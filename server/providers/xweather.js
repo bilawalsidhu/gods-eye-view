@@ -340,7 +340,7 @@ export function xweatherProxy() {
 
       try {
         await loadBudgetOnce();
-        const urlPath = String(req.url || '').split('?')[0];
+        const [urlPath, rawQuery = ''] = String(req.url || '').split('?');
 
         if (urlPath === '/status') {
           const b = currentBudget();
@@ -383,6 +383,17 @@ export function xweatherProxy() {
 
         const key = `${layer}/${z}/${x}/${y}`;
         const now = Date.now();
+        // `t` is the freshness floor: the moment the client last asked for new
+        // data. Without it the TTL alone decides, and a TTL set to the refresh
+        // cadence — a whole day by default — outlives the weather by hours, so
+        // pressing Refresh re-requested every tile and got the same bytes
+        // back. Bounded to now, so a client clock running fast cannot force a
+        // refetch of something already current.
+        const notBefore = Math.min(
+          Number.parseInt(new URLSearchParams(rawQuery).get('t') || '', 10) ||
+            0,
+          now,
+        );
 
         let entry = mem.get(key);
         if (!entry) {
@@ -390,7 +401,7 @@ export function xweatherProxy() {
           if (entry) memSet(key, entry);
         }
         // Fresh cache hit — never counts against the budget.
-        if (entry && now - entry.at < tileTtlMs()) {
+        if (entry && now - entry.at < tileTtlMs() && entry.at >= notBefore) {
           sendTile(entry.buf, 'HIT');
           return;
         }

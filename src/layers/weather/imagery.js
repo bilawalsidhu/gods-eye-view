@@ -3,14 +3,24 @@ import * as Cesium from 'cesium';
 /**
  * Cesium options for one spec.
  *
- * The URL is a same-origin template with no time in it: the proxy asks
- * upstream for `current`, so there is no step to pin and nothing here for a
- * frame to change. Refreshing works by building a new layer, which gives
- * Cesium a fresh per-instance tile cache and so re-requests what is on screen.
+ * The URL carries no time step — the proxy always asks upstream for `current`
+ * — but it does carry a freshness floor. Rebuilding the layer is what makes
+ * Cesium re-request the tiles on screen; `notBefore` is what stops the proxy
+ * answering every one of those from a cache that outlives the weather. It is
+ * the moment the user (or their timer) asked for new data, so a tile cached
+ * before then is refetched exactly once and everything cached since is served
+ * as it stands.
+ *
+ * @param {object} spec Layer spec.
+ * @param {object} [options]
+ * @param {number} [options.notBefore=0] Epoch ms; 0 means "cache as normal".
+ * @returns {object} Cesium provider options.
  */
-export function imageryOptionsFor(spec) {
+export function imageryOptionsFor(spec, { notBefore = 0 } = {}) {
   return {
-    url: spec.tileUrlTemplate,
+    url: notBefore
+      ? `${spec.tileUrlTemplate}?t=${notBefore}`
+      : spec.tileUrlTemplate,
     // The vendor serves 256px tiles in Spherical Mercator, which is also
     // Cesium's default scheme; saying so keeps the two from disagreeing.
     tilingScheme: new Cesium.WebMercatorTilingScheme(),
@@ -87,10 +97,16 @@ export function createImageryStack() {
   };
 
   return {
-    /** Swap a spec to a new frame, leaving anything else in the scene alone. */
-    apply(viewer, spec) {
+    /**
+     * Swap a spec to a new layer, leaving anything else in the scene alone.
+     * @param {object} viewer Cesium viewer.
+     * @param {object} spec Layer spec.
+     * @param {object} [options]
+     * @param {number} [options.notBefore=0] Freshness floor for its tiles.
+     */
+    apply(viewer, spec, { notBefore = 0 } = {}) {
       const provider = new Cesium.UrlTemplateImageryProvider(
-        imageryOptionsFor(spec),
+        imageryOptionsFor(spec, { notBefore }),
       );
       const next = new Cesium.ImageryLayer(provider, layerOptionsFor(spec));
       // Add before removing so the live layer never blinks through to the base

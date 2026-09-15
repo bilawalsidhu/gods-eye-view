@@ -127,10 +127,9 @@ test('two displays own separate imagery and separate destruction', async () => {
 });
 
 test('the base map is never removed, and refreshes swap without a gap', async () => {
-  let stamp = 0;
-  const source = {
-    getFrame: async () => ({ ...FRAME, key: `live:${stamp}` }),
-  };
+  // A deliberately stable key: this source reports the same frame every time,
+  // so what is being tested is the layer's own decision to rebuild.
+  const source = { getFrame: async () => ({ ...FRAME }) };
   const { layer, viewer, layers, removed, base } = harness(source);
 
   await layer.update(viewer);
@@ -138,23 +137,21 @@ test('the base map is never removed, and refreshes swap without a gap', async ()
   assert.equal(layers[0], base, 'the overlay must append, never take index 0');
   assert.equal(owned.length, OWNED);
 
-  // Same frame: keep the live layer rather than rebuilding it for nothing,
-  // which on a billable source would also re-fetch every visible tile.
-  layer.setParams({ refreshNow: true });
+  // An idle tick with nothing asked for and nothing new: keep the live layer
+  // rather than rebuilding it for nothing, which on a billable source would
+  // also re-request every visible tile.
   await layer.update(viewer);
-  assert.deepEqual(
-    layers.slice(1),
-    owned,
-    'an unchanged frame must not rebuild',
-  );
+  assert.deepEqual(layers.slice(1), owned, 'an idle tick must not rebuild');
   assert.equal(removed.length, 0);
 
-  stamp = 1;
+  // A refresh rebuilds even though the frame is unchanged. The ask is for new
+  // pixels, and the rebuild is what re-requests them; skipping it is how the
+  // button came to do nothing at all.
   layer.setParams({ refreshNow: true });
   await layer.update(viewer);
   assert.equal(layers.length, OWNED + 1);
   for (const previous of owned)
-    assert.ok(!layers.includes(previous), 'a new frame must swap the layer');
+    assert.ok(!layers.includes(previous), 'a refresh must swap the layer');
   assert.deepEqual(removed, owned, 'exactly the superseded layers are removed');
   assert.ok(!removed.includes(base));
 });
@@ -458,6 +455,39 @@ test('overlays always draw above fields, whatever order they refresh in', async 
   assert.equal(layers.length, 3, 'no duplicates after a refresh');
   assert.equal(layers[0].id, 'base-map', 'the base map keeps index 0');
   void indexOf;
+});
+
+test('refresh asks the proxy for pixels newer than the moment it was pressed', async () => {
+  // Rebuilding the layer is only half of a refresh. The proxy caches a tile
+  // for the refresh cadence — a day by default — so without a freshness floor
+  // on the URL every re-request comes back out of that cache and the button
+  // does nothing at all.
+  const { layer, viewer, layers } = harness(readySource());
+  const urlOf = () =>
+    layers.find((entry) => entry !== layers[0])?.imageryProvider?.url;
+
+  await layer.update(viewer);
+  assert.equal(
+    urlOf().includes('?t='),
+    false,
+    'switching a layer on may draw from cache; only a refresh may not',
+  );
+
+  const pressedAt = Date.now();
+  layer.setParams({ refreshNow: true });
+  await layer.update(viewer);
+  const stamped = urlOf();
+  const match = /\?t=(\d+)$/.exec(stamped);
+  assert.ok(match, `refreshed tiles must carry a floor, got ${stamped}`);
+  assert.ok(
+    Number(match[1]) >= pressedAt,
+    'the floor is when new data was asked for, not when the tile was cached',
+  );
+
+  // A later redraw must not drop the floor and reinstate the pre-refresh
+  // picture from cache.
+  await layer.update(viewer);
+  assert.equal(urlOf(), stamped, 'the floor is sticky across redraws');
 });
 
 test('with auto-refresh off, nothing is re-read until asked', async () => {

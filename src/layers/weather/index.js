@@ -52,6 +52,8 @@ export function createWeatherLayer({
   const stack = createImageryStack();
   const frames = new Map();
   const polledAt = new Map();
+  /** Freshness floor each drawn spec was last built with. */
+  const floors = new Map();
   let _viewer = null;
   let _enabled = false;
   let _request = null;
@@ -74,6 +76,10 @@ export function createWeatherLayer({
   let _everyCode = DEFAULT_REFRESH_CHOICE;
   /** Set by the panel's refresh button, cleared the moment it is honoured. */
   let _refreshNow = false;
+  // When new data was last asked for, manually or by the timer. Sticky: a tile
+  // cached before this moment stays stale until it is refetched, so a redraw
+  // after a refresh cannot quietly reinstate the pre-refresh picture.
+  let _freshAt = 0;
 
   const isActiveSpec = (spec) => _active.has(spec.id);
   const activeSpecs = () => specs.filter(isActiveSpec);
@@ -98,6 +104,7 @@ export function createWeatherLayer({
   const forget = () => {
     frames.clear();
     polledAt.clear();
+    floors.clear();
   };
 
   const runUpdate = async (viewer) => {
@@ -119,10 +126,15 @@ export function createWeatherLayer({
         stack.remove(viewer, specId);
         frames.delete(specId);
         polledAt.delete(specId);
+        floors.delete(specId);
       }
 
       const forced = _refreshNow;
       _refreshNow = false;
+      // Asking for new data is what moves the freshness floor. Enabling a
+      // layer does not: its first draw is allowed to come from cache, so
+      // switching something on to look at it costs nothing.
+      if (forced) _freshAt = now;
 
       const due = [];
       let redrawn = 0;
@@ -149,13 +161,18 @@ export function createWeatherLayer({
             frames.get(spec.id)?.refreshMs ?? 0,
           );
           if (now - (polledAt.get(spec.id) ?? -Infinity) >= cadence) {
+            // The timer firing is a request for new data too, so it moves the
+            // floor as a button press would. Without this an interval shorter
+            // than the proxy's cache would redraw the same pixels forever.
+            _freshAt = now;
             due.push(spec);
             continue;
           }
         }
         // Held, not due — but the imagery may have gone with the globe.
         if (stack.has(spec.id)) continue;
-        stack.apply(viewer, spec, held);
+        stack.apply(viewer, spec, { notBefore: _freshAt });
+        floors.set(spec.id, _freshAt);
         redrawn += 1;
       }
 
@@ -188,9 +205,19 @@ export function createWeatherLayer({
         // and will be due again on the next tick.
         if (!frame) continue;
         polledAt.set(spec.id, now);
-        if (!stack.has(spec.id) || frames.get(spec.id)?.key !== frame.key) {
+        // Rebuild when what this spec draws should change: a new frame, or
+        // a new freshness floor. The floor has to count on its own — the
+        // source is entitled to hand back the same key, and a refresh that
+        // skipped the rebuild would leave the pre-refresh URL in place and so
+        // keep serving the pre-refresh pixels.
+        if (
+          !stack.has(spec.id) ||
+          frames.get(spec.id)?.key !== frame.key ||
+          floors.get(spec.id) !== _freshAt
+        ) {
           // Add before removing so a live spec never blinks through the base map.
-          stack.apply(viewer, spec, frame);
+          stack.apply(viewer, spec, { notBefore: _freshAt });
+          floors.set(spec.id, _freshAt);
           frames.set(spec.id, frame);
         }
         refreshed += 1;
@@ -243,6 +270,7 @@ export function createWeatherLayer({
       _enabled = false;
       _hidden = false;
       _lastUpdate = null;
+      _freshAt = 0;
       _lastError = null;
       _noKey = false;
       console.log('[Data:Weather] Initialized');
@@ -284,6 +312,7 @@ export function createWeatherLayer({
       _viewer = null;
       _hidden = false;
       _lastUpdate = null;
+      _freshAt = 0;
       _lastError = null;
       _noKey = false;
     },

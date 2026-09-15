@@ -261,6 +261,54 @@ test('keyed: miss, hit, budget accounting, and the monthly rollover', async (t) 
   assert.equal(calls, 2);
 });
 
+test('pressing refresh gets new pixels, not the same ones again', async (t) => {
+  // The TTL defaults to the refresh cadence, a whole day, while radar moves in
+  // minutes. Without a freshness floor the Refresh button re-requested every
+  // tile on screen and the proxy answered all of them from cache: the layer
+  // looked refreshed, cost nothing, and showed yesterday's weather.
+  isolate(t, { ...KEYED, XWEATHER_TILE_TTL_MS: String(24 * 60 * 60 * 1000) });
+  let now = Date.UTC(2026, 8, 15, 12, 0, 0);
+  t.mock.method(Date, 'now', () => now);
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls += 1;
+    return pngResponse();
+  });
+  const request = install(xweatherProxy());
+  const cache = async (url) => (await request(url)).headers['x-xweather-cache'];
+
+  assert.equal(await cache(tileUrl(4, 8, 5)), 'MISS');
+  assert.equal(calls, 1);
+
+  // An hour on, well inside the TTL: still cached, still free.
+  now += 60 * 60 * 1000;
+  assert.equal(await cache(tileUrl(4, 8, 5)), 'HIT');
+  assert.equal(calls, 1);
+
+  // The user asks for new data. The tile predates the request, so it is
+  // refetched exactly once.
+  const askedAt = now;
+  assert.equal(await cache(`${tileUrl(4, 8, 5)}?t=${askedAt}`), 'MISS');
+  assert.equal(calls, 2);
+
+  // Panning afterwards must not keep bypassing the cache: the stamp stays on
+  // the URL for the life of the layer, and the tile is now newer than it.
+  assert.equal(await cache(`${tileUrl(4, 8, 5)}?t=${askedAt}`), 'HIT');
+  assert.equal(calls, 2);
+
+  // A stamp older than the tile is satisfied by what is already held.
+  assert.equal(await cache(`${tileUrl(4, 8, 5)}?t=${askedAt - 5000}`), 'HIT');
+  assert.equal(calls, 2);
+
+  // A client clock running ahead cannot force a refetch of a current tile.
+  assert.equal(await cache(`${tileUrl(4, 8, 5)}?t=${now + 86400000}`), 'HIT');
+  assert.equal(calls, 2);
+
+  // Garbage in the stamp is ignored rather than treated as "always refetch".
+  assert.equal(await cache(`${tileUrl(4, 8, 5)}?t=nonsense`), 'HIT');
+  assert.equal(calls, 2);
+});
+
 test('every tile goes to one upstream host, so the connection is reused', async (t) => {
   // The vendor offers maps1..maps4 so a browser can exceed its per-host
   // connection limit. This is a single server-side client: spreading requests
