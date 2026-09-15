@@ -1,5 +1,16 @@
 # Changelog
 
+## Spanish locale
+
+- Ship the Spanish catalog as the first follow-up locale on the i18n
+  foundation: four namespace catalogs key-for-key with en (913 keys), the
+  built-in locale pair returns to en+es, and the dock language switch
+  renders EN + ES (aria-labels for shipped codes only).
+- Spanish plural agreement is pinned through the real catalog values, and
+  the reviewed es strings (the eleven one-string fixes) are anchored
+  against regression. A measured es-only CCTV control-row wrap rule lands
+  (`html[lang='es']`); English pixels are unchanged.
+
 ## Internationalization foundation
 
 - Add the locale core (`src/i18n/`): configurable locale pair

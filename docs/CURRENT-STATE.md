@@ -2264,43 +2264,41 @@ This is the current runtime/source-of-truth snapshot for the project.
 
 ### Internationalization / catalog locales (September 2026)
 
-The application-owned UI is fully extracted into message catalogs; **en**
-is the only shipped locale in this foundation state — additional locales
-land as stacked follow-up PRs, one per locale (Spanish first), each
-following the locale-addition recipe in
+The application-owned UI renders in the configured locale pair drawn from
+two shipped catalogs — **en, es** — with further locales landing as stacked
+follow-up PRs, one per locale, each following the locale-addition recipe in
 [`docs/TRANSLATORS.md`](./TRANSLATORS.md). English is the default, the
-source catalog, and the fallback. The subsystem lives in `src/i18n/`:
+source catalog, and the fallback; a key missing in another locale renders
+its English value. The subsystem lives in `src/i18n/`:
 
 - **File map.** `src/i18n/locale.js` owns locale resolution, guarded storage
   (`gev:locale:v1`), the one-shot `?lang=` override, and `<html lang>`/`<html
   dir>` metadata. `src/i18n/index.js` owns the catalog registry, `t()`
   (interpolation + `Intl.PluralRules` plural selection), `formatNumber` /
   `formatDate`, `applyDocumentTranslations()`, and
-  `persistLocaleAndReload()`. The shipped catalog is four flat message maps
-  — `src/i18n/locales/en/{shell,cockpit,layers,setup}.js`, 912 keys (shell
-  34, cockpit 369, layers 388, setup 121). Plural entries are the en
-  `{ one, other }` shape; a future locale may add only cardinal categories
-  `Intl.PluralRules` reports valid for it, and an entry lacking the selected
+  `persistLocaleAndReload()`. Catalogs are four flat message maps per locale
+  — `src/i18n/locales/{en,es}/{shell,cockpit,layers,setup}.js` — mirrored
+  key-for-key (913 keys per locale; es is fully translated). Plural entries
+  are a superset of the en `{ one, other }` shape: a locale may add only
+  cardinal categories `Intl.PluralRules` reports valid for it (ru/uk will
+  ship one/few/many/other when they land), and an entry lacking the selected
   category degrades to `other` at runtime. Locale-code normalization
-  (`es-MX`/`es_419` → `es`, plus fr/ru/uk and variants) ships ahead of the
+  (`fr-CA` → `fr`, `ru-KZ` → `ru`, plus es/uk variants) ships ahead of the
   locales on purpose: knowing a code is hygiene, shipping is catalog-driven
   through `CATALOG_LOCALES`.
 - **Selector.** The command dock carries a compact locale switch: a static
   `.dock-locale-switch` group container in `index.html` whose buttons
   (`.dock-locale-btn`) are rendered at runtime by `src/ui/applicationShell.js`
-  `_initLocaleSelector()` — one per locale in the configured pair; while
-  only English ships that is a single EN button. A click persists the
-  choice and reloads the page with the hash preserved, so no live re-apply
-  of already-rendered dynamic panels is needed.
-- **Locale pair config.** `GEV_DEFAULT_LOCALE` and `GEV_SECONDARY_LOCALE` in
-  `.env`, injected as `import.meta.env` defines by `vite.config.js`; both
-  values are validated against the shipped catalogs (`CATALOG_LOCALES`),
-  and the offered set is `dedup([default, secondary, 'en'])`. While English
-  is the only shipped catalog the built-in pair is en-only, so every
-  configuration degenerates to a single offered locale; an invalid,
-  unshipped, or degenerate configured pair falls back to that built-in
-  en-only shape (dev-only warn). The first secondary-locale PR restores the
-  built-in en+es pair.
+  `_initLocaleSelector()` — one per locale in the configured pair (EN + ES
+  by default). A click persists the choice and reloads the page with the
+  hash preserved, so no live re-apply of already-rendered dynamic panels is
+  needed. Selector aria-labels exist for shipped locale codes only.
+- **Locale pair config.** `GEV_DEFAULT_LOCALE` (default `en`) and
+  `GEV_SECONDARY_LOCALE` (default `es`) in `.env`, injected as
+  `import.meta.env` defines by `vite.config.js`; both values are validated
+  against the shipped catalogs (`CATALOG_LOCALES`), and the offered set is
+  `dedup([default, secondary, 'en'])`. An invalid, unshipped, or degenerate
+  pair falls back to the built-in en+es (dev-only warn).
 - **Resolution order.** `?lang=<locale>` (search string only; never
   persisted, never written into share links; stripped by
   `persistLocaleAndReload`; accepted only for offered locales) → stored
@@ -2309,21 +2307,20 @@ source catalog, and the fallback. The subsystem lives in `src/i18n/`:
   `es-MX`/`es_419` → `es`) → the CONFIGURED default locale. Unsupported
   values defer to the next
   step rather than forcing English.
-- **Gates** (all under `node --test src/i18n/`, 40 tests):
+- **Gates** (all under `node --test src/i18n/`, 41 tests):
   `catalog.test.mjs` enforces per-locale key, placeholder-name, and
   plural-shape parity with the strict exact-parity flip ON
   (`REQUIRE_FULL_PARITY`; `GEV_I18N_REQUIRE_FULL_LOCALE_PARITY=0` opts out
-  for staged work; the loops are vacuous while only en ships — each locale
-  PR meets them from day one);
+  for staged work);
   `markupCoverage.test.mjs` requires every `data-i18n*` attribute in
   `index.html` to resolve in every shipped catalog and rejects unknown attribute
   spellings; `i18n.test.mjs` pins precedence, guards, fallback,
-  interpolation, the plural-selection contract (synthetic missing-category
-  degradation; real-catalog plural pins arrive with each locale PR), and
-  DOM application; `repairPass.test.mjs` anchors en byte-identity for
-  extracted literals and rejects a locale-scoped CCTV wrap rule shipping
-  ahead of its locale (per-locale value anchors arrive with each locale
-  PR).
+  interpolation, plurals (es one/other agreement through the real catalog
+  plus the synthetic missing-category degradation; ru/uk four-category pins
+  arrive with those locales), and DOM application;
+  `repairPass.test.mjs` anchors the reviewed translations — en byte-identity
+  for extracted literals, the eleven corrected es strings, and the
+  locale-scoped es CCTV wrap rule.
 - **Accepted deferrals (do not "fix" silently):**
   - The military-awareness subject header literal `FLIGHT / VESSEL WINDOW`
     (`src/data/militaryAwareness.js`) stays English; the literal is
