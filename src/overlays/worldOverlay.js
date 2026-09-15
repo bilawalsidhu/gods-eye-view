@@ -1962,6 +1962,8 @@ function publishPaintRect(item) {
   const { record, placement } = item;
   const rect = _paintRectPool[_paintRectCount] || (_paintRectPool[_paintRectCount] = {});
   _paintRectCount++;
+  rect.anchorX = placement.anchorX;
+  rect.anchorY = placement.anchorY;
   rect.x = placement.rect.x;
   rect.y = placement.rect.y;
   rect.w = placement.rect.w;

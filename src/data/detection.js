@@ -1,3 +1,4 @@
+import { paintTransitBracket } from './detectionDraw.js';
 import * as Cesium from 'cesium';
 import { governorRequestRender } from '../renderGovernor.js';
 import {
@@ -10,6 +11,7 @@ import {
 import {
   acquireAlpha,
   appendCornerBracket,
+  appendTransitBracket,
   resolveTier,
   measureTrackLabel,
   nearFarScale,
@@ -217,6 +219,8 @@ let _hostLane = null;
  * @type {{surface:HTMLCanvasElement|null,setActive:Function,requestPaint:Function,unregister:Function}|null}
  */
 let _calloutLane = null;
+let _transitBracketPaths = new Map();
+let _transitBracketAlpha = 1;
 /**
  * Callouts solved by the sensor lane this frame, replayed by the callout lane.
  * The array and its rows are POOLED — `_calloutCount` is the live length — so a
@@ -329,6 +333,7 @@ export function destroyDetection() {
   _hostLane = null;
   _calloutLane?.unregister?.();
   _calloutLane = null;
+  _transitBracketPaths.clear();
   _calloutCount = 0;
   _viewer = null;
   _layers = [];
@@ -517,7 +522,12 @@ export function markDetectionSourcesChanged(reason = 'sources-changed') {
 
 /** Read-only diagnostics for unit/browser QA. */
 export function getDetectionDiagnostics() {
-  return _lastDiagnostics ? JSON.parse(JSON.stringify(_lastDiagnostics)) : null;
+  if (!_lastDiagnostics) return null;
+  const result = JSON.parse(JSON.stringify(_lastDiagnostics));
+  // Readback only: expose painted plates so pixel QA can exclude occluded
+  // sprites/strokes. Nothing is copied on the production paint path.
+  result.calloutRects = _calloutPool.slice(0, _calloutCount).map(({ x, y, w, h, alpha }) => ({ x, y, w, h, alpha }));
+  return result;
 }
 
 function _publishDiagnostics() {
@@ -981,9 +991,14 @@ function _stashCallout(entry, acquireFade, keyhole) {
  * @param {Object} frame Host paint frame.
  */
 function _paintCalloutLane(frame) {
-  if (_mode === MODE_OFF || _suspended || _calloutCount === 0) return;
+  if (_mode === MODE_OFF || _suspended) return;
   const ctx = frame.ctx;
   if (!ctx) return;
+  for (const bands of _transitBracketPaths.values()) {
+    for (const entry of bands) {
+      if (entry) paintTransitBracket(ctx, entry.path, entry.color, entry.alpha * _transitBracketAlpha);
+    }
+  }
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
   for (let i = 0; i < _calloutCount; i++) {
@@ -1061,6 +1076,7 @@ function _materializeCandidate(obj, width, height, keyhole, occlusionRects, came
  * for a bounded cohort on solve ticks.
  */
 function _drawOverlay(frame) {
+  _transitBracketPaths.clear();
   const { width, height } = frame;
   if (!_ctx || width <= 0 || height <= 0) {
     return { didSolve: false, solveMs: 0, fadingCount: 0, animatingCount: 0, solvePending: false };
@@ -1217,6 +1233,9 @@ function _drawOverlay(frame) {
       );
       halfW = _clamp((isTracked ? 14 : 9) * bscale, 7, 48);
       halfH = _clamp((isTracked ? 11 : 7) * bscale, 5, 38);
+    } else if (obj.tier?.startsWith('transit_') && obj.bracketHalfWidth > 0) {
+      halfW = obj.bracketHalfWidth;
+      halfH = obj.bracketHalfHeight;
     } else {
       halfW = _mode === MODE_DENSE ? (isTracked ? 28 : 11) : 16;
       halfH = _mode === MODE_DENSE ? (isTracked ? 22 : 7) : 10;
@@ -1230,7 +1249,8 @@ function _drawOverlay(frame) {
     const keyholeAlpha = keyholeLabelAlphaFromGeometry(sx, sy, keyhole);
     const bracketAlpha = detectionBracketAlpha(obj.type, keyholeAlpha, keyholeOutsideOpacity);
     if (bracketAlpha > 0) {
-      appendCornerBracket(pathFor(bracketPaths, color, bracketAlpha), sx, sy, halfW, halfH);
+      const transit = obj.tier?.startsWith('transit_');
+      (transit ? appendTransitBracket : appendCornerBracket)(pathFor(transit ? _transitBracketPaths : bracketPaths, color, bracketAlpha), sx, sy, halfW, halfH);
       visibleCount++;
       if (obj.type === 'AIR') aircraftBracketSectors[detectionHorizontalSector(sx, width)]++;
       if (bracketAlpha >= 1) bracketOpacityCounts.full++;
@@ -1346,6 +1366,7 @@ function _drawOverlay(frame) {
 
   const fade = acquireAlpha(_enableTime, now, FADE_MS);
   const bracketWidth = _mode === MODE_DENSE ? 1 : 1.25;
+  _transitBracketAlpha = fade * bracketPresentationOpacity;
 
   // Brackets — batched by tier color and linear radial-opacity band.
   _ctx.lineWidth = bracketWidth;

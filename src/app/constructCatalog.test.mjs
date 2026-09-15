@@ -38,7 +38,7 @@ test('catalogs construct distinct layers and classification from their supplied 
     signal: b.signal,
     surface: fixtureSurface(b.signal),
   });
-  assert.equal(first.layers.length, 18);
+  assert.equal(first.layers.length, 19);
   assert.deepEqual(
     first.layers.map(({ id }) => id),
     second.layers.map(({ id }) => id),

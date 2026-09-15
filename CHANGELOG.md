@@ -7,6 +7,7 @@
 - Add source-only layer exports and enforce source, browser, standalone and voice import directions. Move plain record/feed helpers and settings filesystem hardening to their owners while preserving compatibility and behavior.
 
 - Separate voice session lifetime and common controls from the default Realtime protocol adapter.
+- Add live public transit: vehicles from seven open GTFS-Realtime feeds played back a lag behind real time at their reported speed, a selected-vehicle trail with bounded MBTA history caching, mode-coloured detection brackets in every preset, and sprites that stay readable in night-vision and thermal views.
 - Separate canonical voice action arguments from descriptive wording, preserving the existing Realtime tool inventory.
 
 - Expose portable radio, camera-type and regional source helpers; keep HTTP transport separate from record normalization.
@@ -226,6 +227,15 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   address grid — so headings use the shared id-hash fallback at low confidence
   and are corrected with the calibration gizmo. `CCTV_CALGARY_MAX_SOURCES` sets
   the cap and `CCTV_CALGARY_ENABLED=0` turns the pack off.
+- **Transit layer** — keyless buses, trams, subways, trains and ferries in
+  Boston, Austin, Minneapolis–St Paul, Helsinki, the Netherlands, Norway and
+  South East Queensland. Vehicles use delayed timestamp playback and explicit
+  waiting states. Selection shows available recent history, mode-coloured cards
+  and clear report ages; MBTA history can survive a browser reload while the
+  proxy remains running. Heights are aligned to work with Google 3D tiles.
+  Subways are projected to street level and their cards explain that choice.
+  Visible animation, detection membership, history storage and proxy requests
+  are bounded. Share links carry Transit as token `j`.
 
 - Add Ontario 511 as a keyless CCTV source pack, including Kitchener-area
   highway cameras, with server-registered still URLs and attribution.
