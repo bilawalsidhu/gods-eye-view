@@ -111,12 +111,36 @@
   "traffic-provider": {
     "runtime": "node",
     "exports": ["./server/providers/traffic"],
-    "modules": ["server/providers/traffic.js", "src/data/tomtomTiles.js"],
+    "modules": [
+      "server/providers/traffic.js",
+      "src/data/tileBudget.js",
+      "src/data/tomtomTiles.js"
+    ],
+    "external": []
+  },
+  "xweather-provider": {
+    "runtime": "node",
+    "exports": ["./server/providers/xweather"],
+    "modules": [
+      "server/providers/xweather.js",
+      "src/data/tileBudget.js",
+      "src/data/xweatherTiles.js"
+    ],
     "external": []
   },
   "traffic-source": {
     "exports": ["./sources/traffic"],
-    "modules": ["src/data/tomtomTiles.js"],
+    "modules": ["src/data/tileBudget.js", "src/data/tomtomTiles.js"],
+    "external": []
+  },
+  "xweather-source": {
+    "exports": ["./sources/xweather"],
+    "modules": ["src/data/xweatherTiles.js"],
+    "external": []
+  },
+  "tile-budget-source": {
+    "exports": ["./sources/tile-budget"],
+    "modules": ["src/data/tileBudget.js"],
     "external": []
   },
   "firms-provider": {
@@ -835,6 +859,7 @@
     "exports": ["./layers/traffic"],
     "modules": [
       "src/data/flowMatch.js",
+      "src/data/tileBudget.js",
       "src/data/tomtomTiles.js",
       "src/data/trafficBounds.js",
       "src/data/trafficFlowStyle.js",
@@ -1164,6 +1189,7 @@
       "src/data/spriteOrder.js",
       "src/data/telegeographySubmarineCables.js",
       "src/data/terrainHeights.js",
+      "src/data/tileBudget.js",
       "src/data/tomtomTiles.js",
       "src/data/tr3bRegistry.js",
       "src/data/trackedCamera.js",

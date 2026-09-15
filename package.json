@@ -89,7 +89,12 @@
     "./server/providers/traffic": {
       "node": "./server/providers/traffic.js"
     },
+    "./server/providers/xweather": {
+      "node": "./server/providers/xweather.js"
+    },
     "./sources/traffic": "./src/data/tomtomTiles.js",
+    "./sources/xweather": "./src/data/xweatherTiles.js",
+    "./sources/tile-budget": "./src/data/tileBudget.js",
     "./server/providers/firms": {
       "node": "./server/providers/firms.js"
     },

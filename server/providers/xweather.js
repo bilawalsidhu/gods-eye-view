@@ -1,0 +1,397 @@
+import path from 'node:path';
+import { promises as fsp } from 'node:fs';
+
+import {
+  DEFAULT_DAILY_TILE_BUDGET,
+  DEFAULT_DISK_CACHE_BYTES,
+  isValidTileCoord as isValidXweatherTile,
+  resolveRefreshMs,
+} from '../../src/data/xweatherTiles.js';
+import {
+  utcDayKey as xweatherUtcDayKey,
+  normalizeBudget as normalizeXweatherBudget,
+  isOverBudget as isXweatherOverBudget,
+} from '../../src/data/tileBudget.js';
+
+/**
+ * Vaisala Xweather `radar-global` raster-tile proxy with a daily budget governor.
+ *
+ * Upstream: https://maps{1-4}.api.xweather.com/{id}_{secret}/radar-global/{z}/{x}/{y}/current.png
+ * — global radar with satellite-derived fill where no ground radar reaches,
+ * refreshed upstream every two minutes, 256x256 PNG in Spherical Mercator.
+ *
+ * This proxy is not optional the way the others are. Xweather puts BOTH the
+ * client id and the client secret in the URL path, so the browser can never
+ * hold them: it fetches same-origin `/api/xweather/radar/{z}/{x}/{y}.png` and
+ * the credentials stay here. Every other source this layer has used was
+ * keyless and CORS-open and was read directly from the page.
+ *
+ * Cache: memory + disk (.gev-cache/xweather/), TTL defaults to the refresh
+ * cadence, single-flight per tile, serve-stale-on-failure — the tomtomProxy
+ * pattern. Unlike that one the disk cache is bounded and evicts oldest-first,
+ * because paid raster tiles across a dozen zoom levels grow without limit.
+ * Cache hits never count against the budget.
+ *
+ * Budget governor: a persistent counter (.gev-cache/xweather/budget.json, keyed
+ * by UTC date) counts upstream fetch attempts against a soft cap
+ * (XWEATHER_DAILY_TILE_BUDGET, default 400/day ≈ 12,000/month against a 15,000
+ * free monthly allowance). Over the cap the proxy serves stale tiles when
+ * available, else 429 {error:'budget'}. `dailyCount` on /status is also how
+ * real call volume gets measured before settling on a cadence.
+ *
+ * GET /api/xweather/status → {hasKey, dailyCount, budget, date, refreshMs}.
+ * Keyless mode: status reports hasKey:false and the tile endpoint 503s
+ * {error:'no_key'} without touching upstream. There is no keyless fallback for
+ * this layer — the precipitation row reports unavailable and draws nothing.
+ *
+ * @returns {import('vite').Plugin}
+ */
+export function xweatherProxy() {
+  const CACHE_DIR = path.join(process.cwd(), '.gev-cache', 'xweather');
+  const BUDGET_PATH = path.join(CACHE_DIR, 'budget.json');
+  const MEM_MAX_ENTRIES = 512;
+  const UPSTREAM_TIMEOUT_MS = 15000;
+  /** Sweep the disk cache every N writes rather than on each one. */
+  const PRUNE_EVERY_WRITES = 50;
+
+  /** @type {Map<string, {at:number, buf:Buffer}>} tile key `z/x/y` -> cached tile (kept past TTL for serve-stale). */
+  const mem = new Map();
+  /** @type {Map<string, Promise<{at:number, buf:Buffer}|null>>} single-flight per tile. */
+  const inflight = new Map();
+
+  /** @type {{date:string, count:number}|null} lazily-loaded persistent counter. */
+  let budget = null;
+  let budgetLoaded = false;
+  let writesSincePrune = 0;
+
+  const credentials = () => ({
+    id: process.env.XWEATHER_CLIENT_ID || '',
+    secret: process.env.XWEATHER_CLIENT_SECRET || '',
+  });
+
+  /** Both halves are required; one alone cannot authenticate. */
+  function hasCredentials() {
+    const { id, secret } = credentials();
+    return Boolean(id && secret);
+  }
+
+  /**
+   * Scrub the credentials out of anything on its way to a log line.
+   *
+   * This provider carries its secret in the URL *path*, not a query parameter,
+   * so an upstream error that quotes the request — a DNS or TLS failure often
+   * does — would otherwise write the secret into the server log. Client
+   * responses never include upstream text at all; this guards the other exit.
+   */
+  function redact(text) {
+    const { id, secret } = credentials();
+    let out = String(text ?? '');
+    for (const part of [secret, id])
+      if (part) out = out.replaceAll(part, '***');
+    return out;
+  }
+
+  function refreshMs() {
+    return resolveRefreshMs(process.env.XWEATHER_REFRESH_MS);
+  }
+
+  /** Longer TTL is directly fewer billable accesses, at the cost of staler pixels. */
+  function tileTtlMs() {
+    const raw = Number.parseInt(process.env.XWEATHER_TILE_TTL_MS || '', 10);
+    return Number.isFinite(raw) && raw > 0 ? raw : refreshMs();
+  }
+
+  function dailyBudgetLimit() {
+    const raw = Number.parseInt(
+      process.env.XWEATHER_DAILY_TILE_BUDGET || '',
+      10,
+    );
+    return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_DAILY_TILE_BUDGET;
+  }
+
+  function diskCacheLimitBytes() {
+    const raw = Number.parseInt(
+      process.env.XWEATHER_DISK_CACHE_BYTES || '',
+      10,
+    );
+    return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_DISK_CACHE_BYTES;
+  }
+
+  async function loadBudgetOnce() {
+    if (budgetLoaded) return;
+    budgetLoaded = true;
+    try {
+      const parsed = JSON.parse(await fsp.readFile(BUDGET_PATH, 'utf8'));
+      if (
+        parsed &&
+        typeof parsed.date === 'string' &&
+        Number.isFinite(parsed.count)
+      ) {
+        budget = parsed;
+      }
+    } catch {
+      /* no budget file yet */
+    }
+  }
+
+  async function persistBudget() {
+    try {
+      await fsp.mkdir(CACHE_DIR, { recursive: true });
+      await fsp.writeFile(BUDGET_PATH, JSON.stringify(budget), 'utf8');
+    } catch (err) {
+      console.warn(
+        '[xweather-proxy] budget write failed:',
+        redact(err?.message || err),
+      );
+    }
+  }
+
+  /** Roll the counter to today (UTC) and return it. */
+  function currentBudget() {
+    budget = normalizeXweatherBudget(budget, xweatherUtcDayKey());
+    return budget;
+  }
+
+  /** Count one upstream fetch attempt against today's budget (async persist). */
+  function recordUpstreamFetch() {
+    currentBudget().count += 1;
+    void persistBudget();
+  }
+
+  const tilePath = (key) =>
+    path.join(CACHE_DIR, `radar-${key.replaceAll('/', '-')}.png`);
+
+  /** Disk-cache read; tile age comes from the file's mtime. */
+  async function readDiskTile(key) {
+    try {
+      const [stat, buf] = await Promise.all([
+        fsp.stat(tilePath(key)),
+        fsp.readFile(tilePath(key)),
+      ]);
+      return { at: stat.mtimeMs, buf };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Keep the tile directory under its byte ceiling, oldest first.
+   *
+   * Paid tiles accumulate across every zoom the camera visits, so unlike the
+   * traffic cache this one cannot grow forever. Eviction is by mtime, which is
+   * also how age is read, so the tile evicted is always the least recently
+   * refreshed.
+   */
+  async function pruneDisk() {
+    const limit = diskCacheLimitBytes();
+    try {
+      const names = (await fsp.readdir(CACHE_DIR)).filter(
+        (name) => name.startsWith('radar-') && name.endsWith('.png'),
+      );
+      const entries = [];
+      let total = 0;
+      for (const name of names) {
+        try {
+          const stat = await fsp.stat(path.join(CACHE_DIR, name));
+          entries.push({ name, at: stat.mtimeMs, size: stat.size });
+          total += stat.size;
+        } catch {
+          /* raced with another sweep */
+        }
+      }
+      if (total <= limit) return;
+      entries.sort((a, b) => a.at - b.at);
+      for (const entry of entries) {
+        if (total <= limit) break;
+        try {
+          await fsp.unlink(path.join(CACHE_DIR, entry.name));
+          total -= entry.size;
+          // Filenames flatten the key's slashes to dashes; undo that so the
+          // in-memory copy is dropped too rather than outliving the file.
+          mem.delete(
+            entry.name
+              .slice('radar-'.length, -'.png'.length)
+              .replaceAll('-', '/'),
+          );
+        } catch {
+          /* already gone */
+        }
+      }
+    } catch (err) {
+      console.warn(
+        '[xweather-proxy] cache prune failed:',
+        redact(err?.message || err),
+      );
+    }
+  }
+
+  async function writeDiskTile(key, buf) {
+    try {
+      await fsp.mkdir(CACHE_DIR, { recursive: true });
+      await fsp.writeFile(tilePath(key), buf);
+      writesSincePrune += 1;
+      if (writesSincePrune >= PRUNE_EVERY_WRITES) {
+        writesSincePrune = 0;
+        await pruneDisk();
+      }
+    } catch (err) {
+      console.warn(
+        `[xweather-proxy] tile cache write failed for ${key}:`,
+        redact(err?.message || err),
+      );
+    }
+  }
+
+  /** LRU-ish memory insert (Map preserves insertion order; evict the oldest). */
+  function memSet(key, entry) {
+    if (!mem.has(key) && mem.size >= MEM_MAX_ENTRIES) {
+      const oldest = mem.keys().next().value;
+      mem.delete(oldest);
+    }
+    mem.set(key, entry);
+  }
+
+  async function fetchUpstream(z, x, y) {
+    const { id, secret } = credentials();
+    // The vendor spreads load across maps1..maps4; pick one per request.
+    const host = `maps${1 + Math.floor(Math.random() * 4)}.api.xweather.com`;
+    const url =
+      `https://${host}/${encodeURIComponent(id)}_${encodeURIComponent(secret)}` +
+      `/radar-global/${z}/${x}/${y}/current.png`;
+    recordUpstreamFetch(); // attempts count — upstream bills the request either way
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    // Xweather reports quota and auth failures as a non-image body with a 200,
+    // so the content type is the real check — caching one as a tile would pin
+    // an error page over the globe until the TTL expired.
+    const contentType = String(res.headers.get('content-type') || '');
+    if (!contentType.startsWith('image/'))
+      throw new Error('non-image response');
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length === 0) throw new Error('empty tile body');
+    return buf;
+  }
+
+  const installMiddleware = (server) => {
+    server.middlewares.use('/api/xweather', async (req, res) => {
+      // Sanitized responses only (proxy/security baseline): no upstream
+      // error details, and never echo the credentials or the upstream URL.
+      const sendJson = (status, obj, extraHeaders = {}) => {
+        if (res.headersSent) return;
+        res.writeHead(status, {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store',
+          ...extraHeaders,
+        });
+        res.end(JSON.stringify(obj));
+      };
+      const sendTile = (buf, cacheStatus) => {
+        if (res.headersSent) return;
+        res.writeHead(200, {
+          'Content-Type': 'image/png',
+          'Cache-Control': 'no-store',
+          'x-xweather-cache': cacheStatus,
+        });
+        res.end(buf);
+      };
+
+      try {
+        await loadBudgetOnce();
+        const urlPath = String(req.url || '').split('?')[0];
+
+        if (urlPath === '/status') {
+          const b = currentBudget();
+          sendJson(200, {
+            hasKey: hasCredentials(),
+            dailyCount: b.count,
+            budget: dailyBudgetLimit(),
+            date: b.date,
+            refreshMs: refreshMs(),
+          });
+          return;
+        }
+
+        const m = urlPath.match(/^\/radar\/(\d+)\/(\d+)\/(\d+)\.png$/);
+        if (!m) {
+          sendJson(404, { error: 'not_found' });
+          return;
+        }
+        const z = Number(m[1]);
+        const x = Number(m[2]);
+        const y = Number(m[3]);
+        if (!isValidXweatherTile(z, x, y)) {
+          sendJson(400, { error: 'invalid_tile' });
+          return;
+        }
+        if (!hasCredentials()) {
+          sendJson(503, { error: 'no_key' });
+          return;
+        }
+
+        const key = `${z}/${x}/${y}`;
+        const now = Date.now();
+
+        let entry = mem.get(key);
+        if (!entry) {
+          entry = await readDiskTile(key);
+          if (entry) memSet(key, entry);
+        }
+        // Fresh cache hit — never counts against the budget.
+        if (entry && now - entry.at < tileTtlMs()) {
+          sendTile(entry.buf, 'HIT');
+          return;
+        }
+
+        // Budget governor: over the soft cap, last-good data beats a dead layer.
+        if (isXweatherOverBudget(currentBudget(), dailyBudgetLimit())) {
+          if (entry) {
+            sendTile(entry.buf, 'STALE-BUDGET');
+          } else {
+            sendJson(429, { error: 'budget' });
+          }
+          return;
+        }
+
+        // Stale or missing → refresh, single-flight per tile.
+        if (!inflight.has(key)) {
+          inflight.set(
+            key,
+            fetchUpstream(z, x, y)
+              .then(async (buf) => {
+                const fresh = { at: Date.now(), buf };
+                memSet(key, fresh);
+                await writeDiskTile(key, buf);
+                return fresh;
+              })
+              .catch((err) => {
+                console.warn(
+                  `[xweather-proxy] ${key} fetch failed (${redact(err?.message || err)}) — serving stale if any`,
+                );
+                return null;
+              })
+              .finally(() => inflight.delete(key)),
+          );
+        }
+        const fresh = await inflight.get(key);
+        if (fresh) {
+          sendTile(fresh.buf, 'MISS');
+        } else if (entry) {
+          sendTile(entry.buf, 'STALE-ERROR'); // upstream down — stale beats empty
+        } else {
+          sendJson(502, { error: 'upstream' });
+        }
+      } catch (err) {
+        console.warn('[xweather-proxy] error:', redact(err?.message || err));
+        sendJson(500, { error: 'proxy' });
+      }
+    });
+  };
+
+  return {
+    name: 'xweather-proxy',
+    configureServer: installMiddleware,
+    configurePreviewServer: installMiddleware,
+  };
+}

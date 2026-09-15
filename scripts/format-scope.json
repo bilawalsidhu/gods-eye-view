@@ -563,5 +563,9 @@
   "src/app/data.js",
   "src/app/tools.js",
   "src/app/startupChrome.js",
-  "src/app/errors.js"
+  "src/app/errors.js",
+  "src/data/tileBudget.js",
+  "src/data/xweatherTiles.js",
+  "server/providers/xweather.js",
+  "src/tooling/xweatherProvider.test.mjs"
 ]
