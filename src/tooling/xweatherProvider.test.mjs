@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { promises as fsp } from 'node:fs';
 import { xweatherProxy } from 'gods-eye-view/server/providers/xweather';
+import { MAX_TILE_ZOOM } from 'gods-eye-view/sources/xweather';
 
 /**
  * Mount the plugin and drive its single route directly — the harness shape
@@ -127,6 +128,15 @@ test('coordinates are validated before the key is ever read', async (t) => {
     assert.equal(res.status, 400, url);
     assert.equal(json(res).error, 'invalid_tile');
   }
+  // Pin the ceiling itself. One level past it is where the service stops
+  // having anything new to say and starts charging for blur, so the boundary
+  // is a cost decision, not an arbitrary bound. A valid coordinate falls
+  // through to the key check (503 here) rather than being rejected.
+  assert.equal((await request(`/radar/${MAX_TILE_ZOOM}/1/1.png`)).status, 503);
+  assert.equal(
+    (await request(`/radar/${MAX_TILE_ZOOM + 1}/1/1.png`)).status,
+    400,
+  );
   assert.equal((await request('/nope')).status, 404);
 });
 

@@ -19,11 +19,18 @@ export const MIN_TILE_ZOOM = 0;
 /**
  * @const {number} Deepest tile this app requests.
  *
- * The composite is about 1 km at best, and level 11 is already ~76 m/px, so
- * asking deeper buys no detail and multiplies billable requests. Cesium
- * magnifies past it instead.
+ * Measured against the live service rather than guessed from the nominal
+ * resolution. Over Tokyo, with convection in range of a dense radar network,
+ * level 8 still showed discrete cells with intensity cores; level 10 was
+ * already smooth blobs and level 11 a single faceted smear — the service
+ * upsampling a coarser source. Level 9 is ~305 m/px, comfortably past a ~1 km
+ * composite, so it is the last level carrying real information.
+ *
+ * Stopping here is also the cheapest lever available: each further level is an
+ * entirely new tile set to pay for, and they would only ever be blurrier
+ * copies of this one. Cesium magnifies past it, which costs nothing.
  */
-export const MAX_TILE_ZOOM = 11;
+export const MAX_TILE_ZOOM = 9;
 
 /**
  * @const {number} Default refresh cadence, deliberately conservative.
