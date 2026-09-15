@@ -142,8 +142,16 @@ export function createTrackedOverlayEntry(entity) {
     title,
     details: Array.isArray(model.details) ? model.details.map((line) => String(line)) : [],
     accent: model.accent || WORLD_OVERLAY_STYLE.accent,
-    anchorRadiusPx: 10,
-    anchorRadiusScale: TRACKED_BILLBOARD_SCALE,
+    cardStyle: model.cardStyle,
+    selected: model.selected === true,
+    leaderStyle: model.leaderStyle,
+    leaderAnimationMs: model.leaderAnimationMs,
+    leaderAnimationStartedAt: model.leaderAnimationStartedAt,
+    leaderDrawRatio: model.leaderDrawRatio,
+    anchorRadiusPx: Number.isFinite(Number(model.anchorRadiusPx))
+      ? Math.max(0, Number(model.anchorRadiusPx)) : 10,
+    anchorRadiusScale: Object.prototype.hasOwnProperty.call(model, 'anchorRadiusScale')
+      ? model.anchorRadiusScale : TRACKED_BILLBOARD_SCALE,
     minAnchorGapPx: 16,
     anchorGapPaddingPx: 10,
     verticalOnly: true,
@@ -194,6 +202,9 @@ export function getActiveTrackedReadoutId() {
   return _activeEntryId;
 }
 
+/** Static-context layers whose click selection publishes the readout card. */
+const READOUT_CONTEXT_LAYERS = new Set(['military-installations', 'alpr-cameras']);
+
 /**
  * Initialize the model bridge and selection listeners. No render listener is
  * installed; the already-initialized world-overlay host owns the frame lane.
@@ -210,7 +221,7 @@ export function initTrackedReadout(viewer) {
   }) || null;
   _contextSelectedHandler = (event) => {
     const record = event.detail;
-    if (record?.layerId === 'military-installations') {
+    if (READOUT_CONTEXT_LAYERS.has(record?.layerId)) {
       _selectedContext = record;
       publishEntity(record.entity);
       return;

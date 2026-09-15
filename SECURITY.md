@@ -13,7 +13,7 @@ Include repro steps and impact. We'll acknowledge, investigate, and credit you (
 
 ## How secrets are handled
 
-The golden rule: **secret-bearing API keys stay on the server side.** The dev/preview server (middleware in `server/providers/local.js`) brokers every request that needs a private credential, so the browser never receives one.
+The golden rule: **secret-bearing API keys stay on the server side.** The dev/preview server (middleware under `server/providers/`) brokers every request that needs a private credential, so the browser never receives one.
 
 | Key | Where it lives | How the browser uses it |
 |-----|----------------|--------------------------|
@@ -51,17 +51,19 @@ Terminal development uses one ignored repository-root `.env` for both
 `GOOGLE_MAPS_API_KEY` (browser) and `GOOGLE_MAPS_SERVER_API_KEY` (server).
 The tracked `.env.example` documents both without credentials. Vite injects
 only the browser key; sharing an environment file does not expose the server
-key. Both entries are available in Provider Settings. Pinokio saves them in
+key. Provider Settings presents only the browser key as Google Maps; configure
+the optional server key manually in the environment file. Pinokio uses
 its ignored `pinokio/ENVIRONMENT` instead, with app values and blanks taking
 precedence over inherited global values. An absent server key retains the
 browser-key fallback for existing single-key setups.
 
 ## Server-side proxy hardening
 
-The data proxies in `server/providers/local.js` are written so the browser cannot turn the server into an open relay:
+The data proxies under `server/providers/` are written so the browser cannot turn the server into an open relay:
 
 - **No arbitrary-URL fetching.** The CCTV frame proxy fetches only server-registered camera/frame URLs — clients cannot pass an upstream URL to fetch (SSRF mitigation). Other proxies target fixed upstream hosts.
 - **Radio is not an audio relay.** `/api/radio/stations` contacts only allowlisted Radio Browser HTTPS hosts and paths, rejects redirects, rejects any hostname with a loopback/private/link-local/metadata/non-public A or AAAA result, and pins each TLS connection to a validated address. It returns normalized public HTTPS stream URLs; `/api/radio/click/:uuid` applies the same destination policy and accepts only station IDs from the current bounded catalog. The browser then connects directly to the broadcaster after an explicit playback action, so the broadcaster sees the listener's IP address. GEV never proxies, caches, records, or redistributes audio.
+- **No verbatim client headers upstream.** The CCTV media route is the one route that relays a request header (`Range`, for video seeking). It is parsed and canonicalized before it is forwarded: one `bytes=` range only, with every accepted form — explicit span, open-ended and suffix — bounded to the same 64 MiB ceiling the relay applies to a declared response body. Multi-range, malformed, inverted and non-`bytes` values are dropped and the request proceeds without a `Range`, as RFC 7233 §3.1 prescribes. Bounding the request bounds what is asked for: a response that declares no length — live streamed media, or a chunked body from an upstream that ignores the `Range` — has no ceiling. An upstream request the browser has stopped waiting for is cancelled rather than left running, whether the viewer leaves before the headers arrive or during the body.
 - **Response-size caps and timeouts** on proxied responses.
 - **Sanitized errors** — internal error details are not echoed back to clients.
 - **Coalesced OAuth refresh** and cached successful responses only (OpenSky).

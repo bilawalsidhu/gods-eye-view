@@ -9,7 +9,7 @@ import {
 import {
   LOCAL_OVERLAY_COHORT_LIMIT,
   createLocalInfrastructureOverlayEntry,
-} from '../data/localGeojson.js';
+} from '../data/localGeojsonCore.js';
 import {
   FIRMS_AMBIENT_COHORT_LIMIT,
   FIRMS_OVERLAY_SOURCE_ID,

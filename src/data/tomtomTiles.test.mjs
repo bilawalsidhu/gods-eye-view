@@ -53,22 +53,39 @@ test('lonLatToTile: downtown Austin @ z12 -> x935 y1686 (matches fixture)', () =
 
 test('tileToBBox: fixture tile bbox contains downtown Austin', () => {
   const bbox = tileToBBox(12, 935, 1686);
-  assert.ok(bbox.west <= AUSTIN.lon && AUSTIN.lon <= bbox.east, `lon outside [${bbox.west}, ${bbox.east}]`);
-  assert.ok(bbox.south <= AUSTIN.lat && AUSTIN.lat <= bbox.north, `lat outside [${bbox.south}, ${bbox.north}]`);
+  assert.ok(
+    bbox.west <= AUSTIN.lon && AUSTIN.lon <= bbox.east,
+    `lon outside [${bbox.west}, ${bbox.east}]`,
+  );
+  assert.ok(
+    bbox.south <= AUSTIN.lat && AUSTIN.lat <= bbox.north,
+    `lat outside [${bbox.south}, ${bbox.north}]`,
+  );
   assert.ok(bbox.north > bbox.south && bbox.east > bbox.west);
 });
 
 test('tileToBBox <-> lonLatToTile roundtrip at the bbox center', () => {
   const bbox = tileToBBox(12, 935, 1686);
-  const center = { lon: (bbox.west + bbox.east) / 2, lat: (bbox.south + bbox.north) / 2 };
+  const center = {
+    lon: (bbox.west + bbox.east) / 2,
+    lat: (bbox.south + bbox.north) / 2,
+  };
   const t = lonLatToTile(center.lon, center.lat, 12);
   assert.deepEqual({ x: t.x, y: t.y }, { x: 935, y: 1686 });
 });
 
 test('lonLatToTile clamps poles and antimeridian into valid range', () => {
-  for (const [lon, lat] of [[-180, 89.9], [180, -89.9], [179.9999, 0]]) {
+  for (const [lon, lat] of [
+    [-180, 89.9],
+    [180, -89.9],
+    [179.9999, 0],
+  ]) {
     const t = lonLatToTile(lon, lat, 12);
-    assert.equal(isValidTileCoord(12, t.x, t.y), true, `invalid tile for ${lon},${lat}: ${t.x},${t.y}`);
+    assert.equal(
+      isValidTileCoord(12, t.x, t.y),
+      true,
+      `invalid tile for ${lon},${lat}: ${t.x},${t.y}`,
+    );
   }
 });
 
@@ -76,14 +93,19 @@ test('lonLatToTile clamps poles and antimeridian into valid range', () => {
 
 test('tilesForBounds: clamped Austin viewport covers the fixture tile', () => {
   const bounds = {
-    south: AUSTIN.lat - 0.025, north: AUSTIN.lat + 0.025,
-    west: AUSTIN.lon - 0.025, east: AUSTIN.lon + 0.025,
+    south: AUSTIN.lat - 0.025,
+    north: AUSTIN.lat + 0.025,
+    west: AUSTIN.lon - 0.025,
+    east: AUSTIN.lon + 0.025,
   };
   const tiles = tilesForBounds(bounds, 12);
-  assert.ok(tiles.length >= 1 && tiles.length <= 4, `tile count ${tiles.length}`);
+  assert.ok(
+    tiles.length >= 1 && tiles.length <= 4,
+    `tile count ${tiles.length}`,
+  );
   assert.ok(
     tiles.some((t) => t.z === 12 && t.x === 935 && t.y === 1686),
-    `fixture tile missing from ${JSON.stringify(tiles)}`
+    `fixture tile missing from ${JSON.stringify(tiles)}`,
   );
 });
 
@@ -102,7 +124,7 @@ test('tilesForBounds: bounds straddling a tile edge return both tiles', () => {
 });
 
 test('tilesForBounds: default zoom is 12 and every tile is valid', () => {
-  const bounds = { south: 51.49, north: 51.52, west: -0.14, east: -0.10 }; // London
+  const bounds = { south: 51.49, north: 51.52, west: -0.14, east: -0.1 }; // London
   const tiles = tilesForBounds(bounds);
   assert.ok(tiles.length >= 1);
   for (const t of tiles) {
@@ -112,7 +134,11 @@ test('tilesForBounds: default zoom is 12 and every tile is valid', () => {
 });
 
 test('tilesForBounds: runaway bounds are truncated by the safety cap', () => {
-  const tiles = tilesForBounds({ south: -60, north: 60, west: -170, east: 170 }, 12, { maxTiles: 16 });
+  const tiles = tilesForBounds(
+    { south: -60, north: 60, west: -170, east: 170 },
+    12,
+    { maxTiles: 16 },
+  );
   assert.ok(tiles.length <= 16, `got ${tiles.length}`);
 });
 
@@ -129,15 +155,30 @@ test('normalizeBudget: same-day state passes through untouched', () => {
 });
 
 test('normalizeBudget: day rollover resets the counter', () => {
-  const rolled = normalizeBudget({ date: '2026-07-16', count: 39999 }, '2026-07-17');
+  const rolled = normalizeBudget(
+    { date: '2026-07-16', count: 39999 },
+    '2026-07-17',
+  );
   assert.deepEqual(rolled, { date: '2026-07-17', count: 0 });
 });
 
 test('normalizeBudget: missing/corrupt state starts fresh', () => {
-  assert.deepEqual(normalizeBudget(null, '2026-07-16'), { date: '2026-07-16', count: 0 });
-  assert.deepEqual(normalizeBudget({ date: '2026-07-16', count: NaN }, '2026-07-16'), { date: '2026-07-16', count: 0 });
-  assert.deepEqual(normalizeBudget({ count: 5 }, '2026-07-16'), { date: '2026-07-16', count: 0 });
-  assert.deepEqual(normalizeBudget({ date: '2026-07-16', count: -3 }, '2026-07-16'), { date: '2026-07-16', count: 0 });
+  assert.deepEqual(normalizeBudget(null, '2026-07-16'), {
+    date: '2026-07-16',
+    count: 0,
+  });
+  assert.deepEqual(
+    normalizeBudget({ date: '2026-07-16', count: NaN }, '2026-07-16'),
+    { date: '2026-07-16', count: 0 },
+  );
+  assert.deepEqual(normalizeBudget({ count: 5 }, '2026-07-16'), {
+    date: '2026-07-16',
+    count: 0,
+  });
+  assert.deepEqual(
+    normalizeBudget({ date: '2026-07-16', count: -3 }, '2026-07-16'),
+    { date: '2026-07-16', count: 0 },
+  );
 });
 
 test('isOverBudget: at or above the limit is over, below is not', () => {

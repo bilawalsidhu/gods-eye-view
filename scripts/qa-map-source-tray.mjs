@@ -569,7 +569,13 @@ try {
       trusted: event.isTrusted, detail: event.detail ?? null,
       style: event.target.closest('.style-btn')?.dataset.style || null,
     });
-    for (const type of ['keydown', 'keyup', 'click']) grid.addEventListener(type, record, true);
+    // A claimed hold deliberately blurs the button. Repeats and release then
+    // target the document body, so observe Space beyond the original grid.
+    const recordSpace = (event) => {
+      if (event.code === 'Space') record(event);
+    };
+    for (const type of ['keydown', 'keyup']) document.addEventListener(type, recordSpace, true);
+    grid.addEventListener('click', record, true);
     manager.setStyle = function (...args) {
       probe.activations.push(args[0]);
       return originalSetStyle.apply(this, args);
@@ -597,6 +603,11 @@ try {
       voiceBefore: probe.voiceBefore, voiceNow: voiceState(),
       selectedStyle: manager.activeStyle, selectedMap: manager.mapStackController.getActiveId(),
       focusedStyle: document.activeElement?.dataset.style || null,
+      holdObservation: {
+        pageFocused: document.hasFocus(), visibility: document.visibilityState,
+        timerPending: Boolean(voice.pushToTalkHoldTimer),
+        focusOwnerMatches: document.activeElement === voice.pushToTalkHoldFocusOwner,
+      },
     });
     probe.reset = () => {
       probe.events.length = 0;
@@ -609,7 +620,8 @@ try {
       manager.setStyle = originalSetStyle;
       voice.start = originalVoiceStart;
       observer.disconnect();
-      for (const type of ['keydown', 'keyup', 'click']) grid.removeEventListener(type, record, true);
+      for (const type of ['keydown', 'keyup']) document.removeEventListener(type, recordSpace, true);
+      grid.removeEventListener('click', record, true);
     };
     window.__qaStyleKeyProbe = probe;
   });
@@ -638,9 +650,11 @@ try {
     await page.keyboard.down('Space');
     styleSpaceIsDown = true;
     longSpaceDown = await page.evaluate(() => window.__qaStyleKeyProbe.snapshot());
-    await new Promise((resolve) => setTimeout(resolve, 250));
+    // Use the browser's clock, like the production hold timer. Runner-side
+    // delays can finish while Chromium's timer is still pending under load.
+    await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 250)));
     await page.keyboard.down('Space'); // exercise repeat without resetting the hold deadline
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 400)));
     longSpaceHeld = await page.evaluate(() => window.__qaStyleKeyProbe.snapshot());
     await page.keyboard.up('Space');
     styleSpaceIsDown = false;
@@ -700,6 +714,14 @@ try {
       if (controller.googleTileset) controller.googleTileset.show = false;
       controller.googleTileset = null;
       controller.cesiumToken = '';
+      // Availability is now composed in the source registry. Override only
+      // this fixture's choices, as the previous token-field seam did.
+      for (const source of controller._sources.values()) {
+        if (source.descriptor.requiresIon || source.descriptor.kind === 'photoreal') {
+          source.available = false;
+        }
+      }
+      controller._registry.state.hasCesiumIonToken = false;
       await styleManager._setMapStack('osm', { syncShare: false });
       styleManager._initMapStackControl();
     });
@@ -904,15 +926,15 @@ try {
     });
     const waitForQueuedNotice = async (label, timeoutMs = 1000) => {
       const deadline = performance.now() + timeoutMs;
-      while (styleManager._globalStatusNotice?.label !== label
+      while (styleManager._feedback._globalStatusNotice?.label !== label
           && performance.now() < deadline) {
         await new Promise((resolve) => setTimeout(resolve, 16));
       }
-      return styleManager._globalStatusNotice?.label === label;
+      return styleManager._feedback._globalStatusNotice?.label === label;
     };
     const baseNow = performance.now();
     try {
-      styleManager._loadingFeedbackState = {
+      styleManager._feedback._loadingFeedbackState = {
         phase: 'idle', visible: false, startedAt: 0, showAt: 0, hideAt: 0,
         activeIds: [], batchOutcome: null, terminal: null, operation: null,
       };
@@ -932,7 +954,7 @@ try {
       styleManager._updateGlobalLoadingFeedback(baseNow);
       styleManager._updateGlobalLoadingFeedback(baseNow + 200);
       dataManager.getAll = () => [];
-      styleManager._loadingFeedbackEvent = {
+      styleManager._feedback._loadingFeedbackEvent = {
         type: 'visibility-failed',
         layerId: 'qa-unrelated-layer',
         error: new Error('QA offline'),
@@ -1243,9 +1265,10 @@ try {
       manager._setCommandDockPanelPinState(id, false, { persist: false, syncShare: false });
       manager.setPanelCollapsed(id, true, { persist: false, syncShare: false });
     }
-    const original = manager.setPanelCollapsed;
-    const probe = { transitions: [], restore: () => { manager.setPanelCollapsed = original; } };
-    manager.setPanelCollapsed = function (id, ...args) {
+    const chrome = manager._panelChrome;
+    const original = chrome.setPanelCollapsed;
+    const probe = { transitions: [], restore: () => { chrome.setPanelCollapsed = original; } };
+    chrome.setPanelCollapsed = function (id, ...args) {
       const before = document.getElementById(id)?.classList.contains('collapsed');
       const result = original.call(this, id, ...args);
       const after = document.getElementById(id)?.classList.contains('collapsed');
@@ -1452,7 +1475,8 @@ try {
         getStats: () => ({ count: 1, lastUpdate: Date.now(), source: 'Local focus fixture' }),
       });
       state.ids.push(transitionId);
-      manager._renderToggles();
+      const { application } = await import('/src/main.js');
+      application.getComponents().data.presentation.panel._renderToggles();
       const offId = manager.getAll().find((layer) => !state.ids.includes(layer.id) && layer.showInTogglePanel && !layer.enabled)?.id;
       return {
         ready: Boolean(offId), offId, fixtureIds: state.ids.slice(0, 2), transitionId,
@@ -1466,6 +1490,20 @@ try {
       for (const width of [1000, 620, 480]) {
         await page.setViewport({ width, height: 900, deviceScaleFactor: 1 });
         await page.evaluate(() => window.__godsEyeView.styleManager.setPanelCollapsed('data-panel', false, { persist: false, syncShare: false }));
+        // Resizing schedules rail placement on animation frames. Wait for that
+        // pass and its CSS transitions before comparing a focus rectangle with
+        // hit testing; a fixed Tab delay can observe two different positions.
+        await page.evaluate(() => new Promise((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(resolve));
+        }));
+        await page.waitForFunction((expectedWidth) => {
+          const stack = document.getElementById('left-panel-stack');
+          if (innerWidth !== expectedWidth || !stack) return false;
+          if ((stack.dataset.layoutMode === 'mobile') !== (expectedWidth <= 720)) return false;
+          return !stack.getAnimations({ subtree: true }).some((animation) => (
+            animation instanceof CSSTransition && animation.playState === 'running'
+          ));
+        }, { timeout: 5_000 }, width);
         await page.focus('#data-panel .panel-collapse-btn');
         const targets = [[dataSetup.offId, 'OFF', false], [dataSetup.fixtureIds[0], 'ON', true], [dataSetup.fixtureIds[1], 'STALE', true]];
         for (const [id, label, enabled] of targets) {
@@ -1478,12 +1516,13 @@ try {
             JSON.stringify({ setup: enabled ? 'dev QA fixture' : 'real production OFF row; not activated', navigation, state }));
           await page.screenshot({ path: path.join(shotsDir, `${width}-data-${label.toLowerCase()}-focus.png`) });
           if (label === 'OFF') {
-            const passive = await page.evaluate((layerId) => {
+            const passive = await page.evaluate(async (layerId) => {
               const probe = window.__qaDataFocus;
               const focusBefore = document.activeElement;
               const productionBefore = JSON.stringify(probe.production());
               const durableBefore = localStorage.getItem('gev:layer-state:v2');
-              window.__godsEyeView.dataManager._refreshTogglePanel();
+              const { application } = await import('/src/main.js');
+              application.getComponents().data.presentation.refresh();
               return {
                 focusRetained: document.activeElement === focusBefore
                   && focusBefore.matches('.data-toggle-btn')
@@ -1589,7 +1628,8 @@ try {
       state.transition?.releaseDisable?.();
       const removed = [];
       for (const id of state.ids) removed.push(await window.__gevQaUnregisterLayer(manager, id));
-      manager._renderToggles();
+      const { application } = await import('/src/main.js');
+      application.getComponents().data.presentation.panel._renderToggles();
       window.__godsEyeView.styleManager.setPanelCollapsed('data-panel', state.collapsed, { persist: false, syncShare: false });
       // A native user-origin toggle legitimately asks the production state
       // coordinator to persist. Restore the exact pre-fixture value so this

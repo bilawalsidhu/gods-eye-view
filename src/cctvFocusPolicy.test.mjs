@@ -1,3 +1,4 @@
+import { readShellSource } from './testSupport/readShellSource.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -73,7 +74,7 @@ test('CCTV enable retains a pre-await tracking snapshot when tracking clears dur
   assert.match(diagnostics[0][0], /before setEnabled await/);
   assert.match(diagnostics[1][0], /after setEnabled await/);
 
-  const uiSource = readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
+  const uiSource = readShellSource();
   assert.match(uiSource, /await runCctvLayerEnableTransition\(\{/);
 });
 
@@ -94,4 +95,26 @@ test('CCTV disable transition does not emit enable-ownership diagnostics', async
   assert.equal(result, null);
   assert.deepEqual(transitions, [false]);
   assert.deepEqual(diagnostics, []);
+});
+
+
+test('a disposed UI cannot activate a camera when enabling finishes late', async () => {
+  let release;
+  let disposed = false;
+  let activations = 0;
+  const pending = runCctvLayerEnableTransition({
+    target: true,
+    setEnabled: () => new Promise((resolve) => { release = resolve; }),
+    readOwnership: () => ({}),
+    shouldFocus: () => !disposed,
+    activate: () => { activations++; return 'camera-a'; },
+    fly: () => assert.fail('disposed UI must not fly'),
+    debug: () => {},
+  });
+  disposed = true;
+  release();
+  await pending;
+  assert.equal(activations, 0);
+  const uiSource = readShellSource();
+  assert.match(uiSource, /shouldFocus: \(\) =>\s*!this\._disposed\s*&&\s*this\._dataManager\.isEnabled\('cctv'\)/);
 });

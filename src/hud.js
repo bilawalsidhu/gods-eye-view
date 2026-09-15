@@ -1,3 +1,4 @@
+import { applicationServices } from './services/application.js';
 /**
  * @module hud
  * @description Intelligence HUD Overlay — NRO/NGA Satellite Aesthetic.
@@ -35,7 +36,6 @@ const MILITARY_STYLES = new Set(['retro', 'surveillance', 'thermal']);
 /** Allowed HUD layout variants. */
 const HUD_VARIANTS = new Set(['tactical', 'operator', 'minimal']);
 const HUD_SUMMARY_INTERVAL_MS = 15000;
-const HUD_SUMMARY_URL = '/api/openai/hud-summary';
 
 /**
  * Cell size (degrees) for the ALT readout's geoid-undulation cache. N changes
@@ -66,7 +66,11 @@ export class IntelHUD {
    * @param {Cesium.Viewer} viewer - The Cesium Viewer instance used for
    *   camera telemetry and coordinate derivation.
    */
-  constructor(viewer) {
+  constructor(viewer, { placeSearch, summaryPolicy = {}, basemapContext = {}, summaryService = applicationServices.summary } = {}) {
+    this.summaryService = summaryService;
+    this.summaryPolicy = summaryPolicy;
+    this.basemapContext = basemapContext;
+    this.placeSearch = placeSearch;
     this.viewer = viewer;
     this._visible = false;
     this._autoMode = true; // auto show/hide based on style
@@ -626,6 +630,7 @@ export class IntelHUD {
       return;
     }
     if (!force && !this._summaryDirty) return;
+    if (this.summaryPolicy.canRequest?.() === false) return;
 
     const revision = this._summaryRevision;
     // Every caller invokes this as `void this._updateSummary(...)`, so nothing
@@ -659,13 +664,9 @@ export class IntelHUD {
     const timeout = window.setTimeout(() => controller.abort(), 5000);
     this._summaryRequest = controller;
     try {
-      const response = await fetch(HUD_SUMMARY_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(context),
-        signal: controller.signal,
-      });
-      const data = await response.json().catch(() => null);
+      this.summaryPolicy.onRequest?.();
+      const response = await this.summaryService.summarize(context, { signal: controller.signal });
+      const data = response.data;
       if (revision !== this._summaryRevision) return;
       if (isHudSummaryUnconfigured(response.status, data)) {
         this._setSummaryText(fallbackText, animate);
@@ -700,7 +701,7 @@ export class IntelHUD {
   }
 
   async _summaryContext() {
-    const labels = await getBasemapLabelContext(this.viewer);
+    const labels = await getBasemapLabelContext(this.viewer, this.placeSearch, this.basemapContext);
     const enabledLayers = this._dataManager?.getAll?.()
       ?.filter((layer) => layer.enabled)
       .map((layer) => layer.name) || [];

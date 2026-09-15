@@ -1,3 +1,4 @@
+import { readShellSource } from '../testSupport/readShellSource.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -671,7 +672,8 @@ test('pathological detection paint holds alternate frames without freezing share
 
 test('detection cannot resurrect a private canvas, listener, matrix, resize, clear, or UI inventory', () => {
   const source = readFileSync(new URL('./detection.js', import.meta.url), 'utf8');
-  const uiSource = readFileSync(new URL('../ui.js', import.meta.url), 'utf8');
+  const uiSource = readShellSource()
+  + '\n' + readFileSync(new URL('../ui/visualPresets.js', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /createElement\(\s*['"]canvas['"]\s*\)/);
   assert.doesNotMatch(source, /postRender\.addEventListener/);
   assert.doesNotMatch(source, /['"]detection-overlay['"]/);
@@ -694,7 +696,7 @@ test('detection cannot resurrect a private canvas, listener, matrix, resize, cle
   // three times" — same guarantee, and the copies can no longer drift.
   assert.match(
     uiSource,
-    /const MILITARY_DETECTION_PRESET = Object\.freeze\(\{ mode: 'dense', densityPct: 75 \}\);/,
+    /const MILITARY_DETECTION_PRESET = Object\.freeze\(\{\s*mode: 'dense',\s*densityPct: 75,?\s*\}\);/,
     'the tactical detection default is still Dense @ 75%',
   );
   assert.equal(

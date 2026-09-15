@@ -1,5 +1,110 @@
 # Changelog
 
+- Add an optional Nominatim geocoding adapter with configurable search/reverse endpoints, cancellation, bounded responses and retryable upstream errors. Extract portable response-reading and Overpass lexical helpers while retaining existing server exports.
+
+- Expose reference feed factories independently of standalone catalog construction; preserve source choices and asset attribution.
+
+- Add source-only layer exports and enforce source, browser, standalone and voice import directions. Move plain record/feed helpers and settings filesystem hardening to their owners while preserving compatibility and behavior.
+
+- Separate voice session lifetime and common controls from the default Realtime protocol adapter.
+- Separate canonical voice action arguments from descriptive wording, preserving the existing Realtime tool inventory.
+
+- Expose portable radio, camera-type and regional source helpers; keep HTTP transport separate from record normalization.
+
+- Separate vessel records and feed acquisition from rendering while preserving selection, partial-feed retention, sea-surface placement and request cancellation.
+
+- Separate military-flight records and acquisition from rendering while preserving ground-model ownership, source units and follow behavior.
+
+- Separate civil-flight acquisition and record reconciliation from Cesium resource updates, preserving source timing, ground placement and tracking behavior.
+
+- Separate navigation, share restoration, visual settings and panel state into focused UI owners with explicit dependencies and terminal cleanup.
+
+- Separate layer lifecycle transactions from panel construction and render/detection reactions; retain existing transition and refresh behavior.
+
+- Let CLI tools, development launchers and the setup doctor use an explicit project directory while retaining their existing default paths.
+
+- Split application scene, controls, catalog, tools and HTML into reusable components; configure application request services and sources without changing global fetch. Preserve standalone markup and voice behavior. Explicit annotation navigation may resolve a distant named target.
+
+## Voice component boundaries
+
+- Separate voice controls, Realtime connection requests and the action runner.
+- Allow compatible endpoints and server-selected models through construction options.
+- Cancel pending token/SDP requests on Stop or teardown and reject expired secrets.
+
+
+## Configurable geospatial services
+
+- Compose geocoding, place context and routes through independent providers.
+- Allow compatible endpoint configuration without changing voice tools or annotation behavior.
+- Isolate configured source caches and reject results after cancellation.
+
+
+## ALPR camera locations
+
+- Port Manjunath's (@manjunath22466) cyan camera badges, coral selection brackets,
+  gradient direction wedges and animated tactical labels into the reusable ALPR
+  layer. Keep bounded source loading, stable entities, selection and SHOW NEAREST.
+- Align the ALPR layer-row header with other layers, keeping the toggle beside
+  the name instead of wrapping it onto its own line.
+
+- Label the loaded camera count as nearby, show a purple-dot legend, and add
+  SHOW NEAREST to frame and select a loaded camera when none are on screen,
+  using the available 3D-tile or globe terrain height.
+
+- Keep nearby camera markers and selection stable during rotation, use bounded
+  ground-centered coverage instead of the horizon rectangle, and reuse in-flight queries.
+
+- Add optional, source-labeled OpenStreetMap ALPR camera locations, bounded city queries,
+  cached-response and coverage notices, selection cards, share links, and voice toggles.
+- Separate the request adapter, camera model, presentation, and instance lifecycle.
+  Source cancellation also guards late response bodies and rejects invalid query bounds.
+
+## Release disabled infrastructure rendering
+
+- Remove built Data Center, Dam and Submarine Cable entities when their layers
+  are disabled, avoiding retained visualizer work and entity memory.
+- Keep parsed datasets cached for re-enable; rebuild entities without refetching.
+
+## Camera layer components
+
+- Separate camera source requests, placement, frames, projection, cards and calibration.
+- Own visibility listeners and pending initialization within each layer lifetime.
+- Preserve existing camera catalogs, URL families, geometry and playback behavior.
+
+## Traffic and bikeshare components
+
+- Separate traffic loading, animation, styling and lifecycle into factory-owned components.
+- Give each flow source its own bounded decode cache and cancellation checks.
+- Separate bikeshare registry, station requests, rendering, selection and proximity handling.
+
+## Installation and context components
+
+- Separate mapped-site requests, records, placement, selection and viewport lifecycle.
+- Separate proximity queries, subject tracking, navigation/history, panel and direction rendering.
+- Retain source and ground-floor ownership in standalone composition; reject malformed
+  installation snapshots and ignore failures from cancelled requests.
+
+## Satellite and mission layer components
+
+- Separate catalog loading, orbit calculations, display, tracking and interaction
+  into instance-owned satellite components.
+- Separate mission ingestion, paths, placement, cards, roster, replay and camera
+  operations, retaining existing layer controls and satellite coordination.
+- Cancel late mission source work and reject malformed launch snapshots.
+
+## Fire layer components
+
+- Split fire source loading, state, rendering, cards, selection and viewport work
+  into reusable components with application-owned scene services.
+- Cancel late refreshes, retain good data after malformed responses, and preserve
+  selection identity without repeating a user-selection notification on refresh.
+
+## Earthquake components
+
+- Separate earthquake snapshot loading, record validation, and display ownership.
+- Cancel pending earthquake refreshes on disable or destruction, retaining the
+  last good snapshot after malformed or failed refreshes.
+
 ## September 8, 2026
 
 Earthquake refreshes validate the complete feed and construct replacement entities before clearing the previous snapshot. Malformed rows and duplicate rendered IDs retain the last good entities, overlays, count and timestamp and report a malformed response; unknown magnitude is excluded from M2.5+ rendering.
@@ -21,6 +126,304 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+- Give application request services, terrain/floor caches and annotation lookup state explicit owners and cancellation; share them across controls, layers and voice.
+
+- Construct application layers from explicit sources, with standalone provider selection and catalog-owned aircraft classification; controls and voice queries use those instances.
+
+- Let application data and controls receive the same explicit layer catalog; keep standalone defaults and registration-before-restoration ordering.
+
+- Expose existing FIRMS CSV parsing and UTC time-window helpers through a portable package export, with shared contract fixtures.
+
+- Separate map source factories from switching and resource ownership; retain current source IDs, attribution and fallbacks.
+
+- Separate radio directory loading, station selection, globe presentation and playback into composed components with an explicit metadata source.
+
+- Separate submarine cable sources and rendering components, and export bundled geography lookup modules.
+
+### Added
+
+- DISPLAY ▸ Draw: draw on the world by hand. Pick Area, Line or Pin, click the
+  vertices, double-click or press Enter to finish, label and colour it; Backspace
+  undoes a vertex, Esc cancels the shape and a second Esc leaves draw mode, and
+  Clear wipes the board. Drawn shapes go through the same annotation engine as
+  spoken ones, so they render with the whiteboard look, persist, de-dup and clear
+  together. While you are drawing, the draw tool owns the pointer and no layer
+  selects what you click through (#235 — thanks @cora-fresh-labs).
+
+### Fixed
+
+- Bikeshare stations load again. The extracted station source addressed the
+  proxy as `/api/gbfs?url=`, but the proxy reads its upstream target from the
+  path, so every request answered 400 and the layer reported a fetch error for
+  every city (#441 — thanks @MiguelGFerreira).
+- Overpass requests now carry a User-Agent that names the application, its
+  version and the project address, which is what the OpenStreetMap API usage
+  policy asks for; the previous string identified neither. A mirror may refuse
+  a client it cannot identify, and a refused mirror is one the fan-out has to
+  skip, so this affects every Overpass-backed layer: Mapped Installations,
+  traffic roads and annotation geometry. Mirror rotation, cooldown and cache
+  admission are unchanged (#420 — thanks @GladiatorrX9).
+- Place search has a last resort. With no Google Maps key, and when Photon does
+  not answer, a named-place search now falls back to OpenStreetMap's Nominatim
+  through `/api/geocode`, so search and voice fly-to still work on a keyless
+  globe. The route keeps to the service's usage policy: an identifying
+  User-Agent and Referer, at most one request per second, answers cached, one
+  upstream call shared between identical searches in flight, a bounded queue so
+  a burst is refused rather than held, and a queued search dropped once its
+  caller has given up (#350 — thanks @sendmebits).
+
+- Regional upstream reads now hold their deadline through the response body. The
+  abort timer was cleared as soon as the headers arrived, so an upstream that
+  answered and then stalled mid-body had no deadline at all. Redirect policy is
+  now stated per call rather than inherited, and the fixed Nominatim endpoints
+  refuse to be redirected.
+
+- The location search box answers two kinds of query without a network request
+  or an API key. A decimal-degree coordinate — `43.1731, -79.0384`, or either
+  order when N/S/E/W say which is which — flies straight there; a bundled city
+  or landmark name typed exactly (`paris`, `sf`, `Golden Gate Bridge`) flies to
+  the bundled place. Anything else, including anything malformed, goes to the
+  existing geocoders unchanged. Degrees/minutes/seconds and grid references are
+  not parsed and fall through the same way (#388 — thanks @KuraPiee).
+- A data-layer control a provider key is holding back now names that key. With
+  no FIRMS key the fire layer's control read KEY REQUIRED without saying which
+  key or where to put it; it now reads "Needs FIRMS_MAP_KEY — add it in Provider
+  Settings", on the control and in its accessible name. A layer that needs no
+  key, or already holds one, carries no such text, and an unrecognised key name
+  produces none rather than a guess (#296 — thanks @Matthew-Selvam).
+
+- Draped annotation geometry — area fills and outlines, routes and arrows —
+  classifies onto terrain as well as 3D tiles. On a keyless boot, where Cesium's
+  own globe carries the imagery, marks previously rendered their labels and no
+  geometry at all. This affected spoken annotations as much as hand-drawn ones.
+
+- A finished drawn area closes its ring, so its outline no longer misses the
+  edge back to the first vertex.
+
+- Areas measured and anchored across the antimeridian use unwrapped longitudes:
+  a shape straddling 180° reported an area thousands of times too large and
+  placed its label on the opposite side of the world.
+
+- Traffic now retries a failed destination after city navigation without a layer
+  toggle. Camera departure cancels pending work, arrival checks the final view,
+  and superseded requests cannot keep a newer view loading.
+
+### Added
+
+- Two map-orientation controls sit beside Share in the top-center globe
+  actions. Tilt Map swings between a straight-down map and a 35-degree oblique
+  around the point under the centre of the view, keeping that point and the
+  distance to it. North Up rotates around the same point until north is at the
+  top, keeping the pitch, and its needle shows the current bearing. Both decline
+  without moving the camera when nothing is under the centre of the view, and
+  both follow Reset Globe out of Clean UI, recording, Scene playback and Cockpit
+  (#442 — thanks @yashveeeeeeer).
+- The location search box answers two kinds of query without a network request
+  or an API key. A decimal-degree coordinate — `43.1731, -79.0384`, or either
+  order when N/S/E/W say which is which — flies straight there; a bundled city
+  or landmark name typed exactly (`paris`, `sf`, `Golden Gate Bridge`) flies to
+  the bundled place. Anything else, including anything malformed, goes to the
+  existing geocoders unchanged. Degrees/minutes/seconds and grid references are
+  not parsed and fall through the same way (#388 — thanks @KuraPiee).
+
+- Add Open Calgary traffic cameras as a keyless CCTV source pack (thanks
+  @rileygramlich): the public City of Calgary catalog, frames pinned to the
+  city's own host and upgraded to HTTPS, with the Open Government Licence –
+  City of Calgary attribution. The dataset publishes no camera facing — its
+  quadrant field and the quadrant suffix on each camera name are Calgary's
+  address grid — so headings use the shared id-hash fallback at low confidence
+  and are corrected with the calibration gizmo. `CCTV_CALGARY_MAX_SOURCES` sets
+  the cap and `CCTV_CALGARY_ENABLED=0` turns the pack off.
+
+- Add Ontario 511 as a keyless CCTV source pack, including Kitchener-area
+  highway cameras, with server-registered still URLs and attribution.
+- CCTV Mesh adds Finland: Fintraffic road weather cameras, keyless, nationwide, 300 by default. Each camera view of a station is placed separately; ambient stills refresh on the source's 10-minute cadence (the active camera keeps the usual 10-second refresh).
+- Add DriveBC highway cameras for British Columbia to the CCTV layer: the 250
+  nearest Vancouver and Victoria by default, with Open Government Licence –
+  British Columbia attribution. `CCTV_DRIVEBC_MAX_SOURCES` sets the cap and
+  `CCTV_DRIVEBC_ENABLED=0` turns the pack off.
+- Add TxDOT highway cameras for Texas as a keyless CCTV pack: the Austin and
+  San Antonio districts by default (`CCTV_TXDOT_DISTRICTS` selects any of the
+  25), only cameras reporting Device Online, snapshots decoded from TxDOT's
+  JSON-wrapped JPEG for the official origin only.
+- Add Estonia CCTV source packs: Tallinn intersection stills (`ristmikud.tallinn.ee`,
+  curated catalog) and nationwide Transpordiamet / Tarktee road-weather cameras
+  (DATEX2 locations + rotating JPEG URLs), with Tallinn city POIs and attribution.
+- Add a Warendorf (Germany) source pack: the Stadt Warendorf Marktplatz webcam, with a
+  curated pose.
+- Add Live Traffic NSW (Transport for NSW, CC BY 4.0) as a keyless CCTV pack: 217
+  Sydney and regional cameras with compass headings and view descriptions.
+- CCTV monitor planes no longer clip into the terrain. The plane is lifted
+  rigidly by the largest clearance deficit over a 3×3 grid of support points
+  against the ground under each (the ground at the mount where nothing finer is
+  known), and the client honours pack ranges instead of inflating them to 220 m.
+  `src/data/local_data/cctv_ground_heights/` ships precomputed ground heights under
+  every camera's mount and plane footprint (3,445 of 3,446 cameras), aligned to work
+  with Google Photorealistic 3D Tiles; cameras with shipped heights are placed
+  with zero runtime sampling, and the rest resolve the ground under their plane
+  from the Re:Earth DEM on activation. The footprint lift is capped at 60 m
+  above the mount-based lift so a tower under a far edge cannot launch the plane.
+
+- Press backtick (`) to toggle a rendered-frame-rate readout beneath the logo.
+  Typing fields retain the key; monitoring stops when hidden.
+
+
+- Extract vessel feed, store, rendering, selection, trail and card components with explicit source and scene services.
+- Bound contact retention for incomplete vessel observations, preserve source freshness and refresh history references in place.
+- Cancel pending vessel history during selection and layer teardown.
+
+- Split military flights into instance-owned state, ingestion, motion, rendering, tracking and query components. Share the existing aircraft calculations and give military classification an explicit source and cleanup lifecycle. Preserve known military identities even when the source has no position for them.
+
+- Split civil flights into instance-owned state, ingestion, motion, rendering, tracking and query components. Cancel enrichment on teardown and resolve model assets through the application.
+
+- Separate aircraft/vessel transport and normalization from layer rendering, preserving observation timestamps, altitude datums and optional history.
+- Retain absent aircraft during partially admitted snapshots and bound source error messages.
+
+- Drive share updates, Location feedback and Scene controls through immutable state snapshots and disposable subscriptions.
+- Keep stale lookup/load completions from publishing accepted results and retain shot rows during playback progress updates.
+- Export the existing Scene director with explicit playback and editing outcomes.
+
+- Separate UI assembly from standalone engine wiring, with dedicated panel layout, position, notice and recording owners.
+- Stop pending UI presentation and drag work during disposal; preserve accessible status text when stopping its decoration.
+- Organize component styles behind the same ordered stylesheet entry and include 3D model controls in the current-state snapshot.
+
+- Separate Scene controls and text presentation from project/playback operations; revoke replaced row listeners and suppress stale completion feedback.
+- Preserve shot-label identity on selection so double-click rename can complete.
+
+- Split Cockpit camera/controller, instruments, briefing, signals and layout into focused modules with explicit application operations.
+- Give Display portal moves cancellable focus/scroll restoration and stop Cockpit work before asynchronous UI teardown.
+
+- Separate Context controls, mode transitions and layer restoration; release tab listeners and suppress late panel/search feedback after disposal.
+
+- Separate camera-panel controls, frame loading, calibration editing and status display; cancel stale image and calibration work on camera changes or disposal.
+
+- Restore UI observer, resize-listener and CCTV subscription cleanup after Location extraction.
+
+- Extract Radio controls and tuner presentation with explicit actions and complete listener/subscription cleanup.
+
+- Extract Location controls and cancellable search presentation; preserve navigation handoff and prevent delayed POI expansion after closing the row.
+
+- Separate Layers panel presentation and clear-control bindings from layer lifecycle operations; revoke listeners and subscriptions on replacement or teardown.
+
+- Extract Map Source controls with listener cleanup and protection against obsolete selection feedback.
+
+- Separate visual effects, presets and animation from Display controls, with explicit stage ownership and teardown.
+
+- Extract Display control bindings with synchronous listener cleanup; preserve existing visual actions and native input behavior.
+
+- Extract application shortcuts and shader-parameter controls into reusable UI
+  components, preserving inputs and cleaning up listeners on rebuild/disposal.
+
+- Extract adaptive panel rail placement and measurement into reusable UI modules,
+  preserving obstacle clearance, responsive allocation, disclosure and scroll behavior.
+
+- Extract shared surface keyboard handling for the welcome launcher and Provider
+  Settings, preserving Tab/Escape behavior and releasing the listener on teardown.
+
+### Added
+
+### Security
+
+- The CCTV media route no longer forwards a client `Range` header to the upstream
+  camera host as it arrived. A single `bytes=` range is canonicalized and
+  forwarded, with every accepted form — explicit span, open-ended and suffix —
+  bounded to 64 MiB, the ceiling the relay already applies to a response that
+  declares its length. A response that declares no length has no ceiling — live
+  streamed media, and anything an upstream sends chunked while ignoring the
+  `Range` — which is unchanged. Multi-range, malformed, inverted, non-`bytes` and
+  unsafe-integer values are dropped and the request proceeds without a `Range`,
+  as RFC 7233 §3.1 prescribes; a multi-range value previously invited a
+  `multipart/byteranges` answer, whose parts nothing here reads. A value carrying
+  CR or LF made the outbound request throw, and the route recorded the thrown
+  message — which contains the caller's own string — as that camera's entry in
+  the health report. A request the browser has stopped waiting for is now
+  released: whether the viewer leaves while the camera is still answering or
+  part-way through the picture, the upstream request is cancelled rather than
+  left running, and neither case marks the camera degraded. Ordinary seeking is
+  unaffected. Contributed by Maher-Reven (#253).
+- CI pins `actions/checkout` and `actions/setup-node` to the commits their
+  `v4.4.0` tags name, so a repointed tag cannot change what runs in CI. The
+  version stays in a trailing comment, and moving to a later release is a
+  deliberate edit. Contributed by SurefireStudios (#309).
+
+- Validate configured Google Places coordinates and text queries before rate
+  limiting or upstream requests; preserve the keyless capability response.
+- Bound CCTV media response headers to 15 seconds and cancel error bodies.
+  Cap buffered snapshot downloads at 16 MiB while streaming.
+
+
+- Cancel the active location lookup when its controls are disposed.
+
+
+### Fixed
+
+- `DATA_SOURCES.md` states what the project does with camera frame content: a
+  successful upstream response is relayed as the provider served it, nothing in
+  the camera pipeline enhances it or recognises what is in it, resampling for
+  display is the only change made to the picture, and no frame is written to disk.
+  It also names what a viewer sees when an upstream has no frame — including a
+  last good picture kept after a failed refresh — and the one feature that sends
+  imagery anywhere: the voice assistant's viewport screenshot. Contributed by
+  Lob26 (#357).
+- Pinokio's Update shows what it is about to install before it installs it: the
+  tracking branch, the remote it fetched from, the incoming commits and their
+  diffstat. The remote is printed as host and path — a password or token in the
+  URL's user field is replaced and any query string dropped, though a secret
+  spelled as an ordinary path segment cannot be told from a repository name. It
+  fetches once and applies exactly the revision it named, so a commit that lands
+  mid-update cannot be installed unannounced. A git read it cannot complete is
+  reported as such instead of as "already up to date", and if the revision to
+  apply cannot be resolved at all the update stops without installing anything
+  and exits unsuccessfully. Contributed by Lob26 (#356).
+- On Windows, the credential-file hardening step verifies the file's permissions
+  through the system PowerShell. A side-by-side PowerShell 7 install prepends its
+  own module directories, which the 5.1 verifier cannot load, so the check failed
+  and the credential was refused. The verify script now sets its module path from
+  the running interpreter's own home, and the environment it is launched with
+  carries that one value and no differently cased alias of it. The tests that
+  cover it drive a stubbed process launcher, so what they check is the command
+  and environment the code builds; the Windows onboarding CI job now also runs
+  this file, where its one Windows-only case exercises the real hardener against
+  real native tools. Contributed by michaelhan1208 (#161).
+- The panel-recovery instructions in `docs/KNOWN-ISSUES.md`, `docs/CURRENT-STATE.md`
+  and `scripts/dev-fresh.sh` describe what the interface does. The rails lay panels
+  out themselves and write no stored position, so a CCTV panel that looks missing
+  is collapsed or its layer is off; the collapsed-state key is what opens it, and
+  the value to store is `'0'`, since removing the key returns the panel to its
+  default, which is collapsed. A view opened from a share link is laid out from
+  the link and ignores the stored value, so the console workaround is for ordinary
+  loads only. A check keeps the documented keys and outcomes in step with the
+  code. Contributed by vegettto (#408).
+
+- Extract panel disclosure and hover/focus controls into a reusable module;
+  cancel their listeners and pending work during replacement and teardown.
+
+- Reuse cached military aircraft during adsb.lol rate limits and server errors,
+  honor bounded retry delays, and preserve cached observation times and stale
+  indicators. Show installation zoom guidance without a false LOAD FAILED.
+
+- GBFS rejects upstream redirects, caps streamed responses at 5 MiB, and keeps
+  its deadline active through body reads. Rejected downloads are cancelled.
+
+
+- Split Overpass/installation search, regional briefing/weather, local voice
+  handlers and standalone key setup into focused modules. Preserve routes,
+  source behavior, tool schemas and credential restrictions.
+
+- Restore data-provider routes under local build preview and return JSON 404s
+  for unmatched API requests. Credential editing remains development-only.
+
+- Extract CCTV catalog/media and Radio Browser directory providers into focused
+  Node modules, preserving their routes and policies and isolating CCTV catalogs
+  by provider instance and application root.
+
+- Simplify POWER UP to one Google Maps entry. Keep the optional server key
+  available through environment configuration without a second setup row or
+  missing-key reminder.
+
+- Separate terrain, traffic, FIRMS and GBFS middleware into focused provider
+  modules, preserving local configuration, routes and cache/error behavior.
+
 - Split satellite and launch-feed server providers into focused modules with
   portable request URL builders, preserving routes and cache/error behavior.
 
@@ -33,7 +436,44 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   routes, local setup, fallback behavior and rendering.
 
 
+### Added
+
+- **Directions layer** — keyless A→B directions without a geocoder or a
+  microphone (thanks @spcpza). The row's chips arm a globe click for A and B
+  (DRIVE / WALK / BIKE, SWAP, FLY, CLEAR); the route comes from the existing
+  `/api/route` proxy (OSRM on the FOSSGIS servers), is draped on terrain and
+  3D tiles with the same flowing dashes as voice routes, and drops one dot per
+  maneuver. Below the chips is a compact keyboard-reachable ordered list of the
+  turns — distance and instruction per step; click one to open that maneuver's
+  card. FLY rides the shared route-flight cinematic through the same camera
+  authority voice destinations use, highlights the step it is on as it goes,
+  and lands when the route under it is replaced or cleared. A route that cannot
+  be found says so, and one longer than the 200-maneuver cap says it is cut
+  off; no straight line is ever drawn as a route. Share links carry the layer
+  as token `n`.
+- `/api/route` now returns turn-by-turn steps when asked (`steps=1`), phrased
+  in plain English from OSRM's maneuver data (`src/data/routeSteps.js`). Steps
+  are opt-in per request, so callers that do not read them (voice route
+  annotations, `fly_route`) get exactly the response they got before; identical
+  requests in flight at the same time share one upstream call; outbound calls
+  are spaced to the one-per-second rate the routing service's usage policy
+  states, with a bounded queue behind that gate and an honest 429 past it; the
+  upstream host is pinned against redirects, and a rate limit from the routing
+  service is reported as one rather than as a missing route.
+- The Data attribution popover now credits OSRM / FOSSGIS routing (used by
+  voice routes since launch, previously uncredited), with the OpenStreetMap
+  credit and the "fix the map" link the service's usage policy asks for.
+
 ### Changed
+
+- The interface asks Google Fonts for only the icon glyphs it draws, instead of
+  the whole variable icon font, and no longer requests a second icon family that
+  nothing renders. A check fails when a source names a glyph the request is
+  missing, because an absent glyph does not draw a placeholder — the element
+  renders the glyph's name as text. The check reads the panel templates as well
+  as the scripts, and reads glyph names written as literals, so a glyph chosen
+  through a variable has to be added to the request by hand. Contributed by
+  mml-studio (#239).
 - Separate explicit browser build settings from standalone environment loading
   and local provider middleware. Preserve provider behavior and root named exports.
 - Rename standalone browser startup to `src/standalone/` and add a Node-only
@@ -41,6 +481,29 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 
 ### Development
+
+- The CCTV launcher and preview-server tests resolve their temporary fixture
+  root through `fs.realpath`, so they pass on macOS, where the system temp
+  directory is reached through a symlink and the paths the tests compare would
+  otherwise differ. The launcher, preview-server and tool-project tests share one
+  helper that resolves the root, and a case that builds a symlinked temp root
+  explicitly keeps it covered on Linux, whose own temp root is not symlinked.
+  Contributed by VassagoDevteam (#301).
+- Remove the annotation GeoJSON conversion module and its tests. Nothing in the
+  application read or wrote it, so it carried no behavior. Annotations are
+  unchanged. Contributed by raiyan22 (#293).
+- Check the destination preset table as data: every entry carries the keys the
+  camera reads, its numbers are finite, its coordinates are on Earth, its camera
+  angle is one a camera can hold, `viewBounds` latitudes are not swapped, every
+  landmark lies inside its own destination's `viewBounds` (wrapped, so a view
+  across the antimeridian is valid), and every `LOCATIONS` row matches the
+  destination it names. This is a structural guard on the hand-written table for
+  whoever adds the next destination; it passes on the current entries and makes
+  no claim about how well any destination is framed. Contributed by daikaginza
+  (#168).
+- Drop `CCTV_AUTO_CALIBRATE` and `CCTV_DRAPE_MESH` from `.env.example`. Nothing
+  reads either name; the features they once switched no longer exist, so setting
+  them did nothing. Contributed by dajiaohuang (#283).
 
 - Extract application lifecycle and viewer exports. Split standalone startup into
   scene setup, controls, layer registration, tools and loading UI. Startup failure
@@ -52,6 +515,14 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   those exports separate from app startup and local Node services.
 
 ### Fixed
+
+- Reduce terrain-height timeouts when Re:Earth slows down. Batches are
+  sized against measured response latency on both browser and server to reduce
+  request timeouts, and a partial upstream failure now
+  keeps the heights that did resolve rather than discarding them. A position
+  the upstream answers with no height is reported as an absent reading instead
+  of a failed refresh, so the log distinguishes a slow or broken upstream from
+  one that simply has no value for a coordinate.
 
 - Separate optional Google server credentials for Places and Street View from
   the browser key, contributed by Tom-Neverwinter (#110). Provider Settings,
@@ -171,6 +642,27 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 - Existing cached refusals are now ignored immediately, including during
   stale-data fallback. Concurrent identical requests share the same last-good
   fallback when all mirrors refuse, without duplicating upstream requests.
+- A keyless place lookup no longer remembers a network failure as "no such
+  place". A blip while Photon was answering used to be memoized for the rest of
+  the session, so the query kept returning not-found from memory on a network
+  that had since recovered. A miss is now cached only when every source
+  consulted actually returned a verdict.
+
+### Added
+
+- Keyless place search. The LOCATION search box and the `fly_to_location` voice
+  tool now resolve place names through Photon (komoot, over OpenStreetMap) when
+  no Google Maps key is configured — previously the lookup threw. Google stays
+  the primary path and is unchanged when it answers; the fallback also covers a
+  key whose Geocoding API is not enabled, which Google reports as HTTP 200 with
+  `REQUEST_DENIED`, so an empty result is the detector rather than an error.
+- The same keyless fallback now covers the remaining two place lookups: map
+  annotations ("annotate the botanical garden") and the Radio layer's
+  "near \<place>" selection. Radio previously threw without a key, which
+  surfaced as a failed voice turn rather than as a station it could not place;
+  annotations silently failed to anchor. Annotation footprints match OSM on the
+  resolved feature's canonical name, so locality words in the request cannot
+  pull the outline onto a neighbouring building.
 
 - Refresh vulnerable transitive dependencies and update browser/image tooling
   to Puppeteer 25.10.0 and Sharp 0.35.4. Cesium remains on 1.138.0.
