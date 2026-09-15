@@ -2,6 +2,7 @@
 import {
   createTrack,
   createSample,
+  createFixSample,
   insertFix,
   advance,
   readFix,
@@ -155,7 +156,11 @@ export function initializePlayback(entry, budget, feedLag) {
     },
   });
   entry.sample = createSample();
-  entry.segment = { from: {}, to: {}, fraction: NaN };
+  entry.segment = {
+    from: createFixSample(),
+    to: createFixSample(),
+    fraction: NaN,
+  };
   entry.clocks = { wallNowMs: NaN, monoNowMs: NaN };
   // Inspection only. Scene animation reads the typed store into owned scratch.
   Object.defineProperty(entry, 'playT', {

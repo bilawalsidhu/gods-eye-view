@@ -2584,6 +2584,9 @@ newest bearings are explicitly labelled as reports. Rejected fixes cannot alter
 lag reservoirs or the target delay. Returning from a hidden tab explicitly
 synchronizes visible playback before its next frame.
 
+Playback reserves numeric scratch before the first sample, including unknown
+heights, and reuses caller-owned sample and segment storage.
+
 **Scene work.** Stationary and animated billboards use separate, adjacent
 collections above CCTV and Bikeshare. Traffic, Bikeshare and Transit share camera
 sensitivity claims; the original sensitivity returns after the last release.

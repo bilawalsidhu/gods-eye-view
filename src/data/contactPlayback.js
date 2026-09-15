@@ -29,6 +29,21 @@ function percentile(reservoir, rank) {
 export function createHistoryBudget(maxBytes = 32 * 1024 * 1024) {
   return { maxBytes, allocatedBytes: 0 };
 }
+/** Numeric fields are reserved up front, including unknown mesh heights. */
+export function createFixSample() {
+  return {
+    t: NaN,
+    lat: NaN,
+    lon: NaN,
+    heightM: NaN,
+    h: NaN,
+    receivedAt: NaN,
+    bearingDeg: NaN,
+    flags: 0,
+    epoch: 0,
+    seq: -1,
+  };
+}
 export function createTrack({
   capacity = 128,
   retentionMs = 900_000,
@@ -41,8 +56,8 @@ export function createTrack({
     retentionMs,
     policy,
     budget,
-    metricsScratchA: {},
-    metricsScratchB: {},
+    metricsScratchA: createFixSample(),
+    metricsScratchB: createFixSample(),
     storage: new DataView(new ArrayBuffer(0)),
     slots: 0,
     head: 0,
@@ -68,10 +83,10 @@ export function createTrack({
     bracket: 0,
     metricsRevision: -1,
     metricsIndex: -1,
-    from: {},
-    to: {},
-    metrics: {},
-    latest: {},
+    from: createFixSample(),
+    to: createFixSample(),
+    metrics: { speed: NaN, course: NaN, nextMotionT: Infinity },
+    latest: createFixSample(),
     pending: null,
     pendingCount: 0,
   };

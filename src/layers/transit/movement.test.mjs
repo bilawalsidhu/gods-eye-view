@@ -89,3 +89,58 @@ test('display copy never borrows a future bearing and follows anchored freshness
     /Reported 10 s ago · shown 25 s behind/,
   );
 });
+
+test('mesh-floor sampling owns fully initialized numeric scratch before the first frame', async () => {
+  const { correctHeight } = await import('../../data/contactPlayback.js');
+  const e = entry();
+  const scratch = [
+    e.track.from,
+    e.track.to,
+    e.track.latest,
+    e.track.metricsScratchA,
+    e.track.metricsScratchB,
+    e.segment.from,
+    e.segment.to,
+  ];
+  const fields = [
+    't',
+    'lat',
+    'lon',
+    'heightM',
+    'h',
+    'receivedAt',
+    'bearingDeg',
+    'flags',
+    'epoch',
+    'seq',
+  ];
+  for (const value of scratch)
+    for (const field of fields)
+      assert.equal(
+        typeof value[field],
+        'number',
+        `preallocated numeric ${field}`,
+      );
+  const shapes = scratch.map((value) => Object.keys(value));
+  recordFix(e, fix(10000));
+  recordFix(e, fix(25000, 42.001));
+  correctHeight(e.track, e.track.baseSeq, 12.125);
+  correctHeight(e.track, e.track.baseSeq + 1, 37.375);
+  for (let i = 0; i < 10000; i++) {
+    assert.equal(updatePlayback(e, 35000 + i, i), e.sample);
+    assert.equal(sampleAt(e.track, 10000 + i, e.sample), e.sample);
+    assert.ok(Number.isFinite(e.sample.heightM));
+  }
+  [
+    e.track.from,
+    e.track.to,
+    e.track.latest,
+    e.track.metricsScratchA,
+    e.track.metricsScratchB,
+    e.segment.from,
+    e.segment.to,
+  ].forEach((value, i) => assert.equal(value, scratch[i]));
+  scratch.forEach((value, i) =>
+    assert.deepEqual(Object.keys(value), shapes[i]),
+  );
+});
