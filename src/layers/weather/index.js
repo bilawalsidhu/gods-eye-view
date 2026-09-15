@@ -107,8 +107,22 @@ export function createWeatherLayer({
     floors.clear();
   };
 
+  /**
+   * The boolean this returns is the lifecycle, not the weather.
+   *
+   * The manager turns a `false` from the first update into a failed enable, so
+   * it must mean "this call could not be honoured" — torn down, no viewer, or
+   * superseded — and never "enabled, but with nothing to draw just now". This
+   * layer has two such states by design: a photoreal stack hides the globe,
+   * and there is no keyless mode. Both belong on the row, and the row only
+   * exists while the layer is on. Health is `getStats()`.
+   */
   const runUpdate = async (viewer) => {
-    if (!_enabled || !viewer || _hidden) return false;
+    if (!_enabled || !viewer) return false;
+    // Enabled over a hidden globe is a state, not a fault: the imagery is
+    // withdrawn, the row says GLOBE HIDDEN IN 3D, and returning to a globe
+    // stack redraws from the frames still held.
+    if (_hidden) return true;
     _request?.abort();
     const request = new AbortController();
     _request = request;
@@ -234,12 +248,15 @@ export function createWeatherLayer({
       // An outage only reaches the row when nothing is drawn at all; what it
       // always shows is age, since lastUpdate stops advancing.
       else _lastError = stack.size ? null : failure?.message || _lastError;
-      // A tick with nothing due is a healthy tick, not a failed refresh.
-      return stack.size > 0 || due.length === 0;
+      // The pass completed and the row now reflects it, whether that is
+      // imagery or `ADD XWEATHER KEY`. A source that is down must not take the
+      // layer off with it — an absent row says nothing at all, where an
+      // unavailable one says what is wrong.
+      return true;
     } catch (error) {
       if (settled()) return false;
       _lastError = error?.message || 'Weather source unavailable';
-      return false;
+      return true;
     } finally {
       if (_request === request) _request = null;
     }

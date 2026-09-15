@@ -230,7 +230,8 @@ test('disable unsubscribes, and a rejected frame reports without drawing', async
     },
   });
   assert.equal(listeners.size, 1);
-  assert.equal(await layer.update(viewer), false);
+  // The pass completed; what failed is the source, and the row carries that.
+  assert.equal(await layer.update(viewer), true);
   assert.deepEqual(layers, [base], 'a failed frame must draw nothing');
   assert.equal(layer.getStats().error, 'Xweather unreachable');
   // A service that could not be reached is NOT a missing key. Telling someone
@@ -257,7 +258,10 @@ test('without a key the row reports unavailable rather than an empty globe', asy
     },
   };
   const { layer, viewer, layers, base } = harness(source);
-  assert.equal(await layer.update(viewer), false);
+  // True, and deliberately: the manager reads a false first update as a
+  // failed enable and switches the layer back off, which would take the row
+  // saying ADD XWEATHER KEY away with it.
+  assert.equal(await layer.update(viewer), true);
   assert.deepEqual(layers, [base], 'nothing is drawn without a key');
   const stats = layer.getStats();
   assert.equal(stats.status, 'unavailable');
@@ -284,6 +288,58 @@ test('a key arriving later clears the unavailable state', async () => {
   assert.notEqual(stats.status, 'unavailable');
   assert.equal(stats.error, null);
   assert.equal(stats.countLabel, `${OWNED} ON`);
+});
+
+test('an enable never fails for a state the row is meant to report', async () => {
+  // The manager turns a false first update into a failed enable, switches the
+  // layer back off and toasts "weather could not start cleanly". Both states
+  // below are ones this layer is designed to sit in and explain, so failing
+  // the enable removes the very row that would have explained them.
+  const cases = [
+    {
+      what: 'no key',
+      source: {
+        getFrame: async () => {
+          throw noKeyError();
+        },
+      },
+      globeVisible: true,
+      error: 'ADD XWEATHER KEY',
+    },
+    {
+      what: 'source unreachable',
+      source: {
+        getFrame: async () => {
+          throw new Error('Xweather unreachable');
+        },
+      },
+      globeVisible: true,
+      error: 'Xweather unreachable',
+    },
+    {
+      what: 'globe hidden by a photoreal stack',
+      source: readySource(),
+      globeVisible: false,
+      error: 'GLOBE HIDDEN IN 3D',
+    },
+  ];
+
+  for (const { what, source, globeVisible, error } of cases) {
+    const { layer, viewer, layers, base } = harness(source, { globeVisible });
+    assert.notEqual(
+      await layer.update(viewer),
+      false,
+      `${what} must not reject the enable`,
+    );
+    assert.deepEqual(layers, [base], `${what} draws nothing`);
+    assert.equal(layer.getStats().error, error, what);
+  }
+
+  // A torn-down layer is the opposite case: the call cannot be honoured, and
+  // false is the only honest answer.
+  const { layer, viewer } = harness(readySource());
+  layer.disable(viewer);
+  assert.equal(await layer.update(viewer), false, 'disabled rejects the call');
 });
 
 test('the layer refuses to construct without a frame source', () => {
