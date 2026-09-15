@@ -174,6 +174,10 @@ export function validateMeteorSnapshot(payload) {
     !Number.isFinite(payload.fetchedAt) ||
     !Number.isInteger(payload.totalCount) ||
     payload.totalCount < payload.records.length ||
+    (payload.records.length === 0 &&
+      (payload.totalCount !== 0 ||
+        payload.timeFrom !== null ||
+        payload.timeTo !== null)) ||
     (payload.records.length > 0 &&
       (!Number.isFinite(payload.timeFrom) ||
         !Number.isFinite(payload.timeTo) ||

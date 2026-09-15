@@ -21,6 +21,32 @@ const errors = [];
 page.on('pageerror', (error) => errors.push(error.message));
 try {
   await page.setViewport({ width: 1440, height: 1000, deviceScaleFactor: 1 });
+  let feedMode = 'live';
+  await page.setRequestInterception(true);
+  page.on('request', (req) =>
+    req.interceptResolutionState().action === 'disabled'
+      ? undefined
+      : req.url().endsWith('/api/meteors') && feedMode !== 'live'
+        ? req.respond({
+            status: feedMode === 'empty' ? 200 : 502,
+            contentType: 'application/json',
+            body:
+              feedMode === 'empty'
+                ? JSON.stringify({
+                    records: [],
+                    totalCount: 0,
+                    generatedAt: Date.now(),
+                    fetchedAt: Date.now(),
+                    stale: false,
+                    limited: false,
+                    rejectedCount: 0,
+                    timeFrom: null,
+                    timeTo: null,
+                  })
+                : '{}',
+          })
+        : req.continue(),
+  );
   await page.goto(`${url}/?welcome=0`, {
     waitUntil: 'domcontentloaded',
     timeout: 60000,
@@ -29,6 +55,26 @@ try {
     timeout: 60000,
   });
   await new Promise((resolve) => setTimeout(resolve, 4000));
+  feedMode = 'fail';
+  await page.$eval('[data-layer-id="meteors"] .data-toggle-btn', (el) =>
+    el.click(),
+  );
+  await page.waitForFunction(() => {
+    const entry = window.__godsEyeView.dataManager.layers.get('meteors');
+    return entry.enabled && entry.module.getStats().error;
+  });
+  assert.equal(await page.$eval('.gev-meteor-card', (el) => el.hidden), false);
+  assert.match(
+    await page.$eval('.meteor-overview', (el) => el.textContent),
+    /temporarily unavailable/,
+  );
+  await page.evaluate(() =>
+    window.__godsEyeView.dataManager.setEnabled('meteors', false, {
+      origin: 'user',
+    }),
+  );
+  feedMode = 'live';
+  await page.setRequestInterception(false);
   await page.$eval('[data-layer-id="meteors"] .data-toggle-btn', (el) =>
     el.click(),
   );
@@ -42,6 +88,7 @@ try {
     window.__godsEyeView.dataManager.layers.get('meteors').module.getStats(),
   );
   assert.ok(stats.count > 0, JSON.stringify(stats));
+  assert.equal(stats.error, null, 'retry clears the acquisition error');
   await page.waitForSelector(
     '.gev-meteor-card:not([hidden]) .meteor-overview:not([hidden])',
   );
@@ -114,17 +161,35 @@ try {
   await page.click('.meteor-close');
   assert.equal(await page.$eval('.meteor-detail', (el) => el.hidden), true);
   // Wait for Cesium to apply the selection style before sending a real click.
-  await page.waitForFunction(
-    ({ x, y, id }) => {
-      const { scene } = window.__godsEyeView.viewer;
-      scene.requestRender();
-      const picked = scene.pick({ x, y });
-      return picked?.id?.id === `meteor:${id}`;
+  const pickedPoint = await page.waitForFunction(
+    async (id) => {
+      const { viewer } = window.__godsEyeView;
+      const Cesium = await import('/node_modules/cesium/Build/Cesium/index.js');
+      const entity = viewer.dataSources
+        .getByName('meteors')[0]
+        .entities.getById(`meteor:${id}`);
+      const positions = entity.polyline.positions.getValue();
+      const midpoint = Cesium.Cartesian3.midpoint(
+        positions[0],
+        positions[1],
+        new Cesium.Cartesian3(),
+      );
+      const point = Cesium.SceneTransforms.worldToWindowCoordinates(
+        viewer.scene,
+        midpoint,
+      );
+      viewer.scene.requestRender();
+      if (!point) return false;
+      const picked = viewer.scene.pick(point);
+      return picked?.id?.id === `meteor:${id}`
+        ? { x: point.x, y: point.y }
+        : false;
     },
     { timeout: 15000, polling: 100 },
-    geometry,
+    geometry.id,
   );
-  await page.mouse.click(Math.round(geometry.x), Math.round(geometry.y), {
+  const clickPoint = await pickedPoint.jsonValue();
+  await page.mouse.click(Math.round(clickPoint.x), Math.round(clickPoint.y), {
     delay: 60,
   });
   await page.waitForSelector('.meteor-detail:not([hidden])');
@@ -248,29 +313,8 @@ try {
   await page.click('.meteor-minimize');
 
   // A failed refresh must retain the last accepted data and visibly mark it stale.
-  let emptyBatch = false;
   await page.setRequestInterception(true);
-  page.on('request', (req) =>
-    req.url().endsWith('/api/meteors')
-      ? req.respond({
-          status: emptyBatch ? 200 : 502,
-          contentType: 'application/json',
-          body: emptyBatch
-            ? JSON.stringify({
-                records: [],
-                totalCount: 0,
-                generatedAt: Date.now(),
-                fetchedAt: Date.now(),
-                stale: false,
-                limited: false,
-                rejectedCount: 0,
-                timeFrom: null,
-                timeTo: null,
-              })
-            : '{}',
-        })
-      : req.continue(),
-  );
+  feedMode = 'fail';
   const failure = await page.evaluate(async () => {
     const app = window.__godsEyeView;
     const layer = app.dataManager.layers.get('meteors').module;
@@ -284,7 +328,7 @@ try {
     await page.$eval('.meteor-status', (el) => el.textContent),
     /STALE/,
   );
-  emptyBatch = true;
+  feedMode = 'empty';
   await page.evaluate(() =>
     window.__godsEyeView.dataManager.layers
       .get('meteors')
@@ -313,6 +357,9 @@ try {
       screenshots: output,
     }),
   );
+} catch (error) {
+  console.error('Page errors:', errors);
+  throw error;
 } finally {
   await browser.close();
 }

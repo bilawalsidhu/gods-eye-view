@@ -64,14 +64,17 @@ The `/api/meteors` route has one fixed HTTPS upstream, no key or user-supplied q
 Downloads have a 25-second deadline and 64 MiB cap. Concurrent requests share one
 refresh; successful data is cached in memory for six hours. Failures back off for
 one minute and serve any previous batch as stale. Development and built preview
-use the same provider.
+use the same provider. An initial acquisition failure keeps the observatory open
+with an unavailable message; toggling the layer retries. Empty snapshots must
+report zero observations and null time bounds.
 
 ## Verification
 
 Parser/provider tests are discovered by `npm test`. With the dev server running,
 `node scripts/qa-meteors.mjs` checks the initial overview, live data, WGS84 heights,
 click selection, context visibility, endpoint guides, midpoint scrubbing,
-replay cancellation, re-enable, mobile bounds and stale retention. Screenshots
+replay cancellation, re-enable, mobile bounds, first-load failure and retry,
+stale retention and empty-batch cleanup. Screenshots
 are saved in `qa-shots/meteors/`.
 
 ## Later

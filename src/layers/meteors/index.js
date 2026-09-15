@@ -371,6 +371,9 @@ export function createMeteorsLayer({ source, services } = {}) {
               null,
               'The camera network data is temporarily unavailable. Toggle this layer to try again.',
             );
+          // A handled outage leaves the enabled observatory available for retry.
+          // Returning false here would make the lifecycle roll back enable and hide it.
+          return true;
         }
         return false;
       } finally {

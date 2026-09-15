@@ -102,6 +102,31 @@ test('valid empty batch remains distinct from malformed nonempty data', () => {
   assert.equal(result.timeFrom, null);
 });
 
+test('empty snapshots require zero total observations and explicit null time bounds', () => {
+  const empty = {
+    ...envelope(),
+    records: [],
+    totalCount: 0,
+    timeFrom: null,
+    timeTo: null,
+  };
+  assert.equal(validateMeteorSnapshot(empty), empty);
+  for (const change of [
+    { totalCount: -1 },
+    { totalCount: 1 },
+    { timeFrom: 123 },
+    { timeTo: 0 },
+    { timeFrom: undefined },
+    { timeTo: undefined },
+    { timeFrom: Infinity },
+    { timeTo: NaN },
+  ])
+    assert.throws(
+      () => validateMeteorSnapshot({ ...empty, ...change }),
+      /Malformed/,
+    );
+});
+
 test('source enforces cancellation through response parsing and rejects invalid envelopes', async () => {
   const controller = new AbortController();
   const source = createMeteorSource({
