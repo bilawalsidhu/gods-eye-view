@@ -115,16 +115,25 @@ export function createTrails({ state, services, parts, source }) {
     if (entry === selected)
       for (let i = activeIndex - 1; i >= 0; i--) order.push(i);
     entry.trailTruncated = false;
+    let markerVertices = 0;
+    let markerIntervals = Math.max(0, entry.track.count - 1 - activeIndex);
     for (const i of order) {
       readFix(entry.track, i, a);
       readFix(entry.track, i + 1, b);
+      const markerCorridor = i >= activeIndex;
+      if (markerCorridor) markerIntervals--;
       if (a.epoch !== b.epoch || b.flags & FIX_FLAGS.BREAK) continue;
       if (entry !== selected && b.t < entry.sample.displayT) continue;
-      const n = Math.max(1, Math.ceil(fixDistanceM(a, b) / STEP_M));
-      if (vertices + n + 1 > TRAIL_VERTEX_LIMIT) {
-        entry.trailTruncated = true;
-        continue;
-      }
+      const desired = Math.max(1, Math.ceil(fixDistanceM(a, b) / STEP_M));
+      // Reserve endpoints for every future marker interval. Sparse reports
+      // coarsen the active path instead of losing the vehicle to the body cap.
+      const n = markerCorridor
+        ? Math.min(desired, TRAIL_VERTEX_LIMIT - markerVertices - 2 * markerIntervals - 1)
+        : desired;
+      const retainBody = vertices + n + 1 <= TRAIL_VERTEX_LIMIT;
+      if (!retainBody || n < desired) entry.trailTruncated = true;
+      if (!markerCorridor && !retainBody) continue;
+      if (markerCorridor) markerVertices += n + 1;
       const positions = [],
         heights = [];
       let valid = true;
@@ -145,10 +154,10 @@ export function createTrails({ state, services, parts, source }) {
           );
       }
       signature += `${a.seq}/${b.seq}:${heights.join(',')};`;
-      vertices += n + 1;
+      if (retainBody) vertices += n + 1;
       if (!valid) continue;
       paths.set(a.seq, { positions, toSeq: b.seq });
-      if (entry === selected && fixDistanceM(a, b) > 0) {
+      if (entry === selected && retainBody && fixDistanceM(a, b) > 0) {
         for (let k = 0; k < n; k++)
           all.push({
             fromSeq: a.seq,

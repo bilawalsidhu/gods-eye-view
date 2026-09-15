@@ -7,6 +7,8 @@
 - Extract a portable Director shot runner and connect existing scene playback to
   it. Preserve authored content, project files, camera/layer behavior and source
   attribution; document the planned timeline, scene-file and data-pack boundaries.
+- Preserve transit markers between sparse rail reports by bounding corridor subdivisions independently of retained trail geometry.
+
 - Keep selected transit trail bodies and heads classified on terrain and 3D tiles across map-source changes.
 
 - Separate map-feature acquisition from annotation/search selection. Move road and mapped-installation decoding into source adapters while preserving geometry policy, cancellation, retry outcomes and compatibility exports.

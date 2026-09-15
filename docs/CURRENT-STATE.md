@@ -2567,7 +2567,9 @@ fixes per vehicle, under a global 32 MiB history budget. Capacity pressure may
 shorten that history. Only the selected vehicle has a trail: completed segments
 are batched primitives, and a small moving head ends at the marker. Trail
 geometry is bounded to 640 prepared vertices, prioritizing the active corridor
-and shortening the oldest geometry first. Supported scenes use ground polylines
+and shortening the oldest geometry first. Active and future marker corridors
+retain their own 640-vertex budget; long report intervals use coarser subdivisions
+than 25 m instead of dropping an admitted vehicle. Supported scenes use ground polylines
 classified against both terrain and 3D tiles, including after map-stack changes,
 with per-segment age colours. History changes rebuild the body. The head is one
 short draped corridor, clipped to displayed time by a material uniform; only

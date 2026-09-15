@@ -2671,6 +2671,52 @@ test('a long selected history shortens its oldest geometry before sacrificing th
   );
 });
 
+test('sparse rail reports preserve a bounded marker corridor with and without selection', async (t) => {
+  const app = harness(t);
+  const parts = app.layer._transitPartsForTest();
+  const { seek } = await import('../../data/contactPlayback.js');
+  let latitude = 42.36 - 16000 / 111320;
+  let timestamp = reported();
+  app.serve('mbta', () => ({
+    status: 200,
+    body: snapshot('mbta', 'MBTA', [
+      vehicle('sparse', latitude, -71.06, timestamp, { routeId: 'CR-1' }),
+    ], { fetchedAt: Date.now() }),
+  }));
+  app.layer.enable(app.viewer);
+  await app.layer.update();
+  app.settle();
+  app.advance(180000);
+  latitude = 42.36;
+  timestamp += 180;
+  await app.layer.update();
+  app.settle();
+  const entry = app.vehicles()[0];
+  assert.equal(entry.mode, 'rail');
+  assert.equal(entry.track.count, 2, 'both 88.9 m/s reports pass admission');
+  assert.equal(entry.fixes[1].t - entry.fixes[0].t, 180000);
+  for (let i = 0; i < 1500; i++)
+    app.ground._warm.set(app.ground._key(42.20 + i * 0.0002, -71.06), 12);
+  seek(entry.track, entry.fixes[0].t + 90000, {
+    wallNowMs: Date.now(), monoNowMs: performance.now(),
+  });
+  parts.rendering.sampleIdle(entry);
+  for (const selected of [false, true, false]) {
+    if (selected) parts.selection.selectVehicle(entry.key);
+    else parts.selection.clearSelection();
+    parts.trails.prepareEntry(entry);
+    const path = entry.displayPaths.get(entry.sample.fromSeq);
+    assert.ok(path, 'active corridor survives the body cap');
+    assert.ok(path.positions.length <= 640);
+    const position = parts.trails.samplePosition(entry, entry.sample, new Cesium.Cartesian3(), true);
+    assert.ok(position && [position.x, position.y, position.z].every(Number.isFinite));
+    parts.rendering.placeSample(entry, true);
+    assert.equal(entry.marker.show, true);
+    assert.ok(Cesium.Cartesian3.equals(entry.marker.position, position));
+    assert.ok(entry.trailVertices <= 640);
+  }
+});
+
 test('missing rectangle still rejects the far side, and frustum rejection wins', async (t) => {
   const app = harness(t, { altitude: 100_000 });
   app.viewer.camera.computeViewRectangle = () => undefined;
