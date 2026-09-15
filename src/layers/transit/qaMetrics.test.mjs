@@ -329,28 +329,42 @@ test('trail-head acceptance names every missing and failed condition', async () 
   );
 });
 
-test('trail pixel acceptance needs six changed samples; static dark roads, empty reads and five hits fail', async () => {
+const trailPatch = (rgb) => Array.from({ length: 49 }, () => [...rgb, 255]).flat();
+const trailEvidence = (on, off) => ({
+  onAgain: on, offAgain: off, tilesReady: true,
+  samples: Array.from({ length: 8 }, (_, i) => ({ x: i * 20 + 20, y: 20, radius: 3, inFront: true })),
+  sprite: { x: 300, y: 20, radius: 24 },
+});
+
+test('trail pixels require repeatable contrast at six distinct samples outside the sprite', async () => {
   const { reduceTrailPixels } = await import('./qaMetrics.js');
-  const patch = (rgb) => [...rgb, 255, ...rgb, 255];
-  const off = Array.from({ length: 8 }, () => patch([150, 150, 150]));
-  const on = off.map((p, i) => (i < 6 ? patch([94, 240, 138]) : p));
-  assert.equal(reduceTrailPixels(on, off).pass, true);
-  assert.equal(
-    reduceTrailPixels(
-      on.map((p, i) => (i === 5 ? off[i] : p)),
-      off,
-    ).pass,
-    false,
-  );
-  const dark = off.map(() => patch([5, 8, 12]));
-  assert.equal(reduceTrailPixels(dark, off).present, 8);
-  const dim = off.map(() => patch([126, 126, 126]));
-  assert.equal(
-    reduceTrailPixels(dim, off).present,
-    0,
-    'a 0.16-alpha dark depth-fail line is too faint',
-  );
-  assert.equal(reduceTrailPixels(dark, dark).present, 0);
-  assert.equal(reduceTrailPixels(on, on).present, 0);
-  assert.equal(reduceTrailPixels([], []).pass, false);
+  const off = Array.from({ length: 8 }, () => trailPatch([150, 150, 150]));
+  const on = off.map((p, i) => i < 6 ? trailPatch([94, 240, 138]) : p);
+  const evidence = trailEvidence(on, off);
+  assert.equal(reduceTrailPixels(on, off, evidence).pass, true);
+  const five = on.map((p, i) => i === 5 ? off[i] : p);
+  assert.equal(reduceTrailPixels(five, off, trailEvidence(five, off)).pass, false);
+  for (const rgb of [[5, 8, 12], [126, 126, 126]]) {
+    const patches = off.map(() => trailPatch(rgb));
+    assert.equal(reduceTrailPixels(patches, off, trailEvidence(patches, off)).present, rgb[0] === 5 ? 8 : 0);
+    assert.equal(reduceTrailPixels(patches, patches, trailEvidence(patches, patches)).present, 0);
+  }
+  assert.equal(reduceTrailPixels(on, off).pass, false, 'two reads are insufficient');
+  assert.equal(reduceTrailPixels(on, off, { ...evidence, tilesReady: false }).pass, false);
+  assert.equal(reduceTrailPixels(on, off, { ...evidence, samples: Array(8).fill(evidence.samples[0]) }).pass, false);
+  assert.equal(reduceTrailPixels(on, off, { ...evidence, sprite: { x: 80, y: 20, radius: 200 } }).pass, false);
+  assert.equal(reduceTrailPixels([], [], trailEvidence([], [])).pass, false);
+});
+
+test('background refinement without a trail cannot pass repeated off/on acceptance', async () => {
+  const { reduceTrailPixels } = await import('./qaMetrics.js');
+  const grey = (n) => Array.from({ length: 8 }, () => trailPatch([n, n, n]));
+  const off = grey(100), on = grey(30);
+  const evidence = trailEvidence(on, off);
+  assert.equal(reduceTrailPixels(on, off, { ...evidence, offAgain: grey(30) }).pass, false, 'one background transition is not a trail');
+  assert.equal(reduceTrailPixels(on, off, { ...evidence, offAgain: grey(170), onAgain: grey(100) }).pass, false, 'equal deltas on a drifting baseline are not a trail');
+  assert.equal(reduceTrailPixels(on, off, { ...evidence, onAgain: off }).pass, false, 'contrast must repeat');
+  const first = off.map((p) => p.map((v, i) => i < 8 ? on[0][i] : v));
+  const second = off.map((p) => p.map((v, i) => i >= 8 && i < 16 ? on[0][i] : v));
+  assert.equal(reduceTrailPixels(first, off, { ...evidence, onAgain: second }).pass, false, 'the same pixels must change twice');
 });

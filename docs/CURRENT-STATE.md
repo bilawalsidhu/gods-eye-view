@@ -2697,18 +2697,24 @@ and exercise the real OFF/restore button. Cesium render errors fail selection
 acceptance.
 The `trail-visible` section requires a visible Google 3D tileset. It selects a
 scripted straight CapMetro bus with nine retained fixes, runs for 20 seconds at each
-300/600/900 m view (55/45/45 degrees), then compares trail-on/off framebuffer patches at eight
-projected surface points. `Google 3D selected trail visible at 6 of 8 projected samples`
+300/600/900 m view (55/45/45 degrees), then freezes playback and waits for sustained tile and primitive readiness.
+It captures off/on/off/on framebuffer patches at eight distinct projected surface
+points outside the padded sprite and selection bracket. `Google 3D selected trail visible at 6 of 8 projected samples`
 prints the selected key, fix count, elapsed display time, path length, hit count,
 per-point coordinates/hits and renderer strategy. At least six points need a
-changed green core or dark backing; an unchanged dark road fails. The dark
+repeatably changed green core or dark backing at the same pixels. Repeated off
+and on channels and their contrast deltas must agree within 8 RGB levels;
+background refinement, overlapping samples and unchanged dark roads fail. The dark
 backing must reduce summed RGB by at least 40%, and either match needs RGB
 distance of at least 40, so a faint depth-fail wash cannot satisfy visibility. Artifacts are
 `<tag>-<altitude>m-trail-visible.jpg` and matching JSON. Run the same harness
 against the base and patched keyed builds; partial runs remain diagnostic.
-Node geometry checks measure 1,352 bytes per head subdivision, zero ordinary-frame
-head geometry uploads, and a conservative 1,809,648-byte body estimate including
-64 bytes per instance, below 2 MiB. The same 20-second browser interval scopes
+Node checks run Cesium's final geometry pipeline, including batch IDs and
+position encoding: 1,576 bytes per head subdivision and 2,014,128 bytes for the
+1,278-instance body. The body plus a separate 81,792-byte instance reserve totals
+2,095,920 bytes, below the 2 MiB body limit; the head remains below its separate
+2 KiB/frame geometry limit. Ordinary frames upload no head geometry. These are
+pipeline buffer measurements, not measured GPU time or instance-texture uploads. The same 20-second browser interval scopes
 WebGL uploads to the trail body/head, forces one body rebuild, reports head CPU
 p95/max, and gates body uploads at 2 MiB and head uploads at 2 KiB/frame.
 

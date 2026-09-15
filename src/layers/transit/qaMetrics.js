@@ -330,26 +330,40 @@ export function reduceTrailHead(anchor, target) {
   };
 }
 
-/** Paired trail pixels must change: a dark roof/road alone cannot pass. */
-export function reduceTrailPixels(on, off) {
+/** Repeated off/on patches isolate stable, trail-correlated framebuffer changes. */
+export function reduceTrailPixels(on, off, evidence = {}) {
+  const { onAgain, offAgain, samples = [], sprite, tilesReady } = evidence;
+  const finitePoint = (p) => p && [p.x, p.y, p.radius].every(Number.isFinite) && p.radius > 0;
+  const stable = [], eligible = [];
   const hits = Array.from({ length: 8 }, (_, i) => {
-    const a = on?.[i],
-      b = off?.[i];
-    if (!a || !b || a.length !== b.length || a.length % 4) return false;
+    const point = samples[i];
+    eligible[i] = !!(tilesReady === true && finitePoint(point) && point.inFront === true && finitePoint(sprite) &&
+      Math.hypot(point.x - sprite.x, point.y - sprite.y) > point.radius + sprite.radius &&
+      samples.slice(0, i).every((prior) => !finitePoint(prior) ||
+        Math.hypot(point.x - prior.x, point.y - prior.y) > point.radius + prior.radius));
+    const a = on?.[i], b = off?.[i], c = onAgain?.[i], d = offAgain?.[i];
+    stable[i] = false;
+    if (!eligible[i] || !a?.length || a.length % 4 ||
+      [b, c, d].some((p) => !p || p.length !== a.length)) return false;
     let matches = 0;
+    const contrast = (lit, baseline, k) => {
+      const delta = Math.hypot(lit[k] - baseline[k], lit[k + 1] - baseline[k + 1], lit[k + 2] - baseline[k + 2]);
+      const green = lit[k + 1] > lit[k] + 30 && lit[k + 1] > lit[k + 2] + 18;
+      const dark = lit[k] + lit[k + 1] + lit[k + 2] < 0.6 * (baseline[k] + baseline[k + 1] + baseline[k + 2]);
+      return delta >= 40 && (green || dark);
+    };
     for (let k = 0; k < a.length; k += 4) {
-      const delta = Math.hypot(
-        a[k] - b[k],
-        a[k + 1] - b[k + 1],
-        a[k + 2] - b[k + 2],
-      );
-      const green = a[k + 1] > a[k] + 30 && a[k + 1] > a[k + 2] + 18;
-      const dark =
-        a[k] + a[k + 1] + a[k + 2] < 0.6 * (b[k] + b[k + 1] + b[k + 2]);
-      if (delta >= 40 && (green || dark)) matches++;
+      for (let channel = 0; channel < 3; channel++) {
+        const j = k + channel;
+        if (![a[j], b[j], c[j], d[j]].every((v) => Number.isFinite(v) && v >= 0 && v <= 255) ||
+          Math.abs(b[j] - d[j]) > 8 || Math.abs(a[j] - c[j]) > 8 ||
+          Math.abs((a[j] - b[j]) - (c[j] - d[j])) > 8) return false;
+      }
+      if (contrast(a, b, k) && contrast(c, d, k)) matches++;
     }
+    stable[i] = true;
     return matches >= 2;
   });
   const present = hits.filter(Boolean).length;
-  return { hits, present, total: 8, pass: present >= 6 };
+  return { hits, stable, eligible, present, total: 8, pass: present >= 6 };
 }

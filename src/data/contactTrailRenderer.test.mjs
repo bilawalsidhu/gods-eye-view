@@ -159,23 +159,41 @@ test('ground body and clipped head stay inside rebuild and frame geometry budget
     Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672),
   ];
   const start = performance.now();
-  const geometry = await Cesium.GroundPolylineGeometry.createGeometry(
-    new Cesium.GroundPolylineGeometry({ positions, width: 5, granularity: 0 }),
-  );
-  const bytes =
-    Object.values(geometry.attributes).reduce(
-      (n, a) => n + (a?.values?.byteLength || 0),
-      0,
-    ) + geometry.indices.byteLength;
-  const bodyBytes = (bytes + 64) * 2 * (TRAIL_VERTEX_LIMIT - 1);
-  assert.ok(bodyBytes + bytes < 2 * 1024 * 1024);
-  assert.ok(
-    bytes < 2048,
-    'even a subdivision crossing uploads less than 2 KiB of head geometry',
-  );
-  console.log(
-    `trail geometry: ${bytes} bytes/head crossing, 0 bytes/ordinary head frame, ${bodyBytes} bytes/body including 64 bytes/instance reserve; geometry CPU ${(performance.now() - start).toFixed(3)} ms`,
-  );
+  const instances = async (count) => Promise.all(Array.from({ length: count }, async (_, i) =>
+    new Cesium.GeometryInstance({
+      id: i,
+      geometry: await Cesium.GroundPolylineGeometry.createGeometry(
+        new Cesium.GroundPolylineGeometry({ positions, width: i % 2 ? 3 : 5, granularity: 0 }),
+      ),
+    }),
+  ));
+  const pipelineBytes = async (count) => {
+    // Match GroundPolylinePrimitive's internal Primitive options and the
+    // application's morph-capable scene, including batch IDs and encoding.
+    const result = Cesium.PrimitivePipeline.combineGeometry({
+      instances: await instances(count),
+      projection: new Cesium.GeographicProjection(),
+      ellipsoid: Cesium.Ellipsoid.WGS84,
+      modelMatrix: Cesium.Matrix4.clone(Cesium.Matrix4.IDENTITY),
+      elementIndexUintSupported: true,
+      scene3DOnly: false,
+      vertexCacheOptimize: false,
+      compressVertices: false,
+      createPickOffsets: false,
+    });
+    return result.geometries.reduce((sum, geometry) => sum +
+      Object.values(geometry.attributes).reduce((n, a) => n + (a?.values?.byteLength || 0), 0) +
+      geometry.indices.byteLength, 0);
+  };
+  const bytes = await pipelineBytes(1);
+  const bodyInstances = 2 * (TRAIL_VERTEX_LIMIT - 1);
+  const bodyBytes = await pipelineBytes(bodyInstances);
+  assert.equal(bytes, 1576, 'measure final encoded and batched geometry');
+  assert.equal(bodyBytes, 2014128);
+  const instanceReserve = 64 * bodyInstances;
+  assert.ok(bodyBytes + instanceReserve <= 2 * 1024 * 1024);
+  assert.ok(bytes <= 2048, 'subdivision crossings stay below 2 KiB of head geometry');
+  console.log(`trail final pipeline: ${bytes} bytes/head crossing, 0 bytes/ordinary head frame, ${bodyBytes} bytes/body (${bodyInstances} instances), ${instanceReserve} bytes instance reserve; geometry CPU ${(performance.now() - start).toFixed(3)} ms`);
 });
 
 test('supported scenes drape body and clipped head on 3D tiles and retain head geometry', (t) => {

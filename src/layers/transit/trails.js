@@ -18,8 +18,8 @@ const MODE_COLOR = {
   ferry: '#5FD6FF',
   unknown: '#D8DDE5',
 };
-// Two ground lanes use up to 2,704 bytes per edge before instance attributes.
-// Reserve head geometry and batch attributes inside the 2 MiB rebuild budget.
+// Final Cesium batching uses 3,152 bytes per two-lane edge.
+// The 1,278-instance body plus 64 bytes/instance reserve stays below 2 MiB.
 export const TRAIL_VERTEX_LIMIT = 640;
 const STEP_M = 25;
 
