@@ -328,6 +328,7 @@ test('sensor sampler waits for postRender and reads framebuffer pixels; stopped 
     globalThis.Image = previousImage;
   });
   const identity = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+  const readRows = [];
   let listener,
     reads = 0,
     render = true;
@@ -336,6 +337,7 @@ test('sensor sampler waits for postRender and reads framebuffer pixels; stopped 
     UNSIGNED_BYTE: 2,
     readPixels(x, y, w, h, format, type, buffer) {
       reads++;
+      readRows.push(y);
       buffer.set([255, 255, 255, 255]);
     },
   };
@@ -408,7 +410,17 @@ test('sensor sampler waits for postRender and reads framebuffer pixels; stopped 
     },
   };
   const page = { evaluate: async (fn, ...args) => fn(...args) };
+  const sampledLayer = window.__godsEyeView.dataManager.layers.get('transit').module;
+  const originalState = sampledLayer._transitStateForTest;
+  sampledLayer._transitStateForTest = () => {
+    const state = originalState();
+    state._vehicles.get('bus').marker.position.y = 0.0025; // Screen y = 199.5.
+    return state;
+  };
   const pixels = await sampleTransitPixels(page, {});
+  sampledLayer._transitStateForTest = originalState;
+  assert.deepEqual(readRows.slice(0, 9), [201, 200, 199, 201, 200, 199, 201, 200, 199],
+    'fractional CSS coordinates must invert the floored framebuffer row');
   assert.ok(
     reads >= 13,
     'centre, rings and background come from WebGL readPixels',

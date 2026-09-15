@@ -7,6 +7,8 @@
 - Extract a portable Director shot runner and connect existing scene playback to
   it. Preserve authored content, project files, camera/layer behavior and source
   attribution; document the planned timeline, scene-file and data-pack boundaries.
+- Read fractional transit sample coordinates from the correct framebuffer row.
+
 - Strengthen sensor halos to 2 px for bright roofs while retaining normal silhouettes and CRT body sizing.
 
 - Isolate the selected-trail pixel fixture from live CapMetro fleet replacement.

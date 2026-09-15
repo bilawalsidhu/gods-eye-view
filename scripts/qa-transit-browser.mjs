@@ -367,7 +367,7 @@ export async function sampleTransitPixels(page, palette) {
           const luma = (r, g, b) => (0.299 * r + 0.587 * g + 0.114 * b) / 255;
           const readLuma = (cx, cy) => {
             const px = Math.floor(cx * scale);
-            const py = Math.floor(canvas.height - 1 - cy * scale);
+            const py = canvas.height - 1 - Math.floor(cy * scale);
             const buf = new Uint8Array(4);
             gl.readPixels(px, py, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, buf);
             return luma(buf[0], buf[1], buf[2]);
