@@ -1,5 +1,20 @@
 # Changelog
 
+## Meteor trajectories (local contribution)
+
+- Add an optional Global Meteor Network layer with fitted atmospheric paths,
+  brightest/next selection, UTC observation cards and illustrative replay.
+- Add a keyless bounded GMN provider, six-hour caching, stale fallback,
+  attribution, share-state visibility and existing voice layer controls.
+- Add parser/provider tests and browser checks for geometry, selection,
+  replay cleanup, mobile layout and failed-refresh retention.
+- Add a persistent meteor observatory with batch context, observation-time
+  distribution and bright events to explore. Annotate the selected passage with
+  endpoint altitudes and direction; add an altitude profile, isolated selection,
+  context toggle and luminous playback with pause/resume and scrubbing.
+
+## Other changes
+
 - Widen opaque sensor halos to 3 display pixels with a 30 px fleet core while retaining at least 60% opaque core coverage, adding contrast margin through thermal blur and bloom on bright roofs.
 
 - Exclude Noir's intentionally vignetted outer field from transit core measurements and add separate Boston live oblique selection/readability coverage.

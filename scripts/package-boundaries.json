@@ -1126,6 +1126,10 @@
       "src/annotations/worldAnnotationRenderer.js",
       "src/app/catalog.js",
       "src/app/constructCatalog.js",
+      "src/app/layers/meteors.js",
+      "src/layers/meteors/index.js",
+      "src/layers/meteors/panel.js",
+      "src/layers/meteors/records.js",
       "src/app/controls.js",
       "src/app/data.js",
       "src/app/errors.js",
@@ -1521,6 +1525,7 @@
       "src/splitFlap.js",
       "src/standalone/catalog.js",
       "src/standalone/layerSources.js",
+      "src/layers/meteors/source.js",
       "src/styles/anime.js",
       "src/styles/noir.js",
       "src/styles/retro.js",
@@ -1688,6 +1693,10 @@
       "src/annotations/resolver.js",
       "src/app/catalog.js",
       "src/app/constructCatalog.js",
+      "src/app/layers/meteors.js",
+      "src/layers/meteors/index.js",
+      "src/layers/meteors/panel.js",
+      "src/layers/meteors/records.js",
       "src/app/layers/aisLiveVessels.js",
       "src/app/layers/alprCameras.js",
       "src/app/layers/bikeshare.js",
@@ -2365,6 +2374,35 @@
       "src/search/geospatial.js",
       "src/data/regionalModel.js",
       "src/sources/httpBody.js"
+    ],
+    "external": []
+  },
+  "meteors": {
+    "exports": ["./layers/meteors"],
+    "modules": [
+      "src/layers/meteors/index.js",
+      "src/layers/meteors/panel.js",
+      "src/layers/meteors/records.js"
+    ],
+    "external": ["cesium"]
+  },
+  "meteors-source": {
+    "exports": ["./layers/meteors/source"],
+    "modules": [
+      "src/layers/meteors/source.js",
+      "src/layers/meteors/records.js",
+      "src/sources/httpBody.js"
+    ],
+    "external": []
+  },
+  "meteors-provider": {
+    "runtime": "node",
+    "exports": ["./server/providers/meteors"],
+    "modules": [
+      "server/providers/meteors.js",
+      "server/providers/common/http.js",
+      "src/sources/httpBody.js",
+      "src/layers/meteors/records.js"
     ],
     "external": []
   },

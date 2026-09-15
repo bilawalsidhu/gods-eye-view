@@ -74,6 +74,10 @@ export const DATA_CREDITS = [
       '(ODbL 1.0)',
   },
   {
+    key: 'gmn-meteors',
+    html: 'Meteor trajectories: <a href="https://globalmeteornetwork.org/data/" target="_blank" rel="noopener">Global Meteor Network</a> (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>); fitted atmospheric segments, rendered from published endpoints',
+  },
+  {
     key: 'photon-geocoder',
     html:
       'Keyless place search: ' +

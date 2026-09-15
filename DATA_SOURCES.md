@@ -1,5 +1,21 @@
 # Data Sources & Attribution
 
+## Global Meteor Network — meteor trajectories
+
+The optional Meteors layer reads the [latest GMN trajectory summary](https://globalmeteornetwork.org/data/traj_summary_data/daily/traj_summary_latest_daily.txt)
+through a fixed local provider. GMN releases high-level trajectory data under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), with attribution to
+[Global Meteor Network](https://globalmeteornetwork.org/data/) and its method
+papers (Vida et al., 2020 and 2021, linked there). Attribution appears in the
+event card and Data attribution. One source row is an attributed test fixture;
+operational data is fetched at runtime.
+
+Batches are published after processing and have incomplete geographic coverage.
+The renderer joins fitted endpoints without ground extension or impact inference.
+Heights reference WGS84. The six-second constant-speed replay is illustrative,
+not footage. No station coordinates or camera imagery are redistributed.
+See [METEORS.md](docs/METEORS.md) for caps and missing-data/refresh semantics.
+
 God's Eye View's **code** is [MIT](LICENSE)-licensed. **The MIT grant covers the source code only — it does NOT extend to third-party data or visual assets.** Every third-party source keeps its own license and terms. This file documents the live and bundled data sources; bundled 3D-model provenance is recorded in [`public/models/README.md`](public/models/README.md).
 
 How to read this:

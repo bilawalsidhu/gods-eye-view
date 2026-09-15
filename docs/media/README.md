@@ -1,5 +1,15 @@
 # README media provenance
 
+## Meteor observatory
+
+`meteor-observatory.png` was captured from the local application on 2026-09-15
+for this contribution's review and documentation. It shows the meteor observatory
+with Global Meteor Network trajectory data (CC BY 4.0) and Esri World Imagery.
+The application and provider attributions remain visible in the unmodified capture.
+The screenshot does not contain browser chrome, account details or camera footage.
+Third-party imagery and data retain their respective terms; see
+[Data Sources & Attribution](../../DATA_SOURCES.md).
+
 ## Capture GIFs
 
 Bilawal Sidhu created and owns the following 17 GIFs and has authorized their inclusion and redistribution as part of this public repository and its project documentation. Any appearance by Bilawal Sidhu in these captures is included with his permission.
