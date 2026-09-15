@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { isPointerFree } from '../../data/inputOwnership.js';
 import {
   RADIO_PREFIX,
   RADIO_PICK_OFFSETS,
@@ -117,6 +118,8 @@ export function createInteraction({
       layerState._viewer.scene.canvas,
     );
     layerState._clickHandler.setInputAction((click) => {
+      // A tool owns the pointer (src/data/inputOwnership.js): yield the click.
+      if (!isPointerFree()) return;
       if (!radioPresentationAllowed()) return;
       const stationId = pickedRadioStationAt(click.position);
       if (!stationId) return;

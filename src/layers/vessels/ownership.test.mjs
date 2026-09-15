@@ -34,9 +34,17 @@ function services() {
 }
 function setup(source, options = {}) {
   const layer = createVesselLayer({ source, services: services(), options });
+  const primitives = new Set();
   layer.testing._setVesselStateForTest({
     viewer: {},
-    billboardCollection: { add: (options) => ({ ...options }), remove: noop },
+    billboardCollection: {
+      add(options) {
+        const primitive = { ...options };
+        primitives.add(primitive);
+        return primitive;
+      },
+      remove: (primitive) => primitives.delete(primitive),
+    },
   });
   let now = 1000;
   layer.testing._setAisRuntimeForTest({
@@ -46,6 +54,7 @@ function setup(source, options = {}) {
   });
   return {
     layer,
+    primitives,
     advance: (ms) => {
       now += ms;
     },
@@ -85,7 +94,10 @@ test('vessel construction is inert and each instance owns its records, icon cach
   const two = createVesselState({ source, services: services() });
   for (const key of ['state', 'shipIconCache', '_scratchFocusScreen'])
     assert.notEqual(one[key], two[key]);
-  assert.notEqual(one.state.vesselMap, two.state.vesselMap);
+  assert.notEqual(one.state.records.byMmsi, two.state.records.byMmsi);
+  assert.notEqual(one.state.feed, two.state.feed);
+  assert.notEqual(one.state.records.all, two.state.records.all);
+  assert.notEqual(one.state.records.unkeyed, two.state.records.unkeyed);
   assert.notEqual(one.state.trailPositions, two.state.trailPositions);
   const { layer } = setup(source);
   const other = createVesselLayer({ source, services: services() });
@@ -264,4 +276,28 @@ test('partial-feed expiry releases a selected vessel and its pending trail', asy
   finish({ records: [] });
   await new Promise(setImmediate);
   assert.equal(layer.testing._getVesselStateForTest().trailPositionCount, 0);
+});
+
+test('refresh keeps pick identity and renderer geometry separate, and eviction releases the primitive', async () => {
+  let current = snapshot([observation('111')]);
+  const { layer, primitives } = setup({ getSnapshot: async () => current });
+  await layer.update();
+  const [primitive] = primitives;
+  const record = primitive.id;
+  for (const key of ['position', 'surfacePosition', 'normal', 'billboard']) {
+    assert.equal(Object.hasOwn(record, key), false);
+  }
+  assert.equal(layer.findByQuery('111').position, primitive.position);
+  const oldPosition = primitive.position;
+  current = snapshot([{ ...observation('111'), longitude: 4.06 }]);
+  await layer.update();
+  assert.equal(primitives.size, 1);
+  assert.equal([...primitives][0], primitive);
+  assert.equal(primitive.id, record);
+  assert.notDeepEqual(primitive.position, oldPosition);
+  assert.equal(layer.findByQuery('111').position, primitive.position);
+  current = snapshot([observation('222')]);
+  await layer.update();
+  assert.equal(primitives.has(primitive), false);
+  assert.equal(layer.findByQuery('111'), null);
 });

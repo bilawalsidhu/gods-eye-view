@@ -1,26 +1,10 @@
-import * as Cesium from 'cesium';
-import {
-  createSubmarineCableLayer,
-  createCableOverlayPublisher as createPublisher,
-} from '../layers/submarineCables/index.js';
+import { createApplicationCables } from '../app/layers/submarineCables.js';
+import { overlayHost } from '../app/layers/overlayHost.js';
+import { createCableOverlayPublisher as createPublisher } from '../layers/submarineCables/index.js';
 import { createBundledCableSource } from '../layers/submarineCables/bundledSource.js';
-import {
-  clearOverlaySource,
-  setOverlayEntries,
-  setOverlaySourceVisible,
-} from '../overlays/worldOverlay.js';
-const overlayHost = Object.freeze({
-  clearSource: clearOverlaySource,
-  setEntries: setOverlayEntries,
-  setVisible: setOverlaySourceVisible,
-});
 export function createTeleGeographySubmarineCableLayer(options = {}) {
-  return createSubmarineCableLayer({
+  return createApplicationCables({
     source: createBundledCableSource(),
-    overlayHost,
-    screenSpaceEventHandlerFactory: (canvas) =>
-      new Cesium.ScreenSpaceEventHandler(canvas),
-    mapStackEventTarget: typeof window !== 'undefined' ? window : null,
     ...options,
   });
 }

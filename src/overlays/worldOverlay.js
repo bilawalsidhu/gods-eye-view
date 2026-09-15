@@ -466,6 +466,16 @@ export function normalizeOverlayEntry(sourceId, entry) {
     leaderOffsetPx: Number.isFinite(Number(entry.leaderOffsetPx))
       ? Math.max(0, Number(entry.leaderOffsetPx))
       : 0,
+    leaderStyle: entry.leaderStyle === 'elbow' ? 'elbow' : 'straight',
+    leaderAnimationMs: Number.isFinite(Number(entry.leaderAnimationMs))
+      ? Math.max(0, Number(entry.leaderAnimationMs))
+      : 0,
+    leaderAnimationStartedAt: Number.isFinite(Number(entry.leaderAnimationStartedAt))
+      ? Number(entry.leaderAnimationStartedAt)
+      : 0,
+    leaderDrawRatio: Number.isFinite(Number(entry.leaderDrawRatio))
+      ? Math.max(0.1, Math.min(0.9, Number(entry.leaderDrawRatio)))
+      : 0.68,
     anchorRadiusPx: Number.isFinite(Number(entry.anchorRadiusPx))
       ? Math.max(0, Number(entry.anchorRadiusPx))
       : 0,
@@ -1421,6 +1431,19 @@ function activeFadeCount(timestamp) {
   return count;
 }
 
+function activeLeaderAnimationCount(timestamp) {
+  let count = 0;
+  for (let i = 0; i < _sourceList.length; i++) {
+    const source = _sourceList[i];
+    if (!sourceActive(source)) continue;
+    for (const entry of source.entries.values()) {
+      if (entry.leaderAnimationMs > 0
+        && timestamp - entry.leaderAnimationStartedAt < entry.leaderAnimationMs) count++;
+    }
+  }
+  return count;
+}
+
 function overlayHasPaintWork(timestamp = nowMs()) {
   if (activeCustomPaintLaneCount() > 0) return true;
   if (activeEntryCount() > 0) return true;
@@ -2177,8 +2200,8 @@ function drawWorldOverlay() {
   _diagnostics.projectionMs = nowMs() - projectionStarted;
   solveDomains(timestamp);
   paintFrame(keyhole);
-  const fadesRemaining = activeFadeCount(timestamp);
-  if (fadesRemaining > 0) _viewer.scene.requestRender?.();
+  const animationsRemaining = activeFadeCount(timestamp) + activeLeaderAnimationCount(timestamp);
+  if (animationsRemaining > 0) _viewer.scene.requestRender?.();
 }
 
 function createDevFacade() {

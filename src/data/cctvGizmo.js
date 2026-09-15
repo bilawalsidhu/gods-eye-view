@@ -24,6 +24,7 @@
  * invariant is untouched.
  */
 import * as Cesium from 'cesium';
+import { isPointerFree } from './inputOwnership.js';
 
 // Grazing guard (spec §5): reject plane intersections when the view ray is
 // nearly parallel to the constraint plane — the hit point races to infinity
@@ -506,6 +507,8 @@ export function createCalibrationGizmo({ viewer, getActiveRecord, applyPatch, en
   }
 
   handler.setInputAction((event) => {
+    // A tool owns the pointer (src/data/inputOwnership.js): yield the press.
+    if (!isPointerFree()) return;
     if (!enabled) return;
     const part = pickGizmoPart(event.position);
     debugLog('LEFT_DOWN', event.position, 'part:', part);

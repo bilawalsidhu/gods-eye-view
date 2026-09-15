@@ -26,9 +26,10 @@ export function createLifecycle({
         throw new Error('Configure the source before layer initialization');
       if (typeof source?.getSnapshot !== 'function')
         throw new TypeError('A snapshot source is required');
-      flightState._source = source;
-      flightState._lastSource = source.label || flightState._lastSource;
-      this.source = flightState._lastSource;
+      flightState.feed._source = source;
+      flightState.feed._lastSource =
+        source.label || flightState.feed._lastSource;
+      this.source = flightState.feed._lastSource;
     },
 
     /**
@@ -40,7 +41,7 @@ export function createLifecycle({
     init(viewer) {
       if (flightState._viewer)
         throw new Error('Flight layer is already initialized');
-      if (typeof flightState._source?.getSnapshot !== 'function')
+      if (typeof flightState.feed._source?.getSnapshot !== 'function')
         throw new TypeError('A snapshot source is required');
       if (flightState.lifetime.signal.aborted)
         flightState.lifetime = new AbortController();
@@ -78,19 +79,21 @@ export function createLifecycle({
           });
       }
       flightState._billboards = new Map();
+      flightState._cullPositions.clear();
       flightState._detectionObjects = new Map();
-      flightState._flightData = new Map();
+      flightState.records.data = new Map();
       flightState._positionHistory = new Map();
       flightState._displayCourse.clear();
       flightState._groundSnap.clear();
-      flightState._count = 0;
-      flightState._lastUpdate = null;
-      flightState._backoff = false;
-      flightState._retryAt = 0;
-      flightState._lastError = null;
-      flightState._lastStatus = null;
-      flightState._lastSource = flightState._source.label || 'Aircraft';
-      flightState._lastCoverage = 'worldwide upstream snapshot';
+      flightState.feed._count = 0;
+      flightState.feed._lastUpdate = null;
+      flightState.feed._backoff = false;
+      flightState.feed._retryAt = 0;
+      flightState.feed._lastError = null;
+      flightState.feed._lastStatus = null;
+      flightState.feed._lastSource =
+        flightState.feed._source.label || 'Aircraft';
+      flightState.feed._lastCoverage = 'worldwide upstream snapshot';
       flightState._trackedIcao = null;
       parts.tracking._resetTrackedSelectionState();
       flightState._trackedEntity = null;
@@ -142,11 +145,11 @@ export function createLifecycle({
       // Height-datum fix: warm the geoid grid once per layer-enable. The poll loop
       // only reads geoidHeight() synchronously after this resolves (guarded by
       // _geoidReady) — never awaited per-aircraft, never blocking a poll tick.
-      if (!flightState._geoidReady) {
+      if (!flightState.records.geoidReady) {
         const lifetime = flightState.lifetime;
         ensureGeoidReady()
           .then(() => {
-            if (!lifetime.signal.aborted) flightState._geoidReady = true;
+            if (!lifetime.signal.aborted) flightState.records.geoidReady = true;
           })
           .catch(() => {
             /* geoid grid failed to load — baro path stays un-geoid-corrected until retried */
@@ -300,8 +303,9 @@ export function createLifecycle({
       }
       flightState._planeModelLoaded = false;
       flightState._billboards.clear();
+      flightState._cullPositions.clear();
       flightState._detectionObjects.clear();
-      flightState._flightData.clear();
+      flightState.records.data.clear();
       flightState._positionHistory.clear();
       flightState._displayCourse.clear();
       flightState._groundSnap.clear();
@@ -312,20 +316,20 @@ export function createLifecycle({
         clearTimeout(flightState._enrichDripTimer);
         flightState._enrichDripTimer = null;
       }
-      flightState._missingPolls.clear();
+      flightState.records.missingPolls.clear();
       flightState._focusEvidenceIds.clear();
-      flightState._count = 0;
-      flightState._lastUpdate = null;
+      flightState.feed._count = 0;
+      flightState.feed._lastUpdate = null;
       flightState._cockpitContactMode = false;
       flightState._cockpitNearContacts = new Set();
       flightState._cockpitSubjectId = null;
-      flightState._trackingRefreshEpoch += 1;
-      flightState._lastTrackingRefreshOutcome = {
-        epoch: flightState._trackingRefreshEpoch,
+      flightState.feed._trackingRefreshEpoch += 1;
+      flightState.feed._lastTrackingRefreshOutcome = {
+        epoch: flightState.feed._trackingRefreshEpoch,
         status: 'destroyed',
         ids: new Set(),
-        source: flightState._lastSource,
-        coverage: flightState._lastCoverage,
+        source: flightState.feed._lastSource,
+        coverage: flightState.feed._lastCoverage,
       };
       parts.tracking._resetTrackedSelectionState(); // next lifecycle re-evaluates against the ENTER ceiling
       flightState._viewer = null;

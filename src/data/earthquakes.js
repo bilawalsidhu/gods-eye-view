@@ -1,22 +1,11 @@
-import {
-  createEarthquakesLayer as createLayer,
-  createUsgsEarthquakeSource,
-} from '../layers/earthquakes/index.js';
-import {
-  clearOverlaySource,
-  setOverlayEntries,
-  setOverlaySourceVisible,
-} from '../overlays/worldOverlay.js';
+import { createUsgsEarthquakeSource } from '../layers/earthquakes/index.js';
+import { createApplicationEarthquakes } from '../app/layers/earthquakes.js';
 export * from '../layers/earthquakes/index.js';
 /** Wire the standalone source and application overlay owner. */
 export function createEarthquakesLayer({
   source = createUsgsEarthquakeSource(),
-  overlayHost = {
-    setEntries: setOverlayEntries,
-    setVisible: setOverlaySourceVisible,
-    clearSource: clearOverlaySource,
-  },
+  ...options
 } = {}) {
-  return createLayer({ source, overlayHost });
+  return createApplicationEarthquakes({ source, ...options });
 }
 export default createEarthquakesLayer();

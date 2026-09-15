@@ -1,3 +1,4 @@
+import { readShellSource } from './testSupport/readShellSource.mjs';
 import { expandApplicationHtml } from '../build/application-html.js';
 import { readStylesheet } from './testSupport/readStylesheet.mjs';
 import assert from 'node:assert/strict';
@@ -137,7 +138,7 @@ test('minimum panel corridor expands upward without crossing the lower obstacle 
 });
 
 test('desktop panel lanes use per-panel allocations and presentation-only auto-collapse', () => {
-  const ui = readFileSync(new URL('./ui/applicationShell.js', import.meta.url), 'utf8');
+  const ui = readShellSource();
   const css = readStylesheet(new URL('../style.css', import.meta.url));
   assert.doesNotMatch(ui, /_enforce(?:Left|Right)PanelAccordion/);
   assert.match(rails, /classList\.add\('collapsed', 'layout-auto-collapsed'\)/);
@@ -191,7 +192,7 @@ test('desktop panel lanes use per-panel allocations and presentation-only auto-c
 });
 
 test('share-panel state excludes responsive collapse and preserves recipient preferences', () => {
-  const ui = readFileSync(new URL('./ui/applicationShell.js', import.meta.url), 'utf8');
+  const ui = readShellSource();
   const sharelink = readFileSync(new URL('./sharelink.js', import.meta.url), 'utf8');
 
   assert.match(
@@ -214,7 +215,7 @@ test('share-panel state excludes responsive collapse and preserves recipient pre
 });
 
 test('parameterized Display presets keep one stable scroll owner', () => {
-  const ui = readFileSync(new URL('./ui/applicationShell.js', import.meta.url), 'utf8');
+  const ui = readShellSource();
   const css = readStylesheet(new URL('../style.css', import.meta.url));
 
   assert.match(css, /#pp-toggles:not\(\.collapsed\) > #param-slider-panel\.active\s*\{[\s\S]*?flex:\s*0 0 auto;[\s\S]*?max-height:\s*none;[\s\S]*?overflow-y:\s*visible;/);

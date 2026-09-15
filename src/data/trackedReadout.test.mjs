@@ -121,6 +121,26 @@ test('tracked entry factory pins the production protected-lane policy', () => {
   assert.equal(entry.edgeFade, 'keyhole');
 });
 
+test('selected camera readout carries tactical animation and fixed badge clearance', () => {
+  const entry = createTrackedOverlayEntry({
+    id: 'alpr:42', gevDisplayPosition: () => ({ x: 1, y: 2, z: 3 }),
+    gevLabelModel: {
+      title: 'ALPR-0042', details: ['OSM MAPPED'], accent: '#ff6474',
+      cardStyle: 'tactical', selected: true, leaderStyle: 'elbow',
+      leaderAnimationMs: 440, leaderAnimationStartedAt: 100, leaderDrawRatio: 0.68,
+      anchorRadiusPx: 30, anchorRadiusScale: null,
+    },
+  });
+  assert.equal(entry.cardStyle, 'tactical');
+  assert.equal(entry.selected, true);
+  assert.equal(entry.leaderStyle, 'elbow');
+  assert.equal(entry.leaderAnimationMs, 440);
+  assert.equal(entry.leaderAnimationStartedAt, 100);
+  assert.equal(entry.leaderDrawRatio, 0.68);
+  assert.equal(entry.anchorRadiusPx, 30);
+  assert.equal(entry.anchorRadiusScale, null);
+});
+
 test('tracked entity publishes a protected host entry backed by the frame cache', () => {
   const originalWindow = globalThis.window;
   const fakeWindow = new EventTarget();

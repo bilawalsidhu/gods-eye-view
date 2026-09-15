@@ -1,3 +1,4 @@
+import { readShellSource } from './testSupport/readShellSource.mjs';
 import { _handleContextLayerChange } from './ui/contextLayerChanges.js';
 import { connectContextManager } from './ui/contextSubscriptions.js';
 import { _restoreContextSession, _restoreContextSessionAfterLayerSettles } from './ui/contextSession.js';
@@ -23,7 +24,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-const src = readFileSync(fileURLToPath(new URL('./ui/applicationShell.js', import.meta.url)), 'utf8');
+const src = readShellSource();
 
 const handler = _handleContextLayerChange.toString();
 

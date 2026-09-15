@@ -156,7 +156,63 @@ export async function proxyMediaResponse(
   stream.on('error', () => {
     if (!res.writableEnded) res.end();
   });
+
+  // A live camera feed has no end of its own. When the viewer goes away the
+  // upstream connection must go with it, or every abandoned view leaves a
+  // stream open against the camera host for as long as that host will hold it.
+  let released = false;
+  const releaseUpstream = () => {
+    if (released) return;
+    released = true;
+    stream.unpipe(res);
+    // Destroying the Node stream cancels the web body it wraps; the direct
+    // cancel covers a body that was never wrapped, and rejects harmlessly when
+    // the reader is already held.
+    stream.destroy();
+    try {
+      const cancelled = upstream.body?.cancel?.();
+      if (typeof cancelled?.catch === 'function') cancelled.catch(() => {});
+    } catch {
+      /* already closed */
+    }
+  };
+  res.once('close', () => {
+    if (!res.writableEnded) releaseUpstream();
+  });
+  res.once('error', releaseUpstream);
+  stream.once('end', () => {
+    released = true;
+  });
   stream.pipe(res);
+}
+
+/**
+ * Watch a client response for an early goodbye.
+ *
+ * Bound BEFORE the upstream request goes out, because most of the waiting
+ * happens before any header comes back: a viewer who closes the tab while a
+ * slow camera is still thinking would otherwise leave that request running with
+ * nobody to receive it.
+ *
+ * @param {import('http').ServerResponse} res - The client response.
+ * @returns {{signal: AbortSignal, closed: boolean}} `signal` cancels the
+ *   upstream request; `closed` says the client left before the response ended.
+ */
+export function watchDownstreamClose(res) {
+  const controller = new AbortController();
+  const state = {
+    signal: controller.signal,
+    closed: false,
+  };
+  const onClose = () => {
+    // A response that ended normally also emits close; only an early one counts.
+    if (res.writableEnded) return;
+    state.closed = true;
+    controller.abort();
+  };
+  res.once?.('close', onClose);
+  res.once?.('error', onClose);
+  return state;
 }
 
 /** Read a snapshot incrementally, retaining at most maxBytes of owned chunks. */
@@ -229,14 +285,21 @@ export async function fetchCctvMediaUpstream(
     headers = {},
     fetchImpl = fetch,
     timeoutMs = CCTV_MEDIA_FETCH_TIMEOUT_MS,
+    signal: downstream = null,
   } = {},
 ) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  // The client going away cancels the upstream request, not just the response
+  // to it.
+  const onDownstreamAbort = () => controller.abort();
+  if (downstream?.aborted) controller.abort();
+  else downstream?.addEventListener?.('abort', onDownstreamAbort);
   try {
     return await fetchImpl(url, { headers, signal: controller.signal });
   } finally {
     clearTimeout(timeoutId);
+    downstream?.removeEventListener?.('abort', onDownstreamAbort);
   }
 }
 

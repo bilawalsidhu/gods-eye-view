@@ -1,5 +1,6 @@
 import { SceneDirector } from '../scenes/director.js';
 import { initAnnotations } from '../annotations/index.js';
+import { initDrawTool } from '../annotations/drawTool.js';
 import { initGevVoiceCommands } from '../voice/gevRealtime.js';
 import { installScopeMask, destroyScopeMask } from '../scopeMask.js';
 import {
@@ -23,17 +24,27 @@ export function createApplicationTools({
   signal,
   defer,
 }) {
-  const { viewer, tileset, mapStackController } = scene;
+  const { viewer, tileset, mapStackController, operations } = scene;
   const { styleManager, weatherEffects, cockpitCloudEffects } = controls;
   const { dataManager } = data;
   const sceneDirector = new SceneDirector(viewer, styleManager, dataManager);
   defer(() => sceneDirector.destroy());
   onSceneDirector?.(sceneDirector);
-  const annotations = initAnnotations({ viewer, tileset, placeSearch });
+  const annotations = initAnnotations({
+    viewer,
+    tileset,
+    placeSearch,
+    resolver: operations.annotationResolver,
+  });
   defer(() => {
     if (window.__gevAnnotations === annotations) delete window.__gevAnnotations;
     annotations.destroy();
   });
+  // DISPLAY ▸ Draw: the same whiteboard, drawn by hand. It claims the pointer
+  // while a session is open, so its teardown belongs to the application
+  // lifetime rather than to whoever last pressed the button.
+  const drawTool = initDrawTool({ viewer, annotations });
+  defer(() => drawTool?.destroy());
   if (startChrome)
     defer(startChrome({ loadingScreen, styleManager, dataManager, signal }));
   // Idle render governor: flips the scene into requestRenderMode whenever
@@ -64,10 +75,7 @@ export function createApplicationTools({
     viewer.useDefaultRenderLoop = !hidden;
     cockpitCloudEffects?.setSuspended?.(hidden);
     if (!hidden) {
-      if (dataManager._panelRefreshPendingOnVisible) {
-        dataManager._panelRefreshPendingOnVisible = false;
-        dataManager._refreshTogglePanel();
-      }
+      data.presentation.flushVisible();
       governorRequestRender('visibility-restore');
     }
   };
@@ -95,6 +103,7 @@ export function createApplicationTools({
     weatherEffects,
     cockpitCloudEffects,
     getRenderGovernorDiagnostics,
+    surfaceServices: operations.surface,
     requestRender: governorRequestRender,
   };
   const debug = window.__godsEyeView;
@@ -103,6 +112,9 @@ export function createApplicationTools({
   });
   const voiceCommands = initGevVoiceCommands({
     ...voice,
+    floorServices: operations.surface.groundFloor,
+    annotationResolver: operations.annotationResolver,
+    searchNavigation: operations.searchAndFlyTo,
     signal,
     placeSearch,
     viewer,

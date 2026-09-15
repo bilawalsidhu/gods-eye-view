@@ -1,35 +1,14 @@
-import { createVesselLayer } from '../layers/vessels/index.js';
-import { createAisStreamSource } from '../sources/live/standalone.js';
-import * as context from './contextStore.js';
-import * as trails from './trailRenderer.js';
-import * as labels from './detectionDraw.js';
-import * as picking from './pickRegistry.js';
-import * as overlay from '../overlays/worldOverlay.js';
-import * as geoid from './geoid.js';
-import * as sprites from './spriteOrder.js';
-import * as focus from './focusDeemphasis.js';
-import * as worldFocus from '../worldFocus.js';
-import * as render from '../renderGovernor.js';
+import { createApplicationVessels } from '../app/layers/aisLiveVessels.js';
 
-const aisLiveVesselsLayer = createVesselLayer({
+import { createAisStreamSource } from '../sources/live/standalone.js';
+
+const aisLiveVesselsLayer = createApplicationVessels({
   source: createAisStreamSource({
     apiUrl: import.meta.env?.VITE_AIS_LIVE_API_URL || '/api/ais-live',
   }),
   options: {
     maxRows: import.meta.env?.VITE_AIS_LIVE_MAX_ROWS,
     maxLabels: import.meta.env?.VITE_AIS_LIVE_LABEL_MAX_ROWS,
-  },
-  services: {
-    context,
-    trails,
-    labels,
-    picking,
-    overlay,
-    geoid,
-    sprites,
-    focus,
-    worldFocus,
-    render,
   },
 });
 export { AIS_FIRST_CONNECT_GRACE_MS } from '../layers/vessels/policy.js';
