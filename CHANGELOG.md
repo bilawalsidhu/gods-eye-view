@@ -7,6 +7,8 @@
 - Extract a portable Director shot runner and connect existing scene playback to
   it. Preserve authored content, project files, camera/layer behavior and source
   attribution; document the planned timeline, scene-file and data-pack boundaries.
+- Isolate the selected-trail pixel fixture from live CapMetro fleet replacement.
+
 - Place Transit in the Movement panel between Street Traffic and Bike Share.
 
 - Require stable repeated off/on transit trail captures outside the sprite footprint, reject changing backgrounds, and measure upload budgets after final Cesium geometry batching.

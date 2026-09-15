@@ -1,3 +1,12 @@
+import { getRegisteredTransitFeed } from '../src/data/transitFeeds.js';
+
+// Not registered or active: camera discovery and live polls never own this feed.
+/** CapMetro metadata under a private QA identity for selected-trail pixels. */
+export const TRAIL_VISIBILITY_FEED = Object.freeze({
+  ...getRegisteredTransitFeed('capmetro-austin'),
+  id: 'qa-trail-capmetro',
+});
+
 import { reportTransitVisibility } from './qa-transit-browser.mjs';
 import { writeFile } from 'node:fs/promises';
 import {
@@ -619,7 +628,7 @@ export async function runTrailVisibility({
   );
   await wait(8000);
   const setup = await page.evaluate(
-    async ({ altitude, pitch }) => {
+    async ({ altitude, pitch, feed }) => {
       const app = window.__godsEyeView,
         scene = app.viewer.scene;
       const layer = app.dataManager.layers.get('transit').module;
@@ -652,11 +661,7 @@ export async function runTrailVisibility({
         parts.ingestion.removeVehicle(key);
       clearTimeout(state._cameraDebounceTimer);
       state._cameraDebounceTimer = null;
-      const { getRegisteredTransitFeed } =
-        await import('/src/data/transitFeeds.js');
       const { seek, setRate } = await import('/src/data/contactPlayback.js');
-      const feed = getRegisteredTransitFeed('capmetro-austin');
-      if (!feed) throw new Error('CapMetro fixture feed missing');
       const now = Date.now();
       // Nine straight street fixes, 30 m apart. Use the production surface path.
       for (let i = 0; i < 9; i++) {
@@ -699,7 +704,7 @@ export async function runTrailVisibility({
         startLat: entry.sample.lat,
       };
     },
-    { altitude, pitch },
+    { altitude, pitch, feed: TRAIL_VISIBILITY_FEED },
   );
   if (!setup.google) {
     check(name, false, JSON.stringify(setup), { unexercised: true });

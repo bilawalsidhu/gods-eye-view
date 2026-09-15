@@ -3730,3 +3730,29 @@ test('transit polls the supplied source and cancels it when disabled', async (t)
   await app.layer.update();
   assert.equal(calls.length, before);
 });
+
+
+test('selected trail QA fixture survives repeated live CapMetro snapshots', async (t) => {
+  const { TRAIL_VISIBILITY_FEED } = await import('../../../scripts/qa-transit-scenes.mjs');
+  const { getRegisteredTransitFeed } = await import('../../data/transitFeeds.js');
+  const app = harness(t, { at: { lat: 30.267, lon: -97.7431 } });
+  app.layer.enable(app.viewer);
+  const { ingestion, selection } = app.layer._transitPartsForTest();
+  const now = Date.now();
+  ingestion.applySnapshot(TRAIL_VISIBILITY_FEED, {
+    fetchedAt: now,
+    vehicles: [vehicle('trail-visible', 30.267, -97.7431, now / 1000)],
+  }, { stale: false });
+  const key = `${TRAIL_VISIBILITY_FEED.id}:trail-visible`;
+  selection.selectVehicle(key);
+  assert.equal(app.state()._selectedKey, key);
+  for (let poll = 0; poll <= MISSED_POLLS_TO_DROP; poll++) {
+    ingestion.applySnapshot(getRegisteredTransitFeed('capmetro-austin'), {
+      fetchedAt: now + poll,
+      vehicles: [vehicle('live-bus', 30.268, -97.7431, now / 1000)],
+    }, { stale: false });
+  }
+  assert.ok(app.state()._vehicles.has(key), 'live polls must not evict the selected fixture');
+  assert.equal(app.state()._selectedKey, key);
+  assert.ok(app.state()._vehicles.has('capmetro-austin:live-bus'), 'live ingestion still runs');
+});

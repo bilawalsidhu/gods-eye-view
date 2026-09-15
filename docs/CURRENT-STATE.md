@@ -2697,7 +2697,8 @@ style activation before reading generated controls; DETECT checks set density
 and exercise the real OFF/restore button. Cesium render errors fail selection
 acceptance.
 The `trail-visible` section requires a visible Google 3D tileset. It selects a
-scripted straight CapMetro bus with nine retained fixes, runs for 20 seconds at each
+scripted straight bus with CapMetro metadata under the isolated `qa-trail-capmetro`
+feed ID, with nine retained fixes, runs for 20 seconds at each
 300/600/900 m view (55/45/45 degrees), then freezes playback and waits for sustained tile and primitive readiness.
 It captures off/on/off/on framebuffer patches at eight distinct projected surface
 points outside the padded sprite and selection bracket. `Google 3D selected trail visible at 6 of 8 projected samples`
