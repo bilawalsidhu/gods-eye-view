@@ -609,6 +609,7 @@
   "src/data/surfaceServices.js",
   "src/annotations/resolver.js",
   "src/services/terrainHeights.js",
+  "src/services/terrainHeights.test.mjs",
   "src/services/groundFloor.js",
   "src/services/meshFloorSampler.js",
   "src/services/groundSnap.js",

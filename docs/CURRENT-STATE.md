@@ -568,6 +568,22 @@ under `gods-eye-view/server/providers/`. Portable terrain mechanics, traffic til
 math and GBFS source rules are available under `gods-eye-view/sources/`.
 The browser layers and their rendering remain in their existing modules.
 
+## Terrain height cache bound
+
+The client terrain-height resolver's in-memory cache is bounded at 20 000
+entries (`DEFAULT_MAX_CACHE_ENTRIES`, overridable per instance through
+`createTerrainHeights({ maxCacheEntries })`). Coordinate rounding makes repeated
+visits to one place share a key but does not bound how many distinct places a
+session visits, and the cache previously had no eviction, so a long session
+retained every coordinate it ever resolved. Eviction is least-recently-used:
+a consumer read promotes its entry, so the cell being watched is not dropped for
+having been resolved early. The bound sits far above a city-scale session, so
+normal use never evicts and issues no additional proxy requests. A batch's
+results are assembled from what that call resolved, so eviction during a large
+batch cannot report a just-resolved point as unresolved. Re:Earth and
+geoid-fallback entry semantics, the fallback cooldown and the abort-time flush
+are unchanged.
+
 ## Landmark annotation identity
 
 When a landmark geocode contains only address components, annotations retain
