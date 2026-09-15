@@ -1672,4 +1672,9 @@ export function _clearBikeshareSelectionForTest() {
   _overlayHost = DEFAULT_OVERLAY_HOST;
 }
 
+/** Read back the installed ScreenSpaceEventHandler in runtime tests. */
+export function _getBikeshareClickHandlerForTest() {
+  return _clickHandler;
+}
+
 export default bikeshareLayer;
