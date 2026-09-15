@@ -30,6 +30,25 @@ Next iteration candidates:
 
 ---
 
+### Weather tile spend under-reports when two servers share a checkout
+Status: Open (single-server workaround)
+
+Context:
+- The Xweather budget counter lives in one process and is mirrored to
+  `.gev-cache/xweather/budget.json` on a one-second debounce. Two dev servers on
+  one checkout each keep their own total and overwrite the other's file, so the
+  number the Weather panel shows is one server's share rather than the account's.
+- The account has a single hard allowance (15,000 accesses a month), so the
+  under-report is in the unsafe direction: the governor can believe there is
+  room that has already been spent.
+
+Workaround:
+- Run one dev server while the Weather layer is in use.
+- The authoritative figure is the Xweather account dashboard; the panel's total
+  is a local estimate of it.
+
+---
+
 ### CCTV panel can appear "missing" after layout refactors
 Status: Open (workaround available)
 

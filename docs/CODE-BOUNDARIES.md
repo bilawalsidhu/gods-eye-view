@@ -157,6 +157,39 @@ Browser terrain sampling, traffic matching/drawing, fire overlays and bike-share
 layer lifecycle remain in their current modules. This extraction changes no
 source defaults, credentials, quotas, data interpretation or visual behavior.
 
+## Weather provider
+
+`gods-eye-view/server/providers/xweather` is a Node-only entry owning the
+raster-tile middleware, its bounded disk cache and the monthly budget counter.
+Its import starts no acquisition. Unlike the other provider entries it has no
+keyless path: without credentials the status endpoint reports `hasKey:false`
+and the tile route refuses, because the vendor puts both halves of the
+credential in the upstream URL path and the browser can never hold them.
+
+`gods-eye-view/sources/xweather` exports tile-coordinate validation, the zoom
+ceilings and the cadence and budget defaults. `gods-eye-view/sources/tile-budget`
+exports the UTC day and month keys and the budget comparison that the traffic
+and weather providers share, each keeping its own period. Neither imports Node
+middleware, application configuration or rendering.
+
+`src/data/xweatherCatalogue.js` is the single source of truth for which vendor
+layers may be drawn at all: the Node provider derives its allowlist and each
+layer's zoom ceiling from it, and the browser layer and panel derive their spec
+table and labels from the same entries. It is dependency-free apart from the
+`sources/xweather` constants, so the server, the layer and `node:test` all
+import it directly.
+
+`gods-eye-view/layers/weather` is the browser layer. It owns Cesium imagery
+handles rather than entities, receives its frame source and scene services
+through explicit construction, and addresses only this app's own
+`/api/xweather` route.
+
+`server/providers/common/cache-dir.js` names the one directory every provider
+caches into and builds paths below it. It is owned by each provider package
+that caches to disk, and the standalone dev config excludes that directory from
+the file watcher — the tile proxies write a file per tile, and a watcher
+reacting to those starves the fetches producing them.
+
 ## Local search, regional context, voice and setup
 
 Node-only exports `server/providers/overpass`, `server/providers/military-installations`,
