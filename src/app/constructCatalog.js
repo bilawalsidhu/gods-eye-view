@@ -8,6 +8,7 @@ import { createApplicationCctv } from './layers/cctv.js';
 import { createApplicationRadio } from './layers/radio.js';
 import { createApplicationTraffic } from './layers/traffic.js';
 import { createApplicationBikeshare } from './layers/bikeshare.js';
+import { createApplicationTransit } from './layers/transit.js';
 import { createApplicationDirections } from './layers/directions.js';
 import { createApplicationInstallations } from './layers/militaryInstallations.js';
 import { createApplicationSatellites } from './layers/satellites.js';
@@ -34,6 +35,7 @@ const SOURCE_METHODS = Object.freeze({
     'resetFlowTileCache',
   ],
   bikeshare: ['getStations'],
+  transit: ['getVehicles'],
   installations: ['getMappedSites', 'searchNearby'],
   satellites: ['readGroup'],
   launches: ['getLaunches', 'getActiveTle'],
@@ -110,6 +112,7 @@ export function createApplicationCatalog({
         createApplicationCctv({ surface, source: sources.cctv }),
         createApplicationRadio({ surface, source: sources.radio }),
         createApplicationBikeshare({ source: sources.bikeshare }),
+        createApplicationTransit({ source: sources.transit }),
         createApplicationDirections(),
         vessels,
         installations,

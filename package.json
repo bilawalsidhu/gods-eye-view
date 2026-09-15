@@ -97,6 +97,10 @@
       "node": "./server/providers/gbfs.js"
     },
     "./sources/gbfs": "./src/data/gbfsSource.js",
+    "./server/providers/transit": {
+      "node": "./server/providers/transit.js"
+    },
+    "./sources/transit": "./src/data/transitFeeds.js",
     "./server/providers/cctv": {
       "node": "./server/providers/cctv.js"
     },
@@ -156,6 +160,7 @@
     "./layers/awareness": "./src/layers/awareness/index.js",
     "./layers/traffic": "./src/layers/traffic/index.js",
     "./layers/bikeshare": "./src/layers/bikeshare/index.js",
+    "./layers/transit": "./src/layers/transit/index.js",
     "./layers/directions": "./src/layers/directions/index.js",
     "./layers/cctv": "./src/layers/cctv/index.js",
     "./layers/alpr": "./src/layers/alpr/index.js",

@@ -107,6 +107,23 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+### Added
+
+- **Transit layer** — live public-transit vehicles from open GTFS-Realtime
+  feeds. Seven keyless, openly licensed regions ship in the registry (MBTA
+  Boston, CapMetro Austin, Metro Transit Minneapolis–St Paul, HSL Helsinki,
+  OVapi Netherlands, Entur Norway, TransLink South East Queensland). Vehicles
+  render as points colored by mode (bus, tram, metro, rail, ferry) and glide
+  from their last drawn position to each new fix over the 15 s poll interval;
+  near the ground they sit on the shared ground floor and stay hidden until
+  their cell answers. Clicking one opens a card with route, speed, heading,
+  next stop, occupancy and report age; the handler yields while any tool holds
+  the pointer. Only feeds whose coverage contains the camera's look-at point
+  are polled. The new `/api/transit` proxy (`server/providers/transit.js`)
+  fetches registered feed URLs only, decodes the protobuf server-side, caches
+  15 s in memory, and serves a stale snapshot for up to 10 minutes when an
+  upstream fails. Share links carry the layer as token `h`.
+
 - Give application request services, terrain/floor caches and annotation lookup state explicit owners and cancellation; share them across controls, layers and voice.
 
 - Construct application layers from explicit sources, with standalone provider selection and catalog-owned aircraft classification; controls and voice queries use those instances.

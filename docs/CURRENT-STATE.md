@@ -2377,11 +2377,38 @@ its criteria cannot be silently ignored.
 | CCTV | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Street View fallback | `src/data/cctv.js` | `/api/cctv` | 10s (active) |
 | Radio | Radio Browser (public-domain station directory) | `src/data/radio.js` | `/api/radio/stations`, `/api/radio/click/:uuid` | 45 min directory refresh |
 | Bikeshare 🚲 | GBFS (Lyft + BCycle) | `src/data/bikeshare.js` | `/api/gbfs` | 60s |
+| Transit 🚌 | Operator GTFS-Realtime VehiclePositions (7 keyless regions, `src/data/transitFeeds.js`) | `src/layers/transit/` (`src/data/transit.js`) | `/api/transit` | 15s (poll + glide) |
 | Directions 🧭 | OSRM on FOSSGIS servers (OpenStreetMap) | `src/data/directions.js` | `/api/route` (`steps=1`) | on placement / mode change |
 | Datacenters ▣ | OSM extract (bundled) | `src/data/localLayers.js` | — | static |
 | Dams ▰ | OpenInfraMap/OSM extract (bundled) | `src/data/localLayers.js` | — | static |
 | Submarine Cables ◠ | TeleGeography public map (bundled) | `src/data/telegeographySubmarineCables.js` | — | static |
 | FIRMS Active Fires ▲ | NASA FIRMS live (VIIRS ×3 NRT, trailing 24h) | `src/data/firmsHeatmap.js` | `/api/firms` (`FIRMS_MAP_KEY`) | 10 min (proxy TTL 30 min) |
+
+Transit polls only the registered feeds whose coverage circle contains the
+camera's look-at point (with a 40 km hysteresis once active) and only below a
+3,000 km altitude gate, so a session over Boston costs one MBTA request per
+15 s and nothing elsewhere. Each vehicle is one point primitive colored by mode
+(bus, tram, metro, rail, ferry — the feed's default refined by per-operator
+route-id hints); on every poll it glides from its last drawn position to the
+new fix over the next poll interval, one interval behind real time, and a
+vehicle missing from two consecutive polls is removed. Fixes older than ten
+minutes are ignored. Below 60 km a vehicle reads the shared ground floor
+(`cachedGroundFloor`) and stays hidden until its cell answers — cells are
+warmed at most 300 per poll and re-read on a short timer, never per frame;
+above 60 km the fleet renders at the ellipsoid, always visible through the
+mesh. Clicking a vehicle opens a protected shared-host card (route, speed,
+heading, stop status, occupancy, report age) that re-anchors every 250 ms
+while the vehicle moves; the click handler is ambient and yields while any
+tool holds the pointer; Escape or a click on empty globe clears it. The layer
+holds continuous render only while it has vehicles and is one instance per
+catalog. The `/api/transit` proxy (`server/providers/transit.js`) resolves an
+id against the registry, fetches https upstreams only (redirects must stay on
+https), caps bodies at 8 MB, decodes the protobuf server-side with `pbf`
+(`src/data/gtfsRealtime.js` — no `gtfs-realtime-bindings`), caches each feed in
+memory for 15 s with a single-flight refresh, and serves a stale snapshot marked
+`X-GEV-Cache: STALE-ERROR` for up to 10 minutes when the upstream fails; the
+layer reads that as STALE. Each operator's credit is registered dynamically
+the first time its vehicles render.
 
 Directions is a keyless front end to the routing the voice agent already
 uses. Its row chips are the whole interface: DRIVE / WALK / BIKE pick the

@@ -170,6 +170,10 @@ export const DATA_CREDITS = [
       '<a href="https://data.calgary.ca/stories/s/Open-Calgary-Terms-of-Use/u45n-7awa" target="_blank" rel="noopener">Open Government Licence – City of Calgary</a>',
   },
   {
+    key: 'gtfs-rt',
+    html: 'Transit vehicles: operator GTFS-Realtime feeds (each operator is credited below when its vehicles are shown)',
+  },
+  {
     key: 'gbfs',
     html: 'Bikeshare availability: GBFS operator feeds (e.g. Austin BCycle)',
   },
@@ -286,6 +290,27 @@ export const NATURAL_EARTH_CREDIT = {
     'Physical region boundaries from ' +
     '<a href="https://www.naturalearthdata.com" target="_blank" rel="noopener">Natural Earth</a> (public domain)',
 };
+
+/**
+ * Per-feed transit credit, registered the first time that feed's vehicles
+ * render (see `src/data/transitFeeds.js` for the license of each).
+ * @param {{ id: string, attribution: string, license: string, licenseUrl: string }} feed
+ * @returns {{ key: string, html: string }}
+ */
+export function transitFeedCredit(feed) {
+  const escape = (text) =>
+    String(text)
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;');
+  return {
+    key: `transit-${feed.id}`,
+    html:
+      `Transit (${escape(feed.attribution)}): ` +
+      `<a href="${escape(feed.licenseUrl)}" target="_blank" rel="noopener">${escape(feed.license)}</a>`,
+  };
+}
 
 /** @type {Set<string>} Keys of dynamic credits already registered this session. */
 const _dynamicCreditKeys = new Set();

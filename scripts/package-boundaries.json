@@ -143,6 +143,23 @@
     "modules": ["src/data/gbfsSource.js"],
     "external": []
   },
+  "transit-provider": {
+    "runtime": "node",
+    "exports": ["./server/providers/transit"],
+    "modules": [
+      "server/providers/transit.js",
+      "server/providers/common/http.js",
+      "src/data/transitFeeds.js",
+      "src/data/transitProxy.js",
+      "src/data/gtfsRealtime.js"
+    ],
+    "external": ["pbf"]
+  },
+  "transit-source": {
+    "exports": ["./sources/transit"],
+    "modules": ["src/data/transitFeeds.js"],
+    "external": []
+  },
   "cctv-provider": {
     "runtime": "node",
     "exports": ["./server/providers/cctv"],
@@ -895,6 +912,25 @@
     ],
     "external": ["cesium"]
   },
+  "transit-layer": {
+    "exports": ["./layers/transit"],
+    "modules": [
+      "src/layers/transit/controls.js",
+      "src/layers/transit/index.js",
+      "src/layers/transit/ingestion.js",
+      "src/layers/transit/lifecycle.js",
+      "src/layers/transit/model.js",
+      "src/layers/transit/policy.js",
+      "src/layers/transit/rendering.js",
+      "src/layers/transit/selection.js",
+      "src/layers/transit/source.js",
+      "src/layers/transit/state.js",
+      "src/layers/transit/testing.js",
+      "src/layers/transit/viewport.js",
+      "src/data/transitFeeds.js"
+    ],
+    "external": ["cesium"]
+  },
   "cctv-layer": {
     "exports": ["./layers/cctv"],
     "modules": [
@@ -1584,7 +1620,22 @@
       "src/data/routeSteps.js",
       "src/layers/directions/index.js",
       "src/data/directions.js",
-      "src/app/layers/directions.js"
+      "src/app/layers/directions.js",
+      "src/app/layers/transit.js",
+      "src/data/transit.js",
+      "src/data/transitFeeds.js",
+      "src/layers/transit/controls.js",
+      "src/layers/transit/index.js",
+      "src/layers/transit/ingestion.js",
+      "src/layers/transit/lifecycle.js",
+      "src/layers/transit/model.js",
+      "src/layers/transit/policy.js",
+      "src/layers/transit/rendering.js",
+      "src/layers/transit/selection.js",
+      "src/layers/transit/source.js",
+      "src/layers/transit/state.js",
+      "src/layers/transit/testing.js",
+      "src/layers/transit/viewport.js"
     ],
     "external": [
       "@mapbox/vector-tile",
@@ -1929,7 +1980,22 @@
       "src/data/terrainHeights.js",
       "src/data/groundFloor.js",
       "src/data/directions.js",
-      "src/app/layers/directions.js"
+      "src/app/layers/directions.js",
+      "src/app/layers/transit.js",
+      "src/data/transit.js",
+      "src/data/transitFeeds.js",
+      "src/layers/transit/controls.js",
+      "src/layers/transit/index.js",
+      "src/layers/transit/ingestion.js",
+      "src/layers/transit/lifecycle.js",
+      "src/layers/transit/model.js",
+      "src/layers/transit/policy.js",
+      "src/layers/transit/rendering.js",
+      "src/layers/transit/selection.js",
+      "src/layers/transit/source.js",
+      "src/layers/transit/state.js",
+      "src/layers/transit/testing.js",
+      "src/layers/transit/viewport.js"
     ],
     "external": [
       "cesium",
