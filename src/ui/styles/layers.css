@@ -1287,29 +1287,62 @@
 }
 
 /* ── Weather panel ──────────────────────────────────────────────────────
-   Sizing lives on the panel's own id, never on #right-context-rail: the
-   rail's box is modelled by the credit keep-out test, which fails closed on
-   any geometry it does not recognise. */
-#weather-panel {
-  width: var(--display-panel-expanded-width, 272px);
+   Chrome, chips and labels are the rail's existing components: the card is
+   the same glass treatment CCTV and Context use, the layer buttons are
+   .data-toggle-chip, and the group captions are .pp-slider-mini-label.
+   Only the panel's own layout lives here.
+
+   Sizing stays on the panel's own id and never on #right-context-rail,
+   whose box the credit keep-out test models and which fails closed on
+   geometry it does not recognise. */
+#right-context-rail #weather-panel {
+  width: 100%;
 }
-#weather-panel.collapsed {
-  width: var(--right-context-collapsed-width, 176px);
+#right-context-rail #weather-panel.collapsed {
+  width: var(--right-context-collapsed-width);
+  /* Keep the collapsed tab on the rail edge rather than stranded at the
+     expanded-width origin, as the sibling panels do. */
+  margin-left: auto;
 }
 .weather-panel-inner {
+  position: relative;
   display: flex;
+  min-height: 0;
   flex-direction: column;
   gap: 10px;
-  padding: 10px 12px 12px;
+  padding: 14px 16px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--panel-radius);
+  background: var(--glass-bg);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
 }
-#weather-panel.collapsed .weather-panel-inner > :not(.panel-header) {
+#right-context-rail #weather-panel.collapsed .weather-panel-inner {
+  height: 50px;
+  min-height: 50px;
+  box-sizing: border-box;
+}
+#right-context-rail
+  #weather-panel.collapsed
+  .weather-panel-inner
+  > :not(.panel-header) {
   display: none;
+}
+#right-context-rail #weather-panel:not(.collapsed) .weather-panel-inner {
+  max-height: 100%;
+  overflow-y: auto;
+  scrollbar-width: thin;
 }
 .weather-unavailable {
   margin: 0;
-  font-size: 11px;
-  line-height: 1.4;
-  color: var(--warning, #f0b429);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.6px;
+  line-height: 1.5;
+  color: #ffb45c;
 }
 .weather-refresh-row {
   display: flex;
@@ -1321,15 +1354,13 @@
   flex: 1 1 96px;
   min-width: 0;
 }
-.weather-auto-btn {
-  flex: 0 0 auto;
-}
 .weather-budget {
   margin: 0;
-  font-size: 10px;
-  letter-spacing: 0.04em;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 1px;
   font-variant-numeric: tabular-nums;
-  opacity: 0.68;
+  color: var(--text-dim);
 }
 .weather-group {
   display: flex;
@@ -1342,50 +1373,27 @@
   justify-content: space-between;
   gap: 8px;
   margin: 0;
-  font-size: 10px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  opacity: 0.75;
-}
-.weather-group-note {
-  letter-spacing: 0.04em;
-  text-transform: none;
-  opacity: 0.6;
 }
 .weather-options {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  align-items: center;
+  gap: 4px 6px;
 }
-.weather-option {
+/* The chip itself is .data-toggle-chip; this only makes room for the
+   coverage and forecast markers beside its label. */
+.weather-chip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 3px 8px;
-  font: inherit;
-  font-size: 10px;
-  letter-spacing: 0.02em;
-  color: inherit;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 3px;
-  cursor: pointer;
 }
-.weather-option:hover {
-  border-color: rgba(255, 255, 255, 0.4);
-}
-.weather-option.active {
-  background: rgba(64, 196, 255, 0.18);
-  border-color: rgba(64, 196, 255, 0.7);
-}
-.weather-option-tag {
-  font-size: 8px;
-  letter-spacing: 0.08em;
+.weather-chip-tag {
   padding: 0 3px;
   border-radius: 2px;
-  background: rgba(255, 255, 255, 0.12);
-  opacity: 0.85;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-dim);
 }
-.weather-option-tag-forecast {
-  background: rgba(240, 180, 41, 0.22);
+.data-toggle-chip.active .weather-chip-tag {
+  color: var(--accent);
+  background: rgba(0, 212, 255, 0.16);
 }

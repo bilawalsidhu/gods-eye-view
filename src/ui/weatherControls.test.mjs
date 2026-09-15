@@ -47,8 +47,8 @@ function node(tag = 'div') {
     },
     listenerCount: (type) => listeners.get(type)?.size ?? 0,
     querySelector(selector) {
-      if (selector !== '.weather-option-label') return null;
-      return this.children.find((c) => c.className === 'weather-option-label');
+      if (selector !== '.weather-chip-label') return null;
+      return this.children.find((c) => c.className === 'weather-chip-label');
     },
   };
   return self;
@@ -58,7 +58,7 @@ function node(tag = 'div') {
 function optionsByLabel(container) {
   const map = new Map();
   for (const button of container.children) {
-    map.set(button.querySelector('.weather-option-label')?.textContent, button);
+    map.set(button.querySelector('.weather-chip-label')?.textContent, button);
   }
   return map;
 }
@@ -136,7 +136,7 @@ test('a layer that only covers the United States says so', () => {
   const h = harness();
   try {
     const tagged = h.elements.overlays.children.filter((button) =>
-      button.children.some((c) => c.className?.includes('weather-option-tag')),
+      button.children.some((c) => c.className?.includes('weather-chip-tag')),
     );
     const expected = WEATHER_LAYER_SPECS.filter(
       (s) => s.group === OVERLAY && (s.usOnly || s.forecast),

@@ -46,7 +46,9 @@ export function bindWeatherControls({ elements, actions }) {
   function optionButton(spec, role) {
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = 'weather-option';
+    // The rail's existing chip component, so state, hover and focus match
+    // every other chip in the app.
+    button.className = 'data-toggle-chip weather-chip';
     button.dataset.layerCode = spec.code;
     button.title = describe(spec);
     if (role === 'radio') {
@@ -57,7 +59,7 @@ export function bindWeatherControls({ elements, actions }) {
     }
 
     const label = document.createElement('span');
-    label.className = 'weather-option-label';
+    label.className = 'weather-chip-label';
     label.textContent = spec.label;
     button.appendChild(label);
 
@@ -65,7 +67,7 @@ export function bindWeatherControls({ elements, actions }) {
     // row is the difference between "switched on and quiet" and "broken".
     if (spec.usOnly) {
       const tag = document.createElement('span');
-      tag.className = 'weather-option-tag';
+      tag.className = 'weather-chip-tag';
       tag.textContent = 'US';
       button.appendChild(tag);
     }
@@ -73,7 +75,7 @@ export function bindWeatherControls({ elements, actions }) {
     // for an observation of now.
     if (spec.forecast) {
       const tag = document.createElement('span');
-      tag.className = 'weather-option-tag weather-option-tag-forecast';
+      tag.className = 'weather-chip-tag';
       tag.textContent = 'FCST';
       button.appendChild(tag);
     }
@@ -125,11 +127,11 @@ export function bindWeatherControls({ elements, actions }) {
   };
 
   listen(elements.overlays, 'click', (event) => {
-    const button = event.target?.closest?.('.weather-option');
+    const button = event.target?.closest?.('.data-toggle-chip');
     if (button) toggle(button.dataset.layerCode);
   });
   listen(elements.fields, 'click', (event) => {
-    const button = event.target?.closest?.('.weather-option');
+    const button = event.target?.closest?.('.data-toggle-chip');
     if (button) toggle(button.dataset.layerCode);
   });
   listen(elements.refresh, 'click', () => actions.refreshNow());
