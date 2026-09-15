@@ -1,6 +1,16 @@
 import * as Cesium from 'cesium';
 import { isPickedWorldPosition } from '../data/scenePick.js';
 
+function trackedTarget(viewer) {
+  const entity = viewer.trackedEntity;
+  // Read the visual's sample first; sampling a flight CallbackProperty twice
+  // can advance dead reckoning ahead of the displayed aircraft.
+  return (
+    entity?.gevDisplayPosition?.() ||
+    entity?.position?.getValue(viewer.clock?.currentTime)
+  );
+}
+
 export const OBLIQUE_PITCH = Cesium.Math.toRadians(-35);
 export const STRAIGHT_DOWN_PITCH = Cesium.Math.toRadians(-89);
 const OBLIQUE_THRESHOLD = Cesium.Math.toRadians(-60);
@@ -63,7 +73,9 @@ export function pickViewTarget(viewer) {
 /** Describe the camera as an orbit around the current viewport center. */
 export function readCameraTargetFrame(viewer) {
   const camera = viewer?.camera;
-  const target = pickViewTarget(viewer);
+  const target = viewer?.trackedEntity
+    ? trackedTarget(viewer)
+    : pickViewTarget(viewer);
   if (!camera || !target || !isPickedWorldPosition(camera.positionWC))
     return null;
 
@@ -98,6 +110,9 @@ export function setCameraTargetFrame(viewer, frame) {
   const camera = viewer?.camera;
   if (!camera || !frame?.target || !Number.isFinite(frame.range)) return false;
   try {
+    const trackedTransform = viewer.trackedEntity
+      ? Cesium.Matrix4.clone(camera.transform)
+      : null;
     camera.lookAt(
       frame.target,
       new Cesium.HeadingPitchRange(
@@ -106,6 +121,13 @@ export function setCameraTargetFrame(viewer, frame) {
         frame.range,
       ),
     );
+    if (trackedTransform) {
+      // Preserve EntityView's reference frame (including satellite frames).
+      // Its next update carries this new local offset along with the target.
+      camera.lookAtTransform(trackedTransform);
+      viewer.scene?.requestRender?.();
+      return true;
+    }
     const destination = Cesium.Cartesian3.clone(camera.positionWC);
     const direction = Cesium.Cartesian3.clone(camera.directionWC);
     const up = Cesium.Cartesian3.clone(camera.upWC);
@@ -160,6 +182,62 @@ function headingDegrees(camera) {
   return Cesium.Math.toDegrees(normalizedHeading(camera?.heading));
 }
 
+/** Ease an orbit without handing off the entity that owns the follow camera. */
+export function createCameraOrientationAnimator(
+  viewer,
+  { now = () => performance.now(), duration = 650 } = {},
+) {
+  let remove = null;
+  let pending = null;
+  const cancel = () => {
+    remove?.();
+    remove = null;
+    pending = null;
+  };
+  function animate(frame, destination) {
+    cancel();
+    if (!viewer.scene?.preUpdate?.addEventListener || duration <= 0)
+      return setCameraTargetFrame(viewer, { ...frame, ...destination });
+    const entity = viewer.trackedEntity;
+    pending = destination;
+    const start = now();
+    const headingDelta = Cesium.Math.negativePiToPi(
+      destination.heading - frame.heading,
+    );
+    remove = viewer.scene.preUpdate.addEventListener(() => {
+      if (viewer.isDestroyed?.() || viewer.trackedEntity !== entity) {
+        cancel();
+        return;
+      }
+      const progress = Cesium.Math.clamp((now() - start) / duration, 0, 1);
+      const eased = Cesium.EasingFunction.CUBIC_IN_OUT(progress);
+      const target = entity ? trackedTarget(viewer) : frame.target;
+      if (
+        !isPickedWorldPosition(target) ||
+        !setCameraTargetFrame(viewer, {
+          ...frame,
+          target,
+          heading: frame.heading + headingDelta * eased,
+          pitch: Cesium.Math.lerp(frame.pitch, destination.pitch, eased),
+        })
+      ) {
+        cancel();
+        return;
+      }
+      if (progress === 1) cancel();
+    });
+    viewer.scene.requestRender?.();
+    return true;
+  }
+  return {
+    animate,
+    cancel,
+    get destination() {
+      return pending;
+    },
+  };
+}
+
 /** Bind the two map-orientation actions and keep their accessible state current. */
 export function bindCameraOrientationControls({
   viewer,
@@ -176,6 +254,7 @@ export function bindCameraOrientationControls({
   // of the screen: 4 ms median and up to 12 ms, measured on this machine. It is
   // therefore held between refreshes rather than recomputed per frame.
   let tilted = false;
+  const animator = createCameraOrientationAnimator(viewer);
 
   /** Recompute the tilt state exactly, paying for one pick. */
   const refreshTilt = () => {
@@ -229,7 +308,19 @@ export function bindCameraOrientationControls({
     removers.push(() => element.removeEventListener('click', handler));
   };
   listen(tiltButton, () => {
-    const result = runNavigation('camera', () => toggleCameraTilt(viewer));
+    const pending = animator.destination;
+    const result = runNavigation('camera', () => {
+      const frame = readCameraTargetFrame(viewer);
+      if (!frame) return false;
+      const nextTilted = !frameIsTilted(pending || frame);
+      const pitch = nextTilted ? OBLIQUE_PITCH : STRAIGHT_DOWN_PITCH;
+      return animator.animate(frame, {
+        heading: pending?.heading ?? frame.heading,
+        pitch,
+      })
+        ? { tilted: nextTilted, pitch }
+        : false;
+    });
     if (result) {
       showToast?.(result.tilted ? 'Tilted view' : 'Straight-down view');
       // The action reports the state it just commanded, so the button can
@@ -239,7 +330,17 @@ export function bindCameraOrientationControls({
     sync();
   });
   listen(northButton, () => {
-    const result = runNavigation('camera', () => resetCameraNorth(viewer));
+    const pending = animator.destination;
+    const result = runNavigation('camera', () => {
+      const frame = readCameraTargetFrame(viewer);
+      return (
+        frame &&
+        animator.animate(frame, {
+          heading: 0,
+          pitch: pending?.pitch ?? frame.pitch,
+        })
+      );
+    });
     if (result) showToast?.('North up');
     sync();
   });
@@ -255,14 +356,22 @@ export function bindCameraOrientationControls({
   // The exact tilt state is refreshed once per gesture, not once per frame —
   // moveEnd fires when the camera stops, which is where the pick is affordable.
   subscribe(viewer?.camera?.moveEnd, refreshTilt);
+  subscribe(viewer?.trackedEntityChanged, animator.cancel);
+  for (const type of ['pointerdown', 'wheel']) {
+    const canvas = viewer?.scene?.canvas;
+    canvas?.addEventListener?.(type, animator.cancel, { passive: true });
+    removers.push(() => canvas?.removeEventListener?.(type, animator.cancel));
+  }
   refreshTilt();
 
   return {
     sync,
     refreshTilt,
+    cancel: animator.cancel,
     destroy() {
       if (destroyed) return;
       destroyed = true;
+      animator.cancel();
       for (const remove of removers.splice(0)) remove();
     },
   };
