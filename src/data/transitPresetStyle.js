@@ -12,7 +12,7 @@
  * Encoding per profile, the traffic-dot precedent applied to a glyph:
  *  - `mono` (surveillance/NVG, thermal/FLIR, noir, cockpit nvg/thermal): the
  *    sprite is WHITE — the hottest end of grayscale FLIR and of the Ironbow
- *    ramp, and the brightest phosphor under NVG — drawn larger, with a dark
+ *    ramp, and the brightest phosphor under NVG — at CRT size, with a thin dark
  *    halo sized in SCREEN pixels so it keeps local contrast on a bright road
  *    through any luma mapping. Black-hot FLIR inverts it, deliberately: a
  *    black sprite with a light ring is what a hot object looks like there.
@@ -52,8 +52,8 @@ const PROFILE_BY_STYLE = Object.freeze({
 const SPRITE_STYLE = Object.freeze({
   mono: Object.freeze({
     rgba: Object.freeze([255, 255, 255, 1]),
-    scale: 1.5,
-    outlinePx: 3,
+    scale: 1.3,
+    outlinePx: 2,
   }),
   crt: Object.freeze({
     scale: 1.3,
@@ -111,8 +111,6 @@ export function presetSpriteRgba(styleName, mode) {
  * @returns {number} 1 under the normal profile.
  */
 export function presetSpriteScale(styleName, selected = false) {
-  if (transitStyleProfile(styleName) === 'mono')
-    return selected ? 36 / 30 : 30 / 20;
   return SPRITE_STYLE[transitStyleProfile(styleName)]?.scale ?? 1;
 }
 

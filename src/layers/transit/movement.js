@@ -264,7 +264,10 @@ export function displayCourse(entry, nowMs) {
   const target = Number.isFinite(entry.sample?.segmentCourseDeg)
     ? entry.sample.segmentCourseDeg
     : null;
-  if (target === null) return entry.courseDeg ?? null;
+  if (target === null) {
+    if (Number.isFinite(entry.courseDeg)) return entry.courseDeg;
+    return Number.isFinite(entry.record?.bearing) ? entry.record.bearing : null;
+  }
   if (entry.courseDeg === null || !Number.isFinite(entry.courseEvalAt)) {
     return target;
   }

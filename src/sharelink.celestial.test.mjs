@@ -1,3 +1,5 @@
+import { DisplayBindings } from './ui/displayBindings.js';
+import { LocationNavigation } from './ui/locationNavigation.js';
 import { VisualSettings } from './ui/visualSettings.js';
 import { readShellSource, shellMethod } from './testSupport/readShellSource.mjs';
 import { StyleManager } from './ui/applicationShell.js';
@@ -700,13 +702,15 @@ test('visual input listeners are revoked before asynchronous UI teardown', () =>
   const firstAwait = disposal.indexOf('await ');
   assert.ok(firstAwait > 0);
   const synchronous = disposal.slice(0, firstAwait);
-  assert.match(synchronous, /this\._applicationShortcuts\?\.destroy\(\)/);
+  assert.match(synchronous, /this\._displayBindings\.destroy\(\)/);
   assert.match(synchronous, /this\._visualSettings\.stop\(\)/);
   assert.match(synchronous, /this\._mapSourceControls\?\.destroy\(\)/);
   assert.match(synchronous, /this\._clearLayersControl\?\.destroy\(\)/);
-  assert.match(synchronous, /this\._locationControls\?\.destroy\(\)/);
-  assert.match(synchronous, /this\._locationLookup\?\.destroy\(\)/);
-  assert.match(synchronous, /this\._displayControls\?\.destroy\(\)/);
+  assert.match(synchronous, /this\._locationNavigation\.destroy\(\)/);
+  assert.match(LocationNavigation.prototype.destroy.toString(), /this\._locationControls\?\.destroy\(\)/);
+  assert.match(LocationNavigation.prototype.destroy.toString(), /this\._locationLookup\?\.destroy\(\)/);
+  assert.match(DisplayBindings.prototype.destroy.toString(), /this\._displayControls\?\.destroy\(\)/);
+  assert.match(DisplayBindings.prototype.destroy.toString(), /this\._applicationShortcuts\?\.destroy\(\)/);
   assert.match(VisualSettings.prototype.stop.toString(), /this\._styleParameters\?\.destroy\(\)/);
   assert.match(VisualSettings.prototype.stop.toString(), /this\._visualEffects\.stop\(\)/);
 });

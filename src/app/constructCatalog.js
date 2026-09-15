@@ -120,9 +120,9 @@ export function createApplicationCatalog({
         createApplicationTraffic({ source: sources.traffic }),
         createApplicationCctv({ surface, source: sources.cctv }),
         createApplicationRadio({ surface, source: sources.radio }),
+        createApplicationTransit({ surface, source: sources.transit }),
         createApplicationBikeshare({ source: sources.bikeshare }),
         createApplicationDirections(),
-        createApplicationTransit({ surface, source: sources.transit }),
         vessels,
         installations,
         createApplicationAwareness({
