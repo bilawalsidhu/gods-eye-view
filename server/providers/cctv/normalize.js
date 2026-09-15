@@ -380,6 +380,17 @@ export function isLikelyNswCoordinate(lat, lon) {
   );
 }
 
+/** Calgary's municipal extent, with slack for the ring road. */
+export function isLikelyCalgaryCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 50.8 &&
+    lat <= 51.25 &&
+    lon >= -114.4 &&
+    lon <= -113.8
+  );
+}
+
 export function isLikelyFinlandCoordinate(lat, lon) {
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
   return lat >= 59.5 && lat <= 70.5 && lon >= 19 && lon <= 32;

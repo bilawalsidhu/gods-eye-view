@@ -310,7 +310,7 @@ test('accents and punctuation do not change what a name compares as', () => {
 
 test('forward geocoding is composed once and consumers do not call a source directly', () => {
   for (const file of ['locations.js', 'annotations/annotationResolver.js', 'voice/gevActions.js']) {
-    const source = fs.readFileSync(path.join(ROOT, 'src', file), 'utf8');
+    const source = readGeocodingConsumer(file);
     assert.match(source, /placeSearch\.geocode\(/);
     assert.doesNotMatch(source, /geocodeKeyless|geocode\/json\?address/);
   }
@@ -325,7 +325,7 @@ test('a missing key is never a thrown error on the client', () => {
   // It was one, in the Radio layer: a keyless install surfaced "play radio near
   // Hanoi" as a failed voice turn rather than as a station it could not place.
   for (const file of ['locations.js', 'annotations/annotationResolver.js', 'voice/gevActions.js']) {
-    const body = fs.readFileSync(path.join(ROOT, 'src', file), 'utf8');
+    const body = readGeocodingConsumer(file);
     assert.doesNotMatch(body, /throw new Error\([^)]*No Google Maps API key/, `${file} throws on a missing key`);
   }
 });
@@ -446,3 +446,9 @@ test('a biased pass that never answered leaves the whole lookup unanswered', asy
   assert.deepEqual(outcome, { place: null, answered: false });
   assert.equal(urls.length, 2);
 });
+
+function readGeocodingConsumer(file) {
+  const files = file === 'annotations/annotationResolver.js'
+    ? [file, 'annotations/resolver.js'] : [file];
+  return files.map((name) => fs.readFileSync(path.join(ROOT, 'src', name), 'utf8')).join('\n');
+}

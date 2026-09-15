@@ -1,3 +1,4 @@
+import { readShellSource, shellMethod } from './testSupport/readShellSource.mjs';
 import { _syncContextModeButtons } from './ui/contextPresentation.js';
 // Contacts-scoped detection (owner playtest 2026-08-18: "when you click on
 // Contacts, detections should just turn on, and they should stay on in Cockpit
@@ -28,7 +29,7 @@ import {
 import { canonicalizeDensity } from './data/detectionPolicy.js';
 
 // Follow the UI wiring and its extracted preset definitions.
-const uiSource = fs.readFileSync(new URL('./ui/applicationShell.js', import.meta.url), 'utf8')
+const uiSource = readShellSource()
   + '\n' + fs.readFileSync(new URL('./ui/visualPresets.js', import.meta.url), 'utf8');
 
 /**
@@ -140,10 +141,7 @@ test('the Contacts preset is the very object the military styles apply', () => {
 });
 
 test('the shared preset applier ignores the style override flag — the caller owns it', () => {
-  const applier = uiSource.slice(
-    uiSource.indexOf('_applyDetectionPreset(det) {'),
-    uiSource.indexOf('Applies the global post-processing baseline'),
-  );
+  const applier = shellMethod('_applyDetectionPreset').toString();
   assert.ok(applier.length > 0);
   assert.doesNotMatch(applier, /_detectionUserOverridden/);
   // The STYLE path still gates on it; Contacts deliberately does not.

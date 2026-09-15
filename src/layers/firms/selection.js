@@ -3,6 +3,7 @@ import {
   fireDetectionKey,
 } from '../../data/firmsLabels.js';
 import * as Cesium from 'cesium';
+import { isPointerFree } from '../../data/inputOwnership.js';
 import { CONTEXT_TOP_N } from './policy.js';
 
 export function createSelection({
@@ -35,6 +36,8 @@ export function createSelection({
       layerState._viewer,
     );
     layerState._clickHandler.setInputAction((click) => {
+      // A tool owns the pointer (src/data/inputOwnership.js): yield the click.
+      if (!isPointerFree()) return;
       const picked = layerState._viewer.scene.pick(click.position);
       const fire = pickedFire(picked);
       if (fire) {

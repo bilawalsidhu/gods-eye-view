@@ -77,7 +77,7 @@ export function createRendering({
   function _fleetBillboardScale(icao24, klass) {
     return (
       (CLASS_SCALE_2D[klass] || 1) *
-      (flightState._flightData.get(icao24)?.onGround ? GROUND_SCALE : 1)
+      (flightState.records.data.get(icao24)?.onGround ? GROUND_SCALE : 1)
     );
   }
 
@@ -171,7 +171,7 @@ export function createRendering({
       return;
     }
 
-    const meta = flightState._flightData.get(icao24);
+    const meta = flightState.records.data.get(icao24);
     bb.image = aircraftIcon(
       _iconKind(icao24, meta?.klass),
       bb._gevIconLarge ? TRACKED_ICON_PX : undefined,
@@ -303,7 +303,7 @@ export function createRendering({
    *  because a resample is mid-backoff. */
 
   function _modelDisplayPosition(icao24, pos, result) {
-    const meta = flightState._flightData.get(icao24);
+    const meta = flightState.records.data.get(icao24);
     if (!meta || !meta.onGround) return pos;
     const h = flightState._groundSnap.heightFor(
       flightState._viewer,
@@ -438,7 +438,7 @@ export function createRendering({
    *  the same rule (its billboard entity is always the fallback visual). */
 
   function _syncModelToClass(icao24) {
-    const key = _specKeyFor(flightState._flightData.get(icao24)?.klass);
+    const key = _specKeyFor(flightState.records.data.get(icao24)?.klass);
     const current = flightState._models.get(icao24);
     if (
       (current && current._gevSpecKey !== key) ||
@@ -510,10 +510,10 @@ export function createRendering({
     // aircraft mid-load, the post-await admission below rejects the stale asset.
     // Boost state likewise: the creation options bake it in, so a mid-load
     // toggle must reject too (the reload queue only covers ADMITTED models).
-    const specKey = _specKeyFor(flightState._flightData.get(icao24)?.klass);
+    const specKey = _specKeyFor(flightState.records.data.get(icao24)?.klass);
     const loadIrBoost = flightState._irBoost;
     try {
-      const spec = _modelSpec(flightState._flightData.get(icao24)?.klass);
+      const spec = _modelSpec(flightState.records.data.get(icao24)?.klass);
       model = await Cesium.Model.fromGltfAsync({
         url: resolveAsset(spec.url),
         asynchronous: false,
@@ -559,12 +559,12 @@ export function createRendering({
       !_modelRegimeActive() ||
       !flightState._modelCollection ||
       flightState._modelCollection.isDestroyed() ||
-      !flightState._flightData.has(icao24) ||
+      !flightState.records.data.has(icao24) ||
       icao24 === flightState._trackedIcao ||
       flightState._models.has(icao24) ||
       flightState._models.size >= _modelCap() ||
       // Class reclassified mid-load → this GLB/scale is for the OLD class.
-      _specKeyFor(flightState._flightData.get(icao24)?.klass) !== specKey ||
+      _specKeyFor(flightState.records.data.get(icao24)?.klass) !== specKey ||
       // IR boost flipped mid-load → this model baked the wrong shader/tint.
       flightState._irBoost !== loadIrBoost;
     if (stale) {
@@ -714,10 +714,10 @@ export function createRendering({
       flightState._trackedModelLoading = true;
       const gen = flightState._trackedModelGen;
       const trackedSpec = _modelSpec(
-        flightState._flightData.get(flightState._trackedIcao)?.klass,
+        flightState.records.data.get(flightState._trackedIcao)?.klass,
       );
       const trackedKey = _specKeyFor(
-        flightState._flightData.get(flightState._trackedIcao)?.klass,
+        flightState.records.data.get(flightState._trackedIcao)?.klass,
       );
       const trackedIrBoost = flightState._irBoost;
       Cesium.Model.fromGltfAsync({
@@ -756,7 +756,7 @@ export function createRendering({
           // _trackedModel was still null): drop the stale asset; driver reloads.
           if (
             _specKeyFor(
-              flightState._flightData.get(flightState._trackedIcao)?.klass,
+              flightState.records.data.get(flightState._trackedIcao)?.klass,
             ) !== trackedKey ||
             flightState._irBoost !== trackedIrBoost
           ) {
@@ -829,7 +829,7 @@ export function createRendering({
       );
       if (!flightState._trackedModel.ready) return;
       const spec = _modelSpec(
-        flightState._flightData.get(flightState._trackedIcao)?.klass,
+        flightState.records.data.get(flightState._trackedIcao)?.klass,
       );
       flightState._trackedModel.scale = trackedModelScaleForPixelCap({
         baseScale: spec.scale,
@@ -989,7 +989,7 @@ export function createRendering({
     for (const [icao24, bb] of flightState._billboards) {
       if (icao24 === flightState._trackedIcao) continue; // tracked entity owns its own motion
 
-      const info = flightState._flightData.get(icao24);
+      const info = flightState.records.data.get(icao24);
 
       const dr = parts.motion._deadReckon(icao24, flightState._scratchFleetPos);
       // The dead-reckoned point drifts away from the fix whose cell supplied the
@@ -1018,7 +1018,7 @@ export function createRendering({
       // pass would hide a plane that is really just low over high-N terrain
       // waiting for its floor to warm (ATL grounded contacts at geoid −31 m).
       const beyondHorizon = !occluder.isPointVisible(
-        info?.cullPosition || bb.position,
+        flightState._cullPositions.get(icao24) || bb.position,
       );
       // A billboard flipping INTO view (horizon reveal while the camera idles)
       // gets its rotation refreshed THIS tick even without a pose change —
@@ -1074,7 +1074,7 @@ export function createRendering({
           flightState._cockpitContactMode && !isCockpitNear
             ? 1
             : _fleetBillboardScale(icao24, info?.klass),
-        baseAlpha: flightState._missingPolls.get(icao24) ? 0.45 : 1,
+        baseAlpha: flightState.records.missingPolls.get(icao24) ? 0.45 : 1,
         baseColor,
         focusFactor: focus.factor,
         cameraDistanceM,

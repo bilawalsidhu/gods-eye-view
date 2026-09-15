@@ -1,3 +1,8 @@
+export {
+  PARTIAL_RETENTION_MS,
+  SELECTED_PIN_REFRESHES,
+  AIS_FIRST_CONNECT_LABEL,
+} from './recordPolicy.js';
 import { VESSEL_LABEL_GRID_PX } from '../../data/vesselLabels.js';
 
 export const FOCUS_EVIDENCE_DEV = import.meta.env?.DEV === true;
@@ -11,8 +16,6 @@ export const REFRESH_MS = 60000;
 /** Bounded wait for the first accepted vessel position in one enabled session. */
 
 export const AIS_FIRST_CONNECT_GRACE_MS = 30000;
-
-export const AIS_FIRST_CONNECT_LABEL = 'awaiting first AIS position…';
 
 export const VISIBILITY_UPDATE_MS = 800;
 
@@ -29,10 +32,6 @@ export const LABEL_GRID_PX = VESSEL_LABEL_GRID_PX;
  */
 
 export const CARD_MIN_SEP_PX = 150;
-
-/** Number of consecutive refreshes a selected-but-vanished vessel is retained. */
-
-export const SELECTED_PIN_REFRESHES = 3;
 
 /** Trail hue for the selected vessel (PRD F4, pinned to the AIS teal-green family). */
 
@@ -100,6 +99,3 @@ export const AIS_DEGRADED_STATUSES = new Set([
   'down',
   'auth-failed',
 ]);
-
-/** Missing records in an incomplete observation are retained for at most five minutes. */
-export const PARTIAL_RETENTION_MS = 5 * 60 * 1000;

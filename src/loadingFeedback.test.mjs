@@ -1,3 +1,5 @@
+import { ShareRestoration } from './ui/shareRestoration.js';
+import { readShellSource, shellMethod } from './testSupport/readShellSource.mjs';
 import { expandApplicationHtml } from '../build/application-html.js';
 import { readStylesheet } from './testSupport/readStylesheet.mjs';
 import test from 'node:test';
@@ -91,11 +93,9 @@ test('deferred terminal notices lose ownership to newer acquisition epochs and d
 });
 
 test('share-follow failures use the universal top-center status instead of the bottom toast', () => {
-  const ui = readFileSync(new URL('./ui/applicationShell.js', import.meta.url), 'utf8');
-  const start = ui.indexOf('  _handleShareTrackingRestoreStatus(result) {');
-  const end = ui.indexOf('\n  _initGlobalContextPanel() {', start);
-  const handler = ui.slice(start, end);
-  assert.match(handler, /this\._showGlobalStatusNotice\(message\)/);
+  const ui = readShellSource();
+  const handler = shellMethod('_handleShareTrackingRestoreStatus').toString();
+  assert.match(handler, /this\.showStatus\(message\)/);
   assert.match(handler, /this\.initialRestorePromise\.then\(showAfterStartupCover\)/);
   assert.match(handler, /this\._lifetime\.frame\(\(\) => \{/);
   assert.match(handler, /this\._lifetime\.listen\(\s*startupCover,\s*'transitionend',\s*showOnce,\s*\{ once: true \},?\s*\)/);
@@ -197,14 +197,15 @@ test('replacement, repetition, and hidden-tab elapsed time use the newest fixed 
 });
 
 test('universal notice lifecycle clears on dispose and uses the one top-center live region', () => {
-  const ui = readFileSync(new URL('./ui/applicationShell.js', import.meta.url), 'utf8');
+  const ui = readShellSource();
   const html = expandApplicationHtml(readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
   const disposeStart = ui.indexOf('  async dispose() {');
   const disposeEnd = ui.indexOf('\n  }\n', disposeStart);
   const dispose = ui.slice(disposeStart, disposeEnd);
 
   assert.match(dispose, /this\._feedback\._globalStatusNotice = null;/);
-  assert.match(dispose, /this\._shareTrackingNoticeGeneration \+= 1;/);
+  assert.match(dispose, /this\._shareRestoration\.destroy\(\)/);
+  assert.match(ShareRestoration.prototype.destroy.toString(), /this\._shareTrackingNoticeGeneration \+= 1;/);
   assert.match(html, /<div id="global-loading-status" role="status" aria-live="polite" aria-atomic="true" hidden>/);
 });
 
