@@ -9,7 +9,7 @@ import trafficLayer from '../data/traffic.js';
 import cctvLayer from '../data/cctv.js';
 import radioLayer from '../data/radio.js';
 import bikeshareLayer from '../data/bikeshare.js';
-import precipitationLayer from '../data/precipitation.js';
+import weatherLayer from '../data/weather.js';
 import aisLiveVesselsLayer from '../data/aisLiveVessels.js';
 import militaryInstallationsLayer from '../data/militaryInstallations.js';
 import militaryAwarenessLayer from '../data/militaryAwareness.js';
@@ -47,7 +47,7 @@ export function createApplicationData({
   dataManager.register(cctvLayer);
   dataManager.register(radioLayer);
   dataManager.register(bikeshareLayer);
-  dataManager.register(precipitationLayer);
+  dataManager.register(weatherLayer);
   dataManager.register(aisLiveVesselsLayer);
   dataManager.register(militaryInstallationsLayer);
   dataManager.register(militaryAwarenessLayer);

@@ -192,9 +192,10 @@ test('no unchanged Realtime tool definition drifts silently', () => {
     .update(JSON.stringify(unchanged))
     .digest('hex')
     .slice(0, 16);
-  // ALPR and Precipitation intentionally extend the two layer enums; retain
-  // the complete pin.
-  assert.equal(digest, '1ccb2a4dabc33622', 'an unchanged Realtime tool definition drifted');
+  // The layer enums in set_layer_visibility and show_data_layers_menu carry
+  // every registered layer id, so adding or renaming a layer moves this digest
+  // and busts the session cache. Re-derive it and name the tools that moved.
+  assert.equal(digest, 'a3fdf50b8c8d2b56', 'an unchanged Realtime tool definition drifted');
 });
 
 test('Radio volume and mission speed share the Sharpen slider visual language', () => {

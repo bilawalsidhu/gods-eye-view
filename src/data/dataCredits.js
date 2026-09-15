@@ -69,7 +69,7 @@ export const DATA_CREDITS = [
   {
     key: 'xweather',
     html:
-      'Precipitation (global observed radar): ' +
+      'Weather (observed radar, lightning, alerts and analysis fields): ' +
       '<a href="https://www.xweather.com/" target="_blank" rel="noopener">Powered by Vaisala Xweather</a>',
   },
   {

@@ -7,14 +7,14 @@ import {
   LAYER_ID,
   LAYER_NAME,
   LAYER_TICK_MS,
-  PRECIPITATION_TIERS,
+  WEATHER_LAYER_SPECS,
   REFRESH_CHOICES,
   defaultActiveIds,
 } from './policy.js';
 
 export * from './model.js';
 export * from './policy.js';
-export { createPrecipitationSource } from './source.js';
+export { createWeatherSource } from './source.js';
 
 const MAP_STACK_EVENT = 'gev:map-stack-changed';
 
@@ -38,14 +38,14 @@ function globeHidden(viewer) {
   return viewer?.scene?.globe?.show === false;
 }
 
-/** Own one precipitation display and its frame lifecycle. */
-export function createPrecipitationLayer({
+/** Own one weather display and its frame lifecycle. */
+export function createWeatherLayer({
   source,
-  tiers = PRECIPITATION_TIERS,
+  specs = WEATHER_LAYER_SPECS,
   services: { mapStack = windowMapStack() } = {},
 } = {}) {
   if (typeof source?.getFrame !== 'function')
-    throw new TypeError('Precipitation requires a frame source');
+    throw new TypeError('Weather requires a frame source');
 
   const stack = createImageryStack();
   const frames = new Map();
@@ -62,7 +62,7 @@ export function createPrecipitationLayer({
   // passing fault. They read identically from outside and must not be merged.
   let _noKey = false;
   /**
-   * The tiers actually drawn. Everything else in the table is dormant: never
+   * The specs actually drawn. Everything else in the table is dormant: never
    * polled, never drawn, costing nothing. Enabling a layer is what spends the
    * quota, because each one multiplies every camera move.
    */
@@ -73,8 +73,8 @@ export function createPrecipitationLayer({
   /** Set by the panel's refresh button, cleared the moment it is honoured. */
   let _refreshNow = false;
 
-  const tierIsActive = (tier) => _active.has(tier.id);
-  const activeTiers = () => tiers.filter(tierIsActive);
+  const isActiveSpec = (spec) => _active.has(spec.id);
+  const activeSpecs = () => specs.filter(isActiveSpec);
   const refreshChoiceMs = () =>
     REFRESH_CHOICES.find((choice) => choice.code === _everyCode)?.ms ??
     FALLBACK_REFRESH_MS;
@@ -112,11 +112,11 @@ export function createPrecipitationLayer({
       // and so nothing billed.
       // Anything switched off since the last tick stops drawing immediately,
       // and stops being polled with it.
-      for (const tierId of stack.ownedIds()) {
-        if (_active.has(tierId)) continue;
-        stack.remove(viewer, tierId);
-        frames.delete(tierId);
-        polledAt.delete(tierId);
+      for (const specId of stack.ownedIds()) {
+        if (_active.has(specId)) continue;
+        stack.remove(viewer, specId);
+        frames.delete(specId);
+        polledAt.delete(specId);
       }
 
       const forced = _refreshNow;
@@ -124,17 +124,17 @@ export function createPrecipitationLayer({
 
       const due = [];
       let redrawn = 0;
-      for (const tier of activeTiers()) {
-        const held = frames.get(tier.id);
+      for (const spec of activeSpecs()) {
+        const held = frames.get(spec.id);
         // A layer just switched on has nothing to draw, so it fetches once
         // whatever the refresh settings say — otherwise enabling a layer would
         // appear to do nothing until the next interval.
         if (!held) {
-          due.push(tier);
+          due.push(spec);
           continue;
         }
         if (forced) {
-          due.push(tier);
+          due.push(spec);
           continue;
         }
         // With auto-refresh off, a held frame is never replaced on a timer.
@@ -144,24 +144,24 @@ export function createPrecipitationLayer({
             refreshChoiceMs(),
             // The server also has an opinion, set against the same quota; take
             // whichever is slower so the panel can never out-spend it.
-            frames.get(tier.id)?.refreshMs ?? 0,
+            frames.get(spec.id)?.refreshMs ?? 0,
           );
-          if (now - (polledAt.get(tier.id) ?? -Infinity) >= cadence) {
-            due.push(tier);
+          if (now - (polledAt.get(spec.id) ?? -Infinity) >= cadence) {
+            due.push(spec);
             continue;
           }
         }
         // Held, not due — but the imagery may have gone with the globe.
-        if (stack.has(tier.id)) continue;
-        stack.apply(viewer, tier, held);
+        if (stack.has(spec.id)) continue;
+        stack.apply(viewer, spec, held);
         redrawn += 1;
       }
 
       // One request per distinct read, all in flight at once, settling
       // independently so one dead source cannot stop the others drawing.
       const reads = new Map();
-      for (const tier of due)
-        if (!reads.has(tier.capsKey)) reads.set(tier.capsKey, tier);
+      for (const spec of due)
+        if (!reads.has(spec.capsKey)) reads.set(spec.capsKey, spec);
       const keys = [...reads.keys()];
       const settlements = await Promise.allSettled(
         keys.map((key) =>
@@ -180,23 +180,23 @@ export function createPrecipitationLayer({
       });
 
       let refreshed = 0;
-      for (const tier of due) {
-        const frame = read.get(tier.capsKey);
-        // This source is down. The tier keeps whatever it is already drawing
+      for (const spec of due) {
+        const frame = read.get(spec.capsKey);
+        // This source is down. The spec keeps whatever it is already drawing
         // and will be due again on the next tick.
         if (!frame) continue;
-        polledAt.set(tier.id, now);
-        if (!stack.has(tier.id) || frames.get(tier.id)?.key !== frame.key) {
-          // Add before removing so a live tier never blinks through the base map.
-          stack.apply(viewer, tier, frame);
-          frames.set(tier.id, frame);
+        polledAt.set(spec.id, now);
+        if (!stack.has(spec.id) || frames.get(spec.id)?.key !== frame.key) {
+          // Add before removing so a live spec never blinks through the base map.
+          stack.apply(viewer, spec, frame);
+          frames.set(spec.id, frame);
         }
         refreshed += 1;
       }
 
       if (refreshed || redrawn) _lastUpdate = Date.now();
       // Nothing active is a deliberate state, not a broken one.
-      if (!activeTiers().length) _lastError = null;
+      if (!activeSpecs().length) _lastError = null;
       // A missing key is latched separately, and only cleared by a read that
       // succeeds — otherwise the row would flicker between "add a key" and a
       // generic error as ticks failed for different reasons.
@@ -209,7 +209,7 @@ export function createPrecipitationLayer({
       return stack.size > 0 || due.length === 0;
     } catch (error) {
       if (settled()) return false;
-      _lastError = error?.message || 'Precipitation source unavailable';
+      _lastError = error?.message || 'Weather source unavailable';
       return false;
     } finally {
       if (_request === request) _request = null;
@@ -236,15 +236,14 @@ export function createPrecipitationLayer({
     updateInterval: LAYER_TICK_MS,
 
     init(viewer) {
-      if (_viewer)
-        throw new Error('Precipitation layer is already initialized');
+      if (_viewer) throw new Error('Weather layer is already initialized');
       _viewer = viewer;
       _enabled = false;
       _hidden = false;
       _lastUpdate = null;
       _lastError = null;
       _noKey = false;
-      console.log('[Data:Precipitation] Initialized');
+      console.log('[Data:Weather] Initialized');
     },
 
     enable(viewer) {
@@ -300,12 +299,12 @@ export function createPrecipitationLayer({
           ? params.layers
           : String(params.layers).split(/[\s,]+/);
         const resolved = requested
-          .map((id) => tiers.find((tier) => tier.id === id)?.id)
+          .map((id) => specs.find((spec) => spec.id === id)?.id)
           .filter(Boolean);
         // At most one continuous field: they are opaque edge to edge, so a
         // second would simply hide the first while billing for both.
         const fields = resolved.filter(
-          (id) => tiers.find((tier) => tier.id === id)?.group === FIELD,
+          (id) => specs.find((spec) => spec.id === id)?.group === FIELD,
         );
         const dropped = new Set(fields.slice(0, -1));
         _active = new Set(resolved.filter((id) => !dropped.has(id)));

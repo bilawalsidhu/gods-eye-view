@@ -2,7 +2,7 @@
  * @file Tile validation and tuning defaults for the Xweather radar proxy.
  *
  * Shared by the `/api/xweather` vite plugin (coordinate validation before the
- * key check, budget and cadence defaults) and the precipitation layer, which
+ * key check, budget and cadence defaults) and the weather layer, which
  * needs the same zoom ceiling it asks Cesium to stop at. Zero dependencies and
  * Cesium-free so both sides can unit-test against it with node:test.
  *

@@ -178,7 +178,7 @@ const CREDIT_EXPECTATIONS = {
   'local-firms': /FIRMS/i,
   'telegeography-submarine-cables': /TeleGeography/i,
   'local-neighborhoods': /DataSF|San Francisco/i,
-  precipitation: /Xweather|Vaisala/i,
+  weather: /Xweather|Vaisala/i,
   'weather-effects': /Open-Meteo/i,
 };
 

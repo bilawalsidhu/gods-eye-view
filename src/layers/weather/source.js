@@ -2,7 +2,7 @@ import { liveFrame, noKeyError } from './model.js';
 import { STATUS_URL } from './policy.js';
 
 /**
- * Ask the app's own server whether precipitation can be drawn, and how often.
+ * Ask the app's own server whether weather layers can be drawn, and how often.
  *
  * Every earlier version of this source read a public WMS straight from the
  * page. This one cannot and must not: Xweather puts both halves of the
@@ -14,11 +14,11 @@ import { STATUS_URL } from './policy.js';
  * The tiles themselves are fetched by Cesium, not by this module. All that is
  * read here is the key state and the cadence.
  */
-export function createPrecipitationSource({
+export function createWeatherSource({
   fetchImpl = (...args) => globalThis.fetch(...args),
 } = {}) {
   return {
-    async getFrame(_tier, { signal } = {}) {
+    async getFrame(_spec, { signal } = {}) {
       signal?.throwIfAborted();
       const response = await fetchImpl(STATUS_URL, {
         method: 'GET',
@@ -26,7 +26,7 @@ export function createPrecipitationSource({
         signal,
       });
       if (!response.ok)
-        throw new Error(`Precipitation service HTTP ${response.status}`);
+        throw new Error(`Weather service HTTP ${response.status}`);
       const status = await response.json();
       // The body can resolve after the caller moved on; check before using it.
       signal?.throwIfAborted();
@@ -34,7 +34,7 @@ export function createPrecipitationSource({
       // a missing field as `false` would report "add a key" to someone whose
       // key is fine.
       if (typeof status?.hasKey !== 'boolean')
-        throw new TypeError('Malformed precipitation status');
+        throw new TypeError('Malformed weather status');
       if (!status.hasKey) throw noKeyError();
       return liveFrame(Date.now(), status.refreshMs);
     },

@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createPrecipitationSource } from './source.js';
+import { createWeatherSource } from './source.js';
 import { isNoKeyError, liveFrame, NO_KEY } from './model.js';
-import { PRECIPITATION_TIERS, STATUS_URL } from './policy.js';
+import { WEATHER_LAYER_SPECS, STATUS_URL } from './policy.js';
 
-const [TIER] = PRECIPITATION_TIERS;
+const [TIER] = WEATHER_LAYER_SPECS;
 const ok = (body) =>
   new Response(JSON.stringify(body), {
     status: 200,
@@ -12,12 +12,12 @@ const ok = (body) =>
   });
 
 test('construction is inert, and the only address is this app itself', async () => {
-  createPrecipitationSource({
+  createWeatherSource({
     fetchImpl: () => assert.fail('construction fetched data'),
   });
 
   const calls = [];
-  const source = createPrecipitationSource({
+  const source = createWeatherSource({
     fetchImpl: (url) => {
       calls.push(String(url));
       return Promise.resolve(ok({ hasKey: true, refreshMs: 900000 }));
@@ -31,7 +31,7 @@ test('construction is inert, and the only address is this app itself', async () 
 });
 
 test('the server owns the refresh cadence', async () => {
-  const source = createPrecipitationSource({
+  const source = createWeatherSource({
     fetchImpl: async () => ok({ hasKey: true, refreshMs: 300000 }),
   });
   const frame = await source.getFrame(TIER);
@@ -39,7 +39,7 @@ test('the server owns the refresh cadence', async () => {
   // An absent or nonsensical cadence must not become a zero-delay poll loop
   // against a source that bills per tile.
   for (const refreshMs of [undefined, 0, -1, 'soon', null]) {
-    const loose = createPrecipitationSource({
+    const loose = createWeatherSource({
       fetchImpl: async () => ok({ hasKey: true, refreshMs }),
     });
     assert.equal((await loose.getFrame(TIER)).refreshMs, null);
@@ -47,7 +47,7 @@ test('the server owns the refresh cadence', async () => {
 });
 
 test('no key is a distinct, nameable failure', async () => {
-  const source = createPrecipitationSource({
+  const source = createWeatherSource({
     fetchImpl: async () => ok({ hasKey: false, refreshMs: 3600000 }),
   });
   await assert.rejects(source.getFrame(TIER), (error) => {
@@ -62,16 +62,16 @@ test('a malformed or failing status is unhealthy, never a missing key', async ()
   // Reading an absent field as `false` would tell someone whose key is fine to
   // go and add one.
   for (const body of [{}, { hasKey: 'yes' }, { hasKey: null }, []]) {
-    const source = createPrecipitationSource({
+    const source = createWeatherSource({
       fetchImpl: async () => ok(body),
     });
     await assert.rejects(source.getFrame(TIER), (error) => {
-      assert.match(error.message, /Malformed precipitation status/);
+      assert.match(error.message, /Malformed weather status/);
       assert.ok(!isNoKeyError(error));
       return true;
     });
   }
-  const failing = createPrecipitationSource({
+  const failing = createWeatherSource({
     fetchImpl: async () => new Response('nope', { status: 503 }),
   });
   await assert.rejects(failing.getFrame(TIER), (error) => {
@@ -83,7 +83,7 @@ test('a malformed or failing status is unhealthy, never a missing key', async ()
 
 test('cancellation is honored after the body resolves', async () => {
   const controller = new AbortController();
-  const source = createPrecipitationSource({
+  const source = createWeatherSource({
     fetchImpl: async () => ({
       ok: true,
       status: 200,

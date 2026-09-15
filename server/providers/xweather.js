@@ -45,7 +45,7 @@ import {
  * GET /api/xweather/status → {hasKey, monthCount, budget, month, refreshMs}.
  * Keyless mode: status reports hasKey:false and the tile endpoint 503s
  * {error:'no_key'} without touching upstream. There is no keyless fallback for
- * this layer — the precipitation row reports unavailable and draws nothing.
+ * this layer — the weather row reports unavailable and draws nothing.
  *
  * @returns {import('vite').Plugin}
  */

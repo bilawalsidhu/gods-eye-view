@@ -11,19 +11,10 @@ import {
   layerByCode,
 } from '../../data/xweatherCatalogue.js';
 
-/**
- * Registered layer id, and its share-link identity.
- *
- * Still `precipitation` although the layer now draws temperature, wind,
- * lightning and a dozen other things. The id is load-bearing well outside this
- * directory — the layer-state registry keys its share token to it, the manager
- * throws at boot if the registered set and the registry disagree, the voice
- * action map routes to it, and two tests pin a hash of the Realtime tool
- * schema that contains it. The *display* name is what changed.
- */
-export const LAYER_ID = 'precipitation';
+/** Registered layer id, and its identity in the layer-state registry. */
+export const LAYER_ID = 'weather';
 
-/** What the row calls itself now that it is more than rain. */
+/** Name shown on the layer row. */
 export const LAYER_NAME = 'Weather';
 
 /**
@@ -37,11 +28,11 @@ export const tileUrlTemplate = (layer) =>
 /** Where the layer asks whether a key is configured, and how often to refresh. */
 export const STATUS_URL = '/api/xweather/status';
 
-/** Provider branch a tier dispatches to. Everything here is XYZ tiles. */
-export const TIER_KINDS = Object.freeze(['xyz']);
+/** Provider branch a spec dispatches to. Everything here is XYZ tiles. */
+export const SPEC_KINDS = Object.freeze(['xyz']);
 
 /**
- * How a tier learns which frame to draw. `live` means the service always
+ * How a spec learns which frame to draw. `live` means the service always
  * serves its current composite and publishes no time to pin.
  */
 export const FRAME_MODES = Object.freeze(['live']);
@@ -69,10 +60,10 @@ export const REFRESH_CHOICES = Object.freeze([
 export const DEFAULT_REFRESH_CHOICE = 'd';
 
 /**
- * Every drawable tier, derived from the shared catalogue.
+ * Every drawable spec, derived from the shared catalogue.
  *
- * One tier per Xweather layer, all of them dormant until the Weather panel
- * says otherwise: `index.js` polls and draws only the active set, so a tier
+ * One spec per Xweather layer, all of them dormant until the Weather panel
+ * says otherwise: `index.js` polls and draws only the active set, so a spec
  * sitting here costs nothing. That is the whole economy of the feature —
  * offering a layer is free, enabling one is what spends the quota, because
  * every enabled layer multiplies every camera move.
@@ -80,7 +71,7 @@ export const DEFAULT_REFRESH_CHOICE = 'd';
  * Fields sit at a lower rung than overlays so a temperature field can never
  * bury the lightning drawn over it.
  */
-export const PRECIPITATION_TIERS = Object.freeze(
+export const WEATHER_LAYER_SPECS = Object.freeze(
   XWEATHER_LAYERS.map((entry) =>
     Object.freeze({
       id: entry.layer,
@@ -95,7 +86,7 @@ export const PRECIPITATION_TIERS = Object.freeze(
       coverage: entry.coverage,
       usOnly: entry.usOnly,
       frameMode: 'live',
-      // Every tier reads the same status endpoint, so one read serves them all.
+      // Every spec reads the same status endpoint, so one read serves them all.
       capsKey: STATUS_URL,
       tileUrlTemplate: tileUrlTemplate(entry.layer),
       forecast: entry.forecast,
@@ -107,13 +98,13 @@ export const PRECIPITATION_TIERS = Object.freeze(
 );
 
 /** Tier lookup by the id the imagery stack keys on. */
-const TIERS_BY_ID = new Map(PRECIPITATION_TIERS.map((tier) => [tier.id, tier]));
+const TIERS_BY_ID = new Map(WEATHER_LAYER_SPECS.map((spec) => [spec.id, spec]));
 
-export function tierById(id) {
+export function layerSpecById(id) {
   return TIERS_BY_ID.get(String(id ?? '')) || null;
 }
 
-/** The tiers drawn before anyone opens the panel: radar, as it has always been. */
+/** The specs drawn before anyone opens the panel. */
 export function defaultActiveIds() {
   return defaultLayerCodes()
     .map((code) => layerByCode(code)?.layer)

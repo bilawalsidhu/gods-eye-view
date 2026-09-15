@@ -4,7 +4,7 @@
  * One source of truth for three consumers that must never disagree: the
  * `/api/xweather` proxy derives its allowlist from here (a layer name arriving
  * from the browser is checked against it, never proxied on trust), the
- * precipitation layer builds its tier table from it, and the Weather panel
+ * weather layer builds its tier table from it, and the Weather panel
  * takes its labels and grouping from it.
  *
  * Zero dependencies and Cesium-free so the server, the layer and node:test can

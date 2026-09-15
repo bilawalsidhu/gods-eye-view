@@ -153,7 +153,7 @@
     "./aircraft": "./src/layers/aircraft/index.js",
     "./layers/vessels": "./src/layers/vessels/index.js",
     "./layers/earthquakes": "./src/layers/earthquakes/index.js",
-    "./layers/precipitation": "./src/layers/precipitation/index.js",
+    "./layers/weather": "./src/layers/weather/index.js",
     "./layers/firms": "./src/layers/firms/index.js",
     "./layers/satellites": "./src/layers/satellites/index.js",
     "./layers/launches": "./src/layers/launches/index.js",

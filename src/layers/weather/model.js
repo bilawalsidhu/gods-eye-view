@@ -1,4 +1,4 @@
-/** Frame construction and failure classification for the precipitation layer. */
+/** Frame construction and failure classification for the weather layer. */
 
 /**
  * Marker for "the server says no credential is configured".

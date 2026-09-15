@@ -82,7 +82,7 @@ export const KEY_SETUP_KEYS = Object.freeze([
   Object.freeze({
     id: 'xweather',
     title: 'XWEATHER',
-    unlocks: 'Live global precipitation radar (the layer needs it — no keyless mode)',
+    unlocks: 'The Weather layer — global radar, lightning and more (no keyless mode)',
     getUrl: 'https://www.xweather.com/account',
     envVars: Object.freeze(['XWEATHER_CLIENT_ID', 'XWEATHER_CLIENT_SECRET']),
     tier: 'free',

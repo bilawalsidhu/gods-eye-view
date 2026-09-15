@@ -722,16 +722,16 @@
     ],
     "external": ["cesium"]
   },
-  "precipitation-layer": {
-    "exports": ["./layers/precipitation"],
+  "weather-layer": {
+    "exports": ["./layers/weather"],
     "modules": [
       "src/data/xweatherCatalogue.js",
       "src/data/xweatherTiles.js",
-      "src/layers/precipitation/imagery.js",
-      "src/layers/precipitation/index.js",
-      "src/layers/precipitation/model.js",
-      "src/layers/precipitation/policy.js",
-      "src/layers/precipitation/source.js"
+      "src/layers/weather/imagery.js",
+      "src/layers/weather/index.js",
+      "src/layers/weather/model.js",
+      "src/layers/weather/policy.js",
+      "src/layers/weather/source.js"
     ],
     "external": ["cesium"]
   },
@@ -1177,7 +1177,7 @@
       "src/data/naturalEarthRegions.js",
       "src/data/neighborhoodPolygons.js",
       "src/data/pickRegistry.js",
-      "src/data/precipitation.js",
+      "src/data/weather.js",
       "src/data/radio.js",
       "src/data/radioCountry.js",
       "src/data/regionalBrief.js",
@@ -1344,11 +1344,11 @@
       "src/layers/military/state.js",
       "src/layers/military/testing.js",
       "src/layers/military/tracking.js",
-      "src/layers/precipitation/imagery.js",
-      "src/layers/precipitation/index.js",
-      "src/layers/precipitation/model.js",
-      "src/layers/precipitation/policy.js",
-      "src/layers/precipitation/source.js",
+      "src/layers/weather/imagery.js",
+      "src/layers/weather/index.js",
+      "src/layers/weather/model.js",
+      "src/layers/weather/policy.js",
+      "src/layers/weather/source.js",
       "src/layers/radio/catalogModel.js",
       "src/layers/radio/categories.js",
       "src/layers/radio/clustering.js",

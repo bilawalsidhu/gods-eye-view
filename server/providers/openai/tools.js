@@ -137,7 +137,7 @@ const GEV_REALTIME_TOOLS = [
         layerId: {
           type: 'string',
           description:
-            'Common-name mapping for the non-obvious ids: space mission(s) → rocket-launches; fires/wildfires/active fires → local-firms (NASA FIRMS); ships/vessels/boats → ais-live-vessels; undersea/submarine cables → telegeography-submarine-cables; datacenters → local-datacenters; dams → local-dams; bikes/bike share → bikeshare; street traffic/congestion → traffic; traffic cameras → cctv; internet radio/stations → radio; ALPR/license plate readers/Flock cameras → alpr-cameras; rain/weather/radar → precipitation.',
+            'Common-name mapping for the non-obvious ids: space mission(s) → rocket-launches; fires/wildfires/active fires → local-firms (NASA FIRMS); ships/vessels/boats → ais-live-vessels; undersea/submarine cables → telegeography-submarine-cables; datacenters → local-datacenters; dams → local-dams; bikes/bike share → bikeshare; street traffic/congestion → traffic; traffic cameras → cctv; internet radio/stations → radio; ALPR/license plate readers/Flock cameras → alpr-cameras; rain/radar/storms → weather.',
           enum: [
             'flights',
             'military',
@@ -148,7 +148,7 @@ const GEV_REALTIME_TOOLS = [
             'cctv',
             'radio',
             'bikeshare',
-            'precipitation',
+            'weather',
             'ais-live-vessels',
             'local-datacenters',
             'local-dams',
@@ -188,7 +188,7 @@ const GEV_REALTIME_TOOLS = [
             'telegeography-submarine-cables',
             'local-firms',
             'alpr-cameras',
-            'precipitation',
+            'weather',
           ],
           description: 'Optional layer row to scroll into view and highlight.',
         },

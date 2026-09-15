@@ -1,14 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import { createPrecipitationLayer } from './index.js';
-import { tierImageryOptions, tierLayerOptions } from './imagery.js';
+import { createWeatherLayer } from './index.js';
+import { imageryOptionsFor, layerOptionsFor } from './imagery.js';
 import {
   FIELD,
   FRAME_MODES,
   OVERLAY,
-  PRECIPITATION_TIERS,
-  TIER_KINDS,
+  WEATHER_LAYER_SPECS,
+  SPEC_KINDS,
   defaultActiveIds,
 } from './policy.js';
 import { noKeyError } from './model.js';
@@ -19,7 +19,7 @@ import { noKeyError } from './model.js';
  * model, since each drawn layer multiplies every camera move.
  */
 const OWNED = defaultActiveIds().length;
-const ALL_ON = PRECIPITATION_TIERS.map((tier) => tier.id);
+const ALL_ON = WEATHER_LAYER_SPECS.map((spec) => spec.id);
 
 const FRAME = { key: 'live:1', validTime: null, referenceTime: null };
 
@@ -27,7 +27,7 @@ const FRAME = { key: 'live:1', validTime: null, referenceTime: null };
  * A viewer stub that records imagery ownership. `base` stands in for the map
  * controller's own layer at index 0, which this layer must never remove.
  */
-function harness(source, { globeVisible = true, tiers } = {}) {
+function harness(source, { globeVisible = true, specs } = {}) {
   const base = { id: 'base-map' };
   const layers = [base];
   const removed = [];
@@ -52,9 +52,9 @@ function harness(source, { globeVisible = true, tiers } = {}) {
       },
     },
   };
-  const layer = createPrecipitationLayer({
+  const layer = createWeatherLayer({
     source,
-    ...(tiers ? { tiers } : {}),
+    ...(specs ? { specs } : {}),
     services: {
       mapStack: {
         subscribe(handler) {
@@ -187,8 +187,8 @@ test('a photoreal round trip redraws from what is held, without re-polling', asy
   // flip to Google 3D and back would bill a fresh set of tiles each time.
   const calls = [];
   const source = {
-    getFrame: async (tier) => {
-      calls.push(tier.id);
+    getFrame: async (spec) => {
+      calls.push(spec.id);
       return { ...FRAME };
     },
   };
@@ -278,30 +278,30 @@ test('a key arriving later clears the unavailable state', async () => {
 });
 
 test('the layer refuses to construct without a frame source', () => {
-  assert.throws(() => createPrecipitationLayer(), /requires a frame source/);
+  assert.throws(() => createWeatherLayer(), /requires a frame source/);
   assert.throws(
-    () => createPrecipitationLayer({ source: {} }),
+    () => createWeatherLayer({ source: {} }),
     /requires a frame source/,
   );
-  assert.equal(PRECIPITATION_TIERS.length >= 1, true);
+  assert.equal(WEATHER_LAYER_SPECS.length >= 1, true);
 });
 
-test('every tier declares what the layer dispatches on', () => {
-  for (const tier of PRECIPITATION_TIERS) {
-    assert.ok(TIER_KINDS.includes(tier.kind), `${tier.id} kind`);
-    assert.ok(FRAME_MODES.includes(tier.frameMode), `${tier.id} frameMode`);
-    assert.ok(Number.isFinite(tier.refreshMs), `${tier.id} refreshMs`);
-    assert.equal(typeof tier.capsKey, 'string', `${tier.id} capsKey`);
+test('every spec declares what the layer dispatches on', () => {
+  for (const spec of WEATHER_LAYER_SPECS) {
+    assert.ok(SPEC_KINDS.includes(spec.kind), `${spec.id} kind`);
+    assert.ok(FRAME_MODES.includes(spec.frameMode), `${spec.id} frameMode`);
+    assert.ok(Number.isFinite(spec.refreshMs), `${spec.id} refreshMs`);
+    assert.equal(typeof spec.capsKey, 'string', `${spec.id} capsKey`);
     // Forecast layers may be offered — a jet stream has no observed form —
     // but never silently. Presenting a forecast as current conditions was the
     // defect that prompted the whole migration, so the flag is mandatory and
     // the panel labels from it.
-    assert.equal(typeof tier.forecast, 'boolean', `${tier.id} forecast flag`);
-    if (tier.forecast)
+    assert.equal(typeof spec.forecast, 'boolean', `${spec.id} forecast flag`);
+    if (spec.forecast)
       assert.equal(
-        defaultActiveIds().includes(tier.id),
+        defaultActiveIds().includes(spec.id),
         false,
-        `${tier.id} is a forecast and must never be on by default`,
+        `${spec.id} is a forecast and must never be on by default`,
       );
   }
 });
@@ -310,11 +310,11 @@ test('the tile template is same-origin and carries no credential', () => {
   // The credentials live in the upstream URL path, so the one thing the client
   // must be unable to do is build that URL. All it ever sees is a relative
   // route into this app's own server.
-  for (const tier of PRECIPITATION_TIERS) {
-    const { url } = tierImageryOptions(tier);
+  for (const spec of WEATHER_LAYER_SPECS) {
+    const { url } = imageryOptionsFor(spec);
     assert.ok(
       url.startsWith('/api/'),
-      `${tier.id} must be same-origin: ${url}`,
+      `${spec.id} must be same-origin: ${url}`,
     );
     assert.doesNotMatch(url, /^[a-z]+:/i, 'no scheme, so no external origin');
     assert.doesNotMatch(url, /client|secret|key|token/i, 'no credential shape');
@@ -322,10 +322,10 @@ test('the tile template is same-origin and carries no credential', () => {
 });
 
 test('the provider is built at the capped level with picking off', () => {
-  for (const tier of PRECIPITATION_TIERS) {
-    const options = tierImageryOptions(tier);
-    assert.equal(options.maximumLevel, tier.maxTileLevel);
-    assert.ok(Number.isFinite(tier.maxTileLevel), `${tier.id} needs a ceiling`);
+  for (const spec of WEATHER_LAYER_SPECS) {
+    const options = imageryOptionsFor(spec);
+    assert.equal(options.maximumLevel, spec.maxTileLevel);
+    assert.ok(Number.isFinite(spec.maxTileLevel), `${spec.id} needs a ceiling`);
     assert.equal(options.enablePickFeatures, false);
     assert.ok(options.tilingScheme instanceof Cesium.WebMercatorTilingScheme);
   }
@@ -335,43 +335,43 @@ test('every placement hands Cesium a numeric alpha', () => {
   // Regression: Cesium's types advertise `alpha` as number|function, but the
   // globe shader assigns it straight into a float uniform. A function reached
   // the uniform as NaN and rendered the entire globe black.
-  for (const tier of PRECIPITATION_TIERS) {
-    const options = tierLayerOptions(tier);
-    assert.equal(typeof options.alpha, 'number', `${tier.id} numeric alpha`);
+  for (const spec of WEATHER_LAYER_SPECS) {
+    const options = layerOptionsFor(spec);
+    assert.equal(typeof options.alpha, 'number', `${spec.id} numeric alpha`);
     assert.ok(
       options.alpha > 0 && options.alpha <= 1,
-      `${tier.id} alpha range`,
+      `${spec.id} alpha range`,
     );
   }
 });
 
 test('only the active set is polled or drawn', async () => {
-  // The table offers every layer; enabling one is what costs. A dormant tier
+  // The table offers every layer; enabling one is what costs. A dormant spec
   // must never be fetched, because every enabled layer multiplies every
   // camera move against a monthly quota.
   const calls = [];
   const source = {
-    getFrame: async (tier) => {
-      calls.push(tier.id);
+    getFrame: async (spec) => {
+      calls.push(spec.id);
       return { ...FRAME };
     },
   };
   const { layer, viewer, layers, base } = harness(source);
   await layer.update(viewer);
   assert.equal(layers.length, OWNED + 1, 'only the default set draws');
-  // Every tier reads the same status endpoint, so however many are due they
+  // Every spec reads the same status endpoint, so however many are due they
   // cost one read between them — the tiles are the spend, not the status.
-  assert.equal(calls.length, 1, 'one status read serves every due tier');
+  assert.equal(calls.length, 1, 'one status read serves every due spec');
 
   // Switching overlays on draws them, still on one read.
-  const overlays = PRECIPITATION_TIERS.filter(
-    (tier) => tier.group === OVERLAY,
+  const overlays = WEATHER_LAYER_SPECS.filter(
+    (spec) => spec.group === OVERLAY,
   ).slice(0, 3);
   calls.length = 0;
-  layer.setParams({ layers: overlays.map((tier) => tier.id) });
+  layer.setParams({ layers: overlays.map((spec) => spec.id) });
   await layer.update(viewer);
   assert.equal(layers.length, overlays.length + 1);
-  assert.equal(calls.length, 1, 'still one read for the newly due tiers');
+  assert.equal(calls.length, 1, 'still one read for the newly due specs');
 
   // Switching everything off withdraws the imagery and stops all polling.
   calls.length = 0;
@@ -392,11 +392,11 @@ test('at most one continuous field is ever drawn', async () => {
   // Fields paint every pixel and are opaque, so a second would hide the first
   // while billing for both. The panel offers them single-select; the layer
   // enforces it, so a hand-made share link cannot smuggle two in.
-  const fields = PRECIPITATION_TIERS.filter((tier) => tier.group === FIELD);
+  const fields = WEATHER_LAYER_SPECS.filter((spec) => spec.group === FIELD);
   assert.ok(fields.length > 2, 'the fixture needs several fields');
   const { layer, viewer, layers } = harness(readySource());
 
-  layer.setParams({ layers: fields.slice(0, 3).map((tier) => tier.id) });
+  layer.setParams({ layers: fields.slice(0, 3).map((spec) => spec.id) });
   assert.deepEqual(
     layer.getParams().layers,
     [fields[2].id],
@@ -407,8 +407,8 @@ test('at most one continuous field is ever drawn', async () => {
 });
 
 test('overlays always draw above fields, whatever order they refresh in', async () => {
-  const field = PRECIPITATION_TIERS.find((tier) => tier.group === FIELD);
-  const overlay = PRECIPITATION_TIERS.find((tier) => tier.group === OVERLAY);
+  const field = WEATHER_LAYER_SPECS.find((spec) => spec.group === FIELD);
+  const overlay = WEATHER_LAYER_SPECS.find((spec) => spec.group === OVERLAY);
   const { layer, viewer, layers } = harness(readySource());
   layer.setParams({ layers: [overlay.id, field.id] });
   await layer.update(viewer);
@@ -431,8 +431,8 @@ test('with auto-refresh off, nothing is re-read until asked', async () => {
   // when someone asks for it, never on a clock.
   const calls = [];
   const source = {
-    getFrame: async (tier) => {
-      calls.push(tier.id);
+    getFrame: async (spec) => {
+      calls.push(spec.id);
       return { ...FRAME, key: `live:${calls.length}` };
     },
   };
@@ -462,8 +462,8 @@ test('auto-refresh polls on its interval, never faster than the server allows', 
   const calls = [];
   let serverCadence = null;
   const source = {
-    getFrame: async (tier) => {
-      calls.push(tier.id);
+    getFrame: async (spec) => {
+      calls.push(spec.id);
       return {
         ...FRAME,
         key: `live:${calls.length}`,
@@ -514,15 +514,15 @@ test('every offered layer is one the budget can afford', () => {
     'air-quality-co',
     'air-quality-index-eaqi-categories',
   ];
-  for (const tier of PRECIPITATION_TIERS) {
+  for (const spec of WEATHER_LAYER_SPECS) {
     assert.ok(
-      !SURCHARGED.includes(tier.id),
-      `${tier.id} bills above the base rate and has a 1x twin`,
+      !SURCHARGED.includes(spec.id),
+      `${spec.id} bills above the base rate and has a 1x twin`,
     );
   }
   // Codes are share-link identity and must never collide.
-  const codes = PRECIPITATION_TIERS.map((tier) => tier.code);
-  assert.equal(new Set(codes).size, codes.length, 'tier codes must be unique');
+  const codes = WEATHER_LAYER_SPECS.map((spec) => spec.code);
+  assert.equal(new Set(codes).size, codes.length, 'spec codes must be unique');
   for (const code of codes)
     assert.match(code, /^[a-z0-9]$/, `${code} must be one url-safe character`);
   assert.ok(ALL_ON.length > 20, 'the panel is meant to offer a real choice');

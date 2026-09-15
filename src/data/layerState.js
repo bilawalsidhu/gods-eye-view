@@ -45,6 +45,35 @@ const RADIO_CODE_FILTERS = Object.freeze(
   Object.fromEntries(Object.entries(RADIO_FILTER_CODES).map(([key, value]) => [value, key])),
 );
 
+/**
+ * The Weather layer's selection, as one packed field.
+ *
+ * Twenty-nine separate boolean options would cost roughly a third of the 512
+ * characters the whole `lo` field gets and twenty-nine of the thirty-six
+ * single-character tokens available to one owner. One string of per-layer
+ * codes costs a handful of characters and no tokens beyond its own.
+ *
+ * The value stays a **string** rather than an array on purpose: the options bag
+ * is shallow-cloned, so a mutable array would be shared by reference across
+ * every clone of the state. The layer expands it.
+ *
+ * An unknown character is dropped rather than rejecting the payload — a link
+ * from a build that offers a layer this one does not should lose that layer,
+ * not fail to open.
+ */
+const WEATHER_CODE = /^[a-z0-9]$/;
+
+export function normalizeWeatherLayers(value) {
+  if (typeof value !== 'string') return null;
+  if (value.length > 32) return null;
+  const seen = [];
+  for (const code of value) {
+    if (!WEATHER_CODE.test(code) || seen.includes(code)) continue;
+    seen.push(code);
+  }
+  return seen.join('');
+}
+
 function normalizeBoolean(value) {
   return typeof value === 'boolean' ? value : null;
 }
@@ -182,6 +211,30 @@ function integerOption(key, token, defaultValue) {
 }
 
 const OPTION_GROUPS = Object.freeze({
+  // Keyed by the owning layer's id, as every bag here is.
+  weather: Object.freeze([
+    // Which layers are drawn. 'r' is radar, the only one on by default, so a
+    // link that omits this field means what the layer has always shown.
+    Object.freeze({
+      key: 'layers',
+      token: 'l',
+      defaultValue: 'r',
+      normalize: normalizeWeatherLayers,
+      encode: (value) => value,
+      decode: (value) => normalizeWeatherLayers(value),
+    }),
+    // Auto-refresh is off unless someone turns it on: with a monthly quota and
+    // a cost that scales with enabled layers, spending on a timer is a choice.
+    booleanOption('auto', 'a', false),
+    // The interval it uses once on. Codes match REFRESH_CHOICES in the layer's
+    // policy; 'd' is a day.
+    enumOption('every', 'e', 'd', ['q', 'h', 's', 'd'], {
+      q: 'q',
+      h: 'h',
+      s: 's',
+      d: 'd',
+    }),
+  ]),
   flights: Object.freeze([
     // Owner directive 2026-08-22: the fleet's 3D models are DEFAULT-ON in
     // PROXIMITY mode. Proximity is itself the altitude/count gate — models only
@@ -287,12 +340,19 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   Object.freeze({ id: 'military', token: 'm', disposition: 'enabled+mirrored-options', optionOwner: 'flights' }),
   Object.freeze({ id: 'military-awareness', token: 'g', disposition: 'enabled-only' }),
   Object.freeze({ id: 'military-installations', token: 'i', disposition: 'enabled-only' }),
-  Object.freeze({ id: 'precipitation', token: 'n', disposition: 'enabled-only' }),
   Object.freeze({ id: 'radio', token: 'r', disposition: 'enabled+options', optionOwner: 'radio' }),
   Object.freeze({ id: 'rocket-launches', token: 'x', disposition: 'enabled-only' }),
   Object.freeze({ id: 'satellites', token: 's', disposition: 'enabled+options', optionOwner: 'satellites' }),
   Object.freeze({ id: 'telegeography-submarine-cables', token: 'u', disposition: 'enabled-only' }),
   Object.freeze({ id: 'traffic', token: 't', disposition: 'enabled-only' }),
+  // Token 'n', not 'w': a share link carries the token and nothing else, so a
+  // published token is frozen for the life of the layer.
+  Object.freeze({
+    id: 'weather',
+    token: 'n',
+    disposition: 'enabled+options',
+    optionOwner: 'weather',
+  }),
 ]);
 
 export const REGISTERED_LAYER_IDS = Object.freeze(LAYER_STATE_REGISTRY.map((entry) => entry.id));
