@@ -1,0 +1,6 @@
+backend: parakeet-cpp
+known_usecases:
+    - transcript
+name: parakeet-cpp-realtime_eou_120m-v1
+parameters:
+    model: parakeet-cpp/realtime_eou_120m-v1-f16.gguf

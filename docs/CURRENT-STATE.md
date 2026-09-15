@@ -1,5 +1,41 @@
 # God's Eye View Current State
 
+## Local Realtime voice
+
+- The mic panel stores a CLOUD/LOCAL provider choice. CLOUD keeps the existing
+  OpenAI Realtime session and STD/MINI pricing controls. LOCAL hides those
+  pricing controls, reports backend startup and preload state, and runs the
+  same voice instructions and 28 tools against LocalAI's WebRTC endpoint.
+- The Apple Silicon reference profile uses Silero VAD, Parakeet Realtime EOU
+  120M STT, MiniCPM5-2B MLX 4-bit, and Kokoro TTS. `npm run
+  voice:local:setup` installs the profile; `npm run voice:local:check` verifies
+  it without mutation. Both read the pipeline config for the stage list, so
+  swapping a model is a YAML edit rather than a code change. Setup installs the
+  backends those stages name and downloads language-model weights so a first
+  LOCAL session never waits on a silent multi-gigabyte fetch (about 5.5 GB
+  installed). `npm run doctor` reports the same readiness. Reasoning is disabled
+  in the shipped profile. The thinking compatibility patch is skipped on
+  LocalAI builds that already honor `enable_thinking=false`.
+- LocalAI signalling is relayed through the dev server to avoid browser CORS
+  configuration and to translate the raw SDP offer into LocalAI 4.9.0's JSON
+  request shape. Media still uses the negotiated WebRTC connection.
+- The POWER UP panel installs local voice in place: `GET /api/setup/local-voice`
+  reports supported/ready/step state and `POST` starts the profile's plan, both
+  behind the same loopback admission gate as the key endpoints. The row shows
+  `brew install localai` as a command rather than running a package manager.
+  Choosing LOCAL opens this panel when setup is missing; returning from the
+  terminal rechecks the binary and reveals INSTALL without a reload.
+- The backend status endpoint answers `ready`, `starting`, `needs-setup`,
+  `unavailable` or `stopped`. `needs-setup` names the command that installs the
+  missing piece and ends the session attempt instead of retrying; a warm-up
+  reports download progress and fails only after it stops progressing.
+- GEV starts only loopback LocalAI targets and owns only the child process it
+  created. Remote targets must already be running. A spawned child is stopped
+  with the dev server.
+- MiniCPM output is buffered until its parser separates structured tool calls
+  from ordinary text, so function markup does not reach TTS. Tool-result
+  follow-ups use the backend's configured output budget; there is no
+  client-side 80-token limit.
 Place search accepts an explicit Nominatim provider with independently configured search and reverse endpoints. The default offline/Google/Photon/local-fallback order is unchanged when no provider is selected. Provider adapters share normalized coordinates, viewport framing and reverse labels; roads and boundary geometry remain separate services. Portable capped-response and Overpass lexical helpers are exported independently of the Node server.
 
 Reference feed construction is exported through `sources/reference`; the cable source also has a dedicated `layers/submarine-cables/source` entry. Standalone catalog compatibility remains available. Source choices, data and attribution are unchanged.
@@ -288,7 +324,6 @@ editing/playback actions while retaining persistence, camera and layer sequencin
 Shot selection updates the highlight without replacing the row, preserving
 native double-click rename. Replacing rows revokes their old listeners. Disposal stops controls immediately;
 late file and failed-action completions cannot update removed presentation.
-
 ## Cockpit component ownership
 
 Cockpit presentation is separated from its camera/controller behavior. Existing
@@ -299,7 +334,6 @@ Superseded portal frames cannot repaint old state or steal focus after disposal;
 retained Cockpit actions cannot restart a disposed controller. Input, subscriptions
 and queued panel work stop before asynchronous layer restoration; final camera
 and portal cleanup follows that restoration.
-
 
 ## Context coordination
 

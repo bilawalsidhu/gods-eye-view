@@ -199,6 +199,87 @@
   border-radius: 3px;
 }
 
+.key-setup-local {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+  padding: 0.6rem 0.7rem;
+  background: rgba(29, 69, 81, 0.14);
+  border: 1px solid rgba(100, 200, 220, 0.15);
+  border-radius: 0.42rem;
+}
+
+.key-setup-local[data-ready='true'] {
+  background: rgba(30, 81, 57, 0.12);
+  border-color: rgba(84, 227, 156, 0.32);
+}
+
+.key-setup-local-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--font-mono);
+}
+
+.key-setup-local-head strong {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.08rem;
+}
+
+.key-setup-local-state {
+  font-size: 0.6rem;
+  letter-spacing: 0.06rem;
+  color: rgba(148, 178, 188, 0.85);
+}
+
+.key-setup-local[data-ready='true'] .key-setup-local-state {
+  color: rgba(84, 227, 156, 0.9);
+}
+.key-setup-local[data-state='failed'] .key-setup-local-state {
+  color: rgba(255, 138, 128, 0.9);
+}
+
+.key-setup-local-unlocks,
+.key-setup-local-progress {
+  margin: 0;
+  font-size: 0.62rem;
+  line-height: 1.4;
+  color: rgba(190, 214, 222, 0.75);
+}
+
+.key-setup-local-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.key-setup-local-install {
+  padding: 0.3rem 0.6rem;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.08rem;
+  color: inherit;
+  background: rgba(100, 200, 220, 0.12);
+  border: 1px solid rgba(100, 200, 220, 0.3);
+  border-radius: 0.3rem;
+  cursor: pointer;
+}
+
+.key-setup-local-install:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.key-setup-local-command {
+  padding: 0.25rem 0.45rem;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  background: rgba(10, 20, 24, 0.5);
+  border-radius: 0.3rem;
+  user-select: all;
+}
+
 .key-setup-row {
   display: grid;
   gap: 0.35rem;

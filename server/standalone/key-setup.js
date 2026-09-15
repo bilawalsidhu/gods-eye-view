@@ -12,6 +12,7 @@ import { readEnvironmentSource as readPinokioEnvironmentSource } from '../../scr
 import fs from 'node:fs';
 import { parseEnv as parseDotenvText } from 'node:util';
 import { randomUUID } from 'node:crypto';
+import { createLocalVoiceInstaller } from './local-voice.js';
 import { hardenCredentialFile } from './key-setup-hardening.mjs';
 
 /**
@@ -245,6 +246,23 @@ function keySetupEndpoint({ sourceRoot = defaultSourceRoot } = {}) {
     apply: (_config, { command, isPreview }) =>
       command === 'serve' && !isPreview,
     configureServer(server) {
+      const localVoice = createLocalVoiceInstaller({
+        environment: process.env,
+      });
+      server.middlewares.use('/api/setup/local-voice', (req, res) => {
+        if (req.method !== 'GET' && req.method !== 'POST') {
+          return respond(res, 405, { error: 'Method not allowed' });
+        }
+        const admission = admit(req);
+        if (!admission.ok) {
+          return respond(res, admission.status, { error: admission.error });
+        }
+        return respond(
+          res,
+          200,
+          req.method === 'POST' ? localVoice.start() : localVoice.status(),
+        );
+      });
       server.middlewares.use('/api/setup/status', (req, res) => {
         if (req.method !== 'GET')
           return respond(res, 405, { error: 'Method not allowed' });

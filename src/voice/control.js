@@ -15,6 +15,7 @@ export function createVoiceControl({ reset = false } = {}) {
         <div class="gev-voice-kicker">AI AGENT</div>
         <div id="gev-voice-status">OFF</div>
         <div class="gev-voice-cost">
+          <button id="gev-voice-provider" class="gev-voice-tier-btn" type="button" aria-pressed="false" title="Voice provider — applies next session">CLOUD</button>
           <button id="gev-voice-tier" class="gev-voice-tier-btn" type="button" aria-pressed="false" title="Voice model tier — applies next session">STD</button>
           <span id="gev-voice-cost-value" class="gev-voice-cost-value" data-level="ok" title="Estimated session cost">~$0.00</span>
         </div>
@@ -66,6 +67,7 @@ export function createVoiceControl({ reset = false } = {}) {
     detail: root.querySelector('#gev-voice-detail'),
     helpDetail: root.querySelector('.gev-voice-help-detail'),
     errorDetail: root.querySelector('#gev-voice-error-detail'),
+    providerButton: root.querySelector('#gev-voice-provider'),
     tierButton: root.querySelector('#gev-voice-tier'),
     costValue: root.querySelector('#gev-voice-cost-value'),
   };

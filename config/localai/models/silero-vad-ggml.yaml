@@ -1,0 +1,8 @@
+backend: whisper
+known_usecases:
+    - vad
+name: silero-vad-ggml
+options:
+    - vad_only
+parameters:
+    model: ggml-silero-v5.1.2.bin

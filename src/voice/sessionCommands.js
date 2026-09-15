@@ -9,6 +9,7 @@ export function createVoiceCommands({
   createSession,
   createController,
   backend,
+  openProviderSettings,
   signal,
   debugSink,
   createControl = createVoiceControl,
@@ -25,6 +26,7 @@ export function createVoiceCommands({
         ui,
         dataManager,
         backend,
+        openProviderSettings,
         debugSink,
         createController,
         radioLayer: dataManager?.layers?.get('radio')?.module || null,
@@ -34,6 +36,8 @@ export function createVoiceCommands({
   const capabilities = adapter.capabilities || {};
   if (ui.tierButton) ui.tierButton.hidden = !capabilities.costControls;
   if (ui.costValue) ui.costValue.hidden = !capabilities.costControls;
+  if (ui.providerButton)
+    ui.providerButton.hidden = !capabilities.providerSelection;
   if (!capabilities.pushToTalk) {
     ui.button.setAttribute('aria-label', 'Toggle voice control');
     if (ui.helpDetail) ui.helpDetail.textContent = 'Activate to toggle voice';

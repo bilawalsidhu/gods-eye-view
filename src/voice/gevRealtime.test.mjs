@@ -27,9 +27,11 @@ import {
   shouldHandlePushToTalkKeyDown,
   shouldIgnoreVoiceButtonClick,
   shouldStopVoiceAfterRadioTool,
+  readStoredVoiceProvider,
   readStoredVoiceTier,
   readStoredVoiceLimits,
   writeStoredVoiceTier,
+  writeStoredVoiceProvider,
   writeStoredVoiceLimits,
 } from './gevRealtime.js';
 import { createVoiceCostTracker } from './voiceCost.js';
@@ -3015,6 +3017,14 @@ test('voice tier round-trips through storage', () => {
   assert.equal(readStoredVoiceTier(storage), 'standard');
 });
 
+test('voice provider round-trips through storage and rejects unknown values', () => {
+  const storage = fakeVoiceStorage();
+  assert.equal(writeStoredVoiceProvider('local', storage), 'local');
+  assert.equal(readStoredVoiceProvider(storage), 'local');
+  assert.equal(writeStoredVoiceProvider('unknown', storage), 'openai');
+  assert.equal(readStoredVoiceProvider(storage), 'openai');
+});
+
 test('an unset or hand-edited tier reads back as standard', () => {
   assert.equal(readStoredVoiceTier(fakeVoiceStorage()), 'standard');
   assert.equal(
@@ -3194,6 +3204,54 @@ test('F1: the toggle still records the next-session preference while live', () =
   assert.match(ui.tierButton.title, /this session stays on/i);
 });
 
+test('provider preference changes do not alter the live session follow-up policy', () => {
+  const localUi = { tierButton: {}, costValue: {} };
+  const local = new GevRealtimeController({
+    ui: localUi,
+    runner: async () => ({}),
+  });
+  let localEvent = null;
+  local.status = 'listening';
+  local.dc = { readyState: 'open' };
+  local.sessionVoiceProvider = 'local';
+  local.voiceProvider = 'openai';
+  local.pendingResponseInstructions = 'Confirm the completed tool.';
+  local.syncProviderUi();
+  local.sendRealtimeEvent = (event) => {
+    localEvent = event;
+    return true;
+  };
+  local.flushPendingResponse();
+  assert.equal(localEvent.response.localai_classifier.enabled, false);
+  assert.equal(localEvent.response.tool_choice, 'none');
+  assert.equal(localUi.costValue.hidden, true, 'live LOCAL cost stays hidden');
+
+  const cloudUi = { tierButton: {}, costValue: {} };
+  const cloud = new GevRealtimeController({
+    ui: cloudUi,
+    runner: async () => ({}),
+  });
+  let cloudEvent = null;
+  cloud.status = 'listening';
+  cloud.dc = { readyState: 'open' };
+  cloud.sessionVoiceProvider = 'openai';
+  cloud.voiceProvider = 'local';
+  cloud.pendingResponseInstructions = 'Confirm the completed tool.';
+  cloud.syncProviderUi();
+  cloud.sendRealtimeEvent = (event) => {
+    cloudEvent = event;
+    return true;
+  };
+  cloud.flushPendingResponse();
+  assert.equal('localai_classifier' in cloudEvent.response, false);
+  assert.equal('tool_choice' in cloudEvent.response, false);
+  assert.equal(
+    cloudUi.costValue.hidden,
+    false,
+    'live CLOUD cost stays visible',
+  );
+});
+
 test('F1: when idle, toggling does re-price the preview meter', () => {
   const { controller } = costControllerHarness();
   controller.status = 'idle';
@@ -3291,6 +3349,7 @@ test('F5: teardown always closes the channel, in one step', () => {
   let closed = false;
   let pcClosed = false;
   controller.responseActive = true;
+  controller.pendingSessionUpdate = { instructions: 'local' };
   controller.dc = { readyState: 'open', send() {}, close() { closed = true; } };
   controller.pc = { close() { pcClosed = true; } };
   controller.stop();
@@ -3298,6 +3357,7 @@ test('F5: teardown always closes the channel, in one step', () => {
   assert.equal(pcClosed, true, 'peer connection closed');
   assert.equal(controller.dc, null);
   assert.equal(controller.pc, null);
+  assert.equal(controller.pendingSessionUpdate, null, 'a failed local start cannot update the next cloud session');
 });
 
 test('F5: a response in flight at teardown marks the accounting INCOMPLETE', () => {
@@ -3524,6 +3584,27 @@ test('CONTROL: a live response’s function call is dispatched normally', async 
   assert.deepEqual(dispatched, ['fly_to_location'], 'the guard must not block ordinary tool calls');
 });
 
+test('a failed local tool requests one unclassified correction', async () => {
+  const { controller } = toolDispatchController();
+  const sent = [];
+  controller.voiceProvider = 'local';
+  controller.sessionVoiceProvider = 'local';
+  controller.runner = async () => ({ ok: false, action: 'fly_to_location', error: 'Nothing matched' });
+  controller.sendRealtimeEvent = (payload, label) => {
+    sent.push({ payload, label });
+    return true;
+  };
+  controller.updateResponseState({ type: 'response.created', response: { id: 'resp_fail' } });
+  await controller.handleRealtimeEvent(lateToolEvent('resp_fail', 'call_fail'));
+  controller.updateResponseState({
+    type: 'response.done',
+    response: { id: 'resp_fail', status: 'completed' },
+  });
+
+  const correction = sent.find(({ label }) => label === 'client.response_create.tool_followup');
+  assert.equal(correction?.payload?.response?.localai_classifier?.enabled, false);
+});
+
 test('a typed command supersedes the old response, so its late tools never fire', async () => {
   const { controller, sent, dispatched } = toolDispatchController();
   controller.updateResponseState({ type: 'response.created', response: { id: 'resp_old' } });
@@ -3671,6 +3752,63 @@ test('a genuinely different refused call still gets its own output', async () =>
   assert.deepEqual(outputs, ['call_one', 'call_two'], 'each distinct call is answered');
 });
 
+test('a local backend that needs setup fails the session start with the fix, not a retry loop', async () => {
+  let settingsOpened = 0;
+  const controller = new GevRealtimeController({
+    ui: {},
+    runner: async () => ({}),
+    openProviderSettings: () => {
+      settingsOpened += 1;
+      return true;
+    },
+  });
+  const methods = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options = {}) => {
+    methods.push(options.method || 'GET');
+    return {
+      json: async () => ({
+        state: 'needs-setup',
+        detail: 'LocalAI has no "gpt-realtime" pipeline — run npm run voice:local:setup',
+      }),
+    };
+  };
+  try {
+    const result = await controller.awaitLocalBackendReady(controller.startEpoch);
+    assert.equal(result.ok, false);
+    assert.match(result.detail, /npm run voice:local:setup/);
+    assert.deepEqual(methods, ['POST'], 'a missing install is terminal, so it must not keep polling');
+    assert.equal(settingsOpened, 1, 'the explicit mic attempt reveals the setup path');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('switching to LOCAL reveals setup when the backend reports it missing', async () => {
+  let settingsOpened = 0;
+  const controller = new GevRealtimeController({
+    ui: {},
+    runner: async () => ({}),
+    openProviderSettings: () => {
+      settingsOpened += 1;
+      return true;
+    },
+  });
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    json: async () => ({
+      state: 'needs-setup',
+      detail: 'LocalAI is not installed — run: brew install localai',
+    }),
+  });
+  try {
+    await controller.ensureLocalBackend();
+    assert.equal(settingsOpened, 1);
+    assert.equal(controller.localBackendState.state, 'needs-setup');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 const testPlaceSearch = () => createStandalonePlaceSearch({ resolveApiKey: () => globalThis.window?.__GOOGLE_MAPS_API_KEY__ });
 function createGevActionRunner(options) { return createActionRunner({ placeSearch: testPlaceSearch(), ...options }); }
 function controlRadio(viewer, manager, args, options) { return runControlRadio(viewer, manager, args, { placeSearch: testPlaceSearch(), ...options }); }

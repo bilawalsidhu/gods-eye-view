@@ -118,6 +118,14 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+- Local voice installs from the app. The POWER UP panel gained a LOCAL VOICE row
+  that reports readiness, runs the profile's install plan on a button, and shows
+  which step is running and how many megabytes of weights have arrived. Only
+  `brew install localai` stays a terminal step, shown as a command to copy.
+- Voice can switch between OpenAI Realtime and a self-hosted LocalAI Realtime
+  pipeline from the mic panel. The Apple Silicon reference profile combines
+  Silero VAD, Parakeet STT, MiniCPM5-2B MLX 4-bit, and Kokoro TTS, with a
+  repeatable setup/check command and the same 28 GEV tools.
 - Give application request services, terrain/floor caches and annotation lookup state explicit owners and cancellation; share them across controls, layers and voice.
 
 - Construct application layers from explicit sources, with standalone provider selection and catalog-owned aircraft classification; controls and voice queries use those instances.
@@ -457,7 +465,27 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   credit and the "fix the map" link the service's usage policy asks for.
 
 ### Changed
-
+- Local voice setup reads the pipeline config instead of a hard-coded list, so
+  swapping a stage — a different LLM, STT or TTS — is a YAML edit: it installs
+  the backends the stage configs name, pulls gallery models, downloads Hugging
+  Face weights, applies the MiniCPM parser only for the shipped MiniCPM weights,
+  and requires Apple Silicon only while a stage runs on the `mlx` backend.
+- Local voice setup downloads the language model too, so choosing LOCAL starts
+  what is already installed instead of silently fetching 1.3 GB, and
+  `voice:local:check` rejects missing weights and stale pipeline configs.
+- The local backend reports its warm-up honestly: a missing install names the
+  setup command, a first run shows download progress, and an active download is
+  governed by a progress-stall deadline rather than the model-load deadline.
+- `npm run doctor` reports local voice readiness beside the OpenAI voice line.
+- Local voice setup skips the MLX thinking patch on LocalAI builds that already
+  honor `enable_thinking=false` (merged upstream as mudler/LocalAI#11962), so
+  setup and check keep working on newer LocalAI.
+- The MiniCPM voice stage buffers LLM output until tool calls are parsed. Kokoro
+  already synthesizes complete replies, so this removes the MLX streaming patch
+  without changing when speech begins.
+- Local voice sessions are excluded from OpenAI spend limits, wait for the
+  pipeline to preload, and use the configured pipeline output limit after tool
+  calls instead of a client-side 80-token cap.
 - The interface asks Google Fonts for only the icon glyphs it draws, instead of
   the whole variable icon font, and no longer requests a second icon family that
   nothing renders. A check fails when a source names a glyph the request is
@@ -507,6 +535,12 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   those exports separate from app startup and local Node services.
 
 ### Fixed
+
+- Local MiniCPM tool markup is converted to structured function calls without
+  reaching speech output, and disabling model thinking reaches the MLX chat
+  template as `enable_thinking=false`.
+- Choosing LOCAL now opens Provider Settings when setup is missing. Returning
+  from installing LocalAI refreshes the LOCAL VOICE row without a page reload.
 
 - Reduce terrain-height timeouts when Re:Earth slows down. Batches are
   sized against measured response latency on both browser and server to reduce

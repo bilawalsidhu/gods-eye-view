@@ -1,0 +1,4 @@
+const LOCAL_AI_REALTIME_URL_DEFAULT = 'http://localhost:8080/v1/realtime/calls';
+const LOCAL_AI_REALTIME_MODEL_DEFAULT = 'gpt-realtime';
+
+export { LOCAL_AI_REALTIME_MODEL_DEFAULT, LOCAL_AI_REALTIME_URL_DEFAULT };
