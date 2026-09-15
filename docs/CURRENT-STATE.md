@@ -1,5 +1,15 @@
 # God's Eye View Current State
 
+The optional **Meteors · latest batch** layer shows Global Meteor Network fitted
+atmospheric trajectories. Its observatory opens on activation with batch context,
+an observation-time histogram and bright events to explore. Selection isolates a
+path with direction and altitude annotations, a profile and pause/scrub controls
+for the illustrative six-second replay. These are processed observations,
+not live meteors. The keyless provider caches for six hours, retains stale data
+on failure and bounds downloads and rendered records. Layer visibility is
+shareable (token `h`); existing voice layer menus accept `meteors`. See
+[METEORS.md](METEORS.md) for source semantics and verification.
+
 Place search accepts an explicit Nominatim provider with independently configured search and reverse endpoints. The default offline/Google/Photon/local-fallback order is unchanged when no provider is selected. Provider adapters share normalized coordinates, viewport framing and reverse labels; roads and boundary geometry remain separate services. Portable capped-response and Overpass lexical helpers are exported independently of the Node server.
 
 Reference feed construction is exported through `sources/reference`; the cable source also has a dedicated `layers/submarine-cables/source` entry. Standalone catalog compatibility remains available. Source choices, data and attribution are unchanged.

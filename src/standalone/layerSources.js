@@ -12,6 +12,7 @@ import { createSatelliteSource } from '../layers/satellites/source.js';
 import { createLaunchSource } from '../layers/launches/source.js';
 import { createOverpassAlprSource } from '../layers/alpr/source.js';
 import { createFirmsSource } from '../layers/firms/source.js';
+import { createMeteorSource } from '../layers/meteors/source.js';
 import { createReferenceSources } from '../sources/reference.js';
 export { createReferenceSources as createStandaloneReferenceSources } from '../sources/reference.js';
 
@@ -19,6 +20,7 @@ export { createReferenceSources as createStandaloneReferenceSources } from '../s
 export function createStandaloneLayerSources() {
   return {
     ...createReferenceSources(),
+    meteors: createMeteorSource(),
     flights: createOpenSkySource(),
     military: createAdsbLolSource(),
     vessels: createAisStreamSource({

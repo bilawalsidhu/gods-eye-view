@@ -230,6 +230,11 @@
     "./sources/http-body": "./src/sources/httpBody.js",
     "./sources/overpass": "./src/sources/overpass.js",
     "./search/nominatim": "./src/search/nominatim.js",
-    "./sources/nominatim": "./src/sources/nominatim.js"
+    "./sources/nominatim": "./src/sources/nominatim.js",
+    "./layers/meteors": "./src/layers/meteors/index.js",
+    "./layers/meteors/source": "./src/layers/meteors/source.js",
+    "./server/providers/meteors": {
+      "node": "./server/providers/meteors.js"
+    }
   }
 }

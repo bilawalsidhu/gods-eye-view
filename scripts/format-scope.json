@@ -675,5 +675,14 @@
   "src/search/nominatim.test.mjs",
   "src/sources/httpBody.js",
   "src/sources/overpass.js",
-  "src/sources/nominatim.js"
+  "src/sources/nominatim.js",
+  "src/app/layers/meteors.js",
+  "src/layers/meteors/index.js",
+  "src/layers/meteors/panel.js",
+  "src/layers/meteors/records.js",
+  "src/layers/meteors/source.js",
+  "src/layers/meteors/records.test.mjs",
+  "src/layers/meteors/provider.test.mjs",
+  "server/providers/meteors.js",
+  "scripts/qa-meteors.mjs"
 ]

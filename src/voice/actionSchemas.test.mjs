@@ -15,13 +15,13 @@ const stable = (value) =>
         )
       : value;
 
-test('the complete Realtime tool payload retains its pre-extraction contract and wording', () => {
+test('the complete Realtime tool payload retains its contract including the meteor layer enum', () => {
   const digest = createHash('sha256')
     .update(JSON.stringify(stable(GEV_REALTIME_TOOLS)))
     .digest('hex');
   assert.equal(
     digest,
-    '956381c3456d3644ed7c9cda72910dc68a34d9191e0b3e414ee200c348245214',
+    '4df6e66a7d4027b2e14e6ad384ff6a6922a229ddf066a15297fa320a18e3e392',
   );
 });
 
