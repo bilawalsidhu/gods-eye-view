@@ -2653,7 +2653,10 @@ heights, and reuses caller-owned sample and segment storage.
 collections above CCTV and Bikeshare. Traffic, Bikeshare and Transit share camera
 sensitivity claims; the original sensitivity returns after the last release.
 Visibility checks combine the camera frustum and ellipsoid occlusion at no more
-than 4 Hz; missing map bounds do not admit the globe's far side. Frame work
+than 4 Hz; missing map bounds do not admit the globe's far side. Camera arrivals
+rebuild an unprepared or cold marker corridor during that visibility sweep,
+adopt a loaded surface, and update both heightPending and surfaceReady diagnostics.
+A resolved display sample clears its pending-height gate without waiting for a poll. Frame work
 visits moving visible vehicles, up to 64 pending height changes, and the selected
 head. Rotation visits visible membership at 5 Hz, with selected rotation per
 frame. The transit render hold exists only for visible positional or orientation

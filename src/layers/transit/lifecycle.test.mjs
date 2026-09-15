@@ -3771,3 +3771,36 @@ test('selected trail QA fixture survives repeated live CapMetro snapshots', asyn
     'live ingestion still runs',
   );
 });
+
+for (const jump of ['setView', 'flyTo']) {
+  test(`${jump} recovers a cold hidden vehicle within one visibility interval`, async (t) => {
+    const app = harness(t, { floorAt: () => undefined });
+    let floor;
+    app.viewer.scene.globe.show = true;
+    app.viewer.scene.globe.getHeight = () => floor;
+    app.serve('mbta', () => ({
+      status: 200,
+      body: snapshot('mbta', 'MBTA', [vehicle('cold', 42.36, -71.06, reported())]),
+    }));
+    app.layer.enable(app.viewer);
+    await app.layer.update();
+    const entry = app.vehicles()[0];
+    assert.equal(entry.marker.show, false);
+    assert.equal(entry.heightPending, true);
+    // Surface tiles are now loaded at the camera destination. No poll, floor
+    // timer or preRender is allowed to bootstrap the visibility recovery.
+    clearTimeout(app.state()._floorTimer);
+    app.state()._floorTimer = null;
+    app.viewer.camera[jump] = () => {
+      floor = 12;
+      app.viewer.camera.changed.raiseEvent();
+    };
+    app.viewer.camera[jump]();
+    app.advance(250);
+    assert.equal(entry.marker.show, true);
+    assert.equal(entry.heightPending, false);
+    assert.equal(entry.surfaceReady, true);
+    assert.equal(entry.visibility.heightPending, false);
+    assert.equal(entry.visibility.surfaceReady, true);
+  });
+}

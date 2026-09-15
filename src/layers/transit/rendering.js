@@ -97,6 +97,7 @@ export function createRendering({ state, services, parts }) {
       nearGround,
     );
     entry.surfaceReady = !!known;
+    entry.heightPending = !known;
     entry.marker.show = !!known && vehicleInView(entry);
     if (known) {
       entry.marker.position = state._scratchCartesian;
@@ -523,6 +524,10 @@ export function createRendering({ state, services, parts }) {
       else state._visible.delete(entry);
       if (visible && entry.track?.count) {
         if (!wasVisible && !entry.qaFixture) syncPlayback(entry, now);
+        // Re-entry can advance into an unprepared corridor; loaded tiles can
+        // also resolve a cold path without a poll or a render-loop wakeup.
+        if (!wasVisible || entry.surfaceReady === false || entry.heightPending)
+          parts.trails.prepareEntry(entry);
         // Surface completion must recover while requestRenderMode is idle.
         // Otherwise surfaceReady=false prevents the very frame that clears it.
         if (!state._moving.has(entry)) {
@@ -532,6 +537,8 @@ export function createRendering({ state, services, parts }) {
       }
       entry.marker.show =
         visible && !entry.heightPending && entry.surfaceReady !== false;
+      visibility.heightPending = !!entry.heightPending;
+      visibility.surfaceReady = entry.surfaceReady ?? null;
       schedulePlayback(entry);
       changed ||= visible !== wasVisible || wasShown !== entry.marker.show;
     }
