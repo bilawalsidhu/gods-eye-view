@@ -2699,7 +2699,9 @@ scripted straight CapMetro bus with nine retained fixes, runs for 20 seconds at 
 projected surface points. `Google 3D selected trail visible at 6 of 8 projected samples`
 prints the selected key, fix count, elapsed display time, path length, hit count,
 per-point coordinates/hits and renderer strategy. At least six points need a
-changed green core or dark backing; an unchanged dark road fails. Artifacts are
+changed green core or dark backing; an unchanged dark road fails. The dark
+backing must reduce summed RGB by at least 40%, and either match needs RGB
+distance of at least 40, so a faint depth-fail wash cannot satisfy visibility. Artifacts are
 `<tag>-<altitude>m-trail-visible.jpg` and matching JSON. Run the same harness
 against the base and patched keyed builds; partial runs remain diagnostic.
 Node geometry checks measure 1,352 bytes per head subdivision, zero ordinary-frame

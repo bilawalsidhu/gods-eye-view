@@ -344,6 +344,12 @@ test('trail pixel acceptance needs six changed samples; static dark roads, empty
   );
   const dark = off.map(() => patch([5, 8, 12]));
   assert.equal(reduceTrailPixels(dark, off).present, 8);
+  const dim = off.map(() => patch([126, 126, 126]));
+  assert.equal(
+    reduceTrailPixels(dim, off).present,
+    0,
+    'a 0.16-alpha dark depth-fail line is too faint',
+  );
   assert.equal(reduceTrailPixels(dark, dark).present, 0);
   assert.equal(reduceTrailPixels(on, on).present, 0);
   assert.equal(reduceTrailPixels([], []).pass, false);

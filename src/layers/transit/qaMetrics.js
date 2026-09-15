@@ -343,9 +343,10 @@ export function reduceTrailPixels(on, off) {
         a[k + 1] - b[k + 1],
         a[k + 2] - b[k + 2],
       );
-      const green = a[k + 1] > a[k] + 25 && a[k + 1] > a[k + 2] + 18;
-      const dark = a[k] + a[k + 1] + a[k + 2] < b[k] + b[k + 1] + b[k + 2] - 45;
-      if (delta >= 25 && (green || dark)) matches++;
+      const green = a[k + 1] > a[k] + 30 && a[k + 1] > a[k + 2] + 18;
+      const dark =
+        a[k] + a[k + 1] + a[k + 2] < 0.6 * (b[k] + b[k + 1] + b[k + 2]);
+      if (delta >= 40 && (green || dark)) matches++;
     }
     return matches >= 2;
   });

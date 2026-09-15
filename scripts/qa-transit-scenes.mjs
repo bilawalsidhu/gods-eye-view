@@ -618,72 +618,89 @@ export async function runTrailVisibility({
     { altitude, pitch },
   );
   await wait(8000);
-  const setup = await page.evaluate(async () => {
-    const app = window.__godsEyeView,
-      scene = app.viewer.scene;
-    const layer = app.dataManager.layers.get('transit').module;
-    const state = layer._transitStateForTest(),
-      parts = layer._transitPartsForTest();
-    const google =
-      !!app.tileset &&
-      app.tileset.show !== false &&
-      app.mapStackController.getActiveId() === 'photoreal';
-    if (!google)
-      return { google: false, reason: 'visible Google 3D tileset required' };
-    parts.selection.clearSelection();
-    parts.ingestion.abortAllInFlight();
-    state._activeFeeds.clear();
-    for (const key of state._vehicles.keys())
-      parts.ingestion.removeVehicle(key);
-    clearTimeout(state._cameraDebounceTimer);
-    state._cameraDebounceTimer = null;
-    const { getRegisteredTransitFeed } =
-      await import('/src/data/transitFeeds.js');
-    const { seek, setRate } = await import('/src/data/contactPlayback.js');
-    const feed = getRegisteredTransitFeed('capmetro-austin');
-    if (!feed) throw new Error('CapMetro fixture feed missing');
-    const now = Date.now();
-    // Nine straight street fixes, 7.5 m apart. Use the production surface path.
-    for (let i = 0; i < 9; i++) {
-      const timestamp = (now - 120000 + i * 15000) / 1000;
-      parts.ingestion.applySnapshot(
-        feed,
-        {
-          fetchedAt: timestamp * 1000,
-          vehicles: [
-            {
-              id: 'trail-visible',
-              routeId: '1',
-              tripId: 'trail-visible',
-              lat: 30.267 + (i * 7.5) / 111320,
-              lon: -97.7431,
-              timestamp,
-              timestampSource: 'vehicle',
-              bearing: 0,
-            },
-          ],
-        },
-        { stale: false },
-      );
-    }
-    const entry = state._vehicles.get(`${feed.id}:trail-visible`);
-    entry.qaFixture = true;
-    const clocks = { wallNowMs: now, monoNowMs: performance.now() };
-    seek(entry.track, now - 45000, clocks);
-    setRate(entry.track, 1, clocks);
-    parts.rendering.sampleIdle(entry);
-    parts.height.anchorFloors();
-    parts.rendering.refreshVisibility();
-    parts.rendering.maintainPresentation();
-    parts.selection.selectVehicle(entry.key);
-    return {
-      google,
-      key: entry.key,
-      fixes: entry.track.count,
-      startDisplayT: now - 45000,
-      startLat: entry.sample.lat,
-    };
-  });
+  const setup = await page.evaluate(
+    async ({ altitude, pitch }) => {
+      const app = window.__godsEyeView,
+        scene = app.viewer.scene;
+      const layer = app.dataManager.layers.get('transit').module;
+      const state = layer._transitStateForTest(),
+        parts = layer._transitPartsForTest();
+      const google =
+        !!app.tileset &&
+        app.tileset.show !== false &&
+        app.mapStackController.getActiveId() === 'photoreal';
+      if (!google)
+        return { google: false, reason: 'visible Google 3D tileset required' };
+      const C = scene.camera.positionCartographic.constructor;
+      const centreLat = 30.267 + 90 / 111320;
+      const floor = scene.sampleHeight(C.fromDegrees(-97.7431, centreLat));
+      if (Number.isFinite(floor))
+        scene.camera.setView({
+          destination: C.toCartesian(
+            C.fromDegrees(
+              -97.7431,
+              centreLat - altitude / Math.tan((pitch * Math.PI) / 180) / 111320,
+              floor + altitude,
+            ),
+          ),
+          orientation: { heading: 0, pitch: (-pitch * Math.PI) / 180, roll: 0 },
+        });
+      parts.selection.clearSelection();
+      parts.ingestion.abortAllInFlight();
+      state._activeFeeds.clear();
+      for (const key of state._vehicles.keys())
+        parts.ingestion.removeVehicle(key);
+      clearTimeout(state._cameraDebounceTimer);
+      state._cameraDebounceTimer = null;
+      const { getRegisteredTransitFeed } =
+        await import('/src/data/transitFeeds.js');
+      const { seek, setRate } = await import('/src/data/contactPlayback.js');
+      const feed = getRegisteredTransitFeed('capmetro-austin');
+      if (!feed) throw new Error('CapMetro fixture feed missing');
+      const now = Date.now();
+      // Nine straight street fixes, 30 m apart. Use the production surface path.
+      for (let i = 0; i < 9; i++) {
+        const timestamp = (now - 120000 + i * 15000) / 1000;
+        parts.ingestion.applySnapshot(
+          feed,
+          {
+            fetchedAt: timestamp * 1000,
+            vehicles: [
+              {
+                id: 'trail-visible',
+                routeId: '1',
+                tripId: 'trail-visible',
+                lat: 30.267 + (i * 30) / 111320,
+                lon: -97.7431,
+                timestamp,
+                timestampSource: 'vehicle',
+                bearing: 0,
+              },
+            ],
+          },
+          { stale: false },
+        );
+      }
+      const entry = state._vehicles.get(`${feed.id}:trail-visible`);
+      entry.qaFixture = true;
+      const clocks = { wallNowMs: now, monoNowMs: performance.now() };
+      seek(entry.track, now - 45000, clocks);
+      setRate(entry.track, 1, clocks);
+      parts.rendering.sampleIdle(entry);
+      parts.height.anchorFloors();
+      parts.rendering.refreshVisibility();
+      parts.rendering.maintainPresentation();
+      parts.selection.selectVehicle(entry.key);
+      return {
+        google,
+        key: entry.key,
+        fixes: entry.track.count,
+        startDisplayT: now - 45000,
+        startLat: entry.sample.lat,
+      };
+    },
+    { altitude, pitch },
+  );
   if (!setup.google) {
     check(name, false, JSON.stringify(setup), { unexercised: true });
     return;
