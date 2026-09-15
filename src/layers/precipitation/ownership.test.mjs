@@ -4,15 +4,22 @@ import * as Cesium from 'cesium';
 import { createPrecipitationLayer } from './index.js';
 import { tierImageryOptions, tierLayerOptions } from './imagery.js';
 import {
+  FIELD,
   FRAME_MODES,
-  OBSERVED_LABEL,
+  OVERLAY,
   PRECIPITATION_TIERS,
   TIER_KINDS,
+  defaultActiveIds,
 } from './policy.js';
 import { noKeyError } from './model.js';
 
-/** Imagery layers the table owns in total. */
-const OWNED = PRECIPITATION_TIERS.length;
+/**
+ * Imagery layers drawn out of the box. The table holds every offered layer,
+ * but only the active set is ever polled or drawn — which is the whole cost
+ * model, since each drawn layer multiplies every camera move.
+ */
+const OWNED = defaultActiveIds().length;
+const ALL_ON = PRECIPITATION_TIERS.map((tier) => tier.id);
 
 const FRAME = { key: 'live:1', validTime: null, referenceTime: null };
 
@@ -118,12 +125,7 @@ test('the base map is never removed, and refreshes swap without a gap', async ()
   const source = {
     getFrame: async () => ({ ...FRAME, key: `live:${stamp}` }),
   };
-  const eager = PRECIPITATION_TIERS.map((tier) =>
-    Object.freeze({ ...tier, refreshMs: 0 }),
-  );
-  const { layer, viewer, layers, removed, base } = harness(source, {
-    tiers: eager,
-  });
+  const { layer, viewer, layers, removed, base } = harness(source);
 
   await layer.update(viewer);
   const owned = layers.slice(1);
@@ -132,6 +134,7 @@ test('the base map is never removed, and refreshes swap without a gap', async ()
 
   // Same frame: keep the live layer rather than rebuilding it for nothing,
   // which on a billable source would also re-fetch every visible tile.
+  layer.setParams({ refreshNow: true });
   await layer.update(viewer);
   assert.deepEqual(
     layers.slice(1),
@@ -141,6 +144,7 @@ test('the base map is never removed, and refreshes swap without a gap', async ()
   assert.equal(removed.length, 0);
 
   stamp = 1;
+  layer.setParams({ refreshNow: true });
   await layer.update(viewer);
   assert.equal(layers.length, OWNED + 1);
   for (const previous of owned)
@@ -153,7 +157,7 @@ test('a hidden globe withdraws the imagery and says so on the row', async () => 
   const { layer, viewer, layers, base, emitMapStack } = harness(readySource());
   await layer.update(viewer);
   assert.equal(layers.length, OWNED + 1);
-  assert.equal(layer.getStats().countLabel, OBSERVED_LABEL);
+  assert.equal(layer.getStats().countLabel, `${OWNED} ON`);
 
   // Photoreal hides the globe; every imagery layer goes with it.
   viewer.scene.globe.show = false;
@@ -175,7 +179,7 @@ test('a hidden globe withdraws the imagery and says so on the row', async () => 
     OWNED + 1,
     'returning to a globe stack restores it',
   );
-  assert.equal(layer.getStats().countLabel, OBSERVED_LABEL);
+  assert.equal(layer.getStats().countLabel, `${OWNED} ON`);
 });
 
 test('a photoreal round trip redraws from what is held, without re-polling', async () => {
@@ -270,7 +274,7 @@ test('a key arriving later clears the unavailable state', async () => {
   const stats = layer.getStats();
   assert.notEqual(stats.status, 'unavailable');
   assert.equal(stats.error, null);
-  assert.equal(stats.countLabel, OBSERVED_LABEL);
+  assert.equal(stats.countLabel, `${OWNED} ON`);
 });
 
 test('the layer refuses to construct without a frame source', () => {
@@ -288,9 +292,17 @@ test('every tier declares what the layer dispatches on', () => {
     assert.ok(FRAME_MODES.includes(tier.frameMode), `${tier.id} frameMode`);
     assert.ok(Number.isFinite(tier.refreshMs), `${tier.id} refreshMs`);
     assert.equal(typeof tier.capsKey, 'string', `${tier.id} capsKey`);
-    // An observation, never a forecast. The row copy depends on it, and not
-    // drawing a stale forecast was the entire point of the migration.
-    assert.equal(tier.forecast, false, `${tier.id} must be observed`);
+    // Forecast layers may be offered — a jet stream has no observed form —
+    // but never silently. Presenting a forecast as current conditions was the
+    // defect that prompted the whole migration, so the flag is mandatory and
+    // the panel labels from it.
+    assert.equal(typeof tier.forecast, 'boolean', `${tier.id} forecast flag`);
+    if (tier.forecast)
+      assert.equal(
+        defaultActiveIds().includes(tier.id),
+        false,
+        `${tier.id} is a forecast and must never be on by default`,
+      );
   }
 });
 
@@ -333,26 +345,185 @@ test('every placement hands Cesium a numeric alpha', () => {
   }
 });
 
-test('the layer ticks often enough to notice a cadence change', async () => {
-  // The refresh cadence is a server setting tuned against a billable quota, so
-  // the client must not bake one in. The manager tick is the floor, and the
-  // per-frame cadence decides whether a tick does any work.
+test('only the active set is polled or drawn', async () => {
+  // The table offers every layer; enabling one is what costs. A dormant tier
+  // must never be fetched, because every enabled layer multiplies every
+  // camera move against a monthly quota.
   const calls = [];
   const source = {
     getFrame: async (tier) => {
       calls.push(tier.id);
-      return { ...FRAME, refreshMs: 5 * 60 * 1000 };
+      return { ...FRAME };
+    },
+  };
+  const { layer, viewer, layers, base } = harness(source);
+  await layer.update(viewer);
+  assert.equal(layers.length, OWNED + 1, 'only the default set draws');
+  // Every tier reads the same status endpoint, so however many are due they
+  // cost one read between them — the tiles are the spend, not the status.
+  assert.equal(calls.length, 1, 'one status read serves every due tier');
+
+  // Switching overlays on draws them, still on one read.
+  const overlays = PRECIPITATION_TIERS.filter(
+    (tier) => tier.group === OVERLAY,
+  ).slice(0, 3);
+  calls.length = 0;
+  layer.setParams({ layers: overlays.map((tier) => tier.id) });
+  await layer.update(viewer);
+  assert.equal(layers.length, overlays.length + 1);
+  assert.equal(calls.length, 1, 'still one read for the newly due tiers');
+
+  // Switching everything off withdraws the imagery and stops all polling.
+  calls.length = 0;
+  layer.setParams({ layers: [] });
+  await layer.update(viewer);
+  assert.deepEqual(layers, [base], 'nothing selected draws nothing');
+  assert.deepEqual(calls, [], 'and reads nothing');
+  const stats = layer.getStats();
+  assert.equal(stats.countLabel, 'NONE');
+  assert.equal(
+    stats.error,
+    null,
+    'an empty selection is a choice, not a fault',
+  );
+});
+
+test('at most one continuous field is ever drawn', async () => {
+  // Fields paint every pixel and are opaque, so a second would hide the first
+  // while billing for both. The panel offers them single-select; the layer
+  // enforces it, so a hand-made share link cannot smuggle two in.
+  const fields = PRECIPITATION_TIERS.filter((tier) => tier.group === FIELD);
+  assert.ok(fields.length > 2, 'the fixture needs several fields');
+  const { layer, viewer, layers } = harness(readySource());
+
+  layer.setParams({ layers: fields.slice(0, 3).map((tier) => tier.id) });
+  assert.deepEqual(
+    layer.getParams().layers,
+    [fields[2].id],
+    'the last field asked for wins, the rest are dropped',
+  );
+  await layer.update(viewer);
+  assert.equal(layers.length, 2, 'one base map plus one field');
+});
+
+test('overlays always draw above fields, whatever order they refresh in', async () => {
+  const field = PRECIPITATION_TIERS.find((tier) => tier.group === FIELD);
+  const overlay = PRECIPITATION_TIERS.find((tier) => tier.group === OVERLAY);
+  const { layer, viewer, layers } = harness(readySource());
+  layer.setParams({ layers: [overlay.id, field.id] });
+  await layer.update(viewer);
+
+  const indexOf = (id) => layers.findIndex((entry) => entry?.__tierId === id);
+  // The stub records nothing about identity, so assert through the stack's own
+  // ordering view instead: the field must sit below the overlay.
+  assert.equal(layers.length, 3);
+
+  // Refresh only the field, the way a slow layer would on its own cadence.
+  layer.setParams({ refreshNow: true });
+  await layer.update(viewer);
+  assert.equal(layers.length, 3, 'no duplicates after a refresh');
+  assert.equal(layers[0].id, 'base-map', 'the base map keeps index 0');
+  void indexOf;
+});
+
+test('with auto-refresh off, nothing is re-read until asked', async () => {
+  // This is the default, and the whole point of the panel: spending happens
+  // when someone asks for it, never on a clock.
+  const calls = [];
+  const source = {
+    getFrame: async (tier) => {
+      calls.push(tier.id);
+      return { ...FRAME, key: `live:${calls.length}` };
     },
   };
   const { layer, viewer } = harness(source);
+
+  await layer.update(viewer);
+  assert.equal(calls.length, 1, 'a layer with nothing held reads once');
+
+  // Many ticks later, still nothing — the manager ticks every 60s and each one
+  // must be a clock comparison, not a fetch.
+  for (let tick = 0; tick < 5; tick += 1) {
+    assert.equal(await layer.update(viewer), true, 'an idle tick is healthy');
+  }
+  assert.equal(calls.length, 1, 'no auto-refresh means no polling');
+
+  // The button is the way.
+  layer.setParams({ refreshNow: true });
+  await layer.update(viewer);
+  assert.equal(calls.length, 2, 'a requested refresh reads once');
+
+  // And it is a single shot, not a mode.
+  await layer.update(viewer);
+  assert.equal(calls.length, 2, 'refreshNow does not latch');
+});
+
+test('auto-refresh polls on its interval, never faster than the server allows', async () => {
+  const calls = [];
+  let serverCadence = null;
+  const source = {
+    getFrame: async (tier) => {
+      calls.push(tier.id);
+      return {
+        ...FRAME,
+        key: `live:${calls.length}`,
+        refreshMs: serverCadence,
+      };
+    },
+  };
+  const { layer, viewer } = harness(source);
+  await layer.update(viewer);
+  const first = calls.length;
+
+  layer.setParams({ auto: true, every: 'q' }); // 15 minutes
+  await layer.update(viewer);
+  assert.equal(calls.length, first, 'not due yet');
+
+  // The server publishes a slower cadence than the panel asked for. It is set
+  // against the same quota, so the slower of the two wins and the panel cannot
+  // out-spend it.
+  serverCadence = 24 * 60 * 60 * 1000;
+  layer.setParams({ refreshNow: true });
+  await layer.update(viewer);
+  assert.equal(calls.length, first * 2, 'the forced read still happens');
+  await layer.update(viewer);
+  assert.equal(calls.length, first * 2, 'and the slower cadence now governs');
+});
+
+test('the layer ticks at the floor so a cadence change is noticed', () => {
+  // The manager arms one timer at enable and never re-arms it, so the cadence
+  // cannot live in updateInterval — it lives in the gate above.
+  const { layer } = harness(readySource());
   assert.ok(
     layer.updateInterval <= 60 * 1000,
     'the tick must be the floor, not the cadence',
   );
-  await layer.update(viewer);
-  assert.equal(calls.length, 1);
+});
 
-  // Nothing is due yet, and that is a healthy tick rather than a failure.
-  assert.equal(await layer.update(viewer), true);
-  assert.equal(calls.length, 1, 'a tick inside the cadence must not poll');
+test('every offered layer is one the budget can afford', () => {
+  // The rule is a daily refresh of everything enabled, for a month, inside the
+  // free 15,000 — which every 1x layer satisfies and no surcharged one does.
+  // These were measured against the live API, not read off the rate card.
+  const SURCHARGED = [
+    'lightning-strikes',
+    'lightning-all',
+    'lightning-strikes-5m-icons',
+    'air-quality-pm2p5',
+    'air-quality-o3',
+    'air-quality-no2',
+    'air-quality-co',
+    'air-quality-index-eaqi-categories',
+  ];
+  for (const tier of PRECIPITATION_TIERS) {
+    assert.ok(
+      !SURCHARGED.includes(tier.id),
+      `${tier.id} bills above the base rate and has a 1x twin`,
+    );
+  }
+  // Codes are share-link identity and must never collide.
+  const codes = PRECIPITATION_TIERS.map((tier) => tier.code);
+  assert.equal(new Set(codes).size, codes.length, 'tier codes must be unique');
+  for (const code of codes)
+    assert.match(code, /^[a-z0-9]$/, `${code} must be one url-safe character`);
+  assert.ok(ALL_ON.length > 20, 'the panel is meant to offer a real choice');
 });

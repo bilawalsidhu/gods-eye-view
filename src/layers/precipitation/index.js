@@ -1,11 +1,15 @@
 import { createImageryStack } from './imagery.js';
 import { isNoKeyError } from './model.js';
 import {
+  DEFAULT_REFRESH_CHOICE,
   FALLBACK_REFRESH_MS,
+  FIELD,
   LAYER_ID,
+  LAYER_NAME,
   LAYER_TICK_MS,
-  OBSERVED_LABEL,
   PRECIPITATION_TIERS,
+  REFRESH_CHOICES,
+  defaultActiveIds,
 } from './policy.js';
 
 export * from './model.js';
@@ -57,6 +61,23 @@ export function createPrecipitationLayer({
   // standing state an operator can fix, while "the probe failed" may be a
   // passing fault. They read identically from outside and must not be merged.
   let _noKey = false;
+  /**
+   * The tiers actually drawn. Everything else in the table is dormant: never
+   * polled, never drawn, costing nothing. Enabling a layer is what spends the
+   * quota, because each one multiplies every camera move.
+   */
+  let _active = new Set(defaultActiveIds());
+  /** Auto-refresh is off until asked for; the button is the normal way. */
+  let _auto = false;
+  let _everyCode = DEFAULT_REFRESH_CHOICE;
+  /** Set by the panel's refresh button, cleared the moment it is honoured. */
+  let _refreshNow = false;
+
+  const tierIsActive = (tier) => _active.has(tier.id);
+  const activeTiers = () => tiers.filter(tierIsActive);
+  const refreshChoiceMs = () =>
+    REFRESH_CHOICES.find((choice) => choice.code === _everyCode)?.ms ??
+    FALLBACK_REFRESH_MS;
 
   // Shared by disable and destroy: an arrow-bound `this` would be undefined in
   // one of the two call paths.
@@ -89,21 +110,48 @@ export function createPrecipitationLayer({
       // Work out what is actually due. Anything whose frame is still held but
       // whose imagery went away with the globe is simply redrawn — no request,
       // and so nothing billed.
+      // Anything switched off since the last tick stops drawing immediately,
+      // and stops being polled with it.
+      for (const tierId of stack.ownedIds()) {
+        if (_active.has(tierId)) continue;
+        stack.remove(viewer, tierId);
+        frames.delete(tierId);
+        polledAt.delete(tierId);
+      }
+
+      const forced = _refreshNow;
+      _refreshNow = false;
+
       const due = [];
       let redrawn = 0;
-      for (const tier of tiers) {
-        // The server owns the cadence — it is tuned against a billable quota —
-        // so once a frame has been read, its value wins over the table's.
-        const cadence =
-          frames.get(tier.id)?.refreshMs ??
-          tier.refreshMs ??
-          FALLBACK_REFRESH_MS;
-        const stale = now - (polledAt.get(tier.id) ?? -Infinity) >= cadence;
+      for (const tier of activeTiers()) {
         const held = frames.get(tier.id);
-        if (stale || !held) {
+        // A layer just switched on has nothing to draw, so it fetches once
+        // whatever the refresh settings say — otherwise enabling a layer would
+        // appear to do nothing until the next interval.
+        if (!held) {
           due.push(tier);
           continue;
         }
+        if (forced) {
+          due.push(tier);
+          continue;
+        }
+        // With auto-refresh off, a held frame is never replaced on a timer.
+        // Spending happens when asked for, not on the clock.
+        if (_auto) {
+          const cadence = Math.max(
+            refreshChoiceMs(),
+            // The server also has an opinion, set against the same quota; take
+            // whichever is slower so the panel can never out-spend it.
+            frames.get(tier.id)?.refreshMs ?? 0,
+          );
+          if (now - (polledAt.get(tier.id) ?? -Infinity) >= cadence) {
+            due.push(tier);
+            continue;
+          }
+        }
+        // Held, not due — but the imagery may have gone with the globe.
         if (stack.has(tier.id)) continue;
         stack.apply(viewer, tier, held);
         redrawn += 1;
@@ -147,6 +195,8 @@ export function createPrecipitationLayer({
       }
 
       if (refreshed || redrawn) _lastUpdate = Date.now();
+      // Nothing active is a deliberate state, not a broken one.
+      if (!activeTiers().length) _lastError = null;
       // A missing key is latched separately, and only cleared by a read that
       // succeeds — otherwise the row would flicker between "add a key" and a
       // generic error as ticks failed for different reasons.
@@ -154,7 +204,7 @@ export function createPrecipitationLayer({
       else if (failure && isNoKeyError(failure)) _noKey = true;
       // An outage only reaches the row when nothing is drawn at all; what it
       // always shows is age, since lastUpdate stops advancing.
-      _lastError = stack.size ? null : failure?.message || _lastError;
+      else _lastError = stack.size ? null : failure?.message || _lastError;
       // A tick with nothing due is a healthy tick, not a failed refresh.
       return stack.size > 0 || due.length === 0;
     } catch (error) {
@@ -177,7 +227,7 @@ export function createPrecipitationLayer({
 
   const layer = {
     id: LAYER_ID,
-    name: 'Precipitation',
+    name: LAYER_NAME,
     icon: '🌧',
     source: 'Vaisala Xweather',
     // Tick at the floor, not the refresh cadence: the cadence is a server
@@ -237,6 +287,48 @@ export function createPrecipitationLayer({
       _noKey = false;
     },
 
+    /**
+     * Runtime parameters, driven by the Weather panel.
+     *
+     * The manager refuses `setLayerParams` outright for a module without this,
+     * so it is also what makes the selection shareable: the same values round
+     * trip through the layer-state registry.
+     */
+    setParams(params = {}) {
+      if (Array.isArray(params.layers) || typeof params.layers === 'string') {
+        const requested = Array.isArray(params.layers)
+          ? params.layers
+          : String(params.layers).split(/[\s,]+/);
+        const resolved = requested
+          .map((id) => tiers.find((tier) => tier.id === id)?.id)
+          .filter(Boolean);
+        // At most one continuous field: they are opaque edge to edge, so a
+        // second would simply hide the first while billing for both.
+        const fields = resolved.filter(
+          (id) => tiers.find((tier) => tier.id === id)?.group === FIELD,
+        );
+        const dropped = new Set(fields.slice(0, -1));
+        _active = new Set(resolved.filter((id) => !dropped.has(id)));
+      }
+      if (typeof params.auto === 'boolean') _auto = params.auto;
+      if (typeof params.every === 'string') {
+        if (REFRESH_CHOICES.some((choice) => choice.code === params.every))
+          _everyCode = params.every;
+      }
+      // Transient, and deliberately not part of the persisted option bag: a
+      // share link should never arrive asking to spend.
+      if (params.refreshNow === true) _refreshNow = true;
+      return true;
+    },
+
+    getParams() {
+      return {
+        layers: [...(_active || [])],
+        auto: _auto,
+        every: _everyCode,
+      };
+    },
+
     getStats() {
       // The globe is gone in photoreal, so the toggle must not read as healthy.
       if (_hidden)
@@ -256,21 +348,23 @@ export function createPrecipitationLayer({
           status: 'unavailable',
           error: 'ADD XWEATHER KEY',
         };
-      const primary =
-        tiers.find(
-          (entry) => entry.role === 'primary' && frames.has(entry.id),
-        ) ||
-        tiers.find((entry) => frames.has(entry.id)) ||
-        null;
-      const frame = primary ? frames.get(primary.id) : null;
-      if (!frame)
-        return { count: 0, lastUpdate: _lastUpdate, error: _lastError };
+      const drawn = stack.size;
+      if (!drawn)
+        return {
+          count: 0,
+          countLabel: _active.size ? null : 'NONE',
+          lastUpdate: _lastUpdate,
+          // Choosing to draw nothing is a state, not a fault.
+          error: _active.size ? _lastError : null,
+          status: _active.size ? undefined : 'idle',
+          statusMessage: _active.size ? undefined : 'no layers selected',
+        };
       return {
         count: 0,
-        // An imagery layer counts nothing, and an observation has no forecast
-        // lead to report, so the slot says what kind of field this is. It also
-        // keeps the meta line as short as every other layer's.
-        countLabel: OBSERVED_LABEL,
+        // An imagery layer counts nothing and an observation has no forecast
+        // lead, so the slot carries how much is switched on — which is also
+        // what governs the bill.
+        countLabel: `${drawn} ON`,
         lastUpdate: _lastUpdate,
         error: _lastError,
       };

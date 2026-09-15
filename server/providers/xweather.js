@@ -2,23 +2,26 @@ import path from 'node:path';
 import { promises as fsp } from 'node:fs';
 
 import {
-  DEFAULT_DAILY_TILE_BUDGET,
   DEFAULT_DISK_CACHE_BYTES,
+  DEFAULT_MONTHLY_TILE_BUDGET,
   isValidTileCoord as isValidXweatherTile,
   resolveRefreshMs,
 } from '../../src/data/xweatherTiles.js';
+import { isAllowedLayer } from '../../src/data/xweatherCatalogue.js';
 import {
-  utcDayKey as xweatherUtcDayKey,
+  utcMonthKey as xweatherUtcMonthKey,
   normalizeBudget as normalizeXweatherBudget,
   isOverBudget as isXweatherOverBudget,
 } from '../../src/data/tileBudget.js';
 
 /**
- * Vaisala Xweather `radar-global` raster-tile proxy with a daily budget governor.
+ * Vaisala Xweather raster-tile proxy with a monthly budget governor.
  *
- * Upstream: https://maps{1-4}.api.xweather.com/{id}_{secret}/radar-global/{z}/{x}/{y}/current.png
- * — global radar with satellite-derived fill where no ground radar reaches,
- * refreshed upstream every two minutes, 256x256 PNG in Spherical Mercator.
+ * Upstream: https://maps{1-4}.api.xweather.com/{id}_{secret}/{layer}/{z}/{x}/{y}/current.png
+ * — 256x256 PNG in Spherical Mercator. The layer arrives from the browser and
+ * is therefore checked against the catalogue allowlist before anything else:
+ * forwarded on trust, this would be an open proxy to every Xweather product on
+ * the account, including the ones billing at ten times the rate.
  *
  * This proxy is not optional the way the others are. Xweather puts BOTH the
  * client id and the client secret in the URL path, so the browser can never
@@ -33,13 +36,13 @@ import {
  * Cache hits never count against the budget.
  *
  * Budget governor: a persistent counter (.gev-cache/xweather/budget.json, keyed
- * by UTC date) counts upstream fetch attempts against a soft cap
- * (XWEATHER_DAILY_TILE_BUDGET, default 400/day ≈ 12,000/month against a 15,000
- * free monthly allowance). Over the cap the proxy serves stale tiles when
- * available, else 429 {error:'budget'}. `dailyCount` on /status is also how
- * real call volume gets measured before settling on a cadence.
+ * by UTC month) counts upstream fetch attempts against the account's only real
+ * quota — 15,000 accesses a month on the free tier, which is also the default
+ * cap, so the proxy stops where free ends rather than at an invented margin.
+ * Over the cap it serves stale tiles when available, else 429 {error:'budget'}.
+ * `monthCount` on /status is what the Weather panel displays.
  *
- * GET /api/xweather/status → {hasKey, dailyCount, budget, date, refreshMs}.
+ * GET /api/xweather/status → {hasKey, monthCount, budget, month, refreshMs}.
  * Keyless mode: status reports hasKey:false and the tile endpoint 503s
  * {error:'no_key'} without touching upstream. There is no keyless fallback for
  * this layer — the precipitation row reports unavailable and draws nothing.
@@ -101,12 +104,12 @@ export function xweatherProxy() {
     return Number.isFinite(raw) && raw > 0 ? raw : refreshMs();
   }
 
-  function dailyBudgetLimit() {
+  function monthlyBudgetLimit() {
     const raw = Number.parseInt(
-      process.env.XWEATHER_DAILY_TILE_BUDGET || '',
+      process.env.XWEATHER_MONTHLY_TILE_BUDGET || '',
       10,
     );
-    return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_DAILY_TILE_BUDGET;
+    return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_MONTHLY_TILE_BUDGET;
   }
 
   function diskCacheLimitBytes() {
@@ -146,9 +149,9 @@ export function xweatherProxy() {
     }
   }
 
-  /** Roll the counter to today (UTC) and return it. */
+  /** Roll the counter to this month (UTC) and return it. */
   function currentBudget() {
-    budget = normalizeXweatherBudget(budget, xweatherUtcDayKey());
+    budget = normalizeXweatherBudget(budget, xweatherUtcMonthKey());
     return budget;
   }
 
@@ -158,8 +161,14 @@ export function xweatherProxy() {
     void persistBudget();
   }
 
+  /**
+   * Cache file for one tile of one layer.
+   *
+   * The layer has to be part of the name: two layers share every z/x/y, and a
+   * key that ignored it would serve wind speed where radar was asked for.
+   */
   const tilePath = (key) =>
-    path.join(CACHE_DIR, `radar-${key.replaceAll('/', '-')}.png`);
+    path.join(CACHE_DIR, `${key.replaceAll('/', '-')}.png`);
 
   /** Disk-cache read; tile age comes from the file's mtime. */
   async function readDiskTile(key) {
@@ -185,8 +194,8 @@ export function xweatherProxy() {
   async function pruneDisk() {
     const limit = diskCacheLimitBytes();
     try {
-      const names = (await fsp.readdir(CACHE_DIR)).filter(
-        (name) => name.startsWith('radar-') && name.endsWith('.png'),
+      const names = (await fsp.readdir(CACHE_DIR)).filter((name) =>
+        name.endsWith('.png'),
       );
       const entries = [];
       let total = 0;
@@ -207,12 +216,13 @@ export function xweatherProxy() {
           await fsp.unlink(path.join(CACHE_DIR, entry.name));
           total -= entry.size;
           // Filenames flatten the key's slashes to dashes; undo that so the
-          // in-memory copy is dropped too rather than outliving the file.
-          mem.delete(
-            entry.name
-              .slice('radar-'.length, -'.png'.length)
-              .replaceAll('-', '/'),
-          );
+          // in-memory copy is dropped too rather than outliving the file. The
+          // layer name itself may contain dashes, so only the trailing three
+          // segments — z, x, y — are restored.
+          const stem = entry.name.slice(0, -'.png'.length);
+          const cut = stem.split('-');
+          const zxy = cut.splice(-3).join('/');
+          mem.delete(`${cut.join('-')}/${zxy}`);
         } catch {
           /* already gone */
         }
@@ -251,13 +261,13 @@ export function xweatherProxy() {
     mem.set(key, entry);
   }
 
-  async function fetchUpstream(z, x, y) {
+  async function fetchUpstream(layer, z, x, y) {
     const { id, secret } = credentials();
     // The vendor spreads load across maps1..maps4; pick one per request.
     const host = `maps${1 + Math.floor(Math.random() * 4)}.api.xweather.com`;
     const url =
       `https://${host}/${encodeURIComponent(id)}_${encodeURIComponent(secret)}` +
-      `/radar-global/${z}/${x}/${y}/current.png`;
+      `/${encodeURIComponent(layer)}/${z}/${x}/${y}/current.png`;
     recordUpstreamFetch(); // attempts count — upstream bills the request either way
     const res = await fetch(url, {
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
@@ -305,22 +315,32 @@ export function xweatherProxy() {
           const b = currentBudget();
           sendJson(200, {
             hasKey: hasCredentials(),
-            dailyCount: b.count,
-            budget: dailyBudgetLimit(),
-            date: b.date,
+            monthCount: b.count,
+            budget: monthlyBudgetLimit(),
+            month: b.date,
             refreshMs: refreshMs(),
           });
           return;
         }
 
-        const m = urlPath.match(/^\/radar\/(\d+)\/(\d+)\/(\d+)\.png$/);
+        const m = urlPath.match(
+          /^\/tile\/([a-z0-9-]{1,48})\/(\d+)\/(\d+)\/(\d+)\.png$/,
+        );
         if (!m) {
           sendJson(404, { error: 'not_found' });
           return;
         }
-        const z = Number(m[1]);
-        const x = Number(m[2]);
-        const y = Number(m[3]);
+        const layer = m[1];
+        const z = Number(m[2]);
+        const x = Number(m[3]);
+        const y = Number(m[4]);
+        // Allowlist and coordinates are both checked before the key is read, so
+        // a probe for a layer this app does not draw can never become a
+        // billable upstream fetch.
+        if (!isAllowedLayer(layer)) {
+          sendJson(400, { error: 'unknown_layer' });
+          return;
+        }
         if (!isValidXweatherTile(z, x, y)) {
           sendJson(400, { error: 'invalid_tile' });
           return;
@@ -330,7 +350,7 @@ export function xweatherProxy() {
           return;
         }
 
-        const key = `${z}/${x}/${y}`;
+        const key = `${layer}/${z}/${x}/${y}`;
         const now = Date.now();
 
         let entry = mem.get(key);
@@ -345,7 +365,7 @@ export function xweatherProxy() {
         }
 
         // Budget governor: over the soft cap, last-good data beats a dead layer.
-        if (isXweatherOverBudget(currentBudget(), dailyBudgetLimit())) {
+        if (isXweatherOverBudget(currentBudget(), monthlyBudgetLimit())) {
           if (entry) {
             sendTile(entry.buf, 'STALE-BUDGET');
           } else {
@@ -358,7 +378,7 @@ export function xweatherProxy() {
         if (!inflight.has(key)) {
           inflight.set(
             key,
-            fetchUpstream(z, x, y)
+            fetchUpstream(layer, z, x, y)
               .then(async (buf) => {
                 const fresh = { at: Date.now(), buf };
                 memSet(key, fresh);

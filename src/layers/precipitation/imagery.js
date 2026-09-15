@@ -43,22 +43,47 @@ export function tierLayerOptions(tier) {
  *
  * `MapSourceController` is the only other writer to `viewer.imageryLayers`: it
  * keeps the base map at index 0 and removes only its own handle on a stack
- * switch. This stack therefore appends and removes strictly what it added, so
+ * switch. This stack therefore inserts and removes strictly what it added, so
  * neither owner can evict the other's layers.
- *
- * It stays keyed by tier even though one tier is drawn today. What that buys is
- * not speculative generality but the co-tenancy rule above: ownership has to be
- * per-handle for the two writers to coexist safely.
  */
 export function createImageryStack() {
   const owned = new Map();
+  /** Rung per owned tier, so ordering survives without re-reading the table. */
+  const rungs = new Map();
 
   const detach = (viewer, tierId) => {
     const layer = owned.get(tierId);
     if (!layer) return false;
     owned.delete(tierId);
+    rungs.delete(tierId);
     viewer?.imageryLayers?.remove(layer, true);
     return true;
+  };
+
+  /**
+   * Where this tier belongs in the collection right now.
+   *
+   * Tiers refresh independently, so a slow one re-applying must not land on top
+   * of a faster one that happened to refresh more recently: Cesium's `add` puts
+   * a layer above everything when no index is given. Sit directly beneath the
+   * lowest-placed owned tier that outranks this one, and read the live
+   * collection rather than a remembered index so the position survives the map
+   * controller swapping the base map underneath us.
+   *
+   * With continuous fields at a low rung and sparse overlays above them, this
+   * is what stops an hourly temperature field from burying the lightning drawn
+   * over it until the next lightning tick.
+   */
+  const insertIndexFor = (viewer, tier) => {
+    const layers = viewer.imageryLayers;
+    let index = layers.length;
+    for (const [tierId, layer] of owned) {
+      if (tierId === tier.id) continue;
+      if ((rungs.get(tierId) ?? 0) <= tier.rung) continue;
+      const at = layers.indexOf(layer);
+      if (at >= 0 && at < index) index = at;
+    }
+    return index;
   };
 
   return {
@@ -69,11 +94,12 @@ export function createImageryStack() {
       );
       const next = new Cesium.ImageryLayer(provider, tierLayerOptions(tier));
       // Add before removing so the live layer never blinks through to the base
-      // map. Appending also keeps the base map at index 0 where its owner
-      // expects it.
-      viewer.imageryLayers.add(next);
+      // map. Inserting at the tier's rung — rather than appending — keeps the
+      // base map at index 0 and the paint order independent of refresh order.
+      viewer.imageryLayers.add(next, insertIndexFor(viewer, tier));
       detach(viewer, tier.id);
       owned.set(tier.id, next);
+      rungs.set(tier.id, tier.rung);
       return next;
     },
     remove: detach,

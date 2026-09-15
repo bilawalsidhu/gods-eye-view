@@ -23,6 +23,20 @@ export function utcDayKey(epochMs = Date.now()) {
 }
 
 /**
+ * UTC calendar-month key, for a provider whose quota is monthly.
+ *
+ * `normalizeBudget` and `isOverBudget` take the period key as an argument and
+ * do not care what period it names, so a provider picks its own bucket by
+ * choosing which of these it calls.
+ *
+ * @param {number} [epochMs=Date.now()] - Timestamp in ms.
+ * @returns {string} 'YYYY-MM' in UTC.
+ */
+export function utcMonthKey(epochMs = Date.now()) {
+  return new Date(epochMs).toISOString().slice(0, 7);
+}
+
+/**
  * Normalize a persisted budget state against today's UTC day key.
  * Rolls the counter to zero on day change; replaces missing/corrupt state.
  * Returns the SAME object when it is already valid for `dayKey` (cheap to

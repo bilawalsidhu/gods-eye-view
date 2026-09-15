@@ -7,6 +7,10 @@ import {
   MAX_TILE_ZOOM,
 } from 'gods-eye-view/sources/xweather';
 
+/** A layer the catalogue allows; the proxy refuses anything outside it. */
+const LAYER = 'radar-global';
+const tileUrl = (z, x, y, layer = LAYER) => `/tile/${layer}/${z}/${x}/${y}.png`;
+
 /**
  * Mount the plugin and drive its single route directly — the harness shape
  * used by every other provider test (see environmentProviders.test.mjs).
@@ -102,7 +106,7 @@ test('keyless: status is healthy, tiles 503, and upstream is never touched', asy
   assert.equal(json(status).hasKey, false);
   assert.equal(typeof json(status).refreshMs, 'number');
 
-  const tile = await request('/radar/4/8/5.png');
+  const tile = await request(tileUrl(4, 8, 5));
   assert.equal(tile.status, 503);
   assert.equal(json(tile).error, 'no_key');
   assert.equal(calls, 0, 'a keyless request must never reach upstream');
@@ -118,7 +122,7 @@ test('both halves of the credential are required', async (t) => {
   });
   const request = install(xweatherProxy());
   assert.equal(json(await request('/status')).hasKey, false);
-  assert.equal((await request('/radar/4/8/5.png')).status, 503);
+  assert.equal((await request(tileUrl(4, 8, 5))).status, 503);
 });
 
 test('coordinates are validated before the key is ever read', async (t) => {
@@ -126,7 +130,7 @@ test('coordinates are validated before the key is ever read', async (t) => {
   const request = install(xweatherProxy());
   // A bad coordinate is a client error, not a missing-key error — checking it
   // first also means a malformed request can never become a billable fetch.
-  for (const url of ['/radar/12/1/1.png', '/radar/4/99/1.png']) {
+  for (const url of [tileUrl(12, 1, 1), tileUrl(4, 99, 1)]) {
     const res = await request(url);
     assert.equal(res.status, 400, url);
     assert.equal(json(res).error, 'invalid_tile');
@@ -135,18 +139,73 @@ test('coordinates are validated before the key is ever read', async (t) => {
   // having anything new to say and starts charging for blur, so the boundary
   // is a cost decision, not an arbitrary bound. A valid coordinate falls
   // through to the key check (503 here) rather than being rejected.
-  assert.equal((await request(`/radar/${MAX_TILE_ZOOM}/1/1.png`)).status, 503);
-  assert.equal(
-    (await request(`/radar/${MAX_TILE_ZOOM + 1}/1/1.png`)).status,
-    400,
-  );
+  assert.equal((await request(tileUrl(MAX_TILE_ZOOM, 1, 1))).status, 503);
+  assert.equal((await request(tileUrl(MAX_TILE_ZOOM + 1, 1, 1))).status, 400);
   assert.equal((await request('/nope')).status, 404);
 });
 
-test('keyed: miss, hit, budget accounting, and the daily rollover', async (t) => {
+test('only catalogued layers are proxied at all', async (t) => {
+  // The browser supplies the layer name, so this is a security boundary rather
+  // than a convenience: forwarded on trust, the proxy would reach every
+  // Xweather product on the account — including the lightning variants that
+  // bill at ten times the rate and are deliberately excluded.
+  isolate(t, KEYED);
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls += 1;
+    return pngResponse();
+  });
+  const request = install(xweatherProxy());
+
+  for (const layer of [
+    'lightning-strikes', // real, allowed by the vendor, 10x — not by us
+    'air-quality-pm2p5', // real, 5x
+    'satellite-geocolor', // real, but a base map rather than an overlay
+    'not-a-layer',
+  ]) {
+    const res = await request(tileUrl(4, 8, 5, layer));
+    assert.equal(res.status, 400, layer);
+    assert.equal(json(res).error, 'unknown_layer', layer);
+  }
+  assert.equal(calls, 0, 'a rejected layer must never reach upstream');
+
+  // A catalogued layer still goes through.
+  assert.equal(
+    (await request(tileUrl(4, 8, 5, 'lightning-flash'))).status,
+    200,
+  );
+  assert.equal(calls, 1);
+});
+
+test('two layers at the same tile do not share a cache slot', async (t) => {
+  // Cache and budget key on the layer as well as z/x/y; keyed on coordinates
+  // alone, the second layer would be served the first one's pixels.
+  isolate(t, KEYED);
+  const asked = [];
+  t.mock.method(globalThis, 'fetch', async (raw) => {
+    asked.push(String(raw).match(/\/([a-z0-9-]+)\/4\/8\/5\//)?.[1]);
+    return pngResponse();
+  });
+  const request = install(xweatherProxy());
+  assert.equal(
+    (await request(tileUrl(4, 8, 5, 'radar-global'))).headers[
+      'x-xweather-cache'
+    ],
+    'MISS',
+  );
+  assert.equal(
+    (await request(tileUrl(4, 8, 5, 'lightning-flash'))).headers[
+      'x-xweather-cache'
+    ],
+    'MISS',
+  );
+  assert.deepEqual(asked, ['radar-global', 'lightning-flash']);
+});
+
+test('keyed: miss, hit, budget accounting, and the monthly rollover', async (t) => {
   isolate(t, {
     ...KEYED,
-    XWEATHER_DAILY_TILE_BUDGET: '1',
+    XWEATHER_MONTHLY_TILE_BUDGET: '1',
     XWEATHER_TILE_TTL_MS: String(60 * 60 * 1000),
   });
   let now = Date.UTC(2026, 8, 15, 12, 0, 0);
@@ -159,13 +218,13 @@ test('keyed: miss, hit, budget accounting, and the daily rollover', async (t) =>
       url.includes('fixture-id_fixture-secret'),
       'both halves must reach upstream, joined by an underscore',
     );
-    assert.ok(url.includes('/radar-global/'), 'the observed global layer');
+    assert.ok(url.includes(`/${LAYER}/`), 'the requested layer goes upstream');
     assert.ok(url.endsWith('/current.png'));
     return pngResponse();
   });
   const request = install(xweatherProxy());
 
-  const miss = await request('/radar/4/8/5.png');
+  const miss = await request(tileUrl(4, 8, 5));
   assert.equal(miss.status, 200);
   assert.equal(miss.headers['Content-Type'], 'image/png');
   assert.equal(miss.headers['x-xweather-cache'], 'MISS');
@@ -173,29 +232,30 @@ test('keyed: miss, hit, budget accounting, and the daily rollover', async (t) =>
 
   // A fresh cache hit must not bill a second access.
   assert.equal(
-    (await request('/radar/4/8/5.png')).headers['x-xweather-cache'],
+    (await request(tileUrl(4, 8, 5))).headers['x-xweather-cache'],
     'HIT',
   );
   assert.equal(calls, 1);
-  assert.equal(json(await request('/status')).dailyCount, 1);
+  assert.equal(json(await request('/status')).monthCount, 1);
 
   // Past the TTL and over the one-fetch cap: last-good data beats a dead layer.
   now += 2 * 60 * 60 * 1000;
   assert.equal(
-    (await request('/radar/4/8/5.png')).headers['x-xweather-cache'],
+    (await request(tileUrl(4, 8, 5))).headers['x-xweather-cache'],
     'STALE-BUDGET',
   );
   // A tile with nothing cached has no stale copy to fall back to.
-  const starved = await request('/radar/4/9/5.png');
+  const starved = await request(tileUrl(4, 9, 5));
   assert.equal(starved.status, 429);
   assert.equal(json(starved).error, 'budget');
   assert.equal(calls, 1, 'nothing more reached upstream while over budget');
 
-  // A new UTC day resets the counter.
-  now += 24 * 60 * 60 * 1000;
-  assert.equal(json(await request('/status')).dailyCount, 0);
+  // A new UTC month resets the counter. The account has exactly one quota —
+  // 15,000 a month — so the month is the only period that means anything.
+  now += 32 * 24 * 60 * 60 * 1000;
+  assert.equal(json(await request('/status')).monthCount, 0);
   assert.equal(
-    (await request('/radar/4/9/5.png')).headers['x-xweather-cache'],
+    (await request(tileUrl(4, 9, 5))).headers['x-xweather-cache'],
     'MISS',
   );
   assert.equal(calls, 2);
@@ -214,7 +274,7 @@ test('an upstream error body is never cached as a tile', async (t) => {
       }),
   );
   const request = install(xweatherProxy());
-  const res = await request('/radar/4/8/5.png');
+  const res = await request(tileUrl(4, 8, 5));
   assert.equal(res.status, 502);
   assert.equal(json(res).error, 'upstream');
 });
@@ -234,7 +294,7 @@ test('a credential never reaches the client or the log, even via upstream text',
   });
   const request = install(xweatherProxy());
 
-  for (const url of ['/status', '/radar/4/8/5.png']) {
+  for (const url of ['/status', tileUrl(4, 8, 5)]) {
     const res = await request(url);
     const seen = JSON.stringify([res.body, res.headers]);
     assert.ok(!seen.includes('fixture-secret'), `${url} leaked the secret`);

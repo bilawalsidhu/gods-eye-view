@@ -3,85 +3,121 @@ import {
   MAX_TILE_ZOOM,
   MIN_REFRESH_MS,
 } from '../../data/xweatherTiles.js';
-
-/** Registered layer id; also its share-link identity. */
-export const LAYER_ID = 'precipitation';
+import {
+  FIELD,
+  OVERLAY,
+  XWEATHER_LAYERS,
+  defaultLayerCodes,
+  layerByCode,
+} from '../../data/xweatherCatalogue.js';
 
 /**
- * Same-origin tile route. The credentials never appear here — the vendor puts
- * both halves in the upstream URL path, so `/api/xweather` builds that server
- * side and this template is all the browser ever sees.
+ * Registered layer id, and its share-link identity.
+ *
+ * Still `precipitation` although the layer now draws temperature, wind,
+ * lightning and a dozen other things. The id is load-bearing well outside this
+ * directory — the layer-state registry keys its share token to it, the manager
+ * throws at boot if the registered set and the registry disagree, the voice
+ * action map routes to it, and two tests pin a hash of the Realtime tool
+ * schema that contains it. The *display* name is what changed.
  */
-export const TILE_URL_TEMPLATE = '/api/xweather/radar/{z}/{x}/{y}.png';
+export const LAYER_ID = 'precipitation';
+
+/** What the row calls itself now that it is more than rain. */
+export const LAYER_NAME = 'Weather';
+
+/**
+ * Same-origin tile route. Credentials never appear here — the vendor puts both
+ * halves in the upstream URL path, so `/api/xweather` builds that server-side
+ * and this template is all the browser ever sees.
+ */
+export const tileUrlTemplate = (layer) =>
+  `/api/xweather/tile/${layer}/{z}/{x}/{y}.png`;
 
 /** Where the layer asks whether a key is configured, and how often to refresh. */
 export const STATUS_URL = '/api/xweather/status';
 
-/**
- * Provider branch a tier dispatches to.
- *
- * Only `xyz` now. The WMS branch went with the free model and radar services
- * it existed for; if a WMS source ever returns, the branch returns with it
- * rather than sitting here unused.
- */
+/** Provider branch a tier dispatches to. Everything here is XYZ tiles. */
 export const TIER_KINDS = Object.freeze(['xyz']);
 
 /**
  * How a tier learns which frame to draw. `live` means the service always
- * serves its current composite and publishes no time to pin, so the row says
- * LIVE rather than inventing a stamp.
+ * serves its current composite and publishes no time to pin.
  */
 export const FRAME_MODES = Object.freeze(['live']);
 
-/** The count slot: an imagery layer counts nothing, and this is an observation. */
-export const OBSERVED_LABEL = 'LIVE';
-
 /**
  * Manager tick. Deliberately the floor rather than the refresh cadence: the
- * real cadence comes from the server so it can be retuned without a rebuild,
- * and the per-tier gating below decides whether a tick does any work. A tick
- * with nothing due is a clock comparison.
+ * manager arms one timer at enable and has no re-arm path, so a fast fixed
+ * tick plus the gate in `index.js` is the only way to get a cadence that can
+ * change at runtime. A tick with nothing due is a clock comparison.
  */
 export const LAYER_TICK_MS = MIN_REFRESH_MS;
 
 /** Used until `/status` answers with the configured cadence. */
 export const FALLBACK_REFRESH_MS = DEFAULT_REFRESH_MS;
 
-/**
- * One observed source, drawn at every zoom.
- *
- * What was here before was four placements of two forecast models and a
- * regional radar, tiled across the globe by hand-derived rectangle covers so
- * that exactly one of them painted any point. All of that existed to make free
- * sources cover the planet between them, and none of it fixed the thing that
- * actually made the layer wrong: a twice-daily global model is a +3h to +15h
- * forecast, and a forecast half a day old does not agree with live radar about
- * where the rain is.
- *
- * Xweather's `radar-global` is a single observation — ground radar with
- * satellite-derived fill where no radar reaches — so the covers, the cutouts,
- * the partition rule and the capabilities parsing all go with it. The seam
- * that remains is the vendor's: radar and satellite fill do not look alike,
- * and the join shows where a network ends.
- */
-export const PRECIPITATION_TIERS = Object.freeze([
-  Object.freeze({
-    id: 'xweather-radar',
-    role: 'primary',
-    // Paint order, kept because the imagery stack still orders by it and the
-    // map controller's base map must stay underneath.
-    rung: 1,
-    kind: 'xyz',
-    label: 'Vaisala Xweather',
-    frameMode: 'live',
-    capsKey: STATUS_URL,
-    tileUrlTemplate: TILE_URL_TEMPLATE,
-    // An observation, never a forecast. Nothing on the row may imply otherwise.
-    forecast: false,
-    // Heavy enough to read as the subject, light enough to keep the terrain
-    // legible underneath — the value the radar inlay used before this.
-    alpha: 0.68,
-    refreshMs: DEFAULT_REFRESH_MS,
-    maxTileLevel: MAX_TILE_ZOOM,
-  }),
+/** Auto-refresh intervals the panel offers, and the share-link code for each. */
+export const REFRESH_CHOICES = Object.freeze([
+  Object.freeze({ code: 'q', label: '15 min', ms: 15 * 60 * 1000 }),
+  Object.freeze({ code: 'h', label: '1 hour', ms: 60 * 60 * 1000 }),
+  Object.freeze({ code: 's', label: '6 hours', ms: 6 * 60 * 60 * 1000 }),
+  Object.freeze({ code: 'd', label: '24 hours', ms: 24 * 60 * 60 * 1000 }),
 ]);
+
+/** The interval a fresh install auto-refreshes at, if it ever switches it on. */
+export const DEFAULT_REFRESH_CHOICE = 'd';
+
+/**
+ * Every drawable tier, derived from the shared catalogue.
+ *
+ * One tier per Xweather layer, all of them dormant until the Weather panel
+ * says otherwise: `index.js` polls and draws only the active set, so a tier
+ * sitting here costs nothing. That is the whole economy of the feature —
+ * offering a layer is free, enabling one is what spends the quota, because
+ * every enabled layer multiplies every camera move.
+ *
+ * Fields sit at a lower rung than overlays so a temperature field can never
+ * bury the lightning drawn over it.
+ */
+export const PRECIPITATION_TIERS = Object.freeze(
+  XWEATHER_LAYERS.map((entry) =>
+    Object.freeze({
+      id: entry.layer,
+      code: entry.code,
+      group: entry.group,
+      role: entry.defaultOn ? 'primary' : 'secondary',
+      rung: entry.rung,
+      kind: 'xyz',
+      label: entry.label,
+      detail: entry.detail,
+      cadence: entry.cadence,
+      coverage: entry.coverage,
+      usOnly: entry.usOnly,
+      frameMode: 'live',
+      // Every tier reads the same status endpoint, so one read serves them all.
+      capsKey: STATUS_URL,
+      tileUrlTemplate: tileUrlTemplate(entry.layer),
+      forecast: entry.forecast,
+      alpha: entry.alpha,
+      refreshMs: DEFAULT_REFRESH_MS,
+      maxTileLevel: MAX_TILE_ZOOM,
+    }),
+  ),
+);
+
+/** Tier lookup by the id the imagery stack keys on. */
+const TIERS_BY_ID = new Map(PRECIPITATION_TIERS.map((tier) => [tier.id, tier]));
+
+export function tierById(id) {
+  return TIERS_BY_ID.get(String(id ?? '')) || null;
+}
+
+/** The tiers drawn before anyone opens the panel: radar, as it has always been. */
+export function defaultActiveIds() {
+  return defaultLayerCodes()
+    .map((code) => layerByCode(code)?.layer)
+    .filter(Boolean);
+}
+
+export { FIELD, OVERLAY };

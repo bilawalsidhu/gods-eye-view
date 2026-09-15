@@ -567,5 +567,6 @@
   "src/data/tileBudget.js",
   "src/data/xweatherTiles.js",
   "server/providers/xweather.js",
-  "src/tooling/xweatherProvider.test.mjs"
+  "src/tooling/xweatherProvider.test.mjs",
+  "src/data/xweatherCatalogue.js"
 ]

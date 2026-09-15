@@ -124,6 +124,7 @@
     "modules": [
       "server/providers/xweather.js",
       "src/data/tileBudget.js",
+      "src/data/xweatherCatalogue.js",
       "src/data/xweatherTiles.js"
     ],
     "external": []
@@ -724,6 +725,7 @@
   "precipitation-layer": {
     "exports": ["./layers/precipitation"],
     "modules": [
+      "src/data/xweatherCatalogue.js",
       "src/data/xweatherTiles.js",
       "src/layers/precipitation/imagery.js",
       "src/layers/precipitation/index.js",
@@ -1204,6 +1206,7 @@
       "src/data/trafficQueue.js",
       "src/data/trailRenderer.js",
       "src/data/vesselLabels.js",
+      "src/data/xweatherCatalogue.js",
       "src/data/xweatherTiles.js",
       "src/firstRunExperience.js",
       "src/hud.js",

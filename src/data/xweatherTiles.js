@@ -48,12 +48,18 @@ export const DEFAULT_REFRESH_MS = 24 * 60 * 60 * 1000;
 export const MIN_REFRESH_MS = 60 * 1000;
 
 /**
- * @const {number} Default upstream fetches allowed per UTC day.
+ * @const {number} Default upstream fetches allowed per UTC month.
  *
- * The free allowance is 15,000 accesses a month; 400/day is ~12,000 across a
- * 30-day month, leaving headroom. A soft cap, not a billing guarantee.
+ * This is the free allowance itself, so the proxy stops exactly where free
+ * ends and billing begins rather than at some invented margin. The account's
+ * only real quota is monthly; there is deliberately no daily sub-limit, and
+ * nothing daily is reported to the app.
+ *
+ * Over the cap the proxy serves whatever it already holds rather than going
+ * dark — a stale tile beats a blank globe, and the next month rolls the
+ * counter on its own.
  */
-export const DEFAULT_DAILY_TILE_BUDGET = 400;
+export const DEFAULT_MONTHLY_TILE_BUDGET = 15000;
 
 /** @const {number} Default ceiling on the on-disk tile cache. */
 export const DEFAULT_DISK_CACHE_BYTES = 64 * 1024 * 1024;
