@@ -202,6 +202,13 @@ export const DATA_CREDITS = [
       '<a href="https://terrain.reearth.land" target="_blank" rel="noopener">Re:Earth Terrain</a> / ' +
       'Mapterhorn (CC BY 4.0) / EGM2008 (NGA)',
   },
+  {
+    key: 'glm',
+    html:
+      'Lightning: NOAA GOES-R Series Geostationary Lightning Mapper (GLM) via ' +
+      '<a href="https://www.goes-r.gov/products/baseline-lightning-detection.html" target="_blank" rel="noopener">GOES-R</a> ' +
+      'NOAA Open Data (U.S. public domain)',
+  },
   // ── Bundled snapshots ───────────────────────────────────────────
   {
     key: 'datacenters',

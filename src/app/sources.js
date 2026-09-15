@@ -10,6 +10,7 @@ import { configureInstallationSource } from '../data/militaryInstallations.js';
 import { configureSatelliteSource } from '../data/satellites.js';
 import { configureLaunchSource } from '../data/rocketLaunches.js';
 import { configureFirmsSource } from '../data/firmsHeatmap.js';
+import { configureGlmSource } from '../data/glmLightning.js';
 import { configureMilitaryRegistrySource } from '../data/militaryRegistry.js';
 const configure = {
   alpr: configureAlprSource,
@@ -21,6 +22,7 @@ const configure = {
   satellites: configureSatelliteSource,
   launches: configureLaunchSource,
   firms: configureFirmsSource,
+  glm: configureGlmSource,
 };
 /** Configure sources before any registration or state restoration starts. */
 export function configureApplicationSources({

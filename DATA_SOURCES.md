@@ -15,6 +15,7 @@ How to read this:
 
 | Source                                                                | Used for                                                                                                                            | License / terms                                                                                                                                                                                                                                                                                                                                       | Attribution                                                                                                                                 |
 | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| **NOAA GLM (Geostationary Lightning Mapper)** | Lightning flash observations (GOES-19 East, GOES-18 West) | U.S. public domain (NOAA); keyless via NOAA Open Data on AWS | "NOAA/NESDIS GOES-R Series GLM" (courtesy; not an endorsement) |
 | **OpenStreetMap ALPR camera locations** (including DeFlock community mapping) | Optional mapped automatic license-plate-reader camera layer | [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/); commercial use permitted with applicable attribution and database share-alike obligations | [© OpenStreetMap contributors](https://www.openstreetmap.org/copyright); [DeFlock](https://deflock.org) community mapping |
 | **Google Map Tiles API** (Photorealistic 3D Tiles) + Places/Geocoding | The 3D globe, voice scene context, and on-demand nearby installation search                                                         | Google Maps Platform ToS (proprietary, your own key + billing)                                                                                                                                                                                                                                                                                        | "Google" / "Google Maps" logo — **shown in-app**, required                                                                                  |
 | **OpenSky Network**                                                   | Primary worldwide live-flight snapshot                                                                                              | Non-commercial research/education license                                                                                                                                                                                                                                                                                                             | Schäfer et al., _"Bringing Up OpenSky"_, IPSN 2014 + opensky-network.org                                                                    |
@@ -148,6 +149,21 @@ Suomi-NPP) clamped to the trailing 24 h, cached 30 min to respect the shared MAP
 transaction quota. Requires a free `FIRMS_MAP_KEY`
 (https://firms.modaps.eosdis.nasa.gov/api/map_key/); the layer is empty without it.
 The former bundled 2026-05-25 snapshot was removed 2026-07-16.
+
+### NOAA GLM lightning
+
+The optional **GLM Lightning** layer shows recent lightning **flash observations**
+from NOAA's Geostationary Lightning Mapper on GOES-19 (East) and GOES-18 (West).
+The `/api/glm` server-side proxy lists and downloads keyless `GLM-L2-LCFA`
+NetCDF-4 granules from the public NOAA Open Data S3 buckets (`noaa-goes19`,
+`noaa-goes18`), decodes flashes with `h5wasm` in a bounded rolling two-minute
+window, deduplicates by granule/flash id, and returns compact JSON (capped at
+20,000 flashes, newest first). NOAA GOES data is U.S. public domain; the credit
+above is a courtesy and does not imply endorsement. These are optical flash
+detections from a geostationary view, **not ground-truth cloud-to-ground strike
+records**; overlapping East/West views can observe the same physical flash, and
+counts are not globally deduplicated. Requires `h5wasm` (devDependency) on the
+local dev/preview server.
 
 ### Natural Earth physical regions (`natural_earth/`)
 

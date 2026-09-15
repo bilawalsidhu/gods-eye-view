@@ -215,6 +215,11 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ### Added
 
+- Add a keyless **GLM Lightning** layer from NOAA GOES-R (GOES-19 East, GOES-18
+  West). The `/api/glm` proxy reads `GLM-L2-LCFA` NetCDF-4 granules from the
+  public NOAA Open Data S3 buckets, decodes flashes with `h5wasm`, and keeps a
+  bounded two-minute rolling window (capped at 20,000 newest flashes). These are
+  optical flash observations, not ground-truth strike records.
 - Two map-orientation controls sit beside Share in the top-center globe
   actions. Tilt Map swings between a straight-down map and a 35-degree oblique
   around the point under the centre of the view, keeping that point and the
@@ -248,7 +253,6 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   Subways are projected to street level and their cards explain that choice.
   Visible animation, detection membership, history storage and proxy requests
   are bounded. Share links carry Transit as token `j`.
-
 - Add Ontario 511 as a keyless CCTV source pack, including Kitchener-area
   highway cameras, with server-registered still URLs and attribution.
 - CCTV Mesh adds Finland: Fintraffic road weather cameras, keyless, nationwide, 300 by default. Each camera view of a station is placed separately; ambient stills refresh on the source's 10-minute cadence (the active camera keeps the usual 10-second refresh).
