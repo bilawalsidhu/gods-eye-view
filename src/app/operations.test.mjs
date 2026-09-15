@@ -163,3 +163,22 @@ test('annotation lookup and cached outlines use the supplied source independentl
     { name: 'AbortError' },
   );
 });
+
+test('invalid feature adapters fail before surface listeners are installed', () => {
+  let installed = 0;
+  assert.throws(
+    () =>
+      createApplicationOperations({
+        signal: new AbortController().signal,
+        requests: { ...requests({ getHeights: async () => [] }), features: {} },
+        eventTarget: {
+          addEventListener() {
+            installed++;
+          },
+          removeEventListener() {},
+        },
+      }),
+    /Missing feature operation/,
+  );
+  assert.equal(installed, 0);
+});

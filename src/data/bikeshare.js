@@ -1,5 +1,5 @@
 import { createApplicationBikeshare } from '../app/layers/bikeshare.js';
-import { createSourceSlot } from '../app/sourceSlot.js';
+import { createSourceSlot } from '../sources/sourceSlot.js';
 import { createBikeshareSource } from '../layers/bikeshare/source.js';
 
 const sourceSlot = createSourceSlot(

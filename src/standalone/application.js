@@ -1,5 +1,6 @@
 import { createStandaloneCatalog } from './catalog.js';
 import { createStandalonePlaceSearch } from './placeSearch.js';
+import { CITY_POIS } from '../locations.js';
 import { createApplication } from '../app/application.js';
 import { createStandaloneScene } from './scene.js';
 import { createStandaloneControls } from './controls.js';
@@ -27,6 +28,10 @@ export function createStandaloneApplication({
   return createApplication({
     createScene: async (context) => {
       placeSearch = createStandalonePlaceSearch({
+        // The bundled city and landmark data the offline name provider reads.
+        // The search package takes it as plain data rather than importing it,
+        // so it stays free of application state.
+        presets: CITY_POIS,
         ...geospatial,
         resolveApiKey: () => googleApiKey,
         signal: context.signal,
@@ -38,6 +43,12 @@ export function createStandaloneApplication({
         loaderStatus,
       });
       catalog = createStandaloneCatalog({
+        nepalBoundaryResolver: (signal) =>
+          scene.operations.annotationResolver.resolveRegionRingForQuery(
+            'Nepal',
+            signal,
+            placeSearch,
+          ),
         signal: context.signal,
         surface: scene.operations.surface,
       });

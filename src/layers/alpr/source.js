@@ -4,7 +4,7 @@ import {
   QUERY_SNAP_DEGREES,
   QUERY_LIMIT,
 } from './policy.js';
-import { buildOverpassQuery, normalizeAlprNode } from './model.js';
+import { buildOverpassQuery, normalizeAlprNode } from './records.js';
 /** Construct the bounded OSM request adapter without starting a request. */
 export function createOverpassAlprSource({
   fetchImpl = (...args) => globalThis.fetch(...args),
@@ -80,3 +80,5 @@ export function createOverpassAlprSource({
     },
   };
 }
+
+export { buildOverpassQuery } from './records.js';

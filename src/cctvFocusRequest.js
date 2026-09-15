@@ -22,9 +22,11 @@ export function activateCctvCameraFromWorldClick(
 ) {
   if (!cameraId || typeof activate !== 'function') return false;
   if (activate(cameraId) !== CCTV_ACTIVATION_RESULT.ACTIVATED) return false;
-  eventTarget.dispatchEvent(new CustomEvent(CCTV_FOCUS_REQUEST_EVENT, {
-    detail: { cameraId },
-  }));
+  eventTarget.dispatchEvent(
+    new CustomEvent(CCTV_FOCUS_REQUEST_EVENT, {
+      detail: { cameraId },
+    }),
+  );
   return true;
 }
 
@@ -36,8 +38,12 @@ export function activateCctvCameraFromWorldClick(
  * @returns {() => void} Listener disposer.
  */
 export function registerCctvFocusRequestListener(eventTarget, listener) {
-  if (!eventTarget?.addEventListener || !eventTarget?.removeEventListener
-    || typeof listener !== 'function') return () => {};
+  if (
+    !eventTarget?.addEventListener ||
+    !eventTarget?.removeEventListener ||
+    typeof listener !== 'function'
+  )
+    return () => {};
   eventTarget.addEventListener(CCTV_FOCUS_REQUEST_EVENT, listener);
   let disposed = false;
   return () => {
@@ -57,11 +63,16 @@ export function registerCctvFocusRequestListener(eventTarget, listener) {
  */
 export function routeCctvFocusRequest(event, runExplicitFocus, focusCamera) {
   const cameraId = event?.detail?.cameraId;
-  if (typeof cameraId !== 'string' || !cameraId || typeof runExplicitFocus !== 'function') {
+  if (
+    typeof cameraId !== 'string' ||
+    !cameraId ||
+    typeof runExplicitFocus !== 'function'
+  ) {
     return false;
   }
   return runExplicitFocus(
     () => cameraId,
-    (selectedId) => focusCamera(selectedId, CCTV_WORLD_CLICK_FOCUS_DURATION_SEC),
+    (selectedId) =>
+      focusCamera(selectedId, CCTV_WORLD_CLICK_FOCUS_DURATION_SEC),
   );
 }

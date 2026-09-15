@@ -69,7 +69,13 @@ export const SATELLITE_CLASSES = Object.freeze({
 });
 
 /** Legend/report order for the classes above. */
-export const SATELLITE_CLASS_ORDER = Object.freeze(['station', 'nav', 'geo', 'visual', 'comms']);
+export const SATELLITE_CLASS_ORDER = Object.freeze([
+  'station',
+  'nav',
+  'geo',
+  'visual',
+  'comms',
+]);
 
 /**
  * CelesTrak group tag → { class, subtype }. Subtype names the specific
@@ -150,8 +156,11 @@ export function satelliteClassLabel(group, { isIss = false } = {}) {
 export function tallySatelliteClasses(entries) {
   const counts = Object.create(null);
   for (const entry of entries || []) {
-    const descriptor = entry && typeof entry === 'object' ? entry : { group: entry };
-    const { klass } = satelliteClassOf(descriptor.group, { isIss: descriptor.isIss });
+    const descriptor =
+      entry && typeof entry === 'object' ? entry : { group: entry };
+    const { klass } = satelliteClassOf(descriptor.group, {
+      isIss: descriptor.isIss,
+    });
     counts[klass] = (counts[klass] || 0) + 1;
   }
   return counts;
@@ -171,7 +180,13 @@ export function satelliteClassLegend(counts) {
     const count = counts?.[klass];
     if (!(count > 0)) continue;
     const spec = SATELLITE_CLASSES[klass];
-    result.push({ klass, label: spec.label, color: spec.color, blurb: spec.blurb, count });
+    result.push({
+      klass,
+      label: spec.label,
+      color: spec.color,
+      blurb: spec.blurb,
+      count,
+    });
   }
   return result;
 }

@@ -28,11 +28,39 @@ import { pointInRing } from './naturalEarthRegions.js';
 
 /** Layers the engine understands, with the fields queries may reference. */
 export const ANALYST_LAYERS = {
-  flights: { numeric: ['altitudeM', 'speedMps', 'verticalRateMps'], text: ['callsign', 'icao24', 'originCountry', 'operator', 'routeOrigin', 'routeDestination', 'aircraftClass'], flags: ['military', 'onGround'] },
-  military: { numeric: ['altitudeM', 'speedMps', 'verticalRateMps'], text: ['callsign', 'icao24', 'originCountry', 'operator', 'aircraftClass'], flags: ['military', 'onGround'] },
-  'ais-live-vessels': { numeric: ['speedKts', 'courseDeg'], text: ['name', 'mmsi', 'shipType', 'destination', 'navStatus'], flags: [] },
-  'local-firms': { numeric: ['frp'], text: ['confidence', 'satellite'], flags: [] },
-  earthquakes: { numeric: ['magnitude', 'depthKm'], text: ['place'], flags: [] },
+  flights: {
+    numeric: ['altitudeM', 'speedMps', 'verticalRateMps'],
+    text: [
+      'callsign',
+      'icao24',
+      'originCountry',
+      'operator',
+      'routeOrigin',
+      'routeDestination',
+      'aircraftClass',
+    ],
+    flags: ['military', 'onGround'],
+  },
+  military: {
+    numeric: ['altitudeM', 'speedMps', 'verticalRateMps'],
+    text: ['callsign', 'icao24', 'originCountry', 'operator', 'aircraftClass'],
+    flags: ['military', 'onGround'],
+  },
+  'ais-live-vessels': {
+    numeric: ['speedKts', 'courseDeg'],
+    text: ['name', 'mmsi', 'shipType', 'destination', 'navStatus'],
+    flags: [],
+  },
+  'local-firms': {
+    numeric: ['frp'],
+    text: ['confidence', 'satellite'],
+    flags: [],
+  },
+  earthquakes: {
+    numeric: ['magnitude', 'depthKm'],
+    text: ['place'],
+    flags: [],
+  },
 };
 
 const EARTH_R_KM = 6371;
@@ -42,8 +70,9 @@ export function haversineKm(lat1, lon1, lat2, lon2) {
   const d2r = Math.PI / 180;
   const dLat = (lat2 - lat1) * d2r;
   const dLon = (lon2 - lon1) * d2r;
-  const a = Math.sin(dLat / 2) ** 2
-    + Math.cos(lat1 * d2r) * Math.cos(lat2 * d2r) * Math.sin(dLon / 2) ** 2;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * d2r) * Math.cos(lat2 * d2r) * Math.sin(dLon / 2) ** 2;
   return 2 * EARTH_R_KM * Math.asin(Math.min(1, Math.sqrt(a)));
 }
 
@@ -55,17 +84,25 @@ export function applyFilter(records, filter) {
     const got = r[field];
     if (got === null || got === undefined) return false;
     switch (op) {
-      case 'gt': return Number(got) > Number(value);
-      case 'gte': return Number(got) >= Number(value);
-      case 'lt': return Number(got) < Number(value);
-      case 'lte': return Number(got) <= Number(value);
+      case 'gt':
+        return Number(got) > Number(value);
+      case 'gte':
+        return Number(got) >= Number(value);
+      case 'lt':
+        return Number(got) < Number(value);
+      case 'lte':
+        return Number(got) <= Number(value);
       case 'eq': {
-        if (typeof got === 'boolean' || typeof value === 'boolean') return Boolean(got) === Boolean(value);
+        if (typeof got === 'boolean' || typeof value === 'boolean')
+          return Boolean(got) === Boolean(value);
         return String(got).toLowerCase() === String(value).toLowerCase();
       }
-      case 'neq': return String(got).toLowerCase() !== String(value).toLowerCase();
-      case 'contains': return String(got).toLowerCase().includes(String(value).toLowerCase());
-      default: return true;
+      case 'neq':
+        return String(got).toLowerCase() !== String(value).toLowerCase();
+      case 'contains':
+        return String(got).toLowerCase().includes(String(value).toLowerCase());
+      default:
+        return true;
     }
   });
 }
@@ -74,15 +111,23 @@ export function applyFilter(records, filter) {
 export function applyScope(records, scope, resolved) {
   if (!scope || scope.kind === 'anywhere') return records;
   if (scope.kind === 'region' && resolved?.ring) {
-    return records.filter((r) => Number.isFinite(r.lat) && Number.isFinite(r.lon)
-      && pointInRing(resolved.ring, r.lat, r.lon));
+    return records.filter(
+      (r) =>
+        Number.isFinite(r.lat) &&
+        Number.isFinite(r.lon) &&
+        pointInRing(resolved.ring, r.lat, r.lon),
+    );
   }
   if (scope.kind === 'radius' || scope.kind === 'view') {
     const c = resolved?.center;
     const km = resolved?.km;
     if (!c || !Number.isFinite(km)) return records;
-    return records.filter((r) => Number.isFinite(r.lat) && Number.isFinite(r.lon)
-      && haversineKm(c.lat, c.lon, r.lat, r.lon) <= km);
+    return records.filter(
+      (r) =>
+        Number.isFinite(r.lat) &&
+        Number.isFinite(r.lon) &&
+        haversineKm(c.lat, c.lon, r.lat, r.lon) <= km,
+    );
   }
   return records;
 }
@@ -108,9 +153,12 @@ export function createAnalystEngine(providers) {
   let lastResult = null;
 
   async function query(spec = {}) {
-    const layers = (spec.followUp && lastResult)
-      ? null // follow-up: re-filter the remembered set, no re-snapshot
-      : (Array.isArray(spec.layers) && spec.layers.length ? spec.layers : ['flights']);
+    const layers =
+      spec.followUp && lastResult
+        ? null // follow-up: re-filter the remembered set, no re-snapshot
+        : Array.isArray(spec.layers) && spec.layers.length
+          ? spec.layers
+          : ['flights'];
 
     // 1) Source records
     let records;
@@ -164,20 +212,23 @@ export function createAnalystEngine(providers) {
       // camera made the two disagree — a parked, high-altitude camera answered
       // "46 within 250 km" while the panel showed a far larger contact-centred
       // count. Same question, two numbers.
-      const explicitCenter = scope.center && Number.isFinite(scope.center.lat)
-        ? scope.center
-        : null;
-      const subject = explicitCenter ? null : providers.getContextSubject?.() || null;
+      const explicitCenter =
+        scope.center && Number.isFinite(scope.center.lat) ? scope.center : null;
+      const subject = explicitCenter
+        ? null
+        : providers.getContextSubject?.() || null;
       const view = providers.getViewContext();
       // Only a subject that actually SUPPLIED the centre may name it. A
       // subject present but without usable coordinates silently fell back to
       // the camera while the label still read "within 250 km of <contact>" —
       // a count centred on one place, reported as centred on another, with
       // nothing in the payload to show which.
-      const subjectCenter = Number.isFinite(subject?.lat) && Number.isFinite(subject?.lon)
-        ? { lat: subject.lat, lon: subject.lon }
-        : null;
-      const center = explicitCenter || subjectCenter || { lat: view.lat, lon: view.lon };
+      const subjectCenter =
+        Number.isFinite(subject?.lat) && Number.isFinite(subject?.lon)
+          ? { lat: subject.lat, lon: subject.lon }
+          : null;
+      const center = explicitCenter ||
+        subjectCenter || { lat: view.lat, lon: view.lon };
       resolvedScope = { center, km: Number(scope.km) || 100 };
       if (subjectCenter) resolvedScope.centeredOn = subject.label || null;
       scopeNote = resolvedScope.centeredOn
@@ -188,7 +239,10 @@ export function createAnalystEngine(providers) {
         : `within ${resolvedScope.km} km`;
     } else if (scope.kind === 'view') {
       const view = providers.getViewContext();
-      resolvedScope = { center: { lat: view.lat, lon: view.lon }, km: view.viewRadiusKm };
+      resolvedScope = {
+        center: { lat: view.lat, lon: view.lon },
+        km: view.viewRadiusKm,
+      };
       scopeNote = `view:${Math.round(view.viewRadiusKm)}km`;
       scopeLabel = 'in view';
     } else {
@@ -205,15 +259,22 @@ export function createAnalystEngine(providers) {
     if (sortBy === 'distance') {
       const ref = resolvedScope?.center || providers.getViewContext();
       for (const it of items) {
-        it.distanceKm = (Number.isFinite(it.lat) && Number.isFinite(it.lon))
-          ? Math.round(haversineKm(ref.lat, ref.lon, it.lat, it.lon) * 10) / 10 : null;
+        it.distanceKm =
+          Number.isFinite(it.lat) && Number.isFinite(it.lon)
+            ? Math.round(haversineKm(ref.lat, ref.lon, it.lat, it.lon) * 10) /
+              10
+            : null;
       }
     }
     if (sortBy) {
       const dir = spec.sortDir === 'asc' ? 1 : -1;
-      items.sort((a, b) => (Number(a[sortBy]) - Number(b[sortBy])) * dir
-        || String(a.id).localeCompare(String(b.id)));
-      if (sortBy === 'distance') items.sort((a, b) => (a.distanceKm ?? 1e9) - (b.distanceKm ?? 1e9));
+      items.sort(
+        (a, b) =>
+          (Number(a[sortBy]) - Number(b[sortBy])) * dir ||
+          String(a.id).localeCompare(String(b.id)),
+      );
+      if (sortBy === 'distance')
+        items.sort((a, b) => (a.distanceKm ?? 1e9) - (b.distanceKm ?? 1e9));
     }
     const limit = Math.max(1, Math.min(50, Number(spec.limit) || 10));
     const top = items.slice(0, limit);
@@ -223,7 +284,10 @@ export function createAnalystEngine(providers) {
       count: items.length,
       items: top,
       truncated: items.length > top.length,
-      summary: summarize(items, sortBy && sortBy !== 'distance' ? sortBy : null),
+      summary: summarize(
+        items,
+        sortBy && sortBy !== 'distance' ? sortBy : null,
+      ),
       scopeLabel,
       coverage: {
         layersQueried,
@@ -233,7 +297,9 @@ export function createAnalystEngine(providers) {
       },
       // Surfaced so the narration can name the centre it measured from rather
       // than implying a view-centred answer.
-      ...(resolvedScope?.centeredOn ? { centeredOn: resolvedScope.centeredOn } : {}),
+      ...(resolvedScope?.centeredOn
+        ? { centeredOn: resolvedScope.centeredOn }
+        : {}),
     };
     lastResult = { items, coverage: result.coverage };
     return result;
@@ -241,7 +307,11 @@ export function createAnalystEngine(providers) {
 
   return {
     query,
-    reset() { lastResult = null; },
-    hasMemory() { return Boolean(lastResult); },
+    reset() {
+      lastResult = null;
+    },
+    hasMemory() {
+      return Boolean(lastResult);
+    },
   };
 }

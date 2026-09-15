@@ -29,9 +29,9 @@ export function shouldExpandGlobalContextPanel({
   restoring = false,
 }) {
   return Boolean(
-    GLOBAL_CONTEXT_EXPLICIT_ACTIONS.has(action)
-    && explicitUserAction
-    && succeeded
-    && !restoring
+    GLOBAL_CONTEXT_EXPLICIT_ACTIONS.has(action) &&
+    explicitUserAction &&
+    succeeded &&
+    !restoring,
   );
 }

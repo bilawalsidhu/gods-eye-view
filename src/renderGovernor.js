@@ -61,7 +61,8 @@ function applyMode() {
  * @returns {void}
  */
 export function installRenderGovernor(viewer) {
-  if (!viewer?.scene) throw new TypeError('installRenderGovernor requires a Cesium viewer');
+  if (!viewer?.scene)
+    throw new TypeError('installRenderGovernor requires a Cesium viewer');
   _viewer = viewer;
   _installed = true;
   // Never let Cesium re-render on simulation-time deltas behind our back —
