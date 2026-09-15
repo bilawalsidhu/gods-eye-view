@@ -2412,6 +2412,7 @@ its criteria cannot be silently ignored.
 | Dams ▰ | OpenInfraMap/OSM extract (bundled) | `src/data/localLayers.js` | — | static |
 | Submarine Cables ◠ | TeleGeography public map (bundled) | `src/data/telegeographySubmarineCables.js` | — | static |
 | FIRMS Active Fires ▲ | NASA FIRMS live (VIIRS ×3 NRT, trailing 24h) | `src/data/firmsHeatmap.js` | `/api/firms` (`FIRMS_MAP_KEY`) | 10 min (proxy TTL 30 min) |
+| Weather Radar 🌦 | RainViewer live precipitation radar | `src/data/weatherRadar.js` | `/api/weather-radar/metadata`, `/api/weather-radar/tile` | 5 min (proxy TTL 10 min) |
 
 Directions is a keyless front end to the routing the voice agent already
 uses. Its row chips are the whole interface: DRIVE / WALK / BIKE pick the
@@ -3078,7 +3079,7 @@ silently demoting every later lookup for the session.
   with compact fields for enabled layers, allowlisted layer options, panel state,
   and the active preset's allowlisted shader controls. An absent layer field uses
   deterministic defaults; an explicit empty field means no enabled layers.
-- The registry seals only after all 16 production layers register, and every
+- The registry seals only after all 17 production layers register, and every
   layer has an explicit serialization disposition. Unknown enabled-layer tokens
   reject the layer payload; unknown option tokens are ignored. Restoration
   settles independently per layer so one failed or unavailable source cannot
@@ -3182,6 +3183,35 @@ silently demoting every later lookup for the session.
   inert.
 - Client render cap `VITE_AIS_LIVE_MAX_ROWS` (default 12,000); type-colored ship icons (tanker/cargo/passenger/fishing/tug); screen-space label clustering caps active labels at `VITE_AIS_LIVE_LABEL_MAX_ROWS` (default 900).
 - Click-to-inspect wired into the voice context store.
+
+### Live Weather Radar (September 2026)
+
+- **Provider & Proxy:** Live global precipitation radar via RainViewer's public
+  API (`server/providers/weatherRadar.js`). Keyless (free for personal/educational use).
+  `/api/weather-radar/metadata` fetches current radar frames, caches for 10 minutes
+  in memory, serves stale data up to 30 minutes on outage, and rate-limits clients
+  at 60/min (200/min global). Tile requests proxy through `/api/weather-radar/tile`
+  with in-flight request coalescing, 512 KiB buffer caps, and coordinate validation;
+  zoom level is clamped at zoom 7 to match RainViewer's native radar ceiling and
+  prevent upstream 400 errors.
+- **Client Presentation & Invariants (`src/data/weatherRadar.js`):** The layer
+  renders precipitation as a single, stable `Cesium.ImageryLayer` backed by
+  `UrlTemplateImageryProvider`.
+  - **Zero-flicker stability:** The layer displays the latest authoritative frame
+    directly. It deliberately avoids cycling unbuffered `ImageryLayer` instances
+    via `layer.show` toggling, which caused Cesium to constantly discard and
+    reload textures across network boundaries (producing ~1s blank flashes).
+  - **Zoom resilience:** `maximumLevel: 7` is paired with Cesium's parent-tile
+    sampling so radar textures upscale continuously across regional and street
+    zoom levels (zoom 8–18) rather than dropping off or returning proxy 400s.
+  - **Lifecycle & Governance:** Metadata refreshes on a 5-minute cadence. The
+    imagery layer is reconstructed only when the latest frame timestamp advances.
+    Disable hides the layer and cancels active timers; destroy removes the imagery
+    layer from `viewer.imageryLayers`.
+- **Registry & Attribution:** Enrolled in `LAYER_STATE_REGISTRY` with token `v`
+  and disposition `enabled-only`. Attribution is registered dynamically via
+  `registerDynamicCredit` (`RAINVIEWER_CREDIT`) into the expandable Data Attribution
+  lightbox on layer enable.
 
 ### Voice Control (June 2026)
 
@@ -3371,7 +3401,6 @@ are omitted rather than framing the wrong part of the globe.
 
 ### Not Currently in Runtime
 
-- Weather radar (removed before OSS v1 after QA; no reliable visible payoff)
 - General replay/timeline systems outside the Space Missions experience
 - LiDAR explorer and paired-point CCTV calibration experiments
 
