@@ -1,5 +1,33 @@
 # God's Eye View Current State
 
+Director imports now open a non-mutating preview before Apply. EDIT DETAILS
+authors validated anchor, camera, pack and interaction drafts; SHARE SCENE exports
+a selected scene or a bounded bundle of explicitly chosen pack files. Bundled
+bytes remain in memory until replacement/teardown and require reimport after a
+page reload. Stop releases rendering while retaining replay bytes. Cancellation
+and stale drafts cannot replace newer project state. See [authoring and sharing](DIRECTOR-SHARING.md).
+
+Director version-6 documents add bounded, scene-local feature actions. Settled
+LOAD/seek exposes keyboard-accessible text/source cards, anchor focus, explicit
+shot transitions and admitted layer state changes. Pointer claims take priority;
+Stop/replacement/teardown cancel pending actions and release handlers and UI.
+Same-shot seeks rebuild selected packs and restore declared layer baselines.
+See [scene actions](DIRECTOR-INTERACTIONS.md). Existing scenes/assets and credit remain.
+
+Director version-5 documents add scene-local data-pack manifests and per-shot
+selection. Registered sources acquire bounded, cancellable assets separately from
+GeoJSON, PNG and manually played media presentation. Storage paths, attribution
+and geographic placement remain distinct; Stop/replacement releases resources.
+Import acquires nothing. See [data packs](DIRECTOR-DATA-PACKS.md). Existing scene
+content, assets and credit remain unchanged.
+
+Director version-4 documents add named geographic anchors and optional explicit
+camera moves with easing, duration and holds. Playback and seek share one
+coordinate sampler; navigation/manual input revokes authored motion and pending
+holds. Anchor heights and explicit endpoints require the WGS84 ellipsoid
+reference. Legacy projects retain their ordinary flights, content and edits.
+See [camera directions](DIRECTOR-CAMERA.md).
+
 Realtime voice composes separate connection, response/tool, Radio handoff, input
 and audio-meter, cost, viewport-context and diagnostic owners. The existing
 controller exports and session/backend contracts remain available. Tool protocol,
@@ -25,8 +53,11 @@ Pure authored-time/seek calculations and a playback clock now own timing,
 hold deadlines and subscriptions. Stop immediately clears timers and settles
 holds; stale tick callbacks cannot publish into a replacement. Registered pack
 rules own presentation overrides and Nepal map fallback without changing saved
-shots or content. The versioned scene/data-pack format remains planned in
-[Director](DIRECTOR.md).
+shots or content. Scene-document validation and legacy migration now have separate
+owners. Invalid imports preserve the current project; unreadable saved projects
+are protected from fallback writes. Version 6 is the export format, with
+zero pitch, low camera heights, scope and detection edits preserved. See [the document contract](SCENE-DOCUMENT.md);
+see [Director](DIRECTOR.md) for camera, pack, action and sharing support.
 
 Search framing and annotations request semantic map features from an explicit source. The Overpass adapter owns bounded queries, member/tag decoding and request deadlines; callers retain candidate ranking, outline caching, deferred retries and scene placement. Empty, transient and throttled outcomes remain distinct. Traffic sources return road records and installation sources return mapped records with freshness/saturation metadata, so their layers no longer decode upstream elements. ALPR already normalizes its records in the source. Default providers, footprints, road directions, exact-viewport retries and source attribution are unchanged.
 

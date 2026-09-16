@@ -1,5 +1,23 @@
 # Changelog
 
+- Add Director import previews, validated scene/shot detail drafts and selected-scene
+  JSON or asset-bundle sharing. Preserve attribution; verify bounded bundle bytes
+  before admission and release staged work on cancellation or teardown.
+
+- Director scene documents now support bounded data-pack manifests, per-shot
+  selection and registered GeoJSON/PNG/media loaders with explicit placement,
+  visible attribution and cancellation/disposal on Stop or replacement.
+
+- Director version 4 adds named camera anchors and explicit pose-to-pose moves
+  with shared playback/seek interpolation, easing and holds. Navigation and
+  manual input cancel authored motion; older scene files retain existing flights.
+
+
+- Director validates bounded version-3 scene files before replacing a project,
+  preserves unreadable browser saves, migrates legacy bloom once and preserves
+  zero-pitch/low-altitude camera and scope/detection edits. Project normalization has a separate owner.
+
+
 - Separate Director timing, seek calculations, playback clocks and registered
   scene-pack presentation rules. Preserve authored content and controls; Stop
   releases pending hold timers and stale ticks cannot affect replacement playback.
@@ -212,6 +230,9 @@ This changelog records public product changes. For the authoritative description
 of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md).
 
 ## [Unreleased]
+
+- Add bounded Director feature actions with accessible controls, explicit camera/layer admission and cancellation; restore pack geometry on same-shot seek. Preserve existing scenes and content attribution.
+
 
 - Give application request services, terrain/floor caches and annotation lookup state explicit owners and cancellation; share them across controls, layers and voice.
 

@@ -4,6 +4,11 @@
  * New logic belongs with an owner, not in this forwarding surface.
  */
 export class ShellFacade {
+  /** Observe camera ownership transfers through the navigation owner. */
+  subscribeCameraHandoff(listener) {
+    return this._navigation.subscribeCameraHandoff(listener);
+  }
+
   get _models3dModeBtns() {
     return this._aircraftDisplay._models3dModeBtns;
   }

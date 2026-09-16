@@ -1,3 +1,9 @@
+import {
+  resolveCameraPose,
+  resolveCameraMove,
+  sampleCameraMove,
+} from './camera.js';
+
 const DEFAULT_SHOT_DURATION_SEC = 4;
 const clamp01 = (value) => Math.max(0, Math.min(1, value));
 
@@ -78,7 +84,12 @@ export function sceneSeekState(scene, progress, durationForShot, holdForShot) {
   const holdElapsedSec = Math.max(0, shotElapsedSec - flightDurationSec);
   const holdProgress =
     holdDurationSec > 0 ? clamp01(holdElapsedSec / holdDurationSec) : 1;
-  const previousCamera = scene.shots[shotIndex - 1]?.camera || shot.camera;
+  const targetCamera = resolveCameraPose(scene, shot.camera);
+  const previousCamera = resolveCameraPose(
+    scene,
+    scene.shots[shotIndex - 1]?.camera || shot.camera,
+  );
+  const move = resolveCameraMove(scene, shot);
   return {
     sceneProgress: totalSec > 0 ? targetSec / totalSec : 0,
     sceneElapsedSec: targetSec,
@@ -92,6 +103,8 @@ export function sceneSeekState(scene, progress, durationForShot, holdForShot) {
     holdElapsedSec,
     cameraProgress,
     holdProgress,
-    camera: cameraAtProgress(previousCamera, shot.camera, cameraProgress),
+    camera: move
+      ? sampleCameraMove(move, cameraProgress)
+      : cameraAtProgress(previousCamera, targetCamera, cameraProgress),
   };
 }

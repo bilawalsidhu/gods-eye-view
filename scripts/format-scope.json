@@ -749,5 +749,16 @@
   "src/director/clock.test.mjs",
   "src/director/timeline.test.mjs",
   "src/scenes/packs/registry.test.mjs",
-  "scripts/qa-director-timing.mjs"
+  "scripts/qa-director-timing.mjs",
+  "src/director/document.test.mjs",
+  "src/director/camera.test.mjs",
+  "src/scenes/cameraMotion.test.mjs",
+  "scripts/qa-director-camera.mjs",
+  "src/director/packs/packs.test.mjs",
+  "scripts/qa-director-packs.mjs",
+  "src/scenes/dataPacks/presentation.test.mjs",
+  "src/director/interactions/interactions.test.mjs",
+  "scripts/qa-director-interactions.mjs",
+  "src/director/sharing/sharing.test.mjs",
+  "scripts/qa-director-sharing.mjs"
 ]
