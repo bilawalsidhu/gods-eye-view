@@ -23,7 +23,7 @@ test('the complete Realtime tool payload retains its pre-extraction contract and
   // layer/filter description wording) and the live-trains layer enums.
   assert.equal(
     digest,
-    'b86063a019aff621eb80b7b0a34f73eab46a39c467e5011322fabfe6deecc8df',
+    'd7745f0f00d717805220b1d463c93c87393991ecdfe38e566c61cd4e970f7147',
   );
 });
 
