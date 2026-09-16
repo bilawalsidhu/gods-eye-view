@@ -5,9 +5,16 @@ import {
   MAX_RENDERED,
   TRAIN_COLOR,
   LABEL_MAX_DISTANCE_M,
+  TRAIN_EXTRAPOLATION_MAX_MS,
 } from './policy.js';
+import { parseFixTimeMs, trainShownDegrees } from './records.js';
 
-export { trainHeadingDeg, normalizeTrainsPayload } from './records.js';
+export {
+  trainHeadingDeg,
+  normalizeTrainsPayload,
+  parseFixTimeMs,
+  trainShownDegrees,
+} from './records.js';
 export { createAmtrakerTrainSource } from './source.js';
 export * from './policy.js';
 
@@ -21,9 +28,15 @@ export function trainStatusLine(record) {
 }
 
 /** Own one live-train display and its refresh lifecycle. */
-export function createLiveTrainsLayer({ source } = {}) {
+export function createLiveTrainsLayer({ source, services } = {}) {
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('Live trains require a snapshot source');
+  // Dots move between polls (dead reckoning off real fixes), so while the
+  // layer is enabled it holds the demand-driven render loop open the way the
+  // aircraft layers do. Optional: without render services the layer still
+  // works, just repainting on data refreshes only.
+  const holdRender = services?.render?.holdContinuousRender;
+  const releaseRender = services?.render?.releaseContinuousRender;
   let _viewer = null;
   let _request = null;
   let _dataSource = null;
@@ -32,6 +45,8 @@ export function createLiveTrainsLayer({ source } = {}) {
   let _lastError = null;
   let _enabled = false;
   let _records = [];
+  /** id → {fixes: [{timeMs, lon, lat}]} — the last two real GPS fixes. */
+  const _tracks = new Map();
 
   const layer = {
     id: LAYER_ID,
@@ -56,6 +71,7 @@ export function createLiveTrainsLayer({ source } = {}) {
     enable() {
       _enabled = true;
       if (_dataSource) _dataSource.show = true;
+      holdRender?.(LAYER_ID);
     },
 
     disable() {
@@ -63,6 +79,7 @@ export function createLiveTrainsLayer({ source } = {}) {
       _request = null;
       _enabled = false;
       if (_dataSource) _dataSource.show = false;
+      releaseRender?.(LAYER_ID);
     },
 
     async update() {
@@ -76,16 +93,66 @@ export function createLiveTrainsLayer({ source } = {}) {
           return false;
 
         const fallback = Cesium.Color.fromCssColorString(TRAIN_COLOR);
-        const nextEntities = [];
+        const retained = new Set();
         for (const record of rows.slice(0, MAX_RENDERED)) {
+          retained.add(record.id);
+          // Track upkeep: append a fix only when the telemetry moved on, so
+          // repeated polls of one stale fix never fake a fresh observation.
+          const fixTimeMs = parseFixTimeMs(record.updatedAt) ?? Date.now();
+          let track = _tracks.get(record.id);
+          if (!track) {
+            track = {
+              fixes: [{ timeMs: fixTimeMs, lon: record.lon, lat: record.lat }],
+            };
+            _tracks.set(record.id, track);
+          } else {
+            const last = track.fixes[track.fixes.length - 1];
+            if (
+              fixTimeMs > last.timeMs &&
+              (record.lon !== last.lon || record.lat !== last.lat)
+            ) {
+              track.fixes.push({
+                timeMs: fixTimeMs,
+                lon: record.lon,
+                lat: record.lat,
+              });
+              if (track.fixes.length > 2) track.fixes.shift();
+            }
+          }
+
           const accent = record.accent
             ? Cesium.Color.fromCssColorString(record.accent)
             : fallback;
           const status = trainStatusLine(record);
-          nextEntities.push(
+          const labelText =
+            `${record.routeName.toUpperCase()}${record.trainNum ? ` ${record.trainNum}` : ''}` +
+            (status ? `\n${status}` : '');
+          const existing = _dataSource.entities.getById(record.id);
+          if (existing) {
+            // Entities persist across polls; only presentation values change.
+            // The position callback already reads the mutated track.
+            existing.label.text = labelText;
+            existing.point.color = accent;
+            for (const [key, value] of Object.entries({
+              velocityMph: record.velocityMph,
+              nextStation: record.nextStation,
+              timeliness: record.timeliness,
+            }))
+              existing.properties[key] = value;
+            continue;
+          }
+          _dataSource.entities.add(
             new Cesium.Entity({
               id: record.id,
-              position: Cesium.Cartesian3.fromDegrees(record.lon, record.lat),
+              // Dead-reckoned every frame from the last two real fixes.
+              position: new Cesium.CallbackProperty(() => {
+                const shown = trainShownDegrees(
+                  track,
+                  Date.now(),
+                  TRAIN_EXTRAPOLATION_MAX_MS,
+                );
+                return Cesium.Cartesian3.fromDegrees(shown.lon, shown.lat);
+              }, false),
               point: {
                 pixelSize: 8,
                 color: accent,
@@ -96,9 +163,7 @@ export function createLiveTrainsLayer({ source } = {}) {
                 scaleByDistance: new Cesium.NearFarScalar(350, 1.3, 6e6, 0.5),
               },
               label: {
-                text:
-                  `${record.routeName.toUpperCase()}${record.trainNum ? ` ${record.trainNum}` : ''}` +
-                  (status ? `\n${status}` : ''),
+                text: labelText,
                 font: '12px system-ui',
                 fillColor: Cesium.Color.WHITE,
                 outlineColor: Cesium.Color.BLACK,
@@ -126,10 +191,14 @@ export function createLiveTrainsLayer({ source } = {}) {
             }),
           );
         }
-        _dataSource.entities.removeAll();
-        for (const entity of nextEntities) _dataSource.entities.add(entity);
+        // Trains that completed their run leave the display and the tracks.
+        for (const entity of [..._dataSource.entities.values]) {
+          if (retained.has(entity.id)) continue;
+          _dataSource.entities.remove(entity);
+          _tracks.delete(entity.id);
+        }
         _records = rows;
-        _count = nextEntities.length;
+        _count = _dataSource.entities.values.length;
         _lastUpdate = Date.now();
         _lastError = null;
         return true;
@@ -147,6 +216,7 @@ export function createLiveTrainsLayer({ source } = {}) {
       _request?.abort();
       _request = null;
       _enabled = false;
+      releaseRender?.(LAYER_ID);
       if (_dataSource && viewer) viewer.dataSources.remove(_dataSource, true);
       _dataSource = null;
       _viewer = null;
@@ -154,6 +224,7 @@ export function createLiveTrainsLayer({ source } = {}) {
       _lastUpdate = null;
       _lastError = null;
       _records = [];
+      _tracks.clear();
     },
 
     /**

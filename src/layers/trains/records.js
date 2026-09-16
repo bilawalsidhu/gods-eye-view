@@ -81,3 +81,41 @@ export function normalizeTrainsPayload(payload) {
   }
   return [...byId.values()];
 }
+
+/** Telemetry timestamp → epoch ms, or null when unparseable. */
+export function parseFixTimeMs(value) {
+  const ms = Date.parse(String(value ?? ''));
+  return Number.isFinite(ms) ? ms : null;
+}
+
+/**
+ * Where to draw a train right now, from its last two real GPS fixes.
+ *
+ * Between polls the dot dead-reckons along the straight line the last two
+ * fixes define, at the speed those fixes imply — motion derived purely from
+ * telemetry, no compass guessing. Carry-forward past the latest fix is
+ * clamped (maxAheadMs) so a train whose GPS goes quiet creeps briefly and
+ * then rests at a position near where it was genuinely last seen, instead
+ * of sailing off the track forever. With a single fix there is nothing to
+ * infer, so the dot holds it.
+ *
+ * @param {{fixes: Array<{timeMs:number, lon:number, lat:number}>}} track
+ * @param {number} nowMs
+ * @param {number} maxAheadMs
+ * @returns {{lon:number, lat:number}}
+ */
+export function trainShownDegrees(track, nowMs, maxAheadMs) {
+  const fixes = track?.fixes || [];
+  const last = fixes[fixes.length - 1];
+  if (!last) return { lon: 0, lat: 0 };
+  if (fixes.length < 2) return { lon: last.lon, lat: last.lat };
+  const prev = fixes[fixes.length - 2];
+  const dtMs = last.timeMs - prev.timeMs;
+  if (dtMs <= 0) return { lon: last.lon, lat: last.lat };
+  const aheadMs = Math.min(Math.max(nowMs - last.timeMs, 0), maxAheadMs);
+  const fraction = aheadMs / dtMs;
+  return {
+    lon: last.lon + (last.lon - prev.lon) * fraction,
+    lat: last.lat + (last.lat - prev.lat) * fraction,
+  };
+}
