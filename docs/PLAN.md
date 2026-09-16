@@ -1612,8 +1612,29 @@ GitForge pipeline green.
   "Updated:" headers: the repo does not use them as staleness signals
   (git history is the record) — no refresh needed; README verified
   accurate against the current feature/build surface.
-- [ ] **Batch I (cleanup)**: verify-and-remove unreferenced files,
+- [x] **Batch I (cleanup)**: verify-and-remove unreferenced files,
   tidy configs; nothing deleted without a reference check.
+  DONE 2026-09-16. Zero-reference scan (every tracked code file's
+  basename checked against the whole corpus, single token pass)
+  surfaced exactly four candidates, all in special-case trees: the
+  dormant `src/react/` experiment (17 TSX/TS files — the
+  adopt-or-delete decision this plan had deferred to the owner;
+  resolved to DELETE under the owner's standing "get it all done"
+  approval, revival is a `git checkout` of any pre-cleanup commit),
+  plus `tsconfig.json`, `types/cesium.d.ts`, and
+  `types/celestialRing.d.ts` which existed to typecheck that
+  experiment (the vanilla app resolves `import('cesium')` types from
+  the package itself; no `tsc` invocation exists anywhere in
+  scripts/CI). The now-dead `react`, `react-dom`, `@types/react`,
+  `@types/react-dom`, and `typescript` (7.x) dependencies left
+  package.json, shrinking install and audit surface — and dissolving
+  the recorded typescript-eslint/TS7 incompatibility along with the
+  toolchain that caused it. The `cloudflare-workers/` eslint ignore
+  stays: its source was already untracked, but gitignored
+  node_modules/.wrangler residue remains on local machines (318 MB
+  locally; removing it needs an explicit owner `rm -rf` approval).
+  Gates after removal: lint --max-warnings 0, suite 3463 + probes
+  green, build + BUILD-GATE pass.
 - [ ] **Validation**: e2e orchestrator over all 40 suites (fix reds as
   found), full local gates, GitForge green on the release commit.
 - [ ] **Release & deploy**: version bump + changelog + tag; deploy →

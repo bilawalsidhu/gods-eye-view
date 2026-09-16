@@ -44,16 +44,14 @@ export default [
       '.wrangler/**',
       // Separate sub-project with its own toolchain (TS + vitest + prettier);
       // wrangler tmp/ build output lives under its .wrangler/.
+      // Separate sub-project whose source was removed from the repo
+      // (Batch I 2026-09-16); only gitignored node_modules/.wrangler residue
+      // remains on some machines. The ignore stays so lint never walks it.
       'cloudflare-workers/**',
       // Third-party bundles checked into the repo.
       'src/data/local_data/**',
       // Vendored/bundled artifacts, not authored source.
       '**/*.min.js',
-      // Unmounted React overlay scaffold (TSX). The runtime ships the vanilla
-      // UI only; this scaffold is dormant pending an adopt-or-delete decision
-      // (docs/PLAN.md). ESLint would need typescript-eslint, whose current
-      // release does not accept the repo's TypeScript 7 toolchain.
-      'src/react/**',
     ],
   },
 
@@ -134,7 +132,7 @@ export default [
     // authored `src/` JavaScript; tests are `.test.mjs` (never matched by the
     // `*.js` glob), workers/vendored/dormant trees stay exempt.
     files: ['src/**/*.js'],
-    ignores: ['src/data/local_data/**', 'src/react/**', 'src/workers/**'],
+    ignores: ['src/data/local_data/**', 'src/workers/**'],
     rules: {
       'jsdoc/require-jsdoc': ['error', {
         require: { ClassDeclaration: true, MethodDefinition: false },
