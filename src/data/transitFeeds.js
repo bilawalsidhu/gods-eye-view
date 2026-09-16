@@ -185,6 +185,110 @@ function guelphRouteLabel(routeId) {
 }
 
 /**
+ * Hamilton publishes an internal key for every route: not one of HSR's 80 route
+ * ids equals the number on the bus, so an untranslated feed reads as
+ * "Route 5783" city-wide. Two generations of id are live at once — `5688` and
+ * `5780` are both the 2 BARTON — and both are listed, because both arrive.
+ *
+ * Numbers are unpadded to match the rest of the registry (`routes.txt` says
+ * `02`; a rider says 2). The seasonal and event shuttles publish a name rather
+ * than a number — `TC230`, `PEACH`, `ROCKTON` — and those are already what a
+ * rider would say, so they survive as published. Ids and names are from the
+ * City's own published GTFS `routes.txt`, under the same terms as the feed.
+ */
+const HAMILTON_ROUTE_NAMES = Object.freeze({
+  5687: '1',
+  5688: '2',
+  5689: '3',
+  5690: '4',
+  5691: '5',
+  5692: '6',
+  5693: '7',
+  5694: '8',
+  5695: '9',
+  5696: '10',
+  5697: '11',
+  5698: '12',
+  5699: '16',
+  5700: '18',
+  5701: '20',
+  5702: '21',
+  5703: '22',
+  5704: '23',
+  5705: '24',
+  5706: '25',
+  5707: '26',
+  5708: '27',
+  5709: '33',
+  5710: '34',
+  5711: '35',
+  5712: '41',
+  5713: '42',
+  5714: '43',
+  5715: '44',
+  5716: '51',
+  5717: '52',
+  5718: '55',
+  5719: '56',
+  5720: '99',
+  5731: 'X-IND',
+  5780: '2',
+  5781: '3',
+  5782: '4',
+  5783: '5',
+  5784: '6',
+  5785: '7',
+  5786: '8',
+  5787: '9',
+  5789: '11',
+  5790: '12',
+  5791: '16',
+  5792: '18',
+  5793: '20',
+  5794: '21',
+  5795: '22',
+  5796: '23',
+  5797: '24',
+  5798: '25',
+  5799: '26',
+  5800: '27',
+  5801: '33',
+  5802: '34',
+  5803: '35',
+  5805: '42',
+  5806: '43',
+  5807: '44',
+  5808: '51',
+  5809: '52',
+  5811: '56',
+  5812: '99',
+  5820: 'TC230',
+  5823: 'X IND',
+  5824: 'TC-700',
+  5825: 'TC-300',
+  5826: 'CAN',
+  5827: 'PEACH',
+  5828: '1',
+  5829: '10',
+  5830: '41',
+  5831: '55',
+  5832: 'TC300',
+  5833: 'TC700',
+  5834: 'TC730',
+  5835: 'ANCFAIR',
+  5836: 'ROCKTON',
+});
+
+/**
+ * Hamilton route id to the number a rider would say.
+ * @param {string|null} routeId
+ * @returns {string|null}
+ */
+function hamiltonRouteLabel(routeId) {
+  return HAMILTON_ROUTE_NAMES[routeId] || routeId;
+}
+
+/**
  * YRT publishes Viva bus rapid transit by route id (`601`), while every rider,
  * station sign and map calls it "Viva Blue". Plain local routes are already the
  * number on the bus and are left alone, unpadded: `105` reads better than the
@@ -478,6 +582,7 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
       note: 'The attribution wording is prescribed by the licence, so it is used verbatim as the credit rather than paraphrased to an operator name. Names, crests, logos and marks are excluded from the grant, so the credit stays text.',
     }),
     defaultMode: 'bus',
+    routeLabel: hamiltonRouteLabel,
   }),
   Object.freeze({
     id: 'durham-region',

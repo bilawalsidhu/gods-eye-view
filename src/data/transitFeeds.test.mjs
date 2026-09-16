@@ -432,6 +432,23 @@ test('YRT local branches read as the branch letter, not the padded id', () => {
   assert.equal(transitRouteLabel(yrt, '9101'), '9101');
 });
 
+test('Hamilton route ids are internal keys, read as the number on the bus', () => {
+  // Not one of HSR's 80 route ids equals its published short name, so every
+  // vehicle reads as "Route 5783" until the table translates it. Hamilton also
+  // carries two generations of id for the same route — `5688` and `5780` are
+  // both the 2 BARTON — so both must land on the same answer.
+  const hsr = getTransitFeed('hsr-hamilton');
+  assert.equal(transitRouteLabel(hsr, '5780'), '2');
+  assert.equal(transitRouteLabel(hsr, '5688'), '2', 'the older id agrees');
+  assert.equal(transitRouteLabel(hsr, '5687'), '1');
+  assert.equal(transitRouteLabel(hsr, '5829'), '10', 'the B-Line');
+  assert.equal(transitRouteLabel(hsr, '5793'), '20', 'the A-Line');
+  // Published names that are not numbers are already what a rider would say,
+  // so they survive as published rather than being forced into a number.
+  assert.equal(transitRouteLabel(hsr, '5820'), 'TC230');
+  assert.equal(transitRouteLabel(hsr, '9999'), '9999', 'unknown survives');
+});
+
 test('Burlington route ids are joined, never prefix-stripped', () => {
   // `351` is route 1 and `3510` is route 10, so no amount of trimming a `35`
   // prefix works — the table is the only correct answer.
