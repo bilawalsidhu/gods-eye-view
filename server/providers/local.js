@@ -18,6 +18,7 @@ import { adsbLolProxy } from './aircraft/adsb-lol.js';
 import { aisLiveProxy } from './vessels/ais-live.js';
 import { trackBackfillProxies } from './aircraft/tracks.js';
 import { openAiRealtimeProxy } from './openai.js';
+import { geminiLiveProxy } from './gemini.js';
 import { googlePlacesContextProxy } from './places.js';
 import { keySetupEndpoint } from '../standalone/key-setup.js';
 
@@ -44,6 +45,7 @@ function localProviderPlugins() {
     aisLiveProxy(),
     trackBackfillProxies(),
     openAiRealtimeProxy(),
+    geminiLiveProxy(),
     googlePlacesContextProxy(),
     keySetupEndpoint(),
   ];

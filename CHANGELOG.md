@@ -404,6 +404,8 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 - Extract shared surface keyboard handling for the welcome launcher and Provider
   Settings, preserving Tab/Escape behavior and releasing the listener on teardown.
 
+- Google Gemini Live voice model support with BYOK `GEMINI_API_KEY` (`src/voice/geminiLiveAdapter.js`, `server/providers/gemini.js`).
+
 ### Added
 
 ### Security

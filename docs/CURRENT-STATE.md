@@ -3371,6 +3371,14 @@ silently demoting every later lookup for the session.
   4. **The loaded-data caveat is stated once when relevant**: counts cover loaded data, and the flights layer loads where you look (appended to `coverage.note` for radius/view scopes over viewport-loaded layers).
 - **Degradation**: without `OPENAI_API_KEY`, `/api/realtime/token` returns 503 and the mic button surfaces the error; the rest of the app is unaffected.
 
+### Google Gemini Live Voice Control (September 2026)
+
+- **Multi-provider model tiers:** `src/voice/voiceCost.js` registers the `gemini` tier (`gemini-3.8-live` / Gemini Multimodal Live API) alongside OpenAI's `standard` (`gpt-realtime-2`) and `mini` (`gpt-realtime-2.1-mini`). The voice dock model selector cycles `STD` ➔ `MINI` ➔ `GEM 3.8`, persisting the preference and applying it on the next session start.
+- **Server-side proxy & credential security:** `GEMINI_API_KEY` remains server-side in `.env` or Provider Settings. The local proxy (`server/providers/gemini.js`) brokers the `/api/realtime/gemini-live` WebSocket connection, injecting the API key into the upstream Google `BidiGenerateContent` endpoint (`generativelanguage.googleapis.com`) without exposing keys to the browser client.
+- **Client PCM audio pipeline:** `src/voice/geminiLiveAdapter.js` captures mono microphone audio, downsamples to 16 kHz 16-bit PCM little-endian frames, and streams `realtimeInput` audio chunks to Google. Incoming assistant turns are decoded from 24 kHz PCM chunks and played back via the Web Audio API with automatic context resumption.
+- **Tool declaration & execution bridge:** The adapter translates GEV's 28 spatial tool schemas (`server/providers/openai/tools.js`) into Gemini's OpenAPI `functionDeclarations` format. Incoming `toolCall.functionCalls` from Gemini map directly to GEV's `extractFunctionCalls` interface, triggering the existing `gevActions.js` action runner and returning formatted `toolResponse` outputs.
+- **Power Up / BYOK registry:** `src/keySetupCore.mjs` registers `GEMINI_API_KEY` under `KEY_SETUP_KEYS`, providing status LED tracking, automated `.env` writes, and a direct "GET KEY ↗" link to Google AI Studio.
+
 ### AI HUD Summary (June 2026)
 
 - HUD `SUMMARY` readout requests a five-word intelligence-style summary from `/api/openai/hud-summary` (model `OPENAI_HUD_SUMMARY_MODEL`, default `gpt-5-nano`, minimal reasoning).
@@ -3546,7 +3554,7 @@ are omitted rather than framing the wrong part of the globe.
 - `/api/route` proxies bounded OSRM route requests for annotation routes, with profile allowlisting, distance caps, response caps, caching, and sanitized "no route found" errors.
 - Track endpoints: `/api/ais-live/track?mmsi=` (server-accumulated ring buffers; sub-route handled before the rows snapshot), `/api/opensky-track?icao24=` (OAuth, 60s cache, sanitized errors, independent OpenSky credit bucket), `/api/adsblol/trace?hex=` (60s cache, 5MB cap, ODbL attribution required in UI).
 - Realtime debug logs redact API keys, bearer tokens, client secrets, and image data URLs before writing to disk; request bodies are size-capped.
-
+- `GEMINI_API_KEY` is server-side only; the browser connects through the local `/api/realtime/gemini-live` WebSocket proxy to Google's Bidi streaming endpoint.
 ## UI/UX Runtime Defaults
 
 - Z ladder: panels promote within 100–139 (renormalized on wrap), voice pill 150, toast 200, clean-view exit 300.
