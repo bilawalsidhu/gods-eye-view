@@ -375,35 +375,61 @@ test('a feed with rider-facing route ids is left alone', () => {
   assert.equal(transitRouteLabel(null, '7'), '7');
 });
 
-test('Barrie is registered but unpolled until its licence is accepted', () => {
-  // The City offers these terms for acceptance behind a click-through gate.
-  // Registered-but-off is how that decision stays visible and one line from
-  // reversible, rather than being made silently by a poller.
-  assert.equal(
-    getRegisteredTransitFeed('barrie-transit')?.name,
-    'Barrie Transit',
-  );
-  assert.equal(getTransitFeed('barrie-transit'), null, 'not routable');
-  assert.equal(
-    publicTransitCatalog().some((feed) => feed.id === 'barrie-transit'),
-    false,
-    'never offered to the browser',
-  );
+test('the feeds whose licences are accepted by use are switched on', () => {
+  // Barrie and YRT each ask for acceptance through a form, and each licence
+  // also says that using the data is itself acceptance. That reading was
+  // taken deliberately, so both are routable and both record the reasoning
+  // in their terms note rather than leaving it to be re-derived later.
+  for (const id of ['barrie-transit', 'yrt-york']) {
+    assert.ok(getTransitFeed(id), `${id} is routable`);
+    assert.ok(
+      publicTransitCatalog().some((feed) => feed.id === id),
+      `${id} is offered to the browser`,
+    );
+    assert.match(
+      getRegisteredTransitFeed(id).terms.note,
+      /acceptance is by use|use itself acceptance|took that clause as sufficient/,
+      `${id} records why it ships on`,
+    );
+  }
 });
 
-test('YRT is registered but unpolled until its licence form is answered', () => {
+test('every registered feed now ships on, and the gate still decides that', () => {
+  // The enabled set must stay a filter over the registry, not a copy of it:
+  // flipping one feed off has to make it unreachable.
   assert.equal(getRegisteredTransitFeed('yrt-york')?.name, 'YRT/Viva');
-  assert.equal(getTransitFeed('yrt-york'), null, 'not routable');
+  assert.deepEqual(
+    TRANSIT_FEED_REGISTRY.filter((feed) => feed.defaultEnabled !== true),
+    [],
+  );
 });
 
 test('Viva bus rapid transit is named by its colour, not its route number', () => {
   // YRT publishes `601` where every rider, map and station sign says
   // "Viva Blue". The numeric local routes already read correctly and are
   // left alone.
-  const yrt = getRegisteredTransitFeed('yrt-york');
+  const yrt = getTransitFeed('yrt-york');
   assert.equal(transitRouteLabel(yrt, '601'), 'Viva Blue');
   assert.equal(transitRouteLabel(yrt, '60301'), 'Viva Purple A');
   assert.equal(transitRouteLabel(yrt, '607'), 'Viva Yellow');
   assert.equal(transitRouteLabel(yrt, '105'), '105', 'a local bus is a number');
   assert.equal(transitRouteLabel(yrt, '9899'), '9899');
+});
+
+test('Burlington route ids are joined, never prefix-stripped', () => {
+  // `351` is route 1 and `3510` is route 10, so no amount of trimming a `35`
+  // prefix works — the table is the only correct answer.
+  const bur = getTransitFeed('burlington-transit');
+  assert.equal(transitRouteLabel(bur, '351'), '1');
+  assert.equal(transitRouteLabel(bur, '3510'), '10');
+  assert.equal(transitRouteLabel(bur, '3512'), '12');
+  assert.equal(transitRouteLabel(bur, '3587'), '87');
+  assert.equal(transitRouteLabel(bur, '9999'), '9999', 'unknown survives');
+});
+
+test('Burlington is live and carries its terms link, which its licence requires', () => {
+  const bur = getTransitFeed('burlington-transit');
+  assert.equal(bur.defaultEnabled, true);
+  assert.match(bur.licenseUrl, /Open%20Data%20Terms%20of%20Use\.pdf$/);
+  assert.match(bur.url, /^https:\/\//, 'port 80 has no listener at all');
 });

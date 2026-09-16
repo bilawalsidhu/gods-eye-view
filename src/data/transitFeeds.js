@@ -210,6 +210,41 @@ function yrtRouteLabel(routeId) {
 }
 
 /**
+ * Burlington publishes the internal key of a route, and the keys are a trap:
+ * `351` is route 1 while `3510` is route 10, so trimming a `35` prefix gets
+ * the wrong answer on half the network. The join is the only correct route.
+ * Ids and numbers are from the City's own published GTFS `routes.txt`, which
+ * sits in the same directory as the realtime feed under the same terms.
+ */
+const BURLINGTON_ROUTE_NAMES = Object.freeze({
+  351: '1',
+  352: '2',
+  353: '3',
+  354: '4',
+  356: '6',
+  3510: '10',
+  3511: '11',
+  3512: '12',
+  3525: '25',
+  3548: '48',
+  3550: '50',
+  3551: '51',
+  3552: '52',
+  3580: '80',
+  3581: '81',
+  3587: '87',
+});
+
+/**
+ * Burlington route id to the number a rider would say.
+ * @param {string|null} routeId
+ * @returns {string|null}
+ */
+function burlingtonRouteLabel(routeId) {
+  return BURLINGTON_ROUTE_NAMES[routeId] || routeId;
+}
+
+/**
  * Registry of feeds. Order is presentation order in the stats/credit text.
  * `loadRadiusKm` is the distance from `center` inside which the feed is polled.
  * @type {ReadonlyArray<Readonly<{
@@ -507,11 +542,11 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
       'https://www.barrie.ca/services-payments/transportation-parking/barrie-transit/barrie-gtfs',
     attribution:
       'Realtime vehicle data \u00a9 City of Barrie, used under the Barrie Transit Data licence',
-    defaultEnabled: false,
+    defaultEnabled: true,
     terms: Object.freeze({
       quote:
         'Barrie Transit hereby grants you a non-exclusive, limited and revocable rights to use, reproduce, and redistribute Barrie Transit Data (scheduled and real-time data) subject to the following terms: Barrie Transit trademarks and copyrighted materials, including any confusingly similar variants, may not be used in association with Data. ... Barrie Transit maintains title, ownership, rights and interest in and to Data.',
-      note: 'OFF until a person on this project accepts the licence. The City publishes the feed directory behind a click-through "I agree" checkbox and a CAPTCHA; the endpoint itself needs no key, token or cookie, but the terms are offered for acceptance and nobody here has accepted them. That is a decision for a human, not something a poller should assume, so this ships registered and unpolled until someone ticks the box \u2014 then flip this one line. Two further oddities worth knowing: the licence requires NO attribution at all (the credit above is a courtesy), and its trademark clause is broad enough that the credit names the City rather than Barrie Transit. The grant is expressly REVOCABLE and unversioned, so the quote above is the text as read on 2026-09-16.',
+      note: 'The City offers this licence for acceptance behind a click-through checkbox, and the licence body also makes use itself acceptance: \u201cBy using Barrie Transit Data, you agree to be bound by these terms.\u201d This deployment\u2019s owner took that clause as sufficient on 2026-09-16 and switched the feed on; nothing gates the endpoint, which needs no key, token or cookie. Two oddities worth knowing: the licence requires NO attribution at all (the credit above is a courtesy), and its trademark clause is broad enough that the credit names the City rather than Barrie Transit. The grant is expressly REVOCABLE and unversioned, so the quote above is the text as read on 2026-09-16.',
     }),
     defaultMode: 'bus',
   }),
@@ -529,14 +564,36 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
       'https://www.yrt.ca/en/about-us/open-data-licence-agreement.aspx',
     attribution:
       "Contains public transit Information made available under YRT's Open Data Licence",
-    defaultEnabled: false,
+    defaultEnabled: true,
     terms: Object.freeze({
       quote:
         'YRT grants You a worldwide, royalty-free, perpetual, non-exclusive licence to Use the Information subject to the conditions below ... Use the Information commercially ... Provide credit to YRT when using Information under this licence but are not required to. ... Please note: You must agree with and accept the above stated License Agreement in order to download YRT GTFS or real-time GTFS data.',
-      note: 'OFF for the same reason as Barrie: the operator asks that its licence be accepted through a form (forms.yrt.ca/YRT-GTFS-Data, which collects a name, company, phone and email and issues no credential) before the data is taken. Nothing gates the endpoint, and the licence body also says use is itself acceptance \u2014 but a form asking for contact details is close enough to the registration this registry refuses that a person, not a poller, should decide. Flip this one line once someone has answered it. The credit above is the licence\u2019s own wording and must be reproduced as given; attribution is optional here, and given anyway. Logos, trademarks and crests are carved out, so the credit stays text. Two data notes: no vehicle carries a bearing, so heading comes from observed movement; and one stuck unit reported a position ten hours old, which the layer shows as a stale report rather than hides.',
+      note: 'The operator asks that its licence be accepted through a form (forms.yrt.ca/YRT-GTFS-Data, which collects a name, company, phone and email and issues no credential), while the licence body says acceptance is by use: \u201cYour Use of Information indicates Your acceptance of the terms and conditions below.\u201d This deployment\u2019s owner took that clause as sufficient on 2026-09-16 and switched the feed on. Nothing gates the endpoint. The credit above is the licence\u2019s own wording and must be reproduced as given; attribution is optional here, and given anyway. Logos, trademarks and crests are carved out, so the credit stays text. Two data notes: no vehicle carries a bearing, so heading comes from observed movement; and one stuck unit reported a position ten hours old, which the layer shows as a stale report rather than hides.',
     }),
     defaultMode: 'bus',
     routeLabel: yrtRouteLabel,
+  }),
+  Object.freeze({
+    id: 'burlington-transit',
+    name: 'Burlington Transit',
+    operator: 'Burlington Transit (City of Burlington)',
+    region: 'Burlington, ON',
+    center: Object.freeze({ lat: 43.3342, lon: -79.8089 }),
+    loadRadiusKm: 12,
+    url: 'https://opendata.burlington.ca/gtfs-rt/GTFS_VehiclePositions.pb',
+    license: 'City of Burlington Open Data Terms of Use',
+    licenseUrl:
+      'https://opendata.burlington.ca/opendata-terms-of-use/City%20of%20Burlington%20-%20Open%20Data%20Terms%20of%20Use.pdf',
+    attribution:
+      'Transit data \u00a9 City of Burlington (Burlington Transit), used under the City of Burlington Open Data Terms of Use',
+    defaultEnabled: true,
+    terms: Object.freeze({
+      quote:
+        'The Corporation of the City of Burlington (the City) now grants you a worldwide, royalty-free, non-exclusive, revocable licence to use, reproduce, modify, and distribute the datasets in all current and future media and formats for any lawful purpose. ... If you distribute or provide access to these datasets to any other person ... you agree to include a copy of, or this Uniform Resource Locator (URL) for, these Terms of Use.',
+      note: 'Same 2011-era municipal template as Mississauga, and the same two consequences: the grant is REVOCABLE, and the terms have to travel with the data, so `licenseUrl` is the Terms document itself rather than a catalogue page and the attribution popover carries the link. Credit is optional here and given anyway. Crests, logos and marks are excluded and the terms forbid implying any association, so the credit stays plain text. The catalogue record for this data leads with a licence link that 404s; the URL above is the live one. Plain http:// has no listener at all \u2014 not a redirect, a hang \u2014 so the https:// URL is mandatory rather than preferred. The feed updates once a minute and answers conditional requests with an ETag.',
+    }),
+    defaultMode: 'bus',
+    routeLabel: burlingtonRouteLabel,
   }),
 ]);
 
