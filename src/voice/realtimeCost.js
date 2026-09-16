@@ -4,6 +4,7 @@ import {
   writeStoredVoiceTier,
   writeStoredVoiceLimits,
 } from './realtimePreferences.js';
+import { readStoredCloudVoiceAuthMode } from './cloudVoiceAuth.js';
 import {
   createVoiceCostTracker,
   resolveVoiceModel,
@@ -16,6 +17,8 @@ export class RealtimeCost {
     Object.assign(this, { readUi, readStatus }, operations);
     this.voiceTier = readStoredVoiceTier();
     this.voiceLimits = readStoredVoiceLimits();
+    this.cloudVoiceAuth = readStoredCloudVoiceAuthMode();
+    this.sessionCloudVoiceAuth = null;
     this.costTracker = createVoiceCostTracker({
       tier: this.voiceTier,
       limits: this.voiceLimits,
@@ -56,6 +59,8 @@ export class RealtimeCost {
             }; applies next session`;
     }
     if (this.ui?.costValue) {
+      const liveAuth = this.sessionCloudVoiceAuth || this.cloudVoiceAuth;
+      this.ui.costValue.hidden = liveAuth === 'oauth';
       this.ui.costValue.textContent = state.display;
       this.ui.costValue.dataset.level = state.level;
       this.ui.costValue.title =
@@ -136,6 +141,7 @@ export class RealtimeCost {
    */
   recordUsage(usage) {
     if (!usage) return null;
+    if (this.sessionCloudVoiceAuth === 'oauth') return null;
     const state = this.costTracker.record(usage);
     this.syncCostUi();
     if (state.warnCrossed) {
@@ -190,6 +196,8 @@ export class RealtimeCost {
   prepareSession() {
     this.voiceTier = readStoredVoiceTier();
     this.voiceLimits = readStoredVoiceLimits();
+    this.cloudVoiceAuth = readStoredCloudVoiceAuthMode();
+    this.sessionCloudVoiceAuth = this.cloudVoiceAuth;
     this.costCapStopped = false;
     // Provisional meter (tier-priced) so the readout shows $0.00 while
     // connecting. It is REPLACED below with one bound to the model the server

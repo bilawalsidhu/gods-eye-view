@@ -37,6 +37,7 @@ function request(
     url = '/',
     body = '',
     origin = 'http://localhost:4173',
+    remoteAddress = '127.0.0.1',
   } = {},
 ) {
   return new Promise((resolve, reject) => {
@@ -49,7 +50,7 @@ function request(
         origin,
         'content-type': 'application/json',
       },
-      socket: { remoteAddress: '127.0.0.1' },
+      socket: { remoteAddress },
     });
     const headers = {};
     const res = {
@@ -193,6 +194,147 @@ test('Realtime handler preserves tools and default instructions, isolates suppli
   }
   assert.notEqual(sent[0].session.instructions, sent[1].session.instructions);
   assert.equal(sent[0].session.instructions, sent[2].session.instructions);
+});
+
+test('Realtime handler keeps API key as default and uses OAuth only when requested', async (t) => {
+  env(t, 'GEV_RATELIMIT_OPENAI_PER_MIN', undefined);
+  let oauthReads = 0;
+  const authorizations = [];
+  const routes = install(
+    openAiRealtimeProxy({
+      realtime: {
+        resolveApiKey: () => 'fixture-api-key',
+        resolveOAuthAccessToken: () => {
+          oauthReads += 1;
+          return 'fixture-oauth-token';
+        },
+        fetchImpl: async (_url, options) => {
+          authorizations.push(options.headers.Authorization);
+          return Response.json({ value: 'fixture-ephemeral' });
+        },
+      },
+    }),
+  );
+  const token = routes.get('/api/realtime/token');
+
+  assert.equal((await request(token)).status, 200);
+  assert.equal(oauthReads, 0, 'default cloud voice does not read OAuth');
+  assert.equal(authorizations.at(-1), 'Bearer fixture-api-key');
+
+  assert.equal((await request(token, { url: '/?auth=oauth' })).status, 200);
+  assert.equal(oauthReads, 1);
+  assert.equal(authorizations.at(-1), 'Bearer fixture-oauth-token');
+});
+
+test('OAuth status and token minting never expose local OAuth to remote clients', async () => {
+  let oauthReads = 0;
+  const routes = install(
+    openAiRealtimeProxy({
+      realtime: {
+        resolveOAuthAccessToken: () => {
+          oauthReads += 1;
+          return 'must-not-be-read-remotely';
+        },
+        fetchImpl: () =>
+          assert.fail('remote OAuth request must not reach OpenAI'),
+      },
+    }),
+  );
+  const remote = { remoteAddress: '192.168.1.20' };
+  assert.equal(
+    (await request(routes.get('/api/realtime/oauth-status'), remote)).status,
+    403,
+  );
+  assert.equal(
+    (
+      await request(routes.get('/api/realtime/token'), {
+        ...remote,
+        url: '/?auth=oauth',
+      })
+    ).status,
+    403,
+  );
+  assert.equal(oauthReads, 0);
+});
+
+test('OAuth status reports local sign-in availability without returning the token', async () => {
+  const routes = install(
+    openAiRealtimeProxy({
+      realtime: { resolveOAuthAccessToken: () => 'fixture-oauth-secret' },
+    }),
+  );
+  const response = await request(routes.get('/api/realtime/oauth-status'));
+  assert.equal(response.status, 200);
+  assert.deepEqual(response.json(), { available: true });
+  assert.equal(response.body.includes('fixture-oauth-secret'), false);
+});
+
+test('OAuth login endpoint launches local Codex sign-in once and never exposes credentials', async () => {
+  let starts = 0;
+  let clock = 1_000;
+  const routes = install(
+    openAiRealtimeProxy({
+      realtime: {
+        resolveOAuthAccessToken: () => {
+          throw new Error('not signed in');
+        },
+        startOAuthLogin: async () => {
+          starts += 1;
+        },
+        now: () => clock,
+      },
+    }),
+  );
+  const handler = routes.get('/api/realtime/oauth-login');
+
+  const started = await request(handler, { method: 'POST' });
+  assert.equal(started.status, 202);
+  assert.deepEqual(started.json(), {
+    available: false,
+    started: true,
+    pending: true,
+  });
+  assert.equal(starts, 1);
+
+  clock += 1_000;
+  const duplicate = await request(handler, { method: 'POST' });
+  assert.equal(duplicate.status, 202);
+  assert.equal(duplicate.json().pending, true);
+  assert.equal(starts, 1, 'rapid retries must not spawn another login');
+
+  const remote = await request(handler, {
+    method: 'POST',
+    remoteAddress: '192.168.1.20',
+  });
+  assert.equal(remote.status, 403);
+  assert.equal(starts, 1);
+
+  const crossOrigin = await request(handler, {
+    method: 'POST',
+    origin: 'https://example.com',
+  });
+  assert.equal(crossOrigin.status, 403);
+  assert.equal(starts, 1);
+});
+
+test('OAuth login endpoint selects an existing local sign-in without launching Codex', async () => {
+  const handler = install(
+    openAiRealtimeProxy({
+      realtime: {
+        resolveOAuthAccessToken: () => 'fixture-existing-secret',
+        startOAuthLogin: () =>
+          assert.fail('existing auth must not launch login'),
+      },
+    }),
+  ).get('/api/realtime/oauth-login');
+  const response = await request(handler, { method: 'POST' });
+  assert.equal(response.status, 200);
+  assert.deepEqual(response.json(), {
+    available: true,
+    started: false,
+    pending: false,
+  });
+  assert.equal(response.body.includes('fixture-existing-secret'), false);
 });
 
 test('debug logging resolves each supplied application directory independently', async (t) => {

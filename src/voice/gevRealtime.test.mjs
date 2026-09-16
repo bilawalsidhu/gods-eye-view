@@ -3194,6 +3194,20 @@ test('F1: the toggle still records the next-session preference while live', () =
   assert.match(ui.tierButton.title, /this session stays on/i);
 });
 
+test('OAuth cloud sessions hide API spend and do not trip the API spend guard', () => {
+  const { controller, ui } = costControllerHarness();
+  controller.status = 'listening';
+  controller._cost.cloudVoiceAuth = 'oauth';
+  controller._cost.sessionCloudVoiceAuth = 'oauth';
+  controller.syncCostUi();
+  const before = controller.costTracker.state();
+  assert.equal(ui.costValue.hidden, true);
+  assert.equal(controller.recordUsage(usdUsage(100)), null);
+  const after = controller.costTracker.state();
+  assert.equal(after.totalUsd, before.totalUsd);
+  assert.equal(controller.costCapStopped, false);
+});
+
 test('F1: when idle, toggling does re-price the preview meter', () => {
   const { controller } = costControllerHarness();
   controller.status = 'idle';

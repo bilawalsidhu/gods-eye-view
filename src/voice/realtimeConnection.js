@@ -82,6 +82,7 @@ export class RealtimeConnection {
     this.debugLog('session.starting', {
       epoch,
       tier: this.cost.voiceTier,
+      authMode: this.cost.sessionCloudVoiceAuth,
       connection: this.connectionDiagnostics(),
     });
     let localStream = null;
@@ -89,6 +90,7 @@ export class RealtimeConnection {
     try {
       const minted = await this.backend.requestToken({
         tier: this.cost.voiceTier,
+        authMode: this.cost.sessionCloudVoiceAuth,
         signal,
       });
       const token = minted.token;
