@@ -15,6 +15,77 @@ function megabytes(bytes) {
   return `${Math.round(Number(bytes || 0) / 1e6)} MB`;
 }
 
+const GIB = 1024 ** 3;
+
+/**
+ * Small, tool-call-capable MLX models we have an explicit LocalAI config for.
+ * The list is intentionally curated: hardware fit alone is not enough for GEV,
+ * because the language model must also drive the existing tool surface well.
+ */
+export const LOCAL_VOICE_LLM_CANDIDATES = Object.freeze([
+  Object.freeze({
+    id: 'minicpm5-1b-mlx',
+    label: 'MiniCPM5 1B · MLX 4-bit',
+    minimumMemoryGb: 6,
+    detail: 'Fastest · lower memory',
+  }),
+  Object.freeze({
+    id: 'minicpm5-2b-mlx',
+    label: 'MiniCPM5 2B · MLX 4-bit',
+    minimumMemoryGb: 10,
+    detail: 'Better tool quality · recommended when it fits',
+  }),
+]);
+
+/**
+ * Pick the strongest validated local-voice LLM that leaves useful headroom for
+ * the speech stack and the rest of the app. Apple Silicon exposes GPU memory as
+ * unified system memory, so total RAM is the useful budget here.
+ */
+export function recommendLocalVoiceLlm({
+  platform = '',
+  architecture = '',
+  totalMemoryBytes = 0,
+  candidates = LOCAL_VOICE_LLM_CANDIDATES,
+} = {}) {
+  const totalMemoryGb = Number(totalMemoryBytes || 0) / GIB;
+  const appleSilicon = platform === 'darwin' && architecture === 'arm64';
+  const rows = candidates.map((candidate) => ({
+    ...candidate,
+    fits: appleSilicon && totalMemoryGb >= candidate.minimumMemoryGb,
+  }));
+  const fitting = rows.filter((candidate) => candidate.fits);
+  const recommended = fitting.at(-1) || null;
+  const selected = recommended || rows[0] || null;
+  return {
+    automatic: true,
+    appleSilicon,
+    totalMemoryGb,
+    selected: selected?.id || null,
+    recommendation: recommended,
+    candidates: rows,
+  };
+}
+
+/** Compact status copy for the Provider Settings row. */
+export function localVoiceRecommendationLine({
+  model = null,
+  recommendation = null,
+  hardware = null,
+} = {}) {
+  if (model?.automatic === false && model?.selected) {
+    return `CUSTOM · ${model.selected}`;
+  }
+  const chosen = recommendation?.label;
+  if (!chosen) return '';
+  const memory = Number(hardware?.totalMemoryGb || 0);
+  const suffix =
+    Number.isFinite(memory) && memory > 0
+      ? ` · ${Math.round(memory)} GB unified memory`
+      : '';
+  return `RECOMMENDED · ${chosen}${suffix}`;
+}
+
 export const LOCAL_VOICE_COMPATIBILITY = Object.freeze({
   mlxThinking: 'mlx-thinking',
   minicpm5Parser: 'minicpm5-parser',

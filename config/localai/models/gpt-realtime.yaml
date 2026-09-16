@@ -3,7 +3,9 @@ name: gpt-realtime
 pipeline:
   vad: silero-vad-ggml
   transcription: parakeet-cpp-realtime_eou_120m-v1
-  llm: minicpm5-2b-mlx
+  # `auto` is resolved by the GEV setup helper before this config is installed.
+  # Replacing it with a concrete model name is the manual override path.
+  llm: auto
   tts: kokoro
 
   disable_thinking: true

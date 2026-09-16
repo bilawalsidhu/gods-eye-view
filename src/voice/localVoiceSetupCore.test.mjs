@@ -5,7 +5,9 @@ import {
   localVoiceActionLabel,
   localVoiceInstallPlan,
   localVoiceProgressLine,
+  localVoiceRecommendationLine,
   localVoiceRowLabel,
+  recommendLocalVoiceLlm,
 } from './localVoiceSetupCore.mjs';
 
 const PROFILE = Object.freeze({
@@ -136,4 +138,45 @@ test('the row says what it is, and the button says what it would do', () => {
   assert.equal(localVoiceRowLabel({}), 'NOT INSTALLED');
   assert.equal(localVoiceActionLabel({}), 'INSTALL');
   assert.equal(localVoiceActionLabel({ state: 'failed' }), 'RETRY INSTALL');
+});
+
+test('Apple Silicon recommendation scales with unified memory', () => {
+  const low = recommendLocalVoiceLlm({
+    platform: 'darwin',
+    architecture: 'arm64',
+    totalMemoryBytes: 8 * 1024 ** 3,
+  });
+  assert.equal(low.selected, 'minicpm5-1b-mlx');
+  assert.deepEqual(
+    low.candidates.map(({ id, fits }) => [id, fits]),
+    [
+      ['minicpm5-1b-mlx', true],
+      ['minicpm5-2b-mlx', false],
+    ],
+  );
+
+  const roomy = recommendLocalVoiceLlm({
+    platform: 'darwin',
+    architecture: 'arm64',
+    totalMemoryBytes: 16 * 1024 ** 3,
+  });
+  assert.equal(roomy.selected, 'minicpm5-2b-mlx');
+  assert.equal(roomy.recommendation.label, 'MiniCPM5 2B · MLX 4-bit');
+});
+
+test('recommendation copy distinguishes automatic and manual model choices', () => {
+  assert.equal(
+    localVoiceRecommendationLine({
+      model: { automatic: true, selected: 'minicpm5-2b-mlx' },
+      recommendation: { label: 'MiniCPM5 2B · MLX 4-bit' },
+      hardware: { totalMemoryGb: 16 },
+    }),
+    'RECOMMENDED · MiniCPM5 2B · MLX 4-bit · 16 GB unified memory',
+  );
+  assert.equal(
+    localVoiceRecommendationLine({
+      model: { automatic: false, selected: 'qwen3-4b-mlx' },
+    }),
+    'CUSTOM · qwen3-4b-mlx',
+  );
 });

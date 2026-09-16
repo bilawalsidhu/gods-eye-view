@@ -7,6 +7,7 @@ import { localVoiceInstallPlan } from '../../src/voice/localVoiceSetupCore.mjs';
 import { incompleteDownloadBytes } from '../providers/localai/files.js';
 import {
   readProfile,
+  resolveLocalVoiceLlm,
   runLocalStep,
   setupLocalVoice,
   stepCommand,
@@ -27,6 +28,7 @@ export function createLocalVoiceInstaller({
   platform = process.platform,
   architecture = process.arch,
   homeDirectory = os.homedir(),
+  totalMemoryBytes = os.totalmem(),
   profileDir = undefined,
   downloadedBytes = null,
   probeBinary = (executable) =>
@@ -35,6 +37,7 @@ export function createLocalVoiceInstaller({
   let steps = [];
   let state = 'idle';
   let error = '';
+  let activeModel = null;
 
   const home = () =>
     path.resolve(
@@ -53,9 +56,26 @@ export function createLocalVoiceInstaller({
     LOCALAI_BACKENDS_PATH: backendsDir(),
   });
 
-  const profileOrNull = () => {
+  const modelSelection = ({ preferInstalled = true } = {}) =>
+    resolveLocalVoiceLlm({
+      environment,
+      platform,
+      architecture,
+      totalMemoryBytes,
+      profileDir,
+      installedModelsDir: modelsDir(),
+      preferInstalled,
+    });
+
+  const profileOrNull = ({ preferInstalled = true } = {}) => {
     try {
-      return readProfile(profileDir);
+      const model = modelSelection({ preferInstalled });
+      return {
+        model,
+        profile: readProfile(profileDir, undefined, {
+          stageOverrides: model.automatic ? { llm: model.selected } : {},
+        }),
+      };
     } catch {
       return null;
     }
@@ -72,9 +92,9 @@ export function createLocalVoiceInstaller({
 
   /** A profile is installable here unless an mlx stage meets the wrong machine. */
   function supported() {
-    const profile = profileOrNull();
-    if (!profile) return false;
-    if (!profile.backends.includes('mlx')) return true;
+    const resolved = profileOrNull();
+    if (!resolved) return false;
+    if (!resolved.profile.backends.includes('mlx')) return true;
     return platform === 'darwin' && architecture === 'arm64';
   }
 
@@ -84,6 +104,7 @@ export function createLocalVoiceInstaller({
         environment,
         platform,
         architecture,
+        totalMemoryBytes,
         checkOnly: true,
         ...profileOptions,
       });
@@ -95,6 +116,12 @@ export function createLocalVoiceInstaller({
 
   function status() {
     const { ready, detail } = readiness();
+    let model = null;
+    try {
+      model = modelSelection({ preferInstalled: true });
+    } catch {
+      // A malformed manual override is already reported by readiness.
+    }
     return {
       binary: hasLocalAi(),
       supported: supported(),
@@ -102,6 +129,16 @@ export function createLocalVoiceInstaller({
       detail,
       state,
       error,
+      model: model
+        ? {
+            automatic: model.automatic,
+            configured: model.configured,
+            selected: model.selected,
+          }
+        : null,
+      hardware: model?.hardware || null,
+      recommendation: model?.recommendation || null,
+      candidates: model?.candidates || [],
       bytes: state === 'running' ? bytes() : 0,
       steps: steps.map(({ id, kind, label, state: stepState }) => ({
         id,
@@ -157,6 +194,10 @@ export function createLocalVoiceInstaller({
             ...profileOptions,
             modelsDir: modelsDir(),
             backendsDir: backendsDir(),
+            stageOverrides:
+              activeModel?.automatic && activeModel?.selected
+                ? { llm: activeModel.selected }
+                : {},
           });
         step.state = 'done';
       } catch (failure) {
@@ -172,12 +213,14 @@ export function createLocalVoiceInstaller({
   /** Idempotent while running: a second click returns the run already in flight. */
   function start() {
     if (state === 'running') return status();
-    const profile = profileOrNull();
-    if (!profile) {
+    const resolved = profileOrNull({ preferInstalled: false });
+    if (!resolved) {
       state = 'failed';
       error = 'No local voice profile found';
       return status();
     }
+    const { profile, model } = resolved;
+    activeModel = model;
     if (!supported()) {
       state = 'failed';
       error = 'The mlx stage in this profile requires an Apple Silicon Mac';

@@ -5,7 +5,9 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   LOCAL_VOICE_COMPATIBILITY,
+  LOCAL_VOICE_LLM_CANDIDATES,
   localVoiceInstallPlan,
+  recommendLocalVoiceLlm,
 } from '../src/voice/localVoiceSetupCore.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -14,7 +16,11 @@ const PROFILE_DIR = path.join(ROOT, 'config', 'localai');
 const PIPELINE_NAME = 'gpt-realtime';
 /** WebRTC audio codec backend. No model config names it, the transport needs it. */
 const ALWAYS_BACKENDS = Object.freeze(['opus']);
-const MINICPM5_MLX_REPO = 'openbmb/MiniCPM5-2B-MLX';
+const AUTO_LLM = 'auto';
+
+function isMiniCpm5MlxRepo(repoId) {
+  return /^openbmb\/MiniCPM5-(?:1B|2B)-MLX$/.test(String(repoId || ''));
+}
 
 function replaceOnce(source, needle, replacement, label) {
   const first = source.indexOf(needle);
@@ -121,6 +127,20 @@ export function parsePipelineStages(text) {
   return stages;
 }
 
+/** Replace declared pipeline stages while preserving the rest of the YAML. */
+export function renderPipelineStages(text, overrides = {}) {
+  let output = String(text);
+  for (const [stage, value] of Object.entries(overrides)) {
+    if (!['vad', 'transcription', 'llm', 'tts'].includes(stage) || !value)
+      continue;
+    const pattern = new RegExp(`^(\\s{2}${stage}:\\s*)\\S+(\\s*)$`, 'm');
+    if (!pattern.test(output))
+      throw new Error(`Pipeline does not declare ${stage}`);
+    output = output.replace(pattern, `$1${value}$2`);
+  }
+  return output;
+}
+
 /** The backend a model config runs on, if it names one. */
 function parseBackend(text) {
   return /^backend:\s*(\S+)\s*$/m.exec(String(text))?.[1] ?? null;
@@ -152,11 +172,21 @@ export function isHuggingFaceRepo(value) {
 export function readProfile(
   profileDir = PROFILE_DIR,
   pipelineName = PIPELINE_NAME,
+  { stageOverrides = {} } = {},
 ) {
   const dir = path.join(profileDir, 'models');
-  const stages = parsePipelineStages(
-    fs.readFileSync(path.join(dir, `${pipelineName}.yaml`), 'utf8'),
-  );
+  const stages = {
+    ...parsePipelineStages(
+      fs.readFileSync(path.join(dir, `${pipelineName}.yaml`), 'utf8'),
+    ),
+    ...stageOverrides,
+  };
+  // `readProfile()` is also a useful inspection helper. Outside the installer
+  // there is no hardware context, so resolve the auto marker to the strongest
+  // shipped candidate rather than pretending `auto` is a gallery model.
+  if (stages.llm === AUTO_LLM) {
+    stages.llm = LOCAL_VOICE_LLM_CANDIDATES.at(-1)?.id || AUTO_LLM;
+  }
   const names = Object.values(stages);
   if (!names.length)
     throw new Error(`${pipelineName}.yaml declares no pipeline stages`);
@@ -182,7 +212,7 @@ export function readProfile(
   if (backends.has('mlx')) {
     compatibility.push(LOCAL_VOICE_COMPATIBILITY.mlxThinking);
   }
-  if (weights.some(({ repoId }) => repoId === MINICPM5_MLX_REPO)) {
+  if (weights.some(({ repoId }) => isMiniCpm5MlxRepo(repoId))) {
     compatibility.push(LOCAL_VOICE_COMPATIBILITY.minicpm5Parser);
   }
   return {
@@ -192,6 +222,85 @@ export function readProfile(
     gallery,
     weights,
     compatibility,
+  };
+}
+
+function configuredPipelineStages(profileDir = PROFILE_DIR) {
+  return parsePipelineStages(
+    fs.readFileSync(
+      path.join(profileDir, 'models', `${PIPELINE_NAME}.yaml`),
+      'utf8',
+    ),
+  );
+}
+
+function knownAutoLlm(name) {
+  return LOCAL_VOICE_LLM_CANDIDATES.some((candidate) => candidate.id === name);
+}
+
+/**
+ * Resolve `llm: auto` to a validated model for this machine. A concrete `llm:`
+ * in the profile is always treated as an operator override and left alone.
+ */
+export function resolveLocalVoiceLlm({
+  environment = process.env,
+  platform = process.platform,
+  architecture = process.arch,
+  totalMemoryBytes = os.totalmem(),
+  profileDir = PROFILE_DIR,
+  installedModelsDir = null,
+  preferInstalled = false,
+  requestedLlm = null,
+} = {}) {
+  const configured = configuredPipelineStages(profileDir).llm;
+  if (configured && configured !== AUTO_LLM) {
+    return {
+      automatic: false,
+      configured,
+      selected: configured,
+      recommendation: null,
+      candidates: [],
+      hardware: {
+        platform,
+        architecture,
+        totalMemoryGb: Number(totalMemoryBytes || 0) / 1024 ** 3,
+        unifiedMemory: platform === 'darwin' && architecture === 'arm64',
+      },
+    };
+  }
+
+  const recommendation = recommendLocalVoiceLlm({
+    platform,
+    architecture,
+    totalMemoryBytes,
+  });
+  const explicit = requestedLlm || environment.GEV_LOCAL_VOICE_LLM || null;
+  if (explicit && !knownAutoLlm(explicit)) {
+    throw new Error(`Unknown local voice LLM selection: ${explicit}`);
+  }
+
+  let installed = null;
+  if (preferInstalled && installedModelsDir) {
+    const file = path.join(installedModelsDir, `${PIPELINE_NAME}.yaml`);
+    if (fs.existsSync(file)) {
+      installed =
+        parsePipelineStages(fs.readFileSync(file, 'utf8')).llm || null;
+      if (!knownAutoLlm(installed)) installed = null;
+    }
+  }
+  const selected = explicit || installed || recommendation.selected;
+  return {
+    automatic: true,
+    configured: AUTO_LLM,
+    selected,
+    recommendation: recommendation.recommendation,
+    candidates: recommendation.candidates,
+    hardware: {
+      platform,
+      architecture,
+      totalMemoryGb: recommendation.totalMemoryGb,
+      unifiedMemory: recommendation.appleSilicon,
+    },
   };
 }
 
@@ -270,14 +379,29 @@ export function stepCommand(
 /** Steps that are file work rather than a spawned command. */
 export function runLocalStep(
   step,
-  { profileDir = PROFILE_DIR, modelsDir, backendsDir } = {},
+  {
+    profileDir = PROFILE_DIR,
+    modelsDir,
+    backendsDir,
+    pipelineName = PIPELINE_NAME,
+    stageOverrides = {},
+  } = {},
 ) {
   if (step?.kind === 'configs') {
     for (const name of fs.readdirSync(path.join(profileDir, 'models'))) {
-      fs.copyFileSync(
-        path.join(profileDir, 'models', name),
-        path.join(modelsDir, name),
-      );
+      const source = path.join(profileDir, 'models', name);
+      const target = path.join(modelsDir, name);
+      if (
+        name === `${pipelineName}.yaml` &&
+        Object.keys(stageOverrides).length
+      ) {
+        fs.writeFileSync(
+          target,
+          renderPipelineStages(fs.readFileSync(source, 'utf8'), stageOverrides),
+        );
+      } else {
+        fs.copyFileSync(source, target);
+      }
     }
   }
   if (step?.kind === 'compat') {
@@ -362,10 +486,30 @@ export function setupLocalVoice({
   environment = process.env,
   platform = process.platform,
   architecture = process.arch,
+  totalMemoryBytes = os.totalmem(),
   checkOnly = false,
   profileDir = PROFILE_DIR,
+  requestedLlm = null,
 } = {}) {
-  const profile = readProfile(profileDir);
+  const executable = environment.GEV_LOCAL_AI_BIN || 'local-ai';
+  const home = path.resolve(
+    environment.GEV_LOCAL_AI_HOME ||
+      path.join(os.homedir(), '.local', 'share', 'localai'),
+  );
+  const modelsDir = path.join(home, 'models');
+  const backendsDir = path.join(home, 'backends');
+  const model = resolveLocalVoiceLlm({
+    environment,
+    platform,
+    architecture,
+    totalMemoryBytes,
+    profileDir,
+    installedModelsDir: modelsDir,
+    preferInstalled: checkOnly,
+    requestedLlm,
+  });
+  const stageOverrides = model.automatic ? { llm: model.selected } : {};
+  const profile = readProfile(profileDir, PIPELINE_NAME, { stageOverrides });
   const usesMlx = profile.backends.includes('mlx');
   // Only the MLX stack is Apple-Silicon-bound; a profile that swaps in a
   // llama.cpp stage has no reason to refuse to install elsewhere.
@@ -374,13 +518,6 @@ export function setupLocalVoice({
       'The mlx stage in this profile requires an Apple Silicon Mac',
     );
   }
-  const executable = environment.GEV_LOCAL_AI_BIN || 'local-ai';
-  const home = path.resolve(
-    environment.GEV_LOCAL_AI_HOME ||
-      path.join(os.homedir(), '.local', 'share', 'localai'),
-  );
-  const modelsDir = path.join(home, 'models');
-  const backendsDir = path.join(home, 'backends');
   const childEnvironment = {
     ...environment,
     GEV_LOCAL_AI_HOME: home,
@@ -404,7 +541,14 @@ export function setupLocalVoice({
         environment: childEnvironment,
       });
       if (spec) command(spec.command, spec.args, spec.environment);
-      else runLocalStep(step, { profileDir, modelsDir, backendsDir });
+      else
+        runLocalStep(step, {
+          profileDir,
+          modelsDir,
+          backendsDir,
+          pipelineName: profile.pipelineName,
+          stageOverrides,
+        });
     }
   }
 
@@ -412,9 +556,19 @@ export function setupLocalVoice({
   for (const name of fs.readdirSync(path.join(profileDir, 'models'))) {
     const source = path.join(profileDir, 'models', name);
     const installed = path.join(modelsDir, name);
+    const expected =
+      name === `${profile.pipelineName}.yaml` &&
+      Object.keys(stageOverrides).length
+        ? Buffer.from(
+            renderPipelineStages(
+              fs.readFileSync(source, 'utf8'),
+              stageOverrides,
+            ),
+          )
+        : fs.readFileSync(source);
     if (
       !fs.existsSync(installed) ||
-      !fs.readFileSync(source).equals(fs.readFileSync(installed))
+      !expected.equals(fs.readFileSync(installed))
     ) {
       missing.push(`model config ${name}`);
     }
@@ -439,7 +593,13 @@ export function setupLocalVoice({
       `Local voice setup incomplete (${missing.join(', ')}) — run npm run voice:local:setup`,
     );
   }
-  return { home, ready: true, profile: profile.pipelineName };
+  return {
+    home,
+    ready: true,
+    profile: profile.pipelineName,
+    selectedLlm: model.selected,
+    automaticLlm: model.automatic,
+  };
 }
 
 function main() {

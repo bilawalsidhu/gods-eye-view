@@ -203,13 +203,17 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+- Local voice now resolves `llm: auto` against the Mac's unified memory before
+  installation, choosing the validated MiniCPM5 1B profile for 8 GB-class Macs
+  and MiniCPM5 2B when there is enough headroom. POWER UP shows the recommendation;
+  concrete YAML model choices remain manual overrides.
 - Local voice installs from the app. The POWER UP panel gained a LOCAL VOICE row
   that reports readiness, runs the profile's install plan on a button, and shows
   which step is running and how many megabytes of weights have arrived. Only
   `brew install localai` stays a terminal step, shown as a command to copy.
 - Voice can switch between OpenAI Realtime and a self-hosted LocalAI Realtime
   pipeline from the mic panel. The Apple Silicon reference profile combines
-  Silero VAD, Parakeet STT, MiniCPM5-2B MLX 4-bit, and Kokoro TTS, with a
+  Silero VAD, Parakeet STT, auto-selected MiniCPM5 MLX 4-bit, and Kokoro TTS, with a
   repeatable setup/check command and the same 28 GEV tools.
 
 - Add bounded Director feature actions with accessible controls, explicit camera/layer admission and cancellation; restore pack geometry on same-shot seek. Preserve existing scenes and content attribution.

@@ -168,3 +168,26 @@ test('a missing LocalAI names the one command that stays in the terminal', () =>
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('the setup row recommends the model that fits this Mac', () => {
+  const low = createLocalVoiceInstaller({
+    environment: { GEV_LOCAL_AI_HOME: '/tmp/gev-unused-low' },
+    platform: 'darwin',
+    architecture: 'arm64',
+    totalMemoryBytes: 8 * 1024 ** 3,
+    probeBinary: () => false,
+  }).status();
+  assert.equal(low.model.automatic, true);
+  assert.equal(low.model.selected, 'minicpm5-1b-mlx');
+  assert.equal(low.recommendation.id, 'minicpm5-1b-mlx');
+
+  const roomy = createLocalVoiceInstaller({
+    environment: { GEV_LOCAL_AI_HOME: '/tmp/gev-unused-roomy' },
+    platform: 'darwin',
+    architecture: 'arm64',
+    totalMemoryBytes: 16 * 1024 ** 3,
+    probeBinary: () => false,
+  }).status();
+  assert.equal(roomy.model.selected, 'minicpm5-2b-mlx');
+  assert.equal(roomy.recommendation.id, 'minicpm5-2b-mlx');
+});

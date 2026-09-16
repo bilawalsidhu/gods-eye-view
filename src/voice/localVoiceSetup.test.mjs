@@ -10,6 +10,8 @@ import {
   patchLocalAiBackendSource,
   patchTokenizerSource,
   readProfile,
+  renderPipelineStages,
+  resolveLocalVoiceLlm,
   setupLocalVoice,
   weightsPresent,
 } from '../../scripts/setup-local-voice.mjs';
@@ -135,6 +137,57 @@ test('swapping a pipeline stage needs no code edit', () => {
     llm: 'qwen3-4b-mlx',
     tts: 'kokoro',
   });
+  assert.match(
+    renderPipelineStages(
+      [
+        'name: gpt-realtime',
+        'pipeline:',
+        '  llm: auto',
+        '  tts: kokoro',
+        '',
+      ].join('\n'),
+      { llm: 'minicpm5-1b-mlx' },
+    ),
+    /^  llm: minicpm5-1b-mlx$/m,
+    'the installed pipeline materializes the recommendation',
+  );
+});
+
+test('auto LLM resolution honors hardware and an explicit shipped override', () => {
+  const low = resolveLocalVoiceLlm({
+    platform: 'darwin',
+    architecture: 'arm64',
+    totalMemoryBytes: 8 * 1024 ** 3,
+    environment: {},
+  });
+  assert.equal(low.automatic, true);
+  assert.equal(low.selected, 'minicpm5-1b-mlx');
+
+  const roomy = resolveLocalVoiceLlm({
+    platform: 'darwin',
+    architecture: 'arm64',
+    totalMemoryBytes: 16 * 1024 ** 3,
+    environment: {},
+  });
+  assert.equal(roomy.selected, 'minicpm5-2b-mlx');
+
+  const pinned = resolveLocalVoiceLlm({
+    platform: 'darwin',
+    architecture: 'arm64',
+    totalMemoryBytes: 16 * 1024 ** 3,
+    environment: { GEV_LOCAL_VOICE_LLM: 'minicpm5-1b-mlx' },
+  });
+  assert.equal(pinned.selected, 'minicpm5-1b-mlx');
+  assert.throws(
+    () =>
+      resolveLocalVoiceLlm({
+        platform: 'darwin',
+        architecture: 'arm64',
+        totalMemoryBytes: 16 * 1024 ** 3,
+        environment: { GEV_LOCAL_VOICE_LLM: 'not-a-shipped-candidate' },
+      }),
+    /Unknown local voice LLM selection/,
+  );
 });
 
 test('Hub repos are told apart from gallery weight files', () => {

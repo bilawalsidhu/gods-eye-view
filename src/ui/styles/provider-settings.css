@@ -240,12 +240,19 @@
   color: rgba(255, 138, 128, 0.9);
 }
 
+.key-setup-local-recommendation,
 .key-setup-local-unlocks,
 .key-setup-local-progress {
   margin: 0;
   font-size: 0.62rem;
   line-height: 1.4;
   color: rgba(190, 214, 222, 0.75);
+}
+
+.key-setup-local-recommendation {
+  color: rgba(84, 227, 156, 0.9);
+  font-family: var(--font-mono);
+  letter-spacing: 0.025rem;
 }
 
 .key-setup-local-actions {

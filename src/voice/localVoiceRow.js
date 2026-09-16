@@ -9,6 +9,7 @@
 import {
   localVoiceActionLabel,
   localVoiceProgressLine,
+  localVoiceRecommendationLine,
   localVoiceRowLabel,
 } from './localVoiceSetupCore.mjs';
 
@@ -31,6 +32,9 @@ export async function initLocalVoiceRow({
   const button = root.querySelector('[data-local-voice-install]');
   const command = root.querySelector('[data-local-voice-command]');
   const progress = root.querySelector('[data-local-voice-progress]');
+  const recommendation = root.querySelector(
+    '[data-local-voice-recommendation]',
+  );
   let timer = null;
   let disposed = false;
   let lastStatus = null;
@@ -47,6 +51,11 @@ export async function initLocalVoiceRow({
     root.dataset.state = status.state || 'idle';
     root.dataset.ready = String(Boolean(status.ready));
     if (stateLabel) stateLabel.textContent = localVoiceRowLabel(status);
+    if (recommendation) {
+      const text = localVoiceRecommendationLine(status);
+      recommendation.textContent = text;
+      recommendation.hidden = !text;
+    }
     const action = localVoiceActionLabel(status);
     // LocalAI itself is a package install, so that step is shown as a command
     // to run rather than a button that drives someone's package manager.

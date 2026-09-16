@@ -11,7 +11,7 @@ The bundled profile was verified with LocalAI 4.9.0 and MLX-LM 0.31.3. It uses:
 | --- | --- | --- |
 | VAD | Silero VAD | Detect speech boundaries |
 | STT | Parakeet Realtime EOU 120M | Transcribe speech and detect end of utterance |
-| LLM | MiniCPM5-2B MLX 4-bit | Choose tools and write the reply |
+| LLM | MiniCPM5 1B/2B MLX 4-bit (auto) | Choose tools and write the reply |
 | TTS | Kokoro 82M (`af_heart`) | Produce assistant speech |
 
 ## Install
@@ -39,6 +39,14 @@ arrive. `brew install localai` stays a terminal step — the row shows that
 command when LocalAI itself is missing rather than driving your package
 manager. The endpoints behind the row (`/api/setup/local-voice`) answer only
 the machine running the dev server, exactly like the key endpoints.
+
+The row also reports the LLM recommended for this Mac. The shipped pipeline
+uses `llm: auto`: an 8 GB-class Apple Silicon machine selects the official
+MiniCPM5-1B MLX weights, while machines with at least 10 GiB of unified memory
+select MiniCPM5-2B. The threshold leaves room for STT, TTS, LocalAI, Cesium and
+the browser instead of treating every byte of unified memory as model budget.
+The installed `gpt-realtime.yaml` contains the concrete choice, so readiness
+checks keep using that selection after a dev-server restart.
 
 Choosing **LOCAL** also opens POWER UP automatically when this setup is
 missing. If the row asks for `brew install localai`, run it in a terminal and
@@ -70,9 +78,9 @@ language and voice models`. Two outcomes are distinct on purpose:
 
 ## Swapping a stage
 
-The pipeline file decides what gets installed, so choosing different models is a
-YAML edit. Point a stage at another model, put that model's config beside it,
-and re-run setup:
+The pipeline file decides what gets installed. `llm: auto` opts into the
+hardware-aware MiniCPM choice above. Replacing `auto` with a concrete model name
+is an explicit override: put that model's config beside it and re-run setup.
 
 ```sh
 $EDITOR config/localai/models/gpt-realtime.yaml   # llm: qwen3-4b-mlx
@@ -95,6 +103,7 @@ These optional environment values change the defaults:
 GEV_VOICE_PROVIDER=local
 GEV_LOCAL_REALTIME_URL=http://localhost:8080/v1/realtime/calls
 GEV_LOCAL_REALTIME_MODEL=gpt-realtime
+GEV_LOCAL_VOICE_LLM=minicpm5-2b-mlx
 GEV_LOCAL_AI_BIN=local-ai
 GEV_LOCAL_AI_HOME=/absolute/path/to/localai
 ```
@@ -102,7 +111,10 @@ GEV_LOCAL_AI_HOME=/absolute/path/to/localai
 `GEV_VOICE_PROVIDER` sets the initial provider for a new browser profile. The
 mic panel selection is stored in the browser and takes precedence. A remote
 `GEV_LOCAL_REALTIME_URL` is supported, but GEV will never try to start or stop a
-process on that host.
+process on that host. `GEV_LOCAL_VOICE_LLM` optionally pins one of the shipped
+auto candidates (`minicpm5-1b-mlx` or `minicpm5-2b-mlx`) for scripted setup;
+editing the pipeline to a concrete `llm:` remains the path for arbitrary custom
+models.
 
 The included pipeline disables MiniCPM thinking, retains four conversation
 items, and preloads the full stack before the microphone connects. LLM output

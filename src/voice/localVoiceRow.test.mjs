@@ -25,6 +25,7 @@ function stubPanel() {
     '[data-local-voice-install]': stubElement(),
     '[data-local-voice-command]': stubElement(),
     '[data-local-voice-progress]': stubElement(),
+    '[data-local-voice-recommendation]': stubElement(),
   };
   const root = { ...stubElement(), querySelector: (selector) => parts[selector] || null };
   return {
@@ -39,7 +40,17 @@ const ok = (body) => ({ ok: true, json: async () => body });
 test('the row offers one install and reports progress from the server', async () => {
   const { parts, root, documentRef } = stubPanel();
   const calls = [];
-  let body = { binary: true, supported: true, ready: false, state: 'idle', steps: [], bytes: 0 };
+  let body = {
+    binary: true,
+    supported: true,
+    ready: false,
+    state: 'idle',
+    steps: [],
+    bytes: 0,
+    model: { automatic: true, selected: 'minicpm5-2b-mlx' },
+    recommendation: { label: 'MiniCPM5 2B · MLX 4-bit' },
+    hardware: { totalMemoryGb: 16 },
+  };
   const fetchImpl = async (url, options = {}) => {
     calls.push(`${options.method || 'GET'} ${url}`);
     return ok(body);
@@ -51,6 +62,10 @@ test('the row offers one install and reports progress from the server', async ()
   assert.equal(parts['[data-local-voice-install]'].textContent, 'INSTALL');
   assert.equal(parts['[data-local-voice-install]'].hidden, false);
   assert.equal(parts['[data-local-voice-command]'].hidden, true, 'LocalAI is present, so no command to run');
+  assert.equal(
+    parts['[data-local-voice-recommendation]'].textContent,
+    'RECOMMENDED · MiniCPM5 2B · MLX 4-bit · 16 GB unified memory',
+  );
 
   body = {
     binary: true,
