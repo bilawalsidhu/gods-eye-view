@@ -71,7 +71,7 @@ const settle = async () => {
 };
 const descriptor = (id) => ({ id, label: id, kind: 'imagery' });
 function publicFixture() {
-  const tileset = { show: true };
+  const tileset = { show: true, imageryLayers: { id: 'drape' } };
   const registry = createDefaultMapSources({ googleTileset: tileset });
   const providers = new Map();
   for (const source of registry.sources) {
@@ -183,6 +183,50 @@ test('returning to the live provider supersedes a pending switch without rebuild
   assert.notEqual(env.imagery[0], layer, 'a removed layer must be recreated');
   assert.equal(env.viewer.scene.globe.show, true);
   assert.equal(env.tileset.show, false);
+  env.controller.destroy();
+});
+
+test('the controller says which imagery collection is being rendered', async () => {
+  // A photoreal stack hides the globe, so imagery added to the globe's
+  // collection draws nothing. This controller owns both halves of that switch,
+  // so it answers the question rather than leaving callers to read scene state
+  // and guess.
+  const env = publicFixture();
+  await env.controller.setStack('esri-imagery');
+  assert.deepEqual(env.controller.getImageryTarget(), {
+    regime: 'globe',
+    imageryLayers: env.viewer.imageryLayers,
+  });
+
+  await env.controller.setStack('photoreal');
+  assert.deepEqual(env.controller.getImageryTarget(), {
+    regime: 'tileset',
+    imageryLayers: env.tileset.imageryLayers,
+  });
+
+  await env.controller.setStack('osm');
+  assert.equal(env.controller.getImageryTarget().regime, 'globe');
+
+  // Teardown hands back the globe rather than a destroyed tileset's collection.
+  await env.controller.setStack('photoreal');
+  env.controller.destroy();
+  assert.deepEqual(env.controller.getImageryTarget(), {
+    regime: 'globe',
+    imageryLayers: env.viewer.imageryLayers,
+  });
+});
+
+test('the boot activation resolves a target even though it emits no event', async () => {
+  // Startup calls setStack with { silent: true }; a target derived from the
+  // change event would still be unset at first draw.
+  const env = publicFixture();
+  await env.controller.setStack('photoreal', { silent: true });
+  assert.equal(
+    env.changes.length,
+    0,
+    'the silent activation must emit nothing',
+  );
+  assert.equal(env.controller.getImageryTarget().regime, 'tileset');
   env.controller.destroy();
 });
 

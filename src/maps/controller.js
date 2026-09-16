@@ -31,6 +31,8 @@ export class MapSourceController {
     this._terrainProviders = new Map();
     this._tilesets = new Map();
     this._ownedTilesets = new Set();
+    /** @type {object|null} The tileset currently shown, or null on a globe stack. */
+    this._activeTileset = null;
     this._disposed = new WeakSet();
     this._switchGen = 0;
     this._isSwitching = false;
@@ -175,6 +177,29 @@ export class MapSourceController {
       if (source.tileset) source.tileset.show = source.tileset === active;
     for (const tileset of this._ownedTilesets)
       tileset.show = tileset === active;
+    this._activeTileset = active || null;
+  }
+
+  /**
+   * Which imagery collection is actually being rendered right now.
+   *
+   * Overlay imagery cannot simply be added to `viewer.imageryLayers`: a
+   * photoreal stack hides the globe, and imagery on a hidden globe draws
+   * nothing. This controller is the authority on the answer because it owns
+   * both halves of the switch — it sets `globe.show` and it decides which
+   * tileset is shown — so a caller reading scene state would be guessing at
+   * what this already knows.
+   *
+   * Resolved from the activation path rather than from a change event, so it
+   * is correct for the silent boot activation, which emits none.
+   *
+   * @returns {{regime: 'globe'|'tileset', imageryLayers: object}} Where to draw.
+   */
+  getImageryTarget() {
+    const tileset = this._activeTileset;
+    return tileset
+      ? { regime: 'tileset', imageryLayers: tileset.imageryLayers }
+      : { regime: 'globe', imageryLayers: this.viewer.imageryLayers };
   }
 
   async _activateGlobeStack(stack, gen) {
@@ -343,6 +368,7 @@ export class MapSourceController {
     this._terrainProviders.clear();
     this._tilesets.clear();
     this._ownedTilesets.clear();
+    this._activeTileset = null;
     this._onChange = null;
     this._onError = null;
   }
