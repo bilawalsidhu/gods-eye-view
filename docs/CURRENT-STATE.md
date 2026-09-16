@@ -1,5 +1,11 @@
 # God's Eye View Current State
 
+Vessel snapshot completeness is separate from freshness. A current snapshot with
+rejected or duplicate records shows PARTIAL with accepted/received counts; stale
+or unknown freshness and transport failures retain their warnings. Partial
+snapshots still retain missing contacts within the existing age and row limits.
+A complete successful snapshot clears the partial indicator.
+
 Director imports now open a non-mutating preview before Apply. EDIT DETAILS
 authors validated anchor, camera, pack and interaction drafts; SHARE SCENE exports
 a selected scene or a bounded bundle of explicitly chosen pack files. Bundled
@@ -63,6 +69,14 @@ Search framing and annotations request semantic map features from an explicit so
 
 Nepal media preloads survive repeated camera-flight updates, but Stop, event disable and replacement remove abandoned frames and revoke pending Facebook sessions. Fallback evidence-card clicks respect the shared drawing-tool pointer lease.
 
+In the Pinokio browser shell, Nepal provider embeds and hidden preloads are
+disabled before creating frames or loading provider SDKs, because the shell can
+redirect iframe navigation to an external browser. Existing source-linked cards
+remain available, and Open Original is an explicit action. Optional approved
+local clips still use the existing fallback; the public pack bundles no witness
+clips. Chrome and Safari retain embeds even when visiting a Pinokio-launched
+server. This compatibility fallback does not repair Pinokio's navigation handler.
+
 Nepal flood lines classify the active terrain or photoreal surface, and the surge marker follows that surface. Geographic route coordinates are unchanged; dynamic lines do not rely on unsupported depth-failure materials. Later media-only shots keep their completed source-path history throughout arrival and card reveal.
 
 Scene Stop, replacement, seek, and teardown revoke the Upper Valley locator's delayed camera approach and orbit while preserving its visible callout. A revoked timer or camera callback cannot start another flight or interfere with a newer shot.
@@ -79,7 +93,7 @@ The Nepal overview route and lake-shot trail share the river-centerline starting
 
 The event panel omits the WITNESS shortcut. Shot media, source attribution, Open Original links and corridor navigation remain available.
 
-The Mailung Bazzar, Dandaguan YouTube embed follows the provider's playback clock through 0:07, then the scene advances after its 0.65-second media exit. The controller reconciles provider state and source time when the API attaches and while waiting for playback, including missed PLAYING notifications and an already-ended clip. Startup is bounded to five seconds, and stalled playback has a bounded timeout; unavailable or blocked media cannot strand the scene. The authored estimate remains seven seconds plus the exit, replacing older saved holds at runtime without rewriting them. Stop, replacement and teardown revoke pending playback callbacks.
+The Mailung Bazzar, Dandaguan YouTube embed follows the provider's playback clock through 0:07, then the scene advances after its 0.65-second media exit. The controller reconciles provider state and source time when the API attaches and while waiting for playback, including missed PLAYING notifications and an already-ended clip. Startup is bounded to five seconds, and stalled playback has a bounded timeout; unavailable or blocked media cannot strand the scene. When the host deliberately suppresses provider playback and there is no approved local clip, the source card instead uses the authored 7.65-second dwell before the next shot. The authored estimate replaces older saved holds at runtime without rewriting them. Autoplay requires transient Director ownership from Play Scene or Play Shot; LOAD, restoration and seek remain passive. Stop, replacement and teardown revoke that ownership and pending playback callbacks.
 
 Persistent media-led Nepal shots preserve their completed upstream flood path during camera travel. The next reach still reveals after arrival; direct loads reconstruct the prefix and backward replay trims downstream history.
 

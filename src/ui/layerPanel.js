@@ -7,6 +7,7 @@ const FEED_STATE_LABELS = Object.freeze({
   loading: 'LOADING',
   degraded: 'DEGRADED',
   stale: 'STALE',
+  partial: 'PARTIAL',
   fallback: 'FALLBACK',
   unavailable: 'UNAVAILABLE',
 });
@@ -505,6 +506,17 @@ export class LayerPanel {
           ? stats.loadingLabel.trim()
           : stats.coverage || ago;
       return `${stateLabel} · ${source} · ${detail}`;
+    }
+    if (feedState === 'partial') {
+      const { acceptedRowCount, rawRowCount } = stats;
+      const detail =
+        Number.isInteger(acceptedRowCount) &&
+        Number.isInteger(rawRowCount) &&
+        acceptedRowCount >= 0 &&
+        rawRowCount > acceptedRowCount
+          ? `${acceptedRowCount} of ${rawRowCount} records accepted`
+          : 'incomplete snapshot';
+      return `${stateLabel} · ${source} · ${detail} · ${ago}`;
     }
     if (feedState === 'stale') {
       const retry =

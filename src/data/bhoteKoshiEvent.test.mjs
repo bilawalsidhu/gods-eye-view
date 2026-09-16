@@ -30,6 +30,8 @@ import {
 } from './bhoteKoshiEvent.js';
 import { SCENE_RECIPES } from '../scenes/recipes.js';
 import { LayerLifecycle } from './lifecycle.js';
+import { createBhoteKoshiEmbeddedMedia } from './bhoteKoshiEmbeddedMedia.js';
+import { SceneDirector } from '../scenes/director.js';
 
 const eventUrl = new URL('../../public/events/bhote-koshi-2026/event.json', import.meta.url);
 const eventModuleUrl = new URL('./bhoteKoshiEvent.js', import.meta.url);
@@ -277,8 +279,9 @@ test('trimmed scene media holds through provider startup, playback and fade, the
   try {
     const viewer = eventViewer();
     await layer.init(viewer);
+    layer.setSceneMediaPlayback({ sceneId: 'scene', shotId: 'shot', token: { cancelled: false } });
     layer.setParams({ presentation: 'scene-beat', sceneSurface: 'evidence-beat', beatId: 'mailung-bazzar',
-      sceneContext: { holdSec: 7.65 },
+      sceneContext: { sceneId: 'scene', shotId: 'shot', holdSec: 7.65 },
       sceneControls: { evidenceMediaAutoplay: true, cameraSettled: true, mediaExitDurationSec: 0.65 } }, { origin: 'scene' });
     await layer.enable(viewer, { origin: 'scene' });
     assert.equal(layer.getSceneShotMediaHold('mailung-bazzar').pending, true);
@@ -299,6 +302,94 @@ test('trimmed scene media holds through provider startup, playback and fade, the
     await layer.destroy();
     globalThis.document = previous.document; globalThis.window = previous.window;
   }
+});
+
+test('Pinokio source-card fallback selects authored Director dwell, not an impossible player hold', async () => {
+  const previous = { document: globalThis.document, window: globalThis.window };
+  installEventDom();
+  globalThis.window = { setTimeout: () => 1, clearTimeout() {} };
+  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
+  const layer = createBhoteKoshiEventLayer({
+    eventLoader: async () => event,
+    imageryProviderFactory: async url => ({ url }),
+    terrainSampler: async (_viewer, observations) => observations.map(() => ({ height: 800 })),
+    mediaLoader: async () => { throw Object.assign(new Error('No bundled clip'), { name: 'AbortError' }); },
+    overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
+    renderHost: { request() {}, hold() {}, release() {} },
+    embeddedMediaFactory: options => createBhoteKoshiEmbeddedMedia({ ...options,
+      globalRef: { navigator: { userAgent: 'Chrome Pinokio/8.0.40' } },
+      documentRef: { createElement() { assert.fail('unsupported host must allocate no provider DOM'); } },
+    }),
+  });
+  const token = { cancelled: false, signal: new AbortController().signal };
+  const params = { presentation: 'scene-beat', sceneSurface: 'evidence-beat', beatId: 'mailung-bazzar',
+    sceneContext: { sceneId: 'scene', shotId: 'shot', holdSec: 7.65 },
+    sceneControls: { evidenceMediaAutoplay: true, mediaPlaybackHoldSec: 7, cameraSettled: true } };
+  try {
+    const viewer = eventViewer();
+    await layer.init(viewer);
+    layer.setSceneMediaPlayback({ sceneId: 'scene', shotId: 'shot', token });
+    layer.setParams(params, { origin: 'scene' });
+    await layer.enable(viewer, { origin: 'scene' });
+    assert.equal(layer.getSceneShotMediaHold('mailung-bazzar'), null);
+    const waits = [];
+    await SceneDirector.prototype._holdShot.call({
+      _layerStatesForShot: () => ({ [layer.id]: { enabled: true, params } }),
+      dataManager: { layers: new Map([[layer.id, { module: layer }]]) },
+      _effectiveShotHoldSec: () => 7.65,
+      _sleep: async ms => waits.push(ms),
+      stopScene: () => assert.fail('a source card must not time out'),
+    }, { id: 'scene' }, { id: 'shot' }, token);
+    assert.deepEqual(waits, [7650], 'use the authored dwell instead of completing instantly or polling 20 seconds');
+    event.evidenceSpine.find(item => item.id === 'mailung-bazzar').media.videoPath = 'fixture-approved.mp4';
+    assert.equal(layer.getSceneShotMediaHold('mailung-bazzar').pending, true,
+      'an approved local clip remains a real playback owner even with the provider suppressed');
+  } finally { await layer.destroy(); Object.assign(globalThis, previous); }
+});
+
+test('saved autoplay controls cannot authorize media; live shot ownership is cancellable and never serialized', async () => {
+  const previous = { document: globalThis.document, window: globalThis.window };
+  installEventDom();
+  const timers = new Map(); let timerId = 0;
+  globalThis.window = { setTimeout: fn => { timers.set(++timerId, fn); return timerId; }, clearTimeout: id => timers.delete(id) };
+  const calls = [];
+  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
+  const layer = createBhoteKoshiEventLayer({
+    eventLoader: async () => event,
+    imageryProviderFactory: async url => ({ url }),
+    terrainSampler: async (_viewer, observations) => observations.map(() => ({ height: 800 })),
+    mediaLoader: async () => { throw Object.assign(new Error('No bundled clip'), { name: 'AbortError' }); },
+    overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
+    renderHost: { request() {}, hold() {}, release() {} },
+    embeddedMediaFactory: () => ({ supportsPlayback: true, warm: () => true,
+      show: options => { calls.push(options.autoplay); return true; },
+      getPlaybackState: () => null, play() {}, pause() {}, hide() {}, destroy() {} }),
+  });
+  const params = { presentation: 'scene-beat', sceneSurface: 'evidence-beat', beatId: 'mailung-bazzar',
+    sceneContext: { sceneId: 'scene', shotId: 'shot', holdSec: 7.65 },
+    sceneControls: { evidenceMediaAutoplay: true, cameraSettled: true, mediaPlaybackHoldSec: 7 } };
+  try {
+    const viewer = eventViewer(); await layer.init(viewer);
+    layer.setParams(params, { origin: 'local-restore' }); await layer.enable(viewer);
+    assert.ok(calls.length); assert.ok(calls.every(value => value === false));
+    assert.equal(layer.getSceneShotMediaHold('mailung-bazzar'), null);
+    const saved = layer.getParams();
+    const abort = new AbortController();
+    layer.setSceneMediaPlayback({ sceneId: 'scene', shotId: 'shot', token: { cancelled: false, signal: abort.signal } });
+    layer.setParams(params, { origin: 'scene' });
+    assert.equal(calls.at(-1), true);
+    assert.equal(layer.getSceneShotMediaHold('mailung-bazzar').pending, true,
+      'a temporarily null supported-provider state is still startup, not unsupported');
+    assert.deepEqual(layer.getParams(), saved, 'live playback authority must not enter saved params');
+    const late = [...timers.values()];
+    abort.abort(); late.forEach(fn => fn());
+    assert.equal(layer.getSceneShotMediaHold('mailung-bazzar'), null);
+    layer.setParams(params, { origin: 'local-restore' });
+    assert.equal(calls.at(-1), false, 'late callbacks and restored flags cannot restart revoked playback');
+    layer.setSceneMediaPlayback({ sceneId: 'scene', shotId: 'different-shot', token: { cancelled: false } });
+    layer.setParams(params, { origin: 'scene' });
+    assert.equal(calls.at(-1), false, 'a different shot cannot borrow this playback owner');
+  } finally { await layer.destroy(); Object.assign(globalThis, previous); }
 });
 
 test('Bhote Koshi timeline helpers clamp untrusted UI values', () => {
@@ -1695,7 +1786,9 @@ test('Upper Valley Collapse autoplays its muted local fallback without starting 
       sceneControls: { evidenceMediaAutoplay: true },
       beatId: 'immediate-collapse-viewpoint',
       beatReveal: 0.36,
+      sceneContext: { sceneId: 'scene', shotId: 'shot' },
     }, { origin: 'scene' });
+    layer.setSceneMediaPlayback({ sceneId: 'scene', shotId: 'shot', token: { cancelled: false } });
     await layer.enable(viewer, { origin: 'scene' });
     assert.equal(videos.length, 1);
     const video = videos[0];
@@ -1874,6 +1967,7 @@ test('Nepal evidence shots resume the standalone callout and flood sequence from
     sceneSurface: 'evidence-beat',
     beatId: 'gyirong-border-gate',
     beatReveal: 0.36,
+    sceneContext: { sceneId: 'scene', shotId: 'shot' },
     sceneControls: {
       evidenceSequence: true,
       evidenceSequenceDurationSec: 0.9,
@@ -1886,6 +1980,7 @@ test('Nepal evidence shots resume the standalone callout and flood sequence from
   try {
     await layer.init(viewer);
     layer.setParams(params, { origin: 'scene' });
+    layer.setSceneMediaPlayback({ sceneId: 'scene', shotId: 'shot', token: { cancelled: false } });
     await layer.enable(viewer, { origin: 'scene' });
     const card = entries.find(({ id }) => id === 'evidence-card-gyirong-border-gate');
     const flood = viewer._test.dataSources[0].entities.getById('bhote-koshi-flood-core');

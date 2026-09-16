@@ -10,6 +10,57 @@ import {
   resolveEmbeddedMediaSource,
 } from './bhoteKoshiEmbeddedMedia.js';
 
+test('Pinokio fallback never creates provider DOM or loads SDKs', async () => {
+  const unexpected = () => { throw new Error('Provider resource allocated in Pinokio'); };
+  const media = createBhoteKoshiEmbeddedMedia({
+    viewer: {},
+    documentRef: { createElement: unexpected },
+    globalRef: {
+      navigator: { userAgent: 'Mozilla/5.0 Chrome/140.0.0.0 Safari/537.36 Pinokio/8.0.40' },
+      setTimeout: unexpected,
+      requestAnimationFrame: unexpected,
+    },
+    facebookLoader: unexpected,
+    youtubeLoader: unexpected,
+    xLoader: unexpected,
+  });
+  for (const sourceUrl of [
+    'https://www.youtube.com/watch?v=abcdefghijk',
+    'https://www.facebook.com/watch/?v=123456789',
+    'https://x.com/example/status/123456789',
+  ]) {
+    const options = { observation: { media: { sourceUrl } }, autoplay: true };
+    assert.equal(media.warm(options), false, 'no hidden preload');
+    assert.equal(media.show(options), false, 'retain the existing fallback card');
+    assert.equal(media.play(), false);
+    assert.equal(media.pause(), false);
+    media.hide();
+  }
+  media.destroy();
+  media.hide();
+  await Promise.resolve();
+});
+
+test('ordinary browsers retain real preloads on the same launcher URL', () => {
+  for (const userAgent of [
+    'Mozilla/5.0 Chrome/140.0.0.0 Safari/537.36',
+    'Mozilla/5.0 Version/18.0 Safari/605.1.15',
+    'Mozilla/5.0 Electron/38.0.0',
+    '',
+  ]) {
+    const { media, root } = preloadFixture({ globalRef: {
+      navigator: { userAgent }, location: { href: 'http://127.0.0.1:42003/' },
+    } });
+    assert.equal(media.warm({ observation: { media: {
+      sourceUrl: 'https://www.youtube.com/watch?v=abcdefghijk',
+    } } }), true);
+    assert.equal(root.children.length, 1);
+    media.pause();
+    assert.equal(root.children.length, 0);
+    media.destroy();
+  }
+});
+
 function trimmedPlaybackFixture() {
   let now = 0;
   let nextId = 0;
