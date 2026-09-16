@@ -29,11 +29,11 @@ GEV entry points
 
 Avenues
 
-| id | title | direction | cost |
-|---|---|---|---|
-| `av-geo-1` | USGS feed as a transducer for the field claim loop | gev->bridge | low |
-| `av-geo-2` | Aftershock structure as the NOISE_AS_SIGNAL positive control | gev->bridge | low |
-| `av-geo-3` | Depth bands are a 2-bit non-Gray code | bridge->gev | trivial |
+| id | title | direction | cost | status |
+|---|---|---|---|---|
+| `av-geo-1` | USGS feed as a transducer for the field claim loop | gev->bridge | low |  |
+| `av-geo-2` | Aftershock structure as the NOISE_AS_SIGNAL positive control | gev->bridge | low |  |
+| `av-geo-3` | Depth bands are a 2-bit non-Gray code | bridge->gev | trivial |  |
 
 Ecosystem: `earth-systems`, `physics-guard`, `noise-sensor`
 
@@ -55,12 +55,12 @@ GEV entry points
 
 Avenues
 
-| id | title | direction | cost |
-|---|---|---|---|
-| `av-atm-1` | NDBC buoys as a GEV data layer | bridge->gev | medium |
-| `av-atm-2` | NHC active storms as annotation polygons | bridge->gev | low |
-| `av-atm-3` | FIRMS confidence <-> epistemology grade | both | trivial |
-| `av-atm-4` | Buoy pressure/wind residuals through the claim loop during a named storm | bridge->bridge | low |
+| id | title | direction | cost | status |
+|---|---|---|---|---|
+| `av-atm-1` | NDBC buoys as a GEV data layer | bridge->gev | medium |  |
+| `av-atm-2` | NHC active storms as annotation polygons | bridge->gev | low |  |
+| `av-atm-3` | FIRMS confidence <-> epistemology grade | both | trivial |  |
+| `av-atm-4` | Buoy pressure/wind residuals through the claim loop during a named storm | bridge->bridge | low |  |
 
 Ecosystem: `earth-systems`, `physics-guard`, `urban-resilience`, `noise-sensor`
 
@@ -82,12 +82,12 @@ GEV entry points
 
 Avenues
 
-| id | title | direction | cost |
-|---|---|---|---|
-| `av-orb-1` | SGP4 state -> gravity encoder payload | gev->bridge | low |
-| `av-orb-2` | TLE epoch age as a drift claim | gev->bridge | low |
-| `av-orb-3` | precession.py vs celestialRing.js cross-check | both | trivial |
-| `av-orb-4` | ISS pass windows as orbital-phycom link opportunities | gev->ecosystem | low |
+| id | title | direction | cost | status |
+|---|---|---|---|---|
+| `av-orb-1` | SGP4 state -> gravity encoder payload | gev->bridge | low |  |
+| `av-orb-2` | TLE epoch age as a drift claim | gev->bridge | low |  |
+| `av-orb-3` | precession.py vs celestialRing.js cross-check | both | trivial |  |
+| `av-orb-4` | ISS pass windows as orbital-phycom link opportunities | gev->ecosystem | low |  |
 
 Ecosystem: `orbital-phycom`, `fractal-compass`, `keystone-codex`
 
@@ -110,12 +110,12 @@ GEV entry points
 
 Avenues
 
-| id | title | direction | cost |
-|---|---|---|---|
-| `av-mob-1` | Coast error vs coast time, measured from GEV's own fix history | gev->bridge | low |
-| `av-mob-2` | Cross-track distance as a band claim | gev->bridge | low |
-| `av-mob-3` | Traffic simulation must enter the bridge as 'asserted' | gev->bridge | trivial |
-| `av-mob-4` | Validity scope on the kinematic constants | bridge->gev | low |
+| id | title | direction | cost | status |
+|---|---|---|---|---|
+| `av-mob-1` | Coast error vs coast time, measured from GEV's own fix history | gev->bridge | low | harness shipped (coast_divergence.py: ports of arcOffsetEnu, estimateTurnRateDps, staleCoastLimitSeconds; fetch/measure/selftest), self-tested on great-circle synthetics with a ~120 m tangent-plane floor at 69 km. UNMEASURED on real fixes: OpenSky and adsb.lol were unreachable from the session. Run `fetch` where they are, then `measure`. |
+| `av-mob-2` | Cross-track distance as a band claim | gev->bridge | low |  |
+| `av-mob-3` | Traffic simulation must enter the bridge as 'asserted' | gev->bridge | trivial |  |
+| `av-mob-4` | Validity scope on the kinematic constants | bridge->gev | low |  |
 
 Ecosystem: `trdap`, `urban-resilience`, `be2-communication`, `cyclic`
 
@@ -138,11 +138,11 @@ GEV entry points
 
 Avenues
 
-| id | title | direction | cost |
-|---|---|---|---|
-| `av-inf-1` | Coupling-matrix nodes at geographic positions | gev->bridge | medium |
-| `av-inf-2` | Consent gate on any GEV dataset mounted into the atlas | gev->bridge | trivial |
-| `av-inf-3` | Installation feed as a stale-aware claim | gev->bridge | low |
+| id | title | direction | cost | status |
+|---|---|---|---|---|
+| `av-inf-1` | Coupling-matrix nodes at geographic positions | gev->bridge | medium |  |
+| `av-inf-2` | Consent gate on any GEV dataset mounted into the atlas | gev->bridge | trivial |  |
+| `av-inf-3` | Installation feed as a stale-aware claim | gev->bridge | low |  |
 
 Ecosystem: `thermodynamic-accountability`, `component-failure`, `urban-resilience`, `resilience`, `coop`
 
@@ -165,12 +165,12 @@ GEV entry points
 
 Avenues
 
-| id | title | direction | cost |
-|---|---|---|---|
-| `av-fdi-1` | One feed-state to epistemology table | both | trivial |
-| `av-fdi-2` | Refusal-cached-as-data as a registered principle instance | gev->bridge | trivial |
-| `av-fdi-3` | A null run for the tracking harness | bridge->gev | low |
-| `av-fdi-4` | Age distributions instead of a stale boolean | bridge->gev | low |
+| id | title | direction | cost | status |
+|---|---|---|---|---|
+| `av-fdi-1` | One feed-state to epistemology table | both | trivial |  |
+| `av-fdi-2` | Refusal-cached-as-data as a registered principle instance | gev->bridge | trivial |  |
+| `av-fdi-3` | A null run for the tracking harness | bridge->gev | low |  |
+| `av-fdi-4` | Age distributions instead of a stale boolean | bridge->gev | low |  |
 
 Ecosystem: `noise-sensor`, `physics-guard`, `logic-ferret`, `component-failure`, `symbolic-sensors`
 
@@ -191,11 +191,11 @@ GEV entry points
 
 Avenues
 
-| id | title | direction | cost |
-|---|---|---|---|
-| `av-sen-1` | A field-nodes layer: .obs lines on the globe | bridge->gev | medium |
-| `av-sen-2` | Camera pack schema as a sensor-pack schema | gev->bridge | low |
-| `av-sen-3` | A spoken relay through the voice agent | both | high |
+| id | title | direction | cost | status |
+|---|---|---|---|---|
+| `av-sen-1` | A field-nodes layer: .obs lines on the globe | bridge->gev | medium |  |
+| `av-sen-2` | Camera pack schema as a sensor-pack schema | gev->bridge | low |  |
+| `av-sen-3` | A spoken relay through the voice agent | both | high |  |
 
 Ecosystem: `be2-communication`, `symbolic-sensors`, `noise-sensor`, `biogrid`, `living-intelligence`
 
@@ -216,12 +216,12 @@ GEV entry points
 
 Avenues
 
-| id | title | direction | cost |
-|---|---|---|---|
-| `av-agt-1` | Coverage and feed state on every narrated answer | bridge->gev | trivial |
-| `av-agt-2` | A spoken claim through T1-T4 | gev->bridge | medium |
-| `av-agt-3` | A null harness for the HUD summary | bridge->gev | low |
-| `av-agt-4` | The analyst result set as a Reading | gev->bridge | low |
+| id | title | direction | cost | status |
+|---|---|---|---|---|
+| `av-agt-1` | Coverage and feed state on every narrated answer | bridge->gev | trivial |  |
+| `av-agt-2` | A spoken claim through T1-T4 | gev->bridge | medium |  |
+| `av-agt-3` | A null harness for the HUD summary | bridge->gev | low |  |
+| `av-agt-4` | The analyst result set as a Reading | gev->bridge | low |  |
 
 Ecosystem: `haas`, `defense`, `logic-ferret`, `ai-arena`, `ai-human-audit`, `adaptive-intelligence`
 
@@ -241,15 +241,16 @@ GEV entry points
 | `src/renderGovernor.js` | identity-keyed holds; continuous while any hold, idle otherwise; O(1) passive |
 | `src/overlays/worldOverlayAllocation.worker.mjs` | allocation off the main thread |
 | `scripts/track-regression.mjs` | the tracked entity survived four regressions because the harness couples to per-frame position |
+| `src/data/labelArbiterNull.test.mjs` | av-det-1: the null harness, measured numbers in the header, both halves pinned |
 
 Avenues
 
-| id | title | direction | cost |
-|---|---|---|---|
-| `av-det-1` | Null harness on allocateLayerQuotas layerWeights | bridge->gev | trivial |
-| `av-det-2` | Render governor holds replace the strobe modulo | gev->bridge | low |
-| `av-det-3` | Priority is a projection and says so | bridge->gev | trivial |
-| `av-det-4` | The tracking harness as a worked pin | gev->bridge | trivial |
+| id | title | direction | cost | status |
+|---|---|---|---|---|
+| `av-det-1` | Null harness on allocateLayerQuotas layerWeights | bridge->gev | trivial | MEASURED 2026-09-16, src/data/labelArbiterNull.test.mjs in the fork: random weights in [0.5, 2] reproduce the shipped allocation 18-31% of the time at capacities 16-128 (not the 77% AISS shape), and the shipped weights move ~3% of labels against flat weights (0.45 of 16, 1.84 of 64). Reading: load-bearing and small, a tiebreak on top of sqrt(count). Both halves pinned. |
+| `av-det-2` | Render governor holds replace the strobe modulo | gev->bridge | low |  |
+| `av-det-3` | Priority is a projection and says so | bridge->gev | trivial |  |
+| `av-det-4` | The tracking harness as a worked pin | gev->bridge | trivial |  |
 
 Ecosystem: `shadow-hunting`, `fractal-compass`, `geometric-manifold`
 
@@ -269,12 +270,12 @@ GEV entry points
 
 Avenues
 
-| id | title | direction | cost |
-|---|---|---|---|
-| `av-enc-1` | A view as a Primitive over a voice-only channel | both | low |
-| `av-enc-2` | Layer tokens and the modality nibble in one table | both | trivial |
-| `av-enc-3` | GEV feed claims in .claims line format | gev->bridge | low |
-| `av-enc-4` | Share-link round-trip as a lossless-ness test | bridge->gev | trivial |
+| id | title | direction | cost | status |
+|---|---|---|---|---|
+| `av-enc-1` | A view as a Primitive over a voice-only channel | both | low |  |
+| `av-enc-2` | Layer tokens and the modality nibble in one table | both | trivial |  |
+| `av-enc-3` | GEV feed claims in .claims line format | gev->bridge | low |  |
+| `av-enc-4` | Share-link round-trip as a lossless-ness test | bridge->gev | trivial |  |
 
 Ecosystem: `rosetta`, `soms`, `mandala`, `keystone-codex`
 
@@ -296,10 +297,10 @@ GEV entry points
 
 Avenues
 
-| id | title | direction | cost |
-|---|---|---|---|
-| `av-vis-1` | solver.js as a GEV layer | bridge->gev | medium |
-| `av-vis-2` | Trails as 4D splat chains | gev->bridge | low |
-| `av-vis-3` | Octahedral glyphs as overlay tokens | bridge->gev | low |
+| id | title | direction | cost | status |
+|---|---|---|---|---|
+| `av-vis-1` | solver.js as a GEV layer | bridge->gev | medium |  |
+| `av-vis-2` | Trails as 4D splat chains | gev->bridge | low |  |
+| `av-vis-3` | Octahedral glyphs as overlay tokens | bridge->gev | low |  |
 
 Ecosystem: `mandala`, `polyhedral`, `rosetta`
