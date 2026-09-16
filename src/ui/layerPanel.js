@@ -20,7 +20,10 @@ const PANEL_GROUPS = [
       'satellites',
       'flights',
       'military',
+      'flight-patterns',
       'ais-live-vessels',
+      'live-trains',
+      'melbourne-pedestrians',
       'traffic',
       'transit',
       'bikeshare',
@@ -61,6 +64,7 @@ const PANEL_LABELS = {
   'alpr-cameras': 'Mapped ALPR Cameras',
   'local-datacenters': 'Data Centers',
   'local-firms': 'Active Fires',
+  'melbourne-pedestrians': 'Foot Traffic (Melbourne)',
 };
 
 function panelLabel(layer) {

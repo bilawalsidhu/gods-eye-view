@@ -39,12 +39,21 @@ test('catalogs construct distinct layers and classification from their supplied 
     signal: b.signal,
     surface: fixtureSurface(b.signal),
   });
-  assert.equal(first.layers.length, 21);
+  assert.equal(first.layers.length, 24);
   assert.ok(first.get('transit'));
   const order = first.layers.map(({ id }) => id);
   assert.deepEqual(
     order.slice(order.indexOf('traffic'), order.indexOf('directions') + 1),
-    ['traffic', 'cctv', 'radio', 'transit', 'bikeshare', 'directions'],
+    [
+      'traffic',
+      'cctv',
+      'radio',
+      'transit',
+      'live-trains',
+      'melbourne-pedestrians',
+      'bikeshare',
+      'directions',
+    ],
   );
   assert.ok(first.get('bhote-koshi-2026'));
   assert.ok(first.get('bhote-koshi-locator'));

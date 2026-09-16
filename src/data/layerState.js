@@ -332,10 +332,20 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   Object.freeze({ id: 'directions', token: 'n', disposition: 'enabled-only' }),
   Object.freeze({ id: 'earthquakes', token: 'e', disposition: 'enabled-only' }),
   Object.freeze({
+    id: 'flight-patterns',
+    token: 'y',
+    disposition: 'enabled-only',
+  }),
+  Object.freeze({
     id: 'flights',
     token: 'f',
     disposition: 'enabled+options',
     optionOwner: 'flights',
+  }),
+  Object.freeze({
+    id: 'live-trains',
+    token: 'l',
+    disposition: 'enabled-only',
   }),
   Object.freeze({ id: 'local-dams', token: 'q', disposition: 'enabled-only' }),
   Object.freeze({
@@ -344,6 +354,11 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     disposition: 'enabled-only',
   }),
   Object.freeze({ id: 'local-firms', token: 'w', disposition: 'enabled-only' }),
+  Object.freeze({
+    id: 'melbourne-pedestrians',
+    token: 'k',
+    disposition: 'enabled-only',
+  }),
   Object.freeze({
     id: 'military',
     token: 'm',
