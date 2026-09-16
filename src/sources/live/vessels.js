@@ -23,6 +23,9 @@ export function normalizeVesselObservation(row, reference = null) {
       epoch(row.last_position_epoch, 1000) ??
       epoch(Date.parse(row.last_position_UTC)),
     altitudeDatum: 'sea-surface',
+    // Provider telemetry (APRS-IS) is carried through untouched; providers that
+    // have none leave this null so no consumer has to feature-detect.
+    telemetry: row.telemetry ?? null,
   };
 }
 

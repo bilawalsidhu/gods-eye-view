@@ -20,6 +20,7 @@ export function normalizeVessel(row) {
     speed: finiteNumber(row.speed),
     course: finiteNumber(row.course),
     heading: finiteNumber(row.heading),
+    telemetry: row.telemetry ?? null,
     lastPositionUtc: String(row.last_position_UTC || ''),
     lastPositionEpoch: finiteNumber(row.last_position_epoch),
     missedRefreshes: 0,
@@ -74,6 +75,7 @@ export class VesselRecords {
         record.speed = next.speed;
         record.course = next.course;
         record.heading = next.heading;
+        record.telemetry = next.telemetry ?? record.telemetry ?? null;
         record.lastPositionUtc = next.lastPositionUtc;
         record.lastPositionEpoch = next.lastPositionEpoch;
         record.missedRefreshes = 0;

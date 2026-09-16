@@ -42,6 +42,8 @@
       "server/providers/aircraft/tracks.js",
       "server/providers/vessels/ais-store.js",
       "server/providers/vessels/ais-live.js",
+      "server/providers/vessels/aprs-live.js",
+      "server/providers/vessels/aprs-parser.js",
       "src/data/adsbLolFallback.js",
       "src/data/aisStreamAdapter.js",
       "src/data/aisWatchdog.js",

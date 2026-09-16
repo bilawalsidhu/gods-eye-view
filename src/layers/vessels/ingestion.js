@@ -1,6 +1,32 @@
 import { AIS_FIRST_CONNECT_LABEL } from './recordPolicy.js';
 
-/** Own source requests and classified feed state through explicit operations. */
+/**
+ * The camera's visible geographic bounds in degrees, or null when they cannot
+ * be derived. Used only to scope providers that support a viewport (APRS-IS);
+ * providers that ignore the field are unaffected.
+ * @param {Object} viewer - Cesium viewer.
+ * @returns {?{west:number,south:number,east:number,north:number}}
+ */
+function viewerBounds(viewer) {
+  const camera = viewer?.scene?.camera;
+  const ellipsoid = viewer?.scene?.globe?.ellipsoid;
+  if (!camera?.computeViewRectangle || !ellipsoid) return null;
+  try {
+    const rect = camera.computeViewRectangle(ellipsoid);
+    if (!rect) return null;
+    const degrees = (radians) => (radians * 180) / Math.PI;
+    const bounds = {
+      west: degrees(rect.west),
+      south: degrees(rect.south),
+      east: degrees(rect.east),
+      north: degrees(rect.north),
+    };
+    return Object.values(bounds).every(Number.isFinite) ? bounds : null;
+  } catch {
+    return null;
+  }
+}
+
 export function createIngestion({
   feed,
   readSource,
@@ -35,7 +61,10 @@ export function createIngestion({
             ])
           : requestController.signal;
       const snapshot = await readSource().getSnapshot(
-        { maxRows: getRowLimit() },
+        {
+          maxRows: getRowLimit(),
+          viewport: viewerBounds(viewer),
+        },
         { signal },
       );
       if (!ownsAisRequest(requestController, requestSessionId)) return;
@@ -159,6 +188,7 @@ export function createIngestion({
       speed: record.speedMps == null ? null : record.speedMps / 0.514444,
       course: record.courseDeg,
       heading: record.headingDeg,
+      telemetry: record.telemetry ?? null,
       last_position_epoch:
         record.observedAtMs == null ? null : record.observedAtMs / 1000,
       last_position_UTC:

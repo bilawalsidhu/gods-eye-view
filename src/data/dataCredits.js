@@ -49,6 +49,10 @@ export const DATA_CREDITS = [
       '<a href="https://aisstream.io" target="_blank" rel="noopener">AISStream.io</a>',
   },
   {
+    key: 'aprs-is',
+    html: 'Live APRS-IS vessels: APRS amateur-radio network (receive-only; no APRS.fi API or scraping)',
+  },
+  {
     key: 'celestrak',
     html:
       'Satellites (TLEs): CelesTrak ' +

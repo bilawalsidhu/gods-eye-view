@@ -10,3 +10,4 @@ export { adsbLolProxy } from './aircraft/adsb-lol.js';
 export { adsbdbProxy } from './aircraft/enrichment.js';
 export { trackBackfillProxies } from './aircraft/tracks.js';
 export { aisLiveProxy } from './vessels/ais-live.js';
+export { aprsLiveProxy } from './vessels/aprs-live.js';
