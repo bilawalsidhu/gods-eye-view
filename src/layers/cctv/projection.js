@@ -168,6 +168,79 @@ export function createProjection({
    * @returns {Object|null} Projection runtime, or null if no viewer.
    */
 
+  async function attachVideoSource(runtime, url, feedType) {
+    const video = runtime?.video;
+    if (!video) return;
+    if (feedType !== 'hls') {
+      video.src = url;
+      return;
+    }
+    try {
+      const { default: Hls } = await import('hls.js');
+      if (runtime.disposed || runtime.video !== video) return;
+      if (!Hls.isSupported()) {
+        video.src = url;
+        return;
+      }
+      const hls = new Hls({
+        lowLatencyMode: false,
+        enableWorker: true,
+        liveSyncDurationCount: 5,
+        liveMaxLatencyDurationCount: 6,
+        maxBufferLength: 60,
+        backBufferLength: 30,
+      });
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (!data?.fatal) return;
+        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+          // reread master for a fresh session
+          console.warn(
+            '[Data:CCTV] hls network error, reloading source:',
+            data.details,
+          );
+          setTimeout(() => {
+            if (runtime.hls === hls) hls.loadSource(url);
+          }, 2000);
+          return;
+        }
+        if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+          hls.recoverMediaError();
+          return;
+        }
+        console.warn('[Data:CCTV] hls fatal:', data.type, data.details);
+        hls.destroy();
+        if (runtime.hls === hls) runtime.hls = null;
+      });
+      hls.loadSource(url);
+      hls.attachMedia(video);
+      runtime.hls = hls;
+
+      // Rate governor: DelDOT cameras deliver ~52 s of content per 60 s wall
+      // time. Hold playbackRate by buffer depth so the stream never starves;
+      // cameras with honest clocks sit at 1.0 and never leave it.
+      const governor = setInterval(() => {
+        if (runtime.video !== video || !runtime.hls) {
+          clearInterval(governor);
+          return;
+        }
+        const b = video.buffered;
+        if (!b.length) return;
+        const ahead = b.end(b.length - 1) - video.currentTime;
+        let rate = 1.0;
+        if (ahead < 15) rate = 0.75;
+        else if (ahead < 20) rate = 0.85;
+        else if (ahead < 30) rate = 0.93;
+        else if (ahead > 40) rate = 1.05;
+        if (Math.abs(video.playbackRate - rate) > 0.01)
+          video.playbackRate = rate;
+      }, 1000);
+      runtime.rateGovernor = governor;
+    } catch (error) {
+      console.warn('[Data:CCTV] hls.js unavailable:', error?.message || error);
+      video.src = url;
+    }
+  }
+
   function createProjectionRuntime(record) {
     if (!layerState._viewer) return null;
     const canvas = document.createElement('canvas');
@@ -207,6 +280,7 @@ export function createProjection({
       // only re-uploads the plane texture when there is genuinely new content.
       canvasStamp: 1,
       lastSwappedCanvasStamp: 0,
+      disposed: false,
     };
 
     parts.frames.paintProjectionPlaceholder(ctx, record.camera);
@@ -214,16 +288,32 @@ export function createProjection({
     if (mode === 'video') {
       const video = document.createElement('video');
       video.muted = true;
-      video.loop = true;
-      video.autoplay = true;
       video.playsInline = true;
       video.crossOrigin = 'anonymous';
       video.preload = 'auto';
-      video.src = parts.frames.mediaUrlFor(record.camera);
       video.addEventListener('canplay', () => {
         video.play().catch(() => {});
       });
+      // Cesium sizes the video texture from the element's width/height
+      // attributes at first upload. Set them from the real stream dimensions
+      // and rebind on any resolution change (camera switch, adaptive source).
+      const bindVideoTexture = () => {
+        if (runtime.video !== video || !runtime.planeMaterial) return;
+        if (!(video.videoWidth > 0 && video.videoHeight > 0)) return;
+        video.width = video.videoWidth;
+        video.height = video.videoHeight;
+        runtime.planeMaterial.image = runtime.canvas;
+        runtime.planeMaterial.image = video;
+      };
+      video.addEventListener('loadedmetadata', bindVideoTexture);
+      video.addEventListener('resize', bindVideoTexture);
       runtime.video = video;
+      runtime.hls = null;
+      attachVideoSource(
+        runtime,
+        parts.frames.mediaUrlFor(record.camera),
+        feedType,
+      );
     } else {
       const img = new Image();
       img.decoding = 'async';
@@ -254,7 +344,7 @@ export function createProjection({
     const positions =
       record.frustumPositions || parts.geometry.frustumCartesians(geometry);
     runtime.planeMaterial = new Cesium.ImageMaterialProperty({
-      image: mode === 'video' && runtime.video ? runtime.video : canvas,
+      image: canvas,
       transparent: true,
       color: Cesium.Color.WHITE.withAlpha(0.95),
     });
@@ -288,6 +378,15 @@ export function createProjection({
 
   function destroyProjectionRuntime(runtime) {
     if (!runtime) return;
+    runtime.disposed = true;
+    if (runtime.hls) {
+      runtime.hls.destroy();
+      runtime.hls = null;
+    }
+    if (runtime.rateGovernor) {
+      clearInterval(runtime.rateGovernor);
+      runtime.rateGovernor = null;
+    }
     if (runtime.video) {
       runtime.video.pause();
       runtime.video.removeAttribute('src');
@@ -355,6 +454,15 @@ export function createProjection({
    * @param {string|null} activeId - ID of the currently active camera.
    */
 
+  /**
+   * The active camera's decoded <video>, for a second surface (the panel card)
+   * to paint from. Null when the active feed is a still or not yet attached.
+   * @returns {HTMLVideoElement|null}
+   */
+  function getActiveVideoElement() {
+    return parts.selection.getActiveRecord()?.projection?.video || null;
+  }
+
   function pauseInactiveProjectionFeeds(activeId) {
     for (const record of layerState._records) {
       if (!record.projection?.video) continue;
@@ -371,6 +479,7 @@ export function createProjection({
   }
   return {
     createCctvProjectionOverlayEntry,
+    getActiveVideoElement,
     updatePlanePlacement,
     clearProjectionOverlay,
     setPlaneVisible,

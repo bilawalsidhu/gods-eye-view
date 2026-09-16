@@ -56,6 +56,9 @@ import {
   CALGARY_DOWNTOWN,
   CALGARY_MAX_CATALOG_BYTES,
   CCTV_SOURCE_FETCH_TIMEOUT_MS,
+  DELDOT_CCTV_URL,
+  DEFAULT_DELDOT_MAX_SOURCES,
+  DELDOT_ANCHORS,
 } from './constants.js';
 import {
   toFiniteNumber,
@@ -1589,6 +1592,96 @@ export async function loadCalgarySourcesFromOpenData() {
   } catch (error) {
     console.warn(
       '[CCTV] Calgary camera download error:',
+      error?.message || error,
+    );
+    return [];
+  }
+}
+export async function loadDelDOTSourcesFromOpenData() {
+  try {
+    const resp = await fetch(DELDOT_CCTV_URL, {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+    });
+    if (!resp.ok) {
+      console.warn('[CCTV] DelDOT source download failed:', resp.status);
+      return [];
+    }
+    const payload = await resp.json();
+    const rows = Array.isArray(payload?.videoCameras)
+      ? payload.videoCameras
+      : [];
+    if (!rows.length) return [];
+
+    const cameras = [];
+    for (const row of rows) {
+      if (String(row?.status).toLowerCase() !== 'active') continue;
+      const lat = toFiniteNumber(row?.lat);
+      const lon = toFiniteNumber(row?.lon);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+      // Delaware bounding box — a bad upstream coord can't place a camera out of state.
+      if (lat < 38.4 || lat > 39.9 || lon < -75.85 || lon > -75.0) continue;
+
+      // Official-host pin: RTMP-over-HTTP (rtmpt:80) is the steady transport.
+      const streamUrl = String(row?.urls?.rtmp || '');
+      if (!streamUrl.startsWith('rtmpt://video.deldot.gov:80/live/')) continue;
+
+      const id = String(row?.id || '').trim();
+      if (!id) continue;
+      const cameraId = `deldot-${id.toLowerCase()}`;
+      const title = String(row?.title || '').trim();
+
+      // Title carries an unambiguous travel token for ~1 in 5 cameras
+      // ("US 13 SB @ ..."). directionToHeading (allowBare=false) matches only
+      // NB/SB/EB/WB, never a bare "W"/"N" street prefix — "W NORTH ST" yields
+      // no heading and falls back.
+      const heading = directionToHeading(title);
+      const hasHeading = Number.isFinite(heading);
+
+      cameras.push({
+        id: cameraId,
+        name: title || `DelDOT ${id}`,
+        city: String(row?.county ? `${row.county} County` : 'Delaware'),
+        cityId: `deldot-${String(row?.county || 'de')
+          .toLowerCase()
+          .replace(/\s+/g, '-')}`,
+        provider: 'DelDOT',
+        lat,
+        lon,
+        headingDeg: hasHeading ? heading : fallbackHeadingFromId(cameraId),
+        headingConfidence: hasHeading ? 'high' : 'low',
+        // Fabricated RAW PRIOR poses (same personalities as Austin/Caltrans);
+        // the client ground-snap + manual calibration own the truth.
+        pitchDeg: hasHeading ? -24 : -18,
+        fovDeg: hasHeading ? 56 : 44,
+        rangeM: hasHeading ? 210 : 145,
+        mountHeightM: hasHeading ? 10 : 8,
+        groundElevationM: 10, // Delaware is near sea level and flat.
+        feedType: 'hls',
+        url: streamUrl,
+        snapshotUrl: streamUrl,
+        sourceKind: 'deldot-open-data',
+        license: 'Public DelDOT traffic camera',
+      });
+    }
+
+    const unique = Array.from(
+      new Map(cameras.map((camera) => [camera.id, camera])).values(),
+    );
+    const maxRaw = Number(
+      process.env.CCTV_DELDOT_MAX_SOURCES || DEFAULT_DELDOT_MAX_SOURCES,
+    );
+    const maxCount = Number.isFinite(maxRaw)
+      ? Math.max(8, Math.min(400, Math.floor(maxRaw)))
+      : DEFAULT_DELDOT_MAX_SOURCES;
+    const prioritized = prioritizeSources(unique, maxCount, DELDOT_ANCHORS);
+    console.log(
+      `[CCTV] Loaded DelDOT camera sources: ${unique.length} Active (using nearest ${prioritized.length})`,
+    );
+    return prioritized;
+  } catch (error) {
+    console.warn(
+      '[CCTV] DelDOT source download error:',
       error?.message || error,
     );
     return [];
