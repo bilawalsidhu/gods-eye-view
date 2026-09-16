@@ -1,0 +1,33 @@
+# Git
+.git
+.gitignore
+.github
+
+# Local environment/secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies and local caches
+node_modules
+.npm
+.pnpm-store
+.yarn
+.yarn-cache
+
+# Build/test output
+dist
+coverage
+.vite
+.gev-cache
+.gev-logs
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode
+.idea
+
+# Logs
+*.log
+npm-debug.log*
