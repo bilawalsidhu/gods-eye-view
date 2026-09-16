@@ -346,6 +346,9 @@ export class GevRealtimeController {
     this.stop({ preserveStatus: true });
     this.pushToTalkMode = pushToTalk;
     this.pushToTalkKeyHeld = pushToTalkKeyHeld;
+    // stop() cleared the held-key attribute; the rebuilt session must re-apply
+    // it so the held state survives the connect (mirrors setMicrophoneEnabled).
+    if (pushToTalkKeyHeld && this.ui?.root) this.ui.root.dataset.pushToTalk = 'held';
     this.spaceKeyHeld = spaceKeyHeld;
     if (!window.RTCPeerConnection || !navigator.mediaDevices?.getUserMedia) {
       this.setStatus('error', 'WebRTC microphone support unavailable');
