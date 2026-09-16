@@ -282,7 +282,7 @@ Fifteen layers and map sources. **Thirteen have a keyless path.** Some offer add
 | 🛰️ **Satellites**           | 838-object catalog, color-coded by class with a live legend — the **DENSE** chip drops in the whole Starlink shell                                                                                                                                                                                                                                                                  | CelesTrak                               | 🟢                                                                                                  |
 | 🌍 **Earthquakes**          | Global seismic activity, last 24h                                                                                                                                                                                                                                                                                                                                                   | USGS                                    | 🟢                                                                                                  |
 | 🚗 **Traffic**              | Simulated vehicles on OSM roads. With TomTom, live flow speeds drive the simulation and congestion colors below ~8 km; individual vehicle positions are not live observations                                                                                                                                                                                                       | TomTom + OSM                            | 🟢 simulation · 🟡 live flow speeds                                                                 |
-| 📹 **CCTV Mesh**            | ~3,600 public cameras projected _into_ the 3D space — Austin · Texas (TxDOT) · California (Caltrans) · London (TfL) · Ontario (511) · Finland (Fintraffic) · British Columbia (DriveBC) · Estonia (Tallinn, Tarktee) · New South Wales (Live Traffic NSW) · Calgary. Positions are published; poses are estimated priors **you calibrate by dragging a gizmo on the camera itself** | City APIs                               | 🟢                                                                                                  |
+| 📹 **CCTV Mesh**            | ~3,700 public cameras projected _into_ the 3D space — Austin · Texas (TxDOT) · California (Caltrans) · London (TfL) · Ontario (511) · Finland (Fintraffic) · British Columbia (DriveBC) · Estonia (Tallinn, Tarktee) · New South Wales (Live Traffic NSW) · Calgary · Delaware (DelDOT, **live video**). Positions are published; poses are estimated priors **you calibrate by dragging a gizmo on the camera itself** | City APIs                               | 🟢                                                                                                  |
 | 📻 **Radio**                | Geolocated world radio with an **analog tuner** — drag the needle across up to 750 stations and the globe flies to each broadcaster                                                                                                                                                                                                                                                 | Radio Browser / broadcasters            | 🟢                                                                                                  |
 | 🚌 **Transit**              | Live buses, trams, metros, trains and ferries with delayed playback between reports, selected-vehicle trails, and mode-coloured DETECT labels — Boston, Austin, Minneapolis, Helsinki, the Netherlands, Norway, South East Queensland                                                                                                                                               | Operator GTFS-Realtime feeds            | 🟢                                                                                                  |
 | 🚲 **Bikeshare**            | Live station availability                                                                                                                                                                                                                                                                                                                                                           | GBFS                                    | 🟢                                                                                                  |
@@ -436,6 +436,32 @@ security add-generic-password -U -s "cesium-ion"      -a "token"   -w
 ```
 
 OpenSky can run fully anonymous (`OPENSKY_AUTH_MODE=anon`), or import OAuth credentials with `./scripts/opensky-import-client.sh /path/to/credentials.json`.
+
+</details>
+
+<details>
+<summary>Live video cameras (HLS / RTMP)</summary>
+
+CCTV sources with `"feedType": "hls"` play as continuous video instead of
+refreshed stills. The server owns the stream: it keeps one upstream session
+per active camera, serves the browser a locally generated playlist, and the
+client plays it through hls.js. Two upstream strategies, chosen by URL:
+
+- **`.m3u8` upstreams** are pulled directly in Node — no extra dependencies.
+- **RTMP and other stream URLs** go through **ffmpeg** (`-c copy`, no
+  re-encode), which is optional: without it those cameras fall back to the
+  stills path and everything else is unchanged. If you self-host in Docker,
+  add `ffmpeg` to your image.
+
+The DelDOT Delaware pack is the working example — every `Active` camera in
+DelDOT's public catalog registers with its `rtmpt://video.deldot.gov:80/…`
+stream (the same stream as `rtmp://…:1935`, tunneled over HTTP, so it works
+where port 1935 is blocked). `CCTV_DELDOT_ENABLED=0` turns the pack off.
+
+Some agencies restart their streams on a timer or run encoders whose clock
+lags real time (DelDOT does both). The pipeline absorbs that automatically —
+a brief hitch at a restart, and a playback-rate governor that holds the
+stream a few seconds behind live so it never starves. Nothing to configure.
 
 </details>
 
