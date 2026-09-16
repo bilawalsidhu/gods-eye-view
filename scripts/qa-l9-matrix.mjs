@@ -657,9 +657,23 @@ check({
     // git grep: 0 = matches found, 1 = no matches (the clean case), >1 = error.
     if (grep.code > 1) return crash(`git grep failed (exit ${grep.code}): ${tail(grep.err)}`);
     const hits = grep.out.split('\n').filter(Boolean);
-    return hits.length === 0
-      ? pass(`no tracked .env; ${patterns.length} credential prefixes scanned across ${files.length} tracked files, no hits`)
-      : fail(`${hits.length} credential literal(s): ${hits.slice(0, 2).join(' | ').slice(0, 200)}`);
+    // A matched literal whose body is one character repeated (sk-CCCCCCCC…)
+    // is a deliberately fake fixture — the redaction-scrubber tests need
+    // credential-SHAPED input to prove the scrubber fires, and no real
+    // credential is a single character rung. Ignore those; report the count
+    // so the scan stays honest about what it saw.
+    const literalRegex = new RegExp(patterns.join('|'), 'g');
+    const isFakeFixture = (literal) => /(.)\1{7,}/.test(literal);
+    const realHits = [];
+    let fakeCount = 0;
+    for (const line of hits) {
+      const literals = line.match(literalRegex) ?? [];
+      if (literals.length === 0 || literals.some((l) => !isFakeFixture(l))) realHits.push(line);
+      else fakeCount += literals.length;
+    }
+    return realHits.length === 0
+      ? pass(`no tracked .env; ${patterns.length} credential prefixes scanned across ${files.length} tracked files, no real literals${fakeCount ? ` (${fakeCount} known-fake fixture literal(s) ignored)` : ''}`)
+      : fail(`${realHits.length} credential literal(s): ${realHits.slice(0, 2).join(' | ').slice(0, 200)}`);
   },
 });
 
