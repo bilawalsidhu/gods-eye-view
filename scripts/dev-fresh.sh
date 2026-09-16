@@ -56,6 +56,7 @@ KEY_SETUP_EXTERNAL_KEYS=()
 [[ -n "${GOOGLE_MAPS_SERVER_API_KEY:-}" ]] && KEY_SETUP_EXTERNAL_KEYS+=(GOOGLE_MAPS_SERVER_API_KEY)
 [[ -n "${CESIUM_ION_TOKEN:-}" ]] && KEY_SETUP_EXTERNAL_KEYS+=(CESIUM_ION_TOKEN)
 [[ -n "${OPENAI_API_KEY:-}" ]] && KEY_SETUP_EXTERNAL_KEYS+=(OPENAI_API_KEY)
+[[ -n "${DEEPSEEK_API_KEY:-}" ]] && KEY_SETUP_EXTERNAL_KEYS+=(DEEPSEEK_API_KEY)
 [[ -n "${AISSTREAM_API_KEY:-}" ]] && KEY_SETUP_EXTERNAL_KEYS+=(AISSTREAM_API_KEY)
 [[ -n "${FIRMS_MAP_KEY:-}" ]] && KEY_SETUP_EXTERNAL_KEYS+=(FIRMS_MAP_KEY)
 [[ -n "${TOMTOM_API_KEY:-}" ]] && KEY_SETUP_EXTERNAL_KEYS+=(TOMTOM_API_KEY)
@@ -233,12 +234,14 @@ resolve_opensky_credentials
 # Add to Keychain with e.g.:
 #   security add-generic-password -U -s "openai-api" -a "api-key" -w
 OPENAI_API_KEY="${OPENAI_API_KEY:-$(read_dotenv_value "OPENAI_API_KEY")}"
+DEEPSEEK_API_KEY="${DEEPSEEK_API_KEY:-$(read_dotenv_value "DEEPSEEK_API_KEY")}"
 AISSTREAM_API_KEY="${AISSTREAM_API_KEY:-$(read_dotenv_value "AISSTREAM_API_KEY")}"
 CESIUM_ION_TOKEN="${CESIUM_ION_TOKEN:-$(read_dotenv_value "CESIUM_ION_TOKEN")}"
 LL2_API_TOKEN="${LL2_API_TOKEN:-$(read_dotenv_value "LL2_API_TOKEN")}"
 TOMTOM_API_KEY="${TOMTOM_API_KEY:-$(read_dotenv_value "TOMTOM_API_KEY")}"
 FIRMS_MAP_KEY="${FIRMS_MAP_KEY:-$(read_dotenv_value "FIRMS_MAP_KEY")}"
 OPENAI_API_KEY="${OPENAI_API_KEY:-$(read_keychain_secret "openai-api" "api-key")}"
+DEEPSEEK_API_KEY="${DEEPSEEK_API_KEY:-$(read_keychain_secret "deepseek-api" "api-key")}"
 AISSTREAM_API_KEY="${AISSTREAM_API_KEY:-$(read_keychain_secret "aisstream-api" "api-key")}"
 CESIUM_ION_TOKEN="${CESIUM_ION_TOKEN:-$(read_keychain_secret "cesium-ion" "token")}"
 TOMTOM_API_KEY="${TOMTOM_API_KEY:-$(read_keychain_secret "tomtom-api" "api-key")}"
@@ -348,6 +351,7 @@ case "${OPENSKY_AUTH_MODE}" in
     ;;
 esac
 [[ -n "${OPENAI_API_KEY}" ]] && echo "OpenAI key (voice + HUD summary): configured" || echo "OpenAI key (voice + HUD summary): not set — GEV MIC disabled"
+[[ -n "${DEEPSEEK_API_KEY}" ]] && echo "DeepSeek key (AI chat + HUD fallback): configured" || echo "DeepSeek key (AI chat + HUD fallback): not set"
 [[ -n "${AISSTREAM_API_KEY}" ]] && echo "AISStream key (live vessels): configured" || echo "AISStream key (live vessels): not set — ships layer empty"
 if [[ -n "${GOOGLE_MAPS_API_KEY}" ]]; then
   echo "Startup map: Google Photorealistic 3D Tiles (direct)"
@@ -415,6 +419,7 @@ put_env_if_set OPENSKY_CLIENT_SECRET "${OPENSKY_CLIENT_SECRET}"
 put_env_if_set OPENSKY_USERNAME "${OPENSKY_USERNAME}"
 put_env_if_set OPENSKY_PASSWORD "${OPENSKY_PASSWORD}"
 put_env_if_set OPENAI_API_KEY "${OPENAI_API_KEY}"
+put_env_if_set DEEPSEEK_API_KEY "${DEEPSEEK_API_KEY}"
 put_env_if_set AISSTREAM_API_KEY "${AISSTREAM_API_KEY}"
 put_env_if_set CESIUM_ION_TOKEN "${CESIUM_ION_TOKEN}"
 put_env_if_set TOMTOM_API_KEY "${TOMTOM_API_KEY}"
