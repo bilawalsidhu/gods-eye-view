@@ -3,8 +3,9 @@ import * as Cesium from 'cesium';
 /**
  * Cesium options for one spec.
  *
- * The URL carries no time step — the proxy always asks upstream for `current`
- * — but it does carry a freshness floor. Rebuilding the layer is what makes
+ * The URL names no frame — the proxy asks upstream for `current`, the only
+ * step that means the same thing at every moment — but it does carry a
+ * freshness floor. Rebuilding the layer is what makes
  * Cesium re-request the tiles on screen; `notBefore` is what stops the proxy
  * answering every one of those from a cache that outlives the weather. It is
  * the moment the user (or their timer) asked for new data, so a tile cached

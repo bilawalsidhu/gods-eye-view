@@ -31,8 +31,13 @@ export const STATUS_URL = '/api/xweather/status';
 export const SPEC_KINDS = Object.freeze(['xyz']);
 
 /**
- * How a spec learns which frame to draw. `live` means the service always
- * serves its current composite and publishes no time to pin.
+ * How a spec learns which frame to draw.
+ *
+ * `live` means the request names no frame, so the service answers with its
+ * current composite. The tile route does take a time step, but only as an
+ * offset in minutes from now — there is no absolute stamp a session could pin
+ * itself to, so tiles fetched at different moments hold different moments.
+ * That is what the freshness floor bounds and cannot remove.
  */
 export const FRAME_MODES = Object.freeze(['live']);
 

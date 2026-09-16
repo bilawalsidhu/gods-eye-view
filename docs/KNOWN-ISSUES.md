@@ -30,6 +30,34 @@ Next iteration candidates:
 
 ---
 
+### Weather tiles on screen can come from different moments
+Status: Open (inherent to the source; mitigated by refreshing)
+
+Context:
+- Tiles are fetched only when the camera needs them. A tile already held is
+  served from cache until the next refresh; a tile the camera has never asked
+  for is fetched when it is first needed, and arrives current. So after a long
+  gap since the last refresh, zooming or panning into new ground mixes what was
+  cached then with what is being fetched now.
+- It shows up most clearly between zoom levels, because each level is its own
+  set of tiles: a storm visible at one level can be absent one level out, where
+  the tile still holds the older frame.
+- This is the cost of the layer's whole economy. Fetching every visible tile on
+  every camera move would keep the globe internally consistent, and is exactly
+  the spend the Weather panel exists to prevent — one exploratory session of a
+  single layer is about 405 tiles against a 15,000-a-month allowance.
+- The tile route does accept a time step, but only as an offset in minutes from
+  now. There is no absolute stamp to pin a session to, so a single consistent
+  frame cannot be requested even at a higher price.
+
+Workaround:
+- Press REFRESH. Every tile older than that moment is refetched once, which
+  re-syncs what is on screen; the layer row's age is the honest reading of when
+  that last happened.
+- Shorten the auto-refresh interval if consistency matters more than spend.
+
+---
+
 ### CCTV panel can appear "missing"
 Status: Open (workaround available)
 
