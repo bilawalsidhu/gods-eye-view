@@ -15,6 +15,7 @@ import { applicationServices } from './services/application.js';
  */
 
 import * as Cesium from 'cesium';
+import { greatCircleKm } from './geoDistance.js';
 import { forward as toMGRS } from 'mgrs';
 import { CITY_POIS } from './locations.js';
 import { composeLocalityTag } from './hudLocality.js';
@@ -589,13 +590,7 @@ export class IntelHUD {
    * @returns {number} Distance in kilometers.
    */
   _haversineKm(lat1, lon1, lat2, lon2) {
-    const toRad = (deg) => Cesium.Math.toRadians(deg);
-    const dLat = toRad(lat2 - lat1);
-    const dLon = toRad(lon2 - lon1);
-    const a =
-      Math.sin(dLat / 2) ** 2 +
-      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-    return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return greatCircleKm({ lat: lat1, lon: lon1 }, { lat: lat2, lon: lon2 });
   }
 
   /**

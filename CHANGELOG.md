@@ -1,5 +1,10 @@
 # Changelog
 
+- Share one validated great-circle distance utility across runtime consumers.
+  Canonical coordinates use `{ lat, lon }`, invalid points stay outside spatial
+  selections, kilometres and metres share the IUGG mean Earth radius, and
+  compatibility `haversineKm` exports delegate to the canonical implementation.
+
 - Add Director import previews, validated scene/shot detail drafts and selected-scene
   JSON or asset-bundle sharing. Preserve attribution; verify bounded bundle bytes
   before admission and release staged work on cancellation or teardown.

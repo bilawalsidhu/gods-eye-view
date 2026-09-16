@@ -1,5 +1,13 @@
 # God's Eye View Current State
 
+Shared distance checks use `geoDistance.js` with `{ lat, lon }` points and the
+IUGG mean spherical Earth radius. `greatCircleKm` is canonical;
+`greatCircleMeters` is its exact metre conversion. Missing, non-finite, and
+out-of-range points return `Infinity`, so threshold and nearest-item consumers
+exclude invalid positions. Older exported `haversineKm` entry points remain as
+compatibility wrappers only. Intentional local angular, projection, ellipsoidal
+prefilter, and small-viewport approximations remain separate.
+
 Director imports now open a non-mutating preview before Apply. EDIT DETAILS
 authors validated anchor, camera, pack and interaction drafts; SHARE SCENE exports
 a selected scene or a bounded bundle of explicitly chosen pack files. Bundled
