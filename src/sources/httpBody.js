@@ -55,38 +55,52 @@ export async function readResponseJsonCapped(response, maxBytes, signal) {
 
 /**
  * Read a fetch() Response body as bytes with the same hard cap as
- * readResponseTextCapped — for protobuf upstreams (GTFS-Realtime).
+ * readResponseTextCapped — for protobuf and tile upstreams (GTFS-Realtime,
+ * TomTom flow). Same early Content-Length rejection, running cap while
+ * streaming and cancellation on abort, so callers can treat the two alike.
  * Throws { code:'RESPONSE_TOO_LARGE' }.
  */
-export async function readResponseBytesCapped(response, maxBytes) {
+export async function readResponseBytesCapped(response, maxBytes, signal) {
   const tooLarge = () => {
     const err = new Error('Upstream response too large');
     err.code = 'RESPONSE_TOO_LARGE';
     return err;
   };
   const declared = Number(response.headers.get('content-length'));
-  if (Number.isFinite(declared) && declared > maxBytes) throw tooLarge();
+  if (Number.isFinite(declared) && declared > maxBytes) {
+    void response.body?.cancel().catch(() => {});
+    throw tooLarge();
+  }
+  signal?.throwIfAborted();
   const reader = response.body?.getReader?.();
   if (!reader) {
     const bytes = new Uint8Array(await response.arrayBuffer());
+    signal?.throwIfAborted();
     if (bytes.byteLength > maxBytes) throw tooLarge();
     return bytes;
   }
+  const cancel = () => {
+    void reader.cancel().catch(() => {});
+  };
+  signal?.addEventListener('abort', cancel, { once: true });
   const chunks = [];
   let total = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.byteLength;
-    if (total > maxBytes) {
-      try {
-        await reader.cancel();
-      } catch {
-        /* no-op */
-      }
-      throw tooLarge();
+  try {
+    for (;;) {
+      signal?.throwIfAborted();
+      const { done, value } = await reader.read();
+      signal?.throwIfAborted();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) throw tooLarge();
+      chunks.push(value);
     }
-    chunks.push(value);
+  } catch (error) {
+    cancel();
+    throw error;
+  } finally {
+    signal?.removeEventListener('abort', cancel);
+    reader.releaseLock();
   }
   const out = new Uint8Array(total);
   let offset = 0;
