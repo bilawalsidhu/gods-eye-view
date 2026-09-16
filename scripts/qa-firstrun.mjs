@@ -299,17 +299,28 @@ async function runArbitrationSection(page, { shots, consoleErrors }) {
     const beforeLightbox = await launcherState();
     record('the launcher is up before the attribution lightbox opens', beforeLightbox.onScreen);
 
-    const linkClicked = await page.evaluate(() => {
-      const link = document.querySelector('#cesium-credits .cesium-credit-expand-link');
-      link?.click();
-      return Boolean(link);
+    // Open the lightbox the way qa-attribution-b12 does: creditDisplay.
+    // showLightbox() with a flushed frame. The old path clicked the
+    // .cesium-credit-expand-link inside #cesium-credits, but main.js
+    // deliberately detaches that strip (operator decision 2026-08-29, PLAN.md
+    // Batch 6), so the link no longer exists and every downstream ESC/z-order
+    // pin was failing on a lightbox that never opened.
+    const opened = await page.evaluate(async () => {
+      const cd = window.__godsEyeView?.viewer?.creditDisplay;
+      if (!cd?.showLightbox) return false;
+      window.__godsEyeView.viewer.scene.requestRender();
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      cd.showLightbox();
+      window.__godsEyeView.viewer.scene.requestRender();
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      return true;
     });
     await sleep(300);
     const lightboxUp = await lightboxState();
     record(
       'the real "Data attribution" lightbox opens above the card',
-      linkClicked && lightboxUp.shown && lightboxUp.z === '200',
-      `link=${linkClicked} shown=${lightboxUp.shown} z-index=${lightboxUp.z} vs the launcher's 175`,
+      opened && lightboxUp.shown && lightboxUp.z === '200',
+      `opened=${opened} shown=${lightboxUp.shown} z-index=${lightboxUp.z} vs the launcher's 175`,
     );
     const buried = await launcherState();
     record(

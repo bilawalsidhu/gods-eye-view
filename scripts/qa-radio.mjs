@@ -128,13 +128,14 @@ async function main() {
   }
   // Keyless probe (same allowance the L9 matrix's C3 makes): a server with
   // no real GOOGLE_MAPS_API_KEY answers its OWN endpoints with the honest
-  // 503 "not set" contract, and Chrome logs every non-2xx as a console
-  // error. Without tolerating exactly those, a keyless run can never pass
-  // the console/5xx assertions at the bottom.
+  // unavailability contract — google places as 200 {"unavailable":true},
+  // openai/firms as 503 "not set" — and Chrome logs every non-2xx as a
+  // console error. Without tolerating exactly those, a keyless run can never
+  // pass the console/5xx assertions at the bottom.
   let serverKeyless = false;
   try {
     const probe = await fetch(`${APP_URL}/api/google/nearby-places?lat=30.2672&lon=-97.7431`);
-    serverKeyless = probe.status === 503 && /not set/i.test(await probe.text());
+    serverKeyless = probe.status === 200 && /"unavailable"\s*:\s*true/i.test(await probe.text());
   } catch { /* server up (checked above); a probe failure just means keyed */ }
   fs.mkdirSync(SHOTS_DIR, { recursive: true });
   const browser = await puppeteer.launch({

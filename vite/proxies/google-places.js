@@ -6,7 +6,7 @@
  * plugin list from these modules.
  */
 
-import { GOOGLE_NEARBY_FIELD_MASK, GOOGLE_TEXT_FIELD_MASK, buildNearbyRequestBody, buildTextSearchRequestBody, normalizeNearbyPlaces, normalizeTextPlaces, parseCoordinateParam, resolveServerGoogleApiKey } from '../../src/data/googlePlacesPolicy.js';
+import { GOOGLE_NEARBY_FIELD_MASK, GOOGLE_TEXT_FIELD_MASK, buildNearbyRequestBody, buildTextSearchRequestBody, keylessPlacesPayload, normalizeNearbyPlaces, normalizeTextPlaces, parseCoordinateParam, resolveServerGoogleApiKey } from '../../src/data/googlePlacesPolicy.js';
 import { clientKey, makeOptInRateLimiter, sameSiteViolation, sendSameSiteRejection } from './_shared.js';
 
 export let _googleRateLimiter;
@@ -58,9 +58,13 @@ export function googlePlacesContextProxy() {
       // not valid" on every call.
       const apiKey = resolveServerGoogleApiKey(process.env);
       if (!apiKey) {
-        res.statusCode = 503;
+        // Honest keyless contract (200 + unavailable), not a 503: Chrome logs
+        // "Failed to load resource" for any 503 body, which poisoned every
+        // clean-console QA assertion on keyless machines. Shared payload.
+        res.statusCode = 200;
         res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ error: 'GOOGLE_MAPS_API_KEY is not set', places: [] }));
+        res.setHeader('Cache-Control', 'private, max-age=300');
+        res.end(JSON.stringify(keylessPlacesPayload()));
         return;
       }
 
@@ -137,9 +141,11 @@ export function googlePlacesContextProxy() {
       // Placeholder-aware, matching nearby-places above.
       const apiKey = resolveServerGoogleApiKey(process.env);
       if (!apiKey) {
-        res.statusCode = 503;
+        // Honest keyless contract — see nearby-places above.
+        res.statusCode = 200;
         res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ error: 'GOOGLE_MAPS_API_KEY is not set', places: [] }));
+        res.setHeader('Cache-Control', 'private, max-age=300');
+        res.end(JSON.stringify(keylessPlacesPayload()));
         return;
       }
 

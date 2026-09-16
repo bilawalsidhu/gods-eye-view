@@ -292,13 +292,9 @@ async function init() {
       };
     }
     // buildTogglePanel builds the vanilla layer toggle rows into #data-toggles.
-    // The React/PWA sibling build mounts its own LayerPanel.tsx and skips this
-    // call to avoid duplicate rows; THIS build loads only src/main.js (no
-    // React entry), so without it #data-toggles stays empty and the app ships
-    // with no layer UI at all — the regression the L9 matrix caught (layer
-    // rows, feed-state chips, and the voice layer-state sync all read these
-    // rows). Data manager state is shared; both paths read/write the same
-    // layer registry.
+    // Without it #data-toggles stays empty and the app ships with no layer UI
+    // at all — the regression the L9 matrix caught (layer rows, feed-state
+    // chips, and the voice layer-state sync all read these rows).
     dataManager.buildTogglePanel(document.getElementById('data-toggles'));
     styleManager.attachDataManager(dataManager);
 

@@ -126,6 +126,15 @@ try {
   // Let tiles finish + fades settle + the settling frames drain.
   await new Promise((r) => setTimeout(r, 12_000));
 
+  // Drop to the plain style BEFORE the idle baseline. The first-run default is
+  // CRT (operator ruling 2026-08-29) — an ANIMATED stage whose time uniform
+  // legitimately keeps the style-anim low-demand hold alive forever, so the
+  // governor can never report `idle` while it runs. This suite's subject is
+  // the governor/detection contract, not the style pipeline; the CRT default
+  // is a deliberate product feature, not a render leak.
+  await page.evaluate(() => { window.__godsEyeView.styleManager.setStyle('normal'); });
+  await new Promise((r) => setTimeout(r, 2_000));
+
   /** Count scene postRender fires and rAF ticks over windowMs. */
   const countFrames = (windowMs) => page.evaluate((ms) => new Promise((resolve) => {
     const scene = window.__godsEyeView.viewer.scene;

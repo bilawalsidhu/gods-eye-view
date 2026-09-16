@@ -31,9 +31,10 @@ const FILES = {
   module: path.join(ROOT, 'src', 'firstRunExperience.js'),
   html: path.join(ROOT, 'index.html'),
   css: path.join(ROOT, 'style.css'),
-  vite: path.join(ROOT, 'vite.config.js'),
   main: path.join(ROOT, 'src', 'main.js'),
   ui: path.join(ROOT, 'src', 'ui.js'),
+  radioPanel: path.join(ROOT, 'src', 'ui', 'radioPanel.js'),
+  schema: path.join(ROOT, 'src', 'voice', 'realtimeSession.js'),
   docs: path.join(ROOT, 'docs', 'CURRENT-STATE.md'),
 };
 
@@ -171,8 +172,10 @@ const MUTATIONS = [
   {
     // Anchored past the call so it cannot land on the cockpit disclosure's own
     // stopImmediatePropagation() a few lines below and prove nothing about this.
+    // (Radio-panel ESC guard moved from ui.js to src/ui/radioPanel.js — the
+    // mutator follows the code, not the old address.)
     defect: 'the radio disclosure returns to stopPropagation, so one ESC does two things',
-    file: 'ui',
+    file: 'radioPanel',
     from: '      event.stopImmediatePropagation();\n      setRadioDisclosure(false, { returnFocus: true });',
     to: '      event.stopPropagation();\n      setRadioDisclosure(false, { returnFocus: true });',
   },
@@ -431,10 +434,12 @@ const MUTATIONS = [
     to: 'data-first-run-status',
   },
   {
+    // The launcher element became a <div> (was <aside>); the pin still guards
+    // the dialog semantics, so the mutation follows the tag.
     defect: 'the launcher is no longer announced as a dialog',
     file: 'html',
-    from: '<aside id="first-run-launcher" role="dialog"',
-    to: '<aside id="first-run-launcher"',
+    from: '<div id="first-run-launcher" role="dialog"',
+    to: '<div id="first-run-launcher"',
   },
   {
     defect: 'the launcher is revealed before the loading cover yields',
@@ -450,15 +455,17 @@ const MUTATIONS = [
   },
 
   // ── Voice: schema must not drift ──────────────────────────────────────────
+  // (The 28 frozen schemas + instruction mapping moved from vite.config.js to
+  // src/voice/realtimeSession.js — the mutator moved with them.)
   {
     defect: 'the voice TOOL SCHEMA is edited (a Realtime prompt-cache bust)',
-    file: 'vite',
+    file: 'schema',
     from: "            'earthquakes',\n            'satellites',",
     to: "            'earthquakes',\n            'infrastructure-mode',\n            'satellites',",
   },
   {
     defect: 'the instruction mapping is dropped, so voice cannot reach the modes',
-    file: 'vite',
+    file: 'schema',
     from: "            'NAMED VIEWS are shorthand",
     to: "            // 'NAMED VIEWS are shorthand",
   },

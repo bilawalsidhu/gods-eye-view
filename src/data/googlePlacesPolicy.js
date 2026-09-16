@@ -157,6 +157,23 @@ export function resolveServerGoogleApiKey(env) {
     ?? resolveGoogleApiKey(env?.GOOGLE_MAPS_API_KEY);
 }
 
+/** Keyless error text, identical in both runtimes. */
+export const GOOGLE_KEYLESS_MESSAGE = 'GOOGLE_MAPS_API_KEY is not set';
+
+/**
+ * The honest keyless payload. A deployment with no Places key answers 200
+ * `{ places: [], error, unavailable: true }` — the same "clearly-labelled
+ * unavailability" convention as the AIS/CCTV/FIRMS feeds — instead of a 503.
+ * A 503 makes Chrome log "Failed to load resource" for a request the server
+ * KNEW it could not serve, poisoning every clean-console QA assertion and
+ * the browser console of real keyless users. The client already treats both
+ * shapes identically (`response.ok` → read `places`).
+ * @returns {object} Keyless response body shared by dev and prod.
+ */
+export function keylessPlacesPayload() {
+  return { places: [], error: GOOGLE_KEYLESS_MESSAGE, unavailable: true };
+}
+
 /**
  * Request body for `places:searchText` (view-biased).
  *

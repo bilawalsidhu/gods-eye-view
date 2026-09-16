@@ -20,7 +20,9 @@
  *   non-GET          → 405 { error: 'Method not allowed', places: [] }
  *   cross-site GET   → 403 { error: 'cross-origin requests are rejected', places: [] }
  *   over rate limit  → 429 { error: 'Rate limit exceeded', places: [] } + Retry-After: 5
- *   missing key      → 503 { error: 'GOOGLE_MAPS_API_KEY is not set', places: [] }
+ *   missing key      → 200 { places: [], error, unavailable: true } — honest
+ *                      keyless contract (matches AIS/CCTV/FIRMS); a 503 here
+ *                      made Chrome log a network error on every keyless boot
  *   bad params       → 400 { error, places: [] }
  *   upstream status verbatim (with { places, error: upstream message })
  *   fetch failure    → 502 { error, places: [] }
@@ -49,6 +51,7 @@ import {
   GOOGLE_TEXT_RADIUS_MIN_M,
   buildNearbyRequestBody,
   buildTextSearchRequestBody,
+  keylessPlacesPayload,
   normalizeNearbyPlaces,
   normalizeTextPlaces,
   parseCoordinateParam,
@@ -80,6 +83,22 @@ function placesError(status, message, extraHeaders = {}) {
   });
 }
 
+/**
+ * Honest keyless response (200 + `unavailable: true`, matching the AIS/CCTV/
+ * FIRMS unavailability convention) — a 503 here made Chrome log "Failed to
+ * load resource" on every keyless boot, poisoning clean-console QA asserts.
+ * Shares the payload builder and cache policy with the success path.
+ */
+function placesUnavailable() {
+  return new Response(JSON.stringify(keylessPlacesPayload()), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'private, max-age=300',
+    },
+  });
+}
+
 export async function onRequest({ request, env }) {
   if (request.method !== 'GET') {
     return placesError(405, 'Method not allowed');
@@ -95,7 +114,7 @@ export async function onRequest({ request, env }) {
 
   const apiKey = resolveServerGoogleApiKey(env);
   if (!apiKey) {
-    return placesError(503, 'GOOGLE_MAPS_API_KEY is not set');
+    return placesUnavailable();
   }
 
   const url = new URL(request.url);

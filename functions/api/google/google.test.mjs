@@ -111,12 +111,20 @@ test('GEV_RATELIMIT_GOOGLE_PER_MIN=0 is the documented escape hatch', async () =
   }
 });
 
-test('a missing key answers the dev 503 shape without touching upstream', async () => {
+test('a missing key answers the honest keyless 200 shape without touching upstream', async () => {
   const stub = stubFetch(() => { throw new Error('must not fetch'); });
   try {
     const res = await onRequest(ctx(siteFetch('/nearby-places', 'lat=29.4&lon=-98.5'), {}));
-    assert.equal(res.status, 503);
-    assert.deepEqual(await res.json(), { error: 'GOOGLE_MAPS_API_KEY is not set', places: [] });
+    // 200 + `unavailable: true` (the AIS/CCTV/FIRMS convention), NOT a 503:
+    // Chrome logs "Failed to load resource" for any 503, which poisoned
+    // clean-console QA asserts on keyless machines.
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), {
+      error: 'GOOGLE_MAPS_API_KEY is not set',
+      places: [],
+      unavailable: true,
+    });
+    assert.equal(res.headers.get('cache-control'), 'private, max-age=300');
     assert.equal(stub.calls.length, 0);
   } finally {
     stub.restore();
@@ -236,8 +244,12 @@ test('the scaffolded .env placeholder key is treated as absent, not forwarded', 
   try {
     for (const placeholder of ['your_google_maps_api_key_here', '  your_google_maps_api_key_here  ', '   ', '']) {
       const res = await onRequest(ctx(siteFetch('/nearby-places', 'lat=29.4&lon=-98.5'), { GOOGLE_MAPS_API_KEY: placeholder }));
-      assert.equal(res.status, 503, JSON.stringify(placeholder));
-      assert.deepEqual(await res.json(), { error: 'GOOGLE_MAPS_API_KEY is not set', places: [] });
+      assert.equal(res.status, 200, JSON.stringify(placeholder));
+      assert.deepEqual(await res.json(), {
+        error: 'GOOGLE_MAPS_API_KEY is not set',
+        places: [],
+        unavailable: true,
+      });
     }
     assert.equal(stub.calls.length, 0, 'no placeholder value may reach upstream');
   } finally {

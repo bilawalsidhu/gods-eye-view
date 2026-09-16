@@ -2351,10 +2351,12 @@ async function preflight() {
   } catch { env.keys.OPENSKY = 'error'; }
   try {
     // Google has no /status endpoint; its documented keyless shape is the
-    // places proxy's 503 {"error":"GOOGLE_MAPS_API_KEY is not set"}. A keyed
-    // server answers otherwise (upstream result) — presence, not validity.
+    // places proxy's honest-unavailable 200 {"unavailable":true} (the
+    // AIS/CCTV/FIRMS convention — the former 503 made Chrome log a network
+    // error on every keyless boot). A keyed server answers otherwise
+    // (upstream result) — presence, not validity.
     const g = await jget('/api/google/nearby-places?lat=30.27&lon=-97.74', { timeoutMs: 30000 });
-    if (g.status === 503 && /GOOGLE_MAPS_API_KEY is not set/.test(g.text)) env.keys.GOOGLE = false;
+    if (g.status === 200 && /"unavailable"\s*:\s*true/.test(g.text)) env.keys.GOOGLE = false;
     else if (g.status < 500) env.keys.GOOGLE = true;
     else env.keys.GOOGLE = 'error';
   } catch { env.keys.GOOGLE = 'error'; }

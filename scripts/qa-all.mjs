@@ -43,6 +43,32 @@ const LOG_DIR = path.resolve(getOpt('--log-dir', '.gev-logs/qa-all'));
 
 const SCRIPTS_DIR = path.resolve(path.dirname(new URL(import.meta.url).pathname));
 
+// Per-suite invocation/timeout overrides. Most suites take `[url, --url url]`;
+// the map exists for the few that don't:
+//  - qa-voice-wav reads argv[2] as the app URL and argv[3] as the WAV fixture
+//    path, so a `--url` flag would be mistaken for a fixture path.
+const SUITE_ARGV_OVERRIDES = {
+  'qa-voice-wav.mjs': (baseUrl) => [baseUrl],
+};
+
+// Wall-clock ceiling per suite. The default covers the ordinary harnesses;
+// the two matrix/baseline suites embed long inner waits (qa-l9-matrix even
+// runs `npm test` inside itself) and were measured to need more.
+const SUITE_TIMEOUT_OVERRIDES = {
+  'qa-l9-matrix.mjs': 2_700_000,
+  'qa-overlay-baseline.mjs': 1_800_000,
+};
+
+// Suites that exit nonzero with a self-declared key gate ("Server has no X
+// key — run against the keyed dev server") cannot run on this machine by
+// design — we do not fabricate credentials. They are reported as ENV-GATED,
+// listed in the summary, and do not fail the run.
+const ENV_GATE_MARKERS = [
+  'run against the keyed dev server',
+  'the A/B needs live flow',
+  'OPENAI_API_KEY is not set',
+];
+
 function discoverSuites() {
   return fs
     .readdirSync(SCRIPTS_DIR)
@@ -53,9 +79,13 @@ function discoverSuites() {
 
 function runSuite(suite) {
   return new Promise((resolve) => {
+    const extraArgs = SUITE_ARGV_OVERRIDES[suite]
+      ? SUITE_ARGV_OVERRIDES[suite](BASE_URL)
+      : [BASE_URL, '--url', BASE_URL];
+    const timeoutMs = SUITE_TIMEOUT_OVERRIDES[suite] ?? SUITE_TIMEOUT_MS;
     const child = spawn(
       process.execPath,
-      [path.join(SCRIPTS_DIR, suite), BASE_URL, '--url', BASE_URL],
+      [path.join(SCRIPTS_DIR, suite), ...extraArgs],
       {
         env: { ...process.env, QA_BASE_URL: BASE_URL },
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -65,19 +95,28 @@ function runSuite(suite) {
     const logStream = fs.createWriteStream(logPath);
     child.stdout.pipe(logStream);
     child.stderr.pipe(logStream);
+    // Keep an in-memory copy for gate classification: `logStream.end()` on
+    // 'close' flushes asynchronously, so re-reading the file here can miss
+    // the final lines — exactly where a suite prints its key-gate message.
+    let logText = '';
+    child.stdout.on('data', (chunk) => { logText += chunk; });
+    child.stderr.on('data', (chunk) => { logText += chunk; });
 
     let timedOut = false;
     const timer = setTimeout(() => {
       timedOut = true;
       child.kill('SIGKILL');
-    }, SUITE_TIMEOUT_MS);
+    }, timeoutMs);
 
     child.on('close', (code) => {
       clearTimeout(timer);
       logStream.end();
       // A SIGKILL we issued means timeout, not a suite crash.
-      if (timedOut) resolve({ suite, status: 'TIMEOUT', code: null });
-      else resolve({ suite, status: code === 0 ? 'PASS' : 'FAIL', code });
+      if (timedOut) return resolve({ suite, status: 'TIMEOUT', code: null });
+      if (code !== 0 && ENV_GATE_MARKERS.some((marker) => logText.includes(marker))) {
+        return resolve({ suite, status: 'ENV-GATED', code });
+      }
+      resolve({ suite, status: code === 0 ? 'PASS' : 'FAIL', code });
     });
     child.on('error', (err) => {
       clearTimeout(timer);
@@ -110,8 +149,13 @@ for (const suite of suites) {
   console.log(`${result.status} (${seconds}s)`);
 }
 
-const failed = results.filter((r) => r.status !== 'PASS');
-console.log(`\n${results.length - failed.length}/${results.length} suites passed`);
+const failed = results.filter((r) => r.status !== 'PASS' && r.status !== 'ENV-GATED');
+const envGated = results.filter((r) => r.status === 'ENV-GATED');
+const gatedSuffix = envGated.length ? ` (${envGated.length} env-gated, keyless by design)` : '';
+console.log(`\n${results.length - failed.length - envGated.length}/${results.length} suites passed${gatedSuffix}`);
+for (const r of envGated) {
+  console.log(`  ⚠ ${r.suite} — ENV-GATED (needs an API key this machine does not have) — ${path.join(LOG_DIR, `${r.suite}.log`)}`);
+}
 for (const r of failed) {
   console.log(`  ✖ ${r.suite} — ${r.status}${r.code !== null ? ` (exit ${r.code})` : ''} — ${path.join(LOG_DIR, `${r.suite}.log`)}`);
 }

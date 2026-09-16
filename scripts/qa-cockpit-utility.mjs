@@ -2417,12 +2417,13 @@ try {
     console.log(`WARN contact selection swapped by live-feed attrition during Cockpit Reset: ${resetState.subjectBefore} -> ${resetState.subjectAfter}`);
   }
   // Keyless deployments answer their own google/openai endpoints with the
-  // honest 503 "not set" contract (the same allowance the L9 matrix's C3
-  // makes). Probing keeps the assertion about UNEXPECTED console dirt.
+  // honest unavailability contract (the same allowance the L9 matrix's C3
+  // makes): google places is 200 {"unavailable":true}; openai/firms still
+  // 503 "not set". Probing keeps the assertion about UNEXPECTED console dirt.
   let keylessServer = false;
   try {
     const keylessProbe = await fetch(`${appUrl}/api/google/nearby-places?lat=30.2672&lon=-97.7431`);
-    keylessServer = keylessProbe.status === 503 && /not set/i.test(await keylessProbe.text());
+    keylessServer = keylessProbe.status === 200 && /"unavailable"\s*:\s*true/i.test(await keylessProbe.text());
   } catch { /* keyed or unreachable — treat as keyed */ }
   const KEYLESS_PATH = /^\/api\/(google\/(?:nearby-places|text-search)|openai\/hud-summary|realtime\/token|firms)$/;
   // Chrome logs every non-2xx subresource as "Failed to load resource: …
