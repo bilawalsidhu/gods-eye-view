@@ -259,10 +259,12 @@ export const TORONTO_RESCU_IMAGE_ORIGIN =
 export const DEFAULT_TORONTO_MAX_SOURCES = 336;
 /** Yonge / Queen: the prioritization anchor. */
 export const TORONTO_DOWNTOWN = { lat: 43.6532, lon: -79.3832 };
-/** Toronto's lakeshore core sits near 76 m; the ravines and the north of the
- * city run higher. This prior only has to be close — the client's one-shot
- * ground snap corrects it wherever 3D tiles are loaded. */
-export const TORONTO_GROUND_ELEVATION_M = 90;
+/** The city climbs from 76 m at the lake to 209 m at Steeles, so no single
+ * number fits: this is the mean across the 336 camera sites. Placement comes
+ * from the precomputed ground-height sidecar wherever a camera has an entry;
+ * this prior is only the fallback for a sidecar miss or an edited pose, and
+ * the client's ground snap corrects it wherever 3D tiles are loaded. */
+export const TORONTO_GROUND_ELEVATION_M = 116;
 /** Hard ceiling on the RESCU list body. The whole city is ~336 rows and under
  * 60 KB; this only exists so an upstream that streams an unbounded body cannot
  * be buffered without limit. */
