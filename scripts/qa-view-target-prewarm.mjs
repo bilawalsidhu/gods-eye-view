@@ -32,7 +32,7 @@ fs.mkdirSync(shotsDir, { recursive: true });
 
 const chromeCandidates = [
   process.env.PUPPETEER_EXECUTABLE_PATH,
-  await puppeteer.executablePath().catch(() => null),
+  await Promise.resolve().then(() => puppeteer.executablePath()).catch(() => null),
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
 ].filter(Boolean);
 const executablePath = chromeCandidates.find((candidate) => fs.existsSync(candidate));

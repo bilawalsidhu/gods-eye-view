@@ -26,7 +26,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // across majors.
 const chrome = [
   process.env.PUPPETEER_EXECUTABLE_PATH,
-  await puppeteer.executablePath().catch(() => null),
+  await Promise.resolve().then(() => puppeteer.executablePath()).catch(() => null),
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
 ].filter(Boolean).find((p) => fs.existsSync(p));
 

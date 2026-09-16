@@ -38,7 +38,7 @@ const SHOT_DIR = path.join(ROOT, 'qa-shots', 'firstrun');
 const CHROME_CANDIDATES = [
   process.env.PUPPETEER_EXECUTABLE_PATH,
   // Version-pinned Chrome-for-Testing over the auto-updating system Chrome.
-  await puppeteer.executablePath().catch(() => null),
+  await Promise.resolve().then(() => puppeteer.executablePath()).catch(() => null),
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
 ].filter(Boolean);
 
