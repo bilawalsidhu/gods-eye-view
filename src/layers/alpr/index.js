@@ -7,6 +7,7 @@ import {
   QUERY_SNAP_DEGREES,
   QUERY_REUSE_MS,
   ALPR_COLOR,
+  ALPR_SELECTED_COLOR,
 } from './policy.js';
 import {
   snapAlprBox,
@@ -17,6 +18,9 @@ import {
   alprCreditMarkup,
 } from './model.js';
 import { createAlprPresentation } from './presentation.js';
+import { computeCordon } from './cordon.js';
+import { createCordonSource } from './cordonSource.js';
+import { createCordonOverlay } from './cordonOverlay.js';
 
 /**
  * Own one layer's requests, records, display and viewer subscriptions.
@@ -67,7 +71,19 @@ export function createAlprCamerasLayer({ source, services } = {}) {
     debounceTimer: null,
     /** Snapped box of the last successful query; a view still inside it reuses its records. */
     lastQueryBox: null,
+    /** One-shot cordon analysis for the town at view center. */
+    cordon: {
+      loading: false,
+      ready: false,
+      error: null,
+      abort: null,
+      name: null,
+      stats: null,
+      truncated: false,
+    },
   };
+  const cordonSource = createCordonSource();
+  const cordonOverlay = createCordonOverlay();
   const {
     initOverlay,
     destroyOverlay,
@@ -82,6 +98,95 @@ export function createAlprCamerasLayer({ source, services } = {}) {
     updateSelectedAnchor,
     installInteraction,
   } = createAlprPresentation({ state, services, source });
+
+  function clearCordon() {
+    state.cordon.abort?.abort();
+    state.cordon = {
+      loading: false,
+      ready: false,
+      error: null,
+      abort: null,
+      name: null,
+      stats: null,
+      truncated: false,
+    };
+    cordonOverlay.clear();
+    governorRequestRender('alpr-cordon');
+  }
+
+  /**
+   * Cordon the town at view center: fetch its boundary, entry roads and
+   * cameras, then render gates and keep the stats for the row legend.
+   * Returns whether an analysis landed (tests await the chip's promise).
+   */
+  async function runCordon() {
+    if (!state.enabled || state.cordon.loading) return false;
+    const box = viewportBox(state.viewer);
+    if (!box) {
+      clearCordon();
+      state.cordon.error = 'Zoom to a town before running a cordon';
+      governorRequestRender('alpr-cordon');
+      return false;
+    }
+    state.cordon.abort?.abort();
+    const abort = new AbortController();
+    state.cordon = {
+      loading: true,
+      ready: false,
+      error: null,
+      abort,
+      name: null,
+      stats: null,
+      truncated: false,
+    };
+    governorRequestRender('alpr-cordon');
+    try {
+      const data = await cordonSource.analyze(
+        {
+          lat: (box.south + box.north) / 2,
+          lon: (box.west + box.east) / 2,
+        },
+        source,
+        abort.signal,
+      );
+      if (abort.signal.aborted || state.cordon.abort !== abort) return false;
+      const { gates, stats } = computeCordon({
+        ring: data.ring,
+        roads: data.roads,
+        cameras: data.cameras,
+      });
+      cordonOverlay.render({ ring: data.ring, gates });
+      state.cordon = {
+        loading: false,
+        ready: true,
+        error: null,
+        abort: null,
+        name: data.name,
+        stats,
+        truncated: data.truncated,
+      };
+      return true;
+    } catch (error) {
+      if (
+        error?.name === 'AbortError' ||
+        abort.signal.aborted ||
+        state.cordon.abort !== abort
+      )
+        return false;
+      state.cordon = {
+        loading: false,
+        ready: false,
+        error: error?.message || 'Cordon analysis failed',
+        abort: null,
+        name: null,
+        stats: null,
+        truncated: false,
+      };
+      return false;
+    } finally {
+      governorRequestRender('alpr-cordon');
+    }
+  }
 
   function setAlprStatus(status, error = null) {
     if (state.status === status && state.error === error) return;
@@ -246,6 +351,9 @@ export function createAlprCamerasLayer({ source, services } = {}) {
       state.credit = creditMarkup
         ? new Cesium.Credit(creditMarkup, true)
         : null;
+      // Cordon geometry sits under the camera badges, so its source is added
+      // first and the camera data source stays the most recently added one.
+      cordonOverlay.init(viewer);
       viewer.dataSources.add(state.dataSource);
       state.moveEndRemove =
         viewer.camera.moveEnd.addEventListener(scheduleLoad);
@@ -264,6 +372,7 @@ export function createAlprCamerasLayer({ source, services } = {}) {
     },
     disable() {
       state.enabled = false;
+      clearCordon();
       hideOnMapCredit();
       unregisterPickOwner(LAYER_ID);
       clearUnavailableRetry();
@@ -283,6 +392,7 @@ export function createAlprCamerasLayer({ source, services } = {}) {
     },
     destroy(viewer = state.viewer) {
       this.disable();
+      cordonOverlay.destroy();
       destroyOverlay();
       state.moveEndRemove?.();
       state.moveEndRemove = null;
@@ -349,6 +459,25 @@ export function createAlprCamerasLayer({ source, services } = {}) {
             onClick: focusNearest,
           },
           {
+            id: 'cordon',
+            label: state.cordon.ready
+              ? 'CLEAR CORDON'
+              : state.cordon.loading
+                ? 'CORDON…'
+                : 'CORDON',
+            title: state.cordon.ready
+              ? 'Remove the cordon overlay'
+              : 'Measure what share of the roads entering the town at screen center pass a mapped reader',
+            disabled: !state.enabled || state.cordon.loading,
+            onClick: () => {
+              if (state.cordon.ready) {
+                clearCordon();
+                return true;
+              }
+              return runCordon();
+            },
+          },
+          {
             id: 'edit-osm',
             label: 'FIX ON OSM',
             title: Number.isSafeInteger(selected?.osmId)
@@ -376,6 +505,31 @@ export function createAlprCamerasLayer({ source, services } = {}) {
             blurb:
               'Cyan cameras turn coral when selected. Wedges illustrate mapped direction, not measured coverage. Nearby cameras may be outside the screen.',
           },
+          ...(state.cordon.ready && state.cordon.stats
+            ? [
+                {
+                  label: `Cordon · ${state.cordon.name}`,
+                  color: ALPR_SELECTED_COLOR,
+                  count: state.cordon.stats.total - state.cordon.stats.covered,
+                  blurb:
+                    `${state.cordon.stats.covered} of ${state.cordon.stats.total} road entries pass a mapped reader ` +
+                    `(${Math.round(state.cordon.stats.share * 100)}%) — majors ${state.cordon.stats.majors.covered}/${state.cordon.stats.majors.total}. ` +
+                    'Coral gates are unmonitored gaps. Mapped cameras are a floor, not a registry' +
+                    (state.cordon.truncated
+                      ? '; data truncated — treat coverage as partial.'
+                      : '.'),
+                },
+              ]
+            : state.cordon.error
+              ? [
+                  {
+                    label: 'Cordon',
+                    color: ALPR_SELECTED_COLOR,
+                    count: 0,
+                    blurb: state.cordon.error,
+                  },
+                ]
+              : []),
         ],
       };
     },
@@ -432,3 +586,17 @@ export {
   QUERY_REUSE_MS,
 } from './policy.js';
 export { createOverpassAlprSource } from './source.js';
+export {
+  buildCordonRoadsQuery,
+  normalizeCordonRoads,
+  pickCordonBoundary,
+  stitchOuterRing,
+  ringBox,
+  cordonPointInRing,
+  ringCrossings,
+  nearestCameraToRoadM,
+  dedupeCrossings,
+  computeCordon,
+  CORDON_ROAD_CLASS_RE,
+} from './cordon.js';
+export { createCordonSource } from './cordonSource.js';
