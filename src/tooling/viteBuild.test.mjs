@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { createBrowserViteConfig } from '../../build/vite.js';
+import { BROWSER_CSP, createBrowserViteConfig } from '../../build/vite.js';
 import standaloneConfig, * as compatibility from '../../vite.config.js';
 import * as providers from '../../server/providers/local.js';
 
@@ -23,10 +23,18 @@ test('explicit build inputs preserve browser-only defines, plugin order and loop
   assert.ok(config.server.fs.deny.includes('**/ENVIRONMENT'));
   assert.ok(config.server.fs.deny.includes('.env.*'));
   assert.equal(config.server.headers['X-Frame-Options'], 'DENY');
-  assert.equal(
-    config.server.headers['Content-Security-Policy'],
+  const csp = config.server.headers['Content-Security-Policy'];
+  assert.equal(csp, BROWSER_CSP);
+  for (const directive of [
+    "script-src 'self' 'unsafe-eval'",
+    "object-src 'none'",
+    "base-uri 'self'",
     "frame-ancestors 'none'",
-  );
+  ]) {
+    assert.ok(csp.includes(directive), directive);
+  }
+  assert.ok(!csp.includes("script-src 'self' 'unsafe-inline'"));
+  assert.deepEqual(config.preview.headers, config.server.headers);
   assert.deepEqual(config.define, {
     'import.meta.env.GOOGLE_MAPS_API_KEY': '"browser-fixture"',
     'import.meta.env.CESIUM_ION_TOKEN': '"ion-fixture"',
