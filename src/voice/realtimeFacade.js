@@ -574,15 +574,9 @@ export class RealtimeFacade {
   get localBackendState() {
     return this._provider.localBackendState;
   }
-  set localBackendState(value) {
-    this._provider.localBackendState = value;
-  }
 
   get localBackendPollTimer() {
     return this._provider.localBackendPollTimer;
-  }
-  set localBackendPollTimer(value) {
-    this._provider.localBackendPollTimer = value;
   }
 
   get sessionVoiceProvider() {
@@ -607,10 +601,6 @@ export class RealtimeFacade {
     return this._provider.setVoiceProvider(...args);
   }
 
-  requestLocalVoiceSetup(...args) {
-    return this._provider.requestLocalVoiceSetup(...args);
-  }
-
   awaitLocalBackendReady(...args) {
     return this._provider.awaitLocalBackendReady(...args);
   }
@@ -625,14 +615,6 @@ export class RealtimeFacade {
 
   watchLocalBackend(...args) {
     return this._provider.watchLocalBackend(...args);
-  }
-
-  stopWatchingLocalBackend(...args) {
-    return this._provider.stopWatchingLocalBackend(...args);
-  }
-
-  setLocalBackendState(...args) {
-    return this._provider.setLocalBackendState(...args);
   }
 
   syncProviderUi(...args) {
