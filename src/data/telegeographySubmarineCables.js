@@ -77,8 +77,8 @@ export default createTeleGeographySubmarineCableLayer();
  * Select the nearest visible cable references without exceeding the bounded
  * cohort cap the shared host is offered.
  * @param {object[]} records Records annotated with `visible` and `distanceM`.
- * @param {number} [limit]
- * @returns {object[]}
+ * @param {number} [limit] Requested cohort size; clamped to the shipped cap and floored at 0.
+ * @returns {object[]} Up to `cap` visible references, nearest first, ties broken by entity id.
  */
 export function selectCableReferenceLabelWinners(
   records,
@@ -103,8 +103,8 @@ export function selectCableReferenceLabelWinners(
  * Distance-derived arbiter priority. Quantized to 50 km buckets so a slowly
  * moving camera does not reshuffle equal-rank labels on every sweep; nearer
  * references still win collisions, matching the shipped nearest-first feel.
- * @param {number} distanceM
- * @returns {number}
+ * @param {number} distanceM Camera-to-reference distance in metres.
+ * @returns {number} Arbiter rank in [1000 − cap/50 000, 1000]; higher wins.
  */
 export function cableReferencePriority(distanceM) {
   const distance = Number.isFinite(distanceM) ? Math.max(0, distanceM) : CABLE_REFERENCE_LABEL_MAX_DISTANCE_M;
@@ -119,7 +119,7 @@ export function cableReferencePriority(distanceM) {
  * native point/stem/line remains the click surface, and a non-interactive
  * label keeps the host's per-frame accessibility/hit sync allocation-free.
  * @param {object} record Reference record ({ id, kind, label, tip }).
- * @returns {object}
+ * @returns {object} Host entry bound to the record's live tip Cartesian.
  */
 export function createCableOverlayEntry(record) {
   const kind = record?.kind === 'landing-point' ? 'landing-point' : 'cable';
@@ -157,10 +157,12 @@ export function createCableOverlayEntry(record) {
  * hide() — clear the published source and go invisible while staying
  * reusable. There is deliberately no permanent-destroy method: a hidden
  * publisher already drops late publishes until the next show().
- * @param {object} [options]
- * @param {string} [options.sourceId]
+ * @param {object} [options] Publisher wiring.
+ * @param {string} [options.sourceId] Overlay source id published through the host.
  * @param {object} [options.host] Test seam for the three host lifecycle calls.
  * @returns {{show:function():void,publish:function(object[]):void,hide:function():void}}
+ *   Publisher whose show()/hide() gate host visibility and whose publish()
+ *   swaps the rendered feature set while hidden output is suppressed.
  */
 export function createCableOverlayPublisher({
   sourceId = CABLE_OVERLAY_SOURCE_ID,
@@ -219,7 +221,7 @@ const CABLE_GLOBE_STACK_IDS = Object.freeze(
  * for an unknown stack — it renders on every surface, exactly the shipped
  * pre-optimization behavior.
  * @param {string|null|undefined} activeId MapStackController stack id.
- * @returns {Cesium.ClassificationType}
+ * @returns {Cesium.ClassificationType} The narrowest classification that still renders on the active surface.
  */
 export function cableClassificationTypeForStack(activeId) {
   if (activeId === 'photoreal') return Cesium.ClassificationType.CESIUM_3D_TILE;
@@ -232,8 +234,8 @@ export function cableClassificationTypeForStack(activeId) {
  * `setStack(..., { silent: true })` fires no 'gev:map-stack-changed' event,
  * so the initial classification reads the scene the way the height-datum
  * listeners do: the photoreal regime is exactly "globe hidden".
- * @param {Cesium.Scene|null|undefined} scene
- * @returns {Cesium.ClassificationType}
+ * @param {Cesium.Scene|null|undefined} scene Live scene whose globe visibility decides the regime.
+ * @returns {Cesium.ClassificationType} 3D-tile-only under the photoreal regime, else BOTH.
  */
 export function cableClassificationTypeForScene(scene) {
   if (!scene?.globe) return Cesium.ClassificationType.BOTH;
@@ -253,8 +255,8 @@ const MARKER_COLLECTION_EXPECTATIONS = Object.freeze([
  * Splitting validation from mutation is what makes the fallback honest: a
  * shape failure on the SECOND collection (or the second data source) must
  * not leave the first one already forced to TRANSLUCENT.
- * @param {Cesium.DataSource|null|undefined} dataSource
- * @returns {{ready:object[],pending:number,invariantFailed:boolean}}
+ * @param {Cesium.DataSource|null|undefined} dataSource Entity data source whose marker collections are inspected.
+ * @returns {{ready:object[],pending:number,invariantFailed:boolean}} Collections safe to flip, how many are not yet created, and whether Cesium's shape no longer matches.
  */
 function probeTranslucentMarkerBlend(dataSource) {
   const cluster = dataSource?.clustering;
@@ -286,8 +288,8 @@ function probeTranslucentMarkerBlend(dataSource) {
 /**
  * Commit a clean probe. Only ever called once every probe in the batch has
  * passed, so this cannot land a partial application.
- * @param {{ready:object[],pending:number}} probe
- * @returns {{applied:number,pending:number,invariantFailed:boolean}}
+ * @param {{ready:object[],pending:number}} probe Clean probe result from probeTranslucentMarkerBlend.
+ * @returns {{applied:number,pending:number,invariantFailed:boolean}} How many collections were flipped, how many are still unborn, and the carried failure flag.
  */
 function commitTranslucentMarkerBlend(probe) {
   for (const collection of probe.ready) {
@@ -315,8 +317,8 @@ function commitTranslucentMarkerBlend(probe) {
  * VALIDATE-ALL-THEN-MUTATE-ALL: every field/type check runs before the first
  * assignment, so a failure anywhere leaves BOTH collections on Cesium's
  * default blend — the fallback this helper promises.
- * @param {Cesium.DataSource|null|undefined} dataSource
- * @returns {{applied:number,pending:number,invariantFailed:boolean}}
+ * @param {Cesium.DataSource|null|undefined} dataSource Entity data source to validate and then mutate.
+ * @returns {{applied:number,pending:number,invariantFailed:boolean}} Commit outcome; `invariantFailed` means nothing was touched.
  */
 export function applyTranslucentMarkerBlend(dataSource) {
   const probe = probeTranslucentMarkerBlend(dataSource);
@@ -328,7 +330,7 @@ export function applyTranslucentMarkerBlend(dataSource) {
  * Monotonic clock for the sweep gate's motion probe. A hoisted declaration:
  * the module's `export default createTeleGeographySubmarineCableLayer()`
  * runs before this point in source order.
- * @returns {number}
+ * @returns {number} Monotonic milliseconds, or wall-clock ms where `performance` is unavailable.
  */
 function defaultSweepClock() {
   return (typeof performance === 'object' && typeof performance.now === 'function')
@@ -366,10 +368,13 @@ function defaultSweepClock() {
  * sizing, and the winner ranks all derive from `positionWC` alone, so a
  * heading-only rotation cannot change a single sweep output and deliberately
  * does not spend one.
- * @param {object} [options]
+ * @param {object} [options] Gate tuning.
  * @param {function():number} [options.now] Monotonic clock (test seam).
- * @param {number} [options.probeIntervalMs]
- * @param {number} [options.motionEpsilonM]
+ * @param {number} [options.probeIntervalMs] Minimum spacing between motion probes.
+ * @param {number} [options.motionEpsilonM] Camera travel that counts as motion worth a sweep.
+ * @returns {{markDirty:function():void, shouldRun:function(Cesium.Camera=):boolean,
+ *   reset:function():void}} Gate API: force the event condition, ask whether a
+ *   sweep is owed this frame, and drop all motion/dirty state (load reset).
  */
 export function createCableReferenceSweepGate({
   now = defaultSweepClock,
@@ -384,7 +389,11 @@ export function createCableReferenceSweepGate({
   let dirty = true;
   let lastProbeAt = -Infinity;
 
-  /** Arm the next probe window and adopt the camera position being swept. */
+  /** Arm the next probe window and adopt the camera position being swept.
+   * @param {Cesium.Camera} [camera] Camera whose `positionWC` becomes the new reference.
+   * @param {number} time Monotonic timestamp the sweep was granted at.
+   * @returns {boolean} Always true — the caller has been told to sweep.
+   */
   function accept(camera, time) {
     lastProbeAt = time;
     const position = camera?.positionWC;
@@ -398,7 +407,7 @@ export function createCableReferenceSweepGate({
     /**
      * @param {Cesium.Camera} [camera] Live camera; omit to disable the motion
      *   fallback entirely (pure dirty-only gate).
-     * @returns {boolean}
+     * @returns {boolean} True when a reference sweep is owed this frame.
      */
     shouldRun(camera) {
       if (dirty) {
@@ -435,7 +444,7 @@ export function createCableReferenceSweepGate({
  * preallocated position buffers alternate so each real change raises exactly
  * one geometry notification (the localGeojson double-buffer pattern).
  * @param {object} record Reference record with entity/base/tip/nextTip/buffers.
- * @param {Cesium.Cartesian3} cameraPositionWC
+ * @param {Cesium.Cartesian3} cameraPositionWC Camera world position the stem length is settled against.
  * @param {number} canvasHeight CSS-pixel canvas height.
  * @param {number} fov Camera frustum field of view (radians).
  * @returns {boolean} True when the stem geometry was redefined.
@@ -470,6 +479,11 @@ export function updateCableReferenceStem(record, cameraPositionWC, canvasHeight,
   return true;
 }
 
+/** Assemble the TeleGeography submarine-cable layer. Everything is injectable
+ *  so the offline suite can drive load, sweep and pick paths without a browser.
+ * @param {{overlayHost?: object, screenSpaceEventHandlerFactory?: function(HTMLCanvasElement): object, mapStackEventTarget?: (EventTarget|null), sweepClock?: function(): number}} [deps] seams; each falls back to the production behaviour.
+ * @returns {object} Data-layer module conforming to the DataLayerManager contract.
+ */
 export function createTeleGeographySubmarineCableLayer({
   overlayHost = DEFAULT_OVERLAY_HOST,
   screenSpaceEventHandlerFactory = (canvas) => new Cesium.ScreenSpaceEventHandler(canvas),
@@ -521,6 +535,7 @@ export function createTeleGeographySubmarineCableLayer({
   const _lastPublishedPriorities = [];
   let _lastPublishedCount = -1;
 
+  /** Forget the last published cohort so the next sweep always republishes. */
   function resetPublishSignature() {
     _lastPublishedIds.length = 0;
     _lastPublishedPriorities.length = 0;
@@ -531,6 +546,12 @@ export function createTeleGeographySubmarineCableLayer({
   const cableOutline = Cesium.Color.BLACK.withAlpha(0.45);
   const landingColor = Cesium.Color.fromCssColorString(BASE_LANDING_COLOR);
 
+  /** Fetch GeoJSON from the bundled/public asset paths and build all three
+   *  data sources. A superseded load aborts itself without clearing the flags
+   *  that belong to the generation that owns the layer now.
+   * @param {import('cesium').Viewer} viewer Viewer that will own the data sources.
+   * @returns {Promise<void>} Resolves when this generation's build settles.
+   */
   async function load(viewer) {
     if (_loading || _loaded) return;
 
@@ -702,17 +723,26 @@ export function createTeleGeographySubmarineCableLayer({
     }
   }
 
+  /** Mirror `_enabled` onto all three data sources' `show` flags. */
   function updateVisibility() {
     if (_cableDataSource) _cableDataSource.show = _enabled;
     if (_landingDataSource) _landingDataSource.show = _enabled;
     if (_referenceDataSource) _referenceDataSource.show = _enabled;
   }
 
+  /** Tag an entity for click resolution both directly and in the pick map.
+   * @param {import('cesium').Entity} entity Entity carrying the pickable primitive.
+   * @param {object} info Pick record ({ kind, reference }) handed to flyToReference.
+   */
   function registerPickEntity(entity, info) {
     entity.__gevTeleGeography = info;
     _pickByEntity.set(entity, info);
   }
 
+  /** Apply the shared cable polyline style, honouring a feed-supplied hue.
+   * @param {import('cesium').Entity} entity Cable entity to style.
+   * @param {{properties?: {color?: string}}} feature Source GeoJSON feature.
+   */
   function styleCableEntity(entity, feature) {
     if (!entity?.polyline) return;
     const color = feature?.properties?.color
@@ -759,7 +789,7 @@ export function createTeleGeographySubmarineCableLayer({
   /**
    * Re-classify every cable ground line for the active surface. One batched
    * ground-primitive rebuild per stack switch — never per frame.
-   * @param {Cesium.ClassificationType} next
+   * @param {Cesium.ClassificationType} next Classification to apply to every cable polyline.
    */
   function applyCableClassification(next) {
     if (next === undefined || next === _classificationType) return;
@@ -773,6 +803,10 @@ export function createTeleGeographySubmarineCableLayer({
     _viewer?.scene?.requestRender?.();
   }
 
+  /** Apply the shared landing-point style; TBD landings read one pixel smaller.
+   * @param {import('cesium').Entity} entity Landing-point entity to style.
+   * @param {{properties?: {is_tbd?: *}}} feature Source GeoJSON feature.
+   */
   function styleLandingEntity(entity, feature) {
     if (!entity?.point) return;
     entity.point.color = landingColor.withAlpha(0.92);
@@ -783,6 +817,10 @@ export function createTeleGeographySubmarineCableLayer({
     entity.show = true;
   }
 
+  /** Create one cable/landing reference: native stem polyline, depth-tested
+   *  point, overlay label record, and its sweep bookkeeping.
+   * @param {{reference: {lon:number, lat:number}, label: string, kind: string, color: string, feature: object}} root0 Reference descriptor from the normalized feature set.
+   */
   function addReferenceStem({ reference, label, kind, color, feature }) {
     if (!_referenceDataSource || !reference) return;
 
@@ -838,6 +876,8 @@ export function createTeleGeographySubmarineCableLayer({
     _referenceRecords.push(record);
   }
 
+  /** Run one reference sweep: horizon-cull, re-size stems, rank winners, and
+   *  republish the cohort when its signature actually changed. */
   function updateReferenceVisibility() {
     if (!_enabled || !_viewer?.camera) return;
     const cameraPos = _viewer.camera.positionWC;
@@ -892,6 +932,8 @@ export function createTeleGeographySubmarineCableLayer({
     _lastPublishedPriorities.length = winners.length;
   }
 
+  /** Install the LEFT_CLICK handler that flies to a picked cable or landing point.
+   * @param {import('cesium').Viewer} viewer Viewer whose scene supplies the canvas. */
   function beginInteraction(viewer) {
     if (_clickHandler) return;
     _clickHandler = screenSpaceEventHandlerFactory(viewer.scene.canvas);
@@ -904,6 +946,11 @@ export function createTeleGeographySubmarineCableLayer({
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
   }
 
+  /** Resolve a scene.pick() result back to a reference pick record, walking the
+   *  primitive map, the `__gevTeleGeography` tag, and the entity-id back-reference.
+   * @param {{primitive?: object, id?: *}|null|undefined} picked Result of `scene.pick()`.
+   * @returns {object|null} The registered pick record, or null when the pick is not ours.
+   */
   function resolvePickRecord(picked) {
     if (!picked) return null;
     const primitive = picked.primitive;
@@ -929,6 +976,10 @@ export function createTeleGeographySubmarineCableLayer({
     return null;
   }
 
+  /** Fly the camera to a cable/landing reference at the shared inspection altitude.
+   * @param {import('cesium').Viewer} viewer Viewer whose camera is driven.
+   * @param {{lon:number, lat:number}} reference Reference coordinates in degrees.
+   */
   function flyToReference(viewer, reference) {
     if (!viewer || !reference) return;
     const destination = Cesium.Cartesian3.fromDegrees(reference.lon, reference.lat, 6500);
@@ -945,6 +996,11 @@ export function createTeleGeographySubmarineCableLayer({
     });
   }
 
+  /** Extract a reference coordinate from a feature: an explicit coordinates
+   *  property wins, else the first geometry coordinate, else the centroid.
+   * @param {{geometry?: object, properties?: object}} feature Source GeoJSON feature.
+   * @returns {{lon:number, lat:number}|null} Reference coordinate in degrees, or null when the feature has none.
+   */
   function featureReference(feature) {
     const geometry = feature?.geometry;
     if (!geometry) return null;
@@ -980,6 +1036,10 @@ export function createTeleGeographySubmarineCableLayer({
     };
   }
 
+  /** Read a `[lon, lat]` pair out of a feature's `coordinates` property.
+   * @param {*} value Raw property value.
+   * @returns {number[]|null} `[lon, lat]` in degrees, or null when absent/non-numeric.
+   */
   function coordsFromProperty(value) {
     if (!Array.isArray(value) || value.length < 2) return null;
     const lon = Number(value[0]);
@@ -988,6 +1048,10 @@ export function createTeleGeographySubmarineCableLayer({
     return [lon, lat];
   }
 
+  /** Read a `[lon, lat]` pair out of a GeoJSON Point position.
+   * @param {*} value Raw geometry coordinate array.
+   * @returns {number[]|null} `[lon, lat]` in degrees, or null when absent/non-numeric.
+   */
   function coordsFromPoint(value) {
     if (!Array.isArray(value) || value.length < 2) return null;
     const lon = Number(value[0]);
@@ -996,6 +1060,10 @@ export function createTeleGeographySubmarineCableLayer({
     return [lon, lat];
   }
 
+  /** Flatten arbitrarily nested coordinate arrays into a flat `[lon, lat]` list.
+   * @param {*} value GeoJSON coordinate array at any nesting depth.
+   * @param {number[][]} out Accumulator the pairs are pushed into.
+   */
   function collectLonLat(value, out) {
     if (!Array.isArray(value)) return;
     if (typeof value[0] === 'number' && typeof value[1] === 'number') {
@@ -1009,11 +1077,21 @@ export function createTeleGeographySubmarineCableLayer({
     for (const child of value) collectLonLat(child, out);
   }
 
+  /** Display label for a feature: `name`, else `id`, else the GeoJSON feature id.
+   * @param {{id?: (string|number), properties?: object}} feature Source GeoJSON feature.
+   * @returns {string} Trimmed label, possibly empty.
+   */
   function featureLabel(feature) {
     const props = feature?.properties || {};
     return String(props.name || props.id || feature?.id || '').trim();
   }
 
+  /** Guarantee every feature a stable string id so entities and pick records
+   *  can key off it across reloads.
+   * @param {{features?: object[]}} json Parsed GeoJSON document.
+   * @param {string} kind Layer-relative kind used to synthesize missing ids.
+   * @returns {Array<object>} Features with a guaranteed string `id`.
+   */
   function normalizeFeatures(json, kind) {
     const features = Array.isArray(json?.features) ? json.features : [];
     return features.map((feature, index) => {
@@ -1025,6 +1103,11 @@ export function createTeleGeographySubmarineCableLayer({
     });
   }
 
+  /** Fetch a bundled GeoJSON asset, preferring the browser's HTTP cache.
+   * @param {string} url Asset URL to fetch.
+   * @param {AbortSignal} [signal] Abort signal for a superseded load generation.
+   * @returns {Promise<object>} Parsed JSON body.
+   */
   async function fetchJson(url, signal) {
     const response = await fetch(url, { signal, cache: 'force-cache' });
     if (!response.ok) {
@@ -1165,6 +1248,11 @@ export function createTeleGeographySubmarineCableLayer({
   };
 }
 
+/** Collapse whitespace and truncate a reference label to the overlay's card budget.
+ * @param {*} value Raw label text from the feed.
+ * @param {number} [maxLength=34] Maximum characters before ellipsis truncation.
+ * @returns {string} Single-spaced label, `''` when there is nothing to show.
+ */
 function clampLabel(value, maxLength = 34) {
   const text = String(value || '').replaceAll(/\s+/g, ' ').trim();
   if (!text) return '';

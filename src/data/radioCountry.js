@@ -15,6 +15,13 @@ const ENGLISH_REGION_NAMES = typeof Intl?.DisplayNames === 'function'
   ? new Intl.DisplayNames(['en'], { type: 'region' })
   : null;
 
+/**
+ * Reduce a country label to a stable lookup key for the name→code map.
+ *
+ * @param {*} value - Raw label; non-strings collapse to the empty key.
+ * @returns {string} NFKC-normalized lowercase key with dashes flattened to
+ *   spaces, apostrophes/periods dropped, and "&" expanded to "and".
+ */
 function countryKey(value) {
   return String(value || '')
     .normalize('NFKC')
@@ -57,6 +64,13 @@ for (const [name, code] of Object.entries({
   'the netherlands': 'NL',
 })) COUNTRY_NAME_TO_CODE.set(countryKey(name), code);
 
+/**
+ * English display name for an ISO 3166-1 alpha-2 code.
+ *
+ * @param {string} code - Two-letter uppercase country code.
+ * @returns {string} Intl.DisplayNames name ("United States"), or the code
+ *   itself when the locale data or the code is unavailable.
+ */
 function canonicalCountryName(code) {
   return ENGLISH_REGION_NAMES?.of(code) || code;
 }
@@ -64,6 +78,13 @@ function canonicalCountryName(code) {
 /**
  * Normalize a bounded country code or English/common country name.
  * Invalid or ambiguous values fail closed instead of broadening selection.
+ *
+ * @param {*} value - Two-letter ISO code, a country name, or an empty-ish
+ *   sentinel (null/undefined/'' meaning "no filter").
+ * @returns {{valid: boolean, empty: boolean, code: string, name: string}} Frozen
+ *   verdict: `empty` for the no-filter case, `valid` false for anything too
+ *   long, non-string, or unmappable, and the resolved alpha-2 code plus its
+ *   canonical English name on success.
  */
 export function normalizeRadioCountryInput(value) {
   if (value === undefined || value === null || value === '') {

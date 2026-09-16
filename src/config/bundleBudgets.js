@@ -106,6 +106,10 @@ const basenameOf = (relativePath) => relativePath.slice(relativePath.lastIndexOf
 /**
  * Classify one dist-relative artifact path. Returns the matching row, or
  * `null` when the file falls to DEFAULT_CHUNK_BUDGET (workers today).
+ * @param {string} relativePath - dist-relative artifact path (e.g.
+ *   `assets/index-DJpUHRcE.js`); only the basename is pattern-matched.
+ * @returns {{id: string, pattern: RegExp, label: string, budget: number, why: string}|null}
+ *   The first BUNDLE_BUDGETS row whose pattern matches the basename, else null.
  */
 export function classifyBundleFile(relativePath) {
   const basename = basenameOf(relativePath);
@@ -119,7 +123,7 @@ const remedial = (why, remedy) => `${remedy} — ${why}.`;
 /**
  * Evaluate measured artifact sizes against the budget table.
  *
- * @param {object} input
+ * @param {object} input - Build-output inventory supplied by the budget check.
  * @param {Array<{path: string, bytes: number}>} input.files dist-relative
  *   paths (as the build emitted them, e.g. `assets/index-DJpUHRcE.js`) with
  *   their sizes on disk.
@@ -132,6 +136,10 @@ const remedial = (why, remedy) => `${remedy} — ${why}.`;
  *   build output — the universe the manifest's non-shell entries (icons, the
  *   boot document) are checked against. Required for the stale-entry check.
  * @returns {{classified: Array, violations: Array<{path: string, code: string, message: string}>, precacheTotal: number, distTotal: number|null}}
+ *   `classified` is every file annotated with its row, budget and pass/fail;
+ *   `violations` is the actionable failure list (empty when within budget);
+ *   the totals are the measured bytes the precache/dist ceilings are checked
+ *   against.
  */
 export function evaluateBundleBudgets({
   files,

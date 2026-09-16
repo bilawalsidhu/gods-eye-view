@@ -1,7 +1,20 @@
+/**
+ * Clamp to the unit interval; non-numeric input counts as 0.
+ * @param {number} value - Raw strength.
+ * @returns {number} Value in [0, 1].
+ */
 function clamp01(value) {
   return Math.min(1, Math.max(0, Number(value) || 0));
 }
 
+/**
+ * Normalize a raw observation onto [0, 1] over a min/max window; values
+ * outside the window saturate, non-finite input or a degenerate window is 0.
+ * @param {number} value - Raw observation.
+ * @param {number} min - Window start (0 output).
+ * @param {number} max - Window end (1 output).
+ * @returns {number} Normalized strength in [0, 1].
+ */
 function range01(value, min, max) {
   if (!Number.isFinite(Number(value)) || max <= min) return 0;
   return clamp01((Number(value) - min) / (max - min));
@@ -11,6 +24,11 @@ function range01(value, min, max) {
  * Convert source weather observations into bounded visual strengths. The WMO
  * code selects the effect family; numeric observations only control strength.
  * Missing weather fails clear instead of inventing conditions.
+ * @param {object|null} weather - Normalized observation (regionalBrief shape)
+ *   carrying `weatherCode`, `cloudCoverPct`, `precipitationMm`, `windKph`,
+ *   `visibilityM`, `windDirectionDeg`.
+ * @returns {object} Per-effect strengths in [0, 1] (`available: false` plus
+ *   zeroed channels when the observation is unusable).
  */
 export function deriveWeatherEffectProfile(weather) {
   if (!weather || !Number.isFinite(Number(weather.weatherCode))) {
@@ -67,7 +85,14 @@ export function deriveWeatherEffectProfile(weather) {
   };
 }
 
-/** Fade ground-weather overlays as the camera climbs above their plausible layer. */
+/**
+ * Fade ground-weather overlays as the camera climbs above their plausible
+ * layer; each channel hits 0 at its own ceiling, so stratospheric views do
+ * not show surface rain.
+ * @param {number} altitudeM - Camera altitude in metres.
+ * @returns {{precipitation: number, cloud: number, haze: number}}
+ *   Per-channel multipliers in [0, 1].
+ */
 export function weatherAltitudeFactors(altitudeM) {
   const altitude = Math.max(0, Number(altitudeM) || 0);
   return {

@@ -21,6 +21,7 @@ let _fontInvalidationInstalled = false;
 let _fontInvalidationGeneration = 0;
 let _observedFontSet = null;
 
+/** Drop the single least-recently-used measurement across every cached font. */
 function evictOldestTextMeasureEntry() {
   let oldestFont = null;
   let oldestText = null;
@@ -72,10 +73,11 @@ export function destroyWorldOverlayDraw() {
 
 /**
  * Measure text with a font-aware cache.
- * @param {CanvasRenderingContext2D} ctx
- * @param {string} text
- * @param {string} font
- * @returns {number}
+ * @param {CanvasRenderingContext2D} ctx - Context used on a cache miss; its
+ *   `font` is set as a side effect.
+ * @param {string} text - Text to measure; `null`/`undefined` measure as ''.
+ * @param {string} font - CSS font shorthand; falsy falls back to the label font.
+ * @returns {number} Advance width in CSS pixels, 0 when unmeasurable.
  */
 export function measureWorldOverlayText(ctx, text, font) {
   if (!_fontInvalidationInstalled) installWorldOverlayFontInvalidation();
@@ -106,12 +108,13 @@ export function getWorldOverlayTextMeasureCacheSize() {
 
 /**
  * Append a rounded rectangle to the current Canvas2D path.
- * @param {CanvasRenderingContext2D|Path2D} path
- * @param {number} x
- * @param {number} y
- * @param {number} w
- * @param {number} h
- * @param {number} radius
+ * @param {CanvasRenderingContext2D|Path2D} path - Target path or context; the
+ *   native `roundRect` is used where the browser provides one.
+ * @param {number} x - Left edge, CSS px.
+ * @param {number} y - Top edge, CSS px.
+ * @param {number} w - Width, CSS px.
+ * @param {number} h - Height, CSS px.
+ * @param {number} radius - Corner radius, clamped to half the shorter side.
  */
 export function roundedRectPath(path, x, y, w, h, radius = WORLD_OVERLAY_STYLE.radius) {
   if (typeof path.roundRect === 'function') {
@@ -130,12 +133,14 @@ export function roundedRectPath(path, x, y, w, h, radius = WORLD_OVERLAY_STYLE.r
 /**
  * FIRMS-compatible distance fade: full through 70% of the far range, then a
  * linear ramp to zero. A finite minimum is a hard near-range policy boundary.
- * @param {number} distanceM
- * @param {object} [options]
- * @param {number} [options.minDistance]
- * @param {number} [options.maxDistance]
- * @param {number} [options.fadeStartRatio]
- * @returns {number}
+ * @param {number} distanceM - Camera distance in metres.
+ * @param {object} [options] - Fade policy.
+ * @param {number} [options.minDistance=0] - Distance at/below which alpha is 0.
+ * @param {number} [options.maxDistance=Infinity] - Distance at/above which
+ *   alpha is 0; a non-finite value disables the ramp entirely.
+ * @param {number} [options.fadeStartRatio=0.7] - Fraction of the range that
+ *   stays fully opaque before the linear ramp to zero begins.
+ * @returns {number} Alpha in [0, 1].
  */
 export function distanceFade(distanceM, {
   minDistance = 0,
@@ -157,13 +162,14 @@ export function distanceFade(distanceM, {
 /**
  * Cesium NearFarScalar-compatible distance scale for a complete overlay card.
  * Values clamp outside the curve and interpolate linearly between its stops.
- * @param {number} distanceM
- * @param {object|null} [curve]
- * @param {number} [curve.near]
- * @param {number} [curve.nearValue]
- * @param {number} [curve.far]
- * @param {number} [curve.farValue]
- * @returns {number}
+ * @param {number} distanceM - Camera distance in metres.
+ * @param {object|null} [curve] - NearFarScalar-style curve; null or incomplete
+ *   input yields 1.
+ * @param {number} [curve.near] - Distance at which `nearValue` applies.
+ * @param {number} [curve.nearValue] - Scale at the near stop, clamped to >= 0.
+ * @param {number} [curve.far] - Distance at which `farValue` applies.
+ * @param {number} [curve.farValue] - Scale at the far stop, clamped to >= 0.
+ * @returns {number} Interpolated scale, clamped outside the curve's stops.
  */
 export function distanceScale(distanceM, curve = null) {
   if (!curve || !Number.isFinite(distanceM)) return 1;
@@ -181,9 +187,11 @@ export function distanceScale(distanceM, curve = null) {
  * Source-configurable camera-altitude scale for a complete overlay card.
  * The first leg may use smoothstep to preserve CCTV's shipped street-to-city
  * transition; the second leg is linear and clamps at the source's minimum.
- * @param {number} altitudeM
- * @param {object|null} [curve]
- * @returns {number}
+ * @param {number} altitudeM - Camera altitude above the ellipsoid, in metres.
+ * @param {object|null} [curve] - Piecewise `{fullEnd, midEnd, end, midValue,
+ *   endValue, smoothToMid}` curve; null or a missing stop yields 1.
+ * @returns {number} Scale factor: 1 at/below `fullEnd`, `midValue` at `midEnd`,
+ *   `endValue` at/above `end`.
  */
 export function altitudeScale(altitudeM, curve = null) {
   if (!curve || !Number.isFinite(altitudeM)) return 1;
@@ -208,12 +216,12 @@ export function altitudeScale(altitudeM, curve = null) {
 
 /**
  * Linear camera-altitude fade. Sources opt in with finite fade boundaries.
- * @param {number} altitudeM
- * @param {object} [options]
- * @param {number} [options.minAltitude]
- * @param {number} [options.fadeStart]
- * @param {number} [options.fadeEnd]
- * @returns {number}
+ * @param {number} altitudeM - Camera altitude above the ellipsoid, in metres.
+ * @param {object} [options] - Fade policy; a non-finite bound disables its leg.
+ * @param {number} [options.minAltitude=-Infinity] - Altitude below which alpha is 0.
+ * @param {number} [options.fadeStart=Infinity] - Altitude where the ramp begins.
+ * @param {number} [options.fadeEnd=Infinity] - Altitude at/above which alpha is 0.
+ * @returns {number} Alpha in [0, 1].
  */
 export function altitudeFade(altitudeM, {
   minAltitude = Number.NEGATIVE_INFINITY,
@@ -230,7 +238,16 @@ export function altitudeFade(altitudeM, {
   return 1 - (altitudeM - start) / (end - start);
 }
 
-/** Multiply the five independent opacity channels in the binding order. */
+/**
+ * Multiply the five independent opacity channels in the binding order.
+ * @param {object} [channels] - Channel set; every absent channel counts as 1.
+ * @param {number} [channels.sourceAlpha=1] - Source alpha times entry alpha.
+ * @param {number} [channels.temporalFade=1] - Arbiter enter/exit fade.
+ * @param {number} [channels.distanceFade=1] - Distance ramp from `distanceFade`.
+ * @param {number} [channels.altitudeFade=1] - Altitude ramp from `altitudeFade`.
+ * @param {number} [channels.keyholeEdgeFade=1] - Radial keyhole edge fade.
+ * @returns {number} Composed alpha in [0, 1].
+ */
 export function combinedOverlayAlpha({
   sourceAlpha = 1,
   temporalFade = 1,
@@ -245,10 +262,22 @@ export function combinedOverlayAlpha({
     * clampUnit(keyholeEdgeFade);
 }
 
+/**
+ * Clamp one channel to [0, 1]; non-finite input counts as fully opaque.
+ * @param {number} value - Raw channel value.
+ * @returns {number} Value clamped to the unit interval.
+ */
 function clampUnit(value) {
   return Number.isFinite(Number(value)) ? Math.max(0, Math.min(1, Number(value))) : 1;
 }
 
+/**
+ * Compose and memoize the single-line `title · detail` text used by track and
+ * measure passes. The cache fields live on the entry, which the host re-creates
+ * on every publication, so the memo never survives a source update.
+ * @param {object} entry - Normalized entry carrying `title`/`details`.
+ * @returns {string} Cached display text, '' when the entry has neither part.
+ */
 function trackDisplayText(entry) {
   const title = entry?.title || '';
   const detail = Array.isArray(entry?.details) ? entry.details[0] || '' : '';
@@ -262,10 +291,11 @@ function trackDisplayText(entry) {
 
 /**
  * Measure the selected entry variant into a caller-owned layout object.
- * @param {CanvasRenderingContext2D} ctx
- * @param {object} entry
- * @param {object} [out]
- * @returns {{w:number,h:number,padX:number,padY:number,titleH:number,lineH:number,thumbW:number,thumbH:number}}
+ * @param {CanvasRenderingContext2D} ctx - Context used for text measurement.
+ * @param {object} entry - Normalized entry carrying the variant and thumbnail
+ *   sizing fields.
+ * @param {object} [out] - Layout object reused by the caller every frame.
+ * @returns {{w:number,h:number,padX:number,padY:number,titleH:number,lineH:number,thumbW:number,thumbH:number}} The same `out`, with every layout field assigned.
  */
 export function measureOverlayEntry(ctx, entry, out = {}) {
   const variant = entry?.selected ? 'selected' : String(entry?.variant || 'label');
@@ -325,6 +355,22 @@ export function measureOverlayEntry(ctx, entry, out = {}) {
   return out;
 }
 
+/**
+ * Write one placement variant into a pooled object, including the leader stub's
+ * two endpoints. Both `above`/`below` and `left`/`right` leaders start at the
+ * anchor; the vertical ones stay strictly vertical (see the comment below).
+ * @param {object|null} out - Placement object to overwrite in place.
+ * @param {string} corner - Placement side: 'above'|'below'|'left'|'right'.
+ * @param {number} x - Card left edge after viewport clamping, CSS px.
+ * @param {number} y - Card top edge after viewport clamping, CSS px.
+ * @param {number} w - Scaled card width, CSS px.
+ * @param {number} h - Scaled card height, CSS px.
+ * @param {number} anchorX - Screen-space anchor x, CSS px.
+ * @param {number} anchorY - Screen-space anchor y, CSS px.
+ * @param {number} [signedLeaderOffset=0] - Leader start offset along the
+ *   anchor edge; the sign encodes which side of the anchor the card is on.
+ * @returns {object} The placement object that was written.
+ */
 function writePlacement(out, corner, x, y, w, h, anchorX, anchorY, signedLeaderOffset = 0) {
   const placement = out || {};
   placement.corner = corner;
@@ -372,6 +418,14 @@ const VERTICAL_PLACEMENT_ORDERS = Object.freeze({
   below: Object.freeze(['below', 'above']),
 });
 
+/**
+ * Keep one axis of a placement inside the viewport, holding a safety margin.
+ * @param {number} value - Desired coordinate along the axis.
+ * @param {number} size - Card extent along that axis.
+ * @param {number} viewportSize - Viewport extent along that axis.
+ * @param {number} [margin=4] - Minimum distance kept from each viewport edge.
+ * @returns {number} Clamped coordinate, CSS px.
+ */
 function clampPlacementCoordinate(value, size, viewportSize, margin = 4) {
   return Math.max(margin, Math.min(value, Math.max(margin, viewportSize - size - margin)));
 }
@@ -379,20 +433,22 @@ function clampPlacementCoordinate(value, size, viewportSize, margin = 4) {
 /**
  * Build deterministic above/below/right/left placements, clamped to the live
  * viewport. The caller may reuse `out` and its placement objects every frame.
- * @param {object} input
- * @param {number} input.anchorX
- * @param {number} input.anchorY
- * @param {number} input.width
- * @param {number} input.height
- * @param {number} input.viewportWidth
- * @param {number} input.viewportHeight
- * @param {number} [input.gap]
- * @param {string} [input.preferred]
- * @param {number} [input.leaderOffset]
- * @param {boolean} [input.verticalOnly]
- * @param {number} [input.viewportMargin]
- * @param {Array<object>} [out]
- * @returns {Array<object>}
+ * @param {object} input - Geometry and policy for one entry's candidate boxes.
+ * @param {number} input.anchorX - Screen-space anchor x, CSS px.
+ * @param {number} input.anchorY - Screen-space anchor y, CSS px.
+ * @param {number} input.width - Scaled card width, CSS px.
+ * @param {number} input.height - Scaled card height, CSS px.
+ * @param {number} input.viewportWidth - Canvas width, CSS px.
+ * @param {number} input.viewportHeight - Canvas height, CSS px.
+ * @param {number} [input.gap=12] - Clearance between anchor and card edge.
+ * @param {string} [input.preferred='auto'] - Requested corner; unknown values
+ *   fall back to the automatic above/below choice.
+ * @param {number} [input.leaderOffset=0] - Signed leader start offset, CSS px.
+ * @param {boolean} [input.verticalOnly=false] - Restrict candidates to
+ *   above/below, preserving cockpit's shipped behaviour.
+ * @param {number} [input.viewportMargin=4] - Edge margin for the clamps.
+ * @param {Array<object>} [out] - Pooled placement array, reused per frame.
+ * @returns {Array<object>} `out`, truncated to the surviving candidate count.
  */
 export function placementVariants({
   anchorX,
@@ -444,6 +500,13 @@ export function placementVariants({
   return out;
 }
 
+/**
+ * Stroke the leader from the anchor to the card edge.
+ * @param {CanvasRenderingContext2D} ctx - Target context.
+ * @param {object} placement - Placement carrying the leader endpoints and the
+ *   paint scale used to keep the stroke at one CSS pixel.
+ * @param {string} [accent] - Stroke colour; falls back to the theme leader.
+ */
 function drawLeader(ctx, placement, accent) {
   ctx.strokeStyle = accent || WORLD_OVERLAY_STYLE.leader;
   // Leaders are screen-space strokes. Card content may be painted inside an
@@ -462,6 +525,13 @@ function drawLeader(ctx, placement, accent) {
   ctx.stroke();
 }
 
+/**
+ * Paint a card's leader, rounded background, border, and left accent bar.
+ * @param {CanvasRenderingContext2D} ctx - Target context.
+ * @param {object} entry - Normalized entry; `accent` selects the bar tint.
+ * @param {object} placement - Placement carrying the card rect.
+ * @param {boolean} [selected=false] - Apply the heavier selected treatment.
+ */
 function drawCardChrome(ctx, entry, placement, selected = false) {
   const { x, y, w, h } = placement.rect;
   const accent = entry.accent || WORLD_OVERLAY_STYLE.accent;
@@ -477,6 +547,14 @@ function drawCardChrome(ctx, entry, placement, selected = false) {
   ctx.fillRect(x, y + 3, selected ? 3 : 2, Math.max(1, h - 6));
 }
 
+/**
+ * Paint a card's title and detail lines inside its already-drawn chrome.
+ * @param {CanvasRenderingContext2D} ctx - Target context.
+ * @param {object} entry - Normalized entry carrying `title`/`details`.
+ * @param {object} placement - Placement carrying the card rect.
+ * @param {boolean} [selected=false] - Use the larger selected type scale.
+ * @param {number} [topOffset=0] - Extra top inset, CSS px.
+ */
 function drawCardText(ctx, entry, placement, selected = false, topOffset = 0) {
   const details = Array.isArray(entry.details) ? entry.details : [];
   const x = placement.rect.x + (selected ? 12 : 9);
@@ -494,6 +572,13 @@ function drawCardText(ctx, entry, placement, selected = false, topOffset = 0) {
   }
 }
 
+/**
+ * Re-express a colour at a given alpha when its form is recognizable.
+ * @param {string} color - `r, g, b` triplet or `#rrggbb` hex; anything else is
+ *   passed through untouched.
+ * @param {number} alpha - Alpha in [0, 1] baked into the `rgba()` result.
+ * @returns {string} `rgba()` string, or the trimmed input when unparseable.
+ */
 function colorWithAlpha(color, alpha) {
   const text = String(color || WORLD_OVERLAY_STYLE.accent).trim();
   const triplet = text.match(/^(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})$/);
@@ -506,6 +591,13 @@ function colorWithAlpha(color, alpha) {
   return text;
 }
 
+/**
+ * Derive, and memoize on the entry, the tactical card's accent-derived colours.
+ * The memo is keyed by accent string, so a theme or source tint change
+ * invalidates it without any explicit clear.
+ * @param {object} entry - Normalized entry carrying `accent`.
+ * @returns {object} `{accent, leader, border, rule}` colour set.
+ */
 function tacticalAccentColors(entry) {
   const accent = entry.accent || WORLD_OVERLAY_STYLE.accent;
   let colors = entry._overlayTacticalAccentColors;
@@ -521,7 +613,15 @@ function tacticalAccentColors(entry) {
   return colors;
 }
 
-/** Paint the legacy FIRMS/vessel tactical card inside the shared host. */
+/**
+ * Paint the legacy FIRMS/vessel tactical card inside the shared host.
+ * @param {CanvasRenderingContext2D} ctx - Target context.
+ * @param {object} entry - Normalized entry; `_overlayLayout` supplies the type
+ *   metrics measured by `measureOverlayEntry`.
+ * @param {object} placement - Placement carrying the card rect and leader.
+ * @param {number} [alpha=1] - Composed opacity applied via `globalAlpha`.
+ * @returns {{x:number, y:number, w:number, h:number}} The painted card rect.
+ */
 export function paintTacticalCard(ctx, entry, placement, alpha = 1) {
   const selected = entry.selected || entry.variant === 'selected';
   const details = Array.isArray(entry.details) ? entry.details : [];
@@ -575,7 +675,14 @@ export function paintTacticalCard(ctx, entry, placement, alpha = 1) {
   return placement.rect;
 }
 
-/** Paint a compact ambient label. */
+/**
+ * Paint a compact ambient label.
+ * @param {CanvasRenderingContext2D} ctx - Target context.
+ * @param {object} entry - Normalized entry; only `title`/`accent` are read.
+ * @param {object} placement - Placement carrying the card rect and leader.
+ * @param {number} [alpha=1] - Composed opacity applied via `globalAlpha`.
+ * @returns {{x:number, y:number, w:number, h:number}} The painted card rect.
+ */
 export function paintLabel(ctx, entry, placement, alpha = 1) {
   ctx.save();
   ctx.globalAlpha = alpha;
@@ -588,7 +695,14 @@ export function paintLabel(ctx, entry, placement, alpha = 1) {
   return placement.rect;
 }
 
-/** Paint a compact track label with optional inline detail. */
+/**
+ * Paint a compact track label with optional inline detail.
+ * @param {CanvasRenderingContext2D} ctx - Target context.
+ * @param {object} entry - Normalized entry carrying `title`/`details`.
+ * @param {object} placement - Placement carrying the card rect and leader.
+ * @param {number} [alpha=1] - Composed opacity applied via `globalAlpha`.
+ * @returns {{x:number, y:number, w:number, h:number}} The painted card rect.
+ */
 export function paintTrack(ctx, entry, placement, alpha = 1) {
   ctx.save();
   ctx.globalAlpha = alpha;
@@ -605,7 +719,14 @@ export function paintTrack(ctx, entry, placement, alpha = 1) {
   return placement.rect;
 }
 
-/** Paint a standard detail card. */
+/**
+ * Paint a standard detail card.
+ * @param {CanvasRenderingContext2D} ctx - Target context.
+ * @param {object} entry - Normalized entry carrying `title`/`details`.
+ * @param {object} placement - Placement carrying the card rect and leader.
+ * @param {number} [alpha=1] - Composed opacity applied via `globalAlpha`.
+ * @returns {{x:number, y:number, w:number, h:number}} The painted card rect.
+ */
 export function paintCard(ctx, entry, placement, alpha = 1) {
   ctx.save();
   ctx.globalAlpha = alpha;
@@ -615,7 +736,15 @@ export function paintCard(ctx, entry, placement, alpha = 1) {
   return placement.rect;
 }
 
-/** Paint a thumbnail card. The image slot remains source-owned. */
+/**
+ * Paint a thumbnail card. The image slot remains source-owned.
+ * @param {CanvasRenderingContext2D} ctx - Target context.
+ * @param {object} entry - Normalized entry; `_overlayLayout` supplies geometry
+ *   and the `thumbnail*` fields carry the presentation overrides.
+ * @param {object} placement - Placement carrying the card rect and leader.
+ * @param {number} [alpha=1] - Composed opacity applied via `globalAlpha`.
+ * @returns {{x:number, y:number, w:number, h:number}} The painted card rect.
+ */
 export function paintThumbnail(ctx, entry, placement, alpha = 1) {
   const layout = entry._overlayLayout || {};
   const { x, y, w, h } = placement.rect;
@@ -669,7 +798,14 @@ export function paintThumbnail(ctx, entry, placement, alpha = 1) {
   return placement.rect;
 }
 
-/** Paint the protected selected-card treatment. */
+/**
+ * Paint the protected selected-card treatment.
+ * @param {CanvasRenderingContext2D} ctx - Target context.
+ * @param {object} entry - Normalized entry carrying `title`/`details`/`accent`.
+ * @param {object} placement - Placement carrying the card rect and leader.
+ * @param {number} [alpha=1] - Composed opacity applied via `globalAlpha`.
+ * @returns {{x:number, y:number, w:number, h:number}} The painted card rect.
+ */
 export function paintSelected(ctx, entry, placement, alpha = 1) {
   ctx.save();
   ctx.globalAlpha = alpha;
@@ -679,7 +815,15 @@ export function paintSelected(ctx, entry, placement, alpha = 1) {
   return placement.rect;
 }
 
-/** Paint the centered protected tracked-target readout treatment. */
+/**
+ * Paint the centered protected tracked-target readout treatment.
+ * @param {CanvasRenderingContext2D} ctx - Target context.
+ * @param {object} entry - Normalized entry; `_overlayLayout` supplies the type
+ *   metrics measured by `measureOverlayEntry`.
+ * @param {object} placement - Placement carrying the card rect and leader.
+ * @param {number} [alpha=1] - Composed opacity applied via `globalAlpha`.
+ * @returns {{x:number, y:number, w:number, h:number}} The painted card rect.
+ */
 export function paintTracked(ctx, entry, placement, alpha = 1) {
   const details = Array.isArray(entry.details) ? entry.details : [];
   const layout = entry._overlayLayout || {};
@@ -788,7 +932,17 @@ export function paintDetectionCallout(ctx, callout, alpha = 1) {
   }
 }
 
-/** Dispatch a normalized entry to its pure variant painter. */
+/**
+ * Dispatch a normalized entry to its pure variant painter. Precedence is
+ * cardStyle, then tracked, then selected, then the remaining variants, so a
+ * source cannot reach a lesser treatment by setting a conflicting variant.
+ * @param {CanvasRenderingContext2D} ctx - Target context.
+ * @param {object} entry - Normalized entry carrying the variant/style fields.
+ * @param {object} placement - Placement chosen by the host for this frame.
+ * @param {number} [alpha=1] - Composed opacity forwarded to the painter.
+ * @returns {{x:number, y:number, w:number, h:number}|undefined} The painted
+ *   card rect, as returned by the dispatched painter.
+ */
 export function paintOverlayEntry(ctx, entry, placement, alpha = 1) {
   if (entry.cardStyle === 'tactical') return paintTacticalCard(ctx, entry, placement, alpha);
   if (entry.variant === 'tracked') return paintTracked(ctx, entry, placement, alpha);

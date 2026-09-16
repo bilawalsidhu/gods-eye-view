@@ -41,7 +41,10 @@ export function greatCircleKm(lat1, lon1, lat2, lon2) {
 /**
  * Initial bearing (radians) from point 1 toward point 2 along the great circle.
  *
- * @param {number} lat1 @param {number} lon1 @param {number} lat2 @param {number} lon2
+ * @param {number} lat1 - Start point latitude (degrees).
+ * @param {number} lon1 - Start point longitude (degrees).
+ * @param {number} lat2 - Target point latitude (degrees).
+ * @param {number} lon2 - Target point longitude (degrees).
  * @returns {number} Bearing in radians (0 = north, clockwise).
  */
 function initialBearingRad(lat1, lon1, lat2, lon2) {
@@ -91,7 +94,7 @@ function destinationPoint(lat, lon, bearingRad, distKm) {
  *    activates below 8 km camera altitude, so a look-at point farther than
  *    ~12 km is horizon-gazing, not something the user can see roads at.
  *
- * @param {object} args
+ * @param {object} args Nadir and ground-hit coordinates for one frame's fetch decision.
  * @param {number} args.nadirLat - Camera nadir latitude (degrees).
  * @param {number} args.nadirLon - Camera nadir longitude (degrees).
  * @param {number} [args.hitLat] - pickEllipsoid ground-hit latitude (degrees), if any.

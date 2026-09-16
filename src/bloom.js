@@ -19,7 +19,13 @@ export const BLOOM_INTENSITY_DEFAULT = 0;
 /** Maximum intensity on the legacy v1 scale (used for migration). */
 const LEGACY_BLOOM_INTENSITY_MAX = 100;
 
-/** @param {number} value @param {number} min @param {number} max */
+/**
+ * Constrain a value to an inclusive numeric range.
+ * @param {number} value - Input value, coerced by the caller.
+ * @param {number} min - Inclusive lower bound.
+ * @param {number} max - Inclusive upper bound.
+ * @returns {number} `value` clamped into `[min, max]`.
+ */
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }

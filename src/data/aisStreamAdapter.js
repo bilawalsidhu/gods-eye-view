@@ -34,9 +34,9 @@ const RATE_TEXT = /(rate[\s_-]*limit|too\s*many\s*(requests|connections)|quota\s
 /**
  * Parse an HTTP `Retry-After` header into milliseconds.
  * Accepts delta-seconds or an HTTP-date. Returns 0 when absent/unparseable.
- * @param {string|number|undefined|null} raw
+ * @param {string|number|undefined|null} raw Header value: delta-seconds or an HTTP-date.
  * @param {number} [nowMs] Wall-clock reference for the HTTP-date form.
- * @returns {number}
+ * @returns {number} Delay in milliseconds; 0 when absent, non-numeric, or already past.
  */
 export function parseRetryAfterMs(raw, nowMs = Date.now()) {
   if (raw === null || raw === undefined) return 0;
@@ -56,8 +56,8 @@ export function parseRetryAfterMs(raw, nowMs = Date.now()) {
  * treating either as a generic error is how a watchdog turns into a hammer.
  *
  * @param {{httpStatus?: number|string, message?: string,
- *   retryAfterHeader?: string|number|null, nowMs?: number}} input
- * @returns {{kind: string, message: string, retryAfterMs?: number}}
+ *   retryAfterHeader?: string|number|null, nowMs?: number}} input Whatever the failure site can report; every field is optional.
+ * @returns {{kind: string, message: string, retryAfterMs?: number}} Classified failure — `kind` is one of AIS_FAILURE_KINDS, `retryAfterMs` present only for a rate limit carrying Retry-After.
  */
 export function classifyAisFailure(input = {}) {
   const text = String(input.message || '').trim();
@@ -99,8 +99,8 @@ export function classifyAisFailure(input = {}) {
  * which for an auth error envelope means the rejection is dropped and the
  * generic transport ladder runs instead.
  *
- * @param {*} data
- * @returns {string|null}
+ * @param {*} data Frame payload in any shape `ws` or the built-in WebSocket delivers.
+ * @returns {string|null} Decoded UTF-8 text, or null when the shape can only be decoded asynchronously.
  */
 export function decodeAisFrameSync(data) {
   if (typeof data === 'string') return data;
@@ -121,8 +121,8 @@ export function decodeAisFrameSync(data) {
 /**
  * Decode one websocket frame to text. Handles the String (built-in WebSocket),
  * Buffer/TypedArray (ws), ArrayBuffer and Blob shapes.
- * @param {*} data
- * @returns {Promise<string>}
+ * @param {*} data Frame payload in any shape `ws` or the built-in WebSocket delivers (Blob included).
+ * @returns {Promise<string>} Decoded frame text; always resolves — a Blob shape is the only path that awaits.
  */
 export async function decodeAisFrame(data) {
   const sync = decodeAisFrameSync(data);
@@ -144,8 +144,8 @@ export const AIS_MAX_FRAME_BYTES = 1_000_000;
  * Approximate a frame's size without decoding it. String length is in code
  * units rather than UTF-8 bytes, which only ever under-counts — fine for a
  * rejection threshold.
- * @param {*} data
- * @returns {number}
+ * @param {*} data Frame payload, possibly an array of fragmented parts.
+ * @returns {number} Approximate size in bytes; 0 for shapes that carry no bytes.
  */
 export function aisFrameByteLength(data) {
   if (typeof data === 'string') return data.length;
@@ -198,9 +198,9 @@ export const AIS_RECOGNIZED_MESSAGE_TYPES = Object.freeze(new Set([
 
 /**
  * Resolve an envelope's MMSI, or null.
- * @param {object} envelope
- * @param {object} body
- * @returns {string|null}
+ * @param {object} envelope Raw AISStream envelope, whose MetaData usually carries the MMSI.
+ * @param {object} body Typed message body, consulted for the UserID fallback used by some message classes.
+ * @returns {string|null} MMSI as a trimmed string, or null when neither source supplies one.
  */
 export function aisEnvelopeMmsi(envelope, body = {}) {
   const metadata = envelope?.MetaData || envelope?.Metadata || {};
@@ -217,8 +217,8 @@ export function aisEnvelopeMmsi(envelope, body = {}) {
  * MMSI. An envelope carrying nothing but an MMSI is not evidence the feed
  * works: that is exactly the shape a malformed or synthetic frame takes.
  *
- * @param {object} envelope
- * @returns {boolean}
+ * @param {object} envelope Parsed AISStream envelope.
+ * @returns {boolean} True when the frame is real feed traffic and may be credited as liveness.
  */
 export function isRecognizedAisEnvelope(envelope) {
   if (!envelope || typeof envelope !== 'object' || Array.isArray(envelope)) return false;
@@ -232,8 +232,8 @@ export function isRecognizedAisEnvelope(envelope) {
 /**
  * Parse a decoded frame into a classified envelope.
  *
- * @param {string} text
- * @returns {{kind: 'malformed'}|{kind: 'error', message: string}|{kind: 'data', envelope: object}}
+ * @param {string} text Fully decoded frame text.
+ * @returns {{kind: 'malformed'}|{kind: 'error', message: string}|{kind: 'data', envelope: object}} Parsed verdict: unparseable/non-object, an upstream error envelope, or usable feed data.
  */
 export function parseAisEnvelope(text) {
   let envelope;
@@ -252,14 +252,14 @@ export function parseAisEnvelope(text) {
 /**
  * Create the AISStream transport adapter.
  *
- * @param {object} options
+ * @param {object} options Adapter wiring — the only place real I/O enters the pipeline.
  * @param {(url: string) => object} options.createSocket Socket factory.
  * @param {() => string} options.resolveUrl Upstream URL, read per connect.
  * @param {() => object} options.buildSubscription Subscription payload.
  * @param {(envelope: object) => boolean} options.ingestEnvelope Returns true
  *   only when the envelope was a real AIS record — the sole liveness proof.
- * @param {{wall: Function, mono: Function}} [options.clock]
- * @param {(message: string) => void} [options.warn]
+ * @param {{wall: Function, mono: Function}} [options.clock] Time source passed straight through to the watchdog.
+ * @param {(message: string) => void} [options.warn] Diagnostic sink for dropped frames and failed terminates.
  * @returns {object} adapter handle
  */
 export function createAisStreamAdapter(options) {
@@ -278,7 +278,10 @@ export function createAisStreamAdapter(options) {
   let generationHighWater = 0;
   let watchdog = null;
 
-  /** (Re)build the state machine, preserving the generation namespace. */
+  /** (Re)build the state machine, preserving the generation namespace.
+   * @param {object} [watchdogOptions={}] Budget overrides forwarded to createAisWatchdog.
+   * @returns {object} The newly created watchdog handle.
+   */
   function setWatchdogOptions(watchdogOptions = {}) {
     if (watchdog) {
       generationHighWater = Math.max(generationHighWater, watchdog.highWaterGeneration());
@@ -291,17 +294,27 @@ export function createAisStreamAdapter(options) {
     return watchdog;
   }
 
-  /** True while `socket` is still the adapter's socket for `generation`. */
+  /** True while `socket` is still the adapter's socket for `generation`.
+   * @param {number} generation Socket generation the event claims.
+   * @param {object} socket Socket object the handler captured.
+   * @returns {boolean} True when the map still pairs this exact generation with this exact socket.
+   */
   function ownsSocket(generation, socket) {
     return sockets.get(generation) === socket;
   }
 
-  /** Drop the map entry only if it still holds this exact socket. */
+  /** Drop the map entry only if it still holds this exact socket.
+   * @param {number} generation Generation whose entry is being released.
+   * @param {object} socket Socket the event arrived on; the identity guard keeps a late event from deleting a successor's entry.
+   */
   function releaseSocketEntry(generation, socket) {
     if (sockets.get(generation) === socket) sockets.delete(generation);
   }
 
-  /** Hard-abort a socket. Always terminate(), never close(). */
+  /** Hard-abort a socket. Always terminate(), never close().
+   * @param {object} socket Socket to destroy at the TCP level.
+   * @param {string} reason Cause tag used in the diagnostic line on failure.
+   */
   function abort(socket, reason) {
     try {
       socket.terminate();
@@ -310,7 +323,10 @@ export function createAisStreamAdapter(options) {
     }
   }
 
-  /** Terminate the socket registered for `generation`, if any. */
+  /** Terminate the socket registered for `generation`, if any.
+   * @param {number} generation Generation named by a watchdog terminate action.
+   * @param {string} reason Machine-supplied cause forwarded to abort().
+   */
   function terminateGeneration(generation, reason) {
     const socket = sockets.get(generation);
     if (!socket) return;
@@ -321,7 +337,7 @@ export function createAisStreamAdapter(options) {
   /**
    * Perform watchdog actions in order.
    * @param {object} owner Watchdog instance that produced the actions.
-   * @param {Array<object>} actions
+   * @param {Array<object>} actions Ordered action list ('connect'/'terminate'); empty lists are a no-op.
    */
   function runActions(owner, actions) {
     for (const action of actions || []) {
@@ -330,7 +346,11 @@ export function createAisStreamAdapter(options) {
     }
   }
 
-  /** Fail a generation through its owning watchdog, with classification. */
+  /** Fail a generation through its owning watchdog, with classification.
+   * @param {object} owner Watchdog that commissioned the failing socket.
+   * @param {number} generation Generation being failed.
+   * @param {{kind: string, message: string, retryAfterMs?: number}} detail Classified failure from classifyAisFailure.
+   */
   function failGeneration(owner, generation, detail) {
     runActions(owner, owner.onFailure(generation, detail));
   }
@@ -341,6 +361,9 @@ export function createAisStreamAdapter(options) {
    * Handlers capture BOTH the socket object and the watchdog instance that
    * commissioned them, so an event arriving after a dispose cannot reach the
    * replacement machine or a replacement socket.
+   *
+   * @param {object} owner Watchdog instance to report events to.
+   * @param {number} generation Generation this socket is commissioned under.
    */
   function openSocket(owner, generation) {
     generationHighWater = Math.max(generationHighWater, generation);
@@ -456,6 +479,12 @@ export function createAisStreamAdapter(options) {
    * The message pipeline. Ownership is verified before any work AND again
    * after the decode await, because that suspension point is long enough for a
    * terminate to land.
+   *
+   * @param {object} owner Watchdog instance to report events to.
+   * @param {number} generation Generation the frame arrived under.
+   * @param {object} socket Socket the handler captured.
+   * @param {*} data Undecoded frame payload (Blob shape only, in practice).
+   * @returns {Promise<void>} Resolves when the frame has been handed on.
    */
   async function handleMessage(owner, generation, socket, data) {
     if (!ownsSocket(generation, socket)) {
@@ -470,6 +499,11 @@ export function createAisStreamAdapter(options) {
   /**
    * Classify and apply one decoded frame. Ownership is re-verified here because
    * the async path suspends before reaching it.
+   *
+   * @param {object} owner Watchdog instance to report events to.
+   * @param {number} generation Generation the frame arrived under.
+   * @param {object} socket Socket the handler captured.
+   * @param {string} text Decoded frame text.
    */
   function handleDecodedMessage(owner, generation, socket, text) {
     if (!ownsSocket(generation, socket)) {
@@ -494,7 +528,9 @@ export function createAisStreamAdapter(options) {
     runActions(owner, owner.onMessage(generation));
   }
 
-  /** Drive the machine once: re-declare the environment, then advance time. */
+  /** Drive the machine once: re-declare the environment, then advance time.
+   * @param {{hasKey: boolean, hasTransport?: boolean, silenceWatch?: boolean, keyFingerprint?: string|null}} env Environment capabilities, re-read on every request.
+   */
   function ensure(env) {
     if (!watchdog) setWatchdogOptions();
     runActions(watchdog, watchdog.configure(env));
@@ -519,7 +555,9 @@ export function createAisStreamAdapter(options) {
     ensure,
     dispose,
     snapshot: () => (watchdog ? watchdog.snapshot() : null),
-    /** Diagnostics for tests. */
+    /** Diagnostics for tests.
+     * @returns {{liveSockets:number, generations:number[], generationHighWater:number, watchdog:(object|null)}} Adapter internals snapshot.
+     */
     debug: () => ({
       liveSockets: sockets.size,
       generations: [...sockets.keys()],

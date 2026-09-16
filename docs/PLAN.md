@@ -1535,12 +1535,12 @@ GitForge pipeline green.
   spread` is OFF — its autofix strips the `[...set]` snapshot in
   emitter loops, proven to OOM scopeMask.test.mjs (handler rebinds
   mid-fire; live Set iteration never terminates). The jsdoc REQUIRE
-  tier lives in `eslint.docs.config.js` (`npm run lint:docs`,
-  non-gating): the authored-surface docs-coverage metric feeding
-  Batch H — baseline 3921 gaps (1539 require-param, 723 require-jsdoc,
-  656 require-returns…), worst files radio.js (263),
-  annotationResolver.js (158), flights.js (133). Promotion into the
-  gate is a Batch H exit criterion.
+  tier shipped as a non-gating metric (`eslint.docs.config.js`,
+  `npm run lint:docs`) with a baseline 3934 gaps across 150 files
+  (worst: radio.js 263, annotationResolver.js 158, flights.js 133);
+  Batch H authored the backlog to zero and PROMOTED the tier into the
+  merge gate (`eslint.config.js`, scoped to authored `src/**/*.js`),
+  deleting the redundant metric config + script (2026-09-16).
 - [x] **Batch F (AAA)**: run `scripts/qa-a11y.mjs`; fix every
   serious/critical + all AAA-tagged findings (contrast 7:1 on text,
   focus appearance, target size minimum); re-run to zero.
@@ -1589,8 +1589,29 @@ GitForge pipeline green.
   behavioral contract is unchanged — arm-guard, hidden-stop, and stopper
   anchors untouched). ui.js is 60 lines lighter; no behavior change
   (3477 checks green, lint clean, build + BUILD-GATE pass).
-- [ ] **Batch H (docs)**: JSDoc gap list from the Batch E tooling; fill
+- [x] **Batch H (docs)**: JSDoc gap list from the Batch E tooling; fill
   top gaps; refresh stale "Updated:" headers; README accuracy sweep.
+  DONE 2026-09-16. The 3934-gap REQUIRE-tier backlog (150 files) was
+  authored to zero by real hand-written JSDoc — the automated
+  `--fix` pass was attempted first, generated placeholder stubs
+  (`@param root0."0"` with empty descriptions; gaps 3934 -> 7259), and
+  was fully reverted: every block is authored prose with types read
+  from call sites (destructured params as root-plus-dotted-children,
+  `import('cesium')` type forms, index-signature generics).
+  Comments-only verified mechanically across all 150 files (0
+  non-comment diff lines; sole exception: one byte-identical `const`
+  line repositioned in annotationResolver.js so an orphaned JSDoc
+  block binds to its function). Two source-anchor regression tests
+  pinned to one-line JSDoc comments were re-pointed (behavioral
+  contracts unchanged): cameraHandoff.test.mjs funnel end-anchor,
+  sharelink.celestial.test.mjs deferred-navigation block end. Suite
+  3477 checks green, gate lint green. EXIT CRITERION MET: the require
+  tier is now enforced in `eslint.config.js` (scoped
+  `src/**/*.js`; workers/vendored/dormant exempt) and the redundant
+  `eslint.docs.config.js` + `lint:docs` script were removed.
+  "Updated:" headers: the repo does not use them as staleness signals
+  (git history is the record) — no refresh needed; README verified
+  accurate against the current feature/build surface.
 - [ ] **Batch I (cleanup)**: verify-and-remove unreferenced files,
   tidy configs; nothing deleted without a reference check.
 - [ ] **Validation**: e2e orchestrator over all 40 suites (fix reds as

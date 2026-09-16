@@ -36,7 +36,7 @@ const _lastRead = new Map();
  * Resolve the backing store once. `undefined` stands for "not looked at yet";
  * `null` means "unavailable — cache disabled".
  *
- * @returns {Storage|null}
+ * @returns {Storage|null} the probe-verified store, or null when access throws
  */
 function resolveStorage() {
   if (_storage !== undefined) return _storage;
@@ -61,7 +61,8 @@ function resolveStorage() {
 /**
  * Override the backing store (tests, or an explicit `null` to disable).
  *
- * @param {Storage|null} storage
+ * @param {Storage|null} storage the store to use from now on, or null to
+ *   disable the cache entirely (every read misses, every write is dropped)
  */
 export function setLocalCacheStorage(storage) {
   _storage = storage;
@@ -91,7 +92,7 @@ export function clearLocalCache() {
  * Read a cached value.
  *
  * @param {string} key Cache key (namespaced automatically).
- * @param {{ nowMs?: number }} [opts]
+ * @param {{ nowMs?: number }} [opts] clock override for TTL expiry checks.
  * @returns {{ hit: boolean, value: (object|Array|null) }} `value` is null on a
  *   miss; a cached JSON `null` is not a representable value by design.
  */
@@ -173,8 +174,9 @@ export function writeLocalCache(key, value, { ttlMs, nowMs = Date.now() } = {}) 
  * Evict the least-recently-read entries to make room for `keep`.
  * Read tracking lives in memory; entries never read this session rank coldest.
  *
- * @param {Storage} store
- * @param {{ keep: string, nowMs: number }} opts
+ * @param {Storage} store the resolved backing store to delete from.
+ * @param {{ keep: string, nowMs: number }} opts `keep` is the namespaced key
+ *   being written (never evicted); `nowMs` is the current clock for consistency.
  */
 function evictColdest(store, { keep, nowMs }) {
   const entries = [];
@@ -205,7 +207,7 @@ function evictColdest(store, { keep, nowMs }) {
  * Enforce the entry cap by dropping the coldest entries. Called opportunistically
  * after writes; a small overshoot is harmless, an unbounded store is not.
  *
- * @param {number} maxEntries
+ * @param {number} maxEntries steady-state cap; defaults to the module constant.
  */
 export function trimLocalCache(maxEntries = MAX_ENTRIES) {
   const store = resolveStorage();

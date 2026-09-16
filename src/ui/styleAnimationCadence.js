@@ -32,7 +32,8 @@ export const STYLE_ANIM_FPS_OVERRIDE_CAP = 120;
 
 /**
  * Resolve the minimum interval between style-loop advances.
- * @param {object} [options]
+ * @param {object} [options] Injectable inputs; defaults read the live page
+ *   location, tests pass a literal string instead.
  * @param {string} [options.search] Query string to read overrides from
  *   (defaults to the live location, injectable for tests).
  * @returns {number} Milliseconds between advances; 1..1000/1.

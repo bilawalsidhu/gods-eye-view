@@ -55,8 +55,9 @@ if (typeof window !== 'undefined') {
  * True when a VISIBLE 3D tileset in the scene reports its streaming queue
  * drained (tilesLoaded) — the mirror of cctv.js's projectionTilesReady.
  * Walks top-level primitives only (a handful; once per poll).
- * @param {Cesium.Scene} scene
- * @returns {boolean}
+ * @param {Cesium.Scene} scene the live scene whose primitives are walked.
+ * @returns {boolean} true when a visible tileset reports a drained queue
+ *   (vacuously false when no tileset is present).
  */
 function _visibleTilesetLoaded(scene) {
   try {
@@ -73,6 +74,11 @@ function _visibleTilesetLoaded(scene) {
 
 /**
  * Equirectangular distance (km) — same approximation the flights clamp uses.
+ * @param {number} lat1 first latitude, decimal degrees.
+ * @param {number} lon1 first longitude, decimal degrees.
+ * @param {number} lat2 second latitude, decimal degrees.
+ * @param {number} lon2 second longitude, decimal degrees.
+ * @returns {number} approximate separation in kilometers.
  */
 function _approxKm(lat1, lon1, lat2, lon2) {
   const dLat = (lat2 - lat1) * 111.32;
@@ -88,7 +94,7 @@ function _approxKm(lat1, lon1, lat2, lon2) {
  *
  * @param {Cesium.Scene|undefined} scene - The scene (skipped when absent/torn down).
  * @param {Array<{lat: number, lon: number}>} points - Contact/waypoint coords.
- * @param {object} [options]
+ * @param {object} [options] Gating inputs and probe exclusions.
  * @param {Array<object>} [options.excludeObjects] - Own billboards/models to
  *   exclude from the probe (Cesium matches instances/.primitive/.id — pass
  *   Billboard and Model instances, NOT collections).

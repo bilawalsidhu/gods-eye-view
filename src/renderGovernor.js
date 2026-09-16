@@ -77,7 +77,7 @@ const RECENT_REQUEST_CAP = 16;
 
 /**
  * Pure frame-rate decision for the current governor state.
- * @param {object} [options]
+ * @param {object} [options] - Governor state snapshot (defaults to the live module state).
  * @param {string[]} [options.holds] Active hold owner ids.
  * @param {boolean} [options.cameraActive] Whether camera motion is underway.
  * @param {number} [options.baseFps] Baseline loop rate.
@@ -95,12 +95,27 @@ export function resolveGovernorTargetFrameRate({
   return holds.length === 1 && holds[0] === STYLE_ANIM_OWNER_ID ? lowDemandFps : baseFps;
 }
 
+/**
+ * Push the resolved target frame rate onto the viewer when it changed. Cheap
+ * enough to call on every hold/camera transition.
+ * @returns {void}
+ */
 function applyFrameRatePolicy() {
   if (!_installed || !_viewer) return;
   const next = resolveGovernorTargetFrameRate({ holds: [..._holds], cameraActive: _cameraActive });
   if (_viewer.targetFrameRate !== next) _viewer.targetFrameRate = next;
 }
 
+/**
+ * Reconcile Cesium's requestRenderMode with the hold set: continuous while any
+ * hold exists, idle otherwise (with one settling frame on entry). No-op before
+ * install. `_forceImmediate` is accepted for call-site symmetry with
+ * releaseContinuousRender but makes no difference — the mode itself is applied
+ * synchronously either way.
+ *
+ * @param {boolean} [_forceImmediate] Unused; see above.
+ * @returns {void}
+ */
 function applyMode(_forceImmediate = false) {
   if (!_installed || !_viewer?.scene) return;
   const continuous = _holds.size > 0;
@@ -141,7 +156,8 @@ function cancelIdleTransition() {
  * hold/release still record into the holds set (and apply at install time);
  * requests are safe no-ops — so modules can call all three unconditionally
  * in tests without a viewer.
- * @param {import('cesium').Viewer} viewer
+ * @param {import('cesium').Viewer} viewer - Viewer whose scene/camera the
+ *   governor takes over (its `targetFrameRate` and `requestRenderMode`).
  * @returns {void}
  */
 export function installRenderGovernor(viewer) {
@@ -193,7 +209,7 @@ export function holdContinuousRender(ownerId) {
  * Call where the owner's per-frame work ENDS (listener removed, animation
  * settled, tracking stopped, layer disabled). Schedules an idle transition
  * after a short cooldown so rapid re-acquisition doesn't cause oscillation.
- * @param {string} ownerId
+ * @param {string} ownerId - Same stable id the hold was registered under.
  * @param {boolean} [immediate] - If true, transitions to idle synchronously (bypasses
  * the cooldown). Used by tests to keep behavior synchronous.
  * @returns {void}
@@ -238,6 +254,10 @@ export function governorRequestRender(reason = 'unspecified') {
  * @returns {{installed: boolean, mode: 'continuous'|'idle', holds: string[],
  *   recentRequests: Array<{reason: string, at: number}>, targetFrameRate: number|null,
  *   cameraActive: boolean}}
+ *   Read-only snapshot of the governor for QA harnesses and the HUD: whether it
+ *   is installed, the derived mode, sorted hold owners, the last idle-mode
+ *   render requests, the live frame rate (null pre-install), and the
+ *   camera-motion flag behind the low-demand policy.
  */
 export function getRenderGovernorDiagnostics() {
   return {

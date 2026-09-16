@@ -116,6 +116,7 @@ const scratchWindowCoord = new Cesium.Cartesian2();
  * @param {object|null|undefined} fire - Internal fire record.
  * @returns {{id: string, lat: number|null, lon: number|null, frp: number|null,
  *   confidence: number|null, satellite: string|null, acqTime: number|null}}
+ *   JSON-safe analyst record.
  */
 export function mapAnalystRecord(fire) {
   const num = (v) => (Number.isFinite(v) ? v : null);
@@ -131,6 +132,25 @@ export function mapAnalystRecord(fire) {
   };
 }
 
+/**
+ * Build the FIRMS live-data layer object (DataLayerManager contract). All
+ * state is closure-private; the returned object exposes the manager-facing
+ * lifecycle (`init`/`enable`/`disable`/`update`/`destroy`), stats, and the
+ * narrow seams other subsystems consume (detection overlay, analyst engine,
+ * ambient cards). Defaults wire the shared world-overlay host and the real
+ * Cesium click handler so tests can inject stand-ins.
+ *
+ * @param {object} [deps] - Layer descriptor plus optional seams.
+ * @param {string} deps.id - Layer id ('firms').
+ * @param {string} deps.name - Human layer name for panels/context store.
+ * @param {string} [deps.icon='▲'] - Panel glyph.
+ * @param {string} [deps.source='NASA FIRMS'] - Attribution string.
+ * @param {{setEntries: Function, setVisible: Function, clearSource: Function,
+ *   hitTest: Function}} [deps.overlayHost] - World-overlay host seam.
+ * @param {Function} [deps.screenSpaceEventHandlerFactory] - Creates the Cesium
+ *   `ScreenSpaceEventHandler` for the viewer's canvas.
+ * @returns {object} Layer object with the DataLayerManager contract.
+ */
 export function createFirmsHeatmapLayer({
   id,
   name,
@@ -328,6 +348,7 @@ export function createFirmsHeatmapLayer({
      * like a healthy empty layer) with a matching human `loadingLabel`:
      * 'LIVE · updated Xm ago' fresh, 'STALE · cached Xh' when the proxy
      * served past-TTL cache, 'KEY REQUIRED' keyless.
+     * @returns {object} Counts, feed state flags, and WASM diagnostics.
      */
     getStats() {
       const now = Date.now();
@@ -367,6 +388,7 @@ export function createFirmsHeatmapLayer({
      * Strongest currently-loaded detection (by FRP) for voice targeting
      * ("take me to the biggest fire").
      * @returns {{latitude: number, longitude: number, frp: number, label: string}|null}
+     *   Voice-target descriptor, or null with no detections loaded.
      */
     getStrongestFire() {
       const strongest = _firesByFrp.length ? _firesByFrp[0] : null;
@@ -386,8 +408,9 @@ export function createFirmsHeatmapLayer({
      * deliberate post-PR#1 task; when that happens the arbiter replaces this
      * layer's greedy declutter as the SELECTOR and the shared overlay remains
      * the renderer. Walks the FRP-sorted index so the strongest fires come first.
-     * @param {{maxCount?: number}} [options]
+     * @param {{maxCount?: number}} [options] - Truncation options.
      * @returns {Array<{position: Cesium.Cartesian3, id: string, type: string}>}
+     *   Detectable objects (strongest first), empty while disabled/empty.
      */
     getDetectableObjects(options = {}) {
       if (!_enabled || !_firesByFrp.length) return [];
@@ -427,7 +450,13 @@ export function createFirmsHeatmapLayer({
       return result;
     },
 
-    /** Test seam that binds the production click path and indexes. */
+    /**
+     * Test seam that binds the production click path and indexes without a
+     * data refresh.
+     * @param {object} viewer - Viewer (or stub) to install the handler on.
+     * @param {Array<object>} [fires] - Detection records to index.
+     * @returns {object} The installed click handler (for asserting/destroying).
+     */
     _bindInteractionForTest(viewer, fires = []) {
       _viewer = viewer;
       _enabled = true;
@@ -974,6 +1003,7 @@ export function createFirmsHeatmapLayer({
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
   }
 
+  /** Tear down the click handler installed by {@link installClickHandler}. */
   function removeClickHandler() {
     if (_clickHandler) {
       _clickHandler.destroy();
@@ -981,7 +1011,10 @@ export function createFirmsHeatmapLayer({
     }
   }
 
-  /** Select one stable detection and request one UI-owned camera transfer. */
+  /**
+   * Select one stable detection and request one UI-owned camera transfer.
+   * @param {object} fire - Detection record (the card/pick that was activated).
+   */
   function selectAndFocusFire(fire) {
     selectFire(fire);
     requestWorldFocus({
@@ -1028,6 +1061,7 @@ export function createFirmsHeatmapLayer({
     rebuildAmbientLabels();
   }
 
+  /** Drop the current selection, its context-store entry, and its card. */
   function clearFireSelection() {
     if (!_selectedFire) return;
     _selectedFire = null;
@@ -1053,6 +1087,7 @@ export function createFirmsHeatmapLayer({
     });
   }
 
+  /** Tear down the moveEnd listener installed by {@link installMoveEndWatcher}. */
   function removeMoveEndWatcher() {
     if (_moveEndRemover) {
       _moveEndRemover();
@@ -1126,6 +1161,7 @@ export function createFirmsHeatmapLayer({
     return recordId;
   }
 
+  /** Delete every record this layer registered in the shared context store. */
   function clearContextRegistrations() {
     if (!_contextIds.size) return;
     try {
@@ -1142,7 +1178,7 @@ export function createFirmsHeatmapLayer({
    * null). Walks the pre-sorted FRP index so it stays a single cheap pass.
    * @param {?object} bounds - Padded view bounds in degrees, or null.
    * @param {number} limit - Max detections returned.
-   * @returns {Array<object>}
+   * @returns {Array<object>} Detection records, strongest FRP first.
    */
   function topFiresWithinBounds(bounds, limit = CONTEXT_TOP_N) {
     if (!bounds) return _firesByFrp.slice(0, limit);
@@ -1155,6 +1191,7 @@ export function createFirmsHeatmapLayer({
     return top;
   }
 
+  /** Create (once) the billboard collection and register it with the host. */
   function ensureDetectionCollections() {
     if (!_viewer || _billboards) return;
     _billboards = new Cesium.BillboardCollection({
@@ -1168,6 +1205,10 @@ export function createFirmsHeatmapLayer({
     overlayHost.setVisible(FIRMS_OVERLAY_SOURCE_ID, _enabled);
   }
 
+  /**
+   * Remove the billboard collection from the scene and clear the host source.
+   * @param {object} [viewer] - Viewer owning the scene (defaults to the bound one).
+   */
   function removeDetectionCollections(viewer) {
     const scene = viewer?.scene || _viewer?.scene;
     if (scene && !scene.isDestroyed?.()) {
@@ -1186,7 +1227,8 @@ export function createFirmsHeatmapLayer({
    * `viewer.camera` and `viewer.scene.camera` are the SAME object in Cesium;
    * both are probed so a partial stub (either shape) still gets a real
    * occluder rather than silently degrading to "nothing is ever occluded".
-   * @returns {?Cesium.EllipsoidalOccluder}
+   * @returns {?Cesium.EllipsoidalOccluder} Camera-centred occluder, or null
+   *   when no usable camera exists yet.
    */
   function fireHorizonOccluder() {
     const camera = _viewer?.camera?.positionWC ? _viewer.camera : _viewer?.scene?.camera;
@@ -1206,11 +1248,19 @@ export function createFirmsHeatmapLayer({
     applyHorizonCull(_billboards, fireHorizonOccluder(), _cullPositions);
   }
 
+  /**
+   * Camera height above the ellipsoid in metres, Infinity when unknown.
+   * @returns {number} Height in metres.
+   */
   function cameraHeight() {
     return _viewer?.camera?.positionCartographic?.height ?? Number.POSITIVE_INFINITY;
   }
 
-  /** Raw LOD index for a camera height (0 = global ... 3 = close). */
+  /**
+   * Raw LOD index for a camera height (0 = global ... 3 = close).
+   * @param {number} height - Camera height in metres.
+   * @returns {number} Band index whose floor the height has cleared.
+   */
   function rawLodIndex(height) {
     const index = LOD_LEVELS.findIndex((level) => height >= level.minHeight);
     return index === -1 ? LOD_LEVELS.length - 1 : index;
@@ -1234,7 +1284,10 @@ export function createFirmsHeatmapLayer({
     return index;
   }
 
-  /** Current camera view rectangle, or null when looking at sky/horizon. */
+  /**
+   * Current camera view rectangle, or null when looking at sky/horizon.
+   * @returns {?Cesium.Rectangle} Rectangle in radians (reused scratch object).
+   */
   function computeViewRect() {
     try {
       const rect = _viewer?.camera?.computeViewRectangle(
@@ -1252,7 +1305,7 @@ export function createFirmsHeatmapLayer({
    * rendered one that the padding is at risk of being consumed (pan) or
    * the footprint changed notably (zoom within a band).
    * @param {?Cesium.Rectangle} viewRect - Current view rectangle.
-   * @returns {boolean}
+   * @returns {boolean} True when a rebuild is warranted (false keeps the current render).
    */
   function viewChangedEnough(viewRect) {
     if (!viewRect) return false; // sky/horizon — keep the current render
@@ -1271,6 +1324,10 @@ export function createFirmsHeatmapLayer({
     return latShift > lastHeight * VIEW_PADDING * 0.6 || lonShift > lastWidth * VIEW_PADDING * 0.6;
   }
 
+  /**
+   * Install the throttled preRender LOD sweep plus the moveEnd settle-kick
+   * that guarantees one render after the camera stops inside a throttle window.
+   */
   function installLodWatcher() {
     if (_preRenderRemover || !_viewer) return;
     // The LOD sweep is throttle-gated inside preRender. When the camera
@@ -1314,6 +1371,7 @@ export function createFirmsHeatmapLayer({
     });
   }
 
+  /** Tear down the preRender LOD sweep and the moveEnd settle-kick. */
   function removeLodWatcher() {
     if (_preRenderRemover) {
       _preRenderRemover();
@@ -1332,6 +1390,7 @@ export function createFirmsHeatmapLayer({
  * near-global views where clipping would be pointless.
  * @param {Cesium.Rectangle} rect - Camera view rectangle (radians).
  * @returns {?{west: number, south: number, east: number, north: number, wraps: boolean}}
+ *   Degree bounds, or null when the view is near-global.
  */
 function paddedDegreeBounds(rect) {
   const width = Cesium.Rectangle.computeWidth(rect);
@@ -1362,14 +1421,28 @@ function paddedDegreeBounds(rect) {
   };
 }
 
-/** Point-in-bounds test in degrees, anti-meridian aware. */
+/**
+ * Point-in-bounds test in degrees, anti-meridian aware.
+ * @param {{west: number, south: number, east: number, north: number,
+ *   wraps: boolean}} bounds - Degree bounds.
+ * @param {number} lat - Point latitude in degrees.
+ * @param {number} lon - Point longitude in degrees.
+ * @returns {boolean} True when the point falls inside the bounds.
+ */
 function boundsContainPoint(bounds, lat, lon) {
   if (lat < bounds.south || lat > bounds.north) return false;
   if (bounds.wraps) return lon >= bounds.west || lon <= bounds.east;
   return lon >= bounds.west && lon <= bounds.east;
 }
 
-/** Cell-rectangle/bounds intersection test in degrees, anti-meridian aware. */
+/**
+ * Cell-rectangle/bounds intersection test in degrees, anti-meridian aware.
+ * @param {{latCell: number, lonCell: number}} cell - Cell's min corner, degrees.
+ * @param {number} gridDegrees - Cell edge length in degrees.
+ * @param {{west: number, south: number, east: number, north: number,
+ *   wraps: boolean}} bounds - Degree bounds.
+ * @returns {boolean} True when the cell rectangle intersects the bounds.
+ */
 function cellIntersectsBounds(cell, gridDegrees, bounds) {
   if (cell.latCell + gridDegrees < bounds.south || cell.latCell > bounds.north) return false;
   const west = cell.lonCell;
@@ -1378,10 +1451,23 @@ function cellIntersectsBounds(cell, gridDegrees, bounds) {
   return east >= bounds.west && west <= bounds.east;
 }
 
+/**
+ * Cell heat score — the single ordering/normalization key for the cells bands.
+ * Mirrored by firmsHeatTexture.cellScore; keep the two in sync.
+ * @param {{intensity: number, count: number, night: number, maxFrp: number}} cell
+ *   Aggregated cell.
+ * @returns {number} Unbounded positive score.
+ */
 function heatScore(cell) {
   return cell.intensity + cell.count * 0.8 + cell.night * 0.6 + cell.maxFrp * 0.12;
 }
 
+/**
+ * Normalized heat value → cell fill color on the shared yellow/orange/red ramp.
+ * @param {number} value - Heat score normalized to [0, 1].
+ * @param {number} alpha - Fill alpha to apply.
+ * @returns {Cesium.Color} Color at the given alpha.
+ */
 function heatColor(value, alpha) {
   if (value > 0.72) return Cesium.Color.RED.withAlpha(alpha);
   if (value > 0.42) return Cesium.Color.ORANGE.withAlpha(alpha);
@@ -1392,7 +1478,7 @@ function heatColor(value, alpha) {
  * Pick a sprite color stop from FRP + confidence, reusing the same
  * yellow → orange → red thresholds as the aggregated heat cells.
  * @param {object} fire - Detection record.
- * @returns {{name: string, color: Cesium.Color}}
+ * @returns {{name: string, color: Cesium.Color}} Chosen stop from DETECTION_COLOR_STOPS.
  */
 function detectionColorStop(fire) {
   const heat = Math.min(1, Math.sqrt(Math.max(0, fire.frp) / 150) * 0.85 + fire.confidence * 0.15);
@@ -1401,12 +1487,21 @@ function detectionColorStop(fire) {
   return DETECTION_COLOR_STOPS[2];
 }
 
-/** FRP → core marker pixel size, clamped to 8..28px. */
+/**
+ * FRP → core marker pixel size, clamped to 8..28px (sqrt keeps the dynamic
+ * range readable — a 500 MW fire is not 60x a 1 MW one on screen).
+ * @param {number} frp - Fire radiative power in MW.
+ * @returns {number} Core size in pixels.
+ */
 function frpPixelSize(frp) {
   return Math.max(8, Math.min(28, Math.round(8 + Math.sqrt(Math.max(0, frp)) * 2)));
 }
 
-/** Quantize a core size to a 2px bucket so the sprite cache stays tiny. */
+/**
+ * Quantize a core size to a 2px bucket so the sprite cache stays tiny.
+ * @param {number} coreSize - Raw core size in pixels.
+ * @returns {number} Bucketed size in pixels, clamped to 8..28.
+ */
 function sizeBucket(coreSize) {
   return Math.max(8, Math.min(28, Math.round(coreSize / 2) * 2));
 }
@@ -1461,7 +1556,7 @@ function glowSprite(stop, corePx) {
  * free either way (contacts are ALWAYS visible — never below the surface,
  * slightly above is fine).
  * @param {object} fire - Detection record.
- * @returns {Cesium.Cartesian3}
+ * @returns {Cesium.Cartesian3} Render anchor (memoized on the record).
  */
 function firePosition(fire) {
   const height = fireAnchorHeight(fire.lat, fire.lon);
@@ -1479,7 +1574,7 @@ function firePosition(fire) {
  * NEVER feeds rendering: the datum-correct anchor from {@link firePosition}
  * is what the sprite and the card are drawn at.
  * @param {object} fire - Detection record.
- * @returns {Cesium.Cartesian3}
+ * @returns {Cesium.Cartesian3} Occlusion-test anchor (memoized on the record).
  */
 export function fireCullPosition(fire) {
   const position = firePosition(fire);
@@ -1496,7 +1591,7 @@ export function fireCullPosition(fire) {
  * boundary case, so they get the same lift as sub-ellipsoid fire anchors.
  * @param {number} lon - Cell center longitude in degrees.
  * @param {number} lat - Cell center latitude in degrees.
- * @returns {Cesium.Cartesian3}
+ * @returns {Cesium.Cartesian3} Lifted anchor at the cell center.
  */
 function cellCullPosition(lon, lat) {
   return Cesium.Cartesian3.fromDegrees(lon, lat, CULL_LIFT_M);
@@ -1546,7 +1641,7 @@ export function applyHorizonCull(billboards, occluder, cullPositions = null) {
  * screen position (greedy declutter accept test).
  * @param {Array<{x: number, y: number}>} accepted - Accepted label positions.
  * @param {Cesium.Cartesian2} screen - Candidate window coordinates.
- * @returns {boolean}
+ * @returns {boolean} True when the position may accept a label.
  */
 function screenSeparated(accepted, screen) {
   const minSq = LABEL_MIN_SEP_PX * LABEL_MIN_SEP_PX;
@@ -1629,6 +1724,7 @@ export function buildFireCard(candidate, nowMs) {
  * "max 210 MW · new 3h". Accent comes from the candidate (heat-normalized
  * score is only known at renderCells time). Exported for unit tests.
  * @param {{cell: object, position: Cesium.Cartesian3, accent: string}} candidate
+ *   Cell label candidate (`accent` precomputed by renderCells).
  * @param {number} nowMs - Current epoch milliseconds.
  * @returns {object} firmsLabels entry.
  */
@@ -1659,7 +1755,7 @@ export function buildCellCard(candidate, nowMs) {
  * excludes ambient cards, but bypass both the 18-card cohort and distance fade.
  * @param {object} card Source-formatted card.
  * @param {number} fadeDistance Current LOD fade distance in metres.
- * @returns {object}
+ * @returns {object} Host-ready card with layout/fade/collision fields applied.
  */
 export function applyFirmsOverlayPolicy(card, fadeDistance) {
   const selected = card?.selected === true;
@@ -1697,18 +1793,32 @@ function cellAccent(normalized) {
   return accentForSeverity('yellow');
 }
 
-/** Coordinate line like "30.512°N 75.831°E". */
+/**
+ * Coordinate line like "30.512°N 75.831°E".
+ * @param {number} lat - Latitude in degrees.
+ * @param {number} lon - Longitude in degrees.
+ * @returns {string} Formatted coordinate pair at millidegree precision.
+ */
 function formatLatLon(lat, lon) {
   const latPart = `${Math.abs(lat).toFixed(3)}°${lat >= 0 ? 'N' : 'S'}`;
   const lonPart = `${Math.abs(lon).toFixed(3)}°${lon >= 0 ? 'E' : 'W'}`;
   return `${latPart} ${lonPart}`;
 }
 
+/**
+ * Format FRP in MW — whole numbers at 10 MW and above, one decimal below.
+ * @param {number} frp - Fire radiative power in MW.
+ * @returns {string} Display value (no unit suffix).
+ */
 function formatFrp(frp) {
   return frp >= 10 ? frp.toFixed(0) : frp.toFixed(1);
 }
 
-/** Millisecond delta → "<1h" / "Xh" / "Xd", or '' for invalid input. */
+/**
+ * Millisecond delta → "<1h" / "Xh" / "Xd", or '' for invalid input.
+ * @param {number} deltaMs - Elapsed milliseconds.
+ * @returns {string} Compact age string.
+ */
 function formatAge(deltaMs) {
   if (!Number.isFinite(deltaMs) || deltaMs < 0) return '';
   const hours = deltaMs / 3600000;
@@ -1717,7 +1827,11 @@ function formatAge(deltaMs) {
   return `${Math.round(hours / 24)}d`;
 }
 
-/** Millisecond delta → "<1m ago" / "Xm ago" / "Xh ago" (fresh-feed readout). */
+/**
+ * Millisecond delta → "<1m ago" / "Xm ago" / "Xh ago" (fresh-feed readout).
+ * @param {number} deltaMs - Elapsed milliseconds since the last update.
+ * @returns {string} Relative-age string ('just now' for invalid input).
+ */
 function formatAgoMinutes(deltaMs) {
   if (!Number.isFinite(deltaMs) || deltaMs < 0) return 'just now';
   const minutes = Math.floor(deltaMs / 60000);
@@ -1726,7 +1840,11 @@ function formatAgoMinutes(deltaMs) {
   return `${Math.round(minutes / 60)}h ago`;
 }
 
-/** Normalized 0..1 confidence → low/nominal/high display bucket. */
+/**
+ * Normalized 0..1 confidence → low/nominal/high display bucket.
+ * @param {number} confidence - Normalized confidence (firmsAdapt output).
+ * @returns {string} 'low' | 'nominal' | 'high'.
+ */
 function confidenceBucket(confidence) {
   if (confidence >= 0.75) return 'high';
   if (confidence >= 0.45) return 'nominal';

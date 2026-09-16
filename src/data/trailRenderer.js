@@ -61,6 +61,8 @@ export function createTrail(viewer, { color, width = 2.5 }) {
   /** @type {Cesium.Entity|null} */
   let entity = null;
 
+  /** Lazily add the polyline entity on the first real geometry; a destroyed
+   *  viewer (or an already-present entity) leaves the collection untouched. */
   function ensureEntity() {
     if (entity || destroyed || !viewer || viewer.isDestroyed()) return;
     entity = viewer.entities.add({
@@ -105,7 +107,8 @@ export function createTrail(viewer, { color, width = 2.5 }) {
       ensureEntity();
     },
 
-    /** Temporarily hide/show the trail without discarding accumulated history. */
+    /** Temporarily hide/show the trail without discarding accumulated history.
+     * @param {boolean} nextVisible False hides the polyline; anything else (including undefined) shows it. */
     setVisible(nextVisible) {
       visible = nextVisible !== false;
       if (entity) entity.show = visible;

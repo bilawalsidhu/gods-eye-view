@@ -79,7 +79,12 @@ let _workerVisibleResultId = -1;
 let _workerPendingId = -1;
 
 /**
- * Get or create the visibility worker. Created lazily on first use.
+ * Get or create the visibility worker. Created lazily on first use, and wired
+ * to accept only the response matching the in-flight request id so a slow pass
+ * can never overwrite a newer one. An errored worker is dropped so the next
+ * dispatch retries construction and callers fall back to the main thread.
+ *
+ * @returns {Worker|null} The worker, or null while it is being reconstructed.
  */
 function getVisibilityWorker() {
   if (!_visibilityWorker) {
@@ -108,7 +113,9 @@ function getVisibilityWorker() {
  * Dispatch a visibility computation to the worker.
  * Returns immediately — result is delivered asynchronously via onmessage.
  * @param {Array} positions — array of vessel surface positions
- * @param {{x:number,y:number,z:number}} cameraPosition
+ * @param {{x:number,y:number,z:number}} cameraPosition Camera world coordinates the
+ *   horizon test is performed from.
+ * @returns {void}
  */
 function dispatchVisibilityWorker(positions, cameraPosition) {
   const worker = getVisibilityWorker();
@@ -225,7 +232,8 @@ const AIS_DEGRADED_STATUSES = new Set(['stale', 'reconnecting', 'down', 'auth-fa
 /**
  * Seconds until the server's next reconnect attempt, or 0 when none is
  * scheduled. Mirrors the flights layer's `retryInSec` chip affordance.
- * @returns {number}
+ * @returns {number} Whole seconds until the next attempt, or 0 when nothing is
+ *   scheduled (including the terminal auth-failed case).
  */
 function aisRetryInSec() {
   // A rejected key is terminal until someone changes it; an hour-long
@@ -240,7 +248,8 @@ function aisRetryInSec() {
  * Chip text for a feed the server has reported as not delivering.
  * @param {string} status - 'stale' | 'reconnecting' | 'down'
  * @param {object} payload - Parsed /api/ais-live JSON.
- * @returns {string}
+ * @returns {string} Operator-facing degradation text, including silence age or
+ *   reconnect attempt when the payload carries it.
  */
 function describeDegradedAisFeed(status, payload) {
   if (status === 'auth-failed') {
@@ -290,7 +299,14 @@ export function deriveAisFeedError(payload, acceptedRowCount) {
   return detail && !AIS_STATUS_REASON[status] ? `${reason} (${detail})` : reason;
 }
 
-/** True when a raw AIS row can enter the production vessel normalizer. */
+/**
+ * True when a raw AIS row can enter the production vessel normalizer. Rows
+ * without finite coordinates are dropped before reconciliation so a malformed
+ * upstream record can never displace a good cached vessel.
+ *
+ * @param {object|null|undefined} row Raw row from the /api/ais-live payload.
+ * @returns {boolean} Whether `lat`/`lon` are both finite numbers.
+ */
 function hasUsableVesselCoordinates(row) {
   return Number.isFinite(Number(row?.lat)) && Number.isFinite(Number(row?.lon));
 }
@@ -300,7 +316,8 @@ function hasUsableVesselCoordinates(row) {
  * @param {object|null|undefined} payload - Parsed /api/ais-live payload.
  * @returns {{transportStatus: string|null, lastMessageAt: number|string|null,
  *   rawRows: Array<object>, acceptedRows: Array<object>, rawRowCount: number,
- *   acceptedRowCount: number, error: string|null}}
+ *   acceptedRowCount: number, error: string|null}} Classification the reconcile
+ *   step acts on; `error` is always set when the feed has nothing usable.
  */
 export function classifyAisFeedSnapshot(payload) {
   const rawRows = Array.isArray(payload?.rows) ? payload.rows : [];
@@ -330,7 +347,7 @@ export function classifyAisFeedSnapshot(payload) {
  * @returns {{id: string|null, mmsi: string|null, name: string|null,
  *   lat: number|null, lon: number|null, speedKts: number|null,
  *   courseDeg: number|null, shipType: string|null, destination: string|null,
- *   navStatus: null}}
+ *   navStatus: null}} JSON-safe analyst row, or an all-null row for a missing record.
  */
 export function mapAnalystRecord(record) {
   const num = (v) => (Number.isFinite(v) ? v : null);
@@ -381,7 +398,8 @@ export function vesselDatumHeightM(geoidN, liftM) {
  *
  * @param {{selectedMmsi?: string|number|null, pickedMmsi?: string|number|null,
  *   gesture?: 'click'|'escape'}} input - Current selection plus owned pick.
- * @returns {{action: 'none'|'select'|'deselect'}}
+ * @returns {{action: 'none'|'select'|'deselect'}} Layer-owned action for the gesture;
+ *   `select`/`deselect` carry the layer id and MMSI in `detail`-adjacent fields.
  */
 export function reduceVesselSelection(input = {}) {
   const selectedMmsi = normalizeSelectionMmsi(input.selectedMmsi);
@@ -407,6 +425,13 @@ export function reduceVesselSelection(input = {}) {
     : { action: 'none' };
 }
 
+/**
+ * Canonicalize an MMSI-ish selection value to its string key, mapping missing
+ * and whitespace-only values to null so `vesselMap` lookups never see ''.
+ *
+ * @param {string|number|null|undefined} value Raw selection value.
+ * @returns {string|null} Trimmed MMSI string, or null when unusable.
+ */
 function normalizeSelectionMmsi(value) {
   if (value === null || value === undefined) return null;
   const text = String(value).trim();
@@ -415,9 +440,9 @@ function normalizeSelectionMmsi(value) {
 
 /**
  * Geoid undulation N at (lat, lon), or null until the grid has loaded.
- * @param {number} lat
- * @param {number} lon
- * @returns {number|null}
+ * @param {number} lat Geodetic latitude in degrees.
+ * @param {number} lon Geodetic longitude in degrees.
+ * @returns {number|null} Undulation N in metres, or null while the grid is cold.
  */
 function currentGeoidN(lat, lon) {
   return _geoidReady ? geoidHeight(lat, lon) : null;
@@ -528,6 +553,7 @@ const aisLiveVesselsLayer = {
    * Find a vessel by exact MMSI or case-insensitive name substring.
    * @param {string|number} query MMSI or partial vessel name.
    * @returns {{ mmsi: string, name: string, position: Cesium.Cartesian3, latitude: number, longitude: number, speedKt: number|null, course: number|null, type: string }|null}
+   *   Match with its live position, or null when nothing resolves.
    */
   findByQuery(query) {
     if (query === null || query === undefined) return null;
@@ -566,6 +592,7 @@ const aisLiveVesselsLayer = {
    * @param {number} rangeM Max distance in meters (non-finite = unbounded).
    * @param {number} [maxCount=25] Maximum entries to return.
    * @returns {Array<{ mmsi: string, name: string, position: Cesium.Cartesian3, distanceM: number }>}
+   *   At most `maxCount` vessels, nearest first.
    */
   getNearby(centerCartesian, rangeM, maxCount = 25) {
     const records = state.vesselRecords;
@@ -587,11 +614,6 @@ const aisLiveVesselsLayer = {
   },
 
   /**
-   * Get positions of all currently loaded vessels.
-   * @param {number} [maxCount=800] Maximum entries to return.
-   * @returns {Array<{ id: string, label: string, position: Cesium.Cartesian3, latitude: number, longitude: number }>}
-   */
-  /**
    * Whether this layer still carries a vessel, in O(1).
    *
    * Mirror of `flights.hasContact`: presence consumers must not infer absence
@@ -608,6 +630,17 @@ const aisLiveVesselsLayer = {
     return state.vesselMap.has(String(mmsi).trim());
   },
 
+  /**
+   * Get positions of all currently loaded vessels, in record order.
+   *
+   * NOTE: this list is CAPPED, so it is a sample of the fleet rather than an
+   * inventory. Presence checks must use `hasContact`, which answers from the
+   * uncapped MMSI map instead of inferring absence from a truncated list.
+   *
+   * @param {number} [maxCount=800] Maximum entries to return.
+   * @returns {Array<{ id: string, label: string, position: Cesium.Cartesian3, latitude: number, longitude: number }>}
+   *   Records that currently hold a position.
+   */
   getAllPositions(maxCount = 800) {
     const result = [];
     const records = state.vesselRecords;
@@ -678,6 +711,7 @@ const aisLiveVesselsLayer = {
   /**
    * Get info about the currently selected vessel.
    * @returns {{ mmsi: string, name: string, latitude: number, longitude: number, speedKt: number|null, course: number|null, type: string }|null}
+   *   Selected vessel detail, or null when nothing is selected.
    */
   getSelectedInfo() {
     const record = state.selectedRecord;
@@ -701,6 +735,8 @@ const aisLiveVesselsLayer = {
    * @param {number} [options.maxCount] - Maximum objects to return (defaults to all).
    * @param {number} [options.seed] - Seed offset for stride sampling.
    * @returns {Array<{position: Cesium.Cartesian3, id: string, type: string, skipLabel: boolean}>}
+   *   Deterministically sampled vessels for the overlay budget; empty when the
+   *   layer is disabled or has no billboard collection to sample.
    */
   getDetectableObjects(options = {}) {
     if (!state.enabled || !state.billboardCollection || !state.billboardCollection.show) return [];
@@ -832,7 +868,14 @@ const state = {
   trailBackfillToken: 0,
 };
 
-/** Replace live AIS rows through the production reconciliation path (DEV only). */
+/**
+ * Replace live AIS rows through the production reconciliation path (DEV only).
+ * Gated on the focus-evidence dev flag; synthetic rows exercise the real
+ * billboard/trail/selection code so evidence captures match production paths.
+ *
+ * @param {Array<object>} [rows=[]] Raw AIS-shaped rows to install.
+ * @returns {{ok: boolean, count: number}} Outcome plus accepted row count.
+ */
 function _setFocusEvidenceVessels(rows = []) {
   if (!FOCUS_EVIDENCE_DEV || !state.viewer || !state.billboardCollection) {
     return { ok: false, count: 0 };
@@ -851,7 +894,12 @@ function _setFocusEvidenceVessels(rows = []) {
   return { ok: true, count: state.count };
 }
 
-/** JSON-safe vessel alpha/position snapshot for the evidence report. */
+/**
+ * JSON-safe vessel alpha/position snapshot for the evidence report.
+ *
+ * @returns {Array<{id: string, show: boolean, alpha: number|null, x: number|null, y: number|null}>}
+ *   Per-vessel visibility/opacity/screen position, empty outside dev mode.
+ */
 function _focusEvidenceVesselSnapshot() {
   if (!FOCUS_EVIDENCE_DEV || !state.viewer) return [];
   return state.vesselRecords.map((record) => {
@@ -871,12 +919,23 @@ function _focusEvidenceVesselSnapshot() {
 
 export default aisLiveVesselsLayer;
 
+/** Cancel the pending first-connect expiry timer, if one is armed.
+ *
+ * @returns {void}
+ */
 function clearFirstConnectTimer() {
   if (state.firstConnectTimer === null) return;
   _aisRuntime.clearTimeout(state.firstConnectTimer);
   state.firstConnectTimer = null;
 }
 
+/**
+ * Close the current AIS session: bump the session token so in-flight requests
+ * and timers can no longer commit, reset first-connect bookkeeping, and drop
+ * the occluder/reconcile caches so the next enable recomputes them.
+ *
+ * @returns {void}
+ */
 function invalidateAisSession() {
   clearFirstConnectTimer();
   state.sessionId = ++_aisSessionSequence;
@@ -891,6 +950,13 @@ function invalidateAisSession() {
   _reconcilePending = false;
 }
 
+/**
+ * Open a fresh AIS session on enable and arm the first-connect grace timer, so
+ * a feed that never delivers its first position degrades to an explicit
+ * "unavailable" verdict instead of spinning on "awaiting first AIS position…".
+ *
+ * @returns {void}
+ */
 function beginAisSession() {
   clearFirstConnectTimer();
   const sessionId = ++_aisSessionSequence;
@@ -904,6 +970,15 @@ function beginAisSession() {
   scheduleFirstConnectExpiry(sessionId, AIS_FIRST_CONNECT_GRACE_MS);
 }
 
+/**
+ * Arm (or re-arm) the first-connect grace countdown. Every timer tick
+ * re-validates the session token and phase, so a disable/enable or a settled
+ * connection cannot be expired by a timer from an older session.
+ *
+ * @param {number} sessionId Session the countdown belongs to.
+ * @param {number} delayMs Milliseconds remaining before expiry.
+ * @returns {void}
+ */
 function scheduleFirstConnectExpiry(sessionId, delayMs) {
   state.firstConnectTimer = _aisRuntime.setTimeout(() => {
     if (
@@ -926,26 +1001,59 @@ function scheduleFirstConnectExpiry(sessionId, delayMs) {
   }, delayMs);
 }
 
+/** Terminate the first-connect grace window with a definitive phase and clear
+ *  the "awaiting…" loading label.
+ *
+ * @param {string} phase Terminal phase ('live' or 'unavailable').
+ * @returns {void}
+ */
 function settleFirstConnectPhase(phase) {
   clearFirstConnectTimer();
   state.firstConnectPhase = phase;
   state.loadingLabel = '';
 }
 
+/** Whether a transport status still deserves the first-connect grace window.
+ *
+ * @param {string|null} status Server-reported transport status.
+ * @returns {boolean} True while the connection may still deliver.
+ */
 function isGraceEligibleTransport(status) {
   return AIS_HEALTHY_STATUSES.has(status) || status === 'connecting';
 }
 
+/** Whether a transport status has already failed definitively, ending the grace
+ *  window immediately rather than waiting out the countdown.
+ *
+ * @param {string|null} status Server-reported transport status.
+ * @returns {boolean} True when the feed has failed for this session.
+ */
 function isDefinitiveTransportFailure(status) {
   return Boolean(status) && !isGraceEligibleTransport(status);
 }
 
+/** Record a definitive feed failure while retaining any cached vessels, which
+ *  stay on screen and are flagged stale rather than silently vanishing.
+ *
+ * @param {string} [reason] Operator-facing failure text for the status chip.
+ * @returns {void}
+ */
 function markAisUnavailable(reason) {
   settleFirstConnectPhase('unavailable');
   state.error = reason || 'AIS live load failed';
   state.stale = state.count > 0;
 }
 
+/**
+ * Poll `/api/ais-live` and commit the result through the reconcile path. The
+ * request carries a session token plus a hard timeout, so a response from a
+ * disabled or re-enabled layer is discarded rather than committed, and a hung
+ * upstream cannot wedge the poll loop. Transport failures land in
+ * `markAisUnavailable` instead of throwing out of the layer lifecycle.
+ *
+ * @param {import('cesium').Viewer} viewer Viewer whose collections are reconciled.
+ * @returns {Promise<void>} Resolves when the poll attempt finishes.
+ */
 async function loadLivePositions(viewer) {
   if (!viewer || state.loading) return;
   state.loading = true;
@@ -998,7 +1106,15 @@ async function loadLivePositions(viewer) {
   }
 }
 
-/** True while a request still owns this enabled layer lifecycle. */
+/**
+ * True while a request still owns this enabled layer lifecycle. Both the
+ * abort-controller identity and the session token must match: a disable/enable
+ * cycle reuses the object shape but must never let the old request commit.
+ *
+ * @param {AbortController} controller Controller created for the request.
+ * @param {number} sessionId Session token captured when the request started.
+ * @returns {boolean} Whether the request may still mutate layer state.
+ */
 function ownsAisRequest(controller, sessionId) {
   return state.enabled
     && state.sessionId === sessionId
@@ -1006,7 +1122,17 @@ function ownsAisRequest(controller, sessionId) {
     && !controller.signal.aborted;
 }
 
-/** Apply a classified snapshot while preserving warm state on zero accepted rows. */
+/**
+ * Apply a classified snapshot while preserving warm state on zero accepted rows.
+ * An empty-but-healthy feed must not clear the previous fleet: cached vessels
+ * stay drawn (flagged stale) and first-connect grace is honoured before any
+ * verdict is written. Only accepted rows reach `reconcileVessels`.
+ *
+ * @param {import('cesium').Viewer} viewer Viewer whose collections are reconciled.
+ * @param {object} payload Parsed /api/ais-live JSON.
+ * @returns {{reconciled: boolean, transportStatus: string|null, acceptedRowCount: number,
+ *   error: string|null}} What the snapshot did, for logging and tests.
+ */
 function applyAisFeedSnapshot(viewer, payload) {
   const snapshot = classifyAisFeedSnapshot(payload);
   state.loaded = true;
@@ -1053,6 +1179,12 @@ function applyAisFeedSnapshot(viewer, payload) {
   return { reconciled: true, ...snapshot };
 }
 
+/**
+ * Build the poll URL, embedding the effective render-row cap so the server
+ * never ships more rows than the client will render.
+ *
+ * @returns {string} Absolute `/api/ais-live` URL with `maxRows` set.
+ */
 function liveApiUrl() {
   const base = import.meta.env?.VITE_AIS_LIVE_API_URL || DEFAULT_API_URL;
   const url = new URL(base, window.location.origin);
@@ -1060,6 +1192,10 @@ function liveApiUrl() {
   return url.toString();
 }
 
+/** Effective row cap for the renderer, clamped to a sane band.
+ *
+ * @returns {number} Row count to request from the proxy (500…50000).
+ */
 function renderRowLimit() {
   const configured = Number(import.meta.env?.VITE_AIS_LIVE_MAX_ROWS);
   if (Number.isFinite(configured) && configured > 0) {
@@ -1068,6 +1204,11 @@ function renderRowLimit() {
   return DEFAULT_RENDER_ROWS;
 }
 
+/** Effective cap on vessels that may hold an active label card; never above the
+ *  render row limit, and 0 disables labelling outright.
+ *
+ * @returns {number} Label budget in rows.
+ */
 function labelRowLimit() {
   const configured = Number(import.meta.env?.VITE_AIS_LIVE_LABEL_MAX_ROWS);
   if (Number.isFinite(configured) && configured >= 0) {
@@ -1076,6 +1217,12 @@ function labelRowLimit() {
   return Math.min(DEFAULT_ACTIVE_LABELS, renderRowLimit());
 }
 
+/** Create and register the vessel billboard collection once per viewer; a no-op
+ *  when it already exists so enable/destroy cycles never stack primitives.
+ *
+ * @param {import('cesium').Viewer} viewer Viewer to attach the collection to.
+ * @returns {void}
+ */
 function ensureCollections(viewer) {
   if (!viewer || state.billboardCollection) return;
   state.billboardCollection = new Cesium.BillboardCollection({
@@ -1100,6 +1247,7 @@ function ensureCollections(viewer) {
  *
  * @param {Cesium.Viewer} viewer - The Cesium viewer instance.
  * @param {Array<object>} rows - Raw AIS rows from the live API.
+ * @returns {void}
  */
 function reconcileVessels(viewer, rows) {
   // Guard: if a previous reconcile is still chunking, let the next poll handle
@@ -1145,10 +1293,12 @@ function reconcileVessels(viewer, rows) {
  * Phase 2 of vessel reconciliation: synchronous diff pass.
  * Called once all rows are normalized by the chunked setup phase.
  *
- * @param {Cesium.Viewer} viewer
- * @param {any} occluder
- * @param {Set<string>} seen
- * @param {Array<object>} normalizedRows
+ * @param {Cesium.Viewer} viewer Viewer whose collections and HUD are updated.
+ * @param {import('cesium').EllipsoidalOccluder|null} occluder Horizon occluder reused for
+ *   newly added records; null before the first visibility pass resolves.
+ * @param {Set<string>} seen MMSI keys observed in this payload, populated as rows apply.
+ * @param {Array<object>} normalizedRows Normalized records produced by the chunked phase.
+ * @returns {void}
  */
 function reconcileVesselsFinish(viewer, occluder, seen, normalizedRows) {
   for (let i = 0; i < normalizedRows.length; i++) {
@@ -1281,6 +1431,15 @@ function removeRecordPrimitives(record) {
   record.billboard = null;
 }
 
+/**
+ * Convert one raw AIS row into the internal vessel record, including the
+ * height-datum work: an ellipsoid surface point for the horizon occluder plus
+ * the sea-surface (geoid + lift) render position derived from it, and the
+ * geodetic surface normal used as the billboard rotation axis.
+ *
+ * @param {object|null|undefined} row Raw feed row (external input, never trusted).
+ * @returns {object|null} Normalized record, or null for unusable coordinates.
+ */
 function normalizeVessel(row) {
   if (!row) return null; // feed rows are external input; the accept filter is null-safe too
   const lat = Number(row.lat);
@@ -1326,12 +1485,24 @@ function normalizeVessel(row) {
   };
 }
 
+/** Coerce a feed value to a finite number, mapping missing/non-numeric input to
+ *  null so downstream consumers never see NaN.
+ *
+ * @param {*} value Raw feed field.
+ * @returns {number|null} Finite number, or null when unusable.
+ */
 function finiteNumber(value) {
   if (value === null || value === undefined || value === '') return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 }
 
+/** Billboard scale from vessel speed, so fast ships render slightly smaller and
+ *  read as moving rather than looming.
+ *
+ * @param {object} record Normalized vessel record.
+ * @returns {number} Icon scale factor.
+ */
 function shipScale(record) {
   const speed = Number(record.speed || 0);
   if (speed >= 18) return 0.78;
@@ -1377,6 +1548,12 @@ function shipIcon(record, selected) {
   return icon;
 }
 
+/** Attach the per-frame visibility/label pass to `scene.preRender`; idempotent,
+ *  so repeated init/enable calls never stack listeners.
+ *
+ * @param {import('cesium').Viewer} viewer Viewer to observe.
+ * @returns {void}
+ */
 function installRuntime(viewer) {
   if (state.preRenderRemover || !viewer) return;
   state.preRenderRemover = viewer.scene.preRender.addEventListener(() => updateVisibility());
@@ -1385,6 +1562,9 @@ function installRuntime(viewer) {
 /**
  * Adaptive refresh: watch camera altitude and trigger faster polls when zoomed in.
  * Runs on every preRender (cheap — just a number compare).
+ *
+ * @param {import('cesium').Viewer} viewer Viewer whose camera altitude is watched.
+ * @returns {void}
  */
 function installAltitudeWatcher(viewer) {
   if (state.altitudeWatcherRemover || !viewer) return;
@@ -1404,6 +1584,16 @@ function installAltitudeWatcher(viewer) {
   });
 }
 
+/**
+ * Per-frame visibility and label pass. Two cadences share one listener: the
+ * 800 ms regular pass (occluder rebuild, worker dispatch, billboard show/rotate,
+ * label candidates) and an 80 ms focus-only pass that advances emphasised-sprite
+ * alpha while a vessel is followed. Both are no-ops outside their window, so a
+ * parked scene costs a timestamp compare.
+ *
+ * @param {boolean} [force=false] Run both passes immediately regardless of cadence.
+ * @returns {void}
+ */
 function updateVisibility(force = false) {
   if (!state.enabled) return;
   const now = focusNowMs(performance.now());
@@ -1527,7 +1717,7 @@ function updateVisibility(force = false) {
 /**
  * Apply focus alpha to vessel sprites. Kept as a production wire seam so the
  * animation/deadband contract can be tested without constructing WebGL.
- * @param {object} input
+ * @param {object} input - Frame inputs and scene seams for the focus pass.
  * @param {Array<object>} input.records - Vessel records whose sprite alpha the pass advances.
  * @param {object|null} input.target - Current focus target, or null when nothing is followed.
  * @param {number} [input.previousActiveCount=0] - Sprites still under focus emphasis from the previous pass.
@@ -1536,6 +1726,8 @@ function updateVisibility(force = false) {
  * @param {Function} input.cameraDistanceFor - Returns the camera distance, in metres, to a world position.
  * @param {object} [input.params] - Focus tuning overrides forwarded to the shared focus helpers.
  * @returns {{writes:number,transitioning:boolean,activeCount:number,ran:boolean}}
+ *   Sprite writes performed, whether any alpha is still animating, how many
+ *   sprites are emphasised, and whether the pass ran at all.
  */
 export function applyVesselFocusDeemphasis({
   records,
@@ -1584,12 +1776,24 @@ export function applyVesselFocusDeemphasis({
   return { writes, transitioning, activeCount, ran: true };
 }
 
+/** Build an ellipsoidal horizon occluder for the current camera.
+ *
+ * @returns {import('cesium').EllipsoidalOccluder|null} Occluder, or null when the
+ *   camera cannot report a world position yet.
+ */
 function makeOccluder() {
   const cameraPosition = state.viewer?.camera?.positionWC;
   if (!cameraPosition) return null;
   return new Cesium.EllipsoidalOccluder(Cesium.Ellipsoid.WGS84, cameraPosition);
 }
 
+/** Horizon test against the WGS84 ellipsoid; permissive when either input is
+ *  absent so a cold cache never hides the fleet.
+ *
+ * @param {Cesium.Cartesian3|null} surfacePosition Ellipsoid-height-0 vessel position.
+ * @param {import('cesium').EllipsoidalOccluder|null} occluder Cached camera occluder.
+ * @returns {boolean} Whether the vessel is on the camera's side of the horizon.
+ */
 function isVisible(surfacePosition, occluder) {
   if (!surfacePosition || !occluder) return true;
   return occluder.isPointVisible(surfacePosition);
@@ -1604,6 +1808,7 @@ function isVisible(surfacePosition, occluder) {
  * selected vessel always gets its full-detail card, even when horizon-culled
  * from the ambient candidates; its protected entry bypasses ambient quotas.
  * @param {Array<object>} records - Horizon-visible vessel records.
+ * @returns {void}
  */
 function updateClusteredLabels(records) {
   const viewer = state.viewer;
@@ -1656,6 +1861,7 @@ function updateClusteredLabels(records) {
  * selector remains authoritative for the 118 px grid and 150 px separation;
  * the host then composes this demand with sibling ambient-card sources.
  * @param {object[]} entries Formatted vessel card entries.
+ * @returns {void}
  */
 function publishVesselOverlayEntries(entries) {
   const canvas = state.viewer?.scene?.canvas || state.viewer?.canvas;
@@ -1689,6 +1895,13 @@ function publishVesselOverlayEntries(entries) {
   );
 }
 
+/** Declutter ranking score for a label candidate: named, moving, heading-reporting
+ *  vessels outrank anonymous drifters; the selected vessel is unconditionally top.
+ *
+ * @param {object} record Vessel record being scored.
+ * @param {object|null} selected Currently selected record, for the top-slot check.
+ * @returns {number} Higher scores win the grid cell.
+ */
 function labelPriority(record, selected) {
   if (record === selected) return 100000;
   let score = 0;
@@ -1699,11 +1912,23 @@ function labelPriority(record, selected) {
   return score;
 }
 
+/** Whether a vessel carries a human-meaningful name — filters the feed's
+ *  `VESSEL` placeholder, `MMSI 123456789` padding, and MMSI-echo names.
+ *
+ * @param {object} record Vessel record to inspect.
+ * @returns {boolean} Whether the name adds information worth a card.
+ */
 function hasUsefulName(record) {
   const text = String(record.name || '').trim();
   return Boolean(text && text !== 'VESSEL' && !/^MMSI\s*\d+$/i.test(text) && text !== record.mmsi);
 }
 
+/** Create (or reuse) the pick handler that turns globe clicks into vessel
+ *  selections; idempotent across init/enable cycles.
+ *
+ * @param {import('cesium').Viewer} viewer Viewer whose canvas is bound.
+ * @returns {void}
+ */
 function installInteraction(viewer) {
   if (state.clickHandler || !viewer) return;
   const handler = state.interactionHandlerFactory
@@ -1712,6 +1937,17 @@ function installInteraction(viewer) {
   bindVesselInteraction(viewer, handler, state.interactionKeyTarget || document);
 }
 
+/**
+ * Bind the click, keyboard, and tracked-entity-ownership handlers. Clicks
+ * resolve through a strict ownership ladder — own record pick, trail pick,
+ * sibling-owned pick, overlay card hit — so AIS never competes with another
+ * layer's camera command and never dismisses itself on a stale card id.
+ *
+ * @param {import('cesium').Viewer} viewer Viewer used for scene picking.
+ * @param {object} handler Cesium `ScreenSpaceEventHandler`-like input sink.
+ * @param {EventTarget} keyTarget DOM target the Escape handler binds to.
+ * @returns {void}
+ */
 function bindVesselInteraction(viewer, handler, keyTarget) {
   state.clickHandler = handler;
   handler.setInputAction((click) => {
@@ -1774,7 +2010,14 @@ function bindVesselInteraction(viewer, handler, keyTarget) {
   });
 }
 
-/** Select one live vessel and request one UI-owned camera transfer. */
+/**
+ * Select one live vessel and request one UI-owned camera transfer. The
+ * selection reducer decides whether this is a new pick or a no-op; the focus
+ * request is issued either way so a repeat click re-frames the same contact.
+ *
+ * @param {object|null} record Vessel record picked on the globe or a card.
+ * @returns {boolean} Whether a vessel was addressed.
+ */
 function selectAndFocusVessel(record) {
   if (!record?.mmsi) return false;
   const transition = reduceVesselSelection({
@@ -1792,6 +2035,11 @@ function selectAndFocusVessel(record) {
   return true;
 }
 
+/** Tear down the pick handler, Escape listener, and tracked-entity ownership
+ *  subscription installed by `bindVesselInteraction`.
+ *
+ * @returns {void}
+ */
 function removeVesselInteraction() {
   if (state.clickHandler) {
     state.clickHandler.destroy();
@@ -1808,6 +2056,12 @@ function removeVesselInteraction() {
   }
 }
 
+/** Escape-key handler: collapse the current vessel selection. Routed through the
+ *  same selection reducer as pointer input so the two cannot disagree.
+ *
+ * @param {KeyboardEvent} event DOM keydown event.
+ * @returns {void}
+ */
 function onVesselKeyDown(event) {
   if (!state.enabled || event.key !== 'Escape') return;
   const transition = reduceVesselSelection({
@@ -1819,6 +2073,14 @@ function onVesselKeyDown(event) {
   }
 }
 
+/**
+ * Apply vessel selection: swap the icon to the bright variant, repaint the card
+ * set immediately, publish the HUD/context readouts, and (re)start the track
+ * trail — reusing an existing trail when the same vessel is re-selected.
+ *
+ * @param {object|null} record Vessel record to select.
+ * @returns {void}
+ */
 function selectVessel(record) {
   if (!record?.mmsi) return;
   const reuseTrail = state.trailMmsi === record.mmsi;
@@ -1942,6 +2204,7 @@ async function backfillVesselTrail(mmsi, token) {
  * Append the selected vessel's refreshed position to its trail when it has
  * moved more than TRAIL_MIN_MOVE_M from the last trail vertex.
  * @param {object} record - Selected vessel record after an in-place update.
+ * @returns {void}
  */
 function appendSelectedVesselTrailFix(record) {
   if (!state.trail) return;
@@ -1956,6 +2219,7 @@ function appendSelectedVesselTrailFix(record) {
 
 /**
  * Clear the rendered trail and accumulation; invalidate pending backfills.
+ * @returns {void}
  */
 function clearSelectedVesselTrail() {
   state.trailBackfillToken += 1;
@@ -1966,6 +2230,7 @@ function clearSelectedVesselTrail() {
 
 /**
  * Destroy the trail primitive entirely (layer disable/teardown).
+ * @returns {void}
  */
 function destroySelectedVesselTrail() {
   clearSelectedVesselTrail();
@@ -2006,6 +2271,18 @@ function registerSelectedContext(record) {
   }
 }
 
+/**
+ * Drop the current vessel selection: restore the ambient icon, repaint the card
+ * set, tear down the trail unless the caller explicitly keeps it, and clear the
+ * shared entity context.
+ *
+ * @param {object} [options] Teardown controls.
+ * @param {boolean} [options.preserveTrail=false] Keep the rendered trail (used when
+ *   re-selecting the same vessel).
+ * @param {boolean} [options.evicted=false] Marks the context clear as an eviction
+ *   rather than a user deselect.
+ * @returns {void}
+ */
 function clearSelection({ preserveTrail = false, evicted = false } = {}) {
   const record = state.selectedRecord;
   if (record?.billboard) {
@@ -2025,15 +2302,25 @@ function clearSelection({ preserveTrail = false, evicted = false } = {}) {
 }
 
 /**
+ * Clear the selection and reset the AIS HUD readout — the user-facing teardown
+ * path that pairs `clearSelection` with the panel reset.
+ *
  * @param {object} [options] Clear origin.
  * @param {boolean} [options.evicted=false] The vessel aged out of the feed
  *   rather than being deselected.
+ * @returns {void}
  */
 function clearVesselInspection({ evicted = false } = {}) {
   clearSelection({ evicted });
   resetSelectedVesselHud();
 }
 
+/** Paint the AIS HUD readout for the selected vessel, appending the STALE marker
+ *  when a pinned vessel has missed refreshes.
+ *
+ * @param {object} record Selected vessel record.
+ * @returns {void}
+ */
 function updateSelectedVesselHud(record) {
   const el = document.getElementById('hud-ais-vessel');
   if (!el) return;
@@ -2048,6 +2335,10 @@ function updateSelectedVesselHud(record) {
   ].join('\n');
 }
 
+/** Return the AIS HUD readout to its inactive placeholder state.
+ *
+ * @returns {void}
+ */
 function resetSelectedVesselHud() {
   const el = document.getElementById('hud-ais-vessel');
   if (!el) return;
@@ -2055,6 +2346,13 @@ function resetSelectedVesselHud() {
   el.textContent = 'AIS: --';
 }
 
+/** Truncate a feed string to a HUD/card budget with an ellipsis, substituting
+ *  `--` for empty values.
+ *
+ * @param {*} value Raw field value.
+ * @param {number} maxLength Character budget.
+ * @returns {string} Bounded display text.
+ */
 function trimHudValue(value, maxLength) {
   const text = String(value || '--').trim() || '--';
   return text.length > maxLength ? `${text.slice(0, maxLength - 3)}...` : text;
@@ -2120,7 +2418,15 @@ export function buildSelectedVesselCard(record) {
   };
 }
 
-/** Stable overlay identity for MMSI-keyed and source-retained unkeyed rows. */
+/**
+ * Stable overlay identity for MMSI-keyed and source-retained unkeyed rows.
+ * Unkeyed rows have no identity, so their id is derived from name plus rounded
+ * coordinates — stable enough that a stationary unkeyed contact keeps its card
+ * and hit rectangle between refreshes.
+ *
+ * @param {object} record Vessel record.
+ * @returns {string} `vessel:<mmsi>` or a positional fallback id.
+ */
 function vesselOverlayEntryId(record) {
   const mmsi = String(record?.mmsi || '').trim();
   if (mmsi) return `vessel:${mmsi}`;
@@ -2130,7 +2436,11 @@ function vesselOverlayEntryId(record) {
   return `vessel:unkeyed:${name}:${lat}:${lon}`;
 }
 
-/** Uppercased, card-width-bounded AIS type (empty string when unknown). */
+/** Uppercased, card-width-bounded AIS type (empty string when unknown).
+ *
+ * @param {object} record Vessel record.
+ * @returns {string} Short type label for the card detail line.
+ */
 function vesselTypeShort(record) {
   return normalizeVesselType(record.type).toUpperCase().slice(0, 14);
 }
@@ -2142,7 +2452,7 @@ function vesselTypeShort(record) {
  * @param {Array<{x: number, y: number}>} accepted - Accepted card positions.
  * @param {{x: number, y: number}} screen - Candidate window coordinates.
  * @param {number} minSepPx - Minimum separation in pixels.
- * @returns {boolean}
+ * @returns {boolean} True when the candidate may be accepted without overlap.
  */
 export function cardScreenSeparated(accepted, screen, minSepPx) {
   const minSq = minSepPx * minSepPx;
@@ -2154,20 +2464,43 @@ export function cardScreenSeparated(accepted, screen, minSepPx) {
   return true;
 }
 
+/** Best display name for a vessel: the reported name when it is informative,
+ *  otherwise an `MMSI …` fallback so no card or HUD line ever reads `VESSEL`
+ *  when an identity exists.
+ *
+ * @param {object} record Vessel record.
+ * @returns {string} Display name.
+ */
 function displayVesselName(record) {
   const name = String(record.name || '').trim();
   if (name && name !== 'VESSEL' && name !== record.mmsi) return name;
   return record.mmsi ? `MMSI ${record.mmsi}` : 'VESSEL';
 }
 
+/** Format knots for the HUD, using the `--` placeholder for unknown speed.
+ *
+ * @param {number|null} speed Speed in knots.
+ * @returns {string} Speed text such as `12.4KT` or `--KT`.
+ */
 function formatSpeed(speed) {
   return speed === null ? '--KT' : `${speed.toFixed(1)}KT`;
 }
 
+/** Format a heading/course value in whole degrees for the HUD.
+ *
+ * @param {number|null} heading Heading in degrees.
+ * @returns {string} Heading text such as `284DEG` or `--DEG`.
+ */
 function formatHeading(heading) {
   return Number.isFinite(heading) ? `${Math.round(heading)}DEG` : '--DEG';
 }
 
+/** Render the position-report age for the HUD, falling back to `LIVE` when the
+ *  feed supplied no parseable UTC timestamp.
+ *
+ * @param {object} record Vessel record with `lastPositionUtc`.
+ * @returns {string} `POS: HH:MM:SSZ` or `POS: LIVE`.
+ */
 function formatPositionTime(record) {
   if (!record.lastPositionUtc) return 'POS: LIVE';
   const date = new Date(record.lastPositionUtc);
@@ -2175,6 +2508,11 @@ function formatPositionTime(record) {
   return `POS: ${date.toISOString().slice(11, 19)}Z`;
 }
 
+/** Toggle both the billboard collection and the overlay-card source.
+ *
+ * @param {boolean} show Whether vessels should render.
+ * @returns {void}
+ */
 function setVisible(show) {
   if (state.billboardCollection) {
     state.billboardCollection.show = show;
@@ -2182,6 +2520,11 @@ function setVisible(show) {
   _vesselOverlayHost.setVisible(VESSEL_OVERLAY_SOURCE_ID, show);
 }
 
+/** Restore every piece of mutable layer state to its freshly-imported value,
+ *  including a new session token so no surviving request can commit.
+ *
+ * @returns {void}
+ */
 function resetState() {
   clearFirstConnectTimer();
   state.viewer = null;
@@ -2275,12 +2618,23 @@ export function _setVesselStateForTest(options = {}) {
   state.interactionKeyTarget = options.interactionKeyTarget || null;
 }
 
-/** Inject a host recorder for lifecycle/contract tests; null restores production. */
+/**
+ * Inject a host recorder for lifecycle/contract tests; null restores production.
+ *
+ * @param {object|null} [host=null] Object exposing `setEntries`/`setVisible`/
+ *   `clearSource`/`hitTest`, or null to restore the real overlay host.
+ * @returns {void}
+ */
 export function _setVesselOverlayHostForTest(host = null) {
   _vesselOverlayHost = host || DEFAULT_VESSEL_OVERLAY_HOST;
 }
 
-/** Exercise the production selector/publisher through a test-owned state. */
+/**
+ * Exercise the production selector/publisher through a test-owned state.
+ *
+ * @param {Array<object>} [records=[]] Records the selector should treat as visible.
+ * @returns {void}
+ */
 export function _updateVesselCardsForTest(records = []) {
   updateClusteredLabels(records);
 }
@@ -2306,22 +2660,42 @@ export function _normalizeVesselForTest(row) {
   return normalizeVessel(row);
 }
 
-/** Apply one server snapshot through the production pre-reconcile health gate. */
+/**
+ * Apply one server snapshot through the production pre-reconcile health gate.
+ *
+ * @param {object} viewer Viewer-like object passed through to reconcile.
+ * @param {object} payload Parsed /api/ais-live JSON.
+ * @returns {{reconciled: boolean, error: string|null}} Snapshot outcome.
+ */
 export function _applyAisFeedSnapshotForTest(viewer, payload) {
   return applyAisFeedSnapshot(viewer, payload);
 }
 
-/** Exercise the request-owned live loader with a test-controlled fetch. */
+/**
+ * Exercise the request-owned live loader with a test-controlled fetch.
+ *
+ * @param {object} viewer Viewer-like object passed to the reconcile path.
+ * @returns {Promise<void>} Resolves when the poll attempt finishes.
+ */
 export function _loadLivePositionsForTest(viewer) {
   return loadLivePositions(viewer);
 }
 
-/** Start the production first-connect grace state without installing UI. */
+/** Start the production first-connect grace state without installing UI.
+ *
+ * @returns {void}
+ */
 export function _beginAisSessionForTest() {
   beginAisSession();
 }
 
-/** Inject a deterministic clock/scheduler; null restores production runtime. */
+/**
+ * Inject a deterministic clock/scheduler; null restores production runtime.
+ *
+ * @param {object|null} [runtime=null] Object exposing `now`, `setTimeout`, and
+ *   `clearTimeout`; must provide all three when non-null.
+ * @returns {void}
+ */
 export function _setAisRuntimeForTest(runtime = null) {
   clearFirstConnectTimer();
   _aisRuntime = runtime
@@ -2333,7 +2707,17 @@ export function _setAisRuntimeForTest(runtime = null) {
     : DEFAULT_AIS_RUNTIME;
 }
 
-/** Read feed-health fields without exposing mutable production state. */
+/**
+ * Read feed-health fields without exposing mutable production state.
+ *
+ * @returns {{count: number, loaded: boolean, loading: boolean, loadingLabel: string,
+ *   stale: boolean, error: string|null, status: string, lastUpdate: number|null,
+ *   transportStatus: string|null, lastMessageAt: number|string|null,
+ *   rawRowCount: number, acceptedRowCount: number, selectedMmsi: string|null,
+ *   trailMmsi: string|null, trailPositionCount: number, sessionId: number,
+ *   firstConnectPhase: string, firstConnectStartedAt: number|null,
+ *   firstConnectDeadline: number|null}} Normalized feed-health snapshot.
+ */
 export function _getVesselFeedStateForTest() {
   const stats = aisLiveVesselsLayer.getStats();
   return {
@@ -2363,6 +2747,7 @@ export function _getVesselFeedStateForTest() {
  * Read lifecycle ownership state without exposing the mutable state object.
  * Test-only seam.
  * @returns {{trailMmsi: string|null, trailPositionCount: number, vesselCount: number}}
+ *   Trail ownership and keyed-vessel counts.
  */
 export function _getVesselStateForTest() {
   return {

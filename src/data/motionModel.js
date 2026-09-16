@@ -12,6 +12,11 @@ const DEG = Math.PI / 180;
 const _mmCarto = new Cesium.Cartographic();
 const _mmCandidateCarto = new Cesium.Cartographic();
 
+/**
+ * Wrap a bearing into [0, 360).
+ * @param {number} deg Angle in degrees; non-finite input propagates NaN.
+ * @returns {number} Equivalent angle in [0, 360).
+ */
 export function norm360(deg) {
   return ((deg % 360) + 360) % 360;
 }
@@ -21,9 +26,11 @@ export function norm360(deg) {
  * manufacturing a new source timestamp or changing its reported lat/lon.
  * Airborne fixes and downward candidates are deliberately left untouched.
  *
- * @param {{position: Cesium.Cartesian3}|null} newest
- * @param {Cesium.Cartesian3|null} candidatePosition
- * @param {boolean} onGround
+ * @param {{position: Cesium.Cartesian3}|null} newest Fix to repair in place —
+ *   its `position` Cartesian3 is rewritten, never replaced.
+ * @param {Cesium.Cartesian3|null} candidatePosition The newly resolved render
+ *   floor supplying the target height.
+ * @param {boolean} onGround Whether the contact is currently grounded.
  * @returns {boolean} True when the stored position was lifted.
  */
 export function liftRepeatedGroundFix(newest, candidatePosition, onGround) {
@@ -45,7 +52,11 @@ export function liftRepeatedGroundFix(newest, candidatePosition, onGround) {
   return true;
 }
 
-/** Normalize to (−180, 180]. */
+/**
+ * Normalize to (−180, 180].
+ * @param {number} deg Angle in degrees.
+ * @returns {number} Signed equivalent, used for shortest-arc deltas.
+ */
 export function norm180(deg) {
   const n = norm360(deg);
   return n > 180 ? n - 360 : n;
@@ -56,6 +67,13 @@ export function norm180(deg) {
  * measured in `from`'s local ENU frame. Returns null when the chord is shorter
  * than `minChordM` or the motion is vertical-only (direction unreliable —
  * callers fall back to the reported track).
+ *
+ * @param {Cesium.Cartesian3} from Earlier fix.
+ * @param {Cesium.Cartesian3} to Later fix.
+ * @param {number} [minChordM] Minimum chord length in metres below which the
+ *   direction is treated as unreadable.
+ * @returns {?number} Course over ground in degrees, or null when the motion is
+ *   too short or too vertical to measure.
  */
 export function courseBetweenCartesians(from, to, minChordM = 25) {
   const dx = to.x - from.x;
@@ -106,6 +124,13 @@ export const TURN_MIN_SPEED_MPS = 5;
 
 /** 0 at/below COURSE_TRACK_ONLY_MPS, 1 at/above COURSE_CHORD_ONLY_MPS, linear
  *  between. Non-finite speed (unknown) → 1, the legacy chord behavior. */
+/**
+ * 0 at/below COURSE_TRACK_ONLY_MPS, 1 at/above COURSE_CHORD_ONLY_MPS, linear
+ *  between. Non-finite speed (unknown) → 1, the legacy chord behavior.
+ * @param {number} speedMps Displayed ground speed in m/s.
+ * @returns {number} Chord weight in [0, 1] used to blend chord course over the
+ *   reported track.
+ */
 export function speedRamp(speedMps) {
   if (!Number.isFinite(speedMps)) return 1;
   if (speedMps <= COURSE_TRACK_ONLY_MPS) return 0;
@@ -115,6 +140,14 @@ export function speedRamp(speedMps) {
 
 /** Shortest-arc angle lerp: from → to by t (t=0 → from, t=1 → to). Also the
  *  course blender (blend chord over track by the speed ramp). */
+/**
+ * Shortest-arc angle lerp: from → to by t (t=0 → from, t=1 → to). Also the
+ *  course blender (blend chord over track by the speed ramp).
+ * @param {number} fromDeg Start angle in degrees.
+ * @param {number} toDeg End angle in degrees; taken the short way round.
+ * @param {number} t Interpolation fraction; unclamped values extrapolate.
+ * @returns {number} Interpolated angle wrapped into [0, 360).
+ */
 export function lerpAngleDeg(fromDeg, toDeg, t) {
   return norm360(fromDeg + norm180(toDeg - fromDeg) * t);
 }
@@ -122,6 +155,15 @@ export function lerpAngleDeg(fromDeg, toDeg, t) {
 /** Speed-scaled slew cap for limitCourseStep: COURSE_MIN_DPS at low speed
  *  easing to `maxDps` at cruise, so slow aircraft glide through segment
  *  boundaries instead of whipping at the fleet cap. */
+/**
+ * Speed-scaled slew cap for limitCourseStep: COURSE_MIN_DPS at low speed
+ *  easing to `maxDps` at cruise, so slow aircraft glide through segment
+ *  boundaries instead of whipping at the fleet cap.
+ * @param {number} speedMps Displayed ground speed in m/s.
+ * @param {number} maxDps Cap reached at cruise speed.
+ * @param {number} [minDps] Cap at/below the track-only gate.
+ * @returns {number} Slew cap in deg/s for this speed.
+ */
 export function courseSlewCapDps(speedMps, maxDps, minDps = COURSE_MIN_DPS) {
   return minDps + (maxDps - minDps) * speedRamp(speedMps);
 }
@@ -133,6 +175,15 @@ export function courseSlewCapDps(speedMps, maxDps, minDps = COURSE_MIN_DPS) {
  * fixes still describe clear movement. The delayed renderer already derives a
  * matching segment speed and course from those fixes, so tracking and cockpit
  * consumers should prefer that pair over stale poll fields.
+ *
+ * @param {object} root0 Kinematics from the two sources that can describe one
+ *   instant — the fix-derived segment and the feed's own poll fields.
+ * @param {number} root0.derivedSpeedMps Speed computed from consecutive fixes.
+ * @param {number} root0.derivedTrackDeg Course computed from consecutive fixes.
+ * @param {number} root0.reportedSpeedMps Ground speed as reported by the feed.
+ * @param {number} root0.reportedTrackDeg Track as reported by the feed.
+ * @returns {{speedMps: ?number, trackDeg: ?number}} The derived pair where it is
+ *   finite, otherwise the reported pair, otherwise null per field.
  */
 export function displayedKinematics({
   derivedSpeedMps,
@@ -158,6 +209,16 @@ export function displayedKinematics({
  * still hears the aircraft. This horizon permits one grace window after the
  * latest actual contact, while `maximumSec` prevents a cached/stale feed from
  * drifting an aircraft indefinitely.
+ *
+ * @param {object} root0 The two source clocks plus the caller's bounds.
+ * @param {number} root0.fixEpochMs Epoch ms of the newest position fix.
+ * @param {number} root0.lastContactEpochMs Epoch ms of the newest message of
+ *   ANY kind heard from the aircraft.
+ * @param {number} [root0.minimumSec] Floor; also the answer for unusable clocks.
+ * @param {number} [root0.contactGraceSec] Extra coast allowed past the last contact.
+ * @param {number} [root0.maximumSec] Hard ceiling, regardless of contact lead.
+ * @returns {number} Coast horizon in seconds, always within [minimumSec,
+ *   maximumSec] so a caller can never be handed an unbounded coast.
  */
 export function staleCoastLimitSeconds({
   fixEpochMs,
@@ -180,6 +241,18 @@ export function staleCoastLimitSeconds({
  * Smooths the once-per-fix course step at interpolation-segment boundaries
  * without lagging real turns (real aircraft turn ≤ ~4°/s; limiter default 60°/s).
  */
+/**
+ * Shortest-arc rate limiter: step `prevDeg` toward `targetDeg` by at most
+ * `maxDegPerSec * dtSec`. Seeds directly on the target when prev is null.
+ * Smooths the once-per-fix course step at interpolation-segment boundaries
+ * without lagging real turns (real aircraft turn ≤ ~4°/s; limiter default 60°/s).
+ *
+ * @param {?number} prevDeg Previous displayed course; null/NaN seeds on target.
+ * @param {number} targetDeg Course to converge on.
+ * @param {number} maxDegPerSec Slew cap in deg/s.
+ * @param {number} dtSec Elapsed seconds; negative is clamped to a zero step.
+ * @returns {number} New displayed course in [0, 360).
+ */
 export function limitCourseStep(prevDeg, targetDeg, maxDegPerSec, dtSec) {
   if (prevDeg == null || !Number.isFinite(prevDeg)) return norm360(targetDeg);
   const d = norm180(targetDeg - prevDeg);
@@ -196,6 +269,16 @@ export function limitCourseStep(prevDeg, targetDeg, maxDegPerSec, dtSec) {
  * a FINITE speed below it are skipped — at hover/taxi speed the reported track
  * is GPS-vector noise, not a turn (samples without a speed keep the legacy
  * behavior: no way to tell, so they still count).
+ *
+ * @param {Array<{tSec: number, trackDeg: number, speedMps?: number}>} samples
+ *   Chronological track samples; fewer than two returns 0.
+ * @param {number} [noiseFloorDps] Magnitude below which the estimate reads as
+ *   straight flight and returns 0.
+ * @param {number} [maxDps] Output clamp magnitude.
+ * @param {number} [minSpeedMps] Skip intervals whose endpoint speeds are finite
+ *   but below this.
+ * @returns {number} Mean per-interval turn rate in deg/s, signed by turn
+ *   direction, clamped to ±maxDps.
  */
 export function estimateTurnRateDps(samples, noiseFloorDps = 0.4, maxDps = 4, minSpeedMps = 0) {
   if (!samples || samples.length < 2) return 0;
@@ -221,7 +304,13 @@ export function estimateTurnRateDps(samples, noiseFloorDps = 0.4, maxDps = 4, mi
 
 /** Adapter: fix history [{time: JulianDate, track, velocity}] →
  *  estimateTurnRateDps, guarded by TURN_MIN_SPEED_MPS (low-speed fix-track
- *  jitter must not manufacture a turn rate). */
+ *  jitter must not manufacture a turn rate).
+ *
+ * @param {Array<{time: Cesium.JulianDate, track: number, velocity?: number}>}
+ *   history Chronological fix history; times are differenced against the first
+ *   entry, so absolute epochs do not matter.
+ * @returns {number} Turn rate in deg/s, 0 when fewer than two usable fixes.
+ */
 export function turnRateFromFixHistory(history) {
   if (!history || history.length < 2) return 0;
   const t0 = history[0].time;
@@ -303,7 +392,7 @@ export function projectGroundArcLatLon(lat, lon, courseDeg, speedMps, turnRateDp
  *    so a sustained turn's arc — where the contact actually goes — would be
  *    left cold. Sampling the arc keeps corridor and display on one path.
  *
- * @param {object} p
+ * @param {object} p - Display state for one grounded contact at one render tick.
  * @param {boolean} p.extrapolating - Whether the display position was extrapolated.
  * @param {number} p.displayLat - Where it renders now, latitude.
  * @param {number} p.displayLon - Where it renders now, longitude.
@@ -353,6 +442,16 @@ export function corridorPathLatLon({
  * integrating a constant-rate turn when turnRateDps is significant. Writes
  * {east, north, endCourseDeg} into `result` (no allocation) and returns it.
  * Works for negative dt (backward extrapolation — the warm-up path).
+ *
+ * @param {number} speedMps Ground speed in m/s.
+ * @param {number} trackDeg Instantaneous course, degrees from north.
+ * @param {number} turnRateDps Signed turn rate; |rate| below ~0.006 deg/s
+ *   degenerates to the straight tangent.
+ * @param {number} dtSec Seconds to integrate; negative steps backwards.
+ * @param {{east: number, north: number, endCourseDeg: number}} result Scratch
+ *   object written in place.
+ * @returns {{east: number, north: number, endCourseDeg: number}} The same
+ *   `result`: ENU offset in metres plus the course at the end of the arc.
  */
 export function arcOffsetEnu(speedMps, trackDeg, turnRateDps, dtSec, result) {
   const tr = trackDeg * DEG;

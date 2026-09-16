@@ -89,7 +89,8 @@ export function parseAcquisitionMs(date, time, cache = new Map()) {
 /**
  * Map sensor/instrument strings to a short display sensor name.
  * @param {*} value - Raw instrument property.
- * @returns {string}
+ * @returns {string} 'VIIRS' | 'MODIS', else the input uppercased and truncated
+ *   to 12 chars ('' for empty).
  */
 export function normalizeSensor(value) {
   const text = String(value || '').toUpperCase();
@@ -98,10 +99,21 @@ export function normalizeSensor(value) {
   return text ? text.slice(0, 12) : '';
 }
 
+/**
+ * Clamp a number into [0, 1] (confidence/ratio guard).
+ * @param {number} value - Unbounded input.
+ * @returns {number} Value limited to the unit interval.
+ */
 function clamp01(value) {
   return Math.max(0, Math.min(1, value));
 }
 
+/**
+ * Coerce a proxy record property to a finite number, 0 otherwise — numeric
+ * fire fields (frp/brightness) must stay finite for downstream scoring.
+ * @param {*} value - Raw property.
+ * @returns {number} Parsed value, or 0 when not finite.
+ */
 function finiteNumber(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : 0;

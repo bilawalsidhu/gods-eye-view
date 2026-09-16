@@ -101,11 +101,23 @@ const flapStates = new WeakMap();
 /** Teardown for an in-flight width ease (listeners, not timers). */
 const widthEases = new WeakMap();
 
+/**
+ * Read a positive tuning number, falling back when the override is absent,
+ * non-numeric, or not strictly positive.
+ * @param {*} value Supplied override.
+ * @param {number} fallback Module constant to use instead.
+ * @returns {number} A positive number of milliseconds.
+ */
 function positiveNumber(value, fallback) {
   const number = Number(value);
   return Number.isFinite(number) && number > 0 ? number : fallback;
 }
 
+/**
+ * Monotonic clock for cascade timing.
+ * @returns {number} Milliseconds from performance.now(), or Date.now() where
+ *   performance is unavailable.
+ */
 function nowMs() {
   return typeof performance !== 'undefined' && typeof performance.now === 'function'
     ? performance.now()
@@ -126,12 +138,14 @@ function nowMs() {
  * @param {string} fromText - Glyphs currently on screen.
  * @param {string} toText - Text to settle on.
  * @param {{charMs?: number, staggerMs?: number, maxTotalMs?: number}} [options]
+ *   Timing overrides; each falls back to the module constant.
  * @returns {{
  *   cells: Array<{index: number, from: string, to: string, changed: boolean,
  *                 vacating: boolean, delayMs: number}>,
  *   durationMs: number, staggerMs: number, changedCount: number,
  *   firstChanged: number, lastChanged: number,
- * }}
+ * }} Per-column flap plan plus the cascade's total duration and stagger; an
+ *   empty plan when the two strings are identical.
  */
 export function planSplitFlap(fromText, toText, options = {}) {
   const charMs = positiveNumber(options.charMs, FLAP_CHAR_MS);
@@ -203,6 +217,10 @@ export function planSplitFlap(fromText, toText, options = {}) {
  * A column with no glyph on the side being asked for is a RESERVED BLANK, not
  * an absence: it is still on the board, holding its width and its index. That
  * is what keeps the returned string positionally true.
+ *
+ * @param {{changed: boolean, from: string, to: string}} cell One planned column.
+ * @param {boolean} turned Whether the column has passed its halfway turn.
+ * @returns {string} The glyph on the board for this column at this instant.
  */
 function displayedGlyph(cell, turned) {
   if (!cell.changed) return cell.to;
@@ -228,6 +246,7 @@ function displayedGlyph(cell, turned) {
  * @param {{cells: Array<object>}} plan - A plan from `planSplitFlap`.
  * @param {number} elapsedMs - Milliseconds since the cascade started.
  * @param {{charMs?: number, turnRatio?: number}} [options]
+ *   Timing overrides; `turnRatio` must match the CSS keyframe crossover.
  * @returns {string} The currently displayed string, one character per column.
  */
 export function visibleGlyphs(plan, elapsedMs, options = {}) {
@@ -244,7 +263,10 @@ export function visibleGlyphs(plan, elapsedMs, options = {}) {
   return out;
 }
 
-/** Whether the viewer asked for reduced motion. */
+/**
+ * Whether the viewer asked for reduced motion.
+ * @returns {boolean} True when prefers-reduced-motion: reduce is set.
+ */
 function prefersReducedMotion() {
   return typeof window !== 'undefined'
     && typeof window.matchMedia === 'function'
@@ -260,6 +282,9 @@ function prefersReducedMotion() {
  * get `.visible`. All of those still report client rects, so a naive check
  * would animate a chip nobody can see. `checkVisibility` walks ancestors for
  * exactly these properties; the fallback walks them by hand.
+ *
+ * @param {HTMLElement|null} element Chip label element to test.
+ * @returns {boolean} Whether the element is connected and actually painted.
  */
 function isVisible(element) {
   if (!element?.isConnected) return false;
@@ -282,6 +307,11 @@ function isVisible(element) {
   return true;
 }
 
+/**
+ * Measure an element's rendered width.
+ * @param {HTMLElement|null} element Element to measure.
+ * @returns {number} Border-box width in px, or 0 when measurement is unavailable.
+ */
 function measureWidth(element) {
   return typeof element.getBoundingClientRect === 'function'
     ? element.getBoundingClientRect().width
@@ -295,6 +325,10 @@ function measureWidth(element) {
  * `.gev-flap-text` is the same object for the life of the chip, so a label
  * change never reparents anything (invariant 1). Rebuilt only if something
  * outside this module has clobbered the label's children.
+ *
+ * @param {HTMLElement} element Chip label element to upgrade or read.
+ * @returns {{text: HTMLElement, cells: HTMLElement}} The permanent text span
+ *   and the decorative cells sibling.
  */
 function ensureHost(element) {
   // O(1) happy path: this runs on every chip tick, including the ones where
@@ -323,13 +357,22 @@ function ensureHost(element) {
   return { text: nextText, cells: nextCells };
 }
 
-/** Drop the width transition, leaving the element at its natural width. */
+/**
+ * Drop the width transition, leaving the element at its natural width.
+ * @param {HTMLElement} element Chip label element to release.
+ * @returns {void}
+ */
 function clearSizing(element) {
   element.classList?.remove(SIZING_CLASS);
   element.style?.removeProperty('width');
   element.style?.removeProperty('--gev-flap-total');
 }
 
+/**
+ * Tear down any in-flight width ease for an element and unregister it.
+ * @param {HTMLElement} element Element whose ease should be cancelled.
+ * @returns {void}
+ */
 function cancelWidthEase(element) {
   const teardown = widthEases.get(element);
   if (!teardown) return;
@@ -349,6 +392,12 @@ function cancelWidthEase(element) {
  * change still schedules exactly one `setTimeout` (invariant 2). A transition
  * that never fires is harmless: the pinned width equals the natural width it
  * was easing to, and the next change clears it regardless.
+ *
+ * @param {HTMLElement} element Chip label element to resize.
+ * @param {number} fromWidth Width at the start of the ease, px.
+ * @param {number} toWidth Width to ease to, px.
+ * @param {number} durationMs Length of the transition, milliseconds.
+ * @returns {boolean} Whether an ease was actually started.
  */
 function easeWidth(element, fromWidth, toWidth, durationMs) {
   cancelWidthEase(element);
@@ -377,6 +426,11 @@ function easeWidth(element, fromWidth, toWidth, durationMs) {
   return true;
 }
 
+/**
+ * Cancel an in-flight cascade settle timer and forget the element's state.
+ * @param {HTMLElement} element Chip label element whose cascade is ending.
+ * @returns {void}
+ */
 function clearFlapTimer(element) {
   const state = flapStates.get(element);
   if (!state) return;
@@ -389,6 +443,11 @@ function clearFlapTimer(element) {
  *
  * The `Text` node is untouched apart from its data, and neither permanent span
  * is removed — only the decorative cells are emptied.
+ *
+ * @param {HTMLElement} element Chip label element to settle.
+ * @param {{text: HTMLElement, cells: HTMLElement}} host Permanent shell from
+ *   ensureHost().
+ * @returns {void}
  */
 function rest(element, host) {
   element.classList.remove(ACTIVE_CLASS);
@@ -405,6 +464,11 @@ function rest(element, host) {
  * A shrinking label has been holding every column at full width for the whole
  * cascade (invariant 4), so this is where the board narrows — as one eased
  * transition, never a single-frame snap.
+ *
+ * @param {HTMLElement} element Chip label element whose cascade landed.
+ * @param {string} expected Text the cascade was supposed to settle on.
+ * @param {number} easeMs Duration of the slack take-up transition, milliseconds.
+ * @returns {void}
  */
 function settle(element, expected, easeMs) {
   flapStates.delete(element);
@@ -430,6 +494,8 @@ function settle(element, expected, easeMs) {
  * @param {string} text - Text to settle on.
  * @param {{immediate?: boolean, charMs?: number, staggerMs?: number,
  *          maxTotalMs?: number}} [options]
+ *   `immediate` skips the animation entirely; the timing keys override the
+ *   module constants for this one change.
  * @returns {boolean} True when a flap animation was started.
  */
 export function setSplitFlapText(element, text, options = {}) {

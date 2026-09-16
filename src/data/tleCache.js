@@ -38,8 +38,8 @@ export function readCachedTle(group) {
 /**
  * Persist a TLE group. Oversized catalogs and storage failures are silent
  * no-ops — the network path still served the caller.
- * @param {string} group
- * @param {string} text
+ * @param {string} group CelesTrak group name (the proxy path segment).
+ * @param {string} text Raw TLE group text as served by the proxy.
  * @returns {boolean} True when persisted.
  */
 export function writeCachedTle(group, text) {

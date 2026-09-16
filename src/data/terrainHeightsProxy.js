@@ -11,15 +11,21 @@ export const TERRAIN_RETRY_BUDGET_MS = 10_000;
 /** One initial attempt plus three bounded retries. */
 export const TERRAIN_MAX_ATTEMPTS = 4;
 
-/** @param {number} ms */
+/**
+ * Default retry delay primitive.
+ * @param {number} ms milliseconds to pause the retry loop.
+ * @returns {Promise<void>} resolves after the delay.
+ */
 function defaultSleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
  * Parse the proxy's `points=lon,lat;...` query parameter.
- * @param {string|null|undefined} raw
- * @returns {Array<[number, number]>|null}
+ * @param {string|null|undefined} raw the raw query value (lon,lat pairs,
+ *   semicolon-separated, client-serialized at TERRAIN_POINT_PRECISION).
+ * @returns {Array<[number, number]>|null} [lon, lat] pairs in request order,
+ *   or null when any pair is malformed or non-numeric (degrees).
  */
 export function parseTerrainPoints(raw) {
   const text = String(raw || '').trim();
@@ -40,28 +46,38 @@ export function parseTerrainPoints(raw) {
 
 /**
  * Canonical per-point cache key, matching the client's 5dp request format.
- * @param {[number, number]} point lon/lat pair
+ * @param {[number, number]} point lon/lat pair in decimal degrees.
+ * @returns {string} `"lon,lat"` at TERRAIN_POINT_PRECISION digits.
  */
 export function terrainPointKey([lon, lat]) {
   return `${lon.toFixed(TERRAIN_POINT_PRECISION)},${lat.toFixed(TERRAIN_POINT_PRECISION)}`;
 }
 
-/** @param {[number, number]} point */
+/**
+ * Snap a request point onto the key it is cached and answered under.
+ * @param {[number, number]} point raw lon/lat pair in decimal degrees.
+ * @returns {{key: string, point: [number, number]}} the canonical key plus the
+ *   re-parsed point it rounds to (so upstream sees the serialized value).
+ */
 function canonicalTerrainPoint(point) {
   const key = terrainPointKey(point);
   return { key, point: key.split(',').map(Number) };
 }
 
-/** Only a real numeric ellipsoid height is cacheable/servable. */
+/**
+ * Only a real numeric ellipsoid height is cacheable/servable.
+ * @param {unknown} result candidate upstream row (`{ellipsoid, ...}`).
+ * @returns {boolean} true when the row carries a finite ellipsoid height.
+ */
 export function validTerrainResult(result) {
   return Boolean(result) && Number.isFinite(result.ellipsoid);
 }
 
 /**
  * Convert Retry-After (delta-seconds or HTTP-date) to milliseconds.
- * @param {string|null|undefined} value
- * @param {number} nowMs
- * @returns {number|null}
+ * @param {string|null|undefined} value the header value (seconds or HTTP-date).
+ * @param {number} nowMs current epoch ms, used to resolve HTTP-dates.
+ * @returns {number|null} delay in ms, or null when absent/unparseable.
  */
 export function terrainRetryAfterMs(value, nowMs = Date.now()) {
   const text = String(value ?? '').trim();
@@ -79,8 +95,9 @@ export function terrainRetryAfterMs(value, nowMs = Date.now()) {
  * Retry sleeps and retry attempts share a 10s budget after attempt one.
  *
  * Dependencies are injectable for deterministic offline tests.
- * @param {Array<[number, number]>} points
- * @param {object} [options]
+ * @param {Array<[number, number]>} points lon/lat pairs (degrees) for one
+ *   upstream chunk, already deduplicated by the caller.
+ * @param {object} [options] retry/transport knobs and test seams.
  * @param {Function} [options.fetchImpl] - Injectable fetch implementation used
  *   by tests; defaults to globalThis.fetch.
  * @param {Function} [options.sleep] - Injectable delay callback used by tests;
@@ -97,7 +114,8 @@ export function terrainRetryAfterMs(value, nowMs = Date.now()) {
  *   may add after the first attempt settles.
  * @param {number} [options.maxAttempts=4] - Maximum number of upstream
  *   attempts (one initial plus bounded retries).
- * @returns {Promise<Array<object>>}
+ * @returns {Promise<Array<object>>} the upstream `results` array, index-aligned
+ *   with `points`; rejects after the budget/attempts are exhausted.
  */
 export async function fetchTerrainChunkWithRetry(points, {
   fetchImpl = globalThis.fetch,
@@ -163,12 +181,18 @@ export async function fetchTerrainChunkWithRetry(points, {
  * including duplicates. Stale values remain eligible only when refresh fails.
  * If any position has no real height, return 502 with no fabricated result.
  *
- * @param {object} options
- * @param {Array<[number, number]>} options.points
- * @param {Map<string, {at:number, result:object}>} options.cache
+ * @param {object} options request inputs plus the injected cache/fetch seams.
+ * @param {Array<[number, number]>} options.points requested lon/lat pairs
+ *   (degrees); duplicates are answered from the same cache entry.
+ * @param {Map<string, {at:number, result:object}>} options.cache per-point
+ *   store keyed by terrainPointKey; mutated in place on refresh.
  * @param {(points:Array<[number, number]>)=>Promise<Array<object>>} options.fetchMissing
- * @param {number} options.ttlMs
- * @param {()=>number} [options.now]
+ *   upstream fetch for the points the cache cannot answer.
+ * @param {number} options.ttlMs freshness window in ms for a cache entry.
+ * @param {()=>number} [options.now] injectable clock (epoch ms).
+ * @returns {Promise<{status: number, body: object, cacheChanged: boolean, upstreamError: Error|null}>}
+ *   200 with `results` in request order, or 502 when any point has no real
+ *   height; `cacheChanged` tells the caller whether to persist the cache.
  */
 export async function resolveTerrainHeightRequest({
   points,

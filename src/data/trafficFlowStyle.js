@@ -69,7 +69,7 @@ export function flowSpeedScale(level) {
  * curves are identical for level ≥ 0.4.
  *
  * @param {number} level - traffic_level 0..1.
- * @param {object}  [opts]
+ * @param {object}  [opts] Behaviour switches for the jamViz density prototype.
  * @param {boolean} [opts.jamBoost=false] - Deepen the curve below the 2.5 cap.
  * @returns {number} Multiplier within [1, 2.5] (or [1, 4] boosted); non-finite input → 1.
  */

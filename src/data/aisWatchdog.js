@@ -52,7 +52,9 @@ export const AIS_FAILURE_KINDS = Object.freeze(['transport', 'auth', 'rate-limit
 /** Statuses that must not flip back to a hopeful 'connecting' on a retry. */
 const QUIET_TERMINAL = new Set(['down', 'auth-failed']);
 
-/** Statuses in which fresh data is genuinely flowing. */
+/** Statuses in which fresh data is genuinely flowing.
+ * @param {string} status Watchdog status string from a snapshot.
+ * @returns {boolean} True only for 'live' — a handshake or a retry is not data. */
 export function isLiveAisStatus(status) {
   return status === 'live';
 }
@@ -66,9 +68,9 @@ export function isLiveAisStatus(status) {
  * failure. Only a literal 0 is the kill switch; anything unparseable falls
  * back to the default and says so once.
  *
- * @param {string|number|undefined|null} raw
- * @param {(message: string) => void} [warn]
- * @returns {{kind: 'default'|'off'|'timeout', value?: number}}
+ * @param {string|number|undefined|null} raw Value of the `AISSTREAM_SILENCE_TIMEOUT_MS` environment variable.
+ * @param {(message: string) => void} [warn] Sink for the one-time notice emitted when an unparseable value is ignored.
+ * @returns {{kind: 'default'|'off'|'timeout', value?: number}} Resolution: `default` (use the shipped stale budget), `off` (literal 0 disables the watchdog), or `timeout` with the override in ms.
  */
 export function parseSilenceTimeoutEnv(raw, warn) {
   if (raw === undefined || raw === null) return { kind: 'default' };
@@ -98,16 +100,16 @@ const DEFAULT_CLOCK = Object.freeze({
  * The caller must invoke `configure()` before the first `tick()` so the
  * machine knows whether a key and a websocket transport exist.
  *
- * @param {object} [options]
- * @param {number} [options.staleMs]
- * @param {number} [options.recycleAfterMs]
- * @param {number[]} [options.backoffMs]
- * @param {number} [options.downRetryMs]
- * @param {number} [options.authProbeMs]
+ * @param {object} [options] Budget overrides; every field falls back to AIS_WATCHDOG_DEFAULTS when non-positive or absent.
+ * @param {number} [options.staleMs] Silence after which the feed is REPORTED stale.
+ * @param {number} [options.recycleAfterMs] Silence after which the socket is hard-aborted; floored at `staleMs`.
+ * @param {number[]} [options.backoffMs] Transport retry ladder; its length is also the attempt budget before `down`.
+ * @param {number} [options.downRetryMs] Slow retry cadence once the ladder is exhausted.
+ * @param {number} [options.authProbeMs] Probe cadence while the key is being rejected.
  * @param {number} [options.startGeneration] Seed for the socket-generation
  *   counter. MUST be the caller's module-lifetime high-water mark so that a
  *   disposal never re-issues a generation a late handler still refers to.
- * @param {{wall: Function, mono: Function}} [options.clock]
+ * @param {{wall: Function, mono: Function}} [options.clock] Time source: `wall()` epoch ms for display timestamps, `mono()` for every duration.
  * @returns {object} watchdog handle
  */
 export function createAisWatchdog(options = {}) {
@@ -146,11 +148,13 @@ export function createAisWatchdog(options = {}) {
   /** Identifies the credential in use, so a key change can clear auth-failed. */
   let keyFingerprint = null;
 
+  /** Free the one-connection-per-key slot without emitting a terminate. */
   function release() {
     owned = null;
   }
 
-  /** True once the backoff ladder has been spent without any data. */
+  /** True once the backoff ladder has been spent without any data.
+   * @returns {boolean} True when reconnectAttempt exceeds the ladder length. */
   function isExhausted() {
     return reconnectAttempt > backoffMs.length;
   }
@@ -198,7 +202,10 @@ export function createAisWatchdog(options = {}) {
     nextAttemptMono = monoNow + backoffMs[reconnectAttempt - 1];
   }
 
-  /** Hard-abort whatever socket we hold, if any. */
+  /** Hard-abort whatever socket we hold, if any.
+   * @param {string} reason Machine-supplied cause recorded on the terminate action.
+   * @returns {Array<object>} A single 'terminate' action, or [] when no socket is owned.
+   */
   function terminateOwned(reason) {
     if (owned === null) return [];
     const generationToKill = owned;
@@ -211,7 +218,7 @@ export function createAisWatchdog(options = {}) {
    * every request so a key added to .env mid-session is picked up).
    *
    * @param {{hasKey: boolean, hasTransport?: boolean, silenceWatch?: boolean,
-   *   keyFingerprint?: string|null}} env
+   *   keyFingerprint?: string|null}} env Environment capabilities as observed by the transport adapter.
    * @returns {Array<object>} actions
    */
   function configure(env) {
@@ -321,7 +328,10 @@ export function createAisWatchdog(options = {}) {
     return [{ type: 'connect', generation }];
   }
 
-  /** True when an event belongs to the socket we still own. */
+  /** True when an event belongs to the socket we still own.
+   * @param {number} eventGeneration Generation stamped on the event by the adapter.
+   * @returns {boolean} True when it matches the currently owned generation.
+   */
   function ownsGeneration(eventGeneration) {
     return owned !== null && eventGeneration === owned;
   }
@@ -334,6 +344,9 @@ export function createAisWatchdog(options = {}) {
    * its original schedule. An orphan (a socket we already gave up on, opening
    * late) is told to hang itself up so it cannot hold the one-connection-per-key
    * slot.
+   *
+   * @param {number} eventGeneration Generation stamped on the open event.
+   * @returns {Array<object>} A 'terminate' action for an orphan socket, else [].
    */
   function onOpen(eventGeneration) {
     if (!ownsGeneration(eventGeneration)) {
@@ -348,6 +361,9 @@ export function createAisWatchdog(options = {}) {
    * The adapter must call this only after the frame has decoded and been
    * recognised as an AIS payload; malformed frames and error envelopes are
    * never liveness.
+   *
+   * @param {number} eventGeneration Generation stamped on the message event.
+   * @returns {Array<object>} A 'terminate' action for an orphan socket, else [].
    */
   function onMessage(eventGeneration) {
     if (!ownsGeneration(eventGeneration)) {
@@ -362,7 +378,10 @@ export function createAisWatchdog(options = {}) {
     return [];
   }
 
-  /** The socket closed on its own. */
+  /** The socket closed on its own.
+   * @param {number} eventGeneration Generation stamped on the close event.
+   * @returns {Array<object>} [] — the slot is already free; a later tick reconnects.
+   */
   function onClose(eventGeneration) {
     if (!ownsGeneration(eventGeneration)) return [];
     release();
@@ -376,8 +395,9 @@ export function createAisWatchdog(options = {}) {
    * by class, rather than waiting out the silence budget for a socket we
    * already know is bad.
    *
-   * @param {number} eventGeneration
-   * @param {{kind?: string, message?: string, retryAfterMs?: number}} [detail]
+   * @param {number} eventGeneration Generation stamped on the failure event.
+   * @param {{kind?: string, message?: string, retryAfterMs?: number}} [detail] Classified failure detail; an unrecognised kind degrades to `transport`.
+   * @returns {Array<object>} The 'terminate' action for the owned socket, else [].
    */
   function onFailure(eventGeneration, detail = {}) {
     if (!ownsGeneration(eventGeneration)) return [];
@@ -393,7 +413,9 @@ export function createAisWatchdog(options = {}) {
     return actions;
   }
 
-  /** Tear everything down (dev-server restart / plugin close). */
+  /** Tear everything down (dev-server restart / plugin close).
+   * @returns {Array<object>} A 'terminate' action when a socket was owned, else [].
+   */
   function dispose() {
     const actions = terminateOwned('dispose');
     status = 'idle';
@@ -408,12 +430,16 @@ export function createAisWatchdog(options = {}) {
     return actions;
   }
 
-  /** Highest generation ever issued — the seed for any replacement machine. */
+  /** Highest generation ever issued — the seed for any replacement machine.
+   * @returns {number} Monotonic generation high-water mark; never decreases, never resets.
+   */
   function highWaterGeneration() {
     return generation;
   }
 
-  /** Status metadata for /api/ais-live. */
+  /** Status metadata for /api/ais-live.
+   * @returns {{status:string, error:(string|null), lastMessageAt:(number|null), silentForMs:(number|null), reconnectAttempt:number, nextAttemptAt:(number|null), watchdog:string, staleAfterMs:number}} Feed health report; `silentForMs` is null when no socket is owned and `nextAttemptAt` is null outside the retry states.
+   */
   function snapshot() {
     const monoNow = clock.mono();
     const wallNow = clock.wall();
@@ -434,7 +460,9 @@ export function createAisWatchdog(options = {}) {
     };
   }
 
-  /** Test/diagnostic view of internal ownership. */
+  /** Test/diagnostic view of internal ownership.
+   * @returns {{status:string, owned:(number|null), generation:number, reconnectAttempt:number, lastMessageAt:(number|null)}} Raw internals; not part of the public surface.
+   */
   function debugState() {
     return { status, owned, generation, reconnectAttempt, lastMessageAt: lastMessageWall };
   }
@@ -453,12 +481,21 @@ export function createAisWatchdog(options = {}) {
   };
 }
 
+/** Operator-facing message for a classified failure, used when the adapter
+ *  supplies no message of its own.
+ * @param {string} kind One of AIS_FAILURE_KINDS.
+ * @returns {string} Human-readable one-liner naming the credential or the transport. */
 function defaultFailureMessage(kind) {
   if (kind === 'auth') return 'AISStream rejected the API key';
   if (kind === 'rate-limit') return 'AISStream rate-limited this key';
   return 'AISStream websocket error';
 }
 
+/** Guard every numeric override: anything non-finite or non-positive falls
+ *  back, so a `0` or garbage value in config can never disable a budget.
+ * @param {number|undefined} value Candidate duration or count.
+ * @param {number} fallback Shipped default used when the candidate is unusable.
+ * @returns {number} `value` when finite and > 0, else `fallback`. */
 function positiveOr(value, fallback) {
   return Number.isFinite(value) && value > 0 ? value : fallback;
 }

@@ -22,7 +22,8 @@
  * unicast space (loopback, RFC1918 private, CGNAT, link-local, multicast,
  * reserved, broadcast, or simply malformed as 4 dotted decimals).
  * @param {string} hostname Already lowercased, brackets/trailing dot stripped.
- * @returns {boolean}
+ * @returns {boolean} True when the host is four dotted decimals that parse
+ *   and at least one octet lands outside globally routable unicast space.
  */
 export function isNonGlobalIpv4(hostname) {
   const pieces = hostname.split('.');
@@ -52,7 +53,8 @@ export function isNonGlobalIpv4(hostname) {
  * @param {{httpsOnly?: boolean}} [opts] Require https: (radio streams) —
  *   default false, because plaintext http is a legitimate shape for public
  *   CCTV snapshot endpoints.
- * @returns {boolean}
+ * @returns {boolean} True when the server may fetch `value` as written —
+ *   false for anything unparseable, credentialed, or aimed at a local host.
  */
 export function isSafeExternalHttpUrl(value, { httpsOnly = false } = {}) {
   if (typeof value !== 'string' || !value) return false;

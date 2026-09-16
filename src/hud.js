@@ -618,6 +618,8 @@ export class IntelHUD {
    * Refresh the summary readout. Optionally animates the text via typewriter.
    * @param {boolean} [animate=false] - If true, types the summary character
    *   by character; otherwise sets it instantly.
+   * @param {boolean} [force=false] - Redraw even when `_summaryDirty` is false
+   *   (used by explicit refreshes that bypass dirty tracking).
    */
   async _updateSummary(animate = false, force = false) {
     const fallbackText = this._composeSummary();

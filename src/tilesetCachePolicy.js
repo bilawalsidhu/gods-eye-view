@@ -29,6 +29,12 @@ export const MAX_TILESET_CACHE_MB = 4096;
 
 const MIB = 1024 * 1024;
 
+/**
+ * Normalize an override (or the default) to a usable MiB budget.
+ * @param {*} value - Raw `?tileCacheMB=` / `?tileCacheOverflowMB=` value.
+ * @returns {number} Positive integer MiB in `[1, MAX_TILESET_CACHE_MB]`;
+ *   non-numeric and non-positive inputs fall back to the default.
+ */
 function clampCacheMiB(value) {
   const n = Math.round(Number(value));
   if (!Number.isFinite(n) || n < 1) return DEFAULT_TILESET_CACHE_MB;
@@ -37,7 +43,7 @@ function clampCacheMiB(value) {
 
 /**
  * Resolve the tile-cache budget from query overrides.
- * @param {object} [options]
+ * @param {object} [options] - Injection seam; defaults read the live URL.
  * @param {string} [options.search] Query string (defaults to the live
  *   location, injectable for tests).
  * @returns {{cacheBytes: number, maximumCacheOverflowBytes: number,

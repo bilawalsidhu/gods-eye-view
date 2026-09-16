@@ -88,7 +88,7 @@ export function tileToBBox(z, x, y) {
  *
  * @param {{south:number, west:number, north:number, east:number}} bounds - Degrees.
  * @param {number} [zoom=12] - Tile zoom level.
- * @param {object} [opts]
+ * @param {object} [opts] Truncation knobs.
  * @param {number} [opts.maxTiles=64] - Safety cap on returned tiles.
  * @returns {Array<{z:number, x:number, y:number}>} Covering tiles.
  */

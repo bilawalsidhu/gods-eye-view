@@ -34,8 +34,8 @@ export const MESH_FLOOR_ABOVE_PRIOR_M = 80;
 
 /**
  * Snaps a coordinate to the coarse (3-decimal, ~111 m) floor grid.
- * @param {number} lat
- * @param {number} lon
+ * @param {number} lat latitude in decimal degrees.
+ * @param {number} lon longitude in decimal degrees.
  * @returns {{lat: number, lon: number}} Grid-cell coordinate.
  */
 export function coarseFloorCoord(lat, lon) {
@@ -52,7 +52,8 @@ export function coarseFloorCoord(lat, lon) {
  * @param {number|null|undefined} altM - Proposed ellipsoidal render height.
  * @param {number|null|undefined} groundM - Local ellipsoidal ground, if known.
  * @param {number} [liftM] - Clearance above the floor.
- * @returns {number|null}
+ * @returns {number|null} Clamped ellipsoidal render height in meters, or null
+ *   when neither input is finite.
  */
 export function floorAltitudeM(altM, groundM, liftM = GROUND_FLOOR_LIFT_M) {
   const hasAlt = Number.isFinite(altM);
@@ -292,6 +293,8 @@ export function corridorFloorCells(points) {
  *     anyway; the far end of its corridor can wait a poll.
  *
  * @param {Array<{cells: Array<{lat: number, lon: number}>, cold: number, speedMps: number}>} candidates
+ *   one entry per contact: its ordered corridor cells, how many are cold, and
+ *   how fast it is moving.
  * @param {Set<string>} seen - Keys ("lat,lon") already collected; MUTATED with
  *   everything this call allocates, so the caller's dedupe stays consistent.
  * Ranking alone still starves a TIE longer than the budget: 80 equally needy
@@ -396,12 +399,18 @@ const _meshCells = new Map();
  *  'gev:map-stack-changed' listener. Photoreal is the boot default. */
 let _meshPreferred = true;
 
-/** @param {boolean} preferred - google-3d regime active. */
+/**
+ * Toggle whether mesh-floor cells apply (google-3d regime active).
+ * @param {boolean} preferred - google-3d regime active.
+ */
 export function setMeshFloorPreferred(preferred) {
   _meshPreferred = Boolean(preferred);
 }
 
-/** @returns {boolean} Whether mesh-floor cells currently apply. */
+/**
+ * Whether mesh-floor cells currently apply.
+ * @returns {boolean} true only in the photoreal (google-3d) regime.
+ */
 export function meshFloorPreferred() {
   return _meshPreferred;
 }
@@ -409,7 +418,9 @@ export function meshFloorPreferred() {
 /**
  * Records a sampled rendered-surface height for the cell containing the
  * coordinate (one-shot latch — first accepted sample wins).
- * @param {number} lat @param {number} lon @param {number} heightM
+ * @param {number} lat sample latitude, decimal degrees.
+ * @param {number} lon sample longitude, decimal degrees.
+ * @param {number} heightM ellipsoidal mesh height in meters.
  */
 export function reportMeshFloorCell(lat, lon, heightM) {
   if (!Number.isFinite(lat) || !Number.isFinite(lon) || !Number.isFinite(heightM)) return;
@@ -418,7 +429,14 @@ export function reportMeshFloorCell(lat, lon, heightM) {
   if (!_meshCells.has(key)) _meshCells.set(key, heightM);
 }
 
-/** Return whether a rendered-mesh sample is plausible against a real DEM prior. */
+/**
+ * Whether a rendered-mesh sample is plausible against a real DEM prior.
+ * The window is asymmetric because the mesh legitimately sits ABOVE bare earth
+ * (buildings, trees) but never far below it.
+ * @param {number} heightM sampled mesh height, ellipsoidal meters.
+ * @param {number} priorM warm Re:Earth DEM height for the same cell, meters.
+ * @returns {boolean} true when the sample falls in the accepted window.
+ */
 export function meshFloorSampleWithinPrior(heightM, priorM) {
   return Number.isFinite(heightM)
     && Number.isFinite(priorM)
@@ -431,6 +449,9 @@ export function meshFloorSampleWithinPrior(heightM, priorM) {
  * Callers must not bypass this with raw `reportMeshFloorCell`: a coarse-LOD,
  * rooftop, or aircraft hit would otherwise win the session-long first-write
  * latch and poison every floor consumer in the cell.
+ * @param {number} lat sample latitude, decimal degrees.
+ * @param {number} lon sample longitude, decimal degrees.
+ * @param {number} heightM sampled mesh height, ellipsoidal meters.
  * @returns {boolean} Whether the sample passed and was reported.
  */
 export function reportValidatedMeshFloorCell(lat, lon, heightM) {
@@ -445,8 +466,9 @@ export function reportValidatedMeshFloorCell(lat, lon, heightM) {
 /**
  * Synchronous mesh-cell read — null when the cell is unsampled OR the
  * google-3d regime is inactive (globe stacks must floor on the DEM).
- * @param {number} lat @param {number} lon
- * @returns {number|null}
+ * @param {number} lat latitude in decimal degrees.
+ * @param {number} lon longitude in decimal degrees.
+ * @returns {number|null} ellipsoidal rendered-surface height, or null.
  */
 export function cachedMeshFloor(lat, lon) {
   if (!_meshPreferred) return null;
@@ -467,8 +489,8 @@ export function _clearMeshFloorCellsForTest() {
  * to the Re:Earth DEM cell — the single choke point every ground-adjacent
  * consumer (fleet clamp, grounded surface chain, trail floors) reads, so
  * they all agree on one surface.
- * @param {number} lat
- * @param {number} lon
+ * @param {number} lat latitude in decimal degrees.
+ * @param {number} lon longitude in decimal degrees.
  * @returns {number|null} Ellipsoidal floor of the cell, or null if not warm.
  */
 export function cachedGroundFloor(lat, lon) {
@@ -501,8 +523,9 @@ export const FLOOR_RESOLVE_DEADLINE_MS = 1200;
  * FLOOR_RESOLVE_DEADLINE_MS, then returns so the caller can paint with the
  * cells that ARE warm. The underlying resolve continues in the background
  * and fills the cache for later reads. Never throws.
- * @param {Array<{lat: number, lon: number}>} points
- * @returns {Promise<void>}
+ * @param {Array<{lat: number, lon: number}>} points coordinates to resolve,
+ *   decimal degrees (traces, backfills — any length).
+ * @returns {Promise<void>} resolves at the deadline or on completion.
  */
 export function resolveGroundFloorCellsBounded(points) {
   return Promise.race([
@@ -511,6 +534,15 @@ export function resolveGroundFloorCellsBounded(points) {
   ]);
 }
 
+/**
+ * Dedupe `points` to unique coarse cells that have no DEM prior yet and
+ * resolve them through resolveEllipsoidalGround, so the synchronous
+ * `cachedGroundFloor` reads that follow are warm. Best-effort: any failure
+ * leaves those cells simply unclamped.
+ * @param {Array<{lat: number, lon: number}>} points coordinates in decimal
+ *   degrees; non-finite entries are skipped.
+ * @returns {Promise<void>}
+ */
 export async function resolveGroundFloorCells(points) {
   if (!Array.isArray(points) || !points.length) return;
   const cells = new Map();
@@ -538,7 +570,11 @@ let _floorBatchInFlight = false;
  *  the owner's "you can't just go to a place and start inspecting it". */
 const _pendingFloorCells = new Map();
 
-/** Kicks the resolver for a cell map, chaining any cells queued meanwhile. */
+/**
+ * Kicks the resolver for a cell map, chaining any cells queued meanwhile.
+ * @param {Map<string, {lat: number, lon: number}>} cells unique coarse cells
+ *   to resolve, keyed by "lat,lon".
+ */
 function _resolveFloorCells(cells) {
   _floorBatchInFlight = true;
   resolveEllipsoidalGround([...cells.values()])
@@ -559,7 +595,8 @@ function _resolveFloorCells(cells) {
  * throws into the caller. Contending calls QUEUE (never drop): their cells
  * ride the next batch as soon as the in-flight one completes. Results are
  * picked up by later `cachedGroundFloor` reads.
- * @param {Array<{lat: number, lon: number}>} points
+ * @param {Array<{lat: number, lon: number}>} points coordinates to warm,
+ *   decimal degrees (a poll's contacts, a trail, a spawn burst).
  */
 export function warmGroundFloor(points) {
   if (!Array.isArray(points) || !points.length) return;

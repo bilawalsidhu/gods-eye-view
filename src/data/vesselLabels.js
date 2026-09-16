@@ -41,7 +41,7 @@ const NUMERIC_TYPE_FAMILIES = {
  * Resolve an AIS type to display text: bare numeric ship-type codes map to
  * family names ("71" → "CARGO"); text types pass through unchanged.
  * @param {string} type Raw AIS type.
- * @returns {string}
+ * @returns {string} Family/special-craft name for numeric codes, the trimmed input for text types, or `''` for zero/blank.
  */
 export function normalizeVesselType(type) {
   const text = String(type || '').trim();
@@ -52,16 +52,24 @@ export function normalizeVesselType(type) {
   return NUMERIC_TYPE_FAMILIES[Math.floor(code / 10)] || 'OTHER';
 }
 
-/** AIS ship type → CSS hex hue for the billboard chevron. */
+/** AIS ship type → CSS hex hue for the billboard chevron.
+ * @param {string} type Raw AIS ship-type string from the vessel record.
+ * @returns {string} CSS hex color; the cargo-blue default when no family matches. */
 export function vesselTypeCss(type) {
   return styleForType(type).css;
 }
 
-/** AIS ship type → "r, g, b" accent string for the host card. */
+/** AIS ship type → "r, g, b" accent string for the host card.
+ * @param {string} type Raw AIS ship-type string from the vessel record.
+ * @returns {string} Comma-separated RGB channels usable inside `rgba(...)`; the cargo-blue default when no family matches. */
 export function accentForVesselType(type) {
   return styleForType(type).accent;
 }
 
+/** First TYPE_STYLES entry whose pattern matches the normalized type, else the
+ * default (unclassified) style.
+ * @param {string} type Raw AIS ship-type string.
+ * @returns {{pattern: RegExp, css: string, accent: string}} Matched style record. */
 function styleForType(type) {
   const text = normalizeVesselType(type);
   return TYPE_STYLES.find((entry) => entry.pattern.test(text)) || DEFAULT_STYLE;
@@ -74,7 +82,7 @@ function styleForType(type) {
  * @param {number} width CSS viewport width.
  * @param {number} height CSS viewport height.
  * @param {number} [rowLimit=900] Configured source row ceiling.
- * @returns {number}
+ * @returns {number} Ambient cohort ceiling: `min(shipped cohort max, rowLimit, grid cells)`; 0 when any input is not positive.
  */
 export function vesselOverlayCohortLimit(width, height, rowLimit = VESSEL_DEFAULT_LABEL_LIMIT) {
   const w = Number(width);
@@ -91,7 +99,7 @@ export function vesselOverlayCohortLimit(width, height, rowLimit = VESSEL_DEFAUL
  * protected selected rectangle excludes ambient cards while bypassing quotas.
  * @param {object} card Source-formatted vessel card.
  * @param {number} [fadeDistance=5000000] Ambient distance-fade endpoint.
- * @returns {object}
+ * @returns {object} Copy of `card` with the overlay policy fields merged in (the input object is not mutated).
  */
 export function applyVesselOverlayPolicy(card, fadeDistance = VESSEL_CARD_FADE_DISTANCE_M) {
   const selected = card?.selected === true;

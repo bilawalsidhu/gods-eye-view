@@ -94,8 +94,11 @@ export const VOICE_TIERS = Object.freeze(Object.keys(VOICE_MODELS));
  * normal session instead of breaking the mic. Callers that need to know a
  * fallback happened compare `entry.tier` to what they asked for.
  *
- * @param {unknown} tier
+ * @param {unknown} tier - Tier name asked for by the UI or the token endpoint
+ *   querystring; any value (including garbage) is accepted.
  * @returns {{tier: 'standard'|'mini', id: string, label: string, rates: object}}
+ *   The registry entry for that tier, or the `standard` entry when `tier` is
+ *   not a known name.
  */
 export function resolveVoiceModel(tier) {
   // Own-property check, NOT `VOICE_MODELS[key] || default`: inherited keys
@@ -107,7 +110,13 @@ export function resolveVoiceModel(tier) {
     : VOICE_MODELS[DEFAULT_VOICE_TIER];
 }
 
-/** True only for a tier name this build knows (own properties only). */
+/**
+ * True only for a tier name this build knows (own properties only).
+ * @param {unknown} tier - Candidate tier name; trimmed and lower-cased before
+ *   the lookup, non-strings simply fail.
+ * @returns {boolean} Whether the normalized name is an own key of
+ *   `VOICE_MODELS` (never a prototype member such as `constructor`).
+ */
 export function isKnownVoiceTier(tier) {
   const key = typeof tier === 'string' ? tier.trim().toLowerCase() : '';
   return Object.prototype.hasOwnProperty.call(VOICE_MODELS, key);
@@ -117,6 +126,10 @@ export function isKnownVoiceTier(tier) {
  * The priciest known rate table, derived (not hardcoded) so it stays correct if
  * the registry gains a tier. Used as the conservative default whenever we do
  * not recognise the model a session is actually running on.
+ *
+ * @returns {{tier: 'standard'|'mini', id: string, label: string, rates: object}}
+ *   The registry entry with the highest audio-output rate (the dominant cost
+ *   in a speech-to-speech session).
  */
 export function mostExpensiveVoiceModel() {
   // Rank by audio output — the dominant cost in a speech-to-speech session.
@@ -136,8 +149,12 @@ export function mostExpensiveVoiceModel() {
  * An unrecognised id bills at the most expensive known rates rather than
  * guessing cheap — under-metering is what lets a cap be overrun.
  *
- * @param {unknown} modelId
+ * @param {unknown} modelId - Model id the token endpoint echoed back for the
+ *   live session (`OPENAI_REALTIME_MODEL` resolved); non-strings bill as
+ *   unrecognised.
  * @returns {{tier: string, id: string, label: string, rates: object, recognized: boolean}}
+ *   The matching registry entry with `recognized: true`, or the worst-case
+ *   entry with `recognized: false` and `id` set to the value passed in.
  */
 export function resolveVoiceModelById(modelId) {
   const id = typeof modelId === 'string' ? modelId.trim() : '';
@@ -187,6 +204,12 @@ export const VOICE_COST_LIMIT_OFF = 'off';
  * Accepted "disabled" spellings: the `'off'` sentinel, Infinity, and a
  * 0/negative number. Absent/undefined/null and unparseable values fall back to
  * the default — a corrupt entry must never disarm the cap.
+ *
+ * @param {{warnUsd?: number|string, capUsd?: number|string}} [limits] - Raw
+ *   thresholds as persisted (settings/localStorage) or supplied by the caller;
+ *   each field is cleaned independently.
+ * @returns {{warnUsd: number, capUsd: number}} Frozen limits; a disabled
+ *   threshold is `Infinity`, an absent or unparseable one the default.
  */
 export function normalizeCostLimits(limits) {
   const clean = (value, fallback) => {
@@ -205,7 +228,15 @@ export function normalizeCostLimits(limits) {
   });
 }
 
-/** Convert limits to a JSON-safe shape that round-trips a disabled threshold. */
+/**
+ * Convert limits to a JSON-safe shape that round-trips a disabled threshold.
+ *
+ * @param {{warnUsd?: number|string, capUsd?: number|string}} [limits] - Raw
+ *   limits, exactly as `normalizeCostLimits` accepts them.
+ * @returns {{warnUsd: number|string, capUsd: number|string}} Limits with every
+ *   disabled threshold replaced by the `VOICE_COST_LIMIT_OFF` sentinel, so
+ *   persistence keeps it disabled instead of re-arming the default.
+ */
 export function serializeCostLimits(limits) {
   const normalized = normalizeCostLimits(limits);
   const encode = (value) => (Number.isFinite(value) ? value : VOICE_COST_LIMIT_OFF);
@@ -218,6 +249,29 @@ export function serializeCostLimits(limits) {
 /* ------------------------------------------------------------------ *
  * USAGE → USD
  * ------------------------------------------------------------------ */
+
+/**
+ * Billable token buckets split out of one Realtime usage payload.
+ *
+ * `*Cached` buckets are the cached tokens already INCLUDED in the modality
+ * totals; the `*In`/`*Out` buckets are the uncached remainder. The two
+ * `*Total` fields carry the raw aggregates for reconciliation against the
+ * source payload.
+ *
+ * @typedef {object} UsageTokenSplit
+ * @property {number} textIn - Uncached text input tokens.
+ * @property {number} audioIn - Uncached audio input tokens; absorbs any
+ *   detail-vs-aggregate residual so nothing billed goes uncounted.
+ * @property {number} imageIn - Uncached image input tokens.
+ * @property {number} textCached - Cached text input tokens.
+ * @property {number} audioCached - Cached audio input tokens.
+ * @property {number} imageCached - Cached image input tokens.
+ * @property {number} textOut - Text output tokens.
+ * @property {number} audioOut - Audio output tokens; absorbs the output
+ *   residual, and the whole output when no detail object is present.
+ * @property {number} inputTotal - Raw `input_tokens` aggregate.
+ * @property {number} outputTotal - Raw `output_tokens` aggregate.
+ */
 
 const nonNegative = (value) => {
   const n = Number(value);
@@ -243,6 +297,7 @@ const nonNegative = (value) => {
  * residual is therefore attributed to audio rates.
  *
  * @param {object|null|undefined} usage - `response.usage` from `response.done`.
+ * @returns {UsageTokenSplit} Token buckets, all non-negative.
  */
 export function splitUsageTokens(usage) {
   const inDetails = usage?.input_token_details || null;
@@ -334,7 +389,13 @@ export function estimateUsageCostUsd(usage, rates) {
   return Number.isFinite(usd) && usd > 0 ? usd : 0;
 }
 
-/** Format a running cost for the compact UI readout ("~$0.42"). */
+/**
+ * Format a running cost for the compact UI readout ("~$0.42").
+ *
+ * @param {number} usd - Cost in USD; non-finite or negative input clamps to 0.
+ * @returns {string} Two-decimal display text; sub-cent non-zero totals read
+ *   `~$0.01` rather than collapsing to `~$0.00`.
+ */
 export function formatCostUsd(usd) {
   const n = Number.isFinite(Number(usd)) ? Math.max(0, Number(usd)) : 0;
   if (n > 0 && n < 0.01) return '~$0.01';
@@ -344,6 +405,54 @@ export function formatCostUsd(usd) {
 /* ------------------------------------------------------------------ *
  * SESSION COST TRACKER (state machine)
  * ------------------------------------------------------------------ */
+
+/**
+ * One immutable reading of the running session cost, returned by every
+ * tracker method. The field-level policies (one-shot latches, worst-case
+ * billing, incomplete accounting) are documented on the `snapshot` literal
+ * inside `createVoiceCostTracker`.
+ *
+ * @typedef {object} VoiceCostSnapshot
+ * @property {'standard'|'mini'} tier - Tier the session was priced from.
+ * @property {string} modelId - Model id actually in use.
+ * @property {boolean} ratesRecognized - False when the model id was unknown
+ *   and billing fell back to the worst-case rate table.
+ * @property {number} totalUsd - Running USD estimate for the session.
+ * @property {number} responses - Billed responses folded into `totalUsd`.
+ * @property {number} warnUsd - Effective soft threshold, Infinity when disabled.
+ * @property {number} capUsd - Effective hard threshold, Infinity when disabled.
+ * @property {'ok'|'warn'|'cap'} level - Highest threshold crossed so far.
+ * @property {boolean} warnCrossed - True only on the single record() that
+ *   crossed the soft threshold.
+ * @property {boolean} capCrossed - True only on the single record() that
+ *   crossed the hard cap.
+ * @property {boolean} capReached - True once the cap is latched; the session
+ *   must be stopped.
+ * @property {boolean} incomplete - True when a billed response never reported
+ *   usage, so the estimate is partial.
+ * @property {string} display - Compact chip text (`~$0.42*`); the `*` is a
+ *   see-note mark, never a direction claim.
+ * @property {string|null} note - Prose for the tooltip, null when the
+ *   accounting is complete.
+ */
+
+/**
+ * Tracker API for one voice session's spend guard.
+ *
+ * @typedef {object} VoiceCostTracker
+ * @property {{tier: string, id: string, label: string, rates: object,
+ *   recognized: boolean}} model - Frozen pricing for the bound model.
+ * @property {{warnUsd: number, capUsd: number}} limits - Effective thresholds
+ *   after normalization.
+ * @property {Function} record - Folds one response's usage into the total and
+ *   re-evaluates both thresholds.
+ * @property {Function} state - Reads the current state without folding in
+ *   new usage.
+ * @property {Function} markIncomplete - Records that a billed response will
+ *   never report its usage.
+ * @property {Function} reset - Zeroes the totals for a new session while
+ *   keeping the same model binding and limits.
+ */
 
 /**
  * Accumulate per-response usage into a running session cost and latch the two
@@ -363,7 +472,11 @@ export function formatCostUsd(usd) {
  * different model. `tier` alone is only used before a session exists.
  *
  * @param {{tier?: string, modelId?: string,
- *          limits?: {warnUsd?: number, capUsd?: number}}} [options]
+ *          limits?: {warnUsd?: number, capUsd?: number}}} [options] - Session
+ *   pricing and thresholds: `modelId` (server-echoed) outranks `tier`, and
+ *   `limits` is passed through `normalizeCostLimits` on the way in.
+ * @returns {VoiceCostTracker} Tracker bound to exactly one session; every
+ *   method returns a fresh `VoiceCostSnapshot`.
  */
 export function createVoiceCostTracker(options = {}) {
   const model = options.modelId
@@ -419,6 +532,8 @@ export function createVoiceCostTracker(options = {}) {
     /**
      * Fold one response's usage into the session total.
      * @param {object} usage - `response.usage`
+     * @returns {VoiceCostSnapshot} Post-fold state, with `warnCrossed` /
+     *   `capCrossed` set on the one record that crosses each threshold.
      */
     record(usage) {
       const usd = estimateUsageCostUsd(usage, model.rates);
@@ -438,18 +553,27 @@ export function createVoiceCostTracker(options = {}) {
       }
       return snapshot(warnCrossed, capCrossed);
     },
-    /** Current state without folding in new usage. */
+    /**
+     * Current state without folding in new usage.
+     * @returns {VoiceCostSnapshot} The latched state as of the last record().
+     */
     state: () => snapshot(),
     /**
      * Record that a billed response will never report its usage (torn down
      * mid-response). Flags the accounting as incomplete rather than
      * fabricating a token count for it.
+     *
+     * @returns {VoiceCostSnapshot} State with `incomplete` latched on; the
+     *   total is unchanged.
      */
     markIncomplete() {
       incomplete = true;
       return snapshot();
     },
-    /** Reset for a new session (same model/limits). */
+    /**
+     * Reset for a new session (same model/limits).
+     * @returns {VoiceCostSnapshot} Zeroed state; `incomplete` is cleared too.
+     */
     reset() {
       totalUsd = 0;
       responses = 0;

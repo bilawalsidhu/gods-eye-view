@@ -24,8 +24,8 @@ export const FIRE_ANCHOR_LIFT_M = 5;
  * when the floor is warm, else 0 (the pre-fix ellipsoid anchor — dots render
  * exactly as before until their floor lands). Warm-cache read only; never
  * triggers network or sampling.
- * @param {number} lat
- * @param {number} lon
+ * @param {number} lat - Detection latitude in degrees.
+ * @param {number} lon - Detection longitude in degrees.
  * @returns {number} Ellipsoidal anchor height in metres.
  */
 export function fireAnchorHeight(lat, lon) {
@@ -59,7 +59,12 @@ export function warmFireAnchorFloors(points) {
   return run;
 }
 
-/** @returns {Array<{lat: number, lon: number}>} Points with no warm floor. */
+/**
+ * Keep only the points whose coarse cell has no warm floor yet — the batch
+ * payload for {@link warmFireAnchorFloors}, minus non-finite coordinates.
+ * @param {Array<{lat: number, lon: number}>} points - Rendered detections.
+ * @returns {Array<{lat: number, lon: number}>} Points with no warm floor.
+ */
 function collectCold(points) {
   if (!Array.isArray(points)) return [];
   const cold = [];
@@ -71,7 +76,12 @@ function collectCold(points) {
   return cold;
 }
 
-/** Resolves one batch (re-filtered at run time) and reports whether it warmed anything. */
+/**
+ * Resolves one batch (re-filtered at run time against cells an earlier batch
+ * in the chain may have warmed) and reports whether it warmed anything.
+ * @param {Array<{lat: number, lon: number}>} points - Queued cold points.
+ * @returns {Promise<boolean>} True when at least one point gained a warm floor.
+ */
 async function resolveBatch(points) {
   const cold = points.filter((p) => cachedGroundFloor(p.lat, p.lon) == null);
   if (!cold.length) return false;

@@ -36,7 +36,11 @@ export const TR3B_TYPE_LABEL = 'TR-3B';
  */
 export const TR3B_CLASS = 'tr3b';
 
-/** @param {*} id Raw contact id. @returns {string} Normalized registry key. */
+/**
+ * Normalize any contact id to the registry's storage form.
+ * @param {*} id Raw contact id (hex, case, or whitespace may vary by layer).
+ * @returns {string} Trimmed lower-case key; `''` for a nullish/blank id.
+ */
 function key(id) {
   return String(id ?? '').trim().toLowerCase();
 }
@@ -44,7 +48,7 @@ function key(id) {
 /**
  * Whether a contact is currently rendered as a TR-3B.
  * @param {string} id ICAO 24-bit address (any case).
- * @returns {boolean}
+ * @returns {boolean} True while the triangle silhouette applies to this contact.
  */
 export function isTr3b(id) {
   const k = key(id);

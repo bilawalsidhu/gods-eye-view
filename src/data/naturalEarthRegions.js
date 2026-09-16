@@ -21,7 +21,12 @@ import { createRetryableLoader } from './retryableLoad.js';
 const EARTH_RADIUS_KM = 6371;
 const toRad = (d) => (d * Math.PI) / 180;
 
-/** Spherical-excess ring area (km²) — same family as turf/geojson-area. */
+/**
+ * Spherical-excess ring area (km²) — same family as turf/geojson-area.
+ * @param {Array<[number, number]>} ring outer ring as [lon, lat] pairs in
+ *   decimal degrees (GeoJSON order).
+ * @returns {number} unsigned enclosed area in square kilometers.
+ */
 function ringAreaKm2(ring) {
   const n = ring.length;
   if (n < 3) return 0;
@@ -34,6 +39,15 @@ function ringAreaKm2(ring) {
   return Math.abs((sum * EARTH_RADIUS_KM * EARTH_RADIUS_KM) / 2);
 }
 
+/**
+ * Great-circle separation on a sphere — used only for bbox diagonals and
+ * relative ranking, never for display distances.
+ * @param {number} lon1 first longitude, decimal degrees.
+ * @param {number} lat1 first latitude, decimal degrees.
+ * @param {number} lon2 second longitude, decimal degrees.
+ * @param {number} lat2 second latitude, decimal degrees.
+ * @returns {number} separation in kilometers.
+ */
 function haversineKm(lon1, lat1, lon2, lat2) {
   const dLat = toRad(lat2 - lat1);
   const dLon = toRad(lon2 - lon1);
@@ -45,6 +59,8 @@ function haversineKm(lon1, lat1, lon2, lat2) {
 /**
  * Normalize a query/name for matching: lowercase, strip diacritics and
  * punctuation, collapse whitespace, strip a leading "the ".
+ * @param {string} s raw name or spoken query.
+ * @returns {string} canonical match key ('' for an empty input).
  */
 function normalizeName(s) {
   return String(s || '')
@@ -93,7 +109,11 @@ const ALIASES = {
   'sierra nevada mountains': 'sierra nevada',
 };
 
-/** Generic suffix rewrites tried when there is no exact/alias hit. */
+/**
+ * Generic suffix rewrites tried when there is no exact/alias hit.
+ * @param {string} norm normalized query (normalizeName form).
+ * @returns {string[]} alternate keys to try, most specific first.
+ */
 function suffixVariants(norm) {
   const v = [];
   // "x mountains" ↔ "x mts" (pack uses "Mts."; normalization strips the dot)
@@ -116,6 +136,12 @@ let _entries = null;
 const isNode = typeof process !== 'undefined' && Boolean(process.versions?.node)
   && typeof window === 'undefined';
 
+/**
+ * Load one bundled Natural Earth pack by its base name.
+ * @param {'regions'|'marine'} base pack selector.
+ * @returns {Promise<object>} the raw pack (GeoJSON-ish, pre-decimated, with
+ *   `features[].polygons` instead of full geometry).
+ */
 async function loadPackFile(base) {
   if (isNode) {
     // Import attribute instead of node:fs readFileSync — a plain dynamic JSON
@@ -140,6 +166,13 @@ async function loadPackFile(base) {
   return mod.default || mod;
 }
 
+/**
+ * Flatten a pack into indexed entries, computing the area/bbox metrics that
+ * ranking needs once at load time.
+ * @param {object} pack loaded pack from loadPackFile.
+ * @param {'natural'|'marine'} kind discriminator stamped on every entry.
+ * @returns {Array<object>} entries with polygons, areaKm2, bbox and diagonal.
+ */
 function buildEntries(pack, kind) {
   const out = [];
   for (const ft of pack.features || []) {
@@ -198,6 +231,12 @@ const loadIndex = createRetryableLoader(async () => {
   return index;
 });
 
+/**
+ * Project an internal entry onto the public result shape (drops internals).
+ * @param {object} entry an index entry from buildEntries.
+ * @returns {object} public result: name, classification, kind, geometry,
+ *   bbox and metrics.
+ */
 function toResult(entry) {
   return {
     name: entry.name,
@@ -238,6 +277,7 @@ export async function findNaturalRegion(query) {
 /**
  * Diagnostics: every region in the pack (no geometry).
  * @returns {Promise<Array<{name:string, featurecla:string, kind:string, areaKm2:number, bboxDiagonalKm:number}>>}
+ *   one row per pack entry, no geometry.
  */
 export async function listRegions() {
   await loadIndex();
@@ -253,10 +293,11 @@ export async function listRegions() {
 /**
  * Ray-cast (even-odd) point-in-ring test. Ring = [[lon,lat], …], open or
  * closed. Degenerate rings (<3 verts) are never containing.
- * @param {Array<[number,number]>} ring
- * @param {number} lat
- * @param {number} lon
- * @returns {boolean}
+ * @param {Array<[number,number]>} ring candidate ring, [lon, lat] pairs in
+ *   decimal degrees.
+ * @param {number} lat test latitude, decimal degrees.
+ * @param {number} lon test longitude, decimal degrees.
+ * @returns {boolean} true when the point is inside the ring.
  */
 export function pointInRing(ring, lat, lon) {
   if (!Array.isArray(ring) || ring.length < 3) return false;
@@ -284,7 +325,8 @@ export function pointInRing(ring, lat, lon) {
  * @param {number} lat     Geocoded anchor latitude.
  * @param {number} lon     Geocoded anchor longitude.
  * @returns {Promise<{name:string, kind:'natural'|'marine', featurecla:string,
- *   ring:Array<[number,number]>, areaKm2:number}|null>}
+ *   ring:Array<[number,number]>, areaKm2:number}|null>} the containing ring,
+ *   or null when no candidate ring holds the anchor.
  */
 export async function lookupNaturalRegionOutline(query, lat, lon) {
   const norm = normalizeName(query);

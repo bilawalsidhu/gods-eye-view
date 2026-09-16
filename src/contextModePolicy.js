@@ -3,12 +3,25 @@ const CONTEXT_DEPENDENCIES = Object.freeze({
   'space-missions': new Set(['rocket-launches', 'satellites']),
 });
 const CONTEXT_COMPANIONS = new Set(['radio']);
-/** Return whether an origin represents a direct user choice on this route. */
+/**
+ * Return whether an origin represents a direct user choice on this route.
+ * @param {string} origin Change origin recorded by the data manager.
+ * @param {string} [_layerId] Layer the change concerns; reserved so call sites
+ *   can later route policy per layer without a signature change.
+ * @returns {boolean} True for 'user' and 'voice' origins only.
+ */
 export function isExplicitUserIntentOrigin(origin, _layerId = null) {
   return origin === 'user' || origin === 'voice';
 }
 
-/** Preserve explicit layer intent that completes while a stale restore is queued. */
+/**
+ * Preserve explicit layer intent that completes while a stale restore is queued.
+ * @param {object} p Active restore and the observed change.
+ * @param {{enabledLayerIds?: Set<string>, explicitLayerStates?: Map<string, boolean>,
+ *   cancelled?: boolean}|null} p.restoreState Queued restore being bookkept.
+ * @param {object|null} p.change DataLayerManager visibility notification.
+ * @returns {boolean} Whether the change was explicit intent and was recorded.
+ */
 export function recordContextRestoreExplicitChange({ restoreState, change }) {
   if (
     !restoreState?.enabledLayerIds
@@ -22,7 +35,18 @@ export function recordContextRestoreExplicitChange({ restoreState, change }) {
   return true;
 }
 
-/** Settle every explicit Context-restore replay without losing semantic failures. */
+/**
+ * Settle every explicit Context-restore replay without losing semantic failures.
+ * @param {object} p Replay inputs.
+ * @param {{explicitLayerStates?: Map<string, boolean>, cancelled?: boolean}|null}
+ *   p.restoreState Restore holding the layer intents to replay.
+ * @param {(layerId: string, enabled: boolean, opts?: object) => Promise<boolean>}
+ *   p.setEnabled Layer manager enable call.
+ * @param {string|null} [p.notificationToken] Suppresses restore notifications
+ *   while the replay runs.
+ * @returns {Error|null} Aggregated failure naming every failed layer, or null
+ *   when the whole replay settled.
+ */
 export async function settleContextIntentReplay({ restoreState, setEnabled, notificationToken = null }) {
   if (restoreState?.cancelled) return null;
   const entries = [...(restoreState?.explicitLayerStates || [])];
@@ -50,7 +74,13 @@ export async function settleContextIntentReplay({ restoreState, setEnabled, noti
   return error;
 }
 
-/** Preserve the primary Context failure while aggregating every failed layer. */
+/**
+ * Preserve the primary Context failure while aggregating every failed layer.
+ * @param {Error|null} primaryError Failure of the transition being reported.
+ * @param {Error|null} secondaryError Failure of the companion transition.
+ * @returns {Error|null} The primary error (possibly annotated with the
+ *   secondary's failed layers), or whichever failure exists.
+ */
 export function mergeContextTransitionErrors(primaryError, secondaryError) {
   if (!primaryError) return secondaryError || null;
   if (!secondaryError) return primaryError;
@@ -61,7 +91,15 @@ export function mergeContextTransitionErrors(primaryError, secondaryError) {
   return primaryError;
 }
 
-/** Settle a user-facing Context action and convert every failure form to false. */
+/**
+ * Settle a user-facing Context action and convert every failure form to false.
+ * @param {object} p Action to run and how to report its failure.
+ * @param {() => Promise<*>|*} p.operation The Context transition.
+ * @param {(error: Error) => void} [p.onFailure] User-facing error surface.
+ * @param {boolean} [p.falseIsFailure=true] Treat a `false` result as a failure
+ *   rather than as an honest success.
+ * @returns {Promise<boolean|*>} The operation result, or false on any failure.
+ */
 export async function settleUserFacingContextAction({ operation, onFailure, falseIsFailure = true }) {
   try {
     const result = await operation();
@@ -101,6 +139,7 @@ export const CONTEXT_ENTRY_LAYER_IDS = Object.freeze(['military-awareness', 'roc
  * settled nothing, so the funnel only runs on a real settle.
  *
  * @param {{_contextModeChanging?: boolean, _syncContextModeButtons?: () => void}} owner
+ *   Context coordinator whose in-flight flag is being settled.
  * @param {boolean} [changing=false] Flag state to publish.
  * @returns {void}
  */
@@ -191,6 +230,11 @@ export function shouldCaptureContextSession(change) {
 /**
  * Return whether one explicit mission intent superseded an in-flight Clear All
  * reservation and therefore needs deferred Context adoption.
+ *
+ * @param {object} p Intent and reservation state.
+ * @param {object|null} p.change Manager visibility-requested notification.
+ * @param {boolean} p.clearInFlight Whether a Clear All transaction is running.
+ * @returns {boolean} True when the entry must wait for the Clear All to settle.
  */
 export function shouldDeferContextEntryDuringClear({ change, clearInFlight }) {
   return Boolean(
@@ -371,7 +415,7 @@ export const CONTEXT_MODE_VOICE_NAMES = Object.freeze({
 /**
  * Name a context mode in the vocabulary the tools and the operator share.
  * @param {string|null|undefined} internalMode Internal mode id.
- * @param {object} [options]
+ * @param {object} [options] Wording for the empty case.
  * @param {string|null} [options.emptyAs='off'] What "no mode" is called. 'off'
  *   for a state field that always names a mode; null where an absent value
  *   means "none at all" (nothing is entering, there was no prior mode) and

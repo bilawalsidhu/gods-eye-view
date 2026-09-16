@@ -402,7 +402,7 @@ let _trafficTimingDroppedTraces = 0;
  * Return development timing counters for the capture harness and inertness test.
  * This named export is unused by the application and removed from production.
  * @returns {{enabled:boolean, marksInstalled:number, traceObjectsCreated:number,
- *   uncorrelatedTracesDropped:number}}
+ *   uncorrelatedTracesDropped:number}} Instrumentation state; all fields are 0/false when tracing is compiled out.
  */
 export function getTrafficTimingDiagnostics() {
   return {
@@ -440,7 +440,7 @@ const _scratchLerp = new Cesium.Cartesian3();
  * @param {number} west  - Western longitude bound (degrees).
  * @param {number} north - Northern latitude bound (degrees).
  * @param {number} east  - Eastern longitude bound (degrees).
- * @param {object}  [opts]
+ * @param {object}  [opts] Query-shaping options.
  * @param {boolean} [opts.majorOnly=false] - Restrict to major highway classes only.
  * @param {number}  [opts.timeoutSec=25]   - Overpass server-side timeout.
  * @returns {string} Overpass QL query body.
@@ -464,7 +464,7 @@ function buildOverpassQuery(south, west, north, east, { majorOnly = false, timeo
  * @param {number} west  - Western longitude bound (degrees).
  * @param {number} north - Northern latitude bound (degrees).
  * @param {number} east  - Eastern longitude bound (degrees).
- * @param {object}  [opts]
+ * @param {object}  [opts] Fetch options.
  * @param {boolean} [opts.majorOnly=false]  - Restrict to major highway classes.
  * @param {number}  [opts.timeoutSec=25]    - Server-side Overpass timeout.
  * @param {AbortSignal} [opts.signal]       - Abort signal for cancellation.
@@ -1059,7 +1059,7 @@ function getFetchCenter() {
 
 /**
  * Compute the geographic center of a bounding box.
- * @param {{south:number, west:number, north:number, east:number}} bounds
+ * @param {{south:number, west:number, north:number, east:number}} bounds Box to centre, in degrees.
  * @returns {{lat:number, lon:number}} Center point in degrees.
  */
 function getBoundsCenter(bounds) {
@@ -1125,7 +1125,7 @@ function boundsOverlap(a, b, threshold) {
  * midpoint-centered variant remains as the internal re-clamp guard in
  * `loadRoadsForBounds` (idempotent on already-clamped bounds).
  *
- * @param {{south:number, west:number, north:number, east:number}} bounds
+ * @param {{south:number, west:number, north:number, east:number}} bounds Arbitrary bounds, in degrees.
  * @returns {{south:number, west:number, north:number, east:number}} Clamped bounds.
  */
 function clampBounds(bounds) {
@@ -1233,13 +1233,13 @@ export function deriveTrafficFlowError(error) {
  *  - live but flow-down → an `error` string, so the chip degrades and says
  *    the colors on screen are simulated. Never a stale "LIVE · N% cov".
  *
- * @param {object} [input]
+ * @param {object} [input] Live-flow state as observed by the layer.
  * @param {boolean} [input.liveMode] - `/api/tomtom/status` reported a key.
  * @param {boolean} [input.fetching] - A viewport load is in flight.
  * @param {string|null} [input.flowError] - `deriveTrafficFlowError` result, if any.
  * @param {number} [input.coveragePct] - Matched-road coverage, 0–100.
  * @param {boolean} [input.statusUnavailable] - The status probe itself failed.
- * @returns {{mode:'live'|'sim', error:string|null, loadingLabel:string}}
+ * @returns {{mode:'live'|'sim', error:string|null, loadingLabel:string}} What the HUD chip should claim about this feed right now.
  */
 export function trafficFeedPresentation({
   liveMode = false,
@@ -1703,7 +1703,12 @@ function trafficTimingPass(trace, pass, source) {
   return state;
 }
 
-/** Build a structured-clone-safe detail object for User Timing entries. */
+/** Build a structured-clone-safe detail object for User Timing entries.
+ * @param {{trace?: object, pass?: string, source?: string, proxyCache?: (string|null), proxyUpstream?: (string|null)}} [state] Timing pass state; null-safe.
+ * @param {string} segment Phase label the entry is attributed to.
+ * @param {object} [extra={}] Additional scalar fields merged into the detail.
+ * @returns {{trafficTiming: boolean, segment: string, pass: string, source: string, [key: string]: any}} Detail payload free of non-cloneable references.
+ */
 function trafficTimingDetail(state, segment, extra = {}) {
   return {
     trafficTiming: true,
@@ -1721,7 +1726,13 @@ function trafficTimingDetail(state, segment, extra = {}) {
   };
 }
 
-/** Add a uniquely named User Timing mark and return its name. */
+/** Add a uniquely named User Timing mark and return its name.
+ * @param {{trace?: object, pass?: string}} [state] Timing pass state naming the mark.
+ * @param {string} phase Phase label inside the mark name.
+ * @param {object} [extra={}] Extra detail fields attached to the mark.
+ * @param {number} [startTime] Explicit mark timestamp; omitted uses now.
+ * @returns {string} Globally unique mark name usable as a measure endpoint.
+ */
 function trafficTimingMark(state, phase, extra = {}, startTime) {
   const traceId = state?.trace?.id ?? 'interaction';
   const pass = state?.pass || 'load';
@@ -1732,7 +1743,13 @@ function trafficTimingMark(state, phase, extra = {}, startTime) {
   return name;
 }
 
-/** Emit a named User Timing measure between two marks. */
+/** Emit a named User Timing measure between two marks.
+ * @param {string} segment Segment label for the measure name.
+ * @param {{trace?: object, pass?: string}} [state] Timing pass state attributing the measure.
+ * @param {string} start Start mark name.
+ * @param {string} end End mark name.
+ * @param {object} [extra={}] Extra detail fields attached to the measure.
+ */
 function trafficTimingMeasure(segment, state, start, end, extra = {}) {
   performance.measure(`traffic:${segment}:${state?.pass || 'load'}`, {
     start,
@@ -1741,7 +1758,13 @@ function trafficTimingMeasure(segment, state, start, end, extra = {}) {
   });
 }
 
-/** Emit an aggregate-duration measure without pretending its work was contiguous. */
+/** Emit an aggregate-duration measure without pretending its work was contiguous.
+ * @param {string} segment Segment label for the aggregate measure.
+ * @param {{trace?: object, pass?: string}} [state] Timing pass state attributing the aggregate.
+ * @param {number} anchorTime Monotonic start of the accumulated window.
+ * @param {number} duration Accumulated (non-contiguous) duration in ms.
+ * @param {object} [extra={}] Extra detail fields attached to the marks and measure.
+ */
 function trafficTimingAggregate(segment, state, anchorTime, duration, extra = {}) {
   const start = trafficTimingMark(state, `${segment}-aggregate-start`, extra, anchorTime);
   const end = trafficTimingMark(state, `${segment}-aggregate-end`, extra, anchorTime + duration);
@@ -1764,12 +1787,17 @@ function clearTrafficTimingEntries() {
   for (const name of measureNames) performance.clearMeasures(name);
 }
 
-/** Return the stable User Timing mark name for a scheduling interaction. */
+/** Return the stable User Timing mark name for a scheduling interaction.
+ * @param {number} interactionId Sequence number minted when the camera change armed a load.
+ * @returns {string} Mark name the load's measures are anchored to.
+ */
 function trafficTimingCameraChangeMarkName(interactionId) {
   return `traffic:interaction:${interactionId}:last-camera-change`;
 }
 
-/** Mint and mark the exact camera-change interaction that armed a debounced load. */
+/** Mint and mark the exact camera-change interaction that armed a debounced load.
+ * @returns {{interactionId:number, timestamp:number}} Anchor the next debounced load correlates against.
+ */
 function markTrafficTimingCameraChange() {
   const interactionId = ++_trafficTimingSequence;
   const timestamp = performance.now();
@@ -1813,6 +1841,10 @@ function markTrafficTimingMoveEnd() {
  * Instrumented twin of `parseRoads`. Operation ordering and road output match
  * the normal function; debug-only clocks accumulate synchronous height and
  * waypoint-materialization time independently.
+ *
+ * @param {object|null} overpassData Parsed Overpass response (`elements` array), or nothing at all.
+ * @param {object|null} trace Correlated load trace; null disables timing marks.
+ * @returns {Array<object>} Parsed road records, identical to `parseRoads` output.
  */
 function parseRoadsTimed(overpassData, trace) {
   /* TRACE_ONLY_BEGIN */
@@ -1941,14 +1973,23 @@ function parseRoadsTimed(overpassData, trace) {
   return roads;
 }
 
-/** Resolve a render label into its correlated pass and data source. */
+/** Resolve a render label into its correlated pass and data source.
+ * @param {object} trace Correlated load trace the render belongs to.
+ * @param {string} label Dot-render label, e.g. "Cache major" or "Proxy full".
+ * @returns {object} Timing pass state for that pass/source pair.
+ */
 function trafficTimingRenderState(trace, label) {
   const pass = label.toLowerCase().includes('major') ? 'major' : 'full';
   const source = label.startsWith('Cache') ? 'client-cache' : 'proxy';
   return trafficTimingPass(trace, pass, source);
 }
 
-/** Record the first Cesium postRender following a completed dot render. */
+/** Record the first Cesium postRender following a completed dot render.
+ * @param {object} state Timing pass state the render was measured under.
+ * @param {string} renderEnd Name of the mark where the dot render finished.
+ * @param {number} renderId Render sequence number correlating this postRender to its render.
+ * @param {object} renderMetrics Scalar render metrics merged into every emitted detail.
+ */
 function scheduleTrafficTimingPostRender(state, renderEnd, renderId, renderMetrics) {
   if (!_viewer?.scene) return;
   let remove = null;
@@ -1978,7 +2019,12 @@ function scheduleTrafficTimingPostRender(state, renderEnd, renderId, renderMetri
   _trafficTimingPostRenderRemovers?.add(remove);
 }
 
-/** Start a scheduling-correlated debug trace, or count and drop an unpaired load. */
+/** Start a scheduling-correlated debug trace, or count and drop an unpaired load.
+ * @param {{south:number, west:number, north:number, east:number}} bounds Viewport bounds to load roads for, in degrees.
+ * @param {number} altitude Camera altitude in metres driving the request budget.
+ * @param {{interactionId:number, timestamp:number}|null} expectedAnchor Interaction armed by the debounced camera change; null when none is pending.
+ * @returns {Promise<void>} Resolves when the load (correlated or not) completes.
+ */
 async function loadRoadsForBoundsTimed(bounds, altitude, expectedAnchor) {
   const generation = _loadGeneration + 1;
   if (!expectedAnchor || expectedAnchor !== _trafficTimingCurrentAnchor) {
@@ -2338,7 +2384,7 @@ const trafficLayer = {
   /**
    * Update user-adjustable parameters (density and speed scaling).
    *
-   * @param {object}  [params]
+   * @param {object}  [params] Layer parameters; unrecognised or out-of-range values are ignored.
    * @param {number}  [params.densityScale] - Dot density multiplier (clamped 0.2–2.5).
    * @param {number}  [params.speedScale]   - Dot speed multiplier (clamped 0.3–3.0).
    */
@@ -2374,7 +2420,7 @@ const trafficLayer = {
 
   /**
    * Return the current user-adjustable parameters.
-   * @returns {{densityScale:number, speedScale:number}}
+   * @returns {{densityScale:number, speedScale:number}} Currently applied core parameters; the object omits the A/B fields when unset.
    */
   getParams() {
     return {
@@ -2393,10 +2439,10 @@ const trafficLayer = {
    * Uses a deterministic stride-based sampling so different seeds yield
    * non-overlapping subsets without sorting or shuffling.
    *
-   * @param {object}  [options]
+   * @param {object}  [options] Sampling controls.
    * @param {number}  [options.maxCount] - Maximum objects to return (defaults to all).
    * @param {number}  [options.seed]     - Integer seed to offset the sampling start.
-   * @returns {Array<{position:Cesium.Cartesian3, id:string, type:string}>}
+   * @returns {Array<{position:Cesium.Cartesian3, id:string, type:string}>} Detectable dot descriptors; empty when the layer is disabled or no dots exist.
    */
   getDetectableObjects(options = {}) {
     if (!_enabled || _dots.length === 0) return [];
@@ -2462,7 +2508,7 @@ const trafficLayer = {
    * issued to the proxy this session (decode-cache hits excluded).
    * @returns {{count:number, lastUpdate:number|null, loading:boolean,
    *   mode:'live'|'sim', error:string|null, flowCoveragePct:number,
-   *   tilesFetched:number}}
+   *   tilesFetched:number}} Snapshot consumed by the status chips and the QA suites.
    */
   getStats() {
     // Outstanding flow work counts as loading: the paint race can leave a

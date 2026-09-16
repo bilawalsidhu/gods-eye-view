@@ -221,7 +221,7 @@ export function skyBackdropFactor(cameraPosition, position, featherRad = HORIZON
  * Call once per tick, then test points with occluder.isPointVisible(pos).
  *
  * @param {Cesium.Camera} camera - The scene camera.
- * @returns {Cesium.EllipsoidalOccluder}
+ * @returns {Cesium.EllipsoidalOccluder} The module-level occluder, repositioned for this camera — not a copy.
  */
 export function horizonOccluder(camera) {
   _occluder.cameraPosition = camera.positionWC;
@@ -232,7 +232,7 @@ export function horizonOccluder(camera) {
  * Cheap camera pose signature for "did the camera move" gating of rotation
  * passes (position quantized to ~10m, angles to ~0.06 deg).
  * @param {Cesium.Camera} camera - The scene camera.
- * @returns {string}
+ * @returns {string} `x:y:z:heading:pitch:roll` signature; equal strings mean the pose is unchanged.
  */
 export function cameraPoseSignature(camera) {
   const p = camera.positionWC;

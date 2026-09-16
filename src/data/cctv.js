@@ -183,8 +183,9 @@ const DEFAULT_CAMERA_CALIBRATION = Object.freeze({
  * Returns whether a calibration patch moves the camera's ground anchor.
  * Rotational, optical, range, and manual-height edits preserve the existing
  * ground reference; only north/east translation needs a new floor.
- * @param {object|null|undefined} patch
- * @returns {boolean}
+ * @param {object|null|undefined} patch - Partial calibration patch as submitted
+ *   by the gizmo, panel, or voice action (absolute offset values).
+ * @returns {boolean} True when the patch carries a north or east offset key.
  */
 export function calibrationPatchMovesAnchor(patch) {
   if (!patch || typeof patch !== 'object') return false;
@@ -417,7 +418,12 @@ export function _pushAmbientCardEntriesForTest() {
   pushAmbientCardEntries();
 }
 
-/** Test seam for exercising real layer lifecycle paths without a DOM host. */
+/**
+ * Test seam for exercising real layer lifecycle paths without a DOM host.
+ * Passing null restores the module-default host adapter.
+ * @param {object|null} [host=null] - Partial overlay-host adapter merged over
+ *   the module default (`setEntries`/`setVisible`/`clearSource`/`hitTest`).
+ */
 export function _setCctvOverlayHostForTest(host = null) {
   _cctvOverlayHost = host ? { ...DEFAULT_CCTV_OVERLAY_HOST, ...host } : DEFAULT_CCTV_OVERLAY_HOST;
   _projectionOverlayOwnerId = null;
@@ -425,7 +431,10 @@ export function _setCctvOverlayHostForTest(host = null) {
 
 /**
  * Build the protected label associated with one active monitor plane.
- * @param {{cameraId: string, name: string, position: Cesium.Cartesian3|Function}} input
+ * @param {{cameraId: string, name: string, position: Cesium.Cartesian3|Function}} input -
+ *   Plane identity: camera id, display title, and the label anchor (a
+ *   Cartesian3, or a zero-arg accessor returning one so the entry tracks the
+ *   runtime's cached label position).
  * @returns {object} Shared-host presentation entry.
  */
 export function createCctvProjectionOverlayEntry({ cameraId, name, position }) {
@@ -453,9 +462,11 @@ export function createCctvProjectionOverlayEntry({ cameraId, name, position }) {
  * The active-camera thumbnail defaults OFF, preserving the shipped behavior
  * where the monitor plane is the camera's sole active representation.
  *
- * @param {object} [options]
- * @param {boolean} [options.activeCameraCardEnabled=false]
- * @returns {{activeCameraCardEnabled:boolean}}
+ * @param {object} [options] - Presentation switches.
+ * @param {boolean} [options.activeCameraCardEnabled=false] - Publish an ambient
+ *   card for the ACTIVE camera alongside its monitor plane (opt-in override of
+ *   the shipped "plane is the only active representation" behavior).
+ * @returns {{activeCameraCardEnabled:boolean}} The applied presentation state.
  */
 export function setCctvCardPresentationOptions({ activeCameraCardEnabled = false } = {}) {
   _activeCameraCardEnabled = activeCameraCardEnabled === true;
@@ -470,8 +481,8 @@ let _moveStartListener = null;
 
 /**
  * Converts degrees to radians.
- * @param {number} deg
- * @returns {number}
+ * @param {number} deg - Angle in degrees.
+ * @returns {number} Angle in radians.
  */
 function toRad(deg) {
   return Cesium.Math.toRadians(deg);
@@ -479,8 +490,8 @@ function toRad(deg) {
 
 /**
  * Normalizes a heading angle to the [0, 360) range.
- * @param {number} deg
- * @returns {number}
+ * @param {number} deg - Raw heading in degrees (any magnitude or sign).
+ * @returns {number} Heading wrapped into [0, 360).
  */
 function normalizeHeading(deg) {
   let v = deg % 360;
@@ -490,10 +501,10 @@ function normalizeHeading(deg) {
 
 /**
  * Clamps a value to [min, max].
- * @param {number} value
- * @param {number} min
- * @param {number} max
- * @returns {number}
+ * @param {number} value - Input value.
+ * @param {number} min - Lower bound (inclusive).
+ * @param {number} max - Upper bound (inclusive).
+ * @returns {number} `value` limited to the inclusive [min, max] interval.
  */
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -514,7 +525,8 @@ function clamp(value, min, max) {
  * `google-3d`; undefined/null (no viewer / torn down) must fall to the regime
  * that never touches the scene. Pure — exported for the unit suite.
  * @param {boolean|undefined|null} globeShow - `viewer.scene.globe.show`.
- * @returns {'google-3d'|'terrain-globe'}
+ * @returns {'google-3d'|'terrain-globe'} Regime key indexing the per-camera
+ *   ground cache.
  */
 export function surfaceRegimeKey(globeShow) {
   return globeShow === false ? 'google-3d' : 'terrain-globe';
@@ -540,8 +552,8 @@ function normalizeFeedType(value) {
 
 /**
  * Returns true if the feed type requires a <video> element rather than an <img>.
- * @param {string} feedType
- * @returns {boolean}
+ * @param {string} feedType - Canonical feed type (see `normalizeFeedType`).
+ * @returns {boolean} True for mp4, hls, and webm.
  */
 function isVideoFeedType(feedType) {
   return feedType === 'mp4' || feedType === 'hls' || feedType === 'webm';
@@ -549,9 +561,10 @@ function isVideoFeedType(feedType) {
 
 /**
  * Coerces a value to a finite number or returns the fallback.
- * @param {*} value
- * @param {number} [fallback=NaN]
- * @returns {number}
+ * @param {*} value - Value to coerce (API number, string, null, ...).
+ * @param {number} [fallback=NaN] - Returned when `value` does not coerce to a
+ *   finite number.
+ * @returns {number} The finite coercion of `value`, or `fallback`.
  */
 function safeNumber(value, fallback = Number.NaN) {
   const n = Number(value);
@@ -561,7 +574,8 @@ function safeNumber(value, fallback = Number.NaN) {
 /**
  * Derives a deterministic heading from a camera ID string via a simple hash.
  * Produces one of 16 evenly-spaced headings (0, 22.5, 45, ..., 337.5).
- * @param {string} id
+ * @param {string} id - Camera ID (typically a GUID); the hash is deterministic,
+ *   so one camera keeps the same synthetic heading across sessions.
  * @returns {number} Heading in degrees [0, 360).
  */
 function headingFromId(id) {
@@ -575,9 +589,9 @@ function headingFromId(id) {
 
 /**
  * Rounds a value to the nearest multiple of `step`.
- * @param {number} value
- * @param {number} [step=0.1]
- * @returns {number}
+ * @param {number} value - Value to round.
+ * @param {number} [step=0.1] - Quantization grain (must be non-zero).
+ * @returns {number} The multiple of `step` nearest to `value`.
  */
 function quantize(value, step = 0.1) {
   return Math.round(value / step) * step;
@@ -588,6 +602,7 @@ function quantize(value, step = 0.1) {
  * Missing or non-finite fields fall back to defaults.
  * @param {object} [value={}] - Raw calibration values.
  * @returns {{ offsetNorthM: number, offsetEastM: number, headingDeg: number, pitchDeg: number, fovDeg: number, rangeScale: number, heightM: number }}
+ *   Fully defaulted, clamped, and quantized calibration.
  */
 function normalizeCalibration(value = {}) {
   const raw = value && typeof value === 'object' ? value : {};
@@ -604,8 +619,9 @@ function normalizeCalibration(value = {}) {
 
 /**
  * Returns true if the given calibration is effectively the default (all offsets near zero).
- * @param {object} calibration
- * @returns {boolean}
+ * @param {object} calibration - Calibration to probe (normalized internally, so
+ *   raw or partial input is fine).
+ * @returns {boolean} True when every field sits within 1e-4 of its default.
  */
 function isDefaultCalibration(calibration) {
   const probe = normalizeCalibration(calibration);
@@ -618,7 +634,7 @@ function isDefaultCalibration(calibration) {
  * (true → 'on', false → 'off'); anything else keeps the current mode.
  * @param {*} value - Requested mode ('off'|'on'|'viewshed') or boolean.
  * @param {'off'|'on'|'viewshed'} current - Mode to keep when the request is invalid.
- * @returns {'off'|'on'|'viewshed'}
+ * @returns {'off'|'on'|'viewshed'} The resolved coverage mode.
  */
 export function normalizeCoverageMode(value, current) {
   if (value === true) return 'on';
@@ -646,7 +662,7 @@ function offsetDegrees(latDeg, northMeters, eastMeters) {
  * Returns `window.localStorage` when it is safely accessible, else null.
  * Split out so store IO can be exercised under plain node:test with an
  * injected storage-like object (getItem/setItem/removeItem) instead.
- * @returns {Storage|null}
+ * @returns {Storage|null} The live `localStorage`, or null when unavailable.
  */
 function safeWindowLocalStorage() {
   if (typeof window === 'undefined') return null;
@@ -669,6 +685,8 @@ function safeWindowLocalStorage() {
  * @param {{getItem:Function}|null} [storage] - Injectable storage (defaults
  *   to `window.localStorage`); lets the unit suite test this pure of a DOM.
  * @returns {Map<string, {values:object, source:string, savedAt:number}>}
+ *   Camera ID → persisted entry; empty when no store, no key, or a parse
+ *   failure.
  */
 export function readCalibrationStoreV2(storage = safeWindowLocalStorage()) {
   const map = new Map();
@@ -698,7 +716,9 @@ export function readCalibrationStoreV2(storage = safeWindowLocalStorage()) {
 
 /**
  * Persists a calibration map to the v2 store.
- * @param {Map<string, {values:object, source:string, savedAt:number}>} map
+ * @param {Map<string, {values:object, source:string, savedAt:number}>} map -
+ *   Camera ID → calibration entry to persist (values are re-normalized on
+ *   write; provenance is forced to 'manual').
  * @param {{setItem:Function}|null} [storage] - Injectable storage (defaults
  *   to `window.localStorage`).
  */
@@ -724,6 +744,7 @@ export function writeCalibrationStoreV2(map, storage = safeWindowLocalStorage())
  * directly (`{values, source:'manual', savedAt}`) — never bare offset values
  * — so it round-trips straight back through `writeCalibrationStoreV2`.
  * @returns {Map<string, {values:object, source:string, savedAt:number}>}
+ *   The persisted calibration entries (empty on a fresh profile).
  */
 function loadCalibrationStore() {
   return readCalibrationStoreV2();
@@ -746,8 +767,9 @@ function saveCalibrationStore() {
  *
  * Pure — no scoring math, no raycasts. `confidenceFromScore` and score-based
  * quality seeding are retired; this replaces them.
- * @param {{calSource?: string|null, poseSource?: string|null}} camera
- * @returns {'calibrated'|'curated'|'raw-prior'}
+ * @param {{calSource?: string|null, poseSource?: string|null}} camera - Camera
+ *   pose carrier holding the provenance fields the badge reads.
+ * @returns {'calibrated'|'curated'|'raw-prior'} Badge state for the panel.
  */
 export function deriveCalBadge(camera) {
   if (camera?.calSource === 'manual') return 'calibrated';
@@ -873,6 +895,8 @@ function projectPoint(latDeg, lonDeg, bearingDeg, distanceM) {
  *   capCenter: {lat:number,lon:number,alt:number},
  *   corners: { tl: object, tr: object, br: object, bl: object },
  *   topCenter: {lat:number,lon:number,alt:number}, groundAltM: number }}
+ *   Frustum geometry: effective range, vertical FOV, half-extents in metres,
+ *   and degree/altitude triples for every anchor the renderers consume.
  */
 export function computeFrustumGeometry(camera, groundAltM, rangeOverrideM = null) {
   const ground = safeNumber(groundAltM, 0);
@@ -1043,7 +1067,7 @@ function seedCatalog() {
 
 /**
  * Looks up a city ID from CITY_POIS by exact or partial name match.
- * @param {string} cityName
+ * @param {string} cityName - User/source-supplied city name (case-insensitive).
  * @returns {string|null} Matching city ID or null.
  */
 function cityIdByName(cityName) {
@@ -1192,6 +1216,8 @@ function projectionTilesReady() {
  * @returns {{ mount: Cesium.Cartesian3, capCenter: Cesium.Cartesian3,
  *   tl: Cesium.Cartesian3, tr: Cesium.Cartesian3, br: Cesium.Cartesian3,
  *   bl: Cesium.Cartesian3, label: Cesium.Cartesian3 }}
+ *   ECEF positions keyed by geometry anchor; `label` sits 1.2 m above the cap
+ *   for the shared-host callout.
  */
 function frustumCartesians(geometry) {
   const at = (p) => Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.alt);
@@ -1250,7 +1276,8 @@ function frustumFrameEcef(camera, atPos) {
  * computed only on slider/save/activation, never per frame (§2b).
  * @param {object} camera - Camera pose.
  * @param {Cesium.Cartesian3} capCenterPos - Plane center in ECEF.
- * @returns {Cesium.Quaternion}
+ * @returns {Cesium.Quaternion} Entity orientation aligning local +Z with the
+ *   plane normal and local +X with viewer-right.
  */
 function planeOrientationFor(camera, capCenterPos) {
   const frame = frustumFrameEcef(camera, capCenterPos);
@@ -1270,7 +1297,7 @@ function planeOrientationFor(camera, capCenterPos) {
  * `_activateGlobeStack` flip exactly this flag). Reading scene state directly
  * — rather than caching the map-stack id — means the regime is correct even
  * for stack changes this module never got an event for.
- * @returns {'google-3d'|'terrain-globe'}
+ * @returns {'google-3d'|'terrain-globe'} The live surface regime.
  */
 function currentSurfaceRegime() {
   return surfaceRegimeKey(_viewer?.scene?.globe?.show);
@@ -1298,7 +1325,8 @@ function groundPriorAltFor(record) {
  * `groundResolved`).
  * @param {object} record - Camera record.
  * @param {string} [regime] - Defaults to the current surface regime.
- * @returns {boolean}
+ * @returns {boolean} True once that regime's one-shot ground sample was
+ *   accepted for the record.
  */
 function isGroundResolved(record, regime = currentSurfaceRegime()) {
   return record?.groundResolved?.[regime] === true;
@@ -1546,7 +1574,8 @@ function clearProjectionOverlay() {
 /**
  * Shows/hides the monitor plane and its associated shared-host label.
  * @param {object} runtime - Projection runtime.
- * @param {boolean} visible
+ * @param {boolean} visible - True shows the plane and (re)publishes its
+ *   protected label; false hides both.
  */
 function setPlaneVisible(runtime, visible) {
   if (!runtime) return;
@@ -1566,7 +1595,17 @@ function setPlaneVisible(runtime, visible) {
   }
 }
 
-/** Create the native monitor plane plus its cached host-label presentation. */
+/**
+ * Creates the native monitor plane plus its cached host-label presentation.
+ * Stamps the runtime's camera id, label position (mutated in place by later
+ * refreshes so the label accessor stays valid), overlay entry, and plane
+ * entity (hidden — `setPlaneVisible` owns show state).
+ * @param {object} record - Camera runtime record.
+ * @param {object} runtime - Projection runtime being populated.
+ * @param {object} geometry - `computeFrustumGeometry` result (plane dimensions).
+ * @param {object} positions - `frustumCartesians` result (center + label anchor).
+ * @returns {Cesium.Entity} The created (hidden) plane entity.
+ */
 function createProjectionPlane(record, runtime, geometry, positions) {
   runtime.labelPosition ||= new Cesium.Cartesian3();
   Cesium.Cartesian3.clone(positions.label, runtime.labelPosition);
@@ -1880,10 +1919,6 @@ function drawProjectionFrame(record) {
 }
 
 /**
- * Starts the requestAnimationFrame loop that drives projection canvas updates
- * (frame draw + texture swap) for the active camera.
- */
-/**
  * The projection rAF has real work only while a camera is actively projected
  * or a focus fade is in flight — otherwise it burned a wakeup + style poll
  * every rendered frame for the whole enabled lifetime of the layer. The tick
@@ -1898,6 +1933,11 @@ function projectionLoopIsNeeded() {
   return focusPassIsNeeded(getFocusTarget(), _activeFocusStyleCount);
 }
 
+/**
+ * Starts the projection requestAnimationFrame loop that drives canvas frame
+ * draws and texture swaps for the active camera. No-op when the loop is
+ * already armed or `projectionLoopIsNeeded()` reports no work.
+ */
 function startProjectionLoop() {
   if (_projectionRaf) return;
   if (!projectionLoopIsNeeded()) return;
@@ -1937,6 +1977,7 @@ function startProjectionLoop() {
  * Focus modulation rides the layer's existing animation loop; no additional
  * scene listener is installed. Only camera-icon alpha changes here — coverage
  * geometry and monitor-plane styling retain their established cadence.
+ * @param {number} [nowMs] - Timestamp in ms; defaults to `focusNowMs()`.
  */
 function refreshCctvFocusStyles(nowMs) {
   nowMs = focusNowMs(nowMs);
@@ -1964,7 +2005,7 @@ function refreshCctvFocusStyles(nowMs) {
 
 /**
  * Apply the gated CCTV focus pass through the production color path.
- * @param {object} input
+ * @param {object} input - Dependency-injected pass inputs (see members).
  * @param {Array<object>} input.records - Camera records whose billboards the pass
  *   restyles; each contributes `billboard` and `camera.id`.
  * @param {object|null} input.target - Shared focus target the icons yield toward
@@ -1980,6 +2021,9 @@ function refreshCctvFocusStyles(nowMs) {
  *   scaled by the focus factor.
  * @param {object} [input.params] - Focus-deemphasis tuning overrides for this pass.
  * @returns {{writes:number,transitioning:boolean,activeCount:number,ran:boolean}}
+ *   Pass telemetry: billboard writes applied, whether any icon is still
+ *   mid-transition, how many icons sit outside the deadband, and whether the
+ *   gate let the pass run at all.
  */
 export function applyCctvFocusDeemphasis({
   records,
@@ -2099,7 +2143,7 @@ function applyFrustumGeometry(record, groundAltM) {
  * completion re-enqueue), from explicit pose-edit call sites, and from the
  * map-stack regime-change handler.
  * @param {object} record - Camera record.
- * @param {object} [options={}]
+ * @param {object} [options={}] - Rewrite options.
  * @param {boolean} [options.sampleGround=true] - When false, skip shared
  *   mesh-floor refinement and use the cached/prior ground instead.
  */
@@ -2206,7 +2250,8 @@ function resolveCommittedGroundAnchor(record) {
  * Never rejects — a total failure resolves null and geometry stays on
  * catalog fallbacks (no worse than pre-Task-5).
  * @param {object[]} catalog - Camera objects (post-ensureCameraPose).
- * @returns {Promise<Array<{ellipsoid:number, source:string}>|null>}
+ * @returns {Promise<Array<{ellipsoid:number, source:string}>|null>} Per-camera
+ *   ellipsoidal priors indexed by catalog position, or null on total failure.
  */
 async function resolveGroundPriors(catalog) {
   try {
@@ -2320,7 +2365,8 @@ function handleMapStackChanged() {
 /**
  * Stops the staggered geometry-load queue and optionally clears progress
  * counters (kept when pausing mid-flight is not needed — we always clear).
- * @param {boolean} [clearProgress=true]
+ * @param {boolean} [clearProgress=true] - True resets `_geoLoading` and the
+ *   loaded/total counters so the panel stops showing a stale drain.
  */
 function stopGeometryLoadQueue(clearProgress = true) {
   if (_geoQueueTimer) {
@@ -2720,7 +2766,13 @@ function refreshHorizonCulling() {
 // docs/CURRENT-STATE.md)
 // ---------------------------------------------------------------------------
 
-/** Returns (creating on demand) the stable frame slot for a camera id. */
+/**
+ * Returns (creating on demand) the stable frame slot for a camera id. Slots
+ * outlive individual fetches so the renderer can keep painting the last
+ * decoded frame while a refresh is in flight.
+ * @param {string} cameraId - Camera whose slot is requested.
+ * @returns {object} The camera's persistent frame slot.
+ */
 function ensureCardFrameSlot(cameraId) {
   let slot = _cardFrameSlots.get(cameraId);
   if (!slot) {
@@ -3068,7 +3120,7 @@ function cardFrameTick() {
  * @param {object} record - Camera record.
  * @param {object} slot - The camera's stable frame slot.
  * @param {number} refreshMs - Source cadence (also keys the frame-URL tick).
- * @param {object} [options]
+ * @param {object} [options] - Fetch modifiers.
  * @param {boolean} [options.userGesture] - Hover fast-track (item B): the
  *   launch bypasses the pacer gate, so its spacing sample would pollute the
  *   pacing telemetry — skip the min-spacing sample only. The launch still
@@ -3206,6 +3258,11 @@ export function hideCctvRecordVisuals(records, destroyVolume, activeCameraId = n
   }
 }
 
+/**
+ * Hides every visual the layer owns without destroying it: per-record
+ * coverage/projection/viewshed state, the shared-host projection overlay,
+ * and the billboard collection. Used by `disable()`.
+ */
 function hideCctvVisuals() {
   hideCctvRecordVisuals(_records, destroyViewshedVolume, _activeCameraId);
   clearProjectionOverlay();
@@ -3518,7 +3575,9 @@ function notifyListenersThrottled() {
  *
  * @param {object} record - Camera record.
  * @param {object} patch - Partial 7-field calibration (absolute offset values).
- * @param {{transient?: boolean}} [options]
+ * @param {{transient?: boolean}} [options] - Application grade.
+ * @param {boolean} [options.transient] - True for gizmo mid-drag moves: cheap
+ *   v2 recompute + throttled notify, no ground re-arm or frame re-fetch.
  * @returns {boolean} True when the patch applied.
  */
 function applyCalibrationPatch(record, patch, options = {}) {
@@ -3776,10 +3835,12 @@ export function deactivateActiveCamera() {
  * carries no canonical object ID. Any identified scene object is non-empty,
  * including selectable siblings that do not participate in the pick registry.
  * @param {object|null} picked - `scene.pick()` result.
- * @param {object} [context]
- * @param {string|null} [context.activeCameraId]
- * @param {boolean} [context.calibrationMode]
- * @returns {boolean}
+ * @param {object} [context] - Caller-owned layer state (seam for unit tests).
+ * @param {string|null} [context.activeCameraId] - Currently active camera, or
+ *   null when nothing is selected (nothing to deselect).
+ * @param {boolean} [context.calibrationMode] - True while the ADJUST gizmo
+ *   owns the pointer (deselection is suppressed).
+ * @returns {boolean} True when the click must clear the active camera.
  */
 export function cctvEmptyClickDeselects(picked, {
   activeCameraId = null,
@@ -3868,12 +3929,23 @@ export function materializeCctvCoverageEntities(
   return created;
 }
 
-/** Materializes one active camera's coverage set. */
+/**
+ * Materializes one active camera's coverage set (always eligible).
+ * @param {object} record - Camera runtime record.
+ * @param {(record: object) => object[]} buildEntities - Coverage builder.
+ * @returns {object[]} Entities created (empty when the record already had a set).
+ */
 export function materializeCctvActiveCoverageEntities(record, buildEntities) {
   return materializeCctvCoverageEntities([record], () => true, buildEntities);
 }
 
-/** Materializes only records in the current coverage-visible ID set. */
+/**
+ * Materializes only records in the current coverage-visible ID set.
+ * @param {object[]} records - Camera runtime records.
+ * @param {Set<string>|string[]} visibleIds - Camera ids whose coverage may exist.
+ * @param {(record: object) => object[]} buildEntities - Coverage builder.
+ * @returns {object[]} Entities created across the eligible records.
+ */
 export function materializeCctvVisibleCoverageEntities(records, visibleIds, buildEntities) {
   const eligibleIds = visibleIds instanceof Set ? visibleIds : new Set(visibleIds || []);
   return materializeCctvCoverageEntities(
@@ -3883,18 +3955,36 @@ export function materializeCctvVisibleCoverageEntities(records, visibleIds, buil
   );
 }
 
-/** Registers newly built coverage entities with the layer-global collection. */
+/**
+ * Registers newly built coverage entities with the layer-global collection so
+ * a later `destroyCoverageEntities()` removes everything the layer created.
+ * @param {object[]} created - Entities returned by a materialize helper.
+ * @returns {object[]} The same entities, for call-site chaining.
+ */
 function registerCoverageEntities(created) {
   _coverageEntities.push(...created);
   return created;
 }
 
+/**
+ * Ensures the active camera's coverage entities exist (activation-lazy path:
+ * builds them even while coverage mode is OFF).
+ * @param {object|null} record - Active camera runtime record.
+ * @returns {object[]} Newly created entities (empty on a re-run).
+ */
 function ensureActiveCoverageEntities(record) {
   return registerCoverageEntities(
     materializeCctvActiveCoverageEntities(record, buildCoverageEntities),
   );
 }
 
+/**
+ * Ensures coverage entities exist for every record in the visible-id set
+ * (the `refreshCoverageStyles` path while coverage mode is ON).
+ * @param {object[]} records - Camera runtime records.
+ * @param {Set<string>|string[]} visibleIds - Camera ids allowed to build.
+ * @returns {object[]} Newly created entities.
+ */
 function ensureVisibleCoverageEntities(records, visibleIds) {
   return registerCoverageEntities(
     materializeCctvVisibleCoverageEntities(records, visibleIds, buildCoverageEntities),
@@ -3939,7 +4029,11 @@ function extractPickedCameraId(picked) {
     : null;
 }
 
-/** Test-only seam for the CCTV ownership proof used by the world-click route. */
+/**
+ * Test-only seam for the CCTV ownership proof used by the world-click route.
+ * @param {object|null} picked - `scene.pick()` result to classify.
+ * @returns {string|null} Camera id this layer provably owns, else null.
+ */
 export function _extractPickedCameraIdForTest(picked) {
   return extractPickedCameraId(picked);
 }
@@ -4060,6 +4154,13 @@ export function focusCctvRecord(viewer, record, duration = 2.2) {
   return CCTV_FOCUS_RESULT.FOCUSED;
 }
 
+/**
+ * Module-scoped wrapper around `focusCctvRecord` resolving the viewer and the
+ * record from the layer's own catalog.
+ * @param {string} cameraId - Camera to fly to.
+ * @param {number} [duration=2.2] - Flight duration in seconds.
+ * @returns {'focused'|'no-active-camera'|'tracking-holds-view'|'cockpit-active'} Focus result.
+ */
 function focusCamera(cameraId, duration = 2.2) {
   return focusCctvRecord(_viewer, _recordById.get(cameraId), duration);
 }
@@ -4102,10 +4203,11 @@ export function maybeAutoHop(nowMs) {
 /**
  * Resolves a catalog cycle target, including the explicit no-selection state.
  * NEXT from null selects the first record; PREV selects the last.
- * @param {number} currentIdx
- * @param {number} step
- * @param {number} count
- * @returns {number}
+ * @param {number} currentIdx - Current catalog index, or a negative/non-finite
+ *   value for "no selection".
+ * @param {number} step - Signed positions to advance (negative walks back).
+ * @param {number} count - Catalog size (non-positive yields the empty marker).
+ * @returns {number} The next index, or -1 when the catalog is empty.
  */
 export function cctvCycleIndex(currentIdx, step, count) {
   const total = Number.isFinite(count) ? Math.floor(count) : 0;
@@ -4663,7 +4765,7 @@ const cctvLayer = {
   /**
    * Returns the current runtime parameters including toggle states,
    * active camera, and calibration values.
-   * @returns {object}
+   * @returns {object} Parameter snapshot in the same shape `setParams` accepts.
    */
   getParams() {
     const active = getActiveRecord();
@@ -4684,10 +4786,11 @@ const cctvLayer = {
 
   /**
    * Returns a sampled list of camera positions for the detection overlay system.
-   * @param {object} [options={}]
+   * @param {object} [options={}] - Sampling controls.
    * @param {number} [options.maxCount] - Maximum number of objects to return.
    * @param {number} [options.seed] - Offset seed for deterministic stride sampling.
    * @returns {{ position: Cesium.Cartesian3, id: string, type: string }[]}
+   *   Detectable camera objects (empty while the layer is disabled).
    */
   getDetectableObjects(options = {}) {
     if (!_enabled || _records.length === 0) return [];
@@ -4716,6 +4819,8 @@ const cctvLayer = {
    * Returns basic layer statistics, including initial-load progress while
    * the staggered geometry queue is draining.
    * @returns {{ count: number, lastUpdate: number|null, error: string|null, loading: boolean, loadingLoaded: number, loadingTotal: number }}
+   *   Layer stats: camera count, last update epoch ms, last error, and the
+   *   staggered geometry queue's progress.
    */
   getStats() {
     return {
@@ -4745,7 +4850,7 @@ const cctvLayer = {
 
   /**
    * Returns the current UI state snapshot without subscribing.
-   * @returns {object}
+   * @returns {object} The same payload `subscribe` listeners receive.
    */
   getUIState() {
     return uiState();
@@ -4755,9 +4860,10 @@ const cctvLayer = {
    * Opts the active camera into or out of protected thumbnail publication.
    * The default is false: the monitor plane remains the sole active-camera
    * representation while ambient and hover-pinned cards continue unchanged.
-   * @param {object} [options]
-   * @param {boolean} [options.activeCameraCardEnabled=false]
-   * @returns {{activeCameraCardEnabled:boolean}}
+   * @param {object} [options] - Presentation switches.
+   * @param {boolean} [options.activeCameraCardEnabled=false] - Publish an
+   *   ambient card for the ACTIVE camera in addition to its monitor plane.
+   * @returns {{activeCameraCardEnabled:boolean}} The applied presentation state.
    */
   setCardPresentationOptions(options = {}) {
     return setCctvCardPresentationOptions(options);
@@ -4766,7 +4872,7 @@ const cctvLayer = {
   /**
    * Selects a camera by ID and optionally flies to it.
    * @param {string} cameraId - Camera ID to select.
-   * @param {object} [options={}]
+   * @param {object} [options={}] - Selection options.
    * @param {boolean} [options.focus] - If true, fly the viewer to the camera.
    * @param {number} [options.durationSec] - Fly-to duration in seconds.
    * @returns {boolean} True if the camera was found and selected.
@@ -4793,7 +4899,7 @@ const cctvLayer = {
   /**
    * Cycles the active camera forward or backward by `step` positions in the catalog.
    * @param {number} [step=1] - Number of positions to advance (negative to go back).
-   * @param {object} [options={}]
+   * @param {object} [options={}] - Cycle options.
    * @param {boolean} [options.focus] - If true, fly to the new camera.
    * @param {number} [options.durationSec] - Fly-to duration in seconds.
    * @returns {string|null} The newly active camera ID, or null if catalog is empty.
@@ -4816,7 +4922,7 @@ const cctvLayer = {
 
   /**
    * Selects and flies to the camera nearest the current viewer position.
-   * @param {object} [options={}]
+   * @param {object} [options={}] - Focus options.
    * @param {boolean} [options.focus=true] Whether to fly after selection.
    * @param {number} [options.durationSec] - Fly-to duration in seconds.
    * @returns {string|null} The nearest camera ID, or null if none found.

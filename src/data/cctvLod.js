@@ -37,8 +37,8 @@ const PROVIDER_STATIC_REFRESH_MS = Object.freeze({
  * Card counts stay inside the 20..40 range (follow-up round 2): street level
  * keeps the overlay sparse, metro scale earns the full ring.
  *
- * @param {number} cameraHeightM
- * @returns {{cardLimit:number}}
+ * @param {number} cameraHeightM - Viewer eye height above the ellipsoid, metres.
+ * @returns {{cardLimit:number}} Budget object; `cardLimit` is the ambient-card cap.
  */
 export function cctvLodBudgets(cameraHeightM) {
   const height = Number.isFinite(cameraHeightM) ? Math.max(0, cameraHeightM) : CITY_HEIGHT_M;
@@ -62,10 +62,10 @@ export const CCTV_CARD_INCUMBENT_FACTOR = 0.8;
 /**
  * Effective ranking distance for the ambient-card selection: incumbents
  * (cameras that already hold a card) get the 20% distance discount.
- * @param {number} distanceKm
- * @param {boolean} isIncumbent
- * @param {number} [factor]
- * @returns {number}
+ * @param {number} distanceKm - Camera eye distance in km.
+ * @param {boolean} isIncumbent - True when the camera already holds a card.
+ * @param {number} [factor] - Discount multiplier for incumbents.
+ * @returns {number} Ranking distance in km (Infinity for non-finite input).
  */
 export function incumbentRankKm(distanceKm, isIncumbent, factor = CCTV_CARD_INCUMBENT_FACTOR) {
   const km = Number.isFinite(distanceKm) ? Math.max(0, distanceKm) : Infinity;
@@ -78,7 +78,13 @@ export const CCTV_CARD_CENTER_WEIGHT = 0.5;
 /** Robust pool-distance percentile used to scale the screen-space term. */
 export const CCTV_CARD_SPREAD_PERCENTILE = 0.9;
 
-/** True only when both viewport dimensions are finite positive pixels. */
+/**
+ * True only when both viewport dimensions are finite positive pixels — the
+ * gate for the screen-space ranking/distribution passes.
+ * @param {number} viewW - Viewport width in CSS px.
+ * @param {number} viewH - Viewport height in CSS px.
+ * @returns {boolean} Whether a valid screen-space projection is available.
+ */
 export function hasFiniteCctvViewport(viewW, viewH) {
   return Number.isFinite(viewW) && viewW > 0
     && Number.isFinite(viewH) && viewH > 0;
@@ -87,11 +93,11 @@ export function hasFiniteCctvViewport(viewW, viewH) {
 /**
  * Returns an anchor's normalized distance from screen center: zero at center,
  * one at or beyond a viewport corner.
- * @param {number} sx
- * @param {number} sy
- * @param {number} viewW
- * @param {number} viewH
- * @returns {number}
+ * @param {number} sx - Screen anchor x in CSS px.
+ * @param {number} sy - Screen anchor y in CSS px.
+ * @param {number} viewW - Viewport width in CSS px.
+ * @param {number} viewH - Viewport height in CSS px.
+ * @returns {number} Center offset in [0, 1] (1 when the anchor or viewport is unusable).
  */
 export function screenCenterFraction(sx, sy, viewW, viewH) {
   if (!hasFiniteCctvViewport(viewW, viewH)) return 0;
@@ -104,9 +110,10 @@ export function screenCenterFraction(sx, sy, viewW, viewH) {
 
 /**
  * Returns a robust distance scale for the eligible candidate pool.
- * @param {number[]} distancesKm
- * @param {number} [percentile]
- * @returns {number}
+ * @param {number[]} distancesKm - Eye distances in km for the eligible pool.
+ * @param {number} [percentile] - Order statistic in [0, 1].
+ * @returns {number} Pooled distance in km (0 for an empty pool) — the scale
+ *   that converts a screen-center fraction into comparable km.
  */
 export function cctvCandidateSpreadKm(
   distancesKm,
@@ -122,11 +129,12 @@ export function cctvCandidateSpreadKm(
 
 /**
  * Blends viewer distance with screen-center distance in common km units.
- * @param {number} distanceKm
- * @param {number} centerFraction
- * @param {number} spreadKm
- * @param {number} [weight]
- * @returns {number}
+ * @param {number} distanceKm - Eye distance in km.
+ * @param {number} centerFraction - Screen-center offset from
+ *   {@link screenCenterFraction}.
+ * @param {number} spreadKm - Pool spread that scales the center term.
+ * @param {number} [weight] - Center-term weight in [0, 1].
+ * @returns {number} Blended rank distance in km (Infinity for non-finite distance).
  */
 export function blendCenterRankKm(
   distanceKm,
@@ -166,12 +174,13 @@ export const CCTV_CARD_GRID_ROWS = 4;
  * per-frame draw-pass declutter stays authoritative over what paints.
  *
  * @param {Array<{id:string,sx:number,sy:number,rankKm:number}>} candidates
- * @param {object} [options]
+ *   Projected in-view candidates with screen anchors and pre-computed rank.
+ * @param {object} [options] - Layout/budget overrides.
  * @param {number} [options.budget] - Max ids returned.
  * @param {number} [options.viewW] - Viewport width (CSS px).
  * @param {number} [options.viewH] - Viewport height (CSS px).
- * @param {number} [options.cols]
- * @param {number} [options.rows]
+ * @param {number} [options.cols] - Grid columns (overrides the module default).
+ * @param {number} [options.rows] - Grid rows (overrides the module default).
  * @returns {string[]} Winner ids in priority order (cell winners, then
  *   global-rank fill).
  */
@@ -240,13 +249,16 @@ export function distributeCctvCards(candidates, {
  * screen info the original nearest-first cap applies unchanged.
  *
  * @param {Array<{id:string,distanceKm:number,inView:boolean,isVideo?:boolean,sx?:number,sy?:number}>} candidates
- * @param {object} [options]
- * @param {number} [options.cameraHeightM]
- * @param {Iterable<string>|Set<string>} [options.incumbentIds]
+ *   Already-projected in-view candidates from cctv.js.
+ * @param {object} [options] - Selection context (all optional).
+ * @param {number} [options.cameraHeightM] - Viewer height in metres, selects the budget.
+ * @param {Iterable<string>|Set<string>} [options.incumbentIds] - Cameras that
+ *   currently hold a card (they get the incumbency discount).
  * @param {number} [options.viewW] - Viewport width (CSS px) — enables the
  *   screen-distribution pass.
  * @param {number} [options.viewH] - Viewport height (CSS px).
- * @returns {{cardIds:string[],budgets:{cardLimit:number}}}
+ * @returns {{cardIds:string[],budgets:{cardLimit:number}}} Cameras that should
+ *   hold ambient cards (priority order) plus the applied budget.
  */
 export function selectCctvLod(candidates, { cameraHeightM, incumbentIds, viewW, viewH } = {}) {
   const budgets = cctvLodBudgets(cameraHeightM);
@@ -333,6 +345,16 @@ export function selectCctvLod(candidates, { cameraHeightM, incumbentIds, viewW, 
   return { cardIds, budgets };
 }
 
+/**
+ * Deterministic tiebreak used to pick the representative when duplicate ids
+ * appear in the candidate list: nearest eye distance, then most central, then
+ * upper-left screen anchor. Negative means `a` wins.
+ * @param {{distanceKm:number,sx:number,sy:number}} a - First candidate.
+ * @param {{distanceKm:number,sx:number,sy:number}} b - Second candidate.
+ * @param {{screened: boolean, viewW: number, viewH: number}} view - Viewport
+ *   context (destructured from the caller's selection options).
+ * @returns {number} Comparator value in [-1, 1].
+ */
 function compareCctvRepresentative(a, b, { screened, viewW, viewH }) {
   if (a.distanceKm !== b.distanceKm) return a.distanceKm < b.distanceKm ? -1 : 1;
   if (screened) {
@@ -369,7 +391,7 @@ export const CCTV_LOD_GRACE_MS = 5_000;
  * Pure function: `graceState` is never mutated; the returned `graceState`
  * replaces it for the next pass.
  *
- * @param {object} [input]
+ * @param {object} [input] - One selection pass's inputs.
  * @param {string[]} [input.selectedIds] - This pass's selected card ids
  *   (already budget-capped, nearest-first — `selectCctvLod().cardIds` after
  *   declutter).
@@ -381,6 +403,7 @@ export const CCTV_LOD_GRACE_MS = 5_000;
  * @param {number} [input.gracePasses] - Consecutive unselected passes tolerated.
  * @param {number} [input.graceMs] - Max wall-time a card may linger in grace.
  * @returns {{keepIds:string[], evictIds:string[], graceState:Map<string,{misses:number,since:number}>}}
+ *   Cards to keep, cards to drop now, and the replacement grace map.
  */
 export function applyEvictionGrace({
   selectedIds = [],
@@ -432,8 +455,8 @@ export function applyEvictionGrace({
  * value wins, bounded to one minute through twenty minutes; otherwise known
  * public-pack cadences provide conservative defaults.
  *
- * @param {object} camera
- * @returns {number}
+ * @param {object} camera - Camera record (`frameRefreshMs`, `provider`).
+ * @returns {number} Refresh interval in milliseconds.
  */
 export function staticFrameRefreshMs(camera) {
   const explicit = Number(camera?.frameRefreshMs);

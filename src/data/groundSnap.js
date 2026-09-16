@@ -139,8 +139,8 @@ const SAMPLE_WINDOW_MS = 250;
  * misses that would burn retry backoff for nothing. With NO tileset present
  * (OSM fallback) this returns true so the sample path is not permanently
  * blocked — the sample just misses and backs off.
- * @param {Cesium.Viewer} viewer
- * @returns {boolean}
+ * @param {Cesium.Viewer} viewer viewer whose scene primitives are inspected.
+ * @returns {boolean} true when sampling may proceed.
  */
 function _tilesReady(viewer) {
   const prims = viewer?.scene?.primitives;
@@ -163,6 +163,7 @@ function _tilesReady(viewer) {
  *   forget: (icao: string) => void,
  *   clear: () => void,
  * }}
+ *   Per-layer cache handle; `heightFor` is the only read path.
  */
 export function createGroundSnap() {
   /** @type {Map<string, {h: number|null, samplePos: Cesium.Cartesian3|null,
@@ -193,8 +194,10 @@ export function createGroundSnap() {
    * contact MOVING, which is exactly what this measures.
    *
    * @param {{h: number|null, samplePos: Cesium.Cartesian3|null, held: boolean}|undefined} entry
+   *   the contact's snap state, when it has one.
    * @param {Cesium.Cartesian3} surfacePos - Contact's position on the ellipsoid.
-   * @returns {number|null}
+   * @returns {number|null} the held height while it still describes the ground
+   *   under the contact, else null.
    */
   function heldSnapM(entry, surfacePos) {
     if (!entry || !entry.held || entry.h == null || !entry.samplePos) return null;
@@ -215,7 +218,11 @@ export function createGroundSnap() {
   }
 
   /** Forget a demoted measurement: it no longer describes anywhere this contact
-   *  is, so the contact is COLD again (model hidden, floored billboard). */
+   *  is, so the contact is COLD again (model hidden, floored billboard).
+   * @param {{h: number|null, samplePos: Cesium.Cartesian3|null, held: boolean}} entry
+   *   the contact's snap state, cleared in place.
+   * @returns {null} always null — the COLD answer for this contact.
+   */
   function dropHold(entry) {
     entry.h = null;
     entry.samplePos = null;
@@ -242,7 +249,8 @@ export function createGroundSnap() {
    * measurement would let a roof cell hide a correctly placed model.
    *
    * @param {Cesium.Cartesian3} surfacePos - Contact's position on the ellipsoid.
-   * @returns {number|null}
+   * @returns {number|null} measured mesh height in meters, or null when the
+   *   cell has not been measured.
    */
   function freshMeasuredFloorAt(surfacePos) {
     const carto = Cesium.Cartographic.fromCartesian(
@@ -271,7 +279,8 @@ export function createGroundSnap() {
    *   scene.sampleHeight objectsToExclude list (own billboards/models/entities —
    *   the vertical pick ray at a plane's OWN lat/lon lands on its icon/model
    *   otherwise). Only invoked when a sample actually fires.
-   * @returns {number|null}
+   * @returns {number|null} cached tile-skin height in meters (ellipsoid), a
+   *   held last-known within its drift bound, or null when cold.
    */
   function heightFor(viewer, icao, pos, getExclusions) {
     const surfacePos = Cesium.Ellipsoid.WGS84.scaleToGeodeticSurface(pos, scratchSurfacePos);
@@ -342,7 +351,9 @@ export function createGroundSnap() {
     return sampled;
   }
 
-  /** Drop one aircraft's snap (eviction / ground-flag flip / suppression). */
+  /** Drop one aircraft's snap (eviction / ground-flag flip / suppression).
+   * @param {string} icao cache key of the contact to forget.
+   */
   function forget(icao) { entries.delete(icao); }
 
   /** Drop everything (layer destroy). */

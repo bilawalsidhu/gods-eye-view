@@ -18,6 +18,9 @@ import {
  * Initializes the location bar: renders city pills from CITY_POIS, sets up
  * QWERTY keyboard navigation for POI selection, wires the search toggle
  * and geocoding search input.
+ * @param {object} mgr - StyleManager instance (src/ui.js) owning the
+ *   location-bar DOM the pills and listeners are attached to, plus the
+ *   deferred-navigation bookkeeping the search handler writes back through.
  * @returns {void}
  */
 export function initLocationBar(mgr) {
@@ -146,6 +149,9 @@ export function initLocationBar(mgr) {
  * Signals the start of an inter-city world jump: notifies the traffic layer
  * to pause tile fetching and suspends detection overlays to prevent stale
  * rendering during the flight.
+ * @param {object} mgr - StyleManager instance (src/ui.js) whose
+ *   `_trafficTransitionTimer` id is cleared and re-armed by the paired
+ *   begin/end calls.
  * @returns {void}
  */
 export function beginWorldJumpTransition(mgr) {
@@ -157,6 +163,9 @@ export function beginWorldJumpTransition(mgr) {
 /**
  * Signals the end of an inter-city world jump: resumes traffic tile fetching,
  * resumes detection overlays, and forces a traffic sync chip update.
+ * @param {object} mgr - StyleManager instance (src/ui.js) whose
+ *   `_trafficTransitionTimer` id is cleared and whose traffic-sync chip is
+ *   repainted after the layer resumes.
  * @returns {void}
  */
 export function endWorldJumpTransition(mgr) {
@@ -198,6 +207,9 @@ function flyWithTransition(mgr, cityChanged, flyAction) {
  * Release camera ownership when a resolved Location destination starts.
  * Contact mode and its selected subject remain intact so FOCUS can return to
  * that subject after the user finishes inspecting the destination.
+ * @param {object} mgr - StyleManager instance (src/ui.js) whose navigation
+ *   stamp, cockpit view, and follow-camera ownership this navigation takes
+ *   over.
  * @returns {boolean} Whether a Contact subject remains selected.
  */
 export function beginLocationNavigation(mgr) {
@@ -295,6 +307,9 @@ function expandPOIRow(mgr, cityId) {
 
 /**
  * Hides the POI pill row and clears the expanded city state.
+ * @param {object} mgr - StyleManager instance (src/ui.js) holding the POI
+ *   row and divider elements plus the `_expandedCityId`/`_activePoiIndex`
+ *   pair this reset nulls.
  * @returns {void}
  */
 function collapsePOIRow(mgr) {
@@ -306,6 +321,8 @@ function collapsePOIRow(mgr) {
 
 /**
  * Highlights the active POI pill and removes highlight from all others.
+ * @param {object} mgr - StyleManager instance (src/ui.js) holding the POI
+ *   row whose pills are compared against `_activePoiIndex`.
  * @returns {void}
  */
 function updatePoiHighlight(mgr) {
@@ -318,6 +335,9 @@ function updatePoiHighlight(mgr) {
  * Forget the last free-text search destination and repaint the LOCATION
  * readout. Public so camera owners that fly on their own — scene playback
  * most of all — can invalidate it without reaching into private state.
+ * @param {object} mgr - StyleManager instance (src/ui.js) caching
+ *   `_searchedLocationLabel` and owning the mini-status elements the repaint
+ *   targets.
  * @returns {void}
  */
 export function clearSearchedLocation(mgr) {
@@ -347,6 +367,9 @@ function setActiveLocation(mgr, locationId) {
 /**
  * Updates the collapsed mini-status readout with the current destination:
  * a preset city + POI/landmark, or the last free-text geocode search.
+ * @param {object} mgr - StyleManager instance (src/ui.js) holding the
+ *   active-location/POI/searched-label state the readout is derived from and
+ *   the `_locationMiniCity`/`_locationMiniPoi` elements it is written into.
  * @returns {void}
  */
 export function updateLocationMiniStatus(mgr) {

@@ -29,6 +29,8 @@ export const PRESENTED_MAP_STACK_IDS = Object.freeze([
  * @param {{id: string, label: string, available?: boolean, requiresIon?: boolean, unavailableReason?: string|null}} stack - Stack descriptor from `getStacks()`.
  * @param {string|null} activeId - Currently active stack id.
  * @returns {{id: string, label: string, available: boolean, active: boolean, requiresIon: boolean, requirement: string, unavailableHint: string, title: string}}
+ *   Render-ready chip view model with every field defaulted, so the renderer
+ *   never has to guard for a missing descriptor.
  */
 export function mapStackChipModel(stack, activeId) {
   const available = stack?.available !== false;
@@ -72,7 +74,7 @@ export function mapStackChipModels(stacks, activeId) {
  * Renders the chip row into `container`, replacing any previous chips.
  * @param {HTMLElement} container - Row element.
  * @param {Array<object>} stacks - `MapStackController.getStacks()` output.
- * @param {object} [options]
+ * @param {object} [options] - Behaviour knobs; every field optional.
  * @param {string|null} [options.activeId] - Currently active stack id.
  * @param {(stackId: string) => void} [options.onSelect] - Selection callback.
  * @param {Document} [options.doc] - Document override (tests).

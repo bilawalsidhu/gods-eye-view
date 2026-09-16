@@ -1,10 +1,22 @@
 import { api } from '../config/apiEndpoints.js';
 const MAX_ARTICLES = 5;
 
+/**
+ * Collapse whitespace and hard-truncate upstream text to readout length.
+ * @param {*} value raw upstream string (or anything coercible).
+ * @param {number} [maxLength=180] character ceiling after normalization.
+ * @returns {string} single-spaced trimmed text, at most `maxLength` chars.
+ */
 function cleanText(value, maxLength = 180) {
   return String(value || '').replaceAll(/\s+/g, ' ').trim().slice(0, maxLength);
 }
 
+/**
+ * Accept only an absolute http(s) URL — article links are rendered, never
+ * fetched, but an unparsed `javascript:` href would still be clickable.
+ * @param {*} value candidate URL from an upstream article row.
+ * @returns {string|null} normalized href, or null when not http(s).
+ */
 function safeHttpUrl(value) {
   try {
     const parsed = new URL(String(value || ''));
@@ -14,7 +26,14 @@ function safeHttpUrl(value) {
   }
 }
 
-/** Normalize a Nominatim reverse-geocode response into cockpit-sized place context. */
+/**
+ * Normalize a Nominatim reverse-geocode response into cockpit-sized place context.
+ * @param {object|null} payload parsed reverse-geocode body (`address` +
+ *   `display_name`).
+ * @returns {{label: string, locality: string|null, region: string|null,
+ *   country: string|null, countryCode: string|null}|null} null when nothing in
+ *   the payload names a place.
+ */
 export function normalizeRegionalPlace(payload) {
   const address = payload?.address || {};
   const locality = cleanText(
@@ -36,7 +55,13 @@ export function normalizeRegionalPlace(payload) {
   };
 }
 
-/** Normalize and deduplicate GDELT ArticleList output without trusting article HTML. */
+/**
+ * Normalize and deduplicate GDELT ArticleList output without trusting article HTML.
+ * @param {object|null} payload parsed GDELT body (`articles` array or absent).
+ * @param {number} [limit=5] requested article count, clamped to [1, 5].
+ * @returns {Array<{title: string, url: string, domain: string, publishedAt:
+ *   string|null, sourceCountry: string|null}>} deduped by title+hostname.
+ */
 export function normalizeRegionalArticles(payload, limit = MAX_ARTICLES) {
   const rows = Array.isArray(payload?.articles) ? payload.articles : [];
   const seen = new Set();
@@ -65,7 +90,15 @@ export function normalizeRegionalArticles(payload, limit = MAX_ARTICLES) {
   return articles;
 }
 
-/** Normalize Open-Meteo current conditions into a small source-stamped record. */
+/**
+ * Normalize Open-Meteo current conditions into a small source-stamped record.
+ * @param {object|null} payload parsed Open-Meteo body (`current` block).
+ * @returns {{observedAt: string|null, temperatureC: number|null,
+ *   apparentTemperatureC: number|null, precipitationMm: number|null,
+ *   cloudCoverPct: number|null, windKph: number|null, windDirectionDeg: number|null,
+ *   visibilityM: number|null, weatherCode: number|null}|null} null when the body
+ *   carries no numeric temperature.
+ */
 export function normalizeRegionalWeather(payload) {
   const current = payload?.current;
   if (!current || !Number.isFinite(Number(current.temperature_2m))) return null;
@@ -91,7 +124,12 @@ export function normalizeRegionalWeather(payload) {
   };
 }
 
-/** Translate the WMO weather code used by Open-Meteo into concise cockpit copy. */
+/**
+ * Translate the WMO weather code used by Open-Meteo into concise cockpit copy.
+ * @param {number|string|null} code WMO `weather_code` (0 = clear, 95+ = storm).
+ * @returns {string} short uppercase label; unknown codes say so rather than
+ *   guessing.
+ */
 export function weatherCodeLabel(code) {
   const value = Number(code);
   if (!Number.isFinite(value)) return 'CONDITIONS UNKNOWN';
@@ -108,7 +146,15 @@ export function weatherCodeLabel(code) {
   return 'MIXED CONDITIONS';
 }
 
-/** Great-circle distance used to avoid refetching a regional brief every animation frame. */
+/**
+ * Great-circle distance used to avoid refetching a regional brief every animation frame.
+ * @param {{latitude: number, longitude: number}|null|undefined} from earlier
+ *   position, decimal degrees.
+ * @param {{latitude: number, longitude: number}|null|undefined} to later
+ *   position, decimal degrees.
+ * @returns {number} separation in meters; Infinity when any coordinate is
+ *   non-finite (which also forces the "refetch" branch).
+ */
 export function regionalDistanceM(from, to) {
   if (![from?.latitude, from?.longitude, to?.latitude, to?.longitude].every(Number.isFinite)) {
     return Infinity;
@@ -122,7 +168,15 @@ export function regionalDistanceM(from, to) {
   return 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-/** Fetch a bounded regional brief through the same-origin dev/preview proxy. */
+/**
+ * Fetch a bounded regional brief through the same-origin dev/preview proxy.
+ * @param {number} latitude latitude in decimal degrees.
+ * @param {number} longitude longitude in decimal degrees.
+ * @param {object} [opts] fetch options bag.
+ * @param {AbortSignal} [opts.signal] abort signal for camera-follow callers
+ *   that abandon a brief mid-flight.
+ * @returns {Promise<object>} the parsed brief body (place, weather, articles).
+ */
 export async function fetchRegionalBrief(latitude, longitude, { signal } = {}) {
   if (![latitude, longitude].every(Number.isFinite)) throw new Error('Valid coordinates are required');
   const params = new URLSearchParams({ latitude: latitude.toFixed(5), longitude: longitude.toFixed(5) });

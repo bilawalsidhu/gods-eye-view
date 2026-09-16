@@ -36,13 +36,30 @@ export function findByDoublingRadius(search, {
   return null;
 }
 
-/** @param {number} meters @returns {string} */
+/**
+ * Format a metric distance for HUD/label display, collapsing non-finite and
+ * negative inputs to the em-dash placeholder the summary panels render for
+ * unknown values.
+ *
+ * @param {number} meters Distance in metres.
+ * @returns {string} Human-readable distance (`"m"` under 1 km, `"km"` above).
+ */
 export function formatAwarenessDistance(meters) {
   if (!Number.isFinite(meters) || meters < 0) return '—';
   return meters < 1000 ? `${Math.round(meters)} m` : `${(meters / 1000).toFixed(meters < 10000 ? 1 : 0)} km`;
 }
 
-/** Return a stable visible label without leaking missing values into UI text. */
+/**
+ * Return a stable visible label without leaking missing values into UI text.
+ *
+ * Accepts a raw contact object or any candidate field; objects are probed in
+ * `callsign → name → label → id → icao24 → mmsi` order (recursing so a nested
+ * object falls through to the next candidate) and everything unrenderable
+ * collapses to `—`.
+ *
+ * @param {*} value Contact object, string, number, or missing field.
+ * @returns {string} Trimmed display label, or `'—'` when nothing is usable.
+ */
 export function formatAwarenessLabel(value) {
   if (value && typeof value === 'object') {
     for (const candidate of [value.callsign, value.name, value.label, value.id, value.icao24, value.mmsi]) {
@@ -60,6 +77,19 @@ export function formatAwarenessLabel(value) {
  * Summarize sorted nearby results without promoting missing/stale feeds to a
  * negative finding. `UNKNOWN` is an input-data state, never an out-of-range
  * claim in this MVP.
+ *
+ * Rows are normalized to a finite non-negative `distanceM` (accepting the
+ * legacy `distance` spelling), sorted ascending, and truncated to `limit`.
+ *
+ * @param {Array<{distanceM?: number, distance?: number, [key: string]: *}>} items
+ *   Nearby candidates emitted by the per-layer proximity search.
+ * @param {object} [options] Feed-state switches supplied by the caller.
+ * @param {boolean} [options.available=true] False when the source feed failed to load.
+ * @param {boolean} [options.stale=false] True when the feed is older than its freshness window.
+ * @param {number} [options.limit=3] Maximum contacts kept in `nearest`.
+ * @returns {{relationship: string, count: number|null, nearest: Array<{distanceM: number}>, reason: string}}
+ *   Cohort verdict: `NEARBY` with ranked contacts, or `UNKNOWN` plus the
+ *   explanatory `reason` (unavailable feed, stale feed, or genuinely empty).
  */
 export function summarizeAwarenessCohort(items, { available = true, stale = false, limit = 3 } = {}) {
   if (!available) return { relationship: AWARENESS_RELATIONSHIP.UNKNOWN, count: null, nearest: [], reason: 'feed unavailable' };

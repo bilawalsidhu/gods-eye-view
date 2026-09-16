@@ -48,7 +48,7 @@ export const GEOCODE_CACHE_MAX_ENTRIES = 256;
  * 400, because silently defaulting a query the caller believes it sent is how
  * "why does this city not resolve" bugs are born.
  *
- * @param {URLSearchParams} searchParams
+ * @param {URLSearchParams} searchParams raw request query (q, limit, viewbox)
  * @returns {{query: string, limit: number, viewbox: {south:number, west:number, north:number, east:number}|null}|null}
  *   null when `q` or `limit` is missing/invalid.
  */
@@ -70,7 +70,10 @@ export function parseGeocodeQuery(searchParams) {
 /**
  * Parse the client's `swLat,swLng|neLat,neLng` viewbox into bounded degrees,
  * or null when anything is off (missing, malformed, off-planet).
- * @param {string|null} raw
+ * @param {string|null} raw the client's `swLat,swLng|neLat,neLng` string, or
+ *   null when the parameter is absent
+ * @returns {{south:number, west:number, north:number, east:number}|null}
+ *   corner-normalized degrees (west < east, south < north)
  */
 export function parseGeocodeViewbox(raw) {
   if (!raw) return null;
@@ -101,7 +104,8 @@ export function parseGeocodeViewbox(raw) {
  *
  * @param {{query: string, limit?: number, viewbox?: object|null}} parsed from parseGeocodeQuery
  * @param {string} [baseUrl] upstream /search endpoint (NOMINATIM_BASE_URL override)
- * @returns {URL}
+ * @returns {URL} the upstream request URL with format/limit/q and optional
+ *   viewbox bias already set
  */
 export function buildNominatimSearchUrl(parsed, baseUrl = NOMINATIM_SEARCH_ENDPOINT) {
   const url = new URL(baseUrl);
@@ -117,7 +121,11 @@ export function buildNominatimSearchUrl(parsed, baseUrl = NOMINATIM_SEARCH_ENDPO
   return url;
 }
 
-/** Upstream request headers — the identifying UA is policy, Accept is manners. */
+/**
+ * Upstream request headers — the identifying UA is policy, Accept is manners.
+ * @returns {{'User-Agent': string, Accept: string}} headers for every
+ *   Nominatim fetch this module issues
+ */
 export function nominatimRequestHeaders() {
   return {
     'User-Agent': NOMINATIM_USER_AGENT,
@@ -137,6 +145,7 @@ export function nominatimRequestHeaders() {
  *
  * @param {unknown} payload parsed upstream JSON
  * @returns {{label: string, lat: number, lon: number, kind: string, viewport: object|null}[]}
+ *   client-shaped rows, in upstream order, with unusable rows dropped
  */
 export function normalizeNominatimResults(payload) {
   if (!Array.isArray(payload)) return [];
@@ -162,7 +171,10 @@ export function normalizeNominatimResults(payload) {
 /**
  * Nominatim `boundingbox` ([south, north, west, east] as strings) → the
  * geocode bounds shape, or null when any edge is missing/unparseable.
- * @param {unknown} boundingbox
+ * @param {unknown} boundingbox the raw `boundingbox` array from a Nominatim
+ *   row (four decimal strings, south/north/west/east order)
+ * @returns {{southwest: {lat:number, lng:number}, northeast: {lat:number, lng:number}}|null}
+ *   the flyToViewportBounds bounds shape, corners min/max normalized
  */
 export function nominatimBoundingBoxToViewport(boundingbox) {
   if (!Array.isArray(boundingbox) || boundingbox.length !== 4) return null;
@@ -174,7 +186,12 @@ export function nominatimBoundingBoxToViewport(boundingbox) {
   };
 }
 
-/** Response envelope the client reads: results + the OSM attribution (policy). */
+/**
+ * Response envelope the client reads: results + the OSM attribution (policy).
+ * @param {Array<{label: string, lat: number, lon: number, kind: string, viewport: object|null}>} results
+ *   normalized rows from normalizeNominatimResults (possibly empty)
+ * @returns {{results: object[], attribution: string}} the cached/returned payload
+ */
 function successPayload(results) {
   return { results, attribution: '© OpenStreetMap contributors' };
 }
@@ -196,7 +213,7 @@ function successPayload(results) {
  *   refresh failure with a stale entry → 200 stale results,
  *                       X-GEV-Cache: STALE-ERROR, no-store
  *
- * @param {object} deps
+ * @param {object} deps injected request context — everything varies per test
  * @param {string} [deps.method] request method (default GET)
  * @param {URLSearchParams} deps.searchParams request query
  * @param {Map<string,{at:number,payload:object}>} deps.cache per-isolate result cache
@@ -206,6 +223,7 @@ function successPayload(results) {
  * @param {string} [deps.baseUrl] upstream /search endpoint override
  * @param {number} [deps.timeoutMs] upstream abort budget (default 10 s)
  * @returns {Promise<{status: number, payload: object, cacheState: 'MISS'|'HIT'|'INFLIGHT'|'STALE-ERROR'|'NONE', cacheControl: 'public, max-age=60'|'no-store'}>}
+ *   the response triple the caller writes straight to the wire
  */
 export async function resolveGeocodeRequest({
   method = 'GET',
@@ -271,10 +289,25 @@ export async function resolveGeocodeRequest({
   }
 }
 
+/**
+ * 200 envelope for a served payload, fresh or cached.
+ * @param {object} payload the success envelope from successPayload
+ * @param {'MISS'|'HIT'|'INFLIGHT'} cacheState how this payload was obtained
+ * @returns {{status: number, payload: object, cacheState: string, cacheControl: string}}
+ *   cacheable response triple
+ */
 function ok(payload, cacheState) {
   return { status: 200, payload, cacheState, cacheControl: 'public, max-age=60' };
 }
 
+/**
+ * Non-200 envelope for a rejected request or an unavailable upstream.
+ * @param {number} status HTTP status code (400, 405, 502)
+ * @param {{error: string}} payload the client-facing error body
+ * @param {'NONE'|'STALE-ERROR'} cacheState diagnostic cache disposition
+ * @returns {{status: number, payload: object, cacheState: string, cacheControl: string}}
+ *   no-store response triple
+ */
 function fail(status, payload, cacheState) {
   return { status, payload, cacheState, cacheControl: 'no-store' };
 }

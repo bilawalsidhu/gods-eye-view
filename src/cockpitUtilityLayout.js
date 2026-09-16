@@ -7,7 +7,7 @@
  * returned `maxHeight` is measured from that resolved top, so a corridor the
  * strip cannot honour by moving is honoured by shrinking instead.
  *
- * @param {object} input
+ * @param {object} input Measured rectangles and sizing knobs, all in px.
  * @param {number} input.recBottom Bottom edge of the REC readout, in px.
  * @param {number} input.signalTop Top edge of the briefing card, in px.
  * @param {number} input.stripHeight Rendered height of the strip, in px.
@@ -17,7 +17,8 @@
  * @param {number} [input.signalGap] Clearance above the briefing card.
  * @param {number} [input.minTopFloor] Absolute ceiling for the strip, in px.
  * @param {number} [input.minTopRatio] Viewport-relative ceiling, 0..1.
- * @returns {{ top: number, maxHeight: number }}
+ * @returns {{ top: number, maxHeight: number }} Resolved strip top and the
+ *   height it may occupy below that top, in px.
  */
 export function resolveCockpitUtilityAnchor({
   recBottom,
@@ -47,13 +48,15 @@ export function resolveCockpitUtilityAnchor({
  * Resolve whether a collapsed Cockpit utility launcher can share the desktop
  * corridor with the currently expanded utility panel.
  *
- * @param {object} input
- * @param {number} input.availableHeight
- * @param {number} input.expandedHeight
- * @param {number} input.collapsedHeight
- * @param {number} [input.gap]
- * @param {number} [input.minimumExpandedHeight]
- * @returns {{ primaryOnly: boolean, expandedMaxHeight: number }}
+ * @param {object} input Corridor measurement and launcher sizes, in px.
+ * @param {number} input.availableHeight Usable corridor height.
+ * @param {number} input.expandedHeight Rendered height of the expanded panel.
+ * @param {number} input.collapsedHeight Rendered height of one collapsed launcher.
+ * @param {number} [input.gap] Spacing between the panel and the launcher.
+ * @param {number} [input.minimumExpandedHeight] Floor the expanded panel never
+ *   shrinks below, even when the corridor cannot honour it.
+ * @returns {{ primaryOnly: boolean, expandedMaxHeight: number }} Whether the
+ *   launcher must be hidden, and the panel's allowed height.
  */
 export function resolveCockpitUtilityLayout({
   availableHeight,

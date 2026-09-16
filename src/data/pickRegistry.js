@@ -68,7 +68,7 @@ export function unregisterPickOwner(layerId) {
  * True when some OTHER registered layer owns the picked id.
  * @param {string} layerId - The asking layer's id (excluded from the scan).
  * @param {string} pickedId - Picked primitive/entity id.
- * @returns {boolean}
+ * @returns {boolean} True when a different layer's predicate claims this id, so the caller must ignore the pick.
  */
 export function isOwnedByOtherLayer(layerId, pickedId) {
   if (!pickedId) return false;

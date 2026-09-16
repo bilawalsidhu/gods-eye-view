@@ -7,14 +7,27 @@
  * multi-step ENTRY TRANSACTION (adopt → enter → roll back).
  */
 
-/** Force the prior aircraft layer to reacquire Cesium and durable tracking ownership. */
+/**
+ * Force the prior aircraft layer to reacquire Cesium and durable tracking ownership.
+ * @param {object} layer Aircraft layer exposing `trackById`/`stopTracking`.
+ * @param {string} id Aircraft id the layer should re-track.
+ * @param {object} [opts] Rollback attribution.
+ * @param {string} [opts.origin='programmatic'] Origin stamped on both the stop
+ *   and the re-track so the change reads as one transaction.
+ * @returns {boolean} Whether the layer accepted the tracked id.
+ */
 export function restoreAircraftTrackingOwner(layer, id, { origin = 'programmatic' } = {}) {
   if (!layer?.trackById || !id) return false;
   layer.stopTracking?.({ origin });
   return Boolean(layer.trackById(id, { origin }));
 }
 
-/** Normalize Cockpit aircraft metadata into a stable tracking target. */
+/**
+ * Normalize Cockpit aircraft metadata into a stable tracking target.
+ * @param {object} info Tracked-aircraft info from the owning layer.
+ * @returns {{layerId: string, id: string}|null} Layer-scoped target, or null
+ *   when the metadata names no layer or no aircraft.
+ */
 export function aircraftTrackingTarget(info) {
   if (!info?.layerId || !(info.icao24 || info.id)) return null;
   return {
@@ -23,7 +36,22 @@ export function aircraftTrackingTarget(info) {
   };
 }
 
-/** Enter Cockpit and restore the pre-transaction tracker after every failure form. */
+/**
+ * Enter Cockpit and restore the pre-transaction tracker after every failure form.
+ *
+ * @param {object} tx Entry transaction.
+ * @param {object} tx.cockpitView Cockpit view controller (`enter`/`exit`/`readAircraftInfo`).
+ * @param {object|null} [tx.selectedLayer] Layer owning an explicitly selected aircraft.
+ * @param {{id: string}|null} [tx.selectedTarget] Aircraft the operator asked to follow in.
+ * @param {object|null} [tx.currentLayer] Layer that owned tracking before entry.
+ * @param {object|null} [tx.rollbackLayer] Layer to restore tracking on during rollback.
+ * @param {{layerId: string, id: string}|undefined} [tx.rollbackTarget] Explicit
+ *   restore target; omit to reuse the live tracked target read at entry.
+ * @param {string} [tx.selectionOrigin='programmatic'] Origin attributed to the
+ *   selection and to the rollback that undoes it.
+ * @returns {{entered: boolean, error: string|null}} Entry outcome; `error` is a
+ *   user-presentable message when entry failed.
+ */
 export function enterCockpitWithTracking({
   cockpitView,
   selectedLayer = null,

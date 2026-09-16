@@ -48,7 +48,7 @@ let _overlayHost = DEFAULT_TRACKED_OVERLAY_HOST;
  * model used by the host.
  * @param {string} text Raw source-formatted label text.
  * @param {string} accent Source-owned accent color.
- * @returns {{title:string,details:string[],accent:string}}
+ * @returns {{title:string,details:string[],accent:string}} Presentation model: the first line as title, remaining lines as detail rows, and the untouched accent.
  */
 export function trackedLabelModelFromText(text, accent = WORLD_OVERLAY_STYLE.accent) {
   const raw = String(text || '').trim();
@@ -70,7 +70,7 @@ export function trackedLabelModelFromText(text, accent = WORLD_OVERLAY_STYLE.acc
  * to `entity.position.getValue()`: doing so in the host's post-render phase
  * would recompute dead reckoning after the follow camera settled and jitter.
  * @param {object|null} entity Tracked or selected presentation entity.
- * @returns {object|null}
+ * @returns {object|null} Cached `Cesium.Cartesian3` display position, or null when the layer publishes no cache.
  */
 export function cachedTrackedDisplayPosition(entity) {
   if (!entity || typeof entity.gevDisplayPosition !== 'function') return null;
@@ -95,7 +95,7 @@ export function cachedTrackedDisplayPosition(entity) {
  * `gevDisplayPosition`: that accessor carries the follow-camera anti-jitter contract
  * and must keep returning the value the camera settled on.
  * @param {object|null} entity Tracked or selected presentation entity.
- * @returns {object|null}
+ * @returns {object|null} Model-visual position when available, else the display position, else null.
  */
 export function cachedTrackedVisualPosition(entity) {
   if (entity && typeof entity.gevVisualPosition === 'function') {
@@ -107,6 +107,11 @@ export function cachedTrackedVisualPosition(entity) {
   return cachedTrackedDisplayPosition(entity);
 }
 
+/** Stable host entry id for one tracked entity: the layer's explicit
+ *  `gevTrackedId` when published, else `entity:<id>`, else null (unpublishable).
+ * @param {object|null} entity Tracked or selected presentation entity.
+ * @returns {string|null} Host-unique entry id.
+ */
 function entryIdFor(entity) {
   const explicit = String(entity?.gevTrackedId || '').trim();
   if (explicit) return explicit;
@@ -114,6 +119,10 @@ function entryIdFor(entity) {
   return fallback ? `entity:${fallback}` : null;
 }
 
+/** Entity the readout currently describes: Cesium's trackedEntity, or the
+ *  context-selected entity while a non-aircraft subject owns the card.
+ * @returns {object|null} Active presentation entity, or null when nothing is tracked or selected.
+ */
 function activeEntity() {
   return _viewer?.trackedEntity || _selectedContext?.entity || null;
 }
@@ -121,7 +130,7 @@ function activeEntity() {
 /**
  * Build the host entry from a layer-owned tracked presentation model.
  * @param {object|null} entity Tracked or selected presentation entity.
- * @returns {object|null}
+ * @returns {object|null} Host entry configured for the `tracked` paint lane, or null when the entity carries no usable model/position.
  */
 export function createTrackedOverlayEntry(entity) {
   const model = entity?.gevLabelModel;
@@ -153,6 +162,10 @@ export function createTrackedOverlayEntry(entity) {
   });
 }
 
+/** Push one entity's entry to the host as the single-member tracked cohort, or
+ *  clear the source when the entity publishes nothing.
+ * @param {object|null} entity Entity to publish.
+ */
 function publishEntity(entity) {
   const entry = createTrackedOverlayEntry(entity);
   if (!entry) {
@@ -168,11 +181,13 @@ function publishEntity(entity) {
   _overlayHost.setVisible(TRACKED_OVERLAY_SOURCE_ID, true);
 }
 
+/** Drop the tracked entry from the host and forget its id. */
 function clearTrackedSource() {
   _activeEntryId = null;
   _overlayHost.clearSource(TRACKED_OVERLAY_SOURCE_ID);
 }
 
+/** Re-evaluate which entity is active and republish or clear accordingly. */
 function syncActiveEntity() {
   publishEntity(activeEntity());
 }
@@ -187,7 +202,8 @@ export function refreshTrackedReadout(entity) {
   if (entity && entity === activeEntity()) publishEntity(entity);
 }
 
-/** Current tracked host entry id, used to resolve its actual painted rectangle. */
+/** Current tracked host entry id, used to resolve its actual painted rectangle.
+ * @returns {string|null} Entry id of the published tracked card, or null when nothing is published. */
 export function getActiveTrackedReadoutId() {
   return _activeEntryId;
 }
@@ -253,7 +269,8 @@ export function destroyTrackedReadout() {
   _viewer = null;
 }
 
-/** Inject a host recorder for focused lifecycle tests; null restores production. */
+/** Inject a host recorder for focused lifecycle tests; null restores production.
+ * @param {object|null} [host=null] Replacement host exposing setEntries/setVisible/clearSource. */
 export function _setTrackedOverlayHostForTest(host = null) {
   _overlayHost = host || DEFAULT_TRACKED_OVERLAY_HOST;
 }

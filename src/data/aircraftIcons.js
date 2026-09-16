@@ -257,6 +257,14 @@ const TRACKED_RASTER_PX = 192;
  *  Default size serves the fleet; pass `aircraftIcon(kind, TRACKED_ICON_PX)`
  *  (re-exported below) for the tracked billboard. */
 export const TRACKED_ICON_PX = TRACKED_RASTER_PX;
+/**
+ * Data URI for one class silhouette, rastered at `px` and memoised per
+ * kind+size. Unknown kinds fall back to the airliner glyph.
+ *
+ * @param {string} kind A classifyAircraft() class key (or `tr3b` / `tr3bHot` for the Easter-egg triangle).
+ * @param {number} [px=FLEET_RASTER_PX] Edge length in device pixels; use TRACKED_ICON_PX for the tracked billboard.
+ * @returns {string} `data:image/svg+xml;base64,...` URI suitable for `billboard.image`.
+ */
 export function aircraftIcon(kind, px = FLEET_RASTER_PX) {
   const k = BODIES[kind] ? kind : 'airliner';
   const key = `${k}@${px}`;

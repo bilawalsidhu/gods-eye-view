@@ -29,6 +29,12 @@ const isNode = typeof process !== 'undefined' && Boolean(process.versions?.node)
  */
 const _cityLoaders = new Map();
 
+/**
+ * Fold a place name into a word-only match key: lowercase, punctuation and
+ * separators replaced by single spaces.
+ * @param {string} s raw feature or query name.
+ * @returns {string} normalized key ('' for empty input).
+ */
 function normalize(s) {
   return String(s || '').toLowerCase().replaceAll(/[^a-z0-9 ]+/g, ' ').replaceAll(/\s+/g, ' ').trim();
 }
@@ -44,7 +50,13 @@ const NAME_ALIASES = new Map([
   ['downtown', 'financial district south beach'],
 ]);
 
-/** Ray-casting point-in-ring. ring = [[lon,lat], …]. */
+/**
+ * Ray-casting point-in-ring. ring = [[lon,lat], …].
+ * @param {number} lon test longitude, decimal degrees.
+ * @param {number} lat test latitude, decimal degrees.
+ * @param {Array<[number, number]>} ring ring vertices as [lon, lat] pairs.
+ * @returns {boolean} true when the point is inside the ring.
+ */
 function pointInRing(lon, lat, ring) {
   let inside = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
@@ -57,7 +69,12 @@ function pointInRing(lon, lat, ring) {
   return inside;
 }
 
-/** Normalize Polygon | MultiPolygon → array of polygons (each = [outerRing, ...holes]). */
+/**
+ * Normalize Polygon | MultiPolygon → array of polygons (each = [outerRing, ...holes]).
+ * @param {{type: string, coordinates: Array}|null|undefined} geom GeoJSON
+ *   geometry of a neighborhood feature.
+ * @returns {Array<Array<Array<[number, number]>>>} polygons, possibly empty.
+ */
 function toPolygons(geom) {
   if (!geom) return [];
   if (geom.type === 'Polygon') return [geom.coordinates];
@@ -65,7 +82,14 @@ function toPolygons(geom) {
   return [];
 }
 
-/** The outer ring of the polygon (part) that CONTAINS the point, honoring holes. */
+/**
+ * The outer ring of the polygon (part) that CONTAINS the point, honoring holes.
+ * @param {{geometry: object}} feature GeoJSON feature from the city pack.
+ * @param {number} lon test longitude, decimal degrees.
+ * @param {number} lat test latitude, decimal degrees.
+ * @returns {Array<[number, number]>|null} the containing outer ring, or null
+ *   when the point is outside every part (or inside a hole).
+ */
 function containingOuterRing(feature, lon, lat) {
   for (const poly of toPolygons(feature.geometry)) {
     const outer = poly[0];
@@ -80,7 +104,12 @@ function containingOuterRing(feature, lon, lat) {
   return null;
 }
 
-/** Largest outer ring (by vertex count) — used when the name matches but the point is just outside. */
+/**
+ * Largest outer ring (by vertex count) — used when the name matches but the point is just outside.
+ * @param {object} geom GeoJSON geometry of the matched feature.
+ * @returns {Array<[number, number]>|null} the biggest outer ring, or null for
+ *   a geometry with no usable parts.
+ */
 function largestOuterRing(geom) {
   let best = null;
   for (const poly of toPolygons(geom)) {
@@ -90,6 +119,12 @@ function largestOuterRing(geom) {
   return best;
 }
 
+/**
+ * Memoized (and retryable) feature loader for one bundled city pack.
+ * @param {{id: string, loader: () => Promise<object>}} city a CITY_FILES entry.
+ * @returns {() => Promise<Array>} loader resolving to the pack's features
+ *   (empty array when the file is malformed).
+ */
 function cityLoader(city) {
   let loader = _cityLoaders.get(city.id);
   if (!loader) {
@@ -122,6 +157,12 @@ function cityLoader(city) {
   return loader;
 }
 
+/**
+ * Load a city's features, degrading a failed pack to an empty set (with one
+ * console warning) so the caller's ladder continues.
+ * @param {{id: string, loader: () => Promise<object>}} city a CITY_FILES entry.
+ * @returns {Promise<Array>} features, or [] when the pack is unavailable.
+ */
 async function loadCity(city) {
   try {
     return await cityLoader(city)();
@@ -135,8 +176,8 @@ async function loadCity(city) {
 
 /**
  * Look up a bundled neighborhood polygon for a point + name.
- * @param {number} lat
- * @param {number} lon
+ * @param {number} lat point latitude, decimal degrees.
+ * @param {number} lon point longitude, decimal degrees.
  * @param {string} matchName - the geocoder's canonical place name (e.g. "Marina District")
  * @returns {Promise<{ring:[number,number][], name:string}|null>} the outer ring + matched
  *   neighborhood name, or null when the point isn't in a covered city / no match.

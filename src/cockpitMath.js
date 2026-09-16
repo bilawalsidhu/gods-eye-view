@@ -1,10 +1,21 @@
-/** Normalize a heading into the [0, 360) range. */
+/**
+ * Normalize a heading into the [0, 360) range.
+ * @param {number} value Heading in degrees, any magnitude.
+ * @returns {number} Equivalent heading in [0, 360); non-finite input reads 0.
+ */
 export function normalizeHeading(value) {
   if (!Number.isFinite(value)) return 0;
   return ((value % 360) + 360) % 360;
 }
 
-/** Advance a displayed heading along the shortest arc without exceeding a slew rate. */
+/**
+ * Advance a displayed heading along the shortest arc without exceeding a slew rate.
+ * @param {number} current Displayed heading, degrees.
+ * @param {number} target Heading to converge on, degrees.
+ * @param {number} maxStepDeg Maximum travel allowed this call, degrees.
+ * @returns {number} Slew heading in [0, 360) degrees; `current` unchanged when
+ *   the rate is unusable.
+ */
 export function slewHeading(current, target, maxStepDeg) {
   const from = normalizeHeading(current);
   const to = normalizeHeading(target);
@@ -21,6 +32,12 @@ export function slewHeading(current, target, maxStepDeg) {
  * then uses this amount to converge on the layer's delayed display position.
  * Capping correction below forward speed prevents a late feed fix from
  * becoming a first-person surge or reversal while still removing drift.
+ *
+ * @param {number} distanceM Gap between the inertial cockpit position and the
+ *   layer's displayed position, metres.
+ * @param {number} speedMps Aircraft ground speed, metres per second.
+ * @param {number} dtSec Elapsed time since the previous step, seconds.
+ * @returns {number} Along-course correction to apply this step, metres.
  */
 export function cockpitAnchorCorrectionStep(distanceM, speedMps, dtSec) {
   if (!Number.isFinite(distanceM) || distanceM <= 0
@@ -32,14 +49,28 @@ export function cockpitAnchorCorrectionStep(distanceM, speedMps, dtSec) {
   return Math.min(distanceM, eased, correctionRateMps * dt);
 }
 
-/** Return whether a throttled cockpit presentation update is due. */
+/**
+ * Return whether a throttled cockpit presentation update is due.
+ * @param {number} nowMs Current clock reading, milliseconds.
+ * @param {number} lastUpdateMs Timestamp of the last update, milliseconds;
+ *   non-positive means "never updated".
+ * @param {number} intervalMs Minimum spacing between updates, milliseconds.
+ * @returns {boolean} Whether an update should run now.
+ */
 export function cockpitUiUpdateDue(nowMs, lastUpdateMs, intervalMs) {
   if (!Number.isFinite(nowMs) || !Number.isFinite(intervalMs) || intervalMs < 0) return false;
   if (!Number.isFinite(lastUpdateMs) || lastUpdateMs <= 0 || nowMs < lastUpdateMs) return true;
   return nowMs - lastUpdateMs >= intervalMs;
 }
 
-/** Return whether the bounded rendered-surface acquisition window has elapsed. */
+/**
+ * Return whether the bounded rendered-surface acquisition window has elapsed.
+ * @param {number} nowMs Current clock reading, milliseconds.
+ * @param {number} startedMs When the wait began, milliseconds.
+ * @param {number} [timeoutMs=5000] Budget for the wait, milliseconds.
+ * @returns {boolean} True when the budget is spent or the inputs are unusable —
+ *   an unusable clock never blocks a camera that must move.
+ */
 export function cockpitSurfaceWaitExpired(nowMs, startedMs, timeoutMs = 5000) {
   if (![nowMs, startedMs, timeoutMs].every(Number.isFinite) || timeoutMs < 0) return true;
   return nowMs - startedMs >= timeoutMs;
@@ -48,6 +79,11 @@ export function cockpitSurfaceWaitExpired(nowMs, startedMs, timeoutMs = 5000) {
 /**
  * Keep the cockpit camera above the shared rendered-surface floor.
  * Unknown floors preserve the proposed camera height.
+ *
+ * @param {number} proposedHeightM Camera height the motion wants, metres.
+ * @param {number} groundHeightM Sampled surface height, metres above the ellipsoid.
+ * @param {number} clearanceM Minimum gap to hold above the surface, metres.
+ * @returns {number} Safe camera height, metres above the ellipsoid.
  */
 export function cockpitGroundSafeHeight(proposedHeightM, groundHeightM, clearanceM) {
   if (!Number.isFinite(proposedHeightM)) return proposedHeightM;
@@ -59,13 +95,25 @@ export function cockpitGroundSafeHeight(proposedHeightM, groundHeightM, clearanc
 /**
  * Resolve the cockpit altitude readout without rewriting source aviation data.
  * Confirmed grounded contacts read zero feet; airborne contacts retain MSL.
+ *
+ * @param {number} altitudeM Reported altitude, metres MSL.
+ * @param {boolean} onGround True when the source confirms the contact is parked.
+ * @returns {number|null} Display altitude in feet MSL, or null when the source
+ *   supplied no reading.
  */
 export function cockpitAltitudeDisplayFt(altitudeM, onGround) {
   if (onGround === true) return 0;
   return Number.isFinite(altitudeM) ? altitudeM * 3.28084 : null;
 }
 
-/** Format the cockpit Context scope without overstating installation coverage. */
+/**
+ * Format the cockpit Context scope without overstating installation coverage.
+ * @param {string|number} subjectLabel Subject name, or a numeric label fallback.
+ * @param {number} radiusM Window radius around the subject, metres.
+ * @param {string|null} [installationCoverage] Pre-formatted installation count,
+ *   or null when the window holds none.
+ * @returns {string} One-line scope readout for the HUD.
+ */
 export function formatCockpitContextScope(subjectLabel, radiusM, installationCoverage = null) {
   const normalizedLabel = typeof subjectLabel === 'string'
     ? subjectLabel.trim() || '—'
@@ -90,6 +138,11 @@ export function formatCockpitContextScope(subjectLabel, radiusM, installationCov
  * the old path re-parsed innerHTML on every 30-degree crossing during camera
  * motion); per update only the shared `--tape-shift` custom property and the
  * division labels change.
+ *
+ * @param {number} heading Current heading, degrees.
+ * @returns {{center: number, divisions: number[], shift: number}} Quantized
+ *   center heading, the seven division headings 30 degrees apart, and the tape
+ *   shift in divisions (−0.5..0.5).
  */
 export function compassTapeLayout(heading) {
   const normalized = normalizeHeading(heading);
@@ -101,12 +154,22 @@ export function compassTapeLayout(heading) {
   };
 }
 
-/** Return seven 30-degree compass divisions centered on a heading. */
+/**
+ * Return seven 30-degree compass divisions centered on a heading.
+ * @param {number} heading Center heading, degrees.
+ * @returns {number[]} Seven division headings, −90..+90 degrees around the
+ *   center, each in [0, 360).
+ */
 export function compassDivisions(heading) {
   return compassTapeLayout(heading).divisions;
 }
 
-/** Format a compass division as a cardinal/intercardinal label or degrees. */
+/**
+ * Format a compass division as a cardinal/intercardinal label or degrees.
+ * @param {number} heading Division heading, degrees.
+ * @returns {string} Cardinal label (N/NE/…) on the 45-degree marks, else a
+ *   zero-padded three-digit degrees label.
+ */
 export function formatCompassDivision(heading) {
   const normalized = normalizeHeading(heading);
   const labels = new Map([
@@ -116,7 +179,12 @@ export function formatCompassDivision(heading) {
   return labels.get(normalized) || String(Math.round(normalized)).padStart(3, '0');
 }
 
-/** Choose a readable altitude-tape interval for the current flight level. */
+/**
+ * Choose a readable altitude-tape interval for the current flight level.
+ * @param {number} altitudeFt Altitude the tape is centered on, feet.
+ * @returns {number} Tick interval in feet (100, 250, or 500); 500 when the
+ *   altitude is unusable.
+ */
 export function altitudeRulerStep(altitudeFt) {
   if (!Number.isFinite(altitudeFt)) return 500;
   const altitude = Math.max(0, altitudeFt);
@@ -128,6 +196,13 @@ export function altitudeRulerStep(altitudeFt) {
 /**
  * Return an odd number of altitude ticks whose fractional slots move smoothly
  * behind a fixed center pointer as altitude changes.
+ *
+ * @param {number} altitudeFt Altitude the fixed pointer reads, feet.
+ * @param {number} [count=9] Requested tick count, forced odd and floored at 3.
+ * @returns {Array<{valueFt: number, slot: number, depth: number, major: boolean,
+ *   stepFt: number}>} Ticks from lowest to highest; `slot` is the tick's
+ *   fractional offset from the pointer in tick units, `depth` its absolute
+ *   value, `major` the every-other-tick emphasis.
  */
 export function altitudeRulerTicks(altitudeFt, count = 9) {
   if (!Number.isFinite(altitudeFt)) return [];
@@ -153,6 +228,10 @@ export function altitudeRulerTicks(altitudeFt, count = 9) {
 /**
  * Return the horizontal inset needed to keep an altitude tick on a circular
  * keyhole rim. The tape places each slot at 8% of its diameter vertically.
+ *
+ * @param {number} slot Tick's fractional offset from the pointer, in tick units.
+ * @returns {number} Inset as a fraction of the rim radius, 0 at the center and
+ *   growing toward the rim.
  */
 export function altitudeRulerCurveInset(slot) {
   if (!Number.isFinite(slot)) return 0;
@@ -160,13 +239,22 @@ export function altitudeRulerCurveInset(slot) {
   return 1 - Math.sqrt(1 - normalizedY ** 2);
 }
 
-/** Render altitude-tape values as stable five-character flight-deck labels. */
+/**
+ * Render altitude-tape values as stable five-character flight-deck labels.
+ * @param {number} valueFt Tick altitude, feet.
+ * @returns {string} Zero-padded five-character label; `-----` when unusable.
+ */
 export function formatAltitudeRulerTick(valueFt) {
   if (!Number.isFinite(valueFt)) return '-----';
   return String(Math.max(0, Math.round(valueFt))).padStart(5, '0');
 }
 
-/** Choose a readable speed-tape interval for the current ground speed. */
+/**
+ * Choose a readable speed-tape interval for the current ground speed.
+ * @param {number} speedKt Ground speed the tape is centered on, knots.
+ * @returns {number} Tick interval in knots (10, 20, or 25); 25 when the speed
+ *   is unusable.
+ */
 export function speedRulerStep(speedKt) {
   if (!Number.isFinite(speedKt)) return 25;
   const speed = Math.max(0, speedKt);
@@ -175,7 +263,15 @@ export function speedRulerStep(speedKt) {
   return 25;
 }
 
-/** Return moving speed ticks behind a fixed current-speed pointer. */
+/**
+ * Return moving speed ticks behind a fixed current-speed pointer.
+ * @param {number} speedKt Speed the fixed pointer reads, knots.
+ * @param {number} [count=9] Requested tick count, forced odd and floored at 3.
+ * @returns {Array<{valueKt: number, slot: number, depth: number, major: boolean,
+ *   stepKt: number}>} Ticks from lowest to highest; `slot` is the tick's
+ *   fractional offset from the pointer in tick units, `depth` its absolute
+ *   value, `major` the every-other-tick emphasis.
+ */
 export function speedRulerTicks(speedKt, count = 9) {
   if (!Number.isFinite(speedKt)) return [];
   const tickCount = Math.max(3, Math.floor(count) | 1);
@@ -197,13 +293,25 @@ export function speedRulerTicks(speedKt, count = 9) {
   });
 }
 
-/** Render speed-tape values as stable three-character flight-deck labels. */
+/**
+ * Render speed-tape values as stable three-character flight-deck labels.
+ * @param {number} valueKt Tick speed, knots.
+ * @returns {string} Zero-padded three-character label; `---` when unusable.
+ */
 export function formatSpeedRulerTick(valueKt) {
   if (!Number.isFinite(valueKt)) return '---';
   return String(Math.max(0, Math.round(valueKt))).padStart(3, '0');
 }
 
-/** Return the initial great-circle bearing between two latitude/longitude points. */
+/**
+ * Return the initial great-circle bearing between two latitude/longitude points.
+ * @param {number} fromLat Start latitude, degrees north.
+ * @param {number} fromLon Start longitude, degrees east.
+ * @param {number} toLat End latitude, degrees north.
+ * @param {number} toLon End longitude, degrees east.
+ * @returns {number|null} Initial bearing in [0, 360) degrees, or null for
+ *   unusable or coincident points.
+ */
 export function bearingBetweenCoordinates(fromLat, fromLon, toLat, toLon) {
   if (![fromLat, fromLon, toLat, toLon].every(Number.isFinite)) return null;
   const φ1 = fromLat * Math.PI / 180;
@@ -216,7 +324,13 @@ export function bearingBetweenCoordinates(fromLat, fromLon, toLat, toLon) {
   return normalizeHeading(Math.atan2(y, x) * 180 / Math.PI);
 }
 
-/** Return a target bearing relative to the current heading in the [-180, 180) range. */
+/**
+ * Return a target bearing relative to the current heading in the [-180, 180) range.
+ * @param {number} bearing Absolute bearing to the target, degrees.
+ * @param {number} heading Current heading, degrees.
+ * @returns {number|null} Relative bearing, degrees (+ = right of the nose), or
+ *   null when either input is unusable.
+ */
 export function relativeBearing(bearing, heading) {
   if (!Number.isFinite(bearing) || !Number.isFinite(heading)) return null;
   return ((normalizeHeading(bearing) - normalizeHeading(heading) + 540) % 360) - 180;
@@ -304,6 +418,23 @@ export function resolveCockpitContextReadout({ snapshot = null, info = null } = 
 /**
  * Resolve a vertically centered panel slot inside a HUD rail while respecting
  * live rectangles that intersect that rail above or below the viewport center.
+ *
+ * @param {object} rail Viewport and rail geometry, in px.
+ * @param {number} rail.viewportHeight Viewport height; the rail is centered on
+ *   its midpoint.
+ * @param {number} rail.panelHeight Natural height of the panel to place.
+ * @param {number} rail.laneLeft Left edge of the rail's horizontal band.
+ * @param {number} rail.laneRight Right edge of the rail's horizontal band.
+ * @param {Array<{left: number, right: number, top: number, bottom: number}>} [rail.obstacles]
+ *   Live rectangles, in viewport px.
+ * @param {number} rail.baseTop Default top bound of the rail.
+ * @param {number} rail.baseBottom Default bottom bound of the rail.
+ * @param {number} [rail.gap=12] Clearance kept between the panel and an obstacle.
+ * @param {string} [rail.align='center'] 'start' pins the panel to the safe top;
+ *   anything else centers it in the corridor.
+ * @returns {{top: number, maxHeight: number, safeTop: number, safeBottom: number,
+ *   constrained: boolean}|null} Placed top, available height, resolved bounds,
+ *   and whether the panel was clamped — or null for unusable geometry.
  */
 export function resolveHudRailLayout({
   viewportHeight,

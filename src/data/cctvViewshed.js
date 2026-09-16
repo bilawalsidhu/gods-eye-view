@@ -44,6 +44,7 @@ export function cameraHue(index) {
  * and wireframe line tints (idle/active), all in the same hue family.
  * @param {number} hueDeg - Hue in degrees.
  * @returns {{fill: Cesium.Color, fillActive: Cesium.Color, line: Cesium.Color, lineActive: Cesium.Color}}
+ *   Fill colors at the idle/active alphas and matching wireframe line tints.
  */
 export function viewshedColors(hueDeg) {
   const hue = ((Number(hueDeg) % 360) + 360) % 360 / 360;
@@ -63,7 +64,8 @@ export function viewshedColors(hueDeg) {
  * its rays/cap from the same 5 Cartesians).
  * @param {{mount: Cesium.Cartesian3, tl: Cesium.Cartesian3, tr: Cesium.Cartesian3,
  *   br: Cesium.Cartesian3, bl: Cesium.Cartesian3}} positions - frustumCartesians shape.
- * @returns {{positions: Float64Array, indices: Uint16Array}}
+ * @returns {{positions: Float64Array, indices: Uint16Array}} 15 interleaved
+ *   XYZ doubles and 18 indices (6 triangles, CCW as authored).
  */
 export function frustumVolumeGeometryData(positions) {
   const pts = [positions.mount, positions.tl, positions.tr, positions.br, positions.bl];
@@ -93,7 +95,7 @@ export function frustumVolumeGeometryData(positions) {
  * billboard/wireframe/plane, whose pick semantics are established).
  * @param {object} positions - frustumCartesians shape (see frustumVolumeGeometryData).
  * @param {Cesium.Color} color - Per-camera fill color (already alpha'd).
- * @returns {Cesium.Primitive}
+ * @returns {Cesium.Primitive} Ready-to-add translucent volume primitive.
  */
 export function createFrustumVolumePrimitive(positions, color) {
   const { positions: flat, indices } = frustumVolumeGeometryData(positions);

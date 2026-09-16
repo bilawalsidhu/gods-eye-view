@@ -86,7 +86,22 @@ const SHARE_STYLE_PARAM_REGISTRY = Object.freeze({
   ]),
 });
 
+/**
+ * Owns the `#…` share-state channel: mirrors viewer/visual/panel state into the
+ * URL hash (debounced, suppressed while an incoming share is still restoring)
+ * and restores a parsed hash back onto the viewer.
+ */
 export class ShareLinkManager {
+  /**
+   * @param {import('cesium').Viewer} viewer - Viewer whose camera drives the hash.
+   * @param {object} [deps] - Collaborators injected by the caller.
+   * @param {Function} [deps.onRestore] - `(snapshot) => Promise<void>` invoked with
+   *   the decoded visual/panel snapshot so StyleManager can apply it.
+   * @param {Function} [deps.isNavigationCurrent] - `(token) => boolean` authority
+   *   gate; a share restore only flies while it still owns navigation.
+   * @param {Function} [deps.cancelOwnedNavigation] - Cancels a camera flight this
+   *   manager started, when it is still the current navigation owner.
+   */
   constructor(viewer, {
     onRestore,
     isNavigationCurrent,
@@ -150,6 +165,9 @@ export class ShareLinkManager {
 
   /**
    * Parse URL hash on page load. Returns parsed state or null.
+   * @returns {object|null} The decoded share state (camera, visual toggles,
+   *   layer/panel state, share timestamp), or null when the hash is absent or
+   *   its coordinates are not finite — a null return means "no share to restore".
    */
   parseInitialHash() {
     const hash = window.location.hash.slice(1);
@@ -245,6 +263,18 @@ export class ShareLinkManager {
 
   /**
    * Apply a parsed state to the viewer + style manager.
+   *
+   * @param {object} state - Output of {@link ShareLinkManager#parseInitialHash}.
+   * @param {object} [root0] - Apply options.
+   * @param {boolean} [root0.applyCamera] - Whether to fly the camera to the
+   *   shared pose (default true).
+   * @param {string|null} [root0.navigationToken] - Authority token for the
+   *   navigation owner check; the flight is skipped when this share no longer
+   *   owns navigation.
+   * @returns {Promise<{succeeded: boolean, camera: string, visual: string,
+   *   map: string, panels: string}>} Per-lane outcome ('applied' | 'superseded'
+   *   | 'skipped' | 'cancelled'), with `succeeded` false only when the manager
+   *   was destroyed or the state was unusable.
    */
   async applyState(state, { applyCamera = true, navigationToken = null } = {}) {
     if (this._destroyed || !state) return { succeeded: false, reason: 'unavailable' };
@@ -347,7 +377,13 @@ export class ShareLinkManager {
     this._scheduleUpdate();
   }
 
-  /** Mark a newer explicit action as owner of one delayed restore lane. */
+  /**
+   * Mark a newer explicit action as owner of one delayed restore lane.
+   * @param {'visual'|'map'|'panel'} lane - Restore lane whose authority moves
+   *   to the current session action.
+   * @param {string|null} [panelId] - Panel id when `lane` is 'panel'.
+   * @returns {void}
+   */
   claimRestoreLane(lane, panelId = null) {
     if (!this._initialRestorePending) return;
     if (lane === 'panel' && panelId) {
@@ -357,17 +393,32 @@ export class ShareLinkManager {
     }
   }
 
-  /** Install the finalized durable layer-state source used by URL generation. */
+  /**
+   * Install the finalized durable layer-state source used by URL generation.
+   * @param {Function|null} provider - Zero-arg function returning the durable
+   *   layer state object, or null to clear.
+   * @returns {void}
+   */
   setLayerStateProvider(provider) {
     this._layerStateProvider = typeof provider === 'function' ? provider : null;
   }
 
-  /** Install the finalized panel-state source used by URL generation. */
+  /**
+   * Install the finalized panel-state source used by URL generation.
+   * @param {Function|null} provider - Zero-arg function returning the panel
+   *   state snapshot, or null to clear.
+   * @returns {void}
+   */
   setPanelStateProvider(provider) {
     this._panelStateProvider = typeof provider === 'function' ? provider : null;
   }
 
-  /** Install the active visual preset parameter source used by URL generation. */
+  /**
+   * Install the active visual preset parameter source used by URL generation.
+   * @param {Function|null} provider - `(styleName) => values` returning the
+   *   preset's parameter values, or null to clear.
+   * @returns {void}
+   */
   setStyleParamStateProvider(provider) {
     this._styleParamStateProvider = typeof provider === 'function' ? provider : null;
   }
@@ -377,7 +428,12 @@ export class ShareLinkManager {
     this._scheduleUpdate();
   }
 
-  /** Called when the panel-state provider changes. */
+  /**
+   * Called when the panel-state provider changes.
+   * @param {string|null} [panelId] - Panel whose state moved, claimed as the
+   *   owning action for that panel's restore lane.
+   * @returns {void}
+   */
   onPanelStateChange(panelId = null) {
     if (panelId) this.claimRestoreLane('panel', panelId);
     this._scheduleUpdate();
@@ -401,7 +457,11 @@ export class ShareLinkManager {
     else params.delete(SHARE_UI_STATE_PARAM);
   }
 
-  /** Called by StyleManager when style/toggles change */
+  /**
+   * Called by StyleManager when style/toggles change
+   * @param {string} styleName - Newly active visual preset id.
+   * @returns {void}
+   */
   onStyleChange(styleName) {
     this._currentStyle = styleName;
     this._scheduleUpdate();
@@ -442,7 +502,14 @@ export class ShareLinkManager {
     this._scheduleUpdate();
   }
 
-  /** Copy a current-state snapshot with a copy-time timestamp. Returns true on success. */
+  /**
+   * Copy a current-state snapshot with a copy-time timestamp. Returns true on success.
+   * @param {object} [root0] - Copy options.
+   * @param {number} [root0.nowMs] - Wall clock used for the copy timestamp
+   *   (injectable for tests); defaults to now.
+   * @returns {Promise<boolean>} True when the URL reached the clipboard, false
+   *   when there was nothing to share or the write was rejected.
+   */
   async copyLink({ nowMs = Date.now() } = {}) {
     const params = this._buildHashParams();
     if (!params) return false;
@@ -470,7 +537,11 @@ export class ShareLinkManager {
     history.replaceState(null, '', `#${params.toString()}`);
   }
 
-  /** Build a deterministic snapshot without mutating history. */
+  /**
+   * Build a deterministic snapshot without mutating history.
+   * @returns {URLSearchParams|null} Full share-state params, or null when the
+   *   manager is destroyed or the camera has no cartographic position.
+   */
   _buildHashParams() {
     if (this._destroyed) return null;
     const camera = this.viewer.camera;
@@ -545,7 +616,15 @@ export class ShareLinkManager {
   }
 }
 
-/** Decode a strict positive epoch-seconds copy timestamp for age classification. */
+/**
+ * Decode a strict positive epoch-seconds copy timestamp for age classification.
+ * @param {URLSearchParams} params - Share hash params carrying the copy timestamp.
+ * @param {object} [root0] - Decode options.
+ * @param {number} [root0.nowMs] - Wall clock the timestamp may not exceed
+ *   (injectable for tests); defaults to now.
+ * @returns {number|null} Timestamp in ms, or null when absent, malformed,
+ *   unsafe as an integer, or in the future.
+ */
 export function decodeShareCreatedAtMs(params, { nowMs = Date.now() } = {}) {
   const raw = params?.get?.(SHARE_CREATED_AT_PARAM);
   if (typeof raw !== 'string' || !/^[1-9]\d*$/.test(raw)) return null;
@@ -556,7 +635,14 @@ export function decodeShareCreatedAtMs(params, { nowMs = Date.now() } = {}) {
   return timestampMs;
 }
 
-/** Encode allowlisted parameters for the active visual preset. */
+/**
+ * Encode allowlisted parameters for the active visual preset.
+ * @param {URLSearchParams} params - Params object written in place.
+ * @param {string} styleName - Active preset id; must have a registry row.
+ * @param {object|null} values - Preset parameter values keyed by `spec.key`;
+ *   non-finite entries are skipped, finite ones clamped to the spec band.
+ * @returns {void}
+ */
 export function encodeStyleParamState(params, styleName, values) {
   const registry = SHARE_STYLE_PARAM_REGISTRY[styleName];
   if (!registry || !values || typeof values !== 'object') {
@@ -574,7 +660,13 @@ export function encodeStyleParamState(params, styleName, values) {
   else params.delete(SHARE_STYLE_PARAMS_PARAM);
 }
 
-/** Decode allowlisted parameters for the selected visual preset. */
+/**
+ * Decode allowlisted parameters for the selected visual preset.
+ * @param {URLSearchParams} params - Share hash params to read.
+ * @param {string} styleName - Preset the params will be applied to.
+ * @returns {object|null} `{[key: string]: number}` of clamped preset values, or
+ *   null when absent, malformed, or for a preset with no registry row.
+ */
 export function decodeStyleParamState(params, styleName) {
   if (params.get('v') !== '2' || !params.has(SHARE_STYLE_PARAMS_PARAM)) return null;
   const registry = SHARE_STYLE_PARAM_REGISTRY[styleName];
@@ -592,7 +684,13 @@ export function decodeStyleParamState(params, styleName) {
   return Object.keys(decoded).length ? decoded : null;
 }
 
-/** Decode the shareable collapsed and pinned state for known panels. */
+/**
+ * Decode the shareable collapsed and pinned state for known panels.
+ * @param {URLSearchParams} params - Share hash params to read.
+ * @returns {{specs: Array<{id: string, collapsed: boolean, pinned: boolean|null}>}|null}
+ *   Panel states with a definite `collapsed` value, or null when absent or
+ *   entirely malformed.
+ */
 export function decodePanelStateParams(params) {
   if (params.get('v') !== '2' || !params.has(SHARE_UI_STATE_PARAM)) return null;
   const raw = String(params.get(SHARE_UI_STATE_PARAM) || '').trim();

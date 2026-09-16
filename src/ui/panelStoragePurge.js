@@ -20,9 +20,11 @@ const VERSIONED_PANEL_KEY = /^godsEyeView\.v(\d+)\.(panelPos|panelCollapsed|layo
  * one-shot reset marker follow PANEL_POSITION_STORAGE_VERSION; collapsed
  * state follows PANEL_LAYOUT_STORAGE_VERSION (they reset independently by
  * design — see the constants in src/ui.js).
- * @param {string} family
- * @param {{positionVersion: string, layoutVersion: string}} versions
- * @returns {string}
+ * @param {string} family - Key family to resolve; `panelCollapsed` follows
+ *   the layout version, everything else the position version.
+ * @param {{positionVersion: string, layoutVersion: string}} versions - Live
+ *   `vN` strings from ui.js for the two independently versioned families.
+ * @returns {string} The live `vN` string `family` is versioned against.
  */
 function currentVersionFor(family, { positionVersion, layoutVersion }) {
   return family === 'panelCollapsed' ? layoutVersion : positionVersion;
@@ -35,7 +37,7 @@ function currentVersionFor(family, { positionVersion, layoutVersion }) {
  * @param {string[]} keys Every key in the storage bucket.
  * @param {{positionVersion: string, layoutVersion: string}} versions The
  *   live `vN` strings (e.g. 'v8' / 'v6').
- * @returns {string[]}
+ * @returns {string[]} The stale subset of `keys`, in input order.
  */
 export function stalePanelStorageKeys(keys, { positionVersion, layoutVersion }) {
   return (keys || []).filter((key) => {
@@ -52,7 +54,10 @@ export function stalePanelStorageKeys(keys, { positionVersion, layoutVersion }) 
  * run must never break panel init.
  * @param {{getItem?: Function, key: Function, removeItem: Function}} storage
  *   Anything shaped like localStorage (the `key(i)` + `length` contract).
- * @param {{positionVersion: string, layoutVersion: string}} versions
+ * @param {{positionVersion: string, layoutVersion: string}} versions - Live
+ *   `vN` strings passed through to `stalePanelStorageKeys`; ui.js supplies
+ *   the `PANEL_POSITION_STORAGE_VERSION`/`PANEL_LAYOUT_STORAGE_VERSION`
+ *   constants.
  * @returns {string[]} The keys actually removed.
  */
 export function purgeStalePanelStorage(storage, versions) {

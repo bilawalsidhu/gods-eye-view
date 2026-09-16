@@ -96,7 +96,8 @@ export function scanlineOffsetPx(nowMs) {
  * own frame through `invalidateHost()`, and asking here as well would turn a
  * bounded chain into a permanent one.
  *
- * @param {object} input
+ * @param {object} input - Frame-state snapshot; every field comes from the host
+ *   frame's single clock sample.
  * @param {boolean} input.active - Detection is on and not suspended.
  * @param {number} input.nowMs - The frame's monotonic timestamp (see header).
  * @param {number} input.enabledAtMs - When detection last (re)activated, same clock.
@@ -145,12 +146,15 @@ export const DETECTION_PAINT_SKIP_THRESHOLD_MS = 22;
  * invariant worth pinning — a wrapper cannot skip without re-requesting, because
  * the same decision produces both.
  *
- * @param {object} input
+ * @param {object} input - Cost telemetry from the previous detection paint plus
+ *   the host signal that makes a skip unsafe.
  * @param {boolean} input.layoutChanged - The host's layout revision moved this frame.
  * @param {number} input.lastPaintMs - Cost of the previous detection paint.
  * @param {number} input.frameCount - Monotonic detection frame counter.
- * @param {number} [input.thresholdMs]
- * @returns {{skip: boolean, requestFollowUp: boolean}}
+ * @param {number} [input.thresholdMs] - Skip threshold override; defaults to
+ *   DETECTION_PAINT_SKIP_THRESHOLD_MS.
+ * @returns {{skip: boolean, requestFollowUp: boolean}} `requestFollowUp` is
+ *   always `===` `skip`: a skipped frame owes exactly one re-request.
  */
 export function detectionPaintSkipDecision({
   layoutChanged,
@@ -173,7 +177,8 @@ export function detectionPaintSkipDecision({
  * cliffs (exactly 1, or gone) and never animate.
  *
  * @param {{selected?: boolean, temporalAlpha?: number}} entry - Arbiter render row.
- * @returns {boolean}
+ * @returns {boolean} True while a later frame will paint a different alpha, so
+ *   the row still owes the overlay a frame.
  */
 export function renderEntryIsAnimating(entry) {
   if (!entry) return false;
@@ -184,7 +189,9 @@ export function renderEntryIsAnimating(entry) {
 /**
  * Count rendered rows whose alpha is still moving, in either direction.
  * @param {Array<{selected?: boolean, temporalAlpha?: number}>} renderEntries
- * @returns {number}
+ *   Rows the arbiter's render pass kept; assumed non-null.
+ * @returns {number} Count of rows still animating — 0 is what lets detection go
+ *   idle on a parked scene.
  */
 export function countAnimatingRenderEntries(renderEntries) {
   let count = 0;

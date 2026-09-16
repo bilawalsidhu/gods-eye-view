@@ -91,7 +91,8 @@ function solveKepler(M, e) {
  * Compute Earth's true longitude of ascending node (Ω_E) and obliquity (ε)
  * at a given Julian Date.  Uses IAU 1976 precession model (simplified).
  * @param {number} jd Julian Date
- * @returns {{ OmegaEarth: number, obliquity: number }}
+ * @returns {{ OmegaEarth: number, obliquity: number }} Node longitude and
+ *   obliquity, both radians.
  */
 function earthOrientationAtJd(jd) {
   const T = (jd - J2000_JD) / 36525.0; // Julian centuries from J2000
@@ -184,9 +185,9 @@ function eciToEcefM(eci, jd) {
 
 /**
  * Compute a planet's ECEF position for a Cesium.JulianDate.
- * @param {string} planetId
- * @param {Cesium.JulianDate} time
- * @returns {Cesium.Cartesian3}
+ * @param {string} planetId Planet key from PLANET_ELEMENTS, or 'moon'.
+ * @param {Cesium.JulianDate} time Instant to propagate to.
+ * @returns {Cesium.Cartesian3} ECEF position in metres; ZERO for an unknown id.
  */
 function planetEcefPosition(planetId, time) {
   if (planetId === 'moon') return moonEcefPosition(time);
@@ -205,8 +206,9 @@ const _moonFixed = new Cesium.Matrix3();
 
 /**
  * Compute the Moon's ECEF position using Cesium's built-in ephemeris.
- * @param {Cesium.JulianDate} time
- * @returns {Cesium.Cartesian3}
+ * @param {Cesium.JulianDate} time Instant to evaluate the ephemeris at.
+ * @returns {Cesium.Cartesian3} ECEF position in metres, or ZERO when the
+ *   ICRF-to-fixed transform is unavailable.
  */
 function moonEcefPosition(time) {
   Cesium.Simon1994PlanetaryPositions.computeMoonPositionInEarthInertialFrame(time, _moonInertial);
@@ -225,6 +227,11 @@ const REFRESH_MS = 60_000; // Update ephemeris every 60s
 let _lastEphemerisUpdate = 0;
 const _cachedPositions = new Map(); // planetId → Cesium.Cartesian3
 
+/**
+ * Refresh the cached per-planet ECEF positions, at most once per REFRESH_MS.
+ * @param {Cesium.JulianDate} julianDate Current scene time.
+ * @returns {void}
+ */
 function _updateEphemeris(julianDate) {
   const now = Cesium.JulianDate.toMilliseconds(julianDate);
   if (now - _lastEphemerisUpdate < REFRESH_MS && _cachedPositions.size > 0) return;
@@ -236,6 +243,10 @@ function _updateEphemeris(julianDate) {
   }
 }
 
+/**
+ * Per-frame entity position update driven from scene.preRender.
+ * @returns {void}
+ */
 function _tick() {
   if (!_enabled || !_viewer) return;
   const time = _viewer.clock.currentTime;

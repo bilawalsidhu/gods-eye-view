@@ -43,14 +43,33 @@ export function humanizeInstallationClass(klass) {
   return words ? `${words[0].toUpperCase()}${words.slice(1)}` : 'Mapped installation';
 }
 
+/**
+ * Range check for a WGS84 latitude.
+ * @param {number} value - Candidate latitude in degrees.
+ * @returns {boolean} True when finite and within [-90, 90].
+ */
 function finiteLatitude(value) {
   return Number.isFinite(value) && value >= -90 && value <= 90;
 }
 
+/**
+ * Range check for a WGS84 longitude.
+ * @param {number} value - Candidate longitude in degrees.
+ * @returns {boolean} True when finite and within [-180, 180].
+ */
 function finiteLongitude(value) {
   return Number.isFinite(value) && value >= -180 && value <= 180;
 }
 
+/**
+ * Extract a representative point for an Overpass element: its own coordinates
+ * or center when present, else the midpoint of its bounds. Returns null when
+ * neither yields a sane coordinate pair.
+ *
+ * @param {object} element - Overpass element (node/way/relation, `out geom` shape).
+ * @returns {{latitude: number, longitude: number}|null} Point in degrees, or
+ *   null when the element has no usable geometry.
+ */
 function pointFrom(element) {
   const lat = Number(element?.lat ?? element?.center?.lat);
   const longitude = Number(element?.lon ?? element?.center?.lon);
@@ -73,6 +92,14 @@ function pointFrom(element) {
   return { latitude: midLatitude, longitude: midLongitude };
 }
 
+/**
+ * Extract an element's ring as [lon, lat] pairs, rejecting open/partial
+ * geometry and anything outside the point cap.
+ *
+ * @param {object} element - Overpass element carrying a `geometry` array.
+ * @returns {Array<[number, number]>|null} Ring as [lon, lat] pairs, or null
+ *   when the geometry is absent, too small, oversized, or malformed.
+ */
 function footprintFrom(element) {
   if (!Array.isArray(element?.geometry) || element.geometry.length < 3 || element.geometry.length > MAX_FOOTPRINT_POINTS) return null;
   const points = [];
@@ -87,9 +114,13 @@ function footprintFrom(element) {
 
 /**
  * Convert a safe, server-filtered Overpass payload into display records.
- * @param {{elements?: Array}} payload
- * @param {string} [retrievedAt]
- * @returns {{records: Array, droppedCount: number}}
+ * @param {{elements?: Array}} payload - Already-filtered upstream elements from
+ *   the `/api/military-installations` handler (military-tagged, bbox-limited).
+ * @param {string} [retrievedAt] - ISO timestamp stamped onto every record's
+ *   source citation; defaults to now.
+ * @returns {{records: Array, droppedCount: number}} Accepted display records
+ *   (deduplicated by `osm:<type>:<id>`) plus how many elements were discarded
+ *   as unknown, unclassable, unplaceable, or duplicate.
  */
 export function normalizeMilitaryInstallations(payload, retrievedAt = new Date().toISOString()) {
   const records = [];
@@ -130,7 +161,13 @@ export function normalizeMilitaryInstallations(payload, retrievedAt = new Date()
   return { records, droppedCount };
 }
 
-/** @param {unknown} value @returns {boolean} */
+/**
+ * Validate a client-supplied bbox against the lat/lon domains and the 10-degree
+ * per-axis cap the server enforces.
+ * @param {unknown} value - Candidate `{south, west, north, east}` in degrees.
+ * @returns {boolean} True when all four edges are finite, ordered, and within
+ *   the 10 x 10 degree request cap.
+ */
 export function isValidInstallationBoundingBox(value) {
   const box = value || {};
   const south = Number(box.south);

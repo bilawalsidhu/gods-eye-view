@@ -48,8 +48,7 @@
     "test": "node scripts/run-unit-tests.mjs",
     "test:coverage": "c8 node scripts/run-unit-tests.mjs --parallel-only",
     "test:track": "node scripts/track-regression.mjs",
-    "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs",
-    "lint:docs": "eslint . --config eslint.docs.config.js"
+    "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs"
   },
   "c8": {
     "reporter": [

@@ -11,7 +11,11 @@
 import { runCctvLayerEnableTransition } from '../cctvFocusPolicy.js';
 import cctvLayer from '../data/cctv.js';
 
-/** Shortest-wrap signed degrees, for heading offsets typed as absolute values. */
+/**
+ * Shortest-wrap signed degrees, for heading offsets typed as absolute values.
+ * @param {number} deg - Absolute degrees in any magnitude.
+ * @returns {number} Equivalent value in (-180, 180], so a typed 359.5 becomes a -0.5 calibration offset.
+ */
 const signedNormalizeDeg = (deg) => ((((deg + 180) % 360) + 360) % 360) - 180;
 
 /**
@@ -63,6 +67,7 @@ const CCTV_CAL_FIELDS = {
  * Wires up all CCTV panel controls: enable/disable, nearest/prev/next camera,
  * camera select dropdown, focus, coverage, auto-hop, projection,
  * manual calibration sliders, and save/reset buttons.
+ * @param {object} mgr - StyleManager instance (src/ui.js) that owns the CCTV panel elements and delegates; its `_cctv*` handles get the listeners and `_toggleCctvEnabled`/`_runExplicitCctvFocus`/`_syncCctvPanelViewport` are driven through it.
  * @returns {void}
  */
 export function initCctvPanel(mgr) {
@@ -172,6 +177,7 @@ export function initCctvPanel(mgr) {
 
 /**
  * Returns the currently active CCTV camera ID from state or the select dropdown.
+ * @param {object} mgr - StyleManager instance whose cached CCTV state and camera select element are consulted.
  * @returns {string} Camera ID, or empty string if none.
  */
 function activeCctvCameraId(mgr) {
@@ -180,6 +186,7 @@ function activeCctvCameraId(mgr) {
 
 /**
  * Clears the preview and invalidates any in-flight preload.
+ * @param {object} mgr - StyleManager instance holding the live CCTV frame element, its wrap, and the request token that is advanced.
  * @returns {void}
  */
 function clearCctvFrame(mgr) {
@@ -211,9 +218,9 @@ function clearCctvFrame(mgr) {
  * main, which never blanked on a successful refresh in the first place.)
  *
  * @param {object} mgr - StyleManager instance holding the live CCTV frame element, its wrap, and the preload request token.
- * @param {string} src
- * @param {string} cameraId
- * @param {boolean} cameraChanged
+ * @param {string} src - Frame URL to preload off-DOM; only assigned to the live element after it decodes.
+ * @param {string} cameraId - Camera the frame belongs to, recorded on the element's dataset for change detection.
+ * @param {boolean} cameraChanged - True when the frame is for a different camera than is on screen, so the stale pixels are dropped instead of retained under new metadata.
  * @returns {void}
  */
 function queueCctvFrame(mgr, src, cameraId, cameraChanged) {
@@ -249,8 +256,8 @@ function queueCctvFrame(mgr, src, cameraId, cameraChanged) {
  * without disturbing whatever is already on screen.
  * @param {object} mgr - StyleManager instance holding the live CCTV frame element whose request token the commit is validated against.
  * @param {number} token - Request token; a stale one is ignored.
- * @param {string} src
- * @param {boolean} ok
+ * @param {string} src - Preloaded frame URL written to the live element on success.
+ * @param {boolean} ok - True when the preload decoded (load event), false on the error event.
  * @returns {void}
  */
 function settleCctvFrame(mgr, token, src, ok) {
@@ -282,8 +289,8 @@ function settleCctvFrame(mgr, token, src, ok) {
  * Keeps the source badge truthful about the visible frame lifecycle. Health
  * may already be OK while the browser is still decoding the requested image.
  * @param {object} mgr - StyleManager instance holding the source badge that is written and the CCTV frame elements that are read.
- * @param {object|null} activeCamera
- * @param {boolean} enabled
+ * @param {object|null} activeCamera - Active camera descriptor whose sourceKind/sourceStatus label the ready state, or null when nothing is active.
+ * @param {boolean} enabled - Whether the CCTV layer is currently enabled; false forces the idle badge.
  * @returns {void}
  */
 function syncCctvSourceBadge(mgr, activeCamera, enabled) {
@@ -312,6 +319,7 @@ function syncCctvSourceBadge(mgr, activeCamera, enabled) {
 
 /**
  * Resets calibration for the active CCTV camera to its server defaults.
+ * @param {object} mgr - StyleManager instance whose data manager issues the reset patch and whose toast reports the outcome.
  * @returns {void}
  */
 function resetCctvCalibration(mgr) {

@@ -268,14 +268,30 @@ const _diagnostics = {
   paintedBySource: _paintedBySource,
 };
 
+/**
+ * Monotonic high-resolution clock, tolerant of a missing `performance`.
+ * @returns {number} Milliseconds since the time origin.
+ */
 function nowMs() {
   return globalThis.performance?.now?.() ?? Date.now();
 }
 
+/**
+ * Clamp a value to [0, 1], mapping non-finite input to `fallback`.
+ * @param {number} value - Raw value; may be `undefined` from a source field.
+ * @param {number} [fallback=1] - Result when `value` is not finite.
+ * @returns {number} Value clamped to the unit interval.
+ */
 function clamp01(value, fallback = 1) {
   return Number.isFinite(Number(value)) ? Math.max(0, Math.min(1, Number(value))) : fallback;
 }
 
+/**
+ * Validate a source id and return its trimmed form.
+ * @param {string} sourceId - Caller-supplied source identifier.
+ * @returns {string} Trimmed, non-empty source id.
+ * @throws {TypeError} When the id is not a non-empty string.
+ */
 function assertSourceId(sourceId) {
   if (typeof sourceId !== 'string' || !sourceId.trim()) {
     throw new TypeError('WorldOverlay sourceId must be a non-empty string');
@@ -283,22 +299,54 @@ function assertSourceId(sourceId) {
   return sourceId.trim();
 }
 
+/**
+ * Build the record key for one entry. The NUL separator keeps a source/entry
+ * pair unambiguous where either id could contain the other as a prefix.
+ * @param {string} sourceId - Owning source id.
+ * @param {string} entryId - Entry id, unique within its source.
+ * @returns {string} Composite key.
+ */
 function entryKey(sourceId, entryId) {
   return `${sourceId}\u0000${entryId}`;
 }
 
+/**
+ * Total order over arbitrary string keys; deliberately not locale-aware, since
+ * the key is only ever used for a stable tie-break.
+ * @param {string} a - First key.
+ * @param {string} b - Second key.
+ * @returns {number} Negative, 0, or positive.
+ */
 function compareStableKeys(a, b) {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
+/**
+ * Protected-entry order: highest priority first, then stable by overlay key.
+ * @param {object} a - First normalized entry.
+ * @param {object} b - Second normalized entry.
+ * @returns {number} Negative when `a` sorts before `b`.
+ */
 function compareProtectedEntries(a, b) {
   return b.priority - a.priority || compareStableKeys(a._overlayKey, b._overlayKey);
 }
 
+/**
+ * Candidate-side twin of `compareProtectedEntries`, ordering pooled candidates.
+ * @param {object} a - First pooled candidate.
+ * @param {object} b - Second pooled candidate.
+ * @returns {number} Negative when `a` sorts before `b`.
+ */
 function compareProtectedCandidates(a, b) {
   return b.priority - a.priority || compareStableKeys(a.key, b.key);
 }
 
+/**
+ * Final paint order: paint lane, then in-lane z-index, then stable key.
+ * @param {object} a - First pooled paint item.
+ * @param {object} b - Second pooled paint item.
+ * @returns {number} Negative when `a` sorts before `b`.
+ */
 function comparePaintItems(a, b) {
   return a.lane - b.lane || a.zIndex - b.zIndex || compareStableKeys(a.key, b.key);
 }
@@ -307,6 +355,10 @@ function comparePaintItems(a, b) {
  * Stable in-place insertion sort over the live prefix of a pooled array.
  * `Array#sort` allocates a work buffer per call; the frame path only ever
  * orders a short, nearly sorted prefix.
+ * @param {Array<object>} items - Pooled array; sorted in place.
+ * @param {number} count - Length of the live prefix (`items.length` minus the
+ *   dead tail the pool retains for reuse).
+ * @param {function(object, object):number} compare - Total order over items.
  */
 function sortPooledRange(items, count, compare) {
   for (let i = 1; i < count; i++) {
@@ -320,7 +372,12 @@ function sortPooledRange(items, count, compare) {
   }
 }
 
-/** Map#forEach callback that zeroes a demand tally without clearing the map. */
+/**
+ * Map#forEach callback that zeroes a demand tally without clearing the map.
+ * @param {number} value - Current tally for the domain (discarded).
+ * @param {string} key - Source id whose tally is reset.
+ * @param {Map<string, number>} map - The tally map being iterated.
+ */
 function zeroDemandEntry(value, key, map) {
   map.set(key, 0);
 }
@@ -331,20 +388,30 @@ function zeroDemandEntry(value, key, map) {
  * reallocates the backing hash table per domain per frame, so the index is
  * dropped only once it dwarfs the live cohort — the same policy the arbiter
  * applies to its per-solve key stamps.
- * @param {Map<string, object>} index
- * @param {number} liveCount
+ * @param {Map<string, object>} index - Keyed index rebuilt every frame.
+ * @param {number} liveCount - Live cohort size the index is expected to hold.
  */
 function pruneKeyedIndex(index, liveCount) {
   if (index.size > liveCount * 4 + 64) index.clear();
 }
 
+/**
+ * Default collision domain for a variant when its source does not name one.
+ * @param {string} variant - Normalized entry variant.
+ * @returns {string} Ambient collision group id ('ambient-label' family).
+ */
 function defaultCollisionGroup(variant) {
   if (variant === 'label') return 'ambient-label';
   if (variant === 'track' || variant === 'tracked') return 'ambient-track';
   return 'ambient-card';
 }
 
-/** Resolve an entry to one of the seven binding paint lanes. */
+/**
+ * Resolve an entry to one of the seven binding paint lanes.
+ * @param {WorldOverlayEntry} entry - Normalized (or raw) entry; only the four
+ *   lane-relevant fields are read, so a partially built entry is safe here.
+ * @returns {number} Index into `WORLD_OVERLAY_PAINT_LANES`.
+ */
 export function paintLaneForOverlayEntry(entry = {}) {
   if (PAINT_LANE_INDEX.has(entry.paintLane)) return PAINT_LANE_INDEX.get(entry.paintLane);
   if (entry.tracked || entry.variant === 'tracked') return PAINT_LANE_INDEX.get('tracked');
@@ -355,14 +422,6 @@ export function paintLaneForOverlayEntry(entry = {}) {
   return PAINT_LANE_INDEX.get('ambient-label');
 }
 
-/**
- * Validate and copy a source entry into the shared presentation contract.
- * Source-specific objects remain opaque in `metadata`; they are never read by
- * the renderer.
- * @param {string} sourceId
- * @param {object} entry
- * @returns {WorldOverlayEntry}
- */
 /**
  * Snapshot an entry's optional occlusion-test anchor into a host-owned
  * Cartesian3, mirroring the flights layer's `info.cullPosition || bb.position`
@@ -396,6 +455,28 @@ function snapshotCullPosition(entry) {
   return new Cesium.Cartesian3(x, y, z);
 }
 
+/**
+ * Validate and copy a source entry into the shared presentation contract.
+ * Source-specific objects remain opaque in `metadata`; they are never read by
+ * the renderer.
+ *
+ * Normalization is strict by design: a malformed entry throws instead of
+ * silently dropping one row of a source's cohort, so a misconfigured source
+ * is visible on its first publication rather than hiding as a missing label.
+ * Every presentation field the host reads is copied here, and the copy is
+ * host-owned from then on — later mutation of the source's own object has no
+ * effect until the source publishes again. The private `_overlay*` fields are
+ * the host's per-entry working set: pooled caches, memoized layout, and the
+ * image slot reference used by the require-image gate.
+ *
+ * @param {string} sourceId - Owning source id; validated and trimmed.
+ * @param {object} entry - Raw source entry (see the `WorldOverlayEntry`
+ *   typedef; optional presentation fields are documented at their use sites).
+ * @returns {WorldOverlayEntry} Normalized entry carrying the host's
+ *   bookkeeping fields (`_overlayKey`, cohort rank/hash, layout slot).
+ * @throws {TypeError} When `sourceId` is empty, `entry` is not an object, or
+ *   `entry.id`, `entry.position`, or `entry.variant` is missing/unsupported.
+ */
 export function normalizeOverlayEntry(sourceId, entry) {
   const source = assertSourceId(sourceId);
   if (!entry || typeof entry !== 'object') throw new TypeError('WorldOverlay entry must be an object');
@@ -545,6 +626,13 @@ export function normalizeOverlayEntry(sourceId, entry) {
   return normalized;
 }
 
+/**
+ * Copy a distance scale curve, rejecting any non-finite stop.
+ * @param {object|null|undefined} curve - Source curve `{near, nearValue, far,
+ *   farValue}` in metres and scale units.
+ * @returns {object|null} Sanitized curve with ordered stops, or null when the
+ *   input is absent or any stop is non-finite.
+ */
 function normalizeDistanceScale(curve) {
   if (!curve || typeof curve !== 'object') return null;
   const values = [curve.near, curve.nearValue, curve.far, curve.farValue].map(Number);
@@ -556,6 +644,13 @@ function normalizeDistanceScale(curve) {
   return { near, nearValue, far, farValue };
 }
 
+/**
+ * Copy a camera-altitude scale curve, rejecting any non-finite stop and
+ * sorting the three altitude boundaries into ascending order.
+ * @param {object|null|undefined} curve - Source curve `{fullEnd, midEnd, end,
+ *   midValue, endValue, smoothToMid}` in metres.
+ * @returns {object|null} Sanitized curve, or null when absent or incomplete.
+ */
 function normalizeAltitudeScale(curve) {
   if (!curve || typeof curve !== 'object') return null;
   const values = [curve.fullEnd, curve.midEnd, curve.end, curve.midValue, curve.endValue].map(Number);
@@ -573,6 +668,14 @@ function normalizeAltitudeScale(curve) {
   };
 }
 
+/**
+ * Merge a source's requested options over its previous values, clamping every
+ * numeric field into its documented range. Fields the caller omits keep their
+ * previous value, which is what makes re-registration with one option safe.
+ * @param {WorldOverlaySourceOptions} [options] - Newly requested options.
+ * @param {WorldOverlaySourceOptions} [previous] - Options currently in force.
+ * @returns {WorldOverlaySourceOptions} Fully-populated, clamped option set.
+ */
 function normalizeSourceOptions(options = {}, previous = {}) {
   const requestedCapacity = Number(options.collisionCapacity ?? previous.collisionCapacity);
   return {
@@ -595,6 +698,12 @@ function normalizeSourceOptions(options = {}, previous = {}) {
   };
 }
 
+/**
+ * Whether an entry bypasses cohort bounding and collision capacity.
+ * @param {WorldOverlayEntry} entry - Normalized entry.
+ * @returns {boolean} True for selected/pinned/protected/tracked entries and
+ *   anything resolved to the selected or tracked lane.
+ */
 function isProtected(entry) {
   return entry.selected || entry.pinned || entry.protected || entry.tracked
     || paintLaneForOverlayEntry(entry) >= PAINT_LANE_INDEX.get('selected');
@@ -603,10 +712,14 @@ function isProtected(entry) {
 /**
  * Bound one source/domain's ambient surplus without evicting protected items.
  * `LabelArbiter` performs the later cross-source, screen-space selection.
- * @param {Array<WorldOverlayEntry>} entries
- * @param {number} limit
- * @param {Set<string>} [incumbentKeys]
- * @returns {Array<WorldOverlayEntry>}
+ * @param {Array<WorldOverlayEntry>} entries - One source's entries in a single
+ *   collision domain.
+ * @param {number} [limit=DEFAULT_COHORT_LIMIT] - Ambient cap before clamping
+ *   to `MAX_SOURCE_COHORT_LIMIT`.
+ * @param {Set<string>} [incumbentKeys] - Keys the arbiter selected last solve;
+ *   incumbents get seniority so a settled label is not displaced by a newcomer.
+ * @returns {Array<WorldOverlayEntry>} Protected entries (priority order)
+ *   followed by the bounded ambient cohort.
  */
 export function selectBoundedOverlayCohort(entries, limit = DEFAULT_COHORT_LIMIT, incumbentKeys = new Set()) {
   const cap = Math.max(1, Math.min(MAX_SOURCE_COHORT_LIMIT, Math.floor(Number(limit) || DEFAULT_COHORT_LIMIT)));
@@ -624,10 +737,23 @@ export function selectBoundedOverlayCohort(entries, limit = DEFAULT_COHORT_LIMIT
   return protectedEntries.concat(bounded.values(cap));
 }
 
+/**
+ * Whether a registered source may contribute to this frame.
+ * @param {object} source - Source record from `getOrCreateSource`.
+ * @returns {boolean} False when the source is hidden or cockpit mode is active
+ *   and the source opted out of it.
+ */
 function sourceActive(source) {
   return source.options.visible && !(_cockpitActive && source.options.hideInCockpit);
 }
 
+/**
+ * Return a collision domain, creating its arbiter and pooled frame buffers on
+ * first use. Domains are keyed by collision group, so unrelated sources that
+ * share a group also share one solve and one paint budget.
+ * @param {string} domainId - Collision group id.
+ * @returns {object} Domain record holding the arbiter and its buffers.
+ */
 function getOrCreateDomain(domainId) {
   let domain = _domains.get(domainId);
   if (!domain) {
@@ -661,6 +787,12 @@ function getOrCreateDomain(domainId) {
   return domain;
 }
 
+/**
+ * Regroup a source's entries by collision domain and re-bound each cohort into
+ * the source's stable parallel slots (`cohortDomainIds`/`cohortLists`), so the
+ * per-frame loop walks flat arrays without allocating per publication.
+ * @param {object} source - Source record whose `entries` map is already current.
+ */
 function rebuildSourceCohorts(source) {
   const groups = new Map();
   source.demandByDomain.clear();
@@ -690,6 +822,14 @@ function rebuildSourceCohorts(source) {
   source.cohortLists.length = index;
 }
 
+/**
+ * Return a registered source, creating it on first use and merging options
+ * into an existing one. Registering before the first publication is how a
+ * layer reserves its capacity budget; the returned record is host-owned.
+ * @param {string} sourceId - Stable source id.
+ * @param {WorldOverlaySourceOptions} [options] - Options to create or merge.
+ * @returns {object} Source record with its entries map and cohort slots.
+ */
 function getOrCreateSource(sourceId, options = {}) {
   const id = assertSourceId(sourceId);
   let source = _sources.get(id);
@@ -711,6 +851,13 @@ function getOrCreateSource(sourceId, options = {}) {
   return source;
 }
 
+/**
+ * Drop per-frame derived state so the next painted frame rebuilds it, then ask
+ * the scene for a render. Safe to call before init and after destroy.
+ * @param {object} [flags] - Which caches to invalidate.
+ * @param {boolean} [flags.solve=true] - Force the arbiter to re-solve.
+ * @param {boolean} [flags.layout=false] - Also rescan UI occluder geometry.
+ */
 function invalidateHost({ solve = true, layout = false } = {}) {
   if (solve) _solveDirty = true;
   if (layout) _occludersDirty = true;
@@ -721,6 +868,11 @@ function invalidateHost({ solve = true, layout = false } = {}) {
   _viewer?.scene?.requestRender?.();
 }
 
+/**
+ * No-op lane handle returned after destroy, so a late registration cannot
+ * resurrect the host or leak a painter into torn-down state.
+ * @returns {object} Inert handle matching the live registration shape.
+ */
 function inertPaintLaneHandle() {
   return { surface: null, setActive() {}, requestPaint() {}, unregister() {} };
 }
@@ -733,8 +885,10 @@ function inertPaintLaneHandle() {
  * surface used only to preserve element-level scene blending.
  * @param {string} laneId One of `WORLD_OVERLAY_PAINT_LANES`.
  * @param {function(object):void} painter Source-owned paint callback.
- * @param {{id?:string,active?:boolean,target?:'shared'|'detection',shouldPaint?:function(object):boolean}} [options]
- * @returns {{surface:HTMLCanvasElement|null,setActive:function(boolean):void,requestPaint:function():void,unregister:function():void}}
+ * @param {{id?:string,active?:boolean,target?:'shared'|'detection',shouldPaint?:function(object):boolean}} [options] Registration
+ *   details; re-registering the same id replaces the earlier painter.
+ * @returns {{surface:HTMLCanvasElement|null,setActive:function(boolean):void,requestPaint:function():void,unregister:function():void}} Lane
+ *   handle; `unregister` detaches the painter and releases its budget.
  */
 export function registerWorldOverlayPaintLane(laneId, painter, options = {}) {
   if (_destroyed) return inertPaintLaneHandle();
@@ -793,9 +947,10 @@ export function registerWorldOverlayPaintLane(laneId, painter, options = {}) {
 
 /**
  * Replace all entries owned by a source atomically.
- * @param {string} sourceId
- * @param {object[]} entries
- * @param {WorldOverlaySourceOptions} [options]
+ * @param {string} sourceId - Owning source id; created if unknown.
+ * @param {object[]} entries - Raw entries; each is validated, so one malformed
+ *   row rejects the whole publication.
+ * @param {WorldOverlaySourceOptions} [options] - Source options to create/merge.
  */
 export function setOverlayEntries(sourceId, entries, options = {}) {
   if (_destroyed) return;
@@ -815,8 +970,8 @@ export function setOverlayEntries(sourceId, entries, options = {}) {
 
 /**
  * Insert or replace one entry without rebuilding another source.
- * @param {string} sourceId
- * @param {object} entry
+ * @param {string} sourceId - Owning source id; created if unknown.
+ * @param {object} entry - Raw entry; an existing id is replaced in place.
  */
 export function upsertOverlayEntry(sourceId, entry) {
   if (_destroyed) return;
@@ -830,9 +985,9 @@ export function upsertOverlayEntry(sourceId, entry) {
 
 /**
  * Remove one entry by stable identity.
- * @param {string} sourceId
- * @param {string} entryId
- * @returns {boolean}
+ * @param {string} sourceId - Owning source id.
+ * @param {string} entryId - Entry id to delete.
+ * @returns {boolean} True when the entry existed and was removed.
  */
 export function removeOverlayEntry(sourceId, entryId) {
   if (_destroyed) return false;
@@ -850,8 +1005,9 @@ export function removeOverlayEntry(sourceId, entryId) {
 
 /**
  * Remove all entries while retaining the source's registration/options.
- * @param {string} sourceId
- * @returns {boolean}
+ * @param {string} sourceId - Source id to empty.
+ * @returns {boolean} True when the source was registered and had entries
+ *   cleared (also true for an already-empty registered source).
  */
 export function clearOverlaySource(sourceId) {
   if (_destroyed) return false;
@@ -870,8 +1026,9 @@ export function clearOverlaySource(sourceId) {
 
 /**
  * Enable/disable one registered source.
- * @param {string} sourceId
- * @param {boolean} visible
+ * @param {string} sourceId - Source id; created if unknown so a layer can be
+ *   hidden before its first publication.
+ * @param {boolean} visible - False hides every entry the source publishes.
  */
 export function setOverlaySourceVisible(sourceId, visible) {
   if (_destroyed) return;
@@ -882,6 +1039,7 @@ export function setOverlaySourceVisible(sourceId, visible) {
   invalidateHost();
 }
 
+/** Recompute the per-source entry tallies after any source/entry mutation. */
 function updateEntryDiagnostics() {
   const entriesBySource = {};
   let entryCount = 0;
@@ -896,9 +1054,10 @@ function updateEntryDiagnostics() {
 
 /**
  * Return the most recently published painted box (valid until next frame).
- * @param {string} sourceId
- * @param {string} entryId
- * @returns {(OverlayRect & {sourceId:string,entryId:string})|null}
+ * @param {string} sourceId - Owning source id.
+ * @param {string} entryId - Entry id to look up.
+ * @returns {(OverlayRect & {sourceId:string,entryId:string})|null} Last
+ *   painted box, or null when the entry was not painted this frame.
  */
 export function getOverlayPaintRect(sourceId, entryId) {
   if (_destroyed) return null;
@@ -911,10 +1070,12 @@ export function getOverlayPaintRect(sourceId, entryId) {
 
 /**
  * Resolve the topmost interactive world-overlay entry at CSS-pixel coords.
- * @param {number} x
- * @param {number} y
- * @param {{sourceId?:string,collisionGroup?:string,filter?:Function}} [options]
- * @returns {{sourceId:string,entryId:string,entry:WorldOverlayEntry,rect:OverlayRect}|null}
+ * @param {number} x - Pointer x in CSS pixels, canvas-relative.
+ * @param {number} y - Pointer y in CSS pixels, canvas-relative.
+ * @param {{sourceId?:string,collisionGroup?:string,filter?:Function}} [options] - Optional
+ *   narrowing filters; all must accept a candidate rect.
+ * @returns {{sourceId:string,entryId:string,entry:WorldOverlayEntry,rect:OverlayRect}|null} Topmost
+ *   hit, or null when nothing interactive is under the point.
  */
 export function hitTestWorldOverlay(x, y, options = {}) {
   if (_destroyed || !Number.isFinite(x) || !Number.isFinite(y)) return null;
@@ -949,6 +1110,14 @@ export function getWorldOverlayDiagnostics() {
  * The horizon test prefers `entry.cullPosition` when the source supplied one
  * (see normalizeOverlayEntry) so a sub-ellipsoid render anchor is not
  * false-hidden near the limb; everything else still uses the render position.
+ * @param {WorldOverlayEntry} entry - Normalized entry supplying `horizonCull`,
+ *   `cullPosition`, and `viewportPadding`.
+ * @param {Cesium.Cartesian3} position - World-space render anchor to test.
+ * @param {{x:number,y:number}} screen - Projected CSS-pixel position.
+ * @param {{width:number,height:number}} viewport - Canvas size in CSS pixels.
+ * @param {Cesium.EllipsoidalOccluder|null} occluder - Shared WGS84 occluder;
+ *   null skips the horizon test entirely.
+ * @returns {boolean} True when the point may be painted this frame.
  */
 export function isOverlayPointVisible(entry, position, screen, viewport, occluder) {
   if (!position || !Number.isFinite(position.x) || !Number.isFinite(position.y) || !Number.isFinite(position.z)) {
@@ -969,6 +1138,10 @@ export function isOverlayPointVisible(entry, position, screen, viewport, occlude
 /**
  * Return true when a rectangle intersects any cached UI exclusion box.
  * `count` lets pooled buffers expose a live prefix without truncating.
+ * @param {OverlayRect} rect - Placement box in CSS pixels.
+ * @param {Array<OverlayRect>} exclusions - Cached UI exclusion boxes.
+ * @param {number} [count=exclusions.length] - Live prefix length to test.
+ * @returns {boolean} True on any intersection.
  */
 export function overlayRectIntersectsAny(rect, exclusions, count = exclusions.length) {
   for (let i = 0; i < count; i++) {
@@ -982,6 +1155,10 @@ export function overlayRectIntersectsAny(rect, exclusions, count = exclusions.le
 /**
  * Like `overlayRectIntersectsAny`, but only against exclusions that composite
  * BELOW the host — the ones a placement may never overlap at any cost.
+ * @param {OverlayRect} rect - Placement box in CSS pixels.
+ * @param {Array<OverlayRect>} exclusions - Cached UI exclusion boxes.
+ * @param {number} [count=exclusions.length] - Live prefix length to test.
+ * @returns {boolean} True when a hard (below-host) exclusion is overlapped.
  */
 export function overlayRectIntersectsAnyHard(rect, exclusions, count = exclusions.length) {
   for (let i = 0; i < count; i++) {
@@ -993,6 +1170,14 @@ export function overlayRectIntersectsAnyHard(rect, exclusions, count = exclusion
   return false;
 }
 
+/**
+ * Pick the placement with the least total overlap against a rect set — the
+ * fallback when a protected entry has no fully clear variant.
+ * @param {Array<object>} placements - Placement variants for one entry.
+ * @param {Array<OverlayRect>} exclusions - Rect set to avoid.
+ * @param {number} count - Live prefix length of `exclusions`.
+ * @returns {object|null} Least-overlapping placement, or null if none exist.
+ */
 function leastOverlappingPlacement(placements, exclusions, count) {
   let best = null;
   let bestArea = Number.POSITIVE_INFINITY;
@@ -1015,6 +1200,12 @@ function leastOverlappingPlacement(placements, exclusions, count) {
   return best;
 }
 
+/**
+ * Create or adopt the host's DOM: the z6 card canvas, the z5 detection surface
+ * parented to the Cesium container, and the accessibility mirror appended to
+ * `document.body`. Idempotent, so a destroy/init cycle reuses existing nodes
+ * instead of leaking duplicates.
+ */
 function ensureOverlayDom() {
   _root = document.getElementById(ROOT_ID);
   if (!_root) {
@@ -1081,6 +1272,18 @@ function ensureOverlayDom() {
   _detectionCtx = _detectionSurface.getContext('2d', { alpha: true, desynchronized: true });
 }
 
+/**
+ * Resize one canvas backing store to a CSS box times a DPR and reset its
+ * transform. Only the backing store is conditionally written; the style size
+ * is restated every call so a stylesheet change cannot desync it.
+ * @param {HTMLCanvasElement|null} canvas - Target canvas.
+ * @param {CanvasRenderingContext2D|null} ctx - Its 2D context, if already held.
+ * @param {number} width - CSS-pixel width.
+ * @param {number} height - CSS-pixel height.
+ * @param {number} dpr - Device pixel ratio applied to the backing store.
+ * @returns {boolean} True when the backing store dimensions changed, which
+ *   also means the canvas contents were cleared by the browser.
+ */
 function sizeCanvasSurface(canvas, ctx, width, height, dpr) {
   if (!canvas) return false;
   const backingWidth = Math.round(width * dpr);
@@ -1109,6 +1312,12 @@ function sizeCanvasSurface(canvas, ctx, width, height, dpr) {
  */
 const OVERLAY_MAX_DPR = 1.5;
 
+/**
+ * Resolve the backing-store DPR for both overlay canvases: the capped default,
+ * or the `?overlayDpr=` override when it asks for at least 1.
+ * @param {number} deviceDpr - Live `devicePixelRatio`.
+ * @returns {number} DPR in [1, 3], default-capped at `OVERLAY_MAX_DPR`.
+ */
 function resolveOverlayDpr(deviceDpr) {
   const override = Number(
     new URLSearchParams(globalThis.location?.search ?? '').get('overlayDpr'),
@@ -1124,6 +1333,8 @@ function resolveOverlayDpr(deviceDpr) {
  * calls this, so a zero-source overlay keeps a 0x0 canvas instead of a
  * full-viewport buffer; `drawWorldOverlay` sizes lazily on the first frame
  * that actually has paint work.
+ * @returns {boolean} True when either canvas was resized this call, which
+ *   invalidates occluders, the solve, and both surface contents.
  */
 function ensureCanvasSize() {
   if (!_canvas || !_viewer?.canvas) return false;
@@ -1161,6 +1372,9 @@ function ensureCanvasSize() {
  * invisible lives on an ANCESTOR — a child of a `display:none` container keeps
  * its own computed `display`, so the local style test alone cannot see it.
  * `checkVisibility` resolves the whole chain; the local test is the fallback.
+ * @param {Element|null} element - Candidate occluder element.
+ * @returns {boolean} False only when the element (or an ancestor) is provably
+ *   invisible; unknown engines default to visible.
  */
 function elementIsVisible(element) {
   if (!element || element.hidden) return false;
@@ -1197,6 +1411,8 @@ const HOST_TOP_Z_INDEX = 6;
  * `#world-overlay-root` — so the walk keeps overwriting as it climbs and returns
  * the last one found. An element with no positioned z-indexed ancestor stacks at
  * the root's own level, which is below the host.
+ * @param {Element} element - Element to evaluate.
+ * @returns {number} Outermost z-index found while climbing, 0 when none.
  */
 function elementStackLevel(element) {
   let level = 0;
@@ -1220,12 +1436,21 @@ function elementStackLevel(element) {
  * paints UNDER the host does not — a card kept there renders ON TOP of it, which
  * violates the absolute rule that labels never cover the UI. `#intel-hud` is z2,
  * i.e. below both host surfaces, so its corners and bars need a HARD veto.
+ * @param {Element} element - Candidate occluder element.
+ * @returns {boolean} True when the element composites above the host surfaces.
  */
 function occluderStacksAboveHost(element) {
   return elementStackLevel(element) > HOST_TOP_Z_INDEX;
 }
 
-/** Append one inflated, canvas-relative exclusion rectangle from the pool. */
+/**
+ * Append one inflated, canvas-relative exclusion rectangle from the pool.
+ * @param {DOMRect} rect - The chrome element's border box.
+ * @param {{left:number, top:number}} canvasRect - Host canvas origin, used to
+ *   express the box in the same space as placements.
+ * @param {boolean} [hard=false] - True vetoes a placement outright rather than
+ *   only demoting it in the placement preference.
+ */
 function pushUiOcclusionRect(rect, canvasRect, hard = false) {
   const index = _uiOcclusionRects.length;
   const out = _uiOcclusionRectPool[index] || (_uiOcclusionRectPool[index] = {});
@@ -1238,6 +1463,16 @@ function pushUiOcclusionRect(rect, canvasRect, hard = false) {
   _uiOcclusionRects.push(out);
 }
 
+/**
+ * Rescan the exclusion inventory when the cached geometry is stale. Refreshes
+ * are throttled to `OCCLUDER_REFRESH_MS`; a throttled request schedules one
+ * catch-up render so a late invalidation is never dropped.
+ * @param {number} timestamp - Frame timestamp from the high-resolution clock.
+ * @param {boolean} [force=false] - Bypass the throttle (used on the first
+ *   frame with paint work, where there is no previous sample to compare).
+ * @returns {boolean} True when the inventory was rebuilt and the solve
+ *   invalidated.
+ */
 function refreshUiOccluders(timestamp, force = false) {
   if (!_canvas || !_occludersDirty) return false;
   const elapsed = timestamp - _occludersUpdatedAt;
@@ -1284,6 +1519,7 @@ function refreshUiOccluders(timestamp, force = false) {
   return true;
 }
 
+/** Invalidate geometry and layout after a resize or observer-driven change. */
 function markLayoutDirty() {
   _resizeDirty = true;
   _occludersDirty = true;
@@ -1291,6 +1527,7 @@ function markLayoutDirty() {
   invalidateHost({ solve: true, layout: true });
 }
 
+/** Invalidate only the exclusion inventory (attribute churn on chrome). */
 function markOccludersDirty() {
   _occludersDirty = true;
   if (!overlayHasPaintWork()) return;
@@ -1315,6 +1552,8 @@ const OCCLUDER_ATTRIBUTE_OBSERVATION = Object.freeze({
  * live nodes at record-delivery time, so "append, then set id" within one task
  * is still seen; removals judge the detached subtree, which selector APIs
  * still traverse.
+ * @param {Node} node - Added/removed node from a mutation record.
+ * @returns {boolean} True when the subtree touches inventory chrome.
  */
 function nodeIsOrContainsOccluderChrome(node) {
   if (!node || typeof node.matches !== 'function') return false; // text/comment nodes
@@ -1325,6 +1564,11 @@ function nodeIsOrContainsOccluderChrome(node) {
   return false;
 }
 
+/**
+ * Whether either side of a childList record adds or removes inventory chrome.
+ * @param {NodeList|Array<Node>|null} nodes - Added or removed node list.
+ * @returns {boolean} True when any node touches chrome.
+ */
 function childListTouchesChrome(nodes) {
   if (!nodes) return false;
   for (let i = 0; i < nodes.length; i++) {
@@ -1341,6 +1585,8 @@ function childListTouchesChrome(nodes) {
  * originate from an occluder element itself (element-scoped observation), so
  * they always invalidate. A batch the runtime failed to deliver falls back to
  * the conservative pre-filter behavior.
+ * @param {Array<MutationRecord>|undefined} records - Batch from the observer;
+ *   an undelivered batch falls back to full invalidation.
  */
 function handleChromeMutations(records) {
   if (!overlayHasPaintWork()) {
@@ -1365,6 +1611,12 @@ function handleChromeMutations(records) {
   }
 }
 
+/**
+ * Attach the observers that keep the exclusion inventory honest: a window
+ * resize listener, a body-scoped childList MutationObserver for discovery, and
+ * a ResizeObserver plus per-element attribute observation for the chrome
+ * already present in the DOM.
+ */
 function installUiOccluderObservers() {
   _windowResizeHandler = markLayoutDirty;
   globalThis.window?.addEventListener?.('resize', _windowResizeHandler);
@@ -1392,6 +1644,14 @@ function installUiOccluderObservers() {
   }
 }
 
+/**
+ * Clear one canvas through its identity transform, then restore the DPR
+ * transform the paint path assumes.
+ * @param {HTMLCanvasElement|null} canvas - Canvas whose backing store is cleared.
+ * @param {CanvasRenderingContext2D|null} ctx - Its 2D context.
+ * @returns {boolean|undefined} True when the canvas was cleared; undefined when
+ *   there was nothing to clear (no context or a zero-sized store).
+ */
 function clearCanvasSurface(canvas, ctx) {
   if (!ctx || !canvas || !(canvas.width > 0) || !(canvas.height > 0)) return;
   ctx.setTransform?.(1, 0, 0, 1, 0, 0);
@@ -1399,7 +1659,12 @@ function clearCanvasSurface(canvas, ctx) {
   ctx.setTransform?.(_canvasDpr, 0, 0, _canvasDpr, 0, 0);
 }
 
-/** Clear either or both host-owned surfaces through the single frame path. */
+/**
+ * Clear either or both host-owned surfaces through the single frame path,
+ * clearing their pending-clear flags as a side effect.
+ * @param {boolean} [clearMain=true] - Clear the shared z6 card canvas.
+ * @param {boolean} [clearDetection=true] - Clear the z5 detection surface.
+ */
 function clearCanvas(clearMain = true, clearDetection = true) {
   if (clearMain) {
     clearCanvasSurface(_canvas, _ctx);
@@ -1411,6 +1676,7 @@ function clearCanvas(clearMain = true, clearDetection = true) {
   }
 }
 
+/** @returns {number} Entries held by sources that may paint this frame. */
 function activeEntryCount() {
   let count = 0;
   for (let i = 0; i < _sourceList.length; i++) {
@@ -1420,6 +1686,12 @@ function activeEntryCount() {
   return count;
 }
 
+/**
+ * Count active source-owned paint lanes, optionally narrowed to one target.
+ * @param {string|null} [target=null] - 'shared'|'detection' to count only that
+ *   target; null counts both.
+ * @returns {number} Number of active lanes matching `target`.
+ */
 function activeCustomPaintLaneCount(target = null) {
   let count = 0;
   for (let i = 0; i < _customPaintLaneList.length; i++) {
@@ -1429,6 +1701,12 @@ function activeCustomPaintLaneCount(target = null) {
   return count;
 }
 
+/**
+ * Count arbiter states still inside an enter or exit fade, which is what keeps
+ * continuous rendering alive until the last transition settles.
+ * @param {number} timestamp - Frame timestamp from the high-resolution clock.
+ * @returns {number} Number of states with a fade in progress.
+ */
 function activeFadeCount(timestamp) {
   let count = 0;
   for (let d = 0; d < _domainList.length; d++) {
@@ -1446,6 +1724,13 @@ function activeFadeCount(timestamp) {
   return count;
 }
 
+/**
+ * Whether this frame has any overlay work at all. A dormant host must answer
+ * false cheaply: it keeps the canvases unallocated and stops the postRender
+ * callback from measuring, projecting, or clearing anything.
+ * @param {number} [timestamp=nowMs()] - Frame timestamp used for fade checks.
+ * @returns {boolean} True when a lane, entry, or pending fade needs paint.
+ */
 function overlayHasPaintWork(timestamp = nowMs()) {
   if (activeCustomPaintLaneCount() > 0) return true;
   if (activeEntryCount() > 0) return true;
@@ -1456,6 +1741,11 @@ function overlayHasPaintWork(timestamp = nowMs()) {
   return false;
 }
 
+/**
+ * Compose this frame's view-projection once, into the shared matrix and its
+ * scalar mirror (the per-component reads the hot projection path uses).
+ * @returns {object} `_viewProjectionScalars`, keyed by matrix cell.
+ */
 function prepareProjectionMatrix() {
   const camera = _viewer.camera;
   const matrix = Cesium.Matrix4.multiply(
@@ -1478,6 +1768,13 @@ function prepareProjectionMatrix() {
   return _viewProjectionScalars;
 }
 
+/**
+ * Fill the shared, allocation-free frame contract handed to custom paint
+ * lanes, and refresh the occluder's camera anchor when the camera moved.
+ * @param {number} timestamp - Frame timestamp from the high-resolution clock.
+ * @param {object} keyhole - Shared keyhole geometry for this viewport.
+ * @returns {object} View-projection scalars for the frame.
+ */
 function prepareCustomPaintFrame(timestamp, keyhole) {
   const viewProjection = prepareProjectionMatrix();
   const camera = _viewer.camera.positionWC;
@@ -1502,6 +1799,15 @@ function prepareCustomPaintFrame(timestamp, keyhole) {
   return viewProjection;
 }
 
+/**
+ * Return the pooled projection record for an entry's key, creating its
+ * candidate object and reusable sub-objects on first sight. The record is
+ * refreshed with the current publication's entry, so an entry re-published
+ * under the same id reuses its slot without losing identity.
+ * @param {WorldOverlayEntry} entry - Normalized entry being projected.
+ * @returns {object} Pooled record: position, screen point, placements,
+ *   candidate, and the fade/scale options for this frame.
+ */
 function getProjectionRecord(entry) {
   let record = _records.get(entry._overlayKey);
   if (!record) {
@@ -1557,6 +1863,10 @@ function getProjectionRecord(entry) {
   return record;
 }
 
+/**
+ * Zero the per-domain frame counters and demand tallies without releasing any
+ * pooled storage, so `collectFrameCandidates` can refill them in place.
+ */
 function resetFrameDomains() {
   for (let d = 0; d < _domainList.length; d++) {
     const domain = _domainList[d];
@@ -1577,6 +1887,17 @@ function resetFrameDomains() {
   }
 }
 
+/**
+ * Resolve one entry's position, project it, apply every fade/scale channel,
+ * measure and place its card, and prune placements against UI chrome. Returns
+ * null for anything this frame cannot paint, which is how a candidate drops
+ * out before it can cost arbiter capacity.
+ * @param {WorldOverlayEntry} entry - Normalized entry to project.
+ * @param {object} source - Owning source record (supplies the source alpha).
+ * @param {object} viewProjection - This frame's view-projection scalars.
+ * @param {object} keyhole - Shared keyhole geometry for this viewport.
+ * @returns {object|null} The entry's pooled record when it survived, else null.
+ */
 function snapshotAndProject(entry, source, viewProjection, keyhole) {
   const record = getProjectionRecord(entry);
   let position;
@@ -1753,6 +2074,8 @@ function snapshotAndProject(entry, source, viewProjection, keyhole) {
  * Nothing here allocates per painted entry in steady state: records, candidate
  * objects, placement objects, and the domain buffers are all reused, and live
  * membership is carried by `candidate.frameStamp` instead of a rebuilt map.
+ * @param {object} keyhole - Shared keyhole geometry for this viewport.
+ * @param {object} viewProjection - This frame's view-projection scalars.
  */
 function collectFrameCandidates(keyhole, viewProjection) {
   resetFrameDomains();
@@ -1879,6 +2202,13 @@ function collectFrameCandidates(keyhole, viewProjection) {
   _diagnostics.projectedCount = projectedCount;
 }
 
+/**
+ * Append one record/placement pair to the pooled paint queue.
+ * @param {object|null} record - Projection record owning the entry.
+ * @param {object|null} placement - Placement chosen for this frame.
+ * @param {number} temporalAlpha - Arbiter enter/exit fade for the entry.
+ * @param {boolean} selected - Whether the entry is treated as protected art.
+ */
 function addPaintItem(record, placement, temporalAlpha, selected) {
   if (!record || !placement) return;
   const item = _paintItemPool[_paintCount] || (_paintItemPool[_paintCount] = {});
@@ -1892,11 +2222,22 @@ function addPaintItem(record, placement, temporalAlpha, selected) {
   _paintQueue[_paintCount++] = item;
 }
 
+/**
+ * Whether a source still exists and may paint; re-checked at render time so a
+ * source hidden between projection and paint drops out instead of flickering.
+ * @param {string} sourceId - Source id to test.
+ * @returns {boolean} True when the source is registered and active.
+ */
 function sourceCanPaint(sourceId) {
   const source = _sources.get(sourceId);
   return Boolean(source) && sourceActive(source);
 }
 
+/**
+ * Re-solve due domains, emit protected entries, and turn the arbiter's rendered
+ * entries into the pooled paint queue for this frame.
+ * @param {number} timestamp - Frame timestamp from the high-resolution clock.
+ */
 function solveDomains(timestamp) {
   _paintCount = 0;
   let solveMs = 0;
@@ -1960,6 +2301,11 @@ function solveDomains(timestamp) {
   _diagnostics.solveRevision = solveRevision;
 }
 
+/**
+ * Publish one painted item's rectangle to the frame index and, when the entry
+ * is interactive, to the hit-test set.
+ * @param {object} item - Pooled paint item holding the record and placement.
+ */
 function publishPaintRect(item) {
   const { record, placement } = item;
   const rect = _paintRectPool[_paintRectCount] || (_paintRectPool[_paintRectCount] = {});
@@ -2025,6 +2371,11 @@ function syncAccessibleActions() {
 
 let _detectionSurfacePrepared = false;
 
+/**
+ * Run every active source-owned painter registered in one lane, in
+ * registration order, on their chosen target surface.
+ * @param {number} lane - Lane index from `WORLD_OVERLAY_PAINT_LANES`.
+ */
 function paintCustomLane(lane) {
   for (let i = 0; i < _customPaintLaneList.length; i++) {
     const record = _customPaintLaneList[i];
@@ -2057,6 +2408,12 @@ function paintCustomLane(lane) {
   }
 }
 
+/**
+ * Paint one solved item: compose its alpha channels, scale/translate for the
+ * entry's paint scale, dispatch to the variant painter, and publish its rect.
+ * @param {object} item - Pooled paint item for one entry.
+ * @param {object} keyhole - Shared keyhole geometry for this viewport.
+ */
 function paintEntryItem(item, keyhole) {
   const { record, placement } = item;
   const entry = record.entry;
@@ -2096,6 +2453,12 @@ function paintEntryItem(item, keyhole) {
   _paintedBySource[entry.source]++;
 }
 
+/**
+ * Paint the frame: clear what is pending, run each lane's custom painters and
+ * then that lane's solved entries, publish hit rects, and sync the accessible
+ * mirror.
+ * @param {object} keyhole - Shared keyhole geometry for this viewport.
+ */
 function paintFrame(keyhole) {
   const started = nowMs();
   clearCanvas(true, false);
@@ -2130,6 +2493,14 @@ function paintFrame(keyhole) {
     || activeCustomPaintLaneCount(PAINT_TARGET_SHARED) > 0;
 }
 
+/**
+ * Re-express a placement in the local space of its own card so a scaled paint
+ * pass can translate to the rect origin and scale the context once.
+ * @param {object} placement - Screen-space placement being painted.
+ * @param {number} scale - Entry paint scale (> 0, 1 means no transform).
+ * @param {object} out - Pooled placement reused for the scaled copy.
+ * @returns {object} `out`, with every geometry field divided by `scale`.
+ */
 function localizeScaledPlacement(placement, scale, out) {
   const x = placement.rect.x;
   const y = placement.rect.y;
@@ -2152,6 +2523,7 @@ function localizeScaledPlacement(placement, scale, out) {
   return out;
 }
 
+/** Zero the per-frame diagnostic counters ahead of a new solve/paint pass. */
 function resetFrameDiagnostics() {
   _diagnostics.candidateCount = 0;
   _diagnostics.projectedCount = 0;
@@ -2167,6 +2539,11 @@ function resetFrameDiagnostics() {
   }
 }
 
+/**
+ * Per-postRender frame driver: bail out cheaply when dormant, otherwise size
+ * the surfaces, refresh the exclusion inventory, project and solve, paint, and
+ * keep continuous rendering alive while a fade is still settling.
+ */
 function drawWorldOverlay() {
   if (_destroyed || !_viewer || !_canvas || !_ctx) return;
   const timestamp = nowMs();
@@ -2206,6 +2583,7 @@ function drawWorldOverlay() {
   if (fadesRemaining > 0) _viewer.scene.requestRender?.();
 }
 
+/** Publish the diagnostics facade used by dev tooling and QA (dev builds only). */
 function createDevFacade() {
   if (typeof window === 'undefined' || import.meta.env?.DEV !== true) return;
   window.__gevWorldOverlay = { getDiagnostics: getWorldOverlayDiagnostics };
@@ -2213,7 +2591,8 @@ function createDevFacade() {
 
 /**
  * Initialize the singleton host. Repeated calls for the same viewer are no-op.
- * @param {Cesium.Viewer} viewer
+ * @param {Cesium.Viewer} viewer - Viewer whose scene drives the postRender
+ *   loop and whose container hosts the detection surface.
  */
 export function initWorldOverlay(viewer) {
   if (!viewer?.scene?.postRender?.addEventListener) {

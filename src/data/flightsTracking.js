@@ -23,6 +23,49 @@ import { trackedModelScaleForPixelCap } from './trackedCamera.js';
 import { trackedModelZoomActive } from './trackedModelRegime.js';
 import { refreshTrackedReadout, trackedLabelModelFromText } from './trackedReadout.js';
 
+/**
+ * Build one layer's private tracking pipeline — the per-icao billboard,
+ * dead-reckoning, 3D-model, cockpit-contact and fading-trail machinery shared
+ * verbatim by flights.js and militaryFlights.js.
+ *
+ * The returned `p` carries every shared field and behavior; `config` injects
+ * only the genuinely per-layer pieces (model spec tables, palette, pixel caps,
+ * feed-shape accessors, tracking seams). The two layers therefore differ by
+ * presentation and record shape, never by behavior.
+ *
+ * @param {object} config - Per-layer seams and presentation constants.
+ * @param {Function} config.modelSpec - `klass -> {url, scale, blendAmount, bellyM,
+ *   nativeRadiusM, visualCenterNative, trailAnchorNative}` GLB spec lookup.
+ * @param {Function} config.refreshTr3bContact - Re-renders one converted (TR-3B) contact.
+ * @param {Function} config.clearTracking - Deselects the tracked subject, `(notify, {origin})`.
+ * @param {Function} config.trackFlight - Selects a contact as the tracked subject,
+ *   `(icao24, {origin})`.
+ * @param {Function} config.updateTrackedModel - One frame of the tracked-model driver
+ *   (normally a `scene.preUpdate` listener).
+ * @param {Function} config.contextSubjectMetadata - Builds the context-slot metadata for one icao.
+ * @param {Function} config.fleetBillboardColor - Ambient billboard `Cesium.Color` for one icao.
+ * @param {Function} config.fleetBillboardScale - Ambient billboard scale for one icao/class.
+ * @param {Function} config.modelCap - Concurrent 3D-model budget (count).
+ * @param {Function} config.modelColor - glTF creation tint for one icao.
+ * @param {Function} config.modelMatrix - Writes a display position + course into a model
+ *   matrix, `(position, courseDeg, result)`.
+ * @param {Function} config.normalBillboardScaleByDistance - Ambient `Cesium.NearFarScalar` ramp.
+ * @param {Function} config.refreshTrailDisplay - Repaints the fading trail from accumulated fixes.
+ * @param {Function} [config.trailFloorFix] - Floors a trail fix to sampled ground; flights
+ *   pushes raw fixes and omits the seam.
+ * @param {Function} [config.requestTypeEnrichment] - Flags one icao's type metadata as wanted;
+ *   military runs no ambient enrichment and omits the seam.
+ * @param {Function} config.trackedLabelText - Readout label text for one icao.
+ * @param {Function} config.fleetFreshnessColor - Cockpit-dot freshness tint, `(icao24, alpha)`.
+ * @param {Function} config.infoSpeed - Ground speed (m/s) from a feed's INFO fallback record.
+ * @param {Function} config.infoHeading - True course (deg) from a feed's INFO fallback record.
+ * @param {number} config.trackedModelMaxPx - Pixel cap on the tracked model silhouette.
+ * @param {number} config.trackedFocusScaleBase - Base billboard scale for focus sizing.
+ * @param {string} config.trackedLabelAccent - Accent color for the tracked readout.
+ * @param {Cesium.Color} config.unmodeledTrackedColor - Tracked billboard color while 2D.
+ * @param {Cesium.Color} config.modeledIconColor - glTF tint while a model owns the visual.
+ * @returns {object} The `p` pipeline instance, assigned onto the owning layer via `Object.assign`.
+ */
 export function createFlightTrackingPipeline(config) {
   const p = {};
 
@@ -118,7 +161,10 @@ p._groundSnap = createGroundSnap();
  *  the ones the operator converted into a TR-3B (Easter egg), which draw the
  *  black-triangle glyph — its thermal-reactive variant while an IR style owns
  *  the scene. Routing EVERY `aircraftIcon()` call through this is what makes a
- *  conversion survive the poll reconciler and the two-tier raster swap. */
+ *  conversion survive the poll reconciler and the two-tier raster swap.
+ * @param {string} icao24 - Normalized ICAO 24-bit address of the contact.
+ * @param {string} klass - Aircraft class key from the feed's metadata.
+ * @returns {string} Icon kind: `klass` unchanged, or a TR-3B glyph kind when converted. */
 p._iconKind = (icao24, klass) => tr3bIconKind(icao24, klass, { hot: p._irBoost });
 
 /** IR hot-target mode (field test 2026-08-16): the NVG/FLIR post-styles
@@ -171,7 +217,9 @@ p._scratchTrailClip = new Cesium.Cartesian3();
 p._scratchWarmupTime = new Cesium.JulianDate();
 
 /** Spec identity for a LOADED model: URL and scale together (same-URL classes
- *  differ by scale — airliner vs quadjet both ship airplane.glb). */
+ *  differ by scale — airliner vs quadjet both ship airplane.glb).
+ * @param {string} klass - Aircraft class key from the feed's metadata.
+ * @returns {string} `"<url>@<scale>"` identity compared against `model._gevSpecKey`. */
 p._specKeyFor = (klass) => {
   const spec = p._modelSpec(klass);
   return `${spec.url}@${spec.scale}`;
@@ -367,11 +415,15 @@ p._scratchOffset = new Cesium.Cartesian3();
 
   // ── Shared pipeline functions (verbatim from flights.js) ──
 
+/** Abort every in-flight data fetch this layer owns (refresh/disable/teardown). */
 function _abortActiveUpdates() {
   for (const controller of p._activeUpdateControllers) controller.abort();
   p._activeUpdateControllers.clear();
 }
 
+/** Normalize a Cockpit event's payload and run the presentation switch it implies.
+ *  A missing or falsy `active` means Cockpit is leaving, not just subject-less.
+ * @param {{active?: boolean, subjectId?: string}} [detail] - Cockpit state payload. */
 function _applyCockpitState(detail = {}) {
   const active = detail?.active === true;
   p._cockpitSubjectId = active
@@ -380,6 +432,11 @@ function _applyCockpitState(detail = {}) {
   p._setCockpitContactMode(active);
 }
 
+/** Re-run a tracking intent that had to be deferred — the billboard collection or
+ *  the contact's billboard was not ready when the click landed. The stored
+ *  generation makes the intent self-expiring: any later cancel/re-track bumps it
+ *  and this restores nothing.
+ * @returns {boolean} True when a deferred intent was consumed and tracking re-applied. */
 function _applyPendingTrackingRestore() {
   const pending = p._pendingTrackingRestore;
   if (!pending || pending.generation !== p._trackingIntentGeneration) return false;
@@ -389,13 +446,15 @@ function _applyPendingTrackingRestore() {
   return true;
 }
 
+/** Drop any deferred tracking intent and invalidate the ones already queued. */
 function _cancelPendingTrackingRestore() {
   p._trackingIntentGeneration += 1;
   p._pendingTrackingRestore = null;
 }
 
 /** Drop an icao's generation entry once nothing references it (no live model, no in-flight
- *  load) — keeps _modelGen bounded. Shared by _releaseModel + both _ensureModel exit paths. */
+ *  load) — keeps _modelGen bounded. Shared by _releaseModel + both _ensureModel exit paths.
+ * @param {string} icao24 - Normalized ICAO 24-bit address whose generation entry is reaped. */
 function _cleanupModelGen(icao24) {
   if (!p._modelPending.has(icao24) && !p._models.has(icao24)) p._modelGen.delete(icao24);
 }
@@ -413,6 +472,9 @@ function _clearTrail() {
   p._trailHeadEntity = null;
 }
 
+/** Cockpit pips keep a flatter ramp than the ambient icons — the pip is a fixed-size
+ *  dot whose legibility must survive the full camera range, not a silhouette to scale.
+ * @returns {Cesium.NearFarScalar} Near/far scale ramp applied to cockpit contact pips. */
 function _cockpitBillboardScaleByDistance() {
   return new Cesium.NearFarScalar(1000, 1.15, 8000000, 0.65);
 }
@@ -428,6 +490,9 @@ function _destroyTrail() {
   }
 }
 
+/** Drain one bounded slice of the boost-flip reload queue (see `p.IR_RELOAD_BATCH`).
+ *  Called per fleet tick; the queue self-annihilates once empty, and entries whose
+ *  model already matches the current boost state are skipped without a release. */
 function _drainIrReloadQueue() {
   if (!p._irReloadQueue) return;
   const batch = p._irReloadQueue.splice(0, p.IR_RELOAD_BATCH);
@@ -441,7 +506,12 @@ function _drainIrReloadQueue() {
   if (p._irReloadQueue.length === 0) p._irReloadQueue = null;
 }
 
-/** Drive the exact fleet billboard-to-model handoff used by `_fleetTick`. */
+/** Drive the exact fleet billboard-to-model handoff used by `_fleetTick`.
+ * @param {object} root0 - Handoff request.
+ * @param {string} root0.icao24 - Normalized ICAO 24-bit address of the contact to hand off.
+ * @param {Cesium.Cartesian3} root0.position - Dead-reckoned world position feeding the model matrix.
+ * @param {number} [root0.course=0] - Display course (degrees) baked into the model matrix.
+ * @returns {boolean} True when the model took the visual, false when the billboard kept it. */
 function _driveFleetModelHandoffForTest({ icao24, position, course = 0 }) {
   return p._driveFleetModelHandoff(
     icao24,
@@ -452,12 +522,19 @@ function _driveFleetModelHandoffForTest({ icao24, position, course = 0 }) {
   );
 }
 
+/** Publish a layer-lifecycle/awareness `CustomEvent` on `window`. Silently a
+ *  no-op outside a browser realm (SSR, workers, unit-test node context).
+ * @param {string} type - Event name, e.g. the layer's awareness topic.
+ * @param {object} detail - Payload carried on the event's `detail` property. */
 function _emitAwarenessEvent(type, detail) {
   if (typeof window === 'undefined' || !window.dispatchEvent || typeof CustomEvent === 'undefined') return;
   window.dispatchEvent(new CustomEvent(type, { detail }));
 }
 
-/** Exercise the exact asynchronous fleet loader and return its admitted model. */
+/** Exercise the exact asynchronous fleet loader and return its admitted model.
+ * @param {string} icao24 - Normalized ICAO 24-bit address to load a model for.
+ * @returns {Promise<Cesium.Model|null>} The admitted model, or null when the load was
+ *   rejected (cap, stale generation, regime off) or failed. */
 async function _ensureFleetModelForTest(icao24) {
   await p._ensureModel(icao24);
   return p._models.get(icao24) || null;
@@ -473,7 +550,8 @@ async function _ensureFleetModelForTest(icao24) {
  *  (2026-07-03 Van Nuys grounded case; 2026-07-06 Austin QNH-below-field
  *  case). Far-side planes are still removed by the fleet tick's horizon
  *  occluder, which never depended on depth. Kept as a function so the
- *  callers' restyle sites stay diff-stable. */
+ *  callers' restyle sites stay diff-stable.
+ * @returns {number} `Infinity` — Cesium's "never depth-test this billboard" sentinel. */
 function _groundDepthDistance() {
   return Number.POSITIVE_INFINITY;
 }
@@ -483,13 +561,18 @@ function _groundDepthDistance() {
  *  neighbor's) billboard/model instead of the tile skin. Cesium's ray-pick exclusion
  *  matches picked-object IDs, and every billboard AND model in this layer carries its
  *  icao as `id`, so the icao strings cover both; the tracked entity is excluded as the
- *  object itself. Built lazily — only when a sample actually fires (one-shot). */
+ *  object itself. Built lazily — only when a sample actually fires (one-shot).
+ * @returns {Array<string|Cesium.Entity>} Pick IDs to exclude from the ground-sample ray. */
 function _groundSampleExclusions() {
   const out = [...p._billboards.keys()];
   if (p._trackedEntity) out.push(p._trackedEntity);
   return out;
 }
 
+/** A user/voice/tool-initiated selection — the class of origin that may open the
+ *  cockpit or force a track, as opposed to a programmatic reconcile.
+ * @param {string} origin - Tracking-origin tag carried on a track/clear call.
+ * @returns {boolean} True for `user`, `voice`, or `tool`. */
 function _isExplicitTrackingOrigin(origin) {
   return origin === 'user' || origin === 'voice' || origin === 'tool';
 }
@@ -499,7 +582,7 @@ function _isExplicitTrackingOrigin(origin) {
  * predates its oldest real fix — i.e. _deadReckon is extrapolating backward, with no
  * real history yet sitting BEHIND the displayed icon. The trail must draw nothing in
  * this window (every accumulated point is ahead of the icon).
- * @returns {boolean}
+ * @returns {boolean} True while the tracked contact has no fix behind its display time.
  */
 function _isTrackWarmingUp() {
   if (!p._trackedIcao) return false;
@@ -511,7 +594,8 @@ function _isTrackWarmingUp() {
   return Cesium.JulianDate.lessThan(renderTime, history[0].time);
 }
 
-/** Active ADD radius (m) — new planes inside this range get a model. Mode-aware: 'all' reaches far. */
+/** Active ADD radius (m) — new planes inside this range get a model. Mode-aware: 'all' reaches far.
+ * @returns {number} Admission radius in metres for the current 3D mode. */
 function _modelAddDistM() {
   return p._models3dMode === 'all' ? p.MODEL_ALL_ADD_M : p.MODEL_PROX_ADD_M;
 }
@@ -530,7 +614,12 @@ function _modelAddDistM() {
  *  keeps the 2D billboard visible and the model hidden, and it retries later. Once
  *  a contact has resolved once, a later outage holds that measurement inside
  *  groundSnap's drift bound instead — a taxiing aircraft does not pop back to 2D
- *  because a resample is mid-backoff. */
+ *  because a resample is mid-backoff.
+ * @param {string} icao24 - Normalized ICAO 24-bit address (ground-snap cache key).
+ * @param {Cesium.Cartesian3} pos - Dead-reckoned world position of the contact.
+ * @param {Cesium.Cartesian3} [result] - Cartesian to reuse for the snapped position.
+ * @returns {Cesium.Cartesian3|null} `pos` verbatim when airborne, the skin-snapped
+ *   position (plus belly offset) when grounded, or null while placement is unresolved. */
 function _modelDisplayPosition(icao24, pos, result) {
   const meta = p._flightData.get(icao24);
   if (!meta || !meta.onGround) return pos;
@@ -547,12 +636,15 @@ function _modelDisplayPosition(icao24, pos, result) {
  * sets it true for a fleet model (`_driveFleetModelHandoff`, after the matrix is
  * committed) and one for the tracked model (`_updateTrackedModel`, likewise);
  * everything else — admission, an unresolved ground, a not-yet-ready glTF, the
- * limb cull, a regime exit — only ever clears it. */
+ * limb cull, a regime exit — only ever clears it.
+ * @param {Cesium.Model|null} model - Model primitive to test, or null when none is loaded.
+ * @returns {boolean} True when the model is loaded AND currently the drawn visual. */
 function _modelIsRendering(model) {
   return Boolean(model) && model.ready === true && model.show === true;
 }
 
-/** Active KEEP radius (m) — a modeled plane keeps its model out to here (hysteresis vs ADD). */
+/** Active KEEP radius (m) — a modeled plane keeps its model out to here (hysteresis vs ADD).
+ * @returns {number} Release radius in metres for the current 3D mode. */
 function _modelKeepDistM() {
   return p._models3dMode === 'all' ? p.MODEL_ALL_KEEP_M : p.MODEL_PROX_KEEP_M;
 }
@@ -589,8 +681,8 @@ function _modelKeepDistM() {
  *    `_updateTrackedModel` to clear `show`; the rendering test is what keeps a
  *    null or still-loading tracked model from claiming a visual it is not
  *    drawing yet.
- * @param {string} icao24
- * @returns {boolean}
+ * @param {string} icao24 - Normalized ICAO 24-bit address of the contact in question.
+ * @returns {boolean} True when a 3D model is what the operator is looking at for this contact.
  */
 function _modelOwnsVisual(icao24) {
   if (icao24 === p._trackedIcao) {
@@ -606,13 +698,17 @@ function _modelOwnsVisual(icao24) {
  *  `all`, and one who wants none turns 3D off — this predicate is unchanged. The TRACKED
  *  contact does not route through here: it is one model, it is what the camera is aimed at,
  *  and it takes its own default-on, hysteretic zoom regime
- *  (`_trackedModelRegimeActive`). */
+ *  (`_trackedModelRegimeActive`).
+ * @returns {boolean} True when fleet contacts are eligible for 3D models this frame. */
 function _modelRegimeActive() {
   if (!p._models3dEnabled) return false;
   const h = p._viewer?.camera?.positionCartographic?.height ?? Infinity;
   return h < p.MODEL_ALT_CEIL_M;
 }
 
+/** Canonicalize a candidate contact id to this layer's icao key form.
+ * @param {*} candidate - Raw id from an event payload, selection, or feed record.
+ * @returns {string|null} Trimmed lowercase id, or null when the candidate is empty. */
 function _normalizeTrackedIcao(candidate) {
   const normalized = String(candidate ?? '').trim().toLowerCase();
   return normalized || null;
@@ -620,7 +716,7 @@ function _normalizeTrackedIcao(candidate) {
 
 /**
  * Global keydown handler — Escape deselects the tracked flight.
- * @param {KeyboardEvent} e
+ * @param {KeyboardEvent} e - Browser key event; only the Escape key is acted on.
  */
 function _onKeyDown(e) {
   if (e.key === 'Escape' && p._trackedIcao) {
@@ -672,7 +768,8 @@ function _refreshTr3bForStyle() {
 }
 
 /** Remove the 3D model for ONE aircraft (removal / military-suppression / track handoff).
- *  Bumps the load generation so any in-flight load for this icao is rejected on completion. */
+ *  Bumps the load generation so any in-flight load for this icao is rejected on completion.
+ * @param {string} icao24 - Normalized ICAO 24-bit address whose model is released. */
 function _releaseModel(icao24) {
   const m = p._models.get(icao24);
   const pending = p._modelPending.has(icao24);
@@ -712,6 +809,8 @@ function _releaseTrackedModel() {
   }
 }
 
+/** Queue every live model for the boost-state reload and drop the tracked model so
+ *  both presentation paths come back with the shader/tint they were created under. */
 function _reloadModelsForIrBoost() {
   p._irReloadQueue = [...p._models.keys()];
   for (const icao of p._modelPending) {
@@ -754,7 +853,10 @@ function _resetTrackedSelectionState() {
   p._trackedModelRetryAtMs = 0;
 }
 
-/** Set the exact Cockpit subject through the production state transition for focused tests. */
+/** Set the exact Cockpit subject through the production state transition for focused tests.
+ * @param {boolean} active - True to enter Cockpit contact mode, false to leave it.
+ * @param {string|null} [subjectId=null] - ICAO 24-bit address of the Cockpit subject; ignored
+ *   when `active` is false. */
 function _setCockpitDetectionSubjectForTest(active, subjectId = null) {
   p._applyCockpitState({ active, subjectId });
 }
@@ -765,7 +867,8 @@ function _setCockpitDetectionSubjectForTest(active, subjectId = null) {
  *  Gap-proof: the fleet billboard is re-shown BEFORE the release so the
  *  contact never goes invisible for the tick gap; _releaseModel's generation
  *  bump also invalidates any pending load. The tracked standalone model gets
- *  the same rule (its billboard entity is always the fallback visual). */
+ *  the same rule (its billboard entity is always the fallback visual).
+ * @param {string} icao24 - Normalized ICAO 24-bit address whose model spec is re-checked. */
 function _syncModelToClass(icao24) {
   const key = p._specKeyFor(p._flightData.get(icao24)?.klass);
   const current = p._models.get(icao24);
@@ -818,7 +921,8 @@ function _toCleanText(value) {
  *  readout run in postRender at a LATER frameNumber, so calling _trackedDisplayPosition there would
  *  re-run the dead-reckon on a fresh sample and double-advance the reconciliation → the label jitters
  *  against the now-stable plane (the model's jitter fix, resurfacing in the labels). Returns null when
- *  there's no valid fix for the tracked aircraft, so callers fall back to the billboard position. */
+ *  there's no valid fix for the tracked aircraft, so callers fall back to the billboard position.
+ * @returns {Cesium.Cartesian3|null} This frame's already-computed tracked position, or null. */
 function _trackedDisplayCached() {
   return (p._drReconcileValid && p._drReconcileIcao === p._trackedIcao) ? p._cachedDRPosition : null;
 }
@@ -831,12 +935,17 @@ function _trackedDisplayCached() {
  *  against the size the operator SEES, not the nominal one. */
 /** World-space origin of the tracked model, or null when no model of this
  *  contact is drawing. This is the centre the rendered bounding sphere is
- *  measured from, so the trail clip and the envelope agree on one frame. */
+ *  measured from, so the trail clip and the envelope agree on one frame.
+ * @returns {Cesium.Cartesian3|null} Model origin in world space, or null when no model draws. */
 function _trackedModelCenterWorld() {
   if (!p._trackedIcao || !p._trackedModel || !p._modelOwnsVisual(p._trackedIcao)) return null;
   return Cesium.Matrix4.getTranslation(p._trackedModel.modelMatrix, p._scratchTrailClip);
 }
 
+/** Radius (m) of the tracked model as actually rendered this frame — the class
+ *  spec's native radius scaled by Cesium's effective `computedScale`, which may
+ *  exceed the nominal spec scale to satisfy minimumPixelSize.
+ * @returns {number} Rendered bounding radius in metres, 0 when no model draws. */
 function _trackedModelEnvelopeM() {
   if (!p._trackedIcao || !p._trackedModel || !p._modelOwnsVisual(p._trackedIcao)) return 0;
   const spec = p._modelSpec(p._flightData.get(p._trackedIcao)?.klass);
@@ -846,7 +955,9 @@ function _trackedModelEnvelopeM() {
   return spec.nativeRadiusM * scale;
 }
 
-/** Whether the driver may start another tracked-model load this frame. */
+/** Whether the driver may start another tracked-model load this frame.
+ * @param {number} [nowMs=Date.now()] - Current wall clock (ms); injected for determinism.
+ * @returns {boolean} True while the per-selection failure bound and retry backoff allow it. */
 function _trackedModelLoadAllowed(nowMs = Date.now()) {
   if (p._trackedModelFailIcao !== p._trackedIcao) return true; // untried selection
   if (p._trackedModelFailCount >= p.TRACKED_MODEL_MAX_LOAD_FAILS) return false;
@@ -855,11 +966,15 @@ function _trackedModelLoadAllowed(nowMs = Date.now()) {
 
 /** Evaluate the TRACKED contact's zoom regime through the production predicate.
  *  The decision is latch-bearing (default-on, hysteretic, cockpit/TR-3B-suppressed)
- *  and otherwise only observable through a live scene, so tests drive it here. */
+ *  and otherwise only observable through a live scene, so tests drive it here.
+ * @returns {boolean} The tracked contact's current zoom-regime decision. */
 function _trackedModelRegimeActiveForTest() {
   return p._trackedModelRegimeActive();
 }
 
+/** Trail endpoint for the rendered tracked owner: the model's trail hardpoint when a
+ *  model owns the visual, otherwise the cached dead-reckoned display position.
+ * @returns {Cesium.Cartesian3|null} World-space trail head, or null with no valid fix. */
 function _trackedTrailCached() {
   if (p._trackedIcao && p._modelOwnsVisual(p._trackedIcao)) {
     const spec = p._modelSpec(p._flightData.get(p._trackedIcao)?.klass);
@@ -885,6 +1000,7 @@ function _trackedTrailCached() {
  * It reads `modelMatrix`, which `_updateTrackedModel` already wrote this frame — no
  * sampling, no `_modelDisplayPosition` call from postRender, and no new dead reckoning,
  * so the follow-camera anti-jitter contract on `gevDisplayPosition` is untouched.
+ * @returns {Cesium.Cartesian3|null} The tracked contact's visual position this frame.
  */
 function _trackedVisualCached() {
   if (p._trackedIcao && p._modelOwnsVisual(p._trackedIcao)) {
@@ -900,7 +1016,8 @@ function _trackedVisualCached() {
 }
 
 /** Run one frame of the production tracked-model driver (normally a
- *  `scene.preUpdate` listener) so tests can pin its bounded load retries. */
+ *  `scene.preUpdate` listener) so tests can pin its bounded load retries.
+ * @returns {*} Whatever the injected driver returned for that frame. */
 function _updateTrackedModelForTest() {
   return p._updateTrackedModel();
 }
@@ -916,7 +1033,9 @@ function _appendTrailFix(position) {
   p._refreshTrailDisplay();
 }
 
-/** Apply the current normal/cockpit visual contract to one owned fleet billboard. */
+/** Apply the current normal/cockpit visual contract to one owned fleet billboard.
+ * @param {string} icao24 - Normalized ICAO 24-bit address the billboard belongs to.
+ * @param {Cesium.Billboard} [bb] - Billboard primitive to restyle; a no-op when absent. */
 function _applyFleetBillboardPresentation(icao24, bb) {
   if (!bb) return;
   const limbScale = p._billboardLimbScale.get(bb) ?? 1;
@@ -947,7 +1066,15 @@ function _applyFleetBillboardPresentation(icao24, bb) {
  * ready 3D model. Missing/loading models and unresolved terrain always leave
  * the billboard owning the visual, so no render frame can hide both.
  * `beforeShow` runs only on the committing path — the per-tick model treatment
- * belongs to a model that is about to draw, not to one still waiting. */
+ * belongs to a model that is about to draw, not to one still waiting.
+ * @param {string} icao24 - Normalized ICAO 24-bit address being handed off.
+ * @param {Cesium.Model|null} model - Admitted model primitive, or null when none is loaded.
+ * @param {Cesium.Billboard} bb - The 2D billboard currently owning the visual.
+ * @param {Cesium.Cartesian3} pos - Dead-reckoned world position for the model matrix.
+ * @param {number} course - Display course (degrees) baked into the model matrix.
+ * @param {Function} [beforeShow] - Ran once immediately before the model is shown.
+ * @returns {boolean} True when the model now owns the visual, false when the billboard
+ *   kept it (nothing loaded, or no safe placement). */
 function _driveFleetModelHandoff(icao24, model, bb, pos, course, beforeShow) {
   if (!model) {
     bb.show = true;
@@ -974,7 +1101,8 @@ function _driveFleetModelHandoff(icao24, model, bb, pos, course, beforeShow) {
   return true;
 }
 
-/** Lazily create the glTF model for an aircraft (fire-and-forget; billboard shows until ready). */
+/** Lazily create the glTF model for an aircraft (fire-and-forget; billboard shows until ready).
+ * @param {string} icao24 - Normalized ICAO 24-bit address to admit into the model set. */
 async function _ensureModel(icao24) {
   // Never model the TRACKED aircraft — it owns a separate entity billboard, and the fleet
   // tick skips it, so a model here would be orphaned + double-rendered.
@@ -1063,6 +1191,14 @@ async function _ensureModel(icao24) {
  * up = +Z; heading 0 deg = north, 90 deg = east. Sets `_drCourseDeg` to the
  * arc's instantaneous end course on every path.
  * Arc math adapted from skylight (https://github.com/cpaczek/skylight, MIT).
+ * @param {{position: Cesium.Cartesian3, velocity: number, track: number}} fix - The feed fix
+ *   to project; its own velocity/track win over the INFO fallback.
+ * @param {object|null} info - The feed's enrichment record consulted when `fix` lacks
+ *   kinematics (field names are layer-specific via the injected accessors).
+ * @param {number} dt - Seconds to project; positive forward, negative backward.
+ * @param {Cesium.Cartesian3} out - Cartesian to receive the projected position.
+ * @param {number} [turnRateDps=0] - Observed turn rate (deg/s); a straight line when ≈0.
+ * @returns {Cesium.Cartesian3} `out`, holding the projected world position.
  */
 function _extrapolateFix(fix, info, dt, out, turnRateDps = 0) {
   const speed = Number.isFinite(fix.velocity) ? fix.velocity : (p._infoSpeed(info) || 0);
@@ -1083,7 +1219,9 @@ function _extrapolateFix(fix, info, dt, out, turnRateDps = 0) {
   return Cesium.Matrix4.multiplyByPoint(enu, p._scratchOffset, out);
 }
 
-/** Switch all current and future ambient contacts between silhouettes and cockpit pips. */
+/** Switch all current and future ambient contacts between silhouettes and cockpit pips.
+ * @param {boolean} active - True to enter Cockpit contact mode, false to restore the
+ *   normal silhouette presentation. */
 function _setCockpitContactMode(active) {
   const next = active === true;
   if (p._cockpitContactMode === next) return;
@@ -1102,7 +1240,8 @@ function _setCockpitContactMode(active) {
   p._lastFleetTickMs = 0;
 }
 
-/** Evaluate the production tracked-billboard handoff colour for focused tests. */
+/** Evaluate the production tracked-billboard handoff colour for focused tests.
+ * @returns {Cesium.Color} The color the tracked billboard should carry this frame. */
 function _trackedBillboardColorForTest() {
   return p._modelOwnsVisual(p._trackedIcao) ? p.UNMODELED_TRACKED_COLOR : p.MODELED_ICON_COLOR;
 }
@@ -1116,7 +1255,9 @@ function _trackedBillboardColorForTest() {
  *  its declaration): on click the limiter continues from whatever nose the
  *  fleet pass was displaying, and on untrack the fleet pass continues from
  *  whatever nose this path last wrote — the tracked and fleet consumers of
- *  the same aircraft can never disagree across the handoff. */
+ *  the same aircraft can never disagree across the handoff.
+ * @returns {number} Smoothed display course (degrees, 0–360), hover-held when the
+ *   displayed speed is too low for any course source to be trusted. */
 function _trackedDisplayCourse() {
   const info = p._flightData.get(p._trackedIcao);
   const fallback = p._infoHeading(info) || 0;
@@ -1137,7 +1278,10 @@ function _trackedDisplayCourse() {
   return course;
 }
 
-/** Resolve the selected aircraft's actual rendered square extent this frame. */
+/** Resolve the selected aircraft's actual rendered square extent this frame.
+ * @param {string} icao24 - Normalized ICAO 24-bit address of the selected contact.
+ * @param {Cesium.Cartesian3} position - World position the contact renders at this frame.
+ * @returns {number} Projected on-screen size in pixels, clamped to the model/billboard caps. */
 function _trackedFocusSizePx(icao24, position) {
   const camera = p._viewer?.camera;
   const scene = p._viewer?.scene;
@@ -1188,6 +1332,7 @@ function _trackedFocusSizePx(icao24, position) {
  * In cockpit you are sitting 7 m behind and 2.6 m above your own aircraft's
  * origin, so its ~26 m airframe would fill the visor. First-person means your
  * own airframe is not drawn.
+ * @returns {boolean} True when the selected contact should resolve into a 3D model.
  */
 function _trackedModelRegimeActive() {
   if (p._trackedZoomLatchIcao !== p._trackedIcao) {
@@ -1208,7 +1353,9 @@ function _trackedModelRegimeActive() {
   return p._trackedZoomLatched;
 }
 
-/** Write the explicit tracked presentation model and refresh its host entry. */
+/** Write the explicit tracked presentation model and refresh its host entry.
+ * @param {string} icao24 - Normalized ICAO 24-bit address of the tracked contact; a
+ *   mismatch with the live selection is a stale call and is ignored. */
 function _updateTrackedLabelModel(icao24) {
   if (!p._trackedEntity || icao24 !== p._trackedIcao) return;
   p._trackedEntity.gevLabelModel = trackedLabelModelFromText(

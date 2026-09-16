@@ -112,6 +112,15 @@ const FRAGMENT_SHADER = `
   }
 `;
 
+/**
+ * Compile one GLSL shader stage, deleting it and reporting the driver's log
+ * on failure.
+ * @param {WebGLRenderingContext} gl Context to compile against.
+ * @param {number} type `gl.VERTEX_SHADER` or `gl.FRAGMENT_SHADER`.
+ * @param {string} source GLSL source text.
+ * @returns {WebGLShader} Compiled shader handle.
+ * @throws {Error} The driver's info log when compilation fails.
+ */
 function compileShader(gl, type, source) {
   const shader = gl.createShader(type);
   gl.shaderSource(shader, source);
@@ -122,6 +131,13 @@ function compileShader(gl, type, source) {
   throw new Error(error);
 }
 
+/**
+ * Haversine great-circle distance between two lat/lon points.
+ * @param {{latitude: number, longitude: number}} a First point, degrees.
+ * @param {{latitude: number, longitude: number}} b Second point, degrees.
+ * @returns {number} Distance in metres; Infinity when either point is unusable,
+ *   which reads as "always refresh".
+ */
 function greatCircleM(a, b) {
   if (![a?.latitude, a?.longitude, b?.latitude, b?.longitude].every(Number.isFinite)) return Infinity;
   const latitudeA = Cesium.Math.toRadians(a.latitude);
@@ -133,7 +149,18 @@ function greatCircleM(a, b) {
   return 6371000 * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
 }
 
-/** Return whether cockpit weather must refresh for elapsed time or movement. */
+/**
+ * Return whether cockpit weather must refresh for elapsed time or movement.
+ * @param {object} q Refresh inputs.
+ * @param {number} q.nowMs Current clock reading, milliseconds.
+ * @param {number} q.fetchedAt When the live observation was fetched, epoch ms.
+ * @param {{latitude: number, longitude: number}|null} q.anchor Location the
+ *   observation was fetched for, degrees.
+ * @param {{latitude: number, longitude: number}} q.point Current camera location, degrees.
+ * @param {boolean} q.hasWeather Whether any observation is held at all.
+ * @returns {boolean} True when the observation is stale, has moved too far, or
+ *   is missing.
+ */
 export function cockpitWeatherRefreshDue({ nowMs, fetchedAt, anchor, point, hasWeather }) {
   if (!hasWeather) return true;
   if (!Number.isFinite(nowMs) || !Number.isFinite(fetchedAt)) return true;
@@ -141,7 +168,13 @@ export function cockpitWeatherRefreshDue({ nowMs, fetchedAt, anchor, point, hasW
     || greatCircleM(anchor, point) >= WEATHER_MOVE_REFRESH_M;
 }
 
-/** Returns the capped framebuffer size used by the cockpit cloud pass. */
+/**
+ * Returns the capped framebuffer size used by the cockpit cloud pass.
+ * @param {number} width Viewport width in CSS px.
+ * @param {number} height Viewport height in CSS px.
+ * @returns {{width: number, height: number}} Render size in px, at least 1×1,
+ *   scaled so the pass stays inside MAX_RENDER_WIDTH/HEIGHT.
+ */
 export function cockpitCloudRenderSize(width, height) {
   const viewportWidth = Math.max(1, Number(width) || 1);
   const viewportHeight = Math.max(1, Number(height) || 1);
@@ -156,7 +189,11 @@ export function cockpitCloudRenderSize(width, height) {
   };
 }
 
-/** Resolve the persisted cockpit-weather preference; missing values default off. */
+/**
+ * Resolve the persisted cockpit-weather preference; missing values default off.
+ * @param {string|null} value Stored preference read from localStorage.
+ * @returns {boolean} Whether the cloud pass is opted in.
+ */
 export function cockpitWeatherEnabledFromStoredValue(value) {
   return value === '1';
 }
@@ -496,7 +533,7 @@ export class CockpitCloudEffectsController {
   /**
    * Hidden-state gate (perf wave 2): pause the independent cloud rAF while
    * the document is hidden; resume it on return if cockpit mode is still up.
-   * @param {boolean} suspended
+   * @param {boolean} suspended True while the document is hidden.
    * @returns {void}
    */
   setSuspended(suspended) {
@@ -526,6 +563,11 @@ export class CockpitCloudEffectsController {
   }
 }
 
+/**
+ * Construct the cockpit cloud controller for a viewer.
+ * @param {Cesium.Viewer} viewer Viewer whose camera anchors the weather query.
+ * @returns {CockpitCloudEffectsController} Controller managing the cloud pass.
+ */
 export function initCockpitCloudEffects(viewer) {
   return new CockpitCloudEffectsController(viewer);
 }

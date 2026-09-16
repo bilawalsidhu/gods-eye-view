@@ -47,12 +47,30 @@ const CELESTIAL_MAX_DEVICE_PIXEL_RATIO = 1.25;
 let keyholeFadeRatio = KEYHOLE_LABEL_FEATHER_RATIO;
 let keyholeOutsideOpacity = KEYHOLE_OUTSIDE_OPACITY_DEFAULT;
 
-/** Clamp a number to an inclusive range. */
+/**
+ * Clamp a number to an inclusive range.
+ *
+ * @param {number} value - Input to constrain.
+ * @param {number} min - Lower bound, returned when value is below it.
+ * @param {number} max - Upper bound, returned when value is above it.
+ * @returns {number} The clamped value; equal to min/max at the range edges.
+ */
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
-/** Update the shared fade distance and outside-opacity floor. */
+/**
+ * Update the shared fade distance and outside-opacity floor. Non-finite
+ * entries leave the current tuning untouched, so callers may pass a partial
+ * patch (or nothing) without resetting the other knob.
+ *
+ * @param {object} [tuning] - Fields to override; defaults to an empty patch.
+ * @param {number} [tuning.fadeRatio] - Feather band as a fraction of the keyhole
+ *   radius, clamped to [0, KEYHOLE_LABEL_FEATHER_MAX_RATIO].
+ * @param {number} [tuning.outsideOpacity] - Opacity floor outside the keyhole,
+ *   clamped to [0, 1].
+ * @returns {{fadeRatio: number, outsideOpacity: number}} The applied tuning.
+ */
 export function setKeyholeFadeTuning({ fadeRatio, outsideOpacity } = {}) {
   if (Number.isFinite(fadeRatio)) {
     keyholeFadeRatio = clamp(fadeRatio, 0, KEYHOLE_LABEL_FEATHER_MAX_RATIO);
@@ -63,12 +81,26 @@ export function setKeyholeFadeTuning({ fadeRatio, outsideOpacity } = {}) {
   return getKeyholeFadeTuning();
 }
 
-/** Read the current normalized keyhole fade settings. */
+/**
+ * Read the current normalized keyhole fade settings.
+ *
+ * @returns {{fadeRatio: number, outsideOpacity: number}} Feather fraction of the
+ *   keyhole radius and the outside-opacity floor currently in force.
+ */
 export function getKeyholeFadeTuning() {
   return { fadeRatio: keyholeFadeRatio, outsideOpacity: keyholeOutsideOpacity };
 }
 
-/** Return the single shared screen-space keyhole circle and label feather. */
+/**
+ * Return the single shared screen-space keyhole circle and label feather.
+ *
+ * @param {number} width - Viewport width in CSS pixels.
+ * @param {number} height - Viewport height in CSS pixels; the keyhole diameter
+ *   is derived from it, so a portrait window yields the smaller circle.
+ * @returns {{centerX: number, centerY: number, radius: number, featherPx: number}}
+ *   Keyhole centre and radius in CSS pixels plus the feather band in pixels;
+ *   all zeros when either dimension is not positive.
+ */
 export function getKeyholeGeometry(width, height) {
   const w = Number(width);
   const h = Number(height);
@@ -88,12 +120,26 @@ export function getKeyholeGeometry(width, height) {
  * Compute the radial opacity for a callout's visual center. Text remains fully
  * opaque inside the keyhole and fades linearly to the configured outside-opacity
  * floor through a band derived from the live keyhole radius.
+ *
+ * @param {number} labelX - Label visual centre X in CSS pixels.
+ * @param {number} labelY - Label visual centre Y in CSS pixels.
+ * @param {number} width - Viewport width in CSS pixels.
+ * @param {number} height - Viewport height in CSS pixels.
+ * @returns {number} Opacity in [0, 1] at that point.
  */
 export function keyholeLabelAlpha(labelX, labelY, width, height) {
   return keyholeLabelAlphaFromGeometry(labelX, labelY, getKeyholeGeometry(width, height));
 }
 
-/** Compute keyhole opacity from geometry already cached by a hot render loop. */
+/**
+ * Compute keyhole opacity from geometry already cached by a hot render loop.
+ *
+ * @param {number} labelX - Label visual centre X in CSS pixels.
+ * @param {number} labelY - Label visual centre Y in CSS pixels.
+ * @param {object} geometry - Geometry from {@link getKeyholeGeometry}.
+ * @returns {number} 1 inside the circle, the outside-opacity floor past the
+ *   feather band, and a linear blend across the band itself.
+ */
 export function keyholeLabelAlphaFromGeometry(labelX, labelY, geometry) {
   if (!geometry || !(geometry.radius > 0) || !Number.isFinite(labelX) || !Number.isFinite(labelY)) return 0;
   const feather = geometry.featherPx;
@@ -104,19 +150,35 @@ export function keyholeLabelAlphaFromGeometry(labelX, labelY, geometry) {
   return 1 - (1 - keyholeOutsideOpacity) * progress;
 }
 
-/** Normalize an angle to [0, 2π). */
+/**
+ * Normalize an angle to [0, 2π).
+ *
+ * @param {number} angle - Angle in radians, any sign or magnitude.
+ * @returns {number} Equivalent angle in radians in [0, 2π).
+ */
 export function normalizeAngle(angle) {
   const wrapped = angle % TAU;
   return wrapped < 0 ? wrapped + TAU : wrapped;
 }
 
-/** Return the shortest unsigned distance between two circular angles. */
+/**
+ * Return the shortest unsigned distance between two circular angles.
+ *
+ * @param {number} a - First angle in radians, any wrap.
+ * @param {number} b - Second angle in radians, any wrap.
+ * @returns {number} Separation in radians within [0, π].
+ */
 export function circularAngleDistance(a, b) {
   const delta = Math.abs(normalizeAngle(a) - normalizeAngle(b));
   return Math.min(delta, TAU - delta);
 }
 
-/** The optical celestial treatment is intentionally limited to Normal view. */
+/**
+ * The optical celestial treatment is intentionally limited to Normal view.
+ *
+ * @param {string} styleName - Active visual style identifier from StyleManager.
+ * @returns {boolean} True only for the 'normal' style.
+ */
 export function isCelestialRingStyleSupported(styleName) {
   return styleName === 'normal';
 }
@@ -129,7 +191,9 @@ export function isCelestialRingStyleSupported(styleName) {
  * @param {number} rightComponent - Dot(direction, camera.rightWC).
  * @param {number} upComponent - Dot(direction, camera.upWC).
  * @param {number} lastAngle - Previous stable angle in radians.
- * @returns {{angle:number, opacity:number, stable:boolean}}
+ * @returns {{angle: number, opacity: number, stable: boolean}} Bearing in radians
+ *   in [0, 2π), marker opacity in [0, 1], and whether the bearing is stable
+ *   enough to keep (unstable frames reuse `lastAngle` and fade instead).
  */
 export function celestialScreenAngle(rightComponent, upComponent, lastAngle = 0) {
   const planeLength = Math.hypot(rightComponent, upComponent);
@@ -151,15 +215,18 @@ export function celestialScreenAngle(rightComponent, upComponent, lastAngle = 0)
  * Test whether a projected Earth disc is completely inside the shared keyhole.
  * The different enter/exit clearances provide hysteresis while zooming.
  *
- * @param {object} geometry
- * @param {number} geometry.earthCenterX
- * @param {number} geometry.earthCenterY
- * @param {number} geometry.earthRadius
- * @param {number} geometry.keyholeCenterX
- * @param {number} geometry.keyholeCenterY
- * @param {number} geometry.keyholeRadius
- * @param {boolean} wasVisible
- * @returns {boolean}
+ * @param {object} geometry - Projected disc, as returned by
+ *   {@link projectEarthDiscToViewport}.
+ * @param {number} geometry.earthCenterX - Earth-disc centre X in CSS pixels.
+ * @param {number} geometry.earthCenterY - Earth-disc centre Y in CSS pixels.
+ * @param {number} geometry.earthRadius - Earth-disc radius in CSS pixels.
+ * @param {number} geometry.keyholeCenterX - Keyhole centre X in CSS pixels.
+ * @param {number} geometry.keyholeCenterY - Keyhole centre Y in CSS pixels.
+ * @param {number} geometry.keyholeRadius - Keyhole radius in CSS pixels.
+ * @param {boolean} wasVisible - Previous state; selects the looser exit
+ *   clearance so zooming out does not flicker the overlay.
+ * @returns {boolean} True when the clearance between the disc and the keyhole
+ *   edge meets the enter/exit threshold in CSS pixels.
  */
 export function isFullGlobeInsideKeyhole(geometry, wasVisible = false) {
   const {
@@ -177,7 +244,16 @@ export function isFullGlobeInsideKeyhole(geometry, wasVisible = false) {
   return clearance >= (wasVisible ? GLOBE_EXIT_CLEARANCE_PX : GLOBE_ENTER_CLEARANCE_PX);
 }
 
-/** Return the Earth-disc radius in CSS pixels for a perspective camera. */
+/**
+ * Return the Earth-disc radius in CSS pixels for a perspective camera.
+ *
+ * @param {number} cameraDistance - Camera range from Earth's centre in metres;
+ *   must exceed the WGS84 maximum radius or the camera is inside the globe.
+ * @param {number} viewportHeight - Viewport height in CSS pixels.
+ * @param {number} fovy - Vertical field of view in radians, within (0, π).
+ * @returns {number|null} Projected limb radius in CSS pixels, or null when the
+ *   inputs are non-finite, out of range, or degenerate.
+ */
 export function earthDiscScreenRadius(cameraDistance, viewportHeight, fovy) {
   const earthRadiusM = Cesium.Ellipsoid.WGS84.maximumRadius;
   if (
@@ -202,7 +278,9 @@ export function earthDiscScreenRadius(cameraDistance, viewportHeight, fovy) {
  * @param {number} height - Viewport height in CSS pixels.
  * @param {object} [scratchCenter] - Reusable Cesium Cartesian2 result.
  * @param {object} [scratchToCenter] - Reusable Cesium Cartesian3 result.
- * @returns {object|null}
+ * @returns {object|null} `{earthCenterX, earthCenterY, earthRadius,
+ *   keyholeCenterX, keyholeCenterY, keyholeRadius}` in CSS pixels, or null when
+ *   the camera is inside/at the surface, looking away, or the viewport is empty.
  */
 export function projectEarthDiscToViewport(
   viewer,
@@ -245,7 +323,20 @@ export function projectEarthDiscToViewport(
   };
 }
 
-/** Draw one tapered orbital arc around a celestial marker. */
+/**
+ * Draw one tapered orbital arc around a celestial marker. Segment alpha and
+ * width follow a sine envelope so the arc swells at the marker and thins
+ * toward its ends.
+ *
+ * @param {CanvasRenderingContext2D} ctx - Effect-layer 2D context (CSS pixel
+ *   transform already applied by {@link CelestialRing#_resize}).
+ * @param {number} cx - Ring centre X in CSS pixels.
+ * @param {number} cy - Ring centre Y in CSS pixels.
+ * @param {number} radius - Arc radius in CSS pixels.
+ * @param {number} angle - Bearing the arc is centred on, in radians.
+ * @param {string} rgb - Comma-separated "r, g, b" stroke colour triplet.
+ * @param {number} strength - Peak stroke alpha multiplier in [0, 1].
+ */
 function drawTaperedArc(ctx, cx, cy, radius, angle, rgb, strength) {
   const span = 0.82;
   const segments = 18;
@@ -268,7 +359,20 @@ function drawTaperedArc(ctx, cx, cy, radius, angle, rgb, strength) {
   ctx.restore();
 }
 
-/** Draw the soft directional rays cast inward from the sun marker. */
+/**
+ * Draw the soft directional rays cast inward from the sun marker. Clipped to
+ * the annulus between the Earth limb and the ring so the globe itself stays
+ * untouched.
+ *
+ * @param {CanvasRenderingContext2D} ctx - Sun-layer 2D context.
+ * @param {number} cx - Ring centre X in CSS pixels.
+ * @param {number} cy - Ring centre Y in CSS pixels.
+ * @param {number} radius - Outer ring radius in CSS pixels.
+ * @param {number} innerRadius - Annulus inner radius in CSS pixels, at or
+ *   beyond the projected Earth limb.
+ * @param {number} angle - Sun bearing in radians; geometry is painted at 0 and
+ *   rotated into place by the caller via a CSS transform.
+ */
 function drawSunRays(ctx, cx, cy, radius, innerRadius, angle) {
   const sx = cx + Math.cos(angle) * radius;
   const sy = cy + Math.sin(angle) * radius;
@@ -311,7 +415,17 @@ function drawSunRays(ctx, cx, cy, radius, innerRadius, angle) {
   ctx.restore();
 }
 
-/** Draw a restrained cool haze around the moon sector. */
+/**
+ * Draw a restrained cool haze around the moon sector.
+ *
+ * @param {CanvasRenderingContext2D} ctx - Moon-layer 2D context.
+ * @param {number} cx - Ring centre X in CSS pixels.
+ * @param {number} cy - Ring centre Y in CSS pixels.
+ * @param {number} radius - Ring radius in CSS pixels; the haze spans a small
+ *   fraction of it.
+ * @param {number} angle - Moon bearing in radians; painted at 0 and rotated by
+ *   the caller.
+ */
 function drawMoonHaze(ctx, cx, cy, radius, angle) {
   const mx = cx + Math.cos(angle) * radius;
   const my = cy + Math.sin(angle) * radius;
@@ -333,8 +447,13 @@ function drawMoonHaze(ctx, cx, cy, radius, angle) {
  */
 export class CelestialRing {
   /**
-   * @param {Cesium.Viewer} viewer
-   * @param {{enabled?:boolean,onAutoDisable?:Function}} [options]
+   * @param {Cesium.Viewer} viewer - Viewer whose container hosts the overlay;
+   *   its camera and canvas drive every frame.
+   * @param {{enabled?:boolean,onAutoDisable?:Function}} [options] - Startup
+   *   preference and auto-disable hook.
+   * @param {boolean} [options.enabled=true] - Start with the effect enabled.
+   * @param {Function} [options.onAutoDisable] - Invoked after the effect turns
+   *   itself off because the camera left the full-globe composition.
    */
   constructor(viewer, { enabled = true, onAutoDisable = null } = {}) {
     this.viewer = viewer;
@@ -418,7 +537,12 @@ export class CelestialRing {
     this.viewer.container.appendChild(this._root);
   }
 
-  /** Enable or disable the user preference for the effect. */
+  /**
+   * Enable or disable the user preference for the effect.
+   *
+   * @param {boolean} enabled - Desired state; re-enabling marks the ephemeris
+   *   dirty and both transitions request one render frame.
+   */
   setEnabled(enabled) {
     const wasEnabled = this.enabled;
     this.enabled = Boolean(enabled);
@@ -437,7 +561,11 @@ export class CelestialRing {
     }
   }
 
-  /** Whether the current camera already frames the complete globe inside the keyhole. */
+  /**
+   * Whether the current camera already frames the complete globe inside the keyhole.
+   *
+   * @returns {boolean} True when the projected disc clears the enter threshold.
+   */
   isGlobeFullyVisible() {
     const canvas = this.viewer.scene.canvas;
     const width = canvas.clientWidth || canvas.width;
@@ -450,7 +578,7 @@ export class CelestialRing {
   /**
    * Fly outward to the full-globe composition used by the celestial ring while
    * preserving the hemisphere currently beneath the camera.
-   * @param {{duration?:number}} [options]
+   * @param {{duration?:number}} [options] - Flight tuning.
    * @returns {boolean} Whether a valid camera flight was started.
    */
   focusFullGlobe({ duration = 2.4 } = {}) {
@@ -509,7 +637,15 @@ export class CelestialRing {
     this._outlineRenderKey = '';
   }
 
-  /** Resize the canvas backing store while drawing in CSS pixels. */
+  /**
+   * Resize the canvas backing store while drawing in CSS pixels. The backing
+   * scale is the cheapest of native devicePixelRatio and the pixel-count and
+   * dimension budgets, then applied as a context transform so every painter
+   * keeps working in CSS pixels.
+   *
+   * @param {number} width - CSS pixel width to draw at.
+   * @param {number} height - CSS pixel height to draw at.
+   */
   _resize(width, height) {
     const nativeDpr = Math.max(1, window.devicePixelRatio || 1);
     const pixelsScale = Math.sqrt(CELESTIAL_MAX_BACKING_PIXELS / (width * height));
@@ -534,6 +670,9 @@ export class CelestialRing {
   /**
    * Sample Earth-fixed directions once per enable. Camera movement only
    * re-projects these cached vectors; it never re-runs the planetary model.
+   * @param {Cesium.JulianDate} time - Clock sample for the planetary model.
+   * @returns {boolean} True when the cached vectors are usable (either freshly
+   *   sampled or still valid); false when the ICRF frame was unavailable.
    */
   _updateEphemeris(time) {
     if (!this._ephemerisDirty) return true;
@@ -560,7 +699,14 @@ export class CelestialRing {
     this._onAutoDisable?.();
   }
 
-  /** Return the projected Earth disc used for the full-globe gate. */
+  /**
+   * Return the projected Earth disc used for the full-globe gate.
+   *
+   * @param {number} width - Viewport width in CSS pixels.
+   * @param {number} height - Viewport height in CSS pixels.
+   * @returns {object|null} Disc/keyhole geometry from
+   *   {@link projectEarthDiscToViewport}, or null when not frameable.
+   */
   _projectedEarthDisc(width, height) {
     return projectEarthDiscToViewport(
       this.viewer,
@@ -571,7 +717,17 @@ export class CelestialRing {
     );
   }
 
-  /** Position one icon-library marker along the keyhole circumference. */
+  /**
+   * Position one icon-library marker along the keyhole circumference, pulled
+   * inward far enough to keep the glyph inside the viewport.
+   *
+   * @param {HTMLElement} marker - Marker span to place and fade.
+   * @param {number} cx - Ring centre X in CSS pixels.
+   * @param {number} cy - Ring centre Y in CSS pixels.
+   * @param {number} radius - Requested marker orbit radius in CSS pixels.
+   * @param {number} angle - Marker bearing in radians.
+   * @param {number} opacity - Marker opacity in [0, 1].
+   */
   _positionMarker(marker, cx, cy, radius, angle, opacity) {
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
@@ -584,7 +740,16 @@ export class CelestialRing {
     marker.style.opacity = String(opacity);
   }
 
-  /** Update the cached effect geometry only when camera distance or viewport changes. */
+  /**
+   * Update the cached effect geometry only when camera distance or viewport
+   * changes; the expensive gradient passes are keyed on geometry and reused by
+   * the compositor between changes.
+   *
+   * @param {number} cx - Ring centre X in CSS pixels.
+   * @param {number} cy - Ring centre Y in CSS pixels.
+   * @param {number} radius - Ring radius in CSS pixels.
+   * @param {number} rayInnerRadius - Sun-ray annulus inner radius in CSS pixels.
+   */
   _renderEffectLayers(cx, cy, radius, rayInnerRadius) {
     const outlineKey = `${cx}:${cy}:${radius}`;
     if (outlineKey !== this._outlineRenderKey) {
@@ -705,7 +870,13 @@ export class CelestialRing {
     };
   }
 
-  /** Read-only geometry snapshot for browser QA. */
+  /**
+   * Read-only geometry snapshot for browser QA.
+   *
+   * @returns {object|null} Copy of the last throttled frame's state (angles,
+   *   opacities, projected disc, ephemeris count), or null before the first
+   *   draw. Cloned so callers cannot mutate the live snapshot.
+   */
   getDebugState() {
     return this._debug ? { ...this._debug, disc: this._debug.disc ? { ...this._debug.disc } : null } : null;
   }

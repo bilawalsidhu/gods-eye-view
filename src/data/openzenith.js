@@ -31,7 +31,13 @@ const _inflight = new Map();
 const cacheKey = (lat, lon) =>
   `oz:rg:${lat.toFixed(COORD_PRECISION)}:${lon.toFixed(COORD_PRECISION)}`;
 
-/** The address fields the readout renders — everything else is noise. */
+/**
+ * The address fields the readout renders — everything else is noise.
+ * @param {unknown} place the upstream `place` object (address, display_name,
+ *   location) or anything else a proxy hiccup produced
+ * @returns {{label: string, displayName: string, lat: number|null, lon: number|null}|null}
+ *   null when no city/state/country chain yields a label
+ */
 function toPlace(place) {
   if (!place || typeof place !== 'object') return null;
   const a = place.address || {};
@@ -51,8 +57,8 @@ function toPlace(place) {
 /**
  * Reverse-geocode a ground coordinate to a human place label.
  *
- * @param {number} lat
- * @param {number} lon
+ * @param {number} lat latitude in decimal degrees (WGS84).
+ * @param {number} lon longitude in decimal degrees (WGS84).
  * @returns {Promise<{label: string, displayName: string, lat: number|null,
  *   lon: number|null}|null>} Null on any failure or when the cell has no
  *   address (open water, wilderness) — the negative is cached too.

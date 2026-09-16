@@ -235,12 +235,22 @@ const _playbackControlListeners = new Set();
 const VOICE_RESTORE_DELAY_MS = 650;
 const VOICE_RESTORE_DURATION_MS = 1800;
 
+/**
+ * Apply the shared SSRF policy in radio's https-only flavor.
+ * @param {string} value - Candidate stream or homepage URL from the directory broker.
+ * @returns {boolean} Whether the URL is an absolute https URL on a publicly routable host.
+ */
 function isSafeRadioHttpsUrl(value) {
   // Shared SSRF policy (src/data/externalUrlPolicy.js) — radio streams are
   // the https-only flavor; CCTV snapshots allow plaintext http.
   return isSafeExternalHttpUrl(value, { httpsOnly: true });
 }
 
+/**
+ * Gate one raw broker row against the full directory contract.
+ * @param {object} station - Unvalidated station record from `/api/radio/stations`.
+ * @returns {boolean} Whether every field satisfies the length, charset, coordinate, and SSRF rules.
+ */
 function isValidRadioDirectoryStation(station) {
   const cleanText = (value, maxLength, { allowEmpty = true } = {}) => (
     typeof value === 'string'
@@ -278,6 +288,11 @@ function isValidRadioDirectoryStation(station) {
   );
 }
 
+/**
+ * Copy a validated station into a deeply frozen value safe to publish to consumers.
+ * @param {object} station - Directory station carrying `tags` and `languages` arrays.
+ * @returns {object} Frozen station snapshot whose array fields are frozen copies.
+ */
 function freezeRadioStation(station) {
   return Object.freeze({
     id: station.id,
@@ -297,6 +312,14 @@ function freezeRadioStation(station) {
   });
 }
 
+/**
+ * Bind a station set to the producer instance and accepted generation that produced it.
+ * @param {string} instance - Broker catalog instance token; generations compare only within it.
+ * @param {number} generation - Accepted catalog generation reported by the broker (>= 1).
+ * @param {string|null} updatedAt - ISO-8601 directory timestamp, or null when the broker omitted it.
+ * @param {Array<object>} stations - Validated station rows to freeze into the snapshot.
+ * @returns {object|null} Frozen `{ instance, generation, updatedAt, stations, stationIds }`, or null on a bad generation or instance.
+ */
 function createAcceptedCatalogSnapshot(instance, generation, updatedAt, stations) {
   if (!Number.isSafeInteger(generation) || generation < 1) return null;
   if (typeof instance !== 'string' || !instance) return null;
@@ -315,6 +338,12 @@ const RADIO_LABEL_SEGMENTER = typeof Intl?.Segmenter === 'function'
   ? new Intl.Segmenter(undefined, { granularity: 'grapheme' })
   : null;
 
+/**
+ * Collapse whitespace and elide a label to a grapheme-safe character budget.
+ * @param {string} value - Raw station or cluster text.
+ * @param {number} maxChars - Maximum graphemes to keep before an ellipsis is appended.
+ * @returns {string} Single-spaced text, truncated to the budget with a trailing ellipsis.
+ */
 function compactRadioLabelText(value, maxChars) {
   const text = String(value || '').replaceAll(/\s+/g, ' ').trim();
   const graphemes = RADIO_LABEL_SEGMENTER
@@ -324,6 +353,11 @@ function compactRadioLabelText(value, maxChars) {
   return `${graphemes.slice(0, Math.max(1, maxChars - 1)).join('').trimEnd()}…`;
 }
 
+/**
+ * Strip separator punctuation and trailing qualifiers from a label name.
+ * @param {string} value - Raw station-name fragment around a detected frequency.
+ * @returns {string} Trimmed name without `|`/`:` decorations, a trailing "FM", or a parenthetical.
+ */
 function cleanRadioLabelName(value) {
   return String(value || '')
     .replaceAll(/^[\s|:·\-–—]+|[\s|:·\-–—]+$/g, '')
@@ -333,7 +367,11 @@ function cleanRadioLabelName(value) {
     .trim();
 }
 
-/** Return compact frequency-first text for a Radio globe label. */
+/**
+ * Return compact frequency-first text for a Radio globe label.
+ * @param {object} station - Directory station whose name may embed an FM frequency.
+ * @returns {string} "<freq> FM — <name>" within the label budget, or the compacted full name.
+ */
 export function radioGlobeLabel(station) {
   const fullName = String(station?.name || '').replaceAll(/\s+/g, ' ').trim();
   if (!fullName) return '';
@@ -368,7 +406,12 @@ export function radioGlobeLabel(station) {
   return `${prefix} — ${compactRadioLabelText(labelName, nameBudget)}`;
 }
 
-/** Build the protected selected-station text published through WorldOverlay. */
+/**
+ * Build the protected selected-station text published through WorldOverlay.
+ * @param {object} station - Selected directory station supplying id, name, and category.
+ * @param {Cesium.Cartesian3} position - Ground-lifted world position of the selected marker.
+ * @returns {object|null} Overlay entry at `MAX_SAFE_INTEGER` priority, or null without id, name, or position.
+ */
 export function createRadioSelectedOverlayEntry(station, position) {
   if (!station?.id || !station?.name || !position) return null;
   return createOverlayEntry({
@@ -392,7 +435,16 @@ export function createRadioSelectedOverlayEntry(station, position) {
   });
 }
 
-/** Build one bounded ambient cluster badge for the shared overlay host. */
+/**
+ * Build one bounded ambient cluster badge for the shared overlay host.
+ * @param {object} root0 - Cluster candidate produced by the overlay publish pass.
+ * @param {string} root0.id - Stable cluster identity keying the `cluster:` entry id.
+ * @param {Cesium.Cartesian3|Function} root0.position - Cluster world position, or a getter re-evaluated per frame.
+ * @param {string} root0.text - Pre-rendered count/category badge text.
+ * @param {string} [root0.accent] - CSS accent color; falls back to the "other" category color.
+ * @param {number} [root0.stationCount] - Member count driving priority and anchor radius.
+ * @returns {object|null} Ambient-lane overlay entry, or null without id, position, or text.
+ */
 export function createRadioClusterOverlayEntry({ id, position, text, accent, stationCount }) {
   if (!id || !position || !text) return null;
   return createOverlayEntry({
@@ -427,7 +479,14 @@ export function createRadioClusterOverlayEntry({ id, position, text, accent, sta
   });
 }
 
-/** Build one ambient station label while Cesium retains its point and picking. */
+/**
+ * Build one ambient station label while Cesium retains its point and picking.
+ * @param {object} root0 - Singleton candidate record.
+ * @param {object} root0.station - Directory station to label.
+ * @param {Cesium.Cartesian3} root0.position - Lifted world position of the station marker.
+ * @param {number} [root0.priority=1] - Collision priority; clusters always outrank singletons.
+ * @returns {object|null} Ambient-lane overlay entry, or null without station id, name, or position.
+ */
 export function createRadioSingletonOverlayEntry({ station, position, priority = 1 }) {
   if (!station?.id || !station?.name || !position) return null;
   return createOverlayEntry({
@@ -458,7 +517,11 @@ export function createRadioSingletonOverlayEntry({ station, position, priority =
   });
 }
 
-/** Return the bounded singleton-label allowance for the current camera scale. */
+/**
+ * Return the bounded singleton-label allowance for the current camera scale.
+ * @param {number} cameraHeightM - Camera height above the ellipsoid in meters.
+ * @returns {number} 48 near the surface, 32 at mid range, or 16 at/above the global-view altitude.
+ */
 export function radioSingletonLabelLimit(cameraHeightM) {
   const height = Math.max(0, Number(cameraHeightM) || 0);
   if (height >= GLOBAL_RADIO_ALTITUDE_M) return RADIO_SINGLETON_GLOBAL_LIMIT;
@@ -466,7 +529,12 @@ export function radioSingletonLabelLimit(cameraHeightM) {
   return RADIO_SINGLETON_NEAR_LIMIT;
 }
 
-/** Rank visible singleton stations by camera distance and stable station id. */
+/**
+ * Rank visible singleton stations by camera distance and stable station id.
+ * @param {Array<object>} candidates - Render records carrying station, position, and `distanceM`.
+ * @param {number} [limit=RADIO_SINGLETON_NEAR_LIMIT] - Maximum number of candidates to keep.
+ * @returns {Array<object>} New nearest-first array capped at `limit`; ties break by station id.
+ */
 export function selectRadioSingletonCandidates(candidates, limit = RADIO_SINGLETON_NEAR_LIMIT) {
   const distance = (candidate) => {
     const value = Number(candidate?.distanceM);
@@ -480,7 +548,12 @@ export function selectRadioSingletonCandidates(candidates, limit = RADIO_SINGLET
     .slice(0, Math.max(0, Math.floor(Number(limit) || 0)));
 }
 
-/** Rank and cap ambient Radio clusters before shared-host entry allocation. */
+/**
+ * Rank and cap ambient Radio clusters before shared-host entry allocation.
+ * @param {Array<object>} candidates - Cluster candidates carrying `stationCount` and `id`.
+ * @param {number} [limit=RADIO_OVERLAY_COHORT_LIMIT] - Maximum number of clusters to keep.
+ * @returns {Array<object>} New largest-first array capped at `limit`; ties break by cluster id.
+ */
 export function selectRadioClusterCandidates(candidates, limit = RADIO_OVERLAY_COHORT_LIMIT) {
   return [...(candidates || [])]
     .sort((a, b) => (
@@ -498,6 +571,10 @@ export function selectRadioClusterCandidates(candidates, limit = RADIO_OVERLAY_C
  * inheritance remains mutual-best: a current cluster accepts only one of its
  * greatest contributors and a prior identity transfers only to one of its
  * strongest split children.
+ * @param {Array<object>} candidates - Current cluster candidates carrying `stationIds` membership.
+ * @param {Array<object>} [previous] - Previously published candidates carrying an `identityId`.
+ * @param {Function} [createId] - `(candidate, index) => string` minting identities for clusters with no ancestor.
+ * @returns {Array<object>} Candidates augmented with `membershipId`, `identityId`, and `id`.
  */
 export function reconcileRadioClusterCandidates(candidates, previous = [], createId = null) {
   const current = (Array.isArray(candidates) ? candidates : []).map((candidate, index) => {
@@ -615,10 +692,18 @@ export function reconcileRadioClusterCandidates(candidates, previous = [], creat
   });
 }
 
+/**
+ * Drop all inherited cluster identities so the next publish mints fresh ones.
+ * @returns {void}
+ */
 function resetRadioClusterOverlayIdentities() {
   _clusterOverlayIdentities = [];
 }
 
+/**
+ * Produce the zeroed overlay diagnostics shape used before any publish.
+ * @returns {object} Fresh diagnostics with empty entry, singleton, cluster, and membership lists.
+ */
 function emptyRadioOverlayDiagnostics() {
   return {
     entryCount: 0,
@@ -631,11 +716,22 @@ function emptyRadioOverlayDiagnostics() {
   };
 }
 
+/**
+ * Clamp a raw volume input into the transport's supported range.
+ * @param {*} value - User or preset volume; non-numeric input coerces to 0.
+ * @returns {number} Volume clamped to [0, 1].
+ */
 function clampRadioVolume(value) {
   return Math.min(1, Math.max(0, Number(value) || 0));
 }
 
-/** Return whether camera translation materially changes horizon visibility. */
+/**
+ * Return whether camera translation materially changes horizon visibility.
+ * @param {object|null} previous - Previous camera world position `{ x, y, z }`.
+ * @param {object|null} current - Current camera world position `{ x, y, z }`.
+ * @param {number} [epsilonM=HORIZON_CAMERA_MOVE_EPSILON_M] - Movement threshold in meters.
+ * @returns {boolean} Whether the camera moved farther than the threshold, or either position is unusable.
+ */
 export function radioCameraPositionChanged(previous, current, epsilonM = HORIZON_CAMERA_MOVE_EPSILON_M) {
   if (!previous || !current) return true;
   const dx = Number(current.x) - Number(previous.x);
@@ -646,6 +742,10 @@ export function radioCameraPositionChanged(previous, current, epsilonM = HORIZON
   return dx * dx + dy * dy + dz * dz > threshold * threshold;
 }
 
+/**
+ * Invalidate any in-flight voice restore and cancel its timer and fade frame.
+ * @returns {void}
+ */
 function cancelRadioVolumeTransition() {
   _volumeTransitionGeneration += 1;
   if (_voiceRestoreTimer) clearTimeout(_voiceRestoreTimer);
@@ -657,18 +757,31 @@ function cancelRadioVolumeTransition() {
   _volumeFadeFrame = null;
 }
 
+/**
+ * Schedule one volume-fade step on the animation frame when one is available.
+ * @param {Function} callback - Fade step invoked with a monotonic or epoch millisecond timestamp.
+ * @returns {number} Frame or timeout handle usable with the matching cancel.
+ */
 function scheduleVolumeFrame(callback) {
   if (typeof requestAnimationFrame === 'function') return requestAnimationFrame(callback);
   return setTimeout(() => callback(Date.now()), 16);
 }
 
+/**
+ * Provide the millisecond clock used for volume-fade progress math.
+ * @returns {number} `performance.now()` when present, otherwise `Date.now()`.
+ */
 function volumeClock() {
   return typeof performance !== 'undefined' && typeof performance.now === 'function'
     ? performance.now()
     : Date.now();
 }
 
-/** Normalize one directory tag to a stable, lower-case display token. */
+/**
+ * Normalize one directory tag to a stable, lower-case display token.
+ * @param {*} value - Tag string or one entry of a comma-separated tag list.
+ * @returns {string} Lower-case, space-separated token of at most 80 characters.
+ */
 export function normalizeRadioTag(value) {
   return String(value ?? '')
     .trim()
@@ -678,6 +791,11 @@ export function normalizeRadioTag(value) {
     .slice(0, 80);
 }
 
+/**
+ * Normalize a station's tags across broker array and legacy comma-string shapes.
+ * @param {object} station - Directory station whose `tags` may be an array or comma string.
+ * @returns {Array<string>} Normalized non-empty tag tokens.
+ */
 function stationTags(station) {
   if (Array.isArray(station?.tags)) return station.tags.map(normalizeRadioTag).filter(Boolean);
   return String(station?.tags ?? '')
@@ -686,16 +804,32 @@ function stationTags(station) {
     .filter(Boolean);
 }
 
+/**
+ * Test a station's normalized tags against a needle list.
+ * @param {object} station - Directory station to inspect.
+ * @param {Array<string>} needles - Lower-case tag tokens; an empty list never matches.
+ * @returns {boolean} Whether any tag equals or contains any needle.
+ */
 function hasTag(station, needles) {
   const tags = stationTags(station);
   return needles.some((needle) => tags.some((tag) => tag === needle || tag.includes(needle)));
 }
 
+/**
+ * List the known music genres a station's tags declare.
+ * @param {object} station - Directory station to inspect.
+ * @returns {Array<string>} Genre tokens from MUSIC_GENRES present in the station tags.
+ */
 function detectedGenres(station) {
   return MUSIC_GENRES.filter(([genre]) => hasTag(station, [genre])).map(([genre]) => genre);
 }
 
-/** Return whether a station belongs in a station-tag category. */
+/**
+ * Return whether a station belongs in a station-tag category.
+ * @param {object} station - Directory station whose tags drive matching.
+ * @param {string} categoryId - Canonical category id, `genre:*` id, or `other`.
+ * @returns {boolean} Whether the station matches; `all` matches everything.
+ */
 export function stationMatchesRadioCategory(station, categoryId) {
   if (categoryId === 'all') return true;
   if (categoryId.startsWith('genre:')) {
@@ -712,14 +846,23 @@ export function stationMatchesRadioCategory(station, categoryId) {
   return hasTag(station, CATEGORY_MATCHERS[categoryId] || []);
 }
 
-/** Return the shared CSS color for a canonical or detected-genre category. */
+/**
+ * Return the shared CSS color for a canonical or detected-genre category.
+ * @param {string} [categoryId='other'] - Canonical category id or `genre:*` id.
+ * @returns {string} Hex color for the category, or the "other" color when unknown.
+ */
 export function radioCategoryColor(categoryId = 'other') {
   const normalized = String(categoryId || 'other');
   const canonical = normalized.startsWith('genre:') ? 'music' : normalized;
   return RADIO_CATEGORY_COLORS[canonical] || RADIO_CATEGORY_COLORS.other;
 }
 
-/** Format the concise count/category badge shown above a Radio cluster. */
+/**
+ * Format the concise count/category badge shown above a Radio cluster.
+ * @param {string} [categoryId='other'] - Cluster category id or `genre:*` id.
+ * @param {number} [count=0] - Member station count; non-integers floor to a value >= 0.
+ * @returns {string} Text such as "12 NEWS" rendered inside the cluster badge.
+ */
 export function radioClusterBadgeText(categoryId = 'other', count = 0) {
   const normalized = String(categoryId || 'other');
   const canonical = normalized.startsWith('genre:') ? 'music' : normalized;
@@ -728,7 +871,12 @@ export function radioClusterBadgeText(categoryId = 'other', count = 0) {
   return `${stationCount} ${label}`;
 }
 
-/** Choose the category advertised by a cluster in the active station-tag view. */
+/**
+ * Choose the category advertised by a cluster in the active station-tag view.
+ * @param {Array<object>} stations - Clustered stations used to elect a majority category.
+ * @param {string} [activeFilter='all'] - Active filter; a recognized non-`all` filter is echoed verbatim.
+ * @returns {string} Dominant category id in marker order, or `other` when the unclassified set wins.
+ */
 export function radioClusterCategoryId(stations, activeFilter = 'all') {
   const filter = String(activeFilter || 'all');
   if (filter !== 'all') {
@@ -755,20 +903,32 @@ export function radioClusterCategoryId(stations, activeFilter = 'all') {
   return clusterCategory;
 }
 
-/** Build the code-native four-corner bracket used by the selected station. */
+/**
+ * Build the code-native four-corner bracket used by the selected station.
+ * @param {string} [color] - Six-digit hex stroke color; anything else falls back to "other".
+ * @returns {string} Inline SVG markup for the 40x40 selection bracket.
+ */
 export function radioSelectionBracketSvg(color = RADIO_CATEGORY_COLORS.other) {
   const stroke = /^#[0-9a-f]{6}$/i.test(String(color)) ? String(color) : RADIO_CATEGORY_COLORS.other;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><path d="M2 13V2H13 M27 2H38V13 M38 27V38H27 M13 38H2V27" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="square"/></svg>`;
 }
 
-/** Choose one stable display category for a station that may match several filters. */
+/**
+ * Choose one stable display category for a station that may match several filters.
+ * @param {object} station - Directory station to classify.
+ * @returns {string} First matching category in marker order, or `other`.
+ */
 export function radioStationCategoryId(station) {
   return RADIO_MARKER_CATEGORY_ORDER.find((categoryId) => (
     stationMatchesRadioCategory(station, categoryId)
   )) || 'other';
 }
 
-/** Build canonical and detected-genre categories from station-level tags. */
+/**
+ * Build canonical and detected-genre categories from station-level tags.
+ * @param {Array<object>} stations - Accepted directory stations.
+ * @returns {Array<object>} Ordered `{ id, label, color, count }` rows ending with `other`.
+ */
 export function buildRadioCategories(stations) {
   const rows = Array.isArray(stations) ? stations : [];
   const categories = [
@@ -796,13 +956,22 @@ export function buildRadioCategories(stations) {
   }));
 }
 
-/** Filter stations without changing the active stream or selection. */
+/**
+ * Filter stations without changing the active stream or selection.
+ * @param {Array<object>} stations - Stations to filter; a non-array yields an empty result.
+ * @param {string} [categoryId='all'] - Category id to match.
+ * @returns {Array<object>} New array of matching stations in input order.
+ */
 export function filterRadioStations(stations, categoryId = 'all') {
   return (Array.isArray(stations) ? stations : [])
     .filter((station) => stationMatchesRadioCategory(station, categoryId));
 }
 
-/** Return whether Radio Browser metadata identifies a station as English-language. */
+/**
+ * Return whether Radio Browser metadata identifies a station as English-language.
+ * @param {object} station - Directory station carrying a `languages` array.
+ * @returns {boolean} Whether any language code or name denotes English.
+ */
 export function isEnglishRadioStation(station) {
   const languages = Array.isArray(station?.languages) ? station.languages : [];
   return languages.some((language) => {
@@ -811,6 +980,12 @@ export function isEnglishRadioStation(station) {
   });
 }
 
+/**
+ * Measure the haversine angular separation between a station and an anchor.
+ * @param {object} station - Station supplying lat/lon in degrees.
+ * @param {object|null} anchor - Anchor `{ lat, lon }` in degrees.
+ * @returns {number} Central angle in radians, or `Number.POSITIVE_INFINITY` for non-finite coordinates.
+ */
 function radioAngularDistance(station, anchor) {
   const lat1 = Cesium.Math.toRadians(Number(anchor?.lat));
   const lon1 = Cesium.Math.toRadians(Number(anchor?.lon));
@@ -824,7 +999,14 @@ function radioAngularDistance(station, anchor) {
   return 2 * Math.asin(Math.min(1, Math.sqrt(Math.max(0, haversine))));
 }
 
-/** Rank a copied station list by viewport distance, with an optional English-first tier. */
+/**
+ * Rank a copied station list by viewport distance, with an optional English-first tier.
+ * @param {Array<object>} stations - Stations to rank; the input array is never mutated.
+ * @param {object|null} anchor - Viewport anchor `{ lat, lon }` used as the distance origin.
+ * @param {object} [root0] - Ranking options.
+ * @param {boolean} [root0.preferEnglish=false] - Sort English-language stations into a first tier.
+ * @returns {Array<object>} Stations ordered by language tier, angular distance, then input index.
+ */
 export function rankRadioStationsForViewport(stations, anchor, { preferEnglish = false } = {}) {
   return (Array.isArray(stations) ? stations : [])
     .map((station, index) => ({
@@ -837,7 +1019,16 @@ export function rankRadioStationsForViewport(stations, anchor, { preferEnglish =
     .map(({ station }) => station);
 }
 
-/** Rank stations for an explicit voice/player request without moving the camera. */
+/**
+ * Rank stations for an explicit voice/player request without moving the camera.
+ * @param {Array<object>} stations - Accepted directory stations to search.
+ * @param {object} [root0] - Request criteria.
+ * @param {string} [root0.categoryId='all'] - Category filter applied before ranking.
+ * @param {object|null} [root0.anchor=null] - `{ lat, lon }` distance origin; omitted keeps catalog order.
+ * @param {string} [root0.country=''] - Country name or ISO code; an unrecognized value empties the result.
+ * @param {string} [root0.stationQuery=''] - Free-text needle matched against id, name, locale, and tags.
+ * @returns {Array<object>} Matching stations, viewport-ranked when an anchor is supplied.
+ */
 export function rankRadioStationsForRequest(stations, {
   categoryId = 'all',
   anchor = null,
@@ -871,12 +1062,25 @@ export function rankRadioStationsForRequest(stations, {
     : matches.slice();
 }
 
-/** Classify a globe-scale Radio view without flapping on Cesium height round-off. */
+/**
+ * Classify a globe-scale Radio view without flapping on Cesium height round-off.
+ * @param {number} altitudeM - Camera height above the ellipsoid in meters.
+ * @returns {boolean} Whether the rounded height reaches the global-view altitude.
+ */
 export function radioViewIsGlobal(altitudeM) {
   return Number.isFinite(altitudeM) && Math.round(altitudeM) >= GLOBAL_RADIO_ALTITUDE_M;
 }
 
 /** Pure stale-response guard shared by the async directory update path. */
+/**
+ * Pure stale-response guard shared by the async directory update path.
+ * @param {number} generation - Request generation captured when the fetch started.
+ * @param {number} currentGeneration - Latest request generation for the layer.
+ * @param {boolean} enabled - Whether the layer is currently enabled.
+ * @param {number|null} [sessionGeneration] - Session generation captured at fetch start.
+ * @param {number|null} [currentSessionGeneration] - Latest session generation; defaults to the captured value.
+ * @returns {boolean} Whether an in-flight response is still the one to apply.
+ */
 export function radioRequestIsCurrent(
   generation,
   currentGeneration,
@@ -889,7 +1093,11 @@ export function radioRequestIsCurrent(
     && sessionGeneration === currentSessionGeneration;
 }
 
-/** Resolve a station id from ordinary, selected, or Cesium cluster pick shapes. */
+/**
+ * Resolve a station id from ordinary, selected, or Cesium cluster pick shapes.
+ * @param {object|Array|string|number|null} picked - Cesium pick result, cluster entity-id array, or raw id.
+ * @returns {string|null} Station id with the `radio:` prefix stripped, or null when unparsable.
+ */
 export function radioStationIdFromPick(picked) {
   const pending = [picked?.id, picked?.primitive?.id];
   const seen = new Set();
@@ -912,7 +1120,12 @@ export function radioStationIdFromPick(picked) {
   return null;
 }
 
-/** Map an integer tuner slot directly to one available directory station. */
+/**
+ * Map an integer tuner slot directly to one available directory station.
+ * @param {number} value - Requested slot; non-numeric input clamps to 0.
+ * @param {number} stationCount - Number of stations backing the tuner band.
+ * @returns {object} `{ slot, max, locked, stationIndex, leftIndex, rightIndex }` for the snapped slot.
+ */
 export function radioTunerSlot(value, stationCount) {
   const count = Math.max(0, Math.floor(Number(stationCount) || 0));
   if (!count) return { slot: 0, max: 0, locked: false, stationIndex: -1, leftIndex: -1, rightIndex: -1 };
@@ -928,12 +1141,25 @@ export function radioTunerSlot(value, stationCount) {
   };
 }
 
-/** Snap a tuner release to the nearest available directory station. */
+/**
+ * Snap a tuner release to the nearest available directory station.
+ * @param {number} value - Continuous or integral slot at release.
+ * @param {number} stationCount - Number of stations backing the tuner band.
+ * @returns {object} Slot resolution with the same shape `radioTunerSlot` produces.
+ */
 export function radioTunerCommitSlot(value, stationCount) {
   return radioTunerSlot(value, stationCount);
 }
 
-/** Map one pointer coordinate to continuous absolute directory progress. */
+/**
+ * Map one pointer coordinate to continuous absolute directory progress.
+ * @param {number} clientX - Pointer x position in client pixels.
+ * @param {number} left - Tape element left edge in client pixels.
+ * @param {number} width - Tape element width in client pixels.
+ * @param {number} stationCount - Number of stations backing the tuner band.
+ * @param {number} [insetPx=7] - Non-interactive padding excluded from both ends.
+ * @returns {object} `{ ratio, coordinate, stationIndex }`; `stationIndex` is -1 for an empty band.
+ */
 export function radioTunerPointerPosition(clientX, left, width, stationCount, insetPx = 7) {
   const count = Math.max(0, Math.floor(Number(stationCount) || 0));
   if (!count) return { ratio: 0, coordinate: 0, stationIndex: -1 };
@@ -949,7 +1175,19 @@ export function radioTunerPointerPosition(clientX, left, width, stationCount, in
   };
 }
 
-/** Build a bounded virtual tuner tape around one continuous directory coordinate. */
+/**
+ * Build a bounded virtual tuner tape around one continuous directory coordinate.
+ * @param {number} coordinate - Absolute directory coordinate, clamped to `[0, stationCount - 1]`.
+ * @param {number} stationCount - Number of stations backing the tuner band.
+ * @param {number} width - Tape element width in client pixels.
+ * @param {object} [root0] - Tape layout options.
+ * @param {number} [root0.insetPx=7] - Non-interactive padding excluded from both ends.
+ * @param {number} [root0.minPitchPx=14] - Minimum spacing between adjacent ticks.
+ * @param {number} [root0.speedFactor=5] - Factor magnifying directory distance into tape travel.
+ * @param {number} [root0.overscan=2] - Extra tick pitches rendered past each tape edge.
+ * @param {number} [root0.labelStep=6] - Channel interval between labelled major ticks.
+ * @returns {object} `{ ticks, needleX, pitchPx, ratio }` describing the visible virtual tape.
+ */
 export function buildRadioTunerTicks(coordinate, stationCount, width, {
   insetPx = 7,
   minPitchPx = 14,
@@ -999,7 +1237,12 @@ export function buildRadioTunerTicks(coordinate, stationCount, width, {
   return { ticks, needleX, pitchPx, ratio: value / (count - 1) };
 }
 
-/** Plan a station-centered camera move that preserves altitude and view angle. */
+/**
+ * Plan a station-centered camera move that preserves altitude and view angle.
+ * @param {object} station - Station supplying the target lat/lon in degrees.
+ * @param {object} [cameraState] - Current `{ height, heading, pitch, roll }`; defaults look straight down.
+ * @returns {object|null} Destination `{ lat, lon, height, heading, pitch, roll }`, or null without finite target coordinates.
+ */
 export function radioStationCameraPlan(station, cameraState = {}) {
   const targetLat = Number(station?.lat);
   const targetLon = Number(station?.lon);
@@ -1039,6 +1282,8 @@ export function radioStationCameraPlan(station, cameraState = {}) {
  * Decide whether Radio navigation should first restore a centered Earth view.
  * Fit-capable clipped discs and closer views whose optical center has reached
  * the Earth limb use the staged path; ordinary centered local views stay direct.
+ * @param {object} geometry - Earth-disc/keyhole screen geometry from `projectEarthDiscToViewport`.
+ * @returns {boolean} Whether Radio navigation must first restore a centered Earth view.
  */
 export function radioGlobeNeedsRecentering(geometry) {
   if (!geometry || isFullGlobeInsideKeyhole(geometry, false)) return false;
@@ -1063,7 +1308,12 @@ export function radioGlobeNeedsRecentering(geometry) {
   return geometry.earthRadius - centerOffset < GLOBE_ENTER_CLEARANCE_PX;
 }
 
-/** Preserve closer zoom while capping an extreme full-globe recovery. */
+/**
+ * Preserve closer zoom while capping an extreme full-globe recovery.
+ * @param {number} currentHeight - Current camera height in meters.
+ * @param {boolean} fullGlobeCapable - Whether the whole globe already fits the keyhole.
+ * @returns {number|null} Height to fly to, capped at the recenter maximum; null for invalid input.
+ */
 export function radioGlobeRecenterHeight(currentHeight, fullGlobeCapable) {
   if (!Number.isFinite(currentHeight) || currentHeight < 0) return null;
   return fullGlobeCapable
@@ -1071,7 +1321,13 @@ export function radioGlobeRecenterHeight(currentHeight, fullGlobeCapable) {
     : currentHeight;
 }
 
-/** Bound one already ordered filtered directory without injecting outside selections. */
+/**
+ * Bound one already ordered filtered directory without injecting outside selections.
+ * @param {Array<object>} rankedStations - Stations already ranked for the current view.
+ * @param {object|null} selected - Currently selected station; honored only if already present.
+ * @param {number} [limit=RADIO_TUNER_STATION_LIMIT] - Requested band size, capped at the directory limit.
+ * @returns {Array<object>} The leading slice of the ranked list.
+ */
 export function buildRadioTunerBand(rankedStations, selected, limit = RADIO_TUNER_STATION_LIMIT) {
   const boundedLimit = Math.min(
     RADIO_TUNER_DIRECTORY_LIMIT,
@@ -1080,7 +1336,15 @@ export function buildRadioTunerBand(rankedStations, selected, limit = RADIO_TUNE
   return (Array.isArray(rankedStations) ? rankedStations : []).slice(0, boundedLimit);
 }
 
-/** Decide whether tuner static should be audible for the current handoff state. */
+/**
+ * Decide whether tuner static should be audible for the current handoff state.
+ * @param {object} [root0] - Tuner handoff state.
+ * @param {boolean} [root0.tuningActive=false] - Whether a tuning gesture is in progress.
+ * @param {boolean} [root0.tuningStatic=false] - Whether static is requested for this gesture.
+ * @param {string|null} [root0.awaitingStationId=null] - Station released but not yet confirmed playing.
+ * @param {boolean} [root0.voiceDucked=false] - Whether a live voice turn owns a hard mute.
+ * @returns {boolean} Whether the synthesized noise source should be audible.
+ */
 export function radioTuningStaticShouldPlay({
   tuningActive = false,
   tuningStatic = false,
@@ -1090,6 +1354,12 @@ export function radioTuningStaticShouldPlay({
   return Boolean(tuningStatic && !voiceDucked && (tuningActive || awaitingStationId));
 }
 
+/**
+ * Place a station marker above its cached ground floor.
+ * @param {object} station - Station supplying lat/lon in degrees.
+ * @param {number} [liftM=MARKER_LIFT_M] - Meters to raise the marker above terrain.
+ * @returns {Cesium.Cartesian3} World position for the entity or overlay entry.
+ */
 function markerPosition(station, liftM = MARKER_LIFT_M) {
   const floor = cachedGroundFloor(station.lat, station.lon);
   return Cesium.Cartesian3.fromDegrees(
@@ -1099,19 +1369,35 @@ function markerPosition(station, liftM = MARKER_LIFT_M) {
   );
 }
 
+/**
+ * Resolve the selected station from the accepted catalog index.
+ * @returns {object|null} Selected station, or null when nothing is selected.
+ */
 function selectedStation() {
   return _selectedId ? _stationById.get(_selectedId) || null : null;
 }
 
+/**
+ * Resolve the station the UI should currently render as selected.
+ * @returns {object|null} Tuning preview, cancelled-tuning restore, or committed selection; null when none applies.
+ */
 function selectedPresentationStation() {
   if (_tuningActive) return tuningResolutionStation(_tuningPreviewId);
   return _cancelledTuningPresentationStation || selectedStation();
 }
 
+/**
+ * Filter the accepted catalog through the active category filter.
+ * @returns {Array<object>} Stations currently eligible for markers and the tuner band.
+ */
 function visibleStations() {
   return filterRadioStations(_stations, _filter);
 }
 
+/**
+ * Resolve the geographic point the camera is actually looking at.
+ * @returns {object|null} `{ lat, lon, altitudeM, globalView }`, or null without a usable camera.
+ */
 function viewportRadioAnchor() {
   const camera = _viewer?.camera;
   const scene = _viewer?.scene;
@@ -1134,6 +1420,10 @@ function viewportRadioAnchor() {
   };
 }
 
+/**
+ * Rank the visible directory from the viewport anchor, English-first at globe scale.
+ * @returns {Array<object>} Visible stations ordered for cycling and default selection.
+ */
 function rankedVisibleStations() {
   const anchor = viewportRadioAnchor();
   return rankRadioStationsForViewport(visibleStations(), anchor, {
@@ -1141,12 +1431,20 @@ function rankedVisibleStations() {
   });
 }
 
-/** Return the deeply immutable healthy catalog generation shared with tuner consumers. */
+/**
+ * Return the deeply immutable healthy catalog generation shared with tuner consumers.
+ * @returns {object} Frozen accepted snapshot, or the empty snapshot before the first acceptance.
+ */
 export function getRadioAcceptedCatalogSnapshot() {
   return _acceptedCatalogSnapshot;
 }
 
-/** Compare every station field that determines tuner presentation and playback. */
+/**
+ * Compare every station field that determines tuner presentation and playback.
+ * @param {object} frozenStation - Station frozen at tuning start.
+ * @param {object|null} currentStation - Live catalog entry under the same id.
+ * @returns {boolean} Whether every field still matches exactly.
+ */
 export function radioStationResolutionMatches(frozenStation, currentStation) {
   if (!frozenStation || !currentStation) return false;
   for (const key of [
@@ -1163,15 +1461,27 @@ export function radioStationResolutionMatches(frozenStation, currentStation) {
   });
 }
 
+/**
+ * Freeze the catalog a tuning gesture resolves against.
+ * @returns {object} Accepted catalog snapshot captured at gesture start.
+ */
 function captureRadioTuningResolutionSnapshot() {
   return _acceptedCatalogSnapshot;
 }
 
+/**
+ * Resolve a station from the frozen tuning catalog rather than the live one.
+ * @param {string|null} id - Station id read from the tuner gesture.
+ * @returns {object|null} Frozen station, or null when unknown or not tuning.
+ */
 function tuningResolutionStation(id) {
   return id ? _tuningStationById.get(String(id)) || null : null;
 }
 
-/** Return an immutable snapshot consumed by the right-rail UI. */
+/**
+ * Return an immutable snapshot consumed by the right-rail UI.
+ * @returns {object} Frozen state covering lifecycle, catalog, selection, audio, and tuner fields.
+ */
 export function getRadioUIState() {
   const visible = visibleStations();
   const selected = selectedStation();
@@ -1207,6 +1517,10 @@ export function getRadioUIState() {
   });
 }
 
+/**
+ * Publish a fresh UI snapshot to every state subscriber.
+ * @returns {void}
+ */
 function emitState() {
   const snapshot = getRadioUIState();
   for (const listener of _listeners) {
@@ -1218,7 +1532,11 @@ function emitState() {
   }
 }
 
-/** Subscribe to radio state; the current state is delivered immediately. */
+/**
+ * Subscribe to radio state; the current state is delivered immediately.
+ * @param {Function} listener - Callback receiving the frozen UI snapshot.
+ * @returns {Function} Unsubscribe function; a non-function listener gets a no-op.
+ */
 export function subscribeToRadio(listener) {
   if (typeof listener !== 'function') return () => {};
   _listeners.add(listener);
@@ -1226,13 +1544,24 @@ export function subscribeToRadio(listener) {
   return () => _listeners.delete(listener);
 }
 
-/** Subscribe to explicit playback controls so voice handoffs cannot undo them. */
+/**
+ * Subscribe to explicit playback controls so voice handoffs cannot undo them.
+ * @param {Function} listener - Callback receiving `{ action, origin, attemptId }`.
+ * @returns {Function} Unsubscribe function; a non-function listener gets a no-op.
+ */
 export function subscribeToRadioPlaybackControls(listener) {
   if (typeof listener !== 'function') return () => {};
   _playbackControlListeners.add(listener);
   return () => _playbackControlListeners.delete(listener);
 }
 
+/**
+ * Notify playback-control observers of a user- or voice-initiated action.
+ * @param {string} action - One of `play`, `pause`, or `stop`.
+ * @param {string} origin - Initiator, such as `user`, `voice`, or `layer-disable`.
+ * @param {string|null} [attemptId] - Playback attempt the action applies to.
+ * @returns {void}
+ */
 function emitPlaybackControl(action, origin, attemptId = _activePlaybackAttempt?.id || null) {
   const event = { action, origin, attemptId };
   for (const listener of _playbackControlListeners) {
@@ -1244,6 +1573,11 @@ function emitPlaybackControl(action, origin, attemptId = _activePlaybackAttempt?
   }
 }
 
+/**
+ * Test whether a media event belongs to the currently armed playback attempt.
+ * @param {HTMLAudioElement} audio - Element that raised the event.
+ * @returns {boolean} Whether the element, play generation, and station id all match.
+ */
 function audioEventBelongsToActiveAttempt(audio) {
   const attempt = _activePlaybackAttempt;
   return _audio === audio
@@ -1252,6 +1586,12 @@ function audioEventBelongsToActiveAttempt(audio) {
     && attempt.stationId === _audioStationId;
 }
 
+/**
+ * Create the single audio element and wire its media-event handlers.
+ * @param {object} [root0] - Installation options.
+ * @param {boolean} [root0.replace=false] - Retire and rebuild the element even if one already exists.
+ * @returns {void}
+ */
 function installAudio({ replace = false } = {}) {
   if (_audio && !replace) return;
   if (typeof Audio === 'undefined') return;
@@ -1301,6 +1641,10 @@ function installAudio({ replace = false } = {}) {
   });
 }
 
+/**
+ * Stop and disconnect the static chain, leaving the audio context alive.
+ * @returns {void}
+ */
 function stopTuningNoiseSource() {
   if (_tuningNoiseSource) {
     try { _tuningNoiseSource.stop(); } catch { /* already stopped */ }
@@ -1313,6 +1657,10 @@ function stopTuningNoiseSource() {
   _tuningNoiseGain = null;
 }
 
+/**
+ * Ramp static gain to the level implied by the current tuner handoff state.
+ * @returns {void}
+ */
 function syncTuningNoiseGain() {
   if (!_tuningNoiseContext || !_tuningNoiseGain) return;
   const audible = radioTuningStaticShouldPlay({
@@ -1330,6 +1678,10 @@ function syncTuningNoiseGain() {
   _tuningNoiseGain.gain.linearRampToValueAtTime(target, now + 0.025);
 }
 
+/**
+ * Build the looping band-limited static source used by the tuner.
+ * @returns {boolean} Whether a Web Audio context exists and the source is running.
+ */
 function installTuningNoise() {
   const AudioContextClass = globalThis.AudioContext || globalThis.webkitAudioContext;
   if (!AudioContextClass) return false;
@@ -1359,13 +1711,20 @@ function installTuningNoise() {
   return true;
 }
 
-/** Return the complete accepted filtered directory in stable catalog order. */
+/**
+ * Return the complete accepted filtered directory in stable catalog order.
+ * @param {number} [limit=RADIO_TUNER_STATION_LIMIT] - Requested band size handed to the band builder.
+ * @returns {Array<object>} Tuner band stations, or an empty array while presentation is gated.
+ */
 export function getRadioTunerStations(limit = RADIO_TUNER_STATION_LIMIT) {
   if (!radioPresentationAllowed() || !_acceptedCatalogSnapshot.stations.length) return [];
   return buildRadioTunerBand(visibleStations(), selectedStation(), limit);
 }
 
-/** Begin a direct-manipulation tuning gesture and pause the current stream. */
+/**
+ * Begin a direct-manipulation tuning gesture and pause the current stream.
+ * @returns {boolean} Whether the gesture started with a frozen catalog to resolve against.
+ */
 export function beginRadioTuning() {
   if (!radioPresentationAllowed() || !visibleStations().length) return false;
   const snapshot = captureRadioTuningResolutionSnapshot();
@@ -1388,7 +1747,11 @@ export function beginRadioTuning() {
   return true;
 }
 
-/** Toggle low-volume synthesized static for tuner preview and stream handoff. */
+/**
+ * Toggle low-volume synthesized static for tuner preview and stream handoff.
+ * @param {boolean} active - Whether static should be audible.
+ * @returns {boolean} Whether the state was accepted; false outside an active gesture.
+ */
 export function setRadioTuningStatic(active) {
   if (!radioPresentationAllowed() || !_tuningActive) return false;
   const next = Boolean(active);
@@ -1399,6 +1762,11 @@ export function setRadioTuningStatic(active) {
   return true;
 }
 
+/**
+ * Capture the camera state Radio must preserve across a flight.
+ * @param {Cesium.Camera} [camera] - Camera to read; defaults to the layer viewer.
+ * @returns {object|null} `{ height, heading, pitch, roll }`, or null without a camera.
+ */
 function radioCameraState(camera = _viewer?.camera) {
   if (!camera) return null;
   return {
@@ -1409,11 +1777,20 @@ function radioCameraState(camera = _viewer?.camera) {
   };
 }
 
-/** Radio may move the globe only while no tracked entity owns the follow camera. */
+/**
+ * Radio may move the globe only while no tracked entity owns the follow camera.
+ * @param {Cesium.Viewer} [viewer] - Viewer to test; defaults to the layer viewer.
+ * @returns {boolean} Whether a camera exists and nothing is tracked.
+ */
 export function radioCameraNavigationAllowed(viewer = _viewer) {
   return Boolean(viewer?.camera) && !viewer.trackedEntity;
 }
 
+/**
+ * Plan the optional centered-Earth leg that precedes a station flight.
+ * @param {Cesium.Viewer} [viewer] - Viewer to measure; defaults to the layer viewer.
+ * @returns {object|null} `{ destination, cameraState }` for the recenter leg, or null when a direct flight is fine.
+ */
 function radioGlobeRecenterPlan(viewer = _viewer) {
   const camera = viewer?.camera;
   const canvas = viewer?.scene?.canvas;
@@ -1471,6 +1848,11 @@ function radioGlobeRecenterPlan(viewer = _viewer) {
   };
 }
 
+/**
+ * Test whether a navigation record is still the one the layer should fly.
+ * @param {object|null} navigation - Navigation record under test.
+ * @returns {boolean} Whether generation, layer enablement, and camera ownership all still hold.
+ */
 function radioCameraNavigationIsCurrent(navigation) {
   return Boolean(
     navigation
@@ -1480,18 +1862,32 @@ function radioCameraNavigationIsCurrent(navigation) {
   );
 }
 
+/**
+ * Abort the in-progress Radio flight and clear its completion token.
+ * @returns {void}
+ */
 function cancelActiveRadioCameraFlight() {
   if (!_activeRadioCameraFlight || !radioCameraNavigationAllowed(_viewer)) return;
   _activeRadioCameraFlight = null;
   _viewer.camera.cancelFlight();
 }
 
+/**
+ * Retire every outstanding Radio navigation and cancel its flight.
+ * @returns {void}
+ */
 function invalidateRadioCameraNavigation() {
   _radioCameraNavigationGeneration += 1;
   cancelActiveRadioCameraFlight();
   _activeRadioCameraFlight = null;
 }
 
+/**
+ * Test whether a navigation record already targets a specific station selection.
+ * @param {object|null} navigation - Navigation record under test.
+ * @param {object|null} station - Station being selected.
+ * @returns {boolean} Whether the record is current and targets that station.
+ */
 function radioCameraNavigationOwnsSelection(navigation, station) {
   return Boolean(
     navigation
@@ -1501,6 +1897,13 @@ function radioCameraNavigationOwnsSelection(navigation, station) {
   );
 }
 
+/**
+ * Launch a camera flight bound to a navigation record's generation.
+ * @param {object|null} navigation - Navigation record that owns the flight.
+ * @param {object} options - `camera.flyTo` destination and orientation options.
+ * @param {Function} [onComplete] - Invoked only when the flight completes without cancellation.
+ * @returns {boolean} Whether the flight was started.
+ */
 function startRadioCameraFlight(navigation, options, onComplete) {
   if (!radioCameraNavigationIsCurrent(navigation)) return false;
   const token = ++_radioCameraFlightSequence;
@@ -1517,6 +1920,11 @@ function startRadioCameraFlight(navigation, options, onComplete) {
   return true;
 }
 
+/**
+ * Fly the navigation's target station into its planned camera position.
+ * @param {object|null} navigation - Navigation record carrying the target and camera state.
+ * @returns {boolean} Whether the focusing flight was started.
+ */
 function focusRadioNavigationTarget(navigation) {
   if (!radioCameraNavigationIsCurrent(navigation) || !navigation.target) return false;
   const plan = radioStationCameraPlan(navigation.target, navigation.cameraState);
@@ -1531,6 +1939,11 @@ function focusRadioNavigationTarget(navigation) {
   });
 }
 
+/**
+ * Open a new navigation record, invalidating any previous one.
+ * @param {object|null} [cameraState] - Camera state to preserve when no recenter leg is needed.
+ * @returns {object|null} Fresh navigation record, or null when the camera is unavailable or owned.
+ */
 function beginRadioCameraNavigation(cameraState = null) {
   const generation = ++_radioCameraNavigationGeneration;
   if (!radioCameraNavigationAllowed(_viewer) || !_enabled) return null;
@@ -1547,6 +1960,14 @@ function beginRadioCameraNavigation(cameraState = null) {
   };
 }
 
+/**
+ * Rotate the camera onto a station, running any pending recenter leg first.
+ * @param {object|null} station - Station to bring into view.
+ * @param {number} [duration=0.35] - Focus-leg flight duration in seconds.
+ * @param {object|null} [cameraState] - Camera state captured by the caller.
+ * @param {object|null} [navigation] - Existing navigation record to continue instead of opening a new one.
+ * @returns {boolean} Whether a flight was started or the recenter leg is already running.
+ */
 function rotateRadioStationIntoView(
   station,
   duration = 0.35,
@@ -1580,7 +2001,13 @@ function rotateRadioStationIntoView(
   return focusRadioNavigationTarget(activeNavigation);
 }
 
-/** Preview a tuner station bracket and camera orientation without starting audio. */
+/**
+ * Preview a tuner station bracket and camera orientation without starting audio.
+ * @param {string|null} id - Frozen-catalog station id under the needle.
+ * @param {object} [root0] - Preview options.
+ * @param {boolean} [root0.rotate=true] - Fly the camera onto the previewed station.
+ * @returns {boolean} Whether the id resolved to a frozen station.
+ */
 export function previewRadioTuningStation(id, { rotate = true } = {}) {
   if (!radioPresentationAllowed() || !_tuningActive) return false;
   const station = tuningResolutionStation(id);
@@ -1605,6 +2032,13 @@ export function previewRadioTuningStation(id, { rotate = true } = {}) {
   return Boolean(station);
 }
 
+/**
+ * Tear down a tuning gesture and release its noise source and navigation.
+ * @param {object} [root0] - Teardown options.
+ * @param {boolean} [root0.emit=true] - Publish a UI snapshot after teardown.
+ * @param {object|null} [root0.restoredStation=null] - Station kept rendered as selected, presentation only.
+ * @returns {void}
+ */
 function clearRadioTuningNoise({ emit = true, restoredStation = null } = {}) {
   if (_tuningCameraNavigation) invalidateRadioCameraNavigation();
   _tuningActive = false;
@@ -1631,7 +2065,10 @@ export function endRadioTuning() {
   clearRadioTuningNoise();
 }
 
-/** Cancel a tuning gesture and restore its frozen start marker for presentation only. */
+/**
+ * Cancel a tuning gesture and restore its frozen start marker for presentation only.
+ * @returns {boolean} Whether an active gesture was cancelled.
+ */
 export function cancelRadioTuning() {
   if (!_tuningActive) return false;
   const restoredStation = tuningResolutionStation(_tuningStartStationId);
@@ -1639,7 +2076,13 @@ export function cancelRadioTuning() {
   return true;
 }
 
-/** Commit the exact frozen drag resolution or report that it is unavailable. */
+/**
+ * Commit the exact frozen drag resolution or report that it is unavailable.
+ * @param {string|null} id - Frozen-catalog station id released by the gesture.
+ * @param {object} [root0] - Commit options.
+ * @param {string} [root0.origin='programmatic'] - Initiator forwarded to the resulting selection.
+ * @returns {object} Frozen `{ ok, reason, stationId, generation }` outcome.
+ */
 export function commitRadioTuningStation(id, { origin = 'programmatic' } = {}) {
   const frozenStation = tuningResolutionStation(id);
   const currentStation = _stationById.get(String(id)) || null;
@@ -1693,6 +2136,13 @@ export function commitRadioTuningStation(id, { origin = 'programmatic' } = {}) {
   });
 }
 
+/**
+ * Switch to the armed fallback station after a failed playback attempt.
+ * @param {string|null} failedId - Station whose stream failed.
+ * @param {string} [origin] - Initiator carried onto the fallback selection.
+ * @param {string|null} [attemptId] - Attempt id carried onto the fallback selection.
+ * @returns {boolean} Whether a fallback was armed and selected.
+ */
 function tryRadioFallback(
   failedId,
   origin = _playFallbackOrigin || 'programmatic',
@@ -1726,11 +2176,22 @@ function tryRadioFallback(
   return true;
 }
 
+/**
+ * Credit the station's directory click count without blocking playback.
+ * @param {string} id - Station id reported to the broker.
+ * @returns {void}
+ */
 function recordDirectoryClick(id) {
   fetch(api.radioClick(id), { method: 'POST' }).catch(() => {});
 }
 
-/** Play the selected broadcaster stream after an explicit user action. */
+/**
+ * Play the selected broadcaster stream after an explicit user action.
+ * @param {object} [root0] - Playback options.
+ * @param {string} [root0.origin='programmatic'] - Initiator recorded on the playback attempt.
+ * @param {string|null} [root0.attemptId=null] - Caller-supplied attempt id; one is minted when absent.
+ * @returns {Promise<boolean>} Resolves true once the selected stream is confirmed playing.
+ */
 export async function playSelectedRadio({ origin = 'programmatic', attemptId = null } = {}) {
   const station = selectedStation();
   if (!radioPresentationAllowed() || !station?.streamUrl) return false;
@@ -1797,6 +2258,12 @@ export async function playSelectedRadio({ origin = 'programmatic', attemptId = n
  * Wait for confirmed Radio playback while voice owns a hard mute.
  * A fallback station may replace the first stream during this wait, so the
  * state subscription—not the first play() promise—is authoritative.
+ * @param {object} [root0] - Injection points; defaults are the module's own playback surfaces.
+ * @param {Function} [root0.startPlayback] - Starts playback and resolves to whether it began.
+ * @param {Function} [root0.subscribe] - State subscription returning an unsubscribe function.
+ * @param {Function} [root0.getState] - Returns the current UI snapshot.
+ * @param {number} [root0.timeoutMs=RADIO_VOICE_PLAYBACK_TIMEOUT_MS] - Wait budget before resolving false.
+ * @returns {Promise<boolean>} Resolves true when the stream plays while voice still owns the mute.
  */
 export function confirmRadioPlayback({
   startPlayback,
@@ -1845,7 +2312,13 @@ export function confirmRadioPlayback({
   });
 }
 
-/** Start and verify a prepared station without ever making it audible under voice. */
+/**
+ * Start and verify a prepared station without ever making it audible under voice.
+ * @param {object} [options] - Voice playback options.
+ * @param {string|null} [options.attemptId] - Attempt id forwarded to the playback attempt.
+ * @param {number} [options.timeoutMs] - Wait budget forwarded to the confirmation wait.
+ * @returns {Promise<boolean>} Resolves true only when playback is confirmed under the voice mute.
+ */
 export function playPreparedRadioForVoice(options = {}) {
   if (!_voiceDucked) return Promise.resolve(false);
   return confirmRadioPlayback({
@@ -1856,7 +2329,13 @@ export function playPreparedRadioForVoice(options = {}) {
   });
 }
 
-/** Stop the shared stream and release its network resource. */
+/**
+ * Stop the shared stream and release its network resource.
+ * @param {object} [root0] - Stop options.
+ * @param {string} [root0.origin='programmatic'] - Initiator; `user` and `voice` are echoed to observers.
+ * @param {string|null} [root0.attemptId=null] - When set, only the matching active attempt is stopped.
+ * @returns {boolean} Whether the stop was applied; a stale attempt id is ignored.
+ */
 export function stopRadioPlayback({ origin = 'programmatic', attemptId = null } = {}) {
   if (attemptId && _activePlaybackAttempt?.id !== attemptId) return false;
   const stoppedAttemptId = _activePlaybackAttempt?.id || null;
@@ -1882,7 +2361,12 @@ export function stopRadioPlayback({ origin = 'programmatic', attemptId = null } 
   return true;
 }
 
-/** Pause or resume the selected stream. Resuming is still click initiated. */
+/**
+ * Pause or resume the selected stream. Resuming is still click initiated.
+ * @param {object} [root0] - Toggle options.
+ * @param {string} [root0.origin='programmatic'] - Initiator forwarded to the resulting pause or play.
+ * @returns {Promise<boolean>} Resolves true when the resulting pause or play succeeded.
+ */
 export function toggleRadioPlayback({ origin = 'programmatic' } = {}) {
   if (['loading', 'playing', 'buffering'].includes(_audioState)) {
     return Promise.resolve(pauseRadioPlayback({ origin }));
@@ -1898,7 +2382,12 @@ export function toggleRadioPlayback({ origin = 'programmatic' } = {}) {
   return playSelectedRadio({ origin });
 }
 
-/** Pause Radio without toggling a stopped or already-paused stream back on. */
+/**
+ * Pause Radio without toggling a stopped or already-paused stream back on.
+ * @param {object} [root0] - Pause options.
+ * @param {string} [root0.origin='programmatic'] - Initiator; `user` and `voice` are echoed to observers.
+ * @returns {boolean} Whether an active stream was paused.
+ */
 export function pauseRadioPlayback({ origin = 'programmatic' } = {}) {
   if (!['loading', 'playing', 'buffering'].includes(_audioState)) return false;
   const pausedAttemptId = _activePlaybackAttempt?.id || null;
@@ -1918,7 +2407,11 @@ export function pauseRadioPlayback({ origin = 'programmatic' } = {}) {
   return true;
 }
 
-/** Set shared audio volume, clamped to [0, 1]. */
+/**
+ * Set shared audio volume, clamped to [0, 1].
+ * @param {number|string} value - Requested volume; non-numeric input clamps to 0.
+ * @returns {boolean} Whether presentation is allowed and the volume was applied.
+ */
 export function setRadioVolume(value) {
   if (!radioPresentationAllowed()) return false;
   const volume = clampRadioVolume(value);
@@ -1934,7 +2427,11 @@ export function setRadioVolume(value) {
   return true;
 }
 
-/** Durable Radio preferences; this surface never creates or plays audio. */
+/**
+ * Durable Radio preferences; this surface never creates or plays audio.
+ * @param {object} [params] - Preference updates; absent keys are left untouched.
+ * @returns {boolean} Whether every present key carried a valid value.
+ */
 export function setRadioParams(params = {}) {
   const nextFilter = Object.hasOwn(params, 'filter')
     ? normalizeRadioFilter(params.filter)
@@ -1983,6 +2480,10 @@ export function setRadioParams(params = {}) {
   return true;
 }
 
+/**
+ * Read the persisted Radio preferences for share links and preset restoration.
+ * @returns {object} `{ filter, volume }` currently applied to the layer.
+ */
 export function getRadioParams() {
   return { filter: _filter, volume: _userVolume };
 }
@@ -1990,6 +2491,10 @@ export function getRadioParams() {
 /**
  * Mute Radio during a live voice turn, then gently restore the user-owned
  * volume after voice returns to standby. Repeated state sync is idempotent.
+ * @param {boolean} ducked - Whether a live voice turn owns a hard mute.
+ * @param {object} [root0] - Restore ramp options.
+ * @param {number} [root0.restoreDelayMs=VOICE_RESTORE_DELAY_MS] - Delay before the fade back begins.
+ * @param {number} [root0.restoreDurationMs=VOICE_RESTORE_DURATION_MS] - Smoothstep fade duration back to the user volume.
  */
 export function setRadioVoiceDucking(ducked, {
   restoreDelayMs = VOICE_RESTORE_DELAY_MS,
@@ -2047,6 +2552,10 @@ export function setRadioVoiceDucking(ducked, {
   else beginRestore();
 }
 
+/**
+ * Rebuild the Cesium entity behind the selected-station bracket.
+ * @returns {void}
+ */
 function updateSelectionEntity() {
   if (_selectedEntity && _viewer) _viewer.entities.remove(_selectedEntity);
   _selectedEntity = null;
@@ -2089,6 +2598,10 @@ function updateSelectionEntity() {
   scheduleRadioOverlayPublish();
 }
 
+/**
+ * Read Cesium's generated cluster point collection for the Radio data source.
+ * @returns {Cesium.PointPrimitiveCollection|null} Cluster points carrying membership ids, or null before clustering.
+ */
 function clusterPointCollection() {
   return _dataSource?.clustering?._clusterPointCollection || null;
 }
@@ -2114,6 +2627,10 @@ function scheduleRadioOverlayPublishAfterClusterRebuild() {
   });
 }
 
+/**
+ * Rebuild and publish the selected, cluster, and singleton overlay cohort.
+ * @returns {void}
+ */
 function publishRadioOverlayEntries() {
   _overlayPublishTimer = null;
   if (!radioPresentationAllowed()) {
@@ -2222,6 +2739,10 @@ function publishRadioOverlayEntries() {
   };
 }
 
+/**
+ * Coalesce overlay publishes into a single task within the current session.
+ * @returns {void}
+ */
 function scheduleRadioOverlayPublish() {
   if (_overlayPublishTimer) clearTimeout(_overlayPublishTimer);
   const sessionGeneration = _sessionGeneration;
@@ -2230,6 +2751,11 @@ function scheduleRadioOverlayPublish() {
   }, 0);
 }
 
+/**
+ * Fly the camera to an overhead view of a station.
+ * @param {object|null} station - Station to center; an invalid target still invalidates navigation.
+ * @returns {boolean} Whether the focus flight was started.
+ */
 function focusStation(station) {
   _radioCameraNavigationGeneration += 1;
   if (!station || !radioCameraNavigationAllowed(_viewer)) return false;
@@ -2241,7 +2767,17 @@ function focusStation(station) {
   return true;
 }
 
-/** Select a station. Playback occurs only when autoplay is explicitly true. */
+/**
+ * Select a station. Playback occurs only when autoplay is explicitly true.
+ * @param {string} id - Station id present in the accepted catalog.
+ * @param {object} [root0] - Selection options.
+ * @param {boolean} [root0.autoplay=false] - Start playback once the selection settles.
+ * @param {boolean} [root0.focus=false] - Fly the camera to an overhead view of the station.
+ * @param {string} [root0.origin='programmatic'] - Initiator recorded on any playback attempt.
+ * @param {string|null} [root0.attemptId=null] - Attempt id to reuse instead of minting one.
+ * @param {object|null} [root0.cameraNavigation] - Navigation record allowed to own this selection.
+ * @returns {boolean} Whether the station exists and was selected.
+ */
 export function selectRadioStation(id, {
   autoplay = false,
   focus = false,
@@ -2278,7 +2814,16 @@ export function selectRadioStation(id, {
   return true;
 }
 
-/** Select the previous or next station and optionally retain a UI-owned band order. */
+/**
+ * Select the previous or next station and optionally retain a UI-owned band order.
+ * @param {number} [direction=1] - Signed step; any negative value walks backwards.
+ * @param {object} [root0] - Cycle options.
+ * @param {boolean} [root0.rotate=false] - Rotate the camera onto each station as it is selected.
+ * @param {Array<string>|null} [root0.stationIds=null] - UI-owned band order overriding the ranked view.
+ * @param {boolean} [root0.autoplay=true] - Start playback on the cycled-to station.
+ * @param {string} [root0.origin='programmatic'] - Initiator recorded on any playback attempt.
+ * @returns {boolean} Whether a station was selected.
+ */
 export function cycleRadioStation(direction = 1, {
   rotate = false,
   stationIds = null,
@@ -2316,7 +2861,14 @@ export function cycleRadioStation(direction = 1, {
   });
 }
 
-/** Select and optionally play the best station for a location/category request. */
+/**
+ * Select and optionally play the best station for a location/category request.
+ * @param {object} [criteria] - Request criteria forwarded to the request ranking.
+ * @param {object} [root0] - Selection options.
+ * @param {boolean} [root0.autoplay=true] - Start playback on the chosen station.
+ * @param {string} [root0.origin='programmatic'] - Initiator recorded on any playback attempt.
+ * @returns {object|null} The chosen station, or null when nothing matches or presentation is gated.
+ */
 export function selectRequestedRadioStation(criteria = {}, { autoplay = true, origin = 'programmatic' } = {}) {
   if (!radioPresentationAllowed()) return null;
   const requestedCategory = String(criteria.categoryId || 'all');
@@ -2336,6 +2888,12 @@ export function selectRequestedRadioStation(criteria = {}, { autoplay = true, or
   return ranked[0];
 }
 
+/**
+ * Re-evaluate horizon and filter visibility for every marker and the selection.
+ * @param {object} [root0] - Visibility options.
+ * @param {boolean} [root0.force=true] - Scan even when the camera has not moved materially.
+ * @returns {void}
+ */
 function updateRenderVisibility({ force = true } = {}) {
   if (!_viewer || !_dataSource) return;
   const cameraPosition = _viewer.camera?.positionWC;
@@ -2364,7 +2922,11 @@ function updateRenderVisibility({ force = true } = {}) {
   if (visibilityChanged) governorRequestRender('radio-horizon');
 }
 
-/** Change marker/list category without interrupting an active station. */
+/**
+ * Change marker/list category without interrupting an active station.
+ * @param {string} categoryId - Declared category id; unknown ids fall back to `all`.
+ * @returns {boolean} Whether presentation is allowed and the filter was applied.
+ */
 export function setRadioFilter(categoryId) {
   if (!radioPresentationAllowed()) return false;
   const valid = _categories.some((category) => category.id === categoryId);
@@ -2395,7 +2957,12 @@ export function setRadioFilter(categoryId) {
   return true;
 }
 
-/** Retain refresh identities only while every represented station still exists. */
+/**
+ * Retain refresh identities only while every represented station still exists.
+ * @param {Array<object>} previous - Previously published cluster candidates.
+ * @param {Array<object>} stations - Stations present after a catalog refresh.
+ * @returns {Array<object>} Candidates whose membership survived the refresh unchanged.
+ */
 export function retainRadioClusterIdentitiesForStations(previous, stations) {
   const stationIds = new Set((stations || []).map((station) => String(station?.id || '')).filter(Boolean));
   return (previous || []).filter((candidate) => (
@@ -2405,6 +2972,11 @@ export function retainRadioClusterIdentitiesForStations(previous, stations) {
   ));
 }
 
+/**
+ * Replace the marker set and indexes with a new accepted catalog.
+ * @param {Array<object>} stations - Validated stations becoming the visible catalog.
+ * @returns {void}
+ */
 function reconcileStations(stations) {
   if (!_tuningActive) _cancelledTuningPresentationStation = null;
   _clusterOverlayIdentities = retainRadioClusterIdentitiesForStations(
@@ -2449,6 +3021,10 @@ function reconcileStations(stations) {
   updateRenderVisibility();
 }
 
+/**
+ * Configure Cesium clustering and mirror membership onto the visible cluster point.
+ * @returns {void}
+ */
 function installClusterStyling() {
   if (!_dataSource || _removeClusterListener) return;
   const clustering = _dataSource.clustering;
@@ -2488,6 +3064,11 @@ function installClusterStyling() {
   });
 }
 
+/**
+ * Resolve a Radio station under a screen position without stealing other layers' picks.
+ * @param {Cesium.Cartesian2} position - Screen-space click position.
+ * @returns {string|null} Station id from the primary pick, drill pick, or tolerance ring; null otherwise.
+ */
 function pickedRadioStationAt(position) {
   const scene = _viewer?.scene;
   if (!scene || !position) return null;
@@ -2521,6 +3102,10 @@ function pickedRadioStationAt(position) {
   return null;
 }
 
+/**
+ * Gate every visible, audible, and pickable Radio surface on layer lifecycle.
+ * @returns {boolean} Whether the layer is enabled and the manager confirms a settled enabled state.
+ */
 function radioPresentationAllowed() {
   if (!_managerLifecyclePresentation) return _enabled;
   return _enabled
@@ -2529,6 +3114,10 @@ function radioPresentationAllowed() {
     && !_managerLifecyclePresentation.uncertain;
 }
 
+/**
+ * Apply the lifecycle gate to the data source, overlay source, and interaction handlers.
+ * @returns {void}
+ */
 function syncRadioLifecyclePresentation() {
   const visible = radioPresentationAllowed();
   if (_dataSource) _dataSource.show = visible;
@@ -2545,6 +3134,10 @@ function syncRadioLifecyclePresentation() {
   }
 }
 
+/**
+ * Register the pick owner, click handler, and horizon visibility poll.
+ * @returns {void}
+ */
 function installInteraction() {
   if (!_viewer || _clickHandler) return;
   registerPickOwner('radio', (id) => id.startsWith(RADIO_PREFIX));
@@ -2566,6 +3159,10 @@ function installInteraction() {
   _horizonTimer = setInterval(() => updateRenderVisibility({ force: false }), HORIZON_TICK_MS);
 }
 
+/**
+ * Tear down the pick owner, click handler, and horizon poll.
+ * @returns {void}
+ */
 function removeInteraction() {
   unregisterPickOwner('radio');
   _clickHandler?.destroy();
@@ -2582,7 +3179,10 @@ export const radioLayer = {
   source: 'Radio Browser',
   updateInterval: 45 * 60 * 1000,
 
-  /** Initialize the Cesium data source and the single audio element. */
+  /**
+   * Initialize the Cesium data source and the single audio element.
+   * @param {Cesium.Viewer} viewer - Viewer receiving the Radio data source.
+   */
   init(viewer) {
     _sessionGeneration += 1;
     _viewer = viewer;
@@ -2605,7 +3205,13 @@ export const radioLayer = {
     emitState();
   },
 
-  /** Apply the manager-owned lifecycle gate to visible and pickable Radio state. */
+  /**
+   * Apply the manager-owned lifecycle gate to visible and pickable Radio state.
+   * @param {object} [root0] - Lifecycle presentation reported by DataLayerManager.
+   * @param {string|null} [root0.lifecycleState] - One of `enabling`, `enabled`, `disabling`, or `disabled`.
+   * @param {boolean} [root0.enabled=false] - Whether the manager intends the layer to be visible.
+   * @param {boolean} [root0.uncertain=false] - Whether the manager cannot confirm the settled state.
+   */
   setLifecyclePresentation({ lifecycleState = null, enabled = false, uncertain = false } = {}) {
     const settledState = enabled ? 'enabled' : 'disabled';
     const normalizedState = ['enabling', 'enabled', 'disabling', 'disabled'].includes(lifecycleState)
@@ -2816,7 +3422,10 @@ export const radioLayer = {
     _playbackControlListeners.clear();
   },
 
-  /** Layer statistics for HUD/debug surfaces. */
+  /**
+   * Layer statistics for HUD/debug surfaces.
+   * @returns {object} Catalog, playback, freshness, and overlay counters for diagnostics.
+   */
   getStats() {
     return {
       count: _stations.length,

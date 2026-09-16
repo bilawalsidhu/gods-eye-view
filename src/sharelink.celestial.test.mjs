@@ -188,7 +188,9 @@ test('a shared view reserves its own camera without cancelling its saved Follow'
   );
   const deferred = sourceBlock(
     "  _beginDeferredNavigation(noun = 'location', { cancelPendingSelection = true } = {}) {",
-    '  /** Final authority check and release immediately before a delayed flight. */',
+    // Batch H: the block-end anchor used to be a one-line JSDoc comment that
+    // was expanded into a full block; anchor on the following method instead.
+    '  _reassertNavigationHandoff(generation) {',
   );
   // The shared view's own `cancelPendingSelection` must reach the stamp; other
   // stamp options may ride alongside it.

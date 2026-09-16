@@ -9,6 +9,15 @@ import { createHybridAnnotationRenderer } from './hybridAnnotationRenderer.js';
  * The HYBRID renderer uses world-space draping for
  * footprints + screen-space SVG for callouts/rings/arrows. The engine, resolver,
  * and voice tool wiring are shared across rendering strategies.
+ *
+ * @param {object} root0 - Bootstrap inputs, both coming from the Cesium boot in main.js.
+ * @param {import('cesium').Viewer} root0.viewer - Live viewer; the engine borrows its
+ *   camera for flyTo/framing and both sub-renderers attach their surfaces to its scene.
+ * @param {import('cesium').Cesium3DTileset|null} root0.tileset - Photoreal 3D tiles when that
+ *   stack booted, else null; collision is enabled on it so clamped marks sit on the
+ *   tiles instead of at sea level.
+ * @returns {object} The initialized annotation engine (also published as
+ *   `window.__gevAnnotations`).
  */
 export function initAnnotations({ viewer, tileset = null }) {
   // World-space footprint draping; clamped marks can use the photoreal tiles.

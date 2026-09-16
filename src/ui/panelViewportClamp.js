@@ -19,7 +19,9 @@ export const PANEL_VIEWPORT_INSET_PX = 6;
  *   Desired position plus the panel's current box size.
  * @param {{width: number, height: number}} viewport Window inner size.
  * @param {number} [inset] Edge keep-out, defaults to PANEL_VIEWPORT_INSET_PX.
- * @returns {{left: number, top: number}}
+ * @returns {{left: number, top: number}} Clamped position; when the panel is
+ *   larger than the viewport the `inset` floor wins, so its top-left corner
+ *   is still `inset` px on-screen.
  */
 export function clampPanelToViewport({ left, top, width, height }, { width: viewportWidth, height: viewportHeight }, inset = PANEL_VIEWPORT_INSET_PX) {
   const maxLeft = Math.max(inset, viewportWidth - width - inset);

@@ -69,6 +69,10 @@ const RIGHT_STACK_OBSTACLE_SELECTOR = [
  * controls, and Global Context (which owns the nested Radio companion).
  * The rail then measures the live HUD chrome at runtime so it can stay
  * aligned and within the available vertical corridor.
+ * @param {object} mgr - StyleManager instance (src/ui.js) supplying the
+ *   right-rail stack and the Display/CCTV/parameter panel elements that are
+ *   re-parented into it; the resize/mutation observers this init creates are
+ *   stored back on it.
  * @returns {void}
  */
 export function initRightPanelAdaptiveLayout(mgr) {
@@ -151,6 +155,19 @@ export function initRightPanelAdaptiveLayout(mgr) {
     scheduleRightPanelLayout(mgr);
   }
 
+/**
+ * Coalesces right-rail relayout into a single animation frame; a request
+ * while one is already pending is dropped. The reconsider flag re-opens
+ * panels the allocator auto-collapsed before the next measurement, so a HUD
+ * fade can undo a collapse that was sized against the old corridor.
+ * @param {object} mgr - StyleManager instance (src/ui.js) owning the right
+ *   stack, the pending-frame request id, and the reconsider flag the
+ *   deferred pass consumes.
+ * @param {object} root0 - Options.
+ * @param {boolean} root0.reconsiderAutoCollapse - Release panels marked
+ *   `layout-auto-collapsed` before the deferred pass re-measures.
+ * @returns {void}
+ */
 export function scheduleRightPanelLayout(mgr, { reconsiderAutoCollapse = false } = {}) {
     if (reconsiderAutoCollapse) mgr._rightStackReconsiderAutoCollapse = true;
     if (!mgr._rightPanelStack || mgr._rightStackLayoutFrame !== null) return;
@@ -172,6 +189,10 @@ export function scheduleRightPanelLayout(mgr, { reconsiderAutoCollapse = false }
  * corridor is too short, the expanded panel receives the remaining height
  * with internal scrolling. Tactical HUD hides collapsed sibling launchers
  * while a panel is expanded; other HUD layouts keep them visible.
+ * @param {object} mgr - StyleManager instance (src/ui.js) supplying the
+ *   right stack, the HUD variant/visibility provider, the panel elements it
+ *   measures and resizes, and the preferred-panel id that steers allocation
+ *   order.
  * @returns {void}
  */
 export function syncRightPanelAdaptiveLayout(mgr) {
@@ -380,6 +401,9 @@ export function syncRightPanelAdaptiveLayout(mgr) {
  * actual HUD/chrome rectangles that intersect the left lane, then decides
  * whether collapsed sibling labels can remain visible beside the expanded
  * panel. No decision is keyed to a specific panel or HUD variant.
+ * @param {object} mgr - StyleManager instance (src/ui.js) supplying the
+ *   left accordion stack; the resize/mutation observers and HUD transition
+ *   and cockpit-mode handlers this init creates are stored back on it.
  * @returns {void}
  */
 export function initLeftPanelAdaptiveLayout(mgr) {
@@ -450,7 +474,16 @@ export function initLeftPanelAdaptiveLayout(mgr) {
 }
 
 /**
- * Batches adaptive accordion work into one animation frame.
+ * Batches adaptive accordion work into one animation frame; requests landing
+ * while a frame is already queued are dropped. The reconsider flag re-opens
+ * auto-collapsed panels before the deferred measurement, e.g. when a HUD
+ * fade or cockpit-mode change frees the corridor that forced the collapse.
+ * @param {object} mgr - StyleManager instance (src/ui.js) owning the left
+ *   accordion stack, the pending-frame request id, and the reconsider flag
+ *   the deferred pass consumes.
+ * @param {object} root0 - Options.
+ * @param {boolean} root0.reconsiderAutoCollapse - Release panels marked
+ *   `layout-auto-collapsed` before the deferred pass re-measures.
  * @returns {void}
  */
 export function scheduleLeftPanelLayout(mgr, { reconsiderAutoCollapse = false } = {}) {
@@ -508,6 +541,10 @@ function measureLeftPanelNaturalHeight(mgr, panel) {
  * Measures a live obstacle-free corridor for the left accordion and toggles
  * focus mode only when the expanded panel plus sibling labels cannot fit.
  * Safe boundaries are written as viewport-relative CSS values.
+ * @param {object} mgr - StyleManager instance (src/ui.js) supplying the left
+ *   stack, the HUD variant/visibility provider, the collapsed-height cache
+ *   and preferred-panel id the allocator reads, and the panel elements it
+ *   resizes.
  * @returns {void}
  */
 export function syncLeftPanelAdaptiveLayout(mgr) {

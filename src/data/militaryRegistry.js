@@ -30,7 +30,7 @@ let _polling = false;
 /**
  * True when the dedicated military layer currently renders these aircraft
  * (the flights layer should suppress duplicates rather than restyle them).
- * @returns {boolean}
+ * @returns {boolean} True while the military layer is enabled.
  */
 export function isMilitaryLayerActive() {
   return _militaryLayerActive;
@@ -87,7 +87,8 @@ export function registerMilitaryIcaos(icaos) {
 /**
  * Whether an aircraft is known military.
  * @param {string} icao24 - ICAO24 hex (any case).
- * @returns {boolean}
+ * @returns {boolean} True if the hex is in the known-military set; unknown
+ *   hexes read as civil until a poll classifies them.
  */
 export function isMilitaryIcao(icao24) {
   return _milIcaos.has(String(icao24 || '').toLowerCase());

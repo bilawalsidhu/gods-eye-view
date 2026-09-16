@@ -103,11 +103,12 @@ export const CCTV_THUMBNAIL_ALTITUDE_SCALE = Object.freeze({
  * band. A user-pinned hover card may intentionally enter the band because it
  * is temporary and requested; persistent ambient cards yield to the HUD.
  *
- * @param {object} input
+ * @param {object} input - Card anchor + viewport context.
  * @param {number} input.sy - Anchor Y in CSS pixels.
  * @param {number} input.viewH - Viewport height in CSS pixels.
- * @param {boolean} [input.pinned=false]
- * @returns {boolean}
+ * @param {boolean} [input.pinned=false] - Hover-summoned card (bypasses the band).
+ * @returns {boolean} True when the anchor may paint (pinned cards only need a
+ *   finite Y).
  */
 export function isCctvCardAnchorSafe({ sy, viewH, pinned = false } = {}) {
   if (pinned) return Number.isFinite(sy);
@@ -122,9 +123,10 @@ export function isCctvCardAnchorSafe({ sy, viewH, pinned = false } = {}) {
  * anchor keeps `minSepPx` from every already-accepted anchor, so cards never
  * pile onto each other or bury neighboring camera icons.
  * @param {Array<{id:string,sx:number,sy:number,distanceKm:number}>} candidates
- * @param {object} [options]
- * @param {number} [options.minSepPx]
- * @param {number} [options.limit]
+ *   LOD-selected candidates with screen anchors.
+ * @param {object} [options] - Separation/cap overrides.
+ * @param {number} [options.minSepPx] - Required anchor separation in px.
+ * @param {number} [options.limit] - Hard cap on accepted cards.
  * @returns {string[]} Accepted ids, nearest-first.
  */
 export function declutterCctvCards(candidates, { minSepPx = CCTV_CARD_MIN_SEP_PX, limit = Infinity } = {}) {
@@ -160,7 +162,8 @@ export function declutterCctvCards(candidates, { minSepPx = CCTV_CARD_MIN_SEP_PX
  *     until 7,500 m, then a linear alpha fade to 0 at 9,500 m.
  *   - ≥9,500 m: fully hidden (alpha 0) — entries may persist, nothing paints.
  * @param {number} cameraHeightM - Viewer camera height above the ellipsoid.
- * @returns {{scale:number, alpha:number}}
+ * @returns {{scale:number, alpha:number}} Card scale in [0.35, 1] and opacity
+ *   in [0, 1] (alpha 0 hides the card entirely).
  */
 export function cardScaleForAltitude(cameraHeightM) {
   const h = Number.isFinite(cameraHeightM) ? Math.max(0, cameraHeightM) : 0;
@@ -187,11 +190,12 @@ export function cardScaleForAltitude(cameraHeightM) {
  * card has a first frame the layer drops back to the steady-state global
  * gate (single in-flight fetch, one launch per second — an in-flight fetch
  * still blocks the tick, so slow responses only lower the rate).
- * @param {object} [input]
+ * @param {object} [input] - Pacer state at this tick.
  * @param {boolean} [input.coldFill] - A selected card lacks its first frame.
  * @param {number} [input.inFlight] - Current in-flight fetch count.
  * @param {number} [input.sinceLastLaunchMs] - Ms since the last fetch launch.
- * @returns {{mode:('burst'|'steady'), launch:boolean}}
+ * @returns {{mode:('burst'|'steady'), launch:boolean}} Active pacing mode and
+ *   whether this tick may launch a fetch.
  */
 export function cardFetchPolicy({ coldFill = false, inFlight = 0, sinceLastLaunchMs = Infinity } = {}) {
   if (coldFill) {
@@ -213,6 +217,7 @@ export function cardFetchPolicy({ coldFill = false, inFlight = 0, sinceLastLaunc
  * onto them (via applyFrameResult) so the renderer sees new frames without
  * an entry rebuild.
  * @returns {{frame:*, stamp:number, failCount:number, lastAttemptAt:number}}
+ *   Empty slot (`stamp === 0` means never drawn — renders nothing).
  */
 export function createFrameSlot() {
   return { frame: null, stamp: 0, failCount: 0, lastAttemptAt: 0 };
@@ -224,9 +229,11 @@ export function createFrameSlot() {
  * frame and stamp untouched (the drawn card persists) and only bumps the
  * failure count for retry backoff.
  * @param {{frame:*, stamp:number, failCount:number, lastAttemptAt:number}} prev
- * @param {{ok:boolean, frame?:*}} result
- * @param {number} nowMs
+ *   Current slot state (null → treated as a fresh slot).
+ * @param {{ok:boolean, frame?:*}} result - Fetch outcome.
+ * @param {number} nowMs - Wall-clock stamp for the attempt.
  * @returns {{frame:*, stamp:number, failCount:number, lastAttemptAt:number}}
+ *   Replacement slot state (new object; the entry's reference is re-assigned).
  */
 export function applyFrameResult(prev, result, nowMs) {
   const base = prev || createFrameSlot();
@@ -244,8 +251,8 @@ export function applyFrameResult(prev, result, nowMs) {
 /**
  * Per-camera attempt spacing: a base gap between attempts, doubling per
  * consecutive failure, capped (a dead source settles at one try per 5 min).
- * @param {number} failCount
- * @returns {number}
+ * @param {number} failCount - Consecutive failures recorded on the slot.
+ * @returns {number} Delay in ms (capped at the 5-minute ceiling).
  */
 export function frameRetryDelayMs(failCount) {
   const fails = Math.max(0, Number(failCount) || 0);
@@ -257,9 +264,10 @@ export function frameRetryDelayMs(failCount) {
  * stale against its source cadence (or never filled), and past the retry
  * spacing since its last attempt.
  * @param {{stamp:number, failCount:number, lastAttemptAt:number}|null} slot
+ *   Frame slot to test (null → never due).
  * @param {number} refreshMs - Source cadence (staticFrameRefreshMs).
- * @param {number} nowMs
- * @returns {boolean}
+ * @param {number} nowMs - Current wall time in ms.
+ * @returns {boolean} True when a fetch may be launched now.
  */
 export function frameFetchDue(slot, refreshMs, nowMs) {
   if (!slot) return false;
@@ -276,7 +284,7 @@ export function frameFetchDue(slot, refreshMs, nowMs) {
  * are dropped.
  * @param {Array<{id:string, stamp:number}>} slots - Cached slot ids + stamps.
  * @param {Iterable<string>} keepIds - Live card ids (selection + grace).
- * @param {number} [cap]
+ * @param {number} [cap] - Cache ceiling in slots.
  * @returns {string[]} Ids to drop from the cache.
  */
 export function planFrameCachePrune(slots, keepIds, cap = CCTV_FRAME_CACHE_MAX) {
@@ -293,16 +301,17 @@ export function planFrameCachePrune(slots, keepIds, cap = CCTV_FRAME_CACHE_MAX) 
  * stable frame slot is passed by reference; the host reads `slot.frame` on
  * every paint, so a successful fetch appears without rebuilding the entry and
  * a failed fetch cannot clear the last successful pixels.
- * @param {object} input
- * @param {string} input.id
- * @param {object} input.position
- * @param {string} input.title
- * @param {{frame:*,stamp:number}} input.frameSlot
- * @param {number} [input.rank=0]
- * @param {boolean} [input.pinned=false]
- * @param {boolean} [input.active=false]
- * @param {number} [input.gapPx=16]
- * @returns {object}
+ * @param {object} input - One camera's card description.
+ * @param {string} input.id - Camera id (also the overlay entry id).
+ * @param {object} input.position - World position (Cesium.Cartesian3-shaped).
+ * @param {string} input.title - Card title line (camera label).
+ * @param {{frame:*,stamp:number}} input.frameSlot - Stable frame slot, held by
+ *   reference so later fetches appear without an entry rebuild.
+ * @param {number} [input.rank=0] - Selection rank (lower = higher priority).
+ * @param {boolean} [input.pinned=false] - Hover-summoned card.
+ * @param {boolean} [input.active=false] - Monitor-open camera (protected).
+ * @param {number} [input.gapPx=16] - Requested leader gap in px (floored by the host).
+ * @returns {object} Normalized entry for the world-overlay host.
  */
 export function createCctvThumbnailOverlayEntry({
   id,

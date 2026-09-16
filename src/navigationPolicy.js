@@ -70,7 +70,7 @@ export function stampInitialShareGesture(stamp) {
 
 /**
  * Run an immediate explicit camera navigation.
- * @param {object} options
+ * @param {object} [options] Navigation inputs and the three transaction callbacks.
  * @param {boolean} [options.disposed=false] - Whether the owning controller is
  *   disposed; a disposed controller refuses the navigation.
  * @param {boolean} [options.cockpitActive=false] - Whether Cockpit view is
@@ -108,7 +108,7 @@ export function runExplicitNavigation({
 
 /**
  * Accept a deferred navigation intent without releasing the current owner.
- * @param {object} options
+ * @param {object} [options] Navigation inputs and the generation-claim callback.
  * @param {boolean} [options.disposed=false] - Whether the owning controller is
  *   disposed; a disposed controller refuses the navigation.
  * @param {boolean} [options.cockpitActive=false] - Whether Cockpit view is
@@ -138,7 +138,7 @@ export function beginDeferredNavigation({
 
 /**
  * Re-assert authority immediately before a deferred flight.
- * @param {object} options
+ * @param {object} [options] Generation state and the handoff callbacks.
  * @param {number} options.generation - Generation stamp claimed when the
  *   deferred navigation was accepted.
  * @param {number} options.currentGeneration - Navigation generation that is

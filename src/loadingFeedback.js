@@ -4,12 +4,27 @@ export const LOADING_FAILURE_DWELL_MS = 5000;
 export const LOADING_LONG_THRESHOLD_MS = 30000;
 export const TRAFFIC_SYNC_CONFIRM_MS = 1500;
 
+/**
+ * Coerce a reported count into a non-negative finite number.
+ * @param {*} value - Raw stats count; may be undefined, a string, or NaN.
+ * @returns {number} Sanitized count, 0 whenever the input is not usable.
+ */
 function finiteCount(value) {
   const number = Number(value);
   return Number.isFinite(number) && number >= 0 ? number : 0;
 }
 
-/** Normalize one manager layer into a small loading-feedback record. */
+/**
+ * Normalize one manager layer into a small loading-feedback record.
+ * @param {object} [layer] - Manager layer record (`id`, `name`, `enabled`,
+ *   `lifecycleState`, `stats`) as returned by DataLayerManager.getAll();
+ *   read-only, never mutated.
+ * @returns {object} Flattened row: `id`, `label` (display name),
+ *   `lifecycleState` (falling back to `enabled`/`disabled` when unset),
+ *   `loading`, `disabling`, `refresh` (a re-poll of an already-enabled layer
+ *   with accepted data, as opposed to a first cold load), `count`,
+ *   `accepted`, `error`, `unavailable`, `keyRequired`, and `degraded`.
+ */
 export function normalizeLayerLoading(layer = {}) {
   const stats = layer.stats || {};
   const lifecycleState = String(layer.lifecycleState || (layer.enabled ? 'enabled' : 'disabled'));
@@ -40,6 +55,15 @@ export function normalizeLayerLoading(layer = {}) {
   };
 }
 
+/**
+ * Derive a batch terminal outcome from the participant rows' own stats.
+ * @param {object} summary - Aggregate summary whose `records` are
+ *   normalizeLayerLoading() rows.
+ * @param {string[]} participantIds - Layer ids participating in the epoch.
+ * @returns {string|null} 'error' when any participant reports an error or an
+ *   unavailable feed; null while none is degraded. KEY REQUIRED rows are
+ *   excluded — they own their own copy and are not a failed batch.
+ */
 function terminalFromParticipantStats(summary, participantIds) {
   if (!participantIds?.length) return null;
   const participants = new Set(participantIds);
@@ -54,7 +78,15 @@ function terminalFromParticipantStats(summary, participantIds) {
     : null;
 }
 
-/** Aggregate all manager layers without changing their lifecycle authority. */
+/**
+ * Aggregate all manager layers without changing their lifecycle authority.
+ * @param {object[]} [layers] - Manager layer records as returned by
+ *   DataLayerManager.getAll().
+ * @returns {object} Summary with `records` (normalized rows), `active`
+ *   (loading rows only), `activeIds`, `disabling` (true only while every
+ *   active row is mid-disable), and `refresh` (true while every active row
+ *   is a re-poll rather than a first load).
+ */
 export function aggregateLayerLoading(layers = []) {
   const records = layers.map(normalizeLayerLoading);
   const active = records.filter((record) => record.loading);
@@ -68,6 +100,11 @@ export function aggregateLayerLoading(layers = []) {
   };
 }
 
+/**
+ * Seed the idle global loading state the reducer folds forward from.
+ * @returns {object} Idle state: phase 'idle' with the chip hidden, zeroed
+ *   timestamps, an empty roster, and no batch outcome, terminal, or operation.
+ */
 export function createLoadingFeedbackState() {
   return {
     phase: 'idle',
@@ -82,7 +119,19 @@ export function createLoadingFeedbackState() {
   };
 }
 
-/** Create a top-center status notice, optionally persistent until explicitly cleared. */
+/**
+ * Create a top-center status notice, optionally persistent until explicitly cleared.
+ * @param {string} message - Notice copy; a blank message yields null.
+ * @param {number} _nowMs - Creation timestamp, deliberately unused: a finite
+ *   notice starts its dwell only at first presentation.
+ * @param {object} [root0] - Presentation options.
+ * @param {string} [root0.state='error'] - Severity/state key driving chip
+ *   styling (e.g. 'error', 'acquiring').
+ * @param {string} [root0.detail=''] - Secondary line beneath the label.
+ * @param {boolean} [root0.persistent=false] - When true the notice never
+ *   expires and must be replaced or cleared explicitly.
+ * @returns {object|null} Normalized notice, or null for a blank message.
+ */
 export function createGlobalStatusNotice(message, _nowMs = 0, {
   state = 'error',
   detail = '',
@@ -103,7 +152,15 @@ export function createGlobalStatusNotice(message, _nowMs = 0, {
   };
 }
 
-/** Present a top-center status notice until its deadline or explicit clearing. */
+/**
+ * Present a top-center status notice until its deadline or explicit clearing.
+ * @param {object|null} notice - Notice from createGlobalStatusNotice();
+ *   mutated once to stamp a finite notice's `hideAt` on its first
+ *   presentation.
+ * @param {number} nowMs - Current performance.now() sample.
+ * @returns {object|null} Presentation `{ state, label, detail }`, or null
+ *   when the notice is blank or has outlived its dwell.
+ */
 export function presentGlobalStatusNotice(notice, nowMs = 0) {
   const now = Number.isFinite(nowMs) ? nowMs : 0;
   if (!notice?.label) return null;
@@ -120,7 +177,17 @@ export function presentGlobalStatusNotice(notice, nowMs = 0) {
   };
 }
 
-/** Whether deferred notice work still owns the current presentation epoch. */
+/**
+ * Whether deferred notice work still owns the current presentation epoch.
+ * @param {number} expectedGeneration - Notice generation captured when the
+ *   presentation was deferred.
+ * @param {number} currentGeneration - The controller's current notice
+ *   generation, bumped by every newer acquisition.
+ * @param {boolean} [disposed=false] - Whether the controller has been torn
+ *   down.
+ * @returns {boolean} True only while the controller is live and the captured
+ *   generation still matches; a stale epoch never surfaces over a newer one.
+ */
 export function canPresentDeferredStatusNotice(expectedGeneration, currentGeneration, disposed = false) {
   return !disposed
     && Number.isSafeInteger(expectedGeneration)
@@ -131,6 +198,13 @@ export function canPresentDeferredStatusNotice(expectedGeneration, currentGenera
  * Present the shared status surface without allowing a persistent notice to
  * hide a terminal manager failure. Failure dwell starts when the manager
  * reports it, so it must remain the highest-priority presentation while live.
+ * @param {object|null} notice - Universal status notice, if any.
+ * @param {object} loadingState - Reduced loading state from
+ *   reduceLoadingFeedback().
+ * @param {object} summary - Aggregate summary supplying loading-phase copy.
+ * @param {number} nowMs - Current performance.now() sample.
+ * @returns {object|null} Winning presentation `{ state, label, detail }`:
+ *   a manager error outranks the notice, then the notice, then loading.
  */
 export function presentGlobalLoadingStatus(notice, loadingState, summary, nowMs = 0) {
   const loadingPresentation = presentLoadingFeedback(loadingState, summary, nowMs);
@@ -138,7 +212,11 @@ export function presentGlobalLoadingStatus(notice, loadingState, summary, nowMs 
   return presentGlobalStatusNotice(notice, nowMs) || loadingPresentation;
 }
 
-/** Create the sampled Street Traffic chip state. */
+/**
+ * Create the sampled Street Traffic chip state.
+ * @returns {object} Idle chip state: hidden and not busy, with no
+ *   confirmation deadline and empty label/progress slots.
+ */
 export function createTrafficSyncFeedbackState() {
   return {
     busy: false,
@@ -152,6 +230,18 @@ export function createTrafficSyncFeedbackState() {
 /**
  * Reduce one sampled Street Traffic status without extending completion on
  * every animation-loop poll. Coverage describes accepted data, not work.
+ * @param {object|null} previous - Previous chip state; null seeds the idle
+ *   state.
+ * @param {object} [root0] - Traffic layer sample.
+ * @param {boolean} [root0.enabled=false] - Whether the layer is on; a
+ *   disabled sample always resets to the idle state.
+ * @param {object} [root0.stats] - Layer stats (`loading`, `worldJumping`,
+ *   `phaseProgressPct`, `phaseLabel`/`loadingLabel`, `prewarmQueueDepth`).
+ * @param {boolean} [root0.forceShow=false] - Arm the confirmation flash on a
+ *   settle even when the previous sample was not busy.
+ * @param {number} [nowMs=0] - Current performance.now() sample.
+ * @returns {object} Next chip state: busy work with a label and progress
+ *   slot, a bounded post-settle confirmation flash, or the idle state.
  */
 export function reduceTrafficSyncFeedback(previous, {
   enabled = false,
@@ -206,6 +296,14 @@ export function reduceTrafficSyncFeedback(previous, {
   };
 }
 
+/**
+ * Map one manager change event onto a batch terminal outcome.
+ * @param {object|null} event - Manager change event (`type`, `layerId`, plus
+ *   an optional `error` or `cancelled` flag).
+ * @returns {string|null} 'error' for failures, 'cancelled' for
+ *   cancellations, 'complete' for visibility/refresh events, null when the
+ *   event is unclassified (e.g. a mid-load transition).
+ */
 function terminalFromEvent(event) {
   const type = String(event?.type || '');
   if (type === 'visibility-failed' || type === 'refresh-failed' || event?.error) return 'error';
@@ -214,6 +312,13 @@ function terminalFromEvent(event) {
   return null;
 }
 
+/**
+ * Keep the worst terminal outcome of a batch, worst first.
+ * @param {string|null} current - Outcome accumulated so far.
+ * @param {string|null} next - Incoming candidate outcome.
+ * @returns {string|null} The more severe of the two (error outranks
+ *   cancelled, which outranks complete), or `current` when `next` is empty.
+ */
 function mergeTerminalOutcome(current, next) {
   const severity = { complete: 1, cancelled: 2, error: 3 };
   if (!next) return current || null;
@@ -221,7 +326,17 @@ function mergeTerminalOutcome(current, next) {
   return current;
 }
 
-/** Reduce a sampled manager summary into delayed, non-flashing UI state. */
+/**
+ * Reduce a sampled manager summary into delayed, non-flashing UI state.
+ * @param {object|null} previous - Previous state; null seeds the idle state.
+ * @param {object} summary - Aggregate summary from aggregateLayerLoading().
+ * @param {number} nowMs - Current performance.now() sample.
+ * @param {object|null} [event=null] - Manager change event, folded into the
+ *   batch outcome only when its `layerId` participates in this epoch.
+ * @returns {object} Next state: a loading epoch carrying its roster and
+ *   batch outcome, a bounded terminal dwell, or a reset idle state when work
+ *   finished before it was ever revealed.
+ */
 export function reduceLoadingFeedback(previous, summary, nowMs, event = null) {
   const state = previous || createLoadingFeedbackState();
   const now = Number.isFinite(nowMs) ? nowMs : 0;
@@ -279,7 +394,16 @@ export function reduceLoadingFeedback(previous, summary, nowMs, event = null) {
   return createLoadingFeedbackState();
 }
 
-/** Build the user-facing status copy for the current loading state. */
+/**
+ * Build the user-facing status copy for the current loading state.
+ * @param {object} state - Reduced loading state.
+ * @param {object} summary - Aggregate summary supplying the active roster
+ *   for the loading-phase detail line.
+ * @param {number} nowMs - Current performance.now() sample, driving the
+ *   long-load threshold.
+ * @returns {object|null} `{ state, label, detail }` for the top-center chip,
+ *   or null while the state is not visible.
+ */
 export function presentLoadingFeedback(state, summary, nowMs) {
   if (!state?.visible) return null;
   if (state.phase === 'terminal') {

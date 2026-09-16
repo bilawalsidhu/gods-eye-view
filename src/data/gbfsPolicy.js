@@ -23,8 +23,8 @@ export const GBFS_ALLOWED_HOSTS = new Set([
  *
  * Also accepts any subdomain of publicbikesystem.net.
  *
- * @param {string} hostname
- * @returns {boolean}
+ * @param {string} hostname Upstream hostname as received from the relayed URL (case/whitespace tolerated).
+ * @returns {boolean} True when the proxy may fetch from this host.
  */
 export function isAllowedGbfsHost(hostname) {
   const host = String(hostname || '').trim().toLowerCase();
@@ -36,8 +36,8 @@ export function isAllowedGbfsHost(hostname) {
 /**
  * Only allow station_information.json and station_status.json endpoints.
  *
- * @param {string} pathname
- * @returns {boolean}
+ * @param {string} pathname Request path to test (any prefix is allowed; the suffix decides).
+ * @returns {boolean} True only for the two station endpoints the proxy relays.
  */
 export function isAllowedGbfsPath(pathname) {
   return /\/station_(information|status)\.json$/i.test(String(pathname || ''));
@@ -49,7 +49,7 @@ export function isAllowedGbfsPath(pathname) {
  * station_information is semi-static (5 min cache); station_status is
  * real-time (no-store).
  *
- * @param {string} pathname
+ * @param {string} pathname Request path whose endpoint class sets the cache window.
  * @returns {string} Cache-Control header value.
  */
 export function gbfsCacheControl(pathname) {

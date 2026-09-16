@@ -49,7 +49,11 @@ export const DEFAULT_AUSTIN_MAX_SOURCES = 250;
 export const DEFAULT_CCTV_MAX_SOURCES = 900;
 /** Reference point for Austin camera prioritization (Congress & 6th). */
 export const AUSTIN_DOWNTOWN = { lat: 30.2672, lon: -97.7431 };
-/** Caltrans CCTV: one JSON feed per district, identical schema statewide. */
+/**
+ * Caltrans CCTV: one JSON feed per district, identical schema statewide.
+ * @param {number|string} district - Caltrans district number (3, 4, 7, 11...).
+ * @returns {string} District status-feed URL, zero-padded to two digits.
+ */
 export const CALTRANS_CCTV_URL = (district) =>
   `https://cwwp2.dot.ca.gov/data/d${district}/cctv/cctvStatusD${String(district).padStart(2, '0')}.json`;
 /** Districts fetched by default: SF Bay (4), LA (7), San Diego (11), Sacramento (3). */
@@ -91,7 +95,7 @@ let _cctvSourceInflight = null;
  * FNV-1a 32-bit hash of a string, used to derive deterministic pseudo-random
  * values (e.g. hue for synthetic SVG billboards, fallback heading angles).
  *
- * @param {string} text
+ * @param {string} text - Input string (null/undefined coerces to '').
  * @returns {number} Unsigned 32-bit hash.
  */
 export function hashSeed(text) {
@@ -106,8 +110,8 @@ export function hashSeed(text) {
 /**
  * Escape special XML/HTML characters for safe embedding in SVG text nodes.
  *
- * @param {string} text
- * @returns {string}
+ * @param {string} text - Raw text (null/undefined coerces to '').
+ * @returns {string} Escaped text safe for XML/SVG text content and attributes.
  */
 export function escapeXml(text) {
   return String(text || '')
@@ -138,8 +142,8 @@ export function normalizeFeedType(value) {
 /**
  * Check whether a normalized feed type represents streaming video.
  *
- * @param {string} feedType
- * @returns {boolean}
+ * @param {string} feedType - Normalized feed type (see normalizeFeedType).
+ * @returns {boolean} True for mp4/webm/hls (streamed, not snapshot).
  */
 export function isVideoFeedType(feedType) {
   return feedType === 'mp4' || feedType === 'webm' || feedType === 'hls';
@@ -148,9 +152,9 @@ export function isVideoFeedType(feedType) {
 /**
  * Coerce a value to a finite number, returning fallback if NaN/Infinity.
  *
- * @param {*} value
- * @param {number} [fallback=NaN]
- * @returns {number}
+ * @param {*} value - Value to coerce (strings/numbers/numeric-ish).
+ * @param {number} [fallback=NaN] - Value returned when coercion is not finite.
+ * @returns {number} Finite number, or the fallback.
  */
 export function toFiniteNumber(value, fallback = Number.NaN) {
   const num = Number(value);
@@ -160,8 +164,8 @@ export function toFiniteNumber(value, fallback = Number.NaN) {
 /**
  * Normalize a column/field name to a lowercase snake_case key.
  *
- * @param {string} text
- * @returns {string}
+ * @param {string} text - Raw column/field name (any casing, spaces, dashes).
+ * @returns {string} Lowercase snake_case key ('' for empty input).
  */
 function normalizeKey(text) {
   return String(text || '')
@@ -176,8 +180,8 @@ function normalizeKey(text) {
  *
  * WKT uses (lon lat) order; returned object uses {lat, lon}.
  *
- * @param {string} value
- * @returns {{lat:number, lon:number}}
+ * @param {string} value - WKT POINT string.
+ * @returns {{lat:number, lon:number}} Degrees; NaN/NaN when unparseable.
  */
 export function parsePointString(value) {
   const match = String(value || '').match(/POINT\s*\(\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\)/i);
@@ -194,8 +198,8 @@ export function parsePointString(value) {
  * Handles WKT POINT strings, and objects with latitude/lat/y or
  * longitude/lon/lng/x properties (various casing).
  *
- * @param {string|object|null} value
- * @returns {{lat:number, lon:number}}
+ * @param {string|object|null} value - WKT string or coordinate-bearing object.
+ * @returns {{lat:number, lon:number}} Degrees; NaN/NaN when nothing resolves.
  */
 export function coerceLatLon(value) {
   if (!value) return { lat: Number.NaN, lon: Number.NaN };
@@ -227,7 +231,7 @@ export function coerceLatLon(value) {
  * explicit latitude/longitude scalar fields.
  *
  * @param {object} record - Flattened camera record.
- * @returns {{lat:number, lon:number}}
+ * @returns {{lat:number, lon:number}} Degrees; NaN/NaN when no field resolves.
  */
 function extractAustinCoords(record) {
   const candidates = [
@@ -295,7 +299,7 @@ function extractAustinCameraId(record) {
  *
  * @param {object} record - Flattened camera record.
  * @param {string} cameraId - Fallback identifier if no name field found.
- * @returns {string}
+ * @returns {string} Camera display name ('Austin Camera <id>' when unnamed).
  */
 function extractAustinName(record, cameraId) {
   const preferredKeys = [
@@ -357,9 +361,9 @@ function extractAustinHeading(record) {
 /**
  * Bounding-box sanity check: is this coordinate plausibly in the Austin metro area?
  *
- * @param {number} lat
- * @param {number} lon
- * @returns {boolean}
+ * @param {number} lat - Latitude in degrees.
+ * @param {number} lon - Longitude in degrees.
+ * @returns {boolean} True when the point sits inside the Austin metro bbox.
  */
 function isLikelyAustinCoordinate(lat, lon) {
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
@@ -371,7 +375,7 @@ function isLikelyAustinCoordinate(lat, lon) {
  *
  * Produces one of 16 evenly-spaced compass directions (0, 22.5, 45, ...).
  *
- * @param {string} cameraId
+ * @param {string} cameraId - Camera id (the hash seed; stable across refreshes).
  * @returns {number} Heading in degrees [0..360).
  */
 function fallbackHeadingFromId(cameraId) {
@@ -717,12 +721,6 @@ async function loadTflSourcesFromOpenData(env = {}) {
 }
 
 /**
- * Normalize a raw CCTV source item into a canonical shape with safe defaults.
- *
- * @param {object} item - Raw source from file, env, or Austin Open Data.
- * @returns {object} Normalized source with all expected fields populated.
- */
-/**
  * Load-time URL validation (PR #185, issue #29): a catalog entry's media URLs
  * are fetched BY THE SERVER, so an entry must never aim that fetch at
  * loopback, private/link-local ranges, or a credential-embedded URL. Unsafe
@@ -737,6 +735,16 @@ function safeMediaUrl(value) {
   return isSafeExternalHttpUrl(value) ? value : '';
 }
 
+/**
+ * Normalize a raw CCTV source item into the canonical served shape with safe
+ * defaults, so downstream code never sees a missing field. Media URLs pass
+ * through {@link safeMediaUrl} (load-time SSRF gate); numeric pose/geometry
+ * fields coerce to NaN rather than 0 when absent — NaN is "unknown", 0 would
+ * be a wrong-but-plausible camera pose.
+ *
+ * @param {object} item - Raw source from file, env, or Austin Open Data.
+ * @returns {object} Normalized source with every expected field populated.
+ */
 export function normalizeSourceItem(item) {
   return {
     id: String(item.id || '').trim(),
@@ -793,7 +801,7 @@ export function parseConfiguredSourcesFromEnv(rawValue) {
  * only in production) with the three live open-data packs, deduplicates by
  * ID, applies the global max cap, and caches for CCTV_SOURCE_CACHE_MS.
  *
- * @param {object} [options]
+ * @param {object} [options] - Refresh inputs (constant per process/isolate).
  * @param {Array<object>} [options.configuredSources=[]] - Raw source objects
  *   from server-side configuration (dev: config file + CCTV_SOURCES_JSON;
  *   production: CCTV_SOURCES_JSON). Injected because reading a file needs `fs`.
@@ -823,9 +831,10 @@ export async function getCctvSources({ configuredSources = [], env = {} } = {}) 
  * refresh with a good prior catalog it serves stale rather than blanking the
  * CCTV layer.
  *
- * @param {object} [options]
- * @param {Array<object>} [options.configuredSources=[]]
- * @param {object} [options.env={}]
+ * @param {object} [options] - Refresh inputs.
+ * @param {Array<object>} [options.configuredSources=[]] - File/env-backed raw
+ *   sources, merged after (and thus overriding) the live packs on id clash.
+ * @param {object} [options.env={}] - Provider gate/cap environment variables.
  * @returns {Promise<Array<object>>} Deduplicated, capped source list.
  */
 async function refreshCctvSources({ configuredSources = [], env = {} } = {}) {
@@ -892,11 +901,11 @@ async function refreshCctvSources({ configuredSources = [], env = {} } = {}) {
  * showing camera name, city, ID, status, and current timestamp. Used
  * when no upstream image or Street View fallback is available.
  *
- * @param {object} opts
- * @param {string} opts.cameraId
- * @param {string} opts.label
- * @param {string} [opts.city]
- * @param {string} [opts.status]
+ * @param {object} opts - Placeholder inputs.
+ * @param {string} opts.cameraId - Camera id (drives the deterministic hue).
+ * @param {string} opts.label - Camera name shown on the billboard.
+ * @param {string} [opts.city] - City/region line ('GLOBAL GRID' when absent).
+ * @param {string} [opts.status] - Status line ('SYNTHETIC' when absent).
  * @returns {string} SVG markup string.
  */
 export function buildSyntheticCctvSvg({ cameraId, label, city, status }) {
@@ -974,9 +983,10 @@ export const CCTV_STREAM_HEADER_TIMEOUT_MS = 15 * 1000;
  * Honors a declared content-length for a cheap early exit and otherwise
  * enforces the cap while streaming, cancelling the body past the limit.
  * Worker-safe (ReadableStream reader only — no Node APIs).
- * @param {Response} response
- * @param {number} maxBytes
- * @returns {Promise<{ok:true,bytes:Uint8Array}|{ok:false}>}
+ * @param {Response} response - Upstream response to drain.
+ * @param {number} maxBytes - Hard ceiling on accepted body size.
+ * @returns {Promise<{ok:true,bytes:Uint8Array}|{ok:false}>} Concatenated bytes,
+ *   or `{ok:false}` when the body was missing or exceeded the cap.
  */
 export async function readBytesCapped(response, maxBytes) {
   const declared = Number(response.headers.get('content-length'));
@@ -1019,11 +1029,12 @@ export async function readBytesCapped(response, maxBytes) {
  * (MJPEG/HLS) is never killed mid-flight. A timeout resolves as
  * `{ ok:false }` exactly like any other upstream miss.
  * @param {string} url Validated upstream media URL.
- * @param {object} [options]
+ * @param {object} [options] - Request shaping + injection points.
  * @param {Record<string,string>} [options.headers] Request headers (Range etc.).
- * @param {number} [options.timeoutMs=CCTV_STREAM_HEADER_TIMEOUT_MS]
+ * @param {number} [options.timeoutMs=CCTV_STREAM_HEADER_TIMEOUT_MS] Header wait budget.
  * @param {typeof fetch} [options.fetchImpl=fetch] Injectable for tests.
  * @returns {Promise<{ok:true, upstream:Response, disarm:()=>void}|{ok:false}>}
+ *   Open upstream plus the disarm handle, or `{ok:false}` on timeout/error.
  */
 export async function fetchMediaHeadersBounded(url, {
   headers = {},
@@ -1055,10 +1066,11 @@ export async function fetchMediaHeadersBounded(url, {
  * deliberately left untouched — callers stream `upstream.body` themselves.
  *
  * @param {Response} upstream - fetch() Response object.
- * @param {object} [opts]
+ * @param {object} [opts] - Passthrough options.
  * @param {string} [opts.sourceHeader='upstream'] - Value for X-CCTV-Source header.
  * @returns {{ok:true, status:number, headers:object}
- *   |{ok:false, status:502, error:string}}
+ *   |{ok:false, status:502, error:string}} Passthrough status/headers, or a
+ *   502 rejection when the upstream declares an oversized fixed body.
  */
 export function buildMediaPassthrough(upstream, { sourceHeader = 'upstream' } = {}) {
   const contentType = upstream.headers.get('content-type') || 'application/octet-stream';
@@ -1093,10 +1105,11 @@ export function buildMediaPassthrough(upstream, { sourceHeader = 'upstream' } = 
  * and `timeoutMs` are injectable only to keep the timeout contract unit-testable.
  *
  * @param {string} url - Server-registered upstream image URL.
- * @param {object} [options]
+ * @param {object} [options] - Injection points for the timeout contract.
  * @param {typeof fetch} [options.fetchImpl=fetch] - Fetch implementation.
  * @param {number} [options.timeoutMs=CCTV_FRAME_FETCH_TIMEOUT_MS] - Abort timeout.
- * @returns {Promise<{ok:true,body:Uint8Array,contentType:string}|null>}
+ * @returns {Promise<{ok:true,body:Uint8Array,contentType:string}|null>} Image
+ *   bytes + type, or null on any miss (non-image, oversized, error, timeout).
  */
 export async function fetchCctvImageFromUpstream(url, {
   fetchImpl = fetch,
@@ -1139,14 +1152,15 @@ export async function fetchCctvImageFromUpstream(url, {
  * `process.env`), so a deployment without GOOGLE_MAPS_API_KEY silently skips
  * straight to the synthetic frame instead of failing the request.
  *
- * @param {object} opts
- * @param {number} opts.lat
- * @param {number} opts.lon
- * @param {number} [opts.heading]
- * @param {number} [opts.fov]
- * @param {number} [opts.pitch]
+ * @param {object} opts - Camera pose + credential.
+ * @param {number} opts.lat - Camera latitude in degrees.
+ * @param {number} opts.lon - Camera longitude in degrees.
+ * @param {number} [opts.heading] - Compass bearing in degrees (default 0).
+ * @param {number} [opts.fov] - Horizontal field of view in degrees (20..120).
+ * @param {number} [opts.pitch] - Camera pitch in degrees (-40..20).
  * @param {string|undefined} opts.apiKey - GOOGLE_MAPS_API_KEY value.
- * @returns {Promise<{ok:true,body:Uint8Array,contentType:string}|null>}
+ * @returns {Promise<{ok:true,body:Uint8Array,contentType:string}|null>} Image
+ *   bytes, or null when keyless/out-of-range/timed out.
  */
 export async function streetViewFallback({ lat, lon, heading, fov, pitch, apiKey }) {
   // resolveGoogleApiKey: the scaffolded .env placeholder counts as absent, so
@@ -1197,7 +1211,8 @@ export async function streetViewFallback({ lat, lon, heading, fov, pitch, apiKey
  * entries survive across requests.
  *
  * @returns {{setHealth:(cameraId:string, patch:object)=>void,
- *            listHealth:()=>Array<object>}}
+ *            listHealth:()=>Array<object>}} Tracker with a bounded write path
+ *   and a snapshot read.
  */
 export function createCctvHealthTracker() {
   /** @type {Map<string,{id:string,status:string,sourceKind:string,label:string,message:string,updatedAt:number}>} */
@@ -1207,7 +1222,12 @@ export function createCctvHealthTracker() {
    * observability isn't silently evicted for a default 800-camera catalog. */
   const HEALTH_MAX_ENTRIES = 1200;
 
-  /** Update the health entry for a camera, evicting the oldest entry if at capacity. */
+  /**
+   * Update the health entry for a camera, evicting the oldest entry if at
+   * capacity.
+   * @param {string} cameraId - Camera id keying the health map.
+   * @param {object} patch - Partial fields (status/sourceKind/label/message).
+   */
   const setHealth = (cameraId, patch) => {
     // Evict oldest entries if the health map grows beyond the cap
     if (!health.has(cameraId) && health.size >= HEALTH_MAX_ENTRIES) {
@@ -1225,7 +1245,10 @@ export function createCctvHealthTracker() {
     });
   };
 
-  /** Snapshot all camera health entries as an array. */
+  /**
+   * Snapshot all camera health entries as an array.
+   * @returns {Array<object>} Health records in insertion order.
+   */
   const listHealth = () => Array.from(health.values());
 
   return { setHealth, listHealth };
@@ -1235,8 +1258,8 @@ export function createCctvHealthTracker() {
  * Build a JSON payload describing stream info (feedType, URLs) for a camera.
  *
  * @param {object|undefined} source - Registered source, or undefined when unknown.
- * @param {string} cameraId
- * @returns {object}
+ * @param {string} cameraId - Camera id echoed into the payload.
+ * @returns {object} Stream info (feedType, media/frame URLs, provider, sourceKind).
  */
 export function buildStreamPayload(source, cameraId) {
   const feedType = normalizeFeedType(source?.feedType || 'image');

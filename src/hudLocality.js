@@ -28,7 +28,7 @@ export const NEAR_POI_MAX_KM = 150;
  * @param {number} value Signed decimal degrees.
  * @param {string} positive Suffix when the value is >= 0.
  * @param {string} negative Suffix when the value is < 0.
- * @returns {string}
+ * @returns {string} Two-decimal magnitude with the hemisphere suffix appended.
  */
 function coordinateTag(value, positive, negative) {
   return `${Math.abs(value).toFixed(2)}${value >= 0 ? positive : negative}`;

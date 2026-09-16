@@ -42,9 +42,11 @@ export async function ensureGeoidReady() {
  * Geoid undulation N at a given point, in metres, relative to the WGS84
  * ellipsoid (positive = geoid above ellipsoid). Throws if
  * `ensureGeoidReady()` has not resolved yet.
- * @param {number} latDeg
- * @param {number} lonDeg
- * @returns {number}
+ * @param {number} latDeg Latitude in decimal degrees (WGS84).
+ * @param {number} lonDeg Longitude in decimal degrees; wrapped internally to
+ *   [-180, 180) before the grid lookup.
+ * @returns {number} Geoid undulation N in metres (positive = geoid surface
+ *   above the WGS84 ellipsoid).
  */
 export function geoidHeight(latDeg, lonDeg) {
   if (!egm96Module) {
@@ -60,8 +62,8 @@ export function geoidHeight(latDeg, lonDeg) {
  * Converts an orthometric (mean-sea-level) height to an ellipsoidal
  * (WGS84 globe-relative) height: h = H + N.
  * @param {number} hMslM - orthometric height in metres (height above MSL)
- * @param {number} latDeg
- * @param {number} lonDeg
+ * @param {number} latDeg Latitude in decimal degrees (WGS84).
+ * @param {number} lonDeg Longitude in decimal degrees (WGS84).
  * @returns {number} ellipsoidal height in metres
  */
 export function orthometricToEllipsoidal(hMslM, latDeg, lonDeg) {

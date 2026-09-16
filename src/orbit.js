@@ -21,7 +21,8 @@ export class OrbitController {
   /**
    * Start orbiting around a target position.
    * @param {Cesium.Cartesian3} targetCartesian - The point to orbit around
-   * @param {object} options
+   * @param {object} options - Framing overrides; each key is optional and
+   *   falls back to the controller's current value.
    * @param {number} options.radius - Distance from target in meters
    * @param {number} options.pitch - Tilt angle in degrees (negative = looking down)
    * @param {number} options.speed - Degrees per second (default 6)
@@ -77,7 +78,8 @@ export class OrbitController {
   /**
    * Toggle orbit on/off.
    * @param {Cesium.Cartesian3} targetCartesian - Required when starting
-   * @param {object} options - Passed to start()
+   * @param {object} [options] - Framing overrides forwarded to start(); each
+   *   omitted key keeps the controller's current value.
    * @returns {boolean} Whether orbit is now active
    */
   toggle(targetCartesian, options) {

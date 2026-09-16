@@ -113,12 +113,13 @@ export function awarenessRefreshIntervalMs(cameraMoving) {
  * floor in every state — no bin-crossing pattern, and no motion-end settle, can
  * refresh faster than AWARENESS_MOTION_REFRESH_MS.
  *
- * @param {object} input
+ * @param {object} input Per-frame evidence captured by the preRender listener.
  * @param {number} input.nowMs This frame's clock.
  * @param {number} input.lastRefreshMs When the readout last refreshed.
  * @param {number} input.lastPoseChangeMs When the camera pose last changed bins.
  * @param {boolean} input.wasMoving Whether the previous frame counted as moving.
- * @returns {{moving: boolean, refresh: boolean}}
+ * @returns {{moving: boolean, refresh: boolean}} Motion verdict for this frame
+ *   and whether the Contacts readout should refresh on it.
  */
 export function awarenessRefreshDecision({ nowMs, lastRefreshMs, lastPoseChangeMs, wasMoving }) {
   const moving = nowMs - lastPoseChangeMs < AWARENESS_MOTION_SETTLE_MS;
@@ -227,6 +228,14 @@ const state = {
   cohortPages: new Map(),
 };
 
+/**
+ * Materialize the Contacts panel, adopting a pre-existing DOM node when a
+ * server-rendered or restored shell is already present. Attaches the single
+ * delegated click listener that routes PREVIOUS/NEXT/focus and per-contact
+ * buttons; safe to call repeatedly.
+ *
+ * @returns {HTMLElement} The panel element, owned or adopted.
+ */
 function ensurePanel() {
   if (state.panel) return state.panel;
   const existing = document.getElementById('military-awareness-panel');
@@ -255,6 +264,8 @@ function ensurePanel() {
   return panel;
 }
 
+/** Swap the panel to its standby shell and hide the direction overlay, keeping
+ *  the panel element itself resident so re-enabling does not reflow the page. */
 function hidePanel() {
   if (state.panel) {
     const markup = `<div class="military-awareness-standby">
@@ -270,6 +281,18 @@ function hidePanel() {
   if (state.directionRoot) state.directionRoot.hidden = true;
 }
 
+/**
+ * Read one dependency layer's live health into the shape the cohort summarizer
+ * consumes. The availability verdict is deliberately conservative: a source
+ * that has started but not yet answered counts as UNAVAILABLE rather than
+ * empty, so the panel never flashes a false all-clear (see the in-body comment
+ * for the two distinct "not settled yet" windows).
+ *
+ * @param {string} layerId Manager layer id to interrogate.
+ * @returns {{available: boolean, stale: boolean, stats: object}} Cohort feed
+ *   state plus the raw `getStats()` snapshot (with `loading` forced on while
+ *   the lifecycle is still `enabling`).
+ */
 function sourceState(layerId) {
   const lifecycle = state.dataManager?.getLayerLifecycleState?.(layerId) || null;
   const enabled = lifecycle?.enabled === true || state.dataManager?.isEnabled(layerId) === true;
@@ -316,10 +339,25 @@ function sourceState(layerId) {
   return { available: !unavailable, stale: Boolean(stats.stale), stats };
 }
 
+/** Snapshot every awareness dependency's feed state in one call.
+ *
+ * @returns {Record<string, {available: boolean, stale: boolean, stats: object}>}
+ *   `sourceState()` results keyed by layer id.
+ */
 function collectSourceStates() {
   return Object.fromEntries(DEPENDENCIES.map((layerId) => [layerId, sourceState(layerId)]));
 }
 
+/**
+ * Derive a change-detection token from every source's identity-and-health
+ * tuple. Any movement in availability, staleness, last-update time, count,
+ * status, or error flips the token, which is the cheap signal that cohorts are
+ * built on stale evidence and must be re-evaluated.
+ *
+ * @param {Record<string, {available: boolean, stale: boolean, stats: object}>} sourceStates
+ *   Snapshot returned by `collectSourceStates()`.
+ * @returns {string} Deterministic pipe-joined revision token.
+ */
 function sourceRevision(sourceStates) {
   return DEPENDENCIES.map((layerId) => {
     const source = sourceStates[layerId];
@@ -336,6 +374,16 @@ function sourceRevision(sourceStates) {
   }).map((parts) => parts.join(':')).join('|');
 }
 
+/**
+ * Compare an awareness subject with a source row, string-coerced so numeric
+ * MMSIs match their string ids.
+ *
+ * @param {{layerId: string, id: string|number}|null} subject Current subject.
+ * @param {object|null} item Candidate row from the source layer.
+ * @param {string} prefix Layer id the row belongs to.
+ * @param {string} key Row field holding the contact id (`icao24`, `mmsi`, `id`).
+ * @returns {boolean} Whether the row IS the subject.
+ */
 function isSame(subject, item, prefix, key) {
   return subject?.layerId === prefix && String(subject.id) === String(item?.[key]);
 }
@@ -357,6 +405,21 @@ export function summarizeInstallationViewport(items, source) {
   };
 }
 
+/**
+ * Wrap the engine cohort summarizer so the panel gets a short display slice
+ * while PREVIOUS/NEXT navigation still sees the full in-range cohort. The
+ * untruncated list is carried on `navigationNearest`; `nearest` is what the
+ * panel paginates.
+ *
+ * @param {Array<{distanceM?: number, distance?: number, [key: string]: *}>} items
+ *   Nearby candidates from one source layer.
+ * @param {{available: boolean, stale: boolean}} source Feed state for that layer.
+ * @param {object} [options] Slice sizes.
+ * @param {number} [options.displayLimit=AWARENESS_MAX_EXAMPLES] Rows the panel renders.
+ * @param {number} [options.navigationLimit=AWARENESS_MAX_NAVIGATION_EXAMPLES]
+ *   Rows kept for navigation walk.
+ * @returns {object} Engine summary plus `navigationNearest`.
+ */
 function summarizeAwarenessCohortForNavigation(items, source, {
   displayLimit = AWARENESS_MAX_EXAMPLES,
   navigationLimit = AWARENESS_MAX_NAVIGATION_EXAMPLES,
@@ -412,7 +475,21 @@ export function contactsWindowFromSnapshot(snapshot) {
   };
 }
 
-/** Build the read-only Awareness snapshot shared with compact HUD consumers. */
+/**
+ * Build the read-only Awareness snapshot shared with compact HUD consumers.
+ *
+ * Projects the full evaluation down to plain data — a detached subject, the
+ * per-cohort verdicts the panel renders, and the navigation state — so a
+ * consumer can never mutate module state through it. `nearest` is copied, not
+ * aliased.
+ *
+ * @param {object|null} results Live evaluation from `evaluateSubject()`.
+ * @param {object} [navigation] Navigation bookkeeping to embed verbatim.
+ * @param {object} [options] Snapshot switches.
+ * @param {boolean} [options.subjectPresent=true] Whether the source still
+ *   reports the subject; false drives the CONTACT LOST hold state.
+ * @returns {object|null} Plain-data snapshot, or null with no evaluation.
+ */
 export function buildAwarenessContextSnapshot(results, navigation = {}, { subjectPresent = true } = {}) {
   if (!results) return null;
   return {
@@ -452,7 +529,7 @@ export function buildAwarenessContextSnapshot(results, navigation = {}, { subjec
  * The subject is excluded from its own window, which is why the panel reads
  * "contacts around X" rather than "including X".
  * @param {Cesium.Cartesian3} position Window centre.
- * @param {object} [options]
+ * @param {object} [options] Window shaping.
  * @param {number} [options.radiusM=AWARENESS_RADIUS_M] Window radius.
  * @param {object|null} [options.subject=null] Contact at the centre, excluded.
  * @returns {{flights: Array, military: Array, aircraft: number}|null} Cohorts
@@ -472,6 +549,17 @@ export function collectAircraftProximityWindow(position, {
   return { flights, military, aircraft: flights.length + military.length };
 }
 
+/**
+ * Evaluate the full awareness cohort set around a subject: proximity for all
+ * four sources, each summarized with its own feed health. This is the single
+ * source of truth the panel, the HUD snapshot, and the navigation walk read.
+ *
+ * @param {{position?: Cesium.Cartesian3}|null} subject Subject to centre on.
+ * @param {Record<string, {available: boolean, stale: boolean, stats: object}>} [sourceStates]
+ *   Pre-collected feed states; defaults to a fresh snapshot.
+ * @returns {object|null} Evaluation with `subject`, `evaluatedAt`, `radiusM`,
+ *   and one cohort per source, or null when the subject has no position.
+ */
 function evaluateSubject(subject, sourceStates = collectSourceStates()) {
   const position = subject?.position;
   if (!position) return null;
@@ -504,6 +592,15 @@ function evaluateSubject(subject, sourceStates = collectSourceStates()) {
   };
 }
 
+/**
+ * Render one cohort as the panel's row markup: label, live count with page
+ * indicator, source/coverage note, and the current page of tappable contacts.
+ * Every interpolated string is escaped; counts report `?` for unknown feeds.
+ *
+ * @param {{id: string, label: string, source: string, coverage?: string,
+ *   summary: object}} cohort Cohort to render.
+ * @returns {string} `<section>` markup for the cohort row.
+ */
 function rowHtml(cohort) {
   const summary = cohort.summary;
   const count = summary.count === null ? '?' : String(summary.count);
@@ -527,7 +624,20 @@ function rowHtml(cohort) {
   </section>`;
 }
 
-/** Focus a nearby example through the source layer that owns its selection. */
+/**
+ * Focus a nearby example through the source layer that owns its selection.
+ * Each layer has a different focus contract — flight layers track, vessels
+ * select, installations fly the camera — so the delegation lives here rather
+ * than at every call site. Camera flights are suppressed for non-aircraft
+ * targets while cockpit mode owns the camera.
+ *
+ * @param {string} layerId Owning layer id of the target.
+ * @param {string} id Target contact id (`icao24`, `mmsi`, or installation id).
+ * @param {object} [options] Focus provenance.
+ * @param {string} [options.origin='programmatic'] Who asked for the focus;
+ *   forwarded to the layer so telemetry can distinguish user from voice.
+ * @returns {boolean} Whether some layer accepted the focus.
+ */
 function focusNearbyTarget(layerId, id, { origin = 'programmatic' } = {}) {
   if (!layerId || !id) return false;
   if (layerId === 'flights') {
@@ -555,26 +665,50 @@ function focusNearbyTarget(layerId, id, { origin = 'programmatic' } = {}) {
   return true;
 }
 
+/**
+ * Stable `layerId:id` identity for a subject, used as the history/visited key.
+ *
+ * @param {{layerId: string, id: string|number}|null} subject Subject to key.
+ * @returns {string} Composite key, or `''` with no subject.
+ */
 function subjectKey(subject) {
   return subject ? `${subject.layerId}:${subject.id}` : '';
 }
 
+/** Normalize a layer or contact id for cross-source comparison: stringified,
+ *  trimmed, lowercased, and empty-string-safe for missing values.
+ *
+ * @param {*} value Raw id from any source layer.
+ * @returns {string} Normalized id.
+ */
 function normalizeContextId(value) {
   return String(value || '').trim().toLowerCase();
 }
 
+/** Subject identity normalized for matching against the viewer's tracked id.
+ *
+ * @param {{layerId: string, id: string|number}|null} subject Subject to key.
+ * @returns {string} Normalized composite key, or `''` with no subject.
+ */
 function normalizedSubjectKey(subject) {
   if (!subject) return '';
   return `${normalizeContextId(subject.layerId)}:${normalizeContextId(subject.id)}`;
 }
 
+/** Start a fresh NEXT/PREVIOUS cycle: forget visited contacts and seed the set
+ *  with the current subject so the first step always leaves it. */
 function resetNavigationVisitedCycle() {
   state.navigationVisited.clear();
   const currentKey = subjectKey(state.subject);
   if (currentKey) state.navigationVisited.add(currentKey);
 }
 
-/** @returns {{historyKeys: string[], navigationVisitedKeys: string[], historyLength: number, navigationIndex: number, suppressedHistoryKey: string|null, pendingSelectionKey: string|null}} */
+/**
+ * Test-only read model of the navigation walk state.
+ * @returns {{historyKeys: string[], navigationVisitedKeys: string[], historyLength: number,
+ *   navigationIndex: number, suppressedHistoryKey: string|null, pendingSelectionKey: string|null}}
+ *   Serialized view of the history stack, visited set, and cursor.
+ */
 export function _getAwarenessNavigationStateForTest() {
   return {
     historyKeys: state.navigationHistory.map(subjectKey),
@@ -586,6 +720,17 @@ export function _getAwarenessNavigationStateForTest() {
   };
 }
 
+/**
+ * Select an already-materialized context target without a camera flight —
+ * the fallback for installations (and vessels in cockpit mode) when focusing
+ * would otherwise steal the camera. Looks the target up among the subject,
+ * the history stack, and the current cohorts, so only contacts the panel
+ * already knows about are eligible.
+ *
+ * @param {string} layerId Owning layer id of the target.
+ * @param {string} id Target contact id.
+ * @returns {boolean} Whether a known target with a position was selected.
+ */
 function selectKnownContextTarget(layerId, id) {
   const key = `${layerId}:${id}`;
   const known = [
@@ -607,6 +752,20 @@ function selectKnownContextTarget(layerId, id) {
   return true;
 }
 
+/**
+ * Focus a target while bracketing the selection with the pending-key guard.
+ * The pending key lets the subject listener recognize the selection this focus
+ * is about to produce, and `preserveHistory` suppresses the history push for
+ * re-focusing the current subject (PREVIOUS/NEXT must not re-push what it is
+ * stepping over).
+ *
+ * @param {string} layerId Owning layer id of the target.
+ * @param {string} id Target contact id.
+ * @param {boolean} [preserveHistory=false] Suppress the history push for this focus.
+ * @param {object} [options] Provenance passed through to the layer.
+ * @param {string} [options.origin='programmatic'] Who requested the focus.
+ * @returns {boolean} Whether the focus was accepted.
+ */
 function requestFocus(layerId, id, preserveHistory = false, { origin = 'programmatic' } = {}) {
   const key = `${layerId}:${id}`;
   state.pendingSelectionKey = key;
@@ -617,23 +776,56 @@ function requestFocus(layerId, id, preserveHistory = false, { origin = 'programm
   return focused;
 }
 
+/** Subject-shaped convenience wrapper over `requestFocus`.
+ *
+ * @param {{layerId: string, id: string|number}|null} subject Subject to focus.
+ * @param {boolean} [preserveHistory=false] Suppress the history push.
+ * @param {object} [options] Provenance passed through to the layer.
+ * @returns {boolean} Whether the focus was accepted.
+ */
 function focusSubject(subject, preserveHistory = false, options = {}) {
   if (!subject) return false;
   return requestFocus(subject.layerId, subject.id, preserveHistory, options);
 }
 
+/** Re-fly the current subject (panel FOCUS button), deliberately preserving
+ *  history so a manual re-focus does not rewrite the walk.
+ *
+ * @param {object} [options] Provenance passed through to the layer.
+ * @returns {boolean} Whether the focus was accepted.
+ */
 function focusCurrentSubject(options = {}) {
   return focusSubject(state.subject, true, options);
 }
 
+/** Whether a layer id is one of the two aircraft sources.
+ *
+ * @param {string} layerId Layer id to classify.
+ * @returns {boolean} True for `flights` and `military`.
+ */
 function isFlightLayer(layerId) {
   return layerId === 'flights' || layerId === 'military';
 }
 
+/** Canonicalize a type-code-ish aircraft class string for filtering.
+ *
+ * @param {*} value Raw class/type field from a contact row.
+ * @returns {string} Lowercased trimmed class, or `''` when absent.
+ */
 function normalizeAircraftClass(value) {
   return String(value || '').trim().toLowerCase();
 }
 
+/**
+ * Match a contact against a requested aircraft class across the several field
+ * spellings the flight feeds use. An empty request matches everything; a
+ * contact with no class information matches nothing, so an aircraft-class
+ * filter never returns unknown-type rows.
+ *
+ * @param {object|null} item Contact row to test.
+ * @param {string|null} aircraftClass Requested class (`'fighter'`, `'b738'`, …).
+ * @returns {boolean} Whether the row satisfies the filter.
+ */
 function aircraftClassMatchesFilter(item, aircraftClass) {
   const requested = normalizeAircraftClass(aircraftClass);
   if (!requested) return true;
@@ -650,6 +842,22 @@ function aircraftClassMatchesFilter(item, aircraftClass) {
   return candidates.some((candidate) => candidate === requested || candidate.includes(requested));
 }
 
+/**
+ * Filter the engine's ordered navigation targets down to what a walk is
+ * allowed to visit: optional layer affinity, aircraft-only mode, and an
+ * aircraft-class constraint. Ordering stays with the engine.
+ *
+ * @param {Array<{id: string, summary?: {nearest?: Array<object>}}>} sourceCohorts
+ *   Evaluated cohorts carrying their navigation rows.
+ * @param {{layerId: string}|null} subject Current subject (excluded upstream).
+ * @param {Iterable<string>} visitedKeys Already-visited `layerId:id` keys.
+ * @param {object} [options] Walk constraints.
+ * @param {string|null} [options.targetLayer=null] Restrict to one layer.
+ * @param {string|null} [options.aircraftClass=null] Restrict to one aircraft class.
+ * @param {boolean} [options.aircraftOnly=false] Restrict to aircraft layers.
+ * @returns {Array<{layerId: string, id: string, item: object, visited: boolean}>}
+ *   Filtered targets in engine order.
+ */
 function selectNavigationTargets(sourceCohorts, subject, visitedKeys, {
   targetLayer = null,
   aircraftClass = null,
@@ -685,6 +893,17 @@ function currentTrackedFlightSubject() {
   return subjects.find((subject) => normalizedSubjectKey(subject) === trackedKey) || null;
 }
 
+/**
+ * Cheap reachability probe for the "no other aircraft in range" verdict: asks
+ * both flight layers whether ANY other aircraft exists inside the maximum
+ * search radius, honouring the same layer/class constraints the walk applies.
+ * Capped at two rows per layer — it needs an existence answer, not a cohort.
+ *
+ * @param {object} [options] Walk constraints mirrored from the navigation call.
+ * @param {string|null} [options.targetLayer=null] Layer the walk is confined to.
+ * @param {string|null} [options.aircraftClass=null] Aircraft class filter.
+ * @returns {boolean} Whether at least one other aircraft is reachable.
+ */
 function alternativeFlightAvailable({
   targetLayer = null,
   aircraftClass = null,
@@ -718,6 +937,20 @@ function alternativeFlightAvailable({
   )));
 }
 
+/**
+ * Nearest acceptable aircraft to the subject inside a radius, across both
+ * flight layers. Applies the same layer/class constraints as the walk and can
+ * ignore already-visited contacts, which is what makes PREVIOUS/NEXT converge
+ * instead of bouncing between the two nearest airframes.
+ *
+ * @param {number} radiusM Search radius around the subject.
+ * @param {Iterable<string>} visitedKeys Already-visited `layerId:id` keys.
+ * @param {boolean} excludeVisited Whether visited contacts are disqualified.
+ * @param {object} [options] Walk constraints.
+ * @param {string|null} [options.targetLayer=null] Layer to confine the search to.
+ * @param {string|null} [options.aircraftClass=null] Aircraft class filter.
+ * @returns {{layerId: string, id: string, item: object}|null} Closest match.
+ */
 function closestFlightWithinRadius(radiusM, visitedKeys, excludeVisited, {
   targetLayer = null,
   aircraftClass = null,
@@ -754,6 +987,16 @@ function closestFlightWithinRadius(radiusM, visitedKeys, excludeVisited, {
   return candidates[0] || null;
 }
 
+/**
+ * Find the next flight target by letting the search radius double outward from
+ * the cohort window to the Earth-chord maximum. When every in-range contact is
+ * already visited, the visited set resets once and the search runs again, so a
+ * saturated cohort wraps instead of reporting a dead end.
+ *
+ * @param {object} [options] Walk constraints (`targetLayer`, `aircraftClass`).
+ * @returns {{candidate: {layerId: string, id: string}, radiusM: number}|null}
+ *   Match plus the radius that produced it, or null when the sky is empty.
+ */
 function findExpandedFlightTarget(options = {}) {
   if (!isFlightLayer(state.subject?.layerId)) return null;
   let visitedKeys = [...state.navigationVisited];
@@ -771,6 +1014,11 @@ function findExpandedFlightTarget(options = {}) {
   return search();
 }
 
+/** Whether the subject's own cohort feed could not answer, in which case its
+ *  null count is an absence of evidence and must not gate NEXT.
+ *
+ * @returns {boolean} True when the subject's cohort is UNKNOWN with no count.
+ */
 function subjectCohortFeedUnknown() {
   const cohort = state.results?.cohorts?.find((item) => item.id === state.subject?.layerId);
   return cohort?.summary?.relationship === AWARENESS_RELATIONSHIP.UNKNOWN
@@ -804,6 +1052,15 @@ export function canNavigateAwarenessNext({
   );
 }
 
+/**
+ * Evaluate the NEXT button against live module state, mapping each branch onto
+ * the pure `canNavigateAwarenessNext` predicate.
+ *
+ * @param {object} [options] Navigation filters.
+ * @param {string|null} [options.targetLayer=null] Layer the walk is confined to.
+ * @param {string|null} [options.aircraftClass=null] Aircraft class filter.
+ * @returns {boolean} Whether NEXT has a runnable path right now.
+ */
 function canNavigateNext({
   targetLayer = null,
   aircraftClass = null,
@@ -871,6 +1128,21 @@ function focusCompatibleHistory(direction, {
   }
 }
 
+/**
+ * Step the Contact selection along the walk: history first (PREVIOUS can only
+ * ever go backwards), then the unvisited cohort, then the expanding-radius
+ * flight search, then a visited-set reset that lets a saturated cohort wrap.
+ * NEXT is the only direction that can discover, and an unanswerable subject
+ * cohort blocks discovery rather than guessing.
+ *
+ * @param {number} direction Walk direction; negative for PREVIOUS.
+ * @param {object} [options] Walk constraints and provenance.
+ * @param {string|null} [options.targetLayer=null] Layer to confine the walk to.
+ * @param {string|null} [options.aircraftClass=null] Aircraft class filter.
+ * @param {boolean} [options.aircraftOnly=false] Restrict the walk to aircraft.
+ * @param {string} [options.origin='programmatic'] Who drove the step.
+ * @returns {boolean} Whether the selection moved.
+ */
 function navigateHistory(direction, {
   targetLayer = null,
   aircraftClass = null,
@@ -919,6 +1191,14 @@ function navigateHistory(direction, {
   return requestFocus(candidate.layerId, candidate.id, false, { origin });
 }
 
+/**
+ * Join a history subject back onto its live cohort row so class filtering in
+ * history sees current data; a subject no longer in the cohort resolves to
+ * itself, preserving its last-known class.
+ *
+ * @param {{layerId: string, id: string|number}|null} subject History subject.
+ * @returns {object|null} Cohort row for the subject, or the subject itself.
+ */
 function historySubjectItem(subject) {
   if (!subject) return null;
   const cohort = state.results?.cohorts?.find((item) => item.id === subject.layerId);
@@ -927,7 +1207,17 @@ function historySubjectItem(subject) {
     || subject;
 }
 
-/** Retain filter metadata when a production subject enters navigation history. */
+/**
+ * Retain filter metadata when a production subject enters navigation history.
+ * History entries are shallow copies, so without this a contact re-entered
+ * from history would lose the aircraft class the walk filters on.
+ *
+ * @param {{layerId: string, id: string|number, aircraftClass?: string}|null} subject
+ *   Subject being archived.
+ * @param {object|null} [sourceItem] Live cohort row, preferred as the class source.
+ * @returns {{layerId: string, id: string|number, aircraftClass?: string}} Copy
+ *   of the subject with the best-available `aircraftClass` retained.
+ */
 export function historySubjectSnapshot(subject, sourceItem = null) {
   const aircraftClass = sourceItem?.aircraftClass
     || sourceItem?.klass
@@ -937,6 +1227,16 @@ export function historySubjectSnapshot(subject, sourceItem = null) {
   return aircraftClass ? { ...subject, aircraftClass } : { ...subject };
 }
 
+/**
+ * Re-acquire the live source row behind an aircraft subject, preferring the
+ * current sweep and falling back to a tight local proximity scan. Vessels and
+ * installations never resolve here — only aircraft subject snapshots are
+ * rehydrated.
+ *
+ * @param {{layerId: string, id: string|number, position?: Cesium.Cartesian3}|null} subject
+ *   Subject needing a live row.
+ * @returns {object|null} Matching source row, or null for non-aircraft subjects.
+ */
 function historySourceItem(subject) {
   if (!isFlightLayer(subject?.layerId) || !subject?.position) return null;
   // The current sweep already holds this contact's record. Reusing it keeps
@@ -953,7 +1253,23 @@ function historySourceItem(subject) {
     .find((item) => String(item?.icao24 || item?.id) === String(subject.id)) || null;
 }
 
-/** Find the next history entry compatible with requested navigation filters. */
+/**
+ * Find the next history entry compatible with requested navigation filters.
+ * The scan is strictly monotonic from `startIndex`, which is what lets callers
+ * step over evicted contacts without looping and guarantees termination at
+ * either end of the stack.
+ *
+ * @param {Array<object>} history Subject snapshots in visit order.
+ * @param {number} startIndex Index to walk away from (usually the cursor).
+ * @param {number} direction Walk direction; negative searches toward older entries.
+ * @param {object} [options] Entry compatibility filters.
+ * @param {string|null} [options.targetLayer=null] Restrict to one layer id.
+ * @param {string|null} [options.aircraftClass=null] Restrict to one aircraft class.
+ * @param {boolean} [options.aircraftOnly=false] Restrict to aircraft layers.
+ * @param {(subject: object) => object|null} [options.resolveItem] Resolves a history
+ *   subject to the row its class filter is evaluated against.
+ * @returns {number} Matching index, or -1 when no entry qualifies.
+ */
 export function findCompatibleHistoryIndex(history, startIndex, direction, {
   targetLayer = null,
   aircraftClass = null,
@@ -971,6 +1287,11 @@ export function findCompatibleHistoryIndex(history, startIndex, direction, {
   return -1;
 }
 
+/** Render the PREVIOUS / FOCUS / NEXT control row, disabling controls whose
+ *  walk branch is currently impossible.
+ *
+ * @returns {string} Markup for the navigation control group.
+ */
 function navigationControlsHtml() {
   const canPrevious = state.navigationIndex > 0;
   return `<div class="military-awareness-controls" role="group" aria-label="Global Context navigation">
@@ -980,6 +1301,12 @@ function navigationControlsHtml() {
   </div>`;
 }
 
+/** Non-markup view of walk availability, for consumers that need the verdict
+ *  without the buttons.
+ *
+ * @returns {{canPrevious: boolean, canFocus: boolean, canNext: boolean}} Walk
+ *   capability flags for the current subject.
+ */
 function navigationState() {
   return {
     canPrevious: state.navigationIndex > 0,
@@ -988,10 +1315,21 @@ function navigationState() {
   };
 }
 
+/** Escape a value for interpolation into panel markup.
+ *
+ * @param {*} value Any feed-derived string.
+ * @returns {string} HTML-entity-safe text.
+ */
 function escapeHtml(value) {
   return String(value ?? '').replaceAll(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char]);
 }
 
+/** Paint the panel from the current evaluation. Markup is rebuilt only when the
+ *  rendered string differs, so screen-reader live regions and CSS transitions
+ *  are not churned by unchanged refreshes.
+ *
+ * @returns {void}
+ */
 function renderResults() {
   if (!state.enabled || !state.results) return hidePanel();
   const panel = ensurePanel();
@@ -1007,6 +1345,8 @@ function renderResults() {
   }
 }
 
+/** Advance every multi-page cohort by one page and repaint. Single-page cohorts
+ *  are skipped so their rows never flicker on the rotation tick. */
 function rotateAwarenessPages() {
   if (!state.enabled || !state.results) return;
   let changed = false;
@@ -1020,15 +1360,27 @@ function rotateAwarenessPages() {
   if (changed) { renderResults(); scheduleDirectionOverlayUpdate(true); }
 }
 
+/** Start the shared page-rotation timer; idempotent, so repeated activation
+ *  never stacks intervals. */
 function startAwarenessPageRotation() {
   if (!state.pageTimer) state.pageTimer = window.setInterval(rotateAwarenessPages, AWARENESS_PAGE_ROTATE_MS);
 }
 
+/** Stop the page-rotation timer and clear its handle so the next start is a
+ *  genuine re-arm rather than a stale-handle reuse. */
 function stopAwarenessPageRotation() {
   if (state.pageTimer) window.clearInterval(state.pageTimer);
   state.pageTimer = null;
 }
 
+/**
+ * Build the on-globe direction overlay once: a compass ring with cardinal
+ * labels, a live heading readout, and the three nearest-contact markers. The
+ * markers cache their arrow/label children and last angle so per-frame updates
+ * avoid layout and only rotate what moved.
+ *
+ * @returns {HTMLElement|null} Overlay root, or null while there is no viewer.
+ */
 function ensureDirectionOverlay() {
   if (state.directionRoot || !state.viewer) return state.directionRoot;
   const root = document.createElement('div');
@@ -1076,6 +1428,14 @@ function ensureDirectionOverlay() {
   return root;
 }
 
+/**
+ * Coalesce direction-overlay repaints onto one animation frame, gated by the
+ * motion-aware refresh interval. `force` bypasses the interval for discrete
+ * events (a new subject, a page rotation) that must not wait out the cadence.
+ *
+ * @param {boolean} [force=false] Repaint on the next frame regardless of cadence.
+ * @returns {void}
+ */
 function scheduleDirectionOverlayUpdate(force = false) {
   if (state.directionFrame !== null || !state.enabled) return;
   const now = Date.now();
@@ -1087,12 +1447,24 @@ function scheduleDirectionOverlayUpdate(force = false) {
   });
 }
 
+/** Drop any pending overlay frame and reset the cadence anchor so the next
+ *  schedule is immediate rather than rate-limited by a cancelled tick.
+ *
+ * @returns {void}
+ */
 function cancelDirectionOverlayUpdate() {
   if (state.directionFrame !== null) window.cancelAnimationFrame(state.directionFrame);
   state.directionFrame = null;
   state.lastDirectionUpdateMs = 0;
 }
 
+/** Reposition the direction overlay: compass ring centred on the subject,
+ *  cardinals rotated to true bearing, and the three nearest contacts placed by
+ *  bearing and range. Hides itself rather than drawing nonsense when there is
+ *  no subject, no evaluation, or an unusable keyhole geometry.
+ *
+ * @returns {void}
+ */
 function updateDirectionOverlay() {
   const root = ensureDirectionOverlay();
   if (!root || !state.enabled || !state.subject?.position || !state.results) {
@@ -1182,6 +1554,8 @@ function updateDirectionOverlay() {
   }
 }
 
+/** Remove the awareness ring entities from the viewer and drop the cached
+ *  visual state, buying exactly one idle-mode frame so the removal is drawn. */
 function clearVisual() {
   if (state.visual?.entities && state.viewer) {
     for (const entity of state.visual.entities) state.viewer.entities.remove(entity);
@@ -1191,6 +1565,15 @@ function clearVisual() {
   state.visual = null;
 }
 
+/**
+ * Draw (or move) the 250 km awareness ring centred on the subject. An existing
+ * ring is translated only after a meaningful displacement, keeping ten large
+ * ellipse geometries from being rebuilt for sub-pixel tracking motion.
+ *
+ * @param {{layerId: string, id: string|number, position?: Cesium.Cartesian3}|null} subject
+ *   Subject to ring.
+ * @returns {void}
+ */
 function renderVisual(subject) {
   if (!state.viewer || !subject?.position) return;
   const cartographic = Cesium.Cartographic.fromCartesian(subject.position);
@@ -1229,6 +1612,16 @@ function renderVisual(subject) {
   governorRequestRender('awareness-visual');
 }
 
+/**
+ * Commit a subject as the current Contact: mark it visited, splice forward
+ * history on a new pick, push a position-cloned history snapshot, and trigger
+ * the immediate refresh. Re-selecting the current subject is a no-op for
+ * history but still refreshes.
+ *
+ * @param {{layerId: string, id: string|number, position?: Cesium.Cartesian3}|null} subject
+ *   Subject to make current.
+ * @returns {void}
+ */
 function selectSubject(subject) {
   if (!state.enabled || !subject?.position) return;
   startAwarenessPageRotation();
@@ -1355,7 +1748,16 @@ function resolveSubjectLabel(subject) {
   return subject.label;
 }
 
-/** Refresh proximity counts/distances against the subject's current live position. */
+/**
+ * Refresh proximity counts/distances against the subject's current live
+ * position, and decide presence from what this tick actually observed. A cheap
+ * refresh only updates geometry and (when enrichment changed it) the label; a
+ * full re-evaluation re-runs every cohort and clamps the panel pages.
+ *
+ * @param {boolean} [force=false] Bypass the movement/source-revision gates and
+ *   re-evaluate unconditionally.
+ * @returns {void}
+ */
 function refreshSelectedSubject(force = false) {
   if (!state.enabled || !state.subject) return;
   const sources = collectSourceStates();
@@ -1405,6 +1807,16 @@ function refreshSelectedSubject(force = false) {
   scheduleDirectionOverlayUpdate(force);
 }
 
+/**
+ * Convert a source-layer context record into an awareness subject. Only the
+ * two non-aircraft context sources are eligible; records without finite
+ * coordinates are rejected rather than placed at the antimeridian origin.
+ *
+ * @param {{layerId: string, id: string, latitude: *, longitude: *, label?: string,
+ *   properties?: {mmsi?: *}}|null} record Layer context record.
+ * @returns {{layerId: string, id: *, label: string, position: Cesium.Cartesian3}|null}
+ *   Subject shaped for the awareness pipeline, or null when ineligible.
+ */
 function subjectFromContext(record) {
   if (!record || !['ais-live-vessels', 'military-installations'].includes(record.layerId)) return null;
   const latitude = Number(record.latitude);
@@ -1431,6 +1843,8 @@ function markSubjectEvicted() {
   state.subjectMissing = true;
 }
 
+/** Reset the whole awareness pipeline to its passive shell: subject, history,
+ *  visual, panel, and timers all go, leaving the module enabled but empty. */
 function clearAwarenessSubject() {
   state.autoFocusRetryPending = false;
   state.subject = null;
@@ -1453,8 +1867,8 @@ function clearAwarenessSubject() {
  * Quantized camera-pose signature, or '' when the camera cannot report a full
  * pose yet. An unknown pose reads as PARKED, so a camera that is still coming
  * up can never be mistaken for continuous movement.
- * @param {Cesium.Camera|null|undefined} camera
- * @returns {string}
+ * @param {Cesium.Camera|null|undefined} camera Camera whose pose is sampled.
+ * @returns {string} Quantized pose token, or `''` when the pose is unknown.
  */
 function cameraMotionSignature(camera) {
   if (!camera?.positionWC || !Number.isFinite(camera.heading)) return '';
@@ -1467,8 +1881,8 @@ function cameraMotionSignature(camera) {
  * A cohort reports `count: null` when its feed is unavailable or stale, and `0`
  * when the feed is healthy but empty. Only a positive count puts a marker on
  * the compass rim, so anything else means there is nothing to animate.
- * @param {?{cohorts?: Array<{summary?: {count: ?number}}>}} results
- * @returns {boolean}
+ * @param {?{cohorts?: Array<{summary?: {count: ?number}}>}} results Evaluation to test.
+ * @returns {boolean} Whether at least one cohort has a positive contact count.
  */
 export function awarenessResultsAreLive(results) {
   const cohorts = Array.isArray(results?.cohorts) ? results.cohorts : [];
@@ -1489,7 +1903,7 @@ export function awarenessResultsAreLive(results) {
  * @param {boolean} [snapshot.hasSubject=Boolean(state.subject)] A contact is selected.
  * @param {boolean} [snapshot.hasLiveResults=awarenessResultsAreLive(state.results)] At
  *   least one cohort reports a positive contact count.
- * @returns {boolean}
+ * @returns {boolean} Whether the Contacts panel needs continuous rendering.
  */
 export function awarenessNeedsContinuousRender({
   cameraMoving = state.cameraMoving,
@@ -1511,6 +1925,9 @@ function syncAwarenessRenderHold() {
   else releaseContinuousRender('military-awareness');
 }
 
+/** Wire the module into the running app: the four selection/clear window events
+ *  and the `scene.preRender` listener that owns motion hysteresis, the render
+ *  hold, the refresh cadence, and the auto-focus retry. Idempotent. */
 function attachRuntimeListeners() {
   if (state.runtimeListenersAttached || !state.viewer) return;
   window.addEventListener('gev:awareness-subject-selected', state.subjectListener);
@@ -1551,6 +1968,9 @@ function attachRuntimeListeners() {
   state.runtimeListenersAttached = true;
 }
 
+/** Undo `attachRuntimeListeners()` exactly: drop the window events, remove the
+ *  preRender callback, release the render hold, and cancel any queued overlay
+ *  frame so nothing keeps firing after teardown. */
 function detachRuntimeListeners() {
   if (state.runtimeListenersAttached) {
     window.removeEventListener('gev:awareness-subject-selected', state.subjectListener);
@@ -1581,6 +2001,15 @@ function releaseAircraftTracking() {
   militaryFlightsLayer.stopTracking?.();
 }
 
+/**
+ * Re-run the awareness pipeline once a deferred dependency (vessels or
+ * installations) settles. Gated on the activation token so a late-arriving
+ * promise from an abandoned enable cannot mutate a newer session, and on
+ * `autoFocusRetryPending` so the retry happens exactly once per activation.
+ *
+ * @param {number} activationId Activation the deferred dependency belongs to.
+ * @returns {void}
+ */
 function refreshAfterDeferredDependency(activationId) {
   if (!state.enabled || state.passive || activationId !== state.activationId) return;
   if (state.subject) {
@@ -1592,6 +2021,16 @@ function refreshAfterDeferredDependency(activationId) {
   }
 }
 
+/**
+ * Turn on every context dependency, starting them concurrently so one slow feed
+ * cannot stall the rest. Aircraft sources are awaited (they are the substance of
+ * the context); deferred sources settle in the background and re-run the
+ * pipeline through `refreshAfterDeferredDependency`.
+ *
+ * @param {number} [activationId=state.activationId] Session token that invalidates
+ *   work started for a since-abandoned activation.
+ * @returns {Promise<void>} Resolves once the aircraft dependencies settle.
+ */
 async function enableDependencies(activationId = state.activationId) {
   const aircraftPending = [];
   for (const layerId of DEPENDENCIES) {
@@ -1629,6 +2068,15 @@ async function enableDependencies(activationId = state.activationId) {
   await Promise.allSettled(aircraftPending);
 }
 
+/**
+ * Disable the dependencies this activation enabled, restoring the layer manager
+ * to its pre-activation state. If a newer activation began while the releases
+ * were in flight, it re-enables for that session instead — the releases are only
+ * ever the tail of a superseded activation.
+ *
+ * @param {number} releaseActivationId Activation the releases belong to.
+ * @returns {Promise<void>} Resolves when every release has settled.
+ */
 function releaseOwnedDependencies(releaseActivationId) {
   const owned = [...state.ownedDependencies];
   state.ownedDependencies.clear();
@@ -1642,6 +2090,14 @@ function releaseOwnedDependencies(releaseActivationId) {
     });
 }
 
+/**
+ * Move Contacts from its passive shell into the operational state: adopt the
+ * currently tracked flight as the subject if there is one, enable dependencies,
+ * and otherwise attempt the one-shot nearest-observable auto-focus. Stale
+ * activations bail out at both stages.
+ *
+ * @returns {Promise<void>} Resolves when dependency enabling has settled.
+ */
 function activateOperationalContext() {
   const activationId = ++state.activationId;
   state.autoFocusRetryPending = false;
@@ -1868,7 +2324,11 @@ const militaryAwarenessLayer = {
   getStats() {
     return { count: state.results ? 1 : 0, lastUpdate: state.results?.evaluatedAt || null, stale: false, error: null, status: state.enabled ? 'ready' : 'idle' };
   },
-  /** Return the latest read-only context result for compact HUD consumers. */
+  /**
+   * Return the latest read-only context result for compact HUD consumers.
+   * @returns {object|null} Snapshot with subject, cohorts, and navigation state;
+   *   null while the module is disabled or has no subject.
+   */
   getContextSnapshot() {
     if (!state.enabled || !state.subject) return null;
     if (!state.results) {
@@ -1891,6 +2351,11 @@ const militaryAwarenessLayer = {
    * can explicitly return to the same contact, while delayed activation work
    * cannot silently reclaim the camera after the reset.
    * @returns {boolean} Whether a Contact subject remains selected.
+   * @param {object} [options] Release controls.
+   * @param {boolean} [options.preserveVesselSelection=false] Keep an AIS vessel
+   *   selected rather than clearing it along with the aircraft tracking.
+   * @param {string} [options.origin='programmatic'] Caller identity forwarded to
+   *   the layer stop-tracking calls for telemetry.
    */
   releaseCameraOwnership({ preserveVesselSelection = false, origin = 'programmatic' } = {}) {
     ++state.activationId;
@@ -1913,7 +2378,14 @@ const militaryAwarenessLayer = {
   navigatePrevious(options = {}) { return navigateHistory(-1, options); },
   focusCurrent(options = {}) { return focusCurrentSubject(options); },
   navigateNext(options = {}) { return navigateHistory(1, options); },
-  /** Select a context target through its owning layer's established tracker. */
+  /**
+   * Select a context target through its owning layer's established tracker.
+   * @param {string} layerId Owning layer id of the target.
+   * @param {string} id Target contact id.
+   * @param {object} [options] Provenance forwarded to the owning layer.
+   * @param {string} [options.origin='programmatic'] Who requested the focus.
+   * @returns {boolean} Whether the focus was accepted.
+   */
   focusTarget(layerId, id, options = {}) { return requestFocus(layerId, id, false, options); },
 };
 

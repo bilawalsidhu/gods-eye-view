@@ -89,6 +89,10 @@ export const OVERPASS_SIMPLIFY_TOLERANCE_DEG = 0.0004;
  * quoted string is treated as string content, not a comment (and vice versa).
  * Chained regex replaces get the ordering wrong (a quoted slash-slash would hide
  * the rest of the line), which is exactly the bypass this avoids.
+ *
+ * @param {string} src raw Overpass QL query text (client-supplied)
+ * @returns {string} query with comments removed and every quoted literal
+ *   collapsed to empty quotes, ready for the bound/selector probes
  */
 export function stripOverpassNoise(src) {
   let out = '';
@@ -135,7 +139,8 @@ export function stripOverpassNoise(src) {
  * a fake bound inside a tag value can't satisfy the check.
  *
  * @param {string} rawBody - Raw POST body (`data=...`).
- * @returns {{ok:true, body:string} | {ok:false, error:string}}
+ * @returns {{ok:true, body:string} | {ok:false, error:string}} the re-encoded
+ *   form body to forward upstream, or the 400 reason to return instead
  */
 export function sanitizeOverpassBody(rawBody) {
   let params;
@@ -247,6 +252,9 @@ export function overpassLooksRateLimited(bodyText) {
  * Detect an Overpass HTTP-200 body that is actually a runtime FAILURE (server-side
  * timeout / out-of-memory) via its `remark`. These are transient upstream failures,
  * not authoritative empty results, so they must not be returned or cached.
+ *
+ * @param {string} bodyText - Upstream response body (any type; coerced).
+ * @returns {boolean} True when the body carries a runtime-error remark.
  */
 export function overpassLooksRuntimeError(bodyText) {
   const text = String(bodyText || '').toLowerCase();
@@ -256,7 +264,15 @@ export function overpassLooksRuntimeError(bodyText) {
 }
 
 /** Iterative Douglas-Peucker on [{lat,lon},...] (planar-degree approx — fine at
- *  the ~44 m tolerance used here). Endpoints always kept. */
+ *  the ~44 m tolerance used here). Endpoints always kept.
+ *
+ * @param {Array<{lat:number, lon:number}>} points ring vertices, lat/lon in
+ *   decimal degrees, in draw order
+ * @param {number} toleranceDeg perpendicular-distance threshold in degrees of
+ *   latitude below which a vertex is dropped
+ * @returns {Array<{lat:number, lon:number}>} decimated copy of `points`
+ *   (first and last vertex always retained)
+ */
 function douglasPeucker(points, toleranceDeg) {
   const n = points.length;
   if (n <= 2) return points;
@@ -299,7 +315,13 @@ function douglasPeucker(points, toleranceDeg) {
   return out;
 }
 
-/** Simplify one element's geometry array in place if it is big enough. */
+/** Simplify one element's geometry array in place if it is big enough.
+ *
+ * @param {{geometry?: Array<{lat:number, lon:number}>, members?: Array<{geometry?: Array<object>}>}} el
+ *   Overpass element with `out geom` geometry (and optional relation members)
+ * @param {number} minPoints rings shorter than this pass through untouched
+ * @param {number} toleranceDeg Douglas-Peucker tolerance in degrees
+ */
 function simplifyElementGeometry(el, minPoints, toleranceDeg) {
   if (Array.isArray(el?.geometry) && el.geometry.length >= minPoints) {
     el.geometry = douglasPeucker(el.geometry, toleranceDeg);
@@ -322,6 +344,8 @@ function simplifyElementGeometry(el, minPoints, toleranceDeg) {
  * override thresholds).
  *
  * @param {string} bodyText - Raw upstream JSON body.
+ * @param {{minBytes?: number, minPoints?: number, toleranceDeg?: number}} [opts]
+ *   threshold overrides (tests); defaults are the module constants.
  * @returns {string} Possibly-simplified JSON body.
  */
 export function simplifyOverpassPayloadBody(bodyText, opts = {}) {
@@ -354,6 +378,8 @@ export function simplifyOverpassPayloadBody(bodyText, opts = {}) {
  * @param {string} body - URL-encoded Overpass QL query body.
  * @param {number} [maxResponseBytes] Endpoint-specific response cap.
  * @returns {Promise<{status:number,body:string,contentType:string,endpoint:string,rateLimited:boolean,runtimeError:boolean}>}
+ *   the first clean payload (geometry simplified), else the last rate-limited
+ *   payload; rejects when every mirror failed and none looked rate-limited
  */
 export async function fetchOverpassPayload(body, maxResponseBytes = OVERPASS_MAX_RESPONSE_BYTES) {
   let lastError = null;
@@ -439,8 +465,9 @@ export async function fetchOverpassPayload(body, maxResponseBytes = OVERPASS_MAX
  * The one builder for the mapped-installation Overpass query, shared by the
  * dev middleware refresh and the Pages Function so both upstreams see
  * byte-identical queries for the same box.
- * @param {{south:number, west:number, north:number, east:number}} box
- * @param {number} [elementCap]
+ * @param {{south:number, west:number, north:number, east:number}} box bbox in
+ *   decimal degrees; order not normalized here — validate first
+ * @param {number} [elementCap] `out ... N` cap that marks a saturated response.
  * @returns {string} URL-encoded form body (`data=...`).
  */
 export function buildMilitaryInstallationsQuery(box, elementCap = 700) {
@@ -451,9 +478,10 @@ export function buildMilitaryInstallationsQuery(box, elementCap = 700) {
 
 /**
  * Read one bounded finite number from a URLSearchParams set.
- * @param {URLSearchParams} params
- * @param {string} key
- * @returns {number|null}
+ * @param {URLSearchParams} params request query to read from.
+ * @param {string} key parameter name (e.g. `south`).
+ * @returns {number|null} the parsed value, or null when absent, blank, or
+ *   not a finite number.
  */
 export function requiredFiniteQueryNumber(params, key) {
   const value = params.get(key);
@@ -480,9 +508,12 @@ export const MILITARY_INSTALLATION_BBOX_STEP_DEG = 0.05;
 
 /**
  * Snap a request bbox outward onto the shared installation cache grid.
- * @param {{south:number, west:number, north:number, east:number}} box
- * @param {number} [stepDeg]
- * @returns {{south:number, west:number, north:number, east:number}}
+ * @param {{south:number, west:number, north:number, east:number}} box bbox in
+ *   decimal degrees, already validated and correctly ordered.
+ * @param {number} [stepDeg] grid cell size in degrees, a divisor of the axis
+ *   limits so clamping stays on-grid.
+ * @returns {{south:number, west:number, north:number, east:number}} a superset
+ *   bbox (every edge grows or stays), clamped to the planet.
  */
 export function quantizeMilitaryInstallationBox(box, stepDeg = MILITARY_INSTALLATION_BBOX_STEP_DEG) {
   // Round the ratio first: 29.9999/0.05 lands a hair under an exact grid line
@@ -508,8 +539,11 @@ export function quantizeMilitaryInstallationBox(box, stepDeg = MILITARY_INSTALLA
  * viewport at 5 decimals and must be keyed at 5, otherwise two nearby exact
  * viewports would share an answer and the second would be missing the edge
  * strip it just exposed.
- * @param {{south:number, west:number, north:number, east:number}} box
- * @param {number} [decimals]
+ * @param {{south:number, west:number, north:number, east:number}} box bbox in
+ *   decimal degrees, already snapped (or exact, with `decimals` raised).
+ * @param {number} [decimals] fractional digits per edge; must match the
+ *   quantization that produced `box`.
+ * @returns {string} `s,w,n,e` joined by commas.
  */
 export function militaryInstallationCacheKey(box, decimals = 3) {
   return [box.south, box.west, box.north, box.east]
@@ -522,8 +556,9 @@ export function militaryInstallationCacheKey(box, decimals = 3) {
  * correctly ordered, no cross-dateline span, and at most 10 degrees per axis —
  * the same shape the dev middleware has always demanded before touching a
  * public OSM mirror.
- * @param {URLSearchParams} params
- * @returns {?{south:number, west:number, north:number, east:number}}
+ * @param {URLSearchParams} params request query holding south/west/north/east.
+ * @returns {?{south:number, west:number, north:number, east:number}} the
+ *   validated degrees, or null when any rule fails.
  */
 export function validMilitaryInstallationBox(params) {
   const south = requiredFiniteQueryNumber(params, 'south');

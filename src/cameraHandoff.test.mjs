@@ -149,7 +149,9 @@ test('voice Cockpit next/previous shares the manual Context navigation path', ()
   );
   const funnel = body(
     cockpitView,
-    /navigateContext\(direction, options = \{\}\) \{([\s\S]*?)\n {2}\}\n\n {2}\/\*\* Adopt/,
+    // Batch H: the Adopt method gained a full JSDoc block, so anchor on its
+    // signature instead of the former one-line doc comment.
+    /navigateContext\(direction, options = \{\}\) \{([\s\S]*?)\n {2}\}[\s\S]*?_adoptTrackedEntity\(nowMs/,
     'Cockpit Context navigation funnel',
   );
   ordered(funnel, [

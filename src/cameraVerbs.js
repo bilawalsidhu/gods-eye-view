@@ -131,7 +131,10 @@ const ROUTE_MAX_DESCENT_MPS = 10;
 
 /* ── Pure cinematic helpers (unit-tested; no viewer, no module state) ────── */
 
-/** Whether the operating system asked us to keep motion boring. */
+/**
+ * Whether the operating system asked us to keep motion boring.
+ * @returns {boolean} True when prefers-reduced-motion: reduce is set.
+ */
 export function prefersReducedMotion() {
   try {
     return typeof window !== 'undefined'
@@ -301,7 +304,12 @@ const _warmCarto = new Cesium.Cartographic();
 const _probeCarto = new Cesium.Cartographic();
 
 /** Point at arc length `s` along the polyline (binary search — queries jump
- *  backwards for the inbound chord, so a forward cursor would not do). */
+ *  backwards for the inbound chord, so a forward cursor would not do).
+ * @param {object} state Route flight state carrying `pts`, `cumM`, `totalM`.
+ * @param {number} s Arc length from the route start, metres (clamped).
+ * @param {Cesium.Cartesian3} result Scratch vector to write the point into.
+ * @returns {Cesium.Cartesian3} The interpolated point, in `result`.
+ */
 function arcPoint(state, s, result) {
   const { pts, cumM } = state;
   const clamped = Math.min(state.totalM, Math.max(0, s));
@@ -316,7 +324,15 @@ function arcPoint(state, s, result) {
   return Cesium.Cartesian3.lerp(pts[lo], pts[lo + 1], t, result);
 }
 
-/** Unit horizontal direction from arc `sA` to arc `sB`, or null when degenerate. */
+/** Unit horizontal direction from arc `sA` to arc `sB`, or null when degenerate.
+ * @param {object} state Route flight state carrying `pts`, `cumM`, `totalM`.
+ * @param {number} sA Arc length of the chord start, metres.
+ * @param {number} sB Arc length of the chord end, metres.
+ * @param {Cesium.Cartesian3} up Local up; the vertical component removed from the chord.
+ * @param {Cesium.Cartesian3} result Scratch vector to write the direction into.
+ * @returns {Cesium.Cartesian3|null} Unit horizontal direction in `result`, or
+ *   null when the two points are vertically coincident.
+ */
 function horizontalChord(state, sA, sB, up, result) {
   const a = arcPoint(state, sA, _arcA);
   const b = arcPoint(state, sB, _arcB);
@@ -379,7 +395,12 @@ export function routeCorridorCells(state, fromM, spanM, maxCells = ROUTE_WARM_MA
   return out;
 }
 
-/** Fire-and-forget warm of a corridor stretch; never throws into the caller. */
+/** Fire-and-forget warm of a corridor stretch; never throws into the caller.
+ * @param {object} state Route flight state; `warmFn` and `warmedCells` are used.
+ * @param {number} fromM Arc length to start warming at, metres.
+ * @param {number} spanM Metres of arc to cover.
+ * @returns {number} Cells actually dispatched (deduped, capped).
+ */
 function warmRouteCorridor(state, fromM, spanM) {
   if (typeof state?.warmFn !== 'function') return 0;
   const cells = routeCorridorCells(state, fromM, spanM);
@@ -512,7 +533,7 @@ export function probeMeshFloorM(scene, cells) {
 
 /**
  * Build the state for one cinematic route flight.
- * @param {object} options
+ * @param {object} options Route geometry and the terrain collaborators.
  * @param {Cesium.Cartesian3[]} options.pts Route vertices.
  * @param {number[]} options.cumM Cumulative arc length per vertex.
  * @param {string} [options.speed] slow | normal | fast.
@@ -809,6 +830,10 @@ let _active = null; // { kind, motion, direction, speed, mode, ...state }
 let _tickRemover = null;
 let _inputRemovers = [];
 
+/**
+ * Drop the lookAt reference frame so manual control returns cleanly.
+ * @returns {void}
+ */
 function clearLookAt() {
   try { _viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY); } catch { /* teardown race */ }
 }
@@ -836,7 +861,13 @@ function levelCameraRoll() {
   }
 }
 
-/** Stop any active motion. Returns whether one was running. */
+/**
+ * Stop any active motion. Returns whether one was running.
+ * @param {string} [reason='interrupt'] Diagnostic label recorded by the harness.
+ * @returns {{wasActive: boolean, reason: string, leveled: boolean}} Whether a
+ *   motion was interrupted, the reason it ended, and whether a route dolly's
+ *   bank had to be levelled out.
+ */
 export function interruptCameraMotion(reason = 'interrupt') {
   const wasActive = Boolean(_active);
   // While an entity is TRACKED, the follow camera owns the reference frame —
@@ -853,7 +884,11 @@ export function interruptCameraMotion(reason = 'interrupt') {
   return { wasActive, reason, leveled };
 }
 
-/** Diagnostics / harness hook. */
+/**
+ * Diagnostics / harness hook.
+ * @returns {object|null} Active motion summary — kind, mode, speed, and the
+ *   route-flight telemetry when a dolly is running — or null when idle.
+ */
 export function getActiveCameraMotion() {
   if (!_active) return null;
   const info = { kind: _active.kind, mode: _active.mode, speed: _active.speed };
@@ -872,6 +907,10 @@ export function getActiveCameraMotion() {
   return info;
 }
 
+/**
+ * Advance the active motion by wall-clock dt, once per clock tick.
+ * @returns {void}
+ */
 function onTick() {
   if (!_active || !_viewer) return;
   // Wall-clock dt: clock.currentTime FREEZES when the app clock isn't
@@ -968,7 +1007,13 @@ function onTick() {
   }
 }
 
-/** Wire the module to the viewer once (idempotent). */
+/**
+ * Wire the module to the viewer once (idempotent).
+ * @param {Cesium.Viewer} viewer Viewer whose clock drives the motion tick.
+ * @param {(viewer: Cesium.Viewer) => Cesium.Cartesian3|null} getViewTargetCartesian
+ *   Resolves the screen-center ground target an orbit should circle.
+ * @returns {void}
+ */
 export function initCameraVerbs(viewer, getViewTargetCartesian) {
   if (_viewer === viewer) return;
   _viewer = viewer;
@@ -989,8 +1034,10 @@ export function initCameraVerbs(viewer, getViewTargetCartesian) {
 /**
  * move_camera implementation. Returns the house result shape; rejections are
  * plain-English `ok:false` errors.
- * @param {object} args
+ * @param {object} args Voice tool arguments: `motion`, `direction`, `speed`, `mode`.
  * @param {Function|null} runNavigation Validated camera-authority transaction.
+ * @returns {object} `{ok, action, ...}` result; `ok:false` carries a
+ *   model-readable `error` string.
  */
 export function moveCamera(args = {}, runNavigation = null) {
   const motion = String(args.motion || '').toLowerCase();
@@ -1096,13 +1143,17 @@ export function adjustOrbitRange(factor) {
 
 /**
  * fly_route implementation: dolly along an existing route annotation.
- * @param {Array} annoList  — engine list() output (raw annos incl. `path`)
- * @param {object} args
+ * @param {Array} annoList  — engine list() output (raw annos incl. `path`);
+ *   the newest route matching `args.label` is flown.
+ * @param {object} args Voice tool arguments (`speed`, `label`).
  * @param {Function|null} floorFn  (latDeg, lonDeg) => cached floor metres.
  * @param {Function|null} runNavigation Validated camera-authority transaction.
  * @param {Function|null} warmFn  (cells) => void — batch-warms the floor cells
  * along the route corridor. Without it a cold cache has no protection: route
  * vertices carry height 0, so an unwarmed mountain corridor reads as sea level.
+ * @returns {object} `{ok, action, ...}` result — on success the flight summary
+ *   (label, speed, distance in metres, duration in seconds, waypoint count),
+ *   on refusal `ok:false` with a model-readable `error`.
  */
 export function flyRoute(annoList, args = {}, floorFn = null, runNavigation = null, warmFn = null) {
   const speed = ROUTE_M_S[String(args.speed || 'normal').toLowerCase()] ? String(args.speed || 'normal').toLowerCase() : 'normal';

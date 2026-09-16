@@ -27,15 +27,43 @@ const _treatmentResult = {
   factors: _scratchFactors,
 };
 
+/**
+ * Clamp a value into a closed range.
+ * @param {number} value Value to constrain.
+ * @param {number} min Inclusive lower bound.
+ * @param {number} max Inclusive upper bound; assumed >= `min`.
+ * @returns {number} `value` bounded to [min, max], or a bound when it lies outside.
+ */
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
+/**
+ * Merge caller overrides over the module tuning without mutating module state.
+ * @param {Partial<typeof DEFAULT_AIRCRAFT_RECESSION_PARAMS>|undefined} overrides
+ *   Per-call tuning, e.g. from a unit test. The live `_params` reference (or a
+ *   falsy value) short-circuits to the cached object so the hot path allocates
+ *   nothing.
+ * @returns {typeof DEFAULT_AIRCRAFT_RECESSION_PARAMS} Effective tuning for this call.
+ */
 function resolvedParams(overrides) {
   if (!overrides || overrides === _params) return _params;
   return { ..._params, ...overrides };
 }
 
+/**
+ * Compute limb-relative recession factors into a caller-supplied accumulator.
+ * @param {number} cameraDistanceM Distance from camera to the sprite in metres;
+ *   non-finite or negative disables the taper.
+ * @param {number} cameraHeightM Camera height above the ellipsoid in metres;
+ *   must be inside the (0, globeViewBlendEndM) band.
+ * @param {typeof DEFAULT_AIRCRAFT_RECESSION_PARAMS} tuning Effective taper tuning.
+ * @param {{scale:number, alpha:number, limbRatio:(number|null)}} result
+ *   Scratch object written in place so the per-frame path allocates nothing.
+ * @returns {{scale:number, alpha:number, limbRatio:(number|null)}} The same
+ *   `result` object: identity factors with `limbRatio: null` when the taper is
+ *   inactive, otherwise the smoothstep-eased multipliers against the limb.
+ */
 function aircraftRecessionFactorsResolved(cameraDistanceM, cameraHeightM, tuning, result) {
   if (!Number.isFinite(cameraDistanceM) || cameraDistanceM < 0
     || !Number.isFinite(cameraHeightM) || cameraHeightM <= 0
@@ -76,8 +104,11 @@ function aircraftRecessionFactorsResolved(cameraDistanceM, cameraHeightM, tuning
 
 /**
  * Patch runtime taper tuning for evidence capture/A-B work.
- * @param {Partial<typeof DEFAULT_AIRCRAFT_RECESSION_PARAMS>} [patch]
- * @returns {typeof DEFAULT_AIRCRAFT_RECESSION_PARAMS}
+ * @param {Partial<typeof DEFAULT_AIRCRAFT_RECESSION_PARAMS>} [patch] Tuning
+ *   overrides; unknown keys and non-finite values are ignored, and every
+ *   recognized key is re-clamped to its documented range.
+ * @returns {typeof DEFAULT_AIRCRAFT_RECESSION_PARAMS} A defensive copy of the
+ *   tuning now in effect, so later `set` calls cannot mutate a captured snapshot.
  */
 export function setAircraftRecessionParams(patch = {}) {
   const next = { ..._params };
@@ -124,9 +155,11 @@ export function getAircraftRecessionParams() {
  * Straight-line tangent distance from a camera above a spherical Earth to its
  * geometric limb. The WGS84 semi-major radius is sufficient for a visual
  * taper; the occluder remains the authoritative far-side visibility test.
- * @param {number} cameraHeightM
- * @param {number} [earthRadiusM]
- * @returns {number}
+ * @param {number} cameraHeightM Camera altitude above the ellipsoid in metres;
+ *   non-positive yields NaN so callers can treat the answer as "no limb".
+ * @param {number} [earthRadiusM] Sphere radius to use; defaults to the WGS84
+ *   semi-major axis.
+ * @returns {number} Tangent (slant) distance to the horizon in metres.
  */
 export function cameraLimbDistanceM(
   cameraHeightM,
@@ -138,11 +171,13 @@ export function cameraLimbDistanceM(
 
 /**
  * Pure recession factors for one aircraft.
- * @param {object} input
+ * @param {object} input Camera-relative geometry for one aircraft.
  * @param {number} input.cameraDistanceM Sprite-to-camera distance.
  * @param {number} input.cameraHeightM Camera height above the ellipsoid.
- * @param {Partial<typeof DEFAULT_AIRCRAFT_RECESSION_PARAMS>} [params]
- * @returns {{scale:number,alpha:number,limbRatio:number|null}}
+ * @param {Partial<typeof DEFAULT_AIRCRAFT_RECESSION_PARAMS>} [params] Tuning
+ *   override for tests and A-B capture; omitted means the module tuning.
+ * @returns {{scale:number,alpha:number,limbRatio:number|null}} Fresh multiplier
+ *   object each call — safe to retain, unlike the treatment helper's result.
  */
 export function aircraftRecessionFactors({ cameraDistanceM, cameraHeightM }, params) {
   const tuning = resolvedParams(params);
@@ -157,20 +192,26 @@ export function aircraftRecessionFactors({ cameraDistanceM, cameraHeightM }, par
 /**
  * Production wire helper: compose base scale/alpha, focus emphasis, and limb
  * recession into one deadband-gated billboard write site.
- * @param {object} input
- * @param {object} input.billboard
- * @param {number} input.baseScale
- * @param {number} input.baseAlpha
- * @param {{withAlpha:(alpha:number)=>object}} input.baseColor
- * @param {number} input.focusFactor
- * @param {number} input.cameraDistanceM
- * @param {number} input.cameraHeightM
+ * @param {object} input The billboard to write plus the look it should carry.
+ * @param {object} input.billboard Cesium BillboardCollection billboard, mutated
+ *   in place only where the change exceeds `writeEpsilon`.
+ * @param {number} input.baseScale Untapered sprite scale.
+ * @param {number} input.baseAlpha Untapered sprite alpha, already including the
+ *   keyhole.
+ * @param {{withAlpha:(alpha:number)=>object}} input.baseColor Color object whose
+ *   `withAlpha` produces the tinted color assigned to the billboard.
+ * @param {number} input.focusFactor Focus-emphasis multiplier in [0, 1].
+ * @param {number} input.cameraDistanceM Sprite-to-camera distance in metres.
+ * @param {number} input.cameraHeightM Camera altitude in metres.
  * @param {Partial<typeof DEFAULT_AIRCRAFT_RECESSION_PARAMS>} [input.params]
+ *   Tuning override; omitted means the module tuning.
  *
  * IMPORTANT: the returned object (including `factors`) is a module-owned
  * mutable singleton. Consume every needed property before the next call;
  * never retain it as a snapshot.
  * @returns {{scale:number,alpha:number,scaleWrites:number,alphaWrites:number,factors:object}}
+ *   Composed scale/alpha actually applied, one flag per property that crossed
+ *   the deadband and was written, and the raw recession factors.
  */
 export function applyAircraftBillboardTreatment({
   billboard,
@@ -216,11 +257,14 @@ export function applyAircraftBillboardTreatment({
 /**
  * Apply the already-composed aircraft alpha to an ambient glTF model without
  * disturbing Cesium's existing MIX/colorBlendAmount presentation semantics.
- * @param {object} input
- * @param {object} input.model
- * @param {{withAlpha:(alpha:number)=>object}} input.baseColor
- * @param {number} input.alpha
+ * @param {object} input The model to tint plus the alpha already composed for
+ *   its billboard.
+ * @param {object} input.model Cesium model entity, mutated in place.
+ * @param {{withAlpha:(alpha:number)=>object}} input.baseColor Base color whose
+ *   `withAlpha` builds the replacement color.
+ * @param {number} input.alpha Final aircraft alpha from the billboard pass.
  * @param {Partial<typeof DEFAULT_AIRCRAFT_RECESSION_PARAMS>} [input.params]
+ *   Tuning override; only `writeEpsilon` is consulted here.
  * @returns {number} One when a color write occurred, otherwise zero.
  */
 export function applyAircraftModelTreatment({ model, baseColor, alpha, params }) {

@@ -30,7 +30,7 @@ const FORWARD_SLACK_MS = 2 * HOUR_MS;
  * non-whitespace char `<`) and text errors like "Invalid MAP_KEY" fail it;
  * any payload whose first line carries the expected header fields passes.
  * @param {string} text - Raw upstream response body.
- * @returns {boolean}
+ * @returns {boolean} True when the payload smells like parseable FIRMS CSV.
  */
 export function isLikelyCsv(text) {
   if (typeof text !== 'string') return false;
@@ -152,13 +152,24 @@ export function filterTrailing24h(records, nowMs) {
   });
 }
 
-/** Trimmed string cell at index, '' for missing columns. */
+/**
+ * Trimmed string cell at a column index, '' when the column is absent from
+ * this product version's header or the row is short.
+ * @param {string[]} parts - Comma-split CSV row.
+ * @param {number|undefined} index - Column index from the header map.
+ * @returns {string} Cell value, whitespace-trimmed.
+ */
 function cell(parts, index) {
   if (index === undefined || parts[index] === undefined) return '';
   return parts[index].trim();
 }
 
-/** Numeric cell → finite number, else 0. */
+/**
+ * Numeric CSV cell coerced to a finite number, 0 for blank/garbage cells —
+ * heat scores and splat inputs must never see NaN.
+ * @param {string|undefined} value - Raw cell text.
+ * @returns {number} Parsed value, or 0 when not finite.
+ */
 function finiteOrZero(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : 0;

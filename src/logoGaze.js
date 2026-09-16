@@ -11,7 +11,8 @@ const GAZE_EPSILON = 0.08;
  * @param {number} clientY - Pointer y coordinate in CSS pixels.
  * @param {{left:number, top:number, width:number, height:number}} rect - Logo bounds.
  * @param {number} [maxOffset=MAX_GAZE_SVG_UNITS] - Maximum SVG-space translation.
- * @returns {{x:number, y:number}}
+ * @returns {{x:number, y:number}} Translation to apply to the globe group, in
+ *   SVG user units; `{x: 0, y: 0}` for degenerate inputs.
  */
 export function calculateLogoGaze(clientX, clientY, rect, maxOffset = MAX_GAZE_SVG_UNITS) {
   const values = [clientX, clientY, rect?.left, rect?.top, rect?.width, rect?.height, maxOffset];
@@ -35,7 +36,8 @@ export function calculateLogoGaze(clientX, clientY, rect, maxOffset = MAX_GAZE_S
  * remains fixed. Returns a cleanup callback.
  *
  * @param {Document|Element} [root=document] - DOM root to search.
- * @returns {() => void}
+ * @returns {() => void} Detach listener and cancel the in-flight frame; a no-op
+ *   when `window` is unavailable or no gaze logos are present.
  */
 export function initLogoGaze(root = document) {
   if (typeof window === 'undefined' || !root?.querySelectorAll) return () => {};

@@ -3,6 +3,8 @@ import { prefersReducedMotion } from './cameraVerbs.js';
 
 /**
  * Set camera to Austin on load with a cinematic fly-in.
+ * @param {Cesium.Viewer} viewer - Viewer whose camera performs the opening flight.
+ * @returns {void}
  */
 export function flyToAustin(viewer) {
   // Reduced motion: land directly on the destination — no unprompted 4-second

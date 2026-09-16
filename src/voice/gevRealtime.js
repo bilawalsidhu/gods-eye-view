@@ -48,7 +48,14 @@ const VOICE_LIMITS_STORAGE_KEY = 'godsEyeView.voiceCost.limits';
 const MICROPHONE_VISUALIZER_GATE = 0.12;
 const ASSISTANT_VISUALIZER_GATE = 0.04;
 
-/** Best-effort localStorage handle; absent in tests and locked-down browsers. */
+/**
+ * Best-effort localStorage handle; absent in tests and locked-down browsers.
+ *
+ * @param {Storage|null} [storage] - Handle injected by tests; when omitted the
+ *   global `localStorage` is used.
+ * @returns {Storage|null} Usable storage handle, or null when none is
+ *   available (privacy modes throw on mere access, which is swallowed here).
+ */
 function voiceStorage(storage) {
   if (storage) return storage;
   try {
@@ -61,6 +68,11 @@ function voiceStorage(storage) {
 /**
  * Read the persisted voice model tier. Unknown/corrupt values resolve to the
  * default, so a hand-edited localStorage entry can never pick a bad model.
+ *
+ * @param {Storage|null} [storage] - Handle to read from; defaults to
+ *   `localStorage` via `voiceStorage`.
+ * @returns {'standard'|'mini'} Persisted tier, or `DEFAULT_VOICE_TIER` when
+ *   absent, corrupt, or unknown.
  */
 export function readStoredVoiceTier(storage) {
   try {
@@ -71,7 +83,16 @@ export function readStoredVoiceTier(storage) {
   }
 }
 
-/** Persist the voice model tier. Never throws. */
+/**
+ * Persist the voice model tier. Never throws.
+ *
+ * @param {unknown} tier - Requested tier; resolved through
+ *   `resolveVoiceModel` first so only a known name is ever written.
+ * @param {Storage|null} [storage] - Handle to write to; defaults to
+ *   `localStorage` via `voiceStorage`.
+ * @returns {'standard'|'mini'} The tier actually persisted (the resolved one,
+ *   which may differ from what was requested).
+ */
 export function writeStoredVoiceTier(tier, storage) {
   const resolved = resolveVoiceModel(tier).tier;
   try {
@@ -85,6 +106,11 @@ export function writeStoredVoiceTier(tier, storage) {
 /**
  * Read the persisted spend thresholds, falling back to the generous defaults.
  * Stored as `{"warnUsd":2,"capUsd":5}` under one key so both move together.
+ *
+ * @param {Storage|null} [storage] - Handle to read from; defaults to
+ *   `localStorage` via `voiceStorage`.
+ * @returns {{warnUsd: number, capUsd: number}} Normalized thresholds; absent
+ *   or corrupt JSON yields the defaults with the cap still armed.
  */
 export function readStoredVoiceLimits(storage) {
   try {
@@ -103,6 +129,13 @@ export function readStoredVoiceLimits(storage) {
  * Infinity, and `JSON.stringify(Infinity)` is `null` — which reads back as
  * "absent" and silently restores the default, re-arming a cap the user turned
  * off. The 'off' sentinel round-trips instead.
+ *
+ * @param {{warnUsd?: number|string, capUsd?: number|string}} limits - Raw
+ *   thresholds to persist; normalized before serialization.
+ * @param {Storage|null} [storage] - Handle to write to; defaults to
+ *   `localStorage` via `voiceStorage`.
+ * @returns {{warnUsd: number, capUsd: number}} The normalized limits that were
+ *   written.
  */
 export function writeStoredVoiceLimits(limits, storage) {
   const normalized = normalizeCostLimits(limits);
@@ -117,7 +150,19 @@ export function writeStoredVoiceLimits(limits, storage) {
   return normalized;
 }
 
-/** Return whether a voice transition should pause Radio playback. */
+/**
+ * Return whether a voice transition should pause Radio playback.
+ *
+ * @param {object} root0 - Current voice state, as tracked on the controller.
+ * @param {string} root0.status - Session status (`STATUS` value); connecting
+ *   or executing holds Radio.
+ * @param {string} root0.speaker - Which side of the conversation owns audio
+ *   (`'user'`, `'ai'`, or `'idle'`).
+ * @param {boolean} root0.pushToTalkKeyHeld - True while the push-to-talk key
+ *   is physically held.
+ * @returns {boolean} True when broadcaster audio must yield to the voice
+ *   session.
+ */
 export function shouldPauseRadioForVoice({
   status = 'idle',
   speaker = 'idle',
@@ -130,7 +175,14 @@ export function shouldPauseRadioForVoice({
     || Boolean(pushToTalkKeyHeld);
 }
 
-/** Successful Radio voice actions that should hand control back to playing audio. */
+/**
+ * Successful Radio voice actions that should hand control back to playing audio.
+ *
+ * @param {object|null} result - Tool result produced by the action runner for
+ *   a `control_radio` call.
+ * @returns {boolean} True when the user asked (successfully) for playback, so
+ *   the voice session can close and un-mute the broadcaster.
+ */
 export function shouldStopVoiceAfterRadioTool(result) {
   return Boolean(
     result?.ok
@@ -139,7 +191,28 @@ export function shouldStopVoiceAfterRadioTool(result) {
   );
 }
 
-/** Verify muted broadcaster playback before closing voice and releasing Radio. */
+/**
+ * Verify muted broadcaster playback before closing voice and releasing Radio.
+ *
+ * Awaits the radio module's prepare step while the voice session is still
+ * open, so a station that fails to start (or a handoff that was superseded by
+ * a newer turn) can be cancelled and reported honestly instead of leaving the
+ * user with silence.
+ *
+ * @param {object|null} result - Radio tool result carrying
+ *   `radioPlaybackRequested` and the fields echoed into the returned result.
+ * @param {object} root0 - Radio/voice callbacks, all optional.
+ * @param {Function} root0.prepareRadio - Starts playback; resolves truthy on
+ *   success.
+ * @param {Function} root0.stopVoice - Closes the voice session.
+ * @param {Function} root0.cancelRadio - Undoes a start that must not stand.
+ * @param {Function} root0.isCurrent - Returns false when this handoff was
+ *   superseded while `prepareRadio` was in flight.
+ * @returns {Promise<{handled: boolean, cancelled?: boolean, result: object}>}
+ *   `handled: false` with the original result when no playback was requested;
+ *   otherwise the augmented result with `ok` and `audioState` reflecting what
+ *   actually happened.
+ */
 export async function startPreparedRadioAfterPlaybackReady(result, {
   prepareRadio,
   stopVoice,
@@ -186,7 +259,17 @@ export async function startPreparedRadioAfterPlaybackReady(result, {
   }
 }
 
-/** Silence both broadcaster audio and tuner static when voice owns the speaker. */
+/**
+ * Silence both broadcaster audio and tuner static when voice owns the speaker.
+ *
+ * @param {object} root0 - Radio module methods, all optional.
+ * @param {Function} root0.duckRadio - Drops the broadcaster volume for the
+ *   length of the session.
+ * @param {Function} root0.pauseRadio - Halts playback and tuner static;
+ *   returns truthy when playback was actually running.
+ * @returns {boolean} Whether playback was paused (false when nothing was
+ *   playing).
+ */
 export function silenceRadioForVoice({ duckRadio, pauseRadio } = {}) {
   duckRadio?.();
   return pauseRadio?.() || false;
@@ -198,6 +281,23 @@ export function silenceRadioForVoice({ duckRadio, pauseRadio } = {}) {
  */
 const SUPERSEDED_RESPONSE_MEMORY = 8;
 
+/**
+ * Wire the voice subsystem to the running app: build the action runner and
+ * UI, construct the controller, subscribe annotation outline events, and
+ * publish the controller as `window.__gevVoiceCommands`. Safe to call again —
+ * a previous instance is stopped (UI removed) before the new one is built.
+ *
+ * @param {object} root0 - App singletons the voice tools operate on.
+ * @param {object} root0.viewer - Cesium viewer the camera verbs drive.
+ * @param {object} root0.styleManager - HUD/style controller the UI mounts
+ *   through.
+ * @param {object} root0.dataManager - Layer manager the data tools address.
+ * @param {object|null} [root0.sceneDirector] - Cinematic scene director, when
+ *   scene capture tools should be available.
+ * @param {object|null} [root0.annotations] - Annotation whiteboard engine,
+ *   when outline feedback should stream back into the conversation.
+ * @returns {GevRealtimeController} The live controller instance.
+ */
 export function initGevVoiceCommands({ viewer, styleManager, dataManager, sceneDirector = null, annotations = null }) {
   if (window.__gevVoiceCommands && typeof window.__gevVoiceCommands.stop === 'function') {
     window.__gevVoiceCommands.stop({ removeUi: true });
@@ -230,7 +330,24 @@ export function initGevVoiceCommands({ viewer, styleManager, dataManager, sceneD
   return controller;
 }
 
+/**
+ * One OpenAI Realtime voice session: owns the WebRTC peer/data channels, the
+ * mic + assistant meters, the response/call bookkeeping that routes tool
+ * calls to the action runner, and the HUD controls that start and stop it.
+ * Constructed once per `initGevVoiceCommands` call; a second call replaces it.
+ */
 export class GevRealtimeController {
+  /**
+   * @param {object} root0 - Collaborators wired by the initializer.
+   * @param {Function} root0.runner - Action runner that executes voice tool
+   *   calls against the app.
+   * @param {object} root0.ui - Voice control DOM (button, tier button, chip)
+   *   created by `createVoiceControl`.
+   * @param {object|null} [root0.radioLayer] - Radio layer module, when Radio
+   *   ducking/pause handoff should be available.
+   * @param {object|null} [root0.dataManager] - Layer manager consulted for
+   *   layer lifecycle summaries and layer-addressed tools.
+   */
   constructor({ runner, ui, radioLayer = null, dataManager = null }) {
     this.runner = runner;
     this.ui = ui;
@@ -646,7 +763,8 @@ export class GevRealtimeController {
 
   /**
    * Enables or mutes only the outbound microphone tracks.
-   * @param {boolean} enabled
+   * @param {boolean} enabled - True to let the session hear the user; false
+   *   mutes every local audio track without tearing the connection down.
    * @returns {void}
    */
   setMicrophoneEnabled(enabled) {
@@ -658,7 +776,8 @@ export class GevRealtimeController {
 
   /**
    * Drives the dock waveform from live microphone energy while voice is active.
-   * @param {MediaStream} stream
+   * @param {MediaStream} stream - Local mic stream from the WebRTC offer;
+   *   replaces any meter from a previous session.
    * @returns {void}
    */
   startVoiceVisualizer(stream) {
@@ -719,7 +838,8 @@ export class GevRealtimeController {
    * Adds the incoming assistant audio stream to the existing Web Audio meter.
    * The audio element remains responsible for playback; this branch only reads
    * its frequency energy for the visualizer.
-   * @param {MediaStream} stream
+   * @param {MediaStream} stream - Assistant audio stream from the remote
+   *   WebRTC track; ignored when no mic meter context exists yet.
    * @returns {void}
    */
   startAssistantVoiceVisualizer(stream) {
@@ -910,6 +1030,11 @@ export class GevRealtimeController {
    * next turn and can confirm or correct without talking over the user. The
    * payload is serialized JSON, so place names stay structured DATA (the same
    * injection hygiene as failedLabels), never instruction-bearing prose.
+   *
+   * @param {object} payload - Map event record; serialized with
+   *   `JSON.stringify` into a single system text item.
+   * @returns {boolean} True when the data channel was open and the event was
+   *   sent, false when there was no live session to receive it.
    */
   notifyMapEvent(payload) {
     if (!this.dc || this.dc.readyState !== 'open') return false;
@@ -1496,7 +1621,11 @@ export class GevRealtimeController {
     if (shouldPauseRadioForVoice({ speaker: nextSpeaker })) this.pauseRadioForVoice();
   }
 
-  /** Pause Radio for explicit voice ownership; never resumes it automatically. */
+  /**
+   * Pause Radio for explicit voice ownership; never resumes it automatically.
+   * @returns {boolean} Whether playback was actually paused (false when Radio
+   *   was not playing).
+   */
   pauseRadioForVoice() {
     return silenceRadioForVoice({
       duckRadio: () => this.setRadioVoiceDucking(true),
@@ -1515,6 +1644,8 @@ export class GevRealtimeController {
    * Freeze a prepared Radio handoff while a direct user OFF request settles.
    * The reservation stops unsafe underlying work immediately, but the handoff
    * epoch is committed only if the manager's authoritative final state is OFF.
+   *
+   * @returns {void}
    */
   reserveRadioVisibilityOff() {
     const reservation = ++this.radioVisibilityOffReservation;
@@ -1537,12 +1668,25 @@ export class GevRealtimeController {
       });
   }
 
-  /** Whether any stronger Radio action is still awaiting semantic authority. */
+  /**
+   * Whether any stronger Radio action is still awaiting semantic authority.
+   * @returns {boolean} True while a visibility-OFF reservation or a live tool
+   *   handoff reservation owns the decision.
+   */
   isRadioHandoffReserved() {
     return this.radioVisibilityOffPending || this.radioToolHandoffReservations.size > 0;
   }
 
-  /** Freeze active, prepared, and preflight Radio work without committing. */
+  /**
+   * Freeze active, prepared, and preflight Radio work without committing.
+   *
+   * @param {object} root0 - Freeze scope.
+   * @param {string} [root0.abortScope='all'] - Authority scope passed to the
+   *   sibling-tool abort (`'all'` or `'playback'`).
+   * @param {boolean} [root0.abortActiveTools=false] - Also abort in-flight
+   *   Radio tool calls, not just prepared/preflight handoff work.
+   * @returns {void}
+   */
   freezeRadioHandoffForReservation({ abortScope = 'all', abortActiveTools = false } = {}) {
     if (abortActiveTools) this.abortRadioSiblingTools({ scope: abortScope });
     if (this.radioHandoffInFlight) {
@@ -1557,7 +1701,15 @@ export class GevRealtimeController {
     }
   }
 
-  /** Reserve a dedicated/generic stronger Radio tool until its result settles. */
+  /**
+   * Reserve a dedicated/generic stronger Radio tool until its result settles.
+   *
+   * @param {object} root0 - Reservation scope.
+   * @param {string} [root0.abortScope='all'] - Authority scope frozen for the
+   *   duration of the reservation.
+   * @returns {symbol} Token to hand back to
+   *   `settleRadioToolHandoffReservation` when the tool result arrives.
+   */
   reserveRadioToolHandoff({ abortScope = 'all' } = {}) {
     const token = Symbol('radio-tool-handoff-reservation');
     this.radioToolHandoffReservations.set(token, { abortScope });
@@ -1565,7 +1717,18 @@ export class GevRealtimeController {
     return token;
   }
 
-  /** Commit or release one stronger Radio tool's provisional reservation. */
+  /**
+   * Commit or release one stronger Radio tool's provisional reservation.
+   *
+   * @param {symbol} token - Token returned by `reserveRadioToolHandoff`;
+   *   unknown tokens are ignored.
+   * @param {object} root0 - Settlement outcome.
+   * @param {boolean} [root0.commit=false] - True when the tool succeeded and
+   *   its playback decision becomes authoritative.
+   * @param {string|null} [root0.responseId=null] - Response id attributed to
+   *   the cancellation when committing.
+   * @returns {void}
+   */
   settleRadioToolHandoffReservation(token, { commit = false, responseId = null } = {}) {
     const reservation = this.radioToolHandoffReservations.get(token);
     if (!reservation) return;
@@ -1636,7 +1799,16 @@ export class GevRealtimeController {
     }
   }
 
-  /** Invalidate delayed Radio work inside the requested authority scope. */
+  /**
+   * Invalidate delayed Radio work inside the requested authority scope.
+   *
+   * @param {object} root0 - Selection filters; both optional.
+   * @param {string|null} [root0.responseId=null] - When set, only the tool
+   *   calls raised by that response are aborted.
+   * @param {string} [root0.scope='all'] - `'all'` or `'playback'`; the latter
+   *   spares tools outside the playback authority domain.
+   * @returns {void}
+   */
   abortRadioSiblingTools({ responseId = null, scope = 'all' } = {}) {
     for (const [controller, metadata] of this.activeRadioToolControllers) {
       if (responseId && metadata.responseId !== responseId) continue;
@@ -1646,7 +1818,18 @@ export class GevRealtimeController {
     }
   }
 
-  /** Invalidate delayed Radio work and stop only a preflight owned by voice. */
+  /**
+   * Invalidate delayed Radio work and stop only a preflight owned by voice.
+   *
+   * @param {object} root0 - Cancellation scope.
+   * @param {boolean} [root0.abortTools=false] - Abort every in-flight tool
+   *   call, not only Radio siblings.
+   * @param {string|null} [root0.responseId=null] - Response id recorded with
+   *   the cancellation so late calls can be matched.
+   * @param {boolean} [root0.abortRadioSiblings=false] - Abort Radio tool
+   *   calls under the default (`'all'`) authority scope.
+   * @returns {void}
+   */
   cancelRadioHandoff({ abortTools = false, responseId = null, abortRadioSiblings = false } = {}) {
     this.radioHandoffEpoch++;
     this.radioHandoffCancellation = {
@@ -1755,6 +1938,8 @@ export class GevRealtimeController {
    * camera/layer/annotation state is worse than a completed one, and the tool
    * abort signal is advisory (most actions do not check it). What the latch DOES
    * guarantee is that no NEW tool is dispatched once the cap has tripped.
+   *
+   * @returns {boolean} True once the hard cap has tripped for this session.
    */
   isSessionEnding() {
     return this.costCapStopped === true;
@@ -1768,6 +1953,9 @@ export class GevRealtimeController {
    * may still be open and delivering a late `response.done`. Rebuilding on that
    * signal would send late usage to a fresh preview tracker instead of the one
    * that owns the session's spend.
+   *
+   * @returns {boolean} True when the session is inactive AND both the data and
+   *   peer channels are gone.
    */
   isVoiceSessionSettled() {
     return !this.isActive() && !this.dc && !this.pc;
@@ -1781,6 +1969,8 @@ export class GevRealtimeController {
    * shows the LIVE session meter (`this.costTracker` — bound to the model this
    * session actually connected with). During a session those two can legitimately
    * disagree, which is exactly what "applies next session" means.
+   *
+   * @returns {void}
    */
   syncCostUi() {
     const state = this.costTracker.state();
@@ -1810,6 +2000,8 @@ export class GevRealtimeController {
    * Flip STANDARD <-> MINI. Takes effect on the NEXT session: the model is
    * fixed when the ephemeral token is minted, so a live session is deliberately
    * left alone rather than reconnected mid-sentence.
+   *
+   * @returns {'standard'|'mini'} The newly selected tier.
    */
   toggleVoiceTier() {
     // Reads the PERSISTED PREFERENCE, never the tracker. The tracker is bound
@@ -1832,6 +2024,11 @@ export class GevRealtimeController {
    * error state that still holds a live channel) this writes the preference
    * ONLY. Once settled there is no session meter to protect, so the provisional
    * tracker is refreshed to preview the newly selected model.
+   *
+   * @param {unknown} tier - Requested tier name; resolved (never trusted) via
+   *   `resolveVoiceModel` before it is stored or persisted.
+   * @returns {'standard'|'mini'} The tier actually in effect for the next
+   *   session.
    */
   setVoiceTier(tier) {
     this.voiceTier = writeStoredVoiceTier(tier);
@@ -1854,6 +2051,10 @@ export class GevRealtimeController {
    *
    * Like the tier, this does not rebuild a LIVE session's tracker — that would
    * discard accrued spend. New limits arm at the next session start.
+   *
+   * @param {{warnUsd?: number|string, capUsd?: number|string}} limits - Raw
+   *   thresholds; normalized and persisted through `writeStoredVoiceLimits`.
+   * @returns {{warnUsd: number, capUsd: number}} The limits now in effect.
    */
   setVoiceCostLimits(limits) {
     this.voiceLimits = writeStoredVoiceLimits(limits);
@@ -1871,6 +2072,11 @@ export class GevRealtimeController {
    * Fold one response's token usage into the session cost, then act on the
    * thresholds: a soft warning (visual + one console line) and a hard cap that
    * ends the session through the normal stop path.
+   *
+   * @param {object|null|undefined} usage - `response.usage` from the
+   *   `response.done` event; null is a no-op returning null.
+   * @returns {object|null} The tracker snapshot for this response, or null
+   *   when no usage was reported.
    */
   recordUsage(usage) {
     if (!usage) return null;
@@ -1902,6 +2108,10 @@ export class GevRealtimeController {
    * (data channel closed, peer connection closed, mic tracks stopped) so the
    * mic is genuinely released, then overrides the status line with the reason.
    * `preserveStatus` keeps stop() from writing its own "Voice off" over it.
+   *
+   * @param {object} state - Cost snapshot whose `display` and `capUsd` feed
+   *   the warning line and the final status.
+   * @returns {void}
    */
   handleCostCap(state) {
     if (this.costCapStopped) return;
@@ -2024,10 +2234,24 @@ export class GevRealtimeController {
   }
 }
 
+/**
+ * Whether the current viewport image may be sent to the model at all: only the
+ * 'local' privacy scale ever leaves the browser.
+ *
+ * @param {string} viewScale - Selected viewport-image scale.
+ * @returns {boolean} True when a capture may be attached to the request.
+ */
 function shouldSendViewportImage(viewScale) {
   return viewScale === 'local';
 }
 
+/**
+ * Whether a tool result carries any structured view identity worth naming.
+ *
+ * @param {object} result - Action-runner result to inspect.
+ * @returns {boolean} True when a selection, visible-entity list, nearby
+ *   places, or known landmarks are present.
+ */
 function hasStructuredViewIdentity(result) {
   return Boolean(
     result.selected ||
@@ -2037,6 +2261,16 @@ function hasStructuredViewIdentity(result) {
   );
 }
 
+/**
+ * Compose the follow-up instruction injected after a tool result, per action.
+ *
+ * Keeps the model honest about partial Radio/annotation outcomes and tells it
+ * to treat result text (failedLabels, place names) as inert DATA — never as
+ * instructions — so a hostile place name cannot steer the turn.
+ *
+ * @param {object} result - Action-runner result for the completed tool call.
+ * @returns {string} Instruction text for `response.create`.
+ */
 function responseInstructionForToolResult(result) {
   if (result?.action === 'control_radio' && result.radioPlaybackSuppressed) {
     if (result.audioState === 'paused') {
@@ -2115,6 +2349,10 @@ function responseInstructionForToolResult(result) {
   return 'Briefly confirm the completed GEV action once. Do not repeat yourself.';
 }
 
+/**
+ * Build the per-session debug-log correlation id (time + random part).
+ * @returns {string} Id of the form `gev-<base36 time>-<base36 random>`.
+ */
 function createDebugSessionId() {
   const randomPart = Math.random().toString(36).slice(2, 10);
   return `gev-${Date.now().toString(36)}-${randomPart}`;
@@ -2123,6 +2361,17 @@ function createDebugSessionId() {
 // Idempotently tear down a MediaStream + RTCPeerConnection acquired by an
 // abandoned start() attempt. Every close is guarded so double-release (once
 // here, once via stop()) is a no-op — critical for closing the hot mic (H7).
+/**
+ * Release the mic stream and peer connection from an abandoned start().
+ *
+ * Every close is guarded so double-release (once here, once via stop()) is a
+ * no-op — critical for closing the hot mic (H7).
+ *
+ * @param {object} root0 - Resources held by the failed attempt.
+ * @param {MediaStream|null} [root0.localStream] - Local mic stream to stop.
+ * @param {RTCPeerConnection|null} [root0.localPc] - Peer connection to close.
+ * @returns {void}
+ */
 function releaseStartResources({ localStream = null, localPc = null } = {}) {
   if (localStream) {
     try {
@@ -2134,6 +2383,14 @@ function releaseStartResources({ localStream = null, localPc = null } = {}) {
   }
 }
 
+/**
+ * POST one debug record to the server-side log sink. Never throws, and never
+ * blocks voice control: `sendBeacon` is preferred for page-unload survival,
+ * with `fetch(keepalive)` as the fallback.
+ *
+ * @param {object} record - Already-redacted debug record.
+ * @returns {void}
+ */
 function postDebugLog(record) {
   try {
     const body = JSON.stringify(record);
@@ -2152,6 +2409,16 @@ function postDebugLog(record) {
   }
 }
 
+/**
+ * Capture a downscaled JPEG of the Cesium canvas for the model's vision input.
+ *
+ * Refuses to ship a stale or unusable frame: no fresh render, a near-black
+ * capture, or an encoding over `VIEWPORT_MAX_ENCODED_BYTES` all return null so
+ * the caller falls through without an image instead of stranding the turn.
+ *
+ * @returns {Promise<string|null>} `data:image/jpeg` URL, or null when no
+ *   capture could be produced.
+ */
 async function captureViewportImage() {
   const viewer = window.__godsEyeView?.viewer;
   const source = viewer?.scene?.canvas || document.querySelector('#cesiumContainer .cesium-widget canvas');
@@ -2197,6 +2464,15 @@ async function captureViewportImage() {
 // Scale (w, h) down so w*h <= maxPixels while preserving aspect ratio. Never
 // upscales. Both dimensions shrink together, so portrait and landscape are
 // treated equally (M13). Pure + deterministic → unit-tested (exported below).
+/**
+ * Downscale one capture within the total-pixel budget.
+ *
+ * @param {number} width - Source canvas width in pixels.
+ * @param {number} height - Source canvas height in pixels.
+ * @param {number} maxPixels - Total-pixel budget for the capture.
+ * @returns {{width: number, height: number}} Dimensions guaranteed not to
+ *   exceed the budget (floored, and never below 1px).
+ */
 export function computeDownscale(width, height, maxPixels) {
   const w = Math.max(1, Math.floor(width) || 0);
   const h = Math.max(1, Math.floor(height) || 0);
@@ -2215,6 +2491,13 @@ export function computeDownscale(width, height, maxPixels) {
 // Approximate the decoded byte length of a base64 data URL without allocating
 // the buffer: strip the "data:...;base64," prefix, then base64 is 4 chars per
 // 3 bytes (minus any '=' padding). Exported for unit tests.
+/**
+ * Size a base64 data URL without allocating the decoded buffer.
+ *
+ * @param {unknown} dataUrl - Data URL to measure; non-strings measure 0.
+ * @returns {number} Approximate decoded byte length (payload only, prefix
+ *   excluded).
+ */
 export function estimateDataUrlBytes(dataUrl) {
   if (typeof dataUrl !== 'string') return 0;
   const commaIndex = dataUrl.indexOf(',');
@@ -2225,6 +2508,8 @@ export function estimateDataUrlBytes(dataUrl) {
 
 /**
  * Ensure the canvas holds a CURRENT frame before capture.
+ *
+ * @param {object} viewer - Cesium viewer whose scene is driven.
  * @returns {Promise<boolean>} true only when a fresh frame was presented —
  *   false while hidden (render loop suspended; a capture would be stale) or
  *   when the bounded wait timed out. Callers must not label a non-fresh
@@ -2255,6 +2540,18 @@ export async function renderFreshCesiumFrame(viewer) {
   }
 }
 
+/**
+ * Heuristic blank-frame detector for the viewport capture.
+ *
+ * Downsamples to a small canvas and averages Rec.709 luminance over opaque
+ * pixels; a globe that has not rendered yet reads as essentially black.
+ *
+ * @param {CanvasRenderingContext2D} ctx - Context holding the frame to test.
+ * @param {number} width - Frame width in pixels.
+ * @param {number} height - Frame height in pixels.
+ * @returns {boolean} True when the frame is empty/unrendered and should not
+ *   be sent; false when it carries visible content.
+ */
 function isNearlyBlackFrame(ctx, width, height) {
   const sampleWidth = Math.min(48, width);
   const sampleHeight = Math.min(32, height);
@@ -2285,6 +2582,12 @@ function isNearlyBlackFrame(ctx, width, height) {
  * requested tier is only a request, since OPENAI_REALTIME_MODEL[_MINI] can
  * point a tier at any model id. The caller prices against the returned id, not
  * against its own tier assumption.
+ *
+ * @param {'standard'|'mini'} [tier] - Requested tier; the server may resolve
+ *   it to a different model id via env override.
+ * @returns {Promise<{token: string, model: string|null, tier: string|null}>}
+ *   The ephemeral client secret plus the model/tier the server reports for it.
+ * @throws {Error} On a non-2xx response or a body without a client secret.
  */
 async function fetchRealtimeToken(tier = DEFAULT_VOICE_TIER) {
   const url = `${TOKEN_URL}?tier=${encodeURIComponent(resolveVoiceModel(tier).tier)}`;
@@ -2313,6 +2616,17 @@ async function fetchRealtimeToken(tier = DEFAULT_VOICE_TIER) {
   return { token, model: servedModel, tier: servedTier };
 }
 
+/**
+ * Collect the tool calls a Realtime event carries.
+ *
+ * The API reports function calls in two shapes — an arguments-done event and a
+ * completed output item — so both are normalized into one list and nameless
+ * fragments dropped.
+ *
+ * @param {object} event - Realtime server event.
+ * @returns {Array<object>} Tool calls with `id`, `call_id`, `name`, and
+ *   stringified `arguments`.
+ */
 function extractFunctionCalls(event) {
   const calls = [];
 
@@ -2337,6 +2651,15 @@ function extractFunctionCalls(event) {
 // error code is item_not_found OR it echoes the event_id of a delete we issued.
 // The event_id match narrows the code-only whitelist so an unrelated
 // item_not_found (should one ever arise) still surfaces normally.
+/**
+ * Classify a server error as the benign tail of our own viewport-image delete.
+ *
+ * @param {object|null} payload - Realtime error event.
+ * @param {Set<string>|null} [pendingDeleteIds] - `event_id`s of deletes this
+ *   session issued and has not yet seen acknowledged.
+ * @returns {boolean} True when the error only confirms an already-deleted
+ *   screenshot item and must not be surfaced to the user.
+ */
 export function isBenignViewportDeleteError(payload, pendingDeleteIds = null) {
   if (!payload || payload.type !== 'error') return false;
   const echoedId = payload.event_id;
@@ -2345,6 +2668,16 @@ export function isBenignViewportDeleteError(payload, pendingDeleteIds = null) {
   return code === 'item_not_found';
 }
 
+/**
+ * Dedupe keys for one tool call, keyed on call/item identity only.
+ *
+ * The same call arrives via two event types and must collapse to one
+ * execution, but a name+args key would also swallow legitimate repeats
+ * ("zoom in" twice) and starve the model of a function_call_output.
+ *
+ * @param {object} call - Normalized tool call.
+ * @returns {Array<string>} Non-empty `call:`/`item:` identity keys.
+ */
 function callDedupeKeys(call) {
   // Dedupe ONLY on call/item identity. The same call arrives via both
   // response.function_call_arguments.done and response.output_item.done, so
@@ -2357,6 +2690,14 @@ function callDedupeKeys(call) {
   ].filter(Boolean);
 }
 
+/**
+ * Decode a tool call's arguments, which arrive as a JSON string (or already
+ * as an object on some paths).
+ *
+ * @param {string|object|null|undefined} value - Raw `arguments` field.
+ * @returns {object} Parsed arguments; `{}` for absent or unparseable input so
+ *   a malformed call still resolves to a runnable action.
+ */
 function parseArguments(value) {
   if (!value) return {};
   if (typeof value === 'object') return value;
@@ -2367,6 +2708,18 @@ function parseArguments(value) {
   }
 }
 
+/**
+ * Normalize a WebRTC/Realtime failure into the debug-record shape.
+ *
+ * Unwraps the RTCError wrapper for its transport detail (SCTP cause, alerts)
+ * and merges caller-supplied diagnostics, dropping empty fields.
+ *
+ * @param {string} source - Short label for the failure site (e.g. `pc.oniceconnectionstatechange`).
+ * @param {Error|RTCError|null|undefined} error - Thrown or reported error.
+ * @param {object} [extra] - Additional diagnostic fields (connection state,
+ *   response id, status reason).
+ * @returns {object} Record as stored in the error log / posted to the sink.
+ */
 function createErrorRecord(source, error, extra = {}) {
   const rtcError = error?.error || error;
   return {
@@ -2382,6 +2735,13 @@ function createErrorRecord(source, error, extra = {}) {
   };
 }
 
+/**
+ * Render an error record as the two-line UI/console string: `source: message`
+ * then a `key=value` state summary of whatever diagnostics are present.
+ *
+ * @param {object} record - Record produced by `createErrorRecord`.
+ * @returns {string} Human-readable error text, state line omitted when empty.
+ */
 function formatErrorForDisplay(record) {
   const primary = [record.source, record.message].filter(Boolean).join(': ');
   const state = [
@@ -2395,17 +2755,33 @@ function formatErrorForDisplay(record) {
   return state ? `${primary}\n${state}` : primary;
 }
 
+/**
+ * Copy an object without null, undefined, or empty-string entries.
+ * @param {object|null|undefined} value - Fields to filter.
+ * @returns {object} Entries that carry information.
+ */
 function removeEmptyValues(value) {
   return Object.fromEntries(Object.entries(value || {}).filter(([, item]) => (
     item !== null && item !== undefined && item !== ''
   )));
 }
 
+/**
+ * Collapse whitespace and clamp text to a maximum length with an ellipsis.
+ * @param {unknown} value - Text to compact; falsy input yields `''`.
+ * @param {number} maxLength - Character ceiling (ellipsis included).
+ * @returns {string} Single-spaced, clamped text.
+ */
 function compactText(value, maxLength) {
   const text = String(value || '').replaceAll(/\s+/g, ' ').trim();
   return text.length <= maxLength ? text : `${text.slice(0, maxLength - 1)}…`;
 }
 
+/**
+ * Read the persisted recent-error list.
+ * @returns {Array<object>} At most `ERROR_LOG_LIMIT` records, or `[]` when
+ *   storage is unavailable or the payload is corrupt.
+ */
 function loadStoredErrors() {
   try {
     const value = JSON.parse(localStorage.getItem(ERROR_STORAGE_KEY) || '[]');
@@ -2415,6 +2791,13 @@ function loadStoredErrors() {
   }
 }
 
+/**
+ * Persist the recent-error list, trimmed to the limit. Best effort: quota or
+ * privacy-mode failures are swallowed, since diagnostics remain in memory.
+ *
+ * @param {Array<object>} errors - Records to store (newest last).
+ * @returns {void}
+ */
 function storeErrors(errors) {
   try {
     localStorage.setItem(ERROR_STORAGE_KEY, JSON.stringify(errors.slice(0, ERROR_LOG_LIMIT)));
@@ -2425,8 +2808,9 @@ function storeErrors(errors) {
 
 /**
  * Returns whether a keyboard event represents the hold-Space voice shortcut.
- * @param {KeyboardEvent|object|null} event
- * @returns {boolean}
+ * @param {KeyboardEvent|object|null} event - Keyboard event (or a test stand-in
+ *   carrying `code`/`key`).
+ * @returns {boolean} True when the event is the Space key in either spelling.
  */
 export function isPushToTalkKey(event) {
   return event?.code === 'Space' || event?.key === ' ';
@@ -2434,8 +2818,9 @@ export function isPushToTalkKey(event) {
 
 /**
  * Protects text entry and modified shortcuts from the global push-to-talk key.
- * @param {KeyboardEvent|object|null} event
- * @returns {boolean}
+ * @param {KeyboardEvent|object|null} event - Keydown event to vet.
+ * @returns {boolean} True only for an unmodified Space press outside text
+ *   inputs, contenteditable regions, and other form controls.
  */
 export function shouldHandlePushToTalkKeyDown(event) {
   if (!isPushToTalkKey(event) || event.defaultPrevented) return false;
@@ -2448,8 +2833,9 @@ export function shouldHandlePushToTalkKeyDown(event) {
 
 /**
  * Avoids a click/Space race that could stop an active voice session mid-turn.
- * @param {boolean} spaceKeyHeld
- * @returns {boolean}
+ * @param {boolean} spaceKeyHeld - True while the Space shortcut is held; the
+ *   matching `click` (Space also fires click on buttons) must be ignored.
+ * @returns {boolean} True when the button click should be dropped.
  */
 export function shouldIgnoreVoiceButtonClick(spaceKeyHeld) {
   return Boolean(spaceKeyHeld);
@@ -2457,10 +2843,14 @@ export function shouldIgnoreVoiceButtonClick(spaceKeyHeld) {
 
 /**
  * Selects input or output frequency data for the active voice speaker.
- * @param {'idle'|'user'|'ai'} speaker
- * @param {{analyser: AnalyserNode|null, data: Uint8Array|null}} input
- * @param {{analyser: AnalyserNode|null, data: Uint8Array|null}} output
- * @returns {{analyser: AnalyserNode, data: Uint8Array}|null}
+ * @param {'idle'|'user'|'ai'} speaker - Side of the conversation to meter; the
+ *   assistant's output meter wins while it is speaking.
+ * @param {{analyser: AnalyserNode|null, data: Uint8Array|null}} input - Mic
+ *   meter (analyser plus its bin buffer).
+ * @param {{analyser: AnalyserNode|null, data: Uint8Array|null}} output -
+ *   Assistant-output meter, same shape.
+ * @returns {{analyser: AnalyserNode, data: Uint8Array}|null} The usable meter,
+ *   or null when neither side is wired up yet.
  */
 export function selectVoiceVisualizerSignal(speaker, input, output) {
   const signal = speaker === 'ai' ? output : input;
@@ -2469,10 +2859,11 @@ export function selectVoiceVisualizerSignal(speaker, input, output) {
 
 /**
  * Keeps analysing buffered assistant audio after the response-done control event.
- * @param {'idle'|'user'|'ai'} currentSpeaker
- * @param {'idle'|'user'|'ai'} nextSpeaker
- * @param {boolean} keepCurrent
- * @returns {'idle'|'user'|'ai'}
+ * @param {'idle'|'user'|'ai'} currentSpeaker - Speaker owning the meter now.
+ * @param {'idle'|'user'|'ai'} nextSpeaker - Speaker the control event asked for.
+ * @param {boolean} keepCurrent - True to hold the assistant meter through the
+ *   trailing audio of a just-finished response.
+ * @returns {'idle'|'user'|'ai'} The speaker whose meter should drive the bars.
  */
 export function resolveVoiceVisualizerSpeaker(currentSpeaker, nextSpeaker, keepCurrent = false) {
   if (keepCurrent && currentSpeaker === 'ai') return 'ai';
@@ -2481,9 +2872,9 @@ export function resolveVoiceVisualizerSpeaker(currentSpeaker, nextSpeaker, keepC
 
 /**
  * Resolves the in-app help tray copy for the current push-to-talk state.
- * @param {boolean} pushToTalkMode
- * @param {boolean} pushToTalkKeyHeld
- * @returns {string}
+ * @param {boolean} pushToTalkMode - Whether the Space shortcut is bound.
+ * @param {boolean} pushToTalkKeyHeld - Whether Space is held right now.
+ * @returns {string} Hint text shown in the voice help tray.
  */
 export function resolveVoiceControlHint(pushToTalkMode, pushToTalkKeyHeld) {
   return pushToTalkMode && pushToTalkKeyHeld
@@ -2506,7 +2897,8 @@ export function gateVoiceVisualizerLevel(level, threshold) {
 
 /**
  * Restores the CSS-owned standby baseline for every visualizer bar.
- * @param {Iterable<HTMLElement>|null|undefined} bars
+ * @param {Iterable<HTMLElement>|null|undefined} bars - Bar elements currently
+ *   in the dock; skipped entirely when the meter never started.
  * @returns {void}
  */
 function resetVoiceVisualizerBars(bars) {
@@ -2517,6 +2909,21 @@ function resetVoiceVisualizerBars(bars) {
   }
 }
 
+/**
+ * Build (or reuse) the voice control DOM and return its live element handles.
+ *
+ * With `reset` any existing control is removed first so a re-init cannot
+ * inherit stale listeners. The block mounts into the command dock when present
+ * and falls back to `document.body` otherwise.
+ *
+ * @param {object} root0 - Mount options.
+ * @param {boolean} [root0.reset=false] - Rebuild from scratch instead of
+ *   reusing the existing `#gev-voice-control` element.
+ * @returns {{root: HTMLElement, button: HTMLElement, buttonLabel: HTMLElement,
+ *   status: HTMLElement, detail: HTMLElement, helpDetail: HTMLElement,
+ *   errorDetail: HTMLElement, tierButton: HTMLElement|null,
+ *   costValue: HTMLElement}} Element references the controller binds to.
+ */
 function createVoiceControl({ reset = false } = {}) {
   let root = document.getElementById('gev-voice-control');
   if (root && reset) {

@@ -43,6 +43,8 @@ const DEFAULT_OVERLAY_HOST = Object.freeze({
  *  - Shallow (<70km): Red
  *  - Intermediate (70-300km): Orange
  *  - Deep (>300km): Yellow
+ * @param {number} depthKm Hypocenter depth below the surface, kilometres.
+ * @returns {Cesium.Color} Band color for this depth.
  */
 function depthColor(depthKm) {
   if (depthKm < 70) return Cesium.Color.RED;
@@ -54,12 +56,12 @@ function depthColor(depthKm) {
  * Build the source-owned presentation for one ambient magnitude label.
  * Magnitude formatting deliberately remains here instead of moving into the
  * shared renderer.
- * @param {object} input
+ * @param {object} input One earthquake's presentation values.
  * @param {string} input.id Stable USGS or deterministic fallback id.
  * @param {Cesium.Cartesian3} input.position Ground anchor shared with the pulse.
  * @param {number} input.magnitude USGS magnitude.
  * @param {string} input.accent Source-owned depth-band color.
- * @returns {object}
+ * @returns {object} Overlay entry shaped for the shared world-overlay host.
  */
 export function createEarthquakeOverlayEntry({ id, position, magnitude, accent }) {
   const mag = Number(magnitude);
@@ -79,7 +81,12 @@ export function createEarthquakeOverlayEntry({ id, position, magnitude, accent }
   });
 }
 
-/** Keep the largest events, with stable identity as the tie-break. */
+/**
+ * Keep the largest events, with stable identity as the tie-break.
+ * @param {Array<object>} entries Candidate overlay entries carrying `priority` and `id`.
+ * @param {number} [limit] Requested cohort size, capped at the module limit.
+ * @returns {Array<object>} Highest-priority entries, strongest first.
+ */
 export function selectEarthquakeOverlayCohort(
   entries,
   limit = EARTHQUAKE_OVERLAY_COHORT_LIMIT,
@@ -104,6 +111,7 @@ export function selectEarthquakeOverlayCohort(
  * @param {number} [index=0] - Position in the snapshot (fallback id only).
  * @returns {{id: string, magnitude: number|null, depthKm: number|null,
  *   lat: number|null, lon: number|null, timeMs: number|null, place: string|null}}
+ *   JSON-safe analyst row; `timeMs` is USGS epoch milliseconds.
  */
 export function mapAnalystRecord(raw, index = 0) {
   const num = (v) => (Number.isFinite(v) ? v : null);
@@ -119,6 +127,15 @@ export function mapAnalystRecord(raw, index = 0) {
   };
 }
 
+/**
+ * Build the USGS earthquake layer: a Cesium data source of clamped ground
+ * discs plus the ambient magnitude labels it owns in the world overlay.
+ *
+ * @param {object} [deps] Injectable collaborators.
+ * @param {{setEntries: Function, setVisible: Function, clearSource: Function}} [deps.overlayHost]
+ *   World-overlay host seam; tests pass a recording stand-in.
+ * @returns {object} Layer module implementing the DataLayerManager contract.
+ */
 export function createEarthquakesLayer({ overlayHost = DEFAULT_OVERLAY_HOST } = {}) {
   let _dataSource = null;
   let _count = 0;

@@ -49,9 +49,9 @@ const cache = new Map();
 /**
  * Builds the rounded cache key shared between the in-memory cache and the
  * `points` string sent to the proxy (see file header, point 2).
- * @param {number} lat
- * @param {number} lon
- * @returns {string}
+ * @param {number} lat latitude in decimal degrees.
+ * @param {number} lon longitude in decimal degrees.
+ * @returns {string} `"lat,lon"` rounded to 5 dp.
  */
 function cacheKey(lat, lon) {
   return `${lat.toFixed(5)},${lon.toFixed(5)}`;
@@ -61,9 +61,9 @@ function cacheKey(lat, lon) {
  * Synchronous read of a previously resolved ellipsoidal ground height.
  * Returns null if this exact (rounded) coordinate hasn't been resolved yet
  * by either the proxy path or the geoid-fallback path.
- * @param {number} lat
- * @param {number} lon
- * @returns {number|null}
+ * @param {number} lat latitude in decimal degrees.
+ * @param {number} lon longitude in decimal degrees.
+ * @returns {number|null} ellipsoidal height in meters, or null when cold.
  */
 export function cachedEllipsoidalGround(lat, lon) {
   const entry = cache.get(cacheKey(lat, lon));
@@ -78,9 +78,10 @@ export function cachedEllipsoidalGround(lat, lon) {
  * the airport: floors built on it sank every sprite/trail, and the mesh
  * sampler's sanity gate rejected REAL surface samples against it. Floor
  * consumers read THIS; the plain read stays for display-only consumers.
- * @param {number} lat
- * @param {number} lon
- * @returns {number|null}
+ * @param {number} lat latitude in decimal degrees.
+ * @param {number} lon longitude in decimal degrees.
+ * @returns {number|null} Re:Earth ellipsoidal height in meters, or null when
+ *   the point is cold or was answered by the geoid fallback.
  */
 export function cachedRealEllipsoidalGround(lat, lon) {
   const entry = cache.get(cacheKey(lat, lon));
@@ -93,7 +94,8 @@ export function cachedRealEllipsoidalGround(lat, lon) {
  * look results up positionally-independent of upstream response ordering.
  * Throws on any failure (non-ok response, network error, malformed body) —
  * callers decide the fallback behavior per point.
- * @param {Array<{key: string, lat: number, lon: number}>} chunk
+ * @param {Array<{key: string, lat: number, lon: number}>} chunk one slice of
+ *   the work list (<=CHUNK_SIZE entries, deduplicated by rounded key).
  * @returns {Promise<Map<string, number>>} key -> ellipsoid height (m)
  */
 async function fetchChunk(chunk) {
@@ -129,10 +131,11 @@ async function fetchChunk(chunk) {
  * orthometric source height is available, else `geoidHeight` alone (treats
  * the point as if it were at the geoid, i.e. H≈0 — a coast-level prior).
  * Assumes `ensureGeoidReady()` has already resolved.
- * @param {number} lat
- * @param {number} lon
- * @param {number} [sourceOrthometricM]
- * @returns {number}
+ * @param {number} lat latitude in decimal degrees.
+ * @param {number} lon longitude in decimal degrees.
+ * @param {number} [sourceOrthometricM] the data source's own orthometric
+ *   (MSL) height in meters, when it published one.
+ * @returns {number} estimated ellipsoidal height in meters.
  */
 function geoidFallback(lat, lon, sourceOrthometricM) {
   const n = geoidHeight(lat, lon);
@@ -157,6 +160,8 @@ function geoidFallback(lat, lon, sourceOrthometricM) {
  *   with a real proxy round-trip pending — sees a warm hit.
  *
  * @param {Array<{lat:number, lon:number, sourceOrthometricM?:number}>} coords
+ *   coordinates in decimal degrees, with each source's own MSL height (meters)
+ *   when known — it is added to the geoid undulation on the fallback path.
  * @returns {Promise<Array<{ellipsoid:number, source:'reearth'|'geoid-fallback'}>>}
  *   Same length and order as `coords`.
  */

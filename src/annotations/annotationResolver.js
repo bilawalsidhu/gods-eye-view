@@ -30,7 +30,14 @@ const enclosingAreaCache = new Map(); // smallest enclosing named non-building p
 // for the whole session.
 const NEG_CACHE_TTL_MS = 60_000;
 
-/** Read a cache entry → value | null (cached not-found within TTL) | undefined (miss/expired). */
+/**
+ * Read a cache entry → value | null (cached not-found within TTL) | undefined (miss/expired).
+ * Positive entries are always valid; a negative (null) entry past NEG_CACHE_TTL_MS is evicted
+ * here so the next call re-fetches instead of inheriting a stale not-found.
+ * @param {Map<string, {value: *, at: number}>} cache - One of the module's result caches (geocode, footprint, monument, …).
+ * @param {string} key - Full cache key: query, scope, and rounded-coordinate components.
+ * @returns {(*|null|undefined)} Cached value; `null` for a not-found still within its TTL; `undefined` on a miss or an expired negative.
+ */
 function cacheRead(cache, key) {
   const entry = cache.get(key);
   if (!entry) return undefined;
@@ -40,7 +47,12 @@ function cacheRead(cache, key) {
   return undefined;
 }
 
-/** Write a positive (or definitive-null) cache entry with a timestamp. */
+/**
+ * Write a positive (or definitive-null) cache entry with a timestamp.
+ * @param {Map<string, {value: *, at: number}>} cache - Cache to populate.
+ * @param {string} key - Full cache key.
+ * @param {*} value - Resolved result, or `null` for a definitive not-found (the timestamp is what lets it expire).
+ */
 function cacheWrite(cache, key, value) {
   cache.set(key, { value, at: Date.now() });
 }
@@ -50,6 +62,10 @@ function cacheWrite(cache, key, value) {
  * answered "no such place"), never on an abort or a transient error (network /
  * 429 / 5xx / timeout). Caching those would poison the key; instead we leave it a
  * miss so the next attempt retries. Definitive negatives still carry a TTL.
+ * @param {Map<string, {value: *, at: number}>} cache - One of the module's result caches to guard against poisoned entries.
+ * @param {string} key - Cache key, in the same form the positive lookup for this source writes.
+ * @param {AbortSignal} [signal] - Caller's cancellation signal; a superseded resolution is never cached.
+ * @param {boolean} [definitive=true] - False when the miss was transient (network / 429 / timeout), which must stay retryable.
  */
 function negCache(cache, key, signal, definitive = true) {
   if (signal?.aborted) return; // superseded — never cache
@@ -57,7 +73,12 @@ function negCache(cache, key, signal, definitive = true) {
   cacheWrite(cache, key, null);
 }
 
-/** Wire an external AbortSignal to a local controller; returns a detach fn. */
+/**
+ * Wire an external AbortSignal to a local controller; returns a detach fn.
+ * @param {AbortController} controller - Local controller that owns the fetch's own signal and timeout.
+ * @param {AbortSignal} [externalSignal] - Caller's cancellation signal; an already-aborted signal aborts the controller immediately.
+ * @returns {function(): void} Detach that removes the abort listener (a no-op when nothing was wired).
+ */
 function linkAbort(controller, externalSignal) {
   if (!externalSignal) return () => {};
   if (externalSignal.aborted) { controller.abort(); return () => {}; }
@@ -69,8 +90,9 @@ function linkAbort(controller, externalSignal) {
 /**
  * Resolve a single annotation target to a normalized world anchor.
  *
- * @param {object} opts
- * @param {Cesium.Viewer} opts.viewer
+ * @param {object} opts - Resolution request (destructured).
+ * @param {Cesium.Viewer} opts.viewer - Live viewer: supplies the view centre for biasing/gating,
+ *                                    the depth-aware pixel pick, and ground-height sampling.
  * @param {string} [opts.target]      Place name to geocode.
  * @param {number} [opts.latitude]    Explicit latitude (wins over target).
  * @param {number} [opts.longitude]   Explicit longitude.
@@ -97,7 +119,9 @@ function linkAbort(controller, externalSignal) {
  *   viewport: object | null,
  *   resolveOutline?: () => Promise<undefined | null | { rateLimited: true, retryAfterMs: number | null }
  *     | { ring, footprintKind, buildingHeight, synthesized, lat, lon, height }>,
- * }>}
+ * }>} Resolved world anchor, or `null` when nothing plausible resolved — the proximity gate
+ *   rejected a far-flung geocode and no other rung (Places, Natural Earth, pixel pick) panned
+ *   out. `resolveOutline` is present only in progressive mode (`deferFootprint`).
  */
 export async function resolveAnnotationTarget({
   viewer, target, latitude, longitude, footprint = false, intent = 'the_thing',
@@ -317,6 +341,11 @@ export async function resolveAnnotationTarget({
    *     retry only once, no sooner than both Retry-After and their normal ladder allow.
    * The inline path awaits it right here; progressive callers (deferFootprint) invoke it
    * AFTER the anchor mark is drawn and upgrade the mark in place.
+   *
+   * @returns {Promise<undefined|null|{rateLimited: true, retryAfterMs: number|null}
+   *   |{ring: Array<[number,number]>, footprintKind: 'building'|'area', buildingHeight: number|null,
+   *     synthesized: boolean, lat: number, lon: number, height: number, naturalRegion?: string}>}
+   *   The outline patch per the tri-state contract above.
    */
   const resolveOutline = async () => {
     let scope = baseScope;
@@ -562,10 +591,10 @@ const GROUNDS_RADIUS_MAX_M = 1200; // place can't shrink to a dot, nor a city-wi
  * marked `synthesized:true` so the renderers draw it "approximate" (dashed/feathered),
  * never as an authoritative boundary (research §8.6 invariant 3). Pure local math — no
  * Overpass call — so it always succeeds and adds no proxy/rate-limit cost.
- * @param {number} lat
- * @param {number} lon
- * @param {number} radiusM
- * @returns {{ring:[number,number][], kind:'area', heightM:null, synthesized:true}}
+ * @param {number} lat - Buffered-disc centre latitude (degrees).
+ * @param {number} lon - Buffered-disc centre longitude (degrees).
+ * @param {number} radiusM - Disc radius in metres, chosen by the caller for the scope (neighborhood / grounds / around).
+ * @returns {{ring:[number,number][], kind:'area', heightM:null, synthesized:true}} A closed 44-vertex lon/lat ring (first point repeated) plus the `synthesized` marker the renderers draw feathered.
  */
 function synthesizeBufferedArea(lat, lon, radiusM) {
   const mPerDegLat = 111320;
@@ -588,7 +617,8 @@ function synthesizeBufferedArea(lat, lon, radiusM) {
  * a sane band. Google never returns a polygon, but the viewport frames the real
  * feature, so this is far better than a blind constant. Falls back to
  * GROUNDS_RADIUS_M when there is no viewport.
- * @param {{low:{latitude:number,longitude:number},high:{latitude:number,longitude:number}}|null} viewport
+ * @param {{low:{latitude:number,longitude:number},high:{latitude:number,longitude:number}}|null} viewport - Places viewport box framing the feature, or null when the anchor carried none.
+ * @returns {number} Disc radius in metres: half the viewport diagonal clamped to the GROUNDS band, else GROUNDS_RADIUS_M.
  */
 function groundsRadiusFromViewport(viewport) {
   const lo = viewport?.low;
@@ -603,13 +633,25 @@ function groundsRadiusFromViewport(viewport) {
   return Math.max(GROUNDS_RADIUS_MIN_M, Math.min(GROUNDS_RADIUS_MAX_M, r));
 }
 
+/**
+ * Whether a REAL footprint is larger than its scope's area cap (SCOPE_AREA_CAP_M2) —
+ * i.e. the wrong feature matched (a city standing in for a neighborhood) and the
+ * caller must drop it rather than draw a misleading blob. Scopes without a cap
+ * always pass; synthesized discs are exempted by the caller, not here.
+ * @param {{ring: Array<[number,number]>}} fp - Footprint candidate; only its ring is measured.
+ * @param {string} scope - Resolution scope ('building'|'compound'|'neighborhood'|'city'|'county'|…).
+ * @returns {boolean} True when the scope has a cap and the ring's projected area exceeds it.
+ */
 function exceedsScopeArea(fp, scope) {
   const cap = SCOPE_AREA_CAP_M2[scope];
   if (!cap) return false;
   return ringAreaM2(fp.ring) > cap;
 }
 
-/** Shoelace area (m²) of a [[lon,lat], ...] ring in a local equirectangular projection. */
+/** Shoelace area (m²) of a [[lon,lat], ...] ring in a local equirectangular projection.
+ * @param {Array<[number, number]>} ring - Lon/lat ring; fewer than 3 vertices measures 0.
+ * @returns {number} Unsigned projected area in square metres.
+ */
 function ringAreaM2(ring) {
   if (!Array.isArray(ring) || ring.length < 3) return 0;
   const mLat = 111_320;
@@ -628,6 +670,13 @@ function ringAreaM2(ring) {
 /**
  * Forward-geocode a place name via Google Geocoding, biased to the current
  * viewport so "the marina" resolves near where the user is looking.
+ *
+ * @param {string} query - Place name as uttered (trimmed by the caller or not; it is lower-cased for the cache key).
+ * @param {string|null} [biasRect] - Google `bounds` bias string `swLat,swLng|neLat,neLng` from viewportBias(); null searches unbounded.
+ * @param {AbortSignal} [signal] - Forwards cancellation so a superseded resolution stops its fetch.
+ * @returns {Promise<null | {lat:number, lon:number, label:string|null, primaryName:string|null, types:string[], viewport:{low:{latitude:number,longitude:number},high:{latitude:number,longitude:number}}|null}>}
+ *   The resolved place, or `null` when no API key is present, nothing matched (definitive),
+ *   or the call failed transiently (network / abort / quota — never cached as a miss).
  */
 async function geocodePlace(query, biasRect, signal) {
   // typeof guard keeps the bare-env read safe under plain node (unit tests);
@@ -677,7 +726,10 @@ async function geocodePlace(query, biasRect, signal) {
 }
 
 /** Geocoding returns {southwest:{lat,lng},northeast:{lat,lng}}; normalize to the Places
- *  {low,high} lat/lng shape the rest of the pipeline (disc sizing, framing) consumes. */
+ *  {low,high} lat/lng shape the rest of the pipeline (disc sizing, framing) consumes.
+ * @param {{southwest?:{lat:number,lng:number}, northeast?:{lat:number,lng:number}}|null} vp - Geocoder viewport/bounds object, or null when Google returned none.
+ * @returns {{low:{latitude:number,longitude:number},high:{latitude:number,longitude:number}}|null} Normalized viewport, or null when any corner is missing/non-finite.
+ */
 function normalizeGeocodeViewport(vp) {
   const sw = vp?.southwest;
   const ne = vp?.northeast;
@@ -699,7 +751,15 @@ const placesCache = new Map(); // Text Search hits, keyed by query + rounded vie
  * `viewport` (a lat/lng bounding box framing the place, or null) is carried
  * through so the resolver can SIZE a fallback grounds disc to the real feature.
  * @returns {Promise<null | { lat:number, lon:number, label:string|null, distanceM:number,
- *   viewport:{low:{latitude:number,longitude:number},high:{latitude:number,longitude:number}}|null }>}
+ *   viewport:{low:{latitude:number,longitude:number},high:{latitude:number,longitude:number}}|null,
+ *   id:string|null, primaryType:string|null, types:string[] }>}
+ *   Closest usable hit, or `null` on an empty/invalid query, a definitive no-match,
+ *   or a transient proxy failure (never cached as a miss).
+ * @param {string} query - Landmark/POI name to search for.
+ * @param {number} centerLat - View-centre latitude (degrees) the search is biased toward.
+ * @param {number} centerLon - View-centre longitude (degrees).
+ * @param {number} radiusM - Bias radius in metres sent to the proxy; bounds the candidate set, not the trust bound.
+ * @param {AbortSignal} [signal] - Forwards cancellation so a superseded resolution stops its fetch.
  */
 async function placesTextSearch(query, centerLat, centerLon, radiusM, signal) {
   const q = String(query || '').trim();
@@ -750,6 +810,9 @@ async function placesTextSearch(query, centerLat, centerLon, radiusM, signal) {
  * neighborhood result), falling back to the first component / leading label
  * token. This is the user's INTENT, stripped of the trailing admin context that
  * makes the raw utterance match the wrong-scope OSM feature.
+ *
+ * @param {object} result - First Google Geocoding `results[]` entry (address_components, types, formatted_address).
+ * @returns {string|null} Canonical feature name (e.g. "Mission District"), or null when the result carries no usable name.
  */
 function extractPrimaryName(result) {
   const resultTypes = new Set((result.types || []).map((t) => String(t).toLowerCase()));
@@ -766,6 +829,9 @@ function extractPrimaryName(result) {
  * Map the Google geocode `types` to a resolution SCOPE so we fetch the right
  * OSM feature at the right size. Country-agnostic: scope only selects the query
  * strategy; the specific admin level is found by name within `is_in` results.
+ *
+ * @param {string[]} [types] - Google geocode `types` of the resolved result (empty/undefined → 'auto').
+ * @returns {string} One of 'country'|'state'|'county'|'city'|'neighborhood'|'street'|'building'|'compound'|'auto'.
  */
 function scopeFromTypes(types) {
   const t = new Set((types || []).map((s) => String(s).toLowerCase()));
@@ -790,6 +856,10 @@ function scopeFromTypes(types) {
  * entityKind facts take precedence over wording; every kind in today's voice tool
  * schema is non-admin, while the admin cases keep forward-compatible handling for
  * a future schema addition. Geocode result types are deliberately not an input.
+ *
+ * @param {string|null} target - The place name the voice model asked about.
+ * @param {string|null} entityKind - The model's entity FACT ('country'|'state'|'county'|'building'|…), or null when absent.
+ * @returns {string|null} 'country'|'state'|'county' when the ask names an admin scope explicitly, else null.
  */
 function adminScopeFromAsk(target, entityKind) {
   if (typeof entityKind === 'string' && entityKind.trim()) {
@@ -811,6 +881,10 @@ function adminScopeFromAsk(target, entityKind) {
  * fills the gap they leave (Places-sourced anchors never have geocode types, so they
  * are always 'auto' without this). 'point_feature' is handled by the point-first
  * contract (isPointLikeTarget), not by scope. Exported for tests.
+ *
+ * @param {string} scope - Scope derived from the geocode types ('auto' when none were usable).
+ * @param {string|null} entityKind - Voice model's entity FACT ('building'|'compound'|'district'|'street'|'point_feature'), or null.
+ * @returns {string} The resolved scope — the input unchanged unless it was 'auto' and the entityKind mapped to one.
  */
 export function refineScope(scope, entityKind) {
   if (scope !== 'auto') return scope;
@@ -823,18 +897,27 @@ export function refineScope(scope, entityKind) {
 
 /** True when an HTTP-200 Overpass body actually signals a runtime FAILURE (server-side
  *  timeout / out-of-memory) via its `remark` — a transient error, not an authoritative
- *  empty result, so callers must not cache it as a definitive not-found. */
+ *  empty result, so callers must not cache it as a definitive not-found.
+ * @param {object|null} data - Parsed Overpass response body.
+ * @returns {boolean} True when `remark` reports a runtime error, timeout, or out-of-memory condition.
+ */
 function overpassHasError(data) {
   const remark = String(data?.remark || '').toLowerCase();
   return remark.includes('runtime error') || remark.includes('timed out') || remark.includes('out of memory');
 }
 
-/** A distinct Overpass throttle result that must not enter the ordinary transient ladder. */
+/** A distinct Overpass throttle result that must not enter the ordinary transient ladder.
+ * @param {*} value - Any footprint-fetch outcome (footprint, null, undefined, or a throttle marker).
+ * @returns {boolean} True when the value is the `{rateLimited:true, retryAfterMs}` throttle object.
+ */
 export function isRateLimitedOutcome(value) {
   return value?.rateLimited === true;
 }
 
-/** Parse Retry-After seconds or an HTTP date into a non-negative millisecond delay. */
+/** Parse Retry-After seconds or an HTTP date into a non-negative millisecond delay.
+ * @param {string|null|undefined} value - Raw `Retry-After` header value (delta-seconds or HTTP-date).
+ * @returns {number|null} Delay in milliseconds rounded up, or null when absent/unparseable.
+ */
 function parseRetryAfterMs(value) {
   if (value == null || String(value).trim() === '') return null;
   const seconds = Number(value);
@@ -843,7 +926,12 @@ function parseRetryAfterMs(value) {
   return Number.isFinite(at) ? Math.max(0, at - Date.now()) : null;
 }
 
-/** POST an Overpass QL query and return elements, a transient null, or a throttle object. */
+/** POST an Overpass QL query and return elements, a transient null, or a throttle object.
+ * @param {string} query - Full Overpass QL query (including `[out:json]` and `[timeout:…]`).
+ * @param {number} [timeoutMs=14000] - Client-side abort budget; must outlast the QL timeout plus proxy transit.
+ * @param {AbortSignal} [signal] - External cancellation wired into the request's controller.
+ * @returns {Promise<Array<object>|{rateLimited:true, retryAfterMs:number|null}|null>} `elements[]` on success, the throttle object on 429/503+Retry-After, else null (HTTP error, body-level runtime error, or network/abort — all transient).
+ */
 async function overpassJson(query, timeoutMs = 14000, signal) {
   const controller = new AbortController();
   const detach = linkAbort(controller, signal);
@@ -877,6 +965,15 @@ async function overpassJson(query, timeoutMs = 14000, signal) {
  * we pick the one whose NAME best matches the query (country-agnostic — no need
  * to know each country's admin_level mapping), pivot it to its relation, and
  * simplify the outline so even a state/country draws cleanly.
+ *
+ * @param {number} lat - Anchor latitude (degrees) the `is_in` probe runs at.
+ * @param {number} lon - Anchor longitude (degrees).
+ * @param {string} query - Canonical match name for the boundary (the resolver's `matchName`).
+ * @param {string} scope - Admin scope ('country'|'state'|'county'|'city'|'neighborhood'); biases specificity and the fallback path.
+ * @param {AbortSignal} [signal] - Forwards cancellation to both the `is_in` and pivot fetches.
+ * @returns {Promise<{ring: Array<[number,number]>, kind:'area', heightM:null}|{rateLimited:true, retryAfterMs:number|null}|null|undefined>}
+ *   The simplified boundary ring (cached), `null` when definitively no in-scope admin polygon exists,
+ *   `undefined` on a transient upstream failure (uncached, retryable), or the throttle object.
  */
 async function fetchAdminArea(lat, lon, query, scope, signal) {
   // Scope changes both the name-matching bias and the fallback strategy (only
@@ -1020,6 +1117,14 @@ async function fetchAdminArea(lat, lon, query, scope, signal) {
  * Neighborhood fallback: OSM often tags neighborhoods as `place=` areas/relations
  * rather than admin boundaries. Query those near the point and match the canonical
  * name (area-capped so a "neighborhood" never grabs a whole city).
+ *
+ * @param {number} lat - Anchor latitude (degrees) the `around` sweep centres on.
+ * @param {number} lon - Anchor longitude (degrees).
+ * @param {string} query - Canonical match name scored against the place's name.
+ * @param {AbortSignal} [signal] - Forwards cancellation to the Overpass fetch.
+ * @returns {Promise<{ring: Array<[number,number]>, kind:'area', heightM:null}|{rateLimited:true, retryAfterMs:number|null}|null|undefined>}
+ *   The best-scoring place polygon, `null` when none matched (uncached — the caller decides),
+ *   `undefined` on a transient failure, or the throttle object.
  */
 async function fetchPlaceArea(lat, lon, query, signal) {
   const queryWords = normalizedWords(query);
@@ -1061,6 +1166,14 @@ async function fetchPlaceArea(lat, lon, query, signal) {
  *   Tier C — a same-named district / commercial area near the street.
  *   Tier F — buffer the matching street centerline into a corridor ribbon.
  * Always returns an area (or null), never a building.
+ *
+ * @param {number} lat - Anchor latitude (degrees) both tier sweeps centre on.
+ * @param {number} lon - Anchor longitude (degrees).
+ * @param {string} query - Street name the candidates are scored against.
+ * @param {AbortSignal} [signal] - Forwards cancellation to the Overpass fetches.
+ * @returns {Promise<{ring: Array<[number,number]>, kind:'area', heightM:null}|{rateLimited:true, retryAfterMs:number|null}|null|undefined>}
+ *   A district polygon or a buffered centerline corridor (cached), `null` when both tiers
+ *   definitively came up empty, `undefined` on a transient failure, or the throttle object.
  */
 async function fetchStreet(lat, lon, query, signal) {
   const cacheKey = `street|${lat.toFixed(4)},${lon.toFixed(4)}|${query.toLowerCase()}`;
@@ -1130,7 +1243,10 @@ async function fetchStreet(lat, lon, query, signal) {
   return definitive ? null : undefined;
 }
 
-/** Chain street way-segments into one contiguous polyline by endpoint matching. */
+/** Chain street way-segments into one contiguous polyline by endpoint matching.
+ * @param {Array<Array<[number, number]>>} segments - Disjoint lon/lat segments (≥2 points each) from the same named way.
+ * @returns {Array<[number, number]>} One lon/lat polyline built by greedily appending/prepending whichever segment's endpoints match (within ~2 m); unmatchable segments are left out.
+ */
 function stitchLine(segments) {
   const same = (a, b) => approximateDistanceM(a[1], a[0], b[1], b[0]) < 2;
   const remaining = segments.map((s) => s.slice());
@@ -1153,7 +1269,11 @@ function stitchLine(segments) {
   return line;
 }
 
-/** Offset a centerline into a closed corridor ring (~2*halfWidthM wide). */
+/** Offset a centerline into a closed corridor ring (~2*halfWidthM wide).
+ * @param {Array<[number, number]>} line - Stitched centerline as [[lon,lat], …] with ≥2 vertices.
+ * @param {number} halfWidthM - Offset distance in metres applied to each side of the centerline.
+ * @returns {Array<[number, number]>} Closed lon/lat ring (left offsets forward, right offsets back, first point repeated).
+ */
 function bufferCorridor(line, halfWidthM) {
   const lat0 = line[0][1];
   const mLon = 111320 * Math.cos((lat0 * Math.PI) / 180);
@@ -1178,7 +1298,11 @@ function bufferCorridor(line, halfWidthM) {
 }
 
 /** Douglas–Peucker ring simplification with a metres tolerance. Pre-decimates
- *  very large rings (state/country) to keep the recursion shallow. */
+ *  very large rings (state/country) to keep the recursion shallow.
+ * @param {Array<[number, number]>} ring - Lon/lat ring to simplify (unchanged when ≤24 vertices).
+ * @param {number} tolM - Allowed perpendicular deviation in metres at the ring's latitude.
+ * @returns {Array<[number, number]>} Simplified ring, or the input untouched when reduction would leave fewer than 4 vertices.
+ */
 function simplifyRing(ring, tolM) {
   if (ring.length <= 24) return ring;
   let pts = ring;
@@ -1194,6 +1318,15 @@ function simplifyRing(ring, tolM) {
   return out.length >= 4 ? out : ring;
 }
 
+/**
+ * Iterative Douglas–Peucker polyline simplification: keeps the endpoints and any
+ * vertex whose perpendicular deviation from its segment exceeds `tol`, dropping
+ * the rest. Index-based with an explicit stack (no recursion, no per-call array
+ * slicing) so a 50k-point country boundary can't blow the call stack or thrash GC.
+ * @param {Array<[number, number]>} points - Lon/lat (or projected) vertices of the open/closed line.
+ * @param {number} tol - Deviation tolerance in the same units as the projected vertices.
+ * @returns {Array<[number, number]>} The kept vertices in original order (a copy; the input is not mutated).
+ */
 function douglasPeucker(points, tol) {
   const n = points.length;
   if (n < 3) return points.slice();
@@ -1227,6 +1360,14 @@ function douglasPeucker(points, tol) {
   return out;
 }
 
+/**
+ * Perpendicular distance from a point to the SEGMENT a→b (the perpendicular is
+ * clamped to the endpoints, so a point past either end measures to that end).
+ * @param {[number, number]} p - Point in projected units.
+ * @param {[number, number]} a - Segment start.
+ * @param {[number, number]} b - Segment end.
+ * @returns {number} Distance in the same units as the inputs.
+ */
 function perpDistance(p, a, b) {
   const dx = b[0] - a[0];
   const dy = b[1] - a[1];
@@ -1256,6 +1397,14 @@ function perpDistance(p, a, b) {
  *   'point'  — point-like targets: (almost) exactly-named, monument-scale polygons only.
  *
  * @returns {Promise<null | { ring: Array<[number,number]>, kind: 'building'|'area', heightM: number|null }>}
+ *   The best-scoring footprint (cached), `null` when Overpass answered and nothing matched
+ *   (definitive), `undefined` on a transient failure or an already-aborted caller.
+ * @param {number} lat - Anchor latitude (degrees) the radii are measured from.
+ * @param {number} lon - Anchor longitude (degrees).
+ * @param {string} query - Canonical match name scored against candidate names.
+ * @param {string} scope - Resolution scope; carried for the cache key and the caller's later scope-cap check.
+ * @param {AbortSignal} [signal] - Forwards cancellation to the Overpass fetch.
+ * @param {string} [mode='loose'] - Selection contract: 'loose' | 'strict' | 'point' (semantics above).
  */
 async function fetchFootprint(lat, lon, query, scope, signal, mode = 'loose') {
   // The resolution MODE changes what counts as a match, so it must be part of the
@@ -1325,6 +1474,11 @@ const ENCLOSING_RADIUS_M = 600; // sweep this far for an enclosing named non-bui
  *   - `undefined` on a TRANSIENT Overpass failure (timeout / network — a retry may yet find it).
  *
  * @returns {Promise<undefined | null | { ring: Array<[number,number]>, kind: 'area', heightM: null }>}
+ *   Per the tri-state contract above (cached on either definitive outcome).
+ * @param {number} lat - Contained point's latitude (degrees); the sweep centre.
+ * @param {number} lon - Contained point's longitude (degrees).
+ * @param {AbortSignal} [signal] - Forwards cancellation to the Overpass fetch.
+ * @param {string} [query=''] - The user's words, used ONLY as a near-area-tie tiebreak bonus.
  */
 async function fetchEnclosingArea(lat, lon, signal, query = '') {
   const cacheKey = `${lat.toFixed(2)},${lon.toFixed(2)}`; // ~1 km buckets — grounds annotations share one
@@ -1395,14 +1549,20 @@ async function fetchEnclosingArea(lat, lon, signal, query = '') {
 }
 
 const MONUMENT_RADIUS_M = 2500; // search this far from the view centre for a named monument
-/** A target that reads like a fine-grained monument/marker (vs a building/district). */
+/** A target that reads like a fine-grained monument/marker (vs a building/district).
+ * @param {string|null} query - Name text from the ask (target or label).
+ * @returns {boolean} True when the text contains a monument/memorial/statue-class word.
+ */
 function isMonumentLikeQuery(query) {
   return /\b(monument|memorial|statue|sculpture|fountain|cenotaph|obelisk|plaque|bust)\b/i.test(String(query || ''));
 }
 
 /** A target that reads like an enclosing GROUNDS / COMPOUND / CAMPUS (e.g. "Texas Capitol grounds")
  *  rather than a single building — used to synthesize a loose-footprint disc when OSM has no real
- *  polygon, instead of failing outright. */
+ *  polygon, instead of failing outright.
+ * @param {string|null} query - Name or label text from the ask.
+ * @returns {boolean} True when the text contains a grounds/compound/campus-class word.
+ */
 function isGroundsLikeQuery(query) {
   return /\b(grounds|compound|campus|complex|quad|plaza)\b/i.test(String(query || ''));
 }
@@ -1416,6 +1576,12 @@ function isGroundsLikeQuery(query) {
  *   3. the monument wordlist,
  *   4. the Places `types` of the anchored feature (data — present on places-sourced
  *      anchors; 'monument'/'sculpture' are unambiguous point classes).
+ *
+ * @param {string|null} target - Place name from the ask.
+ * @param {string|null} entityKind - Voice model's entity FACT; 'point_feature' asserts point-like, any other kind asserts area-like.
+ * @param {string[]} placeTypes - `types` of the Places-anchored feature (empty for non-Places anchors).
+ * @param {string|null} label - The annotation's label text, checked for grounds-like wording that vetoes point-first.
+ * @returns {boolean} True when the target must resolve POINT-FIRST (only an exact-ish, monument-scale polygon may replace the point).
  */
 function isPointLikeTarget(target, entityKind, placeTypes, label) {
   if (entityKind === 'point_feature') return true;
@@ -1433,11 +1599,18 @@ function isPointLikeTarget(target, entityKind, placeTypes, label) {
  * fact) is trusted both ways. Grounds-like asks reach the REAL enclosing-polygon sweep even
  * under `around_the_thing` phrasing — the thing named IS the grounds, so a buffered
  * around-disc would be the wrong shape. Exported for tests.
+ *
+ * @param {string|null} target - Place name from the ask.
+ * @param {string|null} label - The annotation's label text (often where "grounds" actually landed).
+ * @param {string|null} entityKind - Voice model's entity FACT; when present it decides alone ('compound' → grounds).
+ * @returns {boolean} True when the ask is for an enclosing grounds/compound/campus area rather than a building.
  */
 export function isGroundsLikeAsk(target, label, entityKind) {
   if (entityKind) return entityKind === 'compound';
   return isGroundsLikeQuery(target) || isGroundsLikeQuery(label);
 }
+
+const monumentInflight = new Map(); // centerKey → in-flight sweep promise (batch dedup)
 
 /**
  * Find the actual OSM monument/memorial/statue NEAR a view centre, name-matched. Google geocodes
@@ -1446,9 +1619,13 @@ export function isGroundsLikeAsk(target, label, entityKind) {
  * feature. The Overpass result set is cached by rounded centre, so a whole batch of monuments on
  * one set of grounds costs a SINGLE query. Returns {lat, lon, label} on a name match, else null
  * (no match, or a transient/timed-out Overpass) → the caller keeps the geocode point.
+ *
+ * @param {number} lat - View-centre latitude (degrees) the 2.5 km monument sweep centres on.
+ * @param {number} lon - View-centre longitude (degrees).
+ * @param {string} query - Monument name from the ask, scored for name coverage against each feature.
+ * @param {AbortSignal} [_signal] - Intentionally unused: the shared bucket sweep ignores caller cancellation (it is bounded by its own 6 s timeout, and one caller's clear() must not kill another's snap).
+ * @returns {Promise<{lat:number, lon:number, label:string}|null>} The matched feature's point and name, or null on no match / a transient sweep failure.
  */
-const monumentInflight = new Map(); // centerKey → in-flight sweep promise (batch dedup)
-
 async function fetchLocalMonument(lat, lon, query, _signal) {
   const centerKey = `${lat.toFixed(2)},${lon.toFixed(2)}`; // ~1 km buckets — grounds monuments share one
   let features = cacheRead(monumentCache, centerKey);
@@ -1521,6 +1698,13 @@ const POINTLIKE_AREA_CAP_M2 = 60_000;
  * Pick the best OSM polygon for a query from raw Overpass elements. `mode` selects the
  * acceptance contract ('loose' | 'strict' | 'point' — see fetchFootprint). Exported for
  * the unit tests, which pin the mode contracts with fixtures captured from live data.
+ *
+ * @param {Array<object>} elements - Raw Overpass `elements[]` (ways/relations with `out geom` geometry and tags).
+ * @param {number} targetLat - Anchor latitude (degrees) used for containment and centroid distance.
+ * @param {number} targetLon - Anchor longitude (degrees).
+ * @param {string} query - Canonical match name scored against candidate names.
+ * @param {string} [mode='loose'] - Acceptance contract: 'loose' | 'strict' | 'point' (see fetchFootprint).
+ * @returns {{ring: Array<[number,number]>, kind: 'building'|'area', heightM: number|null}|null} Highest-scoring footprint, or null when no candidate satisfies the mode's contract.
  */
 export function selectFootprint(elements, targetLat, targetLon, query, mode = 'loose') {
   const requireName = mode === 'strict';
@@ -1601,7 +1785,11 @@ export function selectFootprint(elements, targetLat, targetLon, query, mode = 'l
   return best;
 }
 
-/** Estimate a building's height (m) from OSM tags, falling back to footprint size. */
+/** Estimate a building's height (m) from OSM tags, falling back to footprint size.
+ * @param {object} tags - The element's OSM tags (`height`, `building:levels`, `roof:height`, …).
+ * @param {number} areaM2 - Footprint area in m², used when the tags carry no usable height.
+ * @returns {number} Height in metres, clamped to a plausible 10–70 m band when estimated.
+ */
 function buildingHeightFromTags(tags, areaM2) {
   const explicit = parseMeters(tags.height || tags['building:height']);
   if (explicit) return explicit;
@@ -1612,6 +1800,11 @@ function buildingHeightFromTags(tags, areaM2) {
   return Math.max(10, Math.min(70, side * 0.6));
 }
 
+/**
+ * Parse a free-form OSM length value into metres ("12", "12.5", "40 ft", "12,5 m").
+ * @param {string|number|null|undefined} value - Raw tag value; anything non-numeric yields 0.
+ * @returns {number} Metres, or 0 when absent/unparseable/non-positive (a falsy "no data" the caller treats as unknown).
+ */
 function parseMeters(value) {
   if (value == null) return 0;
   const n = Number.parseFloat(String(value).replace(',', '.'));
@@ -1621,6 +1814,13 @@ function parseMeters(value) {
 
 // --- geometry helpers -------------------------------------------------------
 
+/**
+ * Extract a closed-boundary candidate's vertices as {lat,lon} points, from either
+ * a way/relation's inline `geometry` (`out geom`) or — for a multipolygon relation —
+ * its stitched outer ways.
+ * @param {object} element - Overpass element (way or relation) carrying `geometry` or `members`.
+ * @returns {Array<{lat:number, lon:number}>} Ordered vertices (non-finite points dropped); empty when the element has no usable geometry.
+ */
 function elementCoordinates(element) {
   if (Array.isArray(element.geometry)) {
     return element.geometry.filter((p) => Number.isFinite(p?.lat) && Number.isFinite(p?.lon));
@@ -1644,6 +1844,9 @@ function elementCoordinates(element) {
  * endpoint gap is small relative to its own span (a minor seam); otherwise the
  * relation geometry is incomplete and it returns [] rather than fabricate a
  * straight chord across the gap (the reported bay-spanning blob).
+ *
+ * @param {Array<Array<{lat:number, lon:number}>>} ways - The relation's outer ways, each ≥2 {lat,lon} vertices.
+ * @returns {Array<{lat:number, lon:number}>} The best closed ring as a vertex chain, or [] when the geometry is too incomplete to trust.
  */
 function stitchRing(ways) {
   if (!ways.length) return [];
@@ -1671,7 +1874,10 @@ function stitchRing(ways) {
   return endpointGapM(largest) <= allow ? largest : [];
 }
 
-/** Largest component by projected area (each component is an array of {lat,lon}). */
+/** Largest component by projected area (each component is an array of {lat,lon}).
+ * @param {Array<Array<{lat:number, lon:number}>>} components - Vertex chains produced by buildRingComponents.
+ * @returns {Array<{lat:number, lon:number}>} The first (then subsequently largest) component by approximateAreaM2.
+ */
 function largestByArea(components) {
   let best = components[0];
   let bestArea = approximateAreaM2(best);
@@ -1682,7 +1888,10 @@ function largestByArea(components) {
   return best;
 }
 
-/** Rough diameter (m) of a chain's bounding box. */
+/** Rough diameter (m) of a chain's bounding box.
+ * @param {Array<{lat:number, lon:number}>} chain - Vertex chain to measure.
+ * @returns {number} Great-circle distance corner-to-corner of the chain's bbox (0 for an empty chain).
+ */
 function ringSpanM(chain) {
   let minLat = Infinity; let maxLat = -Infinity; let minLon = Infinity; let maxLon = -Infinity;
   for (const p of chain) {
@@ -1694,7 +1903,10 @@ function ringSpanM(chain) {
   return approximateDistanceM(minLat, minLon, maxLat, maxLon);
 }
 
-/** Chain ways into maximal connected components by endpoint matching. */
+/** Chain ways into maximal connected components by endpoint matching.
+ * @param {Array<Array<{lat:number, lon:number}>>} ways - Way geometries (each ≥2 vertices) to join where endpoints coincide.
+ * @returns {Array<Array<{lat:number, lon:number}>>} One chain per connected component, oriented so shared endpoints abut.
+ */
 function buildRingComponents(ways) {
   const same = (a, b) => Math.abs(a.lon - b.lon) < 1e-7 && Math.abs(a.lat - b.lat) < 1e-7;
   const remaining = ways.map((w) => w.slice());
@@ -1725,7 +1937,10 @@ function buildRingComponents(ways) {
   return components;
 }
 
-/** Great-circle distance (m) between a chain's first and last vertex. */
+/** Great-circle distance (m) between a chain's first and last vertex.
+ * @param {Array<{lat:number, lon:number}>|null} chain - Vertex chain (null or <2 vertices → Infinity, i.e. "not a ring").
+ * @returns {number} Gap in metres; Infinity when the chain cannot be closed.
+ */
 function endpointGapM(chain) {
   if (!chain || chain.length < 2) return Infinity;
   const a = chain[0];
@@ -1734,6 +1949,13 @@ function endpointGapM(chain) {
 }
 
 
+/**
+ * Close a lon/lat ring by repeating its first vertex at the end, which Cesium and
+ * the geometry helpers treat as a polygon rather than an open polyline. Mutates
+ * and returns the input array; rings shorter than 3 vertices are passed through.
+ * @param {Array<[number, number]>} ring - [[lon,lat], …] ring to close in place.
+ * @returns {Array<[number, number]>} The same array, guaranteed to end where it starts.
+ */
 function closeRing(ring) {
   if (ring.length < 3) return ring;
   const [fx, fy] = ring[0];
@@ -1742,6 +1964,12 @@ function closeRing(ring) {
   return ring;
 }
 
+/**
+ * Arithmetic mean of a ring's vertices — the centroid the anchor re-centers on
+ * (cheap, adequate for compact features; a concave ring's mean can fall outside it).
+ * @param {Array<[number, number]>} [ring] - [[lon,lat], …] ring.
+ * @returns {{lat:number, lon:number}|null} Mean point, or null for a missing/degenerate (<3 vertex) ring.
+ */
 function ringCentroid(ring) {
   if (!ring || ring.length < 3) return null;
   let sumLat = 0;
@@ -1753,6 +1981,13 @@ function ringCentroid(ring) {
   return { lat: sumLat / ring.length, lon: sumLon / ring.length };
 }
 
+/**
+ * Shoelace area (m²) of a {lat,lon} point chain in a local equirectangular
+ * projection anchored at the first vertex — good enough for buildings and
+ * small areas, where the size gates and scoring use it.
+ * @param {Array<{lat:number, lon:number}>} coords - Ordered vertices (closure not required).
+ * @returns {number} Unsigned projected area in square metres (0 below 3 vertices).
+ */
 function approximateAreaM2(coords) {
   // Shoelace in a local equirectangular projection (good enough for buildings).
   if (coords.length < 3) return 0;
@@ -1770,12 +2005,32 @@ function approximateAreaM2(coords) {
   return Math.abs(area) / 2;
 }
 
+/**
+ * Flat-earth distance (m) between two lat/lon points, scaling longitude by the
+ * cosine of the midpoint latitude. Sub-km accuracy at the city scales this
+ * module works at, and it runs thousands of times per resolution — so it
+ * deliberately avoids the haversine series.
+ * @param {number} latA - First point latitude (degrees).
+ * @param {number} lonA - First point longitude (degrees).
+ * @param {number} latB - Second point latitude (degrees).
+ * @param {number} lonB - Second point longitude (degrees).
+ * @returns {number} Approximate separation in metres.
+ */
 function approximateDistanceM(latA, lonA, latB, lonB) {
   const latScale = 111_320;
   const lonScale = latScale * Math.cos(Cesium.Math.toRadians((latA + latB) / 2));
   return Math.hypot((latB - latA) * latScale, (lonB - lonA) * lonScale);
 }
 
+/**
+ * Ray-cast point-in-polygon test over a {lat,lon} vertex chain (closure not required).
+ * Boundary behaviour is unspecified — adequate for the containment gates here, where an
+ * on-edge point is an edge case, not a contract.
+ * @param {number} lon - Test point longitude (degrees).
+ * @param {number} lat - Test point latitude (degrees).
+ * @param {Array<{lat:number, lon:number}>} coords - Polygon vertices.
+ * @returns {boolean} True when the point lies inside the polygon.
+ */
 function pointInPolygon(lon, lat, coords) {
   let inside = false;
   for (let i = 0, j = coords.length - 1; i < coords.length; j = i++) {
@@ -1788,6 +2043,13 @@ function pointInPolygon(lon, lat, coords) {
   return inside;
 }
 
+/**
+ * Tokenize a name into the lowercase, ASCII-folded word set this module scores
+ * with: punctuation stripped, accents folded (NFKD), and words of ≤2 characters
+ * dropped so tokens like "of", "el", or "st" can't manufacture an overlap.
+ * @param {string|Array<string>|null|undefined} value - Name (or pre-joined name parts) to tokenize.
+ * @returns {Set<string>} Distinct significant words; empty when nothing usable was given.
+ */
 function normalizedWords(value) {
   return new Set(String(value || '')
     .toLowerCase()
@@ -1798,6 +2060,13 @@ function normalizedWords(value) {
     .filter((word) => word.length > 2));
 }
 
+/**
+ * Count how many of `left`'s words also appear in `right` — the raw overlap term
+ * every name score here builds on (coverage = overlap / denominator of interest).
+ * @param {Set<string>} left - Word set being accounted for (usually the query).
+ * @param {Set<string>} right - Word set being matched against (usually the feature's name).
+ * @returns {number} Number of shared words (0 when the sets are disjoint).
+ */
 function wordOverlap(left, right) {
   let matches = 0;
   for (const word of left) {
@@ -1809,10 +2078,6 @@ function wordOverlap(left, right) {
 // --- viewer helpers ---------------------------------------------------------
 
 /**
- * Current view rectangle as a Google `bounds` string `swLat,swLng|neLat,neLng`,
- * used to bias geocoding toward what the user is looking at.
- */
-/**
  * The current view as a center + radius (km), feeding the geocode proximity gate: a named place
  * that resolved much farther than this radius from center is rejected as a wrong match.
  *
@@ -1820,7 +2085,11 @@ function wordOverlap(left, right) {
  * always available, whereas computeViewRectangle() returns undefined exactly when the user is in
  * the common low/oblique view with the horizon in frame (which is when the bad geocodes bite).
  * Radius is scaled from camera height (a generous proxy for how much ground is on screen), with a
- * floor so a super-zoomed-in view doesn't over-reject genuinely nearby places.
+ * floor so a super-zoomed-in view doesn't over-reject genuinely nearby places. (For the view
+ * rectangle as a Google `bounds` string, see viewportBias below.)
+ *
+ * @param {Cesium.Viewer} [viewer] - Live viewer; any missing camera/scene yields null.
+ * @returns {{lat:number, lon:number, radiusKm:number}|null} View centre + radius, or null when the camera state is unavailable.
  */
 function viewportProximity(viewer) {
   try {
@@ -1836,7 +2105,12 @@ function viewportProximity(viewer) {
   }
 }
 
-/** Exported for searchAndFlyTo (src/locations.js), which shares this bias. */
+/** Current view rectangle as a Google `bounds` string `swLat,swLng|neLat,neLng`,
+ *  used to bias geocoding toward what the user is looking at.
+ *  Exported for searchAndFlyTo (src/locations.js), which shares this bias.
+ * @param {Cesium.Viewer} viewer - Live viewer whose camera provides the view rectangle.
+ * @returns {string|null} The bounds bias string, or null when the rectangle can't be computed (oblique/horizon views) or contains NaN.
+ */
 export function viewportBias(viewer) {
   try {
     const rect = viewer?.camera?.computeViewRectangle?.();
@@ -1861,6 +2135,12 @@ export function viewportBias(viewer) {
  * PLACES_MAX_DISTANCE_M. A near geocode returns null untouched — local hits keep the
  * plain geocode path. Returns the Places hit
  * ({ lat, lon, label, types, viewport, distanceM, … }) or null.
+ *
+ * @param {Cesium.Viewer} viewer - Live viewer supplying the view centre for the biased search.
+ * @param {string} query - Place name to re-search via Places.
+ * @param {{lat:number, lon:number}|null} [geocoded=null] - The geocode result, or null when geocoding produced nothing.
+ * @param {AbortSignal} [signal=undefined] - Forwards cancellation to the Places fetch.
+ * @returns {Promise<{lat:number, lon:number, label:string|null, distanceM:number, types:string[], viewport:object|null}|null>} The trusted Places hit, or null when the geocode was already near or the hit fell outside the trust bound.
  */
 export async function placesNearViewRecovery(viewer, query, geocoded = null, signal = undefined) {
   const center = pickWorldFromScreen(viewer, 0.5, 0.5) || viewportProximity(viewer);
@@ -1878,6 +2158,11 @@ export async function placesNearViewRecovery(viewer, query, geocoded = null, sig
  * project-to-screen used by the renderers. This is the "point at the pixel"
  * fallback: the agent indicates a spot in the viewport screenshot when it can't
  * name the place, and we anchor the mark to the actual world point under it.
+ *
+ * @param {Cesium.Viewer} viewer - Live viewer whose scene performs the pick cascade.
+ * @param {number} nx - Normalized viewport X in [0,1] (clamped here).
+ * @param {number} ny - Normalized viewport Y in [0,1] (clamped here).
+ * @returns {{lat:number, lon:number}|null} World coordinate under the pixel, or null when every pick stage came back degenerate or the canvas has no size yet.
  */
 function pickWorldFromScreen(viewer, nx, ny) {
   const scene = viewer?.scene;
@@ -1920,6 +2205,11 @@ function pickWorldFromScreen(viewer, nx, ny) {
  * Best-effort ground height at a coordinate. The Cesium globe is hidden behind
  * the Google 3D tiles, so we try to clamp onto the photoreal tile surface; if
  * the tiles for that spot aren't loaded we fall back to the ellipsoid (0).
+ *
+ * @param {Cesium.Viewer} viewer - Live viewer whose scene samples the tile surface.
+ * @param {number} lon - Longitude (degrees) to sample.
+ * @param {number} lat - Latitude (degrees) to sample.
+ * @returns {number} Ground height in metres above the ellipsoid; 0 when nothing is loaded yet (never a throw).
  */
 function sampleGroundHeight(viewer, lon, lat) {
   const scene = viewer?.scene;
@@ -1941,6 +2231,12 @@ function sampleGroundHeight(viewer, lon, lat) {
   return Number.isFinite(globeHeight) && globeHeight > 0 ? globeHeight : 0;
 }
 
+/**
+ * Truncate a Google formatted address to its leading comma component — the display
+ * label ("Texas State Capitol") without the trailing locality/admin context.
+ * @param {string|null|undefined} formattedAddress - Full formatted address from the geocoder.
+ * @returns {string|null} First comma-separated component, or null when there is nothing to show.
+ */
 function shortLabel(formattedAddress) {
   if (!formattedAddress) return null;
   return String(formattedAddress).split(',')[0].trim() || null;
@@ -1956,9 +2252,9 @@ function shortLabel(formattedAddress) {
  * resolve to a region-like boundary — the analyst engine reports that
  * honestly rather than silently scoping to nothing.
  *
- * @param {string} name  e.g. "Texas", "the Alps", "France", "Gulf of Mexico"
- * @param {AbortSignal} [signal]
- * @returns {Promise<{name:string, ring:Array<[number,number]>}|null>}
+ * @param {string} name - Region name as uttered, e.g. "Texas", "the Alps", "France", "Gulf of Mexico".
+ * @param {AbortSignal} [signal] - Forwards cancellation to the geocode and admin-boundary fetches.
+ * @returns {Promise<{name:string, ring:Array<[number,number]>}|null>} The boundary ring plus the canonical name it resolved to, or null when the name is empty or not region-like.
  */
 export async function resolveRegionRingForQuery(name, signal) {
   const q = String(name || '').trim();

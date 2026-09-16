@@ -45,14 +45,33 @@ const RADIO_CODE_FILTERS = Object.freeze(
   Object.fromEntries(Object.entries(RADIO_FILTER_CODES).map(([key, value]) => [value, key])),
 );
 
+/**
+ * Accept only a real boolean.
+ * @param {*} value Candidate option value of any type.
+ * @returns {?boolean} The value when it is a boolean, otherwise null so the
+ *   caller falls back to the option default.
+ */
 function normalizeBoolean(value) {
   return typeof value === 'boolean' ? value : null;
 }
 
+/**
+ * Accept only a member of a fixed option vocabulary.
+ * @param {Array<string>} values Allowed values, in canonical order.
+ * @param {*} value Candidate option value.
+ * @returns {?string} The value when it is a member, otherwise null.
+ */
 function normalizeEnum(values, value) {
   return values.includes(value) ? value : null;
 }
 
+/**
+ * Validate a radio filter key: either a built-in genre name or a `genre:`
+ * custom tag within the codec's length bound.
+ * @param {*} value Raw filter value from UI state, a share link, or storage.
+ * @returns {?string} Canonical filter key, or null when it names no filter the
+ *   radio layer can apply.
+ */
 export function normalizeRadioFilter(value) {
   const normalized = String(value || '').trim().toLowerCase();
   if (Object.hasOwn(RADIO_FILTER_CODES, normalized)) return normalized;
@@ -60,22 +79,51 @@ export function normalizeRadioFilter(value) {
   return null;
 }
 
+/**
+ * Map a canonical radio filter key onto its single-character share-link code.
+ * @param {string} value Canonical filter key ('all', 'news', 'genre:jazz', …).
+ * @returns {string} Compact code for the `lo=` field; custom genres are
+ *   prefixed with `g-` so they never collide with the reserved codes.
+ */
 function encodeRadioFilter(value) {
   return RADIO_FILTER_CODES[value] || `g-${value.slice('genre:'.length)}`;
 }
 
+/**
+ * Inverse of encodeRadioFilter.
+ * @param {string} value Single-character or `g-`-prefixed code from the link.
+ * @returns {?string} Canonical filter key, or null when the code is unknown —
+ *   unknown filters are dropped rather than defaulting, so a later-added genre
+ *   cannot be silently rewritten.
+ */
 function decodeRadioFilter(value) {
   if (Object.hasOwn(RADIO_CODE_FILTERS, value)) return RADIO_CODE_FILTERS[value];
   if (/^g-[a-z0-9][a-z0-9 &-]{0,31}$/.test(value)) return `genre:${value.slice(2)}`;
   return null;
 }
 
+/**
+ * Clamp a radio volume onto the two-decimal 0-1 grid the codec serializes.
+ * @param {*} value Raw volume; may be a 0-1 number or anything numeric-coercible.
+ * @returns {?number} Volume rounded to two decimals, or null when not finite.
+ */
 function normalizeVolume(value) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return null;
   return Math.round(Math.max(0, Math.min(1, numeric)) * 100) / 100;
 }
 
+/**
+ * Build a boolean option codec.
+ * @param {string} key Option key as it appears in durable state and layer params.
+ * @param {string} token Single-character share-link token.
+ * @param {boolean} defaultValue Current default when the option is unset.
+ * @param {{absentValue?: boolean}} [opts] Overrides, notably `absentValue` to
+ *   freeze what an omitted token means for links already in the wild.
+ * @returns {{key:string, token:string, defaultValue:boolean, absentValue:boolean,
+ *   normalize:function(*):?boolean, encode:function(boolean):string,
+ *   decode:function(string):?boolean}} Frozen codec object.
+ */
 function booleanOption(key, token, defaultValue, { absentValue = defaultValue } = {}) {
   return Object.freeze({
     key,
@@ -107,11 +155,24 @@ function booleanOption(key, token, defaultValue, { absentValue = defaultValue } 
  *
  * (This is the same rule `scf` follows in sharelink.js by hand. `models3d` is the
  * first option in THIS codec to need it — flipped to default-ON on 2026-08-22.)
+ *
+ * @param {{defaultValue: *, absentValue?: *}} spec Option codec under test.
+ * @returns {*} The value a MISSING token decodes to for this schema version.
  */
 function absentTokenValue(spec) {
   return Object.hasOwn(spec, 'absentValue') ? spec.absentValue : spec.defaultValue;
 }
 
+/**
+ * Build a bounded transponder-identity option codec.
+ * @param {string} key Option key in durable state and layer params.
+ * @param {string} token Single-character share-link token.
+ * @param {?string} [defaultValue] Default identity; null means "following nothing".
+ * @returns {{key:string, token:string, defaultValue:?string,
+ *   normalize:function(*):?string, encode:function(string):string,
+ *   decode:function(string):?string}} Frozen codec that lower-cases, trims and
+ *   grammar-checks the ID, rejecting anything out of grammar outright.
+ */
 function trackingIdOption(key, token, defaultValue = null) {
   const bounded = (candidate) => {
     if (candidate === null || candidate === undefined) return null;
@@ -132,6 +193,18 @@ function trackingIdOption(key, token, defaultValue = null) {
   });
 }
 
+/**
+ * Build a closed-vocabulary option codec with single-character codes.
+ * @param {string} key Option key in durable state and layer params.
+ * @param {string} token Single-character share-link token.
+ * @param {string} defaultValue Default member of the vocabulary.
+ * @param {Array<string>} values Allowed values.
+ * @param {[key: string]: string} codes value→code map used on encode; the
+ *   inverse is derived on decode.
+ * @returns {{key:string, token:string, defaultValue:string,
+ *   normalize:function(*):?string, encode:function(string):string,
+ *   decode:function(string):?string}} Frozen codec.
+ */
 function enumOption(key, token, defaultValue, values, codes) {
   const reverse = Object.fromEntries(Object.entries(codes).map(([name, code]) => [code, name]));
   return Object.freeze({
@@ -144,6 +217,17 @@ function enumOption(key, token, defaultValue, values, codes) {
   });
 }
 
+/**
+ * Build a positive-integer option codec.
+ * @param {string} key Option key in durable state and layer params.
+ * @param {string} token Single-character share-link token.
+ * @param {?number} defaultValue Default integer; null means unset.
+ * @returns {{key:string, token:string, defaultValue:?number,
+ *   normalize:function(*):?number, encode:function(number):string,
+ *   decode:function(string):?number}} Frozen codec accepting positive integers
+ *   only — zero and negatives are treated as absent so a sentinel cannot be
+ *   smuggled into durable state.
+ */
 function integerOption(key, token, defaultValue) {
   return Object.freeze({
     key,
@@ -286,14 +370,31 @@ const OPTION_OWNER_IDS = Object.freeze([...new Set(
   LAYER_STATE_REGISTRY.map((entry) => entry.optionOwner).filter(Boolean),
 )]);
 
+/**
+ * Look up the option codecs an option-owning layer group provides.
+ * @param {string} ownerId Option-owner id from the registry (e.g. 'flights').
+ * @returns {Array<object>} Frozen codec specs, empty for an unknown owner.
+ */
 function optionSpecs(ownerId) {
   return OPTION_GROUPS[ownerId] || [];
 }
 
+/**
+ * Build the default option set for one owner.
+ * @param {string} ownerId Option-owner id from the registry.
+ * @returns {[key: string]: *} key→defaultValue map covering every spec.
+ */
 function defaultsForOwner(ownerId) {
   return Object.fromEntries(optionSpecs(ownerId).map((spec) => [spec.key, spec.defaultValue]));
 }
 
+/**
+ * Normalize one owner's option set against its codecs, filling defaults.
+ * @param {string} ownerId Option-owner id from the registry.
+ * @param {object} [candidate] Raw options as supplied by a link or storage.
+ * @returns {[key: string]: *} Complete option set: every key present, each
+ *   value either normalized or the spec default.
+ */
 function normalizeOwnerOptions(ownerId, candidate = {}) {
   const input = candidate && typeof candidate === 'object' ? candidate : {};
   const normalized = {};
@@ -304,12 +405,26 @@ function normalizeOwnerOptions(ownerId, candidate = {}) {
   return normalized;
 }
 
-/** Return whether an event origin represents durable direct intent. */
+/**
+ * Return whether an event origin represents durable direct intent.
+ * @param {?string} origin Change origin ('user', 'voice', 'tool', a restore
+ *   origin, or null).
+ * @returns {boolean} True when the action should be persisted as a preference
+ *   and may cancel passive restoration.
+ */
 export function isExplicitLayerStateOrigin(origin) {
   return origin === 'user' || origin === 'voice' || origin === 'tool';
 }
 
-/** Validate the static registry itself before it is used to seal a manager. */
+/**
+ * Validate the static registry itself before it is used to seal a manager.
+ * @param {Array<{id:string, token:string, disposition:string, optionOwner?:string}>}
+ *   [registry] Registry to check; defaults to the module's own.
+ * @returns {boolean} True when every id/token/disposition is well-formed and
+ *   unique — it throws rather than returning false.
+ * @throws {Error} On any empty field, bad grammar, duplicate, or an
+ *   option-owning/disposition contradiction.
+ */
 export function validateLayerStateRegistry(registry = LAYER_STATE_REGISTRY) {
   if (!Array.isArray(registry) || registry.length === 0) {
     throw new Error('Layer-state registry must be a non-empty array');
@@ -340,7 +455,11 @@ export function validateLayerStateRegistry(registry = LAYER_STATE_REGISTRY) {
 
 validateLayerStateRegistry();
 
-/** Produce the complete durable default state. */
+/**
+ * Produce the complete durable default state.
+ * @returns {{version:number, enabledLayerIds:Array<string>, options:{[key: string]: object}}}
+ *   Fresh state: nothing enabled, every option owner at its defaults.
+ */
 export function createDefaultLayerState() {
   return {
     version: LAYER_STATE_VERSION,
@@ -352,7 +471,15 @@ export function createDefaultLayerState() {
   };
 }
 
-/** Sanitize and canonicalize an externally supplied layer-state object. */
+/**
+ * Sanitize and canonicalize an externally supplied layer-state object.
+ * @param {*} candidate Raw state from a share link, storage, or an in-memory
+ *   merge; non-objects are treated as empty.
+ * @returns {{version:number, enabledLayerIds:Array<string>, options:{[key: string]: object}}}
+ *   Canonical state in registry order: unknown ids dropped, options filled to
+ *   defaults, orphaned tracking selections cleared, and multiple simultaneous
+ *   tracking IDs collapsed to none.
+ */
 export function normalizeLayerState(candidate) {
   const input = candidate && typeof candidate === 'object' ? candidate : {};
   const requestedEnabled = new Set(
@@ -390,6 +517,13 @@ export function normalizeLayerState(candidate) {
   };
 }
 
+/**
+ * Deep-copy a state so a caller can hold a snapshot across later mutations.
+ * @param {*} state State to normalize and copy.
+ * @returns {{version:number, enabledLayerIds:Array<string>, options:{[key: string]: object}}}
+ *   Structurally independent clone; mutating its arrays or option sets never
+ *   reaches the coordinator's durable state.
+ */
 export function cloneLayerState(state) {
   const normalized = normalizeLayerState(state);
   return {
@@ -401,7 +535,15 @@ export function cloneLayerState(state) {
   };
 }
 
-/** Append the compact v2 layer fields to an existing URLSearchParams object. */
+/**
+ * Append the compact v2 layer fields to an existing URLSearchParams object.
+ * @param {URLSearchParams} params Query being built; mutated in place and
+ *   returned. Any previous `l`/`lo` values are replaced or removed.
+ * @param {*} state State to serialize; normalized first so callers may hand
+ *   back live, partially-formed state.
+ * @returns {URLSearchParams} The same `params` object, with `l` always set and
+ *   `lo` set only when at least one non-absent option needs writing.
+ */
 export function encodeLayerStateParams(params, state) {
   const normalized = normalizeLayerState(state);
   const enabled = new Set(normalized.enabledLayerIds);
@@ -426,7 +568,14 @@ export function encodeLayerStateParams(params, state) {
   return params;
 }
 
-/** Decode v2 fields. Null means that the layer payload is absent. */
+/**
+ * Decode v2 fields. Null means that the layer payload is absent.
+ * @param {URLSearchParams} params Parsed query of an inbound share link.
+ * @returns {?{version:number, enabledLayerIds:Array<string>, options:{[key: string]: object}}}
+ *   Canonical state, or null when the version is not v2, `l` is missing, any
+ *   payload field exceeds its ceiling, or any layer token is unknown — the
+ *   whole payload is rejected rather than salvaged.
+ */
 export function decodeLayerStateParams(params) {
   if (params.get('v') !== String(LAYER_STATE_VERSION) || !params.has('l')) return null;
   const rawLayers = String(params.get('l') || '');
@@ -470,7 +619,12 @@ export function decodeLayerStateParams(params) {
   return normalizeLayerState({ enabledLayerIds, options: rawOptions });
 }
 
-/** Stable local-storage representation (full IDs for debuggability). */
+/**
+ * Stable local-storage representation (full IDs for debuggability).
+ * @param {*} state State to serialize; normalized first.
+ * @returns {string} JSON with version, enabled id array and full option sets —
+ *   deliberately not the compact token form, so an operator can read the blob.
+ */
 export function serializeStoredLayerState(state) {
   const normalized = normalizeLayerState(state);
   return JSON.stringify({
@@ -480,6 +634,14 @@ export function serializeStoredLayerState(state) {
   });
 }
 
+/**
+ * Inverse of serializeStoredLayerState.
+ * @param {?string} raw JSON previously written to local storage.
+ * @returns {?{version:number, enabledLayerIds:Array<string>, options:{[key: string]: object}}}
+ *   Canonical state, or null on malformed JSON, a version mismatch, a missing
+ *   id array, or any normalization rejection — a stale blob degrades to
+ *   defaults instead of throwing at startup.
+ */
 export function parseStoredLayerState(raw) {
   if (typeof raw !== 'string' || !raw) return null;
   try {
@@ -491,17 +653,37 @@ export function parseStoredLayerState(raw) {
   }
 }
 
-/** Return sanitized options to apply to one registered module. */
+/**
+ * Return sanitized options to apply to one registered module.
+ * @param {*} state Durable state to read from.
+ * @param {string} layerId Registered layer id.
+ * @returns {?[key: string]: *} Copy of that layer's option-owner options, or
+ *   null when the layer is unknown or owns no options — the caller cannot
+ *   distinguish "no options" from "not applicable" any other way.
+ */
 export function layerOptionsForRestore(state, layerId) {
   const entry = REGISTRY_BY_ID.get(layerId);
   if (!entry?.optionOwner) return null;
   return { ...normalizeLayerState(state).options[entry.optionOwner] };
 }
 
+/**
+ * Reach the browser storage area without letting a blocked origin throw.
+ * @returns {?Storage} `localStorage`, or null when it is unavailable (sandboxed
+ *   iframe, disabled cookies, or a privacy mode that throws on access).
+ */
 function safeStorage() {
   try { return globalThis.localStorage || null; } catch { return null; }
 }
 
+/**
+ * Read one layer's settled lifecycle state off the manager for a result row.
+ * @param {object} dataManager DataLayerManager to query.
+ * @param {string} layerId Registered layer id.
+ * @returns {{settledEnabled: boolean, lifecycleState: string, lifecycleUncertain: boolean}}
+ *   Observability fields copied into every restore result so a cancelled row
+ *   still reports where the layer actually ended up.
+ */
 function currentLayerOutcome(dataManager, layerId) {
   const state = dataManager.getLayerLifecycleState?.(layerId);
   return {
@@ -606,7 +788,12 @@ export class LayerStateCoordinator {
     }
   }
 
-  /** Revoke every passive restore before explicit navigation can be reclaimed. */
+  /**
+   * Revoke every passive restore before explicit navigation can be reclaimed.
+   * @param {string} [reason] Machine-readable cancellation reason reported to
+   *   the layer and the share-follow status consumer.
+   * @returns {void}
+   */
   cancelPendingRestores(reason = 'superseded-by-explicit-navigation') {
     for (const controller of this._restoreControllers.values()) controller.abort(reason);
     this._revokePendingTrackingWatch(reason);
@@ -615,6 +802,12 @@ export class LayerStateCoordinator {
   /**
    * Revoke a pending shared Follow. Physical navigation may also clear only
    * the exact passive selection, without writing recipient preferences.
+   *
+   * @param {string} [reason] Machine-readable cancellation reason.
+   * @param {object} [opts] What else the cancellation should do.
+   * @param {boolean} [opts.clearSelection=false] Also null the tracked id out of
+   *   durable state and the layer's live params, not just stop waiting for it.
+   * @returns {boolean} Whether a durable selection was actually cleared.
    */
   cancelPendingShareTracking(reason = 'superseded-by-explicit-navigation', {
     clearSelection = false,
@@ -820,6 +1013,13 @@ export class LayerStateCoordinator {
    * verdict is delivered. Waiting out the pending window must not by itself
    * push a fresh link into the "expired" wording — that word describes the
    * SHARE's age, not how long this client watched for the subject.
+   *
+   * @param {{expiryWindowMs: number}} selected Share-follow policy plus target,
+   *   as produced by _selectedShareTrackingTarget.
+   * @param {number} [atMs] Virtual timestamp of the absence observation.
+   * @returns {string} 'expired' when the share itself is older than the policy
+   *   window, 'unavailable' when the share is fresh but the subject never came,
+   *   and 'unavailable' too when no share creation time is known.
    */
   _classifyMissingTrackingTarget(selected, atMs = this.now()) {
     const copiedAt = this._shareCreatedAtMs;
@@ -828,7 +1028,13 @@ export class LayerStateCoordinator {
     return ageMs > selected.expiryWindowMs ? 'expired' : 'unavailable';
   }
 
-  /** Whether the owning layer currently follows the shared subject. */
+  /**
+   * Whether the owning layer currently follows the shared subject.
+   * @param {{layerId: string, optionKey: string, targetId: string}} selected
+   *   Share-follow target under test.
+   * @returns {boolean} True when the layer's live tracking option already names
+   *   this subject — the "found" condition of the pending watch.
+   */
   _trackingTargetLatched(selected) {
     const params = this.dataManager.getLayerParams?.(selected.layerId);
     const active = params?.[selected.optionKey];
@@ -847,7 +1053,13 @@ export class LayerStateCoordinator {
     }
   }
 
-  /** Publish a share-follow lifecycle update without allowing UI errors to own state. */
+  /**
+   * Publish a share-follow lifecycle update without allowing UI errors to own state.
+   * @param {{status: string, classification: string, layerId: string}} status
+   *   Lifecycle record: one of pending/found/cancelled plus a classification
+   *   and whatever probe and policy fields the consumer renders.
+   * @returns {void}
+   */
   _publishTrackingRestoreStatus(status) {
     try { this.onTrackingRestoreStatus?.(status); } catch { /* status UI is best effort */ }
   }
@@ -861,6 +1073,10 @@ export class LayerStateCoordinator {
    * watch exists, so the abort was a no-op and the orphaned timer went on to
    * announce "Shared … unavailable" for a subject whose latch had been
    * cancelled — a notice about work no longer being attempted.
+   *
+   * @param {string} reason Machine-readable cancellation reason, surfaced both
+   *   to the layer and in the published status record.
+   * @returns {void}
    */
   _revokePendingTrackingWatch(reason) {
     this._trackingRestoreController?.abort(reason);
@@ -900,6 +1116,16 @@ export class LayerStateCoordinator {
    * blocked (startup must not wait out a 90 s window before it may write the
    * URL again), and the terminal verdict is deferred until the source-specific
    * window has genuinely expired. The existing wordings are unchanged.
+   *
+   * @param {{layerId: string, optionKey: string, targetId: string, expiryWindowMs: number}}
+   *   selected Share-follow target and its source-specific policy.
+   * @param {{status: string}} probe The resolution probe that found the subject
+   *   absent; its fields seed every published status record.
+   * @param {?AbortSignal} [signal] Caller's signal; aborted here means the
+   *   watch is superseded, not that the subject is gone.
+   * @returns {Promise<{status: string, classification: string, cleared: boolean}>}
+   *   The PENDING record immediately, with the terminal verdict arriving later
+   *   through onTrackingRestoreStatus.
    */
   async _beginPendingTrackingRestore(selected, probe, signal = null) {
     const generation = this._trackingRestoreGeneration;
@@ -1004,6 +1230,12 @@ export class LayerStateCoordinator {
   /**
    * Refresh and restore the one shareable tracked target after destination
    * camera and ordinary layer restoration have settled.
+   *
+   * @param {object} [opts] Cancellation wiring.
+   * @param {?AbortSignal} [opts.signal] Signal from the caller's own teardown
+   *   path; combined with this method's internal controller.
+   * @returns {Promise<{status: string, classification?: string, cleared?: boolean}>}
+   *   Terminal lifecycle record, or 'skipped' when no share target exists.
    */
   async restoreShareTrackingSelection({ signal = null } = {}) {
     const selected = this._selectedShareTrackingTarget();

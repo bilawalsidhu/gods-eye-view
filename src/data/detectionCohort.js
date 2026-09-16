@@ -1,12 +1,26 @@
 const DEFAULT_MAX_COHORT = 256;
 
-/** Resolve the review-mandated bounded materialization cap for a layer quota. */
+/**
+ * Resolve the review-mandated bounded materialization cap for a layer quota.
+ * @param {number|string} quota Layer's configured rich-candidate quota; a
+ *   non-numeric or negative value is floored to 0 before scaling.
+ * @returns {number} Candidate cap, clamped to [64, DEFAULT_MAX_COHORT] — four
+ *   contenders per quota slot so a full quota of incumbents still leaves room
+ *   to observe challengers.
+ */
 export function cohortCapForQuota(quota) {
   const normalized = Math.max(0, Math.floor(Number(quota) || 0));
   return Math.min(DEFAULT_MAX_COHORT, Math.max(64, normalized * 4));
 }
 
-/** Stable FNV-1a identity hash used only on solve ticks. */
+/**
+ * Stable FNV-1a identity hash used only on solve ticks.
+ * @param {string|number} layerId Owning layer id — scopes the hash so the same
+ *   source id on two layers does not collide.
+ * @param {string|number} sourceId Per-object identity from the data source.
+ * @returns {number} Unsigned 32-bit hash, deterministic across sessions so the
+ *   tiebreak below never reshuffles between frames.
+ */
 export function stableIdentityHash(layerId, sourceId) {
   const text = `${String(layerId)}\u0000${String(sourceId)}`;
   let hash = 2166136261;
@@ -17,7 +31,15 @@ export function stableIdentityHash(layerId, sourceId) {
   return hash >>> 0;
 }
 
-/** Negative means a is a better deterministic contender than b. */
+/**
+ * Negative means a is a better deterministic contender than b.
+ * @param {object} a Candidate observation; reads the `_cohortPriority`,
+ *   `_cohortBand`, `_cohortHash` and `_cohortSourceId` annotations.
+ * @param {object} b Candidate observation, same shape as `a`.
+ * @returns {number} Comparator result ordering by descending priority, then
+ *   descending band, then ascending identity hash, then source id — a total
+ *   order, so a tie can never flip between frames.
+ */
 export function compareCohortContenders(a, b) {
   const priorityDelta = (Number(b?._cohortPriority) || 0) - (Number(a?._cohortPriority) || 0);
   if (priorityDelta) return priorityDelta;
@@ -28,6 +50,13 @@ export function compareCohortContenders(a, b) {
   return String(a?._cohortSourceId).localeCompare(String(b?._cohortSourceId));
 }
 
+/**
+ * Min-heap ordering test: whether `a` belongs below `b` in the retention heap.
+ * @param {object} a Candidate observation under consideration for eviction.
+ * @param {object} b Candidate observation currently held at the parent/root.
+ * @returns {boolean} True when `a` is the weaker contender and must be evicted
+ *   first, keeping the strongest `maxSize` observations in the heap.
+ */
 function isWorse(a, b) {
   return compareCohortContenders(a, b) > 0;
 }

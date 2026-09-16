@@ -38,7 +38,7 @@ const MIN_MATCHED_SAMPLES = 2;
 
 /**
  * Median of a numeric array (even count averages the two middles).
- * @param {number[]} values
+ * @param {number[]} values Traffic levels sampled along one road.
  * @returns {number|null} Median, or null for an empty array.
  */
 export function median(values) {
@@ -48,7 +48,10 @@ export function median(values) {
   return sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
-/** Bearing (degrees, 0 = north, clockwise) of a projected dx/dy vector. */
+/** Bearing (degrees, 0 = north, clockwise) of a projected dx/dy vector.
+ * @param {number} dx Eastward component in local meters.
+ * @param {number} dy Northward component in local meters.
+ * @returns {number} Bearing in degrees, unnormalized to (−180, 180] — only fed to the folded diff. */
 function bearingDeg(dx, dy) {
   return (Math.atan2(dx, dy) * 180) / Math.PI;
 }
@@ -56,7 +59,8 @@ function bearingDeg(dx, dy) {
 /**
  * Bearing disagreement folded mod 180° — a flow line drawn in the opposite
  * direction of travel still describes the same two-way road.
- * @param {number} a - Bearing (degrees). @param {number} b - Bearing (degrees).
+ * @param {number} a - Bearing (degrees).
+ * @param {number} b - Bearing (degrees).
  * @returns {number} min(|Δ|, 180 − |Δ|) in [0, 90].
  */
 function bearingDiffDeg(a, b) {
@@ -65,7 +69,14 @@ function bearingDiffDeg(a, b) {
   return Math.min(d, 180 - d);
 }
 
-/** Squared distance from point (px,py) to segment (ax,ay)-(bx,by), meters². */
+/** Squared distance from point (px,py) to segment (ax,ay)-(bx,by), meters².
+ * @param {number} px Sample point easting (local meters).
+ * @param {number} py Sample point northing (local meters).
+ * @param {number} ax Segment start easting (local meters).
+ * @param {number} ay Segment start northing (local meters).
+ * @param {number} bx Segment end easting (local meters).
+ * @param {number} by Segment end northing (local meters).
+ * @returns {number} Squared distance to the closest point on the segment (clamped to the endpoints). */
 function pointSegDist2(px, py, ax, ay, bx, by) {
   const dx = bx - ax;
   const dy = by - ay;

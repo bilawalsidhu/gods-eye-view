@@ -28,7 +28,7 @@ export const RETRY_COOLDOWN_MAX_MS = 300_000;
  *
  * @template T
  * @param {() => (Promise<T>|T)} load - Runs at most once per successful load.
- * @param {object} [options]
+ * @param {object} [options] - Overrides; defaults are the module constants.
  * @param {number} [options.cooldownMs] - Backoff after the first failure.
  * @param {number} [options.maxCooldownMs] - Ceiling for the doubling backoff.
  * @param {() => number} [options.now] - Clock seam for tests.

@@ -54,7 +54,8 @@ export const GOOGLE_TEXT_RADIUS_DEFAULT_M = 4000;
 /**
  * Context ranking for the HUD summary: landmarks and attractions carry the
  * scene; amenities are last resorts. Higher wins.
- * @param {string[]} types
+ * @param {string[]} types the place's Google `types` list.
+ * @returns {number} rank score; unknown mixes fall back to the generic tier.
  */
 export function placeContextPriority(types) {
   const typeSet = new Set(types);
@@ -70,6 +71,12 @@ export function placeContextPriority(types) {
  * Flat-earth equirectangular distance in whole meters — plenty at HUD context
  * radii (<= 50 km) and cheap enough to run per place per request.
  * Non-finite inputs sort last via MAX_SAFE_INTEGER.
+ *
+ * @param {number} latA origin latitude, decimal degrees.
+ * @param {number} lonA origin longitude, decimal degrees.
+ * @param {number} latB target latitude, decimal degrees.
+ * @param {number} lonB target longitude, decimal degrees.
+ * @returns {number} approximate separation in whole meters.
  */
 export function approximateDistanceM(latA, lonA, latB, lonB) {
   if (![latA, lonA, latB, lonB].every(Number.isFinite)) return Number.MAX_SAFE_INTEGER;
@@ -81,7 +88,15 @@ export function approximateDistanceM(latA, lonA, latB, lonB) {
   ));
 }
 
-/** Request body for `places:searchNearby` (DISTANCE-ranked circle). */
+/**
+ * Request body for `places:searchNearby` (DISTANCE-ranked circle).
+ *
+ * @param {object} root0 search constraint.
+ * @param {number} root0.latitude circle center latitude, decimal degrees.
+ * @param {number} root0.longitude circle center longitude, decimal degrees.
+ * @param {number} root0.radiusM circle radius in meters (clamped upstream).
+ * @returns {object} JSON body for the Places API `places:searchNearby` POST.
+ */
 export function buildNearbyRequestBody({ latitude, longitude, radiusM }) {
   return {
     maxResultCount: GOOGLE_NEARBY_MAX_RESULTS,
@@ -100,6 +115,9 @@ export function buildNearbyRequestBody({ latitude, longitude, radiusM }) {
  * invalid (NaN) rather than 0. `Number(null)` and `Number('')` are both 0,
  * which would otherwise silently query Google for 0°N 0°E (Gulf of Guinea)
  * when the client omits a coordinate. Shared by both runtimes.
+ *
+ * @param {string|null|undefined} value raw query-param value.
+ * @returns {number} parsed number, or NaN when absent/blank/non-numeric.
  */
 export function parseCoordinateParam(value) {
   if (value === null || value === undefined || String(value).trim() === '') return Number.NaN;
@@ -139,7 +157,16 @@ export function resolveServerGoogleApiKey(env) {
     ?? resolveGoogleApiKey(env?.GOOGLE_MAPS_API_KEY);
 }
 
-/** Request body for `places:searchText` (view-biased). */
+/**
+ * Request body for `places:searchText` (view-biased).
+ *
+ * @param {object} root0 query plus its bias circle.
+ * @param {string} root0.textQuery free-text place query from the HUD.
+ * @param {number} root0.latitude bias-circle center latitude, decimal degrees.
+ * @param {number} root0.longitude bias-circle center longitude, decimal degrees.
+ * @param {number} root0.radiusM bias-circle radius in meters.
+ * @returns {object} JSON body for the Places API `places:searchText` POST.
+ */
 export function buildTextSearchRequestBody({ textQuery, latitude, longitude, radiusM }) {
   return {
     textQuery,
@@ -153,7 +180,15 @@ export function buildTextSearchRequestBody({ textQuery, latitude, longitude, rad
   };
 }
 
-/** Shared per-place projection of the Google result row. */
+/**
+ * Shared per-place projection of the Google result row.
+ *
+ * @param {object} place one Google Places `places[]` row.
+ * @param {number} latitude request latitude, decimal degrees.
+ * @param {number} longitude request longitude, decimal degrees.
+ * @returns {object} the fields both normalizers share (id, name, position,
+ *   computed distanceM, trimmed types).
+ */
 function basePlace(place, latitude, longitude) {
   const placeLatitude = place.location?.latitude ?? null;
   const placeLongitude = place.location?.longitude ?? null;
@@ -172,7 +207,11 @@ function basePlace(place, latitude, longitude) {
  * Normalize a Nearby Search response into the client contract: deduped by
  * name+address, ranked by context priority then distance, capped at 20, with
  * the internal priority field stripped before the wire.
- * @returns {object[]}
+ *
+ * @param {object} data parsed Places API response (`{places: [...]}` or not).
+ * @param {number} latitude request latitude, decimal degrees.
+ * @param {number} longitude request longitude, decimal degrees.
+ * @returns {object[]} client contract rows, best context first.
  */
 export function normalizeNearbyPlaces(data, latitude, longitude) {
   if (!Array.isArray(data?.places)) return [];
@@ -201,7 +240,11 @@ export function normalizeNearbyPlaces(data, latitude, longitude) {
 /**
  * Normalize a Text Search response: keeps the viewport box (low/high corners)
  * so the client can size a fallback grounds disc to the real feature.
- * @returns {object[]}
+ *
+ * @param {object} data parsed Places API response (`{places: [...]}` or not).
+ * @param {number} latitude request latitude, decimal degrees.
+ * @param {number} longitude request longitude, decimal degrees.
+ * @returns {object[]} client contract rows in upstream order, named rows only.
  */
 export function normalizeTextPlaces(data, latitude, longitude) {
   if (!Array.isArray(data?.places)) return [];

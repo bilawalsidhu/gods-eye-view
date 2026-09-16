@@ -112,7 +112,7 @@ export class MapStackController {
    * Human-readable reason a stack can't be activated. Shared by `getStacks()`
    * and `setStack()` so the tooltip and the toast never drift apart.
    * @param {object} stack - Stack descriptor.
-   * @returns {string}
+   * @returns {string} Copy for the chip tooltip and the failed-switch toast.
    */
   _unavailableReason(stack) {
     return stack?.requiresIon
@@ -136,7 +136,7 @@ export class MapStackController {
    * at is still the one IT asked for can compare this across its own await.
    * Unchanged (or advanced by exactly its own call) means no newer switch has
    * claimed the globe.
-   * @returns {number}
+   * @returns {number} Switch generation counter; 0 until the first `setStack()`.
    */
   getSwitchGeneration() {
     return this._switchGen;
@@ -291,7 +291,8 @@ export class MapStackController {
    * for imagery providers). If a newer switch starts while the Re:Earth
    * fetch is in flight, this call's result is discarded instead of
    * clobbering the newer switch's terrain.
-   * @param {boolean} enabled
+   * @param {boolean} enabled - True selects ion World Terrain; false selects
+   *   the keyless ellipsoidal provider for tokenless globe stacks.
    * @param {number} [gen] — switch generation this call belongs to
    */
   async _setWorldTerrainEnabled(enabled, gen) {
@@ -316,7 +317,8 @@ export class MapStackController {
    * without an ion token: Re:Earth ellipsoidal quantized-mesh terrain, or
    * `EllipsoidTerrainProvider` (flat — current/prior behavior) if the
    * Re:Earth endpoint can't be constructed. Never throws.
-   * @returns {Promise<Cesium.TerrainProvider>}
+   * @returns {Promise<Cesium.TerrainProvider>} Cached Re:Earth provider on
+   *   repeat calls; the flat provider after a construction failure.
    */
   async _getKeylessTerrainProvider() {
     if (this._reearthTerrainProvider) return this._reearthTerrainProvider;

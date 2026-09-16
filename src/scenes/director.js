@@ -35,8 +35,8 @@ const DEFAULT_HOLD_SEC = 0.9;
 
 /**
  * Clamp a numeric value to the [0, 1] range.
- * @param {number} value
- * @returns {number}
+ * @param {number} value Value to clamp.
+ * @returns {number} The value limited to [0, 1].
  */
 function clamp01(value) {
   return Math.max(0, Math.min(1, value));
@@ -53,8 +53,8 @@ function uid(prefix) {
 
 /**
  * Deep-clone a JSON-serializable value via round-trip stringify/parse.
- * @param {*} value
- * @returns {*}
+ * @param {*} value Project state (layers, params, visual state) to copy.
+ * @returns {*} A detached copy; functions and Dates do not survive.
  */
 function deepClone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -64,7 +64,8 @@ function deepClone(value) {
  * Normalize a raw layer state entry into a canonical { enabled, params? } shape.
  * Accepts both boolean shorthand and full object forms.
  * @param {boolean|object} entry - Raw layer state (boolean or { enabled, params })
- * @returns {{ enabled: boolean, params?: object }}
+ * @returns {{ enabled: boolean, params?: object }} Canonical layer entry with a
+ *   cloned params bag.
  */
 function normalizeLayerEntry(entry) {
   if (entry && typeof entry === 'object') {
@@ -80,10 +81,11 @@ function normalizeLayerEntry(entry) {
  * Normalize a raw bloom post-processing state, migrating intensity values
  * across bloom scale versions so older saved projects render correctly.
  * @param {object} rawBloom - Raw bloom state from storage or recipe
- * @param {object} [options]
+ * @param {object} [options] - Migration inputs; both keys default sensibly.
  * @param {number} [options.projectVersion] - Schema version of the source project
  * @param {number} [options.fallbackIntensity] - Default intensity if not stored
- * @returns {{ enabled: boolean, intensity: number, version: number }}
+ * @returns {{ enabled: boolean, intensity: number, version: number }} Bloom
+ *   state decoded to the current scale version.
  */
 function normalizeBloomState(rawBloom = {}, { projectVersion = PROJECT_VERSION, fallbackIntensity = 50 } = {}) {
   // Determine which bloom scale the stored value was encoded under.
@@ -109,7 +111,8 @@ function normalizeBloomState(rawBloom = {}, { projectVersion = PROJECT_VERSION, 
  * with fully normalized shots. Each keyframe in the recipe's cameraPath becomes
  * one shot, inheriting the recipe's style, post, and layer configuration.
  * @param {object} recipe - A SCENE_RECIPES entry
- * @returns {{ id: string, title: string, shots: object[] }}
+ * @returns {{ id: string, title: string, shots: object[] }} Editable scene; one
+ *   shot per recipe cameraPath keyframe.
  */
 function recipeToScene(recipe) {
   const post = recipe.post || {};
@@ -196,7 +199,8 @@ function createDefaultProject() {
  * bloom intensity and coerces all numeric fields.
  * @param {object} rawShot - Raw shot data (may be incomplete or from an older schema)
  * @param {number} [index=0] - Positional index used for fallback title
- * @param {object} [options]
+ * @param {object} [options] - Migration inputs; `projectVersion` decides which
+ *   bloom scale a stored intensity was encoded under.
  * @param {number} [options.projectVersion] - Schema version of the enclosing project
  * @returns {object} Fully normalized shot
  */
@@ -570,9 +574,10 @@ export class SceneDirector {
 
   /**
    * Resolve a scene and shot by their IDs.
-   * @param {string} sceneId
-   * @param {string} shotId
-   * @returns {{ scene: object|undefined, shot: object|undefined }}
+   * @param {string} sceneId Scene to look in.
+   * @param {string} shotId Shot to resolve within that scene.
+   * @returns {{ scene: object|undefined, shot: object|undefined }} The pair;
+   *   `shot` is undefined when the id is unknown to the scene.
    */
   _getShot(sceneId, shotId) {
     const scene = this._project.scenes.find((item) => item.id === sceneId);
@@ -629,7 +634,8 @@ export class SceneDirector {
 
   /**
    * Snapshot the current enabled/params state of every registered data layer.
-   * @returns {[key: string]: { enabled: boolean, params?: object }}
+   * @returns {[key: string]: { enabled: boolean, params?: object }} Every
+   *   registered layer keyed by id, with its params bag when it has one.
    */
   _captureLayerStates() {
     const layers = {};
@@ -702,8 +708,9 @@ export class SceneDirector {
 
   /**
    * Delete a specific shot from a scene after user confirmation.
-   * @param {string} sceneId
-   * @param {string} shotId
+   * @param {string} sceneId Scene holding the shot.
+   * @param {string} shotId Shot to remove.
+   * @returns {Promise<void>} Resolves once the list is re-rendered.
    */
   async deleteShot(sceneId, shotId) {
     const { scene, shot } = this._getShot(sceneId, shotId);
@@ -731,10 +738,12 @@ export class SceneDirector {
    * and overwrite the operator's newer intent — the camera ends on shot A
    * while the panel reads shot B.
    *
-   * @param {string} sceneId
-   * @param {string} shotId
-   * @param {object} [options]
+   * @param {string} sceneId Scene holding the shot to load.
+   * @param {string} shotId Shot to apply.
+   * @param {object} [options] Load options.
    * @param {number} [options.flyDuration=2.2] - Camera flight duration in seconds
+   * @returns {Promise<void>} Resolves when the shot has been applied, or as
+   *   soon as a newer LOAD or a scene run supersedes this one.
    */
   async loadShot(sceneId, shotId, { flyDuration = 2.2 } = {}) {
     if (this._running) return;
@@ -775,7 +784,8 @@ export class SceneDirector {
    * lets the awaited work itself be cancelled instead of merely disowned.
    * @param {number} generation - The generation this LOAD reserved
    * @param {AbortSignal} [signal] - Abort signal for this LOAD's manager calls
-   * @returns {{ cancelled: boolean, signal: AbortSignal|undefined }}
+   * @returns {{ cancelled: boolean, signal: AbortSignal|undefined }} Live
+   *   cancellation view for this LOAD's awaits.
    */
   _loadToken(generation, signal = undefined) {
     const director = this;
@@ -810,7 +820,11 @@ export class SceneDirector {
    * Build a flat playback queue of { scene, shot } pairs starting from the
    * given scene and wrapping around through all remaining scenes (round-robin).
    * @param {string} startSceneId - Scene to begin playback from
-   * @returns {Array<{ scene: object, shot: object }>}
+   * @param {object} [opts] Queue shape options.
+   * @param {boolean} [opts.single=false] Stop after the starting scene instead
+   *   of round-robining through the whole project.
+   * @returns {Array<{ scene: object, shot: object }>} Flat shot queue in
+   *   playback order.
    */
   _buildPlaybackQueue(startSceneId, { single = false } = {}) {
     if (!this._project.scenes.length) return [];
@@ -836,7 +850,8 @@ export class SceneDirector {
 
   /**
    * Lists scenes for voice/scripting consumers.
-   * @returns {Array<{id: string, title: string, shots: number}>}
+   * @returns {Array<{id: string, title: string, shots: number}>} One summary
+   *   row per scene, in project order.
    */
   listScenes() {
     return this._project.scenes.map((scene) => ({
@@ -849,7 +864,8 @@ export class SceneDirector {
   /**
    * Finds a scene by id, exact title, or case-insensitive title substring.
    * @param {string} query - Scene id or (partial) title.
-   * @returns {{id: string, title: string, shots: number}|null}
+   * @returns {{id: string, title: string, shots: number}|null} Matching scene
+   *   summary, or null when nothing matches the query.
    */
   findSceneByQuery(query) {
     const q = String(query ?? '').trim().toLowerCase();
@@ -863,6 +879,7 @@ export class SceneDirector {
   /**
    * Playback status snapshot for voice read-back.
    * @returns {{running: boolean, selectedSceneId: string|null, sceneCount: number}}
+   *   Playback state for read-back.
    */
   getPlaybackStatus() {
     return {
@@ -887,10 +904,11 @@ export class SceneDirector {
    * Escape or the stop button (checked between shots and during sleeps).
    *
    * @param {string} [sceneId] - Scene to start from; defaults to the current selection
-   * @param {object} [options]
+   * @param {object} [options] Run options.
    * @param {boolean} [options.single=false] - Play only the named scene instead of
    *   round-robining through the whole project (voice playback uses this).
    * @returns {Promise<{started: boolean, reason?: string, shots?: number}>}
+   *   Refusal reason for an unstarted run; shot count for a started one.
    */
   async startScene(sceneId, { single = false } = {}) {
     if (this._running) return { started: false, reason: 'already-running' };
@@ -1142,10 +1160,12 @@ export class SceneDirector {
    * refused layer would be a lie.
    *
    * @param {[key: string]: { enabled: boolean, params?: object }} targetStates
+   *   The shot's normalized layer map — declared keys only are touched.
    * @param {{ cancelled: boolean, signal?: AbortSignal }|null} [token]
    *   Cancellation token — a stop or a newer request ends the pass and aborts
    *   the transition in flight.
    * @returns {Promise<{ applied: string[], refused: string[], cancelled: boolean }>}
+   *   Layer ids that settled each way, and whether the pass was cut short.
    */
   async _applyLayerStates(targetStates, token = null) {
     const applied = [];
@@ -1337,7 +1357,8 @@ export class SceneDirector {
   /**
    * Toggle disabled state on all scene panel buttons based on run state.
    * Editing controls are disabled during a run; stop is disabled when idle.
-   * @param {boolean} isRunning
+   * @param {boolean} isRunning True while a scene run is in progress.
+   * @returns {void}
    */
   _setButtons(isRunning) {
     if (this._sceneStartBtn) this._sceneStartBtn.disabled = isRunning;
@@ -1369,7 +1390,8 @@ export class SceneDirector {
 
   /**
    * Set the status line text in the scene panel.
-   * @param {string} text
+   * @param {string} text Status message to show.
+   * @returns {void}
    */
   _updateStatus(text) {
     if (this._sceneStatus) this._sceneStatus.textContent = text;
@@ -1401,7 +1423,8 @@ export class SceneDirector {
 
   /**
    * Global keydown handler registered during a run. Escape cancels the run.
-   * @param {KeyboardEvent} event
+   * @param {KeyboardEvent} event Key event from the document listener.
+   * @returns {void}
    */
   _onKeyDown(event) {
     if (event.key === ESCAPE_KEY && this._running) {

@@ -33,6 +33,14 @@ const PALETTE = {
 const CLASSIFY = Cesium.ClassificationType.CESIUM_3D_TILE;
 const CLAMP = Cesium.HeightReference.CLAMP_TO_GROUND;
 
+/**
+ * Build the world-space renderer: a `gev-annotations` CustomDataSource added to
+ * the viewer, with the GevRouteFlow fabric registered once for route materials.
+ * @param {Cesium.Viewer} viewer - Viewer that hosts the annotation entities; its
+ *   camera height also drives the target-ring and distance scaling.
+ * @returns {{add: Function, remove: Function, sync: Function, destroy: Function}}
+ *   Renderer handle satisfying the shared renderer contract (see module header).
+ */
 export function createWorldAnnotationRenderer(viewer) {
   const dataSource = new Cesium.CustomDataSource('gev-annotations');
   viewer.dataSources.add(dataSource);
@@ -44,6 +52,11 @@ export function createWorldAnnotationRenderer(viewer) {
   // per-frame bookkeeping.
   ensureFlowFabricRegistered();
 
+  /**
+   * Resolve an annotation's palette key to a Cesium color.
+   * @param {object} anno - Annotation record; `anno.color` is a PALETTE key.
+   * @returns {Cesium.Color} Opaque base color that liveColor() applies alpha to.
+   */
   function colorFor(anno) {
     return Cesium.Color.fromCssColorString(PALETTE[anno.color] || PALETTE.primary);
   }
@@ -51,12 +64,26 @@ export function createWorldAnnotationRenderer(viewer) {
   // Target-ring radius (meters) scaled to camera height so it reads at any
   // altitude. Read once per frame for BOTH ellipse axes — camera height is
   // constant within a frame, so semiMajor === semiMinor always holds.
+  /**
+   * Target-ring radius in meters for the current camera altitude, so a mark
+   * reads as a ring when zoomed in and stays visible when pulled back.
+   * @returns {number} Radius in meters, clamped to 14-170 (3% of camera height).
+   */
   function ringRadius() {
     const h = viewer.camera.positionCartographic?.height ?? 1000;
     return Math.max(14, Math.min(170, h * 0.03));
   }
 
   // A live color that follows the annotation's fade alpha and an optional pulse.
+  /**
+   * Color property that follows an annotation's fade alpha, optionally pulsing.
+   * @param {object} anno - Annotation whose `alpha` (0-1, default 1) scales the result.
+   * @param {Cesium.Color} base - Opaque color the alpha is applied to.
+   * @param {object} [root0] - Animation options.
+   * @param {number} [root0.alpha] - Static multiplier layered on top of `anno.alpha`.
+   * @param {boolean} [root0.pulse] - Modulate alpha by pulseFactor() each frame.
+   * @returns {Cesium.CallbackProperty} Per-frame color property clamped to the 0-1 alpha range.
+   */
   function liveColor(anno, base, { alpha = 0.9, pulse = false } = {}) {
     return new Cesium.CallbackProperty(() => {
       const a = (anno.alpha ?? 1) * alpha * (pulse ? pulseFactor() : 1);
@@ -64,6 +91,15 @@ export function createWorldAnnotationRenderer(viewer) {
     }, false);
   }
 
+  /**
+   * Materialize one annotation as Cesium entities in the annotation data source.
+   * The branch is picked by shape: extruded classification volume for a single
+   * building ring, draped fill for a larger ring, flowing route polyline, arrow
+   * connector, or a point reticle + label. Entities are published onto
+   * `anno._entities` as they land so remove() can reach a partially-added mark.
+   * @param {object} anno - Annotation record; needs `id`, `type`, `color`, and the
+   *   geometry its shape implies (`ring`, `path`, `to`, or `anchor`).
+   */
   function add(anno) {
     const base = colorFor(anno);
     // Published to the mark BEFORE anything is added, and mutated in place as
@@ -216,6 +252,15 @@ export function createWorldAnnotationRenderer(viewer) {
   }
 
   // A clamped point + (optional) label that sits on the tile surface.
+  /**
+   * Entity pairing a clamped surface point with an optional text label.
+   * @param {object} anno - Annotation providing `anchor` and, when present, `label`
+   *   (rendered via labelGraphic) and `type` (which sizes the point dot).
+   * @param {Cesium.Color} base - Base color for the point marker.
+   * @param {object} root0 - Marker options.
+   * @param {boolean} root0.point - Add the pixel dot (labels-only marks omit it).
+   * @returns {Cesium.Entity} The added entity.
+   */
   function labelMarker(anno, base, { point }) {
     return dataSource.entities.add({
       position: Cesium.Cartesian3.fromDegrees(anno.anchor.lon, anno.anchor.lat),
@@ -231,6 +276,13 @@ export function createWorldAnnotationRenderer(viewer) {
     });
   }
 
+  /**
+   * Cesium label graphic for an annotation's text callout (clamped, depth-test
+   * exempt, distance-scaled, with a dark backdrop that fades with the mark).
+   * @param {object} anno - Annotation supplying the `label` text and `alpha`.
+   * @param {Cesium.Color} _base - Unused; accepted to match the shared graphic signature.
+   * @returns {object} Options object for an `Entity.label`.
+   */
   function labelGraphic(anno, _base) {
     return {
       text: anno.label,
@@ -253,6 +305,11 @@ export function createWorldAnnotationRenderer(viewer) {
     };
   }
 
+  /**
+   * Remove every entity a prior add() published onto this annotation. Idempotent:
+   * annotations with no `_entities` list are ignored.
+   * @param {object} anno - Annotation carrying the `_entities` array.
+   */
   function remove(anno) {
     if (!anno?._entities) return;
     for (const entity of anno._entities) {
@@ -265,10 +322,18 @@ export function createWorldAnnotationRenderer(viewer) {
     anno._entities = null;
   }
 
+  /**
+   * Renderer-contract hook for batched state handoff — a no-op here because
+   * CallbackProperty already animates alpha/pulse every rendered frame.
+   */
   function sync() {
     // No-op: CallbackProperty drives per-frame alpha/pulse animation.
   }
 
+  /**
+   * Remove the annotation data source and all of its entities from the viewer.
+   * Tolerates an already-torn-down scene.
+   */
   function destroy() {
     try {
       viewer.dataSources.remove(dataSource, true);
@@ -280,6 +345,10 @@ export function createWorldAnnotationRenderer(viewer) {
   return { add, remove, sync, destroy };
 }
 
+/**
+ * Pulse envelope shared by every animated mark.
+ * @returns {number} 0.6-1.0 sinusoid at roughly 0.8 Hz, read off the wall clock.
+ */
 function pulseFactor() {
   // 0.6 .. 1.0 sinusoid at ~0.8 Hz
   return 0.8 + 0.2 * Math.sin(performance.now() * 0.005);
@@ -290,6 +359,9 @@ function pulseFactor() {
  * `materialInput.st.s` is the along-line coordinate (0 = origin, 1 = destination),
  * so `fract(s*repeat - time*speed)` scrolls the pattern toward the end. Works on
  * a clamped/classified ground polyline (PolylineMaterialAppearance supports it).
+ * @param {string} colorCss - CSS color for the flowing dashes (rendered at alpha 0.95).
+ * @returns {Cesium.Material} Material whose construction registers the
+ *   `GevRouteFlow` fabric type under Cesium's type cache.
  */
 function makeRouteFlowMaterial(colorCss) {
   return new Cesium.Material({
@@ -338,6 +410,9 @@ function ensureFlowFabricRegistered() {
  * is what actually makes the dashes flow on the GPU. (The prior versions either
  * returned a standalone Material Cesium never rendered, or treated `result` as a
  * Material — both left the real uniforms untouched, so nothing animated.)
+ *
+ * Construct with `new`; Cesium instantiates it from the polyline `material` option.
+ * @param {string} colorCss - CSS color for the dashes (stored at alpha 0.95).
  */
 function FlowMaterialProperty(colorCss) {
   this._color = Cesium.Color.fromCssColorString(colorCss).withAlpha(0.95);
@@ -366,7 +441,13 @@ FlowMaterialProperty.prototype.equals = function equals(other) {
   return this === other;
 };
 
-/** Evenly down-sample a [[lon,lat],...] ring to at most n points (keeps shape). */
+/**
+ * Evenly down-sample a [[lon,lat],...] ring to at most n points (keeps shape).
+ * @param {Array<Array<number>>} ring - Ring vertices as [lon, lat] degree pairs.
+ * @param {number} n - Maximum number of output vertices.
+ * @returns {Array<Array<number>>} The input ring when already within `n`, else a
+ *   decimated copy spanning its full extent.
+ */
 function decimateRing(ring, n) {
   if (ring.length <= n) return ring;
   const out = [];
@@ -379,6 +460,10 @@ function decimateRing(ring, n) {
  * the centroid would clamp onto the roof, so we probe several points beyond the
  * footprint radius and take a low percentile (≈ ground). Returns null if the
  * tiles under those points aren't loaded yet.
+ * @param {Cesium.Scene} scene - Scene queried for surface clamping.
+ * @param {Array<Array<number>>} ring - Footprint vertices as [lon, lat] degree pairs.
+ * @returns {number|null} Ground height in meters, or null when clamping is
+ *   unsupported or no sample landed on a loaded tile.
  */
 function sampleGroundOutside(scene, ring) {
   if (!scene?.clampToHeightSupported || typeof scene.clampToHeight !== 'function') return null;
@@ -416,6 +501,9 @@ function sampleGroundOutside(scene, ring) {
  * Inflate a [[lon,lat],...] ring outward from its centroid by `meters`, so an
  * extruded building volume encloses the photogrammetry mesh instead of slicing
  * through its edges. Radial buffer — fine for compact building footprints.
+ * @param {Array<Array<number>>} ring - Footprint vertices as [lon, lat] degree pairs.
+ * @param {number} meters - Outward buffer distance in meters.
+ * @returns {Array<Array<number>>} Buffered ring, same vertex count, as [lon, lat] pairs.
  */
 function bufferRing(ring, meters) {
   let clon = 0;

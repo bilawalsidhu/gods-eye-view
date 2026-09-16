@@ -23,8 +23,9 @@ const WEATHER_EFFECTS_FIELDS =
 
 /**
  * Validate `latitude`/`longitude` query params into a finite, in-range point.
- * @param {URLSearchParams} params
- * @returns {{latitude: number, longitude: number}|null}
+ * @param {URLSearchParams} params - Request query string.
+ * @returns {{latitude: number, longitude: number}|null} Parsed point, or null
+ *   when either param is missing, non-numeric, or out of range.
  */
 export function validRegionalPoint(params) {
   const latitude = requiredFiniteQueryNumber(params, 'latitude');
@@ -38,7 +39,8 @@ export function validRegionalPoint(params) {
  * Cache key for a point: quantized to 0.1° so camera drift reuses the same
  * observation instead of hammering Open-Meteo per meter of movement. Shared
  * by the regional-brief middleware (same quantization) and this endpoint.
- * @param {{latitude: number, longitude: number}} point
+ * @param {{latitude: number, longitude: number}} point - Validated point.
+ * @returns {string} "lat,lon" key at 0.1° resolution.
  */
 export function regionalPointCacheKey(point) {
   const lat = (Math.round(point.latitude * 10) / 10).toFixed(1);
@@ -46,7 +48,13 @@ export function regionalPointCacheKey(point) {
   return `${lat},${lon}`;
 }
 
-/** The exact upstream URL both runtimes fetch. */
+/**
+ * The exact upstream URL both runtimes fetch. Public API, keyless, so the URL
+ * carries no credential and is safe to log.
+ * @param {{latitude: number, longitude: number}} point - Validated point
+ *   (serialized at 5 decimals).
+ * @returns {string} Open-Meteo forecast URL for the `current` field set.
+ */
 export function buildOpenMeteoWeatherUrl(point) {
   const params = new URLSearchParams({
     latitude: point.latitude.toFixed(5),
@@ -59,9 +67,12 @@ export function buildOpenMeteoWeatherUrl(point) {
 
 /**
  * Shape a normalized observation into the client payload contract.
- * @param {{latitude: number, longitude: number}} point
+ * @param {{latitude: number, longitude: number}} point - Validated point
+ *   echoed back as `coordinates`.
  * @param {object} weather normalizeRegionalWeather() output
  * @param {string} retrievedAt ISO timestamp supplied by the runtime
+ * @returns {object} Client payload (`status`, `retrievedAt`, `coordinates`,
+ *   `weather`).
  */
 export function buildWeatherEffectsPayload(point, weather, retrievedAt) {
   return {

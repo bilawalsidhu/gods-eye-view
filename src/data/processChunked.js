@@ -39,6 +39,12 @@ export function processChunked(items, chunkSize, handle, onComplete) {
 
   let index = 0;
 
+  /**
+   * Drain items for one scheduled slice, then re-schedule if any remain.
+   * @param {IdleDeadline=} deadline Real deadline when driven by
+   *   requestIdleCallback; absent on the setTimeout fallback path.
+   * @returns {void}
+   */
   function runSlice(deadline) {
     // With a real IdleDeadline, process as many items as the remaining idle
     // time allows. The setTimeout fallback invokes runSlice WITHOUT a
@@ -73,9 +79,10 @@ export function processChunked(items, chunkSize, handle, onComplete) {
  * Synchronous fallback for cases where yielding is undesirable (e.g. tests,
  * or when caller has already yielded and needs to drain remaining items).
  *
- * @param {Array} items
- * @param {number} [chunkSize]
- * @param {(item: any, index: number) => void} handle
+ * @param {Array} items - Items to process; iterated in index order.
+ * @param {number} [chunkSize] - Items per inner loop (default 500); bounds
+ *   the `Math.min` slice, not the outer walk, so it cannot skip items.
+ * @param {(item: any, index: number) => void} handle - Called once per item.
  */
 export function processChunkedSync(items, chunkSize, handle) {
   const chunk = Math.max(1, Math.floor(chunkSize) || DEFAULT_CHUNK);

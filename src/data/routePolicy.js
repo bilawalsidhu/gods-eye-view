@@ -24,7 +24,8 @@ export const ROUTE_UPSTREAM_TIMEOUT_MS = 12000;
 /**
  * Normalize the client's `profile` value to an OSRM profile name.
  * Accepts the aliases the annotation UI has used over time.
- * @param {string|null} raw
+ * @param {string|null} raw Client-supplied profile value; null/empty means the
+ *   caller sent no preference and gets the module default (`foot`).
  * @returns {'car'|'bike'|'foot'|null} null = rejected profile.
  */
 export function normalizeRouteProfile(raw) {
@@ -37,8 +38,13 @@ export function normalizeRouteProfile(raw) {
 
 /**
  * Parse and validate the `coords=lon,lat;lon,lat;…` parameter.
- * @param {string} raw
+ * @param {string} raw The untrusted query value, verbatim from the request —
+ *   split, trimmed, and range-checked here before anything is forwarded.
  * @returns {{ok: true, pairs: string[], pts: Array<[number, number]>, coords: string}|{ok: false, error: string}}
+ *   On `ok`, `pairs` is the canonicalized per-point strings, `coords` the
+ *   canonical joined form for the upstream URL, and `pts` the numeric
+ *   `[lon, lat]` pairs for local geometry checks; on failure `error` is the
+ *   exact client-facing string both runtimes must return.
  */
 export function parseRouteCoords(raw) {
   const pairs = (raw || '').split(';').map((s) => s.trim()).filter(Boolean);
@@ -64,6 +70,8 @@ export function parseRouteCoords(raw) {
  * cross-continent request is either a bug or an attempt to drive heavy
  * upstream OSRM work. Returns an error message, or null when acceptable.
  * @param {Array<[number, number]>} pts [lon, lat] pairs
+ * @returns {string|null} Rejection message for the client, or null when the
+ *   span is plausible enough to forward upstream.
  */
 export function routeSpanError(pts) {
   let totalKm = 0;
@@ -77,7 +85,14 @@ export function routeSpanError(pts) {
   return null;
 }
 
-/** The exact public FOSSGIS OSRM URL both runtimes fetch. */
+/**
+ * The exact public FOSSGIS OSRM URL both runtimes fetch.
+ * @param {'car'|'bike'|'foot'} profile Already-normalized profile name; `car`
+ *   maps to OSRM's `driving` router/profile pair.
+ * @param {string} coords Canonical `lon,lat;lon,lat` list from
+ *   {@link parseRouteCoords} — interpolated verbatim into the path.
+ * @returns {string} Upstream URL with fixed geometry/alternatives query args.
+ */
 export function buildOsrmUrl(profile, coords) {
   const osrmProfile = profile === 'car' ? 'driving' : profile;
   return `https://routing.openstreetmap.de/routed-${profile}/route/v1/${osrmProfile}/${coords}?overview=full&geometries=geojson&alternatives=false&steps=false`;
@@ -85,7 +100,13 @@ export function buildOsrmUrl(profile, coords) {
 
 /**
  * Shape the OSRM response into the client payload contract.
+ * @param {object|null} osrm Parsed upstream JSON body (already buffered and
+ *   size-capped by the caller); may be null on a decode failure.
+ * @param {'car'|'bike'|'foot'} profile The normalized profile echoed back so
+ *   the client can label the route it drew.
  * @returns {{ok: true, profile: string, distanceM: number, durationS: number, geometry: Array}|{ok: false, error: string}}
+ *   Distance in metres, duration in seconds, geometry as OSRM's [lon, lat]
+ *   coordinate array passed through unmodified.
  */
 export function osrmRoutePayload(osrm, profile) {
   const route = osrm?.routes?.[0];

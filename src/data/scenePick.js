@@ -36,8 +36,8 @@ const MAX_PICK_MAGNITUDE_M = 1_000_000_000;
  * Whether a picked Cartesian names a real position on or above the globe, and
  * so can be converted to a Cartographic both safely and meaningfully.
  *
- * @param {{x: number, y: number, z: number}|null|undefined} position
- * @returns {boolean}
+ * @param {{x: number, y: number, z: number}|null|undefined} position Cartesian read from `scene.pickPosition()`, in the Cesium fixed frame.
+ * @returns {boolean} True when the magnitude is finite and inside the globe-to-GEO band, i.e. safe to convert.
  */
 export function isPickedWorldPosition(position) {
   if (!position) return false;

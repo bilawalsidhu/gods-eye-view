@@ -141,8 +141,8 @@ export function scopeTerminusAlpha(heightM) {
 /**
  * Snap a terminus alpha to the repaint grid. Equal quantized values mean the
  * paint would be indistinguishable, so the repaint is skipped.
- * @param {number} alpha
- * @returns {number}
+ * @param {number} alpha - Raw terminus alpha; out-of-range and NaN coerce to 0.
+ * @returns {number} Alpha rounded to the nearest SCOPE_TERMINUS_QUANTUM step.
  */
 export function quantizeScopeTerminusAlpha(alpha) {
   const a = Math.max(0, Math.min(1, Number(alpha) || 0));
@@ -156,7 +156,7 @@ export function quantizeScopeTerminusAlpha(alpha) {
  * Clamp a share-link/UI terminus PERCENT into the supported band.
  * Non-numeric input is not a value at all — it means "absent", i.e. adaptive.
  * Pure — unit-tested directly.
- * @param {*} value
+ * @param {*} value - Raw `sce` value: a number, a numeric string, or absent.
  * @returns {?number} 94..100, or null for adaptive.
  */
 export function clampScopeTerminusPct(value) {
@@ -188,16 +188,12 @@ export function updateScopeTerminusForHeight(heightM) {
 }
 
 /**
- * Pin the terminus alpha, or restore adaptive behavior.
- * @param {?number} alpha - Alpha in [0,1], or null/undefined for adaptive.
- * @returns {void}
- */
-/**
  * Run `fn` with paints COALESCED: any draw() it triggers only marks the canvas
  * dirty, and exactly one paint happens at the end. The case that matters is a
  * DPR change landing on the same tick as a terminus step — two full-viewport
  * repaints where one will do.
- * @param {Function} fn
+ * @param {Function} fn - Mutations to apply; called synchronously, nested calls
+ *   collapse into the outermost scope's single paint.
  * @returns {void}
  */
 function withCoalescedPaint(fn) {
@@ -222,6 +218,16 @@ function currentTerminusTarget() {
   );
 }
 
+/**
+ * Pin the mask's outside alpha to a caller-supplied terminus instead of the
+ * altitude curve (style-panel slider). Pass null/NaN to release the pin and
+ * follow the live camera again. Values outside the supported band are floored
+ * at SCOPE_OUTSIDE_ALPHA so the terminus can never become transparent.
+ *
+ * @param {number|null} alpha - Terminus alpha in [SCOPE_OUTSIDE_ALPHA, 1], or
+ *   null to clear the override.
+ * @returns {void}
+ */
 export function setScopeTerminusOverride(alpha) {
   if (alpha == null || !Number.isFinite(Number(alpha))) {
     _terminusOverride = null;
@@ -250,7 +256,10 @@ export function getScopeTerminusAlpha() {
   return _terminusAlpha;
 }
 
-/** Test/diagnostics seam: repaints caused by terminus steps since install. */
+/**
+ * Test/diagnostics seam: repaints caused by terminus steps since install.
+ * @returns {number} Count of quantized-alpha changes that triggered a paint.
+ */
 export function getScopeTerminusRepaintCount() {
   return _terminusRepaints;
 }
@@ -264,7 +273,12 @@ export function getScopeTerminusRepaintCount() {
  */
 const SCOPE_MASK_MAX_DPR = 1.5;
 
-/** Backing-store scale actually used by the last draw(). */
+/**
+ * Backing-store scale actually used by the last draw().
+ * @param {number} [ratio] - Device pixel ratio to cap (defaults to the live
+ *   `window.devicePixelRatio`).
+ * @returns {number} `ratio` clamped to SCOPE_MASK_MAX_DPR; never below 1.
+ */
 export function scopeMaskDevicePixelRatio(ratio = (typeof window !== 'undefined' ? window.devicePixelRatio : 1)) {
   return Math.min(SCOPE_MASK_MAX_DPR, Number(ratio) || 1);
 }
@@ -305,6 +319,10 @@ function watchDevicePixelRatio() {
   else if (typeof query.addListener === 'function') query.addListener(_dprListener);
 }
 
+/**
+ * Detach the re-armed resolution listener, if one is pending.
+ * @returns {void}
+ */
 function teardownDevicePixelRatioWatch() {
   if (_dprQuery && _dprListener) {
     if (typeof _dprQuery.removeEventListener === 'function') _dprQuery.removeEventListener('change', _dprListener);
@@ -340,6 +358,14 @@ export function scopeMaskGeometry(width, height, featherRatio = _featherRatio) {
   };
 }
 
+/**
+ * Repaint the mask canvas from current geometry/terminus state. Coalesces
+ * re-entrant calls into a single paint, clears once on the disabled transition,
+ * and draws either a hard even-odd crop (zero feather) or the feathered radial
+ * gradient otherwise.
+ *
+ * @returns {void}
+ */
 function draw() {
   if (_coalescingPaint) { _paintDirty = true; return; } // one paint at scope exit
   if (!_canvas || !_container) return;
@@ -398,7 +424,8 @@ function draw() {
 
 /**
  * Install the scope mask into the viewer container. Idempotent.
- * @param {import('cesium').Viewer} viewer
+ * @param {import('cesium').Viewer} viewer - Viewer whose container hosts the
+ *   mask canvas and whose camera drives the terminus sampling.
  * @returns {void}
  */
 export function installScopeMask(viewer) {
@@ -431,7 +458,8 @@ function currentCameraHeightM() {
  * warranted. Two cheap compares per rendered frame; under the idle governor a
  * parked camera renders no frames at all, so this costs nothing at rest.
  * moveEnd additionally pins the exact settled value.
- * @param {import('cesium').Viewer} viewer
+ * @param {import('cesium').Viewer} viewer - Viewer whose scene preRender and
+ *   camera moveEnd events are sampled.
  * @returns {void}
  */
 function watchCameraHeight(viewer) {
@@ -457,6 +485,7 @@ function watchCameraHeight(viewer) {
   }
 }
 
+/** Detach the camera-height listeners and reset the sample throttle. */
 function teardownCameraHeightWatch() {
   if (_cameraSampleRemover) { _cameraSampleRemover(); _cameraSampleRemover = null; }
   if (_cameraMoveEndRemover) { _cameraMoveEndRemover(); _cameraMoveEndRemover = null; }
@@ -464,7 +493,10 @@ function teardownCameraHeightWatch() {
 }
 
 /**
- * @param {boolean} enabled
+ * Turn the mask on or off. Re-enabling re-samples the live camera altitude once,
+ * because nothing sampled it while the mask was off.
+ *
+ * @param {boolean} enabled - Whether the scope mask paints at all.
  * @returns {void}
  */
 export function setScopeMaskEnabled(enabled) {
@@ -482,7 +514,7 @@ export function setScopeMaskEnabled(enabled) {
   draw();
 }
 
-/** @returns {boolean} */
+/** @returns {boolean} Whether the scope mask is currently enabled. */
 export function isScopeMaskEnabled() {
   return _enabled;
 }
@@ -496,7 +528,7 @@ export function setScopeMaskFeather(ratio) {
   draw();
 }
 
-/** @returns {number} */
+/** @returns {number} Current edge feather as a fraction of keyhole radius. */
 export function getScopeMaskFeather() {
   return _featherRatio;
 }

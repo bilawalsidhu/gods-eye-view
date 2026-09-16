@@ -55,7 +55,8 @@ const DEFAULT_OVERLAY_HOST = Object.freeze({
  * Build the validated local-infrastructure card copy.
  * @param {object} properties Unwrapped GeoJSON feature properties.
  * @param {string} layerId Local layer id.
- * @returns {{title:string,details:string[]}}
+ * @returns {{title:string,details:string[]}} card title plus at most one
+ *   trimmed detail line (operator/load, or river).
  */
 export function localInfrastructureOverlayCopy(properties, layerId) {
   const props = unwrapProperties(properties) || {};
@@ -99,14 +100,15 @@ export function localInfrastructureOverlayCopy(properties, layerId) {
 /**
  * Produce one normalized-contract input owned by a local infrastructure layer.
  * The host revalidates the authoritative `source` value while normalizing it.
- * @param {object} options
+ * @param {object} options One entry's identity, placement and styling.
  * @param {string} options.id Stable id within the source.
  * @param {string} options.layerId Local layer id.
  * @param {Cesium.Cartesian3} options.position Current stem-tip position.
  * @param {object} options.properties Unwrapped feature properties.
  * @param {number} options.priority Source-owned importance score.
  * @param {string} options.accent Source accent color.
- * @returns {object}
+ * @returns {object} normalized overlay entry (ambient-card variant) for
+ *   `overlayHost.setEntries`.
  */
 export function createLocalInfrastructureOverlayEntry({
   id,
@@ -148,7 +150,7 @@ export function createLocalInfrastructureOverlayEntry({
  * Two deterministic contenders per legacy grid cell preserve the old density
  * while giving the shared solver an alternative when the first card collides.
  * @param {object[]} records Local stem/entry records.
- * @param {object} options
+ * @param {object} options Viewport/projection inputs and the density caps.
  * @param {number} options.maxEntries Legacy source cap.
  * @param {number} options.gridPx Legacy screen grid size.
  * @param {number} options.width Viewport width in CSS pixels.
@@ -206,10 +208,11 @@ export function selectLocalInfrastructureOverlayCohort(records, {
 
 /**
  * Bind a local layer's visibility and entry lifecycle to the shared host.
- * @param {object} options
+ * @param {object} options Host binding (source id + optional test seam).
  * @param {string} options.sourceId Local layer id.
  * @param {object} [options.host] Test seam for the three host lifecycle calls.
  * @returns {{show:function():void,publish:function(object[]):void,hide:function():void,destroy:function():void}}
+ *   idempotent lifecycle handle; calls after `destroy` are no-ops.
  */
 export function createLocalInfrastructureOverlayPublisher({
   sourceId,
@@ -274,6 +277,23 @@ export function localDatasetError(error) {
  * A minimal, rock-solid native implementation for loading local GeoJSON Data.
  * Draws 3D stems (polylines) attached to Point entities and ensures
  * standard scene.pick natively clicks them.
+ *
+ * @param {object} root0 Layer descriptor + render/pick injection seams.
+ * @param {string} root0.id Stable layer id (also the overlay source id).
+ * @param {string} root0.url Bundled JSONL dataset URL, fetched on first enable.
+ * @param {string} root0.name Human layer title shown by the manager.
+ * @param {string} root0.color CSS color for stems, markers and polygon fill.
+ * @param {string} [root0.icon] Manager chip emoji.
+ * @param {string} [root0.source] Provenance string surfaced in entity context.
+ * @param {boolean} [root0.labels] Whether ambient cards are published at all.
+ * @param {number} [root0.labelMax] Legacy per-source label cap.
+ * @param {number} [root0.labelGridPx] Legacy label grid cell size in CSS px.
+ * @param {object} [root0.overlayHost] Overlay host lifecycle shim (tests).
+ * @param {function(HTMLCanvasElement): object} [root0.screenSpaceEventHandlerFactory]
+ *   Click-handler factory seam for tests.
+ * @param {function(object, Cesium.Cartesian3): ({x:number,y:number}|null)} [root0.projectToWindow]
+ *   Scene→window projection seam for tests.
+ * @returns {object} DataLayerManager-compatible layer module.
  */
 export function createLocalGeoJsonLayer({
   id,
@@ -323,7 +343,8 @@ export function createLocalGeoJsonLayer({
    *   - BUDGET: sampling can be supported and still keep failing (no sampleable
    *     surface yet/ever). Give up after GROUND_SAMPLE_MAX_ARMED_RETRIES
    *     consecutive arms; free camera-motion frames still retry.
-   * @param {Cesium.Viewer} viewer
+   * @param {Cesium.Viewer} viewer the layer's viewer, read only for
+   *   `scene.sampleHeightSupported`.
    * @returns {void}
    */
   function scheduleGroundRetryRender(viewer) {
@@ -338,6 +359,7 @@ export function createLocalGeoJsonLayer({
     }, GROUND_SAMPLE_RETRY_MS);
   }
 
+  /** Reset the give-up budget and cancel any armed retry timer. */
   function clearGroundRetryRender() {
     _groundRetryArms = 0;
     _lastGroundSampleCapability = null;
@@ -741,10 +763,24 @@ export function createLocalGeoJsonLayer({
   };
 }
 
+/**
+ * Deterministic overlay contender order: higher priority first, ties broken by
+ * id so the same viewport always yields the same cohort.
+ * @param {{priority:number, id:string|number}} a first record.
+ * @param {{priority:number, id:string|number}} b second record.
+ * @returns {number} negative when `a` sorts before `b`.
+ */
 function compareLocalOverlayRecords(a, b) {
   return b.priority - a.priority || String(a.id).localeCompare(String(b.id));
 }
 
+/**
+ * Insert a record into its grid cell's ranked contender list, keeping at most
+ * LOCAL_OVERLAY_CELL_SURPLUS entries (best + one deterministic alternate).
+ * @param {object[]} contenders the cell's records, priority-ordered.
+ * @param {{priority:number, id:string|number}} record the candidate to admit.
+ * @returns {void}
+ */
 function insertLocalCellContender(contenders, record) {
   let index = 0;
   while (index < contenders.length && compareLocalOverlayRecords(contenders[index], record) <= 0) {
@@ -754,6 +790,18 @@ function insertLocalCellContender(contenders, record) {
   if (contenders.length > LOCAL_OVERLAY_CELL_SURPLUS) contenders.length = LOCAL_OVERLAY_CELL_SURPLUS;
 }
 
+/**
+ * Sample the real surface height under one stem and lift its base onto it.
+ * Rate-limited per record (GROUND_SAMPLE_RETRY_MS) and sanity-gated: a
+ * non-finite or implausible sample leaves the record ungrounded so a later
+ * walk retries once tiles stream in.
+ * @param {Cesium.Viewer} viewer viewer whose scene provides the sample.
+ * @param {{carto: Cesium.Cartographic, base: Cesium.Cartesian3, entity: object,
+ *   groundSampled: boolean, lastGroundSampleMs: number, groundHeight: number}} record
+ *   mutable stem record for one feature.
+ * @param {number} now monotonic timestamp (performance.now) for rate limiting.
+ * @returns {boolean} true when this call grounded the record.
+ */
 function sampleLocalGroundHeight(viewer, record, now) {
   if (record.groundSampled || !viewer.scene.sampleHeightSupported) return false;
   if (now - record.lastGroundSampleMs < GROUND_SAMPLE_RETRY_MS) return false;
@@ -778,6 +826,20 @@ function sampleLocalGroundHeight(viewer, record, now) {
   return true;
 }
 
+/**
+ * Resize one stem so its tip holds ~65 px on screen, and (lazily) ground its
+ * base. Writes only when the new tip moves more than the sub-metre epsilon,
+ * flipping the polyline's double buffer so Cesium sees a fresh array.
+ * @param {Cesium.Viewer} viewer viewer providing camera, canvas and scene.
+ * @param {{carto: Cesium.Cartographic, base: Cesium.Cartesian3, tip: Cesium.Cartesian3,
+ *   nextTip: Cesium.Cartesian3, stemPositionBuffers: Cesium.Cartesian3[][],
+ *   stemPositionBufferIndex: number, groundHeight: number, groundSampled: boolean,
+ *   lastGroundSampleMs: number, entity: object}} record mutable stem record.
+ * @param {number} now monotonic timestamp for ground-sample rate limiting.
+ * @param {number|null} [knownDistance] camera distance in meters already
+ *   computed by the caller (skips one Cartesian3.distance).
+ * @returns {boolean} true when the tip moved and the geometry was rewritten.
+ */
 function updateLocalStemGeometry(viewer, record, now, knownDistance = null) {
   const distance = Number.isFinite(knownDistance)
     ? knownDistance
@@ -809,6 +871,13 @@ function updateLocalStemGeometry(viewer, record, now, knownDistance = null) {
   return true;
 }
 
+/**
+ * Pick the shortest usable label for a feature from its OSM-style properties,
+ * falling back to the layer's generic title.
+ * @param {object} props unwrapped feature properties (with `tags`).
+ * @param {string} layerId local layer id, for the fallback title.
+ * @returns {string} label clamped to the card width.
+ */
 function featureLabelFromProperties(props, layerId) {
   const tags = props.tags || {};
 
@@ -828,6 +897,14 @@ function featureLabelFromProperties(props, layerId) {
   return clampLabel(text || layerTitle(layerId));
 }
 
+/**
+ * Score a feature's label importance for the cohort arbiter: named features
+ * outrank unnamed ones, operators and capacity add weight, and the two
+ * infrastructure layers get a small per-layer bias.
+ * @param {object} props unwrapped feature properties (with `tags`).
+ * @param {string} layerId local layer id.
+ * @returns {number} additive importance score (higher wins).
+ */
 function labelPriorityFromProperties(props, layerId) {
   const tags = props.tags || {};
 
@@ -841,6 +918,11 @@ function labelPriorityFromProperties(props, layerId) {
   return score;
 }
 
+/**
+ * Read an entity's Cesium property bag into a plain object of plain values.
+ * @param {Cesium.Entity} entity entity whose `properties` to flatten.
+ * @returns {object} property-name → plain value (ConstantProperty resolved).
+ */
 function propertyObject(entity) {
   const source = entity?.properties;
   const raw = typeof source?.getValue === 'function'
@@ -849,6 +931,12 @@ function propertyObject(entity) {
   return unwrapProperties(raw);
 }
 
+/**
+ * Recursively resolve Cesium property wrappers (anything with `getValue`) into
+ * plain JSON values; non-object leaves pass through untouched.
+ * @param {*} value a property bag, array, wrapper, or scalar.
+ * @returns {*} same shape with every wrapper resolved at current time.
+ */
 function unwrapProperties(value) {
   if (!value || typeof value !== 'object') return value;
   if (Array.isArray(value)) return value.map(unwrapProperties);
@@ -861,26 +949,53 @@ function unwrapProperties(value) {
   return out;
 }
 
+/**
+ * Coerce a property to display text, rejecting empties and the string forms
+ * of null/undefined that GeoJSON authors leave behind.
+ * @param {*} value raw property value.
+ * @returns {string} trimmed text, or '' when nothing displayable remains.
+ */
 function cleanLabel(value) {
   const text = String(value || '').trim();
   if (!text || text === 'undefined' || text === 'null') return '';
   return text;
 }
 
+/**
+ * First displayable value in a candidate list (first non-empty wins).
+ * @param {Array<*>} values ordered fallback candidates.
+ * @returns {string} the first cleaned value, or ''.
+ */
 function firstClean(values) {
   return values.map(cleanLabel).find(Boolean) || '';
 }
 
+/**
+ * Clamp a feature label to the card's one-line budget.
+ * @param {*} value raw label text.
+ * @returns {string} text of at most 34 characters (ellipsis-terminated).
+ */
 function clampLabel(value) {
   const text = cleanLabel(value);
   return text.length > 34 ? `${text.slice(0, 31)}...` : text;
 }
 
+/**
+ * Clamp a card detail line to its wider two-segment budget.
+ * @param {*} value raw detail text.
+ * @returns {string} text of at most 48 characters (ellipsis-terminated).
+ */
 function clampCardLine(value) {
   const text = cleanLabel(value);
   return text.length > 48 ? `${text.slice(0, 45)}...` : text;
 }
 
+/**
+ * Generic singular title for a bundled local layer, used when a feature has
+ * no name of its own.
+ * @param {string} layerId local layer id.
+ * @returns {string} short human noun ("Dam", "Datacenter", "Feature").
+ */
 function layerTitle(layerId) {
   if (layerId === 'local-datacenters') return 'Datacenter';
   if (layerId === 'local-dams') return 'Dam';

@@ -134,7 +134,7 @@ const BILL_FAR_SCALE = 0.5;
  * detection telemetry against a production build is the point of keeping it.
  *
  * @param {string} search A `location.search` string.
- * @returns {boolean}
+ * @returns {boolean} True only for `?detectDebug=1`; malformed search strings read as off.
  */
 export function detectionDebugRequested(search) {
   try {
@@ -163,7 +163,7 @@ const GLOW_PX = DETECTION_STYLE.glowPx;
  * a single frame and disagree about whether an animation had finished. Every
  * timestamp that feeds a fade — this module's and the label arbiter's — now
  * comes from here or from `frame.timestamp`, which is the same clock.
- * @returns {number}
+ * @returns {number} Monotonic milliseconds; falls back to the wall clock where `performance` is absent.
  */
 function _nowMs() {
   return globalThis.performance?.now?.() ?? Date.now();
@@ -302,7 +302,7 @@ let _projectionRequestId = 0;
  * Index-aligned correlation is not enough: cohort order can permute between
  * frames (BoundedCohort re-scores on every solve), and index alignment would
  * silently draw bracket A on object B.
- * @param {{_layerId?:string, sourceId?:string|number, id?:string|number}} obj
+ * @param {{_layerId?:string, sourceId?:string|number, id?:string|number}} obj Detectable object as produced by a layer's getDetectableObjects().
  * @param {number} i - Fallback index for objects with no identity of their own.
  * @returns {number} FNV-1a hash of layerId + sourceId.
  */
@@ -310,7 +310,7 @@ const _workerIdentityOf = (obj, i) => stableIdentityHash(obj._layerId || '', obj
 
 /**
  * Returns the singleton detection projection worker, creating it on first call.
- * @returns {Worker}
+ * @returns {Worker} Module-level worker; null-capable callers must guard for the `typeof Worker === 'undefined'` case themselves.
  */
 function getProjectionWorker() {
   if (!_projectionWorker && typeof Worker !== 'undefined') {
@@ -495,6 +495,9 @@ function _bracketHalfSizes(obj, distance) {
   return _halfSizes;
 }
 
+/** Index of the density profile a given density percentage selects.
+ * @param {number} [densityPct=_densityPct] Current density in percent (0–100).
+ * @returns {number} Index into MODE_LABELS, or 0 when the density maps to no profile. */
 function _modeForDensity(densityPct = _densityPct) {
   return MODE_LABELS.indexOf(profileForDensity(densityPct));
 }
@@ -563,7 +566,7 @@ export function resumeDetection() {
  * screen-blended sensor surface and the shared normal-blend callout lane.
  * Letting them diverge would leave callouts painted over a dead sensor field
  * (or brackets with no callsigns).
- * @param {boolean} active
+ * @param {boolean} active True arms both lanes; false disarms them and drops the callout count.
  */
 function _setLanesActive(active) {
   const next = active === true;
@@ -646,11 +649,15 @@ export function markDetectionSourcesChanged(reason = 'sources-changed') {
   if (_lastDiagnostics) _lastDiagnostics.lastSourceChangeReason = reason;
 }
 
-/** Read-only diagnostics for unit/browser QA. */
+/** Read-only diagnostics for unit/browser QA.
+ * @returns {object|null} Deep copy of the last solved diagnostics, or null before the first frame.
+ */
 export function getDetectionDiagnostics() {
   return _lastDiagnostics ? JSON.parse(JSON.stringify(_lastDiagnostics)) : null;
 }
 
+/** Publish the last diagnostics onto the host canvas dataset so headless QA can
+ *  assert on rendered state without reaching into the module. */
 function _publishDiagnostics() {
   if (!_hostCanvas?.dataset || !_lastDiagnostics) return;
   const dataset = _hostCanvas.dataset;
@@ -695,6 +702,8 @@ export function setDetectionStyle(styleName) {
   _hostLane?.requestPaint();
 }
 
+/** Re-apply the active theme's blend + filter chain to the detection surface.
+ *  One compositor pass; called on lane attach and on style change only. */
 function _applySurfaceTheme() {
   if (!_hostSurface) return;
   _hostSurface.style.mixBlendMode = _theme.blend;
@@ -702,6 +711,7 @@ function _applySurfaceTheme() {
   _hostSurface.style.filter = `${_theme.filter} drop-shadow(0 0 ${GLOW_PX}px ${_theme.glow})`;
 }
 
+/** Show/hide the sensor surface from the current mode and suspend state. */
 function _syncSurfaceVisibility() {
   // Detection does NOT hold continuous render. It repaints on CHANGE — every
   // mode/suspend/tuning transition routes through this chokepoint or through
@@ -718,7 +728,7 @@ function _syncSurfaceVisibility() {
 /**
  * Returns the active theme's key colors so other overlays (e.g. the tracked-target
  * readout) can match the current visual mode (cyan/green/amber/white-hot).
- * @returns {{label: string, line: string, dim: string, glow: string, labelBg: string}}
+ * @returns {{label: string, line: string, dim: string, glow: string, labelBg: string}} Copied palette; `dim` falls back to `label` for themes that do not define it.
  */
 export function getDetectionTheme() {
   return {
@@ -769,6 +779,9 @@ function _applyModeState() {
  * Host gate for the shipped pathological-load relief valve. Returning false
  * preserves the dedicated surface's previous pixels while every shared lane
  * continues through the same host frame.
+ *
+ * @param {{layoutRevision: number, ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, surface: HTMLCanvasElement, width: number, height: number, timestamp: number}} frame Host-supplied paint frame for this tick.
+ * @returns {boolean} True when the detection surface should repaint this frame.
  */
 function _shouldPaintDetectionLane(frame) {
   if (_mode === MODE_OFF || _suspended) return false;
@@ -793,7 +806,9 @@ function _shouldPaintDetectionLane(frame) {
   return true;
 }
 
-/** Paint detection into the host-owned blend-isolation target. */
+/** Paint detection into the host-owned blend-isolation target.
+ * @param {{layoutRevision: number, ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, surface: HTMLCanvasElement, width: number, height: number, timestamp: number}} frame Host-supplied paint frame for this tick.
+ */
 function _paintDetectionLane(frame) {
   if (_mode === MODE_OFF || _suspended) return;
   _ctx = frame.ctx;
@@ -954,10 +969,18 @@ function _drawSparseFocusRing(width, height) {
   _ctx.restore();
 }
 
+/** Composite arbiter/registry key for one detectable object.
+ * @param {string} layerId Owning layer id ('flights', 'cctv', …).
+ * @param {string|number} sourceId Layer-local source identity.
+ * @returns {string} `layerId:sourceId`, unique across the overlay. */
 function _detectionKey(layerId, sourceId) {
   return `${layerId || 'unknown'}:${String(sourceId)}`;
 }
 
+/** Coarse placement priority an object starts from before its layer's
+ *  entitlement is applied — skipLabel objects are un-placeable, so they sink.
+ * @param {{skipLabel?: boolean, tier?: string, type?: string}} obj Detectable object.
+ * @returns {number} Higher wins the arbiter's scarce label slots. */
 function _semanticPriority(obj) {
   if (obj.skipLabel) return 1000;
   if (obj.tier === 'military') return 120;
@@ -969,6 +992,18 @@ function _semanticPriority(obj) {
   return 10;
 }
 
+/** Enumerate the four candidate callout corners for one bracket and keep the
+ *  ones that fit the viewport, dodge UI rectangles, and clear the keyhole.
+ * @param {number} sx Bracket centre screen X.
+ * @param {number} sy Bracket centre screen Y.
+ * @param {number} halfW Bracket half-width in CSS px.
+ * @param {number} halfH Bracket half-height in CSS px.
+ * @param {{w:number, h:number, primaryX:number, microX:number, baseline:number, hasMicro:boolean}} card Measured label card geometry.
+ * @param {number} width Viewport width in CSS px.
+ * @param {number} height Viewport height in CSS px.
+ * @param {{centerX:number, centerY:number, radiusPx:number, featherPx:number}} keyhole Focus-ring geometry driving the radial alpha.
+ * @param {Array<{x:number,y:number,w:number,h:number}>} [occlusionRects=[]] HUD rectangles the card must not cover.
+ * @returns {Array<{corner:string, cardX:number, cardY:number, leadFromX:number, leadFromY:number, leadToSide:string, leadToX:number, leadToY:number, centerX:number, centerY:number, keyholeAlpha:number, rect:{x:number,y:number,w:number,h:number}, primaryX:number, microX:number, baseline:number}>} Surviving placements, best-last-order as generated (NE, NW, SE, SW). */
 function _buildLabelPlacements(
   sx,
   sy,
@@ -1136,7 +1171,14 @@ function _plateScaleForBackdrop(skyFactor) {
   return 1 + (SKY_PLATE_SCALE - 1) * skyFactor;
 }
 
-/** Materialize one bounded rich-callout candidate for the existing arbiter. */
+/** Materialize one bounded rich-callout candidate for the existing arbiter.
+ * @param {object} obj Detectable object carrying the cohort's cached screen/candidate fields.
+ * @param {number} width Viewport width in CSS px.
+ * @param {number} height Viewport height in CSS px.
+ * @param {{centerX:number, centerY:number, radiusPx:number, featherPx:number}} keyhole Focus-ring geometry for placement alpha.
+ * @param {Array<{x:number,y:number,w:number,h:number}>} occlusionRects HUD rectangles the card must dodge.
+ * @param {import('cesium').Cartesian3} cameraPosition Camera world position feeding the sky/backdrop plate scale.
+ * @returns {object|null} Arbiter candidate record, or null when no corner could place the card. */
 function _materializeCandidate(obj, width, height, keyhole, occlusionRects, cameraPosition) {
   const primary = obj._candidatePrimary;
   const micro = obj._candidateMicro;
@@ -1190,6 +1232,9 @@ function _materializeCandidate(obj, width, height, keyhole, occlusionRects, came
  * Paint detection against the shared host frame. Brackets remain broad and
  * per-frame; rich placements rebuild only for selected/fading identities and
  * for a bounded cohort on solve ticks.
+ *
+ * @param {{layoutRevision: number, ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, surface: HTMLCanvasElement, width: number, height: number, dpr: number, timestamp: number, viewProjection: object, cameraPosition: (import('cesium').Cartesian3|null), occluder: object, keyhole: object, uiRects: Array<{x:number,y:number,w:number,h:number}>, uiRectCount: number}} frame Host-supplied paint frame for this tick.
+ * @returns {{didSolve: boolean, solveMs: number, fadingCount: number, animatingCount: number, solvePending: boolean}} Frame telemetry consumed by the render-demand policy.
  */
 function _drawOverlay(frame) {
   const { width, height } = frame;

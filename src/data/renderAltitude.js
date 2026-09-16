@@ -16,7 +16,8 @@
 // flights layer (Task 7).
 
 /**
- * @param {object} params
+ * Resolve one aircraft's render altitude from its most trustworthy source.
+ * @param {object} params - The OpenSky state-vector fields this poll carries.
  * @param {number|null|undefined} params.geoAltM - OpenSky geo_altitude (m, WGS84 ellipsoidal), if reported.
  * @param {number|null|undefined} params.baroAltM - Barometric/MSL altitude (m), if reported.
  * @param {boolean} params.onGround - OpenSky on_ground flag.
@@ -81,7 +82,7 @@ export function reuseGroundedSurfaceM(currentM, previousM) {
  * fallback holds that height instead, which is what product behavior requires for:
  * "hold the last known altitude until a fresh one comes in."
  *
- * @param {object} params
+ * @param {object} params - Altitude fields for the contact being placed.
  * @param {number|null|undefined} params.geoAltM - Reported geo_altitude.
  * @param {number|null|undefined} params.baroAltM - Reported baro_altitude.
  * @param {number|null|undefined} params.priorRenderM - Render height this

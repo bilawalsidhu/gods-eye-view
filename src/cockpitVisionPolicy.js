@@ -7,12 +7,24 @@ const TARGET_STYLE_BY_MODE = Object.freeze({
   noir: 'noir',
 });
 
-/** Normalize a requested Cockpit vision mode to the inherited preset entry. */
+/**
+ * Normalize a requested Cockpit vision mode to the inherited preset entry.
+ * @param {string} mode Requested vision mode id.
+ * @returns {string} A member of COCKPIT_VISION_MODES; unknown falls back to
+ *   'optical'.
+ */
 export function normalizeCockpitVisionMode(mode) {
   return COCKPIT_VISION_MODES.includes(mode) ? mode : 'optical';
 }
 
-/** Settle pending map-style crossfades and return their intended final intensities. */
+/**
+ * Settle pending map-style crossfades and return their intended final intensities.
+ * @param {{[name: string]: {uniforms: {intensity: number}}}} stages Live post-process
+ *   stages keyed by preset name.
+ * @param {Map<string, {to: number}>|null} transitions In-flight crossfades.
+ * @returns {{[name: string]: number}} Baseline intensity per stage name, restored
+ *   by applyCockpitVisionStageIntensities().
+ */
 export function captureCockpitVisionBaseline(stages, transitions) {
   const baseline = {};
   for (const [name, stage] of Object.entries(stages)) {
@@ -27,6 +39,13 @@ export function captureCockpitVisionBaseline(stages, transitions) {
 /**
  * Apply Cockpit-only stage intensities without changing any shader parameters.
  * Returns the temporary style whose parameters should be shown, or null.
+ * @param {{[name: string]: {uniforms: {intensity: number}}}} stages Live post-process
+ *   stages keyed by preset name.
+ * @param {string} mode Requested Cockpit vision mode.
+ * @param {{[name: string]: number}} [restore] Baseline intensities captured by
+ *   captureCockpitVisionBaseline(), reapplied for 'optical'.
+ * @returns {string|null} Preset name whose parameters should be shown, or null
+ *   when the optical (unchanged) presentation is in force.
  */
 export function applyCockpitVisionStageIntensities(stages, mode, restore = {}) {
   const next = normalizeCockpitVisionMode(mode);

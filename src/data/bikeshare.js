@@ -79,7 +79,7 @@ const COLOR_OUTLINE = Cesium.Color.BLACK.withAlpha(0.25);
 /**
  * Build GBFS endpoint URLs for a BCycle-hosted system.
  * @param {string} systemId - BCycle system identifier (e.g. 'bcycle_boulder').
- * @returns {{ stationInformationUrl: string, stationStatusUrl: string }}
+ * @returns {{ stationInformationUrl: string, stationStatusUrl: string }} The two GBFS endpoint URLs under `gbfs.bcycle.com`.
  */
 function buildBcycleUrls(systemId) {
   return {
@@ -91,7 +91,7 @@ function buildBcycleUrls(systemId) {
 /**
  * Convenience factory for a BCycle-hosted city registry entry.
  * Merges caller-supplied metadata with auto-generated BCycle GBFS URLs.
- * @param {object} opts
+ * @param {object} opts City metadata plus the BCycle system identifier.
  * @param {string} opts.id - Unique city identifier.
  * @param {string} opts.city - Human-readable city name.
  * @param {number} opts.centerLat - City center latitude.
@@ -547,7 +547,7 @@ function endLoading() {
  * GBFS feeds are inconsistent — some use booleans, others use 0/1 or strings.
  * @param {*} value - Raw field value from GBFS JSON.
  * @param {boolean} [fallback=true] - Default when value is null/undefined/unrecognized.
- * @returns {boolean}
+ * @returns {boolean} Native boolean interpretation of the field.
  */
 function normalizeGbfsBool(value, fallback = true) {
   if (value == null) return fallback;
@@ -564,7 +564,7 @@ function normalizeGbfsBool(value, fallback = true) {
  * Parse a value as a non-negative integer, returning fallback on failure.
  * @param {*} value - Raw numeric value.
  * @param {number|null} [fallback=null] - Returned when value is not a valid non-negative number.
- * @returns {number|null}
+ * @returns {number|null} Rounded non-negative integer, or `fallback`.
  */
 function toNonNegativeInteger(value, fallback = null) {
   const n = Number(value);
@@ -769,7 +769,7 @@ function parseStationStatus(payload) {
 /**
  * Fetch and parse JSON from a GBFS endpoint via the local proxy.
  * @param {string} upstreamUrl - Full HTTPS GBFS endpoint URL.
- * @param {object} [options]
+ * @param {object} [options] Fetch controls.
  * @param {AbortSignal} [options.signal] - Optional abort signal for cancellation.
  * @returns {Promise<object>} Parsed JSON payload.
  * @throws {Error} On non-OK HTTP status or malformed JSON.
@@ -989,7 +989,7 @@ function buildSelectionLabel(record) {
  * Build the protected selected-station entry from source-owned copy.
  * @param {string} key Stable city/station composite key.
  * @param {object} record Bikeshare render record.
- * @returns {object|null}
+ * @returns {object|null} Host entry for the `selected` paint lane, or null when the station has no placed point.
  */
 export function createBikeshareSelectedOverlayEntry(key, record) {
   const position = record?.point?.position;
@@ -1286,10 +1286,10 @@ function buildDetectionId(record) {
  * Collect a sampled subset of visible stations for HUD detection overlay rendering.
  * Uses a deterministic stride pattern controlled by options.seed and options.maxCount
  * to avoid overcrowding the HUD while still providing broad coverage.
- * @param {object} [options]
+ * @param {object} [options] Sampling controls.
  * @param {number} [options.maxCount] - Maximum number of detectable objects to return.
  * @param {number} [options.seed] - Seed for deterministic stride offset selection.
- * @returns {Array<{ position: Cesium.Cartesian3, id: string, type: string, skipLabel: boolean }>}
+ * @returns {Array<{ position: Cesium.Cartesian3, id: string, type: string, skipLabel: boolean }>} Detectable station descriptors in render order.
  */
 function collectDetectableStations(options = {}) {
   if (!_enabled || !_pointCollection || !_pointCollection.show || _stationRenderMap.size === 0) return [];
@@ -1591,7 +1591,7 @@ const bikeshareLayer = {
   /**
    * Return a sampled array of detectable station objects for HUD overlay rendering.
    * @param {object} [options] - Sampling options (maxCount, seed).
-   * @returns {Array<{ position: Cesium.Cartesian3, id: string, type: string, skipLabel: boolean }>}
+   * @returns {Array<{ position: Cesium.Cartesian3, id: string, type: string, skipLabel: boolean }>} Detectable station descriptors in render order.
    */
   getDetectableObjects(options = {}) {
     return collectDetectableStations(options);
@@ -1599,7 +1599,7 @@ const bikeshareLayer = {
 
   /**
    * Return current layer statistics for the UI status display.
-   * @returns {{ count: number, lastUpdate: number|null, loading: boolean, loadingLabel?: string, error?: string }}
+   * @returns {{ count: number, lastUpdate: number|null, loading: boolean, loadingLabel?: string, error?: string }} Live layer statistics; `loadingLabel` present only while loading and `error` only after a failed sync.
    */
   getStats() {
     const stats = {
@@ -1616,7 +1616,9 @@ const bikeshareLayer = {
     return stats;
   },
 
-  /** Permanently release primitives, handlers, and the selected host source. */
+  /** Permanently release primitives, handlers, and the selected host source.
+   * @param {import('cesium').Viewer} viewer Viewer whose camera listener and entity collection are released.
+   */
   destroy(viewer) {
     if (_enabled) this.disable(viewer);
     else {
@@ -1652,7 +1654,9 @@ function _onKeyDown(e) {
   }
 }
 
-/** Seed a selected-station runtime record while still exercising real select/clear paths. */
+/** Seed a selected-station runtime record while still exercising real select/clear paths.
+ * @param {{viewer: import('cesium').Viewer, key: string, record: object, overlayHost?: object}} seed Runtime fixture; `overlayHost` defaults back to the production host.
+ */
 export function _setBikeshareSelectionStateForTest({ viewer, key, record, overlayHost }) {
   _viewer = viewer;
   _stationRenderMap = new Map([[key, record]]);
@@ -1661,7 +1665,9 @@ export function _setBikeshareSelectionStateForTest({ viewer, key, record, overla
   _overlayHost = overlayHost || DEFAULT_OVERLAY_HOST;
 }
 
-/** Exercise the production selection path in focused runtime tests. */
+/** Exercise the production selection path in focused runtime tests.
+ * @param {string} key Composite city/station key of the station to select (must already be seeded in the render map).
+ */
 export function _selectBikeshareStationForTest(key) {
   _selectStation(key);
 }
@@ -1672,7 +1678,9 @@ export function _clearBikeshareSelectionForTest() {
   _overlayHost = DEFAULT_OVERLAY_HOST;
 }
 
-/** Read back the installed ScreenSpaceEventHandler in runtime tests. */
+/** Read back the installed ScreenSpaceEventHandler in runtime tests.
+ * @returns {object|null} The layer's click handler, or null before enable()/after destroy().
+ */
 export function _getBikeshareClickHandlerForTest() {
   return _clickHandler;
 }

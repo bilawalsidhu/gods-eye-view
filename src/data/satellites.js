@@ -178,6 +178,8 @@ const POINT_STYLES = {
  * @param {number} noradId NORAD catalog number.
  * @param {string|undefined} group Catalog group tag (see CATALOG_GROUPS / 'dense').
  * @returns {{ pixelSize: number, color: Cesium.Color, outlineColor: Cesium.Color, outlineWidth: number }}
+ *   Point style; ISS and dense extras get their dedicated profiles, anything
+ *   unrecognized falls back to the `visual` profile.
  */
 function _pointStyleFor(noradId, group) {
   if (noradId === ISS_NORAD) return POINT_STYLES.iss;
@@ -202,6 +204,11 @@ let _lastError = null;
 const _activeUpdateControllers = new Set();
 let _denseLoadController = null;
 
+/**
+ * Aborts every in-flight catalog fetch (core group loads plus the dense TLE
+ * load) and drops their controllers. Called on disable/destroy/re-init so a
+ * torn-down layer never applies a late response.
+ */
 function _abortActiveUpdates() {
   for (const controller of _activeUpdateControllers) controller.abort();
   _activeUpdateControllers.clear();
@@ -329,7 +336,11 @@ export function satelliteCatalogModeChanged(currentCatalog, requestedCatalog) {
     && requestedCatalog !== currentCatalog;
 }
 
-/** Build the persistent ISS ambient label from the cached point position. */
+/**
+ * Build the persistent ISS ambient label from the cached point position.
+ * @param {Cesium.Cartesian3} position - ISS ECEF position the label tracks.
+ * @returns {object} Shared-host presentation entry for the ISS callout.
+ */
 export function createIssOverlayEntry(position) {
   return createOverlayEntry({
     id: String(ISS_NORAD),
@@ -353,7 +364,11 @@ export function createIssOverlayEntry(position) {
   });
 }
 
-/** Cached ISS point only; never performs a fresh SGP4 propagation. */
+/**
+ * Cached ISS point only; never performs a fresh SGP4 propagation.
+ * @returns {Cesium.Cartesian3|null} The ISS point's last position, or null
+ *   before the ISS point exists.
+ */
 function _issDisplayCached() {
   return _points.get(ISS_NORAD)?.position || null;
 }
@@ -376,6 +391,7 @@ let _lastDockedScanMs = Number.NEGATIVE_INFINITY;
 /**
  * Rebuild the docked-companion set for the tracked satellite.
  * @returns {boolean} true when membership changed (callers resync presentation).
+ * @param {number} nowMs - Wall-clock timestamp in ms (throttles the scan).
  */
 function _refreshDockedCompanions(nowMs) {
   const trackedPosition = _trackedNorad === null ? null : _trackedDisplayCached();
@@ -405,7 +421,10 @@ function _refreshDockedCompanions(nowMs) {
   return changed;
 }
 
-/** Names of the docked companions, stable-sorted so the card text never churns. */
+/**
+ * Names of the docked companions, stable-sorted so the card text never churns.
+ * @returns {string[]} Catalog names (or `SAT-<noradId>` fallbacks), sorted.
+ */
 function _dockedCompanionNames() {
   const names = [];
   for (const noradId of _dockedCompanions) {
@@ -472,6 +491,10 @@ export function orbitFrameModelMatrix(
 
 /**
  * Parse TLE text into array of { name, line1, line2 } objects.
+ * @param {string} text - Raw three-line-element catalog text (name, line 1,
+ *   line 2 per satellite; blank lines tolerated).
+ * @returns {Array<{name: string, line1: string, line2: string}>} Well-formed
+ *   TLE triples (line 1 starting `1 `, line 2 starting `2 `).
  */
 function parseTLE(text) {
   const lines = text.trim().split('\n').map(l => l.trim()).filter(l => l.length > 0);
@@ -491,6 +514,12 @@ function parseTLE(text) {
  * Propagate satellite position at a given JS Date.
  * Returns geodetic position plus inertial speed from the same SGP4 propagation
  * epoch, or null on error.
+ * @param {object} satrec - satellite.js record from `twoline2satrec`.
+ * @param {Date} date - Propagation epoch.
+ * @returns {{longitude: number, latitude: number, altitude: number, speedMps: number|null}|null}
+ *   Geodetic fix — longitude/latitude in degrees, altitude in METRES (the
+ *   satellite.js geodetic height in km is scaled here), and the ECI velocity
+ *   magnitude in m/s (null when the propagation yields no velocity).
  */
 function propagatePosition(satrec, date) {
   try {
@@ -517,6 +546,14 @@ function propagatePosition(satrec, date) {
   }
 }
 
+/**
+ * Orbital period derived from the satrec's mean motion. `satrec.no` is
+ * radians/minute (SGP4 internal units); `1440 / 2π` converts it to rev/day,
+ * then 86400 / rev-per-day gives seconds per revolution.
+ * @param {object} satrec - satellite.js record from `twoline2satrec`.
+ * @returns {number} Period in seconds (floored at a 0.1 rev/day mean motion
+ *   so degenerate satrecs cannot divide by zero).
+ */
 function orbitalPeriodSeconds(satrec) {
   const meanMotion = satrec.no * (1440 / (2 * Math.PI));
   return 86400 / Math.max(meanMotion, 0.1);
@@ -525,6 +562,12 @@ function orbitalPeriodSeconds(satrec) {
 /**
  * Compute full orbital path as array of Cartesian3 positions.
  * Steps around one full orbit based on the satellite's mean motion.
+ * @param {object} satrec - satellite.js record from `twoline2satrec`.
+ * @param {Date} referenceDate - Epoch the ring is baked at; GMST is fixed to
+ *   it so the ring closes instead of drifting west by Earth rotation.
+ * @returns {Cesium.Cartesian3[]} `ORBIT_PATH_STEPS + 1` ECEF positions
+ *   (altitude in metres); failed propagations are skipped, so a ring can be
+ *   shorter than requested.
  */
 function computeOrbitPath(satrec, referenceDate) {
   const periodSec = orbitalPeriodSeconds(satrec);
@@ -571,6 +614,9 @@ function computeOrbitPath(satrec, referenceDate) {
  * segment. The Primitive keeps it via depthFailAppearance + the per-instance
  * depthFailColor attribute (same mechanism the entity STATIC batch uses):
  * bright where above the horizon, dimmed where behind the globe.
+ * @param {number} noradId - Satellite whose ring to create.
+ * @param {Cesium.Color} [color] - Ring color (defaults to cyan; tracking
+ *   passes yellow).
  */
 function _showOrbitPath(noradId, color) {
   if (_orbitPaths.has(noradId)) return; // already showing
@@ -650,6 +696,7 @@ function _updateOrbitPathRotations(nowDate) {
 
 /**
  * Remove orbital path for a satellite.
+ * @param {number} noradId - Satellite whose ring primitive is destroyed.
  */
 function _hideOrbitPath(noradId) {
   const path = _orbitPaths.get(noradId);
@@ -659,6 +706,12 @@ function _hideOrbitPath(noradId) {
   }
 }
 
+/**
+ * Coerces a candidate follow target into a usable NORAD id.
+ * @param {string|number} candidate - Raw id from a share link, voice, or panel.
+ * @returns {number|null} Positive integer NORAD id, or null when the candidate
+ *   is not a finite positive number.
+ */
 function _normalizeTrackedNorad(candidate) {
   const numeric = Number(candidate);
   if (!Number.isFinite(numeric)) return null;
@@ -666,11 +719,24 @@ function _normalizeTrackedNorad(candidate) {
   return rounded > 0 ? rounded : null;
 }
 
+/**
+ * Publishes a cross-layer awareness CustomEvent on `window`. Silently no-ops
+ * outside a browser realm (node:test) or where CustomEvent is unavailable.
+ * @param {string} type - Event name (e.g. 'gev:awareness-subject-selected').
+ * @param {object} detail - Payload carried as the event's `detail`.
+ */
 function _emitAwarenessEvent(type, detail) {
   if (typeof window === 'undefined' || !window.dispatchEvent || typeof CustomEvent === 'undefined') return;
   window.dispatchEvent(new CustomEvent(type, { detail }));
 }
 
+/**
+ * Replays a deferred tracking intent once its preconditions hold again.
+ * The intent survives only while its generation matches (no newer
+ * cancel/restart), the layer is enabled, and the target exists in both the
+ * catalog and the point collection.
+ * @returns {boolean} True when the pending target was actually re-tracked.
+ */
 function _applyPendingTrackingRestore() {
   const pending = _pendingTrackingRestore;
   if (!pending || pending.generation !== _trackingIntentGeneration || !_enabled) return false;
@@ -680,6 +746,10 @@ function _applyPendingTrackingRestore() {
   return _trackedNorad === pending.id;
 }
 
+/**
+ * Drops any deferred tracking intent. Bumping the generation token also
+ * invalidates intents captured by in-flight async restores.
+ */
 function _cancelPendingTrackingRestore() {
   _trackingIntentGeneration += 1;
   _pendingTrackingRestore = null;
@@ -691,6 +761,9 @@ function _cancelPendingTrackingRestore() {
  *   the follow-camera (viewer.trackedEntityChanged), tear down our own state
  *   but do NOT clear viewer.trackedEntity — the new owner controls it now,
  *   and clearing it would yank the camera off their target (mirror of flights).
+ * @param {object} [root0] - Deselection metadata.
+ * @param {string} [root0.origin='programmatic'] - Provenance of the
+ *   deselection, forwarded on the awareness event (`'user'`, `'share-restore'`, ...).
  */
 function _clearTracking(skipViewerUntrack = false, { origin = 'programmatic' } = {}) {
   // Untracking dissolves the cluster: every companion returns to its own
@@ -749,6 +822,9 @@ function _clearTracking(skipViewerUntrack = false, { origin = 'programmatic' } =
  * 200ms throttle. The matching ECEF position is left in
  * `_trackedFrameCartesian`. SGP4 for one satellite per frame is cheap.
  * @returns {{ longitude: number, latitude: number, altitude: number }|null}
+ *   Geodetic fix in degrees/metres from the current frame's propagation, or
+ *   null when nothing is tracked, the catalog row is gone, or SGP4 failed
+ *   (the last good sample is retained in that case).
  */
 function _getTrackedFramePosition() {
   if (_trackedNorad === null) return null;
@@ -796,12 +872,15 @@ function _getTrackedFramePosition() {
   return _trackedFrameGeo;
 }
 
-/** Cached ECEF display point only; never propagates a fresh SGP4 sample. */
+/**
+ * Cached ECEF display point only; never propagates a fresh SGP4 sample.
+ * @returns {Cesium.Cartesian3|null} The tracked satellite's cached ECEF
+ *   position, or null before the first successful frame propagation.
+ */
 function _trackedDisplayCached() {
   return _trackedFrameGeo ? _trackedFrameCartesian : null;
 }
 
-/** Update the explicit model only when the rounded altitude line changes. */
 /** Epoch of the last shared-context refresh for the tracked satellite. */
 let _contextRefreshedAtMs = 0;
 /**
@@ -939,6 +1018,14 @@ function _refreshTrackedSubjectContext() {
   refreshTrackedSubjectContext(_contextSubjectMetadata(_trackedNorad));
 }
 
+/**
+ * Update the explicit model only when the rounded altitude line changes.
+ * Rebuilds the tracked card's title and detail lines (class, altitude, NORAD,
+ * and the consolidated docked-companion line), republishing only when the
+ * text actually differs so the readout never churns per frame.
+ * @param {number|null} [fallbackAltitudeM=null] - Altitude in metres used when
+ *   the per-frame cache has no sample yet.
+ */
 function _updateTrackedSatelliteLabelModel(fallbackAltitudeM = null) {
   if (!_trackedEntity || _trackedNorad === null) return;
   const sat = _catalog.get(_trackedNorad);
@@ -969,6 +1056,16 @@ function _updateTrackedSatelliteLabelModel(fallbackAltitudeM = null) {
   refreshTrackedReadout(_trackedEntity);
 }
 
+/**
+ * Internal tracking entry point: clears any current follow, hides the point
+ * primitive, builds the tracked entity (point graphic + label + per-frame
+ * position callback), shows the orbit ring, grabs the follow camera, and
+ * publishes the awareness/context events.
+ * @param {number} noradId - NORAD id present in both catalog and points.
+ * @param {object} [root0] - Tracking metadata.
+ * @param {string} [root0.origin='programmatic'] - Provenance of the selection
+ *   (`'user'`, `'share-restore'`, `'programmatic'`), used by event consumers.
+ */
 function _trackSatellite(noradId, { origin = 'programmatic' } = {}) {
   _clearTracking(false, { origin });
 
@@ -1048,6 +1145,8 @@ function _trackSatellite(noradId, { origin = 'programmatic' } = {}) {
  * container — see docs/PERFORMANCE.md). Fine at the 1s/200ms cadence. Dense
  * extras are excluded: they refresh on the round-robin budget in
  * _propagateDenseChunk.
+ * @returns {number} Count of point primitives actually moved (catalog rows
+ *   with no point primitive are skipped and not counted).
  */
 function _propagateAll() {
   const t0 = performance.now();
@@ -1103,6 +1202,12 @@ function _propagateDenseChunk() {
  * Load the dense catalog extras (Starlink) as points-only satellites.
  * Chunked so ~10K twoline2satrec builds + initial propagations never block a
  * frame; a token guards against mode flips / catalog rebuilds mid-load.
+ * @param {object} [root0] - Load options.
+ * @param {AbortSignal|null} [root0.signal=null] - External cancellation signal
+ *   (combined with the layer's own controller via `AbortSignal.any`).
+ * @returns {Promise<{status: string, reason?: string}>} Settlement descriptor:
+ *   'ready', 'loading', 'not-requested', 'source-unavailable', 'aborted', or
+ *   'failed' (with `reason`).
  */
 async function _loadDenseCatalog({ signal = null } = {}) {
   if (!_viewer || !_pointCollection) return { status: 'source-unavailable', reason: 'layer-unavailable' };
@@ -1311,14 +1416,15 @@ function _preRenderTick() {
 /**
  * Seed a single tracked satellite so tests can invoke the exact production
  * pre-render callback without constructing a WebGL viewer.
- * @param {object} state
- * @param {number} state.noradId
- * @param {string} state.name
- * @param {object} state.satrec
- * @param {object} state.entity
- * @param {object} state.point
- * @param {object} state.viewer
- * @param {() => (number|Date)} state.now
+ * @param {object} state - Tracked-satellite seed state.
+ * @param {number} state.noradId - NORAD id to mark as tracked.
+ * @param {string} state.name - Catalog display name for the tracked row.
+ * @param {object} state.satrec - satellite.js record used for propagation.
+ * @param {object} state.entity - Stand-in tracked entity (receives gevLabelModel).
+ * @param {object} state.point - Stand-in point primitive for the tracked row.
+ * @param {object} state.viewer - Viewer-like stand-in (frameNumber source).
+ * @param {() => (number|Date)} state.now - Clock seam returning ms or a Date,
+ *   driving both the frame epoch and the docked-scan throttle.
  * @param {Array<object>} [state.neighbours=[]] - Extra catalog/point rows so a test can
  *   exercise a docked cluster plus a control satellite that must stay outside it.
  */
@@ -1356,7 +1462,18 @@ export function _setTrackedSatelliteRefreshStateForTest({
   _enabled = true;
 }
 
-/** Seed catalog authority and optional dense settlement for share-Follow tests. */
+/**
+ * Seed catalog authority and optional dense settlement for share-Follow tests.
+ * Bumps the tracking-refresh epoch, records the outcome the resolver will
+ * observe, and installs the dense-load promise it awaits.
+ * @param {object} [root0] - Seed values.
+ * @param {string} [root0.status='accepted'] - Last refresh outcome
+ *   ('accepted' | 'partial' | others read as unavailable).
+ * @param {string[]} [root0.failedGroups=[]] - Groups missing from a partial load.
+ * @param {'core'|'dense'} [root0.catalog='core'] - Active catalog mode.
+ * @param {Promise<object>|null} [root0.densePromise=null] - Promise the
+ *   resolver awaits in dense mode (defaults to a resolved not-requested).
+ */
 export function _setSatelliteTrackingRefreshOutcomeForTest({
   status = 'accepted',
   failedGroups = [],
@@ -1371,6 +1488,12 @@ export function _setSatelliteTrackingRefreshOutcomeForTest({
 
 /** The tracked satellite's current ECEF sample — the value the docked-cluster
  *  scan measures against. Exposed so a test can place neighbours around it. */
+/**
+ * The tracked satellite's current ECEF sample — the value the docked-cluster
+ * scan measures against. Exposed so a test can place neighbours around it.
+ * @returns {Cesium.Cartesian3} The cached per-frame ECEF position (mutated in
+ *   place by `_getTrackedFramePosition`).
+ */
 export function _trackedFrameCartesianForTest() {
   return _trackedFrameCartesian;
 }
@@ -1384,7 +1507,8 @@ export function _runSatellitePreRenderForTest() {
  * Seed the minimum render state a dense-catalog load needs, so a test can
  * exercise the real async load/settle/fail path (and the row-control states it
  * drives) without constructing a WebGL viewer.
- * @param {{ catalog?: 'core'|'dense', showPoints?: boolean }} [options]
+ * @param {{ catalog?: 'core'|'dense', showPoints?: boolean }} [options] - Params
+ *   seed (`catalog` mode and point visibility the load path will read).
  */
 export function _setDenseCatalogStateForTest({ catalog = 'core', showPoints = true } = {}) {
   _viewer = { scene: { primitives: { add: (p) => p, remove() {} } } };
@@ -1431,12 +1555,26 @@ export function _clearDenseCatalogStateForTest() {
   _enabled = false;
 }
 
-/** Catalog group tag recorded for a satellite, for ingestion-path assertions. */
+/**
+ * Catalog group tag recorded for a satellite, for ingestion-path assertions.
+ * @param {string|number} noradId - NORAD id to look up.
+ * @returns {string|undefined} Group tag, or undefined when the id is absent.
+ */
 export function _catalogGroupForTest(noradId) {
   return _catalog.get(Number(noradId))?.group;
 }
 
-/** Seed ISS/tracking state while retaining the production track and host paths. */
+/**
+ * Seed ISS/tracking state while retaining the production track and host paths.
+ * @param {object} root0 - Seed state.
+ * @param {object} root0.viewer - Viewer-like stand-in used by the sync paths.
+ * @param {object} root0.satrec - satellite.js record for the ISS row.
+ * @param {object} root0.point - Point primitive stand-in for the ISS row.
+ * @param {object} [root0.overlayHost] - Overlay host adapter (defaults to the
+ *   module-default no-op host).
+ * @param {boolean} [root0.preservePending=false] - Keep any deferred tracking
+ *   intent instead of cancelling it during the seed.
+ */
 export function _setSatelliteLabelLifecycleStateForTest({
   viewer,
   satrec,
@@ -1462,23 +1600,35 @@ export function _setSatelliteLabelLifecycleStateForTest({
   _syncIssOverlay();
 }
 
-/** Exercise production ISS tracking from the cached catalog and point. */
+/**
+ * Exercise production ISS tracking from the cached catalog and point.
+ * @returns {object|null} The tracked entity created by `_trackSatellite`.
+ */
 export function _trackIssForTest() {
   _trackSatellite(ISS_NORAD);
   return _trackedEntity;
 }
 
-/** Return the deferred restore target held by the production tracker. */
+/**
+ * Return the deferred restore target held by the production tracker.
+ * @returns {number|null} Pending NORAD id, or null when nothing is deferred.
+ */
 export function _pendingSatelliteTrackingRestoreForTest() {
   return _pendingTrackingRestore?.id ?? null;
 }
 
-/** Exercise the production deferred-restore retry after a simulated catalog refresh. */
+/**
+ * Exercise the production deferred-restore retry after a simulated catalog refresh.
+ * @returns {boolean} True when the pending target was actually re-tracked.
+ */
 export function _applyPendingSatelliteTrackingRestoreForTest() {
   return _applyPendingTrackingRestore();
 }
 
-/** Remove a cached catalog row so tests can model a target arriving later. */
+/**
+ * Remove a cached catalog row so tests can model a target arriving later.
+ * @param {string|number} noradId - NORAD id to drop from catalog and points.
+ */
 export function _removeSatelliteTrackingCandidateForTest(noradId) {
   const id = Number(noradId);
   _catalog.delete(id);
@@ -1494,7 +1644,10 @@ export function _clearSatelliteLabelLifecycleForTest() {
   _overlayHost = DEFAULT_OVERLAY_HOST;
 }
 
-/** Focus alpha for satellite points, inside the existing shared preRender tick. */
+/**
+ * Focus alpha for satellite points, inside the existing shared preRender tick.
+ * @param {number} nowMs - Frame timestamp in ms (throttles to ~12.5 Hz).
+ */
 function _updatePointFocus(nowMs) {
   const target = getFocusTarget();
   if (!_params.showPoints || !focusPassIsNeeded(target, _activeFocusCount)) return;
@@ -1519,7 +1672,7 @@ function _updatePointFocus(nowMs) {
 
 /**
  * Apply the gated satellite-point focus pass through the production color path.
- * @param {object} input
+ * @param {object} input - Dependency-injected pass inputs (see members).
  * @param {Map<number, object>} input.points - Satellite points keyed by NORAD ID whose alpha the pass advances.
  * @param {number|null} input.trackedId - NORAD ID of the followed satellite; skipped so the tracked dot keeps full emphasis.
  * @param {object|null} input.target - Current focus target, or null when nothing is followed.
@@ -1530,6 +1683,9 @@ function _updatePointFocus(nowMs) {
  * @param {Function} input.baseColorFor - Returns a point's base color, whose alpha the pass scales.
  * @param {object} [input.params] - Focus tuning overrides forwarded to the shared focus helpers.
  * @returns {{writes:number,transitioning:boolean,activeCount:number,ran:boolean}}
+ *   Pass telemetry: point writes applied, whether any point is still
+ *   transitioning, how many sit outside the deadband, and whether the gate
+ *   let the pass run.
  */
 export function applySatellitePointFocusDeemphasis({
   points,
@@ -1955,6 +2111,8 @@ const satellitesLayer = {
    * name substring. Position is freshly propagated via SGP4.
    * @param {string|number} query NORAD id or partial name.
    * @returns {{ noradId: number, name: string, position: Cesium.Cartesian3, latitude: number, longitude: number, altitudeM: number }|null}
+   *   Freshly propagated match (degrees/metres), or null when the query is
+   *   empty, unmatched, or SGP4 fails.
    */
   findByQuery(query) {
     if (query === null || query === undefined || !_catalog || _catalog.size === 0) return null;
@@ -1994,6 +2152,8 @@ const satellitesLayer = {
    * (no SGP4 re-propagation).
    * @param {number} [maxCount=300] Maximum entries to return.
    * @returns {Array<{ id: number, label: string, position: Cesium.Cartesian3, latitude: number, longitude: number, altitudeM: number }>}
+   *   Cached positions in degrees/metres (dense extras excluded, so voice and
+   *   framing lists stay on the core catalog).
    */
   getAllPositions(maxCount = 300) {
     const result = [];
@@ -2024,6 +2184,9 @@ const satellitesLayer = {
    * Track a satellite by NORAD id (camera follow + orbit path + highlight),
    * same path as clicking its point.
    * @param {string|number} noradId NORAD catalog number.
+   * @param {object} [root0] - Tracking metadata.
+   * @param {string} [root0.origin='programmatic'] - Provenance of the selection
+   *   forwarded to `_trackSatellite` and the awareness events.
    * @returns {boolean} True if tracking started.
    */
   trackById(noradId, { origin = 'programmatic' } = {}) {
@@ -2037,6 +2200,15 @@ const satellitesLayer = {
   /**
    * Resolve a shared Follow target only after the applicable CelesTrak
    * catalog has settled. A partial catalog can prove presence, never absence.
+   * @param {string|number} noradId - NORAD id (numeric string accepted).
+   * @param {object} [root0] - Resolution options.
+   * @param {AbortSignal|null} [root0.signal=null] - Cancellation signal from
+   *   the share-restore consumer.
+   * @param {string} [root0.origin='share-restore'] - Provenance forwarded to
+   *   `trackById` when the target resolves.
+   * @returns {Promise<{status: string, reason?: string, refreshEpoch?: number, failedGroups?: string[]}>}
+   *   'found' on success; otherwise 'missing' | 'cancelled' | 'superseded' |
+   *   'source-unavailable' with the explaining `reason`.
    */
   async resolveTrackingRestoreTarget(noradId, {
     signal = null,
@@ -2096,6 +2268,9 @@ const satellitesLayer = {
 
   /**
    * Stop tracking the currently tracked satellite (no-op if none).
+   * @param {object} [root0] - Deselection metadata.
+   * @param {string} [root0.origin='programmatic'] - Provenance forwarded to
+   *   `_clearTracking` and the awareness event.
    * @returns {boolean} Always true.
    */
   stopTracking({ origin = 'programmatic' } = {}) {
@@ -2111,6 +2286,8 @@ const satellitesLayer = {
   /**
    * Get info about the currently tracked satellite.
    * @returns {{ noradId: number, name: string, latitude: number, longitude: number, altitudeM: number }|null}
+   *   Per-frame-cached fix (degrees/metres) for the followed satellite, or
+   *   null when nothing is tracked or propagation failed this frame.
    */
   getTrackedInfo() {
     if (_trackedNorad === null || !_catalog.has(_trackedNorad)) return null;
@@ -2132,6 +2309,12 @@ const satellitesLayer = {
    * catalog: 'core' (default, ~840 sats) | 'dense' (adds the Starlink shell
    * as points-only extras on a relaxed propagation budget).
    * @param {{ catalog?: 'core'|'dense', showPoints?: boolean, showOrbits?: boolean, selectedSatTrackingId?: number|null }} [params]
+   *   Parameter object; every key is optional and applied only when present.
+   * @param {object} [root0] - Application metadata.
+   * @param {string} [root0.origin='programmatic'] - Provenance of the change;
+   *   explicit layer-state origins cancel a pending tracking restore.
+   * @returns {boolean} False only when `params.catalog` is present but not a
+   *   valid mode (nothing applied); otherwise true.
    */
   setParams(params = {}, { origin = 'programmatic' } = {}) {
     if (isExplicitLayerStateOrigin(origin)
@@ -2265,6 +2448,11 @@ const satellitesLayer = {
   },
 };
 
+/**
+ * Escape key drops the current satellite follow (user origin), mirroring the
+ * flights-layer keyboard contract. Ignored while the layer is disabled.
+ * @param {KeyboardEvent} e - DOM keydown event.
+ */
 function _onKeyDown(e) {
   if (_enabled && e.key === 'Escape' && _trackedNorad) {
     _cancelPendingTrackingRestore();
@@ -2272,6 +2460,13 @@ function _onKeyDown(e) {
   }
 }
 
+/**
+ * Installs the layer's input wiring exactly once per viewer: the
+ * trackedEntityChanged guard that yields the follow camera to sibling layers,
+ * the LEFT_CLICK pick handler (track / yield-to-sibling / empty-space
+ * deselect), and the Escape key listener.
+ * @param {Cesium.Viewer} viewer - Viewer whose canvas and camera are bound.
+ */
 function _installClickHandler(viewer) {
   if (_clickHandler) return; // already installed
 
@@ -2333,7 +2528,13 @@ function _installClickHandler(viewer) {
 /**
  * Next ISS pass for an observer. Requires the catalog to have loaded (the
  * satellites layer enabled at least once this session).
+ * @param {object} root0 - Observer geometry.
+ * @param {number} root0.latDeg - Observer latitude in degrees.
+ * @param {number} root0.lonDeg - Observer longitude in degrees.
+ * @param {number} [root0.minElevDeg=10] - Minimum pass elevation in degrees.
  * @returns {{status:'no-tle'}|{status:'none'}|{status:'ok', pass:{riseMs:number,setMs:number,maxElevDeg:number,maxElevMs:number,riseAzDeg:number}}}
+ *   'no-tle' before the ISS satrec exists, 'none' when no pass meets the
+ *   elevation floor, else 'ok' with the pass geometry.
  */
 export function getNextIssPass({ latDeg, lonDeg, minElevDeg = 10 }) {
   const sat = _catalog.get(ISS_NORAD);
@@ -2373,6 +2574,13 @@ export function scoreSatelliteNameMatch(query, catalogName) {
   return score;
 }
 
+/**
+ * Launch year parsed from the satrec's international designator (field 1
+ * columns 10-11, two-digit form).
+ * @param {object} satrec - satellite.js record carrying `intldesg`.
+ * @returns {number|null} Full year (1957-2056 window), or null when the
+ *   designator is missing/malformed.
+ */
 function internationalDesignatorYear(satrec) {
   const match = String(satrec?.intldesg || '').match(/^(\d{2})/);
   if (!match) return null;
@@ -2383,6 +2591,12 @@ function internationalDesignatorYear(satrec) {
 let _lookupTleText = null;
 let _lookupTleEntries = [];
 
+/**
+ * Parsed TLE triples for a catalog text, memoized on the text itself so
+ * repeated mission lookups over the same CelesTrak payload parse once.
+ * @param {string} tleText - Raw three-line-element catalog text.
+ * @returns {Array<{name: string, line1: string, line2: string}>} Parsed entries.
+ */
 function lookupTleEntries(tleText) {
   if (tleText !== _lookupTleText) {
     _lookupTleText = tleText;
@@ -2391,12 +2605,27 @@ function lookupTleEntries(tleText) {
   return _lookupTleEntries;
 }
 
+/**
+ * Launch year encoded in a TLE line 1's international designator (columns
+ * 10-11, two-digit form).
+ * @param {string} line1 - TLE line 1.
+ * @returns {number|null} Full year (1957-2056 window), or null when the field
+ *   is not numeric.
+ */
 function tleLineLaunchYear(line1) {
   const shortYear = Number(String(line1 || '').slice(9, 11));
   if (!Number.isFinite(shortYear)) return null;
   return shortYear >= 57 ? 1900 + shortYear : 2000 + shortYear;
 }
 
+/**
+ * Builds a mission-orbit track descriptor for one satellite record: current
+ * propagated fix, period, a one-orbit ECEF path, and a position accessor.
+ * @param {string} name - Satellite display name from the TLE/catalog row.
+ * @param {object} satrec - satellite.js record from `twoline2satrec`.
+ * @returns {{noradId:number,name:string,current:object,periodSec:number,orbitPath:Cesium.Cartesian3[],gmstAtBake:number,positionAt:function(Date):object|null}|null}
+ *   Track descriptor, or null when the current-epoch propagation fails.
+ */
 function orbitTrackFromRecord(name, satrec) {
   const referenceDate = new Date();
   const current = propagatePosition(satrec, referenceDate);
@@ -2420,6 +2649,8 @@ function orbitTrackFromRecord(name, satrec) {
  * @param {string} query Mission or payload name.
  * @param {{launchTime?: string|null}} [options] Optional launch epoch for namesake rejection.
  * @returns {{noradId:number,name:string,current:object,periodSec:number,orbitPath:Cesium.Cartesian3[],positionAt:function(Date):object|null}|null}
+ *   Best-scoring track (score ≥ 12 and same launch year when known), or null
+ *   when nothing in the text matches credibly.
  */
 export function findSatelliteOrbitTrackInTle(tleText, query, options = {}) {
   const launchYear = Number.isFinite(Date.parse(options.launchTime))
@@ -2448,6 +2679,8 @@ export function findSatelliteOrbitTrackInTle(tleText, query, options = {}) {
  * @param {string|number} query NORAD id or mission/payload name.
  * @param {{launchTime?: string|null}} [options] Optional launch epoch used to reject namesakes from another launch year.
  * @returns {{noradId:number,name:string,current:object,periodSec:number,orbitPath:Cesium.Cartesian3[],positionAt:function(Date):object|null}|null}
+ *   Track descriptor from the live catalog, or null when the catalog is empty,
+ *   the query is blank, or no row matches.
  */
 export function getSatelliteOrbitTrack(query, options = {}) {
   if (query === null || query === undefined || !_catalog?.size) return null;

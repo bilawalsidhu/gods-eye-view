@@ -142,6 +142,7 @@ export function sceneRequiresContextModeExit(contextMode) {
  * @param {Set<string>|Iterable<string>} [registeredIds] Layer ids the data
  *   manager currently knows about. Omit to skip the registration filter.
  * @returns {Array<{ id: string, enabled: boolean, params: object|undefined }>}
+ *   One entry per declared, still-registered layer, in declaration order.
  */
 export function sceneLayerPlan(targetStates, registeredIds) {
   const known = registeredIds instanceof Set

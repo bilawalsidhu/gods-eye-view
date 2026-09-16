@@ -148,6 +148,8 @@ export function resolveTier(obj) {
  * @param {string} secondary - Dim second line (class · metric); '' collapses to one line.
  * @param {number} charWidth - Monospace glyph advance, px.
  * @returns {{w: number, h: number, idBase: number, subBase: number, textX: number, hasSec: boolean}}
+ *   Card box size, the two text baselines measured from the card top, the text
+ *   left inset (accent bar + gap), and whether a second line is present.
  */
 export function measureLabelCard(primary, secondary, charWidth) {
   const padX = 6;
@@ -179,6 +181,8 @@ export function measureLabelCard(primary, secondary, charWidth) {
  * @param {string} micro - Short metric, e.g. flight level digits or '14kn' ('' = none).
  * @param {number} charWidth - Monospace glyph advance for the primary text, px.
  * @returns {{w: number, h: number, baseline: number, primaryX: number, microX: number, hasMicro: boolean}}
+ *   Label box size, the shared text baseline from the label top, the left inset
+ *   of the callsign and of the micro-field, and whether a micro-field is present.
  */
 export function measureTrackLabel(primary, micro, charWidth) {
   const padX = 6;
@@ -243,7 +247,10 @@ export const VIEW_PROJECTION_KEYS = [
   'vp0', 'vp1', 'vp3', 'vp4', 'vp5', 'vp7', 'vp8', 'vp9', 'vp11', 'vp12', 'vp13', 'vp15',
 ];
 
-/** Exact {x,y,z} triple equality. NaN never equals NaN, so a NaN position never matches. */
+/** Exact {x,y,z} triple equality. NaN never equals NaN, so a NaN position never matches.
+ * @param {{x:number,y:number,z:number}|null} a Stored camera position.
+ * @param {{x:number,y:number,z:number}|null} b Current camera position.
+ * @returns {boolean} True when the two references or all three components match exactly. */
 function positionEquals(a, b) {
   if (a === b) return true;
   if (!a || !b) return false;
@@ -268,7 +275,11 @@ function positionEquals(a, b) {
 export const PROJECTION_REUSE_FLOOR_M = 0.05;
 export const PROJECTION_REUSE_RELATIVE = 5e-5;
 
-/** Per-axis epsilon containment. */
+/** Per-axis epsilon containment.
+ * @param {{x:number,y:number,z:number}|null} a Stored object position.
+ * @param {{x:number,y:number,z:number}|null} b Current object position.
+ * @param {number} eps Per-axis tolerance in metres (distance-relative reuse bound).
+ * @returns {boolean} True when each axis differs by at most `eps`. */
 function positionWithin(a, b, eps) {
   if (a === b) return true;
   if (!a || !b) return false;

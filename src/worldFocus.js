@@ -11,7 +11,13 @@ export const WORLD_FOCUS_FRAMING = Object.freeze({
   fire: Object.freeze({ radiusM: 400, rangeM: 3000, pitchDeg: -35 }),
 });
 
-/** Validate a layer-owned focus target before camera policy can release tracking. */
+/**
+ * Validate a layer-owned focus target before camera policy can release tracking.
+ * @param {object} detail Focus request payload: `kind`, `id`, and an ECEF
+ *   `position` Cartesian3.
+ * @returns {boolean} Whether the target is a known kind with a real
+ *   surface-anchored position.
+ */
 export function isValidWorldFocusTarget(detail) {
   if (!detail || !WORLD_FOCUS_FRAMING[detail.kind]) return false;
   if (!String(detail.id || '').trim()) return false;
@@ -28,7 +34,12 @@ export function isValidWorldFocusTarget(detail) {
     && magnitude >= Cesium.Ellipsoid.WGS84.minimumRadius * 0.95;
 }
 
-/** Announce a valid user-click focus request. */
+/**
+ * Announce a valid user-click focus request.
+ * @param {object} detail Focus target; must pass isValidWorldFocusTarget().
+ * @param {EventTarget} [eventTarget=globalThis.window] Dispatch target.
+ * @returns {boolean} Whether the WORLD_FOCUS_REQUEST_EVENT was dispatched.
+ */
 export function requestWorldFocus(detail, eventTarget = globalThis.window) {
   if (!isValidWorldFocusTarget(detail)) return false;
   if (typeof eventTarget?.dispatchEvent !== 'function') return false;
@@ -36,7 +47,13 @@ export function requestWorldFocus(detail, eventTarget = globalThis.window) {
   return true;
 }
 
-/** Register one listener and return an idempotent disposer. */
+/**
+ * Register one listener and return an idempotent disposer.
+ * @param {EventTarget} eventTarget Event source carrying the requests.
+ * @param {Function} listener Handler invoked with each focus CustomEvent.
+ * @returns {() => void} Disposer; safe to call more than once, and a no-op
+ *   when the host or listener is unusable.
+ */
 export function registerWorldFocusRequestListener(eventTarget, listener) {
   if (!eventTarget?.addEventListener || !eventTarget?.removeEventListener
     || typeof listener !== 'function') return () => {};
@@ -49,7 +66,13 @@ export function registerWorldFocusRequestListener(eventTarget, listener) {
   };
 }
 
-/** Route a valid request through the UI-owned camera policy. */
+/**
+ * Route a valid request through the UI-owned camera policy.
+ * @param {CustomEvent} event Focus request carrying the target in `detail`.
+ * @param {Function} runExplicitFocus Policy gate that wraps the flight.
+ * @param {Function} fly Flight callback; receives the validated target.
+ * @returns {boolean} Whether the request was accepted and flown.
+ */
 export function routeWorldFocusRequest(event, runExplicitFocus, fly) {
   const detail = event?.detail;
   if (!isValidWorldFocusTarget(detail)) return false;
@@ -57,7 +80,12 @@ export function routeWorldFocusRequest(event, runExplicitFocus, fly) {
   return runExplicitFocus(detail, () => fly(detail));
 }
 
-/** Fly to a world target after ownership has been released. */
+/**
+ * Fly to a world target after ownership has been released.
+ * @param {Cesium.Viewer} viewer Viewer whose camera performs the flight.
+ * @param {object} [target] Validated focus target; `kind` selects the framing.
+ * @returns {boolean} Whether a flight was started.
+ */
 export function flyToWorldTarget(viewer, target = {}) {
   const camera = viewer?.camera;
   const framing = WORLD_FOCUS_FRAMING[target.kind];

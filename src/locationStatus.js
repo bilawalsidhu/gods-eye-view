@@ -12,7 +12,11 @@
 
 const EMPTY = Object.freeze({ city: '📍 Location: --', poi: 'Landmark: --' });
 
-/** Split a geocoder `formatted_address` into its trimmed, non-empty segments. */
+/**
+ * Split a geocoder `formatted_address` into its trimmed, non-empty segments.
+ * @param {string} label - Raw address string; nullish coerces to `''`.
+ * @returns {string[]} Comma-delimited segments, most specific first.
+ */
 export function addressSegments(label) {
   return String(label ?? '')
     .split(',')
@@ -28,7 +32,7 @@ export function addressSegments(label) {
  * label is used only when no preset city is active, which is exactly the state
  * a free-text search leaves behind.
  *
- * @param {object} [input]
+ * @param {object} [input] - Sources of location context, in precedence order.
  * @param {{name: string, pois?: Array<{name: string}>}|null} [input.city]
  *   Active preset city record, or null.
  * @param {{name: string}|null} [input.currentPoi] - Currently framed preset POI.

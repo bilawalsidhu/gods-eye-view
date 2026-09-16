@@ -49,6 +49,17 @@ const OUTLINE_UPGRADE_CONCURRENCY = 2;
  * `isStale()` is consulted after each backoff wait so a cleared/superseded board stops
  * retrying immediately. A thrown resolver counts as definitive — the pre-retry
  * catch→point behavior. Exported for tests.
+ * @param {Function} resolveOutline - Zero-arg outline resolver for one mark; fulfils with a
+ *   footprint object, `null` (definitive no-polygon), `undefined` (transient — retryable), or a
+ *   `{ rateLimited: true, retryAfterMs }` throttle. A rejection is downgraded to definitive null.
+ * @param {object} [root0] - Retry tuning; omitted keys fall back to the module defaults.
+ * @param {number[]} [root0.delaysMs] - Transient backoff ladder in ms; one re-run per entry.
+ * @param {Function} [root0.isStale] - Polled after each wait; returns true when the board was
+ *   cleared or superseded so the loop stands down instead of finishing the ladder.
+ * @param {Function} [root0.waitFn] - Backoff sleep taking ms; injected so tests run instantly.
+ * @returns {Promise<object|null|undefined>} The resolver's final footprint (`null` = definitive
+ *   no-polygon), or `undefined` when the ladder was exhausted, the retry was throttled twice, or
+ *   the board went stale mid-backoff.
  */
 export async function resolveOutlineWithRetry(resolveOutline, {
   delaysMs = OUTLINE_RETRY_DELAYS_MS,
@@ -86,6 +97,9 @@ export async function resolveOutlineWithRetry(resolveOutline, {
  * United States" are the same asked-for THING while their outlines resolve. Identity
  * becomes GEOMETRY the moment the outline lands; this key is only the stand-in while
  * geometry is unknown. Exported for tests.
+ * @param {string} target - Asked-for place name, optionally carrying ", locality" qualifiers.
+ * @returns {string|null} Lowercased head before the first comma, or null when the target is
+ *   empty/absent (coordinate and pixel specs never collapse on this key).
  */
 export function normalizeTargetKey(target) {
   const raw = String(target ?? '').trim().toLowerCase();
@@ -94,6 +108,17 @@ export function normalizeTargetKey(target) {
   return head || raw;
 }
 
+/**
+ * Build the annotation engine: state, lifecycle, camera assist, and the public
+ * `{ annotate, clear, fadeOutAll, … }` facade the voice tools call into.
+ * @param {object} root0 - Wiring for one engine instance.
+ * @param {object} root0.viewer - Cesium viewer whose camera serves flyTo/framing assists.
+ * @param {object} root0.renderer - Pluggable mark renderer exposing `add/remove/update/sync`.
+ * @param {number[]} [root0.outlineRetryDelaysMs] - Deferred-outline backoff ladder in ms.
+ * @param {Function} [root0.resolveTarget] - Target resolver; injectable for tests.
+ * @returns {object} Engine facade: `annotate`, `clear`, `fadeOutAll`, `count`, `list`,
+ *   `onOutlineEvent`, `demo`, `tour`.
+ */
 export function createAnnotationEngine({
   viewer,
   renderer,
@@ -118,17 +143,33 @@ export function createAnnotationEngine({
   // "tracing the boundary now" can later honestly confirm or correct itself.
   const outlineListeners = new Set();
 
+  /**
+   * Fan one deferred-outline outcome out to the subscribers. A throwing listener is
+   * swallowed: narration must never break the geometry upgrade.
+   * @param {object} evt - Outcome payload as emitted by runOutlineUpgrade.
+   * @returns {void}
+   */
   function emitOutlineEvent(evt) {
     for (const listener of outlineListeners) {
       try { listener(evt); } catch { /* a listener error must never break the upgrade */ }
     }
   }
 
+  /**
+   * Abort every still-registered in-flight controller (annotate() resolves and outline
+   * upgrades) so a clear()/destroy() cannot leave fetches drawing onto a wiped board.
+   * @returns {void}
+   */
   function abortPending() {
     for (const c of activeControllers) { try { c.abort(); } catch { /* no-op */ } }
     activeControllers.clear();
   }
 
+  /**
+   * Discard every queued (not yet started) outline upgrade: detach its task from the
+   * mark and release the owning controller so nothing stale can start after a clear.
+   * @returns {void}
+   */
   function dropQueuedOutlineUpgrades() {
     while (outlineQueue.length) {
       const task = outlineQueue.shift();
@@ -140,10 +181,22 @@ export function createAnnotationEngine({
   // A controller stays abortable (in activeControllers) while its annotate() call OR any
   // progressive outline-upgrade task it spawned is still running — clear() must be able to
   // abort in-flight Overpass fetches even after the tool result has already returned.
+  /**
+   * Register one more owner of a call's controller (the annotate() call itself, or an
+   * outline-upgrade task it spawned), keeping it abortable by clear().
+   * @param {AbortController} c - Controller shared by one annotate() call and its upgrades.
+   * @returns {void}
+   */
   function retainController(c) {
     c._retain = (c._retain || 0) + 1;
     activeControllers.add(c);
   }
+  /**
+   * Drop one ownership reference; the controller leaves the abortable set only when its
+   * last owner (call or outline task) is done.
+   * @param {AbortController} c - Controller to release.
+   * @returns {void}
+   */
   function releaseController(c) {
     c._retain = (c._retain || 0) - 1;
     if (c._retain <= 0) activeControllers.delete(c);
@@ -152,6 +205,11 @@ export function createAnnotationEngine({
   // World annotations carry persistent per-frame scene animation (pulsing
   // live colors, camera-scaled rings, route-flow uniforms in the renderer),
   // so the scene must render continuously while any mark exists. (perf wave 2)
+  /**
+   * Hold continuous rendering while marks exist (their animation is per-frame) and
+   * release the hold the moment the board empties, so the idle governor resumes.
+   * @returns {void}
+   */
   function syncAnnotationHold() {
     if (annotations.size > 0) holdContinuousRender('annotations');
     else releaseContinuousRender('annotations');
@@ -165,7 +223,7 @@ export function createAnnotationEngine({
    * mark over the orphan. remove() tolerates partial and absent state, so this
    * is safe to call unconditionally; it must never mask the original failure.
    * (second review)
-   * @param {object} anno
+   * @param {object} anno - Mark whose partial renderer state should be torn down.
    * @returns {void}
    */
   function rollbackRendererState(anno) {
@@ -174,6 +232,12 @@ export function createAnnotationEngine({
     } catch { /* the renderer is already in a bad way; the original error wins */ }
   }
 
+  /**
+   * Drive fade-in/fade-out alpha on a requestAnimationFrame loop and reap marks whose
+   * fade finished. Self-terminates once the board is stable (no mark has animation
+   * ahead) and is restarted by the next add or fade.
+   * @returns {void}
+   */
   function ensureTicking() {
     if (tickHandle != null) return;
     const tick = () => {
@@ -216,11 +280,13 @@ export function createAnnotationEngine({
    * Draw one or more annotations.
    *
    * @param {Array<object>} requests  Raw annotation specs from the voice tool.
-   * @param {object} [opts]
-   * @param {boolean} [opts.clearPrevious]
+   * @param {object} [opts]  Per-call behavior switches.
+   * @param {boolean} [opts.clearPrevious]  Wipe the board first (aborts superseded work).
    * @param {boolean} [opts.persist]  Keep until cleared (default true).
    * @param {boolean} [opts.flyTo]    Frame the first resolved annotation.
-   * @returns {Promise<{ok, drawn, failed, ids, results}>}
+   * @returns {Promise<{ok, drawn, failed, ids, results}>} Per-item summary; `results`
+   *   carries one entry per spec (ok/fail + honesty fields), `ids` the marks actually
+   *   on the board, plus `capped`/`aborted` flags for the caller to narrate.
    */
   async function annotate(requests, opts = {}) {
     const list = Array.isArray(requests) ? requests : [requests];
@@ -382,6 +448,18 @@ export function createAnnotationEngine({
     };
   }
 
+  /**
+   * Resolve one raw voice spec to world geometry, dispatching on its normalized type:
+   * a route resolves every waypoint then fetches a street-following path (falling back
+   * to an honestly-labeled direct line), an arrow resolves both endpoints, and a
+   * point/area resolves to an anchor with its footprint deferred to an outline upgrade.
+   * @param {object} spec - Raw annotation spec from the voice tool (type, target/points, options).
+   * @param {AbortSignal} signal - Cancellation signal forwarded to every upstream fetch.
+   * @returns {Promise<object>} Type-shaped resolution — route `{path, distanceM, durationS, mode}`,
+   *   arrow `{from, to, distanceM}`, or the resolver's anchor/footprint for point and area.
+   * @throws {Error} When route waypoints or arrow endpoints cannot be located; `error.failedTargets`
+   *   names the specific places that were not found.
+   */
   async function resolveSpec(spec, signal) {
     const type = normalizeType(spec?.type);
     if (type === 'route') {
@@ -498,6 +576,11 @@ export function createAnnotationEngine({
    * screen-space callout to the world-space drape). The mark never disappears here: on a
    * failed / aborted / superseded resolution it simply stays an honest point (marks are
    * only ever removed by an explicit clear — the no-auto-clear invariant).
+   * @param {object} anno - Live mark to upgrade; mutated in place with the ring when it lands.
+   * @param {Function} resolveOutline - Deferred resolver from the spec's resolution.
+   * @param {number} myGen - Generation token of the owning annotate() call.
+   * @param {AbortController} controller - Owning call's controller, kept abortable until done.
+   * @returns {void}
    */
   function startOutlineUpgrade(anno, resolveOutline, myGen, controller) {
     if (anno._outlineTask) return; // one upgrade per mark at a time
@@ -509,6 +592,11 @@ export function createAnnotationEngine({
     drainOutlineQueue();
   }
 
+  /**
+   * Start queued outline upgrades up to the concurrency limit, skipping (and releasing)
+   * tasks whose call was superseded or whose mark no longer exists.
+   * @returns {void}
+   */
   function drainOutlineQueue() {
     while (activeOutlineUpgrades < OUTLINE_UPGRADE_CONCURRENCY && outlineQueue.length) {
       const task = outlineQueue.shift();
@@ -525,6 +613,13 @@ export function createAnnotationEngine({
     }
   }
 
+  /**
+   * Execute one outline upgrade: await the retried resolver, mutate the mark in place
+   * with the footprint (recentring on its centroid), re-route it through the renderer,
+   * collapse same-geometry duplicates, then emit the final outcome once.
+   * @param {object} task - Queue entry `{anno, resolveOutline, myGen, controller}`.
+   * @returns {Promise<void>} Resolves when the upgrade is settled and its slot released.
+   */
   async function runOutlineUpgrade(task) {
     const { anno, resolveOutline, myGen, controller } = task;
     try {
@@ -592,7 +687,12 @@ export function createAnnotationEngine({
   }
 
   /** Build the success result for an annotation (fresh or duplicate), keeping the route
-   *  fallback + synthesized-area honesty fields the voice layer relies on. */
+   *  fallback + synthesized-area honesty fields the voice layer relies on.
+   *  @param {object} anno - Mark that is (or stands in for) the drawn annotation.
+   *  @param {object} resolved - Resolution the spec produced; supplies `resolvedVia`.
+   *  @param {string} id - Id to report — the existing mark's id for a duplicate.
+   *  @returns {object} `{ok:true, id, type, label, latitude, longitude, resolvedVia, outline, …}`
+   *  plus `outlinePending`/`approximate`/route metrics only when they apply. */
   function okResult(anno, resolved, id) {
     return {
       ok: true,
@@ -625,7 +725,9 @@ export function createAnnotationEngine({
    *  building vs "around the Capitol" buffer) is NOT collapsed; the caller replaces label/color in
    *  place so the latest caption wins. For BARE POINTS (pin/highlight/label) there is no geometry
    *  to compare, so identity also requires the LABEL to match — otherwise distinct things that a
-   *  degenerate geocode stacks on one point (several Capitol monuments) would erase each other. */
+   *  degenerate geocode stacks on one point (several Capitol monuments) would erase each other.
+   *  @param {object} anno - Newly built candidate to match against the live board.
+   *  @returns {object|null} The existing mark to refresh or replace, or null when new. */
   function findDuplicate(anno) {
     if (!anno.anchor) return null;
     const near = (a, b) => a && b && Math.abs(a.lon - b.lon) < 5e-4 && Math.abs(a.lat - b.lat) < 5e-4;
@@ -684,6 +786,15 @@ export function createAnnotationEngine({
     return null;
   }
 
+  /**
+   * Materialize a live mark from a resolved spec: shared lifecycle fields (id, color,
+   * label, TTL/alpha) plus the type's geometry — route path, arrow endpoints, or an
+   * anchor that may still be waiting on its deferred outline.
+   * @param {object} spec - Raw voice spec supplying color, label, ttl and shape intent.
+   * @param {object} resolved - Resolution from resolveSpec for this spec.
+   * @param {boolean} persist - True → no TTL (mark lives until cleared); false → spec TTL or default.
+   * @returns {object} The annotation record the engine stores and the renderer draws.
+   */
   function buildAnnotation(spec, resolved, persist) {
     const type = normalizeType(spec?.type);
     const id = `anno-${++_seq}`;
@@ -753,6 +864,11 @@ export function createAnnotationEngine({
     };
   }
 
+  /**
+   * Wipe the board: bump the generation, abort in-flight resolves and outline tasks so
+   * nothing superseded can draw afterwards, then remove every mark from the renderer.
+   * @returns {void}
+   */
   function clear() {
     // Bump first so any in-flight annotate() sees itself as superseded, and abort
     // its pending fetches so a slow resolve can never redraw onto the cleared board.
@@ -784,6 +900,8 @@ export function createAnnotationEngine({
    * When NOTHING this call drew or refreshed is visible, gently frame those marks. Never
    * fires when at least one mark is already in view (don't fight the user's camera), and
    * never on a later outline upgrade (no mid-narration yanks).
+   * @param {string[]} markIds - Ids this annotate() call drew or refreshed.
+   * @returns {void}
    */
   function ensureMarksVisible(markIds) {
     try {
@@ -821,7 +939,9 @@ export function createAnnotationEngine({
   }
 
   /** Whether a lon/lat point is inside the camera frustum AND on the near side of the
-   *  globe. On any API hiccup, report visible — bad data must never move the camera. */
+   *  globe. On any API hiccup, report visible — bad data must never move the camera.
+   *  @param {{lon: number, lat: number, height?: number}} p - World point in degrees.
+   *  @returns {boolean} True when the point is on screen (or when visibility is unknowable). */
   function isPointOnScreen(p) {
     try {
       const camera = viewer.camera;
@@ -835,6 +955,12 @@ export function createAnnotationEngine({
     }
   }
 
+  /**
+   * Fly the camera to frame one mark: its anchor (or arrow tip), sized by the real ring
+   * when geometry landed, else by the Places viewport, else a default local range.
+   * @param {object} anno - Mark to frame.
+   * @returns {void}
+   */
   function frameAnnotation(anno) {
     try {
       const target = anno.to
@@ -874,6 +1000,9 @@ export function createAnnotationEngine({
      * Subscribe to deferred-outline outcomes. Listener receives
      * `{ id, label, target, status: 'resolved'|'failed', approximate? }` once per
      * upgrade task, AFTER the mark was mutated in place. Returns an unsubscribe fn.
+     * @param {Function} listener - Called once per upgrade task with the outcome payload;
+     *   non-function input is ignored.
+     * @returns {Function} Unsubscribe that removes this listener from the fan-out.
      */
     onOutlineEvent(listener) {
       if (typeof listener !== 'function') return () => {};
@@ -884,6 +1013,7 @@ export function createAnnotationEngine({
     /**
      * Scripted demo so the feature is verifiable without a live mic session.
      * Lays down a small San Francisco "tour" the way the voice agent would.
+     * @returns {Promise<object>} The underlying annotate() result for the batch.
      */
     async demo() {
       return annotate([
@@ -898,6 +1028,7 @@ export function createAnnotationEngine({
      * Self-running narration "tour" — sequences camera moves and annotations
      * with pauses the way the voice agent would, so the whole experience can be
      * watched end-to-end without a mic. `window.__gevAnnotations.tour()`.
+     * @returns {Promise<{ok: boolean, steps: number}>} Completion marker for the console.
      */
     async tour() {
       clear();
@@ -922,6 +1053,17 @@ export function createAnnotationEngine({
     },
   };
 
+  /**
+   * Best-effort camera flight used by the scripted tour (never throws).
+   * @param {object} root0 - Camera pose in degrees/seconds.
+   * @param {number} root0.lon - Destination longitude in degrees.
+   * @param {number} root0.lat - Destination latitude in degrees.
+   * @param {number} root0.height - Destination height in meters.
+   * @param {number} [root0.heading] - Camera heading in degrees (default 0).
+   * @param {number} [root0.pitch] - Camera pitch in degrees (default -30, looking down).
+   * @param {number} [root0.duration] - Flight duration in seconds (default 2.5).
+   * @returns {void}
+   */
   function flyTo({ lon, lat, height, heading = 0, pitch = -30, duration = 2.5 }) {
     try {
       viewer.camera.flyTo({
@@ -941,11 +1083,21 @@ export function createAnnotationEngine({
   return engine;
 }
 
+/**
+ * Sleep for a given number of milliseconds; the injectable backoff primitive for
+ * outline retries and the scripted tour pacing.
+ * @param {number} ms - Delay in milliseconds.
+ * @returns {Promise<void>} Resolves once the delay has elapsed.
+ */
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Exact per-vertex ring equality ([[lon,lat],…], ~1m epsilon) — the geometry-identity test. */
+/** Exact per-vertex ring equality ([[lon,lat],…], ~1m epsilon) — the geometry-identity test.
+ * @param {Array<[number, number]>} a - First ring as [lon, lat] vertex pairs.
+ * @param {Array<[number, number]>} b - Second ring to compare vertex-for-vertex.
+ * @returns {boolean} True when lengths match and every vertex is within epsilon.
+ */
 function ringsEqual(a, b) {
   const la = a ? a.length : 0;
   const lb = b ? b.length : 0;
@@ -958,7 +1110,10 @@ function ringsEqual(a, b) {
 
 // --- helpers ----------------------------------------------------------------
 
-/** The place name(s) a spec attempted to resolve (route waypoints, arrow endpoints, or a single target). */
+/** The place name(s) a spec attempted to resolve (route waypoints, arrow endpoints, or a single target).
+ * @param {object} spec - Raw voice spec; the type decides which fields carry the names.
+ * @returns {string[]} Non-empty target names in ask order (empty when none were given).
+ */
 function specTargets(spec) {
   const type = normalizeType(spec?.type);
   if (type === 'route' && Array.isArray(spec?.points)) {
@@ -975,6 +1130,11 @@ function specTargets(spec) {
  * unresolved, thrown), so the tool layer can always name the unresolved PLACE
  * rather than the caption. Pass explicit failedTargets (e.g. only the missing
  * arrow endpoint) when known; otherwise it derives them from the spec.
+ * @param {object} spec - Raw voice spec that failed; supplies label/target context.
+ * @param {string} error - Human-readable failure reason for the tool result.
+ * @param {string[]|null} failedTargets - Explicit unresolved place names when the caller
+ *   knows them, else null to derive them from the spec.
+ * @returns {object} `{ok:false, label, target, failedTargets, error}` result entry.
  */
 function failResult(spec, error, failedTargets) {
   const targets = (failedTargets && failedTargets.length) ? failedTargets : specTargets(spec);
@@ -987,6 +1147,12 @@ function failResult(spec, error, failedTargets) {
   };
 }
 
+/**
+ * Collapse the voice model's free-text shape words onto the four canonical engine
+ * types; anything unrecognized degrades to a highlight rather than erroring.
+ * @param {string} type - Raw `type` from the voice spec (may be absent or odd-cased).
+ * @returns {string} One of 'route', 'arrow', 'area', 'pin', 'highlight'.
+ */
 function normalizeType(type) {
   const t = String(type || '').toLowerCase();
   if (t === 'area' || t === 'polygon' || t === 'outline' || t === 'compound') return 'area';
@@ -997,6 +1163,13 @@ function normalizeType(type) {
   return 'highlight';
 }
 
+/**
+ * Alpha for one mark at time `now`: the ~260 ms fade-in crossed with the TTL/fade-out
+ * ramp. Side effect: flags the mark `expiring` once its fade-out has fully elapsed.
+ * @param {object} anno - Mark being animated (bornAt, createdAt, ttlMs, fadeStart, expiring).
+ * @param {number} now - `performance.now()` timestamp to evaluate at.
+ * @returns {number} Opacity in the 0-1 range.
+ */
 function computeAlpha(anno, now) {
   const inT = (now - anno.bornAt) / 260;
   const fadeIn = inT >= 1 ? 1 : Math.max(0, inT);
@@ -1014,7 +1187,11 @@ function computeAlpha(anno, now) {
 
 /** Whether a mark still has alpha animation ahead — fading in, fading out, or a TTL
  *  fade not yet finished. A persistent mark past its ~260ms fade-in is stable, so the
- *  tick loop can stop. */
+ *  tick loop can stop.
+ * @param {object} anno - Mark to inspect.
+ * @param {number} now - `performance.now()` timestamp to evaluate at.
+ * @returns {boolean} True while any fade (in, out, or scheduled TTL) is outstanding.
+ */
 function pendingAnimation(anno, now) {
   if (now - anno.bornAt < 260) return true; // fading in
   if (anno.expiring) return true; // fading out
@@ -1031,7 +1208,10 @@ function pendingAnimation(anno, now) {
 // fly_to_location natural-region heuristic uses (field test 2026-07-23).
 const VIEWPORT_ASSIST_RANGE_CAP_M = 120000;
 
-/** flyTo range from a Places viewport box (low/high lat-lng corners), or null. */
+/** flyTo range from a Places viewport box (low/high lat-lng corners), or null.
+ * @param {{low: {longitude: number, latitude: number}, high: {longitude: number, latitude: number}}|null} vp - Places viewport, when the anchor came from Places.
+ * @returns {number|null} Camera range in meters, clamped to the assist cap; null when absent or degenerate.
+ */
 function viewportRange(vp) {
   if (!vp?.low || !vp?.high) return null;
   try {
@@ -1047,6 +1227,12 @@ function viewportRange(vp) {
   }
 }
 
+/**
+ * flyTo range that frames a resolved footprint: 0.7 of the ring's diagonal span,
+ * with a small floor so a tiny building still frames to a readable distance.
+ * @param {Array<[number, number]>} ring - Footprint ring as [lon, lat] vertex pairs.
+ * @returns {number} Camera range in meters.
+ */
 function ringRange(ring) {
   let minLat = Infinity;
   let maxLat = -Infinity;
@@ -1065,15 +1251,33 @@ function ringRange(ring) {
   return Math.max(300, span * 0.7);
 }
 
+/**
+ * Trim a voice-provided label and cap it at 80 chars so a rambling caption cannot
+ * blow out the callout; empty input becomes null so the resolver's label can win.
+ * @param {string} label - Raw label from the spec.
+ * @returns {string|null} Cleaned label, or null when nothing usable was supplied.
+ */
 function cleanLabel(label) {
   const text = String(label || '').trim();
   return text ? text.slice(0, 80) : null;
 }
 
+/**
+ * Round a coordinate to 5 decimals (~1 m) for tool-result output; non-finite input
+ * reports null rather than leaking NaN into the voice result.
+ * @param {number} n - Longitude or latitude in degrees.
+ * @returns {number|null} Rounded value, or null for non-finite input.
+ */
 function round5(n) {
   return Number.isFinite(n) ? Math.round(n * 1e5) / 1e5 : null;
 }
 
+/**
+ * Normalize free-text travel-mode words to the OSRM profile the route proxy expects;
+ * unspecified or unrecognized modes fall back to walking.
+ * @param {string} m - Raw mode from the spec ('car'/'bike'/…, may be absent).
+ * @returns {string} One of 'car', 'bike', 'foot'.
+ */
 function normalizeMode(m) {
   const t = String(m || '').toLowerCase();
   if (t === 'car' || t === 'drive' || t === 'driving') return 'car';
@@ -1081,7 +1285,13 @@ function normalizeMode(m) {
   return 'foot';
 }
 
-/** Fetch a real street-following route from the /api/route proxy (OSM/OSRM). */
+/** Fetch a real street-following route from the /api/route proxy (OSM/OSRM).
+ * @param {Array<[number, number]>} coordPairs - Waypoints as [lon, lat] degree pairs.
+ * @param {string} mode - Normalized travel mode ('car' | 'bike' | 'foot').
+ * @param {AbortSignal} [externalSignal] - Caller's cancellation; aborts the fetch and detaches cleanly.
+ * @returns {Promise<object|null>} Upstream `{ok, geometry, distanceM, durationS}` payload, or
+ *   null when routing was unavailable/aborted (caller then draws an honest direct line).
+ */
 async function fetchRoute(coordPairs, mode, externalSignal) {
   const controller = new AbortController();
   const onAbort = () => controller.abort();
@@ -1102,6 +1312,13 @@ async function fetchRoute(coordPairs, mode, externalSignal) {
   return null;
 }
 
+/**
+ * Great-circle (haversine) distance between two lon/lat points — the honest metric for
+ * the straight-line fallback drawn when the routing service is unavailable.
+ * @param {{lon: number, lat: number}} a - First point in degrees.
+ * @param {{lon: number, lat: number}} b - Second point in degrees.
+ * @returns {number} Distance in meters.
+ */
 function greatCircleM(a, b) {
   const R = 6371000;
   const toRad = (deg) => (deg * Math.PI) / 180;
@@ -1113,12 +1330,29 @@ function greatCircleM(a, b) {
   return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
+/**
+ * Human-readable distance for route labels: whole/one-decimal km above 1 km, else
+ * meters rounded to the nearest 10.
+ * @param {number} m - Distance in meters.
+ * @returns {string|null} Formatted distance, or null when the input is not finite.
+ */
 function formatDistance(m) {
   if (!Number.isFinite(m)) return null;
   if (m >= 1000) return `${(m / 1000).toFixed(m >= 10000 ? 0 : 1)} km`;
   return `${Math.round(m / 10) * 10} m`;
 }
 
+/**
+ * Build a route mark's caption: the caller's label with distance (plus travel time and
+ * verb) appended — or an explicit "direct line, no route" when routing fell back, so
+ * the narration never claims a computed travel time it does not have.
+ * @param {string|null} baseLabel - Label from the spec (or the resolver's place name).
+ * @param {number|null} distM - Route distance in meters; null suppresses all metrics.
+ * @param {number|null} durS - Estimated duration in seconds; null on the fallback path.
+ * @param {string|null} mode - Normalized travel mode, picking the walk/ride/drive verb.
+ * @param {boolean} fallback - True when the line is a straight fallback, not a real route.
+ * @returns {string|null} Composed caption, or the base label when no distance is known.
+ */
 function composeRouteLabel(baseLabel, distM, durS, mode, fallback) {
   const dist = formatDistance(distM);
   if (!dist) return baseLabel;
@@ -1132,6 +1366,13 @@ function composeRouteLabel(baseLabel, distM, durS, mode, fallback) {
   return baseLabel ? `${baseLabel} — ${metrics}` : metrics;
 }
 
+/**
+ * Append a formatted distance to an arrow/highlight caption so the mark states the
+ * span it draws; the base label is returned unchanged when no distance is computable.
+ * @param {string|null} baseLabel - Caption to extend.
+ * @param {number|null} distM - Great-circle span in meters.
+ * @returns {string|null} Caption with the distance suffix, or the original label.
+ */
 function appendDistance(baseLabel, distM) {
   const dist = formatDistance(distM);
   if (!dist) return baseLabel;

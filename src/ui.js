@@ -379,12 +379,10 @@ const SHARPEN_SHADER = /* glsl */ `
  * - Toast notification system.
  * - Intel HUD lifecycle and variant switching.
  */
-
-
 export class StyleManager {
   /**
    * @param {Cesium.Viewer} viewer - The CesiumJS viewer instance.
-   * @param {object} [options]
+   * @param {object} [options] - Controller wiring for pieces the app shell owns.
    * @param {object|null} [options.mapStackController] - MapStackController
    *   instance backing the basemap chips and stack switching; null leaves
    *   those controls inert.
@@ -1055,7 +1053,16 @@ export class StyleManager {
     );
   }
 
-  /** Advance camera authority and settle any older search UI immediately. */
+  /**
+   * Advance camera authority and settle any older search UI immediately.
+   * @param {object} [root0] Supersession knobs.
+   * @param {boolean} [root0.cancelPendingSelection=true] - Also cancel a
+   *   pending share-selected subject. DEFERRED navigation opts out until its
+   *   flight actually starts, so a slow geocode cannot clear live state.
+   * @param {boolean} [root0.clearSearchedLocation=true] - Also invalidate the
+   *   last free-text search destination readout.
+   * @returns {number} The newly authoritative navigation generation.
+   */
   _stampNavigation({ cancelPendingSelection = true, clearSearchedLocation = true } = {}) {
     this._navigationGeneration += 1;
     // A newer destination owns the camera, so the last free-text search is no
@@ -1099,7 +1106,12 @@ export class StyleManager {
     return this._navigationGeneration;
   }
 
-  /** Settle only the search generation that still owns the shared input UI. */
+  /**
+   * Settle only the search generation that still owns the shared input UI.
+   * @param {number} generation - Generation the caller believes is active; a
+   *   stale generation is ignored so a newer search is never blanked.
+   * @returns {void}
+   */
   _settleLocationSearchUi(generation) {
     if (this._activeLocationSearchGeneration !== generation) return;
     this._activeLocationSearchGeneration = null;
@@ -1108,7 +1120,17 @@ export class StyleManager {
     this._locationSearch?.blur();
   }
 
-  /** Release every follow owner while preserving Contact and vessel selection. */
+  /**
+   * Release every follow owner while preserving Contact and vessel selection.
+   * @param {object} [root0] Release scope knobs.
+   * @param {boolean} [root0.preserveVesselSelection=true] - Keep the AIS vessel
+   *   selection; false clears it along with the camera owner.
+   * @param {boolean} [root0.preserveCameraFlight=false] - Leave an in-flight
+   *   camera animation running instead of cancelling it.
+   * @param {string} [root0.trackingOrigin='tool'] - Origin tag passed to the
+   *   layer stop/release calls for share-state bookkeeping.
+   * @returns {boolean} Whether a Contact subject remains selected after the release.
+   */
   _releaseFollowCamera({
     preserveVesselSelection = true,
     preserveCameraFlight = false,
@@ -1141,7 +1163,15 @@ export class StyleManager {
     return contactSelected;
   }
 
-  /** Run one immediate destination through the shared ownership policy. */
+  /**
+   * Run one immediate destination through the shared ownership policy.
+   * @param {string} noun - Subject noun used in the Cockpit refusal toast.
+   * @param {Function} navigate - Flight callback; receives the new generation
+   *   stamp and runs after the current owner is released.
+   * @param {object|undefined} releaseOptions - Options forwarded verbatim to
+   *   `_releaseFollowCamera`; undefined uses its defaults.
+   * @returns {*} The navigation result, or false when disposed or Cockpit refuses.
+   */
   _runExplicitNavigation(noun, navigate, releaseOptions = undefined) {
     return runExplicitNavigation({
       disposed: this._disposed,
@@ -1155,7 +1185,15 @@ export class StyleManager {
     });
   }
 
-  /** Accept a delayed lookup without releasing its current camera owner. */
+  /**
+   * Accept a delayed lookup without releasing its current camera owner.
+   * @param {string} [noun='location'] - Subject noun used in the Cockpit
+   *   refusal toast.
+   * @param {object} [root0] Stamp options.
+   * @param {boolean} [root0.cancelPendingSelection=true] - Whether the eventual
+   *   flight may cancel a pending share-selected subject.
+   * @returns {number|false} Generation stamp, or false when disposed or Cockpit refuses.
+   */
   _beginDeferredNavigation(noun = 'location', { cancelPendingSelection = true } = {}) {
     return beginDeferredNavigation({
       disposed: this._disposed,
@@ -1169,7 +1207,12 @@ export class StyleManager {
     });
   }
 
-  /** Final authority check and release immediately before a delayed flight. */
+  /**
+   * Final authority check and release immediately before a delayed flight.
+   * @param {number} generation - Generation claimed when the deferred lookup
+   *   was accepted; a superseded generation is refused.
+   * @returns {boolean} Whether the deferred flight still owns the camera.
+   */
   _reassertNavigationHandoff(generation) {
     return reassertNavigationHandoff({
       generation,
@@ -1188,37 +1231,68 @@ export class StyleManager {
     });
   }
 
-  /** Public lifecycle seam used by voice location navigation. */
+  /**
+   * Public lifecycle seam used by voice location navigation.
+   * @returns {number|false} Deferred generation stamp, or false when refused.
+   */
   beginDeferredLocationNavigation() {
     return this._beginDeferredNavigation('location');
   }
 
-  /** Public final-authority seam used by voice geocoding. */
+  /**
+   * Public final-authority seam used by voice geocoding.
+   * @param {number} generation - Generation returned by the deferred accept.
+   * @returns {boolean} Whether the deferred flight still owns the camera.
+   */
   reassertDeferredLocationNavigation(generation) {
     return this._reassertNavigationHandoff(generation);
   }
 
-  /** Public immediate route used by voice destinations. */
+  /**
+   * Public immediate route used by voice destinations.
+   * @param {Function} navigate - Flight callback; receives the new generation stamp.
+   * @returns {*} The navigation result, or false when refused.
+   */
   runImmediateLocationNavigation(navigate) {
     return this.runImmediateNavigation('location', navigate);
   }
 
-  /** Public authority facade used by validated voice camera destinations. */
+  /**
+   * Public authority facade used by validated voice camera destinations.
+   * @param {string} noun - Subject noun used in the Cockpit refusal toast.
+   * @param {Function} navigate - Flight callback; receives the new generation stamp.
+   * @param {object|undefined} releaseOptions - Options forwarded to
+   *   `_releaseFollowCamera`; undefined uses its defaults.
+   * @returns {*} The navigation result, or false when refused.
+   */
   runImmediateNavigation(noun, navigate, releaseOptions = undefined) {
     return this._runExplicitNavigation(noun, navigate, releaseOptions);
   }
 
-  /** Supersede deferred work when an owner-specific route handles release. */
+  /**
+   * Supersede deferred work when an owner-specific route handles release.
+   * @returns {number} The newly authoritative navigation generation.
+   */
   supersedeDeferredNavigation() {
     return this._stampNavigation();
   }
 
-  /** Route a valid vessel/fire request through the shared navigation policy. */
+  /**
+   * Route a valid vessel/fire request through the shared navigation policy.
+   * @param {object} detail - Focus target payload (`kind`, `id`, ECEF
+   *   `position`) already validated by the world-focus router.
+   * @param {Function} fly - Flight callback that flies the camera to `detail`.
+   * @returns {*} The navigation result, or false when disposed or Cockpit refuses.
+   */
   _runExplicitWorldFocus(detail, fly) {
     return this._runExplicitNavigation(detail?.kind || 'target', fly);
   }
 
-  /** Return the aircraft tracker owned before a multi-step Cockpit transaction. */
+  /**
+   * Return the aircraft tracker owned before a multi-step Cockpit transaction.
+   * @returns {{layerId: string, id: string}|null} Current tracked aircraft, or
+   *   null when nothing is tracked.
+   */
   getAircraftTrackingTarget() {
     return aircraftTrackingTarget(this.cockpitView?.readAircraftInfo?.());
   }
@@ -1380,7 +1454,17 @@ export class StyleManager {
     this._syncShareState();
   }
 
-  /** Apply a temporary cockpit-only CRT/NVG/FLIR/NOIR post-process override. */
+  /**
+   * Apply a temporary cockpit-only CRT/NVG/FLIR/NOIR post-process override.
+   * @param {string} mode - Requested vision mode ('optical'|'crt'|'nvg'|
+   *   'thermal'|'noir'); unknown values normalize to 'optical'.
+   * @param {boolean} active - Whether the override engages; false restores the
+   *   captured pre-entry baseline.
+   * @param {object} [root0] Reveal options.
+   * @param {boolean} [root0.revealParameters=false] - Also surface the style
+   *   parameter controls once the override lands.
+   * @returns {void}
+   */
   _setCockpitVision(mode, active, { revealParameters = false } = {}) {
     const next = active ? normalizeCockpitVisionMode(mode) : 'optical';
     if (!this.stages) return;
@@ -1459,7 +1543,14 @@ export class StyleManager {
     this.cockpitView.setVisionMode(this.cockpitView.visionMode);
   }
 
-  /** Reveal shared style parameters, optionally opening Cockpit Display first. */
+  /**
+   * Reveal shared style parameters, optionally opening Cockpit Display first.
+   * @param {object} [root0] Reveal options.
+   * @param {boolean} [root0.openDisplay=false] - Open the Cockpit Display
+   *   disclosure instead of only uncollapsing the panel; a no-op when the
+   *   Display disclosure is already open.
+   * @returns {void}
+   */
   _revealCockpitStyleParameters({ openDisplay = false } = {}) {
     if (!this.cockpitView?.active || !this._sliderPanel?.classList.contains('active')) return;
     if (openDisplay && this._cockpitDisplayToggleBtn?.getAttribute('aria-expanded') !== 'true') {
@@ -1527,7 +1618,7 @@ export class StyleManager {
   /**
    * Sets the bloom intensity, updates the slider UI, and applies the value.
    * @param {number} intensity - Raw intensity percentage.
-   * @param {object} [options]
+   * @param {object} [options] - Application options.
    * @param {boolean} [options.syncShare=true] - Whether to push state to the share link.
    * @returns {void}
    */
@@ -1802,7 +1893,7 @@ export class StyleManager {
   /**
    * Switches the active map/globe source stack.
    * @param {string} stackId - Map stack id.
-   * @param {object} [options]
+   * @param {object} [options] - Switch options.
    * @param {boolean} [options.syncShare=true] - Whether to update the share link.
    * @returns {Promise<void>}
    */
@@ -2093,11 +2184,6 @@ export class StyleManager {
   }
 
   /**
-   * Pushes the current visual state (bloom, sharpen, HUD, detection) to
-   * the ShareLinkManager so the URL hash stays in sync.
-   * @returns {void}
-   */
-  /**
    * Detection as a DURABLE preference, for serialization into a share link.
    *
    * While Contacts is active it OWNS detection and forces Dense @ 75%. That is
@@ -2109,6 +2195,7 @@ export class StyleManager {
    *
    * `_contactsDetectionRestore` is exactly that snapshot and is null whenever
    * Contacts does not own detection, so the live values are used normally.
+   * @returns {{mode: string, densityPct: number}} Detection state to publish.
    */
   _shareableDetectionState() {
     return shareableDetectionState({
@@ -2118,6 +2205,11 @@ export class StyleManager {
     });
   }
 
+  /**
+   * Pushes the current visual state (bloom, sharpen, HUD, detection) to
+   * the ShareLinkManager so the URL hash stays in sync.
+   * @returns {void}
+   */
   _syncShareState() {
     const detection = this._shareableDetectionState();
     this.shareLinkManager.onToggleChange(this.bloomEnabled, this.sharpenEnabled, {
@@ -2146,6 +2238,8 @@ export class StyleManager {
    * Updates the traffic sync status chip with loading phase label and progress.
    * Auto-hides after 1.5s when loading completes; stays visible while busy.
    * @param {boolean} [forceShow=false] - Force the chip visible regardless of busy state.
+   * @param {number} [now=performance.now()] - Sample time for the confirmation
+   *   flash window; injected so callers can drive deterministic ticks.
    * @returns {void}
    */
   _updateTrafficSyncChip(forceShow = false, now = performance.now()) {
@@ -2402,7 +2496,7 @@ export class StyleManager {
    * mouse passes. Wheel events cancel pending opens to avoid surprise expansion
    * during scroll-through.
    * @param {string} panelId - DOM id of the panel element.
-   * @param {object} [options]
+   * @param {object} [options] - Hover timing overrides.
    * @param {number} [options.openDelayMs=850] - Hover dwell time before auto-expanding.
    * @param {number} [options.closeDelayMs=1000] - Delay after pointer leaves before collapsing.
    * @returns {void}
@@ -3621,17 +3715,27 @@ export class StyleManager {
     this._scheduleRightPanelLayout();
   }
 
-  /** Wire the independent Radio companion controls. */
+  /**
+   * Wire the independent Radio companion controls.
+   * @returns {void}
+   */
   _initRadioPanel() {
     return initRadioPanel(this);
   }
 
-  /** Keep the Context header Radio shortcut truthful for its current route. */
+  /**
+   * Keep the Context header Radio shortcut truthful for its current route.
+   * @returns {void}
+   */
   _syncContextRadioLauncherState() {
     return syncContextRadioLauncherState(this);
   }
 
-  /** Render Radio state without making playback or Context decisions. */
+  /**
+   * Render Radio state without making playback or Context decisions.
+   * @param {object} state - Radio layer state snapshot (`stats`, `params`).
+   * @returns {void}
+   */
   _renderRadioState(state) {
     return renderRadioState(this, state);
   }
@@ -3650,17 +3754,28 @@ export class StyleManager {
     return this._runExplicitNavigation('camera', () => focus(cameraId));
   }
 
-  /** Wire up every CCTV panel control and state subscription. */
+  /**
+   * Wire up every CCTV panel control and state subscription.
+   * @returns {void}
+   */
   _initCctvPanel() {
     return initCctvPanel(this);
   }
 
-  /** Toggle the CCTV layer through its enable transition. */
+  /**
+   * Toggle the CCTV layer through its enable transition.
+   * @param {boolean|undefined} forceState - Explicit target state; undefined toggles.
+   * @returns {Promise<void>} Resolves once the transition settles.
+   */
   async _toggleCctvEnabled(forceState) {
     return toggleCctvEnabled(this, forceState);
   }
 
-  /** Render CCTV state without making layer-lifecycle decisions. */
+  /**
+   * Render CCTV state without making layer-lifecycle decisions.
+   * @param {object} state - CCTV layer state snapshot (`stats`, `params`).
+   * @returns {void}
+   */
   _renderCctvState(state) {
     return renderCctvState(this, state);
   }
@@ -3687,6 +3802,9 @@ export class StyleManager {
    * Restores a panel's collapsed/expanded state from localStorage.
    * Falls back to the CSS class default if no saved state exists.
    * @param {string} panelId - DOM id of the panel.
+   * @param {object} [root0] Restore options.
+   * @param {boolean} [root0.allowStored=true] - Read the persisted preference;
+   *   false forces the markup default (used on a factory reset).
    * @returns {void}
    */
   _restorePanelCollapsedState(panelId, { allowStored = true } = {}) {
@@ -3730,32 +3848,56 @@ export class StyleManager {
     }
   }
 
-  /** Build the adaptive right rail (Display, CCTV, parameters, Context). */
+  /**
+   * Build the adaptive right rail (Display, CCTV, parameters, Context).
+   * @returns {void}
+   */
   _initRightPanelAdaptiveLayout() {
     return initRightPanelAdaptiveLayout(this);
   }
 
-  /** Schedule one rAF-deferred right-rail layout pass. */
+  /**
+   * Schedule one rAF-deferred right-rail layout pass.
+   * @param {object} [root0] Pass options.
+   * @param {boolean} [root0.reconsiderAutoCollapse=false] - Re-evaluate
+   *   responsive auto-collapse instead of only reallocating panel heights.
+   * @returns {void}
+   */
   _scheduleRightPanelLayout({ reconsiderAutoCollapse = false } = {}) {
     return scheduleRightPanelLayout(this, { reconsiderAutoCollapse });
   }
 
-  /** Measure HUD chrome and allocate right-rail panel heights. */
+  /**
+   * Measure HUD chrome and allocate right-rail panel heights.
+   * @returns {void}
+   */
   _syncRightPanelAdaptiveLayout() {
     return syncRightPanelAdaptiveLayout(this);
   }
 
-  /** Build the adaptive left accordion (Control, Data, Scene panels). */
+  /**
+   * Build the adaptive left accordion (Control, Data, Scene panels).
+   * @returns {void}
+   */
   _initLeftPanelAdaptiveLayout() {
     return initLeftPanelAdaptiveLayout(this);
   }
 
-  /** Schedule one rAF-deferred left-stack layout pass. */
+  /**
+   * Schedule one rAF-deferred left-stack layout pass.
+   * @param {object} [root0] Pass options.
+   * @param {boolean} [root0.reconsiderAutoCollapse=false] - Re-evaluate
+   *   responsive auto-collapse instead of only reallocating panel heights.
+   * @returns {void}
+   */
   _scheduleLeftPanelLayout({ reconsiderAutoCollapse = false } = {}) {
     return scheduleLeftPanelLayout(this, { reconsiderAutoCollapse });
   }
 
-  /** Measure HUD chrome and allocate left-stack panel heights. */
+  /**
+   * Measure HUD chrome and allocate left-stack panel heights.
+   * @returns {void}
+   */
   _syncLeftPanelAdaptiveLayout() {
     return syncLeftPanelAdaptiveLayout(this);
   }
@@ -3852,7 +3994,8 @@ export class StyleManager {
    * @param {number} left - desired left (px)
    * @param {number} top - desired top (px)
    * @param {HTMLElement} panelEl - the panel element
-   * @returns {{left:number, top:number}}
+   * @returns {{left:number, top:number}} Clamped position that keeps the panel
+   *   fully inside the viewport.
    */
   _clampToViewport(left, top, panelEl) {
     const rect = panelEl.getBoundingClientRect();
@@ -3881,18 +4024,6 @@ export class StyleManager {
   }
 
   /**
-   * Makes a panel draggable via its handle element. Implements:
-   * - Z-order promotion: each pointerdown increments the global z-counter
-   *   so the clicked panel floats above siblings.
-   * - Viewport clamping: drag moves are clamped to a 6px inset from all edges.
-   * - Right-rail pinning: pp-toggles panel is re-anchored right after drag.
-   * - CCTV viewport sync: cctv-panel recalculates scroll height after drag.
-   * @param {string} panelId - DOM id of the panel.
-   * @param {HTMLElement} panelEl - The panel DOM element.
-   * @param {HTMLElement} handleEl - The drag handle element within the panel.
-   * @returns {void}
-   */
-  /**
    * Promotes a panel to the top of the panel z band [PANEL_Z_BASE, PANEL_Z_MAX].
    * Renormalizes all promoted panels when the band is exhausted so panels can
    * never climb above the voice pill (150), toasts (200), or clean-view exit (300).
@@ -3915,6 +4046,18 @@ export class StyleManager {
     panelEl.style.zIndex = String(this._panelZCounter);
   }
 
+  /**
+   * Makes a panel draggable via its handle element. Implements:
+   * - Z-order promotion: each pointerdown increments the global z-counter
+   *   so the clicked panel floats above siblings.
+   * - Viewport clamping: drag moves are clamped to a 6px inset from all edges.
+   * - Right-rail pinning: pp-toggles panel is re-anchored right after drag.
+   * - CCTV viewport sync: cctv-panel recalculates scroll height after drag.
+   * @param {string} panelId - DOM id of the panel.
+   * @param {HTMLElement} panelEl - The panel DOM element.
+   * @param {HTMLElement} handleEl - The drag handle element within the panel.
+   * @returns {void}
+   */
   _makePanelDraggable(panelId, panelEl, handleEl) {
     // Z-order promotion: bring clicked panel to front of the stacking context
     panelEl.addEventListener('pointerdown', () => {
@@ -4153,6 +4296,7 @@ export class StyleManager {
    * Sets HUD visibility mode. 'auto' restores style-driven show/hide.
    * @param {'on'|'off'|'auto'} mode - Visibility mode.
    * @returns {{ok: boolean, visible?: boolean, layout?: string, error?: string}}
+   *   Applied state, or `ok:false` with an `error` for an unknown mode.
    */
   setHudVisible(mode) {
     const normalized = String(mode ?? '').toLowerCase();
@@ -4170,6 +4314,7 @@ export class StyleManager {
    * Switches the HUD layout variant.
    * @param {'tactical'|'operator'|'minimal'} variantName - Layout variant.
    * @returns {{ok: boolean, layout?: string, visible?: boolean, error?: string}}
+   *   Applied state, or `ok:false` with an `error` for an unknown variant.
    */
   setHudLayout(variantName) {
     const variant = String(variantName ?? '').toLowerCase();
@@ -4184,6 +4329,7 @@ export class StyleManager {
   /**
    * Reads current detection overlay state (engine mode + UI density percent).
    * @returns {{detectionMode: string, densityPct: number|null, allocationStrategy:string, fadePct:number, outsideOpacityPct:number}}
+   *   Live engine mode plus the slider-backed tuning values.
    */
   getDetectionState() {
     const pct = this._detectionDensitySlider
@@ -4198,7 +4344,11 @@ export class StyleManager {
     };
   }
 
-  /** Read-only overlay diagnostics used by browser QA and regression harnesses. */
+  /**
+   * Read-only overlay diagnostics used by browser QA and regression harnesses.
+   * @returns {object|null} Deep copy of the last diagnostic snapshot, or null
+   *   before the overlay's first solve.
+   */
   getDetectionDiagnostics() {
     return readDetectionDiagnostics();
   }
@@ -4207,7 +4357,7 @@ export class StyleManager {
    * Controls the detection overlay: on/off, mode, and density percent.
    * Density writes the slider AND the engine so share links and scene
    * snapshots stay truthful.
-   * @param {object} [options]
+   * @param {object} [options] - Detection controls; omitted fields are left as-is.
    * @param {boolean} [options.enabled] - false forces OFF; true restores the current density profile.
    * @param {'sparse'|'balanced'|'dense'|'panoptic'} [options.mode] - Profile (legacy aliases accepted).
    * @param {number} [options.densityPct] - 0-100 density percent.
@@ -4215,6 +4365,7 @@ export class StyleManager {
    * @param {number} [options.fadePct] - Fade distance as 0-40% of the keyhole radius.
    * @param {number} [options.outsideOpacityPct] - Opacity beyond the fade distance, 0-100%.
    * @returns {{ok: boolean, detectionMode?: string, densityPct?: number|null, error?: string}}
+   *   New detection state, or `ok:false` with an `error` and the unchanged state.
    */
   setDetection({ enabled, mode, densityPct, allocationStrategy, fadePct, outsideOpacityPct } = {}) {
     if (enabled !== undefined && typeof enabled !== 'boolean') {
@@ -4305,6 +4456,8 @@ export class StyleManager {
    * Switches the basemap stack and reports whether the switch landed.
    * @param {string} stackId - One of mapStackController.getStacks() ids.
    * @returns {Promise<{ok: boolean, activeStack?: string, error?: string|null, available?: string[]}>}
+   *   Resolves after the switch settles; `ok:false` carries the reason and, for
+   *   an unknown id, the list of available stack ids.
    */
   async setMapStack(stackId) {
     if (!this.mapStackController) {
@@ -4330,10 +4483,11 @@ export class StyleManager {
 
   /**
    * Controls bloom post-processing. Intensity is the UI percent (0-200).
-   * @param {object} [options]
-   * @param {boolean} [options.enabled]
+   * @param {object} [options] - Bloom controls; omitted fields are left as-is.
+   * @param {boolean} [options.enabled] - Toggle the bloom stage.
    * @param {number} [options.intensityPct] - 0-200.
    * @returns {{ok: boolean, bloom: {enabled: boolean, intensityPct: number|null}}}
+   *   Applied bloom state, or `ok:false` with an `error` for invalid input.
    */
   setBloom({ enabled, intensityPct } = {}) {
     const current = () => ({
@@ -4361,10 +4515,11 @@ export class StyleManager {
 
   /**
    * Controls sharpen post-processing. Intensity is the UI percent (0-100).
-   * @param {object} [options]
-   * @param {boolean} [options.enabled]
+   * @param {object} [options] - Sharpen controls; omitted fields are left as-is.
+   * @param {boolean} [options.enabled] - Toggle the sharpen stage.
    * @param {number} [options.intensityPct] - 0-100.
    * @returns {{ok: boolean, sharpen: {enabled: boolean, intensityPct: number|null}}}
+   *   Applied sharpen state, or `ok:false` with an `error` for invalid input.
    */
   setSharpen({ enabled, intensityPct } = {}) {
     const current = () => ({
@@ -4394,7 +4549,10 @@ export class StyleManager {
     };
   }
 
-  /** Whether the full-globe celestial overlay is enabled by user preference. */
+  /**
+   * Whether the full-globe celestial overlay is enabled by user preference.
+   * @returns {boolean} True when the ring's enabled flag is set.
+   */
   get celestialRingEnabled() {
     return Boolean(this.celestialRing?.enabled);
   }
@@ -4403,11 +4561,12 @@ export class StyleManager {
    * Controls the celestial ring. The Display button uses `focus=true` when the
    * ring is disabled or unavailable at the current zoom, turning the control
    * into a reveal action instead of requiring a separate globe-navigation step.
-   * @param {boolean} enabled
-   * @param {object} [options]
-   * @param {boolean} [options.syncShare=true]
-   * @param {boolean} [options.focus=false]
+   * @param {boolean} enabled - Requested ring state.
+   * @param {object} [options] - Application options.
+   * @param {boolean} [options.syncShare=true] - Whether to update the share link.
+   * @param {boolean} [options.focus=false] - Fly the globe so the ring is in frame.
    * @returns {{ok:boolean, celestialRing:{enabled:boolean,visible:boolean}, cameraFocused:boolean, error?:string}}
+   *   Ring state after the change plus whether a focus flight ran.
    */
   setCelestialRingEnabled(enabled, { syncShare = true, focus = false } = {}) {
     const styleSupported = isCelestialRingStyleSupported(this.activeStyle);
@@ -4467,6 +4626,7 @@ export class StyleManager {
    * Starts or stops orbiting the active POI.
    * @param {boolean} [enabled] - Omit to toggle.
    * @returns {{ok: boolean, orbiting: boolean, error?: string}}
+   *   Orbit state, or `ok:false` with an `error` when no landmark is active.
    */
   setOrbit(enabled) {
     const active = Boolean(this.orbitController?.active);
@@ -4487,7 +4647,7 @@ export class StyleManager {
   /**
    * Enables/disables clean view (hides all UI chrome).
    * @param {boolean} [enabled] - Omit to toggle.
-   * @returns {{ok: boolean, cleanView: boolean}}
+   * @returns {{ok: boolean, cleanView: boolean}} Resulting clean-view state.
    */
   setCleanView(enabled) {
     this.toggleCleanView(enabled);
@@ -4497,6 +4657,8 @@ export class StyleManager {
   /**
    * Reads global context mode state for voice/state-sync consumers.
    * @returns {{mode: 'flights'|'space-missions'|null, active: boolean, changing: boolean, entering: 'flights'|'space-missions'|null, snapshotCaptured: boolean}}
+   *   Current mode plus the in-flight transition flags and whether a session
+   *   snapshot exists for restore.
    */
   getContextModeState() {
     return {
@@ -4513,16 +4675,20 @@ export class StyleManager {
   /**
    * Sets global context mode (Contacts / Space Missions / off) for voice.
    * @param {'contacts'|'space-missions'|'off'|null} mode - Requested context target.
-   * @param {object} [options]
-   * @param {string|symbol|null} [options.notificationToken]
-   * @param {AbortSignal|null} [options.signal]
-   * @param {Function|null} [options.isCurrent]
+   * @param {object} [options] - Request scoping.
+   * @param {string|symbol|null} [options.notificationToken] - Voice-turn token
+   *   that invalidates the request when a newer turn arrives.
+   * @param {AbortSignal|null} [options.signal] - Abort signal for the request.
+   * @param {Function|null} [options.isCurrent] - Extra liveness predicate polled
+   *   at each suspension point of the transition.
    * @param {boolean} [options.claimVisualAuthority] Whether this request is a
    *   genuine operator/voice Context intent that should take the visual restore
    *   lane. Cockpit choreography calls this facade INTERNALLY for its own
    *   enter/rollback steps; those transitions are not a Context request by the
    *   operator and must stay inert, so they pass `false`.
    * @returns {Promise<{ok:boolean, mode:'flights'|'space-missions'|null, active:boolean, action:string, error?:string}>}
+   *   Settled context state; a cancelled or failed transition reports
+   *   `ok:false` with its `error` and any `failedLayerIds`.
    */
   async setContextMode(mode, {
     notificationToken = null,
@@ -4629,6 +4795,7 @@ export class StyleManager {
   /**
    * Returns cockpit status for voice/state sync and navigation operations.
    * @returns {{active:boolean, entryAllowed:boolean, visionMode:string, subject:{id:string,layerId:string}|null, navigation:{canPrevious:boolean,canNext:boolean,canFocus:boolean}|null, awareness?: object}|null}
+   *   Cockpit snapshot, including why entry is blocked when it is unavailable.
    */
   getCockpitState() {
     const snapshot = militaryAwarenessLayer.getContextSnapshot?.();
@@ -4739,13 +4906,19 @@ export class StyleManager {
   /**
    * Controls cockpit entry/exit and context navigation.
    * @param {'enter'|'exit'|'next'|'previous'|'status'} action - Cockpit action.
-   * @param {object} [options]
-   * @param {string|symbol|null} [options.notificationToken]
+   * @param {object} [options] - Action options.
+   * @param {string|symbol|null} [options.notificationToken] - Voice-turn token
+   *   that invalidates a pending entry when a newer turn arrives.
    * @param {'flights'|'military'|'ais-live-vessels'|'military-installations'|null} [options.targetLayer]
-   * @param {string|null} [options.aircraftClass]
+   *   Contact layer the entry should retarget to before entering.
+   * @param {string|null} [options.aircraftClass] - Optional aircraft class
+   *   filter (e.g. 'helicopter') applied with `targetLayer`.
    * @param {{layerId:'flights'|'military',id:string}|null} [options.selectedTarget]
+   *   Contact the caller intends to enter.
    * @param {{layerId:'flights'|'military',id:string}|null} [options.rollbackTarget]
+   *   Contact to restore if the entry is abandoned mid-transition.
    * @returns {{ok:boolean, action:string, error?:string, state?:object}}
+   *   Outcome plus the resulting cockpit state; `ok:false` carries `error`.
    */
   controlCockpit(action, {
     notificationToken = null,
@@ -4903,6 +5076,7 @@ export class StyleManager {
   /**
    * Captures the current camera position and orientation as a serializable object.
    * @returns {{lat: number, lon: number, alt: number, heading: number, pitch: number, roll: number}|null}
+   *   Degrees-based camera state, or null before the camera has a position.
    */
   getCameraState() {
     const carto = this.viewer.camera.positionCartographic;
@@ -4920,6 +5094,7 @@ export class StyleManager {
   /**
    * Flies the camera to a previously captured camera state using cubic ease-in-out.
    * @param {{lat: number, lon: number, alt: number, heading?: number, pitch?: number, roll?: number}} cameraState
+   *   Saved camera state; missing orientation fields fall back to the defaults.
    * @param {number} [duration=2.8] - Flight duration in seconds.
    * @returns {void}
    */
@@ -4987,6 +5162,7 @@ export class StyleManager {
   }
 
   /**
+   * Captures the active look (style, post-processing, HUD, detection, scope,
    * per-style shader uniform values) for serialization or scene recipe capture.
    * @returns {object} Serializable visual state object.
    */
@@ -5038,7 +5214,7 @@ export class StyleManager {
    * and share-link restore. Async so the map-stack switch resolves before
    * the share state is synced; callers may fire-and-forget.
    * @param {object} [state={}] - Visual state object (as returned by getVisualState).
-   * @param {object} [options]
+   * @param {object} [options] - Commit options.
    * @param {(() => boolean)|null} [options.isCurrent] Caller liveness predicate.
    *   The map-stack switch is this method's ONLY suspension point, and the
    *   shader-uniform writes come after it — so a caller superseded while that
@@ -5181,7 +5357,8 @@ export class StyleManager {
 
   /**
    * Applies recording-friendly post-processing and shader uniform overrides.
-   * @param {object} preset
+   * @param {object} [preset] - Partial visual state; only the fields present
+   *   are applied (bloom, sharpen, hudVariant, detection, styleParams).
    */
   applyCinematicPreset(preset = {}) {
     const bloomInput = typeof preset.bloom === 'object' ? preset.bloom : { intensity: preset.bloom };
@@ -5252,7 +5429,7 @@ export class StyleManager {
    * the HUD to the specified mode. Exiting restores the HUD mode and layout
    * variant that were active before recording started.
    * @param {boolean} enabled - Whether to enable recording mode.
-   * @param {object} [options]
+   * @param {object} [options] - Recording presentation options.
    * @param {boolean} [options.hidePanels=true] - Hide all panel chrome.
    * @param {string} [options.hudMode='minimal'] - HUD mode while recording ('off'|'minimal'|'full'|'auto').
    * @param {string} [options.safeFrame='16:9'] - Aspect ratio for the safe-frame overlay.
@@ -5312,6 +5489,9 @@ export class StyleManager {
    * Creates a labeled range input for each tunable uniform. Hides the panel
    * for 'normal' mode which has no shader parameters.
    * @param {string} styleName - Style name whose uniforms to display.
+   * @param {object} [root0] Panel options.
+   * @param {boolean} [root0.reveal=false] - Also uncollapse the panel and scroll
+   *   it into view once rebuilt.
    * @returns {void}
    */
   _updateSliderPanel(styleName, { reveal = false } = {}) {
@@ -5392,7 +5572,7 @@ export class StyleManager {
    * 3. Applies style preset defaults (bloom/sharpen/HUD) if applyPreset is true.
    * 4. Updates button highlights, style indicator, slider panel, HUD, and detection overlay.
    * @param {string} styleName - Target style ('normal'|'retro'|'surveillance'|'thermal'|'anime'|'noir'|'snow').
-   * @param {object} [options]
+   * @param {object} [options] - Switch options.
    * @param {boolean} [options.applyPreset=true] - Whether to apply STYLE_PRESET_DEFAULTS for the new style.
    * @param {boolean} [options.revealParameters=applyPreset] - Whether to reveal
    *   the new style's parameter controls in the Display panel.
@@ -5531,7 +5711,13 @@ export class StyleManager {
     this._globalLoadingDetail.textContent = presentation.detail;
   }
 
-  /** Show a message in the universal top-center status banner. */
+  /**
+   * Show a message in the universal top-center status banner.
+   * @param {string} message - Notice text rendered on the banner label line.
+   * @param {object} [options] - Notice options forwarded to
+   *   `createGlobalStatusNotice` (severity state, dwell, persistence).
+   * @returns {void}
+   */
   _showGlobalStatusNotice(message, options = {}) {
     const now = performance.now();
     this._globalStatusNotice = createGlobalStatusNotice(message, now, options);
@@ -5657,12 +5843,18 @@ export class StyleManager {
     return initLocationBar(this);
   }
 
-  /** Signals the start of an inter-city world jump. */
+  /**
+   * Signals the start of an inter-city world jump.
+   * @returns {void}
+   */
   _beginWorldJumpTransition() {
     return beginWorldJumpTransition(this);
   }
 
-  /** Signals the end of an inter-city world jump. */
+  /**
+   * Signals the end of an inter-city world jump.
+   * @returns {void}
+   */
   _endWorldJumpTransition() {
     return endWorldJumpTransition(this);
   }
@@ -5685,7 +5877,10 @@ export class StyleManager {
     return clearSearchedLocation(this);
   }
 
-  /** Repaints the collapsed LOCATION mini-status readout. */
+  /**
+   * Repaints the collapsed LOCATION mini-status readout.
+   * @returns {void}
+   */
   _updateLocationMiniStatus() {
     return updateLocationMiniStatus(this);
   }
@@ -5936,21 +6131,15 @@ export class StyleManager {
   // ── HUD Toggle ───────────────────────────────
 
   /**
-   * Wires the HUD toggle button, initializes the default HUD variant to 'tactical',
-   * and sets up the detection mode cycle button.
+   * One 3D toggle drives BOTH aircraft layers (commercial + military) so all
+   * planes flip together.
+   * @param {object} params - Layer params carrying the `models3d` flag and/or
+   *   the `models3dMode` selection.
+   * @param {object} [root0] Write options.
+   * @param {string} [root0.origin='user'] - Change origin used for share-state
+   *   bookkeeping ('user' persists; other origins stay session-scoped).
    * @returns {void}
    */
-  /**
-   * Wires the DISPLAY-rail "3D" toggle to the flights layer's `models3d` param.
-   * ON by default in `proximity` mode (product invariant 2026-08-22): the fleet
-   * renders as 3D glTF models once the camera is zoomed in past the layer's
-   * altitude ceiling, and only the nearest MODEL_MAX in view are admitted, so
-   * the default costs nothing at globe scale. `all` is the deliberate opt-in;
-   * turning the toggle off returns the fleet to flat billboards. The TRACKED
-   * contact is independent of this toggle (see trackedModelRegime.js).
-   * @returns {void}
-   */
-  /** One 3D toggle drives BOTH aircraft layers (commercial + military) so all planes flip together. */
   _setModels3dParams(params, { origin = 'user' } = {}) {
     this._dataManager?.setLayerParams('flights', params, { origin });
     this._dataManager?.setLayerParams('military', params, { origin });
@@ -5972,6 +6161,16 @@ export class StyleManager {
     this._layoutRightPanels();
   }
 
+  /**
+   * Wires the DISPLAY-rail "3D" toggle to the flights layer's `models3d` param.
+   * ON by default in `proximity` mode (product invariant 2026-08-22): the fleet
+   * renders as 3D glTF models once the camera is zoomed in past the layer's
+   * altitude ceiling, and only the nearest MODEL_MAX in view are admitted, so
+   * the default costs nothing at globe scale. `all` is the deliberate opt-in;
+   * turning the toggle off returns the fleet to flat billboards. The TRACKED
+   * contact is independent of this toggle (see trackedModelRegime.js).
+   * @returns {void}
+   */
   _initModels3dToggle() {
     if (!this._models3dBtn) return;
     // The Proximity/All mode row is revealed only while 3D is on (mirrors the DETECT slider row).
@@ -6023,6 +6222,11 @@ export class StyleManager {
     this._models3dBtn?.setAttribute('aria-pressed', String(this._models3dEnabled));
   }
 
+  /**
+   * Wires the HUD toggle button, initializes the default HUD variant to 'tactical',
+   * and sets up the detection mode cycle button.
+   * @returns {void}
+   */
   _initHUDToggle() {
     this._hudBtn.addEventListener('click', () => {
       this.shareLinkManager?.claimRestoreLane?.('visual');
@@ -6251,12 +6455,19 @@ export class StyleManager {
     });
   }
 
-  /** Whether a share link was used to load the page */
+  /**
+   * Whether a share link was used to load the page.
+   * @returns {boolean} True when an initial share state was requested.
+   */
   get hasShareState() {
     return Boolean(this._hasShareState);
   }
 
-  /** Terminal result for the complete initial share restoration. */
+  /**
+   * Terminal result for the complete initial share restoration.
+   * @returns {Promise<{status: string, share: object|null, layers: Array, tracking?: object}>}
+   *   Resolves with the restore outcome, or immediately when no share was requested.
+   */
   get initialRestorePromise() {
     return this._initialShareRestorePromise || Promise.resolve({ status: 'not-requested' });
   }

@@ -22,19 +22,36 @@
 
 const VALID_TYPES = new Set(['pin', 'highlight', 'label', 'arrow', 'route', 'area']);
 
-/** {lon,lat,height?} -> GeoJSON position, or null if not a finite lon/lat. */
+/**
+ * {lon,lat,height?} -> GeoJSON position, or null if not a finite lon/lat.
+ * @param {{lon: number, lat: number, height?: number}} p - Runtime point (an
+ *   annotation anchor, route vertex, or arrow tip).
+ * @returns {number[]|null} `[lon, lat]`, `[lon, lat, height]` when a finite height
+ *   is present, or null when lon/lat are missing or non-finite.
+ */
 function toPosition(p) {
   if (!p || !Number.isFinite(p.lon) || !Number.isFinite(p.lat)) return null;
   return Number.isFinite(p.height) ? [p.lon, p.lat, p.height] : [p.lon, p.lat];
 }
 
-/** GeoJSON position -> {lon,lat,height?}, or null if malformed. */
+/**
+ * GeoJSON position -> {lon,lat,height?}, or null if malformed.
+ * @param {number[]} c - GeoJSON position `[lon, lat]` or `[lon, lat, height]`.
+ * @returns {{lon: number, lat: number, height?: number}|null} The runtime point, or
+ *   null when `c` is not an array carrying finite lon/lat.
+ */
 function fromPosition(c) {
   if (!Array.isArray(c) || !Number.isFinite(c[0]) || !Number.isFinite(c[1])) return null;
   return Number.isFinite(c[2]) ? { lon: c[0], lat: c[1], height: c[2] } : { lon: c[0], lat: c[1] };
 }
 
-/** Mean of a runtime ring (`[[lon,lat],...]`), used as a fallback area anchor on import. */
+/**
+ * Mean of a runtime ring (`[[lon,lat],...]`), used as a fallback area anchor on import.
+ * @param {number[][]} ring - Ring vertices as `[lon, lat]` pairs; closure state is
+ *   irrelevant (the closing duplicate just biases the mean).
+ * @returns {{lon: number, lat: number}|null} Unweighted vertex mean, or null for an
+ *   empty or non-array ring.
+ */
 function ringCentroid(ring) {
   if (!Array.isArray(ring) || ring.length === 0) return null;
   let sx = 0;
@@ -108,7 +125,8 @@ export function annotationToFeature(anno) {
  * the importer adds render state). Fails CLOSED: returns null for any malformed feature,
  * unknown `gev:type`, or geometry that doesn't match the declared type.
  * @param {object} feature - A GeoJSON Feature produced by {@link annotationToFeature}.
- * @returns {object|null}
+ * @returns {object|null} A runtime annotation carrying the semantic fields only, or null
+ *   when the feature, its `gev:type`, or its geometry fails validation.
  */
 export function featureToAnnotation(feature) {
   if (!feature || feature.type !== 'Feature' || !feature.geometry || !feature.properties) return null;
@@ -191,8 +209,10 @@ export function featureToAnnotation(feature) {
 /**
  * Convert an array of runtime annotations to a GeoJSON FeatureCollection.
  * Marks that can't form a valid geometry are dropped (not thrown).
- * @param {Array<object>} annotations
- * @returns {{type:'FeatureCollection', features: object[]}}
+ * @param {Array<object>} annotations - Runtime annotations to serialize; a non-array
+ *   input is treated as empty rather than throwing.
+ * @returns {{type:'FeatureCollection', features: object[]}} A FeatureCollection holding
+ *   only the marks that formed a valid geometry, in input order.
  */
 export function annotationsToFeatureCollection(annotations) {
   const features = (Array.isArray(annotations) ? annotations : [])
@@ -204,8 +224,10 @@ export function annotationsToFeatureCollection(annotations) {
 /**
  * Convert a GeoJSON FeatureCollection back to runtime annotation objects.
  * Malformed features are skipped (fail-closed per feature), never throwing.
- * @param {object} collection
- * @returns {Array<object>}
+ * @param {object} collection - A FeatureCollection, normally round-tripped through
+ *   {@link annotationsToFeatureCollection}.
+ * @returns {Array<object>} Runtime annotations for the well-formed features, in input
+ *   order; empty when `collection` isn't a FeatureCollection with a features array.
  */
 export function featureCollectionToAnnotations(collection) {
   if (!collection || collection.type !== 'FeatureCollection' || !Array.isArray(collection.features)) return [];

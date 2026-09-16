@@ -50,7 +50,7 @@ export function canonicalizeContactId(value) {
  *
  * Hex is checked first and exactly: it is the unique key, so a hex query must
  * never be out-competed by a substring hit elsewhere in the fleet.
- * @param {object} params
+ * @param {object} params Contact identity fields and the caller's query, bundled so layers can spread a record straight in.
  * @param {string} params.query Caller's raw query text.
  * @param {string} [params.hex] Contact's unique transponder address.
  * @param {string} [params.callsign] Contact's callsign, if any.

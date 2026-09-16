@@ -122,6 +122,11 @@ function isRenderedOnScreen(element) {
   const rect = element.getBoundingClientRect();
   return rect.width > 0 && rect.height > 0;
 }
+/**
+ * Compact age label for a news article's publication timestamp.
+ * @param {string} value - ISO-8601 published-at string from the regional news feed.
+ * @returns {string} "5M AGO", "3H AGO", or "2D AGO"; "TIME UNKNOWN" when the string does not parse.
+ */
 function formatCockpitBriefAge(value) {
   const timestamp = Date.parse(value);
   if (!Number.isFinite(timestamp)) return 'TIME UNKNOWN';
@@ -131,6 +136,11 @@ function formatCockpitBriefAge(value) {
   return hours < 48 ? `${hours}H AGO` : `${Math.round(hours / 24)}D AGO`;
 }
 
+/**
+ * Wind direction as an eight-point compass label for the LOCAL brief.
+ * @param {number} value - Meteorological wind direction in degrees (0 = north, clockwise).
+ * @returns {string} "NE · 45°" style label, or "DIR UNKNOWN" for non-finite input.
+ */
 function formatCockpitWindDirection(value) {
   if (!Number.isFinite(value)) return 'DIR UNKNOWN';
   const labels = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
@@ -138,6 +148,18 @@ function formatCockpitWindDirection(value) {
   return `${labels[Math.round(normalized / 45) % labels.length]} · ${Math.round(normalized)}°`;
 }
 
+/**
+ * Writes a readout value through the split-flap roll. Unchanged text is a
+ * no-op; a change within 220 ms of the last one is dropped so a burst of
+ * feed updates cannot queue overlapping rolls, and digit positions animate
+ * in the direction the value moved.
+ * @param {HTMLElement|null} element - Target readout element; a no-op when absent.
+ * @param {string} text - Preformatted display text, also mirrored to aria-label.
+ * @param {number|null} numericValue - Numeric counterpart used to derive roll direction (null when the readout is unavailable).
+ * @param {object} [root0] - Roll tuning.
+ * @param {number|null} [root0.circularRange] - Wrap span (360 for the heading readout) so the delta is measured the short way across zero.
+ * @param {boolean} [root0.immediate] - Bypass the debounce and roll at once, used for cockpit entry's forced first paint.
+ */
 function setCockpitRollingValue(element, text, numericValue, {
   circularRange = null,
   immediate = false,
@@ -217,6 +239,14 @@ function setCockpitRollingValue(element, text, numericValue, {
 
   element.replaceChildren(fragment);
 }
+/**
+ * Live cockpit HUD loop for one tracked contact. Instantiated once by
+ * StyleManager as `cockpitView`; StyleManager keeps cockpit MODE authority
+ * (voice actions call styleManager.controlCockpit), while this class owns
+ * camera takeover, the per-frame readouts, vision modes, the signal stream,
+ * and the regional brief carousel. It hides the tracked entity from the map
+ * and drives the camera from scene.preUpdate for the duration of the mode.
+ */
 export class CockpitViewController {
   constructor(viewer, {
     onVisionChange = null,
@@ -513,6 +543,9 @@ export class CockpitViewController {
    * covers feed-refresh handoffs where the old source releases before the new
    * source publishes its entity; trackedEntityChanged adopts synchronously as
    * soon as the replacement exists, so the normal path does not wait.
+   * @param {number} direction - Step direction: negative selects the previous contact, any other value the next.
+   * @param {object} [options] - Forwarded to the awareness layer's navigatePrevious/navigateNext (targetLayer, aircraftClass, origin).
+   * @returns {boolean} True when the selection moved to another contact.
    */
   navigateContext(direction, options = {}) {
     const method = direction < 0 ? 'navigatePrevious' : 'navigateNext';
@@ -528,7 +561,12 @@ export class CockpitViewController {
     return true;
   }
 
-  /** Adopt a newly selected aircraft without ever leaving Cockpit. */
+  /**
+   * Adopt a newly selected aircraft without ever leaving Cockpit.
+   * @param {number} nowMs - Frame timestamp (performance.now()) stamped as the adoption time.
+   * @param {object|null} [suppliedInfo] - Tracked-aircraft descriptor already resolved this frame; re-resolved from the layers when omitted.
+   * @returns {boolean} True when a new entity was adopted; false when cockpit is inactive, the entity has no position, or it is already the adopted one.
+   */
   _adoptTrackedEntity(nowMs, suppliedInfo = null) {
     const nextEntity = this.viewer.trackedEntity;
     if (!this.active || !nextEntity?.position || nextEntity === this.trackedEntity) return false;

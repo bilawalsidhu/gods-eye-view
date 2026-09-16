@@ -37,7 +37,15 @@ export const ANALYST_LAYERS = {
 
 const EARTH_R_KM = 6371;
 
-/** Great-circle distance in km. */
+/**
+ * Great-circle distance in km.
+ *
+ * @param {number} lat1 - Start latitude in decimal degrees.
+ * @param {number} lon1 - Start longitude in decimal degrees.
+ * @param {number} lat2 - End latitude in decimal degrees.
+ * @param {number} lon2 - End longitude in decimal degrees.
+ * @returns {number} Separation in kilometres on a 6371 km sphere.
+ */
 export function haversineKm(lat1, lon1, lat2, lon2) {
   const d2r = Math.PI / 180;
   const dLat = (lat2 - lat1) * d2r;
@@ -47,7 +55,20 @@ export function haversineKm(lat1, lon1, lat2, lon2) {
   return 2 * EARTH_R_KM * Math.asin(Math.min(1, Math.sqrt(a)));
 }
 
-/** One filter: {field, op:'gt'|'lt'|'gte'|'lte'|'eq'|'neq'|'contains', value}. */
+/**
+ * One filter: {field, op:'gt'|'lt'|'gte'|'lte'|'eq'|'neq'|'contains', value}.
+ * Records missing the field are dropped; comparisons are numeric for the
+ * range operators and case-insensitive strings otherwise, with booleans
+ * compared as booleans for eq.
+ *
+ * @param {Array<object>} records - Layer records to filter; not mutated.
+ * @param {object} [filter] - Filter to apply; a missing field or op returns
+ *   the input unchanged.
+ * @param {string} filter.field - Record property to test.
+ * @param {string} filter.op - Comparison operator from the set above.
+ * @param {*} filter.value - Right-hand side, coerced per operator.
+ * @returns {Array<object>} Records passing the filter.
+ */
 export function applyFilter(records, filter) {
   const { field, op, value } = filter || {};
   if (!field || !op) return records;
@@ -70,7 +91,23 @@ export function applyFilter(records, filter) {
   });
 }
 
-/** Scope records spatially. scope: {kind:'view'|'region'|'radius'|'anywhere', …}. */
+/**
+ * Scope records spatially. scope: {kind:'view'|'region'|'radius'|'anywhere', …}.
+ * Region uses a point-in-polygon test against the resolved ring; view and
+ * radius use a haversine window. Underspecified inputs fall through to the
+ * unscoped set rather than dropping everything.
+ *
+ * @param {Array<object>} records - Layer records with numeric lat/lon.
+ * @param {object} [scope] - Scope intent produced by the query parser.
+ * @param {string} [scope.kind] - One of 'view', 'region', 'radius', 'anywhere'.
+ * @param {object} [resolved] - Scope resolution supplied by the caller; the
+ *   fields that matter depend on scope.kind.
+ * @param {Array<object>} [resolved.ring] - Ordered ring for region scope.
+ * @param {{lat: number, lon: number}} [resolved.center] - Window centre for
+ *   view/radius scope.
+ * @param {number} [resolved.km] - Window radius in kilometres.
+ * @returns {Array<object>} Records inside the scope.
+ */
 export function applyScope(records, scope, resolved) {
   if (!scope || scope.kind === 'anywhere') return records;
   if (scope.kind === 'region' && resolved?.ring) {
@@ -87,7 +124,15 @@ export function applyScope(records, scope, resolved) {
   return records;
 }
 
-/** Numeric summary for the narration layer. */
+/**
+ * Numeric summary for the narration layer.
+ *
+ * @param {Array<object>} items - Full (untruncated) result set.
+ * @param {string|null} sortField - Field to summarize, or null to report the
+ *   count only.
+ * @returns {{count: number}} Count plus `min`/`max` suffix keys for the field
+ *   when any record carries a finite value for it.
+ */
 function summarize(items, sortField) {
   const summary = { count: items.length };
   if (sortField && items.length) {
@@ -103,10 +148,48 @@ function summarize(items, sortField) {
 /**
  * Create an engine bound to live providers. All spatial/text/number logic is
  * in the pure helpers above; this closure only sequences and remembers.
+ *
+ * @param {object} providers - Injected data access; see the module header.
+ * @param {function(string): Array<object>} providers.getRecords - Snapshot of a
+ *   layer's records.
+ * @param {function(string): Promise<{ring: Array, name: string}|null>} providers.resolveRegionRing -
+ *   Named-region boundary lookup.
+ * @param {function(): {lat: number, lon: number, viewRadiusKm: number, bounds?: object}} providers.getViewContext -
+ *   Camera-derived view context.
+ * @param {function(): {lat: number, lon: number, label: string}|null} [providers.getContextSubject] -
+ *   Optional panel-selected contact whose position may serve as a radius
+ *   centre instead of the camera.
+ * @returns {{query: function(object): Promise<object>, reset: function(): void, hasMemory: function(): boolean}}
+ *   Engine handle; `query` resolves to a result envelope, `reset` clears the
+ *   follow-up memory, `hasMemory` reports whether one exists.
  */
 export function createAnalystEngine(providers) {
   let lastResult = null;
 
+  /**
+   * Run one analyst query. Resolves to an envelope whose `ok` is false for an
+   * unsupported layer or an unresolvable region (with `error` text meant for
+   * narration), and whose `ok` result carries count, top items, summary,
+   * scope label, and coverage. Successful queries are remembered for a later
+   * `followUp` re-filter.
+   *
+   * @param {object} [spec] - Query intent; every field is optional.
+   * @param {string[]} [spec.layers] - Layer keys to snapshot; defaults to
+   *   ['flights'], ignored when re-querying the remembered set.
+   * @param {{kind: string, name?: string, center?: {lat: number, lon: number},
+   *   km?: number}} [spec.scope] - Spatial scope; defaults to {kind:'view'}.
+   * @param {Array<{field: string, op: string, value: *>}} [spec.filters] -
+   *   Attribute filters applied in order after the spatial scope.
+   * @param {string} [spec.sortBy] - Record field to sort by, or 'distance'
+   *   from the resolved centre.
+   * @param {string} [spec.sortDir] - 'asc' for ascending; anything else sorts
+   *   descending.
+   * @param {number} [spec.limit] - Items to return, clamped to 1..50
+   *   (default 10).
+   * @param {boolean} [spec.followUp] - Re-filter the previous result set
+   *   instead of re-snapshotting the layers.
+   * @returns {Promise<object>} Result envelope as described above.
+   */
   async function query(spec = {}) {
     const layers = (spec.followUp && lastResult)
       ? null // follow-up: re-filter the remembered set, no re-snapshot

@@ -179,6 +179,10 @@ export function launchStatusAllowsOrbit(status) {
  * @param {object|null} launch Normalized launch record.
  * @param {boolean} replayAvailable Whether a rendered ascent/orbit track exists.
  * @returns {{orbit: string|null, ascent: string, replayAvailable: boolean}}
+ *   Panel captions: `orbit` is the catalog orbit name, prefixed 'PLANNED · '
+ *   when the status forbids an orbit claim; `ascent` selects the ascent-source
+ *   caption between supplied trajectory points, reconstruction, and
+ *   unavailable; `replayAvailable` echoes whether a rendered track exists.
  */
 export function missionPathPresentation(launch, replayAvailable = false) {
   const orbitName = launch?.orbit?.name || (typeof launch?.orbit === 'string' ? launch.orbit : null);
@@ -291,6 +295,13 @@ function ensureMissionOrbitPatternRegistered() {
   _missionOrbitPatternRegistered = true;
 }
 
+/**
+ * Build a fresh instance of the once-registered tactical orbit material. Each
+ * polyline gets its own uniform set so live and estimated rings can carry
+ * different stroke colors over the same fabric.
+ * @param {Cesium.Color} color Stroke color for the dot-and-dash pattern.
+ * @returns {Cesium.Material} Material of type 'GevMissionOrbitTactical'.
+ */
 function createMissionOrbitPatternMaterial(color) {
   ensureMissionOrbitPatternRegistered();
   return Cesium.Material.fromType('GevMissionOrbitTactical', {
@@ -300,6 +311,12 @@ function createMissionOrbitPatternMaterial(color) {
   });
 }
 
+/**
+ * Resolve whether a baked orbit ring may render: the layer must be live and,
+ * when a mission is isolated, the ring must belong to the selected mission.
+ * @param {string} launchId Mission that owns the candidate primitive.
+ * @returns {boolean} Value to apply to the primitive's `show` flag.
+ */
 function missionOrbitPrimitiveVisible(launchId) {
   return Boolean(
     _enabled
@@ -308,12 +325,20 @@ function missionOrbitPrimitiveVisible(launchId) {
   );
 }
 
+/**
+ * Re-apply the visibility predicate to every baked orbit primitive after a
+ * layer enable/disable or a selection change.
+ */
 function syncMissionOrbitPrimitiveVisibility() {
   for (const [launchId, path] of _missionOrbitPrimitives) {
     if (path.primitive) path.primitive.show = missionOrbitPrimitiveVisible(launchId);
   }
 }
 
+/**
+ * Detach every baked orbit primitive collection from the scene and clear the
+ * bake map. Used before a full mission rebuild and on layer destroy.
+ */
 function removeMissionOrbitPrimitives() {
   for (const path of _missionOrbitPrimitives.values()) {
     if (path.primitive && _viewer?.scene?.primitives) {
@@ -323,6 +348,13 @@ function removeMissionOrbitPrimitives() {
   _missionOrbitPrimitives.clear();
 }
 
+/**
+ * Advance each visible orbit primitive from its bake-time GMST to the current
+ * Earth rotation, carrying the orbit label anchor along. The baked ECEF
+ * geometry is never rebuilt; only the model matrix and the derived label
+ * position move.
+ * @param {Date} nowDate Wall-clock date driving the GMST transform.
+ */
 function updateMissionOrbitPrimitiveFrames(nowDate) {
   for (const [launchId, path] of _missionOrbitPrimitives) {
     if (!path.primitive || !missionOrbitPrimitiveVisible(launchId)) continue;
@@ -337,6 +369,18 @@ function updateMissionOrbitPrimitiveFrames(nowDate) {
   }
 }
 
+/**
+ * Bake a live satellite's orbit ring as a PolylineCollection primitive whose
+ * model matrix carries the bake-time GMST, so per-frame Earth rotation costs
+ * one matrix update instead of a geometry rebuild.
+ * @param {object} launch Normalized launch record.
+ * @param {Cesium.Cartesian3[]} orbitPath Orbit ring to bake.
+ * @param {object|null} satelliteTrack Satellite-derived track exposing
+ *   `gmstAtBake`.
+ * @returns {boolean} True when the primitive was created; false when there is
+ *   no viewer or the track has no finite bake GMST (the caller then falls back
+ *   to an ordinary entity polyline).
+ */
 function addMissionOrbitPrimitive(launch, orbitPath, satelliteTrack) {
   if (!_viewer || !satelliteTrack || !Number.isFinite(satelliteTrack.gmstAtBake)) return false;
   const collection = new Cesium.PolylineCollection();
@@ -357,6 +401,13 @@ function addMissionOrbitPrimitive(launch, orbitPath, satelliteTrack) {
   return true;
 }
 
+/**
+ * Cesium material property exposing the registered tactical orbit fabric to
+ * entity polylines (the estimated rings that are not baked as primitives).
+ * The uniform set is constant, so Cesium caches the evaluated material.
+ * @class
+ * @param {Cesium.Color} color Stroke color for the dot-and-dash pattern.
+ */
 function MissionOrbitPatternMaterialProperty(color) {
   ensureMissionOrbitPatternRegistered();
   this._color = color;
@@ -394,7 +445,7 @@ MissionOrbitPatternMaterialProperty.prototype.equals = function equals(other) {
  * @param {string} input.launchId Candidate mission identifier.
  * @param {number} input.cameraHeightM Camera height above the ellipsoid.
  * @param {number} input.cameraDistanceM Direct camera range to the launch pad.
- * @returns {boolean}
+ * @returns {boolean} Whether the pad zone may draw for this camera/mission pair.
  */
 export function launchPadZoneVisible({
   layerActive,
@@ -460,6 +511,14 @@ export function missionAnchorVisible(
   return missionAnchorHorizonVisible(cameraPosition, markerPosition);
 }
 
+/**
+ * Fly the camera back to the keyhole-fitted whole-globe view used when the
+ * layer enables or the selection clears. The distance is derived from the
+ * viewport field of view and the shared keyhole geometry so Earth fills the
+ * same screen radius at any canvas size.
+ * @param {Cesium.Viewer} viewer Viewer whose camera is moved.
+ * @param {number} [duration=2.4] Fly-to duration in seconds.
+ */
 function focusFullGlobe(viewer, duration = 2.4) {
   const canvas = viewer?.scene?.canvas;
   const height = canvas?.clientHeight || canvas?.height;
@@ -481,6 +540,13 @@ function focusFullGlobe(viewer, duration = 2.4) {
   });
 }
 
+/**
+ * Compress a launch name for overlay and roster copy: collapse whitespace,
+ * drop the ' | ' provider suffix and the ' — ' subtitle, then ellipsize.
+ * @param {string|null} name Raw mission name.
+ * @param {number} [maxLength=24] Character budget before ellipsis.
+ * @returns {string} Compact display label.
+ */
 function shortMissionLabel(name, maxLength = 24) {
   const text = String(name || 'Unnamed mission').replaceAll(/\s+/g, ' ').trim().split(' | ')[0];
   const compact = text.split(' — ')[0].trim();
@@ -507,7 +573,8 @@ export function compactLaunchSiteName(launchSite) {
  * @param {object} launch Normalized Launch Library mission.
  * @param {Cesium.Cartesian3|function():Cesium.Cartesian3} position Existing display position.
  * @param {boolean} [selected=false] Whether the mission owns the selected view.
- * @returns {object}
+ * @returns {object} Overlay entry — an ambient marker when unselected, or a
+ *   protected selected-lane entry carrying the launch-site detail line.
  */
 export function createRocketMissionMarkerOverlayEntry(launch, position, selected = false) {
   const mission = shortMissionLabel(launch?.name, 26).toUpperCase();
@@ -549,14 +616,14 @@ export function createRocketMissionMarkerOverlayEntry(launch, position, selected
  * Build one protected label belonging to the selected mission's trajectory,
  * live payload position, or orbit. Copy is already source-formatted by the
  * caller; newline semantics become explicit host detail rows.
- * @param {object} input
+ * @param {object} input Mission-element descriptor.
  * @param {string} input.id Stable mission-element identity.
  * @param {Cesium.Cartesian3|function():Cesium.Cartesian3} input.position Existing cached position.
  * @param {string} input.text Former native-label text, including newlines.
  * @param {string} input.accent Source-owned label color.
  * @param {number} [input.priority=0] Protected placement order.
  * @param {number} [input.gapPx=8] Anchor-to-label gap.
- * @returns {object}
+ * @returns {object} Protected selected-lane label entry.
  */
 export function createRocketMissionElementOverlayEntry({
   id,
@@ -586,7 +653,15 @@ export function createRocketMissionElementOverlayEntry({
   });
 }
 
-/** Keep the newest ambient mission markers with stable identity tie-breaking. */
+/**
+ * Keep the newest ambient mission markers with stable identity tie-breaking.
+ * Entries are ranked by descending priority and then by id, so equal-priority
+ * markers resolve to the same cohort across frames.
+ * @param {Array<object>} entries Candidate ambient marker entries.
+ * @param {number} [limit=ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT]
+ *   Requested cohort size, clamped to the layer's own ceiling.
+ * @returns {Array<object>} At most `limit` entries, highest priority first.
+ */
 export function selectRocketMissionMarkerOverlayCohort(
   entries,
   limit = ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT,
@@ -601,6 +676,11 @@ export function selectRocketMissionMarkerOverlayCohort(
   )).slice(0, cap);
 }
 
+/**
+ * Lazily draw and cache the 48 px corner-bracket reticle used as the hover
+ * billboard image on launch anchors; every mission shares one canvas.
+ * @returns {HTMLCanvasElement} Cached reticle image.
+ */
 function missionHoverReticleImage() {
   if (_missionHoverReticleImage) return _missionHoverReticleImage;
   const canvas = document.createElement('canvas');
@@ -641,7 +721,8 @@ function missionHoverReticleImage() {
  * @param {boolean} input.countdownActive Whether the T-minus hold is active.
  * @param {boolean} [input.preCountdownActive=false] - Whether the launch is still
  *   short of the T-minus hold; the overlay yields null for it.
- * @returns {'countdown'|'ascent'|'orbit'|null}
+ * @returns {'countdown'|'ascent'|'orbit'|null} Overlay mode to render, or null
+ *   when replay is inactive or the launch is still short of the T-minus hold.
  */
 export function replayOverlayMode({
   replayActive,
@@ -675,7 +756,8 @@ export function replayVehicleScreenRotation(from, to) {
  * @param {{x:number,y:number}} next Current path projection.
  * @param {number} [alpha] Interpolation amount.
  * @param {number} [snapDistance] Maximum distance to smooth.
- * @returns {{x:number,y:number}}
+ * @returns {{x:number,y:number}} Smoothed position, or `next` unchanged when
+ *   the step exceeds `snapDistance` (a deliberate lag-free snap).
  */
 export function smoothReplayWindowPosition(
   previous,
@@ -693,6 +775,10 @@ export function smoothReplayWindowPosition(
   };
 }
 
+/**
+ * Create (once) the DOM overlay hosting the replay rocket SVG, thrust plumes,
+ * orbit dot, and title/detail callout, appended to the Cesium container.
+ */
 function createReplayVehicleOverlay() {
   if (_replayVehicleOverlay || typeof document === 'undefined') return;
   const host = document.getElementById('cesiumContainer') || document.body;
@@ -723,12 +809,20 @@ function createReplayVehicleOverlay() {
   host.appendChild(_replayVehicleOverlay);
 }
 
+/**
+ * Hide the replay vehicle overlay and clear its thrusting/paused modifiers.
+ * The element itself survives so the next replay can reuse it.
+ */
 function hideReplayVehicleOverlay() {
   if (!_replayVehicleOverlay) return;
   _replayVehicleOverlay.hidden = true;
   _replayVehicleOverlay.classList.remove('is-thrusting', 'is-paused');
 }
 
+/**
+ * Remove the replay vehicle overlay from the DOM and forget its cached
+ * callout text.
+ */
 function destroyReplayVehicleOverlay() {
   _replayVehicleOverlay?.remove();
   _replayVehicleOverlay = null;
@@ -758,7 +852,9 @@ export function missionDataCompleteness(launch = {}) {
  * Build a data-rich roster while preserving the source-array index
  * used by mission selection and Previous/Next navigation.
  * @param {Array<object>} launches Normalized launch records.
- * @returns {Array<{launch: object, index: number}>}
+ * @returns {Array<{launch: object, index: number}>} Roster-ordered records
+ *   ranked by completeness, then newest first; `index` still refers to the
+ *   source array so selection navigation stays index-stable.
  */
 export function missionRosterEntries(launches) {
   return (launches || [])
@@ -815,6 +911,14 @@ export function parseMissionDurationSeconds(value) {
   return match[1] ? -seconds : seconds;
 }
 
+/**
+ * Read the mission-elapsed insertion time from the Launch Library timeline:
+ * the latest deployment/injection event wins, then SECO, then the largest
+ * non-negative offset available.
+ * @param {object} launch Normalized launch record.
+ * @returns {number|null} Seconds from liftoff to orbit insertion, or null when
+ *   the timeline exposes no non-negative offsets.
+ */
 function orbitInsertionOffsetSeconds(launch) {
   const events = (launch.timeline || []).filter((event) => Number.isFinite(event.offsetSeconds) && event.offsetSeconds >= 0);
   if (!events.length) return null;
@@ -825,6 +929,14 @@ function orbitInsertionOffsetSeconds(launch) {
   return Math.max(...events.map((event) => event.offsetSeconds));
 }
 
+/**
+ * Estimate the orbital period from the mean radius of the sampled ring via
+ * the circular-orbit identity and Earth's standard gravitational parameter.
+ * Used when no satellite-derived period exists for the mission.
+ * @param {Cesium.Cartesian3[]} [orbitPath] Orbit ring samples.
+ * @returns {number} Period in seconds; 5400 (a 90-minute LEO) for an empty
+ *   path.
+ */
 function estimatedOrbitPeriodSeconds(orbitPath) {
   if (!orbitPath?.length) return 5400;
   const meanRadius = orbitPath.reduce((total, point) => total + Cesium.Cartesian3.magnitude(point), 0) / orbitPath.length;
@@ -882,6 +994,23 @@ export function replayStartAfterPause(startedAt, pausedAt, resumedAt) {
   return startedAt + Math.max(0, resumedAt - pausedAt);
 }
 
+/**
+ * Derive replay playback state for one instant of wall-clock time. The mission
+ * clock advances at the speed multiplier, optionally looping over the
+ * ascent+orbit animation, and maps elapsed progress back onto a real mission
+ * epoch when the timeline disclosed an insertion offset.
+ * @param {object} launch Normalized launch record.
+ * @param {number} startedAt Replay start epoch in milliseconds (future-dated
+ *   to model the tile-settle and countdown lead).
+ * @param {number} ascentDurationSec Animated ascent duration in seconds.
+ * @param {number} orbitDurationSec Animated orbit duration in seconds.
+ * @param {number} orbitPeriodSec Propagated or estimated orbital period.
+ * @param {number} [speed=1] Playback multiplier.
+ * @param {number} [nowMs=Date.now()] Wall-clock epoch in milliseconds.
+ * @param {number} [preCountdownDurationSec=0] Lead time before the T-minus hold.
+ * @param {boolean} [loop=true] Whether playback wraps at the animation end.
+ * @returns {{ascending: boolean, phaseProgress: number, eventTime: Date|null, elapsedSinceStart: number, countdownActive: boolean, preCountdownActive: boolean, countdownSeconds: number}} Phase, normalized phase progress, mission-epoch event time, and countdown flags.
+ */
 export function replayState(
   launch,
   startedAt,
@@ -929,6 +1058,15 @@ export function replayState(
   };
 }
 
+/**
+ * Project a plausible orbit ring from launch metadata alone (orbit class,
+ * pad coordinates, and a coarse launch-azimuth heuristic). This is an
+ * estimate for missions with no TLE match, never a claim about the real
+ * orbital plane. Altitudes: GEO/GTO 35,786 km, MEO 20,200 km, else 550 km.
+ * @param {object} launch Normalized launch record.
+ * @returns {Cesium.Cartesian3[]|null} 97 samples forming a closed ring around
+ *   Earth, or null when the record lacks an orbit name or pad coordinates.
+ */
 export function approximateOrbitPath(launch) {
   if (!launch.orbit?.name || !Number.isFinite(launch.lat) || !Number.isFinite(launch.lon)) return null;
   const orbitName = launch.orbit.name.toLowerCase();
@@ -999,12 +1137,23 @@ export function approximateOrbitPath(launch) {
   });
 }
 
+/**
+ * Extract the launch id encoded in a layer entity id such as
+ * `rocket-launch:<id>` or `rocket-orbit:<id>:<n>`.
+ * @param {Cesium.Entity} entity Candidate entity.
+ * @returns {string|null} Launch id, or null when the entity is not layer-owned.
+ */
 function entityLaunchId(entity) {
   if (!entity?.id || typeof entity.id !== 'string') return null;
   const match = entity.id.match(/^rocket-[^:]+:([^:]+)/);
   return match?.[1] || null;
 }
 
+/**
+ * Drop every overlay entry owned by this layer from the shared host and hide
+ * both its ambient and selected sources. Called on disable, destroy, and when
+ * the layer is not currently displayed.
+ */
 function clearMissionOverlaySources() {
   _selectedMissionOverlayTimeText = null;
   _missionOverlayHost.clearSource(ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID);
@@ -1013,6 +1162,12 @@ function clearMissionOverlaySources() {
   _missionOverlayHost.setVisible(ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_ID, false);
 }
 
+/**
+ * Rebuild the overlay sources for the current selection state. A selected
+ * mission owns the protected selected source (its marker plus trajectory,
+ * payload, and orbit labels) and suppresses the ambient cohort; otherwise the
+ * bounded ambient cohort renders and the hovered roster row is pinned.
+ */
 function syncMissionOverlayEntries() {
   if (!_enabled || !_dataSource?.show) {
     clearMissionOverlaySources();
@@ -1068,6 +1223,10 @@ function syncMissionOverlayEntries() {
   _missionOverlayHost.setVisible(ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID, true);
 }
 
+/**
+ * Refresh the selected mission's live event-time label only when the formatted
+ * text actually changed, so the overlay sources are not rebuilt every frame.
+ */
 function refreshSelectedMissionOverlayText() {
   const selectedRecord = _selectedLaunchId
     ? _missionOverlayRecords.get(_selectedLaunchId)
@@ -1077,6 +1236,14 @@ function refreshSelectedMissionOverlayText() {
   if (nextText !== _selectedMissionOverlayTimeText) syncMissionOverlayEntries();
 }
 
+/**
+ * Select one mission for the panel, entities, overlays, and camera anchors.
+ * Selecting another mission tears down replay and zoom-anchor state owned by
+ * the previous one; null clears the selection and restores all markers.
+ * @param {string|null} launchId Mission to select, or null to deselect.
+ * @param {boolean} [isolate=true] Whether the selection came from an explicit
+ *   user action (drives the `_explicitSelection` flag reused on re-enable).
+ */
 function setSelectedMission(launchId, isolate = true) {
   if (launchId) clearMissionRosterHover();
   if (_replayCameraLaunchId && _replayCameraLaunchId !== launchId) stopMissionReplay();
@@ -1100,10 +1267,18 @@ function setSelectedMission(launchId, isolate = true) {
   renderMissionPanel();
 }
 
+/**
+ * Hide the launch-pad zone primitive without releasing its geometry, so the
+ * pad can reappear instantly when the camera returns.
+ */
 function hideLaunchPadZone() {
   if (_launchPadZonePrimitive) _launchPadZonePrimitive.show = false;
 }
 
+/**
+ * Remove the launch-pad zone primitive from the scene and forget which pad it
+ * belonged to, forcing a rebuild for the next selected mission.
+ */
 function removeLaunchPadZonePrimitive() {
   if (_launchPadZonePrimitive && _viewer?.scene?.primitives) {
     _viewer.scene.primitives.remove(_launchPadZonePrimitive);
@@ -1112,6 +1287,12 @@ function removeLaunchPadZonePrimitive() {
   _launchPadZoneLaunchId = null;
 }
 
+/**
+ * Build the selected pad's 500 m ground disc: a translucent fill with a bright
+ * rim, classified onto both 3D tiles and the globe, with a depth-bias render
+ * state so the ring is not buried by the launch-pad mesh at oblique angles.
+ * @param {object} launch Selected mission providing pad coordinates.
+ */
 function createLaunchPadZonePrimitive(launch) {
   removeLaunchPadZonePrimitive();
   const material = new Cesium.Material({
@@ -1178,6 +1359,11 @@ function createLaunchPadZonePrimitive(launch) {
   _launchPadZoneLaunchId = launch.id;
 }
 
+/**
+ * Install the shared preRender listener that owns all ring/zone bookkeeping:
+ * it rotates the orbit primitives once per second, evaluates pad-zone
+ * visibility against the live camera, and builds or hides the zone primitive.
+ */
 function initLaunchPadZonePrimitive() {
   if (!_viewer || _launchPadZoneRemover) return;
   _launchPadZoneRemover = _viewer.scene.preRender.addEventListener(() => {
@@ -1214,12 +1400,27 @@ function initLaunchPadZonePrimitive() {
   });
 }
 
+/**
+ * Detach the pad-zone preRender listener and remove the zone primitive. Used
+ * on layer destroy so no frame callback outlives the layer.
+ */
 function destroyLaunchPadZonePrimitive() {
   if (_launchPadZoneRemover) _launchPadZoneRemover();
   _launchPadZoneRemover = null;
   removeLaunchPadZonePrimitive();
 }
 
+/**
+ * Sample a Cartesian polyline by arc length. Segment distances are memoized
+ * per path in a WeakMap and the target segment is found by binary search, so
+ * repeated per-frame sampling stays cheap.
+ * @param {Cesium.Cartesian3[]} path Path samples.
+ * @param {number} progress Normalized distance along the path, clamped [0, 1].
+ * @param {Cesium.Cartesian3} [result] Optional target for the in-place write.
+ * @returns {Cesium.Cartesian3|undefined} Interpolated position (written into
+ *   `result` when supplied), the single vertex for degenerate one-point paths,
+ *   or undefined for an empty path.
+ */
 export function samplePath(path, progress, result) {
   if (!path?.length) return undefined;
   // Degenerate returns clone into `result` when provided — handing back a
@@ -1277,7 +1478,8 @@ export function orbitProgressAtTime(nowMs, periodSec) {
  * @param {Cesium.Cartesian3} launchPosition Launch-pad position.
  * @param {Cesium.Cartesian3} insertionPosition Orbit insertion position.
  * @param {number} [samples] Number of curve intervals.
- * @returns {Cesium.Cartesian3[]}
+ * @returns {Cesium.Cartesian3[]} `samples + 1` positions from pad to insertion,
+ *   or the two raw endpoints when either cannot be converted to cartographic.
  */
 export function reconstructedAscentPath(launchPosition, insertionPosition, samples = 512) {
   const ellipsoid = Cesium.Ellipsoid.WGS84;
@@ -1316,6 +1518,13 @@ export function reconstructedAscentPath(launchPosition, insertionPosition, sampl
   });
 }
 
+/**
+ * Find the orbit sample most nearly radial to a reference position, i.e. the
+ * point on the ring closest in direction to the candidate insertion point.
+ * @param {Cesium.Cartesian3[]} orbitPath Orbit ring samples.
+ * @param {Cesium.Cartesian3} referencePosition Candidate insertion position.
+ * @returns {number} Index into `orbitPath`; 0 for an empty path.
+ */
 function nearestOrbitIndex(orbitPath, referencePosition) {
   if (!orbitPath?.length || !referencePosition) return 0;
   const referenceDirection = Cesium.Cartesian3.normalize(referencePosition, new Cesium.Cartesian3());
@@ -1332,6 +1541,15 @@ function nearestOrbitIndex(orbitPath, referencePosition) {
   return bestIndex;
 }
 
+/**
+ * Rotate an orbit ring so it begins (and closes) at the insertion sample.
+ * Closing duplicates are detected and dropped before rotation so the animated
+ * marker never doubles back at the seam.
+ * @param {Cesium.Cartesian3[]} orbitPath Orbit ring samples.
+ * @param {number} insertionIndex Sample the ring should start from.
+ * @returns {Cesium.Cartesian3[]} Re-rooted closed ring; an empty input stays
+ *   empty.
+ */
 function orbitPathFromInsertion(orbitPath, insertionIndex) {
   if (!orbitPath?.length) return [];
   const first = orbitPath[0];
@@ -1345,6 +1563,16 @@ function orbitPathFromInsertion(orbitPath, insertionIndex) {
   return rotated;
 }
 
+/**
+ * Interpolate one path segment along the WGS84 geodesic so it can never dip
+ * through the ellipsoid, easing the altitude blend with a smoothstep. Sample
+ * density scales with surface distance (one point per 75 km) so replay motion
+ * does not visibly pause at long segment boundaries.
+ * @param {Cesium.Cartesian3} startPosition Segment start.
+ * @param {Cesium.Cartesian3} endPosition Segment end.
+ * @returns {Cesium.Cartesian3[]} 2–257 surface-safe samples including both
+ *   exact endpoints, or the raw endpoints when either is not cartographic.
+ */
 function surfaceSafeSegment(startPosition, endPosition) {
   const ellipsoid = Cesium.Ellipsoid.WGS84;
   const start = ellipsoid.cartesianToCartographic(startPosition);
@@ -1372,6 +1600,12 @@ function surfaceSafeSegment(startPosition, endPosition) {
   return positions;
 }
 
+/**
+ * Run `surfaceSafeSegment` across a control polyline, de-duplicating shared
+ * endpoints so the result is one continuous sample list.
+ * @param {Cesium.Cartesian3[]} controlPositions Ordered control points.
+ * @returns {Cesium.Cartesian3[]} Continuous surface-safe path.
+ */
 function surfaceSafePath(controlPositions) {
   if (!controlPositions?.length) return [];
   if (controlPositions.length === 1) return controlPositions.slice();
@@ -1383,6 +1617,17 @@ function surfaceSafePath(controlPositions) {
   return path;
 }
 
+/**
+ * Replace the final ascent samples with a cubic Bézier that matches both the
+ * climb tangent and the orbit tangent at insertion, then clamp the blended
+ * points back to the original altitude envelope so the world-space chord
+ * cannot tunnel through the ellipsoid. Mutates and returns `ascentPath`.
+ * @param {Cesium.Cartesian3[]} ascentPath Ascent samples to blend in place.
+ * @param {Cesium.Cartesian3[]} orbitPath Orbit ring supplying the tangent.
+ * @param {number} insertionIndex Orbit sample the ascent must join.
+ * @returns {Cesium.Cartesian3[]} The same path, blended (or untouched when the
+ *   ascent is too short or the orbit tangent is degenerate).
+ */
 function blendAscentIntoOrbitTangent(ascentPath, orbitPath, insertionIndex) {
   if (!ascentPath?.length || ascentPath.length < 4 || !orbitPath?.length) return ascentPath;
   const ellipsoid = Cesium.Ellipsoid.WGS84;
@@ -1467,6 +1712,9 @@ function blendAscentIntoOrbitTangent(ascentPath, orbitPath, insertionIndex) {
  * @param {Cesium.Cartesian3[]} orbitPath Selected satellite or estimated orbit.
  * @param {Cesium.Cartesian3|null} [insertionReference] Propagated or estimated insertion position.
  * @returns {{ascentPath: Cesium.Cartesian3[], animatedOrbitPath: Cesium.Cartesian3[], insertionIndex: number}}
+ *   Globe-safe ascent ending at the insertion sample, the orbit ring re-rooted
+ *   to that same sample so the animated marker cannot jump between phases, and
+ *   the resolved insertion index.
  */
 export function buildMissionPaths(
   launchPosition,
@@ -1492,6 +1740,18 @@ export function buildMissionPaths(
   };
 }
 
+/**
+ * Resolve the forward geodesic heading of a path at a progress point, probing
+ * progressively larger lookahead steps until the segment is long enough to
+ * yield a numerically stable heading.
+ * @param {Cesium.Cartesian3[]} path Replay path samples.
+ * @param {number} progress Normalized progress along the path.
+ * @param {number} [fallback=Math.PI] Heading returned when no step produces a
+ *   usable geodesic.
+ * @returns {number} Zero-to-two-pi forward path heading in radians. Because
+ *   HeadingPitchRange places the camera opposite its heading vector, this
+ *   value keeps a chase camera behind the vehicle.
+ */
 export function cameraHeadingForPath(path, progress, fallback = Math.PI) {
   if (!path?.length) return fallback;
   const current = samplePath(path, progress);
@@ -1547,7 +1807,8 @@ export function replayChaseCameraHeading(pathHeading, orbitBlend = 0) {
  * @param {number} previous Previous Cesium heading in radians.
  * @param {number} desired Desired Cesium heading in radians.
  * @param {number} [maxStepRad] Maximum angular change for one rendered frame.
- * @returns {number}
+ * @returns {number} Clamped heading in the zero-to-two-pi range, falling back
+ *   to the finite input when the other operand is not a number.
  */
 export function smoothReplayCameraHeading(
   previous,
@@ -1583,7 +1844,9 @@ export function missionZoomPitch(rangeM) {
  * orbital globe pullback.
  * @param {{ascending: boolean, phaseProgress: number}} state Replay phase.
  * @param {number} altitudeM Animated vehicle altitude above the ellipsoid.
- * @returns {{range: number, pitch: number}}
+ * @returns {{range: number, pitch: number}} Camera range in metres and pitch
+ *   in radians for the current altitude, with the orbit branch easing toward
+ *   a wide oblique composition of the whole ring.
  */
 export function replayCameraView(state, altitudeM) {
   const altitude = Math.max(0, Number(altitudeM) || 0);
@@ -1685,6 +1948,9 @@ export function replayOrbitCameraTarget(vehicleAnchor, frameCenter, orbitBlend =
  * @param {number} range Camera distance from the target.
  * @param {number} pitch Camera elevation below the local horizon.
  * @returns {{destination: Cesium.Cartesian3, direction: Cesium.Cartesian3, up: Cesium.Cartesian3}|null}
+ *   Camera destination, view direction, and radial up vector for
+ *   `camera.setView`, or null when any input position is missing or the
+ *   orbit-normal/radial cross products degenerate.
  */
 export function replayOrbitCameraPose(
   position,
@@ -1795,6 +2061,10 @@ export function replayOrbitGlobeRange(
   return Cesium.Math.lerp(range, globeAndVehicleRange, blend);
 }
 
+/**
+ * Release the mission zoom-anchor camera lock (the `lookAt` transform) while
+ * leaving replay camera ownership untouched.
+ */
 function stopMissionZoomAnchor() {
   if (_missionZoomAnchorRemover) _missionZoomAnchorRemover();
   _missionZoomAnchorRemover = null;
@@ -1804,6 +2074,13 @@ function stopMissionZoomAnchor() {
   }
 }
 
+/**
+ * Lock the camera to the selected launch site with a zoom-dependent pitch, so
+ * user zooming blends from the global nadir view into an oblique local view.
+ * Skipped entirely while a replay owns the camera.
+ * @param {object} launch Selected mission providing pad coordinates.
+ * @param {number} initialRange Initial camera range in metres.
+ */
 function startMissionZoomAnchor(launch, initialRange) {
   if (!_viewer || !launch || _replayCameraLaunchId) return;
   stopMissionZoomAnchor();
@@ -1816,6 +2093,11 @@ function startMissionZoomAnchor(launch, initialRange) {
   );
 }
 
+/**
+ * Reflect replay availability and transport state onto the mission panel: the
+ * REPLAY button exists only for missions with a built track, the pause/cancel
+ * transport appears while a replay runs, and aria-pressed/labels stay honest.
+ */
 function syncReplayButton() {
   const button = _missionPanel?.querySelector('[data-mission-replay]');
   const transport = _missionPanel?.querySelector('[data-mission-replay-transport]');
@@ -1843,6 +2125,12 @@ function syncReplayButton() {
   }
 }
 
+/**
+ * Announce the current replay phase through the transport control's accessible
+ * label: pre-countdown, T-minus, liftoff, ascent, orbit, plus the paused
+ * qualifier.
+ * @param {{countdownActive: boolean, preCountdownActive: boolean, countdownSeconds: number, elapsedSinceStart: number, ascending: boolean}} state Replay state sampled this frame.
+ */
 function syncReplayCountdownButton(state) {
   const transport = _missionPanel?.querySelector('[data-mission-replay-transport]');
   if (!transport || !_replayCameraLaunchId) return;
@@ -1856,6 +2144,10 @@ function syncReplayCountdownButton(state) {
   transport.setAttribute('aria-label', `${phase}${_replayPaused ? ', paused' : ''}`);
 }
 
+/**
+ * Mirror the current replay multiplier into the speed slider's value, its
+ * progress-fill custom property, and the `×` output text.
+ */
 function syncReplaySpeedControl() {
   const input = _missionPanel?.querySelector('[data-mission-replay-speed]');
   const output = _missionPanel?.querySelector('[data-mission-replay-speed-output]');
@@ -1867,6 +2159,12 @@ function syncReplaySpeedControl() {
   if (output) output.textContent = `${_replaySpeed.toFixed(_replaySpeed % 1 ? 2 : 0)}×`;
 }
 
+/**
+ * Change the replay multiplier without losing mission-elapsed time: every
+ * animation start epoch is re-based so the elapsed mission clock is preserved
+ * across the change.
+ * @param {number|string} value Requested multiplier from the slider.
+ */
 function setReplaySpeed(value) {
   const nextSpeed = normalizeReplaySpeed(value);
   const previousSpeed = _replaySpeed;
@@ -1886,6 +2184,12 @@ function setReplaySpeed(value) {
   syncReplaySpeedControl();
 }
 
+/**
+ * Resolve the replay wall clock for one mission: the frozen pause epoch while
+ * that mission's replay is paused, otherwise the current time.
+ * @param {string} launchId Mission whose replay clock is read.
+ * @returns {number} Epoch milliseconds the replay advances from.
+ */
 function replayClockNow(launchId) {
   if (
     _replayPaused
@@ -1897,6 +2201,10 @@ function replayClockNow(launchId) {
   return Date.now();
 }
 
+/**
+ * Freeze the running replay at the current instant.
+ * @returns {boolean} True when a running replay was paused.
+ */
 function pauseMissionReplay() {
   if (!_replayCameraLaunchId || _replayPaused) return false;
   _replayPausedAtMs = Date.now();
@@ -1905,6 +2213,11 @@ function pauseMissionReplay() {
   return true;
 }
 
+/**
+ * Resume a paused replay, shifting its start epoch so the paused interval is
+ * not consumed as mission time.
+ * @returns {boolean} True when a paused replay was resumed.
+ */
 function resumeMissionReplay() {
   if (!_replayCameraLaunchId || !_replayPaused || !Number.isFinite(_replayPausedAtMs)) {
     return false;
@@ -1923,6 +2236,12 @@ function resumeMissionReplay() {
   return true;
 }
 
+/**
+ * End the active replay: invalidate the camera token, detach the preUpdate
+ * chase listener, restore the free camera transform, and rebuild the overlays.
+ * The mission's animation start is re-based so its marker holds the position
+ * it had when the replay stopped.
+ */
 function stopMissionReplay() {
   const stoppedLaunchId = _replayCameraLaunchId;
   _replayCameraToken++;
@@ -1938,6 +2257,17 @@ function stopMissionReplay() {
   syncMissionOverlayEntries();
 }
 
+/**
+ * Run the reconstructed ascent-then-orbit replay with a following camera. The
+ * chase listener is installed on preUpdate (so the camera is set before Cesium
+ * traverses and refines tiles), the camera flies to the pad broadside to the
+ * ascent, then follows the vehicle and switches to a world-frame orbit pose
+ * after insertion.
+ * @param {string} launchId Mission to replay.
+ * @returns {boolean} True when the replay started; false when the mission or
+ *   its track is missing, or when the same replay was already running (the
+ *   toggle case).
+ */
 function startMissionReplay(launchId) {
   const launch = _launches.find((item) => item.id === launchId);
   const track = _replayTracks.get(launchId);
@@ -2100,8 +2430,9 @@ function startMissionReplay(launchId) {
  * Number(null)==0 / Number('')==0 trap — an unknown must stay null, never
  * become a fabricated zero (DATA_PRESET honesty, PR #197 pattern). Real
  * zeros pass through: only null/undefined/'' are treated as absent.
- * @param {*} value
- * @returns {?number}
+ * @param {*} value Upstream field of any shape.
+ * @returns {?number} Finite number, or null when the value is absent or not
+ *   numeric.
  */
 function finiteNumberOrNull(value) {
   if (value === null || value === undefined || value === '') return null;
@@ -2109,10 +2440,24 @@ function finiteNumberOrNull(value) {
   return Number.isFinite(number) ? number : null;
 }
 
+/**
+ * Semantic alias for `finiteNumberOrNull` applied to pad and landing
+ * coordinates, keeping the absent-stays-null contract visible at call sites.
+ * @param {*} value Upstream coordinate field.
+ * @returns {?number} Finite coordinate, or null when absent.
+ */
 function finiteCoordinate(value) {
   return finiteNumberOrNull(value);
 }
 
+/**
+ * Flatten Launch Library payload records across the several shapes the API
+ * returns (`rocket.payloads`, `payloads`, `mission.payloads`) into the panel
+ * row shape. Unknown counts stay at 1 and missing masses stay null rather
+ * than degrading to zero.
+ * @param {object} launch Raw Launch Library launch record.
+ * @returns {Array<{id: string, name: string, type: string|null, manufacturer: string|null, operator: string|null, destination: string|null, amount: number, massKg: number|null}>} Normalized payloads.
+ */
 export function normalizePayloadFlights(launch) {
   const flights = launch.rocket?.payloads || launch.payloads || launch.mission?.payloads || [];
   if (!Array.isArray(flights)) return [];
@@ -2131,6 +2476,18 @@ export function normalizePayloadFlights(launch) {
   });
 }
 
+/**
+ * Normalize one launcher, spacecraft, or payload landing record into the
+ * stage-row shape, deriving the most honest status string available: a real
+ * success/failure verdict first, then attempt, landing-type, or
+ * launcher-status evidence, and finally 'NO RECOVERY DATA'.
+ * @param {object} stage Raw stage or payload-flight record.
+ * @param {string} fallbackName Row label when no type/serial can be derived.
+ * @param {string} category 'LAUNCHER', 'SPACECRAFT', or 'PAYLOAD'.
+ * @param {number} index Position within its category, used for fallback ids.
+ * @returns {object} Normalized recovery stage: identity, status, and pad
+ *   coordinates when upstream supplies them.
+ */
 function normalizeLanding(stage, fallbackName, category, index) {
   const landing = stage?.landing;
   const location = landing?.landing_location || {};
@@ -2166,6 +2523,14 @@ function normalizeLanding(stage, fallbackName, category, index) {
   };
 }
 
+/**
+ * Collect every recovery-capable stage for a launch: launcher stages,
+ * spacecraft stages, and payload flights that carried a landing record.
+ * @param {object} launch Raw Launch Library launch record.
+ * @param {Array<object>} payloads Payloads from `normalizePayloadFlights`,
+ *   used to name and type payload recoveries.
+ * @returns {Array<object>} Normalized recovery stages in category order.
+ */
 function normalizeRecoveryStages(launch, payloads) {
   const rocket = launch.rocket || {};
   const launcherStages = Array.isArray(rocket.launcher_stage) ? rocket.launcher_stage : [];
@@ -2189,6 +2554,19 @@ function normalizeRecoveryStages(launch, payloads) {
   return stages;
 }
 
+/**
+ * Resolve where a stage ended up, graded by how much the record actually
+ * supports: recorded landing coordinates win ('CONFIRMED'), RTLS-style
+ * destinations project back to the pad ('PAD / RTLS'), and a disclosed
+ * downrange distance is projected great-circle along the launch→insertion
+ * bearing ('EST. DOWNRANGE').
+ * @param {object} stage Normalized recovery stage.
+ * @param {object} launch Normalized launch record.
+ * @param {Cesium.Cartesian3|null} insertionPosition Ascent insertion point
+ *   used as the great-circle bearing reference.
+ * @returns {{lat: number, lon: number, accuracy: string}|null} Endpoint in
+ *   degrees, or null when nothing in the record constrains a position.
+ */
 function landingEndpoint(stage, launch, insertionPosition) {
   if (Number.isFinite(stage.lat) && Number.isFinite(stage.lon)) {
     return { lat: stage.lat, lon: stage.lon, accuracy: 'CONFIRMED' };
@@ -2222,6 +2600,17 @@ function landingEndpoint(stage, launch, insertionPosition) {
   };
 }
 
+/**
+ * Build the descent path for one stage: separate from the ascent at a
+ * stage-indexed fraction of the climb, then run a surface-safe segment down to
+ * the landing endpoint held 12 m above the surface.
+ * @param {Cesium.Cartesian3[]} ascentPath Ascent samples to separate from.
+ * @param {{lat: number, lon: number, accuracy: string}|null} endpoint Resolved landing endpoint.
+ * @param {number} stageIndex Zero-based position of this stage.
+ * @param {number} stageCount Total recovery stages for the launch.
+ * @returns {Cesium.Cartesian3[]} Descent samples; empty when there is no
+ *   ascent geometry or no resolvable endpoint.
+ */
 function stageReentryRecoveryPath(ascentPath, endpoint, stageIndex, stageCount) {
   if (!ascentPath?.length || !endpoint) return [];
   const progress = Cesium.Math.clamp(0.28 + (stageIndex / Math.max(stageCount, 1)) * 0.34, 0.28, 0.68);
@@ -2230,6 +2619,13 @@ function stageReentryRecoveryPath(ascentPath, endpoint, stageIndex, stageCount) 
   return surfaceSafeSegment(separation, destination);
 }
 
+/**
+ * Locate the sample where a descent path first crosses the atmospheric
+ * interface altitude, falling back to a proportional position when the
+ * sampled heights never straddle it.
+ * @param {Cesium.Cartesian3[]} path Descent path samples.
+ * @returns {number} Index of the first sample at or below the interface.
+ */
 function atmosphericReentryIndex(path) {
   if (!path?.length) return 0;
   const ellipsoid = Cesium.Ellipsoid.WGS84;
@@ -2248,11 +2644,26 @@ function atmosphericReentryIndex(path) {
   return Math.min(Math.max(Math.round(path.length * 0.55), 0), path.length - 1);
 }
 
+/**
+ * Join rendered `<tr>` markup for a mission panel table, or emit one
+ * full-width empty-state row when there is nothing to show.
+ * @param {string[]} items Pre-rendered row markup.
+ * @param {number} columns Column count used for the empty-state colspan.
+ * @param {string} emptyText Panel copy for the no-data case.
+ * @returns {string} Table body innerHTML.
+ */
 function missionTableRows(items, columns, emptyText) {
   if (!items.length) return `<tr><td colspan="${columns}" class="mission-table-empty">${emptyText}</td></tr>`;
   return items.map((item) => item).join('');
 }
 
+/**
+ * Write one panel field, hiding its entire row when the value is absent so
+ * unknown data collapses instead of rendering blanks or placeholder text.
+ * @param {string} selector Selector for the output element inside the panel.
+ * @param {string|null} value Text to display; null/undefined/blank hides the row.
+ * @param {string} [title=''] Optional tooltip attached to the rendered value.
+ */
 function setMissionPanelField(selector, value, title = '') {
   const output = _missionPanel?.querySelector(selector);
   if (!output) return;
@@ -2293,6 +2704,12 @@ export function payloadRowCells(payload) {
   ].join('');
 }
 
+/**
+ * Repaint the mission detail panel for the current selection: identity
+ * fields, orbit/ascent presentation captions, payload and recovery tables,
+ * live telemetry, navigation state, and replay availability. The panel is
+ * hidden entirely when no mission is selected.
+ */
 function renderMissionPanel() {
   if (!_missionPanel) return;
   const launch = _launches.find((item) => item.id === _selectedLaunchId);
@@ -2350,6 +2767,11 @@ function renderMissionPanel() {
   if (panelScroller) panelScroller.scrollTop = 0;
 }
 
+/**
+ * Rebuild the roster list from the completeness ordering — one colored marker
+ * button per mission with provider and date — plus the count header and the
+ * empty-window state.
+ */
 function renderMissionRoster() {
   if (!_missionRoster) return;
   const list = _missionRoster.querySelector('[data-mission-roster-list]');
@@ -2370,6 +2792,11 @@ function renderMissionRoster() {
   }).join('');
 }
 
+/**
+ * Escape a value for interpolation into mission panel and roster innerHTML.
+ * @param {*} value Field value of any upstream shape.
+ * @returns {string} HTML-escaped text; null and undefined become ''.
+ */
 function escapeMissionText(value) {
   return String(value ?? '').replaceAll(/[&<>"']/g, (character) => ({
     '&': '&amp;',
@@ -2380,6 +2807,12 @@ function escapeMissionText(value) {
   })[character]);
 }
 
+/**
+ * Refresh the selected mission's live payload readouts (current distance from
+ * Earth, satellite speed with a km/h tooltip), throttled to one write per
+ * 250 ms unless a selection repaint forces it.
+ * @param {boolean} [force=false] Bypass the throttle.
+ */
 function updateMissionTelemetry(force = false) {
   if (!_missionPanel || !_selectedLaunchId || !_dataSource) return;
   const now = performance.now();
@@ -2406,6 +2839,11 @@ function updateMissionTelemetry(force = false) {
   );
 }
 
+/**
+ * Select and fly to the mission at a source-array index — the shared path for
+ * roster clicks and Previous/Next navigation. Out-of-range indices are ignored.
+ * @param {number} index Index into the launch array.
+ */
 function selectMissionAt(index) {
   const launch = _launches[index];
   if (!launch) return;
@@ -2413,6 +2851,10 @@ function selectMissionAt(index) {
   focusMission(launch);
 }
 
+/**
+ * Cancel any pending roster hover preview, drop the pinned hover marker, and
+ * refresh the ambient overlays when the pin actually changed.
+ */
 function clearMissionRosterHover() {
   if (_missionRosterHoverTimer) clearTimeout(_missionRosterHoverTimer);
   _missionRosterHoverTimer = null;
@@ -2421,6 +2863,12 @@ function clearMissionRosterHover() {
   if (changed) syncMissionOverlayEntries();
 }
 
+/**
+ * Fly to a roster mission on hover without changing the selection. The range
+ * holds the user's current globe height (bounded below by the close-view
+ * range) so a preview never yanks the camera down to the surface.
+ * @param {object} launch Hovered mission record.
+ */
 function previewMissionFromRoster(launch) {
   if (!_viewer || !launch || _selectedLaunchId) return;
   const range = missionHoverPreviewRange(_viewer.camera.positionCartographic?.height);
@@ -2435,6 +2883,12 @@ function previewMissionFromRoster(launch) {
   );
 }
 
+/**
+ * Pin the hovered roster mission's label immediately and schedule its camera
+ * preview after the hover delay, so fast pointer travel across the roster
+ * does not drag the globe across every mission it crosses.
+ * @param {number} index Index into the launch array of the hovered row.
+ */
 function scheduleMissionRosterPreview(index) {
   const launch = _launches[index];
   if (!launch || _selectedLaunchId) return;
@@ -2447,6 +2901,13 @@ function scheduleMissionRosterPreview(index) {
   }, 140);
 }
 
+/**
+ * Fly to the selected mission and hand the camera to the zoom anchor on
+ * arrival. Range is fitted to the orbit extent against the viewport field of
+ * view when a ring exists (else the global range), and the view direction is
+ * built so the globe's limb frames the mission.
+ * @param {object} launch Selected mission record.
+ */
 function focusMission(launch) {
   if (!_viewer || !launch) return;
   stopMissionZoomAnchor();
@@ -2496,6 +2957,11 @@ function focusMission(launch) {
   });
 }
 
+/**
+ * Fly to an oblique close-up of the selected pad (the FOCUS action), tearing
+ * down replay and zoom-anchor ownership first and re-anchoring on arrival.
+ * @param {object} launch Selected mission record.
+ */
 function focusLaunchSite(launch) {
   if (!_viewer || !launch) return;
   stopMissionReplay();
@@ -2521,6 +2987,12 @@ function focusLaunchSite(launch) {
   );
 }
 
+/**
+ * Build the mission detail panel and its roster wiring once per session:
+ * delegated roster handlers with named removers (the roster element outlives
+ * the layer, so every enable cycle must detach what the last one attached),
+ * the panel markup, and the navigation/focus/replay/speed listeners.
+ */
 function createMissionPanel() {
   if (_missionPanel || typeof document === 'undefined') return;
   const host = document.getElementById('space-mission-panel-host')
@@ -2603,6 +3075,16 @@ function createMissionPanel() {
   syncReplaySpeedControl();
 }
 
+/**
+ * Position and dress the DOM replay vehicle for one frame: resolve the
+ * overlay mode, sample the replay path, project to window coordinates, apply
+ * horizon and viewport culling (plus positional smoothing outside a live
+ * replay), then update the vehicle rotation and callout text.
+ * @param {Cesium.EllipsoidalOccluder} occluder Occluder carrying the current
+ *   camera position for horizon tests.
+ * @returns {'countdown'|'ascent'|'orbit'|null} Mode rendered this frame, or
+ *   null when the overlay ended up hidden.
+ */
 function updateReplayVehicleOverlay(occluder) {
   if (!_viewer || !_replayVehicleOverlay || !_selectedLaunchId) {
     hideReplayVehicleOverlay();
@@ -2747,6 +3229,13 @@ function updateReplayVehicleOverlay(occluder) {
   return mode;
 }
 
+/**
+ * Write a graphic's visibility only when the evaluated value differs, so a
+ * per-frame pass does not dirty entities and force Cesium re-evaluation.
+ * @param {Cesium.PointGraphics|Cesium.BillboardGraphics} graphic Graphic to update.
+ * @param {boolean} visible Desired horizon-derived visibility.
+ * @param {Cesium.JulianDate} time Sample time for the current value.
+ */
 function setGraphicVisibility(graphic, visible, time) {
   if (!graphic) return;
   const next = Boolean(visible);
@@ -2754,6 +3243,13 @@ function setGraphicVisibility(graphic, visible, time) {
   if (current !== next) graphic.show = next;
 }
 
+/**
+ * Per-frame declutter pass installed on preRender: refresh panel telemetry,
+ * dress the replay vehicle overlay, refresh the selected mission's live event
+ * label, and apply horizon visibility to each layer graphic. `entity.show`
+ * stays reserved for mission-selection isolation; horizon state is applied to
+ * the individual graphics so rear-side anchors remain reevaluable.
+ */
 function updateMissionFrame() {
   if (!_enabled || !_viewer || !_dataSource?.show) {
     hideReplayVehicleOverlay();
@@ -2800,7 +3296,8 @@ function updateMissionFrame() {
  * Select a stable marker color from the mission operator and payload name.
  * Labels stay cyan so the layer remains visually coherent.
  * @param {object} launch Normalized launch record.
- * @returns {Cesium.Color}
+ * @returns {Cesium.Color} Operator-matched marker color, falling back to the
+ *   generic provider color and finally the layer cyan.
  */
 export function missionMarkerColor(launch) {
   const identity = `${launch.provider || ''} ${launch.name || ''} ${launch.missionName || ''}`.toLowerCase();
@@ -2822,7 +3319,9 @@ export function missionMarkerColor(launch) {
  * them; orbital tracks must not be reconstructed from launch metadata.
  * @param {object} payload Launch Library 2-compatible response.
  * @param {Date} [now] Reference time used for the rolling window.
- * @returns {Array<object>}
+ * @returns {Array<object>} Normalized launch records inside the window that
+ *   also carry resolvable pad coordinates; records outside the window or
+ *   without a usable position are dropped.
  */
 export function normalizeRocketLaunches(payload, now = new Date()) {
   const launches = Array.isArray(payload) ? payload : payload?.results;
@@ -2870,6 +3369,17 @@ export function normalizeRocketLaunches(payload, now = new Date()) {
   }).filter((launch) => launch.inWindow && launch.lat !== null && launch.lon !== null);
 }
 
+/**
+ * Create the full entity set for one mission: the launch anchor plus its
+ * overlay record, supplied trajectory segments, the satellite or estimated
+ * orbit ring, stage re-entry/recovery polylines and endpoints, the live
+ * payload position callback, and the ascent-then-orbit replay marker. The
+ * TLE track is resolved from the layer cache first, then matched against the
+ * fetched active catalog, and stage landing endpoints are derived from it.
+ * @param {object} launch Normalized launch record.
+ * @param {string|null} [activeTleText=_activeTleText] Active-catalog TLE text
+ *   to match against when the cache holds no track for the mission query.
+ */
 function addLaunchEntity(launch, activeTleText = _activeTleText) {
   const position = Cesium.Cartesian3.fromDegrees(launch.lon, launch.lat);
   const overlayRecord = {
@@ -3282,11 +3792,20 @@ function addLaunchEntity(launch, activeTleText = _activeTleText) {
   }
 }
 
+/**
+ * Cancel a pending post-TLE rebuild timer, if one is armed.
+ */
 function clearPostTleRetry() {
   if (_retryTimer) clearTimeout(_retryTimer);
   _retryTimer = null;
 }
 
+/**
+ * Schedule one bounded rebuild after the active TLE catalog arrives, so
+ * missions rendered against a stale or absent catalog get their satellite
+ * tracks back-filled without entering an unbounded retry loop.
+ * @param {number} token Lifecycle token that invalidates stale timers.
+ */
 function schedulePostTleRetry(token) {
   if (_retryTimer || token !== _lifecycleToken || !shouldRetryAfterActiveTle({
     enabled: _enabled,
@@ -3301,6 +3820,14 @@ function schedulePostTleRetry(token) {
   }, POST_TLE_RETRY_DELAY_MS);
 }
 
+/**
+ * Fetch the CelesTrak active-catalog TLE text used to match mission payloads
+ * to satellites, once per lifecycle. Concurrent callers share the in-flight
+ * promise and the resolved text is cached for the layer's lifetime.
+ * @param {number} token Lifecycle token that invalidates stale requests.
+ * @returns {Promise<string|null>} Resolved catalog text, or null when the
+ *   fetch failed or the layer was disabled/superseded mid-flight.
+ */
 function ensureActiveTleLookup(token) {
   if (_activeTleText) return Promise.resolve(_activeTleText);
   if (_activeTlePromise && _activeTlePromiseToken === token) return _activeTlePromise;
@@ -3333,6 +3860,12 @@ function ensureActiveTleLookup(token) {
   return request;
 }
 
+/**
+ * Snapshot the satellites layer's effective visibility and params, then enable
+ * it with mission-specific params so replay has propagated tracks to draw.
+ * Rejects — so the manager's fail-closed path and the Context rollback see an
+ * honest failure — when the dependency layer cannot start.
+ */
 async function captureSatelliteDependency() {
   if (!_dataManager || _satelliteStateBeforeMission) return;
   _satelliteStateBeforeMission = {
@@ -3370,6 +3903,12 @@ async function captureSatelliteDependency() {
   }
 }
 
+/**
+ * Restore the satellites layer's params and visibility captured by
+ * `captureSatelliteDependency`. Rejects when the restore leaves the layer in
+ * any other state than the snapshot, so a failed cleanup surfaces instead of
+ * silently consuming the user's layer enable.
+ */
 async function restoreSatelliteDependency() {
   const snapshot = _satelliteStateBeforeMission;
   if (!snapshot || !_dataManager) return;
@@ -3388,6 +3927,14 @@ async function restoreSatelliteDependency() {
   }
 }
 
+/**
+ * Fetch and rebuild the mission set: normalize the 30-day window, rebuild all
+ * entities and orbit primitives against the TLE text available now, restore
+ * the selection (re-focusing the camera when the catalog just arrived), and
+ * repaint the panel and roster. Failures are recorded on the layer instead of
+ * propagating.
+ * @param {number} token Lifecycle token that invalidates stale rebuilds.
+ */
 async function performMissionUpdate(token) {
   try {
     ensureActiveTleLookup(token);
@@ -3429,6 +3976,11 @@ async function performMissionUpdate(token) {
   }
 }
 
+/**
+ * Request a mission refresh, coalescing overlapping calls into a single loop
+ * so a dirty flag raised mid-update produces exactly one follow-up pass.
+ * @returns {Promise<void>} Resolves when the coalesced rebuild finishes.
+ */
 function requestMissionUpdate() {
   if (!_enabled) return Promise.resolve();
   const token = _lifecycleToken;
@@ -3606,12 +4158,21 @@ const rocketLaunchesLayer = {
   attachDataManager(dataManager) { _dataManager = dataManager; },
 };
 
-/** Test seam for real layer lifecycle coverage with a recording host. */
+/**
+ * Test seam for real layer lifecycle coverage: swap in a recording overlay
+ * host so tests can observe source updates while exercising the real
+ * lifecycle.
+ * @param {object|null} [host=null] Host override merged over the module
+ *   defaults; null restores the production host.
+ */
 export function _setRocketMissionOverlayHostForTest(host = null) {
   _missionOverlayHost = host ? { ...DEFAULT_OVERLAY_HOST, ...host } : DEFAULT_OVERLAY_HOST;
 }
 
-/** Test seam that exercises the real selection/deselection path. */
+/**
+ * Test seam that drives the production selection/deselection path directly.
+ * @param {string|null} [launchId=null] Mission to select; null deselects.
+ */
 export function _setSelectedRocketMissionForTest(launchId = null) {
   setSelectedMission(launchId, Boolean(launchId));
 }

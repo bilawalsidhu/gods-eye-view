@@ -14,7 +14,14 @@ import radioLayer, {
   radioTunerSlot,
 } from '../data/radio.js';
 
-/** Wire the independent Radio companion controls. */
+/**
+ * Wire the independent Radio companion controls.
+ * @param {object} mgr - StyleManager instance (src/ui.js) owning every radio
+ *   element this wires (panel, tuner, transport, cockpit/context launchers),
+ *   the `AbortController` that tears the listeners down, and the panel
+ *   collapse / data-layer calls the handlers drive.
+ * @returns {void}
+ */
 export function initRadioPanel(mgr) {
     if (!mgr._radioPanel) return;
     mgr._radioTunerAbort?.abort();
@@ -543,7 +550,8 @@ async function revealRadioControlsAfterExplicitEnable(mgr, trigger) {
  * Bring the embedded Radio section into the expanded Context scroller.
  * This never changes Radio power, playback, selection, or Context mode.
  * @param {object} mgr - StyleManager instance holding the radio panel element whose position drives the scroll.
- * @param {{focusTarget?: HTMLElement|null}} [options]
+ * @param {{focusTarget?: HTMLElement|null}} [options] Optional focus
+ *   recipient scrolled into view, focused only after the scroll commits.
  * @returns {Promise<boolean>} Whether the internal scroller moved.
  */
 async function revealRadioPanelInsideContext(mgr, { focusTarget = null } = {}) {
@@ -571,7 +579,13 @@ async function revealRadioPanelInsideContext(mgr, { focusTarget = null } = {}) {
     return moved;
 }
 
-/** Keep the Context header Radio shortcut truthful for its current route. */
+/**
+ * Keep the Context header Radio shortcut truthful for its current route.
+ * @param {object} mgr - StyleManager instance (src/ui.js) holding the
+ *   launcher button, the compact disclosure dock, and the embedded radio
+ *   panel whose expanded state the labels and aria attributes mirror.
+ * @returns {void}
+ */
 export function syncContextRadioLauncherState(mgr) {
     if (!mgr._contextRadioToggleBtn) return;
     const contextPanel = document.getElementById('global-context-panel');
@@ -593,7 +607,16 @@ export function syncContextRadioLauncherState(mgr) {
     mgr._contextRadioToggleBtn.title = `${action} compact Radio controls`;
 }
 
-/** Render Radio state without making playback or Context decisions. */
+/**
+ * Render Radio state without making playback or Context decisions.
+ * @param {object} mgr - StyleManager instance (src/ui.js) holding every
+ *   radio element this repaints, the cached `_radioState` it writes, and the
+ *   data-manager lifecycle lookup that overrides the snapshot's `enabled`.
+ * @param {object} state - Frozen snapshot from `radioLayer.getUIState()`
+ *   (enabled/loading/filter/categories/selected/audioState/volume); a local
+ *   copy with the data-manager lifecycle merged in is what gets cached.
+ * @returns {void}
+ */
 export function renderRadioState(mgr, state) {
     if (!state || !mgr._radioPanel) return;
     const lifecycle = mgr._dataManager?.getLayerLifecycleState?.('radio') || null;

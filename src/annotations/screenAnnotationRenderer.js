@@ -44,6 +44,12 @@ const RING_OUTER_R = 34;
 const RING_INNER_R = 18;
 const DOT_R = 5;
 const LABEL_DOT_R = 4;
+/**
+ * Size multiplier for point-marker geometry at the current camera altitude.
+ * @param {number} h - Camera height in meters (0 when the cartographic is unavailable).
+ * @returns {number} Linear falloff from 1 (at/below MARK_SCALE_NEAR_H) to MARK_SCALE_MIN
+ *   (at/above MARK_SCALE_FAR_H).
+ */
 function markScale(h) {
   if (!(h > MARK_SCALE_NEAR_H)) return 1;
   if (h >= MARK_SCALE_FAR_H) return MARK_SCALE_MIN;
@@ -51,6 +57,23 @@ function markScale(h) {
   return 1 - t * (1 - MARK_SCALE_MIN);
 }
 
+/**
+ * Build the screen-space whiteboard renderer and mount its SVG overlay layer.
+ *
+ * Installs the whiteboard stylesheet, appends the fixed-position host to
+ * `document.body`, and subscribes to `scene.postRender` so every live mark is
+ * re-projected after each camera/tile update.
+ *
+ * @param {Cesium.Viewer} viewer - Viewer whose scene supplies projection, the
+ *   horizon occluder camera, and the tracked entity footprint.
+ * @param {object} [root0] - Dependency seams (overridden by tests).
+ * @param {Function} [root0.overlayPaintRect] - `(sourceId, readoutId)` lookup returning the
+ *   painted rectangle `{x, y, w, h}` of a tracked-readout card, in CSS px.
+ * @param {Function} [root0.activeTrackedReadoutId] - Zero-arg accessor for the id of the
+ *   readout currently tracking the camera, or null when nothing is tracked.
+ * @returns {{add: Function, update: Function, remove: Function, sync: Function, destroy: Function}}
+ *   Renderer handle satisfying the shared renderer contract (see module header).
+ */
 export function createScreenAnnotationRenderer(viewer, {
   overlayPaintRect = getOverlayPaintRect,
   activeTrackedReadoutId = getActiveTrackedReadoutId,
@@ -72,6 +95,10 @@ export function createScreenAnnotationRenderer(viewer, {
   const HEIGHT_CACHE_SOFT = 600; // target size; over this we evict keys not used this frame
   const HEIGHT_CACHE_HARD = 8000; // absolute ceiling (one big ring + others) — never exceeded
   let projGen = 0; // bumped each projection frame; entries used this frame are "hot"
+  /**
+   * Bring `heightCache` back under its soft cap once it grows past it, evicting
+   * cold keys (not touched this frame) before insertion-order fallback.
+   */
   function trimHeightCache() {
     if (heightCache.size <= HEIGHT_CACHE_SOFT) return;
     // Evict COLD keys first (not touched this frame), so a single large area/route
@@ -94,12 +121,25 @@ export function createScreenAnnotationRenderer(viewer, {
   const onPostRender = () => projectAll();
   scene.postRender.addEventListener(onPostRender);
 
+  /**
+   * Resolve an annotation's palette key to its SVG color.
+   * @param {object} anno - Annotation record; `anno.color` is a PALETTE key.
+   * @returns {string} CSS hex color, falling back to PALETTE.primary for unknown keys.
+   */
   function color(anno) {
     return PALETTE[anno.color] || PALETTE.primary;
   }
 
   // Best-effort surface height under a coordinate (clamps onto the 3D tiles).
   // Returns 0 until the tile loads, then caches the validated height.
+  /**
+   * Surface height under a coordinate, memoized per rounded lon/lat key.
+   * @param {number} lon - Longitude in degrees.
+   * @param {number} lat - Latitude in degrees.
+   * @returns {number} Height in meters above the ellipsoid; 0 until the tile
+   *   under the point loads (the unresolved sample stays unsettled and is
+   *   retried on later frames).
+   */
   function groundHeight(lon, lat) {
     const key = `${lon.toFixed(5)},${lat.toFixed(5)}`;
     const cached = heightCache.get(key);
@@ -130,6 +170,14 @@ export function createScreenAnnotationRenderer(viewer, {
     return fallback;
   }
 
+  /**
+   * Create the SVG nodes for one annotation and register it for per-frame
+   * projection. The mark shape is chosen by `anno.type` (area polygon, arrow,
+   * route polyline, or point reticle + callout). Throws unwind their own
+   * registration, so a failed add leaves no orphaned nodes.
+   * @param {object} anno - Annotation record; needs `id`, `type`, `color`, and
+   *   the geometry its type implies (`ring`, `to`, `path`, or `anchor`).
+   */
   function add(anno) {
     const c = color(anno);
     const group = svgEl('g', { class: 'gev-anno', opacity: '0' });
@@ -230,6 +278,11 @@ export function createScreenAnnotationRenderer(viewer, {
    * Re-seat a progressive area upgrade without replacing its SVG group. The hybrid
    * renderer converts the pending reticle to a centroid label; keeping the group
    * preserves element identity and prevents the old/new 320 ms fades from overlapping.
+   * @param {object} anno - Replacement annotation record, matched to an existing
+   *   mark by `id`; unknown ids fall through to add() unless `empty` is set.
+   * @param {object} [root0] - Options.
+   * @param {boolean} [root0.empty] - Blank the mark (remove its SVG children and hide
+   *   the group) instead of drawing, without dropping the record.
    */
   function update(anno, { empty = false } = {}) {
     const rec = records.get(anno.id);
@@ -265,6 +318,13 @@ export function createScreenAnnotationRenderer(viewer, {
     // Area-type updates route through the hybrid proxy only.
   }
 
+  /**
+   * Project a world anchor to screen pixels, culling what the camera cannot see.
+   * @param {number} lon - Longitude in degrees.
+   * @param {number} lat - Latitude in degrees.
+   * @returns {{x: number, y: number}|null} Window coordinates in CSS px, or null when the
+   *   point is behind the camera, past the globe horizon, non-finite, or far off-screen.
+   */
   function project(lon, lat) {
     // Anchor at the real surface height (cached + validated), so marks sit on
     // the ground/building instead of at sea level. The settle-once cache keeps
@@ -297,6 +357,12 @@ export function createScreenAnnotationRenderer(viewer, {
   const _scratchTrackedWin = new Cesium.Cartesian2();
 
   // Evaluate a NearFarScalar (billboard scaleByDistance) at a camera distance.
+  /**
+   * Evaluate a NearFarScalar (billboard `scaleByDistance`) at a camera distance.
+   * @param {Cesium.NearFarScalar} nfs - near/far bounds in meters with their values.
+   * @param {number} dist - Camera distance in meters.
+   * @returns {number} Linearly interpolated value, clamped outside [near, far].
+   */
   function nearFarValue(nfs, dist) {
     if (dist <= nfs.near) return nfs.nearValue;
     if (dist >= nfs.far) return nfs.farValue;
@@ -305,6 +371,12 @@ export function createScreenAnnotationRenderer(viewer, {
   }
   // Tracked-subject screen footprint, or null when neither host card nor native
   // tracked graphic painted. The host rectangle is authoritative for the card.
+  /**
+   * Screen rectangle occupied by the currently tracked subject.
+   * @returns {{left: number, right: number, top: number, bottom: number}|null} Pixel rect
+   *   inflated by TRACKED_BBOX_MARGIN, or null when neither the host card nor a native
+   *   tracked billboard produced a finite footprint.
+   */
   function trackedEntityRect() {
     const trackedId = activeTrackedReadoutId();
     const painted = trackedId
@@ -348,6 +420,11 @@ export function createScreenAnnotationRenderer(viewer, {
     return { left: left - m, right: right + m, top: top - m, bottom: bottom + m };
   }
 
+  /**
+   * Re-project every live mark into screen space for the current frame: set the
+   * SVG viewBox, apply altitude-scaled marker geometry, position/de-collide
+   * callouts, then ease overlapped marks under the tracked subject.
+   */
   function projectAll() {
     if (!records.size) return;
     projGen += 1; // new frame: entries touched below are "hot" and survive trimming
@@ -495,6 +572,11 @@ export function createScreenAnnotationRenderer(viewer, {
     }
   }
 
+  /**
+   * Start the fade-out of one mark and drop its record immediately, so a
+   * re-add of the same geometry is never blocked by the dying node.
+   * @param {object} anno - Annotation whose `id` selects the record to retire.
+   */
   function remove(anno) {
     const rec = records.get(anno.id);
     if (!rec) return;
@@ -507,11 +589,19 @@ export function createScreenAnnotationRenderer(viewer, {
     if (records.size === 0) heightCache.clear();
   }
 
+  /**
+   * Renderer-contract hook for batched state handoff — positioning is already
+   * driven per frame, so this just forces one projection pass.
+   */
   function sync() {
     // Positioning is driven by the postRender loop; nothing to batch here.
     projectAll();
   }
 
+  /**
+   * Detach the postRender listener, remove the SVG layer from the document,
+   * and clear the mark records and ground-height cache.
+   */
   function destroy() {
     try { scene.postRender.removeEventListener(onPostRender); } catch { /* torn down */ }
     try { layer.remove(); } catch { /* gone */ }
@@ -524,6 +614,12 @@ export function createScreenAnnotationRenderer(viewer, {
 
 // --- SVG helpers ------------------------------------------------------------
 
+/**
+ * Build the fixed-position whiteboard host with its SVG root and shared defs
+ * (the sketch filter the strokes reference). Not yet attached to the document.
+ * @returns {{layer: HTMLDivElement, svg: SVGElement, defs: SVGElement}} Unmounted overlay
+ *   nodes; `defs` is a child of `svg`, which is a child of `layer`.
+ */
 function buildOverlay() {
   const layer = document.createElement('div');
   layer.className = 'gev-screen-whiteboard';
@@ -542,6 +638,14 @@ function buildOverlay() {
   return { layer, svg, defs };
 }
 
+/**
+ * Build a glassy callout card (background rect, color accent bar, label text).
+ * The card is measured on the next animation frame, once it is in the document.
+ * @param {string} text - Label text; empty/absent means no callout at all.
+ * @param {string} c - CSS color for the accent bar.
+ * @returns {object|null} Callout handle (`node`, `rect`, `text`, `accent`, `width`,
+ *   `height`, `sized`) for positioning and de-collision, or null when `text` is falsy.
+ */
 function makeCallout(text, c) {
   if (!text) return null;
   const node = document.createElementNS(SVGNS, 'g');
@@ -568,6 +672,12 @@ function makeCallout(text, c) {
   return callout;
 }
 
+/**
+ * Measure a callout's laid-out text and size its card, accent bar, and cached
+ * `width`/`height` to fit. Safe to call before layout — it retries silently.
+ * @param {object} callout - Handle returned by makeCallout; mutated in place and
+ *   flagged `sized` once the measurement succeeds.
+ */
 function sizeCallout(callout) {
   try {
     const bbox = callout.text.getBBox();
@@ -584,6 +694,14 @@ function sizeCallout(callout) {
   } catch { /* not laid out yet */ }
 }
 
+/**
+ * Translate a callout to a screen anchor, caching the resolved top-left in
+ * `_x`/`_y` so de-collision and leader re-pointing can work from it.
+ * @param {object} callout - Handle returned by makeCallout.
+ * @param {number} x - Left edge in px, or the center when `center` is true.
+ * @param {number} y - Top edge in px.
+ * @param {boolean} center - Center the card horizontally on `x`.
+ */
 function positionCallout(callout, x, y, center) {
   if (!callout.sized) sizeCallout(callout);
   const tx = center ? x - callout.width / 2 : x;
@@ -596,6 +714,8 @@ function positionCallout(callout, x, y, center) {
  * Nudge overlapping callout cards apart so labels stay readable when several
  * marks cluster on screen. Simple top-down sweep: each card that overlaps an
  * earlier one is pushed just below it. O(n²) but n is small.
+ * @param {Array<object>} callouts - Sized callout handles; re-sorted by `_y` and
+ *   re-translated in place.
  */
 function decollideCallouts(callouts) {
   callouts.sort((a, b) => a._y - b._y);
@@ -617,6 +737,13 @@ function decollideCallouts(callouts) {
   }
 }
 
+/**
+ * Add a colored arrowhead `<marker>` to defs the first time a palette key is
+ * used, so arrows can reference it via `marker-end: url(#gev-arrow-<key>)`.
+ * @param {SVGElement} defs - Shared `<defs>` the marker is appended to.
+ * @param {string} key - Palette key naming the marker id.
+ * @param {string} c - CSS color for the arrowhead fill.
+ */
 function ensureArrowMarker(defs, key, c) {
   if (defs.querySelector(`#gev-arrow-${key}`)) return;
   const marker = document.createElementNS(SVGNS, 'marker');
@@ -634,12 +761,23 @@ function ensureArrowMarker(defs, key, c) {
   defs.appendChild(marker);
 }
 
+/**
+ * Create a namespaced SVG element and apply its attributes in one step.
+ * @param {string} tag - SVG element name (e.g. `circle`, `polygon`, `polyline`).
+ * @param {object} attrs - Attribute name/value pairs, including dashed SVG names
+ *   such as `stroke-width`; values are coerced to strings by setAttribute.
+ * @returns {SVGElement} The created, unattached element.
+ */
 function svgEl(tag, attrs) {
   const el = document.createElementNS(SVGNS, tag);
   for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
   return el;
 }
 
+/**
+ * Inject the whiteboard stylesheet once per document; later calls are no-ops
+ * (the renderer is constructed once per hybrid renderer, but tests rebuild it).
+ */
 function injectStyles() {
   if (document.getElementById('gev-screen-whiteboard-styles')) return;
   const style = document.createElement('style');

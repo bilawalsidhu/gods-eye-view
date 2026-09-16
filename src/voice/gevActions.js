@@ -284,6 +284,23 @@ export function readLayerLifecycleSummary(dataManager, layerId, { fallbackEnable
   };
 }
 
+/**
+ * Build the voice tool runner: the single dispatch point every Realtime
+ * function call flows through. Wires camera-verb prewarming, then returns an
+ * async handler that maps a tool name + arguments to one action result.
+ *
+ * @param {object} root0 - App singletons the tools operate on.
+ * @param {object} root0.viewer - Cesium viewer (camera, entities, picking).
+ * @param {object} root0.styleManager - Style/panel controller.
+ * @param {object} root0.dataManager - Layer manager owning all data layers.
+ * @param {object|null} [root0.sceneDirector] - Cinematic scene director, when
+ *   scene playback tools should be available.
+ * @param {object|null} [root0.annotations] - Annotation whiteboard engine,
+ *   when annotate/clear tools should be available.
+ * @returns {Function} `async runGevAction(name, rawArgs, runOptions)` resolving
+ *   to a plain result object; throws only for an unknown tool name or an
+ *   unusable argument that the model must correct.
+ */
 export function createGevActionRunner({ viewer, styleManager, dataManager, sceneDirector = null, annotations = null }) {
   installViewTargetPrewarm(viewer);
   initCameraVerbs(viewer, getViewTargetCartesian);
@@ -923,6 +940,15 @@ export function createGevActionRunner({ viewer, styleManager, dataManager, scene
   };
 }
 
+/**
+ * Resolve the aircraft currently selected AND trackable, for cockpit verbs.
+ *
+ * @param {object|null} dataManager - Layer manager providing the selection
+ *   context and the flights/military modules.
+ * @returns {{layerId: string, id: string}|null} Layer id plus track id, or
+ *   null when the selection is absent, not an aircraft layer, or the owning
+ *   module cannot track it.
+ */
 function selectedCockpitTarget(dataManager) {
   const selected = getSelectedEntityContext({ dataManager });
   if (!selected || !['flights', 'military'].includes(selected.layerId)) return null;
@@ -942,13 +968,27 @@ const MAX_ROUTE_POINTS = 12;
 const MAX_TARGET_LEN = 200;
 const MAX_LABEL_LEN = 120;
 
+/**
+ * Trim a string and clamp it to a maximum length (abuse guard).
+ * @param {unknown} value - Value to clamp; non-strings pass through untouched.
+ * @param {number} max - Character ceiling.
+ * @returns {string|unknown} Trimmed/clamped string, or the original value.
+ */
 function clampStr(value, max) {
   if (typeof value !== 'string') return value;
   const trimmed = value.trim();
   return trimmed.length > max ? trimmed.slice(0, max) : trimmed;
 }
 
-/** Bound the free-text + array sizes inside one annotation spec before it reaches the engine. */
+/**
+ * Bound the free-text + array sizes inside one annotation spec before it
+ * reaches the engine.
+ *
+ * @param {object|null|undefined} spec - One annotation request (label, target,
+ *   optional point list).
+ * @returns {object|null|undefined} Shallow copy with clamped text and a
+ *   truncated route, or the input when it is not an object.
+ */
 function sanitizeAnnotationSpec(spec) {
   if (!spec || typeof spec !== 'object') return spec;
   const out = { ...spec };
@@ -969,6 +1009,18 @@ function sanitizeAnnotationSpec(spec) {
  * Draw "whiteboard" annotations on the 3D world to point out what the agent is
  * talking about. Place names are resolved to real-world coordinates (and OSM
  * footprints) by the annotation engine, so the agent never has to guess pixels.
+ *
+ * @param {object|null} annotations - Annotation engine, or null when the
+ *   whiteboard was not initialized.
+ * @param {object} [args] - Tool arguments.
+ * @param {Array<object>} [args.annotations] - Marks to draw, each sanitized by
+ *   `sanitizeAnnotationSpec` before the engine sees it.
+ * @param {boolean} [args.persist] - False to keep the marks out of the
+ *   persisted board (defaults to persisting).
+ * @param {boolean} [args.flyTo] - True to fly the camera to the new marks.
+ * @returns {Promise<object>} Result with `ok`, per-item `items`, and the
+ *   honesty fields (`partial`, `failedLabels`, `routeFallback`,
+ *   `outlinePending`) the voice layer narrates from.
  */
 async function annotateMap(annotations, args = {}) {
   if (!annotations || typeof annotations.annotate !== 'function') {
@@ -1031,6 +1083,14 @@ async function annotateMap(annotations, args = {}) {
   };
 }
 
+/**
+ * Wipe every annotation from the board (the `clear_annotations` tool).
+ *
+ * @param {object|null} annotations - Annotation engine, or null when the
+ *   whiteboard was not initialized.
+ * @returns {object} `{ok, action}` result; `ok: false` with an error when no
+ *   engine is available.
+ */
 function clearAnnotations(annotations) {
   if (!annotations || typeof annotations.clear !== 'function') {
     return { ok: false, action: 'clear_annotations', error: 'Annotation engine unavailable' };
@@ -1039,6 +1099,11 @@ function clearAnnotations(annotations) {
   return { ok: true, action: 'clear_annotations' };
 }
 
+/**
+ * Map a spoken map-stack phrase to its canonical basemap id.
+ * @param {unknown} value - Free-text stack name from the model.
+ * @returns {string|null} Canonical stack id, or null when unrecognized.
+ */
 function normalizeStackId(value) {
   const raw = String(value || '').trim().toLowerCase();
   if (!raw) return null;
@@ -1048,6 +1113,14 @@ function normalizeStackId(value) {
 /**
  * Voice scene playback control. Playback is fire-and-forget: startScene
  * sequences shots for minutes and must not block the realtime tool loop.
+ *
+ * @param {object|null} sceneDirector - Scene director, or null when the
+ *   cinematic subsystem is unavailable.
+ * @param {object} [args] - Tool arguments.
+ * @param {string} [args.action] - `list`, `status`, `stop`, `next`, or `play`.
+ * @param {string} [args.sceneId] - Free-text scene query for `play`.
+ * @returns {object} `{ok, action}` plus whichever fields the sub-action
+ *   produces (`scenes`, playback status, `playing`, `shots`, or `error`).
  */
 function controlScene(sceneDirector, args = {}) {
   if (!sceneDirector) {
@@ -1085,7 +1158,19 @@ function controlScene(sceneDirector, args = {}) {
   throw new Error(`Unknown scene action: ${args.action || 'missing'}`);
 }
 
-/** Voice CCTV control over the cctv layer module's public surface. */
+/**
+ * Voice CCTV control over the cctv layer module's public surface.
+ *
+ * @param {object} dataManager - Layer manager; provides the cctv module and
+ *   layer enable/params writes.
+ * @param {object} [args] - Tool arguments (`action`, plus `cameraQuery` or
+ *   `enabled` depending on the action).
+ * @param {object|null} [styleManager] - Style controller used to supersede a
+ *   deferred navigation before a camera move.
+ * @returns {Promise<object>} `{action: 'control_cctv'}` result with the module
+ *   summary and focus outcome, or `ok: false` with an error.
+ * @throws {Error} For a missing `cameraQuery` on `select` or an unknown action.
+ */
 export async function controlCctv(dataManager, args = {}, styleManager = null) {
   const action = String(args.action || '').toLowerCase();
   const cctv = dataManager.layers.get('cctv')?.module;
@@ -1205,7 +1290,17 @@ const RADIO_COUNTRY_CENTERS = new Map([
   ['united states of america', { lat: 39.8, lon: -98.6, country: 'US', label: 'United States' }],
 ]);
 
-/** Resolve curated cities and common country requests without moving the camera. */
+/**
+ * Resolve curated cities and common country requests without moving the camera.
+ *
+ * @param {string} query - Free-text location phrase from the model; matched
+ *   against the country-center table and (indirectly) the city POI list.
+ * @param {string} [locationId] - Structured location id, which outranks the
+ *   free-text phrase when it names a known city.
+ * @returns {{lat: number, lon: number, label: string, country: string}|null}
+ *   Broadcast-area center, or null when the request is not a curated city or
+ *   country and needs a live geocode.
+ */
 export function knownRadioLocation(query, locationId = '') {
   const requestedId = normalizeLocationId(locationId) || normalizeLocationId(query);
   const city = requestedId ? CITY_POIS[requestedId] : null;
@@ -1221,6 +1316,16 @@ export function knownRadioLocation(query, locationId = '') {
   return RADIO_COUNTRY_CENTERS.get(String(query || '').trim().toLowerCase()) || null;
 }
 
+/**
+ * Extract and validate an explicit lat/lon pair from Radio tool arguments.
+ *
+ * @param {object} [args] - Tool arguments.
+ * @param {number} [args.latitude] - Requested latitude (degrees).
+ * @param {number} [args.longitude] - Requested longitude (degrees).
+ * @returns {{provided: boolean, valid: boolean, latitude: number,
+ *   longitude: number}} Whether either coordinate was supplied, and whether
+ *   the pair is present AND in range.
+ */
 function radioCoordinatePair(args = {}) {
   const latitudeProvided = Object.hasOwn(args, 'latitude');
   const longitudeProvided = Object.hasOwn(args, 'longitude');
@@ -1240,17 +1345,47 @@ function radioCoordinatePair(args = {}) {
   return { provided, valid, latitude, longitude };
 }
 
+/**
+ * Whether the Radio turn that started this work still owns the floor.
+ * @param {object} [options] - Runner options threaded through the action.
+ * @param {AbortSignal} [options.signal] - Cancelled when the turn is aborted.
+ * @param {Function} [options.isCurrent] - Caller-supplied currency check.
+ * @returns {boolean} False once the request has been superseded and must stop.
+ */
 function radioActionIsCurrent(options = {}) {
   return !options.signal?.aborted
     && (typeof options.isCurrent !== 'function' || options.isCurrent());
 }
 
+/**
+ * Build the cancellation error a superseded Radio request reports.
+ * @returns {Error} `AbortError`-named error so callers can distinguish
+ *   supersession from a real failure.
+ */
 function radioAbortError() {
   const error = new Error('Radio request was superseded by a newer voice turn');
   error.name = 'AbortError';
   return error;
 }
 
+/**
+ * Resolve where the user wants Radio to search: explicit coordinates, a
+ * curated city/country, or a live geocode of the free-text phrase.
+ *
+ * @param {object} [args] - Tool arguments.
+ * @param {string} [args.locationQuery] - Free-text place to geocode when the
+ *   curated tables miss.
+ * @param {string} [args.locationId] - Structured city id, checked first.
+ * @param {{provided: boolean, valid: boolean, latitude: number,
+ *   longitude: number}} [coordinates] - Pre-validated coordinate pair from
+ *   `radioCoordinatePair`; defaults to reading it from `args`.
+ * @param {object} [options] - Runner options (`signal`, `isCurrent`).
+ * @returns {Promise<{lat: number, lon: number, label: string,
+ *   country: string}|null>} Location to scope the search to; null when nothing
+ *   was supplied or the geocode found nothing.
+ * @throws {Error} The supersession error when the turn is no longer current,
+ *   or a key error when no Maps key is configured.
+ */
 async function resolveRadioLocation(args = {}, coordinates = radioCoordinatePair(args), options = {}) {
   if (!radioActionIsCurrent(options)) throw radioAbortError();
   if (coordinates.valid) {
@@ -1292,7 +1427,22 @@ async function resolveRadioLocation(args = {}, coordinates = radioCoordinatePair
   }
 }
 
-/** Voice Radio controls over the Radio layer's public player surface. */
+/**
+ * Voice Radio controls over the Radio layer's public player surface.
+ *
+ * A `play` request that also carries selection criteria is normalized to
+ * `select`, since playback alone cannot honor qualifiers.
+ *
+ * @param {object} viewer - Cesium viewer (camera, for the viewport anchor).
+ * @param {object} dataManager - Layer manager; provides the radio module and
+ *   intent-tracked enable/disable writes.
+ * @param {object} [args] - Tool arguments (`action`, `category`, `country`,
+ *   `stationQuery`, `locationId`/`locationQuery`, `latitude`/`longitude`).
+ * @param {object} [options] - Runner options (`signal`, `isCurrent`).
+ * @returns {Promise<object>} `{action: 'control_radio'}` result including the
+ *   player summary and intent outcome, or `ok: false` with an error.
+ * @throws {Error} For an unknown action or a superseded request.
+ */
 export async function controlRadio(viewer, dataManager, args = {}, options = {}) {
   const requestedAction = String(args.action || '').trim().toLowerCase();
   const coordinates = radioCoordinatePair(args);
@@ -1602,7 +1752,7 @@ export async function controlRadio(viewer, dataManager, args = {}, options = {})
 /**
  * Maps a CCTV focus code to an honest voice-tool result.
  * @param {string|boolean} focusResult CCTV focus result code.
- * @param {object} [options]
+ * @param {object} [options] Distinguisher for the wording of each refusal.
  * @param {boolean} [options.cameraSelected=false] Whether this action first selected a camera.
  * @returns {{ok: boolean, error: string|null}} Voice-facing result fields.
  */
@@ -1652,7 +1802,22 @@ export function formatTrackedEntityLabel(found, query = '') {
     || String(query);
 }
 
-/** Finds and tracks/selects an entity by spoken query across layer families. */
+/**
+ * Finds and tracks/selects an entity by spoken query across layer families.
+ *
+ * Special-cases fire queries (which resolve to the strongest FIRMS detection
+ * rather than an entity) and routes every camera move through the managed
+ * navigation gate so tracking and deferred navigation cannot fight.
+ *
+ * @param {object} viewer - Cesium viewer the camera verbs drive.
+ * @param {object} dataManager - Layer manager providing the queryable modules.
+ * @param {object} styleManager - Style controller gating navigation.
+ * @param {object} [args] - Tool arguments.
+ * @param {string} [args.query] - Spoken entity query.
+ * @returns {Promise<object>} `{ok, action, kind, layerId, label}` result, or
+ *   `ok: false` with the reason nothing matched.
+ * @throws {Error} When the query is empty.
+ */
 async function trackEntity(viewer, dataManager, styleManager, args = {}) {
   const query = String(args.query || '').trim();
   if (!query) throw new Error('track_entity needs a query');
@@ -1740,7 +1905,18 @@ async function trackEntity(viewer, dataManager, styleManager, args = {}) {
   return { ok: false, action: 'track_entity', query, error: `Nothing matched "${query}"${disabledNote}` };
 }
 
-/** Releases tracking/selection on every entity layer family. */
+/**
+ * Releases tracking/selection on every entity layer family.
+ *
+ * Each layer is cleared independently so one failing module cannot strand the
+ * others; per-layer failures are reported by id instead of thrown.
+ *
+ * @param {object|null} viewer - Cesium viewer; its `trackedEntity` is cleared.
+ * @param {object} dataManager - Layer manager providing the modules and the
+ *   per-layer selected-tracking params.
+ * @returns {object} `{ok, action, released}` plus `failedLayerIds` and an
+ *   `error` when any layer could not be cleared.
+ */
 function stopAllTracking(viewer, dataManager) {
   const released = [];
   const failed = new Set();
@@ -1800,6 +1976,15 @@ function stopAllTracking(viewer, dataManager) {
  * When entries are found and detection is OFF, auto-enables panoptic
  * detection so the framed entities are labeled, and reports
  * detectionEnabled so the voice agent can mention labels are on.
+ *
+ * @param {object} viewer - Cesium viewer providing the view target and camera.
+ * @param {object} dataManager - Layer manager providing the target module.
+ * @param {object} styleManager - Style controller used to toggle detection.
+ * @param {object} [args] - Tool arguments.
+ * @param {string} [args.target='flights'] - Free-text target family.
+ * @param {number} [args.radiusKm] - Search radius, clamped to 10–20000.
+ * @returns {Promise<object>} `{ok, action}` result with the framed count and
+ *   any detection toggle outcome.
  */
 async function frameOverhead(viewer, dataManager, styleManager, args = {}) {
   const targetRaw = String(args.target || 'flights').toLowerCase();
@@ -1871,7 +2056,24 @@ async function frameOverhead(viewer, dataManager, styleManager, args = {}) {
   });
 }
 
-/** Run one validated voice camera mutation through the UI-owned authority seam. */
+/**
+ * Run one validated voice camera mutation through the UI-owned authority seam.
+ *
+ * All voice camera verbs go through here so the style manager can refuse a
+ * move the current view state forbids (cockpit active, tracking holds, and so
+ * on) instead of the tool racing the UI.
+ *
+ * @param {object|null} styleManager - Style controller exposing
+ *   `runImmediateNavigation`.
+ * @param {string} noun - Authority domain the mutation belongs to
+ *   (`'aircraft'`, `'fire'`, `'vessel'`, …).
+ * @param {string} action - Tool name the result is attributed to.
+ * @param {Function} navigate - Camera mutation returning the tool result.
+ * @param {object|undefined} [releaseOptions] - Options forwarded when the
+ *   manager releases the navigation claim.
+ * @returns {object} The mutation's result, or `ok: false` with an error when
+ *   the policy unavailable or the move was refused.
+ */
 function runManagedVoiceNavigation(styleManager, noun, action, navigate, releaseOptions = undefined) {
   if (typeof styleManager?.runImmediateNavigation !== 'function') {
     return { ok: false, action, error: 'Camera navigation policy unavailable' };
@@ -1881,7 +2083,14 @@ function runManagedVoiceNavigation(styleManager, noun, action, navigate, release
   return { ok: false, action, error: 'Camera navigation is unavailable in the current view' };
 }
 
-/** Gathers tracked/selected entities across layer families for read-back. */
+/**
+ * Gathers tracked/selected entities across layer families for read-back.
+ *
+ * @param {object} dataManager - Layer manager providing the per-family modules.
+ * @returns {Array<{kind: string, layerId: string}>} Descriptors for every
+ *   family currently tracking or selecting an entity; layers that are not
+ *   ready are skipped.
+ */
 function collectTrackedEntities(dataManager) {
   const tracked = [];
   for (const family of TRACKABLE_FAMILIES) {
@@ -1897,6 +2106,19 @@ function collectTrackedEntities(dataManager) {
   return tracked;
 }
 
+/**
+ * Collect the place/street/POI labels describing what is on screen, for the
+ * HUD summary and basemap narration.
+ *
+ * Reverse geocode, viewport sample, and nearby-POI lookups run in parallel and
+ * are bounded by `BASEMAP_CONTEXT_WAIT_MS`; whatever misses the deadline is
+ * simply omitted rather than delaying the HUD.
+ *
+ * @param {object} viewer - Cesium viewer whose camera/viewport is described.
+ * @returns {Promise<{placeLabels: string[], streetLabels: string[],
+ *   nearbyPlaceLabels: string[]}>} Deduplicated, length-capped label lists
+ *   (empty arrays when the view target cannot be resolved).
+ */
 export async function getBasemapLabelContext(viewer) {
   const samples = sampleViewportCartographics(viewer);
   const cameraHeightM = viewer.camera.positionCartographic.height;
@@ -1951,6 +2173,15 @@ export async function getBasemapLabelContext(viewer) {
   };
 }
 
+/**
+ * Warm the view-target pick cache shortly after each camera move.
+ *
+ * Installs once per viewer: a debounced idle-callback re-picks the ground
+ * point so the next voice query does not pay the depth readback itself.
+ *
+ * @param {object} viewer - Cesium viewer whose `camera.moveEnd` is observed.
+ * @returns {void}
+ */
 function installViewTargetPrewarm(viewer) {
   if (viewer.__gevViewTargetPrewarmInstalled) return;
   viewer.__gevViewTargetPrewarmInstalled = true;
@@ -1983,6 +2214,21 @@ function installViewTargetPrewarm(viewer) {
   });
 }
 
+/**
+ * Zoom the camera in or out toward the current view target.
+ *
+ * Computes the move from the live target distance so the step scales with
+ * altitude, clamps the approach so zoom-in can never pass the target, and
+ * verifies the camera actually moved before reporting success.
+ *
+ * @param {object} viewer - Cesium viewer whose camera is moved.
+ * @param {object} args - Tool arguments.
+ * @param {string} args.direction - `'in'` or `'out'`.
+ * @param {string} [args.amount='little'] - `little`, `medium`, or `lot`.
+ * @returns {object} `{ok, action}` result with requested vs. actual movement
+ *   and heights; `ok: false` when the camera could not move.
+ * @throws {Error} When `direction` or `amount` is not a known value.
+ */
 function adjustCameraZoom(viewer, args) {
   const direction = String(args.direction || '').toLowerCase();
   if (direction !== 'in' && direction !== 'out') {
@@ -2044,10 +2290,32 @@ function adjustCameraZoom(viewer, args) {
 
 const COMPASS_16 = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
 
+/**
+ * Convert an azimuth to one of the 16 compass points.
+ * @param {number} azDeg - Azimuth in degrees clockwise from north.
+ * @returns {string} Compass abbreviation such as `'NNE'`.
+ */
 function compassDir(azDeg) {
   return COMPASS_16[Math.round(((((azDeg % 360) + 360) % 360)) / 22.5) % 16];
 }
 
+/**
+ * Report the next visible ISS pass over an observer location.
+ *
+ * @param {object} viewer - Cesium viewer; its camera position supplies the
+ *   observer when the arguments omit coordinates.
+ * @param {object} args - Tool arguments.
+ * @param {number} [args.latitude] - Observer latitude (degrees); falls back to
+ *   the camera.
+ * @param {number} [args.longitude] - Observer longitude (degrees); same
+ *   fallback.
+ * @param {number} [args.minElevationDeg=10] - Minimum peak elevation for a
+ *   pass to count.
+ * @returns {object} `{ok, action}` result with rise time, duration, peak
+ *   elevation, and rise compass direction, or `ok: false` with the reason.
+ * @throws {Error} When no coordinates are available and the camera has no
+ *   cartographic position.
+ */
 function nextIssPass(viewer, args) {
   let latDeg = Number.isFinite(args.latitude) ? args.latitude : null;
   let lonDeg = Number.isFinite(args.longitude) ? args.longitude : null;
@@ -2086,6 +2354,11 @@ function nextIssPass(viewer, args) {
   };
 }
 
+/**
+ * Resolve a spoken panel name to its DOM panel id.
+ * @param {unknown} value - Free-text panel name or an exact panel id.
+ * @returns {string|null} Canonical panel id, or null when unrecognized.
+ */
 function normalizePanelId(value) {
   const raw = String(value || '').trim();
   if (!raw) return null;
@@ -2093,6 +2366,12 @@ function normalizePanelId(value) {
   return PANEL_ALIASES.get(raw.toLowerCase()) || null;
 }
 
+/**
+ * Map a spoken layer name to a registered layer id, alias table first.
+ * @param {unknown} value - Free-text layer name or a raw layer id.
+ * @returns {string|null} Canonical layer id, the raw value when it is not an
+ *   alias, or null when nothing was supplied.
+ */
 function normalizeLayerId(value) {
   const raw = String(value || '').trim();
   if (!raw) return null;
@@ -2100,12 +2379,29 @@ function normalizeLayerId(value) {
   return raw;
 }
 
+/**
+ * Restrict a layer id to the layers cockpit tracking can follow.
+ * @param {unknown} value - Free-text layer name or layer id.
+ * @returns {string|null} Canonical layer id when it is cockpit-eligible, else
+ *   null.
+ */
 function normalizeCockpitTargetLayer(value) {
   const layerId = normalizeLayerId(value);
   if (!layerId || !COCKPIT_TARGET_LAYERS.has(layerId)) return null;
   return layerId;
 }
 
+/**
+ * Infer cockpit navigation hints from the action text the model produced.
+ *
+ * Keyword scanning, not NLP: vessel/ship/ais selects the AIS layer,
+ * installation/facility/base the installations layer, military the military
+ * air layer, and helicopter words select the helicopter class.
+ *
+ * @param {unknown} rawAction - Cockpit action string to scan.
+ * @returns {{targetLayer: string|null, aircraftClass: string|null}} Hints,
+ *   each null when the text named nothing relevant.
+ */
 function normalizeCockpitNavigationHints(rawAction) {
   const raw = String(rawAction || '').trim().toLowerCase();
   if (!raw) return {};
@@ -2151,6 +2447,15 @@ function normalizeAircraftClassFilter(value) {
   return raw.replaceAll(/[\s-]+/g, '') === TR3B_CLASS ? TR3B_CLASS : raw;
 }
 
+/**
+ * Show or hide one panel through the style manager, with a DOM fallback.
+ *
+ * @param {object|null} styleManager - Style controller exposing
+ *   `setPanelCollapsed`; without it the panel element is toggled directly.
+ * @param {string} panelId - Canonical panel id from `normalizePanelId`.
+ * @param {boolean} open - True to expand, false to collapse.
+ * @returns {void}
+ */
 function setPanelOpen(styleManager, panelId, open) {
   if (styleManager && typeof styleManager.setPanelCollapsed === 'function') {
     styleManager.setPanelCollapsed(panelId, !open, { explicit: true });
@@ -2160,12 +2465,27 @@ function setPanelOpen(styleManager, panelId, open) {
   }
 }
 
+/**
+ * Map a spoken context-mode phrase to its canonical mode id.
+ * @param {unknown} value - Free-text mode name from the model.
+ * @returns {string|null} Canonical context mode, or null when unrecognized.
+ */
 function normalizeContextMode(value) {
   const raw = String(value || '').trim().toLowerCase();
   if (!raw) return null;
   return CONTEXT_MODE_ALIASES.get(raw) || null;
 }
 
+/**
+ * Normalize a free-text cockpit command to one canonical cockpit action.
+ *
+ * Alias table first, then punctuation-stripped matching, then keyword
+ * fallbacks — so "let's head into the cockpit" still resolves to `enter`.
+ *
+ * @param {unknown} value - Cockpit action text from the model.
+ * @returns {string|null} `enter`, `exit`, `next`, `previous`, or `status`;
+ *   null when nothing matches.
+ */
 function normalizeCockpitAction(value) {
   const raw = String(value || '').trim().toLowerCase();
   if (!raw) return null;
@@ -2189,6 +2509,14 @@ function normalizeCockpitAction(value) {
   return null;
 }
 
+/**
+ * Scroll the data panel to a layer's row and flash it, so a spoken layer
+ * change is also visible.
+ *
+ * @param {string} layerId - Registered layer id whose row is targeted.
+ * @returns {{id: string, name: string}|null} Row identity (`name` from the
+ *   rendered label), or null when the panel has no such row.
+ */
 function focusDataLayerRow(layerId) {
   const row = document.querySelector(`#data-toggles [data-layer-id="${CSS.escape(layerId)}"]`);
   if (!row) return null;
@@ -2202,6 +2530,12 @@ function focusDataLayerRow(layerId) {
 }
 
 
+/**
+ * Map a spoken style name (including legacy aliases) to a valid style id.
+ * @param {unknown} value - Free-text style name from the model.
+ * @returns {string|null} Style id in `ALLOWED_STYLES`, or null when
+ *   unrecognized.
+ */
 function normalizeStyle(value) {
   const raw = String(value || '').trim().toLowerCase();
   if (raw === 'filter off' || raw === 'off' || raw === 'default') return 'normal';
@@ -2211,6 +2545,36 @@ function normalizeStyle(value) {
   return null;
 }
 
+/**
+ * Fly the camera to a requested location — preset city, POI, coordinates, or
+ * free-text query.
+ *
+ * Resolution order is preset location id → coordinates → named POI → geocode
+ * search. Optional hooks let the caller run the move inside its own navigation
+ * gate and (optionally) wait for actual arrival before reporting success.
+ *
+ * @param {object} viewer - Cesium viewer the flight drives.
+ * @param {object} args - Tool arguments.
+ * @param {string} [args.locationId] - Curated city/preset id.
+ * @param {string} [args.query] - Free-text place, matched against POIs first.
+ * @param {number} [args.latitude] - Explicit latitude (degrees).
+ * @param {number} [args.longitude] - Explicit longitude (degrees).
+ * @param {number} [args.rangeM] - Camera range, clamped to 100–20,000,000.
+ * @param {string} [args.viewMode] - `'close'` or `'overview'`.
+ * @param {boolean} [args.waitForArrival] - True to resolve only when the
+ *   flight completes or is cancelled.
+ * @param {object} [hooks] - Navigation integration hooks, all optional.
+ * @param {Function|null} [hooks.onStart] - Called when the flight starts.
+ * @param {Function|null} [hooks.runImmediate] - Runs the move through the
+ *   caller's immediate-navigation seam.
+ * @param {Function|null} [hooks.beginDeferred] - Opens a deferred-navigation
+ *   generation for a geocode search.
+ * @param {Function|null} [hooks.reassertDeferred] - Reasserts that generation
+ *   right before the flight.
+ * @returns {Promise<object>} `{ok, action: 'fly_to_location', label}` result
+ *   with the resolved coordinates/range and navigation mode.
+ * @throws {Error} When no usable location argument was supplied.
+ */
 async function flyToRequestedLocation(viewer, args, {
   onStart = null,
   runImmediate = null,
@@ -2352,6 +2716,11 @@ async function flyToRequestedLocation(viewer, args, {
   throw new Error('fly_to_location needs a locationId, query, or latitude/longitude');
 }
 
+/**
+ * Resolve a spoken place name to a curated preset location id.
+ * @param {unknown} value - Free-text place name or a preset id.
+ * @returns {string|null} Preset id present in `CITY_POIS`, or null.
+ */
 function normalizeLocationId(value) {
   const raw = String(value || '').trim().toLowerCase();
   if (!raw) return null;
@@ -2360,6 +2729,20 @@ function normalizeLocationId(value) {
   return null;
 }
 
+/**
+ * Build a full picture of the current view: camera, style, context mode,
+ * cockpit state, controls, scene playback, tracked entities, and layers.
+ *
+ * @param {object} viewer - Cesium viewer whose camera is described.
+ * @param {object} styleManager - Style controller providing style/context/
+ *   cockpit/control state.
+ * @param {object} dataManager - Layer manager; supplies the enabled-layer list
+ *   and tracked-entity descriptors.
+ * @param {object|null} [sceneDirector] - Scene director, when present its
+ *   playback status is included.
+ * @returns {object} `{ok, action, camera, style, …}` payload for
+ *   `get_current_view_state`.
+ */
 function getCurrentViewState(viewer, styleManager, dataManager, sceneDirector = null) {
   const cartographic = Cesium.Cartographic.fromCartesian(viewer.camera.positionWC);
   return {
@@ -2395,6 +2778,23 @@ function getCurrentViewState(viewer, styleManager, dataManager, sceneDirector = 
   };
 }
 
+/**
+ * Describe the entity the user is asking about: the selection when there is
+ * one, otherwise a shortlist of what is visible.
+ *
+ * Scene context is gathered in parallel; the visible-entity scan is skipped
+ * entirely at altitudes where it cannot be meaningful.
+ *
+ * @param {object} viewer - Cesium viewer used for picking and camera state.
+ * @param {object} dataManager - Layer manager providing entity records.
+ * @param {object} styleManager - Style controller used for scene context.
+ * @param {object} [args] - Tool arguments.
+ * @param {string} [args.scope='auto'] - `'selected'`, `'in_view'`, or `'auto'`.
+ * @param {string} [args.layerId] - Optional layer restriction for the scan.
+ * @param {number} [args.limit] - Max visible entities, clamped to 1–12.
+ * @returns {Promise<object>} `{ok, action, scope, scene}` plus `selected` or
+ *   the `visible` shortlist.
+ */
 async function getEntityContext(viewer, dataManager, styleManager, args = {}) {
   const startedAt = performance.now();
   const scope = String(args.scope || 'auto').toLowerCase();
@@ -2532,16 +2932,48 @@ function centerMatchesSubject(center, subjectPosition) {
   return haversineKm(subjectLat, subjectLon, center.lat, center.lon) <= SUBJECT_CENTER_TOLERANCE_KM;
 }
 
+/**
+ * Whether a visible-entity screen scan can produce useful results at this
+ * altitude. Above the ceiling the viewport spans too much area for "what is
+ * on screen" to be a meaningful answer.
+ *
+ * @param {number} cameraHeightM - Camera height in meters.
+ * @returns {boolean} True when the scan should run.
+ */
 function shouldScanVisibleEntities(cameraHeightM) {
   return cameraHeightM <= 100000;
 }
 
+/**
+ * Summarize the entity currently selected anywhere in the app.
+ *
+ * @param {object} dataManager - Layer manager forwarded to the context store.
+ * @returns {object|null} Summarized selection record with properties, or null
+ *   when nothing is selected.
+ */
 function selectedEntityContext(dataManager) {
   const record = getSelectedEntityContext({ dataManager });
   if (!record) return null;
   return summarizeContextRecord(record, { includeProperties: true });
 }
 
+/**
+ * Shortlist the entities actually inside the viewport, closest to the view
+ * target first.
+ *
+ * Two-stage filter to keep the per-frame cost bounded: a cheap lat/lon
+ * prefilter builds a bounded candidate list, then only those are projected to
+ * screen space and ranked by pixel distance from the viewport centre.
+ *
+ * @param {object} viewer - Cesium viewer used for the projection.
+ * @param {object} dataManager - Layer manager providing the enabled-layer set.
+ * @param {object} [root0] - Scan options.
+ * @param {string|null} [root0.layerId] - Restrict the scan to one layer.
+ * @param {number} [root0.limit=5] - How many summaries to return.
+ * @param {Cesium.Cartographic|null} [root0.target] - Ground point that ranks
+ *   the prefilter; null treats every candidate as equidistant.
+ * @returns {Array<object>} Summarized entity records, nearest-first.
+ */
 function visibleEntityContexts(viewer, dataManager, { layerId = null, limit = 5, target = null } = {}) {
   const nearbyRecords = [];
   const canvas = viewer.scene.canvas;
@@ -2589,6 +3021,16 @@ function visibleEntityContexts(viewer, dataManager, { layerId = null, limit = 5,
     .map((item) => item.summary);
 }
 
+/**
+ * Insert into a distance-sorted list capped at `limit`, dropping the farthest
+ * entry when the cap is already reached.
+ *
+ * @param {Array<{distanceScore: number}>} records - Sorted shortlist, mutated
+ *   in place.
+ * @param {{distanceScore: number}} candidate - Record to consider.
+ * @param {number} limit - Maximum list length.
+ * @returns {void}
+ */
 function insertNearestRecord(records, candidate, limit) {
   if (records.length < limit) {
     records.push(candidate);
@@ -2608,6 +3050,17 @@ function insertNearestRecord(records, candidate, limit) {
   records.pop();
 }
 
+/**
+ * Compose the scene block shared by the entity/scene context tools: camera,
+ * basemap description, active style, and the enabled layers with counts.
+ *
+ * @param {object} viewer - Cesium viewer whose camera/viewport is described.
+ * @param {object} styleManager - Style controller for the active style.
+ * @param {object} dataManager - Layer manager for the enabled-layer list.
+ * @param {Cesium.Cartographic|null} [viewTarget] - Pre-resolved ground point;
+ *   when null the basemap block omits target-specific detail.
+ * @returns {Promise<object>} Scene context record.
+ */
 async function getSceneContext(viewer, styleManager, dataManager, viewTarget = null) {
   const cartographic = Cesium.Cartographic.fromCartesian(viewer.camera.positionWC);
   const basemap = await getBasemapContext(viewer, viewTarget);
@@ -2631,6 +3084,20 @@ async function getSceneContext(viewer, styleManager, dataManager, viewTarget = n
   };
 }
 
+/**
+ * Describe the basemap beneath the camera: view scale, viewport place samples,
+ * the target place, nearby landmarks, and POIs.
+ *
+ * Cache-first. Every network lookup runs through `resolveWithin` with the
+ * shared wait budget and falls back to the coarse place name derived from the
+ * view scale, so a slow geocode degrades the answer instead of stalling it.
+ *
+ * @param {object} viewer - Cesium viewer whose camera/viewport is described.
+ * @param {Cesium.Cartographic|null} [viewTarget] - Ground point under the
+ *   camera; null when no surface pick is available.
+ * @returns {Promise<object>} Basemap context record (`source`, `viewScale`,
+ *   `viewportPlaces`, `target`, `place`, `nearbyPlaces`, `knownLandmarks`).
+ */
 async function getBasemapContext(viewer, viewTarget = null) {
   const target = viewTarget;
   const samples = sampleViewportCartographics(viewer);
@@ -2700,6 +3167,14 @@ async function getBasemapContext(viewer, viewTarget = null) {
   };
 }
 
+/**
+ * Bucket a camera altitude into the named view scale used by every context
+ * policy in this module.
+ *
+ * @param {number} cameraHeightM - Camera height in meters.
+ * @returns {string} `'global'`, `'continental'`, `'regional'`, `'metro'`,
+ *   `'city'`, or `'local'`.
+ */
 function classifyViewScale(cameraHeightM) {
   if (cameraHeightM > 12000000) return 'global';
   if (cameraHeightM > 3000000) return 'continental';
@@ -2709,18 +3184,49 @@ function classifyViewScale(cameraHeightM) {
   return 'local';
 }
 
+/**
+ * Whether the view-target reverse geocode is worth a network call at this
+ * altitude (regional and closer).
+ * @param {number} cameraHeightM - Camera height in meters.
+ * @returns {boolean} True when the target geocode should run.
+ */
 function shouldReverseGeocode(cameraHeightM) {
   return cameraHeightM <= 750000;
 }
 
+/**
+ * Whether the viewport edge samples should be reverse geocoded (continental
+ * and closer — the looser of the two geocode gates).
+ * @param {number} cameraHeightM - Camera height in meters.
+ * @returns {boolean} True when viewport sample geocoding should run.
+ */
 function shouldReverseGeocodeViewport(cameraHeightM) {
   return cameraHeightM <= 3000000;
 }
 
+/**
+ * Whether nearby-POI lookup is meaningful at this altitude (street-level
+ * views only — at higher altitudes the radius grows past usefulness).
+ * @param {number} cameraHeightM - Camera height in meters.
+ * @returns {boolean} True when the POI fetch should run.
+ */
 function shouldFetchNearbyPlaces(cameraHeightM) {
   return cameraHeightM <= 25000;
 }
 
+/**
+ * Curated POIs near the view target, from the built-in landmark catalogue.
+ *
+ * The search radius widens with camera altitude so the answer stays relevant
+ * from street level to metro views; beyond 250 km nothing is returned.
+ *
+ * @param {number} latitude - View-target latitude (degrees).
+ * @param {number} longitude - View-target longitude (degrees).
+ * @param {number} cameraHeightM - Camera height in meters.
+ * @returns {Array<{name: string, cityId: string, city: string, latitude:
+ *   number, longitude: number, distanceKm: number}>} Up to five landmarks,
+ *   nearest first.
+ */
 function nearbyKnownLandmarks(latitude, longitude, cameraHeightM) {
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return [];
   const maxDistanceKm = cameraHeightM <= 5000
@@ -2751,6 +3257,15 @@ function nearbyKnownLandmarks(latitude, longitude, cameraHeightM) {
   return matches.sort((a, b) => a.distanceKm - b.distanceKm).slice(0, 5);
 }
 
+/**
+ * Great-circle distance between two points on a spherical earth.
+ *
+ * @param {number} lat1 - First latitude (degrees).
+ * @param {number} lon1 - First longitude (degrees).
+ * @param {number} lat2 - Second latitude (degrees).
+ * @param {number} lon2 - Second longitude (degrees).
+ * @returns {number} Distance in kilometers.
+ */
 function haversineKm(lat1, lon1, lat2, lon2) {
   const toRad = (value) => Cesium.Math.toRadians(value);
   const radiusKm = 6371.0088;
@@ -2763,6 +3278,18 @@ function haversineKm(lat1, lon1, lat2, lon2) {
   return 2 * radiusKm * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+/**
+ * Build the stand-in place record used when a precise geocode is unavailable
+ * or the camera is too high for one to be honest.
+ *
+ * @param {string} viewScale - View scale from `classifyViewScale`.
+ * @param {number} latitude - View-target latitude (degrees).
+ * @param {number} longitude - View-target longitude (degrees).
+ * @param {{country: string, confidence: string}|null} [inferredCountry] -
+ *   Country inferred from viewport samples, when known.
+ * @returns {object} Place record carrying an explicit `precision` and a `note`
+ *   the model can quote instead of over-claiming accuracy.
+ */
 function coarseBasemapPlace(viewScale, latitude, longitude, inferredCountry = null) {
   if (viewScale === 'global') {
     return {
@@ -2787,6 +3314,21 @@ function coarseBasemapPlace(viewScale, latitude, longitude, inferredCountry = nu
   };
 }
 
+/**
+ * Cartographic view center, cached per camera pose and per pick mode.
+ *
+ * Wraps `getViewTargetCartesian` and converts the result to lat/lon/height.
+ * The short-lived cache exists because `scene.pickPosition` (the depth stage)
+ * is a synchronous GPU readback: several context collectors ask for the same
+ * view center within one render, and each would otherwise pay the stall again.
+ *
+ * @param {object} viewer - Cesium viewer whose camera defines the view center.
+ * @param {object} [options] - Pick options forwarded to the Cartesian probe.
+ * @param {boolean} [options.surfaceOnly=false] - Skip the depth-readback stage
+ *   and accept ellipsoid/globe precision only.
+ * @returns {Cesium.Cartographic|null} View-center position, or null when the
+ *   pick missed (open sky, degenerate projection).
+ */
 function getViewTargetCartographic(viewer, options = {}) {
   // The cache is scoped by pick mode: a surfaceOnly (ellipsoid-level) answer
   // must never be served to a depth-precision caller within the TTL, and a
@@ -2811,6 +3353,14 @@ function getViewTargetCartographic(viewer, options = {}) {
   return target;
 }
 
+/**
+ * Compact signature of the camera pose used to invalidate the view-target
+ * cache (position to ~1 m, height to 2 m, heading/pitch to milliradians).
+ *
+ * @param {object} viewer - Cesium viewer whose camera is fingerprinted.
+ * @returns {string} Colon-joined signature; equal strings mean an unchanged
+ *   view for caching purposes.
+ */
 function cameraViewSignature(viewer) {
   const camera = viewer.camera;
   const cartographic = camera.positionCartographic;
@@ -2836,6 +3386,13 @@ function cameraViewSignature(viewer) {
  * which runtime profiling flagged as the app's worst main-thread stall; callers
  * that only need "where is the view centered" at label/basemap precision pass
  * surfaceOnly and get the zero-readback ellipsoid/globe stages instead.
+ *
+ * @param {object} viewer - Cesium viewer whose scene is picked.
+ * @param {object} [options] - Pick options.
+ * @param {boolean} [options.surfaceOnly=false] - Skip the depth-readback pick
+ *   stage and use only the cheap ellipsoid/globe stages.
+ * @returns {Cesium.Cartesian3|null} World position under the viewport center,
+ *   or null when every stage missed.
  */
 function getViewTargetCartesian(viewer, options = {}) {
   const scene = viewer.scene;
@@ -2875,6 +3432,16 @@ function getViewTargetCartesian(viewer, options = {}) {
   return isPickedWorldPosition(position) ? position : null;
 }
 
+/**
+ * Sample the viewport on a fixed seven-point grid and return the ground
+ * coordinates each sample lands on, so the context can say which country or
+ * region the camera is over without spending a geocode request.
+ *
+ * @param {object} viewer - Cesium viewer providing the camera and scene.
+ * @returns {Array<{latitude: number, longitude: number}>} Degree-rounded
+ *   samples that hit the ellipsoid, center point first; empty when the view is
+ *   all sky or the canvas has no size yet.
+ */
 function sampleViewportCartographics(viewer) {
   const scene = viewer.scene;
   const canvas = scene.canvas;
@@ -2909,6 +3476,17 @@ function sampleViewportCartographics(viewer) {
   return samples;
 }
 
+/**
+ * Coarse country attribution for a viewport sample set, via majority vote
+ * over `inferCountry`'s bounding boxes. The vote share is reported as
+ * confidence so the model can qualify the claim; boxes are country-scale, so
+ * this answers "which country is on screen", never "where am I".
+ *
+ * @param {Array<{latitude: number, longitude: number}>} samples - Viewport
+ *   ground samples from `sampleViewportCartographics`.
+ * @returns {{country: string, confidence: number, sampleCount: number, totalSamples: number}|null}
+ *   Winning country with its vote share, or null when no sample resolves.
+ */
 function inferCountryFromSamples(samples) {
   if (!samples.length) return null;
   const counts = new Map();
@@ -2927,6 +3505,15 @@ function inferCountryFromSamples(samples) {
   };
 }
 
+/**
+ * Point-in-bounding-box country lookup over a small hand-picked table of
+ * regions relevant to the basemap context. Deliberately approximate: the
+ * result only labels a high-altitude view, it is never a precise location.
+ *
+ * @param {number} latitude - Latitude in degrees.
+ * @param {number} longitude - Longitude in degrees.
+ * @returns {string|null} Country name, or null when the point matches no box.
+ */
 function inferCountry(latitude, longitude) {
   const regions = [
     { name: 'Iran', south: 24.0, north: 40.2, west: 44.0, east: 63.5 },
@@ -2954,6 +3541,18 @@ function inferCountry(latitude, longitude) {
   return region?.name || null;
 }
 
+/**
+ * Google reverse geocode for one coordinate, deduplicated by result cache and
+ * in-flight map so concurrent callers share one request. The response is
+ * trimmed to the fields the scene context quotes (address, locality, region,
+ * country) plus capped visible/street label lists.
+ *
+ * @param {number} latitude - Latitude in degrees.
+ * @param {number} longitude - Longitude in degrees.
+ * @returns {Promise<object|null>} Place record, or null when no API key is
+ *   configured, the coordinate is non-finite, the API reports no results, or
+ *   the request fails.
+ */
 async function reverseGeocode(latitude, longitude) {
   const apiKey = window.__GOOGLE_MAPS_API_KEY__;
   if (!apiKey || !Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
@@ -3003,6 +3602,18 @@ async function reverseGeocode(latitude, longitude) {
   return request;
 }
 
+/**
+ * Reverse geocode the first few viewport samples and merge them into a single
+ * viewport place summary. Skipped at building scale, where the center geocode
+ * plus Nearby Places is more precise and avoids three redundant Google
+ * requests, and whenever the altitude gate says geocoding would be dishonest.
+ *
+ * @param {Array<{latitude: number, longitude: number}>} samples - Viewport
+ *   ground samples from `sampleViewportCartographics`.
+ * @param {number} cameraHeightM - Camera altitude in meters.
+ * @returns {Promise<object|null>} Aggregated viewport places, or null when the
+ *   altitude gate rejects the request or nothing geocoded.
+ */
 async function reverseGeocodeViewportSamples(samples, cameraHeightM) {
   if (!shouldReverseGeocodeViewport(cameraHeightM) || !samples.length) return null;
   // At building scale, center geocoding plus Nearby Places is more precise and
@@ -3027,6 +3638,17 @@ async function reverseGeocodeViewportSamples(samples, cameraHeightM) {
   return summarizeViewportPlaces(places.filter(Boolean));
 }
 
+/**
+ * Synchronous read of already-fetched viewport geocodes, for callers that must
+ * not add latency — or fire requests — on this frame. Same output shape as the
+ * async path, but sourced only from the reverse-geocode cache.
+ *
+ * @param {Array<{latitude: number, longitude: number}>} samples - Viewport
+ *   ground samples from `sampleViewportCartographics`.
+ * @param {number} cameraHeightM - Camera altitude in meters.
+ * @returns {object|null} Aggregated viewport places from cache, or null when
+ *   the altitude gate rejects it or nothing has been fetched yet.
+ */
 function viewportPlacesFromCache(samples, cameraHeightM) {
   if (!shouldReverseGeocodeViewport(cameraHeightM) || cameraHeightM <= 10000 || !samples.length) return null;
   const places = [samples[0], samples[1], samples[2]].filter(Boolean).flatMap((sample) => {
@@ -3047,6 +3669,16 @@ function viewportPlacesFromCache(samples, cameraHeightM) {
   return summarizeViewportPlaces(places);
 }
 
+/**
+ * Fold per-sample geocode results into one summary: dominant region fields
+ * plus deduplicated visible and street label lists.
+ *
+ * @param {Array<object>} places - Per-sample place records carrying `country`,
+ *   `region`, `locality`, `labels` and `streetLabels`.
+ * @returns {object|null} Summary with `samples`, `dominantCountry`,
+ *   `dominantRegion`, `dominantLocality`, `visibleLabels` and `streetLabels`,
+ *   or null when there are no places.
+ */
 function summarizeViewportPlaces(places) {
   if (!places.length) return null;
   return {
@@ -3059,6 +3691,18 @@ function summarizeViewportPlaces(places) {
   };
 }
 
+/**
+ * Nearby POIs around the view center, fetched through the google-places proxy
+ * and deduplicated by result cache and in-flight map. Results are capped at 12
+ * named places so the payload stays bounded.
+ *
+ * @param {number} latitude - View-center latitude in degrees.
+ * @param {number} longitude - View-center longitude in degrees.
+ * @param {number} cameraHeightM - Camera altitude in meters; selects the
+ *   search radius.
+ * @returns {Promise<Array<object>>} Place records; empty when the coordinate is
+ *   non-finite, the proxy fails or it reports no places.
+ */
 async function fetchNearbyPlaces(latitude, longitude, cameraHeightM) {
   // A camera aimed at space yields non-finite pick coordinates; requesting
   // with them just 400s on the proxy and spams the console every such frame.
@@ -3093,6 +3737,13 @@ async function fetchNearbyPlaces(latitude, longitude, cameraHeightM) {
   return request;
 }
 
+/**
+ * Sanitize a batch of label values and drop duplicates, preserving first-
+ * occurrence order.
+ *
+ * @param {Array<*>} values - Raw label values of any type.
+ * @returns {Array<string>} Non-empty sanitized labels, deduplicated.
+ */
 function uniqueStrings(values) {
   return [...new Set(values
     .map((value) => sanitizeLabel(value))
@@ -3118,6 +3769,17 @@ function sanitizeLabel(value) {
   return out.replaceAll(/\s+/g, ' ').trim().slice(0, 120);
 }
 
+/**
+ * `fetch` with a hard deadline: the request is aborted once it exceeds
+ * `timeoutMs`, so a stalled upstream cannot pin a context collection (or the
+ * voice turn that is waiting on it).
+ *
+ * @param {string} url - Request URL.
+ * @param {object} [options] - Options passed through to `fetch`.
+ * @param {number} [timeoutMs=5000] - Milliseconds before the request aborts.
+ * @returns {Promise<Response>} Fetch response; rejects on abort or network
+ *   failure.
+ */
 async function fetchWithTimeout(url, options = {}, timeoutMs = 5000) {
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
@@ -3128,21 +3790,57 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 5000) {
   }
 }
 
+/**
+ * Cache key for a reverse-geocode request.
+ *
+ * @param {number} latitude - Latitude in degrees.
+ * @param {number} longitude - Longitude in degrees.
+ * @returns {string} Key rounded to four decimal places (~11 m) so nearby
+ *   re-queries share one cache entry.
+ */
 function reverseGeocodeKey(latitude, longitude) {
   return `${latitude.toFixed(4)},${longitude.toFixed(4)}`;
 }
 
+/**
+ * Cache key for a Nearby Places request. The resolved radius is part of the
+ * key so a change of camera altitude cannot serve results from another band.
+ *
+ * @param {number} latitude - View-center latitude in degrees.
+ * @param {number} longitude - View-center longitude in degrees.
+ * @param {number} cameraHeightM - Camera altitude in meters.
+ * @returns {string} Coordinate key (four decimal places) plus the resolved
+ *   radius in meters.
+ */
 function nearbyPlacesCacheKey(latitude, longitude, cameraHeightM) {
   const radiusM = nearbyPlacesRadiusM(cameraHeightM);
   return `${latitude.toFixed(4)},${longitude.toFixed(4)},${radiusM}`;
 }
 
+/**
+ * Search radius for Nearby Places, scaled to camera altitude so a street-level
+ * view does not return POIs blocks away from the subject.
+ *
+ * @param {number} cameraHeightM - Camera altitude in meters.
+ * @returns {number} Radius in meters: 500, 2000 or 5000.
+ */
 function nearbyPlacesRadiusM(cameraHeightM) {
   if (cameraHeightM <= 1000) return 500;
   if (cameraHeightM <= 5000) return 2000;
   return 5000;
 }
 
+/**
+ * Await a promise for at most `timeoutMs`, then take the fallback. Rejections
+ * are converted to the fallback as well, so a failed supplementary lookup
+ * degrades the scene context instead of throwing out of it.
+ *
+ * @template T
+ * @param {Promise<T>} promise - Promise to await.
+ * @param {number} timeoutMs - Milliseconds to wait before falling back.
+ * @param {T} fallback - Value returned on timeout or rejection.
+ * @returns {Promise<T>} The settled value, or the fallback.
+ */
 async function resolveWithin(promise, timeoutMs, fallback) {
   let timeout = null;
   try {
@@ -3157,12 +3855,34 @@ async function resolveWithin(promise, timeoutMs, fallback) {
   }
 }
 
+/**
+ * Equirectangular approximation of squared great-circle distance, used to rank
+ * candidates at the short ranges the context cares about. Longitude is scaled
+ * by the mean latitude's cosine to correct for meridian convergence; degrees
+ * are left unsquared-out so no sqrt is needed on a compare-only path.
+ *
+ * @param {number} latA - First latitude in degrees.
+ * @param {number} lonA - First longitude in degrees.
+ * @param {number} latB - Second latitude in degrees.
+ * @param {number} lonB - Second longitude in degrees.
+ * @returns {number} Squared distance in scaled-degree units; only relative
+ *   magnitude is meaningful.
+ */
 function approximateCoordinateDistanceSq(latA, lonA, latB, lonB) {
   const latDelta = latB - latA;
   const lonDelta = (lonB - lonA) * Math.cos(Cesium.Math.toRadians((latA + latB) / 2));
   return latDelta * latDelta + lonDelta * lonDelta;
 }
 
+/**
+ * Telemetry for context collection: report any scope that took 500 ms or more,
+ * so slow voice turns are visible without spamming the console on the healthy
+ * path.
+ *
+ * @param {number} startedAt - `performance.now()` value captured on entry.
+ * @param {string} scope - Scope name for the log line.
+ * @returns {void}
+ */
 function logSlowContext(startedAt, scope) {
   const durationMs = Math.round(performance.now() - startedAt);
   if (durationMs >= 500) {
@@ -3170,6 +3890,14 @@ function logSlowContext(startedAt, scope) {
   }
 }
 
+/**
+ * Most frequent value in a list, with its vote share. Used to name the
+ * dominant country, region or locality across viewport samples.
+ *
+ * @param {Array<string>} values - Candidate values, already filtered non-empty.
+ * @returns {{value: string, count: number, confidence: number}|null} Winner
+ *   with its occurrence count and share of the list, or null when empty.
+ */
 function dominantValue(values) {
   if (!values.length) return null;
   const counts = new Map();
@@ -3182,6 +3910,20 @@ function dominantValue(values) {
   };
 }
 
+/**
+ * Compact, prompt-safe summary of one Cesium entity. Reuses the entity's
+ * cached context record when it has one, otherwise derives label, layer and
+ * position from the entity itself.
+ *
+ * @param {object} viewer - Cesium viewer, retained for signature parity with
+ *   the sibling context helpers (not read directly).
+ * @param {object} entity - Entity to summarize.
+ * @param {object} [root0] - Summary options.
+ * @param {boolean} [root0.includeProperties=false] - Include a compacted
+ *   property set in the summary.
+ * @returns {object} Summary record (id, name, layer, coordinates, optional
+ *   properties) safe to hand to the voice model.
+ */
 function _summarizeEntity(viewer, entity, { includeProperties = false } = {}) {
   const now = Cesium.JulianDate.now();
   if (entity.__gevContextId) {
@@ -3215,6 +3957,17 @@ function _summarizeEntity(viewer, entity, { includeProperties = false } = {}) {
   };
 }
 
+/**
+ * Project a stored context record into the same shape `_summarizeEntity`
+ * produces, so payload code does not care which path produced the record.
+ *
+ * @param {object} record - Cached context record.
+ * @param {object} [root0] - Summary options.
+ * @param {boolean} [root0.includeProperties=false] - Include a compacted
+ *   property set in the summary.
+ * @returns {object} Summary record with identity, layer, coordinates and
+ *   liveness.
+ */
 function summarizeContextRecord(record, { includeProperties = false } = {}) {
   return {
     id: String(record.id || ''),
@@ -3229,6 +3982,14 @@ function summarizeContextRecord(record, { includeProperties = false } = {}) {
   };
 }
 
+/**
+ * Center of a polygon entity, derived from its rendered hierarchy positions.
+ *
+ * @param {object} entity - Cesium entity, expected to carry a `polygon`.
+ * @param {Cesium.JulianDate} now - Time used to sample the hierarchy property.
+ * @returns {Cesium.Cartesian3|null} Bounding-sphere center of the ring, or
+ *   null when the entity has no polygon positions at this time.
+ */
 function polygonCenter(entity, now) {
   const hierarchy = entity.polygon?.hierarchy?.getValue?.(now);
   const positions = hierarchy?.positions;
@@ -3236,11 +3997,25 @@ function polygonCenter(entity, now) {
   return Cesium.BoundingSphere.fromPoints(positions).center;
 }
 
+/**
+ * Snapshot of an entity's properties as plain values, with Cesium property
+ * instances resolved to their current values.
+ *
+ * @param {object} entity - Cesium entity with a `properties` bag.
+ * @returns {object} Plain-object property map; empty when the entity has none.
+ */
 function propertyObject(entity) {
   const raw = entity?.properties?.getValue?.(Cesium.JulianDate.now()) || {};
   return unwrapProperties(raw);
 }
 
+/**
+ * Recursively resolve Cesium property objects — anything exposing `getValue`
+ * — into plain values, recursing through arrays and nested objects.
+ *
+ * @param {*} value - Property bag, array, Property instance or primitive.
+ * @returns {*} Fully resolved plain value.
+ */
 function unwrapProperties(value) {
   if (!value || typeof value !== 'object') return value;
   if (Array.isArray(value)) return value.map(unwrapProperties);
@@ -3253,6 +4028,16 @@ function unwrapProperties(value) {
   return out;
 }
 
+/**
+ * Reduce a property bag to the small set the voice payload can afford:
+ * preferred identity/attribute keys first, then whatever else fits. The
+ * nested `tags` map is flattened in, values are normalized through
+ * `cleanText`, and the result is capped at 12 entries.
+ *
+ * @param {object} props - Property bag, including a nested `tags` object when
+ *   present.
+ * @returns {object} At most 12 cleaned key/value pairs.
+ */
 function compactProperties(props) {
   const preferredKeys = [
     'name',
@@ -3282,6 +4067,15 @@ function compactProperties(props) {
   return result;
 }
 
+/**
+ * Coerce a raw property value to a bounded display string. Objects and
+ * nullish values collapse to empty, placeholder strings ("undefined",
+ * "null") are dropped, and anything past 180 characters is truncated with an
+ * ellipsis.
+ *
+ * @param {*} value - Raw value of any type.
+ * @returns {string} Non-empty trimmed text, or '' when nothing usable.
+ */
 function cleanText(value) {
   if (value == null || typeof value === 'object') return '';
   const text = String(value).trim();
@@ -3289,6 +4083,14 @@ function cleanText(value) {
   return text.length > 180 ? `${text.slice(0, 177)}...` : text;
 }
 
+/**
+ * Human-readable layer name for a layer id, for the bundled static layers
+ * whose ids are not operator-facing.
+ *
+ * @param {string|null} layerId - Layer id carried by the entity or record.
+ * @returns {string} Display title, the id itself when no mapping exists, or
+ *   "Entity" when there is no id at all.
+ */
 function layerTitle(layerId) {
   if (layerId === 'local-datacenters') return 'Datacenter';
   if (layerId === 'local-dams') return 'Dam';
@@ -3297,6 +4099,17 @@ function layerTitle(layerId) {
   return layerId || 'Entity';
 }
 
+/**
+ * Coerce a tool-supplied value to a number and clamp it into [min, max],
+ * returning `fallback` for anything non-numeric. Arguments arriving over the
+ * voice channel are frequently strings, so the coercion is deliberate.
+ *
+ * @param {*} value - Raw value to coerce and clamp.
+ * @param {number} min - Inclusive lower bound.
+ * @param {number} max - Inclusive upper bound.
+ * @param {number} fallback - Value returned when `value` is not finite.
+ * @returns {number} Clamped number, or the fallback.
+ */
 function clampNumber(value, min, max, fallback) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return fallback;
@@ -3331,6 +4144,19 @@ function activeContactsWindow() {
   }
 }
 
+/**
+ * Provider surface handed to the analyst engine: record access per enabled
+ * layer, region-ring resolution, the active Contacts subject, and the current
+ * view context.
+ *
+ * @param {object} viewer - Cesium viewer used to build the view context.
+ * @param {object} dataManager - Layer manager used to resolve and gate layers.
+ * @param {object} [root0] - Provider options.
+ * @param {[key: string]: number|null} [root0.recordLimitByLayer=null] -
+ *   Per-layer record caps; layers without an entry use their module default.
+ * @returns {object} Providers: `getRecords`, `resolveRegionRing`,
+ *   `getContextSubject` and `getViewContext`.
+ */
 function analystProviders(viewer, dataManager, { recordLimitByLayer = null } = {}) {
   return {
     getRecords(layerKey) {
@@ -3377,6 +4203,30 @@ function analystProviders(viewer, dataManager, { recordLimitByLayer = null } = {
   };
 }
 
+/**
+ * Run a spoken analyst query through the shared engine and compact the result
+ * into the voice payload, adding the honesty annotations the model needs:
+ * warm-up notes for freshly enabled layers, viewport-loading caveats,
+ * reconciliation against the active Contacts window, and entity-centred
+ * proximity answers routed through the same engine that fills Contacts.
+ *
+ * @param {object} viewer - Cesium viewer providing the view context.
+ * @param {object} dataManager - Layer manager backing the record providers.
+ * @param {object} [args] - Tool arguments from the voice model.
+ * @param {Array<string>} [args.layers] - Layer keys to query; the engine's
+ *   default layer set when omitted.
+ * @param {object} [args.scope] - Query scope; `kind` is typically `view`,
+ *   `radius` or a named region.
+ * @param {Array<object>} [args.filters] - Field filters applied engine-side.
+ * @param {string} [args.sortBy] - Field results are sorted by.
+ * @param {string} [args.sortDir] - Sort direction (`asc` or `desc`).
+ * @param {number} [args.limit] - Maximum number of results.
+ * @param {boolean} [args.followUp=false] - Treat the query as a follow-up in
+ *   the same session, keeping engine-side memory of the previous result.
+ * @returns {Promise<object>} Result envelope: on success `count`,
+ *   `scopeLabel`, `truncated`, `items`, `summary`, `coverage` and any
+ *   reconciliation notes; on failure `ok: false` with the engine error.
+ */
 async function runAnalystQuery(viewer, dataManager, args = {}) {
   if (!_analystEngine) _analystEngine = createAnalystEngine(analystProviders(viewer, dataManager));
   const result = await _analystEngine.query({

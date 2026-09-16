@@ -39,7 +39,8 @@ const ENVIRONMENTAL_LABELS = Object.freeze({
 });
 
 /**
- * @param {string} [choice]
+ * @param {string} [choice] - Selected label id; falls back to the module
+ *   constant, then to 'ENVIRONMENTAL' when unknown.
  * @returns {{title: string}} The label set the constant above selects.
  */
 export function environmentalLabel(choice = ENVIRONMENTAL_LABEL_CHOICE) {
@@ -134,9 +135,11 @@ export const FIRST_RUN_MISSIONS = Object.freeze({
 
 /**
  * Resolve a Web Storage area without letting a hostile getter escape.
- * @param {'local'|'session'} kind
+ * @param {'local'|'session'} kind - Which storage area to resolve.
  * @param {object|null|undefined} injected Explicit store; `undefined` means "use the global".
  * @returns {{getItem?: Function, setItem?: Function, removeItem?: Function}|null}
+ *   The injected store verbatim, the resolved global area, or null when the
+ *   global getter throws (privacy-restricted storage).
  */
 function resolveStore(kind, injected) {
   if (injected !== undefined) return injected;
@@ -148,7 +151,13 @@ function resolveStore(kind, injected) {
   }
 }
 
-/** Read one key, treating every failure as "nothing stored". */
+/**
+ * Read one key, treating every failure as "nothing stored".
+ * @param {'local'|'session'} kind - Which storage area to read.
+ * @param {object|null|undefined} injected - Explicit store (tests/callers).
+ * @param {string} key - Storage key to read.
+ * @returns {string|null} Stored value, or null when absent or unreadable.
+ */
 function readStored(kind, injected, key) {
   try {
     return resolveStore(kind, injected)?.getItem?.(key) ?? null;
@@ -161,6 +170,10 @@ function readStored(kind, injected, key) {
  * Write one key, best-effort. Never throws; REPORTS whether the value landed so
  * a caller that showed the visitor a promise ("don't show this again") can take
  * it back rather than display a preference nothing stored.
+ * @param {'local'|'session'} kind - Which storage area to write.
+ * @param {object|null|undefined} injected - Explicit store (tests/callers).
+ * @param {string} key - Storage key to write.
+ * @param {string} value - Value to persist.
  * @returns {boolean} true only if the value was actually written.
  */
 function writeStored(kind, injected, key, value) {
@@ -176,6 +189,9 @@ function writeStored(kind, injected, key, value) {
 
 /**
  * Remove one key, best-effort.
+ * @param {'local'|'session'} kind - Which storage area to clear.
+ * @param {object|null|undefined} injected - Explicit store (tests/callers).
+ * @param {string} key - Storage key to remove.
  * @returns {boolean} true only if the removal actually happened.
  */
 function removeStored(kind, injected, key) {
@@ -191,12 +207,14 @@ function removeStored(kind, injected, key) {
 
 /**
  * Decide whether the launcher belongs in this page load.
- * @param {object} input
+ * @param {object} input - Suppression inputs, all injectable for tests.
  * @param {boolean} [input.hasShareState]
+ *   True when a share link is being restored; its camera always wins.
  * @param {{getItem: Function}|null} [input.storage] Durable (localStorage).
  * @param {{getItem: Function}|null} [input.sessionStorageRef] Per-session.
  * @param {{search?: string}|null} [input.location]
- * @returns {boolean}
+ *   Location supplying `?welcome=0|1`; defaults to the live location.
+ * @returns {boolean} True when the launcher should reveal this page load.
  */
 export function shouldShowFirstRun({
   hasShareState = false,
@@ -220,7 +238,9 @@ export function shouldShowFirstRun({
  * but the outcome is RETURNED, because the checkbox that calls this is showing
  * the visitor a claim about the future and must not keep a tick nothing saved.
  * @param {boolean} suppressed
+ *   True to persist "don't show this again", false to clear it.
  * @param {{setItem: Function, removeItem?: Function}|null} [storage]
+ *   Durable store to write; defaults to the guarded global localStorage.
  * @returns {boolean} true if the durable state now matches what was asked.
  */
 export function setFirstRunSuppressed(suppressed, storage) {
@@ -232,6 +252,7 @@ export function setFirstRunSuppressed(suppressed, storage) {
 /**
  * Record that this browser session has seen and closed the launcher.
  * @param {{setItem: Function}|null} [sessionStorageRef]
+ *   Session store to write; defaults to the guarded global sessionStorage.
  * @returns {void}
  */
 export function rememberFirstRunSessionDismissed(sessionStorageRef) {
@@ -245,11 +266,16 @@ export function rememberFirstRunSessionDismissed(sessionStorageRef) {
  * exploration rather than being stranded on a map they did not ask for.
  *
  * @param {string} choice Key of FIRST_RUN_MISSIONS.
- * @param {object} deps
+ * @param {object} deps - App facades the mission drives, injected for tests.
  * @param {(mode: string) => Promise<object>} deps.setContextMode
+ *   Context-panel mission runner (styleManager facade).
  * @param {(layerId: string) => Promise<boolean>} deps.setLayerEnabled
+ *   Layer enable used by globe missions (DataManager facade).
  * @param {() => Promise<any>} deps.flyToGlobe
+ *   Camera pull-out started alongside globe missions.
  * @returns {Promise<{ok: boolean, choice: string, result?: object, failedLayerIds?: string[]}>}
+ *   Mission outcome; `failedLayerIds` names the globe-mission layers that did
+ *   not enable, `result` carries the context-mode result verbatim.
  */
 export async function runFirstRunChoice(choice, { setContextMode, setLayerEnabled, flyToGlobe }) {
   const mission = FIRST_RUN_MISSIONS[choice];
@@ -292,7 +318,8 @@ export const EXCLUSIVE_SURFACE_CLASSES = Object.freeze([
 /**
  * Is some other surface currently claiming the screen?
  * @param {Document} [documentRef]
- * @returns {boolean}
+ *   Document to inspect; defaults to the live document.
+ * @returns {boolean} True when any exclusive-surface body class is present.
  */
 export function exclusiveSurfaceActive(documentRef = globalThis.document) {
   const list = documentRef?.body?.classList;
@@ -302,14 +329,20 @@ export function exclusiveSurfaceActive(documentRef = globalThis.document) {
 
 /**
  * Wire and reveal the mission launcher.
- * @param {object} input
+ * @param {object} input - Dependencies and DOM/storage injection points.
  * @param {object} input.styleManager Initialized StyleManager.
  * @param {object} [input.dataManager] DataManager, for the globe missions' layers.
  * @param {Document} [input.documentRef]
+ *   Document hosting the launcher markup (defaults to the live document).
  * @param {Storage} [input.storage]
+ *   Durable store for the suppression checkbox (defaults to guarded localStorage).
  * @param {Storage} [input.sessionStorageRef]
+ *   Session store for the per-session dismissal flag.
  * @param {Location} [input.location]
+ *   Location read for `?welcome=0|1` (defaults to the live location).
  * @returns {null|{dismiss: Function}}
+ *   Launcher controller, or null when the markup is missing, already
+ *   initialized, or the launcher is suppressed for this load.
  */
 export function initFirstRunExperience({
   styleManager,
@@ -366,6 +399,8 @@ export function initFirstRunExperience({
    * zero-sized box, a centre outside the viewport, a null hit. This guard exists
    * to stop the launcher acting while something is demonstrably on top of it; it
    * must never become the reason ESC quietly stops working.
+   *
+   * @returns {boolean} True when an element outside the card hit-tests at its centre.
    */
   const coveredByOverlay = () => {
     if (typeof documentRef.elementFromPoint !== 'function') return false;
@@ -389,6 +424,9 @@ export function initFirstRunExperience({
    * invisible element. getClientRects() is empty under `display: none`, which
    * is exactly how every one of those surfaces hides this card; the hit test
    * then covers the overlays that leave the box intact and simply sit on top.
+   *
+   * @returns {boolean} True only when the card is connected, visible, measurable,
+   *   and not covered by any overlay.
    */
   const isTopmost = () => root.isConnected
     && root.classList.contains('visible')
@@ -491,6 +529,14 @@ export function initFirstRunExperience({
     status.textContent = 'This browser is blocking storage, so that could not be saved.';
   };
 
+  /**
+   * Document-capture key handler for the visible card: consumes ESC to dismiss
+   * and traps Tab inside the launcher. Backs off instantly for anything the
+   * card cannot see or that another surface already handled.
+   *
+   * @param {KeyboardEvent} event - Keydown event captured on the document.
+   * @returns {void}
+   */
   function onKeyDown(event) {
     // THE ARBITRATION RULE: never consume input for a card nobody can see.
     // The observer below normally removes the launcher before another surface

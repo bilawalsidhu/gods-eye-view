@@ -92,7 +92,11 @@ export function loadHeatRenderer() {
   return rendererPromise;
 }
 
-/** Last WASM glue load error (null when none), for layer stats/QA. */
+/**
+ * Last WASM glue load error (null when none), for layer stats/QA. Render-time
+ * failures surface separately through the layer's own `wasmError` stat.
+ * @returns {?string} Truncated error message from the most recent attempt.
+ */
 export function lastRendererError() {
   return lastLoadError;
 }
@@ -185,15 +189,28 @@ export function buildSplatInputs(cells, lod, bounds) {
   return { lons, lats, brights, maxScore };
 }
 
-/** Same weight as firmsHeatmap.heatScore — duplicated here (not imported) to
+/**
+ * Same weight as firmsHeatmap.heatScore — duplicated here (not imported) to
  * keep this module importable from unit tests without pulling Cesium in.
- * If one changes, change both; the texture/entity alpha parity depends on it. */
+ * If one changes, change both; the texture/entity alpha parity depends on it.
+ * @param {{intensity: number, count: number, night: number, maxFrp: number}} cell
+ *   Aggregated cell.
+ * @returns {number} Heat score driving both the splat ramp and entity alpha.
+ */
 function cellScore(cell) {
   return cell.intensity + cell.count * 0.8 + cell.night * 0.6 + cell.maxFrp * 0.12;
 }
 
-/** Point-in-bounds in degrees (cell rectangle vs padded bounds), mirroring
- * firmsHeatmap.cellIntersectsBounds — keep in sync with it. */
+/**
+ * Point-in-bounds in degrees (cell rectangle vs padded bounds), mirroring
+ * firmsHeatmap.cellIntersectsBounds — keep in sync with it. A wrapping bounds
+ * accepts a cell that touches either side of the anti-meridian window.
+ * @param {{latCell: number, lonCell: number}} cell - Cell's min corner, degrees.
+ * @param {number} gridDegrees - Cell edge length in degrees.
+ * @param {{west: number, south: number, east: number, north: number,
+ *   wraps: boolean}} bounds - Padded degree bounds.
+ * @returns {boolean} True when the cell rectangle intersects the bounds.
+ */
 function cellInBounds(cell, gridDegrees, bounds) {
   if (cell.latCell + gridDegrees < bounds.south || cell.latCell > bounds.north) return false;
   const west = cell.lonCell;

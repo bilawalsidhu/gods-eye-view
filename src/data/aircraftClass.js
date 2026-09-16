@@ -90,6 +90,20 @@ const EMITTER_CATEGORY = {
   A5: 'widebody', A6: 'fastjet', A7: 'helicopter', B1: 'glider',
 };
 
+/**
+ * Map one aircraft's type designator / category onto a glyph class key.
+ *
+ * Resolution order: exact ICAO type-code set membership (military fast-jet and
+ * UAV sets first so `F16` reads as a fastjet while `C17` stays a widebody),
+ * then the OpenSky extended-states integer category, then an ADS-B emitter
+ * string. Anything unresolved falls through to `airliner` — the safest default
+ * for the shared jet glyph.
+ *
+ * @param {{typeCode?: string|null, category?: number|string|null}} [root0] Aircraft descriptor taken from a state vector; both fields are optional.
+ * @param {string|null} [root0.typeCode] ICAO type designator such as `B789` or `C172`; blank or absent when the feed drops it.
+ * @param {number|string|null} [root0.category] OpenSky extended category index (2–9) or ADS-B emitter string (`A1`–`B1`).
+ * @returns {string} Class key indexing CLASS_SCALE_2D / CLASS_SCALE_3D / aircraftIcons: `light`, `glider`, `turboprop`, `airliner`, `widebody`, `quadjet`, `helicopter`, `fastjet`, `bizjet`, or `uav`.
+ */
 export function classifyAircraft({ typeCode, category } = {}) {
   const code = String(typeCode || '').trim().toUpperCase();
   if (code) {

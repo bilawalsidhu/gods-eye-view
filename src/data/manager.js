@@ -1,5 +1,14 @@
 import { governorRequestRender } from '../renderGovernor.js';
 import { markDetectionSourcesChanged } from './detection.js';
+
+/**
+ * Deep-copy plain layer parameters so a caller's object can never be mutated by
+ * a layer, and vice versa. Arrays and nested objects are recursed; scalars pass
+ * through unchanged.
+ *
+ * @param {*} value Parameter value of any JSON-like shape.
+ * @returns {*} Structural deep clone of the input.
+ */
 function cloneLayerParams(value) {
   if (Array.isArray(value)) return value.map(cloneLayerParams);
   if (value && typeof value === 'object') {
@@ -26,26 +35,64 @@ const VALID_LAYER_SERIALIZATION_DISPOSITIONS = new Set([
   'enabled+mirrored-options',
 ]);
 
+/** Whether a thrown value is a DOM `AbortError`, which lifecycle code treats as
+ *  an intentional cancel rather than a failure.
+ *
+ * @param {*} error Caught value.
+ * @returns {boolean} True for abort-style errors.
+ */
 function isAbortError(error) {
   return error?.name === 'AbortError';
 }
 
+/**
+ * Build the typed error raised when a layer refuses a lifecycle transition.
+ * Callers match on `name`, so a rejection stays distinguishable from an
+ * accidental throw inside a layer's enable/disable body.
+ *
+ * @param {string} layerId Layer that refused the transition.
+ * @param {string} phase Lifecycle phase that was refused (`enable`, `disable`, …).
+ * @returns {Error} Error with `name: 'LifecycleRejectedError'`.
+ */
 function lifecycleRejectedError(layerId, phase) {
   const error = new Error(`[Data] ${layerId} ${phase} rejected the lifecycle transition`);
   error.name = 'LifecycleRejectedError';
   return error;
 }
 
+/** Build the typed error raised when a layer rejects a parameter update.
+ *
+ * @param {string} layerId Layer that rejected the parameters.
+ * @returns {Error} Error with `name: 'LayerParamsRejectedError'`.
+ */
 function paramsRejectedError(layerId) {
   const error = new Error(`[Data] ${layerId} rejected layer parameters`);
   error.name = 'LayerParamsRejectedError';
   return error;
 }
 
+/** Whether an origin names a deliberate operator/tool decision, as opposed to a
+ *  programmatic or restore-driven one. Only explicit intents may cancel a
+ *  pending restore.
+ *
+ * @param {string} origin Provenance string attached to a layer call.
+ * @returns {boolean} True for `user`, `voice`, or `tool`.
+ */
 function isExplicitLayerIntentOrigin(origin) {
   return origin === 'user' || origin === 'voice' || origin === 'tool';
 }
 
+/**
+ * Ask a layer to cancel any pending restore it is holding. Best-effort and
+ * warning-only: a layer that does not implement the hook, or that throws while
+ * cancelling, must not break the intent that triggered it.
+ *
+ * @param {{module?: {cancelPendingRestore?: Function, cancelPendingTrackingRestore?: Function}}} entry
+ *   Layer registry entry.
+ * @param {string} origin Provenance of the superseding intent.
+ * @param {string} reason Short machine-readable cause forwarded to the layer.
+ * @returns {void}
+ */
 function cancelPendingLayerRestore(entry, origin, reason) {
   if (!isExplicitLayerIntentOrigin(origin)) return;
   try {
@@ -55,6 +102,15 @@ function cancelPendingLayerRestore(entry, origin, reason) {
   }
 }
 
+/**
+ * Convert a layer's stats-reported fault into an Error, or null when the layer
+ * considers itself healthy. The manager surfaces the layer's own message rather
+ * than wrapping a generic one, so a chip reads the real cause.
+ *
+ * @param {object|null} stats Layer `getStats()` result.
+ * @param {string} label Human-readable layer name for synthesized messages.
+ * @returns {Error|null} Fault to surface, or null when there is nothing to report.
+ */
 function refreshFailureFromStats(stats, label) {
   const specific = stats?.error || stats?.lastError;
   if (specific) return specific instanceof Error ? specific : new Error(String(specific));
@@ -116,6 +172,15 @@ export function layerFeedState(stats = {}) {
  * for real-time data overlays on the CesiumJS globe.
  */
 export class DataLayerManager {
+  /**
+   * Create a manager bound to a viewer. Construction only allocates registries;
+   * registration stays open until `finalizeRegistrations()` seals the set.
+   *
+   * @param {import('cesium').Viewer} viewer Viewer the layers render into.
+   * @param {object} [options] Manager switches.
+   * @param {boolean} [options.allowQaRegistration=false] Authorize the dev-only
+   *   post-seal `registerForQa`/`unregisterForQa` seam.
+   */
   constructor(viewer, { allowQaRegistration = false } = {}) {
     this.viewer = viewer;
     this.layers = new Map(); // id → { module, enabled, initialized, intervalId, lifecycleState, lifecycleUncertain }
@@ -141,7 +206,13 @@ export class DataLayerManager {
     this._registerLayer(layerModule);
   }
 
-  /** Register a synthetic layer after sealing in an explicitly dev-enabled manager. */
+  /**
+   * Register a synthetic layer after sealing in an explicitly dev-enabled manager.
+   * Refuses unless the manager was constructed with `allowQaRegistration`.
+   *
+   * @param {object} layerModule Layer module conforming to the layer contract.
+   * @returns {string} The registered layer id.
+   */
   registerForQa(layerModule) {
     if (!this._allowQaRegistration || !this._registrationsFinalized) {
       throw new Error('QA layer registration is not authorized');
@@ -151,7 +222,13 @@ export class DataLayerManager {
     return layerModule.id;
   }
 
-  /** Destroy a layer previously registered through the dev QA seam. */
+  /**
+   * Destroy a layer previously registered through the dev QA seam. Refuses to
+   * touch production layers — only ids recorded by `registerForQa` qualify.
+   *
+   * @param {string} layerId QA layer id to destroy.
+   * @returns {Promise<boolean>} Whether the layer was found and destroyed.
+   */
   async unregisterForQa(layerId) {
     if (!this._allowQaRegistration || !this._qaLayerIds.has(layerId)) return false;
     const destroyed = await this.destroyLayer(layerId);
@@ -220,7 +297,16 @@ export class DataLayerManager {
     });
   }
 
-  /** Seal registration and prove each production layer has one share disposition. */
+  /**
+   * Seal registration and prove each production layer has one share disposition.
+   * The registry must cover exactly the registered ids — no layer may be
+   * shareable without a declared persistence contract, and no declared contract
+   * may reference a layer that does not exist.
+   *
+   * @param {Array<{id: string, disposition: string}>} serializationRegistry
+   *   Declared persistence dispositions, one per registered layer.
+   * @returns {boolean} True once the manager is sealed.
+   */
   finalizeRegistrations(serializationRegistry) {
     if (this._registrationsFinalized) throw new Error('Data-layer registrations are already finalized');
     if (!Array.isArray(serializationRegistry)) throw new Error('Layer serialization registry must be an array');
@@ -444,6 +530,18 @@ export class DataLayerManager {
    * Refresh one enabled tracked layer at the destination, then let that layer
    * decide whether the requested ID was present in an authoritative snapshot.
    * Lifecycle success alone is deliberately insufficient for this decision.
+   *
+   * @param {string} layerId Layer expected to hold the tracked contact.
+   * @param {string} targetId Contact id the share link is trying to restore.
+   * @param {object} [options] Resolution controls.
+   * @param {AbortSignal|null} [options.signal=null] Cancellation for the refresh and
+   *   the layer's own resolution work.
+   * @param {string} [options.origin='share-restore'] Provenance forwarded to the layer.
+   * @returns {Promise<{layerId: string, targetId: string, origin: string,
+   *   refreshSucceeded: boolean, status: string, reason?: string, errorClass?: string}>}
+   *   Resolution verdict; `status` is one of `found`, `missing`,
+   *   `source-unavailable`, `cancelled`, `superseded`, `destroyed`,
+   *   `unavailable`, or `unsupported`.
    */
   async resolveLayerTrackingTarget(layerId, targetId, {
     signal = null,
@@ -958,7 +1056,18 @@ export class DataLayerManager {
 
   /**
    * Ensure a layer is in the requested enabled/disabled state.
-   * Deterministic helper for scripted scene playback.
+   * Deterministic helper for scripted scene playback, and the public control
+   * contract for absolute visibility.
+   *
+   * @param {string} layerId Layer to drive.
+   * @param {boolean} shouldEnable Target visibility state.
+   * @param {object} [options] Request controls.
+   * @param {string} [options.origin='programmatic'] Provenance recorded on the intent
+   *   and surfaced to listeners.
+   * @param {AbortSignal|null} [options.signal=null] Cancels the queued lifecycle work.
+   * @param {string|null} [options.notificationToken=null] Correlates the resulting
+   *   visibility change with an in-flight UI announcement.
+   * @returns {Promise<boolean>} Resolves true when the layer is in the requested state.
    */
   setEnabled(layerId, shouldEnable, {
     origin = 'programmatic',
@@ -974,7 +1083,22 @@ export class DataLayerManager {
 
   /**
    * Internal absolute-visibility request with an exact intent handle.
-   * The ordinary setEnabled() promise remains the public control contract.
+   * The ordinary setEnabled() promise remains the public control contract;
+   * this variant additionally returns the intent epoch so a transaction can
+   * await its own specific completion rather than the latest one.
+   *
+   * @param {string} layerId Layer to drive.
+   * @param {boolean} shouldEnable Target visibility state.
+   * @param {object} [options] Request controls.
+   * @param {string} [options.origin='programmatic'] Provenance recorded on the intent.
+   * @param {AbortSignal|null} [options.signal=null] Cancels the queued lifecycle work.
+   * @param {string|null} [options.notificationToken=null] Announcement correlation token.
+   * @param {boolean} [options.notifyWillChangeBeforeEffective=false] Emit the will-change
+   *   edge before the effective state changes rather than after.
+   * @param {object|null} [options.beforeEnableParams=null] Parameters applied before
+   *   the enable transaction begins.
+   * @returns {{intentEpoch: number|null, promise: Promise<boolean>}} Intent handle plus
+   *   the completion promise; `intentEpoch` is null when the layer cannot be driven.
    */
   _setEnabledWithIntent(layerId, shouldEnable, {
     origin = 'programmatic',
@@ -1308,7 +1432,14 @@ export class DataLayerManager {
     return { intentEpoch, promise };
   }
 
-  /** Wait for one exact absolute visibility intent to complete. */
+  /**
+   * Wait for one exact absolute visibility intent to complete.
+   *
+   * @param {string} layerId Layer owning the intent record.
+   * @param {number} intentEpoch Epoch captured when the intent was queued.
+   * @returns {Promise<object|null>} Intent completion record, or null when the
+   *   epoch is unknown (layer destroyed or record evicted).
+   */
   async _waitForVisibilityIntent(layerId, intentEpoch) {
     const record = this.layers.get(layerId)?.visibilityIntentRecords?.get(intentEpoch);
     return record ? record.settled : null;
@@ -1318,6 +1449,11 @@ export class DataLayerManager {
    * Follow one restore request through any explicit superseding intent chain.
    * The newest named successor must reach a terminal state before restore can
    * judge the layer; an obsolete caller boolean is never sufficient.
+   *
+   * @param {string} layerId Layer whose intent chain is followed.
+   * @param {number} intentEpoch Epoch of the first intent in the chain.
+   * @returns {Promise<object|null>} Terminal intent record of the authoritative
+   *   successor, or null when the chain cannot be followed.
    */
   async _waitForAuthoritativeVisibilityIntent(layerId, intentEpoch) {
     const entry = this.layers.get(layerId);
@@ -1342,6 +1478,9 @@ export class DataLayerManager {
    * lifecycle work (or a superseded transaction awaiting adoption) is moving
    * it — an ENABLING layer is effectively ON and a DISABLING layer is
    * effectively OFF, regardless of which side has settled.
+   *
+   * @param {object} entry Layer registry entry.
+   * @returns {boolean} The layer's effective visibility target.
    */
   _effectiveEnabled(entry) {
     // Newest-intent-wins: an absolute request owns effective visibility from
@@ -1364,7 +1503,8 @@ export class DataLayerManager {
    * snapshotted as ON, and a layer honoring a user's in-flight OFF is not
    * snapshotted (and later restored) as ON.
    * @param {string} layerId Registered layer identifier.
-   * @returns {boolean}
+   * @returns {boolean} Effective visibility, counting in-flight transitions as
+   *   their target state; false for an unregistered layer.
    */
   isEffectivelyEnabled(layerId) {
     const entry = this.layers.get(layerId);
@@ -1374,7 +1514,7 @@ export class DataLayerManager {
   /**
    * Snapshot the exact set of registered layers the user currently intends
    * enabled, counting in-flight transitions as their target state.
-   * @returns {Set<string>} A detached set safe for later restoration.
+   * @returns {Set<string>} A detached set of layer ids safe for later restoration.
    */
   getEnabledLayerIds() {
     return new Set(
@@ -1395,6 +1535,9 @@ export class DataLayerManager {
    * @param {string} [options.origin='user'] Visibility-event origin.
    * @param {symbol|null} [options.notificationToken] Shared notification owner.
    * @returns {Promise<{targetIds:string[],items:object[],clearedIds:string[],notClearedIds:string[]}>}
+   *   Batch report: every targeted id, its per-layer `items` entry (cleared
+   *   flag, lifecycle snapshot, superseded/error detail), and the split id
+   *   lists. `cleared` is only true for a settled, certain disabled state.
    */
   async clearSelectedLayers({ origin = 'user', notificationToken = null } = {}) {
     const clearBatchId = Symbol('clear-selected-layers');
@@ -1637,14 +1780,33 @@ export class DataLayerManager {
     }
   }
 
-  /** Apply runtime parameters through an origin-bearing intent lane. */
+  /**
+   * Apply runtime parameters through an origin-bearing intent lane. The lane
+   * keeps a late-arriving programmatic update from overwriting a newer explicit
+   * user/voice decision.
+   *
+   * @param {string} layerId Layer to update.
+   * @param {object} params Parameter object handed to the layer's `setParams`.
+   * @param {object} [options] Update controls.
+   * @param {string} [options.origin='programmatic'] Provenance recorded on the intent.
+   * @returns {boolean} Whether the parameters were accepted and applied.
+   */
   setLayerParams(layerId, params, { origin = 'programmatic' } = {}) {
     const paramsIntentEpoch = this._reserveLayerParamsIntent(layerId, params, origin);
     if (!Number.isInteger(paramsIntentEpoch)) return false;
     return this._applyLayerParamsIntent(layerId, params, { origin, paramsIntentEpoch }).succeeded;
   }
 
-  /** Cancel a module-owned pending restore without creating a parameter intent. */
+  /**
+   * Cancel a module-owned pending restore without creating a parameter intent.
+   *
+   * @param {string} layerId Layer holding the pending restore.
+   * @param {object} [options] Cancellation detail.
+   * @param {string} [options.origin='programmatic'] Provenance of the cancellation.
+   * @param {string} [options.reason='cancelled'] Machine-readable cause forwarded
+   *   to the module.
+   * @returns {boolean} Whether a module hook existed and ran without throwing.
+   */
   cancelPendingLayerRestore(layerId, {
     origin = 'programmatic',
     reason = 'cancelled',
@@ -1662,7 +1824,17 @@ export class DataLayerManager {
     }
   }
 
-  /** Publish parameters already applied by a layer's direct interaction. */
+  /**
+   * Publish parameters already applied by a layer's direct interaction. Verifies
+   * the live parameters actually match the request before announcing, so an
+   * adoption can never fabricate state the layer does not hold.
+   *
+   * @param {string} layerId Layer whose parameters were applied directly.
+   * @param {object} params Parameters believed to be in effect.
+   * @param {object} [options] Announcement controls.
+   * @param {string} [options.origin='programmatic'] Provenance of the adoption.
+   * @returns {boolean} Whether the adoption matched and was published.
+   */
   adoptLayerParams(layerId, params, { origin = 'programmatic' } = {}) {
     const requestedParams = cloneLayerParams(params || {});
     const paramsIntentEpoch = this._reserveLayerParamsIntent(layerId, requestedParams, origin);
@@ -1689,6 +1861,15 @@ export class DataLayerManager {
    * Publish an explicit owner adoption of an already-settled layer visibility.
    * This is used when a direct selection promotes a Context-owned dependency
    * into durable user state without redundantly re-running its lifecycle.
+   *
+   * @param {string} layerId Layer being adopted.
+   * @param {boolean} enabled Settled visibility the caller asserts as user-owned.
+   * @param {object} [options] Adoption controls.
+   * @param {string} [options.origin='programmatic'] Provenance of the adoption.
+   * @param {boolean} [options.adoptedFromSelection=false] Whether a direct contact
+   *   selection triggered the promotion.
+   * @returns {boolean} Whether the adoption was published (false when the layer is
+   *   missing, unsettled, or already in a different state).
    */
   adoptLayerVisibility(
     layerId,
@@ -1716,6 +1897,16 @@ export class DataLayerManager {
    * Restore one finalized-registry layer independently. Parameters apply after
    * init and before enable, with a terminal envelope that never writes local
    * persistence.
+   *
+   * @param {string} layerId Layer to restore.
+   * @param {object} [desired] Restored state.
+   * @param {boolean} [desired.enabled=false] Visibility to settle the layer into.
+   * @param {object|null} [desired.params=null] Parameters applied before enabling.
+   * @param {object} [options] Restore controls.
+   * @param {string} [options.origin='programmatic'] Provenance recorded on intents.
+   * @param {AbortSignal|null} [options.signal=null] Cancels the restore transaction.
+   * @returns {Promise<object>} Terminal envelope with phase, settled visibility, and
+   *   lifecycle certainty; the shape never throws for an absent layer.
    */
   async restoreLayerState(layerId, { enabled = false, params = null } = {}, {
     origin = 'programmatic',
@@ -1807,6 +1998,10 @@ export class DataLayerManager {
 
   /**
    * Read runtime parameters from a layer if it exposes `getParams()`.
+   *
+   * @param {string} layerId Layer to read.
+   * @returns {object|null} Cloned parameter object, or null when the layer is
+   *   missing, has no `getParams`, or throws.
    */
   getLayerParams(layerId) {
     const entry = this.layers.get(layerId);
@@ -1823,8 +2018,12 @@ export class DataLayerManager {
 
   /**
    * Destroy a single layer — calls its destroy() method if it has one,
-   * then removes it from the manager. This is the proper cleanup path
-   * that was previously missing.
+   * then removes it from the manager. Teardown owns the entry from its
+   * synchronous boundary: intents are revoked, queued work drains, and
+   * before-destroy listeners run before the layer is disabled and dropped.
+   *
+   * @param {string} layerId Layer to destroy.
+   * @returns {Promise<boolean>} Whether the layer was found and destroyed.
    */
   async destroyLayer(layerId) {
     const entry = this.layers.get(layerId);
@@ -1908,7 +2107,13 @@ export class DataLayerManager {
     return entry ? entry.enabled : false;
   }
 
-  /** Return authoritative settled visibility and the current lifecycle phase. */
+  /**
+   * Return authoritative settled visibility and the current lifecycle phase.
+   *
+   * @param {string} layerId Layer to inspect.
+   * @returns {{enabled: boolean, lifecycleState: string, uncertain: boolean}|null}
+   *   Frozen lifecycle view, or null when the layer is not registered.
+   */
   getLayerLifecycleState(layerId) {
     const entry = this.layers.get(layerId);
     if (!entry) return null;
@@ -1948,6 +2153,7 @@ export class DataLayerManager {
    * This lets a newer direct-user OFF request cancel older work before that work
    * can publish an intermediate settled visibility state.
    * @param {(change:{type:string,layerId:string,enabled:boolean,origin:string}) => void} callback
+   *   Invoked synchronously for each explicit visibility request.
    * @returns {() => void} Unsubscribe function.
    */
   subscribeVisibilityRequests(callback) {
@@ -1961,6 +2167,8 @@ export class DataLayerManager {
    * may await bounded mode preparation and return a string or `{reason}` to
    * refuse a transition.
    * @param {(change:{type:string,layerId:string,enabled:boolean,origin:string}) => (string|object|null|void)} callback Guard.
+   *   Returns a refusal reason string/object to block the transition, or
+   *   nothing to allow it.
    * @returns {() => void} Unsubscribe function.
    */
   addVisibilityGuard(callback) {
@@ -1972,6 +2180,7 @@ export class DataLayerManager {
   /**
    * Subscribe to the awaited pre-destroy lifecycle boundary.
    * @param {(change:{type:string,layerId:string}) => (void|Promise<void>)} callback
+   *   Awaited before each layer is irreversibly removed.
    * @returns {() => void} Unsubscribe function.
    */
   subscribeBeforeDestroy(callback) {
@@ -2016,7 +2225,12 @@ export class DataLayerManager {
   }
 
   /**
-   * Build the toggle panel UI inside the given container element.
+   * Build the toggle panel UI inside the given container element. Repeated calls
+   * re-render in place; the container is remembered so `_refreshTogglePanel` can
+   * update rows without a rebuild.
+   *
+   * @param {HTMLElement} container Element the panel markup is appended to.
+   * @returns {void}
    */
   buildTogglePanel(container) {
     this._toggleContainer = container;

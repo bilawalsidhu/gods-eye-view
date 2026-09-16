@@ -32,6 +32,15 @@
 
 export const DEFAULT_MSAA_SAMPLES = 2;
 
+/**
+ * Resolve the WebGL context attributes for the viewer, honoring the
+ * `?msaa=` / `?preserveBuffer=` escape hatches described above.
+ * @param {object} [options] - Injection seam; defaults read the live URL.
+ * @param {string} [options.search] Query string to read overrides from
+ *   (defaults to the live location, injectable for tests).
+ * @returns {{msaaSamples: number, contextOptions: {webgl: {preserveDrawingBuffer: boolean}}}}
+ *   Spread directly into the Cesium Viewer constructor options.
+ */
 export function resolveRenderContextOptions({ search = globalThis.location?.search ?? '' } = {}) {
   const params = new URLSearchParams(search);
 

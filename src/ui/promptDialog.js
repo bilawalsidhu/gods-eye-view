@@ -14,7 +14,13 @@
 
 const CONFIRM_SENTINEL = '__gev_confirm__';
 
-/** Shared chrome: modal dialog with a labelled heading and a dialog-method form. */
+/**
+ * Shared chrome: modal dialog with a labelled heading and a dialog-method form.
+ * @param {object} root0 - Chrome options shared by both dialog flavors.
+ * @param {string} root0.title - Heading text, wired as the dialog's accessible name via aria-labelledby.
+ * @param {string} root0.className - Class applied to the <dialog>; also the prefix of the generated heading id.
+ * @returns {{dialog: HTMLDialogElement, form: HTMLFormElement}} Detached dialog element plus the dialog-method form the actions row appends into.
+ */
 function _buildDialog({ title, className }) {
   const dialog = document.createElement('dialog');
   dialog.className = className;
@@ -35,7 +41,13 @@ function _buildDialog({ title, className }) {
 
 /** Cancel + confirm submit buttons. A dialog-method submit closes the
  *  <dialog> and sets returnValue from the submitter's value before the
- *  close event fires, so the close handler can tell the paths apart. */
+ *  close event fires, so the close handler can tell the paths apart.
+ * @param {HTMLFormElement} form - Dialog-method form the actions row is appended to.
+ * @param {object} root0 - Button label overrides.
+ * @param {string} root0.cancelText - Cancel button label; submits with an empty value.
+ * @param {string} root0.confirmText - Confirm button label; its submit value is the sentinel the close handler matches.
+ * @returns {{cancel: HTMLButtonElement, confirm: HTMLButtonElement}} The two submit buttons, so promptDialog can route Enter in the input to confirm.
+ */
 function _buildActions(form, { cancelText, confirmText }) {
   const actions = document.createElement('div');
   actions.className = 'gev-dialog-actions';
@@ -61,13 +73,13 @@ function _buildActions(form, { cancelText, confirmText }) {
  * Modal text prompt. Resolves the entered string on confirm, or null on
  * cancel/Esc. The initial value is preselected, like window.prompt.
  *
- * @param {object} options
+ * @param {object} options - Prompt configuration.
  * @param {string} options.title Heading text (also the dialog's accessible name).
  * @param {string} options.label Visible field label.
  * @param {string} [options.value] Initial input value.
- * @param {string} [options.confirmText]
- * @param {string} [options.cancelText]
- * @returns {Promise<string|null>}
+ * @param {string} [options.confirmText] Confirm button label (default 'OK').
+ * @param {string} [options.cancelText] Cancel button label (default 'Cancel').
+ * @returns {Promise<string|null>} Resolves the untrimmed input on confirm, or null on cancel/Esc.
  */
 export function promptDialog({
   title,
@@ -122,12 +134,12 @@ export function promptDialog({
  * Modal confirmation. Resolves true only when the confirm button is
  * activated; Esc and the cancel button resolve false (window.confirm parity).
  *
- * @param {object} options
+ * @param {object} options - Confirmation configuration.
  * @param {string} options.title Heading text (also the dialog's accessible name).
  * @param {string} options.message Body text.
- * @param {string} [options.confirmText]
- * @param {string} [options.cancelText]
- * @returns {Promise<boolean>}
+ * @param {string} [options.confirmText] Confirm button label (default 'Delete').
+ * @param {string} [options.cancelText] Cancel button label (default 'Cancel').
+ * @returns {Promise<boolean>} True only when the confirm button was activated.
  */
 export function confirmDialog({
   title,

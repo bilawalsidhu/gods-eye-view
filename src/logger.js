@@ -32,7 +32,8 @@ export const LOG_RING_CAPACITY = 500;
 /**
  * Parse a level name; case-insensitive, unknown names are rejected so a typo
  * can never silently silence the console.
- * @param {string} raw
+ * @param {string} raw - Untrusted level name, e.g. `?log=warn` value or a
+ *   persisted preference.
  * @returns {string|null} One of the LOG_LEVELS keys, or null.
  */
 export function parseLogLevelName(raw) {
@@ -43,7 +44,7 @@ export function parseLogLevelName(raw) {
 /**
  * Resolve the startup level: `?log=<level>` wins, else log everything.
  * @param {string} [search] A `location.search`-shaped query string.
- * @returns {string}
+ * @returns {string} Requested level, else `'debug'`.
  */
 export function initialLogLevel(search = typeof location !== 'undefined' ? location.search : '') {
   try {
@@ -72,12 +73,20 @@ export function setLogLevel(level) {
   _level = name;
 }
 
-/** Newest-last snapshot of the retained history. */
+/**
+ * Newest-last snapshot of the retained history.
+ * @returns {object[]} Copy of the ring buffer entries; callers may mutate it
+ *   without corrupting the live buffer.
+ */
 export function peekLogBuffer() {
   return _ring.slice();
 }
 
-/** Hand the history to a diagnostic sink and start a fresh buffer. */
+/**
+ * Hand the history to a diagnostic sink and start a fresh buffer.
+ * @returns {object[]} All retained entries in insertion order; the buffer is
+ *   emptied as a side effect.
+ */
 export function drainLogBuffer() {
   const drained = _ring;
   _ring = [];
@@ -105,6 +114,9 @@ export function recordDebugEvent(event, record) {
 /**
  * Render a non-string detail compactly; a broken render must never break the
  * caller (logging is a diagnostics path, not an application path).
+ * @param {*} part - Any value from a log call's variadic tail.
+ * @returns {string} JSON for plain objects, the stack for `Error`s, and
+ *   `String(part)` when JSON serialization throws (circular structures).
  */
 function renderDetail(part) {
   if (part instanceof Error) return part.stack || `${part.name}: ${part.message}`;
@@ -115,6 +127,14 @@ function renderDetail(part) {
   }
 }
 
+/**
+ * Single funnel for the `log*` wrappers: gate the console write, then append
+ * the flattened line to the ring buffer regardless of the gate.
+ * @param {string} level - One of the LOG_LEVELS keys below `silent`.
+ * @param {string} namespace - Module-owned prefix rendered as `[namespace]`.
+ * @param {Array<*>} parts - Variadic tail; non-strings pass through
+ *   {@link renderDetail}.
+ */
 function emit(level, namespace, parts) {
   const prefix = `[${namespace}]`;
   const [first, ...rest] = parts;
@@ -136,22 +156,38 @@ function emit(level, namespace, parts) {
   if (_ring.length > LOG_RING_CAPACITY) _ring.splice(0, _ring.length - LOG_RING_CAPACITY);
 }
 
-/** @param {string} namespace Module-owned prefix, e.g. 'Data:Flights'. */
+/**
+ * Debug-level write — the default gate, so it reaches the console today.
+ * @param {string} namespace - Module-owned prefix, e.g. 'Data:Flights'.
+ * @param {...*} parts - Message fragments joined with spaces in the ring entry.
+ */
 export function logDebug(namespace, ...parts) {
   emit('debug', namespace, parts);
 }
 
-/** @param {string} namespace Module-owned prefix, e.g. 'Data:Flights'. */
+/**
+ * Informational write for lifecycle and progress events.
+ * @param {string} namespace - Module-owned prefix, e.g. 'Data:Flights'.
+ * @param {...*} parts - Message fragments joined with spaces in the ring entry.
+ */
 export function logInfo(namespace, ...parts) {
   emit('info', namespace, parts);
 }
 
-/** @param {string} namespace Module-owned prefix, e.g. 'Data:Flights'. */
+/**
+ * Warning write; survives a `?log=warn` quieting.
+ * @param {string} namespace - Module-owned prefix, e.g. 'Data:Flights'.
+ * @param {...*} parts - Message fragments joined with spaces in the ring entry.
+ */
 export function logWarn(namespace, ...parts) {
   emit('warn', namespace, parts);
 }
 
-/** @param {string} namespace Module-owned prefix, e.g. 'Data:Flights'. */
+/**
+ * Error write; the highest non-silent gate, always visible unless silenced.
+ * @param {string} namespace - Module-owned prefix, e.g. 'Data:Flights'.
+ * @param {...*} parts - Message fragments joined with spaces in the ring entry.
+ */
 export function logError(namespace, ...parts) {
   emit('error', namespace, parts);
 }

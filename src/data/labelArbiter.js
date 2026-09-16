@@ -11,10 +11,24 @@ const FADE_OUT_MS = 300;
 const MIN_LIFETIME_MS = 2500;
 const COOLDOWN_MS = 1200;
 
+/**
+ * Floor and clamp a possibly-garbage number into a bounded integer.
+ * @param {*} value Raw value; non-numeric input reads as 0.
+ * @param {number} min Inclusive lower bound.
+ * @param {number} max Inclusive upper bound.
+ * @returns {number} Truncated integer within [min, max].
+ */
 function clampInt(value, min, max) {
   return Math.max(min, Math.min(max, Math.floor(Number(value) || 0)));
 }
 
+/**
+ * Normalize a layer demand map into sorted, positive [layerId, count] pairs.
+ * @param {Map<string, number>|{[key: string]: number}|null} demandByLayer Raw
+ *   demand in either collection form; null reads as empty.
+ * @returns {Array<[string, number]>} Pairs sorted by layer id, zero/negative
+ *   and non-numeric counts dropped, so iteration order is stable.
+ */
 function demandEntries(demandByLayer) {
   const entries = demandByLayer instanceof Map
     ? Array.from(demandByLayer.entries())
@@ -25,6 +39,15 @@ function demandEntries(demandByLayer) {
     .sort(([a], [b]) => a.localeCompare(b));
 }
 
+/**
+ * Hand out entitlement a layer could not use to layers that still want it.
+ * @param {Map<string,number>} quotas Quota per layer, mutated in place.
+ * @param {Map<string,number>} demand Per-layer demand ceiling.
+ * @param {number} capacity Total label budget to reach.
+ * @param {Array<string>} order Layer ids to sweep in — deterministic fill
+ *   order, which is what makes the whole allocation reproducible.
+ * @returns {Map<string,number>} The same `quotas` map.
+ */
 function redistributeUnused(quotas, demand, capacity, order) {
   let used = Array.from(quotas.values()).reduce((sum, value) => sum + value, 0);
   while (used < capacity) {
@@ -42,6 +65,22 @@ function redistributeUnused(quotas, demand, capacity, order) {
   return quotas;
 }
 
+/**
+ * Pooled twin of allocateLayerQuotas: same arithmetic, no allocation. Every
+ * array is a module-instance scratch buffer reused across solves.
+ * @param {Map<string,number>} demand Per-layer demand, already normalized.
+ * @param {number} capacity Total label budget.
+ * @param {string} strategy 'ELASTIC' or 'WEIGHTED'.
+ * @param {[key: string]: number} layerWeights Per-layer semantic weights used
+ *   by the weighted strategy; null/omitted weights default to 1.
+ * @param {Array<string>} ids Active layer ids, sorted.
+ * @param {number} idCount How many of `ids` are live.
+ * @param {Map<string,number>} quotas Output map, cleared and refilled.
+ * @param {Array<object>} weighted Scratch for weighted entries.
+ * @param {Array<object>} priorityOrder Scratch for weight-sorted entries.
+ * @param {Array<object>} remainders Scratch for largest-remainder entries.
+ * @returns {Map<string,number>} The same `quotas` map, layer→quota.
+ */
 function allocateLayerQuotasInto(
   demand,
   capacity,
@@ -155,6 +194,16 @@ function allocateLayerQuotasInto(
 /**
  * Allocate a collective capacity across non-empty layers. Both strategies are
  * work-conserving and deterministic; unused entitlement is always borrowed.
+ *
+ * @param {Map<string, number>|{[key: string]: number}} demandByLayer How many
+ *   labels each layer wants; any layer absent or zero receives nothing.
+ * @param {number} capacity Total label budget shared across layers.
+ * @param {string} [strategy] 'ELASTIC' splits evenly then borrows; 'WEIGHTED'
+ *   seeds one label per layer and apportions the rest by sqrt(count) × weight.
+ * @param {[key: string]: number} [layerWeights] Semantic per-layer weights for
+ *   the weighted strategy; unknown layers default to 1.
+ * @returns {Map<string, number>} layerId→quota, summing to at most `capacity`
+ *   and never exceeding per-layer demand.
  */
 export function allocateLayerQuotas(demandByLayer, capacity, strategy = ALLOCATION_ELASTIC, layerWeights = {}) {
   const entries = demandEntries(demandByLayer);
@@ -219,6 +268,12 @@ export function allocateLayerQuotas(demandByLayer, capacity, strategy = ALLOCATI
   return redistributeUnused(quotas, demand, cap, priorityOrder);
 }
 
+/**
+ * Whether a rectangle is usable for placement math.
+ * @param {?{x:number,y:number,w:number,h:number}} rect Candidate rectangle.
+ * @returns {boolean} True only when all four fields are finite and both extents
+ *   are strictly positive — a zero-area rect would collide with everything.
+ */
 function rectIsFinite(rect) {
   return rect
     && Number.isFinite(rect.x)
@@ -229,6 +284,13 @@ function rectIsFinite(rect) {
     && rect.h > 0;
 }
 
+/**
+ * Axis-aligned overlap test with an outward padding margin.
+ * @param {{x:number,y:number,w:number,h:number}} a First rectangle.
+ * @param {{x:number,y:number,w:number,h:number}} b Second rectangle.
+ * @param {number} [padding] Extra gap in px required between rectangles.
+ * @returns {boolean} True when the inflated rectangles intersect.
+ */
 function overlaps(a, b, padding = 4) {
   return a.x < b.x + b.w + padding
     && a.x + a.w + padding > b.x
@@ -269,6 +331,10 @@ class SpatialHash {
    * least one unclamped cell, which maps to the same clamped key, so folding
    * can only add candidate comparisons — `overlaps` still decides — and can
    * never hide a real collision.
+   *
+   * @param {number} x Cell x index, may be negative.
+   * @param {number} y Cell y index, may be negative.
+   * @returns {number} Packed 28-bit integer key for the cells Map.
    */
   _cellKey(x, y) {
     const cx = Math.max(-CELL_ORIGIN, Math.min(CELL_ORIGIN - 1, x)) + CELL_ORIGIN;
@@ -319,6 +385,18 @@ class SpatialHash {
 // Only the sign of a sort comparator is observed, so every branch returns a
 // small integer. A fractional (double) result would be boxed on the way out of
 // the comparator on every comparison of every solve.
+/**
+ * Total order over candidates: lifetime-pinned incumbents first, then plain
+ * incumbents, then priority, keyhole visibility, and center proximity, with the
+ * key as the final deterministic tiebreak.
+ * @param {object} a First candidate.
+ * @param {object} b Second candidate.
+ * @param {Map<string,object>} states Per-key label state used for incumbency
+ *   and pinning.
+ * @param {number} now Frame timestamp the lifetime window is measured from.
+ * @returns {number} Negative when `a` sorts before `b`, positive after, 0 never
+ *   reaching for distinct keys because the key compare is last.
+ */
 function candidateCompare(a, b, states, now) {
   const aState = states.get(a.key);
   const bState = states.get(b.key);
@@ -343,6 +421,13 @@ function candidateCompare(a, b, states, now) {
   return String(a.key).localeCompare(String(b.key));
 }
 
+/**
+ * Cache a candidate's spread anchor in its own object so the queue reads plain
+ * doubles instead of re-deriving geometry on every comparison.
+ * @param {object} candidate Candidate to annotate with `_anchorX`/`_anchorY`;
+ *   prefers the projected point, then a lead line origin, then a rect center.
+ * @returns {void}
+ */
 function cacheCandidateAnchorScalars(candidate) {
   let anchorX = Number.NaN;
   let anchorY = Number.NaN;
@@ -363,6 +448,12 @@ function cacheCandidateAnchorScalars(candidate) {
   candidate._anchorY = anchorY;
 }
 
+/**
+ * Coarse visibility rank used as the queue's second sort key.
+ * @param {object} candidate Candidate carrying `keyholeAlpha`.
+ * @returns {number} 0-8 band; full visibility saturates at 8 so everything at
+ *   alpha >= 0.999 ties instead of splitting hairs.
+ */
 function visibilityBand(candidate) {
   const alpha = Math.max(0, Math.min(1, Number(candidate?.keyholeAlpha) || 0));
   return alpha >= 0.999 ? 8 : Math.floor(alpha * 8);
@@ -400,6 +491,19 @@ class SpatialCandidateQueue {
    * spread state lives in a pooled numeric buffer, so computed squared doubles
    * stay unboxed. Few-placement candidates already blocked by the
    * monotonically growing collision field are dismissed before anchor scans.
+   *
+   * @param {Array<object>} candidates Caller-owned slice for this layer.
+   * @param {number} count How many of `candidates` are live.
+   * @param {Array<object>} anchors Already-selected candidates seeding the
+   *   farthest-point metric; each carries cached `_anchorX`/`_anchorY`.
+   * @param {number} anchorCount How many of `anchors` are live.
+   * @param {Map<string,number>} attemptStamps Key→stamp map marking keys
+   *   already tried this solve.
+   * @param {number} stamp Current solve's stamp.
+   * @param {SpatialHash} spatial Shared occupancy grid.
+   * @param {Map<string,object>} states Per-key arbiter state, used to seed
+   *   spread distances and to resolve sticky corners in dismissal.
+   * @returns {void}
    */
   reset(candidates, count, anchors, anchorCount, attemptStamps, stamp, spatial, states) {
     this.candidates = candidates;
@@ -476,6 +580,9 @@ class SpatialCandidateQueue {
    * grows during a solve, so it can never become placeable later. Duplicate
    * keys retain their historical single-attempt semantics: a free duplicate
    * prevents the shared key from being dismissed.
+   *
+   * @param {number} index Index into the queue's candidate slice.
+   * @returns {boolean} True when the key was dismissed for this solve.
    */
   _dismissBlockedKey(index) {
     const candidate = this.candidates[index];
@@ -597,6 +704,10 @@ class SpatialCandidateQueue {
  * First placement in the canonical attempt order — finite rectangles only,
  * sticky corner first. Equivalent to the head of the filtered/stable-sorted
  * list the original built, without materializing it.
+ *
+ * @param {object} candidate Candidate carrying a `placements` array.
+ * @param {?string} stickyCorner Corner name to prefer, or null when unset.
+ * @returns {?object} First finite placement, or null when none is finite.
  */
 function firstOrderedPlacement(candidate, stickyCorner) {
   const placements = candidate?.placements;
@@ -614,6 +725,12 @@ function firstOrderedPlacement(candidate, stickyCorner) {
 /**
  * Walk the canonical attempt order and return the first placement the spatial
  * hash accepts. The collision probes happen in exactly the original order.
+ *
+ * @param {object} candidate Candidate carrying a `placements` array.
+ * @param {?string} stickyCorner Corner name tried first, before the canonical order.
+ * @param {SpatialHash} spatial Occupancy grid to probe against.
+ * @returns {?object} The first unoccupied placement, or null when every
+ *   candidate position collides.
  */
 function firstFreePlacement(candidate, stickyCorner, spatial) {
   const placements = candidate?.placements;
@@ -640,11 +757,22 @@ function firstFreePlacement(candidate, stickyCorner, spatial) {
  */
 let _globalSolveStamp = 0;
 
-/** Drop a stamp index once it holds far more keys than the live cohort. */
+/**
+ * Drop a stamp index once it holds far more keys than the live cohort.
+ * @param {Map<string,number>} map Stamp map to shrink; cleared wholesale, which
+ *   is safe because a missing entry and a stale entry behave identically.
+ * @param {number} liveCount Candidates in the current solve.
+ * @returns {void}
+ */
 function pruneStampMap(map, liveCount) {
   if (map.size > liveCount * 4 + 64) map.clear();
 }
 
+/**
+ * Empty a pooled layer bucket in place, keeping its candidate array allocated.
+ * @param {{list: Array<object>, count: number}} bucket Bucket to reset.
+ * @returns {void}
+ */
 function resetLayerBucket(bucket) {
   bucket.count = 0;
 }
@@ -671,6 +799,13 @@ const mergeScratch = [];
  * solve (measured: ~63% of solve CPU at 3300 candidates). Merge order takes
  * the left run on ties, which reproduces the insertion sort's stable
  * ordering bit-for-bit.
+ *
+ * @param {Array<object>} items Pooled array whose prefix [0, count) is sorted
+ *   in place; entries past `count` are ignored.
+ * @param {number} count Number of live entries at the head of `items`.
+ * @param {Map<string,object>} states Per-key arbiter state handed to the comparator.
+ * @param {number} now Frame timestamp handed to the comparator.
+ * @returns {void}
  */
 function sortCandidateRange(items, count, states, now) {
   const width = INSERTION_SORT_MAX;
@@ -718,6 +853,13 @@ function sortCandidateRange(items, count, states, now) {
  * Resolve the current render placement without materializing or sorting an
  * intermediate list. This is equivalent to `orderedPlacements(...).find(...)`
  * for every finite-placement/sticky-corner combination used by renderEntries.
+ *
+ * @param {object} candidate Candidate carrying a `placements` array.
+ * @param {?string} stickyCorner Corner pinned by the label's state, if any.
+ * @param {?object} fallback Placement to return when no finite placement exists
+ *   — normally the one recorded at selection time, so a label keeps its last
+ *   position while its geometry is momentarily unavailable.
+ * @returns {?object} Placement to paint this frame.
  */
 function renderPlacement(candidate, stickyCorner, fallback) {
   const placements = candidate?.placements;
@@ -780,7 +922,11 @@ export class LabelArbiter {
     this._spatial.clear();
   }
 
-  /** Refresh the pooled state list when solve membership has moved on. */
+  /**
+   * Refresh the pooled state list when solve membership has moved on.
+   * @returns {Array<object>} The pooled backing array — internal only, never
+   *   handed to callers.
+   */
   _refreshStateList() {
     if (!this._stateListDirty) return this._stateList;
     const list = this._stateList;
@@ -796,7 +942,7 @@ export class LabelArbiter {
    * receive the pooled backing array — a caller that mutated it would desync
    * the arbiter permanently — and must not iterate `states` directly either,
    * because a Map iterator allocates a result object per step.
-   * @returns {number}
+   * @returns {number} Count of states currently held, selected and fading both.
    */
   activeStateCount() {
     return this._refreshStateList().length;
@@ -804,8 +950,9 @@ export class LabelArbiter {
 
   /**
    * Live state at `index`, valid for the current solve generation.
-   * @param {number} index
-   * @returns {object|undefined}
+   * @param {number} index Position in [0, activeStateCount); out-of-range reads
+   *   undefined rather than throwing.
+   * @returns {object|undefined} Label state record, or undefined past the end.
    */
   activeStateAt(index) {
     return this._refreshStateList()[index];
@@ -823,6 +970,26 @@ export class LabelArbiter {
    * pooled storage, so duplicates keep independent spatial state — harmless,
    * because only the one that wins the key is ever selected, but callers
    * should keep keys unique per solve.
+   *
+   * @param {Array<object>} candidates Cohort for this solve; entries lacking a
+   *   key, layerId, or positive keyholeAlpha are skipped. Non-arrays are treated
+   *   as empty.
+   * @param {object} [options] Per-solve knobs; all optional.
+   * @param {number} [options.capacity] Total label budget; defaults to 0, which
+   *   selects nothing.
+   * @param {string} [options.strategy] 'ELASTIC' or 'WEIGHTED' quota split.
+   * @param {Map<string, number>|{[key: string]: number}} [options.demandByLayer]
+   *   Full lightweight-field demand; layers with candidates but no entry here
+   *   fall back to their candidate count.
+   * @param {[key: string]: number} [options.layerWeights] Semantic weights for
+   *   the weighted strategy.
+   * @param {boolean} [options.preserveIncumbents=true] Try sitting winners first
+   *   — disabled automatically when the active layer set changed.
+   * @param {number} [options.now] Frame timestamp driving fades and cooldowns.
+   * @param {boolean} [options.collectDiagnostics=true] Build `lastDiagnostics`;
+   *   skipping it saves the per-solve object churn in hot paths.
+   * @returns {?object} The diagnostics object when collected, otherwise null —
+   *   always a fresh copy-free singleton owned by the arbiter.
    */
   solve(candidates, options = {}) {
     const now = Number.isFinite(options.now) ? options.now : Date.now();
@@ -1117,6 +1284,16 @@ export class LabelArbiter {
   /**
    * Reproject accepted/fading identities from the current frame candidate map.
    * A caller-owned output array enables allocation-free per-frame rendering.
+   *
+   * @param {Map<string,object>|Array<object>} currentCandidates This frame's
+   *   candidates keyed by label key; an array is keyed up on entry. Entries
+   *   absent here fall back to the state's last seen candidate.
+   * @param {number} [now] Frame timestamp driving enter/exit fade progress.
+   * @param {Array<object>} [out] Caller-owned output array, reused and
+   *   truncated to the returned length.
+   * @returns {Array<object>} The same `out`, up to one entry per live state
+   *   with non-zero alpha, each carrying `candidate`, `placement`,
+   *   `temporalAlpha` and `selected`.
    */
   renderEntries(currentCandidates, now = Date.now(), out = []) {
     const current = currentCandidates instanceof Map
@@ -1156,6 +1333,14 @@ export class LabelArbiter {
    * Return the bounded identities that still need per-frame placement data.
    * The grouped layer/source representation lets the render lane test live
    * membership without allocating composite keys for every losing source.
+   *
+   * @param {object} [root0] Selection knobs.
+   * @param {boolean} [root0.includeFading=true] Also return identities on their
+   *   way out, whose labels are still painted this frame.
+   * @param {number} [root0.now] Frame timestamp the fade-out window is measured
+   *   against.
+   * @returns {Map<string, Set<*>>} layerId→set of sourceIds still needing
+   *   placement data.
    */
   liveIdentities({ includeFading = true, now = Date.now() } = {}) {
     const grouped = new Map();

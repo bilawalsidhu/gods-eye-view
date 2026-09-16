@@ -42,9 +42,9 @@ const scratchW = new Cesium.Cartesian3();
  *   t = (e − b·d) / (1 − b²)   with b = rayDir·axisDir, w = rayOrigin − axisOrigin,
  *                                    d = rayDir·w,      e = axisDir·w.
  *
- * @param {Cesium.Cartesian3} rayOrigin
+ * @param {Cesium.Cartesian3} rayOrigin - Mouse-ray origin (ECEF).
  * @param {Cesium.Cartesian3} rayDir - Unit.
- * @param {Cesium.Cartesian3} axisOrigin
+ * @param {Cesium.Cartesian3} axisOrigin - Axis line origin (ECEF).
  * @param {Cesium.Cartesian3} axisDir - Unit.
  * @returns {number|null} Axis parameter in metres, or null when near-parallel.
  */
@@ -61,9 +61,9 @@ export function closestParamOnAxis(rayOrigin, rayDir, axisOrigin, axisDir) {
 /**
  * Intersects a mouse ray with a plane, refusing grazing configurations
  * (|rayDir·normal| < 0.08) and hits behind the ray origin.
- * @param {Cesium.Cartesian3} rayOrigin
+ * @param {Cesium.Cartesian3} rayOrigin - Mouse-ray origin (ECEF).
  * @param {Cesium.Cartesian3} rayDir - Unit.
- * @param {Cesium.Cartesian3} planeOrigin
+ * @param {Cesium.Cartesian3} planeOrigin - A point on the plane.
  * @param {Cesium.Cartesian3} planeNormal - Unit.
  * @returns {Cesium.Cartesian3|null} Hit point (new instance), or null.
  */
@@ -93,8 +93,8 @@ export function ringAngle(hitPoint, center, basisA, basisB) {
 
 /**
  * Shortest signed angular delta from → to, wrap-safe.
- * @param {number} fromRad
- * @param {number} toRad
+ * @param {number} fromRad - Start angle in radians.
+ * @param {number} toRad - End angle in radians.
  * @returns {number} Delta in (−π, π].
  */
 export function signedAngleDelta(fromRad, toRad) {
@@ -134,8 +134,9 @@ const toDeg = (rad) => (rad * 180) / Math.PI;
 
 /**
  * Local ENU unit axes at an ECEF position.
- * @param {Cesium.Cartesian3} position
+ * @param {Cesium.Cartesian3} position - Mount position (ECEF).
  * @returns {{east: Cesium.Cartesian3, north: Cesium.Cartesian3, up: Cesium.Cartesian3}}
+ *   Unit axis triple in the local frame.
  */
 function enuAxes(position) {
   const frame = Cesium.Transforms.eastNorthUpToFixedFrame(position);
@@ -147,7 +148,15 @@ function enuAxes(position) {
   };
 }
 
-/** a*sa + b*sb (fresh Cartesian3). */
+/**
+ * a*sa + b*sb (fresh Cartesian3) — one-allocation linear combination used to
+ * build the gizmo's local frame vectors.
+ * @param {Cesium.Cartesian3} a - First vector.
+ * @param {number} sa - Scalar multiplier for `a`.
+ * @param {Cesium.Cartesian3} b - Second vector.
+ * @param {number} sb - Scalar multiplier for `b`.
+ * @returns {Cesium.Cartesian3} New combined vector.
+ */
 function combine2(a, sa, b, sb) {
   const out = Cesium.Cartesian3.multiplyByScalar(a, sa, new Cesium.Cartesian3());
   const t = Cesium.Cartesian3.multiplyByScalar(b, sb, new Cesium.Cartesian3());
@@ -160,6 +169,8 @@ function combine2(a, sa, b, sb) {
  * @param {number} headingDeg - Compass heading (0 = north, +east).
  * @param {number} pitchDeg - Elevation (+up).
  * @param {{east, north, up}} axes - ENU axes at the mount.
+ * @returns {{forwardHoriz: Cesium.Cartesian3, right: Cesium.Cartesian3,
+ *   view: Cesium.Cartesian3}} Unit vectors (fresh instances).
  */
 function viewAxesFor(headingDeg, pitchDeg, axes) {
   const h = toRadians(headingDeg);
@@ -170,7 +181,15 @@ function viewAxesFor(headingDeg, pitchDeg, axes) {
   return { forwardHoriz, right, view };
 }
 
-/** Circle polyline positions around `center` in the (basisA, basisB) plane. */
+/**
+ * Circle polyline positions around `center` in the (basisA, basisB) plane —
+ * RING_SEGMENTS + 1 points so the polyline closes without a gap.
+ * @param {Cesium.Cartesian3} center - Ring center (the mount).
+ * @param {number} radius - Ring radius in metres.
+ * @param {Cesium.Cartesian3} basisA - In-plane unit vector (angle 0).
+ * @param {Cesium.Cartesian3} basisB - In-plane unit vector (angle +90°).
+ * @returns {Array<Cesium.Cartesian3>} Closed-loop positions.
+ */
 function ringPositions(center, radius, basisA, basisB) {
   const positions = [];
   for (let i = 0; i <= RING_SEGMENTS; i++) {
@@ -187,8 +206,8 @@ function ringPositions(center, radius, basisA, basisB) {
  * into calibration patches through a narrow callback interface — the gizmo
  * never touches layer records/stores directly.
  *
- * @param {object} deps
- * @param {Cesium.Viewer} deps.viewer
+ * @param {object} deps - Injection seams (the gizmo owns no layer state).
+ * @param {Cesium.Viewer} deps.viewer - Viewer whose scene/entities host the gizmo.
  * @param {function(): object|null} deps.getActiveRecord - Returns the record
  *   the gizmo should attach to, or null to hide (layer decides: enabled +
  *   calibration mode + active camera).
@@ -199,7 +218,7 @@ function ringPositions(center, radius, basisA, basisB) {
  *   end, for the PINNED drag record.
  * @returns {{setEnabled: function(boolean): void, refresh: function(): void,
  *   destroy: function(): void, isDragging: function(): boolean,
- *   isEnabled: function(): boolean}}
+ *   isEnabled: function(): boolean}} Controller handle.
  */
 export function createCalibrationGizmo({ viewer, getActiveRecord, applyPatch, endPatch }) {
   let enabled = false;
@@ -212,7 +231,12 @@ export function createCalibrationGizmo({ viewer, getActiveRecord, applyPatch, en
   const scene = viewer.scene;
   const handler = new Cesium.ScreenSpaceEventHandler(scene.canvas);
 
-  /** Adds (or re-adds) a gizmo entity, clearing any stale duplicate id. */
+  /**
+   * Adds (or re-adds) a gizmo entity, clearing any stale duplicate id.
+   * @param {string} part - Gizmo part name (id suffix after GIZMO_ID_PREFIX).
+   * @param {object} options - Entity options passed through to viewer.entities.add.
+   * @returns {object} The created Cesium Entity.
+   */
   function addEntity(part, options) {
     const id = `${GIZMO_ID_PREFIX}${part}`;
     const stale = viewer.entities.getById(id);
@@ -222,6 +246,14 @@ export function createCalibrationGizmo({ viewer, getActiveRecord, applyPatch, en
     return entity;
   }
 
+  /**
+   * Register a polyline-based gizmo part (rings and move arrows); `arrow`
+   * adds a point primitive at the line's far end as the grab target.
+   * @param {string} part - Gizmo part name.
+   * @param {Cesium.Color} color - Part color (also the depth-fail tint).
+   * @param {number} width - Polyline width in px.
+   * @param {boolean} [arrow=false] - Use the arrow material + end-point primitive.
+   */
   function polylinePart(part, color, width, arrow = false) {
     addEntity(part, {
       ...(arrow ? {
@@ -246,6 +278,12 @@ export function createCalibrationGizmo({ viewer, getActiveRecord, applyPatch, en
     });
   }
 
+  /**
+   * Register a point-primitive gizmo part (range/FOV handles).
+   * @param {string} part - Gizmo part name.
+   * @param {Cesium.Color} color - Handle color.
+   * @param {number} pixelSize - Handle size in px.
+   */
   function pointPart(part, color, pixelSize) {
     addEntity(part, {
       position: Cesium.Cartesian3.ZERO,
@@ -268,6 +306,7 @@ export function createCalibrationGizmo({ viewer, getActiveRecord, applyPatch, en
   pointPart('handle-fov-l', COLOR_HANDLE, 10);
   pointPart('handle-fov-r', COLOR_HANDLE, 10);
 
+  /** Hide every gizmo entity (disabled, or no active record to attach to). */
   function hideAll() {
     for (const entity of entities.values()) entity.show = false;
   }
@@ -310,13 +349,23 @@ export function createCalibrationGizmo({ viewer, getActiveRecord, applyPatch, en
     for (const entity of entities.values()) entity.show = true;
   }
 
-  /** Extracts a gizmo part name from a pick result, or null. */
+  /**
+   * Extracts a gizmo part name from a pick result, or null.
+   * @param {object} picked - Cesium pick result (either pick shape).
+   * @returns {?string} Part name after the id prefix.
+   */
   function gizmoPartFrom(picked) {
     const id = picked?.id?.id ?? picked?.id;
     if (typeof id !== 'string' || !id.startsWith(GIZMO_ID_PREFIX)) return null;
     return id.slice(GIZMO_ID_PREFIX.length);
   }
 
+  /**
+   * Resolve a window position to a visible gizmo part, single-pick first with
+   * a drillPick fallback (see the cheap-path comment below).
+   * @param {Cesium.Cartesian2} windowPosition - Screen position in px.
+   * @returns {?string} Gizmo part name, or null when nothing gizmo-owned is hit.
+   */
   function pickGizmoPart(windowPosition) {
     // Gizmo primitives render depth-test-free and should be the topmost pick.
     // Take the cheap single-result path first: a full drillPick can stall for
@@ -352,6 +401,11 @@ export function createCalibrationGizmo({ viewer, getActiveRecord, applyPatch, en
     return null;
   }
 
+  /**
+   * Mouse ray for a screen position (null when the camera cannot produce one).
+   * @param {Cesium.Cartesian2} windowPosition - Screen position in px.
+   * @returns {?object} Cesium pick ray with `origin`/`direction`.
+   */
   function pickRay(windowPosition) {
     try {
       return viewer.camera.getPickRay(windowPosition) || null;
@@ -360,10 +414,19 @@ export function createCalibrationGizmo({ viewer, getActiveRecord, applyPatch, en
     }
   }
 
+  /**
+   * Set the canvas cursor ( '' restores the default ).
+   * @param {string} value - CSS cursor name.
+   */
   function setCursor(value) {
     if (scene.canvas?.style) scene.canvas.style.cursor = value;
   }
 
+  /**
+   * Track the hovered part: point handles get a size bump, everything else
+   * gets the grab cursor only (never a geometry change — see comment below).
+   * @param {?string} part - Hovered gizmo part name, or null to clear.
+   */
   function setHovered(part) {
     const nextId = part ? `${GIZMO_ID_PREFIX}${part}` : null;
     if (nextId === hoveredId) return;
@@ -383,7 +446,12 @@ export function createCalibrationGizmo({ viewer, getActiveRecord, applyPatch, en
     setCursor(hoveredId ? 'grab' : '');
   }
 
-  /** Captures the fixed drag reference frame + start values for a part. */
+  /**
+   * Captures the fixed drag reference frame + start values for a part.
+   * @param {string} part - Gizmo part being grabbed.
+   * @param {Cesium.Cartesian2} windowPosition - Pointer-down screen position.
+   * @returns {boolean} True when the drag started (camera input disabled).
+   */
   function beginDrag(part, windowPosition) {
     const record = getActiveRecord();
     const positions = record?.frustumPositions;
@@ -443,7 +511,12 @@ export function createCalibrationGizmo({ viewer, getActiveRecord, applyPatch, en
     return true;
   }
 
-  /** Converts the current mouse ray into a calibration patch for the drag part. */
+  /**
+   * Converts the current mouse ray into a calibration patch for the drag part.
+   * @param {Cesium.Cartesian2} windowPosition - Current pointer screen position.
+   * @returns {?object} Partial calibration patch (absolute offsets), or null
+   *   when the geometry does not resolve this frame.
+   */
   function dragPatch(windowPosition) {
     const ray = pickRay(windowPosition);
     if (!ray || !drag) return null;
@@ -487,6 +560,7 @@ export function createCalibrationGizmo({ viewer, getActiveRecord, applyPatch, en
     return null;
   }
 
+  /** Close the live drag: restore camera input, cursor, and fire the commit tail. */
   function endDrag() {
     if (!drag) return;
     const record = drag.record;
@@ -498,7 +572,10 @@ export function createCalibrationGizmo({ viewer, getActiveRecord, applyPatch, en
     endPatch(record);
   }
 
-  /** QA/debug tracing, on when the page sets `window.__gevGizmoDebug = true`. */
+  /**
+   * QA/debug tracing, on when the page sets `window.__gevGizmoDebug = true`.
+   * @param {...*} args - Values forwarded to console.debug.
+   */
   function debugLog(...args) {
     if (typeof window !== 'undefined' && window.__gevGizmoDebug) {
       console.debug('[CCTV:gizmo]', ...args);

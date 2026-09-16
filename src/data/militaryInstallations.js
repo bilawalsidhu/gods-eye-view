@@ -40,6 +40,13 @@ const distanceGeodesicScratch = new Cesium.EllipsoidGeodesic();
 /**
  * Allocation-free spherical distance used only as a conservative rejection
  * pass before the exact ellipsoidal geodesic calculation.
+ *
+ * @param {number} latitudeARad - Point A latitude in RADIANS (a Cesium
+ *   Cartographic read directly).
+ * @param {number} longitudeARad - Point A longitude in radians.
+ * @param {number} latitudeBDeg - Point B latitude in degrees.
+ * @param {number} longitudeBDeg - Point B longitude in degrees.
+ * @returns {number} Haversine surface distance in meters on the mean-radius sphere.
  */
 export function approximateSurfaceDistanceM(latitudeARad, longitudeARad, latitudeBDeg, longitudeBDeg) {
   const latitudeBRad = Cesium.Math.toRadians(latitudeBDeg);
@@ -81,6 +88,11 @@ const state = {
   googleSearchRequested: false,
 };
 
+/**
+ * Map an installation class to its point color.
+ * @param {{class: string}} record - Installation record.
+ * @returns {Cesium.Color} Class color, falling back to the neutral military-land grey.
+ */
 function colorFor(record) {
   return Cesium.Color.fromCssColorString(COLOR_BY_CLASS[record.class] || '#9ca6b0');
 }
@@ -103,7 +115,12 @@ export function classifyGoogleMilitaryPlace(place) {
     : 'places_candidate';
 }
 
-/** @param {object} record @returns {string} Human-readable source attribution. */
+/**
+ * Human-readable source attribution for a record.
+ * @param {object} record - Installation record carrying a `sources` array.
+ * @returns {string} Deduplicated source names joined with `+`, or
+ *   'Unknown mapped source' when the record carries none.
+ */
 export function installationSourceLabel(record) {
   const names = [...new Set((Array.isArray(record?.sources) ? record.sources : [])
     .map((source) => String(source?.name || '').trim())
@@ -145,8 +162,10 @@ export function installationSurfaceHeightM(record) {
  *    bounded by one snap cell (~5.5 km) around the viewport.
  *
  * @param {{latitude:number, longitude:number, footprint:?Array, osmType:?string}} record
+ *   Mapped record: point coordinates, optional [lon,lat] footprint ring, and the
+ *   OSM element type that says how much geometry we actually hold.
  * @param {{south:number, west:number, north:number, east:number}} box Requested viewport.
- * @returns {boolean}
+ * @returns {boolean} True when the record belongs in this viewport's render set.
  */
 export function installationWithinViewport(record, box) {
   if (!record || !box) return false;
@@ -178,7 +197,10 @@ export function installationWithinViewport(record, box) {
  * shipped predate the field and live for 30 days. Fall back to deriving it from
  * the element count against the cap the payload itself reports.
  * @param {{saturated?: boolean, elements?: Array, elementCap?: number}} payload
- * @returns {boolean}
+ *   Upstream payload (proxy response or a 30-day cache entry, which may predate
+ *   the `saturated` field).
+ * @returns {boolean} True when the proxy said so, or when the element count
+ *   reached the cap the payload itself reports.
  */
 export function installationResponseSaturated(payload) {
   if (typeof payload?.saturated === 'boolean') return payload.saturated;
@@ -194,7 +216,9 @@ export function installationResponseSaturated(payload) {
  * else animates — no frame would otherwise arrive to re-read this, so a load
  * that fails after the scene went quiet would leave the last healthy readout on
  * screen indefinitely.
- * @param {string} status @param {?string} error
+ * @param {string} status - Layer status to commit ('idle'|'loading'|'ready'|'unavailable'|'zoom-in').
+ * @param {?string} error - Human-readable error detail, or null when healthy.
+ * @returns {void}
  */
 function setInstallationStatus(status, error = null) {
   if (state.status === status && state.error === error) return;
@@ -203,6 +227,13 @@ function setInstallationStatus(status, error = null) {
   governorRequestRender('installations-status');
 }
 
+/**
+ * Read the camera's view rectangle as a bounded request box.
+ * @param {import('cesium').Viewer} viewer - Viewer whose camera defines the view.
+ * @returns {{south:number, west:number, north:number, east:number}|null} Box in
+ *   degrees, or null when the view is degenerate, crosses the dateline, or
+ *   exceeds MAX_VIEWPORT_DEGREES on either axis (a zoom-in is required first).
+ */
 function viewportBox(viewer) {
   const rectangle = viewer?.camera?.computeViewRectangle(viewer.scene.globe.ellipsoid);
   if (!rectangle) return null;
@@ -215,6 +246,7 @@ function viewportBox(viewer) {
   return { south, west, north, east };
 }
 
+/** Drop every rendered installation entity and its pick-context registrations. */
 function clearRendered() {
   if (state.dataSource?.entities) state.dataSource.entities.removeAll();
   removeEntityContextsForLayer(LAYER_ID);
@@ -240,6 +272,7 @@ function renderableRecords() {
   return selected ? [...rendered, selected] : rendered;
 }
 
+/** Rebuild the installation point entities from renderableRecords(). */
 function renderRecords() {
   // Post-moveEnd debounced fetches commit after the camera settles; the
   // rebuilt entities need one frame in idle mode. (perf wave 2 fix)
@@ -336,6 +369,12 @@ function warmInstallationFloors(records) {
   });
 }
 
+/**
+ * Select an installation by id and repaint so it exists as an entity.
+ * @param {string} id - Record id (`osm:<type>:<id>`).
+ * @returns {boolean} True when the selection stuck, false when the id is
+ *   unknown or produced no entity.
+ */
 function selectRecord(id) {
   const record = state.recordById.get(id);
   if (!record || !state.dataSource) return false;
@@ -345,6 +384,12 @@ function selectRecord(id) {
   return state.selectedId === id;
 }
 
+/**
+ * Attach the left-click pick handler that selects a rendered installation.
+ * Idempotent; no-op before the scene canvas exists.
+ * @param {import('cesium').Viewer} viewer - Viewer whose canvas receives clicks.
+ * @returns {void}
+ */
 function installInteraction(viewer) {
   if (state.clickHandler) return;
   state.clickHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
@@ -359,6 +404,9 @@ function installInteraction(viewer) {
 /**
  * Backoff progression for the unavailable-state retry: 30 s, doubling to a
  * 240 s ceiling. Pure so the progression is pinnable without booting the layer.
+ *
+ * @param {number} prevDelayMs - Previous backoff delay in ms (0/NaN starts the sequence).
+ * @returns {number} Next delay in ms — double the previous, capped at 240 s.
  */
 export function installationRetryDelayMs(prevDelayMs) {
   const RETRY_MIN_MS = 30000;
@@ -386,12 +434,24 @@ function scheduleUnavailableRetry() {
   }, state.retryDelayMs);
 }
 
+/**
+ * Cancel any pending unavailable-state retry.
+ * @param {object} [options] - Options.
+ * @param {boolean} [options.resetBackoff] - Reset the backoff step to 0
+ *   (default true); callers that merely supersede the retry keep the step.
+ * @returns {void}
+ */
 function clearUnavailableRetry({ resetBackoff = true } = {}) {
   clearTimeout(state.retryTimer);
   state.retryTimer = null;
   if (resetBackoff) state.retryDelayMs = 0;
 }
 
+/**
+ * Debounce a fetch until the camera/viewport request settles; keeps any retry
+ * backoff step so a superseded retry doesn't restart the ladder at 30 s.
+ * @returns {void}
+ */
 function scheduleLoad() {
   if (!state.enabled) return;
   // A user-driven load supersedes any pending retry; the load reschedules on
@@ -401,6 +461,15 @@ function scheduleLoad() {
   state.timer = setTimeout(() => { loadInstallations(); }, REQUEST_DEBOUNCE_MS);
 }
 
+/**
+ * Fetch installations for the current viewport (exact bbox first, widened on a
+ * saturated answer), then Places candidates when a nearby search was requested,
+ * normalize, warm ground floors, and render. Owns the layer's request lifecycle:
+ * aborts any in-flight request, commits status transitions, and schedules the
+ * unavailable-state retry on failure.
+ *
+ * @returns {Promise<void>}
+ */
 async function loadInstallations() {
   if (!state.enabled || !state.viewer) return;
   const box = viewportBox(state.viewer);
@@ -547,8 +616,16 @@ const militaryInstallationsLayer = {
     clearSelectedEntityContextForLayer(LAYER_ID);
     state.selectedId = null;
   },
+  /**
+   * Layer refresh hook. The DataLayerManager invokes this immediately after
+   * enable(), which owns the first fetch, so this is the re-poll path.
+   * @returns {Promise<void>} Resolves when the refresh attempt settles.
+   */
   update() { return loadInstallations(); },
-  /** Request a one-shot Google Maps Places search around the current map view. */
+  /**
+   * Request a one-shot Google Maps Places search around the current map view.
+   * @returns {Promise<void>} Resolves when the resulting load attempt settles.
+   */
   searchNearby() {
     state.googleSearchRequested = true;
     return loadInstallations();

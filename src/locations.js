@@ -136,9 +136,12 @@ export const GLOBE_VIEW = Object.freeze({
 /**
  * Fly straight out to the full-earth globe view, keeping the current sub-camera
  * point centered so the user's continent stays in front of them.
- * @param {Cesium.Viewer} viewer
+ * @param {Cesium.Viewer} viewer - Viewer whose camera performs the flight.
  * @param {{duration?: number, onComplete?: Function, onCancel?: Function}} options
- * @returns {{latitude: number, longitude: number, heightM: number}}
+ *   Flight tuning: `duration` in seconds (falls back to GLOBE_VIEW.durationS),
+ *   plus completion/cancel callbacks wired to Cesium's own `complete`/`cancel`.
+ * @returns {{latitude: number, longitude: number, heightM: number}} The
+ *   sub-camera point kept centered and the flight's final altitude.
  */
 export function flyToGlobeView(viewer, options = {}) {
   const carto = viewer.camera.positionCartographic;
@@ -178,10 +181,10 @@ export const LOCATIONS = Object.entries(CITY_POIS).map(([id, city]) => ({
  * Fly the camera to a landmark using lookAt-based targeting.
  * Guarantees the target is centered in viewport via flyToBoundingSphere + lookAt.
  *
- * @param {Cesium.Viewer} viewer
+ * @param {Cesium.Viewer} viewer - Viewer whose camera flies and locks.
  * @param {number} lat - Latitude in degrees
  * @param {number} lon - Longitude in degrees
- * @param {object} options
+ * @param {object} options - Framing and lifecycle options (spread by callers).
  * @param {number} options.range - Distance from target in meters (default 500)
  * @param {number} options.pitch - Camera tilt in degrees, negative = down (default -30)
  * @param {number} options.heading - Camera heading in degrees (default 0)
@@ -262,6 +265,13 @@ export function flyToLandmark(viewer, lat, lon, options = {}) {
 /**
  * Fly to a preset location by ID (uses the first POI as default).
  * Returns target position for orbit controller.
+ * @param {Cesium.Viewer} viewer - Viewer whose camera flies.
+ * @param {string} locationId - CITY_POIS key (`austin`, `sf`, `tokyo`, …).
+ * @param {object} [options] - Forwarded to flyToLandmark; `viewMode: 'overview'`
+ *   frames the city's viewBounds instead of its first POI.
+ * @returns {object|false|null} The framing result of the chosen flight, or
+ *   `null` when the locationId is unknown (framing functions return `false`
+ *   for an unusable viewport, CANCELLED_SEARCH for a beforeFly veto).
  */
 export function flyToPresetLocation(viewer, locationId, options = {}) {
   const city = CITY_POIS[locationId];
@@ -290,6 +300,12 @@ export function flyToPresetLocation(viewer, locationId, options = {}) {
 /**
  * Fly to a specific POI within a city.
  * Returns target position for orbit controller.
+ * @param {Cesium.Viewer} viewer - Viewer whose camera flies.
+ * @param {string} cityId - CITY_POIS key the POI belongs to.
+ * @param {number} poiIndex - Index into the city's `pois` array.
+ * @param {object} [options] - Forwarded to flyToLandmark (range/pitch/heading overrides).
+ * @returns {object|null} The framing result, or `null` when the city or POI
+ *   index doesn't exist.
  */
 export function flyToPOI(viewer, cityId, poiIndex, options = {}) {
   const city = CITY_POIS[cityId];
@@ -307,7 +323,11 @@ export function flyToPOI(viewer, cityId, poiIndex, options = {}) {
 }
 
 const POI_STOPWORDS = new Set(['the', 'a', 'an', 'at', 'of', 'in', 'on', 'to']);
-/** Significant lowercased word set of a name (punctuation stripped, stopwords dropped). */
+/**
+ * Significant lowercased word set of a name (punctuation stripped, stopwords dropped).
+ * @param {string} s - POI or query name to tokenize.
+ * @returns {Set<string>} Non-stopword tokens; empty when the input has none.
+ */
 function poiNameTokens(s) {
   return new Set(
     String(s || '').toLowerCase().replaceAll(/[^a-z0-9\s]/g, ' ').split(/\s+/)
@@ -322,8 +342,9 @@ function poiNameTokens(s) {
  * all appear in the query — so "Frost Bank Tower" matches "frost tower bank", and extra words like
  * a trailing city are fine), and the POI name must be ≥2 words so a single shared token ("Texas",
  * "Tower") can't grab the wrong landmark. Returns { cityId, index } or null.
- * @param {string} query
- * @returns {{cityId: string, index: number} | null}
+ * @param {string} query - Free-text place query (usually transcribed voice).
+ * @returns {{cityId: string, index: number} | null} The matched curated POI and
+ *   its city, or null when no POI's name is fully contained in the query.
  */
 export function findPoiByName(query) {
   const q = poiNameTokens(query);
@@ -353,6 +374,13 @@ export const CANCELLED_SEARCH = Object.freeze({ cancelled: true });
  * Returns the searchAndFlyTo result shape, CANCELLED_SEARCH when a beforeFly
  * veto fires, or null when the pack has no match (caller then throws or
  * returns null exactly as before).
+ *
+ * @param {Cesium.Viewer} viewer - Viewer whose camera flies.
+ * @param {string} query - Natural-language place name to resolve offline.
+ * @param {object} options - searchAndFlyTo options (duration, beforeFly,
+ *   onStart/onComplete/onCancel).
+ * @returns {Promise<{label: string, navigationMode: string, rangeM: number|null}|object|null>}
+ *   Result shape on success, CANCELLED_SEARCH on veto, null on no match.
  */
 async function flyNaturalRegionFallback(viewer, query, options) {
   const region = await findNaturalRegion(query).catch(() => null);
@@ -419,6 +447,14 @@ async function flyNaturalRegionFallback(viewer, query, options) {
  * Returns the searchAndFlyTo result shape, CANCELLED_SEARCH when a beforeFly
  * veto fires, or null when the proxy is unreachable / finds nothing (caller
  * then reports the miss exactly as before).
+ *
+ * @param {Cesium.Viewer} viewer - Viewer whose camera flies and supplies the
+ *   viewport bias sent as Nominatim's `viewbox`.
+ * @param {string} query - Free-text place name to geocode.
+ * @param {object} options - searchAndFlyTo options (duration, range, beforeFly,
+ *   onStart/onComplete/onCancel).
+ * @returns {Promise<{label: string, navigationMode: string, rangeM: number|null}|object|null>}
+ *   Result shape on success, CANCELLED_SEARCH on veto, null on miss/failure.
  */
 async function flyKeylessGeocode(viewer, query, options) {
   const params = [`q=${encodeURIComponent(query)}`, 'limit=8'];
@@ -493,6 +529,25 @@ async function flyKeylessGeocode(viewer, query, options) {
  * Geocode a place name using Google Geocoding API, then fly there at a scale
  * appropriate to the request. Countries and cities use their viewport by
  * default; precise landmarks/buildings use close landmark framing.
+ *
+ * @param {Cesium.Viewer} viewer - Viewer whose camera flies and supplies the
+ *   viewport bias (`bounds`) sent with the geocode request.
+ * @param {string} query - Free-text place name (voice transcription or panel input).
+ * @param {object} [options] - Search tuning, forwarded to the framing helpers.
+ * @param {number} [options.range] - Explicit landmark range in meters; when set
+ *   the result reports `navigationMode: 'explicit-range'`.
+ * @param {number} [options.duration] - Flight duration in seconds.
+ * @param {boolean} [options.forceClose] - Force close framing of an overview-mode hit.
+ * @param {string} [options.viewMode] - `'overview'` requests whole-place framing
+ *   and stands down the locality sanity gate.
+ * @param {Function} [options.beforeFly] - Veto hook; returning false cancels
+ *   before the camera moves (searchAndFlyTo then returns CANCELLED_SEARCH).
+ * @param {Function} [options.onStart] - Called when the flight starts.
+ * @param {Function} [options.onComplete] - Called when the flight completes.
+ * @param {Function} [options.onCancel] - Called when the flight is cancelled.
+ * @returns {Promise<{label: string, navigationMode: string, rangeM: number|null}|object|null>}
+ *   Result shape on success, CANCELLED_SEARCH on veto, null when nothing was
+ *   found. Throws when keyless and no tier matched.
  */
 export async function searchAndFlyTo(viewer, query, options = {}) {
   // `typeof import.meta.env` keeps the bare-env read safe under plain node
@@ -653,7 +708,12 @@ export async function searchAndFlyTo(viewer, query, options = {}) {
 }
 
 /** Places {low,high} viewport → the geocode {southwest,northeast} bounds shape
- *  flyToViewportBounds consumes (used when the Places recovery replaces a geocode). */
+ *  flyToViewportBounds consumes (used when the Places recovery replaces a geocode).
+ * @param {{low: {latitude: number, longitude: number}, high: {latitude: number, longitude: number}}|null} vp
+ *   Google Places viewport (lat/lng literal numbers).
+ * @returns {{southwest: {lat: number, lng: number}, northeast: {lat: number, lng: number}}|null}
+ *   geocode-shaped bounds, or null when any coordinate is missing/non-finite.
+ */
 function placesViewportToBounds(vp) {
   const low = vp?.low;
   const high = vp?.high;
@@ -670,6 +730,10 @@ function placesViewportToBounds(vp) {
  * building range lands on a random rooftop, and a `route` result framed at 250 m looks
  * like the camera picked one arbitrary building on the street (field test 8 / rootcause
  * doc §3) — both frame their geocode viewport instead.
+ *
+ * @param {string[]} types - Geocode result `types` array (Google taxonomy).
+ * @returns {'region-overview'|'city-overview'|'neighborhood-close'|'street-corridor'|'area-overview'|'precise-place'}
+ *   The framing mode driving range and viewport handling.
  */
 export function geocodeNavigationMode(types) {
   const values = new Set(types);
@@ -729,8 +793,11 @@ const KM_PER_DEGREE = 111.32;
  * Measure a geocode {southwest,northeast} box. Pure; shared by the region-swath
  * and locality-sanity heuristics so both read the antimeridian the same way.
  * @param {{southwest:{lat:number,lng:number}, northeast:{lat:number,lng:number}}|null} viewport
+ *   Geocode-shaped bounds to measure; null/nonsense yields null.
  * @returns {null | {latSpanDeg:number, lonSpanDeg:number, latSpanKm:number,
  *   lonSpanKm:number, spanKm:number, centerLat:number, centerLng:number}}
+ *   Box spans in degrees and km, diagonal span, and the short-way-round center,
+ *   or null when the box isn't measurable.
  */
 export function viewportMetrics(viewport) {
   const southwest = viewport?.southwest;
@@ -765,7 +832,11 @@ export function viewportMetrics(viewport) {
   };
 }
 
-/** Wrap a longitude in degrees into [-180, 180). */
+/**
+ * Wrap a longitude in degrees into [-180, 180).
+ * @param {number} lng - Unwrapped longitude in degrees (may exceed ±180).
+ * @returns {number} Equivalent longitude in [-180, 180).
+ */
 function wrapLongitude(lng) {
   return ((lng + 180) % 360 + 360) % 360 - 180;
 }
@@ -813,7 +884,14 @@ export const PLACE_ANCHOR_OFFSET_RATIO = 0.15;
  */
 const PLACE_FALLBACK_HALF_SPAN_KM = 20;
 
-/** Great-circle distance in km (small enough here that the spherical model is fine). */
+/**
+ * Great-circle distance in km (small enough here that the spherical model is fine).
+ * @param {number} lat1 - First point latitude in degrees.
+ * @param {number} lng1 - First point longitude in degrees.
+ * @param {number} lat2 - Second point latitude in degrees.
+ * @param {number} lng2 - Second point longitude in degrees.
+ * @returns {number} Haversine distance between the two points, in km.
+ */
 function greatCircleKm(lat1, lng1, lat2, lng2) {
   const dLat = Cesium.Math.toRadians(lat2 - lat1);
   const dLng = Cesium.Math.toRadians(lng2 - lng1);
@@ -839,10 +917,13 @@ function greatCircleKm(lat1, lng1, lat2, lng2) {
  * flagged for the owner rather than changed silently.
  *
  * @param {{southwest:{lat:number,lng:number}, northeast:{lat:number,lng:number}}|null} viewport
+ *   Geocode-shaped bounds the caller intends to frame (returned unchanged unless gated).
  * @param {number} anchorLat Geocode result latitude (`geometry.location`).
  * @param {number} anchorLng Geocode result longitude.
  * @param {string[]} [types] Raw geocode result types, used only for the country exemption.
  * @returns {{southwest:{lat:number,lng:number}, northeast:{lat:number,lng:number}}|null}
+ *   The viewport to frame: the input box, or a ~40 km metro box on the anchor
+ *   when the gate trips; null only when the input was null.
  */
 export function placeFramingViewport(viewport, anchorLat, anchorLng, types = []) {
   if (Array.isArray(types) && types.includes('country')) return viewport;
@@ -877,10 +958,13 @@ export function placeFramingViewport(viewport, anchorLat, anchorLng, types = [])
  * looking along the feature's long axis.
  *
  * @param {{southwest:{lat:number,lng:number}, northeast:{lat:number,lng:number}}|null} viewport
+ *   Geocode-shaped bounds of the natural feature.
  * @returns {null
  *   | {mode:'full', spanKm:number}
  *   | {mode:'swath', spanKm:number, centerLat:number, centerLng:number,
  *      rangeM:number, pitchDeg:number, headingDeg:number}}
+ *   `full` frames the box as-is; `swath` carries the camera pose for the capped
+ *   oblique framing; null when the box isn't measurable.
  */
 export function regionFramingPlan(viewport) {
   const metrics = viewportMetrics(viewport);
@@ -902,6 +986,11 @@ export function regionFramingPlan(viewport) {
   };
 }
 
+/**
+ * Fallback landmark range (meters) when the geocode has no usable viewport to frame.
+ * @param {string} mode - geocodeNavigationMode() result.
+ * @returns {number} Range in meters — wide for area/street modes, close for POIs.
+ */
 function defaultRangeForNavigationMode(mode) {
   // Fallback ranges when the geocode has no usable viewport to frame.
   if (mode === 'area-overview') return 1400;
@@ -909,11 +998,36 @@ function defaultRangeForNavigationMode(mode) {
   return 250;
 }
 
+/**
+ * Whether a framing mode flies to the geocode's viewport rather than landmark range.
+ * @param {string} mode - geocodeNavigationMode() result.
+ * @returns {boolean} True when the viewport should be framed as a whole.
+ */
 function shouldFrameGeocodeViewport(mode) {
   return mode === 'region-overview' || mode === 'city-overview'
     || mode === 'area-overview' || mode === 'street-corridor';
 }
 
+/**
+ * Frame a {southwest,northeast} box with a padded Cesium.Rectangle flight. The
+ * shared "overview" primitive behind city/region/natural-region searches; it
+ * wraps antimeridian-crossing boxes correctly before building the rectangle.
+ *
+ * @param {Cesium.Viewer} viewer - Viewer whose camera flies.
+ * @param {{southwest:{lat:number,lng:number}, northeast:{lat:number,lng:number}}|null} viewport
+ *   Geocode-shaped bounds; unusable coordinates yield `false`.
+ * @param {object} [options] - Flight options.
+ * @param {number} [options.duration] - Flight duration in seconds (default 3.0).
+ * @param {Function} [options.beforeFly] - Veto hook; returning `false` aborts
+ *   before the camera moves (reported as CANCELLED_SEARCH).
+ * @param {Function} [options.onStart] - Called when the flight starts.
+ * @param {Function} [options.onComplete] - Called when the flight completes.
+ * @param {Function} [options.onCancel] - Called when the flight is cancelled.
+ * @param {string} [options.navigationMode] - Mode echoed into the result.
+ * @returns {{targetPosition: Cesium.Cartesian3, boundingRadius: number,
+ *   range: null, viewBounds: object, navigationMode: string}|false|object}
+ *   Framing result, `false` for an unusable box, or CANCELLED_SEARCH on veto.
+ */
 function flyToViewportBounds(viewer, viewport, options = {}) {
   const {
     duration = 3.0,
@@ -984,6 +1098,13 @@ function flyToViewportBounds(viewer, viewport, options = {}) {
   };
 }
 
+/**
+ * Validate a caller/OSM building footprint, keeping only fully finite dimensions.
+ * @param {{height: number, width: number, depth: number}|null} bounds - Footprint
+ *   in meters, as carried by a POI's `buildingBounds` or an Overpass way.
+ * @returns {{height: number, width: number, depth: number}|null} Coerced bounds,
+ *   or null when any dimension is missing/non-positive.
+ */
 function normalizeBuildingBounds(bounds) {
   if (!bounds) return null;
   const height = finitePositive(bounds.height);
@@ -993,6 +1114,12 @@ function normalizeBuildingBounds(bounds) {
   return { ...bounds, height, width, depth };
 }
 
+/**
+ * Bounding-sphere radius of a normalized building footprint, inflated 18% so an
+ * oblique view of the tallest face stays inside the sphere.
+ * @param {{height: number, width: number, depth: number}} bounds - Footprint in meters.
+ * @returns {number} Sphere radius in meters (half-diagonal of the box × 1.18).
+ */
 function buildingBoundingRadius(bounds) {
   const halfHeight = bounds.height / 2;
   const halfWidth = bounds.width / 2;
@@ -1000,6 +1127,12 @@ function buildingBoundingRadius(bounds) {
   return Math.hypot(halfHeight, halfWidth, halfDepth) * 1.18;
 }
 
+/**
+ * Camera distance that fits a sphere of the given radius in the current frustum.
+ * @param {Cesium.Viewer} viewer - Viewer supplying the camera frustum (fov/aspect).
+ * @param {number} radius - Sphere radius in meters.
+ * @returns {number} Backoff distance in meters along the camera axis.
+ */
 function rangeForBoundingSphere(viewer, radius) {
   const frustum = viewer.camera.frustum;
   const verticalFov = Number(frustum?.fov) || Cesium.Math.toRadians(60);
@@ -1013,6 +1146,13 @@ function rangeForBoundingSphere(viewer, radius) {
   return radius / Math.sin(desiredAngularRadius) * 1.05;
 }
 
+/**
+ * Camera tilt that suits a building's proportions — tall towers are viewed more
+ * level, squat footprints from steeper above.
+ * @param {{height: number, width: number, depth: number}|null} bounds - Footprint
+ *   in meters; null means "no geometry known".
+ * @returns {number} Pitch in degrees (negative = looking down).
+ */
 function buildingPitch(bounds) {
   if (!bounds) return -25;
   const footprint = Math.max(bounds.width, bounds.depth);
@@ -1023,6 +1163,18 @@ function buildingPitch(bounds) {
   return -32;
 }
 
+/**
+ * Query Overpass for the building a precise-place geocode landed on, so the
+ * camera frames the real footprint instead of guessing a range. Any failure
+ * (non-OK, timeout, malformed) returns null and the caller keeps landmark framing.
+ *
+ * @param {number} lat - Geocoded latitude in degrees.
+ * @param {number} lon - Geocoded longitude in degrees.
+ * @param {string} query - Original place query, scored against OSM names.
+ * @returns {Promise<{lat: number, lon: number, height: number, width: number,
+ *   depth: number, osmName: string|null, osmType: string, osmId: number}|null>}
+ *   Best-scoring footprint, or null when nothing usable was found.
+ */
 async function resolveBuildingBounds(lat, lon, query) {
   const overpassQuery = `
     [out:json][timeout:10];
@@ -1055,6 +1207,19 @@ async function resolveBuildingBounds(lat, lon, query) {
   }
 }
 
+/**
+ * Pick the best building candidate from an Overpass response: name overlap with
+ * the query dominates, containing the target point adds a bonus, and nearer
+ * centers win ties. Needs ≥3 coordinates and a ≥2 m footprint to qualify.
+ *
+ * @param {Array<object>} elements - Overpass `elements` (ways/relations with geometry).
+ * @param {number} targetLat - Geocoded latitude in degrees.
+ * @param {number} targetLon - Geocoded longitude in degrees.
+ * @param {string} query - Original place query used for name matching.
+ * @returns {{lat: number, lon: number, height: number, width: number,
+ *   depth: number, osmName: string|null, osmType: string, osmId: number}|null}
+ *   The winning footprint (internal score stripped), or null when none qualified.
+ */
 function selectBuildingBounds(elements, targetLat, targetLon, query) {
   const queryWords = normalizedWords(query);
   const candidates = [];
@@ -1093,6 +1258,12 @@ function selectBuildingBounds(elements, targetLat, targetLon, query) {
   return best;
 }
 
+/**
+ * Collect the finite lat/lon vertices of an Overpass element, following member
+ * geometries for multipolygon relations.
+ * @param {object} element - Overpass element (`geometry` array or `members`).
+ * @returns {Array<{lat: number, lon: number}>} Vertex list, possibly empty.
+ */
 function elementCoordinates(element) {
   if (Array.isArray(element.geometry)) {
     return element.geometry.filter((point) => Number.isFinite(point?.lat) && Number.isFinite(point?.lon));
@@ -1105,6 +1276,13 @@ function elementCoordinates(element) {
   ));
 }
 
+/**
+ * Measure a vertex ring's extents in meters at a reference latitude.
+ * @param {Array<{lat: number, lon: number}>} coordinates - Ring vertices in degrees.
+ * @param {number} latitude - Latitude the width is measured along (cosine-scaled).
+ * @returns {{width: number, depth: number}} East-west (`width`) and north-south
+ *   (`depth`) extents in meters.
+ */
 function coordinateBounds(coordinates, latitude) {
   const latitudes = coordinates.map((point) => point.lat);
   const longitudes = coordinates.map((point) => point.lon);
@@ -1118,6 +1296,15 @@ function coordinateBounds(coordinates, latitude) {
   };
 }
 
+/**
+ * Estimate a building's height from OSM tags, falling back through explicit
+ * height → level count → footprint-proportional guess.
+ * @param {{height?: string, 'building:height'?: string, 'building:levels'?: string,
+ *   'roof:height'?: string}} tags - OSM tag bag of the element.
+ * @param {{width: number, depth: number}} bounds - Measured footprint in meters,
+ *   used only by the fallback estimate.
+ * @returns {number} Estimated height in meters (never below the 12 m floor).
+ */
 function buildingHeightFromTags(tags, bounds) {
   const explicitHeight = parseMeters(tags.height || tags['building:height']);
   if (explicitHeight) return explicitHeight;
@@ -1127,6 +1314,11 @@ function buildingHeightFromTags(tags, bounds) {
   return Math.max(12, Math.min(80, Math.max(bounds.width, bounds.depth) * 0.8));
 }
 
+/**
+ * Parse an OSM length tag into meters, accepting comma decimals and `ft` suffixes.
+ * @param {string|number|null} value - Raw tag value (e.g. `"314 ft"`, `"95,5"`).
+ * @returns {number} Meters, or 0 when the value isn't a positive length.
+ */
 function parseMeters(value) {
   if (value == null) return 0;
   const number = Number.parseFloat(String(value).replace(',', '.'));
@@ -1134,6 +1326,11 @@ function parseMeters(value) {
   return /\b(ft|feet|foot)\b/i.test(String(value)) ? number * 0.3048 : number;
 }
 
+/**
+ * Centroid of a vertex ring (used when Overpass supplies no `center`).
+ * @param {Array<{lat: number, lon: number}>} coordinates - Ring vertices in degrees.
+ * @returns {{lat: number, lon: number}} Arithmetic mean position.
+ */
 function averageCoordinate(coordinates) {
   const total = coordinates.reduce((sum, point) => ({
     lat: sum.lat + point.lat,
@@ -1145,6 +1342,11 @@ function averageCoordinate(coordinates) {
   };
 }
 
+/**
+ * Lowercased, diacritic-folded significant word set of a value (tokens ≤2 chars dropped).
+ * @param {string} value - Query or OSM name text (may be null/undefined).
+ * @returns {Set<string>} Distinct significant tokens.
+ */
 function normalizedWords(value) {
   return new Set(String(value || '')
     .toLowerCase()
@@ -1155,6 +1357,12 @@ function normalizedWords(value) {
     .filter((word) => word.length > 2));
 }
 
+/**
+ * Count how many of one token set appear in the other — the building-name score.
+ * @param {Set<string>} left - Query tokens.
+ * @param {Set<string>} right - Candidate OSM name tokens.
+ * @returns {number} Number of shared tokens (0 when none).
+ */
 function wordOverlap(left, right) {
   let matches = 0;
   for (const word of left) {
@@ -1163,6 +1371,13 @@ function wordOverlap(left, right) {
   return matches;
 }
 
+/**
+ * Even-odd ray-cast containment test for a lat/lon ring.
+ * @param {number} lon - Point longitude in degrees.
+ * @param {number} lat - Point latitude in degrees.
+ * @param {Array<{lat: number, lon: number}>} coordinates - Ring vertices in degrees.
+ * @returns {boolean} True when the point lies inside the ring.
+ */
 function pointInPolygon(lon, lat, coordinates) {
   let inside = false;
   for (let index = 0, previous = coordinates.length - 1; index < coordinates.length; previous = index++) {
@@ -1175,6 +1390,15 @@ function pointInPolygon(lon, lat, coordinates) {
   return inside;
 }
 
+/**
+ * Fast equirectangular planar distance for sorting nearby candidates (not
+ * geodesic-accurate; fine at the ≤180 m radii used here).
+ * @param {number} latA - First point latitude in degrees.
+ * @param {number} lonA - First point longitude in degrees.
+ * @param {number} latB - Second point latitude in degrees.
+ * @param {number} lonB - Second point longitude in degrees.
+ * @returns {number} Approximate separation in meters.
+ */
 function approximateDistanceM(latA, lonA, latB, lonB) {
   const latitudeScale = 111320;
   const longitudeScale = latitudeScale * Math.cos(Cesium.Math.toRadians((latA + latB) / 2));
@@ -1184,6 +1408,11 @@ function approximateDistanceM(latA, lonA, latB, lonB) {
   );
 }
 
+/**
+ * Coerce an option to a positive finite number.
+ * @param {*} value - Raw option value (may be undefined, non-numeric, or ≤0).
+ * @returns {number} The value when usable, else 0 so callers can `||` a default.
+ */
 function finitePositive(value) {
   const number = Number(value);
   return Number.isFinite(number) && number > 0 ? number : 0;

@@ -2,12 +2,24 @@ const KNOT_TO_MPS = 0.514444;
 const FOOT_TO_M = 0.3048;
 const FPM_TO_MPS = 0.00508;
 
+/**
+ * Coerce a feed field to a finite number, treating absent and unparseable
+ * values alike as "no reading".
+ * @param {*} value Raw field from the adsb.lol record.
+ * @returns {number|null} Parsed number, or null when absent or non-finite.
+ */
 function finiteNumber(value) {
   if (value === null || value === undefined || value === '') return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 }
 
+/**
+ * Map an adsb.lol emitter category code (A1..B7) onto the OpenSky
+ * `category` numeric enum used by the Flights renderer.
+ * @param {*} value Raw `category` field from the adsb.lol record.
+ * @returns {number} OpenSky category code, or 0 when unknown or absent.
+ */
 function emitterCategory(value) {
   const category = String(value || '').trim().toUpperCase();
   const categories = {
@@ -76,7 +88,8 @@ export function normalizeAdsbLolAircraftState(aircraft, nowSeconds) {
  * Normalize an adsb.lol point response to an OpenSky-compatible response.
  * Invalid rows and positionless contacts are intentionally excluded.
  * @param {object} payload adsb.lol v2 response.
- * @returns {{time:number,states:Array[]}}
+ * @returns {{time:number,states:Array[]}} OpenSky-shaped response: `time` in
+ *   epoch seconds, `states` the surviving state vectors.
  */
 export function normalizeAdsbLolPointResponse(payload) {
   const responseNow = finiteNumber(payload?.now);

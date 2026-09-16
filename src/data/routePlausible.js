@@ -13,7 +13,14 @@
 const D2R = Math.PI / 180;
 const R_KM = 6371;
 
-/** Haversine great-circle distance in km. */
+/**
+ * Haversine great-circle distance in km.
+ * @param {number} lat1 Latitude of the first point, in decimal degrees.
+ * @param {number} lon1 Longitude of the first point, in decimal degrees.
+ * @param {number} lat2 Latitude of the second point, in decimal degrees.
+ * @param {number} lon2 Longitude of the second point, in decimal degrees.
+ * @returns {number} Separation of the two points along the sphere surface, km.
+ */
 export function greatCircleKm(lat1, lon1, lat2, lon2) {
   const p1 = lat1 * D2R;
   const p2 = lat2 * D2R;
@@ -23,6 +30,15 @@ export function greatCircleKm(lat1, lon1, lat2, lon2) {
   return R_KM * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+/**
+ * Initial great-circle bearing from p1 toward p2, measured clockwise from
+ * true north. Shared by {@link crossTrackKm}; not part of the public surface.
+ * @param {number} lat1 Latitude of the origin point, in decimal degrees.
+ * @param {number} lon1 Longitude of the origin point, in decimal degrees.
+ * @param {number} lat2 Latitude of the target point, in decimal degrees.
+ * @param {number} lon2 Longitude of the target point, in decimal degrees.
+ * @returns {number} Bearing in radians, in [-PI, PI].
+ */
 function bearingRad(lat1, lon1, lat2, lon2) {
   const p1 = lat1 * D2R;
   const p2 = lat2 * D2R;
@@ -32,7 +48,17 @@ function bearingRad(lat1, lon1, lat2, lon2) {
   return Math.atan2(y, x);
 }
 
-/** Signed cross-track distance (km) of point from the great circle p1→p2. */
+/**
+ * Signed cross-track distance (km) of point from the great circle p1→p2.
+ * @param {number} lat Latitude of the point being tested, in decimal degrees.
+ * @param {number} lon Longitude of the point being tested, in decimal degrees.
+ * @param {number} lat1 Latitude of the path start, in decimal degrees.
+ * @param {number} lon1 Longitude of the path start, in decimal degrees.
+ * @param {number} lat2 Latitude of the path end, in decimal degrees.
+ * @param {number} lon2 Longitude of the path end, in decimal degrees.
+ * @returns {number} Perpendicular offset in km — positive when the point lies
+ *   left of the p1→p2 heading, negative when right, 0 when on the path.
+ */
 export function crossTrackKm(lat, lon, lat1, lon1, lat2, lon2) {
   const d13 = greatCircleKm(lat1, lon1, lat, lon) / R_KM;
   const b13 = bearingRad(lat1, lon1, lat, lon);
@@ -47,13 +73,16 @@ const VERT_TREND_MPS = 2;      // ~400 fpm
 const LOCAL_AIRPORT_KM = 150;
 
 /**
- * @param {object} p
+ * @param {object} p - The live contact and the scheduled route under test.
  * @param {number} p.latDeg - Plane's current latitude (degrees).
  * @param {number} p.lonDeg - Plane's current longitude (degrees).
- * @param {number|null} [p.altitudeM]
+ * @param {number|null} [p.altitudeM] - Barometric/geo altitude in metres;
+ *   undefined treated as unknown, which skips the vertical-trend check.
  * @param {number|null} [p.verticalRateMps] — positive = climbing
- * @param {{lat:number|null, lon:number|null}|null} [p.origin]
- * @param {{lat:number|null, lon:number|null}|null} [p.destination]
+ * @param {{lat:number|null, lon:number|null}|null} [p.origin] - adsbdb origin
+ *   airport, in decimal degrees, when the route carries one.
+ * @param {{lat:number|null, lon:number|null}|null} [p.destination] - adsbdb
+ *   destination airport, in decimal degrees, when the route carries one.
  * @returns {boolean} false ONLY when the route is confidently wrong.
  */
 export function routePlausible({ latDeg, lonDeg, altitudeM = null, verticalRateMps = null, origin = null, destination = null }) {

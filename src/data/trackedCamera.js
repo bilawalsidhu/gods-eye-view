@@ -8,7 +8,7 @@ const ZOOM_INERTIA_STATES = new WeakMap();
  * Preserve real-world model scale except when a very close tracked camera
  * would make the selected aircraft dominate the viewport.
  *
- * @param {object} options
+ * @param {object} options Geometry inputs describing the tracked asset and the current camera.
  * @param {number} options.baseScale Asset's calibrated real-world scale.
  * @param {number} options.nativeRadiusM Asset bounding radius before scale.
  * @param {number} options.rangeM Camera-to-aircraft range.
@@ -57,6 +57,20 @@ export function trackedDisplayPositionForCamera(entity, time, result) {
     : entity?.position?.getValue(time, result);
 }
 
+/**
+ * Suppress zoom inertia and enforce the minimum readable range for the
+ * duration of a tracked follow.
+ *
+ * State is keyed on the camera controller and reference-counted by owner
+ * entity, so consecutive handoffs between aircraft never restore the original
+ * inertia while a successor still holds the target. The returned disposer
+ * releases this entity's claim and restores the controller only when the last
+ * owner goes away.
+ *
+ * @param {Cesium.ScreenSpaceCameraController|null} controller Controller whose zoom behaviour is being constrained.
+ * @param {Cesium.Entity} entity Entity claiming the tracked frame.
+ * @returns {function(): void} Disposer that drops this entity's claim.
+ */
 function acquireStableTrackedZoom(controller, entity) {
   if (!controller) return () => {};
   let state = ZOOM_INERTIA_STATES.get(controller);

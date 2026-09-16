@@ -24,6 +24,13 @@ const SHARED_ENTRY_BASELINE = Object.freeze({
   terrainOcclusion: false,
 });
 
+/**
+ * Build a layer-side overlay entry with the host's baseline presentation flags
+ * already applied, so a factory cannot drift from `_normalizeEntry`.
+ * @param {object} [entry={}] - Source-owned fields; a later spread wins, so
+ *   per-entry overrides (e.g. CCTV's `interactive: true`) still apply.
+ * @returns {object} Fresh entry: the shared baseline plus every field of `entry`.
+ */
 export function createOverlayEntry(entry = {}) {
   return { ...SHARED_ENTRY_BASELINE, ...entry };
 }

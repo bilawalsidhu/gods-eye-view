@@ -59,8 +59,9 @@ const SECRET_LIKE_KEY = /(?:api[_-]?key|authorization|bearer|client[_-]?secret|t
 /**
  * Keys whose VALUE never belongs in a debug log, whatever the sender claims.
  * Matches the client list exactly; anything matching is replaced, not kept.
- * @param {string} key
- * @returns {boolean}
+ * @param {string} key - Property name as it appears in the debug payload.
+ * @returns {boolean} True when the name is credential-shaped and its value
+ *   must be swapped for `[Redacted]` before the record is stored.
  */
 export function isSecretLikeKey(key) {
   return SECRET_LIKE_KEY.test(String(key));
@@ -72,8 +73,9 @@ export function isSecretLikeKey(key) {
  * JSON-embedded client secrets, ek_ ephemeral realtime keys, and JWTs —
  * the value shapes a compromised session could exfiltrate. `data:image/`
  * payloads (viewport captures) are dropped for size, not secrets.
- * @param {string} value
- * @returns {string}
+ * @param {string} value - Raw string value as it will appear in the record.
+ * @returns {string} Redacted string, truncated to `DEBUG_STRING_MAX_CHARS`
+ *   with a trailing marker when it exceeded the ceiling.
  */
 export function sanitizeDebugString(value) {
   if (value.startsWith('data:image/')) {
@@ -95,6 +97,18 @@ export function sanitizeDebugString(value) {
     : redacted;
 }
 
+/**
+ * Recursive redaction walk over a parsed JSON value — the engine both the
+ * client (`sanitizeDebugValue`) and the server (`sanitizeDebugRecord`) run.
+ * Applies the string, depth, and per-container ceilings, plus the
+ * `isSecretLikeKey` value swap, at every level.
+ *
+ * @param {unknown} value - Value at this depth of the payload.
+ * @param {number} depth - Recursion depth of this call; past
+ *   `DEBUG_RECORD_MAX_DEPTH` the branch collapses to `[MaxDepth]`.
+ * @returns {unknown} Redacted counterpart of `value`; numbers, booleans, and
+ *   null pass through untouched.
+ */
 function redactValue(value, depth) {
   if (depth > DEBUG_RECORD_MAX_DEPTH) return '[MaxDepth]';
   if (value === null) return null;
@@ -127,8 +141,10 @@ function redactValue(value, depth) {
 /**
  * The client-side shape: same redaction, no plain-object requirement — the
  * client only ever sanitizes object literals it just built.
- * @param {Record<string, unknown>} value
- * @returns {Record<string, unknown>}
+ * @param {Record<string, unknown>} value - Payload the client is about to POST
+ *   to `/api/realtime/debug-log`.
+ * @returns {Record<string, unknown>} Same shape with credential-shaped
+ *   content removed and oversized containers trimmed.
  */
 export function sanitizeDebugValue(value) {
   return /** @type {Record<string, unknown>} */ (redactValue(value, 0));
@@ -914,6 +930,17 @@ export function buildRealtimeSessionConfig({
 
 // ── OpenAI response-shape helpers (shared with the HUD-summary endpoint) ─────
 
+/**
+ * Pull the assistant-visible text out of an OpenAI Responses/Realtime payload.
+ *
+ * Prefers the flat `output_text` the API offers when present, then flattens
+ * `output[].content[]` collecting every `text` / `output_text` part — so a
+ * caller gets one string whether the upstream shape is flat or nested.
+ *
+ * @param {object|null|undefined} data - Parsed OpenAI response body.
+ * @returns {string} Joined, trimmed response text; empty string when the body
+ *   carries no text parts at all.
+ */
 export function extractOpenAiResponseText(data) {
   if (typeof data?.output_text === 'string' && data.output_text.trim()) {
     return data.output_text.trim();
@@ -926,6 +953,17 @@ export function extractOpenAiResponseText(data) {
     .trim();
 }
 
+/**
+ * Collapse free model text into the ≤5-word HUD summary headline.
+ *
+ * Strips punctuation/emoji (Unicode letter, number, space, and hyphen are
+ * kept), drops empty words, and joins the first five — so a verbose or
+ * malformed upstream answer still renders as a short, HUD-safe label.
+ *
+ * @param {unknown} value - Raw summary text from the model (`null`/`undefined`
+ *   yield an empty string).
+ * @returns {string} Space-joined headline of at most five words.
+ */
 export function toFiveWordHudSummary(value) {
   return String(value || '')
     .replaceAll(/[^\p{L}\p{N}\s-]/gu, ' ')

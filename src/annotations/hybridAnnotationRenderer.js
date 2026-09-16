@@ -17,6 +17,12 @@ import { createScreenAnnotationRenderer } from './screenAnnotationRenderer.js';
  *
  * The hybrid surface honors add/update/remove/sync/destroy; update coordinates the
  * one route change that spans both sub-renderers.
+ *
+ * @param {import('cesium').Viewer} viewer - Live viewer; the world route adds its
+ *   entity data source to it and the screen route mounts its SVG host over it.
+ * @returns {{add: Function, update: Function, remove: Function, sync: Function, destroy: Function}}
+ *   Renderer handle satisfying the shared renderer contract consumed by the
+ *   annotation engine (annotationEngine.js).
  */
 export function createHybridAnnotationRenderer(viewer) {
   const world = createWorldAnnotationRenderer(viewer);
@@ -24,6 +30,15 @@ export function createHybridAnnotationRenderer(viewer) {
   // anno.id -> { worldProxy?, screenProxy? } — proxies own the sub-renderer state.
   const routed = new Map();
 
+  /**
+   * Route a new mark: areas and routes drape in world space (plus a screen
+   * callout when labelled), everything else goes to screen only. The routing
+   * entry is registered before any sub-renderer runs so a throw still leaves
+   * the mark removable.
+   *
+   * @param {object} anno - Runtime annotation from the engine; needs `id` and
+   *   `type`, plus the geometry fields that type implies (`ring`/`path`/`anchor`).
+   */
   function add(anno) {
     const entry = {};
     // Route the entry FIRST, then fill it in. A sub-renderer throw (WebGL loss
@@ -66,6 +81,9 @@ export function createHybridAnnotationRenderer(viewer) {
    * Upgrade a pending area without replacing its existing screen-space group.
    * World geometry is new, but the reticle's SVG group is converted in place to
    * the centroid callout so there is no overlapping fade-out/fade-in pair.
+   *
+   * @param {object} anno - Runtime annotation being upgraded; an untracked `id`
+   *   falls through to add(), and a non-area (or ring-less) mark is left alone.
    */
   function update(anno) {
     const entry = routed.get(anno.id);
@@ -100,6 +118,9 @@ export function createHybridAnnotationRenderer(viewer) {
    * so a retry (or a later clear) can finish the job instead of the orphan
    * becoming permanently unreachable. The failure is rethrown after both
    * routes have had their turn.
+   *
+   * @param {object} anno - Runtime annotation to release; its `id` addresses the
+   *   routing entry, and an id with no entry is a no-op.
    */
   function remove(anno) {
     const entry = routed.get(anno.id);
@@ -125,11 +146,23 @@ export function createHybridAnnotationRenderer(viewer) {
     if (failure) throw failure;
   }
 
+  /**
+   * Hand the live annotation set to both sub-renderers for batch reconciliation.
+   * Both current routes are no-ops (CallbackProperty and the postRender loop own
+   * per-frame animation), so this exists purely as the contract's reconcile hook.
+   *
+   * @param {Map<string, object>} annotations - The engine's full annotation map,
+   *   keyed by annotation id.
+   */
   function sync(annotations) {
     world.sync(annotations);
     screen.sync(annotations);
   }
 
+  /**
+   * Tear down both sub-renderers (world data source and screen overlay layer)
+   * and drop the routing table.
+   */
   function destroy() {
     world.destroy();
     screen.destroy();
@@ -144,6 +177,12 @@ export function createHybridAnnotationRenderer(viewer) {
  * engine mutates each tick — `alpha`, `bornAt`, `expiring` — are read through),
  * with a few own properties overridden. Sub-renderers store their own state
  * (`_entities`, SVG refs) as own properties on the proxy, isolated per route.
+ *
+ * @param {object} anno - Runtime annotation to inherit from.
+ * @param {object} overrides - Own properties shadowing inherited fields (`label`,
+ *   `type`, `ring`, `path`, `anchor` are the ones the routes use).
+ * @returns {object} A fresh proxy whose prototype is `anno`, with `overrides` as
+ *   its own enumerable properties.
  */
 function liveProxy(anno, overrides) {
   return Object.assign(Object.create(anno), overrides);

@@ -31,8 +31,11 @@
  * Activation applies the tactical preset, which writes density as well — so a
  * mode-only snapshot restored OFF @ 25% as OFF @ 75%, and the operator's next
  * manual enable came back Dense instead of the Sparse they had been using.
- * @param {?{mode?: string, densityPct?: number}} state
- * @returns {{mode: string, densityPct: ?number}}
+ * @param {?{mode?: string, densityPct?: number}} state Snapshot as read off the
+ *   detection engine; null/undefined fields normalize to OFF/null.
+ * @returns {{mode: string, densityPct: ?number}} Comparable copy: upper-cased
+ *   mode, density kept only when finite so a NaN can never masquerade as a saved
+ *   percent.
  */
 function normalizeDetectionState(state) {
   const densityPct = Number(state?.densityPct);
@@ -92,7 +95,8 @@ export function contactsDetectionExitPlan(restore, current, styleOwnsDetection =
  * that as the default. It should just happen" — rather than restoring whatever
  * profile the operator last left detection at.
  *
- * @param {object} input
+ * @param {object} input Detection engine accessors plus the current Contacts
+ *   transition, injected so the UI and the unit tests drive one code path.
  * @param {boolean} input.active Whether Contacts is now active.
  * @param {?{mode: string, densityPct: ?number}} input.restore Saved pre-Contacts state.
  * @param {() => {mode: string, densityPct: ?number}} input.getState Reads the
@@ -134,7 +138,8 @@ export function applyContactsDetection({
  * no Contacts mode present to explain or undo it, even when the author's own
  * setting was OFF @ 50%. Publish what deactivation would restore instead.
  *
- * @param {object} input
+ * @param {object} input Live engine state plus whatever ownership snapshot the
+ *   caller is holding.
  * @param {?{mode: string, densityPct: ?number}} input.owned Saved pre-Contacts
  *   state; null whenever Contacts does not own detection.
  * @param {string} input.liveMode Current engine detection mode.
@@ -162,7 +167,8 @@ export function shareableDetectionState({ owned, liveMode, liveDensityPct }) {
  * and left a copied link advertising the operator's pre-Contacts values while
  * the map showed Dense @ 75%.
  *
- * @param {object} input
+ * @param {object} input Outcome of the Contacts transition plus the ownership
+ *   state on each side of it.
  * @param {boolean} input.changed Whether the detection engine was touched.
  * @param {boolean} input.hadOwnership Contacts owned detection before.
  * @param {boolean} input.hasOwnership Contacts owns detection now.

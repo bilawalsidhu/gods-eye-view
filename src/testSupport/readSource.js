@@ -15,7 +15,11 @@ export function readSource(relativeSpec, importerUrl) {
   return normalizeEol(readFileSync(new URL(relativeSpec, importerUrl), 'utf8'));
 }
 
-/** Fold CRLF and bare CR to LF. */
+/**
+ * Fold CRLF and bare CR to LF.
+ * @param {string} text - Source text as read from disk, in any EOL flavor.
+ * @returns {string} The same text with every line ending normalized to `\n`.
+ */
 export function normalizeEol(text) {
   return text.replaceAll(/\r\n?/g, '\n');
 }

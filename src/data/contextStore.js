@@ -1,5 +1,11 @@
 const STORE_KEY = '__gevContextStore';
 
+/**
+ * Build the empty store shape. Kept as a function so every fresh store —
+ * including the one tests observe — gets its own Map instances.
+ * @returns {{entities: Map<string, object>, selectedEntityId: string|null,
+ *   selectedAt: number|null}} A new empty context store.
+ */
 function createStore() {
   return {
     entities: new Map(),
@@ -8,6 +14,11 @@ function createStore() {
   };
 }
 
+/**
+ * Return the process-wide context store, creating it on first use.
+ * @returns {{entities: Map<string, object>, selectedEntityId: string|null,
+ *   selectedAt: number|null}} The shared store hanging off `window`.
+ */
 export function getContextStore() {
   if (!window[STORE_KEY]) {
     window[STORE_KEY] = createStore();
@@ -28,6 +39,13 @@ function hasContextHost() {
   return typeof window !== 'undefined' && Boolean(window);
 }
 
+/**
+ * File one entity's context record into the store and stamp the entity with
+ * its context id.
+ * @param {object} entity Live Cesium entity (or carrier object) the record points at.
+ * @param {object} metadata Record fields; `id` is the store key and required.
+ * @returns {object|null} The stored record, or null when identity is missing.
+ */
 export function registerEntityContext(entity, metadata) {
   if (!entity || !metadata?.id) return null;
   const store = getContextStore();
@@ -41,6 +59,11 @@ export function registerEntityContext(entity, metadata) {
   return record;
 }
 
+/**
+ * Make an already-registered entity the shared selection and announce it.
+ * @param {object} entity Entity previously stamped by registerEntityContext().
+ * @returns {object|null} The selected record, or null for an unknown entity.
+ */
 export function selectEntityContext(entity) {
   const store = getContextStore();
   const contextId = entity?.__gevContextId;
@@ -126,6 +149,14 @@ export function clearTrackedSubjectContext(layerId) {
   }
 }
 
+/**
+ * Read the current selection, dropping it when it no longer describes
+ * something visible.
+ * @param {object} [deps] collaborators for the liveness check.
+ * @param {object|null} [deps.dataManager] Layer manager; when supplied a
+ *   record whose owning layer is disabled reads as stale.
+ * @returns {object|null} The live selected record, or null when empty/stale.
+ */
 export function getSelectedEntityContext({ dataManager = null } = {}) {
   const store = getContextStore();
   if (!store.selectedEntityId) return null;
@@ -159,7 +190,11 @@ export function clearSelectedEntityContextForLayer(layerId, { evicted = false } 
   }
 }
 
-/** Remove obsolete context records when a viewport-scoped layer refreshes. */
+/**
+ * Remove obsolete context records when a viewport-scoped layer refreshes.
+ * @param {string} layerId Layer whose records have all been replaced.
+ * @returns {void}
+ */
 export function removeEntityContextsForLayer(layerId) {
   const store = getContextStore();
   for (const [id, record] of store.entities) {
@@ -176,6 +211,13 @@ export function removeEntityContextsForLayer(layerId) {
   }
 }
 
+/**
+ * Liveness check for one context record: visible entity, visible data source,
+ * and — when a manager is supplied — an enabled owning layer.
+ * @param {object|null} record Stored context record to test.
+ * @param {object|null} [dataManager] Layer manager consulted for `layerId`.
+ * @returns {boolean} Whether the record still describes a live subject.
+ */
 export function isContextRecordActive(record, dataManager = null) {
   if (!record) return false;
   if (record.entity?.show === false) return false;

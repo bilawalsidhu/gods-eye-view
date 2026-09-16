@@ -90,7 +90,14 @@ export function detectionBracketAlpha(type, keyholeAlpha, outsideOpacity = AIRCR
   return Math.max(aircraftBracketAlphaFloor(outsideOpacity), alpha);
 }
 
-/** Stable left/front/right bucket for bracket coverage diagnostics and QA. */
+/**
+ * Stable left/front/right bucket for bracket coverage diagnostics and QA.
+ * @param {number} screenX - Projected bracket x in CSS px.
+ * @param {number} viewportWidth - Canvas width in CSS px; must be > 0.
+ * @returns {string} 'left', 'right', or 'front' — front covers the middle
+ *   third, and any unreadable geometry collapses to 'front' rather than
+ *   poisoning the bucket counts.
+ */
 export function detectionHorizontalSector(screenX, viewportWidth) {
   const width = Number(viewportWidth);
   const x = Number(screenX);
@@ -111,7 +118,15 @@ export const VIEW_SCALE_BUDGETS = Object.freeze({
   global: Object.freeze({ 0: 6, 25: 14, 50: 28, 75: 42, 100: 56 }),
 });
 
-/** Clamp and canonicalize arbitrary input onto the five approved density stops. */
+/**
+ * Clamp and canonicalize arbitrary input onto the five approved density stops.
+ * @param {number} inputPct - Raw density percent from a slider, share link, or
+ *   persisted state; may be off-range or non-numeric.
+ * @param {number} fallback - Stop used when `inputPct` is not finite. Fed back
+ *   through the same canonicalization, so it need not itself be a valid stop.
+ * @returns {number} One of 0, 25, 50, 75, 100 — bands split at the midpoints,
+ *   so 12.5 is the exact tie between OFF and SPARSE.
+ */
 export function canonicalizeDensity(inputPct, fallback = 50) {
   const raw = Number(inputPct);
   if (!Number.isFinite(raw)) return canonicalizeDensity(fallback, 50);
@@ -121,7 +136,13 @@ export function canonicalizeDensity(inputPct, fallback = 50) {
   return pct < 87.5 ? 75 : 100;
 }
 
-/** Derive the only valid enabled profile from a canonical density stop. */
+/**
+ * Derive the only valid enabled profile from a canonical density stop.
+ * @param {number} inputPct - Density percent; canonicalized first, so callers
+ *   may hand back raw slider input.
+ * @returns {string} 'SPARSE', 'BALANCED', or 'DENSE' — the enabled profile the
+ *   stop belongs to, never 'OFF' (OFF is an explicit mode, not a density).
+ */
 export function profileForDensity(inputPct) {
   const stop = canonicalizeDensity(inputPct);
   if (stop <= 25) return 'SPARSE';
@@ -129,7 +150,13 @@ export function profileForDensity(inputPct) {
   return 'BALANCED';
 }
 
-/** Return the canonical default stop for an enabled profile or legacy alias. */
+/**
+ * Return the canonical default stop for an enabled profile or legacy alias.
+ * @param {string} profile - Profile name or legacy alias ('SURVEY', 'NORMAL',
+ *   'PANOPTIC', …); unknown values normalize to null.
+ * @returns {number} Density stop the profile ships at — 25/50/75 — with null
+ *   (and BALANCED's own default) collapsing to 50.
+ */
 export function defaultDensityForProfile(profile) {
   const normalized = normalizeProfile(profile);
   if (normalized === 'SPARSE') return 25;
@@ -137,7 +164,13 @@ export function defaultDensityForProfile(profile) {
   return 50;
 }
 
-/** Normalize current and legacy profile labels. OFF remains an enabled-state value. */
+/**
+ * Normalize current and legacy profile labels. OFF remains an enabled-state value.
+ * @param {string} profile - Raw profile label from UI state, a share link, or a
+ *   persisted store; may carry legacy aliases or surrounding whitespace.
+ * @returns {?string} Canonical 'OFF', 'SPARSE', 'BALANCED', or 'DENSE', or null
+ *   when the label names no known profile and the caller must fall back.
+ */
 export function normalizeProfile(profile) {
   const raw = String(profile || '').trim().toUpperCase();
   if (raw === 'OFF') return 'OFF';
@@ -147,7 +180,14 @@ export function normalizeProfile(profile) {
   return null;
 }
 
-/** Normalize the user-selectable layer allocation strategy. */
+/**
+ * Normalize the user-selectable layer allocation strategy.
+ * @param {string} strategy - Raw strategy label ('ELASTIC' | 'WEIGHTED'); case
+ *   and whitespace tolerant, and may be null/undefined.
+ * @param {string} fallback - Strategy to honor when `strategy` is unrecognized;
+ *   itself normalized, so an unknown fallback degrades to ELASTIC.
+ * @returns {string} A member of ALLOCATION_STRATEGIES, never an arbitrary string.
+ */
 export function normalizeAllocationStrategy(strategy, fallback = ALLOCATION_ELASTIC) {
   const raw = String(strategy || '').trim().toUpperCase();
   if (ALLOCATION_STRATEGIES.includes(raw)) return raw;
@@ -157,7 +197,13 @@ export function normalizeAllocationStrategy(strategy, fallback = ALLOCATION_ELAS
     : ALLOCATION_ELASTIC;
 }
 
-/** Classify camera altitude into the shared label-budget view scale. */
+/**
+ * Classify camera altitude into the shared label-budget view scale.
+ * @param {number} altitudeM - Camera height above the ellipsoid in metres;
+ *   non-finite input reads as orbital.
+ * @returns {string} One of the VIEW_SCALE_BUDGETS keys: 'street', 'city',
+ *   'metro', 'regional', or 'global'.
+ */
 export function viewScaleForAltitude(altitudeM) {
   const altitude = Number.isFinite(Number(altitudeM)) ? Math.max(0, Number(altitudeM)) : 1e9;
   if (altitude < 1200) return 'street';
@@ -167,7 +213,15 @@ export function viewScaleForAltitude(altitudeM) {
   return 'global';
 }
 
-/** Resolve the collective text-callout cap for an altitude and density stop. */
+/**
+ * Resolve the collective text-callout cap for an altitude and density stop.
+ * @param {number} altitudeM - Camera altitude in metres, passed through
+ *   viewScaleForAltitude to pick the budget row.
+ * @param {number} densityPct - Density percent, canonicalized to a stop so the
+ *   lookup never misses a band.
+ * @returns {number} Maximum simultaneous text callouts across ALL detection
+ *   layers at this zoom — the arbiter's shared budget, not a per-layer count.
+ */
 export function labelBudgetFor(altitudeM, densityPct) {
   const scale = viewScaleForAltitude(altitudeM);
   const stop = canonicalizeDensity(densityPct);
@@ -178,6 +232,14 @@ export function labelBudgetFor(altitudeM, densityPct) {
  * Migrate a persisted/legacy mode+density pair into one canonical state.
  * Legacy Panoptic/God intent resolves to Dense even when its historical
  * density was below 75; legacy Sparse remains inside the Sparse band.
+ *
+ * @param {string} mode - Raw persisted mode label, including legacy aliases.
+ * @param {number} densityPct - Persisted density percent; ignored when it
+ *   contradicts the resolved profile.
+ * @param {number} fallbackDensity - Stop used when `densityPct` is unusable.
+ * @returns {{enabled: boolean, profile: string, densityPct: number}} Canonical
+ *   state where `profile` and `densityPct` always agree, so no later code has
+ *   to re-derive one from the other.
  */
 export function migrateDetectionState(mode, densityPct, fallbackDensity = 50) {
   const rawMode = String(mode || '').trim().toUpperCase();

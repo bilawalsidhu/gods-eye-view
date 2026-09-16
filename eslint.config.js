@@ -106,16 +106,16 @@ export default [
   },
 
   // ---------------------------------------------------------------------
-  // JSDoc hygiene (Batch E). Two tiers:
-  //   1. VALIDATION everywhere (this file, part of the merge gate) — where
-  //      JSDoc exists it must be correct: types resolve, param names/types
-  //      match the signature, tags are canonical. This costs nothing on
-  //      undocumented code.
-  //   2. REQUIREMENT on the public surface (eslint.docs.config.js, run via
-  //      `npm run lint:docs`, NOT part of the merge gate) — exported
-  //      functions/classes need doc blocks. This is the docs-coverage
-  //      metric feeding Batch H; closing the gap list is tracked there
-  //      rather than blocked here.
+  // JSDoc hygiene. Two tiers, BOTH in the merge gate since Batch H:
+  //   1. VALIDATION everywhere — where JSDoc exists it must be correct:
+  //      types resolve, param names/types match the signature, tags are
+  //      canonical. This costs nothing on undocumented code.
+  //   2. REQUIREMENT on the authored surface (scoped block below) — every
+  //      exported function/class/constructor in `src/` must carry a doc
+  //      block, and documented signatures must declare their params and
+  //      returns. Batch H authored the 3934-gap backlog to zero (2026-09-16)
+  //      and promoted the tier out of the non-gating `eslint.docs.config.js`
+  //      metric into this gate; workers/vendored/dormant code stays exempt.
   // ---------------------------------------------------------------------
   {
     plugins: { jsdoc },
@@ -126,6 +126,32 @@ export default [
       'jsdoc/check-types': 'error',
       'jsdoc/implements-on-classes': 'error',
       'jsdoc/no-undefined-types': 'error',
+    },
+  },
+
+  {
+    // Requirement tier (Batch H promotion). Same scope the docs metric used:
+    // authored `src/` JavaScript; tests are `.test.mjs` (never matched by the
+    // `*.js` glob), workers/vendored/dormant trees stay exempt.
+    files: ['src/**/*.js'],
+    ignores: ['src/data/local_data/**', 'src/react/**', 'src/workers/**'],
+    rules: {
+      'jsdoc/require-jsdoc': ['error', {
+        require: { ClassDeclaration: true, MethodDefinition: false },
+        contexts: [
+          'ExportedFunctionDeclaration',
+          'ExportedFunctionExpression',
+          'ExportedClassDeclaration',
+          'ExportedVariableDeclaration > ArrowFunctionExpression',
+        ],
+      }],
+      'jsdoc/require-param': 'error',
+      'jsdoc/require-param-description': 'error',
+      'jsdoc/require-param-name': 'error',
+      'jsdoc/require-param-type': 'error',
+      'jsdoc/require-returns': 'error',
+      'jsdoc/require-returns-description': 'error',
+      'jsdoc/require-returns-type': 'error',
     },
   },
 

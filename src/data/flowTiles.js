@@ -97,7 +97,9 @@ export function decodeFlowTile(data, z, x, y) {
   return segments;
 }
 
-/** Insert into the decode cache with oldest-entry eviction. */
+/** Insert into the decode cache with oldest-entry eviction.
+ * @param {string} key Tile identity, `z/x/y`.
+ * @param {{at:number, segments:Array}} entry Decode timestamp plus the decoded segments for that tile. */
 function cacheSet(key, entry) {
   if (!_decodeCache.has(key) && _decodeCache.size >= DECODE_CACHE_MAX_ENTRIES) {
     const oldest = _decodeCache.keys().next().value;
@@ -116,7 +118,7 @@ function cacheSet(key, entry) {
  * failed (e.g. keyless 503, aborted signal, proxy down).
  *
  * @param {{south:number, west:number, north:number, east:number}} bounds - Degrees.
- * @param {object} [opts]
+ * @param {object} [opts] Fetch controls.
  * @param {AbortSignal} [opts.signal] - Abort signal (camera moved / layer disabled).
  * @param {number} [opts.zoom=12] - Flow tile zoom level.
  * @returns {Promise<Array<{coords:number[][], trafficLevel:number, roadType:string, closure:boolean}>>}
