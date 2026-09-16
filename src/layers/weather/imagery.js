@@ -16,9 +16,13 @@ import { DRAPED_ALPHA_SCALE } from '../../data/xweatherCatalogue.js';
  * @param {object} spec Layer spec.
  * @param {object} [options]
  * @param {number} [options.notBefore=0] Epoch ms; 0 means "cache as normal".
+ * @param {'globe'|'tileset'} [options.regime] Where the layer is being added.
  * @returns {object} Cesium provider options.
  */
-export function imageryOptionsFor(spec, { notBefore = 0 } = {}) {
+export function imageryOptionsFor(
+  spec,
+  { notBefore = 0, regime = 'globe' } = {},
+) {
   return {
     url: notBefore
       ? `${spec.tileUrlTemplate}?t=${notBefore}`
@@ -32,7 +36,15 @@ export function imageryOptionsFor(spec, { notBefore = 0 } = {}) {
     // Past this the service has no more detail and is only upsampling — and
     // every level is a separate set of billable tiles. Cesium magnifies past
     // it for free.
-    maximumLevel: spec.maxTileLevel,
+    //
+    // The two regimes read this ceiling differently. The globe treats it as
+    // inclusive and will request it; draped imagery clamps to
+    // `maximumLevel - 1` and never reaches it, which would leave the same
+    // layer a level coarser in 3D than on the globe — visibly softer, for no
+    // reason the viewer could guess. Asking for one more lands the clamp on
+    // the level actually wanted, and the clamp still stops it going past.
+    maximumLevel:
+      regime === 'tileset' ? spec.maxTileLevel + 1 : spec.maxTileLevel,
   };
   // No per-provider Cesium.Credit here on purpose. One would land in the
   // display's *dynamic* frame credits, while the attribution gate reads
@@ -130,7 +142,7 @@ export function createImageryStack() {
      */
     apply(collection, spec, { notBefore = 0, regime = 'globe' } = {}) {
       const provider = new Cesium.UrlTemplateImageryProvider(
-        imageryOptionsFor(spec, { notBefore }),
+        imageryOptionsFor(spec, { notBefore, regime }),
       );
       const next = new Cesium.ImageryLayer(
         provider,

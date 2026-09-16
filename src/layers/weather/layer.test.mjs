@@ -19,6 +19,7 @@ import {
 import { noKeyError } from './model.js';
 import {
   MAX_TILE_ZOOM,
+  isValidTileCoord,
   SAMPLED_MAX_TILE_ZOOM,
   SYMBOL_MAX_TILE_ZOOM,
 } from '../../data/xweatherTiles.js';
@@ -630,6 +631,30 @@ test('a layer stops at the depth its own data supports', () => {
   assert.equal(ceiling('lightning-flash'), SYMBOL_MAX_TILE_ZOOM);
   assert.equal(ceiling('alerts'), SYMBOL_MAX_TILE_ZOOM);
   assert.equal(ceiling('stormcells'), SYMBOL_MAX_TILE_ZOOM);
+});
+
+test('both regimes resolve to the same deepest level', () => {
+  // The ceiling means different things either side of Cesium: the globe
+  // requests `maximumLevel`, draped imagery clamps to `maximumLevel - 1` and
+  // never reaches it. Left alone the same layer is a level coarser in 3D —
+  // half the resolution, for no reason a viewer could guess at.
+  for (const spec of WEATHER_LAYER_SPECS) {
+    const globe = imageryOptionsFor(spec, { regime: 'globe' }).maximumLevel;
+    const draped = imageryOptionsFor(spec, { regime: 'tileset' }).maximumLevel;
+    // What each regime will actually ask the proxy for.
+    assert.equal(globe, spec.maxTileLevel, `${spec.id} on the globe`);
+    assert.equal(draped - 1, spec.maxTileLevel, `${spec.id} draped`);
+    // And never past it: the proxy refuses a level this layer does not offer.
+    assert.ok(
+      isValidTileCoord(spec.maxTileLevel, 0, 0, spec.maxTileLevel),
+      `${spec.id} must be fetchable at its own ceiling`,
+    );
+    assert.equal(
+      isValidTileCoord(spec.maxTileLevel + 1, 0, 0, spec.maxTileLevel),
+      false,
+      `${spec.id} must not be fetchable past it`,
+    );
+  }
 });
 
 test('the tile template is same-origin and carries no credential', () => {
