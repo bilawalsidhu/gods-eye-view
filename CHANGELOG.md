@@ -81,6 +81,9 @@
 - Preserve loaded base imagery when successive scene shots use the same provider, avoiding a bare-globe flash at shot handoffs.
 
 - Add the Nepal Flood Incident scene with geographic labels, synchronized event controls, linked witness sources, and Vantor comparison imagery over Esri. Nepal uses Google 3D when available and falls back to Esri with keyless terrain without rewriting saved shots. Bundled event imagery and derived data retain their separate non-commercial terms.
+- Add an agency-agnostic `message-signs` layer rendering live electronic message signs as readable board faces oriented to the traffic each sign addresses, with Nebraska 511 (NDOT) as the first pack. Serve the list and the sign-face images from the app origin, since the upstream CORS preflight is answered by its SPA host as HTML.
+
+- Add the Nebraska 511 (NDOT) camera pack: statewide highway cameras behind `CCTV_NE511_ENABLED` / `CCTV_NE511_MAX_SOURCES`, prioritized along the I-80 corridor so a lowered cap thins to statewide coverage, with frames pinned to the NDOT image origin and road-aligned headings precomputed from OSM way geometry.
 
 - Add an optional Nominatim geocoding adapter with configurable search/reverse endpoints, cancellation, bounded responses and retryable upstream errors. Extract portable response-reading and Overpass lexical helpers while retaining existing server exports.
 

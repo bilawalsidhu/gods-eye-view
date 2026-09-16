@@ -236,6 +236,83 @@ export const CALGARY_DOWNTOWN = { lat: 51.0461, lon: -114.0626 };
  * body cannot be buffered without limit. */
 export const CALGARY_MAX_CATALOG_BYTES = 4 * 1024 * 1024;
 
+/**
+ * Nebraska 511 (NDOT): keyless CARS-X / OneWeb GraphQL endpoint. One POST
+ * returns the statewide camera list; frames are stills on a separate host, to
+ * which the frame proxy is pinned by construction.
+ */
+export const NE511_GRAPHQL_URL = 'https://www.511.nebraska.gov/api/graphql';
+export const NE511_IMAGE_ORIGIN = 'https://dot511.nebraska.gov/images/';
+/**
+ * Statewide bbox plus a zoom past the server's clustering threshold: at the
+ * site's own statewide zoom (7) dense areas collapse into `Cluster` entries
+ * that carry no camera.
+ */
+export const NE511_BOUNDS = Object.freeze({
+  north: 43.1,
+  south: 39.9,
+  east: -95.2,
+  west: -104.2,
+  zoom: 11,
+});
+/** One camera entity is one source; the whole network plus headroom. */
+export const DEFAULT_NE511_MAX_SOURCES = 350;
+/**
+ * This network follows I-80 rather than metro cores, so anchors are spaced
+ * along the corridor west to east. Anchors only ORDER a pack and the
+ * catalog-wide cap thins from the END of that order (cap.js), so corridor
+ * spacing keeps a thinned catalog statewide instead of collapsing onto Omaha.
+ */
+export const NE511_ANCHORS = [
+  { lat: 41.2565, lon: -95.9345 }, // Omaha
+  { lat: 40.8136, lon: -96.7026 }, // Lincoln
+  { lat: 40.9264, lon: -98.342 }, // Grand Island
+  { lat: 41.1239, lon: -100.7654 }, // North Platte
+  { lat: 41.128, lon: -101.7196 }, // Ogallala
+  { lat: 41.1428, lon: -102.9783 }, // Sidney
+  { lat: 41.8666, lon: -103.6672 }, // Scottsbluff
+];
+/**
+ * Mid-corridor elevation prior: the state climbs from ~320 m at Omaha to
+ * ~1450 m at Kimball. The client's ground snap corrects each camera.
+ */
+export const NE511_GROUND_ELEVATION_M = 600;
+/** Camera list for one bbox; `views` is one entry per angle on the mast. */
+export const NE511_CAMERAS_QUERY = `query MapFeatures($input: MapFeaturesArgs!) {
+  mapFeaturesQuery(input: $input) {
+    mapFeatures {
+      __typename
+      uri
+      title
+      ... on Camera {
+        active
+        bbox
+        views {
+          uri
+          category
+          ... on CameraView {
+            url
+          }
+        }
+      }
+    }
+    error {
+      message
+      type
+    }
+  }
+}`;
+/** Road-heading alignment (roadHeadings.js). */
+export const ROAD_HEADING_MATCH_RADIUS_M = 150;
+/**
+ * Roads a highway camera plausibly watches. Service roads and tracks are
+ * excluded so a mast beside a frontage lane aligns to the mainline; link ramps
+ * are included, since an interchange camera often looks down one.
+ */
+export const ROAD_HEADING_HIGHWAY_FILTER =
+  '[highway~"^(motorway|trunk|primary|secondary|motorway_link|trunk_link)$"]';
+/** Overpass server-side QL timeout; the transport adds its own wall clock. */
+export const ROAD_HEADING_QL_TIMEOUT_S = 60;
 /** Camera CATALOGS change rarely; 15 min keeps multi-megabyte upstream list refetches (Austin rows.json + 4 Caltrans districts + TfL + Ontario 511) infrequent. Frames are fetched per-request and are unaffected. */
 export const CCTV_SOURCE_CACHE_MS = 15 * 60 * 1000;
 /** Per-provider catalog-fetch timeout. Bounds the worst-case refresh so one
