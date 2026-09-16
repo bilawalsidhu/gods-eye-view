@@ -861,8 +861,11 @@ export class StyleManager extends ShellFacade {
    *
    * Collapse before hiding. A panel put away while expanded would come back
    * expanded into a rail that has since allocated its height elsewhere.
+   *
+   * @param {object} [change] The visibility change that prompted this.
+   * @param {string} [change.origin] Who asked; only a person opens the panel.
    */
-  _syncWeatherPanelPresence() {
+  _syncWeatherPanelPresence({ origin } = {}) {
     const panel = this._weatherPanel;
     if (!panel) return;
     const enabled = this._dataManager?.isEnabled?.('weather') === true;
@@ -871,6 +874,13 @@ export class StyleManager extends ShellFacade {
       this.setPanelCollapsed('weather-panel', true, { persist: false });
     }
     panel.hidden = !enabled;
+    // Switching the layer on is a request to use it, so its controls come up
+    // open rather than as a tab to find and click. Only for an explicit
+    // toggle: a share link or a scene carries the panel state its author
+    // chose, and restoring one must not force it open.
+    if (enabled && origin === 'user') {
+      this.setPanelCollapsed('weather-panel', false, { explicit: true });
+    }
     this._scheduleRightPanelLayout({ reconsiderAutoCollapse: true });
   }
 

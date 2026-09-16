@@ -206,7 +206,7 @@ export class LayerBindings {
         this._feedback._loadingFeedbackEvent = change;
         this._updateGlobalLoadingFeedback(performance.now());
         if (change?.type === 'visibility' && change.layerId === 'weather') {
-          this._syncWeatherPanelPresence();
+          this._syncWeatherPanelPresence(change);
         }
       });
     }
