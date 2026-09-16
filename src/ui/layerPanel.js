@@ -21,6 +21,7 @@ const PANEL_GROUPS = [
       'flights',
       'military',
       'ais-live-vessels',
+      'live-trains',
       'traffic',
       'transit',
       'bikeshare',

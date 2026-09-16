@@ -57,3 +57,23 @@ export const MAX_CANVAS_FRUSTUMS = 64;
 
 /** OSM attribution may collapse after five seconds; full credit stays in Data attribution. */
 export const CREDIT_DISPLAY_MS = 5000;
+
+/** Cordon analysis — the town boundary bbox may span at most this (≈66 km),
+ * keeping every cordon query well under the proxy's bbox ceiling. */
+export const CORDON_MAX_BBOX_DEG = 0.6;
+
+/** Degrees of padding around the boundary bbox so roads and cameras just
+ * outside the line still participate in crossing and coverage checks. */
+export const CORDON_BBOX_MARGIN_DEG = 0.01;
+
+/** Meters — a mapped reader within this distance of an entry road's polyline
+ * counts that entry as covered. Readers sit on the roadside, and OSM
+ * positions are accurate to a few meters, so this is deliberately tight. */
+export const CORDON_COVERAGE_M = 100;
+
+/** Meters — boundary crossings closer than this that belong to the same
+ * named road merge into one gate (dual carriageways, split junctions). */
+export const CORDON_MERGE_M = 60;
+
+/** Overpass `out geom N;` cap for the cordon road fetch. */
+export const CORDON_ROADS_LIMIT = 4000;

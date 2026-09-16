@@ -138,6 +138,7 @@ const schemas = [
             'telegeography-submarine-cables',
             'local-firms',
             'alpr-cameras',
+            'live-trains',
           ],
         },
         enabled: {
@@ -170,6 +171,7 @@ const schemas = [
             'telegeography-submarine-cables',
             'local-firms',
             'alpr-cameras',
+            'live-trains',
           ],
         },
       },
@@ -771,6 +773,7 @@ const schemas = [
               'ais-live-vessels',
               'local-firms',
               'earthquakes',
+              'alpr-cameras',
             ],
           },
         },
