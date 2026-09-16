@@ -221,6 +221,10 @@ const LAYER_ALIASES = new Map([
   ['license plate readers', 'alpr-cameras'],
   ['license plate cameras', 'alpr-cameras'],
   ['plate readers', 'alpr-cameras'],
+  ['trains', 'live-trains'],
+  ['live trains', 'live-trains'],
+  ['amtrak', 'live-trains'],
+  ['amtrak trains', 'live-trains'],
 ]);
 
 const CITY_ALIASES = new Map([

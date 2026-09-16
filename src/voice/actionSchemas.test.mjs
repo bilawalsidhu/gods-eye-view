@@ -20,10 +20,10 @@ test('the complete Realtime tool payload retains its pre-extraction contract and
     .update(JSON.stringify(stable(GEV_REALTIME_TOOLS)))
     .digest('hex');
   // Re-pinned for the ALPR analyst extension (analyst_query layers enum +
-  // layer/filter description wording).
+  // layer/filter description wording) and the live-trains layer enums.
   assert.equal(
     digest,
-    '1c0ed488771866e6cc95c04159835f4487c111aea4ce883e5fe628dcc3db837f',
+    'b86063a019aff621eb80b7b0a34f73eab46a39c467e5011322fabfe6deecc8df',
   );
 });
 
