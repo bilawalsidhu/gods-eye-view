@@ -1,5 +1,7 @@
 # Changelog
 
+- Bound the remaining upstream body reads (FIRMS, CelesTrak, adsb.lol, TomTom, OpenSky, adsbdb) with streaming size caps and shared deadlines; the adsb.lol military and OpenSky `states/all` polls gain deadlines of their own.
+
 - Director scene documents now support bounded data-pack manifests, per-shot
   selection and registered GeoJSON/PNG/media loaders with explicit placement,
   visible attribution and cancellation/disposal on Stop or replacement.
