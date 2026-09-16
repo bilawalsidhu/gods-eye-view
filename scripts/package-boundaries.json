@@ -260,6 +260,7 @@
       "server/providers/common/request.js",
       "server/providers/common/source-root.js",
       "server/providers/openai.js",
+      "server/providers/openai/codex-auth.js",
       "server/providers/openai/constants.js",
       "server/providers/openai/debug-log.js",
       "server/providers/openai/hud-summary.js",
@@ -1158,6 +1159,7 @@
     "modules": [
       "src/voice/realtimeController.js",
       "src/voice/realtimeBackend.js",
+      "src/voice/cloudVoiceAuth.js",
       "src/voice/control.js",
       "src/voice/layerSummary.js",
       "src/voice/voiceCost.js",
@@ -1697,6 +1699,7 @@
       "src/voice/gevActions.js",
       "src/voice/gevRealtime.js",
       "src/voice/layerSummary.js",
+      "src/voice/cloudVoiceAuth.js",
       "src/voice/realtimeBackend.js",
       "src/voice/realtimeController.js",
       "src/voice/voiceCost.js",

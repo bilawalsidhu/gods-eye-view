@@ -143,7 +143,9 @@ export function buildCapabilitySummary(credentials) {
     flights: configured('OPENSKY_CLIENT_ID') && configured('OPENSKY_CLIENT_SECRET')
       ? 'OpenSky OAuth credentials present (runtime mode and validity not verified)'
       : 'OpenSky OAuth credentials not configured',
-    voice: configured('OPENAI_API_KEY') ? 'available' : 'off until an OpenAI key is added',
+    voice: configured('OPENAI_API_KEY')
+      ? 'available'
+      : 'ChatGPT/Codex OAuth can be selected at runtime',
     vessels: configured('AISSTREAM_API_KEY') ? 'live AISStream feed' : 'off until an AISStream key is added',
     fires: configured('FIRMS_MAP_KEY') ? 'live NASA FIRMS feed' : 'off until a FIRMS key is added',
     traffic: configured('TOMTOM_API_KEY') ? 'live TomTom flow' : 'built-in traffic simulation',
