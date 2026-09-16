@@ -22,6 +22,14 @@ import { createMapSourceControls } from './mapSource.js';
 import { STYLES } from './effects.js';
 
 import * as Cesium from 'cesium';
+import {
+  BLOOM_SCALE_VERSION,
+  clampBloomIntensity,
+  decodeBloomIntensity,
+} from '../bloom.js';
+import { createSelfLocateControl } from './selfLocate.js';
+import { setupZoomSmoothing } from './zoomSmoothing.js';
+import { decodeBloomIntensity } from '../bloom.js';
 
 import { aircraftTrackingTarget } from '../cockpitTracking.js';
 
@@ -538,6 +546,8 @@ export class StyleManager extends ShellFacade {
     this._initCctvPanel();
     this._initGlobalContextPanel();
     this._initLocationBar();
+    this._initSelfLocate();
+    this._initZoomSmoothing();
     this._initShareButton();
     this._initCameraOrientationControls();
     this._initClearSelectedLayersButton();
@@ -1325,6 +1335,199 @@ export class StyleManager extends ShellFacade {
   }
 
   /**
+   * 500 ms DOM ticker for the traffic sync chip (was per-frame). It also
+   * polls the loading chip as a safety net: a camera-driven layer can flip
+   * its own `stats.loading` without emitting a manager event, and that is
+   * the one loading start the event path cannot see.
+   */
+  _startTrafficChipTicker() {
+    return this._feedback._startTrafficChipTicker();
+  }
+
+  /**
+   * Self-stopping 60 ms ticker for the global loading chip.
+   *
+   * The chip used to ride the style rAF loop, which perf wave 2 made
+   * self-stopping — leaving the chip frozen mid-state whenever no crossfade
+   * or animated shader was running (it would never reveal, never cross the
+   * long-load threshold, and never dwell out). Its reducer
+   * (src/loadingFeedback.js) is time-driven, so it needs real ticks; it is
+   * also pure DOM, so it takes NO governor hold and requests no render.
+   * Armed by _updateGlobalLoadingFeedback whenever loading leaves idle or a
+   * universal notice begins, and stops once both have settled.
+   * (rebase 2026-08-16: main's loading chip vs wave 2's stopped loop)
+   * @returns {void}
+   */
+  _armLoadingFeedbackTicker() {
+    return this._feedback._armLoadingFeedbackTicker();
+  }
+
+  /** Stop the loading-chip ticker if it is running. Idempotent. */
+  _stopLoadingFeedbackTicker() {
+    return this._feedback._stopLoadingFeedbackTicker();
+  }
+
+  // ── Location Bar ─────────────────────────────
+
+  /** Subscribe to the current location lookup, including replacements of its control owner. */
+  subscribeLocationSearch(listener, options) {
+    return this._locationState.subscribe(listener, options);
+  }
+
+  _handleLocationSearchState(state, change) {
+    if (this._disposed || !change) return;
+    if (change.type === 'started')
+      this._activeLocationSearchGeneration = change.generation;
+    else if (change.type === 'found') {
+      this._searchedLocationLabel = state.destination.label || state.query;
+      this._setActiveLocation(null);
+      this._currentPoi = null;
+      this._collapsePOIRow();
+      this._updateLocationMiniStatus();
+    } else if (change.type === 'missing') this._showToast('Location not found');
+    else if (change.type === 'failed') this._showToast('Search failed');
+    else if (change.type === 'settled')
+      this._settleLocationSearchUi(change.generation);
+    else if (
+      change.type === 'reset' &&
+      this._activeLocationSearchGeneration !== null
+    ) {
+      this._settleLocationSearchUi(this._activeLocationSearchGeneration);
+    }
+  }
+
+  /**
+   * Initializes the location bar: renders city pills from CITY_POIS, sets up
+   * QWERTY keyboard navigation for POI selection, wires the search toggle
+   * and geocoding search input.
+   * @returns {void}
+   */
+  /**
+   * Universal entity search: single input querying aircraft, vessels, places
+   * simultaneously from already-loaded layer data (no new fetch pathway).
+   * @returns {void}
+   */
+  /**
+   * Self-locate button — purely client-side, ephemeral, never transmitted.
+   * @returns {void}
+   */
+  _initSelfLocate() {
+    this._selfLocateControl?.destroy();
+    if (!this._selfLocateBtn) return;
+    this._selfLocateControl = createSelfLocateControl({
+      button: this._selfLocateBtn,
+      viewer: this.viewer,
+      showToast: (message) => this._showToast(message),
+    });
+  }
+
+  /**
+   * Trackpad zoom smoothing: prefers Cesium's built-in controller options,
+   * adds rAF easing and distinct sensitivity for trackpad/pinch vs mouse.
+   * @returns {void}
+   */
+  _initZoomSmoothing() {
+    this._zoomSmoothingControl?.destroy();
+    this._zoomSmoothingControl = setupZoomSmoothing(this.viewer);
+  }
+
+  _initLocationBar() {
+    const { CITY_POIS, searchAndFlyTo, LocationSearch } = this.services;
+    this._locationControls?.destroy();
+    this._locationLookupUnsubscribe?.();
+    this._locationLookup?.destroy();
+    this._locationLookup = new LocationSearch({
+      input: this._locationSearch,
+      begin: () => this._beginDeferredNavigation('location'),
+      isCurrent: (generation) =>
+        !this._disposed && generation === this._navigationGeneration,
+      beforeFly: (generation) => this._reassertNavigationHandoff(generation),
+      search: (query, options) =>
+        searchAndFlyTo(this.viewer, query, {
+          placeSearch: this.placeSearch,
+          ...options,
+        }),
+      onError: (error) => console.error('[Search] Geocoding failed:', error),
+    });
+    this._locationLookupUnsubscribe = this._locationLookup.subscribe(
+      ({ initial, change }) => {
+        this._locationState.publish(initial ? { type: 'reset' } : change);
+      },
+    );
+    this._locationControls = new LocationControls({
+      elements: {
+        pills: this._locationPills,
+        poiRow: this._poiRow,
+        divider: this._locationBarDivider,
+        search: this._locationSearch,
+        searchToggle: this._searchToggle,
+        resetButtons: [this._resetGlobeBtn, this._cockpitResetGlobeBtn],
+        statusCity: this._locationMiniCity,
+        statusPoi: this._locationMiniPoi,
+      },
+      cities: CITY_POIS,
+      getExpandedCity: () => this._expandedCityId,
+      onCity: (id) => this._onCityPillClick(id),
+      onPoi: (id, index) => this._onPoiClick(id, index),
+      onSearch: (query) => this._locationLookup.run(query),
+      onReset: () => this.resetToGlobeView(),
+    });
+  }
+
+  /**
+   * Signals the start of an inter-city world jump: notifies the traffic layer
+   * to pause tile fetching and suspends detection overlays to prevent stale
+   * rendering during the flight.
+   * @returns {void}
+   */
+  _beginWorldJumpTransition() {
+    const { suspendDetection, trafficLayer } = this.services;
+    clearTimeout(this._trafficTransitionTimer);
+    trafficLayer.beginWorldJump?.();
+    suspendDetection('intercity');
+  }
+
+  /**
+   * Signals the end of an inter-city world jump: resumes traffic tile fetching,
+   * resumes detection overlays, and forces a traffic sync chip update.
+   * @returns {void}
+   */
+  _endWorldJumpTransition() {
+    const { resumeDetection, trafficLayer } = this.services;
+    clearTimeout(this._trafficTransitionTimer);
+    trafficLayer.endWorldJump?.();
+    resumeDetection();
+    this._updateTrafficSyncChip(true);
+  }
+
+  /**
+   * Wraps a fly-to action with world-jump transition hooks when the target
+   * city differs from the current one. Applies begin/end transition signals
+   * with a 5.2s safety timeout to guarantee cleanup if the flight callback
+   * never fires onComplete.
+   * @param {boolean} cityChanged - Whether the destination is in a different city.
+   * @param {function} flyAction - Callback receiving `{onStart, onComplete}` hooks; should return a result with targetPosition.
+   * @returns {*} Return value from flyAction.
+   */
+  _flyWithTransition(cityChanged, flyAction) {
+    return this._runExplicitNavigation('location', () => {
+      if (!cityChanged) return flyAction({});
+      let completed = false;
+      const finalize = () => {
+        if (completed) return;
+        completed = true;
+        this._endWorldJumpTransition();
+      };
+      const result = flyAction({
+        onStart: () => this._beginWorldJumpTransition(),
+        onComplete: finalize,
+      });
+      this._trafficTransitionTimer = window.setTimeout(finalize, 5200);
+      return result;
+    });
+  }
+
+  /**
    * Release camera ownership when a resolved Location destination starts.
    * Contact mode and its selected subject remain intact so FOCUS can return to
    * that subject after the user finishes inspecting the destination.
@@ -1470,6 +1673,9 @@ export class StyleManager extends ShellFacade {
     this._mapSourceControls?.destroy();
     this._cameraOrientationControls?.destroy();
     this._clearLayersControl?.destroy();
+    this._locationControls?.destroy();
+    this._selfLocateControl?.destroy();
+    this._zoomSmoothingControl?.destroy();
     this._cctvControls?.destroy();
     this._radioControls?.destroy();
     this._cockpitCoordinator.stop();

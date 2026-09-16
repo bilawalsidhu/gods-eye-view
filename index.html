@@ -22,6 +22,33 @@
 
   <!-- gev:template display-controls -->
 
+  <!-- Top-center camera and share actions -->
+  <nav id="top-center-actions" aria-label="Globe actions">
+    <button id="clear-selected-layers" type="button" aria-label="Clear selected data layers" title="Turn off all selected data layers">
+      <span class="material-symbols-outlined" aria-hidden="true">layers_clear</span>
+    </button>
+    <button id="self-locate-btn" type="button" aria-label="Find my position" title="Find my position">
+      <span class="material-symbols-outlined" aria-hidden="true">my_location</span>
+    </button>
+    <button id="share-btn" type="button" aria-label="Copy share link" title="Copy share link">
+      <span class="share-icon" aria-hidden="true">&#x1F517;</span>
+    </button>
+    <button id="reset-globe-view" type="button" aria-label="Reset to full globe view" title="Reset camera and return to full globe view">
+      <span class="material-symbols-outlined" aria-hidden="true">public</span>
+    </button>
+  </nav>
+  <div id="global-loading-status" role="status" aria-live="polite" aria-atomic="true" hidden>
+    <span id="global-loading-label">LOADING LIVE DATA</span>
+    <span id="global-loading-detail"></span>
+  </div>
+  <div id="traffic-sync-chip" aria-live="polite">
+    <span id="traffic-sync-label">syncing road network</span>
+    <span id="traffic-sync-progress">0%</span>
+  </div>
+  <div id="cctv-sync-chip" aria-live="polite">
+    <span id="cctv-sync-label">loading frames</span>
+    <span id="cctv-sync-progress">0/0</span>
+  </div>
   <!-- gev:template command-dock -->
 
   <!-- gev:template layer-panels -->

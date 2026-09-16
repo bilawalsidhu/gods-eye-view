@@ -213,6 +213,8 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+- Add self-locate button using browser geolocation — purely client-side and ephemeral, never logged or transmitted, with non-blocking error feedback.
+- Smooth trackpad zoom by configuring Cesium ScreenSpaceCameraController inertia/zoomFactor and adding rAF-based easing with distinct sensitivity for trackpad, pinch (ctrlKey) and mouse wheel.
 - Add bounded Director feature actions with accessible controls, explicit camera/layer admission and cancellation; restore pack geometry on same-shot seek. Preserve existing scenes and content attribution.
 
 

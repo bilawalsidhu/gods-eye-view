@@ -175,5 +175,6 @@ export function readShellElements(document = globalThis.document) {
     _detectionBtn: document.getElementById('detection-toggle'),
     _models3dBtn: document.getElementById('models3d-toggle'),
     _models3dModeRow: document.getElementById('models3d-mode-row'),
+    _selfLocateBtn: document.getElementById('self-locate-btn'),
   };
 }

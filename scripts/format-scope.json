@@ -190,6 +190,8 @@
   "src/ui/location.js",
   "src/ui/locationControls.js",
   "src/ui/locationSearch.js",
+  "src/ui/selfLocate.js",
+  "src/ui/zoomSmoothing.js",
   "src/locationStatus.js",
   "src/ui/locationControls.test.mjs",
   "src/ui/locationSearch.test.mjs",
