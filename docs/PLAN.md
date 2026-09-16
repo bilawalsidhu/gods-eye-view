@@ -1570,9 +1570,25 @@ GitForge pipeline green.
   stylesheet. Verified: suite 3468 checks green (incl. 10 contrast
   tests), lint --max-warnings 0 clean, qa-a11y 0 violations, live
   computed-style probe resolves the new values, build + BUILD-GATE pass.
-- [ ] **Batch G (smells)**: carve pure modules out of `src/ui.js`'s
+- [x] **Batch G (smells)**: carve pure modules out of `src/ui.js`'s
   largest remaining seams (style animation loop, chip tickers) with
   tests; no behavior change.
+  DONE 2026-09-15. Two carve-outs, both named seams: (1)
+  `src/ui/styleTransitionLoop.js` — the style-animation loop's
+  deterministic core (easeInOutQuad, sampleStyleTransition with
+  done-clamping that preserves the exact `transition.to` final write,
+  advanceStageClocks with the chain-mode visible-stage epsilon,
+  styleLoopNeedsWork) replaces the inline math in
+  `_startAnimationLoop`; `STYLE_TRANSITION_DURATION_MS` now lives in the
+  module. (2) `src/ui/loadingTickerPolicy.js` — loadingTickerNeeded /
+  loadingTickerSettled (exact complements) and
+  globalStatusNoticeExpired replace the three inline guards in
+  `_updateGlobalLoadingFeedback` / `_armLoadingFeedbackTicker`. 9 new
+  unit tests; the loadingFeedback.test.mjs source anchor that pinned the
+  old inline settle regex was re-pointed at the routed call (its
+  behavioral contract is unchanged — arm-guard, hidden-stop, and stopper
+  anchors untouched). ui.js is 60 lines lighter; no behavior change
+  (3477 checks green, lint clean, build + BUILD-GATE pass).
 - [ ] **Batch H (docs)**: JSDoc gap list from the Batch E tooling; fill
   top gaps; refresh stale "Updated:" headers; README accuracy sweep.
 - [ ] **Batch I (cleanup)**: verify-and-remove unreferenced files,

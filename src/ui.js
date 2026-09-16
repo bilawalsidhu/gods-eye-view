@@ -160,6 +160,16 @@ import {
   styleAnimShouldAdvance,
 } from './ui/styleAnimationCadence.js';
 import {
+  sampleStyleTransition,
+  advanceStageClocks,
+  styleLoopNeedsWork,
+} from './ui/styleTransitionLoop.js';
+import {
+  loadingTickerNeeded,
+  loadingTickerSettled,
+  globalStatusNoticeExpired,
+} from './ui/loadingTickerPolicy.js';
+import {
   setScopeMaskEnabled,
   isScopeMaskEnabled,
   setScopeMaskFeather,
@@ -169,8 +179,6 @@ import {
   clampScopeTerminusPct,
 } from './scopeMask.js';
 
-/** Duration (ms) for shader intensity crossfade between style presets. */
-const TRANSITION_DURATION_MS = 500;
 /** Map of style name to its GLSL shader module for post-process stages. */
 const STYLES = { retro: retroShader, surveillance: nightVisionShader, thermal: thermalShader, anime: animeShader, noir: noirShader, snow: snowShader };
 /** Versioned localStorage namespace prefix to invalidate stale panel layouts. */
@@ -5460,7 +5468,7 @@ export class StyleManager {
 
   /**
    * Enqueues a smooth intensity transition for a shader stage. The animation
-   * loop interpolates from `fromValue` to `toValue` over TRANSITION_DURATION_MS.
+   * loop interpolates from `fromValue` to `toValue` over STYLE_TRANSITION_DURATION_MS.
    * @param {string} styleName - Name of the shader stage to transition.
    * @param {number} fromValue - Starting intensity (typically current value).
    * @param {number} toValue - Target intensity (0.0 to fade out, 1.0 to fade in).
@@ -5499,16 +5507,13 @@ export class StyleManager {
       summary,
       now,
     );
-    if (this._globalStatusNotice?.persistent !== true
-        && Number.isFinite(this._globalStatusNotice?.hideAt)
-        && now >= this._globalStatusNotice.hideAt) {
+    if (globalStatusNoticeExpired(this._globalStatusNotice, now)) {
       this._globalStatusNotice = null;
     }
     // Loading phases and universal notices both have time-driven transitions.
-    // Compute this after arbitration: a queued finite notice starts its dwell
+    // Evaluated after arbitration: a queued finite notice starts its dwell
     // only on its first visible frame, then keeps the ticker alive to expiry.
-    const noticeNeedsTicker = Number.isFinite(this._globalStatusNotice?.hideAt);
-    if (this._loadingFeedbackState?.phase !== 'idle' || noticeNeedsTicker) {
+    if (loadingTickerNeeded(this._loadingFeedbackState?.phase, this._globalStatusNotice)) {
       this._armLoadingFeedbackTicker();
     }
     this._globalLoadingStatus.hidden = !presentation;
@@ -5559,38 +5564,20 @@ export class StyleManager {
       const elapsedSec = (Date.now() - this.startTime) / 1000.0;
 
       // Update transitions — interpolate each active crossfade
+      // (sampling/easing in ./ui/styleTransitionLoop.js, unit-tested there).
       for (const [styleName, transition] of this.transitions) {
-        const elapsed = now - transition.start;
-        const t = Math.min(elapsed / TRANSITION_DURATION_MS, 1.0);
-        // Ease-in-out quadratic: smooth acceleration then deceleration
-        const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-        const value = transition.from + (transition.to - transition.from) * eased;
-
-        this._setStageIntensity(this.stages[styleName], value);
-
-        if (t >= 1.0) {
-          this._setStageIntensity(this.stages[styleName], transition.to);
-          this.transitions.delete(styleName);
-        }
+        const { value, done } = sampleStyleTransition(transition, now);
+        this._setStageIntensity(this.stages[styleName], done ? transition.to : value);
+        if (done) this.transitions.delete(styleName);
       }
 
       // Update time uniforms for animated shaders. Zero-intensity stages
       // are disabled (see _initStages — the scope is now the explicit
       // scopeMask canvas), so enabled === visible here; only these keep
       // the loop and its continuous-render hold alive.
-      let animatedStageVisible = false;
-      for (const [, stage] of this._stageEntries) {
-        if (stage.enabled && stage.uniforms.time !== undefined) {
-          stage.uniforms.time = elapsedSec;
-          // Chain mode keeps zero-intensity stages ENABLED for pass parity —
-          // only a stage that is actually VISIBLE keeps the loop (and the
-          // continuous-render hold) alive, or a settled CRT session would
-          // hold the loop forever via an invisible snow stage.
-          if (stage.uniforms.intensity > 0.001) animatedStageVisible = true;
-        }
-      }
+      const animatedStageVisible = advanceStageClocks(this._stageEntries, elapsedSec);
 
-      const needed = this.transitions.size > 0 || animatedStageVisible;
+      const needed = styleLoopNeedsWork(this.transitions.size, animatedStageVisible);
       if (needed) holdContinuousRender('style-anim');
       else releaseContinuousRender('style-anim');
       if (!needed) {
@@ -5646,8 +5633,7 @@ export class StyleManager {
       const now = performance.now();
       this._lastLoadingFeedbackUpdateAt = now;
       this._updateGlobalLoadingFeedback(now);
-      const noticeNeedsTicker = Number.isFinite(this._globalStatusNotice?.hideAt);
-      if (this._loadingFeedbackState?.phase === 'idle' && !noticeNeedsTicker) {
+      if (loadingTickerSettled(this._loadingFeedbackState?.phase, this._globalStatusNotice)) {
         this._stopLoadingFeedbackTicker();
       }
     }, 60);

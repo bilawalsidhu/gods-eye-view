@@ -643,9 +643,12 @@ test('the loading ticker never runs hidden and stops after loading and notices s
 
   // 3. Reaching idle stops it after any time-driven notice has completed.
   //    Persistent ACQUIRING notices remain visible without a 60ms timer.
+  //    (Batch G moved the arm/settle decision into src/ui/loadingTickerPolicy.js
+  //    — the anchor pins the routed call; the policy math is unit-tested in
+  //    loadingTickerPolicy.test.mjs.)
   assert.match(
     arm,
-    /const noticeNeedsTicker = Number\.isFinite\(this\._globalStatusNotice\?\.hideAt\);[\s\S]*?if \(this\._loadingFeedbackState\?\.phase === 'idle' && !noticeNeedsTicker\) \{\s*this\._stopLoadingFeedbackTicker\(\);\s*\}/,
+    /if \(loadingTickerSettled\(this\._loadingFeedbackState\?\.phase, this\._globalStatusNotice\)\) \{\s*this\._stopLoadingFeedbackTicker\(\);\s*\}/,
     'an idle phase with no expiring notice must stop the ticker',
   );
   assert.match(
