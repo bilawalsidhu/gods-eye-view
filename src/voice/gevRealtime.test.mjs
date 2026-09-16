@@ -3679,17 +3679,24 @@ test('a live response is untouched when no typed command superseded it', () => {
   assert.equal(controller.isSupersededResponse(null), false, 'an unattributed call is not stale');
 });
 
+/** Observe the actual protocol output rather than replacing its implementation. */
+function observeToolOutputs(controller, record) {
+  const send = controller.sendRealtimeEvent;
+  controller.sendRealtimeEvent = (message, label) => {
+    if (message.type === 'conversation.item.create' && message.item?.type === 'function_call_output') {
+      record(message.item.call_id, JSON.parse(message.item.output));
+    }
+    return send.call(controller, message, label);
+  };
+}
+
 test('a refused superseded call is still answered with a terminal output', async () => {
   // Every function call must be answered. Leaving one unanswered strands a
   // pending call in the conversation and deadlocks the model — the same hazard
   // callDedupeKeys is written to avoid. Refusing is not ignoring.
   const { controller, sent, dispatched } = toolDispatchController();
   const outputs = [];
-  controller.sendToolOutput = (callId, result) => {
-    outputs.push({ callId, result });
-    sent.push('client.function_call_output');
-    return true;
-  };
+  observeToolOutputs(controller, (callId, result) => outputs.push({ callId, result }));
   controller.updateResponseState({ type: 'response.created', response: { id: 'resp_old' } });
   controller.sendTextCommand('stop');
   await controller.handleRealtimeEvent(lateToolEvent('resp_old', 'call_stale'));
@@ -3732,7 +3739,7 @@ test('the two server surfaces of one refused call collapse to a single output', 
   // two outputs for one call_id is its own protocol error.
   const { controller } = toolDispatchController();
   const outputs = [];
-  controller.sendToolOutput = (callId) => { outputs.push(callId); return true; };
+  observeToolOutputs(controller, (callId) => outputs.push(callId));
   controller.updateResponseState({ type: 'response.created', response: { id: 'resp_old' } });
   controller.sendTextCommand('stop');
   await controller.handleRealtimeEvent(lateToolEvent('resp_old', 'call_stale'));
@@ -3744,7 +3751,7 @@ test('a genuinely different refused call still gets its own output', async () =>
   // The collapse must key on call identity, not on "we already refused one".
   const { controller } = toolDispatchController();
   const outputs = [];
-  controller.sendToolOutput = (callId) => { outputs.push(callId); return true; };
+  observeToolOutputs(controller, (callId) => outputs.push(callId));
   controller.updateResponseState({ type: 'response.created', response: { id: 'resp_old' } });
   controller.sendTextCommand('stop');
   await controller.handleRealtimeEvent(lateToolEvent('resp_old', 'call_one'));

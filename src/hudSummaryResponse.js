@@ -23,13 +23,16 @@ export function keylessHudSummaryResponse(apiKey) {
 
 /** Return true only for the deliberate, successful no-key capability response. */
 export function isHudSummaryUnconfigured(status, data) {
-  const keys = data !== null && typeof data === 'object' && !Array.isArray(data)
-    ? Object.keys(data)
-    : [];
-  return keys.length === 4
-    && status === 200
-    && data?.configured === false
-    && data?.code === HUD_SUMMARY_UNCONFIGURED_CODE
-    && data?.error === null
-    && data?.summary === null;
+  const keys =
+    data !== null && typeof data === 'object' && !Array.isArray(data)
+      ? Object.keys(data)
+      : [];
+  return (
+    keys.length === 4 &&
+    status === 200 &&
+    data?.configured === false &&
+    data?.code === HUD_SUMMARY_UNCONFIGURED_CODE &&
+    data?.error === null &&
+    data?.summary === null
+  );
 }

@@ -45,7 +45,8 @@
     "test": "node scripts/run-unit-tests.mjs",
     "test:track": "node scripts/track-regression.mjs",
     "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs",
-    "check:boundaries": "node scripts/check-import-directions.mjs && node scripts/check-package-boundaries.mjs"
+    "check:boundaries": "node scripts/check-import-directions.mjs && node scripts/check-package-boundaries.mjs",
+    "qa:transit": "node scripts/qa-transit.mjs"
   },
   "dependencies": {
     "@mapbox/vector-tile": "^3.0.0",
@@ -149,6 +150,7 @@
     "./ui/scenes": "./src/ui/scenes.js",
     "./ui/shell": "./src/ui/applicationShell.js",
     "./ui/styles": "./src/ui/styles.js",
+    "./director": "./src/director/playback.js",
     "./scenes": "./src/scenes/director.js",
     "./sources/live": "./src/sources/live/index.js",
     "./layers/flights": "./src/layers/flights/index.js",
@@ -238,6 +240,15 @@
     "./sources/http-body": "./src/sources/httpBody.js",
     "./sources/overpass": "./src/sources/overpass.js",
     "./search/nominatim": "./src/search/nominatim.js",
-    "./sources/nominatim": "./src/sources/nominatim.js"
+    "./sources/nominatim": "./src/sources/nominatim.js",
+    "./server/providers/transit": {
+      "node": "./server/providers/transit.js"
+    },
+    "./sources/transit": "./src/data/transitProxy.js",
+    "./layers/transit": "./src/layers/transit/index.js",
+    "./layers/transit/standalone": "./src/data/transit.js",
+    "./layers/transit/source": "./src/layers/transit/source.js",
+    "./sources/transit-service": "./src/sources/transitService.js",
+    "./sources/map-features": "./src/sources/overpassFeatures.js"
   }
 }

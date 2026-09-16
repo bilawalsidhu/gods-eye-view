@@ -7,7 +7,8 @@ export * from './realtimeController.js';
 export function initGevVoiceCommands(options) {
   return createVoiceCommands({
     ...options,
-    openProviderSettings: options.openProviderSettings || requestProviderSettings,
+    openProviderSettings:
+      options.openProviderSettings || requestProviderSettings,
     runner: createGevActionRunner(options),
   });
 }

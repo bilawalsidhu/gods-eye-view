@@ -29,7 +29,9 @@ export function requestProviderSettings(eventTarget = globalThis) {
     return false;
   }
   try {
-    eventTarget.dispatchEvent(new EventConstructor(PROVIDER_SETTINGS_OPEN_EVENT));
+    eventTarget.dispatchEvent(
+      new EventConstructor(PROVIDER_SETTINGS_OPEN_EVENT),
+    );
     return true;
   } catch {
     return false;
@@ -39,7 +41,9 @@ export function requestProviderSettings(eventTarget = globalThis) {
 /** Chip label — pure, exported for tests. */
 export function keySetupChipLabel(status) {
   const missing = Math.max(0, (status?.total || 0) - (status?.setCount || 0));
-  return missing > 0 ? `POWER UP · ${missing} ${missing === 1 ? 'KEY' : 'KEYS'} WAITING` : 'POWERED UP';
+  return missing > 0
+    ? `POWER UP · ${missing} ${missing === 1 ? 'KEY' : 'KEYS'} WAITING`
+    : 'POWERED UP';
 }
 
 /**
@@ -98,13 +102,17 @@ function buildRow(documentRef, key) {
   const tier = documentRef.createElement('span');
   tier.className = 'key-setup-tier';
   tier.textContent = TIER_DOTS[key.tier] || '';
-  tier.title = key.tier === 'metered' ? 'Metered — a billing-enabled account' : 'Free key — register, paste, done';
+  tier.title =
+    key.tier === 'metered'
+      ? 'Metered — a billing-enabled account'
+      : 'Free key — register, paste, done';
   head.append(led, title, tier);
   if (key.clientExposed) {
     const exposed = documentRef.createElement('span');
     exposed.className = 'key-setup-exposed';
     exposed.textContent = 'browser-side';
-    exposed.title = 'This key runs in the browser by design — restrict it at the provider (see SECURITY.md)';
+    exposed.title =
+      'This key runs in the browser by design — restrict it at the provider (see SECURITY.md)';
     head.append(exposed);
   }
   if (external) {
@@ -113,7 +121,8 @@ function buildRow(documentRef, key) {
     const badge = documentRef.createElement('span');
     badge.className = 'key-setup-external';
     badge.textContent = 'configured externally';
-    badge.title = 'Supplied by your environment, Keychain, or launcher — change it where it was set';
+    badge.title =
+      'Supplied by your environment, Keychain, or launcher — change it where it was set';
     head.append(badge);
   }
   const get = documentRef.createElement('a');
@@ -183,10 +192,7 @@ export async function initKeySetup({
     openRequested = true;
   };
   const onOpenRequest = () => openDialog();
-  eventTarget?.addEventListener?.(
-    PROVIDER_SETTINGS_OPEN_EVENT,
-    onOpenRequest,
-  );
+  eventTarget?.addEventListener?.(PROVIDER_SETTINGS_OPEN_EVENT, onOpenRequest);
   const destroy = () => {
     if (disposed) return;
     disposed = true;
@@ -200,13 +206,19 @@ export async function initKeySetup({
     chip.remove();
     root.remove();
   };
-  if (signal?.aborted) { destroy(); return null; }
+  if (signal?.aborted) {
+    destroy();
+    return null;
+  }
   signal?.addEventListener('abort', destroy, { once: true });
   const doFetch = fetchImpl || globalThis.fetch?.bind(globalThis);
 
   let status = null;
   try {
-    const response = await doFetch('/api/setup/status', { cache: 'no-store', signal: lifetime.signal });
+    const response = await doFetch('/api/setup/status', {
+      cache: 'no-store',
+      signal: lifetime.signal,
+    });
     if (!response.ok) throw new Error(String(response.status));
     status = await response.json();
     if (disposed) return null;
@@ -235,12 +247,14 @@ export async function initKeySetup({
     chip.hidden = status.setCount >= status.total;
     if (!rowsHost) return;
     rowsHost.textContent = '';
-    for (const key of status.keys || []) rowsHost.append(buildRow(documentRef, key));
+    for (const key of status.keys || [])
+      rowsHost.append(buildRow(documentRef, key));
   };
 
-  const visible = () => root.isConnected
-    && root.classList.contains('visible')
-    && root.getClientRects().length > 0;
+  const visible = () =>
+    root.isConnected &&
+    root.classList.contains('visible') &&
+    root.getClientRects().length > 0;
 
   const keyboard = createSurfaceKeyboard({
     root,
@@ -270,22 +284,29 @@ export async function initKeySetup({
     if (!open) return;
     open = false;
     root.classList.remove('visible');
-    const hide = () => { if (!open) root.hidden = true; };
+    const hide = () => {
+      if (!open) root.hidden = true;
+    };
     root.addEventListener('transitionend', hide, { once: true });
     globalThis.setTimeout?.(hide, 400);
     if (statusLine) statusLine.textContent = defaultStatusText;
     keyboard.deactivate({ restoreFocus: true });
   };
 
-  const say = (text) => { if (statusLine) statusLine.textContent = text; };
+  const say = (text) => {
+    if (statusLine) statusLine.textContent = text;
+  };
 
-  const storeLabel = () => (status?.store === 'pinokio-environment'
-    ? 'your app configuration'
-    : 'your local .env');
+  const storeLabel = () =>
+    status?.store === 'pinokio-environment'
+      ? 'your app configuration'
+      : 'your local .env';
 
   const submitUpdates = async (updates, doneVerb) => {
     if (disposed || busy) return;
-    const googleWasUnset = !status?.keys?.find((key) => key.id === 'google-maps')?.set;
+    const googleWasUnset = !status?.keys?.find(
+      (key) => key.id === 'google-maps',
+    )?.set;
     busy = true;
     applyButton?.setAttribute('aria-disabled', 'true');
     say('Saving…');
@@ -302,13 +323,17 @@ export async function initKeySetup({
         say(payload.error || `Save failed (${response.status}).`);
         return;
       }
-      for (const input of root.querySelectorAll('input[data-env-var]')) input.value = '';
+      for (const input of root.querySelectorAll('input[data-env-var]'))
+        input.value = '';
       render(payload.status);
       if (googleWasUnset && payload.saved?.includes('GOOGLE_MAPS_API_KEY')) {
         const strip = () => {
           try {
-            const next = stripKeylessBasemapFromHash(globalThis.location?.hash?.slice(1) || '');
-            if (next !== null) globalThis.history?.replaceState?.(null, '', `#${next}`);
+            const next = stripKeylessBasemapFromHash(
+              globalThis.location?.hash?.slice(1) || '',
+            );
+            if (next !== null)
+              globalThis.history?.replaceState?.(null, '', `#${next}`);
           } catch {
             // Continuity is a nicety, never a blocker.
           }
@@ -316,9 +341,14 @@ export async function initKeySetup({
         strip();
         // The live share writer may re-serialize the still-OSM stack before
         // the restart's reload lands, so strip again at the door.
-        globalThis.addEventListener?.('pagehide', strip, { once: true, signal: lifetime.signal });
+        globalThis.addEventListener?.('pagehide', strip, {
+          once: true,
+          signal: lifetime.signal,
+        });
       }
-      say(`${doneVerb} ${storeLabel()}. Restarting — this page reloads itself.`);
+      say(
+        `${doneVerb} ${storeLabel()}. Restarting — this page reloads itself.`,
+      );
     } catch (error) {
       say(`Save failed: ${error?.message || error}`);
     } finally {
@@ -331,7 +361,10 @@ export async function initKeySetup({
     if (disposed || busy) return;
     const inputs = [...root.querySelectorAll('input[data-env-var]')];
     const updates = collectKeyUpdates(
-      inputs.map((input) => ({ envVar: input.dataset.envVar, value: input.value })),
+      inputs.map((input) => ({
+        envVar: input.dataset.envVar,
+        value: input.value,
+      })),
     );
     if (!Object.keys(updates).length) {
       say('Paste at least one key first.');
@@ -357,8 +390,9 @@ export async function initKeySetup({
     // Removal is destructive and — behind a framing defense that should already
     // stop it — a clickjack target. A confirm turns a single aligned click into
     // a deliberate two-step the lure cannot pre-satisfy.
-    const ok = typeof globalThis.confirm !== 'function'
-      || globalThis.confirm('Remove this key from your saved configuration?');
+    const ok =
+      typeof globalThis.confirm !== 'function' ||
+      globalThis.confirm('Remove this key from your saved configuration?');
     if (!ok) return;
     void submitUpdates(
       Object.fromEntries(envVars.map((name) => [name, null])),
@@ -371,7 +405,11 @@ export async function initKeySetup({
   // Re-entry for a fully-keyed setup, demos, and support: ?setup=1 opens the
   // dialog even though the chip has retired.
   try {
-    if (new URLSearchParams(globalThis.location?.search || '').get('setup') === '1') openDialog();
+    if (
+      new URLSearchParams(globalThis.location?.search || '').get('setup') ===
+      '1'
+    )
+      openDialog();
   } catch {
     // An unparsable location never blocks init.
   }

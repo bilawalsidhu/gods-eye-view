@@ -1,3 +1,4 @@
+import { LayerBindings } from './ui/layerBindings.js';
 import { readShellSource, shellMethod } from './testSupport/readShellSource.mjs';
 import { readLayerSource } from './testSupport/readLayerSource.mjs';
 import { StyleManager } from './ui/applicationShell.js';
@@ -31,7 +32,8 @@ function body(source, pattern, label) {
 function ordered(source, needles, label) {
   let previous = -1;
   for (const needle of needles) {
-    const index = source.indexOf(needle, previous + 1);
+    const match = needle instanceof RegExp ? needle.exec(source.slice(previous + 1)) : null;
+    const index = needle instanceof RegExp ? (match ? previous + 1 + match.index : -1) : source.indexOf(needle, previous + 1);
     assert.ok(index >= 0, `${label}: missing ${needle}`);
     assert.ok(index > previous, `${label}: ${needle} is out of order`);
     previous = index;
@@ -104,7 +106,7 @@ test('voice Cockpit entry reaches the camera only through stamping seams', () =>
     'Cockpit entry transaction',
   );
   ordered(transaction, [
-    'if (!selectedLayer.trackById?.(selectedTarget.id, { origin: selectionOrigin })) {',
+    /if \(\s*!selectedLayer\.trackById\?\.\(selectedTarget\.id, \{\s*origin: selectionOrigin,?\s*\}\)\s*\) \{/,
     'if (!entryError) entered = Boolean(cockpitView.enter());',
   ], 'Cockpit entry transaction');
   // No direct camera control: every mutation goes through a layer tracker or
@@ -200,11 +202,11 @@ test('accepted navigation releases through PR15-aware ownership before flight', 
 
 test('validated voice camera destinations share the UI navigation authority facade', () => {
   assert.match(ui, /runImmediateNavigation\(noun, navigate, releaseOptions = undefined\) \{\s*return this\._runExplicitNavigation\(noun, navigate, releaseOptions\);/);
-  assert.match(voice, /runManagedVoiceNavigation\(\s*styleManager, 'camera', 'move_camera', navigate, releaseOptions/);
-  assert.match(voice, /runManagedVoiceNavigation\(styleManager, 'route', 'fly_route', navigate/);
-  assert.match(voice, /runManagedVoiceNavigation\(styleManager, 'fire', 'track_entity'/);
-  assert.match(voice, /runManagedVoiceNavigation\(styleManager, family\.kind, 'track_entity'/);
-  assert.match(voice, /runManagedVoiceNavigation\(styleManager, 'frame', 'frame_overhead'/);
+  assert.match(voice, /runManagedVoiceNavigation\(\s*styleManager,\s*'camera',\s*'move_camera',\s*navigate,\s*releaseOptions/);
+  assert.match(voice, /runManagedVoiceNavigation\(\s*styleManager,\s*'route',\s*'fly_route',\s*navigate/);
+  assert.match(voice, /runManagedVoiceNavigation\(\s*styleManager,\s*'fire',\s*'track_entity'/);
+  assert.match(voice, /runManagedVoiceNavigation\(\s*styleManager,\s*family\.kind,\s*'track_entity'/);
+  assert.match(voice, /runManagedVoiceNavigation\(\s*styleManager,\s*'frame',\s*'frame_overhead'/);
   const trackedVoice = voice.slice(
     voice.indexOf('async function trackEntity'),
     voice.indexOf('async function frameOverhead'),
@@ -224,20 +226,20 @@ test('validated voice camera destinations share the UI navigation authority faca
   ordered(move, [
     "if (!['orbit', 'pan', 'tilt', 'rotate'].includes(motion))",
     'const start = () => {',
-    "const preserveCameraFlight = motion === 'orbit'",
+    /const preserveCameraFlight =\s*motion === 'orbit'/,
     'runNavigation(start, { preserveCameraFlight })',
   ], 'move validation before handoff');
 
   const route = body(
     cameraVerbs,
-    /export function flyRoute\(annoList, args = \{\}, floorFn = null, runNavigation = null, warmFn = null\) \{([\s\S]*?)\n\}/,
+    /export function flyRoute\(\s*annoList,\s*args = \{\},\s*floorFn = null,\s*runNavigation = null,\s*warmFn = null,?\s*\) \{([\s\S]*?)\n\}/,
     'fly route',
   );
   ordered(route, [
     'if (!routes.length)',
     'const pts = route.path.map',
     'const start = () => {',
-    "return typeof runNavigation === 'function' ? runNavigation(start) : start();",
+    /return typeof runNavigation === 'function'\s*\? runNavigation\(start\)\s*: start\(\);/,
   ], 'route validation before handoff');
   // The corridor warm is injected the same way the floor READ is — the dolly
   // never reaches into the data layer itself, and the voice dispatch is the one
@@ -301,8 +303,8 @@ test('newer navigation, reset, Cockpit, and teardown share one generation', () =
   const dispose = body(ui, /async dispose\(\) \{([\s\S]*?)\n  \}/, 'dispose');
   ordered(dispose, [
     'this._disposed = true;',
+    'this._layerBindings.stop();',
     'this._navigation.destroy();',
-    'this._removeWorldRequestFocusListener?.();',
     'await this._contextControls.restoreForDisposal();',
   ], 'dispose invalidation');
   assert.match(shellMethod('destroy').toString(), /this\._stampNavigation\(\)/);
@@ -312,11 +314,15 @@ test('teardown synchronously closes immediate camera entry points', () => {
   const dispose = body(ui, /async dispose\(\) \{([\s\S]*?)\n  \}/, 'dispose');
   ordered(dispose, [
     'this._disposed = true;',
+    'this._layerBindings.stop();',
+    'await this._contextControls.restoreForDisposal();',
+  ], 'synchronous teardown barrier');
+  ordered(LayerBindings.prototype.stop.toString(), [
+    'this._disposed = true;',
     'this._removeCctvRequestFocusListener?.();',
     'this._removeWorldRequestFocusListener?.();',
     'this._navigationOwnerChangedRemover?.();',
-    'await this._contextControls.restoreForDisposal();',
-  ], 'synchronous teardown barrier');
+  ], 'camera bindings close synchronously');
 
   const navigation = body(
     ui,

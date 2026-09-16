@@ -1,3 +1,13 @@
+import { normalizeMilitaryInstallations } from '../../data/militaryInstallationData.js';
+
+/** Preserve legacy cache admission even when the explicit saturation flag is absent. */
+export function installationResponseSaturated(payload) {
+  if (typeof payload?.saturated === 'boolean') return payload.saturated;
+  const cap = Number(payload?.elementCap);
+  if (!Number.isFinite(cap) || cap <= 0) return false;
+  return Array.isArray(payload?.elements) && payload.elements.length >= cap;
+}
+
 /** Read mapped installations and explicit nearby-place searches through fixed endpoints. */
 export function createInstallationSource({
   fetchImpl = (...args) => globalThis.fetch(...args),
@@ -43,7 +53,14 @@ export function createInstallationSource({
         );
       if (!Array.isArray(body?.elements))
         throw new Error('Malformed installation snapshot');
-      return body;
+      return {
+        ...normalizeMilitaryInstallations(
+          body,
+          body.retrievedAt || new Date().toISOString(),
+        ),
+        status: body.status,
+        saturated: installationResponseSaturated(body),
+      };
     },
     async searchNearby({ latitude, longitude, radiusM }, { signal } = {}) {
       if (

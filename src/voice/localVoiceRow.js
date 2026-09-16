@@ -69,7 +69,9 @@ export async function initLocalVoiceRow({
         method,
         cache: 'no-store',
         signal,
-        ...(method === 'POST' ? { headers: { 'Content-Type': 'application/json' }, body: '{}' } : {}),
+        ...(method === 'POST'
+          ? { headers: { 'Content-Type': 'application/json' }, body: '{}' }
+          : {}),
       });
       if (!response.ok) throw new Error(String(response.status));
       const status = await response.json();
@@ -77,7 +79,9 @@ export async function initLocalVoiceRow({
       paint(status);
       stopPolling();
       if (status.state === 'running') {
-        timer = globalThis.setTimeout?.(() => { void load(); }, POLL_MS);
+        timer = globalThis.setTimeout?.(() => {
+          void load();
+        }, POLL_MS);
         // A pending poll must never hold a process open (Node, in tests);
         // setTimeout returns a number in browsers, so this is a no-op there.
         timer?.unref?.();

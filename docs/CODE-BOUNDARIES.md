@@ -1,16 +1,19 @@
 # Formatting and component boundaries
 
-Run `npm run format` to format the files in `scripts/format-scope.json` and
+Run `npm run format` to format the files in `scripts/format-scope.json` plus
+automatically discovered runtime JavaScript in `scripts/format-runtime.json`, and
 `npm run format:check` to check that same list without writing. CI checks the
-entire adopted list on Linux and Windows. Prettier is pinned in the development
+combined scope on Linux and Windows. Prettier is pinned in the development
 dependencies; use the installed version so local and CI output agree. The shared
 configuration specifies two spaces, single quotes, semicolons and LF endings.
 
-Add new reusable modules and their tests to the list as they are extracted.
+Owned runtime modules are discovered automatically; add their tests and other
+non-runtime files to the explicit list as they are adopted.
 Keep mechanical formatting in its own commit after behavior is stable. Existing
 source-text regression assertions still apply; investigate failures and preserve
 their behavioral coverage when a move or line wrap changes a tested shape.
-Files outside the list retain their surrounding style until deliberately adopted.
+Files outside the runtime roots and explicit list retain their surrounding style
+until deliberately adopted.
 Generated output, local configuration, browser evidence and bundled datasets are
 excluded. The formatter validates every entry before writing any file.
 
@@ -592,9 +595,9 @@ installation footprints, and annotation geometry (administrative boundaries,
 neighborhoods, streets, building/grounds outlines and monument candidates).
 Nominatim forward/reverse lookup does not replace those queries. Layer source
 interfaces select traffic, camera and installation ingestion separately;
-annotation `boundaries.query` still uses Overpass QL and OSM-shaped elements.
-Replacing that service with a different query language requires operation-level
-feature/geometry adapters, not just changing its URL. Rendering and geometry
+annotation and camera-framing consumers use the feature operations documented
+below. The Overpass adapter translates those operations and normalizes records;
+an alternate backend implements that source interface. Rendering and geometry
 selection remain consumers of those results.
 
 `./sources/nominatim` exports the lower-level JSONv2 client and normalizers for
@@ -604,3 +607,44 @@ server adapters without importing search composition.
 `./sources/overpass` exports the quoted-string/comment lexer. The lexer alone is
 not a query validator: spatial bounds, timeouts and other policy remain in the
 server sanitizer. Existing server imports keep their compatibility exports.
+
+Runtime formatting discovers tracked and new non-ignored `.js`, `.mjs` and `.cjs`
+files under the configured owned roots. Tests retain explicit adoption. Git and
+Prettier exclusions keep local/generated data out; resolved paths are validated
+before any writes. New runtime modules do not need another scope-list entry.
+
+## Map-feature sources
+
+Application request services expose `features`. Callers may supply another source
+with the same operations; the default is `createOverpassFeatureSource` from
+`sources/map-features`. Legacy boundary-query configuration remains supported.
+Search and annotation code request candidates and rank them without constructing
+query-language strings or decoding backend tags and relation members.
+
+| Operation                                                             | Result used by the caller                               |
+| --------------------------------------------------------------------- | ------------------------------------------------------- |
+| `getAdministrativeAreas(point, options)`                              | Named administrative candidates and geometry references |
+| `getAreaGeometry(id, options)`                                        | Geometry for one selected administrative reference      |
+| `getNeighborhoodAreas(point, options)`                                | Neighborhood polygon candidates                         |
+| `getStreetAreas(point, options)` / `getStreetLines(point, options)`   | Named areas and road lines for street annotations       |
+| `getFootprints(point, options)` / `getEnclosingAreas(point, options)` | Building and surrounding-ground candidates              |
+| `getMonuments(point, options)`                                        | Named point candidates                                  |
+| `getFocusFootprints(point, options)`                                  | Building/landmark candidates for camera framing         |
+
+Points use `{lat, lon}`. Options carry `signal`. A successful array, including an
+empty array, is definitive; `null` means a transient failure;
+`{rateLimited: true, retryAfterMs}` retains a provider's retry delay. Candidates
+carry `id`, `names` (`primary`, `english`, `official`, `alternate`, `short`),
+`coordinates` (objects with `lat` and `lon`), `building` and optional `heightM`,
+`center` and `point`. Administrative candidates use `category: 'administrative'`
+and a numeric `level`. Provenance may retain compatibility metadata, but ranking
+does not use backend tags. The Overpass implementation retains its existing
+operation-specific query radii and deadlines.
+
+Traffic's source response decodes to `{roads}`. Each road supplies longitude/latitude
+`coordinates`, a road-class `type` and `oneway` (`-1`, `0` or `1`). Scene construction
+still owns thinning, terrain sampling and Cartesian waypoints. Installation
+sources supply `{records, droppedCount, status, saturated}`; viewport filtering,
+exact-bound retry and rendering stay in the layer. Legacy cache saturation is
+decoded in the source. Source and geometry modules remain independent of Cesium,
+DOM and platform middleware.

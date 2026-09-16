@@ -237,3 +237,8 @@ FIRMS refactoring can be checked without a configured server key using
 fixture mode exercises populated display, aggregation, cards, keyless and stale
 responses, and selection/camera handoff. It does not establish live-source
 acceptance; omit `--fixtures` with a configured FIRMS key for that check.
+
+Director authoring and sharing acceptance: `node scripts/qa-director-sharing.mjs`
+checks installed import previews, draft validation, file-bundle round trips,
+cancellation, resource ownership and narrow-screen controls. Run alongside the
+scene-controls, camera, pack, interaction and timing harnesses.
