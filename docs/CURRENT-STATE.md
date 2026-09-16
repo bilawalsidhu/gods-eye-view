@@ -1,5 +1,108 @@
 # God's Eye View Current State
 
+Vessel snapshot completeness is separate from freshness. A current snapshot with
+rejected or duplicate records shows PARTIAL with accepted/received counts; stale
+or unknown freshness and transport failures retain their warnings. Partial
+snapshots still retain missing contacts within the existing age and row limits.
+A complete successful snapshot clears the partial indicator.
+
+Director imports now open a non-mutating preview before Apply. EDIT DETAILS
+authors validated anchor, camera, pack and interaction drafts; SHARE SCENE exports
+a selected scene or a bounded bundle of explicitly chosen pack files. Bundled
+bytes remain in memory until replacement/teardown and require reimport after a
+page reload. Stop releases rendering while retaining replay bytes. Cancellation
+and stale drafts cannot replace newer project state. See [authoring and sharing](DIRECTOR-SHARING.md).
+
+Director version-6 documents add bounded, scene-local feature actions. Settled
+LOAD/seek exposes keyboard-accessible text/source cards, anchor focus, explicit
+shot transitions and admitted layer state changes. Pointer claims take priority;
+Stop/replacement/teardown cancel pending actions and release handlers and UI.
+Same-shot seeks rebuild selected packs and restore declared layer baselines.
+See [scene actions](DIRECTOR-INTERACTIONS.md). Existing scenes/assets and credit remain.
+
+Director version-5 documents add scene-local data-pack manifests and per-shot
+selection. Registered sources acquire bounded, cancellable assets separately from
+GeoJSON, PNG and manually played media presentation. Storage paths, attribution
+and geographic placement remain distinct; Stop/replacement releases resources.
+Import acquires nothing. See [data packs](DIRECTOR-DATA-PACKS.md). Existing scene
+content, assets and credit remain unchanged.
+
+Director version-4 documents add named geographic anchors and optional explicit
+camera moves with easing, duration and holds. Playback and seek share one
+coordinate sampler; navigation/manual input revokes authored motion and pending
+holds. Anchor heights and explicit endpoints require the WGS84 ellipsoid
+reference. Legacy projects retain their ordinary flights, content and edits.
+See [camera directions](DIRECTOR-CAMERA.md).
+
+Realtime voice composes separate connection, response/tool, Radio handoff, input
+and audio-meter, cost, viewport-context and diagnostic owners. The existing
+controller exports and session/backend contracts remain available. Tool protocol,
+response wording, push-to-talk timing, model preferences and Radio confirmation
+order are preserved. Stopped connections, stale offers and delayed captures cannot affect a
+replacement session; audio meters release failed initialization and reject revoked
+frames. Delayed action results and post-capture continuations cannot resume a
+stopped conversation or send output into a replacement. See [voice ownership](VOICE-OWNERSHIP.md).
+
+The application shell composes focused state owners for navigation, destination
+lookup/orbit, Cockpit, visual settings, panel layout, aircraft display and layer
+bindings. Keyboard/display subscriptions have a separate lifetime; existing
+layer, scene and voice methods remain available through a delegation facade.
+Disposal settles pending globe resets and removes camera-entry listeners before
+asynchronous restoration; replacing a manager detaches its old Directions
+services. See [UI ownership](UI-OWNERSHIP.md).
+
+Director's ordered shot runner is exported independently of rendering, UI,
+storage and scene content. The existing scene controller supplies an adapter for
+visual/layer state, camera travel, media holds and release. Playback cancellation,
+preview cleanup, saved projects and all scene assets/attribution are preserved.
+Pure authored-time/seek calculations and a playback clock now own timing,
+hold deadlines and subscriptions. Stop immediately clears timers and settles
+holds; stale tick callbacks cannot publish into a replacement. Registered pack
+rules own presentation overrides and Nepal map fallback without changing saved
+shots or content. Scene-document validation and legacy migration now have separate
+owners. Invalid imports preserve the current project; unreadable saved projects
+are protected from fallback writes. Version 6 is the export format, with
+zero pitch, low camera heights, scope and detection edits preserved. See [the document contract](SCENE-DOCUMENT.md);
+see [Director](DIRECTOR.md) for camera, pack, action and sharing support.
+
+Search framing and annotations request semantic map features from an explicit source. The Overpass adapter owns bounded queries, member/tag decoding and request deadlines; callers retain candidate ranking, outline caching, deferred retries and scene placement. Empty, transient and throttled outcomes remain distinct. Traffic sources return road records and installation sources return mapped records with freshness/saturation metadata, so their layers no longer decode upstream elements. ALPR already normalizes its records in the source. Default providers, footprints, road directions, exact-viewport retries and source attribution are unchanged.
+
+Nepal media preloads survive repeated camera-flight updates, but Stop, event disable and replacement remove abandoned frames and revoke pending Facebook sessions. Fallback evidence-card clicks respect the shared drawing-tool pointer lease.
+
+In the Pinokio browser shell, Nepal provider embeds and hidden preloads are
+disabled before creating frames or loading provider SDKs, because the shell can
+redirect iframe navigation to an external browser. Existing source-linked cards
+remain available, and Open Original is an explicit action. Optional approved
+local clips still use the existing fallback; the public pack bundles no witness
+clips. Chrome and Safari retain embeds even when visiting a Pinokio-launched
+server. This compatibility fallback does not repair Pinokio's navigation handler.
+
+Nepal flood lines classify the active terrain or photoreal surface, and the surge marker follows that surface. Geographic route coordinates are unchanged; dynamic lines do not rely on unsupported depth-failure materials. Later media-only shots keep their completed source-path history throughout arrival and card reveal.
+
+Scene Stop, replacement, seek, and teardown revoke the Upper Valley locator's delayed camera approach and orbit while preserving its visible callout. A revoked timer or camera callback cannot start another flight or interfere with a newer shot.
+
+Nepal scene ownership follows the parameters prepared by the public layer manager before activation, without depending on enable-time origin metadata. Enabling a scene beat preserves its selected map and camera; passive restoration does not schedule standalone playback.
+
+Animated scene cards sample their optional scale, opacity and leader callbacks once per projected frame. A failed callback suppresses that frame and can recover on the next one; ordinary layers keep the shared projection path without animation evaluation.
+
+Nepal Flood Incident is accessed through Scenes. Its flood and locator components remain registered for scene playback but are hidden from the Data Layers menu. Closing the event stops the active scene, including pending loads and media. The default catalog does not install a separate reconstruction scene; existing saved scenes remain untouched.
+
+Double-click a shot name to edit it inline. Enter or moving focus saves a nonempty name, Escape cancels, and saved names persist with the scene project.
+
+The Nepal overview route and lake-shot trail share the river-centerline starting point nearest Debris-Dammed Lake. No earlier upstream section is included; evidence pins remain separate from the schematic river geometry.
+
+The event panel omits the WITNESS shortcut. Shot media, source attribution, Open Original links and corridor navigation remain available.
+
+The Mailung Bazzar, Dandaguan YouTube embed follows the provider's playback clock through 0:07, then the scene advances after its 0.65-second media exit. The controller reconciles provider state and source time when the API attaches and while waiting for playback, including missed PLAYING notifications and an already-ended clip. Startup is bounded to five seconds, and stalled playback has a bounded timeout; unavailable or blocked media cannot strand the scene. When the host deliberately suppresses provider playback and there is no approved local clip, the source card instead uses the authored 7.65-second dwell before the next shot. The authored estimate replaces older saved holds at runtime without rewriting them. Autoplay requires transient Director ownership from Play Scene or Play Shot; LOAD, restoration and seek remain passive. Stop, replacement and teardown revoke that ownership and pending playback callbacks.
+
+Persistent media-led Nepal shots preserve their completed upstream flood path during camera travel. The next reach still reveals after arrival; direct loads reconstruct the prefix and backward replay trims downstream history.
+
+Repeated map-stack requests retain the live imagery layer when its provider is unchanged. Scene handoffs keep loaded tiles while real source changes, switch cancellation, and tile-error fallbacks retain their existing behavior.
+
+Nepal Flood Incident is available in Scenes, with a 25-shot sequence, geographic labels, an event panel, scene scrubbing and shot playback. Comparison shots use Esri beneath Vantor imagery. Other Nepal shots use Google 3D when its tileset is available and fall back to Esri otherwise; without an ion token, the existing map stack uses Re:Earth terrain. Saved shots retain their authored camera and map preferences across keyed and keyless runtimes. The bundled pack contains historical 2021 and post-event 2026 imagery, not an isolated before/after measurement; the animated flood path is schematic, not a hazard model. Witness media opens or embeds original sources without bundled clips. See `public/events/bhote-koshi-2026/README.md` for provenance and non-commercial data terms.
+
+Transit snapshot and selected-history reads use an explicit source interface. The standalone source selects the existing routes; rendering, playback and selection retain their existing owners. A portable request service owns registered-feed admission, bounded decoding, cache/revalidation, backoff and history; development and preview use the same thin adapter. Compatibility exports and source attribution are preserved.
+
 Place search accepts an explicit Nominatim provider with independently configured search and reverse endpoints. The default offline/Google/Photon/local-fallback order is unchanged when no provider is selected. Provider adapters share normalized coordinates, viewport framing and reverse labels; roads and boundary geometry remain separate services. Portable capped-response and Overpass lexical helpers are exported independently of the Node server.
 
 Reference feed construction is exported through `sources/reference`; the cable source also has a dedicated `layers/submarine-cables/source` entry. Standalone catalog compatibility remains available. Source choices, data and attribution are unchanged.
@@ -731,7 +834,7 @@ Non-object or array-valued properties reject the response instead of being treat
 
 Launch payloads with missing records now say PAYLOAD DATA UNAVAILABLE. Missing names use Unnamed payload; absent or invalid mass stays unknown instead of appearing as 0 KG.
 
-Updated: August 24, 2026
+Updated: September 15, 2026
 
 ## Aircraft and vessel server modules
 
@@ -2405,9 +2508,9 @@ its criteria cannot be silently ignored.
 | Traffic | OSM Overpass (+ optional TomTom live flow) | `src/data/traffic.js` | `/api/overpass` + `/api/tomtom` | viewport-driven |
 | CCTV | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Street View fallback | `src/data/cctv.js` | `/api/cctv` | 10s (active) |
 | Radio | Radio Browser (public-domain station directory) | `src/data/radio.js` | `/api/radio/stations`, `/api/radio/click/:uuid` | 45 min directory refresh |
+| Transit 🚌 | Operator GTFS-Realtime VehiclePositions (7 keyless regions, `src/data/transitFeeds.js`) | `src/layers/transit/` via `src/app/layers/transit.js` | `/api/transit` | 15s (poll + delayed playback) |
 | Bikeshare 🚲 | GBFS (Lyft + BCycle) | `src/data/bikeshare.js` | `/api/gbfs` | 60s |
 | Directions 🧭 | OSRM on FOSSGIS servers (OpenStreetMap) | `src/data/directions.js` | `/api/route` (`steps=1`) | on placement / mode change |
-| Transit 🚌 | Operator GTFS-Realtime VehiclePositions (7 keyless regions, `src/data/transitFeeds.js`) | `src/layers/transit/` via `src/app/layers/transit.js` | `/api/transit` | 15s (poll + delayed playback) |
 | Datacenters ▣ | OSM extract (bundled) | `src/data/localLayers.js` | — | static |
 | Dams ▰ | OpenInfraMap/OSM extract (bundled) | `src/data/localLayers.js` | — | static |
 | Submarine Cables ◠ | TeleGeography public map (bundled) | `src/data/telegeographySubmarineCables.js` | — | static |
@@ -2495,7 +2598,9 @@ What a card needs is a resolved ground anchor: a step whose ground cell has not
 answered yet opens nothing rather than a card hanging at sea level. The cells
 are re-read for up to 90 seconds, which outlasts a cold terrain round trip;
 reroute, CLEAR and disable cancel that.
-Transit is off by default, and share links use token `j`. The layer polls
+Transit is off by default, and share links use token `j`. The movement panel order
+places Transit directly after Street Traffic and before Bike Share. Cameras and
+utilities retain their own groups. The layer polls
 registered feeds near the camera every 15 seconds, below a 3,000 km altitude
 gate. Seven keyless regions are available: Boston, Austin, Minneapolis–St Paul,
 Helsinki, the Netherlands, Norway and South East Queensland. Mode silhouettes
@@ -2520,10 +2625,19 @@ clipped to the displayed time. The browser retains up to 15 minutes and 128
 fixes per vehicle, under a global 32 MiB history budget. Capacity pressure may
 shorten that history. Only the selected vehicle has a trail: completed segments
 are batched primitives, and a small moving head ends at the marker. Trail
-geometry is bounded to 2,048 prepared vertices; history changes rebuild the
-body, while ordinary playback updates the head and segment visibility.
-Both normal and depth-fail instance colours follow the age ramp once per display
-second or style change. Subdivision crossings update only changed visibility
+geometry is bounded to 640 prepared vertices, prioritizing the active corridor
+and shortening the oldest geometry first. Active and future marker corridors
+retain their own 640-vertex budget; long report intervals use coarser subdivisions
+than 25 m instead of dropping an admitted vehicle. Supported scenes use ground polylines
+classified against both terrain and 3D tiles, including after map-stack changes,
+with per-segment age colours. History changes rebuild the body. The head is one
+short draped corridor, clipped to displayed time by a material uniform; only
+subdivision crossings rebuild it. Ordinary frames upload no head geometry.
+Without ground-polyline support, ordinary primitives retain a mode-coloured
+0.55-alpha depth-fail path, including the head, without dimming it to near-black.
+Instance attribute updates write back the same typed array returned by Cesium;
+its getters return copies, so reading a second time discards a visibility or colour edit.
+Normal instance colours follow the age ramp once per display second or style change. Subdivision crossings update only changed visibility
 attributes. Deselecting releases selection geometry; marker paths retain only
 active and future corridors.
 
@@ -2541,22 +2655,27 @@ ingestion, eviction uses receipt-ordered queues, and capacity loss is disclosed
 when history is recreated.
 
 **Surface and route limitations.** Heights are aligned to work with Google 3D
-tiles. Unknown historical surfaces leave gaps in a trail. Sparse reports can
+tiles. Draped history is prepared on selection even while marker floors are unresolved;
+Cesium resolves its surface. Without ground-polyline support, unknown historical
+surfaces leave gaps. A selected body follows layer enablement and vehicle existence,
+so an off-screen head does not hide an on-screen tail. Sparse reports can
 cut across corners; these paths are not surveyed route geometry. Subway markers
 are projected to street level because the feed does not provide depth, and the
 selected card explains that choice. Actual street-level views still require
 visual inspection.
 
 **Appearance.** Normal fleet frames are 20 px, growing to 30 px on selection;
-NVG, thermal and noir frames are 30/36 px. Source rasters are 48/96 px before padding.
-External halos are 1/1.5 px in normal and 3/3 px in sensors, calculated from the
+CRT, NVG, thermal and noir frames are 26/39 px. Source rasters are 48/96 px before padding.
+External halos are 1/1.5 px in normal, 1.25/1.25 px in CRT and 2/2 px in sensors, calculated from the
 final unpadded display size. Six modes, two sizes and three profiles cap the
 raster cache at 36 variants. Normal mode colours are bus `#5EF08A`, tram
 `#FFC24A`, subway `#FF4538`, rail `#D9A6FF`, ferry `#5FD6FF`, and unknown
-`#D8DDE5`. Selection keeps the mode colour. Sensor bodies use solid rounded envelopes with at least 60% opaque white coverage
-of the padded display footprint, without interior panel lines. Sensor input is opaque white with a
-fully opaque black halo; black-hot reverses the contrast through the
-thermal effect. Creation, mode changes, selection, deselection, map presets and
+`#D8DDE5`. Selection keeps the mode colour. Sensors reuse each normal silhouette's exact
+outer path, filled opaque white without interior panel lines, with an opaque
+`#05080C` halo. Only the external padding grows; the unpadded silhouette remains
+at CRT size. There is no envelope body. Black-hot reverses the contrast and
+Ironbow maps the white input to its hottest palette entry through the thermal
+effect; sprite code never applies a red tint. Creation, mode changes, selection, deselection, map presets and
 Cockpit vision use the same sprite styling function.
 
 Sensor signatures remain in-scene. The thresholds in `qaMetrics.js` require
@@ -2566,14 +2685,17 @@ of its phosphor peak white (0.65992 from RGB 0.16/1/0.22), halo minimum ≤0.25
 with the centre minus sampled background reported without gating. Each preset needs at least
 six verified, unobscured sprites; insufficient coverage is UNEXERCISED.
 The sampler excludes overlapping footprints, including otherwise ineligible
-sprites, and verifies pick ownership across all nine sampled core pixels.
+sprites, and chooses nine source-raster points in the widest solid white band, avoiding
+window/panel gaps. Equal-width tram bands prefer the upper solid body over the
+geometric centre; the nine-point spacing and all thresholds remain unchanged.
+The sampler then verifies pick ownership at all nine points.
 Noir samples also exclude its deliberately vignetted outer field, using shader
 settings and screen position rather than observed brightness. Selected-trail
 diagnostics report every condition even when selection fails.
 
 Transit brackets use the normal-composite overlay surface: a 1.25 px mode-colour
 stroke over 3.25 px dark backing. Other contact themes retain their existing
-behavior. The selected trail uses a 2 px core over 4 px backing, mode-coloured
+behavior. The selected trail uses a 3 px core over 5 px backing, mode-coloured
 in normal and white input in sensors. Alpha falls linearly from 0.80 at the head
 to 0.45 at two minutes, 0.20 at ten minutes and 0.08 at fifteen minutes.
 
@@ -2596,7 +2718,10 @@ heights, and reuses caller-owned sample and segment storage.
 collections above CCTV and Bikeshare. Traffic, Bikeshare and Transit share camera
 sensitivity claims; the original sensitivity returns after the last release.
 Visibility checks combine the camera frustum and ellipsoid occlusion at no more
-than 4 Hz; missing map bounds do not admit the globe's far side. Frame work
+than 4 Hz; missing map bounds do not admit the globe's far side. Camera arrivals
+rebuild an unprepared or cold marker corridor during that visibility sweep,
+adopt a loaded surface, and update both heightPending and surfaceReady diagnostics.
+A resolved display sample clears its pending-height gate without waiting for a poll. Frame work
 visits moving visible vehicles, up to 64 pending height changes, and the selected
 head. Rotation visits visible membership at 5 Hz, with selected rotation per
 frame. The transit render hold exists only for visible positional or orientation
@@ -2609,6 +2734,15 @@ destruction also releases collections and registrations.
 ```sh
 QA_BASE_URL=http://localhost:4305 QA_TAG=keyless node scripts/qa-transit.mjs
 ```
+
+`QA_BASE_URL=http://localhost:4305 node scripts/qa-transit-recovery.mjs` is the
+focused keyless camera-arrival regression. With destination tiles loaded, it
+injects nine disclosed moving-bus reports and delays their floor acquisition,
+selects the hidden vehicle, then releases the floor and calls camera.setView.
+Within two seconds it requires a visible marker, a prepared visible body and
+at least six of eight paired off/on trail pixel samples. It uses production
+selection, visibility and geometry owners and writes screenshots plus JSON;
+it does not establish Google 3D acceptance.
 
 The full run samples completed frames at 1920×1080 CSS pixels, records DPR, and
 measures moving fleets of 800 and 3,000 vehicles with 128 fixes each and DETECT
@@ -2640,6 +2774,30 @@ injected playback independently of live fleet activity. Thermal checks verify
 style activation before reading generated controls; DETECT checks set density
 and exercise the real OFF/restore button. Cesium render errors fail selection
 acceptance.
+The `trail-visible` section requires a visible Google 3D tileset. It selects a
+scripted straight bus with CapMetro metadata under the isolated `qa-trail-capmetro`
+feed ID, with nine retained fixes, runs for 20 seconds at each
+300/600/900 m view (55/45/45 degrees), then freezes playback and waits for sustained tile and primitive readiness.
+It captures off/on/off/on framebuffer patches at eight distinct projected surface
+points outside the padded sprite and selection bracket. `Google 3D selected trail visible at 6 of 8 projected samples`
+prints the selected key, fix count, elapsed display time, path length, hit count,
+per-point coordinates/hits and renderer strategy. At least six points need a
+repeatably changed green core or dark backing at the same pixels. Repeated off
+and on channels and their contrast deltas must agree within 8 RGB levels;
+background refinement, overlapping samples and unchanged dark roads fail. The dark
+backing must reduce summed RGB by at least 40%, and either match needs RGB
+distance of at least 40, so a faint depth-fail wash cannot satisfy visibility. Artifacts are
+`<tag>-<altitude>m-trail-visible.jpg` and matching JSON. Run the same harness
+against the base and patched keyed builds; partial runs remain diagnostic.
+Node checks run Cesium's final geometry pipeline, including batch IDs and
+position encoding: 1,576 bytes per head subdivision and 2,014,128 bytes for the
+1,278-instance body. The body plus a separate 81,792-byte instance reserve totals
+2,095,920 bytes, below the 2 MiB body limit; the head remains below its separate
+2 KiB/frame geometry limit. Ordinary frames upload no head geometry. These are
+pipeline buffer measurements, not measured GPU time or instance-texture uploads. The same 20-second browser interval scopes
+WebGL uploads to the trail body/head, forces one body rebuild, reports head CPU
+p95/max, and gates body uploads at 2 MiB and head uploads at 2 KiB/frame.
+
 Required empty or unexercised checks fail acceptance. The passing final line is
 `HARNESS: PASS (0 unexercised)`. A `QA_SECTIONS` subset is diagnostic only and
 cannot claim full acceptance.

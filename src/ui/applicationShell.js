@@ -1,56 +1,33 @@
-import { STYLE_STATUS_LABELS } from './visualPresets.js';
+import { ShellFacade } from './shellFacade.js';
+import { AircraftDisplay } from './aircraftDisplay.js';
+import { LayerBindings } from './layerBindings.js';
 import { PanelChrome } from './panelChrome.js';
 import { VisualSettings } from './visualSettings.js';
 import { NavigationController } from './navigationController.js';
 import { ShareRestoration } from './shareRestoration.js';
-import { createFrameRateMonitor } from './frameRateMonitor.js';
+import { DisplayBindings } from './displayBindings.js';
 import { createStateChannel } from '../app/stateChannel.js';
 import { setSplitFlapText } from '../splitFlap.js';
 import { UiLifetime } from './uiLifetime.js';
 import { RecordingControls } from './recordingControls.js';
 import { readShellElements } from './shellElements.js';
-import { CockpitViewController, CockpitDisplayPortal } from './cockpit.js';
+import { CockpitCoordinator } from './cockpitCoordinator.js';
 import { ContextControls } from './context.js';
 import { CctvControls } from './cctv.js';
 import { RadioControls } from './radio.js';
-import { LocationControls } from './location.js';
+import { LocationNavigation } from './locationNavigation.js';
 import { bindClearLayersControl } from './layers.js';
 import { bindCameraOrientationControls } from './cameraOrientationControls.js';
 import { createMapSourceControls } from './mapSource.js';
 import { STYLES } from './effects.js';
-import { bindDisplayControls } from './displayControls.js';
-import { bindApplicationShortcuts } from './visualInput.js';
 
 import * as Cesium from 'cesium';
-import { decodeBloomIntensity } from '../bloom.js';
 
-import {
-  aircraftTrackingTarget,
-  enterCockpitWithTracking,
-} from '../cockpitTracking.js';
-
-import { isExplicitLayerStateOrigin } from '../data/layerState.js';
-
-import { canonicalizeDensity } from '../data/detectionPolicy.js';
+import { aircraftTrackingTarget } from '../cockpitTracking.js';
 
 import { ShellFeedback } from './shellFeedback.js';
 
-import { cockpitEntryAllowed } from '../contextModePolicy.js';
-
-import { formatAwarenessLabel } from '../data/militaryAwarenessEngine.js';
 import { runCctvLayerEnableTransition } from '../cctvFocusPolicy.js';
-import {
-  registerCctvFocusRequestListener,
-  routeCctvFocusRequest,
-} from '../cctvFocusRequest.js';
-import {
-  flyToWorldTarget,
-  registerWorldFocusRequestListener,
-  routeWorldFocusRequest,
-} from '../worldFocus.js';
-import { registerNavigationAuthorityListener } from '../navigationPolicy.js';
-
-/** Display labels shown in the mini-status readout for each active style. */
 
 /**
  * Central UI orchestrator for the God's Eye View application.
@@ -72,7 +49,7 @@ import { registerNavigationAuthorityListener } from '../navigationPolicy.js';
  * - Intel HUD lifecycle and variant switching.
  */
 
-export class StyleManager {
+export class StyleManager extends ShellFacade {
   /**
    * @param {Cesium.Viewer} viewer - The CesiumJS viewer instance.
    * @param {object} [options]
@@ -81,10 +58,10 @@ export class StyleManager {
     viewer,
     { mapStackController = null, placeSearch, services, requestServices } = {},
   ) {
+    super();
     const {
       IntelHUD,
       ShareLinkManager,
-      OrbitController,
       CelestialRing,
       initTrackedReadout,
       initWorldOverlay,
@@ -93,30 +70,12 @@ export class StyleManager {
       trafficLayer,
       flightsLayer,
       militaryFlightsLayer,
-      isTr3b,
-      toggleTr3b,
       satellitesLayer,
       cctvLayer,
       bikeshareLayer,
       transitLayer,
       aisLiveVesselsLayer,
       militaryAwarenessLayer,
-      cachedGroundFloor,
-      cachedMeshFloor,
-      GROUND_FLOOR_LIFT_M,
-      meshFloorPreferred,
-      warmGroundFloor,
-      sampleMeshFloorCells,
-      holdContinuousRender,
-      releaseContinuousRender,
-      governorRequestRender,
-      setScopeMaskEnabled,
-      setScopeMaskFeather,
-      setScopeTerminusOverride,
-      clampScopeTerminusPct,
-      fetchRegionalBrief,
-      regionalDistanceM,
-      weatherCodeLabel,
     } = services;
     this.services = services;
     this._lifetime = new UiLifetime();
@@ -190,6 +149,8 @@ export class StyleManager {
       viewer,
       mapStackController,
       services: {
+        setScopeTerminusOverride: services.setScopeTerminusOverride,
+        clampScopeTerminusPct: services.clampScopeTerminusPct,
         getDetectionMode: services.getDetectionMode,
         getDetectionTuning: services.getDetectionTuning,
         getKeyholeFadeTuning: services.getKeyholeFadeTuning,
@@ -243,6 +204,7 @@ export class StyleManager {
         _styleMiniValue: this._styleMiniValue,
       },
       operations: {
+        _restorePanelState: (...args) => this._restorePanelState(...args),
         _layoutRightPanels: (...args) => this._layoutRightPanels(...args),
         _scheduleAdaptivePanelLayout: (...args) =>
           this._scheduleAdaptivePanelLayout(...args),
@@ -265,44 +227,97 @@ export class StyleManager {
       readDisplayPortalActive: () => this._cockpitDisplayPortalActive,
     });
 
-    // Bloom/sharpen state
-    this._globeResetPromise = null;
-    this._dataManager = null;
-    this._directionsShellModule = null;
+    this._layerBindings = new LayerBindings({
+      viewer,
+      services: {
+        cachedGroundFloor: services.cachedGroundFloor,
+        warmGroundFloor: services.warmGroundFloor,
+        cctvLayer: services.cctvLayer,
+      },
+      readControls: () => ({
+        hud: this.hud,
+        _contextControls: this._contextControls,
+        _cctvControls: this._cctvControls,
+        _radioControls: this._radioControls,
+      }),
+      operations: {
+        _updateTrafficSyncChip: (...args) =>
+          this._updateTrafficSyncChip(...args),
+        _updateGlobalLoadingFeedback: (...args) =>
+          this._updateGlobalLoadingFeedback(...args),
+        _syncContextModeButtons: (...args) =>
+          this._syncContextModeButtons(...args),
+        _stampNavigation: (...args) => this._stampNavigation(...args),
+        _runExplicitCctvFocus: (...args) => this._runExplicitCctvFocus(...args),
+        _runExplicitWorldFocus: (...args) =>
+          this._runExplicitWorldFocus(...args),
+        runImmediateNavigation: (...args) =>
+          this.runImmediateNavigation(...args),
+        _showToast: (...args) => this._showToast(...args),
+      },
+      feedback: this._feedback,
+      shareRestoration: this._shareRestoration,
+    });
 
     this._windowResizeHandler = null;
-    this._cctvRequestFocusHandler = null;
-    this._removeCctvRequestFocusListener = null;
-    this._worldRequestFocusHandler = null;
-    this._removeWorldRequestFocusListener = null;
-    this._removeNavigationAuthorityListener = null;
-    this._navigationOwnerChangedRemover = null;
-    this._awarenessSelectedHandler = null;
-    this._awarenessClearedHandler = null;
     this._disposed = false;
-
-    // DOM refs
 
     this._mapStackChangeHandler = null;
 
-    this._cockpitDisplayPortal = null;
     this._cockpitDisplayModeHandler = null;
 
-    this._activeLocationId = null;
-    this._expandedCityId = null;
-    this._activePoiIndex = null;
-    this._currentTarget = null; // Cesium.Cartesian3 of current POI target
-    this._currentPoi = null; // Current POI data object
-    // Formatted address of the last free-text geocode search. Preset pills set
-    // _activeLocationId instead; a search has no preset record, so this is the
-    // only thing the mini-status can report for it.
-    this._searchedLocationLabel = null;
-    this._trafficTransitionTimer = null;
+    this._locationNavigation = new LocationNavigation({
+      viewer,
+      placeSearch,
+      navigation: this._navigation,
+      readCockpit: () => this.cockpitView,
+      services: {
+        CITY_POIS: services.CITY_POIS,
+        searchAndFlyTo: services.searchAndFlyTo,
+        LocationSearch: services.LocationSearch,
+        OrbitController: services.OrbitController,
+        suspendDetection: services.suspendDetection,
+        resumeDetection: services.resumeDetection,
+        trafficLayer: services.trafficLayer,
+        flyToPresetLocation: services.flyToPresetLocation,
+        flyToPOI: services.flyToPOI,
+        GLOBE_VIEW: services.GLOBE_VIEW,
+        flyToGlobeView: services.flyToGlobeView,
+        interruptCameraMotion: services.interruptCameraMotion,
+        flightsLayer: services.flightsLayer,
+        militaryFlightsLayer: services.militaryFlightsLayer,
+        satellitesLayer: services.satellitesLayer,
+        aisLiveVesselsLayer: services.aisLiveVesselsLayer,
+        militaryAwarenessLayer: services.militaryAwarenessLayer,
+        rocketLaunchesLayer: services.rocketLaunchesLayer,
+      },
+      elements: {
+        _locationPills: this._locationPills,
+        _poiRow: this._poiRow,
+        _locationBarDivider: this._locationBarDivider,
+        _locationSearch: this._locationSearch,
+        _searchToggle: this._searchToggle,
+        _resetGlobeBtn: this._resetGlobeBtn,
+        _cockpitResetGlobeBtn: this._cockpitResetGlobeBtn,
+        _locationMiniCity: this._locationMiniCity,
+        _locationMiniPoi: this._locationMiniPoi,
+      },
+      operations: {
+        _beginDeferredNavigation: (...args) =>
+          this._beginDeferredNavigation(...args),
+        _reassertNavigationHandoff: (...args) =>
+          this._reassertNavigationHandoff(...args),
+        _settleLocationSearchUi: (...args) =>
+          this._settleLocationSearchUi(...args),
+        _runExplicitNavigation: (...args) =>
+          this._runExplicitNavigation(...args),
+        _stampNavigation: (...args) => this._stampNavigation(...args),
+        _updateTrafficSyncChip: (...args) =>
+          this._updateTrafficSyncChip(...args),
+        _showToast: (...args) => this._showToast(...args),
+      },
+    });
     this._lastTrafficChipUpdateAt = 0;
-
-    // Orbit controller
-    this.orbitController = new OrbitController(viewer);
-    this._orbitIndicator = null;
 
     // Intel HUD
     this.hud = new IntelHUD(viewer, {
@@ -310,58 +325,50 @@ export class StyleManager {
       summaryService: requestServices?.summary,
     });
     this._recording.hud = this.hud;
-    // True only while the open Data Layers panel is the reason Cockpit's
-    // Contact panel is collapsed. A user-collapsed Contact panel must remain
-    // collapsed when Data Layers closes.
-    /** Pre-Contacts detection state, restored on deactivation (see _syncContactsDetection). */
-    this.cockpitView = new CockpitViewController(viewer, {
+    this._cockpitCoordinator = new CockpitCoordinator({
+      viewer,
       services: {
-        flightsLayer,
-        militaryFlightsLayer,
-        isTr3b,
-        toggleTr3b,
-        militaryAwarenessLayer,
-        formatAwarenessLabel,
-        cachedGroundFloor,
-        cachedMeshFloor,
-        GROUND_FLOOR_LIFT_M,
-        meshFloorPreferred,
-        warmGroundFloor,
-        sampleMeshFloorCells,
-        holdContinuousRender,
-        releaseContinuousRender,
-        fetchRegionalBrief,
-        regionalDistanceM,
-        weatherCodeLabel,
+        flightsLayer: services.flightsLayer,
+        militaryFlightsLayer: services.militaryFlightsLayer,
+        isTr3b: services.isTr3b,
+        toggleTr3b: services.toggleTr3b,
+        militaryAwarenessLayer: services.militaryAwarenessLayer,
+        cachedGroundFloor: services.cachedGroundFloor,
+        cachedMeshFloor: services.cachedMeshFloor,
+        GROUND_FLOOR_LIFT_M: services.GROUND_FLOOR_LIFT_M,
+        meshFloorPreferred: services.meshFloorPreferred,
+        warmGroundFloor: services.warmGroundFloor,
+        sampleMeshFloorCells: services.sampleMeshFloorCells,
+        holdContinuousRender: services.holdContinuousRender,
+        releaseContinuousRender: services.releaseContinuousRender,
+        fetchRegionalBrief: services.fetchRegionalBrief,
+        regionalDistanceM: services.regionalDistanceM,
+        weatherCodeLabel: services.weatherCodeLabel,
       },
-      onVisionChange: (mode, active, options) =>
-        this._setCockpitVision(mode, active, options),
-      onCameraTakeover: () =>
-        this._stampNavigation({ cancelPendingSelection: false }),
-      getInheritedVisionLabel: () =>
-        STYLE_STATUS_LABELS[this.activeStyle] ||
-        String(this.activeStyle || 'normal').toUpperCase(),
-      isEntryAllowed: () =>
-        cockpitEntryAllowed({
-          contextMode: this._contextMode,
-          contextModeChanging: this._contextModeChanging,
-          flightsEnabled: !!this._dataManager?.isEnabled('flights'),
-          militaryEnabled: !!this._dataManager?.isEnabled('military'),
-        }),
-      onEntered: () => this._panelChrome.enterCockpit(),
-      onExited: () => this._panelChrome.exitCockpit(),
-      restoreTrackingFrame: (entity) => {
-        const [layerId, ...idParts] = String(entity?.gevTrackedId || '').split(
-          ':',
-        );
-        const trackedId = idParts.join(':');
-        if (!trackedId) return false;
-        if (layerId === 'flights')
-          return flightsLayer.refocusTrackedById?.(trackedId) === true;
-        if (layerId === 'military')
-          return militaryFlightsLayer.refocusTrackedById?.(trackedId) === true;
-        return false;
+      elements: {
+        _ppToggles: this._ppToggles,
+        _cockpitDisplayPanel: this._cockpitDisplayPanel,
+        _hudBtn: this._hudBtn,
+        _detectionBtn: this._detectionBtn,
+        _sliderPanel: this._sliderPanel,
+        _models3dBtn: this._models3dBtn,
       },
+      operations: {
+        _layoutRightPanels: (...args) => this._layoutRightPanels(...args),
+        _setCockpitVision: (...args) => this._setCockpitVision(...args),
+        _stampNavigation: (...args) => this._stampNavigation(...args),
+        getAircraftTrackingTarget: (...args) =>
+          this.getAircraftTrackingTarget(...args),
+        _scheduleRightPanelLayout: (...args) =>
+          this._scheduleRightPanelLayout(...args),
+        _syncContextRadioLauncherState: (...args) =>
+          this._syncContextRadioLauncherState(...args),
+      },
+      readDataManager: () => this._dataManager,
+      readContext: () => this.getContextModeState(),
+      readActiveStyle: () => this.activeStyle,
+      enterPanels: () => this._panelChrome.enterCockpit(),
+      exitPanels: () => this._panelChrome.exitCockpit(),
     });
 
     // Full-globe sun/moon ring. It is a crisp screen-space overlay above the
@@ -378,126 +385,7 @@ export class StyleManager {
     // Share Link Manager
     this.shareLinkManager = new ShareLinkManager(viewer, {
       onRestore: async (state) => {
-        const {
-          style,
-          bloom,
-          sharpen,
-          bloomIntensity,
-          bloomVersion,
-          sharpenIntensity,
-          hudVariant,
-          hudVisible,
-          detectionMode,
-          detectionDensity,
-          detectionAllocation,
-          detectionFadePct,
-          detectionOutsideOpacityPct,
-          celestialRing,
-          scopeEnabled,
-          scopeFeatherPct,
-          scopeTerminusPct,
-          mapStack,
-          panelState,
-          styleParams,
-        } = state || {};
-        // Ignore the retired 'ai-edit' style from older share links.
-        if (style && style !== 'normal' && style !== 'ai-edit') {
-          this.setStyle(style, {
-            applyPreset: true,
-            revealParameters: false,
-            restore: true,
-          });
-        }
-        if (
-          styleParams &&
-          style &&
-          this.stages[style] &&
-          STYLES[style]?.uniforms
-        ) {
-          for (const [uniformName, uniformValue] of Object.entries(
-            styleParams,
-          )) {
-            if (!Object.hasOwn(STYLES[style].uniforms, uniformName)) continue;
-            this.stages[style].uniforms[uniformName] = uniformValue;
-          }
-          this._updateSliderPanel(style, { reveal: false });
-        }
-        if (typeof bloomIntensity === 'number' && this._bloomSlider) {
-          const intensity = decodeBloomIntensity(bloomIntensity, bloomVersion);
-          this._setBloomIntensity(intensity, { syncShare: false });
-        }
-        if (typeof sharpenIntensity === 'number' && this._sharpenSlider) {
-          const pct = Math.max(0, Math.min(100, Math.round(sharpenIntensity)));
-          this._sharpenSlider.value = String(pct);
-          this._sharpenSliderValue.textContent = `${pct}%`;
-          this._applySharpenIntensity(pct / 100);
-        }
-        if (typeof bloom === 'boolean') this._setBloomEnabled(bloom);
-        if (typeof sharpen === 'boolean') this._setSharpenEnabled(sharpen);
-        if (hudVariant) this._setHudVariant(hudVariant);
-        if (typeof hudVisible === 'boolean') {
-          this.hud.setMode(hudVisible ? 'on' : 'off');
-          this._updateHudButtonState();
-        }
-        if (
-          typeof detectionDensity === 'number' &&
-          this._detectionDensitySlider
-        ) {
-          const pct = canonicalizeDensity(detectionDensity);
-          this._detectionDensitySlider.value = String(pct);
-          this._detectionDensityValue.textContent = `${pct}%`;
-          this._applyDetectionDensityFromUi();
-        }
-        if (detectionAllocation) {
-          this._setDetectionAllocation(detectionAllocation, {
-            syncShare: false,
-            persist: false,
-          });
-        }
-        if (typeof detectionFadePct === 'number' && this._detectionFadeSlider) {
-          this._detectionFadeSlider.value = String(detectionFadePct);
-        }
-        if (
-          typeof detectionOutsideOpacityPct === 'number' &&
-          this._detectionOpacitySlider
-        ) {
-          this._detectionOpacitySlider.value = String(
-            detectionOutsideOpacityPct,
-          );
-        }
-        this._applyDetectionFadeFromUi();
-        if (detectionMode) this._setDetectionMode(detectionMode);
-        if (typeof celestialRing === 'boolean') {
-          this.setCelestialRingEnabled(celestialRing, {
-            syncShare: false,
-            focus: false,
-          });
-        }
-        if (typeof scopeEnabled === 'boolean') {
-          setScopeMaskEnabled(scopeEnabled);
-          this._scopeBtn?.classList.toggle('active', scopeEnabled);
-          this._scopeBtn?.setAttribute('aria-pressed', String(scopeEnabled));
-        }
-        if (typeof scopeFeatherPct === 'number' && this._scopeFeatherSlider) {
-          const pct = Math.max(0, Math.min(100, Math.round(scopeFeatherPct)));
-          this._scopeFeatherSlider.value = String(pct);
-          if (this._scopeFeatherValue)
-            this._scopeFeatherValue.textContent = `${pct}%`;
-          setScopeMaskFeather(pct / 100);
-        }
-        // null restores the altitude-adaptive ramp; a number pins the terminus
-        // (clamped to the supported 94..100 band, same as the `sce` hash key).
-        if (scopeTerminusPct === null) setScopeTerminusOverride(null);
-        else if (typeof scopeTerminusPct === 'number') {
-          const pinned = clampScopeTerminusPct(scopeTerminusPct);
-          setScopeTerminusOverride(pinned == null ? null : pinned / 100);
-        }
-        const mapStackRestore = mapStack
-          ? this._setMapStack(mapStack, { syncShare: false })
-          : Promise.resolve();
-        if (panelState) this._restorePanelState(panelState);
-        await mapStackRestore;
-        this._syncShareState();
+        return this._visualSettings.restoreShareState(state);
       },
       isNavigationCurrent: (generation) =>
         generation === this._navigationGeneration,
@@ -528,32 +416,19 @@ export class StyleManager {
       },
       { emitCurrent: false },
     );
-    this._locationState = createStateChannel(
-      () => this._locationLookup?.getState() || null,
-    );
-    this._locationState.subscribe(
-      ({ state, change }) => {
-        this._handleLocationSearchState(state, change);
-      },
-      { emitCurrent: false },
-    );
     // Parse before panel chrome initializes so every valid share URL starts
     // from deterministic markup defaults instead of recipient-local panel
     // preferences. Encoded panel fields are applied after all panels exist.
     this._shareRestoration.attachLinks(this.shareLinkManager);
 
-    this._models3dModeBtns = [
-      document.getElementById('models3d-mode-proximity'),
-      document.getElementById('models3d-mode-all'),
-    ];
-    // DISPLAY-rail 3D-aircraft toggle (flights layer param). DEFAULT-ON in
-    // PROXIMITY (owner directive 2026-08-22) — mirrors the `models3d` default in
-    // layerState.js and `_models3dEnabled` in both flight layers, and the `active`
-    // class the button carries in index.html. A fresh boot skips layer-state
-    // restoration, so these initializers are the only thing keeping the lit
-    // button and the armed layer in agreement.
-    this._models3dEnabled = true;
-    this._models3dMode = 'proximity'; // 'proximity' (nearest in view) | 'all' (every in-view plane)
+    this._aircraftDisplay = new AircraftDisplay({
+      elements: {
+        _models3dBtn: this._models3dBtn,
+        _models3dModeRow: this._models3dModeRow,
+      },
+      readDataManager: () => this._dataManager,
+      layout: () => this._layoutRightPanels(),
+    });
 
     // The shared world-overlay host must own its one postRender lane before
     // detection and tracked-readout initialize. It stays transparent until a
@@ -584,6 +459,76 @@ export class StyleManager {
 
     this._initStages();
     this._initBloomSharpen();
+    this._displayBindings = new DisplayBindings({
+      viewer,
+      services: {
+        cycleDetectionMode: services.cycleDetectionMode,
+        setScopeMaskEnabled: services.setScopeMaskEnabled,
+        isScopeMaskEnabled: services.isScopeMaskEnabled,
+        setScopeMaskFeather: services.setScopeMaskFeather,
+      },
+      elements: {
+        _locationSearch: this._locationSearch,
+        _bloomBtn: this._bloomBtn,
+        _bloomSlider: this._bloomSlider,
+        _sharpenBtn: this._sharpenBtn,
+        _sharpenSlider: this._sharpenSlider,
+        _scopeBtn: this._scopeBtn,
+        _scopeFeatherSlider: this._scopeFeatherSlider,
+        _hudLayoutSelect: this._hudLayoutSelect,
+        _hudBtn: this._hudBtn,
+        _cleanViewBtn: this._cleanViewBtn,
+        _cleanViewExitBtn: this._cleanViewExitBtn,
+        _detectionDensitySlider: this._detectionDensitySlider,
+        _detectionBtn: this._detectionBtn,
+        _detectionFadeSlider: this._detectionFadeSlider,
+        _detectionOpacitySlider: this._detectionOpacitySlider,
+        _celestialBtn: this._celestialBtn,
+        _models3dBtn: this._models3dBtn,
+        _scopeFeatherValue: this._scopeFeatherValue,
+        _sharpenSliderValue: this._sharpenSliderValue,
+        _detectionDensityValue: this._detectionDensityValue,
+      },
+      operations: {
+        setStyle: (...args) => this.setStyle(...args),
+        _updateHudButtonState: (...args) => this._updateHudButtonState(...args),
+        _syncShareState: (...args) => this._syncShareState(...args),
+        _toggleOrbit: (...args) => this._toggleOrbit(...args),
+        toggleCleanView: (...args) => this.toggleCleanView(...args),
+        _toggleCctvEnabled: (...args) => this._toggleCctvEnabled(...args),
+        _setBloomEnabled: (...args) => this._setBloomEnabled(...args),
+        _setBloomIntensity: (...args) => this._setBloomIntensity(...args),
+        _setSharpenEnabled: (...args) => this._setSharpenEnabled(...args),
+        _applySharpenIntensity: (...args) =>
+          this._applySharpenIntensity(...args),
+        _setHudVariant: (...args) => this._setHudVariant(...args),
+        _applyDetectionDensityFromUi: (...args) =>
+          this._applyDetectionDensityFromUi(...args),
+        _setDetectionAllocation: (...args) =>
+          this._setDetectionAllocation(...args),
+        _applyDetectionFadeFromUi: (...args) =>
+          this._applyDetectionFadeFromUi(...args),
+        setCelestialRingEnabled: (...args) =>
+          this.setCelestialRingEnabled(...args),
+        _setModels3dEnabled: (...args) => this._setModels3dEnabled(...args),
+        _syncModels3dModeRow: (...args) => this._syncModels3dModeRow(...args),
+        _setModels3dMode: (...args) => this._setModels3dMode(...args),
+      },
+      readState: () => ({
+        shareLinkManager: this.shareLinkManager,
+        hud: this.hud,
+        bloomEnabled: this.bloomEnabled,
+        sharpenEnabled: this.sharpenEnabled,
+        celestialRing: this.celestialRing,
+        celestialRingEnabled: this.celestialRingEnabled,
+        _models3dEnabled: this._models3dEnabled,
+        _models3dModeBtns: this._models3dModeBtns,
+        _detectionAllocationBtns: this._detectionAllocationBtns,
+      }),
+      claimDetection: () => {
+        this._visualSettings._detectionUserOverridden = true;
+      },
+    });
     this._initUI();
     this._initMapStackControl();
     this._initPanelChrome();
@@ -622,258 +567,10 @@ export class StyleManager {
     // return so the time-driven reducer catches up on real elapsed time — and
     // re-arms its own ticker if the batch is still running.
     this._feedback.observeVisibility();
-    this._cctvRequestFocusHandler = (event) =>
-      routeCctvFocusRequest(
-        event,
-        (activate, focus) => this._runExplicitCctvFocus(activate, focus),
-        (cameraId, durationSec) => cctvLayer.focusCamera(cameraId, durationSec),
-      );
-    this._removeCctvRequestFocusListener = registerCctvFocusRequestListener(
-      window,
-      this._cctvRequestFocusHandler,
-    );
-    this._worldRequestFocusHandler = (event) =>
-      routeWorldFocusRequest(
-        event,
-        (detail, fly) => this._runExplicitWorldFocus(detail, fly),
-        (detail) => flyToWorldTarget(this.viewer, detail),
-      );
-    this._removeWorldRequestFocusListener = registerWorldFocusRequestListener(
-      window,
-      this._worldRequestFocusHandler,
-    );
-    this._navigationOwnerChangedRemover =
-      viewer.trackedEntityChanged.addEventListener((entity) => {
-        if (entity && !this._disposed)
-          this._stampNavigation({ cancelPendingSelection: false });
-      });
-    // Vessel/installation focus flies without ever assigning a tracked entity,
-    // so it cannot reach the listener above. It announces instead.
-    this._removeNavigationAuthorityListener =
-      registerNavigationAuthorityListener(window, (event) => {
-        if (this._disposed) return;
-        this._stampNavigation({
-          cancelPendingSelection:
-            event?.detail?.cancelPendingSelection !== false,
-        });
-      });
+    this._layerBindings.observeCamera();
   }
 
   // Compatibility reads for existing controls, scene snapshots and Cockpit.
-
-  get _navigationGeneration() {
-    return this._navigation._navigationGeneration;
-  }
-  set _navigationGeneration(value) {
-    this._navigation._navigationGeneration = value;
-  }
-  get _activeLocationSearchGeneration() {
-    return this._navigation._activeLocationSearchGeneration;
-  }
-  set _activeLocationSearchGeneration(value) {
-    this._navigation._activeLocationSearchGeneration = value;
-  }
-  get _shareTrackingAcquiringKey() {
-    return this._shareRestoration._shareTrackingAcquiringKey;
-  }
-  set _shareTrackingAcquiringKey(value) {
-    this._shareRestoration._shareTrackingAcquiringKey = value;
-  }
-  get _shareTrackingNoticeGeneration() {
-    return this._shareRestoration._shareTrackingNoticeGeneration;
-  }
-  set _shareTrackingNoticeGeneration(value) {
-    this._shareRestoration._shareTrackingNoticeGeneration = value;
-  }
-  get _initialShareState() {
-    return this._shareRestoration._initialShareState;
-  }
-  set _initialShareState(value) {
-    this._shareRestoration._initialShareState = value;
-  }
-  get _initialShareNavigationGeneration() {
-    return this._shareRestoration._initialShareNavigationGeneration;
-  }
-  set _initialShareNavigationGeneration(value) {
-    this._shareRestoration._initialShareNavigationGeneration = value;
-  }
-  get _initialShareRestoreTimeout() {
-    return this._shareRestoration._initialShareRestoreTimeout;
-  }
-  set _initialShareRestoreTimeout(value) {
-    this._shareRestoration._initialShareRestoreTimeout = value;
-  }
-  get _layerStateCoordinator() {
-    return this._shareRestoration._layerStateCoordinator;
-  }
-  set _layerStateCoordinator(value) {
-    this._shareRestoration._layerStateCoordinator = value;
-  }
-  get _layerStateRestorePromise() {
-    return this._shareRestoration._layerStateRestorePromise;
-  }
-  set _layerStateRestorePromise(value) {
-    this._shareRestoration._layerStateRestorePromise = value;
-  }
-  get _initialShareRestorePromise() {
-    return this._shareRestoration._initialShareRestorePromise;
-  }
-  set _initialShareRestorePromise(value) {
-    this._shareRestoration._initialShareRestorePromise = value;
-  }
-  get _resolveInitialShareRestore() {
-    return this._shareRestoration._resolveInitialShareRestore;
-  }
-  set _resolveInitialShareRestore(value) {
-    this._shareRestoration._resolveInitialShareRestore = value;
-  }
-  get _hasShareState() {
-    return this._shareRestoration._hasShareState;
-  }
-  set _hasShareState(value) {
-    this._shareRestoration._hasShareState = value;
-  }
-  get _initialShareSelectionSuperseded() {
-    return this._shareRestoration._initialShareSelectionSuperseded;
-  }
-  set _initialShareSelectionSuperseded(value) {
-    this._shareRestoration._initialShareSelectionSuperseded = value;
-  }
-  get _initialShareGestureHandler() {
-    return this._shareRestoration._initialShareGestureHandler;
-  }
-  set _initialShareGestureHandler(value) {
-    this._shareRestoration._initialShareGestureHandler = value;
-  }
-
-  get _visualEffects() {
-    return this._visualSettings._visualEffects;
-  }
-  set _visualEffects(value) {
-    this._visualSettings._visualEffects = value;
-  }
-  get activeStyle() {
-    return this._visualSettings.activeStyle;
-  }
-  set activeStyle(value) {
-    this._visualSettings.activeStyle = value;
-  }
-  get _detectionUserOverridden() {
-    return this._visualSettings._detectionUserOverridden;
-  }
-  set _detectionUserOverridden(value) {
-    this._visualSettings._detectionUserOverridden = value;
-  }
-  get _cockpitVisionMode() {
-    return this._visualSettings._cockpitVisionMode;
-  }
-  set _cockpitVisionMode(value) {
-    this._visualSettings._cockpitVisionMode = value;
-  }
-  get _cockpitVisionRestore() {
-    return this._visualSettings._cockpitVisionRestore;
-  }
-  set _cockpitVisionRestore(value) {
-    this._visualSettings._cockpitVisionRestore = value;
-  }
-  get _contactsDetectionRestore() {
-    return this._visualSettings._contactsDetectionRestore;
-  }
-  set _contactsDetectionRestore(value) {
-    this._visualSettings._contactsDetectionRestore = value;
-  }
-  get _detectionAllocationBtns() {
-    return this._visualSettings._detectionAllocationBtns;
-  }
-  set _detectionAllocationBtns(value) {
-    this._visualSettings._detectionAllocationBtns = value;
-  }
-  get _detectionAllocationPreference() {
-    return this._visualSettings._detectionAllocationPreference;
-  }
-  set _detectionAllocationPreference(value) {
-    this._visualSettings._detectionAllocationPreference = value;
-  }
-  get _styleParameters() {
-    return this._visualSettings._styleParameters;
-  }
-  set _styleParameters(value) {
-    this._visualSettings._styleParameters = value;
-  }
-  get _irBoostActive() {
-    return this._visualSettings._irBoostActive;
-  }
-  set _irBoostActive(value) {
-    this._visualSettings._irBoostActive = value;
-  }
-  get _irFogWasEnabled() {
-    return this._visualSettings._irFogWasEnabled;
-  }
-  set _irFogWasEnabled(value) {
-    this._visualSettings._irFogWasEnabled = value;
-  }
-
-  get _panelDisclosureControls() {
-    return this._panelChrome._panelDisclosureControls;
-  }
-  set _panelDisclosureControls(value) {
-    this._panelChrome._panelDisclosureControls = value;
-  }
-  get _hoverPanelControls() {
-    return this._panelChrome._hoverPanelControls;
-  }
-  set _hoverPanelControls(value) {
-    this._panelChrome._hoverPanelControls = value;
-  }
-  get _cancelMapSourceFocus() {
-    return this._panelChrome._cancelMapSourceFocus;
-  }
-  set _cancelMapSourceFocus(value) {
-    this._panelChrome._cancelMapSourceFocus = value;
-  }
-  get _cockpitContextCollapsedForDataPanel() {
-    return this._panelChrome._cockpitContextCollapsedForDataPanel;
-  }
-  set _cockpitContextCollapsedForDataPanel(value) {
-    this._panelChrome._cockpitContextCollapsedForDataPanel = value;
-  }
-  get _cockpitPanelRestore() {
-    return this._panelChrome._cockpitPanelRestore;
-  }
-  set _cockpitPanelRestore(value) {
-    this._panelChrome._cockpitPanelRestore = value;
-  }
-  get _panelPosition() {
-    return this._panelChrome._panelPosition;
-  }
-  set _panelPosition(value) {
-    this._panelChrome._panelPosition = value;
-  }
-  get _panelLayout() {
-    return this._panelChrome._panelLayout;
-  }
-  set _panelLayout(value) {
-    this._panelChrome._panelLayout = value;
-  }
-
-  get stages() {
-    return this._visualSettings.stages;
-  }
-  get transitions() {
-    return this._visualSettings.transitions;
-  }
-  get bloomEnabled() {
-    return this._visualSettings.bloomEnabled;
-  }
-  get sharpenEnabled() {
-    return this._visualSettings.sharpenEnabled;
-  }
-  get _bloomStage() {
-    return this._visualEffects.bloomStage;
-  }
-  get _sharpenStage() {
-    return this._visualEffects.sharpenStage;
-  }
 
   /** Advance camera authority and settle any older search UI immediately. */
   _stampNavigation({
@@ -881,11 +578,6 @@ export class StyleManager {
     clearSearchedLocation = true,
   } = {}) {
     return this._navigation._stampNavigation(...arguments);
-  }
-
-  /** Settle only the search generation that still owns the shared input UI. */
-  _settleLocationSearchUi(generation) {
-    return this._navigation._settleLocationSearchUi(...arguments);
   }
 
   /** Release every follow owner while preserving Contact and vessel selection. */
@@ -897,22 +589,12 @@ export class StyleManager {
     return this._navigation._releaseFollowCamera(...arguments);
   }
 
-  /** Run one immediate destination through the shared ownership policy. */
-  _runExplicitNavigation(noun, navigate, releaseOptions = undefined) {
-    return this._navigation._runExplicitNavigation(...arguments);
-  }
-
   /** Accept a delayed lookup without releasing its current camera owner. */
   _beginDeferredNavigation(
     noun = 'location',
     { cancelPendingSelection = true } = {},
   ) {
     return this._navigation._beginDeferredNavigation(...arguments);
-  }
-
-  /** Final authority check and release immediately before a delayed flight. */
-  _reassertNavigationHandoff(generation) {
-    return this._navigation._reassertNavigationHandoff(...arguments);
   }
 
   /** Public lifecycle seam used by voice location navigation. */
@@ -935,34 +617,6 @@ export class StyleManager {
     return this._runExplicitNavigation(noun, navigate, releaseOptions);
   }
 
-  /**
-   * Hand the Directions layer the camera seams its FLY chip needs: the same
-   * immediate-navigation facade voice route flights go through, so there is
-   * one camera owner rather than a second one inside a data layer, the shared
-   * ground-floor read/warm the route dolly flies over, and the app's own toast
-   * so the layer can speak where the rest of the UI speaks.
-   * @returns {void}
-   */
-  _connectDirectionsCamera() {
-    if (!this._dataManager) {
-      // Detaching: the layer outlives this shell, so it must not keep calling
-      // a facade whose viewer is going away.
-      this._directionsShellModule?.attachShellServices?.(null);
-      this._directionsShellModule = null;
-      return;
-    }
-    const directions = this._dataManager.layers?.get('directions')?.module;
-    if (typeof directions?.attachShellServices !== 'function') return;
-    this._directionsShellModule = directions;
-    directions.attachShellServices({
-      runNavigation: (navigate) =>
-        this.runImmediateNavigation('route', navigate),
-      floorFn: (lat, lon) => this.services.cachedGroundFloor(lat, lon),
-      warmFn: (cells) => this.services.warmGroundFloor(cells),
-      showToast: (message) => this._showToast(message),
-    });
-  }
-
   /** Supersede deferred work when an owner-specific route handles release. */
   supersedeDeferredNavigation() {
     return this._stampNavigation();
@@ -978,124 +632,14 @@ export class StyleManager {
     return aircraftTrackingTarget(this.cockpitView?.readAircraftInfo?.());
   }
 
-  /**
-   * On window resize, keep the draggable panel on-screen — a panel positioned near an edge can fall
-   * outside a now-smaller viewport (audit U2). pp-toggles is right-pinned, so re-pin (horizontal) and
-   * clamp its top. No-op until the panel has been positioned (explicit inline top).
-   * @returns {void}
-   */
-  _reclampDraggablePanels() {
-    return this._panelPosition._reclampDraggablePanels();
-  }
-
-  /**
-   * Creates one CesiumJS PostProcessStage per visual style and registers
-   * it with the scene. Each stage starts with intensity 0 (invisible)
-   * so crossfade transitions can animate it in later.
-   * @returns {void}
-   */
-  _initStages() {
-    return this._visualSettings._initStages(...arguments);
-  }
-
-  /**
-   * Single write path for style-stage intensity: keeps `enabled` in
-   * lockstep so zero-intensity stages cost nothing (safe now that the
-   * scope is explicit — see _initStages). The stage enables on the same
-   * frame the first non-zero intensity lands, so crossfades never pop.
-   * @param {Cesium.PostProcessStage} stage - Style post-process stage.
-   * @param {number} value - Intensity in [0, 1].
-   * @returns {void}
-   */
-  _setStageIntensity(stage, value) {
-    return this._visualSettings._setStageIntensity(...arguments);
-  }
-
-  /**
-   * Re-sync every stage's `enabled` flag from its CURRENT intensity.
-   *
-   * The cockpit-vision policy helpers (src/cockpitVisionPolicy.js) are pure
-   * intensity math — they write `uniforms.intensity` directly and know
-   * nothing about the enabled/intensity lockstep _setStageIntensity owns.
-   * Without this sweep a stage the policy raised to 1 would stay DISABLED
-   * and cockpit NVG/FLIR/CRT would render nothing at all. (Inert while the
-   * chain is permanently enabled; load-bearing again once the explicit
-   * scope frees the zero-intensity stages — see _initStages.)
-   * @returns {void}
-   */
-  _syncStagesEnabledFromIntensity() {
-    return this._visualSettings._syncStagesEnabledFromIntensity(...arguments);
-  }
-
-  /**
-   * Contacts-scoped detection (owner playtest 2026-08-18: "when you click on
-   * Contacts, detections should just turn on, and they should stay on in
-   * Cockpit or in third-person tracking inside Contacts").
-   *
-   * The scope is the CONTACTS SESSION, not Cockpit. Cockpit enter/exit and
-   * third-person tracking are moves WITHIN that session and deliberately do not
-   * touch detection — an earlier build hooked this to cockpit enter/exit, which
-   * is exactly what turned detections off when the owner left the cockpit.
-   *
-   * Called from `_syncContextModeButtons`, the single funnel every
-   * `_contextMode` mutation routes through, and gated on the transaction having
-   * SETTLED (`!_contextModeChanging`) so a failed activation can never strand
-   * detection on.
-   * @returns {void}
-   */
-  _syncContactsDetection() {
-    return this._visualSettings._syncContactsDetection(...arguments);
-  }
-
   /** Apply a temporary cockpit-only CRT/NVG/FLIR/NOIR post-process override. */
   _setCockpitVision(mode, active, { revealParameters = false } = {}) {
     return this._visualSettings._setCockpitVision(...arguments);
   }
 
-  /** IR hot-target boost (owner playtest 2026-08-16): under the luminance-
-   *  mapped NVG/FLIR looks the 3D fleets flip to flat white so contacts read
-   *  HOT instead of vanishing mid-gray; restored when the look exits. The
-   *  EFFECTIVE look is Cockpit's vision override while Cockpit is active
-   *  ('nvg'/'thermal', which can differ from the map preset in BOTH
-   *  directions), otherwise the map preset ('surveillance'/'thermal'). */
-  _syncIrBoost() {
-    return this._visualSettings._syncIrBoost(...arguments);
-  }
-
-  /** Keep Cockpit's inherited label and restore target aligned with the active map preset. */
-  _syncCockpitInheritedStyle() {
-    return this._visualSettings._syncCockpitInheritedStyle(...arguments);
-  }
-
   /** Reveal shared style parameters, optionally opening Cockpit Display first. */
   _revealCockpitStyleParameters({ openDisplay = false } = {}) {
     return this._visualSettings._revealCockpitStyleParameters(...arguments);
-  }
-
-  /**
-   * Configures Cesium's built-in bloom stage and adds a custom unsharp-mask
-   * sharpen stage to the post-process pipeline. Both start disabled.
-   * @returns {void}
-   */
-  _initBloomSharpen() {
-    return this._visualSettings._initBloomSharpen(...arguments);
-  }
-
-  /**
-   * Reads the current bloom intensity percentage from the effects controller.
-   * @returns {number} Clamped bloom intensity (0-200).
-   */
-  _getBloomIntensity() {
-    return this._visualSettings._getBloomIntensity(...arguments);
-  }
-
-  /**
-   * Enables or disables the Cesium bloom stage based on both the user toggle
-   * and whether the computed strength exceeds the perceptual threshold (0.06).
-   * @returns {void}
-   */
-  _syncBloomStageEnabled() {
-    return this._visualSettings._syncBloomStageEnabled(...arguments);
   }
 
   /**
@@ -1110,45 +654,6 @@ export class StyleManager {
   }
 
   /**
-   * Maps a bloom intensity percentage to Cesium bloom stage uniforms.
-   * Uses smoothstep easing (Hermite interpolation: 3t^2 - 2t^3) to
-   * produce a perceptually linear glow ramp from zero to full strength.
-   * @param {number} intensity - Bloom intensity percentage (0-200).
-   * @returns {void}
-   */
-  _applyBloomIntensity(intensity) {
-    return this._visualSettings._applyBloomIntensity(...arguments);
-  }
-
-  /**
-   * Toggles bloom on/off, syncs button state, and reveals/hides the intensity slider row.
-   * @param {boolean} enabled - Whether bloom should be active.
-   * @returns {void}
-   */
-  _setBloomEnabled(enabled) {
-    return this._visualSettings._setBloomEnabled(...arguments);
-  }
-
-  /**
-   * Maps a normalized sharpen value (0-1) to the unsharp-mask `amount` uniform.
-   * Range: 0.1 (subtle) to 2.1 (aggressive edge enhancement).
-   * @param {number} val - Normalized sharpen intensity (0.0 to 1.0).
-   * @returns {void}
-   */
-  _applySharpenIntensity(val) {
-    return this._visualSettings._applySharpenIntensity(...arguments);
-  }
-
-  /**
-   * Toggles sharpening on/off, syncs button state, and reveals/hides the intensity slider row.
-   * @param {boolean} enabled - Whether sharpening should be active.
-   * @returns {void}
-   */
-  _setSharpenEnabled(enabled) {
-    return this._visualSettings._setSharpenEnabled(...arguments);
-  }
-
-  /**
    * Wires up all primary UI event listeners: style buttons, keyboard shortcuts
    * (1-8 style keys, H/O/V/F/D/C hotkeys, Escape), AI prompt input with
    * debounce, bloom/sharpen/HUD toggles, detection density slider, and
@@ -1156,162 +661,7 @@ export class StyleManager {
    * @returns {void}
    */
   _initUI() {
-    const {
-      cycleDetectionMode,
-      setScopeMaskEnabled,
-      isScopeMaskEnabled,
-      setScopeMaskFeather,
-    } = this.services;
-    this._applicationShortcuts?.destroy();
-    this._frameRateMonitor?.destroy();
-    this._frameRateMonitor = createFrameRateMonitor({
-      viewer: this.viewer,
-      documentRef: document,
-    });
-    this._applicationShortcuts = bindApplicationShortcuts({
-      documentRef: document,
-      searchInput: this._locationSearch,
-      actions: {
-        setStyle: (style) => this.setStyle(style),
-        dismissSearch: () => {
-          if (this._locationSearch.classList.contains('expanded')) {
-            this._locationSearch.classList.remove('expanded');
-            this._locationSearch.value = '';
-            this._locationSearch.blur();
-          }
-        },
-        toggleHud: () => {
-          this.shareLinkManager?.claimRestoreLane?.('visual');
-          this.hud.toggle();
-          this._updateHudButtonState();
-          this._syncShareState();
-        },
-        toggleOrbit: () => this._toggleOrbit(),
-        toggleCleanView: () => this.toggleCleanView(),
-        toggleLayers: () =>
-          document.getElementById('data-panel').classList.toggle('active'),
-        cycleDetection: () => {
-          this.shareLinkManager?.claimRestoreLane?.('visual');
-          this._detectionUserOverridden = true;
-          cycleDetectionMode();
-          this._syncShareState();
-        },
-        toggleCctv: () => this._toggleCctvEnabled(),
-      },
-    });
-
-    this._displayControls?.destroy();
-    this._displayControls = bindDisplayControls({
-      elements: {
-        styleButtons: document.querySelectorAll('.style-btn'),
-        bloomButton: this._bloomBtn,
-        bloomSlider: this._bloomSlider,
-        sharpenButton: this._sharpenBtn,
-        sharpenSlider: this._sharpenSlider,
-        scopeButton: this._scopeBtn,
-        scopeFeatherSlider: this._scopeFeatherSlider,
-        hudLayout: this._hudLayoutSelect,
-        hudButton: this._hudBtn,
-        cleanViewButton: this._cleanViewBtn,
-        cleanViewExitButton: this._cleanViewExitBtn,
-        densitySlider: this._detectionDensitySlider,
-        detectionButton: this._detectionBtn,
-        allocationButtons: this._detectionAllocationBtns,
-        fadeSliders: [this._detectionFadeSlider, this._detectionOpacitySlider],
-        celestialButton: this._celestialBtn,
-        modelsButton: this._models3dBtn,
-        modelModeButtons: this._models3dBtn ? this._models3dModeBtns : [],
-      },
-      actions: {
-        setStyle: (style) => this.setStyle(style),
-        toggleBloom: () => {
-          this.shareLinkManager?.claimRestoreLane?.('visual');
-          this._setBloomEnabled(!this.bloomEnabled);
-        },
-        setBloomIntensity: (value) => {
-          this.shareLinkManager?.claimRestoreLane?.('visual');
-          this._setBloomIntensity(value);
-        },
-        toggleSharpen: () => {
-          this.shareLinkManager?.claimRestoreLane?.('visual');
-          this._setSharpenEnabled(!this.sharpenEnabled);
-        },
-        toggleScope: () => {
-          this.shareLinkManager?.claimRestoreLane?.('visual');
-          const next = !isScopeMaskEnabled();
-          setScopeMaskEnabled(next);
-          this._scopeBtn.classList.toggle('active', next);
-          this._scopeBtn.setAttribute('aria-pressed', String(next));
-          this._syncShareState();
-        },
-        setScopeFeather: (value) => {
-          this.shareLinkManager?.claimRestoreLane?.('visual');
-          const pct = Math.max(0, Math.min(100, value || 0));
-          if (this._scopeFeatherValue)
-            this._scopeFeatherValue.textContent = `${pct}%`;
-          setScopeMaskFeather(pct / 100);
-          this._syncShareState();
-        },
-        setSharpenIntensity: (pct) => {
-          this.shareLinkManager?.claimRestoreLane?.('visual');
-          if (this._sharpenSliderValue)
-            this._sharpenSliderValue.textContent = `${pct}%`;
-          this._applySharpenIntensity(pct / 100);
-          this._syncShareState();
-        },
-        setHudLayout: (value) => {
-          this.shareLinkManager?.claimRestoreLane?.('visual');
-          this._setHudVariant(value);
-        },
-        toggleCleanView: () => this.toggleCleanView(),
-        exitCleanView: () => this.toggleCleanView(false),
-        setDensity: (value) => {
-          this.shareLinkManager?.claimRestoreLane?.('visual');
-          this._detectionUserOverridden = true;
-          const pct = canonicalizeDensity(value);
-          this._detectionDensitySlider.value = String(pct);
-          if (this._detectionDensityValue)
-            this._detectionDensityValue.textContent = `${pct}%`;
-          this._applyDetectionDensityFromUi();
-          this._syncShareState();
-        },
-        setAllocation: (value) => {
-          this.shareLinkManager?.claimRestoreLane?.('visual');
-          this._detectionUserOverridden = true;
-          this._setDetectionAllocation(value);
-        },
-        setFade: () => {
-          this.shareLinkManager?.claimRestoreLane?.('visual');
-          this._applyDetectionFadeFromUi();
-          this._syncShareState();
-        },
-        toggleCelestial: () => {
-          const ringIsVisible = !!this.celestialRing?.visible;
-          if (!this.celestialRingEnabled || !ringIsVisible) {
-            this.setCelestialRingEnabled(true, { focus: true });
-          } else {
-            this.setCelestialRingEnabled(false);
-          }
-        },
-        toggleHud: () => {
-          this.shareLinkManager?.claimRestoreLane?.('visual');
-          this.hud.toggle();
-          this._updateHudButtonState();
-          this._syncShareState();
-        },
-        cycleDetection: () => {
-          this.shareLinkManager?.claimRestoreLane?.('visual');
-          this._detectionUserOverridden = true;
-          cycleDetectionMode();
-          this._syncShareState();
-        },
-        toggleModels: () => {
-          this._setModels3dEnabled(!this._models3dEnabled);
-          this._syncModels3dModeRow();
-        },
-        setModelsMode: (mode) => this._setModels3dMode(mode),
-      },
-    });
+    this._displayBindings._initUI();
   }
 
   /**
@@ -1361,91 +711,8 @@ export class StyleManager {
     this._mapSourceControls?.render(state);
   }
 
-  /**
-   * Reads and canonicalizes the five-stop density control. The engine derives
-   * Sparse/Balanced/Dense from the same stop.
-   * @returns {void}
-   */
-  _applyDetectionDensityFromUi() {
-    return this._visualSettings._applyDetectionDensityFromUi(...arguments);
-  }
-
-  /** Apply responsive keyhole fade controls from normalized UI percentages. */
-  _applyDetectionFadeFromUi() {
-    return this._visualSettings._applyDetectionFadeFromUi(...arguments);
-  }
-
   _setDetectionAllocation(strategy, { syncShare = true, persist = true } = {}) {
     return this._visualSettings._setDetectionAllocation(...arguments);
-  }
-
-  _syncDetectionUiFromEngine() {
-    return this._visualSettings._syncDetectionUiFromEngine(...arguments);
-  }
-
-  /**
-   * Activates a detection overlay mode by label (e.g. 'OFF', 'SPARSE', 'PANOPTIC').
-   * @param {string} modeLabel - Detection mode label to set.
-   * @returns {void}
-   */
-  _setDetectionMode(modeLabel) {
-    return this._visualSettings._setDetectionMode(...arguments);
-  }
-
-  /**
-   * Switches the HUD layout variant (e.g. 'tactical', 'minimal') and syncs
-   * the layout dropdown if present.
-   * @param {string} variantName - HUD variant identifier.
-   * @returns {void}
-   */
-  _setHudVariant(variantName) {
-    return this._visualSettings._setHudVariant(...arguments);
-  }
-
-  /**
-   * Keeps both responsive panel lanes and Cockpit's utility strip on the same
-   * measured layout commit. HUD visibility transitions can outlive the first
-   * animation frame, so variant changes receive one bounded settling pass.
-   * @param {{settle?: boolean}} [options] Whether to remeasure after transitions.
-   * @returns {void}
-   */
-  _scheduleAdaptivePanelLayout(options0) {
-    return this._panelLayout._scheduleAdaptivePanelLayout(options0);
-  }
-
-  /**
-   * Applies preset defaults (bloom, sharpen, shader uniforms, HUD variant)
-   * when a military-class style (CRT, NVG, FLIR) is selected. Does nothing
-   * for styles without entries in STYLE_PRESET_DEFAULTS.
-   * @param {string} styleName - The style whose defaults to apply.
-   * @returns {void}
-   */
-  _applyStylePresetDefaults(styleName) {
-    return this._visualSettings._applyStylePresetDefaults(...arguments);
-  }
-
-  /**
-   * Apply a detection preset's density and mode through the real UI path.
-   *
-   * Deliberately does NOT consult `_detectionUserOverridden` — the CALLER owns
-   * that decision. The style path checks it (an explicit Sparse/Off must
-   * survive a style switch); Cockpit entry does not (owner: detection is on in
-   * the cockpit "regardless").
-   * @param {{mode?: string, densityPct?: number}} det Preset detection config.
-   * @returns {void}
-   */
-  _applyDetectionPreset(det) {
-    return this._visualSettings._applyDetectionPreset(...arguments);
-  }
-
-  /**
-   * Applies the global post-processing baseline (GLOBAL_POST_DEFAULTS) at
-   * startup before any share-link restore runs. Sets bloom, sharpen, HUD,
-   * and detection to their factory defaults.
-   * @returns {void}
-   */
-  _applyGlobalPostDefaults() {
-    return this._visualSettings._applyGlobalPostDefaults(...arguments);
   }
 
   /**
@@ -1453,77 +720,10 @@ export class StyleManager {
    * the ShareLinkManager so the URL hash stays in sync.
    * @returns {void}
    */
-  /**
-   * Detection as a DURABLE preference, for serialization into a share link.
-   *
-   * While Contacts is active it OWNS detection and forces Dense @ 75%. That is
-   * a session-scoped override, not something the operator chose: it is undone
-   * verbatim on deactivation. Serializing the forced values shipped a link that
-   * pinned Dense @ 75% on the recipient — as a durable preference, with no
-   * Contacts mode present to explain or undo it — even though the author's own
-   * setting was (say) OFF @ 50%. Publish what deactivation would restore.
-   *
-   * `_contactsDetectionRestore` is exactly that snapshot and is null whenever
-   * Contacts does not own detection, so the live values are used normally.
-   */
-  _shareableDetectionState() {
-    return this._visualSettings._shareableDetectionState(...arguments);
-  }
-
-  /** Current shareable visual preferences; subscriptions include an initial snapshot. */
-  subscribeShareState(listener, options) {
-    return this._shareState.subscribe(listener, options);
-  }
 
   _syncShareState() {
     if (this._disposed) return;
     this._shareState.publish({ type: 'settings-changed' });
-  }
-
-  _readShareState() {
-    return this._visualSettings._readShareState(...arguments);
-  }
-
-  /**
-   * Updates the traffic sync status chip with loading phase label and progress.
-   * Auto-hides after 1.5s when loading completes; stays visible while busy.
-   * @param {boolean} [forceShow=false] - Force the chip visible regardless of busy state.
-   * @returns {void}
-   */
-  _updateTrafficSyncChip(forceShow, now) {
-    return this._feedback._updateTrafficSyncChip(forceShow, now);
-  }
-
-  /**
-   * Initializes panel collapse buttons and restores persisted collapsed state.
-   * Also sets up hover-expand behavior for the style presets and location bar panels.
-   * @returns {void}
-   */
-  _initPanelChrome() {
-    return this._panelChrome._initPanelChrome(...arguments);
-  }
-
-  /**
-   * Collapses the nearest expanded panel that owns keyboard focus on Escape.
-   * Nested panels consume the event first, so one key closes one level and
-   * returns focus to that level's disclosure. If Escape was pressed on the
-   * disclosure itself, remove focus after closing so the collapsed button does
-   * not keep a stale keyboard ring.
-   * @param {KeyboardEvent} event - Candidate Escape key event.
-   * @param {string} panelId - Collapsible panel containing the listener.
-   * @returns {boolean} Whether this panel handled the key.
-   */
-  _collapsePanelOnEscape(event, panelId) {
-    return this._panelChrome._collapsePanelOnEscape(...arguments);
-  }
-
-  /**
-   * Allows either command-dock tray to remain open until explicitly unpinned.
-   * Both trays may be pinned; transient and error trays stack above them.
-   * @returns {void}
-   */
-  _initCommandDockPins() {
-    return this._panelChrome._initCommandDockPins(...arguments);
   }
 
   _setCommandDockPanelPinState(
@@ -1532,33 +732,6 @@ export class StyleManager {
     { restore = false, persist = true, syncShare = true } = {},
   ) {
     return this._panelChrome._setCommandDockPanelPinState(...arguments);
-  }
-
-  /**
-   * Tracks the live pinned-tray height so a hovered sibling can stack above it
-   * without hardcoded content dimensions.
-   * @returns {void}
-   */
-  _initCommandDockTrayMetrics() {
-    return this._panelChrome._initCommandDockTrayMetrics(...arguments);
-  }
-
-  /**
-   * Writes each pinned tray height and their combined stack height as CSS
-   * variables. The most recently pinned tray forms the upper level.
-   * @returns {void}
-   */
-  _updateCommandDockTrayStack() {
-    return this._panelChrome._updateCommandDockTrayStack(...arguments);
-  }
-
-  /**
-   * One-time toast when stored v6 panel positions are superseded by the v7
-   * layout defaults (positions reset; collapsed states are preserved).
-   * @returns {void}
-   */
-  _maybeNotifyLayoutReset() {
-    return this._panelChrome._maybeNotifyLayoutReset(...arguments);
   }
 
   /**
@@ -1577,149 +750,6 @@ export class StyleManager {
     { openDelayMs = 850, closeDelayMs = 1000 } = {},
   ) {
     return this._panelChrome._initAutoHoverPanel(...arguments);
-  }
-
-  /**
-   * Sets up drag-to-reposition for legacy floating controls. The right rail
-   * and left accordion remain fixed so their HUD alignment is deterministic.
-   * @returns {void}
-   */
-  _initPanelDrag() {
-    return this._panelPosition._initPanelDrag();
-  }
-
-  _persistAwarenessSelection(event, cleared = false) {
-    if (!this._dataManager) return;
-    const origin = String(event?.detail?.origin || 'programmatic');
-    if (!isExplicitLayerStateOrigin(origin)) return;
-    const layerId = String(event?.detail?.layerId || '');
-    const config = {
-      flights: {
-        key: 'selectedFlightsTrackingId',
-        normalize: (value) =>
-          String(value ?? '')
-            .trim()
-            .toLowerCase() || null,
-      },
-      military: {
-        key: 'selectedMilitaryTrackingId',
-        normalize: (value) =>
-          String(value ?? '')
-            .trim()
-            .toLowerCase() || null,
-      },
-      satellites: {
-        key: 'selectedSatTrackingId',
-        normalize: (value) => {
-          const candidate = Number(value);
-          return Number.isFinite(candidate) && candidate > 0
-            ? Math.trunc(candidate)
-            : null;
-        },
-      },
-    }[layerId];
-    if (!config) return;
-    const selectedValue = cleared ? null : config.normalize(event?.detail?.id);
-    if (cleared || selectedValue === null) {
-      this._dataManager.adoptLayerParams?.(
-        layerId,
-        {
-          [config.key]: selectedValue,
-        },
-        { origin },
-      );
-      return;
-    }
-    // A direct selection promotes a Context-owned tracker dependency into
-    // durable visibility before its selected ID is normalized. Context exit
-    // also keeps this adopted layer instead of tearing down the user's track.
-    const visibilityAdopted = this._dataManager.adoptLayerVisibility?.(
-      layerId,
-      true,
-      { origin, adoptedFromSelection: true },
-    );
-    if (visibilityAdopted === false) return;
-    // Clear the prior family before publishing the replacement. Otherwise the
-    // coordinator briefly sees two IDs and correctly treats them as an
-    // ambiguous incoming state, which would discard the new durable target.
-    for (const [otherLayerId, otherKey] of [
-      ['flights', 'selectedFlightsTrackingId'],
-      ['military', 'selectedMilitaryTrackingId'],
-      ['satellites', 'selectedSatTrackingId'],
-    ]) {
-      if (otherLayerId === layerId) continue;
-      this._dataManager.setLayerParams(
-        otherLayerId,
-        { [otherKey]: null },
-        { origin },
-      );
-    }
-    this._dataManager.adoptLayerParams?.(
-      layerId,
-      {
-        [config.key]: selectedValue,
-      },
-      { origin },
-    );
-  }
-
-  /**
-   * Connects the layer data manager for traffic sync, CCTV state subscription,
-   * and layer enable/disable operations.
-   * @param {object|null} dataManager - The DataManager instance, or null to detach.
-   * @returns {void}
-   */
-  attachDataManager(dataManager) {
-    this._dataManager = dataManager || null;
-    this.hud.attachDataManager(this._dataManager);
-    this._updateTrafficSyncChip();
-    if (this._dataManagerUnsubscribe) {
-      this._dataManagerUnsubscribe();
-      this._dataManagerUnsubscribe = null;
-    }
-    this._contextControls.connect(this._dataManager);
-    if (typeof this._dataManager?.subscribe === 'function') {
-      this._dataManagerUnsubscribe = this._dataManager.subscribe((change) => {
-        this._feedback._loadingFeedbackEvent = change;
-        this._updateGlobalLoadingFeedback(performance.now());
-      });
-    }
-    this._updateGlobalLoadingFeedback(performance.now());
-    this._syncContextModeButtons();
-    this._cctvControls.connect();
-    this._radioControls.connect();
-    this._connectDirectionsCamera();
-    if (!this._awarenessSelectedHandler) {
-      this._awarenessSelectedHandler = (event) =>
-        this._persistAwarenessSelection(event, false);
-      this._awarenessClearedHandler = (event) =>
-        this._persistAwarenessSelection(event, true);
-      window.addEventListener(
-        'gev:awareness-subject-selected',
-        this._awarenessSelectedHandler,
-      );
-      window.addEventListener(
-        'gev:awareness-subject-cleared',
-        this._awarenessClearedHandler,
-      );
-    }
-    this._shareRestoration.connect(this._dataManager);
-  }
-
-  _handleShareTrackingRestoreStatus(result) {
-    return this._shareRestoration._handleShareTrackingRestoreStatus(
-      ...arguments,
-    );
-  }
-
-  get _contextMode() {
-    return this._contextControls?._contextMode ?? null;
-  }
-  get _contextModeChanging() {
-    return this._contextControls?._contextModeChanging ?? false;
-  }
-  get _preservePanelStateDuringLayerClear() {
-    return this._contextControls?._preservePanelStateDuringLayerClear ?? false;
   }
 
   _initGlobalContextPanel() {
@@ -1751,18 +781,6 @@ export class StyleManager {
         },
       },
     });
-  }
-
-  _runUserFacingContextAction(...args) {
-    return this._contextControls?._runUserFacingContextAction(...args);
-  }
-
-  _waitForContextLayerSettlement(...args) {
-    return this._contextControls?._waitForContextLayerSettlement(...args);
-  }
-
-  _syncContextModeButtons(...args) {
-    return this._contextControls?._syncContextModeButtons(...args);
   }
 
   /** Wire the independent Radio companion controls. */
@@ -1841,22 +859,6 @@ export class StyleManager {
         scheduleLayout: () => this._scheduleRightPanelLayout(),
       },
     });
-  }
-
-  _setCockpitDisclosure(...args) {
-    return this._radioControls?._setCockpitDisclosure?.(...args);
-  }
-
-  _setRadioDisclosure(...args) {
-    return this._radioControls?._setRadioDisclosure?.(...args);
-  }
-
-  _syncContextRadioLauncherState(...args) {
-    return this._radioControls?._syncContextRadioLauncherState?.(...args);
-  }
-
-  _renderRadioState(...args) {
-    return this._radioControls?._renderRadioState?.(...args);
   }
 
   /**
@@ -1957,152 +959,6 @@ export class StyleManager {
   }
 
   /**
-   * Returns the versioned localStorage key for a panel's saved position.
-   * @param {string} panelId - DOM id of the panel.
-   * @returns {string} localStorage key.
-   */
-  _panelStorageKey(panelId) {
-    return this._panelPosition._panelStorageKey(panelId);
-  }
-
-  /**
-   * Returns the versioned localStorage key for a panel's collapsed state.
-   * @param {string} panelId - DOM id of the panel.
-   * @returns {string} localStorage key.
-   */
-  _panelCollapseStorageKey(panelId) {
-    return this._panelPosition._panelCollapseStorageKey(panelId);
-  }
-
-  /**
-   * Restores a panel's collapsed/expanded state from localStorage.
-   * Falls back to the CSS class default if no saved state exists.
-   * @param {string} panelId - DOM id of the panel.
-   * @returns {void}
-   */
-  _restorePanelCollapsedState(panelId, options1) {
-    return this._panelChrome._restorePanelCollapsedState(...arguments);
-  }
-
-  /**
-   * Persists a panel's collapsed state ('1' or '0') to localStorage.
-   * @param {string} panelId - DOM id of the panel.
-   * @param {boolean} collapsed - Whether the panel is collapsed.
-   * @returns {void}
-   */
-  _savePanelCollapsedState(panelId, collapsed) {
-    return this._panelChrome._savePanelCollapsedState(...arguments);
-  }
-
-  /**
-   * Builds one fixed right-side rail from Display, CCTV, its parameter
-   * controls, and Global Context (which owns the nested Radio companion).
-   * The rail then measures the live HUD chrome at runtime so it can stay
-   * aligned and within the available vertical corridor.
-   * @returns {void}
-   */
-  _initRightPanelAdaptiveLayout() {
-    return this._panelLayout._initRightPanelAdaptiveLayout();
-  }
-
-  _scheduleRightPanelLayout(options0) {
-    return this._panelChrome._scheduleRightPanelLayout(...arguments);
-  }
-
-  /**
-   * Places the right rail inside the visible HUD-safe corridor. When the
-   * corridor is too short, the expanded panel receives the remaining height
-   * with internal scrolling. Tactical HUD hides collapsed sibling launchers
-   * while a panel is expanded; other HUD layouts keep them visible.
-   * @returns {void}
-   */
-  _syncRightPanelAdaptiveLayout() {
-    return this._panelLayout._syncRightPanelAdaptiveLayout();
-  }
-
-  /**
-   * Initializes the adaptive left accordion. The layout engine measures the
-   * actual HUD/chrome rectangles that intersect the left lane, then decides
-   * whether collapsed sibling labels can remain visible beside the expanded
-   * panel. No decision is keyed to a specific panel or HUD variant.
-   * @returns {void}
-   */
-  _initLeftPanelAdaptiveLayout() {
-    return this._panelLayout._initLeftPanelAdaptiveLayout();
-  }
-
-  /**
-   * Batches adaptive accordion work into one animation frame.
-   * @returns {void}
-   */
-  _scheduleLeftPanelLayout(options0) {
-    return this._panelChrome._scheduleLeftPanelLayout(...arguments);
-  }
-
-  /**
-   * Measures a live obstacle-free corridor for the left accordion and toggles
-   * focus mode only when the expanded panel plus sibling labels cannot fit.
-   * Safe boundaries are written as viewport-relative CSS values.
-   * @returns {void}
-   */
-  _syncLeftPanelAdaptiveLayout() {
-    return this._panelLayout._syncLeftPanelAdaptiveLayout();
-  }
-
-  /**
-   * Updates collapse button glyphs based on panel state. Right-rail panels
-   * use directional arrows; left-stack panels use +/- symbols.
-   * @param {HTMLElement} panelEl - The panel DOM element.
-   * @returns {void}
-   */
-  _syncPanelCollapseButton(panelEl) {
-    return this._panelChrome._syncPanelCollapseButton(...arguments);
-  }
-
-  /**
-   * Converts a panel from left-positioned to right-anchored so it expands
-   * leftward on resize. Used for the right-rail parameter panel.
-   * @param {HTMLElement} panelEl - The panel to re-anchor.
-   * @returns {void}
-   */
-  _pinPanelToRight(panelEl) {
-    return this._panelPosition._pinPanelToRight(panelEl);
-  }
-
-  /**
-   * Restores a panel's top/left position from localStorage.
-   * Right-rail panels are additionally pinned to the right edge.
-   * @param {string} panelId - DOM id of the panel.
-   * @param {HTMLElement} panelEl - The panel DOM element.
-   * @returns {void}
-   */
-  _restorePanelPosition(panelId, panelEl) {
-    return this._panelPosition._restorePanelPosition(panelId, panelEl);
-  }
-
-  /**
-   * Clamp a desired left/top so the panel stays fully on-screen (6px inset), matching the drag
-   * clamp (ui.js ~1822). Width/height are position-independent, so reading the rect first is safe.
-   * @param {number} left - desired left (px)
-   * @param {number} top - desired top (px)
-   * @param {HTMLElement} panelEl - the panel element
-   * @returns {{left:number, top:number}}
-   */
-  _clampToViewport(left, top, panelEl) {
-    return this._panelPosition._clampToViewport(left, top, panelEl);
-  }
-
-  /**
-   * Persists a panel's current bounding-rect position to localStorage.
-   * @param {string} panelId - DOM id of the panel.
-   * @param {HTMLElement} panelEl - The panel DOM element.
-   * @returns {void}
-   */
-  _savePanelPosition(panelId, panelEl) {
-    return this._panelPosition._savePanelPosition(panelId, panelEl);
-  }
-
-  /**
    * Makes a panel draggable via its handle element. Implements:
    * - Z-order promotion: each pointerdown increments the global z-counter
    *   so the clicked panel floats above siblings.
@@ -2114,28 +970,6 @@ export class StyleManager {
    * @param {HTMLElement} handleEl - The drag handle element within the panel.
    * @returns {void}
    */
-  /**
-   * Promotes a panel to the top of the panel z band [PANEL_Z_BASE, PANEL_Z_MAX].
-   * Renormalizes all promoted panels when the band is exhausted so panels can
-   * never climb above the voice pill (150), toasts (200), or clean-view exit (300).
-   * @param {HTMLElement} panelEl - Panel to bring to front.
-   * @returns {void}
-   */
-  _promotePanelZ(panelEl) {
-    return this._panelPosition._promotePanelZ(panelEl);
-  }
-
-  _makePanelDraggable(panelId, panelEl, handleEl) {
-    return this._panelPosition._makePanelDraggable(panelId, panelEl, handleEl);
-  }
-
-  _buildSharePanelState() {
-    return this._panelChrome._buildSharePanelState(...arguments);
-  }
-
-  _restorePanelState(panelState) {
-    return this._panelChrome._restorePanelState(...arguments);
-  }
 
   /**
    * Programmatically collapses or expands a panel, persists the state,
@@ -2223,19 +1057,6 @@ export class StyleManager {
   }
 
   /**
-   * Reads current detection overlay state (engine mode + UI density percent).
-   * @returns {{detectionMode: string, densityPct: number|null, allocationStrategy:string, fadePct:number, outsideOpacityPct:number}}
-   */
-  getDetectionState() {
-    return this._visualSettings.getDetectionState(...arguments);
-  }
-
-  /** Read-only overlay diagnostics used by browser QA and regression harnesses. */
-  getDetectionDiagnostics() {
-    return this._visualSettings.getDetectionDiagnostics(...arguments);
-  }
-
-  /**
    * Controls the detection overlay: on/off, mode, and density percent.
    * Density writes the slider AND the engine so share links and scene
    * snapshots stay truthful.
@@ -2316,11 +1137,6 @@ export class StyleManager {
     return this._visualSettings.setSharpen(...arguments);
   }
 
-  /** Whether the full-globe celestial overlay is enabled by user preference. */
-  get celestialRingEnabled() {
-    return this._visualSettings.celestialRingEnabled;
-  }
-
   /**
    * Controls the celestial ring. The Display button uses `focus=true` when the
    * ring is disabled or unavailable at the current zoom, turning the control
@@ -2336,31 +1152,6 @@ export class StyleManager {
   }
 
   /**
-   * Starts or stops orbiting the active POI.
-   * @param {boolean} [enabled] - Omit to toggle.
-   * @returns {{ok: boolean, orbiting: boolean, error?: string}}
-   */
-  setOrbit(enabled) {
-    const active = !!this.orbitController?.active;
-    if (typeof enabled === 'boolean' && enabled === active) {
-      return { ok: true, orbiting: active };
-    }
-    if (enabled === false) {
-      this._stopOrbit();
-      return { ok: true, orbiting: false };
-    }
-    if (!this._currentTarget) {
-      return {
-        ok: false,
-        orbiting: false,
-        error: 'No active landmark to orbit — fly to a landmark first',
-      };
-    }
-    this._toggleOrbit();
-    return { ok: true, orbiting: !!this.orbitController?.active };
-  }
-
-  /**
    * Enables/disables clean view (hides all UI chrome).
    * @param {boolean} [enabled] - Omit to toggle.
    * @returns {{ok: boolean, cleanView: boolean}}
@@ -2370,312 +1161,6 @@ export class StyleManager {
     return {
       ok: true,
       cleanView: document.body.classList.contains('ui-clean-view'),
-    };
-  }
-
-  /**
-   * Reads global context mode state for voice/state-sync consumers.
-   * @returns {{mode: 'flights'|'space-missions'|null, active: boolean, changing: boolean, entering: 'flights'|'space-missions'|null, snapshotCaptured: boolean}}
-   */
-  getContextModeState(...args) {
-    return this._contextControls?.getContextModeState(...args);
-  }
-
-  /**
-   * Sets global context mode (Contacts / Space Missions / off) for voice.
-   * @param {'contacts'|'space-missions'|'off'|null} mode - Requested context target.
-   * @param {object} [options]
-   * @param {string|Symbol|null} [options.notificationToken]
-   * @param {AbortSignal|null} [options.signal]
-   * @param {Function|null} [options.isCurrent]
-   * @param {boolean} [options.claimVisualAuthority] Whether this request is a
-   *   genuine operator/voice Context intent that should take the visual restore
-   *   lane. Cockpit choreography calls this facade INTERNALLY for its own
-   *   enter/rollback steps; those transitions are not a Context request by the
-   *   operator and must stay inert, so they pass `false`.
-   * @returns {Promise<{ok:boolean, mode:'flights'|'space-missions'|null, active:boolean, action:string, error?:string}>}
-   */
-  setContextMode(...args) {
-    return this._contextControls?.setContextMode(...args);
-  }
-
-  /**
-   * Returns cockpit status for voice/state sync and navigation operations.
-   * @returns {{active:boolean, entryAllowed:boolean, visionMode:string, subject:{id:string,layerId:string}|null, navigation:{canPrevious:boolean,canNext:boolean,canFocus:boolean}|null, awareness?: object}|null}
-   */
-  getCockpitState() {
-    const { militaryAwarenessLayer } = this.services;
-    const snapshot = militaryAwarenessLayer.getContextSnapshot?.();
-    const info = this.cockpitView?.readAircraftInfo?.();
-    const active = Boolean(this.cockpitView?.active);
-    const gateOpen = Boolean(this.cockpitView?.isEntryAllowed?.());
-    // "Could Cockpit be ENTERED right now" — so it is false while already
-    // inside, unconditionally. Cockpit takes the entity off
-    // `viewer.trackedEntity` on entry and NEXT puts one back, which made this
-    // flip true/false between calls while `active` stayed true; readers
-    // (including the voice model) read that as a broken half-entered state.
-    const entryAllowed =
-      !active &&
-      Boolean(gateOpen && info && this.viewer?.trackedEntity?.position);
-    return {
-      active,
-      entryAllowed,
-      // Why entry is unavailable, so a refusal can be explained rather than
-      // guessed at.
-      entryBlockedReason:
-        entryAllowed || active
-          ? null
-          : !gateOpen
-            ? this._contextModeChanging
-              ? 'contacts-starting'
-              : 'contacts-inactive'
-            : 'no-tracked-aircraft',
-      visionMode: this.cockpitView?.visionMode || null,
-      subject: info
-        ? {
-            id: info.icao24 || info.id || null,
-            layerId: info.layerId || null,
-            callsign: info.callsign || null,
-          }
-        : null,
-      navigation: snapshot
-        ? {
-            canPrevious: Boolean(snapshot.navigation?.canPrevious),
-            canNext: Boolean(snapshot.navigation?.canNext),
-            canFocus: Boolean(snapshot.navigation?.canFocus),
-          }
-        : null,
-      awareness: snapshot
-        ? {
-            radiusM: Number.isFinite(snapshot.radiusM)
-              ? snapshot.radiusM
-              : null,
-            subject: snapshot.subject
-              ? {
-                  id: snapshot.subject.id || null,
-                  layerId: snapshot.subject.layerId || null,
-                }
-              : null,
-            cohorts: Array.isArray(snapshot.cohorts)
-              ? snapshot.cohorts.map((cohort) => ({
-                  id: cohort?.id || null,
-                  source: cohort?.source || null,
-                  count: Number.isFinite(cohort?.count) ? cohort.count : null,
-                  relationship: cohort?.relationship || null,
-                  reason: cohort?.reason || null,
-                  coverage: cohort?.coverage || null,
-                }))
-              : [],
-            navigation: snapshot.navigation
-              ? {
-                  canPrevious: Boolean(snapshot.navigation.canPrevious),
-                  canNext: Boolean(snapshot.navigation.canNext),
-                  canFocus: Boolean(snapshot.navigation.canFocus),
-                }
-              : null,
-          }
-        : null,
-      activeTracked: this.cockpitView?.active
-        ? Boolean(this.cockpitView?.trackedEntity)
-        : false,
-      activeMapView: !this.cockpitView?.active && entryAllowed,
-    };
-  }
-
-  /**
-   * Point Cockpit entry at a requested contact layer before it enters.
-   *
-   * Reuses the filtered Context navigation NEXT already uses, so "cockpit in
-   * that military helicopter" lands on the same contact "next military
-   * helicopter" would. Cockpit flies aircraft only; vessel and installation
-   * layers are refused by name rather than silently ignored.
-   * @param {object} options Retarget request.
-   * @param {string} options.targetLayer Requested contact layer.
-   * @param {string|null} options.aircraftClass Optional class filter.
-   * @param {{layerId: string}|null} options.currentTarget Current tracker.
-   * @param {{layerId: string}|null} options.selectedTarget Pending selection.
-   * @returns {{ok: boolean, retargeted?: boolean, error?: string}} Outcome.
-   */
-  _retargetCockpitEntryLayer({
-    targetLayer,
-    aircraftClass,
-    currentTarget,
-    selectedTarget,
-  }) {
-    const { militaryAwarenessLayer } = this.services;
-    if (!['flights', 'military'].includes(targetLayer)) {
-      return {
-        ok: false,
-        error: `Cockpit flies aircraft only — ${targetLayer} contacts cannot be entered`,
-      };
-    }
-    const activeLayer =
-      selectedTarget?.layerId || currentTarget?.layerId || null;
-    const alreadyOnLayer = activeLayer === targetLayer;
-    if (alreadyOnLayer && !aircraftClass)
-      return { ok: true, retargeted: false };
-    const moved = militaryAwarenessLayer?.navigateNext
-      ? !!militaryAwarenessLayer.navigateNext({
-          targetLayer,
-          aircraftClass,
-          origin: 'voice',
-        })
-      : false;
-    if (moved) return { ok: true, retargeted: true };
-    // A filter that matched nothing still enters, as long as the layer is
-    // already right — the operator asked for that layer and is on it.
-    if (alreadyOnLayer) return { ok: true, retargeted: false };
-    const label = targetLayer === 'military' ? 'military' : 'civilian';
-    const filtered = aircraftClass ? `${aircraftClass} ` : '';
-    return {
-      ok: false,
-      error: `No ${filtered}${label} contact is available to enter — track one first, or say "next ${label}"`,
-    };
-  }
-
-  /**
-   * Controls cockpit entry/exit and context navigation.
-   * @param {'enter'|'exit'|'next'|'previous'|'status'} action - Cockpit action.
-   * @param {object} [options]
-   * @param {string|Symbol|null} [options.notificationToken]
-   * @param {'flights'|'military'|'ais-live-vessels'|'military-installations'|null} [options.targetLayer]
-   * @param {string|null} [options.aircraftClass]
-   * @param {{layerId:'flights'|'military',id:string}|null} [options.selectedTarget]
-   * @param {{layerId:'flights'|'military',id:string}|null} [options.rollbackTarget]
-   * @returns {{ok:boolean, action:string, error?:string, state?:object}}
-   */
-  controlCockpit(
-    action,
-    {
-      notificationToken = null,
-      targetLayer = null,
-      aircraftClass = null,
-      selectedTarget = null,
-      rollbackTarget = undefined,
-    } = {},
-  ) {
-    const { flightsLayer, militaryFlightsLayer } = this.services;
-    const normalized = String(action || '').toLowerCase();
-    if (!this.cockpitView) {
-      return {
-        ok: false,
-        action: 'control_cockpit',
-        error: 'Cockpit controller unavailable',
-        state: this.getCockpitState(),
-      };
-    }
-    if (normalized === 'status') {
-      return {
-        ok: true,
-        action: 'control_cockpit',
-        state: this.getCockpitState(),
-        notificationToken: notificationToken || null,
-      };
-    }
-    if (normalized === 'enter') {
-      // Entry is gated exactly as the manual entry chip is. Attempting it while
-      // the gate is shut produced the half-entered look the operator reported
-      // (a plane anchored under the camera with no cockpit around it), so
-      // refuse with the reason instead of trying.
-      if (!this.cockpitView.isEntryAllowed?.()) {
-        return {
-          ok: false,
-          action: 'control_cockpit',
-          error: this._contextModeChanging
-            ? 'Contacts is still starting up — try Cockpit again in a moment'
-            : 'Contacts must be active to enter Cockpit — say "open contacts" first',
-          state: this.getCockpitState(),
-        };
-      }
-      let currentTarget = this.getAircraftTrackingTarget();
-      const layerForTarget = (target) =>
-        target?.layerId === 'military'
-          ? militaryFlightsLayer
-          : target?.layerId === 'flights'
-            ? flightsLayer
-            : null;
-      // A requested layer retargets BEFORE entry, through the same filtered
-      // navigation NEXT uses. Ignoring it entered on whatever was already
-      // tracked and reported success, so "cockpit in that military helicopter"
-      // silently put the operator in an airliner.
-      if (targetLayer) {
-        const requested = this._retargetCockpitEntryLayer({
-          targetLayer,
-          aircraftClass,
-          currentTarget,
-          selectedTarget,
-        });
-        if (!requested.ok) {
-          return {
-            ok: false,
-            action: 'control_cockpit',
-            error: requested.error,
-            state: this.getCockpitState(),
-          };
-        }
-        if (requested.retargeted) {
-          // The retarget is now the authority; a selection sampled before it
-          // would drag entry back to the wrong layer.
-          selectedTarget = null;
-          rollbackTarget =
-            rollbackTarget === undefined ? currentTarget : rollbackTarget;
-          currentTarget = this.getAircraftTrackingTarget();
-        }
-      }
-      const selectedLayer =
-        selectedTarget?.layerId === 'military'
-          ? militaryFlightsLayer
-          : selectedTarget?.layerId === 'flights'
-            ? flightsLayer
-            : null;
-      const entry = enterCockpitWithTracking({
-        cockpitView: this.cockpitView,
-        selectedLayer,
-        selectedTarget,
-        currentLayer: layerForTarget(currentTarget),
-        rollbackLayer: layerForTarget(
-          rollbackTarget === undefined ? currentTarget : rollbackTarget,
-        ),
-        rollbackTarget,
-        selectionOrigin: 'voice',
-      });
-      return {
-        ok: entry.entered,
-        action: 'control_cockpit',
-        state: this.getCockpitState(),
-        error: entry.error,
-      };
-    }
-    if (normalized === 'exit') {
-      const exited = !!this.cockpitView.exit();
-      return {
-        ok: exited,
-        action: 'control_cockpit',
-        state: this.getCockpitState(),
-        error: exited ? null : 'Cockpit was already inactive',
-      };
-    }
-    if (normalized === 'next' || normalized === 'previous') {
-      const changed = this.cockpitView.navigateContext(
-        normalized === 'next' ? 1 : -1,
-        {
-          targetLayer,
-          aircraftClass,
-          origin: 'voice',
-        },
-      );
-      return {
-        ok: changed,
-        action: 'control_cockpit',
-        state: this.getCockpitState(),
-        error: changed ? null : 'No further context target was available',
-      };
-    }
-    return {
-      ok: false,
-      action: 'control_cockpit',
-      error: `Unknown cockpit action: ${action}`,
-      state: this.getCockpitState(),
     };
   }
 
@@ -2761,15 +1246,6 @@ export class StyleManager {
   }
 
   /**
-   * Snapshots the full visual state (active style, bloom, sharpen, HUD, detection,
-   * per-style shader uniform values) for serialization or scene recipe capture.
-   * @returns {object} Serializable visual state object.
-   */
-  getVisualState() {
-    return this._visualSettings.getVisualState(...arguments);
-  }
-
-  /**
    * Restores a full visual state snapshot, applying style, bloom, sharpen,
    * HUD, detection, and per-style shader uniforms. Used by scene recipes
    * and share-link restore. Async so the map-stack switch resolves before
@@ -2790,35 +1266,11 @@ export class StyleManager {
   }
 
   /**
-   * Resets the safe-frame overlay to its inactive state on init.
-   * @returns {void}
-   */
-  _initRecordingOverlay() {
-    return this._recording._initRecordingOverlay();
-  }
-
-  /**
    * Applies recording-friendly post-processing and shader uniform overrides.
    * @param {object} preset
    */
   applyCinematicPreset(preset = {}) {
     return this._visualSettings.applyCinematicPreset(...arguments);
-  }
-
-  /**
-   * Enters or exits recording mode. When active, hides UI chrome via a body class,
-   * displays a safe-frame composition overlay (16:9 or 9:16), and switches
-   * the HUD to the specified mode. Exiting restores the HUD mode and layout
-   * variant that were active before recording started.
-   * @param {boolean} enabled - Whether to enable recording mode.
-   * @param {object} [options]
-   * @param {boolean} [options.hidePanels=true] - Hide all panel chrome.
-   * @param {string} [options.hudMode='minimal'] - HUD mode while recording ('off'|'minimal'|'full'|'auto').
-   * @param {string} [options.safeFrame='16:9'] - Aspect ratio for the safe-frame overlay.
-   * @returns {void}
-   */
-  setRecordingMode(enabled, options) {
-    return this._recording.setRecordingMode(enabled, options);
   }
 
   // ── Parameter Sliders ─────────────────────────
@@ -2832,11 +1284,6 @@ export class StyleManager {
    */
   _updateSliderPanel(styleName, { reveal = false } = {}) {
     return this._visualSettings._updateSliderPanel(...arguments);
-  }
-
-  /** Reveal the map-only parameter surface in the standard Display scroll owner. */
-  _revealStyleParameters() {
-    return this._visualSettings._revealStyleParameters(...arguments);
   }
 
   // ── Style switching ───────────────────────────
@@ -2866,35 +1313,6 @@ export class StyleManager {
   // ── Shader transitions ────────────────────────
 
   /**
-   * Enqueues a smooth intensity transition for a shader stage. The animation
-   * loop interpolates from `fromValue` to `toValue` over TRANSITION_DURATION_MS.
-   * @param {string} styleName - Name of the shader stage to transition.
-   * @param {number} fromValue - Starting intensity (typically current value).
-   * @param {number} toValue - Target intensity (0.0 to fade out, 1.0 to fade in).
-   * @returns {void}
-   */
-  _startTransition(styleName, fromValue, toValue) {
-    return this._visualSettings._startTransition(...arguments);
-  }
-
-  /**
-   * Sample the manager's layer set and paint the global loading chip.
-   * Driven by manager events AND by a ticker, because the underlying state
-   * machine is TIME-driven (reveal delay, long-load threshold, terminal
-   * dwell) — see _armLoadingFeedbackTicker.
-   * @param {number} [now] - performance.now() sample.
-   * @returns {void}
-   */
-  _updateGlobalLoadingFeedback(now) {
-    return this._feedback._updateGlobalLoadingFeedback(now);
-  }
-
-  /** Show a message in the universal top-center status banner. */
-  _showGlobalStatusNotice(message, options) {
-    return this._feedback._showGlobalStatusNotice(message, options);
-  }
-
-  /**
    * Style animation loop — self-stopping (perf wave 2). Runs only while a
    * crossfade is in flight or an animated (time-uniform) stage is visible,
    * holding continuous scene render for exactly that long. Re-armed by
@@ -2907,170 +1325,6 @@ export class StyleManager {
   }
 
   /**
-   * 500 ms DOM ticker for the traffic sync chip (was per-frame). It also
-   * polls the loading chip as a safety net: a camera-driven layer can flip
-   * its own `stats.loading` without emitting a manager event, and that is
-   * the one loading start the event path cannot see.
-   */
-  _startTrafficChipTicker() {
-    return this._feedback._startTrafficChipTicker();
-  }
-
-  /**
-   * Self-stopping 60 ms ticker for the global loading chip.
-   *
-   * The chip used to ride the style rAF loop, which perf wave 2 made
-   * self-stopping — leaving the chip frozen mid-state whenever no crossfade
-   * or animated shader was running (it would never reveal, never cross the
-   * long-load threshold, and never dwell out). Its reducer
-   * (src/loadingFeedback.js) is time-driven, so it needs real ticks; it is
-   * also pure DOM, so it takes NO governor hold and requests no render.
-   * Armed by _updateGlobalLoadingFeedback whenever loading leaves idle or a
-   * universal notice begins, and stops once both have settled.
-   * (rebase 2026-08-16: main's loading chip vs wave 2's stopped loop)
-   * @returns {void}
-   */
-  _armLoadingFeedbackTicker() {
-    return this._feedback._armLoadingFeedbackTicker();
-  }
-
-  /** Stop the loading-chip ticker if it is running. Idempotent. */
-  _stopLoadingFeedbackTicker() {
-    return this._feedback._stopLoadingFeedbackTicker();
-  }
-
-  // ── Location Bar ─────────────────────────────
-
-  /** Subscribe to the current location lookup, including replacements of its control owner. */
-  subscribeLocationSearch(listener, options) {
-    return this._locationState.subscribe(listener, options);
-  }
-
-  _handleLocationSearchState(state, change) {
-    if (this._disposed || !change) return;
-    if (change.type === 'started')
-      this._activeLocationSearchGeneration = change.generation;
-    else if (change.type === 'found') {
-      this._searchedLocationLabel = state.destination.label || state.query;
-      this._setActiveLocation(null);
-      this._currentPoi = null;
-      this._collapsePOIRow();
-      this._updateLocationMiniStatus();
-    } else if (change.type === 'missing') this._showToast('Location not found');
-    else if (change.type === 'failed') this._showToast('Search failed');
-    else if (change.type === 'settled')
-      this._settleLocationSearchUi(change.generation);
-    else if (
-      change.type === 'reset' &&
-      this._activeLocationSearchGeneration !== null
-    ) {
-      this._settleLocationSearchUi(this._activeLocationSearchGeneration);
-    }
-  }
-
-  /**
-   * Initializes the location bar: renders city pills from CITY_POIS, sets up
-   * QWERTY keyboard navigation for POI selection, wires the search toggle
-   * and geocoding search input.
-   * @returns {void}
-   */
-  _initLocationBar() {
-    const { CITY_POIS, searchAndFlyTo, LocationSearch } = this.services;
-    this._locationControls?.destroy();
-    this._locationLookupUnsubscribe?.();
-    this._locationLookup?.destroy();
-    this._locationLookup = new LocationSearch({
-      input: this._locationSearch,
-      begin: () => this._beginDeferredNavigation('location'),
-      isCurrent: (generation) =>
-        !this._disposed && generation === this._navigationGeneration,
-      beforeFly: (generation) => this._reassertNavigationHandoff(generation),
-      search: (query, options) =>
-        searchAndFlyTo(this.viewer, query, {
-          placeSearch: this.placeSearch,
-          ...options,
-        }),
-      onError: (error) => console.error('[Search] Geocoding failed:', error),
-    });
-    this._locationLookupUnsubscribe = this._locationLookup.subscribe(
-      ({ initial, change }) => {
-        this._locationState.publish(initial ? { type: 'reset' } : change);
-      },
-    );
-    this._locationControls = new LocationControls({
-      elements: {
-        pills: this._locationPills,
-        poiRow: this._poiRow,
-        divider: this._locationBarDivider,
-        search: this._locationSearch,
-        searchToggle: this._searchToggle,
-        resetButtons: [this._resetGlobeBtn, this._cockpitResetGlobeBtn],
-        statusCity: this._locationMiniCity,
-        statusPoi: this._locationMiniPoi,
-      },
-      cities: CITY_POIS,
-      getExpandedCity: () => this._expandedCityId,
-      onCity: (id) => this._onCityPillClick(id),
-      onPoi: (id, index) => this._onPoiClick(id, index),
-      onSearch: (query) => this._locationLookup.run(query),
-      onReset: () => this.resetToGlobeView(),
-    });
-  }
-
-  /**
-   * Signals the start of an inter-city world jump: notifies the traffic layer
-   * to pause tile fetching and suspends detection overlays to prevent stale
-   * rendering during the flight.
-   * @returns {void}
-   */
-  _beginWorldJumpTransition() {
-    const { suspendDetection, trafficLayer } = this.services;
-    clearTimeout(this._trafficTransitionTimer);
-    trafficLayer.beginWorldJump?.();
-    suspendDetection('intercity');
-  }
-
-  /**
-   * Signals the end of an inter-city world jump: resumes traffic tile fetching,
-   * resumes detection overlays, and forces a traffic sync chip update.
-   * @returns {void}
-   */
-  _endWorldJumpTransition() {
-    const { resumeDetection, trafficLayer } = this.services;
-    clearTimeout(this._trafficTransitionTimer);
-    trafficLayer.endWorldJump?.();
-    resumeDetection();
-    this._updateTrafficSyncChip(true);
-  }
-
-  /**
-   * Wraps a fly-to action with world-jump transition hooks when the target
-   * city differs from the current one. Applies begin/end transition signals
-   * with a 5.2s safety timeout to guarantee cleanup if the flight callback
-   * never fires onComplete.
-   * @param {boolean} cityChanged - Whether the destination is in a different city.
-   * @param {function} flyAction - Callback receiving `{onStart, onComplete}` hooks; should return a result with targetPosition.
-   * @returns {*} Return value from flyAction.
-   */
-  _flyWithTransition(cityChanged, flyAction) {
-    return this._runExplicitNavigation('location', () => {
-      if (!cityChanged) return flyAction({});
-      let completed = false;
-      const finalize = () => {
-        if (completed) return;
-        completed = true;
-        this._endWorldJumpTransition();
-      };
-      const result = flyAction({
-        onStart: () => this._beginWorldJumpTransition(),
-        onComplete: finalize,
-      });
-      this._trafficTransitionTimer = window.setTimeout(finalize, 5200);
-      return result;
-    });
-  }
-
-  /**
    * Release camera ownership when a resolved Location destination starts.
    * Contact mode and its selected subject remain intact so FOCUS can return to
    * that subject after the user finishes inspecting the destination.
@@ -3080,188 +1334,6 @@ export class StyleManager {
     this._stampNavigation();
     this.cockpitView?.exit({ restoreTracking: false });
     return this._releaseFollowCamera({ preserveVesselSelection: false });
-  }
-
-  /**
-   * Handles a city pill click: toggles POI row collapse if same city,
-   * otherwise expands the POI row, flies to the city's first POI, and
-   * tracks the target position for orbit mode.
-   * @param {string} cityId - Identifier of the clicked city.
-   * @returns {void}
-   */
-  _onCityPillClick(cityId) {
-    const { CITY_POIS, flyToPresetLocation } = this.services;
-    if (this._expandedCityId === cityId) {
-      // Same city clicked again — toggle collapse
-      this._collapsePOIRow();
-      return;
-    }
-
-    const isCityChanged =
-      this._activeLocationId && this._activeLocationId !== cityId;
-    const result = this._flyWithTransition(!!isCityChanged, (hooks) =>
-      flyToPresetLocation(this.viewer, cityId, hooks),
-    );
-    if (result === false) return;
-    this._expandPOIRow(cityId);
-    this._setActiveLocation(cityId);
-    this._activePoiIndex = 0;
-    this._updatePoiHighlight();
-
-    // Track current target + POI for orbit
-    if (result) {
-      this._currentTarget = result.targetPosition;
-      this._currentPoi = CITY_POIS[cityId].pois[0];
-    }
-    this._updateLocationMiniStatus();
-  }
-
-  /**
-   * Handles a POI pill click: stops orbit, flies to the POI, highlights it,
-   * and saves the target position for future orbit activation.
-   * @param {string} cityId - Parent city identifier.
-   * @param {number} poiIndex - Index of the POI within the city's pois array.
-   * @returns {void}
-   */
-  _onPoiClick(cityId, poiIndex) {
-    const { CITY_POIS, flyToPOI } = this.services;
-    const isCityChanged =
-      this._activeLocationId && this._activeLocationId !== cityId;
-    const result = this._flyWithTransition(!!isCityChanged, (hooks) =>
-      flyToPOI(this.viewer, cityId, poiIndex, hooks),
-    );
-    if (result === false) return;
-    this._setActiveLocation(cityId);
-    this._activePoiIndex = poiIndex;
-    this._updatePoiHighlight();
-
-    // Track current target + POI for orbit
-    if (result) {
-      this._currentTarget = result.targetPosition;
-      this._currentPoi = CITY_POIS[cityId].pois[poiIndex];
-    }
-    this._updateLocationMiniStatus();
-  }
-
-  /**
-   * Builds and shows the POI pill row for a city. Each pill displays a
-   * QWERTY keyboard shortcut key and the POI name.
-   * @param {string} cityId - City whose POIs to render.
-   * @returns {void}
-   */
-  _expandPOIRow(cityId) {
-    const { CITY_POIS } = this.services;
-    if (!CITY_POIS[cityId]) return;
-    this._expandedCityId = cityId;
-    this._locationControls.showPois(cityId);
-  }
-
-  /**
-   * Hides the POI pill row and clears the expanded city state.
-   * @returns {void}
-   */
-  _collapsePOIRow() {
-    this._expandedCityId = null;
-    this._activePoiIndex = null;
-    this._locationControls.hidePois();
-  }
-
-  /**
-   * Highlights the active POI pill and removes highlight from all others.
-   * @returns {void}
-   */
-  _updatePoiHighlight() {
-    this._locationControls.highlightPoi(this._activePoiIndex);
-  }
-
-  /**
-   * Forget the last free-text search destination and repaint the LOCATION
-   * readout. Public so camera owners that fly on their own — scene playback
-   * most of all — can invalidate it without reaching into private state.
-   * @returns {void}
-   */
-  clearSearchedLocation() {
-    if (this._searchedLocationLabel === null) return;
-    this._searchedLocationLabel = null;
-    this._updateLocationMiniStatus();
-  }
-
-  /**
-   * Sets the active city location, highlights its pill, and updates the mini-status readout.
-   * @param {string|null} locationId - City identifier, or null to clear.
-   * @returns {void}
-   */
-  _setActiveLocation(locationId) {
-    this._activeLocationId = locationId;
-    // A preset city is now what the camera is framed on, so any earlier
-    // free-text destination has been superseded. Clearing only on a real id
-    // leaves the search path's own _setActiveLocation(null) untouched.
-    if (locationId) this._searchedLocationLabel = null;
-    this._locationControls?.highlightCity(locationId);
-    this._updateLocationMiniStatus();
-  }
-
-  /**
-   * Updates the collapsed mini-status readout with the current destination:
-   * a preset city + POI/landmark, or the last free-text geocode search.
-   * @returns {void}
-   */
-  _updateLocationMiniStatus() {
-    const { CITY_POIS } = this.services;
-    this._locationControls?.renderStatus({
-      city: this._activeLocationId ? CITY_POIS[this._activeLocationId] : null,
-      currentPoi: this._currentPoi,
-      searchedLabel: this._searchedLocationLabel,
-    });
-  }
-
-  /**
-   * Updates the collapsed mini-status readout with the active style label.
-   * @param {string} [styleName=this.activeStyle] - Style name to display.
-   * @returns {void}
-   */
-  _updateStyleMiniStatus(styleName = this.activeStyle) {
-    return this._visualSettings._updateStyleMiniStatus(...arguments);
-  }
-
-  // ── Orbit Mode ──────────────────────────────
-
-  /**
-   * Creates the orbit mode indicator DOM element and appends it to the body.
-   * @returns {void}
-   */
-  _initOrbit() {
-    this._orbitIndicator = this._locationControls.createOrbitIndicator();
-  }
-
-  /**
-   * Toggles the orbit controller around the current POI target. Shows a toast
-   * if no target position has been set (user must fly to a POI first).
-   * @returns {void}
-   */
-  _toggleOrbit() {
-    if (!this._currentTarget) {
-      this._showToast('Fly to a POI first');
-      return;
-    }
-
-    const isActive = this.orbitController.toggle(this._currentTarget, {
-      radius: this._currentPoi?.alt || 500,
-      pitch: this._currentPoi?.pitch || -30,
-    });
-
-    this._orbitIndicator.classList.toggle('active', isActive);
-  }
-
-  /**
-   * Stops orbit mode if active and hides the orbit indicator.
-   * @returns {void}
-   */
-  _stopOrbit() {
-    if (this.orbitController.active) {
-      this.orbitController.stop();
-      this._orbitIndicator.classList.remove('active');
-    }
   }
 
   /** Wire the top-center action that clears only manager-owned data layers. */
@@ -3289,130 +1361,6 @@ export class StyleManager {
     });
   }
 
-  /**
-   * Clear every selected data layer without resetting visual, map, HUD, or
-   * camera state. A layer may still release camera work it owns as part of its
-   * established disable lifecycle.
-   * @returns {Promise<object>} Aggregate manager lifecycle truth for the batch.
-   */
-  clearSelectedLayers(...args) {
-    return this._contextControls?.clearSelectedLayers(...args);
-  }
-
-  /**
-   * Release every camera owner and return to the canonical full-globe frame.
-   * Repeated requests adopt the in-flight reset rather than cancelling it.
-   * @returns {Promise<object>} Canonical reset result shared with voice.
-   */
-  resetToGlobeView() {
-    const {
-      GLOBE_VIEW,
-      flyToGlobeView,
-      interruptCameraMotion,
-      flightsLayer,
-      militaryFlightsLayer,
-      satellitesLayer,
-      aisLiveVesselsLayer,
-      militaryAwarenessLayer,
-      rocketLaunchesLayer,
-    } = this.services;
-    if (this._globeResetPromise) return this._globeResetPromise;
-    this._stampNavigation();
-    interruptCameraMotion('reset-globe');
-    this._stopOrbit();
-    this.cockpitView?.exit({ restoreTracking: false });
-    try {
-      militaryAwarenessLayer.releaseCameraOwnership?.({ origin: 'tool' });
-    } catch {
-      // Keep reset available if Context has not initialized completely.
-      try {
-        flightsLayer.stopTracking?.({ origin: 'tool' });
-      } catch {
-        /* best-effort release */
-      }
-      try {
-        militaryFlightsLayer.stopTracking?.({ origin: 'tool' });
-      } catch {
-        /* best-effort release */
-      }
-      try {
-        aisLiveVesselsLayer.clearSelection?.();
-      } catch {
-        /* best-effort release */
-      }
-    }
-    try {
-      satellitesLayer.stopTracking?.({ origin: 'tool' });
-    } catch {
-      /* best-effort release */
-    }
-    try {
-      rocketLaunchesLayer.releaseCameraOwnership?.();
-    } catch {
-      /* best-effort release */
-    }
-    this.viewer.trackedEntity = undefined;
-    this.viewer.camera.cancelFlight();
-    this.viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
-    this._beginWorldJumpTransition();
-
-    let resolveReset;
-    const resetPromise = new Promise((resolve) => {
-      resolveReset = resolve;
-    });
-    this._globeResetPromise = resetPromise;
-    let settled = false;
-    let timer = null;
-    const finish = (cancelled = false) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      this._endWorldJumpTransition();
-      const carto = this.viewer.camera.positionCartographic;
-      const result = {
-        ok: !cancelled,
-        action: 'zoom_to_globe',
-        cancelled,
-        heightKm: Math.round(GLOBE_VIEW.heightM / 1000),
-        centeredOn: {
-          latitude: Number(Cesium.Math.toDegrees(carto.latitude).toFixed(2)),
-          longitude: Number(Cesium.Math.toDegrees(carto.longitude).toFixed(2)),
-        },
-      };
-      this._resetGlobeBtn?.setAttribute(
-        'aria-label',
-        'Reset to full globe view',
-      );
-      this._cockpitResetGlobeBtn?.setAttribute(
-        'aria-label',
-        'Reset cockpit to full globe view',
-      );
-      this._globeResetPromise = null;
-      resolveReset(result);
-    };
-    timer = window.setTimeout(() => {
-      const height = this.viewer.camera.positionCartographic?.height;
-      finish(
-        !Number.isFinite(height) ||
-          Math.abs(height - GLOBE_VIEW.heightM) > 1000,
-      );
-    }, 4200);
-    this._resetGlobeBtn?.setAttribute(
-      'aria-label',
-      'Resetting to full globe view',
-    );
-    this._cockpitResetGlobeBtn?.setAttribute(
-      'aria-label',
-      'Resetting cockpit to full globe view',
-    );
-    const target = flyToGlobeView(this.viewer, {
-      onComplete: () => finish(false),
-      onCancel: () => finish(true),
-    });
-    if (!target) finish(true);
-    return resetPromise;
-  }
-
   // ── Share Button ─────────────────────────────
 
   /**
@@ -3422,17 +1370,9 @@ export class StyleManager {
   _initShareButton() {
     this._lifetime.listen(this._shareBtn, 'click', async () => {
       const success = await this.shareLinkManager.copyLink();
-      this._showToast(success ? 'Link copied!' : 'Copy failed');
+      if (!this._disposed)
+        this._showToast(success ? 'Link copied!' : 'Copy failed');
     });
-  }
-
-  /**
-   * Displays a temporary toast notification for 2 seconds.
-   * @param {string} message - Text to show in the toast.
-   * @returns {void}
-   */
-  _showToast(message) {
-    return this._feedback._showToast(message);
   }
 
   // ── HUD Toggle ───────────────────────────────
@@ -3452,71 +1392,6 @@ export class StyleManager {
    * contact is independent of this toggle (see trackedModelRegime.js).
    * @returns {void}
    */
-  /** One 3D toggle drives BOTH aircraft layers (commercial + military) so all planes flip together. */
-  _setModels3dParams(params, { origin = 'user' } = {}) {
-    this._dataManager?.setLayerParams('flights', params, { origin });
-    this._dataManager?.setLayerParams('military', params, { origin });
-  }
-
-  _syncModels3dFromLayerState(state) {
-    const options = state?.options?.flights;
-    if (!options) return;
-    this._models3dEnabled = options.models3d === true;
-    this._models3dMode = options.models3dMode === 'all' ? 'all' : 'proximity';
-    this._syncModels3dButtonState();
-    this._models3dModeRow?.classList.toggle('visible', this._models3dEnabled);
-    for (const button of this._models3dModeBtns || []) {
-      if (!button) continue;
-      const active = button.dataset.mode === this._models3dMode;
-      button.classList.toggle('active', active);
-      button.setAttribute('aria-checked', String(active));
-    }
-    this._layoutRightPanels();
-  }
-
-  _syncModels3dModeRow() {
-    if (this._models3dModeRow)
-      this._models3dModeRow.classList.toggle('visible', this._models3dEnabled);
-    this._layoutRightPanels();
-  }
-
-  _initModels3dToggle() {
-    if (!this._models3dBtn) return;
-    this._syncModels3dButtonState();
-    this._syncModels3dModeRow();
-  }
-
-  _setModels3dEnabled(enabled) {
-    this._models3dEnabled = !!enabled;
-    this._setModels3dParams({ models3d: this._models3dEnabled });
-    this._syncModels3dButtonState();
-  }
-
-  _setModels3dMode(mode) {
-    const normalized = mode === 'all' ? 'all' : 'proximity';
-    this._models3dMode = normalized;
-    this._setModels3dParams({ models3dMode: normalized });
-    for (const button of this._models3dModeBtns) {
-      if (!button) continue;
-      const active = button.dataset.mode === normalized;
-      button.classList.toggle('active', active);
-      button.setAttribute('aria-checked', String(active));
-    }
-    this._syncModels3dButtonState();
-  }
-
-  _syncModels3dButtonState() {
-    this._models3dBtn?.classList.toggle('active', this._models3dEnabled);
-    // The lit/dark state is a colour to a sighted operator and nothing at all to
-    // a screen reader without this. It matters more now that the button ships
-    // ACTIVE from markup (default-on, 2026-08-22): the very first thing assistive
-    // tech reported was an unpressed-looking control over an armed layer.
-    // Mirrors #scope-toggle, which has always carried aria-pressed.
-    this._models3dBtn?.setAttribute(
-      'aria-pressed',
-      String(this._models3dEnabled),
-    );
-  }
 
   _initHUDToggle() {
     if (this._hudLayoutSelect) {
@@ -3532,79 +1407,6 @@ export class StyleManager {
       this._setCockpitDisclosure?.('display', !open);
     });
     this._initCockpitDisplayPortal();
-  }
-
-  /**
-   * Reuses the production Display controls inside Cockpit without cloning
-   * stateful inputs or event listeners. Comment anchors preserve each group's
-   * exact home in the standard Display panel for exit and teardown.
-   * @returns {void}
-   */
-  _initCockpitDisplayPortal() {
-    this._cockpitDisplayPortal?.destroy();
-    this._cockpitDisplayPortal = new CockpitDisplayPortal({
-      standardPanel: this._ppToggles,
-      cockpitPanel: this._cockpitDisplayPanel,
-      groups: [
-        ['hud', this._hudBtn?.closest('.pp-toggle-group')],
-        ['detection', this._detectionBtn?.closest('.pp-toggle-group')],
-        ['parameters', this._sliderPanel],
-        ['models3d', this._models3dBtn?.closest('.pp-toggle-group')],
-      ],
-      layout: () => {
-        this._layoutRightPanels();
-        this.cockpitView?.scheduleContextLayout();
-      },
-    });
-  }
-
-  /**
-   * Moves the shared HUD, Detection, Parameters, and 3D controls into or out
-   * of Cockpit.
-   * @param {boolean} active Whether Cockpit owns the Display control groups.
-   * @returns {void}
-   */
-  _setCockpitDisplayPortalActive(active) {
-    this._cockpitDisplayPortal?.setActive(active);
-  }
-  get _cockpitDisplayPortalActive() {
-    return this._cockpitDisplayPortal?.active ?? false;
-  }
-  get _displayPortalScrollRestoreOwner() {
-    return this._cockpitDisplayPortal?.restoreOwner ?? null;
-  }
-  get _standardDisplayScrollTop() {
-    return this._cockpitDisplayPortal?.standardScrollTop ?? 0;
-  }
-
-  /**
-   * Syncs the HUD toggle button active class and HUD layout row visibility
-   * with the current HUD visible state.
-   * @returns {void}
-   */
-  _updateHudButtonState() {
-    return this._visualSettings._updateHudButtonState(...arguments);
-  }
-
-  /**
-   * Updates the detection toggle button label and CSS classes to reflect
-   * the current density-derived profile. Also toggles the density and
-   * allocation controls together.
-   * @param {string} modeLabel - Current detection mode label.
-   * @returns {void}
-   */
-  _updateDetectionButton(modeLabel) {
-    return this._visualSettings._updateDetectionButton(...arguments);
-  }
-
-  /**
-   * Positions the parameter slider panel directly below the right-rail toggle
-   * panel, right-aligned to it. Clamps to viewport bounds to prevent overflow.
-   * Runs inside a rAF to batch with other layout reads.
-   * @returns {void}
-   */
-  _layoutRightPanels() {
-    return this._panelChrome._layoutRightPanels(...arguments);
   }
 
   /**
@@ -3634,21 +1436,12 @@ export class StyleManager {
     });
   }
 
-  /** Whether a share link was used to load the page */
-  get hasShareState() {
-    return !!this._hasShareState;
-  }
-
   /** Terminal result for the complete initial share restoration. */
   get initialRestorePromise() {
     return (
       this._initialShareRestorePromise ||
       Promise.resolve({ status: 'not-requested' })
     );
-  }
-
-  _settleInitialShareRestore(result) {
-    return this._shareRestoration._settleInitialShareRestore(...arguments);
   }
 
   /**
@@ -3667,42 +1460,22 @@ export class StyleManager {
     this._disposed = true;
     this._navigation.stop();
     this._shareState.destroy();
-    this._locationState.destroy();
-    this._locationLookupUnsubscribe?.();
-    this._locationLookupUnsubscribe = null;
+    this._locationNavigation.destroy();
     this._lifetime.destroy();
     this._recording.destroy();
     this._panelChrome.destroy();
     this._feedback.destroy();
 
-    this._applicationShortcuts?.destroy();
-    this._displayControls?.destroy();
-    this._frameRateMonitor?.destroy();
+    this._displayBindings.destroy();
     this._mapSourceControls?.destroy();
     this._cameraOrientationControls?.destroy();
     this._clearLayersControl?.destroy();
-    this._locationControls?.destroy();
     this._cctvControls?.destroy();
     this._radioControls?.destroy();
-    this.cockpitView?.stop();
-    this._cockpitDisplayPortal?.stop();
+    this._cockpitCoordinator.stop();
     this._visualSettings.stop();
-    this._locationLookup?.destroy();
     this.shareLinkManager?.destroy();
-    if (this._awarenessSelectedHandler) {
-      window.removeEventListener(
-        'gev:awareness-subject-selected',
-        this._awarenessSelectedHandler,
-      );
-      this._awarenessSelectedHandler = null;
-    }
-    if (this._awarenessClearedHandler) {
-      window.removeEventListener(
-        'gev:awareness-subject-cleared',
-        this._awarenessClearedHandler,
-      );
-      this._awarenessClearedHandler = null;
-    }
+    this._layerBindings.stop();
 
     // Invalidate any in-flight Context transaction the same way a newer request
     // would. Without this, a reinstatement already past its awaits could
@@ -3713,29 +1486,14 @@ export class StyleManager {
     // Close camera-entry seams synchronously. Context restoration may await
     // layer work, so leaving these listeners attached until afterward lets a
     // focus event release tracking or start a flight during teardown.
-    this._removeCctvRequestFocusListener?.();
-    this._removeCctvRequestFocusListener = null;
-    this._cctvRequestFocusHandler = null;
-    this._removeWorldRequestFocusListener?.();
-    this._removeWorldRequestFocusListener = null;
-    this._worldRequestFocusHandler = null;
-    this._navigationOwnerChangedRemover?.();
-    this._navigationOwnerChangedRemover = null;
-    this._removeNavigationAuthorityListener?.();
-    this._removeNavigationAuthorityListener = null;
     await this._contextControls.restoreForDisposal();
     // IR boost teardown BEFORE detaching the data manager: restore fog and
     // un-boost both aircraft layers so a surviving viewer or replacement
     // manager doesn't inherit sensor state (review P2, 2026-08-16).
     this._visualSettings.releaseIrBoost();
-    this.cockpitView?.dispose();
-    this._cockpitDisplayPortal?.destroy();
-    this._cockpitDisplayPortal = null;
+    this._cockpitCoordinator.destroy();
     this._contextControls.disconnect();
-    this._dataManagerUnsubscribe?.();
-    this._dataManagerUnsubscribe = null;
-    this._directionsShellModule?.attachShellServices?.(null);
-    this._directionsShellModule = null;
+    this._layerBindings.disconnect();
 
     if (this._windowResizeHandler) {
       window.removeEventListener('resize', this._windowResizeHandler);

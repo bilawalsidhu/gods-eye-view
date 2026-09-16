@@ -87,9 +87,11 @@ How to read this:
 
 ---
 
-## Bundled snapshots (committed under `src/data/local_data/`)
+## Bundled snapshots
 
 Static datasets shipped in the repo for an out-of-the-box experience. **None are MIT** — each keeps its own license (see the carve-out in [LICENSE](LICENSE)). Each folder also has its own provenance README.
+
+The [Bhote Koshi event pack](public/events/bhote-koshi-2026/README.md), under `public/events/`, contains Vantor imagery crops and a GeoPera-derived river centerline under **CC BY-NC 4.0**, separately from the MIT code. The derived coordinate dataset in `src/data/bhoteKoshiFloodPath.js` has the same non-commercial restriction and is compiled into the Nepal scene. Commercial users must obtain separate permission or exclude both the event pack and that source-derived dataset from their source and build. Deleting only `public/events/bhote-koshi-2026/` does not remove all restricted data; excluding the scene also requires removing its registrations and imports before building. Linked witness posts and geolocation-map records retain their owners' terms; no social-media clips or cached posters are bundled. Other snapshots below are under `src/data/local_data/`.
 
 | Dataset                                                                     | Folder                            | License                                                                                                   | Commercial use?                                  | Attribution                                                                 |
 | --------------------------------------------------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | --------------------------------------------------------------------------- |

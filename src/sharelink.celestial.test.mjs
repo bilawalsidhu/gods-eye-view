@@ -1,3 +1,5 @@
+import { DisplayBindings } from './ui/displayBindings.js';
+import { LocationNavigation } from './ui/locationNavigation.js';
 import { VisualSettings } from './ui/visualSettings.js';
 import { readShellSource, shellMethod } from './testSupport/readShellSource.mjs';
 import { StyleManager } from './ui/applicationShell.js';
@@ -66,7 +68,7 @@ test('share links parse explicit celestial on and off states', () => {
 });
 
 test('unknown-only v2 layer tokens are invalid, while historical l fields stay inert', () => {
-  const invalid = makeManager('#v=2&lat=10&lon=20&l=z').parseInitialHash();
+  const invalid = makeManager('#v=2&lat=10&lon=20&l=unknown').parseInitialHash();
   assert.equal(invalid.layerState, null);
   assert.equal(invalid.layerStateInvalid, true);
   for (const hash of ['#lat=10&lon=20&l=z', '#v=1&lat=10&lon=20&l=z']) {
@@ -74,6 +76,12 @@ test('unknown-only v2 layer tokens are invalid, while historical l fields stay i
     assert.equal(legacy.layerState, null);
     assert.equal(legacy.layerStateInvalid, false);
   }
+});
+
+test('Nepal locator token is valid in v2 share links', () => {
+  const parsed = makeManager('#v=2&lat=10&lon=20&l=z').parseInitialHash();
+  assert.deepEqual(parsed.layerState.enabledLayerIds, ['bhote-koshi-locator']);
+  assert.equal(parsed.layerStateInvalid, false);
 });
 
 test('share-link serialization emits the current celestial state', () => {
@@ -694,13 +702,15 @@ test('visual input listeners are revoked before asynchronous UI teardown', () =>
   const firstAwait = disposal.indexOf('await ');
   assert.ok(firstAwait > 0);
   const synchronous = disposal.slice(0, firstAwait);
-  assert.match(synchronous, /this\._applicationShortcuts\?\.destroy\(\)/);
+  assert.match(synchronous, /this\._displayBindings\.destroy\(\)/);
   assert.match(synchronous, /this\._visualSettings\.stop\(\)/);
   assert.match(synchronous, /this\._mapSourceControls\?\.destroy\(\)/);
   assert.match(synchronous, /this\._clearLayersControl\?\.destroy\(\)/);
-  assert.match(synchronous, /this\._locationControls\?\.destroy\(\)/);
-  assert.match(synchronous, /this\._locationLookup\?\.destroy\(\)/);
-  assert.match(synchronous, /this\._displayControls\?\.destroy\(\)/);
+  assert.match(synchronous, /this\._locationNavigation\.destroy\(\)/);
+  assert.match(LocationNavigation.prototype.destroy.toString(), /this\._locationControls\?\.destroy\(\)/);
+  assert.match(LocationNavigation.prototype.destroy.toString(), /this\._locationLookup\?\.destroy\(\)/);
+  assert.match(DisplayBindings.prototype.destroy.toString(), /this\._displayControls\?\.destroy\(\)/);
+  assert.match(DisplayBindings.prototype.destroy.toString(), /this\._applicationShortcuts\?\.destroy\(\)/);
   assert.match(VisualSettings.prototype.stop.toString(), /this\._styleParameters\?\.destroy\(\)/);
   assert.match(VisualSettings.prototype.stop.toString(), /this\._visualEffects\.stop\(\)/);
 });

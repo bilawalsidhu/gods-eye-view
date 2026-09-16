@@ -144,3 +144,22 @@ test('mesh-floor sampling owns fully initialized numeric scratch before the firs
     assert.deepEqual(Object.keys(value), shapes[i]),
   );
 });
+
+test('course fallback prefers held course, then finite reported bearing, then unknown', () => {
+  for (const [held, bearing, expected] of [
+    [90, 270, 90],
+    [null, 90, 90],
+    [NaN, 0, 0],
+    [null, null, null],
+    [null, NaN, null],
+    [null, Infinity, null],
+  ]) {
+    const e = {
+      courseDeg: held,
+      sample: { segmentCourseDeg: NaN },
+      record: { bearing },
+    };
+    applyDisplayCourse(e, 100);
+    assert.equal(e.courseDeg, expected);
+  }
+});

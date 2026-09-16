@@ -244,10 +244,22 @@
 }
 
 .scene-shot-label {
+  min-width: 0;
+  flex: 1;
   font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 1px;
   color: var(--text-primary);
+}
+
+.scene-shot-rename {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  font: inherit;
+  color: var(--text-primary);
+  background: var(--bg-panel, #101820);
+  border: 1px solid var(--accent, #00d4ff);
 }
 
 .scene-shot-meta {
@@ -437,4 +449,8 @@
 #scene-panel.collapsed .panel-header,
 #param-slider-panel.collapsed .param-panel-header {
   margin-bottom: 2px;
+}
+
+.director-sharing-dialog::backdrop {
+  background: rgba(0, 8, 14, 0.65);
 }

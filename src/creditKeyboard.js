@@ -3,7 +3,9 @@
  * Cesium retains ownership of showing and hiding its required credit lightbox.
  */
 export function configureCreditKeyboardAccess(root = document) {
-  const expand = root?.querySelector?.('#cesium-credits .cesium-credit-expand-link');
+  const expand = root?.querySelector?.(
+    '#cesium-credits .cesium-credit-expand-link',
+  );
   const lightbox = root?.querySelector?.('.cesium-credit-lightbox');
   const close = lightbox?.querySelector?.('.cesium-credit-lightbox-close');
   if (!expand || !lightbox || !close) return false;
@@ -44,7 +46,9 @@ export function configureCreditKeyboardAccess(root = document) {
     // A long Space hold may hand control to push-to-talk and move focus away.
     // Cancelling the armed release prevents that eventual keyup from also
     // activating the attribution control.
-    control.addEventListener('blur', () => { spacePressed = false; });
+    control.addEventListener('blur', () => {
+      spacePressed = false;
+    });
   };
   const closeAndRestoreFocus = () => {
     expand.setAttribute('aria-expanded', 'false');

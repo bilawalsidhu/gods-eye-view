@@ -64,12 +64,13 @@ The highest-leverage places to jump in:
 
 ## Formatting and reusable components
 
-Run `npm run format` before submitting changes to adopted modules, then
-`npm run format:check` and `npm run check:boundaries`. Formatting uses the
-explicit file list in `scripts/format-scope.json`; add newly extracted modules
-and tests there in a separate mechanical commit. Keep unadopted files consistent
-with their surrounding style. CI checks all adopted files and package boundaries
-on Linux and Windows.
+Run `npm run format` before submitting changes, then `npm run format:check`
+and `npm run check:boundaries`. Runtime JavaScript under the owned roots in
+`scripts/format-runtime.json` is discovered automatically, including new files.
+Tests and other adopted files remain listed in `scripts/format-scope.json`.
+Git-ignored files and `.prettierignore` exclusions are not automatically adopted.
+Keep mechanical formatting separate from behavioral edits. CI checks formatting
+and package boundaries on Linux and Windows.
 
 Reusable package exports own their state and receive application operations
 through explicit callbacks. They must not import the standalone bootstrap or

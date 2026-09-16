@@ -20,6 +20,8 @@ import { createApplicationEarthquakes } from './layers/earthquakes.js';
 import { createApplicationCables } from './layers/submarineCables.js';
 import { createInfrastructureLayers } from '../data/infrastructure.js';
 import { localGeoJsonServices } from './localGeojsonServices.js';
+import { createBhoteKoshiEventLayer } from '../data/bhoteKoshiEvent.js';
+import { createBhoteKoshiLocatorLayer } from '../data/bhoteKoshiLocator.js';
 
 const SOURCE_METHODS = Object.freeze({
   flights: ['getSnapshot'],
@@ -55,6 +57,7 @@ export function createApplicationCatalog({
   metadata = LAYER_STATE_REGISTRY,
   vesselOptions,
   resolveAsset,
+  nepalBoundaryResolver,
 }) {
   if (!signal?.addEventListener)
     throw new TypeError('An application lifetime signal is required');
@@ -101,6 +104,10 @@ export function createApplicationCatalog({
     });
     const catalog = createLayerCatalog(
       [
+        createBhoteKoshiEventLayer(),
+        createBhoteKoshiLocatorLayer({
+          boundaryResolver: nepalBoundaryResolver,
+        }),
         flights,
         military,
         createApplicationEarthquakes({ source: sources.earthquakes }),
@@ -110,9 +117,9 @@ export function createApplicationCatalog({
         createApplicationTraffic({ source: sources.traffic }),
         createApplicationCctv({ surface, source: sources.cctv }),
         createApplicationRadio({ surface, source: sources.radio }),
+        createApplicationTransit({ surface, source: sources.transit }),
         createApplicationBikeshare({ source: sources.bikeshare }),
         createApplicationDirections(),
-        createApplicationTransit({ surface }),
         vessels,
         installations,
         createApplicationAwareness({

@@ -15,9 +15,4 @@ const fires = createFirmsHeatmapLayer({
   source: 'NASA FIRMS · LIVE',
 });
 
-export default [
-  datacenters,
-  dams,
-  submarineCablesLayer,
-  fires,
-];
+export default [datacenters, dams, submarineCablesLayer, fires];

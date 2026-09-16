@@ -24,6 +24,10 @@ export const WORLD_OVERLAY_STYLE = Object.freeze({
   fontTrackedTitle: '600 13px "JetBrains Mono", monospace',
   fontTrackedDetail: '500 11px "JetBrains Mono", monospace',
   radius: 4,
+  anchorDotRadius: 3.2,
+  anchorDotStrokeWidth: 1,
+  anchorDotStroke: 'rgba(4, 12, 16, 0.96)',
+  leaderWidth: 1.35,
 });
 
 /** CCTV's field-tested thumbnail-card overrides on top of shared card chrome. */

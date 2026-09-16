@@ -2171,7 +2171,8 @@ try {
   );
 
   const resetResult = await page.evaluate(() => {
-    const manager = window.__godsEyeView.styleManager;
+    // Both the UI and compatibility facade delegate to this navigation owner.
+    const manager = window.__godsEyeView.styleManager._locationNavigation;
     const awareness = window.__godsEyeView.dataManager.layers.get('military-awareness')?.module;
     window.__qaCockpitReset = {
       calls: 0,
@@ -2203,7 +2204,7 @@ try {
     const awareness = gev.dataManager.layers.get('military-awareness')?.module;
     const subjectId = awareness?.getContextSnapshot?.()?.subject?.id || null;
     const height = gev.viewer.camera.positionCartographic?.height;
-    gev.styleManager.resetToGlobeView = qa.original;
+    gev.styleManager._locationNavigation.resetToGlobeView = qa.original;
     delete window.__qaCockpitReset;
     return {
       calls: qa.calls,

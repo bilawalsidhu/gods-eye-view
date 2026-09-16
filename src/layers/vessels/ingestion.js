@@ -102,6 +102,7 @@ export function createIngestion({
     feed.lastMessageAt = snapshot.lastMessageAt;
     feed.rawRowCount = snapshot.rawRowCount;
     feed.acceptedRowCount = snapshot.acceptedRowCount;
+    feed.partial = payload?.complete === false;
 
     if (snapshot.acceptedRowCount === 0) {
       feed.count = readCount();
@@ -133,7 +134,8 @@ export function createIngestion({
     feed.count = readCount();
     feed.stale =
       Boolean(payload?.refreshing) ||
-      payload?.complete === false ||
+      payload?.freshness === 'stale' ||
+      snapshot.transportStatus === 'stale' ||
       payload?.freshness === 'unknown';
     feed.newestPositionAt = payload?.newestPositionAt || null;
     // Not unconditionally null: a degraded feed keeps its reason even though the
@@ -190,6 +192,7 @@ export function createVesselFeed() {
     loading: false,
     loaded: false,
     stale: false,
+    partial: false,
     error: null,
     loadingLabel: '',
     lastUpdate: null,

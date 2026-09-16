@@ -8,9 +8,9 @@ import {
 } from 'gods-eye-view/sources/transit';
 
 /** Mount the plugin and return a caller for its single route. */
-function install(plugin) {
+function install(plugin, mode = 'configureServer') {
   const routes = new Map();
-  plugin.configureServer({
+  plugin[mode]({
     middlewares: {
       use(route, handler) {
         routes.set(route, handler);
@@ -22,7 +22,11 @@ function install(plugin) {
     const res = {
       headersSent: false,
       writeHead(status, headers) {
-        Object.assign(this, { status, headers, headersSent: true });
+        Object.assign(this, {
+          status,
+          headers: new Headers(headers),
+          headersSent: true,
+        });
       },
       end(body) {
         this.body = body;
@@ -111,7 +115,7 @@ test('a 304 revalidation is a success, not a redirect with a missing Location', 
 
   const first = await call('/vehicles/mbta');
   assert.equal(first.status, 200);
-  assert.equal(first.headers['X-GEV-Cache'], 'MISS');
+  assert.equal(first.headers.get('X-GEV-Cache'), 'MISS');
   assert.equal(JSON.parse(first.body).count, 1);
 
   // Past the freshness window the proxy asks again, conditionally.
@@ -121,19 +125,19 @@ test('a 304 revalidation is a success, not a redirect with a missing Location', 
   assert.equal(second.status, 200, 'an unchanged feed is not a failure');
   // MISS, not STALE-ERROR: the refresh SUCCEEDED. Treating 304 as a redirect
   // made this a failure that happened to be masked by the serve-stale path.
-  assert.equal(second.headers['X-GEV-Cache'], 'MISS');
+  assert.equal(second.headers.get('X-GEV-Cache'), 'MISS');
   assert.equal(JSON.parse(second.body).count, 1);
 
   // And the third one too: a 304 must not have started a backoff ladder.
   t.mock.timers.setTime(Date.now() + TRANSIT_PROXY_TTL_MS + 1_000);
   const third = await call('/vehicles/mbta');
   assert.equal(third.status, 200);
-  assert.equal(third.headers['X-GEV-Cache'], 'MISS');
+  assert.equal(third.headers.get('X-GEV-Cache'), 'MISS');
   assert.equal(calls.length, 3, 'every poll past the TTL reached the operator');
-  assert.equal(third.headers['Retry-After'], undefined);
+  assert.equal(third.headers.get('Retry-After'), null);
   assert.equal(
-    third.headers['X-Transit-Backoff'],
-    undefined,
+    third.headers.get('X-Transit-Backoff'),
+    null,
     'no ladder was started',
   );
 });
@@ -168,8 +172,8 @@ test('a differential feed condemns the snapshot that preceded it', async (t) => 
     200,
     `served ${after.status} with ${after.body}`,
   );
-  assert.equal(after.headers['X-GEV-Cache'], 'NONE');
-  assert.equal(after.headers['X-Transit-Backoff'], 'cooldown');
+  assert.equal(after.headers.get('X-GEV-Cache'), 'NONE');
+  assert.equal(after.headers.get('X-Transit-Backoff'), 'cooldown');
 });
 
 test('a failing operator is put on a cooldown instead of being re-asked every poll', async (t) => {
@@ -183,7 +187,7 @@ test('a failing operator is put on a cooldown instead of being re-asked every po
   const failed = await call('/vehicles/mbta');
   assert.equal(failed.status, 502);
   assert.equal(
-    failed.headers['Retry-After'],
+    failed.headers.get('Retry-After'),
     String(TRANSIT_BACKOFF_LADDER_MS[0] / 1000),
   );
   assert.equal(calls.length, 1);
@@ -192,7 +196,7 @@ test('a failing operator is put on a cooldown instead of being re-asked every po
   t.mock.timers.setTime(Date.now() + 1_000);
   const held = await call('/vehicles/mbta');
   assert.equal(held.status, 503);
-  assert.equal(held.headers['X-Transit-Backoff'], 'cooldown');
+  assert.equal(held.headers.get('X-Transit-Backoff'), 'cooldown');
   assert.equal(calls.length, 1, 'the operator was left alone');
 
   // Past the first rung it is tried again, and a second failure waits longer.
@@ -200,7 +204,7 @@ test('a failing operator is put on a cooldown instead of being re-asked every po
   const retried = await call('/vehicles/mbta');
   assert.equal(calls.length, 2);
   assert.equal(
-    retried.headers['Retry-After'],
+    retried.headers.get('Retry-After'),
     String(TRANSIT_BACKOFF_LADDER_MS[1] / 1000),
   );
 });
@@ -280,7 +284,7 @@ test('a 304 reports that the operator answered, not that the body is new', async
   const call = install(transitProxy({ fetchImpl }));
 
   const first = await call('/vehicles/mbta');
-  assert.equal(Number(first.headers['X-Transit-Contact']), firstAt);
+  assert.equal(Number(first.headers.get('X-Transit-Contact')), firstAt);
   assert.equal(JSON.parse(first.body).fetchedAt, firstAt);
 
   t.mock.timers.setTime(Date.now() + TRANSIT_PROXY_TTL_MS + 1_000);
@@ -292,7 +296,7 @@ test('a 304 reports that the operator answered, not that the body is new', async
     'the positions are as old as they are',
   );
   assert.equal(
-    Number(second.headers['X-Transit-Contact']),
+    Number(second.headers.get('X-Transit-Contact')),
     revalidatedAt,
     'but the operator answered just now',
   );
@@ -300,8 +304,8 @@ test('a 304 reports that the operator answered, not that the body is new', async
   // Served from the fresh cache, the contact time is the last real contact —
   // not the moment this request happened to arrive.
   const third = await call('/vehicles/mbta');
-  assert.equal(third.headers['X-GEV-Cache'], 'HIT');
-  assert.equal(Number(third.headers['X-Transit-Contact']), revalidatedAt);
+  assert.equal(third.headers.get('X-GEV-Cache'), 'HIT');
+  assert.equal(Number(third.headers.get('X-Transit-Contact')), revalidatedAt);
 });
 
 test('a feed served from cache during an outage does not claim fresh contact', async (t) => {
@@ -319,9 +323,9 @@ test('a feed served from cache during an outage does not claim fresh contact', a
 
   t.mock.timers.setTime(Date.now() + TRANSIT_PROXY_TTL_MS + 1_000);
   const during = await call('/vehicles/mbta');
-  assert.equal(during.headers['X-GEV-Cache'], 'STALE-ERROR');
+  assert.equal(during.headers.get('X-GEV-Cache'), 'STALE-ERROR');
   assert.equal(
-    Number(during.headers['X-Transit-Contact']),
+    Number(during.headers.get('X-Transit-Contact')),
     contactedAt,
     'silence does not count as an answer',
   );
@@ -383,4 +387,45 @@ test('history read admission is separate from upstream admission and closes with
   assert.equal(calls.length, 0);
   assert.equal((await call('/vehicles/mbta')).status, 200);
   assert.equal(calls.length, 1);
+});
+
+test('development and preview mount the same transit service and close it on shutdown', async () => {
+  for (const mode of ['configureServer', 'configurePreviewServer']) {
+    let close;
+    let handler;
+    const plugin = transitProxy({
+      fetchImpl: async () => {
+        throw new Error('unexpected upstream');
+      },
+    });
+    plugin[mode]({
+      middlewares: {
+        use(path, fn) {
+          assert.equal(path, '/api/transit');
+          handler = fn;
+        },
+      },
+      httpServer: {
+        once(event, fn) {
+          assert.equal(event, 'close');
+          close = fn;
+        },
+      },
+    });
+    async function call(method) {
+      const res = {
+        writeHead(status) {
+          this.status = status;
+        },
+        end() {},
+      };
+      await handler({ url: '/feeds', method }, res);
+      return res.status;
+    }
+    assert.equal(await call('GET'), 200);
+    assert.equal(await call('TRACE'), 405);
+    close();
+    assert.equal(await call('GET'), 503);
+    plugin.closeBundle();
+  }
 });

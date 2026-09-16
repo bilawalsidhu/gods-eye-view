@@ -1,6 +1,9 @@
 import { applicationServices } from './services/application.js';
 import * as Cesium from 'cesium';
-import { deriveWeatherEffectProfile, weatherAltitudeFactors } from './weatherEffectsMath.js';
+import {
+  deriveWeatherEffectProfile,
+  weatherAltitudeFactors,
+} from './weatherEffectsMath.js';
 
 const WEATHER_REFRESH_MS = 5 * 60_000;
 const CLOUD_FRAME_MS = 1000 / 12;
@@ -117,28 +120,47 @@ function compileShader(gl, type, source) {
   gl.shaderSource(shader, source);
   gl.compileShader(shader);
   if (gl.getShaderParameter(shader, gl.COMPILE_STATUS)) return shader;
-  const error = gl.getShaderInfoLog(shader) || 'Unknown shader compilation error';
+  const error =
+    gl.getShaderInfoLog(shader) || 'Unknown shader compilation error';
   gl.deleteShader(shader);
   throw new Error(error);
 }
 
 function greatCircleM(a, b) {
-  if (![a?.latitude, a?.longitude, b?.latitude, b?.longitude].every(Number.isFinite)) return Infinity;
+  if (
+    ![a?.latitude, a?.longitude, b?.latitude, b?.longitude].every(
+      Number.isFinite,
+    )
+  )
+    return Infinity;
   const latitudeA = Cesium.Math.toRadians(a.latitude);
   const latitudeB = Cesium.Math.toRadians(b.latitude);
   const latitudeDelta = Cesium.Math.toRadians(b.latitude - a.latitude);
   const longitudeDelta = Cesium.Math.toRadians(b.longitude - a.longitude);
-  const haversine = Math.sin(latitudeDelta / 2) ** 2
-    + Math.cos(latitudeA) * Math.cos(latitudeB) * Math.sin(longitudeDelta / 2) ** 2;
-  return 6371000 * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
+  const haversine =
+    Math.sin(latitudeDelta / 2) ** 2 +
+    Math.cos(latitudeA) *
+      Math.cos(latitudeB) *
+      Math.sin(longitudeDelta / 2) ** 2;
+  return (
+    6371000 * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine))
+  );
 }
 
 /** Return whether cockpit weather must refresh for elapsed time or movement. */
-export function cockpitWeatherRefreshDue({ nowMs, fetchedAt, anchor, point, hasWeather }) {
+export function cockpitWeatherRefreshDue({
+  nowMs,
+  fetchedAt,
+  anchor,
+  point,
+  hasWeather,
+}) {
   if (!hasWeather) return true;
   if (!Number.isFinite(nowMs) || !Number.isFinite(fetchedAt)) return true;
-  return nowMs - fetchedAt >= WEATHER_REFRESH_MS
-    || greatCircleM(anchor, point) >= WEATHER_MOVE_REFRESH_M;
+  return (
+    nowMs - fetchedAt >= WEATHER_REFRESH_MS ||
+    greatCircleM(anchor, point) >= WEATHER_MOVE_REFRESH_M
+  );
 }
 
 /** Returns the capped framebuffer size used by the cockpit cloud pass. */
@@ -192,18 +214,24 @@ export class CockpitCloudEffectsController {
     this.pending = null;
     this.abort = null;
     this.destroyed = false;
-    this.reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    this.reducedMotion = window.matchMedia(
+      '(prefers-reduced-motion: reduce)',
+    ).matches;
     this.enabled = this.readEnabledPreference();
 
     this.onResize = () => this.resize();
     this.onCockpitMode = (event) => {
-      const active = event?.detail?.active ?? document.body.classList.contains('cockpit-mode');
+      const active =
+        event?.detail?.active ??
+        document.body.classList.contains('cockpit-mode');
       if (active && this.enabled) this.start();
       else this.stop();
     };
     this.onEnabledChange = (event) => {
       const requested = event?.detail?.enabled;
-      this.setEnabled(typeof requested === 'boolean' ? requested : !this.enabled);
+      this.setEnabled(
+        typeof requested === 'boolean' ? requested : !this.enabled,
+      );
     };
     window.addEventListener('resize', this.onResize);
     window.addEventListener('gev:cockpit-mode-changed', this.onCockpitMode);
@@ -222,9 +250,11 @@ export class CockpitCloudEffectsController {
   }
 
   emitEnabledState() {
-    window.dispatchEvent(new CustomEvent('gev:cockpit-weather-state', {
-      detail: { enabled: this.enabled },
-    }));
+    window.dispatchEvent(
+      new CustomEvent('gev:cockpit-weather-state', {
+        detail: { enabled: this.enabled },
+      }),
+    );
   }
 
   setEnabled(enabled) {
@@ -232,7 +262,9 @@ export class CockpitCloudEffectsController {
     this.enabled = next;
     try {
       localStorage.setItem(WEATHER_ENABLED_STORAGE_KEY, next ? '1' : '0');
-    } catch { /* best effort */ }
+    } catch {
+      /* best effort */
+    }
     if (!next) {
       this.stop();
     } else if (document.body.classList.contains('cockpit-mode')) {
@@ -255,7 +287,11 @@ export class CockpitCloudEffectsController {
       if (!gl) throw new Error('WebGL unavailable');
 
       const vertexShader = compileShader(gl, gl.VERTEX_SHADER, VERTEX_SHADER);
-      const fragmentShader = compileShader(gl, gl.FRAGMENT_SHADER, FRAGMENT_SHADER);
+      const fragmentShader = compileShader(
+        gl,
+        gl.FRAGMENT_SHADER,
+        FRAGMENT_SHADER,
+      );
       const program = gl.createProgram();
       gl.attachShader(program, vertexShader);
       gl.attachShader(program, fragmentShader);
@@ -263,15 +299,18 @@ export class CockpitCloudEffectsController {
       gl.deleteShader(vertexShader);
       gl.deleteShader(fragmentShader);
       if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-        throw new Error(gl.getProgramInfoLog(program) || 'Cloud shader link failed');
+        throw new Error(
+          gl.getProgramInfoLog(program) || 'Cloud shader link failed',
+        );
       }
 
       const buffer = gl.createBuffer();
       gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-        -1, -1, 1, -1, -1, 1,
-        -1, 1, 1, -1, 1, 1,
-      ]), gl.STATIC_DRAW);
+      gl.bufferData(
+        gl.ARRAY_BUFFER,
+        new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]),
+        gl.STATIC_DRAW,
+      );
       const position = gl.getAttribLocation(program, 'position');
       gl.enableVertexAttribArray(position);
       gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
@@ -293,7 +332,8 @@ export class CockpitCloudEffectsController {
   resize() {
     if (!this.gl) return;
     const size = cockpitCloudRenderSize(window.innerWidth, window.innerHeight);
-    if (this.canvas.width === size.width && this.canvas.height === size.height) return;
+    if (this.canvas.width === size.width && this.canvas.height === size.height)
+      return;
     this.canvas.width = size.width;
     this.canvas.height = size.height;
     this.gl.viewport(0, 0, size.width, size.height);
@@ -313,7 +353,13 @@ export class CockpitCloudEffectsController {
   }
 
   start() {
-    if (this.destroyed || !this.enabled || this.frame !== null || this.suspended) return;
+    if (
+      this.destroyed ||
+      !this.enabled ||
+      this.frame !== null ||
+      this.suspended
+    )
+      return;
     if (!this.gl) {
       this.initializeRenderer();
       this.resize();
@@ -353,16 +399,21 @@ export class CockpitCloudEffectsController {
   }
 
   async refresh() {
-    if (this.destroyed || !this.enabled || this.pending || this.suspended
-      || !document.body.classList.contains('cockpit-mode')) {
+    if (
+      this.destroyed ||
+      !this.enabled ||
+      this.pending ||
+      this.suspended ||
+      !document.body.classList.contains('cockpit-mode')
+    ) {
       return this.pending;
     }
     const point = this.cameraPoint();
     if (!point) return null;
     if (
-      this.weather
-      && Date.now() - this.fetchedAt < WEATHER_REFRESH_MS
-      && greatCircleM(this.anchor, point) < WEATHER_MOVE_REFRESH_M
+      this.weather &&
+      Date.now() - this.fetchedAt < WEATHER_REFRESH_MS &&
+      greatCircleM(this.anchor, point) < WEATHER_MOVE_REFRESH_M
     ) {
       this.applyWeather(this.weather, point.altitudeM);
       return this.weather;
@@ -370,11 +421,17 @@ export class CockpitCloudEffectsController {
 
     this.abort?.abort();
     this.abort = new AbortController();
-    const pending = this.weatherService.getConditions(point.latitude, point.longitude, { signal: this.abort.signal });
+    const pending = this.weatherService.getConditions(
+      point.latitude,
+      point.longitude,
+      { signal: this.abort.signal },
+    );
     const request = this.abort;
-    this.pending = pending.then(async (payload) => {
+    this.pending = pending
+      .then(async (payload) => {
         if (this.abort !== request || request.signal.aborted) return null;
-        if (!payload?.weather) throw new Error('Cloud weather observation unavailable');
+        if (!payload?.weather)
+          throw new Error('Cloud weather observation unavailable');
         this.weather = payload.weather;
         this.fetchedAt = Date.now();
         this.anchor = point;
@@ -391,7 +448,10 @@ export class CockpitCloudEffectsController {
         return null;
       })
       .finally(() => {
-        if (this.abort === request) { this.pending = null; this.abort = null; }
+        if (this.abort === request) {
+          this.pending = null;
+          this.abort = null;
+        }
       });
     return this.pending;
   }
@@ -399,12 +459,17 @@ export class CockpitCloudEffectsController {
   applyWeather(weather, altitudeM) {
     const profile = deriveWeatherEffectProfile(weather);
     const altitude = weatherAltitudeFactors(altitudeM);
-    this.targetStrength = profile.available ? profile.cloud * altitude.cloud : 0;
+    this.targetStrength = profile.available
+      ? profile.cloud * altitude.cloud
+      : 0;
     this.windDirectionDeg = profile.windDirectionDeg || 0;
     this.windStrength = profile.wind || 0;
     this.canvas.dataset.cloudStrength = this.targetStrength.toFixed(3);
     this.canvas.dataset.weatherCode = String(weather?.weatherCode ?? 'unknown');
-    if (this.reducedMotion && document.body.classList.contains('cockpit-mode')) {
+    if (
+      this.reducedMotion &&
+      document.body.classList.contains('cockpit-mode')
+    ) {
       this.strength = this.targetStrength;
       const visible = this.strength > 0.035;
       this.canvas.classList.toggle('active', visible);
@@ -414,7 +479,11 @@ export class CockpitCloudEffectsController {
   }
 
   tick(timeMs) {
-    if (this.destroyed || !this.enabled || !document.body.classList.contains('cockpit-mode')) {
+    if (
+      this.destroyed ||
+      !this.enabled ||
+      !document.body.classList.contains('cockpit-mode')
+    ) {
       this.stop();
       return;
     }
@@ -431,20 +500,27 @@ export class CockpitCloudEffectsController {
     if (timeMs - this.lastRefreshCheckMs >= 1000) {
       this.lastRefreshCheckMs = timeMs;
       const point = this.cameraPoint();
-      if (point && cockpitWeatherRefreshDue({
-        nowMs: Date.now(),
-        fetchedAt: this.fetchedAt,
-        anchor: this.anchor,
-        point,
-        hasWeather: Boolean(this.weather),
-      })) void this.refresh();
+      if (
+        point &&
+        cockpitWeatherRefreshDue({
+          nowMs: Date.now(),
+          fetchedAt: this.fetchedAt,
+          anchor: this.anchor,
+          point,
+          hasWeather: Boolean(this.weather),
+        })
+      )
+        void this.refresh();
     }
 
     const blend = this.reducedMotion ? 1 : 0.08;
     this.strength += (this.targetStrength - this.strength) * blend;
     const visible = this.strength > 0.035;
     this.canvas.classList.toggle('active', visible);
-    if (visible && (this.reducedMotion || timeMs - this.lastFrameMs >= CLOUD_FRAME_MS)) {
+    if (
+      visible &&
+      (this.reducedMotion || timeMs - this.lastFrameMs >= CLOUD_FRAME_MS)
+    ) {
       this.lastFrameMs = timeMs;
       this.render(timeMs / 1000);
     } else if (!visible) {
@@ -468,9 +544,16 @@ export class CockpitCloudEffectsController {
     const windRadians = Cesium.Math.toRadians(this.windDirectionDeg);
     const windScale = 0.008 + this.windStrength * 0.022;
     gl.useProgram(this.program);
-    gl.uniform2f(this.locations.resolution, this.canvas.width, this.canvas.height);
+    gl.uniform2f(
+      this.locations.resolution,
+      this.canvas.width,
+      this.canvas.height,
+    );
     gl.uniform1f(this.locations.time, timeSec);
-    gl.uniform1f(this.locations.strength, Math.min(1, Math.max(0, this.strength)));
+    gl.uniform1f(
+      this.locations.strength,
+      Math.min(1, Math.max(0, this.strength)),
+    );
     gl.uniform2f(
       this.locations.wind,
       Math.sin(windRadians) * windScale,
@@ -517,7 +600,10 @@ export class CockpitCloudEffectsController {
     this.stop();
     window.removeEventListener('resize', this.onResize);
     window.removeEventListener('gev:cockpit-mode-changed', this.onCockpitMode);
-    window.removeEventListener('gev:cockpit-weather-toggle', this.onEnabledChange);
+    window.removeEventListener(
+      'gev:cockpit-weather-toggle',
+      this.onEnabledChange,
+    );
     if (this.program && this.gl) this.gl.deleteProgram(this.program);
     this.canvas.remove();
   }

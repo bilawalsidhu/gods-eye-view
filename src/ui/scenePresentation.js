@@ -61,10 +61,36 @@ export function renderSceneShots(
     const label = document.createElement('div');
     label.className = 'scene-shot-label';
     label.textContent = shot.title;
+    label.title = 'Double-click to rename';
     listen(label, 'click', () => select(shot.id));
     listen(label, 'dblclick', () => {
-      const title = window.prompt('Shot title', shot.title);
-      if (title) rename(scene.id, shot.id, title);
+      if (label.children.length) return;
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'scene-shot-rename';
+      input.setAttribute('aria-label', 'Shot name');
+      input.value = shot.title;
+      let finished = false;
+      const finish = (save) => {
+        if (finished) return;
+        finished = true;
+        const title = input.value.trim();
+        label.textContent = shot.title;
+        if (save && title && title !== shot.title)
+          rename(scene.id, shot.id, title);
+      };
+      listen(input, 'keydown', (event) => {
+        event.stopPropagation();
+        if (event.key === 'Enter' || event.key === 'Escape') {
+          event.preventDefault();
+          finish(event.key === 'Enter');
+        }
+      });
+      listen(input, 'blur', () => finish(true));
+      label.textContent = '';
+      label.appendChild(input);
+      input.focus();
+      input.select();
     });
     const actions = document.createElement('div');
     actions.className = 'scene-shot-actions';
