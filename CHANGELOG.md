@@ -757,6 +757,8 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   to Puppeteer 25.10.0 and Sharp 0.35.4. Cesium remains on 1.138.0.
   Browser QA awaits the new asynchronous executable-path lookup.
 
+  - Live Weather Radar layer using RainViewer's public tiled precipitation API (`server/providers/weatherRadar.js`, `src/data/weatherRadar.js`).
+
 ## [0.1.1] — 2026-09-01 — Installation and live-data fixes
 
 ### Changed
