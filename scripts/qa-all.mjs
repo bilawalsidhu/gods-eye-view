@@ -47,8 +47,13 @@ const SCRIPTS_DIR = path.resolve(path.dirname(new URL(import.meta.url).pathname)
 // the map exists for the few that don't:
 //  - qa-voice-wav reads argv[2] as the app URL and argv[3] as the WAV fixture
 //    path, so a `--url` flag would be mistaken for a fixture path.
+//  - qa-cockpit-plates asserts real-GPU plate rendering unless `--swiftshader`
+//    is passed (its structural-plate mode). This NAS has no GPU, so the
+//    default mode can never pass here; SwiftShader mode still exercises the
+//    full plate pipeline.
 const SUITE_ARGV_OVERRIDES = {
   'qa-voice-wav.mjs': (baseUrl) => [baseUrl],
+  'qa-cockpit-plates.mjs': (baseUrl) => [baseUrl, '--url', baseUrl, '--swiftshader'],
 };
 
 // Wall-clock ceiling per suite. The default covers the ordinary harnesses;

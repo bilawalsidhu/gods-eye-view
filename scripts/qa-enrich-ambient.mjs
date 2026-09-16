@@ -54,7 +54,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
 import { classifyAircraft, CLASS_SCALE_2D } from '../src/data/aircraftClass.js';
-import { aircraftIcon } from '../src/data/aircraftIcons.js';
+import { aircraftIcon, TRACKED_ICON_PX } from '../src/data/aircraftIcons.js';
 
 // ---------------------------------------------------------------------------
 // Args (same shape as qa-sprites-b5.mjs)
@@ -159,7 +159,13 @@ const SPEC = {
 const expected = new Map(Object.entries(TYPES).map(([hex, tc]) => [
   hex, classifyAircraft(tc ? { typeCode: tc } : { category: 0 }),
 ]));
-const AIRLINER_ICON = aircraftIcon(classifyAircraft({ category: 0 })); // pre-enrichment default
+// Tier-aware expected glyph: the two-tier raster in flights.js (field test
+// 2026-08-16) swaps to the 192 px close variant once a billboard's on-screen
+// size crosses its hysteresis band — SAME icon kind, different data-URI. A
+// plane whose class scale grows after enrichment (e.g. B744 quadjet) can
+// cross that band mid-run, so every glyph assertion must compare against the
+// tier the billboard is actually carrying (`bb.large` from the probe).
+const iconFor = (bb, klass) => aircraftIcon(klass, bb?.large ? TRACKED_ICON_PX : undefined);
 
 // ---------------------------------------------------------------------------
 async function main() {
@@ -195,13 +201,28 @@ async function main() {
   });
 
   const consoleErrors = [];
+  const suppressedEnv503s = [];
   try {
     const page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 800 });
     page.on('console', (msg) => {
       if (msg.type() === 'error') {
         const text = msg.text();
-        if (!/Failed to load resource.*404/i.test(text)) consoleErrors.push(text);
+        if (/Failed to load resource.*404/i.test(text)) return;
+        // This machine is keyless by design (we do not fabricate
+        // credentials): the HUD's periodic AI-summary POST and the voice
+        // token endpoint both return 503 here, and the app degrades
+        // gracefully (console.warn + fallback text). Those resource errors
+        // are environment noise, not regressions — same class as the 404
+        // filter above. Anything else still fails E12.
+        if (/Failed to load resource.*503/i.test(text)) {
+          const url = msg.location()?.url || '';
+          if (url.includes('/api/openai/hud-summary') || url.includes('/api/realtime/token')) {
+            suppressedEnv503s.push(url);
+            return;
+          }
+        }
+        consoleErrors.push(text);
       }
     });
     page.on('pageerror', (err) => consoleErrors.push(`pageerror: ${err.message}`));
@@ -307,7 +328,12 @@ async function main() {
             if (!p) continue;
             if (typeof p.length === 'number' && typeof p.get === 'function') { walk(p); continue; }
             if (p.image !== undefined && p.alignedAxis !== undefined) {
-              out.push({ id: p.id, image: p.image, scale: p.scale, show: p.show });
+              // `_gevIconLarge` is the two-tier glyph raster flag (flights.js):
+              // true = the 192 px close raster, false/undefined = the 64 px
+              // fleet raster. The two tiers are DIFFERENT data-URIs for the
+              // same icon kind, so every glyph assertion below must ask for
+              // the tier this billboard is actually carrying.
+              out.push({ id: p.id, image: p.image, scale: p.scale, show: p.show, large: Boolean(p._gevIconLarge) });
             }
           }
         };
@@ -361,7 +387,7 @@ async function main() {
     for (const hex of Object.keys(TYPES)) {
       const bb = beforeById.get(hex);
       if (!bb) baselineBad.push(`${hex}:missing`);
-      else if (bb.image !== AIRLINER_ICON) baselineBad.push(`${hex}:not-default-glyph`);
+      else if (bb.image !== iconFor(bb, classifyAircraft({ category: 0 }))) baselineBad.push(`${hex}:not-default-glyph`);
       else if (Math.abs(bb.scale - (CLASS_SCALE_2D.airliner || 1)) > 1e-9) baselineBad.push(`${hex}:scale=${bb.scale}`);
     }
     record('E2 baseline: all 12 category-0 planes default to the airliner glyph',
@@ -414,12 +440,12 @@ async function main() {
     const scaleBad = [];
     for (const [hex, klass] of expected) {
       const bb = afterById.get(hex);
-      const wantImg = aircraftIcon(klass);
+      const wantImg = iconFor(bb, klass);
       const wantScale = CLASS_SCALE_2D[klass] || 1;
       if (!bb || bb.image !== wantImg) glyphBad.push(`${hex}(${klass})${bb ? ':wrong-image' : ':missing'}`);
       if (bb && Math.abs(bb.scale - wantScale) > 1e-9) scaleBad.push(`${hex}: ${bb.scale} != ${wantScale}`);
     }
-    record('E5 glyphs: every billboard matches aircraftIcon(classify(typeCode))',
+    record('E5 glyphs: every billboard matches aircraftIcon(classify(typeCode)) at its raster tier',
       glyphBad.length === 0, glyphBad.length ? glyphBad.join(' ') : `${expected.size} matched (incl. the found:false miss staying airliner)`);
     record('E6 scales: every billboard has its per-class CLASS_SCALE_2D',
       scaleBad.length === 0, scaleBad.length ? scaleBad.join(' ') : 'all scales exact (composes with scaleByDistance)');
@@ -468,7 +494,10 @@ async function main() {
     const pollBad = [];
     for (const [hex, klass] of expected) {
       const bb = afterPollById.get(hex);
-      if (!bb || bb.image !== aircraftIcon(klass)) pollBad.push(`${hex}(${klass})${bb ? ':reverted' : ':missing'}`);
+      // Tier-aware: a class-scale bump after enrichment (B744 quadjet) can
+      // legitimately cross the two-tier raster's hysteresis band on this very
+      // tick — the 192 px variant is the same icon, not a revert.
+      if (!bb || bb.image !== iconFor(bb, klass)) pollBad.push(`${hex}(${klass})${bb ? ':reverted' : ':missing'}`);
       else if (Math.abs(bb.scale - (CLASS_SCALE_2D[klass] || 1)) > 1e-9) pollBad.push(`${hex}:scale-reverted`);
     }
     const noReRequests = afterPoll.starts === Object.keys(TYPES).length;
@@ -529,10 +558,17 @@ async function main() {
       starts: window.__ENRICH_LOG.starts.length,
       inflight: window.__ENRICH_LOG.inflight,
     }));
+    // Direct bucket probe — separates "the sweep ignored the budget" (fetch
+    // count too high AND bucket undrained) from "the bucket was never seeded
+    // from the QA seam" (fetch count too high AND bucket already at 0).
+    const budgetProbe = await page.evaluate(async () => {
+      const mod = await import('/src/data/flights.js');
+      return mod._ambientBudgetForTest();
+    });
     record(`E10 exhaust: requests stall at the budget ceiling (${BUDGET_QA.ceil}) with unrequested planes on-screen`,
       exhausted.starts === BUDGET_QA.ceil && exhausted.inflight === 0,
       `starts=${exhausted.starts} (want ${BUDGET_QA.ceil}: ${startsBeforeBatch} baseline + ${BUDGET_QA.ceil - startsBeforeBatch} tokens; `
-      + `${BATCH_COUNT - (BUDGET_QA.ceil - startsBeforeBatch)} planes left waiting) inflight=${exhausted.inflight}`);
+      + `${BATCH_COUNT - (BUDGET_QA.ceil - startsBeforeBatch)} planes left waiting) inflight=${exhausted.inflight} budget=${budgetProbe}`);
 
     // ========================================================================
     // E11 — refill window passes → enrichment RESUMES. Shorten windowMs so the
@@ -560,6 +596,9 @@ async function main() {
 
     record('E12: no console errors during QA run', consoleErrors.length === 0,
       consoleErrors.length ? `${consoleErrors.length}: ${consoleErrors.slice(0, 3).join(' | ')}` : 'clean');
+    if (suppressedEnv503s.length) {
+      console.log(`  (suppressed ${suppressedEnv503s.length} keyless-endpoint 503(s): ${[...new Set(suppressedEnv503s)].join(', ')})`);
+    }
 
     finish();
   } finally {

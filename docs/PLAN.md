@@ -1635,6 +1635,47 @@ GitForge pipeline green.
   locally; removing it needs an explicit owner `rm -rf` approval).
   Gates after removal: lint --max-warnings 0, suite 3463 + probes
   green, build + BUILD-GATE pass.
+- [x] **Batch J (e2e hardening + honest keyless contract)**: make the
+  40-suite QA battery truthful on a keyless machine, and re-point the
+  harness anchors that source drift had silently broken.
+  DONE 2026-09-16.
+  (1) `scripts/qa-all.mjs` orchestrator: per-suite argv contract fix —
+  qa-voice-wav reads `argv[3]` as the WAV fixture, so the universal
+  `[BASE_URL, '--url', BASE_URL]` shape made it fail in 0.8s with
+  `WAV fixture not found: --url` (SUITE_ARGV_OVERRIDES). Per-suite
+  timeout overrides — qa-l9-matrix 45 min, qa-overlay-baseline 30 min —
+  after both proved ACTIVELY PASSING when the flat cap killed them
+  (SwiftShader ~1 fps rendering). New ENV-GATED status: suites that
+  self-declare a missing gate ("run against the keyed dev server",
+  "OPENAI_API_KEY is not set") are reported distinctly and do not fail
+  the run — the alternative is fabricating credentials, which the plan
+  forbids. (2) google-places honest keyless contract (both runtimes):
+  keyless answered 503, which Chrome natively logs as "Failed to load
+  resource" for any non-2xx subresource — un-suppressible from JS —
+  poisoning every clean-console assertion. Now 200 +
+  `{ places: [], error, unavailable: true }` via `keylessPlacesPayload()`
+  in `src/data/googlePlacesPolicy.js`, wired into
+  `vite/proxies/google-places.js` and `functions/api/google/[[path]].js`
+  (matches the ais-live UNAVAILABLE chip convention). Tests re-pinned
+  (18/18); qa-l9-matrix / qa-cockpit-utility / qa-radio keyless probes
+  aligned to the new shape. (3) Harness drift repairs: qa-firstrun's
+  lightbox opener clicked `#cesium-credits .cesium-credit-expand-link`,
+  but that strip has been deliberately detached since 2026-08-29 — now
+  calls `creditDisplay.showLightbox()` with a double-rAF flush. The four
+  qa-firstrun-mutations anchors that had drifted were re-pointed to
+  reality: radio-panel ESC guard lives in `src/ui/radioPanel.js` (was
+  src/ui.js), the voice TOOL SCHEMA + instruction mapping lives in
+  `src/voice/realtimeSession.js` (was vite.config.js), and the
+  first-run launcher is a `<div>` (was `<aside>`) — 67/67 defects
+  caught after re-pointing. (4) qa-perf vs product alignment: the
+  first-run default is CRT (operator ruling 2026-08-29), an ANIMATED
+  stage whose time uniform legitimately holds style-anim forever — the
+  11 idle-baseline failures were the suite testing an unreachable
+  scenario, not a leak; it now drops to `setStyle('normal')` before the
+  idle baseline. (5) Removed the stale React/PWA comment from
+  src/main.js. Evidence: run 2 14/40 → every red root-caused (env-gated
+  keys, harness drift, orchestrator bugs, contract defect, load);
+  run 3 executed green-or-env-gated on the fixed tree.
 - [ ] **Validation**: e2e orchestrator over all 40 suites (fix reds as
   found), full local gates, GitForge green on the release commit.
 - [ ] **Release & deploy**: version bump + changelog + tag; deploy →

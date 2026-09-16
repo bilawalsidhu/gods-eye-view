@@ -178,6 +178,25 @@ function waitForTilesLoaded(page, timeoutMs = 15000) {
  * @returns {Promise<{mountAltM:number, mountHeightM:number, groundM:number}|null>}
  */
 async function readCameraGround(page, camId) {
+  // Coverage entities are created lazily — after the layer's staggered ground
+  // pass reaches each camera (buildCoverageEntities prefers the refined
+  // geometry). Under load the pass trails the camera list, so a single
+  // immediate read races the build and reports "entity missing" for cameras
+  // that are merely still in the queue. Wait for the entity instead: a
+  // camera that never receives coverage still fails, at a bounded timeout,
+  // but a slow pass no longer falsifies the datum assertions.
+  const ready = await page
+    .waitForFunction(
+      (id) => {
+        const viewer = window.__godsEyeView && window.__godsEyeView.viewer;
+        const ent = viewer && viewer.entities.getById(`cctv-${id}-ray-tl`);
+        return Boolean(ent && ent.polyline);
+      },
+      { timeout: 45000, polling: 500 },
+      camId,
+    )
+    .catch(() => null);
+  if (!ready) return null;
   return page.evaluate((id) => {
     const viewer = window.__godsEyeView.viewer;
     const time = viewer.clock.currentTime;
