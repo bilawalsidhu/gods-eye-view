@@ -283,3 +283,36 @@ test('Realtime service configuration selects compatible endpoint/model without f
   assert.equal(response.headers['cache-control'], 'no-store');
   assert.doesNotMatch(response.body, /server-fixture|voice\.example/);
 });
+
+test('OpenAI routes answer generically when the upstream or the request fails', async (t) => {
+  env(t, 'OPENAI_API_KEY', 'fixture-upstream-secret');
+  env(t, 'GEV_RATELIMIT_OPENAI_PER_MIN', undefined);
+  const leak =
+    'fixture-upstream-secret req_fixture_1234 org-fixture quota exhausted';
+
+  // `data.error.message` is OpenAI's own wording — request ids, organization
+  // hints, quota phrasing — and was relayed verbatim whenever upstream was not ok.
+  t.mock.method(globalThis, 'fetch', async () =>
+    Response.json({ error: { message: leak } }, { status: 429 }),
+  );
+  const summary = await request(
+    install(openAiRealtimeProxy()).get('/api/openai/hud-summary'),
+    { method: 'POST', body: JSON.stringify({ context: {} }) },
+  );
+  assert.equal(summary.json().error, 'OpenAI HUD summary request failed');
+  assert.equal(summary.body.includes('req_fixture_1234'), false);
+  assert.equal(summary.body.includes('fixture-upstream-secret'), false);
+
+  // A network fault surfaced a resolver message naming the upstream host.
+  t.mock.restoreAll();
+  t.mock.method(globalThis, 'fetch', async () => {
+    throw Error(`getaddrinfo ENOTFOUND api.openai.com ${leak}`);
+  });
+  const token = await request(
+    install(openAiRealtimeProxy()).get('/api/realtime/token'),
+  );
+  assert.equal(token.status, 502);
+  assert.deepEqual(token.json(), { error: 'Failed to create Realtime token' });
+  assert.equal(token.body.includes('api.openai.com'), false);
+  assert.equal(token.body.includes('fixture-upstream-secret'), false);
+});

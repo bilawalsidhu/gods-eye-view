@@ -146,12 +146,15 @@ function createRealtimeTokenHandler({
         res.setHeader('X-GEV-Voice-Tier-Fallback', '1');
       }
       res.end(body);
-    } catch (error) {
+    } catch {
+      // For a network fault this was a resolver message naming the upstream
+      // host; the client only needs to know the mint failed.
+      console.warn('[realtime-token] mint failed');
       res.statusCode = 502;
       res.setHeader('Content-Type', 'application/json');
       res.end(
         JSON.stringify({
-          error: error?.message || 'Failed to create Realtime token',
+          error: 'Failed to create Realtime token',
         }),
       );
     }
