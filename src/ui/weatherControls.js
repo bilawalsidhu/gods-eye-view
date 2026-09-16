@@ -1,7 +1,6 @@
 import {
   FIELD,
   OVERLAY,
-  drapedSelection,
   REFRESH_CHOICES,
   WEATHER_LAYER_SPECS,
   codesToIds,
@@ -35,8 +34,6 @@ export function bindWeatherControls({ elements, actions }) {
   const fields = WEATHER_LAYER_SPECS.filter((spec) => spec.group === FIELD);
   /** @type {Map<string, HTMLButtonElement>} */
   const buttons = new Map();
-  /** @type {Map<string, HTMLElement>} The "not drawing here" marker per row. */
-  const held = new Map();
 
   const describe = (spec) => {
     const parts = [spec.detail];
@@ -74,16 +71,6 @@ export function bindWeatherControls({ elements, actions }) {
       tag.textContent = spec.coverage.tag;
       button.appendChild(tag);
     }
-    // Not every selected layer can be drawn in 3D — the drape budget is
-    // small — so a row that is on but not drawing says which it is, rather
-    // than looking identical to one that is.
-    const heldBack = document.createElement('span');
-    heldBack.className = 'weather-chip-tag weather-chip-held';
-    heldBack.textContent = 'NOT IN 3D';
-    heldBack.hidden = true;
-    button.appendChild(heldBack);
-    held.set(spec.code, heldBack);
-
     // A forecast is labelled wherever it appears, so it can never be mistaken
     // for an observation of now.
     if (spec.forecast) {
@@ -163,31 +150,14 @@ export function bindWeatherControls({ elements, actions }) {
      * @param {{hasKey:boolean, monthCount:number, budget:number}|null} status -
      *   Proxy status, or null while it is unknown.
      */
-    /**
-     * Repaint from layer state, the proxy's accounting, and where the scene
-     * is drawing.
-     *
-     * @param {object} params Layer params.
-     * @param {object|null} status `/api/xweather/status`, when it answered.
-     * @param {'globe'|'tileset'} [regime] Which collection is being rendered.
-     */
-    sync(params = {}, status = null, regime = 'globe') {
+    sync(params = {}, status = null) {
       // Before the layer is registered there are no params to read, and an
       // empty panel would misreport the default selection as "everything off".
       selection =
         typeof params.layers === 'string'
           ? params.layers
           : defaultActiveCodes();
-      const activeIds = codesToIds(selection);
-      const active = new Set(activeIds);
-      // The same policy the layer draws by, so the panel cannot disagree with
-      // the globe about which rows are actually on screen.
-      const drawing = new Set(
-        drapedSelection(
-          WEATHER_LAYER_SPECS.filter((spec) => active.has(spec.id)),
-          regime,
-        ).map((spec) => spec.id),
-      );
+      const active = new Set(codesToIds(selection));
       for (const spec of WEATHER_LAYER_SPECS) {
         const button = buttons.get(spec.code);
         if (!button) continue;
@@ -196,8 +166,6 @@ export function bindWeatherControls({ elements, actions }) {
         if (button.getAttribute('role') === 'radio')
           button.setAttribute('aria-checked', String(on));
         else button.setAttribute('aria-pressed', String(on));
-        const marker = held.get(spec.code);
-        if (marker) marker.hidden = !on || drawing.has(spec.id);
       }
 
       const auto = params.auto === true;
@@ -228,7 +196,6 @@ export function bindWeatherControls({ elements, actions }) {
     destroy() {
       for (const remove of removers.splice(0)) remove();
       buttons.clear();
-      held.clear();
     },
   };
 }

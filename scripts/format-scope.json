@@ -336,7 +336,6 @@
   "src/layers/weather/model.js",
   "src/layers/weather/source.js",
   "src/layers/weather/imagery.js",
-  "src/layers/weather/target.js",
   "src/layers/weather/index.js",
   "src/data/weather.js",
   "src/layers/weather/source.test.mjs",

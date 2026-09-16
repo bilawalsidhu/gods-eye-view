@@ -1445,11 +1445,3 @@
   color: var(--accent);
   background: rgba(0, 212, 255, 0.16);
 }
-/* Switched on but not on screen: the 3D drape budget is much smaller than the
-   globe's. The accent would read as "working", so this takes the app's
-   attention-not-error amber instead, on an active chip as much as an idle one. */
-.weather-chip-tag.weather-chip-held,
-.data-toggle-chip.active .weather-chip-tag.weather-chip-held {
-  color: #ffd488;
-  background: rgba(255, 212, 136, 0.16);
-}

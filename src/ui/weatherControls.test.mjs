@@ -4,7 +4,6 @@ import { bindWeatherControls } from './weatherControls.js';
 import {
   FIELD,
   OVERLAY,
-  drapedSelection,
   WEATHER_LAYER_SPECS,
   defaultActiveCodes,
 } from '../layers/weather/policy.js';
@@ -136,13 +135,8 @@ test('a layer that does not cover the whole globe says so', () => {
   // rather than the coverage it is.
   const h = harness();
   try {
-    // Coverage and forecast markers only; every row also carries a hidden
-    // "not drawing in 3D" marker, which is a different kind of fact.
-    const isCoverageTag = (child) =>
-      child.className?.includes('weather-chip-tag') &&
-      !child.className.includes('weather-chip-held');
     const tagged = h.elements.overlays.children.filter((button) =>
-      button.children.some(isCoverageTag),
+      button.children.some((c) => c.className?.includes('weather-chip-tag')),
     );
     const expected = WEATHER_LAYER_SPECS.filter(
       (s) => s.group === OVERLAY && (s.coverage || s.forecast),
@@ -163,7 +157,7 @@ test('a layer that does not cover the whole globe says so', () => {
         (b) => b.dataset.layerCode === spec.code,
       );
       const tags = button.children
-        .filter(isCoverageTag)
+        .filter((c) => c.className?.includes('weather-chip-tag'))
         .map((c) => c.textContent);
       assert.ok(
         tags.includes(spec.coverage.tag),
@@ -266,63 +260,6 @@ test('overlays accumulate and fields replace one another', () => {
     h.control.sync({ layers: radar.code + fieldB.code }, null);
     clickOn(h.elements.fields, fieldButtons.get(fieldB.label));
     assert.equal(h.calls.at(-1)[1].includes(fieldB.code), false);
-  } finally {
-    h.restore();
-  }
-});
-
-test('a row that cannot draw in 3D says so, and only that row', () => {
-  // The drape budget is much smaller than the globe's, so some selected rows
-  // are on but not on screen. Saying nothing would make them indistinguishable
-  // from the ones that are drawing.
-  const h = harness();
-  try {
-    const field = WEATHER_LAYER_SPECS.find((s) => s.group === FIELD);
-    const radar = WEATHER_LAYER_SPECS.find((s) => s.defaultOn);
-    const overlays = WEATHER_LAYER_SPECS.filter(
-      (s) => s.group === OVERLAY && s.rung > radar.rung,
-    ).slice(0, 2);
-    const chosen = [field, radar, ...overlays];
-    const layers = chosen.map((s) => s.code).join('');
-
-    const markerFor = (spec) => {
-      const button = [
-        ...h.elements.overlays.children,
-        ...h.elements.fields.children,
-      ].find((b) => b.dataset.layerCode === spec.code);
-      return button.children.find((c) =>
-        c.className?.includes('weather-chip-held'),
-      );
-    };
-
-    // On the globe every selected row draws, so nothing is marked.
-    h.control.sync({ layers }, null, 'globe');
-    for (const spec of WEATHER_LAYER_SPECS)
-      assert.equal(markerFor(spec).hidden, true, `${spec.label} on the globe`);
-
-    h.control.sync({ layers }, null, 'tileset');
-    const drawing = new Set(
-      drapedSelection(chosen, 'tileset').map((s) => s.id),
-    );
-    assert.ok(
-      drawing.size < chosen.length,
-      'the fixture must exceed the budget',
-    );
-    for (const spec of chosen) {
-      assert.equal(
-        markerFor(spec).hidden,
-        drawing.has(spec.id),
-        `${spec.label} should ${drawing.has(spec.id) ? 'draw' : 'be marked'}`,
-      );
-    }
-
-    // A row that is switched off is not "held back" — it is simply off.
-    const off = WEATHER_LAYER_SPECS.filter(
-      (s) => !chosen.some((c) => c.id === s.id),
-    );
-    assert.ok(off.length > 0);
-    for (const spec of off)
-      assert.equal(markerFor(spec).hidden, true, `${spec.label} is off`);
   } finally {
     h.restore();
   }

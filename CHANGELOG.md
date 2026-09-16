@@ -1,33 +1,5 @@
 # Changelog
 
-## Weather layer
-
-- Add an optional **Weather** layer drawing observed global radar, lightning,
-  severe-weather warnings, tropical cyclones, storm cells and a dozen analysis
-  fields from Vaisala Xweather, selected from a new right-rail WEATHER panel.
-- Proxy every tile through the app's own server. The vendor authenticates by
-  putting the client id and secret in the tile URL path, so the browser never
-  builds that URL, the layer name is checked against an allowlist before the
-  key is read, and every log line is scrubbed of the credential.
-- Meter the source against its monthly allowance: a budget governor that serves
-  stale tiles rather than going dark, a bounded oldest-first disk cache, and a
-  running total shown in the panel beside the controls that move it.
-- Refresh on demand by default, with an optional timer. Choosing a layer draws
-  it immediately and fetches only that layer.
-- Carry the selection in share links as one packed field, so a shared view
-  reopens showing what its author saw.
-- Draw one continuous field at a time and keep sparse overlays above it, mark
-  the layers that stop at a border with the coverage they have, and label
-  forecasts as forecasts.
-- Fetch each layer only as deep as it resolves: sampled rasters stop where the
-  service starts upsampling, symbol layers follow the camera further.
-- Report `UNAVAILABLE · ADD XWEATHER KEY` without a key rather than an empty
-  globe. This layer has no keyless mode.
-- Keep drawing under a photorealistic 3D map stack by draping the imagery on
-  the tileset, rather than going dark with the globe. Cesium truncates draped
-  imagery from the top of the stack, so a small budget is spent on the sparse
-  overlays first, the layer row reports drawn against selected, and the panel
-  marks the rows being held back.
 - Separate Director timing, seek calculations, playback clocks and registered
   scene-pack presentation rules. Preserve authored content and controls; Stop
   releases pending hold timers and stale ticks cannot affect replacement playback.
@@ -121,6 +93,34 @@
 - Let CLI tools, development launchers and the setup doctor use an explicit project directory while retaining their existing default paths.
 
 - Split application scene, controls, catalog, tools and HTML into reusable components; configure application request services and sources without changing global fetch. Preserve standalone markup and voice behavior. Explicit annotation navigation may resolve a distant named target.
+
+## Weather layer
+
+- Add an optional **Weather** layer drawing observed global radar, lightning,
+  severe-weather warnings, tropical cyclones, storm cells and a dozen analysis
+  fields from Vaisala Xweather, selected from a new right-rail WEATHER panel.
+- Proxy every tile through the app's own server. The vendor authenticates by
+  putting the client id and secret in the tile URL path, so the browser never
+  builds that URL, the layer name is checked against an allowlist before the
+  key is read, and every log line is scrubbed of the credential.
+- Meter the source against its monthly allowance: a budget governor that serves
+  stale tiles rather than going dark, a bounded oldest-first disk cache, and a
+  running total shown in the panel beside the controls that move it.
+- Refresh on demand by default, with an optional timer. Choosing a layer draws
+  it immediately and fetches only that layer.
+- Carry the selection in share links as one packed field, so a shared view
+  reopens showing what its author saw.
+- Draw one continuous field at a time and keep sparse overlays above it, mark
+  the layers that stop at a border with the coverage they have, and label
+  forecasts as forecasts.
+- Fetch each layer only as deep as it resolves: sampled rasters stop where the
+  service starts upsampling, symbol layers follow the camera further.
+- Report `UNAVAILABLE · ADD XWEATHER KEY` without a key rather than an empty
+  globe. This layer has no keyless mode.
+- Report `UNAVAILABLE · GLOBE HIDDEN IN 3D` under a photorealistic map stack,
+  which hides the globe and every imagery layer with it. Draping the tiles on
+  the 3D tileset instead was built and measured, and rejected: see
+  `docs/KNOWN-ISSUES.md`.
 
 ## Voice component boundaries
 

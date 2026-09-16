@@ -1784,8 +1784,7 @@
       "src/layers/weather/model.js",
       "src/layers/weather/policy.js",
       "src/layers/weather/source.js",
-      "src/ui/weatherControls.js",
-      "src/layers/weather/target.js"
+      "src/ui/weatherControls.js"
     ],
     "external": [
       "@mapbox/vector-tile",
@@ -2188,8 +2187,7 @@
       "src/layers/weather/source.js",
       "src/data/xweatherCatalogue.js",
       "src/data/xweatherTiles.js",
-      "src/data/tileBudget.js",
-      "src/layers/weather/target.js"
+      "src/data/tileBudget.js"
     ],
     "external": [
       "cesium",
@@ -2710,8 +2708,7 @@
       "src/layers/weather/index.js",
       "src/layers/weather/model.js",
       "src/layers/weather/policy.js",
-      "src/layers/weather/source.js",
-      "src/layers/weather/target.js"
+      "src/layers/weather/source.js"
     ],
     "external": ["cesium"]
   }

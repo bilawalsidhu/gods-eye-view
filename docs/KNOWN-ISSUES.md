@@ -30,6 +30,49 @@ Next iteration candidates:
 
 ---
 
+### Weather does not draw under a photorealistic 3D map stack
+Status: Open (declined — the available mechanism is not good enough)
+
+Context:
+- Weather is the only data layer that stops in Google 3D. Every other layer
+  draws entities or primitives, which render regardless; Weather owns Cesium
+  imagery, and a photoreal stack sets `globe.show = false`, which takes all
+  globe imagery with it. The row reports `UNAVAILABLE · GLOBE HIDDEN IN 3D`.
+- Cesium 1.138 can drape imagery on a `Cesium3DTileset`, and that was built and
+  measured before being withdrawn. It works, but it cannot look right, for two
+  reasons that are not ours to change.
+
+Why draping was rejected:
+- **Resolution follows the mesh, not the camera.** `ModelPrimitiveImagery`
+  picks a level per model primitive from that primitive's own bounding
+  rectangle, targeting one imagery tile per primitive
+  (`desiredNumberOfTilesCovered = 1`, a hard-coded local with no setting).
+  Measured at a fixed camera, refining only the tileset's detail from
+  `maximumScreenSpaceError` 64 to 4 changed which weather levels were fetched.
+  Because Google's mesh LOD and the imagery's power-of-two levels step
+  independently, apparent sharpness oscillates as you descend: between about
+  10,700 km and 7,800 km the imagery level did not change while the mesh
+  refined, so the same tile was stretched across smaller primitives and every
+  symbol grew. Descending made it worse.
+- **Different primitives get different levels in the same frame** (levels 2, 3
+  and 6 together, once measured), so the view is a patchwork rather than one
+  consistent resolution.
+- **Magnification is worst for exactly the layers worth draping.** Lightning,
+  storm cells and warnings are drawn at a fixed pixel size inside the tile, so
+  stretching a tile stretches the glyphs into blobs; a continuous field merely
+  blurs.
+- There is no lever. `minimumLevel` is the only input that could raise the
+  chosen level, and it is a static floor: set high enough to help at mid
+  altitude, it demands 16 to 64 imagery tiles per primitive higher up, past the
+  ten-input limit at which Cesium silently truncates — from the top of the
+  stack, dropping the sparse overlays and keeping the opaque field.
+
+Workaround:
+- Switch to a globe map stack (Esri Satellite, OSM, or an ion imagery stack) to
+  use the Weather layer. The row says which state it is in.
+
+---
+
 ### Weather tiles on screen can come from different moments
 Status: Open (inherent to the source; mitigated by refreshing)
 
