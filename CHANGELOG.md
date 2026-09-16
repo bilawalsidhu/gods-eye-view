@@ -822,6 +822,18 @@ represent previously published GitHub Releases.
 
 ## [Unreleased] — 2026-08-24
 
+### Fixed
+
+- Arrivals at elevated locations no longer place the camera underground. Framing
+  fell back to a per-city `groundElevation` that defaults to sea level and is only
+  supplied for the curated `CITY_POIS`, so any other destination was framed as if
+  it stood on the ocean surface, burying the eye by roughly the local elevation:
+  ~1,609 m over Denver, ~2,240 m over Mexico City, both a black frame. The
+  fallback now consults the worldwide ground-floor elevation service before
+  assuming zero, and a new post-arrival guard measures the rendered surface once
+  tiles have streamed in and lifts the eye to a usable clearance if it is still
+  buried. The guard yields immediately to manual camera input.
+
 ### Added
 
 - Added honest aircraft identity narration: callsign, operator, registration,
