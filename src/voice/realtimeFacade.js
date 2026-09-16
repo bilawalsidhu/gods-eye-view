@@ -563,4 +563,61 @@ export class RealtimeFacade {
   debugLog(...args) {
     return this._diagnostics.debugLog(...args);
   }
+
+  get voiceProvider() {
+    return this._provider.voiceProvider;
+  }
+  set voiceProvider(value) {
+    this._provider.voiceProvider = value;
+  }
+
+  get localBackendState() {
+    return this._provider.localBackendState;
+  }
+
+  get localBackendPollTimer() {
+    return this._provider.localBackendPollTimer;
+  }
+
+  get sessionVoiceProvider() {
+    return this._connection.sessionVoiceProvider;
+  }
+  set sessionVoiceProvider(value) {
+    this._connection.sessionVoiceProvider = value;
+  }
+
+  get pendingSessionUpdate() {
+    return this._connection.pendingSessionUpdate;
+  }
+  set pendingSessionUpdate(value) {
+    this._connection.pendingSessionUpdate = value;
+  }
+
+  toggleVoiceProvider(...args) {
+    return this._provider.toggleVoiceProvider(...args);
+  }
+
+  setVoiceProvider(...args) {
+    return this._provider.setVoiceProvider(...args);
+  }
+
+  awaitLocalBackendReady(...args) {
+    return this._provider.awaitLocalBackendReady(...args);
+  }
+
+  ensureLocalBackend(...args) {
+    return this._provider.ensureLocalBackend(...args);
+  }
+
+  refreshLocalBackendStatus(...args) {
+    return this._provider.refreshLocalBackendStatus(...args);
+  }
+
+  watchLocalBackend(...args) {
+    return this._provider.watchLocalBackend(...args);
+  }
+
+  syncProviderUi(...args) {
+    return this._provider.syncProviderUi(...args);
+  }
 }

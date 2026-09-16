@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   collectKeyUpdates,
   keySetupChipLabel,
+  requestProviderSettings,
   stripKeylessBasemapFromHash,
 } from './keySetup.js';
 
@@ -61,4 +62,47 @@ test('aborting pending setup removes its surface and ignores a late response', a
   assert.deepEqual(removed, ['chip', 'root']);
   resolveResponse({ ok: true, json: async () => ({ keys: [] }) });
   assert.equal(await pending, null);
+});
+
+test('a LOCAL setup request waits for Provider Settings initialization and then opens it', async () => {
+  const listeners = new Map();
+  const element = () => ({
+    dataset: {},
+    hidden: true,
+    isConnected: true,
+    textContent: '',
+    addEventListener(type, listener) { listeners.set(type, listener); },
+    removeEventListener(type, listener) {
+      if (listeners.get(type) === listener) listeners.delete(type);
+    },
+    querySelector: () => null,
+    remove() {},
+  });
+  const chip = element();
+  const root = element();
+  const eventTarget = new EventTarget();
+  let resolveResponse;
+  const documentRef = {
+    activeElement: null,
+    addEventListener() {},
+    removeEventListener() {},
+    getElementById: (id) => (id === 'key-setup-chip' ? chip : root),
+    querySelector: () => null,
+  };
+
+  const { initKeySetup } = await import('./keySetup.js');
+  const pending = initKeySetup({
+    documentRef,
+    eventTarget,
+    fetchImpl: () => new Promise((resolve) => { resolveResponse = resolve; }),
+  });
+  assert.equal(requestProviderSettings(eventTarget), true);
+  resolveResponse({
+    ok: true,
+    json: async () => ({ setCount: 0, total: 1, keys: [] }),
+  });
+
+  const setup = await pending;
+  assert.equal(root.hidden, false, 'the queued request reveals the panel');
+  setup.destroy();
 });

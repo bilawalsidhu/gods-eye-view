@@ -194,6 +194,32 @@ test('Realtime handler preserves tools and default instructions, isolates suppli
   assert.equal(sent[0].session.instructions, sent[2].session.instructions);
 });
 
+test('Realtime handler bootstraps local voice without an OpenAI key or upstream request', async (t) => {
+  env(t, 'OPENAI_API_KEY', undefined);
+  env(t, 'GEV_LOCAL_REALTIME_MODEL', 'fixture-local-pipeline');
+  t.mock.method(globalThis, 'fetch', () => {
+    throw Error('local bootstrap must not call OpenAI');
+  });
+  const response = await request(
+    install(
+      openAiRealtimeProxy({
+        annotationGuidance: 'Fixture local annotation instruction.',
+      }),
+    ).get('/api/realtime/token'),
+    { url: '/?provider=local' },
+  );
+  assert.equal(response.status, 200);
+  assert.equal(response.headers['x-gev-voice-model'], 'local-realtime');
+  const payload = response.json();
+  assert.equal(payload.callsUrl, '/api/realtime/local-calls');
+  assert.equal(payload.session.model, 'local-realtime');
+  assert.equal(
+    payload.sessionUpdate.instructions,
+    realtimeInstructions('Fixture local annotation instruction.'),
+  );
+  assert.deepEqual(payload.sessionUpdate.tools, GEV_REALTIME_TOOLS);
+});
+
 test('debug logging resolves each supplied application directory independently', async (t) => {
   const first = root(t),
     second = root(t);
@@ -230,6 +256,7 @@ test('key setup writes only the supplied application root, retains request guard
   assert.equal(plugin.configurePreviewServer, undefined);
   const routes = install(plugin);
   const handler = routes.get('/api/setup/keys');
+  assert.equal(typeof routes.get('/api/setup/local-voice'), 'function');
   const body = JSON.stringify({
     OPENAI_API_KEY: 'sk-fixture-only-not-a-real-key',
   });

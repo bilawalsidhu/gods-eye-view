@@ -41,6 +41,38 @@ test('separate configured token and SDP transports preserve model metadata and c
   ]);
 });
 
+test('local provider metadata selects its relay and carries the session update', async () => {
+  const calls = [];
+  const sessionUpdate = {
+    instructions: 'Use the supplied tools.',
+    tools: [{ type: 'function', name: 'fixture' }],
+  };
+  const backend = createRealtimeBackend({
+    tokenTransport: async (input) => {
+      calls.push(input);
+      return Response.json({
+        value: 'local',
+        callsUrl: '/api/realtime/local-calls',
+        sessionUpdate,
+      });
+    },
+    connectionTransport: async (input) => {
+      calls.push(input);
+      return new Response('local-answer');
+    },
+  });
+  const credential = await backend.requestToken({ provider: 'local' });
+  assert.deepEqual(credential.sessionUpdate, sessionUpdate);
+  assert.equal(
+    await backend.negotiate({ credential, offerSdp: 'local-offer' }),
+    'local-answer',
+  );
+  assert.deepEqual(calls, [
+    '/api/realtime/token?tier=standard&provider=local',
+    '/api/realtime/local-calls',
+  ]);
+});
+
 test('denied tokens never negotiate or retry; reconnect requests a fresh token', async () => {
   let requests = 0;
   const backend = createRealtimeBackend({

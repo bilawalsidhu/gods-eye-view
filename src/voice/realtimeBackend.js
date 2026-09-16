@@ -15,11 +15,17 @@ export function createRealtimeBackend({
     );
   return Object.freeze({
     protocol: 'openai-realtime',
-    async requestToken({ tier = DEFAULT_VOICE_TIER, signal } = {}) {
+    async requestToken({
+      tier = DEFAULT_VOICE_TIER,
+      provider = 'openai',
+      signal,
+    } = {}) {
       signal = scoped(signal);
       signal.throwIfAborted();
       const separator = tokenEndpoint.includes('?') ? '&' : '?';
-      const url = `${tokenEndpoint}${separator}tier=${encodeURIComponent(resolveVoiceModel(tier).tier)}`;
+      const query = new URLSearchParams({ tier: resolveVoiceModel(tier).tier });
+      if (provider === 'local') query.set('provider', 'local');
+      const url = `${tokenEndpoint}${separator}${query}`;
       const response = await tokenTransport(url, {
         signal,
         cache: 'no-store',
@@ -57,6 +63,8 @@ export function createRealtimeBackend({
           null,
         tier: response.headers?.get?.('X-GEV-Voice-Tier') || null,
         expiresAt,
+        callsUrl: typeof data?.callsUrl === 'string' ? data.callsUrl : null,
+        sessionUpdate: data?.sessionUpdate || null,
       };
     },
     async negotiate({ offerSdp, credential, signal }) {
@@ -69,17 +77,20 @@ export function createRealtimeBackend({
         throw new Error(
           'Realtime client secret has expired; reconnect to request a new one',
         );
-      const response = await connectionTransport(callsEndpoint, {
-        method: 'POST',
-        body: offerSdp,
-        signal,
-        redirect: 'error',
-        cache: 'no-store',
-        headers: {
-          Authorization: `Bearer ${credential.token}`,
-          'Content-Type': 'application/sdp',
+      const response = await connectionTransport(
+        credential.callsUrl || callsEndpoint,
+        {
+          method: 'POST',
+          body: offerSdp,
+          signal,
+          redirect: 'error',
+          cache: 'no-store',
+          headers: {
+            Authorization: `Bearer ${credential.token}`,
+            'Content-Type': 'application/sdp',
+          },
         },
-      });
+      );
       signal.throwIfAborted();
       if (!response.ok) {
         await response.body?.cancel?.().catch(() => {});

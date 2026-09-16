@@ -24,11 +24,12 @@ export class RealtimeConnection {
     readStatus,
     input,
     cost,
+    provider,
     operations,
   }) {
     Object.assign(
       this,
-      { readLifetimeSignal, readBackend, readStatus, input, cost },
+      { readLifetimeSignal, readBackend, readStatus, input, cost, provider },
       operations,
     );
     this.connectionAbort = null;
@@ -39,6 +40,8 @@ export class RealtimeConnection {
     this.startEpoch = 0;
     this.disconnectGraceTimer = null;
     this._tearingDown = false;
+    this.sessionVoiceProvider = null;
+    this.pendingSessionUpdate = null;
   }
   get lifetimeSignal() {
     return this.readLifetimeSignal();
@@ -77,22 +80,46 @@ export class RealtimeConnection {
     // while the last session ran (or in another tab) takes effect exactly here
     // — this is what "applies next session" means.
     this.cost.prepareSession();
+    const sessionVoiceProvider = this.provider.prepareSession();
+    this.sessionVoiceProvider = sessionVoiceProvider;
+    this.provider.syncProviderUi();
     this.syncCostUi();
-    this.setStatus('connecting', 'Requesting microphone');
+    this.setStatus(
+      'connecting',
+      sessionVoiceProvider === 'local'
+        ? 'Starting local backend…'
+        : 'Requesting microphone',
+    );
     this.debugLog('session.starting', {
       epoch,
       tier: this.cost.voiceTier,
+      provider: sessionVoiceProvider,
       connection: this.connectionDiagnostics(),
     });
     let localStream = null;
     let localPc = null;
     try {
+      if (sessionVoiceProvider === 'local') {
+        const ready = await this.awaitLocalBackendReady(epoch, signal);
+        if (this.abandonStart(epoch, { localStream, localPc })) return;
+        if (!ready.ok) {
+          this.stop({ preserveStatus: true });
+          this.reportError(
+            'Local voice backend',
+            new Error(ready.detail || 'Local backend unavailable'),
+          );
+          return;
+        }
+        this.setStatus('connecting', 'Requesting microphone');
+      }
       const minted = await this.backend.requestToken({
         tier: this.cost.voiceTier,
+        provider: sessionVoiceProvider,
         signal,
       });
       const token = minted.token;
       if (this.abandonStart(epoch, { localStream, localPc })) return;
+      this.pendingSessionUpdate = minted.sessionUpdate || null;
       // Bind the session meter to the model actually served. An env override
       // (OPENAI_REALTIME_MODEL[_MINI]) can point a tier at a different model,
       // and pricing by the tier we asked for would then under-meter and let the
@@ -123,7 +150,8 @@ export class RealtimeConnection {
       if (this.abandonStart(epoch, { localStream, localPc })) return;
       this.stream = localStream;
       this.setMicrophoneEnabled(
-        !this.input.pushToTalkMode || this.input.pushToTalkKeyHeld,
+        sessionVoiceProvider !== 'local' &&
+          (!this.input.pushToTalkMode || this.input.pushToTalkKeyHeld),
       );
       this.startVoiceVisualizer(localStream);
 
@@ -174,6 +202,28 @@ export class RealtimeConnection {
       const ownsChannel = () => ownsConnection() && this.dc === dataChannel;
       dataChannel.addEventListener('open', () => {
         if (!ownsChannel()) return;
+        if (this.pendingSessionUpdate) {
+          const sent = this.sendRealtimeEvent(
+            {
+              type: 'session.update',
+              session: this.pendingSessionUpdate,
+            },
+            'client.session.update',
+          );
+          if (!sent) {
+            this.fatalError(
+              'Realtime session configuration',
+              new Error('Could not send the local session configuration'),
+            );
+            return;
+          }
+          this.pendingSessionUpdate = null;
+        }
+        if (sessionVoiceProvider === 'local') {
+          this.setMicrophoneEnabled(
+            !this.input.pushToTalkMode || this.input.pushToTalkKeyHeld,
+          );
+        }
         const detail = this.input.pushToTalkMode
           ? this.input.pushToTalkKeyHeld
             ? 'Release Space to send'
@@ -343,6 +393,8 @@ export class RealtimeConnection {
     this.startEpoch++;
     this.connectionAbort?.abort();
     this.connectionAbort = null;
+    this.pendingSessionUpdate = null;
+    this.sessionVoiceProvider = null;
   }
 
   closeTransport() {

@@ -12,6 +12,7 @@ The session adapter, action runner and backend interfaces remain unchanged.
 | `realtimeRadio.js` | Speaker ducking, prepared playback, stronger-action reservations and playback observers |
 | `realtimeInput.js` | Physical Space gesture, microphone mute, input/output meters and their frame/listener lifetime |
 | `realtimeCost.js` | Next-session preferences and the current session's model-bound meter |
+| `realtimeProvider.js` | CLOUD/LOCAL preference, cancellable local-backend readiness and setup requests |
 | `realtimeViewport.js` | One retained image, bounded deletion identities and capture generation |
 | `realtimeDiagnostics.js` | Bounded error history and sanitized optional diagnostics |
 
@@ -27,6 +28,10 @@ retains confirmed playback through that same shutdown path. A late offer, peer c
 viewport capture or cancelled meter frame cannot enter a replacement session.
 Action and post-capture continuations retain their conversation identity before
 publishing output, queueing a response or changing status.
+
+The connection pins its provider at startup and sends local instructions/tools
+before enabling microphone tracks. Provider changes apply to the next session;
+late readiness replies cannot reopen setup or publish into a replaced controller.
 
 Behavioral invariants remain in force: a 500 ms Space hold claims push-to-talk;
 short control taps and text entry remain native; a click-started session stays

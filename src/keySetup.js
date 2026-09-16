@@ -15,6 +15,28 @@ import { createSurfaceKeyboard } from './ui/surfaceKeyboard.js';
  * or a LAN visitor (loopback-only endpoint) fails the status fetch, and both
  * the chip and the dialog are removed outright.
  */
+import { initLocalVoiceRow } from './voice/localVoiceRow.js';
+
+export const PROVIDER_SETTINGS_OPEN_EVENT = 'gev:provider-settings-open';
+
+/** Ask the loopback Provider Settings owner to reveal its panel. */
+export function requestProviderSettings(eventTarget = globalThis) {
+  const EventConstructor = eventTarget?.Event || globalThis.Event;
+  if (
+    typeof eventTarget?.dispatchEvent !== 'function' ||
+    typeof EventConstructor !== 'function'
+  ) {
+    return false;
+  }
+  try {
+    eventTarget.dispatchEvent(
+      new EventConstructor(PROVIDER_SETTINGS_OPEN_EVENT),
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /** Chip label — pure, exported for tests. */
 export function keySetupChipLabel(status) {
@@ -153,6 +175,7 @@ function buildRow(documentRef, key) {
  */
 export async function initKeySetup({
   documentRef = globalThis.document,
+  eventTarget = globalThis,
   fetchImpl,
   signal,
 } = {}) {
@@ -163,11 +186,22 @@ export async function initKeySetup({
   const lifetime = new AbortController();
   let disposed = false;
   let disposeControls = () => {};
+  let localVoiceRow = null;
+  let openRequested = false;
+  let openDialog = () => {
+    openRequested = true;
+  };
+  const onOpenRequest = () => openDialog();
+  eventTarget?.addEventListener?.(PROVIDER_SETTINGS_OPEN_EVENT, onOpenRequest);
   const destroy = () => {
     if (disposed) return;
     disposed = true;
     lifetime.abort();
     signal?.removeEventListener('abort', destroy);
+    eventTarget?.removeEventListener?.(
+      PROVIDER_SETTINGS_OPEN_EVENT,
+      onOpenRequest,
+    );
     disposeControls();
     chip.remove();
     root.remove();
@@ -229,17 +263,22 @@ export async function initKeySetup({
     onEscape: () => close(),
   });
 
-  const openDialog = () => {
+  openDialog = () => {
     if (disposed || open) return;
     open = true;
     keyboard.activate();
     root.hidden = false;
+    void localVoiceRow?.refresh?.();
     globalThis.requestAnimationFrame?.(() => {
       if (!open) return;
       root.classList.add('visible');
       root.querySelector('input')?.focus?.({ preventScroll: true });
     });
   };
+  if (openRequested) {
+    openRequested = false;
+    openDialog();
+  }
 
   const close = () => {
     if (!open) return;
@@ -378,9 +417,21 @@ export async function initKeySetup({
   disposeControls = () => {
     open = false;
     keyboard.destroy();
+    localVoiceRow?.dispose();
     chip.removeEventListener('click', openDialog);
     closeButton?.removeEventListener('click', close);
     applyButton?.removeEventListener('click', onApply);
   };
+  // Local voice is the one capability no key can switch on, so its row lives
+  // here with the keys rather than in a separate place to discover.
+  localVoiceRow = await initLocalVoiceRow({
+    documentRef,
+    fetchImpl: doFetch,
+    signal: lifetime.signal,
+  });
+  if (disposed) {
+    localVoiceRow?.dispose();
+    return null;
+  }
   return { open: openDialog, close, render, destroy };
 }

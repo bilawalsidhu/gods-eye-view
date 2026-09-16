@@ -124,6 +124,12 @@ helpers for compatibility. Provider Settings lives in `server/standalone/key-set
 and writes to the same root `.env` or Pinokio store as before. `vite.config.js`
 preserves the default configuration and named provider exports for tools/tests.
 
+`gods-eye-view/server/providers/localai` owns LocalAI process lifetime, readiness
+and same-origin WebRTC signalling. `gods-eye-view/server/standalone/local-voice`
+owns the profile-derived installation plan used by Provider Settings. Both are
+Node-only exports with no import-time process or network work; the standalone
+composition decides when to mount and dispose them.
+
 ## Aircraft and vessel providers
 
 `server/providers/live.js` exports the existing Node middleware factories and

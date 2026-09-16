@@ -18,6 +18,7 @@ export class RealtimeTurns {
     readChannel,
     readDataManager,
     readRadioLayer,
+    readSessionProvider,
     radio,
     viewport,
     operations,
@@ -30,6 +31,7 @@ export class RealtimeTurns {
         readChannel,
         readDataManager,
         readRadioLayer,
+        readSessionProvider,
         radio,
         viewport,
       },
@@ -685,10 +687,16 @@ export class RealtimeTurns {
     const instructions = this.pendingResponseInstructions;
     this.pendingResponseInstructions = null;
     this.responseCreatePending = true;
+    const response = { instructions };
+    if (this.readSessionProvider() === 'local') {
+      response.tools = [];
+      response.tool_choice = 'none';
+      response.localai_classifier = { enabled: false };
+    }
     const sent = this.sendRealtimeEvent(
       {
         type: 'response.create',
-        response: { instructions },
+        response,
       },
       'client.response_create.tool_followup',
     );

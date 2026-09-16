@@ -81,6 +81,34 @@ export const VOICE_MODELS = Object.freeze({
   }),
 });
 
+/**
+ * Local (self-hosted) voice pipeline — e.g. LocalAI's Realtime endpoint.
+ *
+ * Deliberately NOT part of VOICE_MODELS: that object drives the STANDARD/MINI
+ * tier toggle in the mic panel, and a third entry would leak a bogus tier into
+ * the UI. It is resolved by id only.
+ *
+ * All rates are zero because inference runs on this machine. Without an entry
+ * here, resolveVoiceModelById() falls through to worst-case OpenAI pricing and
+ * the hard spend cap closes a local session mid-conversation over money that
+ * was never spent.
+ */
+export const LOCAL_VOICE_MODEL = Object.freeze({
+  tier: 'standard',
+  id: 'local-realtime',
+  label: 'LOCAL',
+  rates: Object.freeze({
+    textInput: 0,
+    textCachedInput: 0,
+    textOutput: 0,
+    audioInput: 0,
+    audioCachedInput: 0,
+    audioOutput: 0,
+    imageInput: 0,
+    imageCachedInput: 0,
+  }),
+});
+
 /** The tier used when nothing (or nonsense) was requested. */
 export const DEFAULT_VOICE_TIER = 'standard';
 
@@ -142,6 +170,10 @@ export function mostExpensiveVoiceModel() {
  */
 export function resolveVoiceModelById(modelId) {
   const id = typeof modelId === 'string' ? modelId.trim() : '';
+  // Local pipelines cost nothing; check before the priced table so a local
+  // session is never billed at worst-case rates by the unrecognised-id path.
+  if (id === LOCAL_VOICE_MODEL.id)
+    return { ...LOCAL_VOICE_MODEL, recognized: true };
   for (const entry of Object.values(VOICE_MODELS)) {
     if (entry.id === id) return { ...entry, recognized: true };
   }

@@ -16,8 +16,18 @@ import { shouldPauseRadioForVoice } from './realtimeProtocol.js';
 
 /** Own physical push-to-talk gestures, microphone controls and audio meters. */
 export class RealtimeInput {
-  constructor({ readUi, readStream, readStatus, operations }) {
-    Object.assign(this, { readUi, readStream, readStatus }, operations);
+  constructor({
+    readUi,
+    readStream,
+    readStatus,
+    readMicrophoneReady = () => true,
+    operations,
+  }) {
+    Object.assign(
+      this,
+      { readUi, readStream, readStatus, readMicrophoneReady },
+      operations,
+    );
     this.visualizerAudioContext = null;
     this.visualizerAnalyser = null;
     this.visualizerSource = null;
@@ -191,6 +201,7 @@ export class RealtimeInput {
    * @returns {void}
    */
   setMicrophoneEnabled(enabled) {
+    enabled = Boolean(enabled && this.readMicrophoneReady());
     if (this.ui?.root)
       this.ui.root.dataset.microphone = enabled ? 'active' : 'muted';
     this.stream?.getAudioTracks?.().forEach((track) => {
