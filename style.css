@@ -6,9 +6,11 @@
 :root {
   --bg-dark: #0a0a0f;
   /* Panel scrim. 0.72 left panel-over-bright-imagery text at ~3:1 (WCAG fail);
-     0.82 lifts the worst case (white clouds/ice under a panel) so every text
-     token below clears AA on it. Verified in src/uiContrast.test.mjs. */
-  --glass-bg: rgba(12, 12, 20, 0.82);
+     0.82 lifted the worst case (white clouds/ice under a panel) to AA; 0.88
+     lifts every text token below to AAA (7:1) on it — required because the
+     identity hue --accent computes 6.8:1 at 0.82 and hue is pinned, so the
+     scrim is the only compliant knob. Verified in src/uiContrast.test.mjs. */
+  --glass-bg: rgba(12, 12, 20, 0.88);
   --glass-border: rgba(255, 255, 255, 0.08);
   --glass-border-hover: rgba(255, 255, 255, 0.15);
   --accent: #00d4ff;
@@ -17,9 +19,10 @@
   --text-primary: #e8eaed;
   /* Text alphas are measured against the WORST panel backdrop (glass over
      white imagery), not just --bg-dark — see src/uiContrast.test.mjs.
-     0.5/0.55 computed 2.96:1 / 3.24:1 there; 0.7 computes 5.67:1 (AA). */
-  --text-secondary: rgba(232, 234, 237, 0.7);
-  --text-dim: rgba(232, 234, 237, 0.7); /* 8.19:1 on --bg-dark, 5.67:1 worst case — WCAG AA */
+     0.5/0.55 computed 2.96:1 / 3.24:1 there; 0.7 computed 5.67:1 (AA);
+     0.78 over the 0.88 glass computes ~8:1 (AAA). */
+  --text-secondary: rgba(232, 234, 237, 0.78);
+  --text-dim: rgba(232, 234, 237, 0.78); /* AAA worst case — measured in src/uiContrast.test.mjs */
   --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   --panel-radius: 16px;
@@ -239,7 +242,7 @@ body.cockpit-mode #cockpit-cloud-effects.active {
 }
 
 .celestial-moon {
-  color: rgba(55, 211, 239, 0.84);
+  color: rgba(55, 211, 239, 0.94);
   text-shadow: 0 0 7px rgba(55, 211, 239, 0.65), 0 0 17px rgba(55, 211, 239, 0.25);
 }
 
@@ -406,7 +409,7 @@ body.cockpit-mode #cockpit-cloud-effects.active {
 }
 
 #gev-voice-control[data-status='error'] #gev-voice-status {
-  color: #ff5c6e;
+  color: #ff9da8;
 }
 
 #gev-voice-control[data-status='error'] .gev-voice-readout {
@@ -545,6 +548,9 @@ body.cockpit-mode #cockpit-cloud-effects.active {
   color: var(--text-dim);
   margin-top: 8px;
   text-transform: uppercase;
+  /* Floats on the globe (no panel scrim) — the dark outline is the
+     worst-case backdrop bound; the token carries the ratio. */
+  text-shadow: 0 1px 2px #001018;
 }
 
 /* ── Style Indicator ──────────────────────────── */
@@ -565,6 +571,8 @@ body.cockpit-mode #cockpit-cloud-effects.active {
   letter-spacing: 3px;
   color: var(--text-dim);
   text-transform: uppercase;
+  /* Floats on the globe (no panel scrim) — dark outline bounds the worst case. */
+  text-shadow: 0 1px 2px #001018;
 }
 
 #style-indicator .indicator-value {
@@ -575,7 +583,7 @@ body.cockpit-mode #cockpit-cloud-effects.active {
   letter-spacing: 5px;
   color: var(--accent);
   margin-top: 4px;
-  text-shadow: 0 0 20px var(--accent-glow);
+  text-shadow: 0 1px 2px #001018, 0 0 20px var(--accent-glow);
   transition: var(--transition-smooth);
 }
 
@@ -1247,7 +1255,7 @@ body.cockpit-mode #cockpit-cloud-effects.active {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  color: rgba(190, 221, 230, 0.62);
+  color: rgba(190, 221, 230, 0.82);
   font-family: var(--font-mono);
   font-size: 8px;
   letter-spacing: 1.35px;
@@ -1328,7 +1336,7 @@ body.cockpit-mode #cockpit-cloud-effects.active {
 
 .map-stack-chip.unavailable,
 .map-stack-chip[aria-disabled='true'] {
-  color: rgba(232, 234, 237, 0.28);
+  color: rgba(232, 234, 237, 0.74);
   border-color: rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.02);
   cursor: not-allowed;
@@ -1337,7 +1345,7 @@ body.cockpit-mode #cockpit-cloud-effects.active {
 .map-stack-chip-req {
   font-size: 7px;
   letter-spacing: 0.3px;
-  color: rgba(232, 234, 237, 0.28);
+  color: rgba(232, 234, 237, 0.74);
 }
 
 .pp-stack-status {
@@ -1986,9 +1994,9 @@ body.ui-clean-view #scene-runtime.active {
 #global-loading-status:is([data-state='complete'], [data-state='cancelled'], [data-state='error']) #global-loading-detail {
   display: none;
 }
-#global-loading-status[data-state='error'] { border-color: rgba(255, 98, 82, 0.55); color: #ff9b8e; }
+#global-loading-status[data-state='error'] { border-color: rgba(255, 98, 82, 0.55); color: #ff9f93; }
 #global-loading-status[data-state='error'] #global-loading-label,
-#global-loading-status[data-state='error'] #global-loading-detail { color: #ff9b8e; }
+#global-loading-status[data-state='error'] #global-loading-detail { color: #ff9f93; }
 #global-loading-status[data-state='cancelled'] { color: #ffd488; }
 #global-loading-status[data-state='cancelled'] #global-loading-label,
 #global-loading-status[data-state='cancelled'] #global-loading-detail { color: #ffd488; }
@@ -2248,7 +2256,7 @@ body.ui-clean-view #scene-runtime.active {
   padding: 3px 5px;
   border: 1px solid rgba(220, 238, 255, 0.25);
   border-radius: 4px;
-  color: rgba(220, 238, 255, 0.6);
+  color: rgba(220, 238, 255, 0.74);
   font: inherit;
 }
 
@@ -2295,7 +2303,7 @@ body.ui-clean-view #scene-runtime.active {
   position: absolute;
   left: 50%;
   top: 0;
-  color: rgba(244, 251, 255, 0.46);
+  color: rgba(244, 251, 255, 0.69);
   font-size: 8px;
   letter-spacing: 0.1em;
   transform:
@@ -2320,7 +2328,7 @@ body.ui-clean-view #scene-runtime.active {
   display: grid;
   grid-template-rows: repeat(5, 1fr);
   align-items: center;
-  color: rgba(244, 251, 255, 0.38);
+  color: rgba(244, 251, 255, 0.69);
   font-size: 8px;
   letter-spacing: 0.08em;
   transform-style: preserve-3d;
@@ -2513,7 +2521,7 @@ body.cockpit-mode:has(#left-panel-stack > .panel-collapsible:not(.collapsed)) .c
   display: flex;
   align-items: center;
   gap: 6px;
-  color: rgba(244, 251, 255, 0.68);
+  color: rgba(244, 251, 255, 0.69);
   transform: translateY(-50%) rotateZ(calc(var(--slot) * -1.7deg));
   transform-origin: right center;
   transition: top 120ms linear, right 120ms linear, transform 120ms linear;
@@ -2635,7 +2643,7 @@ body.cockpit-mode:has(#left-panel-stack > .panel-collapsible:not(.collapsed)) .c
 }
 #cockpit-callsign { font-size: 18px; letter-spacing: 0.12em; }
 .cockpit-aircraft-meta {
-  color: rgba(244, 251, 255, 0.48);
+  color: rgba(244, 251, 255, 0.69);
   font-size: 7px;
   letter-spacing: 0.16em;
 }
@@ -2800,7 +2808,7 @@ body.cockpit-mode:has(#left-panel-stack > .panel-collapsible:not(.collapsed)) .c
   position: absolute;
   top: 8px;
   left: 50%;
-  color: rgba(244, 251, 255, 0.52);
+  color: rgba(244, 251, 255, 0.69);
   font-size: 12px;
   letter-spacing: 0.12em;
   /* --tape-shift (set on the tape per update, in divisions −0.5..0.5)
@@ -2922,7 +2930,7 @@ body.cockpit-mode:has(#left-panel-stack > .panel-collapsible:not(.collapsed)) .c
 }
 .cockpit-route-heading small {
   overflow: hidden;
-  color: color-mix(in srgb, var(--cockpit-accent) 68%, rgba(244, 251, 255, 0.46));
+  color: color-mix(in srgb, var(--cockpit-accent) 68%, rgba(244, 251, 255, 0.69));
   font-size: 5px;
   letter-spacing: 0.08em;
   text-overflow: ellipsis;
@@ -3066,7 +3074,7 @@ body.cockpit-mode #view-switcher button {
 .cockpit-context-qualifier {
   grid-column: 1 / -1;
   justify-self: start;
-  color: rgba(116, 219, 255, 0.82);
+  color: rgba(116, 219, 255, 0.87);
   font-size: 7px;
   letter-spacing: 0.16em;
   white-space: nowrap;
@@ -3094,9 +3102,9 @@ body.cockpit-mode #view-switcher button {
 .cockpit-context-weather[aria-pressed="false"] {
   border-color: rgba(244, 251, 255, 0.15);
   background: rgba(0, 7, 12, 0.54);
-  color: rgba(244, 251, 255, 0.42);
+  color: rgba(244, 251, 255, 0.69);
 }
-.cockpit-context-weather[aria-pressed="false"] strong { color: rgba(244, 251, 255, 0.5); }
+.cockpit-context-weather[aria-pressed="false"] strong { color: rgba(244, 251, 255, 0.69); }
 .cockpit-context-weather:hover, .cockpit-context-weather:focus-visible {
   border-color: var(--cockpit-accent);
   color: #fff;
@@ -3156,14 +3164,14 @@ body.cockpit-mode #view-switcher button {
 .cockpit-context-cohorts small {
   grid-column: 1 / -1;
   overflow: hidden;
-  color: rgba(244, 251, 255, 0.4);
+  color: rgba(244, 251, 255, 0.69);
   font-size: 6px;
   letter-spacing: 0.05em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .cockpit-context-cohorts > div.unknown { border-left-color: rgba(213, 168, 99, 0.58); }
-.cockpit-context-cohorts > div.unknown strong { color: #d5a863; }
+.cockpit-context-cohorts > div.unknown strong { color: #dab276; }
 .cockpit-context-nearest {
   display: grid;
   grid-template-columns: 22px minmax(0, 1fr) auto;
@@ -3182,7 +3190,7 @@ body.cockpit-mode #view-switcher button {
 #cockpit-context-direction.unknown { opacity: 0.3; }
 .cockpit-context-nearest > div { grid-column: 2; grid-row: 1; display: grid; gap: 2px; min-width: 0; }
 .cockpit-context-nearest small {
-  color: rgba(244, 251, 255, 0.42);
+  color: rgba(244, 251, 255, 0.69);
   font-size: 6px;
   letter-spacing: 0.12em;
 }
@@ -3211,13 +3219,13 @@ body.cockpit-mode #view-switcher button {
   gap: 8px;
   padding: 6px 8px 0;
   border-top: 1px solid rgba(244, 251, 255, 0.08);
-  color: rgba(244, 251, 255, 0.4);
+  color: rgba(244, 251, 255, 0.69);
   font-size: 6px;
   letter-spacing: 0.11em;
 }
 .cockpit-context-window[data-state="uncertain"] #cockpit-context-uncertainty { color: #74dbff; }
 .cockpit-context-window[data-state="lost"] #cockpit-context-uncertainty {
-  color: #d5a863;
+  color: #dab276;
   font-weight: 600;
 }
 /* The held values are last-known, not current — dim them to match the cue. */
@@ -3480,7 +3488,7 @@ body.cockpit-mode #view-switcher button {
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 8px;
-  color: rgba(244, 251, 255, .58);
+  color: rgba(244, 251, 255, 0.69);
   font: 7px/1 var(--font-mono);
   letter-spacing: .1em;
 }
@@ -3540,7 +3548,7 @@ body.cockpit-mode #view-switcher button {
 .cockpit-brief-actions .material-symbols-outlined { font-size: 14px; }
 #cockpit-brief-auto {
   width: 50px;
-  color: rgba(244, 251, 255, 0.42);
+  color: rgba(244, 251, 255, 0.69);
   font: 700 6px/1 var(--font-mono);
   letter-spacing: 0.05em;
 }
@@ -3553,7 +3561,7 @@ body.cockpit-mode #view-switcher button {
 #cockpit-signal-toggle { width: 28px; margin-left: 2px; }
 #cockpit-brief-position {
   min-width: 25px;
-  color: rgba(244, 251, 255, 0.48);
+  color: rgba(244, 251, 255, 0.69);
   font-size: 6px;
   letter-spacing: 0.08em;
   text-align: center;
@@ -3591,10 +3599,10 @@ body.cockpit-mode #view-switcher button {
 }
 .cockpit-signal-list li.track, .cockpit-signal-list li.current { border-left-color: var(--cockpit-accent); }
 .cockpit-signal-list li.nearby { border-left-color: #fff; }
-.cockpit-signal-list li.military { border-left-color: #d5a863; }
-.cockpit-signal-list li.warning { border-left-color: #d5a863; }
+.cockpit-signal-list li.military { border-left-color: #dab276; }
+.cockpit-signal-list li.warning { border-left-color: #dab276; }
 .cockpit-signal-list time {
-  color: rgba(244, 251, 255, 0.38);
+  color: rgba(244, 251, 255, 0.69);
   font-size: 6px;
   letter-spacing: 0.06em;
 }
@@ -3659,10 +3667,10 @@ body.cockpit-mode #view-switcher button {
 .cockpit-signal-target:focus-visible .cockpit-signal-target-chevron {
   transform: translateX(2px);
 }
-.cockpit-signal-list li.warning strong { color: #d5a863; }
+.cockpit-signal-list li.warning strong { color: #dab276; }
 .cockpit-signal-list span {
   overflow: hidden;
-  color: rgba(244, 251, 255, 0.66);
+  color: rgba(244, 251, 255, 0.69);
   font-size: 8px;
   letter-spacing: 0.06em;
   text-overflow: ellipsis;
@@ -3703,7 +3711,7 @@ body.cockpit-mode #view-switcher button {
   -webkit-line-clamp: 2;
 }
 .cockpit-news-list span {
-  color: color-mix(in srgb, var(--cockpit-accent) 65%, rgba(244, 251, 255, 0.42));
+  color: color-mix(in srgb, var(--cockpit-accent) 65%, rgba(244, 251, 255, 0.69));
   font-size: 6px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -3714,12 +3722,12 @@ body.cockpit-mode #view-switcher button {
   place-items: center;
   padding: 18px 10px;
   border: 0;
-  color: rgba(244, 251, 255, 0.45);
+  color: rgba(244, 251, 255, 0.69);
   font-size: 7px;
   letter-spacing: 0.13em;
   text-align: center;
 }
-.cockpit-brief-status[data-state="unavailable"] { color: #d5a863; }
+.cockpit-brief-status[data-state="unavailable"] { color: #dab276; }
 .cockpit-local-place {
   display: grid;
   gap: 3px;
@@ -3735,7 +3743,7 @@ body.cockpit-mode #view-switcher button {
   white-space: nowrap;
 }
 .cockpit-local-place small {
-  color: rgba(244, 251, 255, 0.44);
+  color: rgba(244, 251, 255, 0.69);
   font-size: 6px;
   letter-spacing: 0.09em;
 }
@@ -3777,7 +3785,7 @@ body.cockpit-mode #view-switcher button {
   white-space: normal;
 }
 .cockpit-local-grid small {
-  color: rgba(244, 251, 255, 0.35);
+  color: rgba(244, 251, 255, 0.69);
   font-size: 6px;
   letter-spacing: 0.07em;
 }
@@ -3785,7 +3793,7 @@ body.cockpit-mode #view-switcher button {
 .cockpit-weather-credit {
   display: inline-block;
   margin-top: 7px;
-  color: rgba(182, 226, 241, 0.72);
+  color: rgba(182, 226, 241, 0.81);
   font: 600 7px/1.2 var(--font-mono);
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -3797,7 +3805,7 @@ body.cockpit-mode #view-switcher button {
   gap: 8px;
   padding: 5px 8px 0;
   border-top: 1px solid rgba(244, 251, 255, 0.08);
-  color: rgba(244, 251, 255, 0.34);
+  color: rgba(244, 251, 255, 0.69);
   font-size: 6px;
   letter-spacing: 0.1em;
 }
@@ -3812,7 +3820,7 @@ body.cockpit-mode #view-switcher button {
   border: 0;
   border-bottom: 1px solid rgba(244, 251, 255, 0.16);
   background: transparent;
-  color: rgba(244, 251, 255, 0.34);
+  color: rgba(244, 251, 255, 0.69);
   font: inherit;
   letter-spacing: 0.08em;
   cursor: pointer;
@@ -3853,7 +3861,7 @@ body.cockpit-mode #view-switcher button {
   position: absolute;
   left: clamp(24px, 4vw, 58px);
   bottom: clamp(22px, 4vh, 42px);
-  color: rgba(244, 251, 255, 0.55);
+  color: rgba(244, 251, 255, 0.69);
   font-size: 9px;
   letter-spacing: 0.14em;
 }
@@ -4133,7 +4141,7 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
   opacity: 0;
   visibility: hidden;
   transition: opacity 0.4s ease, visibility 0.4s ease;
-  --hud-color: rgba(0, 255, 255, 0.6);
+  --hud-color: rgba(0, 255, 255, 0.85);
   --hud-glow: rgba(0, 255, 255, 0.4);
   --hud-border: rgba(0, 255, 255, 0.15);
 }
@@ -4146,7 +4154,9 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
 #intel-hud * {
   font-family: var(--font-mono);
   color: var(--hud-color);
-  text-shadow: 0 0 4px var(--hud-glow);
+  /* Dark outline bounds the worst case (white imagery under the text);
+     the glow is identity. Same treatment as .mission-replay-overlay-callout. */
+  text-shadow: 0 1px 2px #001018, 0 0 4px var(--hud-glow);
   text-transform: uppercase;
   line-height: 1.6;
 }
@@ -4674,7 +4684,7 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
   letter-spacing: .16em;
 }
 #space-mission-panel-host .space-mission-roster-header span {
-  color: rgba(190, 230, 230, .46);
+  color: rgba(190, 230, 230, 0.79);
   font-size: 7px;
   letter-spacing: .1em;
 }
@@ -4772,7 +4782,7 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
   letter-spacing: .07em;
 }
 #space-mission-panel-host .space-mission-roster-copy small {
-  color: rgba(190, 230, 230, .48);
+  color: rgba(190, 230, 230, 0.79);
   font-size: 7px;
   letter-spacing: .035em;
 }
@@ -4783,7 +4793,7 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
 }
 #space-mission-panel-host .space-mission-roster-empty {
   padding: 18px 10px;
-  color: rgba(190, 230, 230, .48);
+  color: rgba(190, 230, 230, 0.79);
   font: 8px/1.5 'JetBrains Mono', monospace;
   letter-spacing: .09em;
   text-align: center;
@@ -4794,7 +4804,7 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
   justify-content: space-between;
   padding: 8px 0 2px;
   border-top: 1px solid rgba(34, 230, 230, .18);
-  color: rgba(190, 230, 230, .58);
+  color: rgba(190, 230, 230, 0.79);
   font: 8px 'JetBrains Mono', monospace;
   letter-spacing: .18em;
 }
@@ -4803,7 +4813,7 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
   height: 24px;
   border: 1px solid rgba(98, 181, 255, .24);
   border-radius: 5px;
-  color: rgba(190, 230, 230, .7);
+  color: rgba(190, 230, 230, 0.82);
   background: rgba(42, 113, 171, .08);
   cursor: pointer;
 }
@@ -4820,7 +4830,7 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
   letter-spacing: .08em;
 }
 #space-mission-panel .space-mission-detail strong { font-size: 14px; }
-#space-mission-panel .space-mission-detail span { color: rgba(190, 230, 230, .7); }
+#space-mission-panel .space-mission-detail span { color: rgba(190, 230, 230, 0.82); }
 #space-mission-panel .space-mission-detail b { color: #d8ffff; font-weight: 400; }
 #space-mission-panel .mission-data-section {
   margin: 0 0 11px;
@@ -4845,7 +4855,7 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
 #space-mission-panel .mission-data-table th {
   padding: 4px 5px;
   border-bottom: 1px solid rgba(34, 230, 230, .22);
-  color: rgba(190, 230, 230, .58);
+  color: rgba(190, 230, 230, 0.79);
   font-weight: 400;
   text-align: left;
 }
@@ -4862,12 +4872,12 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
 #space-mission-panel .mission-data-table small {
   display: block;
   margin-top: 3px;
-  color: rgba(190, 230, 230, .56);
+  color: rgba(190, 230, 230, 0.79);
   font-size: 8px;
   line-height: 1.35;
 }
 #space-mission-panel .mission-table-empty {
-  color: rgba(190, 230, 230, .56);
+  color: rgba(190, 230, 230, 0.79);
   text-align: center;
 }
 #space-mission-panel .mission-replay-speed-control {
@@ -4884,7 +4894,7 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  color: rgba(190, 230, 230, .68);
+  color: rgba(190, 230, 230, 0.79);
   font: 8px 'JetBrains Mono', monospace;
   letter-spacing: .16em;
 }
@@ -4898,7 +4908,7 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
 #space-mission-panel .mission-replay-speed-scale {
   display: flex;
   justify-content: space-between;
-  color: rgba(190, 230, 230, .42);
+  color: rgba(190, 230, 230, 0.79);
   font: 7px 'JetBrains Mono', monospace;
   letter-spacing: .08em;
 }
@@ -4981,7 +4991,7 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
 }
 #space-mission-panel .mission-replay-transport button.cancel {
   border-color: rgba(255, 159, 67, .58);
-  color: #ffb15c;
+  color: #ffb96c;
   background: rgba(255, 159, 67, .08);
 }
 #space-mission-panel .mission-replay-transport.is-paused [data-mission-replay-play] {
@@ -5185,7 +5195,7 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
   padding: 0;
   border: 1px solid rgba(98, 181, 255, .22);
   border-radius: 6px;
-  color: rgba(143, 207, 255, .58);
+  color: rgba(143, 207, 255, 0.94);
   background: rgba(42, 113, 171, .08);
   cursor: pointer;
   transition: border-color .15s ease, color .15s ease, background .15s ease, box-shadow .15s ease;
@@ -5390,7 +5400,7 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
   padding: 12px;
   border: 1px dashed rgba(98, 181, 255, .2);
   border-radius: 7px;
-  color: rgba(190, 230, 230, .5);
+  color: rgba(190, 230, 230, 0.79);
   text-align: center;
   font: 8px/1.45 var(--font-mono);
   letter-spacing: .1em;
@@ -5541,7 +5551,7 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  color: #6daeb5;
+  color: #90c1c7;
   font: 7px/1.2 var(--font-mono);
   letter-spacing: .1em;
 }
@@ -5649,7 +5659,7 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
 .radio-tuner.is-static .radio-tuner-dial {
   box-shadow: inset 0 0 14px rgba(255, 111, 79, .1);
 }
-.radio-tuner.is-static #radio-tuner-station { color: #ff9b7e; }
+.radio-tuner.is-static #radio-tuner-station { color: #ffa186; }
 .radio-tuner-readout span:first-child {
   min-width: 0;
   color: #7fe6ef;
@@ -5659,7 +5669,7 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
 }
 .radio-tuner-readout span:last-child {
   flex: 0 0 auto;
-  color: #517f84;
+  color: #a8bfc2;
 }
 .radio-transport {
   display: grid;
@@ -5706,7 +5716,7 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
   color: #79d7df;
   font: 8px/1.35 var(--font-mono);
 }
-.radio-playback-state.error { color: #ff9d8f; }
+.radio-playback-state.error { color: #ff9f91; }
 .radio-links {
   display: flex;
   flex-wrap: wrap;
@@ -5722,7 +5732,7 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
 .radio-links a:hover, .radio-links a:focus-visible { color: #fff; }
 .radio-privacy {
   margin: 0;
-  color: rgba(190, 230, 230, .48);
+  color: rgba(190, 230, 230, 0.79);
   font: 7px/1.4 var(--font-mono);
 }
 #military-awareness-panel {
@@ -5747,7 +5757,7 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
 .military-awareness-row > div { display: flex; justify-content: space-between; }
 .military-awareness-row b { color: #7fc8ff; }
 .military-awareness-row.unknown b { color: #8fcfff; }
-.military-awareness-row small, .military-awareness-note { color: #a9b7c7; }
+.military-awareness-row small, .military-awareness-note { color: #acbac9; }
 .military-awareness-row ul { margin: 4px 0 0; padding: 0; list-style: none; }
 .military-awareness-row li { display: block; }
 .military-awareness-target { display: flex; justify-content: space-between; gap: 10px; width: 100%; border: 0; padding: 1px 0; color: #dceeff; background: transparent; font: inherit; text-align: left; cursor: pointer; }
@@ -5763,7 +5773,7 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
   border-top: 1px solid rgba(98, 181, 255, 0.16);
 }
 .military-awareness-standby strong { color: #79c2ff; font-size: 10px; letter-spacing: 0.1em; }
-.military-awareness-standby span { color: #8192a6; font-size: 9px; letter-spacing: 0.05em; }
+.military-awareness-standby span { color: #b1bbc8; font-size: 9px; letter-spacing: 0.05em; }
 .military-awareness-standby button {
   justify-self: start;
   padding: 4px 12px;
@@ -5807,9 +5817,9 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
   transform: rotate(var(--compass-rotation));
   transition: transform 80ms linear;
 }
-.military-awareness-compass-label, .military-awareness-compass-heading { position: absolute; transform: translate(-50%, -50%); color: rgba(156,213,255,0.7); font: 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.08em; text-shadow: 0 0 7px rgba(53,161,235,0.55); }
+.military-awareness-compass-label, .military-awareness-compass-heading { position: absolute; transform: translate(-50%, -50%); color: rgba(156, 213, 255, 0.87); font: 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.08em; text-shadow: 0 0 7px rgba(53,161,235,0.55); }
 .military-awareness-compass-label.cardinal-n { color: rgba(255,188,87,0.92); }
-.military-awareness-compass-heading { color: rgba(190,225,249,0.76); font-size: 8px; }
+.military-awareness-compass-heading { color: rgba(190, 225, 249, 0.8); font-size: 8px; }
 .military-awareness-direction-marker { position: absolute; width: 1px; height: 1px; transform: translate(-50%, -50%); transition: opacity 100ms linear; }
 .military-awareness-direction-marker[hidden] { display: none; }
 .military-awareness-direction-arrow { position: absolute; left: 50%; top: 50%; color: #74dbff; font: 23px/1 sans-serif; transform-origin: 50% 50%; text-shadow: 0 0 5px rgba(87,223,255,0.9), 0 0 13px rgba(87,223,255,0.35); }
@@ -5907,14 +5917,14 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
 }
 
 .data-toggle-btn.active.feed-degraded {
-  color: #ffad72;
+  color: #ffb580;
   border-color: rgba(255, 137, 72, 0.78);
   background: rgba(255, 112, 48, 0.1);
   box-shadow: 0 0 10px rgba(255, 112, 48, 0.12);
 }
 
 .data-toggle-btn.active.feed-unavailable {
-  color: #ff8585;
+  color: #ffacac;
   border-color: rgba(255, 92, 92, 0.78);
   background: rgba(255, 60, 60, 0.1);
   box-shadow: 0 0 10px rgba(255, 60, 60, 0.12);
@@ -5985,7 +5995,7 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
 }
 
 .data-toggle-chip.chip-error {
-  color: #ff8585;
+  color: #ffacac;
   border-color: rgba(255, 92, 92, 0.6);
   background: rgba(255, 60, 60, 0.08);
 }
@@ -6265,7 +6275,7 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
   font-family: var(--font-mono);
   font-size: 8px;
   letter-spacing: 2.2px;
-  color: rgba(145, 237, 255, 0.62);
+  color: rgba(145, 237, 255, 0.79);
   pointer-events: none;
 }
 
@@ -6628,8 +6638,8 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
 }
 
 .scene-shot-btn.scene-shot-danger:hover {
-  color: #ff7e7e;
-  border-color: #ff7e7e;
+  color: #ffa0a0;
+  border-color: #ffa0a0;
 }
 
 .scene-btn:hover:not(:disabled) {
@@ -6644,8 +6654,8 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
 }
 
 .scene-btn-danger:hover:not(:disabled) {
-  color: #ff7272;
-  border-color: #ff7272;
+  color: #ffb8b8;
+  border-color: #ffb8b8;
   background: rgba(255, 88, 88, 0.15);
 }
 
@@ -7094,7 +7104,7 @@ body.scene-playback-mode :is(#clear-selected-layers, #reset-globe-view) {
   right: 14px;
   left: 14px;
   overflow: hidden;
-  color: rgba(190, 221, 230, 0.52);
+  color: rgba(190, 221, 230, 0.82);
   font-family: var(--font-mono);
   font-size: 7px;
   letter-spacing: 1.5px;
@@ -7147,7 +7157,7 @@ body.scene-playback-mode :is(#clear-selected-layers, #reset-globe-view) {
 #command-dock .location-toolbar-label {
   font-size: 8px;
   letter-spacing: 1.6px;
-  color: rgba(190, 221, 230, 0.58);
+  color: rgba(190, 221, 230, 0.82);
 }
 
 #command-dock .panel-collapse-btn,
@@ -7389,7 +7399,7 @@ body.recording-mode #command-dock {
 #command-dock .location-toolbar-label::after {
   content: '›';
   margin-left: 0.45rem;
-  color: rgba(54, 220, 255, 0.68);
+  color: rgba(54, 220, 255, 0.89);
   font-size: 0.7rem;
 }
 
@@ -7540,7 +7550,7 @@ body.recording-mode #command-dock {
   grid-column: 2 / 4;
   grid-row: 1;
   align-self: center;
-  color: rgba(190, 221, 230, 0.58);
+  color: rgba(190, 221, 230, 0.82);
   font-size: 0.39rem;
   letter-spacing: 0.07rem;
   text-align: center;
@@ -7578,7 +7588,7 @@ body.recording-mode #command-dock {
 
 #command-dock .gev-mic-label {
   font-size: 0.35rem;
-  color: rgba(190, 221, 230, 0.72);
+  color: rgba(190, 221, 230, 0.82);
   letter-spacing: 0.02rem;
 }
 
@@ -7716,7 +7726,7 @@ body.recording-mode #command-dock {
   display: inline-flex;
   align-items: center;
   gap: 0.42rem;
-  color: rgba(206, 232, 239, 0.72);
+  color: rgba(206, 232, 239, 0.77);
   font-size: 0.58rem;
   font-weight: 500;
   letter-spacing: 0.13rem;
@@ -8064,7 +8074,7 @@ body.recording-mode #command-dock {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  color: #ff8f9d;
+  color: #ff9ca9;
   font-family: var(--font-mono);
   font-size: 0.62rem;
   font-weight: 600;
@@ -8073,7 +8083,7 @@ body.recording-mode #command-dock {
 
 #command-dock .gev-voice-error-dismiss {
   padding: 0.25rem 0.42rem;
-  color: rgba(255, 220, 224, 0.72);
+  color: rgba(255, 220, 224, 0.82);
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 143, 157, 0.32);
   border-radius: 0.2rem;
@@ -8093,7 +8103,7 @@ body.recording-mode #command-dock {
 
 #command-dock .gev-voice-error-hint {
   margin-top: 0.5rem;
-  color: rgba(255, 196, 203, 0.58);
+  color: rgba(255, 196, 203, 0.85);
   font-family: var(--font-mono);
   font-size: 0.52rem;
   line-height: 1.45;
@@ -8259,7 +8269,7 @@ body.recording-mode #command-dock {
   min-width: 1.65rem;
   height: 1rem;
   padding: 0 0.28rem;
-  color: rgba(190, 221, 230, 0.5);
+  color: rgba(190, 221, 230, 0.86);
   background: rgba(255, 255, 255, 0.025);
   border: 1px solid rgba(123, 189, 211, 0.2);
   border-radius: 0.2rem;
@@ -8717,7 +8727,7 @@ body.recording-mode #command-dock {
 }
 
 #gev-voice-control .gev-voice-help-kicker {
-  color: rgba(54, 220, 255, 0.72);
+  color: rgba(54, 220, 255, 0.89);
   font-family: var(--font-mono);
   font-size: 0.46rem;
   font-weight: 600;
@@ -8814,7 +8824,7 @@ body.recording-mode #command-dock {
 /* MINI engaged — amber, distinct from the cyan default so the cheaper tier
    is legible at a glance without reading the label. */
 .gev-voice-tier-btn[aria-pressed='true'] {
-  color: #ffc46b;
+  color: #ffcb7d;
   border-color: rgba(255, 196, 107, 0.55);
   background: rgba(255, 196, 107, 0.12);
 }
@@ -8830,11 +8840,11 @@ body.recording-mode #command-dock {
 }
 
 .gev-voice-cost-value[data-level='warn'] {
-  color: #ffc46b;
+  color: #ffcb7d;
 }
 
 .gev-voice-cost-value[data-level='cap'] {
-  color: #ff6b6b;
+  color: #ffa0a0;
   font-weight: 600;
 }
 
@@ -8917,14 +8927,14 @@ body.recording-mode #command-dock {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  color: rgba(171, 210, 220, 0.6);
+  color: rgba(171, 210, 220, 0.88);
   font-family: var(--font-mono);
   font-size: 0.58rem;
   letter-spacing: 0.1rem;
   text-transform: uppercase;
 }
 
-.first-run-kicker { color: rgba(54, 220, 255, 0.86); }
+.first-run-kicker { color: rgba(54, 220, 255, 0.89); }
 
 #first-run-launcher h2 {
   margin-top: 0.6rem;
@@ -8937,7 +8947,7 @@ body.recording-mode #command-dock {
 #first-run-description {
   max-width: 29rem;
   margin-top: 0.3rem;
-  color: rgba(215, 231, 235, 0.66);
+  color: rgba(215, 231, 235, 0.77);
   font-size: 0.78rem;
   line-height: 1.5;
 }
@@ -9017,7 +9027,7 @@ body.recording-mode #command-dock {
 }
 
 .first-run-choices small {
-  color: rgba(198, 220, 226, 0.55);
+  color: rgba(198, 220, 226, 0.82);
   font-size: 0.66rem;
 }
 
@@ -9048,7 +9058,7 @@ body.recording-mode #command-dock {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  color: rgba(199, 225, 231, 0.66);
+  color: rgba(199, 225, 231, 0.8);
   text-transform: none;
   font-size: 0.62rem;
   letter-spacing: 0.02rem;
@@ -9070,14 +9080,14 @@ body.recording-mode #command-dock {
 .first-run-note {
   min-height: 1.1rem;
   margin-top: 0.5rem;
-  color: rgba(199, 225, 231, 0.62);
+  color: rgba(199, 225, 231, 0.8);
   font-family: var(--font-mono);
   font-size: 0.62rem;
   line-height: 1.35;
 }
 
 #first-run-launcher[data-state='loading'] .first-run-note {
-  color: rgba(54, 220, 255, 0.85);
+  color: rgba(54, 220, 255, 0.89);
 }
 
 /* Every surface that claims the screen hides the launcher. This list is the CSS

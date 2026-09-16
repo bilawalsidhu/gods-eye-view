@@ -17,6 +17,16 @@
 // text alphas, and never change hue tokens (--accent) — the IR/NVG/FLIR and
 // Blade-runner identities live in those hues, not in scrim opacity. These
 // tests pin both the ratios and that division of labor.
+//
+// 2026-09-15 (Batch F): the pins ratcheted AA -> AAA (7:1). At the 0.82
+// scrim the identity hue --accent computed 6.8:1 worst case and hue is
+// pinned, so the only compliant knob was the scrim: --glass-bg 0.82 -> 0.88,
+// text-secondary/dim 0.7 -> 0.78. Computed worst cases now: primary 11.96:1,
+// secondary/dim 7.88:1, accent 8.14:1. HUD chrome floating directly on the
+// globe (no panel behind it) carries a dark text outline (0 1px 2px #001018)
+// as the backdrop bound and --hud-color was raised 0.6 -> 0.85; ratios are
+// not computable there (arbitrary imagery), so the outline is pinned
+// structurally instead.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -25,34 +35,12 @@ import { readSource } from './testSupport/readSource.js';
 const css = readSource('../style.css', import.meta.url);
 
 // ── WCAG 2.1 relative luminance / contrast math ─────────────────────────────
+// Shared with src/styleContrastAudit.test.mjs via src/testSupport/contrastMath.js
+// (a plain module — importing a .test.mjs would re-run its tests).
 
-/** sRGB 8-bit channel → linear-light value (WCAG 2.1 §1.3.5). */
-function linearize(channel) {
-  const s = channel / 255;
-  return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
-}
+import { contrastRatio, composite } from './testSupport/contrastMath.js';
 
-/** WCAG relative luminance of an [r, g, b] 8-bit triple. */
-function luminance([r, g, b]) {
-  return 0.2126 * linearize(r) + 0.7152 * linearize(g) + 0.0722 * linearize(b);
-}
-
-/** WCAG contrast ratio between two colors, ≥ 1. */
-export function contrastRatio(a, b) {
-  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
-  return (hi + 0.05) / (lo + 0.05);
-}
-
-/** Alpha-composite an [r,g,b,a?] foreground over an opaque background triple. */
-export function composite(fg, bg) {
-  if (fg.length === 3) return fg;
-  const [r, g, b, a] = fg;
-  return [
-    r * a + bg[0] * (1 - a),
-    g * a + bg[1] * (1 - a),
-    b * a + bg[2] * (1 - a),
-  ];
-}
+export { contrastRatio, composite };
 
 // ── Token parsing (no hardcoding: the test measures what style.css declares) ─
 
@@ -92,34 +80,28 @@ function textContrast(tokenName, panel) {
 
 // ── The pins ─────────────────────────────────────────────────────────────────
 
-test('panel text clears WCAG AA in the worst case (glass scrim over white imagery)', () => {
+test('panel text clears WCAG AAA in the worst case (glass scrim over white imagery)', () => {
   for (const name of ['text-primary', 'text-secondary', 'text-dim', 'accent']) {
     const ratio = textContrast(name, GLASS_OVER_WHITE);
     assert.ok(
-      ratio >= 4.5,
+      ratio >= 7,
       `--${name} over --glass-bg over white computes ${ratio.toFixed(2)}:1 — ` +
-        'below AA (4.5:1). Fix scrim-first: raise --glass-bg alpha, not text hue.',
+        'below AAA (7:1). Fix scrim-first: raise --glass-bg alpha, not text hue.',
     );
   }
 });
 
-test('panel text clears AA over the nominal dark backdrop too', () => {
+test('panel text clears AAA over the nominal dark backdrop too', () => {
   for (const name of ['text-primary', 'text-secondary', 'text-dim', 'accent']) {
     const ratio = textContrast(name, GLASS_OVER_BG_DARK);
-    assert.ok(ratio >= 4.5, `--${name} over --glass-bg over --bg-dark computes ${ratio.toFixed(2)}:1`);
+    assert.ok(ratio >= 7, `--${name} over --glass-bg over --bg-dark computes ${ratio.toFixed(2)}:1`);
   }
 });
 
-test('--text-dim clears AA directly on --bg-dark (the on-token comment claim)', () => {
+test('--text-dim clears AAA directly on --bg-dark (nominal dark backdrop)', () => {
   const text = parseColor(token('text-dim'));
   const ratio = contrastRatio(composite(text, BG_DARK), BG_DARK);
-  // The inline comment on the token cites a number; keep it honest.
-  const claimed = Number(css.match(/--text-dim:[^;]+;\s*\/\*\s*([\d.]+):1/)?.[1]);
-  assert.ok(claimed >= 4.5, 'token comment must cite an AA-passing ratio');
-  assert.ok(
-    Math.abs(ratio - claimed) <= 0.15,
-    `comment claims ${claimed}:1 but the token computes ${ratio.toFixed(2)}:1 on --bg-dark`,
-  );
+  assert.ok(ratio >= 7, `--text-dim on --bg-dark computes ${ratio.toFixed(2)}:1 — below AAA (7:1)`);
 });
 
 test('the fix stays scrim-first: glass alpha ≥ 0.8, identity hue untouched', () => {
@@ -129,8 +111,8 @@ test('the fix stays scrim-first: glass alpha ≥ 0.8, identity hue untouched', (
   // "tune the alpha back down" cannot silently re-open the AA gap these
   // tests would otherwise only catch via the text side.
   assert.ok(
-    GLASS[3] >= 0.8,
-    `--glass-bg alpha is ${GLASS[3]} — the AA worst case is bought with scrim opacity; do not lower it without re-measuring src/uiContrast.test.mjs`,
+    GLASS[3] >= 0.85,
+    `--glass-bg alpha is ${GLASS[3]} — the AAA worst case is bought with scrim opacity; do not lower it without re-measuring src/uiContrast.test.mjs`,
   );
   // Hue tokens are identity (IR/NVG/FLIR, blade-runner accent) — contrast
   // work must not touch them.
@@ -147,4 +129,15 @@ test('HUD text keeps its legibility shadows and glows (regression anchors)', () 
   assert.match(css, /--hud-glow:\s*rgba\(/, 'HUD glow token must stay declared');
   // The dark scratch shadow that keeps HUD text legible over bright tiles.
   assert.match(css, /text-shadow:\s*0 1px 2px #001018/, 'HUD dark outline shadow must stay');
+  // Batch F (AAA): HUD chrome floats on the globe with NO panel behind it —
+  // its ratio cannot be computed, so the backdrop bound is structural: the
+  // #intel-hud base rule must keep the dark outline next to the identity
+  // glow, and --hud-color must stay at its raised (0.85) alpha.
+  assert.match(
+    css,
+    /#intel-hud \*\s*{[^}]*text-shadow:\s*0 1px 2px #001018, 0 0 4px var\(--hud-glow\)/,
+    '#intel-hud must keep the dark outline beside the glow (globe-floating text has no scrim)',
+  );
+  const hudColor = parseColor(token('hud-color'));
+  assert.ok(hudColor[3] >= 0.85, `--hud-color alpha is ${hudColor[3]} — globe-floating text needs >= 0.85`);
 });

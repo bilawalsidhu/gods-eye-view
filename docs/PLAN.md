@@ -1541,9 +1541,35 @@ GitForge pipeline green.
   656 require-returns…), worst files radio.js (263),
   annotationResolver.js (158), flights.js (133). Promotion into the
   gate is a Batch H exit criterion.
-- [ ] **Batch F (AAA)**: run `scripts/qa-a11y.mjs`; fix every
+- [x] **Batch F (AAA)**: run `scripts/qa-a11y.mjs`; fix every
   serious/critical + all AAA-tagged findings (contrast 7:1 on text,
   focus appearance, target size minimum); re-run to zero.
+  DONE 2026-09-15. `qa-a11y.mjs` reports 0 rule violations in both scan
+  states, but its contrast rules are structurally INCOMPLETE over the
+  WebGL globe (axe cannot composite text against canvas pixels), so the
+  batch's real work was a computed-style audit of our own. Two layers:
+  (1) TOKENS (src/uiContrast.test.mjs, ratcheted AA -> AAA): scrim-first
+  package — `--glass-bg` 0.82 -> 0.88 (at 0.82 the pinned identity hue
+  --accent computed 6.8:1 worst case and hue is untouchable),
+  `--text-secondary`/`--text-dim` 0.7 -> 0.78, `--hud-color` 0.6 -> 0.85,
+  dark `0 1px 2px #001018` text outlines added to globe-floating HUD
+  chrome (#intel-hud, title-bar subtitle, style-indicator). Worst cases
+  now: primary 11.96:1, secondary/dim 7.88:1, accent 8.14:1.
+  (2) LITERALS (new src/styleContrastAudit.test.mjs): parsed every rule
+  of style.css and computed the same worst case per rule — imagery(white)
+  <- glass <- rule's own background veil (real alpha) <- text — finding
+  66 distinct literal colors below 7:1 across 91 occurrences (cockpit
+  captions at 2.93:1, error text 4.81:1, warning ambers 6.59-6.91:1).
+  Codemod raised alphas within each hue (no hue changes) to >= 7.25:1 in
+  every context the value appears; verified per-rule, cross-context.
+  Exemptions are codified and asserted: dark-on-accent inverted buttons
+  (measured vs --accent: 11.6-12.8:1), WCAG 1.4.11 glyphs at the 3:1 bar
+  (#hud-rec-dot, roster chevron), one decorative arrow whose AAA
+  hover/focus state is pinned instead; disabled controls exempt per
+  1.4.3. The test fails if an exemption list stops matching the
+  stylesheet. Verified: suite 3468 checks green (incl. 10 contrast
+  tests), lint --max-warnings 0 clean, qa-a11y 0 violations, live
+  computed-style probe resolves the new values, build + BUILD-GATE pass.
 - [ ] **Batch G (smells)**: carve pure modules out of `src/ui.js`'s
   largest remaining seams (style animation loop, chip tickers) with
   tests; no behavior change.
