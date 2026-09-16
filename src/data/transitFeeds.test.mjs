@@ -289,3 +289,60 @@ test('the TTC row records that BusTime carries no subway', () => {
   assert.match(sources, /surface vehicles \(buses and streetcars\) only/);
   assert.match(sources, /Open Government Licence – Toronto/);
 });
+
+test('the Golden Horseshoe neighbours are registered, keyless and routable', () => {
+  const expected = {
+    'miway-mississauga':
+      'https://www.miapp.ca/GTFS_RT/Vehicle/VehiclePositions.pb',
+    'hsr-hamilton':
+      'https://opendata.hamilton.ca/GTFS-RT/GTFS_VehiclePositions.pb',
+    'durham-region':
+      'https://drtonline.durhamregiontransit.com/gtfsrealtime/VehiclePositions',
+  };
+  for (const [id, url] of Object.entries(expected)) {
+    const feed = getTransitFeed(id);
+    assert.ok(feed, `${id} is routable`);
+    assert.equal(feed.url, url);
+    assert.equal(feed.defaultEnabled, true);
+    assert.equal(feed.defaultMode, 'bus');
+    assert.equal(feed.historyRetention, undefined, `${id} retains nothing`);
+    assert.ok(feed.terms?.quote, `${id} records the terms it ships on`);
+  }
+});
+
+test('each Golden Horseshoe feed covers its own city and not its neighbours', () => {
+  const near = (lat, lon) => transitFeedsInRange(lat, lon).map((f) => f.id);
+  // Mississauga City Centre, downtown Hamilton, Oshawa.
+  assert.ok(near(43.589, -79.6441).includes('miway-mississauga'));
+  assert.ok(near(43.2557, -79.8711).includes('hsr-hamilton'));
+  assert.ok(near(43.8971, -78.8658).includes('durham-region'));
+  // Hamilton is 60 km from Toronto: far enough that the TTC feed is not polled
+  // for it, which is the whole point of a per-feed radius.
+  assert.equal(near(43.2557, -79.8711).includes('ttc-toronto'), false);
+});
+
+test('a bus-only feed never claims a mode its route ids cannot establish', () => {
+  for (const id of ['miway-mississauga', 'hsr-hamilton', 'durham-region']) {
+    const feed = getTransitFeed(id);
+    assert.equal(transitModeFor(feed, '1'), 'bus');
+    assert.equal(
+      transitModeResolved(feed, '1'),
+      false,
+      `${id} defaults rather than resolves`,
+    );
+  }
+});
+
+test('every Golden Horseshoe feed is documented with its licence', () => {
+  const sources = readFileSync(
+    new URL('../../DATA_SOURCES.md', import.meta.url),
+    'utf8',
+  );
+  for (const name of ['MiWay', 'Hamilton HSR', 'Durham Region Transit']) {
+    assert.ok(
+      sources.split('\n').some((line) => line.startsWith(`| **${name}`)),
+      `${name} has a DATA_SOURCES row`,
+    );
+  }
+  assert.match(sources, /Durham Region Transit publishes no bearing/);
+});

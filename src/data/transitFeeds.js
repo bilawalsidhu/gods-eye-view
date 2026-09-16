@@ -312,6 +312,67 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     }),
     routeMode: ttcRouteMode,
   }),
+  Object.freeze({
+    id: 'miway-mississauga',
+    name: 'MiWay',
+    operator: 'MiWay (City of Mississauga)',
+    region: 'Mississauga, ON',
+    center: Object.freeze({ lat: 43.589, lon: -79.6441 }),
+    loadRadiusKm: 30,
+    url: 'https://www.miapp.ca/GTFS_RT/Vehicle/VehiclePositions.pb',
+    license: 'City of Mississauga Open Data Terms of Use',
+    licenseUrl:
+      'http://www5.mississauga.ca/research_catalogue/CityofMississauga_TermsofUse.pdf',
+    attribution: 'MiWay \u2014 City of Mississauga Open Data',
+    defaultEnabled: true,
+    terms: Object.freeze({
+      quote:
+        'The City of Mississauga (the City) now grants you a world-wide, royalty-free, non-exclusive, revocable licence to use, modify, and distribute the Datasets in all current and future media and formats for any lawful purpose.',
+      note: 'Two conditions shape how this ships. The licence is REVOCABLE, and it asks that anyone who provides access to the data pass on the Terms of Use URL \u2014 so `licenseUrl` points at the terms themselves rather than at a catalogue page, and the attribution popover carries the link. Credit is optional here ("you are not required to credit the City"), and is given anyway as a courtesy, the way the other municipal feeds are.',
+    }),
+    defaultMode: 'bus',
+  }),
+  Object.freeze({
+    id: 'hsr-hamilton',
+    name: 'Hamilton HSR',
+    operator: 'Hamilton Street Railway (City of Hamilton)',
+    region: 'Hamilton, ON',
+    center: Object.freeze({ lat: 43.2557, lon: -79.8711 }),
+    loadRadiusKm: 30,
+    url: 'https://opendata.hamilton.ca/GTFS-RT/GTFS_VehiclePositions.pb',
+    license: 'City of Hamilton Open Data Licence',
+    licenseUrl:
+      'https://www.hamilton.ca/city-initiatives/strategies-actions/open-data-licence-terms-and-conditions',
+    attribution:
+      'Contains public sector Data made available under the City of Hamilton\u2019s Open Data Licence',
+    defaultEnabled: true,
+    terms: Object.freeze({
+      quote:
+        'The City of Hamilton grants you a worldwide, royalty-free, perpetual, non-exclusive licence to use the Data, including for commercial purposes ... you must acknowledge the source of the Data by including the following attribution statement: \u201cContains public sector Data made available under the City of Hamilton\u2019s Open Data Licence\u201d.',
+      note: 'The attribution wording is prescribed by the licence, so it is used verbatim as the credit rather than paraphrased to an operator name. Names, crests, logos and marks are excluded from the grant, so the credit stays text.',
+    }),
+    defaultMode: 'bus',
+  }),
+  Object.freeze({
+    id: 'durham-region',
+    name: 'Durham Region Transit',
+    operator: 'Durham Region Transit (Regional Municipality of Durham)',
+    region: 'Durham Region, ON',
+    center: Object.freeze({ lat: 43.9496, lon: -78.9365 }),
+    loadRadiusKm: 45,
+    url: 'https://drtonline.durhamregiontransit.com/gtfsrealtime/VehiclePositions',
+    license: 'Region of Durham Open Data Licence v.1.0',
+    licenseUrl: 'https://www.durham.ca/en/regional-government/open-data.aspx',
+    attribution:
+      "Contains public sector information made available under The Regional Municipality of Durham's Open Data Licence",
+    defaultEnabled: true,
+    terms: Object.freeze({
+      quote:
+        'Durham Region grants you a worldwide, royalty-free, perpetual, non-exclusive licence to use the information ... You are free to: Copy, publish, distribute and transmit the information ... Use the information commercially.',
+      note: 'The licence link the open-data catalogue publishes for this feed (OpenDataLicenceAgreement.pdf) is dead after a site relaunch; `licenseUrl` points at the live Open Data page carrying the same licence v.1.0 text, which is where the quote above was read. Credit is optional and the suggested statement is used verbatim.',
+    }),
+    defaultMode: 'bus',
+  }),
 ]);
 
 /**

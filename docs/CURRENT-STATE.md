@@ -2602,9 +2602,10 @@ Transit is off by default, and share links use token `j`. The movement panel ord
 places Transit directly after Street Traffic and before Bike Share. Cameras and
 utilities retain their own groups. The layer polls
 registered feeds near the camera every 15 seconds, below a 3,000 km altitude
-gate. Eight keyless regions are available: Boston, Austin, Minneapolis–St Paul,
-Helsinki, the Netherlands, Norway, South East Queensland and Toronto (TTC
-surface vehicles; the subway publishes no positions). Mode silhouettes
+gate. Eleven keyless regions are available: Boston, Austin, Minneapolis–St Paul,
+Helsinki, the Netherlands, Norway, South East Queensland, Toronto (TTC
+surface vehicles; the subway publishes no positions), and the Golden
+Horseshoe neighbours MiWay, Hamilton HSR and Durham Region Transit. Mode silhouettes
 identify buses, trams, subways, trains, ferries and unclassified vehicles.
 
 Retained transit history uses the same outlier quarantine as live observations and
