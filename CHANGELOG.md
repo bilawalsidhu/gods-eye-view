@@ -3,6 +3,81 @@
 This changelog records public product changes. For the authoritative description
 of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md).
 
+## [0.9.0] — 2026-09-16
+
+### Added
+
+- Strictest lint gate: `eslint-plugin-jsdoc` validation (every exported
+  symbol documented, parameters and returns typed) plus
+  `eslint-plugin-unicorn` correctness rules, both at zero warnings.
+  The JSDoc tier was authored to zero across the previously undocumented
+  3,934-symbol gap, and the check is wired into `npm run lint` so the
+  documentation surface cannot regress silently.
+- GPU/VRAM governor batch: the Google Photorealistic 3D-Tileset cache is
+  capped (384 MB + 128 MB overflow instead of the 2.5 GB helper default —
+  measured boot residency is ~220 MB, so a downtown fly-through stays
+  resident while bounding the worst-case spike), the render loop drops to
+  30 fps while the style crossfade is the only continuous-render holder
+  and the camera is still, and backing-store DPR is capped. Escape
+  hatches: `?tileCacheMB=`, `?msaa=`, `?preserveBuffer=1`.
+
+### Security
+
+- The pilot Content-Security-Policy is now enforced (no longer
+  report-only), HSTS is stamped on responses, and every API response
+  carries `X-Content-Type-Options: nosniff`.
+
+### Accessibility
+
+- WCAG 2.1 AAA contrast: design tokens ratcheted to the 7:1/4.5:1
+  large-text tiers and every literal palette entry audited against them.
+
+### Fixed
+
+- The aircraft model pipeline's type-enrichment seam (`_ensureModel`)
+  requested adsbdb lookups with the priority flag, which bypassed the
+  rolling ambient token bucket entirely — a zoom-in that admitted dozens
+  of model-eligible aircraft spent unbudgeted upstream requests (the
+  exact 2026-07-03 field-bug shape, re-entering through a second door).
+  Model-eligibility enrichment is now charged against the bucket while
+  keeping its queue priority; an exhausted bucket skips cleanly and the
+  ambient sweep retries after refill. `scripts/qa-enrich-ambient.mjs`
+  gained a budget probe and E10/E11 assert the stall/refill contract.
+- Keyless `POST /api/openai/hud-summary` answered 503, which Chrome logs
+  as an un-suppressible console error for any non-2xx subresource. Both
+  runtimes now degrade with the keyless 200 `unavailable: true` shape
+  (the HUD falls back to static text); `/api/realtime/token` keeps its
+  503 because voice suites gate on that signal.
+- The traffic layer left `_fetching` set when disabled mid-fetch; a
+  rapid disable/enable cycle could wedge its refresh loop. Lifecycle
+  tests pin the reset.
+
+### Removed
+
+- The dormant `src/react/` experiment (17 TSX/TS files) and the
+  `tsconfig.json` + ambient type declarations that existed only to
+  typecheck it, along with the dead `react`, `react-dom`, `@types/*`,
+  and `typescript` dependencies. Revival is a `git checkout` of any
+  pre-0.9.0 commit.
+
+### Internal
+
+- Test coverage waves: new suites for logoGaze, splitFlap, celestialRing,
+  opensky, cctvSources, bikeshare runtime, cctvGizmo, IntelHUD, the
+  scene director's panel/storage paths, the annotation engine and
+  resolver (both to 100% statement coverage), cockpit cloud effects
+  (100%), and the voice session/action surfaces (gevRealtime 65→91%,
+  gevActions 60→86%). The style-loop and loading-ticker cores were
+  carved into pure modules to make that testing possible.
+- The e2e orchestrator (`scripts/qa-all.mjs`) gained per-suite argv
+  contracts, per-suite timeouts, and an ENV-GATED result class for
+  suites that require API keys this machine does not have. The
+  google-places endpoints now answer keyless with the honest 200
+  `{ places: [], error, unavailable: true }` contract (dev middleware
+  and Pages Function alike) instead of a console-poisoning 503, and
+  the qa-firstrun/mutation harness anchors were re-pointed after
+  source drift (radioPanel.js, realtimeSession.js, div launcher).
+
 ## [0.8.1] — 2026-09-14
 
 ### Fixed
