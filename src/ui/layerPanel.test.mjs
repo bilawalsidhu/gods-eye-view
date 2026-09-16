@@ -24,6 +24,7 @@ test('panel presentation places Transit between Street Traffic and Bike Share in
       'flight-patterns',
       'ais-live-vessels',
       'live-trains',
+      'melbourne-pedestrians',
       'traffic',
       'transit',
       'bikeshare',

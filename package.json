@@ -238,6 +238,8 @@
     },
     "./sources/transit": "./src/data/transitProxy.js",
     "./layers/patterns": "./src/layers/patterns/index.js",
+    "./layers/pedestrians": "./src/layers/pedestrians/index.js",
+    "./layers/pedestrians/source": "./src/layers/pedestrians/source.js",
     "./layers/trains": "./src/layers/trains/index.js",
     "./layers/trains/source": "./src/layers/trains/source.js",
     "./layers/transit": "./src/layers/transit/index.js",
