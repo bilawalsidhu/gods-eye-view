@@ -97,7 +97,7 @@ let _cctvSourceInflight = null;
 export function hashSeed(text) {
   let h = 2166136261 >>> 0; // FNV offset basis
   for (let i = 0; i < text.length; i++) {
-    h ^= text.charCodeAt(i);
+    h ^= text.codePointAt(i);
     h = Math.imul(h, 16777619); // FNV prime
   }
   return h >>> 0;
@@ -111,11 +111,11 @@ export function hashSeed(text) {
  */
 export function escapeXml(text) {
   return String(text || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('\'', '&#39;');
 }
 
 /**
@@ -152,7 +152,7 @@ export function isVideoFeedType(feedType) {
  * @param {number} [fallback=NaN]
  * @returns {number}
  */
-export function toFiniteNumber(value, fallback = NaN) {
+export function toFiniteNumber(value, fallback = Number.NaN) {
   const num = Number(value);
   return Number.isFinite(num) ? num : fallback;
 }
@@ -167,8 +167,8 @@ function normalizeKey(text) {
   return String(text || '')
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '');
+    .replaceAll(/[^a-z0-9]+/g, '_')
+    .replaceAll(/^_+|_+$/g, '');
 }
 
 /**
@@ -181,7 +181,7 @@ function normalizeKey(text) {
  */
 export function parsePointString(value) {
   const match = String(value || '').match(/POINT\s*\(\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\)/i);
-  if (!match) return { lat: NaN, lon: NaN };
+  if (!match) return { lat: Number.NaN, lon: Number.NaN };
   return {
     lon: toFiniteNumber(match[1]),
     lat: toFiniteNumber(match[2]),
@@ -198,23 +198,23 @@ export function parsePointString(value) {
  * @returns {{lat:number, lon:number}}
  */
 export function coerceLatLon(value) {
-  if (!value) return { lat: NaN, lon: NaN };
+  if (!value) return { lat: Number.NaN, lon: Number.NaN };
 
   if (typeof value === 'string') {
     return parsePointString(value);
   }
 
   if (typeof value !== 'object') {
-    return { lat: NaN, lon: NaN };
+    return { lat: Number.NaN, lon: Number.NaN };
   }
 
   const lat = toFiniteNumber(
     value.latitude ?? value.lat ?? value.y ?? value.Latitude ?? value.Lat,
-    NaN
+    Number.NaN
   );
   const lon = toFiniteNumber(
     value.longitude ?? value.lon ?? value.lng ?? value.x ?? value.Longitude ?? value.Lon,
-    NaN
+    Number.NaN
   );
   return { lat, lon };
 }
@@ -244,11 +244,11 @@ function extractAustinCoords(record) {
 
   const lat = toFiniteNumber(
     record.latitude ?? record.lat ?? record.camera_latitude ?? record.location_latitude,
-    NaN
+    Number.NaN
   );
   const lon = toFiniteNumber(
     record.longitude ?? record.lon ?? record.lng ?? record.camera_longitude ?? record.location_longitude,
-    NaN
+    Number.NaN
   );
   return { lat, lon };
 }
@@ -326,7 +326,7 @@ function extractAustinName(record, cameraId) {
  * @returns {number} Heading in degrees [0..360), or NaN if unknown.
  */
 function extractAustinHeading(record) {
-  const direct = toFiniteNumber(record.heading_deg ?? record.heading ?? record.bearing, NaN);
+  const direct = toFiniteNumber(record.heading_deg ?? record.heading ?? record.bearing, Number.NaN);
   if (Number.isFinite(direct)) return ((direct % 360) + 360) % 360;
 
   // Dedicated direction fields: bare cardinal words ("West") are real facings.
@@ -351,7 +351,7 @@ function extractAustinHeading(record) {
   const inferred = directionToHeading(nameProbe);
   if (Number.isFinite(inferred)) return inferred;
 
-  return NaN;
+  return Number.NaN;
 }
 
 /**
@@ -620,7 +620,7 @@ async function loadCaltransSourcesFromOpenData(env = {}) {
         // no-tileset stack (keyless OSM) the snap misses and this height freezes,
         // so it must be right-ish on its own.
         groundElevationM: (() => {
-          const ft = toFiniteNumber(loc.elevation, NaN);
+          const ft = toFiniteNumber(loc.elevation, Number.NaN);
           return Number.isFinite(ft) ? Math.max(-100, Math.min(4000, ft * 0.3048)) : 150;
         })(),
         feedType: 'image',

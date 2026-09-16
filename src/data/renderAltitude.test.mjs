@@ -108,7 +108,7 @@ test('grounded with no surfaceM and no geo/baro altitude -> still sentinel null 
 
 test('non-finite (NaN/Infinity) inputs are treated as missing, not thrown', () => {
   assert.equal(
-    pickRenderAltitudeM({ geoAltM: NaN, baroAltM: 1200, onGround: false, surfaceM: null, geoidN: 5 }),
+    pickRenderAltitudeM({ geoAltM: Number.NaN, baroAltM: 1200, onGround: false, surfaceM: null, geoidN: 5 }),
     1205
   );
   assert.equal(
@@ -141,7 +141,7 @@ test('reuseGroundedSurfaceM: current miss falls back to the previous fix ground'
 
 test('reuseGroundedSurfaceM: both miss -> null sentinel (caller default applies)', () => {
   assert.equal(reuseGroundedSurfaceM(null, null), null);
-  assert.equal(reuseGroundedSurfaceM(NaN, undefined), null);
+  assert.equal(reuseGroundedSurfaceM(Number.NaN, undefined), null);
 });
 
 test('reuseGroundedSurfaceM: sea-level 0 ground is finite and reused, not falsy-skipped', () => {

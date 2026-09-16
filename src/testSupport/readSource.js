@@ -17,5 +17,5 @@ export function readSource(relativeSpec, importerUrl) {
 
 /** Fold CRLF and bare CR to LF. */
 export function normalizeEol(text) {
-  return text.replace(/\r\n?/g, '\n');
+  return text.replaceAll(/\r\n?/g, '\n');
 }

@@ -79,10 +79,10 @@ export function summarizeAwarenessCohort(items, { available = true, stale = fals
 
 /**
  * Return selectable nearby targets in a stable, subject-first order.
- * @param {Array<{id: string, summary?: {nearest?: Array<Object>}}>} cohorts Awareness cohorts.
+ * @param {Array<{id: string, summary?: {nearest?: Array<object>}}>} cohorts Awareness cohorts.
  * @param {{layerId?: string}|null} [subject] Current subject.
  * @param {Iterable<string>} [visitedKeys] Previously visited layer/id keys.
- * @returns {Array<{layerId: string, id: string, item: Object}>} Selectable targets.
+ * @returns {Array<{layerId: string, id: string, item: object}>} Selectable targets.
  */
 export function getAwarenessNavigationTargets(cohorts, subject = null, visitedKeys = []) {
   const visited = new Set(visitedKeys);

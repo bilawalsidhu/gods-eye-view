@@ -354,7 +354,7 @@ export function signedTurnRad(a, b, up) {
  * Coarse floor cells along a stretch of the route, in travel order.
  * Deduped to the house 0.001° grid and capped, so one flight can never issue an
  * unbounded warm batch.
- * @param {Object} state Route flight state (needs pts/cumM/totalM).
+ * @param {object} state Route flight state (needs pts/cumM/totalM).
  * @param {number} fromM Arc length to start collecting at.
  * @param {number} spanM Metres of arc to cover.
  * @param {number} [maxCells] Cap on the returned cells.
@@ -434,7 +434,7 @@ export function routeColdSeedFloorM(pathHeightM, cameraHeightM) {
  * reads the rendered surface at the CURRENT level of detail — rooftops and
  * primitives included — which is a better estimate than nothing but is not a
  * guaranteed upper bound. The per-frame raw-sample clamp remains the backstop.
- * @param {Object} state Route flight state.
+ * @param {object} state Route flight state.
  * @param {boolean} takeWhole Adopt the value outright (pre-departure) rather
  * than easing onto it — a mid-flight arrival must never snap the eye.
  * @returns {boolean} Whether the corridor's floor is now RESOLVED.
@@ -512,7 +512,7 @@ export function probeMeshFloorM(scene, cells) {
 
 /**
  * Build the state for one cinematic route flight.
- * @param {Object} options
+ * @param {object} options
  * @param {Cesium.Cartesian3[]} options.pts Route vertices.
  * @param {number[]} options.cumM Cumulative arc length per vertex.
  * @param {string} [options.speed] slow | normal | fast.
@@ -523,13 +523,13 @@ export function probeMeshFloorM(scene, cells) {
  * the cells the cached floor could not answer.
  * @param {number} [options.cameraHeightM] Camera height at start, for the cold seed.
  * @param {boolean} [options.reducedMotion] Flatten bank + altitude shaping.
- * @returns {Object} Motion state for advanceRouteFlight().
+ * @returns {object} Motion state for advanceRouteFlight().
  */
 export function createRouteFlight({
   pts, cumM, speed = 'normal', floorFn = null, warmFn = null, probeFn = null,
   cameraHeightM = Number.NaN, reducedMotion = false,
 }) {
-  const totalM = cumM[cumM.length - 1];
+  const totalM = cumM.at(-1);
   const cruiseMps = ROUTE_M_S[speed] || ROUTE_M_S.normal;
   // The 0.5 s floor keeps a degenerate route from being an instant teleport (it
   // also divides the profile). It is the one case where the speed word is not
@@ -593,7 +593,7 @@ export function createRouteFlight({
 /**
  * Advance one dolly frame. Returns the camera pose to apply; the caller owns
  * the viewer (so this stays testable without one).
- * @param {Object} state From createRouteFlight().
+ * @param {object} state From createRouteFlight().
  * @param {number} dt Seconds elapsed.
  * @returns {{finished: boolean, eye: Cesium.Cartesian3, direction: Cesium.Cartesian3,
  *  up: Cesium.Cartesian3, bankDeg: number, heightM: number, aglM: number,
@@ -989,7 +989,7 @@ export function initCameraVerbs(viewer, getViewTargetCartesian) {
 /**
  * move_camera implementation. Returns the house result shape; rejections are
  * plain-English `ok:false` errors.
- * @param {Object} args
+ * @param {object} args
  * @param {Function|null} runNavigation Validated camera-authority transaction.
  */
 export function moveCamera(args = {}, runNavigation = null) {
@@ -1097,7 +1097,7 @@ export function adjustOrbitRange(factor) {
 /**
  * fly_route implementation: dolly along an existing route annotation.
  * @param {Array} annoList  — engine list() output (raw annos incl. `path`)
- * @param {Object} args
+ * @param {object} args
  * @param {Function|null} floorFn  (latDeg, lonDeg) => cached floor metres.
  * @param {Function|null} runNavigation Validated camera-authority transaction.
  * @param {Function|null} warmFn  (cells) => void — batch-warms the floor cells
@@ -1110,14 +1110,14 @@ export function flyRoute(annoList, args = {}, floorFn = null, runNavigation = nu
   if (!routes.length) {
     return { ok: false, action: 'fly_route', error: 'No route is drawn — draw a route first (e.g. "route from A to B"), then fly it.' };
   }
-  let route = routes[routes.length - 1];
+  let route = routes.at(-1);
   if (args.label) {
     const wanted = String(args.label).toLowerCase();
     const byLabel = routes.filter((a) => String(a.label || '').toLowerCase().includes(wanted));
     if (!byLabel.length) {
       return { ok: false, action: 'fly_route', error: `No route matches "${args.label}" — say fly the route without a name for the newest one.` };
     }
-    route = byLabel[byLabel.length - 1];
+    route = byLabel.at(-1);
   }
   if (route.path.some((point) => !Number.isFinite(point?.lat)
     || point.lat < -90 || point.lat > 90

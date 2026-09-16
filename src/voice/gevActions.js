@@ -1602,7 +1602,7 @@ export async function controlRadio(viewer, dataManager, args = {}, options = {})
 /**
  * Maps a CCTV focus code to an honest voice-tool result.
  * @param {string|boolean} focusResult CCTV focus result code.
- * @param {Object} [options]
+ * @param {object} [options]
  * @param {boolean} [options.cameraSelected=false] Whether this action first selected a camera.
  * @returns {{ok: boolean, error: string|null}} Voice-facing result fields.
  */
@@ -2148,7 +2148,7 @@ function normalizeCockpitNavigationHints(rawAction) {
 function normalizeAircraftClassFilter(value) {
   const raw = String(value || '').trim().toLowerCase();
   if (!raw) return null;
-  return raw.replace(/[\s-]+/g, '') === TR3B_CLASS ? TR3B_CLASS : raw;
+  return raw.replaceAll(/[\s-]+/g, '') === TR3B_CLASS ? TR3B_CLASS : raw;
 }
 
 function setPanelOpen(styleManager, panelId, open) {
@@ -2174,9 +2174,9 @@ function normalizeCockpitAction(value) {
   if (direct) return direct;
 
   const normalized = raw
-    .replace(/[^a-z0-9]+/g, ' ')
+    .replaceAll(/[^a-z0-9]+/g, ' ')
     .trim()
-    .replace(/\s+/g, ' ');
+    .replaceAll(/\s+/g, ' ');
   const directNormalized = COCKPIT_ACTION_ALIASES.get(normalized);
   if (directNormalized) return directNormalized;
 
@@ -2595,7 +2595,7 @@ function insertNearestRecord(records, candidate, limit) {
     records.sort((a, b) => a.distanceScore - b.distanceScore);
     return;
   }
-  if (candidate.distanceScore >= records[records.length - 1].distanceScore) return;
+  if (candidate.distanceScore >= records.at(-1).distanceScore) return;
 
   let low = 0;
   let high = records.length;
@@ -3023,8 +3023,8 @@ async function reverseGeocodeViewportSamples(samples, cameraHeightM) {
       labels: place.labels,
       streetLabels: place.streetLabels,
     };
-  }))).filter(Boolean);
-  return summarizeViewportPlaces(places);
+  })));
+  return summarizeViewportPlaces(places.filter(Boolean));
 }
 
 function viewportPlacesFromCache(samples, cameraHeightM) {
@@ -3115,7 +3115,7 @@ function sanitizeLabel(value) {
     const code = ch.codePointAt(0);
     out += (code < 0x20 || code === 0x7f) ? ' ' : ch; // drop control chars incl. newlines
   }
-  return out.replace(/\s+/g, ' ').trim().slice(0, 120);
+  return out.replaceAll(/\s+/g, ' ').trim().slice(0, 120);
 }
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = 5000) {

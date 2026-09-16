@@ -63,8 +63,8 @@ function deepClone(value) {
 /**
  * Normalize a raw layer state entry into a canonical { enabled, params? } shape.
  * Accepts both boolean shorthand and full object forms.
- * @param {boolean|Object} entry - Raw layer state (boolean or { enabled, params })
- * @returns {{ enabled: boolean, params?: Object }}
+ * @param {boolean|object} entry - Raw layer state (boolean or { enabled, params })
+ * @returns {{ enabled: boolean, params?: object }}
  */
 function normalizeLayerEntry(entry) {
   if (entry && typeof entry === 'object') {
@@ -79,8 +79,8 @@ function normalizeLayerEntry(entry) {
 /**
  * Normalize a raw bloom post-processing state, migrating intensity values
  * across bloom scale versions so older saved projects render correctly.
- * @param {Object} rawBloom - Raw bloom state from storage or recipe
- * @param {Object} [options]
+ * @param {object} rawBloom - Raw bloom state from storage or recipe
+ * @param {object} [options]
  * @param {number} [options.projectVersion] - Schema version of the source project
  * @param {number} [options.fallbackIntensity] - Default intensity if not stored
  * @returns {{ enabled: boolean, intensity: number, version: number }}
@@ -108,8 +108,8 @@ function normalizeBloomState(rawBloom = {}, { projectVersion = PROJECT_VERSION, 
  * Convert a static scene recipe (from recipes.js) into a mutable scene object
  * with fully normalized shots. Each keyframe in the recipe's cameraPath becomes
  * one shot, inheriting the recipe's style, post, and layer configuration.
- * @param {Object} recipe - A SCENE_RECIPES entry
- * @returns {{ id: string, title: string, shots: Object[] }}
+ * @param {object} recipe - A SCENE_RECIPES entry
+ * @returns {{ id: string, title: string, shots: object[] }}
  */
 function recipeToScene(recipe) {
   const post = recipe.post || {};
@@ -179,7 +179,7 @@ function recipeToScene(recipe) {
 
 /**
  * Create a fresh default project by converting all built-in SCENE_RECIPES.
- * @returns {Object} A new project object with version, timestamps, and scenes
+ * @returns {object} A new project object with version, timestamps, and scenes
  */
 function createDefaultProject() {
   return {
@@ -194,11 +194,11 @@ function createDefaultProject() {
  * Normalize a raw shot object from storage or capture into a fully validated
  * shape with safe defaults for every field. Handles version migration for
  * bloom intensity and coerces all numeric fields.
- * @param {Object} rawShot - Raw shot data (may be incomplete or from an older schema)
+ * @param {object} rawShot - Raw shot data (may be incomplete or from an older schema)
  * @param {number} [index=0] - Positional index used for fallback title
- * @param {Object} [options]
+ * @param {object} [options]
  * @param {number} [options.projectVersion] - Schema version of the enclosing project
- * @returns {Object} Fully normalized shot
+ * @returns {object} Fully normalized shot
  */
 function normalizeShot(rawShot, index = 0, { projectVersion = PROJECT_VERSION } = {}) {
   const camera = rawShot?.camera || {};
@@ -247,8 +247,8 @@ function normalizeShot(rawShot, index = 0, { projectVersion = PROJECT_VERSION } 
 /**
  * Normalize and migrate an entire project object loaded from storage or import.
  * Falls back to the default recipe-based project when input is invalid or empty.
- * @param {Object|null} rawProject - Raw project data (potentially from an older schema)
- * @returns {Object} Fully normalized project at the current PROJECT_VERSION
+ * @param {object|null} rawProject - Raw project data (potentially from an older schema)
+ * @returns {object} Fully normalized project at the current PROJECT_VERSION
  */
 function normalizeProject(rawProject) {
   if (!rawProject || typeof rawProject !== 'object') return createDefaultProject();
@@ -293,8 +293,8 @@ function normalizeProject(rawProject) {
 export class SceneDirector {
   /**
    * @param {Cesium.Viewer} viewer - The Cesium viewer instance
-   * @param {Object} styleManager - Controls visual state (bloom, sharpen, HUD, detection, style presets)
-   * @param {Object} dataManager - Manages data layer enable/disable and per-layer params
+   * @param {object} styleManager - Controls visual state (bloom, sharpen, HUD, detection, style presets)
+   * @param {object} dataManager - Manages data layer enable/disable and per-layer params
    */
   constructor(viewer, styleManager, dataManager) {
     this.viewer = viewer;
@@ -313,9 +313,9 @@ export class SceneDirector {
     this._loadAbort = null;
     /** @type {number|null} setInterval ID for the progress bar ticker */
     this._progressTimer = null;
-    /** @type {Object|null} Telemetry accumulator for the current run */
+    /** @type {object|null} Telemetry accumulator for the current run */
     this._activeRun = null;
-    /** @type {Object|null} Telemetry from the most recent completed run */
+    /** @type {object|null} Telemetry from the most recent completed run */
     this._lastRun = null;
     /** @type {string} JSON string of _lastRun for download */
     this._lastRunJson = '';
@@ -350,7 +350,7 @@ export class SceneDirector {
   /**
    * Load and normalize the project from localStorage.
    * Returns the default recipe-based project on missing or corrupt data.
-   * @returns {Object} Normalized project
+   * @returns {object} Normalized project
    */
   _loadProject() {
     try {
@@ -562,7 +562,7 @@ export class SceneDirector {
 
   /**
    * Look up the currently selected scene object.
-   * @returns {Object|null} The scene, or null if no valid selection
+   * @returns {object|null} The scene, or null if no valid selection
    */
   _getSelectedScene() {
     return this._project.scenes.find((scene) => scene.id === this._selectedSceneId) || null;
@@ -572,7 +572,7 @@ export class SceneDirector {
    * Resolve a scene and shot by their IDs.
    * @param {string} sceneId
    * @param {string} shotId
-   * @returns {{ scene: Object|undefined, shot: Object|undefined }}
+   * @returns {{ scene: object|undefined, shot: object|undefined }}
    */
   _getShot(sceneId, shotId) {
     const scene = this._project.scenes.find((item) => item.id === sceneId);
@@ -629,7 +629,7 @@ export class SceneDirector {
 
   /**
    * Snapshot the current enabled/params state of every registered data layer.
-   * @returns {Object.<string, { enabled: boolean, params?: Object }>}
+   * @returns {[key: string]: { enabled: boolean, params?: object }}
    */
   _captureLayerStates() {
     const layers = {};
@@ -733,7 +733,7 @@ export class SceneDirector {
    *
    * @param {string} sceneId
    * @param {string} shotId
-   * @param {Object} [options]
+   * @param {object} [options]
    * @param {number} [options.flyDuration=2.2] - Camera flight duration in seconds
    */
   async loadShot(sceneId, shotId, { flyDuration = 2.2 } = {}) {
@@ -810,7 +810,7 @@ export class SceneDirector {
    * Build a flat playback queue of { scene, shot } pairs starting from the
    * given scene and wrapping around through all remaining scenes (round-robin).
    * @param {string} startSceneId - Scene to begin playback from
-   * @returns {Array<{ scene: Object, shot: Object }>}
+   * @returns {Array<{ scene: object, shot: object }>}
    */
   _buildPlaybackQueue(startSceneId, { single = false } = {}) {
     if (!this._project.scenes.length) return [];
@@ -1066,7 +1066,7 @@ export class SceneDirector {
 
   /** Export the entire project as a timestamped JSON file download. */
   exportProject() {
-    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const stamp = new Date().toISOString().replaceAll(/[:.]/g, '-');
     const fileName = `scene-presets-${stamp}.json`;
     const payload = JSON.stringify(this._project, null, 2);
     // Trigger a browser download via a temporary anchor element
@@ -1105,7 +1105,7 @@ export class SceneDirector {
   /** Download the telemetry metadata from the most recent completed run as JSON. */
   downloadLastRunMetadata() {
     if (!this._lastRunJson) return;
-    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const stamp = new Date().toISOString().replaceAll(/[:.]/g, '-');
     const fileName = `scene-run-${stamp}.json`;
     const blob = new Blob([this._lastRunJson], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -1141,7 +1141,7 @@ export class SceneDirector {
    * transition also answers false, and reporting the operator's own stop as a
    * refused layer would be a lie.
    *
-   * @param {Object.<string, { enabled: boolean, params?: Object }>} targetStates
+   * @param {[key: string]: { enabled: boolean, params?: object }} targetStates
    * @param {{ cancelled: boolean, signal?: AbortSignal }|null} [token]
    *   Cancellation token — a stop or a newer request ends the pass and aborts
    *   the transition in flight.
@@ -1225,7 +1225,7 @@ export class SceneDirector {
    * Fly the Cesium camera to the given position over the specified duration
    * using cubic ease-in-out. Resolves when the flight completes, is cancelled,
    * or a safety timeout fires (duration + 0.6s).
-   * @param {Object} cameraState - Target { lat, lon, alt, heading, pitch, roll }
+   * @param {object} cameraState - Target { lat, lon, alt, heading, pitch, roll }
    * @param {number} durationSec - Flight duration in seconds
    * @param {{ cancelled: boolean }} token - Cancellation token checked before starting
    */
@@ -1388,7 +1388,7 @@ export class SceneDirector {
   /**
    * Append a timestamped telemetry event to the active run log.
    * @param {string} type - Event type identifier (e.g. 'shot_start', 'scene_stopped')
-   * @param {Object|null} payload - Arbitrary event data
+   * @param {object|null} payload - Arbitrary event data
    */
   _logEvent(type, payload) {
     if (!this._activeRun) return;

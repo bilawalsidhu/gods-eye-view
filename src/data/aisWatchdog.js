@@ -98,7 +98,7 @@ const DEFAULT_CLOCK = Object.freeze({
  * The caller must invoke `configure()` before the first `tick()` so the
  * machine knows whether a key and a websocket transport exist.
  *
- * @param {Object} [options]
+ * @param {object} [options]
  * @param {number} [options.staleMs]
  * @param {number} [options.recycleAfterMs]
  * @param {number[]} [options.backoffMs]
@@ -107,8 +107,8 @@ const DEFAULT_CLOCK = Object.freeze({
  * @param {number} [options.startGeneration] Seed for the socket-generation
  *   counter. MUST be the caller's module-lifetime high-water mark so that a
  *   disposal never re-issues a generation a late handler still refers to.
- * @param {{wall: function, mono: function}} [options.clock]
- * @returns {Object} watchdog handle
+ * @param {{wall: Function, mono: Function}} [options.clock]
+ * @returns {object} watchdog handle
  */
 export function createAisWatchdog(options = {}) {
   const staleMs = positiveOr(options.staleMs, AIS_WATCHDOG_DEFAULTS.staleMs);
@@ -183,7 +183,7 @@ export function createAisWatchdog(options = {}) {
     if (effective === 'rate-limit') {
       // Never re-enter at the fast rungs after being told to slow down.
       reconnectAttempt = Math.max(reconnectAttempt, backoffMs.length);
-      const wait = positiveOr(retryAfterMs, backoffMs[backoffMs.length - 1]);
+      const wait = positiveOr(retryAfterMs, backoffMs.at(-1));
       status = isExhausted() ? 'down' : 'reconnecting';
       nextAttemptMono = monoNow + (isExhausted() ? Math.max(wait, downRetryMs) : wait);
       return;
@@ -212,7 +212,7 @@ export function createAisWatchdog(options = {}) {
    *
    * @param {{hasKey: boolean, hasTransport?: boolean, silenceWatch?: boolean,
    *   keyFingerprint?: string|null}} env
-   * @returns {Array<Object>} actions
+   * @returns {Array<object>} actions
    */
   function configure(env) {
     silenceWatchArmed = env.silenceWatch !== false;
@@ -270,7 +270,7 @@ export function createAisWatchdog(options = {}) {
    * releases the slot in the same step it emits a 'terminate' — so a reconnect
    * can only ever follow a terminate, never race it.
    *
-   * @returns {Array<Object>} actions
+   * @returns {Array<object>} actions
    */
   function tick() {
     if (status === 'missing-key' || status === 'unsupported') return [];

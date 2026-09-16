@@ -104,7 +104,7 @@ export async function onRequest({ request }) {
   const safeBody = sanitized.body;
 
   // Normalize whitespace so semantically identical queries share cache entries.
-  const cacheKey = safeBody.replace(/\s+/g, ' ').trim();
+  const cacheKey = safeBody.replaceAll(/\s+/g, ' ').trim();
 
   // Memory tier, then single-flight join, before consuming limiter quota.
   const cached = responseCache.get(cacheKey);

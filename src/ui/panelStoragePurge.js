@@ -50,7 +50,7 @@ export function stalePanelStorageKeys(keys, { positionVersion, layoutVersion }) 
  * Remove stale versioned panel keys from a storage bucket. Storage failures
  * are swallowed (private-mode browsers, quota errors) — a purge that cannot
  * run must never break panel init.
- * @param {{getItem?: function, key: function, removeItem: function}} storage
+ * @param {{getItem?: Function, key: Function, removeItem: Function}} storage
  *   Anything shaped like localStorage (the `key(i)` + `length` contract).
  * @param {{positionVersion: string, layoutVersion: string}} versions
  * @returns {string[]} The keys actually removed.

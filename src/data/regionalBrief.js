@@ -2,7 +2,7 @@ import { api } from '../config/apiEndpoints.js';
 const MAX_ARTICLES = 5;
 
 function cleanText(value, maxLength = 180) {
-  return String(value || '').replace(/\s+/g, ' ').trim().slice(0, maxLength);
+  return String(value || '').replaceAll(/\s+/g, ' ').trim().slice(0, maxLength);
 }
 
 function safeHttpUrl(value) {

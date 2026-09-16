@@ -357,17 +357,17 @@ test('a footprint-less relation just outside the viewport still renders', async 
 });
 
 test('a legacy cached response with no saturation flag still triggers the exact retry', () => {
-  const atCap = { elements: new Array(700).fill({ type: 'node' }), elementCap: 700 };
+  const atCap = { elements: Array.from({length: 700}).fill({ type: 'node' }), elementCap: 700 };
   assert.equal(installationResponseSaturated(atCap), true, 'derived from the reported cap');
   assert.equal(
-    installationResponseSaturated({ elements: new Array(699).fill({ type: 'node' }), elementCap: 700 }),
+    installationResponseSaturated({ elements: Array.from({length: 699}).fill({ type: 'node' }), elementCap: 700 }),
     false,
   );
   // An explicit flag always wins over the derivation.
   assert.equal(installationResponseSaturated({ ...atCap, saturated: false }), false);
   assert.equal(installationResponseSaturated({ elements: [], saturated: true }), true);
   // Nothing to derive from: do not invent saturation.
-  assert.equal(installationResponseSaturated({ elements: new Array(700).fill({}) }), false);
+  assert.equal(installationResponseSaturated({ elements: Array.from({length: 700}).fill({}) }), false);
   assert.equal(installationResponseSaturated(null), false);
 });
 
@@ -401,7 +401,7 @@ test('a failed load buys the frame its status change needs', async () => {
   try {
     assert.equal(harness.stats().status, 'unavailable');
     assert.ok(
-      harness.renderRequests().some((reason) => reason === 'installations-status'),
+      harness.renderRequests().includes('installations-status'),
       'an idle governor would otherwise leave the last healthy readout on screen',
     );
   } finally {

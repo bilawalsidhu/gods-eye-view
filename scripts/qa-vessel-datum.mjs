@@ -128,7 +128,7 @@ function probeVessels({ portLat, portLon, nearDeg, sampleCap }) {
     nearCount: nearHeights.length,
     medianHeight: median,
     minHeight: nearHeights[0] ?? null,
-    maxHeight: nearHeights[nearHeights.length - 1] ?? null,
+    maxHeight: nearHeights.at(-1) ?? null,
   };
 }
 

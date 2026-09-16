@@ -1524,10 +1524,23 @@ GitForge pipeline green.
   director). Each wave: gates green + push; coverage number recorded
   per wave. 99% statements is the goal line; ratchet via a threshold
   in `test:coverage` once above 90%.
-- [ ] **Batch E (lint)**: add `eslint-plugin-jsdoc` require rules
-  (doubles as the docs-coverage metric), evaluate `eslint-plugin-unicorn`
-  / type-aware `eslint-config`-equivalents compatible with plain-JS +
-  Vite; zero warnings retained.
+- [x] **Batch E (lint)** (2026-09-15): `eslint-plugin-jsdoc` +
+  `eslint-plugin-unicorn` (pinned 59.0.1 — 60.x needs ESLint 10) wired
+  into the gate at error level, zero warnings retained. Gate keeps the
+  jsdoc VALIDATION tier (types resolve, param names match signatures —
+  ~590 doc-rot defects fixed repo-wide) plus a curated unicorn
+  correctness set. Two documented scoping decisions: `no-await-
+  expression-member` is production-files-only (97% of violations were
+  the `(await ask()).field` test-assertion idiom), and `no-useless-
+  spread` is OFF — its autofix strips the `[...set]` snapshot in
+  emitter loops, proven to OOM scopeMask.test.mjs (handler rebinds
+  mid-fire; live Set iteration never terminates). The jsdoc REQUIRE
+  tier lives in `eslint.docs.config.js` (`npm run lint:docs`,
+  non-gating): the authored-surface docs-coverage metric feeding
+  Batch H — baseline 3921 gaps (1539 require-param, 723 require-jsdoc,
+  656 require-returns…), worst files radio.js (263),
+  annotationResolver.js (158), flights.js (133). Promotion into the
+  gate is a Batch H exit criterion.
 - [ ] **Batch F (AAA)**: run `scripts/qa-a11y.mjs`; fix every
   serious/critical + all AAA-tagged findings (contrast 7:1 on text,
   focus appearance, target size minimum); re-run to zero.

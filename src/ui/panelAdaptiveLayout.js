@@ -253,7 +253,7 @@ export function syncRightPanelAdaptiveLayout(mgr) {
         panel.style.removeProperty('--right-panel-allocated-height');
       }
     }
-    const gap = parseFloat(getComputedStyle(stack).rowGap) || 0;
+    const gap = Number.parseFloat(getComputedStyle(stack).rowGap) || 0;
     const naturalHeight = visiblePanels.reduce((total, panel) => (
       total + Math.max(
         panel.getBoundingClientRect().height,
@@ -473,6 +473,7 @@ export function scheduleLeftPanelLayout(mgr, { reconsiderAutoCollapse = false } 
  * Estimates an expanded panel's unconstrained content height from its
  * visible direct children and their scroll extents. This avoids treating a
  * flex-grown panel as naturally tall while still accounting for nested lists.
+ * @param {object} mgr - StyleManager instance; unused by this pure measurement helper (kept for the module's manager-first helper signature).
  * @param {HTMLElement} panel - Expanded accordion panel.
  * @returns {number} Natural height in rendered CSS pixels.
  */
@@ -483,23 +484,23 @@ function measureLeftPanelNaturalHeight(mgr, panel) {
     const innerRect = inner.getBoundingClientRect();
     const panelStyle = getComputedStyle(panel);
     const innerStyle = getComputedStyle(inner);
-    const paddingBottom = parseFloat(innerStyle.paddingBottom) || 0;
-    let contentBottom = parseFloat(innerStyle.paddingTop) || 0;
+    const paddingBottom = Number.parseFloat(innerStyle.paddingBottom) || 0;
+    let contentBottom = Number.parseFloat(innerStyle.paddingTop) || 0;
 
     for (const child of inner.children) {
       const childStyle = getComputedStyle(child);
       if (childStyle.display === 'none' || childStyle.visibility === 'hidden') continue;
       const childRect = child.getBoundingClientRect();
-      const marginBottom = parseFloat(childStyle.marginBottom) || 0;
+      const marginBottom = Number.parseFloat(childStyle.marginBottom) || 0;
       const naturalChildHeight = Math.max(childRect.height, child.scrollHeight || 0);
       const childBottom = childRect.top - innerRect.top + naturalChildHeight + marginBottom;
       contentBottom = Math.max(contentBottom, childBottom);
     }
 
-    const wrapperChrome = (parseFloat(panelStyle.borderTopWidth) || 0)
-      + (parseFloat(panelStyle.borderBottomWidth) || 0)
-      + (parseFloat(panelStyle.paddingTop) || 0)
-      + (parseFloat(panelStyle.paddingBottom) || 0);
+    const wrapperChrome = (Number.parseFloat(panelStyle.borderTopWidth) || 0)
+      + (Number.parseFloat(panelStyle.borderBottomWidth) || 0)
+      + (Number.parseFloat(panelStyle.paddingTop) || 0)
+      + (Number.parseFloat(panelStyle.paddingBottom) || 0);
     return Math.ceil(contentBottom + paddingBottom + wrapperChrome);
 }
 
@@ -642,7 +643,7 @@ export function syncLeftPanelAdaptiveLayout(mgr) {
     }, 0);
     let requiredHeight = siblingHeight;
 
-    const rowGap = parseFloat(getComputedStyle(stack).rowGap) || 0;
+    const rowGap = Number.parseFloat(getComputedStyle(stack).rowGap) || 0;
     if (expandedPanels.length) {
       requiredHeight += naturalExpandedHeight;
       requiredHeight += rowGap * Math.max(0, panels.length - 1);

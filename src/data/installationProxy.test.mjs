@@ -118,12 +118,12 @@ test('exact-viewport keys carry the same precision as the query bounds', () => {
 
 test('a pre-fix cache entry derives its missing saturation flag instead of lying', async () => {
   const now = 1_700_000_000_000;
-  const atCap = { payload: { elements: new Array(700).fill({ type: 'node' }), retrievedAt: '', status: 'ready' }, cachedAt: now };
-  const underCap = { payload: { elements: new Array(699).fill({ type: 'node' }), retrievedAt: '', status: 'ready' }, cachedAt: now };
+  const atCap = { payload: { elements: Array.from({length: 700}).fill({ type: 'node' }), retrievedAt: '', status: 'ready' }, cachedAt: now };
+  const underCap = { payload: { elements: Array.from({length: 699}).fill({ type: 'node' }), retrievedAt: '', status: 'ready' }, cachedAt: now };
   assert.equal(migrateMilitaryInstallationEntry(atCap).payload.saturated, true);
   assert.equal(migrateMilitaryInstallationEntry(underCap).payload.saturated, false);
   // An entry that already states it is authoritative.
-  const explicit = { payload: { elements: new Array(700).fill({}), saturated: false }, cachedAt: now };
+  const explicit = { payload: { elements: Array.from({length: 700}).fill({}), saturated: false }, cachedAt: now };
   assert.equal(migrateMilitaryInstallationEntry(explicit).payload.saturated, false);
   assert.equal(migrateMilitaryInstallationEntry(null), null);
 

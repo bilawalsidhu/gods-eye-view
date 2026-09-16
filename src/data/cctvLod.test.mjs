@@ -65,7 +65,7 @@ test('video cameras never consume ambient card slots', () => {
 
 test('selectCctvLod tolerates malformed candidate rows', () => {
   const selected = selectCctvLod(
-    [null, {}, { id: '', inView: true }, { id: 'cam-ok', inView: true, distanceKm: NaN }],
+    [null, {}, { id: '', inView: true }, { id: 'cam-ok', inView: true, distanceKm: Number.NaN }],
     { cameraHeightM: 500 }
   );
   assert.deepEqual(selected.cardIds, ['cam-ok']);
@@ -76,7 +76,7 @@ test('selectCctvLod tolerates malformed candidate rows', () => {
 test('incumbentRankKm discounts incumbents by the 20% factor', () => {
   assert.equal(incumbentRankKm(10, false), 10);
   assert.equal(incumbentRankKm(10, true), 10 * CCTV_CARD_INCUMBENT_FACTOR);
-  assert.equal(incumbentRankKm(NaN, true), Infinity);
+  assert.equal(incumbentRankKm(Number.NaN, true), Infinity);
 });
 
 test('selectCctvLod: a carded camera outranks a slightly-nearer non-carded one', () => {
@@ -183,7 +183,7 @@ test('distributeCctvCards: malformed rows dropped; offscreen anchors clamp to ed
   const ids = distributeCctvCards([
     null,
     { id: '', sx: 10, sy: 10, rankKm: 0 },
-    { id: 'nan', sx: NaN, sy: 10, rankKm: 0 },
+    { id: 'nan', sx: Number.NaN, sy: 10, rankKm: 0 },
     { id: 'ok', sx: 10, sy: 10, rankKm: 1 },
     // Margin candidates just outside the viewport land in the edge cells.
     { id: 'edge', sx: -20, sy: 850, rankKm: 2 },
@@ -223,12 +223,12 @@ test('center-weight helpers are bounded and robust to invalid anchors and outlie
   assert.equal(hasFiniteCctvViewport(Infinity, 800), false);
   assert.equal(screenCenterFraction(500, 400, 1000, 800), 0);
   assert.equal(screenCenterFraction(1000, 800, 1000, 800), 1);
-  assert.equal(screenCenterFraction(NaN, 400, 1000, 800), 1);
+  assert.equal(screenCenterFraction(Number.NaN, 400, 1000, 800), 1);
   assert.equal(screenCenterFraction(-200, -200, 1000, 800), 1);
   assert.equal(screenCenterFraction(500, 400, 0, 0), 0);
   const near = Array.from({ length: 20 }, (_, index) => 1 + index / 100);
   assert.equal(cctvCandidateSpreadKm([...near, 900]), 1.18);
-  assert.equal(cctvCandidateSpreadKm([Infinity, NaN]), 0);
+  assert.equal(cctvCandidateSpreadKm([Infinity, Number.NaN]), 0);
   assert.equal(blendCenterRankKm(10, 0, 20), 5);
   assert.equal(blendCenterRankKm(10, 1, 20), 15);
   assert.equal(blendCenterRankKm(10, 0.5, 20, 0), 10);
@@ -323,7 +323,7 @@ test('ineligible video, hidden, and malformed-distance rows cannot alter eligibl
       sy: 400,
     })),
     { id: 'hidden-outlier', distanceKm: 9_000, inView: false, sx: 900, sy: 700 },
-    { id: 'bad-distance', distanceKm: NaN, inView: true, sx: 900, sy: 700 },
+    { id: 'bad-distance', distanceKm: Number.NaN, inView: true, sx: 900, sy: 700 },
     { id: '', distanceKm: 0, inView: true, sx: 500, sy: 400 },
   ];
 
@@ -335,7 +335,7 @@ test('malformed-distance rows remain slot-neutral when valid candidates leave sp
   const view = { cameraHeightM: 500, viewW: 1000, viewH: 800 };
   const candidates = [
     { id: 'valid', distanceKm: 1, inView: true, sx: 500, sy: 400 },
-    { id: 'bad', distanceKm: NaN, inView: true, sx: 510, sy: 410 },
+    { id: 'bad', distanceKm: Number.NaN, inView: true, sx: 510, sy: 410 },
   ];
 
   assert.deepEqual(selectCctvLod(candidates, view).cardIds, ['valid']);
@@ -350,7 +350,7 @@ test('duplicate IDs are slot-neutral and choose a deterministic representative',
   const duplicates = [
     { ...edge[0], distanceKm: 1_000, sx: 500, sy: 400 },
     { ...center[0], sx: 20, sy: 780 },
-    { ...center[0], distanceKm: NaN, sx: 500, sy: 400 },
+    { ...center[0], distanceKm: Number.NaN, sx: 500, sy: 400 },
   ];
 
   assert.deepEqual(selectCctvLod([...eligible, ...duplicates], view).cardIds, baseline);
@@ -372,7 +372,7 @@ test('center weighting has deterministic ID ties and preserves invalid-anchor el
   const tied = [
     { id: 'tie-b', distanceKm: 10, inView: true, sx: 500, sy: 400 },
     { id: 'tie-a', distanceKm: 10, inView: true, sx: 500, sy: 400 },
-    { id: 'invalid-anchor', distanceKm: 30, inView: true, sx: NaN, sy: NaN },
+    { id: 'invalid-anchor', distanceKm: 30, inView: true, sx: Number.NaN, sy: Number.NaN },
   ];
   const selected = selectCctvLod([...anchors, ...tied], {
     cameraHeightM: 500,
@@ -384,7 +384,7 @@ test('center weighting has deterministic ID ties and preserves invalid-anchor el
   assert.equal(selected.cardIds.includes('invalid-anchor'), false, 'invalid anchor does not displace valid winners');
 
   const onlyInvalid = selectCctvLod([
-    { id: 'invalid-only', distanceKm: 1, inView: true, sx: NaN, sy: NaN },
+    { id: 'invalid-only', distanceKm: 1, inView: true, sx: Number.NaN, sy: Number.NaN },
   ], { cameraHeightM: 500, viewW: 1000, viewH: 800 });
   assert.deepEqual(onlyInvalid.cardIds, ['invalid-only'], 'defensive top-up preserves eligibility');
 });

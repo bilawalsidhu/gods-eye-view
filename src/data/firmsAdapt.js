@@ -11,8 +11,8 @@
  * non-finite coordinates are skipped; `index` is the post-skip position
  * (it keys pick ids and context-store ids, so it must stay sequential).
  * `contextEntity`/`position` start null and are lazily filled by the layer.
- * @param {?Array<Object>} records - /api/firms `fires` array.
- * @returns {Array<Object>} Internal fire records.
+ * @param {?Array<object>} records - /api/firms `fires` array.
+ * @returns {Array<object>} Internal fire records.
  */
 export function adaptFirmsRecords(records) {
   const fires = [];

@@ -103,7 +103,7 @@ export const CCTV_THUMBNAIL_ALTITUDE_SCALE = Object.freeze({
  * band. A user-pinned hover card may intentionally enter the band because it
  * is temporary and requested; persistent ambient cards yield to the HUD.
  *
- * @param {Object} input
+ * @param {object} input
  * @param {number} input.sy - Anchor Y in CSS pixels.
  * @param {number} input.viewH - Viewport height in CSS pixels.
  * @param {boolean} [input.pinned=false]
@@ -122,7 +122,7 @@ export function isCctvCardAnchorSafe({ sy, viewH, pinned = false } = {}) {
  * anchor keeps `minSepPx` from every already-accepted anchor, so cards never
  * pile onto each other or bury neighboring camera icons.
  * @param {Array<{id:string,sx:number,sy:number,distanceKm:number}>} candidates
- * @param {Object} [options]
+ * @param {object} [options]
  * @param {number} [options.minSepPx]
  * @param {number} [options.limit]
  * @returns {string[]} Accepted ids, nearest-first.
@@ -187,7 +187,7 @@ export function cardScaleForAltitude(cameraHeightM) {
  * card has a first frame the layer drops back to the steady-state global
  * gate (single in-flight fetch, one launch per second — an in-flight fetch
  * still blocks the tick, so slow responses only lower the rate).
- * @param {Object} [input]
+ * @param {object} [input]
  * @param {boolean} [input.coldFill] - A selected card lacks its first frame.
  * @param {number} [input.inFlight] - Current in-flight fetch count.
  * @param {number} [input.sinceLastLaunchMs] - Ms since the last fetch launch.

@@ -99,7 +99,7 @@ export function selectEarthquakeOverlayCohort(
  * (analyst query engine seam). Pure — no Cesium types. Missing/unknown
  * fields are null, never NaN/undefined. Falls back to an index-based id
  * when the USGS event id is absent.
- * @param {Object|null|undefined} raw - Plain values pulled off the entity:
+ * @param {object|null|undefined} raw - Plain values pulled off the entity:
  *   {id, mag, place, time, depth, lat, lon}.
  * @param {number} [index=0] - Position in the snapshot (fallback id only).
  * @returns {{id: string, magnitude: number|null, depthKm: number|null,
@@ -304,7 +304,7 @@ export function createEarthquakesLayer({ overlayHost = DEFAULT_OVERLAY_HOST } = 
    * once per spoken query) — zero per-frame cost, no listeners, no caching.
    * Returns [] while the layer is disabled or empty.
    * @param {number} [maxCount=2000] - Maximum records to return (truncation).
-   * @returns {Array<Object>} See mapAnalystRecord for the record shape.
+   * @returns {Array<object>} See mapAnalystRecord for the record shape.
    */
   getAnalystRecords(maxCount = 2000) {
     if (!_dataSource || !_dataSource.show) return [];

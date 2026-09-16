@@ -11,9 +11,9 @@
  * @module data/trafficFlowStyle
  */
 
-/** @const {number} Levels at/above this render as free-flowing (green). */
+/** @constant {number} Levels at/above this render as free-flowing (green). */
 const FREE_THRESHOLD = 0.85;
-/** @const {number} Levels at/above this (and below FREE) render slow (amber); below is jam (red). */
+/** @constant {number} Levels at/above this (and below FREE) render slow (amber); below is jam (red). */
 const SLOW_THRESHOLD = 0.55;
 
 /**
@@ -69,7 +69,7 @@ export function flowSpeedScale(level) {
  * curves are identical for level ≥ 0.4.
  *
  * @param {number} level - traffic_level 0..1.
- * @param {Object}  [opts]
+ * @param {object}  [opts]
  * @param {boolean} [opts.jamBoost=false] - Deepen the curve below the 2.5 cap.
  * @returns {number} Multiplier within [1, 2.5] (or [1, 4] boosted); non-finite input → 1.
  */

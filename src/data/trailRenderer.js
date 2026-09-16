@@ -97,7 +97,7 @@ export function createTrail(viewer, { color, width = 2.5 }) {
       const positions = [];
       for (const position of Array.isArray(cartesians) ? cartesians : []) {
         if (!position) continue;
-        const last = positions[positions.length - 1];
+        const last = positions.at(-1);
         if (last && Cesium.Cartesian3.distanceSquared(last, position) < MIN_SEGMENT_DISTANCE_SQ) continue;
         positions.push(position);
       }

@@ -764,7 +764,7 @@ async function samplePhase(page, moving) {
 async function captureShot(page, shotsDir, sceneId, suffix) {
   if (!shotsDir) return null;
   fs.mkdirSync(shotsDir, { recursive: true });
-  const safeScene = sceneId.replace(/[^a-z0-9-]+/gi, '-');
+  const safeScene = sceneId.replaceAll(/[^a-z0-9-]+/gi, '-');
   const outPath = path.join(shotsDir, `${safeScene}-${suffix}.png`);
   await page.screenshot({ path: outPath });
   return outPath;

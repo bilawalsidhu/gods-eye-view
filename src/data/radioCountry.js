@@ -19,10 +19,10 @@ function countryKey(value) {
   return String(value || '')
     .normalize('NFKC')
     .toLocaleLowerCase('en')
-    .replace(/[‐‑‒–—-]+/g, ' ')
-    .replace(/[.’']/g, '')
-    .replace(/&/g, ' and ')
-    .replace(/\s+/g, ' ')
+    .replaceAll(/[‐‑‒–—-]+/g, ' ')
+    .replaceAll(/[.’']/g, '')
+    .replaceAll('&', ' and ')
+    .replaceAll(/\s+/g, ' ')
     .trim();
 }
 
@@ -72,7 +72,7 @@ export function normalizeRadioCountryInput(value) {
   if (typeof value !== 'string' || value.length > RADIO_COUNTRY_MAX_LENGTH) {
     return Object.freeze({ valid: false, empty: false, code: '', name: '' });
   }
-  const trimmed = value.normalize('NFKC').trim().replace(/\s+/g, ' ');
+  const trimmed = value.normalize('NFKC').trim().replaceAll(/\s+/g, ' ');
   if (
     !trimmed
     || trimmed.length > RADIO_COUNTRY_MAX_LENGTH

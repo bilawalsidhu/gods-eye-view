@@ -33,7 +33,7 @@
  * @module data/trafficPresetStyle
  */
 
-/** @const {Object<string,'mono'|'crt'>} Style name → non-normal profile. */
+/** @constant {[key: string]: 'mono'|'crt'} Style name → non-normal profile. */
 const PROFILE_BY_STYLE = {
   surveillance: 'mono', // NVG — P43 phosphor × luma
   thermal: 'mono',      // FLIR — grayscale/ironbow × luma
@@ -45,7 +45,7 @@ const PROFILE_BY_STYLE = {
  * Per-profile bucket treatments: rgba ([r,g,b] 0–255 + alpha 0–1) and the
  * pixel-size delta added ON TOP of the shipped sizing (which already gives
  * jam +1). Mono luma: jam 1.00 / slow 0.70 / free 0.36.
- * @const {Object<string, Object<string, {rgba:number[], sizeDelta:number}>>}
+ * @constant {[key: string]: [key: string]: {rgba:number[], sizeDelta:number}}
  */
 const DOT_STYLE = {
   mono: {

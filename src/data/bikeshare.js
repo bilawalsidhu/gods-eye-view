@@ -91,7 +91,7 @@ function buildBcycleUrls(systemId) {
 /**
  * Convenience factory for a BCycle-hosted city registry entry.
  * Merges caller-supplied metadata with auto-generated BCycle GBFS URLs.
- * @param {Object} opts
+ * @param {object} opts
  * @param {string} opts.id - Unique city identifier.
  * @param {string} opts.city - Human-readable city name.
  * @param {number} opts.centerLat - City center latitude.
@@ -99,7 +99,7 @@ function buildBcycleUrls(systemId) {
  * @param {string} opts.systemId - BCycle system identifier.
  * @param {number} [opts.loadRadiusKm=100] - Activation radius in km.
  * @param {string} [opts.provider='BCycle'] - Display provider name.
- * @returns {Object} Raw registry entry suitable for RAW_GBFS_CITY_REGISTRY.
+ * @returns {object} Raw registry entry suitable for RAW_GBFS_CITY_REGISTRY.
  */
 function bcycleEntry({ id, city, centerLat, centerLon, systemId, loadRadiusKm = 100, provider = 'BCycle' }) {
   return {
@@ -117,7 +117,7 @@ function bcycleEntry({ id, city, centerLat, centerLon, systemId, loadRadiusKm = 
  * Raw registry of supported GBFS bikeshare cities.
  * Each entry specifies the city center, load radius, GBFS feed URLs, and provider name.
  * Entries using BCycle hosting are constructed via bcycleEntry() for brevity.
- * @type {Object[]}
+ * @type {object[]}
  */
 const RAW_GBFS_CITY_REGISTRY = [
   {
@@ -397,8 +397,8 @@ const RAW_GBFS_CITY_REGISTRY = [
  * Validate and normalize a raw GBFS city registry entry.
  * Ensures required fields are present, URLs are HTTPS and match expected
  * GBFS endpoint patterns, and coordinates are finite numbers.
- * @param {Object} entry - Raw registry entry from RAW_GBFS_CITY_REGISTRY.
- * @returns {Object} Normalized entry with validated fields and extracted hostnames.
+ * @param {object} entry - Raw registry entry from RAW_GBFS_CITY_REGISTRY.
+ * @returns {object} Normalized entry with validated fields and extracted hostnames.
  * @throws {Error} If any required field is missing or invalid.
  */
 function normalizeRegistryEntry(entry) {
@@ -448,7 +448,7 @@ function normalizeRegistryEntry(entry) {
 /**
  * Validated and deduplicated city registry, built at module load time.
  * Throws if any entry fails validation or has a duplicate id.
- * @type {Object[]}
+ * @type {object[]}
  */
 const GBFS_CITY_REGISTRY = (() => {
   const seen = new Set();
@@ -489,16 +489,16 @@ let _activeCityIds = new Set();
 /** @type {Map<string, { stationKeys: Set<string> }>} Per-city runtime tracking of rendered station keys. */
 let _cityRuntime = new Map();
 
-/** @type {Map<string, Map<string, Object>>} Cached station information per city (cityId -> stationId -> StationInfo). */
+/** @type {Map<string, Map<string, object>>} Cached station information per city (cityId -> stationId -> StationInfo). */
 let _stationInfoCache = new Map();
-/** @type {Map<string, { timestamp: number, statusMap: Map<string, Object> }>} Cached station status per city. */
+/** @type {Map<string, { timestamp: number, statusMap: Map<string, object> }>} Cached station status per city. */
 let _statusCache = new Map();
 /** @type {Map<string, { promise: Promise, controller: AbortController, generation: number }>} In-flight station info requests. */
 let _inFlightInfo = new Map();
 /** @type {Map<string, { promise: Promise, controller: AbortController, generation: number }>} In-flight station status requests. */
 let _inFlightStatus = new Map();
 
-/** @type {Map<string, Object>} Render records keyed by "cityId:stationId". */
+/** @type {Map<string, object>} Render records keyed by "cityId:stationId". */
 let _stationRenderMap = new Map();
 /** @type {Cesium.ScreenSpaceEventHandler|null} Click handler for station selection. */
 let _clickHandler = null;
@@ -686,8 +686,8 @@ function computeInRangeCities(center) {
  * Extract the stations array from a GBFS JSON payload.
  * Handles multiple response shapes: { data: { stations: [...] } },
  * { data: [...] }, and nested objects with a stations sub-key.
- * @param {Object} payload - Parsed GBFS JSON response.
- * @returns {Object[]} Array of raw station objects (may be empty).
+ * @param {object} payload - Parsed GBFS JSON response.
+ * @returns {object[]} Array of raw station objects (may be empty).
  */
 function extractStationsArray(payload) {
   const data = payload?.data;
@@ -707,8 +707,8 @@ function extractStationsArray(payload) {
  * Handles field-name variations across different GBFS providers
  * (station_id vs id, lat vs latitude, etc.). Stations with missing or
  * invalid coordinates are silently skipped.
- * @param {Object} payload - Parsed station_information.json response.
- * @returns {Map<string, Object>} Map of stationId to station info objects.
+ * @param {object} payload - Parsed station_information.json response.
+ * @returns {Map<string, object>} Map of stationId to station info objects.
  */
 function parseStationInformation(payload) {
   const stations = extractStationsArray(payload);
@@ -738,8 +738,8 @@ function parseStationInformation(payload) {
 
 /**
  * Parse a GBFS station_status payload into a Map of real-time availability.
- * @param {Object} payload - Parsed station_status.json response.
- * @returns {Map<string, Object>} Map of stationId to status objects containing
+ * @param {object} payload - Parsed station_status.json response.
+ * @returns {Map<string, object>} Map of stationId to status objects containing
  *   bikesAvailable, docksAvailable, and operational flags.
  */
 function parseStationStatus(payload) {
@@ -769,9 +769,9 @@ function parseStationStatus(payload) {
 /**
  * Fetch and parse JSON from a GBFS endpoint via the local proxy.
  * @param {string} upstreamUrl - Full HTTPS GBFS endpoint URL.
- * @param {Object} [options]
+ * @param {object} [options]
  * @param {AbortSignal} [options.signal] - Optional abort signal for cancellation.
- * @returns {Promise<Object>} Parsed JSON payload.
+ * @returns {Promise<object>} Parsed JSON payload.
  * @throws {Error} On non-OK HTTP status or malformed JSON.
  */
 async function fetchGbfsJson(upstreamUrl, { signal } = {}) {
@@ -821,7 +821,7 @@ function abortAllInFlight() {
  * fetched once per city per session.
  * @param {string} cityId - City identifier.
  * @param {number} generation - Proximity generation to detect stale requests.
- * @returns {Promise<Map<string, Object>>} Map of stationId to station info.
+ * @returns {Promise<Map<string, object>>} Map of stationId to station info.
  * @throws {Error} On unknown city, fetch failure, or empty station list.
  */
 async function loadCityStationInfo(cityId, generation) {
@@ -862,7 +862,7 @@ async function loadCityStationInfo(cityId, generation) {
  * to keep availability data current. Concurrent requests are deduplicated.
  * @param {string} cityId - City identifier.
  * @param {number} generation - Proximity generation to detect stale requests.
- * @returns {Promise<Map<string, Object>>} Map of stationId to status objects.
+ * @returns {Promise<Map<string, object>>} Map of stationId to status objects.
  * @throws {Error} On unknown city or fetch failure.
  */
 async function loadCityStationStatus(cityId, generation) {
@@ -900,7 +900,7 @@ async function loadCityStationStatus(cityId, generation) {
  * Prefers the explicit capacity from station_information; falls back to
  * bikes+docks from status data; uses DEFAULT_CAPACITY as last resort.
  * @param {number|null} capacityFromInfo - Capacity from station_information, or null.
- * @param {Object|null} status - Station status object with bikesAvailable/docksAvailable.
+ * @param {object|null} status - Station status object with bikesAvailable/docksAvailable.
  * @returns {number} Resolved capacity (always > 0).
  */
 function resolveCapacity(capacityFromInfo, status) {
@@ -937,7 +937,7 @@ function capacityToPixelSize(capacity) {
  * - >60% bikes available: green.
  * - 30-60% bikes available: yellow.
  * - <30% bikes available: red.
- * @param {Object|null} status - Station status object.
+ * @param {object|null} status - Station status object.
  * @param {number} capacity - Resolved station capacity.
  * @returns {Cesium.Color} Color to apply to the station point.
  */
@@ -958,7 +958,7 @@ function statusToColor(status, capacity) {
 /**
  * Build a multi-line text label for the selected station popup.
  * Shows station name, availability counts, and any abnormal operational flags.
- * @param {Object} record - Render record from _stationRenderMap.
+ * @param {object} record - Render record from _stationRenderMap.
  * @returns {string} Newline-delimited source text for the selected host card.
  */
 function buildSelectionLabel(record) {
@@ -988,8 +988,8 @@ function buildSelectionLabel(record) {
 /**
  * Build the protected selected-station entry from source-owned copy.
  * @param {string} key Stable city/station composite key.
- * @param {Object} record Bikeshare render record.
- * @returns {Object|null}
+ * @param {object} record Bikeshare render record.
+ * @returns {object|null}
  */
 export function createBikeshareSelectedOverlayEntry(key, record) {
   const position = record?.point?.position;
@@ -1110,7 +1110,7 @@ function _installClickHandler(viewer) {
 /**
  * Create a Cartesian3 position for a station, terrain-clamped when possible.
  * Falls back to a fixed small height offset if terrain sampling is unsupported.
- * @param {Object} station - Station info object with lat/lon.
+ * @param {object} station - Station info object with lat/lon.
  * @returns {Cesium.Cartesian3|null} World position, or null if coordinates are invalid.
  */
 function createStationPosition(station) {
@@ -1148,7 +1148,7 @@ function ensureCityRuntime(cityId) {
  * Creates new points for stations not yet rendered; skips existing ones.
  * Respects the MAX_TOTAL_POINTS global cap to prevent GPU overload.
  * @param {string} cityId - City identifier.
- * @param {Map<string, Object>} stationMap - Parsed station info map for the city.
+ * @param {Map<string, object>} stationMap - Parsed station info map for the city.
  */
 function ensureCityPoints(cityId, stationMap) {
   // Deferred debounce/fetch completions mutate point primitives after the
@@ -1238,7 +1238,7 @@ function removeCityPoints(cityId) {
  * Updates each point's color (availability ratio) and pixel size (capacity),
  * and refreshes the render record's cached availability fields.
  * @param {string} cityId - City identifier.
- * @param {Map<string, Object>} statusMap - Parsed station status map.
+ * @param {Map<string, object>} statusMap - Parsed station status map.
  */
 function applyStatusToPoints(cityId, statusMap) {
   governorRequestRender('bikeshare-status');
@@ -1268,7 +1268,7 @@ function applyStatusToPoints(cityId, statusMap) {
 /**
  * Build a compact HUD detection ID string for a station.
  * Truncates long names to 24 chars for readability.
- * @param {Object} record - Render record from _stationRenderMap.
+ * @param {object} record - Render record from _stationRenderMap.
  * @returns {string} Formatted label like "Station Name [5/20]".
  */
 function buildDetectionId(record) {
@@ -1286,7 +1286,7 @@ function buildDetectionId(record) {
  * Collect a sampled subset of visible stations for HUD detection overlay rendering.
  * Uses a deterministic stride pattern controlled by options.seed and options.maxCount
  * to avoid overcrowding the HUD while still providing broad coverage.
- * @param {Object} [options]
+ * @param {object} [options]
  * @param {number} [options.maxCount] - Maximum number of detectable objects to return.
  * @param {number} [options.seed] - Seed for deterministic stride offset selection.
  * @returns {Array<{ position: Cesium.Cartesian3, id: string, type: string, skipLabel: boolean }>}
@@ -1446,7 +1446,7 @@ function onCameraChanged() {
  * Bikeshare data layer object, conforming to the God's Eye View layer interface.
  * Manages lifecycle (init/enable/disable/update) and provides detection and
  * stats hooks for the HUD and UI systems.
- * @type {Object}
+ * @type {object}
  */
 const bikeshareLayer = {
   id: 'bikeshare',
@@ -1590,7 +1590,7 @@ const bikeshareLayer = {
 
   /**
    * Return a sampled array of detectable station objects for HUD overlay rendering.
-   * @param {Object} [options] - Sampling options (maxCount, seed).
+   * @param {object} [options] - Sampling options (maxCount, seed).
    * @returns {Array<{ position: Cesium.Cartesian3, id: string, type: string, skipLabel: boolean }>}
    */
   getDetectableObjects(options = {}) {

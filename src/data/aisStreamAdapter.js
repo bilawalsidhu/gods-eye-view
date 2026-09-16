@@ -68,7 +68,7 @@ export function classifyAisFailure(input = {}) {
     // ws reports a failed upgrade as "Unexpected server response: 401" when no
     // 'unexpected-response' listener consumed it.
     const match = /unexpected server response:\s*(\d{3})/i.exec(text);
-    status = match ? Number(match[1]) : NaN;
+    status = match ? Number(match[1]) : Number.NaN;
   }
 
   if (status === 401 || status === 403) {
@@ -113,7 +113,7 @@ export function decodeAisFrameSync(data) {
   if (Array.isArray(data)) {
     // ws delivers a fragmented message as an array of Buffers.
     const parts = data.map(decodeAisFrameSync);
-    return parts.some((part) => part === null) ? null : parts.join('');
+    return parts.includes(null) ? null : parts.join('');
   }
   return null;
 }
@@ -198,8 +198,8 @@ export const AIS_RECOGNIZED_MESSAGE_TYPES = Object.freeze(new Set([
 
 /**
  * Resolve an envelope's MMSI, or null.
- * @param {Object} envelope
- * @param {Object} body
+ * @param {object} envelope
+ * @param {object} body
  * @returns {string|null}
  */
 export function aisEnvelopeMmsi(envelope, body = {}) {
@@ -217,7 +217,7 @@ export function aisEnvelopeMmsi(envelope, body = {}) {
  * MMSI. An envelope carrying nothing but an MMSI is not evidence the feed
  * works: that is exactly the shape a malformed or synthetic frame takes.
  *
- * @param {Object} envelope
+ * @param {object} envelope
  * @returns {boolean}
  */
 export function isRecognizedAisEnvelope(envelope) {
@@ -233,7 +233,7 @@ export function isRecognizedAisEnvelope(envelope) {
  * Parse a decoded frame into a classified envelope.
  *
  * @param {string} text
- * @returns {{kind: 'malformed'}|{kind: 'error', message: string}|{kind: 'data', envelope: Object}}
+ * @returns {{kind: 'malformed'}|{kind: 'error', message: string}|{kind: 'data', envelope: object}}
  */
 export function parseAisEnvelope(text) {
   let envelope;
@@ -252,15 +252,15 @@ export function parseAisEnvelope(text) {
 /**
  * Create the AISStream transport adapter.
  *
- * @param {Object} options
- * @param {(url: string) => Object} options.createSocket Socket factory.
+ * @param {object} options
+ * @param {(url: string) => object} options.createSocket Socket factory.
  * @param {() => string} options.resolveUrl Upstream URL, read per connect.
- * @param {() => Object} options.buildSubscription Subscription payload.
- * @param {(envelope: Object) => boolean} options.ingestEnvelope Returns true
+ * @param {() => object} options.buildSubscription Subscription payload.
+ * @param {(envelope: object) => boolean} options.ingestEnvelope Returns true
  *   only when the envelope was a real AIS record — the sole liveness proof.
- * @param {{wall: function, mono: function}} [options.clock]
+ * @param {{wall: Function, mono: Function}} [options.clock]
  * @param {(message: string) => void} [options.warn]
- * @returns {Object} adapter handle
+ * @returns {object} adapter handle
  */
 export function createAisStreamAdapter(options) {
   const {
@@ -320,8 +320,8 @@ export function createAisStreamAdapter(options) {
 
   /**
    * Perform watchdog actions in order.
-   * @param {Object} owner Watchdog instance that produced the actions.
-   * @param {Array<Object>} actions
+   * @param {object} owner Watchdog instance that produced the actions.
+   * @param {Array<object>} actions
    */
   function runActions(owner, actions) {
     for (const action of actions || []) {

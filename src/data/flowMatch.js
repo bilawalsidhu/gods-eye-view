@@ -23,17 +23,17 @@
  * @module data/flowMatch
  */
 
-/** @const {number} Meters per degree of latitude (spherical approximation). */
+/** @constant {number} Meters per degree of latitude (spherical approximation). */
 const M_PER_DEG_LAT = 111320;
-/** @const {number} Spatial-hash cell size in meters (~100 m per spec). */
+/** @constant {number} Spatial-hash cell size in meters (~100 m per spec). */
 const CELL_SIZE_M = 100;
-/** @const {number} Max snap distance from a road sample to a flow segment. */
+/** @constant {number} Max snap distance from a road sample to a flow segment. */
 const MATCH_RADIUS_M = 35;
-/** @const {number} Max bearing disagreement (degrees, folded mod 180). */
+/** @constant {number} Max bearing disagreement (degrees, folded mod 180). */
 const BEARING_TOLERANCE_DEG = 30;
-/** @const {number} Evenly-spaced samples per road. */
+/** @constant {number} Evenly-spaced samples per road. */
 const ROAD_SAMPLES = 7;
-/** @const {number} Minimum matched samples for a road to count as matched. */
+/** @constant {number} Minimum matched samples for a road to count as matched. */
 const MIN_MATCHED_SAMPLES = 2;
 
 /**
@@ -96,7 +96,7 @@ function pointSegDist2(px, py, ax, ay, bx, by) {
  */
 export function matchFlowToRoads(roads, flowSegments) {
   const roadCount = Array.isArray(roads) ? roads.length : 0;
-  const matches = new Array(roadCount).fill(null);
+  const matches = Array.from({ length: roadCount }, () => null);
   const empty = { matches, matchedCount: 0, candidateCount: 0 };
   if (roadCount === 0 || !Array.isArray(flowSegments) || flowSegments.length === 0) {
     return empty;
@@ -166,9 +166,9 @@ export function matchFlowToRoads(roads, flowSegments) {
     if (!Array.isArray(coords) || coords.length < 2) continue;
 
     // Project the road once; accumulate arc length for even sampling.
-    const xs = new Array(coords.length);
-    const ys = new Array(coords.length);
-    const cum = new Array(coords.length);
+    const xs = Array.from({length: coords.length});
+    const ys = Array.from({length: coords.length});
+    const cum = Array.from({length: coords.length});
     cum[0] = 0;
     for (let i = 0; i < coords.length; i++) {
       xs[i] = projX(coords[i][0]);

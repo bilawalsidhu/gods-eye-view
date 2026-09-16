@@ -55,7 +55,7 @@ const TTL_MS = 24 * 3600_000;
  * Enrichment store, shaped like the dev middleware's `{routes, aircraft}` so a
  * future KV/Durable Object sink can take over the persistence without touching
  * the lookup logic.
- * @type {{routes: Object<string, {at:number, data:object|null}>, aircraft: Object<string, {at:number, data:object|null}>}}
+ * @type {{routes: [key: string]: {at:number, data:object|null}, aircraft: [key: string]: {at:number, data:object|null}}}
  */
 const store = { routes: {}, aircraft: {} };
 /** @type {Map<string, Promise<object|null>>} `kind:key` single-flight. */

@@ -107,10 +107,10 @@ export async function fetchRegionalText(url, {
 
 export function decodeRssText(value) {
   return String(value || '')
-    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
-    .replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
-    .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-    .replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    .replaceAll(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+    .replaceAll('&amp;', '&').replaceAll('&quot;', '"').replaceAll('&#39;', "'")
+    .replaceAll('&lt;', '<').replaceAll('&gt;', '>')
+    .replaceAll(/<[^>]+>/g, ' ').replaceAll(/\s+/g, ' ').trim();
 }
 
 export function rssTag(block, tag) {
@@ -173,7 +173,7 @@ export async function fetchRegionalNews(place) {
   const query = place?.locality || place?.region || place?.country;
   if (!query) return { status: 'unavailable', query: null, articles: [], source: null };
   const rssParams = new URLSearchParams({
-    q: String(query).replace(/["\\]/g, ' ').trim(),
+    q: String(query).replaceAll(/["\\]/g, ' ').trim(),
     hl: 'en-US',
     gl: 'US',
     ceid: 'US:en',
@@ -187,7 +187,7 @@ export async function fetchRegionalNews(place) {
     if (articles.length) return { status: 'ready', query, articles, source: 'Google News RSS' };
   } catch { /* fall through to the existing free index */ }
   const params = new URLSearchParams({
-    query: `"${String(query).replace(/["\\]/g, ' ').trim()}"`,
+    query: `"${String(query).replaceAll(/["\\]/g, ' ').trim()}"`,
     mode: 'artlist',
     format: 'json',
     maxrecords: '5',

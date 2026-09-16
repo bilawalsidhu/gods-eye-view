@@ -81,6 +81,22 @@ export function terrainRetryAfterMs(value, nowMs = Date.now()) {
  * Dependencies are injectable for deterministic offline tests.
  * @param {Array<[number, number]>} points
  * @param {object} [options]
+ * @param {Function} [options.fetchImpl] - Injectable fetch implementation used
+ *   by tests; defaults to globalThis.fetch.
+ * @param {Function} [options.sleep] - Injectable delay callback used by tests;
+ *   defaults to a promise-wrapped setTimeout.
+ * @param {Function} [options.random] - Injectable randomness source for
+ *   backoff jitter; defaults to Math.random.
+ * @param {Function} [options.now] - Injectable clock returning current epoch
+ *   milliseconds; defaults to Date.now.
+ * @param {Function} [options.makeSignal] - Injectable abort-signal factory
+ *   taking a timeout in milliseconds; defaults to AbortSignal.timeout.
+ * @param {number} [options.attemptTimeoutMs=30000] - Per-attempt fetch timeout
+ *   in milliseconds.
+ * @param {number} [options.retryBudgetMs=10000] - Total milliseconds retries
+ *   may add after the first attempt settles.
+ * @param {number} [options.maxAttempts=4] - Maximum number of upstream
+ *   attempts (one initial plus bounded retries).
  * @returns {Promise<Array<object>>}
  */
 export async function fetchTerrainChunkWithRetry(points, {

@@ -149,7 +149,7 @@ export function textureDomainLon(lon, bounds) {
  * — the exact value the entity path uses for its alpha ramp — rescaled into
  * the crate's 300–500 K window, so texture heat ordering matches the entity
  * path cell-for-cell.
- * @param {Array<Object>} cells - Aggregated cells (aggregateFires output).
+ * @param {Array<object>} cells - Aggregated cells (aggregateFires output).
  * @param {{gridDegrees: number}} lod - Active LOD descriptor.
  * @param {{west: number, south: number, east: number, north: number,
  *   wraps: boolean}|null} bounds - Padded degree bounds (null → all cells).

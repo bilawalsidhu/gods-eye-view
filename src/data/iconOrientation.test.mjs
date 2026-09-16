@@ -163,7 +163,7 @@ test('the band lerps monotonically and saturates on both sides', () => {
     );
   }
   assert.equal(samples[0], 0, 'well below the horizon is fully grounded');
-  assert.equal(samples[samples.length - 1], 1, 'well above the horizon is fully sky');
+  assert.equal(samples.at(-1), 1, 'well above the horizon is fully sky');
   const partial = samples.filter((value) => value > 0 && value < 1);
   assert.ok(partial.length >= 3, `expected a real blend band, saw ${partial.length} partial samples`);
 });
@@ -442,8 +442,8 @@ test('a degenerate camera or contact reports ground rather than throwing', () =>
   assert.equal(skyBackdropFactor(cruiseCamera, cruiseCamera), 0);
   // The planet's centre has no local vertical to measure against.
   assert.equal(skyBackdropFactor(Cesium.Cartesian3.ZERO, cruiseCamera), 0);
-  assert.equal(skyBackdropFactor(new Cesium.Cartesian3(NaN, NaN, NaN), cruiseCamera), 0);
-  assert.equal(skyBackdropFactor(cruiseCamera, new Cesium.Cartesian3(NaN, NaN, NaN)), 0);
+  assert.equal(skyBackdropFactor(new Cesium.Cartesian3(Number.NaN, Number.NaN, Number.NaN), cruiseCamera), 0);
+  assert.equal(skyBackdropFactor(cruiseCamera, new Cesium.Cartesian3(Number.NaN, Number.NaN, Number.NaN)), 0);
   // An infinite coordinate normalizes to NaN a few lines later, and a NaN plate
   // alpha reaches the canvas as an invisible label rather than a caught error.
   assert.equal(skyBackdropFactor(new Cesium.Cartesian3(Infinity, 0, 0), cruiseCamera), 0);

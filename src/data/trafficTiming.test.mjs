@@ -75,10 +75,10 @@ function functionBody(name) {
 
 function canonicalSemanticBody(body) {
   return body
-    .replace(/\/\* TRACE_ONLY_BEGIN \*\/[\s\S]*?\/\* TRACE_ONLY_END \*\//g, '')
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/\/\/[^\n]*/g, '')
-    .replace(/\s+/g, '')
+    .replaceAll(/\/\* TRACE_ONLY_BEGIN \*\/[\s\S]*?\/\* TRACE_ONLY_END \*\//g, '')
+    .replaceAll(/\/\*[\s\S]*?\*\//g, '')
+    .replaceAll(/\/\/[^\n]*/g, '')
+    .replaceAll(/\s+/g, '')
     .replace(
       'if(!overpassData||!overpassData.elements){return[];}',
       'if(!overpassData||!overpassData.elements)return[];',

@@ -235,8 +235,8 @@ const outage = samples.filter((s) => s.phase === 'B');
 const meshRows = outage.filter((s) => s.meshClearM != null);
 const demRows = outage.filter((s) => s.demClearM != null);
 record('the terrain proxy really went down mid-run',
-  outage.length > 0 && outage[outage.length - 1].terrain.failed > 0,
-  `${outage[outage.length - 1]?.terrain?.failed ?? 0} requests answered 504`);
+  outage.length > 0 && outage.at(-1).terrain.failed > 0,
+  `${outage.at(-1)?.terrain?.failed ?? 0} requests answered 504`);
 record('the contact stayed visible throughout', outage.every((s) => s.shown === true));
 if (meshRows.length) {
   const worst = Math.min(...meshRows.map((s) => s.meshClearM));

@@ -56,14 +56,14 @@ function parseArgs() {
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
       case '--input':   opts.input = args[++i]; break;
-      case '--heading':  opts.heading = parseFloat(args[++i]); break;
-      case '--pitch':    opts.pitch = parseFloat(args[++i]); break;
-      case '--roll':     opts.roll = parseFloat(args[++i]); break;
-      case '--hfov':     opts.hfov = parseFloat(args[++i]); break;
-      case '--focal':    opts.focal = parseFloat(args[++i]); break;
-      case '--width':    opts.width = parseInt(args[++i], 10); break;
-      case '--height':   opts.height = parseInt(args[++i], 10); break;
-      case '--step':     opts.step = parseInt(args[++i], 10); break;
+      case '--heading':  opts.heading = Number.parseFloat(args[++i]); break;
+      case '--pitch':    opts.pitch = Number.parseFloat(args[++i]); break;
+      case '--roll':     opts.roll = Number.parseFloat(args[++i]); break;
+      case '--hfov':     opts.hfov = Number.parseFloat(args[++i]); break;
+      case '--focal':    opts.focal = Number.parseFloat(args[++i]); break;
+      case '--width':    opts.width = Number.parseInt(args[++i], 10); break;
+      case '--height':   opts.height = Number.parseInt(args[++i], 10); break;
+      case '--step':     opts.step = Number.parseInt(args[++i], 10); break;
       case '--all':      opts.all = true; break;
       case '--outdir':   opts.outdir = args[++i]; break;
       case '--help':

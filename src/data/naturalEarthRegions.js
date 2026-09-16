@@ -50,9 +50,9 @@ function normalizeName(s) {
   return String(s || '')
     .toLowerCase()
     .normalize('NFD')
-    .replace(/\p{M}/gu, '')
-    .replace(/[^a-z0-9 ]+/g, ' ')
-    .replace(/\s+/g, ' ')
+    .replaceAll(/\p{M}/gu, '')
+    .replaceAll(/[^a-z0-9 ]+/g, ' ')
+    .replaceAll(/\s+/g, ' ')
     .trim()
     .replace(/^the /, '');
 }

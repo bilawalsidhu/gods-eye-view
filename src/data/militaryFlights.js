@@ -487,7 +487,7 @@ function _likelyLanded(icao24) {
  * 45%-alpha billboard fade doesn't apply to the tracked plane (its entity
  * owns the visual), so without this the readout would present last-known
  * altitude/speed as live.
- * @param {Object|null} info - Flight metadata from p._flightData
+ * @param {object|null} info - Flight metadata from p._flightData
  * @param {string} icao24 - ICAO hex identifier (fallback display name)
  * @returns {string} Newline-separated label text
  */
@@ -553,10 +553,12 @@ function _refreshTr3bContact(icao24) {
  * @param {object} state.billboard
  * @param {object} state.billboardCollection
  * @param {object} state.viewer
- * @param {Array<Object>} [state.history=[]]
+ * @param {Array<object>} [state.history=[]]
  * @param {boolean} [state.tracked=true]
  * @param {Iterable<[string, object]>} [state.models=[]] - Fleet 3D models keyed
  *   by icao24, for the billboard-hidden/model-shown handoff state.
+ * @param {object} [state.modelCollection=null] - Primitive collection hosting the fleet
+ *   3D models; hidden when the layer disables.
  */
 export function _setTrackedMilitaryRefreshStateForTest({
   icao24,
@@ -696,7 +698,7 @@ function _deadReckon(icao24, result) {
     }
   }
 
-  const newest = history[history.length - 1];
+  const newest = history.at(-1);
   const elapsedSec = Cesium.JulianDate.secondsDifference(renderTime, newest.time);
   if (elapsedSec <= 0) {
     // Warm-up: renderTime predates ALL history (freshly seen / just-started-tracking
@@ -1150,7 +1152,7 @@ function _fleetTick() {
       ? prevCourse
       : limitCourseStep(
         prevCourse, rawCourse,
-        courseSlewCapDps(p._drSpeedMps != null ? p._drSpeedMps : ((info && info.speedMps) ?? NaN), p.COURSE_MAX_DPS),
+        courseSlewCapDps(p._drSpeedMps != null ? p._drSpeedMps : ((info && info.speedMps) ?? Number.NaN), p.COURSE_MAX_DPS),
         tickDtSec,
       );
     p._displayCourse.set(icao24, course);
@@ -1324,7 +1326,7 @@ function _startTrail(icao24) {
           if (!head) return [];
           // body[n−2] (last displayed body point) → delayed head: runs FORWARD, never a
           // backward/reversing segment.
-          const start = p._trailPositions[p._trailPositions.length - 2];
+          const start = p._trailPositions.at(-2);
           // Floor the head too (round 2): a grounded tracked contact's DR
           // display height is the pre-datum default — without this the last
           // segment dives underground while taxiing.
@@ -1475,6 +1477,8 @@ async function _backfillTrail(icao24, token, oldestFixEpochSec) {
  *   rather than being deselected. Consumers that keep a readout on screen
  *   (the Cockpit Contact panel) hold last-known values for an eviction and
  *   only tear down on a deliberate clear.
+ * @param {string} [options.origin='programmatic'] - Deselect provenance forwarded on the
+ *   gev:awareness-subject-cleared event ('user', 'voice', 'share-restore', or 'programmatic').
  */
 function _clearTracking(skipViewerUntrack = false, {
   evicted = false,
@@ -1697,7 +1701,7 @@ function _trackFlight(icao24, { origin = 'programmatic' } = {}) {
  * adsb.lol carries no origin-country field and this layer has no route
  * enrichment, so originCountry/routeOrigin/routeDestination are always null.
  * @param {string} icao24 - ICAO hex identifier of the aircraft.
- * @param {Object|null|undefined} info - `p._flightData` record for this aircraft.
+ * @param {object|null|undefined} info - `p._flightData` record for this aircraft.
  * @returns {{id: string, icao24: string, callsign: string|null, lat: number|null,
  *   lon: number|null, altitudeM: number|null, speedMps: number|null,
  *   heading: number|null, verticalRateMps: number|null, onGround: boolean,
@@ -1736,7 +1740,7 @@ export function mapAnalystRecord(icao24, info) {
  * Layer descriptor object for the military flights data layer.
  * Conforms to the layer manager contract: init, enable, disable, update, destroy,
  * plus optional getNearby, getDetectableObjects, and getStats accessors.
- * @type {Object}
+ * @type {object}
  */
 const militaryFlightsLayer = {
   id: 'military',
@@ -1847,7 +1851,7 @@ const militaryFlightsLayer = {
   /**
    * Hide the layer, clear any active tracking, and remove input handlers
    * so clicks do not get intercepted while the layer is off.
-   * @param {Cesium.Viewer} viewer - The Cesium viewer instance
+   * @param {Cesium.Viewer} _viewer - The Cesium viewer instance
    */
   disable(_viewer) {
     p._abortActiveUpdates();
@@ -1888,12 +1892,12 @@ const militaryFlightsLayer = {
     }
   },
 
-  /** @deprecated Compatibility alias for {@link enable}. */
+  /** @deprecated Compatibility alias for enable(). */
   show(viewer) {
     this.enable(viewer);
   },
 
-  /** @deprecated Compatibility alias for {@link disable}. */
+  /** @deprecated Compatibility alias for disable(). */
   hide(viewer) {
     this.disable(viewer);
   },
@@ -2168,7 +2172,7 @@ const militaryFlightsLayer = {
           p._positionHistory.set(icao24, []);
         }
         const history = p._positionHistory.get(icao24);
-        const newest = history[history.length - 1];
+        const newest = history.at(-1);
         if (!newest || Cesium.JulianDate.greaterThan(fixTime, newest.time)) {
           // Per-fix kinematics: the fix's own velocity/track ride along so the
           // extrapolation paths use the values that BELONG to the fix they
@@ -2534,7 +2538,7 @@ const militaryFlightsLayer = {
    * @param {number} [maxCount=50] - Maximum number of results to return
    * @param {object} [options] Query membership options.
    * @param {boolean} [options.includeHidden=false] Include loaded horizon-hidden aircraft.
-   * @returns {Array<Object>} Sorted array of nearby aircraft descriptors
+   * @returns {Array<object>} Sorted array of nearby aircraft descriptors
    */
   getNearby(center, range, maxCount = 50, { includeHidden = false } = {}) {
     if (!center || !p._billboardCollection || !p._billboardCollection.show) return [];
@@ -2592,7 +2596,7 @@ const militaryFlightsLayer = {
    * Return a subset of aircraft suitable for the detection overlay system.
    * Uses a deterministic stride-based sampling to keep the count manageable
    * while distributing selections evenly across the collection.
-   * @param {Object} [options={}] - Options
+   * @param {object} [options={}] - Options
    * @param {number} [options.maxCount] - Maximum objects to return (defaults to all)
    * @param {number} [options.seed] - Seed offset for stride sampling (for frame variation)
    * @returns {Array<{position: Cesium.Cartesian3, id: string, type: string, skipLabel: boolean}>}
@@ -2771,7 +2775,7 @@ const militaryFlightsLayer = {
    * spoken query) — zero per-frame cost, no listeners, no caching. Returns
    * [] while the layer is disabled or empty.
    * @param {number} [maxCount=2000] - Maximum records to return (truncation).
-   * @returns {Array<Object>} See mapAnalystRecord for the record shape.
+   * @returns {Array<object>} See mapAnalystRecord for the record shape.
    */
   getAnalystRecords(maxCount = 2000) {
     if (!p._billboardCollection || !p._billboardCollection.show || p._flightData.size === 0) return [];

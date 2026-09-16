@@ -253,7 +253,7 @@ function arcState(p, tSec) {
 function analyze(label, samples, plan) {
   const { capDps = 60, tolFactor = 1.15, snapCeilDeg = 33.75, snapDtCeilMs = 500, minTotalDeg = 40 } = plan;
   const valid = samples.filter((s) => s && Number.isFinite(s.course));
-  const windowSec = valid.length ? (valid[valid.length - 1].tMs - valid[0].tMs) / 1000 : 0;
+  const windowSec = valid.length ? (valid.at(-1).tMs - valid[0].tMs) / 1000 : 0;
   console.log(`\n  ${label}: ${valid.length}/${samples.length} valid frames over ${windowSec.toFixed(1)} s`);
   if (valid.length < 12 || windowSec < 30) {
     record(`${label}: >=12 sampled frames spanning >=30 s`, false, `${valid.length} frames over ${windowSec.toFixed(1)} s`);
@@ -298,7 +298,7 @@ function analyze(label, samples, plan) {
     `${active.length} active, run ${maxRun}`);
   record(`${label} A4: really turning (total change >= +${minTotalDeg}°)`,
     total >= minTotalDeg,
-    `total ${total.toFixed(1)}° over ${((valid[valid.length - 1].tMs - t0) / 1000).toFixed(1)} s`);
+    `total ${total.toFixed(1)}° over ${((valid.at(-1).tMs - t0) / 1000).toFixed(1)} s`);
 }
 
 /** Per-frame deltas of a sampled {tMs, course} series (shared by the
@@ -318,7 +318,7 @@ function courseDeltas(samples) {
  *  reported track are both noise at hover, so any movement is chasing noise. */
 function analyzeHover(label, samples, { maxTotalAbsDeg = 25, maxExcursionDeg = 60 } = {}) {
   const { valid, deltas } = courseDeltas(samples);
-  const windowSec = valid.length ? (valid[valid.length - 1].tMs - valid[0].tMs) / 1000 : 0;
+  const windowSec = valid.length ? (valid.at(-1).tMs - valid[0].tMs) / 1000 : 0;
   console.log(`\n  ${label}: ${valid.length}/${samples.length} valid frames over ${windowSec.toFixed(1)} s`);
   const covered = valid.length >= 12 && windowSec >= 30;
   record(`${label} H1: >=12 sampled frames spanning >=30 s`, covered, `${valid.length} frames over ${windowSec.toFixed(1)} s`);
@@ -329,7 +329,7 @@ function analyzeHover(label, samples, { maxTotalAbsDeg = 25, maxExcursionDeg = 6
     cum += x.d;
     maxExcursion = Math.max(maxExcursion, Math.abs(cum));
   }
-  console.log(`    total |Δcourse|=${totalAbs.toFixed(1)}° | max excursion from start=${maxExcursion.toFixed(1)}° | start=${valid[0].course.toFixed(0)}° end=${valid[valid.length - 1].course.toFixed(0)}°`);
+  console.log(`    total |Δcourse|=${totalAbs.toFixed(1)}° | max excursion from start=${maxExcursion.toFixed(1)}° | start=${valid[0].course.toFixed(0)}° end=${valid.at(-1).course.toFixed(0)}°`);
   record(`${label} H2: displayed course stays put (total |Δ| <= ${maxTotalAbsDeg}° over ${windowSec.toFixed(0)} s)`,
     totalAbs <= maxTotalAbsDeg, `total |Δ| ${totalAbs.toFixed(1)}°`);
   record(`${label} H3: no spins (max excursion from initial course <= ${maxExcursionDeg}°)`,
@@ -348,7 +348,7 @@ function analyzeSlowTurn(label, samples, {
   scoreProgress = true,
 } = {}) {
   const { valid, deltas } = courseDeltas(samples);
-  const windowSec = valid.length ? (valid[valid.length - 1].tMs - valid[0].tMs) / 1000 : 0;
+  const windowSec = valid.length ? (valid.at(-1).tMs - valid[0].tMs) / 1000 : 0;
   console.log(`\n  ${label}: ${valid.length}/${samples.length} valid frames over ${windowSec.toFixed(1)} s`);
   const covered = valid.length >= minSamples && windowSec >= minWindowSec;
   record(`${label} S0: >=${minSamples} frames spanning >=${minWindowSec} s`, covered, `${valid.length} frames over ${windowSec.toFixed(1)} s`);

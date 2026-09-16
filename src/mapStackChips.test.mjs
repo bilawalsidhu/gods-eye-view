@@ -282,7 +282,7 @@ test('the keyboard focus ring survives on the ACTIVE chip', () => {
   // INVISIBLE on the active chip. The ring must live on a property no other
   // chip-state rule sets.
   const css = readSource('../style.css', import.meta.url);
-  const stripComments = (text) => text.replace(/\/\*[\s\S]*?\*\//g, '');
+  const stripComments = (text) => text.replaceAll(/\/\*[\s\S]*?\*\//g, '');
   const chipRules = [...css.matchAll(/([^{}]*\.map-stack-chip[^{}]*)\{([^{}]*)\}/g)]
     .map(([, selector, body], order) => ({
       selector: stripComments(selector).trim(),

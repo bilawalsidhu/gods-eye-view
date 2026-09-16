@@ -503,7 +503,7 @@ function shippedStacking(selector) {
 /** Collect every declaration the shipped stylesheet applies to a selector. */
 function cssDeclarationsFor(css, selector) {
   const declarations = {};
-  const withoutComments = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  const withoutComments = css.replaceAll(/\/\*[\s\S]*?\*\//g, '');
   const rulePattern = /([^{}]+)\{([^{}]*)\}/g;
   let match = rulePattern.exec(withoutComments);
   while (match !== null) {

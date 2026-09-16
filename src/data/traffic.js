@@ -42,26 +42,26 @@ import { holdContinuousRender, releaseContinuousRender } from '../renderGovernor
  * @module data/traffic
  */
 
-/** @const {string} Proxy endpoint for Overpass API queries */
+/** @constant {string} Proxy endpoint for Overpass API queries */
 const OVERPASS_URL = api.overpass();
-/** @const {number} Meters — hide all traffic dots above this camera altitude */
+/** @constant {number} Meters — hide all traffic dots above this camera altitude */
 const ACTIVATION_ALTITUDE = 8000;
-/** @const {number} Meters — above this altitude, only major roads are fetched */
+/** @constant {number} Meters — above this altitude, only major roads are fetched */
 const FAST_FETCH_ALTITUDE = 4500;
-/** @const {number} Milliseconds — debounce delay before fetching after camera settles */
+/** @constant {number} Milliseconds — debounce delay before fetching after camera settles */
 const FETCH_DEBOUNCE = 320;
-/** @const {number} Meters — vertical offset to keep dots above clamped terrain surface */
+/** @constant {number} Meters — vertical offset to keep dots above clamped terrain surface */
 const DOT_HEIGHT_OFFSET = 3.0;
-/** @const {number} Fraction (0-1) — skip re-fetch when viewport overlap exceeds this */
+/** @constant {number} Fraction (0-1) — skip re-fetch when viewport overlap exceeds this */
 const OVERLAP_THRESHOLD = 0.6;
-/** @const {number} Hard cap on total rendered dot primitives for GPU/CPU performance */
+/** @constant {number} Hard cap on total rendered dot primitives for GPU/CPU performance */
 const MAX_DOTS = 6000;
-/** @const {number} Polylines longer than this are simplified by sub-sampling */
+/** @constant {number} Polylines longer than this are simplified by sub-sampling */
 const MAX_WAYPOINTS_PER_ROAD = 80;
-/** @const {number} Km — minimum viewport center shift before allowing refresh */
+/** @constant {number} Km — minimum viewport center shift before allowing refresh */
 const MIN_CENTER_SHIFT_KM = 0.35;
 /**
- * @const {number} Km — max great-circle distance the fetch center may sit from
+ * @constant {number} Km — max great-circle distance the fetch center may sit from
  * the camera nadir. Traffic only activates below ACTIVATION_ALTITUDE (8 km),
  * so a look-at ground point farther than this is horizon-gazing and gets
  * pulled back toward nadir (C4 oblique-bounds fix).
@@ -78,7 +78,7 @@ const TRAFFIC_TIMING_ENABLED = import.meta.env?.DEV
   && typeof window !== 'undefined'
   && new URLSearchParams(window.location.search).get('trafficDebug') === '1';
 
-/** @const {Object<string,number>} Speed in meters per second by highway tag (approximate real-world values) */
+/** @constant {[key: string]: number} Speed in meters per second by highway tag (approximate real-world values) */
 const SPEED_MPS = {
   motorway:     25,   // ~90 km/h
   trunk:        20,   // ~72 km/h
@@ -89,13 +89,13 @@ const SPEED_MPS = {
   unclassified: 5,
 };
 
-/** @const {Object<string,number>} Density multiplier — higher values spawn more dots on important roads */
+/** @constant {[key: string]: number} Density multiplier — higher values spawn more dots on important roads */
 const DENSITY_MULT = {
   motorway: 3.0, trunk: 2.5, primary: 2.0, secondary: 1.5,
   tertiary: 1.0, residential: 0.5, unclassified: 0.4,
 };
 
-/** @const {Object<string,number>} Pixel size per road type (scaled up 25% for screen-recording visibility) */
+/** @constant {[key: string]: number} Pixel size per road type (scaled up 25% for screen-recording visibility) */
 const SIZE_BY_TYPE = {
   motorway: 6, trunk: 6, primary: 5, secondary: 5,
   tertiary: 4, residential: 4, unclassified: 4,
@@ -105,7 +105,7 @@ const SIZE_BY_TYPE = {
  * Live-flow bucket colors (thresholds live in `trafficFlowStyle.js`):
  * green free flow / amber slow / red jam, all at 0.9 alpha.
  * Roads without flow data (`road.flow == null`) keep the sim's white.
- * @const {Object<string, Cesium.Color>}
+ * @constant {[key: string]: Cesium.Color}
  */
 const FLOW_BUCKET_COLORS = {
   free: Cesium.Color.fromCssColorString('#2ecc71').withAlpha(0.9),
@@ -114,22 +114,22 @@ const FLOW_BUCKET_COLORS = {
 };
 
 // ─── Jam-viz prototype (live mode only — see 2026-07-21 design doc) ────────
-/** @const {number} Max congestion heat-line polylines per render (jam first). */
+/** @constant {number} Max congestion heat-line polylines per render (jam first). */
 const HEAT_LINE_CAP = 400;
-/** @const {number} Px — glowing jam corridor line width. */
+/** @constant {number} Px — glowing jam corridor line width. */
 const HEAT_LINE_JAM_WIDTH = 9;
-/** @const {number} Px — flat slow corridor line width. */
+/** @constant {number} Px — flat slow corridor line width. */
 const HEAT_LINE_SLOW_WIDTH = 4;
-/** @const {number} Jam heat-line alpha midpoint (pulse oscillates around it). */
+/** @constant {number} Jam heat-line alpha midpoint (pulse oscillates around it). */
 const HEAT_JAM_BASE_ALPHA = 0.55;
-/** @const {number} Jam heat-line pulse amplitude (±, ~1.6 s period). */
+/** @constant {number} Jam heat-line pulse amplitude (±, ~1.6 s period). */
 const HEAT_JAM_PULSE_ALPHA = 0.2;
-/** @const {Cesium.Color} Jam corridor color (bucket red, alpha pulsed live). */
+/** @constant {Cesium.Color} Jam corridor color (bucket red, alpha pulsed live). */
 const HEAT_JAM_COLOR = Cesium.Color.fromCssColorString('#e05252');
-/** @const {Cesium.Color} Slow corridor color (bucket amber, faint + static). */
+/** @constant {Cesium.Color} Slow corridor color (bucket amber, faint + static). */
 const HEAT_SLOW_COLOR = Cesium.Color.fromCssColorString('#f0b23e').withAlpha(0.2);
 /**
- * @const {number} Meters — jam dots depth-test-punch through the 3D tiles out
+ * @constant {number} Meters — jam dots depth-test-punch through the 3D tiles out
  * to this camera distance so queues stay visible at city scale. The single
  * start-of-road terrain sample puts much of a road below the rendered mesh
  * at oblique city views (first A/B capture: 396 jam dots, zero visible), so
@@ -137,13 +137,13 @@ const HEAT_SLOW_COLOR = Cesium.Color.fromCssColorString('#f0b23e').withAlpha(0.2
  * meant to surface. Live jam dots only; sim dots keep the shipped 2 km.
  */
 const JAM_DOT_DEPTH_PUNCH = 15000;
-/** @const {number} Far-distance scale floor for jam dots (shipped: 0.3). */
+/** @constant {number} Far-distance scale floor for jam dots (shipped: 0.3). */
 const JAM_DOT_FAR_SCALE = 0.55;
-/** @const {number} Speed multiplier while a stop-and-go jam dot bursts forward. */
+/** @constant {number} Speed multiplier while a stop-and-go jam dot bursts forward. */
 const CREEP_BURST = 2.2;
-/** @const {number[]} Ms range a jam dot creeps forward before stopping. */
+/** @constant {number[]} Ms range a jam dot creeps forward before stopping. */
 const CREEP_MOVE_MS = [1200, 3000];
-/** @const {number[]} Ms range a jam dot sits stopped between creeps. */
+/** @constant {number[]} Ms range a jam dot sits stopped between creeps. */
 const CREEP_STOP_MS = [1500, 5000];
 
 // ─── Module State ──────────────────────────────────────────
@@ -269,7 +269,7 @@ let _styleListenerBound = false;
  */
 const _activeBucketColors = { ...FLOW_BUCKET_COLORS };
 /**
- * @const {number} Minimum base pixel size for COLORED dots while a styled
+ * @constant {number} Minimum base pixel size for COLORED dots while a styled
  * preset is active — residential-road dots spawn at 4 px and vanish into
  * post-FX pixelation; presence is the dots' whole job there (follow-up round
  * 2). Sim dots and the normal profile keep SIZE_BY_TYPE untouched.
@@ -420,7 +420,7 @@ export function getTrafficTimingDiagnostics() {
  * @type {Map<string, {major: Array|null, full: Array|null}>}
  */
 const _tileCache = new Map();
-/** @const {number} Maximum tile cache entries before LRU eviction */
+/** @constant {number} Maximum tile cache entries before LRU eviction */
 const TILE_CACHE_MAX_ENTRIES = 64;
 
 /** Reusable scratch Cartesian3 to avoid per-frame allocation / GC pressure */
@@ -440,7 +440,7 @@ const _scratchLerp = new Cesium.Cartesian3();
  * @param {number} west  - Western longitude bound (degrees).
  * @param {number} north - Northern latitude bound (degrees).
  * @param {number} east  - Eastern longitude bound (degrees).
- * @param {Object}  [opts]
+ * @param {object}  [opts]
  * @param {boolean} [opts.majorOnly=false] - Restrict to major highway classes only.
  * @param {number}  [opts.timeoutSec=25]   - Overpass server-side timeout.
  * @returns {string} Overpass QL query body.
@@ -464,12 +464,12 @@ function buildOverpassQuery(south, west, north, east, { majorOnly = false, timeo
  * @param {number} west  - Western longitude bound (degrees).
  * @param {number} north - Northern latitude bound (degrees).
  * @param {number} east  - Eastern longitude bound (degrees).
- * @param {Object}  [opts]
+ * @param {object}  [opts]
  * @param {boolean} [opts.majorOnly=false]  - Restrict to major highway classes.
  * @param {number}  [opts.timeoutSec=25]    - Server-side Overpass timeout.
  * @param {AbortSignal} [opts.signal]       - Abort signal for cancellation.
- * @param {Object|null} [trace=null] - Development-only correlated load trace.
- * @returns {Promise<Object>} Parsed JSON response from Overpass.
+ * @param {object|null} [trace=null] - Development-only correlated load trace.
+ * @returns {Promise<object>} Parsed JSON response from Overpass.
  * @throws {Error} If the HTTP response status is not OK.
  */
 async function fetchRoads(
@@ -540,7 +540,7 @@ async function fetchRoads(
  *  3. Sample terrain height once at the first vertex (avoids per-vertex cost).
  *  4. Convert to Cartesian3 waypoints and pre-compute inter-vertex distances.
  *
- * @param {Object} overpassData - Raw JSON response from the Overpass API.
+ * @param {object} overpassData - Raw JSON response from the Overpass API.
  * @param {Array}  overpassData.elements - Array of OSM elements.
  * @returns {Array<{coords:number[][], type:string, waypoints:Cesium.Cartesian3[], segmentDist:number[]}>}
  *   Parsed road objects ready for dot spawning.
@@ -564,8 +564,8 @@ function parseRoads(overpassData) {
     }
 
     // Ensure the original endpoint is always preserved
-    const last = rawCoords[rawCoords.length - 1];
-    const tail = coords[coords.length - 1];
+    const last = rawCoords.at(-1);
+    const tail = coords.at(-1);
     if (!tail || tail[0] !== last[0] || tail[1] !== last[1]) {
       coords.push(last);
     }
@@ -689,7 +689,7 @@ function computeDotCount(road, altitude) {
  */
 function allocateRoadDotBudgets(roads, altitude, dotCap) {
   const planned = roads.map((road) => computeDotCount(road, altitude));
-  const budgets = new Array(roads.length).fill(0);
+  const budgets = Array.from({length: roads.length}).fill(0);
   let remaining = Math.max(0, dotCap);
 
   // Pass 1 — fairness seed: give one dot to every road (highest-demand first)
@@ -978,7 +978,7 @@ function animate() {
  * Only triggers within the first 2 or last 2 segments of the road, and only
  * with a very low per-frame probability (0.8%) to keep traffic flowing.
  *
- * @param {Object} dot - The dot state object.
+ * @param {object} dot - The dot state object.
  * @param {number} now - Current timestamp in milliseconds.
  */
 function maybeStopLight(dot, now) {
@@ -1233,7 +1233,7 @@ export function deriveTrafficFlowError(error) {
  *  - live but flow-down → an `error` string, so the chip degrades and says
  *    the colors on screen are simulated. Never a stale "LIVE · N% cov".
  *
- * @param {Object} [input]
+ * @param {object} [input]
  * @param {boolean} [input.liveMode] - `/api/tomtom/status` reported a key.
  * @param {boolean} [input.fetching] - A viewport load is in flight.
  * @param {string|null} [input.flowError] - `deriveTrafficFlowError` result, if any.
@@ -1387,7 +1387,7 @@ const FLOW_RENDER_RACE_MS = 250;
  * @param {number} generation - `_loadGeneration` at call time.
  * @param {number} altitude - Camera altitude in meters.
  * @param {string} label - Render log label.
- * @param {Object|null} [trace=null] - Development-only correlated load trace.
+ * @param {object|null} [trace=null] - Development-only correlated load trace.
  * @returns {Promise<boolean>} True if this generation rendered.
  */
 async function applyFlowThenRender(roads, clamped, generation, altitude, label, trace = null) {
@@ -1587,7 +1587,7 @@ function rebuildHeatLines(roads) {
  * @param {Array} roads    - Parsed road objects to render.
  * @param {number} altitude - Camera altitude in meters.
  * @param {string} label    - Logging label (e.g. "Cache full", "Loaded major").
- * @param {Object|null} [trace=null] - Development-only correlated load trace.
+ * @param {object|null} [trace=null] - Development-only correlated load trace.
  */
 function renderRoadsForAltitude(roads, altitude, label, trace = null) {
   const state = TRAFFIC_TIMING_ENABLED && trace
@@ -1615,7 +1615,7 @@ function renderRoadsForAltitude(roads, altitude, label, trace = null) {
     const probes = [
       filteredRoads[0],
       filteredRoads[Math.floor(filteredRoads.length / 2)],
-      filteredRoads[filteredRoads.length - 1],
+      filteredRoads.at(-1),
     ];
     for (const probe of probes) {
       const wp = probe?.waypoints?.[0];
@@ -1680,10 +1680,10 @@ function renderRoadsForAltitude(roads, altitude, label, trace = null) {
  * Return (and optionally update) the current trace's state for a render pass.
  * This function is only reachable when `TRAFFIC_TIMING_ENABLED` is true.
  *
- * @param {Object|null} trace - Correlated load trace.
+ * @param {object|null} trace - Correlated load trace.
  * @param {'major'|'full'} pass - Road-fetch/render pass.
  * @param {string} [source] - Client cache or proxy/network source.
- * @returns {Object|null} Mutable pass timing state.
+ * @returns {object|null} Mutable pass timing state.
  */
 function trafficTimingPass(trace, pass, source) {
   if (!trace) return null;
@@ -1864,8 +1864,8 @@ function parseRoadsTimed(overpassData, trace) {
       coords.push(rawCoords[i]);
     }
 
-    const last = rawCoords[rawCoords.length - 1];
-    const tail = coords[coords.length - 1];
+    const last = rawCoords.at(-1);
+    const tail = coords.at(-1);
     if (!tail || tail[0] !== last[0] || tail[1] !== last[1]) {
       coords.push(last);
     }
@@ -2030,7 +2030,7 @@ const _loadRoadsForBounds = TRAFFIC_TIMING_ENABLED
  * @param {{south:number, west:number, north:number, east:number}} bounds
  *   Viewport bounds (will be clamped internally).
  * @param {number} altitude - Camera altitude in meters.
- * @param {Object|null} [trace=null] - Development-only correlated load trace.
+ * @param {object|null} [trace=null] - Development-only correlated load trace.
  * @returns {Promise<void>}
  */
 async function loadRoadsForBounds(bounds, altitude, trace = null) {
@@ -2168,7 +2168,7 @@ function clearDots() {
  * Lifecycle: init -> enable -> (animate loop + camera-driven loads) -> disable -> destroy.
  * The layer is self-updating: no external tick is needed (`updateInterval: 0`).
  *
- * @type {Object}
+ * @type {object}
  */
 const trafficLayer = {
   id: 'traffic',
@@ -2338,7 +2338,7 @@ const trafficLayer = {
   /**
    * Update user-adjustable parameters (density and speed scaling).
    *
-   * @param {Object}  [params]
+   * @param {object}  [params]
    * @param {number}  [params.densityScale] - Dot density multiplier (clamped 0.2–2.5).
    * @param {number}  [params.speedScale]   - Dot speed multiplier (clamped 0.3–3.0).
    */
@@ -2366,12 +2366,10 @@ const trafficLayer = {
     // Preset-aware dot styling kill switch (A/B): 'off' forces the
     // shipped palette under every post-FX preset. Applies immediately via
     // in-place restyle — no refetch — so A/B legs share identical dots.
-    if (params.presetDots === 'on' || params.presetDots === 'off') {
-      if (params.presetDots !== _presetDots) {
+    if ((params.presetDots === 'on' || params.presetDots === 'off') && params.presetDots !== _presetDots) {
         _presetDots = params.presetDots;
         restyleDotsInPlace();
       }
-    }
   },
 
   /**
@@ -2395,7 +2393,7 @@ const trafficLayer = {
    * Uses a deterministic stride-based sampling so different seeds yield
    * non-overlapping subsets without sorting or shuffling.
    *
-   * @param {Object}  [options]
+   * @param {object}  [options]
    * @param {number}  [options.maxCount] - Maximum objects to return (defaults to all).
    * @param {number}  [options.seed]     - Integer seed to offset the sampling start.
    * @returns {Array<{position:Cesium.Cartesian3, id:string, type:string}>}

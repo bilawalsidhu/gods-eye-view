@@ -73,7 +73,7 @@ test('the persistent boot surfaces stay de-blurred (render-perf five, item 3)', 
     assert.notEqual(start, -1, `${selector} rule exists`);
     const end = css.indexOf('}', start);
     // Strip comments: the policy notes themselves mention backdrop-filter.
-    return css.slice(start, end).replace(/\/\*[\s\S]*?\*\//g, '');
+    return css.slice(start, end).replaceAll(/\/\*[\s\S]*?\*\//g, '');
   };
   for (const selector of [
     '#gev-voice-control',

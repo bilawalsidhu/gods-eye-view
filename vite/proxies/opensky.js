@@ -120,6 +120,12 @@ export function normalizeOpenSkyAuthMode(value) {
  * @param {string} opts.requestedMode - The auth mode the config requested.
  * @param {string} opts.usedMode - The auth mode actually used for the upstream call.
  * @param {string} opts.reason - Human-readable reason string for diagnostics.
+ * @param {number} [opts.staleSeconds] - Age of the served stale cache entry in
+ *   seconds; emitted as X-OpenSky-Stale-Seconds when finite so the client can
+ *   cue staleness.
+ * @param {number} [opts.retryAfterSeconds] - Seconds remaining in the
+ *   rate-limit cooldown; emitted as X-OpenSky-Retry-After-Seconds when finite
+ *   so the client can show a countdown.
  * @returns {Record<string,string>} Header object.
  */
 export function buildOpenSkyHeaders({ cacheStatus, requestedMode, usedMode, reason, staleSeconds, retryAfterSeconds }) {

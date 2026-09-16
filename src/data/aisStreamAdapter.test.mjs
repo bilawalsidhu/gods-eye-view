@@ -556,7 +556,7 @@ test('an HTTP 429 without Retry-After falls back to the slowest rung', async () 
   context.adapter.ensure(ENV);
   context.transport.created[0].emit('unexpected-response', {}, { statusCode: 429, headers: {} });
 
-  const slowest = BUDGETS.backoffMs[BUDGETS.backoffMs.length - 1];
+  const slowest = BUDGETS.backoffMs.at(-1);
   assert.equal(context.adapter.snapshot().nextAttemptAt - context.time.wall, slowest);
 });
 

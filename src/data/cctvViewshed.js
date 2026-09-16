@@ -91,7 +91,7 @@ export function frustumVolumeGeometryData(positions) {
  * bookkeeping), unlit flat color, both faces visible (the viewer is routinely
  * inside or behind a cone), never pickable (clicks fall through to the
  * billboard/wireframe/plane, whose pick semantics are established).
- * @param {Object} positions - frustumCartesians shape (see frustumVolumeGeometryData).
+ * @param {object} positions - frustumCartesians shape (see frustumVolumeGeometryData).
  * @param {Cesium.Color} color - Per-camera fill color (already alpha'd).
  * @returns {Cesium.Primitive}
  */

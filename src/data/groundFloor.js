@@ -187,7 +187,8 @@ export const CELL_HYSTERESIS_DEG = 0.0002;
  * it is CELL_HYSTERESIS_DEG clear of that cell's bounds, which costs two
  * comparisons and no allocation on the sticky path.
  *
- * @param {number} lat @param {number} lon - Displayed coordinate.
+ * @param {number} lat - Displayed latitude.
+ * @param {number} lon - Displayed longitude.
  * @param {{lat: number, lon: number}|null|undefined} previousCell - The cell
  *   this contact read last tick, if any.
  * @returns {{lat: number, lon: number}} The cell to read.
@@ -345,7 +346,7 @@ export function allocateCorridorCells(
   }
   // Cursor per candidate, carried ACROSS rounds: a later round resumes where
   // the previous one stopped instead of re-walking cells already handled.
-  const cursor = new Array(ranked.length).fill(0);
+  const cursor = Array.from({length: ranked.length}).fill(0);
   let left = budget;
   const round = (limit) => {
     for (let i = 0; i < ranked.length; i++) {

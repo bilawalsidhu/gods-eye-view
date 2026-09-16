@@ -35,7 +35,7 @@ import { ANALYST_LAYERS, createAnalystEngine } from './analystEngine.js';
 
 /** Strip block and line comments so source pins scan CODE, not prose. */
 function stripComments(source) {
-  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+  return source.replaceAll(/\/\*[\s\S]*?\*\//g, '').replaceAll(/(^|[^:])\/\/.*$/gm, '$1');
 }
 
 /** Decode an `aircraftIcon()` data URI back to its SVG source. */
@@ -228,8 +228,8 @@ test('a conversion survives a poll refresh, in both the billboard and the tracke
 // flights' shared pipeline lives in flightsTracking.js — pins read the combined
 // layer+factory source, with pipeline state addressed through `p.`
 const FLIGHT_PIN_LAYERS = [
-  { name: 'flights.js', files: ['flights.js', 'flightsTracking.js'], px: 'p\\.' },
-  { name: 'militaryFlights.js', files: ['militaryFlights.js', 'flightsTracking.js'], px: 'p\\.' },
+  { name: 'flights.js', files: ['flights.js', 'flightsTracking.js'], px: String.raw`p\.` },
+  { name: 'militaryFlights.js', files: ['militaryFlights.js', 'flightsTracking.js'], px: String.raw`p\.` },
 ];
 
 test('both flight layers keep a converted contact 2D and visible (render invariants)', async () => {
@@ -263,7 +263,7 @@ test('both flight layers keep a converted contact 2D and visible (render invaria
     assert.equal(callSites.length >= 4, true, `${name}: expected the known aircraftIcon call sites`);
     for (const call of callSites) {
       assert.match(call, new RegExp(`aircraftIcon\\(\\s*${px}_iconKind\\(`),
-        `${name}: ${call.replace(/\s+/g, ' ')} must resolve its sprite kind through _iconKind`);
+        `${name}: ${call.replaceAll(/\s+/g, ' ')} must resolve its sprite kind through _iconKind`);
     }
 
     // 4. Orientation contract is untouched: still a screen-projected rotation

@@ -18,17 +18,18 @@ import assert from 'node:assert/strict';
 import { readSource } from '../testSupport/readSource.js';
 
 // Install the worker global BEFORE importing the module: the worker does
-// `self.onmessage = ...` at import time and `self.postMessage(...)` per
-// message. Captured messages drive the assertions below.
+// `self.addEventListener('message', ...)` at import time and
+// `self.postMessage(...)` per message. Captured messages drive the
+// assertions below.
 const posted = [];
+const messageHandlers = [];
 globalThis.self = {
-  onmessage: null,
+  addEventListener: (type, fn) => { if (type === 'message') messageHandlers.push(fn); },
   postMessage: (msg, transfer) => posted.push({ msg, transfer }),
 };
 
 await import('./aisVisibility.worker.js');
-const worker = globalThis.self;
-const send = (data) => worker.onmessage({ data });
+const send = (data) => messageHandlers.forEach((fn) => fn({ data }));
 
 // WGS84 geodetic → ECEF (same ellipsoid the worker hardcodes).
 function geodeticToEcef(latDeg, lonDeg, heightM = 0) {

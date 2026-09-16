@@ -18,9 +18,9 @@
  * @module data/retryableLoad
  */
 
-/** @const {number} Ms before a first retry is allowed. */
+/** @constant {number} Ms before a first retry is allowed. */
 export const RETRY_COOLDOWN_MS = 5_000;
-/** @const {number} Ms ceiling for the doubling backoff. */
+/** @constant {number} Ms ceiling for the doubling backoff. */
 export const RETRY_COOLDOWN_MAX_MS = 300_000;
 
 /**
@@ -28,7 +28,7 @@ export const RETRY_COOLDOWN_MAX_MS = 300_000;
  *
  * @template T
  * @param {() => (Promise<T>|T)} load - Runs at most once per successful load.
- * @param {Object} [options]
+ * @param {object} [options]
  * @param {number} [options.cooldownMs] - Backoff after the first failure.
  * @param {number} [options.maxCooldownMs] - Ceiling for the doubling backoff.
  * @param {() => number} [options.now] - Clock seam for tests.

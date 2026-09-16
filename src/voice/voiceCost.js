@@ -95,7 +95,7 @@ export const VOICE_TIERS = Object.freeze(Object.keys(VOICE_MODELS));
  * fallback happened compare `entry.tier` to what they asked for.
  *
  * @param {unknown} tier
- * @returns {{tier: VoiceModelTier, id: string, label: string, rates: object}}
+ * @returns {{tier: 'standard'|'mini', id: string, label: string, rates: object}}
  */
 export function resolveVoiceModel(tier) {
   // Own-property check, NOT `VOICE_MODELS[key] || default`: inherited keys

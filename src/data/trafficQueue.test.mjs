@@ -49,7 +49,7 @@ test('queueDistances: a platoon never exceeds the remaining count', () => {
 test('queueDistances: degenerate input yields no positions', () => {
   assert.deepEqual(queueDistances(0, 10), []);
   assert.deepEqual(queueDistances(-5, 10), []);
-  assert.deepEqual(queueDistances(NaN, 10), []);
+  assert.deepEqual(queueDistances(Number.NaN, 10), []);
   assert.deepEqual(queueDistances(1000, 0), []);
 });
 

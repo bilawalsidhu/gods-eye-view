@@ -122,7 +122,7 @@ function trackCachePut(key, entry) {
  * cache whatever came back (any status). Throws on transport failure so the
  * caller can answer with its own route-specific 502 shape.
  *
- * @param {{key: string, upstreamUrl: string, headers?: Object<string,string>}} opts
+ * @param {{key: string, upstreamUrl: string, headers?: [key: string]: string}} opts
  * @returns {Promise<{status: number, body: string, cacheHit: boolean}>}
  */
 export async function fetchTrackJson({ key, upstreamUrl, headers = {} }) {

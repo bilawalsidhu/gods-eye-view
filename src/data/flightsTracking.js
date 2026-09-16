@@ -1131,7 +1131,7 @@ function _trackedDisplayCourse() {
   // Hover hold: at near-zero displayed speed both the chord and the reported
   // track are noise — keep the last stable nose direction instead of chasing.
   if (cacheValid && p._cachedDRHold && prev != null) return prev;
-  const cap = courseSlewCapDps(cacheValid ? p._cachedDRSpeedMps : (p._infoSpeed(info) ?? NaN), p.COURSE_MAX_DPS);
+  const cap = courseSlewCapDps(cacheValid ? p._cachedDRSpeedMps : (p._infoSpeed(info) ?? Number.NaN), p.COURSE_MAX_DPS);
   const course = limitCourseStep(prev, raw, cap, dt);
   p._displayCourse.set(p._trackedIcao, course);
   return course;

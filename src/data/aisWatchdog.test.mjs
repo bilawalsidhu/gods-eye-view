@@ -283,7 +283,7 @@ test('backoff is exponential, not a fixed thrash cycle', () => {
     h.open(generation);
     h.close(generation);
     waits.push(h.snapshot().nextAttemptAt - h.time.wall);
-    h.advance(waits[waits.length - 1]);
+    h.advance(waits.at(-1));
     h.tick();
   }
 
@@ -723,7 +723,7 @@ test('a rate limit without Retry-After enters at the SLOWEST rung', () => {
   const h = goLive(harness());
   h.fail(1, { kind: 'rate-limit', message: '429' });
 
-  const slowest = AIS_WATCHDOG_DEFAULTS.backoffMs[AIS_WATCHDOG_DEFAULTS.backoffMs.length - 1];
+  const slowest = AIS_WATCHDOG_DEFAULTS.backoffMs.at(-1);
   assert.equal(h.snapshot().nextAttemptAt - h.time.wall, slowest);
   assert.notEqual(h.snapshot().nextAttemptAt - h.time.wall, AIS_WATCHDOG_DEFAULTS.backoffMs[0]);
 });

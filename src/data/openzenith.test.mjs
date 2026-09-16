@@ -79,7 +79,7 @@ test('a non-numeric coordinate never reaches the proxy', async (t) => {
   const realFetch = globalThis.fetch;
   t.after(() => { globalThis.fetch = realFetch; });
   globalThis.fetch = async () => { called = true; return { ok: true, status: 200, json: async () => ({}) }; };
-  assert.equal(await reverseGeocodePlace(NaN, -97.7), null);
+  assert.equal(await reverseGeocodePlace(Number.NaN, -97.7), null);
   assert.equal(await reverseGeocodePlace(30.2, undefined), null);
   assert.equal(called, false);
 });

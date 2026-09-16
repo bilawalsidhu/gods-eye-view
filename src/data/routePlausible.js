@@ -48,7 +48,8 @@ const LOCAL_AIRPORT_KM = 150;
 
 /**
  * @param {object} p
- * @param {number} p.latDeg / p.lonDeg — plane's current position
+ * @param {number} p.latDeg - Plane's current latitude (degrees).
+ * @param {number} p.lonDeg - Plane's current longitude (degrees).
  * @param {number|null} [p.altitudeM]
  * @param {number|null} [p.verticalRateMps] — positive = climbing
  * @param {{lat:number|null, lon:number|null}|null} [p.origin]

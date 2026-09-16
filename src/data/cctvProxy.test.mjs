@@ -66,7 +66,7 @@ test('readBytesCapped: bodies under the cap pass through byte-exact', async () =
 
 test('readBytesCapped: an undeclared oversized body is cut off mid-stream', async () => {
   let cancelled = false;
-  const big = new Array(100).fill(new Array(64).fill(7)); // 6400 bytes
+  const big = Array.from({length: 100}).fill(Array.from({length: 64}).fill(7)); // 6400 bytes
   const response = streamResponse(big, { onCancel: () => { cancelled = true; } });
   const read = await readBytesCapped(response, 1024);
   assert.equal(read.ok, false);

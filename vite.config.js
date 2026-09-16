@@ -204,7 +204,7 @@ export default defineConfig(({ mode }) => {
     ],
     server: {
       host: env.HOST || 'localhost',
-      port: parseInt(env.PORT, 10) || 5173,
+      port: Number.parseInt(env.PORT, 10) || 5173,
       // When binding to all interfaces, allow any host; otherwise restrict to local names
       allowedHosts: (env.HOST === '0.0.0.0' || env.HOST === '::')
         ? true

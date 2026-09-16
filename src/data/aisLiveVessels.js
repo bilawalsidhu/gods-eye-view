@@ -87,7 +87,7 @@ function getVisibilityWorker() {
       new URL('../workers/aisVisibility.worker.js', import.meta.url),
       { type: 'module' }
     );
-    _visibilityWorker.onmessage = (e) => {
+    _visibilityWorker.addEventListener('message', (e) => {
       const { visible, requestId } = e.data;
       if (requestId === _workerPendingId) {
         _workerVisibleResult = visible;
@@ -95,11 +95,11 @@ function getVisibilityWorker() {
         _workerPendingId = -1;
       }
       // Older results are discarded — only the latest matters
-    };
-    _visibilityWorker.onerror = (err) => {
+    });
+    _visibilityWorker.addEventListener('error', (err) => {
       console.warn('[AIS] Visibility worker error, falling back to main thread:', err.message);
       _visibilityWorker = null;
-    };
+    });
   }
   return _visibilityWorker;
 }
@@ -239,7 +239,7 @@ function aisRetryInSec() {
 /**
  * Chip text for a feed the server has reported as not delivering.
  * @param {string} status - 'stale' | 'reconnecting' | 'down'
- * @param {Object} payload - Parsed /api/ais-live JSON.
+ * @param {object} payload - Parsed /api/ais-live JSON.
  * @returns {string}
  */
 function describeDegradedAisFeed(status, payload) {
@@ -267,7 +267,7 @@ function describeDegradedAisFeed(status, payload) {
  * vessel positions are separate health stages: an open socket with no message
  * or no accepted positions must not read as a fresh successful update.
  *
- * @param {Object|null|undefined} payload - Parsed /api/ais-live JSON.
+ * @param {object|null|undefined} payload - Parsed /api/ais-live JSON.
  * @param {number} acceptedRowCount - Number of rows accepted by vessel normalization.
  * @returns {string|null} A short reason for the chip, or null if healthy.
  */
@@ -297,9 +297,9 @@ function hasUsableVesselCoordinates(row) {
 
 /**
  * Classify one server snapshot before any destructive reconciliation.
- * @param {Object|null|undefined} payload - Parsed /api/ais-live payload.
+ * @param {object|null|undefined} payload - Parsed /api/ais-live payload.
  * @returns {{transportStatus: string|null, lastMessageAt: number|string|null,
- *   rawRows: Array<Object>, acceptedRows: Array<Object>, rawRowCount: number,
+ *   rawRows: Array<object>, acceptedRows: Array<object>, rawRowCount: number,
  *   acceptedRowCount: number, error: string|null}}
  */
 export function classifyAisFeedSnapshot(payload) {
@@ -326,7 +326,7 @@ export function classifyAisFeedSnapshot(payload) {
  * fields are null, never NaN/undefined. navStatus is always null: the
  * /api/ais-live proxy does not surface AIS NavigationalStatus, so it
  * cannot be derived client-side.
- * @param {Object|null|undefined} record - `state.vesselMap`/`state.vesselRecords` entry.
+ * @param {object|null|undefined} record - `state.vesselMap`/`state.vesselRecords` entry.
  * @returns {{id: string|null, mmsi: string|null, name: string|null,
  *   lat: number|null, lon: number|null, speedKts: number|null,
  *   courseDeg: number|null, shipType: string|null, destination: string|null,
@@ -635,7 +635,7 @@ const aisLiveVesselsLayer = {
    * once per spoken query) — zero per-frame cost, no listeners, no caching.
    * Returns [] while the layer is disabled or empty.
    * @param {number} [maxCount=2000] - Maximum records to return (truncation).
-   * @returns {Array<Object>} See mapAnalystRecord for the record shape.
+   * @returns {Array<object>} See mapAnalystRecord for the record shape.
    */
   getAnalystRecords(maxCount = 2000) {
     if (!state.enabled) return [];
@@ -697,7 +697,7 @@ const aisLiveVesselsLayer = {
    * Return a subset of vessels for the universal detection overlay.
    * Deterministic stride sampling distributes selections evenly across the
    * current record list while honoring the overlay's per-layer budget.
-   * @param {Object} [options={}] - Options from the detection system.
+   * @param {object} [options={}] - Options from the detection system.
    * @param {number} [options.maxCount] - Maximum objects to return (defaults to all).
    * @param {number} [options.seed] - Seed offset for stride sampling.
    * @returns {Array<{position: Cesium.Cartesian3, id: string, type: string, skipLabel: boolean}>}
@@ -794,11 +794,11 @@ const state = {
   firstConnectTimer: null,
   abort: null,
   billboardCollection: null,
-  /** @type {Array<Object>} Flat render list: keyed records + unkeyed records */
+  /** @type {Array<object>} Flat render list: keyed records + unkeyed records */
   vesselRecords: [],
-  /** @type {Map<string, Object>} MMSI -> vessel record (identity across refreshes) */
+  /** @type {Map<string, object>} MMSI -> vessel record (identity across refreshes) */
   vesselMap: new Map(),
-  /** @type {Array<Object>} Records with no MMSI — rebuilt fresh each refresh */
+  /** @type {Array<object>} Records with no MMSI — rebuilt fresh each refresh */
   unkeyedRecords: [],
   clickHandler: null,
   /** Exact EventTarget currently holding the Escape listener. */
@@ -1099,7 +1099,7 @@ function ensureCollections(viewer) {
  * synchronous diff+apply pass.
  *
  * @param {Cesium.Viewer} viewer - The Cesium viewer instance.
- * @param {Array<Object>} rows - Raw AIS rows from the live API.
+ * @param {Array<object>} rows - Raw AIS rows from the live API.
  */
 function reconcileVessels(viewer, rows) {
   // Guard: if a previous reconcile is still chunking, let the next poll handle
@@ -1148,7 +1148,7 @@ function reconcileVessels(viewer, rows) {
  * @param {Cesium.Viewer} viewer
  * @param {any} occluder
  * @param {Set<string>} seen
- * @param {Array<Object>} normalizedRows
+ * @param {Array<object>} normalizedRows
  */
 function reconcileVesselsFinish(viewer, occluder, seen, normalizedRows) {
   for (let i = 0; i < normalizedRows.length; i++) {
@@ -1198,7 +1198,7 @@ function reconcileVesselsFinish(viewer, occluder, seen, normalizedRows) {
  * Create the billboard primitive for a freshly added vessel record. Map labels
  * are canvas cards (vesselLabels.js) rebuilt by the declutter pass — no
  * per-record label primitive exists anymore.
- * @param {Object} record - Normalized vessel record.
+ * @param {object} record - Normalized vessel record.
  * @param {Cesium.EllipsoidalOccluder|null} occluder - Horizon occluder for initial visibility.
  */
 function addRecordPrimitives(record, occluder) {
@@ -1227,8 +1227,8 @@ function addRecordPrimitives(record, occluder) {
  * preserving object identity so selection and the click-pick id stay valid.
  * Billboard image is only reassigned when the resolved icon actually changes
  * (type recolor) to avoid thousands of redundant texture lookups per refresh.
- * @param {Object} record - Existing vessel record in state.vesselMap.
- * @param {Object} next - Freshly normalized record for the same MMSI.
+ * @param {object} record - Existing vessel record in state.vesselMap.
+ * @param {object} next - Freshly normalized record for the same MMSI.
  */
 function updateRecordInPlace(record, next) {
   const selected = record === state.selectedRecord;
@@ -1270,7 +1270,7 @@ function updateRecordInPlace(record, next) {
 
 /**
  * Remove a record's billboard primitive from its collection.
- * @param {Object} record - Vessel record to tear down.
+ * @param {object} record - Vessel record to tear down.
  */
 function removeRecordPrimitives(record) {
   if (!record) return;
@@ -1344,7 +1344,7 @@ function shipScale(record) {
  * clockwise from north (true heading preferred, course-over-ground fallback).
  * Screen rotation is computed from this by the shared projected-rotation
  * pass in updateVisibility — never directly from the compass value.
- * @param {Object} record - Vessel record.
+ * @param {object} record - Vessel record.
  * @returns {number} Course in degrees (0 when unknown).
  */
 function vesselCourseDeg(record) {
@@ -1356,7 +1356,7 @@ function vesselCourseDeg(record) {
  * Build (and cache) a chevron/delta-wing SVG data URL tinted for the vessel.
  * The shape points north (up) so billboard rotation maps directly to heading.
  * One icon is generated per color+variant and reused across all billboards.
- * @param {Object} record - Vessel record (drives per-type tint).
+ * @param {object} record - Vessel record (drives per-type tint).
  * @param {boolean} selected - True for the white/brighter selected variant.
  * @returns {string} SVG data URL.
  */
@@ -1446,7 +1446,7 @@ function updateVisibility(force = false) {
 
     // Build the positions array for the worker — collect synchronously first
     // so we can dispatch immediately without waiting for a GC.
-    const positions = new Array(state.vesselRecords.length);
+    const positions = Array.from({length: state.vesselRecords.length});
     for (let i = 0; i < state.vesselRecords.length; i++) {
       const sp = state.vesselRecords[i].surfacePosition;
       positions[i] = sp ? { x: sp.x, y: sp.y, z: sp.z } : { x: 0, y: 0, z: 0 };
@@ -1528,6 +1528,13 @@ function updateVisibility(force = false) {
  * Apply focus alpha to vessel sprites. Kept as a production wire seam so the
  * animation/deadband contract can be tested without constructing WebGL.
  * @param {object} input
+ * @param {Array<object>} input.records - Vessel records whose sprite alpha the pass advances.
+ * @param {object|null} input.target - Current focus target, or null when nothing is followed.
+ * @param {number} [input.previousActiveCount=0] - Sprites still under focus emphasis from the previous pass.
+ * @param {number} input.nowMs - Frame timestamp in milliseconds driving the alpha transitions.
+ * @param {Function} input.screenPositionFor - Projects a world position to window pixel coordinates.
+ * @param {Function} input.cameraDistanceFor - Returns the camera distance, in metres, to a world position.
+ * @param {object} [input.params] - Focus tuning overrides forwarded to the shared focus helpers.
  * @returns {{writes:number,transitioning:boolean,activeCount:number,ran:boolean}}
  */
 export function applyVesselFocusDeemphasis({
@@ -1596,7 +1603,7 @@ function isVisible(surfacePosition, occluder) {
  * throttled visibility pass and forced refreshes, never per frame. The
  * selected vessel always gets its full-detail card, even when horizon-culled
  * from the ambient candidates; its protected entry bypasses ambient quotas.
- * @param {Array<Object>} records - Horizon-visible vessel records.
+ * @param {Array<object>} records - Horizon-visible vessel records.
  */
 function updateClusteredLabels(records) {
   const viewer = state.viewer;
@@ -1648,7 +1655,7 @@ function updateClusteredLabels(records) {
  * Publish a complete, bounded source snapshot to the shared host. The source
  * selector remains authoritative for the 118 px grid and 150 px separation;
  * the host then composes this demand with sibling ambient-card sources.
- * @param {Object[]} entries Formatted vessel card entries.
+ * @param {object[]} entries Formatted vessel card entries.
  */
 function publishVesselOverlayEntries(entries) {
   const canvas = state.viewer?.scene?.canvas || state.viewer?.canvas;
@@ -1842,7 +1849,7 @@ function selectVessel(record) {
  * Build a slightly lifted trail vertex for a vessel record — raised
  * TRAIL_HEIGHT_M above the sea surface (geoid, same datum as the anchor)
  * to avoid z-fighting.
- * @param {Object} record - Vessel record with lat/lon.
+ * @param {object} record - Vessel record with lat/lon.
  * @returns {Cesium.Cartesian3|null} Lifted position, or null without a fix.
  */
 function vesselTrailPosition(record) {
@@ -1872,7 +1879,7 @@ function refloorVesselRecords() {
 /**
  * Start (or restart) the selected vessel's trail: seed with the current
  * position, render, then fire-and-forget the server ring-buffer backfill.
- * @param {Object} record - Freshly selected vessel record.
+ * @param {object} record - Freshly selected vessel record.
  */
 function startSelectedVesselTrail(record) {
   state.trailBackfillToken += 1;
@@ -1934,13 +1941,13 @@ async function backfillVesselTrail(mmsi, token) {
 /**
  * Append the selected vessel's refreshed position to its trail when it has
  * moved more than TRAIL_MIN_MOVE_M from the last trail vertex.
- * @param {Object} record - Selected vessel record after an in-place update.
+ * @param {object} record - Selected vessel record after an in-place update.
  */
 function appendSelectedVesselTrailFix(record) {
   if (!state.trail) return;
   const next = vesselTrailPosition(record);
   if (!next) return;
-  const last = state.trailPositions[state.trailPositions.length - 1];
+  const last = state.trailPositions.at(-1);
   if (last && Cesium.Cartesian3.distance(last, next) <= TRAIL_MIN_MOVE_M) return;
   state.trailPositions.push(next);
   if (state.trailPositions.length > TRAIL_MAX_POINTS) state.trailPositions.shift();
@@ -1971,8 +1978,8 @@ function destroySelectedVesselTrail() {
 /**
  * Register (or refresh) the selected vessel in the shared context store so
  * the realtime/voice layer can describe what the user has selected.
- * @param {Object} record - Selected vessel record.
- * @returns {Object|null} The context record, or null if registration failed.
+ * @param {object} record - Selected vessel record.
+ * @returns {object|null} The context record, or null if registration failed.
  */
 function registerSelectedContext(record) {
   if (!record?.mmsi) return null;
@@ -2058,8 +2065,8 @@ function trimHudValue(value, maxLength) {
  * compact type/speed/heading detail line, anchored at the record's current
  * rendered position (height-datum caveat: no datum work here). Pure —
  * exported for unit tests.
- * @param {Object} record - Vessel record.
- * @returns {Object} vesselLabels entry.
+ * @param {object} record - Vessel record.
+ * @returns {object} vesselLabels entry.
  */
 export function buildVesselCard(record) {
   const parts = [];
@@ -2086,8 +2093,8 @@ export function buildVesselCard(record) {
  * (on top) and never distance-faded by the overlay. Pinned-but-vanished
  * vessels carry a STALE marker (mirrors the HUD readout). Pure — exported
  * for unit tests.
- * @param {Object} record - Selected vessel record.
- * @returns {Object} vesselLabels entry.
+ * @param {object} record - Selected vessel record.
+ * @returns {object} vesselLabels entry.
  */
 export function buildSelectedVesselCard(record) {
   const direction = record.heading ?? record.course;
@@ -2223,9 +2230,9 @@ function resetState() {
 /**
  * Bind the production interaction callbacks to mockable viewer/handler
  * surfaces. Test-only seam; behavior is shared with installInteraction().
- * @param {Object} viewer - Viewer-like object with scene.pick().
- * @param {Object} handler - Handler-like object with setInputAction().
- * @param {Object} keyTarget - EventTarget-like object with add/removeEventListener().
+ * @param {object} viewer - Viewer-like object with scene.pick().
+ * @param {object} handler - Handler-like object with setInputAction().
+ * @param {object} keyTarget - EventTarget-like object with add/removeEventListener().
  * @returns {void}
  */
 export function _bindVesselInteractionForTest(viewer, handler, keyTarget) {
@@ -2234,7 +2241,7 @@ export function _bindVesselInteractionForTest(viewer, handler, keyTarget) {
 
 /**
  * Prime the minimum live state needed by interaction/lifecycle wire tests.
- * @param {Object} [options={}] - Test state values.
+ * @param {object} [options={}] - Test state values.
  * @returns {void}
  */
 export function _setVesselStateForTest(options = {}) {
@@ -2280,8 +2287,8 @@ export function _updateVesselCardsForTest(records = []) {
 
 /**
  * Reconcile AIS rows through the production lifecycle. Test-only seam.
- * @param {Object} viewer - Viewer-like object.
- * @param {Array<Object>} rows - Raw AIS rows.
+ * @param {object} viewer - Viewer-like object.
+ * @param {Array<object>} rows - Raw AIS rows.
  * @returns {void}
  */
 export function _reconcileVesselsForTest(viewer, rows) {
@@ -2292,8 +2299,8 @@ export function _reconcileVesselsForTest(viewer, rows) {
  * Normalize one raw AIS row through the production path. Test-only seam
  * (normalization is perf-sensitive — bench and equivalence tests drive it
  * directly instead of inferring from reconcile state).
- * @param {Object} row - Raw AIS row.
- * @returns {Object|null} Normalized vessel record, or null when unusable.
+ * @param {object} row - Raw AIS row.
+ * @returns {object|null} Normalized vessel record, or null when unusable.
  */
 export function _normalizeVesselForTest(row) {
   return normalizeVessel(row);

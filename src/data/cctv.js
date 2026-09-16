@@ -183,7 +183,7 @@ const DEFAULT_CAMERA_CALIBRATION = Object.freeze({
  * Returns whether a calibration patch moves the camera's ground anchor.
  * Rotational, optical, range, and manual-height edits preserve the existing
  * ground reference; only north/east translation needs a new floor.
- * @param {Object|null|undefined} patch
+ * @param {object|null|undefined} patch
  * @returns {boolean}
  */
 export function calibrationPatchMovesAnchor(patch) {
@@ -348,8 +348,8 @@ let _cardFrameSlots = new Map();
 let _cardFetchTimer = 0;
 /** In-flight card-frame fetch count (burst allows up to 4, steady is 1). */
 let _cardFetchInFlightCount = 0;
-/** @type {Set<HTMLImageElement>} in-flight fetches, detached on teardown. */
-const _cardFetchImages = new Set();
+/** @type {Array<{image: HTMLImageElement, onLoad: Function, onError: Function}>} in-flight fetches, detached on teardown. */
+const _cardFetchImages = new Set(); // { image, onLoad, onError } in-flight records
 /** @type {Set<string>} camera ids with an in-flight fetch (no double-fetch). */
 const _cardFetchPendingIds = new Set();
 let _cardFetchCount = 0;
@@ -426,7 +426,7 @@ export function _setCctvOverlayHostForTest(host = null) {
 /**
  * Build the protected label associated with one active monitor plane.
  * @param {{cameraId: string, name: string, position: Cesium.Cartesian3|Function}} input
- * @returns {Object} Shared-host presentation entry.
+ * @returns {object} Shared-host presentation entry.
  */
 export function createCctvProjectionOverlayEntry({ cameraId, name, position }) {
   return createOverlayEntry({
@@ -453,7 +453,7 @@ export function createCctvProjectionOverlayEntry({ cameraId, name, position }) {
  * The active-camera thumbnail defaults OFF, preserving the shipped behavior
  * where the monitor plane is the camera's sole active representation.
  *
- * @param {Object} [options]
+ * @param {object} [options]
  * @param {boolean} [options.activeCameraCardEnabled=false]
  * @returns {{activeCameraCardEnabled:boolean}}
  */
@@ -553,7 +553,7 @@ function isVideoFeedType(feedType) {
  * @param {number} [fallback=NaN]
  * @returns {number}
  */
-function safeNumber(value, fallback = NaN) {
+function safeNumber(value, fallback = Number.NaN) {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
 }
@@ -568,7 +568,7 @@ function headingFromId(id) {
   const text = String(id || '');
   let acc = 0;
   for (let i = 0; i < text.length; i++) {
-    acc = (acc * 33 + text.charCodeAt(i)) >>> 0;
+    acc = (acc * 33 + text.codePointAt(i)) >>> 0;
   }
   return normalizeHeading((acc % 16) * 22.5);
 }
@@ -586,7 +586,7 @@ function quantize(value, step = 0.1) {
 /**
  * Sanitizes and clamps a calibration object to valid ranges.
  * Missing or non-finite fields fall back to defaults.
- * @param {Object} [value={}] - Raw calibration values.
+ * @param {object} [value={}] - Raw calibration values.
  * @returns {{ offsetNorthM: number, offsetEastM: number, headingDeg: number, pitchDeg: number, fovDeg: number, rangeScale: number, heightM: number }}
  */
 function normalizeCalibration(value = {}) {
@@ -604,7 +604,7 @@ function normalizeCalibration(value = {}) {
 
 /**
  * Returns true if the given calibration is effectively the default (all offsets near zero).
- * @param {Object} calibration
+ * @param {object} calibration
  * @returns {boolean}
  */
 function isDefaultCalibration(calibration) {
@@ -666,9 +666,9 @@ function safeWindowLocalStorage() {
  * savedAt: <epoch ms> }`. The v1 key (`CCTV_CALIBRATION_STORAGE_KEY_V1`) is
  * NEVER read here — product rule #3 (§9.3): wipe clean, no legacy import.
  *
- * @param {{getItem:function}|null} [storage] - Injectable storage (defaults
+ * @param {{getItem:Function}|null} [storage] - Injectable storage (defaults
  *   to `window.localStorage`); lets the unit suite test this pure of a DOM.
- * @returns {Map<string, {values:Object, source:string, savedAt:number}>}
+ * @returns {Map<string, {values:object, source:string, savedAt:number}>}
  */
 export function readCalibrationStoreV2(storage = safeWindowLocalStorage()) {
   const map = new Map();
@@ -698,8 +698,8 @@ export function readCalibrationStoreV2(storage = safeWindowLocalStorage()) {
 
 /**
  * Persists a calibration map to the v2 store.
- * @param {Map<string, {values:Object, source:string, savedAt:number}>} map
- * @param {{setItem:function}|null} [storage] - Injectable storage (defaults
+ * @param {Map<string, {values:object, source:string, savedAt:number}>} map
+ * @param {{setItem:Function}|null} [storage] - Injectable storage (defaults
  *   to `window.localStorage`).
  */
 export function writeCalibrationStoreV2(map, storage = safeWindowLocalStorage()) {
@@ -723,7 +723,7 @@ export function writeCalibrationStoreV2(map, storage = safeWindowLocalStorage())
  * Loads the v2 calibration store. `_calibrationById` holds these entries
  * directly (`{values, source:'manual', savedAt}`) — never bare offset values
  * — so it round-trips straight back through `writeCalibrationStoreV2`.
- * @returns {Map<string, {values:Object, source:string, savedAt:number}>}
+ * @returns {Map<string, {values:object, source:string, savedAt:number}>}
  */
 function loadCalibrationStore() {
   return readCalibrationStoreV2();
@@ -768,7 +768,7 @@ export function deriveCalBadge(camera) {
  * CAL badge (`deriveCalBadge`, driven by `calSource`/`poseSource`), not a
  * fabricated confidence score.
  *
- * @param {Object} camera - Mutable camera record.
+ * @param {object} camera - Mutable camera record.
  */
 function ensureCameraPose(camera) {
   if (!camera) return;
@@ -863,7 +863,7 @@ function projectPoint(latDeg, lonDeg, bearingDeg, distanceM) {
  * clamped center so the wireframe rays always terminate on the plane's
  * corners — the bottom pair may dip below ground (tiles occlude it).
  *
- * @param {Object} camera - Pose: lat, lon, headingDeg, pitchDeg, fovDeg,
+ * @param {object} camera - Pose: lat, lon, headingDeg, pitchDeg, fovDeg,
  *   rangeM, mountHeightM.
  * @param {number} groundAltM - Ground altitude at the mount (metres).
  * @param {number|null} [rangeOverrideM=null] - Obstruction-probe clamp: caps the
@@ -871,13 +871,13 @@ function projectPoint(latDeg, lonDeg, bearingDeg, distanceM) {
  * @returns {{ rangeM: number, vFovDeg: number, halfW: number, halfH: number,
  *   mount: {lat:number,lon:number,alt:number},
  *   capCenter: {lat:number,lon:number,alt:number},
- *   corners: { tl: Object, tr: Object, br: Object, bl: Object },
+ *   corners: { tl: object, tr: object, br: object, bl: object },
  *   topCenter: {lat:number,lon:number,alt:number}, groundAltM: number }}
  */
 export function computeFrustumGeometry(camera, groundAltM, rangeOverrideM = null) {
   const ground = safeNumber(groundAltM, 0);
   const poseRange = Math.max(1, safeNumber(camera.rangeM, 700));
-  const override = safeNumber(rangeOverrideM, NaN);
+  const override = safeNumber(rangeOverrideM, Number.NaN);
   const R = Number.isFinite(override) && override > 0 ? Math.min(poseRange, override) : poseRange;
   const pitch = toRad(clamp(safeNumber(camera.pitchDeg, -17), -89, 89));
   const hFov = toRad(clamp(safeNumber(camera.fovDeg, 74), 8, 160));
@@ -1002,7 +1002,7 @@ function currentViewContext() {
  * Builds the initial camera catalog from CAMERA_SEEDS definitions.
  * Each seed is resolved against its city's POI coordinates, offset, and
  * passed through ensureCameraPose to populate derived fields.
- * @returns {Object[]} Array of fully-initialized camera objects.
+ * @returns {object[]} Array of fully-initialized camera objects.
  */
 function seedCatalog() {
   const catalog = [];
@@ -1060,7 +1060,7 @@ function cityIdByName(cityName) {
 
 /**
  * Fetches configured camera sources from the backend.
- * @returns {Promise<Object[]>} Array of raw source objects, or empty on failure.
+ * @returns {Promise<object[]>} Array of raw source objects, or empty on failure.
  */
 async function loadCameraSources() {
   try {
@@ -1078,8 +1078,8 @@ async function loadCameraSources() {
  * Merges raw backend sources with seed data to produce the final camera catalog.
  * Seeds provide fallback values for heading, FOV, range, etc. when not specified
  * by the source. Each camera is passed through ensureCameraPose.
- * @param {Object[]} rawSources - Raw source objects from the backend.
- * @returns {Object[]} Array of fully-initialized camera objects.
+ * @param {object[]} rawSources - Raw source objects from the backend.
+ * @returns {object[]} Array of fully-initialized camera objects.
  */
 function buildCatalogFromSources(rawSources) {
   const sources = Array.isArray(rawSources) ? rawSources : [];
@@ -1097,11 +1097,11 @@ function buildCatalogFromSources(rawSources) {
     const cityId = String(source.cityId || '').trim() || cityIdByName(source.city) || seed?.cityId || '';
     const city = cityId && CITY_POIS[cityId] ? CITY_POIS[cityId] : null;
 
-    const lat = safeNumber(source.lat, seed?.lat ?? NaN);
-    const lon = safeNumber(source.lon, seed?.lon ?? NaN);
+    const lat = safeNumber(source.lat, seed?.lat ?? Number.NaN);
+    const lon = safeNumber(source.lon, seed?.lon ?? Number.NaN);
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
 
-    const sourceHeading = safeNumber(source.headingDeg, NaN);
+    const sourceHeading = safeNumber(source.headingDeg, Number.NaN);
     const headingDeg = normalizeHeading(
       Number.isFinite(sourceHeading)
         ? sourceHeading
@@ -1188,7 +1188,7 @@ function projectionTilesReady() {
  * Converts a computeFrustumGeometry result into the Cartesian3 positions the
  * entities consume. Fresh objects per call (geometry updates are rare —
  * slider/save/activation — and entities must never share scratch objects).
- * @param {Object} geometry - Result of computeFrustumGeometry.
+ * @param {object} geometry - Result of computeFrustumGeometry.
  * @returns {{ mount: Cesium.Cartesian3, capCenter: Cesium.Cartesian3,
  *   tl: Cesium.Cartesian3, tr: Cesium.Cartesian3, br: Cesium.Cartesian3,
  *   bl: Cesium.Cartesian3, label: Cesium.Cartesian3 }}
@@ -1214,7 +1214,7 @@ function frustumCartesians(geometry) {
  * Unit ECEF direction of the frustum view axis (heading/pitch) at a position.
  * Used by the plane orientation and the activation obstruction probe — both
  * need the UNCLAMPED axis, so it comes from the pose, not from clamped points.
- * @param {Object} camera - Camera pose (headingDeg, pitchDeg).
+ * @param {object} camera - Camera pose (headingDeg, pitchDeg).
  * @param {Cesium.Cartesian3} atPos - ECEF position defining the local ENU frame.
  * @returns {{ dir: Cesium.Cartesian3, up: Cesium.Cartesian3 }} View axis + the
  *   frame's in-plane "up" (both unit, mutually perpendicular).
@@ -1248,7 +1248,7 @@ function frustumFrameEcef(camera, atPos) {
  * viewer to look along the camera heading). Local +X = viewer-right, +Y =
  * frame-up, so the 16:9 texture maps upright and unmirrored. Static geometry —
  * computed only on slider/save/activation, never per frame (§2b).
- * @param {Object} camera - Camera pose.
+ * @param {object} camera - Camera pose.
  * @param {Cesium.Cartesian3} capCenterPos - Plane center in ECEF.
  * @returns {Cesium.Quaternion}
  */
@@ -1284,7 +1284,7 @@ function currentSurfaceRegime() {
  * `Number(camera.groundElevationM) || 0` ground fallback — it alone lifts
  * London's cameras from the fabricated 15 m to ~52.7 m ellipsoidal in every
  * regime, on first paint.
- * @param {Object} record - Camera record.
+ * @param {object} record - Camera record.
  * @returns {number} Ellipsoidal ground altitude in metres.
  */
 function groundPriorAltFor(record) {
@@ -1296,7 +1296,7 @@ function groundPriorAltFor(record) {
  * Task 5: whether the record's one-shot ground resolution has completed for
  * the given regime (per-regime latch — replaces the old boolean
  * `groundResolved`).
- * @param {Object} record - Camera record.
+ * @param {object} record - Camera record.
  * @param {string} [regime] - Defaults to the current surface regime.
  * @returns {boolean}
  */
@@ -1309,7 +1309,7 @@ function isGroundResolved(record, regime = currentSurfaceRegime()) {
  * cached resolution (`record.groundSamples[regime]` — a shared mesh/DEM floor
  * in google-3d, the DEM/prior in terrain-globe) when it exists, else the prior
  * itself. Never queries the scene.
- * @param {Object} record - Camera record.
+ * @param {object} record - Camera record.
  * @param {string} [regime] - Defaults to the current surface regime.
  * @returns {number} Ground altitude in metres.
  */
@@ -1343,7 +1343,7 @@ export function frameSignatureFromPixels(data) {
  * Signature of the runtime's freshly decoded frame, via a reused 64x36
  * scratch canvas.
  *
- * @param {Object} runtime - Projection runtime holding the decoded `.image`.
+ * @param {object} runtime - Projection runtime holding the decoded `.image`.
  * @returns {number|null} Signature, or null when it cannot be computed (the
  *   caller then treats the frame as changed — the pre-2026-07-30 behavior).
  */
@@ -1382,7 +1382,7 @@ function projectionFrameSignature(runtime) {
  * redrawing the same canvas in place is invisible to the GPU. Alternating
  * references forces a texture recreate, which at <=1Hz and 1080p is cheap.
  *
- * @param {Object} runtime - Projection runtime with `.canvas`.
+ * @param {object} runtime - Projection runtime with `.canvas`.
  * @returns {HTMLCanvasElement|null} The freshly painted buffer, or null.
  */
 function paintNextProjectionBuffer(runtime) {
@@ -1413,7 +1413,7 @@ function paintNextProjectionBuffer(runtime) {
  * updated per-frame by Cesium natively (H5). Image/webcam-frame feeds swap
  * the double-buffer canvas reference, throttled to PROJECTION_TEXTURE_SWAP_MS.
  *
- * @param {Object} record - Camera record with an initialized projection runtime.
+ * @param {object} record - Camera record with an initialized projection runtime.
  */
 function refreshProjectionTextures(record) {
   const runtime = record?.projection;
@@ -1441,7 +1441,7 @@ function refreshProjectionTextures(record) {
 /**
  * Builds the URL for fetching a camera frame image from the backend.
  * Includes a tick parameter to control cache invalidation cadence.
- * @param {Object} camera - Camera object.
+ * @param {object} camera - Camera object.
  * @param {number} [refreshMs=ACTIVE_FRAME_REFRESH_MS] - Refresh interval used for tick bucketing.
  * @returns {string} Frame URL.
  */
@@ -1463,7 +1463,7 @@ function frameUrlFor(camera, refreshMs = ACTIVE_FRAME_REFRESH_MS) {
 
 /**
  * Builds the URL for fetching a camera's video/media stream.
- * @param {Object} camera - Camera object.
+ * @param {object} camera - Camera object.
  * @returns {string} Media URL.
  */
 function mediaUrlFor(camera) {
@@ -1475,8 +1475,8 @@ function mediaUrlFor(camera) {
  * image or video is available. Shows camera name, city, and status text
  * over a dark gradient with tactical border lines.
  * @param {CanvasRenderingContext2D} ctx - 2D context for the projection canvas.
- * @param {Object} camera - Camera object for label info.
- * @param {Object|null} [health=null] - Health state for status message.
+ * @param {object} camera - Camera object for label info.
+ * @param {object|null} [health=null] - Health state for status message.
  */
 function paintProjectionPlaceholder(ctx, camera, health = null) {
   if (!ctx) return;
@@ -1513,7 +1513,7 @@ function paintProjectionPlaceholder(ctx, camera, health = null) {
  * dimensions) + label from the record's current frustum geometry, so the plane
  * always caps the wireframe exactly (corner rays terminate on its corners).
  * No-op when the record has no plane runtime (idle neighbors have no plane).
- * @param {Object} record - Camera record.
+ * @param {object} record - Camera record.
  */
 function updatePlanePlacement(record) {
   const runtime = record?.projection;
@@ -1545,7 +1545,7 @@ function clearProjectionOverlay() {
 
 /**
  * Shows/hides the monitor plane and its associated shared-host label.
- * @param {Object} runtime - Projection runtime.
+ * @param {object} runtime - Projection runtime.
  * @param {boolean} visible
  */
 function setPlaneVisible(runtime, visible) {
@@ -1595,9 +1595,9 @@ function createProjectionPlane(record, runtime, geometry, positions) {
 
 /**
  * Create the production monitor-plane/host-label pair without media setup.
- * @param {Object} viewer Cesium viewer seam.
- * @param {Object} record CCTV runtime record.
- * @returns {Object} Projection runtime.
+ * @param {object} viewer Cesium viewer seam.
+ * @param {object} record CCTV runtime record.
+ * @returns {object} Projection runtime.
  */
 export function _createCctvProjectionPlaneForTest(viewer, record) {
   _viewer = viewer;
@@ -1620,7 +1620,7 @@ export function _createCctvProjectionPlaneForTest(viewer, record) {
 
 /**
  * Exercise the production geometry-to-plane-and-label cache update.
- * @param {Object} record CCTV runtime record.
+ * @param {object} record CCTV runtime record.
  */
 export function _updateCctvProjectionPlaneForTest(record) {
   updatePlanePlacement(record);
@@ -1636,8 +1636,8 @@ export function _updateCctvProjectionPlaneForTest(record) {
  * can't pitch, the plane can). It is textured with the live frame: video
  * element direct, canvas double-buffer otherwise.
  *
- * @param {Object} record - Camera record.
- * @returns {Object|null} Projection runtime, or null if no viewer.
+ * @param {object} record - Camera record.
+ * @returns {object|null} Projection runtime, or null if no viewer.
  */
 function createProjectionRuntime(record) {
   if (!_viewer) return null;
@@ -1699,15 +1699,15 @@ function createProjectionRuntime(record) {
     const img = new Image();
     img.decoding = 'async';
     img.crossOrigin = 'anonymous';
-    img.onload = () => {
+    img.addEventListener('load', () => {
       runtime.imageLoading = false;
       runtime.imageReady = true;
       runtime.imageStamp = Date.now();
-    };
-    img.onerror = () => {
+    });
+    img.addEventListener('error', () => {
       runtime.imageLoading = false;
       runtime.imageReady = false;
-    };
+    });
     runtime.image = img;
   }
 
@@ -1730,8 +1730,8 @@ function createProjectionRuntime(record) {
 
 /**
  * Lazily initializes the projection runtime for a record if it doesn't exist yet.
- * @param {Object} record - Camera record.
- * @returns {Object|null} The record's projection runtime.
+ * @param {object} record - Camera record.
+ * @returns {object|null} The record's projection runtime.
  */
 function ensureProjectionRuntime(record) {
   if (!record) return null;
@@ -1747,7 +1747,7 @@ function ensureProjectionRuntime(record) {
 /**
  * Tears down a projection runtime: stops video playback, removes the monitor
  * plane, and clears its host label if it owns the active source.
- * @param {Object} runtime - Projection runtime to destroy.
+ * @param {object} runtime - Projection runtime to destroy.
  */
 function destroyProjectionRuntime(runtime) {
   if (!runtime) return;
@@ -1769,7 +1769,7 @@ function destroyProjectionRuntime(runtime) {
 /**
  * Triggers a new frame fetch for an image-mode projection if the refresh
  * interval has elapsed. Active cameras refresh more frequently than idle ones.
- * @param {Object} record - Camera record.
+ * @param {object} record - Camera record.
  * @param {boolean} [force=false] - Bypass the interval check.
  */
 function refreshProjectionImage(record, force = false) {
@@ -1801,9 +1801,9 @@ function refreshProjectionImage(record, force = false) {
  * Repaints the projection placeholder at most once per PLACEHOLDER_REPAINT_MS.
  * The projection loop runs at RAF cadence — unthrottled, a pending feed would
  * re-fill the 1080p canvas (gradient + text) on every single frame.
- * @param {Object} record - Camera record.
- * @param {Object} runtime - Projection runtime.
- * @param {Object|null} health - Health state for status text.
+ * @param {object} record - Camera record.
+ * @param {object} runtime - Projection runtime.
+ * @param {object|null} health - Health state for status text.
  */
 function paintPlaceholderThrottled(record, runtime, health) {
   const now = Date.now();
@@ -1824,7 +1824,7 @@ function paintPlaceholderThrottled(record, runtime, health) {
  * Image feeds only repaint when a NEW image finished loading (stamp check):
  * re-blitting an unchanged 1080p image every RAF tick is pure waste since
  * texture uploads are already throttled to 1Hz buffer swaps.
- * @param {Object} record - Camera record with an initialized projection runtime.
+ * @param {object} record - Camera record with an initialized projection runtime.
  */
 function drawProjectionFrame(record) {
   const runtime = record?.projection;
@@ -1965,6 +1965,20 @@ function refreshCctvFocusStyles(nowMs) {
 /**
  * Apply the gated CCTV focus pass through the production color path.
  * @param {object} input
+ * @param {Array<object>} input.records - Camera records whose billboards the pass
+ *   restyles; each contributes `billboard` and `camera.id`.
+ * @param {object|null} input.target - Shared focus target the icons yield toward
+ *   (null runs the restore-only pass).
+ * @param {number} [input.previousActiveCount=0] - Icons the previous pass left outside
+ *   the identity deadband; keeps a pass alive while dimmed icons restore.
+ * @param {number} input.nowMs - Timestamp (ms) driving the attack/release transitions.
+ * @param {Function} input.screenPositionFor - Maps a world position to screen
+ *   coordinates for the pass (null once an icon is hidden).
+ * @param {Function} input.cameraDistanceFor - Returns the camera's distance (m) to a
+ *   world position.
+ * @param {Function} input.baseColorFor - Returns a record's base color, whose alpha is
+ *   scaled by the focus factor.
+ * @param {object} [input.params] - Focus-deemphasis tuning overrides for this pass.
  * @returns {{writes:number,transitioning:boolean,activeCount:number,ran:boolean}}
  */
 export function applyCctvFocusDeemphasis({
@@ -2028,7 +2042,7 @@ function stopProjectionLoop() {
  * polylines (4 corner rays + closed far-plane rectangle), and the monitor
  * plane placement. This is the ONLY place v2 geometry is written — called on
  * slider input / save / activation / the one-shot ground snap, never per frame.
- * @param {Object} record - Camera record.
+ * @param {object} record - Camera record.
  * @param {number} groundAltM - Ground altitude at the mount (metres).
  */
 function applyFrustumGeometry(record, groundAltM) {
@@ -2084,8 +2098,8 @@ function applyFrustumGeometry(record, groundAltM) {
  * geometry queue (the enable-time drain + update()'s one-shot tiles-ready
  * completion re-enqueue), from explicit pose-edit call sites, and from the
  * map-stack regime-change handler.
- * @param {Object} record - Camera record.
- * @param {Object} [options={}]
+ * @param {object} record - Camera record.
+ * @param {object} [options={}]
  * @param {boolean} [options.sampleGround=true] - When false, skip shared
  *   mesh-floor refinement and use the cached/prior ground instead.
  */
@@ -2147,7 +2161,7 @@ function updateRecordGeometry(record, options = {}) {
  * fresh shared floor lands. In the terrain-globe regime the re-arm is
  * effectively free: the next pass re-latches from the DEM/prior with zero
  * scene queries.
- * @param {Object} record - Camera record.
+ * @param {object} record - Camera record.
  */
 function rearmGroundResolution(record) {
   if (!record) return;
@@ -2159,7 +2173,7 @@ function rearmGroundResolution(record) {
  * pass uses a warm shared floor immediately, or preserves the pre-drag floor
  * while the new cell is cold. A revision and coordinate check prevent an
  * older asynchronous release from rewriting a newer edit.
- * @param {Object} record - Camera record whose lat/lon just committed.
+ * @param {object} record - Camera record whose lat/lon just committed.
  */
 function resolveCommittedGroundAnchor(record) {
   if (!record?.camera) return;
@@ -2191,7 +2205,7 @@ function resolveCommittedGroundAnchor(record) {
  * fallback chain is meaningful where the catalog value is real (Caltrans).
  * Never rejects — a total failure resolves null and geometry stays on
  * catalog fallbacks (no worse than pre-Task-5).
- * @param {Object[]} catalog - Camera objects (post-ensureCameraPose).
+ * @param {object[]} catalog - Camera objects (post-ensureCameraPose).
  * @returns {Promise<Array<{ellipsoid:number, source:string}>|null>}
  */
 async function resolveGroundPriors(catalog) {
@@ -2222,7 +2236,7 @@ async function resolveGroundPriors(catalog) {
  *    mesh/DEM floor keep it untouched.
  * Guarded per record against a torn-down/re-inited layer (records are only
  * touched while they are still the live catalog entries).
- * @param {Object[]} records - The record array captured at init time.
+ * @param {object[]} records - The record array captured at init time.
  * @param {Array<{ellipsoid:number, source:string}>} priors - Aligned by index.
  */
 function applyLateGroundPriors(records, priors) {
@@ -2328,7 +2342,7 @@ function stopGeometryLoadQueue(clearProgress = true) {
  * finish always emits once even when the last progress tick just fired.
  *
  * @param {Function} notify Notification callback.
- * @param {Object} [options={}] Testable timing options.
+ * @param {object} [options={}] Testable timing options.
  * @param {() => number} [options.now] Monotonic clock returning milliseconds.
  * @param {number} [options.intervalMs] Maximum progress-notification cadence.
  * @param {number} [options.batchLimit] Maximum batches between progress ticks.
@@ -2369,10 +2383,10 @@ export function createGeometryProgressNotifier(notify, options = {}) {
  * Processes one geometry-queue batch and routes progress/completion through
  * the callbacks shared by production and the unit drain harness.
  *
- * @param {Object} options Batch inputs.
- * @param {Object[]} options.queue Mutable record queue.
+ * @param {object} options Batch inputs.
+ * @param {object[]} options.queue Mutable record queue.
  * @param {number} options.batchSize Maximum records to visit.
- * @param {(record: Object) => void} options.visit Per-record geometry work.
+ * @param {(record: object) => void} options.visit Per-record geometry work.
  * @param {() => void} options.progress Coalesced progress publication.
  * @param {() => void} options.complete Unconditional completion publication.
  * @returns {boolean} True when more records remain.
@@ -2401,7 +2415,7 @@ export function processCctvGeometryQueueBatch({
  * Called for every batch so releasing tracking immediately restores normal
  * throughput without restarting the queue.
  *
- * @param {Object} [ownership={}] Current camera-ownership state.
+ * @param {object} [ownership={}] Current camera-ownership state.
  * @param {*} [ownership.trackedEntity] Cesium tracked entity, if any.
  * @param {boolean} [ownership.cockpitActive] Whether cockpit owns the camera.
  * @returns {{ batchSize: number, delayMs: number }} Drain pacing.
@@ -2418,10 +2432,10 @@ export function cctvGeometryDrainPacing({ trackedEntity = null, cockpitActive = 
  * every call so a mid-drain tracking/cockpit transition changes the very next
  * batch's size and delay.
  *
- * @param {Object} options Batch inputs.
- * @param {Object[]} options.queue Mutable record queue.
- * @param {() => Object} [options.readOwnership] Current camera ownership.
- * @param {(record: Object) => void} options.visit Per-record geometry work.
+ * @param {object} options Batch inputs.
+ * @param {object[]} options.queue Mutable record queue.
+ * @param {() => object} [options.readOwnership] Current camera ownership.
+ * @param {(record: object) => void} options.visit Per-record geometry work.
  * @param {() => void} options.progress Coalesced progress publication.
  * @param {() => void} options.complete Unconditional completion publication.
  * @returns {{ hasMore: boolean, batchSize: number, delayMs: number }} Batch result and pacing.
@@ -2446,8 +2460,8 @@ export function processCctvGeometryDrainBatch({
 
 /**
  * Moves the current active record to the front of a live drain queue.
- * @param {Object[]} queue Mutable geometry queue.
- * @param {Object|null} activeRecord Current active CCTV record.
+ * @param {object[]} queue Mutable geometry queue.
+ * @param {object|null} activeRecord Current active CCTV record.
  * @returns {boolean} Whether the queue order changed.
  */
 export function prioritizeActiveCctvGeometryRecord(queue, activeRecord) {
@@ -2523,7 +2537,7 @@ export function processGeometryBatch() {
  * pass (records left `!groundResolved` by an enable-time drain that ran while
  * tiles were still streaming) so it shares the same stagger machinery as the
  * initial load. Fires at most once per enable — never on a recurring timer.
- * @param {Object[]} records - Camera records needing geometry refresh.
+ * @param {object[]} records - Camera records needing geometry refresh.
  */
 function enqueueGeometryRefresh(records) {
   for (const record of records) {
@@ -2573,7 +2587,7 @@ function startGeometryLoadQueue() {
  * Returns the camera record for the currently active camera. A stale ID falls
  * back to the first record, but an intentional null remains an honest
  * deselected state.
- * @returns {Object|null} Active camera record, or null when none is active.
+ * @returns {object|null} Active camera record, or null when none is active.
  */
 function getActiveRecord() {
   if (!_activeCameraId) return null;
@@ -2608,7 +2622,7 @@ function pauseInactiveProjectionFeeds(activeId) {
  * Determines which camera coverage overlays should be visible based on
  * proximity to the active camera. Limits visibility to
  * COVERAGE_NEIGHBOR_LIMIT cameras within COVERAGE_NEIGHBOR_RADIUS_KM.
- * @param {Object|null} activeRecord - The active camera record.
+ * @param {object|null} activeRecord - The active camera record.
  * @returns {Set<string>} Set of visible camera IDs.
  */
 function buildCoverageVisibleSet(activeRecord) {
@@ -2644,7 +2658,7 @@ function buildCoverageVisibleSet(activeRecord) {
 
 /**
  * Removes (and destroys) a record's viewshed volume primitive, if any.
- * @param {Object} record - Camera record.
+ * @param {object} record - Camera record.
  */
 function destroyViewshedVolume(record) {
   if (!record) return;
@@ -2661,7 +2675,7 @@ function destroyViewshedVolume(record) {
  * already rewrites (style refresh on mode/visible-set/active changes,
  * applyFrustumGeometry on pose edits) — no new update cadence, zero scene
  * queries (viewshed design §3b).
- * @param {Object} record - Camera record.
+ * @param {object} record - Camera record.
  * @param {boolean} isActive - Active camera gets the brighter fill.
  */
 function rebuildViewshedVolume(record, isActive) {
@@ -2753,8 +2767,8 @@ function refreshAmbientCards() {
     const id = record.camera.id;
     if (id === activeId || !record.position) continue;
     let inView = false;
-    let sx = NaN;
-    let sy = NaN;
+    let sx = Number.NaN;
+    let sy = Number.NaN;
     if (occluder.isPointVisible(record.position)) {
       const screen = scene.cartesianToCanvasCoordinates(record.position);
       if (screen && Number.isFinite(screen.x) && Number.isFinite(screen.y)
@@ -2975,7 +2989,7 @@ function clearHoverCard() {
  * respecting the per-camera failure backoff / freshness check
  * (frameFetchDue), the no-double-fetch pending set, and the burst in-flight
  * cap of 4.
- * @param {Object} record - The hovered camera's record.
+ * @param {object} record - The hovered camera's record.
  */
 function hoverFetchCardFrame(record) {
   const cameraId = record.camera.id;
@@ -3051,10 +3065,10 @@ function cardFrameTick() {
  * pure persistence rule (applyFrameResult): success replaces the thumbnail,
  * failure leaves the drawn frame untouched. The frame is downscaled once
  * into a 2x-thumb offscreen canvas; the renderer reads the slot live.
- * @param {Object} record - Camera record.
- * @param {Object} slot - The camera's stable frame slot.
+ * @param {object} record - Camera record.
+ * @param {object} slot - The camera's stable frame slot.
  * @param {number} refreshMs - Source cadence (also keys the frame-URL tick).
- * @param {Object} [options]
+ * @param {object} [options]
  * @param {boolean} [options.userGesture] - Hover fast-track (item B): the
  *   launch bypasses the pacer gate, so its spacing sample would pollute the
  *   pacing telemetry — skip the min-spacing sample only. The launch still
@@ -3078,11 +3092,14 @@ function fetchCardFrame(record, slot, refreshMs, { userGesture = false } = {}) {
   _cardFetchCount += 1;
 
   const image = new Image();
-  _cardFetchImages.add(image);
+  const onLoad = () => settle(true);
+  const onError = () => settle(false);
+  const inFlight = { image, onLoad, onError };
+  _cardFetchImages.add(inFlight);
   const settle = (ok) => {
-    image.onload = null;
-    image.onerror = null;
-    if (_cardFetchImages.delete(image)) {
+    image.removeEventListener('load', onLoad);
+    image.removeEventListener('error', onError);
+    if (_cardFetchImages.delete(inFlight)) {
       _cardFetchInFlightCount = Math.max(0, _cardFetchInFlightCount - 1);
       _cardFetchPendingIds.delete(cameraId);
     }
@@ -3101,8 +3118,8 @@ function fetchCardFrame(record, slot, refreshMs, { userGesture = false } = {}) {
     Object.assign(slot, applyFrameResult(slot, { ok: Boolean(frame), frame }, Date.now()));
     _viewer?.scene?.requestRender?.();
   };
-  image.onload = () => settle(true);
-  image.onerror = () => settle(false);
+  image.addEventListener('load', onLoad);
+  image.addEventListener('error', onError);
   image.src = frameUrlFor(record.camera, refreshMs);
 }
 
@@ -3121,9 +3138,9 @@ function startCardFrameLoop() {
 if (typeof document !== 'undefined') {
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) return;
-    for (const image of _cardFetchImages) {
-      image.onload = null;
-      image.onerror = null;
+    for (const { image, onLoad, onError } of _cardFetchImages) {
+      image.removeEventListener('load', onLoad);
+      image.removeEventListener('error', onError);
       image.removeAttribute('src');
     }
     _cardFetchImages.clear();
@@ -3138,9 +3155,9 @@ function stopCardFrameLoop() {
     clearInterval(_cardFetchTimer);
     _cardFetchTimer = 0;
   }
-  for (const image of _cardFetchImages) {
-    image.onload = null;
-    image.onerror = null;
+  for (const { image, onLoad, onError } of _cardFetchImages) {
+    image.removeEventListener('load', onLoad);
+    image.removeEventListener('error', onError);
     image.removeAttribute('src');
   }
   _cardFetchImages.clear();
@@ -3173,8 +3190,8 @@ function teardownAmbientCards() {
  * styles. Disabling makes every visibility branch false, so a direct sweep is
  * sufficient; live viewshed primitives still require explicit destruction.
  *
- * @param {Object[]} records CCTV runtime records.
- * @param {(record: Object) => void} destroyVolume Viewshed teardown callback.
+ * @param {object[]} records CCTV runtime records.
+ * @param {(record: object) => void} destroyVolume Viewshed teardown callback.
  * @param {string|null} [activeCameraId=null] Active camera whose activation probe must be re-armed.
  */
 export function hideCctvRecordVisuals(records, destroyVolume, activeCameraId = null) {
@@ -3299,7 +3316,7 @@ function nearestCameraIdToViewer() {
  * Counts how many other cameras have overlapping coverage with the target.
  * Overlap is approximated by comparing inter-camera distance against the
  * combined range of both cameras (scaled by 0.92).
- * @param {Object} targetRecord - Camera record to check.
+ * @param {object} targetRecord - Camera record to check.
  * @returns {number} Number of overlapping neighbors.
  */
 function coverageNeighborCount(targetRecord) {
@@ -3358,9 +3375,9 @@ function buildSummaryText() {
 /**
  * Builds a public-facing camera state object for UI consumption.
  * Includes all pose, calibration, CAL badge, projection, and feed metadata.
- * @param {Object} record - Camera record.
+ * @param {object} record - Camera record.
  * @param {string|null} [activeId=null] - Active camera ID for the `active` flag.
- * @returns {Object} Public camera state.
+ * @returns {object} Public camera state.
  */
 function getPublicCameraState(record, activeId = null) {
   const resolvedActiveId = activeId || getActiveRecord()?.camera.id || null;
@@ -3420,7 +3437,7 @@ function getPublicCameraState(record, activeId = null) {
 /**
  * Assembles the full UI state payload containing layer toggles, camera list,
  * active camera details, summary text, and error state.
- * @returns {Object} Complete UI state for subscribers.
+ * @returns {object} Complete UI state for subscribers.
  */
 function uiState() {
   const active = getActiveRecord();
@@ -3499,8 +3516,8 @@ function notifyListenersThrottled() {
  * Commit grade (drag end, numeric entry, voice): only an E/N anchor move
  * resolves a new shared floor; all other edits keep the frozen reference.
  *
- * @param {Object} record - Camera record.
- * @param {Object} patch - Partial 7-field calibration (absolute offset values).
+ * @param {object} record - Camera record.
+ * @param {object} patch - Partial 7-field calibration (absolute offset values).
  * @param {{transient?: boolean}} [options]
  * @returns {boolean} True when the patch applied.
  */
@@ -3582,7 +3599,7 @@ function ensureGizmo() {
  * never per-frame (the zero-raycast invariant applies to steady state). The
  * per-camera range slider overrides the clamp: a user-set rangeScale skips the
  * probe entirely. Probe failure/miss keeps the unclamped range.
- * @param {Object} record - Camera record being activated.
+ * @param {object} record - Camera record being activated.
  */
 function runActivationObstructionProbe(record) {
   record.probeClampRangeM = null;
@@ -3613,8 +3630,8 @@ function runActivationObstructionProbe(record) {
 /**
  * Clears a deactivated camera's temporary obstruction clamp and rewrites its
  * geometry through the normal single-range path.
- * @param {Object|null} record Camera runtime record being deactivated.
- * @param {(record: Object) => void} rewriteGeometry Nominal geometry rewrite.
+ * @param {object|null} record Camera runtime record being deactivated.
+ * @param {(record: object) => void} rewriteGeometry Nominal geometry rewrite.
  * @returns {boolean} Whether a clamp was cleared.
  */
 export function clearProbeClampOnDeactivation(record, rewriteGeometry) {
@@ -3630,7 +3647,7 @@ export function clearProbeClampOnDeactivation(record, rewriteGeometry) {
  * on its next real activation after the temporary clamp is cleared.
  * @param {string} cameraId Requested camera ID.
  * @param {string|null} activeCameraId Current active camera ID.
- * @param {Object|null} record Requested camera runtime record.
+ * @param {object|null} record Requested camera runtime record.
  * @returns {boolean} Whether activation work must run.
  */
 export function cctvRecordNeedsActivation(cameraId, activeCameraId, record) {
@@ -3641,9 +3658,9 @@ export function cctvRecordNeedsActivation(cameraId, activeCameraId, record) {
  * Bind CCTV activation to clean taps while preserving the layer's hover-move
  * callback on the shared Cesium handler. Drag-like and long-press gestures do
  * not reach camera activation or focus dispatch.
- * @param {Cesium.ScreenSpaceEventHandler|Object} handler - Input handler.
- * @param {(click: Object) => void} onClick - Accepted CCTV click callback.
- * @param {Object} [options] - Gesture test seams and optional onMouseMove hook.
+ * @param {Cesium.ScreenSpaceEventHandler|object} handler - Input handler.
+ * @param {(click: object) => void} onClick - Accepted CCTV click callback.
+ * @param {object} [options] - Gesture test seams and optional onMouseMove hook.
  * @returns {void}
  */
 export function bindCctvWorldClickGesture(handler, onClick, options = {}) {
@@ -3758,8 +3775,8 @@ export function deactivateActiveCamera() {
  * active camera exists, ADJUST does not own the pointer, and the scene pick
  * carries no canonical object ID. Any identified scene object is non-empty,
  * including selectable siblings that do not participate in the pick registry.
- * @param {Object|null} picked - `scene.pick()` result.
- * @param {Object} [context]
+ * @param {object|null} picked - `scene.pick()` result.
+ * @param {object} [context]
  * @param {string|null} [context.activeCameraId]
  * @param {boolean} [context.calibrationMode]
  * @returns {boolean}
@@ -3777,7 +3794,7 @@ export function cctvEmptyClickDeselects(picked, {
  * frustum: 4 corner rays (mount → far-plane corner) + the closed far-plane
  * rectangle. Entity ids stay in the `cctv-<id>-<role>` scheme (pick-owner
  * regex depends on it): roles ray-tl / ray-tr / ray-br / ray-bl / cap.
- * @param {Object} record - Camera record.
+ * @param {object} record - Camera record.
  * @returns {Cesium.Entity[]} Array of five coverage entities.
  */
 function buildCoverageEntities(record) {
@@ -3830,10 +3847,10 @@ function buildCoverageEntities(record) {
  * The helper is dependency-injected so unit tests can prove the enable policy
  * without constructing Cesium entities.
  *
- * @param {Object[]} records CCTV runtime records.
- * @param {(record: Object) => boolean} [isEligible] Eligibility predicate.
- * @param {(record: Object) => Object[]} buildEntities Coverage builder.
- * @returns {Object[]} Newly created entities across all eligible records.
+ * @param {object[]} records CCTV runtime records.
+ * @param {(record: object) => boolean} [isEligible] Eligibility predicate.
+ * @param {(record: object) => object[]} buildEntities Coverage builder.
+ * @returns {object[]} Newly created entities across all eligible records.
  */
 export function materializeCctvCoverageEntities(
   records,
@@ -3887,7 +3904,7 @@ function ensureVisibleCoverageEntities(records, visibleIds) {
 /**
  * Extracts a camera ID from a Cesium pick result by checking billboard IDs,
  * primitive IDs, and entity cctvCameraId properties.
- * @param {Object|null} picked - Result from scene.pick().
+ * @param {object|null} picked - Result from scene.pick().
  * @returns {string|null} Camera ID, or null if the pick is not a CCTV entity.
  */
 function extractPickedCameraId(picked) {
@@ -3973,9 +3990,9 @@ function clearRuntimeState() {
 /**
  * Primes the minimum module state needed to exercise the production coverage
  * refresh path in unit tests.
- * @param {Object} [options={}] Test state values.
- * @param {Object|null} [options.viewer] Viewer-like entity owner.
- * @param {Object[]} [options.records] Seeded CCTV records.
+ * @param {object} [options={}] Test state values.
+ * @param {object|null} [options.viewer] Viewer-like entity owner.
+ * @param {object[]} [options.records] Seeded CCTV records.
  * @param {string|null} [options.activeCameraId] Active record id.
  * @param {boolean} [options.enabled=true] Layer enabled state.
  * @param {'off'|'on'|'viewshed'} [options.coverageMode='on'] Coverage mode.
@@ -4011,7 +4028,7 @@ export function _setCctvCoverageStateForTest({
  * Flies the Cesium viewer camera to frame the specified CCTV camera,
  * looking along its heading from above.
  * @param {Cesium.Viewer|null} viewer Cesium viewer that owns the camera.
- * @param {Object|null} record CCTV camera runtime record.
+ * @param {object|null} record CCTV camera runtime record.
  * @param {number} [duration=2.2] - Flight duration in seconds.
  * @returns {'focused'|'no-active-camera'|'tracking-holds-view'|'cockpit-active'} Focus result.
  */
@@ -4537,14 +4554,14 @@ const cctvLayer = {
   /**
    * Applies runtime parameter changes: coverage/projection toggles, auto-hop
    * settings, camera selection, and calibration patches/resets.
-   * @param {Object} [params={}] - Parameter object.
+   * @param {object} [params={}] - Parameter object.
    * @param {boolean} [params.showCoverage] - Back-compat coverage toggle (true→'on', false→'off').
    * @param {'off'|'on'|'viewshed'} [params.coverageMode] - Full coverage-mode API.
    * @param {boolean} [params.showProjection] - Toggle projection overlay visibility.
    * @param {boolean} [params.autoHop] - Enable/disable auto-hop.
    * @param {number} [params.autoHopSec] - Auto-hop interval in seconds.
    * @param {string} [params.selectedCameraId] - Camera ID to activate.
-   * @param {Object} [params.calibration] - Calibration config: `patch` edits
+   * @param {object} [params.calibration] - Calibration config: `patch` edits
    *   the live pose (save-gated — no persistence), `save` persists the current
    *   calibration as manual, `reset` restores the base prior.
    * @param {boolean} [params.calibrationMode] - Toggle the ADJUST gizmo.
@@ -4646,7 +4663,7 @@ const cctvLayer = {
   /**
    * Returns the current runtime parameters including toggle states,
    * active camera, and calibration values.
-   * @returns {Object}
+   * @returns {object}
    */
   getParams() {
     const active = getActiveRecord();
@@ -4667,7 +4684,7 @@ const cctvLayer = {
 
   /**
    * Returns a sampled list of camera positions for the detection overlay system.
-   * @param {Object} [options={}]
+   * @param {object} [options={}]
    * @param {number} [options.maxCount] - Maximum number of objects to return.
    * @param {number} [options.seed] - Offset seed for deterministic stride sampling.
    * @returns {{ position: Cesium.Cartesian3, id: string, type: string }[]}
@@ -4728,7 +4745,7 @@ const cctvLayer = {
 
   /**
    * Returns the current UI state snapshot without subscribing.
-   * @returns {Object}
+   * @returns {object}
    */
   getUIState() {
     return uiState();
@@ -4738,7 +4755,7 @@ const cctvLayer = {
    * Opts the active camera into or out of protected thumbnail publication.
    * The default is false: the monitor plane remains the sole active-camera
    * representation while ambient and hover-pinned cards continue unchanged.
-   * @param {Object} [options]
+   * @param {object} [options]
    * @param {boolean} [options.activeCameraCardEnabled=false]
    * @returns {{activeCameraCardEnabled:boolean}}
    */
@@ -4749,7 +4766,7 @@ const cctvLayer = {
   /**
    * Selects a camera by ID and optionally flies to it.
    * @param {string} cameraId - Camera ID to select.
-   * @param {Object} [options={}]
+   * @param {object} [options={}]
    * @param {boolean} [options.focus] - If true, fly the viewer to the camera.
    * @param {number} [options.durationSec] - Fly-to duration in seconds.
    * @returns {boolean} True if the camera was found and selected.
@@ -4776,7 +4793,7 @@ const cctvLayer = {
   /**
    * Cycles the active camera forward or backward by `step` positions in the catalog.
    * @param {number} [step=1] - Number of positions to advance (negative to go back).
-   * @param {Object} [options={}]
+   * @param {object} [options={}]
    * @param {boolean} [options.focus] - If true, fly to the new camera.
    * @param {number} [options.durationSec] - Fly-to duration in seconds.
    * @returns {string|null} The newly active camera ID, or null if catalog is empty.
@@ -4799,7 +4816,7 @@ const cctvLayer = {
 
   /**
    * Selects and flies to the camera nearest the current viewer position.
-   * @param {Object} [options={}]
+   * @param {object} [options={}]
    * @param {boolean} [options.focus=true] Whether to fly after selection.
    * @param {number} [options.durationSec] - Fly-to duration in seconds.
    * @returns {string|null} The nearest camera ID, or null if none found.

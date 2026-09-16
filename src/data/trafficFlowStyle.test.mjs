@@ -30,7 +30,7 @@ test('flowBucket: < 0.55 is jammed', () => {
 });
 
 test('flowBucket: non-finite input degrades to free (no false alarms)', () => {
-  assert.equal(flowBucket(NaN), 'free');
+  assert.equal(flowBucket(Number.NaN), 'free');
   assert.equal(flowBucket(undefined), 'free');
 });
 
@@ -60,7 +60,7 @@ test('flowSpeedScale: clamps level into [0.15, 1]', () => {
 });
 
 test('flowSpeedScale: non-finite input keeps full speed (sim parity)', () => {
-  assert.equal(flowSpeedScale(NaN), 1);
+  assert.equal(flowSpeedScale(Number.NaN), 1);
   assert.equal(flowSpeedScale(undefined), 1);
 });
 
@@ -75,7 +75,7 @@ test('flowDensityMult: congestion packs more dots, capped at 2.5', () => {
 });
 
 test('flowDensityMult: non-finite input keeps neutral density (sim parity)', () => {
-  assert.equal(flowDensityMult(NaN), 1);
+  assert.equal(flowDensityMult(Number.NaN), 1);
   assert.equal(flowDensityMult(undefined), 1);
 });
 
@@ -95,7 +95,7 @@ test('flowDensityMult jamBoost: deep jams keep climbing to a 4.0 cap', () => {
 });
 
 test('flowDensityMult jamBoost: non-finite input still neutral (sim parity)', () => {
-  assert.equal(flowDensityMult(NaN, { jamBoost: true }), 1);
+  assert.equal(flowDensityMult(Number.NaN, { jamBoost: true }), 1);
   assert.equal(flowDensityMult(undefined, { jamBoost: true }), 1);
 });
 

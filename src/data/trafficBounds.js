@@ -13,7 +13,7 @@
  * @module data/trafficBounds
  */
 
-/** @const {number} Mean Earth radius in km (spherical approximation). */
+/** @constant {number} Mean Earth radius in km (spherical approximation). */
 const EARTH_RADIUS_KM = 6371;
 
 const toRad = (deg) => (deg * Math.PI) / 180;
@@ -91,7 +91,7 @@ function destinationPoint(lat, lon, bearingRad, distKm) {
  *    activates below 8 km camera altitude, so a look-at point farther than
  *    ~12 km is horizon-gazing, not something the user can see roads at.
  *
- * @param {Object} args
+ * @param {object} args
  * @param {number} args.nadirLat - Camera nadir latitude (degrees).
  * @param {number} args.nadirLon - Camera nadir longitude (degrees).
  * @param {number} [args.hitLat] - pickEllipsoid ground-hit latitude (degrees), if any.

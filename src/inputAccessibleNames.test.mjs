@@ -81,9 +81,9 @@ function accessibleName(control) {
     // The wrapping label must contribute text of its own — an aria-hidden
     // span (or nothing) inside the label is not a name.
     const text = wrapping.source
-      .replace(/<[^>]*aria-hidden="true"[^>]*>[\s\S]*?<\/[^>]*>/g, ' ')
-      .replace(/<[^>]*>/g, ' ')
-      .replace(/\s+/g, ' ')
+      .replaceAll(/<[^>]*aria-hidden="true"[^>]*>[\s\S]*?<\/[^>]*>/g, ' ')
+      .replaceAll(/<[^>]*>/g, ' ')
+      .replaceAll(/\s+/g, ' ')
       .trim();
     if (text) return `wrapping <label> ("${text}")`;
   }

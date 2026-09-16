@@ -36,7 +36,7 @@ test('isCctvCardAnchorSafe protects the top HUD band for ambient cards', () => {
   assert.equal(isCctvCardAnchorSafe({ sy: 100, viewH: 1000 }), false);
   assert.equal(isCctvCardAnchorSafe({ sy: 150, viewH: 1000 }), true);
   assert.equal(isCctvCardAnchorSafe({ sy: 100, viewH: 1000, pinned: true }), true);
-  assert.equal(isCctvCardAnchorSafe({ sy: NaN, viewH: 1000 }), false);
+  assert.equal(isCctvCardAnchorSafe({ sy: Number.NaN, viewH: 1000 }), false);
 });
 
 // ─── declutterCctvCards ──────────────────────────────────────────────────────
@@ -66,7 +66,7 @@ test('declutterCctvCards: respects the limit and drops malformed rows', () => {
     { id: 'b', sx: 500, sy: 0, distanceKm: 2 },
     { id: 'c', sx: 1000, sy: 0, distanceKm: 3 },
     { id: '', sx: 200, sy: 200, distanceKm: 0 },
-    { id: 'nan', sx: NaN, sy: 0, distanceKm: 0 },
+    { id: 'nan', sx: Number.NaN, sy: 0, distanceKm: 0 },
     null,
   ], { minSepPx: 130, limit: 2 });
   assert.deepEqual(kept, ['a', 'b']);
@@ -135,7 +135,7 @@ test('CCTV card module cannot resurrect a canvas, projection, listener, or priva
 test('cardScaleForAltitude: full size and opacity at or below 1,800 m', () => {
   assert.deepEqual(cardScaleForAltitude(0), { scale: 1, alpha: 1 });
   assert.deepEqual(cardScaleForAltitude(CCTV_CARD_SCALE_FULL_M), { scale: 1, alpha: 1 });
-  assert.deepEqual(cardScaleForAltitude(NaN), { scale: 1, alpha: 1 });
+  assert.deepEqual(cardScaleForAltitude(Number.NaN), { scale: 1, alpha: 1 });
 });
 
 test('cardScaleForAltitude: hits the validated waypoints', () => {

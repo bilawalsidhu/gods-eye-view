@@ -74,7 +74,7 @@ const MODE_DENSE = 3;
 /** @constant {string[]} MODE_LABELS - Human-readable labels indexed by mode value */
 const MODE_LABELS = ['OFF', 'SPARSE', 'BALANCED', 'DENSE'];
 
-/** @constant {Object<string,string>} LEGACY_MODE_ALIAS - Maps deprecated mode names to current labels */
+/** @constant {[key: string]: string} LEGACY_MODE_ALIAS - Maps deprecated mode names to current labels */
 const LEGACY_MODE_ALIAS = {
   SURVEY: 'SPARSE',
   GOD: 'DENSE',
@@ -84,7 +84,7 @@ const LEGACY_MODE_ALIAS = {
 };
 
 /**
- * @constant {Object<string, {line: string, label: string, labelBg: string, glow: string, blend: string, filter: string, scanline: number}>}
+ * @constant {[key: string]: {line: string, label: string, labelBg: string, glow: string, blend: string, filter: string, scanline: number}}
  * THEME_MAP - Visual theme presets controlling box stroke color, label styling,
  * glow intensity, CSS blend mode, filter chain, and scanline overlay opacity.
  */
@@ -185,7 +185,7 @@ export function countFadingRenderEntries(renderEntries) {
 // Module-level state — singleton lifecycle tied to the Cesium viewer
 // ---------------------------------------------------------------------------
 
-/** @type {Cesium.Viewer|null} */
+/** @type {import('cesium').Viewer|null} */
 let _viewer = null;
 /** @type {number} Current mode index into MODE_LABELS */
 let _mode = MODE_OFF;
@@ -225,14 +225,14 @@ let _calloutLane = null;
  * under load while the host clears the shared canvas every frame, so replaying
  * the last solve is what keeps plates from strobing against persistent
  * brackets.
- * @type {Array<Object>}
+ * @type {Array<object>}
  */
 const _calloutPool = [];
 let _calloutCount = 0;
 /** Cached per-theme plate fills, resolved on style change (never per label). */
 let _platePaint = DETECTION_THEME_MAP._default.calloutPlate;
 let _platePaintSpace = DETECTION_THEME_MAP._default.calloutPlateSpace;
-/** @type {Object} Active theme palette from THEME_MAP */
+/** @type {object} Active theme palette from THEME_MAP */
 let _theme = THEME_MAP._default;
 /** @type {string} Name of the active theme */
 let _themeName = 'normal';
@@ -318,7 +318,7 @@ function getProjectionWorker() {
       new URL('../workers/detectionProjection.worker.js', import.meta.url),
       { type: 'module' },
     );
-    _projectionWorker.onmessage = (e) => {
+    _projectionWorker.addEventListener('message', (e) => {
       // Only one request can be unanswered, so any arrival completes THE
       // pending request; its stored inputs are what a later frame must match
       // to reuse the results. The answer is keyed by the request's stable
@@ -330,8 +330,8 @@ function getProjectionWorker() {
       _workerProjectionResult = byId;
       _workerProjectionRequest = _pendingProjectionRequest;
       _pendingProjectionRequest = null;
-    };
-    _projectionWorker.onerror = (err) => {
+    });
+    _projectionWorker.addEventListener('error', (err) => {
       logWarn('Detection', 'projection worker error:', err.message);
       // Drop the worker AND the half-completed exchange so the next draw
       // falls back to synchronous projection instead of waiting on an answer
@@ -341,7 +341,7 @@ function getProjectionWorker() {
       _pendingProjectionRequest = null;
       _workerProjectionResult = null;
       _workerProjectionRequest = null;
-    };
+    });
   }
   return _projectionWorker;
 }
@@ -364,7 +364,7 @@ function destroyProjectionWorker() {
 /**
  * Initializes detection inside the shared world-overlay host and stores
  * references to data layers. The host owns the canvas and render listener.
- * @param {Cesium.Viewer} viewer - The active Cesium viewer instance.
+ * @param {import('cesium').Viewer} viewer - The active Cesium viewer instance.
  * @param {Array} layers - Data layer modules that may implement getDetectableObjects().
  * @param {Function} onModeChange - Callback invoked with the new mode label string on mode changes.
  */
@@ -582,7 +582,7 @@ export function isDetectionSuspended() {
 
 /**
  * Adjusts runtime tuning parameters for the detection overlay.
- * @param {Object} [options={}] - Tuning options.
+ * @param {object} [options={}] - Tuning options.
  * @param {number} [options.densityPct] - Density percentage canonicalized to 0/25/50/75/100.
  * @param {'ELASTIC'|'WEIGHTED'} [options.allocationStrategy] - Layer-capacity split policy.
  */
@@ -845,7 +845,7 @@ function _paintDetectionLane(frame) {
  * Queries all registered layers for detectable objects. Candidate collection is
  * deliberately independent of density and camera bearing; the central arbiter
  * is the only owner of callout selection.
- * @returns {Array<Object>} Aggregated detectable objects across all layers.
+ * @returns {Array<object>} Aggregated detectable objects across all layers.
  *   Each object is annotated with a `_layerId` property.
  */
 function _collectDetectableObjects() {
@@ -1055,9 +1055,9 @@ function _buildLabelPlacements(
  *
  * Row objects are created once and then only mutated, so a dense field costs
  * no allocation after the first frames that reach a given population.
- * @param {Object} entry Arbiter render row.
+ * @param {object} entry Arbiter render row.
  * @param {number} acquireFade Detection's activation fade.
- * @param {Object} keyhole Frame keyhole geometry.
+ * @param {object} keyhole Frame keyhole geometry.
  */
 function _stashCallout(entry, acquireFade, keyhole) {
   const { candidate, placement, temporalAlpha } = entry;
@@ -1109,7 +1109,7 @@ function _stashCallout(entry, acquireFade, keyhole) {
  * through the sensor surface's `screen` blend. Registered in the same
  * 'detection' lane slot, so callouts keep their shipped z-position beneath
  * every ordinary overlay card and the tracked readout.
- * @param {Object} frame Host paint frame.
+ * @param {object} frame Host paint frame.
  */
 function _paintCalloutLane(frame) {
   if (_mode === MODE_OFF || _suspended || _calloutCount === 0) return;
@@ -1297,7 +1297,7 @@ function _drawOverlay(frame) {
     const band = Math.max(1, Math.min(BRACKET_ALPHA_STEPS, Math.ceil(alpha * BRACKET_ALPHA_STEPS)));
     let bands = map.get(color);
     if (!bands) {
-      bands = new Array(BRACKET_ALPHA_STEPS + 1);
+      bands = Array.from({length: BRACKET_ALPHA_STEPS + 1});
       map.set(color, bands);
     }
     let entry = bands[band];

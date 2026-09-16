@@ -316,7 +316,7 @@ const RADIO_LABEL_SEGMENTER = typeof Intl?.Segmenter === 'function'
   : null;
 
 function compactRadioLabelText(value, maxChars) {
-  const text = String(value || '').replace(/\s+/g, ' ').trim();
+  const text = String(value || '').replaceAll(/\s+/g, ' ').trim();
   const graphemes = RADIO_LABEL_SEGMENTER
     ? [...RADIO_LABEL_SEGMENTER.segment(text)].map((segment) => segment.segment)
     : Array.from(text);
@@ -326,8 +326,8 @@ function compactRadioLabelText(value, maxChars) {
 
 function cleanRadioLabelName(value) {
   return String(value || '')
-    .replace(/^[\s|:·\-–—]+|[\s|:·\-–—]+$/g, '')
-    .replace(/\s+/g, ' ')
+    .replaceAll(/^[\s|:·\-–—]+|[\s|:·\-–—]+$/g, '')
+    .replaceAll(/\s+/g, ' ')
     .replace(/\s+\([^()]{1,40}\)$/, '')
     .replace(/\s+FM$/i, '')
     .trim();
@@ -335,7 +335,7 @@ function cleanRadioLabelName(value) {
 
 /** Return compact frequency-first text for a Radio globe label. */
 export function radioGlobeLabel(station) {
-  const fullName = String(station?.name || '').replace(/\s+/g, ' ').trim();
+  const fullName = String(station?.name || '').replaceAll(/\s+/g, ' ').trim();
   if (!fullName) return '';
 
   let frequency = null;
@@ -673,8 +673,8 @@ export function normalizeRadioTag(value) {
   return String(value ?? '')
     .trim()
     .toLocaleLowerCase()
-    .replace(/[_-]+/g, ' ')
-    .replace(/\s+/g, ' ')
+    .replaceAll(/[_-]+/g, ' ')
+    .replaceAll(/\s+/g, ' ')
     .slice(0, 80);
 }
 
@@ -2674,7 +2674,7 @@ export const radioLayer = {
       const updatedAt = typeof body.updatedAt === 'string' && Number.isFinite(Date.parse(body.updatedAt))
         ? body.updatedAt
         : null;
-      const updatedAtMs = updatedAt ? Date.parse(updatedAt) : NaN;
+      const updatedAtMs = updatedAt ? Date.parse(updatedAt) : Number.NaN;
       if (
         !updatedAt
         || updatedAtMs < Date.now() - RADIO_DIRECTORY_STALE_MS

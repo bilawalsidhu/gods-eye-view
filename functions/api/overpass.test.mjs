@@ -17,7 +17,7 @@ const ctx = (request) => ({ request });
 
 const GOOD_QL = '[out:json][timeout:20];node(around:1200,30.27,-97.74)["leisure"]["name"];out;';
 const goodBody = (ql = GOOD_QL) => `data=${encodeURIComponent(ql)}`;
-const queryKey = (ql) => `data=${encodeURIComponent(ql)}`.replace(/\s+/g, ' ').trim();
+const queryKey = (ql) => `data=${encodeURIComponent(ql)}`.replaceAll(/\s+/g, ' ').trim();
 
 /** Replace global fetch; `impl` receives {url, init}. */
 function stubFetch(impl) {

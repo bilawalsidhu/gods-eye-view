@@ -61,7 +61,7 @@ export const RADIO_FALLBACK_MIRRORS = Object.freeze([
 
 export function cleanRadioText(value, maxLength) {
   // eslint-disable-next-line no-control-regex -- the match exists to strip control characters from upstream text
-  return String(value ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, maxLength).trim();
+  return String(value ?? '').replaceAll(/[\u0000-\u001f\u007f]/g, ' ').replaceAll(/\s+/g, ' ').trim().slice(0, maxLength).trim();
 }
 
 function isNonGlobalIpv4(hostname) {
@@ -86,7 +86,7 @@ function isNonGlobalIpv4(hostname) {
 export function publicRadioHttpsUrl(value) {
   try {
     const url = new URL(String(value ?? ''));
-    const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
+    const hostname = url.hostname.toLowerCase().replaceAll(/^\[|\]$/g, '').replace(/\.$/, '');
     if (url.protocol !== 'https:' || url.username || url.password || !hostname) return null;
     if (
       hostname === 'localhost'
@@ -123,7 +123,7 @@ export function normalizeRadioBrowserStation(raw) {
   if (!name) return null;
   const tags = String(raw?.tags ?? '')
     .split(',')
-    .map((tag) => cleanRadioText(tag, 80).toLocaleLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim())
+    .map((tag) => cleanRadioText(tag, 80).toLocaleLowerCase().replaceAll(/[_-]+/g, ' ').replaceAll(/\s+/g, ' ').trim())
     .filter(Boolean)
     .filter((tag, index, all) => all.indexOf(tag) === index)
     .slice(0, 24);
@@ -186,7 +186,7 @@ function radioMirrorOrigin(value) {
 
 /** Return whether a resolved Radio Browser address is safe for an outbound request. */
 export function isPublicRadioAddress(value) {
-  const address = String(value ?? '').trim().toLowerCase().replace(/^\[|\]$/g, '');
+  const address = String(value ?? '').trim().toLowerCase().replaceAll(/^\[|\]$/g, '');
   if (!address) return false;
   if (!address.includes(':')) {
     const ipv4 = address.split('.');
@@ -252,7 +252,7 @@ export function radioProxyDestination(value) {
 }
 
 async function mapRadioConcurrent(values, concurrency, mapper) {
-  const results = new Array(values.length);
+  const results = Array.from({length: values.length});
   let cursor = 0;
   const workers = Array.from({ length: Math.min(concurrency, values.length) }, async () => {
     for (;;) {
@@ -372,8 +372,8 @@ export function createRadioCatalogBroker({ transport = null, now = Date.now } = 
         const stations = rows.map(normalizeRadioBrowserStation).filter(Boolean);
         const requestedTag = cleanRadioText(tag, 80)
           .toLocaleLowerCase()
-          .replace(/[_-]+/g, ' ')
-          .replace(/\s+/g, ' ')
+          .replaceAll(/[_-]+/g, ' ')
+          .replaceAll(/\s+/g, ' ')
           .trim();
         const requestedTagCovered = !requestedTag || stations.some((station) => (
           station.tags.some((stationTag) => stationTag === requestedTag || stationTag.includes(requestedTag))

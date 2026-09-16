@@ -129,7 +129,7 @@ function stubScopeMaskDom({ width = 1000, height = 800, dpr = 1 } = {}) {
         addColorStop(offset, color) { gradientStops.push({ offset, color }); },
       }),
       set fillStyle(value) { if (typeof value === 'string') fillStyles.push(value); },
-      get fillStyle() { return fillStyles[fillStyles.length - 1] || ''; },
+      get fillStyle() { return fillStyles.at(-1) || ''; },
     }),
   };
   const listeners = new Set();

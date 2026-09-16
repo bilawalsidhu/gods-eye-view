@@ -42,7 +42,7 @@ export const CONTACT_MATCH_TIER = Object.freeze({
  * @returns {string} Canonical form, or '' when there is nothing to compare.
  */
 export function canonicalizeContactId(value) {
-  return String(value ?? '').replace(/[^a-z0-9]/gi, '').toUpperCase();
+  return String(value ?? '').replaceAll(/[^a-z0-9]/gi, '').toUpperCase();
 }
 
 /**

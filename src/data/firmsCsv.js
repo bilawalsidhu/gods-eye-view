@@ -36,7 +36,7 @@ export function isLikelyCsv(text) {
   if (typeof text !== 'string') return false;
   const trimmed = text.trimStart();
   if (!trimmed || trimmed[0] === '<') return false;
-  const headerLine = trimmed.slice(0, trimmed.indexOf('\n') === -1 ? undefined : trimmed.indexOf('\n'))
+  const headerLine = trimmed.slice(0, !trimmed.includes('\n') ? undefined : trimmed.indexOf('\n'))
     .trim().toLowerCase();
   const fields = headerLine.split(',').map((f) => f.trim());
   return REQUIRED_HEADER_FIELDS.every((required) => fields.includes(required));
@@ -114,16 +114,16 @@ export function parseFirmsCsv(text) {
  * @returns {number} Epoch ms, or NaN when unparseable.
  */
 export function acquisitionMsUtc(acqDate, acqTime) {
-  if (typeof acqDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(acqDate)) return NaN;
+  if (typeof acqDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(acqDate)) return Number.NaN;
   const timeText = String(acqTime ?? '').trim();
-  if (!/^\d{1,4}$/.test(timeText)) return NaN;
+  if (!/^\d{1,4}$/.test(timeText)) return Number.NaN;
   const hhmm = timeText.padStart(4, '0');
   const year = Number(acqDate.slice(0, 4));
   const month = Number(acqDate.slice(5, 7));
   const day = Number(acqDate.slice(8, 10));
   const hours = Number(hhmm.slice(0, 2));
   const minutes = Number(hhmm.slice(2, 4));
-  if (month < 1 || month > 12 || day < 1 || day > 31 || hours > 23 || minutes > 59) return NaN;
+  if (month < 1 || month > 12 || day < 1 || day > 31 || hours > 23 || minutes > 59) return Number.NaN;
   return Date.UTC(year, month - 1, day, hours, minutes);
 }
 
@@ -134,7 +134,7 @@ export function acquisitionMsUtc(acqDate, acqTime) {
  * unique date:time pair — granule timestamps repeat heavily.
  * @param {Array<{acqDate: string, acqTime: string|number}>} records - Parser records.
  * @param {number} nowMs - Reference epoch milliseconds.
- * @returns {Array<Object>} Filtered records (original objects, order preserved).
+ * @returns {Array<object>} Filtered records (original objects, order preserved).
  */
 export function filterTrailing24h(records, nowMs) {
   if (!Array.isArray(records) || !Number.isFinite(nowMs)) return [];

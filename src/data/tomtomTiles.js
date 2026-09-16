@@ -13,11 +13,11 @@
  * @module data/tomtomTiles
  */
 
-/** @const {number} Min supported TomTom flow-tile zoom (proxy validation). */
+/** @constant {number} Min supported TomTom flow-tile zoom (proxy validation). */
 export const MIN_TILE_ZOOM = 8;
-/** @const {number} Max supported TomTom flow-tile zoom (proxy validation). */
+/** @constant {number} Max supported TomTom flow-tile zoom (proxy validation). */
 export const MAX_TILE_ZOOM = 16;
-/** @const {number} Web Mercator latitude limit (degrees). */
+/** @constant {number} Web Mercator latitude limit (degrees). */
 const MERCATOR_LAT_LIMIT = 85.05112878;
 
 /**
@@ -88,7 +88,7 @@ export function tileToBBox(z, x, y) {
  *
  * @param {{south:number, west:number, north:number, east:number}} bounds - Degrees.
  * @param {number} [zoom=12] - Tile zoom level.
- * @param {Object} [opts]
+ * @param {object} [opts]
  * @param {number} [opts.maxTiles=64] - Safety cap on returned tiles.
  * @returns {Array<{z:number, x:number, y:number}>} Covering tiles.
  */

@@ -121,7 +121,7 @@ test('sparse-vertex flow polylines (long coord pairs) still match everywhere', (
   // miss samples near the ends; subdivision must cover them.
   const sparse = flow([
     ROAD_NS.coords[0],
-    ROAD_NS.coords[ROAD_NS.coords.length - 1],
+    ROAD_NS.coords.at(-1),
   ], 0.5);
   const { matches } = matchFlowToRoads([ROAD_NS], [sparse]);
   assert.ok(matches[0], 'sparse flow polyline should match the full road');

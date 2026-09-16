@@ -156,7 +156,7 @@ async function watchLoadingChip(page) {
       const label = document.getElementById('global-loading-label')?.textContent?.trim() || '';
       const state = el.dataset.state || '';
       const hidden = el.hidden;
-      const last = window.__chipSeen[window.__chipSeen.length - 1];
+      const last = window.__chipSeen.at(-1);
       const entry = `${hidden ? 'hidden' : 'shown'}:${state}:${label}`;
       if (entry !== last) window.__chipSeen.push(entry);
     };
@@ -754,7 +754,7 @@ async function main() {
         if (!list) return null;
         list.scrollTop = 0;
         const tiles = [...list.querySelectorAll('[data-first-run-choice]')];
-        const last = tiles[tiles.length - 1];
+        const last = tiles.at(-1);
         if (!last) return null;
         const listBox = list.getBoundingClientRect();
         const lastBox = last.getBoundingClientRect();

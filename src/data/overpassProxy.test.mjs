@@ -113,7 +113,7 @@ test('simplify: giant way geometry is decimated, endpoints preserved', () => {
   assert.ok(g.length < ring.length * 0.5, `should shed most redundant points, got ${g.length}/${ring.length}`);
   assert.ok(g.length >= 16, `must keep enough points to stay a ring, got ${g.length}`);
   assert.deepEqual(g[0], ring[0]);
-  assert.deepEqual(g[g.length - 1], ring[ring.length - 1]);
+  assert.deepEqual(g.at(-1), ring.at(-1));
 });
 
 test('simplify: relation member geometries are decimated too', () => {

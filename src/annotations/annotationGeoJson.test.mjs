@@ -35,7 +35,7 @@ test('area polygon round-trips: ring closed in GeoJSON, un-closed on import; cen
   assert.equal(f.geometry.type, 'Polygon');
   const gjRing = f.geometry.coordinates[0];
   assert.equal(gjRing.length, 5); // 4 vertices + explicit closing point
-  assert.deepEqual(gjRing[0], gjRing[gjRing.length - 1]); // closed
+  assert.deepEqual(gjRing[0], gjRing.at(-1)); // closed
   assert.deepEqual(f.properties['gev:anchor'], [-122.434, 37.804]);
   assert.deepEqual(roundTrip(area), area); // ring back to 4, anchor from gev:anchor
 });

@@ -47,7 +47,7 @@ export function makeRateLimiter({ windowMs, max, globalMax }) {
     }
     if (hits.size > 256) {
       for (const [k, v] of hits) {
-        if (!v.length || now - v[v.length - 1] > windowMs) hits.delete(k);
+        if (!v.length || now - v.at(-1) > windowMs) hits.delete(k);
       }
     }
     return true;

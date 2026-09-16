@@ -87,10 +87,10 @@ test('nothing is owed while detection is off or suspended — that is the whole 
 test('a broken or backward clock terminates demand instead of extending it', () => {
   // The failure mode that matters is the one that keeps rendering, so it is the
   // one pinned. A non-finite timestamp reads as "no animation".
-  for (const nowMs of [undefined, null, NaN, Infinity]) {
+  for (const nowMs of [undefined, null, Number.NaN, Infinity]) {
     assert.equal(detectionNeedsFollowUpFrame({ active: true, nowMs, enabledAtMs: 0 }), false);
   }
-  for (const enabledAtMs of [undefined, null, NaN, Infinity]) {
+  for (const enabledAtMs of [undefined, null, Number.NaN, Infinity]) {
     assert.equal(detectionNeedsFollowUpFrame({ active: true, nowMs: 1_000, enabledAtMs }), false);
   }
   assert.equal(detectionNeedsFollowUpFrame(), false, 'no argument at all is still not an animation');
@@ -181,7 +181,7 @@ test('a skipped paint always hands its frame forward — skip and re-request are
   // never skip without re-requesting. A wrapper cannot break this, because both
   // halves come from the same decision.
   for (const layoutChanged of [true, false]) {
-    for (const lastPaintMs of [0, 1, 22, 23, 35, 500, NaN]) {
+    for (const lastPaintMs of [0, 1, 22, 23, 35, 500, Number.NaN]) {
       for (const frameCount of [0, 1, 2, 3, 41, 100]) {
         const d = detectionPaintSkipDecision({ layoutChanged, lastPaintMs, frameCount });
         assert.equal(d.requestFollowUp, d.skip,

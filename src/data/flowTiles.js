@@ -26,11 +26,11 @@ import { tilesForBounds } from './tomtomTiles.js';
 
 export { tilesForBounds };
 
-/** @const {string} MVT layer name in TomTom flow tiles (verified live 2026-07-16). */
+/** @constant {string} MVT layer name in TomTom flow tiles (verified live 2026-07-16). */
 const FLOW_LAYER_NAME = 'Traffic flow';
-/** @const {number} Ms — per-tile decode cache TTL (matches the proxy's 120 s tile TTL). */
+/** @constant {number} Ms — per-tile decode cache TTL (matches the proxy's 120 s tile TTL). */
 const DECODE_CACHE_TTL_MS = 120_000;
-/** @const {number} Max decoded tiles kept in memory before oldest-entry eviction. */
+/** @constant {number} Max decoded tiles kept in memory before oldest-entry eviction. */
 const DECODE_CACHE_MAX_ENTRIES = 64;
 
 /**
@@ -116,7 +116,7 @@ function cacheSet(key, entry) {
  * failed (e.g. keyless 503, aborted signal, proxy down).
  *
  * @param {{south:number, west:number, north:number, east:number}} bounds - Degrees.
- * @param {Object} [opts]
+ * @param {object} [opts]
  * @param {AbortSignal} [opts.signal] - Abort signal (camera moved / layer disabled).
  * @param {number} [opts.zoom=12] - Flow tile zoom level.
  * @returns {Promise<Array<{coords:number[][], trafficLevel:number, roadType:string, closure:boolean}>>}

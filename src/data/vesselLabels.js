@@ -89,9 +89,9 @@ export function vesselOverlayCohortLimit(width, height, rowLimit = VESSEL_DEFAUL
  * Add host-owned layout, fade, collision and paint-lane fields to a formatted
  * vessel card. Ambient and selected cards share `ambient-card`, so the host's
  * protected selected rectangle excludes ambient cards while bypassing quotas.
- * @param {Object} card Source-formatted vessel card.
+ * @param {object} card Source-formatted vessel card.
  * @param {number} [fadeDistance=5000000] Ambient distance-fade endpoint.
- * @returns {Object}
+ * @returns {object}
  */
 export function applyVesselOverlayPolicy(card, fadeDistance = VESSEL_CARD_FADE_DISTANCE_M) {
   const selected = card?.selected === true;

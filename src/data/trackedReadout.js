@@ -69,8 +69,8 @@ export function trackedLabelModelFromText(text, accent = WORLD_OVERLAY_STYLE.acc
  * Read only the layer-owned display cache. There is deliberately no fallback
  * to `entity.position.getValue()`: doing so in the host's post-render phase
  * would recompute dead reckoning after the follow camera settled and jitter.
- * @param {Object|null} entity Tracked or selected presentation entity.
- * @returns {Object|null}
+ * @param {object|null} entity Tracked or selected presentation entity.
+ * @returns {object|null}
  */
 export function cachedTrackedDisplayPosition(entity) {
   if (!entity || typeof entity.gevDisplayPosition !== 'function') return null;
@@ -94,8 +94,8 @@ export function cachedTrackedDisplayPosition(entity) {
  * before its model is ready) are unchanged. This deliberately does NOT repurpose
  * `gevDisplayPosition`: that accessor carries the follow-camera anti-jitter contract
  * and must keep returning the value the camera settled on.
- * @param {Object|null} entity Tracked or selected presentation entity.
- * @returns {Object|null}
+ * @param {object|null} entity Tracked or selected presentation entity.
+ * @returns {object|null}
  */
 export function cachedTrackedVisualPosition(entity) {
   if (entity && typeof entity.gevVisualPosition === 'function') {
@@ -120,8 +120,8 @@ function activeEntity() {
 
 /**
  * Build the host entry from a layer-owned tracked presentation model.
- * @param {Object|null} entity Tracked or selected presentation entity.
- * @returns {Object|null}
+ * @param {object|null} entity Tracked or selected presentation entity.
+ * @returns {object|null}
  */
 export function createTrackedOverlayEntry(entity) {
   const model = entity?.gevLabelModel;
@@ -181,7 +181,7 @@ function syncActiveEntity() {
  * Republish a layer's newly assigned `gevLabelModel` when that entity owns the
  * active tracked readout. Layers call this only when presentation text changes;
  * position remains the live frame-cache getter already registered with host.
- * @param {Object} entity Entity whose model changed.
+ * @param {object} entity Entity whose model changed.
  */
 export function refreshTrackedReadout(entity) {
   if (entity && entity === activeEntity()) publishEntity(entity);
@@ -195,7 +195,7 @@ export function getActiveTrackedReadoutId() {
 /**
  * Initialize the model bridge and selection listeners. No render listener is
  * installed; the already-initialized world-overlay host owns the frame lane.
- * @param {Object} viewer Active Cesium viewer.
+ * @param {object} viewer Active Cesium viewer.
  */
 export function initTrackedReadout(viewer) {
   if (!viewer || _viewer === viewer) return;

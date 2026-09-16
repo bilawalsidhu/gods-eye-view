@@ -172,8 +172,8 @@ async function measureShot(page, base64) {
   return page.evaluate(async (b64) => {
     const image = new Image();
     await new Promise((resolve, reject) => {
-      image.onload = resolve;
-      image.onerror = reject;
+      image.addEventListener('load', resolve);
+      image.addEventListener('error', reject);
       image.src = `data:image/png;base64,${b64}`;
     });
     const canvas = document.createElement('canvas');
@@ -375,8 +375,8 @@ async function main() {
       const crop = await page.evaluate(async ({ b64, box }) => {
         const image = new Image();
         await new Promise((resolve, reject) => {
-          image.onload = resolve;
-          image.onerror = reject;
+          image.addEventListener('load', resolve);
+          image.addEventListener('error', reject);
           image.src = `data:image/png;base64,${b64}`;
         });
         const sx = Math.round(image.width * box.x);

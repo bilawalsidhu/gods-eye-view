@@ -39,7 +39,7 @@ test('isValidTileCoord rejects x/y outside [0, 2^z - 1]', () => {
 test('isValidTileCoord rejects non-integer inputs', () => {
   assert.equal(isValidTileCoord(12.5, 100, 100), false);
   assert.equal(isValidTileCoord(12, 100.2, 100), false);
-  assert.equal(isValidTileCoord(12, 100, NaN), false);
+  assert.equal(isValidTileCoord(12, 100, Number.NaN), false);
   assert.equal(isValidTileCoord('12', 100, 100), false);
 });
 
@@ -135,7 +135,7 @@ test('normalizeBudget: day rollover resets the counter', () => {
 
 test('normalizeBudget: missing/corrupt state starts fresh', () => {
   assert.deepEqual(normalizeBudget(null, '2026-07-16'), { date: '2026-07-16', count: 0 });
-  assert.deepEqual(normalizeBudget({ date: '2026-07-16', count: NaN }, '2026-07-16'), { date: '2026-07-16', count: 0 });
+  assert.deepEqual(normalizeBudget({ date: '2026-07-16', count: Number.NaN }, '2026-07-16'), { date: '2026-07-16', count: 0 });
   assert.deepEqual(normalizeBudget({ count: 5 }, '2026-07-16'), { date: '2026-07-16', count: 0 });
   assert.deepEqual(normalizeBudget({ date: '2026-07-16', count: -3 }, '2026-07-16'), { date: '2026-07-16', count: 0 });
 });
@@ -148,5 +148,5 @@ test('isOverBudget: at or above the limit is over, below is not', () => {
 
 test('isOverBudget: non-positive or invalid limit never blocks', () => {
   assert.equal(isOverBudget({ date: 'x', count: 1e9 }, 0), false);
-  assert.equal(isOverBudget({ date: 'x', count: 1e9 }, NaN), false);
+  assert.equal(isOverBudget({ date: 'x', count: 1e9 }, Number.NaN), false);
 });

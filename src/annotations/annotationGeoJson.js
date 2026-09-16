@@ -81,7 +81,7 @@ export function annotationToFeature(anno) {
     }
     // GeoJSON linear rings must be explicitly closed (first === last).
     const first = ring[0];
-    const last = ring[ring.length - 1];
+    const last = ring.at(-1);
     if (first[0] !== last[0] || first[1] !== last[1]) ring.push([first[0], first[1]]);
     geometry = { type: 'Polygon', coordinates: [ring] };
     properties['gev:footprintKind'] = anno.footprintKind ?? null;
@@ -161,7 +161,7 @@ export function featureToAnnotation(feature) {
     }
     // Drop the GeoJSON closing duplicate to match the runtime ring (not explicitly closed).
     const f = ring[0];
-    const l = ring[ring.length - 1];
+    const l = ring.at(-1);
     if (ring.length > 3 && f[0] === l[0] && f[1] === l[1]) ring.pop();
     const anchor = fromPosition(p['gev:anchor']) || ringCentroid(ring);
     return {

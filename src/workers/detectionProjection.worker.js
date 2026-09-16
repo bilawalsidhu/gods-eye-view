@@ -101,7 +101,7 @@ function ellipsoidalIsPointVisible(camX, camY, camZ, px, py, pz) {
   return !occluded;
 }
 
-self.onmessage = (e) => {
+self.addEventListener('message', (e) => {
   const {
     objectsById,
     viewProjection,
@@ -171,4 +171,4 @@ self.onmessage = (e) => {
   }
 
   self.postMessage({ results, requestId });
-};
+});

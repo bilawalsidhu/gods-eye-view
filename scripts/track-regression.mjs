@@ -3884,7 +3884,7 @@ async function main() {
     await evalPage(async () => {
       const v = window.__godsEyeView.viewer;
       const fl = window.__godsEyeView.dataManager.layers.get('flights').module;
-      window.__SYNTH.flights = window.__SYNTH.flights.filter((f) => !/^aaa09/.test(f.icao));
+      window.__SYNTH.flights = window.__SYNTH.flights.filter((f) => !f.icao.startsWith('aaa09'));
       fl.stopTracking();
       window.__dfGf?._clearMeshFloorCellsForTest();
       delete v.scene.sampleHeight;

@@ -53,7 +53,7 @@ for (const [label, warm] of [
   }
   runs.sort((a, b) => a - b);
   const median = runs[Math.floor(runs.length / 2)];
-  const worst = runs[runs.length - 1];
+  const worst = runs.at(-1);
   console.log(`\n${label}`);
   console.log(`  ${CONTACTS} contacts x 8 cells on ONE tick : median ${median.toFixed(3)} ms, worst ${worst.toFixed(3)} ms`);
   console.log(`  share of one ${TICK_MS} ms fleet tick        : ${(worst / TICK_MS * 100).toFixed(2)}%`);

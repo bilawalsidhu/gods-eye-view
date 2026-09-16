@@ -346,7 +346,7 @@ const OVERLAY_RE = /^[^\S\n]*Summary:[^\S\n]*(\d+)[^\S\n]+measured[^\S\n]*·[^\S
  * a runner that silently takes the first is choosing which truth to believe.
  * @param {RegExp} re A /gm/-flagged, line-anchored verdict pattern.
  * @param {string} text The transcript to scan.
- * @returns {RegExpExecArray[]} All matches, in order.
+ * @returns {Array[]} All matches, in order.
  */
 function allVerdictLines(re, text) {
   re.lastIndex = 0;
@@ -355,7 +355,7 @@ function allVerdictLines(re, text) {
 
 /**
  * Enforce "exactly one complete verdict line" across stdout and stderr.
- * @returns {{matches: RegExpExecArray[], verdict: ?object}} verdict set = stop.
+ * @returns {{matches: Array[], verdict: ?object}} verdict set = stop.
  */
 function soleVerdict(re, kind, { out, err }) {
   const matches = [...allVerdictLines(re, out), ...allVerdictLines(re, err)];
@@ -645,7 +645,7 @@ check({
 
     const patterns = [
       'sk-[A-Za-z0-9]{20,}',                 // OpenAI
-      'AIza[0-9A-Za-z_\\-]{30,}',            // Google
+      String.raw`AIza[0-9A-Za-z_\-]{30,}`,            // Google
       'AKIA[0-9A-Z]{16}',                    // AWS access key id
       'ASIA[0-9A-Z]{16}',                    // AWS session key id
       'gh[pousr]_[A-Za-z0-9]{30,}',          // GitHub tokens
@@ -775,7 +775,7 @@ check({
   run: async () => {
     const r = await jget('/api/celestrak/stations', { timeoutMs: 40000 });
     if (!r.ok) return fail(`HTTP ${r.status}`);
-    const lines = r.text.split('\n').filter((l) => /^1 /.test(l)).length;
+    const lines = r.text.split('\n').filter((l) => l.startsWith('1 ')).length;
     const cache = r.headers.get('x-tle-cache');
     return lines > 0 ? pass(`${lines} TLE records, x-tle-cache=${cache}`) : fail('no TLE lines in response');
   },
@@ -786,7 +786,7 @@ check({
   run: async () => {
     const r = await jget('/api/celestrak/stations', { timeoutMs: 40000 });
     if (!r.ok) return fail(`HTTP ${r.status}`);
-    const line1 = r.text.split('\n').find((l) => /^1 /.test(l));
+    const line1 = r.text.split('\n').find((l) => l.startsWith('1 '));
     if (!line1) return fail('no TLE line 1 found');
     // Columns 19-32: epoch YYDDD.DDDDDDDD
     const yy = Number(line1.slice(18, 20));
@@ -1589,7 +1589,7 @@ async function runBrowserGroup(record) {
       return {
         text: (btn?.textContent || '').trim(),
         feedState: btn?.dataset?.feedState || null,
-        meta: (row?.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 140),
+        meta: (row?.textContent || '').replaceAll(/\s+/g, ' ').trim().slice(0, 140),
       };
     });
     if (!chipR.ok) return crash(`could not read the vessels layer row: ${chipR.reason}`);

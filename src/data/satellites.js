@@ -1319,6 +1319,8 @@ function _preRenderTick() {
  * @param {object} state.point
  * @param {object} state.viewer
  * @param {() => (number|Date)} state.now
+ * @param {Array<object>} [state.neighbours=[]] - Extra catalog/point rows so a test can
+ *   exercise a docked cluster plus a control satellite that must stay outside it.
  */
 export function _setTrackedSatelliteRefreshStateForTest({
   noradId,
@@ -1518,6 +1520,15 @@ function _updatePointFocus(nowMs) {
 /**
  * Apply the gated satellite-point focus pass through the production color path.
  * @param {object} input
+ * @param {Map<number, object>} input.points - Satellite points keyed by NORAD ID whose alpha the pass advances.
+ * @param {number|null} input.trackedId - NORAD ID of the followed satellite; skipped so the tracked dot keeps full emphasis.
+ * @param {object|null} input.target - Current focus target, or null when nothing is followed.
+ * @param {number} [input.previousActiveCount=0] - Points still under focus emphasis from the previous pass.
+ * @param {number} input.nowMs - Frame timestamp in milliseconds driving the alpha transitions.
+ * @param {Function} input.screenPositionFor - Projects a world position to window pixel coordinates.
+ * @param {Function} input.cameraDistanceFor - Returns the camera distance, in metres, to a world position.
+ * @param {Function} input.baseColorFor - Returns a point's base color, whose alpha the pass scales.
+ * @param {object} [input.params] - Focus tuning overrides forwarded to the shared focus helpers.
  * @returns {{writes:number,transitioning:boolean,activeCount:number,ran:boolean}}
  */
 export function applySatellitePointFocusDeemphasis({
@@ -2293,7 +2304,7 @@ function _installClickHandler(viewer) {
       const prim = picked.primitive;
       if (prim && prim.id != null) {
         const noradId = Number(prim.id);
-        if (!isNaN(noradId) && _catalog.has(noradId)) {
+        if (!Number.isNaN(noradId) && _catalog.has(noradId)) {
           _cancelPendingTrackingRestore();
           _trackSatellite(noradId, { origin: 'user' });
           return;
@@ -2346,8 +2357,8 @@ export function scoreSatelliteNameMatch(query, catalogName) {
   const q = String(query || '').trim().toLowerCase();
   const name = String(catalogName || '').trim().toLowerCase();
   if (!q || !name) return 0;
-  const qCompact = q.replace(/[^a-z0-9]/g, '');
-  const nameCompact = name.replace(/[^a-z0-9]/g, '');
+  const qCompact = q.replaceAll(/[^a-z0-9]/g, '');
+  const nameCompact = name.replaceAll(/[^a-z0-9]/g, '');
   if (qCompact === nameCompact) return 1000;
   let score = 0;
   if (

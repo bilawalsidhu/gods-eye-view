@@ -109,7 +109,7 @@ test('shared keyhole geometry is centered and height-derived', () => {
   assert.equal(portrait.radius, 630);
   // Degenerate viewports yield a degenerate keyhole, never NaN.
   assert.deepEqual(getKeyholeGeometry(0, 800), { centerX: 0, centerY: 0, radius: 0, featherPx: 0 });
-  assert.deepEqual(getKeyholeGeometry(NaN, 800), { centerX: 0, centerY: 0, radius: 0, featherPx: 0 });
+  assert.deepEqual(getKeyholeGeometry(Number.NaN, 800), { centerX: 0, centerY: 0, radius: 0, featherPx: 0 });
 });
 
 test('label alpha stays opaque inside and fades monotonically outside', () => {

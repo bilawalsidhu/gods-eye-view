@@ -75,7 +75,7 @@ export function isTrackingClickGesture(gesture = {}) {
  * corrupt the measured gap.
  * Falls back to wall-clock `performance.now()` when no stamps are available
  * (e.g. synthetic touch sequences), so duration never regresses to Infinity.
- * @param {Element|Object|null} element - Element the gesture handler binds.
+ * @param {Element|object|null} element - Element the gesture handler binds.
  * @returns {{now: () => number, dispose: () => void}} Clock seam + cleanup.
  */
 export function domEventPressClock(element) {
@@ -197,9 +197,9 @@ export function domEventPressClock(element) {
  * Pass `now: domEventPressClock(element).now` on production binding sites so
  * press duration tracks physical press time rather than main-thread queueing
  * delay (see that helper).
- * @param {Cesium.ScreenSpaceEventHandler|Object} handler - Input handler.
- * @param {(click: Object, gesture: {travelPx: number, durationMs: number}) => void} onClick - Scene-click callback.
- * @param {{now?: () => number, eventTypes?: Object, onMouseMove?: (event: Object) => void}} [options] - Test/interop seams.
+ * @param {Cesium.ScreenSpaceEventHandler|object} handler - Input handler.
+ * @param {(click: object, gesture: {travelPx: number, durationMs: number}) => void} onClick - Scene-click callback.
+ * @param {{now?: () => number, eventTypes?: object, onMouseMove?: (event: object) => void}} [options] - Test/interop seams.
  * @returns {void}
  */
 export function bindTrackingClickGesture(handler, onClick, options = {}) {

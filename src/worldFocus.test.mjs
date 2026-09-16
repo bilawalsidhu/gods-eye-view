@@ -90,7 +90,7 @@ test('malformed requests are inert', () => {
 test('an unflyable request never reaches the release policy', () => {
   const unflyable = [
     { kind: 'plane', position: POSITION },                       // no framing for this kind
-    { kind: 'vessel', position: { x: NaN, y: 0, z: 0 } },        // malformed position
+    { kind: 'vessel', position: { x: Number.NaN, y: 0, z: 0 } },        // malformed position
     { kind: 'vessel', position: { x: 0, y: 0 } },                // truthy but incomplete
     { kind: 'vessel', id: '123', position: { x: 0, y: 0, z: 0 } }, // ECEF origin
     { kind: 'fire', id: 'fire-1', position: { x: 1, y: 1, z: 1 } }, // finite but inside Earth

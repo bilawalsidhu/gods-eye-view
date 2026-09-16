@@ -43,7 +43,7 @@ test('floorAltitudeM leaves an above-ground altitude untouched', () => {
 
 test('floorAltitudeM with unknown ground returns the altitude unchanged', () => {
   assert.equal(floorAltitudeM(334, null), 334);
-  assert.equal(floorAltitudeM(334, NaN), 334);
+  assert.equal(floorAltitudeM(334, Number.NaN), 334);
 });
 
 test('floorAltitudeM with null altitude and known ground returns ground + lift (ground-waypoint case)', () => {
@@ -138,12 +138,12 @@ test('displayFloorHeightM returns null exactly at the lifted floor (no jitter)',
 
 test('displayFloorHeightM returns null when the floor cell is not warm', () => {
   assert.equal(displayFloorHeightM(124.7, null), null);
-  assert.equal(displayFloorHeightM(124.7, NaN), null);
+  assert.equal(displayFloorHeightM(124.7, Number.NaN), null);
   assert.equal(displayFloorHeightM(124.7, undefined), null);
 });
 
 test('displayFloorHeightM returns null for a non-finite display height', () => {
-  assert.equal(displayFloorHeightM(NaN, 124.7), null);
+  assert.equal(displayFloorHeightM(Number.NaN, 124.7), null);
   assert.equal(displayFloorHeightM(null, 124.7), null);
 });
 
@@ -163,7 +163,7 @@ test('displayFloorHeightM honours a caller-supplied lift', () => {
 test('corridorFloorCells covers both ends of the display→fix walk', () => {
   const cells = corridorFloorCells([{ lat: 30.200, lon: -97.660 }, { lat: 30.203, lon: -97.660 }]);
   assert.deepEqual(cells[0], { lat: 30.2, lon: -97.66 });
-  assert.deepEqual(cells[cells.length - 1], { lat: 30.203, lon: -97.66 });
+  assert.deepEqual(cells.at(-1), { lat: 30.203, lon: -97.66 });
 });
 
 test('corridorFloorCells has no gaps along a multi-cell walk', () => {
@@ -183,12 +183,12 @@ test('corridorFloorCells is bounded on a long walk (never unbounded)', () => {
 });
 
 test('corridorFloorCells returns the start cell alone for a bad endpoint', () => {
-  assert.deepEqual(corridorFloorCells([{ lat: 30.2, lon: -97.66 }, { lat: NaN, lon: -97.66 }]), [{ lat: 30.2, lon: -97.66 }]);
+  assert.deepEqual(corridorFloorCells([{ lat: 30.2, lon: -97.66 }, { lat: Number.NaN, lon: -97.66 }]), [{ lat: 30.2, lon: -97.66 }]);
   assert.deepEqual(corridorFloorCells([{ lat: 30.2, lon: -97.66 }, { lat: null, lon: null }]), [{ lat: 30.2, lon: -97.66 }]);
 });
 
 test('corridorFloorCells returns nothing for a bad start', () => {
-  assert.deepEqual(corridorFloorCells([{ lat: NaN, lon: -97.66 }, { lat: 30.2, lon: -97.66 }]), []);
+  assert.deepEqual(corridorFloorCells([{ lat: Number.NaN, lon: -97.66 }, { lat: 30.2, lon: -97.66 }]), []);
 });
 
 // --- F5: contiguous prefix + guaranteed endpoint ---------------------------
@@ -211,7 +211,7 @@ test('corridorFloorCells: 3 km corridor keeps a gap-free prefix', () => {
 
 test('corridorFloorCells: the destination cell always survives truncation', () => {
   const cells = corridorFloorCells([{ lat: 30.200, lon: -97.660 }, { lat: 30.230, lon: -97.660 }]);
-  assert.deepEqual(cells[cells.length - 1], { lat: 30.23, lon: -97.66 },
+  assert.deepEqual(cells.at(-1), { lat: 30.23, lon: -97.66 },
     'the far end is where the contact is headed — it must be warmed, not dropped');
 });
 
@@ -357,7 +357,7 @@ test('corridorFloorCells walks a turning path\'s arc, not the chord across it', 
     fixLat: 30.199, fixLon: -97.660, lookaheadSec: 30,
   });
   const arcCells = corridorFloorCells(path);
-  const chordCells = corridorFloorCells([path[0], path[path.length - 1]]);
+  const chordCells = corridorFloorCells([path[0], path.at(-1)]);
   const chordKeys = new Set(chordCells.map((c) => `${c.lat},${c.lon}`));
   const offChord = arcCells.filter((c) => !chordKeys.has(`${c.lat},${c.lon}`));
   assert.ok(offChord.length > 0,
@@ -461,7 +461,7 @@ test('corridorPathLatLon spacing stays cell-sized as speed rises', () => {
 
 test('corridorPathLatLon truncates a very long arc instead of thinning it', () => {
   const path = corridorPathLatLon({ ...TURNING_COAST, speedMps: 120, lookaheadSec: 60 });
-  const end = path[path.length - 1];
+  const end = path.at(-1);
   const lenM = Math.hypot(
     (end.lat - TURNING_COAST.displayLat) * 111320,
     (end.lon - TURNING_COAST.displayLon) * 111320 * Math.cos(30.2 * Math.PI / 180),

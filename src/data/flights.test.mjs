@@ -105,7 +105,7 @@ test('flights analyst record: no callsign falls back to registration, then icao2
 
 test('flights analyst record: NaN kinematics become null, military flag passes through', () => {
   const r = mapAnalystRecord('ae01ce', {
-    ...FULL_INFO, velocity: NaN, true_track: undefined, verticalRate: null,
+    ...FULL_INFO, velocity: Number.NaN, true_track: undefined, verticalRate: null,
   }, { military: true });
   assert.equal(r.speedMps, null);
   assert.equal(r.heading, null);
@@ -1069,7 +1069,7 @@ test('display floor: an on_ground FLAP mid-takeoff-roll never dips below the run
   const dipped = grounded.filter((h) => h < GROUND - 0.05);
   assert.deepEqual(dipped, [],
     `${dipped.length} of ${grounded.length} grounded ticks rendered below the runway`);
-  assert.ok(Math.abs(grounded[grounded.length - 1] - (GROUND + GROUND_FLOOR_LIFT_M)) < 0.05,
+  assert.ok(Math.abs(grounded.at(-1) - (GROUND + GROUND_FLOOR_LIFT_M)) < 0.05,
     'and it is still standing on the floor it held, not on nothing');
 });
 
@@ -1675,7 +1675,7 @@ test('getDetectableObjects: stride sampling honours maxCount and seed rotation',
   // maxCount floors at 1 even for 0/negative/NaN input.
   assert.equal(flightsLayer.getDetectableObjects({ maxCount: 0 }).length, 1);
   assert.equal(flightsLayer.getDetectableObjects({ maxCount: -4 }).length, 1);
-  assert.equal(flightsLayer.getDetectableObjects({ maxCount: NaN }).length, 6);
+  assert.equal(flightsLayer.getDetectableObjects({ maxCount: Number.NaN }).length, 6);
 });
 
 test('getDetectableObjects: hidden contacts are skipped; tracked contacts never are', () => {

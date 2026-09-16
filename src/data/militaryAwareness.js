@@ -781,7 +781,15 @@ function subjectCohortFeedUnknown() {
  * Resolves NEXT availability from the same three branches used by navigation.
  * Forward history remains usable while a feed is unavailable; discovering a
  * new nearby or expanded target requires a known subject cohort.
- * @param {Object} availability Navigation branch availability.
+ * @param {object} availability Navigation branch availability.
+ * @param {boolean} [availability.hasForwardHistory=false] A compatible forward history
+ *   entry exists to step to.
+ * @param {boolean} [availability.hasExpandedFlightTarget=false] A flight target outside
+ *   the current cohort is reachable by the expanding-radius search.
+ * @param {boolean} [availability.hasNearbyTarget=false] An unvisited navigation target
+ *   exists in the known cohorts.
+ * @param {boolean} [availability.subjectCohortUnknown=false] The subject's cohort feed is
+ *   unavailable, so its count — and any nearby target — cannot be trusted.
  * @returns {boolean} Whether NEXT has a path that can run.
  */
 export function canNavigateAwarenessNext({
@@ -981,7 +989,7 @@ function navigationState() {
 }
 
 function escapeHtml(value) {
-  return String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char]);
+  return String(value ?? '').replaceAll(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char]);
 }
 
 function renderResults() {
@@ -1304,7 +1312,7 @@ function resolveSubjectPosition(subject, { allowCollectionMaterialization = true
  * keeps its last known position while still reading as present.
  * @param {{id: string, position: Cesium.Cartesian3}} subject Current subject.
  * @param {Array<{id: string, position: Cesium.Cartesian3}>} rows Live collection rows.
- * @param {{hasContact?: function}} layer The owning source layer.
+ * @param {{hasContact?: Function}} layer The owning source layer.
  * @returns {{position: Cesium.Cartesian3, presence: string}} Position plus presence verdict.
  */
 function collectionSubjectPosition(subject, rows, layer) {
@@ -1476,6 +1484,11 @@ export function awarenessResultsAreLive(results) {
  * there is nothing to animate and Contacts must not be the reason the whole
  * scene keeps repainting.
  * @param {object} [snapshot] Explicit state, for tests.
+ * @param {boolean} [snapshot.cameraMoving=state.cameraMoving] The camera pose changed
+ *   recently, so the screen-projected arrows must be redrawn.
+ * @param {boolean} [snapshot.hasSubject=Boolean(state.subject)] A contact is selected.
+ * @param {boolean} [snapshot.hasLiveResults=awarenessResultsAreLive(state.results)] At
+ *   least one cohort reports a positive contact count.
  * @returns {boolean}
  */
 export function awarenessNeedsContinuousRender({
@@ -1654,7 +1667,7 @@ function activateOperationalContext() {
  * Pick the observed candidate closest to the current view. This is intentionally
  * a navigation preference, not a risk, capability, or affiliation calculation.
  * @param {Array<{position: Cesium.Cartesian3}>} candidates Observed candidates.
- * @returns {Object|null} The best currently observable candidate.
+ * @returns {object|null} The best currently observable candidate.
  */
 function closestToCurrentView(candidates) {
   if (!Array.isArray(candidates) || !candidates.length) return null;

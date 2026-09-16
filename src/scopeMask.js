@@ -398,7 +398,7 @@ function draw() {
 
 /**
  * Install the scope mask into the viewer container. Idempotent.
- * @param {Cesium.Viewer} viewer
+ * @param {import('cesium').Viewer} viewer
  * @returns {void}
  */
 export function installScopeMask(viewer) {
@@ -431,7 +431,7 @@ function currentCameraHeightM() {
  * warranted. Two cheap compares per rendered frame; under the idle governor a
  * parked camera renders no frames at all, so this costs nothing at rest.
  * moveEnd additionally pins the exact settled value.
- * @param {Cesium.Viewer} viewer
+ * @param {import('cesium').Viewer} viewer
  * @returns {void}
  */
 function watchCameraHeight(viewer) {

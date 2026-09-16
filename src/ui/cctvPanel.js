@@ -210,6 +210,7 @@ function clearCctvFrame(mgr) {
  * layer once per refresh — a flicker on every feed cycle. Measured against
  * main, which never blanked on a successful refresh in the first place.)
  *
+ * @param {object} mgr - StyleManager instance holding the live CCTV frame element, its wrap, and the preload request token.
  * @param {string} src
  * @param {string} cameraId
  * @param {boolean} cameraChanged
@@ -238,14 +239,15 @@ function queueCctvFrame(mgr, src, cameraId, cameraChanged) {
 
     const preloader = new Image();
     mgr._cctvFramePreloader = preloader;
-    preloader.onload = () => settleCctvFrame(mgr, token, src, true);
-    preloader.onerror = () => settleCctvFrame(mgr, token, src, false);
+    preloader.addEventListener('load', () => settleCctvFrame(mgr, token, src, true));
+    preloader.addEventListener('error', () => settleCctvFrame(mgr, token, src, false));
     preloader.src = src;
 }
 
 /**
  * Commits a decoded frame to the live element, or records the failure
  * without disturbing whatever is already on screen.
+ * @param {object} mgr - StyleManager instance holding the live CCTV frame element whose request token the commit is validated against.
  * @param {number} token - Request token; a stale one is ignored.
  * @param {string} src
  * @param {boolean} ok
@@ -279,6 +281,7 @@ function settleCctvFrame(mgr, token, src, ok) {
 /**
  * Keeps the source badge truthful about the visible frame lifecycle. Health
  * may already be OK while the browser is still decoding the requested image.
+ * @param {object} mgr - StyleManager instance holding the source badge that is written and the CCTV frame elements that are read.
  * @param {object|null} activeCamera
  * @param {boolean} enabled
  * @returns {void}
@@ -328,6 +331,7 @@ function resetCctvCalibration(mgr) {
  * Swaps a readout chip's text for an inline number input. Enter/blur commits
  * (converted to a calibration offset patch), Escape cancels. The next state
  * re-render restores the chip text either way.
+ * @param {object} mgr - StyleManager instance supplying the active CCTV state and the layer params writer the calibration patch is committed through.
  * @param {HTMLButtonElement} chip - The clicked `.cctv-cal-value` element.
  * @returns {void}
  */
@@ -350,7 +354,7 @@ function beginCctvCalValueEdit(mgr, chip) {
     const finish = (commit) => {
       if (finished) return;
       finished = true;
-      const typed = parseFloat(input.value);
+      const typed = Number.parseFloat(input.value);
       input.remove();
       if (commit && Number.isFinite(typed)) {
         const cameraId = activeCctvCameraId(mgr);
@@ -376,6 +380,7 @@ function beginCctvCalValueEdit(mgr, chip) {
 /**
  * Synchronizes the pose readout chips, ADJUST button, and SAVE/RESET
  * disabled states with the active camera.
+ * @param {object} mgr - StyleManager instance holding the calibration chips and the ADJUST/SAVE/RESET buttons that get synchronized.
  * @param {boolean} enabled - Whether the CCTV layer is currently enabled.
  * @param {object|null} activeCamera - The active camera data object (may be null).
  * @returns {void}
@@ -408,6 +413,7 @@ function syncCctvCalReadout(mgr, enabled, activeCamera) {
 /**
  * Toggles the CCTV layer enabled state. When enabling and no camera is active,
  * auto-focuses on the nearest camera.
+ * @param {object} mgr - StyleManager instance whose data manager, toast, cockpit view, and CCTV focus helper drive the toggle.
  * @param {boolean} [forceState] - Explicit on/off. Omit to toggle.
  * @returns {Promise<boolean>} True if the layer is now in the requested state.
  */
@@ -441,6 +447,7 @@ export async function toggleCctvEnabled(mgr, forceState) {
  * Maps a `deriveCalBadge` value (cctv.js) to its panel copy. Single source
  * of truth for CAL-badge casing — used by both the quality chip and the
  * meta line so the two never drift onto different label conventions.
+ * @param {object} mgr - StyleManager instance; unused by this pure label mapper (kept for the module's manager-first helper signature).
  * @param {'calibrated'|'curated'|'raw-prior'|null} badge - Badge state from cctv.js.
  * @returns {string} Display label, or '--' when there is no active camera.
  */
@@ -458,6 +465,7 @@ function calBadgeLabel(mgr, badge) {
  * Updates enable button, camera select dropdown, navigation buttons,
  * coverage/auto-hop/projection toggles, quality chip, source badge,
  * metadata line, frame image, calibration controls, and summary text.
+ * @param {object} mgr - StyleManager instance holding the CCTV panel controls, cached state, and summary elements the render writes.
  * @param {object|null} state - CCTV layer UI state, or null to render empty.
  * @returns {void}
  */
@@ -603,6 +611,7 @@ export function renderCctvState(mgr, state) {
  * Typewriter-animates CCTV summary text into the summary element.
  * Skips animation if the text hasn't changed since the last call.
  * Advances 3 characters per 20ms tick for a fast teletype effect.
+ * @param {object} mgr - StyleManager instance holding the summary element and the typing timer state it advances.
  * @param {string} text - Summary text to display.
  * @returns {void}
  */

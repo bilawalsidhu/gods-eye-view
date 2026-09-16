@@ -29,7 +29,7 @@ test('formatFlightLevel returns empty string for missing/zero/negative altitude'
   assert.equal(formatFlightLevel(-50), '');
   assert.equal(formatFlightLevel(null), '');
   assert.equal(formatFlightLevel(undefined), '');
-  assert.equal(formatFlightLevel(NaN), '');
+  assert.equal(formatFlightLevel(Number.NaN), '');
 });
 
 test('formatKnots rounds and suffixes; omits non-positive/non-finite', () => {
@@ -37,7 +37,7 @@ test('formatKnots rounds and suffixes; omits non-positive/non-finite', () => {
   assert.equal(formatKnots(14.6), '15 kn');
   assert.equal(formatKnots(0), '');
   assert.equal(formatKnots(null), '');
-  assert.equal(formatKnots(NaN), '');
+  assert.equal(formatKnots(Number.NaN), '');
 });
 
 test('monoTextWidth multiplies length by advance, 0 for empty', () => {
@@ -78,7 +78,7 @@ test('acquireAlpha ramps 0->1 across the fade window', () => {
 test('acquireAlpha clamps and defaults safely', () => {
   assert.equal(acquireAlpha(1000, 900, 200), 0);   // before first-seen
   assert.equal(acquireAlpha(1000, 5000, 200), 1);  // long after
-  assert.equal(acquireAlpha(NaN, 5000, 200), 1);   // no timestamp -> visible
+  assert.equal(acquireAlpha(Number.NaN, 5000, 200), 1);   // no timestamp -> visible
   assert.equal(acquireAlpha(1000, 1100, 0), 1);    // no fade -> visible
 });
 
@@ -300,7 +300,7 @@ test('projectionRequestMatches: any single-object change breaks the match', () =
   assert.equal(matches(req, swapped), false, 'an unknown identity must invalidate the answer');
 
   const nanned = baseObjects();
-  nanned[1].position = { x: 4, y: NaN, z: 6 };
+  nanned[1].position = { x: 4, y: Number.NaN, z: 6 };
   assert.equal(matches(req, nanned), false, 'NaN positions can never match (NaN comparisons fail)');
 });
 

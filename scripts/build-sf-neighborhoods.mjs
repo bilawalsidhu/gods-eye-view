@@ -74,12 +74,12 @@ const round = (v) => Number(v.toFixed(DECIMALS));
 function processRing(ring) {
   // GeoJSON rings are closed (first == last); simplify the open part.
   const open = ring.length > 1
-    && ring[0][0] === ring[ring.length - 1][0] && ring[0][1] === ring[ring.length - 1][1]
+    && ring[0][0] === ring.at(-1)[0] && ring[0][1] === ring.at(-1)[1]
     ? ring.slice(0, -1) : ring.slice();
   const simplified = douglasPeucker(open, TOLERANCE).map(([lon, lat]) => [round(lon), round(lat)]);
   const out = [];
   for (const pt of simplified) {
-    const prev = out[out.length - 1];
+    const prev = out.at(-1);
     if (prev && prev[0] === pt[0] && prev[1] === pt[1]) continue;
     out.push(pt);
   }

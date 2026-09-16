@@ -30,7 +30,7 @@ const isNode = typeof process !== 'undefined' && Boolean(process.versions?.node)
 const _cityLoaders = new Map();
 
 function normalize(s) {
-  return String(s || '').toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return String(s || '').toLowerCase().replaceAll(/[^a-z0-9 ]+/g, ' ').replaceAll(/\s+/g, ' ').trim();
 }
 
 /**

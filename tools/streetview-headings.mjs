@@ -34,14 +34,14 @@ function parseArgs() {
 
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
-      case '--lat':        opts.lat = parseFloat(args[++i]); break;
-      case '--lon':        opts.lon = parseFloat(args[++i]); break;
-      case '--fov':        opts.fov = parseInt(args[++i], 10); break;
-      case '--pitch':      opts.pitch = parseInt(args[++i], 10); break;
+      case '--lat':        opts.lat = Number.parseFloat(args[++i]); break;
+      case '--lon':        opts.lon = Number.parseFloat(args[++i]); break;
+      case '--fov':        opts.fov = Number.parseInt(args[++i], 10); break;
+      case '--pitch':      opts.pitch = Number.parseInt(args[++i], 10); break;
       case '--size':       opts.size = args[++i]; break;
       case '--outdir':     opts.outdir = args[++i]; break;
       case '--key':        opts.key = args[++i]; break;
-      case '--step':       opts.step = parseInt(args[++i], 10); break;
+      case '--step':       opts.step = Number.parseInt(args[++i], 10); break;
       case '--neighbors':  opts.neighbors = true; break;
       case '--help':
         console.log('Usage: node tools/streetview-headings.mjs --lat <lat> --lon <lon> [--fov 90] [--pitch 0] [--size 640x640] [--neighbors]');

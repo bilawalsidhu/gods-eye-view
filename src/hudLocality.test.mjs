@@ -92,6 +92,6 @@ test('hud.js actually composes its summary through this helper', () => {
 test('a missing or malformed nearest POI never crashes the summary', () => {
   assert.match(composeLocalityTag(null, 0, 0), /^SECTOR /);
   assert.match(composeLocalityTag(undefined, 0, 0), /^SECTOR /);
-  assert.match(composeLocalityTag({ ...LINCOLN, distKm: NaN }, 10, 10), /^SECTOR /);
+  assert.match(composeLocalityTag({ ...LINCOLN, distKm: Number.NaN }, 10, 10), /^SECTOR /);
   assert.match(composeLocalityTag({ ...LINCOLN }, 10, 10), /^SECTOR /);
 });

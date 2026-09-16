@@ -28,7 +28,7 @@ export function addressSegments(label) {
  * label is used only when no preset city is active, which is exactly the state
  * a free-text search leaves behind.
  *
- * @param {Object} [input]
+ * @param {object} [input]
  * @param {{name: string, pois?: Array<{name: string}>}|null} [input.city]
  *   Active preset city record, or null.
  * @param {{name: string}|null} [input.currentPoi] - Currently framed preset POI.

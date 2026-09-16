@@ -980,7 +980,7 @@ async function runBehaviorLayer() {
       && typeof windowBlock.centeredOn === 'string'
       && /loads by viewport/.test(r?.coverage?.note || '')
       // Contract rule 3: the count names its own scope.
-      && /^within 250 km of /.test(r?.scopeLabel || ''),
+      && (r?.scopeLabel || '').startsWith('within 250 km of '),
       'behavior: analyst_query carries the Contacts panel counts and says what it measured',
       `contactsWindow=${JSON.stringify(windowBlock)} awarenessFlights=${awarenessFlights}${panelUnmeasured ? ' (panel never measured — analyst honestly reported unknown)' : ''} analystCount=${r?.count} scopeLabel="${r?.scopeLabel}"`,
     );

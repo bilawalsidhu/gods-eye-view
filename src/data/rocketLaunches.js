@@ -62,6 +62,8 @@ let _explicitSelection = false;
 let _launches = [];
 let _missionPanel = null;
 let _missionRoster = null;
+/** Detachers for the roster's delegated listeners (the element persists in the DOM). */
+let _missionRosterRemovers = [];
 let _missionRosterHoverTimer = null;
 let _hoveredRosterLaunchId = null;
 let _missionHoverReticleImage = null;
@@ -141,7 +143,7 @@ const SATELLITE_STANDALONE_DEFAULTS = {
 export function satelliteParamsForSpaceMissions(currentParams) {
   return {
     ...SATELLITE_STANDALONE_DEFAULTS,
-    ...(currentParams || {}),
+    ...currentParams,
     catalog: 'dense',
     showPoints: false,
     showOrbits: false,
@@ -156,7 +158,7 @@ export function satelliteParamsForSpaceMissions(currentParams) {
 export function satelliteParamsAfterSpaceMissions(snapshot) {
   return {
     ...SATELLITE_STANDALONE_DEFAULTS,
-    ...(snapshot || {}),
+    ...snapshot,
   };
 }
 
@@ -480,7 +482,7 @@ function focusFullGlobe(viewer, duration = 2.4) {
 }
 
 function shortMissionLabel(name, maxLength = 24) {
-  const text = String(name || 'Unnamed mission').replace(/\s+/g, ' ').trim().split(' | ')[0];
+  const text = String(name || 'Unnamed mission').replaceAll(/\s+/g, ' ').trim().split(' | ')[0];
   const compact = text.split(' — ')[0].trim();
   return compact.length > maxLength ? `${compact.slice(0, maxLength - 1).trimEnd()}…` : compact;
 }
@@ -491,7 +493,7 @@ function shortMissionLabel(name, maxLength = 24) {
  * @returns {string|null} Compact launch-site identifier.
  */
 export function compactLaunchSiteName(launchSite) {
-  const text = String(launchSite || '').replace(/\s+/g, ' ').trim();
+  const text = String(launchSite || '').replaceAll(/\s+/g, ' ').trim();
   if (!text || /^(unknown|unavailable|n\/a)$/i.test(text)) return null;
   const genericPrefix = /^(?:orbital\s+launch\s+pad|space\s+launch\s+complex|launch\s+(?:area|complex|pad|site))\s*[-·:]?\s*/i;
   const compact = text.replace(genericPrefix, '').trim();
@@ -637,6 +639,8 @@ function missionHoverReticleImage() {
  * @param {boolean} input.replayActive Whether replay owns the camera.
  * @param {boolean} input.ascending Whether the replay marker is on ascent.
  * @param {boolean} input.countdownActive Whether the T-minus hold is active.
+ * @param {boolean} [input.preCountdownActive=false] - Whether the launch is still
+ *   short of the T-minus hold; the overlay yields null for it.
  * @returns {'countdown'|'ascent'|'orbit'|null}
  */
 export function replayOverlayMode({
@@ -2367,7 +2371,7 @@ function renderMissionRoster() {
 }
 
 function escapeMissionText(value) {
-  return String(value ?? '').replace(/[&<>"']/g, (character) => ({
+  return String(value ?? '').replaceAll(/[&<>"']/g, (character) => ({
     '&': '&amp;',
     '<': '&lt;',
     '>': '&gt;',
@@ -2524,30 +2528,45 @@ function createMissionPanel() {
   if (!host) return;
   _missionRoster = document.getElementById('space-mission-roster');
   if (_missionRoster) {
-    _missionRoster.onclick = (event) => {
+    // Named handlers + removers: the roster element outlives the layer, so
+    // every enable cycle must detach what the last one attached or the
+    // delegated handlers stack.
+    const roster = _missionRoster;
+    const onRosterClick = (event) => {
       const button = event.target instanceof Element
         ? event.target.closest('[data-mission-roster-index]')
         : null;
       if (!button) return;
       selectMissionAt(Number(button.dataset.missionRosterIndex));
     };
-    _missionRoster.onmouseover = (event) => {
+    const onRosterOver = (event) => {
       const button = event.target instanceof Element
         ? event.target.closest('[data-mission-roster-index]')
         : null;
       if (!button || button.contains(event.relatedTarget)) return;
       scheduleMissionRosterPreview(Number(button.dataset.missionRosterIndex));
     };
-    _missionRoster.onfocusin = (event) => {
+    const onRosterFocusIn = (event) => {
       const button = event.target instanceof Element
         ? event.target.closest('[data-mission-roster-index]')
         : null;
       if (button) scheduleMissionRosterPreview(Number(button.dataset.missionRosterIndex));
     };
-    _missionRoster.onmouseleave = clearMissionRosterHover;
-    _missionRoster.onfocusout = (event) => {
-      if (!_missionRoster.contains(event.relatedTarget)) clearMissionRosterHover();
+    const onRosterFocusOut = (event) => {
+      if (!roster.contains(event.relatedTarget)) clearMissionRosterHover();
     };
+    roster.addEventListener('click', onRosterClick);
+    roster.addEventListener('mouseover', onRosterOver);
+    roster.addEventListener('focusin', onRosterFocusIn);
+    roster.addEventListener('mouseleave', clearMissionRosterHover);
+    roster.addEventListener('focusout', onRosterFocusOut);
+    _missionRosterRemovers = [
+      () => roster.removeEventListener('click', onRosterClick),
+      () => roster.removeEventListener('mouseover', onRosterOver),
+      () => roster.removeEventListener('focusin', onRosterFocusIn),
+      () => roster.removeEventListener('mouseleave', clearMissionRosterHover),
+      () => roster.removeEventListener('focusout', onRosterFocusOut),
+    ];
   }
   _missionPanel = document.createElement('aside');
   _missionPanel.id = 'space-mission-panel';
@@ -3564,13 +3583,8 @@ const rocketLaunchesLayer = {
     _replayTracks.clear();
     _missionPanel?.remove();
     _missionPanel = null;
-    if (_missionRoster) {
-      _missionRoster.onclick = null;
-      _missionRoster.onmouseover = null;
-      _missionRoster.onfocusin = null;
-      _missionRoster.onmouseleave = null;
-      _missionRoster.onfocusout = null;
-    }
+    for (const remove of _missionRosterRemovers) remove();
+    _missionRosterRemovers = [];
     _missionRoster = null;
     _viewer = null;
     if (_dataSource) viewer.dataSources.remove(_dataSource, true);

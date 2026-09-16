@@ -187,15 +187,15 @@ function ringPositions(center, radius, basisA, basisB) {
  * into calibration patches through a narrow callback interface — the gizmo
  * never touches layer records/stores directly.
  *
- * @param {Object} deps
+ * @param {object} deps
  * @param {Cesium.Viewer} deps.viewer
- * @param {function(): Object|null} deps.getActiveRecord - Returns the record
+ * @param {function(): object|null} deps.getActiveRecord - Returns the record
  *   the gizmo should attach to, or null to hide (layer decides: enabled +
  *   calibration mode + active camera).
- * @param {function(Object, Object): void} deps.applyPatch - Transient
+ * @param {function(object, object): void} deps.applyPatch - Transient
  *   per-mousemove calibration patch (partial 7-field object, absolute offset
  *   values) + the PINNED drag record it applies to.
- * @param {function(Object): void} deps.endPatch - Commit-grade tail on drag
+ * @param {function(object): void} deps.endPatch - Commit-grade tail on drag
  *   end, for the PINNED drag record.
  * @returns {{setEnabled: function(boolean): void, refresh: function(): void,
  *   destroy: function(): void, isDragging: function(): boolean,

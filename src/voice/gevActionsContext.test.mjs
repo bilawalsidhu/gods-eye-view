@@ -20,7 +20,7 @@ globalThis.window = {
   __GOOGLE_MAPS_API_KEY__: 'test-gev-key',
   __godsEyeView: { tileset: { readyPromise: Promise.resolve() } },
 };
-globalThis.CSS = globalThis.CSS || { escape: (s) => String(s).replace(/"/g, '\\"') };
+globalThis.CSS = globalThis.CSS || { escape: (s) => String(s).replaceAll('"', String.raw`\"`) };
 
 // ─── Fetch router ───────────────────────────────────────────────────────────
 const calls = { geocode: [], nearby: [] };

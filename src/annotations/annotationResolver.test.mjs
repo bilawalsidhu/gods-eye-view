@@ -1599,7 +1599,7 @@ test('viewportBias: rectangle → bounds string; null/NaN/throw → null', () =>
   const rect = () => Cesium.Rectangle.fromDegrees(-97.8, 30.2, -97.7, 30.3);
   assert.equal(viewportBias({ camera: { computeViewRectangle: rect } }), '30.2000,-97.8000|30.3000,-97.7000');
   assert.equal(viewportBias({ camera: { computeViewRectangle: () => null } }), null);
-  assert.equal(viewportBias({ camera: { computeViewRectangle: () => ({ south: NaN, west: 0, north: 0, east: 0 }) } }), null);
+  assert.equal(viewportBias({ camera: { computeViewRectangle: () => ({ south: Number.NaN, west: 0, north: 0, east: 0 }) } }), null);
   assert.equal(viewportBias({ camera: { computeViewRectangle() { throw new Error('no scene'); } } }), null);
   assert.equal(viewportBias({}), null);
 });

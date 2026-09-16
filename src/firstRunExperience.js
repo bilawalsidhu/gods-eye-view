@@ -521,7 +521,7 @@ export function initFirstRunExperience({
     const order = focusables();
     if (!order.length) return;
     const first = order[0];
-    const last = order[order.length - 1];
+    const last = order.at(-1);
     const active = documentRef.activeElement;
     // Plain focus(), NOT preventScroll: on a short viewport the mission list
     // scrolls inside the card, and a tile the keyboard just reached has to be

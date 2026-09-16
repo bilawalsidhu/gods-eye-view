@@ -30,6 +30,8 @@
  */
 import js from '@eslint/js';
 import globals from 'globals';
+import jsdoc from 'eslint-plugin-jsdoc';
+import unicorn from 'eslint-plugin-unicorn';
 
 export default [
   {
@@ -100,6 +102,100 @@ export default [
     files: ['**/*.test.mjs'],
     rules: {
       'no-unused-expressions': 'off',
+    },
+  },
+
+  // ---------------------------------------------------------------------
+  // JSDoc hygiene (Batch E). Two tiers:
+  //   1. VALIDATION everywhere (this file, part of the merge gate) — where
+  //      JSDoc exists it must be correct: types resolve, param names/types
+  //      match the signature, tags are canonical. This costs nothing on
+  //      undocumented code.
+  //   2. REQUIREMENT on the public surface (eslint.docs.config.js, run via
+  //      `npm run lint:docs`, NOT part of the merge gate) — exported
+  //      functions/classes need doc blocks. This is the docs-coverage
+  //      metric feeding Batch H; closing the gap list is tracked there
+  //      rather than blocked here.
+  // ---------------------------------------------------------------------
+  {
+    plugins: { jsdoc },
+    rules: {
+      'jsdoc/check-alignment': 'error',
+      'jsdoc/check-param-names': 'error',
+      'jsdoc/check-tag-names': 'error',
+      'jsdoc/check-types': 'error',
+      'jsdoc/implements-on-classes': 'error',
+      'jsdoc/no-undefined-types': 'error',
+    },
+  },
+
+  // ---------------------------------------------------------------------
+  // unicorn (Batch E) — curated correctness set, NOT the stylistic
+  // blanket: rules that catch real bugs or unsafe idioms in this
+  // codebase's shape (event-driven rendering, worker messaging, fetch
+  // wrappers). Opinionated style rules are deliberately left off to keep
+  // the diff a lint pass, not a rewrite. eslint-plugin-unicorn is pinned
+  // to the newest release that still supports ESLint 9 (60.x wants 10).
+  // ---------------------------------------------------------------------
+  {
+    plugins: { unicorn },
+    rules: {
+      'unicorn/no-array-push-push': 'error',
+      'unicorn/no-empty-file': 'error',
+      'unicorn/no-instanceof-array': 'error',
+      'unicorn/no-lonely-if': 'error',
+      'unicorn/no-negated-condition': 'off', // early-guard style is idiomatic here
+      'unicorn/no-new-array': 'error',
+      'unicorn/no-object-as-default-parameter': 'error',
+      'unicorn/no-useless-fallback-in-spread': 'error',
+      'unicorn/no-useless-promise-resolve-reject': 'error',
+      // OFF: its autofix strips the `[...set]` snapshot in listener/emitter
+      // loops (`for (const fn of [...handlers]) fn()` → `of handlers`),
+      // which changes semantics the moment a handler adds/removes listeners
+      // mid-fire — proven 2026-09-15 when the autofix OOM'd
+      // scopeMask.test.mjs (sampler rebinds its preRender listener on each
+      // fire; live Set iteration visits the replacement, unbounded). The
+      // snapshot spread is deliberate defensive style here.
+      'unicorn/no-useless-spread': 'off',
+      'unicorn/no-zero-fractions': 'off', // 0.0 literals document float intent
+      'unicorn/prefer-add-event-listener': 'error',
+      'unicorn/prefer-array-flat': 'error',
+      'unicorn/prefer-array-flat-map': 'error',
+      'unicorn/prefer-at': 'error',
+      'unicorn/prefer-code-point': 'error',
+      'unicorn/prefer-date-now': 'error',
+      'unicorn/prefer-includes': 'error',
+      'unicorn/prefer-math-trunc': 'error',
+      'unicorn/prefer-negative-index': 'error',
+      'unicorn/prefer-number-properties': 'error',
+      'unicorn/prefer-object-from-entries': 'error',
+      'unicorn/prefer-string-raw': 'error',
+      'unicorn/prefer-string-replace-all': 'error',
+      'unicorn/prefer-string-slice': 'error',
+      'unicorn/prefer-string-starts-ends-with': 'error',
+      'unicorn/prefer-string-trim-start-end': 'error',
+      'unicorn/prefer-structured-clone': 'off', // structuredClone availability is per-realm here
+      'unicorn/prefer-ternary': 'off', // if/return reads clearer in render code
+      'unicorn/throw-new-error': 'error',
+    },
+  },
+
+  // ---------------------------------------------------------------------
+  // no-await-expression-member, production files only. `(await
+  // ask()).source` inside test assertions is the ecosystem-standard
+  // one-shot idiom (97% of violations were in *.test.mjs / QA scripts);
+  // splitting those would obscure what's being asserted. In shipped code
+  // the hidden sequencing risk is real, so it stays enforced there.
+  // ---------------------------------------------------------------------
+  {
+    files: [
+      'src/**/*.js',
+      'vite/**/*.js',
+      'functions/**/*.js',
+    ],
+    ignores: ['**/*.test.mjs', 'src/data/local_data/**'],
+    rules: {
+      'unicorn/no-await-expression-member': 'error',
     },
   },
 ];

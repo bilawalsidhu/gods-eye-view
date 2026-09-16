@@ -23,7 +23,7 @@ http.createServer((req, res) => {
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
   const url = new URL(req.url, 'http://localhost');
   if (req.method === 'POST' && url.pathname === '/save') {
-    const name = (url.searchParams.get('name') || 'shot').replace(/[^a-zA-Z0-9._-]/g, '_');
+    const name = (url.searchParams.get('name') || 'shot').replaceAll(/[^a-zA-Z0-9._-]/g, '_');
     let body = '';
     req.on('data', (c) => { body += c; });
     req.on('end', () => {

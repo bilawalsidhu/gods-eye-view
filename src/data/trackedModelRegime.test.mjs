@@ -131,7 +131,7 @@ test('an orbit sitting AT the boundary never flaps', () => {
 });
 
 test('a missing camera height reads as infinitely far out, never as "zoomed in"', () => {
-  for (const height of [undefined, null, NaN, Infinity]) {
+  for (const height of [undefined, null, Number.NaN, Infinity]) {
     assert.equal(trackedModelZoomActive(height, false), false);
     assert.equal(trackedModelZoomActive(height, true), false,
       'a torn-down viewer must not latch the model on');
@@ -932,8 +932,8 @@ for (const fixture of LAYERS) {
 // combined layer+factory source with state addressed through `p.`
 const { readFile } = await import('node:fs/promises');
 const PINNED_LAYERS = [
-  { name: 'flights.js', files: ['flights.js', 'flightsTracking.js'], px: 'p\\.' },
-  { name: 'militaryFlights.js', files: ['militaryFlights.js', 'flightsTracking.js'], px: 'p\\.' },
+  { name: 'flights.js', files: ['flights.js', 'flightsTracking.js'], px: String.raw`p\.` },
+  { name: 'militaryFlights.js', files: ['militaryFlights.js', 'flightsTracking.js'], px: String.raw`p\.` },
 ];
 
 for (const { name, files, px } of PINNED_LAYERS) {

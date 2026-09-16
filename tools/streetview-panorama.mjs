@@ -40,10 +40,10 @@ function parseArgs() {
 
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
-      case '--lat':    opts.lat = parseFloat(args[++i]); break;
-      case '--lon':    opts.lon = parseFloat(args[++i]); break;
-      case '--zoom':   opts.zoom = parseInt(args[++i], 10); break;
-      case '--radius': opts.radius = parseInt(args[++i], 10); break;
+      case '--lat':    opts.lat = Number.parseFloat(args[++i]); break;
+      case '--lon':    opts.lon = Number.parseFloat(args[++i]); break;
+      case '--zoom':   opts.zoom = Number.parseInt(args[++i], 10); break;
+      case '--radius': opts.radius = Number.parseInt(args[++i], 10); break;
       case '--outdir': opts.outdir = args[++i]; break;
       case '--key':    opts.key = args[++i]; break;
       case '--help':

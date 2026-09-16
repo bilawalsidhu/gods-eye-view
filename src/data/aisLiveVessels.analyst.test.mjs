@@ -39,7 +39,7 @@ test('ais analyst record: nameless vessel falls back to mmsi id', () => {
 });
 
 test('ais analyst record: empty strings and NaN become null, never undefined', () => {
-  const r = mapAnalystRecord({ mmsi: '', name: 'TUG', speed: NaN, type: '', destination: '' });
+  const r = mapAnalystRecord({ mmsi: '', name: 'TUG', speed: Number.NaN, type: '', destination: '' });
   assert.equal(r.mmsi, null);
   assert.equal(r.speedKts, null);
   assert.equal(r.shipType, null);

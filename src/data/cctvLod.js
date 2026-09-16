@@ -166,7 +166,7 @@ export const CCTV_CARD_GRID_ROWS = 4;
  * per-frame draw-pass declutter stays authoritative over what paints.
  *
  * @param {Array<{id:string,sx:number,sy:number,rankKm:number}>} candidates
- * @param {Object} [options]
+ * @param {object} [options]
  * @param {number} [options.budget] - Max ids returned.
  * @param {number} [options.viewW] - Viewport width (CSS px).
  * @param {number} [options.viewH] - Viewport height (CSS px).
@@ -240,7 +240,7 @@ export function distributeCctvCards(candidates, {
  * screen info the original nearest-first cap applies unchanged.
  *
  * @param {Array<{id:string,distanceKm:number,inView:boolean,isVideo?:boolean,sx?:number,sy?:number}>} candidates
- * @param {Object} [options]
+ * @param {object} [options]
  * @param {number} [options.cameraHeightM]
  * @param {Iterable<string>|Set<string>} [options.incumbentIds]
  * @param {number} [options.viewW] - Viewport width (CSS px) — enables the
@@ -290,8 +290,8 @@ export function selectCctvLod(candidates, { cameraHeightM, incumbentIds, viewW, 
       id: candidate.id,
       distanceKm: Math.max(0, candidate.distanceKm),
       rankKm: Infinity,
-      sx: Number.isFinite(candidate.sx) ? candidate.sx : NaN,
-      sy: Number.isFinite(candidate.sy) ? candidate.sy : NaN,
+      sx: Number.isFinite(candidate.sx) ? candidate.sx : Number.NaN,
+      sy: Number.isFinite(candidate.sy) ? candidate.sy : Number.NaN,
     };
     const current = eligibleById.get(normalized.id);
     if (!current || compareCctvRepresentative(normalized, current, { screened, viewW, viewH }) < 0) {
@@ -369,7 +369,7 @@ export const CCTV_LOD_GRACE_MS = 5_000;
  * Pure function: `graceState` is never mutated; the returned `graceState`
  * replaces it for the next pass.
  *
- * @param {Object} [input]
+ * @param {object} [input]
  * @param {string[]} [input.selectedIds] - This pass's selected card ids
  *   (already budget-capped, nearest-first — `selectCctvLod().cardIds` after
  *   declutter).
@@ -432,7 +432,7 @@ export function applyEvictionGrace({
  * value wins, bounded to one minute through twenty minutes; otherwise known
  * public-pack cadences provide conservative defaults.
  *
- * @param {Object} camera
+ * @param {object} camera
  * @returns {number}
  */
 export function staticFrameRefreshMs(camera) {

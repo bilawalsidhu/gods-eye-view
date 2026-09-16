@@ -240,7 +240,7 @@ export function trailHeadStart(start, anchor, center, radiusM, result) {
  * allocating. `modelMatrix` continues to own the model origin (including
  * ground snapping); bracket/readout and trail consumers supply their own
  * model-local anchor.
- * @param {ArrayLike<number>} modelMatrix Cesium Matrix4-compatible value.
+ * @param {number[]} modelMatrix Cesium Matrix4-compatible value.
  * @param {readonly number[]} nativeCenter Cesium-local native-unit offset.
  * @param {number} scale Cesium Model.computedScale applied outside modelMatrix.
  * @param {{x:number,y:number,z:number}} result Mutable Cartesian-like result.

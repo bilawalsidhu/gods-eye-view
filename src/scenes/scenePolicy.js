@@ -34,7 +34,7 @@ import { contextLayerEnableBlockReason } from '../contextModePolicy.js';
  * capture — a project file is a record of what the operator saw, and a future
  * reader may want it — they are simply dropped on the way to the layer.
  *
- * @constant {ReadonlyArray<string>}
+ * @constant {readonly string[]}
  */
 export const SCENE_TRACKING_PARAM_KEYS = Object.freeze([
   'selectedFlightsTrackingId',
@@ -56,7 +56,7 @@ export const SCENE_TRACKING_PARAM_KEYS = Object.freeze([
  * naming family and requires each match to appear on this list or the one
  * above. A future param named `trackedVesselMmsi` therefore cannot slip
  * through merely by not matching the older `selected…TrackingId` spelling.
- * @constant {ReadonlyArray<string>}
+ * @constant {readonly string[]}
  */
 export const SCENE_KEPT_SELECTION_PARAM_KEYS = Object.freeze([
   'selectedCameraId',
@@ -74,8 +74,8 @@ export const SCENE_SELECTION_PARAM_PATTERN =
 /**
  * Drop every camera-tracking key from one shot's layer params.
  *
- * @param {Object|undefined} params Params as stored on the shot.
- * @returns {Object|undefined} Params safe to push at the layer, or undefined
+ * @param {object|undefined} params Params as stored on the shot.
+ * @returns {object|undefined} Params safe to push at the layer, or undefined
  *   when nothing survives (a params bag that was tracking and nothing else).
  */
 export function stripSceneTrackingParams(params) {
@@ -137,11 +137,11 @@ export function sceneRequiresContextModeExit(contextMode) {
  * tracking params are stripped here, on the way out — see
  * SCENE_TRACKING_PARAM_KEYS.
  *
- * @param {Object.<string, { enabled: boolean, params?: Object }>} targetStates
+ * @param {[key: string]: { enabled: boolean, params?: object }} targetStates
  *   The shot's normalized layer map.
  * @param {Set<string>|Iterable<string>} [registeredIds] Layer ids the data
  *   manager currently knows about. Omit to skip the registration filter.
- * @returns {Array<{ id: string, enabled: boolean, params: Object|undefined }>}
+ * @returns {Array<{ id: string, enabled: boolean, params: object|undefined }>}
  */
 export function sceneLayerPlan(targetStates, registeredIds) {
   const known = registeredIds instanceof Set

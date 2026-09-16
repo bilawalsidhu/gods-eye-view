@@ -222,7 +222,7 @@ test('processChunkedSync processes every item in order, synchronously', () => {
 });
 
 test('processChunkedSync normalizes degenerate chunk sizes without losing items', () => {
-  for (const chunkSize of [undefined, 0, NaN, -5, 0.4]) {
+  for (const chunkSize of [undefined, 0, Number.NaN, -5, 0.4]) {
     const items = ['x', 'y', 'z'];
     const rec = recorder();
     processChunkedSync(items, chunkSize, rec.handle);

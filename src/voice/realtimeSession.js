@@ -80,16 +80,16 @@ export function sanitizeDebugString(value) {
     return `[Redacted image data URL, ${value.length} chars]`;
   }
   const redacted = value
-    .replace(/sk-(?:proj-)?[A-Za-z0-9_-]{20,}/g, '[Redacted OpenAI API key]')
-    .replace(/Bearer\s+[A-Za-z0-9._~+/-]+=*/gi, 'Bearer [Redacted]')
-    .replace(/"client_secret"\s*:\s*"[^"]+"/gi, '"client_secret":"[Redacted]"')
+    .replaceAll(/sk-(?:proj-)?[A-Za-z0-9_-]{20,}/g, '[Redacted OpenAI API key]')
+    .replaceAll(/Bearer\s+[A-Za-z0-9._~+/-]+=*/gi, 'Bearer [Redacted]')
+    .replaceAll(/"client_secret"\s*:\s*"[^"]+"/gi, '"client_secret":"[Redacted]"')
     // Unanchored ek_ backstop: the JSON-shaped rule above misses an
     // ephemeral key embedded in an ESCAPED string value
     // (`"note":"{\"client_secret\":\"ek_…\"}"`), where the quotes the
     // pattern expects are backslash-escaped. The token itself is the
     // sensitive atom; catch it in any quoting context.
-    .replace(/(^|[^A-Za-z0-9_-])ek_[A-Za-z0-9_-]{10,}/g, '$1[Redacted ephemeral key]')
-    .replace(/eyJ[A-Za-z0-9_-]{15,}\.[A-Za-z0-9_-]{15,}\.[A-Za-z0-9_-]{10,}/g, '[Redacted JWT]');
+    .replaceAll(/(^|[^A-Za-z0-9_-])ek_[A-Za-z0-9_-]{10,}/g, '$1[Redacted ephemeral key]')
+    .replaceAll(/eyJ[A-Za-z0-9_-]{15,}\.[A-Za-z0-9_-]{15,}\.[A-Za-z0-9_-]{10,}/g, '[Redacted JWT]');
   return redacted.length > DEBUG_STRING_MAX_CHARS
     ? `${redacted.slice(0, DEBUG_STRING_MAX_CHARS)}...[Truncated ${redacted.length - DEBUG_STRING_MAX_CHARS} chars]`
     : redacted;
@@ -928,7 +928,7 @@ export function extractOpenAiResponseText(data) {
 
 export function toFiveWordHudSummary(value) {
   return String(value || '')
-    .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
+    .replaceAll(/[^\p{L}\p{N}\s-]/gu, ' ')
     .trim()
     .split(/\s+/)
     .filter(Boolean)

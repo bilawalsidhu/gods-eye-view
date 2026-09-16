@@ -412,7 +412,7 @@ export function aisStreamSubscription() {
  * envelopes never reach here — the adapter classifies those — and a JSON
  * object without an MMSI proves nothing about the feed.
  *
- * @param {Object} envelope Parsed, non-error AIS envelope.
+ * @param {object} envelope Parsed, non-error AIS envelope.
  * @returns {boolean} True when an AIS record was recognised.
  */
 export function ingestAisStreamEnvelope(envelope) {
@@ -797,7 +797,7 @@ export default defineConfig(({ mode }) => {
     ],
     server: {
       host: env.HOST || 'localhost',
-      port: parseInt(env.PORT, 10) || 5173,
+      port: Number.parseInt(env.PORT, 10) || 5173,
       // When binding to all interfaces, allow any host; otherwise restrict to local names
       allowedHosts: (env.HOST === '0.0.0.0' || env.HOST === '::')
         ? true

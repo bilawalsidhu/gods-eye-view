@@ -171,6 +171,7 @@ export function endWorldJumpTransition(mgr) {
  * city differs from the current one. Applies begin/end transition signals
  * with a 5.2s safety timeout to guarantee cleanup if the flight callback
  * never fires onComplete.
+ * @param {object} mgr - StyleManager instance supplying the explicit-navigation runner and the world-jump transition timer.
  * @param {boolean} cityChanged - Whether the destination is in a different city.
  * @param {function} flyAction - Callback receiving `{onStart, onComplete}` hooks; should return a result with targetPosition.
  * @returns {*} Return value from flyAction.
@@ -209,6 +210,7 @@ export function beginLocationNavigation(mgr) {
  * Handles a city pill click: toggles POI row collapse if same city,
  * otherwise expands the POI row, flies to the city's first POI, and
  * tracks the target position for orbit mode.
+ * @param {object} mgr - StyleManager instance holding the expanded-city, active-location, and orbit target state this click updates.
  * @param {string} cityId - Identifier of the clicked city.
  * @returns {void}
  */
@@ -238,6 +240,7 @@ function onCityPillClick(mgr, cityId) {
 /**
  * Handles a POI pill click: stops orbit, flies to the POI, highlights it,
  * and saves the target position for future orbit activation.
+ * @param {object} mgr - StyleManager instance holding the active-location and orbit target state this click updates.
  * @param {string} cityId - Parent city identifier.
  * @param {number} poiIndex - Index of the POI within the city's pois array.
  * @returns {void}
@@ -261,6 +264,7 @@ function onPoiClick(mgr, cityId, poiIndex) {
 /**
  * Builds and shows the POI pill row for a city. Each pill displays a
  * QWERTY keyboard shortcut key and the POI name.
+ * @param {object} mgr - StyleManager instance holding the POI row and location-bar divider elements the pills are rendered into.
  * @param {string} cityId - City whose POIs to render.
  * @returns {void}
  */
@@ -306,7 +310,7 @@ function collapsePOIRow(mgr) {
  */
 function updatePoiHighlight(mgr) {
   mgr._poiRow.querySelectorAll('.poi-pill').forEach(pill => {
-    pill.classList.toggle('active', parseInt(pill.dataset.poiIndex) === mgr._activePoiIndex);
+    pill.classList.toggle('active', Number.parseInt(pill.dataset.poiIndex) === mgr._activePoiIndex);
   });
 }
 
@@ -324,6 +328,7 @@ export function clearSearchedLocation(mgr) {
 
 /**
  * Sets the active city location, highlights its pill, and updates the mini-status readout.
+ * @param {object} mgr - StyleManager instance holding the active location id, searched-label cache, and location pill elements.
  * @param {string|null} locationId - City identifier, or null to clear.
  * @returns {void}
  */

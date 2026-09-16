@@ -24,7 +24,7 @@ const __dirname = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..
  *
  * Handles both Node-native streams (.pipe) and web ReadableStreams (.getReader).
  *
- * @param {ReadableStream|NodeJS.ReadableStream|null} body
+ * @param {ReadableStream|import('stream').Readable|null} body
  * @returns {import('stream').Readable|null}
  */
 export function toReadable(body) {

@@ -67,18 +67,18 @@ function parseArgs() {
 
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
-      case '--lat':        opts.lat = parseFloat(args[++i]); break;
-      case '--lon':        opts.lon = parseFloat(args[++i]); break;
-      case '--lookat-lat': opts.lookatLat = parseFloat(args[++i]); break;
-      case '--lookat-lon': opts.lookatLon = parseFloat(args[++i]); break;
-      case '--heading':    opts.heading = parseFloat(args[++i]); break;
-      case '--pitch':      opts.pitch = parseFloat(args[++i]); break;
-      case '--height':     opts.height = parseFloat(args[++i]); break;
-      case '--fov':        opts.fov = parseFloat(args[++i]); break;
-      case '--width':      opts.width = parseInt(args[++i], 10); break;
-      case '--height-px':  opts.heightPx = parseInt(args[++i], 10); break;
-      case '--sse':        opts.sse = parseFloat(args[++i]); break;
-      case '--timeout':    opts.timeout = parseInt(args[++i], 10); break;
+      case '--lat':        opts.lat = Number.parseFloat(args[++i]); break;
+      case '--lon':        opts.lon = Number.parseFloat(args[++i]); break;
+      case '--lookat-lat': opts.lookatLat = Number.parseFloat(args[++i]); break;
+      case '--lookat-lon': opts.lookatLon = Number.parseFloat(args[++i]); break;
+      case '--heading':    opts.heading = Number.parseFloat(args[++i]); break;
+      case '--pitch':      opts.pitch = Number.parseFloat(args[++i]); break;
+      case '--height':     opts.height = Number.parseFloat(args[++i]); break;
+      case '--fov':        opts.fov = Number.parseFloat(args[++i]); break;
+      case '--width':      opts.width = Number.parseInt(args[++i], 10); break;
+      case '--height-px':  opts.heightPx = Number.parseInt(args[++i], 10); break;
+      case '--sse':        opts.sse = Number.parseFloat(args[++i]); break;
+      case '--timeout':    opts.timeout = Number.parseInt(args[++i], 10); break;
       case '--outdir':     opts.outdir = args[++i]; break;
       case '--key':        opts.key = args[++i]; break;
       case '--help':

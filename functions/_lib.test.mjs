@@ -88,7 +88,7 @@ test('makeRateLimiter admits within the window and refuses at the cap', () => {
 });
 
 test('makeOptInRateLimiter is null unless a positive integer is configured', () => {
-  for (const unset of [undefined, '', '0', '-3', 'abc', NaN]) {
+  for (const unset of [undefined, '', '0', '-3', 'abc', Number.NaN]) {
     assert.equal(makeOptInRateLimiter(unset), null, `unset-like value: ${String(unset)}`);
   }
   assert.equal(typeof makeOptInRateLimiter('30'), 'function');

@@ -296,7 +296,7 @@ function waitForTilesLoaded(page, timeoutMs = 15000) {
  * clamp floor). Returns null if no patch in the legal offset ranges clears it
  * (shouldn't happen for the catalog's fabricated poses, but the caller must
  * treat that as INCONCLUSIVE, not a hard failure).
- * @param {Object} basePose - { pitchDeg, fovDeg, rangeM, mountHeightM }.
+ * @param {object} basePose - { pitchDeg, fovDeg, rangeM, mountHeightM }.
  * @param {number} groundAltM - Ground altitude at the mount.
  * @returns {{ pitchDeg: number, fovDeg: number, rangeScale: number }|null} Calibration patch offsets.
  */
@@ -732,7 +732,7 @@ async function main() {
           return [center[0] + world[0], center[1] + world[1], center[2] + world[2]];
         };
         const planeCorners = { tl: corner(-1, 1), tr: corner(1, 1), br: corner(1, -1), bl: corner(-1, -1) };
-        const rayEndpoint = (role) => poly[role][poly[role].length - 1];
+        const rayEndpoint = (role) => poly[role].at(-1);
         const rayCorners = { tl: rayEndpoint('ray-tl'), tr: rayEndpoint('ray-tr'), br: rayEndpoint('ray-br'), bl: rayEndpoint('ray-bl') };
         return {
           tl: dist(planeCorners.tl, rayCorners.tl),
@@ -1035,7 +1035,7 @@ async function main() {
           if (!ok) {
             const worst = Array.isArray(a?.[key]) && Array.isArray(b?.[key])
               ? Math.max(...a[key].map((value, index) => Math.abs(value - b[key][index])))
-              : NaN;
+              : Number.NaN;
             poseMismatches.push(`${key}(Δ=${Number.isFinite(worst) ? worst.toExponential(2) : 'shape'})`);
           }
           return ok;
@@ -1494,7 +1494,7 @@ async function main() {
       const w = scene.canvas.clientWidth;
       const h = scene.canvas.clientHeight;
       const a = scene.cartesianToCanvasCoordinates(pts[0]);
-      const b = scene.cartesianToCanvasCoordinates(pts[pts.length - 1]);
+      const b = scene.cartesianToCanvasCoordinates(pts.at(-1));
       if (!a || !b || !Number.isFinite(a.x) || !Number.isFinite(a.y) ||
           !Number.isFinite(b.x) || !Number.isFinite(b.y)) return null;
       const dx = b.x - a.x;

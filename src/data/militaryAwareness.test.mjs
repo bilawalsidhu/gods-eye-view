@@ -1445,8 +1445,8 @@ test('production eviction sites actually tag their clears', () => {
   // so their cull sites read _trackedIcao through the `p.` prefix — while each
   // layer's own _clearTracking seam stays a plain function passed into the factory.
   for (const [name, source, trackedIcaoRef, clearTrackingRef] of [
-    ['flights', flightsSource, 'p\\._trackedIcao', '_clearTracking'],
-    ['militaryFlights', militarySource, 'p\\._trackedIcao', '_clearTracking'],
+    ['flights', flightsSource, String.raw`p\._trackedIcao`, '_clearTracking'],
+    ['militaryFlights', militarySource, String.raw`p\._trackedIcao`, '_clearTracking'],
   ]) {
     assert.match(
       source,
@@ -1914,7 +1914,7 @@ test('NEXT reaches beyond the panel cap when more nearby targets exist', () => {
       assert.equal(militaryAwarenessLayer.navigateNext(), true);
     }
 
-    assert.deepEqual(focused[focused.length - 1], 'l');
+    assert.deepEqual(focused.at(-1), 'l');
   } finally {
     restores.reverse().forEach((restore) => restore());
     runtime.restore();

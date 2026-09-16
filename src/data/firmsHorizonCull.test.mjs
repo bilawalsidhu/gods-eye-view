@@ -232,7 +232,7 @@ test('normalizeOverlayEntry: carries a valid cullPosition, nulls a junk one', ()
     [kept.cullPosition.x, kept.cullPosition.y, kept.cullPosition.z],
     [4, 5, 6],
   );
-  const dropped = normalizeOverlayEntry('firms', { id: 'b', position, cullPosition: { x: NaN, y: 5, z: 6 } });
+  const dropped = normalizeOverlayEntry('firms', { id: 'b', position, cullPosition: { x: Number.NaN, y: 5, z: 6 } });
   assert.equal(dropped.cullPosition, null, 'a malformed cull point falls back to the render position');
   const notAnObject = normalizeOverlayEntry('firms', { id: 'b2', position, cullPosition: 42 });
   assert.equal(notAnObject.cullPosition, null, 'a non-object cull point is rejected');
@@ -252,7 +252,7 @@ test('normalizeOverlayEntry: the stored cull anchor is a snapshot, not the calle
 
   // Sources legitimately recycle scratch vectors between publishes; a mutation
   // after normalization must never reach the per-frame occluder.
-  caller.x = NaN;
+  caller.x = Number.NaN;
   caller.y = 999;
   assert.deepEqual(
     [normalized.cullPosition.x, normalized.cullPosition.y, normalized.cullPosition.z],
@@ -410,7 +410,7 @@ function createHarness(rawFires) {
     /** The real BillboardCollection the layer created. */
     billboards: () => primitives[0],
     /** Latest entry list published to the overlay host. */
-    latestEntries: () => entryCalls[entryCalls.length - 1] || [],
+    latestEntries: () => entryCalls.at(-1) || [],
     /** `show` flags keyed by billboard pick id. */
     showById() {
       const bb = primitives[0];

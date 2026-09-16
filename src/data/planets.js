@@ -13,7 +13,7 @@ import { holdContinuousRender, releaseContinuousRender } from '../renderGovernor
 // ─── Orbital Elements (J2000 mean elements) ───────────────────────────────────
 
 /**
- * @typedef {Object} OrbitalElements
+ * @typedef {object} OrbitalElements
  * @property {number} a  Semi-major axis (km)
  * @property {number} e  Eccentricity
  * @property {number} i  Inclination (radians)

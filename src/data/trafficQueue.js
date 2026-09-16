@@ -9,13 +9,13 @@
  * @module data/trafficQueue
  */
 
-/** @const {number} Smallest platoon (cars per queue cluster). */
+/** @constant {number} Smallest platoon (cars per queue cluster). */
 const PLATOON_MIN = 4;
-/** @const {number} Random extra cars per platoon (0–4 → sizes 4–8). */
+/** @constant {number} Random extra cars per platoon (0–4 → sizes 4–8). */
 const PLATOON_SPREAD = 5;
-/** @const {number} Meters — minimum bumper-to-bumper gap inside a platoon. */
+/** @constant {number} Meters — minimum bumper-to-bumper gap inside a platoon. */
 const GAP_MIN_M = 6;
-/** @const {number} Meters — random extra gap (6–12 m total). */
+/** @constant {number} Meters — random extra gap (6–12 m total). */
 const GAP_SPREAD_M = 6;
 
 /**

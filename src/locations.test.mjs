@@ -358,7 +358,7 @@ test('placeFramingViewport: no usable viewport or anchor leaves framing alone', 
   assert.equal(placeFramingViewport(null, 29, 101, ['locality']), null);
   assert.equal(placeFramingViewport(undefined, 29, 101, ['locality']), undefined);
   // Without a finite anchor there is nothing better to fly to than the box.
-  assert.equal(placeFramingViewport(OFF_CENTRE_ADMIN_BOX, NaN, 101, ['administrative_area_level_1']), OFF_CENTRE_ADMIN_BOX);
+  assert.equal(placeFramingViewport(OFF_CENTRE_ADMIN_BOX, Number.NaN, 101, ['administrative_area_level_1']), OFF_CENTRE_ADMIN_BOX);
   assert.equal(placeFramingViewport(OFF_CENTRE_ADMIN_BOX, 29, undefined, ['administrative_area_level_1']), OFF_CENTRE_ADMIN_BOX);
 });
 
@@ -471,7 +471,7 @@ test('ordinary boxes are framed exactly as before the antimeridian fix', async (
 test('regionFramingPlan: invalid viewports return null', () => {
   assert.equal(regionFramingPlan(null), null);
   assert.equal(regionFramingPlan({}), null);
-  assert.equal(regionFramingPlan({ southwest: { lat: NaN, lng: 0 }, northeast: { lat: 1, lng: 1 } }), null);
+  assert.equal(regionFramingPlan({ southwest: { lat: Number.NaN, lng: 0 }, northeast: { lat: 1, lng: 1 } }), null);
 });
 
 // Globe-view preset (field test 2026-07-23): "zoom out to a globe view" needs an

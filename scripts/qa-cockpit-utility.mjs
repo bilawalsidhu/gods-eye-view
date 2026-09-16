@@ -1884,7 +1884,7 @@ try {
     // letting the top edge traverse the whole boundary region.
     const minTop = Math.max(96, window.innerHeight * 0.12);
     const LEVER_MIN_HEIGHT_PX = 4;
-    const bottomOffsetPx = parseFloat(getComputedStyle(signal).bottom) || 0;
+    const bottomOffsetPx = Number.parseFloat(getComputedStyle(signal).bottom) || 0;
     const maxCardTop = window.innerHeight - bottomOffsetPx - LEVER_MIN_HEIGHT_PX;
     const moveSignalTopTo = (rawWantTop) => {
       // Seeds beyond the geometric maximum (fully-collapsed card) clamp to it;
@@ -1902,7 +1902,7 @@ try {
         // NOT be folded in here. Subtracting it too cancelled the correction
         // every pass: the spec settled at `current − delta − drift + drift`
         // and the card froze ~5.8 px short of the target forever.
-        const current = parseFloat(signal.style.height) || rect.height;
+        const current = Number.parseFloat(signal.style.height) || rect.height;
         const next = Math.max(LEVER_MIN_HEIGHT_PX, current - delta);
         signal.style.height = `${next}px`;
         passes.push({
@@ -2451,7 +2451,7 @@ try {
     return match ? parseEntry(`${match[1]} ${stripWrapperBracket(match[2])}`) : null;
   };
   const keylessLocal = (entry) => {
-    const parsed = /^503 /.test(entry) ? parseEntry(entry) : null;
+    const parsed = entry.startsWith('503 ') ? parseEntry(entry) : null;
     return Boolean(parsed) && keylessServer && KEYLESS_PATH.test(parsed.path);
   };
   const keylessConsole = (text) => {

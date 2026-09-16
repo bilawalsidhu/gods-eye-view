@@ -267,7 +267,8 @@ const _scratchProjectArc = { east: 0, north: 0, endCourseDeg: 0 };
  * ~111 m cells over ≤1 km legs, where the spherical error is centimetres. The
  * TURN, not the earth model, is what mattered.
  *
- * @param {number} lat @param {number} lon - Start, degrees.
+ * @param {number} lat - Start latitude, degrees.
+ * @param {number} lon - Start longitude, degrees.
  * @param {number} courseDeg - Instantaneous course (0 = north, 90 = east).
  * @param {number} speedMps - Ground speed.
  * @param {number} turnRateDps - Signed turn rate; 0 gives a straight leg.
@@ -304,11 +305,13 @@ export function projectGroundArcLatLon(lat, lon, courseDeg, speedMps, turnRateDp
  *
  * @param {object} p
  * @param {boolean} p.extrapolating - Whether the display position was extrapolated.
- * @param {number} p.displayLat @param {number} p.displayLon - Where it renders now.
+ * @param {number} p.displayLat - Where it renders now, latitude.
+ * @param {number} p.displayLon - Where it renders now, longitude.
  * @param {number} p.courseDeg - Course of the displayed motion.
  * @param {number} p.speedMps - Displayed ground speed.
  * @param {number} [p.turnRateDps] - The contact's estimated turn rate.
- * @param {number} p.fixLat @param {number} p.fixLon - The newest fix.
+ * @param {number} p.fixLat - The newest fix, latitude.
+ * @param {number} p.fixLon - The newest fix, longitude.
  * @param {number} p.lookaheadSec - How far ahead to project when extrapolating.
  * The sample COUNT derives from the arc's length so spacing stays at
  * CORRIDOR_SAMPLE_SPACING_M whatever the speed, and the arc is truncated at

@@ -92,8 +92,10 @@ function _approxKm(lat1, lon1, lat2, lon2) {
  * @param {Array<object>} [options.excludeObjects] - Own billboards/models to
  *   exclude from the probe (Cesium matches instances/.primitive/.id — pass
  *   Billboard and Model instances, NOT collections).
- * @param {number} [options.viewerLat] @param {number} [options.viewerLon]
- *   Viewer subpoint (computed once by the caller's poll).
+ * @param {number} [options.viewerLat] - Viewer subpoint latitude (computed
+ *   once by the caller's poll).
+ * @param {number} [options.viewerLon] - Viewer subpoint longitude (computed
+ *   once by the caller's poll).
  */
 export function sampleMeshFloorCells(scene, points, { excludeObjects = [], viewerLat, viewerLon } = {}) {
   if (!meshFloorPreferred()) return;

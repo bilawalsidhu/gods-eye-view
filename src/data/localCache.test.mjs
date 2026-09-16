@@ -52,7 +52,7 @@ test('a missing or disabled store degrades to a miss, never throws', () => {
 });
 
 test('a write without a positive TTL is refused — no unbounded commitments', () => {
-  for (const ttl of [0, -5, NaN, undefined]) {
+  for (const ttl of [0, -5, Number.NaN, undefined]) {
     assert.equal(writeLocalCache('k', { a: 1 }, { ttlMs: ttl }), false, `ttl=${ttl}`);
   }
   assert.equal(writeLocalCache('k', null, { ttlMs: 1000 }), false, 'null is not a cacheable payload');

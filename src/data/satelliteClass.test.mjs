@@ -103,7 +103,7 @@ test('class colors are distinct, valid, and never borrow the military amber', ()
   // MIL_TINT #FFB800 / militaryFlights.js #FFB800 + #FFD166). A satellite
   // class landing there would read as a military air contact.
   const hueOf = (hex) => {
-    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+    const [r, g, b] = [1, 3, 5].map((i) => Number.parseInt(hex.slice(i, i + 2), 16) / 255);
     const max = Math.max(r, g, b);
     const min = Math.min(r, g, b);
     const d = max - min;
@@ -115,7 +115,7 @@ test('class colors are distinct, valid, and never borrow the military amber', ()
     return ((h * 60) + 360) % 360;
   };
   const saturationOf = (hex) => {
-    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+    const [r, g, b] = [1, 3, 5].map((i) => Number.parseInt(hex.slice(i, i + 2), 16) / 255);
     const max = Math.max(r, g, b);
     const min = Math.min(r, g, b);
     if (max === 0) return 0;
@@ -133,7 +133,7 @@ test('the dense shell stays dimmer than the class it sits among', () => {
   // of COMMS points in the same LEO volume as VISUAL. Luma separation is what
   // keeps the core catalog readable through the dense shell.
   const luma = (hex) => {
-    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+    const [r, g, b] = [1, 3, 5].map((i) => Number.parseInt(hex.slice(i, i + 2), 16));
     return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
   };
   assert.ok(

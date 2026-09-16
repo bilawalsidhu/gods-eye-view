@@ -75,12 +75,21 @@ function linkAbort(controller, externalSignal) {
  * @param {number} [opts.latitude]    Explicit latitude (wins over target).
  * @param {number} [opts.longitude]   Explicit longitude.
  * @param {boolean} [opts.footprint]  Try to trace the real OSM outline ring.
+ * @param {string} [opts.intent]      Ask's focus intent ('the_thing' by default;
+ *                                    'around_the_thing') — the latter resolves the area
+ *                                    AROUND the feature instead of the feature's own extent.
  * @param {string} [opts.entityKind]  Voice model's entity FACT ('building'|'compound'|
  *                                    'district'|'street'|'point_feature') — refines scope
  *                                    routing and the point-first contract; never a style choice.
+ * @param {string} [opts.labelHint]   The annotation's label text, consulted alongside the
+ *                                    target when classifying a point-like vs grounds-like ask.
  * @param {boolean} [opts.deferFootprint]  Progressive mode: return the anchor immediately
  *                                    (ring:null) plus a `resolveOutline()` continuation the
  *                                    caller runs AFTER drawing, upgrading the mark in place.
+ * @param {number} [opts.screenX]     Normalized viewport X (0–1) for the pixel fallback.
+ * @param {number} [opts.screenY]     Normalized viewport Y (0–1) for the pixel fallback.
+ * @param {AbortSignal} [opts.signal] Forwards abort to upstream fetches so a superseded
+ *                                    resolution stops early.
  * @returns {Promise<null | {
  *   lon: number, lat: number, height: number,
  *   ring: Array<[number, number]> | null,
@@ -1131,9 +1140,9 @@ function stitchLine(segments) {
     advanced = false;
     for (let i = 0; i < remaining.length; i++) {
       const s = remaining[i];
-      if (same(line[line.length - 1], s[0])) line = line.concat(s.slice(1));
-      else if (same(line[line.length - 1], s[s.length - 1])) line = line.concat(s.slice(0, -1).reverse());
-      else if (same(line[0], s[s.length - 1])) line = s.slice(0, -1).concat(line);
+      if (same(line.at(-1), s[0])) line = line.concat(s.slice(1));
+      else if (same(line.at(-1), s.at(-1))) line = line.concat(s.slice(0, -1).reverse());
+      else if (same(line[0], s.at(-1))) line = s.slice(0, -1).concat(line);
       else if (same(line[0], s[0])) line = s.slice(1).reverse().concat(line);
       else continue;
       remaining.splice(i, 1);
@@ -1696,11 +1705,11 @@ function buildRingComponents(ways) {
     while (grew) {
       grew = false;
       const head = chain[0];
-      const tail = chain[chain.length - 1];
+      const tail = chain.at(-1);
       for (let i = 0; i < remaining.length; i += 1) {
         const w = remaining[i];
         const ws = w[0];
-        const we = w[w.length - 1];
+        const we = w.at(-1);
         if (same(tail, ws)) chain = chain.concat(w.slice(1));
         else if (same(tail, we)) chain = chain.concat(w.slice(0, -1).reverse());
         else if (same(head, we)) chain = w.slice(0, -1).concat(chain);
@@ -1720,7 +1729,7 @@ function buildRingComponents(ways) {
 function endpointGapM(chain) {
   if (!chain || chain.length < 2) return Infinity;
   const a = chain[0];
-  const b = chain[chain.length - 1];
+  const b = chain.at(-1);
   return approximateDistanceM(a.lat, a.lon, b.lat, b.lon);
 }
 
@@ -1728,7 +1737,7 @@ function endpointGapM(chain) {
 function closeRing(ring) {
   if (ring.length < 3) return ring;
   const [fx, fy] = ring[0];
-  const [lx, ly] = ring[ring.length - 1];
+  const [lx, ly] = ring.at(-1);
   if (fx !== lx || fy !== ly) ring.push([fx, fy]);
   return ring;
 }
@@ -1783,7 +1792,7 @@ function normalizedWords(value) {
   return new Set(String(value || '')
     .toLowerCase()
     .normalize('NFKD')
-    .replace(/[^a-z0-9]+/g, ' ')
+    .replaceAll(/[^a-z0-9]+/g, ' ')
     .trim()
     .split(/\s+/)
     .filter((word) => word.length > 2));
@@ -1836,7 +1845,7 @@ export function viewportBias(viewer) {
     const swLng = Cesium.Math.toDegrees(rect.west).toFixed(4);
     const neLat = Cesium.Math.toDegrees(rect.north).toFixed(4);
     const neLng = Cesium.Math.toDegrees(rect.east).toFixed(4);
-    if ([swLat, swLng, neLat, neLng].some((v) => v === 'NaN')) return null;
+    if ([swLat, swLng, neLat, neLng].includes('NaN')) return null;
     return `${swLat},${swLng}|${neLat},${neLng}`;
   } catch {
     return null;

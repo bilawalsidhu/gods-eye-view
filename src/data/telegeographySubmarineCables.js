@@ -1166,7 +1166,7 @@ export function createTeleGeographySubmarineCableLayer({
 }
 
 function clampLabel(value, maxLength = 34) {
-  const text = String(value || '').replace(/\s+/g, ' ').trim();
+  const text = String(value || '').replaceAll(/\s+/g, ' ').trim();
   if (!text) return '';
   if (text.length <= maxLength) return text;
   return `${text.slice(0, Math.max(1, maxLength - 3))}...`;

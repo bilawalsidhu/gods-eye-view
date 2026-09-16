@@ -30,7 +30,7 @@ test('SF neighborhoods file parses with the expected DataSF shape', () => {
       `${name}: geometry is Polygon|MultiPolygon`);
     eachRing(f.geometry, (ring) => {
       assert.ok(ring.length >= 4, `${name}: ring has >= 4 points`);
-      const [f0, l0] = [ring[0], ring[ring.length - 1]];
+      const [f0, l0] = [ring[0], ring.at(-1)];
       assert.ok(f0[0] === l0[0] && f0[1] === l0[1], `${name}: ring is closed`);
       for (const [lon, lat] of ring) {
         assert.ok(lon >= SF_BOUNDS.west && lon <= SF_BOUNDS.east

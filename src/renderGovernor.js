@@ -141,7 +141,7 @@ function cancelIdleTransition() {
  * hold/release still record into the holds set (and apply at install time);
  * requests are safe no-ops — so modules can call all three unconditionally
  * in tests without a viewer.
- * @param {Cesium.Viewer} viewer
+ * @param {import('cesium').Viewer} viewer
  * @returns {void}
  */
 export function installRenderGovernor(viewer) {

@@ -8,13 +8,13 @@ export const SPRITE_LAYER_ORDER = Object.freeze([
   'flights',
 ]);
 
-/** @type {Map<string, Object>} */
+/** @type {Map<string, object>} */
 const _collections = new Map();
 
 /**
  * Register the current primitive collection for a sprite layer.
  * @param {string} layerId - Stable sprite-order layer key.
- * @param {Object} collection - Cesium billboard/point primitive collection.
+ * @param {object} collection - Cesium billboard/point primitive collection.
  * @returns {void}
  */
 export function registerSpriteCollection(layerId, collection) {
@@ -25,7 +25,7 @@ export function registerSpriteCollection(layerId, collection) {
 /**
  * Remove a registered collection (primarily useful to lifecycle tests).
  * @param {string} layerId - Stable sprite-order layer key.
- * @param {Object} [collection] - Optional identity guard against stale teardown.
+ * @param {object} [collection] - Optional identity guard against stale teardown.
  * @returns {void}
  */
 export function unregisterSpriteCollection(layerId, collection) {
@@ -37,7 +37,7 @@ export function unregisterSpriteCollection(layerId, collection) {
  * Reassert deterministic sprite stacking after any layer enable/init.
  * Cesium's stable translucent sort otherwise preserves first-enable primitive
  * order. Raising bottom-to-top makes flights the final/top collection.
- * @param {Cesium.Viewer|Object} viewer - Active viewer.
+ * @param {import('cesium').Viewer|object} viewer - Active viewer.
  * @returns {void}
  */
 export function restoreSpriteOrder(viewer) {
@@ -59,8 +59,8 @@ export function restoreSpriteOrder(viewer) {
  * restorer by default; tests inject a spy to pin each enable path without
  * constructing a WebGL viewer.
  * @param {string} layerId - Sprite layer whose enable path is restoring order.
- * @param {Cesium.Viewer|Object} viewer - Active viewer.
- * @param {(viewer: Object) => void} [restore=restoreSpriteOrder] - Test seam.
+ * @param {import('cesium').Viewer|object} viewer - Active viewer.
+ * @param {(viewer: object) => void} [restore=restoreSpriteOrder] - Test seam.
  * @returns {void}
  */
 export function restoreSpriteOrderOnEnable(

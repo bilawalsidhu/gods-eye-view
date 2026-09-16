@@ -151,7 +151,7 @@ test('option overrides drive both the stagger and the budget', () => {
   assert.deepEqual(plan.cells.map((cell) => cell.delayMs), [0, 10, 20, 30]);
   assert.equal(plan.durationMs, 130);
   // Invalid overrides fall back to the defaults rather than producing NaN.
-  const guarded = planSplitFlap('AB', 'CD', { charMs: 0, staggerMs: -5, maxTotalMs: NaN });
+  const guarded = planSplitFlap('AB', 'CD', { charMs: 0, staggerMs: -5, maxTotalMs: Number.NaN });
   assert.equal(guarded.durationMs, FLAP_STAGGER_MS + FLAP_CHAR_MS);
 });
 
@@ -336,7 +336,7 @@ test('visibleGlyphs is defensive about junk input', () => {
   const plan = planSplitFlap('AB', 'CD');
   // Negative and non-finite elapsed times read as "nothing has turned yet".
   assert.equal(visibleGlyphs(plan, -500), 'AB');
-  assert.equal(visibleGlyphs(plan, NaN), 'AB');
+  assert.equal(visibleGlyphs(plan, Number.NaN), 'AB');
 });
 
 // ── DOM runtime: setSplitFlapText against a minimal fake DOM ───────────────

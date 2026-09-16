@@ -156,8 +156,8 @@ export class ShareLinkManager {
     if (!hash) return null;
 
     const params = new URLSearchParams(hash);
-    const lat = parseFloat(params.get('lat'));
-    const lon = parseFloat(params.get('lon'));
+    const lat = Number.parseFloat(params.get('lat'));
+    const lon = Number.parseFloat(params.get('lon'));
 
     // Coordinates drive Cartesian conversion, so reject non-finite URL values
     // before marking a share restoration as pending. `parseFloat('Infinity')`
@@ -165,7 +165,7 @@ export class ShareLinkManager {
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
 
     const parseOr = (value, fallback) => {
-      const num = parseFloat(value);
+      const num = Number.parseFloat(value);
       return Number.isFinite(num) ? num : fallback;
     };
 

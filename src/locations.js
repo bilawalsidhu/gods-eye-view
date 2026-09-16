@@ -310,7 +310,7 @@ const POI_STOPWORDS = new Set(['the', 'a', 'an', 'at', 'of', 'in', 'on', 'to']);
 /** Significant lowercased word set of a name (punctuation stripped, stopwords dropped). */
 function poiNameTokens(s) {
   return new Set(
-    String(s || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/)
+    String(s || '').toLowerCase().replaceAll(/[^a-z0-9\s]/g, ' ').split(/\s+/)
       .filter((w) => w && !POI_STOPWORDS.has(w)),
   );
 }
@@ -1149,7 +1149,7 @@ function normalizedWords(value) {
   return new Set(String(value || '')
     .toLowerCase()
     .normalize('NFKD')
-    .replace(/[^a-z0-9]+/g, ' ')
+    .replaceAll(/[^a-z0-9]+/g, ' ')
     .trim()
     .split(/\s+/)
     .filter((word) => word.length > 2));

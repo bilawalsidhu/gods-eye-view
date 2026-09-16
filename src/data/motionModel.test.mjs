@@ -123,7 +123,7 @@ test('speedRamp: track-only below the gate, chord-only above, ramp between, lega
   assert.equal(speedRamp(300), 1);
   const mid = speedRamp((COURSE_TRACK_ONLY_MPS + COURSE_CHORD_ONLY_MPS) / 2);
   assert.ok(Math.abs(mid - 0.5) < 1e-9);
-  assert.equal(speedRamp(NaN), 1);  // unknown speed → legacy chord behavior
+  assert.equal(speedRamp(Number.NaN), 1);  // unknown speed → legacy chord behavior
   assert.equal(speedRamp(null), 1);
 });
 
@@ -138,7 +138,7 @@ test('courseSlewCapDps: COURSE_MIN_DPS at low speed easing to the fleet cap at c
   assert.equal(courseSlewCapDps(0, 60), COURSE_MIN_DPS);
   assert.equal(courseSlewCapDps(COURSE_TRACK_ONLY_MPS, 60), COURSE_MIN_DPS);
   assert.equal(courseSlewCapDps(COURSE_CHORD_ONLY_MPS, 60), 60);
-  assert.equal(courseSlewCapDps(NaN, 60), 60);   // unknown speed → legacy cap
+  assert.equal(courseSlewCapDps(Number.NaN, 60), 60);   // unknown speed → legacy cap
 });
 
 test('turn-rate guard: hover fix-track jitter manufactures NO turn rate; a real slow turn still does', () => {
@@ -267,8 +267,8 @@ test('projectGroundArcLatLon returns the origin for a zero-length leg', () => {
 });
 
 test('projectGroundArcLatLon returns the origin for non-finite inputs', () => {
-  assert.deepEqual(projectGroundArcLatLon(30.2, -97.66, NaN, 10, 0, 30), { lat: 30.2, lon: -97.66 });
-  assert.deepEqual(projectGroundArcLatLon(30.2, -97.66, 45, 10, 0, NaN), { lat: 30.2, lon: -97.66 });
+  assert.deepEqual(projectGroundArcLatLon(30.2, -97.66, Number.NaN, 10, 0, 30), { lat: 30.2, lon: -97.66 });
+  assert.deepEqual(projectGroundArcLatLon(30.2, -97.66, 45, 10, 0, Number.NaN), { lat: 30.2, lon: -97.66 });
 });
 
 test('projectGroundArcLatLon does not blow up at the pole', () => {
@@ -294,7 +294,7 @@ test('corridorPathLatLon leads FORWARD, past the fix, while coasting', () => {
     displayLat: 30.200, displayLon: -97.660, courseDeg: 0, speedMps: 10, turnRateDps: 0,
     fixLat: 30.197, fixLon: -97.660, lookaheadSec: 60,
   });
-  const end = path[path.length - 1];
+  const end = path.at(-1);
   assert.ok(end.lat > 30.200, `must lead the contact, got ${end.lat}`);
   assert.ok(end.lat > 30.197, 'never the backtrail behind the stale fix');
   assert.ok(Math.abs(end.lat - (30.2 + 600 / 111320)) < 1e-5, `end lat ${end.lat}`);
@@ -310,7 +310,7 @@ test('corridorPathLatLon samples the ARC, not a chord, for a turning coaster', (
   // Mid-path must bulge off the straight line joining the ends — that bulge is
   // the ground a chord-only corridor would leave cold.
   const a = path[0];
-  const z = path[path.length - 1];
+  const z = path.at(-1);
   const mid = path[Math.floor(path.length / 2)];
   const t = (mid.lat - a.lat) / (z.lat - a.lat);
   const chordLon = a.lon + (z.lon - a.lon) * t;
@@ -331,13 +331,13 @@ test('corridorPathLatLon falls back to projection when the fix is unusable', () 
   const path = corridorPathLatLon({
     extrapolating: false,
     displayLat: 30.200, displayLon: -97.660, courseDeg: 90, speedMps: 10, turnRateDps: 0,
-    fixLat: NaN, fixLon: NaN, lookaheadSec: 60,
+    fixLat: Number.NaN, fixLon: Number.NaN, lookaheadSec: 60,
   });
-  assert.ok(path[path.length - 1].lon > -97.660, 'still produces a usable endpoint');
+  assert.ok(path.at(-1).lon > -97.660, 'still produces a usable endpoint');
 });
 
 test('corridorPathLatLon returns nothing without a display position', () => {
   assert.deepEqual(corridorPathLatLon({
-    extrapolating: true, displayLat: NaN, displayLon: -97.66, courseDeg: 0, speedMps: 10, lookaheadSec: 60,
+    extrapolating: true, displayLat: Number.NaN, displayLon: -97.66, courseDeg: 0, speedMps: 10, lookaheadSec: 60,
   }), []);
 });

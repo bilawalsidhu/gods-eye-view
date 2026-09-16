@@ -66,7 +66,7 @@ function token(name) {
 function parseColor(text) {
   const hex = text.match(/^#([0-9a-f]{6})$/i);
   if (hex) {
-    const n = parseInt(hex[1], 16);
+    const n = Number.parseInt(hex[1], 16);
     return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
   }
   const rgba = text.match(/^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s]+([\d.]+))?\s*\)$/i);

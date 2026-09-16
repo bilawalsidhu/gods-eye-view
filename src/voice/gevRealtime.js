@@ -1276,14 +1276,12 @@ export class GevRealtimeController {
           result?.ok
           && result.action === 'control_radio'
           && ['disable', 'pause', 'stop'].includes(result.radioAction)
-        ) {
-          if (!radioOwnershipClaimed) {
+         && !radioOwnershipClaimed) {
             this.cancelRadioHandoff({
               abortRadioSiblings: result.radioAction === 'stop',
               responseId: toolResponseId,
             });
           }
-        }
       } catch (error) {
         const authoritativeRadioState = isRadioFeatureCall
           ? (this.radioLayer?.getUIState?.() || {})
@@ -2404,7 +2402,7 @@ function removeEmptyValues(value) {
 }
 
 function compactText(value, maxLength) {
-  const text = String(value || '').replace(/\s+/g, ' ').trim();
+  const text = String(value || '').replaceAll(/\s+/g, ' ').trim();
   return text.length <= maxLength ? text : `${text.slice(0, maxLength - 1)}…`;
 }
 

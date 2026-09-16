@@ -238,7 +238,7 @@ try {
     let sweepHeading = 0;
     const labelsAt = {};
     controller.readAircraftInfo = () => ({
-      ...(realInfo() || {}),
+      ...realInfo(),
       track: sweepHeading,
       stale: false,
       velocityMps: 220,

@@ -509,7 +509,7 @@ function fixtureForUrl(url) {
   return String(url).includes('landing-point') ? LANDING_FIXTURE : CABLE_FIXTURE;
 }
 
-function makeStubViewer(listeners, dataSources, addCalls = { count: 0 }, addControl = null) {
+function makeStubViewer(listeners, dataSources, addCalls, addControl = null) {
   return {
     dataSources: {
       // Mirror Cesium's real DataSourceCollection.add(): the returned promise

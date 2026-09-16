@@ -21,13 +21,13 @@ const LAYERS = [
     name: 'flights',
     path: new URL('./flights.js', import.meta.url),
     pipeline: new URL('./flightsTracking.js', import.meta.url),
-    px: 'p\\.',
+    px: String.raw`p\.`,
   },
   {
     name: 'militaryFlights',
     path: new URL('./militaryFlights.js', import.meta.url),
     pipeline: new URL('./flightsTracking.js', import.meta.url),
-    px: 'p\\.',
+    px: String.raw`p\.`,
   },
 ];
 

@@ -1097,7 +1097,7 @@ function main() {
     ? getDetectionDiagnostics().solveRevision
     : getWorldOverlayDiagnostics().solveRevision;
   const sorted = chunkRates.slice().sort((a, b) => a - b);
-  const maxBytesPerFrame = sorted[sorted.length - 1];
+  const maxBytesPerFrame = sorted.at(-1);
   const medianBytesPerFrame = sorted[Math.floor(sorted.length / 2)];
   const perCandidate = (value) => value / Math.max(1, candidates);
 

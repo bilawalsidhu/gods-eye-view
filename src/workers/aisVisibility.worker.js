@@ -33,8 +33,12 @@ const WGS84_B = WGS84_A * (1 - WGS84_F); // polar radius
  * versus the main-thread Cesium occluder it was replacing (found 2026-09-13
  * by src/workers/aisVisibility.worker.test.mjs).
  *
- * @param {number} camX @param {number} camY @param {number} camZ  — camera position
- * @param {number} px @param {number} py @param {number} pz        — surface position
+ * @param {number} camX - Camera world X (metres).
+ * @param {number} camY - Camera world Y (metres).
+ * @param {number} camZ - Camera world Z (metres).
+ * @param {number} px - Surface point X (metres).
+ * @param {number} py - Surface point Y (metres).
+ * @param {number} pz - Surface point Z (metres).
  * @returns {boolean}
  */
 function isPointVisible(camX, camY, camZ, px, py, pz) {
@@ -62,7 +66,7 @@ function isPointVisible(camX, camY, camZ, px, py, pz) {
   return !occluded;
 }
 
-self.onmessage = (e) => {
+self.addEventListener('message', (e) => {
   const { positions, cameraPosition, requestId } = e.data;
 
   const { x: camX, y: camY, z: camZ } = cameraPosition;
@@ -74,4 +78,4 @@ self.onmessage = (e) => {
   }
 
   self.postMessage({ visible, requestId }, [visible.buffer]);
-};
+});

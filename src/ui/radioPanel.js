@@ -505,6 +505,7 @@ export function initRadioPanel(mgr) {
  * Reveal the newly enabled directory and transport inside Context without
  * moving focus, the page, or the globe. Only the expanded Enable path calls
  * this helper.
+ * @param {object} mgr - StyleManager instance holding the radio panel DOM and playback state that gate the scroll.
  * @param {HTMLElement} trigger Initiating Radio Enable button.
  * @returns {Promise<boolean>} Whether the internal scroller moved.
  */
@@ -541,6 +542,7 @@ async function revealRadioControlsAfterExplicitEnable(mgr, trigger) {
 /**
  * Bring the embedded Radio section into the expanded Context scroller.
  * This never changes Radio power, playback, selection, or Context mode.
+ * @param {object} mgr - StyleManager instance holding the radio panel element whose position drives the scroll.
  * @param {{focusTarget?: HTMLElement|null}} [options]
  * @returns {Promise<boolean>} Whether the internal scroller moved.
  */

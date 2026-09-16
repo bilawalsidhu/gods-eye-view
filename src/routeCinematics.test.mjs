@@ -778,7 +778,7 @@ test('the reduced-motion PREFERENCE reaches a real flight, not just the flag', (
   const priorWindow = globalThis.window;
   const queries = [];
   globalThis.window = {
-    ...(priorWindow || {}),
+    ...priorWindow,
     matchMedia: (query) => { queries.push(query); return { matches: true }; },
   };
   try {

@@ -469,9 +469,8 @@ export function createLocalGeoJsonLayer({
             
             let pos = feature.position?.getValue(Cesium.JulianDate.now());
             
-            if (!pos) {
-              // It's a polygon or line
-              if (feature.polygon) {
+            if (!pos && // It's a polygon or line
+              feature.polygon) {
                 feature.polygon.outline = true;
                 feature.polygon.outlineColor = baseColor;
                 
@@ -481,7 +480,6 @@ export function createLocalGeoJsonLayer({
                   pos = Cesium.BoundingSphere.fromPoints(hierarchy.positions).center;
                 }
               }
-            }
 
             if (!pos) continue;
 

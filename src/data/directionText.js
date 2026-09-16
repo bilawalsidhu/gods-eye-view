@@ -25,7 +25,7 @@
  */
 export function directionToHeading(value, allowBare = false) {
   const text = String(value || '').trim().toUpperCase();
-  if (!text) return NaN;
+  if (!text) return Number.NaN;
   // Explicit travel/intercardinal forms — safe on free-form text (a street
   // name almost never contains "NORTHBOUND" or a lone "NB" token).
   if (/\bNORTHBOUND\b|\bNB\b/.test(text)) return 0;
@@ -43,5 +43,5 @@ export function directionToHeading(value, allowBare = false) {
     if (/\bEAST\b/.test(text)) return 90;
     if (/\bWEST\b/.test(text)) return 270;
   }
-  return NaN;
+  return Number.NaN;
 }

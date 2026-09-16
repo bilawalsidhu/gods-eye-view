@@ -51,7 +51,7 @@ test('earthquake analyst record: missing USGS id falls back to index-based id', 
 });
 
 test('earthquake analyst record: missing fields become null, never NaN/undefined', () => {
-  const r = mapAnalystRecord({ id: 'us1', mag: NaN, depth: undefined, place: '' }, 0);
+  const r = mapAnalystRecord({ id: 'us1', mag: Number.NaN, depth: undefined, place: '' }, 0);
   assert.equal(r.magnitude, null);
   assert.equal(r.depthKm, null);
   assert.equal(r.place, null);

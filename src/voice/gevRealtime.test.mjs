@@ -85,7 +85,7 @@ test('voice visualizer noise gate holds room tone at the baseline', () => {
   assert.equal(gateVoiceVisualizerLevel(0.06, 0.12), 0);
   assert.ok(gateVoiceVisualizerLevel(0.5, 0.12) > 0);
   assert.equal(gateVoiceVisualizerLevel(1, 0.12), 1);
-  assert.equal(gateVoiceVisualizerLevel(NaN, 0.12), 0);
+  assert.equal(gateVoiceVisualizerLevel(Number.NaN, 0.12), 0);
 });
 
 test('voice activation, speech, and push-to-talk pause Radio without an idle auto-resume', () => {
@@ -2452,7 +2452,7 @@ test('computeDownscale never upscales and never returns a zero dimension', () =>
 test('computeDownscale is defensive against garbage input', () => {
   const out = computeDownscale(0, 0, 0);
   assert.ok(out.width >= 1 && out.height >= 1);
-  const nan = computeDownscale(NaN, NaN, NaN);
+  const nan = computeDownscale(Number.NaN, Number.NaN, Number.NaN);
   assert.ok(nan.width >= 1 && nan.height >= 1);
 });
 

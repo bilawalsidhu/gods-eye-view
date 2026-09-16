@@ -895,7 +895,7 @@ function _toLowerText(value) {
  * (the `p._billboards`/`p._flightData` key, the `sourceId` detection declutter hashes,
  * the `id` that trackById/Context cohorts resolve) — never the label.
  * @param {string} icao24 - ICAO 24-bit transponder address (the identity key).
- * @param {Object|null|undefined} info - `p._flightData` record for this aircraft.
+ * @param {object|null|undefined} info - `p._flightData` record for this aircraft.
  * @returns {string} Display label; never empty.
  */
 function _contactLabel(icao24, info) {
@@ -1014,7 +1014,7 @@ function _deadReckon(icao24, result) {
     }
   }
 
-  const newest = history[history.length - 1];
+  const newest = history.at(-1);
   const elapsedSec = Cesium.JulianDate.secondsDifference(renderTime, newest.time);
   if (elapsedSec <= 0) {
     // Warm-up: renderTime predates ALL history (freshly seen / just-started-tracking
@@ -2072,7 +2072,7 @@ function _fleetTick() {
       ? prevCourse
       : limitCourseStep(
         prevCourse, rawCourse,
-        courseSlewCapDps(p._drSpeedMps != null ? p._drSpeedMps : ((info && info.velocity) ?? NaN), p.COURSE_MAX_DPS),
+        courseSlewCapDps(p._drSpeedMps != null ? p._drSpeedMps : ((info && info.velocity) ?? Number.NaN), p.COURSE_MAX_DPS),
         tickDtSec,
       );
     p._displayCourse.set(icao24, course);
@@ -2255,7 +2255,7 @@ function _startTrail(icao24) {
           if (!head) return [];
           // body[n−2] (last displayed body point) → delayed head: runs FORWARD, never a
           // backward/reversing segment.
-          const start = p._trailPositions[p._trailPositions.length - 2];
+          const start = p._trailPositions.at(-2);
           // On a contact that has not moved this segment runs from inside the
           // model out to its own anchor — a line through the fuselage. The END
           // never gives, so a moving trail still terminates on the tail; the
@@ -2383,6 +2383,8 @@ async function _backfillTrail(icao24, token, oldestFixEpochSec) {
  *   rather than being deselected. Consumers that keep a readout on screen
  *   (the Cockpit Contact panel) hold last-known values for an eviction and
  *   only tear down on a deliberate clear.
+ * @param {string} [options.origin='programmatic'] - Deselect provenance forwarded on the
+ *   gev:awareness-subject-cleared event ('user', 'voice', 'share-restore', or 'programmatic').
  */
 function _clearTracking(skipViewerUntrack = false, {
   evicted = false,
@@ -2562,10 +2564,12 @@ function _refreshTr3bContact(icao24) {
  * @param {object} state.billboard
  * @param {object} state.billboardCollection
  * @param {object} state.viewer
- * @param {Array<Object>} [state.history=[]]
+ * @param {Array<object>} [state.history=[]]
  * @param {boolean} [state.tracked=true]
  * @param {Iterable<[string, object]>} [state.models=[]] - Fleet 3D models keyed
  *   by icao24, for the billboard-hidden/model-shown handoff state.
+ * @param {object} [state.modelCollection=null] - Primitive collection hosting the fleet
+ *   3D models; hidden when the layer disables.
  */
 export function _setTrackedFlightRefreshStateForTest({
   icao24,
@@ -2878,7 +2882,7 @@ function _onMilitaryActiveChange(active) {
  * computed by the CALLER (it needs the billboard position) and passed in,
  * so an implausible cached route is never surfaced as fact.
  * @param {string} icao24 - ICAO 24-bit transponder address.
- * @param {Object|null|undefined} info - `p._flightData` record for this aircraft.
+ * @param {object|null|undefined} info - `p._flightData` record for this aircraft.
  * @param {{military?: boolean, routeOk?: boolean}} [flags] - Shared-registry
  *   military flag + route-plausibility verdict.
  * @returns {{id: string, icao24: string, callsign: string|null, lat: number|null,
@@ -3171,7 +3175,7 @@ const flightsLayer = {
   /**
    * Hide all flight billboards and tear down click/keyboard handlers.
    * Also clears any active flight tracking so the camera is released.
-   * @param {Cesium.Viewer} viewer
+   * @param {Cesium.Viewer} _viewer
    */
   disable(_viewer) {
     p._abortActiveUpdates();
@@ -3579,7 +3583,7 @@ const flightsLayer = {
           p._positionHistory.set(icao24, []);
         }
         const history = p._positionHistory.get(icao24);
-        const newest = history[history.length - 1];
+        const newest = history.at(-1);
         if (!newest || Cesium.JulianDate.greaterThan(fixTime, newest.time)) {
           // Per-fix kinematics: the fix's own velocity/track ride along so the
           // extrapolation paths use the values that BELONG to the fix they
@@ -4205,7 +4209,7 @@ const flightsLayer = {
    * enrichment fetches (cached adsbdb values only). Returns [] while the
    * layer is disabled or empty.
    * @param {number} [maxCount=2000] - Maximum records to return (truncation).
-   * @returns {Array<Object>} See mapAnalystRecord for the record shape.
+   * @returns {Array<object>} See mapAnalystRecord for the record shape.
    */
   getAnalystRecords(maxCount = 2000) {
     if (!p._billboardCollection || !p._billboardCollection.show || p._flightData.size === 0) return [];

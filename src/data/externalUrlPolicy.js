@@ -58,7 +58,7 @@ export function isSafeExternalHttpUrl(value, { httpsOnly = false } = {}) {
   if (typeof value !== 'string' || !value) return false;
   try {
     const url = new URL(value);
-    const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
+    const hostname = url.hostname.toLowerCase().replaceAll(/^\[|\]$/g, '').replace(/\.$/, '');
     const protocolOk = httpsOnly ? url.protocol === 'https:' : (url.protocol === 'https:' || url.protocol === 'http:');
     if (!protocolOk || url.username || url.password || !hostname) return false;
     return !(

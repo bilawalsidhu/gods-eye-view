@@ -377,6 +377,9 @@ export class StyleManager {
   /**
    * @param {Cesium.Viewer} viewer - The CesiumJS viewer instance.
    * @param {object} [options]
+   * @param {object|null} [options.mapStackController] - MapStackController
+   *   instance backing the basemap chips and stack switching; null leaves
+   *   those controls inert.
    */
   constructor(viewer, { mapStackController = null } = {}) {
     this.viewer = viewer;
@@ -1221,7 +1224,7 @@ export class StyleManager {
   _reclampDraggablePanels() {
     const el = this._ppToggles;
     if (!el || !el.style.top || el.style.top === 'auto') return;
-    const top = parseInt(el.style.top, 10);
+    const top = Number.parseInt(el.style.top, 10);
     if (!Number.isFinite(top)) return;
     el.style.top = `${this._clampToViewport(0, top, el).top}px`;
     this._pinPanelToRight(el);
@@ -1490,7 +1493,7 @@ export class StyleManager {
     this._sharpenStage.enabled = false;
     this.viewer.scene.postProcessStages.add(this._sharpenStage);
     if (this._sharpenSlider) {
-      this._applySharpenIntensity(parseInt(this._sharpenSlider.value, 10) / 100);
+      this._applySharpenIntensity(Number.parseInt(this._sharpenSlider.value, 10) / 100);
     }
   }
 
@@ -1499,7 +1502,7 @@ export class StyleManager {
    * @returns {number} Clamped bloom intensity (0-200).
    */
   _getBloomIntensity() {
-    return clampBloomIntensity(parseInt(this._bloomSlider?.value || `${BLOOM_INTENSITY_DEFAULT}`, 10));
+    return clampBloomIntensity(Number.parseInt(this._bloomSlider?.value || `${BLOOM_INTENSITY_DEFAULT}`, 10));
   }
 
   /**
@@ -1599,7 +1602,7 @@ export class StyleManager {
       this._sharpenSliderRow.classList.toggle('visible', this.sharpenEnabled);
     }
     if (this.sharpenEnabled && this._sharpenSlider) {
-      this._applySharpenIntensity(parseInt(this._sharpenSlider.value, 10) / 100);
+      this._applySharpenIntensity(Number.parseInt(this._sharpenSlider.value, 10) / 100);
     }
     this._syncShareState();
     this._layoutRightPanels();
@@ -1639,13 +1642,11 @@ export class StyleManager {
         '7': 'snow',
       };
       if (keyMap[e.key]) this.setStyle(keyMap[e.key]);
-      if (e.key === 'Escape') {
-        if (this._locationSearch.classList.contains('expanded')) {
+      if (e.key === 'Escape' && this._locationSearch.classList.contains('expanded')) {
           this._locationSearch.classList.remove('expanded');
           this._locationSearch.value = '';
           this._locationSearch.blur();
         }
-      }
       if (e.key.toLowerCase() === 'h') {
         this.shareLinkManager?.claimRestoreLane?.('visual');
         this.hud.toggle();
@@ -1678,7 +1679,7 @@ export class StyleManager {
     // Bloom intensity slider
     this._bloomSlider.addEventListener('input', () => {
       this.shareLinkManager?.claimRestoreLane?.('visual');
-      this._setBloomIntensity(parseInt(this._bloomSlider.value, 10));
+      this._setBloomIntensity(Number.parseInt(this._bloomSlider.value, 10));
     });
 
     // Sharpen toggle
@@ -1699,7 +1700,7 @@ export class StyleManager {
     });
     this._scopeFeatherSlider?.addEventListener('input', () => {
       this.shareLinkManager?.claimRestoreLane?.('visual');
-      const pct = Math.max(0, Math.min(100, parseInt(this._scopeFeatherSlider.value, 10) || 0));
+      const pct = Math.max(0, Math.min(100, Number.parseInt(this._scopeFeatherSlider.value, 10) || 0));
       if (this._scopeFeatherValue) this._scopeFeatherValue.textContent = `${pct}%`;
       setScopeMaskFeather(pct / 100);
       this._syncShareState();
@@ -1708,7 +1709,7 @@ export class StyleManager {
     if (this._sharpenSlider) {
       this._sharpenSlider.addEventListener('input', () => {
         this.shareLinkManager?.claimRestoreLane?.('visual');
-        const pct = parseInt(this._sharpenSlider.value, 10);
+        const pct = Number.parseInt(this._sharpenSlider.value, 10);
         if (this._sharpenSliderValue) {
           this._sharpenSliderValue.textContent = `${pct}%`;
         }
@@ -2105,7 +2106,7 @@ export class StyleManager {
     return shareableDetectionState({
       owned: this._contactsDetectionRestore,
       liveMode: getDetectionMode(),
-      liveDensityPct: parseInt(this._detectionDensitySlider?.value || '50', 10),
+      liveDensityPct: Number.parseInt(this._detectionDensitySlider?.value || '50', 10),
     });
   }
 
@@ -2114,14 +2115,14 @@ export class StyleManager {
     this.shareLinkManager.onToggleChange(this.bloomEnabled, this.sharpenEnabled, {
       bloomIntensity: this._getBloomIntensity(),
       bloomVersion: BLOOM_SCALE_VERSION,
-      sharpenIntensity: parseInt(this._sharpenSlider?.value || '49', 10),
+      sharpenIntensity: Number.parseInt(this._sharpenSlider?.value || '49', 10),
       hudVariant: this.hud.getVariant(),
       hudVisible: this.hud.visible,
       detectionMode: detection.mode,
       detectionDensity: detection.densityPct,
       detectionAllocation: getDetectionTuning().allocationStrategy,
-      detectionFadePct: parseInt(this._detectionFadeSlider?.value || '7', 10),
-      detectionOutsideOpacityPct: parseInt(this._detectionOpacitySlider?.value || '1', 10),
+      detectionFadePct: Number.parseInt(this._detectionFadeSlider?.value || '7', 10),
+      detectionOutsideOpacityPct: Number.parseInt(this._detectionOpacitySlider?.value || '1', 10),
       celestialRingEnabled: this.celestialRingEnabled,
       scopeEnabled: isScopeMaskEnabled(),
       scopeFeatherPct: Math.round(getScopeMaskFeather() * 100),
@@ -3428,11 +3429,9 @@ export class StyleManager {
       if (
         this._contextModeDeferredEntryIntent?.layerId === change.layerId
         && this._contextModeDeferredEntryIntent.intentEpoch === change.intentEpoch
-      ) {
-        if (cancellationDisposition !== 'replacement') {
+       && cancellationDisposition !== 'replacement') {
           this._contextModeDeferredEntryIntent = null;
         }
-      }
       if (cancellationDisposition === 'replacement') {
         this._contextModeEntering = 'space-missions';
         const entryIntent = this._contextModeEntryIntent;
@@ -4020,6 +4019,13 @@ export class StyleManager {
    * @param {boolean} collapsed - Whether to collapse the panel.
    * @param {object} [options] Disclosure ownership options.
    * @param {boolean} [options.explicit=false] Whether a direct user action owns the panel lane.
+   * @param {boolean} [options.restore=false] - Whether a programmatic restore
+   *   is applying the state; skips the restore-lane claim and the companion
+   *   panel auto-collapse cascade.
+   * @param {boolean} [options.persist=true] - Whether to save the collapsed
+   *   state to localStorage.
+   * @param {boolean} [options.syncShare=true] - Whether to notify
+   *   ShareLinkManager so share links reflect the new state.
    * @returns {void}
    */
   setPanelCollapsed(panelId, collapsed, {
@@ -4173,14 +4179,14 @@ export class StyleManager {
    */
   getDetectionState() {
     const pct = this._detectionDensitySlider
-      ? parseInt(this._detectionDensitySlider.value, 10)
+      ? Number.parseInt(this._detectionDensitySlider.value, 10)
       : null;
     return {
       detectionMode: getDetectionMode(),
       densityPct: pct,
       allocationStrategy: getDetectionTuning().allocationStrategy,
-      fadePct: parseInt(this._detectionFadeSlider?.value || '7', 10),
-      outsideOpacityPct: parseInt(this._detectionOpacitySlider?.value || '0', 10),
+      fadePct: Number.parseInt(this._detectionFadeSlider?.value || '7', 10),
+      outsideOpacityPct: Number.parseInt(this._detectionOpacitySlider?.value || '0', 10),
     };
   }
 
@@ -4235,16 +4241,12 @@ export class StyleManager {
         return { ok: false, error: `Unknown allocation strategy: ${allocationStrategy}`, ...this.getDetectionState() };
       }
     }
-    if (fadePct != null) {
-      if (!Number.isFinite(Number(fadePct))) {
+    if (fadePct != null && !Number.isFinite(Number(fadePct))) {
         return { ok: false, error: `Invalid fade distance: ${fadePct}`, ...this.getDetectionState() };
       }
-    }
-    if (outsideOpacityPct != null) {
-      if (!Number.isFinite(Number(outsideOpacityPct))) {
+    if (outsideOpacityPct != null && !Number.isFinite(Number(outsideOpacityPct))) {
         return { ok: false, error: `Invalid outside opacity: ${outsideOpacityPct}`, ...this.getDetectionState() };
       }
-    }
     const hasExplicitVisualChange = typeof enabled === 'boolean'
       || requestedProfile !== null
       || requestedDensity !== null
@@ -4328,7 +4330,7 @@ export class StyleManager {
   setBloom({ enabled, intensityPct } = {}) {
     const current = () => ({
       enabled: Boolean(this.bloomEnabled),
-      intensityPct: this._bloomSlider ? parseInt(this._bloomSlider.value, 10) : null,
+      intensityPct: this._bloomSlider ? Number.parseInt(this._bloomSlider.value, 10) : null,
     });
     if (enabled !== undefined && typeof enabled !== 'boolean') {
       return { ok: false, error: `Invalid bloom enabled value: ${enabled}`, bloom: current() };
@@ -4359,7 +4361,7 @@ export class StyleManager {
   setSharpen({ enabled, intensityPct } = {}) {
     const current = () => ({
       enabled: Boolean(this.sharpenEnabled),
-      intensityPct: this._sharpenSlider ? parseInt(this._sharpenSlider.value, 10) : null,
+      intensityPct: this._sharpenSlider ? Number.parseInt(this._sharpenSlider.value, 10) : null,
     });
     if (enabled !== undefined && typeof enabled !== 'boolean') {
       return { ok: false, error: `Invalid sharpen enabled value: ${enabled}`, sharpen: current() };
@@ -4504,7 +4506,7 @@ export class StyleManager {
    * Sets global context mode (Contacts / Space Missions / off) for voice.
    * @param {'contacts'|'space-missions'|'off'|null} mode - Requested context target.
    * @param {object} [options]
-   * @param {string|Symbol|null} [options.notificationToken]
+   * @param {string|symbol|null} [options.notificationToken]
    * @param {AbortSignal|null} [options.signal]
    * @param {Function|null} [options.isCurrent]
    * @param {boolean} [options.claimVisualAuthority] Whether this request is a
@@ -4730,7 +4732,7 @@ export class StyleManager {
    * Controls cockpit entry/exit and context navigation.
    * @param {'enter'|'exit'|'next'|'previous'|'status'} action - Cockpit action.
    * @param {object} [options]
-   * @param {string|Symbol|null} [options.notificationToken]
+   * @param {string|symbol|null} [options.notificationToken]
    * @param {'flights'|'military'|'ais-live-vessels'|'military-installations'|null} [options.targetLayer]
    * @param {string|null} [options.aircraftClass]
    * @param {{layerId:'flights'|'military',id:string}|null} [options.selectedTarget]
@@ -4874,11 +4876,11 @@ export class StyleManager {
       detection: this.getDetectionState(),
       bloom: {
         enabled: Boolean(this.bloomEnabled),
-        intensityPct: this._bloomSlider ? parseInt(this._bloomSlider.value, 10) : null,
+        intensityPct: this._bloomSlider ? Number.parseInt(this._bloomSlider.value, 10) : null,
       },
       sharpen: {
         enabled: Boolean(this.sharpenEnabled),
-        intensityPct: this._sharpenSlider ? parseInt(this._sharpenSlider.value, 10) : null,
+        intensityPct: this._sharpenSlider ? Number.parseInt(this._sharpenSlider.value, 10) : null,
       },
       celestialRing: {
         enabled: this.celestialRingEnabled,
@@ -5000,7 +5002,7 @@ export class StyleManager {
       },
       sharpen: {
         enabled: this.sharpenEnabled,
-        intensity: parseInt(this._sharpenSlider?.value || '49', 10),
+        intensity: Number.parseInt(this._sharpenSlider?.value || '49', 10),
       },
       hud: {
         visible: this.hud.visible,
@@ -5008,10 +5010,10 @@ export class StyleManager {
       },
       detection: {
         mode: getDetectionMode(),
-        density: parseInt(this._detectionDensitySlider?.value || '50', 10),
+        density: Number.parseInt(this._detectionDensitySlider?.value || '50', 10),
         allocation: getDetectionTuning().allocationStrategy,
-        fadePct: parseInt(this._detectionFadeSlider?.value || '7', 10),
-        outsideOpacityPct: parseInt(this._detectionOpacitySlider?.value || '0', 10),
+        fadePct: Number.parseInt(this._detectionFadeSlider?.value || '7', 10),
+        outsideOpacityPct: Number.parseInt(this._detectionOpacitySlider?.value || '0', 10),
       },
       scope: {
         enabled: isScopeMaskEnabled(),
@@ -5332,11 +5334,11 @@ export class StyleManager {
 
       const valueDisplay = document.createElement('span');
       valueDisplay.className = 'param-value';
-      valueDisplay.textContent = parseFloat(slider.value).toFixed(uMeta.max <= 1 ? 2 : 1);
+      valueDisplay.textContent = Number.parseFloat(slider.value).toFixed(uMeta.max <= 1 ? 2 : 1);
 
       slider.addEventListener('input', () => {
         this.shareLinkManager?.claimRestoreLane?.('visual');
-        const val = parseFloat(slider.value);
+        const val = Number.parseFloat(slider.value);
         this.stages[styleName].uniforms[uName] = val;
         valueDisplay.textContent = val.toFixed(uMeta.max <= 1 ? 2 : 1);
         // Uniform writes don't auto-render under the idle governor —
@@ -5384,6 +5386,10 @@ export class StyleManager {
    * @param {string} styleName - Target style ('normal'|'retro'|'surveillance'|'thermal'|'anime'|'noir'|'snow').
    * @param {object} [options]
    * @param {boolean} [options.applyPreset=true] - Whether to apply STYLE_PRESET_DEFAULTS for the new style.
+   * @param {boolean} [options.revealParameters=applyPreset] - Whether to reveal
+   *   the new style's parameter controls in the Display panel.
+   * @param {boolean} [options.restore=false] - Whether a programmatic restore
+   *   is applying the style; skips claiming the visual restore lane.
    * @returns {void}
    */
   setStyle(styleName, {

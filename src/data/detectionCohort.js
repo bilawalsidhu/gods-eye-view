@@ -11,7 +11,7 @@ export function stableIdentityHash(layerId, sourceId) {
   const text = `${String(layerId)}\u0000${String(sourceId)}`;
   let hash = 2166136261;
   for (let i = 0; i < text.length; i++) {
-    hash ^= text.charCodeAt(i);
+    hash ^= text.codePointAt(i);
     hash = Math.imul(hash, 16777619);
   }
   return hash >>> 0;

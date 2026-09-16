@@ -83,7 +83,7 @@ export function overpassDiskPath(cacheKey) {
 /**
  * Read a disk-cached Overpass payload. maxAgeMs Infinity = any age (the
  * serve-stale path when every mirror is down).
- * @returns {Promise<?Object>} Payload with cachedAt, or null.
+ * @returns {Promise<?object>} Payload with cachedAt, or null.
  */
 export async function readOverpassDisk(cacheKey, maxAgeMs) {
   try {
@@ -233,7 +233,8 @@ export function overpassProxy() {
           // Collect POST body with a hard byte cap (Overpass QL queries are small)
           let body;
           try {
-            body = (await readRequestBodyCapped(req, OVERPASS_MAX_BODY_BYTES)).toString();
+            const capped = await readRequestBodyCapped(req, OVERPASS_MAX_BODY_BYTES);
+            body = capped.toString();
           } catch (err) {
             if (err?.code === 'BODY_TOO_LARGE') {
               res.writeHead(413, { 'Content-Type': 'application/json' });
@@ -259,7 +260,7 @@ export function overpassProxy() {
           const safeBody = sanitized.body;
 
           // Normalize whitespace so semantically identical Overpass QL queries share cache entries
-          cacheKey = safeBody.replace(/\s+/g, ' ').trim();
+          cacheKey = safeBody.replaceAll(/\s+/g, ' ').trim();
           const preflight = await resolveOverpassPreflight({
             cacheKey,
             memoryCache: _overpassCache,

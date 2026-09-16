@@ -286,7 +286,7 @@ export class IntelHUD {
    * Derive all camera-based telemetry and push values to the DOM.
    * Reads the viewer camera's cartographic position and computes MGRS,
    * lat/lon DMS, GSD, NIIRS, sun elevation, off-nadir angle, and
-   * collection timestamp. Stores results in {@link _latestMetrics}.
+   * collection timestamp. Stores results in the `_latestMetrics` instance field.
    */
   _updateCameraData() {
     const camera = this.viewer.camera;

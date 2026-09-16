@@ -192,8 +192,8 @@ export function sanitizeOverpassBody(rawBody) {
     // misread as a spatial bound. Bounds live in (...) / function calls / set
     // refs, never inside [...], so the probe loses nothing real.
     const outSets = [];
-    const body = stmt.replace(/->\s*\.(\w+)/g, (_, name) => { outSets.push(name); return ' '; });
-    const probe = body.replace(/\[[^\]]*\]/g, ' ');
+    const body = stmt.replaceAll(/->\s*\.(\w+)/g, (_, name) => { outSets.push(name); return ' '; });
+    const probe = body.replaceAll(/\[[^\]]*\]/g, ' ');
 
     // Reject element-in-area scans on the TAG-STRIPPED probe, so a tag filter
     // between the selector and the area filter (way["highway"](area.a)) can't hide
@@ -221,7 +221,7 @@ export function sanitizeOverpassBody(rawBody) {
     if (bounded) for (const name of outSets) boundedSets.add(name);
   }
 
-  const clamped = data.replace(
+  const clamped = data.replaceAll(
     /\[timeout:\s*(\d+)\s*\]/gi,
     (_, n) => `[timeout:${Math.min(Number(n) || OVERPASS_MAX_QL_TIMEOUT, OVERPASS_MAX_QL_TIMEOUT)}]`,
   );

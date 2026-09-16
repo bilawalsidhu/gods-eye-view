@@ -303,7 +303,7 @@ test('a nonzero but sub-cent cost never displays as $0.00', () => {
 });
 
 test('formatCostUsd clamps junk to zero', () => {
-  assert.equal(formatCostUsd(NaN), '~$0.00');
+  assert.equal(formatCostUsd(Number.NaN), '~$0.00');
   assert.equal(formatCostUsd(-3), '~$0.00');
   assert.equal(formatCostUsd(undefined), '~$0.00');
 });

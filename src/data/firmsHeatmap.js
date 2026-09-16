@@ -113,7 +113,7 @@ const scratchWindowCoord = new Cesium.Cartesian2();
  * Missing/unknown fields are null, never NaN/undefined. The id reuses the
  * layer's FIRE-##### pick-id convention (index keys pick ids and
  * context-store ids, so the two stay consistent).
- * @param {Object|null|undefined} fire - Internal fire record.
+ * @param {object|null|undefined} fire - Internal fire record.
  * @returns {{id: string, lat: number|null, lon: number|null, frp: number|null,
  *   confidence: number|null, satellite: string|null, acqTime: number|null}}
  */
@@ -193,7 +193,7 @@ export function createFirmsHeatmapLayer({
    * viewport-independent but walks every detection (~200k live), so it is
    * computed once per grid size per data refresh; renders only clip + cap
    * (field-test round 1: intermediate-zoom chug during LOD rebuilds).
-   * @type {Map<number, Array<Object>>}
+   * @type {Map<number, Array<object>>}
    */
   const _cellCacheByGrid = new Map();
   /**
@@ -414,7 +414,7 @@ export function createFirmsHeatmapLayer({
      * most once per spoken query) — zero per-frame cost, no listeners, no
      * caching. Returns [] while the layer is disabled or empty.
      * @param {number} [maxCount=2000] - Maximum records to return (truncation).
-     * @returns {Array<Object>} See mapAnalystRecord for the record shape.
+     * @returns {Array<object>} See mapAnalystRecord for the record shape.
      */
     getAnalystRecords(maxCount = 2000) {
       if (!_enabled || !_firesByFrp.length) return [];
@@ -513,8 +513,8 @@ export function createFirmsHeatmapLayer({
    * Find the record in the freshly-loaded set matching a previous selection.
    * Identity is the detection itself (lat/lon/acquisition time) — indices
    * are regenerated every fetch, so object/index identity cannot be used.
-   * @param {?Object} previous - Previously selected fire record.
-   * @returns {?Object} Matching new record.
+   * @param {?object} previous - Previously selected fire record.
+   * @returns {?object} Matching new record.
    */
   function findMatchingFire(previous) {
     if (!previous) return null;
@@ -556,9 +556,9 @@ export function createFirmsHeatmapLayer({
    * top-N cap so fires in view never lose their slot to higher-scoring
    * cells on other continents. `bounds === null` (sky/horizon or
    * near-global view) falls back to the global top-N behavior.
-   * @param {Object} lod - Active LOD descriptor.
-   * @param {?Object} bounds - Padded view bounds in degrees, or null.
-   * @returns {Array<Object>} Cells sorted by heat score, capped.
+   * @param {object} lod - Active LOD descriptor.
+   * @param {?object} bounds - Padded view bounds in degrees, or null.
+   * @returns {Array<object>} Cells sorted by heat score, capped.
    */
   function aggregateFires(lod, bounds) {
     const gridDegrees = lod.gridDegrees;
@@ -615,9 +615,9 @@ export function createFirmsHeatmapLayer({
    * rectangles with ONE splat-texture underlay (N ground primitives → 1);
    * any failure leaves the entity render standing, so the legacy path is
    * both the fallback and the first paint.
-   * @param {Array<Object>} cells - Aggregated cells, heat-sorted descending.
-   * @param {Object} lod - Active LOD descriptor.
-   * @param {?Object} bounds - Padded view bounds in degrees, or null.
+   * @param {Array<object>} cells - Aggregated cells, heat-sorted descending.
+   * @param {object} lod - Active LOD descriptor.
+   * @param {?object} bounds - Padded view bounds in degrees, or null.
    */
   function renderCells(cells, lod, bounds) {
     ensureDetectionCollections();
@@ -701,9 +701,9 @@ export function createFirmsHeatmapLayer({
    * normalized intensity as the entity render, so heat ordering and coverage
    * are identical — only the per-pixel presentation differs (continuous
    * field vs hard-edged grid, orange ramp vs yellow→red stops).
-   * @param {Array<Object>} cells - Aggregated cells, heat-sorted descending.
-   * @param {Object} lod - Active LOD descriptor.
-   * @param {?Object} bounds - Padded view bounds in degrees, or null.
+   * @param {Array<object>} cells - Aggregated cells, heat-sorted descending.
+   * @param {object} lod - Active LOD descriptor.
+   * @param {?object} bounds - Padded view bounds in degrees, or null.
    */
   async function upgradeCellsToHeatTexture(cells, lod, bounds) {
     const serial = _renderSerial;
@@ -767,8 +767,8 @@ export function createFirmsHeatmapLayer({
    * ≥750 km camera height the divergence is invisible and warming a
    * continent-wide viewport would waste the DEM proxy.
    * Labels are not built here; candidates feed {@link rebuildAmbientLabels}.
-   * @param {Object} lod - Active LOD descriptor.
-   * @param {?Object} bounds - Padded view bounds in degrees, or null.
+   * @param {object} lod - Active LOD descriptor.
+   * @param {?object} bounds - Padded view bounds in degrees, or null.
    */
   function renderDetections(lod, bounds) {
     ensureDetectionCollections();
@@ -997,7 +997,7 @@ export function createFirmsHeatmapLayer({
    * BillboardCollection picks surface our id either on picked.primitive.id
    * or directly on picked.id depending on the CesiumJS pick path.
    * @param {*} picked - Result of scene.pick().
-   * @returns {?Object} Fire record.
+   * @returns {?object} Fire record.
    */
   function pickedFire(picked) {
     if (!picked) return null;
@@ -1014,7 +1014,7 @@ export function createFirmsHeatmapLayer({
   /**
    * Select a fire: show its detail label and mark it selected in the shared
    * context store so voice "what's selected" resolves to it.
-   * @param {Object} fire - Detection record.
+   * @param {object} fire - Detection record.
    */
   function selectFire(fire) {
     _selectedFire = fire;
@@ -1064,7 +1064,7 @@ export function createFirmsHeatmapLayer({
    * Register the top detections of the current render set in the shared
    * context store (voice "what's burning here") and drop stale entries
    * from the previous rebuild.
-   * @param {Array<Object>} fires - FRP-ranked detections to register.
+   * @param {Array<object>} fires - FRP-ranked detections to register.
    */
   function refreshContextRegistrations(fires) {
     let store = null;
@@ -1093,7 +1093,7 @@ export function createFirmsHeatmapLayer({
   /**
    * Register one fire in the shared context store (idempotent) and return
    * its record id.
-   * @param {Object} fire - Detection record.
+   * @param {object} fire - Detection record.
    * @returns {string} Context record id.
    */
   function registerFireContext(fire) {
@@ -1140,9 +1140,9 @@ export function createFirmsHeatmapLayer({
   /**
    * Top-FRP detections within the given bounds (or globally when bounds is
    * null). Walks the pre-sorted FRP index so it stays a single cheap pass.
-   * @param {?Object} bounds - Padded view bounds in degrees, or null.
+   * @param {?object} bounds - Padded view bounds in degrees, or null.
    * @param {number} limit - Max detections returned.
-   * @returns {Array<Object>}
+   * @returns {Array<object>}
    */
   function topFiresWithinBounds(bounds, limit = CONTEXT_TOP_N) {
     if (!bounds) return _firesByFrp.slice(0, limit);
@@ -1391,7 +1391,7 @@ function heatColor(value, alpha) {
 /**
  * Pick a sprite color stop from FRP + confidence, reusing the same
  * yellow → orange → red thresholds as the aggregated heat cells.
- * @param {Object} fire - Detection record.
+ * @param {object} fire - Detection record.
  * @returns {{name: string, color: Cesium.Color}}
  */
 function detectionColorStop(fire) {
@@ -1460,7 +1460,7 @@ function glowSprite(stop, corePx) {
  * most once per floor state (cold 0 → warm DEM). Rendering stays depth-test
  * free either way (contacts are ALWAYS visible — never below the surface,
  * slightly above is fine).
- * @param {Object} fire - Detection record.
+ * @param {object} fire - Detection record.
  * @returns {Cesium.Cartesian3}
  */
 function firePosition(fire) {
@@ -1478,7 +1478,7 @@ function firePosition(fire) {
  * a lazily-cached lifted point otherwise — see CULL_LIFT_THRESHOLD_M. This
  * NEVER feeds rendering: the datum-correct anchor from {@link firePosition}
  * is what the sprite and the card are drawn at.
- * @param {Object} fire - Detection record.
+ * @param {object} fire - Detection record.
  * @returns {Cesium.Cartesian3}
  */
 export function fireCullPosition(fire) {
@@ -1517,9 +1517,9 @@ function cellCullPosition(lon, lat) {
  * buffer). Accepts any `{length, get(i)}` shape so it is unit-testable without
  * a WebGL scene.
  *
- * @param {?{length: number, get: function(number): (Object|undefined)}} billboards
+ * @param {?{length: number, get: function(number): (object|undefined)}} billboards
  *   Billboard collection (or collection-shaped stub).
- * @param {?{isPointVisible: function(Object): boolean}} occluder Horizon occluder.
+ * @param {?{isPointVisible: function(object): boolean}} occluder Horizon occluder.
  * @param {?Array<Cesium.Cartesian3>} [cullPositions=null] Index-aligned lifted
  *   occlusion-test anchors (see {@link fireCullPosition}); falls back to the
  *   billboard's own render position wherever an entry is absent.
@@ -1562,9 +1562,9 @@ function screenSeparated(accepted, screen) {
  * Card model for a click-selected fire — the full-detail card, drawn last
  * (on top) and never distance-faded by the overlay.
  * Exported for unit tests.
- * @param {Object} fire - Detection record.
+ * @param {object} fire - Detection record.
  * @param {number} nowMs - Current epoch milliseconds.
- * @returns {Object} firmsLabels entry.
+ * @returns {object} firmsLabels entry.
  */
 export function buildSelectedFireCard(fire, nowMs) {
   const meta = [`${confidenceBucket(fire.confidence)} conf`];
@@ -1597,9 +1597,9 @@ export function buildSelectedFireCard(fire, nowMs) {
  * "high · 14h · N20". Ages are computed against each detection's acquisition
  * time — with the live feed everything reads under 24 h (and a stale cache
  * reads truthfully old). Exported for unit tests.
- * @param {{fire: Object, position: Cesium.Cartesian3}} candidate - Label candidate.
+ * @param {{fire: object, position: Cesium.Cartesian3}} candidate - Label candidate.
  * @param {number} nowMs - Current epoch milliseconds.
- * @returns {Object} firmsLabels entry.
+ * @returns {object} firmsLabels entry.
  */
 export function buildFireCard(candidate, nowMs) {
   const fire = candidate.fire;
@@ -1628,9 +1628,9 @@ export function buildFireCard(candidate, nowMs) {
  * Card model for an aggregated heat cell, e.g. title "14 FIRES", detail
  * "max 210 MW · new 3h". Accent comes from the candidate (heat-normalized
  * score is only known at renderCells time). Exported for unit tests.
- * @param {{cell: Object, position: Cesium.Cartesian3, accent: string}} candidate
+ * @param {{cell: object, position: Cesium.Cartesian3, accent: string}} candidate
  * @param {number} nowMs - Current epoch milliseconds.
- * @returns {Object} firmsLabels entry.
+ * @returns {object} firmsLabels entry.
  */
 export function buildCellCard(candidate, nowMs) {
   const cell = candidate.cell;
@@ -1657,9 +1657,9 @@ export function buildCellCard(candidate, nowMs) {
  * Add the host-owned layout/fade/collision fields to a source-formatted FIRMS
  * card. Selected fires share the collision domain so their protected rect
  * excludes ambient cards, but bypass both the 18-card cohort and distance fade.
- * @param {Object} card Source-formatted card.
+ * @param {object} card Source-formatted card.
  * @param {number} fadeDistance Current LOD fade distance in metres.
- * @returns {Object}
+ * @returns {object}
  */
 export function applyFirmsOverlayPolicy(card, fadeDistance) {
   const selected = card?.selected === true;

@@ -24,7 +24,7 @@
 const DEV_API_BASE = ''; // Relative URLs — Vite dev server proxy handles routing
 
 /**
- * @typedef {Object} ApiEndpoints
+ * @typedef {object} ApiEndpoints
  * @property {string} opensky         — OpenSky aircraft state vectors
  * @property {string} openskyTrack   — OpenSky single-flight history
  * @property {string} adsbdb          — ADSB.fi database lookup

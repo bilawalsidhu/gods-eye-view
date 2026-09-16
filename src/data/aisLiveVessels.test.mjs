@@ -1461,7 +1461,7 @@ test('buildSelectedVesselCard: destination line + STALE marker; placeholders for
 test('vesselDatumHeightM falls back to lift alone while the geoid grid is cold', () => {
   assert.equal(vesselDatumHeightM(null, 3), 3);
   assert.equal(vesselDatumHeightM(undefined, 2), 2);
-  assert.equal(vesselDatumHeightM(NaN, 3), 3);
+  assert.equal(vesselDatumHeightM(Number.NaN, 3), 3);
 });
 
 test('vesselDatumHeightM ADDS the undulation N (sign convention: h = N + lift)', () => {

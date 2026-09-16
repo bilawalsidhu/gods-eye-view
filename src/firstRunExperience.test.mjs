@@ -159,7 +159,7 @@ test('no storage is touched from a default parameter position', () => {
   const module = readSource('./firstRunExperience.js', import.meta.url);
   // Comments stripped first: the block explaining this very defect quotes the
   // bad pattern, and matching prose instead of code would make the pin a liar.
-  const code = module.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const code = module.replaceAll(/\/\*[\s\S]*?\*\//g, '').replaceAll(/^\s*\/\/.*$/gm, '');
   assert.doesNotMatch(
     code,
     /=\s*globalThis\.(local|session)Storage/,

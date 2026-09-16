@@ -70,7 +70,21 @@ export function stampInitialShareGesture(stamp) {
 
 /**
  * Run an immediate explicit camera navigation.
- * @param {Object} options
+ * @param {object} options
+ * @param {boolean} [options.disposed=false] - Whether the owning controller is
+ *   disposed; a disposed controller refuses the navigation.
+ * @param {boolean} [options.cockpitActive=false] - Whether Cockpit view is
+ *   active; active Cockpit refuses the navigation.
+ * @param {string} [options.noun='target'] - Subject noun used in the Cockpit
+ *   refusal toast.
+ * @param {Function} [options.showToast] - Toast callback that receives the
+ *   Cockpit refusal message.
+ * @param {Function} [options.stamp] - Callback that claims a new navigation
+ *   generation stamp and returns it.
+ * @param {Function} [options.release] - Callback that releases the current
+ *   camera owner before the flight.
+ * @param {Function} [options.navigate] - Callback that flies to the
+ *   destination; it receives the new generation stamp.
  * @returns {*} Navigation result, or false when disposed or Cockpit refuses.
  */
 export function runExplicitNavigation({
@@ -94,7 +108,17 @@ export function runExplicitNavigation({
 
 /**
  * Accept a deferred navigation intent without releasing the current owner.
- * @param {Object} options
+ * @param {object} options
+ * @param {boolean} [options.disposed=false] - Whether the owning controller is
+ *   disposed; a disposed controller refuses the navigation.
+ * @param {boolean} [options.cockpitActive=false] - Whether Cockpit view is
+ *   active; active Cockpit refuses the navigation.
+ * @param {string} [options.noun='location'] - Subject noun used in the Cockpit
+ *   refusal toast.
+ * @param {Function} [options.showToast] - Toast callback that receives the
+ *   Cockpit refusal message.
+ * @param {Function} [options.stamp] - Callback that claims a deferred
+ *   navigation generation stamp and returns it.
  * @returns {number|false} Generation stamp, or false when disposed or Cockpit refuses.
  */
 export function beginDeferredNavigation({
@@ -114,7 +138,19 @@ export function beginDeferredNavigation({
 
 /**
  * Re-assert authority immediately before a deferred flight.
- * @param {Object} options
+ * @param {object} options
+ * @param {number} options.generation - Generation stamp claimed when the
+ *   deferred navigation was accepted.
+ * @param {number} options.currentGeneration - Navigation generation that is
+ *   currently authoritative.
+ * @param {boolean} [options.cockpitActive=false] - Whether Cockpit view is
+ *   active; active Cockpit refuses the handoff.
+ * @param {boolean} [options.disposed=false] - Whether the owning controller is
+ *   disposed; a disposed controller refuses the handoff.
+ * @param {Function} [options.showToast] - Toast callback that receives the
+ *   Cockpit refusal message.
+ * @param {Function} [options.release] - Callback that releases the current
+ *   camera owner once the handoff is granted.
  * @returns {boolean} Whether the deferred flight still owns the camera.
  */
 export function reassertNavigationHandoff({

@@ -22,14 +22,14 @@ import assert from 'node:assert/strict';
 import { readSource } from '../testSupport/readSource.js';
 
 const posted = [];
+const messageHandlers = [];
 globalThis.self = {
-  onmessage: null,
+  addEventListener: (type, fn) => { if (type === 'message') messageHandlers.push(fn); },
   postMessage: (msg) => posted.push(msg),
 };
 
 await import('./detectionProjection.worker.js');
-const worker = globalThis.self;
-const send = (data) => worker.onmessage({ data });
+const send = (data) => messageHandlers.forEach((fn) => fn({ data }));
 
 function geodeticToEcef(latDeg, lonDeg, heightM = 0) {
   const a = 6378137.0;

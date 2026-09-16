@@ -69,7 +69,7 @@ test('pull cap is honored for other maxPullKm values', () => {
 });
 
 test('pickEllipsoid failure (non-finite hit): falls back to the camera nadir', () => {
-  for (const [hitLat, hitLon] of [[NaN, NaN], [undefined, undefined], [30.3, undefined]]) {
+  for (const [hitLat, hitLon] of [[Number.NaN, Number.NaN], [undefined, undefined], [30.3, undefined]]) {
     const c = deriveFetchCenter({
       nadirLat: NADIR.lat, nadirLon: NADIR.lon,
       hitLat, hitLon,
