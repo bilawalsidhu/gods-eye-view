@@ -239,3 +239,53 @@ test('published transit history scope agrees with the catalog capability', () =>
     /four fixes|0\.95x|guaranteed lower|one poll interval behind/,
   );
 });
+
+test('the TTC feed is registered, routable, and covers Toronto', () => {
+  const ttc = getTransitFeed('ttc-toronto');
+  assert.equal(ttc?.url, 'https://bustime.ttc.ca/gtfsrt/vehicles');
+  assert.equal(ttc.defaultEnabled, true);
+  assert.match(ttc.attribution, /Toronto Transit Commission/);
+  assert.equal(ttc.historyRetention, undefined, 'no proxy retention');
+  assert.ok(
+    transitFeedsInRange(43.6532, -79.3832).some(
+      (feed) => feed.id === 'ttc-toronto',
+    ),
+    'downtown Toronto is inside the load radius',
+  );
+});
+
+test('TTC route numbers tell a streetcar from a bus', () => {
+  // BusTime is the surface feed: 500-series are streetcar routes and the
+  // streetcar-operated Blue Night routes keep their own numbers. Everything
+  // else on this feed is a bus, so the mode is established, not defaulted.
+  const ttc = getTransitFeed('ttc-toronto');
+  assert.equal(transitModeFor(ttc, '501'), 'tram');
+  assert.equal(transitModeFor(ttc, '512'), 'tram');
+  assert.equal(transitModeFor(ttc, '304'), 'tram');
+  assert.equal(transitModeFor(ttc, '36'), 'bus');
+  // 52 Lawrence West is a bus. Only the three-digit 500-series is streetcar,
+  // so the rule must not match on a leading 5 alone.
+  assert.equal(transitModeFor(ttc, '52'), 'bus');
+  assert.equal(transitModeFor(ttc, '59'), 'bus');
+  assert.equal(transitModeFor(ttc, '900'), 'bus');
+  assert.equal(transitModeFor(ttc, '352'), 'bus');
+  assert.equal(transitModeResolved(ttc, '501'), true);
+  assert.equal(transitModeResolved(ttc, null), false);
+  assert.equal(
+    transitModeFor(ttc, null),
+    'bus',
+    'an unrouted vehicle falls back to the feed default, unresolved',
+  );
+});
+
+test('the TTC row records that BusTime carries no subway', () => {
+  const sources = readFileSync(
+    new URL('../../DATA_SOURCES.md', import.meta.url),
+    'utf8',
+  );
+  const row = sources.split('\n').find((line) => line.startsWith('| **TTC**'));
+  assert.ok(row, 'TTC has a DATA_SOURCES row');
+  assert.match(row, /Toronto/);
+  assert.match(sources, /surface vehicles \(buses and streetcars\) only/);
+  assert.match(sources, /Open Government Licence – Toronto/);
+});

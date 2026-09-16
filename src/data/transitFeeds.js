@@ -116,6 +116,21 @@ function metroTransitRouteMode(routeId) {
 }
 
 /**
+ * TTC BusTime is the SURFACE feed: buses and streetcars, never the subway.
+ * Streetcar routes are the 500-series, plus the four Blue Night routes that
+ * run on streetcar trackage (301 Queen, 304 King, 306 Carlton, 310 Spadina);
+ * the rest of the 300-series is night buses.
+ * @param {string|null} routeId
+ * @returns {string}
+ */
+function ttcRouteMode(routeId) {
+  if (!routeId) return 'unknown';
+  if (/^5\d\d$/.test(routeId)) return 'tram';
+  if (/^(301|304|306|310)$/.test(routeId)) return 'tram';
+  return 'bus';
+}
+
+/**
  * Registry of feeds. Order is presentation order in the stats/credit text.
  * `loadRadiusKm` is the distance from `center` inside which the feed is polled.
  * @type {ReadonlyArray<Readonly<{
@@ -269,6 +284,27 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
       note: 'No key, no stated rate limit, no caching rule. Logos and network imagery need separate approval, so the credit is text only.',
     }),
     defaultMode: 'bus',
+  }),
+  Object.freeze({
+    id: 'ttc-toronto',
+    name: 'TTC',
+    operator: 'Toronto Transit Commission',
+    region: 'Toronto, ON',
+    center: Object.freeze({ lat: 43.6532, lon: -79.3832 }),
+    loadRadiusKm: 45,
+    url: 'https://bustime.ttc.ca/gtfsrt/vehicles',
+    license: 'Open Government Licence \u2013 Toronto',
+    licenseUrl: 'https://open.toronto.ca/open-data-licence/',
+    attribution:
+      'Toronto Transit Commission \u2014 City of Toronto Open Data (Open Government Licence \u2013 Toronto)',
+    defaultEnabled: true,
+    terms: Object.freeze({
+      quote:
+        'The Information Provider grants you a worldwide, royalty-free, perpetual, non-exclusive licence to use the Information, including for commercial purposes ... Acknowledge the source of the Information by including any attribution statement specified by the Information Provider.',
+      note: 'The City publishes this endpoint from the TTC BusTime NVAS catalogue entry, whose own licence field reads \"License not specified\"; the quote above is the portal-wide Open Government Licence \u2013 Toronto the City applies to its open data, so the credit carries the licence name the way the Metro Transit entry carries its public-domain note. BusTime is the surface system: buses and streetcars report real positions, the subway reports none, so Lines 1/2/4 are simply absent rather than inferred. The endpoint sends no ETag or Last-Modified, so conditional requests fall through to the proxy snapshot TTL.',
+    }),
+    defaultMode: 'bus',
+    routeMode: ttcRouteMode,
   }),
 ]);
 
