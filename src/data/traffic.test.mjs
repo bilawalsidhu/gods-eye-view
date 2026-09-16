@@ -10,7 +10,7 @@
 // query shape, road parsing (sub-sampling, one-way semantics), dot budgets
 // (fairness + cap), and viewport geometry. All of it runs keyless and
 // offline: parseRoads' terrain sample no-ops without a viewer.
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import trafficLayer, {
@@ -348,4 +348,475 @@ test('viewport geometry: centers, distance, and the longitude cosine correction'
     _internals.distanceKm(oslo, { lat: 59.90, lon: 10.76 })
     - _internals.distanceKm({ lat: 59.90, lon: 10.76 }, oslo),
   ) < 1e-9, 'distance is symmetric');
+});
+
+// ═══ Lifecycle: the keyless session, end to end ════════════════════════════
+//
+// The pure internals above prove the math; this section proves the MACHINE:
+// init → enable → debounced viewport loads → animated dots → camera gating →
+// honest stats → disable → destroy, against stubbed viewer/window/fetch with
+// real Cesium math underneath. Keyless end to end: `/api/tomtom/status`
+// answers `hasKey:false`, and the module caches that verdict for its whole
+// lifetime (`_flowStatusPromise`), so every test in this file is simulation
+// mode by construction. The flip side — a live-key session and its honest
+// degradation — needs a fresh module instance and lives in trafficLive.test.mjs.
+
+const DEBOUNCE_MS = 320;
+const SETTLE_MS = DEBOUNCE_MS + 180; // debounce + two sequential proxy round-trips
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** An Overpass `out geom;` payload: three real-shaped roads plus a junk node. */
+const overpassFixture = () => ({
+  elements: [
+    {
+      type: 'way', id: 1,
+      tags: { highway: 'motorway', oneway: 'yes', maxspeed: '65 mph' },
+      geometry: [
+        { lat: 30.2, lon: -97.8 }, { lat: 30.22, lon: -97.78 }, { lat: 30.24, lon: -97.76 },
+      ],
+    },
+    {
+      type: 'way', id: 2,
+      tags: { highway: 'residential' },
+      geometry: [
+        { lat: 30.3, lon: -97.7 }, { lat: 30.302, lon: -97.698 }, { lat: 30.304, lon: -97.696 },
+      ],
+    },
+    {
+      type: 'way', id: 3,
+      tags: { highway: 'primary', oneway: 'no' },
+      geometry: [
+        { lat: 30.1, lon: -97.6 }, { lat: 30.102, lon: -97.598 },
+        { lat: 30.104, lon: -97.596 }, { lat: 30.106, lon: -97.594 },
+      ],
+    },
+    { type: 'node', id: 9, lat: 30, lon: -97 }, // not a way — parseRoads skips it
+  ],
+});
+
+/**
+ * Minimal Cesium-shaped viewer: real `Cesium.Event`s (so listeners, removers,
+ * and `numberOfListeners` behave), real Cartographic/Rectangle math, and fake
+ * scene sinks that record what the layer adds and removes.
+ */
+function makeViewer({ height = 1000, view = [-97.9, 30.1, -97.6, 30.4] } = {}) {
+  const added = [];
+  const removed = [];
+  const viewer = {
+    scene: {
+      primitives: {
+        add: (p) => { added.push(p); return p; },
+        remove: (p) => {
+          const i = added.indexOf(p);
+          if (i >= 0) added.splice(i, 1);
+          removed.push(p);
+        },
+      },
+      // Heat-lines are live-mode-only; a stray add here is a contract break.
+      groundPrimitives: {
+        add: () => { throw new Error('ground primitives are live-mode only'); },
+        remove: () => {},
+      },
+      canvas: { clientWidth: 800, clientHeight: 600 },
+      preRender: new Cesium.Event(),
+      // Terrain sampling ON with a flat 12 m answer: parseRoads takes its
+      // real height path instead of the no-viewer no-op.
+      sampleHeightSupported: true,
+      sampleHeight: () => 12,
+    },
+    camera: {
+      percentageChanged: 0.5,
+      changed: new Cesium.Event(),
+      moveEnd: new Cesium.Event(),
+      positionCartographic: null,
+      positionWC: null,
+      computeViewRectangle: null,
+      pickEllipsoid: null, // setView installs a look-at on the view center
+    },
+    __added: added,
+    __removed: removed,
+    setView({ height: h = 1000, view: v = view } = {}) {
+      // The look-at tracks the view center: a pan must move the fetch center
+      // too, or clampBoundsAroundCenter clamps to the OLD box and the load
+      // hits the same cache key forever.
+      const lon = (v[0] + v[2]) / 2;
+      const lat = (v[1] + v[3]) / 2;
+      viewer.camera.positionCartographic = Cesium.Cartographic.fromDegrees(lon, lat, h);
+      viewer.camera.positionWC = Cesium.Cartesian3.fromDegrees(lon, lat, h);
+      viewer.camera.computeViewRectangle = () => Cesium.Rectangle.fromDegrees(v[0], v[1], v[2], v[3]);
+      viewer.camera.pickEllipsoid = () => Cesium.Cartesian3.fromDegrees(lon, lat);
+    },
+  };
+  viewer.setView({ height, view });
+  return viewer;
+}
+
+/**
+ * The per-process world: window/document stubs (the layer binds its
+ * gev:style-change listener exactly once, on the first init) and a fetch
+ * router answering the status probe, the Overpass proxy, and nothing else.
+ * Installed lazily on first use and restored when the file ends.
+ */
+let WORLD = null;
+
+function world() {
+  if (WORLD) return WORLD;
+  const calls = { status: 0, overpass: [] };
+  let overpassStatus = 200;
+  let overpassHold = null; // when set: hold responses until released
+
+  const fetchImpl = async (url, opts = {}) => {
+    const u = String(url);
+    if (u.includes('/api/tomtom/status')) {
+      calls.status += 1;
+      return new Response(JSON.stringify({ hasKey: false }),
+        { headers: { 'Content-Type': 'application/json' } });
+    }
+    if (u.includes('/api/overpass')) {
+      const query = new URLSearchParams(opts.body || '').get('data') || '';
+      calls.overpass.push(query);
+      if (overpassHold) {
+        return new Promise((resolve) => { overpassHold.resolvers.push(resolve); });
+      }
+      if (overpassStatus !== 200) {
+        return new Response('overpass down', { status: overpassStatus });
+      }
+      return new Response(JSON.stringify(overpassFixture()),
+        { headers: { 'Content-Type': 'application/json' } });
+    }
+    throw new Error(`lifecycle harness: unexpected fetch ${u}`);
+  };
+
+  const listeners = new Map();
+  const windowStub = {
+    location: { search: '' },
+    addEventListener: (type, fn) => {
+      if (!listeners.has(type)) listeners.set(type, []);
+      listeners.get(type).push(fn);
+    },
+    removeEventListener: (type, fn) => {
+      const fns = listeners.get(type);
+      const i = fns ? fns.indexOf(fn) : -1;
+      if (i >= 0) fns.splice(i, 1);
+    },
+    dispatchEvent: (event) => {
+      for (const fn of listeners.get(event.type) || []) fn(event);
+    },
+  };
+  const documentStub = { documentElement: { dataset: { gevStyle: 'normal' } } };
+  const prev = {
+    window: globalThis.window,
+    hadWindow: Object.prototype.hasOwnProperty.call(globalThis, 'window'),
+    document: globalThis.document,
+    hadDocument: Object.prototype.hasOwnProperty.call(globalThis, 'document'),
+    fetch: globalThis.fetch,
+  };
+  globalThis.window = windowStub;
+  globalThis.document = documentStub;
+  globalThis.fetch = fetchImpl;
+
+  WORLD = {
+    calls,
+    listeners,
+    dispatchStyle(style) {
+      windowStub.dispatchEvent({ type: 'gev:style-change', detail: { style } });
+    },
+    setOverpassStatus(status) { overpassStatus = status; },
+    // Hold every subsequent Overpass response until releaseOverpass(): lets a
+    // test observe the layer mid-fetch (and disable it mid-flight).
+    holdOverpass() { overpassHold = { resolvers: [] }; },
+    releaseOverpass() {
+      const hold = overpassHold;
+      overpassHold = null;
+      for (const resolve of hold?.resolvers || []) {
+        resolve(new Response(JSON.stringify(overpassFixture()),
+          { headers: { 'Content-Type': 'application/json' } }));
+      }
+    },
+    // Per-test isolation: a healthy router and an empty call log, so a count
+    // asserted in one test can only be produced by that test's own camera.
+    resetForTest() {
+      overpassStatus = 200;
+      overpassHold = null;
+      calls.overpass.length = 0;
+    },
+    restore() {
+      if (prev.hadWindow) globalThis.window = prev.window; else delete globalThis.window;
+      if (prev.hadDocument) globalThis.document = prev.document; else delete globalThis.document;
+      globalThis.fetch = prev.fetch;
+    },
+  };
+  return WORLD;
+}
+
+// File-scoped cleanup: registered at module scope because an `after()` inside
+// world() would bind to the FIRST test that called it and restore the native
+// globals mid-file.
+after(() => {
+  if (WORLD) WORLD.restore();
+});
+
+test('lifecycle: init binds the style listener once and adopts the persisted preset', () => {
+  const w = world();
+  const viewer = makeViewer();
+  trafficLayer.init(viewer);
+
+  assert.equal(w.listeners.get('gev:style-change')?.length, 1, 'exactly one style listener');
+  assert.equal(viewer.__added.length, 1, 'init adds the point collection');
+  assert.equal(viewer.__added[0].show, false, 'the collection ships hidden');
+  assert.equal(trafficLayer.getStats().stylePreset, 'normal', 'dataset preset adopted at init');
+
+  w.dispatchStyle('nvg');
+  assert.equal(trafficLayer.getStats().stylePreset, 'nvg', 'the event switches presets');
+  w.dispatchStyle(null);
+  assert.equal(trafficLayer.getStats().stylePreset, 'normal', 'blank names fall back to normal');
+
+  // Destroy/re-register must not stack a second listener; the dataset is
+  // re-read so a preset restored before re-registration still lands.
+  globalThis.document.documentElement.dataset.gevStyle = 'crt';
+  trafficLayer.init(makeViewer());
+  assert.equal(w.listeners.get('gev:style-change').length, 1, 'listener is bound once per page');
+  assert.equal(trafficLayer.getStats().stylePreset, 'crt', 're-init re-reads the dataset');
+  globalThis.document.documentElement.dataset.gevStyle = 'normal';
+  w.dispatchStyle('normal');
+});
+
+test('lifecycle: enable loads the viewport and reports honest keyless stats', async (t) => {
+  const w = world();
+  w.resetForTest();
+  const viewer = makeViewer();
+  t.after(() => { try { trafficLayer.destroy(viewer); } catch { /* unwound */ } });
+  trafficLayer.init(viewer);
+  assert.equal(trafficLayer.getStats().count, 0, 'nothing rendered before enable');
+  assert.equal(
+    trafficLayer.getStats().loadingLabel,
+    'SIMULATED — add TomTom key for live',
+    'the boot-state label is already honest',
+  );
+
+  trafficLayer.enable(viewer);
+  assert.equal(viewer.__added[0].show, true, 'enable shows the collection');
+  assert.equal(viewer.camera.percentageChanged, 0.05, 'enable tightens the camera threshold');
+
+  await sleep(SETTLE_MS);
+  const stats = trafficLayer.getStats();
+  assert.equal(w.calls.status, 1, 'exactly one status probe per session');
+  assert.ok(stats.count > 0, 'dots rendered from the fixture roads');
+  assert.equal(stats.mode, 'sim');
+  assert.equal(stats.error, null);
+  assert.ok(!LIVE_CLAIM.test(stats.loadingLabel), `label never claims live: ${stats.loadingLabel}`);
+  assert.equal(stats.loadingLabel, 'SIMULATED — add TomTom key for live');
+  assert.equal(stats.loading, false, 'the load settled');
+  assert.ok(stats.lastUpdate !== null, 'the load committed its timestamp');
+  assert.equal(stats.flowBuckets.sim, stats.count, 'every keyless dot is a simulated dot');
+  assert.equal(stats.closedRoads, 0);
+  assert.equal(stats.heatLines, 0, 'heat-lines are live-mode only');
+  assert.equal(stats.tilesFetched, 0, 'keyless never touches flow tiles');
+  assert.equal(stats.flowCoveragePct, 0);
+  assert.equal(stats.styleProfile, 'normal');
+
+  // The camera drive: one preRender tick advances every unpaused dot.
+  const dot = trafficLayer.getDetectableObjects({ maxCount: 1 })[0];
+  const before = Cesium.Cartesian3.clone(dot.position);
+  viewer.scene.preRender.raiseEvent();
+  assert.ok(!Cesium.Cartesian3.equals(before, dot.position), 'the animation tick moves dots');
+
+  // Detection-overlay sampling: stride + seed, VEH ids, no congestion tier
+  // keyless (tier colors are a live-mode signal).
+  const objects = trafficLayer.getDetectableObjects({ maxCount: 2 });
+  assert.equal(objects.length, 2);
+  for (const o of objects) {
+    assert.match(o.id, /^VEH-\d{4}$/);
+    assert.equal(o.type, 'VEH');
+    assert.equal(o.tier, undefined, 'keyless contacts carry no congestion tier');
+    assert.ok(o.position);
+  }
+  const [seeded, offset] = [
+    trafficLayer.getDetectableObjects({ maxCount: 1, seed: 0 })[0].id,
+    trafficLayer.getDetectableObjects({ maxCount: 1, seed: 1 })[0].id,
+  ];
+  assert.notEqual(seeded, offset, 'the seed shifts the stride window');
+
+  await trafficLayer.update(); // camera-driven layer: the poll tick is a no-op
+  trafficLayer.disable(viewer);
+});
+
+test('lifecycle: stationary skips, distant moves refetch, high altitude clears', async (t) => {
+  const w = world();
+  w.resetForTest();
+  const viewer = makeViewer();
+  t.after(() => { try { trafficLayer.destroy(viewer); } catch { /* unwound */ } });
+  trafficLayer.init(viewer);
+  trafficLayer.enable(viewer);
+  await sleep(SETTLE_MS);
+  assert.ok(trafficLayer.getStats().count > 0);
+  const loadsAfterBoot = w.calls.overpass.length; // major + full per load
+
+  // Same view re-fired: overlap ≥ 0.6 and center shift ~0 → no new load.
+  viewer.camera.changed.raiseEvent();
+  await sleep(SETTLE_MS);
+  assert.equal(w.calls.overpass.length, loadsAfterBoot, 'a stationary camera does not refetch');
+
+  // Distant pan: zero overlap → debounced major+full reload.
+  viewer.setView({ view: [-98.9, 29.1, -98.6, 29.4] });
+  viewer.camera.changed.raiseEvent();
+  await sleep(SETTLE_MS);
+  assert.equal(w.calls.overpass.length, loadsAfterBoot + 2, 'a distant move loads major+full again');
+  assert.ok(trafficLayer.getStats().count > 0);
+
+  // Above activation altitude: dots cleared synchronously, nothing fetched.
+  viewer.setView({ height: 9000 });
+  viewer.camera.changed.raiseEvent();
+  assert.equal(trafficLayer.getStats().count, 0, 'high altitude clears immediately');
+  await sleep(SETTLE_MS);
+  assert.equal(w.calls.overpass.length, loadsAfterBoot + 2, 'high altitude schedules no fetch');
+
+  // Descending reloads: the H5 gate was nulled by the high-altitude clear,
+  // so the SAME view cannot hit the overlap skip and strand the layer empty.
+  viewer.setView({ height: 1000 });
+  viewer.camera.changed.raiseEvent();
+  await sleep(SETTLE_MS);
+  assert.ok(trafficLayer.getStats().count > 0, 'descending reloads the viewport');
+  trafficLayer.disable(viewer);
+});
+
+test('lifecycle: a failed Overpass fetch rolls back and lets the next look retry', async (t) => {
+  const w = world();
+  w.resetForTest();
+  // A viewport no earlier test loaded: the session road cache must not mask
+  // the dead feed with a hit from someone else's successful fetch.
+  const viewer = makeViewer({ view: [-96.9, 31.1, -96.6, 31.4] });
+  t.after(() => { try { trafficLayer.destroy(viewer); } catch { /* unwound */ } });
+  w.setOverpassStatus(500);
+  trafficLayer.init(viewer);
+  trafficLayer.enable(viewer);
+  await sleep(SETTLE_MS);
+  assert.equal(trafficLayer.getStats().count, 0, 'nothing rendered from a dead feed');
+  assert.equal(trafficLayer.getStats().loading, false, 'the failed load settled');
+  assert.equal(trafficLayer.getStats().error, null, 'a keyless Overpass outage is not a flow error');
+  const attempts = w.calls.overpass.length;
+
+  // The failed load must NOT have committed its bounds (H3): the same
+  // viewport, re-fired, retries instead of tripping the overlap skip forever.
+  viewer.camera.changed.raiseEvent();
+  await sleep(SETTLE_MS);
+  assert.ok(w.calls.overpass.length > attempts, 'a failed load does not wedge the retry gate');
+
+  // Feed recovers: the next look renders.
+  w.setOverpassStatus(200);
+  viewer.camera.changed.raiseEvent();
+  await sleep(SETTLE_MS + 400);
+  assert.ok(trafficLayer.getStats().count > 0, 'recovery renders after the feed returns');
+  trafficLayer.disable(viewer);
+});
+
+test('lifecycle: disable aborts an in-flight fetch and no stale render lands', async (t) => {
+  const w = world();
+  w.resetForTest();
+  // A viewport no earlier test loaded, with the router told to hold every
+  // Overpass answer: the layer is provably mid-fetch when disable() lands.
+  const viewer = makeViewer({ view: [-94.9, 33.1, -94.6, 33.4] });
+  t.after(() => { try { trafficLayer.destroy(viewer); } catch { /* unwound */ } });
+  w.holdOverpass();
+  trafficLayer.init(viewer);
+  trafficLayer.enable(viewer);
+  await sleep(SETTLE_MS);
+  assert.equal(w.calls.overpass.length, 1, 'the major pass is in flight');
+  assert.equal(trafficLayer.getStats().loading, true, 'the load is honestly still open');
+
+  trafficLayer.disable(viewer);
+  assert.equal(trafficLayer.getStats().loading, false, 'disable closes the loading batch');
+  assert.equal(trafficLayer.getStats().count, 0);
+
+  // The held answer lands after disable: the aborted generation must not
+  // resurrect dots on a hidden collection.
+  w.releaseOverpass();
+  await sleep(SETTLE_MS);
+  assert.equal(trafficLayer.getStats().count, 0, 'the late answer is discarded');
+});
+
+test('lifecycle: setParams clamps and gates every knob', () => {
+  world();
+  const before = trafficLayer.getParams();
+  trafficLayer.setParams({ densityScale: 99, speedScale: -1 });
+  let params = trafficLayer.getParams();
+  assert.equal(params.densityScale, 2.5, 'density clamps high');
+  assert.equal(params.speedScale, 0.3, 'speed clamps low');
+  trafficLayer.setParams({ densityScale: 0.01, speedScale: 42 });
+  params = trafficLayer.getParams();
+  assert.equal(params.densityScale, 0.2, 'density clamps low');
+  assert.equal(params.speedScale, 3.0, 'speed clamps high');
+
+  trafficLayer.setParams({ uncoveredRoads: 'hide' });
+  assert.equal(trafficLayer.getParams().uncoveredRoads, 'hide', 'strict live treatment adopted');
+  trafficLayer.setParams({ uncoveredRoads: 'bogus' });
+  assert.equal(trafficLayer.getParams().uncoveredRoads, 'hide', 'junk values are ignored');
+
+  trafficLayer.setParams({ jamViz: 'heatline' });
+  assert.equal(trafficLayer.getParams().jamViz, 'heatline');
+  assert.equal(trafficLayer.getStats().jamViz, 'heatline', 'stats mirror the toggle');
+  trafficLayer.setParams({ jamViz: 'bogus' });
+  assert.equal(trafficLayer.getParams().jamViz, 'heatline', 'junk jamViz is ignored');
+
+  trafficLayer.setParams({ presetDots: 'off' });
+  assert.equal(trafficLayer.getParams().presetDots, 'off');
+  assert.equal(trafficLayer.getStats().styleProfile, 'normal', 'the kill switch pins the shipped profile');
+  trafficLayer.setParams({ presetDots: 'on' });
+  assert.equal(trafficLayer.getStats().styleProfile, 'normal', 'the normal preset stays normal with dots on');
+
+  trafficLayer.setParams(before); // leave the shared module state as found
+});
+
+test('lifecycle: disable restores the camera and unwinds every subscription', async (t) => {
+  const viewer = makeViewer();
+  t.after(() => { try { trafficLayer.destroy(viewer); } catch { /* unwound */ } });
+  viewer.camera.percentageChanged = 0.42;
+  trafficLayer.init(viewer);
+  trafficLayer.enable(viewer);
+  assert.equal(viewer.camera.percentageChanged, 0.05);
+  assert.ok(viewer.camera.changed.numberOfListeners > 0);
+  assert.ok(viewer.scene.preRender.numberOfListeners > 0);
+
+  trafficLayer.disable(viewer);
+  assert.equal(viewer.camera.percentageChanged, 0.42, 'the shared camera threshold is restored');
+  assert.equal(viewer.camera.changed.numberOfListeners, 0, 'camera subscription removed');
+  assert.equal(viewer.scene.preRender.numberOfListeners, 0, 'animation loop removed');
+  assert.equal(viewer.__added[0].show, false, 'the collection hides, not dies');
+  assert.equal(trafficLayer.getStats().count, 0);
+  assert.equal(trafficLayer.getStats().loading, false);
+});
+
+test('lifecycle: destroy removes the collection and the road cache forgets', async (t) => {
+  const w = world();
+  w.resetForTest();
+  // Both registrations use the SAME fresh viewport: the second enable may
+  // only render by refetching, which is exactly what a cleared cache forces.
+  const view = [-95.9, 32.1, -95.6, 32.4];
+  let viewer2 = null;
+  t.after(() => {
+    try { trafficLayer.destroy(viewer); } catch { /* unwound */ }
+    if (viewer2) { try { trafficLayer.destroy(viewer2); } catch { /* unwound */ } }
+  });
+  const viewer = makeViewer({ view });
+  trafficLayer.init(viewer);
+  trafficLayer.enable(viewer);
+  await sleep(SETTLE_MS);
+  assert.ok(trafficLayer.getStats().count > 0);
+  const loadsBeforeDestroy = w.calls.overpass.length;
+
+  trafficLayer.destroy(viewer);
+  assert.equal(viewer.__added.length, 0, 'the point collection left the scene');
+  assert.equal(viewer.__removed.length, 1);
+  assert.equal(trafficLayer.getStats().count, 0);
+
+  // A fresh registration refetches both passes: the session road cache died
+  // with the layer.
+  viewer2 = makeViewer({ view });
+  trafficLayer.init(viewer2);
+  trafficLayer.enable(viewer2);
+  await sleep(SETTLE_MS);
+  assert.ok(w.calls.overpass.length > loadsBeforeDestroy, 'destroy cleared the tile cache');
+  assert.ok(trafficLayer.getStats().count > 0);
+  trafficLayer.destroy(viewer2);
+  assert.equal(w.listeners.get('gev:style-change').length, 1, 're-registration did not stack listeners');
 });

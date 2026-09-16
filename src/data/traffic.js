@@ -2294,6 +2294,11 @@ const trafficLayer = {
     _enableKickTimer = null;
     cancelActiveFetch();
     _loadGeneration++;
+    // The superseded load's finally can never reset this (its generation no
+    // longer matches), and a stuck `true` would both misreport a disabled
+    // layer as loading and permanently disarm the enable-kick's re-load —
+    // the "layer sat empty until the user moved" bug, via a mid-load toggle.
+    _fetching = false;
     clearDots();
     _lastViewCenter = null;
     // A stale outage from the last session would misreport a fresh enable —

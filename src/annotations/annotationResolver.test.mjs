@@ -1410,7 +1410,9 @@ test('a footprint centroid beyond the proximity gate is dropped', async (t) => {
 // ── F. Overpass throttle + body-error mapping ───────────────────────────────
 
 test('Overpass throttles and body-level errors map to the tri-state contract', async (t) => {
-  const FUT = 'Wed, 16 Sep 2026 00:00:00 GMT';
+  // Always one minute in the future: a hardcoded HTTP-date is a time bomb
+  // that detonates the moment the suite runs past it (this one did).
+  const FUT = new Date(Date.now() + 60_000).toUTCString();
   const retry = (v) => ({ get: (k) => (String(k).toLowerCase() === 'retry-after' ? v : null) });
   // One anchor per scenario — 30.271 + (n-1)·0.001, all explicit coords so no
   // geocoder runs and the footprint cache keys stay disjoint.
