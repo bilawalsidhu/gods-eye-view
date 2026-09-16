@@ -4108,7 +4108,7 @@ function clampNumber(value, min, max, fallback) {
  * ("which of those is closest?") scoped to the session.
  */
 /** Layers whose loaded set follows the camera, so a loaded count is not a world count. */
-const VIEWPORT_LOADED_LAYERS = new Set(['flights']);
+const VIEWPORT_LOADED_LAYERS = new Set(['flights', 'alpr-cameras']);
 
 /**
  * The Contacts panel's own counts, or null when Contacts has no subject.
@@ -4261,16 +4261,17 @@ async function runAnalystQuery(
     result.coverage.warmup = `${warming.join(', ')} enabled moments ago — data is still loading; counts will rise for ~30-45s. Say so.`;
   }
   // A radius/view count over a viewport-loaded layer counts what is LOADED, and
-  // the flights layer reloads as the camera moves — so this number can sit well
+  // these layers reload as the camera moves — so this number can sit well
   // under the Contacts cohort without either being wrong. Say which is which.
   const scopeKind = String(args.scope?.kind || 'view').toLowerCase();
+  const viewportLoaded = (result.coverage?.layersQueried || [])
+    .filter((l) => VIEWPORT_LOADED_LAYERS.has(l.layerKey))
+    .map((l) => l.layerKey);
   const viewportScoped =
     (scopeKind === 'radius' || scopeKind === 'view') &&
-    (result.coverage?.layersQueried || []).some((l) =>
-      VIEWPORT_LOADED_LAYERS.has(l.layerKey),
-    );
+    viewportLoaded.length > 0;
   if (viewportScoped && result.coverage) {
-    result.coverage.note = `${result.coverage.note} — counts cover loaded data; the flights layer loads by viewport`;
+    result.coverage.note = `${result.coverage.note} — counts cover loaded data; ${viewportLoaded.join(' and ')} load by viewport`;
   }
   // ENTITY-CENTRED NEARBY: answered by the SAME engine that fills the Contacts
   // panel, so the spoken number and the panel readout for one centre cannot

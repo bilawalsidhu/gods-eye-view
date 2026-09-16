@@ -44,6 +44,9 @@ export function alprLabelDetails(record, source) {
     ),
   ];
   if (equipment.length) details.push(equipment.join(' · '));
+  if (record.zone) details.push(`ZONE ${String(record.zone).toUpperCase()}`);
+  if (record.ref) details.push(`REF ${String(record.ref).toUpperCase()}`);
+  if (record.lastVerified) details.push(`VERIFIED ${record.lastVerified}`);
   if (sourceName === 'OpenStreetMap') details.push('PUBLIC MAP DATA');
   return details;
 }
