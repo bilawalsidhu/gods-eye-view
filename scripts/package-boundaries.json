@@ -1037,6 +1037,16 @@
     ],
     "external": ["cesium"]
   },
+  "live-trains": {
+    "exports": ["./layers/trains"],
+    "modules": [
+      "src/layers/trains/index.js",
+      "src/layers/trains/policy.js",
+      "src/layers/trains/records.js",
+      "src/layers/trains/source.js"
+    ],
+    "external": ["cesium"]
+  },
   "alpr-cameras": {
     "exports": ["./layers/alpr"],
     "modules": [

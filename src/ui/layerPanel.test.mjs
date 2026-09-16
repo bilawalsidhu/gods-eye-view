@@ -22,6 +22,7 @@ test('panel presentation places Transit between Street Traffic and Bike Share in
       'flights',
       'military',
       'ais-live-vessels',
+      'live-trains',
       'traffic',
       'transit',
       'bikeshare',

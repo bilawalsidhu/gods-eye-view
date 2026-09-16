@@ -237,6 +237,8 @@
       "node": "./server/providers/transit.js"
     },
     "./sources/transit": "./src/data/transitProxy.js",
+    "./layers/trains": "./src/layers/trains/index.js",
+    "./layers/trains/source": "./src/layers/trains/source.js",
     "./layers/transit": "./src/layers/transit/index.js",
     "./layers/transit/standalone": "./src/data/transit.js",
     "./layers/transit/source": "./src/layers/transit/source.js",
