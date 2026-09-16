@@ -17,10 +17,13 @@ test('non-POST methods get the dev 405 shape', async () => {
   assert.deepEqual(await res.json(), { error: 'Method not allowed' });
 });
 
-test('a missing key degrades with the dev 503 shape instead of calling OpenAI', async () => {
+test('a missing key degrades with the keyless 200 shape instead of calling OpenAI', async () => {
   const res = await onRequest(post({ place: 'Austin' }, {}));
-  assert.equal(res.status, 503);
-  assert.deepEqual(await res.json(), { error: 'OPENAI_API_KEY is not set' });
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), {
+    error: 'OPENAI_API_KEY is not set',
+    unavailable: true,
+  });
 });
 
 test('invalid JSON bodies are rejected before any upstream call', async () => {

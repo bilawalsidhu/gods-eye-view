@@ -10,7 +10,13 @@
  *
  * Contract (identical to dev):
  *   POST { ...context }            → 200 { summary, error: null }
- *   missing OPENAI_API_KEY        → 503 { error: 'OPENAI_API_KEY is not set' }
+ *   missing OPENAI_API_KEY        → 200 { error: 'OPENAI_API_KEY is not
+ *                                    set', unavailable: true } (keyless
+ *                                    contract — see the ais-live precedent:
+ *                                    non-2xx subresources log un-suppressible
+ *                                    console noise that poisons clean-console
+ *                                    QA assertions; the HUD falls back to its
+ *                                    static text for any summary-less payload)
  *   non-POST                      → 405 { error: 'Method not allowed' }
  *   oversized/invalid body        → 400 { error }
  *   upstream/config failure       → upstream status or 502 { error }
@@ -61,7 +67,7 @@ export async function onRequest(context) {
 
   const apiKey = env.OPENAI_API_KEY;
   if (!apiKey) {
-    return jsonResponse({ error: 'OPENAI_API_KEY is not set' }, { status: 503 });
+    return jsonResponse({ error: 'OPENAI_API_KEY is not set', unavailable: true });
   }
 
   const body = await readJsonBody(request, HUD_SUMMARY_MAX_BODY_BYTES);

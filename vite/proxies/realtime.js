@@ -74,9 +74,18 @@ export function openAiRealtimeProxy() {
 
       const apiKey = process.env.OPENAI_API_KEY;
       if (!apiKey) {
-        res.statusCode = 503;
+        // Keyless contract (see the ais-live/google-places precedent):
+        // answer 200 + `unavailable: true` instead of 503. Chrome logs
+        // "Failed to load resource" for any non-2xx subresource and that
+        // console noise is un-suppressible from JS, which poisons the
+        // clean-console assertions our qa-* harnesses run. The HUD treats
+        // a summary-less payload exactly like an upstream failure and
+        // falls back to the static text. (The /api/realtime/token endpoint
+        // keeps its 503: voice suites env-gate on that signal, and a voice
+        // session has no graceful fallback.)
+        res.statusCode = 200;
         res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ error: 'OPENAI_API_KEY is not set' }));
+        res.end(JSON.stringify({ error: 'OPENAI_API_KEY is not set', unavailable: true }));
         return;
       }
 
