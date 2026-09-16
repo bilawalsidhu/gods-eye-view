@@ -54,6 +54,7 @@ import { refreshTrackedReadout, trackedLabelModelFromText } from './trackedReado
  * @param {Function} [config.trailFloorFix] - Floors a trail fix to sampled ground; flights
  *   pushes raw fixes and omits the seam.
  * @param {Function} [config.requestTypeEnrichment] - Flags one icao's type metadata as wanted;
+ *   charged against the ambient token bucket (see flights._requestModelTypeEnrichment);
  *   military runs no ambient enrichment and omits the seam.
  * @param {Function} config.trackedLabelText - Readout label text for one icao.
  * @param {Function} config.fleetFreshnessColor - Cockpit-dot freshness tint, `(icao24, alpha)`.
@@ -1107,9 +1108,10 @@ async function _ensureModel(icao24) {
   // Never model the TRACKED aircraft — it owns a separate entity billboard, and the fleet
   // tick skips it, so a model here would be orphaned + double-rendered.
   if (icao24 === p._trackedIcao) return;
-  // model-eligible: about to render in 3D — jump the ambient backlog
-  // (military runs no ambient enrichment, so its config omits the seam)
-  p._requestTypeEnrichment?.(icao24, true);
+  // model-eligible: about to render in 3D — front of the enrichment queue,
+  // charged against the ambient bucket (military runs no ambient enrichment,
+  // so its config omits the seam)
+  p._requestTypeEnrichment?.(icao24);
   if (p._models.has(icao24) || p._modelPending.has(icao24)) return;
   // Count PENDING loads in the cap so a zoomed-in tick can't fire 100s of concurrent loads
   // (the cap is rechecked post-await too, before the add). Mode-aware so 'all' can reach MAX_ALL.

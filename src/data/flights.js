@@ -269,7 +269,10 @@ const p = createFlightTrackingPipeline({
   modelMatrix: _modelMatrix,
   normalBillboardScaleByDistance: _normalBillboardScaleByDistance,
   refreshTrailDisplay: _refreshTrailDisplay,
-  requestTypeEnrichment: _requestTypeEnrichment,
+  // Model-eligibility seam (flightsTracking._ensureModel): budgeted — see
+  // _requestModelTypeEnrichment. The tracked-plane path below still calls
+  // _requestTypeEnrichment directly (explicit user intent, one plane).
+  requestTypeEnrichment: _requestModelTypeEnrichment,
   trackedLabelText: _trackedLabelText,
   fleetFreshnessColor: _fleetFreshnessColor,
   infoSpeed: _infoSpeed,
@@ -751,6 +754,32 @@ function _requestTypeEnrichment(icao24, priority = false) {
     }
     if (icao24 === p._trackedIcao && p._trackedEntity) p._updateTrackedLabelModel(icao24);
   }, priority);
+}
+
+/**
+ * Model-eligibility enrichment (the pipeline's `_ensureModel` seam): charged
+ * against the ambient token bucket but priority in the enrichment queue, so a
+ * plane about to render in 3D resolves ahead of the ambient backlog without
+ * bypassing the spend cap. The bucket exists precisely to bound adsbdb
+ * requests, and a zoom-in can make dozens of planes model-eligible in one
+ * fleet tick — an unbudgeted path here silently defeats it (caught by
+ * scripts/qa-enrich-ambient.mjs E10). When the bucket is empty the request is
+ * skipped; the ambient sweep retries after refill and the billboard glyph
+ * shows until the type lands.
+ * @param {string} icao24 - ICAO 24-bit transponder address.
+ * @returns {void}
+ */
+function _requestModelTypeEnrichment(icao24) {
+  // Dedupe/validate BEFORE spending: _ensureModel re-fires this every fleet
+  // tick for every model-eligible plane, and an already-queued or malformed
+  // icao must cost zero tokens (the spend would otherwise never dedupe —
+  // _enqueueEnrich's seen-check runs too late to protect the bucket).
+  if (_enrichSeen.has(`t:${icao24}`)) return;
+  if (!/^[0-9a-f]{6}$/i.test(icao24)) return;
+  _refillAmbientBudget(Date.now());
+  if (_enrichAmbientBudget <= 0) return;
+  _enrichAmbientBudget -= 1;
+  _requestTypeEnrichment(icao24, true); // front of the queue — the spend is still accounted
 }
 
 /** Requests the adsbdb origin/destination leg for the tracked contact's callsign
@@ -4741,5 +4770,24 @@ export const _updateTrackedModelForTest = () => p._updateTrackedModelForTest();
 export const _trackedBillboardColorForTest = () => p._trackedBillboardColorForTest();
 export const _driveFleetModelHandoffForTest = ({ icao24, position, course = 0 }) => p._driveFleetModelHandoffForTest({ icao24, position, course });
 export const _ensureFleetModelForTest = (icao24) => p._ensureFleetModelForTest(icao24);
+
+/**
+ * QA probe for the ambient-enrichment token bucket (scripts/
+ * qa-enrich-ambient.mjs): lets the harness assert exhaustion directly
+ * instead of inferring it from fetch counts alone.
+ * @returns {number} Tokens remaining in the rolling ambient budget.
+ */
+export const _ambientBudgetForTest = () => _enrichAmbientBudget;
+
+/**
+ * Unit-test seam for the budgeted model-eligibility path (the pipeline's
+ * `requestTypeEnrichment` seam). The unit suite (src/data/flights.test.mjs)
+ * asserts the spend/dedupe/skip/refill contract on the token bucket without a
+ * viewer; the e2e suite (scripts/qa-enrich-ambient.mjs E10/E11) asserts the
+ * same contract end-to-end through the live fleet tick.
+ * @param {string} icao24 - ICAO 24-bit transponder address.
+ * @returns {void}
+ */
+export const _requestModelTypeEnrichmentForTest = (icao24) => _requestModelTypeEnrichment(icao24);
 
 export default flightsLayer;

@@ -1872,3 +1872,74 @@ test('getAnalystRecords: honours the visible-fleet gate and truncates', () => {
     assert.equal(record.onGround, false);
   }
 });
+
+// ---------------------------------------------------------------------------
+// Model-eligibility enrichment budget (_requestModelTypeEnrichment). The
+// pipeline's _ensureModel seam used to bypass the ambient token bucket
+// entirely — a zoom-in making dozens of planes model-eligible silently spent
+// unbudgeted adsbdb requests (caught by scripts/qa-enrich-ambient.mjs E10).
+// These tests pin the wrapper's contract: charge per admit, dedupe per
+// session, skip when the bucket is empty WITHOUT marking seen, and admit on
+// refill. No viewer needed — the bucket and the seen-set are module state.
+// ---------------------------------------------------------------------------
+
+test('model-eligibility enrichment spends the ambient bucket, dedupes, and refills', async () => {
+  // A plain-object window carrying only the QA knob — flights.js reads
+  // window.__GEV_ENRICH_AMBIENT_QA lazily inside _ambientBudgetKnobs().
+  const hadWindow = 'window' in globalThis;
+  const prevWindow = globalThis.window;
+  const realFetch = globalThis.fetch;
+  let typeHits = 0;
+  globalThis.fetch = async (url) => {
+    if (String(url).includes('/api/adsbdb/type/')) typeHits += 1;
+    return { ok: true, status: 200, json: async () => ({ found: false }) };
+  };
+  try {
+    globalThis.window = { __GEV_ENRICH_AMBIENT_QA: { ceil: 3, refillTokens: 3, windowMs: 10 } };
+    // Fresh module state (fresh page): init budget is the PRODUCTION ceil —
+    // knobs only bind through refill, exactly like the live app.
+    const mod = await import('./flights.js?model-enrich-1');
+    assert.equal(mod._ambientBudgetForTest(), 300, 'init budget is the production ceiling');
+
+    // First ask: refill sets the anchor (no-op), then one token is spent.
+    mod._requestModelTypeEnrichmentForTest('cafe01');
+    assert.equal(mod._ambientBudgetForTest(), 299, 'one model-eligible plane spends one token');
+
+    // The probe is passive — refill advances only when the wrapper next runs.
+    // A full window later, the QA ceil binds (the same seeding path the e2e
+    // harness uses) and the second ask spends against it.
+    await new Promise((r) => setTimeout(r, 35));
+    mod._requestModelTypeEnrichmentForTest('cafe02');
+    assert.equal(mod._ambientBudgetForTest(), 2, 'refill clamps to the effective ceil, then the ask spends');
+
+    // _ensureModel re-fires every fleet tick: an already-queued icao must
+    // cost zero on re-ask (dedupe runs BEFORE the spend).
+    mod._requestModelTypeEnrichmentForTest('cafe02');
+    assert.equal(mod._ambientBudgetForTest(), 2, 'a re-asked plane never double-spends');
+
+    mod._requestModelTypeEnrichmentForTest('cafe03');
+    mod._requestModelTypeEnrichmentForTest('cafe04');
+    assert.equal(mod._ambientBudgetForTest(), 0, 'the bucket can reach exactly zero');
+
+    // Exhausted bucket: the request is SKIPPED — and not marked seen, so the
+    // ambient sweep can pick the plane up after refill. Re-asking an
+    // admitted plane still costs nothing.
+    mod._requestModelTypeEnrichmentForTest('cafe05');
+    mod._requestModelTypeEnrichmentForTest('cafe04');
+    assert.equal(mod._ambientBudgetForTest(), 0, 'an empty bucket spends nothing');
+
+    // A window later the bucket refills and the skipped plane is admitted.
+    await new Promise((r) => setTimeout(r, 35));
+    mod._requestModelTypeEnrichmentForTest('cafe05');
+    assert.equal(mod._ambientBudgetForTest(), 2, 'a skipped plane is admitted after refill');
+
+    // Settle the drip-paced queue (5 jobs at 200ms spacing) so the runner
+    // exits promptly, then confirm each admitted plane fetched exactly once.
+    await new Promise((r) => setTimeout(r, 1500));
+    assert.equal(typeHits, 5, 'each admitted icao fetched exactly once (cafe01..05)');
+  } finally {
+    globalThis.fetch = realFetch;
+    if (hadWindow) globalThis.window = prevWindow;
+    else delete globalThis.window;
+  }
+});
