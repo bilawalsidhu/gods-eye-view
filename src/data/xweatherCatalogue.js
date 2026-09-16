@@ -59,6 +59,16 @@ const OVERLAY_RUNG = 6;
 const SAMPLED = SAMPLED_MAX_TILE_ZOOM;
 const SYMBOLS = SYMBOL_MAX_TILE_ZOOM;
 
+/**
+ * How much of an authored alpha survives when the layer is draped on photoreal
+ * 3D rather than laid on the globe.
+ *
+ * The same wash behaves differently in the two places. On the globe it sits on
+ * a flat basemap; draped, it also paints building facades, and it sits over a
+ * photograph with far more of its own contrast to compete with.
+ */
+export const DRAPED_ALPHA_SCALE = 0.8;
+
 /** Fields are laid over terrain, so they yield enough of it to stay legible. */
 const FIELD_ALPHA = 0.55;
 

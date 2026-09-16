@@ -1,4 +1,5 @@
 import { createImageryStack } from './imagery.js';
+import { createMapStackTarget } from './target.js';
 import { isNoKeyError } from './model.js';
 import {
   DEFAULT_REFRESH_CHOICE,
@@ -9,6 +10,7 @@ import {
   LAYER_TICK_MS,
   WEATHER_LAYER_SPECS,
   REFRESH_CHOICES,
+  drapedSelection,
   codesToIds,
   defaultActiveIds,
   idsToCodes,
@@ -18,33 +20,14 @@ export * from './model.js';
 export * from './policy.js';
 export { createWeatherSource } from './source.js';
 
-const MAP_STACK_EVENT = 'gev:map-stack-changed';
-
-/** Read the app's rebroadcast of map-stack changes without importing the controller. */
-function windowMapStack() {
-  return {
-    subscribe(handler) {
-      if (typeof window === 'undefined') return () => {};
-      window.addEventListener(MAP_STACK_EVENT, handler);
-      return () => window.removeEventListener(MAP_STACK_EVENT, handler);
-    },
-  };
-}
-
-/**
- * A photoreal stack hides the globe, taking every imagery layer with it. Read
- * live scene state rather than the event payload: the controller also emits
- * 'switching', where the new stack is not applied yet.
- */
-function globeHidden(viewer) {
-  return viewer?.scene?.globe?.show === false;
-}
-
 /** Own one weather display and its frame lifecycle. */
 export function createWeatherLayer({
   source,
   specs = WEATHER_LAYER_SPECS,
-  services: { mapStack = windowMapStack() } = {},
+  services: {
+    mapStack = createMapStackTarget(),
+    render: { governorRequestRender = null } = {},
+  } = {},
 } = {}) {
   if (typeof source?.getFrame !== 'function')
     throw new TypeError('Weather requires a frame source');
@@ -58,7 +41,6 @@ export function createWeatherLayer({
   let _enabled = false;
   let _request = null;
   let _unsubscribe = null;
-  let _hidden = false;
   let _lastUpdate = null;
   let _lastError = null;
   // Distinct from _lastError on purpose: "the server has no credential" is a
@@ -87,10 +69,17 @@ export function createWeatherLayer({
     REFRESH_CHOICES.find((choice) => choice.code === _everyCode)?.ms ??
     FALLBACK_REFRESH_MS;
 
-  // Shared by disable and destroy: an arrow-bound `this` would be undefined in
-  // one of the two call paths.
-  const clearImagery = (viewer) => {
-    stack.clear(viewer || _viewer);
+  /**
+   * Wake the scene after touching an imagery collection.
+   *
+   * A tileset bumps a counter when its imagery changes but never asks for a
+   * frame, and neither does draped imagery finishing its load. Under
+   * `requestRenderMode` that would leave a change invisible until something
+   * else happened to wake the scene.
+   */
+  const requestRender = () => {
+    if (governorRequestRender) governorRequestRender('weather-imagery');
+    else _viewer?.scene?.requestRender?.();
   };
 
   /**
@@ -113,31 +102,40 @@ export function createWeatherLayer({
    * The manager turns a `false` from the first update into a failed enable, so
    * it must mean "this call could not be honoured" — torn down, no viewer, or
    * superseded — and never "enabled, but with nothing to draw just now". This
-   * layer has two such states by design: a photoreal stack hides the globe,
-   * and there is no keyless mode. Both belong on the row, and the row only
-   * exists while the layer is on. Health is `getStats()`.
+   * layer has such states by design: there is no keyless mode, and the drape
+   * budget can hold a selected layer back. Both belong on the row, and the row
+   * only exists while the layer is on. Health is `getStats()`.
    */
   const runUpdate = async (viewer) => {
     if (!_enabled || !viewer) return false;
-    // Enabled over a hidden globe is a state, not a fault: the imagery is
-    // withdrawn, the row says GLOBE HIDDEN IN 3D, and returning to a globe
-    // stack redraws from the frames still held.
-    if (_hidden) return true;
+    // Resolved once per pass: every draw below goes to the collection being
+    // rendered now, and a switch arriving mid-pass supersedes this one.
+    const target = mapStack.resolve(viewer);
+    if (!target?.imageryLayers) return true;
     _request?.abort();
     const request = new AbortController();
     _request = request;
     const settled = () =>
-      request.signal.aborted || _request !== request || !_enabled || _hidden;
+      request.signal.aborted || _request !== request || !_enabled;
     try {
       const now = Date.now();
-      // Work out what is actually due. Anything whose frame is still held but
-      // whose imagery went away with the globe is simply redrawn — no request,
-      // and so nothing billed.
+      // What this regime can actually draw. The globe takes everything; a
+      // tileset takes the drape budget, highest rung first.
+      const drawable = drapedSelection(activeSpecs(), target.regime);
+      const drawableIds = new Set(drawable.map((spec) => spec.id));
+      let withdrawn = 0;
+
       // Anything switched off since the last tick stops drawing immediately,
-      // and stops being polled with it.
+      // and stops being polled with it. A layer that is still selected but not
+      // drawable here only loses its imagery — its frame stays held, so coming
+      // back costs no read and nothing billed.
       for (const specId of stack.ownedIds()) {
-        if (_active.has(specId)) continue;
-        stack.remove(viewer, specId);
+        if (_active.has(specId)) {
+          if (drawableIds.has(specId)) continue;
+          if (stack.remove(specId)) withdrawn += 1;
+          continue;
+        }
+        if (stack.remove(specId)) withdrawn += 1;
         frames.delete(specId);
         polledAt.delete(specId);
         floors.delete(specId);
@@ -152,7 +150,7 @@ export function createWeatherLayer({
 
       const due = [];
       let redrawn = 0;
-      for (const spec of activeSpecs()) {
+      for (const spec of drawable) {
         const held = frames.get(spec.id);
         // A layer just switched on has nothing to draw, so it fetches once
         // whatever the refresh settings say — otherwise enabling a layer would
@@ -183,9 +181,13 @@ export function createWeatherLayer({
             continue;
           }
         }
-        // Held, not due — but the imagery may have gone with the globe.
-        if (stack.has(spec.id)) continue;
-        stack.apply(viewer, spec, { notBefore: _freshAt });
+        // Held, not due — but it may not be drawn where the scene is looking,
+        // because the rendered collection changed under it.
+        if (stack.isDrawnIn(target.imageryLayers, spec.id)) continue;
+        stack.apply(target.imageryLayers, spec, {
+          notBefore: _freshAt,
+          regime: target.regime,
+        });
         floors.set(spec.id, _freshAt);
         redrawn += 1;
       }
@@ -225,12 +227,15 @@ export function createWeatherLayer({
         // skipped the rebuild would leave the pre-refresh URL in place and so
         // keep serving the pre-refresh pixels.
         if (
-          !stack.has(spec.id) ||
+          !stack.isDrawnIn(target.imageryLayers, spec.id) ||
           frames.get(spec.id)?.key !== frame.key ||
           floors.get(spec.id) !== _freshAt
         ) {
           // Add before removing so a live spec never blinks through the base map.
-          stack.apply(viewer, spec, { notBefore: _freshAt });
+          stack.apply(target.imageryLayers, spec, {
+            notBefore: _freshAt,
+            regime: target.regime,
+          });
           floors.set(spec.id, _freshAt);
           frames.set(spec.id, frame);
         }
@@ -238,6 +243,7 @@ export function createWeatherLayer({
       }
 
       if (refreshed || redrawn) _lastUpdate = Date.now();
+      if (refreshed || redrawn || withdrawn) requestRender();
       // Nothing active is a deliberate state, not a broken one.
       if (!activeSpecs().length) _lastError = null;
       // A missing key is latched separately, and only cleared by a read that
@@ -262,13 +268,18 @@ export function createWeatherLayer({
     }
   };
 
-  const syncGlobeVisibility = () => {
+  /**
+   * The rendered collection may have moved; re-run and let the per-spec draw
+   * check re-home whatever is in the wrong one.
+   *
+   * No cached regime to compare against: the port already filters out the
+   * `switching` emission, and an event that changed nothing costs one identity
+   * comparison per drawn spec. A cache here would only add a way for this
+   * layer's idea of the scene to drift from the scene.
+   */
+  const onMapStackChanged = () => {
     if (!_enabled || !_viewer) return;
-    const hidden = globeHidden(_viewer);
-    if (hidden === _hidden) return;
-    _hidden = hidden;
-    if (hidden) clearImagery(_viewer);
-    else void runUpdate(_viewer);
+    void runUpdate(_viewer);
   };
 
   const layer = {
@@ -285,7 +296,6 @@ export function createWeatherLayer({
       if (_viewer) throw new Error('Weather layer is already initialized');
       _viewer = viewer;
       _enabled = false;
-      _hidden = false;
       _lastUpdate = null;
       _freshAt = 0;
       _lastError = null;
@@ -296,10 +306,9 @@ export function createWeatherLayer({
     enable(viewer) {
       _enabled = true;
       _viewer = viewer || _viewer;
-      _hidden = globeHidden(_viewer);
       // No continuous-render hold: imagery tiles drive their own redraws, so
       // the layer has no per-frame animator to keep the render loop alive for.
-      _unsubscribe ??= mapStack.subscribe(syncGlobeVisibility);
+      _unsubscribe ??= mapStack.subscribe(onMapStackChanged);
     },
 
     disable(viewer) {
@@ -308,7 +317,8 @@ export function createWeatherLayer({
       _enabled = false;
       _unsubscribe?.();
       _unsubscribe = null;
-      clearImagery(viewer);
+      stack.clear();
+      requestRender();
       forget();
       _lastError = null;
       _noKey = false;
@@ -324,10 +334,11 @@ export function createWeatherLayer({
       _enabled = false;
       _unsubscribe?.();
       _unsubscribe = null;
-      clearImagery(viewer);
+      stack.clear();
+      requestRender();
       forget();
+      mapStack.attach?.(null);
       _viewer = null;
-      _hidden = false;
       _lastUpdate = null;
       _freshAt = 0;
       _lastError = null;
@@ -341,6 +352,20 @@ export function createWeatherLayer({
      * so it is also what makes the selection shareable: the same values round
      * trip through the layer-state registry.
      */
+    /**
+     * Receive the map controller once the scene owns one.
+     *
+     * The layer catalogue is built before the scene exists, so this cannot be
+     * constructor injection; `createApplicationData` hands every layer the
+     * controller through this hook.
+     *
+     * @param {object|null} controller The map stack controller.
+     */
+    attachMapStackController(controller) {
+      mapStack.attach?.(controller);
+      if (_enabled && _viewer) void runUpdate(_viewer);
+    },
+
     setParams(params = {}) {
       if (typeof params.layers === 'string') {
         const resolved = codesToIds(params.layers).filter((id) =>
@@ -375,14 +400,6 @@ export function createWeatherLayer({
     },
 
     getStats() {
-      // The globe is gone in photoreal, so the toggle must not read as healthy.
-      if (_hidden)
-        return {
-          count: 0,
-          lastUpdate: _lastUpdate,
-          status: 'unavailable',
-          error: 'GLOBE HIDDEN IN 3D',
-        };
       // There is no keyless mode. Without a credential the layer cannot draw
       // at all, so it says so plainly rather than sitting on an empty globe
       // looking healthy — 'unavailable' is what turns the row red.
@@ -408,8 +425,13 @@ export function createWeatherLayer({
         count: 0,
         // An imagery layer counts nothing and an observation has no forecast
         // lead, so the slot carries how much is switched on — which is also
-        // what governs the bill.
-        countLabel: `${drawn} ON`,
+        // what governs the bill. Drawn against selected, because the drape
+        // budget can hold layers back in 3D and a bare count would then be a
+        // lie about what is on screen.
+        countLabel:
+          drawn === _active.size
+            ? `${drawn} ON`
+            : `${drawn} OF ${_active.size} ON`,
         lastUpdate: _lastUpdate,
         error: _lastError,
       };

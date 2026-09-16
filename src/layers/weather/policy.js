@@ -101,6 +101,48 @@ export const WEATHER_LAYER_SPECS = Object.freeze(
 );
 
 /**
+ * How many layers may be draped on a photoreal tileset at once.
+ *
+ * Cesium composites draped imagery per model primitive and truncates hard:
+ * `ImageryPipelineStage` drops everything past ten "imagery inputs", after a
+ * single console warning. An input is one imagery tile a primitive overlaps,
+ * per layer, and Cesium picks the level that puts about one tile across the
+ * primitive — so a primitive straddling the grid in both axes costs four
+ * inputs for one layer. Two layers can therefore never truncate where three
+ * can.
+ *
+ * Leaving it to Cesium is the worst option available: it truncates from the
+ * end of the list, and the end is the top of the stack, so it would keep an
+ * opaque field and silently discard the lightning drawn over it.
+ */
+export const MAX_DRAPED_SPECS = 2;
+
+/**
+ * The active specs a regime can actually draw, in paint order.
+ *
+ * The globe draws everything. A tileset takes the budget above, and spends it
+ * highest rung first: over a photograph the sparse overlays are what is worth
+ * seeing, and a continuous field smeared across every facade is both the least
+ * useful and the most destructive. Catalogue order breaks ties, so the choice
+ * matches the order the panel lists them in.
+ *
+ * @param {object[]} specs Currently selected specs.
+ * @param {'globe'|'tileset'} regime Where they are about to be drawn.
+ * @returns {object[]} The drawable subset, rung-ascending for paint order.
+ */
+export function drapedSelection(specs, regime) {
+  if (regime !== 'tileset' || specs.length <= MAX_DRAPED_SPECS) return specs;
+  const listed = new Map(
+    WEATHER_LAYER_SPECS.map((spec, index) => [spec.id, index]),
+  );
+  const order = (a, b) => listed.get(a.id) - listed.get(b.id);
+  return [...specs]
+    .sort((a, b) => b.rung - a.rung || order(a, b))
+    .slice(0, MAX_DRAPED_SPECS)
+    .sort((a, b) => a.rung - b.rung || order(a, b));
+}
+
+/**
  * Selection codec.
  *
  * The selection travels as a string of one-character codes because that is how

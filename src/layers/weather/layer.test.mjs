@@ -6,12 +6,14 @@ import { imageryOptionsFor, layerOptionsFor } from './imagery.js';
 import {
   FIELD,
   FRAME_MODES,
+  MAX_DRAPED_SPECS,
   OVERLAY,
   SPEC_KINDS,
   REFRESH_CHOICES,
   WEATHER_LAYER_SPECS,
   codesToIds,
   defaultActiveIds,
+  drapedSelection,
   idsToCodes,
 } from './policy.js';
 import { noKeyError } from './model.js';
@@ -36,17 +38,19 @@ const ALL_ON = WEATHER_LAYER_SPECS.map((spec) => spec.id);
 const FRAME = { key: 'live:1', validTime: null, referenceTime: null };
 
 /**
- * A viewer stub that records imagery ownership. `base` stands in for the map
- * controller's own layer at index 0, which this layer must never remove.
+ * One imagery collection, recording what this layer put in it.
+ *
+ * `remove` asserts membership rather than shrugging: a handle must only ever
+ * leave the collection it was added to, so a cross-collection removal fails
+ * in whichever test provokes it, not only in the one aimed at it.
  */
-function harness(source, { globeVisible = true, specs } = {}) {
-  const base = { id: 'base-map' };
-  const layers = [base];
+function collection(seed = []) {
+  const layers = [...seed];
   const removed = [];
-  const listeners = new Set();
-  const viewer = {
-    scene: { globe: { show: globeVisible } },
-    imageryLayers: {
+  return {
+    layers,
+    removed,
+    api: {
       add(layer, index) {
         if (Number.isInteger(index)) layers.splice(index, 0, layer);
         else layers.push(layer);
@@ -56,7 +60,8 @@ function harness(source, { globeVisible = true, specs } = {}) {
       },
       remove(layer) {
         const index = layers.indexOf(layer);
-        if (index >= 0) layers.splice(index, 1);
+        assert.ok(index >= 0, 'removed a layer this collection never held');
+        layers.splice(index, 1);
         removed.push(layer);
       },
       get length() {
@@ -64,6 +69,25 @@ function harness(source, { globeVisible = true, specs } = {}) {
       },
     },
   };
+}
+
+/**
+ * A viewer stub with both render targets.
+ *
+ * `base` stands in for the map controller's own layer at index 0 of the
+ * globe's collection, which this layer must never remove. The tileset's
+ * collection has no such tenant. The viewer deliberately carries no
+ * `scene.globe.show`: the regime comes from the map-stack port, and any
+ * surviving read of scene state should fail loudly rather than pass.
+ */
+function harness(source, { regime = 'globe', specs } = {}) {
+  const base = { id: 'base-map' };
+  const globe = collection([base]);
+  const drape = collection();
+  const listeners = new Set();
+  const renders = [];
+  let current = regime;
+  const viewer = {};
   const layer = createWeatherLayer({
     source,
     ...(specs ? { specs } : {}),
@@ -73,7 +97,12 @@ function harness(source, { globeVisible = true, specs } = {}) {
           listeners.add(handler);
           return () => listeners.delete(handler);
         },
+        resolve: () =>
+          current === 'tileset'
+            ? { regime: 'tileset', imageryLayers: drape.api }
+            : { regime: 'globe', imageryLayers: globe.api },
       },
+      render: { governorRequestRender: (reason) => renders.push(reason) },
     },
   });
   layer.init(viewer);
@@ -81,7 +110,25 @@ function harness(source, { globeVisible = true, specs } = {}) {
   const emitMapStack = () => {
     for (const handler of listeners) handler();
   };
-  return { layer, viewer, layers, removed, base, listeners, emitMapStack };
+  /** Switch the rendered collection the way a map-stack change does. */
+  const setRegime = (next) => {
+    current = next;
+    emitMapStack();
+  };
+  return {
+    layer,
+    viewer,
+    base,
+    globe,
+    drape,
+    listeners,
+    renders,
+    emitMapStack,
+    setRegime,
+    // The regime-agnostic tests speak of "the" collection; that is the globe.
+    layers: globe.layers,
+    removed: globe.removed,
+  };
 }
 
 const readySource = () => ({ getFrame: async () => ({ ...FRAME }) });
@@ -162,37 +209,34 @@ test('the base map is never removed, and refreshes swap without a gap', async ()
   assert.ok(!removed.includes(base));
 });
 
-test('a hidden globe withdraws the imagery and says so on the row', async () => {
-  const { layer, viewer, layers, base, emitMapStack } = harness(readySource());
+test('a photoreal stack re-homes the imagery onto the tileset', async () => {
+  // The globe is hidden in photoreal and imagery on a hidden globe draws
+  // nothing, so the layer moves to the collection that is being rendered
+  // rather than going dark. This is the whole point of the change.
+  const { layer, viewer, globe, drape, base, setRegime } = harness(
+    readySource(),
+    { specs: [...WEATHER_LAYER_SPECS] },
+  );
   await layer.update(viewer);
-  assert.equal(layers.length, OWNED + 1);
-  assert.equal(layer.getStats().countLabel, `${OWNED} ON`);
+  assert.equal(globe.layers.length, OWNED + 1);
+  assert.equal(drape.layers.length, 0);
 
-  // Photoreal hides the globe; every imagery layer goes with it.
-  viewer.scene.globe.show = false;
-  emitMapStack();
-  assert.deepEqual(
-    layers,
-    [base],
-    'a hidden globe must not keep orphan imagery',
-  );
-  const hidden = layer.getStats();
-  assert.equal(hidden.status, 'unavailable');
-  assert.equal(hidden.error, 'GLOBE HIDDEN IN 3D');
-
-  viewer.scene.globe.show = true;
-  emitMapStack();
+  setRegime('tileset');
   await new Promise((resolve) => setTimeout(resolve, 0));
-  assert.equal(
-    layers.length,
-    OWNED + 1,
-    'returning to a globe stack restores it',
-  );
-  assert.equal(layer.getStats().countLabel, `${OWNED} ON`);
+  assert.deepEqual(globe.layers, [base], 'nothing is left on the globe');
+  assert.equal(drape.layers.length, OWNED, 'and it is drawn on the tileset');
+  assert.equal(layer.getStats().status, undefined, 'this is not a fault');
+  assert.equal(layer.getStats().error, null);
+
+  setRegime('globe');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(globe.layers.length, OWNED + 1, 'and it comes back');
+  assert.equal(drape.layers.length, 0, 'leaving nothing behind');
+  assert.equal(globe.layers[0], base, 'the base map is never disturbed');
 });
 
 test('a photoreal round trip redraws from what is held, without re-polling', async () => {
-  // On a metered source this is not only a latency win: re-polling on every
+  // On a metered source this is not only a latency win: re-reading on every
   // flip to Google 3D and back would bill a fresh set of tiles each time.
   const calls = [];
   const source = {
@@ -201,19 +245,21 @@ test('a photoreal round trip redraws from what is held, without re-polling', asy
       return { ...FRAME };
     },
   };
-  const { layer, viewer, layers, base, emitMapStack } = harness(source);
+  const { layer, viewer, globe, drape, base, setRegime } = harness(source);
   await layer.update(viewer);
   const polled = calls.length;
   assert.ok(polled > 0);
 
-  viewer.scene.globe.show = false;
-  emitMapStack();
-  assert.deepEqual(layers, [base]);
-
-  viewer.scene.globe.show = true;
-  emitMapStack();
+  setRegime('tileset');
   await new Promise((resolve) => setTimeout(resolve, 0));
-  assert.equal(layers.length, OWNED + 1, 'the overlay comes back');
+  assert.deepEqual(globe.layers, [base]);
+  assert.ok(drape.layers.length > 0, 'drawn, not withdrawn');
+  assert.equal(calls.length, polled, 'and re-homing costs no read');
+
+  setRegime('globe');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(globe.layers.length, OWNED + 1, 'the overlay comes back');
+  assert.equal(drape.layers.length, 0);
   assert.equal(calls.length, polled, 'and costs no requests');
 
   // Teardown still forgets: re-enabling after a disable is a fresh read.
@@ -221,6 +267,30 @@ test('a photoreal round trip redraws from what is held, without re-polling', asy
   layer.enable(viewer);
   await layer.update(viewer);
   assert.ok(calls.length > polled, 'disable must not leave frames behind');
+});
+
+test('re-homing carries the freshness floor across untouched', async () => {
+  // A regime switch is not a refresh. If the rebuilt URL lost or moved its
+  // floor, the round trip would silently re-bill every tile on screen.
+  const { layer, viewer, globe, drape, setRegime } = harness(readySource());
+  layer.setParams({ refreshNow: true });
+  await layer.update(viewer);
+  const urls = globe.layers
+    .filter((entry) => entry.imageryProvider)
+    .map((entry) => entry.imageryProvider.url);
+  assert.ok(urls.length > 0);
+  assert.ok(
+    urls.every((url) => /\?t=\d+$/.test(url)),
+    `a refresh must stamp every tile URL, got ${urls.join(' ')}`,
+  );
+
+  setRegime('tileset');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(
+    drape.layers.map((entry) => entry.imageryProvider.url).sort(),
+    urls.slice().sort(),
+    'the draped URLs must match byte for byte, floor included',
+  );
 });
 
 test('disable unsubscribes, and a rejected frame reports without drawing', async () => {
@@ -303,7 +373,6 @@ test('an enable never fails for a state the row is meant to report', async () =>
           throw noKeyError();
         },
       },
-      globeVisible: true,
       error: 'ADD XWEATHER KEY',
     },
     {
@@ -313,33 +382,171 @@ test('an enable never fails for a state the row is meant to report', async () =>
           throw new Error('Xweather unreachable');
         },
       },
-      globeVisible: true,
       error: 'Xweather unreachable',
-    },
-    {
-      what: 'globe hidden by a photoreal stack',
-      source: readySource(),
-      globeVisible: false,
-      error: 'GLOBE HIDDEN IN 3D',
     },
   ];
 
-  for (const { what, source, globeVisible, error } of cases) {
-    const { layer, viewer, layers, base } = harness(source, { globeVisible });
+  for (const { what, source, error } of cases) {
+    const { layer, viewer, globe, base } = harness(source);
     assert.notEqual(
       await layer.update(viewer),
       false,
       `${what} must not reject the enable`,
     );
-    assert.deepEqual(layers, [base], `${what} draws nothing`);
+    assert.deepEqual(globe.layers, [base], `${what} draws nothing`);
     assert.equal(layer.getStats().error, error, what);
   }
+
+  // Enabling under a photoreal stack is no longer one of those states: it
+  // draws, on the tileset, and has nothing to report.
+  const photoreal = harness(readySource(), { regime: 'tileset' });
+  assert.notEqual(await photoreal.layer.update(photoreal.viewer), false);
+  assert.deepEqual(photoreal.globe.layers, [photoreal.base]);
+  assert.ok(photoreal.drape.layers.length > 0, 'it draws on the tileset');
+  assert.equal(photoreal.layer.getStats().error, null);
 
   // A torn-down layer is the opposite case: the call cannot be honoured, and
   // false is the only honest answer.
   const { layer, viewer } = harness(readySource());
   layer.disable(viewer);
   assert.equal(await layer.update(viewer), false, 'disabled rejects the call');
+});
+
+test('the drape budget holds layers back, and says how many', async () => {
+  // Cesium truncates draped imagery past ten inputs per primitive, silently,
+  // and drops the topmost — which would keep an opaque field and discard the
+  // lightning over it. So the budget is ours, and it is reported.
+  const field = WEATHER_LAYER_SPECS.find((spec) => spec.group === FIELD);
+  const radar = WEATHER_LAYER_SPECS.find((spec) => spec.defaultOn);
+  const overlays = WEATHER_LAYER_SPECS.filter(
+    (spec) => spec.group === OVERLAY && spec.rung > radar.rung,
+  ).slice(0, 2);
+  const chosen = [field, radar, ...overlays];
+  assert.equal(chosen.length, 4);
+
+  const calls = [];
+  const source = {
+    getFrame: async (spec) => {
+      calls.push(spec.id);
+      return { ...FRAME };
+    },
+  };
+  const { layer, viewer, globe, drape, base, setRegime } = harness(source);
+  layer.setParams({ layers: idsToCodes(chosen.map((spec) => spec.id)) });
+  await layer.update(viewer);
+  assert.equal(globe.layers.length, chosen.length + 1, 'the globe draws all');
+  assert.equal(layer.getStats().countLabel, `${chosen.length} ON`);
+  const polled = calls.length;
+
+  setRegime('tileset');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(drape.layers.length, MAX_DRAPED_SPECS, 'the budget is spent');
+  assert.deepEqual(globe.layers, [base], 'and nothing is left behind');
+  assert.equal(
+    layer.getStats().countLabel,
+    `${MAX_DRAPED_SPECS} OF ${chosen.length} ON`,
+    'the row reports drawn against selected',
+  );
+  assert.equal(layer.getStats().error, null, 'a budget is not a fault');
+  assert.equal(calls.length, polled, 'held-back layers keep their frames');
+
+  setRegime('globe');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(globe.layers.length, chosen.length + 1, 'all four return');
+  assert.equal(layer.getStats().countLabel, `${chosen.length} ON`);
+  assert.equal(calls.length, polled, 'and still cost no read');
+});
+
+test('the drape budget spends on the sparse overlays, not the field', () => {
+  // Pure policy: over a photograph the symbols are what is worth seeing, and a
+  // continuous field smeared across every facade is the least useful of them.
+  const field = WEATHER_LAYER_SPECS.find((spec) => spec.group === FIELD);
+  const radar = WEATHER_LAYER_SPECS.find((spec) => spec.defaultOn);
+  const overlays = WEATHER_LAYER_SPECS.filter(
+    (spec) => spec.group === OVERLAY && spec.rung > radar.rung,
+  ).slice(0, 2);
+  const chosen = [field, radar, ...overlays];
+
+  assert.deepEqual(
+    drapedSelection(chosen, 'globe'),
+    chosen,
+    'the globe takes everything',
+  );
+
+  const draped = drapedSelection(chosen, 'tileset');
+  assert.equal(draped.length, MAX_DRAPED_SPECS);
+  assert.ok(!draped.includes(field), 'the field is the first thing given up');
+  assert.deepEqual(
+    draped.map((spec) => spec.rung),
+    [...draped.map((spec) => spec.rung)].sort((a, b) => a - b),
+    'and the survivors come back in paint order',
+  );
+
+  // Under the budget it is the identity, whatever the regime.
+  const few = chosen.slice(0, MAX_DRAPED_SPECS);
+  assert.deepEqual(drapedSelection(few, 'tileset'), few);
+});
+
+test('rung order survives into a collection with no base map', async () => {
+  const field = WEATHER_LAYER_SPECS.find((spec) => spec.group === FIELD);
+  const radar = WEATHER_LAYER_SPECS.find((spec) => spec.defaultOn);
+  const { layer, viewer, drape, setRegime } = harness(readySource());
+  layer.setParams({ layers: idsToCodes([field.id, radar.id]) });
+  await layer.update(viewer);
+
+  setRegime('tileset');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const indexOf = (id) =>
+    drape.layers.findIndex((entry) =>
+      entry?.imageryProvider?.url?.includes(`/${id}/`),
+    );
+  assert.equal(drape.layers.length, 2);
+  assert.equal(indexOf(field.id), 0, 'no phantom base slot is reserved');
+  assert.ok(
+    indexOf(field.id) < indexOf(radar.id),
+    'and the field still sits beneath the overlay',
+  );
+});
+
+test('a regime switch mid-read never publishes into the collection it left', async () => {
+  // The switch supersedes the in-flight pass; the older run must not land its
+  // imagery in a collection the scene has stopped rendering.
+  // Every pass gets its own pending read; the superseding one creates a
+  // second, so both have to be let go or the awaited pass never settles.
+  const pending = [];
+  const source = {
+    getFrame: () =>
+      new Promise((resolve) => pending.push(() => resolve({ ...FRAME }))),
+  };
+  const release = () => {
+    for (const resolve of pending.splice(0)) resolve();
+  };
+  const { layer, viewer, globe, drape, base, setRegime } = harness(source);
+  const superseded = layer.update(viewer);
+  setRegime('tileset');
+  release();
+  assert.equal(await superseded, false, 'the superseded pass reports so');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(globe.layers, [base], 'and drew nothing on the globe');
+  void drape;
+});
+
+test('every change to a collection asks the scene for a frame', async () => {
+  // A tileset never requests a render when its imagery changes, so under
+  // requestRenderMode a drape can sit invisible until something else wakes it.
+  const { layer, viewer, renders, setRegime } = harness(readySource());
+  await layer.update(viewer);
+  assert.ok(renders.length > 0, 'the first draw asks');
+
+  renders.length = 0;
+  setRegime('tileset');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.ok(renders.length > 0, 're-homing asks');
+
+  renders.length = 0;
+  layer.setParams({ layers: '' });
+  await layer.update(viewer);
+  assert.ok(renders.length > 0, 'withdrawing asks');
 });
 
 test('the layer refuses to construct without a frame source', () => {
@@ -455,11 +662,24 @@ test('every placement hands Cesium a numeric alpha', () => {
   // globe shader assigns it straight into a float uniform. A function reached
   // the uniform as NaN and rendered the entire globe black.
   for (const spec of WEATHER_LAYER_SPECS) {
-    const options = layerOptionsFor(spec);
-    assert.equal(typeof options.alpha, 'number', `${spec.id} numeric alpha`);
+    for (const regime of ['globe', 'tileset']) {
+      const options = layerOptionsFor(spec, regime);
+      assert.equal(
+        typeof options.alpha,
+        'number',
+        `${spec.id} numeric alpha in ${regime}`,
+      );
+      assert.ok(
+        options.alpha > 0 && options.alpha <= 1,
+        `${spec.id} alpha range in ${regime}`,
+      );
+    }
+    // Draped, the same wash also paints building facades over a photograph
+    // rather than sitting on a flat basemap, so it yields more.
     assert.ok(
-      options.alpha > 0 && options.alpha <= 1,
-      `${spec.id} alpha range`,
+      layerOptionsFor(spec, 'tileset').alpha <
+        layerOptionsFor(spec, 'globe').alpha,
+      `${spec.id} must be lighter when draped`,
     );
   }
 });

@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { DRAPED_ALPHA_SCALE } from '../../data/xweatherCatalogue.js';
 
 /**
  * Cesium options for one spec.
@@ -40,34 +41,46 @@ export function imageryOptionsFor(spec, { notBefore = 0 } = {}) {
   // DATA_CREDITS instead.
 }
 
-/** Layer options for a spec. */
-export function layerOptionsFor(spec) {
+/**
+ * Layer options for a spec in the regime it is about to be drawn in.
+ *
+ * @param {object} spec Layer spec.
+ * @param {'globe'|'tileset'} [regime] Where the layer is being added.
+ * @returns {object} Cesium imagery-layer options.
+ */
+export function layerOptionsFor(spec, regime = 'globe') {
   // Alpha must stay a plain number. Cesium's type definition still advertises a
   // per-tile function, but the globe shader assigns the value straight into a
   // float uniform (`uniforms.imageryTextureAlpha[i] = imageryLayer.alpha`), so a
   // function silently corrupts the uniform and renders the whole globe black.
-  return { alpha: spec.alpha };
+  return {
+    alpha: regime === 'tileset' ? spec.alpha * DRAPED_ALPHA_SCALE : spec.alpha,
+  };
 }
 
 /**
  * Own this layer's imagery handles and nothing else.
  *
- * `MapSourceController` is the only other writer to `viewer.imageryLayers`: it
- * keeps the base map at index 0 and removes only its own handle on a stack
- * switch. This stack therefore inserts and removes strictly what it added, so
- * neither owner can evict the other's layers.
+ * Imagery is drawn into whichever collection is being rendered: the globe's
+ * while a globe stack is up, a photoreal tileset's while one hides the globe.
+ * Each handle therefore records the collection it was added to, and is only
+ * ever removed from that one — which is what lets a regime switch move the
+ * layers without orphaning imagery in the collection it left.
+ *
+ * Neither collection belongs to this stack. `MapSourceController` keeps the
+ * base map at index 0 of the globe's, and the tileset's is the tileset's own.
+ * Inserting and removing strictly what it added is what stops this stack from
+ * evicting either owner's layers.
  */
 export function createImageryStack() {
+  /** @type {Map<string, {layer: object, collection: object, rung: number}>} */
   const owned = new Map();
-  /** Rung per owned spec, so ordering survives without re-reading the table. */
-  const rungs = new Map();
 
-  const detach = (viewer, specId) => {
-    const layer = owned.get(specId);
-    if (!layer) return false;
+  const detach = (specId) => {
+    const entry = owned.get(specId);
+    if (!entry) return false;
     owned.delete(specId);
-    rungs.delete(specId);
-    viewer?.imageryLayers?.remove(layer, true);
+    entry.collection.remove(entry.layer, true);
     return true;
   };
 
@@ -84,14 +97,17 @@ export function createImageryStack() {
    * With continuous fields at a low rung and sparse overlays above them, this
    * is what stops an hourly temperature field from burying the lightning drawn
    * over it until the next lightning tick.
+   *
+   * Only peers already in this collection can order this one within it: mid
+   * re-home the rest of the selection is still in the collection being left.
    */
-  const insertIndexFor = (viewer, spec) => {
-    const layers = viewer.imageryLayers;
-    let index = layers.length;
-    for (const [specId, layer] of owned) {
+  const insertIndexFor = (collection, spec) => {
+    let index = collection.length;
+    for (const [specId, entry] of owned) {
       if (specId === spec.id) continue;
-      if ((rungs.get(specId) ?? 0) <= spec.rung) continue;
-      const at = layers.indexOf(layer);
+      if (entry.collection !== collection) continue;
+      if (entry.rung <= spec.rung) continue;
+      const at = collection.indexOf(entry.layer);
       if (at >= 0 && at < index) index = at;
     }
     return index;
@@ -99,41 +115,50 @@ export function createImageryStack() {
 
   return {
     /**
-     * Swap a spec to a new layer, leaving anything else in the scene alone.
-     * @param {object} viewer Cesium viewer.
+     * Swap a spec to a new layer in the given collection, leaving anything
+     * else in the scene alone.
+     *
+     * Re-homing between regimes needs no separate path: the add lands in the
+     * new collection and the detach reads the old one off the handle.
+     *
+     * @param {object} collection Cesium ImageryLayerCollection to draw into.
      * @param {object} spec Layer spec.
      * @param {object} [options]
      * @param {number} [options.notBefore=0] Freshness floor for its tiles.
+     * @param {'globe'|'tileset'} [options.regime] Which collection this is.
+     * @returns {object} The Cesium ImageryLayer now owned for this spec.
      */
-    apply(viewer, spec, { notBefore = 0 } = {}) {
+    apply(collection, spec, { notBefore = 0, regime = 'globe' } = {}) {
       const provider = new Cesium.UrlTemplateImageryProvider(
         imageryOptionsFor(spec, { notBefore }),
       );
-      const next = new Cesium.ImageryLayer(provider, layerOptionsFor(spec));
-      // Add before removing so the live layer never blinks through to the base
-      // map. Inserting at the spec's rung — rather than appending — keeps the
-      // base map at index 0 and the paint order independent of refresh order.
-      viewer.imageryLayers.add(next, insertIndexFor(viewer, spec));
-      detach(viewer, spec.id);
-      owned.set(spec.id, next);
-      rungs.set(spec.id, spec.rung);
+      const next = new Cesium.ImageryLayer(
+        provider,
+        layerOptionsFor(spec, regime),
+      );
+      // Add before removing so the live layer never blinks through to what is
+      // beneath. Inserting at the spec's rung — rather than appending — keeps
+      // the paint order independent of refresh order, and leaves index 0 to
+      // whoever owns it.
+      collection.add(next, insertIndexFor(collection, spec));
+      detach(spec.id);
+      owned.set(spec.id, { layer: next, collection, rung: spec.rung });
       return next;
     },
     remove: detach,
     /** Drop every owned handle; safe to call before init and after destroy. */
-    clear(viewer) {
-      for (const specId of [...owned.keys()]) detach(viewer, specId);
+    clear() {
+      for (const specId of [...owned.keys()]) detach(specId);
     },
     has(specId) {
       return owned.has(specId);
     },
+    /** Drawn, and drawn in the collection being rendered now. */
+    isDrawnIn(collection, specId) {
+      return owned.get(specId)?.collection === collection;
+    },
     ownedIds() {
       return [...owned.keys()];
-    },
-    /** Live collection index of an owned spec, for ordering assertions. */
-    indexOf(viewer, specId) {
-      const layer = owned.get(specId);
-      return layer ? viewer.imageryLayers.indexOf(layer) : -1;
     },
     get size() {
       return owned.size;
