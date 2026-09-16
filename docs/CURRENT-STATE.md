@@ -853,6 +853,99 @@ throws, that source reports failure without a contradictory success entry.
 The existing per-record append continues to support large feeds; sequential
 fetching, trailing-24-hour filtering and partial-success caching are unchanged.
 
+## Historic Fires layer
+
+- `fire-history` (Data Layers → Events → "Historic Fires", share token `y`) shows
+  archived NASA FIRMS detections for one registered event at a time. Events come
+  from `config/fire_events.json` via `GET /api/fire-history`; the list works
+  keyless. Detections come from `GET /api/fire-history/<id>`, which answers
+  503 `no_key` without `FIRMS_MAP_KEY` unless a complete cache already exists.
+  The layer then reports `keyRequired` and the row reads KEY REQUIRED with the
+  same key guidance as Active Fires (`requiresKeyId: 'firms'`).
+- The proxy only fetches registered events: sources, box and day range are
+  server-side config, split into ≤5-day FIRMS windows per source and fetched
+  sequentially. A complete event is cached permanently under
+  `.gev-cache/fire-history/<id>.json`; a partial result (some windows failed)
+  is served with `complete: false`, the row shows `PARTIAL`, and only the failed
+  windows are retried on a later request.
+- Rendering is a `PointPrimitiveCollection` with `disableDepthTestDistance`
+  so detections at ellipsoid height stay visible over terrain and photoreal
+  tiles. Color follows event progress (0 at the first day's 00:00Z, 1 at the
+  end of the last day): yellow → orange → red → ember. Point size grows with
+  fire radiative power; MODIS points start larger than VIIRS. One ambient
+  world-overlay label sits at the event box center.
+- Row controls: one chip per event (`name · year`, region and dates in the
+  tooltip) and an Early/Mid/Late legend with detection counts. Selecting a chip
+  clears the scene, loads the event, and flies the camera to the padded event
+  box; the first load after enable frames the event, later 24 h refreshes do
+  not move the camera. A superseded load cannot paint a newer selection.
+- Replay: after the event chips the row carries ▶ REPLAY / ❚❚ PAUSE, ↺ ALL and a
+  speed chip cycling 0.5× → 1× → 2× → 4× (disabled until detections are loaded).
+  The clock runs in event time at 6 event-hours per real second × speed, driven
+  by `requestAnimationFrame` under a `fire-history-replay` continuous-render
+  hold that is released on pause, end, reset, disable and destroy. While engaged
+  a detection is hidden until its acquisition time, flares brighter and 3 px
+  larger for 12 event-hours, then cools to a dim ember (rgb 118,48,36 · 0.78 α).
+  Reaching the window end parks the clock as REPLAY END; ▶ then restarts from
+  the first day. ↺ ALL returns to the static progress presentation. The row
+  subtitle reads `REPLAY · YYYY-MM-DD HH:MMZ · N×` and the count reads
+  `shown / total`; the row repaints at most 4×/s while playing. Switching
+  events or disabling parks the clock idle; a refresh keeps an engaged clock.
+- Context panel: while the layer is enabled a `HISTORIC FIRES` section
+  (`#fire-history-panel`) sits in the Context panel above Radio, hidden when the
+  layer is off or the Context panel is collapsed, and removed on destroy. It
+  holds the event roster (click selects, same as the row chips), the event card
+  (region, window, burned area, archived detection count, summary), a bar chart
+  of detections per UTC day in the progress ramp with a dashed cursor while the
+  replay is engaged, a seek slider (0–1000 → window fraction; seeking an idle
+  clock shows as PAUSED), a four-stop speed slider, FOCUS (re-frame the event
+  box), ▶ REPLAY SPREAD / ❚❚ PAUSE, ↺ ALL, and the event's https references.
+  The panel re-renders on the same beat as the layer row; sliders keep the
+  user's value while focused. All event and feed text is HTML-escaped.
+- Adding an event: `node scripts/fire-event-scaffold.mjs --name Dixie --year 2021
+  --state US-CA` searches NIFC (WFIGS for 2020+, the perimeter history view
+  before; override with `--service`), prints a candidate table, picks the
+  largest by acreage (`--pick N` otherwise), reads that record's extent for a
+  padded bbox (`--bbox` overrides), derives the inclusive window from the
+  discovery and containment/out dates (`--start`/`--end` override; anything
+  estimated is warned), chooses the archive sources that existed that year, and
+  prints an entry that already passes `normalizeFireEvent`. `--write` appends
+  it to `config/fire_events.json` (duplicate ids refuse). Region, summary and
+  `--ref "Label=https://…"` references are the operator's to fill in.
+- Official perimeter: when the event registers a `perimeter` (whitelisted NIFC
+  service + structured filters, validated like the rest of the event), the
+  layer requests `/api/fire-history/<id>/perimeter` after the detections load
+  and draws the returned Polygon/MultiPolygon rings as ground-clamped polylines
+  (pale ember, 2.5 px) in a `CustomDataSource`. The request is best effort: a
+  404 (`no_perimeter`) or upstream failure leaves the detections untouched, and
+  a newer selection aborts it. The proxy keeps the largest polygon by acreage,
+  simplifies to ~50 m (`maxAllowableOffset=0.0005`, 5-decimal precision) and
+  caches permanently under `<id>.perimeter.json`; it needs no FIRMS key. The
+  panel card shows `OFFICIAL PERIMETER · <ha> HA · <service> · AS OF <date>`
+  (`LOADING` while pending, `NO OFFICIAL PERIMETER REGISTERED` otherwise) and
+  Sources gains an NIFC Open Data link while a perimeter is shown.
+- Selection is a layer param: `getParams()` → `{eventId}`, `setParams({eventId})`
+  selects (a disabled layer just remembers the id until enable). Row chips carry
+  `params: {eventId}`, the panel roster calls `selectEvent(id, {origin: 'user'})`,
+  and voice uses origin `voice`; all three route through
+  `dataManager.setLayerParams` when the manager is attached, so the choice reaches
+  share links (`y` token, option owner `fire-history`, option `e` = event id,
+  kebab-case only; anything else decodes as absent).
+- Voice: `control_fire_history` with actions list, select, replay, pause, reset,
+  speed (0.5/1/2/4), seek (0–1), focus and status. Every action except status
+  enables the layer first (origin `voice`) and waits up to 8 s for the event
+  catalog; select and replay wait for detections the same way and fail plainly
+  ("still loading", "need a FIRMS_MAP_KEY") instead of pretending. `eventQuery`
+  matches id, name or year; a bare "fire" matches nothing. Results carry the
+  event, detection count, replay clock and the peak day so the confirmation is
+  spoken from evidence.
+- `getReplayState()` returns the clock plus `{shown, active, total}` at the
+  cursor; `toggleReplay()`, `resetReplay()`, `setReplaySpeed(n)` and
+  `seekReplay(fraction)` are the programmatic transport.
+- `getEventState()` exposes the registered events, selection, and a per-UTC-day
+  `{date, count, maxFrp}` timeline for the planned replay panel;
+  `getAnalystRecords()` returns JSON-safe detection records.
+
 ## Installations and map-source guidance
 
 - On an uncached Overpass failure, mapped installations keep their existing
