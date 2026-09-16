@@ -1,0 +1,31 @@
+# Run: docker compose up --build
+# Open: http://localhost:4173 — no API keys required to start (keyless Esri
+# imagery + OSM fallback). Add keys below, or in a root .env file (same file
+# the app itself reads — see .env.example), to power up optional layers.
+services:
+  gods-eye-view:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: gods-eye-view:local
+    ports:
+      - '${PORT:-4173}:4173'
+    environment:
+      HOST: 0.0.0.0
+      PORT: 4173
+    # Loads this checkout's .env (git-ignored, same file Provider Settings
+    # writes to) into the container's environment. Optional: the app runs
+    # fine with no .env at all.
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      # Persist provider disk caches (TomTom tiles, etc.) and the voice debug
+      # log across container restarts. Safe to delete; both are rebuilt.
+      - gev-cache:/app/.gev-cache
+      - gev-logs:/app/.gev-logs
+    restart: unless-stopped
+
+volumes:
+  gev-cache:
+  gev-logs:
