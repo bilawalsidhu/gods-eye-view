@@ -333,6 +333,79 @@ test('military fallback cancels a stalled 5xx body and starts cooldown at receip
   assert.equal(calls, 3);
 });
 
+test('AeroAPI proxy brokers the key, validates paths, caches, and never leaks it', async (t) => {
+  const calls = [];
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    calls.push({ url, headers: options.headers });
+    if (url.endsWith('/flights/N123AB'))
+      return Response.json({ flights: [{ fa_flight_id: 'F-1' }] });
+    return Response.json({
+      positions: [
+        { timestamp: '2026-09-16T12:00:00Z', latitude: 30, longitude: -97 },
+      ],
+    });
+  });
+  const request = install(providers.aeroApiProxy(), true);
+
+  // Missing key → sanitized 503, never an upstream call.
+  environment(t, { FLIGHTAWARE_AEROAPI_KEY: undefined });
+  const unkeyed = await request('/api/aeroapi', '/flights/N123AB');
+  assert.equal(unkeyed.statusCode, 503);
+  assert.equal(calls.length, 0);
+
+  environment(t, { FLIGHTAWARE_AEROAPI_KEY: 'fixture-key' });
+  const flight = await request('/api/aeroapi', '/flights/N123AB');
+  assert.equal(flight.statusCode, 200);
+  assert.equal(JSON.parse(flight.body).flights[0].fa_flight_id, 'F-1');
+  assert.equal(calls[0].headers['x-apikey'], 'fixture-key');
+  assert.ok(
+    calls[0].url.startsWith('https://aeroapi.flightaware.com/aeroapi/'),
+  );
+
+  // Cache HIT: the second identical request does not reach upstream.
+  const hit = await request('/api/aeroapi', '/flights/N123AB');
+  assert.equal(hit.body, flight.body);
+  assert.equal(hit.headers['x-aeroapi-cache'], 'HIT');
+  assert.equal(calls.length, 1);
+
+  // Track path forwards the query string untouched.
+  const track = await request(
+    '/api/aeroapi',
+    '/flights/F-1/track?include_estimated_positions=false',
+  );
+  assert.equal(track.statusCode, 200);
+  assert.ok(
+    calls
+      .at(-1)
+      .url.endsWith('/flights/F-1/track?include_estimated_positions=false'),
+  );
+
+  // Path traversal and non-read paths are refused without an upstream call.
+  assert.equal(
+    (await request('/api/aeroapi', '/account/usage')).statusCode,
+    400,
+  );
+  assert.equal(
+    (await request('/api/aeroapi', '/..%2F..%2Fsecrets')).statusCode,
+    400,
+  );
+  assert.equal(
+    (await request('/api/aeroapi', '/flights/X', 'POST')).statusCode,
+    405,
+  );
+  assert.equal(calls.length, 2);
+
+  // Upstream failures are sanitized but their status is relayed.
+  t.mock.method(
+    globalThis,
+    'fetch',
+    async () => new Response('"secret upstream body"', { status: 401 }),
+  );
+  const denied = await request('/api/aeroapi', '/flights/ZZZZZZ');
+  assert.equal(denied.statusCode, 401);
+  assert.equal(JSON.parse(denied.body).error, 'AeroAPI HTTP 401');
+});
+
 test('military cooldown bounds untrusted Retry-After and defaults server errors', async (t) => {
   t.mock.method(console, 'warn', () => {});
   for (const [status, raw, seconds] of [

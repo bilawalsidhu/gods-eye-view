@@ -106,6 +106,15 @@ export const KEY_SETUP_KEYS = Object.freeze([
     envVars: Object.freeze(['LL2_API_TOKEN']),
     tier: 'free',
   }),
+  Object.freeze({
+    id: 'flightaware-aeroapi',
+    title: 'FLIGHTAWARE AEROAPI',
+    unlocks:
+      'Historical flight-track trails when tracking (free tier for ADS-B feeders)',
+    getUrl: 'https://www.flightaware.com/aeroapi/portal/',
+    envVars: Object.freeze(['FLIGHTAWARE_AEROAPI_KEY']),
+    tier: 'free',
+  }),
 ]);
 
 /** Hostnames a Provider Settings request may arrive under or originate from. */
