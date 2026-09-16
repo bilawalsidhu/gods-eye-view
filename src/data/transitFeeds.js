@@ -186,18 +186,30 @@ function guelphRouteLabel(routeId) {
 
 /**
  * YRT publishes Viva bus rapid transit by route id (`601`), while every rider,
- * station sign and map calls it "Viva Blue". The local routes are already the
- * number on the bus and are left alone. Colours are from York Region's own
- * published GTFS `routes.txt`; Viva Green (604) and Pink (606) are not in
- * current service and so are absent here too.
+ * station sign and map calls it "Viva Blue". Plain local routes are already the
+ * number on the bus and are left alone, unpadded: `105` reads better than the
+ * `005` of `routes.txt`.
+ *
+ * Branches are the exception. YRT suffixes a two-digit branch onto the base
+ * route — the scheme Viva's own `60102` follows — so a branch id reaches a
+ * rider as "8301" unless it is translated. Names and colours are from York
+ * Region's own published GTFS `routes.txt`; Viva Green (604) and Pink (606)
+ * are not in current service and so are absent here too.
+ *
+ * Only branches observed live AND published in `routes.txt` are listed. `9101`
+ * runs but is unpublished, so it is deliberately missing: the pattern suggests
+ * "91A", and suggesting is not knowing.
  */
-const YRT_VIVA_ROUTE_NAMES = Object.freeze({
+const YRT_ROUTE_NAMES = Object.freeze({
   601: 'Viva Blue',
   60102: 'Viva Blue B',
   603: 'Viva Purple',
   60301: 'Viva Purple A',
   605: 'Viva Orange',
   607: 'Viva Yellow',
+  8301: '83A',
+  9002: '90B',
+  10702: '107B',
 });
 
 /**
@@ -206,7 +218,7 @@ const YRT_VIVA_ROUTE_NAMES = Object.freeze({
  * @returns {string|null}
  */
 function yrtRouteLabel(routeId) {
-  return YRT_VIVA_ROUTE_NAMES[routeId] || routeId;
+  return YRT_ROUTE_NAMES[routeId] || routeId;
 }
 
 /**

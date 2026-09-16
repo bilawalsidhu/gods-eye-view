@@ -416,6 +416,22 @@ test('Viva bus rapid transit is named by its colour, not its route number', () =
   assert.equal(transitRouteLabel(yrt, '9899'), '9899');
 });
 
+test('YRT local branches read as the branch letter, not the padded id', () => {
+  // YRT suffixes a two-digit branch onto the base route, the same scheme the
+  // Viva table already relies on for `60102`. Unsuffixed, that leaks to a rider
+  // as "8301". The letters are York Region's own published GTFS
+  // `routes.txt` short names, unpadded to match the local routes beside them.
+  const yrt = getTransitFeed('yrt-york');
+  assert.equal(transitRouteLabel(yrt, '10702'), '107B');
+  assert.equal(transitRouteLabel(yrt, '8301'), '83A');
+  assert.equal(transitRouteLabel(yrt, '9002'), '90B');
+  // `9101` runs in the realtime feed but is absent from routes.txt, so there is
+  // no published name to give it. Inventing "91A" from the pattern is exactly
+  // the guess the registry refuses to make; it stays opaque until it is
+  // published.
+  assert.equal(transitRouteLabel(yrt, '9101'), '9101');
+});
+
 test('Burlington route ids are joined, never prefix-stripped', () => {
   // `351` is route 1 and `3510` is route 10, so no amount of trimming a `35`
   // prefix works — the table is the only correct answer.
