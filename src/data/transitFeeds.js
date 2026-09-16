@@ -304,6 +304,12 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
       note: 'The City publishes this endpoint from the TTC BusTime NVAS catalogue entry, whose own licence field reads \"License not specified\"; the quote above is the portal-wide Open Government Licence \u2013 Toronto the City applies to its open data, so the credit carries the licence name the way the Metro Transit entry carries its public-domain note. BusTime is the surface system: buses and streetcars report real positions, the subway reports none, so Lines 1/2/4 are simply absent rather than inferred. The endpoint sends no ETag or Last-Modified, so conditional requests fall through to the proxy snapshot TTL.',
     }),
     defaultMode: 'bus',
+    // Toronto rides streetcars. The vehicles are the shared `tram` mode and
+    // share its silhouette and speed limits; only the word a reader sees
+    // changes, because "tram" is not what anyone at Queen and Spadina says.
+    modeWords: Object.freeze({
+      tram: Object.freeze({ word: 'Streetcar', abbr: 'STREETCAR' }),
+    }),
     routeMode: ttcRouteMode,
   }),
 ]);
