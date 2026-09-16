@@ -1,3 +1,5 @@
+import { greatCircleKm } from '../geoDistance.js';
+
 /**
  * @module transitFeeds
  * @description Registry of keyless, openly licensed GTFS-Realtime
@@ -316,7 +318,8 @@ export function getRegisteredTransitFeed(id) {
 }
 
 /**
- * Great-circle distance in km.
+ * Great-circle distance in km. Retained for compatibility with existing
+ * transit consumers; new shared spatial code should use `greatCircleKm`.
  * @param {number} aLat
  * @param {number} aLon
  * @param {number} bLat
@@ -324,13 +327,7 @@ export function getRegisteredTransitFeed(id) {
  * @returns {number}
  */
 export function haversineKm(aLat, aLon, bLat, bLon) {
-  const toRad = (deg) => (deg * Math.PI) / 180;
-  const dLat = toRad(bLat - aLat);
-  const dLon = toRad(bLon - aLon);
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLon / 2) ** 2;
-  return 2 * 6371 * Math.asin(Math.min(1, Math.sqrt(h)));
+  return greatCircleKm({ lat: aLat, lon: aLon }, { lat: bLat, lon: bLon });
 }
 
 /**
