@@ -6,9 +6,12 @@ export function createWindSource({
   timeoutMs = 45_000,
 } = {}) {
   return {
-    async getSnapshot({ signal, model = 'gfs' } = {}) {
+    async getSnapshot({ signal, model = 'gfs', overlay = 'none' } = {}) {
       if (!['gfs', 'ifs'].includes(model))
         throw new Error('Unknown wind model');
+      if (!['none', 'temperature', 'pressure'].includes(overlay))
+        throw new Error('Unknown weather overlay');
+      const query = `model=${model}${overlay === 'none' ? '' : `&overlay=${overlay}`}`;
       const controller = new AbortController();
       const abort = () => controller.abort(signal.reason);
       signal?.addEventListener('abort', abort, { once: true });
@@ -19,7 +22,7 @@ export function createWindSource({
       const active = controller.signal;
       try {
         signal?.throwIfAborted();
-        const response = await fetchImpl(`/api/wind/manifest?model=${model}`, {
+        const response = await fetchImpl(`/api/wind/manifest?${query}`, {
           signal: active,
           cache: 'no-store',
           redirect: 'error',
@@ -32,8 +35,30 @@ export function createWindSource({
         );
         if (manifest?.unavailable) return manifest;
         const grid = manifest?.grid;
+        const scalar = manifest?.scalar;
+        const scalarError = manifest?.scalarError;
+        const optionalUnavailable =
+          overlay !== 'none' &&
+          scalar === undefined &&
+          scalarError ===
+            (overlay === 'temperature'
+              ? 'Temperature field unavailable'
+              : 'Mean sea level pressure field unavailable');
+        const scalarValid =
+          overlay === 'none'
+            ? scalar === undefined && scalarError === undefined
+            : optionalUnavailable ||
+              (scalarError === undefined &&
+                scalar?.kind === overlay &&
+                scalar.units === (overlay === 'temperature' ? '°C' : 'hPa') &&
+                scalar.level ===
+                  (overlay === 'temperature'
+                    ? '2 m above ground'
+                    : 'mean sea level'));
         if (
           manifest?.model !== model ||
+          (manifest.overlay ?? 'none') !== overlay ||
+          !scalarValid ||
           !grid ||
           !Number.isInteger(grid.nx) ||
           !Number.isInteger(grid.ny) ||
@@ -45,19 +70,20 @@ export function createWindSource({
           grid.dy <= 0 ||
           Math.abs(grid.nx * grid.dx - 360) > 0.01 ||
           !new RegExp(
-            `^/api/wind/grid/${model}-[\\w.-]+\\.bin\\?model=${model}$`,
+            `^/api/wind/grid/${model}-[\\w.-]+\\.bin\\?${query}$`,
           ).test(manifest.gridUrl)
         )
           throw new Error('Malformed wind manifest');
         const count = grid.nx * grid.ny;
+        const expectedBytes = count * (scalar ? 12 : 8);
         const gridResponse = await fetchImpl(manifest.gridUrl, {
           signal: active,
           redirect: 'error',
         });
         if (!gridResponse.ok)
           throw new Error(`Wind HTTP ${gridResponse.status}`);
-        const bytes = await readWindBody(gridResponse, count * 8, active);
-        if (bytes.byteLength !== count * 8)
+        const bytes = await readWindBody(gridResponse, expectedBytes, active);
+        if (bytes.byteLength !== expectedBytes)
           throw new Error('Malformed wind grid');
         const values = new Float32Array(bytes.buffer);
         if (!values.every(Number.isFinite))
@@ -65,7 +91,10 @@ export function createWindSource({
         return {
           ...manifest,
           u: values.slice(0, count),
-          v: values.slice(count),
+          v: values.slice(count, count * 2),
+          ...(scalar
+            ? { scalar: { ...scalar, values: values.slice(count * 2) } }
+            : {}),
         };
       } finally {
         clearTimeout(timer);

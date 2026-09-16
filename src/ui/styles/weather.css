@@ -1,0 +1,140 @@
+/* Weather controls form four stable rows: model, field, units, inspection. */
+[data-layer-id='wind'] .data-toggle-controls:not([hidden]) {
+  display: grid;
+  grid-template-columns: repeat(60, minmax(0, 1fr));
+  gap: 5px 0;
+  margin-left: 0;
+  padding-left: 0;
+  margin-top: 9px;
+}
+[data-layer-id='wind'] .data-toggle-chip {
+  grid-column: span 20;
+  margin-inline: 2px;
+  color: #a9b8bc;
+  letter-spacing: 0.5px;
+  padding-inline: 3px;
+}
+[data-layer-id='wind'] [data-chip-id^='overlay-'] {
+  grid-column: span 30;
+}
+[data-layer-id='wind'] .data-toggle-chip.active {
+  color: #70f0ff;
+}
+[data-layer-id='wind'] .data-toggle-chip:disabled {
+  opacity: 0.45;
+}
+[data-layer-id='wind'] .data-toggle-controls-info {
+  grid-column: 1 / -1;
+}
+[data-layer-id='wind'] .data-toggle-legend-item {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 3px;
+  min-width: 0;
+  margin-top: 7px;
+  color: #b9ccd0;
+  font-size: 9px;
+  text-align: center;
+}
+[data-layer-id='wind'] .data-toggle-legend-swatch {
+  width: 100%;
+  height: 4px;
+  border-radius: 1px;
+}
+/* Weather is one optional instrument within the existing layer panel. */
+[data-layer-id='wind'] .data-toggle-controls-info {
+  white-space: pre-line;
+  line-height: 1.6;
+  font-size: 10px;
+  color: #b9ccd0;
+  margin-top: 7px;
+}
+[data-layer-id='wind'] .data-toggle-chip {
+  min-height: 30px;
+  padding: 5px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+}
+[data-layer-id='wind'] .data-toggle-chip:focus-visible {
+  outline: 2px solid #89e5e5;
+  outline-offset: 2px;
+}
+[data-layer-id='wind'] [data-chip-id='inspect-center'] {
+  grid-column: 1 / -1;
+  text-align: center;
+  min-height: 36px;
+}
+@media (max-width: 600px) {
+  [data-layer-id='wind'] .data-toggle-chip {
+    min-height: 40px;
+  }
+}
+
+/* Observed weather reuses the same accessible layer-row controls. */
+:is([data-layer-id='weather-radar'], [data-layer-id='weather-satellite'])
+  .data-toggle-controls:not([hidden]) {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 5px;
+  margin: 9px 0 0;
+  padding: 0;
+}
+:is([data-layer-id='weather-radar'], [data-layer-id='weather-satellite'])
+  .data-toggle-chip {
+  grid-column: span 4;
+  min-height: 32px;
+  padding: 5px 3px;
+  border-radius: 4px;
+  font-size: 10px;
+  letter-spacing: 0.4px;
+}
+:is([data-layer-id='weather-radar'], [data-layer-id='weather-satellite'])
+  [data-chip-id='coverage'] {
+  grid-column: 1 / -1;
+}
+:is([data-layer-id='weather-radar'], [data-layer-id='weather-satellite'])
+  .data-toggle-chip:focus-visible {
+  outline: 2px solid #89e5e5;
+  outline-offset: 2px;
+}
+:is([data-layer-id='weather-radar'], [data-layer-id='weather-satellite'])
+  .data-toggle-chip:disabled {
+  opacity: 0.4;
+}
+:is([data-layer-id='weather-radar'], [data-layer-id='weather-satellite'])
+  .data-toggle-controls-info {
+  grid-column: 1 / -1;
+  white-space: pre-line;
+  line-height: 1.6;
+  font-size: 10px;
+  color: #b9ccd0;
+  margin-top: 7px;
+}
+[data-layer-id='weather-radar'] .data-toggle-legend-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  font-size: 9px;
+  text-align: center;
+}
+[data-layer-id='weather-radar'] .data-toggle-legend-swatch {
+  width: 100%;
+  height: 4px;
+  border-radius: 1px;
+}
+@media (max-width: 600px) {
+  :is([data-layer-id='weather-radar'], [data-layer-id='weather-satellite'])
+    .data-toggle-chip {
+    min-height: 40px;
+  }
+}
+
+[data-layer-id='wind'] .data-toggle-legend-item {
+  grid-column: span 10;
+}
+[data-layer-id='wind']:has([data-chip-id='overlay-temperature'].active)
+  .data-toggle-legend-item {
+  grid-column: span 6;
+}

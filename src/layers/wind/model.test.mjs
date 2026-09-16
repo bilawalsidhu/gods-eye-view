@@ -2,7 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { advectParticle, sampleWind, windColor } from './model.js';
 
-const field = { u: Float32Array.from([1, 2, 3, 4]), v: Float32Array.from([5, 6, 7, 8]), nx: 2, ny: 2, lo1: 0, la1: 90, dx: 180, dy: 90 };
+const field = {
+  u: Float32Array.from([1, 2, 3, 4]),
+  v: Float32Array.from([5, 6, 7, 8]),
+  nx: 2,
+  ny: 2,
+  lo1: 0,
+  la1: 90,
+  dx: 180,
+  dy: 90,
+};
 
 test('sampleWind interpolates, wraps, clamps, and rejects non-finite input', () => {
   assert.deepEqual(sampleWind(field, 0, 90), { u: 1, v: 5 });

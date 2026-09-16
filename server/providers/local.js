@@ -20,6 +20,7 @@ import { trackBackfillProxies } from './aircraft/tracks.js';
 import { openAiRealtimeProxy } from './openai.js';
 import { googlePlacesContextProxy } from './places.js';
 import { keySetupEndpoint } from '../standalone/key-setup.js';
+import { weatherProxy } from './weather.js';
 import { windProxy } from './wind.js';
 
 /** Construct the local provider plugins in their established order. */
@@ -47,6 +48,7 @@ function localProviderPlugins() {
     openAiRealtimeProxy(),
     googlePlacesContextProxy(),
     windProxy(),
+    weatherProxy(),
     keySetupEndpoint(),
   ];
 }

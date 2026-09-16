@@ -617,7 +617,8 @@
       "src/ui/styles/command-dock-sliding.css",
       "src/ui/styles/voice-cost.css",
       "src/ui/styles/first-run.css",
-      "src/ui/styles/provider-settings.css"
+      "src/ui/styles/provider-settings.css",
+      "src/ui/styles/weather.css"
     ],
     "external": []
   },
@@ -1278,6 +1279,12 @@
       "src/data/wind.js",
       "src/layers/wind/index.js",
       "src/layers/wind/model.js",
+      "src/layers/wind/fields.js",
+      "src/layers/wind/streamlines.js",
+      "src/layers/wind/gpuRendering.js",
+      "src/layers/wind/relief.js",
+      "src/layers/wind/inspection.js",
+      "src/layers/wind/presentation.js",
       "src/layers/wind/rendering.js",
       "src/layers/wind/source.js",
       "src/sources/windBody.js",
@@ -1789,6 +1796,9 @@
       "src/voice/realtimeRadio.js",
       "src/voice/realtimeTurns.js",
       "src/voice/realtimeConnection.js",
+      "src/layers/weather/index.js",
+      "src/layers/weather/rendering.js",
+      "src/layers/weather/source.js",
       "src/director/clock.js",
       "src/director/timeline.js",
       "src/scenes/shotPresentation.js",
@@ -1839,6 +1849,12 @@
       "src/app/constructCatalog.js",
       "src/layers/wind/index.js",
       "src/layers/wind/model.js",
+      "src/layers/wind/fields.js",
+      "src/layers/wind/streamlines.js",
+      "src/layers/wind/gpuRendering.js",
+      "src/layers/wind/relief.js",
+      "src/layers/wind/inspection.js",
+      "src/layers/wind/presentation.js",
       "src/layers/wind/rendering.js",
       "src/app/layers/aisLiveVessels.js",
       "src/app/layers/alprCameras.js",
@@ -2208,7 +2224,10 @@
       "src/sources/overpassFeaturesRecords.js",
       "src/sources/overpassFeatures.js",
       "src/sources/featureSource.js",
-      "src/sources/overpassRoads.js"
+      "src/sources/overpassRoads.js",
+      "src/layers/weather/index.js",
+      "src/layers/weather/rendering.js",
+      "src/layers/weather/source.js"
     ],
     "external": [
       "hls.js",
