@@ -1,9 +1,10 @@
+import { readRealtimeSource } from '../testSupport/readRealtimeSource.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const voiceConfig = readFileSync(new URL('../../server/providers/openai/instructions.js', import.meta.url), 'utf8');
-const realtime = readFileSync(new URL('./realtimeController.js', import.meta.url), 'utf8');
+const realtime = readRealtimeSource();
 
 test('aircraft identity narration acknowledges missing enrichment', () => {
   const start = voiceConfig.indexOf("'For \"what is this aircraft?\" answers");

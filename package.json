@@ -142,6 +142,7 @@
     "./ui/scenes": "./src/ui/scenes.js",
     "./ui/shell": "./src/ui/applicationShell.js",
     "./ui/styles": "./src/ui/styles.js",
+    "./director": "./src/director/playback.js",
     "./scenes": "./src/scenes/director.js",
     "./sources/live": "./src/sources/live/index.js",
     "./layers/flights": "./src/layers/flights/index.js",

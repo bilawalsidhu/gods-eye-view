@@ -614,10 +614,11 @@ function installSceneRuntime(project = PROJECT_FIXTURE) {
     removeEventListener() {},
     body: { classList: noopClassList, appendChild() {} },
   };
+  const stored = new Map([['godsEyeView.sceneProject.v2', JSON.stringify(project)]]);
   globalThis.localStorage = {
-    getItem: () => JSON.stringify(project),
-    setItem() {},
-    removeItem() {},
+    getItem: (key) => stored.get(key) ?? null,
+    setItem: (key, value) => stored.set(key, value),
+    removeItem: (key) => stored.delete(key),
   };
 
   return () => {
@@ -1395,5 +1396,124 @@ test('Scene load outcomes exclude superseded and disposed completions', async ()
     await Promise.all([late, disposal]);
     director.subscribe(() => assert.fail('disposed director must not notify'));
     assert.equal(seen.length, count);
+  } finally { restore(); }
+});
+
+test('invalid and unsupported imports retain the current project, selection and saved bytes', async () => {
+  const { director, restore } = makeDirector();
+  try {
+    const project = director._project;
+    const selected = director._selectedShotId;
+    const saved = localStorage.getItem('godsEyeView.sceneProject.v2');
+    for (const value of ['{}', '{"version":99,"scenes":[]}', '{"scenes":[{"shots":"bad"}]}']) {
+      await director.importProjectFile({ name: 'bad.json', text: async () => value });
+      assert.equal(director._project, project);
+      assert.equal(director._selectedShotId, selected);
+      assert.equal(localStorage.getItem('godsEyeView.sceneProject.v2'), saved);
+      assert.match(director._presentation.status, /Import failed: \$/);
+    }
+    let read = false;
+    await director.importProjectFile({ size: 6 * 1024 * 1024, text: async () => { read = true; } });
+    assert.equal(read, false);
+    assert.equal(director._project, project);
+  } finally { restore(); }
+});
+
+test('newer imports win delayed file reads, and an empty project is preserved', async () => {
+  const { director, restore } = makeDirector();
+  try {
+    let release;
+    const older = director.importProjectFile({ name: 'old.json', text: () => new Promise((resolve) => { release = resolve; }) });
+    await director.importProjectFile({ name: 'empty.json', text: async () => '{"version":3,"scenes":[]}' });
+    release(JSON.stringify(PROJECT_FIXTURE));
+    await older;
+    assert.deepEqual(director._project.scenes, []);
+    assert.equal(director._selectedSceneId, null);
+    assert.deepEqual(JSON.parse(localStorage.getItem('godsEyeView.sceneProject.v2')).scenes, []);
+  } finally { restore(); }
+});
+
+test('unsupported stored documents cannot be overwritten by fallback edits', async () => {
+  const { director, restore } = makeDirector({ project: { version: 99, scenes: [] } });
+  try {
+    const saved = localStorage.getItem('godsEyeView.sceneProject.v2');
+    assert.ok(director._storageReadError);
+    director._project.scenes[0].title = 'Fallback edit';
+    director._saveProject();
+    assert.equal(localStorage.getItem('godsEyeView.sceneProject.v2'), saved);
+    await director.importProjectFile({ name: 'valid.json', text: async () => JSON.stringify(PROJECT_FIXTURE) });
+    assert.equal(director._storageReadError, null);
+    assert.equal(JSON.parse(localStorage.getItem('godsEyeView.sceneProject.v2')).version, 6);
+  } finally { restore(); }
+});
+
+test('valid import settles a cancelled load before replacing the project', async () => {
+  const { director, styleManager, restore } = makeDirector();
+  let release;
+  styleManager.applyVisualState = () => new Promise((resolve) => { release = resolve; });
+  try {
+    const before = director._project;
+    const load = director.loadShot('scene-1', 'shot-a');
+    await settle();
+    const importing = director.importProjectFile({ name: 'empty.json', text: async () => '{"version":3,"scenes":[]}' });
+    await settle();
+    assert.equal(director._project, before, 'old work still owns cleanup');
+    release(true);
+    await Promise.all([load, importing]);
+    assert.deepEqual(director._project.scenes, []);
+    assert.equal(director._pendingWork.size, 0);
+    assert.equal(director.getPlaybackTimingState().activeTimers, 0);
+  } finally { restore(); }
+});
+
+test('a delayed import cannot publish after disposal', async () => {
+  const { director, restore } = makeDirector();
+  let release;
+  try {
+    const before = director._project;
+    const reading = director.importProjectFile({ name: 'empty.json', text: () => new Promise((resolve) => { release = resolve; }) });
+    await director.destroy();
+    release('{"version":3,"scenes":[]}');
+    await reading;
+    assert.equal(director._project, before);
+  } finally { restore(); }
+});
+
+test('invalid authored edits cannot persist an unreadable project over a good save', () => {
+  const { director, restore } = makeDirector();
+  try {
+    const before = localStorage.getItem('godsEyeView.sceneProject.v2');
+    let notice;
+    director._toastStorageError = (message) => { notice = message; };
+    director._project.scenes[0].shots[0].camera.lat = 91;
+    director._saveProject();
+    assert.equal(localStorage.getItem('godsEyeView.sceneProject.v2'), before);
+    assert.match(notice, /camera.lat/);
+  } finally { restore(); }
+});
+
+test('zero camera pitch is preserved by both immediate placement and ordinary flight', async () => {
+  const { director, viewer, restore } = makeDirector();
+  try {
+    let placed;
+    viewer.camera.setView = (options) => { placed = options; };
+    const pose = { lat: 10, lon: 20, alt: 500, heading: 0, pitch: 0, roll: 0 };
+    director._setCameraView(pose);
+    assert.equal(placed.orientation.pitch, 0);
+    await director._flyCamera(pose, 0.2, { cancelled: false });
+    assert.equal(viewer.flights.at(-1).orientation.pitch, 0);
+  } finally { restore(); }
+});
+
+test('camera refusal starts no authored frame or playback clock', async () => {
+  const { director, styleManager, viewer, restore } = makeDirector();
+  try {
+    const shot = director._project.scenes[0].shots[0];
+    shot.move = { from: { ...shot.camera, altitudeReference: 'ellipsoid' }, easing: 'linear' };
+    styleManager.runImmediateNavigation = () => false;
+    assert.equal((await director.startScene('scene-1', { single: true })).reason, 'camera-unavailable');
+    assert.equal(director._cameraMotion.active, false);
+    assert.equal(director.getPlaybackTimingState().activeTimers, 0);
+    assert.deepEqual(viewer.flights, []);
   } finally { restore(); }
 });
