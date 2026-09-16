@@ -2606,8 +2606,8 @@ gate. Thirteen keyless regions are available: Boston, Austin, Minneapolis–St P
 Helsinki, the Netherlands, Norway, South East Queensland, Toronto (TTC
 surface vehicles; the subway publishes no positions), the Golden Horseshoe
 neighbours MiWay, Hamilton HSR and Durham Region Transit, and Guelph and
-Kingston. Barrie is registered but ships off, pending acceptance of its
-click-through licence. Mode silhouettes
+Kingston. Barrie and YRT/Viva are registered but ship off,
+pending acceptance of their licences. Mode silhouettes
 identify buses, trams, subways, trains, ferries and unclassified vehicles.
 
 Retained transit history uses the same outlier quarantine as live observations and

@@ -185,6 +185,31 @@ function guelphRouteLabel(routeId) {
 }
 
 /**
+ * YRT publishes Viva bus rapid transit by route id (`601`), while every rider,
+ * station sign and map calls it "Viva Blue". The local routes are already the
+ * number on the bus and are left alone. Colours are from York Region's own
+ * published GTFS `routes.txt`; Viva Green (604) and Pink (606) are not in
+ * current service and so are absent here too.
+ */
+const YRT_VIVA_ROUTE_NAMES = Object.freeze({
+  601: 'Viva Blue',
+  60102: 'Viva Blue B',
+  603: 'Viva Purple',
+  60301: 'Viva Purple A',
+  605: 'Viva Orange',
+  607: 'Viva Yellow',
+});
+
+/**
+ * YRT route id to the name a rider would say.
+ * @param {string|null} routeId
+ * @returns {string|null}
+ */
+function yrtRouteLabel(routeId) {
+  return YRT_VIVA_ROUTE_NAMES[routeId] || routeId;
+}
+
+/**
  * Registry of feeds. Order is presentation order in the stats/credit text.
  * `loadRadiusKm` is the distance from `center` inside which the feed is polled.
  * @type {ReadonlyArray<Readonly<{
@@ -489,6 +514,29 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
       note: 'OFF until a person on this project accepts the licence. The City publishes the feed directory behind a click-through "I agree" checkbox and a CAPTCHA; the endpoint itself needs no key, token or cookie, but the terms are offered for acceptance and nobody here has accepted them. That is a decision for a human, not something a poller should assume, so this ships registered and unpolled until someone ticks the box \u2014 then flip this one line. Two further oddities worth knowing: the licence requires NO attribution at all (the credit above is a courtesy), and its trademark clause is broad enough that the credit names the City rather than Barrie Transit. The grant is expressly REVOCABLE and unversioned, so the quote above is the text as read on 2026-09-16.',
     }),
     defaultMode: 'bus',
+  }),
+  Object.freeze({
+    id: 'yrt-york',
+    name: 'YRT/Viva',
+    operator:
+      'York Region Transit (YRT/Viva), The Regional Municipality of York',
+    region: 'York Region, ON',
+    center: Object.freeze({ lat: 44.025, lon: -79.436 }),
+    loadRadiusKm: 38,
+    url: 'https://rtu.york.ca/gtfsrealtime/VehiclePositions',
+    license: 'YRT Open Data Licence v2.0 (UK OGL-derived)',
+    licenseUrl:
+      'https://www.yrt.ca/en/about-us/open-data-licence-agreement.aspx',
+    attribution:
+      "Contains public transit Information made available under YRT's Open Data Licence",
+    defaultEnabled: false,
+    terms: Object.freeze({
+      quote:
+        'YRT grants You a worldwide, royalty-free, perpetual, non-exclusive licence to Use the Information subject to the conditions below ... Use the Information commercially ... Provide credit to YRT when using Information under this licence but are not required to. ... Please note: You must agree with and accept the above stated License Agreement in order to download YRT GTFS or real-time GTFS data.',
+      note: 'OFF for the same reason as Barrie: the operator asks that its licence be accepted through a form (forms.yrt.ca/YRT-GTFS-Data, which collects a name, company, phone and email and issues no credential) before the data is taken. Nothing gates the endpoint, and the licence body also says use is itself acceptance \u2014 but a form asking for contact details is close enough to the registration this registry refuses that a person, not a poller, should decide. Flip this one line once someone has answered it. The credit above is the licence\u2019s own wording and must be reproduced as given; attribution is optional here, and given anyway. Logos, trademarks and crests are carved out, so the credit stays text. Two data notes: no vehicle carries a bearing, so heading comes from observed movement; and one stuck unit reported a position ten hours old, which the layer shows as a stale report rather than hides.',
+    }),
+    defaultMode: 'bus',
+    routeLabel: yrtRouteLabel,
   }),
 ]);
 

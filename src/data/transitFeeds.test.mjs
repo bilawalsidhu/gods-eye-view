@@ -390,3 +390,20 @@ test('Barrie is registered but unpolled until its licence is accepted', () => {
     'never offered to the browser',
   );
 });
+
+test('YRT is registered but unpolled until its licence form is answered', () => {
+  assert.equal(getRegisteredTransitFeed('yrt-york')?.name, 'YRT/Viva');
+  assert.equal(getTransitFeed('yrt-york'), null, 'not routable');
+});
+
+test('Viva bus rapid transit is named by its colour, not its route number', () => {
+  // YRT publishes `601` where every rider, map and station sign says
+  // "Viva Blue". The numeric local routes already read correctly and are
+  // left alone.
+  const yrt = getRegisteredTransitFeed('yrt-york');
+  assert.equal(transitRouteLabel(yrt, '601'), 'Viva Blue');
+  assert.equal(transitRouteLabel(yrt, '60301'), 'Viva Purple A');
+  assert.equal(transitRouteLabel(yrt, '607'), 'Viva Yellow');
+  assert.equal(transitRouteLabel(yrt, '105'), '105', 'a local bus is a number');
+  assert.equal(transitRouteLabel(yrt, '9899'), '9899');
+});
