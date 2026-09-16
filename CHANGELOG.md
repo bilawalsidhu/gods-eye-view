@@ -23,6 +23,11 @@
   service starts upsampling, symbol layers follow the camera further.
 - Report `UNAVAILABLE · ADD XWEATHER KEY` without a key rather than an empty
   globe. This layer has no keyless mode.
+- Keep drawing under a photorealistic 3D map stack by draping the imagery on
+  the tileset, rather than going dark with the globe. Cesium truncates draped
+  imagery from the top of the stack, so a small budget is spent on the sparse
+  overlays first, the layer row reports drawn against selected, and the panel
+  marks the rows being held back.
 - Separate Director timing, seek calculations, playback clocks and registered
   scene-pack presentation rules. Preserve authored content and controls; Stop
   releases pending hold timers and stale ticks cannot affect replacement playback.

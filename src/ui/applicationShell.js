@@ -791,6 +791,10 @@ export class StyleManager extends ShellFacade {
   /** Wire the Weather panel: which layers draw, and when they may cost. */
   _initWeatherPanel() {
     this._weatherControls?.destroy();
+    // The drape budget differs by map stack, so the panel repaints with it.
+    this._lifetime.listen(window, 'gev:map-stack-changed', () =>
+      this._syncWeatherPanel(),
+    );
     this._weatherControls = bindWeatherControls({
       elements: {
         overlays: this._weatherOverlays,
@@ -888,7 +892,11 @@ export class StyleManager extends ShellFacade {
       // The panel still works without the readout; the layer row is where an
       // unreachable service is reported.
     }
-    this._weatherControls.sync(params, status);
+    // Which rows can actually draw depends on where the scene is drawing: a
+    // photoreal stack takes a much smaller set of layers than the globe.
+    const regime =
+      this.mapStackController?.getImageryTarget?.().regime ?? 'globe';
+    this._weatherControls.sync(params, status, regime);
   }
 
   /** Wire the independent Radio companion controls. */
