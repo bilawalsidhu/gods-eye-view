@@ -3,6 +3,75 @@ import {
   normalizeVesselType,
 } from '../../data/vesselLabels.js';
 
+/**
+ * Format raw APRS telemetry into a concise tactical card detail line:
+ * `TLM #<seq> · A: a1, a2, ... · D: <digitalBits>`
+ * Units are not invented because APRS defines them in separate messages.
+ * @param {Object|null|undefined} telemetry Raw telemetry object.
+ * @returns {string} Formatted detail line or empty string if absent.
+ */
+export function formatTelemetry(telemetry) {
+  if (!telemetry || typeof telemetry !== 'object') return '';
+  const parts = [];
+  const seq = telemetry.sequence;
+  if (seq !== null && seq !== undefined && Number.isFinite(Number(seq))) {
+    parts.push(`TLM #${Number(seq)}`);
+  } else {
+    parts.push('TLM');
+  }
+  if (Array.isArray(telemetry.analog) && telemetry.analog.length > 0) {
+    parts.push(`A: ${telemetry.analog.join(', ')}`);
+  }
+  if (telemetry.digitalBits) {
+    parts.push(`D: ${String(telemetry.digitalBits).trim()}`);
+  }
+  return parts.length > 1 || parts[0] !== 'TLM' ? parts.join(' · ') : '';
+}
+
+/**
+ * Compact summary for ambient cards when primary navigation metrics are absent.
+ * @param {Object|null|undefined} telemetry
+ * @returns {string}
+ */
+export function formatTelemetrySummary(telemetry) {
+  if (!telemetry || typeof telemetry !== 'object') return '';
+  const seq = telemetry.sequence;
+  if (seq !== null && seq !== undefined && Number.isFinite(Number(seq))) {
+    return `TLM #${Number(seq)}`;
+  }
+  if (
+    (Array.isArray(telemetry.analog) && telemetry.analog.length > 0) ||
+    telemetry.digitalBits
+  ) {
+    return 'TLM';
+  }
+  return '';
+}
+
+/**
+ * Single-line telemetry readout formatted for the monospace HUD corner.
+ * Uses HUD double-space metric separation.
+ * @param {Object|null|undefined} telemetry
+ * @returns {string}
+ */
+export function formatHudTelemetry(telemetry) {
+  if (!telemetry || typeof telemetry !== 'object') return '';
+  const parts = [];
+  const seq = telemetry.sequence;
+  if (seq !== null && seq !== undefined && Number.isFinite(Number(seq))) {
+    parts.push(`TLM: #${Number(seq)}`);
+  } else {
+    parts.push('TLM: --');
+  }
+  if (Array.isArray(telemetry.analog) && telemetry.analog.length > 0) {
+    parts.push(`A: ${telemetry.analog.join(',')}`);
+  }
+  if (telemetry.digitalBits) {
+    parts.push(`D: ${String(telemetry.digitalBits).trim()}`);
+  }
+  return parts.length > 1 || parts[0] !== 'TLM: --' ? parts.join('  ') : '';
+}
+
 export function createCards({
   vesselState,
   services,
@@ -19,11 +88,20 @@ export function createCards({
     // Pinned vessels missing from recent refreshes get a stale marker
     const stale = (record.missedRefreshes || 0) > 0;
     el.classList.add('active');
-    el.textContent = [
-      `AIS: ${trimHudValue(record.name, 32)}`,
+    const isAprs = Boolean(
+      record?.reference?.startsWith('aprs:') || record?.telemetry,
+    );
+    const idLabel = isAprs ? 'CALL' : 'MMSI';
+    const lines = [
+      `${isAprs ? 'APRS' : 'AIS'}: ${trimHudValue(record.name, 32)}`,
       `${trimHudValue(record.type || 'VESSEL', 24)}  SPD: ${formatSpeed(record.speed)}  HDG: ${formatHeading(record.heading ?? record.course)}`,
-      `MMSI: ${record.mmsi || '--'}  ${formatPositionTime(record)}${stale ? '  · STALE' : ''}`,
-    ].join('\n');
+      `${idLabel}: ${record.mmsi || '--'}  ${formatPositionTime(record)}${stale ? '  · STALE' : ''}`,
+    ];
+    if (record.telemetry) {
+      const tlmLine = formatHudTelemetry(record.telemetry);
+      if (tlmLine) lines.push(tlmLine);
+    }
+    el.textContent = lines.join('\n');
   }
 
   function resetSelectedVesselHud() {
@@ -57,6 +135,10 @@ export function createCards({
       parts.push(formatSpeed(record.speed));
     const direction = record.heading ?? record.course;
     if (Number.isFinite(direction)) parts.push(`${Math.round(direction)}°`);
+    if (parts.length === 0 && record.telemetry) {
+      const summary = formatTelemetrySummary(record.telemetry);
+      if (summary) parts.push(summary);
+    }
     return {
       id: vesselOverlayEntryId(record),
       actionable: Boolean(record?.mmsi),
@@ -93,9 +175,17 @@ export function createCards({
     const destination = String(record.destination || '').trim();
     if (destination) details.push(`→ ${trimHudValue(destination, 24)}`);
     const stale = (record.missedRefreshes || 0) > 0;
-    details.push(
-      `MMSI ${record.mmsi || '--'} · ${formatPositionTime(record)}${stale ? ' · STALE' : ''}`,
+    const isAprs = Boolean(
+      record?.reference?.startsWith('aprs:') || record?.telemetry,
     );
+    const idLabel = isAprs ? 'CALL' : 'MMSI';
+    details.push(
+      `${idLabel} ${record.mmsi || '--'} · ${formatPositionTime(record)}${stale ? ' · STALE' : ''}`,
+    );
+    if (record.telemetry) {
+      const tlmLine = formatTelemetry(record.telemetry);
+      if (tlmLine) details.push(tlmLine);
+    }
     return {
       id: vesselOverlayEntryId(record),
       actionable: Boolean(record?.mmsi),
@@ -151,6 +241,10 @@ export function createCards({
   function displayVesselName(record) {
     const name = String(record.name || '').trim();
     if (name && name !== 'VESSEL' && name !== record.mmsi) return name;
+    const isAprs = Boolean(
+      record?.reference?.startsWith('aprs:') || record?.telemetry,
+    );
+    if (isAprs && record.mmsi) return record.mmsi;
     return record.mmsi ? `MMSI ${record.mmsi}` : 'VESSEL';
   }
 
@@ -181,5 +275,8 @@ export function createCards({
     formatSpeed,
     formatHeading,
     formatPositionTime,
+    formatTelemetry,
+    formatTelemetrySummary,
+    formatHudTelemetry,
   };
 }

@@ -204,6 +204,7 @@ export function createSelection({
           speedKt: record.speed,
           course: record.course,
           destination: record.destination,
+          ...(record.telemetry ? { telemetry: record.telemetry } : {}),
         },
       });
     } catch (error) {
