@@ -21,7 +21,11 @@ function readRequestBody(req, maxBytes = 1024 * 1024) {
     req.on('data', (chunk) => {
       total += chunk.length;
       if (total > maxBytes) {
-        reject(new Error(`Request body exceeds ${maxBytes} bytes`));
+        // Same marker readRequestBodyCapped sets, so a caller can tell an
+        // oversized body from a genuine failure without matching on text.
+        const error = new Error(`Request body exceeds ${maxBytes} bytes`);
+        error.code = 'BODY_TOO_LARGE';
+        reject(error);
         req.destroy();
         return;
       }

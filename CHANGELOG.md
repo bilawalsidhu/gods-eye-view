@@ -105,6 +105,8 @@
 
 - Expose portable radio, camera-type and regional source helpers; keep HTTP transport separate from record normalization.
 
+- The Realtime debug-log endpoint is bounded on every axis it was not: an always-on per-client rate limit, asynchronous appends through a serialized queue instead of a synchronous write on the request path, and rotation of the log file at 32 MB keeping one prior generation. The 8 MB cap applied to a single request body and never to the file those requests accumulated into, so any local page could grow it for as long as the dev server ran. A malformed record and a failed write are now told apart, 400 from 500, and neither answer carries the error text.
+
 - Separate vessel records and feed acquisition from rendering while preserving selection, partial-feed retention, sea-surface placement and request cancellation.
 
 - Separate military-flight records and acquisition from rendering while preserving ground-model ownership, source units and follow behavior.
