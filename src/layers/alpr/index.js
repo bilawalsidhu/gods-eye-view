@@ -306,8 +306,36 @@ export function createAlprCamerasLayer({ source, services } = {}) {
       state.saturated = false;
       state.viewer = null;
     },
+    /**
+     * Snapshot the loaded camera records as plain JSON-safe objects for the
+     * analyst query engine ("how many plate readers within 5 km?"). On-demand
+     * only — no listeners, no caching. Returns [] while disabled or empty.
+     * This layer loads by viewport, so a count is a loaded-data count, never
+     * a world count; the analyst coverage note says so.
+     * @param {number} [maxCount=2000] - Maximum records to return (truncation).
+     */
+    getAnalystRecords(maxCount = 2000) {
+      if (!state.enabled || !state.records.length) return [];
+      const limit = Number.isFinite(maxCount)
+        ? Math.max(1, Math.floor(maxCount))
+        : 2000;
+      return state.records.slice(0, limit).map((record) => ({
+        id: record.id,
+        lat: record.latitude,
+        lon: record.longitude,
+        operator: record.operator,
+        manufacturer: record.manufacturer,
+        cameraType: record.cameraType,
+        zone: record.zone,
+        ref: record.ref,
+        directionDeg: record.directionDeg,
+      }));
+    },
     getRowControls() {
       const count = state.dataSource?.entities.values.length || 0;
+      const selected = state.selectedId
+        ? state.recordById.get(state.selectedId)
+        : null;
       return {
         chips: [
           {
@@ -319,6 +347,25 @@ export function createAlprCamerasLayer({ source, services } = {}) {
             disabled:
               !state.enabled || !count || Boolean(state.viewer?.trackedEntity),
             onClick: focusNearest,
+          },
+          {
+            id: 'edit-osm',
+            label: 'FIX ON OSM',
+            title: Number.isSafeInteger(selected?.osmId)
+              ? 'Open this camera on OpenStreetMap to verify or correct it'
+              : 'Select a camera, then open it on OpenStreetMap so corrections flow back to the shared map',
+            disabled: !state.enabled || !Number.isSafeInteger(selected?.osmId),
+            onClick: () => {
+              const record = state.selectedId
+                ? state.recordById.get(state.selectedId)
+                : null;
+              if (!Number.isSafeInteger(record?.osmId)) return;
+              window.open(
+                `https://www.openstreetmap.org/node/${record.osmId}`,
+                '_blank',
+                'noopener,noreferrer',
+              );
+            },
           },
         ],
         legend: [

@@ -771,6 +771,7 @@ const schemas = [
               'ais-live-vessels',
               'local-firms',
               'earthquakes',
+              'alpr-cameras',
             ],
           },
         },

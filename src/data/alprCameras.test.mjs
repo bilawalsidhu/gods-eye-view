@@ -1126,3 +1126,118 @@ test('nearby count and discovery control frame a real loaded camera without fetc
     h.restore();
   }
 });
+
+test('analyst records snapshot the loaded cameras and vanish when disabled', async () => {
+  const h = cameraHarness();
+  try {
+    h.setFetch(async () =>
+      cameraResponse([
+        cameraNode(42, {
+          tags: {
+            'surveillance:type': 'ALPR',
+            manufacturer: 'Flock Safety',
+            operator: 'City Police',
+            'camera:type': 'fixed',
+            'surveillance:zone': 'traffic',
+            ref: 'CAM-9',
+            direction: '135',
+          },
+        }),
+        cameraNode(43, { tags: { 'surveillance:type': 'ALPR' } }),
+      ]),
+    );
+    await alprCamerasLayer.update();
+    const records = alprCamerasLayer.getAnalystRecords();
+    assert.equal(records.length, 2);
+    assert.deepEqual(records[0], {
+      id: 'alpr:42',
+      lat: 30.2672,
+      lon: -97.7431,
+      operator: 'City Police',
+      manufacturer: 'Flock Safety',
+      cameraType: 'fixed',
+      zone: 'traffic',
+      ref: 'CAM-9',
+      directionDeg: 135,
+    });
+    assert.equal(
+      alprCamerasLayer.getAnalystRecords(1).length,
+      1,
+      'maxCount truncates',
+    );
+    alprCamerasLayer.disable();
+    assert.deepEqual(
+      alprCamerasLayer.getAnalystRecords(),
+      [],
+      'a disabled layer answers with no records',
+    );
+  } finally {
+    h.restore();
+  }
+});
+
+test('FIX ON OSM follows the selected camera to its OpenStreetMap node', async () => {
+  const h = cameraHarness();
+  const opened = [];
+  globalThis.window.open = (...args) => {
+    opened.push(args);
+  };
+  try {
+    await alprCamerasLayer.update();
+    const chip = () =>
+      alprCamerasLayer.getRowControls().chips.find((c) => c.id === 'edit-osm');
+    assert.equal(chip().disabled, true, 'no selection, no link target');
+    chip().onClick();
+    assert.equal(opened.length, 0, 'a disabled chip must open nothing');
+    h.click('alpr:42');
+    assert.equal(chip().disabled, false);
+    chip().onClick();
+    assert.deepEqual(opened, [
+      [
+        'https://www.openstreetmap.org/node/42',
+        '_blank',
+        'noopener,noreferrer',
+      ],
+    ]);
+  } finally {
+    delete globalThis.window.open;
+    h.restore();
+  }
+});
+
+test('zone, ref and verification date appear on the card only when mapped', async () => {
+  const h = cameraHarness();
+  try {
+    h.setFetch(async () =>
+      cameraResponse([
+        cameraNode(42, {
+          tags: {
+            'surveillance:type': 'ALPR',
+            manufacturer: 'Flock Safety',
+            'surveillance:zone': 'traffic',
+            ref: 'CAM-9',
+            check_date: '2026-05-01',
+          },
+        }),
+        cameraNode(43, { tags: { 'surveillance:type': 'ALPR' } }),
+      ]),
+    );
+    await alprCamerasLayer.update();
+    const entities = h.source.entities.values;
+    assert.deepEqual(entities[0].gevLabelModel.details, [
+      'OSM MAPPED',
+      'FLOCK SAFETY',
+      'ZONE TRAFFIC',
+      'REF CAM-9',
+      'VERIFIED 2026-05-01',
+      'PUBLIC MAP DATA',
+    ]);
+    assert.deepEqual(
+      entities[1].gevLabelModel.details,
+      ['OSM MAPPED', 'PUBLIC MAP DATA'],
+      'absent tags stay absent instead of rendering empty rows',
+    );
+  } finally {
+    h.restore();
+  }
+});

@@ -505,13 +505,13 @@ export const ACTION_DESCRIPTIONS = {
   },
   analyst_query: {
     description:
-      'Answer questions ABOUT the data currently loaded on the map — counts, lists, superlatives, and attribute filters over live layers (flights, military, ships, fires, earthquakes). Examples: "how many flights over Texas", "biggest fire near LA", "which ships are headed to Oakland", "anything above 40,000 feet", "fastest thing in view". Queries ONLY client-side data from ENABLED layers — if the needed layer is off, say so and offer to enable it. For a follow-up about the previous answer\'s set ("which of those is closest?"), set followUp=true and send only the new filters/sort.',
+      'Answer questions ABOUT the data currently loaded on the map — counts, lists, superlatives, and attribute filters over live layers (flights, military, ships, fires, earthquakes, mapped ALPR cameras). Examples: "how many flights over Texas", "biggest fire near LA", "which ships are headed to Oakland", "anything above 40,000 feet", "how many plate readers within 5 km". Queries ONLY client-side data from ENABLED layers — if the needed layer is off, say so and offer to enable it. For a follow-up about the previous answer\'s set ("which of those is closest?"), set followUp=true and send only the new filters/sort.',
     $position: 1,
     parameters: {
       properties: {
         layers: {
           description:
-            'Layers to query. fires/wildfires → local-firms; ships/vessels → ais-live-vessels.',
+            'Layers to query. fires/wildfires → local-firms; ships/vessels → ais-live-vessels; plate readers/ALPR/Flock cameras → alpr-cameras (viewport-loaded: counts cover the loaded city view, not the world).',
           $position: 2,
         },
         scope: {
@@ -532,7 +532,7 @@ export const ACTION_DESCRIPTIONS = {
         },
         filters: {
           description:
-            'Attribute predicates, ANDed. ALTITUDE IS METERS (40,000 ft = 12192). Fields: altitudeM, speedMps, military, onGround, aircraftClass, callsign, operator, routeOrigin, routeDestination, originCountry (flights); speedKts, shipType, destination (ships); frp, confidence (fires); magnitude, depthKm, place (earthquakes).',
+            'Attribute predicates, ANDed. ALTITUDE IS METERS (40,000 ft = 12192). Fields: altitudeM, speedMps, military, onGround, aircraftClass, callsign, operator, routeOrigin, routeDestination, originCountry (flights); speedKts, shipType, destination (ships); frp, confidence (fires); magnitude, depthKm, place (earthquakes); operator, manufacturer, cameraType, zone, ref (alpr-cameras — "Flock cameras" = filter manufacturer contains flock).',
           $position: 1,
         },
         sortBy: {
