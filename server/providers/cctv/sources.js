@@ -55,6 +55,10 @@ import {
   DEFAULT_CALGARY_MAX_SOURCES,
   CALGARY_DOWNTOWN,
   CALGARY_MAX_CATALOG_BYTES,
+  FLORIDA_CCTV_URL,
+  FLORIDA_IMAGE_HOSTS,
+  DEFAULT_FLORIDA_MAX_SOURCES,
+  FLORIDA_ANCHORS,
   CCTV_SOURCE_FETCH_TIMEOUT_MS,
 } from './constants.js';
 import {
@@ -1589,6 +1593,125 @@ export async function loadCalgarySourcesFromOpenData() {
   } catch (error) {
     console.warn(
       '[CCTV] Calgary camera download error:',
+      error?.message || error,
+    );
+    return [];
+  }
+}
+
+/**
+ * FL511 (Florida DOT) statewide traffic cameras -> catalog sources.
+ *
+ * Catalog is an ArcGIS FeatureServer (JSON), paged 2000 at a time — the
+ * statewide set is ~4,000 cameras, past the service's single-page ceiling, so
+ * the fetch loops on resultOffset until a short page ends it. Every row is a
+ * still image on one of two Divas Cloud hosts; both are host-pinned and any
+ * row whose IMAGE resolves elsewhere is dropped, so a catalog edit can't point
+ * the proxy at an arbitrary origin.
+ *
+ * UNLIKE Calgary, the DIRECTION field IS a real camera bearing. The distinct
+ * set is exactly N/S/E/W plus "NOT DIRECTIONAL" — cardinal compass headings,
+ * not an address grid, so directionToHeading() is trusted for the four
+ * cardinals. "NOT DIRECTIONAL" matches no cardinal, returns non-finite, and
+ * falls through to the shared id-hash fallback at low confidence, exactly as
+ * headingless TfL and Fintraffic cameras do; the operator corrects with the
+ * calibration gizmo.
+ *
+ * Stills only. FL511's HLS streams are not exposed on the FeatureServer, so
+ * this pack is snapshot-only and carries no feedType: 'hls' rows.
+ *
+ * @returns {Promise<Array<object>>} Prioritized camera source objects.
+ */
+export async function loadFloridaSourcesFromOpenData() {
+  try {
+    const rows = [];
+    const pageSize = 2000;
+    // Hard page ceiling: the statewide set is ~3 pages. If the service ever
+    // ignores resultOffset (returns a full page forever), this stops the loop
+    // instead of spinning to OOM.
+    for (let offset = 0, page = 0; page < 10; offset += pageSize, page += 1) {
+      const url = `${FLORIDA_CCTV_URL}?where=1%3D1&outFields=*&f=json&resultRecordCount=${pageSize}&resultOffset=${offset}`;
+      const resp = await fetch(url, {
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+      });
+      if (!resp.ok) {
+        console.warn('[CCTV] Florida camera download failed:', resp.status);
+        break;
+      }
+      const body = await resp.json();
+      const feats = Array.isArray(body?.features) ? body.features : [];
+      rows.push(...feats);
+      // ArcGIS sets exceededTransferLimit when more rows remain; absence (or a
+      // short page) means this was the last one.
+      if (feats.length < pageSize || body.exceededTransferLimit !== true) break;
+    }
+
+    const cameras = [];
+    for (const feat of rows) {
+      const a = feat?.attributes || {};
+      const lat = toFiniteNumber(a.LATITUDE);
+      const lon = toFiniteNumber(a.LONGITUDE);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+
+      const imageUrl = String(a.IMAGE || '');
+      let host = '';
+      try {
+        host = new URL(imageUrl).host;
+      } catch {
+        continue;
+      }
+      if (!FLORIDA_IMAGE_HOSTS.includes(host)) continue; // host pin
+
+      const rawId = String(a.ID || '').trim();
+      if (!rawId) continue;
+      const cameraId = `fl-${rawId}`;
+
+      const heading = directionToHeading(
+        String(a.DIRECTION || '')
+          .trim()
+          .toUpperCase(),
+        true,
+      );
+      const hasHeading = Number.isFinite(heading);
+
+      cameras.push({
+        id: cameraId,
+        name: String(a.DESCRIPT || '').trim() || `FL511 ${rawId}`,
+        city: String(a.COUNTY ? `${a.COUNTY} County` : 'Florida'),
+        cityId: 'florida',
+        provider: 'FL511',
+        lat,
+        lon,
+        headingDeg: hasHeading ? heading : fallbackHeadingFromId(cameraId),
+        headingConfidence: hasHeading ? 'high' : 'low',
+        pitchDeg: hasHeading ? -24 : -18,
+        fovDeg: hasHeading ? 56 : 44,
+        rangeM: hasHeading ? 210 : 145,
+        mountHeightM: hasHeading ? 10 : 8,
+        groundElevationM: 5,
+        feedType: 'image',
+        url: imageUrl,
+        snapshotUrl: imageUrl,
+        sourceKind: 'fl511-open-data',
+        license: 'Florida DOT FL511 traffic camera',
+      });
+    }
+
+    const maxRaw = Number(
+      process.env.CCTV_FLORIDA_MAX_SOURCES || DEFAULT_FLORIDA_MAX_SOURCES,
+    );
+    const maxCount = Number.isFinite(maxRaw)
+      ? Math.max(8, Math.min(4200, Math.floor(maxRaw)))
+      : DEFAULT_FLORIDA_MAX_SOURCES;
+    const prioritized = prioritizeSources(cameras, maxCount, FLORIDA_ANCHORS);
+    console.log(
+      `[CCTV] Loaded Florida camera sources: ${cameras.length} published (using nearest ${prioritized.length})`,
+    );
+    return prioritized;
+  } catch (error) {
+    console.warn(
+      '[CCTV] Florida camera download error:',
       error?.message || error,
     );
     return [];
