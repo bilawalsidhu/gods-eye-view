@@ -4,7 +4,10 @@
  * scene state, no network: everything here is exercised by node:test.
  */
 
-import { TRANSIT_MODE_ICON } from '../../data/transitFeeds.js';
+import {
+  TRANSIT_MODE_ICON,
+  transitRouteLabel,
+} from '../../data/transitFeeds.js';
 import { displayMotion, playbackPosition } from './movement.js';
 
 export const TRANSIT_SELECTED_OVERLAY_SOURCE_ID = 'transit-selected';
@@ -337,7 +340,7 @@ export function buildTransitSelectionCopy(
 ) {
   const icon = TRANSIT_MODE_ICON[mode] || TRANSIT_MODE_ICON.unknown;
   const routeLabel = record.routeId
-    ? `Route ${record.routeId}`
+    ? `Route ${transitRouteLabel(feed, record.routeId)}`
     : record.label
       ? `Vehicle ${record.label}`
       : `Vehicle ${record.id}`;
@@ -515,12 +518,14 @@ export function transitModeAbbr(mode, feed = null) {
  * names one, else the fleet number, else the raw id. What a person standing at
  * the stop would call it.
  * @param {object} record Normalized vehicle record.
+ * @param {object|null} [feed] Registry entry, for feeds whose route ids are
+ *   internal keys rather than the number on the vehicle.
  * @returns {string}
  */
-export function transitDetectionId(record) {
+export function transitDetectionId(record, feed = null) {
   const route =
     typeof record?.routeId === 'string' ? record.routeId.trim() : '';
-  if (route) return elideRouteText(route);
+  if (route) return elideRouteText(transitRouteLabel(feed, route));
   const label = typeof record?.label === 'string' ? record.label.trim() : '';
   if (label) return elideRouteText(label);
   return elideRouteText(String(record?.id || 'TRANSIT'));

@@ -13,6 +13,7 @@ import {
   transitFeedsInRange,
   transitModeFor,
   transitModeResolved,
+  transitRouteLabel,
 } from './transitFeeds.js';
 
 test('every registered feed is keyless, https, licensed, and uniquely identified', () => {
@@ -345,4 +346,47 @@ test('every Golden Horseshoe feed is documented with its licence', () => {
     );
   }
   assert.match(sources, /Durham Region Transit publishes no bearing/);
+});
+
+test('a feed whose route ids are internal database keys can name its routes', () => {
+  // Guelph's realtime feed emits `2991` where the rider sees route `1`. A feed
+  // that knows the difference translates it; every other feed is unaffected.
+  const guelph = getTransitFeed('guelph-transit');
+  assert.equal(transitRouteLabel(guelph, '2991'), '1');
+  assert.equal(transitRouteLabel(guelph, '3016'), '99');
+  assert.equal(transitRouteLabel(guelph, '3007'), '50 U');
+  assert.equal(transitRouteLabel(guelph, '3017'), '99Lite');
+});
+
+test('an unknown or absent route id survives translation unchanged', () => {
+  const guelph = getTransitFeed('guelph-transit');
+  // A route added after this table was built must still render its raw id
+  // rather than vanish or read as "undefined".
+  assert.equal(transitRouteLabel(guelph, '4242'), '4242');
+  assert.equal(transitRouteLabel(guelph, null), null);
+  assert.equal(transitRouteLabel(guelph, ''), '');
+});
+
+test('a feed with rider-facing route ids is left alone', () => {
+  // TTC and Kingston publish the route a rider would say, so translation is
+  // identity for them and no table is carried.
+  assert.equal(transitRouteLabel(getTransitFeed('ttc-toronto'), '501'), '501');
+  assert.equal(transitRouteLabel(getTransitFeed('mbta'), 'Red'), 'Red');
+  assert.equal(transitRouteLabel(null, '7'), '7');
+});
+
+test('Barrie is registered but unpolled until its licence is accepted', () => {
+  // The City offers these terms for acceptance behind a click-through gate.
+  // Registered-but-off is how that decision stays visible and one line from
+  // reversible, rather than being made silently by a poller.
+  assert.equal(
+    getRegisteredTransitFeed('barrie-transit')?.name,
+    'Barrie Transit',
+  );
+  assert.equal(getTransitFeed('barrie-transit'), null, 'not routable');
+  assert.equal(
+    publicTransitCatalog().some((feed) => feed.id === 'barrie-transit'),
+    false,
+    'never offered to the browser',
+  );
 });

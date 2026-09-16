@@ -131,6 +131,60 @@ function ttcRouteMode(routeId) {
 }
 
 /**
+ * Guelph Transit's realtime feed publishes the internal database key of a
+ * route (`2991`), not the number on the front of the bus (`1`). Without this
+ * table the detection label reads "Route 2991", which is not what anyone at
+ * the stop calls it. Route ids and short names are from the City of Guelph's
+ * own published GTFS `routes.txt` (see DATA_SOURCES.md); an id missing here
+ * falls through unchanged, so a route added later degrades to its raw id
+ * rather than disappearing.
+ */
+const GUELPH_ROUTE_NAMES = Object.freeze({
+  2991: '1',
+  2992: '10',
+  2993: '11',
+  2994: '12',
+  2995: '13',
+  2996: '14',
+  2997: '15',
+  2998: '16',
+  2999: '17',
+  3000: '18',
+  3001: '19',
+  3002: '2',
+  3003: '20',
+  3004: '3',
+  3005: '4',
+  3006: '5',
+  3007: '50 U',
+  3008: '52 U',
+  3009: '56 U',
+  3010: '58 U',
+  3011: '6',
+  3012: '7',
+  3013: '8',
+  3014: '9',
+  3015: '98',
+  3016: '99',
+  3017: '99Lite',
+  3018: 'BREW',
+  3019: 'EdiCol',
+  3023: 'IroHarv',
+  3030: 'Sun LN',
+  3032: 'WHanSco',
+  3039: 'ZehCha',
+});
+
+/**
+ * Guelph route id to the number a rider would say.
+ * @param {string|null} routeId
+ * @returns {string|null}
+ */
+function guelphRouteLabel(routeId) {
+  return GUELPH_ROUTE_NAMES[routeId] || routeId;
+}
+
+/**
  * Registry of feeds. Order is presentation order in the stats/credit text.
  * `loadRadiusKm` is the distance from `center` inside which the feed is polled.
  * @type {ReadonlyArray<Readonly<{
@@ -373,6 +427,69 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     }),
     defaultMode: 'bus',
   }),
+  Object.freeze({
+    id: 'guelph-transit',
+    name: 'Guelph Transit',
+    operator: 'Guelph Transit (City of Guelph)',
+    region: 'Guelph, ON',
+    center: Object.freeze({ lat: 43.5325, lon: -80.2482 }),
+    loadRadiusKm: 15,
+    url: 'https://glphprdtmgtfs.glphtrpcloud.com/tmgtfsrealtimewebservice/vehicle/vehiclepositions.pb',
+    license: 'Open Government Licence \u2013 City of Guelph (v2.0)',
+    licenseUrl: 'https://explore.guelph.ca/pages/open-data-license',
+    attribution:
+      'Contains information licensed under the Open Government Licence \u2013 City of Guelph',
+    defaultEnabled: true,
+    terms: Object.freeze({
+      quote:
+        'The Information Provider grants you a worldwide, royalty-free, perpetual, non-exclusive licence to use the Information including for commercial purposes subject to the terms below. ... Acknowledge the source of the Information by including any attribution statement specified by the Information Provider(s) and, where possible, provide a link to this licence.',
+      note: 'The endpoint sits on a vendor host, so provenance matters: the City publishes this exact URL on its own open-data developer page, https://explore.guelph.ca/pages/transit-gtfs-data, under an open-data initiative heading (that page is JavaScript-rendered; its readable source is the ArcGIS item JSON behind it). The licence is a verbatim OGL-Canada 2.0 derivative and the attribution wording above is its prescribed fallback, so it is used as written. The transit datasets carry a BLANK licence field in the portal catalogue; the Terms of Use supply it by default ("Except where otherwise noted this is the Open Government Licence"), the same shape of gap the TTC entry records. The Terms also publish a traffic limit \u2014 no concurrent requests, at most 5 per second \u2014 which one poll every 15 s satisfies many times over. Crests and logos are excluded from the grant, so the credit stays text.',
+    }),
+    defaultMode: 'bus',
+    routeLabel: guelphRouteLabel,
+  }),
+  Object.freeze({
+    id: 'kingston-transit',
+    name: 'Kingston Transit',
+    operator: 'Kingston Transit (The Corporation of the City of Kingston)',
+    region: 'Kingston, ON',
+    center: Object.freeze({ lat: 44.24, lon: -76.57 }),
+    loadRadiusKm: 20,
+    url: 'https://api.cityofkingston.ca/gtfs-realtime/vehicleupdates.pb',
+    license: 'City of Kingston Open Data Licence 1.0',
+    licenseUrl:
+      'https://www.cityofkingston.ca/media/wtpgpkb0/gis_license_opendata.pdf',
+    attribution:
+      'Contains information licensed under the Open Data Licence \u2013 City of Kingston',
+    defaultEnabled: true,
+    terms: Object.freeze({
+      quote:
+        'The Information Provider, the City of Kingston, grants you a worldwide, royalty-free, perpetual, non-exclusive licence to use the information provided for any purpose, including for commercial purposes, subject to the terms below. ... Acknowledge the source of the information by including any attribution statement specified by the City of Kingston and, where possible, provide a link to this licence.',
+      note: 'The City catalogues this exact URL as an open-data dataset, so provenance is direct rather than inferred. `licenseUrl` is the canonical location of the licence PDF; the address the catalogue prints is a legacy path that currently redirects there, and pinning the redirect target is what survives the next site relaunch \u2014 the Durham entry records what happens when it does not. Names, crests and logos are excluded from the grant, so the credit stays text. Roughly one entity in ten carries no usable position (the position field absent, occasionally a momentary 0,0 GPS dropout); both are discarded before rendering.',
+    }),
+    defaultMode: 'bus',
+  }),
+  Object.freeze({
+    id: 'barrie-transit',
+    name: 'Barrie Transit',
+    operator: 'Barrie Transit (City of Barrie)',
+    region: 'Barrie, ON',
+    center: Object.freeze({ lat: 44.371, lon: -79.6733 }),
+    loadRadiusKm: 10,
+    url: 'https://www.myridebarrie.ca/gtfs/GTFS_VehiclePositions.pb',
+    license: 'Barrie Transit Data licence',
+    licenseUrl:
+      'https://www.barrie.ca/services-payments/transportation-parking/barrie-transit/barrie-gtfs',
+    attribution:
+      'Realtime vehicle data \u00a9 City of Barrie, used under the Barrie Transit Data licence',
+    defaultEnabled: false,
+    terms: Object.freeze({
+      quote:
+        'Barrie Transit hereby grants you a non-exclusive, limited and revocable rights to use, reproduce, and redistribute Barrie Transit Data (scheduled and real-time data) subject to the following terms: Barrie Transit trademarks and copyrighted materials, including any confusingly similar variants, may not be used in association with Data. ... Barrie Transit maintains title, ownership, rights and interest in and to Data.',
+      note: 'OFF until a person on this project accepts the licence. The City publishes the feed directory behind a click-through "I agree" checkbox and a CAPTCHA; the endpoint itself needs no key, token or cookie, but the terms are offered for acceptance and nobody here has accepted them. That is a decision for a human, not something a poller should assume, so this ships registered and unpolled until someone ticks the box \u2014 then flip this one line. Two further oddities worth knowing: the licence requires NO attribution at all (the credit above is a courtesy), and its trademark clause is broad enough that the credit names the City rather than Barrie Transit. The grant is expressly REVOCABLE and unversioned, so the quote above is the text as read on 2026-09-16.',
+    }),
+    defaultMode: 'bus',
+  }),
 ]);
 
 /**
@@ -484,6 +601,22 @@ export function transitModeResolved(feed, routeId) {
   return (
     Boolean(hinted) && hinted !== 'unknown' && TRANSIT_MODES.includes(hinted)
   );
+}
+
+/**
+ * The route as a rider would say it. Most feeds publish that already, so this
+ * is identity for them; a feed that publishes internal keys supplies its own
+ * `routeLabel`. Never invents a label: an id the feed does not know survives
+ * unchanged, because a raw id a person can compare against the bus is more
+ * use than a blank.
+ * @param {object|null} feed Registry entry.
+ * @param {string|null} routeId
+ * @returns {string|null}
+ */
+export function transitRouteLabel(feed, routeId) {
+  if (!routeId || typeof feed?.routeLabel !== 'function') return routeId;
+  const named = feed.routeLabel(routeId);
+  return typeof named === 'string' && named ? named : routeId;
 }
 
 /**

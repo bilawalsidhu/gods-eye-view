@@ -143,7 +143,10 @@ export function createQueries({ state, parts }) {
       // Route and operator text change with the record and the mode, both of
       // which arrive on polls — the same events that rebuild this list.
       if (!entry.labelId || entry.labelRecord !== entry.record) {
-        entry.labelId = transitDetectionId(entry.record);
+        entry.labelId = transitDetectionId(
+          entry.record,
+          feedForEntry(state, entry),
+        );
         entry.labelRecord = entry.record;
       }
       if (!entry.labelClass || entry.labelMode !== entry.mode) {

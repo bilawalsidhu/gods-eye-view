@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   buildTransitSelectionCopy,
   transitDetectionClass,
+  transitDetectionId,
   transitDetectionMetric,
   transitModeAbbr,
   transitModeWord,
@@ -49,4 +50,27 @@ test('detection labels carry the operator vocabulary within the field width', ()
   assert.equal(transitDetectionClass('tram', hsl()), 'TRAM HSL');
   const metric = transitDetectionMetric({ mode: 'tram' }, 'tram', 0, ttc());
   assert.match(metric, /^STREETCAR/);
+});
+
+test('a Guelph vehicle is labelled with the number on the bus, not the database key', () => {
+  const guelph = getTransitFeed('guelph-transit');
+  const record = { id: '196', routeId: '2991', timestamp: 0 };
+  const copy = buildTransitSelectionCopy(guelph, record, 'bus', 0, null, null);
+  assert.match(copy.title, /Route 1\b/);
+  assert.doesNotMatch(copy.title, /2991/);
+  assert.equal(transitDetectionId(record, guelph), '1');
+});
+
+test('a feed that already speaks rider route numbers is untouched', () => {
+  const record = { id: '4400', routeId: '501', timestamp: 0 };
+  assert.equal(transitDetectionId(record, ttc()), '501');
+  const copy = buildTransitSelectionCopy(ttc(), record, 'tram', 0, null, null);
+  assert.match(copy.title, /Route 501/);
+  // No feed at all still renders the raw route rather than throwing.
+  assert.equal(transitDetectionId(record), '501');
+});
+
+test('a vehicle with no route still falls back to its fleet number', () => {
+  const guelph = getTransitFeed('guelph-transit');
+  assert.equal(transitDetectionId({ id: '196', label: '196' }, guelph), '196');
 });
