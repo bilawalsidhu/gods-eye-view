@@ -237,6 +237,12 @@ Click **GEV MIC**, grant the microphone, and just talk. This is more than a voic
 
 Twenty-eight tools, four jobs — the commands below come straight from the product's voice test suite and tool playbook:
 
+> [!TIP]
+> **Trusted local browser agents:** the same structured action runner used by the voice agent is
+> available to local Puppeteer/RPA harnesses without adding a network control port. See
+> [Trusted Local Agent Automation](docs/AGENT-AUTOMATION.md) for an allowlisted,
+> confirmation-gated pattern and an Astron Agent integration boundary.
+
 **🎥 Direct it** — drone-operator camera verbs:
 
 > 🗣️ _"Take me to Tokyo."_ · _"Orbit around this area slowly."_ · _"Draw the walking route from the Capitol to Zilker Park."_ → _"Fly the route we just drew."_ · _"Zoom out to a globe view."_
