@@ -1,5 +1,6 @@
 import { CCTV_AMBIENT_CARD_MAX } from '../../data/cctvLod.js';
 import { ACTIVE_FRAME_REFRESH_MS, IDLE_FRAME_REFRESH_MS } from './policy.js';
+import { specSummary } from './modelSpecs.js';
 
 export function createPresentation({
   state: layerState,
@@ -36,7 +37,8 @@ export function createPresentation({
       `${active.camera.city.toUpperCase()} CCTV`,
       `${active.camera.name.toUpperCase()}`,
       `HDG ${Math.round(active.camera.headingDeg)}°`,
-      `FOV ${Math.round(active.camera.fovDeg)}°`,
+      // Identified hardware labels its FOV as datasheet-sourced (catalog.js).
+      `FOV ${Math.round(active.camera.fovDeg)}°${active.camera.fovSource === 'datasheet' ? ' (DATASHEET)' : ''}`,
       `COVERAGE ${area.toFixed(2)}km²`,
       overlapCount > 0 ? `OVERLAP ${overlapCount} cams` : 'ISOLATED VIEW',
       `PROJ ${layerState._showProjection ? 'MONITOR' : 'OFF'}`,
@@ -46,6 +48,10 @@ export function createPresentation({
         ? `SRC ${String(health.sourceKind).toUpperCase()}`
         : `SRC ${String(active.camera.feedType || 'image').toUpperCase()}`,
       `${viewBand.toUpperCase()} CONTEXT`,
+      // Identified hardware: append the model's datasheet specs + attribution.
+      active.camera.spec
+        ? `${specSummary(active.camera.spec).toUpperCase()} · SPECS: CCTV-DATABASE.COM`
+        : null,
     ]
       .filter(Boolean)
       .join(' · ');
@@ -78,6 +84,9 @@ export function createPresentation({
       headingDeg: camera.headingDeg,
       pitchDeg: camera.pitchDeg,
       fovDeg: camera.fovDeg,
+      // Identified-hardware enrichment passthrough (catalog.js / modelSpecs.js).
+      fovSource: camera.fovSource || 'estimated',
+      spec: camera.spec || null,
       rangeM: camera.rangeM,
       elevationM: camera.absoluteHeightM,
       mountHeightM: camera.mountHeightM,
