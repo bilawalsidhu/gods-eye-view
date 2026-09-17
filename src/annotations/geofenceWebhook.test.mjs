@@ -23,7 +23,9 @@ test('buildBreachPayload contains entityId, timestamp, coordinates, speed', () =
     layerKey: 'flights',
     _raw: { speedMps: 250, icao24: 'ABC123' },
   };
-  const payload = buildBreachPayload(entity, { now: () => '2026-01-01T00:00:00.000Z' });
+  const payload = buildBreachPayload(entity, {
+    now: () => '2026-01-01T00:00:00.000Z',
+  });
   assert.equal(payload.entityId, 'ABC123');
   assert.equal(payload.timestamp, '2026-01-01T00:00:00.000Z');
   assert.deepEqual(payload.coordinates, { lon: 12.34, lat: 56.78 });
@@ -32,8 +34,15 @@ test('buildBreachPayload contains entityId, timestamp, coordinates, speed', () =
 });
 
 test('buildBreachPayload extracts speed from various fields', () => {
-  assert.equal(buildBreachPayload({ id: 'a', lon: 0, lat: 0, _raw: { speedKts: 150 } }).speed, 150);
-  assert.equal(buildBreachPayload({ id: 'b', lon: 0, lat: 0, speed: 99 }).speed, 99);
+  assert.equal(
+    buildBreachPayload({ id: 'a', lon: 0, lat: 0, _raw: { speedKts: 150 } })
+      .speed,
+    150,
+  );
+  assert.equal(
+    buildBreachPayload({ id: 'b', lon: 0, lat: 0, speed: 99 }).speed,
+    99,
+  );
   assert.equal(buildBreachPayload({ id: 'c', lon: 0, lat: 0 }).speed, null);
 });
 
@@ -43,7 +52,12 @@ test('dispatchBreach POSTs JSON', async () => {
     captured = { url, opts };
     return { ok: true, status: 200 };
   };
-  const payload = { entityId: 'X', timestamp: 't', coordinates: { lon: 1, lat: 2 }, speed: 10 };
+  const payload = {
+    entityId: 'X',
+    timestamp: 't',
+    coordinates: { lon: 1, lat: 2 },
+    speed: 10,
+  };
   await dispatchBreach('https://example.com/hook', payload, fakeFetch);
   assert.equal(captured.url, 'https://example.com/hook');
   assert.equal(captured.opts.method, 'POST');
@@ -52,7 +66,9 @@ test('dispatchBreach POSTs JSON', async () => {
 });
 
 test('dispatchBreach rejects invalid url', async () => {
-  await assert.rejects(() => dispatchBreach('bad', {}, async () => ({ ok: true })));
+  await assert.rejects(() =>
+    dispatchBreach('bad', {}, async () => ({ ok: true })),
+  );
 });
 
 test('monitor dispatches POST immediately on confirmed breach, deduped', async () => {
@@ -70,7 +86,10 @@ test('monitor dispatches POST immediately on confirmed breach, deduped', async (
   let records = [{ icao24: 'A1', lat: 5, lon: 5, speedMps: 100 }];
   const fakeManager = {
     layers: new Map([
-      ['flights', { enabled: true, module: { getAnalystRecords: () => records } }],
+      [
+        'flights',
+        { enabled: true, module: { getAnalystRecords: () => records } },
+      ],
     ]),
     subscribeActivity: () => () => {},
     subscribe: () => () => {},
@@ -114,7 +133,11 @@ test('monitor dispatches POST immediately on confirmed breach, deduped', async (
 test('monitor setWebhookUrl validation', () => {
   const monitor = createGeofenceMonitor({
     getPolygon: () => null,
-    dataManager: { layers: new Map(), subscribeActivity: () => () => {}, subscribe: () => () => {} },
+    dataManager: {
+      layers: new Map(),
+      subscribeActivity: () => () => {},
+      subscribe: () => () => {},
+    },
   });
   assert.equal(monitor.setWebhookUrl('https://example.com'), true);
   assert.equal(monitor.getWebhookUrl(), 'https://example.com');

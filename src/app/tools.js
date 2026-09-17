@@ -122,8 +122,14 @@ export function createApplicationTools({
     const val = webhookInput?.value || '';
     const ok = geofenceMonitor?.setWebhookUrl(val);
     if (webhookInput) {
-      webhookInput.setAttribute('aria-invalid', String(!ok && val.trim().length > 0));
-      webhookInput.title = ok || !val.trim() ? 'Target URL for breach POST' : 'Invalid URL — must be http(s)';
+      webhookInput.setAttribute(
+        'aria-invalid',
+        String(!ok && val.trim().length > 0),
+      );
+      webhookInput.title =
+        ok || !val.trim()
+          ? 'Target URL for breach POST'
+          : 'Invalid URL — must be http(s)';
     }
   };
   webhookInput?.addEventListener('input', onWebhookInput);
@@ -162,7 +168,8 @@ export function createApplicationTools({
     } finally {
       testBtn.disabled = false;
       setTimeout(() => {
-        if (testHint && testHint.textContent.startsWith('Test POST')) testHint.textContent = '';
+        if (testHint && testHint.textContent.startsWith('Test POST'))
+          testHint.textContent = '';
       }, 4000);
     }
   };

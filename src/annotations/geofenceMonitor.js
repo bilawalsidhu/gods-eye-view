@@ -11,10 +11,7 @@
  *   fires only on initial outside->inside transition.
  * - Also exposes evaluatePoint() for single-position checks.
  */
-import {
-  pointInPolygon,
-  evaluateBatch,
-} from './geofenceIntersection.js';
+import { pointInPolygon, evaluateBatch } from './geofenceIntersection.js';
 import { createGeofenceStateTracker } from './geofenceStateTracker.js';
 import {
   isValidWebhookUrl,
@@ -43,7 +40,8 @@ export function createGeofenceMonitor({
       if (!poly) return null;
       // geofenceTool returns { vertices: [...] } or array
       if (Array.isArray(poly)) return poly.length >= 3 ? poly : null;
-      if (Array.isArray(poly.vertices)) return poly.vertices.length >= 3 ? poly.vertices : null;
+      if (Array.isArray(poly.vertices))
+        return poly.vertices.length >= 3 ? poly.vertices : null;
       return null;
     } catch {
       return null;
@@ -51,7 +49,8 @@ export function createGeofenceMonitor({
   };
 
   const entityKey = (layerKey, e) => {
-    const id = e.icao24 ?? e.mmsi ?? e.id ?? e.icao ?? JSON.stringify([e.lon, e.lat]);
+    const id =
+      e.icao24 ?? e.mmsi ?? e.id ?? e.icao ?? JSON.stringify([e.lon, e.lat]);
     return `${layerKey}:${id}`;
   };
 
@@ -138,20 +137,34 @@ export function createGeofenceMonitor({
   const emitInternalEnter = (entity, polygon) => {
     // Internal event only on initial outside->inside, never duplicate
     try {
-      if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      if (
+        typeof window !== 'undefined' &&
+        typeof window.dispatchEvent === 'function'
+      ) {
         window.dispatchEvent(
           new CustomEvent('geofence:enter', {
-            detail: { entity, polygon: polygon ? [...polygon] : null, at: Date.now() },
+            detail: {
+              entity,
+              polygon: polygon ? [...polygon] : null,
+              at: Date.now(),
+            },
           }),
         );
       }
     } catch {}
     // Also notify via document for non-window contexts
     try {
-      if (typeof document !== 'undefined' && typeof document.dispatchEvent === 'function') {
+      if (
+        typeof document !== 'undefined' &&
+        typeof document.dispatchEvent === 'function'
+      ) {
         document.dispatchEvent(
           new CustomEvent('geofence:enter', {
-            detail: { entity, polygon: polygon ? [...polygon] : null, at: Date.now() },
+            detail: {
+              entity,
+              polygon: polygon ? [...polygon] : null,
+              at: Date.now(),
+            },
           }),
         );
       }
@@ -193,7 +206,13 @@ export function createGeofenceMonitor({
         total: entities.length,
         polygon: null,
       });
-      return { inside, outside, entered: [], exited: [], total: entities.length };
+      return {
+        inside,
+        outside,
+        entered: [],
+        exited: [],
+        total: entities.length,
+      };
     }
 
     const { inside, outside } = evaluateBatch(
@@ -301,10 +320,29 @@ export function createGeofenceMonitor({
       insideEntities = new Map();
       lastInsideCount = 0;
       if (prev.length) {
-        notify({ type: 'transition', entered: [], exited: prev, inside: [], outside: [], polygon: null });
-        notify({ type: 'exit', exited: prev, inside: [], outside: [], polygon: null });
+        notify({
+          type: 'transition',
+          entered: [],
+          exited: prev,
+          inside: [],
+          outside: [],
+          polygon: null,
+        });
+        notify({
+          type: 'exit',
+          exited: prev,
+          inside: [],
+          outside: [],
+          polygon: null,
+        });
       }
-      notify({ type: 'evaluation', inside: [], outside: [], total: 0, polygon: null });
+      notify({
+        type: 'evaluation',
+        inside: [],
+        outside: [],
+        total: 0,
+        polygon: null,
+      });
       return;
     }
     // Polygon changed: re-evaluate immediately against current live data

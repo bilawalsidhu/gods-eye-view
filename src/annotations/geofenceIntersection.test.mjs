@@ -57,10 +57,7 @@ test('filterInside: mixed entities', () => {
     { id: 'c', lon: 0.2, lat: 0.8 },
   ];
   const inside = filterInside(entities, square);
-  assert.deepEqual(
-    inside.map((e) => e.id).sort(),
-    ['a', 'c'],
-  );
+  assert.deepEqual(inside.map((e) => e.id).sort(), ['a', 'c']);
 });
 
 test('evaluateBatch: splits inside/outside, no polygon = all outside', () => {
@@ -121,7 +118,9 @@ test('monitor: evaluates on demand and tracks enter/exit', () => {
   assert.equal(r2.inside.length, 0);
   // exited should contain a1
   const lastTrans = transitions[transitions.length - 1];
-  assert.ok(lastTrans.exited.some((e) => e.id === 'a1' || e._raw?.icao24 === 'a1'));
+  assert.ok(
+    lastTrans.exited.some((e) => e.id === 'a1' || e._raw?.icao24 === 'a1'),
+  );
 
   monitor.destroy();
 });
@@ -129,7 +128,11 @@ test('monitor: evaluates on demand and tracks enter/exit', () => {
 test('monitor: evaluatePoint single check', () => {
   const monitor = createGeofenceMonitor({
     getPolygon: () => square,
-    dataManager: { layers: new Map(), subscribeActivity: () => () => {}, subscribe: () => () => {} },
+    dataManager: {
+      layers: new Map(),
+      subscribeActivity: () => () => {},
+      subscribe: () => () => {},
+    },
   });
   assert.equal(monitor.evaluatePoint(0.5, 0.5), true);
   assert.equal(monitor.evaluatePoint(2, 2), false);

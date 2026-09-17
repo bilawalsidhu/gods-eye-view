@@ -151,9 +151,8 @@ export function createGeofenceRenderer(viewer) {
       return;
     }
     const positions = closedPositions(ring);
-    const fillColor = Cesium.Color.fromCssColorString(FILL_COLOR).withAlpha(
-      0.22,
-    );
+    const fillColor =
+      Cesium.Color.fromCssColorString(FILL_COLOR).withAlpha(0.22);
     const lineColor = Cesium.Color.fromCssColorString(BOUNDARY_COLOR);
 
     fillEntity = dataSource.entities.add({

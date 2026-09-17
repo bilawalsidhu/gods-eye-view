@@ -44,7 +44,10 @@ test('monitor: internal enter only on initial outside->inside, no duplicates', (
   let records = [{ icao24: 'a1', lat: 5, lon: 5 }]; // outside
   const fakeManager = {
     layers: new Map([
-      ['flights', { enabled: true, module: { getAnalystRecords: () => records } }],
+      [
+        'flights',
+        { enabled: true, module: { getAnalystRecords: () => records } },
+      ],
     ]),
     subscribeActivity: () => () => {},
     subscribe: () => () => {},
@@ -95,7 +98,11 @@ test('monitor: updateEntity dedupes single position updates', () => {
   ];
   const monitor = createGeofenceMonitor({
     getPolygon: () => square,
-    dataManager: { layers: new Map(), subscribeActivity: () => () => {}, subscribe: () => () => {} },
+    dataManager: {
+      layers: new Map(),
+      subscribeActivity: () => () => {},
+      subscribe: () => () => {},
+    },
   });
   let enters = 0;
   monitor.onEnter(() => enters++);

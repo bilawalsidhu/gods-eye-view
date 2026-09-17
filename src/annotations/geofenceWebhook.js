@@ -36,10 +36,18 @@ export function extractSpeed(entity) {
   return null;
 }
 
-export function buildBreachPayload(entity, { now = () => new Date().toISOString() } = {}) {
+export function buildBreachPayload(
+  entity,
+  { now = () => new Date().toISOString() } = {},
+) {
   const raw = entity?._raw ?? {};
   const entityId =
-    entity?.id ?? raw.icao24 ?? raw.mmsi ?? entity?.icao24 ?? entity?.mmsi ?? 'unknown';
+    entity?.id ??
+    raw.icao24 ??
+    raw.mmsi ??
+    entity?.icao24 ??
+    entity?.mmsi ??
+    'unknown';
   const lon = entity?.lon ?? raw.lon ?? raw.longitude;
   const lat = entity?.lat ?? raw.latitude;
   const speed = extractSpeed(entity);
