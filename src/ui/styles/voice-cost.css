@@ -77,3 +77,8 @@
 #command-dock.tray-open .gev-voice-cost {
   display: none;
 }
+
+.gev-voice-tier-btn[hidden],
+.gev-voice-cost-value[hidden] {
+  display: none;
+}

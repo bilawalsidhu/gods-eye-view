@@ -57,6 +57,7 @@ export function createCctvLayer({ services, source }) {
     {
       calibrationPatchMovesAnchor:
         parts.calibration.calibrationPatchMovesAnchor,
+      migrateRangeScaleForFloor: parts.calibration.migrateRangeScaleForFloor,
       _pushAmbientCardEntriesForTest:
         parts.testing._pushAmbientCardEntriesForTest,
       _setCctvOverlayHostForTest: parts.testing._setCctvOverlayHostForTest,

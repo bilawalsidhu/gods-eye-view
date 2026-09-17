@@ -193,7 +193,7 @@ export function createTiming({ state: layerState, services, parts, source }) {
    * waypoint-materialization time independently.
    */
 
-  function parseRoadsTimed(overpassData, trace) {
+  function parseRoadsTimed(roadData, trace) {
     /* TRACE_ONLY_BEGIN */
     const _trafficTimingState = trafficTimingPass(
       trace,
@@ -207,7 +207,7 @@ export function createTiming({ state: layerState, services, parts, source }) {
       _trafficTimingParseStartTime,
     );
     /* TRACE_ONLY_END */
-    if (!overpassData || !overpassData.elements) {
+    if (!roadData || !roadData.roads) {
       /* TRACE_ONLY_BEGIN */
       const _trafficTimingParseEnd = trafficTimingMark(
         _trafficTimingState,
@@ -251,10 +251,10 @@ export function createTiming({ state: layerState, services, parts, source }) {
     let _trafficTimingSampleHeightMs = 0;
     let _trafficTimingWaypointMaterializationMs = 0;
     /* TRACE_ONLY_END */
-    for (const el of overpassData.elements) {
-      if (el.type !== 'way' || !el.geometry || el.geometry.length < 2) continue;
+    for (const road of roadData.roads) {
+      if (!road.coordinates || road.coordinates.length < 2) continue;
 
-      const rawCoords = el.geometry.map((g) => [g.lon, g.lat]);
+      const rawCoords = road.coordinates;
       const simplifyStep =
         rawCoords.length > MAX_WAYPOINTS_PER_ROAD
           ? Math.ceil(rawCoords.length / MAX_WAYPOINTS_PER_ROAD)
@@ -271,17 +271,8 @@ export function createTiming({ state: layerState, services, parts, source }) {
       }
       if (coords.length < 2) continue;
 
-      const type = el.tags?.highway || 'unclassified';
-      const onewayTag = el.tags?.oneway;
-      const oneway =
-        onewayTag === 'yes' ||
-        onewayTag === '1' ||
-        onewayTag === 'true' ||
-        el.tags?.junction === 'roundabout'
-          ? 1
-          : onewayTag === '-1'
-            ? -1
-            : 0;
+      const type = road.type;
+      const oneway = road.oneway;
 
       let baseHeight = 0;
       const firstCoord = coords[0];

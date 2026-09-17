@@ -56,18 +56,25 @@ test('flight state owns distinct mutable records, scratch objects and floor samp
   const first = createFlightState({ services: services() });
   const second = createFlightState({ services: services() });
   for (const key of [
-    '_flightData',
+    'records',
+    'feed',
     '_billboards',
     '_positionHistory',
     '_displayFloorState',
     '_groundSnap',
     '_scratchCarto',
     '_models',
-    '_activeUpdateControllers',
     'lifetime',
   ]) {
     assert.notEqual(first[key], second[key], key);
   }
+  assert.notEqual(first.records.data, second.records.data);
+  assert.notEqual(first.records.missingPolls, second.records.missingPolls);
+  assert.notEqual(first.records.geoidNCache, second.records.geoidNCache);
+  assert.notEqual(
+    first.feed._activeUpdateControllers,
+    second.feed._activeUpdateControllers,
+  );
 });
 
 test('aborted enrichment cannot write into a later lifecycle or decrement its active count', async () => {

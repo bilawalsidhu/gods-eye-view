@@ -67,7 +67,7 @@ export function createQueries({
    */
 
   function _likelyLanded(icao24) {
-    const info = flightState._flightData.get(icao24);
+    const info = flightState.records.data.get(icao24);
     if (!info) return false;
     // Round 7 (mirror of flights.js): fast cull only for contacts seen
     // AIRBORNE this session — parked contacts ride the normal grace so feed
@@ -91,7 +91,7 @@ export function createQueries({
    */
 
   function _describeFlight(icao24) {
-    const info = flightState._flightData.get(icao24);
+    const info = flightState.records.data.get(icao24);
     const bb = flightState._billboards.get(icao24);
     const basePos =
       parts.motion._deadReckon(icao24) || (bb ? bb.position : null);
@@ -130,7 +130,8 @@ export function createQueries({
       velocityMps: displayed.speedMps,
       track: displayed.trackDeg,
       stale: Boolean(
-        flightState._missingPolls.get(icao24) || flightState._backoff,
+        flightState.records.missingPolls.get(icao24) ||
+        flightState.feed._backoff,
       ),
     };
   }
@@ -199,7 +200,7 @@ export function createQueries({
 
     icon: '🎖️',
 
-    source: flightState._lastSource,
+    source: flightState.feed._lastSource,
 
     /** @type {number} Polling interval in ms between API fetches */
     updateInterval: 15000,
@@ -362,7 +363,7 @@ export function createQueries({
         const distance = Cesium.Cartesian3.distance(center, pos);
         if (distance > maxRange) continue;
 
-        const info = flightState._flightData.get(icao24);
+        const info = flightState.records.data.get(icao24);
         nearby.push({
           id: info?.callsign?.trim() || info?.registration?.trim() || icao24,
           icao24,
@@ -434,7 +435,7 @@ export function createQueries({
         const model = flightState._models.get(icao24);
         const modelOwnsVisual = parts.rendering._modelOwnsVisual(icao24);
         if (!isTracked && !bb.show && !modelOwnsVisual) continue;
-        const info = flightState._flightData.get(icao24);
+        const info = flightState.records.data.get(icao24);
         const callsign = info?.callsign?.trim();
         const registration = info?.registration?.trim();
         let object = flightState._detectionObjects.get(icao24);
@@ -506,7 +507,7 @@ export function createQueries({
      *   Best match with a cloned, dead-reckoned position, or null if none.
      */
     findByQuery(query) {
-      if (!flightState._flightData || flightState._flightData.size === 0)
+      if (!flightState.records.data || flightState.records.data.size === 0)
         return null;
       const q = String(query || '')
         .trim()
@@ -524,7 +525,7 @@ export function createQueries({
       // cannot disagree, and it is strictly tiered so a registration can never
       // out-rank a real callsign on feed order alone.
       let best = null;
-      for (const [icao24, info] of flightState._flightData) {
+      for (const [icao24, info] of flightState.records.data) {
         const candidate = {
           tier: rankContactMatch({
             query: q,
@@ -595,7 +596,7 @@ export function createQueries({
           flightState._scratchCarto,
         );
         if (!carto) continue;
-        const info = flightState._flightData.get(icao24);
+        const info = flightState.records.data.get(icao24);
         result.push({
           id: icao24, // identity (trackById/Context resolve this)
           // Last surface still reading as the raw hex for a callsign-less
@@ -626,14 +627,14 @@ export function createQueries({
       if (
         !flightState._billboardCollection ||
         !flightState._billboardCollection.show ||
-        flightState._flightData.size === 0
+        flightState.records.data.size === 0
       )
         return [];
       const limit = Number.isFinite(maxCount)
         ? Math.max(1, Math.floor(maxCount))
         : 2000;
       const result = [];
-      for (const [icao24, info] of flightState._flightData) {
+      for (const [icao24, info] of flightState.records.data) {
         result.push(mapAnalystRecord(icao24, info));
         if (result.length >= limit) break;
       }
@@ -672,11 +673,11 @@ export function createQueries({
         .trim()
         .toLowerCase();
       if (!id) return { status: 'missing', reason: 'invalid-target' };
-      const outcome = flightState._lastTrackingRefreshOutcome;
+      const outcome = flightState.feed._lastTrackingRefreshOutcome;
       if (outcome.status !== 'accepted') {
         return {
           status: 'source-unavailable',
-          reason: `${flightState._lastSource} snapshot unavailable`,
+          reason: `${flightState.feed._lastSource} snapshot unavailable`,
           refreshEpoch: outcome.epoch,
           source: outcome.source,
         };
@@ -790,17 +791,20 @@ export function createQueries({
      * @returns {{count: number, lastUpdate: number|null, stale: boolean, error: string|null, status: number|null, retryInSec: number}}
      */
     getStats() {
-      const retryInSec = flightState._retryAt
-        ? Math.max(0, Math.ceil((flightState._retryAt - Date.now()) / 1000))
+      const retryInSec = flightState.feed._retryAt
+        ? Math.max(
+            0,
+            Math.ceil((flightState.feed._retryAt - Date.now()) / 1000),
+          )
         : 0;
       return {
-        count: flightState._count,
-        lastUpdate: flightState._lastUpdate,
-        stale: flightState._backoff,
-        error: flightState._lastError,
-        status: flightState._lastStatus,
+        count: flightState.feed._count,
+        lastUpdate: flightState.feed._lastUpdate,
+        stale: flightState.feed._backoff,
+        error: flightState.feed._lastError,
+        status: flightState.feed._lastStatus,
         retryInSec,
-        source: flightState._lastSource,
+        source: flightState.feed._lastSource,
         fallback: false,
       };
     },

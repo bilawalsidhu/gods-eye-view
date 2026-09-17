@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { isPointerFree } from '../../data/inputOwnership.js';
 
 export function createInteraction({ state, screenSpaceEventHandlerFactory }) {
   function registerPickEntity(entity, info) {
@@ -10,6 +11,8 @@ export function createInteraction({ state, screenSpaceEventHandlerFactory }) {
     if (state._clickHandler) return;
     state._clickHandler = screenSpaceEventHandlerFactory(viewer.scene.canvas);
     state._clickHandler.setInputAction((click) => {
+      // A tool owns the pointer (src/data/inputOwnership.js): yield the click.
+      if (!isPointerFree()) return;
       if (!state._enabled) return;
       const picked = viewer.scene.pick(click.position);
       const record = resolvePickRecord(picked);

@@ -61,7 +61,7 @@ export function createTracking({
 
   function _publishTrackedSelection(icao24, origin = 'programmatic') {
     const bb = flightState._billboards.get(icao24);
-    const info = flightState._flightData.get(icao24);
+    const info = flightState.records.data.get(icao24);
     if (!bb?.position || !info) return false;
     if (flightState._trackedEntity)
       flightState._trackedEntity.gevSelectionOrigin = origin;
@@ -90,13 +90,13 @@ export function createTracking({
   function _contextSubjectMetadata(icao24) {
     const described = parts.queries._describeFlight(icao24);
     if (!described) return null;
-    const info = flightState._flightData.get(icao24);
+    const info = flightState.records.data.get(icao24);
     const label = described.callsign || described.registration || icao24;
     return {
       id: icao24,
       layerId: 'military',
       layerName: 'Military Flights',
-      source: flightState._lastSource,
+      source: flightState.feed._lastSource,
       label,
       latitude: described.latitude,
       longitude: described.longitude,
@@ -218,7 +218,7 @@ export function createTracking({
 
   function _buildTrackedLabel(info, icao24) {
     const stale =
-      flightState._missingPolls.get(icao24) || flightState._backoff
+      flightState.records.missingPolls.get(icao24) || flightState.feed._backoff
         ? ' · STALE'
         : '';
     const callsign =
@@ -251,7 +251,7 @@ export function createTracking({
     if (!flightState._trackedEntity || icao24 !== flightState._trackedIcao)
       return;
     flightState._trackedEntity.gevLabelModel = trackedLabelModelFromText(
-      _buildTrackedLabel(flightState._flightData.get(icao24), icao24),
+      _buildTrackedLabel(flightState.records.data.get(icao24), icao24),
       '#ffd166',
     );
     refreshTrackedReadout(flightState._trackedEntity);
@@ -268,7 +268,7 @@ export function createTracking({
     flightState._trackedEntity.billboard.image = aircraftIcon(
       parts.rendering._iconKind(
         flightState._trackedIcao,
-        flightState._flightData.get(flightState._trackedIcao)?.klass,
+        flightState.records.data.get(flightState._trackedIcao)?.klass,
       ),
       TRACKED_ICON_PX,
     );
@@ -606,8 +606,8 @@ export function createTracking({
   async function _backfillTrail(icao24, token, oldestFixEpochSec) {
     let trace = null;
     try {
-      const track = await flightState._source.getTrack?.(
-        flightState._flightData.get(icao24)?.sourceReference ?? icao24,
+      const track = await flightState.feed._source.getTrack?.(
+        flightState.records.data.get(icao24)?.sourceReference ?? icao24,
         {
           signal: AbortSignal.any([
             flightState.lifetime.signal,
@@ -775,7 +775,7 @@ export function createTracking({
     // ROTATION_REFRESH_MS of a wrong (possibly reversed) nose on release.
     if (flightState._billboards.has(flightState._trackedIcao)) {
       const bb = flightState._billboards.get(flightState._trackedIcao);
-      const meta = flightState._flightData.get(flightState._trackedIcao);
+      const meta = flightState.records.data.get(flightState._trackedIcao);
       bb.show = true;
       bb.width = 20;
       bb.height = 20;
@@ -855,7 +855,7 @@ export function createTracking({
     _clearTracking(false, { origin }); // switching planes — the new follow-camera takes over
 
     const bb = flightState._billboards.get(icao24);
-    const info = flightState._flightData.get(icao24);
+    const info = flightState.records.data.get(icao24);
     if (!bb || !info) return;
 
     flightState._trackedIcao = icao24;
@@ -908,7 +908,7 @@ export function createTracking({
         image: aircraftIcon(
           parts.rendering._iconKind(
             flightState._trackedIcao,
-            flightState._flightData.get(flightState._trackedIcao)?.klass,
+            flightState.records.data.get(flightState._trackedIcao)?.klass,
           ),
           TRACKED_ICON_PX,
         ),
@@ -917,7 +917,7 @@ export function createTracking({
         scale:
           BILLBOARD_SCALE *
           (CLASS_SCALE_2D[
-            flightState._flightData.get(flightState._trackedIcao)?.klass
+            flightState.records.data.get(flightState._trackedIcao)?.klass
           ] || 1),
         // Solid amber when the billboard is the visual (zoomed out, 3D off, or model still loading);
         // transparent once the STANDALONE tracked model is actually up (ready + shown).
@@ -939,7 +939,9 @@ export function createTracking({
         // Screen-projected rotation, evaluated per frame: exact in tracked-orbit
         // mode where camera.heading lives in the entity's reference frame.
         rotation: new Cesium.CallbackProperty(() => {
-          const tracked = flightState._flightData.get(flightState._trackedIcao);
+          const tracked = flightState.records.data.get(
+            flightState._trackedIcao,
+          );
           const pos = getTrackedPosition();
           if (!tracked || !pos || !flightState._viewer)
             return flightState._lastTrackedRotation;

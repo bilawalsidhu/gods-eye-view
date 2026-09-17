@@ -1,22 +1,28 @@
-import { AIS_FIRST_CONNECT_LABEL } from './policy.js';
+import { AIS_FIRST_CONNECT_LABEL } from './recordPolicy.js';
 
+/** Own source requests and classified feed state through explicit operations. */
 export function createIngestion({
-  vesselState,
-  services,
-  parts: components,
-  layer,
-  options,
+  feed,
+  readSource,
+  readViewer,
+  getRowLimit,
+  readCount,
+  applyRows,
+  classifySnapshot,
+  isDefinitiveTransportFailure,
+  isGraceEligibleTransport,
+  markUnavailable,
+  settleFirstConnect,
+  now,
+  setSourceLabel,
 }) {
-  const { state } = vesselState;
-  const aisLiveVesselsLayer = layer;
-
   async function loadLivePositions(viewer) {
-    if (!viewer || state.loading) return;
-    state.loading = true;
-    state.loadingLabel = state.loaded ? 'refreshing...' : 'loading...';
+    if (!viewer || feed.loading) return;
+    feed.loading = true;
+    feed.loadingLabel = feed.loaded ? 'refreshing...' : 'loading...';
     const requestController = new AbortController();
-    const requestSessionId = state.sessionId;
-    state.abort = requestController;
+    const requestSessionId = feed.sessionId;
+    feed.abort = requestController;
 
     try {
       // Combine the layer's teardown-abort with a hard timeout so a hung upstream
@@ -28,12 +34,12 @@ export function createIngestion({
               AbortSignal.timeout(10000),
             ])
           : requestController.signal;
-      const snapshot = await vesselState._source.getSnapshot(
-        { maxRows: components.rendering.renderRowLimit() },
+      const snapshot = await readSource().getSnapshot(
+        { maxRows: getRowLimit() },
         { signal },
       );
       if (!ownsAisRequest(requestController, requestSessionId)) return;
-      aisLiveVesselsLayer.source = snapshot.source;
+      setSourceLabel(snapshot.source);
       // Map observations into the existing display store; source fields stop here.
       applyAisFeedSnapshot(viewer, {
         rows: snapshot.records.map(vesselDisplayRow),
@@ -58,20 +64,18 @@ export function createIngestion({
         ownsAisRequest(requestController, requestSessionId) &&
         error?.name !== 'AbortError'
       ) {
-        components.lifecycle.markAisUnavailable(
-          error?.message || 'AIS live load failed',
-        );
-        console.warn('[Data:ais-live-vessels]', state.error, error);
+        markUnavailable(error?.message || 'AIS live load failed');
+        console.warn('[Data:ais-live-vessels]', feed.error, error);
       }
     } finally {
       if (
-        state.abort === requestController &&
-        state.sessionId === requestSessionId
+        feed.abort === requestController &&
+        feed.sessionId === requestSessionId
       ) {
-        state.loading = false;
-        state.loadingLabel =
-          state.firstConnectPhase === 'loading' ? AIS_FIRST_CONNECT_LABEL : '';
-        state.abort = null;
+        feed.loading = false;
+        feed.loadingLabel =
+          feed.firstConnectPhase === 'loading' ? AIS_FIRST_CONNECT_LABEL : '';
+        feed.abort = null;
       }
     }
   }
@@ -80,9 +84,9 @@ export function createIngestion({
 
   function ownsAisRequest(controller, sessionId) {
     return (
-      state.enabled &&
-      state.sessionId === sessionId &&
-      state.abort === controller &&
+      feed.enabled &&
+      feed.sessionId === sessionId &&
+      feed.abort === controller &&
       !controller.signal.aborted
     );
   }
@@ -90,59 +94,57 @@ export function createIngestion({
   /** Apply a classified snapshot while preserving warm state on zero accepted rows. */
 
   function applyAisFeedSnapshot(viewer, payload) {
-    const snapshot = components.queries.classifyAisFeedSnapshot(payload);
-    state.loaded = true;
-    state.loadingLabel = '';
-    state.transportStatus = snapshot.transportStatus;
-    state.nextAttemptAt = Number(payload?.nextAttemptAt) || null;
-    state.lastMessageAt = snapshot.lastMessageAt;
-    state.rawRowCount = snapshot.rawRowCount;
-    state.acceptedRowCount = snapshot.acceptedRowCount;
+    const snapshot = classifySnapshot(payload);
+    feed.loaded = true;
+    feed.loadingLabel = '';
+    feed.transportStatus = snapshot.transportStatus;
+    feed.nextAttemptAt = Number(payload?.nextAttemptAt) || null;
+    feed.lastMessageAt = snapshot.lastMessageAt;
+    feed.rawRowCount = snapshot.rawRowCount;
+    feed.acceptedRowCount = snapshot.acceptedRowCount;
+    feed.partial = payload?.complete === false;
 
     if (snapshot.acceptedRowCount === 0) {
-      state.count = state.vesselRecords.length;
-      state.stale = state.count > 0 || Boolean(payload?.refreshing);
-      if (
-        components.lifecycle.isDefinitiveTransportFailure(
-          snapshot.transportStatus,
-        )
-      ) {
-        components.lifecycle.markAisUnavailable(snapshot.error);
+      feed.count = readCount();
+      feed.stale = feed.count > 0 || Boolean(payload?.refreshing);
+      if (isDefinitiveTransportFailure(snapshot.transportStatus)) {
+        markUnavailable(snapshot.error);
         return { reconciled: false, ...snapshot };
       }
       if (
-        state.firstConnectPhase === 'loading' &&
-        components.lifecycle.isGraceEligibleTransport(snapshot.transportStatus)
+        feed.firstConnectPhase === 'loading' &&
+        isGraceEligibleTransport(snapshot.transportStatus)
       ) {
-        state.error = null;
-        state.loadingLabel = AIS_FIRST_CONNECT_LABEL;
+        feed.error = null;
+        feed.loadingLabel = AIS_FIRST_CONNECT_LABEL;
         return { reconciled: false, ...snapshot };
       }
-      if (state.firstConnectPhase === 'loading') {
-        components.lifecycle.markAisUnavailable(snapshot.error);
+      if (feed.firstConnectPhase === 'loading') {
+        markUnavailable(snapshot.error);
         return { reconciled: false, ...snapshot };
       }
-      state.error = snapshot.error;
+      feed.error = snapshot.error;
       return { reconciled: false, ...snapshot };
     }
 
-    components.lifecycle.settleFirstConnectPhase('ready');
-    components.store.reconcileVessels(viewer, snapshot.acceptedRows, {
+    settleFirstConnect('ready');
+    applyRows(viewer, snapshot.acceptedRows, {
       complete: payload?.complete !== false,
     });
-    state.count = state.vesselRecords.length;
-    state.stale =
+    feed.count = readCount();
+    feed.stale =
       Boolean(payload?.refreshing) ||
-      payload?.complete === false ||
+      payload?.freshness === 'stale' ||
+      snapshot.transportStatus === 'stale' ||
       payload?.freshness === 'unknown';
-    state.newestPositionAt = payload?.newestPositionAt || null;
+    feed.newestPositionAt = payload?.newestPositionAt || null;
     // Not unconditionally null: a degraded feed keeps its reason even though the
     // cached vessels are still drawable, so the chip cannot go quiet on an
     // outage the user is still looking at.
-    state.error = snapshot.error || payload?.reason || null;
-    state.lastUpdate = Object.hasOwn(payload, 'observedAtMs')
+    feed.error = snapshot.error || payload?.reason || null;
+    feed.lastUpdate = Object.hasOwn(payload, 'observedAtMs')
       ? payload.observedAtMs
-      : vesselState._aisRuntime.now();
+      : now();
     return { reconciled: true, ...snapshot };
   }
 
@@ -169,8 +171,8 @@ export function createIngestion({
   }
   const methods = {
     update(viewer) {
-      if (!state.enabled) return Promise.resolve();
-      return loadLivePositions(viewer || state.viewer);
+      if (!feed.enabled) return Promise.resolve();
+      return loadLivePositions(viewer || readViewer());
     },
   };
 
@@ -180,5 +182,32 @@ export function createIngestion({
     applyAisFeedSnapshot,
     vesselDisplayRow,
     methods,
+  };
+}
+
+/** Construct request admission and first-position status for one vessel layer. */
+export function createVesselFeed() {
+  return {
+    enabled: false,
+    loading: false,
+    loaded: false,
+    stale: false,
+    partial: false,
+    error: null,
+    loadingLabel: '',
+    lastUpdate: null,
+    count: 0,
+    newestPositionAt: null,
+    transportStatus: null,
+    nextAttemptAt: null,
+    lastMessageAt: null,
+    rawRowCount: 0,
+    acceptedRowCount: 0,
+    sessionId: 0,
+    firstConnectPhase: 'idle',
+    firstConnectStartedAt: null,
+    firstConnectDeadline: null,
+    firstConnectTimer: null,
+    abort: null,
   };
 }

@@ -60,7 +60,7 @@ export function createTracking({
 
   function _publishTrackedSelection(icao24, origin = 'programmatic') {
     const bb = flightState._billboards.get(icao24);
-    const info = flightState._flightData.get(icao24);
+    const info = flightState.records.data.get(icao24);
     if (!bb?.position || !info) return false;
     if (flightState._trackedEntity)
       flightState._trackedEntity.gevSelectionOrigin = origin;
@@ -99,10 +99,10 @@ export function createTracking({
       id: icao24,
       layerId: 'flights',
       layerName: 'Live Flights',
-      source: flightState._lastSource,
+      source: flightState.feed._lastSource,
       label: parts.queries._contactLabel(
         icao24,
-        flightState._flightData.get(icao24),
+        flightState.records.data.get(icao24),
       ),
       latitude: described.latitude,
       longitude: described.longitude,
@@ -111,7 +111,7 @@ export function createTracking({
       properties: {
         name: parts.queries._contactLabel(
           icao24,
-          flightState._flightData.get(icao24),
+          flightState.records.data.get(icao24),
         ),
         operator: described.airline || '',
         callsign: described.callsign || '',
@@ -477,8 +477,8 @@ export function createTracking({
   async function _backfillTrail(icao24, token, oldestFixEpochSec) {
     let path = null;
     try {
-      const track = await flightState._source.getTrack?.(
-        flightState._flightData.get(icao24)?.sourceReference ?? icao24,
+      const track = await flightState.feed._source.getTrack?.(
+        flightState.records.data.get(icao24)?.sourceReference ?? icao24,
         {
           signal: AbortSignal.any([
             flightState.lifetime.signal,
@@ -645,7 +645,7 @@ export function createTracking({
       bb.color = parts.rendering._fleetBillboardColor(flightState._trackedIcao);
       bb.scale = parts.rendering._fleetBillboardScale(
         flightState._trackedIcao,
-        flightState._flightData.get(flightState._trackedIcao)?.klass,
+        flightState.records.data.get(flightState._trackedIcao)?.klass,
       );
       bb.rotation = flightState._lastTrackedRotation;
     }
@@ -742,7 +742,7 @@ export function createTracking({
    *  velocity/altitude as live. */
 
   function _trackedLabelText(icao24) {
-    const info = flightState._flightData.get(icao24);
+    const info = flightState.records.data.get(icao24);
     if (!info) return icao24;
     // A whitespace-only callsign ("   ") is truthy, so `(info.callsign || icao24)`
     // kept it, then .trim() emptied it → the callsign slot dropped out of the
@@ -754,7 +754,7 @@ export function createTracking({
     const fl = altFt >= 18000 ? `FL${Math.round(altFt / 100)}` : `${altFt} ft`;
     const spd = info.velocity ? `${Math.round(info.velocity * 1.944)} kts` : '';
     const stale =
-      flightState._missingPolls.get(icao24) || flightState._backoff
+      flightState.records.missingPolls.get(icao24) || flightState.feed._backoff
         ? 'STALE'
         : '';
     const lines = [[cs, fl, spd, stale].filter(Boolean).join(' · ')];
@@ -795,7 +795,7 @@ export function createTracking({
     flightState._trackedEntity.billboard.image = aircraftIcon(
       parts.rendering._iconKind(
         flightState._trackedIcao,
-        flightState._flightData.get(flightState._trackedIcao)?.klass,
+        flightState.records.data.get(flightState._trackedIcao)?.klass,
       ),
       TRACKED_ICON_PX,
     );
@@ -850,7 +850,7 @@ export function createTracking({
    *  cache). Missing data → true (never hide what we can't judge). */
 
   function _routeIsPlausible(icao24, route) {
-    const info = flightState._flightData.get(icao24);
+    const info = flightState.records.data.get(icao24);
     const bb = flightState._billboards.get(icao24);
     if (!info || !bb || !bb.position) return true;
     const carto = Cesium.Cartographic.fromCartesian(
@@ -890,7 +890,7 @@ export function createTracking({
     _clearTracking(false, { origin }); // switching planes — the new follow-camera takes over
 
     const bb = flightState._billboards.get(icao24);
-    const info = flightState._flightData.get(icao24);
+    const info = flightState.records.data.get(icao24);
     if (!bb || !info) return;
 
     flightState._trackedIcao = icao24;
@@ -945,7 +945,7 @@ export function createTracking({
         image: aircraftIcon(
           parts.rendering._iconKind(
             flightState._trackedIcao,
-            flightState._flightData.get(flightState._trackedIcao)?.klass,
+            flightState.records.data.get(flightState._trackedIcao)?.klass,
           ),
           TRACKED_ICON_PX,
         ),
@@ -953,7 +953,7 @@ export function createTracking({
         height: 28,
         scale:
           CLASS_SCALE_2D[
-            flightState._flightData.get(flightState._trackedIcao)?.klass
+            flightState.records.data.get(flightState._trackedIcao)?.klass
           ] || 1,
         // Solid cyan when the billboard is the visual (zoomed out, 3D off, or model still loading);
         // transparent once the STANDALONE tracked model is actually up (ready + shown).
@@ -975,7 +975,9 @@ export function createTracking({
         // Screen-projected rotation, evaluated per frame: exact in tracked-orbit
         // mode where camera.heading lives in the entity's reference frame.
         rotation: new Cesium.CallbackProperty(() => {
-          const tracked = flightState._flightData.get(flightState._trackedIcao);
+          const tracked = flightState.records.data.get(
+            flightState._trackedIcao,
+          );
           const pos = getTrackedPosition();
           if (!tracked || !pos || !flightState._viewer)
             return flightState._lastTrackedRotation;
@@ -1086,13 +1088,14 @@ export function createTracking({
         flightState._billboardCollection.remove(bb);
         flightState._billboards.delete(icao24);
         parts.rendering._releaseModel(icao24); // military-suppression: drop any 3D model too
-        flightState._flightData.delete(icao24);
+        flightState.records.data.delete(icao24);
+        flightState._cullPositions.delete(icao24);
         flightState._positionHistory.delete(icao24);
         flightState._displayCourse.delete(icao24);
         flightState._groundSnap.forget(icao24);
-        flightState._missingPolls.delete(icao24);
+        flightState.records.missingPolls.delete(icao24);
       }
-      flightState._count = flightState._billboards.size;
+      flightState.feed._count = flightState._billboards.size;
     } else if (flightState._billboardCollection.show) {
       // Fire-and-forget refresh; only while the layer is actually enabled.
       void flightsLayer.update(flightState._viewer);

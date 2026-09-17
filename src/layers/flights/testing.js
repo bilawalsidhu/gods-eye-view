@@ -69,14 +69,15 @@ export function createTesting({
     flightState._modelCollection = modelCollection;
     flightState._billboardCollection = billboardCollection;
     flightState._billboards = new Map([[icao24, billboard]]);
+    flightState._cullPositions.clear();
     flightState._models.clear();
     for (const [key, model] of models) flightState._models.set(key, model);
     flightState._detectionObjects = new Map();
-    flightState._flightData = new Map([[icao24, meta]]);
+    flightState.records.data = new Map([[icao24, meta]]);
     flightState._positionHistory = new Map([[icao24, history]]);
-    flightState._missingPolls = new Map();
+    flightState.records.missingPolls = new Map();
     flightState._displayCourse.clear();
-    flightState._geoidNCache.clear();
+    flightState.records.geoidNCache.clear();
     flightState._trackedIcao = tracked ? icao24 : null;
     flightState._trackedEntity = tracked ? entity : null;
     flightState._trackedModel = null;
@@ -86,8 +87,8 @@ export function createTesting({
     // production state owned by the tracking lifecycle (_resetTrackedSelectionState),
     // and clearing them here would mask exactly the deselect→re-track hole this
     // seam is used to test.
-    flightState._backoff = false;
-    flightState._retryAt = 0;
+    flightState.feed._backoff = false;
+    flightState.feed._retryAt = 0;
   }
 
   /** Seed the authoritative snapshot outcome used by share-Follow tests. */
@@ -98,8 +99,8 @@ export function createTesting({
     source = 'OpenSky Network',
     coverage = 'test',
   } = {}) {
-    const epoch = ++flightState._trackingRefreshEpoch;
-    flightState._lastTrackingRefreshOutcome = {
+    const epoch = ++flightState.feed._trackingRefreshEpoch;
+    flightState.feed._lastTrackingRefreshOutcome = {
       epoch,
       status,
       ids: new Set(ids.map((id) => String(id).trim().toLowerCase())),
@@ -117,7 +118,7 @@ export function createTesting({
     history = [],
   }) {
     flightState._billboards.set(icao24, billboard);
-    flightState._flightData.set(icao24, meta);
+    flightState.records.data.set(icao24, meta);
     flightState._positionHistory.set(icao24, history);
   }
 

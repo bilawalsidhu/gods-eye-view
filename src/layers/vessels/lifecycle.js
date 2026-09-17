@@ -19,60 +19,60 @@ export function createLifecycle({
   const { registerPickOwner, unregisterPickOwner } = services.picking;
 
   function clearFirstConnectTimer() {
-    if (state.firstConnectTimer === null) return;
-    vesselState._aisRuntime.clearTimeout(state.firstConnectTimer);
-    state.firstConnectTimer = null;
+    if (state.feed.firstConnectTimer === null) return;
+    vesselState._aisRuntime.clearTimeout(state.feed.firstConnectTimer);
+    state.feed.firstConnectTimer = null;
   }
 
   function invalidateAisSession() {
     clearFirstConnectTimer();
-    state.sessionId = ++vesselState._aisSessionSequence;
-    state.firstConnectPhase = 'idle';
-    state.firstConnectStartedAt = null;
-    state.firstConnectDeadline = null;
+    state.feed.sessionId = ++vesselState._aisSessionSequence;
+    state.feed.firstConnectPhase = 'idle';
+    state.feed.firstConnectStartedAt = null;
+    state.feed.firstConnectDeadline = null;
   }
 
   function beginAisSession() {
     clearFirstConnectTimer();
     const sessionId = ++vesselState._aisSessionSequence;
     const startedAt = vesselState._aisRuntime.now();
-    state.sessionId = sessionId;
-    state.firstConnectPhase = 'loading';
-    state.firstConnectStartedAt = startedAt;
-    state.firstConnectDeadline = startedAt + AIS_FIRST_CONNECT_GRACE_MS;
-    state.error = null;
-    state.loadingLabel = AIS_FIRST_CONNECT_LABEL;
+    state.feed.sessionId = sessionId;
+    state.feed.firstConnectPhase = 'loading';
+    state.feed.firstConnectStartedAt = startedAt;
+    state.feed.firstConnectDeadline = startedAt + AIS_FIRST_CONNECT_GRACE_MS;
+    state.feed.error = null;
+    state.feed.loadingLabel = AIS_FIRST_CONNECT_LABEL;
     scheduleFirstConnectExpiry(sessionId, AIS_FIRST_CONNECT_GRACE_MS);
   }
 
   function scheduleFirstConnectExpiry(sessionId, delayMs) {
-    state.firstConnectTimer = vesselState._aisRuntime.setTimeout(() => {
+    state.feed.firstConnectTimer = vesselState._aisRuntime.setTimeout(() => {
       if (
-        !state.enabled ||
-        state.sessionId !== sessionId ||
-        state.firstConnectPhase !== 'loading'
+        !state.feed.enabled ||
+        state.feed.sessionId !== sessionId ||
+        state.feed.firstConnectPhase !== 'loading'
       )
         return;
       const remainingMs =
-        state.firstConnectDeadline - vesselState._aisRuntime.now();
+        state.feed.firstConnectDeadline - vesselState._aisRuntime.now();
       if (remainingMs > 0) {
         scheduleFirstConnectExpiry(sessionId, remainingMs);
         return;
       }
-      state.firstConnectTimer = null;
-      state.firstConnectPhase = 'unavailable';
-      state.loadingLabel = '';
-      state.error = state.lastMessageAt
+      state.feed.firstConnectTimer = null;
+      state.feed.firstConnectPhase = 'unavailable';
+      state.feed.loadingLabel = '';
+      state.feed.error = state.feed.lastMessageAt
         ? 'awaiting usable AIS positions…'
         : 'awaiting first AIS message…';
-      state.stale = state.count > 0;
+      state.feed.stale = state.feed.count > 0;
     }, delayMs);
   }
 
   function settleFirstConnectPhase(phase) {
     clearFirstConnectTimer();
-    state.firstConnectPhase = phase;
-    state.loadingLabel = '';
+    state.feed.firstConnectPhase = phase;
+    state.feed.loadingLabel = '';
   }
 
   function isGraceEligibleTransport(status) {
@@ -85,40 +85,42 @@ export function createLifecycle({
 
   function markAisUnavailable(reason) {
     settleFirstConnectPhase('unavailable');
-    state.error = reason || 'AIS live load failed';
-    state.stale = state.count > 0;
+    state.feed.error = reason || 'AIS live load failed';
+    state.feed.stale = state.feed.count > 0;
   }
 
   function resetState() {
-    state.abort?.abort();
+    components.rendering.resetRecordVisuals();
+    state.feed.abort?.abort();
     state.trailAbort?.abort();
     state.trailAbort = null;
     clearFirstConnectTimer();
     state.viewer = null;
-    state.enabled = false;
-    state.loading = false;
-    state.loaded = false;
-    state.stale = false;
-    state.error = null;
-    state.loadingLabel = '';
-    state.lastUpdate = null;
-    state.count = 0;
-    state.newestPositionAt = null;
-    state.transportStatus = null;
-    state.nextAttemptAt = null;
-    state.lastMessageAt = null;
-    state.rawRowCount = 0;
-    state.acceptedRowCount = 0;
-    state.sessionId = ++vesselState._aisSessionSequence;
-    state.firstConnectPhase = 'idle';
-    state.firstConnectStartedAt = null;
-    state.firstConnectDeadline = null;
-    state.firstConnectTimer = null;
-    state.abort = null;
+    state.feed.enabled = false;
+    state.feed.loading = false;
+    state.feed.loaded = false;
+    state.feed.stale = false;
+    state.feed.partial = false;
+    state.feed.error = null;
+    state.feed.loadingLabel = '';
+    state.feed.lastUpdate = null;
+    state.feed.count = 0;
+    state.feed.newestPositionAt = null;
+    state.feed.transportStatus = null;
+    state.feed.nextAttemptAt = null;
+    state.feed.lastMessageAt = null;
+    state.feed.rawRowCount = 0;
+    state.feed.acceptedRowCount = 0;
+    state.feed.sessionId = ++vesselState._aisSessionSequence;
+    state.feed.firstConnectPhase = 'idle';
+    state.feed.firstConnectStartedAt = null;
+    state.feed.firstConnectDeadline = null;
+    state.feed.firstConnectTimer = null;
+    state.feed.abort = null;
     state.billboardCollection = null;
-    state.vesselRecords = [];
-    state.vesselMap = new Map();
-    state.unkeyedRecords = [];
+    state.records.all = [];
+    state.records.byMmsi = new Map();
+    state.records.unkeyed = [];
     state.clickHandler = null;
     state.keyTarget = null;
     state.keydownHandler = null;
@@ -162,8 +164,8 @@ export function createLifecycle({
     },
 
     enable(viewer) {
-      const wasEnabled = state.enabled;
-      state.enabled = true;
+      const wasEnabled = state.feed.enabled;
+      state.feed.enabled = true;
       if (!wasEnabled) beginAisSession();
       holdContinuousRender('ais-vessels'); // per-frame animator (perf wave 2)
       const activeViewer = viewer || state.viewer;
@@ -176,10 +178,11 @@ export function createLifecycle({
       // failure leaves N = 0 forever, which is safe: sprites are depth-test-
       // free, so vessels stay visible either way.
       if (!vesselState._geoidReady) {
-        const sessionId = state.sessionId;
+        const sessionId = state.feed.sessionId;
         ensureGeoidReady()
           .then(() => {
-            if (!state.enabled || state.sessionId !== sessionId) return;
+            if (!state.feed.enabled || state.feed.sessionId !== sessionId)
+              return;
             vesselState._geoidReady = true;
             components.tracking.refloorVesselRecords();
           })
@@ -190,14 +193,14 @@ export function createLifecycle({
       // Pick-ownership (H2): vessel picks carry the record OBJECT as their id;
       // the registry resolver reduces it to the record's mmsi (a string key).
       registerPickOwner('ais-live-vessels', (pickedId) =>
-        state.vesselMap.has(pickedId),
+        state.records.byMmsi.has(pickedId),
       );
       restoreSpriteOrderOnEnable('ais', activeViewer);
       return components.ingestion.loadLivePositions(activeViewer);
     },
 
     disable() {
-      state.enabled = false;
+      state.feed.enabled = false;
       invalidateAisSession();
       releaseContinuousRender('ais-vessels');
       unregisterPickOwner('ais-live-vessels');
@@ -206,19 +209,19 @@ export function createLifecycle({
       components.selection.clearVesselInspection();
       components.tracking.destroySelectedVesselTrail();
       components.selection.removeVesselInteraction();
-      if (state.abort) {
-        state.abort.abort();
-        state.abort = null;
+      if (state.feed.abort) {
+        state.feed.abort.abort();
+        state.feed.abort = null;
       }
-      state.loading = false;
-      state.loadingLabel = '';
+      state.feed.loading = false;
+      state.feed.loadingLabel = '';
     },
 
     destroy(viewer) {
       const activeViewer = viewer || state.viewer;
       invalidateAisSession();
       releaseContinuousRender('ais-vessels'); // direct-destroy path (perf wave 2 fix)
-      if (state.abort) state.abort.abort();
+      if (state.feed.abort) state.feed.abort.abort();
       unregisterPickOwner('ais-live-vessels');
       components.selection.clearVesselInspection();
       components.tracking.destroySelectedVesselTrail();

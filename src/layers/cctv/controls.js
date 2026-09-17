@@ -3,6 +3,7 @@ import {
   MIN_AUTO_HOP_SEC,
   MAX_AUTO_HOP_SEC,
   DEFAULT_CAMERA_CALIBRATION,
+  CALIBRATION_RANGE_FLOOR_M,
 } from './policy.js';
 
 export function createControls({ state: layerState, services, parts, source }) {
@@ -100,8 +101,10 @@ export function createControls({ state: layerState, services, parts, source }) {
             parts.model.ensureCameraPose(targetRecord.camera);
             layerState._calibrationById.delete(targetCameraId);
             parts.calibration.saveCalibrationStore();
-            // Reset returns to the base lat/lon, so resolve that anchor once.
+            // Reset returns to the base lat/lon, so resolve that anchor once,
+            // and the footprint under the restored pose.
             parts.ground.resolveCommittedGroundAnchor(targetRecord);
+            void parts.ground.resolveFootprintGround(targetRecord);
             parts.frames.refreshProjectionImage(targetRecord, true);
           }
           if (
@@ -134,6 +137,8 @@ export function createControls({ state: layerState, services, parts, source }) {
                 values: { ...targetRecord.camera.calibration },
                 source: 'manual',
                 savedAt: Date.now(),
+                // Authored against the current range floor: never migrated.
+                rangeFloorM: CALIBRATION_RANGE_FLOOR_M,
               });
             }
             targetRecord.calDirty = false;
@@ -217,7 +222,8 @@ export function createControls({ state: layerState, services, parts, source }) {
         objects.push({
           position: layerState._records[i].position,
           sourceId: camera.id,
-          id: `CAM-${camera.id}`,
+          // Short semantic code where the id is opaque (see cameraDisplayCode).
+          id: `CAM-${camera.code || camera.id}`,
           type: 'CAM',
         });
         if (objects.length >= maxCount) break;

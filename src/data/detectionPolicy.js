@@ -8,7 +8,10 @@
 export const DENSITY_STOPS = Object.freeze([0, 25, 50, 75, 100]);
 export const ALLOCATION_ELASTIC = 'ELASTIC';
 export const ALLOCATION_WEIGHTED = 'WEIGHTED';
-export const ALLOCATION_STRATEGIES = Object.freeze([ALLOCATION_ELASTIC, ALLOCATION_WEIGHTED]);
+export const ALLOCATION_STRATEGIES = Object.freeze([
+  ALLOCATION_ELASTIC,
+  ALLOCATION_WEIGHTED,
+]);
 
 // The keyhole's default 1% outside opacity is appropriate for text, but it
 // made side aircraft brackets effectively disappear while the same contacts
@@ -71,10 +74,16 @@ export function aircraftBracketAlphaFloor(outsideOpacity) {
     : AIRCRAFT_BRACKET_FLOOR_ANCHOR;
   if (outside <= 0) return 0;
   if (outside <= AIRCRAFT_BRACKET_FLOOR_ANCHOR) {
-    return AIRCRAFT_BRACKET_ALPHA_FLOOR * (outside / AIRCRAFT_BRACKET_FLOOR_ANCHOR);
+    return (
+      AIRCRAFT_BRACKET_ALPHA_FLOOR * (outside / AIRCRAFT_BRACKET_FLOOR_ANCHOR)
+    );
   }
-  const progress = (outside - AIRCRAFT_BRACKET_FLOOR_ANCHOR) / (1 - AIRCRAFT_BRACKET_FLOOR_ANCHOR);
-  return AIRCRAFT_BRACKET_ALPHA_FLOOR + (1 - AIRCRAFT_BRACKET_ALPHA_FLOOR) * progress;
+  const progress =
+    (outside - AIRCRAFT_BRACKET_FLOOR_ANCHOR) /
+    (1 - AIRCRAFT_BRACKET_FLOOR_ANCHOR);
+  return (
+    AIRCRAFT_BRACKET_ALPHA_FLOOR + (1 - AIRCRAFT_BRACKET_ALPHA_FLOOR) * progress
+  );
 }
 
 /**
@@ -85,7 +94,11 @@ export function aircraftBracketAlphaFloor(outsideOpacity) {
  *   the default, so a caller that does not know it reproduces the shipped look.
  * @returns {number} Paint alpha, 0-1.
  */
-export function detectionBracketAlpha(type, keyholeAlpha, outsideOpacity = AIRCRAFT_BRACKET_FLOOR_ANCHOR) {
+export function detectionBracketAlpha(
+  type,
+  keyholeAlpha,
+  outsideOpacity = AIRCRAFT_BRACKET_FLOOR_ANCHOR,
+) {
   const alpha = Math.max(0, Math.min(1, Number(keyholeAlpha) || 0));
   if (String(type || '').toUpperCase() !== 'AIR' || alpha <= 0) return alpha;
   return Math.max(aircraftBracketAlphaFloor(outsideOpacity), alpha);
@@ -97,7 +110,7 @@ export function detectionHorizontalSector(screenX, viewportWidth) {
   const x = Number(screenX);
   if (!(width > 0) || !Number.isFinite(x)) return 'front';
   if (x < width / 3) return 'left';
-  if (x > width * 2 / 3) return 'right';
+  if (x > (width * 2) / 3) return 'right';
   return 'front';
 }
 
@@ -140,19 +153,29 @@ export function defaultDensityForProfile(profile) {
 
 /** Normalize current and legacy profile labels. OFF remains an enabled-state value. */
 export function normalizeProfile(profile) {
-  const raw = String(profile || '').trim().toUpperCase();
+  const raw = String(profile || '')
+    .trim()
+    .toUpperCase();
   if (raw === 'OFF') return 'OFF';
   if (raw === 'SPARSE' || raw === 'SURVEY') return 'SPARSE';
   if (raw === 'BALANCED' || raw === 'NORMAL') return 'BALANCED';
-  if (raw === 'DENSE' || raw === 'PANOPTIC' || raw === 'GOD' || raw === 'ON') return 'DENSE';
+  if (raw === 'DENSE' || raw === 'PANOPTIC' || raw === 'GOD' || raw === 'ON')
+    return 'DENSE';
   return null;
 }
 
 /** Normalize the user-selectable layer allocation strategy. */
-export function normalizeAllocationStrategy(strategy, fallback = ALLOCATION_ELASTIC) {
-  const raw = String(strategy || '').trim().toUpperCase();
+export function normalizeAllocationStrategy(
+  strategy,
+  fallback = ALLOCATION_ELASTIC,
+) {
+  const raw = String(strategy || '')
+    .trim()
+    .toUpperCase();
   if (ALLOCATION_STRATEGIES.includes(raw)) return raw;
-  const normalizedFallback = String(fallback || '').trim().toUpperCase();
+  const normalizedFallback = String(fallback || '')
+    .trim()
+    .toUpperCase();
   return ALLOCATION_STRATEGIES.includes(normalizedFallback)
     ? normalizedFallback
     : ALLOCATION_ELASTIC;
@@ -160,7 +183,9 @@ export function normalizeAllocationStrategy(strategy, fallback = ALLOCATION_ELAS
 
 /** Classify camera altitude into the shared label-budget view scale. */
 export function viewScaleForAltitude(altitudeM) {
-  const altitude = Number.isFinite(Number(altitudeM)) ? Math.max(0, Number(altitudeM)) : 1e9;
+  const altitude = Number.isFinite(Number(altitudeM))
+    ? Math.max(0, Number(altitudeM))
+    : 1e9;
   if (altitude < 1200) return 'street';
   if (altitude < 4500) return 'city';
   if (altitude < 20000) return 'metro';
@@ -181,25 +206,46 @@ export function labelBudgetFor(altitudeM, densityPct) {
  * density was below 75; legacy Sparse remains inside the Sparse band.
  */
 export function migrateDetectionState(mode, densityPct, fallbackDensity = 50) {
-  const rawMode = String(mode || '').trim().toUpperCase();
+  const rawMode = String(mode || '')
+    .trim()
+    .toUpperCase();
   const normalized = normalizeProfile(rawMode);
   if (normalized === 'OFF') {
-    const supplied = Number.isFinite(Number(densityPct)) ? densityPct : fallbackDensity;
+    const supplied = Number.isFinite(Number(densityPct))
+      ? densityPct
+      : fallbackDensity;
     const stop = canonicalizeDensity(supplied, fallbackDensity);
-    return { enabled: false, profile: profileForDensity(stop), densityPct: stop };
+    return {
+      enabled: false,
+      profile: profileForDensity(stop),
+      densityPct: stop,
+    };
   }
   if (rawMode === 'PANOPTIC' || rawMode === 'GOD' || rawMode === 'ON') {
-    const density = Number.isFinite(Number(densityPct)) ? Math.max(75, Number(densityPct)) : 75;
-    return { enabled: true, profile: 'DENSE', densityPct: canonicalizeDensity(density) };
+    const density = Number.isFinite(Number(densityPct))
+      ? Math.max(75, Number(densityPct))
+      : 75;
+    return {
+      enabled: true,
+      profile: 'DENSE',
+      densityPct: canonicalizeDensity(density),
+    };
   }
   if (rawMode === 'SPARSE' || rawMode === 'SURVEY') {
-    const density = Number.isFinite(Number(densityPct)) ? Math.min(25, Number(densityPct)) : 25;
+    const density = Number.isFinite(Number(densityPct))
+      ? Math.min(25, Number(densityPct))
+      : 25;
     const stop = canonicalizeDensity(density, 25);
     return { enabled: true, profile: 'SPARSE', densityPct: stop };
   }
   if (normalized === 'BALANCED' || normalized === 'DENSE') {
-    const supplied = Number.isFinite(Number(densityPct)) ? canonicalizeDensity(densityPct) : defaultDensityForProfile(normalized);
-    const stop = profileForDensity(supplied) === normalized ? supplied : defaultDensityForProfile(normalized);
+    const supplied = Number.isFinite(Number(densityPct))
+      ? canonicalizeDensity(densityPct)
+      : defaultDensityForProfile(normalized);
+    const stop =
+      profileForDensity(supplied) === normalized
+        ? supplied
+        : defaultDensityForProfile(normalized);
     return { enabled: true, profile: normalized, densityPct: stop };
   }
   const stop = canonicalizeDensity(densityPct, fallbackDensity);

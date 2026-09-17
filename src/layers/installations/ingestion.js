@@ -1,5 +1,3 @@
-import { normalizeMilitaryInstallations } from '../../data/militaryInstallationData.js';
-
 export function createIngestion({
   state: layerState,
   services,
@@ -58,19 +56,15 @@ export function createIngestion({
       // A SATURATED snapped tile was truncated upstream, so features from the
       // snap's extra ring may have crowded out sites actually on screen. Re-ask
       // for the exact viewport (separately keyed and cached) before rendering.
-      let saturated = parts.model.installationResponseSaturated(payload);
+      let saturated = payload.saturated === true;
       if (saturated) {
         payload = await fetchInstallations(true);
-        saturated = parts.model.installationResponseSaturated(payload);
+        saturated = payload.saturated === true;
       }
-      const normalized = normalizeMilitaryInstallations(
-        payload,
-        payload.retrievedAt || new Date().toISOString(),
-      );
       // The proxy answers a bbox at least as large as the viewport; keep only what
       // was actually asked for so nothing off-screen reaches the map or the
       // "current viewport only" context claim.
-      const records = normalized.records.filter((record) =>
+      const records = payload.records.filter((record) =>
         parts.model.installationWithinViewport(record, box),
       );
       let placesError = null;

@@ -35,9 +35,11 @@ const VIEW = 96;
 const C = VIEW / 2; // 48 — glyph centre
 
 // Hairline dark edge (scaled for the 96 box: ~1.5u ≈ the old 0.5u at 32).
-const STROKE = 'stroke="rgba(0,0,0,0.32)" stroke-width="1.4" stroke-linejoin="round"';
+const STROKE =
+  'stroke="rgba(0,0,0,0.32)" stroke-width="1.4" stroke-linejoin="round"';
 // Heavier edge for the chart-symbol ("bold") glyphs adopted 2026-08-15.
-const STROKE_BOLD = 'stroke="rgba(0,0,0,0.38)" stroke-width="2" stroke-linejoin="round"';
+const STROKE_BOLD =
+  'stroke="rgba(0,0,0,0.38)" stroke-width="2" stroke-linejoin="round"';
 // Softer white for translucent detail (prop discs, rotor disc) — still white so
 // the tint multiplies cleanly; only the alpha differs.
 const DISC = 'fill="white" fill-opacity="0.5"';
@@ -239,7 +241,9 @@ const BODIES = {
 const _iconCache = new Map();
 
 const _b64 = (s) =>
-  typeof btoa === 'function' ? btoa(s) : Buffer.from(s, 'utf8').toString('base64');
+  typeof btoa === 'function'
+    ? btoa(s)
+    : Buffer.from(s, 'utf8').toString('base64');
 
 /** Fleet raster: billboards render at ~40–58 DEVICE px (width 20–24 CSS ×
  *  Retina × class scale). Cesium's billboard atlas has no mipmaps, so a big

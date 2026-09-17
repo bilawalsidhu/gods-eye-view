@@ -1,16 +1,17 @@
-import {
-  createInstallationsLayer,
-  createInstallationSource,
-} from '../layers/installations/index.js';
-import * as render from '../renderGovernor.js';
-import * as context from './contextStore.js';
-import * as ground from './groundFloor.js';
-import * as anchors from './fireAnchors.js';
-import * as picking from './pickRegistry.js';
+import { defaultSurface } from './surfaceServices.js';
+import { createApplicationInstallations } from '../app/layers/militaryInstallations.js';
+import { createSourceSlot } from '../sources/sourceSlot.js';
+import { createInstallationSource } from '../layers/installations/index.js';
 
-const layer = createInstallationsLayer({
-  source: createInstallationSource(),
-  services: { render, context, ground, anchors, picking },
+const sourceSlot = createSourceSlot(
+  createInstallationSource(),
+  ['getMappedSites', 'searchNearby'],
+  'Installation source',
+);
+export const configureInstallationSource = sourceSlot.configure;
+const layer = createApplicationInstallations({
+  surface: defaultSurface,
+  source: sourceSlot.source,
 });
 export const approximateSurfaceDistanceM = layer.approximateSurfaceDistanceM;
 export const classifyGoogleMilitaryPlace = layer.classifyGoogleMilitaryPlace;

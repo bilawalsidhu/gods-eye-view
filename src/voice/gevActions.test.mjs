@@ -2838,7 +2838,7 @@ async function withAwareness(harness, run) {
       : originals.cartoFrom(value)
   );
   try {
-    return await run();
+    return await run(awareness);
   } finally {
     awareness.getContextSnapshot = originals.snapshot;
     flightsLayer.getNearby = originals.flightsNearby;
@@ -2847,7 +2847,7 @@ async function withAwareness(harness, run) {
   }
 }
 
-function analystRunner() {
+function analystRunner(awareness) {
   const flights = {
     id: 'flights',
     // Deliberately a DIFFERENT population from the proximity window: this is
@@ -2869,7 +2869,7 @@ function analystRunner() {
     viewer,
     styleManager: {},
     dataManager: {
-      layers: new Map([['flights', { module: flights }]]),
+      layers: new Map([['flights', { module: flights }], ['military-awareness', { module: awareness }]]),
       isEnabled: (id) => id === 'flights',
       getAll: () => [{ id: 'flights', name: 'Live Flights', enabled: true, stats: { count: 1 } }],
     },
@@ -2883,8 +2883,8 @@ test('front5: a nearby ask centres on the Contacts SUBJECT, not the selected dat
     flights: Array.from({ length: 111 }, (_, i) => ({ id: `F${i}`, icao24: `f${i}`, distance: 1000 * i })),
     military: Array.from({ length: 5 }, (_, i) => ({ id: `M${i}`, icao24: `m${i}`, distance: 500 * i })),
   });
-  await withAwareness(harness, async () => {
-    const runner = analystRunner();
+  await withAwareness(harness, async (awareness) => {
+    const runner = analystRunner(awareness);
     const result = await runner('analyst_query', {
       layers: ['flights', 'military'],
       // The centre the model reached for in the field: the selected datacenter.
@@ -2913,13 +2913,13 @@ test('front5: the spoken count and the panel window are ONE number by constructi
     flights: Array.from({ length: 111 }, (_, i) => ({ id: `F${i}`, icao24: `f${i}` })),
     military: Array.from({ length: 5 }, (_, i) => ({ id: `M${i}`, icao24: `m${i}` })),
   });
-  await withAwareness(harness, async () => {
+  await withAwareness(harness, async (awareness) => {
     // What the PANEL computes for this subject...
     const panel = collectAircraftProximityWindow(harness.snapshot.subject.position, {
       subject: harness.snapshot.subject,
     });
     // ...and what VOICE answers for the same subject.
-    const spoken = await analystRunner()('analyst_query', {
+    const spoken = await analystRunner(awareness)('analyst_query', {
       layers: ['flights', 'military'],
       scope: { kind: 'radius', km: 250 },
     });
@@ -2936,8 +2936,8 @@ test('front5: the spoken count and the panel window are ONE number by constructi
 test('front5: Contacts active with NO subject falls back to the view, not an empty panel', async () => {
   globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
   const harness = awarenessSubjectHarness({ subject: null });
-  await withAwareness(harness, async () => {
-    const result = await analystRunner()('analyst_query', {
+  await withAwareness(harness, async (awareness) => {
+    const result = await analystRunner(awareness)('analyst_query', {
       layers: ['flights'],
       scope: { kind: 'radius', km: 250 },
     });
@@ -2954,8 +2954,8 @@ test('front5: an explicit region still uses the region engine while Contacts is 
     subject: { id: 'a1b2c3', label: 'N546PC' },
     flights: Array.from({ length: 111 }, (_, i) => ({ id: `F${i}`, icao24: `f${i}` })),
   });
-  await withAwareness(harness, async () => {
-    const result = await analystRunner()('analyst_query', {
+  await withAwareness(harness, async (awareness) => {
+    const result = await analystRunner(awareness)('analyst_query', {
       layers: ['flights'],
       scope: { kind: 'region', name: 'Texas' },
     });
@@ -2988,8 +2988,8 @@ test('front5: the box DIAGONAL is not the subject — 1.32 km away is somewhere 
   // separation is 1.32 km. This is the case the coordinator flagged: a centre
   // far enough to be a different place, slipping through on the diagonal.
   globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
-  await withAwareness(subjectWindowHarness(), async () => {
-    const result = await analystRunner()('analyst_query', {
+  await withAwareness(subjectWindowHarness(), async (awareness) => {
+    const result = await analystRunner(awareness)('analyst_query', {
       layers: ['flights', 'military'],
       scope: { kind: 'radius', km: 250, center: { lat: 29.9 + 0.009, lon: -97.9 + 0.009 } },
     });
@@ -3009,8 +3009,8 @@ test('front5: 0.99 km due EAST is the subject, though a degree box rejects it', 
   // 0.99 km — inside 1 km — yet over the 0.01 box threshold. A box would send
   // the operator a different, smaller number for a centre that IS the contact.
   globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
-  await withAwareness(subjectWindowHarness(), async () => {
-    const result = await analystRunner()('analyst_query', {
+  await withAwareness(subjectWindowHarness(), async (awareness) => {
+    const result = await analystRunner(awareness)('analyst_query', {
       layers: ['flights', 'military'],
       scope: { kind: 'radius', km: 250, center: { lat: 29.9, lon: -97.9 + 0.0103 } },
     });
@@ -3140,3 +3140,45 @@ test('voice Radio: the keyless path applies no country filter the keyed path wou
 const testPlaceSearch = () => createStandalonePlaceSearch({ resolveApiKey: () => globalThis.window?.__GOOGLE_MAPS_API_KEY__ });
 function createGevActionRunner(options) { return createActionRunner({ placeSearch: testPlaceSearch(), ...options }); }
 function controlRadio(viewer, manager, args, options) { return runControlRadio(viewer, manager, args, { placeSearch: testPlaceSearch(), ...options }); }
+
+test('ALPR common names toggle only the registered camera layer through the normal voice action', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const viewer = { clock: { onTick: { addEventListener: () => () => {} } },
+    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+    camera: { moveEnd: { addEventListener() {} } } };
+  const calls = [];
+  let enabled = false;
+  const dataManager = {
+    layers: new Map([['alpr-cameras', { module: {} }]]),
+    getAll: () => [{ id: 'alpr-cameras', name: 'ALPR Cameras' }],
+    isEnabled: () => enabled,
+    setEnabled: async (id, value) => { calls.push([id, value]); enabled = value; return true; },
+  };
+  const runner = createGevActionRunner({ viewer, styleManager: {}, dataManager });
+  for (const alias of ['alpr-cameras', 'alpr', 'alpr cameras', 'flock cameras', 'license plate readers', 'license plate cameras', 'plate readers']) {
+    for (const value of [true, false]) {
+      const result = await runner('set_layer_visibility', { layerId: alias, enabled: value });
+      assert.equal(result.ok, true);
+      assert.equal(result.layerId, 'alpr-cameras');
+      assert.deepEqual(calls.at(-1), ['alpr-cameras', value]);
+    }
+  }
+});
+
+test('ISS voice lookup uses the registered satellite instance', async () => {
+  const calls = [];
+  const viewer = {
+    clock: { onTick: { addEventListener: () => () => {} } },
+    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+    camera: { moveEnd: { addEventListener() {} } },
+  };
+  const runner = createGevActionRunner({ viewer, styleManager: {}, dataManager: {
+    layers: new Map([['satellites', { module: { getNextIssPass(query) {
+      calls.push(query);
+      return { status: 'none' };
+    } } }]]),
+  } });
+  const result = await runner('next_iss_pass', { latitude: 30, longitude: -97, minElevationDeg: 15 });
+  assert.deepEqual(calls, [{ latDeg: 30, lonDeg: -97, minElevDeg: 15 }]);
+  assert.match(result.error, /No ISS pass above 15/);
+});

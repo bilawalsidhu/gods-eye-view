@@ -14,33 +14,33 @@ const REGIONAL_BRIEF_STALE_MS = 60 * 60_000;
 
 const REGIONAL_BRIEF_MAX_CACHE = 120;
 
-const _regionalBriefCache = new Map();
-
-const _regionalBriefInFlight = new Map();
-
-const _regionalBriefRateLimiter = makeRateLimiter({
-  windowMs: 60_000,
-  max: 30,
-  globalMax: 90,
-});
-
-function trimRegionalBriefCache() {
-  while (_regionalBriefCache.size > REGIONAL_BRIEF_MAX_CACHE) {
-    const oldest = _regionalBriefCache.keys().next().value;
-    if (oldest === undefined) break;
-    _regionalBriefCache.delete(oldest);
-  }
-}
-
 /** True when at least one regional source produced usable data. */
 function regionalBriefHasAnySource({ place, weather, news } = {}) {
   return Boolean(place || weather || (news && news.status !== 'unavailable'));
 }
 
-function regionalBriefProxy() {
+function regionalBriefProxy({ placeProvider = fetchRegionalPlace } = {}) {
+  const _regionalBriefCache = new Map();
+
+  const _regionalBriefInFlight = new Map();
+
+  const _regionalBriefRateLimiter = makeRateLimiter({
+    windowMs: 60_000,
+    max: 30,
+    globalMax: 90,
+  });
+
+  function trimRegionalBriefCache() {
+    while (_regionalBriefCache.size > REGIONAL_BRIEF_MAX_CACHE) {
+      const oldest = _regionalBriefCache.keys().next().value;
+      if (oldest === undefined) break;
+      _regionalBriefCache.delete(oldest);
+    }
+  }
+
   async function refresh(point, key) {
     const [placeResult, weatherResult] = await Promise.allSettled([
-      fetchRegionalPlace(point),
+      placeProvider(point),
       fetchRegionalWeather(point),
     ]);
     const place = placeResult.status === 'fulfilled' ? placeResult.value : null;

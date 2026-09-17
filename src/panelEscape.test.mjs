@@ -1,3 +1,4 @@
+import { readShellSource } from './testSupport/readShellSource.mjs';
 import { onKeyDown as cockpitKeyDown } from './ui/cockpitInput.js';
 import { readFileSync as readRadioSource } from 'node:fs';
 const radioBindings = readRadioSource(new URL('./ui/radioBindings.js', import.meta.url), 'utf8');
@@ -8,7 +9,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
 
-const source = fs.readFileSync(new URL('./ui/applicationShell.js', import.meta.url), 'utf8');
+const source = readShellSource();
 
 function method(name, nextName) {
   const start = source.indexOf(`  ${name}(`);

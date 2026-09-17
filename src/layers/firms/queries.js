@@ -38,6 +38,12 @@ export function createQueries({
 
     source,
 
+    // The one data-layer control a provider key gates: the proxy answers
+    // 503 {error:'no_key'} without a FIRMS key. Declared as a key-registry id
+    // rather than an env-var string, so the panel can name the key from the
+    // one place that owns what each key is called.
+    requiresKeyId: 'firms',
+
     // Live layer: the manager calls update() every 10 minutes while enabled,
     // which refetches through the /api/firms proxy (the proxy's 30 min TTL —
     // not this interval — is what protects the upstream FIRMS quota).
@@ -75,6 +81,11 @@ export function createQueries({
         lastUpdate: layerState._lastUpdate,
         loading: layerState._loading,
         stale: layerState._stale,
+        // The machine-readable half of the keyless state, ahead of the human
+        // strings below: without it "no key configured" is indistinguishable
+        // from a broken feed, and the row reads as a fault instead of a step
+        // the operator can take.
+        keyRequired: layerState._keyRequired,
         error: layerState._keyRequired
           ? 'KEY REQUIRED'
           : layerState._stale

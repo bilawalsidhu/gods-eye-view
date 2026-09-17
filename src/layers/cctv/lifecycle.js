@@ -6,6 +6,7 @@ import {
   GROUND_PRIOR_INIT_WAIT_MS,
   CAMERA_ICON,
   IDLE_CAMERA_COLOR,
+  CALIBRATION_RANGE_FLOOR_M,
 } from './policy.js';
 
 export function createLifecycle({
@@ -92,9 +93,18 @@ export function createLifecycle({
       for (const camera of catalog) {
         const savedEntry = layerState._calibrationById.get(camera.id);
         if (savedEntry) {
-          camera.calibration = parts.calibration.normalizeCalibration(
-            savedEntry.values,
-          );
+          // Entries saved before the range floor dropped (no rangeFloorM)
+          // keep their effective range by re-basing rangeScale once.
+          const values =
+            savedEntry.rangeFloorM === CALIBRATION_RANGE_FLOOR_M
+              ? savedEntry.values
+              : parts.calibration.migrateRangeScaleForFloor(
+                  savedEntry.values,
+                  camera.rangeM,
+                );
+          savedEntry.values = values;
+          savedEntry.rangeFloorM = CALIBRATION_RANGE_FLOOR_M;
+          camera.calibration = parts.calibration.normalizeCalibration(values);
           camera.calSource = savedEntry.source;
         }
         parts.model.ensureCameraPose(camera);

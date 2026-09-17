@@ -90,6 +90,7 @@ export function createPresentation({
       sourceStatus: health?.status || 'unknown',
       sourceMessage: health?.message || '',
       sourceLabel: health?.label || camera.provider || '',
+      credit: camera.credit || '',
       calibration: {
         ...parts.calibration.normalizeCalibration(camera.calibration),
       },
