@@ -10,6 +10,8 @@
   Media autoplay now requires a live Play Scene or Play Shot action; passive
   loading, saved state and seeking do not grant playback authority.
 
+- Bound the remaining upstream body reads (FIRMS, CelesTrak, adsb.lol, TomTom, OpenSky, adsbdb) with streaming size caps and shared deadlines; the adsb.lol military and OpenSky `states/all` polls gain deadlines of their own.
+
 - Add Director import previews, validated scene/shot detail drafts and selected-scene
   JSON or asset-bundle sharing. Preserve attribution; verify bounded bundle bytes
   before admission and release staged work on cancellation or teardown.

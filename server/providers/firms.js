@@ -2,6 +2,7 @@ import path from 'node:path';
 import { promises as fsp } from 'node:fs';
 
 import { filterTrailing24h, parseFirmsCsv } from '../../src/data/firmsCsv.js';
+import { readResponseTextCapped } from './common/http.js';
 
 /**
  * NASA FIRMS live active-fire proxy with a memory + disk cache.
@@ -29,6 +30,11 @@ export function firmsProxy() {
   const TTL_MS = 30 * 60_000;
   const STATUS_TTL_MS = 5 * 60_000;
   const SOURCES = ['VIIRS_NOAA20_NRT', 'VIIRS_NOAA21_NRT', 'VIIRS_SNPP_NRT'];
+  /**
+   * Per-source body cap. A world/2 pull is ~130k rows x ~100 B, about 13 MB
+   * per satellite in heavy fire season, so this is a bound, not a budget.
+   */
+  const FIRMS_MAX_RESPONSE_BYTES = 64 * 1024 * 1024;
   const CACHE_DIR = path.join(process.cwd(), '.gev-cache');
   const CACHE_PATH = path.join(CACHE_DIR, 'firms.json');
 
@@ -77,9 +83,12 @@ export function firmsProxy() {
    */
   async function fetchSource(key, source) {
     const url = `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${encodeURIComponent(key)}/${source}/world/2`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(60_000) });
+    const signal = AbortSignal.timeout(60_000);
+    const res = await fetch(url, { signal });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const records = parseFirmsCsv(await res.text());
+    const records = parseFirmsCsv(
+      await readResponseTextCapped(res, FIRMS_MAX_RESPONSE_BYTES, signal),
+    );
     if (records === null) throw new Error('non-CSV upstream response');
     return records;
   }
