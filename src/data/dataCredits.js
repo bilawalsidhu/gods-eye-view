@@ -170,6 +170,13 @@ export const DATA_CREDITS = [
       '<a href="https://data.calgary.ca/stories/s/Open-Calgary-Terms-of-Use/u45n-7awa" target="_blank" rel="noopener">Open Government Licence – City of Calgary</a>',
   },
   {
+    key: 'vancouver-cctv',
+    html:
+      'CCTV cameras &amp; frames (Vancouver): City of Vancouver — ' +
+      '<a href="https://trafficcams.vancouver.ca/" target="_blank" rel="noopener">trafficcams.vancouver.ca</a> ' +
+      '(Terms of Use)',
+  },
+  {
     key: 'gbfs',
     html: 'Bikeshare availability: GBFS operator feeds (e.g. Austin BCycle)',
   },
