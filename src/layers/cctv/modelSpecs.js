@@ -297,21 +297,82 @@ const RECORDS = [
   },
 ];
 
+/** Lowercase + collapse whitespace, the shared normal form for matching. */
+function normalize(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+}
+
 const BY_MODEL = new Map();
 for (const record of RECORDS) {
-  BY_MODEL.set(record.model.toLowerCase(), record);
+  BY_MODEL.set(normalize(record.model), record);
   for (const alias of record.aliases || [])
-    BY_MODEL.set(alias.toLowerCase(), record);
+    BY_MODEL.set(normalize(alias), record);
 }
 
 /**
- * Looks up a spec record by model string (case-insensitive; aliases match too).
+ * DISTINCTIVE tokens of a record — the whitespace words of its model and
+ * aliases that identify hardware rather than describe it. A token qualifies
+ * only when it is >= 4 chars AND contains a digit or hyphen, so generic words
+ * ("dome", "network", "camera", "series", "ptz") are never distinctive and a
+ * verbose registry string cannot match on them alone. Surrounding punctuation
+ * is trimmed so "(NDP-7512-Z30)" indexes as "ndp-7512-z30".
+ * @param {Object} record
+ * @returns {string[]} Unique distinctive tokens, lowercased.
+ */
+function distinctiveTokens(record) {
+  const out = new Set();
+  for (const name of [record.model, ...(record.aliases || [])]) {
+    for (const raw of normalize(name).split(' ')) {
+      const token = raw.replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, '');
+      if (token.length >= 4 && /[0-9-]/.test(token)) out.add(token);
+    }
+  }
+  return [...out];
+}
+
+/**
+ * Token index for the substring fallback: one precompiled whole-word matcher
+ * per distinctive token. Word boundaries are any non-alphanumeric char (or the
+ * string ends), so hyphenated/dotted tokens like "q6155-e" or "h.264" match as
+ * whole words while "700" never matches inside "7000".
+ */
+const TOKEN_INDEX = RECORDS.flatMap((record) =>
+  distinctiveTokens(record).map((token) => ({
+    token,
+    record,
+    re: new RegExp(
+      `(?:^|[^a-z0-9])${token.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&')}(?:[^a-z0-9]|$)`,
+    ),
+  })),
+);
+
+/**
+ * Looks up a spec record for a hardware-model string.
+ *
+ * Exact match first (case-insensitive, whitespace-collapsed) on the model and
+ * every alias. When that misses, a token fallback lets a VERBOSE registry
+ * string resolve — e.g. "AXIS Q6155-E PTZ Dome Network Camera" finds the
+ * Q6155-E via its distinctive "q6155-e" token. The most specific (longest)
+ * matched token wins; if two different records tie on the longest matched
+ * token the result is ambiguous and returns null (never guesses).
  * @param {string} model - Hardware model as named by a source pack or seed.
  * @returns {Object|null} The verbatim spec record, or null when unknown.
  */
 export function lookupModelSpec(model) {
   if (!model) return null;
-  return BY_MODEL.get(String(model).trim().toLowerCase()) || null;
+  const query = normalize(model);
+  if (!query) return null;
+  const exact = BY_MODEL.get(query);
+  if (exact) return exact;
+  const matches = TOKEN_INDEX.filter((entry) => entry.re.test(query));
+  if (!matches.length) return null;
+  const maxLen = Math.max(...matches.map((m) => m.token.length));
+  const top = matches.filter((m) => m.token.length === maxLen);
+  const records = new Set(top.map((m) => m.record));
+  return records.size === 1 ? top[0].record : null;
 }
 
 /**
