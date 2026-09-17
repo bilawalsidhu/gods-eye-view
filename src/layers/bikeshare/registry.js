@@ -167,6 +167,18 @@ const RAW_GBFS_CITY_REGISTRY = [
       'https://chat.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
     provider: 'Bike Chattanooga',
   },
+  {
+    id: 'toronto-bike-share',
+    city: 'Toronto, ON',
+    centerLat: 43.6532,
+    centerLon: -79.3832,
+    loadRadiusKm: 90,
+    stationInformationUrl:
+      'https://toronto.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://toronto.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
+    provider: 'Bike Share Toronto',
+  },
   bcycleEntry({
     id: 'boulder-bcycle',
     city: 'Boulder, CO',
