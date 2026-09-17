@@ -222,6 +222,7 @@ export class PanelLayoutController {
       for (const panel of [
         this._ppToggles,
         this._cctvPanel,
+        document.getElementById('weather-panel'),
         globalContextPanel,
       ]) {
         if (panel) this._rightStackResizeObserver.observe(panel);

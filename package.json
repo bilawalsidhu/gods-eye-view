@@ -57,9 +57,9 @@
   "devDependencies": {
     "prettier": "3.9.6",
     "puppeteer": "^25.10.0",
+    "rollup-plugin-external-globals": "^0.13.0",
     "sharp": "^0.35.4",
     "vite": "^6.0.0",
-    "vite-plugin-cesium": "^1.2.23",
     "ws": "^8.21.0"
   },
   "exports": {
@@ -90,7 +90,12 @@
     "./server/providers/traffic": {
       "node": "./server/providers/traffic.js"
     },
+    "./server/providers/xweather": {
+      "node": "./server/providers/xweather.js"
+    },
     "./sources/traffic": "./src/data/tomtomTiles.js",
+    "./sources/xweather": "./src/data/xweatherTiles.js",
+    "./sources/tile-budget": "./src/data/tileBudget.js",
     "./server/providers/firms": {
       "node": "./server/providers/firms.js"
     },
@@ -150,6 +155,7 @@
     "./aircraft": "./src/layers/aircraft/index.js",
     "./layers/vessels": "./src/layers/vessels/index.js",
     "./layers/earthquakes": "./src/layers/earthquakes/index.js",
+    "./layers/weather": "./src/layers/weather/index.js",
     "./sources/firms-csv": "./src/data/firmsCsv.js",
     "./layers/firms": "./src/layers/firms/index.js",
     "./layers/satellites": "./src/layers/satellites/index.js",

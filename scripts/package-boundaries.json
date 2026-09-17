@@ -26,8 +26,12 @@
   "vite-build": {
     "runtime": "node",
     "exports": ["./build/vite", "./build/html"],
-    "modules": ["build/vite.js", "build/application-html.js"],
-    "external": ["vite-plugin-cesium"]
+    "modules": [
+      "build/vite.js",
+      "build/application-html.js",
+      "build/cesium.js"
+    ],
+    "external": ["rollup-plugin-external-globals"]
   },
   "live-providers": {
     "runtime": "node",
@@ -45,7 +49,8 @@
       "src/data/adsbLolFallback.js",
       "src/data/aisStreamAdapter.js",
       "src/data/aisWatchdog.js",
-      "src/sources/httpBody.js"
+      "src/sources/httpBody.js",
+      "server/providers/common/cache-dir.js"
     ],
     "external": ["ws"]
   },
@@ -87,7 +92,8 @@
       "server/providers/space/launch-library.js",
       "server/providers/common/http.js",
       "src/data/spaceProviderRequests.js",
-      "src/sources/httpBody.js"
+      "src/sources/httpBody.js",
+      "server/providers/common/cache-dir.js"
     ],
     "external": []
   },
@@ -101,7 +107,8 @@
     "exports": ["./server/providers/terrain"],
     "modules": [
       "server/providers/terrain.js",
-      "src/data/terrainHeightsProxy.js"
+      "src/data/terrainHeightsProxy.js",
+      "server/providers/common/cache-dir.js"
     ],
     "external": []
   },
@@ -113,12 +120,17 @@
   "traffic-provider": {
     "runtime": "node",
     "exports": ["./server/providers/traffic"],
-    "modules": ["server/providers/traffic.js", "src/data/tomtomTiles.js"],
+    "modules": [
+      "server/providers/traffic.js",
+      "src/data/tomtomTiles.js",
+      "src/data/tileBudget.js",
+      "server/providers/common/cache-dir.js"
+    ],
     "external": []
   },
   "traffic-source": {
     "exports": ["./sources/traffic"],
-    "modules": ["src/data/tomtomTiles.js"],
+    "modules": ["src/data/tomtomTiles.js", "src/data/tileBudget.js"],
     "external": []
   },
   "firms-csv": {
@@ -129,7 +141,11 @@
   "firms-provider": {
     "runtime": "node",
     "exports": ["./server/providers/firms"],
-    "modules": ["server/providers/firms.js", "src/data/firmsCsv.js"],
+    "modules": [
+      "server/providers/firms.js",
+      "src/data/firmsCsv.js",
+      "server/providers/common/cache-dir.js"
+    ],
     "external": []
   },
   "gbfs-provider": {
@@ -207,7 +223,8 @@
       "src/data/routeSteps.js",
       "src/sources/httpBody.js",
       "src/sources/overpass.js",
-      "src/sources/rateLimit.js"
+      "src/sources/rateLimit.js",
+      "server/providers/common/cache-dir.js"
     ],
     "external": []
   },
@@ -226,7 +243,8 @@
       "server/providers/overpass/geometry.js",
       "server/providers/overpass/transport.js",
       "src/sources/httpBody.js",
-      "src/sources/rateLimit.js"
+      "src/sources/rateLimit.js",
+      "server/providers/common/cache-dir.js"
     ],
     "external": []
   },
@@ -580,7 +598,11 @@
       "src/ui/aircraftDisplay.js",
       "src/ui/layerBindings.js",
       "src/ui/displayBindings.js",
-      "src/ui/shellFacade.js"
+      "src/ui/shellFacade.js",
+      "src/data/xweatherCatalogue.js",
+      "src/data/xweatherTiles.js",
+      "src/layers/weather/policy.js",
+      "src/ui/weatherControls.js"
     ],
     "external": ["cesium"]
   },
@@ -972,7 +994,8 @@
       "src/layers/traffic/style.js",
       "src/layers/traffic/timing.js",
       "src/layers/traffic/viewport.js",
-      "src/sources/overpassRoads.js"
+      "src/sources/overpassRoads.js",
+      "src/data/tileBudget.js"
     ],
     "external": ["cesium", "pbf", "@mapbox/vector-tile"]
   },
@@ -1809,7 +1832,18 @@
       "src/director/sharing/lifetime.js",
       "src/director/authoring.js",
       "src/scenes/sharing.js",
-      "src/ui/sceneSharing.js"
+      "src/ui/sceneSharing.js",
+      "src/app/layers/weather.js",
+      "src/data/tileBudget.js",
+      "src/data/weather.js",
+      "src/data/xweatherCatalogue.js",
+      "src/data/xweatherTiles.js",
+      "src/layers/weather/imagery.js",
+      "src/layers/weather/index.js",
+      "src/layers/weather/model.js",
+      "src/layers/weather/policy.js",
+      "src/layers/weather/source.js",
+      "src/ui/weatherControls.js"
     ],
     "external": [
       "@mapbox/vector-tile",
@@ -2203,7 +2237,16 @@
       "src/sources/overpassFeaturesRecords.js",
       "src/sources/overpassFeatures.js",
       "src/sources/featureSource.js",
-      "src/sources/overpassRoads.js"
+      "src/sources/overpassRoads.js",
+      "src/app/layers/weather.js",
+      "src/layers/weather/index.js",
+      "src/layers/weather/model.js",
+      "src/layers/weather/policy.js",
+      "src/layers/weather/imagery.js",
+      "src/layers/weather/source.js",
+      "src/data/xweatherCatalogue.js",
+      "src/data/xweatherTiles.js",
+      "src/data/tileBudget.js"
     ],
     "external": [
       "cesium",
@@ -2489,7 +2532,8 @@
       "src/layers/traffic/flowDecode.js",
       "src/layers/traffic/flowSource.js",
       "src/layers/traffic/source.js",
-      "src/sources/overpassRoads.js"
+      "src/sources/overpassRoads.js",
+      "src/data/tileBudget.js"
     ],
     "external": ["@mapbox/vector-tile", "pbf"]
   },
@@ -2694,5 +2738,40 @@
       "src/sources/featureSource.js"
     ],
     "external": []
+  },
+  "xweather-provider": {
+    "runtime": "node",
+    "exports": ["./server/providers/xweather"],
+    "modules": [
+      "server/providers/xweather.js",
+      "src/data/tileBudget.js",
+      "src/data/xweatherCatalogue.js",
+      "src/data/xweatherTiles.js",
+      "server/providers/common/cache-dir.js"
+    ],
+    "external": []
+  },
+  "xweather-source": {
+    "exports": ["./sources/xweather"],
+    "modules": ["src/data/xweatherTiles.js"],
+    "external": []
+  },
+  "tile-budget-source": {
+    "exports": ["./sources/tile-budget"],
+    "modules": ["src/data/tileBudget.js"],
+    "external": []
+  },
+  "weather-layer": {
+    "exports": ["./layers/weather"],
+    "modules": [
+      "src/data/xweatherCatalogue.js",
+      "src/data/xweatherTiles.js",
+      "src/layers/weather/imagery.js",
+      "src/layers/weather/index.js",
+      "src/layers/weather/model.js",
+      "src/layers/weather/policy.js",
+      "src/layers/weather/source.js"
+    ],
+    "external": ["cesium"]
   }
 }

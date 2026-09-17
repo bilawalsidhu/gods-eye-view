@@ -76,6 +76,8 @@ test('world jump completion cannot revive navigation after shell disposal', (t) 
 function bindings(t) {
   replaceWindow(t, new EventTarget());
   const events = [];
+  const presence = [];
+  const listeners = [];
   const controls = {
     hud: { attachDataManager() {} },
     _contextControls: { connect() {} },
@@ -87,6 +89,7 @@ function bindings(t) {
     operations: {
       _updateTrafficSyncChip() {}, _updateGlobalLoadingFeedback() {},
       _syncContextModeButtons() {},
+      _syncWeatherPanelPresence(change) { presence.push(change); },
     },
   });
   function manager(id, directions = true) {
@@ -94,11 +97,38 @@ function bindings(t) {
       layers: new Map(directions ? [['directions', { module: {
         attachShellServices(value) { events.push([id, value ? 'attach' : 'detach']); },
       } }]] : []),
-      subscribe() { events.push([id, 'subscribe']); return () => events.push([id, 'unsubscribe']); },
+      subscribe(handler) {
+        events.push([id, 'subscribe']);
+        listeners.push(handler);
+        return () => events.push([id, 'unsubscribe']);
+      },
     };
   }
-  return { owner, manager, events };
+  return { owner, manager, events, presence, listeners };
 }
+
+test('the Weather panel reacts to who switched the layer on', (t) => {
+  // Switching the layer on from the left rail is a request to use it, so its
+  // controls should be open. A share link or a scene carries the panel state
+  // its author chose, and restoring one must not override it — so the change's
+  // origin has to reach the panel, not just the fact that it changed.
+  const env = bindings(t);
+  env.owner.attachDataManager(env.manager('a'));
+  assert.equal(env.listeners.length, 1, 'the owner subscribes');
+  env.presence.length = 0;
+
+  const notify = (change) => env.listeners[0](change);
+  notify({ type: 'visibility', layerId: 'weather', enabled: true, origin: 'user' });
+  notify({ type: 'visibility', layerId: 'weather', enabled: true, origin: 'share' });
+  notify({ type: 'visibility', layerId: 'cctv', enabled: true, origin: 'user' });
+  notify({ type: 'refresh', layerId: 'weather' });
+
+  assert.deepEqual(
+    env.presence.map((change) => change?.origin),
+    ['user', 'share'],
+    'only weather visibility reaches the panel, and it carries its origin',
+  );
+});
 
 test('manager replacement releases Directions even when the new manager has no route layer', (t) => {
   const { owner, manager, events } = bindings(t);

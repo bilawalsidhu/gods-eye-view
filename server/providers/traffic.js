@@ -7,6 +7,7 @@ import {
   normalizeBudget as normalizeTomTomBudget,
   isOverBudget as isTomTomOverBudget,
 } from '../../src/data/tomtomTiles.js';
+import { providerCacheDir } from './common/cache-dir.js';
 
 /**
  * TomTom traffic-flow vector-tile proxy with a daily budget governor.
@@ -35,7 +36,7 @@ import {
  */
 export function tomtomProxy() {
   const TILE_TTL_MS = 120_000;
-  const CACHE_DIR = path.join(process.cwd(), '.gev-cache', 'tomtom');
+  const CACHE_DIR = providerCacheDir('tomtom');
   const BUDGET_PATH = path.join(CACHE_DIR, 'budget.json');
   const DEFAULT_DAILY_BUDGET = 40000;
   const MEM_MAX_ENTRIES = 256;

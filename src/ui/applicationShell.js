@@ -19,6 +19,7 @@ import { LocationNavigation } from './locationNavigation.js';
 import { bindClearLayersControl } from './layers.js';
 import { bindCameraOrientationControls } from './cameraOrientationControls.js';
 import { createMapSourceControls } from './mapSource.js';
+import { bindWeatherControls } from './weatherControls.js';
 import { STYLES } from './effects.js';
 
 import * as Cesium from 'cesium';
@@ -99,6 +100,7 @@ export class StyleManager extends ShellFacade {
         _syncContextRadioLauncherState: (...args) =>
           this._syncContextRadioLauncherState(...args),
         _showToast: (...args) => this._showToast(...args),
+        _syncWeatherPanel: (...args) => this._syncWeatherPanel(...args),
       },
       readHud: () => this.hud,
       readCockpit: () => this.cockpitView,
@@ -248,6 +250,8 @@ export class StyleManager extends ShellFacade {
         _syncContextModeButtons: (...args) =>
           this._syncContextModeButtons(...args),
         _stampNavigation: (...args) => this._stampNavigation(...args),
+        _syncWeatherPanelPresence: (...args) =>
+          this._syncWeatherPanelPresence(...args),
         _runExplicitCctvFocus: (...args) => this._runExplicitCctvFocus(...args),
         _runExplicitWorldFocus: (...args) =>
           this._runExplicitWorldFocus(...args),
@@ -536,6 +540,7 @@ export class StyleManager extends ShellFacade {
     this._initRightPanelAdaptiveLayout();
     this._initRadioPanel();
     this._initCctvPanel();
+    this._initWeatherPanel();
     this._initGlobalContextPanel();
     this._initLocationBar();
     this._initShareButton();
@@ -781,6 +786,119 @@ export class StyleManager extends ShellFacade {
         },
       },
     });
+  }
+
+  /** Wire the Weather panel: which layers draw, and when they may cost. */
+  _initWeatherPanel() {
+    this._weatherControls?.destroy();
+    this._weatherControls = bindWeatherControls({
+      elements: {
+        overlays: this._weatherOverlays,
+        fields: this._weatherFields,
+        refresh: this._weatherRefreshBtn,
+        auto: this._weatherAutoBtn,
+        interval: this._weatherInterval,
+        budget: this._weatherBudget,
+        unavailable: this._weatherUnavailable,
+      },
+      actions: {
+        setLayers: (layers) => this._setWeatherParams({ layers }),
+        setAuto: (auto) => this._setWeatherParams({ auto }),
+        setInterval: (every) => this._setWeatherParams({ every }),
+        refreshNow: () => this._refreshWeather(),
+      },
+    });
+    this._syncWeatherPanel();
+  }
+
+  /**
+   * Apply a Weather panel change and repaint the panel from what stuck.
+   *
+   * `origin: 'user'` is what makes the change durable — the layer-state codec
+   * only persists params from an explicit origin, so a programmatic sync can
+   * never overwrite what someone chose.
+   */
+  async _setWeatherParams(params) {
+    this._dataManager?.setLayerParams('weather', params, { origin: 'user' });
+    // Draw a newly chosen layer now rather than at the next tick, which is up
+    // to a minute away. Only a layer with no frame in hand fetches, so this
+    // costs exactly the tiles that were just asked for and leaves the rest of
+    // the selection untouched.
+    if (typeof params.layers === 'string') {
+      await this._dataManager?.refreshLayer?.('weather');
+    }
+    await this._syncWeatherPanel();
+  }
+
+  /**
+   * Fetch the selected layers now.
+   *
+   * Two steps because they do different things: the flag opens the refresh
+   * gate for one pass, and `refreshLayer` drives an update immediately rather
+   * than waiting up to a minute for the next tick.
+   */
+  async _refreshWeather() {
+    this._dataManager?.setLayerParams(
+      'weather',
+      { refreshNow: true },
+      { origin: 'user' },
+    );
+    await this._dataManager?.refreshLayer?.('weather');
+    await this._syncWeatherPanel();
+  }
+
+  /**
+   * Show the Weather panel only while the Weather layer is switched on.
+   *
+   * The panel is the layer's control surface and has no meaning without it:
+   * with the layer off every control is inert, and the refresh button would
+   * spend quota drawing nothing. The layer row in the left rail is the one
+   * switch, so the panel follows it rather than standing beside it.
+   *
+   * Collapse before hiding. A panel put away while expanded would come back
+   * expanded into a rail that has since allocated its height elsewhere.
+   *
+   * @param {object} [change] The visibility change that prompted this.
+   * @param {string} [change.origin] Who asked; only a person opens the panel.
+   */
+  _syncWeatherPanelPresence({ origin } = {}) {
+    const panel = this._weatherPanel;
+    if (!panel) return;
+    const enabled = this._dataManager?.isEnabled?.('weather') === true;
+    if (panel.hidden === !enabled) return;
+    if (!enabled && !panel.classList.contains('collapsed')) {
+      this.setPanelCollapsed('weather-panel', true, { persist: false });
+    }
+    panel.hidden = !enabled;
+    // Switching the layer on is a request to use it, so its controls come up
+    // open rather than as a tab to find and click. Only for an explicit
+    // toggle: a share link or a scene carries the panel state its author
+    // chose, and restoring one must not force it open.
+    if (enabled && origin === 'user') {
+      this.setPanelCollapsed('weather-panel', false, { explicit: true });
+    }
+    this._scheduleRightPanelLayout({ reconsiderAutoCollapse: true });
+  }
+
+  /**
+   * Repaint the panel from layer state and the proxy's own accounting.
+   *
+   * The spend is read here rather than polled: a readout that fetched on a
+   * timer would itself be traffic, on a panel whose whole purpose is to keep
+   * traffic deliberate.
+   */
+  async _syncWeatherPanel() {
+    if (!this._weatherControls) return;
+    const params = this._dataManager?.getLayerParams?.('weather') || {};
+    let status = null;
+    try {
+      const response = await fetch('/api/xweather/status');
+      if (response.ok) status = await response.json();
+    } catch {
+      // The panel still works without the readout; the layer row is where an
+      // unreachable service is reported.
+    }
+    this._weatherControls.sync(params, status);
   }
 
   /** Wire the independent Radio companion controls. */
@@ -1472,6 +1590,7 @@ export class StyleManager extends ShellFacade {
     this._clearLayersControl?.destroy();
     this._cctvControls?.destroy();
     this._radioControls?.destroy();
+    this._weatherControls?.destroy();
     this._cockpitCoordinator.stop();
     this._visualSettings.stop();
     this.shareLinkManager?.destroy();

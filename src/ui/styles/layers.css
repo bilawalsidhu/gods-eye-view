@@ -162,10 +162,13 @@
 }
 #right-context-rail > #pp-toggles,
 #right-context-rail > #cctv-panel,
+#right-context-rail > #weather-panel,
 #right-context-rail > #global-context-panel {
   position: relative;
   inset: auto;
   flex: 0 0 auto;
+  /* The rail itself is pointer-events: none so the globe stays draggable
+     between panels; each panel opts back in here. */
   pointer-events: auto;
 }
 #right-context-rail #global-context-panel {
@@ -191,6 +194,7 @@
 }
 #right-context-rail > #pp-toggles.collapsed .pp-header-row,
 #right-context-rail #cctv-panel.collapsed .cctv-panel-inner,
+#right-context-rail #weather-panel.collapsed .weather-panel-inner,
 #right-context-rail
   #global-context-panel.collapsed
   .global-context-panel-inner {
@@ -237,7 +241,10 @@
 #right-context-rail.layout-exclusive > [data-panel-id].collapsed {
   display: none;
 }
-#right-context-rail.layout-focus > [data-panel-id].collapsed {
+/* `:not([hidden])` is load-bearing: this rule is more specific than the user
+   agent's `[hidden] { display: none }`, so without it a panel hidden by its
+   owner would reappear the moment the rail entered focus layout. */
+#right-context-rail.layout-focus > [data-panel-id].collapsed:not([hidden]) {
   display: block;
   flex: 0 0 auto;
 }
@@ -246,6 +253,7 @@
 }
 #right-context-rail.layout-focus > #pp-toggles:not(.collapsed),
 #right-context-rail.layout-focus > #cctv-panel:not(.collapsed),
+#right-context-rail.layout-focus > #weather-panel:not(.collapsed),
 #right-context-rail.layout-focus > #global-context-panel:not(.collapsed) {
   flex: 0 1 var(--right-panel-allocated-height);
   height: var(--right-panel-allocated-height);
@@ -1305,4 +1313,136 @@
   )
   .data-count {
   display: none;
+}
+
+/* ── Weather panel ──────────────────────────────────────────────────────
+   Chrome, chips and labels are the rail's existing components: the card is
+   the same glass treatment Context uses, the layer buttons are
+   .data-toggle-chip, the group captions are .pp-slider-mini-label, and the
+   refresh controls are .pp-toggle-btn and .pp-select. What this block adds is
+   only the panel's own layout, and the rail geometry every sibling declares —
+   collapsed tab metrics, the allocated-height fill, and the scrolling body.
+
+   Sizing stays on the panel's own id and never on #right-context-rail, whose
+   box the credit keep-out test models and which fails closed on geometry it
+   does not recognise. */
+#right-context-rail #weather-panel {
+  width: 100%;
+}
+#right-context-rail #weather-panel.collapsed {
+  width: var(--right-context-collapsed-width);
+  /* Keep the collapsed tab on the rail edge rather than stranded at the
+     rail's expanded-width origin, as the sibling panels do. */
+  margin-left: auto;
+}
+.weather-panel-inner {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--panel-radius);
+  background: var(--glass-bg);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+}
+#right-context-rail .weather-panel-inner {
+  max-height: 100%;
+}
+#right-context-rail #weather-panel:not(.collapsed) .weather-panel-inner {
+  max-height: 100%;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+/* The collapsed tab has to be the same height as its neighbours, or the
+   collapse arrows sit at different heights down the rail. */
+#right-context-rail #weather-panel.collapsed .weather-panel-inner {
+  min-height: 42px;
+  box-sizing: border-box;
+  justify-content: center;
+  overflow: visible;
+  padding: 8px 10px 8px 14px;
+}
+#right-context-rail #weather-panel.collapsed .panel-header {
+  margin: 0;
+}
+/* When the rail allocates this panel a height, the card fills it rather than
+   leaving the glass short of the box the layout reserved. */
+#right-context-rail.layout-focus
+  > #weather-panel:not(.collapsed)
+  .weather-panel-inner {
+  height: 100%;
+  box-sizing: border-box;
+}
+.weather-unavailable {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.6px;
+  line-height: 1.5;
+  /* The app's attention-not-error amber, as used by the global status line
+     for cancelled and retrying work. A missing key is the same kind of
+     message: nothing is broken, something is waiting on you. */
+  color: #ffd488;
+}
+/* Both buttons and the interval are the rail's own controls, so the row only
+   has to place them. */
+.weather-refresh-row {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.weather-refresh-row .pp-select {
+  flex: 1 1 96px;
+  min-width: 0;
+  height: auto;
+}
+.weather-budget {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 1px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+.weather-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.weather-group-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+}
+.weather-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+}
+/* The chip itself is .data-toggle-chip; this only makes room for the
+   coverage and forecast markers beside its label. */
+.weather-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.weather-chip-tag {
+  padding: 0 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-dim);
+}
+.data-toggle-chip.active .weather-chip-tag {
+  color: var(--accent);
+  background: rgba(0, 212, 255, 0.16);
 }

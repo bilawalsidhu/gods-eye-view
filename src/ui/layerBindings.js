@@ -205,8 +205,12 @@ export class LayerBindings {
       this._dataManagerUnsubscribe = this._dataManager.subscribe((change) => {
         this._feedback._loadingFeedbackEvent = change;
         this._updateGlobalLoadingFeedback(performance.now());
+        if (change?.type === 'visibility' && change.layerId === 'weather') {
+          this._syncWeatherPanelPresence(change);
+        }
       });
     }
+    this._syncWeatherPanelPresence();
     this._updateGlobalLoadingFeedback(performance.now());
     this._syncContextModeButtons();
     this._cctvControls.connect();

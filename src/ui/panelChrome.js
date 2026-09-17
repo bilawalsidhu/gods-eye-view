@@ -14,6 +14,7 @@ const SHARE_PANEL_STATE_SPECS = Object.freeze([
   { id: 'radio-panel' },
   { id: 'scene-panel' },
   { id: 'global-context-panel' },
+  { id: 'weather-panel' },
   { id: 'pp-toggles' },
   { id: 'param-slider-panel' },
 ]);
@@ -25,6 +26,7 @@ const COCKPIT_ENTRY_COLLAPSE_PANEL_IDS = Object.freeze([
   'pp-toggles',
   'global-context-panel',
   'radio-panel',
+  'weather-panel',
 ]);
 
 /** Own panel disclosure, docking, persistence and Cockpit rail restoration. */
@@ -282,6 +284,7 @@ export class PanelChrome {
       'pp-toggles',
       'cctv-panel',
       'global-context-panel',
+      'weather-panel',
     ].includes(panelEl?.id);
     const collapsed = panelEl.classList.contains('collapsed');
     panelEl
@@ -403,6 +406,10 @@ export class PanelChrome {
         : this._rightPanelStack?.contains(panelEl)
           ? panelEl
           : null;
+    // Opening the Weather panel is when its readout is worth having: the
+    // spend is read here rather than on a timer, since a polling readout
+    // would itself be traffic on a panel built to keep traffic deliberate.
+    if (!nextCollapsed && panelId === 'weather-panel') this._syncWeatherPanel();
     const priorLeftOwner = this._panelLayout._leftStackPreferredPanelId;
     const priorRightOwner = this._panelLayout._rightStackPreferredPanelId;
     if (explicit && !restore && !nextCollapsed && leftOwnerPanel) {

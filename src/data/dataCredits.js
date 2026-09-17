@@ -67,6 +67,12 @@ export const DATA_CREDITS = [
     html: 'Earthquakes: Data courtesy of the U.S. Geological Survey',
   },
   {
+    key: 'xweather',
+    html:
+      'Weather (observed radar, lightning, alerts and analysis fields): ' +
+      '<a href="https://www.xweather.com/" target="_blank" rel="noopener">Powered by Vaisala Xweather</a>',
+  },
+  {
     key: 'overpass',
     html:
       'Road geometry (traffic): ' +

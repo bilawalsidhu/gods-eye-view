@@ -82,6 +82,15 @@ export const KEY_SETUP_KEYS = Object.freeze([
     tier: 'free',
   }),
   Object.freeze({
+    id: 'xweather',
+    title: 'XWEATHER',
+    unlocks:
+      'The Weather layer — global radar, lightning and more (no keyless mode)',
+    getUrl: 'https://www.xweather.com/account',
+    envVars: Object.freeze(['XWEATHER_CLIENT_ID', 'XWEATHER_CLIENT_SECRET']),
+    tier: 'free',
+  }),
+  Object.freeze({
     id: 'cesium-ion',
     title: 'CESIUM ION',
     unlocks: 'Bing imagery map stacks + world terrain',

@@ -17,6 +17,8 @@ export const CREDENTIALS = Object.freeze([
   { name: 'AISSTREAM_API_KEY', label: 'AISStream vessels', keychain: [['aisstream-api', 'api-key']] },
   { name: 'FIRMS_MAP_KEY', label: 'NASA FIRMS fires', keychain: [['firms-map', 'map-key']] },
   { name: 'TOMTOM_API_KEY', label: 'TomTom traffic', keychain: [['tomtom-api', 'api-key']] },
+  { name: 'XWEATHER_CLIENT_ID', label: 'Xweather weather layers client ID', keychain: [['xweather-api', 'client-id'], ['xweather-api', 'client_id']] },
+  { name: 'XWEATHER_CLIENT_SECRET', label: 'Xweather weather layers client secret', keychain: [['xweather-api', 'client-secret'], ['xweather-api', 'client_secret']] },
   {
     name: 'OPENSKY_CLIENT_ID',
     label: 'OpenSky client ID',

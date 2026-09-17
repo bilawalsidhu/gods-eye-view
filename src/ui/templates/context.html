@@ -1,5 +1,50 @@
   <!-- Global Context is deliberately independent from the left layer accordion. -->
   <aside id="right-context-rail">
+    <!-- Hidden until the Weather layer is switched on: this panel is that
+         layer's control surface and every control is inert without it. -->
+    <div id="weather-panel" class="panel-collapsible collapsed" data-panel-id="weather-panel" hidden>
+      <div class="panel-glow"></div>
+      <div class="weather-panel-inner">
+        <div class="panel-header">
+          <span class="panel-title">WEATHER</span>
+          <span class="panel-divider"></span>
+          <button class="panel-collapse-btn" data-collapse-target="weather-panel" title="Expand panel" aria-label="Expand Weather">&#x25C0;</button>
+        </div>
+
+        <p id="weather-panel-unavailable" class="weather-unavailable" hidden>
+          Add an Xweather key to draw these layers.
+        </p>
+
+        <div class="weather-refresh-row">
+          <button id="weather-refresh-btn" class="pp-toggle-btn" type="button" title="Fetch the selected layers now">
+            <span class="pp-label">REFRESH</span>
+          </button>
+          <button id="weather-auto-btn" class="pp-toggle-btn" type="button" aria-pressed="false" title="Refresh on a timer instead of on demand">
+            <span class="pp-label">AUTO</span>
+          </button>
+          <select id="weather-interval" class="pp-select" aria-label="Auto-refresh interval" disabled></select>
+        </div>
+
+        <p class="weather-budget" id="weather-budget" aria-live="polite">&nbsp;</p>
+
+        <div class="weather-group" role="group" aria-labelledby="weather-overlays-heading">
+          <p class="weather-group-heading" id="weather-overlays-heading">
+            <span class="pp-slider-mini-label">Overlays</span>
+            <span class="pp-slider-mini-label">stack freely</span>
+          </p>
+          <div id="weather-overlays" class="weather-options"></div>
+        </div>
+
+        <div class="weather-group" role="radiogroup" aria-labelledby="weather-fields-heading">
+          <p class="weather-group-heading" id="weather-fields-heading">
+            <span class="pp-slider-mini-label">Field</span>
+            <span class="pp-slider-mini-label">one at a time</span>
+          </p>
+          <div id="weather-fields" class="weather-options"></div>
+        </div>
+      </div>
+    </div>
+
     <div id="global-context-panel" class="panel-collapsible collapsed" data-panel-id="global-context-panel">
       <div class="panel-glow"></div>
       <div class="global-context-panel-inner">

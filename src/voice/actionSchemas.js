@@ -138,6 +138,7 @@ const schemas = [
             'telegeography-submarine-cables',
             'local-firms',
             'alpr-cameras',
+            'weather',
           ],
         },
         enabled: {
@@ -170,6 +171,7 @@ const schemas = [
             'telegeography-submarine-cables',
             'local-firms',
             'alpr-cameras',
+            'weather',
           ],
         },
       },

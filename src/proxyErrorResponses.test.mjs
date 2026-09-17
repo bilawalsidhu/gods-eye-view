@@ -23,6 +23,7 @@ function fixture(name, overrides = {}, preview = false) {
   const deps = {
     readResponseTextCapped, coalesceProxyRequest,
     path, process: { cwd: () => '/fixture', env: {} },
+    providerCacheDir: (...segments) => path.join('/fixture', '.gev-cache', ...segments),
     fsp: {
       readFile: async () => { throw new Error('cache absent'); },
       stat: async () => { throw new Error('cache absent'); },

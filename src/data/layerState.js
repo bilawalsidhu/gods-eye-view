@@ -47,6 +47,35 @@ const RADIO_CODE_FILTERS = Object.freeze(
   ),
 );
 
+/**
+ * The Weather layer's selection, as one packed field.
+ *
+ * A boolean option per layer would cost roughly a third of the 512 characters
+ * the whole `lo` field gets, and thirty of the thirty-six single-character
+ * tokens available to one owner. One string of per-layer codes costs a handful
+ * of characters and no tokens beyond its own.
+ *
+ * The value stays a **string** rather than an array on purpose: the options bag
+ * is shallow-cloned, so a mutable array would be shared by reference across
+ * every clone of the state. The layer expands it.
+ *
+ * An unknown character is dropped rather than rejecting the payload — a link
+ * from a build that offers a layer this one does not should lose that layer,
+ * not fail to open.
+ */
+const WEATHER_CODE = /^[a-z0-9]$/;
+
+function normalizeWeatherLayers(value) {
+  if (typeof value !== 'string') return null;
+  if (value.length > 32) return null;
+  const seen = [];
+  for (const code of value) {
+    if (!WEATHER_CODE.test(code) || seen.includes(code)) continue;
+    seen.push(code);
+  }
+  return seen.join('');
+}
+
 function normalizeBoolean(value) {
   return typeof value === 'boolean' ? value : null;
 }
@@ -205,6 +234,32 @@ function integerOption(key, token, defaultValue) {
 }
 
 const OPTION_GROUPS = Object.freeze({
+  // Keyed by the owning layer's id, as every bag here is.
+  weather: Object.freeze([
+    // Which layers are drawn. 'r' is radar, the only one on by default, so a
+    // link that omits this field means what the layer has always shown.
+    Object.freeze({
+      key: 'layers',
+      token: 'l',
+      defaultValue: 'r',
+      normalize: normalizeWeatherLayers,
+      encode: (value) => value,
+      decode: (value) => normalizeWeatherLayers(value),
+    }),
+    // Auto-refresh is off unless someone turns it on: with a monthly quota and
+    // a cost that scales with enabled layers, spending on a timer is a choice.
+    booleanOption('auto', 'a', false),
+    // The interval it uses once on. The stored value is the code itself, so
+    // the panel, the layer's REFRESH_CHOICES and the URL share one vocabulary
+    // and the code map below is the identity this helper requires. 'd' is a
+    // day; a test pins this list against the policy.
+    enumOption('every', 'e', 'd', ['q', 'h', 's', 'd'], {
+      q: 'q',
+      h: 'h',
+      s: 's',
+      d: 'd',
+    }),
+  ]),
   flights: Object.freeze([
     // Owner directive 2026-08-22: the fleet's 3D models are DEFAULT-ON in
     // PROXIMITY mode. Proximity is itself the altitude/count gate — models only
@@ -384,6 +439,15 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   }),
   Object.freeze({ id: 'traffic', token: 't', disposition: 'enabled-only' }),
   Object.freeze({ id: 'transit', token: 'j', disposition: 'enabled-only' }),
+  // A share link carries the token and nothing else, so a published one is
+  // frozen for the life of its layer; 'k' is simply the next letter no other
+  // layer had claimed.
+  Object.freeze({
+    id: 'weather',
+    token: 'k',
+    disposition: 'enabled+options',
+    optionOwner: 'weather',
+  }),
 ]);
 
 export const REGISTERED_LAYER_IDS = Object.freeze(

@@ -1,4 +1,4 @@
-import path from 'node:path';
+import { providerCacheDir } from '../common/cache-dir.js';
 
 // ---------------------------------------------------------------------------
 // Overpass API proxy constants and cache state
@@ -51,7 +51,7 @@ const OVERPASS_DISK_TTL_MS = 7 * 86_400_000;
 const OVERPASS_BOUNDARY_DISK_TTL_MS = 30 * 86_400_000;
 
 /** Disk-cache directory for Overpass responses. */
-const OVERPASS_DISK_DIR = path.join(process.cwd(), '.gev-cache', 'overpass');
+const OVERPASS_DISK_DIR = providerCacheDir('overpass');
 
 /** Per-upstream fetch timeout (ms). */
 const OVERPASS_TIMEOUT_MS = 22000;
