@@ -234,6 +234,16 @@ export const DATA_CREDITS = [
       'Some cameras are supplied by partners (TransLink, the City of Vancouver, the City of Surrey, Parks Canada and others); each names its provider in the CCTV panel.',
   },
   {
+    key: 'wsdot-cctv',
+    html:
+      'CCTV cameras &amp; frames (Washington State): ' +
+      '<a href="https://wsdot.wa.gov/" target="_blank" rel="noopener">Washington State Department of Transportation</a> ' +
+      '(<a href="https://wsdot.com/travel/real-time/cameras" target="_blank" rel="noopener">Travel Center</a>), ' +
+      'used per the ' +
+      '<a href="https://wsdot.wa.gov/about/policies/travel-information-disclaimer" target="_blank" rel="noopener">WSDOT travel information disclaimer</a> ' +
+      '(low-volume public feed; catalog cached, frames proxied on demand)',
+  },
+  {
     key: 'tallinn-cctv',
     html:
       'CCTV cameras &amp; frames (Tallinn): City of Tallinn — ' +
