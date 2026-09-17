@@ -66,6 +66,7 @@ test('flights analyst record: full record maps every contract field', () => {
     speedMps: 210.2,
     heading: 187.4,
     verticalRateMps: -4.5,
+    positionTimeMs: null,
     onGround: false,
     military: false,
     aircraftClass: 'airliner',

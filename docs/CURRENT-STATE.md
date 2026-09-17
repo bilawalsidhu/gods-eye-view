@@ -1,5 +1,29 @@
 # God's Eye View Current State
 
+Local voice (`AI_PROVIDER=ollama`) replaces the OpenAI Realtime path with a
+pipeline that stays on the machine: browser Silero VAD, faster-whisper and Piper
+in a Python worker, and an Ollama tool model (`OLLAMA_VOICE_MODEL`, default
+`qwen3:8b`) plus a vision model (`OLLAMA_VISION_MODEL`). The 28 shared tools are
+unchanged; eight registered packs under `src/voice/tools/` add 42 local tools
+served through `/api/voice/*` routes registered from
+`server/providers/ollama/routes/`. Long-running tools carry their own result
+timeouts. Standing features: 15-minute position history with rewind and dead-
+reckoned prediction, scheduled patrols, a rule-based anomaly engine (only
+anomalies near the camera are spoken, six per ten minutes), named geofences,
+incident bundles under `.gev-logs/incidents/` (newest 50, 8 MB cap), radio
+transcription through ffmpeg, multi-camera vision sweeps, speaker enrolment,
+narrated tours, and unauthenticated LAN-only federation with peers named in
+`GEV_PEERS`. The phone companion `remote.html` needs `HOST=0.0.0.0` and the same
+trusted-network caveat. The OpenAI path is untouched when the provider is not
+`ollama`. See [local voice](LOCAL-VOICE.md) and the per-feature documents it
+links.
+
+CCTV catalogs accept an optional static world pack
+(`CCTV_SOURCES_FILE=config/cctv_sources.world.json`, metadata only, frames still
+proxied live from registered operator hosts) and the shared source ceiling is
+now 10000, trimmed round-robin per pack above `CCTV_MAX_SOURCES`. See
+[data sources](../DATA_SOURCES.md).
+
 Vessel snapshot completeness is separate from freshness. A current snapshot with
 rejected or duplicate records shows PARTIAL with accepted/received counts; stale
 or unknown freshness and transport failures retain their warnings. Partial

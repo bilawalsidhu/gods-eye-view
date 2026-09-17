@@ -89,6 +89,8 @@ export class DisplayBindings {
           this._syncShareState();
         },
         toggleCctv: () => this._toggleCctvEnabled(),
+        rewindHistory: () => this._rewindHistory?.(),
+        resumeLiveHistory: () => this._resumeLiveHistory?.(),
       },
     });
 

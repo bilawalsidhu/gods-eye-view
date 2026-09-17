@@ -246,6 +246,9 @@ export function createQueries({
       speedMps: num(info?.velocity),
       heading: num(info?.true_track),
       verticalRateMps: num(info?.verticalRate),
+      // Source contact time (OpenSky last_contact) so history and anomaly
+      // rules measure real elapsed time, not poll arrival time.
+      positionTimeMs: num(info?.lastContactEpochMs),
       onGround: info?.onGround === true,
       military,
       // A converted contact reports the class it RENDERS as, so an analyst
@@ -697,7 +700,8 @@ export function createQueries({
     getAnalystRecords(maxCount = 2000) {
       if (
         !flightState._billboardCollection ||
-        !flightState._billboardCollection.show ||
+        (!flightState._billboardCollection.show &&
+          !flightState._presentationSuppressed) ||
         flightState.records.data.size === 0
       )
         return [];

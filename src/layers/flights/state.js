@@ -103,6 +103,7 @@ export function createFlightState({ source, services }) {
   /** @type {Cesium.BillboardCollection|null} */
 
   flightState._billboardCollection = null;
+  flightState._presentationSuppressed = false;
 
   /** @type {Map<string, Cesium.Billboard>} icao24 -> billboard primitive */
 

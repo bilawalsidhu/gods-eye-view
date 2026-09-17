@@ -15,7 +15,7 @@ function extractOpenAiResponseText(data) {
     .trim();
 }
 
-function toFiveWordHudSummary(value) {
+export function toFiveWordHudSummary(value) {
   return String(value || '')
     .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
     .trim()

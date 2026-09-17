@@ -42,7 +42,15 @@ export function createVoiceCommands({
   const controls = adapter.controller || session;
   controls.session = session;
   const updateStatus = session.subscribe((event) => {
+    if (event.type === 'transcript' && ui.transcript) {
+      renderTranscript(ui.transcript, event);
+      return;
+    }
     if (event.type !== 'state') return;
+    if (event.state === 'idle' && ui.transcript) {
+      ui.transcript.textContent = '';
+      ui.transcript.hidden = true;
+    }
     ui.root.dataset.status = event.state;
     ui.status.textContent =
       event.state === 'idle' ? 'OFF' : event.state.toUpperCase();
@@ -83,4 +91,19 @@ export function createVoiceCommands({
   } else adapter.bindControls?.();
   window.__gevVoiceCommands = controls;
   return controls;
+}
+
+/** Show the last heard command and the assistant's reply under the status. */
+function renderTranscript(element, event) {
+  if (!event.final) return;
+  const text = String(event.text || '').trim();
+  if (!text) return;
+  if (event.role === 'assistant') {
+    const heard = element.dataset.heard || '';
+    element.textContent = heard ? `${heard}\n↳ ${text}` : `↳ ${text}`;
+  } else {
+    element.dataset.heard = `“${text}”`;
+    element.textContent = element.dataset.heard;
+  }
+  element.hidden = false;
 }

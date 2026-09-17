@@ -99,6 +99,7 @@ export function createFlightState({ source, services }) {
   /** @type {Cesium.BillboardCollection|null} Single GPU-batched collection for all aircraft */
 
   flightState._billboardCollection = null;
+  flightState._presentationSuppressed = false;
 
   /** @type {Map<string, Cesium.Billboard>} ICAO hex -> billboard primitive */
 

@@ -184,9 +184,12 @@ export function createTracking({
     // The collection stays visible in cockpit. Near AIR contacts retain their
     // aircraft silhouette until a ready model takes over; far contacts are pips.
     // Never bulk-destroy here: that stalls the renderer exactly as cockpit begins.
-    if (flightState._modelCollection) flightState._modelCollection.show = true;
-    flightState._trail?.setVisible(!next);
-    if (flightState._trailHeadEntity) flightState._trailHeadEntity.show = !next;
+    if (flightState._modelCollection)
+      flightState._modelCollection.show = !flightState._presentationSuppressed;
+    const trailVisible = !next && !flightState._presentationSuppressed;
+    flightState._trail?.setVisible(trailVisible);
+    if (flightState._trailHeadEntity)
+      flightState._trailHeadEntity.show = trailVisible;
     for (const [icao24, bb] of flightState._billboards)
       parts.rendering._applyFleetBillboardPresentation(icao24, bb);
     flightState._lastCamPoseSig = '';

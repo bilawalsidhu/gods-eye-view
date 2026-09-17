@@ -333,6 +333,36 @@ export function createRadioProxyMiddleware({
     }
   }
 
+  /** Minimal station for a directory row without coordinates. */
+  function looseStation(row) {
+    const streamUrl = String(row.url_resolved || row.url || '').trim();
+    if (!/^https?:\/\//i.test(streamUrl)) return null;
+    const name = cleanRadioText(row.name, 120);
+    if (!name) return null;
+    return {
+      id: row.stationuuid,
+      name,
+      lat: null,
+      lon: null,
+      streamUrl,
+      homepage: cleanRadioText(row.homepage, 200) || null,
+      tags: cleanRadioText(row.tags, 200)
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean)
+        .slice(0, 12),
+      languages: [],
+      state: cleanRadioText(row.state, 80) || null,
+      country: cleanRadioText(row.country, 80) || null,
+      countryCode: cleanRadioText(row.countrycode, 8) || null,
+      metadataTrust: 'low',
+      codec: cleanRadioText(row.codec, 16) || null,
+      bitrate: Number.isFinite(Number(row.bitrate))
+        ? Number(row.bitrate)
+        : null,
+    };
+  }
+
   function sendJson(res, status, body) {
     res.writeHead(status, {
       'Content-Type': 'application/json; charset=utf-8',
@@ -343,6 +373,45 @@ export function createRadioProxyMiddleware({
 
   return async function radioProxyMiddleware(req, res) {
     const requestUrl = new URL(req.url || '/', 'http://localhost');
+    // GET /search?name=<text>: live Radio Browser name search for stations
+    // the curated catalog does not carry (used by the voice radio tools).
+    // Rows without coordinates are kept, since a listener only needs the URL.
+    if (requestUrl.pathname === '/search') {
+      if (req.method !== 'GET') {
+        res.writeHead(405, { Allow: 'GET', 'Cache-Control': 'no-store' });
+        res.end();
+        return;
+      }
+      const name = cleanRadioText(requestUrl.searchParams.get('name'), 80);
+      if (!name) {
+        sendJson(res, 400, { error: 'name is required' });
+        return;
+      }
+      try {
+        const params = new URLSearchParams({
+          name,
+          hidebroken: 'true',
+          order: 'clickcount',
+          reverse: 'true',
+          limit: '12',
+        });
+        const rows = await fetchPath(`/json/stations/search?${params}`);
+        const stations = (Array.isArray(rows) ? rows : [])
+          .filter(
+            (row) =>
+              row &&
+              typeof row === 'object' &&
+              typeof row.stationuuid === 'string' &&
+              typeof row.name === 'string',
+          )
+          .map((row) => normalizeRadioBrowserStation(row) || looseStation(row))
+          .filter(Boolean);
+        sendJson(res, 200, { query: name, stations });
+      } catch {
+        sendJson(res, 503, { error: 'Radio directory search is unavailable' });
+      }
+      return;
+    }
     if (requestUrl.pathname === '/stations') {
       if (req.method !== 'GET') {
         res.writeHead(405, { Allow: 'GET', 'Cache-Control': 'no-store' });

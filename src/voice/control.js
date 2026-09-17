@@ -28,6 +28,7 @@ export function createVoiceControl({ reset = false } = {}) {
       </div>
       <div class="gev-voice-readout">
         <div id="gev-voice-detail">VOICE STANDBY</div>
+        <div id="gev-voice-transcript" class="gev-voice-transcript" aria-live="polite" hidden></div>
       </div>
       <div id="gev-voice-help" class="gev-voice-help-tray" role="tooltip">
         <span class="gev-voice-help-kicker">VOICE CONTROL</span>
@@ -64,6 +65,7 @@ export function createVoiceControl({ reset = false } = {}) {
     buttonLabel: root.querySelector('.gev-mic-label'),
     status: root.querySelector('#gev-voice-status'),
     detail: root.querySelector('#gev-voice-detail'),
+    transcript: root.querySelector('#gev-voice-transcript'),
     helpDetail: root.querySelector('.gev-voice-help-detail'),
     errorDetail: root.querySelector('#gev-voice-error-detail'),
     tierButton: root.querySelector('#gev-voice-tier'),

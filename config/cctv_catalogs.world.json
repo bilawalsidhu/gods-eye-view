@@ -1,0 +1,1149 @@
+[
+  {
+    "id": "ca-on",
+    "country": "CA",
+    "countryName": "Canada (Ontario)",
+    "provider": "Ontario 511 / MTO",
+    "catalogUrl": "https://511on.ca/api/v2/get/cameras?format=json",
+    "method": "GET",
+    "arrayPath": "",
+    "fields": {
+      "id": "Id",
+      "name": "Location",
+      "lat": "Latitude",
+      "lon": "Longitude",
+      "heading": "Direction",
+      "elevation": null,
+      "imageUrl": "Views.0.Url"
+    },
+    "license": "Ontario 511 — Government of Ontario. Verify terms before public redistribution.",
+    "anchors": [
+      {
+        "lat": 43.6532,
+        "lon": -79.3832,
+        "city": "Toronto"
+      },
+      {
+        "lat": 45.4215,
+        "lon": -75.6972,
+        "city": "Ottawa"
+      }
+    ],
+    "maxSources": 200
+  },
+  {
+    "id": "us-ny",
+    "country": "US",
+    "countryName": "United States (New York)",
+    "provider": "511NY / NYSDOT",
+    "catalogUrl": "https://511ny.org/List/GetData/Cameras",
+    "method": "POST",
+    "body": "draw=1&start=0&length=100&columns%5B0%5D%5Bdata%5D=roadway&order%5B0%5D%5Bcolumn%5D=0&order%5B0%5D%5Bdir%5D=asc&search%5Bvalue%5D=&search%5Bregex%5D=false",
+    "headers": {
+      "X-Requested-With": "XMLHttpRequest",
+      "User-Agent": "Mozilla/5.0"
+    },
+    "pagination": {
+      "mode": "datatables",
+      "totalPath": "recordsTotal"
+    },
+    "arrayPath": "data",
+    "fields": {
+      "id": "id",
+      "name": "location",
+      "heading": "direction",
+      "elevation": null,
+      "imageUrl": "images.0.imageUrl",
+      "wkt": "latLng.geography.wellKnownText"
+    },
+    "imageBaseUrl": "https://511ny.org",
+    "license": "511NY / NYSDOT. Verify terms before public redistribution.",
+    "anchors": [
+      {
+        "lat": 40.7128,
+        "lon": -74.006,
+        "city": "New York City"
+      },
+      {
+        "lat": 42.8864,
+        "lon": -78.8784,
+        "city": "Buffalo"
+      }
+    ],
+    "maxSources": 200
+  },
+  {
+    "id": "ie-tii",
+    "country": "IE",
+    "countryName": "Ireland",
+    "provider": "Transport Infrastructure Ireland",
+    "catalogUrl": "https://iretg.carsprogram.org/cameras_v1/api/cameras",
+    "method": "GET",
+    "arrayPath": "",
+    "fields": {
+      "id": "id",
+      "name": "name",
+      "lat": "location.latitude",
+      "lon": "location.longitude",
+      "heading": null,
+      "elevation": null,
+      "imageUrl": "views.0.url"
+    },
+    "license": "Licence not stated on the camera API itself; TII portal datasets are CC BY 4.0. Verify before public redistribution.",
+    "anchors": [
+      {
+        "lat": 53.3498,
+        "lon": -6.2603,
+        "city": "Dublin"
+      },
+      {
+        "lat": 51.8985,
+        "lon": -8.4756,
+        "city": "Cork"
+      }
+    ],
+    "maxSources": 200
+  },
+  {
+    "id": "fr-lyon",
+    "country": "FR",
+    "countryName": "France (Lyon)",
+    "provider": "Métropole de Lyon — CRITER",
+    "catalogUrl": "https://data.grandlyon.com/geoserver/metropole-de-lyon/ows?SERVICE=WFS&VERSION=2.0.0&request=GetFeature&typename=metropole-de-lyon:pvo_patrimoine_voirie.pvocameracriter&outputFormat=application/json&SRSNAME=EPSG:4326",
+    "method": "GET",
+    "arrayPath": "features",
+    "fields": {
+      "id": "properties.identifiant",
+      "name": "properties.nom",
+      "lat": "geometry.coordinates.1",
+      "lon": "geometry.coordinates.0",
+      "heading": null,
+      "elevation": null,
+      "imageUrl": "properties.url"
+    },
+    "license": "Licence Ouverte / Open Licence (Etalab) — portal default; layer record does not restate it.",
+    "anchors": [
+      {
+        "lat": 45.764,
+        "lon": 4.8357,
+        "city": "Lyon"
+      }
+    ],
+    "maxSources": 20
+  },
+  {
+    "id": "ch-geneva",
+    "country": "CH",
+    "countryName": "Switzerland (Geneva)",
+    "provider": "Canton de Genève / SITG",
+    "catalogUrl": "https://vector.sitg.ge.ch/arcgis/rest/services/INFOMOB_CAMERA/FeatureServer/0/query?where=1%3D1&outFields=*&outSR=4326&f=geojson",
+    "method": "GET",
+    "arrayPath": "features",
+    "fields": {
+      "id": "properties.OBJECTID",
+      "name": "properties.NOM",
+      "lat": "geometry.coordinates.1",
+      "lon": "geometry.coordinates.0",
+      "heading": null,
+      "elevation": null,
+      "imageUrl": "properties.IMAGE_ALLER"
+    },
+    "license": "opendata.swiss Open use (terms_open) — commercial use permitted, source credit recommended.",
+    "anchors": [
+      {
+        "lat": 46.2044,
+        "lon": 6.1432,
+        "city": "Geneva"
+      }
+    ],
+    "maxSources": 20
+  },
+  {
+    "id": "ca-toronto",
+    "country": "CA",
+    "countryName": "Canada (Toronto)",
+    "provider": "City of Toronto — RESCU",
+    "catalogUrl": "https://ckan0.cf.opendata.inter.prod-toronto.ca/dataset/a3309088-5fd4-4d34-8297-77c8301840ac/resource/4a568300-c7f8-496d-b150-dff6f5dc6d4f/download/traffic-camera-list-4326.geojson",
+    "method": "GET",
+    "arrayPath": "features",
+    "fields": {
+      "id": "properties.REC_ID",
+      "name": "properties.MAINROAD",
+      "lat": "geometry.coordinates.0.1",
+      "lon": "geometry.coordinates.0.0",
+      "heading": "properties.DIRECTION1",
+      "elevation": null,
+      "imageUrl": "properties.IMAGEURL"
+    },
+    "license": "Open Government Licence – Toronto — https://open.toronto.ca/open-data-licence/",
+    "anchors": [
+      {
+        "lat": 43.6431,
+        "lon": -79.3814,
+        "city": "Toronto"
+      }
+    ],
+    "maxSources": 200
+  },
+  {
+    "id": "ca-calgary",
+    "country": "CA",
+    "countryName": "Canada (Calgary)",
+    "provider": "City of Calgary Roads",
+    "catalogUrl": "https://services1.arcgis.com/AVP60cs0Q9PEA8rH/arcgis/rest/services/TrafficCameras_Public/FeatureServer/0/query?where=1%3D1&outFields=*&f=json&outSR=4326&resultRecordCount=2000",
+    "method": "GET",
+    "arrayPath": "features",
+    "fields": {
+      "id": "attributes.OBJECTID",
+      "name": "attributes.Title",
+      "lat": "geometry.y",
+      "lon": "geometry.x",
+      "heading": null,
+      "elevation": null,
+      "imageUrl": "attributes.URL"
+    },
+    "imageUrlRegex": "href=\"([^\"]+)\"",
+    "license": "Open Government Licence – City of Calgary",
+    "anchors": [
+      {
+        "lat": 51.0447,
+        "lon": -114.0719,
+        "city": "Calgary"
+      }
+    ],
+    "maxSources": 150
+  },
+  {
+    "id": "us-il",
+    "country": "US",
+    "countryName": "United States (Illinois)",
+    "provider": "Illinois DOT / Travel Midwest",
+    "catalogUrl": "https://services2.arcgis.com/aIrBD8yn1TDTEXoz/arcgis/rest/services/TrafficCamerasTM_Public/FeatureServer/0/query?where=SnapShot+LIKE+%27%25travelmidwest%25%27&outFields=*&f=json&outSR=4326&resultRecordCount=2000",
+    "method": "GET",
+    "arrayPath": "features",
+    "fields": {
+      "id": "attributes.OBJECTID",
+      "name": "attributes.CameraLocation",
+      "lat": "attributes.y",
+      "lon": "attributes.x",
+      "heading": "attributes.CameraDirection",
+      "elevation": null,
+      "imageUrl": "attributes.SnapShot"
+    },
+    "license": "CC BY-SA 2.0 — Illinois Department of Transportation",
+    "anchors": [
+      {
+        "lat": 41.8781,
+        "lon": -87.6298,
+        "city": "Chicago"
+      }
+    ],
+    "maxSources": 200,
+    "imageUrlPrefix": "https://cctv.travelmidwest.com",
+    "note": "ArcGIS caps this layer at 1000 rows/request and the first page is entirely lakecountypassage.com, which times out. The where clause selects the reliable travelmidwest host (Chicago/Cook, 1920x1080) server-side."
+  },
+  {
+    "id": "us-wa",
+    "country": "US",
+    "countryName": "United States (Washington)",
+    "provider": "Washington State DOT",
+    "catalogUrl": "https://data.wsdot.wa.gov/arcgis/rest/services/TravelInformation/TravelInfoCamerasWeather/FeatureServer/0/query?where=1%3D1&outFields=*&f=json&outSR=4326&resultRecordCount=2000",
+    "method": "GET",
+    "arrayPath": "features",
+    "fields": {
+      "id": "attributes.OBJECTID",
+      "name": "attributes.CameraTitle",
+      "lat": "geometry.y",
+      "lon": "geometry.x",
+      "heading": "attributes.CompassDirection",
+      "elevation": null,
+      "imageUrl": "attributes.ImageURL"
+    },
+    "license": "Licence not stated; published as public traveler information by WSDOT.",
+    "anchors": [
+      {
+        "lat": 47.6062,
+        "lon": -122.3321,
+        "city": "Seattle"
+      }
+    ],
+    "maxSources": 200
+  },
+  {
+    "id": "us-or",
+    "country": "US",
+    "countryName": "United States (Oregon)",
+    "provider": "Oregon DOT TripCheck",
+    "catalogUrl": "https://services.arcgis.com/uUvqNMGPm7axC2dD/arcgis/rest/services/TripCheck_Cameras/FeatureServer/0/query?where=1%3D1&outFields=*&f=json&outSR=4326&resultRecordCount=2000",
+    "method": "GET",
+    "arrayPath": "features",
+    "fields": {
+      "id": "attributes.attributes_cameraId",
+      "name": "attributes.attributes_title",
+      "lat": "attributes.attributes_latitude",
+      "lon": "attributes.attributes_longitude",
+      "heading": null,
+      "elevation": null,
+      "imageUrl": "attributes.attributes_filename"
+    },
+    "license": "Licence not stated; published as public traveler information by ODOT.",
+    "anchors": [
+      {
+        "lat": 45.5152,
+        "lon": -122.6784,
+        "city": "Portland"
+      }
+    ],
+    "maxSources": 150
+  },
+  {
+    "id": "us-ut",
+    "country": "US",
+    "countryName": "United States (Utah)",
+    "provider": "Utah DOT",
+    "catalogUrl": "https://services.arcgis.com/pA2nEVnB6tquxgOW/arcgis/rest/services/CCTV/FeatureServer/0/query?where=IsOnline%3D%27True%27&outFields=*&f=json&outSR=4326&resultRecordCount=2000",
+    "method": "GET",
+    "arrayPath": "features",
+    "fields": {
+      "id": "attributes.ExtId",
+      "name": "attributes.DisplayName",
+      "lat": "geometry.y",
+      "lon": "geometry.x",
+      "heading": "attributes.TrafficDirection",
+      "elevation": null,
+      "imageUrl": "attributes.ImageUrl"
+    },
+    "license": "UDOT: informational purposes, no warranty of accuracy or completeness.",
+    "anchors": [
+      {
+        "lat": 40.7608,
+        "lon": -111.891,
+        "city": "Salt Lake City"
+      }
+    ],
+    "maxSources": 150
+  },
+  {
+    "id": "us-ia",
+    "country": "US",
+    "countryName": "United States (Iowa)",
+    "provider": "Iowa DOT",
+    "catalogUrl": "https://services.arcgis.com/8lRhdTsQyJpO52F1/arcgis/rest/services/Traffic_Cameras_View/FeatureServer/0/query?where=1%3D1&outFields=*&f=json&outSR=4326&resultRecordCount=2000",
+    "method": "GET",
+    "arrayPath": "features",
+    "fields": {
+      "id": "attributes.device_id",
+      "name": "attributes.Desc_",
+      "lat": "attributes.latitude",
+      "lon": "attributes.longitude",
+      "heading": null,
+      "elevation": null,
+      "imageUrl": "attributes.ImageURL"
+    },
+    "license": "Licence not stated; published as public traveler information by Iowa DOT.",
+    "anchors": [
+      {
+        "lat": 41.5868,
+        "lon": -93.625,
+        "city": "Des Moines"
+      }
+    ],
+    "maxSources": 120
+  },
+  {
+    "id": "us-la",
+    "country": "US",
+    "countryName": "United States (Louisiana)",
+    "provider": "Louisiana DOTD / 511LA",
+    "catalogUrl": "https://services1.arcgis.com/fXHQyq63u0UsTeSM/arcgis/rest/services/DOTD_Traffic_Cameras/FeatureServer/0/query?where=1%3D1&outFields=*&f=json&outSR=4326&resultRecordCount=2000",
+    "method": "GET",
+    "arrayPath": "features",
+    "fields": {
+      "id": "attributes.Id",
+      "name": "attributes.Name",
+      "lat": "attributes.Latitude",
+      "lon": "attributes.Longitude",
+      "heading": null,
+      "elevation": null,
+      "imageUrl": "attributes.Url"
+    },
+    "license": "Licence not stated; published as public traveler information by LADOTD.",
+    "anchors": [
+      {
+        "lat": 29.9511,
+        "lon": -90.0715,
+        "city": "New Orleans"
+      },
+      {
+        "lat": 30.4515,
+        "lon": -91.1871,
+        "city": "Baton Rouge"
+      }
+    ],
+    "maxSources": 150
+  },
+  {
+    "id": "us-hi",
+    "country": "US",
+    "countryName": "United States (Hawaii)",
+    "provider": "Hawaii DOT GoAkamai",
+    "catalogUrl": "https://services.arcgis.com/6I1ysurtNWNxkuwd/arcgis/rest/services/HawaiiTrafficCameras/FeatureServer/0/query?where=1%3D1&outFields=*&f=json&outSR=4326&resultRecordCount=2000",
+    "method": "GET",
+    "arrayPath": "features",
+    "fields": {
+      "id": "attributes.OBJECTID",
+      "name": "attributes.Camera_Description",
+      "lat": "geometry.y",
+      "lon": "geometry.x",
+      "heading": null,
+      "elevation": null,
+      "imageUrl": "attributes.URL"
+    },
+    "license": "Licence not stated; images published publicly by HDOT via GoAkamai.",
+    "anchors": [
+      {
+        "lat": 21.3099,
+        "lon": -157.8581,
+        "city": "Honolulu"
+      }
+    ],
+    "maxSources": 120
+  },
+  {
+    "id": "fi-digitraffic",
+    "country": "FI",
+    "countryName": "Finland",
+    "provider": "Fintraffic / Digitraffic",
+    "catalogUrl": "https://tie.digitraffic.fi/api/weathercam/v1/stations",
+    "method": "GET",
+    "arrayPath": "features",
+    "fields": {
+      "id": "properties.presets.0.id",
+      "name": "properties.name",
+      "lat": "geometry.coordinates.1",
+      "lon": "geometry.coordinates.0",
+      "heading": null,
+      "elevation": "geometry.coordinates.2",
+      "imageUrl": null
+    },
+    "imageUrlTemplate": "https://weathercam.digitraffic.fi/{id}.jpg",
+    "license": "CC BY 4.0 — Source: Fintraffic / digitraffic.fi, license CC 4.0 BY",
+    "anchors": [
+      {
+        "lat": 60.17,
+        "lon": 24.94,
+        "city": "Helsinki"
+      },
+      {
+        "lat": 61.5,
+        "lon": 23.76,
+        "city": "Tampere"
+      },
+      {
+        "lat": 60.45,
+        "lon": 22.27,
+        "city": "Turku"
+      },
+      {
+        "lat": 65.01,
+        "lon": 25.47,
+        "city": "Oulu"
+      }
+    ],
+    "maxSources": 200
+  },
+  {
+    "id": "no-vegvesen",
+    "country": "NO",
+    "countryName": "Norway",
+    "provider": "Statens vegvesen",
+    "catalogUrl": "https://road-weather-and-view.atlas.vegvesen.no/weather-information/measurement-sites",
+    "method": "GET",
+    "arrayPath": "features",
+    "headers": {
+      "Accept": "application/vnd.svv.v1+geo+json",
+      "X-System-ID": "gods-eye-view"
+    },
+    "fields": {
+      "id": "properties.cameras.0.id",
+      "name": "properties.name",
+      "lat": "geometry.coordinates.1",
+      "lon": "geometry.coordinates.0",
+      "heading": null,
+      "elevation": "properties.location.heightAboveSeaLevel",
+      "imageUrl": "properties.cameras.0.stillImageUrl"
+    },
+    "license": "NLOD 2.0 (Norsk lisens for offentlige data) — Statens vegvesen",
+    "anchors": [
+      {
+        "lat": 59.91,
+        "lon": 10.75,
+        "city": "Oslo"
+      },
+      {
+        "lat": 60.39,
+        "lon": 5.32,
+        "city": "Bergen"
+      },
+      {
+        "lat": 63.43,
+        "lon": 10.4,
+        "city": "Trondheim"
+      },
+      {
+        "lat": 58.97,
+        "lon": 5.73,
+        "city": "Stavanger"
+      }
+    ],
+    "maxSources": 200
+  },
+  {
+    "id": "se-stockholm",
+    "country": "SE",
+    "countryName": "Sweden (Stockholm)",
+    "provider": "Trafik Stockholm / Trafikverket",
+    "catalogUrl": "https://trafiken.nu/api/trafficcameras?region=vst",
+    "method": "GET",
+    "arrayPath": "",
+    "fields": {
+      "id": "cameraId",
+      "name": "name",
+      "lat": "wgs84Position.coordinates.1",
+      "lon": "wgs84Position.coordinates.0",
+      "heading": "direction",
+      "elevation": null,
+      "imageUrl": "imageUrl"
+    },
+    "license": "Underlying data/images are Trafikverket open data, CC0 1.0. Served via trafiken.nu.",
+    "anchors": [
+      {
+        "lat": 59.33,
+        "lon": 18.07,
+        "city": "Stockholm"
+      }
+    ],
+    "maxSources": 150
+  },
+  {
+    "id": "se-goteborg",
+    "country": "SE",
+    "countryName": "Sweden (Göteborg)",
+    "provider": "Trafik Stockholm / Trafikverket",
+    "catalogUrl": "https://trafiken.nu/api/trafficcameras?region=gbg",
+    "method": "GET",
+    "arrayPath": "",
+    "fields": {
+      "id": "cameraId",
+      "name": "name",
+      "lat": "wgs84Position.coordinates.1",
+      "lon": "wgs84Position.coordinates.0",
+      "heading": "direction",
+      "elevation": null,
+      "imageUrl": "imageUrl"
+    },
+    "license": "Underlying data/images are Trafikverket open data, CC0 1.0. Served via trafiken.nu.",
+    "anchors": [
+      {
+        "lat": 57.71,
+        "lon": 11.97,
+        "city": "Göteborg"
+      }
+    ],
+    "maxSources": 150
+  },
+  {
+    "id": "is-vegagerdin",
+    "country": "IS",
+    "countryName": "Iceland",
+    "provider": "Vegagerðin (IRCA)",
+    "catalogUrl": "https://gagnaveita.vegagerdin.is/api/vefmyndavelar2014_1",
+    "method": "GET",
+    "arrayPath": "",
+    "fields": {
+      "id": "Maelist_nr",
+      "name": "Myndavel",
+      "lat": "Breidd",
+      "lon": "Lengd",
+      "heading": null,
+      "elevation": null,
+      "imageUrl": "Slod"
+    },
+    "license": "IRCA web-services terms (modelled on the UK Open Government Licence). Credit: Icelandic Road and Coastal Administration.",
+    "anchors": [
+      {
+        "lat": 64.15,
+        "lon": -21.94,
+        "city": "Reykjavik"
+      },
+      {
+        "lat": 65.68,
+        "lon": -18.09,
+        "city": "Akureyri"
+      }
+    ],
+    "maxSources": 150
+  },
+  {
+    "id": "ee-tarktee",
+    "country": "EE",
+    "countryName": "Estonia",
+    "provider": "Transpordiamet — Tark Tee",
+    "catalogUrl": "https://tarktee.transpordiamet.ee/tarktee/rest/services/tram/road_cameras/MapServer/0/query?where=1%3D1&outFields=*&outSR=4326&returnGeometry=true&f=geojson",
+    "method": "GET",
+    "arrayPath": "features",
+    "fields": {
+      "id": "properties.objectid",
+      "name": "properties.site_name",
+      "lat": "geometry.coordinates.1",
+      "lon": "geometry.coordinates.0",
+      "heading": null,
+      "elevation": null,
+      "imageUrl": "properties.image_path"
+    },
+    "imageBaseUrl": "https://tarktee.transpordiamet.ee/images/",
+    "license": "Tark Tee terms of use; Estonian PSI re-use law applies. Credit: Transpordiamet.",
+    "anchors": [
+      {
+        "lat": 59.44,
+        "lon": 24.75,
+        "city": "Tallinn"
+      },
+      {
+        "lat": 58.38,
+        "lon": 26.72,
+        "city": "Tartu"
+      }
+    ],
+    "maxSources": 150
+  },
+  {
+    "id": "lt-eismoinfo",
+    "country": "LT",
+    "countryName": "Lithuania",
+    "provider": "Via Lietuva — eismoinfo.lt",
+    "catalogUrl": "https://eismoinfo.lt/eismoinfo-backend/layer-static-features/VKR",
+    "method": "GET",
+    "arrayPath": "0.features",
+    "fields": {
+      "id": "id",
+      "name": "name",
+      "lat": "points.0.point.0",
+      "lon": "points.0.point.1",
+      "heading": null,
+      "elevation": null,
+      "imageUrl": null
+    },
+    "imageUrlTemplate": "https://eismoinfo.lt/eismoinfo-backend/image-provider/camera/last?id={id}",
+    "license": "Terms of use require citing Via Lietuva / eismoinfo.lt as the source.",
+    "anchors": [
+      {
+        "lat": 54.69,
+        "lon": 25.28,
+        "city": "Vilnius"
+      },
+      {
+        "lat": 54.9,
+        "lon": 23.89,
+        "city": "Kaunas"
+      }
+    ],
+    "maxSources": 150
+  },
+  {
+    "id": "hk-td",
+    "country": "HK",
+    "countryName": "Hong Kong",
+    "provider": "Transport Department, HKSAR",
+    "catalogUrl": "https://static.data.gov.hk/td/traffic-snapshot-images/code/Traffic_Camera_Locations_En.xml",
+    "method": "GET",
+    "format": "xml",
+    "recordTag": "image",
+    "fields": {
+      "id": "key",
+      "name": "description",
+      "lat": "latitude",
+      "lon": "longitude",
+      "heading": null,
+      "elevation": null,
+      "imageUrl": "url"
+    },
+    "license": "DATA.GOV.HK Terms of Use v1.2 — commercial use expressly permitted free of charge. Credit: Transport Department, HKSAR Government via DATA.GOV.HK.",
+    "anchors": [
+      {
+        "lat": 22.2819,
+        "lon": 114.1582,
+        "city": "Central"
+      },
+      {
+        "lat": 22.3193,
+        "lon": 114.1694,
+        "city": "Kowloon"
+      },
+      {
+        "lat": 22.3711,
+        "lon": 114.114,
+        "city": "Tsuen Wan"
+      }
+    ],
+    "maxSources": 250
+  },
+  {
+    "id": "nz-nzta",
+    "country": "NZ",
+    "countryName": "New Zealand",
+    "provider": "NZ Transport Agency Waka Kotahi",
+    "catalogUrl": "https://trafficnz.info/service/traffic/rest/4/cameras/all",
+    "method": "GET",
+    "fields": {
+      "id": "id",
+      "name": "name",
+      "lat": "latitude",
+      "lon": "longitude",
+      "heading": "direction",
+      "elevation": null,
+      "imageUrl": "imageUrl"
+    },
+    "imageBaseUrl": "https://trafficnz.info",
+    "license": "NZTA open APIs, no account required, subject to NZTA terms of use. NOT explicitly CC-licensed — trafficnz.info footer reads all rights reserved. Confirm before commercial use.",
+    "anchors": [
+      {
+        "lat": -36.8485,
+        "lon": 174.7633,
+        "city": "Auckland"
+      },
+      {
+        "lat": -41.2866,
+        "lon": 174.7756,
+        "city": "Wellington"
+      },
+      {
+        "lat": -43.5321,
+        "lon": 172.6362,
+        "city": "Christchurch"
+      }
+    ],
+    "maxSources": 200,
+    "headers": {
+      "Accept": "application/json"
+    },
+    "arrayPath": "response.camera",
+    "note": "Endpoint content-negotiates: Accept: application/json returns JSON, otherwise XML. JSON is used here."
+  },
+  {
+    "id": "au-nsw",
+    "country": "AU",
+    "countryName": "Australia (NSW)",
+    "provider": "Transport for NSW",
+    "catalogUrl": "https://portal.data.nsw.gov.au/arcgis/rest/services/Hosted/TfNSW_Traffic_Cameras_Public/FeatureServer/0/query?where=1%3D1&outFields=*&resultRecordCount=1000&outSR=4326&f=geojson",
+    "method": "GET",
+    "arrayPath": "features",
+    "headers": {
+      "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+    },
+    "fields": {
+      "id": "properties.id",
+      "name": "properties.title",
+      "lat": "geometry.coordinates.1",
+      "lon": "geometry.coordinates.0",
+      "heading": "properties.direction",
+      "elevation": null,
+      "imageUrl": "properties.href"
+    },
+    "license": "CC BY — Live Traffic Cameras © Transport for NSW.",
+    "anchors": [
+      {
+        "lat": -33.8688,
+        "lon": 151.2093,
+        "city": "Sydney"
+      },
+      {
+        "lat": -32.9283,
+        "lon": 151.7817,
+        "city": "Newcastle"
+      }
+    ],
+    "maxSources": 200
+  },
+  {
+    "id": "au-qld",
+    "country": "AU",
+    "countryName": "Australia (Queensland)",
+    "provider": "Queensland Transport and Main Roads",
+    "catalogUrl": "https://api.qldtraffic.qld.gov.au/v1/webcams?apikey=3e83add325cbb69ac4d8e5bf433d770b",
+    "method": "GET",
+    "arrayPath": "features",
+    "fields": {
+      "id": "properties.id",
+      "name": "properties.description",
+      "lat": "geometry.coordinates.1",
+      "lon": "geometry.coordinates.0",
+      "heading": "properties.direction",
+      "elevation": null,
+      "imageUrl": "properties.image_url"
+    },
+    "license": "CC BY 4.0 — QLDTraffic GeoJSON API © State of Queensland (Dept of Transport and Main Roads). Key shown is TMR’s own published default developer key.",
+    "anchors": [
+      {
+        "lat": -27.4698,
+        "lon": 153.0251,
+        "city": "Brisbane"
+      },
+      {
+        "lat": -28.0167,
+        "lon": 153.4,
+        "city": "Gold Coast"
+      }
+    ],
+    "maxSources": 150
+  },
+  {
+    "id": "sg-lta",
+    "country": "SG",
+    "countryName": "Singapore",
+    "provider": "Land Transport Authority via data.gov.sg",
+    "catalogUrl": "https://api.data.gov.sg/v1/transport/traffic-images",
+    "method": "GET",
+    "arrayPath": "items.0.cameras",
+    "fields": {
+      "id": "camera_id",
+      "name": "camera_id",
+      "lat": "location.latitude",
+      "lon": "location.longitude",
+      "heading": null,
+      "elevation": null,
+      "imageUrl": "image"
+    },
+    "license": "Singapore Open Data Licence v1.0 — LTA Traffic Images via data.gov.sg.",
+    "anchors": [
+      {
+        "lat": 1.3521,
+        "lon": 103.8198,
+        "city": "Singapore"
+      }
+    ],
+    "maxSources": 100,
+    "note": "LTA cut this feed from 90 cameras to 8 on 2026-06-30; the survivors are Woodlands/Tuas checkpoints and Sentosa Gateway. Expressway cameras are gone."
+  },
+  {
+    "id": "tw-thb",
+    "country": "TW",
+    "countryName": "Taiwan",
+    "provider": "Directorate General of Highways (THB) via TDX",
+    "catalogUrl": "https://tdx.transportdata.tw/api/basic/v2/Road/Traffic/CCTV/Highway?$format=JSON",
+    "method": "GET",
+    "arrayPath": "CCTVs",
+    "fields": {
+      "id": "CCTVID",
+      "name": "SurveillanceDescription",
+      "lat": "PositionLat",
+      "lon": "PositionLon",
+      "heading": null,
+      "elevation": null,
+      "imageUrl": "VideoImageURL"
+    },
+    "license": "Open Government Data License v1.0 (Taiwan). Credit: 交通部公路局 / TDX.",
+    "anchors": [
+      {
+        "lat": 24.99321,
+        "lon": 121.5075,
+        "city": "Taipei"
+      },
+      {
+        "lat": 24.1260742,
+        "lon": 120.5600586,
+        "city": "Taichung"
+      },
+      {
+        "lat": 22.74658,
+        "lon": 120.26181,
+        "city": "Kaohsiung"
+      }
+    ],
+    "maxSources": 250,
+    "enabled": false,
+    "note": "DISABLED: anonymous catalog access is capped at 20 requests/day/IP and is currently 401 from this machine. The IMAGE hosts are keyless and unlimited. Register a free instant OAuth2 key at https://tdx.transportdata.tw/register, then enable. 2,325 cameras."
+  },
+  {
+    "id": "za-sanral",
+    "country": "ZA",
+    "countryName": "South Africa",
+    "provider": "SANRAL i-Traffic",
+    "catalogUrl": "https://www.i-traffic.co.za/map/mapIcons/Cameras",
+    "method": "GET",
+    "arrayPath": "",
+    "fields": {
+      "id": "itemId",
+      "name": null,
+      "lat": "location.0",
+      "lon": "location.1",
+      "heading": null,
+      "elevation": null,
+      "imageUrl": null
+    },
+    "imageUrlTemplate": "https://www.i-traffic.co.za/map/Cctv/{id}",
+    "license": "NO LICENCE PUBLISHED — all rights reserved. SANRAL T&Cs explicitly prohibit redistribution without prior express written consent, and prohibit deep links to pages other than / and /map.",
+    "anchors": [
+      {
+        "lat": -26.2041,
+        "lon": 28.0473,
+        "city": "Johannesburg"
+      },
+      {
+        "lat": -33.9249,
+        "lon": 18.4241,
+        "city": "Cape Town"
+      },
+      {
+        "lat": -29.8587,
+        "lon": 31.0218,
+        "city": "Durban"
+      }
+    ],
+    "maxSources": 200,
+    "enabled": false,
+    "note": "DISABLED ON LICENCE GROUNDS, not technical. 1,238 cameras, keyless, verified working. SANRAL prohibits republication without written consent. Enable only for private use or after obtaining consent. ~28% are offline placeholders (md5 161076e85ba728817a1901cae4610667)."
+  },
+  {
+    "id": "es-dgt",
+    "country": "ES",
+    "countryName": "Spain (DGT national)",
+    "provider": "Dirección General de Tráfico",
+    "catalogUrl": "https://services-eu1.arcgis.com/xMJSZjeskIpAzCcP/arcgis/rest/services/camaras_web/FeatureServer/0/query?where=1%3D1&outFields=*&f=geojson&outSR=4326&resultRecordCount=2000",
+    "method": "GET",
+    "arrayPath": "features",
+    "fields": {
+      "id": "properties.id",
+      "name": "properties.carretera",
+      "lat": "geometry.coordinates.1",
+      "lon": "geometry.coordinates.0",
+      "heading": null,
+      "elevation": null,
+      "imageUrl": null
+    },
+    "imageUrlTemplate": "https://etraffic.dgt.es/camarasEtraffic/{id}.jpg",
+    "license": "DGT open reuse under Ley 37/2007 (RISP); NAP record states the licence is provided free of charge. Credit: Dirección General de Tráfico.",
+    "anchors": [
+      {
+        "lat": 40.4168,
+        "lon": -3.7038,
+        "city": "Madrid"
+      },
+      {
+        "lat": 39.4699,
+        "lon": -0.3763,
+        "city": "Valencia"
+      },
+      {
+        "lat": 37.3891,
+        "lon": -5.9845,
+        "city": "Sevilla"
+      },
+      {
+        "lat": 36.7213,
+        "lon": -4.4214,
+        "city": "Malaga"
+      }
+    ],
+    "maxSources": 250,
+    "note": "GeoJSON mirror of the DATEX XML feed: 1,453 cameras vs 1,945, but a far simpler shape. Excludes Catalonia and Pais Vasco, which run their own services."
+  },
+  {
+    "id": "es-madrid-m30",
+    "country": "ES",
+    "countryName": "Spain (Madrid M-30)",
+    "provider": "Madrid Calle 30 / Ayuntamiento de Madrid",
+    "catalogUrl": "https://mc30.es/xml-data/camaras.xml",
+    "method": "GET",
+    "format": "xml",
+    "recordTag": "Camara",
+    "fields": {
+      "id": "Nombre",
+      "name": "Nombre",
+      "lat": "Latitud",
+      "lon": "Longitud",
+      "heading": null,
+      "elevation": null,
+      "imageUrl": null
+    },
+    "imageUrlTemplate": "https://mc30.es/xml-data/imagenes_camaras/{id}.jpg",
+    "license": "CC BY 4.0 — Madrid Calle 30 / Ayuntamiento de Madrid via datos.madrid.es.",
+    "anchors": [
+      {
+        "lat": 40.4168,
+        "lon": -3.7038,
+        "city": "Madrid"
+      }
+    ],
+    "maxSources": 50
+  },
+  {
+    "id": "es-malaga",
+    "country": "ES",
+    "countryName": "Spain (Málaga)",
+    "provider": "Ayuntamiento de Málaga",
+    "catalogUrl": "https://datosabiertos.malaga.eu/recursos/transporte/trafico/da_camarasTrafico-4326.geojson",
+    "method": "GET",
+    "arrayPath": "features",
+    "fields": {
+      "id": "properties.ID",
+      "name": "properties.NOMBRE",
+      "lat": "geometry.coordinates.1",
+      "lon": "geometry.coordinates.0",
+      "heading": null,
+      "elevation": null,
+      "imageUrl": "properties.URLIMAGEN"
+    },
+    "imageBaseUrl": "https://ctraficomovilidad.malaga.eu/recursos/movilidad/camaras_trafico/",
+    "license": "CC BY 4.0 — Ayuntamiento de Málaga, datosabiertos.malaga.eu.",
+    "anchors": [
+      {
+        "lat": 36.7213,
+        "lon": -4.4214,
+        "city": "Malaga"
+      }
+    ],
+    "maxSources": 150
+  },
+  {
+    "id": "es-vitoria",
+    "country": "ES",
+    "countryName": "Spain (Vitoria-Gasteiz)",
+    "provider": "Ayuntamiento de Vitoria-Gasteiz",
+    "catalogUrl": "https://www.vitoria-gasteiz.org/c11-01w/cameras?action=list&format=GEOJSON",
+    "method": "GET",
+    "arrayPath": "features",
+    "fields": {
+      "id": "id",
+      "name": "properties.nombre",
+      "lat": "geometry.coordinates.1",
+      "lon": "geometry.coordinates.0",
+      "heading": null,
+      "elevation": null,
+      "imageUrl": null
+    },
+    "imageUrlTemplate": "https://www.vitoria-gasteiz.org/c11-01w/cameras?action=get&id={id}",
+    "license": "CC BY 4.0 — Ayuntamiento de Vitoria-Gasteiz / Open Data Euskadi.",
+    "anchors": [
+      {
+        "lat": 42.8467,
+        "lon": -2.6716,
+        "city": "Vitoria-Gasteiz"
+      }
+    ],
+    "maxSources": 60
+  },
+  {
+    "id": "it-aspi",
+    "country": "IT",
+    "countryName": "Italy (Autostrade)",
+    "provider": "Autostrade per l'Italia",
+    "catalogUrl": "https://viabilita.autostrade.it/json/webcams.json",
+    "method": "GET",
+    "arrayPath": "webcams",
+    "headers": {
+      "Referer": "https://viabilita.autostrade.it/"
+    },
+    "fields": {
+      "id": "c_uuid",
+      "name": "t_des_pub",
+      "lat": "n_crd_lat",
+      "lon": "n_crd_lon",
+      "heading": null,
+      "elevation": null,
+      "imageUrl": "frames.F_0.t_url"
+    },
+    "imageBaseUrl": "https://video.autostrade.it/video-frames/",
+    "license": "NOT OPEN. No licence published; viewer shows © Autostrade per l'Italia Spa. Treat as all-rights-reserved — private use only without written consent.",
+    "anchors": [
+      {
+        "lat": 45.4642,
+        "lon": 9.19,
+        "city": "Milan"
+      },
+      {
+        "lat": 41.9028,
+        "lon": 12.4964,
+        "city": "Rome"
+      },
+      {
+        "lat": 40.8518,
+        "lon": 14.2681,
+        "city": "Naples"
+      },
+      {
+        "lat": 44.4949,
+        "lon": 11.3426,
+        "city": "Bologna"
+      }
+    ],
+    "maxSources": 200
+  },
+  {
+    "id": "it-suedtirol",
+    "country": "IT",
+    "countryName": "Italy (Südtirol)",
+    "provider": "Open Data Hub Südtirol / NOI Techpark",
+    "catalogUrl": "https://tourism.opendatahub.com/v1/WebcamInfo?pagesize=2000&fields=Id,Shortname,GpsInfo,ImageGallery,LicenseInfo",
+    "method": "GET",
+    "arrayPath": "Items",
+    "fields": {
+      "id": "Id",
+      "name": "Shortname",
+      "lat": "GpsInfo.0.Latitude",
+      "lon": "GpsInfo.0.Longitude",
+      "heading": null,
+      "elevation": "GpsInfo.0.Altitude",
+      "imageUrl": "ImageGallery.0.ImageUrl"
+    },
+    "license": "MOSTLY UNSTATED — LicenseInfo.License is empty for almost every record. Confirm per record and credit LicenseInfo.LicenseHolder. Tourism/panorama webcams, not traffic cameras.",
+    "anchors": [
+      {
+        "lat": 46.4983,
+        "lon": 11.3548,
+        "city": "Bolzano"
+      },
+      {
+        "lat": 46.0679,
+        "lon": 11.1211,
+        "city": "Trento"
+      }
+    ],
+    "maxSources": 150
+  },
+  {
+    "id": "gr-noa",
+    "country": "GR",
+    "countryName": "Greece",
+    "provider": "National Observatory of Athens — meteo.gr",
+    "catalogUrl": "https://stratus.meteo.noa.gr/cameras/getCameras?lang_id=2",
+    "method": "GET",
+    "arrayPath": "cameras",
+    "headers": {
+      "X-Requested-With": "XMLHttpRequest"
+    },
+    "fields": {
+      "id": "3",
+      "name": "3",
+      "lat": "1",
+      "lon": "0",
+      "heading": null,
+      "elevation": "2",
+      "imageUrl": "5"
+    },
+    "license": "NO LICENCE STATED. NOA is a Greek state research institute but many images sit on partner amateur stations. Seek permission before redistribution. Weather/scenic cameras, not traffic.",
+    "anchors": [
+      {
+        "lat": 37.9838,
+        "lon": 23.7275,
+        "city": "Athens"
+      },
+      {
+        "lat": 40.6401,
+        "lon": 22.9444,
+        "city": "Thessaloniki"
+      }
+    ],
+    "maxSources": 120
+  }
+]

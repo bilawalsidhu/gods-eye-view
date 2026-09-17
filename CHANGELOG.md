@@ -1,5 +1,131 @@
 # Changelog
 
+- Local voice hardening for review: both voice WebSockets and
+  `/api/voice/config` refuse browser origins other than the served host (no
+  cross-site WebSocket hijacking or DNS-rebinding access to the transcript,
+  command injection or the wake-word key); incident pages are served under a
+  `sandbox allow-scripts` CSP so a stored bundle cannot run in the app origin;
+  ffmpeg is restricted to `http,https,tcp,tls` with a 15 s read timeout so a
+  broadcaster redirect cannot steer it at local files or the LAN;
+  `npm run wakeword:fetch` pins the Porcupine model to a commit and SHA-256;
+  `scripts/dev-local.sh` binds `localhost` by default like the Windows
+  launcher. The Python audio worker no longer inherits secret-shaped
+  variables (keys, tokens, passwords) from the server process, and peer URLs
+  are logged and reported without userinfo credentials.
+
+- Local voice hardening after the ten-feature wave: flight and military
+  analyst records carry the source contact time and the position history
+  stores it, so stale polls no longer read as teleports; anomaly rules use
+  timing slack and tighter thresholds, and only anomalies near the camera are
+  spoken (six per ten minutes). Spoken notices carry a kind (alerts keep the
+  warning prefix and reach peers; briefings and tour narration are plain).
+  `camera_sweep` enables the CCTV layer itself, long-running tools get their
+  own result timeouts (sweeps 180 s, vision 60 s), the radio tools fall back
+  to a live Radio Browser name search (`GET /api/radio/search?name=`), and the
+  default model context is 24k for the 70-tool prompt.
+
+- The local assistant now keeps watch on its own: `patrol_start` runs a standing
+  mission on a schedule and speaks a briefing of arrivals, departures, stopped
+  ships and sharp climbs or descents; a rule-based anomaly engine flags stopped
+  vessels, rapid descents, orbiting aircraft, impossible position jumps and
+  vessels that went dark from the position history (`anomaly_list`); named
+  geofences count entries and exits per hour and can alert on entry
+  (`geofence_add`, drawn on the map); and dead-reckoned prediction shows where
+  contacts will be in N minutes (`predict_positions`, scrubber past LIVE) or
+  answers "who will be near X in 10 minutes" (`who_will_be_near`).
+
+- Add incident replay bundles to the local voice assistant: `export_incident`
+  ("save this incident") freezes the current view into one self-contained HTML
+  evidence file with the viewport screenshot, a canvas map of every aircraft
+  and ship track near the camera over the last minutes (time-coloured, with a
+  play/scrub replay), the fix timeline, the recent transcript and standing
+  alerts. Bundles are saved under `.gev-logs/incidents/` through a new
+  `/api/voice/incidents` route (newest 50 kept, 8 MB cap) and offered as a
+  download; `list_incidents` lists them. See docs/INCIDENTS.md.
+- Add radio-in-the-loop to the local voice assistant: `radio_listen` runs
+  ffmpeg + faster-whisper on the dev server against the station playing in the
+  Radio layer (or one named by the user, resolved through the radio directory),
+  keeps an hour of timestamped transcript per listener, and `radio_transcript`
+  / `radio_search` / `radio_stop` let the assistant answer "what did they just
+  say about the storm". Needs ffmpeg (`FFMPEG_PATH`, PATH or the winget
+  install); see docs/RADIO-LISTEN.md.
+- Local voice gains multi-camera vision sweeps: "scan the cameras around
+  downtown and tell me which streets are jammed" runs `camera_sweep`, which
+  picks the nearest loaded CCTV cameras (view / radius / anywhere scope),
+  fetches one frame each through the existing `/api/cctv/frame` proxy, shrinks
+  them in the browser and posts them to a new `POST /api/voice/vision-batch`
+  route that asks the local vision model (qwen3-vl:4b, two frames at a time)
+  for a short verdict and a 0-1 score per camera. Red / amber / green pins with
+  the verdict land on each camera via `annotate_map`; `clear_camera_marks`
+  wipes them. First entry in the `src/voice/tools/` and
+  `server/providers/ollama/routes/` pack registries. See docs/CAMERA-SWEEP.md.
+- Local voice learns who is talking. `enroll_voice` ("this is Anthony",
+  "remember my voice as Anthony") turns the last three utterances into
+  WeSpeaker CAM++ voice prints (onnxruntime CPU, numpy fbank, no torch) kept in
+  `.gev-cache/voice-profiles.json`; every later `transcript` frame carries
+  `speaker: {name, score} | null`, the mic caption shows `HEARD (Anthony):`,
+  and `who_is_speaking`, `list_voices`, `forget_voice` manage profiles through
+  a new `/api/voice/speaker` route. Fetch the 29 MB Apache-2.0 model with
+  `node scripts/fetch-speaker-model.mjs`; without it the feature stays off.
+  Embeddings only, never audio. See docs/SPEAKER-ID.md.
+- Add the cinematic Auto-Director to the local voice assistant: "make me a
+  60-second tour of the busiest airspace" builds a Director scene from live
+  records (densest 1° cell, highest and most varied aircraft; ships, fires,
+  quakes and an orbit of the current view are the other themes), loads it
+  through the Director's validated document import, plays it and speaks a
+  narration line at each shot. `stop_tour` stops it; `save_tour` keeps it as
+  a named scene and downloads a `.gevbundle.json`. See docs/AUTO-DIRECTOR.md.
+- Add federated globes for the local voice assistant: set `GEV_PEERS` to the
+  companion-hub URLs of other instances (`ws://host:port/api/voice/remote`)
+  and `GEV_PEER_NAME` to this globe's name, and spoken alerts are replayed on
+  every peer as "From <peer>: ..." while `share_place` sends a saved place
+  that lands in the peer's memory as `<name> (from <peer>)`. New
+  `/api/voice/peers` route, `peers_list` / `share_place` / `share_alerts`
+  voice tools, origin tagging against forwarding loops. Peers are unauthenticated
+  and must be trusted LAN hosts; see `docs/FEDERATION.md`.
+- Add time travel: rewind and scrub the last 15 minutes of live flights,
+  military flights and ships from an in-memory position history (32 MB cap).
+  A `⏪ 10 MIN` dock button opens a scrubber with play/pause, ×1/×4/×16 and
+  LIVE; `[` / `]` keys and `window.__gevTimeTravel` drive it programmatically.
+  Live layer visuals are hidden (not disabled) while rewound. See
+  docs/TIME-TRAVEL.md.
+- Add `remote.html`, a phone / second-screen companion for the local voice
+  assistant (`AI_PROVIDER=ollama`). It connects to a new
+  `/api/voice/remote` hub that mirrors the globe session's transcript, tool
+  calls and replies as text and forwards typed commands, quick-action chips,
+  interrupts and (on HTTPS/localhost) VAD-cut WAV utterances into the active
+  session. Audio stays on the globe machine. Opening it from a phone needs
+  `HOST=0.0.0.0`; see `docs/REMOTE.md` for the LAN exposure caveat.
+- Local voice gains eyes, memory, alerts and reports: `ask_about_view` sends a
+  viewport screenshot to a local vision model (qwen3-vl:4b) for "what does that
+  sign say" questions; `remember_place` / `go_to_saved_place` and recall of
+  recent targets persist across sessions; `watch_add` creates standing alerts
+  that the assistant speaks unprompted when new records match; `data_report`
+  groups and aggregates loaded layers ("which airlines are over Texas", camera
+  density by cell). Whisper now detects the spoken language and the reply is
+  voiced in it (Spanish, French, German, Italian, Portuguese Piper voices).
+  Opt-in wake word via Porcupine (`PICOVOICE_ACCESS_KEY`). Replies are spoken
+  without markdown.
+
+- Add a fully local voice path behind `AI_PROVIDER=ollama`: browser Silero VAD
+  decides utterance boundaries hands-free, one pre-warmed Python worker runs
+  faster-whisper (CUDA when available) and Piper, and Ollama handles reasoning
+  and the same 28 tool schemas through a local WebSocket with streamed,
+  sentence-level speech. The adapter plugs into the common voice session beside
+  the OpenAI Realtime adapter; no key leaves the machine and the cost meter
+  hides. A bare "fly to <preset city>" answers without a model round trip.
+  Ships `npm run qa:local-voice` (fixture-driven end-to-end check),
+  `npm run qa:tool-calls` (per-model tool accuracy and latency) and
+  `scripts/bench_stt.py`.
+
+- The mic panel shows the last heard command and the reply on a transcript
+  line, and HUD summaries honor a `summaryPolicy` minimum interval, timeout and
+  request gate; the local HUD route cancels its upstream call when the browser
+  gives up.
+
+- WASD moves the camera and Q/E turn it, height-scaled and frame-timed, idle in
+  cockpit mode and in text fields. Ported from faris315mfaf-ai/gods-eye-view.
+
 - Distinguish PARTIAL vessel snapshots from STALE data in the layer panel, with
   accepted-record counts and unchanged retention, freshness and outage safeguards.
 

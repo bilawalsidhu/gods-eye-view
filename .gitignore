@@ -12,3 +12,8 @@ output/
 3d-models/
 pinokio/ENVIRONMENT
 pinokio/.installed
+.venv-local/
+.local/
+scripts/__pycache__/
+public/wakeword/
+.claude/

@@ -41,6 +41,7 @@ export function createVesselState({ source, services }) {
    */
 
   vesselState._geoidReady = false;
+  vesselState._presentationSuppressed = false;
 
   /** @type {Map<string, string>} `${cssColor}:${variant}` -> chevron SVG data URL */
 

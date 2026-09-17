@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0a0f" />
+  <title>GEV Remote</title>
+  <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+  <link rel="stylesheet" href="/src/remote/remote.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <header class="remote-header">
+    <div class="remote-brand">GEV <span>REMOTE</span></div>
+    <div class="remote-host" id="remote-host" title="Server">&nbsp;</div>
+    <div class="remote-pill" id="remote-status" data-tone="idle" role="status" aria-live="polite">CONNECTING</div>
+  </header>
+
+  <main class="remote-main">
+    <ol class="remote-feed" id="remote-feed" aria-label="Transcript" aria-live="polite">
+      <li class="line line--system">
+        <span class="line-tag">SYS</span>
+        <span class="line-text">Companion for the globe's local voice assistant. Start MIC on the globe, then type or tap a command here.</span>
+      </li>
+    </ol>
+  </main>
+
+  <footer class="remote-composer">
+    <div class="remote-chips" id="remote-chips" aria-label="Quick actions"></div>
+    <form class="remote-form" id="remote-form" autocomplete="off">
+      <label class="visually-hidden" for="remote-input">Command</label>
+      <input id="remote-input" name="command" type="text" placeholder="Type a command for the globe" enterkeyhint="send" maxlength="4000" disabled />
+      <button id="remote-send" type="submit" disabled>SEND</button>
+    </form>
+    <div class="remote-actions">
+      <button id="remote-interrupt" type="button" class="remote-action remote-action--warn" disabled>INTERRUPT</button>
+      <button id="remote-mic" type="button" class="remote-action remote-action--mic" data-state="off" hidden>MIC</button>
+      <p class="remote-hint" id="remote-mic-hint" hidden>Mic needs HTTPS or localhost; text works everywhere.</p>
+    </div>
+  </footer>
+
+  <script type="module" src="/src/remote/main.js"></script>
+</body>
+</html>
