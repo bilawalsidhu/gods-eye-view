@@ -438,7 +438,10 @@
   box-shadow: 0 0 24px rgba(255, 40, 40, 0.45);
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.25s ease, transform 0.25s ease, visibility 0.25s;
+  transition:
+    opacity 0.25s ease,
+    transform 0.25s ease,
+    visibility 0.25s;
 }
 #geofence-alert.visible {
   opacity: 1;
@@ -454,7 +457,7 @@
 }
 #geofence-alert-dismiss {
   background: transparent;
-  border: 1px solid rgba(255,255,255,0.35);
+  border: 1px solid rgba(255, 255, 255, 0.35);
   color: #fff;
   border-radius: 4px;
   padding: 2px 8px;
@@ -462,6 +465,11 @@
   font-size: 11px;
 }
 @keyframes geofence-pulse {
-  0%, 100% { box-shadow: 0 0 24px rgba(255,40,40,0.45); }
-  50% { box-shadow: 0 0 36px rgba(255,80,80,0.75); }
+  0%,
+  100% {
+    box-shadow: 0 0 24px rgba(255, 40, 40, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 36px rgba(255, 80, 80, 0.75);
+  }
 }

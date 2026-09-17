@@ -3,13 +3,14 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import {
-  createGeofenceAlert,
-  formatBreachMessage,
-} from './geofenceAlert.js';
+import { createGeofenceAlert, formatBreachMessage } from './geofenceAlert.js';
 import { createGeofenceMonitor } from './geofenceMonitor.js';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const ROOT = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..',
+  '..',
+);
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 
 test('visual alert: formatBreachMessage includes id', () => {
@@ -48,7 +49,11 @@ test('test toggle: sendTestPayload dispatches mock payload', async () => {
   };
   const monitor = createGeofenceMonitor({
     getPolygon: () => null,
-    dataManager: { layers: new Map(), subscribeActivity: () => () => {}, subscribe: () => () => {} },
+    dataManager: {
+      layers: new Map(),
+      subscribeActivity: () => () => {},
+      subscribe: () => () => {},
+    },
     fetchImpl: fakeFetch,
     now: () => '2026-01-03T00:00:00.000Z',
   });
@@ -65,7 +70,11 @@ test('test toggle: sendTestPayload dispatches mock payload', async () => {
 test('test toggle: sendTestPayload requires URL', async () => {
   const monitor = createGeofenceMonitor({
     getPolygon: () => null,
-    dataManager: { layers: new Map(), subscribeActivity: () => () => {}, subscribe: () => () => {} },
+    dataManager: {
+      layers: new Map(),
+      subscribeActivity: () => () => {},
+      subscribe: () => () => {},
+    },
     fetchImpl: async () => ({ ok: true }),
   });
   await assert.rejects(() => monitor.sendTestPayload(), /not configured/);
@@ -75,11 +84,27 @@ test('test toggle: sendTestPayload requires URL', async () => {
 test('markup: geofence alert and test toggle ids exist', () => {
   const chrome = read('src/ui/templates/scene-chrome.html');
   const controls = read('src/ui/templates/display-controls.html');
-  for (const id of ['geofence-alert', 'geofence-alert-text', 'geofence-alert-dismiss']) {
-    assert.match(chrome, new RegExp(`id="${id}"`), `${id} missing in scene-chrome`);
+  for (const id of [
+    'geofence-alert',
+    'geofence-alert-text',
+    'geofence-alert-dismiss',
+  ]) {
+    assert.match(
+      chrome,
+      new RegExp(`id="${id}"`),
+      `${id} missing in scene-chrome`,
+    );
   }
-  for (const id of ['geofence-test-webhook', 'geofence-test-hint', 'geofence-test-row']) {
-    assert.match(controls, new RegExp(`id="${id}"`), `${id} missing in display-controls`);
+  for (const id of [
+    'geofence-test-webhook',
+    'geofence-test-hint',
+    'geofence-test-row',
+  ]) {
+    assert.match(
+      controls,
+      new RegExp(`id="${id}"`),
+      `${id} missing in display-controls`,
+    );
   }
 });
 
@@ -92,7 +117,12 @@ test('monitor: visual alert integration via onEnter', () => {
   ];
   let records = [{ icao24: 'B1', lat: 5, lon: 5 }];
   const fakeManager = {
-    layers: new Map([['flights', { enabled: true, module: { getAnalystRecords: () => records } }]]),
+    layers: new Map([
+      [
+        'flights',
+        { enabled: true, module: { getAnalystRecords: () => records } },
+      ],
+    ]),
     subscribeActivity: () => () => {},
     subscribe: () => () => {},
   };
@@ -102,7 +132,10 @@ test('monitor: visual alert integration via onEnter', () => {
     fetchImpl: async () => ({ ok: true }),
   });
   let shown = null;
-  const fakeAlert = { show: (msg) => (shown = msg), hide: () => (shown = null) };
+  const fakeAlert = {
+    show: (msg) => (shown = msg),
+    hide: () => (shown = null),
+  };
   monitor.onEnter((e) => fakeAlert.show(formatBreachMessage(e)));
   monitor.evaluateAll();
   assert.equal(shown, null);

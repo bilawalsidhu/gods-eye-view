@@ -187,7 +187,8 @@ export function geofenceHint(session, { hasGeofence = false } = {}) {
       ? 'Geofence active — Edit to move vertices, Clear to remove.'
       : 'Click on the globe to add points.';
   const need = MIN_VERTICES - n;
-  if (need > 0) return `Click ${need} more point${need === 1 ? '' : 's'} to close.`;
+  if (need > 0)
+    return `Click ${need} more point${need === 1 ? '' : 's'} to close.`;
   if (finishReason(session) === 'degenerate')
     return 'Those points are in a line — move one off it to enclose an area.';
   return `${formatArea(session)} · double-click or Finish to close, Backspace undoes, Esc cancels.`;

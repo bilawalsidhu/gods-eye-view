@@ -112,7 +112,8 @@ export function initGeofenceTool({ viewer }) {
     document.body.classList.toggle('gev-geofencing', active || editing);
     if (finishBtn) finishBtn.disabled = !active;
     if (editBtn) editBtn.disabled = !geofence;
-    if (clearBtn) clearBtn.disabled = !geofence && session.vertices.length === 0;
+    if (clearBtn)
+      clearBtn.disabled = !geofence && session.vertices.length === 0;
     syncHint();
   };
 
@@ -153,7 +154,10 @@ export function initGeofenceTool({ viewer }) {
     handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
     handler.setInputAction(onClick, Cesium.ScreenSpaceEventType.LEFT_CLICK);
     handler.setInputAction(onMove, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
-    handler.setInputAction(onDoubleClick, Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
+    handler.setInputAction(
+      onDoubleClick,
+      Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK,
+    );
     handler.setInputAction(onDown, Cesium.ScreenSpaceEventType.LEFT_DOWN);
     handler.setInputAction(onUp, Cesium.ScreenSpaceEventType.LEFT_UP);
 
@@ -337,9 +341,7 @@ export function initGeofenceTool({ viewer }) {
     }
     if (!active) return;
     const p = worldAt(event.endPosition);
-    cursor = p
-      ? Cesium.Cartesian3.fromDegrees(p.lon, p.lat, 0)
-      : null;
+    cursor = p ? Cesium.Cartesian3.fromDegrees(p.lon, p.lat, 0) : null;
     renderer.setDraft(session.vertices, cursor);
     viewer.scene.requestRender();
   }
@@ -417,8 +419,7 @@ export function initGeofenceTool({ viewer }) {
       if (active && session.vertices.length) {
         // avoid triggering when focus on button
         const t = event.target;
-        const onControl =
-          t?.closest?.('button, select, a, [role="button"]');
+        const onControl = t?.closest?.('button, select, a, [role="button"]');
         if (!onControl) {
           event.preventDefault();
           finish();
@@ -464,7 +465,9 @@ export function initGeofenceTool({ viewer }) {
       return editing;
     },
     get geofence() {
-      return geofence ? { vertices: geofence.vertices.map((v) => ({ ...v })) } : null;
+      return geofence
+        ? { vertices: geofence.vertices.map((v) => ({ ...v })) }
+        : null;
     },
     get session() {
       return session;
