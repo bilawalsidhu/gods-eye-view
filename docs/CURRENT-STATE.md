@@ -1,5 +1,11 @@
 # God's Eye View Current State
 
+Vessel snapshot completeness is separate from freshness. A current snapshot with
+rejected or duplicate records shows PARTIAL with accepted/received counts; stale
+or unknown freshness and transport failures retain their warnings. Partial
+snapshots still retain missing contacts within the existing age and row limits.
+A complete successful snapshot clears the partial indicator.
+
 Director imports now open a non-mutating preview before Apply. EDIT DETAILS
 authors validated anchor, camera, pack and interaction drafts; SHARE SCENE exports
 a selected scene or a bounded bundle of explicitly chosen pack files. Bundled
