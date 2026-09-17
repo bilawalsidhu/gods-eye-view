@@ -1,5 +1,8 @@
 # Changelog
 
+- Add Sweden Trafikverket and VViS weather camera integration for live CCTV feeds via the Swedish Transport Administration Open API.
+
+
 - Distinguish PARTIAL vessel snapshots from STALE data in the layer panel, with
   accepted-record counts and unchanged retention, freshness and outage safeguards.
 

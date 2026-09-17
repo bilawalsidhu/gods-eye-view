@@ -236,6 +236,17 @@ export const CALGARY_DOWNTOWN = { lat: 51.0461, lon: -114.0626 };
  * body cannot be buffered without limit. */
 export const CALGARY_MAX_CATALOG_BYTES = 4 * 1024 * 1024;
 
+/** Trafikverket (Sweden): traffic and VViS weather cameras via Open API. */
+export const TRAFIKVERKET_DATA_URL =
+  'https://api.trafikinfo.trafikverket.se/v2/data.json';
+export const DEFAULT_TRAFIKVERKET_MAX_SOURCES = 450;
+export const TRAFIKVERKET_ANCHORS = [
+  { lat: 59.3293, lon: 18.0686 }, // Stockholm
+  { lat: 57.7089, lon: 11.9746 }, // Gothenburg
+  { lat: 65.5841, lon: 22.1567 }, // Luleå (Norrbotten)
+  { lat: 55.605, lon: 13.0038 }, // Malmö
+];
+
 /** Camera CATALOGS change rarely; 15 min keeps multi-megabyte upstream list refetches (Austin rows.json + 4 Caltrans districts + TfL + Ontario 511) infrequent. Frames are fetched per-request and are unaffected. */
 export const CCTV_SOURCE_CACHE_MS = 15 * 60 * 1000;
 /** Per-provider catalog-fetch timeout. Bounds the worst-case refresh so one

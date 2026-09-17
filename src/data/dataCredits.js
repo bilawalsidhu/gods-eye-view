@@ -265,6 +265,13 @@ export const DATA_CREDITS = [
       '<a href="https://www.submarinecablemap.com" target="_blank" rel="noopener">submarinecablemap.com</a> ' +
       '(CC BY-NC-SA 3.0 — NonCommercial)',
   },
+  {
+    key: 'trafikverket',
+    html:
+      'CCTV cameras (Sweden): ' +
+      '<a href="https://api.trafikinfo.trafikverket.se/" target="_blank" rel="noopener">Trafikverket</a> ' +
+      '(Open Data)',
+  },
 ];
 
 /**

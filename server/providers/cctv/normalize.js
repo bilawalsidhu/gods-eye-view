@@ -367,6 +367,16 @@ export function isLikelyCalgaryCoordinate(lat, lon) {
   );
 }
 
+/**
+ * Does this footprint fall roughly inside Sweden? Limits errant points from
+ * pulling the map far out to sea or into another country.
+ */
+export function isLikelySwedenCoordinate(lat, lon) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
+  // Broad bbox around Sweden, from Skåne to Treriksröset.
+  return lat >= 55.0 && lat <= 69.1 && lon >= 10.5 && lon <= 24.2;
+}
+
 export function isLikelyFinlandCoordinate(lat, lon) {
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
   return lat >= 59.5 && lat <= 70.5 && lon >= 19 && lon <= 32;

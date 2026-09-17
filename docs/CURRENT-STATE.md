@@ -1,5 +1,8 @@
 # God's Eye View Current State
 
+Sweden Trafikverket CCTV provider integrates live camera feeds and weather camera (VViS) catalogs from the Swedish Transport Administration Open API (v2) using POST requests with authentication key verification and WGS84 coordinate normalization.
+
+
 Vessel snapshot completeness is separate from freshness. A current snapshot with
 rejected or duplicate records shows PARTIAL with accepted/received counts; stale
 or unknown freshness and transport failures retain their warnings. Partial
