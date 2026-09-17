@@ -1,5 +1,9 @@
 # Changelog
 
+- Report AIS speed and course that carry the standard "not available" code as
+  unknown instead of 102.3 knots and 360 degrees. Genuine readings, including a
+  stopped vessel's zero and the highest encodable values, are unchanged.
+
 - Distinguish PARTIAL vessel snapshots from STALE data in the layer panel, with
   accepted-record counts and unchanged retention, freshness and outage safeguards.
 
