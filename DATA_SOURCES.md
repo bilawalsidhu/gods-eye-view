@@ -15,7 +15,7 @@ How to read this:
 
 | Source                                                                | Used for                                                                                                                            | License / terms                                                                                                                                                                                                                                                                                                                                       | Attribution                                                                                                                                 |
 | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| **NOAA GFS (wind)** | Global 10 m wind field for the animated Wind layer | U.S. public domain (NOAA); keyless via NOAA Open Data on AWS | "NOAA Global Forecast System (GFS)" (courtesy; not an endorsement) |
+| **NOAA GFS (wind)** | Global 10 m wind, optional 2 m temperature and mean sea-level pressure for Wind | U.S. public domain (NOAA); keyless via NOAA Open Data on AWS | "NOAA Global Forecast System (GFS)" (courtesy; not an endorsement) |
 | **OpenStreetMap ALPR camera locations** (including DeFlock community mapping) | Optional mapped automatic license-plate-reader camera layer | [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/); commercial use permitted with applicable attribution and database share-alike obligations | [© OpenStreetMap contributors](https://www.openstreetmap.org/copyright); [DeFlock](https://deflock.org) community mapping |
 | **Google Map Tiles API** (Photorealistic 3D Tiles) + Places/Geocoding | The 3D globe, voice scene context, and on-demand nearby installation search                                                         | Google Maps Platform ToS (proprietary, your own key + billing)                                                                                                                                                                                                                                                                                        | "Google" / "Google Maps" logo — **shown in-app**, required                                                                                  |
 | **OpenSky Network**                                                   | Primary worldwide live-flight snapshot                                                                                              | Non-commercial research/education license                                                                                                                                                                                                                                                                                                             | Schäfer et al., _"Bringing Up OpenSky"_, IPSN 2014 + opensky-network.org                                                                    |
@@ -156,21 +156,39 @@ The former bundled 2026-05-25 snapshot was removed 2026-07-16.
 
 ### ECMWF IFS wind
 
-Wind also offers ECMWF IFS 10 m forecasts from the keyless [ECMWF Open Data](https://www.ecmwf.int/en/forecasts/datasets/open-data) service. The proxy reads its JSON Lines inventory and fetches only 10u/10v GRIB messages, resampling the forecast to the display grid. Data is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The [ECMWF Terms of Use](https://apps.ecmwf.int/datasets/licences/general/) also apply. In-app attribution identifies this service as based on ECMWF data and products, links the CC BY 4.0 licence, identifies resampling and animation as modifications, and retains the required ECMWF liability disclaimer. Both model issue time and the selected forecast valid time appear in the layer row. These are model forecasts, not observations.
+Wind also offers ECMWF IFS 10 m forecasts from the keyless [ECMWF Open Data](https://www.ecmwf.int/en/forecasts/datasets/open-data) service. The proxy reads its JSON Lines inventory and byte-range fetches 10u/10v GRIB messages, optionally adding 2t (2 m temperature) or msl (mean sea-level pressure) from the same run and forecast time. It resamples these fields to the approximately 1° display grid. Data is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The [ECMWF Terms of Use](https://apps.ecmwf.int/datasets/licences/general/) also apply. In-app attribution identifies this service as based on ECMWF data and products, links the CC BY 4.0 licence, identifies resampling and animation as modifications, and retains the required ECMWF liability disclaimer. Both model issue time and the selected forecast valid time appear in the layer row. These are model forecasts, not observations.
 
 ### NOAA GFS wind
 
 The optional **Wind** layer animates the global 10 m wind field from NOAA's
 Global Forecast System (GFS). The `/api/wind` server-side proxy selects the
 latest available 0.25° cycle, reads its `.idx` inventory, byte-range fetches only
-the `UGRD`/`VGRD` 10 m GRIB2 messages (≈1 MB each instead of the whole ~500 MB
-file), decodes them with ecCodes (WASM), resamples to a compact grid (1° by
-default), and serves a manifest plus a Float32 U/V payload. It is keyless, cached
+the `UGRD`/`VGRD` 10 m GRIB2 messages, optionally adding `TMP` at 2 m or
+`PRMSL` at mean sea level from the same run and forecast time. It decodes the
+selected messages with ecCodes (WASM), resamples to a compact grid (1° by
+default), and serves a manifest plus Float32 U/V and optional scalar values. It is keyless, cached
 per cycle for an hour, and is a **forecast, not an observation**: the particles
-show model flow, not measured wind. Rendering is a 2D canvas particle overlay
-advected by the field and projected through the Cesium camera; globe-occluded
-particles are skipped. NOAA GFS data is U.S. public domain; the credit above is a
-courtesy and does not imply endorsement.
+show model flow, not measured wind. The renderer bakes bounded curves through
+the sampled field and animates their phase on the GPU, with a canvas fallback.
+Any display lift is a visual aid and does not change the forecast's 10 m level.
+NOAA GFS data is U.S. public domain; the credit above is a courtesy and does not
+imply endorsement.
+
+For both models, optional temperature is normalized from K to °C and pressure
+from Pa to hPa before delivery. A missing, malformed or timed-out companion field
+does not discard valid wind: the manifest marks that field unavailable, and the
+UI retains wind without inventing scalar values. The proxy caches by model and
+requested field, with bounded current/previous grids and shared in-flight loads.
+Wind speed shading is computed locally from U/V and needs no companion download.
+The legend and map-center reading explain units and forecast validity; the
+animation is a visual flow through one forecast, not advancing forecast time.
+Optional globe relief uses existing terrain vertex normals for view lighting;
+without those normals it shades global globe curvature only, not local terrain
+relief. Neither mode represents measured sunlight or a new elevation source.
+This Wind prototype adds no cloud-volume or radar data. Mapped.earth's public
+bundles were studied for rendering ideas, but
+no code or assets were reused and no application licence granting reuse was
+found. Its presentation is not a weather-data source for this implementation.
 
 ### Natural Earth physical regions (`natural_earth/`)
 
@@ -213,3 +231,84 @@ Douglas-Peucker simplification, 6-decimal rounding).
 ## In-app attribution
 
 The required Google Maps / Cesium credit renders on the on-globe credit line (`#cesium-credits`, bottom-left) and must stay visible — including in clean-view and recording modes (the whole line, logo + "Google Maps" + the "Data attribution" link, stays on screen; only the GEV panels/HUD fade). The layer-specific credits (adsb.lol, TeleGeography, OSM datacenters/dams/roads, NASA FIRMS, CelesTrak, USGS, City of Austin, Fintraffic, GBFS, Radio Browser, OpenSky, AISStream) are registered into the expandable **"Data attribution"** popover on that credit line via `viewer.creditDisplay.addStaticCredit(new Cesium.Credit(html, /* showOnScreen */ false))` — see `src/data/dataCredits.js`. When you add a new data source, add its license and attribution to this file **and** append an entry to `DATA_CREDITS` in `src/data/dataCredits.js` so it surfaces in the app.
+
+### Observed weather: NOAA nowCOAST
+
+The Weather section provides keyless, observed **MRMS radar reflectivity** for the
+contiguous United States and **infrared satellite imagery**. Fixed upstream WMS
+services: `https://nowcoast.noaa.gov/geoserver/observations/weather_radar/ows` and
+`https://nowcoast.noaa.gov/geoserver/observations/satellite/ows`.
+
+- `conus_base_reflectivity_mosaic`: approximately 1 km, usually 4-minute updates.
+  dBZ measures radar reflectivity, not rainfall rate, probability or future rain.
+  Coverage gaps do not mean no precipitation. The numeric legend follows NOAA's
+  `weather_radar_base_reflectivity` style.
+- `goes_longwave_imagery`: GOES-19/18 Band 14, approximately 2 km, 5-minute updates,
+  regional North America. Infrared includes clouds and land/sea temperatures;
+  it is not a cloud-only mask or measured cloud volume.
+- `global_longwave_imagery_mosaic`: approximately 3 km, hourly, nominal 60°S–60°N
+  coverage and typically 2–3-hour latency. It is slower global context.
+
+The UI displays the exact advertised observation time separately from acquisition;
+latest means the newest available observation, not zero-delay real time. Up to 13
+recent advertised frames can be replayed as history. No nowcast is synthesized.
+Tiles use WMS 1.1.1 EPSG:4326 longitude/latitude bounds; Cesium's geographic 2×1
+root grid is capped at level 6 for radar and regional GOES. Global infrared instead
+uses one fixed 2048×1024 geographic image: the source's request-dependent contrast
+otherwise creates brightness seams between tiles. This broad context view has a
+coarser display resolution than its 3 km source. No browser reprojection is used. Browser imagery owns at most two frames; the proxy has an 8-request
+concurrency budget, 12-second deadline, 1 MiB tile / 4 MiB global PNG caps and a shared 16 MiB/128-image cache.
+Metadata refreshes every two minutes with explicitly stale last-good fallback.
+No key, new dependency, image reprojection job, or full-disk image download is needed.
+
+Credit: NOAA nowCOAST, NWS/OAR MRMS, NESDIS GOES and global satellite partners.
+[NOAA disclaimer](https://oceanservice.noaa.gov/disclaimer.html).
+Community context: [#85](https://github.com/bilawalsidhu/gods-eye-view/issues/85),
+[#588 radar](https://github.com/bilawalsidhu/gods-eye-view/pull/588), and
+[#457 clouds](https://github.com/bilawalsidhu/gods-eye-view/pull/457).
+This implementation is original; those contributions have not been merged here.
+
+
+### Weather: NHC/CPHC cyclone advisories
+
+- **Sources:** [NHC current tropical cyclone status](https://www.nhc.noaa.gov/CurrentStorms.json) and
+  [NOAA tropical weather summary GIS](https://mapservices.weather.noaa.gov/tropical/rest/services/tropical/NHC_tropical_weather_summary/MapServer).
+- **Rights/credit:** NOAA/NWS National Hurricane Center / Central Pacific Hurricane Center;
+  [NWS public-data terms](https://www.weather.gov/disclaimer). Fetch official products at runtime;
+  no bundled advisory archive and no NOAA endorsement implied.
+- **Coverage/meaning:** Atlantic and eastern/central North Pacific, not global cyclone coverage.
+  Status position time and advisory issue time remain separate. Forecast track, points and cone
+  require matching advisory numbers across all GIS parts. Cone means uncertainty in the
+  forecast center track, not storm size or a complete hazard boundary.
+- **Delivery:** keyless same-origin `/api/cyclones`, five-minute singleflight cache,
+  fixed upstream endpoints, bounded bodies/geometry/deadline, explicit unavailable/stale states.
+  Direct status fetching is unsuitable in browsers because NHC does not advertise CORS.
+
+### Weather: observed lightning density
+
+- **Source:** [NOAA nowCOAST lightning detection WMS](https://nowcoast.noaa.gov/geoserver/observations/lightning_detection/ows),
+  fixed `ldn_lightning_strike_density` layer and `lightning_density` style.
+- **Rights/credit:** NOAA/NWS nowCOAST; derived from Vaisala NLDN/GLD360.
+  [Official product description and public distribution terms](https://ocean.weather.gov/lightning/lightning_pdd.php)
+  permit distribution of this NOAA Level-5 derived product, not raw Vaisala detections.
+- **Meaning:** 15-minute accumulated density on an approximately 8 km grid;
+  source color scale is strikes per km² per minute ×10³. Not individual GLM optical flashes,
+  a live ground-strike counter, an all-clear indication, or global coverage.
+- **Coverage:** 110°E across the Pacific/Americas to 0°, 25°S–80°N. Display exact advertised
+  observations; ten-minute metadata refresh, source-matched colors, bounded shared imagery cache.
+
+### Community weather prior art
+
+The weather design builds on Gustavo Beneduzi's retained GFS/ECMWF contribution
+commits ([#459](https://github.com/bilawalsidhu/gods-eye-view/pull/459),
+[#464](https://github.com/bilawalsidhu/gods-eye-view/pull/464)). Related community
+proposals informed the observed-weather experience: Sandiv D's on-demand radar
+and imagery controls ([#588](https://github.com/bilawalsidhu/gods-eye-view/pull/588));
+Gustavo Beneduzi's GOES and GLM source work
+([#457](https://github.com/bilawalsidhu/gods-eye-view/pull/457),
+[#458](https://github.com/bilawalsidhu/gods-eye-view/pull/458)); and HadiMuhammed's
+NOAA hazard provenance and freshness work
+([#414](https://github.com/bilawalsidhu/gods-eye-view/pull/414)).
+The fixed nowCOAST imagery and NHC advisory implementations are original maintainer
+work; this acknowledgement does not represent merging those four PRs or equate
+NOAA density imagery with the raw GLM product.

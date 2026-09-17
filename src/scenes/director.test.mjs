@@ -1443,7 +1443,7 @@ test('unsupported stored documents cannot be overwritten by fallback edits', asy
     assert.equal(localStorage.getItem('godsEyeView.sceneProject.v2'), saved);
     await director.importProjectFile({ name: 'valid.json', text: async () => JSON.stringify(PROJECT_FIXTURE) });
     assert.equal(director._storageReadError, null);
-    assert.equal(JSON.parse(localStorage.getItem('godsEyeView.sceneProject.v2')).version, 5);
+    assert.equal(JSON.parse(localStorage.getItem('godsEyeView.sceneProject.v2')).version, 6);
   } finally { restore(); }
 });
 

@@ -154,7 +154,20 @@ try {
   const projectFile = path.join(shots, 'project.json');
   fs.writeFileSync(projectFile, JSON.stringify(fixture));
   const input = await page.$('#scene-import-file');
+  const beforePreview = await page.evaluate(() =>
+    JSON.stringify(window.__godsEyeView.sceneDirector._project),
+  );
   await input.uploadFile(projectFile);
+  await page.waitForSelector('[data-director-apply-import]');
+  check(
+    'Import preview leaves the current project untouched',
+    await page.evaluate(
+      (saved) =>
+        JSON.stringify(window.__godsEyeView.sceneDirector._project) === saved,
+      beforePreview,
+    ),
+  );
+  await page.click('[data-director-apply-import]');
   await page.waitForFunction(
     () =>
       document.getElementById('scene-status').textContent ===
@@ -262,8 +275,8 @@ try {
   await input.uploadFile(badFile);
   await page.waitForFunction(() =>
     document
-      .getElementById('scene-status')
-      .textContent.includes('invalid JSON'),
+      .querySelector('[data-director-dialog] [role=status]')
+      ?.textContent.includes('invalid JSON'),
   );
   check(
     'Invalid import reports failure and preserves the current project',
@@ -281,7 +294,9 @@ try {
   fs.writeFileSync(futureFile, JSON.stringify({ version: 99, scenes: [] }));
   await input.uploadFile(futureFile);
   await page.waitForFunction(() =>
-    document.getElementById('scene-status').textContent.includes('$.version'),
+    document
+      .querySelector('[data-director-dialog] [role=status]')
+      ?.textContent.includes('$.version'),
   );
   check(
     'Unsupported versions leave authored state and saved bytes unchanged',
@@ -299,7 +314,9 @@ try {
   fs.writeFileSync(malformedFile, JSON.stringify(malformed));
   await input.uploadFile(malformedFile);
   await page.waitForFunction(() =>
-    document.getElementById('scene-status').textContent.includes('camera.lat'),
+    document
+      .querySelector('[data-director-dialog] [role=status]')
+      ?.textContent.includes('camera.lat'),
   );
   check(
     'Invalid camera field identifies its path without replacing the project',
@@ -308,6 +325,7 @@ try {
       savedBefore,
     ),
   );
+  await page.keyboard.press('Escape');
   await page.screenshot({ path: path.join(shots, 'desktop.png') });
   await page.setViewport({ width: 390, height: 844 });
   await page.screenshot({ path: path.join(shots, 'narrow.png') });

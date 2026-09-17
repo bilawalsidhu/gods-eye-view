@@ -11,8 +11,8 @@ export function renderPackGeometry({ asset, pack }, handle) {
   let lines;
   for (const feature of features) {
     const id = { packId: pack.id, featureId: feature.id };
-    if (feature.type === 'Point')
-      handle.add({
+    if (feature.type === 'Point') {
+      const entity = handle.add({
         name: `${pack.id} / ${feature.id}`,
         position: xyz(feature.coordinates),
         point: {
@@ -22,7 +22,9 @@ export function renderPackGeometry({ asset, pack }, handle) {
           outlineWidth: 2,
         },
       });
-    else if (feature.type === 'LineString') {
+      handle.feature?.(id, entity);
+    } else if (feature.type === 'LineString') {
+      handle.feature?.(id, id);
       if (!lines) {
         lines = new Cesium.PolylineCollection();
         handle.primitive(lines);
@@ -35,7 +37,8 @@ export function renderPackGeometry({ asset, pack }, handle) {
           color: Cesium.Color.CYAN,
         }),
       });
-    } else
+    } else {
+      handle.feature?.(id, id);
       polygons.push(
         new Cesium.GeometryInstance({
           id,
@@ -57,6 +60,7 @@ export function renderPackGeometry({ asset, pack }, handle) {
           },
         }),
       );
+    }
   }
   if (polygons.length)
     handle.primitive(

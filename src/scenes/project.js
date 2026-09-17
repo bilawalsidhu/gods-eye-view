@@ -253,6 +253,9 @@ export function normalizeShot(
             ? { altitudeReference: camera.altitudeReference || 'ellipsoid' }
             : {}),
         },
+    ...(rawShot?.interactions
+      ? { interactions: deepClone(rawShot.interactions) }
+      : {}),
     ...(rawShot?.dataPackIds ? { dataPackIds: [...rawShot.dataPackIds] } : {}),
     ...(rawShot?.move ? { move: deepClone(rawShot.move) } : {}),
     visual: {

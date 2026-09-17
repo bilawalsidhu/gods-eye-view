@@ -2,6 +2,7 @@ import { layerFeedState } from '../data/feedState.js';
 export { layerFeedState } from '../data/feedState.js';
 import { GUIDANCE_STATUSES } from '../loadingFeedback.js';
 import { keySetupRequirement } from '../keySetupCore.mjs';
+import { createWeatherSummary } from './weatherSummary.js';
 const FEED_STATE_LABELS = Object.freeze({
   nominal: 'ON',
   loading: 'LOADING',
@@ -44,7 +45,13 @@ const PANEL_GROUPS = [
   },
   {
     label: 'Weather',
-    ids: ['wind'],
+    ids: [
+      'wind',
+      'weather-radar',
+      'weather-satellite',
+      'weather-lightning',
+      'weather-cyclones',
+    ],
   },
   {
     label: 'Utilities',
@@ -118,6 +125,20 @@ export class LayerPanel {
     if (this._destroyed) return;
     this._releaseBindings();
     this._toggleContainer = container;
+    this._weatherSummary?.destroy();
+    this._weatherSummary = createWeatherSummary({
+      container: container?.ownerDocument?.body,
+      onOpen: (id) => {
+        const panel = container.closest?.('#data-panel');
+        if (panel?.classList.contains('collapsed'))
+          panel.querySelector('[data-collapse-target="data-panel"]')?.click();
+        const row = container.querySelector(`[data-layer-id="${id}"]`);
+        row?.scrollIntoView?.({ block: 'nearest' });
+        row
+          ?.querySelector('.data-toggle-chip:not(:disabled)')
+          ?.focus({ preventScroll: true });
+      },
+    });
     this._renderToggles();
   }
   _bind(element, type, listener) {
@@ -132,6 +153,8 @@ export class LayerPanel {
     if (this._destroyed) return;
     this._destroyed = true;
     this._releaseBindings();
+    this._weatherSummary?.destroy();
+    this._weatherSummary = null;
     this._toggleContainer = null;
   }
   _renderToggles() {
@@ -273,6 +296,25 @@ export class LayerPanel {
 
       this._toggleContainer.appendChild(row);
     }
+    this._refreshWeatherSummary();
+  }
+
+  _refreshWeatherSummary() {
+    this._weatherSummary?.update(
+      this.getAll()
+        .filter(
+          (layer) =>
+            layer.enabled &&
+            [
+              'wind',
+              'weather-radar',
+              'weather-satellite',
+              'weather-lightning',
+              'weather-cyclones',
+            ].includes(layer.id),
+        )
+        .map((layer) => ({ id: layer.id, ...this._rowControlsFor(layer.id) })),
+    );
   }
 
   /** Qualify a loaded count when it does not mean items currently on screen. */
@@ -479,6 +521,7 @@ export class LayerPanel {
         row.querySelector('.data-row-list'),
       );
     }
+    this._refreshWeatherSummary();
   }
 
   _buildMetaText(layer) {

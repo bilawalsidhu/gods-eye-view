@@ -59,7 +59,7 @@ test('v1/v2 bloom migrates once; IDs, edits, pack bindings and zero holds surviv
     const migrated = normalizeProject(
       parseSceneDocument(JSON.stringify(project)),
     );
-    assert.equal(migrated.version, 5);
+    assert.equal(migrated.version, 6);
     assert.equal(migrated.scenes[0].shots[0].visual.bloom.intensity, 150);
     assert.equal(migrated.scenes[0].shots[0].id, 'shot');
     assert.deepEqual(

@@ -1,8 +1,38 @@
 # Changelog
 
+## Unreleased — weather review
+
+- Add keyless NOAA/NHC cyclone advisory positions, coherent forecast tracks and
+  uncertainty cones, plus NOAA's observed 15-minute lightning density imagery.
+  Preserve source clocks, basin coverage and explicit pending/stale states.
+- Make wind default to trails, preserve earlier share-link appearance, retain
+  geometry across scalar changes, and show a compact weather summary with a
+  location marker and selected-field emphasis for forecast inspection.
+
+- Add keyless NOAA observed rain radar and infrared satellite layers to Weather,
+  with explicit coverage/freshness, recent observation playback and native Cesium tiles.
+- Increase desktop wind density to 7,200 paths and improve temperature contrast
+  while retaining the 1,200-path narrow-screen budget and unchanged forecast values.
+
+
+- Expand Wind into a surface-weather prototype: globe-draped speed shading,
+  optional same-run 2 m temperature and mean sea-level pressure, GFS/ECMWF model
+  selection, a numeric legend, wind units, Pause, and a dismissible map-center
+  reading. Keep wind visible when an optional field is unavailable; respect
+  reduced motion and stop animation while hidden or disabled. Bake bounded
+  forecast-following curves once per field and animate their phase on the GPU,
+  with a canvas fallback and globe view lighting owned only while Wind is enabled.
+  Display lift does not
+  change the 10 m forecast level; this adds no cloud volume, radar or forecast-time
+  playback. Native hardware GPU behavior remains unverified.
+
 Add feed provenance to analyst/view answers and HUD context while retaining existing response fields and runner ownership (Matt Van Horn, #347).
 
 Analyst records for loaded satellites, datacenters and dams, with explicit bounded count/rank coverage (Matt Van Horn, #351).
+
+- Add Director import previews, validated scene/shot detail drafts and selected-scene
+  JSON or asset-bundle sharing. Preserve attribution; verify bounded bundle bytes
+  before admission and release staged work on cancellation or teardown.
 
 - Director scene documents now support bounded data-pack manifests, per-shot
   selection and registered GeoJSON/PNG/media loaders with explicit placement,
@@ -211,6 +241,9 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 ## [Unreleased]
 
 - Add ECMWF IFS model selection to Wind (#464, thanks @beneduzi), with model-scoped forecast-step caches, cancellation of replaced requests, and separate issue/valid timestamps.
+
+- Add bounded Director feature actions with accessible controls, explicit camera/layer admission and cancellation; restore pack geometry on same-shot seek. Preserve existing scenes and content attribution.
+
 
 - Give application request services, terrain/floor caches and annotation lookup state explicit owners and cancellation; share them across controls, layers and voice.
 

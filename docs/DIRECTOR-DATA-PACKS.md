@@ -74,7 +74,8 @@ is a lowercase hexadecimal SHA-256 digest checked before rendering. There are at
 most 8 packs per scene, 8 MiB per asset, and 32 MiB of selected assets per shot.
 GeoJSON additionally allows at most 2,000 features and 50,000 positions.
 Transforms, terrain-relative placement, terrain collision avoidance, arbitrary
-GeoJSON styles, archives and local filesystem bundles are not implemented.
+GeoJSON styles and archive extraction are not implemented. Explicit local files
+can be shared through [JSON asset bundles](DIRECTOR-SHARING.md).
 
 ## Loading and resource ownership
 
@@ -110,5 +111,5 @@ status and resource counts for lifecycle diagnostics.
 
 Run `node scripts/qa-director-packs.mjs` against a credentialed local server to
 exercise the real import/load/seek/Stop path with self-authored synthetic assets.
-This stage provides the manifest/loading boundary; interactive actions and
-visual authoring follow separately.
+See [actions](DIRECTOR-INTERACTIONS.md) and [authoring/sharing](DIRECTOR-SHARING.md)
+for the controls built on this manifest/loading boundary.

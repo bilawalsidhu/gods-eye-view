@@ -15,7 +15,8 @@ import {
 import { validateSceneDataPacks } from './packs/manifest.js';
 import { validateSceneCameras } from './cameraDocument.js';
 export { SCENE_DOCUMENT_LIMITS, SceneDocumentError } from './documentFields.js';
-export const SCENE_DOCUMENT_VERSION = 5;
+import { validateSceneInteractions } from './interactions/document.js';
+export const SCENE_DOCUMENT_VERSION = 6;
 
 function visual(value, path, legacy) {
   fields(value, path, [
@@ -66,7 +67,7 @@ export function validateSceneDocument(project) {
     'scenes',
   ]);
   const version = Object.hasOwn(project, 'version') ? project.version : 1;
-  if (![1, 2, 3, 4, 5].includes(version))
+  if (![1, 2, 3, 4, 5, 6].includes(version))
     fail('$.version', 'unsupported scene project version');
   const legacy = version < 3;
   for (const key of ['createdAt', 'updatedAt'])
@@ -126,6 +127,7 @@ export function validateSceneDocument(project) {
         'sourcePackVersion',
         ...(version >= 4 ? ['move'] : []),
         ...(version >= 5 ? ['dataPackIds'] : []),
+        ...(version >= 6 ? ['interactions'] : []),
       ]);
       uniqueId(shot, at, shotIds);
       optional(shot, 'title', at, (v, p) => string(v, p, 4096));
@@ -153,6 +155,7 @@ export function validateSceneDocument(project) {
     });
     validateSceneCameras(scene, path, version);
     validateSceneDataPacks(scene, path);
+    validateSceneInteractions(scene, path);
   });
   return project;
 }

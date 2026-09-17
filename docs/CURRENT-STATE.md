@@ -1,10 +1,97 @@
 # God's Eye View Current State
 
-Wind appears in the Weather group before Utilities and is an optional GFS 10 m forecast overlay. Source acquisition has deadline and body budgets, disconnect cancellation and one-minute failure backoff. The row distinguishes model issue time from forecast valid time. Animation starts only with a field, stops on disable/destruction, preserves trails between unchanged canvas dimensions and scales from 200 to 4,000 particles with viewport area. Application catalog construction owns each instance.
+Wind appears in the Weather group before Utilities. The surface-weather prototype
+uses keyless NOAA GFS or ECMWF IFS forecasts on an approximately 1° display grid.
+It defaults to 10 m wind trails over the existing basemap. Speed shading is an explicit choice; earlier v2 links retain their original speed-shading meaning.
+The same row selects No color field, Speed, Pressure or Temperature, switches wind units between
+km/h, m/s and mph, pauses motion, and opens **Inspect center**. That dismissible
+reading reports the sampled map-center coordinates, interpolated wind speed and
+meteorological direction, selected scalar, model, valid time and freshness; it
+clears when the model/field changes or a refresh begins. The row separately shows
+issue and valid times. Animation moves through a fixed forecast; it does not
+advance forecast time.
+
+Temperature is air temperature at 2 m in °C; pressure is mean sea-level pressure
+in hPa. Optional companion fields come from the same model run/forecast as the
+wind. A missing or invalid companion leaves usable wind visible and identifies
+the selected field as unavailable. The color texture drapes the globe basemap;
+photorealistic 3D tiles may cover it. GPU wind curves follow the sampled forecast
+field. Their 12 km display lift is a rendering aid; the source remains 10 m wind,
+not a forecast at the displayed height or a street-level observation.
+
+The renderer owns field installation, scalar imagery and the animation lifecycle.
+It bakes at most 7,200 curves (1,200 below 700 px) with at most 33 geographic points each on the CPU
+when installing a wind field, then advances a GPU phase along those curves
+without CPU projection of every point on every frame. A canvas renderer remains
+available as a fallback. Pause and reduced-motion mode show a static flow view
+without an idle animation loop; hidden tabs suspend animation, and
+disable/destruction releases owned rendering
+resources and subscriptions. The globe relief helper is enabled with Wind and
+released when Wind is disabled. It uses terrain vertex normals
+for view-directed shading, falling back to global globe-curvature shading when
+normals are unavailable; the fallback does not show local hillshade. Neither mode
+adds elevation data or represents sunlight. Relief declines to replace an
+existing globe material, restores the prior empty material only while still
+owning it, and leaves later owners intact.
+Source acquisition retains deadlines, body budgets, disconnect cancellation,
+per-model/field singleflight caching and one-minute failure backoff. Application
+catalog construction owns each instance.
+
+Wind animates one forecast without advancing forecast time. Separate Weather
+observation layers provide radar and satellite history; none claims measured cloud volume.
+Mapped.earth's public bundles informed the rendering study; no code or assets
+were reused, and the study found no application licence granting reuse. Native
+hardware GPU behavior remains unverified; software-rendered checks do not
+establish native GPU performance or compatibility.
+
+Weather keeps a compact active-product summary and legend visible outside the
+expanded controls. Each product retains its own observed or forecast clock.
+Inspection emphasizes the chosen scalar and marks the exact sampled location;
+the passive marker follows that snapshot, respects globe occlusion and disappears
+on dismissal, field/model/unit changes, disable or teardown. Clean view and
+recording mode hide weather presentation with the other controls. Scalar changes
+reuse native wind geometry when the model, issue/valid time, grid and U/V values
+are identical; new or revised wind still rebuilds. Source and renderer clocks
+remain independent of the shared Cesium clock.
+
+Weather also offers default-off lightning density and cyclone advisories.
+Lightning uses NOAA/NWS nowCOAST's public derived 15-minute density product from
+Vaisala NLDN/GLD360, with ten-minute metadata refresh and exact source times.
+Coverage is the Americas/Pacific (110°E across the dateline to 0°, 25°S–80°N),
+not worldwide detections; units are strikes/km²/min ×10³. It is neither raw GLM
+flashes nor a live strike counter. Weather imagery orders scalar context below
+satellite, radar and lightning consistently across enable and history order.
+
+Cyclones combine fixed NHC/CPHC status and summary GIS endpoints through a bounded
+same-origin provider. The status endpoint lacks browser CORS; each installation
+fetches keyless public sources at runtime, with no centralized ingestion service.
+The five-minute snapshot covers Atlantic and eastern/central North Pacific only.
+Current positions, advisory issue time and position time stay distinct. Tracks,
+forecast lead-hour points and cones render only when all source parts match the
+status advisory; a newer status shows its position with geometry pending rather
+than relabeling older geometry. The cone represents forecast center uncertainty,
+not storm size or the full hazard area. Successful empty and unavailable states
+are distinct. One owned native Cesium data source preserves polygon holes and
+geographic seams and releases on disable; forecast animation is not implied.
+Consult the linked official advisory for safety decisions.
 
 Voice and HUD snapshots reuse the existing feedState classifier. Analyst follow-ups retain their original data provenance; current-view results append provenance without replacing legacy fields. HUD context and deterministic telemetry include non-nominal feed state.
 
 Satellite and local infrastructure layers expose on-demand analyst records through their current factory owners. Analyst counts and ranks explicitly cover only bounded examined loaded records (default 2,000 per new layer, core satellite rows before dense extras); omitted records can change nearest/count and satellite distance is ground distance. Existing tools and result fields remain available.
+
+Director imports now open a non-mutating preview before Apply. EDIT DETAILS
+authors validated anchor, camera, pack and interaction drafts; SHARE SCENE exports
+a selected scene or a bounded bundle of explicitly chosen pack files. Bundled
+bytes remain in memory until replacement/teardown and require reimport after a
+page reload. Stop releases rendering while retaining replay bytes. Cancellation
+and stale drafts cannot replace newer project state. See [authoring and sharing](DIRECTOR-SHARING.md).
+
+Director version-6 documents add bounded, scene-local feature actions. Settled
+LOAD/seek exposes keyboard-accessible text/source cards, anchor focus, explicit
+shot transitions and admitted layer state changes. Pointer claims take priority;
+Stop/replacement/teardown cancel pending actions and release handlers and UI.
+Same-shot seeks rebuild selected packs and restore declared layer baselines.
+See [scene actions](DIRECTOR-INTERACTIONS.md). Existing scenes/assets and credit remain.
 
 Director version-5 documents add scene-local data-pack manifests and per-shot
 selection. Registered sources acquire bounded, cancellable assets separately from
@@ -47,9 +134,9 @@ holds; stale tick callbacks cannot publish into a replacement. Registered pack
 rules own presentation overrides and Nepal map fallback without changing saved
 shots or content. Scene-document validation and legacy migration now have separate
 owners. Invalid imports preserve the current project; unreadable saved projects
-are protected from fallback writes. Version 5 is the export format, with
+are protected from fallback writes. Version 6 is the export format, with
 zero pitch, low camera heights, scope and detection edits preserved. See [the document contract](SCENE-DOCUMENT.md);
-interactions remain planned in [Director](DIRECTOR.md).
+see [Director](DIRECTOR.md) for camera, pack, action and sharing support.
 
 Search framing and annotations request semantic map features from an explicit source. The Overpass adapter owns bounded queries, member/tag decoding and request deadlines; callers retain candidate ranking, outline caching, deferred retries and scene placement. Empty, transient and throttled outcomes remain distinct. Traffic sources return road records and installation sources return mapped records with freshness/saturation metadata, so their layers no longer decode upstream elements. ALPR already normalizes its records in the source. Default providers, footprints, road directions, exact-viewport retries and source attribution are unchanged.
 
@@ -3935,4 +4022,21 @@ closed. Performance and live agency reliability require recorded validation.
 
 ## Wind forecast models
 
-Wind supports selectable GFS/IFS models with persisted model choice. Each fetch chooses the available cycle and forecast step nearest the current time; rows show both issue and valid UTC timestamps. Grid identities include model, cycle and forecast step. Per-model caches retain the last two issued grids for manifest/grid rollover, coalesce concurrent requests, retain last-good data on failures and retry no faster than once per minute. Model changes clear the old field immediately, cancel old acquisition and ignore superseded results.
+Wind supports selectable GFS/IFS models with persisted model choice. Each fetch chooses the available cycle and forecast step nearest the current time; rows show both issue and valid UTC timestamps. Grid identities include model, cycle, forecast step and any requested scalar field. The six model/field cache slots each retain the last two issued grids for manifest/grid rollover, coalesce concurrent requests, retain last-good data on failures and retry no faster than once per minute. Model changes clear the old field immediately, cancel old acquisition and ignore superseded results.
+
+### Local Weather review candidate
+
+Weather now combines the existing GFS/ECMWF surface forecast with two independently
+owned observation layers: NOAA Rain radar (CONUS) and Satellite clouds (regional
+GOES or slower global infrared). Existing layer-row controls provide source,
+opacity, coverage navigation, exact frame time, earlier/later history, playback and
+Latest. Playback never mutates the viewer clock; it pauses when hidden or reduced
+motion is requested. At most current+staging imagery exist per layer, retaining the
+previous frame if the incoming frame fails. Both layers are off by default and
+share/persist product and opacity; transient history does not persist.
+
+Desktop wind now allows 7,200 baked native GPU paths (narrow viewports remain at
+1,200). This doubles the maximum desktop geometry budget, not forecast resolution.
+Temperature uses stronger fixed −40..50°C colors; the underlying 1° forecast and
+numeric inspection values are unchanged. No volumetric cloud height or local rain
+arrival prediction is claimed. NOAA source limits are documented in DATA_SOURCES.

@@ -1,0 +1,385 @@
+/* Weather controls form four stable rows: model, field, units, inspection. */
+[data-layer-id='wind'] .data-toggle-controls:not([hidden]) {
+  display: grid;
+  grid-template-columns: repeat(60, minmax(0, 1fr));
+  gap: 5px 0;
+  margin-left: 0;
+  padding-left: 0;
+  margin-top: 9px;
+}
+[data-layer-id='wind'] .data-toggle-chip {
+  grid-column: span 20;
+  margin-inline: 2px;
+  color: #a9b8bc;
+  letter-spacing: 0.5px;
+  padding-inline: 3px;
+}
+[data-layer-id='wind'] [data-chip-id^='overlay-'] {
+  grid-column: span 30;
+}
+[data-layer-id='wind'] .data-toggle-chip.active {
+  color: #70f0ff;
+}
+[data-layer-id='wind'] .data-toggle-chip:disabled {
+  opacity: 0.45;
+}
+[data-layer-id='wind'] .data-toggle-controls-info {
+  grid-column: 1 / -1;
+}
+[data-layer-id='wind'] .data-toggle-legend-item {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 3px;
+  min-width: 0;
+  margin-top: 7px;
+  color: #b9ccd0;
+  font-size: 9px;
+  text-align: center;
+}
+[data-layer-id='wind'] .data-toggle-legend-swatch {
+  width: 100%;
+  height: 4px;
+  border-radius: 1px;
+}
+/* Weather is one optional instrument within the existing layer panel. */
+[data-layer-id='wind'] .data-toggle-controls-info {
+  white-space: pre-line;
+  line-height: 1.6;
+  font-size: 10px;
+  color: #b9ccd0;
+  margin-top: 7px;
+}
+[data-layer-id='wind'] .data-toggle-chip {
+  min-height: 30px;
+  padding: 5px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+}
+[data-layer-id='wind'] .data-toggle-chip:focus-visible {
+  outline: 2px solid #89e5e5;
+  outline-offset: 2px;
+}
+[data-layer-id='wind'] [data-chip-id='inspect-center'] {
+  grid-column: 1 / -1;
+  text-align: center;
+  min-height: 36px;
+}
+@media (max-width: 600px) {
+  [data-layer-id='wind'] .data-toggle-chip {
+    min-height: 40px;
+  }
+}
+
+/* Observed weather reuses the same accessible layer-row controls. */
+:is(
+    [data-layer-id='weather-radar'],
+    [data-layer-id='weather-satellite'],
+    [data-layer-id='weather-lightning']
+  )
+  .data-toggle-controls:not([hidden]) {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 5px;
+  margin: 9px 0 0;
+  padding: 0;
+}
+:is(
+    [data-layer-id='weather-radar'],
+    [data-layer-id='weather-satellite'],
+    [data-layer-id='weather-lightning']
+  )
+  .data-toggle-chip {
+  grid-column: span 4;
+  min-height: 32px;
+  padding: 5px 3px;
+  border-radius: 4px;
+  font-size: 10px;
+  letter-spacing: 0.4px;
+}
+:is(
+    [data-layer-id='weather-radar'],
+    [data-layer-id='weather-satellite'],
+    [data-layer-id='weather-lightning']
+  )
+  [data-chip-id='coverage'] {
+  grid-column: 1 / -1;
+}
+:is(
+    [data-layer-id='weather-radar'],
+    [data-layer-id='weather-satellite'],
+    [data-layer-id='weather-lightning']
+  )
+  .data-toggle-chip:focus-visible {
+  outline: 2px solid #89e5e5;
+  outline-offset: 2px;
+}
+:is(
+    [data-layer-id='weather-radar'],
+    [data-layer-id='weather-satellite'],
+    [data-layer-id='weather-lightning']
+  )
+  .data-toggle-chip:disabled {
+  opacity: 0.4;
+}
+:is(
+    [data-layer-id='weather-radar'],
+    [data-layer-id='weather-satellite'],
+    [data-layer-id='weather-lightning']
+  )
+  .data-toggle-controls-info {
+  grid-column: 1 / -1;
+  white-space: pre-line;
+  line-height: 1.6;
+  font-size: 10px;
+  color: #b9ccd0;
+  margin-top: 7px;
+}
+:is([data-layer-id='weather-radar'], [data-layer-id='weather-lightning'])
+  .data-toggle-legend-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  font-size: 9px;
+  text-align: center;
+}
+:is([data-layer-id='weather-radar'], [data-layer-id='weather-lightning'])
+  .data-toggle-legend-swatch {
+  width: 100%;
+  height: 4px;
+  border-radius: 1px;
+}
+@media (max-width: 600px) {
+  :is(
+      [data-layer-id='weather-radar'],
+      [data-layer-id='weather-satellite'],
+      [data-layer-id='weather-lightning']
+    )
+    .data-toggle-chip {
+    min-height: 40px;
+  }
+}
+
+[data-layer-id='wind'] .data-toggle-legend-item {
+  grid-column: span 10;
+}
+[data-layer-id='wind']:has([data-chip-id='overlay-temperature'].active)
+  .data-toggle-legend-item {
+  grid-column: span 6;
+}
+
+/* Context remains visible when the layer controls are collapsed. */
+.weather-summary {
+  position: fixed;
+  left: calc(var(--left-stack-x, 16px) + 296px);
+  bottom: calc(2vh + 6.5rem);
+  width: 244px;
+  max-height: calc(100svh - 240px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  z-index: 105;
+  padding: 10px;
+  border: 1px solid rgba(123, 199, 211, 0.24);
+  border-radius: 10px;
+  background: rgba(6, 19, 28, 0.92);
+  color: #dcebf0;
+  box-shadow: 0 8px 24px #0004;
+  pointer-events: auto;
+  font:
+    11px/1.45 system-ui,
+    sans-serif;
+}
+.weather-summary[hidden] {
+  display: none;
+}
+.weather-summary-title {
+  color: #9bbac5;
+  letter-spacing: 1.5px;
+  font-size: 9px;
+  padding: 0 5px 4px;
+}
+.weather-summary-product {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 6px 5px;
+  cursor: pointer;
+}
+.weather-summary-product + .weather-summary-product {
+  border-top: 1px solid #ffffff16;
+}
+.weather-summary-product:hover {
+  background: #ffffff08;
+}
+.weather-summary-product:focus-visible {
+  outline: 2px solid #89e5e5;
+  outline-offset: 2px;
+}
+.weather-summary-product > strong,
+.weather-summary-product > span {
+  display: block;
+}
+.weather-summary-product > [hidden] {
+  display: none;
+}
+.weather-summary-product strong {
+  font-size: 12px;
+}
+.weather-summary-product > span {
+  color: #afc5ce;
+  font-size: 10px;
+}
+.weather-summary-product .weather-summary-status {
+  color: #ffd595;
+}
+.weather-summary-ramp {
+  height: 4px;
+  border-radius: 2px;
+  margin-top: 5px;
+}
+.weather-summary-scale {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 720px) {
+  .weather-summary {
+    left: 12px;
+    right: 12px;
+    top: auto;
+    bottom: calc(2vh + 12rem);
+    width: auto;
+    max-height: 36svh;
+    padding: 6px;
+  }
+  .weather-summary-title {
+    display: none;
+  }
+  .weather-summary-product {
+    padding: 5px 6px;
+    min-height: 44px;
+  }
+  body:has(#data-panel:not(.collapsed)) .weather-summary,
+  body:has(#right-context-rail > [data-panel-id]:not(.collapsed))
+    .weather-summary {
+    display: none;
+  }
+  /* The narrow rail uses CSS, not the desktop height allocator. Give the
+     flex list a definite panel height so only the list scrolls. */
+  body:has(.weather-summary:not([hidden])) #left-panel-stack {
+    overflow: visible;
+    bottom: auto;
+    max-height: calc(50svh - 70px);
+  }
+  body:has(.weather-summary:not([hidden]))
+    #left-panel-stack
+    > #data-panel:not(.collapsed) {
+    flex: 0 0 auto;
+    height: calc(50svh - 70px);
+    max-height: calc(50svh - 70px);
+  }
+  body:has(.weather-summary:not([hidden]))
+    #left-panel-stack
+    > #data-panel:not(.collapsed)
+    .data-panel-inner {
+    box-sizing: border-box;
+    height: 100%;
+    max-height: 100%;
+    min-height: 0;
+    width: 100%;
+    overflow: hidden;
+    background: rgba(7, 17, 25, 0.94);
+  }
+  body:has(.weather-summary:not([hidden]))
+    #left-panel-stack:has(#data-panel:not(.collapsed))
+    > #scene-panel.collapsed {
+    display: none;
+  }
+  body:has(.weather-summary:not([hidden])) .data-toggle-list {
+    overflow-x: hidden;
+    min-height: 0;
+  }
+  body:has(.weather-summary:not([hidden])) #right-context-rail {
+    overflow-x: hidden;
+  }
+  body:has(.weather-summary:not([hidden]))
+    #right-context-rail:not(:has(> :not(.collapsed))) {
+    top: auto;
+    bottom: calc(2vh + 8rem);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.5fr);
+    gap: 4px;
+    overflow: visible;
+  }
+  body:has(.weather-summary:not([hidden]))
+    #right-context-rail:not(:has(> :not(.collapsed)))
+    > :is(#pp-toggles, #cctv-panel, #global-context-panel) {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+  body:has(.weather-summary:not([hidden]))
+    #right-context-rail:not(:has(> :not(.collapsed)))
+    :is(.pp-header-row, .cctv-panel-inner, .global-context-panel-inner) {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    padding-inline: 8px;
+  }
+  body:has(.weather-summary:not([hidden]))
+    #right-context-rail:not(:has(> :not(.collapsed)))
+    :is(.panel-title, .pp-header-label) {
+    font-size: 8px;
+    letter-spacing: 1px;
+  }
+}
+
+@media (max-width: 720px) {
+  body:has(.weather-summary:not([hidden]))
+    #right-context-rail:not(:has(> :not(.collapsed)))
+    .panel-header {
+    gap: 4px;
+  }
+}
+
+body.ui-clean-view .weather-summary,
+body.recording-mode .weather-summary,
+body.ui-clean-view .gev-wind-inspection-marker,
+body.recording-mode .gev-wind-inspection-marker,
+body.ui-clean-view .gev-wind-reading,
+body.recording-mode .gev-wind-reading {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+/* Inspection temporarily gives the map room; closing it restores the same controls. */
+@media (max-width: 720px) {
+  body:has(.gev-wind-reading:not([hidden])) #left-panel-stack {
+    display: none;
+  }
+}
+.weather-summary-ramp {
+  position: relative;
+}
+.weather-summary-zero {
+  position: absolute;
+  top: -2px;
+  height: 8px;
+  border-left: 1px solid #fff;
+}
+.weather-summary-zero::after {
+  content: '0°C';
+  position: absolute;
+  top: 8px;
+  left: 0;
+  transform: translateX(-50%);
+  font-size: 9px;
+  color: #e8f4f7;
+}

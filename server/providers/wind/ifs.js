@@ -1,6 +1,6 @@
-import { fetchText, fetchRange } from './gfs.js';
+import { fetchText, fetchRange, loadOptionalScalar } from './gfs.js';
 import { decodeWindGribMessage } from './decode.js';
-import { resampleWindGrid } from './grid.js';
+import { resampleWeatherSnapshot, weatherScalarMetadata } from './grid.js';
 
 /** Keyless ECMWF Open Data root for real-time IFS forecasts. */
 export const IFS_BASE = 'https://data.ecmwf.int/forecasts';
@@ -70,13 +70,19 @@ export function parseIfsIndex(text) {
  * @param {Array<{param: string, offset: number, length: number}>} entries
  * @returns {{u: {start: number, end: number}, v: {start: number, end: number}}}
  */
-export function ifsWindRanges(entries) {
+export function ifsWindRanges(entries, { overlay = 'none' } = {}) {
+  weatherScalarMetadata(overlay);
   const range = (param) => {
     const item = entries.find((entry) => entry.param === param);
     if (!item) throw new Error(`missing ${param}`);
     return { start: item.offset, end: item.offset + item.length - 1 };
   };
-  return { u: range('10u'), v: range('10v') };
+  return {
+    u: range('10u'),
+    v: range('10v'),
+    ...(overlay === 'temperature' ? { scalar: range('2t') } : {}),
+    ...(overlay === 'pressure' ? { scalar: range('msl') } : {}),
+  };
 }
 
 /**
@@ -106,7 +112,9 @@ export async function fetchIfsWind({
   targetDx = 1,
   decodeImpl = decodeWindGribMessage,
   signal,
+  overlay = 'none',
 } = {}) {
+  weatherScalarMetadata(overlay);
   const nowMs = now();
   const cycle = selectLatestIfsCycle(nowMs);
   const runMs = Date.UTC(
@@ -119,30 +127,40 @@ export async function fetchIfsWind({
   const forecastHour = nearestIfsStep((nowMs - runMs) / 3600_000, cycle.hour);
   const urls = ifsObjectUrls({ ...cycle, step: forecastHour });
   const index = await fetchText({ url: urls.index, fetchImpl, signal });
-  const ranges = ifsWindRanges(parseIfsIndex(index.toString()));
-  const [uBuffer, vBuffer] = await Promise.all([
-    fetchRange({ url: urls.grib, ...ranges.u, fetchImpl, signal }),
-    fetchRange({ url: urls.grib, ...ranges.v, fetchImpl, signal }),
+  const inventory = parseIfsIndex(index.toString());
+  const ranges = ifsWindRanges(inventory);
+  let scalarRange;
+  if (overlay !== 'none') {
+    try {
+      scalarRange = ifsWindRanges(inventory, { overlay }).scalar;
+    } catch {
+      /* A missing optional field does not discard valid wind. */
+    }
+  }
+  // All selected messages come from this one issue/valid-time object.
+  const load = async (range) =>
+    decodeImpl(
+      await fetchRange({ url: urls.grib, ...range, fetchImpl, signal }),
+    );
+  const [u, v, scalar] = await Promise.all([
+    load(ranges.u),
+    load(ranges.v),
+    loadOptionalScalar({
+      range: scalarRange,
+      url: urls.grib,
+      fetchImpl,
+      decodeImpl,
+      signal,
+    }),
   ]);
-  const [u, v] = await Promise.all([decodeImpl(uBuffer), decodeImpl(vBuffer)]);
-  const grid = resampleWindGrid({
-    u: u.values,
-    v: v.values,
-    ni: u.ni,
-    nj: u.nj,
-    lo1: u.lo1,
-    la1: u.la1,
-    di: u.di,
-    dj: u.dj,
-    dx: targetDx,
-    dy: targetDx,
-  });
+  signal?.throwIfAborted();
+  const fields = resampleWeatherSnapshot({ u, v, scalar, overlay, targetDx });
   const runIso = new Date(runMs).toISOString();
   const validIso = new Date(runMs + forecastHour * 3600_000).toISOString();
   return {
     cycle: { ...cycle, forecastHour, runIso, validIso },
     level: '10 m above ground',
     units: 'm/s',
-    grid,
+    ...fields,
   };
 }

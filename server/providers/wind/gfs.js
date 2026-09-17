@@ -43,18 +43,30 @@ export function parseGfsIdx(text) {
  */
 export function windMessageRanges(
   parsed,
-  { level = '10 m above ground' } = {},
+  { level = '10 m above ground', overlay = 'none' } = {},
 ) {
-  const range = (variable) => {
+  weatherScalarMetadata(overlay);
+  const range = (variable, fieldLevel = level) => {
     const index = parsed.messages.findIndex(
-      (message) => message.variable === variable && message.level === level,
+      (message) =>
+        message.variable === variable && message.level === fieldLevel,
     );
     const message = parsed.messages[index];
     const next = parsed.messages[index + 1];
-    if (!message || !next) throw new Error(`missing ${variable} at ${level}`);
+    if (!message || !next)
+      throw new Error(`missing ${variable} at ${fieldLevel}`);
     return { start: message.offset, end: next.offset - 1 };
   };
-  return { u: range('UGRD'), v: range('VGRD') };
+  return {
+    u: range('UGRD'),
+    v: range('VGRD'),
+    ...(overlay === 'temperature'
+      ? { scalar: range('TMP', '2 m above ground') }
+      : {}),
+    ...(overlay === 'pressure'
+      ? { scalar: range('PRMSL', 'mean sea level') }
+      : {}),
+  };
 }
 
 /** Fetch a bounded text response as a Buffer. */
@@ -106,6 +118,40 @@ export async function fetchRange({
   return buffer;
 }
 
+/** A bounded optional request may fail without cancelling valid wind siblings. */
+export async function loadOptionalScalar({
+  range,
+  url,
+  fetchImpl,
+  decodeImpl,
+  signal,
+  timeoutMs = 12_000,
+}) {
+  if (!range) return undefined;
+  const controller = new AbortController();
+  const abort = () => controller.abort(signal.reason);
+  signal?.addEventListener('abort', abort, { once: true });
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    signal?.throwIfAborted();
+    const bytes = await fetchRange({
+      url,
+      ...range,
+      fetchImpl,
+      signal: controller.signal,
+    });
+    const value = await decodeImpl(bytes);
+    controller.signal.throwIfAborted();
+    return value;
+  } catch {
+    return undefined;
+  } finally {
+    clearTimeout(timer);
+    controller.abort();
+    signal?.removeEventListener('abort', abort);
+  }
+}
+
 import {
   GFS_BUCKET,
   gfsObjectKey,
@@ -113,7 +159,7 @@ import {
   nearestGfsStep,
 } from './catalog.js';
 import { decodeWindGribMessage } from './decode.js';
-import { resampleWindGrid } from './grid.js';
+import { resampleWeatherSnapshot, weatherScalarMetadata } from './grid.js';
 
 /** Fetch and decode the GFS 10 m wind field valid closest to now. */
 export async function fetchGfsWind({
@@ -122,7 +168,9 @@ export async function fetchGfsWind({
   targetDx = 1,
   decodeImpl = decodeWindGribMessage,
   signal,
+  overlay = 'none',
 } = {}) {
+  weatherScalarMetadata(overlay);
   const nowMs = now();
   const cycle = selectLatestGfsCycle(nowMs);
   const runMs = Date.UTC(
@@ -136,30 +184,38 @@ export async function fetchGfsWind({
   const forecastHour = nearestGfsStep((nowMs - runMs) / 3600_000);
   const base = `https://${GFS_BUCKET}.s3.amazonaws.com/${gfsObjectKey({ ...cycle, forecastHour })}`;
   const index = await fetchText({ url: `${base}.idx`, fetchImpl, signal });
-  const ranges = windMessageRanges(parseGfsIdx(index.toString()));
-  const [uBuffer, vBuffer] = await Promise.all([
-    fetchRange({ url: base, ...ranges.u, fetchImpl, signal }),
-    fetchRange({ url: base, ...ranges.v, fetchImpl, signal }),
+  const inventory = parseGfsIdx(index.toString());
+  const ranges = windMessageRanges(inventory);
+  let scalarRange;
+  if (overlay !== 'none') {
+    try {
+      scalarRange = windMessageRanges(inventory, { overlay }).scalar;
+    } catch {
+      /* A missing optional field does not discard valid wind. */
+    }
+  }
+  // All selected messages come from this one issue/valid-time object.
+  const load = async (range) =>
+    decodeImpl(await fetchRange({ url: base, ...range, fetchImpl, signal }));
+  const [u, v, scalar] = await Promise.all([
+    load(ranges.u),
+    load(ranges.v),
+    loadOptionalScalar({
+      range: scalarRange,
+      url: base,
+      fetchImpl,
+      decodeImpl,
+      signal,
+    }),
   ]);
-  const [u, v] = await Promise.all([decodeImpl(uBuffer), decodeImpl(vBuffer)]);
-  const grid = resampleWindGrid({
-    u: u.values,
-    v: v.values,
-    ni: u.ni,
-    nj: u.nj,
-    lo1: u.lo1,
-    la1: u.la1,
-    di: u.di,
-    dj: u.dj,
-    dx: targetDx,
-    dy: targetDx,
-  });
+  signal?.throwIfAborted();
+  const fields = resampleWeatherSnapshot({ u, v, scalar, overlay, targetDx });
   const runIso = new Date(runMs).toISOString();
   const validIso = new Date(runMs + forecastHour * 3600_000).toISOString();
   return {
     cycle: { ...cycle, forecastHour, runIso, validIso },
     level: '10 m above ground',
     units: 'm/s',
-    grid,
+    ...fields,
   };
 }

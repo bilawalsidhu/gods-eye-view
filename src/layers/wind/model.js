@@ -3,9 +3,20 @@ export function normalizeLongitude(lon) {
   return ((((lon + 180) % 360) + 360) % 360) - 180;
 }
 
+function interpolate(array, a, b, c, d, tx, ty) {
+  return (
+    (array[a] * (1 - tx) + array[b] * tx) * (1 - ty) +
+    (array[c] * (1 - tx) + array[d] * tx) * ty
+  );
+}
+
 /** Sample a north-to-south, seam-wrapped wind grid bilinearly. */
-export function sampleWind(field, lon, lat) {
-  if (!Number.isFinite(lon) || !Number.isFinite(lat)) return { u: 0, v: 0 };
+export function sampleWind(field, lon, lat, result = {}) {
+  if (!Number.isFinite(lon) || !Number.isFinite(lat)) {
+    result.u = 0;
+    result.v = 0;
+    return result;
+  }
   const { u, v, nx, ny, lo1, la1, dx, dy } = field;
   const x = ((normalizeLongitude(lon - lo1) + 360) % 360) / dx;
   const y = (la1 - lat) / dy;
@@ -15,15 +26,15 @@ export function sampleWind(field, lon, lat) {
   const y0 = Math.floor(yClamped);
   const y1 = Math.min(ny - 1, y0 + 1);
   const ty = yClamped - y0;
-  const column = (index) => ((index % nx) + nx) % nx;
-  const value = (array) => {
-    const a = array[y0 * nx + column(x0)];
-    const b = array[y0 * nx + column(x0 + 1)];
-    const c = array[y1 * nx + column(x0)];
-    const d = array[y1 * nx + column(x0 + 1)];
-    return (a * (1 - tx) + b * tx) * (1 - ty) + (c * (1 - tx) + d * tx) * ty;
-  };
-  return { u: value(u), v: value(v) };
+  const left = ((x0 % nx) + nx) % nx;
+  const right = (left + 1) % nx;
+  const a = y0 * nx + left;
+  const b = y0 * nx + right;
+  const c = y1 * nx + left;
+  const d = y1 * nx + right;
+  result.u = interpolate(u, a, b, c, d, tx, ty);
+  result.v = interpolate(v, a, b, c, d, tx, ty);
+  return result;
 }
 
 /** Return metres represented by one longitude degree at a latitude. */

@@ -3,7 +3,8 @@
 Version 4 scene documents can name geographic anchors and describe an explicit
 camera move followed by a hold. Existing camera-pose shots still use the ordinary
 camera flight. Import, playback, Load, Replay and seek accept the new directions;
-a visual anchor/path editor is a later authoring step.
+[EDIT DETAILS](DIRECTOR-SHARING.md) captures anchors and move starts; a graphical
+path editor remains a later extension.
 
 ```json
 {

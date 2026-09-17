@@ -30,7 +30,7 @@ function caption(viewer, pack) {
 const xyz = (p) => Cesium.Cartesian3.fromDegrees(...p);
 
 /** Create rendering adapters; data acquisition and authored placement stay independent. */
-export function createPackPresentations(viewer) {
+export function createPackPresentations(viewer, targets = new Map()) {
   let panel;
   function addCard(pack) {
     if (!panel) {
@@ -55,9 +55,15 @@ export function createPackPresentations(viewer) {
       primitives = [],
       materials = [],
       urls = [];
+    const featureKeys = [];
     let card,
       destroyed = false;
     return {
+      feature(id, pickedId) {
+        const key = JSON.stringify([id.packId, id.featureId]);
+        targets.set(key, pickedId);
+        featureKeys.push(key);
+      },
       add(spec) {
         const entity = viewer.entities.add(spec);
         entities.push(entity);
@@ -81,6 +87,7 @@ export function createPackPresentations(viewer) {
       dispose() {
         if (destroyed) return;
         destroyed = true;
+        for (const key of featureKeys.splice(0)) targets.delete(key);
         for (const media of card?.querySelectorAll('video,audio') || []) {
           media.pause();
           media.removeAttribute('src');

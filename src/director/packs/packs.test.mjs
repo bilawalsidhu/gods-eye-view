@@ -51,7 +51,7 @@ test('v5 packs and shot references round trip through project migration without 
         JSON.stringify({ version, scenes: [{ id: 'old', shots: [] }] }),
       ),
     );
-    assert.equal(old.version, 5);
+    assert.equal(old.version, 6);
     assert.equal(old.scenes[0].dataPacks, undefined);
   }
 });
