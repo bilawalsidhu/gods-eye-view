@@ -40,6 +40,7 @@
       "server/providers/aircraft/adsb-lol.js",
       "server/providers/aircraft/enrichment.js",
       "server/providers/aircraft/tracks.js",
+      "server/providers/aircraft/aeroapi.js",
       "server/providers/vessels/ais-store.js",
       "server/providers/vessels/ais-live.js",
       "src/data/adsbLolFallback.js",
