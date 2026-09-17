@@ -367,6 +367,17 @@ export function isLikelyCalgaryCoordinate(lat, lon) {
   );
 }
 
+/** City of Toronto bounding box (Steeles to the lake, Etobicoke to Scarborough). */
+export function isLikelyTorontoCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 43.55 &&
+    lat <= 43.9 &&
+    lon >= -79.7 &&
+    lon <= -79.1
+  );
+}
+
 export function isLikelyFinlandCoordinate(lat, lon) {
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
   return lat >= 59.5 && lat <= 70.5 && lon >= 19 && lon <= 32;

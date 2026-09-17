@@ -55,6 +55,12 @@ import {
   DEFAULT_CALGARY_MAX_SOURCES,
   CALGARY_DOWNTOWN,
   CALGARY_MAX_CATALOG_BYTES,
+  TORONTO_RESCU_LIST_URL,
+  TORONTO_RESCU_IMAGE_ORIGIN,
+  DEFAULT_TORONTO_MAX_SOURCES,
+  TORONTO_DOWNTOWN,
+  TORONTO_GROUND_ELEVATION_M,
+  TORONTO_MAX_CATALOG_BYTES,
   CCTV_SOURCE_FETCH_TIMEOUT_MS,
 } from './constants.js';
 import {
@@ -73,12 +79,16 @@ import {
   isLikelyTexasCoordinate,
   isLikelyNswCoordinate,
   isLikelyCalgaryCoordinate,
+  isLikelyTorontoCoordinate,
   cameraDisplayCode,
   rowArrayToObject,
   prioritizeSources,
 } from './normalize.js';
 import { directionToHeading } from '../../../src/data/directionText.js';
-import { readResponseJsonCapped } from '../common/http.js';
+import {
+  readResponseJsonCapped,
+  readResponseTextCapped,
+} from '../common/http.js';
 /**
  * Fetch and parse Austin traffic camera records from the city Open Data portal.
  *
@@ -1589,6 +1599,175 @@ export async function loadCalgarySourcesFromOpenData() {
   } catch (error) {
     console.warn(
       '[CCTV] Calgary camera download error:',
+      error?.message || error,
+    );
+    return [];
+  }
+}
+
+/**
+ * The JSONP envelope the City of Toronto wraps its camera list in. Anchored at
+ * both ends, so only that exact callback is unwrapped — a payload that merely
+ * contains the name somewhere is not treated as the list.
+ */
+const RESCU_JSONP = /^jsonTMCEarthCamerasCallback\(([\s\S]*)\)\s*;?$/;
+
+/**
+ * Unwrap the RESCU camera list. The portal serves the list as JSONP; should it
+ * ever drop the wrapper, the bare JSON document still parses. Anything else —
+ * a foreign callback, a truncated body, an error page — yields no cameras
+ * rather than a thrown loader.
+ *
+ * @param {string} text - Raw response body.
+ * @returns {Array<object>} The `Data` rows, or [] when the body is unusable.
+ */
+export function parseRescuCameraList(text) {
+  const body = String(text ?? '').trim();
+  if (!body) return [];
+  const unwrapped = RESCU_JSONP.exec(body)?.[1] ?? body;
+  try {
+    const parsed = JSON.parse(unwrapped);
+    const rows = parsed?.Data ?? parsed?.data;
+    return Array.isArray(rows) ? rows : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Convert one RESCU list row into a camera source.
+ *
+ * The row carries no URL: the frame URL is built from the documented
+ * `loc####.jpg` convention and a camera number validated as plain digits, so
+ * the frame proxy is pinned to the city origin by construction and no upstream
+ * field — present or planted — can steer it.
+ *
+ * No compass heading exists in this dataset. `D1`-`D4` are the directions of
+ * the *comparison* images (static reference stills captured in 2016, served
+ * from a different path); the live frame is one pan-tilt-zoom camera pointing
+ * wherever the operator left it. Treating those letters as a facing would put
+ * a confident, wrong bearing on every camera in the city, so every row takes
+ * the id-hash fallback and the low-confidence pose, as headingless Austin,
+ * TfL, Fintraffic and Calgary cameras do.
+ *
+ * @param {object} row - One entry from the RESCU `Data` array.
+ * @returns {object|null} Normalized camera source, or null when unusable.
+ */
+export function torontoCameraToSource(row) {
+  if (!row || typeof row !== 'object') return null;
+  const number = String(row.Number ?? row.number ?? '').trim();
+  // Plain digits only: a number is about to become a URL path segment.
+  if (!/^\d{1,6}$/.test(number)) return null;
+
+  const lat = toFiniteNumber(row.Latitude ?? row.latitude);
+  const lon = toFiniteNumber(row.Longitude ?? row.longitude);
+  if (!isLikelyTorontoCoordinate(lat, lon)) return null;
+
+  const cameraId = `toronto-${number}`;
+  // The feed's own label, verbatim. It is upper-case ("MCCOWAN RD", "ST
+  // HELEN'S AVE"); title-casing it would mangle more names than it fixed.
+  const name =
+    String(row.Name ?? row.name ?? '')
+      .replace(/\s+/g, ' ')
+      .trim() || `Toronto Camera ${number}`;
+
+  return {
+    id: cameraId,
+    name,
+    city: 'Toronto',
+    cityId: 'toronto',
+    provider: 'City of Toronto',
+    lat,
+    lon,
+    headingDeg: fallbackHeadingFromId(cameraId),
+    headingConfidence: 'low',
+    pitchDeg: -18,
+    fovDeg: 44,
+    rangeM: 145,
+    mountHeightM: 8,
+    groundElevationM: TORONTO_GROUND_ELEVATION_M,
+    feedType: 'image',
+    url: `${TORONTO_RESCU_IMAGE_ORIGIN}loc${number}.jpg`,
+    snapshotUrl: `${TORONTO_RESCU_IMAGE_ORIGIN}loc${number}.jpg`,
+    sourceKind: 'toronto-rescu-open-data',
+    license:
+      'Contains information licensed under the Open Government Licence – Toronto',
+    // Unselected-label code: the intersection, so a camera at rest reads as a
+    // place rather than as its id.
+    code: cameraDisplayCode(name.toUpperCase()),
+  };
+}
+
+/**
+ * Fetch City of Toronto RESCU traffic cameras from the City's open data
+ * portal, keyless. One JSONP list for the whole city; frames are stills on the
+ * same portal origin.
+ *
+ * The list fetch refuses redirects (`redirect: 'manual'`) so the list host
+ * cannot be steered, and caps the body it will buffer.
+ *
+ * Attribution: Open Government Licence – Toronto, registered in
+ * src/data/dataCredits.js.
+ *
+ * @returns {Promise<Array<object>>} Normalized camera source objects.
+ */
+export async function loadTorontoSourcesFromOpenData() {
+  try {
+    const endpoint =
+      process.env.CCTV_TORONTO_LIST_URL || TORONTO_RESCU_LIST_URL;
+    const resp = await fetch(endpoint, {
+      headers: { Accept: 'application/json, text/javascript' },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+    });
+    // A response this loader will not read still owns its transport until the
+    // body is released, so every rejection path cancels before returning.
+    const discard = async () => {
+      try {
+        await resp.body?.cancel();
+      } catch {
+        /* no-op */
+      }
+      return [];
+    };
+    if (resp.status >= 300 && resp.status < 400) {
+      console.warn(
+        '[CCTV] Toronto camera list redirected; redirects are not followed',
+      );
+      return discard();
+    }
+    if (!resp.ok) {
+      console.warn('[CCTV] Toronto camera download failed:', resp.status);
+      return discard();
+    }
+    const text = await readResponseTextCapped(resp, TORONTO_MAX_CATALOG_BYTES);
+    const rows = parseRescuCameraList(text);
+    if (!rows.length) return [];
+
+    const cameras = [];
+    const seen = new Set();
+    for (const record of rows) {
+      const camera = torontoCameraToSource(record);
+      if (!camera || seen.has(camera.id)) continue;
+      seen.add(camera.id);
+      cameras.push(camera);
+    }
+    const maxRaw = Number(
+      process.env.CCTV_TORONTO_MAX_SOURCES || DEFAULT_TORONTO_MAX_SOURCES,
+    );
+    const maxCount = Number.isFinite(maxRaw)
+      ? Math.max(8, Math.min(500, Math.floor(maxRaw)))
+      : DEFAULT_TORONTO_MAX_SOURCES;
+    const prioritized = prioritizeSources(cameras, maxCount, [
+      TORONTO_DOWNTOWN,
+    ]);
+    console.log(
+      `[CCTV] Loaded Toronto camera sources: ${cameras.length} (using nearest ${prioritized.length})`,
+    );
+    return prioritized;
+  } catch (error) {
+    console.warn(
+      '[CCTV] Toronto camera download error:',
       error?.message || error,
     );
     return [];
