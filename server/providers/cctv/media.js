@@ -500,7 +500,45 @@ export async function fetchCctvImageFromUpstream(
     );
     if (!upstream) return null;
     const contentType = upstream.headers.get('content-type') || '';
-    if (!upstream.ok || !contentType.startsWith('image/')) {
+    if (!upstream.ok) {
+      controller.abort();
+      return null;
+    }
+    if (contentType.includes('multipart/x-mixed-replace')) {
+      const reader = upstream.body?.getReader?.();
+      if (!reader) {
+        controller.abort();
+        return null;
+      }
+      try {
+        const chunks = [];
+        let total = 0;
+        while (total < maxBytes) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          total += value.length;
+          const buf = Buffer.concat(chunks, total);
+          const start = buf.indexOf(Buffer.from([0xff, 0xd8]));
+          if (start !== -1) {
+            const end = buf.indexOf(Buffer.from([0xff, 0xd9]), start + 2);
+            if (end !== -1) {
+              const body = buf.subarray(start, end + 2);
+              return { ok: true, body, contentType: 'image/jpeg' };
+            }
+          }
+        }
+        return null;
+      } finally {
+        try {
+          await reader.cancel();
+        } catch {
+          /* ignore */
+        }
+        reader.releaseLock();
+      }
+    }
+    if (!contentType.startsWith('image/')) {
       controller.abort();
       return null;
     }

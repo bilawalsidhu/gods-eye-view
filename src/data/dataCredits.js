@@ -170,6 +170,13 @@ export const DATA_CREDITS = [
       '<a href="https://data.calgary.ca/stories/s/Open-Calgary-Terms-of-Use/u45n-7awa" target="_blank" rel="noopener">Open Government Licence – City of Calgary</a>',
   },
   {
+    key: 'taiwan-cctv',
+    html:
+      'CCTV cameras &amp; live video streams (Taiwan): ' +
+      '<a href="https://www.freeway.gov.tw/" target="_blank" rel="noopener">Freeway Bureau, MOTC (交通部高速公路局)</a> ' +
+      '(<a href="https://data.gov.tw/license" target="_blank" rel="noopener">Open Government Data License</a>)',
+  },
+  {
     key: 'gbfs',
     html: 'Bikeshare availability: GBFS operator feeds (e.g. Austin BCycle)',
   },

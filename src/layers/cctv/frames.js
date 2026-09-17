@@ -216,10 +216,19 @@ export function createFrames({ state: layerState, services, parts, source }) {
 
   function refreshProjectionImage(record, force = false) {
     const runtime = record?.projection;
-    if (!runtime || runtime.mode !== 'image' || !runtime.image) return;
+    if (!runtime || runtime.mode === 'video') return;
     // Hidden-state gate (perf wave 2): no new frame fetch/decode for a canvas
     // nobody can see. The refresh interval re-fills naturally on return.
     if (typeof document !== 'undefined' && document.hidden && !force) return;
+    const isMjpeg = record.camera.feedType === 'mjpeg';
+    if (isMjpeg) {
+      if (runtime.image?.src && !force) return;
+      const mediaUrl = parts.frames.mediaUrlFor(record.camera);
+      runtime.imageLoading = true;
+      runtime.imageReady = true;
+      runtime.image.src = mediaUrl;
+      return;
+    }
     // Do not replace an in-flight URL on the 10-second refresh boundary. Slow
     // providers otherwise leave cancelled server requests behind and the plane
     // can remain permanently pending. The proxy bounds each attempt; load/error
@@ -309,7 +318,31 @@ export function createFrames({ state: layerState, services, parts, source }) {
     }
 
     refreshProjectionImage(record);
-    if (runtime.image && runtime.imageReady) {
+    if (
+      runtime.image &&
+      (runtime.imageReady || record.camera.feedType === 'mjpeg')
+    ) {
+      if (record.camera.feedType === 'mjpeg') {
+        try {
+          runtime.ctx.clearRect(
+            0,
+            0,
+            PROJECTION_CANVAS_WIDTH,
+            PROJECTION_CANVAS_HEIGHT,
+          );
+          runtime.ctx.drawImage(
+            runtime.image,
+            0,
+            0,
+            PROJECTION_CANVAS_WIDTH,
+            PROJECTION_CANVAS_HEIGHT,
+          );
+          runtime.canvasStamp = (runtime.canvasStamp || 0) + 1;
+        } catch {
+          /* skip decode in-progress */
+        }
+        return;
+      }
       if (runtime.drawnImageStamp !== runtime.imageStamp) {
         // The frame URL carries a 10s cache-buster tick, so a fresh Image
         // DECODES every PROJECTION_ACTIVE_REFRESH_MS whether or not the provider
