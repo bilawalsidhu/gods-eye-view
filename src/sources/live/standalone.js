@@ -170,9 +170,25 @@ export function createAisStreamSource({
   apiUrl = '/api/ais-live',
   origin = () => globalThis.location?.origin || 'http://localhost',
 } = {}) {
+  // Vercel Functions cannot hold the persistent outbound WebSocket AISStream
+  // requires (server/providers/vessels/ais-live.js is never mounted in
+  // serverless mode — see server/serverless/app.js), so a serverless build
+  // short-circuits here instead of polling an endpoint that can only ever
+  // answer 501. See docs/SERVERLESS_LIMITATIONS.md.
+  const serverlessUnavailable = () =>
+    import.meta.env?.VITE_SERVERLESS_MODE === 'true'
+      ? new LiveSourceError(
+          'unavailable',
+          'AIS live relay is unavailable in the serverless deployment',
+          { source: 'AIS live' },
+        )
+      : null;
+
   return {
     label: 'AISStream',
     async getSnapshot({ maxRows = 12000 } = {}, { signal } = {}) {
+      const unavailable = serverlessUnavailable();
+      if (unavailable) throw unavailable;
       const url = new URL(apiUrl, origin());
       url.searchParams.set('maxRows', String(maxRows));
       const { response, payload } = await readResponse(
@@ -196,6 +212,8 @@ export function createAisStreamSource({
       return { ...vesselSnapshot(payload), status: response.status };
     },
     async getTrack(reference, { signal } = {}) {
+      const unavailable = serverlessUnavailable();
+      if (unavailable) throw unavailable;
       const { response, payload } = await readResponse(
         fetchImpl,
         '/api/ais-live/track?mmsi=' + encodeURIComponent(reference),

@@ -16,6 +16,16 @@ export function createRealtimeBackend({
   return Object.freeze({
     protocol: 'openai-realtime',
     async requestToken({ tier = DEFAULT_VOICE_TIER, signal } = {}) {
+      // Vercel Functions cannot mint an OpenAI Realtime ephemeral secret the
+      // way this deployment intends to run (server/serverless/app.js answers
+      // /api/realtime/token with 501 in serverless mode); short-circuit here
+      // instead of round-tripping to learn that. See
+      // docs/SERVERLESS_LIMITATIONS.md.
+      if (import.meta.env?.VITE_SERVERLESS_MODE === 'true') {
+        throw new Error(
+          'Voice control (OpenAI Realtime) is unavailable in the serverless deployment',
+        );
+      }
       signal = scoped(signal);
       signal.throwIfAborted();
       const separator = tokenEndpoint.includes('?') ? '&' : '?';
