@@ -30,6 +30,7 @@ export function createScenePlaybackAdapter(director, defaultShotDurationSec) {
       );
     },
     async applyLayers({ scene, shot, token }) {
+      director._setSceneMediaPlayback(scene, shot, token);
       const result = await director._applyLayerStates(
         director._layerStatesForShot(scene, shot),
         token,

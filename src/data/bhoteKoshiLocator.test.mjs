@@ -512,6 +512,7 @@ for (const phase of ['timer', 'move-end', 'approach', 'orbit']) {
       _sceneSeekGeneration: 0,
       _loadGeneration: 0,
       _cancelActiveSceneTravel: SceneDirector.prototype._cancelActiveSceneTravel,
+      _setSceneMediaPlayback: SceneDirector.prototype._setSceneMediaPlayback,
     };
     try {
       layer.setParams({ presentation: BHOTE_KOSHI_TRIGGER_RECORD_PRESENTATION });

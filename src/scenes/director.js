@@ -1009,13 +1009,39 @@ export class SceneDirector {
       return Promise.resolve({ started: false, reason: 'destroyed' });
     this._sceneSeekGeneration++;
     this._interactionTransitions = 0;
-    return this._trackWork(this._loadShot(sceneId, shotId, options));
+    const previousGeneration = this._loadGeneration;
+    const work = this._loadShot(sceneId, shotId, options);
+    const generation = this._loadGeneration;
+    const ownsLoad = generation !== previousGeneration;
+    return this._trackWork(
+      work.then(
+        (result) => {
+          if (
+            ownsLoad &&
+            !result?.started &&
+            generation === this._loadGeneration
+          )
+            this._setSceneMediaPlayback();
+          return result;
+        },
+        (error) => {
+          if (ownsLoad && generation === this._loadGeneration)
+            this._setSceneMediaPlayback();
+          throw error;
+        },
+      ),
+    );
   }
 
   async _loadShot(
     sceneId,
     shotId,
-    { flyDuration = null, fromCamera = null, sceneSeek = null } = {},
+    {
+      flyDuration = null,
+      fromCamera = null,
+      sceneSeek = null,
+      playMedia = false,
+    } = {},
   ) {
     if (this._running) return { started: false, reason: 'already-running' };
     const { scene, shot } = this._getShot(sceneId, shotId);
@@ -1034,6 +1060,7 @@ export class SceneDirector {
     // manager) rather than merely ignored once it has already committed.
     this._cancelActiveSceneTravel();
     this._usesAuthoredCamera = !!shot.move;
+    this._setSceneMediaPlayback();
     this._interactions?.clear();
     this._dataPacks?.clear();
     this._loadAbort?.abort();
@@ -1064,6 +1091,10 @@ export class SceneDirector {
     if (token.cancelled) return;
     const seekState =
       sceneSeek && typeof sceneSeek === 'object' ? sceneSeek : null;
+    // Previous-scene disable revokes media ownership. Grant the target only
+    // after release and visual setup have succeeded for this live LOAD.
+    if (playMedia && !seekState)
+      this._setSceneMediaPlayback(scene, shot, token);
     const layerResult = await this._applyLayerStates(
       this._layerStatesForShot(scene, shot, {
         cameraSettled: seekState ? seekState.cameraProgress >= 1 : false,
@@ -1157,6 +1188,29 @@ export class SceneDirector {
    */
   _layerStatesForShot(scene, shot, options) {
     return layerStatesForShot(scene, shot, this._scenePacks, options);
+  }
+
+  /** Give opt-in media layers a transient, cancellable shot owner. */
+  _setSceneMediaPlayback(scene = null, shot = null, token = null) {
+    for (const module of this._sceneMediaModules || [])
+      module.setSceneMediaPlayback();
+    this._sceneMediaModules = new Set();
+    if (!scene || !shot || !token || token.cancelled || token.signal?.aborted)
+      return;
+    for (const [id, state] of Object.entries(shot.layers || {})) {
+      const module = this.dataManager?.layers?.get(id)?.module;
+      if (
+        !state?.enabled ||
+        typeof module?.setSceneMediaPlayback !== 'function'
+      )
+        continue;
+      module.setSceneMediaPlayback({
+        sceneId: scene.id,
+        shotId: shot.id,
+        token,
+      });
+      this._sceneMediaModules.add(module);
+    }
   }
 
   /** Keep installed append-pack shots on any surface declared by their source recipe. */
@@ -1314,6 +1368,7 @@ export class SceneDirector {
     const previousShot =
       scene.shots[(shotIndex - 1 + scene.shots.length) % scene.shots.length];
     const result = await this.loadShot(sceneId, shotId, {
+      playMedia: true,
       flyDuration: shot.durationSec || DEFAULT_SHOT_DURATION_SEC,
       fromCamera: shot.move
         ? null
@@ -1658,6 +1713,7 @@ export class SceneDirector {
     // load cannot land a stale shot's layers on top of the run's first shot.
     // Aborting cancels a layer transition already in flight; bumping the
     // generation disowns everything the load has not yet started.
+    this._setSceneMediaPlayback();
     this._cancelActiveSceneTravel();
     this._interactions?.clear();
     this._dataPacks?.clear();
@@ -1771,6 +1827,7 @@ export class SceneDirector {
    * @param {string} [reason='Stopped'] - Human-readable cancellation reason
    */
   stopScene(reason = 'Stopped') {
+    this._setSceneMediaPlayback();
     this._interactions?.clear();
     this._dataPacks?.clear();
     this._sceneSeekGeneration++;
@@ -2314,6 +2371,7 @@ export class SceneDirector {
    * and resets UI buttons to the idle state.
    */
   _finishRun() {
+    this._setSceneMediaPlayback();
     this._clock.finish();
     this._setPlaybackKeyboardEnabled(false);
     // Covers the error path too: a run that threw mid-shot must not leave a
