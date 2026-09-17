@@ -2,7 +2,13 @@ import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { __reloadConfigForTests } from './config.js';
 import { __resetStoreForTests } from './sessions-store.js';
-import { makeReq, makeRes, stubFetchSequence, jsonResponse, sseResponse } from './test-helpers.mjs';
+import {
+  makeReq,
+  makeRes,
+  stubFetchSequence,
+  jsonResponse,
+  sseResponse,
+} from './test-helpers.mjs';
 
 import sessionsHandler from '../../api/ondemand/sessions.js';
 import chatHandler from '../../api/ondemand/chat.js';
@@ -16,9 +22,12 @@ const TEST_KEY = 'test-key-abcd1234';
 const ENV_KEYS = [
   'ONDEMAND_API_KEY',
   'ONDEMAND_BASE_URL',
+  'ONDEMAND_API_BASE',
   'ONDEMAND_SPATIAL_AGENT_ID',
+  'ONDEMAND_KNOWLEDGE_PLUGIN_IDS',
   'ONDEMAND_SPATIAL_FLOW_ID',
   'ONDEMAND_FULFILLMENT_ENDPOINT_ID',
+  'ONDEMAND_ENDPOINT_ID',
   'ONDEMAND_REASONING_MODE',
 ];
 let savedEnv;
@@ -80,9 +89,18 @@ describe('api/ondemand/health.js', () => {
     await healthHandler(req, res);
 
     assert.equal(activeStub.calls.length, 3);
-    assert.equal(activeStub.calls[0].url, 'https://api.on-demand.io/chat/v1/sessions?limit=1');
-    assert.equal(activeStub.calls[1].url, 'https://api.on-demand.io/media/v1/public/file?page=1&limit=1');
-    assert.equal(activeStub.calls[2].url, 'https://api.on-demand.io/automation/api/workflow/?limit=1');
+    assert.equal(
+      activeStub.calls[0].url,
+      'https://api.on-demand.io/chat/v1/sessions?limit=1',
+    );
+    assert.equal(
+      activeStub.calls[1].url,
+      'https://api.on-demand.io/media/v1/public/file?page=1&limit=1',
+    );
+    assert.equal(
+      activeStub.calls[2].url,
+      'https://api.on-demand.io/automation/api/workflow/?limit=1',
+    );
     for (const call of activeStub.calls) {
       assert.equal(call.init.headers.apikey, TEST_KEY);
     }
@@ -100,13 +118,116 @@ describe('api/ondemand/health.js', () => {
   });
 });
 
+describe('api/ondemand/health.js — ?envNames=1 diagnostic (docs/ONDEMAND_PROXY_DESIGN.md §5b)', () => {
+  test('default response (flag absent) has no "env" field', async () => {
+    configureWithKey();
+    activeStub = stubFetchSequence([
+      jsonResponse(200, { message: 'ok', data: [] }),
+      jsonResponse(200, { message: 'ok', data: [] }),
+      jsonResponse(200, { message: 'ok', data: [] }),
+    ]);
+    const req = makeReq({ method: 'GET', url: '/api/ondemand/health' });
+    const res = makeRes();
+    await healthHandler(req, res);
+    assert.equal('env' in res.json(), false);
+  });
+
+  test('envNames=1 never leaks a configured env var VALUE, only names', async () => {
+    // An obviously-unique sentinel: if this string ever shows up in the
+    // serialized response, a value leaked instead of just a name.
+    const SENTINEL = 'sk-test-should-never-leak-9f3ae1c0';
+    process.env.ONDEMAND_API_KEY = SENTINEL;
+    __reloadConfigForTests();
+    activeStub = stubFetchSequence([
+      jsonResponse(200, { message: 'ok', data: [] }),
+      jsonResponse(200, { message: 'ok', data: [] }),
+      jsonResponse(200, { message: 'ok', data: [] }),
+    ]);
+    const req = makeReq({
+      method: 'GET',
+      url: '/api/ondemand/health?envNames=1',
+    });
+    const res = makeRes();
+    await healthHandler(req, res);
+
+    const raw = res.text();
+    assert.equal(
+      raw.includes(SENTINEL),
+      false,
+      'the raw serialized response must never contain an env var value',
+    );
+
+    const body = JSON.parse(raw);
+    assert.ok(Array.isArray(body.env.names));
+    assert.ok(
+      body.env.names.includes('ONDEMAND_API_KEY'),
+      'names lists the key that is set',
+    );
+    assert.ok(
+      body.env.names.every(
+        (n) => typeof n === 'string' && !n.includes(SENTINEL),
+      ),
+      'every entry in names is a bare env var name, not a value',
+    );
+    assert.equal(body.env.sources.apiKey, 'ONDEMAND_API_KEY');
+  });
+
+  test('envNames=1 sources map reports the alias name when only ONDEMAND_ENDPOINT_ID is set', async () => {
+    configureWithKey({ ONDEMAND_ENDPOINT_ID: 'predefined-alias-ep' });
+    activeStub = stubFetchSequence([
+      jsonResponse(200, { message: 'ok', data: [] }),
+      jsonResponse(200, { message: 'ok', data: [] }),
+      jsonResponse(200, { message: 'ok', data: [] }),
+    ]);
+    const req = makeReq({
+      method: 'GET',
+      url: '/api/ondemand/health?envNames=1',
+    });
+    const res = makeRes();
+    await healthHandler(req, res);
+    const body = res.json();
+    assert.equal(
+      body.env.sources.fulfillmentEndpointId,
+      'ONDEMAND_ENDPOINT_ID',
+    );
+    assert.ok(body.env.names.includes('ONDEMAND_ENDPOINT_ID'));
+    assert.equal(
+      body.env.names.some((n) => n.includes('predefined-alias-ep')),
+      false,
+    );
+  });
+
+  test('envNames=1 also attaches env on the "not configured" (no API key) response, without changing its shape otherwise', async () => {
+    __reloadConfigForTests(); // key already deleted by beforeEach
+    const req = makeReq({
+      method: 'GET',
+      url: '/api/ondemand/health?envNames=1',
+    });
+    const res = makeRes();
+    await healthHandler(req, res);
+    assert.equal(res.statusCode, 200);
+    const body = res.json();
+    assert.equal(body.configured, false);
+    assert.equal(body.ondemand, 'not configured');
+    assert.equal(body.env.sources.apiKey, 'unset');
+    assert.ok(Array.isArray(body.env.names));
+  });
+});
+
 describe('api/ondemand/sessions.js', () => {
   test('smoke: POST create sends externalUserId + pluginIds to POST {chat}/sessions', async () => {
     configureWithKey();
     activeStub = stubFetchSequence([
-      jsonResponse(200, { message: 'Chat session created successfully', data: { id: 'sess-abc', createdAt: '2026-01-01T00:00:00.000Z' } }),
+      jsonResponse(200, {
+        message: 'Chat session created successfully',
+        data: { id: 'sess-abc', createdAt: '2026-01-01T00:00:00.000Z' },
+      }),
     ]);
-    const req = makeReq({ method: 'POST', url: '/api/ondemand/sessions', body: { userId: 'user-1' } });
+    const req = makeReq({
+      method: 'POST',
+      url: '/api/ondemand/sessions',
+      body: { userId: 'user-1' },
+    });
     const res = makeRes();
     await sessionsHandler(req, res);
 
@@ -115,7 +236,10 @@ describe('api/ondemand/sessions.js', () => {
     assert.equal(call.url, 'https://api.on-demand.io/chat/v1/sessions');
     assert.equal(call.init.method, 'POST');
     assert.equal(call.init.headers.apikey, TEST_KEY);
-    assert.deepEqual(JSON.parse(call.init.body), { externalUserId: 'user-1', pluginIds: [] });
+    assert.deepEqual(JSON.parse(call.init.body), {
+      externalUserId: 'user-1',
+      pluginIds: [],
+    });
 
     assert.equal(res.statusCode, 201);
     assert.deepEqual(res.json(), {
@@ -128,7 +252,10 @@ describe('api/ondemand/sessions.js', () => {
 
   test('GET returns 404 no_session when the store has nothing for userId', async () => {
     configureWithKey();
-    const req = makeReq({ method: 'GET', url: '/api/ondemand/sessions?userId=nobody' });
+    const req = makeReq({
+      method: 'GET',
+      url: '/api/ondemand/sessions?userId=nobody',
+    });
     const res = makeRes();
     await sessionsHandler(req, res);
     assert.equal(res.statusCode, 404);
@@ -138,12 +265,61 @@ describe('api/ondemand/sessions.js', () => {
   test('DELETE never calls upstream and returns the documented note', async () => {
     configureWithKey();
     activeStub = stubFetchSequence([]);
-    const req = makeReq({ method: 'DELETE', url: '/api/ondemand/sessions?userId=user-1' });
+    const req = makeReq({
+      method: 'DELETE',
+      url: '/api/ondemand/sessions?userId=user-1',
+    });
     const res = makeRes();
     await sessionsHandler(req, res);
     assert.equal(activeStub.calls.length, 0);
     assert.equal(res.statusCode, 200);
     assert.equal(res.json().deleted, true);
+  });
+
+  test('POST with no body pluginIds defaults to the FULL ONDEMAND_KNOWLEDGE_PLUGIN_IDS alias list, not just the first id', async () => {
+    configureWithKey({ ONDEMAND_KNOWLEDGE_PLUGIN_IDS: 'plugin-a,plugin-b' });
+    activeStub = stubFetchSequence([
+      jsonResponse(200, {
+        message: 'Chat session created successfully',
+        data: { id: 'sess-def', createdAt: '2026-01-01T00:00:00.000Z' },
+      }),
+    ]);
+    const req = makeReq({
+      method: 'POST',
+      url: '/api/ondemand/sessions',
+      body: { userId: 'user-2' },
+    });
+    const res = makeRes();
+    await sessionsHandler(req, res);
+
+    assert.equal(activeStub.calls.length, 1);
+    assert.deepEqual(JSON.parse(activeStub.calls[0].init.body), {
+      externalUserId: 'user-2',
+      pluginIds: ['plugin-a', 'plugin-b'],
+    });
+  });
+
+  test('POST with body pluginIds overrides the env default entirely', async () => {
+    configureWithKey({ ONDEMAND_KNOWLEDGE_PLUGIN_IDS: 'plugin-a,plugin-b' });
+    activeStub = stubFetchSequence([
+      jsonResponse(200, {
+        message: 'Chat session created successfully',
+        data: { id: 'sess-ghi', createdAt: '2026-01-01T00:00:00.000Z' },
+      }),
+    ]);
+    const req = makeReq({
+      method: 'POST',
+      url: '/api/ondemand/sessions',
+      body: { userId: 'user-3', pluginIds: ['plugin-caller-supplied'] },
+    });
+    const res = makeRes();
+    await sessionsHandler(req, res);
+
+    assert.equal(activeStub.calls.length, 1);
+    assert.deepEqual(JSON.parse(activeStub.calls[0].init.body), {
+      externalUserId: 'user-3',
+      pluginIds: ['plugin-caller-supplied'],
+    });
   });
 });
 
@@ -155,7 +331,10 @@ describe('api/ondemand/chat.js — validation (no network)', () => {
         throw new Error('network should not be called');
       },
     ]);
-    const req = makeReq({ method: 'POST', body: { userId: 'u', query: 'hi', foo: 'bar' } });
+    const req = makeReq({
+      method: 'POST',
+      body: { userId: 'u', query: 'hi', foo: 'bar' },
+    });
     const res = makeRes();
     await chatHandler(req, res);
     assert.equal(res.statusCode, 400);
@@ -172,7 +351,12 @@ describe('api/ondemand/chat.js — validation (no network)', () => {
     ]);
     const req = makeReq({
       method: 'POST',
-      body: { userId: 'u', query: 'hi', endpointId: 'predefined-x', modelConfigs: { temperature: 5 } },
+      body: {
+        userId: 'u',
+        query: 'hi',
+        endpointId: 'predefined-x',
+        modelConfigs: { temperature: 5 },
+      },
     });
     const res = makeRes();
     await chatHandler(req, res);
@@ -207,7 +391,12 @@ describe('api/ondemand/chat.js — validation (no network)', () => {
     ]);
     const req = makeReq({
       method: 'POST',
-      body: { userId: 'u', query: 'hi', endpointId: 'predefined-x', responseMode: 'webhook' },
+      body: {
+        userId: 'u',
+        query: 'hi',
+        endpointId: 'predefined-x',
+        responseMode: 'webhook',
+      },
     });
     const res = makeRes();
     await chatHandler(req, res);
@@ -220,30 +409,55 @@ describe('api/ondemand/chat.js — smoke with stubbed fetch', () => {
   test('sync: auto-creates a session for userId then POSTs the query', async () => {
     configureWithKey();
     activeStub = stubFetchSequence([
-      jsonResponse(200, { message: 'ok', data: { id: 'sess-xyz', createdAt: 't' } }),
+      jsonResponse(200, {
+        message: 'ok',
+        data: { id: 'sess-xyz', createdAt: 't' },
+      }),
       jsonResponse(200, {
         message: 'Chat query submitted successfully',
-        data: { sessionId: 'sess-xyz', messageId: 'm1', answer: '42', status: 'completed' },
+        data: {
+          sessionId: 'sess-xyz',
+          messageId: 'm1',
+          answer: '42',
+          status: 'completed',
+        },
       }),
     ]);
     const req = makeReq({
       method: 'POST',
-      body: { userId: 'user-2', query: 'What is the answer?', endpointId: 'predefined-claude-sonnet-5', responseMode: 'sync' },
+      body: {
+        userId: 'user-2',
+        query: 'What is the answer?',
+        endpointId: 'predefined-claude-sonnet-5',
+        responseMode: 'sync',
+      },
     });
     const res = makeRes();
     await chatHandler(req, res);
 
     assert.equal(activeStub.calls.length, 2);
-    assert.equal(activeStub.calls[0].url, 'https://api.on-demand.io/chat/v1/sessions');
-    assert.equal(activeStub.calls[1].url, 'https://api.on-demand.io/chat/v1/sessions/sess-xyz/query');
+    assert.equal(
+      activeStub.calls[0].url,
+      'https://api.on-demand.io/chat/v1/sessions',
+    );
+    assert.equal(
+      activeStub.calls[1].url,
+      'https://api.on-demand.io/chat/v1/sessions/sess-xyz/query',
+    );
     assert.equal(activeStub.calls[1].init.method, 'POST');
     assert.equal(activeStub.calls[1].init.headers.apikey, TEST_KEY);
     const sentBody = JSON.parse(activeStub.calls[1].init.body);
     assert.equal(sentBody.query, 'What is the answer?');
     assert.equal(sentBody.endpointId, 'predefined-claude-sonnet-5');
     assert.equal(sentBody.responseMode, 'sync');
-    assert.ok(!('pluginIds' in sentBody), 'pluginIds should be omitted, not sent as undefined');
-    assert.ok(!('reasoningMode' in sentBody), 'reasoningMode must never be sent on a sync query');
+    assert.ok(
+      !('pluginIds' in sentBody),
+      'pluginIds should be omitted, not sent as undefined',
+    );
+    assert.ok(
+      !('reasoningMode' in sentBody),
+      'reasoningMode must never be sent on a sync query',
+    );
 
     assert.equal(res.statusCode, 200);
     assert.equal(res.json().data.answer, '42');
@@ -256,22 +470,36 @@ describe('api/ondemand/chat.js — smoke with stubbed fetch', () => {
       'event:message\ndata:[DONE]\n\n',
     ];
     activeStub = stubFetchSequence([
-      jsonResponse(200, { message: 'ok', data: { id: 'sess-stream', createdAt: 't' } }),
+      jsonResponse(200, {
+        message: 'ok',
+        data: { id: 'sess-stream', createdAt: 't' },
+      }),
       sseResponse(200, frames),
     ]);
     const req = makeReq({
       method: 'POST',
-      body: { userId: 'user-3', query: 'hi', endpointId: 'predefined-x', responseMode: 'stream' },
+      body: {
+        userId: 'user-3',
+        query: 'hi',
+        endpointId: 'predefined-x',
+        responseMode: 'stream',
+      },
     });
     const res = makeRes();
     await chatHandler(req, res);
 
     assert.equal(activeStub.calls.length, 2);
-    assert.equal(activeStub.calls[1].url, 'https://api.on-demand.io/chat/v1/sessions/sess-stream/query');
+    assert.equal(
+      activeStub.calls[1].url,
+      'https://api.on-demand.io/chat/v1/sessions/sess-stream/query',
+    );
     const sentBody = JSON.parse(activeStub.calls[1].init.body);
     assert.equal(sentBody.responseMode, 'stream');
 
-    assert.equal(res.getHeader('content-type'), 'text/event-stream; charset=utf-8');
+    assert.equal(
+      res.getHeader('content-type'),
+      'text/event-stream; charset=utf-8',
+    );
     assert.equal(res.text(), frames.join(''));
     assert.equal(res.ended, true);
   });
@@ -280,10 +508,15 @@ describe('api/ondemand/chat.js — smoke with stubbed fetch', () => {
 describe('api/ondemand/media.js — smoke', () => {
   test('JSON url-create posts to POST {media} with the documented fields', async () => {
     configureWithKey();
-    activeStub = stubFetchSequence([jsonResponse(200, { message: 'Media Created', data: { id: 'm1' } })]);
+    activeStub = stubFetchSequence([
+      jsonResponse(200, { message: 'Media Created', data: { id: 'm1' } }),
+    ]);
     const req = makeReq({
       method: 'POST',
-      body: { url: 'https://example.com/a.pdf', plugins: ['plugin-1713954536'] },
+      body: {
+        url: 'https://example.com/a.pdf',
+        plugins: ['plugin-1713954536'],
+      },
     });
     const res = makeRes();
     await mediaHandler(req, res);
@@ -306,17 +539,27 @@ describe('api/ondemand/media.js — smoke', () => {
 describe('api/ondemand/stt.js — smoke', () => {
   test('POSTs exactly {audioUrl} to /execute/speech_to_text', async () => {
     configureWithKey();
-    activeStub = stubFetchSequence([jsonResponse(200, { message: 'ok', data: { text: 'hello world' } })]);
-    const req = makeReq({ method: 'POST', body: { audioUrl: 'https://example.com/a.wav' } });
+    activeStub = stubFetchSequence([
+      jsonResponse(200, { message: 'ok', data: { text: 'hello world' } }),
+    ]);
+    const req = makeReq({
+      method: 'POST',
+      body: { audioUrl: 'https://example.com/a.wav' },
+    });
     const res = makeRes();
     await sttHandler(req, res);
 
     assert.equal(activeStub.calls.length, 1);
     const call = activeStub.calls[0];
-    assert.equal(call.url, 'https://api.on-demand.io/services/v1/public/service/execute/speech_to_text');
+    assert.equal(
+      call.url,
+      'https://api.on-demand.io/services/v1/public/service/execute/speech_to_text',
+    );
     assert.equal(call.init.method, 'POST');
     assert.equal(call.init.headers.apikey, TEST_KEY);
-    assert.deepEqual(JSON.parse(call.init.body), { audioUrl: 'https://example.com/a.wav' });
+    assert.deepEqual(JSON.parse(call.init.body), {
+      audioUrl: 'https://example.com/a.wav',
+    });
 
     assert.equal(res.json().data.text, 'hello world');
   });
@@ -345,7 +588,10 @@ describe('api/ondemand/tts.js — smoke (json format)', () => {
   test('?format=json returns the upstream envelope without fetching the audio bytes', async () => {
     configureWithKey();
     activeStub = stubFetchSequence([
-      jsonResponse(200, { message: 'ok', data: { audioUrl: 'https://cdn.example.com/out.mp3' } }),
+      jsonResponse(200, {
+        message: 'ok',
+        data: { audioUrl: 'https://cdn.example.com/out.mp3' },
+      }),
     ]);
     const req = makeReq({
       method: 'POST',
@@ -355,11 +601,22 @@ describe('api/ondemand/tts.js — smoke (json format)', () => {
     const res = makeRes();
     await ttsHandler(req, res);
 
-    assert.equal(activeStub.calls.length, 1, 'must not fetch the audio bytes when format=json');
+    assert.equal(
+      activeStub.calls.length,
+      1,
+      'must not fetch the audio bytes when format=json',
+    );
     const call = activeStub.calls[0];
-    assert.equal(call.url, 'https://api.on-demand.io/services/v1/public/service/execute/text_to_speech');
+    assert.equal(
+      call.url,
+      'https://api.on-demand.io/services/v1/public/service/execute/text_to_speech',
+    );
     assert.equal(call.init.headers.apikey, TEST_KEY);
-    assert.deepEqual(JSON.parse(call.init.body), { input: 'hi', voice: 'alloy', model: 'tts-1' });
+    assert.deepEqual(JSON.parse(call.init.body), {
+      input: 'hi',
+      voice: 'alloy',
+      model: 'tts-1',
+    });
 
     assert.equal(res.statusCode, 200);
     assert.equal(res.json().data.audioUrl, 'https://cdn.example.com/out.mp3');
@@ -372,7 +629,10 @@ describe('api/ondemand/tts.js — smoke (json format)', () => {
         throw new Error('network should not be called');
       },
     ]);
-    const req = makeReq({ method: 'POST', body: { input: 'hi', voice: 'not-a-voice' } });
+    const req = makeReq({
+      method: 'POST',
+      body: { input: 'hi', voice: 'not-a-voice' },
+    });
     const res = makeRes();
     await ttsHandler(req, res);
     assert.equal(res.statusCode, 400);
@@ -384,17 +644,30 @@ describe('api/ondemand/tts.js — smoke (json format)', () => {
 describe('api/ondemand/workflow.js — smoke', () => {
   test('execute sends NO request body (contract §7.1)', async () => {
     configureWithKey();
-    activeStub = stubFetchSequence([jsonResponse(200, { executionID: 'ex-1' })]);
-    const req = makeReq({ method: 'POST', url: '/api/ondemand/workflow?action=execute', body: { workflowId: 'wf-1' } });
+    activeStub = stubFetchSequence([
+      jsonResponse(200, { executionID: 'ex-1' }),
+    ]);
+    const req = makeReq({
+      method: 'POST',
+      url: '/api/ondemand/workflow?action=execute',
+      body: { workflowId: 'wf-1' },
+    });
     const res = makeRes();
     await workflowHandler(req, res);
 
     assert.equal(activeStub.calls.length, 1);
     const call = activeStub.calls[0];
-    assert.equal(call.url, 'https://api.on-demand.io/automation/api/workflow/wf-1/execute');
+    assert.equal(
+      call.url,
+      'https://api.on-demand.io/automation/api/workflow/wf-1/execute',
+    );
     assert.equal(call.init.method, 'POST');
     assert.equal(call.init.headers.apikey, TEST_KEY);
-    assert.equal(call.init.body, undefined, 'execute must never send a request body');
+    assert.equal(
+      call.init.body,
+      undefined,
+      'execute must never send a request body',
+    );
 
     assert.equal(res.statusCode, 200);
     assert.equal(res.json().executionID, 'ex-1');
@@ -407,7 +680,11 @@ describe('api/ondemand/workflow.js — smoke', () => {
         throw new Error('network should not be called');
       },
     ]);
-    const req = makeReq({ method: 'POST', url: '/api/ondemand/workflow?action=execute', body: { input: 'nope' } });
+    const req = makeReq({
+      method: 'POST',
+      url: '/api/ondemand/workflow?action=execute',
+      body: { input: 'nope' },
+    });
     const res = makeRes();
     await workflowHandler(req, res);
     assert.equal(res.statusCode, 501);
@@ -417,7 +694,10 @@ describe('api/ondemand/workflow.js — smoke', () => {
 
   test('unknown action -> 400 listing supported actions', async () => {
     configureWithKey();
-    const req = makeReq({ method: 'GET', url: '/api/ondemand/workflow?action=bogus' });
+    const req = makeReq({
+      method: 'GET',
+      url: '/api/ondemand/workflow?action=bogus',
+    });
     const res = makeRes();
     await workflowHandler(req, res);
     assert.equal(res.statusCode, 400);

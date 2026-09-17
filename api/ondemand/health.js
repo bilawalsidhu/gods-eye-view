@@ -20,11 +20,43 @@
  * workflow, speech} using severity order error > degraded > healthy. Chat's
  * own (non-healthy) status is included in that worst-of set in the `else`
  * branch — a broken chat probe must not be hidden behind healthier probes.
+ *
+ * Debug flag `?envNames=1` (added 2026-09-17 for the ondemand-eand-spatial
+ * Vercel project — see docs/ONDEMAND_PROXY_DESIGN.md §5b): adds an `env`
+ * object to the JSON body — `{ names, sources }` — reporting which env var
+ * NAMES beginning with ONDEMAND_ or VITE_ (plus SERVERLESS_MODE, VERCEL,
+ * VERCEL_ENV) exist on this deployment, and which NAME supplied each
+ * logical config setting. NAMES ONLY; no env var value is ever included.
+ * The default response shape (flag absent) is unchanged, and the
+ * ALWAYS-200 / 'not configured' semantics above apply identically whether
+ * or not the flag is present.
  */
 
-import { config, baseUrls, isConfigured } from '../../server/ondemand/config.js';
+import {
+  config,
+  baseUrls,
+  isConfigured,
+  configSources,
+} from '../../server/ondemand/config.js';
 import { ondemandFetch } from '../../server/ondemand/client.js';
-import { assertMethod, rejectCrossOrigin, getRequestUrl } from '../../server/ondemand/http.js';
+import {
+  assertMethod,
+  rejectCrossOrigin,
+  getRequestUrl,
+} from '../../server/ondemand/http.js';
+
+const ENV_NAME_PATTERN =
+  /^(ONDEMAND_|VITE_|SERVERLESS_MODE$|VERCEL$|VERCEL_ENV$)/;
+
+/** Names only, never values — see the `?envNames=1` header comment above. */
+function envNamesDiagnostic() {
+  return {
+    names: Object.keys(process.env)
+      .filter((k) => ENV_NAME_PATTERN.test(k))
+      .sort(),
+    sources: configSources(),
+  };
+}
 
 const PROBE_TIMEOUT_MS = 5000;
 const SEVERITY = ['error', 'degraded', 'not configured', 'healthy']; // lower index = worse
@@ -34,9 +66,11 @@ export default async function handler(req, res) {
   if (!assertMethod(req, res, ['GET', 'HEAD'])) return;
 
   const checkedAt = new Date().toISOString();
+  const requestUrl = getRequestUrl(req);
+  const envNamesRequested = requestUrl.searchParams.get('envNames') === '1';
 
   if (!isConfigured()) {
-    finish(req, res, 200, {
+    const notConfiguredBody = {
       ondemand: 'not configured',
       chat: 'not configured',
       speech: 'not configured',
@@ -47,17 +81,32 @@ export default async function handler(req, res) {
       checkedAt,
       message:
         'ONDEMAND_API_KEY is not set. Set it in the Vercel project Environment Variables (or in .env for local dev) and redeploy/restart.',
-    });
+    };
+    if (envNamesRequested) notConfiguredBody.env = envNamesDiagnostic();
+    finish(req, res, 200, notConfiguredBody);
     return;
   }
 
-  const verbose = getRequestUrl(req).searchParams.get('verbose') === '1';
+  const verbose = requestUrl.searchParams.get('verbose') === '1';
 
   const [chatProbe, mediaProbe, workflowProbe] = await Promise.all([
-    probe(() => ondemandFetch(`${baseUrls().chat}/sessions?limit=1`, { method: 'GET', timeoutMs: PROBE_TIMEOUT_MS })),
-    probe(() => ondemandFetch(`${baseUrls().media}?page=1&limit=1`, { method: 'GET', timeoutMs: PROBE_TIMEOUT_MS })),
     probe(() =>
-      ondemandFetch(`${baseUrls().automation}/workflow/?limit=1`, { method: 'GET', timeoutMs: PROBE_TIMEOUT_MS }),
+      ondemandFetch(`${baseUrls().chat}/sessions?limit=1`, {
+        method: 'GET',
+        timeoutMs: PROBE_TIMEOUT_MS,
+      }),
+    ),
+    probe(() =>
+      ondemandFetch(`${baseUrls().media}?page=1&limit=1`, {
+        method: 'GET',
+        timeoutMs: PROBE_TIMEOUT_MS,
+      }),
+    ),
+    probe(() =>
+      ondemandFetch(`${baseUrls().automation}/workflow/?limit=1`, {
+        method: 'GET',
+        timeoutMs: PROBE_TIMEOUT_MS,
+      }),
     ),
   ]);
 
@@ -70,7 +119,12 @@ export default async function handler(req, res) {
     plugins[config.spatialAgentId] = 'not probed'; // GET /plugin/v1/list is guide-only (§8); not called by default
   }
 
-  const ondemand = rollUp({ chat: chatProbe.status, media: mediaProbe.status, workflow: workflowProbe.status, speech: speech.status });
+  const ondemand = rollUp({
+    chat: chatProbe.status,
+    media: mediaProbe.status,
+    workflow: workflowProbe.status,
+    speech: speech.status,
+  });
 
   const body = {
     ondemand,
@@ -100,8 +154,12 @@ export default async function handler(req, res) {
   } else if (errored.length > 0) {
     // Surface *why* even outside verbose mode so an operator isn't blind to
     // an invalid-key/network failure.
-    body.details = Object.fromEntries(errored.map(([name, p]) => [name, { detail: p.detail }]));
+    body.details = Object.fromEntries(
+      errored.map(([name, p]) => [name, { detail: p.detail }]),
+    );
   }
+
+  if (envNamesRequested) body.env = envNamesDiagnostic();
 
   finish(req, res, 200, body);
 }
@@ -116,7 +174,12 @@ async function probe(makeRequest) {
     const response = await makeRequest();
     const latencyMs = Date.now() - started;
     if (response.status === 401 || response.status === 403) {
-      return { status: 'error', detail: 'invalid key', httpStatus: response.status, latencyMs };
+      return {
+        status: 'error',
+        detail: 'invalid key',
+        httpStatus: response.status,
+        latencyMs,
+      };
     }
     if (response.ok) {
       return { status: 'healthy', httpStatus: response.status, latencyMs };
@@ -125,7 +188,11 @@ async function probe(makeRequest) {
   } catch (err) {
     const latencyMs = Date.now() - started;
     const timedOut = err?.name === 'TimeoutError' || err?.name === 'AbortError';
-    return { status: 'error', detail: timedOut ? 'timeout' : 'network error', latencyMs };
+    return {
+      status: 'error',
+      detail: timedOut ? 'timeout' : 'network error',
+      latencyMs,
+    };
   }
 }
 

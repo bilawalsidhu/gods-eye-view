@@ -43,15 +43,15 @@ export async function ensureSession(userId, opts = {}) {
     }
   }
 
-  // Default pluginIds from ONDEMAND_SPATIAL_AGENT_ID when the caller omits
-  // the field entirely (not merely empty-array, which is a deliberate
-  // "no plugins" choice per §2.1: "pluginIds string[] optional").
+  // Default pluginIds from config.defaultPluginIds (ONDEMAND_SPATIAL_AGENT_ID,
+  // or its alias ONDEMAND_KNOWLEDGE_PLUGIN_IDS — see config.js and
+  // docs/ONDEMAND_PROXY_DESIGN.md §5b) when the caller omits the field
+  // entirely (not merely empty-array, which is a deliberate "no plugins"
+  // choice per §2.1: "pluginIds string[] optional").
   const effectivePluginIds =
     Array.isArray(pluginIds) && pluginIds.length > 0
       ? pluginIds
-      : config.spatialAgentId
-        ? [config.spatialAgentId]
-        : [];
+      : config.defaultPluginIds;
 
   // §2.1: POST /chat/v1/sessions body { externalUserId, pluginIds }.
   // Naming drift (§2.1 callout, §13): the OpenAPI schema and this response
