@@ -168,11 +168,11 @@ export function createViewport({ state: layerState, services, parts, source }) {
         return;
       parts.rendering.applyStatusToPoints(cityId, statusMap);
       layerState._lastUpdate = Date.now();
-      layerState._error = null;
+      layerState._failedCityIds.delete(cityId);
     } catch (error) {
       if (error?.name === 'AbortError') return;
       console.warn(`[Data:Bikeshare] ${cityId} activate error:`, error);
-      layerState._error = 'GBFS fetch error';
+      layerState._failedCityIds.add(cityId);
       deactivateCity(cityId);
       layerState._activeCityIds.delete(cityId);
     } finally {

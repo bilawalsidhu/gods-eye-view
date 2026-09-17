@@ -99,9 +99,16 @@ export function createState({ services }) {
 
   layerState._loadingOps = 0;
 
-  /** Most recent error message string, or null. */
+  /**
+   * @type {Set<string>} City ids whose most recent fetch failed.
+   *
+   * Per city rather than one layer-wide flag: feeds are fetched independently,
+   * so a retired operator must not mark a layer that other cities are still
+   * populating as failed. The layer reports failure only when these cost it
+   * everything it had to draw — see `getStats()` in controls.js.
+   */
 
-  layerState._error = null;
+  layerState._failedCityIds = new Set();
 
   /** Whether the MAX_TOTAL_POINTS cap warning has already been logged. */
 
