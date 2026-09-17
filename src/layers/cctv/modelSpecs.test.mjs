@@ -23,6 +23,19 @@ test('lookupModelSpec matches aliases', () => {
   assert.equal(byAlias.model, 'Q6135-LE');
 });
 
+test('vendored table covers the integrated catalogs published hardware', () => {
+  // Models the live packs publish: King County (Cohu, AUTODOME IP 5000i),
+  // Sarasota (Bosch AUTODOME 7000/VG4), Sioux Falls (Axis).
+  const cohu = lookupModelSpec('3950'); // King County publishes "3950"
+  assert.equal(cohu?.brand, 'Cohu');
+  const autodome = lookupModelSpec('AUTODOME IP 5000i');
+  assert.ok(autodome && horizontalFovDeg(autodome) > 0);
+  const vg4 = lookupModelSpec('VG4 AUTODOME H.264'); // Sarasota's string
+  assert.ok(vg4);
+  const axis = lookupModelSpec('Q6155-E'); // Sioux Falls
+  assert.equal(horizontalFovDeg(axis), 66.7);
+});
+
 test('lookupModelSpec returns null for unknown or empty input — never guesses', () => {
   assert.equal(lookupModelSpec('NOT-A-REAL-MODEL'), null);
   assert.equal(lookupModelSpec(''), null);
