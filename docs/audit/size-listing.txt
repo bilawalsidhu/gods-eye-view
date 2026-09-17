@@ -1,0 +1,323 @@
+# size-listing.txt
+Generated (UTC): 2026-09-17T06:32:28Z
+Audited commit: 0d41b6be5490db1f10a171f238be75db4d4ec3b4 2026-09-16 11:57:56 -0700 Merge pull request #626 from bilawalsidhu/fix/vessel-partial-feed-status
+
+## du -a src/voice server (sorted by path)
+700	server
+660	server/providers
+56	server/providers/aircraft
+8	server/providers/aircraft/adsb-lol.js
+8	server/providers/aircraft/enrichment.js
+28	server/providers/aircraft/opensky.js
+8	server/providers/aircraft/tracks.js
+136	server/providers/cctv
+16	server/providers/cctv.js
+4	server/providers/cctv/cap.js
+12	server/providers/cctv/catalog.js
+12	server/providers/cctv/constants.js
+4	server/providers/cctv/groundHeights.js
+20	server/providers/cctv/media.js
+16	server/providers/cctv/normalize.js
+4	server/providers/cctv/range.js
+60	server/providers/cctv/sources.js
+28	server/providers/common
+4	server/providers/common/geo.js
+4	server/providers/common/http.js
+4	server/providers/common/query.js
+4	server/providers/common/rate-limit.js
+4	server/providers/common/request.js
+4	server/providers/common/source-root.js
+12	server/providers/firms.js
+8	server/providers/gbfs.js
+4	server/providers/live.js
+8	server/providers/local.js
+20	server/providers/military-installations
+12	server/providers/military-installations.js
+8	server/providers/military-installations/cache.js
+4	server/providers/military-installations/constants.js
+4	server/providers/military-installations/query.js
+76	server/providers/openai
+4	server/providers/openai.js
+4	server/providers/openai/constants.js
+4	server/providers/openai/debug-log.js
+4	server/providers/openai/hud-summary.js
+20	server/providers/openai/instructions.js
+4	server/providers/openai/rate-limit.js
+8	server/providers/openai/realtime.js
+24	server/providers/openai/toolDescriptions.js
+4	server/providers/openai/tools.js
+40	server/providers/overpass
+12	server/providers/overpass.js
+8	server/providers/overpass/cache.js
+8	server/providers/overpass/constants.js
+4	server/providers/overpass/geometry.js
+8	server/providers/overpass/query.js
+8	server/providers/overpass/transport.js
+36	server/providers/places
+4	server/providers/places.js
+4	server/providers/places/google-key.js
+12	server/providers/places/google.js
+16	server/providers/places/routes.js
+36	server/providers/radio
+4	server/providers/radio.js
+16	server/providers/radio/catalog.js
+4	server/providers/radio/constants.js
+4	server/providers/radio/stations.js
+8	server/providers/radio/transport.js
+44	server/providers/regional
+4	server/providers/regional.js
+8	server/providers/regional/briefing.js
+4	server/providers/regional/http.js
+4	server/providers/regional/news.js
+12	server/providers/regional/place.js
+4	server/providers/regional/query.js
+4	server/providers/regional/weather-effects.js
+4	server/providers/regional/weather.js
+20	server/providers/space
+4	server/providers/space.js
+8	server/providers/space/celestrak.js
+8	server/providers/space/launch-library.js
+12	server/providers/terrain.js
+12	server/providers/traffic.js
+4	server/providers/transit.js
+4	server/providers/transitHistory.js
+8	server/providers/transitHistory.test.mjs
+32	server/providers/vessels
+16	server/providers/vessels/ais-live.js
+12	server/providers/vessels/ais-store.js
+36	server/standalone
+4	server/standalone/api-not-found.js
+8	server/standalone/key-setup-hardening.mjs
+16	server/standalone/key-setup.js
+4	server/standalone/vite.config.js
+716	src/voice
+24	src/voice/actionSchemas.js
+4	src/voice/actionSchemas.test.mjs
+4	src/voice/aircraftIdentityNarration.test.mjs
+4	src/voice/commands.js
+4	src/voice/control.js
+140	src/voice/gevActions.js
+124	src/voice/gevActions.test.mjs
+4	src/voice/gevRealtime.js
+140	src/voice/gevRealtime.test.mjs
+4	src/voice/layerSummary.js
+4	src/voice/realtimeBackend.js
+8	src/voice/realtimeBackend.test.mjs
+16	src/voice/realtimeConnection.js
+16	src/voice/realtimeController.js
+8	src/voice/realtimeCost.js
+8	src/voice/realtimeDiagnostics.js
+4	src/voice/realtimeEvents.js
+16	src/voice/realtimeFacade.js
+16	src/voice/realtimeInput.js
+8	src/voice/realtimeInputPolicy.js
+12	src/voice/realtimeOwners.test.mjs
+4	src/voice/realtimePreferences.js
+12	src/voice/realtimeProtocol.js
+12	src/voice/realtimeRadio.js
+4	src/voice/realtimeSession.js
+28	src/voice/realtimeTurns.js
+12	src/voice/realtimeViewport.js
+8	src/voice/session.js
+12	src/voice/session.test.mjs
+4	src/voice/sessionCommands.js
+20	src/voice/voiceCost.js
+28	src/voice/voiceCost.test.mjs
+
+## ls -la src/voice
+total 720
+drwxr-xr-x  2 nobody nogroup   4096 Sep 17 06:17 .
+drwxr-xr-x 19 nobody nogroup   4096 Sep 17 06:17 ..
+-rw-r--r--  1 nobody nogroup  21493 Sep 17 06:17 actionSchemas.js
+-rw-r--r--  1 nobody nogroup   2673 Sep 17 06:17 actionSchemas.test.mjs
+-rw-r--r--  1 nobody nogroup   2547 Sep 17 06:17 aircraftIdentityNarration.test.mjs
+-rw-r--r--  1 nobody nogroup    366 Sep 17 06:17 commands.js
+-rw-r--r--  1 nobody nogroup   3315 Sep 17 06:17 control.js
+-rw-r--r--  1 nobody nogroup 141577 Sep 17 06:17 gevActions.js
+-rw-r--r--  1 nobody nogroup 124683 Sep 17 06:17 gevActions.test.mjs
+-rw-r--r--  1 nobody nogroup    368 Sep 17 06:17 gevRealtime.js
+-rw-r--r--  1 nobody nogroup 142052 Sep 17 06:17 gevRealtime.test.mjs
+-rw-r--r--  1 nobody nogroup   1011 Sep 17 06:17 layerSummary.js
+-rw-r--r--  1 nobody nogroup   3233 Sep 17 06:17 realtimeBackend.js
+-rw-r--r--  1 nobody nogroup   4462 Sep 17 06:17 realtimeBackend.test.mjs
+-rw-r--r--  1 nobody nogroup  13279 Sep 17 06:17 realtimeConnection.js
+-rw-r--r--  1 nobody nogroup  13033 Sep 17 06:17 realtimeController.js
+-rw-r--r--  1 nobody nogroup   7696 Sep 17 06:17 realtimeCost.js
+-rw-r--r--  1 nobody nogroup   6617 Sep 17 06:17 realtimeDiagnostics.js
+-rw-r--r--  1 nobody nogroup   1363 Sep 17 06:17 realtimeEvents.js
+-rw-r--r--  1 nobody nogroup  14617 Sep 17 06:17 realtimeFacade.js
+-rw-r--r--  1 nobody nogroup  14568 Sep 17 06:17 realtimeInput.js
+-rw-r--r--  1 nobody nogroup   5667 Sep 17 06:17 realtimeInputPolicy.js
+-rw-r--r--  1 nobody nogroup  11215 Sep 17 06:17 realtimeOwners.test.mjs
+-rw-r--r--  1 nobody nogroup   2580 Sep 17 06:17 realtimePreferences.js
+-rw-r--r--  1 nobody nogroup   9371 Sep 17 06:17 realtimeProtocol.js
+-rw-r--r--  1 nobody nogroup  12202 Sep 17 06:17 realtimeRadio.js
+-rw-r--r--  1 nobody nogroup   1125 Sep 17 06:17 realtimeSession.js
+-rw-r--r--  1 nobody nogroup  27230 Sep 17 06:17 realtimeTurns.js
+-rw-r--r--  1 nobody nogroup  10994 Sep 17 06:17 realtimeViewport.js
+-rw-r--r--  1 nobody nogroup   4682 Sep 17 06:17 session.js
+-rw-r--r--  1 nobody nogroup   9340 Sep 17 06:17 session.test.mjs
+-rw-r--r--  1 nobody nogroup   2899 Sep 17 06:17 sessionCommands.js
+-rw-r--r--  1 nobody nogroup  17458 Sep 17 06:17 voiceCost.js
+-rw-r--r--  1 nobody nogroup  24862 Sep 17 06:17 voiceCost.test.mjs
+
+## ls -laR server
+server:
+total 16
+drwxr-xr-x  4 nobody nogroup 4096 Sep 17 06:17 .
+drwxr-xr-x 16 nobody nogroup 4096 Sep 17 06:25 ..
+drwxr-xr-x 13 nobody nogroup 4096 Sep 17 06:17 providers
+drwxr-xr-x  2 nobody nogroup 4096 Sep 17 06:17 standalone
+
+server/providers:
+total 184
+drwxr-xr-x 13 nobody nogroup  4096 Sep 17 06:17 .
+drwxr-xr-x  4 nobody nogroup  4096 Sep 17 06:17 ..
+drwxr-xr-x  2 nobody nogroup  4096 Sep 17 06:17 aircraft
+drwxr-xr-x  2 nobody nogroup  4096 Sep 17 06:17 cctv
+-rw-r--r--  1 nobody nogroup 16057 Sep 17 06:17 cctv.js
+drwxr-xr-x  2 nobody nogroup  4096 Sep 17 06:17 common
+-rw-r--r--  1 nobody nogroup  9193 Sep 17 06:17 firms.js
+-rw-r--r--  1 nobody nogroup  8046 Sep 17 06:17 gbfs.js
+-rw-r--r--  1 nobody nogroup   514 Sep 17 06:17 live.js
+-rw-r--r--  1 nobody nogroup  4171 Sep 17 06:17 local.js
+drwxr-xr-x  2 nobody nogroup  4096 Sep 17 06:17 military-installations
+-rw-r--r--  1 nobody nogroup  8366 Sep 17 06:17 military-installations.js
+drwxr-xr-x  2 nobody nogroup  4096 Sep 17 06:17 openai
+-rw-r--r--  1 nobody nogroup  1137 Sep 17 06:17 openai.js
+drwxr-xr-x  2 nobody nogroup  4096 Sep 17 06:17 overpass
+-rw-r--r--  1 nobody nogroup  8335 Sep 17 06:17 overpass.js
+drwxr-xr-x  2 nobody nogroup  4096 Sep 17 06:17 places
+-rw-r--r--  1 nobody nogroup   435 Sep 17 06:17 places.js
+drwxr-xr-x  2 nobody nogroup  4096 Sep 17 06:17 radio
+-rw-r--r--  1 nobody nogroup   579 Sep 17 06:17 radio.js
+drwxr-xr-x  2 nobody nogroup  4096 Sep 17 06:17 regional
+-rw-r--r--  1 nobody nogroup   339 Sep 17 06:17 regional.js
+drwxr-xr-x  2 nobody nogroup  4096 Sep 17 06:17 space
+-rw-r--r--  1 nobody nogroup   248 Sep 17 06:17 space.js
+-rw-r--r--  1 nobody nogroup  8650 Sep 17 06:17 terrain.js
+-rw-r--r--  1 nobody nogroup  8877 Sep 17 06:17 traffic.js
+-rw-r--r--  1 nobody nogroup   886 Sep 17 06:17 transit.js
+-rw-r--r--  1 nobody nogroup   136 Sep 17 06:17 transitHistory.js
+-rw-r--r--  1 nobody nogroup  6371 Sep 17 06:17 transitHistory.test.mjs
+drwxr-xr-x  2 nobody nogroup  4096 Sep 17 06:17 vessels
+
+server/providers/aircraft:
+total 60
+drwxr-xr-x  2 nobody nogroup  4096 Sep 17 06:17 .
+drwxr-xr-x 13 nobody nogroup  4096 Sep 17 06:17 ..
+-rw-r--r--  1 nobody nogroup  5670 Sep 17 06:17 adsb-lol.js
+-rw-r--r--  1 nobody nogroup  5173 Sep 17 06:17 enrichment.js
+-rw-r--r--  1 nobody nogroup 26103 Sep 17 06:17 opensky.js
+-rw-r--r--  1 nobody nogroup  4538 Sep 17 06:17 tracks.js
+
+server/providers/cctv:
+total 140
+drwxr-xr-x  2 nobody nogroup  4096 Sep 17 06:17 .
+drwxr-xr-x 13 nobody nogroup  4096 Sep 17 06:17 ..
+-rw-r--r--  1 nobody nogroup  2865 Sep 17 06:17 cap.js
+-rw-r--r--  1 nobody nogroup  9072 Sep 17 06:17 catalog.js
+-rw-r--r--  1 nobody nogroup 12259 Sep 17 06:17 constants.js
+-rw-r--r--  1 nobody nogroup  2721 Sep 17 06:17 groundHeights.js
+-rw-r--r--  1 nobody nogroup 17363 Sep 17 06:17 media.js
+-rw-r--r--  1 nobody nogroup 16071 Sep 17 06:17 normalize.js
+-rw-r--r--  1 nobody nogroup  3710 Sep 17 06:17 range.js
+-rw-r--r--  1 nobody nogroup 58223 Sep 17 06:17 sources.js
+
+server/providers/common:
+total 32
+drwxr-xr-x  2 nobody nogroup 4096 Sep 17 06:17 .
+drwxr-xr-x 13 nobody nogroup 4096 Sep 17 06:17 ..
+-rw-r--r--  1 nobody nogroup  709 Sep 17 06:17 geo.js
+-rw-r--r--  1 nobody nogroup 1639 Sep 17 06:17 http.js
+-rw-r--r--  1 nobody nogroup  430 Sep 17 06:17 query.js
+-rw-r--r--  1 nobody nogroup 1525 Sep 17 06:17 rate-limit.js
+-rw-r--r--  1 nobody nogroup 1000 Sep 17 06:17 request.js
+-rw-r--r--  1 nobody nogroup  259 Sep 17 06:17 source-root.js
+
+server/providers/military-installations:
+total 24
+drwxr-xr-x  2 nobody nogroup 4096 Sep 17 06:17 .
+drwxr-xr-x 13 nobody nogroup 4096 Sep 17 06:17 ..
+-rw-r--r--  1 nobody nogroup 5523 Sep 17 06:17 cache.js
+-rw-r--r--  1 nobody nogroup 2406 Sep 17 06:17 constants.js
+-rw-r--r--  1 nobody nogroup 2928 Sep 17 06:17 query.js
+
+server/providers/openai:
+total 80
+drwxr-xr-x  2 nobody nogroup  4096 Sep 17 06:17 .
+drwxr-xr-x 13 nobody nogroup  4096 Sep 17 06:17 ..
+-rw-r--r--  1 nobody nogroup   891 Sep 17 06:17 constants.js
+-rw-r--r--  1 nobody nogroup  1432 Sep 17 06:17 debug-log.js
+-rw-r--r--  1 nobody nogroup  3541 Sep 17 06:17 hud-summary.js
+-rw-r--r--  1 nobody nogroup 19976 Sep 17 06:17 instructions.js
+-rw-r--r--  1 nobody nogroup  1758 Sep 17 06:17 rate-limit.js
+-rw-r--r--  1 nobody nogroup  5359 Sep 17 06:17 realtime.js
+-rw-r--r--  1 nobody nogroup 24287 Sep 17 06:17 toolDescriptions.js
+-rw-r--r--  1 nobody nogroup   209 Sep 17 06:17 tools.js
+
+server/providers/overpass:
+total 44
+drwxr-xr-x  2 nobody nogroup 4096 Sep 17 06:17 .
+drwxr-xr-x 13 nobody nogroup 4096 Sep 17 06:17 ..
+-rw-r--r--  1 nobody nogroup 4378 Sep 17 06:17 cache.js
+-rw-r--r--  1 nobody nogroup 6169 Sep 17 06:17 constants.js
+-rw-r--r--  1 nobody nogroup 3250 Sep 17 06:17 geometry.js
+-rw-r--r--  1 nobody nogroup 6359 Sep 17 06:17 query.js
+-rw-r--r--  1 nobody nogroup 5638 Sep 17 06:17 transport.js
+
+server/providers/places:
+total 40
+drwxr-xr-x  2 nobody nogroup  4096 Sep 17 06:17 .
+drwxr-xr-x 13 nobody nogroup  4096 Sep 17 06:17 ..
+-rw-r--r--  1 nobody nogroup  1068 Sep 17 06:17 google-key.js
+-rw-r--r--  1 nobody nogroup 10267 Sep 17 06:17 google.js
+-rw-r--r--  1 nobody nogroup 13391 Sep 17 06:17 routes.js
+
+server/providers/radio:
+total 40
+drwxr-xr-x  2 nobody nogroup  4096 Sep 17 06:17 .
+drwxr-xr-x 13 nobody nogroup  4096 Sep 17 06:17 ..
+-rw-r--r--  1 nobody nogroup 12632 Sep 17 06:17 catalog.js
+-rw-r--r--  1 nobody nogroup   805 Sep 17 06:17 constants.js
+-rw-r--r--  1 nobody nogroup   170 Sep 17 06:17 stations.js
+-rw-r--r--  1 nobody nogroup  4426 Sep 17 06:17 transport.js
+
+server/providers/regional:
+total 48
+drwxr-xr-x  2 nobody nogroup 4096 Sep 17 06:17 .
+drwxr-xr-x 13 nobody nogroup 4096 Sep 17 06:17 ..
+-rw-r--r--  1 nobody nogroup 5326 Sep 17 06:17 briefing.js
+-rw-r--r--  1 nobody nogroup 1992 Sep 17 06:17 http.js
+-rw-r--r--  1 nobody nogroup 3237 Sep 17 06:17 news.js
+-rw-r--r--  1 nobody nogroup 9754 Sep 17 06:17 place.js
+-rw-r--r--  1 nobody nogroup  478 Sep 17 06:17 query.js
+-rw-r--r--  1 nobody nogroup 4056 Sep 17 06:17 weather-effects.js
+-rw-r--r--  1 nobody nogroup  824 Sep 17 06:17 weather.js
+
+server/providers/space:
+total 24
+drwxr-xr-x  2 nobody nogroup 4096 Sep 17 06:17 .
+drwxr-xr-x 13 nobody nogroup 4096 Sep 17 06:17 ..
+-rw-r--r--  1 nobody nogroup 4991 Sep 17 06:17 celestrak.js
+-rw-r--r--  1 nobody nogroup 4435 Sep 17 06:17 launch-library.js
+
+server/providers/vessels:
+total 36
+drwxr-xr-x  2 nobody nogroup  4096 Sep 17 06:17 .
+drwxr-xr-x 13 nobody nogroup  4096 Sep 17 06:17 ..
+-rw-r--r--  1 nobody nogroup 14236 Sep 17 06:17 ais-live.js
+-rw-r--r--  1 nobody nogroup 10147 Sep 17 06:17 ais-store.js
+
+server/standalone:
+total 40
+drwxr-xr-x 2 nobody nogroup  4096 Sep 17 06:17 .
+drwxr-xr-x 4 nobody nogroup  4096 Sep 17 06:17 ..
+-rw-r--r-- 1 nobody nogroup   508 Sep 17 06:17 api-not-found.js
+-rw-r--r-- 1 nobody nogroup  8040 Sep 17 06:17 key-setup-hardening.mjs
+-rw-r--r-- 1 nobody nogroup 15245 Sep 17 06:17 key-setup.js
+-rw-r--r-- 1 nobody nogroup   892 Sep 17 06:17 vite.config.js
+
+## du -sh src/voice server
+716K	src/voice
+700K	server

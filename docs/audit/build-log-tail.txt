@@ -1,0 +1,50 @@
+# build-log-tail.txt
+Command: PUPPETEER_SKIP_DOWNLOAD=1 npm ci --no-audit --no-fund && npm run build
+Started (UTC): 2026-09-17T07:05:34Z
+Finished (UTC): 2026-09-17T07:05:41Z
+Exit code: 0
+Node: v22.23.2  npm: 12.0.2  (local proof run; the sandbox/Vercel build runs on Node 24.14.1)
+Branch: ondemand-serverless  audited commit: 0d41b6be5490db1f10a171f238be75db4d4ec3b4
+Env: VITE_SERVERLESS_MODE=true (from .env)
+
+----- last 60 lines -----
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'gods-eye-view@0.1.1',
+npm warn EBADENGINE   required: { node: '>=24.14.0 <25 || >=26 <27' },
+npm warn EBADENGINE   current: { node: 'v22.23.2', npm: '12.0.2' }
+npm warn EBADENGINE }
+npm warn deprecated sourcemap-codec@1.4.8: Please use @jridgewell/sourcemap-codec instead
+
+added 126 packages in 2s
+npm warn install-scripts 2 packages had install scripts blocked because they are not covered by allowScripts:
+npm warn install-scripts   esbuild@0.25.12 (postinstall: node install.js)
+npm warn install-scripts   puppeteer@25.10.0 (postinstall: node install.mjs)
+npm warn install-scripts
+npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+npm notice run gods-eye-view@0.1.1 build
+npm notice run vite build
+vite v6.4.3 building for production...
+transforming...
+✓ 604 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/assets/alpr-marker-selected-brackets-LQ7qLcLT.png      4.73 kB
+dist/assets/alpr-marker-selected-WmayY1kQ.png              10.26 kB
+dist/assets/alpr-marker-normal-COAu686W.png                13.20 kB
+dist/index.html                                            59.35 kB │ gzip:    13.19 kB
+dist/assets/landing-point-geo-CiAWPhfe.json               359.27 kB │ gzip:    72.57 kB
+dist/assets/cable-geo-i2PzBJi6.json                       728.31 kB │ gzip:   242.78 kB
+dist/assets/dams-B2lCjFgp.geojsonl                        730.28 kB
+dist/assets/datacenters-CtzejECr.geojsonl               2,561.98 kB
+dist/assets/index-xZ1catuK.css                            208.54 kB │ gzip:    36.19 kB
+dist/assets/san-francisco-B-TUYeaR.js                     222.26 kB │ gzip:    54.87 kB
+dist/assets/marine-BJ61ZZ9E.js                            633.39 kB │ gzip:   223.23 kB
+dist/assets/regions-RPMKg9pq.js                         1,987.15 kB │ gzip:   683.53 kB
+dist/assets/index-B8xw8oax.js                           2,151.60 kB │ gzip:   641.62 kB
+dist/assets/egm96-universal.esm-D6y_VLZc.js             2,770.50 kB │ gzip: 1,849.99 kB
+
+(!) Some chunks are larger than 1500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 4.54s
