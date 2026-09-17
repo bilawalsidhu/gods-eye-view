@@ -55,6 +55,13 @@
   <!-- Toast notification -->
   <div id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
+  <!-- Geofence breach visual alert -->
+  <div id="geofence-alert" role="alert" aria-live="assertive" hidden>
+    <span class="geofence-alert-icon" aria-hidden="true">⚠</span>
+    <span id="geofence-alert-text">GEOFENCE BREACH</span>
+    <button id="geofence-alert-dismiss" type="button" aria-label="Dismiss alert">✕</button>
+  </div>
+
   <!-- Safe frame guides for recording composition -->
   <div id="safe-frame-overlay">
     <div id="safe-frame-box"></div>
