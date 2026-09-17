@@ -3,6 +3,35 @@
 This changelog records public product changes. For the authoritative description
 of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md).
 
+## [0.9.1] — 2026-09-16
+
+### Fixed
+
+- Boot can no longer hang forever on the Google 3D Tiles asset fetch: the
+  tileset await is bounded by a 60s watchdog that falls back to the Cesium
+  globe like any other tileset failure. Previously a stalled connection to
+  the asset endpoint left the app on the "Loading Google 3D Tiles…" screen
+  indefinitely (observed as QA boot waits exceeding 150s with no error).
+- The Map Source tray's keyboard focus hand-off keeps retrying for 2s
+  (was 720 ms) before giving up. On slow renderers (software WebGL) the
+  tray's fade-to-visible outlasted the old bound, so every retry no-op'd
+  and the tray could open with keyboard focus stranded on the disclosure —
+  the exact strand the hand-off exists to prevent (a11y; PR #171 follow-up).
+
+### QA
+
+- `qa-floor-hold` boots on Linux: its Chrome launch no longer defaults to
+  the macOS-only `--use-angle=metal` backend (which wedges WebGL context
+  creation off macOS and hung the suite's boot wait on every run). Linux
+  defaults to SwiftShader, taking the suite's designed bare-earth DEM
+  oracle path; the rendered-mesh oracle is now enforced as untrusted under
+  SwiftShader as the header always promised, and "visible" counts both of
+  the contact's visuals (fleet billboard and the 3D model that takes over
+  when the contact becomes model-eligible).
+- `qa-l9-matrix` A5 credential scan ignores known-fake fixture literals
+  (repeated-character padding used by the sanitizer tests), so the check
+  measures real credential material again.
+
 ## [0.9.0] — 2026-09-16
 
 ### Added

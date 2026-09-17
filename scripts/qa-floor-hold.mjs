@@ -37,7 +37,14 @@ import path from 'node:path';
 const APP_URL = process.env.QA_BASE_URL || 'http://localhost:4173';
 const argv = Object.fromEntries(process.argv.slice(2)
   .map((a) => a.replace(/^--/, '').split('=')).map(([k, v]) => [k, v ?? true]));
-const ANGLE = String(argv.angle || 'metal');
+// GPU BACKEND MATTERS (see header). The default is the platform's real GPU
+// backend — Metal on macOS. On Linux there is no Metal backend and Chrome
+// wedges WebGL context creation under `--use-angle=metal` (observed 4/4 on
+// the NAS QA box: boot never finishes, so the suite dies in its boot wait).
+// There the default is SwiftShader, which takes the designed DEM-oracle
+// fallback path below.
+const DEFAULT_ANGLE = process.platform === 'darwin' ? 'metal' : 'swiftshader';
+const ANGLE = String(argv.angle || DEFAULT_ANGLE);
 const HEADFUL = Boolean(argv.headful);
 // Austin airport apron by default — the site qa-floor-verify pins, where the
 // mesh sits ~150 m above the geoid and burial is unmistakable.
@@ -129,19 +136,31 @@ await page.evaluate(async () => { await window.__godsEyeView.dataManager.toggle(
 const measure = () => page.evaluate(async (icao) => {
   const v = window.__godsEyeView.viewer;
   const C = v.camera.positionCartographic.constructor;
-  const sprites = []; const models = []; let bb = null;
+  const sprites = []; const models = []; let bb = null; const matches = []; const modelMatches = [];
   const walk = (coll) => {
     for (let i = 0; i < coll.length; i++) {
       let p; try { p = coll.get(i); } catch { continue; }
       if (!p) continue;
       if (typeof p.length === 'number' && typeof p.get === 'function') { walk(p); continue; }
       if (p.image !== undefined && p.alignedAxis !== undefined) {
-        sprites.push(p); if (p.id === icao) bb = p;
-      } else if (p.boundingSphere && p.modelMatrix) models.push(p);
+        sprites.push(p); if (p.id === icao) { bb = p; matches.push(p); }
+      } else if (p.boundingSphere && p.modelMatrix) {
+        models.push(p); if (p.id === icao) modelMatches.push(p);
+      }
     }
   };
   try { walk(v.scene.primitives); } catch { /* mid-teardown */ }
   if (!bb?.position) return { error: 'contact billboard not found' };
+  // The contact can own TWO billboards: the fleet one, and the tracked-visual
+  // one the follow-cam driver swaps in (it hides the fleet billboard precisely
+  // to avoid a double render — flights.js track()). It can also hand the whole
+  // visual to a 3D MODEL once the contact is model-eligible (a few refresh
+  // cycles in) — the fleet billboard is then hidden by design while the model
+  // renders. Keeping only the LAST billboard match read that hidden hand-off
+  // and reported the contact invisible while it was plainly on screen.
+  // "Visible" = any of its visuals is shown.
+  const shown = matches.some((m) => m.show === true)
+    || modelMatches.some((m) => m.show === true);
   const carto = C.fromCartesian(bb.position);
   const lat = carto.latitude * 180 / Math.PI;
   const lon = carto.longitude * 180 / Math.PI;
@@ -171,7 +190,7 @@ const measure = () => page.evaluate(async (icao) => {
     if (mesh == null) await new Promise((r) => setTimeout(r, 1200));
   }
   return {
-    spriteH: carto.height, meshH: mesh, shown: bb.show === true,
+    spriteH: carto.height, meshH: mesh, shown,
     lat: Number(lat.toFixed(5)), lon: Number(lon.toFixed(5)), terrain: { ...window.__TERRAIN },
   };
 }, ICAO);
@@ -232,7 +251,14 @@ await browser.close();
 
 console.log('');
 const outage = samples.filter((s) => s.phase === 'B');
-const meshRows = outage.filter((s) => s.meshClearM != null);
+// The header's promise, enforced: under `--angle=swiftshader` the rendered-
+// mesh oracle "is reported as unavailable rather than trusted". sampleHeight
+// still ANSWERS on SwiftShader, but it reads a coarser LOD (measured ~20.9 m
+// vs ~168.4 m under Metal at one apron point), so a negative clearance there
+// is oracle bias, not burial. Software renders judge by the bare-earth DEM
+// below; hardware renders keep the mesh check.
+const meshOracleTrusted = ANGLE !== 'swiftshader';
+const meshRows = meshOracleTrusted ? outage.filter((s) => s.meshClearM != null) : [];
 const demRows = outage.filter((s) => s.demClearM != null);
 record('the terrain proxy really went down mid-run',
   outage.length > 0 && outage.at(-1).terrain.failed > 0,
@@ -242,9 +268,12 @@ if (meshRows.length) {
   const worst = Math.min(...meshRows.map((s) => s.meshClearM));
   record('the contact never rendered below the RENDERED MESH', worst >= -0.5,
     `worst clearance ${worst} m across ${meshRows.length} samples`);
-} else {
+} else if (meshOracleTrusted) {
   record('rendered-mesh oracle available', false,
     `sampleHeight never answered on ANGLE/${ANGLE} — falling back to the bare-earth DEM`);
+} else {
+  console.log(`  [i] rendered-mesh oracle not trusted on ANGLE/${ANGLE}`
+    + ` (coarse LOD) — judging by the bare-earth DEM`);
 }
 if (demRows.length) {
   const worst = Math.min(...demRows.map((s) => s.demClearM));

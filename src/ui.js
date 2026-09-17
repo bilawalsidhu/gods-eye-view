@@ -2611,9 +2611,13 @@ export class StyleManager {
     // focus hand-off used to fire once at a fixed 240 ms — on a slow enough
     // machine the fade hadn't finished, focus() no-op'd, and keyboard access
     // to the tray was gone (a11y PR #171 / issue #54). Fix the hand-off
-    // rather than tuning the delay: retry on a short cadence, bounded.
+    // rather than tuning the delay: retry on a short cadence, bounded. The
+    // bound must cover the SLOWEST real renderer, not just hardware GL:
+    // under SwiftShader the fade-to-visible took longer than the original
+    // 720 ms cap, so every retry no-op'd and the strand this loop exists to
+    // prevent reappeared (qa-map-source-tray Enter-hold run, 2026-09-16).
     const MAP_SOURCE_FOCUS_RETRY_MS = 30;
-    const MAP_SOURCE_FOCUS_DEADLINE_MS = 720;
+    const MAP_SOURCE_FOCUS_DEADLINE_MS = 2000;
 
     const scheduleMapSourceFocus = () => {
       clearTimeout(disclosureFocusTimer);

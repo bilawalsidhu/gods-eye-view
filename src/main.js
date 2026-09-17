@@ -201,10 +201,24 @@ async function init() {
     loaderStatus.textContent = 'Loading Google 3D Tiles...';
     let tileset = null;
     try {
-      // Load Google Photorealistic 3D Tiles
-      tileset = await Cesium.createGooglePhotorealistic3DTileset({
-        onlyUsingWithGoogleGeocoder: true,
-      });
+      // Load Google Photorealistic 3D Tiles. The await is bounded: a stalled
+      // connection to the tileset asset endpoint otherwise hangs boot forever
+      // (the catch below only sees rejections, not hangs) — QA observed boot
+      // waits exceeding 150s with no error. On timeout the existing fallback
+      // (Cesium globe) engages like any other tileset failure.
+      tileset = await Promise.race([
+        Cesium.createGooglePhotorealistic3DTileset({
+          onlyUsingWithGoogleGeocoder: true,
+        }),
+        new Promise((_, reject) => {
+          const watchdog = setTimeout(
+            () => reject(new Error('Google 3D Tiles asset load timed out after 60s')),
+            60_000,
+          );
+          // Settle hygiene: don't keep the event loop referencing a spent timer.
+          if (typeof watchdog.unref === 'function') watchdog.unref();
+        }),
+      ]);
       viewer.scene.primitives.add(tileset);
       // Photoreal tile-cache budget (Phase 9 Batch P): Google's helper asks
       // for 1536 MB cache + 1024 MB overflow (2.5 GB ceiling). Measured boot
