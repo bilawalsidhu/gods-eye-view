@@ -1,5 +1,8 @@
 # Changelog
 
+- Distinguish PARTIAL vessel snapshots from STALE data in the layer panel, with
+  accepted-record counts and unchanged retention, freshness and outage safeguards.
+
 - Keep Nepal provider media inside the Pinokio compatibility boundary: use
   source-linked fallback cards instead of automatic embeds or hidden preloads
   that launch an external browser. Ordinary browsers retain embedded playback.
