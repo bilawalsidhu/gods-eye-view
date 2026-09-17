@@ -116,6 +116,26 @@
       </div>
     </div>
     <div class="pp-toggle-group">
+      <button class="pp-toggle-btn" id="geofence-toggle" title="Geofence — click to draw a closed polygon, edit vertices, clear" aria-pressed="false">
+        <span class="pp-icon material-symbols-outlined" aria-hidden="true">hexagon</span>
+        <span class="pp-label">Geofence</span>
+      </button>
+      <div class="pp-slider-row" id="geofence-actions-row">
+        <button class="pp-mode-btn" id="geofence-finish" type="button" title="Close the polygon">Finish</button>
+        <button class="pp-mode-btn" id="geofence-edit" type="button" title="Edit vertices by dragging" aria-pressed="false">Edit</button>
+        <button class="pp-mode-btn draw-clear-btn" id="geofence-clear" type="button" title="Clear the geofence">Clear</button>
+        <span class="draw-hint" id="geofence-hint" aria-live="polite"></span>
+      </div>
+      <div class="pp-slider-row" id="geofence-webhook-row">
+        <span class="pp-slider-mini-label">Webhook</span>
+        <input type="url" class="pp-text-input" id="geofence-webhook-url" placeholder="https://example.com/hook" aria-label="Target URL for geofence breach POST" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="pp-slider-row" id="geofence-test-row">
+        <button class="pp-mode-btn" id="geofence-test-webhook" type="button" title="Send mock breach payload to test webhook">Test Webhook</button>
+        <span class="draw-hint" id="geofence-test-hint" aria-live="polite"></span>
+      </div>
+    </div>
+    <div class="pp-toggle-group">
       <button class="pp-toggle-btn" id="celestial-toggle" title="Celestial ring — reveal the full globe" aria-pressed="false">
         <span class="pp-icon material-symbols-outlined" aria-hidden="true">flare</span>
         <span class="pp-label">Celestial</span>

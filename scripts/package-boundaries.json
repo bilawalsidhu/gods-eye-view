@@ -1714,6 +1714,13 @@
       "src/data/inputOwnership.js",
       "src/annotations/drawMode.js",
       "src/annotations/drawTool.js",
+      "src/annotations/geofenceTool.js",
+      "src/annotations/geofenceMonitor.js",
+      "src/annotations/geofenceStateTracker.js",
+      "src/annotations/geofenceWebhook.js",
+      "src/annotations/geofenceIntersection.js",
+      "src/annotations/geofenceRenderer.js",
+      "src/annotations/geofenceModel.js",
       "src/data/routeSteps.js",
       "src/layers/directions/index.js",
       "src/data/directions.js",
@@ -1809,7 +1816,8 @@
       "src/director/sharing/lifetime.js",
       "src/director/authoring.js",
       "src/scenes/sharing.js",
-      "src/ui/sceneSharing.js"
+      "src/ui/sceneSharing.js",
+      "src/annotations/geofenceAlert.js"
     ],
     "external": [
       "@mapbox/vector-tile",
