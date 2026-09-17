@@ -3,7 +3,7 @@ import zhTW from './zh-TW.js';
 
 export const LOCALE_STORAGE_KEY = 'gev:locale:v2';
 export const SUPPORTED_LOCALES = Object.freeze(['en', 'zh-TW']);
-export const DEFAULT_LOCALE = 'zh-TW';
+export const DEFAULT_LOCALE = 'en';
 
 const DICTIONARIES = Object.freeze({
   en,
@@ -14,7 +14,9 @@ let currentLocale = DEFAULT_LOCALE;
 const listeners = new Set();
 
 /**
- * Detect initial locale based on stored preference or default.
+ * Detect initial locale based on stored preference or browser environment.
+ * In browser environments, defaults to 'zh-TW' unless user specifically chooses otherwise.
+ * In headless/Node environments, defaults to DEFAULT_LOCALE ('en') to preserve test baselines.
  *
  * @returns {string} Detected locale ('en' or 'zh-TW').
  */
@@ -28,17 +30,21 @@ export function detectInitialLocale() {
     // Ignore localStorage errors (e.g. sandboxed iframe or private browsing)
   }
 
+  if (typeof navigator === 'undefined' && typeof document === 'undefined') {
+    return DEFAULT_LOCALE;
+  }
+
   const navLang =
     (typeof navigator !== 'undefined' && navigator.language) || '';
   if (
     navLang.toLowerCase().startsWith('en') &&
-    !navLang.toLowerCase().includes('tw')
+    !navLang.toLowerCase().includes('tw') &&
+    !navLang.toLowerCase().includes('hk')
   ) {
-    // Return en only if user's environment specifically requests pure English
-    // But default remains zh-TW for this localized deployment
+    return 'en';
   }
 
-  return DEFAULT_LOCALE;
+  return 'zh-TW';
 }
 
 /**

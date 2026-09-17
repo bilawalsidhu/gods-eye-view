@@ -566,6 +566,10 @@ export class LayerPanel {
   }
 
   _syncToggleButton(button, layer) {
+    const tr =
+      typeof this?.translate === 'function'
+        ? this.translate.bind(this)
+        : (key, fallback) => fallback || key;
     const feedState = layer.enabled ? layerFeedState(layer.stats) : 'off';
     const transitioning =
       layer.lifecycleState === 'enabling' ||
@@ -594,24 +598,24 @@ export class LayerPanel {
     button.setAttribute('aria-disabled', String(transitioning));
     button.setAttribute('aria-busy', String(transitioning));
     button.textContent = transitioning
-      ? this.translate(
+      ? tr(
           `layers.states.${layer.lifecycleState}`,
           layer.lifecycleState.toUpperCase(),
         )
       : uncertain
-        ? this.translate('layers.states.uncertain', 'UNCERTAIN')
+        ? tr('layers.states.uncertain', 'UNCERTAIN')
         : layer.enabled
-          ? this.translate(
+          ? tr(
               `layers.states.${feedState}`,
               FEED_STATE_LABELS[feedState] || 'ON',
             )
-          : this.translate('layers.states.off', 'OFF');
+          : tr('layers.states.off', 'OFF');
     const keyGuidance = layerKeyRequirementTooltip(layer);
     // Name the missing key on the control itself: a row reading KEY REQUIRED
     // without saying WHICH key leaves a dead control and no next step. Empty
     // when the layer needs no key, or already has one.
     button.title = keyGuidance;
-    const layerName = panelLabel(layer, this.translate);
+    const layerName = panelLabel(layer, tr);
     button.setAttribute(
       'aria-label',
       keyGuidance
@@ -626,21 +630,22 @@ export class LayerPanel {
   }
 
   _timeAgo(timestamp) {
+    const tr =
+      typeof this?.translate === 'function'
+        ? this.translate.bind(this)
+        : (key, fallback) => fallback || key;
     const diff = Math.floor((Date.now() - timestamp) / 1000);
-    if (diff < 5) return this.translate('time.justNow', 'just now');
+    if (diff < 5) return tr('time.justNow', 'just now');
     if (diff < 60)
-      return this.translate('time.secondsAgo', `${diff}s ago`).replace(
-        '{s}',
-        String(diff),
-      );
+      return tr('time.secondsAgo', `${diff}s ago`).replace('{s}', String(diff));
     if (diff < 3600)
-      return this.translate(
+      return tr(
         'time.minutesAgo',
         `${Math.floor(diff / 60)}m ago`,
       ).replace('{m}', String(Math.floor(diff / 60)));
-    return this.translate(
-      'time.hoursAgo',
-      `${Math.floor(diff / 3600)}h ago`,
-    ).replace('{h}', String(Math.floor(diff / 3600)));
+    return tr('time.hoursAgo', `${Math.floor(diff / 3600)}h ago`).replace(
+      '{h}',
+      String(Math.floor(diff / 3600)),
+    );
   }
 }
