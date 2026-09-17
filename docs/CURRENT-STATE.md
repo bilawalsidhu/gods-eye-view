@@ -1572,7 +1572,10 @@ Historical planning documents may not match runtime behavior.
 
 ## Runtime Stack
 
-- Vite + CesiumJS app with Google Photorealistic 3D Tiles
+- Vite + CesiumJS app with Google Photorealistic 3D Tiles. The tileset
+  asset fetch is bounded by a 60s boot watchdog (`src/main.js`): a stalled
+  connection falls back to the Cesium globe exactly like a tileset
+  rejection, so boot cannot hang on the loading screen indefinitely.
 - Scene/HUD/style systems in `src/ui.js` and `src/hud.js`
 - Layer management in `src/data/manager.js`
 - Map stack switching in `src/mapStackController.js`
