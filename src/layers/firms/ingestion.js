@@ -35,6 +35,9 @@ export function createIngestion({
         return;
       }
       layerState._keyRequired = false;
+      // Which backend actually answered: 'firms' (keyed) or 'goes' (keyless
+      // fallback). Surfaced in stats so the panel can attribute correctly.
+      layerState._provider = payload?.provider === 'goes' ? 'goes' : 'firms';
       layerState._error = null;
       layerState._stale = Boolean(payload?.stale);
       const previousSelection = layerState._selectedFire;

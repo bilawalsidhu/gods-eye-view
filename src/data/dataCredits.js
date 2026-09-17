@@ -225,6 +225,14 @@ export const DATA_CREDITS = [
       'part of NASA’s Earth Observing System Data and Information System (EOSDIS)',
   },
   {
+    key: 'goes-fires',
+    html:
+      'Active fires (GOES ABI fire/hot spot): NOAA GOES-R Series ABI Level 2 ' +
+      'Fire Detection products, retrieved from the ' +
+      '<a href="https://registry.opendata.aws/noaa-goes/" target="_blank" rel="noopener">NOAA GOES on AWS Open Data</a> ' +
+      'buckets. NOAA data are in the U.S. public domain; no API key is required.',
+  },
+  {
     key: 'drivebc-cctv',
     html:
       'CCTV cameras &amp; frames (British Columbia): ' +
