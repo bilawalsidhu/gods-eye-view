@@ -36,6 +36,43 @@ test('vendored table covers the integrated catalogs published hardware', () => {
   assert.equal(horizontalFovDeg(axis), 66.7);
 });
 
+test('verbose registry strings resolve via distinctive-token fallback', () => {
+  // Sioux Falls publishes the full product title, not the bare model.
+  assert.equal(
+    lookupModelSpec('AXIS Q6155-E PTZ Dome Network Camera')?.model,
+    'Q6155-E',
+  );
+  assert.equal(lookupModelSpec('AXIS Q6000-E Mk II')?.model, 'Q6000-E Mk II');
+  assert.equal(
+    lookupModelSpec('AUTODOME IP starlight 7000i camera')?.id,
+    'bosch-ndp-7512-z30',
+  );
+  // Punctuation around the model token doesn't defeat the match.
+  assert.equal(
+    lookupModelSpec('camera (P3707-PE), outdoor')?.model,
+    'P3707-PE',
+  );
+});
+
+test('token fallback never matches on generic words or wrong models', () => {
+  // Only generic descriptors — no distinctive hardware token — stays null.
+  assert.equal(lookupModelSpec('PTZ Dome Camera'), null);
+  assert.equal(lookupModelSpec('HD Network Camera'), null);
+  assert.equal(lookupModelSpec('Outdoor Dome Camera'), null);
+  // A real-looking but unknown model resolves to nothing, not a near neighbour.
+  assert.equal(lookupModelSpec('AXIS FooBar-9 Network Camera'), null);
+  // A generation token alone must not collide with a similar one: "7000"
+  // belongs to two records (dynamic / starlight 7000 HD), so a bare
+  // "AUTODOME 7000" is ambiguous → null rather than an arbitrary pick.
+  assert.equal(lookupModelSpec('AUTODOME 7000'), null);
+});
+
+test('exact match still wins over the token fallback', () => {
+  // "3965" is an alias of the 3960; exact alias match, not a token scan.
+  assert.equal(lookupModelSpec('3965')?.id, 'cohu-3960');
+  assert.equal(lookupModelSpec('AUTODOME IP 5000i')?.id, 'bosch-ndp-5502-30');
+});
+
 test('lookupModelSpec returns null for unknown or empty input — never guesses', () => {
   assert.equal(lookupModelSpec('NOT-A-REAL-MODEL'), null);
   assert.equal(lookupModelSpec(''), null);
