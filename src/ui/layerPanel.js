@@ -63,8 +63,31 @@ const PANEL_LABELS = {
   'local-firms': 'Active Fires',
 };
 
-function panelLabel(layer) {
-  return PANEL_LABELS[layer.id] || layer.name;
+const LAYER_KEY_MAP = {
+  satellites: 'layers.items.satellites',
+  flights: 'layers.items.flights',
+  military: 'layers.items.military',
+  'ais-live-vessels': 'layers.items.aisLiveVessels',
+  traffic: 'layers.items.traffic',
+  transit: 'layers.items.transit',
+  bikeshare: 'layers.items.bikeshare',
+  cctv: 'layers.items.cctv',
+  'alpr-cameras': 'layers.items.alprCameras',
+  'military-installations': 'layers.items.militaryInstallations',
+  'local-datacenters': 'layers.items.localDatacenters',
+  'telegeography-submarine-cables': 'layers.items.submarineCables',
+  'local-dams': 'layers.items.localDams',
+  'rocket-launches': 'layers.items.rocketLaunches',
+  earthquakes: 'layers.items.earthquakes',
+  'local-firms': 'layers.items.localFirms',
+  directions: 'layers.items.directions',
+  radio: 'layers.items.radio',
+};
+
+function panelLabel(layer, translate = (key, fallback) => fallback || key) {
+  const key = LAYER_KEY_MAP[layer.id];
+  const defaultText = PANEL_LABELS[layer.id] || layer.name;
+  return key ? translate(key, defaultText) : defaultText;
 }
 
 /**
@@ -98,6 +121,8 @@ export class LayerPanel {
     hasRowControls,
     subscribeRowControls,
     onHiddenRefresh = () => {},
+    translate = (key, fallback) => fallback || key,
+    subscribeLocale,
   }) {
     this.getAll = getLayers;
     this.isEnabled = isEnabled;
@@ -107,9 +132,19 @@ export class LayerPanel {
     this.hasRowControls = hasRowControls;
     this.subscribeRowControls = subscribeRowControls;
     this.onHiddenRefresh = onHiddenRefresh;
+    this.translate = translate;
     this._generation = 0;
     this._removers = [];
     this._destroyed = false;
+    if (typeof subscribeLocale === 'function') {
+      this._removers.push(
+        subscribeLocale(() => {
+          if (!this._destroyed && this._toggleContainer) {
+            this._renderToggles();
+          }
+        }),
+      );
+    }
   }
   mount(container) {
     if (this._destroyed) return;
@@ -152,7 +187,7 @@ export class LayerPanel {
       if (group && group !== previousGroup) {
         const heading = document.createElement('h3');
         heading.className = 'data-layer-group-heading';
-        heading.textContent = group;
+        heading.textContent = this.translate(`layers.groups.${group}`, group);
         this._toggleContainer.appendChild(heading);
       }
       previousGroup = group;

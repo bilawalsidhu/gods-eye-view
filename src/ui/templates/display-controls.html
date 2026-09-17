@@ -1,17 +1,17 @@
   <!-- Post-processing toggles (top-right) -->
   <div id="pp-toggles" class="panel-collapsible collapsed" data-panel-id="pp-toggles">
     <div class="compact pp-header-row">
-      <span class="pp-header-label">DISPLAY</span>
+      <span data-i18n="display.title" class="pp-header-label">DISPLAY</span>
       <span class="panel-divider" aria-hidden="true"></span>
       <button class="panel-collapse-btn pp-collapse-btn" data-collapse-target="pp-toggles" title="Collapse panel">&#x25C0;</button>
     </div>
     <div class="pp-toggle-group">
       <button class="pp-toggle-btn" id="hud-toggle" title="Intelligence HUD (H)">
         <span class="pp-icon">&#x25CE;</span>
-        <span class="pp-label">HUD</span>
+        <span class="pp-label" data-i18n="display.hud">HUD</span>
       </button>
       <div class="pp-slider-row" id="hud-layout-row">
-        <span class="pp-slider-mini-label">Layout</span>
+        <span class="pp-slider-mini-label" data-i18n="display.layout">Layout</span>
         <select id="hud-layout-select" class="pp-select" aria-label="HUD layout">
           <option value="tactical">Tactical</option>
           <option value="operator">Operator</option>
@@ -22,27 +22,27 @@
     <div class="pp-toggle-group">
       <button class="pp-toggle-btn" id="detection-toggle" title="Detection Overlay (D)" aria-label="Detection overlay" aria-pressed="false">
         <span class="pp-icon">&#x25A3;</span>
-        <span class="pp-label">DETECT</span>
+        <span class="pp-label" data-i18n="display.detect">DETECT</span>
       </button>
       <div class="pp-slider-row detection-slider-row" id="detection-slider-row">
-        <label class="pp-slider-mini-label" for="detection-density-slider">Density</label>
+        <label class="pp-slider-mini-label" for="detection-density-slider" data-i18n="display.density">Density</label>
         <input type="range" class="pp-slider" id="detection-density-slider" min="0" max="100" step="25" value="50" aria-label="Detection label density" />
         <span class="pp-slider-value" id="detection-density-value">50%</span>
       </div>
       <div class="pp-slider-row detection-allocation-row" id="detection-allocation-row">
-        <span class="pp-slider-mini-label">Allocation</span>
+        <span class="pp-slider-mini-label" data-i18n="display.allocation">Allocation</span>
         <div class="pp-mode-seg detection-allocation-seg" role="radiogroup" aria-label="Detection label allocation">
           <button class="pp-mode-btn active" id="detection-allocation-elastic" data-allocation="ELASTIC" role="radio" aria-checked="true">Elastic</button>
           <button class="pp-mode-btn" id="detection-allocation-weighted" data-allocation="WEIGHTED" role="radio" aria-checked="false">Weighted</button>
         </div>
       </div>
       <div class="pp-slider-row detection-fade-row" id="detection-fade-row">
-        <label class="pp-slider-mini-label" for="detection-fade-slider">Fade</label>
+        <label class="pp-slider-mini-label" for="detection-fade-slider" data-i18n="display.fade">Fade</label>
         <input type="range" class="pp-slider" id="detection-fade-slider" min="0" max="40" step="1" value="7" aria-label="Detection fade distance" title="World-overlay fade distance outside the keyhole as a percentage of its radius" />
         <span class="pp-slider-value" id="detection-fade-value">7%</span>
       </div>
       <div class="pp-slider-row detection-opacity-row" id="detection-opacity-row">
-        <label class="pp-slider-mini-label" for="detection-opacity-slider">Outside</label>
+        <label class="pp-slider-mini-label" for="detection-opacity-slider" data-i18n="display.outside">Outside</label>
         <input type="range" class="pp-slider" id="detection-opacity-slider" min="0" max="100" step="1" value="1" aria-label="Detection opacity outside the keyhole" title="World-overlay label and card opacity beyond the fade distance" />
         <span class="pp-slider-value" id="detection-opacity-value">1%</span>
       </div>
@@ -50,7 +50,7 @@
     <!-- The one shared preset-parameter surface is inserted here at runtime. -->
     <div id="param-slider-panel">
       <div class="param-panel-header">
-        <span class="param-panel-title">PARAMETERS</span>
+        <span class="param-panel-title" data-i18n="display.params">PARAMETERS</span>
         <span class="param-panel-divider"></span>
         <button class="panel-collapse-btn" id="param-panel-collapse-btn" data-collapse-target="param-slider-panel" title="Collapse panel">−</button>
       </div>
@@ -63,23 +63,23 @@
            is what flips them back for a share link or a stored session carrying 3D off. -->
       <button class="pp-toggle-btn active" id="models3d-toggle" aria-pressed="true" title="3D aircraft — flat icons zoomed out, 3D models up close">
         <span class="pp-icon">&#x2708;</span>
-        <span class="pp-label">3D</span>
+        <span class="pp-label" data-i18n="display.3d">3D</span>
       </button>
       <div class="pp-slider-row visible" id="models3d-mode-row">
-        <span class="pp-slider-mini-label">Models</span>
+        <span class="pp-slider-mini-label" data-i18n="display.models">Models</span>
         <div class="pp-mode-seg" role="radiogroup" aria-label="3D model coverage">
-          <button class="pp-mode-btn active" id="models3d-mode-proximity" data-mode="proximity" role="radio" aria-checked="true">Proximity</button>
-          <button class="pp-mode-btn" id="models3d-mode-all" data-mode="all" role="radio" aria-checked="false">All</button>
+          <button class="pp-mode-btn active" id="models3d-mode-proximity" data-mode="proximity" role="radio" aria-checked="true" data-i18n="display.proximity">Proximity</button>
+          <button class="pp-mode-btn" id="models3d-mode-all" data-mode="all" role="radio" aria-checked="false" data-i18n="display.all">All</button>
         </div>
       </div>
     </div>
     <div class="pp-toggle-group">
       <button class="pp-toggle-btn active" id="scope-toggle" title="Scope — the circular viewport mask" aria-pressed="true">
         <span class="pp-icon material-symbols-outlined" aria-hidden="true">adjust</span>
-        <span class="pp-label">Scope</span>
+        <span class="pp-label" data-i18n="display.scope">Scope</span>
       </button>
       <div class="pp-slider-row visible" id="scope-slider-row">
-        <span class="pp-slider-mini-label">Feather</span>
+        <span class="pp-slider-mini-label" data-i18n="display.feather">Feather</span>
         <!-- Feather starts at an 11% soft scope-mask edge (owner final lock
              2026-08-24, superseding the 08-22 hard-crop and 08-23 8% rulings);
              mirrors SCOPE_FEATHER_RATIO_DEFAULT in src/scopeMask.js. Feather
@@ -92,13 +92,13 @@
     <div class="pp-toggle-group">
       <button class="pp-toggle-btn" id="draw-toggle" title="Draw on the world — click vertices, double-click or Enter to finish, Esc to cancel" aria-pressed="false">
         <span class="pp-icon material-symbols-outlined" aria-hidden="true">draw</span>
-        <span class="pp-label">Draw</span>
+        <span class="pp-label" data-i18n="display.draw">Draw</span>
       </button>
       <div class="pp-slider-row" id="draw-mode-row">
-        <span class="pp-slider-mini-label">Shape</span>
+        <span class="pp-slider-mini-label" data-i18n="display.shape">Shape</span>
         <div class="pp-mode-seg" role="radiogroup" aria-label="Shape to draw">
-          <button class="pp-mode-btn active" data-shape="area" role="radio" aria-checked="true">Area</button>
-          <button class="pp-mode-btn" data-shape="line" role="radio" aria-checked="false">Line</button>
+          <button class="pp-mode-btn active" data-shape="area" role="radio" aria-checked="true" data-i18n="display.area">Area</button>
+          <button class="pp-mode-btn" data-shape="line" role="radio" aria-checked="false" data-i18n="display.line">Line</button>
           <button class="pp-mode-btn" data-shape="pin" role="radio" aria-checked="false">Pin</button>
         </div>
       </div>

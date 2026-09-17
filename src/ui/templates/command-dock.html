@@ -7,51 +7,51 @@
       <button id="control-panel-toggle" class="panel-header dock-tray-toggle" type="button"
         data-dock-toggle-target="control-panel" aria-expanded="false"
         aria-controls="control-panel-popover" aria-label="Expand Visual Presets">
-        <span class="panel-title"><span class="dock-label-icon dock-label-icon-presets" aria-hidden="true"></span>VISUAL PRESETS</span>
+        <span class="panel-title"><span class="dock-label-icon dock-label-icon-presets" aria-hidden="true"></span><span data-i18n="dock.presets">VISUAL PRESETS</span></span>
         <span class="panel-divider"></span>
       </button>
       <div id="control-panel-popover" class="dock-popover-content">
-      <button class="dock-pin-btn" data-pin-target="control-panel" type="button" aria-label="Pin visual presets" aria-pressed="false" title="Keep visual presets open"><img src="/pin.svg" alt="" /></button>
+      <button class="dock-pin-btn" data-pin-target="control-panel" type="button" aria-label="Pin visual presets" aria-pressed="false" title="Keep visual presets open" data-i18n-title="dock.pinPresets"><img src="/pin.svg" alt="" /></button>
       <div id="style-buttons" class="button-grid">
-        <button class="style-btn active" data-style="normal" title="Show the globe without a visual filter.">
+        <button class="style-btn active" data-style="normal" title="Show the globe without a visual filter." data-i18n-title="style.normalDesc">
           <span class="btn-icon">◯</span>
-          <span class="btn-label">Normal</span>
+          <span class="btn-label" data-i18n="style.normal">Normal</span>
           <span class="btn-key">1</span>
         </button>
-        <button class="style-btn" data-style="retro" title="Emulate a green phosphor CRT with scanlines and screen curvature.">
+        <button class="style-btn" data-style="retro" title="Emulate a green phosphor CRT with scanlines and screen curvature." data-i18n-title="style.retroDesc">
           <span class="btn-icon">▦</span>
-          <span class="btn-label">CRT</span>
+          <span class="btn-label" data-i18n="style.retro">CRT</span>
           <span class="btn-key">2</span>
         </button>
-        <button class="style-btn" data-style="surveillance" title="Simulate night-vision goggles with green intensification and a tube vignette.">
+        <button class="style-btn" data-style="surveillance" title="Simulate night-vision goggles with green intensification and a tube vignette." data-i18n-title="style.surveillanceDesc">
           <span class="btn-icon">🌙</span>
-          <span class="btn-label">NVG</span>
+          <span class="btn-label" data-i18n="style.surveillance">NVG</span>
           <span class="btn-key">3</span>
         </button>
-        <button class="style-btn" data-style="thermal" title="Simulate FLIR-style thermal contrast. Turn up Ironbow for color.">
+        <button class="style-btn" data-style="thermal" title="Simulate FLIR-style thermal contrast. Turn up Ironbow for color." data-i18n-title="style.thermalDesc">
           <span class="btn-icon">🌡️</span>
-          <span class="btn-label">FLIR</span>
+          <span class="btn-label" data-i18n="style.thermal">FLIR</span>
           <span class="btn-key">4</span>
         </button>
-        <button class="style-btn" data-style="anime" title="Apply bright cel-shaded color and illustrated outlines.">
+        <button class="style-btn" data-style="anime" title="Apply bright cel-shaded color and illustrated outlines." data-i18n-title="style.animeDesc">
           <span class="btn-icon">✦</span>
-          <span class="btn-label">Anime</span>
+          <span class="btn-label" data-i18n="style.anime">Anime</span>
           <span class="btn-key">5</span>
         </button>
-        <button class="style-btn" data-style="noir" title="Apply high-contrast monochrome film-noir grading.">
+        <button class="style-btn" data-style="noir" title="Apply high-contrast monochrome film-noir grading." data-i18n-title="style.noirDesc">
           <span class="btn-icon">◐</span>
-          <span class="btn-label">Noir</span>
+          <span class="btn-label" data-i18n="style.noir">Noir</span>
           <span class="btn-key">6</span>
         </button>
-        <button class="style-btn" data-style="snow" title="Add a cold, snowy whiteout treatment to the scene.">
+        <button class="style-btn" data-style="snow" title="Add a cold, snowy whiteout treatment to the scene." data-i18n-title="style.snowDesc">
           <span class="btn-icon">❄</span>
-          <span class="btn-label">Snow</span>
+          <span class="btn-label" data-i18n="style.snow">Snow</span>
           <span class="btn-key">7</span>
         </button>
       </div>
       <section class="map-source-section" aria-labelledby="map-source-label">
         <div class="map-source-heading">
-          <span id="map-source-label">MAP SOURCE</span>
+          <span data-i18n="dock.mapSource" id="map-source-label">MAP SOURCE</span>
           <span id="map-stack-status" class="pp-stack-status" aria-live="polite">3D</span>
         </div>
         <div id="map-stack-chips" class="map-stack-chip-row" role="group" aria-label="Map source"></div>
