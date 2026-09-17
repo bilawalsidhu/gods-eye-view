@@ -345,6 +345,17 @@ export function isLikelyTexasCoordinate(lat, lon) {
   );
 }
 
+/** Nebraska bounding box. */
+export function isLikelyNebraskaCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 39.9 &&
+    lat <= 43.1 &&
+    lon >= -104.2 &&
+    lon <= -95.2
+  );
+}
+
 /** New South Wales bounding box (incl. the ACT and Lord Howe Island). */
 export function isLikelyNswCoordinate(lat, lon) {
   return (
