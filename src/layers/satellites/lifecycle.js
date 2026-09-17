@@ -17,6 +17,7 @@ export function createLifecycle({
     async init(viewer) {
       parts.catalog._abortActiveUpdates();
       clearFocusTarget('satellites');
+      parts.panel.createSatellitePanel();
       layerState._viewer = viewer;
       layerState._catalog = new Map();
       layerState._points = new Map();
@@ -90,6 +91,7 @@ export function createLifecycle({
         );
       }
       parts.tracking._applyPendingTrackingRestore();
+      parts.panel.renderSatelliteSearchResults();
     },
 
     disable(viewer) {
@@ -117,6 +119,7 @@ export function createLifecycle({
         layerState._preRenderListener();
         layerState._preRenderListener = null;
       }
+      parts.panel.renderSatelliteSearchResults();
     },
 
     destroy(viewer) {
@@ -172,6 +175,7 @@ export function createLifecycle({
         failedGroups: [],
       };
       layerState._viewer = null;
+      parts.panel.renderSatelliteSearchResults();
     },
   };
 

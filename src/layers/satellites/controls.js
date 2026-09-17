@@ -29,6 +29,11 @@ export function createControls({ state: layerState, services, parts, source }) {
     } catch (error) {
       console.warn('[Data:Satellites] row-controls listener failed:', error);
     }
+    try {
+      parts.panel?.renderSatelliteSearchResults?.();
+    } catch (error) {
+      console.warn('[Data:Satellites] search panel refresh failed:', error);
+    }
   }
 
   /**
@@ -204,6 +209,59 @@ export function createControls({ state: layerState, services, parts, source }) {
         longitude: pos.longitude,
         altitudeM: pos.altitude,
       };
+    },
+
+    /**
+     * Search the catalog for satellites by name/NORAD-id substring and/or
+     * CelesTrak group, for the satellite search panel roster. Unlike
+     * `findByQuery` (first/best match only) this returns every match, sorted
+     * by name and capped at `limit` — the panel needs a browsable list, not
+     * a "go there" shortcut. Position is freshly propagated via SGP4, but
+     * only for the page of results returned, never the full candidate set.
+     * @param {string} [query] NORAD id or partial/case-insensitive name; empty matches everything in scope.
+     * @param {{ group?: string|null, limit?: number }} [options]
+     * @returns {{ results: Array<{ noradId: number, name: string, group: string|undefined, position: Cesium.Cartesian3, latitude: number, longitude: number, altitudeM: number }>, matchCount: number }}
+     */
+    searchAll(query, { group = null, limit = 50 } = {}) {
+      if (!layerState._catalog || layerState._catalog.size === 0)
+        return { results: [], matchCount: 0 };
+      const q = String(query ?? '').trim();
+      const lower = q.toLowerCase();
+      const isNumeric = /^\d+$/.test(q);
+
+      const candidates = [];
+      for (const [noradId, sat] of layerState._catalog) {
+        if (group && sat.group !== group) continue;
+        if (q) {
+          const idMatch = isNumeric && noradId === Number(q);
+          if (!idMatch && !sat.name.toLowerCase().includes(lower)) continue;
+        }
+        candidates.push({ noradId, sat });
+      }
+      candidates.sort((a, b) => a.sat.name.localeCompare(b.sat.name));
+
+      const cap = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 50;
+      const now = new Date();
+      const results = [];
+      for (const { noradId, sat } of candidates) {
+        if (results.length >= cap) break;
+        const pos = parts.orbits.propagatePosition(sat.satrec, now);
+        if (!pos) continue;
+        results.push({
+          noradId,
+          name: sat.name.trim(),
+          group: sat.group,
+          position: Cesium.Cartesian3.fromDegrees(
+            pos.longitude,
+            pos.latitude,
+            pos.altitude,
+          ),
+          latitude: pos.latitude,
+          longitude: pos.longitude,
+          altitudeM: pos.altitude,
+        });
+      }
+      return { results, matchCount: candidates.length };
     },
 
     /**

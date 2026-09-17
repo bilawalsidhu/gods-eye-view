@@ -14,6 +14,7 @@
 #left-panel-stack > #data-panel,
 #left-panel-stack > #cctv-panel,
 #left-panel-stack > #global-context-panel,
+#left-panel-stack > #satellite-panel,
 #left-panel-stack > #scene-panel {
   position: relative;
   top: auto;
@@ -35,6 +36,10 @@
   order: 2;
 }
 
+#left-panel-stack > #satellite-panel {
+  order: 3;
+}
+
 #left-panel-stack > #scene-panel {
   order: 4;
 }
@@ -50,6 +55,7 @@
 
 #left-panel-stack > #data-panel:not(.collapsed),
 #left-panel-stack > #cctv-panel:not(.collapsed),
+#left-panel-stack > #satellite-panel:not(.collapsed),
 #left-panel-stack > #scene-panel:not(.collapsed) {
   box-sizing: border-box;
   flex: 0 1 var(--left-panel-allocated-height, auto);
@@ -62,7 +68,7 @@
  * the canonical control order and center their combined stack at 50vh.
  */
 #left-panel-stack.layout-tail
-  > :is(#data-panel, #cctv-panel, #scene-panel):not(.collapsed) {
+  > :is(#data-panel, #cctv-panel, #satellite-panel, #scene-panel):not(.collapsed) {
   box-sizing: border-box;
   flex: 0 0 var(--left-panel-allocated-height);
   height: var(--left-panel-allocated-height);
@@ -71,6 +77,7 @@
 
 #left-panel-stack > #data-panel:not(.collapsed) .data-panel-inner,
 #left-panel-stack > #cctv-panel:not(.collapsed) .cctv-panel-inner,
+#left-panel-stack > #satellite-panel:not(.collapsed) .satellite-panel-inner,
 #left-panel-stack > #scene-panel:not(.collapsed) .scene-panel-inner {
   height: 100%;
   max-height: 100%;
@@ -81,6 +88,7 @@
 }
 
 #left-panel-stack > #cctv-panel:not(.collapsed) .cctv-panel-inner,
+#left-panel-stack > #satellite-panel:not(.collapsed) .satellite-panel-inner,
 #left-panel-stack > #scene-panel:not(.collapsed) .scene-panel-inner {
   overflow-y: auto;
   scrollbar-gutter: stable;
@@ -406,6 +414,8 @@
 #scene-panel.collapsed .scene-shot-list,
 #scene-panel.collapsed .scene-progress,
 #scene-panel.collapsed #scene-status,
+#satellite-panel.collapsed .satellite-search-controls,
+#satellite-panel.collapsed .satellite-search-roster,
 #param-slider-panel.collapsed #param-sliders,
 #location-bar.collapsed .poi-row-container,
 #location-bar.collapsed .location-bar-divider,
@@ -415,6 +425,7 @@
 
 #data-panel.collapsed,
 #cctv-panel.collapsed,
+#satellite-panel.collapsed,
 #scene-panel.collapsed {
   width: var(--left-collapsed-width);
 }
@@ -426,6 +437,7 @@
 #data-panel.collapsed .panel-title,
 #cctv-panel.collapsed .panel-title,
 #radio-panel.collapsed .panel-title,
+#satellite-panel.collapsed .panel-title,
 #scene-panel.collapsed .panel-title {
   font-size: 8px;
   letter-spacing: 1.8px;
@@ -435,6 +447,7 @@
 #data-panel.collapsed .data-panel-inner,
 #cctv-panel.collapsed .cctv-panel-inner,
 #radio-panel.collapsed .radio-panel-inner,
+#satellite-panel.collapsed .satellite-panel-inner,
 #scene-panel.collapsed .scene-panel-inner,
 #param-slider-panel.collapsed,
 #location-bar.collapsed .location-inner {
@@ -446,6 +459,7 @@
 #cctv-panel.collapsed .panel-header,
 #radio-panel.collapsed .panel-header,
 #global-context-panel.collapsed .panel-header,
+#satellite-panel.collapsed .panel-header,
 #scene-panel.collapsed .panel-header,
 #param-slider-panel.collapsed .param-panel-header {
   margin-bottom: 2px;
