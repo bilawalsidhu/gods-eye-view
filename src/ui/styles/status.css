@@ -415,3 +415,53 @@
   visibility: visible;
   transform: translateX(-50%) translateY(0);
 }
+
+/* ── Geofence Breach Visual Alert ──────────────────────── */
+#geofence-alert {
+  position: fixed;
+  top: 72px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-12px);
+  z-index: 250;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: rgba(120, 10, 10, 0.92);
+  border: 1px solid #ff4d4d;
+  border-radius: 8px;
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  box-shadow: 0 0 24px rgba(255, 40, 40, 0.45);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.25s ease, transform 0.25s ease, visibility 0.25s;
+}
+#geofence-alert.visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+  animation: geofence-pulse 1.2s ease-in-out infinite;
+}
+#geofence-alert[hidden] {
+  display: none;
+}
+.geofence-alert-icon {
+  font-size: 16px;
+}
+#geofence-alert-dismiss {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.35);
+  color: #fff;
+  border-radius: 4px;
+  padding: 2px 8px;
+  cursor: pointer;
+  font-size: 11px;
+}
+@keyframes geofence-pulse {
+  0%, 100% { box-shadow: 0 0 24px rgba(255,40,40,0.45); }
+  50% { box-shadow: 0 0 36px rgba(255,80,80,0.75); }
+}

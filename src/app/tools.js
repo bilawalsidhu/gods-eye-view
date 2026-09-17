@@ -1,6 +1,12 @@
 import { SceneDirector } from '../scenes/director.js';
 import { initAnnotations } from '../annotations/index.js';
 import { initDrawTool } from '../annotations/drawTool.js';
+import { initGeofenceTool } from '../annotations/geofenceTool.js';
+import { initGeofenceMonitor } from '../annotations/geofenceMonitor.js';
+import {
+  createGeofenceAlert,
+  formatBreachMessage,
+} from '../annotations/geofenceAlert.js';
 import { initGevVoiceCommands } from '../voice/gevRealtime.js';
 import { installScopeMask, destroyScopeMask } from '../scopeMask.js';
 import {
@@ -53,6 +59,65 @@ export function createApplicationTools({
   // lifetime rather than to whoever last pressed the button.
   const drawTool = initDrawTool({ viewer, annotations });
   defer(() => drawTool?.destroy());
+  // Geofence: click-to-draw closed polygon with boundary + fill, edit + clear.
+  const geofenceTool = initGeofenceTool({ viewer });
+  defer(() => geofenceTool?.destroy());
+  // Geofence monitor: spatial intersection on every live position update.
+  const geofenceMonitor = initGeofenceMonitor({ geofenceTool, dataManager });
+  defer(() => geofenceMonitor?.destroy());
+  // Webhook URL config input -> monitor
+  const webhookInput = document.getElementById('geofence-webhook-url');
+  const onWebhookInput = () => {
+    const val = webhookInput?.value || '';
+    const ok = geofenceMonitor?.setWebhookUrl(val);
+    if (webhookInput) {
+      webhookInput.setAttribute('aria-invalid', String(!ok && val.trim().length > 0));
+      webhookInput.title = ok || !val.trim() ? 'Target URL for breach POST' : 'Invalid URL — must be http(s)';
+    }
+  };
+  webhookInput?.addEventListener('input', onWebhookInput);
+  webhookInput?.addEventListener('change', onWebhookInput);
+  defer(() => {
+    webhookInput?.removeEventListener('input', onWebhookInput);
+    webhookInput?.removeEventListener('change', onWebhookInput);
+  });
+
+  // Visual breach alert
+  const geofenceAlert = createGeofenceAlert();
+  defer(() => geofenceAlert.destroy());
+  const unsubEnterAlert = geofenceMonitor?.onEnter?.((entity) => {
+    geofenceAlert.show(formatBreachMessage(entity));
+  });
+  defer(() => unsubEnterAlert?.());
+
+  // Test toggle: dispatch mock payload to verify webhook connectivity
+  const testBtn = document.getElementById('geofence-test-webhook');
+  const testHint = document.getElementById('geofence-test-hint');
+  const onTestWebhook = async () => {
+    if (!testBtn) return;
+    const url = geofenceMonitor?.getWebhookUrl?.();
+    if (!url) {
+      if (testHint) testHint.textContent = 'Set webhook URL first.';
+      return;
+    }
+    testBtn.disabled = true;
+    if (testHint) testHint.textContent = 'Sending…';
+    try {
+      await geofenceMonitor.sendTestPayload();
+      if (testHint) testHint.textContent = 'Test POST sent ✓';
+      geofenceAlert.show('GEOFENCE TEST — mock payload sent');
+    } catch (err) {
+      if (testHint) testHint.textContent = `Failed: ${err?.message || err}`;
+    } finally {
+      testBtn.disabled = false;
+      setTimeout(() => {
+        if (testHint && testHint.textContent.startsWith('Test POST')) testHint.textContent = '';
+      }, 4000);
+    }
+  };
+  testBtn?.addEventListener('click', onTestWebhook);
+  defer(() => testBtn?.removeEventListener('click', onTestWebhook));
+
   if (startChrome)
     defer(startChrome({ loadingScreen, styleManager, dataManager, signal }));
   // Idle render governor: flips the scene into requestRenderMode whenever
@@ -108,6 +173,8 @@ export function createApplicationTools({
     sceneDirector,
     mapStackController,
     annotations,
+    geofenceTool,
+    geofenceMonitor,
     weatherEffects,
     cockpitCloudEffects,
     getRenderGovernorDiagnostics,
@@ -137,5 +204,5 @@ export function createApplicationTools({
       delete window.__gevVoiceCommands;
   });
   debug.voiceCommands = voiceCommands;
-  return { sceneDirector, annotations, voiceCommands };
+  return { sceneDirector, annotations, geofenceTool, geofenceMonitor, voiceCommands };
 }
