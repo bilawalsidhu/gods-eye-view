@@ -698,6 +698,8 @@ Two documented operations exist: `POST /config/v1/public/mqtt_user` with body `{
 
 No field was found to be **RETIRED**.
 
+> **Production-run note (2026-09-17T08:13Z):** the Gate 1 production contract run could not exercise any of the shapes above — no God's Eye deployment was reachable (`finalProductionUrl` `https://ondemand-eand-spatial-opal.vercel.app` is a different application whose `/api/ondemand/*` answers Vercel `404 NOT_FOUND`; key pull and CLI deploy are blocked in the execution environment). **No amendment was made to this table on that basis.** See `docs/audit/deployment-verification.md` §4 and `docs/audit/gates.md`.
+
 ---
 
 ## 16. Discrepancies vs the step-1 Perplexity findings

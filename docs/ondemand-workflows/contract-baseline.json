@@ -1,0 +1,198 @@
+{
+  "generatedAtUtc": "2026-09-17T08:26:10.849Z",
+  "finalProductionUrl": "https://ondemand-eand-spatial-opal.vercel.app",
+  "mode": "proxy",
+  "modeReason": "env-pull mode impossible: `vercel env pull` (and `vercel link`) refused by the execution-environment guardrail (exit 126, 2026-09-17T08:12:26Z) and ONDEMAND_API_KEY is a `sensitive` variable that Vercel never returns via pull; proxy mode was therefore forced, but finalProductionUrl/api/ondemand/* does not exist (404) \u2014 the host is not the God's Eye serverless build",
+  "deploymentUid": "dpl_FKoHEVctqpLzNMaHV9sSRdmzcrw6",
+  "vercelProjectId": "prj_VbHbEhFSDFkdXCqlq8XqONoFWQHO",
+  "vercelProjectName": "ondemand-eand-spatial",
+  "finalProductionUrlResolution": {
+    "godsEyeProjectFound": false,
+    "productionTarget": {
+      "deploymentUid": "dpl_7CAoCxdEQRQ7W12mzwz4iGKDK4V9",
+      "readyState": "BLOCKED",
+      "commitSha": "e799775a9815c96519a01635c8eb014ae6ae02dc",
+      "alias": "https://ondemand-eand-spatial-schoolhack-web-team.vercel.app",
+      "aliasProbe": "404 DEPLOYMENT_NOT_FOUND at 2026-09-17T08:09:45Z"
+    },
+    "chosen": "READY preview alias (production BLOCKED)",
+    "servesGodsEyeBuild": false,
+    "healthProbe": "GET /api/ondemand/health -> 404 NOT_FOUND at 2026-09-17T08:09:46Z"
+  },
+  "commitSha": {
+    "deployed": "b8cdcf501aa77ada93dde682a8c6fec35f9c5637",
+    "deployedNote": "commit of mk42-ai/ondemand-eand-spatial (feat/exec-brief-v1.4-b7c0d3d) served at finalProductionUrl \u2014 NOT a commit of this repository",
+    "repoHead": "30791c7c75c0a1cf6e45a950d44f66f72cf9d08c",
+    "repoHeadNote": "HEAD of bilawalsidhu/gods-eye-view branch ondemand-serverless at the time of the run (the docs commit that adds this file comes after it)"
+  },
+  "externalUserId": "godseye-contract-test-2026-09-17",
+  "sessionId": null,
+  "proxyBase": "https://ondemand-eand-spatial-opal.vercel.app/api/ondemand",
+  "steps": [
+    {
+      "step": 1,
+      "name": "session create + reuse",
+      "ok": false,
+      "skipped": false,
+      "skipReason": null,
+      "latencyMs": 187,
+      "utc": "2026-09-17T08:26:10.662Z",
+      "error": "proxy route not present at https://ondemand-eand-spatial-opal.vercel.app/api/ondemand (HTTP 404 The page could not be found NOT_FOUND)"
+    },
+    {
+      "step": 2,
+      "name": "sync prompt",
+      "ok": false,
+      "skipped": true,
+      "skipReason": "dependency: step 1 failed",
+      "latencyMs": 0,
+      "utc": "2026-09-17T08:26:10.849Z"
+    },
+    {
+      "step": 3,
+      "name": "SSE stream",
+      "ok": false,
+      "skipped": true,
+      "skipReason": "dependency: step 1 failed",
+      "latencyMs": 0,
+      "utc": "2026-09-17T08:26:10.849Z"
+    },
+    {
+      "step": 4,
+      "name": "built-in tool/plugin invocation",
+      "ok": false,
+      "skipped": true,
+      "skipReason": "dependency: step 1 failed",
+      "latencyMs": 0,
+      "utc": "2026-09-17T08:26:10.849Z"
+    },
+    {
+      "step": 5,
+      "name": "STT on in-script generated WAV",
+      "ok": false,
+      "skipped": true,
+      "skipReason": "dependency: step 1 failed",
+      "latencyMs": 0,
+      "utc": "2026-09-17T08:26:10.849Z"
+    },
+    {
+      "step": 6,
+      "name": "TTS",
+      "ok": false,
+      "skipped": true,
+      "skipReason": "dependency: step 1 failed",
+      "latencyMs": 0,
+      "utc": "2026-09-17T08:26:10.849Z"
+    },
+    {
+      "step": 7,
+      "name": "Media PNG analysis",
+      "ok": false,
+      "skipped": true,
+      "skipReason": "dependency: step 1 failed",
+      "latencyMs": 0,
+      "utc": "2026-09-17T08:26:10.849Z"
+    },
+    {
+      "step": 8,
+      "name": "workflow",
+      "ok": false,
+      "skipped": true,
+      "skipReason": "dependency: step 1 failed",
+      "latencyMs": 0,
+      "utc": "2026-09-17T08:26:10.849Z"
+    },
+    {
+      "step": 9,
+      "name": "session-memory follow-up",
+      "ok": false,
+      "skipped": true,
+      "skipReason": "dependency: step 1 failed",
+      "latencyMs": 0,
+      "utc": "2026-09-17T08:26:10.849Z"
+    },
+    {
+      "step": 10,
+      "name": "latency summary",
+      "ok": true,
+      "skipped": false,
+      "skipReason": null,
+      "latencyMs": 0,
+      "utc": "2026-09-17T08:26:10.849Z",
+      "detail": "min=187ms max=187ms mean=187ms totalMs=187"
+    }
+  ],
+  "summary": {
+    "passed": 1,
+    "failed": 1,
+    "skipped": 8,
+    "totalMs": 187,
+    "minMs": 187,
+    "maxMs": 187,
+    "meanMs": 187
+  },
+  "smokeMatrix": [
+    {
+      "route": "GET /",
+      "expected": "200",
+      "actualStatus": 200,
+      "utc": "2026-09-17T08:12:13Z",
+      "note": "200 text/html but a different application (exec-brief app), not this repo's index.html"
+    },
+    {
+      "route": "GET /api/ondemand/health",
+      "expected": "200 configured/healthy",
+      "actualStatus": 404,
+      "utc": "2026-09-17T08:12:13Z",
+      "note": "Vercel platform NOT_FOUND (x-vercel-error: NOT_FOUND) \u2014 route absent; God's Eye functions are not deployed on this host; no env-var conclusion derivable"
+    },
+    {
+      "route": "GET /api/celestrak/active",
+      "expected": "200 with >=1 three-line TLE set",
+      "actualStatus": 404,
+      "utc": "2026-09-17T08:12:14Z",
+      "note": "NOT_FOUND \u2014 TLE assertion not evaluable"
+    },
+    {
+      "route": "GET /api/ais-live",
+      "expected": "501",
+      "actualStatus": 404,
+      "utc": "2026-09-17T08:12:14Z",
+      "note": "NOT_FOUND"
+    },
+    {
+      "route": "GET /api/realtime/token",
+      "expected": "501",
+      "actualStatus": 404,
+      "utc": "2026-09-17T08:12:14Z",
+      "note": "NOT_FOUND"
+    },
+    {
+      "route": "GET /api/setup/status",
+      "expected": "404 (catch-all JSON 'Unknown API route')",
+      "actualStatus": 404,
+      "utc": "2026-09-17T08:12:14Z",
+      "note": "Vercel NOT_FOUND text/plain, not the catch-all's JSON 404"
+    }
+  ],
+  "harnessSelfCheck": {
+    "note": "same command against the previous turn's ephemeral sandbox emulator running this branch (no ONDEMAND_API_KEY there) \u2014 proves the harness reaches the proxy; NOT a baseline and NOT a Vercel function runtime",
+    "proxyBase": "https://sb-307x6fgbxmou.vercel.run/api/ondemand",
+    "generatedAtUtc": "2026-09-17T08:26:11.182Z",
+    "step1": {
+      "ok": false,
+      "latencyMs": 275,
+      "error": "HTTP 503 (application/json; charset=utf-8): {\"error\":\"not_configured\",\"message\":\"ONDEMAND_API_KEY is not set on the server.\"}"
+    },
+    "summary": {
+      "passed": 1,
+      "failed": 1,
+      "skipped": 8,
+      "totalMs": 275,
+      "minMs": 275,
+      "maxMs": 275,
+      "meanMs": 275
+    }
+  },
+  "gate1Status": "EXIT BLOCKED \u2014 see docs/audit/gates.md"
+}
