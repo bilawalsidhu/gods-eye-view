@@ -100,6 +100,7 @@ export function createLifecycle({
     state.feed.loading = false;
     state.feed.loaded = false;
     state.feed.stale = false;
+    state.feed.partial = false;
     state.feed.error = null;
     state.feed.loadingLabel = '';
     state.feed.lastUpdate = null;
