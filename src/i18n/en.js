@@ -23,15 +23,23 @@ export default Object.freeze({
   'loading.global': 'LOADING LIVE DATA',
   'loading.traffic': 'syncing road network',
   'loading.cctv': 'loading frames',
+  'hud.initializing': 'Initializing photorealistic world...',
 
   // Bottom Command Dock
   'dock.presets': 'VISUAL PRESETS',
   'dock.pinPresets': 'Keep visual presets open',
+  'dock.pinLocation': 'Keep location tray open',
   'dock.mapSource': 'MAP SOURCE',
   'dock.powerUp': 'POWER UP',
-  'dock.searchPlaceholder': 'Search city, landmark, or coordinates...',
+  'dock.location': 'LOCATION',
+  'dock.expandLocation': 'Expand LOCATION',
+  'dock.locationMini': '📍 Location: --',
+  'dock.landmarkMini': 'Landmark: --',
+  'dock.searchTitle': 'Search any location',
+  'dock.searchPlaceholder': 'Search any location...',
   'dock.flightTracking': 'FLIGHT TRACKING',
   'dock.vesselTracking': 'VESSEL TRACKING',
+  'dock.style': 'Style',
 
   // Visual Styles
   'style.normal': 'Normal',
@@ -52,6 +60,13 @@ export default Object.freeze({
   'style.snow': 'Snow',
   'style.snowDesc': 'Add a cold, snowy whiteout treatment to the scene.',
 
+  // Map Stacks
+  'mapStack.photoreal': 'Photoreal 3D',
+  'mapStack.bing-aerial': 'Bing Aerial',
+  'mapStack.bing-labels': 'Bing with Labels',
+  'mapStack.esri-imagery': 'Esri Satellite',
+  'mapStack.osm': 'OpenStreetMap',
+
   // Data Layer Groups
   'layers.title': 'DATA LAYERS',
   'layers.groups.Movement': 'Movement',
@@ -60,6 +75,7 @@ export default Object.freeze({
   'layers.groups.Events': 'Events',
   'layers.groups.Utilities': 'Utilities',
   'layers.groups.Other': 'Other layers',
+  'layers.groups.Other layers': 'Other layers',
 
   // Layer Names
   'layers.items.satellites': 'Satellites',
@@ -81,14 +97,25 @@ export default Object.freeze({
   'layers.items.directions': 'Directions',
   'layers.items.radio': 'Radio',
 
-  // Layer Feed Statuses
-  'layers.status.nominal': 'ON',
-  'layers.status.loading': 'LOADING',
-  'layers.status.degraded': 'DEGRADED',
-  'layers.status.stale': 'STALE',
-  'layers.status.partial': 'PARTIAL',
-  'layers.status.fallback': 'FALLBACK',
-  'layers.status.unavailable': 'UNAVAILABLE',
+  // Layer Feed Statuses & Button labels
+  'layers.states.on': 'ON',
+  'layers.states.off': 'OFF',
+  'layers.states.nominal': 'ON',
+  'layers.states.loading': 'LOADING',
+  'layers.states.degraded': 'DEGRADED',
+  'layers.states.stale': 'STALE',
+  'layers.states.partial': 'PARTIAL',
+  'layers.states.fallback': 'FALLBACK',
+  'layers.states.unavailable': 'UNAVAILABLE',
+  'layers.states.uncertain': 'UNCERTAIN',
+  'layers.states.enabling': 'ENABLING',
+  'layers.states.disabling': 'DISABLING',
+
+  // Time ago
+  'time.justNow': 'just now',
+  'time.secondsAgo': '{s}s ago',
+  'time.minutesAgo': '{m}m ago',
+  'time.hoursAgo': '{h}h ago',
 
   // CCTV Panel
   'cctv.title': 'CCTV',
@@ -130,21 +157,112 @@ export default Object.freeze({
   'scenes.runLog': 'RUN LOG',
   'scenes.ready': 'Ready',
 
+  // Global Context
+  'context.title': 'CONTEXT',
+  'context.contacts': 'CONTACTS',
+  'context.contactsDesc':
+    'Cycles the nearest contacts of whatever type you select — planes, vessels, installations. Satellites track independently.',
+  'context.spaceMissions': 'SPACE MISSIONS',
+  'context.selectTitle': 'SELECT CONTEXT',
+  'context.selectDesc':
+    'CONTACTS — nearest planes · vessels · sites\nSPACE MISSIONS — launches & orbital assets',
+  'context.searchNearbySites': 'SEARCH NEARBY SITES',
+  'context.contactsOff': 'CONTACTS CONTEXT OFF',
+  'context.contactsOffDesc':
+    'SELECT CONTACTS TO LOAD OBSERVED / MAPPED PROXIMITY',
+  'missions.availableTitle': 'AVAILABLE MISSIONS',
+  'missions.selectHint': 'SELECT A MISSION TO INSPECT',
+  'missions.loadingIndex': 'LOADING 30-DAY MISSION INDEX',
+  'missions.keyboardHint': 'TAB PREVIEWS · ENTER / SPACE SELECTS',
+
+  // Radio Player
+  'radio.title': 'RADIO',
+  'radio.ready': 'RADIO READY',
+  'radio.enable': 'ENABLE',
+  'radio.off': 'OFF',
+  'radio.tagFilter': 'STATION TAG',
+  'radio.all': 'All',
+  'radio.noStation': 'NO STATION SELECTED',
+  'radio.stationMetaHint':
+    'Enable Radio, then choose a globe marker or use next.',
+  'radio.bandLabel': 'DIRECTORY BAND',
+  'radio.dragToTune': 'DRAG TO TUNE',
+  'radio.dragNeedle': 'ALL · DRAG THE NEEDLE',
+  'radio.snapsAvailable': 'SNAPS TO AVAILABLE STATIONS',
+  'radio.volume': 'VOLUME',
+  'radio.openMini': 'Open compact Radio controls',
+  'radio.closeMini': 'Close compact Radio controls',
+  'radio.openDetails': 'Open detailed Radio controls',
+  'radio.prev': 'Previous station',
+  'radio.play': 'Play',
+  'radio.next': 'Next station',
+  'radio.prevBtn': 'PREV',
+  'radio.playBtn': 'PLAY',
+  'radio.nextBtn': 'NEXT',
+  'radio.stopBtn': 'STOP',
+  'radio.stateOff': 'Radio off',
+  'radio.stationSite': 'STATION SITE',
+  'radio.directory': 'DIRECTORY: RADIO BROWSER',
+  'radio.privacy':
+    'Audio connects directly to the broadcaster after you press play. Your IP is visible to that broadcaster.',
+
   // Cockpit HUD
   'cockpit.pitch': 'PITCH',
   'cockpit.roll': 'ROLL',
   'cockpit.alt': 'ALT',
   'cockpit.spd': 'SPD',
   'cockpit.target': 'TARGET',
+  'cockpit.enter': 'COCKPIT',
   'cockpit.exit': 'EXIT COCKPIT',
+  'cockpit.exitBtn': 'EXIT COCKPIT',
+  'cockpit.resetGlobe': 'RESET',
+  'cockpit.level': 'LEVEL',
+  'cockpit.opticalPlane': 'OPTICAL PLANE · 01',
+  'cockpit.visorLock': 'VISOR LOCK · ACTIVE',
+  'cockpit.groundSpeedKts': 'GROUND SPEED · KTS',
+  'cockpit.altitudeFt': 'ALTITUDE · FT',
+  'cockpit.firstPerson': 'FIRST PERSON',
+  'cockpit.aircraft': 'AIRCRAFT',
+  'cockpit.liveTrack': 'LIVE TRACK · COURSE ALIGNED',
+  'cockpit.prev': 'PREV',
+  'cockpit.current': 'CURRENT',
+  'cockpit.next': 'NEXT',
+  'cockpit.groundSpeed': 'GROUND SPEED',
+  'cockpit.altitude': 'ALTITUDE',
+  'cockpit.acquiringNews': 'ACQUIRING REGIONAL NEWS',
+  'cockpit.resolvingRegion': 'RESOLVING REGION',
+  'cockpit.temp': 'TEMP',
+  'cockpit.wind': 'WIND',
+  'cockpit.sky': 'SKY',
+  'cockpit.precip': 'PRECIP',
+  'cockpit.sourceBacked': 'SOURCE-BACKED EVENTS · NO SYNTHETIC NEWS',
+  'cockpit.tabSig': 'SIG',
+  'cockpit.tabNews': 'NEWS',
+  'cockpit.tabLocal': 'LOCAL',
+  'cockpit.exitHelp': 'ESC EXIT · C TOGGLE',
+  'cockpit.contactKicker': 'CONTACT',
+  'cockpit.contextOnly': 'CONTEXT ONLY',
+  'cockpit.nearestObserved': 'NEAREST OBSERVED / MAPPED',
+  'cockpit.contextUncertainty': 'AVAILABLE INPUTS ONLY · NOT AN ALL-CLEAR',
+  'cockpit.routeKicker': 'ESTIMATED FLIGHT PLAN',
+  'cockpit.routeUnavailable': 'ROUTE DATA UNAVAILABLE',
+  'cockpit.from': 'FROM',
+  'cockpit.to': 'TO',
+  'cockpit.briefSubtitle': 'OBSERVED / MAPPED PINGS',
+  'cockpit.weatherCredit': 'Weather data by Open-Meteo.com',
 
   // Display Controls
   'display.title': 'DISPLAY',
   'display.hud': 'HUD',
   'display.layout': 'Layout',
+  'display.layoutTactical': 'Tactical',
+  'display.layoutOperator': 'Operator',
+  'display.layoutMinimal': 'Minimal',
   'display.detect': 'DETECT',
   'display.density': 'Density',
   'display.allocation': 'Allocation',
+  'display.elastic': 'Elastic',
+  'display.weighted': 'Weighted',
   'display.fade': 'Fade',
   'display.outside': 'Outside',
   'display.params': 'PARAMETERS',
@@ -158,6 +276,17 @@ export default Object.freeze({
   'display.shape': 'Shape',
   'display.area': 'Area',
   'display.line': 'Line',
+  'display.pin': 'Pin',
+  'display.drawLabelPlaceholder': 'Label (optional)',
+  'display.clear': 'Clear',
+  'display.clearTitle': 'Remove every mark from the board',
+  'display.celestial': 'Celestial',
+  'display.celestialDesc': 'Celestial ring — reveal the full globe',
+  'display.cleanUI': 'Clean UI',
+  'display.cleanUIDesc': 'Hide UI chrome',
+  'display.exitCleanView': 'EXIT CLEAN VIEW',
+  'display.bloom': 'Bloom',
+  'display.sharpen': 'Sharpen',
 
   // Welcome / First Launch
   'welcome.kicker': 'MISSION CONTROL · FIRST LAUNCH',
@@ -187,4 +316,21 @@ export default Object.freeze({
   'powerup.hint': 'ESC to close',
   'powerup.note':
     'The Google Maps key buys the photorealistic planet — everything else stacks on top.',
+
+  // Voice Control
+  'voice.kicker': 'AI AGENT',
+  'voice.off': 'OFF',
+  'voice.tierTitle': 'Voice model tier — applies next session',
+  'voice.costTitle': 'Estimated session cost',
+  'voice.buttonAria':
+    'Voice control — activate to toggle voice; hold Space to speak',
+  'voice.onOff': 'ON/OFF',
+  'voice.standby': 'VOICE STANDBY',
+  'voice.helpKicker': 'VOICE CONTROL',
+  'voice.helpDetail':
+    'Hold Space to speak · tap Space to activate focused controls',
+  'voice.systemError': 'VOICE SYSTEM ERROR',
+  'voice.dismiss': 'DISMISS',
+  'voice.errorHint':
+    'Check microphone permission and network access, then try again.',
 });

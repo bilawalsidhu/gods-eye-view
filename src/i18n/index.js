@@ -1,9 +1,9 @@
 import en from './en.js';
 import zhTW from './zh-TW.js';
 
-export const LOCALE_STORAGE_KEY = 'gev:locale';
+export const LOCALE_STORAGE_KEY = 'gev:locale:v2';
 export const SUPPORTED_LOCALES = Object.freeze(['en', 'zh-TW']);
-export const DEFAULT_LOCALE = 'en';
+export const DEFAULT_LOCALE = 'zh-TW';
 
 const DICTIONARIES = Object.freeze({
   en,
@@ -14,7 +14,7 @@ let currentLocale = DEFAULT_LOCALE;
 const listeners = new Set();
 
 /**
- * Detect initial locale based on stored preference or browser language.
+ * Detect initial locale based on stored preference or default.
  *
  * @returns {string} Detected locale ('en' or 'zh-TW').
  */
@@ -31,11 +31,11 @@ export function detectInitialLocale() {
   const navLang =
     (typeof navigator !== 'undefined' && navigator.language) || '';
   if (
-    navLang.toLowerCase().startsWith('zh') ||
-    navLang.toLowerCase().includes('tw') ||
-    navLang.toLowerCase().includes('hk')
+    navLang.toLowerCase().startsWith('en') &&
+    !navLang.toLowerCase().includes('tw')
   ) {
-    return 'zh-TW';
+    // Return en only if user's environment specifically requests pure English
+    // But default remains zh-TW for this localized deployment
   }
 
   return DEFAULT_LOCALE;
@@ -65,6 +65,10 @@ export function t(key, fallback = '') {
   const defaultDict = DICTIONARIES[DEFAULT_LOCALE];
   if (defaultDict && Object.hasOwn(defaultDict, key)) {
     return defaultDict[key];
+  }
+  const enDict = DICTIONARIES.en;
+  if (enDict && Object.hasOwn(enDict, key)) {
+    return enDict[key];
   }
   return fallback || key;
 }
@@ -130,10 +134,10 @@ export function subscribeLocale(callback) {
  * Scan DOM tree and apply data-i18n attributes.
  *
  * Supported attributes:
- * - data-i18n: Replaces element.textContent
- * - data-i18n-title: Replaces element.title
- * - data-i18n-aria-label: Replaces element.ariaLabel
- * - data-i18n-placeholder: Replaces element.placeholder
+ * - data-i18n: Replaces element textContent (or innerHTML if markup present)
+ * - data-i18n-title: Replaces element title
+ * - data-i18n-aria-label: Replaces element aria-label
+ * - data-i18n-placeholder: Replaces element placeholder
  *
  * @param {HTMLElement|Document} [root=document]
  */
@@ -144,7 +148,12 @@ export function applyTranslations(root = document) {
   for (const el of textNodes) {
     const key = el.dataset.i18n;
     if (key) {
-      el.textContent = t(key, el.textContent);
+      const val = t(key, el.textContent);
+      if (val.includes('<br>') || val.includes('&amp;')) {
+        el.innerHTML = val;
+      } else {
+        el.textContent = val;
+      }
     }
   }
 
@@ -191,7 +200,7 @@ export function applyTranslations(root = document) {
     envSmall.textContent = t('welcome.environmentalDesc', envSmall.textContent);
   }
   const suppressSpan = root.querySelector('.first-run-suppress span');
-  if (suppressSpan && !suppressSpan.dataset?.i18n) {
+  if (suppressSpan) {
     suppressSpan.textContent = t('welcome.dontShow', suppressSpan.textContent);
   }
 
@@ -217,6 +226,21 @@ export function initI18n() {
       switchBtn.addEventListener('click', () => {
         toggleLocale();
       });
+    }
+
+    if (typeof MutationObserver !== 'undefined' && document.body) {
+      const observer = new MutationObserver((mutations) => {
+        for (const m of mutations) {
+          if (m.addedNodes.length > 0) {
+            for (const node of m.addedNodes) {
+              if (node.nodeType === 1) {
+                applyTranslations(node);
+              }
+            }
+          }
+        }
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
     }
   }
 }

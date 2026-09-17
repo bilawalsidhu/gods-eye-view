@@ -106,6 +106,33 @@ export const KEY_SETUP_KEYS = Object.freeze([
     envVars: Object.freeze(['LL2_API_TOKEN']),
     tier: 'free',
   }),
+  Object.freeze({
+    id: 'llm-base-url',
+    title: 'LLM BASE URL (OPENAI COMPATIBLE)',
+    unlocks:
+      'Custom endpoint (ChatGPT, Groq, Grok, Ollama, DeepSeek) for HUD intelligence',
+    getUrl: 'https://groq.com',
+    envVars: Object.freeze(['OPENAI_BASE_URL']),
+    tier: 'free',
+  }),
+  Object.freeze({
+    id: 'llm-model',
+    title: 'LLM MODEL',
+    unlocks:
+      'Model identifier (e.g. gpt-4o-mini, llama-3.3-70b-versatile, grok-beta, deepseek-chat)',
+    getUrl: 'https://platform.openai.com/docs/models',
+    envVars: Object.freeze(['OPENAI_HUD_SUMMARY_MODEL']),
+    tier: 'free',
+  }),
+  Object.freeze({
+    id: 'tts-base-url',
+    title: 'TTS / 語音合成 (YYS)',
+    unlocks:
+      'Text-to-speech audio synthesis endpoint (or browser Web Speech fallback)',
+    getUrl: 'https://platform.openai.com/docs/guides/text-to-speech',
+    envVars: Object.freeze(['TTS_BASE_URL']),
+    tier: 'free',
+  }),
 ]);
 
 /** Hostnames a Provider Settings request may arrive under or originate from. */
@@ -113,8 +140,20 @@ const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 /** Socket addresses that count as this machine. */
 const LOOPBACK_ADDRESSES = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 
+/** Check whether an address belongs to loopback or private LAN subnets. */
+export function isLanAddress(addr) {
+  const ip = String(addr || '')
+    .replace(/^::ffff:/, '')
+    .toLowerCase();
+  if (LOOPBACK_ADDRESSES.has(ip) || LOOPBACK_ADDRESSES.has(addr)) return true;
+  if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(ip)) return true;
+  if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(ip)) return true;
+  if (/^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(ip)) return true;
+  return false;
+}
+
 /** Parse an exact local request authority from a Host header. */
-function localAuthority(hostHeader, protocol) {
+function localAuthority(hostHeader, protocol, allowLan = false) {
   const raw = String(hostHeader || '')
     .trim()
     .toLowerCase();
@@ -123,9 +162,16 @@ function localAuthority(hostHeader, protocol) {
     return null;
   try {
     const parsed = new URL(`${scheme}//${raw}`);
-    return LOCAL_HOSTNAMES.has(parsed.hostname.toLowerCase())
-      ? parsed.origin
-      : null;
+    if (LOCAL_HOSTNAMES.has(parsed.hostname.toLowerCase())) {
+      return parsed.origin;
+    }
+    if (
+      allowLan &&
+      (isLanAddress(parsed.hostname) || parsed.hostname.endsWith('.local'))
+    ) {
+      return parsed.origin;
+    }
+    return null;
   } catch {
     return null;
   }
@@ -262,14 +308,20 @@ export function admitKeySetupRequest({
       error: 'Provider Settings is disabled while sharing is enabled',
     };
   }
-  if (!LOOPBACK_ADDRESSES.has(String(remoteAddress || ''))) {
+  const allowLan = /^(1|true)$/i.test(
+    String(env.GEV_ALLOW_LAN_SETUP || '').trim(),
+  );
+  if (
+    !LOOPBACK_ADDRESSES.has(String(remoteAddress || '')) &&
+    (!allowLan || !isLanAddress(remoteAddress))
+  ) {
     return {
       ok: false,
       status: 403,
       error: 'Provider Settings answers only the machine running the server',
     };
   }
-  const authority = localAuthority(hostHeader, protocol);
+  const authority = localAuthority(hostHeader, protocol, allowLan);
   if (!authority) {
     return {
       ok: false,

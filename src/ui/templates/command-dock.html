@@ -58,7 +58,7 @@
       </section>
       </div>
       <div id="style-mini-status" class="panel-mini-status" aria-live="polite">
-        <span class="panel-mini-label">Style</span>
+        <span class="panel-mini-label" data-i18n="dock.style">Style</span>
         <span id="style-mini-value" class="panel-mini-value">NORMAL</span>
       </div>
     </div>
@@ -70,25 +70,25 @@
     <div class="location-inner">
       <div class="location-toolbar">
         <button id="location-bar-toggle" class="dock-tray-toggle" type="button" data-dock-toggle-target="location-bar" aria-controls="location-bar-popover" aria-expanded="false" aria-label="Expand LOCATION" title="Expand LOCATION">
-          <span class="location-toolbar-label"><span class="dock-label-icon dock-label-icon-location" aria-hidden="true"></span>LOCATION</span>
+          <span class="location-toolbar-label"><span class="dock-label-icon dock-label-icon-location" aria-hidden="true"></span><span data-i18n="dock.location">LOCATION</span></span>
         </button>
         <button class="panel-collapse-btn" data-collapse-target="location-bar" title="Collapse panel">+</button>
       </div>
       <div id="location-mini-status" class="location-mini-status" aria-live="polite">
-        <div id="location-mini-city" class="location-mini-city">📍 Location: --</div>
-        <div id="location-mini-poi" class="location-mini-poi">Landmark: --</div>
+        <div id="location-mini-city" class="location-mini-city" data-i18n="dock.locationMini">📍 Location: --</div>
+        <div id="location-mini-poi" class="location-mini-poi" data-i18n="dock.landmarkMini">Landmark: --</div>
       </div>
       <div id="location-bar-popover" class="dock-popover-content">
-        <button class="dock-pin-btn" data-pin-target="location-bar" type="button" aria-label="Pin location tray" aria-pressed="false" title="Keep location tray open"><img src="/pin.svg" alt="" /></button>
+        <button class="dock-pin-btn" data-pin-target="location-bar" type="button" aria-label="Pin location tray" aria-pressed="false" title="Keep location tray open" data-i18n-title="dock.pinLocation"><img src="/pin.svg" alt="" /></button>
         <div id="poi-row" class="poi-row-container"></div>
         <div class="location-bar-divider" id="location-bar-divider"></div>
         <div class="location-city-row">
           <div id="location-pills" class="location-pills"></div>
           <div class="location-search-wrap">
-            <button id="search-toggle" class="search-toggle-btn" title="Search any location">
+            <button id="search-toggle" class="search-toggle-btn" title="Search any location" data-i18n-title="dock.searchTitle">
               <span>&#x1F50E;</span>
             </button>
-            <input type="text" id="location-search" placeholder="Search any location..." autocomplete="off" spellcheck="false" aria-label="Search location by name or coordinates" />
+            <input type="text" id="location-search" placeholder="Search any location..." data-i18n-placeholder="dock.searchPlaceholder" autocomplete="off" spellcheck="false" aria-label="Search location by name or coordinates" />
           </div>
         </div>
       </div>

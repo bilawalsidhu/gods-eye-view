@@ -32,8 +32,8 @@
       <div class="pp-slider-row detection-allocation-row" id="detection-allocation-row">
         <span class="pp-slider-mini-label" data-i18n="display.allocation">Allocation</span>
         <div class="pp-mode-seg detection-allocation-seg" role="radiogroup" aria-label="Detection label allocation">
-          <button class="pp-mode-btn active" id="detection-allocation-elastic" data-allocation="ELASTIC" role="radio" aria-checked="true">Elastic</button>
-          <button class="pp-mode-btn" id="detection-allocation-weighted" data-allocation="WEIGHTED" role="radio" aria-checked="false">Weighted</button>
+          <button class="pp-mode-btn active" id="detection-allocation-elastic" data-allocation="ELASTIC" role="radio" aria-checked="true" data-i18n="display.elastic">Elastic</button>
+          <button class="pp-mode-btn" id="detection-allocation-weighted" data-allocation="WEIGHTED" role="radio" aria-checked="false" data-i18n="display.weighted">Weighted</button>
         </div>
       </div>
       <div class="pp-slider-row detection-fade-row" id="detection-fade-row">
@@ -99,11 +99,11 @@
         <div class="pp-mode-seg" role="radiogroup" aria-label="Shape to draw">
           <button class="pp-mode-btn active" data-shape="area" role="radio" aria-checked="true" data-i18n="display.area">Area</button>
           <button class="pp-mode-btn" data-shape="line" role="radio" aria-checked="false" data-i18n="display.line">Line</button>
-          <button class="pp-mode-btn" data-shape="pin" role="radio" aria-checked="false">Pin</button>
+          <button class="pp-mode-btn" data-shape="pin" role="radio" aria-checked="false" data-i18n="display.pin">Pin</button>
         </div>
       </div>
       <div class="pp-slider-row" id="draw-label-row">
-        <input type="text" class="pp-text-input" id="draw-label-input" maxlength="120" placeholder="Label (optional)" aria-label="Label for the drawn shape" autocomplete="off" spellcheck="false">
+        <input type="text" class="pp-text-input" id="draw-label-input" maxlength="120" placeholder="Label (optional)" data-i18n-placeholder="display.drawLabelPlaceholder" aria-label="Label for the drawn shape" autocomplete="off" spellcheck="false">
         <select class="pp-select draw-color-select" id="draw-color-select" aria-label="Colour of the drawn shape">
           <option value="primary">Primary</option>
           <option value="amber">Amber</option>
@@ -111,24 +111,24 @@
           <option value="green">Green</option>
           <option value="red">Red</option>
         </select>
-        <button class="pp-mode-btn draw-clear-btn" id="draw-clear" type="button" title="Remove every mark from the board">Clear</button>
+        <button class="pp-mode-btn draw-clear-btn" id="draw-clear" type="button" title="Remove every mark from the board" data-i18n="display.clear" data-i18n-title="display.clearTitle">Clear</button>
         <span class="draw-hint" id="draw-hint" aria-live="polite"></span>
       </div>
     </div>
     <div class="pp-toggle-group">
-      <button class="pp-toggle-btn" id="celestial-toggle" title="Celestial ring — reveal the full globe" aria-pressed="false">
+      <button class="pp-toggle-btn" id="celestial-toggle" title="Celestial ring — reveal the full globe" data-i18n-title="display.celestialDesc" aria-pressed="false">
         <span class="pp-icon material-symbols-outlined" aria-hidden="true">flare</span>
-        <span class="pp-label">Celestial</span>
+        <span class="pp-label" data-i18n="display.celestial">Celestial</span>
       </button>
     </div>
-    <button class="pp-toggle-btn" id="clean-view-toggle" title="Hide UI chrome">
+    <button class="pp-toggle-btn" id="clean-view-toggle" title="Hide UI chrome" data-i18n-title="display.cleanUIDesc">
       <span class="pp-icon">&#x25A1;</span>
-      <span class="pp-label">Clean UI</span>
+      <span class="pp-label" data-i18n="display.cleanUI">Clean UI</span>
     </button>
     <div class="pp-toggle-group">
       <button class="pp-toggle-btn" id="bloom-toggle" title="Bloom / Glow">
         <span class="pp-icon">&#x2728;</span>
-        <span class="pp-label">Bloom</span>
+        <span class="pp-label" data-i18n="display.bloom">Bloom</span>
       </button>
       <div class="pp-slider-row" id="bloom-slider-row">
         <input type="range" class="pp-slider" id="bloom-intensity-slider" min="0" max="200" value="0" aria-label="Bloom intensity" />
@@ -138,7 +138,7 @@
     <div class="pp-toggle-group">
       <button class="pp-toggle-btn" id="sharpen-toggle" title="Sharpening">
         <span class="pp-icon">&#x1F50D;</span>
-        <span class="pp-label">Sharpen</span>
+        <span class="pp-label" data-i18n="display.sharpen">Sharpen</span>
       </button>
       <div class="pp-slider-row" id="sharpen-slider-row">
         <input type="range" class="pp-slider" id="sharpen-intensity-slider" min="0" max="100" value="49" aria-label="Sharpen intensity" />
@@ -146,4 +146,4 @@
       </div>
     </div>
   </div>
-  <button id="clean-view-exit" title="Return UI controls">EXIT CLEAN VIEW</button>
+  <button id="clean-view-exit" title="Return UI controls" data-i18n="display.exitCleanView">EXIT CLEAN VIEW</button>

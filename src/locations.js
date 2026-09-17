@@ -18,6 +18,43 @@ import { unavailablePlaceSearch } from './search/placeSearch.js';
  *   buildingHeight — estimated height of landmark center above ground (meters)
  */
 export const CITY_POIS = {
+  taipei: {
+    name: 'Taipei',
+    groundElevation: 20,
+    viewBounds: {
+      southwest: { lat: 24.95, lng: 121.45 },
+      northeast: { lat: 25.2, lng: 121.68 },
+    },
+    pois: [
+      {
+        name: 'Taipei 101',
+        lat: 25.033964,
+        lon: 121.564468,
+        alt: 600,
+        pitch: -25,
+        heading: 315,
+        buildingHeight: 509,
+      },
+      {
+        name: 'Yuanshan Grand Hotel',
+        lat: 25.0805,
+        lon: 121.526,
+        alt: 500,
+        pitch: -20,
+        heading: 180,
+        buildingHeight: 68,
+      },
+      {
+        name: 'National Palace Museum',
+        lat: 25.1024,
+        lon: 121.5485,
+        alt: 500,
+        pitch: -25,
+        heading: 0,
+        buildingHeight: 30,
+      },
+    ],
+  },
   austin: {
     name: 'Austin',
     groundElevation: 150, // meters above WGS84 ellipsoid

@@ -267,6 +267,7 @@
       "server/providers/openai/rate-limit.js",
       "server/providers/openai/realtime.js",
       "server/providers/openai/tools.js",
+      "server/providers/openai/tts.js",
       "src/hudSummaryResponse.js",
       "src/voice/voiceCost.js",
       "src/voice/actionSchemas.js",

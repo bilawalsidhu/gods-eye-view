@@ -362,3 +362,20 @@ test('server Google key remains supported without appearing in setup or its miss
   assert.ok(!JSON.stringify(status).includes('GOOGLE_MAPS_SERVER_API_KEY'));
   assert.ok(!JSON.stringify(status).includes(secret));
 });
+
+test('the admission gate admits LAN requests when GEV_ALLOW_LAN_SETUP is 1', async () => {
+  const { admitKeySetupRequest } = await import('./keySetupCore.mjs');
+  const lanRequest = {
+    method: 'POST',
+    remoteAddress: '10.9.0.50',
+    hostHeader: '10.9.0.11:4173',
+    origin: 'http://10.9.0.11:4173',
+    contentType: 'application/json',
+    env: { GEV_ALLOW_LAN_SETUP: '1' },
+  };
+  assert.equal(admitKeySetupRequest(lanRequest).ok, true, 'LAN request admitted with GEV_ALLOW_LAN_SETUP=1');
+
+  // Without the env var, LAN request is refused
+  assert.equal(admitKeySetupRequest({ ...lanRequest, env: {} }).ok, false, 'LAN request refused without flag');
+});
+

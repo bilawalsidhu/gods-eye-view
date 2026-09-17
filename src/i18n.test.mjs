@@ -15,7 +15,7 @@ import {
 test('i18n module provides supported locales', () => {
   assert.ok(SUPPORTED_LOCALES.includes('en'));
   assert.ok(SUPPORTED_LOCALES.includes('zh-TW'));
-  assert.equal(DEFAULT_LOCALE, 'en');
+  assert.equal(DEFAULT_LOCALE, 'zh-TW');
 });
 
 test('t() returns translated strings and fallbacks', () => {

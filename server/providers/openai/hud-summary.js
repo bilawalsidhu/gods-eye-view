@@ -33,8 +33,14 @@ async function handleHudSummary(req, res) {
     return;
   }
 
-  const apiKey = process.env.OPENAI_API_KEY;
-  const keyless = keylessHudSummaryResponse(apiKey);
+  const apiKey = (process.env.OPENAI_API_KEY || '').trim();
+  const customBaseUrl = (
+    process.env.OPENAI_BASE_URL ||
+    process.env.LLM_BASE_URL ||
+    ''
+  ).trim();
+  const effectiveAuth = apiKey || customBaseUrl;
+  const keyless = keylessHudSummaryResponse(effectiveAuth);
   if (keyless) {
     res.statusCode = keyless.statusCode;
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -51,30 +57,65 @@ async function handleHudSummary(req, res) {
   try {
     const body = await readRequestBody(req, 64 * 1024);
     const context = JSON.parse(body || '{}');
-    const response = await fetch('https://api.openai.com/v1/responses', {
+    const baseUrl = (customBaseUrl || 'https://api.openai.com/v1').replace(
+      /\/+$/,
+      '',
+    );
+    const model =
+      (
+        process.env.OPENAI_HUD_SUMMARY_MODEL ||
+        process.env.LLM_MODEL ||
+        ''
+      ).trim() || OPENAI_HUD_SUMMARY_MODEL_DEFAULT;
+
+    const instructions = [
+      "Write one concise intelligence-HUD summary for God's Eye View.",
+      'Use only the supplied place, street, nearby-place, and enabled-layer text labels.',
+      'Prefer the clearest named place and include a relevant enabled layer only when useful.',
+      'Do not infer from coordinates or invent a place.',
+      'Output exactly five words with no title, punctuation, markdown, or introductory phrase.',
+    ].join(' ');
+
+    const headers = { 'Content-Type': 'application/json' };
+    if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+
+    // Standard OpenAI-compatible /chat/completions (Groq, Grok, Ollama, DeepSeek, OpenAI)
+    let response = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({
-        model:
-          process.env.OPENAI_HUD_SUMMARY_MODEL ||
-          OPENAI_HUD_SUMMARY_MODEL_DEFAULT,
-        instructions: [
-          "Write one concise intelligence-HUD summary for God's Eye View.",
-          'Use only the supplied place, street, nearby-place, and enabled-layer text labels.',
-          'Prefer the clearest named place and include a relevant enabled layer only when useful.',
-          'Do not infer from coordinates or invent a place.',
-          'Output exactly five words with no title, punctuation, markdown, or introductory phrase.',
-        ].join(' '),
-        input: JSON.stringify(context),
-        reasoning: { effort: 'minimal' },
-        max_output_tokens: 100,
+        model,
+        messages: [
+          { role: 'system', content: instructions },
+          { role: 'user', content: JSON.stringify(context) },
+        ],
+        max_tokens: 100,
       }),
     });
+
+    // Fallback to OpenAI proprietary /responses endpoint if needed
+    if (response.status === 404 && baseUrl === 'https://api.openai.com/v1') {
+      response = await fetch('https://api.openai.com/v1/responses', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          model,
+          instructions,
+          input: JSON.stringify(context),
+          reasoning: { effort: 'minimal' },
+          max_output_tokens: 100,
+        }),
+      });
+    }
+
     const data = await response.json().catch(() => ({}));
-    const summary = toFiveWordHudSummary(extractOpenAiResponseText(data));
+    let rawText = '';
+    if (data?.choices?.[0]?.message?.content) {
+      rawText = data.choices[0].message.content;
+    } else {
+      rawText = extractOpenAiResponseText(data);
+    }
+    const summary = toFiveWordHudSummary(rawText);
     res.statusCode = response.ok && summary ? 200 : response.status || 502;
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('Cache-Control', 'no-store');
@@ -83,7 +124,7 @@ async function handleHudSummary(req, res) {
         summary: summary || null,
         error: response.ok
           ? null
-          : data.error?.message || 'OpenAI HUD summary request failed',
+          : data.error?.message || 'LLM HUD summary request failed',
       }),
     );
   } catch (error) {
