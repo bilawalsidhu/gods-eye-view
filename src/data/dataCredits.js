@@ -171,7 +171,9 @@ export const DATA_CREDITS = [
   },
   {
     key: 'gbfs',
-    html: 'Bikeshare availability: GBFS operator feeds (e.g. Austin BCycle)',
+    html:
+      'Bikeshare availability: GBFS operator feeds ' +
+      '(e.g. Austin BCycle; Bike Share Toronto, operated by the Toronto Parking Authority)',
   },
   {
     key: 'osrm-routing',

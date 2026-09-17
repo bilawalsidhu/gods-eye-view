@@ -182,13 +182,14 @@ export function createIngestion({
             )
               return;
             parts.rendering.applyStatusToPoints(cityId, statusMap);
+            layerState._failedCityIds.delete(cityId);
           } catch (error) {
             if (error?.name === 'AbortError') return;
             console.warn(
               `[Data:Bikeshare] ${cityId} status update error:`,
               error,
             );
-            layerState._error = 'GBFS status update failed';
+            layerState._failedCityIds.add(cityId);
           }
         }),
       );

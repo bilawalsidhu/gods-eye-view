@@ -37,7 +37,14 @@ export function createControls({ state: layerState, services, parts, source }) {
             ? `syncing ${layerState._activeCityIds.size} city feeds...`
             : 'scanning nearby systems...';
       }
-      if (layerState._error) stats.error = layerState._error;
+      // A failed city is only the layer's failure when it left nothing on the
+      // map. While any city still renders, the layer is working and says so.
+      if (
+        layerState._failedCityIds.size > 0 &&
+        layerState._stationRenderMap.size === 0
+      ) {
+        stats.error = 'GBFS fetch error';
+      }
       return stats;
     },
   };

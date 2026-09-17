@@ -144,18 +144,6 @@ const RAW_GBFS_CITY_REGISTRY = [
     provider: 'Biki',
   },
   {
-    id: 'columbus-cogo',
-    city: 'Columbus, OH',
-    centerLat: 39.9612,
-    centerLon: -82.9988,
-    loadRadiusKm: 90,
-    stationInformationUrl:
-      'https://gbfs.cogobikeshare.com/gbfs/2.3/en/station_information.json',
-    stationStatusUrl:
-      'https://gbfs.cogobikeshare.com/gbfs/2.3/en/station_status.json',
-    provider: 'CoGo',
-  },
-  {
     id: 'chattanooga-bikechatt',
     city: 'Chattanooga, TN',
     centerLat: 35.0456,
@@ -166,6 +154,18 @@ const RAW_GBFS_CITY_REGISTRY = [
     stationStatusUrl:
       'https://chat.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
     provider: 'Bike Chattanooga',
+  },
+  {
+    id: 'toronto-bike-share',
+    city: 'Toronto, ON',
+    centerLat: 43.6532,
+    centerLon: -79.3832,
+    loadRadiusKm: 90,
+    stationInformationUrl:
+      'https://toronto.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://toronto.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
+    provider: 'Bike Share Toronto',
   },
   bcycleEntry({
     id: 'boulder-bcycle',
@@ -235,14 +235,6 @@ const RAW_GBFS_CITY_REGISTRY = [
     provider: 'Pacers Bikeshare',
   }),
   bcycleEntry({
-    id: 'fort-lauderdale-broward',
-    city: 'Fort Lauderdale, FL',
-    centerLat: 26.1224,
-    centerLon: -80.1373,
-    systemId: 'bcycle_broward',
-    provider: 'Broward B-cycle',
-  }),
-  bcycleEntry({
     id: 'memphis-bcycle',
     city: 'Memphis, TN',
     centerLat: 35.1495,
@@ -256,22 +248,32 @@ const RAW_GBFS_CITY_REGISTRY = [
     centerLon: -93.625,
     systemId: 'bcycle_desmoines',
   }),
-  bcycleEntry({
+  {
+    // Tugo moved off BCycle to PBSC; the bcycle_tugo feed is gone (404).
     id: 'tucson-tugo',
     city: 'Tucson, AZ',
     centerLat: 32.2226,
     centerLon: -110.9747,
-    systemId: 'bcycle_tugo',
+    loadRadiusKm: 100,
+    stationInformationUrl:
+      'https://tucson.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://tucson.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
     provider: 'Tugo',
-  }),
-  bcycleEntry({
+  },
+  {
+    // Trinity Metro moved off BCycle to PBSC; the bcycle_fortworth feed is gone.
     id: 'fort-worth-trinity',
     city: 'Fort Worth, TX',
     centerLat: 32.7555,
     centerLon: -97.3308,
-    systemId: 'bcycle_fortworth',
+    loadRadiusKm: 100,
+    stationInformationUrl:
+      'https://fortworth.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://fortworth.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
     provider: 'Trinity Metro',
-  }),
+  },
   bcycleEntry({
     id: 'omaha-heartland',
     city: 'Omaha, NE',
@@ -295,14 +297,20 @@ const RAW_GBFS_CITY_REGISTRY = [
     centerLon: -82.394,
     systemId: 'bcycle_greenville',
   }),
-  bcycleEntry({
+  {
+    // Reddy left BCycle for Social Bicycles; the bcycle_reddy feed is gone
+    // (404). This is the endpoint the MobilityData GBFS registry lists.
     id: 'buffalo-reddy',
     city: 'Buffalo, NY',
     centerLat: 42.8864,
     centerLon: -78.8784,
-    systemId: 'bcycle_reddy',
+    loadRadiusKm: 100,
+    stationInformationUrl:
+      'https://reddybikeshare.socialbicycles.com/opendata/station_information.json',
+    stationStatusUrl:
+      'https://reddybikeshare.socialbicycles.com/opendata/station_status.json',
     provider: 'Reddy Bikeshare',
-  }),
+  },
   bcycleEntry({
     id: 'las-vegas-rtc-bike-share',
     city: 'Las Vegas, NV',

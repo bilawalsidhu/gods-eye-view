@@ -2509,7 +2509,7 @@ its criteria cannot be silently ignored.
 | CCTV | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Street View fallback | `src/data/cctv.js` | `/api/cctv` | 10s (active) |
 | Radio | Radio Browser (public-domain station directory) | `src/data/radio.js` | `/api/radio/stations`, `/api/radio/click/:uuid` | 45 min directory refresh |
 | Transit 🚌 | Operator GTFS-Realtime VehiclePositions (7 keyless regions, `src/data/transitFeeds.js`) | `src/layers/transit/` via `src/app/layers/transit.js` | `/api/transit` | 15s (poll + delayed playback) |
-| Bikeshare 🚲 | GBFS (Lyft + BCycle) | `src/data/bikeshare.js` | `/api/gbfs` | 60s |
+| Bikeshare 🚲 | GBFS (Lyft + BCycle + PBSC) | `src/data/bikeshare.js` | `/api/gbfs` | 60s |
 | Directions 🧭 | OSRM on FOSSGIS servers (OpenStreetMap) | `src/data/directions.js` | `/api/route` (`steps=1`) | on placement / mode change |
 | Datacenters ▣ | OSM extract (bundled) | `src/data/localLayers.js` | — | static |
 | Dams ▰ | OpenInfraMap/OSM extract (bundled) | `src/data/localLayers.js` | — | static |
