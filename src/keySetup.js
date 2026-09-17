@@ -1,4 +1,8 @@
 import { createSurfaceKeyboard } from './ui/surfaceKeyboard.js';
+import {
+  readStoredCloudVoiceAuthMode,
+  writeStoredCloudVoiceAuthMode,
+} from './voice/cloudVoiceAuth.js';
 
 /**
  * The POWER UP surface — paste a key, get a power.
@@ -36,6 +40,46 @@ export function collectKeyUpdates(fields) {
     if (value && field?.envVar) updates[field.envVar] = value;
   }
   return updates;
+}
+
+function sleepWithSignal(ms, signal) {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason || new DOMException('Aborted', 'AbortError'));
+      return;
+    }
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal.reason || new DOMException('Aborted', 'AbortError'));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+export async function waitForChatGptOAuth({
+  fetchImpl,
+  signal,
+  timeoutMs = 120_000,
+  pollMs = 1_000,
+  now = () => Date.now(),
+  sleep = sleepWithSignal,
+} = {}) {
+  const deadline = now() + Math.max(0, timeoutMs);
+  while (!signal?.aborted && now() <= deadline) {
+    const response = await fetchImpl('/api/realtime/oauth-status', {
+      cache: 'no-store',
+      signal,
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (response.ok && payload.available) return true;
+    if (now() >= deadline) break;
+    await sleep(Math.max(0, pollMs), signal);
+  }
+  return false;
 }
 
 /**
@@ -143,6 +187,26 @@ function buildRow(documentRef, key) {
       fields.append(remove);
     }
     row.append(fields);
+  }
+  if (key.id === 'openai') {
+    const auth = documentRef.createElement('div');
+    auth.className = 'key-setup-cloud-auth';
+    const mode = readStoredCloudVoiceAuthMode();
+    const state = documentRef.createElement('span');
+    state.className = 'key-setup-cloud-auth-state';
+    state.textContent =
+      mode === 'oauth' ? 'VOICE AUTH · CHATGPT OAUTH' : 'VOICE AUTH · API KEY';
+    const toggle = documentRef.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'key-setup-cloud-auth-toggle';
+    toggle.dataset.cloudVoiceAuthToggle = 'true';
+    toggle.textContent = mode === 'oauth' ? 'USE API KEY' : 'USE CHATGPT OAUTH';
+    toggle.title =
+      mode === 'oauth'
+        ? 'Use OPENAI_API_KEY for the next cloud voice session'
+        : 'Use the signed-in local ChatGPT/Codex OAuth session for the next cloud voice session';
+    auth.append(state, toggle);
+    row.append(auth);
   }
   return row;
 }
@@ -339,6 +403,86 @@ export async function initKeySetup({
   applyButton?.addEventListener('click', onApply);
   // Remove buttons are rendered per row; delegate so re-renders stay wired.
   rowsHost?.addEventListener('click', (event) => {
+    const authButton = event.target?.closest?.(
+      '[data-cloud-voice-auth-toggle]',
+    );
+    if (authButton && !disposed) {
+      void (async () => {
+        const current = readStoredCloudVoiceAuthMode();
+        if (current === 'oauth') {
+          writeStoredCloudVoiceAuthMode('api-key');
+          render(status);
+          say('Cloud voice will use OPENAI_API_KEY on the next session.');
+          return;
+        }
+        authButton.disabled = true;
+        say('Checking local ChatGPT OAuth sign-in…');
+        try {
+          const response = await doFetch('/api/realtime/oauth-status', {
+            cache: 'no-store',
+            signal: lifetime.signal,
+          });
+          const payload = await response.json().catch(() => ({}));
+          if (response.ok && payload.available) {
+            writeStoredCloudVoiceAuthMode('oauth');
+            render(status);
+            say(
+              'ChatGPT OAuth selected for cloud voice. Your API key stays saved and available.',
+            );
+            return;
+          }
+
+          say('Opening ChatGPT sign-in in your browser…');
+          const loginResponse = await doFetch('/api/realtime/oauth-login', {
+            method: 'POST',
+            cache: 'no-store',
+            signal: lifetime.signal,
+          });
+          const loginPayload = await loginResponse.json().catch(() => ({}));
+          if (!loginResponse.ok && loginResponse.status !== 202) {
+            say(
+              loginPayload.error ||
+                payload.error ||
+                'Could not start ChatGPT sign-in on this machine.',
+            );
+            return;
+          }
+          if (loginPayload.available) {
+            writeStoredCloudVoiceAuthMode('oauth');
+            render(status);
+            say(
+              'ChatGPT OAuth selected for cloud voice. Your API key stays saved and available.',
+            );
+            return;
+          }
+
+          say(
+            'Finish ChatGPT sign-in in the browser. Waiting for it to complete…',
+          );
+          const available = await waitForChatGptOAuth({
+            fetchImpl: doFetch,
+            signal: lifetime.signal,
+          });
+          if (!available) {
+            say(
+              'ChatGPT sign-in is still pending. Finish it in the browser, then click USE CHATGPT OAUTH again.',
+            );
+            return;
+          }
+          writeStoredCloudVoiceAuthMode('oauth');
+          render(status);
+          say(
+            'ChatGPT sign-in complete. OAuth will be used for the next cloud voice session.',
+          );
+        } catch (error) {
+          if (lifetime.signal.aborted) return;
+          say(`OAuth check failed: ${error?.message || error}`);
+        } finally {
+          authButton.disabled = false;
+        }
+      })();
+      return;
+    }
     const button = event.target?.closest?.('[data-key-setup-remove]');
     if (disposed || !button || busy) return;
     let envVars = [];

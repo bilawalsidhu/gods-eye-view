@@ -4,6 +4,7 @@ import {
   collectKeyUpdates,
   keySetupChipLabel,
   stripKeylessBasemapFromHash,
+  waitForChatGptOAuth,
 } from './keySetup.js';
 
 test('the chip counts what is missing, and retires the count at zero', () => {
@@ -24,6 +25,28 @@ test('collectKeyUpdates keeps only non-empty trimmed values', () => {
   assert.deepEqual(updates, { OPENAI_API_KEY: 'sk-abc' });
   assert.deepEqual(collectKeyUpdates([]), {});
   assert.deepEqual(collectKeyUpdates(null), {});
+});
+
+test('OAuth login polling stops as soon as local ChatGPT auth becomes available', async () => {
+  let checks = 0;
+  let clock = 0;
+  const available = await waitForChatGptOAuth({
+    fetchImpl: async () => {
+      checks += 1;
+      return {
+        ok: true,
+        json: async () => ({ available: checks >= 3 }),
+      };
+    },
+    timeoutMs: 10_000,
+    pollMs: 100,
+    now: () => clock,
+    sleep: async (ms) => {
+      clock += ms;
+    },
+  });
+  assert.equal(available, true);
+  assert.equal(checks, 3);
 });
 
 test('the first Google key strips ONLY the keyless OSM basemap from the share hash', () => {

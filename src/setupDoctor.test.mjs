@@ -162,6 +162,13 @@ test('doctor describes the credential ladder without exposing values', () => {
   assert.match(capabilities.map, /Google Photorealistic 3D Tiles through Cesium ion/);
   assert.match(capabilities.map, /Bing and world-terrain stacks/);
   assert.equal(capabilities.voice, 'available');
+  assert.equal(
+    buildCapabilitySummary({
+      ...credentials,
+      OPENAI_API_KEY: { configured: false },
+    }).voice,
+    'ChatGPT/Codex OAuth can be selected at runtime',
+  );
   assert.match(capabilities.missions, /token allowance/);
   assert.equal(capabilities.flights, 'OpenSky OAuth credentials not configured');
 
