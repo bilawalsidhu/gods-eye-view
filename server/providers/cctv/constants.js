@@ -244,6 +244,24 @@ export const DELDOT_ANCHORS = [
   { lat: 39.1582, lon: -75.5244 }, // Dover (Kent)
   { lat: 38.6906, lon: -75.3877 }, // Georgetown (Sussex)
 ];
+
+/** WSDOT Travel Center cameras (Washington State): keyless Esri JSON on the
+ * official open-data host — ~1,700 point features in EPSG:3857 (Web Mercator),
+ * ETag/Last-Modified served. WSDOT's metadata marks the feed "low volume" use,
+ * which the 15-minute catalog cache respects. */
+export const WSDOT_CAMERAS_URL =
+  'https://data.wsdot.wa.gov/travelcenter/Cameras.json';
+/** Only frames on WSDOT's own image host are registered; the catalog also
+ * lists ~70 partner cameras (Oregon DOT, City of Seattle, lodges, airports)
+ * whose own terms apply. */
+export const WSDOT_IMAGE_ORIGIN = 'https://images.wsdot.wa.gov/';
+export const DEFAULT_WSDOT_MAX_SOURCES = 250;
+/** Prioritization anchors: downtown Seattle and Spokane. */
+export const WSDOT_ANCHORS = [
+  { lat: 47.6062, lon: -122.3321 }, // Seattle
+  { lat: 47.6588, lon: -117.426 }, // Spokane
+];
+
 /** Camera CATALOGS change rarely; 15 min keeps multi-megabyte upstream list refetches (Austin rows.json + 4 Caltrans districts + TfL + Ontario 511) infrequent. Frames are fetched per-request and are unaffected. */
 export const CCTV_SOURCE_CACHE_MS = 15 * 60 * 1000;
 /** Per-provider catalog-fetch timeout. Bounds the worst-case refresh so one
