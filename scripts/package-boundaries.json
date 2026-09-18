@@ -36,6 +36,7 @@
       "server/providers/live.js",
       "server/providers/common/http.js",
       "server/providers/common/query.js",
+      "server/providers/common/upstream.js",
       "server/providers/aircraft/opensky.js",
       "server/providers/aircraft/adsb-lol.js",
       "server/providers/aircraft/enrichment.js",
@@ -84,8 +85,10 @@
     "modules": [
       "server/providers/space.js",
       "server/providers/space/celestrak.js",
+      "server/providers/space/celestrak-snapshot.js",
       "server/providers/space/launch-library.js",
       "server/providers/common/http.js",
+      "server/providers/common/upstream.js",
       "src/data/spaceProviderRequests.js",
       "src/sources/httpBody.js"
     ],
@@ -113,7 +116,11 @@
   "traffic-provider": {
     "runtime": "node",
     "exports": ["./server/providers/traffic"],
-    "modules": ["server/providers/traffic.js", "src/data/tomtomTiles.js"],
+    "modules": [
+      "server/providers/traffic.js",
+      "server/providers/common/upstream.js",
+      "src/data/tomtomTiles.js"
+    ],
     "external": []
   },
   "traffic-source": {
@@ -870,7 +877,8 @@
       "src/layers/satellites/state.js",
       "src/layers/satellites/testing.js",
       "src/layers/satellites/tracking.js",
-      "src/data/inputOwnership.js"
+      "src/data/inputOwnership.js",
+      "src/sources/live/contract.js"
     ],
     "external": ["cesium", "satellite.js"]
   },
@@ -972,6 +980,7 @@
       "src/layers/traffic/style.js",
       "src/layers/traffic/timing.js",
       "src/layers/traffic/viewport.js",
+      "src/sources/live/contract.js",
       "src/sources/overpassRoads.js"
     ],
     "external": ["cesium", "pbf", "@mapbox/vector-tile"]
@@ -2087,6 +2096,7 @@
       "src/layers/satellites/state.js",
       "src/layers/satellites/testing.js",
       "src/layers/satellites/tracking.js",
+      "src/sources/live/contract.js",
       "src/layers/submarineCables/geometry.js",
       "src/layers/submarineCables/index.js",
       "src/layers/submarineCables/ingestion.js",
@@ -2479,7 +2489,10 @@
   },
   "satellites-source": {
     "exports": ["./layers/satellites/source"],
-    "modules": ["src/layers/satellites/source.js"],
+    "modules": [
+      "src/layers/satellites/source.js",
+      "src/sources/live/contract.js"
+    ],
     "external": []
   },
   "traffic-source-factory": {
@@ -2489,6 +2502,7 @@
       "src/layers/traffic/flowDecode.js",
       "src/layers/traffic/flowSource.js",
       "src/layers/traffic/source.js",
+      "src/sources/live/contract.js",
       "src/sources/overpassRoads.js"
     ],
     "external": ["@mapbox/vector-tile", "pbf"]

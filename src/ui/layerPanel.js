@@ -475,7 +475,10 @@ export class LayerPanel {
       return `UNCERTAIN · ${source} · lifecycle state requires reconciliation`;
     }
     const presentedError =
-      stats.error || stats.lastError || stats.managerRefreshError;
+      stats.error ||
+      stats.lastError ||
+      stats.managerRefreshError ||
+      (feedState === 'degraded' ? stats.providerError : null);
     if (presentedError) {
       if (typeof stats.retryInSec === 'number' && stats.retryInSec > 0) {
         return `${stateLabel} · ${source} · ${presentedError} · retry ${stats.retryInSec}s`;
@@ -497,6 +500,16 @@ export class LayerPanel {
         typeof stats.loadingLabel === 'string' && stats.loadingLabel.trim()
           ? stats.loadingLabel.trim()
           : 'loading...';
+      // A provider that already declared itself degraded (keyless TomTom,
+      // demo AIS replay) says so WHILE it loads too — the operator must not
+      // have to wait for a slow road fetch to learn the layer is not live.
+      if (
+        stats.providerStatus === 'degraded' &&
+        typeof stats.providerError === 'string' &&
+        stats.providerError.trim()
+      ) {
+        return `DEGRADED · ${source} · ${stats.providerError.trim()} · ${loadingLabel}`;
+      }
       return `${source} · ${loadingLabel}`;
     }
     if (feedState === 'fallback') {
@@ -526,6 +539,12 @@ export class LayerPanel {
     }
     if (typeof stats.loadingLabel === 'string' && stats.loadingLabel.trim()) {
       return `${source} · ${stats.loadingLabel.trim()}`;
+    }
+    // A MOVEMENT proxy that reported `live` (server/providers/common/
+    // upstream.js) is named as such, with the age of the DATA (not of the
+    // response), so an operator can tell a live feed from a cached one.
+    if (stats.providerStatus === 'live') {
+      return `LIVE · ${source} · ${ago}`;
     }
     return `${source} · ${ago}`;
   }
