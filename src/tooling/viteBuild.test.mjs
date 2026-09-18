@@ -71,7 +71,7 @@ test('root config retains existing named exports and standalone provider order',
 });
 
 test('build export resolves in Node and has no browser fallback', async () => {
-  const exported = await import('gods-eye-view/build/vite');
+  const exported = await import('ondemand-spatial-intelligence/build/vite');
   assert.equal(exported.createBrowserViteConfig, createBrowserViteConfig);
   const pkg = JSON.parse(
     readFileSync(new URL('../../package.json', import.meta.url)),

@@ -9,7 +9,7 @@ import {
   filterTrailing24h,
   isLikelyCsv,
   parseFirmsCsv,
-} from 'gods-eye-view/sources/firms-csv';
+} from 'ondemand-spatial-intelligence/sources/firms-csv';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURE = fs.readFileSync(

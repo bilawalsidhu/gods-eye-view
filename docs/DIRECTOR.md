@@ -7,7 +7,7 @@ file sharing, along with the remaining extensions.
 
 ## Implemented boundary
 
-`src/director/playback.js`, exported as `gods-eye-view/director`, provides:
+`src/director/playback.js`, exported as `ondemand-spatial-intelligence/director`, provides:
 
 - `buildPlaybackQueue(scenes, startSceneId, { single })`: ordered scenes/shots,
   retaining the existing round-robin behavior.

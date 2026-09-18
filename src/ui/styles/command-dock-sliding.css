@@ -38,7 +38,7 @@
   border-radius: 0.42rem;
   box-shadow:
     0 0.9rem 2.4rem rgba(0, 0, 0, 0.58),
-    0 0 1.5rem rgba(0, 212, 255, 0.08),
+    0 0 1.5rem rgba(29, 172, 137, 0.08),
     0 0 0 1px rgba(255, 255, 255, 0.025) inset;
   backdrop-filter: blur(28px) saturate(1.3);
   -webkit-backdrop-filter: blur(28px) saturate(1.3);
@@ -134,9 +134,9 @@
 #command-dock .dock-pin-btn:hover,
 #command-dock .dock-pin-btn[aria-pressed='true'] {
   color: var(--accent);
-  border-color: rgba(0, 212, 255, 0.62);
-  background: rgba(0, 212, 255, 0.1);
-  box-shadow: 0 0 0.55rem rgba(0, 212, 255, 0.12);
+  border-color: rgba(29, 172, 137, 0.62);
+  background: rgba(29, 172, 137, 0.1);
+  box-shadow: 0 0 0.55rem rgba(29, 172, 137, 0.12);
 }
 
 #command-dock .panel-divider {
@@ -486,11 +486,11 @@
     [data-status='executing']
   )
   .gev-mic-orbit {
-  background: rgba(0, 212, 255, 0.06);
-  border-color: rgba(0, 212, 255, 0.48);
+  background: rgba(29, 172, 137, 0.06);
+  border-color: rgba(29, 172, 137, 0.48);
   box-shadow:
-    0 0 0 0.18rem rgba(0, 212, 255, 0.06),
-    0 0 0.9rem rgba(0, 212, 255, 0.12);
+    0 0 0 0.18rem rgba(29, 172, 137, 0.06),
+    0 0 0.9rem rgba(29, 172, 137, 0.12);
 }
 
 #command-dock #gev-voice-button:hover .gev-mic-orbit img,
@@ -532,11 +532,11 @@
 }
 
 #command-dock > :is(#location-bar, #control-panel).dock-pinned {
-  border-color: rgba(0, 212, 255, 0.55);
+  border-color: rgba(29, 172, 137, 0.55);
   box-shadow:
     0 8px 32px rgba(0, 0, 0, 0.5),
-    0 0 0 1px rgba(0, 212, 255, 0.08) inset,
-    0 0 1rem rgba(0, 212, 255, 0.12);
+    0 0 0 1px rgba(29, 172, 137, 0.08) inset,
+    0 0 1rem rgba(29, 172, 137, 0.12);
 }
 
 #command-dock #location-bar .location-toolbar {
@@ -620,7 +620,7 @@
   border-radius: 0.38rem;
   box-shadow:
     0 0.85rem 2rem rgba(0, 0, 0, 0.58),
-    0 0 1.2rem rgba(0, 212, 255, 0.08);
+    0 0 1.2rem rgba(29, 172, 137, 0.08);
   backdrop-filter: blur(24px) saturate(1.3);
   -webkit-backdrop-filter: blur(24px) saturate(1.3);
   pointer-events: none;

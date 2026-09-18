@@ -1,6 +1,6 @@
 # Reusing infrastructure layers
 
-`gods-eye-view/infrastructure` exports `createInfrastructureLayers(services)`.
+`ondemand-spatial-intelligence/infrastructure` exports `createInfrastructureLayers(services)`.
 It returns fresh datacenter and dam layers in that order, with the existing IDs,
 appearance, label budgets and bundled public datasets. Importing the module or
 calling the factory does not load data, create a viewer, or start the application.
@@ -10,7 +10,7 @@ base paths. This browser source export expects a Vite-compatible asset build.
 Pass the application's existing functions:
 
 ```js
-import { createInfrastructureLayers } from 'gods-eye-view/infrastructure';
+import { createInfrastructureLayers } from 'ondemand-spatial-intelligence/infrastructure';
 
 const layers = createInfrastructureLayers({
   overlayHost: { setEntries, setVisible, clearSource },
@@ -49,9 +49,9 @@ input handler and listeners. The layer never creates an application context stor
 overlay host, viewer, or render scheduler. The consumer must resolve one compatible
 Cesium installation shared with its viewer; it must not bundle separate copies.
 
-`gods-eye-view/infrastructure/geojson` exports the lower-level
+`ondemand-spatial-intelligence/infrastructure/geojson` exports the lower-level
 `createLocalGeoJsonLayer(options, services)` and existing infrastructure overlay
-helpers. `gods-eye-view/infrastructure/lod` exports the existing LOD policy helpers.
+helpers. `ondemand-spatial-intelligence/infrastructure/lod` exports the existing LOD policy helpers.
 The standalone app's `src/data/localGeojson.js` keeps its original single-argument
 factory and supplies its existing functions. Other consumers should use the package
 exports, which do not import standalone application globals.

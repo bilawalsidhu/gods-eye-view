@@ -9,7 +9,7 @@ const application = createStandaloneApplication({
 });
 
 application.start().catch((error) => {
-  console.error("God's Eye View initialization failed:", error);
+  console.error('OnDemand Spatial Intelligence initialization failed:', error);
   const loaderStatus = document.querySelector('#loading-screen .loader-status');
   loaderStatus.textContent = `Error: ${describeError(error)}`;
   loaderStatus.style.color = '#ff4444';

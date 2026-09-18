@@ -1,16 +1,26 @@
 /* ═══════════════════════════════════════════════
-   GOD'S EYE VIEW — Dark Sci-Fi UI
+   OnDemand Spatial Intelligence — Dark UI (OnDemand brand tokens, see docs/BRANDING.md)
    Apple meets Blade Runner
    ═══════════════════════════════════════════════ */
 
 :root {
-  --bg-dark: #0a0a0f;
-  --glass-bg: rgba(12, 12, 20, 0.72);
+  /* OnDemand brand tokens — sources in docs/BRANDING.md */
+  --brand-500: #1dac89; /* on-demand.io .bg-brand-500, app.on-demand.io favicon.svg fill */
+  --brand-300: #5ed8b2; /* on-demand.io .border-brand-300 */
+  --brand-600: #0b9f80; /* on-demand.io gradient linear-gradient(180deg,#5ED8B2,#0B9F80) */
+  --brand-900: #0a4639; /* on-demand.io gradient end */
+  --brand-ink: #0a0b0b; /* on-demand.io .bg-[#0A0B0B] page/header background */
+  --header-bg: rgba(10, 11, 11, 0.85);
+  --btn-primary-bg: var(--brand-500);
+  --btn-primary-text: var(--brand-ink);
+  --btn-primary-hover: var(--brand-300);
+  --bg-dark: #0a0b0b;
+  --glass-bg: rgba(10, 11, 11, 0.78);
   --glass-border: rgba(255, 255, 255, 0.08);
   --glass-border-hover: rgba(255, 255, 255, 0.15);
-  --accent: #00d4ff;
-  --accent-dim: rgba(0, 212, 255, 0.15);
-  --accent-glow: rgba(0, 212, 255, 0.4);
+  --accent: #1dac89;
+  --accent-dim: rgba(29, 172, 137, 0.15);
+  --accent-glow: rgba(29, 172, 137, 0.4);
   --text-primary: #e8eaed;
   --text-secondary: rgba(232, 234, 237, 0.5);
   --text-dim: rgba(232, 234, 237, 0.3);
@@ -393,7 +403,7 @@ body:has(.data-toggle-row[data-layer-id='alpr-cameras'] .data-toggle-btn.active)
     0 8px 32px rgba(0, 0, 0, 0.5),
     0 0 0 1px rgba(255, 255, 255, 0.03) inset,
     0 1px 0 rgba(255, 255, 255, 0.06) inset,
-    0 0 20px rgba(0, 212, 255, 0.08);
+    0 0 20px rgba(29, 172, 137, 0.08);
   backdrop-filter: blur(24px) saturate(1.4);
   -webkit-backdrop-filter: blur(24px) saturate(1.4);
   font-family: var(--font-mono);
@@ -405,8 +415,8 @@ body:has(.data-toggle-row[data-layer-id='alpr-cameras'] .data-toggle-btn.active)
   height: 34px;
   flex: 0 0 auto;
   color: var(--accent);
-  background: rgba(0, 212, 255, 0.06);
-  border: 1px solid rgba(0, 212, 255, 0.28);
+  background: rgba(29, 172, 137, 0.06);
+  border: 1px solid rgba(29, 172, 137, 0.28);
   border-radius: var(--btn-radius);
   font-family: var(--font-mono);
   font-size: 10px;
@@ -417,7 +427,7 @@ body:has(.data-toggle-row[data-layer-id='alpr-cameras'] .data-toggle-btn.active)
 #gev-voice-button:hover {
   color: #ffffff;
   border-color: var(--accent);
-  box-shadow: 0 0 12px rgba(0, 212, 255, 0.22);
+  box-shadow: 0 0 12px rgba(29, 172, 137, 0.22);
 }
 
 .gev-voice-readout {
@@ -524,7 +534,7 @@ body:has(.data-toggle-row[data-layer-id='alpr-cameras'] .data-toggle-btn.active)
   display: block;
   width: 52px;
   height: auto;
-  filter: drop-shadow(0 0 12px rgba(0, 246, 255, 0.5));
+  filter: drop-shadow(0 0 12px rgba(94, 216, 178, 0.5));
 }
 
 #title-bar .title-logo::before,
@@ -649,4 +659,60 @@ body:has(.data-toggle-row[data-layer-id='alpr-cameras'] .data-toggle-btn.active)
   margin-top: 4px;
   text-shadow: 0 0 20px var(--accent-glow);
   transition: var(--transition-smooth);
+}
+
+/* ---- OnDemand brand header (chore(brand): rebrand UI to OnDemand) ---- */
+#title-bar {
+  background: var(--header-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--panel-radius);
+  padding: 10px 16px 10px 12px;
+  backdrop-filter: blur(14px);
+}
+#title-bar .brand-wordmark-logo {
+  display: block;
+  height: 26px;
+  width: auto;
+}
+#title-bar .brand-wordmark-logo img {
+  display: block;
+  height: 26px;
+  width: auto;
+}
+#title-bar h1 {
+  font-size: 15px;
+  letter-spacing: 2px;
+  text-shadow: none;
+}
+#title-bar h1 .brand-product {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+#title-bar h1 .title-accent {
+  color: var(--brand-300);
+}
+#title-bar .subtitle {
+  color: var(--text-secondary);
+}
+.loader-content .loader-logo img,
+.loader-content .loader-logo svg {
+  width: 72px;
+  height: 72px;
+}
+.loader-content .brand-loader-wordmark img {
+  display: block;
+  height: 30px;
+  width: auto;
+  margin: 0 auto 10px;
+}
+.brand-primary-btn,
+button.brand-primary-btn {
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
+  border-color: var(--btn-primary-bg);
+}
+.brand-primary-btn:hover,
+button.brand-primary-btn:hover {
+  background: var(--btn-primary-hover);
+  border-color: var(--btn-primary-hover);
 }

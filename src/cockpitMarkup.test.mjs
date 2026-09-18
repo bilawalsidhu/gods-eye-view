@@ -276,7 +276,7 @@ test('Cockpit owns a focused shared Display portal and compact Radio controls', 
   assert.doesNotMatch(ui, /--cockpit-display-expanded-width|dataPanelWidth/);
   assert.match(css, /is-expanded:has\(\[data-cockpit-launcher='display'\]\)[\s\S]*?box-shadow:\s*0 8px 32px rgba\(0, 0, 0, 0\.42\)/);
   assert.match(css, /\.cockpit-utility-control\.is-expanded \.cockpit-utility-launcher\s*\{[\s\S]*?border:\s*0;[\s\S]*?background:\s*transparent;[\s\S]*?box-shadow:\s*none;/);
-  assert.match(css, /\.cockpit-utility-control\.is-expanded \.cockpit-utility-divider\s*\{[\s\S]*?linear-gradient\(\s*90deg,\s*rgb\(0 212 255 \/ 28%\),\s*rgba\(0, 212, 255, 0\.18\) 58%,\s*transparent\s*\)[\s\S]*?box-shadow:\s*0 0 7px rgba\(0, 212, 255, 0\.22\);/);
+  assert.match(css, /\.cockpit-utility-control\.is-expanded \.cockpit-utility-divider\s*\{[\s\S]*?linear-gradient\(\s*90deg,\s*rgb\(29 172 137 \/ 28%\),\s*rgba\(29, 172, 137, 0\.18\) 58%,\s*transparent\s*\)[\s\S]*?box-shadow:\s*0 0 7px rgba\(29, 172, 137, 0\.22\);/);
   assert.match(radioBindings, /this\._cockpitDisplayToggleBtn\.textContent = displayOpen \? '▶' : '◀';/);
   assert.match(radioBindings, /this\._cockpitRadioToggleBtn\.textContent = radioOpen \? '▶' : '◀';/);
   assert.match(css, /#cockpit-display-panel\s*\{[\s\S]*?display:\s*flex;[\s\S]*?gap:\s*7px;[\s\S]*?padding:\s*0;[\s\S]*?border-top:\s*0;/);

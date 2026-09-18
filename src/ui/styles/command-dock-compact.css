@@ -262,8 +262,8 @@
   padding: 0;
   border-radius: 50%;
   box-shadow:
-    0 0 0 0.2rem rgba(0, 212, 255, 0.06),
-    0 0 1rem rgba(0, 212, 255, 0.12);
+    0 0 0 0.2rem rgba(29, 172, 137, 0.06),
+    0 0 1rem rgba(29, 172, 137, 0.12);
 }
 
 #command-dock .gev-mic-orbit {

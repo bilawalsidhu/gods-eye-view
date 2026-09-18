@@ -1,8 +1,8 @@
 {
-  "name": "gods-eye-view",
+  "name": "ondemand-spatial-intelligence",
   "private": true,
   "version": "0.1.1",
-  "description": "A real-time intelligence console for planet Earth \u2014 photorealistic 3D globe, live aircraft/ships/satellites/earthquakes/CCTV, and hands-free voice control. Runs in a browser.",
+  "description": "OnDemand Spatial Intelligence — a real-time spatial intelligence console for planet Earth: photorealistic 3D globe, live aircraft/ships/satellites/earthquakes/fires/CCTV and OnDemand-powered analysis. Runs in a browser and on Vercel serverless functions.",
   "type": "module",
   "license": "MIT",
   "author": "Bilawal Sidhu",

@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PbfWriter } from 'pbf';
-import { transitProxy } from 'gods-eye-view/server/providers/transit';
+import { transitProxy } from 'ondemand-spatial-intelligence/server/providers/transit';
 import {
   TRANSIT_BACKOFF_LADDER_MS,
   TRANSIT_PROXY_TTL_MS,
-} from 'gods-eye-view/sources/transit';
+} from 'ondemand-spatial-intelligence/sources/transit';
 
 /** Mount the plugin and return a caller for its single route. */
 function install(plugin, mode = 'configureServer') {

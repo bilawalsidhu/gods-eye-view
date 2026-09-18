@@ -1,4 +1,4 @@
-# God's Eye View works without any API keys.
+# OnDemand Spatial Intelligence works without any API keys.
 # Easiest way to add one: open PROVIDER SETTINGS inside the running app (the
 # POWER UP chip, bottom-right). It saves into this file for you with owner-only
 # permissions and restarts the app — you never need to edit this file by hand.
