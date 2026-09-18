@@ -1,5 +1,11 @@
 # Changelog
 
+- HUD summary without a metered key: when `OPENAI_API_KEY` is unset (or
+  `GEV_PREFER_CODEX_OAUTH=true`), `/api/openai/hud-summary` rides the local
+  Codex CLI login against the ChatGPT backend (`OPENAI_HUD_SUMMARY_CODEX_MODEL`,
+  default `gpt-5.6-luna`). Usage-limit and upstream errors keep the free
+  deterministic summary. The lane is echoed in `X-GEV-Hud-Auth`.
+
 - Voice without a metered key: when `OPENAI_API_KEY` is unset,
   `/api/realtime/token` falls back to the operator's local Codex CLI login
   (ChatGPT subscription, read-only). `GEV_PREFER_CODEX_OAUTH=true` pins that

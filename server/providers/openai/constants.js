@@ -16,7 +16,13 @@ const OPENAI_REALTIME_CONTEXT_RETENTION_DEFAULT = 0.5;
 
 const OPENAI_HUD_SUMMARY_MODEL_DEFAULT = 'gpt-5-nano';
 
+// Codex-backend model for the HUD summary when it rides a Codex CLI login
+// (ChatGPT subscription). Only Codex-supported model ids work on that
+// endpoint — override via OPENAI_HUD_SUMMARY_CODEX_MODEL if it drifts.
+const OPENAI_HUD_SUMMARY_CODEX_MODEL_DEFAULT = 'gpt-5.6-luna';
+
 export {
+  OPENAI_HUD_SUMMARY_CODEX_MODEL_DEFAULT,
   OPENAI_HUD_SUMMARY_MODEL_DEFAULT,
   OPENAI_REALTIME_MODEL_MINI_DEFAULT,
   OPENAI_REALTIME_MODEL_DEFAULT,

@@ -13,6 +13,10 @@ const FALSE_VALUES = new Set(['0', 'false', 'no', 'off']);
 const SOURCE_ENV = 'env';
 const SOURCE_CODEX_OAUTH = 'codex-oauth';
 
+// Codex tokens name the ChatGPT account under this nested claim; the Codex
+// backend requires it as the ChatGPT-Account-Id header.
+const OPENAI_AUTH_CLAIM = 'https://api.openai.com/auth';
+
 const NO_CREDENTIAL_MESSAGE =
   'OPENAI_API_KEY is not set and no usable Codex login was found — add an ' +
   'OpenAI key or run `codex login` to use a ChatGPT subscription';
@@ -148,7 +152,19 @@ function readCodexOAuthCredential({ env, codexHome, nowMs }) {
         'refreshed here',
     );
   }
-  return { token: access, expiresAt: new Date(expiresS * 1000) };
+  const claims = payload && payload[OPENAI_AUTH_CLAIM];
+  const accountId =
+    claims !== null && typeof claims === 'object'
+      ? claims.chatgpt_account_id
+      : null;
+  return {
+    token: access,
+    expiresAt: new Date(expiresS * 1000),
+    chatgptAccountId:
+      typeof accountId === 'string' && accountId.trim()
+        ? accountId.trim()
+        : null,
+  };
 }
 
 /**
@@ -181,6 +197,7 @@ function resolveOpenAiCredential({
         token: oauth.token,
         source: SOURCE_CODEX_OAUTH,
         detail: 'Codex CLI login (ChatGPT subscription)',
+        chatgptAccountId: oauth.chatgptAccountId,
       };
     }
     throw new OpenAiAuthError(
@@ -204,6 +221,7 @@ function resolveOpenAiCredential({
       token: oauth.token,
       source: SOURCE_CODEX_OAUTH,
       detail: 'Codex CLI login (ChatGPT subscription)',
+      chatgptAccountId: oauth.chatgptAccountId,
     };
   }
   throw new OpenAiAuthError(NO_CREDENTIAL_MESSAGE);
