@@ -16,8 +16,13 @@ import path from 'node:path';
 const OVERPASS_USER_AGENT =
   'ondemand-spatial/0.1 (+https://github.com/bilawalsidhu/gods-eye-view)';
 
-/** Ordered list of Overpass API mirrors; tried sequentially on failure/rate-limit. */
-const OVERPASS_UPSTREAMS = [
+/**
+ * Default ordered list of Overpass API mirrors; tried sequentially on
+ * failure/rate-limit. Overridable per deployment through the
+ * `OVERPASS_UPSTREAMS` env var (see `parseOverpassUpstreams` below) — the
+ * default list itself is unchanged.
+ */
+const OVERPASS_DEFAULT_UPSTREAMS = Object.freeze([
   'https://overpass-api.de/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
   'https://lz4.overpass-api.de/api/interpreter',
@@ -26,7 +31,90 @@ const OVERPASS_UPSTREAMS = [
   // ban; refused connections fail in ms, so healthy mirrors above still win).
   // Verified: planet coverage (Texas query), CORS *, ~5-20 s cold latency.
   'https://overpass.private.coffee/api/interpreter',
-];
+]);
+
+// --- Road-network configuration point (env-driven, 2026-09-18) --------------
+/**
+ * Why this exists: from cloud egress (Vercel functions) the public Overpass
+ * mirrors are not a dependable road-network source — measured 2026-09-18:
+ * overpass-api.de answers HTTP 406 to this client, kumi.systems and
+ * private.coffee time out. The two env vars below are the operator's levers;
+ * `roadNetworkConfig()` reports them (never their raw values beyond the
+ * parsed list) so `GET /api/tools/road_network_status` can say why the OSM
+ * road fetch is degraded and what to set. The Overpass transport itself is
+ * unchanged apart from reading the parsed mirror list.
+ */
+/** Accepted `ROAD_NETWORK_SOURCE` values: 'overpass' (default) or 'off' (no OSM road fetch). */
+const ROAD_NETWORK_SOURCES = Object.freeze(['overpass', 'off']);
+
+/** Fixed operator-facing blocker text (verbatim in road_network_status). */
+const ROAD_NETWORK_BLOCKER =
+  'Public Overpass mirrors refuse or time out for cloud egress (overpass-api.de HTTP 406, kumi.systems/private.coffee timeouts — measured 2026-09-18); set OVERPASS_UPSTREAMS to a private mirror';
+
+/**
+ * Parse the `OVERPASS_UPSTREAMS` csv override: comma/whitespace-separated
+ * absolute http(s) URLs. Returns the parsed list, or null when the value is
+ * absent or holds no usable URL (→ the default list stays in force).
+ * @param {unknown} value
+ * @returns {string[]|null}
+ */
+function parseOverpassUpstreams(value) {
+  if (typeof value !== 'string') return null;
+  const urls = [];
+  for (const part of value.split(/[,\s]+/)) {
+    const candidate = part.trim();
+    if (!candidate) continue;
+    try {
+      const url = new URL(candidate);
+      if (url.protocol !== 'https:' && url.protocol !== 'http:') continue;
+      if (!urls.includes(url.href)) urls.push(url.href);
+    } catch {
+      /* not a URL — ignored, never thrown at import time */
+    }
+  }
+  return urls.length ? urls : null;
+}
+
+/** `ROAD_NETWORK_SOURCE` → 'overpass' | 'off' (anything unrecognised is the default). */
+function parseRoadNetworkSource(value) {
+  const source = String(value ?? '')
+    .trim()
+    .toLowerCase();
+  return ROAD_NETWORK_SOURCES.includes(source) ? source : 'overpass';
+}
+
+/**
+ * The road-network configuration as seen by the running process:
+ *   { source: 'overpass'|'off', upstreams: string[], blocker: string,
+ *     fromEnv: { ROAD_NETWORK_SOURCE: boolean, OVERPASS_UPSTREAMS: boolean } }
+ * `fromEnv` only says whether each variable is SET (never its raw value);
+ * `env` is injectable for tests; production reads process.env at call time.
+ * @param {NodeJS.ProcessEnv} [env]
+ */
+function roadNetworkConfig(env = process.env) {
+  const source = parseRoadNetworkSource(env.ROAD_NETWORK_SOURCE);
+  const override = parseOverpassUpstreams(env.OVERPASS_UPSTREAMS);
+  return {
+    source,
+    upstreams: override ? [...override] : [...OVERPASS_DEFAULT_UPSTREAMS],
+    blocker: ROAD_NETWORK_BLOCKER,
+    fromEnv: {
+      ROAD_NETWORK_SOURCE: Boolean(
+        String(env.ROAD_NETWORK_SOURCE ?? '').trim(),
+      ),
+      OVERPASS_UPSTREAMS: Boolean(override),
+    },
+  };
+}
+
+/**
+ * Ordered list of Overpass API mirrors actually used by the transport:
+ * the `OVERPASS_UPSTREAMS` csv override when set (read once at import, like
+ * every other constant here), otherwise the default list above.
+ */
+const OVERPASS_UPSTREAMS = parseOverpassUpstreams(
+  process.env.OVERPASS_UPSTREAMS,
+) || [...OVERPASS_DEFAULT_UPSTREAMS];
 
 /**
  * TTL for FRESH cached Overpass responses (ms). Road geometry is static for
@@ -142,7 +230,12 @@ export {
   OVERPASS_SIMPLIFY_MIN_POINTS,
   OVERPASS_SIMPLIFY_TOLERANCE_DEG,
   OVERPASS_MAX_RESPONSE_BYTES,
+  OVERPASS_DEFAULT_UPSTREAMS,
   OVERPASS_UPSTREAMS,
   OVERPASS_USER_AGENT,
   OVERPASS_TIMEOUT_MS,
+  ROAD_NETWORK_BLOCKER,
+  ROAD_NETWORK_SOURCES,
+  parseOverpassUpstreams,
+  roadNetworkConfig,
 };

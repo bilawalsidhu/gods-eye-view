@@ -1,0 +1,386 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "OnDemand Spatial Live Vessels (AIS)",
+    "version": "1.0.0",
+    "description": "Live ship positions (AIS) around a point or inside a bounding box, served by the OnDemand Spatial serverless AIS collector. The collector is BOUNDED: per scene box it opens one AISStream WebSocket, ingests for at most 8 s (AISSTREAM_COLLECT_MS; stops earlier after 2.5 s of silence or 2 000 rows), closes, and answers from a per-box snapshot cache (25 s TTL, shared through KV when configured) — so a call returns within a few seconds and never holds a socket open between requests. When AISSTREAM_API_KEY is missing the route serves a clearly labelled DEMO REPLAY (twelve synthetic vessels, MMSI 9990000NN, names \"DEMO REPLAY N\", Texas Gulf coast only) with status \"degraded\" and source \"Demo replay\" — never presented as live. Fallbacks (demo replay, AISHub delayed positions, last-good snapshots) stay in place because of the AISStream incident of 13 March 2026, when subscriptions were accepted but zero messages arrived (github.com/aisstream/aisstream/issues/15): a silent feed is reported as \"degraded\"/\"empty\" with a statusMessage instead of an empty \"live\" answer. Every response carries `data.status`, `data.collectorMode` and a `provider` block (live | stale | degraded | unavailable) — read them before trusting the vessel list.",
+    "x-ondemand-spatial": {
+      "pluginId": "vessels",
+      "category": "Research",
+      "conversationStarters": [
+        "Which vessels are currently in Galveston Bay (lat 29.45, lon -94.85)?",
+        "List the ships within 100 km of Rotterdam heading to Antwerp",
+        "Where is the vessel with MMSI 999000001 right now and what is its recent track?",
+        "How many tankers are anchored off Fujairah (lat 25.15, lon 56.45) in a 60 km radius?"
+      ],
+      "auth": "none — same-origin proxy; upstream credentials stay server-side",
+      "generatedBy": "scripts/generate-tool-openapi.mjs"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://sb-1dqoce558p0v.vercel.run",
+      "description": "OnDemand Spatial deployment (preview or production)"
+    }
+  ],
+  "paths": {
+    "/api/tools/vessels_in_bbox": {
+      "get": {
+        "operationId": "vessels_in_bbox",
+        "summary": "Live AIS vessels in a scene box (point ± radius, or explicit corners)",
+        "description": "Returns the vessels currently in the scene box, nearest first, from the bounded serverless AIS collector (≤ 8 s AISStream window per box, then a 25 s snapshot cache). The box is lat/lon ± radiusKm unless all four of lamin/lomin/lamax/lomax are given. `data.status` is the route's own state — live | degraded | stale | empty; `data.collectorMode` is aisstream | cache | aishub | demo; when AISSTREAM_API_KEY is not configured the answer is the labelled demo replay (status degraded, source \"Demo replay\", Texas Gulf coast only) and any other box is `status: \"empty\"` with a statusMessage. `count` is the number returned (≤ limit), `total` the number in the box. A rejected key or a failed collection is a 503 with a structured reason, never a raw upstream error.",
+        "parameters": [
+          {
+            "name": "lat",
+            "in": "query",
+            "required": true,
+            "description": "Scene centre latitude in decimal degrees (WGS84). Distances are measured from this point.",
+            "schema": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            }
+          },
+          {
+            "name": "lon",
+            "in": "query",
+            "required": true,
+            "description": "Scene centre longitude in decimal degrees (WGS84).",
+            "schema": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            }
+          },
+          {
+            "name": "lamin",
+            "in": "query",
+            "required": false,
+            "description": "Optional explicit box: south edge (degrees). Supply all four corners or none.",
+            "schema": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            }
+          },
+          {
+            "name": "lomin",
+            "in": "query",
+            "required": false,
+            "description": "Optional explicit box: west edge (degrees). Supply all four corners or none.",
+            "schema": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            }
+          },
+          {
+            "name": "lamax",
+            "in": "query",
+            "required": false,
+            "description": "Optional explicit box: north edge (degrees). Supply all four corners or none.",
+            "schema": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            }
+          },
+          {
+            "name": "lomax",
+            "in": "query",
+            "required": false,
+            "description": "Optional explicit box: east edge (degrees). Supply all four corners or none.",
+            "schema": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            }
+          },
+          {
+            "name": "radiusKm",
+            "in": "query",
+            "required": false,
+            "description": "Half-width of the scene box around lat/lon in kilometres (ignored when all four of lamin/lomin/lamax/lomax are given).",
+            "schema": {
+              "type": "number",
+              "minimum": 5,
+              "maximum": 300,
+              "default": 60
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of vessels returned (nearest first). Default 200.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2000,
+              "default": 200
+            }
+          },
+          {
+            "name": "maxRows",
+            "in": "query",
+            "required": false,
+            "description": "Row cap requested from the AIS snapshot route before distance sorting. Default 2000.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 12000,
+              "default": 2000
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tool result envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error (unknown/missing/invalid parameter)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Upstream failure with a structured reason",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Provider unavailable (missing key / no data) with a structured reason",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tools/vessel_by_mmsi": {
+      "get": {
+        "operationId": "vessel_by_mmsi",
+        "summary": "One vessel by MMSI from the current scene snapshot, with its recent track",
+        "description": "Looks a vessel up by its 9-digit MMSI in the scene snapshot (the box around lat/lon ± radiusKm, default 150 km; when lat/lon are omitted the Texas Gulf coast demo area 28.85..29.85 / -95.35..-94.00 is used) and attaches the recent path from /api/ais-live/track (positions collected by this function instance, or the synthetic path of a demo replay vessel). AIS is scene-scoped: the tool only sees vessels inside the box it collected, so an MMSI outside it (or not transmitting during the ≤ 8 s window) is a 404 `not_found`, not proof the ship does not exist. Demo replay MMSIs are 999000001…999000012 when no AISSTREAM_API_KEY is configured (status degraded).",
+        "parameters": [
+          {
+            "name": "mmsi",
+            "in": "query",
+            "required": true,
+            "description": "Maritime Mobile Service Identity, 5–10 digits (9 for ships).",
+            "schema": {
+              "type": "string",
+              "maxLength": 10
+            }
+          },
+          {
+            "name": "lat",
+            "in": "query",
+            "required": false,
+            "description": "Optional scene centre latitude; defaults (with lon) to the Texas Gulf coast demo area.",
+            "schema": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            }
+          },
+          {
+            "name": "lon",
+            "in": "query",
+            "required": false,
+            "description": "Optional scene centre longitude (required together with lat).",
+            "schema": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            }
+          },
+          {
+            "name": "radiusKm",
+            "in": "query",
+            "required": false,
+            "description": "Half-width of the scene box around lat/lon in kilometres. Default 150.",
+            "schema": {
+              "type": "number",
+              "minimum": 5,
+              "maximum": 300,
+              "default": 150
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tool result envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error (unknown/missing/invalid parameter)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Upstream failure with a structured reason",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Provider unavailable (missing key / no data) with a structured reason",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Provider": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "live",
+              "stale",
+              "degraded",
+              "unavailable"
+            ]
+          },
+          "source": {
+            "type": "string"
+          },
+          "fetchedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "ageSec": {
+            "type": "integer",
+            "nullable": true
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          },
+          "count": {
+            "type": "integer",
+            "nullable": true
+          }
+        }
+      },
+      "ToolResult": {
+        "type": "object",
+        "required": [
+          "ok",
+          "tool",
+          "data"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "tool": {
+            "type": "string"
+          },
+          "params": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "provider": {
+            "$ref": "#/components/schemas/Provider"
+          },
+          "provenance": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "generatedAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ToolError": {
+        "type": "object",
+        "required": [
+          "ok",
+          "error"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "tool": {
+            "type": "string"
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "param": {
+                "type": "string"
+              }
+            }
+          },
+          "provider": {
+            "$ref": "#/components/schemas/Provider"
+          }
+        }
+      }
+    }
+  }
+}
