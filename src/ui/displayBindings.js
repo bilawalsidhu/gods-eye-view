@@ -2,6 +2,7 @@ import { createFrameRateMonitor } from './frameRateMonitor.js';
 import { bindApplicationShortcuts } from './visualInput.js';
 import { bindDisplayControls } from './displayControls.js';
 import { canonicalizeDensity } from '../data/detectionPolicy.js';
+import { createRandomRoamController } from '../randomRoam.js';
 
 /** Own keyboard/display event subscriptions; settings remain with their state owners. */
 export class DisplayBindings {
@@ -60,6 +61,11 @@ export class DisplayBindings {
       viewer: this.viewer,
       documentRef: document,
     });
+    this._randomRoam?.destroy();
+    this._randomRoam = createRandomRoamController({
+      viewer: this.viewer,
+      button: this._roamBtn,
+    });
     this._applicationShortcuts = bindApplicationShortcuts({
       documentRef: document,
       searchInput: this._locationSearch,
@@ -106,6 +112,7 @@ export class DisplayBindings {
         hudButton: this._hudBtn,
         cleanViewButton: this._cleanViewBtn,
         cleanViewExitButton: this._cleanViewExitBtn,
+        roamButton: this._roamBtn,
         densitySlider: this._detectionDensitySlider,
         detectionButton: this._detectionBtn,
         allocationButtons: this._detectionAllocationBtns,
@@ -157,6 +164,12 @@ export class DisplayBindings {
         },
         toggleCleanView: () => this.toggleCleanView(),
         exitCleanView: () => this.toggleCleanView(false),
+        toggleRoam: () => {
+          this._randomRoam?.toggle();
+          if (this._randomRoam?.active)
+            this._showToast?.('Random roam started');
+          else this._showToast?.('Random roam stopped');
+        },
         setDensity: (value) => {
           this.shareLinkManager?.claimRestoreLane?.('visual');
           this.claimDetection();
@@ -210,6 +223,8 @@ export class DisplayBindings {
     this._applicationShortcuts = null;
     this._frameRateMonitor?.destroy();
     this._frameRateMonitor = null;
+    this._randomRoam?.destroy();
+    this._randomRoam = null;
     this._displayControls?.destroy();
     this._displayControls = null;
   }
