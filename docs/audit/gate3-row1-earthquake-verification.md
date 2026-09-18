@@ -1,6 +1,6 @@
 # Gate 3 · Row 1 — `earthquake.search` (USGS FDSN Event) — live verification 2026-09-18
 
-Branch `ondemand-serverless`, code commit `5da207c` (adapter, route, tool JSON, registry). Deploy tier **T2**: fresh node24 Vercel Sandbox `sbx_Fp2WF0A4uY1XmiGmDU3vphQWqtfS`, preview `https://sb-pg1bhjba1gcs.vercel.run`, `npm run dev:serverless` over `dist/` + `api/**`; runtime-only env (ONDEMAND_API_KEY masked `G7Gg…VjnL`, ONDEMAND_SELFTEST_TOKEN, ONDEMAND_BASE_URL, ONDEMAND_ENDPOINT_ID / ONDEMAND_REASONING_ENDPOINT_ID / ONDEMAND_FULFILLMENT_ENDPOINT_ID, ONDEMAND_REASONING_MODE=dynamic, GODS_EYE_FLOW_VERSION=0, VITE_SERVERLESS_MODE=1) — no `.env` file in the sandbox. Function count unchanged at 9 (`/api/sources/earthquakes` is served by `api/[...route].js`).
+Branch `ondemand-serverless`, code commit `5da207c` (adapter, route, tool JSON, registry). Deploy tier **T2**: fresh node24 Vercel Sandbox `sbx_Fp2WF0A4uY1XmiGmDU3vphQWqtfS`, preview `https://sb-pg1bhjba1gcs.vercel.run`, `npm run dev:serverless` over `dist/` + `api/**`; runtime-only env (ONDEMAND_API_KEY masked `<redacted>`, ONDEMAND_SELFTEST_TOKEN, ONDEMAND_BASE_URL, ONDEMAND_ENDPOINT_ID / ONDEMAND_REASONING_ENDPOINT_ID / ONDEMAND_FULFILLMENT_ENDPOINT_ID, ONDEMAND_REASONING_MODE=dynamic, GODS_EYE_FLOW_VERSION=0, VITE_SERVERLESS_MODE=1) — no `.env` file in the sandbox. Function count unchanged at 9 (`/api/sources/earthquakes` is served by `api/[...route].js`).
 
 ## Verification table
 

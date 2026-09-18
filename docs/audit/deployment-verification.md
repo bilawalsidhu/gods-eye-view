@@ -159,7 +159,7 @@ Notes: `/api/celestrak/active` reaches celestrak.org from the sandbox (a 200 wit
 
 ## 5. Selftest run on the sandbox emulator — 2026-09-18T05:47Z (commit 2ed4d78, sandbox sbx_CHYYYEfPHVf9TgYwIrYaHLjqRuiB)
 
-Deploy tier **T2** (the `vercel` CLI is a guardrail shim here — `vercel whoami` exits 126 — so T1/T1-newproject were impossible). The branch runs in a fresh node24 Vercel Sandbox via `npm run dev:serverless` over `dist/` + `api/**`; ONDEMAND_API_KEY (masked `G7Gg…VjnL`), ONDEMAND_SELFTEST_TOKEN, ONDEMAND_BASE_URL, ONDEMAND_ENDPOINT_ID=predefined-gpt-5.6-luna, ONDEMAND_REASONING_MODE=dynamic, GODS_EYE_FLOW_VERSION=0, VITE_SERVERLESS_MODE=1 were injected as process environment only — no `.env` file exists in the sandbox. `keyPresentAtRuntime: true`. Preview host: `sb-5hfcfkb7a79s.vercel.run`.
+Deploy tier **T2** (the `vercel` CLI is a guardrail shim here — `vercel whoami` exits 126 — so T1/T1-newproject were impossible). The branch runs in a fresh node24 Vercel Sandbox via `npm run dev:serverless` over `dist/` + `api/**`; ONDEMAND_API_KEY (masked `<redacted>`), ONDEMAND_SELFTEST_TOKEN, ONDEMAND_BASE_URL, ONDEMAND_ENDPOINT_ID=predefined-gpt-5.6-luna, ONDEMAND_REASONING_MODE=dynamic, GODS_EYE_FLOW_VERSION=0, VITE_SERVERLESS_MODE=1 were injected as process environment only — no `.env` file exists in the sandbox. `keyPresentAtRuntime: true`. Preview host: `sb-5hfcfkb7a79s.vercel.run`.
 
 | Route | Expected | Actual | UTC | Note |
 |---|---|---|---|---|

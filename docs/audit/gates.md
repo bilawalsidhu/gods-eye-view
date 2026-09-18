@@ -17,7 +17,7 @@ Every status below is backed by a file in this repository; nothing is marked EXI
 
 ## Gate 1 — exit record (2026-09-18)
 
-**EXITED at 2026-09-18T04:51:41Z.** The user supplied an OnDemand API key for this run (masked everywhere as `G7Gg…VjnL`, held only in the process environment). With it:
+**EXITED at 2026-09-18T04:51:41Z.** The user supplied an OnDemand API key for this run (masked everywhere as `<redacted>`, held only in the process environment). With it:
 
 - Credential validation: `POST /chat/v1/sessions` → **201** in 249 ms at 04:45:10.744Z (`sessionId 6aacc1d6ab2c7f21f3232d03`) — key classification **ondemand**.
 - Live 10-step contract run (`scripts/ondemand-contract-test.mjs`, direct mode, `endpointId predefined-gpt-5.6-luna`, session `6aacc33eb9401965d65923e0`): session create+reuse 200 · sync 200 · SSE stream 200 (ttfd 1,277 ms, 29 deltas, `[DONE]`) · tool invocation **SKIP** (this account has 0 agents — `GET /plugin/v1/list total=0`) · STT on an in-script WAV 200 · TTS 200 (42,624 MP3 bytes) · Media PNG analysis 200 (`actionStatus completed`) · workflow **SKIP by design** (`ONDEMAND_SPATIAL_FLOW_ID` unset) · session-memory follow-up 200 · latency summary. `CONTRACT RESULT: passed=8 failed=0 skipped=2 totalMs=31012`, exit 0.

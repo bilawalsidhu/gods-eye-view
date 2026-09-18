@@ -744,7 +744,7 @@ The step-1 Perplexity searches (four queries, run by the orchestration layer) re
 
 ## §17 LIVE VALIDATION 2026-09-18
 
-Live run against `https://api.on-demand.io` with a user-supplied key (masked everywhere as `G7Gg…VjnL`; read only from `ONDEMAND_API_KEY` in the process environment, never written to disk). Mode: **direct** (no proxy). Script: `scripts/ondemand-contract-test.mjs`; machine-readable record: `docs/ondemand-workflows/contract-baseline.json`. Nothing in this section was taken from memory — every status code below is from a response received on 2026-09-18.
+Live run against `https://api.on-demand.io` with a user-supplied key (masked everywhere as `<redacted>`; read only from `ONDEMAND_API_KEY` in the process environment, never written to disk). Mode: **direct** (no proxy). Script: `scripts/ondemand-contract-test.mjs`; machine-readable record: `docs/ondemand-workflows/contract-baseline.json`. Nothing in this section was taken from memory — every status code below is from a response received on 2026-09-18.
 
 ### 17.1 Credential validation (step a)
 
