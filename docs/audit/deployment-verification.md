@@ -288,3 +288,112 @@ Full `/api/ondemand/health` JSON (secret-free):
 }
 ```
 
+## 8. Gate 6 — principal workflow created + selftest step 8 live — sandbox verification 2026-09-18T07:31Z (commit aa6fd0c + this gate's commits, sandbox `sbx_DV7Jx2deyh9edv9XkSztio1dws7P`)
+
+Tier T2, preview `https://sb-765981cquksp.vercel.run`, `npm run dev:serverless` over `dist/` + `api/**` (Node v24.14.1; `npm ci` 07:30:43Z, `npm run build` 07:30:53Z–07:31:00Z, server listening 07:31:18Z). Runtime-only env injected into the process: ONDEMAND_API_KEY `****`, ONDEMAND_SELFTEST_TOKEN `****` (one-time), ONDEMAND_BASE_URL, **ONDEMAND_SPATIAL_FLOW_ID=6aace534859f7b0abb53d99a**, **GODS_EYE_FLOW_VERSION=1**, VITE_SERVERLESS_MODE=1, SERVERLESS_MODE=true, HOST/PORT. The only `.env` in the sandbox is the repo's 303-byte non-secret serverless-mode file (no key in it — verified `grep -c ONDEMAND_API_KEY .env` → 0). Function count 9 (unchanged; ≤ 12).
+
+Workflow under test: **`GodsEye Advanced Spatial Workflow` v1, id `6aace534859f7b0abb53d99a`**, created through the documented `POST /automation/api/workflow/` (201, 2026-09-18T07:16:04.335Z) and activated (200, 07:16:14.101Z) — full record in `docs/ondemand-workflows/README.md` and `docs/ondemand-workflows/verification-2026-09-18.json`.
+
+| Check | Expected | HTTP | Latency ms | UTC | Note |
+|---|---|---|---|---|---|
+| `GET /` | 200 | **200** | 80 | 2026-09-18T07:31:19Z | SPA shell |
+| `GET /api/ondemand/health?envNames=1` | 200 | **200** | 2560 | 2026-09-18T07:31:33Z | all five fields **healthy**; `config.spatialFlowId` `{configured:true, source:"ONDEMAND_SPATIAL_FLOW_ID"}`, `config.flowVersion` `{configured:true, source:"GODS_EYE_FLOW_VERSION"}`; full JSON below |
+| `GET /api/ondemand/selftest` (no header) | 404 | **404** | 48 | 2026-09-18T07:32:45Z | `{"error":"not_found"}` |
+| `GET /api/ondemand/selftest` (token) — run 1 | 200 | **200** | 44734 | 2026-09-18T07:31:35Z → 07:32:20Z | **passed 9 / failed 0 / skipped 1** (only step 4 — account has no agents); **step 8 PASS**: `executionId=6aace8f487fc428d7c18a1f3 status=executing logEvents=5 timeToFirstLogMs=298 firstLogUtc=2026-09-18T07:32:04.722Z polledMs=13828`; SSE ttfd 1956 ms; latency column = durationMs |
+| `GET /api/ondemand/selftest` (token) — run 2 | 200 | **200** | 41777 | 2026-09-18T07:32:45Z → 07:33:27Z | passed 9 / failed 0 / skipped 1 again; step 8 `executionId=6aace938bb6a9a7035f43237 … timeToFirstLogMs=276`; SSE ttfd 1629 ms |
+| `GET /api/ondemand/selftest` (token) 10 s after run 2 started | 429 | **429** | 41 | 2026-09-18T07:33:37Z | `{"error":"rate_limited","retryAfterSec":9}`, `Retry-After: 9` |
+| `GET /api/sources/earthquakes?latitude=24.433&longitude=54.651&maxradiuskm=500&starttime=<now-30d>&minmagnitude=3` | 200 | **200** | 429 | 2026-09-18T07:33:27Z | `source:"USGS", coverage:"observed", count:0` (no M≥3 event within 500 km of OMAA in the last 30 days) |
+| `GET /api/ondemand/workflow?action=status&executionId=6aace8f487fc428d7c18a1f3` (proxy → documented `GET /execution/{id}`) | 200 | **200** | 187 | 2026-09-18T07:33:28Z | `trigger.type:"api"`, `status:"executing"` at that moment |
+| `GET /api/ondemand/workflow?action=stream-logs&executionId=…` | 501 | **501** | 53 | 2026-09-18T07:33:28Z | `{"error":"not documented","surface":"stream workflow logs","reference":"§7.1"}` — polling `?action=logs` is the documented surface |
+| `GET /api/ais-live` | 501 | **501** | — | 2026-09-18T07:33:28Z | unavailable_in_serverless |
+| `GET /api/setup/status` | 404 | **404** | — | 2026-09-18T07:33:28Z | catch-all JSON 404 |
+
+Both selftest-started executions finished after the 12 s polling window — `GET /automation/api/execution/list?workflowID=6aace534859f7b0abb53d99a` at 2026-09-18T07:40:47Z: `6aace8f487fc428d7c18a1f3` **success** 164,464 ms, `6aace938bb6a9a7035f43237` **success** 170,404 ms (and the verification run `6aace54bbb6a9a7035f431fc` success 158,861 ms). The `structured_response` node output of `6aace8f487fc428d7c18a1f3` parsed to exactly the seven keys `message, entities, actions, evidence, sources, suggestedNextActions, runMeta` with actions `fly_to_location, track_entity, annotate_map, set_layer_visibility, frame_overhead, analyst_query` (all among the 28 MapAction names), `runMeta.mode = "selftest"`, `runMeta.intent = "anomaly_scan"`.
+
+`docs/ondemand-workflows/contract-baseline.json` was updated **in place** with run 1 (the previous 8/0/2 baseline moved into `history[]`).
+
+Full `/api/ondemand/health?envNames=1` JSON (secret-free — names only):
+
+```json
+{
+  "ondemand": "healthy",
+  "chat": "healthy",
+  "speech": "healthy",
+  "media": "healthy",
+  "workflow": "healthy",
+  "plugins": {},
+  "configured": true,
+  "speechProbe": {
+    "cached": false,
+    "ageSec": 0
+  },
+  "reasoningModeInvalid": false,
+  "config": {
+    "tiers": {
+      "ASK": {
+        "fulfillmentEndpointId": "predefined-gpt-5.6-luna",
+        "reasoningMode": "low"
+      },
+      "INVESTIGATE": {
+        "fulfillmentEndpointId": "predefined-claude-sonnet-5",
+        "reasoningMode": "low"
+      },
+      "DEEP": {
+        "fulfillmentEndpointId": "predefined-claude-sonnet-5",
+        "reasoningMode": "high"
+      }
+    },
+    "apiKey": {
+      "configured": true
+    },
+    "baseUrl": {
+      "configured": true,
+      "source": "ONDEMAND_BASE_URL"
+    },
+    "reasoningEndpointId": {
+      "configured": true,
+      "source": "default"
+    },
+    "fulfillmentEndpointId": {
+      "configured": true,
+      "source": "default"
+    },
+    "reasoningMode": {
+      "configured": false,
+      "source": "unset",
+      "valid": true
+    },
+    "flowVersion": {
+      "configured": true,
+      "source": "GODS_EYE_FLOW_VERSION"
+    },
+    "spatialFlowId": {
+      "configured": true,
+      "source": "ONDEMAND_SPATIAL_FLOW_ID"
+    }
+  },
+  "checkedAt": "2026-09-18T07:31:33.106Z",
+  "message": "OnDemand API reachable; chat probe succeeded.",
+  "env": {
+    "names": [
+      "ONDEMAND_API_KEY",
+      "ONDEMAND_BASE_URL",
+      "ONDEMAND_SELFTEST_TOKEN",
+      "ONDEMAND_SPATIAL_FLOW_ID",
+      "SERVERLESS_MODE",
+      "VITE_SERVERLESS_MODE"
+    ],
+    "sources": {
+      "apiKey": "ONDEMAND_API_KEY",
+      "baseUrl": "ONDEMAND_BASE_URL",
+      "reasoningEndpointId": "default",
+      "fulfillmentEndpointId": "default",
+      "defaultPluginIds": "unset",
+      "spatialFlowId": "ONDEMAND_SPATIAL_FLOW_ID",
+      "reasoningMode": "unset",
+      "flowVersion": "GODS_EYE_FLOW_VERSION",
+      "requestTimeoutMs": "default"
+    }
+  }
+}
+```
