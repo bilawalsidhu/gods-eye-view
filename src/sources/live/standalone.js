@@ -176,7 +176,9 @@ export function createAisStreamSource({
   // short-circuits here instead of polling an endpoint that can only ever
   // answer 501. See docs/SERVERLESS_LIMITATIONS.md.
   const serverlessUnavailable = () =>
-    import.meta.env?.VITE_SERVERLESS_MODE === 'true'
+    ['true', '1', 'yes'].includes(
+      String(import.meta.env?.VITE_SERVERLESS_MODE ?? '').toLowerCase(),
+    )
       ? new LiveSourceError(
           'unavailable',
           'AIS live relay is unavailable in the serverless deployment',

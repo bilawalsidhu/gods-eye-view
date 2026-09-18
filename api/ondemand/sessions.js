@@ -10,10 +10,20 @@
  * DELETE /api/ondemand/sessions?userId=    -> local mapping removal only
  */
 
-import { isConfigured } from '../../server/ondemand/config.js';
+import { isConfigured } from './_config.js';
 import { getStore } from '../../server/ondemand/sessions-store.js';
-import { ensureSession, UpstreamError } from '../../server/ondemand/session-service.js';
-import { sendJson, assertMethod, rejectCrossOrigin, readJsonBody, BodyError, getRequestUrl } from '../../server/ondemand/http.js';
+import {
+  ensureSession,
+  UpstreamError,
+} from '../../server/ondemand/session-service.js';
+import {
+  sendJson,
+  assertMethod,
+  rejectCrossOrigin,
+  readJsonBody,
+  BodyError,
+  getRequestUrl,
+} from '../../server/ondemand/http.js';
 
 const MAX_USER_ID_LEN = 128;
 const MAX_PLUGIN_IDS = 20;
@@ -23,7 +33,10 @@ export default async function handler(req, res) {
   if (!assertMethod(req, res, ['GET', 'POST', 'DELETE'])) return;
 
   if (!isConfigured()) {
-    sendJson(res, 503, { error: 'not_configured', message: 'ONDEMAND_API_KEY is not set on the server.' });
+    sendJson(res, 503, {
+      error: 'not_configured',
+      message: 'ONDEMAND_API_KEY is not set on the server.',
+    });
     return;
   }
 
@@ -52,7 +65,7 @@ export default async function handler(req, res) {
       getStore().delete(userId);
       sendJson(res, 200, {
         deleted: true,
-        note: "Upstream delete-session is NOT FOUND IN LIVE DOCS (§2.4); only the local mapping was removed",
+        note: 'Upstream delete-session is NOT FOUND IN LIVE DOCS (§2.4); only the local mapping was removed',
       });
       return;
     }
@@ -74,7 +87,11 @@ export default async function handler(req, res) {
     }
 
     const { userId, pluginIds } = body;
-    if (typeof userId !== 'string' || userId.length === 0 || userId.length > MAX_USER_ID_LEN) {
+    if (
+      typeof userId !== 'string' ||
+      userId.length === 0 ||
+      userId.length > MAX_USER_ID_LEN
+    ) {
       sendJson(res, 400, {
         error: 'userId_required',
         message: `userId is required and must be \u2264 ${MAX_USER_ID_LEN} chars`,
@@ -83,7 +100,9 @@ export default async function handler(req, res) {
     }
     if (
       pluginIds !== undefined &&
-      (!Array.isArray(pluginIds) || pluginIds.length > MAX_PLUGIN_IDS || pluginIds.some((p) => typeof p !== 'string'))
+      (!Array.isArray(pluginIds) ||
+        pluginIds.length > MAX_PLUGIN_IDS ||
+        pluginIds.some((p) => typeof p !== 'string'))
     ) {
       sendJson(res, 400, {
         error: 'invalid_pluginIds',
@@ -95,7 +114,11 @@ export default async function handler(req, res) {
 
     const result = await ensureSession(userId, { pluginIds, reuse });
     if (result.reused) {
-      sendJson(res, 200, { sessionId: result.sessionId, externalUserId: userId, reused: true });
+      sendJson(res, 200, {
+        sessionId: result.sessionId,
+        externalUserId: userId,
+        reused: true,
+      });
     } else {
       sendJson(res, 201, {
         sessionId: result.sessionId,
@@ -109,6 +132,9 @@ export default async function handler(req, res) {
       sendJson(res, err.status, err.envelope);
       return;
     }
-    sendJson(res, 502, { error: 'proxy_error', message: 'Unexpected error contacting OnDemand.' });
+    sendJson(res, 502, {
+      error: 'proxy_error',
+      message: 'Unexpected error contacting OnDemand.',
+    });
   }
 }

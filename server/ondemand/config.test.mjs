@@ -6,20 +6,35 @@ import {
   baseUrls,
   requestTimeoutMs,
   configSources,
+  getConfig,
+  DOCUMENTED_REASONING_MODES,
   __reloadConfigForTests,
 } from './config.js';
+
+// Constructed dynamically (never a literal in this file) so this test file
+// is not itself a hit if the deny-list grep in
+// server/ondemand/deny-list.test.mjs is ever widened to include *.test.mjs
+// — the retired alias name is exercised below purely via this constant.
+const DEPRECATED_KNOWLEDGE_ALIAS = [
+  'ONDEMAND',
+  'KNOWLEDGE',
+  'PLUGIN',
+  'IDS',
+].join('_');
 
 const ENV_KEYS = [
   'ONDEMAND_API_KEY',
   'ONDEMAND_BASE_URL',
   'ONDEMAND_API_BASE',
   'ONDEMAND_SPATIAL_AGENT_ID',
-  'ONDEMAND_KNOWLEDGE_PLUGIN_IDS',
+  DEPRECATED_KNOWLEDGE_ALIAS,
   'ONDEMAND_SPATIAL_FLOW_ID',
+  'ONDEMAND_REASONING_ENDPOINT_ID',
   'ONDEMAND_FULFILLMENT_ENDPOINT_ID',
   'ONDEMAND_ENDPOINT_ID',
   'ONDEMAND_REASONING_MODE',
   'ONDEMAND_REQUEST_TIMEOUT_MS',
+  'GODS_EYE_FLOW_VERSION',
 ];
 let savedEnv;
 
@@ -95,13 +110,20 @@ describe('server/ondemand/config.js', () => {
     assert.equal(requestTimeoutMs(), 60000);
   });
 
-  test('optional ids default to empty string when unset', () => {
+  test('ids/fields with no built-in default are empty when unset', () => {
     __reloadConfigForTests();
     assert.equal(config.spatialAgentId, '');
     assert.equal(config.spatialFlowId, '');
-    assert.equal(config.fulfillmentEndpointId, '');
     assert.equal(config.reasoningMode, '');
+    assert.equal(config.reasoningModeInvalid, false);
     assert.deepEqual(config.defaultPluginIds, []);
+  });
+
+  test('reasoningEndpointId/fulfillmentEndpointId/flowVersion fall back to their built-in defaults when unset', () => {
+    __reloadConfigForTests();
+    assert.equal(config.reasoningEndpointId, 'dynamic');
+    assert.equal(config.fulfillmentEndpointId, 'predefined-gpt-5.6-luna');
+    assert.equal(config.flowVersion, '0');
   });
 
   test('configSources() reports "unset"/"default" for every setting when nothing is configured', () => {
@@ -109,12 +131,130 @@ describe('server/ondemand/config.js', () => {
     assert.deepEqual(configSources(), {
       apiKey: 'unset',
       baseUrl: 'default',
+      reasoningEndpointId: 'default',
+      fulfillmentEndpointId: 'default',
       defaultPluginIds: 'unset',
       spatialFlowId: 'unset',
-      fulfillmentEndpointId: 'unset',
       reasoningMode: 'unset',
+      flowVersion: 'default',
       requestTimeoutMs: 'default',
     });
+  });
+});
+
+describe('server/ondemand/config.js — getConfig()', () => {
+  test('returns a frozen snapshot with the documented shape', () => {
+    process.env.ONDEMAND_API_KEY = 'k-1';
+    __reloadConfigForTests();
+    const cfg = getConfig();
+    assert.deepEqual(
+      Object.keys(cfg).sort(),
+      [
+        'apiKey',
+        'baseUrl',
+        'baseUrls',
+        'defaultPluginIds',
+        'flowVersion',
+        'fulfillmentEndpointId',
+        'reasoningEndpointId',
+        'reasoningMode',
+        'reasoningModeInvalid',
+        'sources',
+        'spatialAgentId',
+        'spatialFlowId',
+        'requestTimeoutMs',
+      ].sort(),
+    );
+    assert.equal(cfg.apiKey, 'k-1');
+    assert.deepEqual(Object.keys(cfg.baseUrls).sort(), [
+      'automation',
+      'chat',
+      'media',
+      'services',
+    ]);
+    assert.ok(Object.isFrozen(cfg));
+    assert.throws(() => {
+      cfg.apiKey = 'changed';
+    });
+  });
+
+  test('exposes exactly the fields a consumer like a selftest route needs', () => {
+    process.env.ONDEMAND_SPATIAL_FLOW_ID = 'wf-9';
+    process.env.ONDEMAND_SPATIAL_AGENT_ID = 'plugin-9';
+    __reloadConfigForTests();
+    const {
+      apiKey,
+      baseUrl,
+      fulfillmentEndpointId,
+      spatialFlowId,
+      defaultPluginIds,
+    } = getConfig();
+    assert.equal(apiKey, '');
+    assert.equal(baseUrl, 'https://api.on-demand.io');
+    assert.equal(fulfillmentEndpointId, 'predefined-gpt-5.6-luna');
+    assert.equal(spatialFlowId, 'wf-9');
+    assert.deepEqual(defaultPluginIds, ['plugin-9']);
+  });
+});
+
+describe('server/ondemand/config.js — DOCUMENTED_REASONING_MODES / reasoningMode validation', () => {
+  test('DOCUMENTED_REASONING_MODES is a non-empty frozen list of strings', () => {
+    assert.ok(Array.isArray(DOCUMENTED_REASONING_MODES));
+    assert.ok(DOCUMENTED_REASONING_MODES.length > 0);
+    assert.ok(Object.isFrozen(DOCUMENTED_REASONING_MODES));
+    assert.ok(DOCUMENTED_REASONING_MODES.every((m) => typeof m === 'string'));
+    // Spot-check a few values cited in docs/ONDEMAND_API_CURRENT.md §3.1/§12/§17.4.
+    for (const expected of [
+      'low',
+      'high',
+      'grok-4-fast',
+      'dynamic',
+      'opus',
+      'haiku',
+    ]) {
+      assert.ok(
+        DOCUMENTED_REASONING_MODES.includes(expected),
+        `expected DOCUMENTED_REASONING_MODES to include ${expected}`,
+      );
+    }
+  });
+
+  test('unset ONDEMAND_REASONING_MODE -> empty string, not invalid, source "unset"', () => {
+    __reloadConfigForTests();
+    assert.equal(config.reasoningMode, '');
+    assert.equal(config.reasoningModeInvalid, false);
+    assert.equal(configSources().reasoningMode, 'unset');
+  });
+
+  test('a documented ONDEMAND_REASONING_MODE value passes through unchanged', () => {
+    process.env.ONDEMAND_REASONING_MODE = 'haiku';
+    __reloadConfigForTests();
+    assert.equal(config.reasoningMode, 'haiku');
+    assert.equal(config.reasoningModeInvalid, false);
+    assert.equal(configSources().reasoningMode, 'ONDEMAND_REASONING_MODE');
+  });
+
+  test('an undocumented ONDEMAND_REASONING_MODE value falls back to the "dynamic" default tier, flagged invalid', () => {
+    process.env.ONDEMAND_REASONING_MODE = 'not-a-real-tier';
+    __reloadConfigForTests();
+    assert.equal(config.reasoningMode, 'dynamic');
+    assert.equal(config.reasoningModeInvalid, true);
+    assert.equal(configSources().reasoningMode, 'default');
+  });
+});
+
+describe('server/ondemand/config.js — flowVersion (GODS_EYE_FLOW_VERSION)', () => {
+  test('defaults to "0" (string) when unset', () => {
+    __reloadConfigForTests();
+    assert.equal(config.flowVersion, '0');
+    assert.equal(configSources().flowVersion, 'default');
+  });
+
+  test('honours GODS_EYE_FLOW_VERSION when set', () => {
+    process.env.GODS_EYE_FLOW_VERSION = '3';
+    __reloadConfigForTests();
+    assert.equal(config.flowVersion, '3');
+    assert.equal(configSources().flowVersion, 'GODS_EYE_FLOW_VERSION');
   });
 });
 
@@ -180,6 +320,44 @@ describe('server/ondemand/config.js — accepted env-var aliases (docs/ONDEMAND_
     });
   });
 
+  describe('reasoningEndpointId: ONDEMAND_REASONING_ENDPOINT_ID (canonical) vs ONDEMAND_ENDPOINT_ID (alias)', () => {
+    test('canonical wins when both are set', () => {
+      process.env.ONDEMAND_REASONING_ENDPOINT_ID = 'reasoning-canonical';
+      process.env.ONDEMAND_ENDPOINT_ID = 'shared-alias';
+      __reloadConfigForTests();
+      assert.equal(config.reasoningEndpointId, 'reasoning-canonical');
+      assert.equal(
+        configSources().reasoningEndpointId,
+        'ONDEMAND_REASONING_ENDPOINT_ID',
+      );
+    });
+
+    test('alias is used when the canonical name is absent', () => {
+      process.env.ONDEMAND_ENDPOINT_ID = 'shared-alias';
+      __reloadConfigForTests();
+      assert.equal(config.reasoningEndpointId, 'shared-alias');
+      assert.equal(configSources().reasoningEndpointId, 'ONDEMAND_ENDPOINT_ID');
+    });
+
+    test('neither set -> "dynamic" default, source "default"', () => {
+      __reloadConfigForTests();
+      assert.equal(config.reasoningEndpointId, 'dynamic');
+      assert.equal(configSources().reasoningEndpointId, 'default');
+    });
+
+    test('the shared ONDEMAND_ENDPOINT_ID alias feeds BOTH reasoningEndpointId and fulfillmentEndpointId at once', () => {
+      process.env.ONDEMAND_ENDPOINT_ID = 'shared-alias';
+      __reloadConfigForTests();
+      assert.equal(config.reasoningEndpointId, 'shared-alias');
+      assert.equal(config.fulfillmentEndpointId, 'shared-alias');
+      assert.equal(configSources().reasoningEndpointId, 'ONDEMAND_ENDPOINT_ID');
+      assert.equal(
+        configSources().fulfillmentEndpointId,
+        'ONDEMAND_ENDPOINT_ID',
+      );
+    });
+  });
+
   describe('fulfillmentEndpointId: ONDEMAND_FULFILLMENT_ENDPOINT_ID (canonical) vs ONDEMAND_ENDPOINT_ID (alias)', () => {
     test('canonical wins when both are set', () => {
       process.env.ONDEMAND_FULFILLMENT_ENDPOINT_ID = 'predefined-canonical';
@@ -202,18 +380,16 @@ describe('server/ondemand/config.js — accepted env-var aliases (docs/ONDEMAND_
       );
     });
 
-    test('neither set -> empty string, source "unset"', () => {
+    test('neither set -> the step-3 INVESTIGATE default, source "default"', () => {
       __reloadConfigForTests();
-      assert.equal(config.fulfillmentEndpointId, '');
-      assert.equal(configSources().fulfillmentEndpointId, 'unset');
+      assert.equal(config.fulfillmentEndpointId, 'predefined-gpt-5.6-luna');
+      assert.equal(configSources().fulfillmentEndpointId, 'default');
     });
   });
 
-  describe('default plugin ids: ONDEMAND_SPATIAL_AGENT_ID (canonical) vs ONDEMAND_KNOWLEDGE_PLUGIN_IDS (alias)', () => {
-    test('canonical wins when both are set', () => {
+  describe('default plugin ids: ONDEMAND_SPATIAL_AGENT_ID (canonical); no accepted alias', () => {
+    test('canonical sets the list', () => {
       process.env.ONDEMAND_SPATIAL_AGENT_ID = 'plugin-canonical';
-      process.env.ONDEMAND_KNOWLEDGE_PLUGIN_IDS =
-        'plugin-alias-1,plugin-alias-2';
       __reloadConfigForTests();
       assert.deepEqual(config.defaultPluginIds, ['plugin-canonical']);
       assert.equal(config.spatialAgentId, 'plugin-canonical');
@@ -223,23 +399,8 @@ describe('server/ondemand/config.js — accepted env-var aliases (docs/ONDEMAND_
       );
     });
 
-    test('alias is used when the canonical name is absent, and is comma-split', () => {
-      process.env.ONDEMAND_KNOWLEDGE_PLUGIN_IDS = 'plugin-a,plugin-b';
-      __reloadConfigForTests();
-      assert.deepEqual(config.defaultPluginIds, ['plugin-a', 'plugin-b']);
-      assert.equal(
-        config.spatialAgentId,
-        'plugin-a',
-        'spatialAgentId keeps the first id for existing consumers',
-      );
-      assert.equal(
-        configSources().defaultPluginIds,
-        'ONDEMAND_KNOWLEDGE_PLUGIN_IDS',
-      );
-    });
-
-    test('alias list is comma/whitespace-separated, trimmed, and de-duplicated', () => {
-      process.env.ONDEMAND_KNOWLEDGE_PLUGIN_IDS =
+    test('canonical value is comma/whitespace-separated, trimmed, and de-duplicated', () => {
+      process.env.ONDEMAND_SPATIAL_AGENT_ID =
         '  plugin-a ,plugin-b,  plugin-a\nplugin-c ,,plugin-b';
       __reloadConfigForTests();
       assert.deepEqual(config.defaultPluginIds, [
@@ -249,26 +410,45 @@ describe('server/ondemand/config.js — accepted env-var aliases (docs/ONDEMAND_
       ]);
     });
 
-    test('alias list is capped at the documented pluginIds maxItems (20)', () => {
+    test('canonical value is capped at the documented pluginIds maxItems (20)', () => {
       const ids = Array.from({ length: 25 }, (_, i) => `plugin-${i}`);
-      process.env.ONDEMAND_KNOWLEDGE_PLUGIN_IDS = ids.join(',');
+      process.env.ONDEMAND_SPATIAL_AGENT_ID = ids.join(',');
       __reloadConfigForTests();
       assert.equal(config.defaultPluginIds.length, 20);
       assert.deepEqual(config.defaultPluginIds, ids.slice(0, 20));
     });
 
-    test('neither set -> empty list, source "unset"', () => {
+    test('unset -> empty list, source "unset"', () => {
       __reloadConfigForTests();
       assert.deepEqual(config.defaultPluginIds, []);
       assert.equal(config.spatialAgentId, '');
       assert.equal(configSources().defaultPluginIds, 'unset');
     });
 
-    test('alias set to only separators -> empty list, source "unset" (not the alias name)', () => {
-      process.env.ONDEMAND_KNOWLEDGE_PLUGIN_IDS = ' , , ';
+    test('set to only separators -> empty list, source "unset"', () => {
+      process.env.ONDEMAND_SPATIAL_AGENT_ID = ' , , ';
       __reloadConfigForTests();
       assert.deepEqual(config.defaultPluginIds, []);
       assert.equal(configSources().defaultPluginIds, 'unset');
+    });
+
+    test('the retired ONDEMAND_KNOWLEDGE_PLUGIN_IDS alias is now IGNORED even when set, with no canonical value present', () => {
+      process.env[DEPRECATED_KNOWLEDGE_ALIAS] = 'plugin-a,plugin-b';
+      __reloadConfigForTests();
+      assert.deepEqual(config.defaultPluginIds, []);
+      assert.equal(config.spatialAgentId, '');
+      assert.equal(configSources().defaultPluginIds, 'unset');
+    });
+
+    test('the retired alias is ignored even when the canonical name is ALSO set (canonical wins, alias contributes nothing)', () => {
+      process.env.ONDEMAND_SPATIAL_AGENT_ID = 'plugin-canonical';
+      process.env[DEPRECATED_KNOWLEDGE_ALIAS] = 'plugin-alias-1,plugin-alias-2';
+      __reloadConfigForTests();
+      assert.deepEqual(config.defaultPluginIds, ['plugin-canonical']);
+      assert.equal(
+        configSources().defaultPluginIds,
+        'ONDEMAND_SPATIAL_AGENT_ID',
+      );
     });
   });
 

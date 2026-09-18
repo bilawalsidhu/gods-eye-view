@@ -2,11 +2,16 @@ import os from 'node:os';
 import { createMountRouter } from './router.js';
 
 /** VITE_SERVERLESS_MODE / SERVERLESS_MODE mirror the client-side build-time flag; VERCEL is set by the platform itself. */
+/** Accept the usual truthy spellings (`true`, `1`, `yes`) for an env flag. */
+function flagOn(value) {
+  return ['true', '1', 'yes'].includes(String(value ?? '').toLowerCase());
+}
+
 function resolveServerlessMode(explicit) {
   if (explicit !== undefined) return Boolean(explicit);
   return (
-    process.env.VITE_SERVERLESS_MODE === 'true' ||
-    process.env.SERVERLESS_MODE === 'true' ||
+    flagOn(process.env.VITE_SERVERLESS_MODE) ||
+    flagOn(process.env.SERVERLESS_MODE) ||
     Boolean(process.env.VERCEL)
   );
 }

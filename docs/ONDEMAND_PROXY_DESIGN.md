@@ -203,3 +203,146 @@ curl -s -N -X POST http://localhost:5173/api/ondemand/chat \
   -H 'Content-Type: application/json' \
   -d '{"userId":"dev-user-1","query":"Say hello in five words.","endpointId":"predefined-claude-sonnet-5","responseMode":"stream"}'
 ```
+
+---
+
+## 10. Environment name reconciliation (2026-09-18)
+
+Extends §5b (2026-09-17) with the live-validation defaults from
+`docs/ONDEMAND_API_CURRENT.md` §17 (2026-09-18) and a small deny-list.
+`server/ondemand/config.js` remains the only file that reads any of these
+names; every function under `api/ondemand/**` reaches it exclusively
+through `api/ondemand/_config.js` (§ "Single config import point" below).
+
+### 10.1 Precedence table (canonical → alias → default)
+
+Every row: canonical name tried first, then the accepted alias (if any,
+never a value — see `configSources()`), then a built-in default. An env var
+explicitly set to `""`/whitespace counts as unset at every step.
+
+| Setting                 | Canonical                             | Alias                  | Default (`source` reported as `'default'`)                       | Provenance of the default                                                                                                                                                                                                |
+| ----------------------- | ------------------------------------- | ---------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `baseUrl`               | `ONDEMAND_BASE_URL`                   | `ONDEMAND_API_BASE`    | `https://api.on-demand.io`                                       | contract §1                                                                                                                                                                                                              |
+| `reasoningEndpointId`   | `ONDEMAND_REASONING_ENDPOINT_ID`      | `ONDEMAND_ENDPOINT_ID` | `dynamic`                                                        | step-3 INVESTIGATE reasoning choice, §17.5 — reconciled for env-name/health purposes only: OnDemand has no separate "reasoning endpoint" concept (§12), so this value is never sent upstream by any handler in this task |
+| `fulfillmentEndpointId` | `ONDEMAND_FULFILLMENT_ENDPOINT_ID`    | `ONDEMAND_ENDPOINT_ID` | `predefined-gpt-5.6-luna`                                        | step-3 INVESTIGATE fulfillment choice, verified live 2026-09-18 (§17.5); ids are volatile per §12                                                                                                                        |
+| `reasoningMode`         | `ONDEMAND_REASONING_MODE` (validated) | —                      | `''` (unset) / `'dynamic'` (set but invalid — see §10.2)         | §17.5 documented default tier                                                                                                                                                                                            |
+| `flowVersion`           | `GODS_EYE_FLOW_VERSION`               | —                      | `'0'`                                                            | informational only; workflow versioning is NOT FOUND IN LIVE DOCS (§7.3)                                                                                                                                                 |
+| `spatialFlowId`         | `ONDEMAND_SPATIAL_FLOW_ID`            | —                      | `''` (no default — see §5b, no equivalent exists on the project) | —                                                                                                                                                                                                                        |
+| `defaultPluginIds`      | `ONDEMAND_SPATIAL_AGENT_ID`           | — (denied, §10.3)      | `[]` (no default)                                                | —                                                                                                                                                                                                                        |
+| `apiKey`                | `ONDEMAND_API_KEY`                    | —                      | `''` (no default)                                                | —                                                                                                                                                                                                                        |
+
+Note the shared alias: `reasoningEndpointId` and `fulfillmentEndpointId`
+both accept `ONDEMAND_ENDPOINT_ID` — if only that alias is set, both fields
+resolve to the same value. This is intentional, not a bug: the API has one
+concept (`endpointId`) doing fulfillment-model duty, and no separate
+reasoning-endpoint concept at all, so the alias legitimately means the same
+raw setting either way.
+
+### 10.2 `reasoningMode` validation and `reasoningModeInvalid`
+
+`ONDEMAND_REASONING_MODE` is validated against `DOCUMENTED_REASONING_MODES`
+(one exported constant in `server/ondemand/config.js`, citing
+`docs/ONDEMAND_API_CURRENT.md` §3.1/§12 for the guide examples — `low`,
+`high`, `grok-4-fast` — and §17.4 for the live, undocumented
+`GET /config/v1/public/reasoning_modes` predefined `modeId` values —
+`dynamic, glm-4.7-flash, gemini-3-flash, grok-4-fast, gemini-3,
+deepseek-v3.1, haiku, glm-5-turbo, minimax-m2, gpt-5.4, gpt-5.4-pro, opus,
+kimi-k2`):
+
+- **unset** → `reasoningMode = ''` (the field is omitted from the upstream
+  request body entirely, not sent as an empty string) and
+  `reasoningModeInvalid: false`.
+- **set, in the list** → passed through unchanged, `reasoningModeInvalid:
+false`, `source: 'ONDEMAND_REASONING_MODE'`.
+- **set, NOT in the list** → replaced with `'dynamic'` (the documented
+  default tier, §17.5 INVESTIGATE) rather than forwarded blind,
+  `reasoningModeInvalid: true`, `source: 'default'` (the env var was read,
+  but its value did not win — the default did).
+
+`GET /api/ondemand/health` surfaces this two ways: a top-level
+`reasoningModeInvalid: boolean`, and `config.reasoningMode.valid` inside
+the per-setting `config` diagnostic block (§10.4) — both gated on nothing
+else, so a typo'd tier id is visible even with no `ONDEMAND_API_KEY` set.
+
+### 10.3 Deny-list and its rationale
+
+Two env var NAMES are never read by `server/ondemand/config.js`, and must
+never appear as a contiguous string literal anywhere under
+`api/ondemand/**` or `server/ondemand/*.js` (non-test files):
+
+- **`ONDEMAND_KNOWLEDGE_PLUGIN_IDS`** — the §5b alias for
+  `ONDEMAND_SPATIAL_AGENT_ID` is retired. `defaultPluginIds` now comes ONLY
+  from `ONDEMAND_SPATIAL_AGENT_ID` (comma/whitespace-split, capped at 20).
+  Rationale: default plugin/agent ids are meant to come from the Gate-3
+  spatial capability registry (the deployment's own configured spatial
+  agent), not from an arbitrary externally-provisioned "knowledge plugin"
+  list — collapsing the two concepts into one alias was a §5b
+  interoperability convenience that this task retires in favour of a single
+  source of truth.
+- **`ELEVENLABS_API_KEY`** — rule 43: this proxy integrates exactly one AI
+  provider (OnDemand). No secondary AI/voice provider credential is ever
+  read or forwarded by anything under `api/ondemand/**` or
+  `server/ondemand/**` — speech stays OnDemand's own Services API
+  (`tts.js`/`stt.js`), reported `'degraded'` by health rather than ever
+  falling back to a different provider.
+
+**Enforcement:** `server/ondemand/deny-list.test.mjs` (a) recursively greps
+every non-test `.js` source file under `api/ondemand/**` and
+`server/ondemand/*.js` for both literal strings (built via string
+concatenation inside the test itself, so the test file is never a
+false-positive hit of its own scan), (b) sets both names to unique sentinel
+values and asserts neither the sentinel values nor the names themselves
+appear anywhere in `JSON.stringify(getConfig())` or
+`JSON.stringify(configSources())`, and (c) asserts no `getConfig()` key
+matches `/ELEVENLABS|KNOWLEDGE/`. `server/ondemand/config.js` itself also
+carries a runtime tripwire (`getConfig()` throws if any of its own keys, or
+`sources`' keys, ever literally equal a denied name) as a second,
+independent line of defense. `GET /api/ondemand/health?envNames=1` applies
+the same filter to `env.names` so the route cannot even confirm whether
+either variable is set on the deployment.
+
+### 10.4 Single config import point (`api/ondemand/_config.js`)
+
+Every handler under `api/ondemand/**` (`chat.js`, `sessions.js`,
+`media.js`, `stt.js`, `tts.js`, `workflow.js`, `health.js`) imports
+configuration from `./_config.js`, never directly from
+`../../server/ondemand/config.js`. `_config.js` is a one-line re-export
+(`export * from '../../server/ondemand/config.js'`); the underscore prefix
+matters because Vercel does not deploy `api/**/_*.js` files as their own
+routable functions, so this file can live inside `api/ondemand/` — giving
+every sibling a short `./_config.js` import — without Vercel ever trying to
+build an `/api/ondemand/_config` route for it. One import path to change if
+the config module ever moves; one file to read to see every name a handler
+is allowed to pull in. `GET /api/ondemand/health` additionally exposes a
+`config` object on every response (keyed or not) — `{ apiKey, baseUrl,
+reasoningEndpointId, fulfillmentEndpointId, reasoningMode, flowVersion,
+spatialFlowId }`, each `{ configured, source }` (`reasoningMode` also adds
+`valid`) — so the reconciliation outcome for a live deployment is always
+one health check away, without ever needing `?envNames=1`.
+
+### 10.5 Selftest route (contract, implemented by a different task)
+
+`GET /api/ondemand/selftest` is implemented outside this task (by
+`api/ondemand/selftest.js`, using the 10-step baseline logic factored into
+`server/ondemand/contract-steps.js`); this section records the contract it
+is expected to satisfy, since `server/ondemand/config.js`'s
+`ONDEMAND_SELFTEST_TOKEN` name and `getConfig()` shape (`apiKey, baseUrl,
+fulfillmentEndpointId, spatialFlowId, defaultPluginIds`) exist specifically
+to support it:
+
+- **Auth:** the request must carry header `x-selftest-token` equal to
+  `ONDEMAND_SELFTEST_TOKEN` (constant-time comparison — never a plain `===`
+  on secret-bearing strings). No token configured, no header, or a
+  mismatched header → **404** (not 401/403 — the route's very existence is
+  not confirmed to an unauthenticated caller).
+- **Rate limit:** **429** when invoked more than once per 60 seconds per
+  warm instance (in-memory, process-local — the same caveat §5's
+  `ONDEMAND_MAX_CONCURRENCY` row already documents applies: a fresh Vercel
+  instance resets the counter).
+- **Response:** the 10-step baseline JSON (the same shape as
+  `docs/ONDEMAND_API_CURRENT.md` §17.2's contract run — session
+  create/reuse, sync prompt, SSE stream, plugin probe, STT, TTS, media
+  analysis, workflow, session-memory follow-up, latency summary), with the
+  session id replaced by `sessionIdHash` (sha256 of the real session id,
+  never the id itself) and no API key, header value, or other secret
+  anywhere in the body.

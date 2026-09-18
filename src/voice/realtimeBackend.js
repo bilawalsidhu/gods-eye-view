@@ -21,7 +21,11 @@ export function createRealtimeBackend({
       // /api/realtime/token with 501 in serverless mode); short-circuit here
       // instead of round-tripping to learn that. See
       // docs/SERVERLESS_LIMITATIONS.md.
-      if (import.meta.env?.VITE_SERVERLESS_MODE === 'true') {
+      if (
+        ['true', '1', 'yes'].includes(
+          String(import.meta.env?.VITE_SERVERLESS_MODE ?? '').toLowerCase(),
+        )
+      ) {
         throw new Error(
           'Voice control (OpenAI Realtime) is unavailable in the serverless deployment',
         );

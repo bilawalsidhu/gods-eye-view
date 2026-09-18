@@ -14,6 +14,10 @@
  *        docs/ONDEMAND_PROXY_DESIGN.md for the tradeoff; `plugins` simply
  *        reports the configured ONDEMAND_SPATIAL_AGENT_ID as 'not probed'.
  *
+ * Every probe times out at PROBE_TIMEOUT_MS (3000ms — kept well under
+ * typical serverless function limits since all three probes run in
+ * parallel via Promise.all).
+ *
  * Roll-up rule for `ondemand` (this proxy's own documented mapping, since
  * the contract defines no such aggregate field): 'healthy' when the chat
  * probe is healthy; otherwise the WORST status among {chat, media,
@@ -21,23 +25,31 @@
  * own (non-healthy) status is included in that worst-of set in the `else`
  * branch — a broken chat probe must not be hidden behind healthier probes.
  *
+ * Config diagnostic (added 2026-09-18 — see
+ * docs/ONDEMAND_PROXY_DESIGN.md "Environment name reconciliation
+ * (2026-09-18)"): every response (keyed or not) carries a top-level
+ * `config` object — one entry per reconciled setting — `{ configured,
+ * source }` (`reasoningMode` also adds `valid`), where `source` is the env
+ * NAME that resolved the value, or `'default'`/`'unset'` — NEVER a value.
+ * A top-level `reasoningModeInvalid: boolean` mirrors `config.reasoningMode
+ * .valid` for a quick single-field check. Neither field is gated on
+ * `configured`: an invalid ONDEMAND_REASONING_MODE is worth surfacing even
+ * with no API key set.
+ *
  * Debug flag `?envNames=1` (added 2026-09-17 for the ondemand-eand-spatial
  * Vercel project — see docs/ONDEMAND_PROXY_DESIGN.md §5b): adds an `env`
  * object to the JSON body — `{ names, sources }` — reporting which env var
  * NAMES beginning with ONDEMAND_ or VITE_ (plus SERVERLESS_MODE, VERCEL,
  * VERCEL_ENV) exist on this deployment, and which NAME supplied each
  * logical config setting. NAMES ONLY; no env var value is ever included.
- * The default response shape (flag absent) is unchanged, and the
- * ALWAYS-200 / 'not configured' semantics above apply identically whether
- * or not the flag is present.
+ * `names` also excludes the deny-listed env var names (see DENIED_ENV_NAMES
+ * below) even when they are present in process.env — this route must never
+ * confirm their existence, let alone a value. The default response shape
+ * (flag absent) is unchanged, and the ALWAYS-200 / 'not configured'
+ * semantics above apply identically whether or not the flag is present.
  */
 
-import {
-  config,
-  baseUrls,
-  isConfigured,
-  configSources,
-} from '../../server/ondemand/config.js';
+import { getConfig, baseUrls, isConfigured } from './_config.js';
 import { ondemandFetch } from '../../server/ondemand/client.js';
 import {
   assertMethod,
@@ -48,17 +60,69 @@ import {
 const ENV_NAME_PATTERN =
   /^(ONDEMAND_|VITE_|SERVERLESS_MODE$|VERCEL$|VERCEL_ENV$)/;
 
-/** Names only, never values — see the `?envNames=1` header comment above. */
-function envNamesDiagnostic() {
+// DENY-LIST — see server/ondemand/config.js's header comment and
+// docs/ONDEMAND_PROXY_DESIGN.md "Environment name reconciliation
+// (2026-09-18)". Built from parts (never a literal) so this file itself
+// never contains either denied string — server/ondemand/deny-list.test.mjs
+// greps non-test source files for them.
+const DENIED_ENV_NAMES = [
+  ['ELEVENLABS', 'API', 'KEY'].join('_'),
+  ['ONDEMAND', 'KNOWLEDGE', 'PLUGIN', 'IDS'].join('_'),
+];
+
+/** Names only, never values — see the `?envNames=1` header comment above.
+ * `sources` is passed in by the caller (already computed via getConfig())
+ * so this request only calls getConfig() once. */
+function envNamesDiagnostic(sources) {
   return {
     names: Object.keys(process.env)
       .filter((k) => ENV_NAME_PATTERN.test(k))
+      .filter((k) => !DENIED_ENV_NAMES.includes(k))
       .sort(),
-    sources: configSources(),
+    sources,
   };
 }
 
-const PROBE_TIMEOUT_MS = 5000;
+/**
+ * `{ configured, source }` per reconciled setting (`reasoningMode` also
+ * gets `valid`) — `source` is an env NAME or 'default'/'unset', never a
+ * value. `configured` is simply "did something other than 'unset' resolve
+ * this field" — true for every setting that has a built-in default
+ * (baseUrl, reasoningEndpointId, fulfillmentEndpointId, flowVersion) and
+ * conditional for the three that don't (apiKey, reasoningMode,
+ * spatialFlowId).
+ */
+function configDiagnostic(cfg) {
+  const src = cfg.sources;
+  const notUnset = (name) => src[name] !== 'unset';
+  return {
+    apiKey: { configured: notUnset('apiKey') },
+    baseUrl: { configured: notUnset('baseUrl'), source: src.baseUrl },
+    reasoningEndpointId: {
+      configured: notUnset('reasoningEndpointId'),
+      source: src.reasoningEndpointId,
+    },
+    fulfillmentEndpointId: {
+      configured: notUnset('fulfillmentEndpointId'),
+      source: src.fulfillmentEndpointId,
+    },
+    reasoningMode: {
+      configured: notUnset('reasoningMode'),
+      source: src.reasoningMode,
+      valid: !cfg.reasoningModeInvalid,
+    },
+    flowVersion: {
+      configured: notUnset('flowVersion'),
+      source: src.flowVersion,
+    },
+    spatialFlowId: {
+      configured: notUnset('spatialFlowId'),
+      source: src.spatialFlowId,
+    },
+  };
+}
+
+const PROBE_TIMEOUT_MS = 3000;
 const SEVERITY = ['error', 'degraded', 'not configured', 'healthy']; // lower index = worse
 
 export default async function handler(req, res) {
@@ -68,6 +132,7 @@ export default async function handler(req, res) {
   const checkedAt = new Date().toISOString();
   const requestUrl = getRequestUrl(req);
   const envNamesRequested = requestUrl.searchParams.get('envNames') === '1';
+  const cfg = getConfig();
 
   if (!isConfigured()) {
     const notConfiguredBody = {
@@ -78,11 +143,14 @@ export default async function handler(req, res) {
       workflow: 'not configured',
       plugins: {},
       configured: false,
+      reasoningModeInvalid: cfg.reasoningModeInvalid,
+      config: configDiagnostic(cfg),
       checkedAt,
       message:
         'ONDEMAND_API_KEY is not set. Set it in the Vercel project Environment Variables (or in .env for local dev) and redeploy/restart.',
     };
-    if (envNamesRequested) notConfiguredBody.env = envNamesDiagnostic();
+    if (envNamesRequested)
+      notConfiguredBody.env = envNamesDiagnostic(cfg.sources);
     finish(req, res, 200, notConfiguredBody);
     return;
   }
@@ -115,8 +183,8 @@ export default async function handler(req, res) {
   const speech = { status: 'degraded', detail: speechDetail };
 
   const plugins = {};
-  if (config.spatialAgentId) {
-    plugins[config.spatialAgentId] = 'not probed'; // GET /plugin/v1/list is guide-only (§8); not called by default
+  if (cfg.spatialAgentId) {
+    plugins[cfg.spatialAgentId] = 'not probed'; // GET /plugin/v1/list is guide-only (§8); not called by default
   }
 
   const ondemand = rollUp({
@@ -134,6 +202,8 @@ export default async function handler(req, res) {
     workflow: workflowProbe.status,
     plugins,
     configured: true,
+    reasoningModeInvalid: cfg.reasoningModeInvalid,
+    config: configDiagnostic(cfg),
     checkedAt,
     message: messageFor(ondemand),
   };
@@ -159,7 +229,7 @@ export default async function handler(req, res) {
     );
   }
 
-  if (envNamesRequested) body.env = envNamesDiagnostic();
+  if (envNamesRequested) body.env = envNamesDiagnostic(cfg.sources);
 
   finish(req, res, 200, body);
 }

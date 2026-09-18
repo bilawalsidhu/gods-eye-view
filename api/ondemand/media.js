@@ -8,7 +8,7 @@
  *   §5.4 Delete media          — DELETE {media}/{fileId}
  */
 
-import { baseUrls, isConfigured } from '../../server/ondemand/config.js';
+import { baseUrls, isConfigured } from './_config.js';
 import { ondemandFetch } from '../../server/ondemand/client.js';
 import { shapeUpstreamError } from '../../server/ondemand/errors.js';
 import {
@@ -23,13 +23,23 @@ import {
 
 const MAX_JSON_BYTES = 1024 * 1024;
 const MAX_RAW_BYTES = 8 * 1024 * 1024;
-const ALLOWED_LIST_PARAMS = ['page', 'limit', 'sort', 'plugins', 'externalUserId', 'source']; // §5.3
+const ALLOWED_LIST_PARAMS = [
+  'page',
+  'limit',
+  'sort',
+  'plugins',
+  'externalUserId',
+  'source',
+]; // §5.3
 
 export default async function handler(req, res) {
   if (rejectCrossOrigin(req, res)) return;
   if (!assertMethod(req, res, ['GET', 'POST', 'DELETE'])) return;
   if (!isConfigured()) {
-    sendJson(res, 503, { error: 'not_configured', message: 'ONDEMAND_API_KEY is not set on the server.' });
+    sendJson(res, 503, {
+      error: 'not_configured',
+      message: 'ONDEMAND_API_KEY is not set on the server.',
+    });
     return;
   }
 
@@ -43,7 +53,9 @@ export default async function handler(req, res) {
         const value = reqUrl.searchParams.get(key);
         if (value !== null) upstreamUrl.searchParams.set(key, value);
       }
-      const upstream = await ondemandFetch(upstreamUrl.toString(), { method: 'GET' });
+      const upstream = await ondemandFetch(upstreamUrl.toString(), {
+        method: 'GET',
+      });
       await forwardJson(res, upstream);
       return;
     }
@@ -54,7 +66,10 @@ export default async function handler(req, res) {
         sendJson(res, 400, { error: 'fileId_required' });
         return;
       }
-      const upstream = await ondemandFetch(`${media}/${encodeURIComponent(fileId)}`, { method: 'DELETE' });
+      const upstream = await ondemandFetch(
+        `${media}/${encodeURIComponent(fileId)}`,
+        { method: 'DELETE' },
+      );
       await forwardJson(res, upstream);
       return;
     }
@@ -95,19 +110,33 @@ export default async function handler(req, res) {
     }
 
     if (typeof body?.url !== 'string' || !/^https?:\/\//i.test(body.url)) {
-      sendJson(res, 400, { error: 'url_required', message: 'url must be an http(s) URI' });
+      sendJson(res, 400, {
+        error: 'url_required',
+        message: 'url must be an http(s) URI',
+      });
       return;
     }
-    if (!Array.isArray(body?.plugins) || body.plugins.length === 0 || body.plugins.some((p) => typeof p !== 'string')) {
-      sendJson(res, 400, { error: 'plugins_required', message: 'plugins must be a non-empty string[]' });
+    if (
+      !Array.isArray(body?.plugins) ||
+      body.plugins.length === 0 ||
+      body.plugins.some((p) => typeof p !== 'string')
+    ) {
+      sendJson(res, 400, {
+        error: 'plugins_required',
+        message: 'plugins must be a non-empty string[]',
+      });
       return;
     }
     // §5.1 schema marks responseMode required with no documented default;
     // this proxy defaults to 'sync' ONLY when the field is omitted, and
     // records that divergence in docs/ONDEMAND_PROXY_DESIGN.md.
-    const responseMode = body.responseMode === undefined ? 'sync' : body.responseMode;
+    const responseMode =
+      body.responseMode === undefined ? 'sync' : body.responseMode;
     if (!['sync', 'webhook'].includes(responseMode)) {
-      sendJson(res, 400, { error: 'invalid_responseMode', allowed: ['sync', 'webhook'] });
+      sendJson(res, 400, {
+        error: 'invalid_responseMode',
+        allowed: ['sync', 'webhook'],
+      });
       return;
     }
 
@@ -125,10 +154,16 @@ export default async function handler(req, res) {
       if (upstreamBody[key] === undefined) delete upstreamBody[key];
     }
 
-    const upstream = await ondemandFetch(media, { method: 'POST', body: upstreamBody });
+    const upstream = await ondemandFetch(media, {
+      method: 'POST',
+      body: upstreamBody,
+    });
     await forwardJson(res, upstream);
   } catch {
-    sendJson(res, 502, { error: 'proxy_error', message: 'Unexpected error contacting OnDemand.' });
+    sendJson(res, 502, {
+      error: 'proxy_error',
+      message: 'Unexpected error contacting OnDemand.',
+    });
   }
 }
 

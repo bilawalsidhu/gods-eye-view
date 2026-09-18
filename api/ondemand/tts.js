@@ -11,11 +11,18 @@
  * `?format=json`: return the upstream JSON envelope unchanged.
  */
 
-import { isConfigured, baseUrls, requestTimeoutMs } from '../../server/ondemand/config.js';
+import { isConfigured, baseUrls, requestTimeoutMs } from './_config.js';
 import { ondemandFetch } from '../../server/ondemand/client.js';
 import { shapeUpstreamError } from '../../server/ondemand/errors.js';
 import { pipeBinaryBody } from '../../server/ondemand/sse.js';
-import { sendJson, assertMethod, rejectCrossOrigin, readJsonBody, BodyError, getRequestUrl } from '../../server/ondemand/http.js';
+import {
+  sendJson,
+  assertMethod,
+  rejectCrossOrigin,
+  readJsonBody,
+  BodyError,
+  getRequestUrl,
+} from '../../server/ondemand/http.js';
 
 const MAX_INPUT_CHARS = 4096;
 const ALLOWED_MODELS = ['tts-1', 'tts-1-hd'];
@@ -25,7 +32,10 @@ export default async function handler(req, res) {
   if (rejectCrossOrigin(req, res)) return;
   if (!assertMethod(req, res, ['POST'])) return;
   if (!isConfigured()) {
-    sendJson(res, 503, { error: 'not_configured', message: 'ONDEMAND_API_KEY is not set on the server.' });
+    sendJson(res, 503, {
+      error: 'not_configured',
+      message: 'ONDEMAND_API_KEY is not set on the server.',
+    });
     return;
   }
 
@@ -40,8 +50,15 @@ export default async function handler(req, res) {
     throw err;
   }
 
-  if (typeof body?.input !== 'string' || body.input.length === 0 || body.input.length > MAX_INPUT_CHARS) {
-    sendJson(res, 400, { error: 'input_required', message: `input is required, \u2264 ${MAX_INPUT_CHARS} chars` });
+  if (
+    typeof body?.input !== 'string' ||
+    body.input.length === 0 ||
+    body.input.length > MAX_INPUT_CHARS
+  ) {
+    sendJson(res, 400, {
+      error: 'input_required',
+      message: `input is required, \u2264 ${MAX_INPUT_CHARS} chars`,
+    });
     return;
   }
   if (body.model !== undefined && !ALLOWED_MODELS.includes(body.model)) {
@@ -53,19 +70,29 @@ export default async function handler(req, res) {
     return;
   }
 
-  const upstreamBody = { input: body.input, model: body.model, voice: body.voice };
+  const upstreamBody = {
+    input: body.input,
+    model: body.model,
+    voice: body.voice,
+  };
   for (const key of Object.keys(upstreamBody)) {
     if (upstreamBody[key] === undefined) delete upstreamBody[key];
   }
 
   let upstream;
   try {
-    upstream = await ondemandFetch(`${baseUrls().services}/execute/text_to_speech`, {
-      method: 'POST',
-      body: upstreamBody,
-    });
+    upstream = await ondemandFetch(
+      `${baseUrls().services}/execute/text_to_speech`,
+      {
+        method: 'POST',
+        body: upstreamBody,
+      },
+    );
   } catch {
-    sendJson(res, 502, { error: 'proxy_error', message: 'Unexpected error contacting OnDemand.' });
+    sendJson(res, 502, {
+      error: 'proxy_error',
+      message: 'Unexpected error contacting OnDemand.',
+    });
     return;
   }
   if (!upstream.ok) {
@@ -77,7 +104,10 @@ export default async function handler(req, res) {
   try {
     json = await upstream.json(); // {message, data:{audioUrl}}
   } catch {
-    sendJson(res, 502, { error: 'proxy_error', message: 'OnDemand returned a non-JSON text_to_speech response.' });
+    sendJson(res, 502, {
+      error: 'proxy_error',
+      message: 'OnDemand returned a non-JSON text_to_speech response.',
+    });
     return;
   }
   const audioUrl = json?.data?.audioUrl;
@@ -85,7 +115,8 @@ export default async function handler(req, res) {
   const url = getRequestUrl(req);
   const format = url.searchParams.get('format');
   const accept = req.headers['accept'] || '';
-  const wantsAudio = format === 'audio' || (format !== 'json' && accept.includes('audio/'));
+  const wantsAudio =
+    format === 'audio' || (format !== 'json' && accept.includes('audio/'));
 
   if (!wantsAudio || typeof audioUrl !== 'string') {
     sendJson(res, 200, json);
@@ -94,7 +125,9 @@ export default async function handler(req, res) {
 
   let audioResp;
   try {
-    audioResp = await fetch(audioUrl, { signal: AbortSignal.timeout(requestTimeoutMs()) });
+    audioResp = await fetch(audioUrl, {
+      signal: AbortSignal.timeout(requestTimeoutMs()),
+    });
   } catch {
     sendJson(res, 200, json); // fall back to the JSON envelope rather than fail the whole call
     return;
@@ -107,7 +140,10 @@ export default async function handler(req, res) {
   res.statusCode = 200;
   // §6.2: the sample URL is an .mp3; fall back to audio/mpeg when the host
   // storage response doesn't send its own Content-Type.
-  res.setHeader('Content-Type', audioResp.headers.get('content-type') || 'audio/mpeg');
+  res.setHeader(
+    'Content-Type',
+    audioResp.headers.get('content-type') || 'audio/mpeg',
+  );
   res.setHeader('X-OnDemand-Audio-Url', audioUrl);
   res.setHeader('Cache-Control', 'no-store');
   await pipeBinaryBody(audioResp.body, res);

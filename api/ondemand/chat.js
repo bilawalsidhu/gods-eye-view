@@ -12,12 +12,24 @@
  *        missing id (body + env) is a 400, never a silent hardcoded default.
  */
 
-import { config, baseUrls, isConfigured } from '../../server/ondemand/config.js';
+import { config, baseUrls, isConfigured } from './_config.js';
 import { ondemandFetch } from '../../server/ondemand/client.js';
-import { ensureSession, UpstreamError } from '../../server/ondemand/session-service.js';
-import { shapeUpstreamError, notDocumented } from '../../server/ondemand/errors.js';
+import {
+  ensureSession,
+  UpstreamError,
+} from '../../server/ondemand/session-service.js';
+import {
+  shapeUpstreamError,
+  notDocumented,
+} from '../../server/ondemand/errors.js';
 import { pipeSseBody, wireAbortOnClose } from '../../server/ondemand/sse.js';
-import { sendJson, assertMethod, rejectCrossOrigin, readJsonBody, BodyError } from '../../server/ondemand/http.js';
+import {
+  sendJson,
+  assertMethod,
+  rejectCrossOrigin,
+  readJsonBody,
+  BodyError,
+} from '../../server/ondemand/http.js';
 
 const MAX_QUERY_BYTES = 32 * 1024;
 const MAX_BODY_BYTES = 64 * 1024; // headroom above MAX_QUERY_BYTES for the rest of the envelope
@@ -52,7 +64,10 @@ export default async function handler(req, res) {
   if (rejectCrossOrigin(req, res)) return;
   if (!assertMethod(req, res, ['POST'])) return;
   if (!isConfigured()) {
-    sendJson(res, 503, { error: 'not_configured', message: 'ONDEMAND_API_KEY is not set on the server.' });
+    sendJson(res, 503, {
+      error: 'not_configured',
+      message: 'ONDEMAND_API_KEY is not set on the server.',
+    });
     return;
   }
 
@@ -78,7 +93,15 @@ export default async function handler(req, res) {
     }
   }
 
-  const { sessionId, userId, query, pluginIds, fulfillmentOnly, modelConfigs, reasoningMode } = body;
+  const {
+    sessionId,
+    userId,
+    query,
+    pluginIds,
+    fulfillmentOnly,
+    modelConfigs,
+    reasoningMode,
+  } = body;
   let { endpointId, responseMode } = body;
 
   if (!sessionId && !userId) {
@@ -96,7 +119,10 @@ export default async function handler(req, res) {
 
   responseMode = responseMode === undefined ? 'stream' : responseMode;
   if (!['sync', 'stream', 'webhook'].includes(responseMode)) {
-    sendJson(res, 400, { error: 'invalid_responseMode', allowed: ['sync', 'stream', 'webhook'] });
+    sendJson(res, 400, {
+      error: 'invalid_responseMode',
+      allowed: ['sync', 'stream', 'webhook'],
+    });
     return;
   }
   if (responseMode === 'webhook') {
@@ -104,7 +130,8 @@ export default async function handler(req, res) {
     return;
   }
 
-  endpointId = endpointId === undefined ? config.fulfillmentEndpointId : endpointId;
+  endpointId =
+    endpointId === undefined ? config.fulfillmentEndpointId : endpointId;
   if (!endpointId) {
     sendJson(res, 400, {
       error: 'endpointId_required',
@@ -116,7 +143,9 @@ export default async function handler(req, res) {
 
   if (
     pluginIds !== undefined &&
-    (!Array.isArray(pluginIds) || pluginIds.length > MAX_PLUGIN_IDS || pluginIds.some((p) => typeof p !== 'string'))
+    (!Array.isArray(pluginIds) ||
+      pluginIds.length > MAX_PLUGIN_IDS ||
+      pluginIds.some((p) => typeof p !== 'string'))
   ) {
     sendJson(res, 400, {
       error: 'invalid_pluginIds',
@@ -131,13 +160,20 @@ export default async function handler(req, res) {
 
   let cleanModelConfigs;
   if (modelConfigs !== undefined) {
-    if (modelConfigs === null || typeof modelConfigs !== 'object' || Array.isArray(modelConfigs)) {
+    if (
+      modelConfigs === null ||
+      typeof modelConfigs !== 'object' ||
+      Array.isArray(modelConfigs)
+    ) {
       sendJson(res, 400, { error: 'invalid_modelConfigs' });
       return;
     }
     for (const key of Object.keys(modelConfigs)) {
       if (!MODEL_CONFIG_FIELDS.has(key)) {
-        sendJson(res, 400, { error: 'unknown_field', field: `modelConfigs.${key}` });
+        sendJson(res, 400, {
+          error: 'unknown_field',
+          field: `modelConfigs.${key}`,
+        });
         return;
       }
     }
@@ -164,7 +200,10 @@ export default async function handler(req, res) {
         sendJson(res, err.status, err.envelope);
         return;
       }
-      sendJson(res, 502, { error: 'proxy_error', message: 'Unable to establish a session.' });
+      sendJson(res, 502, {
+        error: 'proxy_error',
+        message: 'Unable to establish a session.',
+      });
       return;
     }
   }
@@ -191,9 +230,15 @@ export default async function handler(req, res) {
   if (responseMode === 'sync') {
     let upstream;
     try {
-      upstream = await ondemandFetch(url, { method: 'POST', body: upstreamBody });
+      upstream = await ondemandFetch(url, {
+        method: 'POST',
+        body: upstreamBody,
+      });
     } catch {
-      sendJson(res, 502, { error: 'proxy_error', message: 'Failed to reach OnDemand.' });
+      sendJson(res, 502, {
+        error: 'proxy_error',
+        message: 'Failed to reach OnDemand.',
+      });
       return;
     }
     if (!upstream.ok) {
@@ -204,7 +249,10 @@ export default async function handler(req, res) {
     try {
       json = await upstream.json();
     } catch {
-      sendJson(res, 502, { error: 'proxy_error', message: 'OnDemand returned a non-JSON sync response.' });
+      sendJson(res, 502, {
+        error: 'proxy_error',
+        message: 'OnDemand returned a non-JSON sync response.',
+      });
       return;
     }
     sendJson(res, upstream.status, json); // {message, data:{sessionId, messageId, answer, status}}
@@ -217,7 +265,11 @@ export default async function handler(req, res) {
 
   let upstream;
   try {
-    upstream = await ondemandFetch(url, { method: 'POST', body: upstreamBody, signal: controller.signal });
+    upstream = await ondemandFetch(url, {
+      method: 'POST',
+      body: upstreamBody,
+      signal: controller.signal,
+    });
   } catch {
     unwireEarly();
     if (controller.signal.aborted) {
@@ -228,7 +280,10 @@ export default async function handler(req, res) {
       }
       return;
     }
-    sendJson(res, 502, { error: 'proxy_error', message: 'Failed to reach OnDemand.' });
+    sendJson(res, 502, {
+      error: 'proxy_error',
+      message: 'Failed to reach OnDemand.',
+    });
     return;
   }
 
@@ -261,18 +316,37 @@ function validateModelConfigs(mc) {
   const checks = [
     [
       'stopSequences',
-      (v) => Array.isArray(v) && v.length <= MAX_STOP_SEQUENCES && v.every((s) => typeof s === 'string'),
+      (v) =>
+        Array.isArray(v) &&
+        v.length <= MAX_STOP_SEQUENCES &&
+        v.every((s) => typeof s === 'string'),
       `stopSequences must be a string[] of at most ${MAX_STOP_SEQUENCES} entries`,
     ],
-    ['temperature', (v) => typeof v === 'number' && v >= 0 && v <= 2, 'temperature must be a number in [0, 2]'],
-    ['topP', (v) => typeof v === 'number' && v >= 0 && v <= 1, 'topP must be a number in [0, 1]'],
-    ['presencePenalty', (v) => typeof v === 'number' && v >= 0 && v <= 2, 'presencePenalty must be a number in [0, 2]'],
+    [
+      'temperature',
+      (v) => typeof v === 'number' && v >= 0 && v <= 2,
+      'temperature must be a number in [0, 2]',
+    ],
+    [
+      'topP',
+      (v) => typeof v === 'number' && v >= 0 && v <= 1,
+      'topP must be a number in [0, 1]',
+    ],
+    [
+      'presencePenalty',
+      (v) => typeof v === 'number' && v >= 0 && v <= 2,
+      'presencePenalty must be a number in [0, 2]',
+    ],
     [
       'frequencyPenalty',
       (v) => typeof v === 'number' && v >= 0 && v <= 2,
       'frequencyPenalty must be a number in [0, 2]',
     ],
-    ['fulfillmentPrompt', (v) => typeof v === 'string', 'fulfillmentPrompt must be a string'],
+    [
+      'fulfillmentPrompt',
+      (v) => typeof v === 'string',
+      'fulfillmentPrompt must be a string',
+    ],
   ];
   for (const [field, ok, message] of checks) {
     if (mc[field] !== undefined && !ok(mc[field])) {

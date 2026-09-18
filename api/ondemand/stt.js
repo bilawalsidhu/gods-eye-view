@@ -8,10 +8,19 @@
  * refuses with 501 rather than guessing a schema.
  */
 
-import { baseUrls, isConfigured } from '../../server/ondemand/config.js';
+import { baseUrls, isConfigured } from './_config.js';
 import { ondemandFetch } from '../../server/ondemand/client.js';
-import { shapeUpstreamError, notDocumented } from '../../server/ondemand/errors.js';
-import { sendJson, assertMethod, rejectCrossOrigin, readJsonBody, BodyError } from '../../server/ondemand/http.js';
+import {
+  shapeUpstreamError,
+  notDocumented,
+} from '../../server/ondemand/errors.js';
+import {
+  sendJson,
+  assertMethod,
+  rejectCrossOrigin,
+  readJsonBody,
+  BodyError,
+} from '../../server/ondemand/http.js';
 
 const NOT_DOCUMENTED_UPLOAD = () =>
   notDocumented('stt raw-audio upload', '§6.1', {
@@ -22,7 +31,10 @@ export default async function handler(req, res) {
   if (rejectCrossOrigin(req, res)) return;
   if (!assertMethod(req, res, ['POST'])) return;
   if (!isConfigured()) {
-    sendJson(res, 503, { error: 'not_configured', message: 'ONDEMAND_API_KEY is not set on the server.' });
+    sendJson(res, 503, {
+      error: 'not_configured',
+      message: 'ONDEMAND_API_KEY is not set on the server.',
+    });
     return;
   }
 
@@ -47,16 +59,25 @@ export default async function handler(req, res) {
     sendJson(res, 501, NOT_DOCUMENTED_UPLOAD());
     return;
   }
-  if (typeof body?.audioUrl !== 'string' || !/^https?:\/\//i.test(body.audioUrl)) {
-    sendJson(res, 400, { error: 'audioUrl_required', message: 'audioUrl must be an http(s) URI' });
+  if (
+    typeof body?.audioUrl !== 'string' ||
+    !/^https?:\/\//i.test(body.audioUrl)
+  ) {
+    sendJson(res, 400, {
+      error: 'audioUrl_required',
+      message: 'audioUrl must be an http(s) URI',
+    });
     return;
   }
 
   try {
-    const upstream = await ondemandFetch(`${baseUrls().services}/execute/speech_to_text`, {
-      method: 'POST',
-      body: { audioUrl: body.audioUrl }, // §6.1: exactly one field
-    });
+    const upstream = await ondemandFetch(
+      `${baseUrls().services}/execute/speech_to_text`,
+      {
+        method: 'POST',
+        body: { audioUrl: body.audioUrl }, // §6.1: exactly one field
+      },
+    );
     if (!upstream.ok) {
       sendJson(res, upstream.status, await shapeUpstreamError(upstream));
       return;
@@ -64,12 +85,17 @@ export default async function handler(req, res) {
     const json = await upstream.json(); // {message, data:{text}}
     sendJson(res, upstream.status, json);
   } catch {
-    sendJson(res, 502, { error: 'proxy_error', message: 'Unexpected error contacting OnDemand.' });
+    sendJson(res, 502, {
+      error: 'proxy_error',
+      message: 'Unexpected error contacting OnDemand.',
+    });
   }
 }
 
 function looksLikeInlineAudio(body) {
   return (
-    typeof body?.audioBase64 === 'string' || typeof body?.audio === 'string' || typeof body?.base64 === 'string'
+    typeof body?.audioBase64 === 'string' ||
+    typeof body?.audio === 'string' ||
+    typeof body?.base64 === 'string'
   );
 }

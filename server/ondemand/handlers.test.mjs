@@ -19,16 +19,30 @@ import workflowHandler from '../../api/ondemand/workflow.js';
 import healthHandler from '../../api/ondemand/health.js';
 
 const TEST_KEY = 'test-key-abcd1234';
+// Constructed dynamically (never a literal) — these two names are
+// deny-listed (server/ondemand/deny-list.test.mjs) and must never appear as
+// string literals in a non-test file; kept dynamic here too so this test
+// file's own env-isolation/sentinel plumbing never needs the literal.
+const DEPRECATED_KNOWLEDGE_ALIAS = [
+  'ONDEMAND',
+  'KNOWLEDGE',
+  'PLUGIN',
+  'IDS',
+].join('_');
+const DENIED_ELEVENLABS_NAME = ['ELEVENLABS', 'API', 'KEY'].join('_');
 const ENV_KEYS = [
   'ONDEMAND_API_KEY',
   'ONDEMAND_BASE_URL',
   'ONDEMAND_API_BASE',
   'ONDEMAND_SPATIAL_AGENT_ID',
-  'ONDEMAND_KNOWLEDGE_PLUGIN_IDS',
+  DEPRECATED_KNOWLEDGE_ALIAS,
   'ONDEMAND_SPATIAL_FLOW_ID',
+  'ONDEMAND_REASONING_ENDPOINT_ID',
   'ONDEMAND_FULFILLMENT_ENDPOINT_ID',
   'ONDEMAND_ENDPOINT_ID',
   'ONDEMAND_REASONING_MODE',
+  'GODS_EYE_FLOW_VERSION',
+  DENIED_ELEVENLABS_NAME,
 ];
 let savedEnv;
 let activeStub;
@@ -73,8 +87,43 @@ describe('api/ondemand/health.js', () => {
     assert.equal(body.workflow, 'not configured');
     assert.deepEqual(body.plugins, {});
     assert.equal(body.configured, false);
+    assert.equal(body.reasoningModeInvalid, false);
     assert.ok(typeof body.message === 'string' && body.message.length > 0);
     assert.ok(typeof body.checkedAt === 'string');
+  });
+
+  test('the "not configured" response carries a full `config` block with every source name', async () => {
+    __reloadConfigForTests(); // key already deleted by beforeEach
+    const req = makeReq({ method: 'GET', url: '/api/ondemand/health' });
+    const res = makeRes();
+    await healthHandler(req, res);
+    const body = res.json();
+    assert.deepEqual(
+      Object.keys(body.config).sort(),
+      [
+        'apiKey',
+        'baseUrl',
+        'reasoningEndpointId',
+        'fulfillmentEndpointId',
+        'reasoningMode',
+        'flowVersion',
+        'spatialFlowId',
+      ].sort(),
+    );
+    assert.equal(body.config.apiKey.configured, false);
+    assert.equal(body.config.baseUrl.configured, true);
+    assert.equal(body.config.baseUrl.source, 'default');
+    assert.equal(body.config.reasoningEndpointId.configured, true);
+    assert.equal(body.config.reasoningEndpointId.source, 'default');
+    assert.equal(body.config.fulfillmentEndpointId.configured, true);
+    assert.equal(body.config.fulfillmentEndpointId.source, 'default');
+    assert.equal(body.config.reasoningMode.configured, false);
+    assert.equal(body.config.reasoningMode.source, 'unset');
+    assert.equal(body.config.reasoningMode.valid, true);
+    assert.equal(body.config.flowVersion.configured, true);
+    assert.equal(body.config.flowVersion.source, 'default');
+    assert.equal(body.config.spatialFlowId.configured, false);
+    assert.equal(body.config.spatialFlowId.source, 'unset');
   });
 
   test('smoke: probes chat/media/workflow with apikey header and reports healthy', async () => {
@@ -115,6 +164,39 @@ describe('api/ondemand/health.js', () => {
     assert.equal(body.configured, true);
     assert.deepEqual(body.plugins, {});
     assert.equal(body.error, undefined);
+
+    // once a key is present, none of the five status fields may read
+    // 'not configured' — healthy/degraded/error only (speech stays
+    // 'degraded' by design, never 'not configured', once configured).
+    for (const field of ['ondemand', 'chat', 'speech', 'media', 'workflow']) {
+      assert.notEqual(body[field], 'not configured');
+    }
+    assert.equal(body.reasoningModeInvalid, false);
+    assert.equal(body.config.apiKey.configured, true);
+    assert.equal(body.config.fulfillmentEndpointId.source, 'default');
+  });
+
+  test('reasoningModeInvalid is true (and config.reasoningMode.valid is false) when an undocumented ONDEMAND_REASONING_MODE is set', async () => {
+    configureWithKey({ ONDEMAND_REASONING_MODE: 'not-a-real-tier' });
+    activeStub = stubFetchSequence([
+      jsonResponse(200, { message: 'ok', data: [] }),
+      jsonResponse(200, { message: 'ok', data: [] }),
+      jsonResponse(200, { message: 'ok', data: [] }),
+    ]);
+    const req = makeReq({ method: 'GET', url: '/api/ondemand/health' });
+    const res = makeRes();
+    await healthHandler(req, res);
+    const body = res.json();
+    assert.equal(body.reasoningModeInvalid, true);
+    assert.equal(body.config.reasoningMode.valid, false);
+    assert.equal(body.config.reasoningMode.configured, true);
+    assert.equal(body.config.reasoningMode.source, 'default');
+
+    // still no field reads 'not configured' once a key is present, even
+    // though the reasoningMode value itself was rejected.
+    for (const field of ['ondemand', 'chat', 'speech', 'media', 'workflow']) {
+      assert.notEqual(body[field], 'not configured');
+    }
   });
 });
 
@@ -212,6 +294,41 @@ describe('api/ondemand/health.js — ?envNames=1 diagnostic (docs/ONDEMAND_PROXY
     assert.equal(body.env.sources.apiKey, 'unset');
     assert.ok(Array.isArray(body.env.names));
   });
+
+  test('envNames=1 never lists a deny-listed env var name, even when it is set to a sentinel value', async () => {
+    // Sentinels: if either ever shows up (as a name OR a value) in the
+    // serialized response, the deny-list is not being enforced.
+    const KNOWLEDGE_SENTINEL = 'sentinel-knowledge-7be2c4';
+    const ELEVENLABS_SENTINEL = 'sentinel-elevenlabs-9a01df';
+    process.env[DEPRECATED_KNOWLEDGE_ALIAS] = KNOWLEDGE_SENTINEL;
+    process.env[DENIED_ELEVENLABS_NAME] = ELEVENLABS_SENTINEL;
+    configureWithKey();
+    activeStub = stubFetchSequence([
+      jsonResponse(200, { message: 'ok', data: [] }),
+      jsonResponse(200, { message: 'ok', data: [] }),
+      jsonResponse(200, { message: 'ok', data: [] }),
+    ]);
+    const req = makeReq({
+      method: 'GET',
+      url: '/api/ondemand/health?envNames=1',
+    });
+    const res = makeRes();
+    await healthHandler(req, res);
+
+    const raw = res.text();
+    assert.equal(raw.includes(KNOWLEDGE_SENTINEL), false);
+    assert.equal(raw.includes(ELEVENLABS_SENTINEL), false);
+    assert.equal(raw.includes(DEPRECATED_KNOWLEDGE_ALIAS), false);
+    assert.equal(raw.includes(DENIED_ELEVENLABS_NAME), false);
+
+    const body = JSON.parse(raw);
+    assert.equal(body.env.names.includes(DEPRECATED_KNOWLEDGE_ALIAS), false);
+    assert.equal(body.env.names.includes(DENIED_ELEVENLABS_NAME), false);
+    // the plugin-id default must also not have silently picked up the
+    // retired alias's sentinel value (ONDEMAND_SPATIAL_AGENT_ID was never
+    // set in this test, so `plugins` must stay empty).
+    assert.deepEqual(body.plugins, {});
+  });
 });
 
 describe('api/ondemand/sessions.js', () => {
@@ -276,8 +393,8 @@ describe('api/ondemand/sessions.js', () => {
     assert.equal(res.json().deleted, true);
   });
 
-  test('POST with no body pluginIds defaults to the FULL ONDEMAND_KNOWLEDGE_PLUGIN_IDS alias list, not just the first id', async () => {
-    configureWithKey({ ONDEMAND_KNOWLEDGE_PLUGIN_IDS: 'plugin-a,plugin-b' });
+  test('POST with no body pluginIds defaults to the FULL ONDEMAND_SPATIAL_AGENT_ID list, not just the first id', async () => {
+    configureWithKey({ ONDEMAND_SPATIAL_AGENT_ID: 'plugin-a,plugin-b' });
     activeStub = stubFetchSequence([
       jsonResponse(200, {
         message: 'Chat session created successfully',
@@ -300,7 +417,7 @@ describe('api/ondemand/sessions.js', () => {
   });
 
   test('POST with body pluginIds overrides the env default entirely', async () => {
-    configureWithKey({ ONDEMAND_KNOWLEDGE_PLUGIN_IDS: 'plugin-a,plugin-b' });
+    configureWithKey({ ONDEMAND_SPATIAL_AGENT_ID: 'plugin-a,plugin-b' });
     activeStub = stubFetchSequence([
       jsonResponse(200, {
         message: 'Chat session created successfully',
@@ -367,19 +484,50 @@ describe('api/ondemand/chat.js — validation (no network)', () => {
     assert.equal(activeStub.calls.length, 0);
   });
 
-  test('no endpointId in body or env -> 400 endpointId_required', async () => {
+  test('explicit falsy endpointId in the body -> 400 endpointId_required (env now always resolves to a default tier, so this is the only way left to trigger it)', async () => {
     configureWithKey();
     activeStub = stubFetchSequence([
       () => {
         throw new Error('network should not be called');
       },
     ]);
-    const req = makeReq({ method: 'POST', body: { userId: 'u', query: 'hi' } });
+    const req = makeReq({
+      method: 'POST',
+      body: { userId: 'u', query: 'hi', endpointId: '' },
+    });
     const res = makeRes();
     await chatHandler(req, res);
     assert.equal(res.statusCode, 400);
     assert.equal(res.json().error, 'endpointId_required');
     assert.equal(activeStub.calls.length, 0);
+  });
+
+  test('endpointId omitted from the body falls back to config.fulfillmentEndpointId (default tier, never a 400)', async () => {
+    configureWithKey();
+    activeStub = stubFetchSequence([
+      jsonResponse(200, {
+        message: 'ok',
+        data: { id: 'sess-default-ep', createdAt: 't' },
+      }),
+      jsonResponse(200, {
+        message: 'Chat query submitted successfully',
+        data: {
+          sessionId: 'sess-default-ep',
+          messageId: 'm1',
+          answer: 'ok',
+          status: 'completed',
+        },
+      }),
+    ]);
+    const req = makeReq({
+      method: 'POST',
+      body: { userId: 'u', query: 'hi', responseMode: 'sync' },
+    });
+    const res = makeRes();
+    await chatHandler(req, res);
+    assert.equal(res.statusCode, 200);
+    const sentBody = JSON.parse(activeStub.calls[1].init.body);
+    assert.equal(sentBody.endpointId, 'predefined-gpt-5.6-luna');
   });
 
   test('responseMode webhook -> 501 not documented', async () => {

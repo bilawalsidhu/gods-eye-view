@@ -23,7 +23,9 @@ const DISMISSED_KEY = 'gev.serverlessNoticeDismissed';
 
 /** True only in a build produced with VITE_SERVERLESS_MODE=true (see vercel.json). */
 function isServerlessBuild() {
-  return import.meta.env?.VITE_SERVERLESS_MODE === 'true';
+  return ['true', '1', 'yes'].includes(
+    String(import.meta.env?.VITE_SERVERLESS_MODE ?? '').toLowerCase(),
+  );
 }
 
 /**
