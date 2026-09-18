@@ -479,6 +479,7 @@ export class StyleManager extends ShellFacade {
         _hudBtn: this._hudBtn,
         _cleanViewBtn: this._cleanViewBtn,
         _cleanViewExitBtn: this._cleanViewExitBtn,
+        _roamBtn: this._roamBtn,
         _detectionDensitySlider: this._detectionDensitySlider,
         _detectionBtn: this._detectionBtn,
         _detectionFadeSlider: this._detectionFadeSlider,

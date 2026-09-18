@@ -363,7 +363,8 @@
 
 #pp-toggles:not(.collapsed) > .pp-header-row,
 #pp-toggles:not(.collapsed) > .pp-toggle-group,
-#pp-toggles:not(.collapsed) > #clean-view-toggle {
+#pp-toggles:not(.collapsed) > #clean-view-toggle,
+#pp-toggles:not(.collapsed) > #roam-toggle {
   width: 100%;
 }
 
@@ -460,6 +461,7 @@
 
 #pp-toggles.collapsed .pp-toggle-group,
 #pp-toggles.collapsed #clean-view-toggle,
+#pp-toggles.collapsed #roam-toggle,
 #pp-toggles.collapsed #param-slider-panel {
   display: none;
 }
