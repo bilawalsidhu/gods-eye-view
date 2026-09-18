@@ -69,7 +69,12 @@
  * `getConfig().flowVersionEnv` — that row is reconciled ALIAS-FIRST (the
  * legacy name is the one provisioned on the Vercel project), and this is
  * where an operator sees which one is live. Still names only, never the
- * value.
+ * value. `config.spatialFlowId` (extended 2026-09-18 with the canonical
+ * `ONDEMAND_SPATIAL_WORKFLOW_ID`) has the same shape — `{ configured,
+ * source, resolvedVia, canonical, alias }` — over `getConfig().workflowIdEnv`
+ * (`canonical: 'ONDEMAND_SPATIAL_WORKFLOW_ID'`, `alias:
+ * 'ONDEMAND_SPATIAL_FLOW_ID'`), reconciled CANONICAL-first; the workflow
+ * id VALUE (even the non-secret built-in default) is never echoed here.
  *
  * Debug flag `?envNames=1` (added 2026-09-17 for the ondemand-eand-spatial
  * Vercel project — see docs/ONDEMAND_PROXY_DESIGN.md §5b): adds an `env`
@@ -162,16 +167,27 @@ function configDiagnostic(cfg) {
     spatialFlowId: {
       configured: notUnset('spatialFlowId'),
       source: src.spatialFlowId,
+      resolvedVia: resolvedVia(src.spatialFlowId, cfg.workflowIdEnv),
+      canonical: cfg.workflowIdEnv.canonical,
+      alias: cfg.workflowIdEnv.alias,
     },
   };
 }
 
 /** 'alias' | 'canonical' | 'default' — derived from the env NAME in
- * `sources.flowVersion` against `getConfig().flowVersionEnv` (names only). */
-function flowVersionResolvedVia(source, flowVersionEnv) {
-  if (source === flowVersionEnv.alias) return 'alias';
-  if (source === flowVersionEnv.canonical) return 'canonical';
+ * `sources.<row>` against the row's `{ canonical, alias }` env-name
+ * constant (`getConfig().flowVersionEnv` / `getConfig().workflowIdEnv`);
+ * names only, never a value. */
+function resolvedVia(source, envNames) {
+  if (source === envNames.alias) return 'alias';
+  if (source === envNames.canonical) return 'canonical';
   return 'default';
+}
+
+/** `flowVersion`'s classifier — kept under its historical name; same rule
+ * as `resolvedVia()` applied to `getConfig().flowVersionEnv`. */
+function flowVersionResolvedVia(source, flowVersionEnv) {
+  return resolvedVia(source, flowVersionEnv);
 }
 
 const PROBE_TIMEOUT_MS = 3000;

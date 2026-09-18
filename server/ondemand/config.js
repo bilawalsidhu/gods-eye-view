@@ -39,7 +39,7 @@
  *   fulfillmentEndpointId | ONDEMAND_FULFILLMENT_ENDPOINT_ID    | ONDEMAND_ENDPOINT_ID    | 'predefined-gpt-5.6-luna' (ASK winner)
  *   reasoningMode         | ONDEMAND_REASONING_MODE (validated) | —                        | '' (field omitted upstream)
  *   flowVersion           | ONDEMAND_SPATIAL_FLOW_VERSION       | GODS_EYE_FLOW_VERSION (checked FIRST) | '1' (FLOW_DEFAULTS, 2026-09-18)
- *   spatialFlowId         | ONDEMAND_SPATIAL_FLOW_ID            | —                        | '6aace534859f7b0abb53d99a' (FLOW_DEFAULTS)
+ *   spatialFlowId         | ONDEMAND_SPATIAL_WORKFLOW_ID        | ONDEMAND_SPATIAL_FLOW_ID | '6aace534859f7b0abb53d99a' (FLOW_DEFAULTS)
  *   defaultPluginIds      | ONDEMAND_SPATIAL_AGENT_ID           | — (DENIED, see below)   | [] (no default)
  *   apiKey                | ONDEMAND_API_KEY                    | —                        | '' (no default)
  *
@@ -79,14 +79,23 @@
  *     keep winning until the operator migrates it to the canonical name —
  *     `sources.flowVersion` names which of the two (or 'default') resolved,
  *     surfaced by api/ondemand/health.js `config.flowVersion.resolvedVia`.
- *   - `spatialFlowId` (`ONDEMAND_SPATIAL_FLOW_ID`) defaults to
- *     FLOW_DEFAULTS.spatialFlowId — the REAL id returned by the documented
+ *   - `spatialFlowId` is reconciled CANONICAL-first (`reconcile`, order =
+ *     WORKFLOW_ID_ENV.order): `ONDEMAND_SPATIAL_WORKFLOW_ID` (canonical,
+ *     added 2026-09-18 — the API calls the object a *workflow*, contract
+ *     §7 / §18.2 a) → `ONDEMAND_SPATIAL_FLOW_ID` (the accepted alias, the
+ *     name every earlier deployment note used) → FLOW_DEFAULTS.spatialFlowId
+ *     — the REAL id returned by the documented
  *     `POST /automation/api/workflow/` (201) on 2026-09-18T07:16:04Z for
  *     "OnDemand Spatial Advanced Workflow" v1 — created as "GodsEye
  *     Advanced Spatial Workflow", display name changed 2026-09-18T10:41:47Z
  *     via `PATCH /workflow/{id}/name`, id unchanged (docs/ondemand-workflows/
- *     README.md). A workflow id is not a secret (it is useless without the
- *     api key), which is why it may live here as a non-secret default.
+ *     README.md) and re-confirmed live by `GET /workflow/{id}` → 200 on
+ *     2026-09-18T16:20:55Z (contract §18.2 a; the 26-character spelling
+ *     `…859f9f7b…` answers 404 and must never be used). A workflow id is
+ *     not a secret (it is useless without the api key), which is why it
+ *     may live here as a non-secret default. `sources.spatialFlowId` names
+ *     which of the two env names (or 'default') won, surfaced by
+ *     api/ondemand/health.js `config.spatialFlowId.resolvedVia`.
  *   - DENY-LIST (docs/ONDEMAND_PROXY_DESIGN.md "Environment name
  *     reconciliation (2026-09-18)"): the retired plugin-ids alias for
  *     `ONDEMAND_SPATIAL_AGENT_ID` (exact spelling: see DENIED_ENV_NAMES
@@ -237,6 +246,31 @@ export const FLOW_VERSION_ENV = Object.freeze({
   ]),
 });
 
+/**
+ * Env names of the `spatialFlowId` row and the order they are consulted
+ * in (`reconcile` — CANONICAL first, unlike FLOW_VERSION_ENV above).
+ * Canonical = `ONDEMAND_SPATIAL_WORKFLOW_ID` (added 2026-09-18: the
+ * OnDemand API calls the object a *workflow* — `POST /workflow/{id}/execute`,
+ * contract §7.1 / §18.2 a — so the canonical env name says so too); alias =
+ * `ONDEMAND_SPATIAL_FLOW_ID`, the name used since 2026-09-17 and still
+ * accepted unchanged. Neither name is provisioned on the Vercel project
+ * as of the 2026-09-18 audit (docs/ONDEMAND_PROXY_DESIGN.md §10.1), so the
+ * FLOW_DEFAULTS.spatialFlowId constant is what a stock deployment resolves
+ * to ('default'). `order` is exactly the set of values
+ * `sources.spatialFlowId` can take. Surfaced (names only) through
+ * `getConfig().workflowIdEnv` and api/ondemand/health.js
+ * `config.spatialFlowId`.
+ */
+export const WORKFLOW_ID_ENV = Object.freeze({
+  canonical: 'ONDEMAND_SPATIAL_WORKFLOW_ID',
+  alias: 'ONDEMAND_SPATIAL_FLOW_ID',
+  order: Object.freeze([
+    'ONDEMAND_SPATIAL_WORKFLOW_ID',
+    'ONDEMAND_SPATIAL_FLOW_ID',
+    'default',
+  ]),
+});
+
 // DENY-LIST — see the header comment and docs/ONDEMAND_PROXY_DESIGN.md
 // "Environment name reconciliation (2026-09-18)". Built from parts (never a
 // literal) so this file itself never contains the two denied strings —
@@ -377,11 +411,13 @@ export const TIER_DEFAULTS = Object.freeze({
  * §7.3) — bump it together with the export whenever the definition
  * changes.
  *
- * Both are the DEFAULT branch of the `ONDEMAND_SPATIAL_FLOW_ID` /
- * `ONDEMAND_SPATIAL_FLOW_VERSION` (alias `GODS_EYE_FLOW_VERSION`, checked
- * first — see FLOW_VERSION_ENV) reconciliation rows (source 'default'); an
- * env var set on the deployment still wins. Re-exported through
- * api/ondemand/_config.js like every other name here.
+ * Both are the DEFAULT branch of the `ONDEMAND_SPATIAL_WORKFLOW_ID` (alias
+ * `ONDEMAND_SPATIAL_FLOW_ID`, canonical checked first — see
+ * WORKFLOW_ID_ENV) / `ONDEMAND_SPATIAL_FLOW_VERSION` (alias
+ * `GODS_EYE_FLOW_VERSION`, checked first — see FLOW_VERSION_ENV)
+ * reconciliation rows (source 'default'); an env var set on the deployment
+ * still wins. Re-exported through api/ondemand/_config.js like every other
+ * name here.
  */
 export const FLOW_DEFAULTS = Object.freeze({
   spatialFlowId: '6aace534859f7b0abb53d99a',
@@ -454,12 +490,15 @@ function computeConfig() {
 
   const reasoningModeResult = reconcileReasoningMode();
 
-  // Workflow id for `POST /workflow/{id}/execute` (§7.1). No alias exists
-  // on the target Vercel project for this concept. Default: the real id of
-  // the workflow this repo created (FLOW_DEFAULTS, 2026-09-18).
+  // Workflow id for `POST /workflow/{id}/execute` (§7.1 / §18.2 a).
+  // CANONICAL-first (see WORKFLOW_ID_ENV): ONDEMAND_SPATIAL_WORKFLOW_ID,
+  // then the accepted alias ONDEMAND_SPATIAL_FLOW_ID. Neither is provisioned
+  // on the target Vercel project (2026-09-18 audit), so the default — the
+  // real id of the workflow this repo created (FLOW_DEFAULTS) — is what a
+  // stock deployment resolves to.
   const spatialFlowResult = reconcile(
-    'ONDEMAND_SPATIAL_FLOW_ID',
-    null,
+    WORKFLOW_ID_ENV.canonical,
+    WORKFLOW_ID_ENV.alias,
     FLOW_DEFAULTS.spatialFlowId,
   );
 
@@ -627,7 +666,9 @@ export function requestTimeoutMs() {
  * spatialFlowId/an invalid reasoningMode), or `'unset'` (no default either — the field is simply
  * empty). For `flowVersion` the possible names are exactly
  * FLOW_VERSION_ENV.order ('GODS_EYE_FLOW_VERSION' |
- * 'ONDEMAND_SPATIAL_FLOW_VERSION' | 'default'). NAMES ONLY, never values —
+ * 'ONDEMAND_SPATIAL_FLOW_VERSION' | 'default'); for `spatialFlowId` exactly
+ * WORKFLOW_ID_ENV.order ('ONDEMAND_SPATIAL_WORKFLOW_ID' |
+ * 'ONDEMAND_SPATIAL_FLOW_ID' | 'default'). NAMES ONLY, never values —
  * safe to serialize verbatim in an HTTP response (see
  * api/ondemand/health.js's `?envNames=1`).
  */
@@ -669,6 +710,10 @@ export function getConfig() {
     // Env NAMES (never values) of the alias-first `flowVersion` row and
     // the order they are consulted in — see FLOW_VERSION_ENV.
     flowVersionEnv: FLOW_VERSION_ENV,
+    // Env NAMES (never values) of the canonical-first `spatialFlowId` row
+    // (ONDEMAND_SPATIAL_WORKFLOW_ID → ONDEMAND_SPATIAL_FLOW_ID → default)
+    // and the order they are consulted in — see WORKFLOW_ID_ENV.
+    workflowIdEnv: WORKFLOW_ID_ENV,
     sources: configSources(),
   };
   assertNoDeniedKeys(result);

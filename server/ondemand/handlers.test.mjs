@@ -38,6 +38,7 @@ const ENV_KEYS = [
   'ONDEMAND_API_BASE',
   'ONDEMAND_SPATIAL_AGENT_ID',
   DEPRECATED_KNOWLEDGE_ALIAS,
+  'ONDEMAND_SPATIAL_WORKFLOW_ID',
   'ONDEMAND_SPATIAL_FLOW_ID',
   'ONDEMAND_REASONING_ENDPOINT_ID',
   'ONDEMAND_FULFILLMENT_ENDPOINT_ID',
@@ -187,9 +188,18 @@ describe('api/ondemand/health.js', () => {
     });
     // Since 2026-09-18 the workflow id has a non-secret built-in default
     // (server/ondemand/config.js FLOW_DEFAULTS) — configured, source
-    // 'default'; the VALUE is still never surfaced by health.
+    // 'default'; the VALUE is still never surfaced by health. Same shape
+    // as flowVersion (canonical-first row, WORKFLOW_ID_ENV): both env
+    // NAMES and how it resolved.
     assert.equal(body.config.spatialFlowId.configured, true);
     assert.equal(body.config.spatialFlowId.source, 'default');
+    assert.deepEqual(body.config.spatialFlowId, {
+      configured: true,
+      source: 'default',
+      resolvedVia: 'default',
+      canonical: 'ONDEMAND_SPATIAL_WORKFLOW_ID',
+      alias: 'ONDEMAND_SPATIAL_FLOW_ID',
+    });
     assert.equal(
       JSON.stringify(body).includes('6aace534859f7b0abb53d99a'),
       false,
@@ -297,6 +307,41 @@ describe('api/ondemand/health.js', () => {
       alias: 'GODS_EYE_FLOW_VERSION',
     });
     assert.equal(/"flowVersion":\{[^}]*"8"/.test(res.text()), false);
+  });
+
+  test('config.spatialFlowId reports resolvedVia "canonical" when ONDEMAND_SPATIAL_WORKFLOW_ID (checked first) is set — never the value', async () => {
+    configureWithKey({
+      ONDEMAND_SPATIAL_WORKFLOW_ID: 'wf-canonical-7',
+      ONDEMAND_SPATIAL_FLOW_ID: 'wf-alias-8',
+    });
+    activeStub = stubFetchSequence([...healthyReadProbes(), ttsEnvelope()]);
+    const res = await runHealth();
+    const body = res.json();
+    assert.deepEqual(body.config.spatialFlowId, {
+      configured: true,
+      source: 'ONDEMAND_SPATIAL_WORKFLOW_ID',
+      resolvedVia: 'canonical',
+      canonical: 'ONDEMAND_SPATIAL_WORKFLOW_ID',
+      alias: 'ONDEMAND_SPATIAL_FLOW_ID',
+    });
+    assert.equal(res.text().includes('wf-canonical-7'), false);
+    assert.equal(res.text().includes('wf-alias-8'), false);
+  });
+
+  test('config.spatialFlowId reports resolvedVia "alias" when only ONDEMAND_SPATIAL_FLOW_ID is set (unkeyed response too)', async () => {
+    process.env.ONDEMAND_SPATIAL_FLOW_ID = 'wf-alias-8';
+    __reloadConfigForTests(); // no key: the unkeyed body carries the same block
+    const res = await runHealth();
+    const body = res.json();
+    assert.equal(body.configured, false);
+    assert.deepEqual(body.config.spatialFlowId, {
+      configured: true,
+      source: 'ONDEMAND_SPATIAL_FLOW_ID',
+      resolvedVia: 'alias',
+      canonical: 'ONDEMAND_SPATIAL_WORKFLOW_ID',
+      alias: 'ONDEMAND_SPATIAL_FLOW_ID',
+    });
+    assert.equal(res.text().includes('wf-alias-8'), false);
   });
 
   test('reasoningModeInvalid is true (and config.reasoningMode.valid is false) when an undocumented ONDEMAND_REASONING_MODE is set', async () => {

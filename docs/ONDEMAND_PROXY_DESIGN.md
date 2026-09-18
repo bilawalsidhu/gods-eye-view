@@ -231,7 +231,7 @@ step.
 | `fulfillmentEndpointId` | `ONDEMAND_FULFILLMENT_ENDPOINT_ID`    | `ONDEMAND_ENDPOINT_ID` | `predefined-gpt-5.6-luna`                                        | step-3 INVESTIGATE fulfillment choice, verified live 2026-09-18 (§17.5); ids are volatile per §12                                                                                                                        |
 | `reasoningMode`         | `ONDEMAND_REASONING_MODE` (validated) | —                      | `''` (unset) / `'dynamic'` (set but invalid — see §10.2)         | §17.5 documented default tier                                                                                                                                                                                            |
 | `flowVersion`           | `ONDEMAND_SPATIAL_FLOW_VERSION`       | `GODS_EYE_FLOW_VERSION` (**alias-first** — the one exception to the canonical-first rule; see note below) | `'1'` (`FLOW_DEFAULTS.flowVersion`, Gate 6 2026-09-18)          | informational only; workflow versioning is NOT FOUND IN LIVE DOCS (§7.3) — the repo's own label of the created workflow definition. Health reports `source` (the env NAME that resolved), `resolvedVia: alias\|canonical\|default`, `canonical`, `alias`                                                                                                                                                 |
-| `spatialFlowId`         | `ONDEMAND_SPATIAL_FLOW_ID`            | —                      | `'6aace534859f7b0abb53d99a'` (`FLOW_DEFAULTS.spatialFlowId`)     | Gate 6 (2026-09-18): the REAL id returned by the documented `POST /automation/api/workflow/` (201, 07:16:04Z) for `OnDemand Spatial Advanced Workflow` v1 (display name renamed live 2026-09-18T10:41:47Z, id and v1 definition unchanged) — docs/ondemand-workflows/README.md; a workflow id is not a secret                                                                                                                                                                                                                        |
+| `spatialFlowId`         | `ONDEMAND_SPATIAL_WORKFLOW_ID` (canonical since 2026-09-18) | `ONDEMAND_SPATIAL_FLOW_ID` (accepted alias, canonical-first — `WORKFLOW_ID_ENV.order`) | `'6aace534859f7b0abb53d99a'` (`FLOW_DEFAULTS.spatialFlowId`)     | Gate 6 (2026-09-18): the REAL id returned by the documented `POST /automation/api/workflow/` (201, 07:16:04Z) for `OnDemand Spatial Advanced Workflow` v1 (display name renamed live 2026-09-18T10:41:47Z, id and v1 definition unchanged) — docs/ondemand-workflows/README.md; re-confirmed `GET /workflow/{id}` → 200 at 2026-09-18T16:20:55Z (the 26-char spelling `…859f9f7b…` → 404; contract §18.2 a); a workflow id is not a secret. Health reports `source`, `resolvedVia: canonical\|alias\|default`, `canonical`, `alias` (names only) |
 | `defaultPluginIds`      | `ONDEMAND_SPATIAL_AGENT_ID`           | — (denied, §10.3)      | `[]` (no default)                                                | —                                                                                                                                                                                                                        |
 | `apiKey`                | `ONDEMAND_API_KEY`                    | —                      | `''` (no default)                                                | —                                                                                                                                                                                                                        |
 
@@ -243,7 +243,14 @@ default `'1'`. The alias is the name already provisioned on the Vercel project
 in `/api/ondemand/health` therefore carries `source` (the env NAME that resolved
 — `GODS_EYE_FLOW_VERSION` when the alias wins), `resolvedVia: alias|canonical|default`,
 `canonical: "ONDEMAND_SPATIAL_FLOW_VERSION"` and `alias: "GODS_EYE_FLOW_VERSION"`.
-Every other row is canonical-first.
+Every other row is canonical-first — including `spatialFlowId`, whose canonical
+name became `ONDEMAND_SPATIAL_WORKFLOW_ID` on 2026-09-18 with `ONDEMAND_SPATIAL_FLOW_ID`
+kept as the accepted alias (`WORKFLOW_ID_ENV`; health `config.spatialFlowId` carries the
+same `{ configured, source, resolvedVia, canonical, alias }` shape as `config.flowVersion`).
+
+Live re-validation of every documented surface this table depends on (execute path and
+parameters, logs polling-only, agent create dashboard-only, no realtime WebSocket):
+`docs/ONDEMAND_API_CURRENT.md` §18 (2026-09-18).
 
 Note the shared alias: `reasoningEndpointId` and `fulfillmentEndpointId`
 both accept `ONDEMAND_ENDPOINT_ID` — if only that alias is set, both fields

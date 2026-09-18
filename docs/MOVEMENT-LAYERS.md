@@ -190,3 +190,63 @@ format:check` green. Provider tests mock the network (`t.mock.method(globalThis,
 `celestrakSnapshot.test.mjs`, `liveProviders.test.mjs`,
 `aisServerless.test.mjs`, `trafficProvider.test.mjs`,
 `src/data/providerFeedState.test.mjs`.
+
+## Live verification 2026-09-18 (preview sb-1dqoce558p0v)
+
+E2E pass against `https://sb-1dqoce558p0v.vercel.run` (Vercel Sandbox, node 24, `dev:serverless`
+over `dist` + `api`; runtime env limited to the OnDemand variables — **no OPENSKY / AISSTREAM /
+TOMTOM keys**). Browser side: headless Chromium 1440×900 through the `ui-validator` driver, layers
+enabled with `dataManager.setEnabled(id, true, { origin: 'user' })` after the share-link camera
+restore completed, DENSE satellites chip on, rows read after 40 s. Screenshots (after-only — there
+is no live "before" build of this preview): `.ui-proof/e2e-austin-1440x900.png` (17:31:24Z),
+`.ui-proof/e2e-galveston-1440x900.png` (17:29:33Z).
+
+### DATA LAYERS badge texts (`name | count | meta`)
+
+| Layer | Austin `#lat=30.2672&lon=-97.7431&alt=1200&pitch=-35` (17:31:20Z) | Galveston Bay `#lat=29.45&lon=-94.85&alt=45000&pitch=-55` (17:29:29Z) |
+| --- | --- | --- |
+| Satellites | `Satellites \| 11.5K \| LIVE · CelesTrak · 34m ago` | `Satellites \| 11.5K \| LIVE · CelesTrak · 32m ago` |
+| Live Flights | `Live Flights \| 648 \| DEGRADED · adsb.lol · OpenSky unreachable from this deployment (connect timeout) - adsb.lol regional feed` | `Live Flights \| 532 \| DEGRADED · adsb.lol · OpenSky unreachable from this deployment (connect timeout) - adsb.lol regional feed` |
+| Military Flights | `Military Flights \| 105 \| LIVE · adsb.lol · 7s ago` | `Military Flights \| 130 \| LIVE · adsb.lol · 8s ago` |
+| Live Vessels | `Live Vessels \| — \| Demo replay · No vessels in scene (demo replay covers the Texas Gulf coast)` | `Live Vessels \| 12 \| DEGRADED · Demo replay · AISSTREAM_API_KEY not set - demo replay, not live AIS` |
+| Street Traffic | `Street Traffic \| — \| DEGRADED · TomTom · TOMTOM_API_KEY not set — showing simulated flow on live OSM roads (set TOMTOM_API_KEY in Vercel for live speeds) · SIMULATE…` | `Street Traffic \| — \| DEGRADED · TomTom · TOMTOM_API_KEY not set — showing simulated flow on live OSM roads (set TOMTOM_API_KEY in Vercel for live speeds)` |
+
+One-second samples over 40 s per scene: Satellites `LIVE`×40, Military `LIVE`×40, Flights
+`ENABLING`≤6 s then `DEGRADED`, Vessels `ENABLING` 1 s then `DEGRADED` (Galveston) / `Demo replay`
+guidance (Austin), Traffic `DEGRADED`×40 in the final runs. **0 `HTTP 502`** in every sample and
+every scene. **`UNAVAILABLE`: 0 in the final runs of both scenes, but not always** — in five earlier
+Austin runs the Street Traffic row read `UNAVAILABLE · OpenStreetMap · OpenStreetMap roads
+unavailable — public Overpass mirrors refuse this deployment (HTTP 406); simulated traffic needs
+O…` for ~4 s (samples at 17:09:38Z, 17:14:06Z, 17:21:46Z, 17:23:22Z, 17:24:46Z) before returning to
+`DEGRADED · TomTom · …`: the simulated flow needs OSM roads from `/api/overpass`, which the public
+mirrors answer with HTTP 406 from Vercel egress (§1 root cause; same blocker `road_network_status`
+reports), so the traffic row flaps DEGRADED ↔ UNAVAILABLE around each failed Overpass attempt.
+Console also logged one `GET /api/terrain/heights … 502` during the Austin boots (terrain sampling
+proxy, not a DATA LAYERS row) and the benign `GET /api/setup/status` 404 probe.
+
+Harness note: enabling a layer **before** the camera restore lands (the rows exist while the camera
+is still at the default globe view, lat 35.2 / lon −82.5 / h 24 900 km) makes the vessels layer poll
+that scene box — `No vessels in scene` even at Galveston — so the driver waits for the rewritten
+`#v=2…` hash / camera height < 1 000 km first.
+
+### Tool matrix (`/api/tools/*`, `curl` from outside Vercel, 16:56:46–16:56:55Z)
+
+| Tool | Request | HTTP | Time | `provider.status` / source | Counts | `&bogus=1` |
+| --- | --- | --- | --- | --- | --- | --- |
+| `list_satellites_in_scene` | `lat=30.2672&lon=-97.7431&radiusKm=1500&limit=5` | 200 | 0.67 s | live / CelesTrak | count 1 · matched 1 · total 832 | 400 `unknown_param` |
+| `satellite_passes` | `lat=30.2672&lon=-97.7431&name=iss&hours=24` | 200 | 0.07 s | live / CelesTrak (cache) | 4 passes | 400 `unknown_param` |
+| `flights_in_bbox` | `lat=30.2672&lon=-97.7431&radiusNm=100&limit=5` | 200 | 6.62 s | degraded / adsb.lol — OpenSky connect timeout → regional feed | count 5 · total 152 · upstreamStates 603 | 400 `unknown_param` |
+| `flight_by_icao24` | `icao24=a78b23` (first hex of the previous answer) | 200 | 0.16 s | live / adsb.lol | 1 aircraft (N5852K, C550) | 400 `unknown_param` |
+| `military_flights_in_bbox` | `lat=30.2672&lon=-97.7431&radiusNm=600&limit=5` | 200 | 0.20 s | live / adsb.lol | count 5 · total 114 | 400 `unknown_param` |
+| `vessels_in_bbox` | `lat=29.45&lon=-94.85&radiusKm=60&limit=5` | 200 | 0.07 s | degraded / Demo replay (AISSTREAM_API_KEY not set) | count 5 · total 11 | 400 `unknown_param` |
+| `vessel_by_mmsi` | `mmsi=999000001` | 200 | 0.05 s | degraded / Demo replay | 1 vessel + track | 400 `unknown_param` |
+| `traffic_flow_at_point` | `lat=30.2672&lon=-97.7431` | **503** | 0.05 s | `not_configured` — TOMTOM_API_KEY not set (provider unavailable / TomTom) | — | 400 `unknown_param` |
+| `road_network_status` | — | 200 | 0.05 s | degraded / road-network:overpass — public Overpass mirrors refuse or time out for cloud egress | 4 upstreams | 400 `unknown_param` |
+| `earthquake_search` | `latitude=27&longitude=-92&maxradiuskm=1500&limit=5` | 200 | 0.31 s | live / USGS FDSN Event Web Service | 5 events | 400 `unknown_param` |
+
+Every route answered with `x-tools-route: ondemand-spatial`; provider status travels in the JSON
+`provider` object (no `X-Provider-*` headers on `/api/tools/*`). Full tables, JSON excerpts and
+the per-layer badge notes: `docs/plugins/<id>/TEST_PROOF.md` → "Preview evidence (Vercel egress)".
+OnDemand side of the same pass: `/api/ondemand/health` healthy, selftest 9 PASS / 0 FAIL / 1 SKIP
+(43 624 ms), workflow `6aad6db187fc428d7c18a4bc` first log 436 ms → `success` in 156 649 ms
+(`docs/VOICE_MODE.md`, `docs/ENTITY_CHAT.md`).

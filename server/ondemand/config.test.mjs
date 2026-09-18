@@ -11,6 +11,7 @@ import {
   TIER_DEFAULTS,
   FLOW_DEFAULTS,
   FLOW_VERSION_ENV,
+  WORKFLOW_ID_ENV,
   tierDefaults,
   __reloadConfigForTests,
 } from './config.js';
@@ -32,6 +33,7 @@ const ENV_KEYS = [
   'ONDEMAND_API_BASE',
   'ONDEMAND_SPATIAL_AGENT_ID',
   DEPRECATED_KNOWLEDGE_ALIAS,
+  'ONDEMAND_SPATIAL_WORKFLOW_ID',
   'ONDEMAND_SPATIAL_FLOW_ID',
   'ONDEMAND_REASONING_ENDPOINT_ID',
   'ONDEMAND_FULFILLMENT_ENDPOINT_ID',
@@ -182,12 +184,14 @@ describe('server/ondemand/config.js — getConfig()', () => {
         'tiers',
         'flowDefaults',
         'flowVersionEnv',
+        'workflowIdEnv',
       ].sort(),
     );
     assert.equal(cfg.apiKey, 'k-1');
     assert.equal(cfg.tiers, TIER_DEFAULTS);
     assert.equal(cfg.flowDefaults, FLOW_DEFAULTS);
     assert.equal(cfg.flowVersionEnv, FLOW_VERSION_ENV);
+    assert.equal(cfg.workflowIdEnv, WORKFLOW_ID_ENV);
     assert.deepEqual(Object.keys(cfg.baseUrls).sort(), [
       'automation',
       'chat',
@@ -633,14 +637,102 @@ describe('server/ondemand/config.js — accepted env-var aliases (docs/ONDEMAND_
     });
   });
 
-  test('ONDEMAND_SPATIAL_FLOW_ID has no accepted alias (docs/ONDEMAND_PROXY_DESIGN.md §5b)', () => {
-    __reloadConfigForTests();
-    assert.equal(config.spatialFlowId, FLOW_DEFAULTS.spatialFlowId);
-    assert.equal(configSources().spatialFlowId, 'default');
-    process.env.ONDEMAND_SPATIAL_FLOW_ID = 'wf-1';
-    __reloadConfigForTests();
-    assert.equal(config.spatialFlowId, 'wf-1');
-    assert.equal(configSources().spatialFlowId, 'ONDEMAND_SPATIAL_FLOW_ID');
+  describe('spatialFlowId: ONDEMAND_SPATIAL_WORKFLOW_ID (canonical, checked FIRST) vs ONDEMAND_SPATIAL_FLOW_ID (alias) — docs/ONDEMAND_PROXY_DESIGN.md §10.1, contract §18.2 a', () => {
+    test('WORKFLOW_ID_ENV is a frozen constant naming canonical, alias and the canonical-first order', () => {
+      assert.ok(Object.isFrozen(WORKFLOW_ID_ENV));
+      assert.ok(Object.isFrozen(WORKFLOW_ID_ENV.order));
+      assert.deepEqual(WORKFLOW_ID_ENV, {
+        canonical: 'ONDEMAND_SPATIAL_WORKFLOW_ID',
+        alias: 'ONDEMAND_SPATIAL_FLOW_ID',
+        order: [
+          'ONDEMAND_SPATIAL_WORKFLOW_ID',
+          'ONDEMAND_SPATIAL_FLOW_ID',
+          'default',
+        ],
+      });
+      assert.equal(getConfig().workflowIdEnv, WORKFLOW_ID_ENV);
+      // the two rows must not share a name: the workflow-id row is
+      // canonical-first, the version row alias-first (FLOW_VERSION_ENV)
+      assert.notEqual(WORKFLOW_ID_ENV.canonical, FLOW_VERSION_ENV.canonical);
+      assert.notEqual(WORKFLOW_ID_ENV.alias, FLOW_VERSION_ENV.alias);
+    });
+
+    test('default: neither name set -> FLOW_DEFAULTS.spatialFlowId (the REAL 24-hex id), source "default"', () => {
+      __reloadConfigForTests();
+      assert.equal(config.spatialFlowId, FLOW_DEFAULTS.spatialFlowId);
+      assert.equal(config.spatialFlowId, '6aace534859f7b0abb53d99a');
+      assert.equal(configSources().spatialFlowId, 'default');
+      assert.equal(getConfig().sources.spatialFlowId, 'default');
+    });
+
+    test('canonical only: honours ONDEMAND_SPATIAL_WORKFLOW_ID and names it as the source', () => {
+      process.env.ONDEMAND_SPATIAL_WORKFLOW_ID = 'wf-canonical';
+      __reloadConfigForTests();
+      assert.equal(config.spatialFlowId, 'wf-canonical');
+      assert.equal(getConfig().spatialFlowId, 'wf-canonical');
+      assert.equal(
+        configSources().spatialFlowId,
+        'ONDEMAND_SPATIAL_WORKFLOW_ID',
+      );
+      assert.equal(configSources().spatialFlowId, WORKFLOW_ID_ENV.canonical);
+    });
+
+    test('alias only: honours ONDEMAND_SPATIAL_FLOW_ID (still accepted) and names it as the source', () => {
+      process.env.ONDEMAND_SPATIAL_FLOW_ID = 'wf-alias';
+      __reloadConfigForTests();
+      assert.equal(config.spatialFlowId, 'wf-alias');
+      assert.equal(configSources().spatialFlowId, 'ONDEMAND_SPATIAL_FLOW_ID');
+      assert.equal(configSources().spatialFlowId, WORKFLOW_ID_ENV.alias);
+    });
+
+    test('BOTH set with different values: the canonical ONDEMAND_SPATIAL_WORKFLOW_ID wins — canonical-first', () => {
+      process.env.ONDEMAND_SPATIAL_WORKFLOW_ID = 'wf-canonical';
+      process.env.ONDEMAND_SPATIAL_FLOW_ID = 'wf-alias';
+      __reloadConfigForTests();
+      assert.equal(config.spatialFlowId, 'wf-canonical');
+      assert.equal(
+        configSources().spatialFlowId,
+        'ONDEMAND_SPATIAL_WORKFLOW_ID',
+      );
+      assert.equal(
+        getConfig().sources.spatialFlowId,
+        'ONDEMAND_SPATIAL_WORKFLOW_ID',
+      );
+    });
+
+    test('a whitespace-only canonical falls through to the alias', () => {
+      process.env.ONDEMAND_SPATIAL_WORKFLOW_ID = '   ';
+      process.env.ONDEMAND_SPATIAL_FLOW_ID = 'wf-alias';
+      __reloadConfigForTests();
+      assert.equal(config.spatialFlowId, 'wf-alias');
+      assert.equal(configSources().spatialFlowId, 'ONDEMAND_SPATIAL_FLOW_ID');
+    });
+
+    test('explicitly empty canonical AND alias still yield the default (never an empty id)', () => {
+      process.env.ONDEMAND_SPATIAL_WORKFLOW_ID = '';
+      process.env.ONDEMAND_SPATIAL_FLOW_ID = '   ';
+      __reloadConfigForTests();
+      assert.equal(config.spatialFlowId, FLOW_DEFAULTS.spatialFlowId);
+      assert.equal(configSources().spatialFlowId, 'default');
+    });
+
+    test('sources.spatialFlowId is always one of WORKFLOW_ID_ENV.order (names only, never a value)', () => {
+      for (const env of [
+        {},
+        { ONDEMAND_SPATIAL_WORKFLOW_ID: 'wf-c' },
+        { ONDEMAND_SPATIAL_FLOW_ID: 'wf-a' },
+        { ONDEMAND_SPATIAL_WORKFLOW_ID: 'wf-c', ONDEMAND_SPATIAL_FLOW_ID: 'wf-a' },
+      ]) {
+        delete process.env.ONDEMAND_SPATIAL_WORKFLOW_ID;
+        delete process.env.ONDEMAND_SPATIAL_FLOW_ID;
+        Object.assign(process.env, env);
+        __reloadConfigForTests();
+        const source = configSources().spatialFlowId;
+        assert.ok(WORKFLOW_ID_ENV.order.includes(source), source);
+        assert.notEqual(source, 'wf-c');
+        assert.notEqual(source, 'wf-a');
+      }
+    });
   });
 });
 

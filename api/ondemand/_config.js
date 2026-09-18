@@ -22,9 +22,13 @@
  * name already provisioned on the Vercel project (env id usC3wgbut65gTkaR)
  * and keeps winning over the canonical `ONDEMAND_SPATIAL_FLOW_VERSION`
  * until it is migrated; `FLOW_VERSION_ENV` / `getConfig().flowVersionEnv`
- * carry the names and order. Full detail and rationale in
- * server/ondemand/config.js's header comment and
- * docs/ONDEMAND_PROXY_DESIGN.md "Environment name reconciliation
+ * carry the names and order. The `spatialFlowId` row is canonical-first
+ * like every other: `ONDEMAND_SPATIAL_WORKFLOW_ID` (canonical since
+ * 2026-09-18) -> `ONDEMAND_SPATIAL_FLOW_ID` (accepted alias) -> default;
+ * `WORKFLOW_ID_ENV` / `getConfig().workflowIdEnv` carry those names and
+ * order, and health's `config.spatialFlowId.resolvedVia` says which won.
+ * Full detail and rationale in server/ondemand/config.js's header comment
+ * and docs/ONDEMAND_PROXY_DESIGN.md "Environment name reconciliation
  * (2026-09-18)"):
  *
  *   Setting              | Canonical                          | Alias                | Default
@@ -34,7 +38,7 @@
  *   fulfillmentEndpointId | ONDEMAND_FULFILLMENT_ENDPOINT_ID    | ONDEMAND_ENDPOINT_ID | 'predefined-gpt-5.6-luna' (ASK winner)
  *   reasoningMode         | ONDEMAND_REASONING_MODE (validated) | —                     | '' (field omitted upstream)
  *   flowVersion           | ONDEMAND_SPATIAL_FLOW_VERSION       | GODS_EYE_FLOW_VERSION (checked FIRST) | '1' (FLOW_DEFAULTS)
- *   spatialFlowId         | ONDEMAND_SPATIAL_FLOW_ID            | —                     | '6aace534859f7b0abb53d99a' (FLOW_DEFAULTS)
+ *   spatialFlowId         | ONDEMAND_SPATIAL_WORKFLOW_ID        | ONDEMAND_SPATIAL_FLOW_ID | '6aace534859f7b0abb53d99a' (FLOW_DEFAULTS)
  *   defaultPluginIds      | ONDEMAND_SPATIAL_AGENT_ID           | — (DENIED alias)     | [] (no default)
  *   apiKey                | ONDEMAND_API_KEY                    | —                     | '' (no default)
  *
