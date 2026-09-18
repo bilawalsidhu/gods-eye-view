@@ -271,7 +271,7 @@ _Ask for radio near anywhere and the globe starts broadcasting — every station
 
 ## 🛰️ What's on the Globe
 
-Fifteen layers and map sources. **Thirteen have a keyless path.** Some offer additional capabilities with a provider key. (🟢 no key · 🟡 free key · 🔴 metered.)
+Sixteen layers and map sources. **Fourteen have a keyless path.** Some offer additional capabilities with a provider key. (🟢 no key · 🟡 free key · 🔴 metered.)
 
 | Layer                       | What you get                                                                                                                                                                                                                                                                                                                                                                        | Source                                  | Auth                                                                                                |
 | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- | --------------------------------------------------------------------------------------------------- |
@@ -290,6 +290,7 @@ Fifteen layers and map sources. **Thirteen have a keyless path.** Some offer add
 | 🔥 **Active Fires**         | Live NASA FIRMS detections, trailing 24h                                                                                                                                                                                                                                                                                                                                            | NASA FIRMS                              | 🟡                                                                                                  |
 | 🚀 **Space Missions**       | Rolling 30-day launches with payload, stage, and recovery detail                                                                                                                                                                                                                                                                                                                    | Launch Library 2                        | 🟢 (🟡 optional token raises the allowance)                                                         |
 | 🎖️ **Mapped Installations** | Viewport-bounded military-site context from community mapping — incomplete by nature, and labeled that way                                                                                                                                                                                                                                                                          | OpenStreetMap                           | 🟢                                                                                                  |
+| 📡 **Cellular Networks**    | Viewport-bounded physical mobile-phone sites plus optional logical GSM/UMTS/LTE/5G cells, IDs, PLMN, mapped sector directions and estimated range. Cell records are observations, not subscriber/SMS data or guaranteed coverage. | OpenStreetMap + OpenCellID | 🟢 mapped sites · 🟡 logical Cell IDs |
 
 **The basemap ladder — what each tier buys you:**
 
@@ -303,7 +304,7 @@ Fifteen layers and map sources. **Thirteen have a keyless path.** Some offer add
 
 _The Space Missions layer replaying a Falcon 9 ascent — labeled `RECONSTRUCTED ESTIMATE`, scrubbable 0.25×–4×._
 
-**Also on the globe:** neighborhood overlays · an optional cockpit WX cloud effect. **Bundled static infrastructure:** Datacenters (4,351), Dams (704), and Submarine Cables (712).
+**Also on the globe:** neighborhood overlays · an optional cockpit WX cloud effect. **Bundled static infrastructure:** Datacenters (4,351), Dams (704), and Submarine Cables (712). **Live mapped infrastructure:** cellular sites from OpenStreetMap, with optional OpenCellID logical cells loaded through bounded cached viewport tiles.
 
 ![Diving into the Bahamas and revealing labeled submarine cable routes beneath the globe](docs/media/09-undersea-cables.gif)
 
@@ -406,6 +407,7 @@ _What the TomTom key buys you: rush-hour density painted on the city — then di
 |     | Key                  | Why                                                           | Get it                                             |
 | --- | -------------------- | ------------------------------------------------------------- | -------------------------------------------------- |
 | 🟡  | **OpenSky**          | ✈️ More flight-polling credits (🟢 anonymous works without)   | [opensky-network.org](https://opensky-network.org) |
+| 🟡  | **OpenCellID**       | 📡 Logical cellular Cell IDs, technologies and estimated ranges (mapped OSM sites work without it) | [opencellid.org](https://opencellid.org/) — API key |
 | 🟡  | **Launch Library 2** | 🚀 Higher space-missions request allowance (🟢 works without) | [thespacedevs.com](https://thespacedevs.com)       |
 
 Add these if you need higher polling allowances.

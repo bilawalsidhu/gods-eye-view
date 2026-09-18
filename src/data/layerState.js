@@ -329,6 +329,11 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     disposition: 'enabled+options',
     optionOwner: 'cctv',
   }),
+  Object.freeze({
+    id: 'cellular-networks',
+    token: 'k',
+    disposition: 'enabled-only',
+  }),
   Object.freeze({ id: 'directions', token: 'n', disposition: 'enabled-only' }),
   Object.freeze({ id: 'earthquakes', token: 'e', disposition: 'enabled-only' }),
   Object.freeze({

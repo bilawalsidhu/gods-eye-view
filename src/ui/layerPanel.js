@@ -34,6 +34,7 @@ const PANEL_GROUPS = [
     label: 'Infrastructure',
     ids: [
       'military-installations',
+      'cellular-networks',
       'local-datacenters',
       'telegeography-submarine-cables',
       'local-dams',

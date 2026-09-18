@@ -90,6 +90,20 @@ export const DATA_CREDITS = [
       'community mapping includes <a href="https://deflock.org" target="_blank" rel="noopener">DeFlock</a>',
   },
   {
+    key: 'cellular-networks-osm',
+    html:
+      'Mapped cellular sites: ' +
+      '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> ' +
+      '(ODbL 1.0)',
+  },
+  {
+    key: 'opencellid',
+    html:
+      'Logical cellular cells and estimated ranges: ' +
+      '<a href="https://opencellid.org/" target="_blank" rel="noopener">OpenCellID</a> ' +
+      '(CC BY-SA 4.0)',
+  },
+  {
     key: 'military-installations-osm',
     html:
       'Mapped installation context: ' +
