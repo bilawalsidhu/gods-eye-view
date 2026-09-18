@@ -121,9 +121,8 @@ function buildRow(documentRef, key) {
     fields.className = 'key-setup-fields';
     for (const envVar of key.envVars) {
       const input = documentRef.createElement('input');
-      // Passwords-style so a pasted key never shows on a shared or recorded
-      // screen — this app gets screen-recorded a lot.
-      input.type = 'password';
+      const isVisibleField = envVar.includes('URL') || envVar.includes('MODEL');
+      input.type = isVisibleField ? 'text' : 'password';
       input.autocomplete = 'off';
       input.spellcheck = false;
       input.dataset.envVar = envVar;
@@ -132,6 +131,60 @@ function buildRow(documentRef, key) {
         ? `${envVar} saved — paste to replace`
         : `paste ${envVar}`;
       fields.append(input);
+    }
+    if (key.id === 'llm-base-url') {
+      const presetsWrap = documentRef.createElement('div');
+      presetsWrap.className = 'key-setup-presets';
+      presetsWrap.style.display = 'flex';
+      presetsWrap.style.gap = '6px';
+      presetsWrap.style.marginTop = '6px';
+      presetsWrap.style.flexWrap = 'wrap';
+
+      const PRESETS = [
+        {
+          label: 'ChatGPT',
+          url: 'https://api.openai.com/v1',
+          model: 'gpt-4o-mini',
+        },
+        {
+          label: 'Groq',
+          url: 'https://api.groq.com/openai/v1',
+          model: 'llama-3.3-70b-versatile',
+        },
+        { label: 'Grok (xAI)', url: 'https://api.x.ai/v1', model: 'grok-beta' },
+        { label: 'Ollama', url: 'http://localhost:11434/v1', model: 'llama3' },
+        {
+          label: 'DeepSeek',
+          url: 'https://api.deepseek.com/v1',
+          model: 'deepseek-chat',
+        },
+      ];
+
+      for (const preset of PRESETS) {
+        const btn = documentRef.createElement('button');
+        btn.type = 'button';
+        btn.className = 'scene-btn key-preset-btn';
+        btn.textContent = preset.label;
+        btn.title = `Fill ${preset.label} endpoint & model`;
+        btn.style.fontSize = '11px';
+        btn.style.padding = '2px 8px';
+        btn.style.cursor = 'pointer';
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          const rootEl =
+            row.closest?.('#key-setup') || row.parentElement || row;
+          const baseUrlInput = rootEl.querySelector(
+            'input[data-env-var="OPENAI_BASE_URL"]',
+          );
+          const modelInput = rootEl.querySelector(
+            'input[data-env-var="OPENAI_HUD_SUMMARY_MODEL"]',
+          );
+          if (baseUrlInput) baseUrlInput.value = preset.url;
+          if (modelInput) modelInput.value = preset.model;
+        });
+        presetsWrap.appendChild(btn);
+      }
+      fields.append(presetsWrap);
     }
     if (key.managed === 'file') {
       const remove = documentRef.createElement('button');

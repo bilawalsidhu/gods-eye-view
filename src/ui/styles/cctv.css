@@ -302,6 +302,23 @@
   opacity: 1;
 }
 
+#cctv-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: none;
+  opacity: 0;
+  transition: opacity 180ms ease;
+  background: #000;
+}
+
+#cctv-video.active {
+  display: block;
+  opacity: 1;
+}
+
 #cctv-meta {
   font-family: var(--font-mono);
   font-size: 9px;

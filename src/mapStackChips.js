@@ -126,6 +126,9 @@ export function renderMapStackChips(
     const label = ownerDoc.createElement('span');
     label.className = 'map-stack-chip-label';
     label.textContent = model.label;
+    if (label.dataset) {
+      label.dataset.i18n = `mapStack.${model.id}`;
+    }
     chip.appendChild(label);
 
     if (model.requirement) {

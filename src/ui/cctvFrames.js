@@ -1,4 +1,77 @@
+export function _clearCctvVideo() {
+  if (this._cctvHls) {
+    this._cctvHls.destroy();
+    this._cctvHls = null;
+  }
+  if (this._cctvVideo) {
+    this._cctvVideo.pause?.();
+    this._cctvVideo.removeAttribute('src');
+    this._cctvVideo.load?.();
+    this._cctvVideo.classList.remove('active');
+    if (this._cctvVideo.dataset) {
+      this._cctvVideo.dataset.cameraId = '';
+      this._cctvVideo.dataset.currentSrc = '';
+    }
+  }
+}
+
+export function _queueCctvVideo(camera, cameraChanged) {
+  if (this.destroyed || !this._cctvVideo || !camera) return;
+  const cameraId = camera.id || '';
+  if (cameraChanged) {
+    _clearCctvVideo.call(this);
+  }
+  const streamUrl = camera.mediaUrl || camera.url || '';
+  if (!streamUrl) return;
+
+  const isHls = camera.feedType === 'hls' || streamUrl.includes('.m3u8');
+  if (this._cctvVideo.dataset) {
+    this._cctvVideo.dataset.cameraId = cameraId;
+    this._cctvVideo.dataset.currentSrc = streamUrl;
+  }
+
+  if (isHls) {
+    if (this._cctvVideo.canPlayType?.('application/vnd.apple.mpegurl')) {
+      this._cctvVideo.src = streamUrl;
+    } else if (typeof window !== 'undefined' && window.Hls?.isSupported()) {
+      if (this._cctvHls) this._cctvHls.destroy();
+      const hls = new window.Hls({ enableWorker: false });
+      hls.loadSource(streamUrl);
+      hls.attachMedia(this._cctvVideo);
+      this._cctvHls = hls;
+    } else {
+      this._cctvVideo.src = streamUrl;
+    }
+  } else {
+    this._cctvVideo.src = streamUrl;
+  }
+
+  this._cctvVideo.onplaying = () => {
+    if (this.destroyed || this._cctvVideo.dataset?.cameraId !== cameraId)
+      return;
+    this._cctvVideo.classList.add('active');
+    this._cctvFrameWrap?.classList.add('has-frame');
+    this._cctvFrameWrap?.classList.remove('loading');
+    if (this._cctvSourceBadge) {
+      this._cctvSourceBadge.textContent = 'STREAM · LIVE';
+      this._cctvSourceBadge.dataset.frameState = 'ready';
+    }
+  };
+
+  this._cctvVideo.onerror = () => {
+    if (this.destroyed || this._cctvVideo.dataset?.cameraId !== cameraId)
+      return;
+    this._cctvVideo.classList.remove('active');
+    if (this._cctvFrame && camera.frameUrl) {
+      this._queueCctvFrame(camera.frameUrl, cameraId, false);
+    }
+  };
+
+  this._cctvVideo.play?.().catch?.(() => {});
+}
+
 export function _clearCctvFrame() {
+  _clearCctvVideo.call(this);
   this._cctvFrameRequestToken += 1;
   if (this._cctvFramePreloader) {
     this._cctvFramePreloader.onload = null;
@@ -40,6 +113,15 @@ export function _queueCctvFrame(src, cameraId, cameraChanged) {
     'loading',
     !this._cctvFrameWrap?.classList.contains('has-frame'),
   );
+
+  const isMjpeg =
+    src.includes('/media/') ||
+    this._cctvState?.activeCamera?.feedType === 'mjpeg';
+
+  if (isMjpeg) {
+    this._settleCctvFrame(token, src, true);
+    return;
+  }
 
   const preloader = new Image();
   this._cctvFramePreloader = preloader;
@@ -92,6 +174,15 @@ export function _syncCctvSourceBadge(activeCamera, enabled) {
   }
   const hasDisplayedFrame =
     this._cctvFrameWrap?.classList.contains('has-frame');
+  const isVideoActive = this._cctvVideo?.classList.contains('active');
+  if (
+    isVideoActive ||
+    (hasDisplayedFrame && activeCamera.feedType === 'mjpeg')
+  ) {
+    this._cctvSourceBadge.textContent = 'STREAM · LIVE';
+    this._cctvSourceBadge.dataset.frameState = 'ready';
+    return;
+  }
   if (this._cctvFrame?.dataset.loading === 'true' && !hasDisplayedFrame) {
     this._cctvSourceBadge.textContent = 'FRAME · LOADING';
     this._cctvSourceBadge.dataset.frameState = 'loading';

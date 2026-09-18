@@ -219,7 +219,22 @@ export function createProjection({
       video.playsInline = true;
       video.crossOrigin = 'anonymous';
       video.preload = 'auto';
-      video.src = parts.frames.mediaUrlFor(record.camera);
+      const streamUrl = parts.frames.mediaUrlFor(record.camera);
+      const isHls =
+        record.camera.feedType === 'hls' || streamUrl.includes('.m3u8');
+      if (
+        isHls &&
+        !video.canPlayType?.('application/vnd.apple.mpegurl') &&
+        typeof window !== 'undefined' &&
+        window.Hls?.isSupported()
+      ) {
+        const hls = new window.Hls({ enableWorker: false });
+        hls.loadSource(streamUrl);
+        hls.attachMedia(video);
+        runtime.hls = hls;
+      } else {
+        video.src = streamUrl;
+      }
       video.addEventListener('canplay', () => {
         video.play().catch(() => {});
       });
@@ -288,6 +303,10 @@ export function createProjection({
 
   function destroyProjectionRuntime(runtime) {
     if (!runtime) return;
+    if (runtime.hls) {
+      runtime.hls.destroy();
+      runtime.hls = null;
+    }
     if (runtime.video) {
       runtime.video.pause();
       runtime.video.removeAttribute('src');

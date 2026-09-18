@@ -63,8 +63,31 @@ const PANEL_LABELS = {
   'local-firms': 'Active Fires',
 };
 
-function panelLabel(layer) {
-  return PANEL_LABELS[layer.id] || layer.name;
+const LAYER_KEY_MAP = {
+  satellites: 'layers.items.satellites',
+  flights: 'layers.items.flights',
+  military: 'layers.items.military',
+  'ais-live-vessels': 'layers.items.aisLiveVessels',
+  traffic: 'layers.items.traffic',
+  transit: 'layers.items.transit',
+  bikeshare: 'layers.items.bikeshare',
+  cctv: 'layers.items.cctv',
+  'alpr-cameras': 'layers.items.alprCameras',
+  'military-installations': 'layers.items.militaryInstallations',
+  'local-datacenters': 'layers.items.localDatacenters',
+  'telegeography-submarine-cables': 'layers.items.submarineCables',
+  'local-dams': 'layers.items.localDams',
+  'rocket-launches': 'layers.items.rocketLaunches',
+  earthquakes: 'layers.items.earthquakes',
+  'local-firms': 'layers.items.localFirms',
+  directions: 'layers.items.directions',
+  radio: 'layers.items.radio',
+};
+
+function panelLabel(layer, translate = (key, fallback) => fallback || key) {
+  const key = LAYER_KEY_MAP[layer.id];
+  const defaultText = PANEL_LABELS[layer.id] || layer.name;
+  return key ? translate(key, defaultText) : defaultText;
 }
 
 /**
@@ -98,6 +121,8 @@ export class LayerPanel {
     hasRowControls,
     subscribeRowControls,
     onHiddenRefresh = () => {},
+    translate = (key, fallback) => fallback || key,
+    subscribeLocale,
   }) {
     this.getAll = getLayers;
     this.isEnabled = isEnabled;
@@ -107,9 +132,19 @@ export class LayerPanel {
     this.hasRowControls = hasRowControls;
     this.subscribeRowControls = subscribeRowControls;
     this.onHiddenRefresh = onHiddenRefresh;
+    this.translate = translate;
     this._generation = 0;
     this._removers = [];
     this._destroyed = false;
+    if (typeof subscribeLocale === 'function') {
+      this._removers.push(
+        subscribeLocale(() => {
+          if (!this._destroyed && this._toggleContainer) {
+            this._renderToggles();
+          }
+        }),
+      );
+    }
   }
   mount(container) {
     if (this._destroyed) return;
@@ -152,7 +187,7 @@ export class LayerPanel {
       if (group && group !== previousGroup) {
         const heading = document.createElement('h3');
         heading.className = 'data-layer-group-heading';
-        heading.textContent = group;
+        heading.textContent = this.translate(`layers.groups.${group}`, group);
         this._toggleContainer.appendChild(heading);
       }
       previousGroup = group;
@@ -170,7 +205,7 @@ export class LayerPanel {
       icon.textContent = layer.icon;
       const name = document.createElement('span');
       name.className = 'data-name';
-      name.textContent = panelLabel(layer);
+      name.textContent = panelLabel(layer, this.translate);
       left.appendChild(icon);
       left.appendChild(name);
 
@@ -531,6 +566,10 @@ export class LayerPanel {
   }
 
   _syncToggleButton(button, layer) {
+    const tr =
+      typeof this?.translate === 'function'
+        ? this.translate.bind(this)
+        : (key, fallback) => fallback || key;
     const feedState = layer.enabled ? layerFeedState(layer.stats) : 'off';
     const transitioning =
       layer.lifecycleState === 'enabling' ||
@@ -559,22 +598,29 @@ export class LayerPanel {
     button.setAttribute('aria-disabled', String(transitioning));
     button.setAttribute('aria-busy', String(transitioning));
     button.textContent = transitioning
-      ? layer.lifecycleState.toUpperCase()
+      ? tr(
+          `layers.states.${layer.lifecycleState}`,
+          layer.lifecycleState.toUpperCase(),
+        )
       : uncertain
-        ? 'UNCERTAIN'
+        ? tr('layers.states.uncertain', 'UNCERTAIN')
         : layer.enabled
-          ? FEED_STATE_LABELS[feedState]
-          : 'OFF';
+          ? tr(
+              `layers.states.${feedState}`,
+              FEED_STATE_LABELS[feedState] || 'ON',
+            )
+          : tr('layers.states.off', 'OFF');
     const keyGuidance = layerKeyRequirementTooltip(layer);
     // Name the missing key on the control itself: a row reading KEY REQUIRED
     // without saying WHICH key leaves a dead control and no next step. Empty
     // when the layer needs no key, or already has one.
     button.title = keyGuidance;
+    const layerName = panelLabel(layer, tr);
     button.setAttribute(
       'aria-label',
       keyGuidance
-        ? `${panelLabel(layer)}: ${button.textContent}. ${keyGuidance}`
-        : `${panelLabel(layer)}: ${button.textContent}`,
+        ? `${layerName}: ${button.textContent}. ${keyGuidance}`
+        : `${layerName}: ${button.textContent}`,
     );
   }
 
@@ -584,10 +630,22 @@ export class LayerPanel {
   }
 
   _timeAgo(timestamp) {
+    const tr =
+      typeof this?.translate === 'function'
+        ? this.translate.bind(this)
+        : (key, fallback) => fallback || key;
     const diff = Math.floor((Date.now() - timestamp) / 1000);
-    if (diff < 5) return 'just now';
-    if (diff < 60) return `${diff}s ago`;
-    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-    return `${Math.floor(diff / 3600)}h ago`;
+    if (diff < 5) return tr('time.justNow', 'just now');
+    if (diff < 60)
+      return tr('time.secondsAgo', `${diff}s ago`).replace('{s}', String(diff));
+    if (diff < 3600)
+      return tr('time.minutesAgo', `${Math.floor(diff / 60)}m ago`).replace(
+        '{m}',
+        String(Math.floor(diff / 60)),
+      );
+    return tr('time.hoursAgo', `${Math.floor(diff / 3600)}h ago`).replace(
+      '{h}',
+      String(Math.floor(diff / 3600)),
+    );
   }
 }

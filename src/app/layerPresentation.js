@@ -1,6 +1,7 @@
 import { LayerPanel } from '../ui/layers.js';
 import { governorRequestRender } from '../renderGovernor.js';
 import { markDetectionSourcesChanged } from '../data/detection.js';
+import { t, subscribeLocale } from '../i18n/index.js';
 
 /** Own the layer panel and application reactions to lifecycle activity. */
 export class LayerPresentation {
@@ -41,6 +42,8 @@ export class LayerPresentation {
           this.manager.setEnabled(id, enabled, options),
         setLayerParams: (id, params, options) =>
           this.manager.setLayerParams(id, params, options),
+        translate: t,
+        subscribeLocale,
         getRowControls: (id) => {
           const module = this.manager.layers.get(id)?.module;
           try {
