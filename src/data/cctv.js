@@ -4119,6 +4119,25 @@ export function _setCctvCoverageStateForTest({
 }
 
 /**
+ * Read access to the module-private calibration/pose/catalog internals for
+ * unit tests (same pattern as traffic's `_trafficInternalsForTest`). The
+ * layer lifecycle pulls these through `init`/`setParams`/voice actions, which
+ * need a live viewer; the pure seams below are exactly the parts worth
+ * asserting headless. Exposes references only — no behavior.
+ */
+export const _cctvInternalsForTest = {
+  normalizeCalibration,
+  isDefaultCalibration,
+  headingFromId,
+  offsetDegrees,
+  ensureCameraPose,
+  seedCatalog,
+  buildCatalogFromSources,
+  applyCalibrationPatch,
+  nearestCameraIdToViewer,
+};
+
+/**
  * Flies the Cesium viewer camera to frame the specified CCTV camera,
  * looking along its heading from above.
  * @param {Cesium.Viewer|null} viewer Cesium viewer that owns the camera.

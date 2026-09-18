@@ -60,6 +60,7 @@ import cctvLayer, {
   refreshCoverageStyles,
   setCctvCardPresentationOptions,
   setActiveCamera,
+  _cctvInternalsForTest,
 } from './cctv.js';
 import {
   CCTV_ACTIVATION_RESULT,
@@ -1284,4 +1285,211 @@ test('frameSignatureFromPixels: empty or junk input yields null (always redraw)'
   assert.equal(frameSignatureFromPixels(null), null);
   assert.equal(frameSignatureFromPixels(undefined), null);
   assert.equal(frameSignatureFromPixels({}), null);
+});
+
+// ─── Calibration / pose / catalog internals (via _cctvInternalsForTest) ───
+// The layer lifecycle reaches these through init/setParams/voice actions,
+// which need a live viewer; the pure seams are exactly the parts worth
+// asserting headless. Plane-coincidence math for the frustum lives in the
+// computeFrustumGeometry block above; here we pin the pose-derivation and
+// catalog-merge semantics those frustums are built from.
+
+test('headingFromId: deterministic 16-spoke synthetic heading, junk-safe', () => {
+  const { headingFromId } = _cctvInternalsForTest;
+  assert.equal(headingFromId('cam-1'), headingFromId('cam-1'));
+  const spokes = new Set();
+  for (let i = 0; i < 64; i++) {
+    const h = headingFromId(`camera-${i}`);
+    assert.ok(h >= 0 && h < 360, `heading in [0,360), got ${h}`);
+    assert.equal(h % 22.5, 0, `heading on a 22.5° spoke, got ${h}`);
+    spokes.add(h);
+  }
+  assert.ok(spokes.size > 4, 'ids spread across many spokes');
+  assert.equal(headingFromId(''), headingFromId(''), 'empty id is legal and stable');
+  assert.equal(typeof headingFromId(null), 'number', 'String(null) hash, never a throw');
+});
+
+test('offsetDegrees: equirectangular conversion with a polar divisor floor', () => {
+  const { offsetDegrees } = _cctvInternalsForTest;
+  const equator = offsetDegrees(0, 111.32, 111.32);
+  assert.ok(Math.abs(equator.latOffset - 0.001) < 1e-9);
+  assert.ok(Math.abs(equator.lonOffset - 0.001) < 1e-9);
+  // At 60°N one east metre buys twice the longitude (1 / cos 60°).
+  const midLat = offsetDegrees(60, 0, 111.32);
+  assert.ok(Math.abs(midLat.lonOffset - 0.002) < 1e-9);
+  // Past ~81° the divisor floors at 0.15 so offsets stay finite, not infinite.
+  const polar = offsetDegrees(89, 0, 111320 * 0.15);
+  assert.ok(Math.abs(polar.lonOffset - 1) < 1e-6);
+});
+
+test('normalizeCalibration clamps every field to its band and quantizes the grain', () => {
+  const { normalizeCalibration } = _cctvInternalsForTest;
+  const n = normalizeCalibration({
+    offsetNorthM: 5000,
+    offsetEastM: -5000,
+    headingDeg: 400,
+    pitchDeg: -90,
+    fovDeg: 90,
+    rangeScale: 99,
+    heightM: 1000,
+  });
+  assert.equal(n.offsetNorthM, 900);
+  assert.equal(n.offsetEastM, -900);
+  assert.equal(n.headingDeg, 180);
+  assert.equal(n.pitchDeg, -45);
+  assert.equal(n.fovDeg, 50);
+  assert.equal(n.rangeScale, 3);
+  assert.equal(n.heightM, 240);
+  // Garbage falls back to defaults; the grains quantize (0.1 pose, 0.01 range).
+  const junk = normalizeCalibration({ offsetNorthM: 'nope', rangeScale: 1.2349 });
+  assert.equal(junk.offsetNorthM, 0);
+  assert.equal(junk.rangeScale, 1.23);
+});
+
+test('isDefaultCalibration: raw and partial input folds to the default pose', () => {
+  const { isDefaultCalibration } = _cctvInternalsForTest;
+  assert.equal(isDefaultCalibration({}), true);
+  assert.equal(isDefaultCalibration(), true);
+  assert.equal(isDefaultCalibration({ offsetNorthM: 0.5 }), false);
+  assert.equal(isDefaultCalibration({ rangeScale: 1 }), true, 'explicit default stays default');
+});
+
+test('ensureCameraPose freezes the base pose; deltas re-derive without drift', () => {
+  const { ensureCameraPose } = _cctvInternalsForTest;
+  const camera = {
+    lat: 30,
+    lon: -97.7431,
+    headingDeg: 41,
+    pitchDeg: -17,
+    fovDeg: 74,
+    rangeM: 700,
+    mountHeightM: 24,
+    groundElevationM: 149,
+  };
+  ensureCameraPose(camera);
+  assert.deepEqual(
+    camera.basePose,
+    { lat: 30, lon: -97.7431, headingDeg: 41, pitchDeg: -17, fovDeg: 74, rangeM: 700, mountHeightM: 24 },
+    'first call captures the raw pose, frozen from then on',
+  );
+  assert.equal(camera.lat, 30);
+  assert.equal(camera.anchor.elevM, 149);
+  assert.equal(camera.extrinsics.rollDeg, 0);
+
+  // A calibration delta re-derives from the FROZEN base, not the moved pose.
+  // (Calibration fields are bounded deltas: ±900 m offsets, fov Δ ∈ [-50,50].)
+  camera.calibration = { offsetNorthM: 111.32, rangeScale: 2 };
+  ensureCameraPose(camera);
+  assert.ok(Math.abs(camera.lat - 30.001) < 1e-6, `lat shifted ~0.001°, got ${camera.lat}`);
+  assert.equal(camera.rangeM, 1400, 'range scales off the base range');
+  // Re-deriving again from the same calibration changes nothing (no drift).
+  const afterOnce = { lat: camera.lat, rangeM: camera.rangeM };
+  ensureCameraPose(camera);
+  assert.equal(camera.lat, afterOnce.lat);
+  assert.equal(camera.rangeM, afterOnce.rangeM);
+});
+
+test('applyCalibrationPatch: transient grades are cheap, cal-flagged, anchor-gated', () => {
+  const { applyCalibrationPatch } = _cctvInternalsForTest;
+  assert.equal(applyCalibrationPatch(null, { fovDeg: 60 }), false);
+  assert.equal(applyCalibrationPatch({ camera: {} }, null), false);
+  assert.equal(applyCalibrationPatch({ camera: {} }, 'nope'), false);
+
+  const record = {
+    camera: { ...UNCLAMPED_CAMERA },
+    groundSamples: { 'google-3d': UNCLAMPED_GROUND, 'terrain-globe': UNCLAMPED_GROUND },
+    coverageEntities: [],
+  };
+  assert.equal(applyCalibrationPatch(record, { fovDeg: 60 }, { transient: true }), true);
+  assert.equal(record.calDirty, true);
+  // fovDeg is a bounded DELTA (±50°): the stored calibration holds the
+  // normalized delta, the derived pose holds base 56° + 50° = 106°.
+  assert.equal(record.camera.calibration.fovDeg, 50);
+  assert.equal(record.camera.fovDeg, 106);
+  assert.ok(record.frustumGeometry, 'transient patch recomputes the frustum in place');
+
+  // Range edits take manual control — the activation clamp is released.
+  record.probeClampRangeM = 120;
+  assert.equal(applyCalibrationPatch(record, { rangeScale: 1.5 }, { transient: true }), true);
+  assert.equal(record.probeClampRangeM, null);
+
+  // Anchor-moving transient patches still recompute, and flag the anchor so
+  // the next geometry pass can re-resolve the shared ground floor.
+  assert.equal(applyCalibrationPatch(record, { offsetNorthM: 50 }, { transient: true }), true);
+  assert.equal(record.calibrationAnchorDirty, true);
+  assert.ok(record.frustumGeometry, 'geometry stays live during the drag');
+});
+
+test('nearestCameraIdToViewer: haversine-nearest record, null-safe without pose', () => {
+  const { nearestCameraIdToViewer } = _cctvInternalsForTest;
+  _setCctvCoverageStateForTest({ records: [] });
+  assert.equal(nearestCameraIdToViewer(), null, 'no records');
+  _setCctvCoverageStateForTest({ viewer: {}, records: [] });
+  assert.equal(nearestCameraIdToViewer(), null, 'viewer without a cartographic pose');
+
+  const viewer = {
+    camera: {
+      positionCartographic: {
+        latitude: (30.2672 * Math.PI) / 180,
+        longitude: (-97.7431 * Math.PI) / 180,
+      },
+    },
+  };
+  const near = { camera: { id: 'near', lat: 30.2682, lon: -97.7431 } };
+  const far = { camera: { id: 'far', lat: 31.0, lon: -97.7431 } };
+  _setCctvCoverageStateForTest({ viewer, records: [far, near] });
+  assert.equal(nearestCameraIdToViewer(), 'near');
+  // Reset module state so later tests start from a clean catalog.
+  _setCctvCoverageStateForTest({ records: [] });
+});
+
+test('buildCatalogFromSources: junk dropped, seeds merged, pose fields clamped', () => {
+  const { buildCatalogFromSources, seedCatalog, headingFromId } = _cctvInternalsForTest;
+  assert.deepEqual(buildCatalogFromSources(), [], 'no sources → empty catalog');
+  assert.deepEqual(buildCatalogFromSources('nope'), [], 'non-array → empty catalog');
+
+  const seeds = seedCatalog();
+  assert.ok(seeds.length > 0, 'the bundled seed catalog is non-empty');
+  const [seed] = seeds;
+  // Blank ids and non-finite poses are dropped, not defaulted into existence.
+  assert.equal(buildCatalogFromSources([null, 'x', { id: '   ' }, { id: 'no-pose', lat: 1 }]).length, 0,
+    'missing lon drops the row (NaN is not finite)');
+
+  // A source matching a seed id inherits the seed pose.
+  const merged = buildCatalogFromSources([{ id: seed.id }]);
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].lat, seed.lat);
+  assert.equal(merged[0].lon, seed.lon);
+
+  // Unknown ids get a stable synthetic heading and clamped default intrinsics.
+  const built = buildCatalogFromSources([{ id: 'unknown-cam-1', lat: 31.5, lon: -96 }]);
+  assert.equal(built[0].headingDeg, headingFromId('unknown-cam-1'));
+  assert.equal(built[0].fovDeg, 74);
+  assert.equal(built[0].rangeM, 700);
+  assert.equal(built[0].mountHeightM, 24);
+  assert.equal(built[0].pitchDeg, -17);
+  assert.equal(built[0].headingConfidence, 'low', 'no seed → low heading confidence');
+  assert.equal(built[0].poseSource, null, 'unknown sources stay RAW PRIOR');
+
+  // Source overrides win over defaults, through the same clamps.
+  const overridden = buildCatalogFromSources([{
+    id: 'override-1',
+    lat: '31.5',
+    lon: '-96',
+    headingDeg: 400,
+    fovDeg: 500,
+    rangeM: 50,
+    mountHeightM: 1,
+    pitchDeg: 0,
+    feedType: 'MJPG',
+    poseSource: 'curated',
+  }]);
+  assert.equal(overridden[0].lat, 31.5, 'string coords coerce');
+  assert.equal(overridden[0].headingDeg, 40, '400° normalizes to 40°');
+  assert.equal(overridden[0].fovDeg, 125);
+  assert.equal(overridden[0].rangeM, 220);
+  assert.equal(overridden[0].mountHeightM, 6);
+  assert.equal(overridden[0].pitchDeg, -2, 'pitch clamps at the -2° floor');
+  assert.equal(overridden[0].feedType, 'mjpeg');
+  assert.equal(overridden[0].poseSource, 'curated', 'curated passthrough sets the badge input');
 });

@@ -9,6 +9,28 @@ export const ALLOCATION_TEST_FILES = Object.freeze([
 ]);
 
 /**
+ * Tests that plain `npm test` runs but coverage measurement skips.
+ *
+ * `src/data/trafficTiming.test.mjs` boots a real vite dev server
+ * (`createServer` + `ssrLoadModule('/src/data/traffic.js')`) to inject its
+ * timing-test hooks into the traffic layer. Vite's SSR module runner compiles
+ * the whole traffic import graph a SECOND time — SSR-transformed (double
+ * function wrapper, `Object.defineProperty` export getters), attributed by V8
+ * to the bare filesystem path instead of the `file://` URL the ESM loader
+ * records. Root-caused 2026-09-17: one process's raw V8 coverage then holds
+ * two entries per traffic-graph file (file:// + plain path, different block
+ * counts), and c8 — which merges by resolved path — folds the transformed
+ * copy's near-zero counts into every file in the graph, reporting flowMatch
+ * at 42.97% and tomtomTiles at 69.07% in the batch while a solo c8 run of the
+ * same files measures 100%. Skipping this one file under coverage restores
+ * honest numbers; its assertions do not depend on instrumentation, and the
+ * rest of the traffic graph stays covered by the other traffic test files.
+ */
+export const COVERAGE_EXCLUDED_TEST_FILES = Object.freeze([
+  'src/data/trafficTiming.test.mjs',
+]);
+
+/**
  * Node majors on which the GC-bracketed allocation budgets are calibrated.
  * 24 is the original calibration runtime; 26 was measured 2026-09-13
  * (v26.8.2) — every world-overlay row and the focus probe landed within the
@@ -104,9 +126,27 @@ export function runUnitTests({ coverage = false, parallelOnly = false } = {}) {
   // while raw V8 coverage from the very same child processes records those
   // functions executing — c8 measures the same file at 75.1%, and agrees with
   // the built-in reporter everywhere the built-in one is not wrong).
-  const parallelArgs = coverage
-    ? ['--test', '--experimental-test-coverage', ...plan.parallel]
-    : ['--test', ...plan.parallel];
+  // Coverage-excluded files follow the same contamination principle as the
+  // allocation probes above, one level up: their architecture breaks the
+  // MEASUREMENT itself (see COVERAGE_EXCLUDED_TEST_FILES), so they are
+  // skipped whenever this run is wrapped by coverage tooling — both the
+  // `--coverage` flag and a c8-injected NODE_V8_COVERAGE environment.
+  const underCoverage = coverage || Boolean(process.env.NODE_V8_COVERAGE);
+  const skippedForCoverage = underCoverage
+    ? plan.parallel.filter((file) => COVERAGE_EXCLUDED_TEST_FILES.includes(file))
+    : [];
+  if (skippedForCoverage.length) {
+    console.warn(
+      `[unit] SKIPPED ${skippedForCoverage.length} test file(s) under coverage `
+      + '(break coverage measurement; run plain `npm test` for them): '
+      + `${skippedForCoverage.join(', ')}.`,
+    );
+  }
+  const parallelArgs = [
+    '--test',
+    ...(coverage ? ['--experimental-test-coverage'] : []),
+    ...plan.parallel.filter((file) => !skippedForCoverage.includes(file)),
+  ];
   const parallelStatus = runTests(parallelArgs);
   if (parallelStatus !== 0) return parallelStatus;
   if (parallelOnly) {

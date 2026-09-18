@@ -17,6 +17,7 @@ import {
   cameraHue,
   viewshedColors,
   frustumVolumeGeometryData,
+  createFrustumVolumePrimitive,
 } from './cctvViewshed.js';
 
 const GOLDEN_ANGLE = 137.50776405003785;
@@ -125,4 +126,31 @@ test('frustumVolumeGeometryData: no NaN for a tight (probe-clamped) pyramid', ()
   };
   const { positions: flat } = frustumVolumeGeometryData(near);
   for (const v of flat) assert.ok(Number.isFinite(v));
+});
+
+test('createFrustumVolumePrimitive: synchronous two-sided weld, never pickable', () => {
+  const positions = positionsFixture();
+  const primitive = createFrustumVolumePrimitive(positions, Cesium.Color.CYAN.withAlpha(0.18));
+  assert.ok(primitive instanceof Cesium.Primitive);
+
+  // The primitive carries EXACTLY the welded geometry — no independent
+  // recompute: same 15 doubles, same 18 indices as frustumVolumeGeometryData.
+  const expected = frustumVolumeGeometryData(positions);
+  const instance = primitive.geometryInstances;
+  assert.ok(instance instanceof Cesium.GeometryInstance, 'one geometry instance');
+  const geometry = instance.geometry;
+  assert.deepEqual(Array.from(geometry.attributes.position.values), Array.from(expected.positions));
+  assert.deepEqual(Array.from(geometry.indices), Array.from(expected.indices));
+  assert.equal(geometry.primitiveType, Cesium.PrimitiveType.TRIANGLES);
+
+  // Both faces visible (the viewer sits inside/behind cones routinely), flat
+  // translucent unlit fill, and picking disabled so world clicks fall through
+  // to the billboard/wireframe/plane pick semantics.
+  assert.equal(instance.attributes.color.value.constructor, Uint8Array, 'per-instance color');
+  const appearance = primitive.appearance;
+  assert.equal(appearance.flat, true);
+  assert.equal(appearance.translucent, true);
+  assert.equal(primitive.asynchronous, false, '6 triangles compile synchronously');
+  assert.equal(primitive.allowPicking, false);
+  assert.equal(primitive.appearance.renderState.cull.enabled, false);
 });

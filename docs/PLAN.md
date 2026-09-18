@@ -1720,3 +1720,101 @@ These are known gaps with reasons, not oversights:
   is burst protection, not accounting.
 - **One dev-only dependabot alert** (`extract-zip` via puppeteer): accepted
   with rationale rather than a semver-incompatible override; it never ships.
+
+## Phase 10 — Quality campaign cycle 2 (2026-09-17, OPEN)
+
+Second audit-driven cycle on the v0.9.1 tree (`5c6b080`). Baseline
+re-measured 2026-09-17: lint clean at `--max-warnings 0`, full unit suite
+green, c8 statements **89.43%** (branch 79%, functions 99.33% — up from
+81.17% at the Phase 9 baseline), production-profile aegis scan over
+src/functions/vite/scripts = **1,354 actionable-category findings, all
+triaged verified-safe or vendored/test noise; zero new product defects**.
+Phase 9's two real hardening items confirmed landed and verified in the
+tree: CSP ENFORCING with the maintenance contract comment, HSTS
+max-age=31536000; includeSubDomains (preload deliberately omitted,
+operator decision required).
+
+### 10.1 Findings ledger (measured 2026-09-17)
+
+- **Pattern scan triage**: innerHTML sites (25 stored-xss hits) each
+  verified — static templates, `escapeMissionText`/`escapeHtml`-escaped
+  interpolation, or `innerHTML = ''` clears; the one unescaped
+  interpolation (`locationBar.js` poi pill) renders `CITY_POIS`, a static
+  bundled literal. DOM-xss hits are all `scripts/qa-*.mjs` harness
+  `page.evaluate` calls. `insecure-random`: `Math.random()` builds
+  non-security event/debug-session IDs (worker-safe after the v0.8.1
+  global-scope `randomUUID` deploy lesson), never auth material.
+  `bearer-token-url`: token travels in the Authorization header against
+  the Keycloak token endpoint; the hits are the token CACHE state and
+  comments. `graphql-batch-limit` hits are BATCH_LIMIT constant names.
+- **Coverage shape**: worst modules flowMatch 42.97, cctv 63.26,
+  traffic 65.41, tomtomTiles 69.07, flowTiles 74.39, flights 74.83,
+  militaryFlights 74.89. The residual gap to the 99% goal line is
+  browser-coupled render/RAF loops with no seam; wave 4 (below) attacks
+  the four with real logic seams.
+- **l9 matrix measured budget**: 4500 s ended a run AFTER D8 (≈82 min
+  through D8 under the concurrent dsc load bursts; morning-run D9-D12
+  tail ≈4 min) — orchestrator override raised to 5700 s (95 min).
+- **qa-radio pick-consistency flake root-caused**: the singleton-view
+  convergence loop broke on FIRST `painted>0`, sampling mid-re-solve
+  (matrix run 5: 16 painted / 9 pickable, unreproducible on a settled
+  buffer). Converged now means painted AND solve-revision stable ≥500 ms,
+  with an 8 s cap so an ever-solving host cannot eat the loop.
+- **C11 verify-nothing class**: `settle()`'s poll loop never asked the
+  scene for a frame; under late-run RAF decay Cesium's async work only
+  advances when something pumps a render, so the layer read `loading`
+  forever and the check honestly crashed. `settle()` now pumps through
+  the app's governor hook each poll (the fly_route/floor-hold idiom) and
+  the first-pass budget is 60 s.
+- **D2/D3 ERR_NETWORK_CHANGED storms**: browser transport codes
+  (`net::ERR_NETWORK_CHANGED` et al.) are OS-level disconnect events no
+  product change prevents. qa-heading-b3 and qa-sprites-b5 classify them
+  narrowly (disconnect-path codes only — never generic ERR_FAILED),
+  count them, and report the count in the check detail; product errors
+  still fail.
+
+### 10.2 Batches
+
+- [x] **Batch J (harness robustness)** (2026-09-17): the five fixes
+  above, lint clean, verified against the live dev server (qa-radio,
+  qa-sprites-b5, qa-heading-b3 re-runs).
+- [x] **Batch K (coverage wave 4)** (2026-09-17): real tests for flowMatch,
+  cctv, traffic, tomtomTiles on their existing seams; per-module before/after
+  recorded here. (Supersedes the Phase 9 unchecked B/C/D box above:
+  waves 1-3 landed in Phase 9's batches; the box stayed unticked
+  pending this final wave.)
+  - **Measurement honesty root cause (2026-09-17)**: the batch report's
+    flowMatch 42.97% / tomtomTiles 69.07% were instrument artifacts, not
+    gaps. `trafficTiming.test.mjs` boots a real vite dev server and
+    `ssrLoadModule`s the traffic graph to inject its timing hooks; vite's
+    SSR module runner compiles every file in the graph a SECOND time
+    (transformed: double wrapper + `Object.defineProperty` export getters),
+    and V8 attributes that copy to the bare filesystem path while the ESM
+    loader records `file://` — c8 merges by resolved path, so the
+    transformed copy's near-zero counts diluted the real ones. Fix: the
+    harness now skips that one file under coverage
+    (`COVERAGE_EXCLUDED_TEST_FILES` in `scripts/run-unit-tests.mjs`; plain
+    `npm test` still runs it; the pin in `src/unitTestRunner.test.mjs`
+    enforces the contract). flowMatch and tomtomTiles were already at 100%.
+  - **New tests**: `cctv.test.mjs` +7 (heading/offset/normalize/isDefault/
+    ensureCameraPose/applyCalibrationPatch/nearestCameraId/buildCatalog via a
+    new `_cctvInternalsForTest` seam in cctv.js, mirroring traffic's
+    `_trafficInternalsForTest`); `cctvViewshed.test.mjs` +1
+    (createFrustumVolumePrimitive carries exactly the welded geometry,
+    two-sided, synchronous, unpickable); `traffic.test.mjs` +1 (headless
+    inert contract of the DEV-gated timing diagnostics).
+  - **Before → after (c8 batch, statements/funcs)**: All files 89.43 →
+    **90.33**% (the 89.43 figure was itself deflated by the artifact);
+    cctv.js 63.26/58.89 → **67.92/65.64**; cctvViewshed.js 76.33/75.0 →
+    **100/100**; traffic.js 77.91/67.18 → **78.18/68.75**; flowMatch and
+    tomtomTiles → **100/100** (were reported 42.97 and 69.07).
+  - **Accepted remainder (honest, not chased)**: traffic.js's rest is the
+    DEV-only timing pass (reachable only through the coverage-excluded vite
+    test by design) plus render-path internals that need a full mocked
+    renderer; cctv.js's rest is the projection-texture pipeline, hover/card
+    frame loops, and layer lifecycle — mock-armor territory where the tests
+    would assert the mocks. Recorded here so the next wave starts from the
+    inventory, not a percentage.
+- [ ] **Batch L (close)**: full gates + GitForge pipeline + release;
+  Pages redeploy only if `src/` or the served surface changed
+  (harness/test/docs-only cycles leave `dist` byte-identical).

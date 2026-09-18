@@ -100,6 +100,19 @@ test('npm test stays green on every supported engine, not only the calibrated on
   // WITHOUT the coverage reporter so its overhead can't skew the budgets.
   assert.match(
     runner,
-    /coverage\s*\n\s*\?\s*\['--test',\s*'--experimental-test-coverage'/,
+    /\.\.\.\(coverage \? \['--experimental-test-coverage'\] : \[\]\),/,
+    'coverage reporter must be attached inside the parallel battery, never the probes',
+  );
+  // Root-caused 2026-09-17: trafficTiming.test.mjs boots a vite dev server and
+  // ssrLoadModule's the traffic graph, which re-compiles every file a second
+  // time under a bare-path filename — c8 merges that transformed copy's
+  // near-zero counts into the real ones (flowMatch read 42.97% batch vs 100%
+  // solo). Coverage runs must skip it; plain `npm test` still runs it.
+  assert.match(runner, /COVERAGE_EXCLUDED_TEST_FILES/);
+  assert.match(runner, /underCoverage/);
+  assert.match(
+    runnerSource,
+    /trafficTiming\.test\.mjs/,
+    'the vite-ssr test must stay listed as coverage-excluded until its hooks load another way',
   );
 });

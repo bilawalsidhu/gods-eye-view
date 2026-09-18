@@ -15,6 +15,7 @@ import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import trafficLayer, {
   deriveTrafficFlowError,
+  getTrafficTimingDiagnostics,
   trafficFeedPresentation,
   _trafficInternalsForTest as _internals,
 } from './traffic.js';
@@ -819,4 +820,25 @@ test('lifecycle: destroy removes the collection and the road cache forgets', asy
   assert.ok(trafficLayer.getStats().count > 0);
   trafficLayer.destroy(viewer2);
   assert.equal(w.listeners.get('gev:style-change').length, 1, 're-registration did not stack listeners');
+});
+
+test('traffic timing diagnostics report the inert contract under bare Node', () => {
+  // The TIMING pass is DEV-gated (import.meta.env?.DEV is undefined under
+  // node:test), so its headless contract is exact inertness: zero marks
+  // installed, nothing traced, nothing dropped. The ENABLED pass (marks,
+  // measures, postRender schedule) is exercised by trafficTiming.test.mjs
+  // through a vite dev server — that file is excluded from coverage runs
+  // because ssrLoadModule re-compiles the traffic graph and corrupts c8's
+  // merge (see COVERAGE_EXCLUDED_TEST_FILES in scripts/run-unit-tests.mjs).
+  assert.deepEqual(getTrafficTimingDiagnostics(), {
+    enabled: false,
+    marksInstalled: 0,
+    traceObjectsCreated: 0,
+    uncorrelatedTracesDropped: 0,
+  });
+  assert.equal(
+    performance.getEntriesByType('mark').filter((entry) => entry.name.startsWith('traffic:')).length,
+    0,
+    'no traffic timing marks leak into the global performance buffer',
+  );
 });
