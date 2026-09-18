@@ -4,171 +4,171 @@
 
 ## 0. Header
 
-| Field           | Value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Title           | OnDemand Public API — Current Contract (live-docs audit)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| Generated (UTC) | 2026-09-17T06:14:03Z                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| Method          | Every statement below was taken from documentation fetched **live** on 2026-09-17 (no memory, no prior knowledge). Three sources were fetched: (a) the public marketing/app shells `https://on-demand.io/`, `https://app.on-demand.io/api-reference`, `https://app.on-demand.io/documentation` (all three return an 8–10 KB JavaScript shell with no API text, so they are cited only as "checked"); (b) the public documentation site `https://docs.on-demand.io` — its `llms.txt` index plus **all 85** guide (`/docs/*.md`) and API-reference (`/reference/*.md`) pages, each of which embeds the endpoint's OpenAPI 3.0.3 definition; (c) the in-app API-reference data that `app.on-demand.io/api-reference` renders, served by the authenticated docs API `GET /config/v1/public/docs/categories` and `GET /config/v1/public/docs/reference/api/<slug>` (40 operation specs). The 40 in-app OpenAPI specs were compared field-by-field with the 40 public `/reference/*.md` specs and are **identical** (`paths` and `servers` JSON equal for all 40). |
-| Citation format | `(src: <URL>, retrieved <UTC>)`. `docs.on-demand.io` page URLs are cited with the `.md` suffix that was actually fetched; the human-readable page is the same URL without `.md`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| Not-found rule  | Where a surface is not in any fetched document it is marked **NOT FOUND IN LIVE DOCS** together with the URLs that were checked.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| Counts          | 136 URLs fetched: 131 × HTTP 200, 5 × HTTP 404 (probes for `sitemap.xml`, `llms-full.txt`, `openapi.json`, `/docs/api-reference`, and `https://api.on-demand.io/` root).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Field | Value |
+|---|---|
+| Title | OnDemand Public API — Current Contract (live-docs audit) |
+| Generated (UTC) | 2026-09-17T06:14:03Z |
+| Method | Every statement below was taken from documentation fetched **live** on 2026-09-17 (no memory, no prior knowledge). Three sources were fetched: (a) the public marketing/app shells `https://on-demand.io/`, `https://app.on-demand.io/api-reference`, `https://app.on-demand.io/documentation` (all three return an 8–10 KB JavaScript shell with no API text, so they are cited only as "checked"); (b) the public documentation site `https://docs.on-demand.io` — its `llms.txt` index plus **all 85** guide (`/docs/*.md`) and API-reference (`/reference/*.md`) pages, each of which embeds the endpoint's OpenAPI 3.0.3 definition; (c) the in-app API-reference data that `app.on-demand.io/api-reference` renders, served by the authenticated docs API `GET /config/v1/public/docs/categories` and `GET /config/v1/public/docs/reference/api/<slug>` (40 operation specs). The 40 in-app OpenAPI specs were compared field-by-field with the 40 public `/reference/*.md` specs and are **identical** (`paths` and `servers` JSON equal for all 40). |
+| Citation format | `(src: <URL>, retrieved <UTC>)`. `docs.on-demand.io` page URLs are cited with the `.md` suffix that was actually fetched; the human-readable page is the same URL without `.md`. |
+| Not-found rule | Where a surface is not in any fetched document it is marked **NOT FOUND IN LIVE DOCS** together with the URLs that were checked. |
+| Counts | 136 URLs fetched: 131 × HTTP 200, 5 × HTTP 404 (probes for `sitemap.xml`, `llms-full.txt`, `openapi.json`, `/docs/api-reference`, and `https://api.on-demand.io/` root). |
 
 ### 0.1 Every documentation URL fetched (HTTP status, UTC retrieval time)
 
-| #   | URL fetched                                                                                                             | HTTP | Retrieved (UTC)      | Bytes  | Note                                             |
-| --- | ----------------------------------------------------------------------------------------------------------------------- | ---- | -------------------- | ------ | ------------------------------------------------ |
-| 1   | https://app.on-demand.io/api-reference                                                                                  | 200  | 2026-09-17T05:55:52Z | 8866   |                                                  |
-| 2   | https://app.on-demand.io/documentation                                                                                  | 200  | 2026-09-17T05:55:52Z | 8866   |                                                  |
-| 3   | https://on-demand.io/                                                                                                   | 200  | 2026-09-17T05:55:52Z | 9792   |                                                  |
-| 4   | https://docs.on-demand.io/                                                                                              | 200  | 2026-09-17T05:55:52Z | 202275 | → https://docs.on-demand.io/docs/getting-started |
-| 5   | https://api.on-demand.io/                                                                                               | 404  | 2026-09-17T05:55:54Z | 36     |                                                  |
-| 6   | https://docs.on-demand.io/sitemap.xml                                                                                   | 404  | 2026-09-17T05:56:10Z | 0      |                                                  |
-| 7   | https://docs.on-demand.io/llms.txt                                                                                      | 200  | 2026-09-17T05:56:10Z | 9493   |                                                  |
-| 8   | https://docs.on-demand.io/llms-full.txt                                                                                 | 404  | 2026-09-17T05:56:10Z | 115830 |                                                  |
-| 9   | https://docs.on-demand.io/openapi.json                                                                                  | 404  | 2026-09-17T05:56:10Z | 115825 |                                                  |
-| 10  | https://docs.on-demand.io/docs/api-reference                                                                            | 404  | 2026-09-17T05:56:11Z | 116546 |                                                  |
-| 11  | https://docs.on-demand.io/docs/getting-started.md                                                                       | 200  | 2026-09-17T05:56:30Z | 7476   |                                                  |
-| 12  | https://docs.on-demand.io/docs/authentication.md                                                                        | 200  | 2026-09-17T05:56:30Z | 4795   |                                                  |
-| 13  | https://docs.on-demand.io/docs/rate-limiting.md                                                                         | 200  | 2026-09-17T05:56:30Z | 1874   |                                                  |
-| 14  | https://docs.on-demand.io/docs/response-codes.md                                                                        | 200  | 2026-09-17T05:56:30Z | 1998   |                                                  |
-| 15  | https://docs.on-demand.io/docs/pagination.md                                                                            | 200  | 2026-09-17T05:56:30Z | 743    |                                                  |
-| 16  | https://docs.on-demand.io/docs/webhooks.md                                                                              | 200  | 2026-09-17T05:56:30Z | 1401   |                                                  |
-| 17  | https://docs.on-demand.io/docs/videos.md                                                                                | 200  | 2026-09-17T05:56:30Z | 3381   |                                                  |
-| 18  | https://docs.on-demand.io/docs/what-is-playground.md                                                                    | 200  | 2026-09-17T05:56:30Z | 7514   |                                                  |
-| 19  | https://docs.on-demand.io/docs/what-are-plugins.md                                                                      | 200  | 2026-09-17T05:56:30Z | 5652   |                                                  |
-| 20  | https://docs.on-demand.io/docs/open-api-schema.md                                                                       | 200  | 2026-09-17T05:56:31Z | 16875  |                                                  |
-| 21  | https://docs.on-demand.io/docs/knowledge-plugin.md                                                                      | 200  | 2026-09-17T05:56:31Z | 13678  |                                                  |
-| 22  | https://docs.on-demand.io/docs/rest-based-plugins.md                                                                    | 200  | 2026-09-17T05:56:31Z | 8993   |                                                  |
-| 23  | https://docs.on-demand.io/docs/rest-api-plugin-examples.md                                                              | 200  | 2026-09-17T05:56:31Z | 17607  |                                                  |
-| 24  | https://docs.on-demand.io/docs/rules-to-publish-a-rest-api-plugin.md                                                    | 200  | 2026-09-17T05:56:31Z | 2618   |                                                  |
-| 25  | https://docs.on-demand.io/docs/mqttiot-plugins.md                                                                       | 200  | 2026-09-17T05:56:31Z | 11722  |                                                  |
-| 26  | https://docs.on-demand.io/docs/terminal-agent.md                                                                        | 200  | 2026-09-17T05:56:31Z | 23976  |                                                  |
-| 27  | https://docs.on-demand.io/docs/agent-skills.md                                                                          | 200  | 2026-09-17T05:56:31Z | 13394  |                                                  |
-| 28  | https://docs.on-demand.io/docs/what-are-connectors.md                                                                   | 200  | 2026-09-17T05:56:31Z | 3112   |                                                  |
-| 29  | https://docs.on-demand.io/docs/creating-byoi-endpoint.md                                                                | 200  | 2026-09-17T05:56:31Z | 6932   |                                                  |
-| 30  | https://docs.on-demand.io/docs/creating-byom-model-and-endpoint.md                                                      | 200  | 2026-09-17T05:56:31Z | 11514  |                                                  |
-| 31  | https://docs.on-demand.io/docs/serverless-application.md                                                                | 200  | 2026-09-17T05:56:31Z | 8575   |                                                  |
-| 32  | https://docs.on-demand.io/docs/what-are-chat-sessions.md                                                                | 200  | 2026-09-17T05:56:31Z | 2428   |                                                  |
-| 33  | https://docs.on-demand.io/docs/query-and-responses-modes.md                                                             | 200  | 2026-09-17T05:56:31Z | 32036  |                                                  |
-| 34  | https://docs.on-demand.io/docs/chat-wokflow.md                                                                          | 200  | 2026-09-17T05:56:31Z | 3587   |                                                  |
-| 35  | https://docs.on-demand.io/docs/fulfillment-models.md                                                                    | 200  | 2026-09-17T05:56:31Z | 4454   |                                                  |
-| 36  | https://docs.on-demand.io/docs/fulfillment-prompts.md                                                                   | 200  | 2026-09-17T05:56:31Z | 26073  |                                                  |
-| 37  | https://docs.on-demand.io/docs/projects.md                                                                              | 200  | 2026-09-17T05:56:31Z | 13589  |                                                  |
-| 38  | https://docs.on-demand.io/docs/agents-flow-builder.md                                                                   | 200  | 2026-09-17T05:56:31Z | 962    |                                                  |
-| 39  | https://docs.on-demand.io/docs/creating-a-workflow.md                                                                   | 200  | 2026-09-17T05:56:31Z | 5256   |                                                  |
-| 40  | https://docs.on-demand.io/docs/workflow-nodes.md                                                                        | 200  | 2026-09-17T05:56:31Z | 7072   |                                                  |
-| 41  | https://docs.on-demand.io/docs/media-api.md                                                                             | 200  | 2026-09-17T05:56:31Z | 11742  |                                                  |
-| 42  | https://docs.on-demand.io/docs/cloud-services-api.md                                                                    | 200  | 2026-09-17T05:56:31Z | 7741   |                                                  |
-| 43  | https://docs.on-demand.io/docs/plugin-api.md                                                                            | 200  | 2026-09-17T05:56:31Z | 5837   |                                                  |
-| 44  | https://docs.on-demand.io/docs/chat-api.md                                                                              | 200  | 2026-09-17T05:56:31Z | 16084  |                                                  |
-| 45  | https://docs.on-demand.io/docs/workflow-api.md                                                                          | 200  | 2026-09-17T05:56:31Z | 12033  |                                                  |
-| 46  | https://docs.on-demand.io/docs/execution-api.md                                                                         | 200  | 2026-09-17T05:56:31Z | 8888   |                                                  |
-| 47  | https://docs.on-demand.io/docs/plugins.md                                                                               | 200  | 2026-09-17T05:56:32Z | 4347   |                                                  |
-| 48  | https://docs.on-demand.io/docs/serverless.md                                                                            | 200  | 2026-09-17T05:56:32Z | 1180   |                                                  |
-| 49  | https://docs.on-demand.io/docs/byom.md                                                                                  | 200  | 2026-09-17T05:56:32Z | 2217   |                                                  |
-| 50  | https://docs.on-demand.io/docs/general-faqs.md                                                                          | 200  | 2026-09-17T05:56:32Z | 1261   |                                                  |
-| 51  | https://docs.on-demand.io/reference/intro-to-ondemand-api.md                                                            | 200  | 2026-09-17T05:56:32Z | 2957   |                                                  |
-| 52  | https://docs.on-demand.io/reference/how-to-do-authentication.md                                                         | 200  | 2026-09-17T05:56:32Z | 1872   |                                                  |
-| 53  | https://docs.on-demand.io/reference/how-to-paginate.md                                                                  | 200  | 2026-09-17T05:56:32Z | 4849   |                                                  |
-| 54  | https://docs.on-demand.io/reference/rate-limits.md                                                                      | 200  | 2026-09-17T05:56:32Z | 634    |                                                  |
-| 55  | https://docs.on-demand.io/reference/errors.md                                                                           | 200  | 2026-09-17T05:56:32Z | 4225   |                                                  |
-| 56  | https://docs.on-demand.io/reference/fetchmedia.md                                                                       | 200  | 2026-09-17T05:56:32Z | 9760   |                                                  |
-| 57  | https://docs.on-demand.io/reference/createmediaurl.md                                                                   | 200  | 2026-09-17T05:56:32Z | 14297  |                                                  |
-| 58  | https://docs.on-demand.io/reference/deletemedia.md                                                                      | 200  | 2026-09-17T05:56:32Z | 2035   |                                                  |
-| 59  | https://docs.on-demand.io/reference/convertaudiototext.md                                                               | 200  | 2026-09-17T05:56:32Z | 4416   |                                                  |
-| 60  | https://docs.on-demand.io/reference/converttexttoaudio.md                                                               | 200  | 2026-09-17T05:56:32Z | 5286   |                                                  |
-| 61  | https://docs.on-demand.io/reference/translatetext.md                                                                    | 200  | 2026-09-17T05:56:32Z | 4767   |                                                  |
-| 62  | https://docs.on-demand.io/reference/createmqttuser.md                                                                   | 200  | 2026-09-17T05:56:32Z | 3161   |                                                  |
-| 63  | https://docs.on-demand.io/reference/deletemqttuser.md                                                                   | 200  | 2026-09-17T05:56:32Z | 2272   |                                                  |
-| 64  | https://docs.on-demand.io/reference/post_public-projects.md                                                             | 200  | 2026-09-17T05:56:32Z | 9552   |                                                  |
-| 65  | https://docs.on-demand.io/reference/get_public-projects.md                                                              | 200  | 2026-09-17T05:56:32Z | 10992  |                                                  |
-| 66  | https://docs.on-demand.io/reference/get_public-projects-projectid.md                                                    | 200  | 2026-09-17T05:56:32Z | 8122   |                                                  |
-| 67  | https://docs.on-demand.io/reference/patch_public-projects-projectid.md                                                  | 200  | 2026-09-17T05:56:32Z | 10083  |                                                  |
-| 68  | https://docs.on-demand.io/reference/delete_public-projects-projectid.md                                                 | 200  | 2026-09-17T05:56:33Z | 7305   |                                                  |
-| 69  | https://docs.on-demand.io/reference/get_public-sessions.md                                                              | 200  | 2026-09-17T05:56:33Z | 10772  |                                                  |
-| 70  | https://docs.on-demand.io/reference/post_approvalgate-executionid-approval-nodekey-approve.md                           | 200  | 2026-09-17T05:56:33Z | 3020   |                                                  |
-| 71  | https://docs.on-demand.io/reference/post_approvalgate-executionid-approval-nodekey-reject.md                            | 200  | 2026-09-17T05:56:33Z | 3015   |                                                  |
-| 72  | https://docs.on-demand.io/reference/get_execution-executionid.md                                                        | 200  | 2026-09-17T05:56:33Z | 4215   |                                                  |
-| 73  | https://docs.on-demand.io/reference/get_execution-executionid-delivery-track-email.md                                   | 200  | 2026-09-17T05:56:33Z | 4726   |                                                  |
-| 74  | https://docs.on-demand.io/reference/get_execution-executionid-logs.md                                                   | 200  | 2026-09-17T05:56:33Z | 3805   |                                                  |
-| 75  | https://docs.on-demand.io/reference/get_execution-executionid-node-outputs.md                                           | 200  | 2026-09-17T05:56:33Z | 3700   |                                                  |
-| 76  | https://docs.on-demand.io/reference/post_execution-executionid-report-problem.md                                        | 200  | 2026-09-17T05:56:33Z | 3071   |                                                  |
-| 77  | https://docs.on-demand.io/reference/get_execution-executionid-transcript.md                                             | 200  | 2026-09-17T05:56:33Z | 4142   |                                                  |
-| 78  | https://docs.on-demand.io/reference/get_execution-list.md                                                               | 200  | 2026-09-17T05:56:33Z | 4414   |                                                  |
-| 79  | https://docs.on-demand.io/reference/post_workflow.md                                                                    | 200  | 2026-09-17T05:56:33Z | 11222  |                                                  |
-| 80  | https://docs.on-demand.io/reference/get_workflow.md                                                                     | 200  | 2026-09-17T05:56:33Z | 11778  |                                                  |
-| 81  | https://docs.on-demand.io/reference/get_workflow-id.md                                                                  | 200  | 2026-09-17T05:56:33Z | 11429  |                                                  |
-| 82  | https://docs.on-demand.io/reference/patch_workflow-id.md                                                                | 200  | 2026-09-17T05:56:33Z | 11028  |                                                  |
-| 83  | https://docs.on-demand.io/reference/delete_workflow-id.md                                                               | 200  | 2026-09-17T05:56:34Z | 1382   |                                                  |
-| 84  | https://docs.on-demand.io/reference/post_workflow-id-activate.md                                                        | 200  | 2026-09-17T05:56:34Z | 1318   |                                                  |
-| 85  | https://docs.on-demand.io/reference/post_workflow-id-deactivate.md                                                      | 200  | 2026-09-17T05:56:34Z | 1326   |                                                  |
-| 86  | https://docs.on-demand.io/reference/post_workflow-id-execute.md                                                         | 200  | 2026-09-17T05:56:34Z | 1814   |                                                  |
-| 87  | https://docs.on-demand.io/reference/patch_workflow-id-name.md                                                           | 200  | 2026-09-17T05:56:34Z | 1833   |                                                  |
-| 88  | https://docs.on-demand.io/reference/post_workflow-upload-config.md                                                      | 200  | 2026-09-17T05:56:34Z | 1629   |                                                  |
-| 89  | https://docs.on-demand.io/reference/createchatsession.md                                                                | 200  | 2026-09-17T05:56:34Z | 6326   |                                                  |
-| 90  | https://docs.on-demand.io/reference/getchatsessions.md                                                                  | 200  | 2026-09-17T05:56:34Z | 7578   |                                                  |
-| 91  | https://docs.on-demand.io/reference/getchatsession.md                                                                   | 200  | 2026-09-17T05:56:34Z | 5416   |                                                  |
-| 92  | https://docs.on-demand.io/reference/getchatmessages.md                                                                  | 200  | 2026-09-17T05:56:34Z | 11513  |                                                  |
-| 93  | https://docs.on-demand.io/reference/getchatmessage.md                                                                   | 200  | 2026-09-17T05:56:34Z | 9333   |                                                  |
-| 94  | https://docs.on-demand.io/reference/submitquery.md                                                                      | 200  | 2026-09-17T05:56:34Z | 10816  |                                                  |
-| 95  | https://docs.on-demand.io/reference/updatelivesessionsettings.md                                                        | 200  | 2026-09-17T05:56:34Z | 5804   |                                                  |
-| 96  | https://gateway.on-demand.io/config/v1/public/docs/categories                                                           | 200  | 2026-09-17T05:57:04Z | 2918   |                                                  |
-| 97  | https://gateway.on-demand.io/config/v1/public/docs/reference/api/fetchmedia                                             | 200  | 2026-09-17T05:57:05Z | 4539   |                                                  |
-| 98  | https://gateway.on-demand.io/config/v1/public/docs/reference/api/createmediaurl                                         | 200  | 2026-09-17T05:57:06Z | 6963   |                                                  |
-| 99  | https://gateway.on-demand.io/config/v1/public/docs/reference/api/deletemedia                                            | 200  | 2026-09-17T05:57:06Z | 961    |                                                  |
-| 100 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/convertaudiototext                                     | 200  | 2026-09-17T05:57:07Z | 1974   |                                                  |
-| 101 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/converttexttoaudio                                     | 200  | 2026-09-17T05:57:07Z | 2326   |                                                  |
-| 102 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/translatetext                                          | 200  | 2026-09-17T05:57:08Z | 2166   |                                                  |
-| 103 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/createmqttuser                                         | 200  | 2026-09-17T05:57:08Z | 1450   |                                                  |
-| 104 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/deletemqttuser                                         | 200  | 2026-09-17T05:57:09Z | 1093   |                                                  |
-| 105 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/post_public-projects                                   | 200  | 2026-09-17T05:57:09Z | 5290   |                                                  |
-| 106 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/get_public-projects                                    | 200  | 2026-09-17T05:57:10Z | 5886   |                                                  |
-| 107 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/get_public-projects-projectid                          | 200  | 2026-09-17T05:57:10Z | 4496   |                                                  |
-| 108 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/patch_public-projects-projectid                        | 200  | 2026-09-17T05:57:11Z | 5586   |                                                  |
-| 109 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/delete_public-projects-projectid                       | 200  | 2026-09-17T05:57:11Z | 3940   |                                                  |
-| 110 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/get_public-sessions                                    | 200  | 2026-09-17T05:57:12Z | 5564   |                                                  |
-| 111 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/post_approvalgate-executionid-approval-nodekey-approve | 200  | 2026-09-17T05:57:13Z | 1487   |                                                  |
-| 112 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/post_approvalgate-executionid-approval-nodekey-reject  | 200  | 2026-09-17T05:57:13Z | 1484   |                                                  |
-| 113 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/get_execution-executionid                              | 200  | 2026-09-17T05:57:14Z | 1990   |                                                  |
-| 114 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/get_execution-executionid-delivery-track-email         | 200  | 2026-09-17T05:57:14Z | 2194   |                                                  |
-| 115 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/get_execution-executionid-logs                         | 200  | 2026-09-17T05:57:15Z | 1728   |                                                  |
-| 116 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/get_execution-executionid-node-outputs                 | 200  | 2026-09-17T05:57:15Z | 1709   |                                                  |
-| 117 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/post_execution-executionid-report-problem              | 200  | 2026-09-17T05:57:16Z | 1500   |                                                  |
-| 118 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/get_execution-executionid-transcript                   | 200  | 2026-09-17T05:57:16Z | 1904   |                                                  |
-| 119 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/get_execution-list                                     | 200  | 2026-09-17T05:57:17Z | 1998   |                                                  |
-| 120 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/post_workflow                                          | 200  | 2026-09-17T05:57:17Z | 5314   |                                                  |
-| 121 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/get_workflow                                           | 200  | 2026-09-17T05:57:18Z | 5567   |                                                  |
-| 122 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/get_workflow-id                                        | 200  | 2026-09-17T05:57:18Z | 5447   |                                                  |
-| 123 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/patch_workflow-id                                      | 200  | 2026-09-17T05:57:19Z | 5267   |                                                  |
-| 124 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/delete_workflow-id                                     | 200  | 2026-09-17T05:57:19Z | 629    |                                                  |
-| 125 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/post_workflow-id-activate                              | 200  | 2026-09-17T05:57:20Z | 600    |                                                  |
-| 126 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/post_workflow-id-deactivate                            | 200  | 2026-09-17T05:57:20Z | 606    |                                                  |
-| 127 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/post_workflow-id-execute                               | 200  | 2026-09-17T05:57:21Z | 804    |                                                  |
-| 128 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/patch_workflow-id-name                                 | 200  | 2026-09-17T05:57:21Z | 795    |                                                  |
-| 129 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/post_workflow-upload-config                            | 200  | 2026-09-17T05:57:22Z | 740    |                                                  |
-| 130 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/createchatsession                                      | 200  | 2026-09-17T05:57:22Z | 3623   |                                                  |
-| 131 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/getchatsessions                                        | 200  | 2026-09-17T05:57:23Z | 4436   |                                                  |
-| 132 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/getchatsession                                         | 200  | 2026-09-17T05:57:23Z | 3031   |                                                  |
-| 133 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/getchatmessages                                        | 200  | 2026-09-17T05:57:24Z | 6990   |                                                  |
-| 134 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/getchatmessage                                         | 200  | 2026-09-17T05:57:25Z | 5589   |                                                  |
-| 135 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/submitquery                                            | 200  | 2026-09-17T05:57:25Z | 6196   |                                                  |
-| 136 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/updatelivesessionsettings                              | 200  | 2026-09-17T05:57:26Z | 2993   |                                                  |
+| # | URL fetched | HTTP | Retrieved (UTC) | Bytes | Note |
+|---|---|---|---|---|---|
+| 1 | https://app.on-demand.io/api-reference | 200 | 2026-09-17T05:55:52Z | 8866 |  |
+| 2 | https://app.on-demand.io/documentation | 200 | 2026-09-17T05:55:52Z | 8866 |  |
+| 3 | https://on-demand.io/ | 200 | 2026-09-17T05:55:52Z | 9792 |  |
+| 4 | https://docs.on-demand.io/ | 200 | 2026-09-17T05:55:52Z | 202275 | → https://docs.on-demand.io/docs/getting-started |
+| 5 | https://api.on-demand.io/ | 404 | 2026-09-17T05:55:54Z | 36 |  |
+| 6 | https://docs.on-demand.io/sitemap.xml | 404 | 2026-09-17T05:56:10Z | 0 |  |
+| 7 | https://docs.on-demand.io/llms.txt | 200 | 2026-09-17T05:56:10Z | 9493 |  |
+| 8 | https://docs.on-demand.io/llms-full.txt | 404 | 2026-09-17T05:56:10Z | 115830 |  |
+| 9 | https://docs.on-demand.io/openapi.json | 404 | 2026-09-17T05:56:10Z | 115825 |  |
+| 10 | https://docs.on-demand.io/docs/api-reference | 404 | 2026-09-17T05:56:11Z | 116546 |  |
+| 11 | https://docs.on-demand.io/docs/getting-started.md | 200 | 2026-09-17T05:56:30Z | 7476 |  |
+| 12 | https://docs.on-demand.io/docs/authentication.md | 200 | 2026-09-17T05:56:30Z | 4795 |  |
+| 13 | https://docs.on-demand.io/docs/rate-limiting.md | 200 | 2026-09-17T05:56:30Z | 1874 |  |
+| 14 | https://docs.on-demand.io/docs/response-codes.md | 200 | 2026-09-17T05:56:30Z | 1998 |  |
+| 15 | https://docs.on-demand.io/docs/pagination.md | 200 | 2026-09-17T05:56:30Z | 743 |  |
+| 16 | https://docs.on-demand.io/docs/webhooks.md | 200 | 2026-09-17T05:56:30Z | 1401 |  |
+| 17 | https://docs.on-demand.io/docs/videos.md | 200 | 2026-09-17T05:56:30Z | 3381 |  |
+| 18 | https://docs.on-demand.io/docs/what-is-playground.md | 200 | 2026-09-17T05:56:30Z | 7514 |  |
+| 19 | https://docs.on-demand.io/docs/what-are-plugins.md | 200 | 2026-09-17T05:56:30Z | 5652 |  |
+| 20 | https://docs.on-demand.io/docs/open-api-schema.md | 200 | 2026-09-17T05:56:31Z | 16875 |  |
+| 21 | https://docs.on-demand.io/docs/knowledge-plugin.md | 200 | 2026-09-17T05:56:31Z | 13678 |  |
+| 22 | https://docs.on-demand.io/docs/rest-based-plugins.md | 200 | 2026-09-17T05:56:31Z | 8993 |  |
+| 23 | https://docs.on-demand.io/docs/rest-api-plugin-examples.md | 200 | 2026-09-17T05:56:31Z | 17607 |  |
+| 24 | https://docs.on-demand.io/docs/rules-to-publish-a-rest-api-plugin.md | 200 | 2026-09-17T05:56:31Z | 2618 |  |
+| 25 | https://docs.on-demand.io/docs/mqttiot-plugins.md | 200 | 2026-09-17T05:56:31Z | 11722 |  |
+| 26 | https://docs.on-demand.io/docs/terminal-agent.md | 200 | 2026-09-17T05:56:31Z | 23976 |  |
+| 27 | https://docs.on-demand.io/docs/agent-skills.md | 200 | 2026-09-17T05:56:31Z | 13394 |  |
+| 28 | https://docs.on-demand.io/docs/what-are-connectors.md | 200 | 2026-09-17T05:56:31Z | 3112 |  |
+| 29 | https://docs.on-demand.io/docs/creating-byoi-endpoint.md | 200 | 2026-09-17T05:56:31Z | 6932 |  |
+| 30 | https://docs.on-demand.io/docs/creating-byom-model-and-endpoint.md | 200 | 2026-09-17T05:56:31Z | 11514 |  |
+| 31 | https://docs.on-demand.io/docs/serverless-application.md | 200 | 2026-09-17T05:56:31Z | 8575 |  |
+| 32 | https://docs.on-demand.io/docs/what-are-chat-sessions.md | 200 | 2026-09-17T05:56:31Z | 2428 |  |
+| 33 | https://docs.on-demand.io/docs/query-and-responses-modes.md | 200 | 2026-09-17T05:56:31Z | 32036 |  |
+| 34 | https://docs.on-demand.io/docs/chat-wokflow.md | 200 | 2026-09-17T05:56:31Z | 3587 |  |
+| 35 | https://docs.on-demand.io/docs/fulfillment-models.md | 200 | 2026-09-17T05:56:31Z | 4454 |  |
+| 36 | https://docs.on-demand.io/docs/fulfillment-prompts.md | 200 | 2026-09-17T05:56:31Z | 26073 |  |
+| 37 | https://docs.on-demand.io/docs/projects.md | 200 | 2026-09-17T05:56:31Z | 13589 |  |
+| 38 | https://docs.on-demand.io/docs/agents-flow-builder.md | 200 | 2026-09-17T05:56:31Z | 962 |  |
+| 39 | https://docs.on-demand.io/docs/creating-a-workflow.md | 200 | 2026-09-17T05:56:31Z | 5256 |  |
+| 40 | https://docs.on-demand.io/docs/workflow-nodes.md | 200 | 2026-09-17T05:56:31Z | 7072 |  |
+| 41 | https://docs.on-demand.io/docs/media-api.md | 200 | 2026-09-17T05:56:31Z | 11742 |  |
+| 42 | https://docs.on-demand.io/docs/cloud-services-api.md | 200 | 2026-09-17T05:56:31Z | 7741 |  |
+| 43 | https://docs.on-demand.io/docs/plugin-api.md | 200 | 2026-09-17T05:56:31Z | 5837 |  |
+| 44 | https://docs.on-demand.io/docs/chat-api.md | 200 | 2026-09-17T05:56:31Z | 16084 |  |
+| 45 | https://docs.on-demand.io/docs/workflow-api.md | 200 | 2026-09-17T05:56:31Z | 12033 |  |
+| 46 | https://docs.on-demand.io/docs/execution-api.md | 200 | 2026-09-17T05:56:31Z | 8888 |  |
+| 47 | https://docs.on-demand.io/docs/plugins.md | 200 | 2026-09-17T05:56:32Z | 4347 |  |
+| 48 | https://docs.on-demand.io/docs/serverless.md | 200 | 2026-09-17T05:56:32Z | 1180 |  |
+| 49 | https://docs.on-demand.io/docs/byom.md | 200 | 2026-09-17T05:56:32Z | 2217 |  |
+| 50 | https://docs.on-demand.io/docs/general-faqs.md | 200 | 2026-09-17T05:56:32Z | 1261 |  |
+| 51 | https://docs.on-demand.io/reference/intro-to-ondemand-api.md | 200 | 2026-09-17T05:56:32Z | 2957 |  |
+| 52 | https://docs.on-demand.io/reference/how-to-do-authentication.md | 200 | 2026-09-17T05:56:32Z | 1872 |  |
+| 53 | https://docs.on-demand.io/reference/how-to-paginate.md | 200 | 2026-09-17T05:56:32Z | 4849 |  |
+| 54 | https://docs.on-demand.io/reference/rate-limits.md | 200 | 2026-09-17T05:56:32Z | 634 |  |
+| 55 | https://docs.on-demand.io/reference/errors.md | 200 | 2026-09-17T05:56:32Z | 4225 |  |
+| 56 | https://docs.on-demand.io/reference/fetchmedia.md | 200 | 2026-09-17T05:56:32Z | 9760 |  |
+| 57 | https://docs.on-demand.io/reference/createmediaurl.md | 200 | 2026-09-17T05:56:32Z | 14297 |  |
+| 58 | https://docs.on-demand.io/reference/deletemedia.md | 200 | 2026-09-17T05:56:32Z | 2035 |  |
+| 59 | https://docs.on-demand.io/reference/convertaudiototext.md | 200 | 2026-09-17T05:56:32Z | 4416 |  |
+| 60 | https://docs.on-demand.io/reference/converttexttoaudio.md | 200 | 2026-09-17T05:56:32Z | 5286 |  |
+| 61 | https://docs.on-demand.io/reference/translatetext.md | 200 | 2026-09-17T05:56:32Z | 4767 |  |
+| 62 | https://docs.on-demand.io/reference/createmqttuser.md | 200 | 2026-09-17T05:56:32Z | 3161 |  |
+| 63 | https://docs.on-demand.io/reference/deletemqttuser.md | 200 | 2026-09-17T05:56:32Z | 2272 |  |
+| 64 | https://docs.on-demand.io/reference/post_public-projects.md | 200 | 2026-09-17T05:56:32Z | 9552 |  |
+| 65 | https://docs.on-demand.io/reference/get_public-projects.md | 200 | 2026-09-17T05:56:32Z | 10992 |  |
+| 66 | https://docs.on-demand.io/reference/get_public-projects-projectid.md | 200 | 2026-09-17T05:56:32Z | 8122 |  |
+| 67 | https://docs.on-demand.io/reference/patch_public-projects-projectid.md | 200 | 2026-09-17T05:56:32Z | 10083 |  |
+| 68 | https://docs.on-demand.io/reference/delete_public-projects-projectid.md | 200 | 2026-09-17T05:56:33Z | 7305 |  |
+| 69 | https://docs.on-demand.io/reference/get_public-sessions.md | 200 | 2026-09-17T05:56:33Z | 10772 |  |
+| 70 | https://docs.on-demand.io/reference/post_approvalgate-executionid-approval-nodekey-approve.md | 200 | 2026-09-17T05:56:33Z | 3020 |  |
+| 71 | https://docs.on-demand.io/reference/post_approvalgate-executionid-approval-nodekey-reject.md | 200 | 2026-09-17T05:56:33Z | 3015 |  |
+| 72 | https://docs.on-demand.io/reference/get_execution-executionid.md | 200 | 2026-09-17T05:56:33Z | 4215 |  |
+| 73 | https://docs.on-demand.io/reference/get_execution-executionid-delivery-track-email.md | 200 | 2026-09-17T05:56:33Z | 4726 |  |
+| 74 | https://docs.on-demand.io/reference/get_execution-executionid-logs.md | 200 | 2026-09-17T05:56:33Z | 3805 |  |
+| 75 | https://docs.on-demand.io/reference/get_execution-executionid-node-outputs.md | 200 | 2026-09-17T05:56:33Z | 3700 |  |
+| 76 | https://docs.on-demand.io/reference/post_execution-executionid-report-problem.md | 200 | 2026-09-17T05:56:33Z | 3071 |  |
+| 77 | https://docs.on-demand.io/reference/get_execution-executionid-transcript.md | 200 | 2026-09-17T05:56:33Z | 4142 |  |
+| 78 | https://docs.on-demand.io/reference/get_execution-list.md | 200 | 2026-09-17T05:56:33Z | 4414 |  |
+| 79 | https://docs.on-demand.io/reference/post_workflow.md | 200 | 2026-09-17T05:56:33Z | 11222 |  |
+| 80 | https://docs.on-demand.io/reference/get_workflow.md | 200 | 2026-09-17T05:56:33Z | 11778 |  |
+| 81 | https://docs.on-demand.io/reference/get_workflow-id.md | 200 | 2026-09-17T05:56:33Z | 11429 |  |
+| 82 | https://docs.on-demand.io/reference/patch_workflow-id.md | 200 | 2026-09-17T05:56:33Z | 11028 |  |
+| 83 | https://docs.on-demand.io/reference/delete_workflow-id.md | 200 | 2026-09-17T05:56:34Z | 1382 |  |
+| 84 | https://docs.on-demand.io/reference/post_workflow-id-activate.md | 200 | 2026-09-17T05:56:34Z | 1318 |  |
+| 85 | https://docs.on-demand.io/reference/post_workflow-id-deactivate.md | 200 | 2026-09-17T05:56:34Z | 1326 |  |
+| 86 | https://docs.on-demand.io/reference/post_workflow-id-execute.md | 200 | 2026-09-17T05:56:34Z | 1814 |  |
+| 87 | https://docs.on-demand.io/reference/patch_workflow-id-name.md | 200 | 2026-09-17T05:56:34Z | 1833 |  |
+| 88 | https://docs.on-demand.io/reference/post_workflow-upload-config.md | 200 | 2026-09-17T05:56:34Z | 1629 |  |
+| 89 | https://docs.on-demand.io/reference/createchatsession.md | 200 | 2026-09-17T05:56:34Z | 6326 |  |
+| 90 | https://docs.on-demand.io/reference/getchatsessions.md | 200 | 2026-09-17T05:56:34Z | 7578 |  |
+| 91 | https://docs.on-demand.io/reference/getchatsession.md | 200 | 2026-09-17T05:56:34Z | 5416 |  |
+| 92 | https://docs.on-demand.io/reference/getchatmessages.md | 200 | 2026-09-17T05:56:34Z | 11513 |  |
+| 93 | https://docs.on-demand.io/reference/getchatmessage.md | 200 | 2026-09-17T05:56:34Z | 9333 |  |
+| 94 | https://docs.on-demand.io/reference/submitquery.md | 200 | 2026-09-17T05:56:34Z | 10816 |  |
+| 95 | https://docs.on-demand.io/reference/updatelivesessionsettings.md | 200 | 2026-09-17T05:56:34Z | 5804 |  |
+| 96 | https://gateway.on-demand.io/config/v1/public/docs/categories | 200 | 2026-09-17T05:57:04Z | 2918 |  |
+| 97 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/fetchmedia | 200 | 2026-09-17T05:57:05Z | 4539 |  |
+| 98 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/createmediaurl | 200 | 2026-09-17T05:57:06Z | 6963 |  |
+| 99 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/deletemedia | 200 | 2026-09-17T05:57:06Z | 961 |  |
+| 100 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/convertaudiototext | 200 | 2026-09-17T05:57:07Z | 1974 |  |
+| 101 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/converttexttoaudio | 200 | 2026-09-17T05:57:07Z | 2326 |  |
+| 102 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/translatetext | 200 | 2026-09-17T05:57:08Z | 2166 |  |
+| 103 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/createmqttuser | 200 | 2026-09-17T05:57:08Z | 1450 |  |
+| 104 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/deletemqttuser | 200 | 2026-09-17T05:57:09Z | 1093 |  |
+| 105 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/post_public-projects | 200 | 2026-09-17T05:57:09Z | 5290 |  |
+| 106 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/get_public-projects | 200 | 2026-09-17T05:57:10Z | 5886 |  |
+| 107 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/get_public-projects-projectid | 200 | 2026-09-17T05:57:10Z | 4496 |  |
+| 108 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/patch_public-projects-projectid | 200 | 2026-09-17T05:57:11Z | 5586 |  |
+| 109 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/delete_public-projects-projectid | 200 | 2026-09-17T05:57:11Z | 3940 |  |
+| 110 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/get_public-sessions | 200 | 2026-09-17T05:57:12Z | 5564 |  |
+| 111 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/post_approvalgate-executionid-approval-nodekey-approve | 200 | 2026-09-17T05:57:13Z | 1487 |  |
+| 112 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/post_approvalgate-executionid-approval-nodekey-reject | 200 | 2026-09-17T05:57:13Z | 1484 |  |
+| 113 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/get_execution-executionid | 200 | 2026-09-17T05:57:14Z | 1990 |  |
+| 114 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/get_execution-executionid-delivery-track-email | 200 | 2026-09-17T05:57:14Z | 2194 |  |
+| 115 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/get_execution-executionid-logs | 200 | 2026-09-17T05:57:15Z | 1728 |  |
+| 116 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/get_execution-executionid-node-outputs | 200 | 2026-09-17T05:57:15Z | 1709 |  |
+| 117 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/post_execution-executionid-report-problem | 200 | 2026-09-17T05:57:16Z | 1500 |  |
+| 118 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/get_execution-executionid-transcript | 200 | 2026-09-17T05:57:16Z | 1904 |  |
+| 119 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/get_execution-list | 200 | 2026-09-17T05:57:17Z | 1998 |  |
+| 120 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/post_workflow | 200 | 2026-09-17T05:57:17Z | 5314 |  |
+| 121 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/get_workflow | 200 | 2026-09-17T05:57:18Z | 5567 |  |
+| 122 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/get_workflow-id | 200 | 2026-09-17T05:57:18Z | 5447 |  |
+| 123 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/patch_workflow-id | 200 | 2026-09-17T05:57:19Z | 5267 |  |
+| 124 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/delete_workflow-id | 200 | 2026-09-17T05:57:19Z | 629 |  |
+| 125 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/post_workflow-id-activate | 200 | 2026-09-17T05:57:20Z | 600 |  |
+| 126 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/post_workflow-id-deactivate | 200 | 2026-09-17T05:57:20Z | 606 |  |
+| 127 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/post_workflow-id-execute | 200 | 2026-09-17T05:57:21Z | 804 |  |
+| 128 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/patch_workflow-id-name | 200 | 2026-09-17T05:57:21Z | 795 |  |
+| 129 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/post_workflow-upload-config | 200 | 2026-09-17T05:57:22Z | 740 |  |
+| 130 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/createchatsession | 200 | 2026-09-17T05:57:22Z | 3623 |  |
+| 131 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/getchatsessions | 200 | 2026-09-17T05:57:23Z | 4436 |  |
+| 132 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/getchatsession | 200 | 2026-09-17T05:57:23Z | 3031 |  |
+| 133 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/getchatmessages | 200 | 2026-09-17T05:57:24Z | 6990 |  |
+| 134 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/getchatmessage | 200 | 2026-09-17T05:57:25Z | 5589 |  |
+| 135 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/submitquery | 200 | 2026-09-17T05:57:25Z | 6196 |  |
+| 136 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/updatelivesessionsettings | 200 | 2026-09-17T05:57:26Z | 2993 |  |
 
 ---
 
 ## 1. Authentication
 
-| Item                                              | Value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Source                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Header name                                       | **`apikey`** — every OpenAPI spec declares `securitySchemes: { apikey                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | ApiKeyAuth: { type: apiKey, in: header, name: "apikey" } }`; the Services specs declare it as an explicit required header parameter `apikey`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | `(src: https://docs.on-demand.io/reference/submitquery.md, retrieved 2026-09-17T05:56:34Z)`; `(src: https://docs.on-demand.io/reference/post_workflow.md, retrieved 2026-09-17T05:56:33Z)`; `(src: https://docs.on-demand.io/reference/convertaudiototext.md, retrieved 2026-09-17T05:56:32Z)`; `(src: https://docs.on-demand.io/reference/how-to-do-authentication.md, retrieved 2026-09-17T05:56:32Z)` — "set the API key in request header named `apikey` in each API" |
-| ⚠ Documentation inconsistency                     | The guide page `docs/authentication` contains one sentence "We use the Authorization header with the Bearer token type", but every example on that same page and every OpenAPI spec uses `apikey: <key>`. Treat `apikey` as the contract; no `Authorization: Bearer` example exists anywhere in the fetched docs.                                                                                                                                                                                                                                                                                                                                                                                                                     | `(src: https://docs.on-demand.io/docs/authentication.md, retrieved 2026-09-17T05:56:30Z)`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| Key format / prefix                               | **NOT FOUND IN LIVE DOCS** — neither authentication page describes a prefix, length or format; the key "will be displayed on screen only once". Checked: `https://docs.on-demand.io/docs/authentication.md`, `https://docs.on-demand.io/reference/how-to-do-authentication.md`, `https://docs.on-demand.io/docs/getting-started.md`.                                                                                                                                                                                                                                                                                                                                                                                                  | as listed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| How keys are issued                               | Dashboard only: Settings → **API Key Management** (`https://app.on-demand.io/api-keys-management`) → "Create New API Key"; multiple keys per account are allowed; revoke a compromised key immediately.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `(src: https://docs.on-demand.io/docs/authentication.md, retrieved 2026-09-17T05:56:30Z)`; `(src: https://docs.on-demand.io/reference/how-to-do-authentication.md, retrieved 2026-09-17T05:56:32Z)`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| Base URL — documented default                     | `https://api.on-demand.io/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `(src: https://docs.on-demand.io/reference/intro-to-ondemand-api.md, retrieved 2026-09-17T05:56:32Z)`; `(src: https://docs.on-demand.io/docs/getting-started.md, retrieved 2026-09-17T05:56:30Z)`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Item | Value | Source |
+|---|---|---|
+| Header name | **`apikey`** — every OpenAPI spec declares `securitySchemes: { apikey | ApiKeyAuth: { type: apiKey, in: header, name: "apikey" } }`; the Services specs declare it as an explicit required header parameter `apikey`. | `(src: https://docs.on-demand.io/reference/submitquery.md, retrieved 2026-09-17T05:56:34Z)`; `(src: https://docs.on-demand.io/reference/post_workflow.md, retrieved 2026-09-17T05:56:33Z)`; `(src: https://docs.on-demand.io/reference/convertaudiototext.md, retrieved 2026-09-17T05:56:32Z)`; `(src: https://docs.on-demand.io/reference/how-to-do-authentication.md, retrieved 2026-09-17T05:56:32Z)` — "set the API key in request header named `apikey` in each API" |
+| ⚠ Documentation inconsistency | The guide page `docs/authentication` contains one sentence "We use the Authorization header with the Bearer token type", but every example on that same page and every OpenAPI spec uses `apikey: <key>`. Treat `apikey` as the contract; no `Authorization: Bearer` example exists anywhere in the fetched docs. | `(src: https://docs.on-demand.io/docs/authentication.md, retrieved 2026-09-17T05:56:30Z)` |
+| Key format / prefix | **NOT FOUND IN LIVE DOCS** — neither authentication page describes a prefix, length or format; the key "will be displayed on screen only once". Checked: `https://docs.on-demand.io/docs/authentication.md`, `https://docs.on-demand.io/reference/how-to-do-authentication.md`, `https://docs.on-demand.io/docs/getting-started.md`. | as listed |
+| How keys are issued | Dashboard only: Settings → **API Key Management** (`https://app.on-demand.io/api-keys-management`) → "Create New API Key"; multiple keys per account are allowed; revoke a compromised key immediately. | `(src: https://docs.on-demand.io/docs/authentication.md, retrieved 2026-09-17T05:56:30Z)`; `(src: https://docs.on-demand.io/reference/how-to-do-authentication.md, retrieved 2026-09-17T05:56:32Z)` |
+| Base URL — documented default | `https://api.on-demand.io/` | `(src: https://docs.on-demand.io/reference/intro-to-ondemand-api.md, retrieved 2026-09-17T05:56:32Z)`; `(src: https://docs.on-demand.io/docs/getting-started.md, retrieved 2026-09-17T05:56:30Z)` |
 | Base URL per API family (OpenAPI `servers[].url`) | Chat API: `https://api.on-demand.io` (paths `/chat/v1/...`) · Media API: `https://api.on-demand.io` (paths `/media/v1/public/file...`) · Services API: `https://api.on-demand.io/services/v1/public/service` (paths `/execute/...`) · Projects API: `https://api.on-demand.io/chat/v1` (paths `/public/projects...`, `/public/sessions`) · Agents Flow Builder API: `https://api.on-demand.io/automation/api` (paths `/workflow...`, `/execution...`, `/approvalgate...`) · Agents API (guide only): `https://api.on-demand.io/plugin/v1/list` · MQTT User Management: the spec's `servers[].url` is **`https://gateway-dev.on-demand.io`** ("Development server") — the only family whose spec does not point at `api.on-demand.io`. | `(src: https://docs.on-demand.io/reference/createchatsession.md, retrieved 2026-09-17T05:56:34Z)`; `(src: https://docs.on-demand.io/reference/createmediaurl.md, retrieved 2026-09-17T05:56:32Z)`; `(src: https://docs.on-demand.io/reference/converttexttoaudio.md, retrieved 2026-09-17T05:56:32Z)`; `(src: https://docs.on-demand.io/reference/post_public-projects.md, retrieved 2026-09-17T05:56:32Z)`; `(src: https://docs.on-demand.io/reference/post_workflow.md, retrieved 2026-09-17T05:56:33Z)`; `(src: https://docs.on-demand.io/docs/plugin-api.md, retrieved 2026-09-17T05:56:31Z)`; `(src: https://docs.on-demand.io/reference/createmqttuser.md, retrieved 2026-09-17T05:56:32Z)` |
-| Scoping                                           | Keys are company-scoped: responses carry `companyId`; approval-gate calls state "companyID and userID are taken from the auth context". Per-key scopes/permissions: **NOT FOUND IN LIVE DOCS** (checked the two authentication pages above).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | `(src: https://docs.on-demand.io/reference/createchatsession.md, retrieved 2026-09-17T05:56:34Z)`; `(src: https://docs.on-demand.io/llms.txt, retrieved 2026-09-17T05:56:10Z)`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| Rate limits                                       | Global: "All the endpoints have a rate-limit set against an origin IP address — 10,000 requests per minute". Free-plan object limits: Media Upload 5/min; RAG Calls 100/min; max GPU memory 40 GB per company; max vCPU 10 per company; increases via Settings → Limit → Increase Your Limits (answer within 2 business days). HTTP 429 `rate_limit_exceeded` on breach. Rate-limit response headers: **NOT FOUND IN LIVE DOCS**.                                                                                                                                                                                                                                                                                                     | `(src: https://docs.on-demand.io/reference/rate-limits.md, retrieved 2026-09-17T05:56:32Z)`; `(src: https://docs.on-demand.io/docs/rate-limiting.md, retrieved 2026-09-17T05:56:30Z)`; `(src: https://docs.on-demand.io/reference/errors.md, retrieved 2026-09-17T05:56:32Z)`                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| Error envelope                                    | `{ "errorCode": "<machine code>", "message": "<text>" }`; common codes `invalid_request` 400, `unauthenticated` 401, `unauthorized` 403, `not_found` 404, `method_not_allowed` 405, `rate_limit_exceeded` 429, `server_error` 500, `bad_gateway` 502, `resource_unavailable` 503; chat-specific `plugin_execution_timeout` 504 (plugin timeout 2.5 min), `context_length_exceeded` 400, `model_error` 500.                                                                                                                                                                                                                                                                                                                            | `(src: https://docs.on-demand.io/reference/errors.md, retrieved 2026-09-17T05:56:32Z)`; `(src: https://docs.on-demand.io/docs/response-codes.md, retrieved 2026-09-17T05:56:30Z)`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Scoping | Keys are company-scoped: responses carry `companyId`; approval-gate calls state "companyID and userID are taken from the auth context". Per-key scopes/permissions: **NOT FOUND IN LIVE DOCS** (checked the two authentication pages above). | `(src: https://docs.on-demand.io/reference/createchatsession.md, retrieved 2026-09-17T05:56:34Z)`; `(src: https://docs.on-demand.io/llms.txt, retrieved 2026-09-17T05:56:10Z)` |
+| Rate limits | Global: "All the endpoints have a rate-limit set against an origin IP address — 10,000 requests per minute". Free-plan object limits: Media Upload 5/min; RAG Calls 100/min; max GPU memory 40 GB per company; max vCPU 10 per company; increases via Settings → Limit → Increase Your Limits (answer within 2 business days). HTTP 429 `rate_limit_exceeded` on breach. Rate-limit response headers: **NOT FOUND IN LIVE DOCS**. | `(src: https://docs.on-demand.io/reference/rate-limits.md, retrieved 2026-09-17T05:56:32Z)`; `(src: https://docs.on-demand.io/docs/rate-limiting.md, retrieved 2026-09-17T05:56:30Z)`; `(src: https://docs.on-demand.io/reference/errors.md, retrieved 2026-09-17T05:56:32Z)` |
+| Error envelope | `{ "errorCode": "<machine code>", "message": "<text>" }`; common codes `invalid_request` 400, `unauthenticated` 401, `unauthorized` 403, `not_found` 404, `method_not_allowed` 405, `rate_limit_exceeded` 429, `server_error` 500, `bad_gateway` 502, `resource_unavailable` 503; chat-specific `plugin_execution_timeout` 504 (plugin timeout 2.5 min), `context_length_exceeded` 400, `model_error` 500. | `(src: https://docs.on-demand.io/reference/errors.md, retrieved 2026-09-17T05:56:32Z)`; `(src: https://docs.on-demand.io/docs/response-codes.md, retrieved 2026-09-17T05:56:30Z)` |
 
 ---
 
@@ -180,7 +180,7 @@ Sources for this section unless stated otherwise: OpenAPI specs `(src: https://d
 
 **User-identity field.** `externalUserId` — "An identifier of the external user creating this chat session… external to OnDemand but internal to your own system… can be used for filtering sessions and auditing. If not managing chat users internally, use any unique string." It is **required** in the OpenAPI schema (`required: ["externalUserId"]`) but the Chat API guide table marks it "Required: No" — send it always. It is also a filter on `GET /chat/v1/sessions?externalUserId=` and `GET …/messages?externalUserId=`.
 
-**TTL / context fields.** No TTL, expiry or `contextMetadata` field exists on the Chat API session schema (request or response). `contextMetadata` appears only (a) in the Projects API "Delete project" request schema as `contextMetadata: [{key, value}]` `(src: https://docs.on-demand.io/reference/delete_public-projects-projectid.md, retrieved 2026-09-17T05:56:33Z)` and (b) as the phrase "Update Chat Session — Update a specific chat session's context metadata" in the API index, whose link points to the _Get Chat Session_ page — **no update-session endpoint spec is published** `(src: https://docs.on-demand.io/reference/intro-to-ondemand-api.md, retrieved 2026-09-17T05:56:32Z)`. Session-level plugin selection is `pluginIds` (max 20).
+**TTL / context fields.** No TTL, expiry or `contextMetadata` field exists on the Chat API session schema (request or response). `contextMetadata` appears only (a) in the Projects API "Delete project" request schema as `contextMetadata: [{key, value}]` `(src: https://docs.on-demand.io/reference/delete_public-projects-projectid.md, retrieved 2026-09-17T05:56:33Z)` and (b) as the phrase "Update Chat Session — Update a specific chat session's context metadata" in the API index, whose link points to the *Get Chat Session* page — **no update-session endpoint spec is published** `(src: https://docs.on-demand.io/reference/intro-to-ondemand-api.md, retrieved 2026-09-17T05:56:32Z)`. Session-level plugin selection is `pluginIds` (max 20).
 
 ### 2.1 Create session — `POST https://api.on-demand.io/chat/v1/sessions`
 
@@ -202,13 +202,10 @@ curl -X POST https://api.on-demand.io/chat/v1/sessions \
 
 ```js
 // Node 18+, ESM
-const res = await fetch('https://api.on-demand.io/chat/v1/sessions', {
-  method: 'POST',
-  headers: {
-    apikey: process.env.ONDEMAND_API_KEY,
-    'Content-Type': 'application/json',
-  },
-  body: JSON.stringify({ externalUserId: 'user-app-12345', pluginIds: [] }),
+const res = await fetch("https://api.on-demand.io/chat/v1/sessions", {
+  method: "POST",
+  headers: { apikey: process.env.ONDEMAND_API_KEY, "Content-Type": "application/json" },
+  body: JSON.stringify({ externalUserId: "user-app-12345", pluginIds: [] }),
 });
 const { data } = await res.json();
 const sessionId = data.id;
@@ -225,10 +222,7 @@ curl "https://api.on-demand.io/chat/v1/sessions?limit=10&sort=desc" -H "apikey: 
 ```
 
 ```js
-const r = await fetch(
-  'https://api.on-demand.io/chat/v1/sessions?limit=10&sort=desc',
-  { headers: { apikey: process.env.ONDEMAND_API_KEY } },
-);
+const r = await fetch("https://api.on-demand.io/chat/v1/sessions?limit=10&sort=desc", { headers: { apikey: process.env.ONDEMAND_API_KEY } });
 const { data, pagination } = await r.json(); // next page: ?cursor=<pagination.next>
 ```
 
@@ -241,11 +235,7 @@ curl "https://api.on-demand.io/chat/v1/sessions/$SESSION_ID" -H "apikey: $ONDEMA
 ```
 
 ```js
-const s = await (
-  await fetch(`https://api.on-demand.io/chat/v1/sessions/${sessionId}`, {
-    headers: { apikey: process.env.ONDEMAND_API_KEY },
-  })
-).json();
+const s = await (await fetch(`https://api.on-demand.io/chat/v1/sessions/${sessionId}`, { headers: { apikey: process.env.ONDEMAND_API_KEY } })).json();
 ```
 
 ### 2.4 Delete session — **NOT FOUND IN LIVE DOCS**
@@ -268,38 +258,32 @@ Headers: `apikey`, `Content-Type: application/json`. Path: `sessionId` required.
 
 ### 3.1 Every body field
 
-| Field                                                         | Type           | Allowed values / constraints                                                                                                                                                                                                                                                              | Default                                                                                                                                        | Where documented                                                                                                 |
-| ------------------------------------------------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `query`                                                       | string         | the user's message                                                                                                                                                                                                                                                                        | — (required)                                                                                                                                   | OpenAPI `required: [query, endpointId, responseMode]`                                                            |
-| `endpointId`                                                  | string         | "Endpoint ID of the fulfillment model… predefined, BYOI or BYOM"; predefined IDs are enumerated on the Models page (§12); BYOI/BYOM IDs come from `https://app.on-demand.io/byoi-management` and `https://app.on-demand.io/byom-management/endpoints`                                     | — (required)                                                                                                                                   | OpenAPI + `docs/fulfillment-models.md`                                                                           |
-| `responseMode`                                                | string         | enum **`sync` \| `stream` \| `webhook`**                                                                                                                                                                                                                                                  | OpenAPI: required (no default). Guide `docs/chat-api.md` says "Optional… Defaults to `sync`" — a documented contradiction; send it explicitly. | OpenAPI; guide                                                                                                   |
-| `pluginIds`                                                   | string[]       | `maxItems: 20`; "replace the plugin IDs set during session creation"; empty/absent → session plugins; none anywhere → RAG bypassed                                                                                                                                                        | session value                                                                                                                                  | OpenAPI. Guide samples use **`agentIds`** instead (see §13).                                                     |
-| `fulfillmentOnly`                                             | boolean        | `true` skips RAG (and therefore plugin execution) even when plugins are set                                                                                                                                                                                                               | `false`                                                                                                                                        | OpenAPI                                                                                                          |
-| `modelConfigs`                                                | object         | wrapper for model configuration; "If not passed, default configuration will be used"                                                                                                                                                                                                      | —                                                                                                                                              | OpenAPI                                                                                                          |
-| `modelConfigs.fulfillmentPrompt`                              | string         | system-style instructions; the Fulfillment Prompts guide uses the placeholders `{context}` and `{question}` inside it                                                                                                                                                                     | model default                                                                                                                                  | OpenAPI; `docs/fulfillment-prompts.md`                                                                           |
-| `modelConfigs.stopSequences`                                  | string[]       | "Up to 4 sequences"                                                                                                                                                                                                                                                                       | —                                                                                                                                              | OpenAPI                                                                                                          |
-| `modelConfigs.temperature`                                    | number (float) | 0 – 2                                                                                                                                                                                                                                                                                     | 0.7                                                                                                                                            | OpenAPI                                                                                                          |
-| `modelConfigs.topP`                                           | number (float) | 0 – 1                                                                                                                                                                                                                                                                                     | 1                                                                                                                                              | OpenAPI                                                                                                          |
-| `modelConfigs.presencePenalty`                                | number (float) | 0 – 2                                                                                                                                                                                                                                                                                     | 0                                                                                                                                              | OpenAPI                                                                                                          |
-| `modelConfigs.frequencyPenalty`                               | number (float) | 0 – 2                                                                                                                                                                                                                                                                                     | 0                                                                                                                                              | OpenAPI                                                                                                          |
-| `reasoningMode`                                               | string         | **Not in the OpenAPI schema.** Guide: "Controls reasoning detail in `stream` mode (e.g., `low`, `high`) — relevant only for `responseMode: stream`"; guide samples send `"reasoningMode": "low"` and `"reasoningMode": "grok-4-fast"`. No enumerated list of allowed values is published. | —                                                                                                                                              | `docs/chat-api.md`; `docs/query-and-responses-modes.md`                                                          |
-| `maxTokens` / `max_tokens`                                    | —              | **NOT FOUND IN LIVE DOCS** (0 hits across all 85 pages + 40 specs)                                                                                                                                                                                                                        | —                                                                                                                                              | —                                                                                                                |
-| structured / JSON output (`responseFormat`, `json_schema`, …) | —              | **NOT FOUND IN LIVE DOCS** for Submit Query (the only `structured`/`json_schema` hits are in the REST-agent OpenAPI-schema guides, unrelated to the query body)                                                                                                                           | —                                                                                                                                              | checked `docs/open-api-schema.md`, `docs/agent-skills.md`, `docs/general-faqs.md`, `docs/what-are-connectors.md` |
-| file / media attachment field on the query                    | —              | **NOT FOUND IN LIVE DOCS** on the query body. Media is attached to a conversation by uploading it with the Media API and passing the same `sessionId` (§5); the resulting message appears in the session with `type: "media"`.                                                            | —                                                                                                                                              | `docs/media-api.md`; `reference/getchatmessage.md`                                                               |
-| `agentIds` / `tools`                                          | —              | `agentIds` appears only in guide code samples (never in a schema); `tools` — **NOT FOUND IN LIVE DOCS**                                                                                                                                                                                   | —                                                                                                                                              | see §13                                                                                                          |
+| Field | Type | Allowed values / constraints | Default | Where documented |
+|---|---|---|---|---|
+| `query` | string | the user's message | — (required) | OpenAPI `required: [query, endpointId, responseMode]` |
+| `endpointId` | string | "Endpoint ID of the fulfillment model… predefined, BYOI or BYOM"; predefined IDs are enumerated on the Models page (§12); BYOI/BYOM IDs come from `https://app.on-demand.io/byoi-management` and `https://app.on-demand.io/byom-management/endpoints` | — (required) | OpenAPI + `docs/fulfillment-models.md` |
+| `responseMode` | string | enum **`sync` \| `stream` \| `webhook`** | OpenAPI: required (no default). Guide `docs/chat-api.md` says "Optional… Defaults to `sync`" — a documented contradiction; send it explicitly. | OpenAPI; guide |
+| `pluginIds` | string[] | `maxItems: 20`; "replace the plugin IDs set during session creation"; empty/absent → session plugins; none anywhere → RAG bypassed | session value | OpenAPI. Guide samples use **`agentIds`** instead (see §13). |
+| `fulfillmentOnly` | boolean | `true` skips RAG (and therefore plugin execution) even when plugins are set | `false` | OpenAPI |
+| `modelConfigs` | object | wrapper for model configuration; "If not passed, default configuration will be used" | — | OpenAPI |
+| `modelConfigs.fulfillmentPrompt` | string | system-style instructions; the Fulfillment Prompts guide uses the placeholders `{context}` and `{question}` inside it | model default | OpenAPI; `docs/fulfillment-prompts.md` |
+| `modelConfigs.stopSequences` | string[] | "Up to 4 sequences" | — | OpenAPI |
+| `modelConfigs.temperature` | number (float) | 0 – 2 | 0.7 | OpenAPI |
+| `modelConfigs.topP` | number (float) | 0 – 1 | 1 | OpenAPI |
+| `modelConfigs.presencePenalty` | number (float) | 0 – 2 | 0 | OpenAPI |
+| `modelConfigs.frequencyPenalty` | number (float) | 0 – 2 | 0 | OpenAPI |
+| `reasoningMode` | string | **Not in the OpenAPI schema.** Guide: "Controls reasoning detail in `stream` mode (e.g., `low`, `high`) — relevant only for `responseMode: stream`"; guide samples send `"reasoningMode": "low"` and `"reasoningMode": "grok-4-fast"`. No enumerated list of allowed values is published. | — | `docs/chat-api.md`; `docs/query-and-responses-modes.md` |
+| `maxTokens` / `max_tokens` | — | **NOT FOUND IN LIVE DOCS** (0 hits across all 85 pages + 40 specs) | — | — |
+| structured / JSON output (`responseFormat`, `json_schema`, …) | — | **NOT FOUND IN LIVE DOCS** for Submit Query (the only `structured`/`json_schema` hits are in the REST-agent OpenAPI-schema guides, unrelated to the query body) | — | checked `docs/open-api-schema.md`, `docs/agent-skills.md`, `docs/general-faqs.md`, `docs/what-are-connectors.md` |
+| file / media attachment field on the query | — | **NOT FOUND IN LIVE DOCS** on the query body. Media is attached to a conversation by uploading it with the Media API and passing the same `sessionId` (§5); the resulting message appears in the session with `type: "media"`. | — | `docs/media-api.md`; `reference/getchatmessage.md` |
+| `agentIds` / `tools` | — | `agentIds` appears only in guide code samples (never in a schema); `tools` — **NOT FOUND IN LIVE DOCS** | — | see §13 |
 
 Plugin/agent selection naming: **the schemas say `pluginIds`; the newer guide samples say `agentIds`** (both live). Streaming status events name executed tools `retrievedAgents[].agentId` / `executedAgents[].agentId` (§4).
 
 ### 3.2 Sync request / response
 
 ```json
-{
-  "query": "What is AI?",
-  "endpointId": "predefined-claude-sonnet-5",
-  "responseMode": "sync",
-  "pluginIds": [],
-  "modelConfigs": { "temperature": 0.7 }
-}
+{ "query": "What is AI?", "endpointId": "predefined-claude-sonnet-5", "responseMode": "sync", "pluginIds": [], "modelConfigs": { "temperature": 0.7 } }
 ```
 
 Response 200 ("Sync Mode Response"): `message` ("Chat query submitted successfully"), `data.sessionId`, `data.messageId`, `data.answer` (the full answer), `data.status` enum `processing|completed|failed`.
@@ -311,22 +295,11 @@ curl -X POST "https://api.on-demand.io/chat/v1/sessions/$SESSION_ID/query" \
 ```
 
 ```js
-const r = await fetch(
-  `https://api.on-demand.io/chat/v1/sessions/${sessionId}/query`,
-  {
-    method: 'POST',
-    headers: {
-      apikey: process.env.ONDEMAND_API_KEY,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      query: 'What is AI?',
-      endpointId: 'predefined-claude-sonnet-5',
-      responseMode: 'sync',
-      pluginIds: [],
-    }),
-  },
-);
+const r = await fetch(`https://api.on-demand.io/chat/v1/sessions/${sessionId}/query`, {
+  method: "POST",
+  headers: { apikey: process.env.ONDEMAND_API_KEY, "Content-Type": "application/json" },
+  body: JSON.stringify({ query: "What is AI?", endpointId: "predefined-claude-sonnet-5", responseMode: "sync", pluginIds: [] }),
+});
 const { data } = await r.json(); // data.answer, data.messageId, data.status
 ```
 
@@ -337,13 +310,7 @@ const { data } = await r.json(); // data.answer, data.messageId, data.status
 ### 3.4 Stream request / response
 
 ```json
-{
-  "query": "Get the city based on ip \"122.108.92.210\" and find the current weather in that city",
-  "endpointId": "predefined-claude-sonnet-5",
-  "responseMode": "stream",
-  "pluginIds": [],
-  "reasoningMode": "low"
-}
+{ "query": "Get the city based on ip \"122.108.92.210\" and find the current weather in that city", "endpointId": "predefined-claude-sonnet-5", "responseMode": "stream", "pluginIds": [], "reasoningMode": "low" }
 ```
 
 Response: HTTP 200 with a Server-Sent-Events body (see §4 for the event schema and a verbatim stream).
@@ -356,45 +323,26 @@ curl -N -X POST "https://api.on-demand.io/chat/v1/sessions/$SESSION_ID/query" \
 
 ```js
 // Node 18+, ESM — minimal SSE reader for the documented event/data framing
-const r = await fetch(
-  `https://api.on-demand.io/chat/v1/sessions/${sessionId}/query`,
-  {
-    method: 'POST',
-    headers: {
-      apikey: process.env.ONDEMAND_API_KEY,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      query: 'What is AI?',
-      endpointId: 'predefined-claude-sonnet-5',
-      responseMode: 'stream',
-      pluginIds: [],
-    }),
-  },
-);
-let answer = '',
-  buf = '',
-  event = 'message';
+const r = await fetch(`https://api.on-demand.io/chat/v1/sessions/${sessionId}/query`, {
+  method: "POST",
+  headers: { apikey: process.env.ONDEMAND_API_KEY, "Content-Type": "application/json" },
+  body: JSON.stringify({ query: "What is AI?", endpointId: "predefined-claude-sonnet-5", responseMode: "stream", pluginIds: [] }),
+});
+let answer = "", buf = "", event = "message";
 const dec = new TextDecoder();
 for await (const chunk of r.body) {
   buf += dec.decode(chunk, { stream: true });
   let nl;
-  while ((nl = buf.indexOf('\n')) >= 0) {
-    const line = buf.slice(0, nl).trimEnd();
-    buf = buf.slice(nl + 1);
-    if (line.startsWith('event:')) {
-      event = line.slice(6).trim();
-      continue;
-    }
-    if (!line.startsWith('data:')) continue;
+  while ((nl = buf.indexOf("\n")) >= 0) {
+    const line = buf.slice(0, nl).trimEnd(); buf = buf.slice(nl + 1);
+    if (line.startsWith("event:")) { event = line.slice(6).trim(); continue; }
+    if (!line.startsWith("data:")) continue;
     const data = line.slice(5).trim();
-    if (data === '[DONE]') {
-      /* terminal marker */ break;
-    }
-    if (data.startsWith('[ERROR]:')) throw new Error(data.slice(8));
-    if (event === 'heartbeat') continue;
+    if (data === "[DONE]") { /* terminal marker */ break; }
+    if (data.startsWith("[ERROR]:")) throw new Error(data.slice(8));
+    if (event === "heartbeat") continue;
     const evt = JSON.parse(data);
-    if (evt.eventType === 'fulfillment') answer += evt.answer;
+    if (evt.eventType === "fulfillment") answer += evt.answer;
   }
 }
 ```
@@ -459,15 +407,7 @@ Sources: OpenAPI `(src: https://docs.on-demand.io/reference/createmediaurl.md, r
 Headers `apikey`, `Content-Type: application/json`. Body (schema): `url` string(uri) **required**; `plugins` string[] **required**; `responseMode` enum `sync|webhook` **required**; optional `createdBy`, `updatedBy`, `sessionId`, `externalUserId`, `name`, `sizeBytes` integer, `pluginInputs` object[].
 
 ```json
-{
-  "url": "https://example.com/report.pdf",
-  "name": "report.pdf",
-  "plugins": ["plugin-1713954536"],
-  "sessionId": "<sessionId>",
-  "externalUserId": "user-app-12345",
-  "sizeBytes": 7834093,
-  "responseMode": "sync"
-}
+{ "url": "https://example.com/report.pdf", "name": "report.pdf", "plugins": ["plugin-1713954536"], "sessionId": "<sessionId>", "externalUserId": "user-app-12345", "sizeBytes": 7834093, "responseMode": "sync" }
 ```
 
 Response 200: `message` ("Media Created"), `data{ id, companyId, sessionId, externalUserId, url, sourceUrl, extractedTextUrl, name, sizeBytes, source (document|audio|video|youtube|image), mimeType, extension, plugins[], context, extractedText, actionStatus, failedReason, isDeleted, responseMode, createdBy, updatedBy, pluginInputs[], transcriptionHours, createdAt, updatedAt }`.
@@ -478,21 +418,9 @@ curl -X POST https://api.on-demand.io/media/v1/public/file -H "apikey: $ONDEMAND
 ```
 
 ```js
-const m = await (
-  await fetch('https://api.on-demand.io/media/v1/public/file', {
-    method: 'POST',
-    headers: {
-      apikey: process.env.ONDEMAND_API_KEY,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      url: 'https://example.com/report.pdf',
-      plugins: ['plugin-1713954536'],
-      sessionId,
-      responseMode: 'sync',
-    }),
-  })
-).json();
+const m = await (await fetch("https://api.on-demand.io/media/v1/public/file", { method: "POST",
+  headers: { apikey: process.env.ONDEMAND_API_KEY, "Content-Type": "application/json" },
+  body: JSON.stringify({ url: "https://example.com/report.pdf", plugins: ["plugin-1713954536"], sessionId, responseMode: "sync" }) })).json();
 const mediaId = m.data.id;
 ```
 
@@ -507,19 +435,10 @@ curl -X POST https://api.on-demand.io/media/v1/public/file/raw -H "apikey: $ONDE
 
 ```js
 const fd = new FormData();
-fd.append('file', new Blob([pngBytes], { type: 'image/png' }), 'file.png');
-fd.append('name', 'file.png');
-fd.append('sessionId', sessionId);
-fd.append('plugins', 'plugin-1713958591');
-fd.append('sizeBytes', String(pngBytes.length));
-fd.append('responseMode', 'sync');
-const up = await (
-  await fetch('https://api.on-demand.io/media/v1/public/file/raw', {
-    method: 'POST',
-    headers: { apikey: process.env.ONDEMAND_API_KEY },
-    body: fd,
-  })
-).json();
+fd.append("file", new Blob([pngBytes], { type: "image/png" }), "file.png");
+fd.append("name", "file.png"); fd.append("sessionId", sessionId); fd.append("plugins", "plugin-1713958591");
+fd.append("sizeBytes", String(pngBytes.length)); fd.append("responseMode", "sync");
+const up = await (await fetch("https://api.on-demand.io/media/v1/public/file/raw", { method: "POST", headers: { apikey: process.env.ONDEMAND_API_KEY }, body: fd })).json();
 ```
 
 ### 5.3 Fetch media — `GET https://api.on-demand.io/media/v1/public/file`
@@ -531,11 +450,7 @@ curl "https://api.on-demand.io/media/v1/public/file?page=1&limit=10&source=image
 ```
 
 ```js
-const list = await (
-  await fetch('https://api.on-demand.io/media/v1/public/file?page=1&limit=10', {
-    headers: { apikey: process.env.ONDEMAND_API_KEY },
-  })
-).json();
+const list = await (await fetch("https://api.on-demand.io/media/v1/public/file?page=1&limit=10", { headers: { apikey: process.env.ONDEMAND_API_KEY } })).json();
 ```
 
 ### 5.4 Delete media — `DELETE https://api.on-demand.io/media/v1/public/file/{fileId}`
@@ -547,10 +462,7 @@ curl -X DELETE "https://api.on-demand.io/media/v1/public/file/$MEDIA_ID" -H "api
 ```
 
 ```js
-await fetch(`https://api.on-demand.io/media/v1/public/file/${mediaId}`, {
-  method: 'DELETE',
-  headers: { apikey: process.env.ONDEMAND_API_KEY },
-});
+await fetch(`https://api.on-demand.io/media/v1/public/file/${mediaId}`, { method: "DELETE", headers: { apikey: process.env.ONDEMAND_API_KEY } });
 ```
 
 ---
@@ -573,19 +485,8 @@ curl -X POST https://api.on-demand.io/services/v1/public/service/execute/speech_
 ```
 
 ```js
-const stt = await (
-  await fetch(
-    'https://api.on-demand.io/services/v1/public/service/execute/speech_to_text',
-    {
-      method: 'POST',
-      headers: {
-        apikey: process.env.ONDEMAND_API_KEY,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ audioUrl }),
-    },
-  )
-).json();
+const stt = await (await fetch("https://api.on-demand.io/services/v1/public/service/execute/speech_to_text", { method: "POST",
+  headers: { apikey: process.env.ONDEMAND_API_KEY, "Content-Type": "application/json" }, body: JSON.stringify({ audioUrl }) })).json();
 const transcript = stt.data.text;
 ```
 
@@ -603,22 +504,9 @@ curl -X POST https://api.on-demand.io/services/v1/public/service/execute/text_to
 ```
 
 ```js
-const tts = await (
-  await fetch(
-    'https://api.on-demand.io/services/v1/public/service/execute/text_to_speech',
-    {
-      method: 'POST',
-      headers: {
-        apikey: process.env.ONDEMAND_API_KEY,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ input: 'Hello', voice: 'alloy', model: 'tts-1' }),
-    },
-  )
-).json();
-const audioBytes = new Uint8Array(
-  await (await fetch(tts.data.audioUrl)).arrayBuffer(),
-);
+const tts = await (await fetch("https://api.on-demand.io/services/v1/public/service/execute/text_to_speech", { method: "POST",
+  headers: { apikey: process.env.ONDEMAND_API_KEY, "Content-Type": "application/json" }, body: JSON.stringify({ input: "Hello", voice: "alloy", model: "tts-1" }) })).json();
+const audioBytes = new Uint8Array(await (await fetch(tts.data.audioUrl)).arrayBuffer());
 ```
 
 ### 6.3 Translate text — `POST …/execute/language_translation`
@@ -634,22 +522,8 @@ curl -X POST https://api.on-demand.io/services/v1/public/service/execute/languag
 ```
 
 ```js
-const tr = await (
-  await fetch(
-    'https://api.on-demand.io/services/v1/public/service/execute/language_translation',
-    {
-      method: 'POST',
-      headers: {
-        apikey: process.env.ONDEMAND_API_KEY,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        input: 'Hello, how are you?',
-        languageCode: 'es',
-      }),
-    },
-  )
-).json();
+const tr = await (await fetch("https://api.on-demand.io/services/v1/public/service/execute/language_translation", { method: "POST",
+  headers: { apikey: process.env.ONDEMAND_API_KEY, "Content-Type": "application/json" }, body: JSON.stringify({ input: "Hello, how are you?", languageCode: "es" }) })).json();
 ```
 
 ---
@@ -660,27 +534,27 @@ Base URL: `https://api.on-demand.io/automation/api`; header `apikey` (scheme `Ap
 
 ### 7.1 Endpoint table
 
-| Operation                | Method & path                                                                                                                | Request                                                                                       | Response                                                                                                                                                                                            |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Create workflow          | `POST /workflow/`                                                                                                            | JSON: `name` (req), `trigger` (req), `nodes[]` (req), `delivery[]` (req), `enableMemory` bool | 201 `{ "id": "<workflowId>" }`                                                                                                                                                                      |
-| List workflows           | `GET /workflow/?after=&limit=&keyword=`                                                                                      | —                                                                                             | 200 array of workflow objects (guide shows `{message, data[]}` with `triggerType`)                                                                                                                  |
-| Get workflow             | `GET /workflow/{id}`                                                                                                         | —                                                                                             | 200 workflow object; 404                                                                                                                                                                            |
-| Update workflow          | `PATCH /workflow/{id}`                                                                                                       | JSON: `trigger`, `nodes`, `delivery` (all req), `enableMemory`                                | 200 (no body)                                                                                                                                                                                       |
-| Update name              | `PATCH /workflow/{id}/name`                                                                                                  | `{ "name": "…" }`                                                                             | 200                                                                                                                                                                                                 |
-| Delete workflow          | `DELETE /workflow/{id}`                                                                                                      | —                                                                                             | 200                                                                                                                                                                                                 |
-| **Activate**             | `POST /workflow/{id}/activate`                                                                                               | no body                                                                                       | 200 "Workflow activated successfully"; 500                                                                                                                                                          |
-| **Deactivate**           | `POST /workflow/{id}/deactivate`                                                                                             | no body                                                                                       | 200; 500                                                                                                                                                                                            |
-| **Execute**              | `POST /workflow/{id}/execute`                                                                                                | **no request body is defined in the spec**                                                    | 200 `{ "executionID": "…" }` ("Workflow execution started"); 400 "Invalid request or workflow inactive"; 404                                                                                        |
-| Upload configuration     | `POST /workflow/upload/config`                                                                                               | `multipart/form-data` `file` (binary)                                                         | 200 "Configuration uploaded successfully"; 400 "Invalid request or file format"                                                                                                                     |
-| List executions          | `GET /execution/list?workflowID=<req>&afterID=`                                                                              | —                                                                                             | 200 `{message, data[]}`: `id, workflowID, trigger{id,type (e.g. "api"),actorID}, status (e.g. "executing"), startedAtInMilliseconds, endedAtInMilliseconds, timeTakenInMilliseconds`                |
-| Get execution            | `GET /execution/{executionID}`                                                                                               | —                                                                                             | 200 execution record (as above)                                                                                                                                                                     |
-| Get logs                 | `GET /execution/{executionID}/logs`                                                                                          | —                                                                                             | 200 `{message, data[]}`: `executionID, requestID, task, timestamp, workflowID, nodeKey, message, fields`                                                                                            |
-| Node outputs             | `GET /execution/{executionID}/node/outputs`                                                                                  | —                                                                                             | 200 `{ data: { outputs: { "<nodeKey>": { id, executionID, nodeType, key, value, startedAtInMilliseconds, endedAtInMilliseconds, timeTakenInMilliseconds } } } }`                                    |
-| Voice transcript         | `GET /execution/{executionID}/transcript`                                                                                    | —                                                                                             | 200 `data[]` `{executionID, workflowID, content, responseID, eventID, itemID, author (user \| voice-server \| ond), createdAtInMilliseconds}`; 401 "Unauthorized access or non-voice mode workflow" |
-| Email delivery status    | `GET /execution/{executionID}/delivery/track/email?afterID=&limit=`                                                          | —                                                                                             | 200 (schema not detailed)                                                                                                                                                                           |
-| Report problem           | `POST /execution/{executionID}/report-problem`                                                                               | `{ "type": "…", "message": "…" }` (both req)                                                  | 200                                                                                                                                                                                                 |
-| Approve / reject gate    | `POST /approvalgate/{executionID}/approval/{nodeKey}/approve` · `…/reject`                                                   | no body ("companyID and userID are taken from the auth context")                              | 200; 400 `{status, message}`                                                                                                                                                                        |
-| **Stream workflow logs** | **NOT FOUND IN LIVE DOCS** — only the polling `GET …/logs` exists (0 hits for a streaming-logs endpoint in all pages/specs). |                                                                                               |                                                                                                                                                                                                     |
+| Operation | Method & path | Request | Response |
+|---|---|---|---|
+| Create workflow | `POST /workflow/` | JSON: `name` (req), `trigger` (req), `nodes[]` (req), `delivery[]` (req), `enableMemory` bool | 201 `{ "id": "<workflowId>" }` |
+| List workflows | `GET /workflow/?after=&limit=&keyword=` | — | 200 array of workflow objects (guide shows `{message, data[]}` with `triggerType`) |
+| Get workflow | `GET /workflow/{id}` | — | 200 workflow object; 404 |
+| Update workflow | `PATCH /workflow/{id}` | JSON: `trigger`, `nodes`, `delivery` (all req), `enableMemory` | 200 (no body) |
+| Update name | `PATCH /workflow/{id}/name` | `{ "name": "…" }` | 200 |
+| Delete workflow | `DELETE /workflow/{id}` | — | 200 |
+| **Activate** | `POST /workflow/{id}/activate` | no body | 200 "Workflow activated successfully"; 500 |
+| **Deactivate** | `POST /workflow/{id}/deactivate` | no body | 200; 500 |
+| **Execute** | `POST /workflow/{id}/execute` | **no request body is defined in the spec** | 200 `{ "executionID": "…" }` ("Workflow execution started"); 400 "Invalid request or workflow inactive"; 404 |
+| Upload configuration | `POST /workflow/upload/config` | `multipart/form-data` `file` (binary) | 200 "Configuration uploaded successfully"; 400 "Invalid request or file format" |
+| List executions | `GET /execution/list?workflowID=<req>&afterID=` | — | 200 `{message, data[]}`: `id, workflowID, trigger{id,type (e.g. "api"),actorID}, status (e.g. "executing"), startedAtInMilliseconds, endedAtInMilliseconds, timeTakenInMilliseconds` |
+| Get execution | `GET /execution/{executionID}` | — | 200 execution record (as above) |
+| Get logs | `GET /execution/{executionID}/logs` | — | 200 `{message, data[]}`: `executionID, requestID, task, timestamp, workflowID, nodeKey, message, fields` |
+| Node outputs | `GET /execution/{executionID}/node/outputs` | — | 200 `{ data: { outputs: { "<nodeKey>": { id, executionID, nodeType, key, value, startedAtInMilliseconds, endedAtInMilliseconds, timeTakenInMilliseconds } } } }` |
+| Voice transcript | `GET /execution/{executionID}/transcript` | — | 200 `data[]` `{executionID, workflowID, content, responseID, eventID, itemID, author (user \| voice-server \| ond), createdAtInMilliseconds}`; 401 "Unauthorized access or non-voice mode workflow" |
+| Email delivery status | `GET /execution/{executionID}/delivery/track/email?afterID=&limit=` | — | 200 (schema not detailed) |
+| Report problem | `POST /execution/{executionID}/report-problem` | `{ "type": "…", "message": "…" }` (both req) | 200 |
+| Approve / reject gate | `POST /approvalgate/{executionID}/approval/{nodeKey}/approve` · `…/reject` | no body ("companyID and userID are taken from the auth context") | 200; 400 `{status, message}` |
+| **Stream workflow logs** | **NOT FOUND IN LIVE DOCS** — only the polling `GET …/logs` exists (0 hits for a streaming-logs endpoint in all pages/specs). | | |
 
 ### 7.2 Input / output schema (workflow object)
 
@@ -705,24 +579,11 @@ curl -X POST "https://api.on-demand.io/automation/api/workflow/$WORKFLOW_ID/deac
 ```
 
 ```js
-const base = 'https://api.on-demand.io/automation/api',
-  h = { apikey: process.env.ONDEMAND_API_KEY };
-await fetch(`${base}/workflow/${workflowId}/activate`, {
-  method: 'POST',
-  headers: h,
-});
-const { executionID } = await (
-  await fetch(`${base}/workflow/${workflowId}/execute`, {
-    method: 'POST',
-    headers: h,
-  })
-).json();
-const exec = await (
-  await fetch(`${base}/execution/${executionID}`, { headers: h })
-).json(); // exec.data.status
-const logs = await (
-  await fetch(`${base}/execution/${executionID}/logs`, { headers: h })
-).json();
+const base = "https://api.on-demand.io/automation/api", h = { apikey: process.env.ONDEMAND_API_KEY };
+await fetch(`${base}/workflow/${workflowId}/activate`, { method: "POST", headers: h });
+const { executionID } = await (await fetch(`${base}/workflow/${workflowId}/execute`, { method: "POST", headers: h })).json();
+const exec = await (await fetch(`${base}/execution/${executionID}`, { headers: h })).json();   // exec.data.status
+const logs = await (await fetch(`${base}/execution/${executionID}/logs`, { headers: h })).json();
 ```
 
 Create-workflow body example (from the guide, cron trigger + advanced voice mode node + phone delivery) is reproduced verbatim at `(src: https://docs.on-demand.io/docs/workflow-api.md, retrieved 2026-09-17T05:56:31Z)`.
@@ -761,26 +622,26 @@ Two documented operations exist: `POST /config/v1/public/mqtt_user` with body `{
 
 **Endpoint / model IDs (fulfillment models).** "Endpoint ID is used as the value of `endpointId` in Submit Query" `(src: https://docs.on-demand.io/docs/fulfillment-models.md, retrieved 2026-09-17T05:56:31Z)` (page updatedAt 2026-08-24):
 
-| Model                  | Endpoint name            | `endpointId`                        |
-| ---------------------- | ------------------------ | ----------------------------------- |
-| GPT-5.6 Luna           | `gpt-5.6-luna`           | `predefined-gpt-5.6-luna`           |
-| GPT-5.6 Terra          | `gpt-5.6-terra`          | `predefined-gpt-5.6-terra`          |
-| GPT-5.6 Sol            | `gpt-5.6-sol`            | `predefined-gpt-5.6-sol`            |
-| Claude Opus 5          | `claude-opus-5`          | `predefined-claude-opus-5`          |
-| Claude Sonnet 5        | `claude-sonnet-5`        | `predefined-claude-sonnet-5`        |
-| Claude Fable 5         | `claude-fable-5`         | `predefined-claude-fable-5`         |
-| Gemini 3.7 Flash       | `gemini-3.7-flash`       | `predefined-gemini-3.7-flash`       |
-| Gemini 3.6 Flash       | `gemini-3.6-flash`       | `predefined-gemini-3.6-flash`       |
-| Gemini 3.1             | `gemini-3.1`             | `predefined-gemini-3.1-pro-preview` |
-| Grok 4.6               | `ondemand-grok-4.6`      | `predefined-xai-grok4.6`            |
-| Grok 4.5               | `ondemand-grok-4.5`      | `predefined-xai-grok4.5`            |
-| DeepSeek V4 Pro        | `deepseek-v4-pro`        | `predefined-deepseek-v4-pro`        |
-| DeepSeek V4 Flash Fast | `deepseek-v4-flash-fast` | `predefined-deepseek-v4-flash`      |
-| Kimi K3                | `kimi-k3`                | `predefined-kimi-k3`                |
-| Qwen 3.8 Max           | `qwen-3.8-max`           | `predefined-qwen-3.8-max`           |
-| GLM 5.2                | `glm-5.2`                | `predefined-glm-5.2`                |
-| MiniMax M3             | `minimax-m3`             | `predefined-minimax-m3`             |
-| Muse Spark 1.2         | `muse-spark-1.2`         | `predefined-muse_spark_1.2`         |
+| Model | Endpoint name | `endpointId` |
+|---|---|---|
+| GPT-5.6 Luna | `gpt-5.6-luna` | `predefined-gpt-5.6-luna` |
+| GPT-5.6 Terra | `gpt-5.6-terra` | `predefined-gpt-5.6-terra` |
+| GPT-5.6 Sol | `gpt-5.6-sol` | `predefined-gpt-5.6-sol` |
+| Claude Opus 5 | `claude-opus-5` | `predefined-claude-opus-5` |
+| Claude Sonnet 5 | `claude-sonnet-5` | `predefined-claude-sonnet-5` |
+| Claude Fable 5 | `claude-fable-5` | `predefined-claude-fable-5` |
+| Gemini 3.7 Flash | `gemini-3.7-flash` | `predefined-gemini-3.7-flash` |
+| Gemini 3.6 Flash | `gemini-3.6-flash` | `predefined-gemini-3.6-flash` |
+| Gemini 3.1 | `gemini-3.1` | `predefined-gemini-3.1-pro-preview` |
+| Grok 4.6 | `ondemand-grok-4.6` | `predefined-xai-grok4.6` |
+| Grok 4.5 | `ondemand-grok-4.5` | `predefined-xai-grok4.5` |
+| DeepSeek V4 Pro | `deepseek-v4-pro` | `predefined-deepseek-v4-pro` |
+| DeepSeek V4 Flash Fast | `deepseek-v4-flash-fast` | `predefined-deepseek-v4-flash` |
+| Kimi K3 | `kimi-k3` | `predefined-kimi-k3` |
+| Qwen 3.8 Max | `qwen-3.8-max` | `predefined-qwen-3.8-max` |
+| GLM 5.2 | `glm-5.2` | `predefined-glm-5.2` |
+| MiniMax M3 | `minimax-m3` | `predefined-minimax-m3` |
+| Muse Spark 1.2 | `muse-spark-1.2` | `predefined-muse_spark_1.2` |
 
 "The list of predefined models may be updated over time. Please refer to the playground (`https://app.on-demand.io/playground`) for the most up to date list." Examples elsewhere in the docs still use the older ids `predefined-openai-gpt4o` (Submit Query spec example, guides) and `predefined-openai-gpt4.1` (Projects spec examples) — these are not in the current table. BYOI / BYOM endpoint ids are read from `https://app.on-demand.io/byoi-management` and `https://app.on-demand.io/byom-management/endpoints`. A REST endpoint that enumerates endpoints/models: **NOT FOUND IN LIVE DOCS**.
 
@@ -792,21 +653,21 @@ Two documented operations exist: `POST /config/v1/public/mqtt_user` with body `{
 
 ## 13. Naming reconciliation table
 
-| Concept                 | API term                                                                                                          | UI term                                                                                                | Definition                                                                                                          | Where it appears (endpoint/field)                                                                                                                              | Source URL                                                                                                                                                                                                               |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Tool/agent selection    | `pluginIds` (all OpenAPI schemas); `agentIds` (guide code samples); `plugins` (Media API, workflow nodes)         | **Agents** ("What are Agents?", "My Agents", "Agents Marketplace"); formerly "Plugins"                 | Specialized extensions (Knowledge, REST API, IoT, Terminal, Connectors) invoked in the RAG stage before fulfillment | `POST /chat/v1/sessions` body; `POST …/query` body; `plugins` on `POST /media/v1/public/file`; `nodes[].llm.plugins[{id}]`; stream `retrievedAgents[].agentId` | https://docs.on-demand.io/reference/submitquery.md · https://docs.on-demand.io/docs/query-and-responses-modes.md · https://docs.on-demand.io/docs/what-are-plugins.md · https://docs.on-demand.io/docs/terminal-agent.md |
-| Agent Tools             | "Chat & Agent Tools API" (in-app reference section); plugin objects with `identifier` (`rest_api`, `internet`, …) | Agents / Agent Tools                                                                                   | The chat operations that let a query use agents; the agent records themselves                                       | `GET /plugin/v1/list`; `app.on-demand.io/api-reference#/chat-&-agent-tools-api/*`                                                                              | https://docs.on-demand.io/docs/chat-api.md · https://docs.on-demand.io/docs/plugin-api.md                                                                                                                                |
-| Agent Flows / Workflows | "Agents Flow Builder API" — `workflow`, `execution`, `approvalgate` resources under `/automation/api`             | **Agents Flow Builder** / "Workflow Builder" / "Create Workflow" (dashboard `app.on-demand.io/agents`) | DAG of trigger → nodes (`llm`, `inputText`, `advancedVoiceMode`, `approvalGate`) → delivery channels                | `POST /workflow/`, `POST /workflow/{id}/execute`, `GET /execution/{executionID}`                                                                               | https://docs.on-demand.io/docs/agents-flow-builder.md · https://docs.on-demand.io/reference/post_workflow.md                                                                                                             |
-| Skills                  | — (no API)                                                                                                        | **Skills** (Dashboard → Skills; marketplace)                                                           | A `SKILL.md` playbook (+ optional scripts/references/assets) that agents follow                                     | UI only                                                                                                                                                        | https://docs.on-demand.io/docs/agent-skills.md                                                                                                                                                                           |
-| Endpoints / models      | `endpointId` (`predefined-…`, BYOI, BYOM); workflow `llm.model`                                                   | **Models** page, "Fulfillment Models", BYOI/BYOM Management, Playground                                | The LLM endpoint that fulfils the query                                                                             | `POST …/query.endpointId`; `POST /public/projects.endpointId`; `nodes[].llm.model`                                                                             | https://docs.on-demand.io/docs/fulfillment-models.md                                                                                                                                                                     |
-| Reasoning mode          | `reasoningMode`                                                                                                   | (not surfaced under a UI name in the fetched docs)                                                     | Controls reasoning detail in stream mode; examples `low`, `high`, `grok-4-fast`                                     | `POST …/query` body (guide only, not in OpenAPI); `nodes[].advancedVoiceMode.reasoningMode`                                                                    | https://docs.on-demand.io/docs/chat-api.md · https://docs.on-demand.io/reference/post_workflow.md                                                                                                                        |
-| Fulfillment prompt      | `modelConfigs.fulfillmentPrompt`; workflow `llm.fulfillmentPrompt`; project `systemPrompt`                        | "Fulfillment Prompt" (LLM node), "system prompt" (Projects)                                            | Instructions guiding the model's fulfilment; supports `{context}` / `{question}` placeholders                       | `POST …/query.modelConfigs`; `POST /workflow/ nodes[].llm`; `POST /public/projects`                                                                            | https://docs.on-demand.io/docs/fulfillment-prompts.md · https://docs.on-demand.io/reference/post_workflow.md · https://docs.on-demand.io/reference/post_public-projects.md                                               |
-| Response mode           | `responseMode` (`sync`, `stream`, `webhook`; media: `sync`, `webhook`)                                            | "Response Modes"                                                                                       | How the answer is delivered                                                                                         | `POST …/query`; `POST /media/v1/public/file`                                                                                                                   | https://docs.on-demand.io/docs/query-and-responses-modes.md                                                                                                                                                              |
-| Chat session            | `sessionId` (`data.id`)                                                                                           | Chat / conversation                                                                                    | Continuous conversation container                                                                                   | `/chat/v1/sessions*`                                                                                                                                           | https://docs.on-demand.io/docs/what-are-chat-sessions.md                                                                                                                                                                 |
-| External user           | `externalUserId`                                                                                                  | —                                                                                                      | Your system's end-user id (also a filter)                                                                           | session/message/media bodies and query params                                                                                                                  | https://docs.on-demand.io/reference/createchatsession.md                                                                                                                                                                 |
-| Project                 | `projectId`, `name`, `endpointId`, `systemPrompt`                                                                 | **Projects**                                                                                           | A container of sessions with default model + system prompt                                                          | `/chat/v1/public/projects*`, `GET /chat/v1/public/sessions?projectId=`                                                                                         | https://docs.on-demand.io/docs/projects.md                                                                                                                                                                               |
-| Live session            | `live-settings` (`enabled`, `mode: proactive\|onevents`, `destinations`)                                          | "Live" mode                                                                                            | Proactive / event-triggered assistant messages with email/Slack delivery                                            | `PUT /chat/v1/sessions/{sessionId}/live-settings`                                                                                                              | https://docs.on-demand.io/reference/updatelivesessionsettings.md                                                                                                                                                         |
-| Advanced voice mode     | `advancedVoiceMode` node; `delivery.channel: phone`; `GET /execution/{id}/transcript`                             | "Advanced Voice Mode Node", "Phone Call" delivery                                                      | Outbound phone-call voice conversation run by a workflow                                                            | `/automation/api/workflow*`, `/execution/{executionID}/transcript`                                                                                             | https://docs.on-demand.io/docs/workflow-nodes.md                                                                                                                                                                         |
+| Concept | API term | UI term | Definition | Where it appears (endpoint/field) | Source URL |
+|---|---|---|---|---|---|
+| Tool/agent selection | `pluginIds` (all OpenAPI schemas); `agentIds` (guide code samples); `plugins` (Media API, workflow nodes) | **Agents** ("What are Agents?", "My Agents", "Agents Marketplace"); formerly "Plugins" | Specialized extensions (Knowledge, REST API, IoT, Terminal, Connectors) invoked in the RAG stage before fulfillment | `POST /chat/v1/sessions` body; `POST …/query` body; `plugins` on `POST /media/v1/public/file`; `nodes[].llm.plugins[{id}]`; stream `retrievedAgents[].agentId` | https://docs.on-demand.io/reference/submitquery.md · https://docs.on-demand.io/docs/query-and-responses-modes.md · https://docs.on-demand.io/docs/what-are-plugins.md · https://docs.on-demand.io/docs/terminal-agent.md |
+| Agent Tools | "Chat & Agent Tools API" (in-app reference section); plugin objects with `identifier` (`rest_api`, `internet`, …) | Agents / Agent Tools | The chat operations that let a query use agents; the agent records themselves | `GET /plugin/v1/list`; `app.on-demand.io/api-reference#/chat-&-agent-tools-api/*` | https://docs.on-demand.io/docs/chat-api.md · https://docs.on-demand.io/docs/plugin-api.md |
+| Agent Flows / Workflows | "Agents Flow Builder API" — `workflow`, `execution`, `approvalgate` resources under `/automation/api` | **Agents Flow Builder** / "Workflow Builder" / "Create Workflow" (dashboard `app.on-demand.io/agents`) | DAG of trigger → nodes (`llm`, `inputText`, `advancedVoiceMode`, `approvalGate`) → delivery channels | `POST /workflow/`, `POST /workflow/{id}/execute`, `GET /execution/{executionID}` | https://docs.on-demand.io/docs/agents-flow-builder.md · https://docs.on-demand.io/reference/post_workflow.md |
+| Skills | — (no API) | **Skills** (Dashboard → Skills; marketplace) | A `SKILL.md` playbook (+ optional scripts/references/assets) that agents follow | UI only | https://docs.on-demand.io/docs/agent-skills.md |
+| Endpoints / models | `endpointId` (`predefined-…`, BYOI, BYOM); workflow `llm.model` | **Models** page, "Fulfillment Models", BYOI/BYOM Management, Playground | The LLM endpoint that fulfils the query | `POST …/query.endpointId`; `POST /public/projects.endpointId`; `nodes[].llm.model` | https://docs.on-demand.io/docs/fulfillment-models.md |
+| Reasoning mode | `reasoningMode` | (not surfaced under a UI name in the fetched docs) | Controls reasoning detail in stream mode; examples `low`, `high`, `grok-4-fast` | `POST …/query` body (guide only, not in OpenAPI); `nodes[].advancedVoiceMode.reasoningMode` | https://docs.on-demand.io/docs/chat-api.md · https://docs.on-demand.io/reference/post_workflow.md |
+| Fulfillment prompt | `modelConfigs.fulfillmentPrompt`; workflow `llm.fulfillmentPrompt`; project `systemPrompt` | "Fulfillment Prompt" (LLM node), "system prompt" (Projects) | Instructions guiding the model's fulfilment; supports `{context}` / `{question}` placeholders | `POST …/query.modelConfigs`; `POST /workflow/ nodes[].llm`; `POST /public/projects` | https://docs.on-demand.io/docs/fulfillment-prompts.md · https://docs.on-demand.io/reference/post_workflow.md · https://docs.on-demand.io/reference/post_public-projects.md |
+| Response mode | `responseMode` (`sync`, `stream`, `webhook`; media: `sync`, `webhook`) | "Response Modes" | How the answer is delivered | `POST …/query`; `POST /media/v1/public/file` | https://docs.on-demand.io/docs/query-and-responses-modes.md |
+| Chat session | `sessionId` (`data.id`) | Chat / conversation | Continuous conversation container | `/chat/v1/sessions*` | https://docs.on-demand.io/docs/what-are-chat-sessions.md |
+| External user | `externalUserId` | — | Your system's end-user id (also a filter) | session/message/media bodies and query params | https://docs.on-demand.io/reference/createchatsession.md |
+| Project | `projectId`, `name`, `endpointId`, `systemPrompt` | **Projects** | A container of sessions with default model + system prompt | `/chat/v1/public/projects*`, `GET /chat/v1/public/sessions?projectId=` | https://docs.on-demand.io/docs/projects.md |
+| Live session | `live-settings` (`enabled`, `mode: proactive\|onevents`, `destinations`) | "Live" mode | Proactive / event-triggered assistant messages with email/Slack delivery | `PUT /chat/v1/sessions/{sessionId}/live-settings` | https://docs.on-demand.io/reference/updatelivesessionsettings.md |
+| Advanced voice mode | `advancedVoiceMode` node; `delivery.channel: phone`; `GET /execution/{id}/transcript` | "Advanced Voice Mode Node", "Phone Call" delivery | Outbound phone-call voice conversation run by a workflow | `/automation/api/workflow*`, `/execution/{executionID}/transcript` | https://docs.on-demand.io/docs/workflow-nodes.md |
 
 ---
 
@@ -825,15 +686,15 @@ Two documented operations exist: `POST /config/v1/public/mqtt_user` with body `{
 
 ## 15. Previously-seen field status
 
-| Field               | Status                                                             | Detail                                                                                                                                                                                                    | Source URL                                                                                                                                                              | Retrieved (UTC)                              |
-| ------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
-| `apikey`            | **CONFIRMED**                                                      | Header name `apikey` in every security scheme and example (one stray "Authorization/Bearer" sentence in the guide has no matching example).                                                               | https://docs.on-demand.io/reference/how-to-do-authentication.md · https://docs.on-demand.io/reference/submitquery.md · https://docs.on-demand.io/docs/authentication.md | 2026-09-17T05:56:32Z / 05:56:34Z / 05:56:30Z |
-| `externalUserId`    | **CONFIRMED**                                                      | Required on `POST /chat/v1/sessions` (OpenAPI `required`), optional on media, filter param on sessions/messages/media list.                                                                               | https://docs.on-demand.io/reference/createchatsession.md · https://docs.on-demand.io/reference/getchatsessions.md                                                       | 2026-09-17T05:56:34Z                         |
-| `pluginIds`         | **CONFIRMED in OpenAPI — CHANGED in guide samples (dual-named)**   | Schemas and response objects use `pluginIds` (max 20); guide samples updated 2026-08 send the same array as **`agentIds`**. No schema documents `agentIds`.                                               | https://docs.on-demand.io/reference/submitquery.md · https://docs.on-demand.io/docs/query-and-responses-modes.md · https://docs.on-demand.io/docs/terminal-agent.md     | 2026-09-17T05:56:34Z / 05:56:31Z / 05:56:31Z |
-| `endpointId`        | **CONFIRMED (values CHANGED)**                                     | Field unchanged and required; the predefined id list is now the 18 ids in §12 (e.g. `predefined-claude-sonnet-5`); examples still cite `predefined-openai-gpt4o`, which is absent from the current table. | https://docs.on-demand.io/reference/submitquery.md · https://docs.on-demand.io/docs/fulfillment-models.md                                                               | 2026-09-17T05:56:34Z / 05:56:31Z             |
-| `responseMode`      | **CONFIRMED**                                                      | enum `sync` \| `stream` \| `webhook` (required in OpenAPI; guide says default `sync`). Media API: `sync` \| `webhook`.                                                                                    | https://docs.on-demand.io/reference/submitquery.md · https://docs.on-demand.io/reference/createmediaurl.md                                                              | 2026-09-17T05:56:34Z / 05:56:32Z             |
-| `reasoningMode`     | **CONFIRMED in guides only (not in OpenAPI; values unenumerated)** | Present in the Chat API guide table and stream samples (`low`, `high`, `grok-4-fast`); absent from the Submit Query schema; present as a free string on the workflow `advancedVoiceMode` node.            | https://docs.on-demand.io/docs/chat-api.md · https://docs.on-demand.io/docs/query-and-responses-modes.md · https://docs.on-demand.io/reference/post_workflow.md         | 2026-09-17T05:56:31Z / 05:56:31Z / 05:56:33Z |
-| `fulfillmentPrompt` | **CONFIRMED**                                                      | `modelConfigs.fulfillmentPrompt` on Submit Query; `nodes[].llm.fulfillmentPrompt` on workflows.                                                                                                           | https://docs.on-demand.io/reference/submitquery.md · https://docs.on-demand.io/docs/fulfillment-prompts.md · https://docs.on-demand.io/reference/post_workflow.md       | 2026-09-17T05:56:34Z / 05:56:31Z / 05:56:33Z |
+| Field | Status | Detail | Source URL | Retrieved (UTC) |
+|---|---|---|---|---|
+| `apikey` | **CONFIRMED** | Header name `apikey` in every security scheme and example (one stray "Authorization/Bearer" sentence in the guide has no matching example). | https://docs.on-demand.io/reference/how-to-do-authentication.md · https://docs.on-demand.io/reference/submitquery.md · https://docs.on-demand.io/docs/authentication.md | 2026-09-17T05:56:32Z / 05:56:34Z / 05:56:30Z |
+| `externalUserId` | **CONFIRMED** | Required on `POST /chat/v1/sessions` (OpenAPI `required`), optional on media, filter param on sessions/messages/media list. | https://docs.on-demand.io/reference/createchatsession.md · https://docs.on-demand.io/reference/getchatsessions.md | 2026-09-17T05:56:34Z |
+| `pluginIds` | **CONFIRMED in OpenAPI — CHANGED in guide samples (dual-named)** | Schemas and response objects use `pluginIds` (max 20); guide samples updated 2026-08 send the same array as **`agentIds`**. No schema documents `agentIds`. | https://docs.on-demand.io/reference/submitquery.md · https://docs.on-demand.io/docs/query-and-responses-modes.md · https://docs.on-demand.io/docs/terminal-agent.md | 2026-09-17T05:56:34Z / 05:56:31Z / 05:56:31Z |
+| `endpointId` | **CONFIRMED (values CHANGED)** | Field unchanged and required; the predefined id list is now the 18 ids in §12 (e.g. `predefined-claude-sonnet-5`); examples still cite `predefined-openai-gpt4o`, which is absent from the current table. | https://docs.on-demand.io/reference/submitquery.md · https://docs.on-demand.io/docs/fulfillment-models.md | 2026-09-17T05:56:34Z / 05:56:31Z |
+| `responseMode` | **CONFIRMED** | enum `sync` \| `stream` \| `webhook` (required in OpenAPI; guide says default `sync`). Media API: `sync` \| `webhook`. | https://docs.on-demand.io/reference/submitquery.md · https://docs.on-demand.io/reference/createmediaurl.md | 2026-09-17T05:56:34Z / 05:56:32Z |
+| `reasoningMode` | **CONFIRMED in guides only (not in OpenAPI; values unenumerated)** | Present in the Chat API guide table and stream samples (`low`, `high`, `grok-4-fast`); absent from the Submit Query schema; present as a free string on the workflow `advancedVoiceMode` node. | https://docs.on-demand.io/docs/chat-api.md · https://docs.on-demand.io/docs/query-and-responses-modes.md · https://docs.on-demand.io/reference/post_workflow.md | 2026-09-17T05:56:31Z / 05:56:31Z / 05:56:33Z |
+| `fulfillmentPrompt` | **CONFIRMED** | `modelConfigs.fulfillmentPrompt` on Submit Query; `nodes[].llm.fulfillmentPrompt` on workflows. | https://docs.on-demand.io/reference/submitquery.md · https://docs.on-demand.io/docs/fulfillment-prompts.md · https://docs.on-demand.io/reference/post_workflow.md | 2026-09-17T05:56:34Z / 05:56:31Z / 05:56:33Z |
 
 No field was found to be **RETIRED**.
 
@@ -846,6 +707,8 @@ No field was found to be **RETIRED**.
 
 > **Production-run note (2026-09-17T08:13Z):** the Gate 1 production contract run could not exercise any of the shapes above — no God's Eye deployment was reachable (`finalProductionUrl` `https://ondemand-eand-spatial-opal.vercel.app` is a different application whose `/api/ondemand/*` answers Vercel `404 NOT_FOUND`; key pull and CLI deploy are blocked in the execution environment). **No amendment was made to this table on that basis.** See `docs/audit/deployment-verification.md` §4 and `docs/audit/gates.md`.
 
+> **Production-run note (2026-09-17T08:13Z):** the Gate 1 production contract run could not exercise any of the shapes above — no God's Eye deployment was reachable (`finalProductionUrl` `https://ondemand-eand-spatial-opal.vercel.app` is a different application whose `/api/ondemand/*` answers Vercel `404 NOT_FOUND`; key pull and CLI deploy are blocked in the execution environment). **No amendment was made to this table on that basis.** See `docs/audit/deployment-verification.md` §4 and `docs/audit/gates.md`.
+
 ---
 
 ## 16. Discrepancies vs the step-1 Perplexity findings
@@ -853,25 +716,21 @@ No field was found to be **RETIRED**.
 The step-1 Perplexity searches (four queries, run by the orchestration layer) returned **no OnDemand API contract at all** — every source was either a YouTube overview ("OnDemand FULL Platform Overview", "The All-New OnDemand Platform: Full Overview", AICodeKing "This FULLY FREE AI Agent Platform can Generate Apps for FREE! (+ Free Claude 3.5 Sonnet)", TheAIGRID "How To Use OndemandAI"), the Skywork.ai article "OnDemand AI: A Deep Dive into the Agent-Powered Platform", the Geeky Gadgets article "How to Simplify AI Development with OnDemand AI's Platform", or an unrelated **Open OnDemand** HPC-portal page (discourse.openondemand.org, docs.abci.ai).
 
 **(a) Claims the live docs confirm**
-
 - "RAG platform / PaaS" (Skywork): confirmed — queries run a RAG stage over agents (`pluginIds`, `fulfillmentOnly`, Knowledge Agents) before fulfilment `(src: https://docs.on-demand.io/reference/submitquery.md, retrieved 2026-09-17T05:56:34Z)`, `(src: https://docs.on-demand.io/docs/knowledge-plugin.md, retrieved 2026-09-17T05:56:31Z)`.
 - "No-code workflow builder" (Skywork, videos): confirmed — the visual Agents Flow Builder with trigger/LLM/agent/delivery nodes `(src: https://docs.on-demand.io/docs/creating-a-workflow.md, retrieved 2026-09-17T05:56:31Z)`.
 - "Pre-built AI agents you can customize / an agent marketplace" (Geeky Gadgets, videos): confirmed — Agents Marketplace, My Agents, Connectors, Skills marketplace `(src: https://docs.on-demand.io/docs/what-are-plugins.md, retrieved 2026-09-17T05:56:30Z)`, `(src: https://docs.on-demand.io/docs/agent-skills.md, retrieved 2026-09-17T05:56:31Z)`.
 - "Integrate LLMs, plugins, and create agents/apps" (video titles): confirmed — 18 predefined model endpoints plus BYOI/BYOM, agents, and the Terminal Agent that "builds and deploys a web app… live preview URL" `(src: https://docs.on-demand.io/docs/fulfillment-models.md, retrieved 2026-09-17T05:56:31Z)`, `(src: https://docs.on-demand.io/docs/terminal-agent.md, retrieved 2026-09-17T05:56:31Z)`.
 
 **(b) Claims the live docs contradict**
-
 - "FULLY FREE" (AICodeKing title): contradicted — the docs describe a free tier with limited model access, free-plan rate limits (5 media uploads/min, 100 RAG calls/min, 40 GB GPU, 10 vCPU) and a paid plan page `(src: https://docs.on-demand.io/docs/fulfillment-models.md, retrieved 2026-09-17T05:56:31Z)`, `(src: https://docs.on-demand.io/docs/rate-limiting.md, retrieved 2026-09-17T05:56:30Z)`.
 - "Free Claude 3.5 Sonnet" (AICodeKing title): contradicted/outdated — the current predefined list carries Claude Opus 5 / Sonnet 5 / Fable 5; no 3.5-generation id is listed `(src: https://docs.on-demand.io/docs/fulfillment-models.md, retrieved 2026-09-17T05:56:31Z)`.
 - Skywork's framing of OnDemand as primarily a chatbot/RAG product understates the documented surface: Media analysis, Services (STT/TTS/translation), Projects, MQTT/IoT agents, workflows with phone-call voice mode and approval gates, and the Terminal Agent are all documented APIs/features.
 
 **(c) Not verifiable from the live docs**
-
 - The "$150 credits" referral offer, the specific UI walkthrough claims inside the videos, Product-Hunt/positioning statements, and any pricing figures (only a pricing page link exists, no numbers in the docs).
 - Skywork's competitive comparisons and internal-architecture statements (vector database internals, etc.) — the docs mention "an advanced vector database" only at marketing level `(src: https://docs.on-demand.io/docs/getting-started.md, retrieved 2026-09-17T05:56:30Z)`.
 
 **(d) False match to ignore**
-
 - **Open OnDemand** (openondemand.org / discourse.openondemand.org / docs.abci.ai "Using Open OnDemand") is the Ohio Supercomputer Center's open-source HPC web portal (VNC desktops, Slurm clusters, Jupyter on ABCI). It has no relationship to on-demand.io, its APIs, or anything in this document.
 
 ---
