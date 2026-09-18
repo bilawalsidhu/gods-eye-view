@@ -727,10 +727,19 @@ async function main() {
           for (let waited = 0; waited < 12_000; waited += 250) {
             const hostNow = getWorldOverlayDiagnostics();
             const overlayNow = radio.getOverlayDiagnostics();
-            if (overlayNow.entryCount === 0 || (hostNow.paintedBySource?.radio || 0) > 0) break;
+            const painted = (hostNow.paintedBySource?.radio || 0) > 0;
+            if (overlayNow.entryCount === 0) break;
             if (hostNow.solveRevision === lastRevision) stableRounds += 1;
             else stableRounds = 0;
             lastRevision = hostNow.solveRevision;
+            // Painted alone is NOT converged: mid-camera-flight the first
+            // paint lands while the arbiter is still re-solving, and the pick
+            // below then races a buffer from the unsettled view (matrix run 5:
+            // 16 painted / 9 pickable on a station that repainted one solve
+            // later). Converged = painted AND the solve revision held still
+            // for 500 ms — or painted with the wait budget nearly spent, so a
+            // legitimately ever-solving host cannot eat the whole loop.
+            if (painted && (stableRounds >= 2 || waited >= 8_000)) break;
             if (stableRounds >= 6) break;
             await new Promise((resolve) => setTimeout(resolve, 250));
           }

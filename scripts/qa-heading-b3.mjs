@@ -36,10 +36,18 @@
  *                       consecutive — the old snap was ONE spike per poll
  *     A4 turning      : total unwrapped course change ≥ +40° over the window
  *                       (the plane really turns 3°/s ≈ +120°/40 s)
- *     A5 alignment    : sampled course agrees with the analytic arc tangent at
- *                       the DISPLAYED (render-delayed) time within 35° — catches
- *                       sign/offset inversion in the whole chain (chord lags the
- *                       tangent by ≤ half a segment ≈ 22.5°)
+ *     A5 alignment    : sampled course agrees with the analytic arc tangent
+ *                       AT THE DISPLAYED POSITION within 35° — catches
+ *                       sign/offset inversion in the whole chain. The match is
+ *                       POSITION-anchored, not time-anchored: the pipeline's
+ *                       displayed fix can legally lag the wall-clock-derived
+ *                       display time by up to one poll interval (coast path),
+ *                       worth up to turnDps × poll ≈ 45° of tangent error —
+ *                       which read as two spurious failures before the
+ *                       mechanism was traced (2026-09-17). Where the model IS
+ *                       pins the arc time; the tolerance then measures pure
+ *                       nose-vs-track error (chord lags by ≤ half a segment
+ *                       ≈ 22.5° worst case, well under the tolerance).
  *   Both layers: flights (airplane.glb, offset 180°) then military (jet.glb,
  *   normalized nose -X, offset 180°).
  *
@@ -245,6 +253,39 @@ function arcState(p, tSec) {
   const course = norm360(alpha + 90); // clockwise tangent
   const speedMps = p.radiusM * ((p.turnDps * Math.PI) / 180);
   return { lon, lat, course, speedMps };
+}
+
+/**
+ * Arc tangent matching the model's DISPLAYED POSITION, not a wall-clock-derived
+ * display time. The interpolation pipeline answers renderTime = now − delay
+ * from the newest fix bracket; when the newest fix predates renderTime (poll
+ * phase under any render cadence) the coast path displays the newest fix's
+ * track, legally lagging the analytic arc by up to one poll interval — which
+ * at turnDps °/s is up to ~45° of tangent error against a TIME-derived
+ * expectation (observed: 45.0° and 47.2° in two runs; flights A5 passed the
+ * same code by poll-phase luck). Where the model IS pins the arc time
+ * unambiguously (140 m/s around the circle), so the position-matched tangent
+ * is the timing-independent invariant, and the ±35° tolerance then measures
+ * pure nose-vs-track error.
+ *
+ * @param {{cLon:number, cLat:number, radiusM:number, alphaDeg0:number, turnDps:number}} spec Turn fixture.
+ * @param {number} lonDeg Displayed model longitude.
+ * @param {number} latDeg Displayed model latitude.
+ * @param {number} tCenterRelSec Nominal epoch-relative display time (wall estimate).
+ * @returns {{d2:number, course:number}|null} Best arc match (squared metres) and its tangent.
+ */
+function arcCourseAtDisplayedPos(spec, lonDeg, latDeg, tCenterRelSec) {
+  if (!Number.isFinite(lonDeg) || !Number.isFinite(latDeg)) return null;
+  const mPerDegLon = 111320 * Math.cos((latDeg * Math.PI) / 180);
+  let best = null;
+  for (let t = tCenterRelSec - 60; t <= tCenterRelSec + 6; t += 0.25) {
+    const s = arcState(spec, t);
+    const dEast = (s.lon - lonDeg) * mPerDegLon;
+    const dNorth = (s.lat - latDeg) * 111320;
+    const d2 = dEast * dEast + dNorth * dNorth;
+    if (!best || d2 < best.d2) best = { d2, course: s.course };
+  }
+  return best;
 }
 
 // ---------------------------------------------------------------------------
@@ -474,6 +515,17 @@ async function main() {
     try { return new URL(url, APP_URL).pathname.startsWith('/api/'); } catch { return false; }
   };
   let toleratedEnvironment = 0;
+  // Browser TRANSPORT codes are machine-environment events, not product
+  // defects: a mid-run NIC/network switch makes the OS abort in-flight
+  // fetches (observed as a 15-error ERR_NETWORK_CHANGED storm during a
+  // matrix run on the shared NAS box) and no product change prevents it.
+  // Classified narrowly — only these disconnect-path codes, never a generic
+  // ERR_FAILED, which a product bug can absolutely produce — counted, and
+  // reported in the check detail so the environment cost stays visible.
+  const isNetworkTransportError = (text) => (
+    /net::ERR_(NETWORK_CHANGED|INTERNET_DISCONNECTED|CONNECTION_RESET|CONNECTION_TIMED_OUT|TIMED_OUT|ADDRESS_UNREACHABLE)/.test(text)
+  );
+  let toleratedNetwork = 0;
   try {
     const page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 800 });
@@ -481,6 +533,7 @@ async function main() {
       if (msg.type() === 'error') {
         const text = msg.text();
         if (/Failed to load resource.*404/i.test(text)) return;
+        if (isNetworkTransportError(text)) { toleratedNetwork += 1; return; }
         const status = Number(/status of (\d{3})/.exec(text)?.[1]);
         if (Number.isFinite(status) && isEnvironmentStatus(status)
           && isLocalApiPath(msg.location()?.url || '')) {
@@ -675,7 +728,7 @@ async function main() {
 
       // Invert _modelMatrix (pitch=roll=0): local x in ENU = (cos h, −sin h, 0)
       // → h = atan2(−x·north, x·east); world course = h − headingOffsetDeg.
-      window.__courseFromModelMatrix = function (mm, headingOffsetDeg) {
+      window.__modelPoseFromMatrix = function (mm, headingOffsetDeg) {
         const v = window.__godsEyeView.viewer;
         const C3 = v.camera.position.constructor;
         const Carto = v.camera.positionCartographic.constructor;
@@ -688,7 +741,14 @@ async function main() {
         const xe = mm[0] * ex + mm[1] * ey + mm[2] * ez;
         const xn = mm[0] * nx + mm[1] * ny + mm[2] * nz;
         const hDeg = (Math.atan2(-xn, xe) * 180) / Math.PI;
-        return (((hDeg - headingOffsetDeg) % 360) + 360) % 360;
+        return {
+          course: (((hDeg - headingOffsetDeg) % 360) + 360) % 360,
+          lonDeg: (carto.longitude * 180) / Math.PI,
+          latDeg: (carto.latitude * 180) / Math.PI,
+        };
+      };
+      window.__courseFromModelMatrix = function (mm, headingOffsetDeg) {
+        return window.__modelPoseFromMatrix(mm, headingOffsetDeg)?.course ?? null;
       };
 
       // Google Photorealistic Tiles can starve SwiftShader's ambient render
@@ -713,8 +773,14 @@ async function main() {
           await new Promise((resolve) => {
             const remove = v.scene.preRender.addEventListener(() => {
               const m = window.__findTrackedModel(icao);
-              const c = m ? window.__courseFromModelMatrix(m.modelMatrix, headingOffsetDeg) : null;
-              out.push({ tMs: performance.now(), course: c, epochMs: Date.now() });
+              const pose = m ? window.__modelPoseFromMatrix(m.modelMatrix, headingOffsetDeg) : null;
+              out.push({
+                tMs: performance.now(),
+                epochMs: Date.now(),
+                course: pose?.course ?? null,
+                lonDeg: pose?.lonDeg,
+                latDeg: pose?.latDeg,
+              });
             });
             const step = () => {
               if (performance.now() - start >= windowMs) {
@@ -810,17 +876,27 @@ async function main() {
     );
     analyze('flights', flSamples, {});
 
-    // A5 — absolute alignment vs the analytic arc tangent at the DISPLAYED time
-    // (render delay 30 s; the chord course lags the tangent by ≤ half a segment).
+    // A5 — absolute alignment vs the analytic arc tangent AT THE DISPLAYED
+    // POSITION (timing-independent; see arcCourseAtDisplayedPos — a wall-clock
+    // display time is legally off by up to one poll interval, worth up to ~45°
+    // of tangent at 3°/s, which read as two "environmental" failures before
+    // the mechanism was traced).
     {
       const last = [...flSamples].reverse().find((s) => Number.isFinite(s.course));
       const epochMs = await page.evaluate(() => window.__TURN.epochMs);
       if (last) {
-        const tDispRel = (last.epochMs - epochMs) / 1000 - 30;
-        const expected = arcState(TURN.flights[0], tDispRel).course;
-        const err = Math.abs(norm180(last.course - expected));
-        record('flights A5: displayed course aligned with arc tangent at displayed time (±35°)',
-          err <= 35, `sampled ${last.course.toFixed(1)}° vs tangent ${expected.toFixed(1)}° (|err| ${err.toFixed(1)}°)`);
+        const tDispRel = (last.epochMs - epochMs) / 1000 - 30; // nominal, search centre
+        const match = arcCourseAtDisplayedPos(TURN.flights[0], last.lonDeg, last.latDeg, tDispRel);
+        if (!match) {
+          record('flights A5: displayed course aligned with arc tangent (±35°)', false, 'sample carried no model position');
+        } else if (match.d2 > 250 * 250) {
+          record('flights A5: displayed course aligned with arc tangent (±35°)', false,
+            `displayed model position is ${(Math.sqrt(match.d2)).toFixed(0)} m off the analytic arc — not a course question`);
+        } else {
+          const err = Math.abs(norm180(last.course - match.course));
+          record('flights A5: displayed course aligned with arc tangent (±35°)',
+            err <= 35, `sampled ${last.course.toFixed(1)}° vs arc tangent ${match.course.toFixed(1)}° (|err| ${err.toFixed(1)}°, pos match ${Math.sqrt(match.d2).toFixed(1)} m)`);
+        }
       } else {
         record('flights A5: displayed course aligned with arc tangent', false, 'no valid sample');
       }
@@ -877,11 +953,18 @@ async function main() {
         const last = [...milSamples].reverse().find((s) => Number.isFinite(s.course));
         const epochMs = await page.evaluate(() => window.__TURN.epochMs);
         if (last) {
-          const tDispRel = (last.epochMs - epochMs) / 1000 - 15; // military render delay 15 s
-          const expected = arcState(TURN.military[0], tDispRel).course;
-          const err = Math.abs(norm180(last.course - expected));
-          record('military A5: displayed course aligned with arc tangent at displayed time (±35°)',
-            err <= 35, `sampled ${last.course.toFixed(1)}° vs tangent ${expected.toFixed(1)}° (|err| ${err.toFixed(1)}°)`);
+          const tDispRel = (last.epochMs - epochMs) / 1000 - 15; // military render delay 15 s (nominal, search centre)
+          const match = arcCourseAtDisplayedPos(TURN.military[0], last.lonDeg, last.latDeg, tDispRel);
+          if (!match) {
+            record('military A5: displayed course aligned with arc tangent (±35°)', false, 'sample carried no model position');
+          } else if (match.d2 > 250 * 250) {
+            record('military A5: displayed course aligned with arc tangent (±35°)', false,
+              `displayed model position is ${(Math.sqrt(match.d2)).toFixed(0)} m off the analytic arc — not a course question`);
+          } else {
+            const err = Math.abs(norm180(last.course - match.course));
+            record('military A5: displayed course aligned with arc tangent (±35°)',
+              err <= 35, `sampled ${last.course.toFixed(1)}° vs arc tangent ${match.course.toFixed(1)}° (|err| ${err.toFixed(1)}°, pos match ${Math.sqrt(match.d2).toFixed(1)} m)`);
+          }
         } else {
           record('military A5: displayed course aligned with arc tangent', false, 'no valid sample');
         }
@@ -1143,10 +1226,15 @@ async function main() {
     if (toleratedEnvironment > 0) {
       console.log(`  INFO environment responses tolerated: ${toleratedEnvironment} (local /api/ 5xx+429+420)`);
     }
+    if (toleratedNetwork > 0) {
+      console.log(`  INFO network-transport errors tolerated: ${toleratedNetwork} (disconnect-path codes)`);
+    }
     record('no console errors during QA run', consoleErrors.length === 0 && failedResponses.length === 0,
       consoleErrors.length
         ? `${consoleErrors.length}: ${consoleErrors.slice(0, 3).join(' | ')}; responses=${failedResponses.slice(0, 3).join(' | ') || 'unidentified'}`
-        : 'clean');
+        : (toleratedNetwork > 0
+          ? `clean (+${toleratedNetwork} network-transport errors tolerated as environment)`
+          : 'clean'));
 
     finish();
   } finally {

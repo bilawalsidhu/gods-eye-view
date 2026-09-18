@@ -184,13 +184,26 @@ async function main() {
 
   const consoleErrors = [];
   const httpErrors = [];
+  // Browser TRANSPORT codes are machine-environment events, not product
+  // defects: a mid-run NIC/network switch makes the OS abort in-flight
+  // fetches (observed as a 13-error ERR_NETWORK_CHANGED storm during a
+  // matrix run on the shared NAS box) and no product change prevents it.
+  // Classified narrowly — only these disconnect-path codes, never a generic
+  // ERR_FAILED, which a product bug can absolutely produce — counted, and
+  // reported in the check detail so the environment cost stays visible.
+  const isNetworkTransportError = (text) => (
+    /net::ERR_(NETWORK_CHANGED|INTERNET_DISCONNECTED|CONNECTION_RESET|CONNECTION_TIMED_OUT|TIMED_OUT|ADDRESS_UNREACHABLE)/.test(text)
+  );
+  let toleratedNetwork = 0;
   try {
     const page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 800 });
     page.on('console', (msg) => {
       if (msg.type() === 'error') {
         const text = msg.text();
-        if (!/Failed to load resource.*404/i.test(text)) consoleErrors.push(text);
+        if (/Failed to load resource.*404/i.test(text)) return;
+        if (isNetworkTransportError(text)) { toleratedNetwork += 1; return; }
+        consoleErrors.push(text);
       }
     });
     page.on('pageerror', (err) => consoleErrors.push(`pageerror: ${err.message}`));
@@ -582,7 +595,9 @@ async function main() {
     record('B4: no console errors during QA run', consoleErrors.length === 0,
       consoleErrors.length
         ? `${consoleErrors.length}: ${consoleErrors.slice(0, 3).join(' | ')}; HTTP: ${httpErrors.slice(0, 8).join(' | ') || 'none observed'}`
-        : 'clean');
+        : (toleratedNetwork > 0
+          ? `clean (+${toleratedNetwork} network-transport errors tolerated as environment)`
+          : 'clean'));
 
     finish();
   } finally {

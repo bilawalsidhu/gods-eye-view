@@ -60,10 +60,12 @@ const SUITE_ARGV_OVERRIDES = {
 // the two matrix/baseline suites embed long inner waits (qa-l9-matrix even
 // runs `npm test` inside itself) and were measured to need more.
 const SUITE_TIMEOUT_OVERRIDES = {
-  // Measured 2026-09-16 on the shared NAS box under software WebGL: the l9
-  // matrix was killed at 45 and again at 55 minutes mid-D-class with
-  // C1-C17 all green — 75 min gives the D-class batteries room to finish.
-  'qa-l9-matrix.mjs': 4_500_000,
+  // Measured 2026-09-16 on the shared NAS box under software WebGL: 4500 s
+  // still ended the run after D8 (≈82 min through D8 under the concurrent
+  // dsc load bursts), while the morning run's D9-D12 tail took ≈4 min
+  // (D8 log 12:49:36 → overlay-baseline json 12:52:41) — ≈86 min total.
+  // 95 min keeps ≈9 min of headroom for load swings.
+  'qa-l9-matrix.mjs': 5_700_000,
   'qa-overlay-baseline.mjs': 1_800_000,
 };
 

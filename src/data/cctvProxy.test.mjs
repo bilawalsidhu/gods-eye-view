@@ -37,7 +37,11 @@ test('CCTV upstream frame fetch supplies a bounded abort signal', async () => {
   assert.equal(result, null);
   assert.ok(observedSignal instanceof AbortSignal);
   assert.equal(observedSignal.aborted, true);
-  assert.ok(Date.now() - startedAt < 500, 'test timeout should settle promptly');
+  // Headroom is 100x the timeout, not a tight bound: the intent is "settled
+  // via the abort path, not by hanging", and a wall-clock bound this loose
+  // cannot flake to a loaded CI box's timer coalescing (observed once at
+  // >500 ms while a Puppeteer battery shared the machine).
+  assert.ok(Date.now() - startedAt < 2000, 'test timeout should settle promptly');
   assert.ok(CCTV_FRAME_FETCH_TIMEOUT_MS < 10_000, 'production timeout must beat the active refresh cadence');
 });
 
@@ -120,7 +124,8 @@ test('fetchMediaHeadersBounded: a dark upstream aborts at the header deadline', 
   assert.equal(result.ok, false);
   assert.equal(observed.signal.aborted, true);
   assert.deepEqual(observed.headers, { Range: 'bytes=0-' }, 'validated Range must reach the upstream');
-  assert.ok(Date.now() - startedAt < 500, 'header deadline should settle promptly');
+  // 100x headroom, same rationale as the frame-fetch bound above.
+  assert.ok(Date.now() - startedAt < 2000, 'header deadline should settle promptly');
   assert.ok(CCTV_STREAM_HEADER_TIMEOUT_MS > 0);
 });
 

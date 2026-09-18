@@ -1385,10 +1385,20 @@ async function runBrowserGroup(record) {
     let stats = null;
     let lifecycleState = null;
     for (let i = 0; i < maxSec; i += 1) {
-       
+
       await new Promise((r) => setTimeout(r, 1000));
-       
+
       const snap = await evalBounded((id) => {
+        // Pump a frame through the app's own governor hook before reading
+        // stats, exactly as the fly_route/floor-hold harnesses do. Late in a
+        // full run under software WebGL the RAF cadence can decay far enough
+        // that Cesium's async work advances only when something asks for a
+        // frame — an unpumped wait then reads `loading` forever and the check
+        // crashes as "still loading" (run-4/run-5 class) when the layer was
+        // simply never given a frame to finish on.
+        const g = window.__godsEyeView;
+        try { g.requestRender?.(); } catch { /* no governor */ }
+        try { g.viewer.scene.requestRender(); } catch { /* explicit-render off */ }
         const dm = window.__godsEyeView.dataManager;
         const mod = dm.layers.get(id)?.module;
         const s = mod?.getStats ? mod.getStats() : null;
@@ -1732,6 +1742,7 @@ async function runBrowserGroup(record) {
     await new Promise((r) => setTimeout(r, 2000));
 
     const bundled = ['local-datacenters', 'local-dams', 'telegeography-submarine-cables'];
+    const budgetSec = 60;
     const out = [];
     const stillLoading = [];
     let loadNote = '';
@@ -1750,7 +1761,7 @@ async function runBrowserGroup(record) {
     }, id, 15000);
     for (const id of bundled) {
       const label = id.replace(/^local-|^telegeography-/, '');
-      let r = await settle(id, 45);
+      let r = await settle(id, budgetSec);
       if (r.enableError) {
         // One throw can be a supersede race under full-run load; retry before
         // judging, then treat a second throw as the product failure it is.
@@ -1780,7 +1791,7 @@ async function runBrowserGroup(record) {
       if (!(s.count > 0) && (s.loading || s.loadingLabel) && !s.error) stillLoading.push(label);
     }
     if (stillLoading.length) {
-      return crash(`still loading when the ${45}s budget expired: ${stillLoading.join(', ')} [all: ${out.join(', ')}] — this check could not determine whether they render, so it verified nothing`);
+      return crash(`still loading when the ${budgetSec}s budget expired: ${stillLoading.join(', ')} [all: ${out.join(', ')}] — this check could not determine whether they render, so it verified nothing`);
     }
     let zero = out.filter((o) => /=0$|MISSING/.test(o));
     if (zero.length) {
