@@ -9,6 +9,7 @@ import {
   getConfig,
   DOCUMENTED_REASONING_MODES,
   TIER_DEFAULTS,
+  FLOW_DEFAULTS,
   tierDefaults,
   __reloadConfigForTests,
 } from './config.js';
@@ -115,7 +116,8 @@ describe('server/ondemand/config.js', () => {
   test('ids/fields with no built-in default are empty when unset', () => {
     __reloadConfigForTests();
     assert.equal(config.spatialAgentId, '');
-    assert.equal(config.spatialFlowId, '');
+    // spatialFlowId is NOT in this group any more: since 2026-09-18 it has
+    // a non-secret built-in default (FLOW_DEFAULTS) — see the flow tests.
     assert.equal(config.reasoningMode, '');
     assert.equal(config.reasoningModeInvalid, false);
     assert.deepEqual(config.defaultPluginIds, []);
@@ -134,7 +136,8 @@ describe('server/ondemand/config.js', () => {
       config.fulfillmentEndpointId,
       TIER_DEFAULTS.ASK.fulfillmentEndpointId,
     );
-    assert.equal(config.flowVersion, '0');
+    assert.equal(config.flowVersion, '1');
+    assert.equal(config.flowVersion, FLOW_DEFAULTS.flowVersion);
   });
 
   test('configSources() reports "unset"/"default" for every setting when nothing is configured', () => {
@@ -145,7 +148,7 @@ describe('server/ondemand/config.js', () => {
       reasoningEndpointId: 'default',
       fulfillmentEndpointId: 'default',
       defaultPluginIds: 'unset',
-      spatialFlowId: 'unset',
+      spatialFlowId: 'default',
       reasoningMode: 'unset',
       flowVersion: 'default',
       requestTimeoutMs: 'default',
@@ -175,10 +178,12 @@ describe('server/ondemand/config.js — getConfig()', () => {
         'spatialFlowId',
         'requestTimeoutMs',
         'tiers',
+        'flowDefaults',
       ].sort(),
     );
     assert.equal(cfg.apiKey, 'k-1');
     assert.equal(cfg.tiers, TIER_DEFAULTS);
+    assert.equal(cfg.flowDefaults, FLOW_DEFAULTS);
     assert.deepEqual(Object.keys(cfg.baseUrls).sort(), [
       'automation',
       'chat',
@@ -340,9 +345,17 @@ describe('server/ondemand/config.js — TIER_DEFAULTS / tierDefaults() (benchmar
 });
 
 describe('server/ondemand/config.js — flowVersion (GODS_EYE_FLOW_VERSION)', () => {
-  test('defaults to "0" (string) when unset', () => {
+  test('defaults to "1" (string, FLOW_DEFAULTS.flowVersion) when unset', () => {
     __reloadConfigForTests();
-    assert.equal(config.flowVersion, '0');
+    assert.equal(config.flowVersion, '1');
+    assert.equal(config.flowVersion, FLOW_DEFAULTS.flowVersion);
+    assert.equal(configSources().flowVersion, 'default');
+  });
+
+  test('an explicitly empty GODS_EYE_FLOW_VERSION still yields the default', () => {
+    process.env.GODS_EYE_FLOW_VERSION = '   ';
+    __reloadConfigForTests();
+    assert.equal(config.flowVersion, '1');
     assert.equal(configSources().flowVersion, 'default');
   });
 
@@ -560,11 +573,62 @@ describe('server/ondemand/config.js — accepted env-var aliases (docs/ONDEMAND_
 
   test('ONDEMAND_SPATIAL_FLOW_ID has no accepted alias (docs/ONDEMAND_PROXY_DESIGN.md §5b)', () => {
     __reloadConfigForTests();
-    assert.equal(config.spatialFlowId, '');
-    assert.equal(configSources().spatialFlowId, 'unset');
+    assert.equal(config.spatialFlowId, FLOW_DEFAULTS.spatialFlowId);
+    assert.equal(configSources().spatialFlowId, 'default');
     process.env.ONDEMAND_SPATIAL_FLOW_ID = 'wf-1';
     __reloadConfigForTests();
     assert.equal(config.spatialFlowId, 'wf-1');
     assert.equal(configSources().spatialFlowId, 'ONDEMAND_SPATIAL_FLOW_ID');
+  });
+});
+
+describe('server/ondemand/config.js — FLOW_DEFAULTS (GodsEye Advanced Spatial Workflow v1, 2026-09-18)', () => {
+  test('is a frozen constant carrying the real workflow id and the version label "1"', () => {
+    assert.ok(Object.isFrozen(FLOW_DEFAULTS));
+    assert.deepEqual(Object.keys(FLOW_DEFAULTS).sort(), [
+      'flowVersion',
+      'spatialFlowId',
+    ]);
+    // A Mongo-style 24-hex id, as every workflow id returned by
+    // POST /automation/api/workflow/ is (docs/ONDEMAND_API_CURRENT.md §7.4
+    // samples and the live 201 of 2026-09-18T07:16:04Z).
+    assert.match(FLOW_DEFAULTS.spatialFlowId, /^[0-9a-f]{24}$/);
+    assert.equal(FLOW_DEFAULTS.spatialFlowId, '6aace534859f7b0abb53d99a');
+    assert.equal(FLOW_DEFAULTS.flowVersion, '1');
+    assert.equal(typeof FLOW_DEFAULTS.flowVersion, 'string');
+  });
+
+  test('spatialFlowId defaults to FLOW_DEFAULTS.spatialFlowId with source "default" when unset', () => {
+    __reloadConfigForTests();
+    assert.equal(config.spatialFlowId, FLOW_DEFAULTS.spatialFlowId);
+    assert.equal(configSources().spatialFlowId, 'default');
+    assert.equal(getConfig().spatialFlowId, FLOW_DEFAULTS.spatialFlowId);
+  });
+
+  test('an explicitly empty ONDEMAND_SPATIAL_FLOW_ID still yields the default (never an empty id)', () => {
+    process.env.ONDEMAND_SPATIAL_FLOW_ID = '';
+    __reloadConfigForTests();
+    assert.equal(config.spatialFlowId, FLOW_DEFAULTS.spatialFlowId);
+    assert.equal(configSources().spatialFlowId, 'default');
+  });
+
+  test('the default flow id and version match the committed export docs/ondemand-workflows/gods-eye-advanced-v1.json', async () => {
+    const { readFile } = await import('node:fs/promises');
+    const exported = JSON.parse(
+      await readFile(
+        new URL(
+          '../../docs/ondemand-workflows/gods-eye-advanced-v1.json',
+          import.meta.url,
+        ),
+        'utf8',
+      ),
+    );
+    assert.equal(exported.workflow.id, FLOW_DEFAULTS.spatialFlowId);
+    assert.equal(
+      String(exported._export.flowVersion),
+      FLOW_DEFAULTS.flowVersion,
+    );
+    assert.equal(exported.workflow.name, 'GodsEye Advanced Spatial Workflow');
+    assert.equal(exported.workflow.isActive, true);
   });
 });

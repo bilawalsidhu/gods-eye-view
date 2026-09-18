@@ -175,8 +175,15 @@ describe('api/ondemand/health.js', () => {
     assert.equal(body.config.reasoningMode.valid, true);
     assert.equal(body.config.flowVersion.configured, true);
     assert.equal(body.config.flowVersion.source, 'default');
-    assert.equal(body.config.spatialFlowId.configured, false);
-    assert.equal(body.config.spatialFlowId.source, 'unset');
+    // Since 2026-09-18 the workflow id has a non-secret built-in default
+    // (server/ondemand/config.js FLOW_DEFAULTS) — configured, source
+    // 'default'; the VALUE is still never surfaced by health.
+    assert.equal(body.config.spatialFlowId.configured, true);
+    assert.equal(body.config.spatialFlowId.source, 'default');
+    assert.equal(
+      JSON.stringify(body).includes('6aace534859f7b0abb53d99a'),
+      false,
+    );
   });
 
   test('smoke: probes chat/media/workflow (GET) + speech (POST TTS §6.2) with apikey header and reports healthy', async () => {

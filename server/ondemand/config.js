@@ -38,8 +38,8 @@
  *   reasoningEndpointId   | ONDEMAND_REASONING_ENDPOINT_ID      | ONDEMAND_ENDPOINT_ID    | 'low' (documented reasoningMode, §3.1/§12)
  *   fulfillmentEndpointId | ONDEMAND_FULFILLMENT_ENDPOINT_ID    | ONDEMAND_ENDPOINT_ID    | 'predefined-gpt-5.6-luna' (ASK winner)
  *   reasoningMode         | ONDEMAND_REASONING_MODE (validated) | —                        | '' (field omitted upstream)
- *   flowVersion           | GODS_EYE_FLOW_VERSION               | —                        | '0'
- *   spatialFlowId         | ONDEMAND_SPATIAL_FLOW_ID            | —                        | '' (no default)
+ *   flowVersion           | GODS_EYE_FLOW_VERSION               | —                        | '1' (FLOW_DEFAULTS, 2026-09-18)
+ *   spatialFlowId         | ONDEMAND_SPATIAL_FLOW_ID            | —                        | '6aace534859f7b0abb53d99a' (FLOW_DEFAULTS)
  *   defaultPluginIds      | ONDEMAND_SPATIAL_AGENT_ID           | — (DENIED, see below)   | [] (no default)
  *   apiKey                | ONDEMAND_API_KEY                    | —                        | '' (no default)
  *
@@ -70,7 +70,14 @@
  *     `reasoningModeInvalid: true` rather than being forwarded blind.
  *   - `flowVersion` (`GODS_EYE_FLOW_VERSION`) is informational only —
  *     workflow versioning is NOT FOUND IN LIVE DOCS (§7.3) — and is never
- *     sent upstream by any handler.
+ *     sent upstream by any handler. Its default is FLOW_DEFAULTS.flowVersion
+ *     ('1'): the version label of the workflow this repo created.
+ *   - `spatialFlowId` (`ONDEMAND_SPATIAL_FLOW_ID`) defaults to
+ *     FLOW_DEFAULTS.spatialFlowId — the REAL id returned by the documented
+ *     `POST /automation/api/workflow/` (201) on 2026-09-18T07:16:04Z for
+ *     "GodsEye Advanced Spatial Workflow" v1 (docs/ondemand-workflows/
+ *     README.md). A workflow id is not a secret (it is useless without the
+ *     api key), which is why it may live here as a non-secret default.
  *   - DENY-LIST (docs/ONDEMAND_PROXY_DESIGN.md "Environment name
  *     reconciliation (2026-09-18)"): the retired plugin-ids alias for
  *     `ONDEMAND_SPATIAL_AGENT_ID` (exact spelling: see DENIED_ENV_NAMES
@@ -295,6 +302,29 @@ export const TIER_DEFAULTS = Object.freeze({
 });
 
 /**
+ * Non-secret defaults of the Agents Flow Builder workflow this repository
+ * owns — "GodsEye Advanced Spatial Workflow", version 1 (blueprint rules
+ * 22–23, 46–48). `spatialFlowId` is the real workflow id returned by the
+ * documented `POST https://api.on-demand.io/automation/api/workflow/`
+ * (HTTP 201, 2026-09-18T07:16:04.335Z) and activated via the documented
+ * `POST /workflow/{id}/activate` (HTTP 200, 2026-09-18T07:16:14.101Z);
+ * definition, export and node→module map: docs/ondemand-workflows/
+ * gods-eye-advanced-v1.json and docs/ondemand-workflows/README.md.
+ * `flowVersion` is this repository's own version label for that
+ * definition (the API has no version field, §7.3) — bump it together with
+ * the export whenever the definition changes.
+ *
+ * Both are the DEFAULT branch of the `ONDEMAND_SPATIAL_FLOW_ID` /
+ * `GODS_EYE_FLOW_VERSION` reconciliation rows (source 'default'); an env
+ * var set on the deployment still wins. Re-exported through
+ * api/ondemand/_config.js like every other name here.
+ */
+export const FLOW_DEFAULTS = Object.freeze({
+  spatialFlowId: '6aace534859f7b0abb53d99a',
+  flowVersion: '1',
+});
+
+/**
  * Defaults for one tier by name — case-insensitive (`'deep'`, `'Deep'`,
  * `' DEEP '` all → `TIER_DEFAULTS.DEEP`); anything unknown (or not a
  * string) → `TIER_DEFAULTS.INVESTIGATE`, the balanced middle tier. Returns
@@ -361,13 +391,22 @@ function computeConfig() {
   const reasoningModeResult = reconcileReasoningMode();
 
   // Workflow id for `POST /workflow/{id}/execute` (§7.1). No alias exists
-  // on the target Vercel project for this concept.
-  const spatialFlowResult = reconcile('ONDEMAND_SPATIAL_FLOW_ID', null, '');
+  // on the target Vercel project for this concept. Default: the real id of
+  // the workflow this repo created (FLOW_DEFAULTS, 2026-09-18).
+  const spatialFlowResult = reconcile(
+    'ONDEMAND_SPATIAL_FLOW_ID',
+    null,
+    FLOW_DEFAULTS.spatialFlowId,
+  );
 
   // Informational only — never sent upstream (§7.3: workflow versioning is
-  // NOT FOUND IN LIVE DOCS). String, not number: a version "0" vs 0 has no
+  // NOT FOUND IN LIVE DOCS). String, not number: a version "1" vs 1 has no
   // semantic difference to any consumer, and a string avoids NaN handling.
-  const flowVersionResult = reconcile('GODS_EYE_FLOW_VERSION', null, '0');
+  const flowVersionResult = reconcile(
+    'GODS_EYE_FLOW_VERSION',
+    null,
+    FLOW_DEFAULTS.flowVersion,
+  );
 
   // DENY-LIST: the retired plugin-ids alias (see DENIED_ENV_NAMES above)
   // is never read here — defaultPluginIds comes ONLY from
@@ -517,8 +556,8 @@ export function requestTimeoutMs() {
 /**
  * Which env NAME supplied each logical setting: the canonical name, the
  * accepted alias name, `'default'` (built-in default was used, e.g.
- * baseUrl/reasoningEndpointId/fulfillmentEndpointId/flowVersion/an invalid
- * reasoningMode), or `'unset'` (no default either — the field is simply
+ * baseUrl/reasoningEndpointId/fulfillmentEndpointId/flowVersion/
+ * spatialFlowId/an invalid reasoningMode), or `'unset'` (no default either — the field is simply
  * empty). NAMES ONLY, never values — safe to serialize verbatim in an HTTP
  * response (see api/ondemand/health.js's `?envNames=1`).
  */
@@ -553,6 +592,10 @@ export function getConfig() {
     // Benchmarked ASK/INVESTIGATE/DEEP defaults (constants, never
     // env-reconciled — see TIER_DEFAULTS); ids only, safe to surface.
     tiers: TIER_DEFAULTS,
+    // The owned workflow's non-secret defaults (constants — see
+    // FLOW_DEFAULTS); the reconciled values are `spatialFlowId` /
+    // `flowVersion` above.
+    flowDefaults: FLOW_DEFAULTS,
     sources: configSources(),
   };
   assertNoDeniedKeys(result);

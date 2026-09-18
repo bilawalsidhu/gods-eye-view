@@ -1,0 +1,1041 @@
+{
+  "workflowId": "6aace534859f7b0abb53d99a",
+  "workflowName": "GodsEye Advanced Spatial Workflow",
+  "flowVersion": 1,
+  "startedAtUtc": "2026-09-18T07:16:26.986Z",
+  "calls": [
+    {
+      "label": "execute",
+      "status": 200,
+      "ms": 342,
+      "utc": "2026-09-18T07:16:26.986Z"
+    },
+    {
+      "label": "status",
+      "status": 200,
+      "ms": 166,
+      "utc": "2026-09-18T07:16:27.330Z"
+    },
+    {
+      "label": "logs",
+      "status": 200,
+      "ms": 146,
+      "utc": "2026-09-18T07:16:27.496Z"
+    },
+    {
+      "label": "status",
+      "status": 200,
+      "ms": 200,
+      "utc": "2026-09-18T07:16:31.643Z"
+    },
+    {
+      "label": "logs",
+      "status": 200,
+      "ms": 142,
+      "utc": "2026-09-18T07:16:31.843Z"
+    },
+    {
+      "label": "status",
+      "status": 200,
+      "ms": 203,
+      "utc": "2026-09-18T07:16:35.986Z"
+    },
+    {
+      "label": "logs",
+      "status": 200,
+      "ms": 279,
+      "utc": "2026-09-18T07:16:36.190Z"
+    },
+    {
+      "label": "status",
+      "status": 200,
+      "ms": 221,
+      "utc": "2026-09-18T07:16:40.470Z"
+    },
+    {
+      "label": "logs",
+      "status": 200,
+      "ms": 196,
+      "utc": "2026-09-18T07:16:40.692Z"
+    },
+    {
+      "label": "status",
+      "status": 200,
+      "ms": 289,
+      "utc": "2026-09-18T07:16:44.889Z"
+    },
+    {
+      "label": "logs",
+      "status": 200,
+      "ms": 180,
+      "utc": "2026-09-18T07:16:45.178Z"
+    },
+    {
+      "label": "status",
+      "status": 200,
+      "ms": 124,
+      "utc": "2026-09-18T07:16:49.359Z"
+    },
+    {
+      "label": "logs",
+      "status": 200,
+      "ms": 217,
+      "utc": "2026-09-18T07:16:49.483Z"
+    },
+    {
+      "label": "status",
+      "status": 200,
+      "ms": 193,
+      "utc": "2026-09-18T07:16:53.701Z"
+    },
+    {
+      "label": "logs",
+      "status": 200,
+      "ms": 169,
+      "utc": "2026-09-18T07:16:53.894Z"
+    },
+    {
+      "label": "status",
+      "status": 200,
+      "ms": 209,
+      "utc": "2026-09-18T07:16:58.064Z"
+    },
+    {
+      "label": "logs",
+      "status": 200,
+      "ms": 156,
+      "utc": "2026-09-18T07:16:58.273Z"
+    },
+    {
+      "label": "status",
+      "status": 200,
+      "ms": 160,
+      "utc": "2026-09-18T07:17:02.431Z"
+    },
+    {
+      "label": "logs",
+      "status": 200,
+      "ms": 177,
+      "utc": "2026-09-18T07:17:02.591Z"
+    },
+    {
+      "label": "status",
+      "status": 200,
+      "ms": 181,
+      "utc": "2026-09-18T07:17:06.769Z"
+    },
+    {
+      "label": "logs",
+      "status": 200,
+      "ms": 214,
+      "utc": "2026-09-18T07:17:06.951Z"
+    },
+    {
+      "label": "status",
+      "status": 200,
+      "ms": 217,
+      "utc": "2026-09-18T07:17:11.166Z"
+    },
+    {
+      "label": "logs",
+      "status": 200,
+      "ms": 190,
+      "utc": "2026-09-18T07:17:11.383Z"
+    },
+    {
+      "label": "status",
+      "status": 200,
+      "ms": 299,
+      "utc": "2026-09-18T07:17:15.574Z"
+    },
+    {
+      "label": "logs",
+      "status": 200,
+      "ms": 176,
+      "utc": "2026-09-18T07:17:15.873Z"
+    },
+    {
+      "label": "status",
+      "status": 200,
+      "ms": 191,
+      "utc": "2026-09-18T07:17:20.050Z"
+    },
+    {
+      "label": "logs",
+      "status": 200,
+      "ms": 157,
+      "utc": "2026-09-18T07:17:20.242Z"
+    },
+    {
+      "label": "status",
+      "status": 200,
+      "ms": 202,
+      "utc": "2026-09-18T07:17:24.400Z"
+    },
+    {
+      "label": "logs",
+      "status": 200,
+      "ms": 164,
+      "utc": "2026-09-18T07:17:24.602Z"
+    },
+    {
+      "label": "status",
+      "status": 200,
+      "ms": 188,
+      "utc": "2026-09-18T07:17:28.767Z"
+    },
+    {
+      "label": "logs",
+      "status": 200,
+      "ms": 190,
+      "utc": "2026-09-18T07:17:28.955Z"
+    },
+    {
+      "label": "status",
+      "status": 200,
+      "ms": 123,
+      "utc": "2026-09-18T07:17:33.146Z"
+    },
+    {
+      "label": "logs",
+      "status": 200,
+      "ms": 237,
+      "utc": "2026-09-18T07:17:33.270Z"
+    },
+    {
+      "label": "status",
+      "status": 200,
+      "ms": 144,
+      "utc": "2026-09-18T07:17:37.508Z"
+    },
+    {
+      "label": "logs",
+      "status": 200,
+      "ms": 193,
+      "utc": "2026-09-18T07:17:37.652Z"
+    },
+    {
+      "label": "status",
+      "status": 200,
+      "ms": 213,
+      "utc": "2026-09-18T07:17:41.846Z"
+    },
+    {
+      "label": "logs",
+      "status": 200,
+      "ms": 294,
+      "utc": "2026-09-18T07:17:42.059Z"
+    },
+    {
+      "label": "status",
+      "status": 200,
+      "ms": 145,
+      "utc": "2026-09-18T07:17:46.355Z"
+    },
+    {
+      "label": "logs",
+      "status": 200,
+      "ms": 154,
+      "utc": "2026-09-18T07:17:46.501Z"
+    },
+    {
+      "label": "status",
+      "status": 200,
+      "ms": 212,
+      "utc": "2026-09-18T07:17:50.656Z"
+    },
+    {
+      "label": "logs",
+      "status": 200,
+      "ms": 318,
+      "utc": "2026-09-18T07:17:50.868Z"
+    },
+    {
+      "label": "status",
+      "status": 200,
+      "ms": 236,
+      "utc": "2026-09-18T07:17:55.187Z"
+    },
+    {
+      "label": "logs",
+      "status": 200,
+      "ms": 153,
+      "utc": "2026-09-18T07:17:55.423Z"
+    },
+    {
+      "label": "status",
+      "status": 200,
+      "ms": 172,
+      "utc": "2026-09-18T07:17:59.577Z"
+    },
+    {
+      "label": "logs",
+      "status": 200,
+      "ms": 196,
+      "utc": "2026-09-18T07:17:59.749Z"
+    },
+    {
+      "label": "status",
+      "status": 200,
+      "ms": 219,
+      "utc": "2026-09-18T07:18:03.947Z"
+    },
+    {
+      "label": "logs",
+      "status": 200,
+      "ms": 197,
+      "utc": "2026-09-18T07:18:04.166Z"
+    },
+    {
+      "label": "status",
+      "status": 200,
+      "ms": 226,
+      "utc": "2026-09-18T07:18:08.364Z"
+    },
+    {
+      "label": "logs",
+      "status": 200,
+      "ms": 166,
+      "utc": "2026-09-18T07:18:08.590Z"
+    },
+    {
+      "label": "status",
+      "status": 200,
+      "ms": 132,
+      "utc": "2026-09-18T07:18:12.758Z"
+    },
+    {
+      "label": "logs",
+      "status": 200,
+      "ms": 191,
+      "utc": "2026-09-18T07:18:12.890Z"
+    },
+    {
+      "label": "status",
+      "status": 200,
+      "ms": 195,
+      "utc": "2026-09-18T07:18:17.082Z"
+    },
+    {
+      "label": "logs",
+      "status": 200,
+      "ms": 190,
+      "utc": "2026-09-18T07:18:17.277Z"
+    },
+    {
+      "label": "status",
+      "status": 200,
+      "ms": 215,
+      "utc": "2026-09-18T07:18:21.468Z"
+    },
+    {
+      "label": "logs",
+      "status": 200,
+      "ms": 274,
+      "utc": "2026-09-18T07:18:21.684Z"
+    },
+    {
+      "label": "status",
+      "status": 200,
+      "ms": 241,
+      "utc": "2026-09-18T07:18:25.959Z"
+    },
+    {
+      "label": "logs",
+      "status": 200,
+      "ms": 175,
+      "utc": "2026-09-18T07:18:26.201Z"
+    },
+    {
+      "label": "status",
+      "status": 200,
+      "ms": 192,
+      "utc": "2026-09-18T07:18:30.378Z"
+    },
+    {
+      "label": "logs",
+      "status": 200,
+      "ms": 195,
+      "utc": "2026-09-18T07:18:30.570Z"
+    },
+    {
+      "label": "status",
+      "status": 200,
+      "ms": 172,
+      "utc": "2026-09-18T07:18:34.765Z"
+    },
+    {
+      "label": "logs",
+      "status": 200,
+      "ms": 140,
+      "utc": "2026-09-18T07:18:34.937Z"
+    },
+    {
+      "label": "status",
+      "status": 200,
+      "ms": 171,
+      "utc": "2026-09-18T07:18:39.078Z"
+    },
+    {
+      "label": "logs",
+      "status": 200,
+      "ms": 216,
+      "utc": "2026-09-18T07:18:39.249Z"
+    },
+    {
+      "label": "status",
+      "status": 200,
+      "ms": 127,
+      "utc": "2026-09-18T07:18:43.465Z"
+    },
+    {
+      "label": "logs",
+      "status": 200,
+      "ms": 188,
+      "utc": "2026-09-18T07:18:43.593Z"
+    },
+    {
+      "label": "status",
+      "status": 200,
+      "ms": 282,
+      "utc": "2026-09-18T07:18:47.783Z"
+    },
+    {
+      "label": "logs",
+      "status": 200,
+      "ms": 195,
+      "utc": "2026-09-18T07:18:48.065Z"
+    },
+    {
+      "label": "status",
+      "status": 200,
+      "ms": 237,
+      "utc": "2026-09-18T07:18:52.262Z"
+    },
+    {
+      "label": "logs",
+      "status": 200,
+      "ms": 188,
+      "utc": "2026-09-18T07:18:52.499Z"
+    },
+    {
+      "label": "status",
+      "status": 200,
+      "ms": 168,
+      "utc": "2026-09-18T07:18:56.687Z"
+    },
+    {
+      "label": "logs",
+      "status": 200,
+      "ms": 124,
+      "utc": "2026-09-18T07:18:56.856Z"
+    },
+    {
+      "label": "status",
+      "status": 200,
+      "ms": 231,
+      "utc": "2026-09-18T07:19:00.980Z"
+    },
+    {
+      "label": "logs",
+      "status": 200,
+      "ms": 166,
+      "utc": "2026-09-18T07:19:01.212Z"
+    },
+    {
+      "label": "status",
+      "status": 200,
+      "ms": 180,
+      "utc": "2026-09-18T07:19:05.378Z"
+    },
+    {
+      "label": "logs",
+      "status": 200,
+      "ms": 153,
+      "utc": "2026-09-18T07:19:05.558Z"
+    },
+    {
+      "label": "status",
+      "status": 200,
+      "ms": 167,
+      "utc": "2026-09-18T07:19:09.712Z"
+    },
+    {
+      "label": "logs",
+      "status": 200,
+      "ms": 210,
+      "utc": "2026-09-18T07:19:09.879Z"
+    },
+    {
+      "label": "outputs",
+      "status": 200,
+      "ms": 97,
+      "utc": "2026-09-18T07:19:10.090Z"
+    }
+  ],
+  "logEvents": [
+    {
+      "timestamp": 1789715787311,
+      "utc": "2026-09-18T07:16:27.311Z",
+      "nodeKey": "",
+      "message": "starting workflow execution"
+    },
+    {
+      "timestamp": 1789715787352,
+      "utc": "2026-09-18T07:16:27.352Z",
+      "nodeKey": "session_context",
+      "message": "all dependencies satisfied, proceeding to task execution"
+    },
+    {
+      "timestamp": 1789715794928,
+      "utc": "2026-09-18T07:16:34.928Z",
+      "nodeKey": "session_context",
+      "message": "triggering next task execution"
+    },
+    {
+      "timestamp": 1789715794934,
+      "utc": "2026-09-18T07:16:34.934Z",
+      "nodeKey": "session_context",
+      "message": "node task executed successfully in 7592 milliseconds"
+    },
+    {
+      "timestamp": 1789715795296,
+      "utc": "2026-09-18T07:16:35.296Z",
+      "nodeKey": "spatial_context_builder",
+      "message": "all dependencies satisfied, proceeding to task execution"
+    },
+    {
+      "timestamp": 1789715803787,
+      "utc": "2026-09-18T07:16:43.787Z",
+      "nodeKey": "spatial_context_builder",
+      "message": "triggering next task execution"
+    },
+    {
+      "timestamp": 1789715803794,
+      "utc": "2026-09-18T07:16:43.794Z",
+      "nodeKey": "spatial_context_builder",
+      "message": "node task executed successfully in 8507 milliseconds"
+    },
+    {
+      "timestamp": 1789715804030,
+      "utc": "2026-09-18T07:16:44.030Z",
+      "nodeKey": "intent_classifier",
+      "message": "all dependencies satisfied, proceeding to task execution"
+    },
+    {
+      "timestamp": 1789715812903,
+      "utc": "2026-09-18T07:16:52.903Z",
+      "nodeKey": "intent_classifier",
+      "message": "triggering next task execution"
+    },
+    {
+      "timestamp": 1789715812909,
+      "utc": "2026-09-18T07:16:52.909Z",
+      "nodeKey": "intent_classifier",
+      "message": "node task executed successfully in 8920 milliseconds"
+    },
+    {
+      "timestamp": 1789715813418,
+      "utc": "2026-09-18T07:16:53.418Z",
+      "nodeKey": "capability_resolver",
+      "message": "all dependencies satisfied, proceeding to task execution"
+    },
+    {
+      "timestamp": 1789715825571,
+      "utc": "2026-09-18T07:17:05.571Z",
+      "nodeKey": "capability_resolver",
+      "message": "triggering next task execution"
+    },
+    {
+      "timestamp": 1789715825579,
+      "utc": "2026-09-18T07:17:05.579Z",
+      "nodeKey": "capability_resolver",
+      "message": "node task executed successfully in 12170 milliseconds"
+    },
+    {
+      "timestamp": 1789715825692,
+      "utc": "2026-09-18T07:17:05.692Z",
+      "nodeKey": "planner",
+      "message": "all dependencies satisfied, proceeding to task execution"
+    },
+    {
+      "timestamp": 1789715851887,
+      "utc": "2026-09-18T07:17:31.887Z",
+      "nodeKey": "planner",
+      "message": "triggering next task execution"
+    },
+    {
+      "timestamp": 1789715851894,
+      "utc": "2026-09-18T07:17:31.894Z",
+      "nodeKey": "planner",
+      "message": "node task executed successfully in 26214 milliseconds"
+    },
+    {
+      "timestamp": 1789715852270,
+      "utc": "2026-09-18T07:17:32.270Z",
+      "nodeKey": "verification",
+      "message": "all dependencies satisfied, proceeding to task execution"
+    },
+    {
+      "timestamp": 1789715879743,
+      "utc": "2026-09-18T07:17:59.743Z",
+      "nodeKey": "verification",
+      "message": "triggering next task execution"
+    },
+    {
+      "timestamp": 1789715879749,
+      "utc": "2026-09-18T07:17:59.749Z",
+      "nodeKey": "verification",
+      "message": "node task executed successfully in 27490 milliseconds"
+    },
+    {
+      "timestamp": 1789715879900,
+      "utc": "2026-09-18T07:17:59.900Z",
+      "nodeKey": "spatial_action_planner",
+      "message": "all dependencies satisfied, proceeding to task execution"
+    },
+    {
+      "timestamp": 1789715914215,
+      "utc": "2026-09-18T07:18:34.215Z",
+      "nodeKey": "spatial_action_planner",
+      "message": "triggering next task execution"
+    },
+    {
+      "timestamp": 1789715914221,
+      "utc": "2026-09-18T07:18:34.221Z",
+      "nodeKey": "spatial_action_planner",
+      "message": "node task executed successfully in 34333 milliseconds"
+    },
+    {
+      "timestamp": 1789715914665,
+      "utc": "2026-09-18T07:18:34.665Z",
+      "nodeKey": "synthesis",
+      "message": "all dependencies satisfied, proceeding to task execution"
+    },
+    {
+      "timestamp": 1789715934540,
+      "utc": "2026-09-18T07:18:54.540Z",
+      "nodeKey": "synthesis",
+      "message": "triggering next task execution"
+    },
+    {
+      "timestamp": 1789715934545,
+      "utc": "2026-09-18T07:18:54.545Z",
+      "nodeKey": "synthesis",
+      "message": "node task executed successfully in 19889 milliseconds"
+    },
+    {
+      "timestamp": 1789715934803,
+      "utc": "2026-09-18T07:18:54.803Z",
+      "nodeKey": "structured_response",
+      "message": "all dependencies satisfied, proceeding to task execution"
+    },
+    {
+      "timestamp": 1789715945961,
+      "utc": "2026-09-18T07:19:05.961Z",
+      "nodeKey": "structured_response",
+      "message": "triggering next task execution"
+    },
+    {
+      "timestamp": 1789715945966,
+      "utc": "2026-09-18T07:19:05.966Z",
+      "nodeKey": "structured_response",
+      "message": "node task executed successfully in 11176 milliseconds"
+    },
+    {
+      "timestamp": 1789715946149,
+      "utc": "2026-09-18T07:19:06.149Z",
+      "nodeKey": "",
+      "message": "delivery stage not found; ending execution"
+    }
+  ],
+  "timeToFirstLogMs": 657,
+  "finalStatus": "success",
+  "totalLatencyMs": 163104,
+  "nodeOutputs": {
+    "session_context": {
+      "nodeType": "llm",
+      "timeTakenInMilliseconds": 7579,
+      "valueChars": 2300,
+      "valuePreview": "{\"mode\":\"selftest\",\"session\":{\"sessionId\":null,\"externalUserId\":null,\"locale\":null,\"tier\":null,\"priorTurns\":[]},\"query\":\"What is unusual around this airport?\",\""
+    },
+    "spatial_context_builder": {
+      "nodeType": "llm",
+      "timeTakenInMilliseconds": 8492,
+      "valueChars": 2462,
+      "valuePreview": "{\"mode\":\"selftest\",\"session\":{\"sessionId\":null,\"externalUserId\":null,\"locale\":null,\"tier\":null,\"priorTurns\":[]},\"query\":\"What is unusual around this airport?\",\""
+    },
+    "intent_classifier": {
+      "nodeType": "llm",
+      "timeTakenInMilliseconds": 8908,
+      "valueChars": 2842,
+      "valuePreview": "{\"intent\":\"anomaly_scan\",\"confidence\":0.98,\"tier\":\"INVESTIGATE\",\"focus\":{\"entityIds\":[],\"layers\":[\"flights\",\"earthquakes\",\"ais-live-vessels\"],\"timeWindow\":{\"sta"
+    },
+    "capability_resolver": {
+      "nodeType": "llm",
+      "timeTakenInMilliseconds": 12157,
+      "valueChars": 3408,
+      "valuePreview": "{\"selectedCapabilityIds\":[\"earthquake.search\"],\"calls\":[{\"capabilityId\":\"earthquake.search\",\"ondemandTool\":\"earthquake_search\",\"route\":\"/api/sources/earthquakes"
+    },
+    "planner": {
+      "nodeType": "llm",
+      "timeTakenInMilliseconds": 26201,
+      "valueChars": 5905,
+      "valuePreview": "{\"plan\":{\"steps\":[{\"id\":\"s1\",\"kind\":\"observe\",\"description\":\"Review visible flights for emergency squawks and ground speed anomalies\",\"usesCapabilityId\":null,\"i"
+    },
+    "verification": {
+      "nodeType": "llm",
+      "timeTakenInMilliseconds": 27478,
+      "valueChars": 5831,
+      "valuePreview": "{\"findings\":[{\"id\":\"f1\",\"claim\":\"Aircraft SWR9DE is airborne while squawking emergency code 7700.\",\"kind\":\"observed\",\"status\":\"verified\",\"severity\":\"high\",\"supp"
+    },
+    "spatial_action_planner": {
+      "nodeType": "llm",
+      "timeTakenInMilliseconds": 34319,
+      "valueChars": 7884,
+      "valuePreview": "{\"actions\":[{\"name\":\"fly_to_location\",\"params\":{\"latitude\":24.4331,\"longitude\":54.6511,\"rangeM\":15000,\"viewMode\":\"overview\"},\"reason\":\"Frame airport area for an"
+    },
+    "synthesis": {
+      "nodeType": "llm",
+      "timeTakenInMilliseconds": 19876,
+      "valueChars": 8989,
+      "valuePreview": "{\"message\":\"The clearest verified anomaly is aircraft SWR9DE (icao24:4b1a0c), airborne at altitude 3350 m, speed 240 kts, and squawking 7700; no distance from t"
+    },
+    "structured_response": {
+      "nodeType": "llm",
+      "timeTakenInMilliseconds": 11165,
+      "valueChars": 5450,
+      "valuePreview": "{\"message\":\"The clearest verified anomaly is aircraft SWR9DE (icao24:4b1a0c), airborne at altitude 3350 m, speed 240 kts, and squawking 7700; no distance from t"
+    }
+  },
+  "structuredResponse": {
+    "message": "The clearest verified anomaly is aircraft SWR9DE (icao24:4b1a0c), airborne at altitude 3350 m, speed 240 kts, and squawking 7700; no distance from the airport was supplied. MSC KHALIFA (mmsi:636019876) is under way at 9.8 kts on course 275° near the approach area, but its exact distance from the airport was not supplied. AL DHAFRA 7 (mmsi:470123000) is moored at 0.2 kts, while ETD9 (icao24:8963f2) is on the ground at 12 kts and shows no verified anomaly. The planned earthquake search was not available inside this run, and further live flight and vessel anomaly details could not be checked.",
+    "entities": [
+      {
+        "id": "icao24:4b1a0c",
+        "layerId": "flights",
+        "label": "SWR9DE",
+        "role": "finding",
+        "latitude": 24.489,
+        "longitude": 54.571
+      },
+      {
+        "id": "mmsi:636019876",
+        "layerId": "ais-live-vessels",
+        "label": "MSC KHALIFA",
+        "role": "finding",
+        "latitude": 24.535,
+        "longitude": 54.66
+      },
+      {
+        "id": "mmsi:470123000",
+        "layerId": "ais-live-vessels",
+        "label": "AL DHAFRA 7",
+        "role": "finding",
+        "latitude": 24.512,
+        "longitude": 54.612
+      },
+      {
+        "id": "icao24:8963f2",
+        "layerId": "flights",
+        "label": "ETD9",
+        "role": "finding",
+        "latitude": 24.419,
+        "longitude": 54.632
+      }
+    ],
+    "actions": [
+      {
+        "name": "fly_to_location",
+        "params": {
+          "latitude": 24.4331,
+          "longitude": 54.6511,
+          "rangeM": 15000,
+          "viewMode": "overview"
+        },
+        "reason": "Frame airport area for anomaly review",
+        "findingIds": []
+      },
+      {
+        "name": "track_entity",
+        "params": {
+          "query": "SWR9DE",
+          "layerId": "flights"
+        },
+        "reason": "Track aircraft squawking emergency code 7700",
+        "findingIds": [
+          "f1"
+        ]
+      },
+      {
+        "name": "set_layer_visibility",
+        "params": {
+          "layerId": "ais-live-vessels",
+          "enabled": true
+        },
+        "reason": "Ensure vessel layer visible for verified vessel findings",
+        "findingIds": [
+          "f2",
+          "f3"
+        ]
+      },
+      {
+        "name": "annotate_map",
+        "params": {
+          "annotations": [
+            {
+              "type": "aircraft",
+              "latitude": 24.489,
+              "longitude": 54.571,
+              "label": "SWR9DE - Emergency squawk 7700"
+            },
+            {
+              "type": "vessel",
+              "latitude": 24.535,
+              "longitude": 54.66,
+              "label": "MSC KHALIFA - Under way 9.8kts near approach area"
+            },
+            {
+              "type": "vessel",
+              "latitude": 24.512,
+              "longitude": 54.612,
+              "label": "AL DHAFRA 7 - Moored, no anomaly"
+            },
+            {
+              "type": "aircraft",
+              "latitude": 24.419,
+              "longitude": 54.632,
+              "label": "ETD9 - Normal taxi speed"
+            }
+          ],
+          "flyTo": false,
+          "persist": true
+        },
+        "reason": "Mark all verified findings on the map for analyst review",
+        "findingIds": [
+          "f1",
+          "f2",
+          "f3",
+          "f4"
+        ]
+      },
+      {
+        "name": "analyst_query",
+        "params": {
+          "layers": [
+            "earthquakes"
+          ],
+          "scope": null,
+          "filters": [],
+          "sortBy": null,
+          "sortDir": null,
+          "limit": null,
+          "followUp": true
+        },
+        "reason": "Follow up on pending earthquake search near airport",
+        "findingIds": []
+      },
+      {
+        "name": "frame_overhead",
+        "params": {
+          "target": "flights",
+          "radiusKm": 20
+        },
+        "reason": "Review overhead flight traffic including emergency and taxiing aircraft",
+        "findingIds": [
+          "f1",
+          "f4"
+        ]
+      }
+    ],
+    "evidence": [
+      {
+        "findingId": "f1",
+        "entityId": "icao24:4b1a0c",
+        "field": "squawk",
+        "value": "7700",
+        "sourceLayer": "flights"
+      },
+      {
+        "findingId": "f1",
+        "entityId": "icao24:4b1a0c",
+        "field": "onGround",
+        "value": false,
+        "sourceLayer": "flights"
+      },
+      {
+        "findingId": "f1",
+        "entityId": "icao24:4b1a0c",
+        "field": "altitudeM",
+        "value": 3350,
+        "sourceLayer": "flights"
+      },
+      {
+        "findingId": "f2",
+        "entityId": "mmsi:636019876",
+        "field": "navStatus",
+        "value": "under way using engine",
+        "sourceLayer": "ais-live-vessels"
+      },
+      {
+        "findingId": "f2",
+        "entityId": "mmsi:636019876",
+        "field": "speedKts",
+        "value": 9.8,
+        "sourceLayer": "ais-live-vessels"
+      },
+      {
+        "findingId": "f2",
+        "entityId": "mmsi:636019876",
+        "field": "courseDeg",
+        "value": 275,
+        "sourceLayer": "ais-live-vessels"
+      },
+      {
+        "findingId": "f2",
+        "entityId": "mmsi:636019876",
+        "field": "latitude",
+        "value": 24.535,
+        "sourceLayer": "ais-live-vessels"
+      },
+      {
+        "findingId": "f2",
+        "entityId": "mmsi:636019876",
+        "field": "longitude",
+        "value": 54.66,
+        "sourceLayer": "ais-live-vessels"
+      },
+      {
+        "findingId": "f3",
+        "entityId": "mmsi:470123000",
+        "field": "navStatus",
+        "value": "moored",
+        "sourceLayer": "ais-live-vessels"
+      },
+      {
+        "findingId": "f3",
+        "entityId": "mmsi:470123000",
+        "field": "speedKts",
+        "value": 0.2,
+        "sourceLayer": "ais-live-vessels"
+      },
+      {
+        "findingId": "f4",
+        "entityId": "icao24:8963f2",
+        "field": "onGround",
+        "value": true,
+        "sourceLayer": "flights"
+      },
+      {
+        "findingId": "f4",
+        "entityId": "icao24:8963f2",
+        "field": "speedKts",
+        "value": 12,
+        "sourceLayer": "flights"
+      }
+    ],
+    "sources": [
+      {
+        "id": "flights",
+        "kind": "in_view",
+        "label": "ADS-B (flights layer)",
+        "status": "used"
+      },
+      {
+        "id": "ais-live-vessels",
+        "kind": "in_view",
+        "label": "AIS (ais-live-vessels layer)",
+        "status": "used"
+      },
+      {
+        "id": "earthquake.search",
+        "kind": "capability",
+        "label": "USGS FDSN Event (earthquake_search)",
+        "status": "planned_not_executed"
+      }
+    ],
+    "suggestedNextActions": [
+      {
+        "label": "Enable CCTV near approach area",
+        "action": {
+          "name": "control_cctv",
+          "params": {
+            "action": "nearest",
+            "cameraQuery": "airport approach"
+          }
+        }
+      },
+      {
+        "label": "Check radio traffic for airport frequency",
+        "action": {
+          "name": "control_radio",
+          "params": {
+            "action": "select",
+            "category": "aviation-marine",
+            "locationId": "dubai"
+          }
+        }
+      },
+      {
+        "label": "Query vessel anomalies in wider radius",
+        "action": {
+          "name": "analyst_query",
+          "params": {
+            "layers": [
+              "ais-live-vessels"
+            ],
+            "scope": null,
+            "filters": [],
+            "sortBy": "speedKts",
+            "sortDir": "desc",
+            "limit": 10,
+            "followUp": true
+          }
+        }
+      }
+    ],
+    "runMeta": {
+      "workflow": "GodsEye Advanced Spatial Workflow",
+      "flowVersion": 1,
+      "mode": "selftest",
+      "intent": "anomaly_scan",
+      "tier": "INVESTIGATE",
+      "confidence": 0.98,
+      "selectedCapabilityIds": [
+        "earthquake.search"
+      ],
+      "unknowns": [
+        "Result of earthquake.search call is not yet available within this workflow run",
+        "Live flight anomaly details beyond the visible aircraft",
+        "Live vessel anomaly details beyond the visible vessels"
+      ],
+      "nodeChain": [
+        "session_context",
+        "spatial_context_builder",
+        "intent_classifier",
+        "capability_resolver",
+        "planner",
+        "verification",
+        "spatial_action_planner",
+        "synthesis",
+        "structured_response"
+      ],
+      "generatedAtUtc": "2026-09-18T07:16:04.334Z"
+    }
+  },
+  "validation": {
+    "ok": true,
+    "errors": []
+  },
+  "executionId": "6aace54bbb6a9a7035f431fc",
+  "firstLogEventUtc": "2026-09-18T07:16:27.311Z",
+  "actionNamesUsed": [
+    "fly_to_location",
+    "track_entity",
+    "set_layer_visibility",
+    "annotate_map",
+    "analyst_query",
+    "frame_overhead"
+  ],
+  "finishedAtUtc": "2026-09-18T07:19:10.199Z"
+}
