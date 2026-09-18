@@ -8,6 +8,8 @@ import {
   configSources,
   getConfig,
   DOCUMENTED_REASONING_MODES,
+  TIER_DEFAULTS,
+  tierDefaults,
   __reloadConfigForTests,
 } from './config.js';
 
@@ -121,8 +123,17 @@ describe('server/ondemand/config.js', () => {
 
   test('reasoningEndpointId/fulfillmentEndpointId/flowVersion fall back to their built-in defaults when unset', () => {
     __reloadConfigForTests();
-    assert.equal(config.reasoningEndpointId, 'dynamic');
+    // 'low' = a documented reasoningMode value (§3.1/§12): OnDemand has no
+    // separate reasoning endpoint, so this default is the default
+    // reasoningMode TIER (re-based 2026-09-18 from 'dynamic').
+    assert.equal(config.reasoningEndpointId, 'low');
+    assert.ok(DOCUMENTED_REASONING_MODES.includes(config.reasoningEndpointId));
+    // fulfillment default = the benchmarked ASK winner.
     assert.equal(config.fulfillmentEndpointId, 'predefined-gpt-5.6-luna');
+    assert.equal(
+      config.fulfillmentEndpointId,
+      TIER_DEFAULTS.ASK.fulfillmentEndpointId,
+    );
     assert.equal(config.flowVersion, '0');
   });
 
@@ -163,9 +174,11 @@ describe('server/ondemand/config.js — getConfig()', () => {
         'spatialAgentId',
         'spatialFlowId',
         'requestTimeoutMs',
+        'tiers',
       ].sort(),
     );
     assert.equal(cfg.apiKey, 'k-1');
+    assert.equal(cfg.tiers, TIER_DEFAULTS);
     assert.deepEqual(Object.keys(cfg.baseUrls).sort(), [
       'automation',
       'chat',
@@ -240,6 +253,89 @@ describe('server/ondemand/config.js — DOCUMENTED_REASONING_MODES / reasoningMo
     assert.equal(config.reasoningMode, 'dynamic');
     assert.equal(config.reasoningModeInvalid, true);
     assert.equal(configSources().reasoningMode, 'default');
+  });
+});
+
+describe('server/ondemand/config.js — TIER_DEFAULTS / tierDefaults() (benchmark 2026-09-18, docs/audit/endpoint-benchmark.md)', () => {
+  test('TIER_DEFAULTS has exactly ASK / INVESTIGATE / DEEP with the benchmarked ids and modes', () => {
+    assert.deepEqual(Object.keys(TIER_DEFAULTS).sort(), [
+      'ASK',
+      'DEEP',
+      'INVESTIGATE',
+    ]);
+    assert.deepEqual(TIER_DEFAULTS.ASK, {
+      fulfillmentEndpointId: 'predefined-gpt-5.6-luna',
+      reasoningMode: 'low',
+    });
+    assert.deepEqual(TIER_DEFAULTS.INVESTIGATE, {
+      fulfillmentEndpointId: 'predefined-claude-sonnet-5',
+      reasoningMode: 'low',
+    });
+    assert.deepEqual(TIER_DEFAULTS.DEEP, {
+      fulfillmentEndpointId: 'predefined-claude-sonnet-5',
+      reasoningMode: 'high',
+    });
+  });
+
+  test('TIER_DEFAULTS and every tier entry are frozen', () => {
+    assert.ok(Object.isFrozen(TIER_DEFAULTS));
+    for (const tier of Object.values(TIER_DEFAULTS)) {
+      assert.ok(Object.isFrozen(tier));
+      assert.deepEqual(Object.keys(tier).sort(), [
+        'fulfillmentEndpointId',
+        'reasoningMode',
+      ]);
+    }
+    assert.throws(() => {
+      'use strict';
+      TIER_DEFAULTS.ASK.reasoningMode = 'high';
+    });
+  });
+
+  test('every tier reasoningMode is a documented value (DOCUMENTED_REASONING_MODES) and every id is a predefined-* endpointId', () => {
+    for (const { fulfillmentEndpointId, reasoningMode } of Object.values(
+      TIER_DEFAULTS,
+    )) {
+      assert.ok(
+        DOCUMENTED_REASONING_MODES.includes(reasoningMode),
+        `${reasoningMode} must be a documented reasoningMode`,
+      );
+      assert.match(fulfillmentEndpointId, /^predefined-[a-z0-9.-]+$/);
+    }
+  });
+
+  test('tierDefaults() is case-insensitive and trims', () => {
+    assert.equal(tierDefaults('deep'), TIER_DEFAULTS.DEEP);
+    assert.equal(tierDefaults('DEEP'), TIER_DEFAULTS.DEEP);
+    assert.equal(tierDefaults(' Deep '), TIER_DEFAULTS.DEEP);
+    assert.equal(tierDefaults('ask'), TIER_DEFAULTS.ASK);
+    assert.equal(tierDefaults('investigate'), TIER_DEFAULTS.INVESTIGATE);
+  });
+
+  test('tierDefaults() falls back to INVESTIGATE for unknown / non-string tiers', () => {
+    assert.equal(tierDefaults('turbo'), TIER_DEFAULTS.INVESTIGATE);
+    assert.equal(tierDefaults(''), TIER_DEFAULTS.INVESTIGATE);
+    assert.equal(tierDefaults(undefined), TIER_DEFAULTS.INVESTIGATE);
+    assert.equal(tierDefaults(null), TIER_DEFAULTS.INVESTIGATE);
+    assert.equal(tierDefaults(42), TIER_DEFAULTS.INVESTIGATE);
+    // prototype names must not resolve to inherited properties
+    assert.equal(tierDefaults('constructor'), TIER_DEFAULTS.INVESTIGATE);
+    assert.equal(tierDefaults('toString'), TIER_DEFAULTS.INVESTIGATE);
+  });
+
+  test('getConfig().tiers is the same frozen TIER_DEFAULTS constant, regardless of env overrides', () => {
+    process.env.ONDEMAND_FULFILLMENT_ENDPOINT_ID = 'predefined-override';
+    process.env.ONDEMAND_REASONING_MODE = 'opus';
+    __reloadConfigForTests();
+    const cfg = getConfig();
+    assert.equal(cfg.tiers, TIER_DEFAULTS);
+    assert.equal(
+      cfg.tiers.ASK.fulfillmentEndpointId,
+      'predefined-gpt-5.6-luna',
+    );
+    // the env override wins for the reconciled field itself, as before
+    assert.equal(cfg.fulfillmentEndpointId, 'predefined-override');
+    assert.equal(cfg.reasoningMode, 'opus');
   });
 });
 
@@ -339,10 +435,20 @@ describe('server/ondemand/config.js — accepted env-var aliases (docs/ONDEMAND_
       assert.equal(configSources().reasoningEndpointId, 'ONDEMAND_ENDPOINT_ID');
     });
 
-    test('neither set -> "dynamic" default, source "default"', () => {
+    test('neither set -> "low" default (documented reasoningMode tier, re-based 2026-09-18), source "default"', () => {
+      __reloadConfigForTests();
+      assert.equal(config.reasoningEndpointId, 'low');
+      assert.equal(configSources().reasoningEndpointId, 'default');
+    });
+
+    test('an explicit "dynamic" override still wins over the new "low" default (env overrides unchanged)', () => {
+      process.env.ONDEMAND_REASONING_ENDPOINT_ID = 'dynamic';
       __reloadConfigForTests();
       assert.equal(config.reasoningEndpointId, 'dynamic');
-      assert.equal(configSources().reasoningEndpointId, 'default');
+      assert.equal(
+        configSources().reasoningEndpointId,
+        'ONDEMAND_REASONING_ENDPOINT_ID',
+      );
     });
 
     test('the shared ONDEMAND_ENDPOINT_ID alias feeds BOTH reasoningEndpointId and fulfillmentEndpointId at once', () => {

@@ -467,3 +467,69 @@ the first (and, as of this writing, only) row.
 - **Verification:** results are recorded in
   `docs/audit/gate3-row1-earthquake-verification.md` (placeholder — not
   yet populated by this task).
+
+### 10.6 Validated tier defaults (benchmark 2026-09-18)
+
+_Addendum to §10 (appended 2026-09-18, after §11, to keep the earlier
+sections' line references stable)._ Supersedes the **defaults** chosen in
+`docs/ONDEMAND_API_CURRENT.md` §17.5; the env-name reconciliation in §10.1
+is unchanged.
+
+Live benchmark 2026-09-18T06:42–06:45Z (`docs/audit/endpoint-benchmark.md`):
+one fixed 3-event USGS earthquake prompt, `reasoningMode: "low"` throughout,
+every candidate HTTP 200. "sync" = total wall time of a `responseMode: sync`
+query; "ttfd" = time-to-first-delta of the same query with
+`responseMode: stream`.
+
+| Candidate `endpointId`       | sync total | stream ttfd | Note                                                              |
+| ---------------------------- | ---------: | ----------: | ----------------------------------------------------------------- |
+| `predefined-gpt-5.6-luna`    |   4,189 ms |    1,880 ms | fastest; 593-char answer                                          |
+| `predefined-gpt-5.6-terra`   |   5,687 ms |    2,082 ms |                                                                   |
+| `predefined-claude-sonnet-5` |   6,480 ms |    4,053 ms | richest answer (1,081 chars); emits `fulfillment_thinking` deltas |
+| `predefined-deepseek-v4-pro` |  14,632 ms |   11,653 ms |                                                                   |
+| `predefined-xai-grok4.6`     |  29,860 ms |   23,669 ms |                                                                   |
+
+Resulting constants — `TIER_DEFAULTS` / `tierDefaults(tier)` in
+`server/ondemand/config.js` (re-exported by `api/ondemand/_config.js`, also
+`getConfig().tiers` and `config.tiers` in the health response; frozen; not
+env-reconciled; `tierDefaults()` is case-insensitive and an unknown tier
+resolves to INVESTIGATE). Both fields are documented OnDemand query fields
+(`endpointId` §3.1/§12; `reasoningMode` §3.1/§12, example values `low`,
+`high`, `grok-4-fast`):
+
+| Tier        | fulfillment `endpointId`     | `reasoningMode` | Measured (sync / ttfd)                          |
+| ----------- | ---------------------------- | --------------- | ----------------------------------------------- |
+| ASK         | `predefined-gpt-5.6-luna`    | `low`           | 4,189 ms / 1,880 ms                             |
+| INVESTIGATE | `predefined-claude-sonnet-5` | `low`           | 6,480 ms / 4,053 ms                             |
+| DEEP        | `predefined-claude-sonnet-5` | `high`          | same model as INVESTIGATE with deeper reasoning |
+
+Knock-on changes to the §10.1 defaults column: `fulfillmentEndpointId`
+stays `predefined-gpt-5.6-luna` (now justified as the ASK winner rather
+than the §17.5 INVESTIGATE pick); `reasoningEndpointId`'s default moves
+from `dynamic` to **`low`** — OnDemand has no separate reasoning endpoint
+(§12), so this value is the default `reasoningMode` tier and `low` is a
+documented value (§3.1/§12). Every env override (`ONDEMAND_REASONING_ENDPOINT_ID
+?? ONDEMAND_ENDPOINT_ID`, `ONDEMAND_FULFILLMENT_ENDPOINT_ID ??
+ONDEMAND_ENDPOINT_ID`, validated `ONDEMAND_REASONING_MODE`) behaves exactly
+as before; the set-but-invalid `reasoningMode` fallback of §10.2 (`dynamic`)
+is deliberately unchanged.
+
+**Speech health probe (same change).** `GET /api/ondemand/health` no longer
+hard-codes `speech: degraded`. With a key present it now runs a real,
+lightweight `POST {services}/execute/text_to_speech` with body
+`{ "input": "ok", "model": "tts-1", "voice": "alloy" }` (all documented §6.2
+fields; live: 200 in ~3.0 s with `data.audioUrl`, STT round-trip 200 in
+410 ms) under its own `SPEECH_PROBE_TIMEOUT_MS = 4500` (the three read-only
+probes keep 3 s). Mapping: 2xx with `data.audioUrl` → `healthy`; timeout →
+`degraded` (detail: "speech probe timed out (>4.5 s); TTS is a synthesis
+call, not a read-only probe"); 401/403 → `error`; any other non-2xx (or a
+2xx without `data.audioUrl`) → `degraded` with the status. A successful
+probe is cached per warm instance for 10 minutes (module-level
+`{ at, status, … }`; non-healthy outcomes are never cached), so health does
+not synthesize audio on every call; the response exposes
+`speechProbe: { cached: boolean, ageSec: number }` and never echoes the
+audio URL. Unchanged: HTTP 200 always, every field `not configured` (and no
+upstream call at all) without a key, the `config` block (now also carrying
+`tiers`, ids only) and `?envNames=1`. The old "no read-only probe exists, so
+speech is degraded by design" rationale in §1's endpoint table and in the
+audit logs is superseded by this subsection.

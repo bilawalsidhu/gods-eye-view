@@ -18,7 +18,10 @@
  *       predefined-id list is explicitly volatile; there is no separate
  *       "reasoning endpoint" concept in the API itself (see
  *       `reasoningEndpointId` below).
- *   §17 LIVE VALIDATION 2026-09-18 — chose the tier defaults used below.
+ *   §17 LIVE VALIDATION 2026-09-18 — first live pass over the tier ids;
+ *       superseded for the DEFAULTS below by the timed benchmark of
+ *       2026-09-18T06:42–06:45Z (docs/audit/endpoint-benchmark.md, see
+ *       TIER_DEFAULTS).
  *
  * Reconciliation table (canonical name tried first, then the accepted
  * alias, then a built-in default; `configSources()` reports which NAME
@@ -26,18 +29,28 @@
  * ondemand-eand-spatial Vercel project (full history:
  * docs/ONDEMAND_PROXY_DESIGN.md §5b); extended 2026-09-18 with the
  * step-3/live-validation defaults (docs/ONDEMAND_PROXY_DESIGN.md
- * "Environment name reconciliation (2026-09-18)"):
+ * "Environment name reconciliation (2026-09-18)"), then re-based on the
+ * timed benchmark (docs/ONDEMAND_PROXY_DESIGN.md §10.6):
  *
  *   Setting              | Canonical                          | Alias                   | Default (source='default')
  *   -------------------- | ----------------------------------- | ------------------------ | ---------------------------
  *   baseUrl               | ONDEMAND_BASE_URL                  | ONDEMAND_API_BASE       | 'https://api.on-demand.io'
- *   reasoningEndpointId   | ONDEMAND_REASONING_ENDPOINT_ID      | ONDEMAND_ENDPOINT_ID    | 'dynamic'
- *   fulfillmentEndpointId | ONDEMAND_FULFILLMENT_ENDPOINT_ID    | ONDEMAND_ENDPOINT_ID    | 'predefined-gpt-5.6-luna'
+ *   reasoningEndpointId   | ONDEMAND_REASONING_ENDPOINT_ID      | ONDEMAND_ENDPOINT_ID    | 'low' (documented reasoningMode, §3.1/§12)
+ *   fulfillmentEndpointId | ONDEMAND_FULFILLMENT_ENDPOINT_ID    | ONDEMAND_ENDPOINT_ID    | 'predefined-gpt-5.6-luna' (ASK winner)
  *   reasoningMode         | ONDEMAND_REASONING_MODE (validated) | —                        | '' (field omitted upstream)
  *   flowVersion           | GODS_EYE_FLOW_VERSION               | —                        | '0'
  *   spatialFlowId         | ONDEMAND_SPATIAL_FLOW_ID            | —                        | '' (no default)
  *   defaultPluginIds      | ONDEMAND_SPATIAL_AGENT_ID           | — (DENIED, see below)   | [] (no default)
  *   apiKey                | ONDEMAND_API_KEY                    | —                        | '' (no default)
+ *
+ *   Tier defaults (NOT env-reconciled — constants, see TIER_DEFAULTS /
+ *   tierDefaults(); benchmark 2026-09-18, docs/audit/endpoint-benchmark.md):
+ *
+ *   Tier        | fulfillmentEndpointId        | reasoningMode | sync total / stream ttfd
+ *   ----------- | ---------------------------- | ------------- | ------------------------
+ *   ASK         | 'predefined-gpt-5.6-luna'    | 'low'         | 4,189 ms / 1,880 ms
+ *   INVESTIGATE | 'predefined-claude-sonnet-5' | 'low'         | 6,480 ms / 4,053 ms
+ *   DEEP        | 'predefined-claude-sonnet-5' | 'high'        | (same model, deeper reasoning)
  *
  * Notes:
  *   - `reasoningEndpointId` and `fulfillmentEndpointId` share the SAME
@@ -45,14 +58,16 @@
  *     BOTH fields resolve to it. This is intentional: OnDemand has no
  *     separate "reasoning endpoint" concept (§12), so `reasoningEndpointId`
  *     is reconciled purely for env-name compatibility/health reporting —
- *     its value is conceptually a `reasoningMode`-style tier id (its
- *     default, `'dynamic'`, is itself a documented live modeId, §17.5),
- *     never an upstream endpoint the proxy calls. It is NOT copied into
- *     `reasoningMode` and is NOT sent upstream by any handler in this task.
+ *     its value is the DEFAULT `reasoningMode` TIER (its default, `'low'`,
+ *     is a documented reasoningMode value, §3.1/§12, and the mode every
+ *     benchmarked tier ran with), never an upstream endpoint the proxy
+ *     calls. It is NOT copied into `reasoningMode` and is NOT sent
+ *     upstream by any handler in this task.
  *   - `reasoningMode` is validated against `DOCUMENTED_REASONING_MODES`
  *     (below); an out-of-list value falls back to `'dynamic'` (the
- *     documented default tier, §17.5 INVESTIGATE) with `reasoningModeInvalid:
- *     true` rather than being forwarded blind.
+ *     documented default tier, §17.5 INVESTIGATE — unchanged by the
+ *     benchmark re-base, see docs/ONDEMAND_PROXY_DESIGN.md §10.2) with
+ *     `reasoningModeInvalid: true` rather than being forwarded blind.
  *   - `flowVersion` (`GODS_EYE_FLOW_VERSION`) is informational only —
  *     workflow versioning is NOT FOUND IN LIVE DOCS (§7.3) — and is never
  *     sent upstream by any handler.
@@ -221,10 +236,76 @@ export const DOCUMENTED_REASONING_MODES = Object.freeze([
   'kimi-k2',
 ]);
 
-// Documented default tier (also the §17.5 INVESTIGATE reasoning choice) —
-// used both as the `reasoningEndpointId` default and as the fallback value
-// when ONDEMAND_REASONING_MODE is set but invalid.
-const REASONING_MODE_DEFAULT_TIER = 'dynamic';
+// Fallback value when ONDEMAND_REASONING_MODE is set but invalid — the
+// §17.5 INVESTIGATE reasoning choice / documented default tier. Deliberately
+// NOT changed by the 2026-09-18 benchmark re-base (docs/ONDEMAND_PROXY_DESIGN.md
+// §10.2 documents this exact fallback); only the `reasoningEndpointId`
+// default below moved to `'low'`.
+const REASONING_MODE_INVALID_FALLBACK = 'dynamic';
+
+// Default value of `reasoningEndpointId`. OnDemand has no separate
+// reasoning endpoint (§12), so this value is the default reasoningMode TIER
+// — `'low'` is a documented reasoningMode value (§3.1 "Every body field",
+// §12 "Reasoning mode values") and the mode every tier in the 2026-09-18
+// benchmark ran with (see TIER_DEFAULTS below). Must be a member of
+// DOCUMENTED_REASONING_MODES.
+const REASONING_ENDPOINT_DEFAULT_TIER = 'low';
+
+/**
+ * Benchmarked per-tier defaults (ASK / INVESTIGATE / DEEP) — constants, not
+ * env-reconciled; `fulfillmentEndpointId` here is the `endpointId` sent
+ * upstream (§3.1/§12) and `reasoningMode` the documented stream-only field
+ * (§3.1/§12; example values `low`, `high`, `grok-4-fast`). Both are
+ * documented OnDemand fields; nothing else is derived from a tier.
+ *
+ * Source: live benchmark 2026-09-18T06:42–06:45Z, recorded in
+ * docs/audit/endpoint-benchmark.md — a fixed 3-event USGS earthquake
+ * prompt, every candidate HTTP 200, `reasoningMode: 'low'` throughout;
+ * "sync" = total wall time of a `responseMode: sync` query, "ttfd" =
+ * time-to-first-delta of the same query with `responseMode: stream`:
+ *
+ *   predefined-gpt-5.6-luna      sync  4,189 ms   ttfd  1,880 ms   593 chars
+ *   predefined-gpt-5.6-terra     sync  5,687 ms   ttfd  2,082 ms
+ *   predefined-claude-sonnet-5   sync  6,480 ms   ttfd  4,053 ms   1,081 chars
+ *                                (richest answer; emits fulfillment_thinking)
+ *   predefined-deepseek-v4-pro   sync 14,632 ms   ttfd 11,653 ms
+ *   predefined-xai-grok4.6       sync 29,860 ms   ttfd 23,669 ms
+ *
+ * Choice: ASK = fastest 200 (luna, ttfd < 2 s); INVESTIGATE = richest
+ * answer at an acceptable ttfd (claude-sonnet-5, `low`); DEEP = the same
+ * strongest verified model with `reasoningMode: 'high'` (the documented
+ * "more reasoning detail" value, §3.1) — deepseek-v4-pro and xai-grok4.6
+ * were 2–5× slower for no measured quality gain on this prompt. The
+ * predefined-id list is documented as volatile (§12), so expect this table
+ * to need re-benchmarking; every id here must stay a real, live id.
+ */
+export const TIER_DEFAULTS = Object.freeze({
+  ASK: Object.freeze({
+    fulfillmentEndpointId: 'predefined-gpt-5.6-luna',
+    reasoningMode: 'low',
+  }),
+  INVESTIGATE: Object.freeze({
+    fulfillmentEndpointId: 'predefined-claude-sonnet-5',
+    reasoningMode: 'low',
+  }),
+  DEEP: Object.freeze({
+    fulfillmentEndpointId: 'predefined-claude-sonnet-5',
+    reasoningMode: 'high',
+  }),
+});
+
+/**
+ * Defaults for one tier by name — case-insensitive (`'deep'`, `'Deep'`,
+ * `' DEEP '` all → `TIER_DEFAULTS.DEEP`); anything unknown (or not a
+ * string) → `TIER_DEFAULTS.INVESTIGATE`, the balanced middle tier. Returns
+ * the frozen constant itself (never a copy), so callers must not mutate.
+ */
+export function tierDefaults(tier) {
+  const key = typeof tier === 'string' ? tier.trim().toUpperCase() : '';
+  return Object.prototype.hasOwnProperty.call(TIER_DEFAULTS, key)
+    ? TIER_DEFAULTS[key]
+    : TIER_DEFAULTS.INVESTIGATE;
+}
 
 /** `ONDEMAND_REASONING_MODE` has no alias, but unlike a plain reconcile()
  * row its "default" branch only fires for an explicitly-set-but-invalid
@@ -240,7 +321,7 @@ function reconcileReasoningMode() {
     return { value: raw, source: 'ONDEMAND_REASONING_MODE', invalid: false };
   }
   return {
-    value: REASONING_MODE_DEFAULT_TIER,
+    value: REASONING_MODE_INVALID_FALLBACK,
     source: 'default',
     invalid: true,
   };
@@ -256,23 +337,25 @@ function computeConfig() {
   );
   const baseUrl = normalizeBaseUrl(baseUrlResult.value);
 
-  // No separate "reasoning endpoint" concept exists upstream (§12) — see
-  // the header comment for why this is reconciled independently of
+  // No separate "reasoning endpoint" concept exists upstream (§12): this
+  // value is the default reasoningMode TIER (`'low'`, documented §3.1/§12)
+  // — see the header comment for why it is reconciled independently of
   // `reasoningMode`, sharing ONDEMAND_ENDPOINT_ID as its alias with
   // `fulfillmentEndpointId` below.
   const reasoningEndpointResult = reconcile(
     'ONDEMAND_REASONING_ENDPOINT_ID',
     'ONDEMAND_ENDPOINT_ID',
-    REASONING_MODE_DEFAULT_TIER,
+    REASONING_ENDPOINT_DEFAULT_TIER,
   );
 
-  // `endpointId` of the fulfillment model (§3.1/§12); default verified live
-  // 2026-09-18 (§17.5 INVESTIGATE tier) — ids are volatile per §12, so this
+  // `endpointId` of the fulfillment model (§3.1/§12); default = the ASK
+  // tier winner of the 2026-09-18 benchmark (TIER_DEFAULTS.ASK, fastest
+  // 200: sync 4,189 ms / ttfd 1,880 ms) — ids are volatile per §12, so this
   // default is expected to need revisiting as the predefined list changes.
   const fulfillmentEndpointResult = reconcile(
     'ONDEMAND_FULFILLMENT_ENDPOINT_ID',
     'ONDEMAND_ENDPOINT_ID',
-    'predefined-gpt-5.6-luna',
+    TIER_DEFAULTS.ASK.fulfillmentEndpointId,
   );
 
   const reasoningModeResult = reconcileReasoningMode();
@@ -445,11 +528,13 @@ export function configSources() {
 
 /**
  * Single frozen snapshot of every setting above, plus per-family
- * `baseUrls`. This is the shape any new module should destructure from
- * (e.g. `const { apiKey, baseUrl, fulfillmentEndpointId, spatialFlowId,
- * defaultPluginIds } = getConfig();`) rather than importing individual
- * getters piecemeal. Asserts (defensively — see assertNoDeniedKeys above)
- * that none of its own keys, or `sources`' keys, are a denied env name.
+ * `baseUrls` and the benchmarked `tiers` table (`TIER_DEFAULTS` — the same
+ * frozen constant, not a copy). This is the shape any new module should
+ * destructure from (e.g. `const { apiKey, baseUrl, fulfillmentEndpointId,
+ * spatialFlowId, defaultPluginIds, tiers } = getConfig();`) rather than
+ * importing individual getters piecemeal. Asserts (defensively — see
+ * assertNoDeniedKeys above) that none of its own keys, or `sources`' keys,
+ * are a denied env name.
  */
 export function getConfig() {
   const result = {
@@ -465,6 +550,9 @@ export function getConfig() {
     defaultPluginIds: state.defaultPluginIds,
     spatialAgentId: state.spatialAgentId,
     requestTimeoutMs: state.requestTimeoutMs,
+    // Benchmarked ASK/INVESTIGATE/DEEP defaults (constants, never
+    // env-reconciled — see TIER_DEFAULTS); ids only, safe to surface.
+    tiers: TIER_DEFAULTS,
     sources: configSources(),
   };
   assertNoDeniedKeys(result);

@@ -25,13 +25,29 @@
  *   Setting              | Canonical                          | Alias                | Default
  *   -------------------- | ----------------------------------- | --------------------- | ---------------------------
  *   baseUrl               | ONDEMAND_BASE_URL                  | ONDEMAND_API_BASE    | 'https://api.on-demand.io'
- *   reasoningEndpointId   | ONDEMAND_REASONING_ENDPOINT_ID      | ONDEMAND_ENDPOINT_ID | 'dynamic'
- *   fulfillmentEndpointId | ONDEMAND_FULFILLMENT_ENDPOINT_ID    | ONDEMAND_ENDPOINT_ID | 'predefined-gpt-5.6-luna'
+ *   reasoningEndpointId   | ONDEMAND_REASONING_ENDPOINT_ID      | ONDEMAND_ENDPOINT_ID | 'low' (documented reasoningMode, §3.1/§12)
+ *   fulfillmentEndpointId | ONDEMAND_FULFILLMENT_ENDPOINT_ID    | ONDEMAND_ENDPOINT_ID | 'predefined-gpt-5.6-luna' (ASK winner)
  *   reasoningMode         | ONDEMAND_REASONING_MODE (validated) | —                     | '' (field omitted upstream)
  *   flowVersion           | GODS_EYE_FLOW_VERSION               | —                     | '0'
  *   spatialFlowId         | ONDEMAND_SPATIAL_FLOW_ID            | —                     | '' (no default)
  *   defaultPluginIds      | ONDEMAND_SPATIAL_AGENT_ID           | — (DENIED alias)     | [] (no default)
  *   apiKey                | ONDEMAND_API_KEY                    | —                     | '' (no default)
+ *
+ * Tier defaults — `TIER_DEFAULTS` / `tierDefaults(tier)` (re-exported from
+ * the same module; also `getConfig().tiers`). Constants, not env-reconciled;
+ * benchmark 2026-09-18T06:42–06:45Z, docs/audit/endpoint-benchmark.md and
+ * docs/ONDEMAND_PROXY_DESIGN.md §10.6 (sync total / stream ttfd, all 200):
+ *
+ *   Tier        | fulfillmentEndpointId        | reasoningMode | measured
+ *   ----------- | ---------------------------- | ------------- | ---------------------
+ *   ASK         | 'predefined-gpt-5.6-luna'    | 'low'         | 4,189 ms / 1,880 ms
+ *   INVESTIGATE | 'predefined-claude-sonnet-5' | 'low'         | 6,480 ms / 4,053 ms
+ *   DEEP        | 'predefined-claude-sonnet-5' | 'high'        | same model, `high` reasoning
+ *
+ *   `tierDefaults('deep')` is case-insensitive; an unknown tier resolves
+ *   to INVESTIGATE. `reasoningEndpointId`'s default is the default
+ *   reasoningMode TIER (`'low'`), not an upstream endpoint — OnDemand has
+ *   no separate reasoning endpoint (§12).
  *
  * DENY-LIST: the retired plugin-ids alias and any ElevenLabs API key env
  * var (exact spelling: server/ondemand/config.js's DENIED_ENV_NAMES, or
