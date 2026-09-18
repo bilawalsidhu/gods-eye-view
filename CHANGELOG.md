@@ -1,5 +1,32 @@
 # Changelog
 
+## 2026-09-18 — Vercel routing fix: multi-segment `/api/*` paths reach the catch-all
+
+First deployment of this branch into the real Vercel project
+(`ondemand-eand-spatial`, preview `dpl_AHGWmpyKiDNxGX9TWpMK7Wbb3Nc6`, source
+`4dc98fc`) showed that Vercel's file-system routing matches only ONE path
+segment for `api/[...route].js`: `/api/opensky` and `/api/ais-live` were
+served, while `/api/celestrak/<group>`, `/api/adsblol/mil`, `/api/tomtom/*`
+and `/api/sources/earthquakes` answered the platform's own `NOT_FOUND` 404
+(no function invoked) — the local emulator (`server/serverless/dev-server.mjs`)
+routes every `/api/*` request to the catch-all and therefore never showed it.
+
+- `vercel.json`: new first rewrite `/api/:__gev_api_path*` →
+  `/api/route` (file-system functions such as `api/ondemand/*.js` still win;
+  everything else under `/api/` now reaches `api/[...route].js` with the
+  ORIGINAL pathname in `req.url`).
+- `server/serverless/vercel-adapter.js`: `resolveRequestUrl` strips the two
+  query keys Vercel injects on the way (`__gev_api_path`, the rewrite's
+  source parameter, and `...route`, the `[...route]` match) without
+  re-encoding the caller's own parameters — the strict
+  `/api/sources/earthquakes` validator otherwise answered
+  `Unknown parameter(s): path, ...route`. New `stripVercelInjectedQuery`
+  export + tests.
+- Verified on preview `dpl_743G2gRzJbm4Vxm9d1PZQtqJTo7i`: every MOVEMENT
+  endpoint 200 with a structured status (no 404/502), earthquakes 200.
+  Details: `docs/handover/ONDEMAND_SPATIAL_HANDOVER_2026-09-18.md`
+  → "Deployment outcome 2026-09-18".
+
 ## 2026-09-18 — MOVEMENT data layers repaired for the serverless deployment
 
 Every DATA LAYERS › MOVEMENT row read UNAVAILABLE on the serverless preview
@@ -68,7 +95,7 @@ unavailable, Street Traffic OFF). Full write-up: `docs/MOVEMENT-LAYERS.md`.
   `config.flowVersion.source` (the env NAME that resolved) plus
   `resolvedVia: alias|canonical|default`, `canonical` and `alias`.
 - OnDemand workflow display name renamed live from `GodsEye Advanced Spatial
-  Workflow` to **`OnDemand Spatial Advanced Workflow`** via the documented
+Workflow` to **`OnDemand Spatial Advanced Workflow`** via the documented
   `PATCH /automation/api/workflow/{id}/name` (HTTP 200, 2026-09-18T10:41:47.809Z);
   the id `6aace534859f7b0abb53d99a`, the v1 label, the trigger, the nine nodes
   and their prompts are unchanged (the frozen v1 prompts still self-describe as
@@ -113,16 +140,13 @@ unavailable, Street Traffic OFF). Full write-up: `docs/MOVEMENT-LAYERS.md`.
   with shared playback/seek interpolation, easing and holds. Navigation and
   manual input cancel authored motion; older scene files retain existing flights.
 
-
 - Director validates bounded version-3 scene files before replacing a project,
   preserves unreadable browser saves, migrates legacy bloom once and preserves
   zero-pitch/low-altitude camera and scope/detection edits. Project normalization has a separate owner.
 
-
 - Separate Director timing, seek calculations, playback clocks and registered
   scene-pack presentation rules. Preserve authored content and controls; Stop
   releases pending hold timers and stale ticks cannot affect replacement playback.
-
 
 - Keep parked transit vehicles aligned to their world course during camera orbits, fall back to reported bearing, and keep vehicles with no course consistently screen-up.
 
@@ -305,7 +329,6 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 ## [Unreleased]
 
 - Add bounded Director feature actions with accessible controls, explicit camera/layer admission and cancellation; restore pack geometry on same-shot seek. Preserve existing scenes and content attribution.
-
 
 - Give application request services, terrain/floor caches and annotation lookup state explicit owners and cancellation; share them across controls, layers and voice.
 

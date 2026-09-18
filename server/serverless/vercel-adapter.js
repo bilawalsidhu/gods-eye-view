@@ -129,9 +129,65 @@ function rehydrateBody(req) {
  * @param {import('http').IncomingMessage & {query?: Record<string, unknown>}} req
  * @returns {string}
  */
+/**
+ * Query keys Vercel's router injects into `req.url` on its way to this
+ * catch-all — never sent by the caller, so never forwarded to a handler:
+ *
+ *  - `...route` — the matched segment of the `api/[...route].js` dynamic
+ *    function (Vercel appends it as `?...route=<segment>`).
+ *  - `__gev_api_path` — the named source parameter of vercel.json's
+ *    `/api/:__gev_api_path*` → `/api/route` rewrite, which Vercel appends
+ *    to the query string of every rewritten request (it appends the
+ *    source parameters whether or not the destination uses them — verified
+ *    2026-09-18: with `:path*` the strict earthquakes validator answered
+ *    `Unknown parameter(s): path`). The distinctive name keeps a caller's
+ *    own `path=` untouched. That rewrite exists because Vercel's
+ *    file-system routing only matches ONE path segment for
+ *    `api/[...route].js` (verified 2026-09-18 on ondemand-eand-spatial:
+ *    `/api/opensky` → function, `/api/celestrak/stations` → platform
+ *    NOT_FOUND). The rewritten request still reaches the function with the
+ *    ORIGINAL pathname in `req.url`, so only the injected query keys have
+ *    to be removed.
+ */
+const VERCEL_INJECTED_QUERY_KEYS = Object.freeze([
+  '...route',
+  '__gev_api_path',
+]);
+
+/**
+ * Drop Vercel's injected query keys from a Connect-style URL, leaving every
+ * other `key=value` pair byte-for-byte as it arrived (no re-encoding of the
+ * caller's own parameters — `bbox=29.2,-95.2,…` stays exactly that).
+ *
+ * @param {string} url
+ * @returns {string}
+ */
+function stripVercelInjectedQuery(url) {
+  const q = url.indexOf('?');
+  if (q === -1) return url;
+  const kept = url
+    .slice(q + 1)
+    .split('&')
+    .filter((pair) => {
+      if (pair === '') return false;
+      const eq = pair.indexOf('=');
+      const rawKey = eq === -1 ? pair : pair.slice(0, eq);
+      let key = rawKey;
+      try {
+        key = decodeURIComponent(rawKey.replace(/\+/g, ' '));
+      } catch {
+        // malformed escape — compare the raw key
+      }
+      return !VERCEL_INJECTED_QUERY_KEYS.includes(key);
+    });
+  return kept.length ? `${url.slice(0, q)}?${kept.join('&')}` : url.slice(0, q);
+}
+
 function resolveRequestUrl(req) {
   const url = typeof req.url === 'string' ? req.url : '';
-  if (url.startsWith('/api/') || url === '/api') return url;
+  if (url.startsWith('/api/') || url === '/api') {
+    return stripVercelInjectedQuery(url);
+  }
 
   const routeParam = req.query?.route;
   const segments = Array.isArray(routeParam)
@@ -143,7 +199,7 @@ function resolveRequestUrl(req) {
 
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(req.query || {})) {
-    if (key === 'route') continue;
+    if (key === 'route' || VERCEL_INJECTED_QUERY_KEYS.includes(key)) continue;
     for (const entry of Array.isArray(value) ? value : [value]) {
       if (entry !== undefined) search.append(key, entry);
     }
@@ -152,4 +208,4 @@ function resolveRequestUrl(req) {
   return qs ? `${pathname}?${qs}` : pathname;
 }
 
-export { rehydrateBody, resolveRequestUrl };
+export { rehydrateBody, resolveRequestUrl, stripVercelInjectedQuery };

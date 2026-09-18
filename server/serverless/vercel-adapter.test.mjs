@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { rehydrateBody, resolveRequestUrl } from './vercel-adapter.js';
+import {
+  rehydrateBody,
+  resolveRequestUrl,
+  stripVercelInjectedQuery,
+} from './vercel-adapter.js';
 
 /** Reads a body the way server/providers/common/request.js `readRequestBodyCapped` does. */
 async function readViaAsyncIterator(req) {
@@ -73,4 +77,58 @@ test('resolveRequestUrl rebuilds the path from req.query.route (string) and pres
 test('resolveRequestUrl falls back to bare /api with no route segments', () => {
   const req = { url: undefined, query: {} };
   assert.equal(resolveRequestUrl(req), '/api');
+});
+
+test('resolveRequestUrl strips the query keys Vercel injects via the /api/:path* rewrite and the [...route] match', () => {
+  const req = {
+    url: '/api/sources/earthquakes?starttime=2026-09-17T18:34:32Z&__gev_api_path=sources%2Fearthquakes&...route=route',
+    query: {
+      starttime: '2026-09-17T18:34:32Z',
+      __gev_api_path: 'sources/earthquakes',
+      '...route': 'route',
+    },
+  };
+  assert.equal(
+    resolveRequestUrl(req),
+    '/api/sources/earthquakes?starttime=2026-09-17T18:34:32Z',
+  );
+});
+
+test("stripVercelInjectedQuery leaves the caller's own parameters byte-for-byte and drops the whole query when nothing is left", () => {
+  assert.equal(
+    stripVercelInjectedQuery(
+      '/api/ais-live?bbox=29.2,-95.2,29.9,-94.4&maxRows=200&...route=route',
+    ),
+    '/api/ais-live?bbox=29.2,-95.2,29.9,-94.4&maxRows=200',
+  );
+  assert.equal(
+    stripVercelInjectedQuery(
+      '/api/celestrak/stations?__gev_api_path=celestrak%2Fstations&...route=route',
+    ),
+    '/api/celestrak/stations',
+  );
+  assert.equal(
+    stripVercelInjectedQuery('/api/celestrak/stations'),
+    '/api/celestrak/stations',
+  );
+  assert.equal(
+    stripVercelInjectedQuery('/api/x?path=keep-me'),
+    '/api/x?path=keep-me',
+  );
+});
+
+test('resolveRequestUrl (fallback rebuild) ignores the injected keys in req.query too', () => {
+  const req = {
+    url: '',
+    query: {
+      route: ['tomtom', 'status'],
+      point: '30.25,-97.75',
+      __gev_api_path: 'tomtom/status',
+      '...route': 'route',
+    },
+  };
+  assert.equal(
+    resolveRequestUrl(req),
+    '/api/tomtom/status?point=30.25%2C-97.75',
+  );
 });
