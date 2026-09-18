@@ -191,3 +191,16 @@ Selftest step table (from the response; saved verbatim with provenance to `docs/
 
 Gates before deploy (commit 2ed4d78): `format:check` pass (930 files) · `check:boundaries` pass · `npm test` 4145 tests / 4144 pass / 0 fail / 1 skipped · `test:ondemand` 136/136 · `test:serverless` 30/30 · `vite build` exit 0 · functions under `api/`: 9 (`api/[...route].js` + 8 `api/ondemand/*.js`; `api/ondemand/_config.js` is an underscore helper, not a function).
 
+
+## 6. Gate 3 row 1 — earthquake.search verification — 2026-09-18T06:13Z (commit 5da207c, sandbox sbx_Fp2WF0A4uY1XmiGmDU3vphQWqtfS)
+
+Preview `sb-pg1bhjba1gcs.vercel.run`; runtime-only env as in §5; function count still 9. Full detail: `docs/audit/gate3-row1-earthquake-verification.md`.
+
+| Check | HTTP | Latency ms | UTC | Note |
+|---|---|---|---|---|
+| a: `/api/sources/earthquakes?starttime=2026-09-17T06:13:42Z&minmagnitude=4…` | 200 | 296 | 2026-09-18T06:13:42Z | 12 USGS events |
+| b: `/api/sources/earthquakes?latitude=25.2&longitude=55.3&maxradiuskm=1500…` | 200 | 342 | 2026-09-18T06:13:42Z | 14 events (Gulf circle) |
+| c: `/api/sources/earthquakes?foo=bar` | 400 | 79 | 2026-09-18T06:13:42Z | invalid_query unknown=[foo] |
+| d: `/api/ondemand/health` | 200 | 364 | 2026-09-18T06:13:42Z | chat/media/workflow healthy, sources resolved |
+| e: `OnDemand sync query (session+query)` | 200 | 7682 | 2026-09-18T06:13:43Z | tool not attachable (NOT FOUND IN LIVE DOCS); context-injected answer cites 10/10 USGS ids |
+| f: `/api/ondemand/selftest` | 200 | 29253 | 2026-09-18T06:13:51Z | selftest 8/0/2 unchanged |
