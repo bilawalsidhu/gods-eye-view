@@ -1,5 +1,13 @@
 # Changelog
 
+- Spend the traffic dot cap on the roads the camera can reach: when the cap
+  binds, roads inside the camera rectangle and a margin ring reach their ideal
+  dot count before roads elsewhere in the fetched tile grow. The total is
+  unchanged and an uncapped view still reaches every road, but a cap too small
+  to seed every road now seeds the visible ones, so roads outside the frame can
+  drop to no dots where they previously kept one. Allocation without a usable
+  camera rectangle is identical to before.
+
 - CCTV cameras whose bearing is a guess now say so. Packs mark bearings derived
   from a hash of the camera id as `headingConfidence: 'low'`, but nothing read the
   flag, so roughly 70% of a default catalog rendered like surveyed facings. The HUD

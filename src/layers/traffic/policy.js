@@ -55,6 +55,28 @@ export const OVERLAP_THRESHOLD = 0.6;
 
 export const MAX_DOTS = 6000;
 
+/**
+ * @const {number} Fraction of the camera rectangle's own span kept at full dot
+ * priority OUTSIDE that rectangle.
+ *
+ * Roads are fetched in a box centered on the look-at ground point (C4, see
+ * `getFetchCenter`) while the frame is the camera rectangle. At an oblique
+ * pitch those two are offset, so much of every tile sits outside the frame:
+ * at a 650 m / −30° camera over midtown, 47 % of the fetched roads lay outside
+ * the rectangle with MAX_DOTS already exhausted. Allocation fills what the
+ * camera can reach first.
+ *
+ * A hard screen-edge cut would pop dots in during a pan, so this ring keeps
+ * the roads a small camera move is about to reveal already populated. It must
+ * stay well under 0.5, since the ring grows the rectangle by this fraction on
+ * every side: at 0.4 the ring swallowed the whole tile in that measurement,
+ * every road landed in one tier, and the pass became a no-op. `roadsWithinView`
+ * also floors the ring at MIN_CENTER_SHIFT_KM, which is what covers a small
+ * rectangle this fraction alone would leave too thin.
+ */
+
+export const VIEWPORT_PRIORITY_MARGIN = 0.15;
+
 /** @const {number} Polylines longer than this are simplified by sub-sampling */
 
 export const MAX_WAYPOINTS_PER_ROAD = 80;

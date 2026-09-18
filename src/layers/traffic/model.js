@@ -10,6 +10,8 @@ import {
   DENSITY_MULT,
   JAM_DOT_FAR_SCALE,
   JAM_DOT_DEPTH_PUNCH,
+  VIEWPORT_PRIORITY_MARGIN,
+  MIN_CENTER_SHIFT_KM,
 } from './policy.js';
 
 export function createModel({ state: layerState, services, parts, source }) {
@@ -146,33 +148,138 @@ export function createModel({ state: layerState, services, parts, source }) {
   }
 
   /**
+   * @const {number} Degrees — floor on the margin ring, using the same flat
+   * 111 km per degree this module already assumes. Allocation only re-runs on
+   * the load path, and `onCameraChanged` skips that path entirely while the
+   * view still overlaps and the center has moved less than
+   * MIN_CENTER_SHIFT_KM. A pan shorter than that therefore reveals roads whose
+   * budgets were fixed before they were in frame, so the ring must be at least
+   * as wide as the move the layer tolerates in silence. The proportional ring
+   * alone falls under it below roughly 2 km at a near-nadir pitch — which is
+   * where the cap binds hardest.
+   */
+
+  const MIN_RING_DEG = (MIN_CENTER_SHIFT_KM * 1000) / 111000;
+
+  /**
+   * Flag the roads the camera can reach, for dot-budget priority.
+   *
+   * The test is each road's bounding box against the view rectangle grown by
+   * the margin ring. A box overlaps for some diagonal roads whose geometry
+   * does not, which over-includes; that is the safe direction, since the worst
+   * case is the demand-only split this replaced.
+   *
+   * A rectangle without positive spans yields `null` and the caller then
+   * allocates exactly as it did before viewport priority existed. The
+   * `east > west` half of that test is belt-and-braces rather than load
+   * bearing: for the wrapped form Cesium reports across the antimeridian the
+   * margin is negative, so the interval is empty and every road already falls
+   * outside it — which allocates the same way. It is kept because a later
+   * reader normalizing the wrap is likelier to reach for `Math.abs` than to
+   * notice that.
+   *
+   * @param {Array} roads - Parsed road objects, `coords` in degrees.
+   * @param {{south:number, west:number, north:number, east:number}|null} viewBounds
+   *   Current camera rectangle in degrees, or null when unavailable.
+   * @returns {boolean[]|null} Per-road reachability, or null to opt out.
+   */
+
+  function roadsWithinView(roads, viewBounds) {
+    if (!viewBounds) return null;
+    const { south, west, north, east } = viewBounds;
+    if (!(north > south) || !(east > west)) return null;
+    // A degree of longitude shrinks away from the equator, so the flat
+    // conversion above would under-cover the floor there. The floor is a
+    // guarantee, so widen it by the rectangle's own latitude.
+    const lonFloor =
+      MIN_RING_DEG /
+      Math.max(0.2, Math.cos((((south + north) / 2) * Math.PI) / 180));
+    const latMargin = Math.max(
+      (north - south) * VIEWPORT_PRIORITY_MARGIN,
+      MIN_RING_DEG,
+    );
+    const lonMargin = Math.max(
+      (east - west) * VIEWPORT_PRIORITY_MARGIN,
+      lonFloor,
+    );
+    const minLat = south - latMargin;
+    const maxLat = north + latMargin;
+    const minLon = west - lonMargin;
+    const maxLon = east + lonMargin;
+
+    return roads.map((road) => {
+      const coords = road.coords;
+      if (!coords?.length) return false;
+      let roadMinLon = Infinity;
+      let roadMaxLon = -Infinity;
+      let roadMinLat = Infinity;
+      let roadMaxLat = -Infinity;
+      for (const [lon, lat] of coords) {
+        if (lon < roadMinLon) roadMinLon = lon;
+        if (lon > roadMaxLon) roadMaxLon = lon;
+        if (lat < roadMinLat) roadMinLat = lat;
+        if (lat > roadMaxLat) roadMaxLat = lat;
+      }
+      return (
+        roadMaxLon >= minLon &&
+        roadMinLon <= maxLon &&
+        roadMaxLat >= minLat &&
+        roadMinLat <= maxLat
+      );
+    });
+  }
+
+  /**
    * Distribute a fixed dot budget fairly across all visible roads.
    *
    * Algorithm:
    *  1. Compute ideal dot count per road via `computeDotCount`.
-   *  2. Seed one dot to every road that wants at least one (fairness pass).
-   *  3. Distribute remaining budget proportionally to each road's ideal count.
+   *  2. Seed one dot to every road that wants at least one (fairness pass),
+   *     taking roads the camera can reach before the rest.
+   *  3. Distribute remaining budget proportionally to each road's ideal count,
+   *     filling the roads in frame before any road outside it.
    *  4. Assign leftover dots (from floor rounding) to roads with the highest
    *     fractional residuals (largest-remainder method).
    *
    * This prevents high-density motorways from starving smaller residential roads
-   * when the global MAX_DOTS cap is reached.
+   * when the global MAX_DOTS cap is reached. Fairness alone, however, is fair
+   * across the FETCHED tile rather than the visible part of it: the tile is
+   * centred on the look-at ground point while the frame is the camera
+   * rectangle, and at an oblique pitch those two rectangles are offset, so a
+   * low shallow-pitch camera over a dense core reaches the cap with much of
+   * the budget spent behind or beside the frame. Viewport priority keeps that
+   * fairness inside the tier the user is looking at.
+   *
+   * Without `viewBounds` — no viewer, or a rectangle that cannot be used — the
+   * allocation is identical to the demand-only one in every respect.
    *
    * @param {Array} roads    - Parsed road objects.
    * @param {number} altitude - Camera altitude in meters (affects spacing).
    * @param {number} dotCap   - Maximum total dots to allocate.
+   * @param {{south:number, west:number, north:number, east:number}|null} [viewBounds=null]
+   *   Current camera rectangle in degrees; omit to allocate on demand alone.
    * @returns {number[]} Per-road dot budgets, same length as `roads`.
    */
 
-  function allocateRoadDotBudgets(roads, altitude, dotCap) {
+  function allocateRoadDotBudgets(roads, altitude, dotCap, viewBounds = null) {
     const planned = roads.map((road) => computeDotCount(road, altitude));
     const budgets = new Array(roads.length).fill(0);
     let remaining = Math.max(0, dotCap);
+    const withinView = roadsWithinView(roads, viewBounds);
 
-    // Pass 1 — fairness seed: give one dot to every road (highest-demand first)
+    // Pass 1 — fairness seed: give one dot to every road (highest-demand
+    // first), and to the roads in frame before the ones outside it, so a cap
+    // exhausted mid-pass starves what is off screen rather than whatever the
+    // Overpass response happened to list last.
     const firstPassOrder = planned
       .map((count, index) => ({ count, index }))
-      .sort((a, b) => b.count - a.count);
+      .sort((a, b) =>
+        withinView && withinView[a.index] !== withinView[b.index]
+          ? withinView[a.index]
+            ? -1
+            : 1
+          : b.count - a.count,
+      );
 
     for (const entry of firstPassOrder) {
       if (remaining <= 0) break;
@@ -183,40 +290,68 @@ export function createModel({ state: layerState, services, parts, source }) {
 
     if (remaining <= 0) return budgets;
 
-    // Pass 2 — proportional distribution of the remaining budget
-    let totalRemainder = 0;
-    for (let i = 0; i < planned.length; i++) {
-      totalRemainder += Math.max(0, planned[i] - budgets[i]);
-    }
-    if (totalRemainder <= 0) return budgets;
-
-    const residuals = [];
-    let assigned = 0;
-    for (let i = 0; i < planned.length; i++) {
-      const cap = Math.max(0, planned[i] - budgets[i]);
-      if (cap <= 0) continue;
-      const ideal = (cap / totalRemainder) * remaining;
-      const add = Math.min(cap, Math.floor(ideal));
-      budgets[i] += add;
-      assigned += add;
-      residuals.push({ index: i, residual: ideal - add });
-    }
-
-    // Pass 3 — largest-remainder: hand out leftover dots from floor rounding
-    let leftover = remaining - assigned;
-    if (leftover > 0 && residuals.length > 0) {
-      residuals.sort((a, b) => b.residual - a.residual);
-      let cursor = 0;
-      while (leftover > 0 && residuals.length > 0) {
-        const idx = residuals[cursor % residuals.length].index;
-        if (budgets[idx] < planned[idx]) {
-          budgets[idx] += 1;
-          leftover -= 1;
-        }
-        cursor += 1;
-        // Safety valve: avoid infinite loop if all roads are already at their ideal
-        if (cursor > residuals.length * 3 && leftover > 0) break;
+    /**
+     * Pass 2 and 3 over one tier of roads: proportional distribution of the
+     * available budget, then largest-remainder rounding.
+     *
+     * @param {number[]} indices  - Road indices forming this tier.
+     * @param {number} available - Dots this tier may consume.
+     * @returns {number} Dots left over for the next tier.
+     */
+    const distribute = (indices, available) => {
+      if (available <= 0) return 0;
+      let totalRemainder = 0;
+      for (const i of indices) {
+        totalRemainder += Math.max(0, planned[i] - budgets[i]);
       }
+      if (totalRemainder <= 0) return available;
+
+      const residuals = [];
+      let assigned = 0;
+      for (const i of indices) {
+        const cap = Math.max(0, planned[i] - budgets[i]);
+        if (cap <= 0) continue;
+        const ideal = (cap / totalRemainder) * available;
+        const add = Math.min(cap, Math.floor(ideal));
+        budgets[i] += add;
+        assigned += add;
+        residuals.push({ index: i, residual: ideal - add });
+      }
+
+      let leftover = available - assigned;
+      if (leftover > 0 && residuals.length > 0) {
+        residuals.sort((a, b) => b.residual - a.residual);
+        let cursor = 0;
+        while (leftover > 0) {
+          const idx = residuals[cursor % residuals.length].index;
+          if (budgets[idx] < planned[idx]) {
+            budgets[idx] += 1;
+            leftover -= 1;
+          }
+          cursor += 1;
+          // Safety valve: every road in this tier is already at its ideal
+          if (cursor > residuals.length * 3) break;
+        }
+      }
+      return leftover;
+    };
+
+    if (withinView) {
+      const inFrame = [];
+      const outOfFrame = [];
+      for (let i = 0; i < roads.length; i++) {
+        (withinView[i] ? inFrame : outOfFrame).push(i);
+      }
+      // Roads in frame reach their ideal count first; only what survives that
+      // spills outward, so an off-screen road can no longer take a dot from
+      // one the user is looking at.
+      remaining = distribute(inFrame, remaining);
+      distribute(outOfFrame, remaining);
+    } else {
+      distribute(
+        planned.map((_, index) => index),
+        remaining,
+      );
     }
 
     return budgets;
