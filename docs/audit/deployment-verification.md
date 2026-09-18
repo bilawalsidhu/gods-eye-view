@@ -204,3 +204,87 @@ Preview `sb-pg1bhjba1gcs.vercel.run`; runtime-only env as in §5; function count
 | d: `/api/ondemand/health` | 200 | 364 | 2026-09-18T06:13:42Z | chat/media/workflow healthy, sources resolved |
 | e: `OnDemand sync query (session+query)` | 200 | 7682 | 2026-09-18T06:13:43Z | tool not attachable (NOT FOUND IN LIVE DOCS); context-injected answer cites 10/10 USGS ids |
 | f: `/api/ondemand/selftest` | 200 | 29253 | 2026-09-18T06:13:51Z | selftest 8/0/2 unchanged |
+
+## 7. Speech/benchmark/tier release — sandbox verification 2026-09-18T06:59Z (commits e7e049b…fe9aab8, sandbox sbx_wFeQcG8RpJPrVWAvRaD6J9ehJTal)
+
+Tier T2, preview `sb-26l9a6g6k6rt.vercel.run`, `npm run dev:serverless` over `dist/` + `api/**`; runtime-only env: ONDEMAND_API_KEY `[REDACTED]`, ONDEMAND_SELFTEST_TOKEN `[REDACTED]`, ONDEMAND_BASE_URL, GODS_EYE_FLOW_VERSION=0, VITE_SERVERLESS_MODE=1 (no endpoint overrides → TIER_DEFAULTS apply). No `.env` file in the sandbox. Function count 9.
+
+| Check | Expected | HTTP | Latency ms | UTC | Note |
+|---|---|---|---|---|---|
+| `GET /` | 200 | **200** | 65 | 2026-09-18T06:59:07Z | SPA shell |
+| `GET /api/ondemand/health` | 200 | **200** | 2628 | 2026-09-18T06:59:07Z | all five fields **healthy** (speech now probed live), full JSON below |
+| `GET /api/celestrak/active` (catch-all) | 200 | **200** | 3485 | 2026-09-18T06:59:09Z | `CALSPHERE 1` / `1 00900U 64063C   26260.931517…` |
+| `GET /api/sources/earthquakes?starttime=<now-24h>&minmagnitude=4.5&limit=20` | 200 | **200** | 326 | 2026-09-18T06:59:13Z | 10 events, e.g. `us7000ti83` M4.7, `us7000ti7x` M4.7, `us7000ti79` M4.5 |
+| `GET /api/sources/earthquakes?latitude=25.2&longitude=55.3&maxradiuskm=1500&starttime=<now-30d>&minmagnitude=4` | 200 | **200** | 148 | 2026-09-18T06:59:13Z | 14 events |
+| `GET /api/ais-live` | 501 | **501** | 65 | 2026-09-18T06:59:13Z | unavailable_in_serverless |
+| `GET /api/realtime/token` | 501 | **501** | 55 | 2026-09-18T06:59:13Z | unavailable_in_serverless |
+| `GET /api/setup/status` | 404 | **404** | 55 | 2026-09-18T06:59:14Z | catch-all JSON 404 |
+| `GET /api/ondemand/selftest` (no header) | 404 | **404** | 66 | 2026-09-18T06:59:14Z | `{"error":"not_found"}` |
+| `GET /api/ondemand/selftest` (token) | 200 | **200** | 31208 | 2026-09-18T06:59:45Z | passed 8 / failed 0 / skipped 2 (steps 4 and 8 skipped by account state); SSE ttfd 1815 ms; latency column = durationMs |
+| `GET /api/ondemand/selftest` 3 s after a run started | 429 | **429** | 82 | 2026-09-18T06:59:17Z | 429 `rate_limited`, Retry-After 60 |
+
+Full `/api/ondemand/health` JSON (secret-free):
+
+```json
+{
+  "ondemand": "healthy",
+  "chat": "healthy",
+  "speech": "healthy",
+  "media": "healthy",
+  "workflow": "healthy",
+  "plugins": {},
+  "configured": true,
+  "speechProbe": {
+    "cached": false,
+    "ageSec": 0
+  },
+  "reasoningModeInvalid": false,
+  "config": {
+    "tiers": {
+      "ASK": {
+        "fulfillmentEndpointId": "predefined-gpt-5.6-luna",
+        "reasoningMode": "low"
+      },
+      "INVESTIGATE": {
+        "fulfillmentEndpointId": "predefined-claude-sonnet-5",
+        "reasoningMode": "low"
+      },
+      "DEEP": {
+        "fulfillmentEndpointId": "predefined-claude-sonnet-5",
+        "reasoningMode": "high"
+      }
+    },
+    "apiKey": {
+      "configured": true
+    },
+    "baseUrl": {
+      "configured": true,
+      "source": "ONDEMAND_BASE_URL"
+    },
+    "reasoningEndpointId": {
+      "configured": true,
+      "source": "default"
+    },
+    "fulfillmentEndpointId": {
+      "configured": true,
+      "source": "default"
+    },
+    "reasoningMode": {
+      "configured": false,
+      "source": "unset",
+      "valid": true
+    },
+    "flowVersion": {
+      "configured": true,
+      "source": "GODS_EYE_FLOW_VERSION"
+    },
+    "spatialFlowId": {
+      "configured": false,
+      "source": "unset"
+    }
+  },
+  "checkedAt": "2026-09-18T06:59:07.722Z",
+  "message": "OnDemand API reachable; chat probe succeeded."
+}
+```
+

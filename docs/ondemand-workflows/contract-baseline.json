@@ -1,9 +1,9 @@
 {
   "ok": true,
   "configured": true,
-  "generatedAtUtc": "2026-09-18T05:48:08.602Z",
+  "generatedAtUtc": "2026-09-18T06:59:45.384Z",
   "mode": "direct",
-  "sessionIdHash": "7387674f35cf97455621cdcf273ba5cb784b9f7041ac5f635537dbd2aefc330c",
+  "sessionIdHash": "fde1e441cc264035b589e174c43b005568c322d7070c6461417fbd196c6ed222",
   "fulfillmentEndpointId": "predefined-gpt-5.6-luna",
   "steps": [
     {
@@ -11,9 +11,9 @@
       "name": "session create + reuse",
       "status": "PASS",
       "httpStatus": 200,
-      "latencyMs": 265,
+      "latencyMs": 282,
       "ttfdMs": null,
-      "utc": "2026-09-18T05:47:39.426Z",
+      "utc": "2026-09-18T06:59:14.177Z",
       "detail": "sessionId=***"
     },
     {
@@ -21,9 +21,9 @@
       "name": "sync prompt",
       "status": "PASS",
       "httpStatus": 200,
-      "latencyMs": 2453,
+      "latencyMs": 1674,
       "ttfdMs": null,
-      "utc": "2026-09-18T05:47:39.691Z",
+      "utc": "2026-09-18T06:59:14.459Z",
       "detail": "answer.length=2"
     },
     {
@@ -31,19 +31,19 @@
       "name": "SSE stream",
       "status": "PASS",
       "httpStatus": 200,
-      "latencyMs": 3786,
-      "ttfdMs": 1435,
-      "utc": "2026-09-18T05:47:42.144Z",
-      "detail": "heartbeat=true fulfillmentDeltas=25 timeToFirstDeltaMs=1435"
+      "latencyMs": 4351,
+      "ttfdMs": 1815,
+      "utc": "2026-09-18T06:59:16.134Z",
+      "detail": "heartbeat=true fulfillmentDeltas=27 timeToFirstDeltaMs=1815"
     },
     {
       "step": 4,
       "name": "built-in tool/plugin invocation",
       "status": "SKIP",
       "httpStatus": 200,
-      "latencyMs": 165,
+      "latencyMs": 175,
       "ttfdMs": null,
-      "utc": "2026-09-18T05:47:45.930Z",
+      "utc": "2026-09-18T06:59:20.485Z",
       "skipReason": "no plugin id in env and the account's Agents API listing is empty (GET /plugin/v1/list -> HTTP 200, total=0); no documented chat agent id was invented"
     },
     {
@@ -51,30 +51,30 @@
       "name": "STT on in-script generated WAV",
       "status": "PASS",
       "httpStatus": 200,
-      "latencyMs": 10840,
+      "latencyMs": 13086,
       "ttfdMs": null,
-      "utc": "2026-09-18T05:47:46.095Z",
-      "detail": "mediaId=6aacd0827b8af592f50397d2 textLength=0"
+      "utc": "2026-09-18T06:59:20.660Z",
+      "detail": "mediaId=6aace14822b58594b497d4ff textLength=0"
     },
     {
       "step": 6,
       "name": "TTS",
       "status": "PASS",
       "httpStatus": 200,
-      "latencyMs": 2695,
+      "latencyMs": 2364,
       "ttfdMs": null,
-      "utc": "2026-09-18T05:47:56.935Z",
-      "detail": "contentType=application/octet-stream bytes=41856 container=mp3"
+      "utc": "2026-09-18T06:59:33.746Z",
+      "detail": "contentType=application/octet-stream bytes=42240 container=mp3"
     },
     {
       "step": 7,
       "name": "Media PNG analysis",
       "status": "PASS",
       "httpStatus": 200,
-      "latencyMs": 6998,
+      "latencyMs": 7343,
       "ttfdMs": null,
-      "utc": "2026-09-18T05:47:59.630Z",
-      "detail": "actionStatus=completed context=\"The image is a tiny abstract pixel-art or icon-like graphic composed of a tightly packed grid of square pixels, dominate\""
+      "utc": "2026-09-18T06:59:36.110Z",
+      "detail": "actionStatus=completed context=\"The image is an abstract geometric pattern composed entirely of small square pixels arranged in a tightly packed rectang\""
     },
     {
       "step": 8,
@@ -83,7 +83,7 @@
       "httpStatus": null,
       "latencyMs": 0,
       "ttfdMs": null,
-      "utc": "2026-09-18T05:48:06.628Z",
+      "utc": "2026-09-18T06:59:43.454Z",
       "skipReason": "ONDEMAND_SPATIAL_FLOW_ID unset on the deployment — auto-skipped by design"
     },
     {
@@ -91,9 +91,9 @@
       "name": "session-memory follow-up",
       "status": "PASS",
       "httpStatus": 200,
-      "latencyMs": 1974,
+      "latencyMs": 1929,
       "ttfdMs": null,
-      "utc": "2026-09-18T05:48:06.628Z",
+      "utc": "2026-09-18T06:59:43.454Z",
       "detail": "answer contains the step-2 code word"
     },
     {
@@ -101,69 +101,53 @@
       "name": "latency summary",
       "status": "PASS",
       "httpStatus": null,
-      "latencyMs": 0,
+      "latencyMs": 1,
       "ttfdMs": null,
-      "utc": "2026-09-18T05:48:08.602Z",
-      "detail": "min=265ms max=10840ms mean=4144ms totalMs=29011"
+      "utc": "2026-09-18T06:59:45.383Z",
+      "detail": "min=282ms max=13086ms mean=4433ms totalMs=31029"
     }
   ],
   "summary": {
     "passed": 8,
     "failed": 0,
     "skipped": 2,
-    "totalMs": 29011,
-    "minMs": 265,
-    "maxMs": 10840,
-    "meanMs": 4144
+    "totalMs": 31029,
+    "minMs": 282,
+    "maxMs": 13086,
+    "meanMs": 4433
   },
-  "durationMs": 29177,
+  "durationMs": 31208,
+  "history": [
+    {
+      "generatedAtUtc": "2026-09-18T05:48:08.602Z",
+      "summary": {
+        "passed": 8,
+        "failed": 0,
+        "skipped": 2,
+        "totalMs": 29011,
+        "minMs": 265,
+        "maxMs": 10840,
+        "meanMs": 4144
+      },
+      "sessionIdHash": "7387674f35cf97455621cdcf273ba5cb784b9f7041ac5f635537dbd2aefc330c",
+      "previewHost": "sb-5hfcfkb7a79s.vercel.run",
+      "note": "previous selftest run (8 passed / 0 failed / 2 skipped)"
+    }
+  ],
   "_provenance": {
-    "source": "GET /api/ondemand/selftest on the sandbox emulator (server/serverless/dev-server.mjs serving dist/ + api/**), header x-selftest-token (one-time token, rotated after this run)",
-    "previewHost": "sb-5hfcfkb7a79s.vercel.run",
-    "sandboxId": "sbx_CHYYYEfPHVf9TgYwIrYaHLjqRuiB",
-    "runtime": "node v24.14.1; env injected at process start only (no .env file); ONDEMAND_API_KEY masked G7Gg…VjnL",
-    "configSources": {
-      "apiKey": {
-        "configured": true
-      },
-      "baseUrl": {
-        "configured": true,
-        "source": "ONDEMAND_BASE_URL"
-      },
-      "reasoningEndpointId": {
-        "configured": true,
-        "source": "ONDEMAND_ENDPOINT_ID"
-      },
-      "fulfillmentEndpointId": {
-        "configured": true,
-        "source": "ONDEMAND_ENDPOINT_ID"
-      },
-      "reasoningMode": {
-        "configured": true,
-        "source": "ONDEMAND_REASONING_MODE",
-        "valid": true
-      },
-      "flowVersion": {
-        "configured": true,
-        "source": "GODS_EYE_FLOW_VERSION"
-      },
-      "spatialFlowId": {
-        "configured": false,
-        "source": "unset"
-      }
+    "source": "GET /api/ondemand/selftest (x-selftest-token; one-time runtime token, redacted)",
+    "previewHost": "sb-26l9a6g6k6rt.vercel.run",
+    "sandboxId": "sbx_wFeQcG8RpJPrVWAvRaD6J9ehJTal",
+    "runtime": "node v24.14.1; runtime-only env (ONDEMAND_API_KEY [REDACTED], ONDEMAND_SELFTEST_TOKEN [REDACTED], ONDEMAND_BASE_URL, GODS_EYE_FLOW_VERSION=0, VITE_SERVERLESS_MODE=1); tier defaults from TIER_DEFAULTS (no endpoint env overrides)",
+    "healthAtRun": {
+      "ondemand": "healthy",
+      "chat": "healthy",
+      "speech": "healthy",
+      "media": "healthy",
+      "workflow": "healthy",
+      "configured": true
     },
-    "repoCommitBeforeThisDocCommit": "2ed4d78dcf5dcd9ce490288eb003cda618b8bc6e",
-    "previousBaseline": "direct-mode CLI run of 2026-09-18T04:51Z, kept in git history (commit 1cd99a2, docs/ondemand-workflows/contract-baseline.json)",
-    "verificationUtc": [
-      "2026-09-18T05:47:35Z",
-      "2026-09-18T05:47:35Z",
-      "2026-09-18T05:47:35Z",
-      "2026-09-18T05:47:39Z",
-      "2026-09-18T05:47:39Z",
-      "2026-09-18T05:47:39Z",
-      "2026-09-18T05:47:39Z",
-      "2026-09-18T05:47:39Z",
-      "2026-09-18T05:48:54Z"
-    ]
+    "repoCommitBeforeThisDocCommit": "fe9aab8",
+    "skippedSteps": "4 (account has no agents — GET /plugin/v1/list total 0) and 8 (no ONDEMAND_SPATIAL_FLOW_ID) — unchanged by design; speech steps 5 and 6 PASS"
   }
 }
