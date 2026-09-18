@@ -2,6 +2,38 @@ import { twoline2satrec } from 'satellite.js';
 import * as Cesium from 'cesium';
 import { CATALOG_GROUPS, ISS_NORAD, POINT_STYLES } from './policy.js';
 
+/**
+ * Fold the per-group provider statuses of one refresh into the layer's view:
+ *   status      'stale' if ANY loaded group was served stale (proxy cache past
+ *               TTL or the bundled snapshot), else 'degraded' if any loaded
+ *               group said so, else 'live' when at least one loaded group
+ *               reported; null when no loaded group carried a status.
+ *   error       first non-null provider error (loaded groups first, then the
+ *               failed ones, so a partial outage still names its cause).
+ *   fetchedAtMs OLDEST data-fetch time among the loaded groups.
+ *   source      first provider source label among the loaded groups.
+ * @param {Array<{ok:boolean, provider:object|null, error?:string|null}>} results
+ */
+export function summarizeProviderStatus(results) {
+  const loaded = results.filter((r) => r.ok);
+  const reported = loaded.map((r) => r.provider).filter(Boolean);
+  let status = null;
+  if (reported.some((p) => p.status === 'stale')) status = 'stale';
+  else if (reported.some((p) => p.status === 'degraded')) status = 'degraded';
+  else if (reported.length) status = 'live';
+  const firstError = (rows) =>
+    rows.map((r) => r.error || r.provider?.error || null).find(Boolean) || null;
+  const fetchedAts = reported
+    .map((p) => p.fetchedAtMs)
+    .filter((ms) => Number.isFinite(ms));
+  return {
+    status,
+    error: firstError(loaded) || firstError(results.filter((r) => !r.ok)),
+    fetchedAtMs: fetchedAts.length ? Math.min(...fetchedAts) : null,
+    source: reported.map((p) => p.source).find(Boolean) || null,
+  };
+}
+
 export function createIngestion({
   state: layerState,
   services,
@@ -31,20 +63,41 @@ export function createIngestion({
               const res = await source.readGroup(groupDef.path, {
                 signal: updateSignal,
               });
-              if (!res.ok) return { ...groupDef, entries: [], ok: false };
+              const provider = res.provider || null;
+              if (!res.ok)
+                return {
+                  ...groupDef,
+                  entries: [],
+                  ok: false,
+                  provider,
+                  error: res.error || provider?.error || null,
+                };
               const entries = parts.orbits.parseTLE(res.text);
               updateSignal.throwIfAborted();
-              return { ...groupDef, entries, ok: entries.length > 0 };
+              return {
+                ...groupDef,
+                entries,
+                ok: entries.length > 0,
+                provider,
+                error: provider?.error || null,
+              };
             } catch (error) {
               if (updateSignal.aborted || error?.name === 'AbortError')
                 throw error;
-              return { ...groupDef, entries: [], ok: false };
+              return {
+                ...groupDef,
+                entries: [],
+                ok: false,
+                provider: null,
+                error: null,
+              };
             }
           }),
         );
         updateSignal.throwIfAborted();
 
         const failed = results.filter((r) => !r.ok).map((r) => r.path);
+        const provided = summarizeProviderStatus(results);
         if (failed.length > 0) {
           console.warn(
             `[Data:Satellites] Groups failed or empty: ${failed.join(', ')}`,
@@ -60,6 +113,10 @@ export function createIngestion({
         // screen and surface the outage instead — do NOT stamp _lastUpdate.
         if (results.every((r) => !r.ok)) {
           layerState._lastError = 'CelesTrak unreachable';
+          // The proxy's own reason (e.g. "CelesTrak HTTP 403 — no cached TLEs")
+          // is kept for diagnostics; the provider state of the catalog still on
+          // screen (if any) is left as it was — it describes THAT data.
+          if (provided.error) layerState._providerError = provided.error;
           console.warn(
             '[Data:Satellites] All CelesTrak groups failed — keeping existing catalog, surfacing outage',
           );
@@ -73,6 +130,18 @@ export function createIngestion({
         layerState._lastError = failed.length
           ? `${failed.length} CelesTrak group${failed.length === 1 ? '' : 's'} unavailable`
           : null;
+        // Provider state of the catalog being built: STALE if ANY loaded group
+        // came from the proxy's stale cache or the bundled snapshot, with the
+        // OLDEST data-fetch time so the row's age is honest.
+        layerState._providerStatus = provided.status;
+        layerState._providerError = provided.error;
+        layerState._providerFetchedAt = provided.fetchedAtMs;
+        layerState._providerSource = provided.source;
+        if (provided.status === 'stale') {
+          console.warn(
+            `[Data:Satellites] Catalog served stale by the proxy (${provided.source || 'cache'})${provided.error ? ` — ${provided.error}` : ''}`,
+          );
+        }
 
         // Clear existing
         layerState._pointCollection.removeAll();

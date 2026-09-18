@@ -38,6 +38,7 @@
     "dev": "vite",
     "dev:secure": "./scripts/dev-secure.sh",
     "opensky:import": "./scripts/opensky-import-client.sh",
+    "prebuild": "node scripts/refresh-celestrak-snapshot.mjs --skip-if-fresh 6",
     "build": "vite build",
     "preview": "vite preview",
     "test": "node scripts/run-unit-tests.mjs",

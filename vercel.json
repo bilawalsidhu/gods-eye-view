@@ -7,7 +7,7 @@
   "functions": {
     "api/*.js": {
       "maxDuration": 60,
-      "includeFiles": "{config/**,src/data/local_data/cctv_ground_heights/**}"
+      "includeFiles": "{config/**,data/**,src/data/local_data/cctv_ground_heights/**}"
     },
     "api/ondemand/*.js": {
       "maxDuration": 60

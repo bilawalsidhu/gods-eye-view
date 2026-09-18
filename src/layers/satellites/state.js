@@ -40,6 +40,29 @@ export function createState({ services }) {
 
   state._lastError = null;
 
+  /**
+   * Structured provider state of the catalog on screen, from the proxy's
+   * X-Provider-* headers (server/providers/common/upstream.js): 'live' when
+   * every loaded group came from CelesTrak or a fresh cache, 'stale' when ANY
+   * loaded group was served from the proxy's stale cache or the bundled
+   * snapshot, null for a legacy proxy that reports nothing.
+   * @type {'live'|'stale'|'degraded'|null}
+   */
+
+  state._providerStatus = null;
+
+  /** @type {string|null} First upstream reason the proxy attached (e.g. "CelesTrak HTTP 403"). */
+
+  state._providerError = null;
+
+  /** @type {number|null} Oldest data-fetch epoch (ms) among the loaded groups. */
+
+  state._providerFetchedAt = null;
+
+  /** @type {string|null} Provider source label, e.g. "CelesTrak (bundled snapshot)". */
+
+  state._providerSource = null;
+
   state._activeUpdateControllers = new Set();
 
   state._denseLoadController = null;
