@@ -3788,10 +3788,14 @@ easier to meet (detection is now on more often), but does not create it.
 - Traffic tile cache is capped and traffic layer supports explicit destroy cleanup.
 - Traffic feed state is honest about simulation. `getStats().mode` is the
   CONFIGURED source ('live' = a TomTom key is present, 'sim' = keyless), NOT
-  this instant's health — health rides on `error`. Keyless reads FALLBACK with
-  `SIMULATED — add TomTom key for live` in both the sync chip and the panel
-  meta line; an unreachable `/api/tomtom/status` reads
-  `SIMULATED — traffic service unreachable`; a total flow-fetch failure in live
+  this instant's health — health rides on `error`. Since 2026-09-18 keyless
+  reads **DEGRADED** in the panel (`DEGRADED · TomTom · TOMTOM_API_KEY not set —
+  showing simulated flow on live OSM roads (set TOMTOM_API_KEY in Vercel for
+  live speeds)`, via `status`/`providerStatus: 'degraded'` + `providerError`,
+  while the sync chip keeps `SIMULATED — add TomTom key for live`); an
+  unreachable `/api/tomtom/status` reads
+  `DEGRADED · TomTom · TomTom status unreachable — simulated flow` (chip:
+  `SIMULATED — traffic service unreachable`); a total flow-fetch failure in live
   mode sets `error` (DEGRADED · `SIMULATED — <reason>`) and zeroes the stale
   coverage number. `stats.loading` covers outstanding flow work as well as the
   road fetch, so a failure landing after the 250 ms paint race still ends the

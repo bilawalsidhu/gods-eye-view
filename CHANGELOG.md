@@ -1,5 +1,53 @@
 # Changelog
 
+## 2026-09-18 — MOVEMENT data layers repaired for the serverless deployment
+
+Every DATA LAYERS › MOVEMENT row read UNAVAILABLE on the serverless preview
+(CelesTrak unreachable, OpenSky HTTP 502, adsb.lol HTTP 502, AIS relay
+unavailable, Street Traffic OFF). Full write-up: `docs/MOVEMENT-LAYERS.md`.
+
+- New shared provider helper `server/providers/common/upstream.js`: 10 s
+  timeouts, ≤ 2 jittered retries (never on 4xx), descriptive User-Agent, gzip,
+  body caps, a structured status (`live | stale | degraded | unavailable`,
+  `source`, `fetchedAt`, `error`) carried as `X-Provider-*` headers +
+  `body.provider`, last-good stores and edge `Cache-Control`. Every MOVEMENT
+  proxy answers 200 whenever any data exists and a structured 503 otherwise —
+  no raw 502 reaches the UI. `src/sources/live/contract.js` reads the status;
+  `src/data/feedState.js` / `src/ui/layerPanel.js` render `LIVE · source · age`,
+  `STALE`, `DEGRADED · source · reason` (also while a degraded provider is
+  still loading) and treat an empty scene as guidance, not a fault.
+- Satellites (CelesTrak): celestrak.org → celestrak.com → stale cache →
+  bundled snapshot `data/celestrak-active-snapshot.json` (7 groups incl.
+  Starlink; refreshed by the new `prebuild` step
+  `scripts/refresh-celestrak-snapshot.mjs --skip-if-fresh 6`, shipped via
+  `vercel.json includeFiles data/**`) → 503; edge cache
+  `s-maxage=3600, stale-while-revalidate=86400`; `X-TLE-Source`.
+- Live Flights (OpenSky): scene bounding box (`OPENSKY_BBOX_DEGREES`, default
+  ±1.5°) instead of the worldwide request, OAuth2 client credentials kept
+  (`OPENSKY_CLIENT_ID/SECRET`, cached token), 6 s single probe
+  (`OPENSKY_TIMEOUT_MS`, `OPENSKY_RETRIES`) and a 10 min breaker
+  (`OPENSKY_BREAKER_MS`) because opensky-network.org black-holes cloud egress;
+  fallbacks adsb.lol → adsb.fi → (opt-in) airplanes.live → last-good; 429
+  honours Retry-After.
+- Military Flights (adsb.lol): timeouts, adsb.fi / opt-in airplanes.live
+  fallbacks, last-good, optional server-side scene filter
+  (`?lat&lon&radiusNm`, `X-Flight-Coverage`) and `?point=1` mode.
+- Live Vessels (AISStream) on Vercel: new `ais-serverless.js` bounded collector
+  (≤ 8 s WebSocket per scene box, coalesced, cached 25 s in memory + optional
+  Vercel KV / Upstash REST, edge `s-maxage=30`), AISHub fallback
+  (`AISHUB_USERNAME`) and a clearly labelled demo replay (Texas Gulf coast)
+  when `AISSTREAM_API_KEY` is absent; the client sends the scene bbox and shows
+  "No vessels in scene" for an honestly empty box. The 501 guard is gone.
+- Street Traffic (TomTom): `/api/tomtom/flow-segment?point=lat,lon` (Flow
+  Segment Data), `provider` status + optional flow-segment probe on
+  `/api/tomtom/status`, tile timeout/retry/last-good, daily request budget
+  (`TOMTOM_DAILY_REQUEST_BUDGET`); keyless the layer turns ON with simulated
+  flow on live OSM roads and reads DEGRADED with the reason; a refused/timed-out
+  Overpass road fetch is named for the operator instead of a bare HTTP code.
+- `.env.example` documents every new variable; tests added for the helper and
+  each provider (network mocked); `npm test` 4,223 pass, `test:ondemand` 192,
+  `test:serverless` 47, function count unchanged (9).
+
 ## 2026-09-18 — Rebrand to OnDemand Spatial
 
 - Product and package rename: the product is now **OnDemand Spatial** (the
