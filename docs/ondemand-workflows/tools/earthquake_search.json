@@ -1,0 +1,403 @@
+{
+  "name": "earthquake_search",
+  "description": "Search recent/historical earthquakes from USGS by time window, magnitude range and geographic area (circle or bbox). Returns observed events with UTC time, magnitude, depth, location, tsunami flag and USGS URL.",
+  "provider": "USGS FDSN Event Web Service",
+  "http": {
+    "method": "GET",
+    "url": "https://<preview-host>/api/sources/earthquakes",
+    "note": "replace <preview-host> with the deployed God's Eye host; the route is served by the api/[...route].js catch-all"
+  },
+  "input_schema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "earthquake_search input",
+    "type": "object",
+    "additionalProperties": false,
+    "description": "All fields are optional query parameters forwarded to the USGS FDSN Event Web Service `query` (or `count`) method. A circle search (`latitude` + `longitude` + `maxradiuskm`) and a bounding-box search (`minlatitude`/`maxlatitude`/`minlongitude`/`maxlongitude`) are mutually exclusive — supplying keys from both is a 400 error, and a partial circle (e.g. `latitude` without `maxradiuskm`) is also a 400 error.",
+    "properties": {
+      "starttime": {
+        "type": "string",
+        "description": "Limit to events on or after this time (UTC). Accepts `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM:SS(Z)`; a date with no time means midnight UTC.",
+        "examples": ["2024-01-01", "2024-01-01T00:00:00Z"]
+      },
+      "endtime": {
+        "type": "string",
+        "description": "Limit to events on or before this time (UTC). Same accepted formats as `starttime`.",
+        "examples": ["2024-01-31T23:59:59Z"]
+      },
+      "minmagnitude": {
+        "type": "number",
+        "minimum": -2,
+        "maximum": 10,
+        "description": "Minimum event magnitude, inclusive."
+      },
+      "maxmagnitude": {
+        "type": "number",
+        "minimum": -2,
+        "maximum": 10,
+        "description": "Maximum event magnitude, inclusive."
+      },
+      "latitude": {
+        "type": "number",
+        "minimum": -90,
+        "maximum": 90,
+        "description": "Circle-search center latitude, degrees. Requires `longitude` and `maxradiuskm` together."
+      },
+      "longitude": {
+        "type": "number",
+        "minimum": -180,
+        "maximum": 180,
+        "description": "Circle-search center longitude, degrees. Requires `latitude` and `maxradiuskm` together."
+      },
+      "maxradiuskm": {
+        "type": "number",
+        "exclusiveMinimum": 0,
+        "maximum": 20001.6,
+        "description": "Circle-search radius, kilometers (max is USGS's own limit, half the Earth's circumference). Requires `latitude` and `longitude` together."
+      },
+      "minlatitude": {
+        "type": "number",
+        "minimum": -90,
+        "maximum": 90,
+        "description": "Bounding-box south edge, degrees. Must be <= `maxlatitude`."
+      },
+      "maxlatitude": {
+        "type": "number",
+        "minimum": -90,
+        "maximum": 90,
+        "description": "Bounding-box north edge, degrees. Must be >= `minlatitude`."
+      },
+      "minlongitude": {
+        "type": "number",
+        "minimum": -180,
+        "maximum": 180,
+        "description": "Bounding-box west edge, degrees. Must be <= `maxlongitude`."
+      },
+      "maxlongitude": {
+        "type": "number",
+        "minimum": -180,
+        "maximum": 180,
+        "description": "Bounding-box east edge, degrees. Must be >= `minlongitude`."
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 200,
+        "default": 100,
+        "description": "Maximum number of events to return. USGS itself allows up to 20000; this adapter caps it at 200. Defaults to 100."
+      },
+      "orderby": {
+        "type": "string",
+        "enum": ["time", "time-asc", "magnitude", "magnitude-asc"],
+        "default": "time",
+        "description": "Sort order for the returned events."
+      },
+      "mode": {
+        "type": "string",
+        "enum": ["query", "count"],
+        "default": "query",
+        "description": "Local switch (not forwarded to USGS): 'query' returns matching events, 'count' returns only the number of matching events (uses the FDSN `count` endpoint)."
+      }
+    }
+  },
+  "output_schema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "earthquake_search output",
+    "type": "object",
+    "description": "Success body for mode=query (default). For mode=count, `events` is omitted and `count` alone reflects the number of matching events.",
+    "properties": {
+      "source": { "type": "string", "const": "USGS" },
+      "coverage": { "type": "string", "const": "observed" },
+      "count": {
+        "type": "integer",
+        "description": "Number of events returned (mode=query) or matched (mode=count)."
+      },
+      "events": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": { "type": "string", "description": "USGS event id." },
+            "time_utc": {
+              "type": "string",
+              "description": "ISO-8601 UTC origin time."
+            },
+            "magnitude": { "type": ["number", "null"] },
+            "mag_type": {
+              "type": ["string", "null"],
+              "description": "Magnitude scale, e.g. 'mww', 'mb'."
+            },
+            "depth_km": {
+              "type": ["number", "null"],
+              "description": "Hypocenter depth, kilometers."
+            },
+            "lat": { "type": ["number", "null"] },
+            "lon": { "type": ["number", "null"] },
+            "place": {
+              "type": ["string", "null"],
+              "description": "USGS human-readable location string."
+            },
+            "tsunami": {
+              "type": "integer",
+              "enum": [0, 1],
+              "description": "1 if USGS flagged tsunami potential."
+            },
+            "alert": {
+              "type": ["string", "null"],
+              "description": "PAGER alert level ('green'/'yellow'/'orange'/'red') or null."
+            },
+            "url": {
+              "type": ["string", "null"],
+              "description": "USGS event page URL."
+            },
+            "source": { "type": "string", "const": "USGS" },
+            "coverage": { "type": "string", "const": "observed" },
+            "retrieved_at_utc": {
+              "type": "string",
+              "description": "ISO-8601 UTC time this route fetched the data."
+            }
+          }
+        }
+      },
+      "provenance": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "const": "USGS FDSN Event Web Service"
+          },
+          "url": {
+            "type": "string",
+            "description": "The exact upstream request URL, including format=geojson and all forwarded params."
+          },
+          "generated": {
+            "type": ["string", "null"],
+            "description": "ISO-8601 UTC time USGS generated the response (from GeoJSON metadata.generated)."
+          },
+          "api": { "type": ["string", "null"] },
+          "title": { "type": ["string", "null"] },
+          "retrieved_at_utc": { "type": "string" },
+          "license": {
+            "type": "string",
+            "const": "USGS data are in the public domain (https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits)"
+          }
+        }
+      },
+      "query": {
+        "type": "object",
+        "description": "The request's own query parameters, exactly as forwarded from the HTTP layer into the adapter."
+      }
+    }
+  },
+  "ondemand_registration": {
+    "status": "NOT FOUND IN LIVE DOCS",
+    "reason": "docs/ONDEMAND_API_CURRENT.md §8: agent/tool creation and publishing are dashboard-only; the public REST surface documents only GET /plugin/v1/list. No create/attach endpoint was invented.",
+    "dashboard_path": "REST API Agent (docs.on-demand.io/docs/rest-based-plugins.md) — import this schema as the agent's OpenAPI operation",
+    "ondemand_tool_id": null
+  },
+  "openapi_fragment": {
+    "openapi": "3.0.3",
+    "info": {
+      "title": "God's Eye View — earthquake.search",
+      "version": "1.0.0",
+      "description": "USGS FDSN Event Web Service earthquake search, proxied by God's Eye View."
+    },
+    "servers": [{ "url": "https://<preview-host>" }],
+    "paths": {
+      "/api/sources/earthquakes": {
+        "get": {
+          "operationId": "earthquake_search",
+          "summary": "Search recent/historical earthquakes (USGS FDSN)",
+          "description": "Search recent/historical earthquakes from USGS by time window, magnitude range and geographic area (circle or bbox). Returns observed events with UTC time, magnitude, depth, location, tsunami flag and USGS URL.",
+          "parameters": [
+            {
+              "name": "starttime",
+              "in": "query",
+              "required": false,
+              "schema": { "type": "string" },
+              "description": "YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS(Z), UTC."
+            },
+            {
+              "name": "endtime",
+              "in": "query",
+              "required": false,
+              "schema": { "type": "string" },
+              "description": "YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS(Z), UTC."
+            },
+            {
+              "name": "minmagnitude",
+              "in": "query",
+              "required": false,
+              "schema": { "type": "number", "minimum": -2, "maximum": 10 }
+            },
+            {
+              "name": "maxmagnitude",
+              "in": "query",
+              "required": false,
+              "schema": { "type": "number", "minimum": -2, "maximum": 10 }
+            },
+            {
+              "name": "latitude",
+              "in": "query",
+              "required": false,
+              "schema": { "type": "number", "minimum": -90, "maximum": 90 },
+              "description": "Circle center latitude; requires longitude + maxradiuskm."
+            },
+            {
+              "name": "longitude",
+              "in": "query",
+              "required": false,
+              "schema": { "type": "number", "minimum": -180, "maximum": 180 },
+              "description": "Circle center longitude; requires latitude + maxradiuskm."
+            },
+            {
+              "name": "maxradiuskm",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 20001.6
+              },
+              "description": "Circle radius km; requires latitude + longitude."
+            },
+            {
+              "name": "minlatitude",
+              "in": "query",
+              "required": false,
+              "schema": { "type": "number", "minimum": -90, "maximum": 90 },
+              "description": "Bbox south edge; mutually exclusive with the circle params."
+            },
+            {
+              "name": "maxlatitude",
+              "in": "query",
+              "required": false,
+              "schema": { "type": "number", "minimum": -90, "maximum": 90 },
+              "description": "Bbox north edge; mutually exclusive with the circle params."
+            },
+            {
+              "name": "minlongitude",
+              "in": "query",
+              "required": false,
+              "schema": { "type": "number", "minimum": -180, "maximum": 180 },
+              "description": "Bbox west edge; mutually exclusive with the circle params."
+            },
+            {
+              "name": "maxlongitude",
+              "in": "query",
+              "required": false,
+              "schema": { "type": "number", "minimum": -180, "maximum": 180 },
+              "description": "Bbox east edge; mutually exclusive with the circle params."
+            },
+            {
+              "name": "limit",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 200,
+                "default": 100
+              }
+            },
+            {
+              "name": "orderby",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "string",
+                "enum": ["time", "time-asc", "magnitude", "magnitude-asc"],
+                "default": "time"
+              }
+            },
+            {
+              "name": "mode",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "string",
+                "enum": ["query", "count"],
+                "default": "query"
+              },
+              "description": "Local switch; 'count' uses the FDSN count endpoint instead of query. Not forwarded to USGS."
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Matching earthquakes (or their count, if mode=count).",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/EarthquakeSearchResponse"
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "Invalid query — unknown parameter, out-of-range value, or mixed circle/bbox.",
+              "content": {
+                "application/json": {
+                  "schema": { "$ref": "#/components/schemas/InvalidQueryError" }
+                }
+              }
+            },
+            "502": {
+              "description": "Unhandled internal error.",
+              "content": {
+                "application/json": {
+                  "schema": { "$ref": "#/components/schemas/SourcesError" }
+                }
+              }
+            },
+            "504": {
+              "description": "USGS did not respond in time, or was unreachable, after one retry.",
+              "content": {
+                "application/json": {
+                  "schema": { "$ref": "#/components/schemas/AdapterError" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "components": {
+      "schemas": {
+        "EarthquakeSearchResponse": {
+          "type": "object",
+          "properties": {
+            "source": { "type": "string", "example": "USGS" },
+            "coverage": { "type": "string", "example": "observed" },
+            "count": { "type": "integer" },
+            "events": { "type": "array", "items": { "type": "object" } },
+            "provenance": { "type": "object" },
+            "query": { "type": "object" }
+          }
+        },
+        "InvalidQueryError": {
+          "type": "object",
+          "properties": {
+            "error": { "type": "string", "example": "invalid_query" },
+            "message": { "type": "string" },
+            "unknown": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "AdapterError": {
+          "type": "object",
+          "properties": {
+            "error": {
+              "type": "string",
+              "enum": ["usgs_rejected", "usgs_unavailable", "usgs_timeout"]
+            },
+            "detail": { "type": "string" }
+          }
+        },
+        "SourcesError": {
+          "type": "object",
+          "properties": {
+            "error": { "type": "string", "example": "sources_error" }
+          }
+        }
+      }
+    }
+  }
+}

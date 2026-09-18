@@ -346,3 +346,124 @@ to support it:
   session id replaced by `sessionIdHash` (sha256 of the real session id,
   never the id itself) and no API key, header value, or other secret
   anywhere in the body.
+
+---
+
+## 11. Gate 3 — spatial capability rows
+
+Gate 3 registers server-side, OnDemand-invocable "capabilities" — small,
+deterministic REST adapters over public spatial data sources, tracked in
+`src/registry/capabilities.json` and documented as OnDemand tool
+definitions under `docs/ondemand-workflows/tools/*.json`. Row 1 below is
+the first (and, as of this writing, only) row.
+
+### Row 1 — earthquake.search (USGS FDSN Event)
+
+- **Adapter module:** `server/sources/usgs-earthquakes.js` — deterministic,
+  no LLM anywhere in the path. Talks to the USGS FDSN Event Web Service
+  (`https://earthquake.usgs.gov/fdsnws/event/1/`), exposing both the
+  `query` method (`USGS_QUERY_URL`) and the `count` method
+  (`USGS_COUNT_URL`, selected by the local `mode:'count'` switch — `mode`
+  is never itself forwarded upstream).
+
+- **Params/caps (`ALLOWED_PARAMS`, frozen):** `starttime`, `endtime`
+  (ISO-8601 UTC, `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM:SS(Z)`, hand-parsed so
+  the result never depends on the host timezone), `minmagnitude` /
+  `maxmagnitude` (`[-2, 10]`), `latitude` (`[-90, 90]`) / `longitude`
+  (`[-180, 180]`) / `maxradiuskm` (`(0, 20001.6]`) as a circle search,
+  `minlatitude`/`maxlatitude`/`minlongitude`/`maxlongitude` as a bounding
+  box, `limit` (integer, default 100, silently clamped to 200 — USGS
+  itself allows up to 20000, this deployment caps it), and `orderby`
+  (`time` \| `time-asc` \| `magnitude` \| `magnitude-asc`, default `time`).
+  Any other key is a 400 listing the unknown name(s). A circle
+  (`latitude`+`longitude`+`maxradiuskm`, all three required together) and
+  a bbox are mutually exclusive — supplying keys from both is a 400.
+  `format=geojson` is added exactly once by `validateQuery()` itself, never
+  by a caller.
+
+- **Normalisation envelope.** Every returned event
+  (`normalizeFeature()`) has the flat shape: `id, time_utc` (ISO, from
+  `properties.time` ms), `magnitude` (`properties.mag`), `mag_type`
+  (`properties.magType`), `depth_km` (`geometry.coordinates[2]`), `lat`
+  (`coordinates[1]`), `lon` (`coordinates[0]`), `place, tsunami` (`0`\|`1`),
+  `alert` (`properties.alert` or `null`), `url` (`properties.url`),
+  `source:'USGS'`, `coverage:'observed'`, `retrieved_at_utc`. Every
+  response also carries a `provenance` object: `source`, the exact request
+  `url`, `generated` (ISO, from the GeoJSON `metadata.generated`), `api`,
+  `title`, `retrieved_at_utc`, and a public-domain `license` note.
+
+- **Error policy.** `AbortSignal.timeout(8000)` per attempt; a 5xx
+  response or a network/timeout error is retried exactly once
+  (`retries: 1`) — a timeout that exhausts its retry is
+  `{ok:false, status:504, error:'usgs_timeout'}`, any other exhausted
+  network error is `status:504, error:'usgs_unavailable'`, and an
+  exhausted 5xx keeps USGS's own status with `error:'usgs_unavailable'`. A
+  4xx is never retried: USGS answers a bad parameter combination with a
+  plain-text 400/404 body, which is passed through as
+  `{ok:false, status: <400 or 404, else normalised to 400>, error:'usgs_rejected', detail}`
+  (`detail` capped to the body's first 200 characters — USGS error bodies
+  are plain text, not JSON).
+
+- **Route, and why it costs no extra function.**
+  `server/serverless/earthquakes-route.js` exports
+  `createEarthquakesHandler()`, a Connect-style `(req, res)` handler for
+  GET/HEAD only (405 + `Allow` otherwise) that parses the query string,
+  calls the adapter, and never throws (an unexpected error becomes a 502
+  `{error:'sources_error'}`). `server/serverless/app.js` mounts it at
+  `router.use('/api/sources/earthquakes', createEarthquakesHandler())`
+  right before the provider-plugin loop, unconditionally (both standalone
+  and serverless mode) — exactly like every `server/providers/**` plugin's
+  own `middlewares.use(...)` call, just registered directly instead of via
+  a plugin's `configureServer()`. Because every non-`api/ondemand/**`
+  request already flows through the single catch-all function
+  (`api/[...route].js` → `getServerlessApi().handle()`), adding this mount
+  does not add a Vercel function: the deployed function count stays at 9.
+  Success responses are cached at the edge/browser for 60s
+  (`Cache-Control: public, max-age=60`); every error response is
+  `no-store`.
+
+- **Registry row** (`src/registry/capabilities.json`, verbatim):
+
+  ```json
+  {
+    "id": "earthquake.search",
+    "provider": "USGS FDSN Event",
+    "route": "/api/sources/earthquakes",
+    "ondemand_tool": "earthquake_search",
+    "ondemand_tool_id": null,
+    "coverage": "observed",
+    "auth": "none",
+    "persistent_connection": false,
+    "status": "registered-unverified",
+    "definition": "docs/ondemand-workflows/tools/earthquake_search.json",
+    "notes": "REST agent creation is dashboard-only in the live OnDemand docs (§8); status becomes 'live' once the tool is created in the dashboard and the end-to-end query invokes it."
+  }
+  ```
+
+- **OnDemand registration status:** **NOT FOUND IN LIVE DOCS** — per §8
+  above, agent/tool creation and publishing are dashboard-only (My Agents →
+  Create Agents; a REST API Agent is defined by importing an OpenAPI
+  schema), and the public REST surface documents only
+  `GET /plugin/v1/list`. No create/attach endpoint exists to invoke, so
+  none was invented. The dashboard path recorded in both the tool
+  definition and the registry row is: **REST API Agent**
+  (`docs.on-demand.io/docs/rest-based-plugins.md`) — import
+  `docs/ondemand-workflows/tools/earthquake_search.json`'s
+  `openapi_fragment` as the agent's OpenAPI operation, which yields a real
+  `ondemand_tool_id` (a `plugin-<digits>` id, per §8's documented shape)
+  to fill in once it exists.
+
+- **How the existing browser feed layer differs.** `src/layers/earthquakes/`
+  (`source.js`) is unchanged by this row and stays exactly as it was: it
+  polls USGS's rolling **summary** feed
+  (`https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson`)
+  directly from the client for the live globe view — no query parameters,
+  always "the last 24 hours, everything". `server/sources/usgs-earthquakes.js`
+  is a different upstream entirely: the **FDSN query API**, which accepts
+  the time/magnitude/geographic filters above and is called server-side,
+  through `/api/sources/earthquakes`, not from the browser. Neither
+  duplicates the other's job.
+
+- **Verification:** results are recorded in
+  `docs/audit/gate3-row1-earthquake-verification.md` (placeholder — not
+  yet populated by this task).
