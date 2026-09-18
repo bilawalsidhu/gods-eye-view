@@ -1,5 +1,7 @@
 # God's Eye View Current State
 
+The user interface supports full runtime localization (`en` and Traditional Chinese `zh-TW`) through `src/i18n/`, with persistent preference storage (`gev:locale:v2`) and automatic browser language detection. Provider Settings (`src/keySetup.js`) supports custom OpenAI-compatible endpoints (`OPENAI_BASE_URL`), custom summary models (`OPENAI_HUD_SUMMARY_MODEL`), and text-to-speech audio synthesis (`TTS_BASE_URL`) with quick-fill presets for ChatGPT, Groq, Grok, Ollama, and DeepSeek, alongside optional LAN administration access (`GEV_ALLOW_LAN_SETUP=1`). The CCTV system supports continuous dynamic MJPEG video streaming (`multipart/x-mixed-replace`) in addition to static snapshots, and includes a curated catalog of Taiwan freeway and urban cameras (`config/cctv_sources.taiwan.json`) with corresponding Taipei POI navigation presets.
+
 Vessel snapshot completeness is separate from freshness. A current snapshot with
 rejected or duplicate records shows PARTIAL with accepted/received counts; stale
 or unknown freshness and transport failures retain their warnings. Partial

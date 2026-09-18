@@ -1,5 +1,9 @@
 # Changelog
 
+- Add Traditional Chinese (繁體中文, zh-TW) UI localization with runtime language switcher and automatic locale detection.
+- Add configurable OpenAI-compatible LLM Base URL, custom model name with quick-fill presets (ChatGPT, Groq, Grok, Ollama, DeepSeek), and Web Speech Synthesis (TTS) fallback in Provider Settings.
+- Add Taiwan Freeway and urban CCTV camera coverage (25 curated cameras) with continuous dynamic MJPEG video streaming support and Taipei destination POI presets.
+
 - Distinguish PARTIAL vessel snapshots from STALE data in the layer panel, with
   accepted-record counts and unchanged retention, freshness and outage safeguards.
 

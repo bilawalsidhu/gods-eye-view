@@ -639,10 +639,10 @@ export class LayerPanel {
     if (diff < 60)
       return tr('time.secondsAgo', `${diff}s ago`).replace('{s}', String(diff));
     if (diff < 3600)
-      return tr(
-        'time.minutesAgo',
-        `${Math.floor(diff / 60)}m ago`,
-      ).replace('{m}', String(Math.floor(diff / 60)));
+      return tr('time.minutesAgo', `${Math.floor(diff / 60)}m ago`).replace(
+        '{m}',
+        String(Math.floor(diff / 60)),
+      );
     return tr('time.hoursAgo', `${Math.floor(diff / 3600)}h ago`).replace(
       '{h}',
       String(Math.floor(diff / 3600)),
