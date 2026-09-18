@@ -6,6 +6,7 @@ import { parseEnv } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { projectRoot } from './project-root.mjs';
 import { selectMapStartupRoute } from '../src/mapStartup.js';
+import { codexOAuthStatus } from '../server/providers/openai/codex-auth.js';
 
 const ROOT = projectRoot(import.meta.url);
 
@@ -128,7 +129,7 @@ export function resolveCredential(spec, {
   return { configured: false, source: null };
 }
 
-export function buildCapabilitySummary(credentials) {
+export function buildCapabilitySummary(credentials, { codexOAuth = 'missing' } = {}) {
   const configured = (name) => credentials[name]?.configured === true;
   const route = selectMapStartupRoute({
     googleApiKey: configured('GOOGLE_MAPS_API_KEY') ? 'configured' : '',
@@ -143,7 +144,13 @@ export function buildCapabilitySummary(credentials) {
     flights: configured('OPENSKY_CLIENT_ID') && configured('OPENSKY_CLIENT_SECRET')
       ? 'OpenSky OAuth credentials present (runtime mode and validity not verified)'
       : 'OpenSky OAuth credentials not configured',
-    voice: configured('OPENAI_API_KEY') ? 'available' : 'off until an OpenAI key is added',
+    voice: configured('OPENAI_API_KEY')
+      ? 'available'
+      : codexOAuth === 'valid'
+        ? 'available via Codex login (ChatGPT subscription)'
+        : codexOAuth === 'expired'
+          ? 'off — Codex login token expired; run `codex login` or add an OpenAI key'
+          : 'off until an OpenAI key is added',
     vessels: configured('AISSTREAM_API_KEY') ? 'live AISStream feed' : 'off until an AISStream key is added',
     fires: configured('FIRMS_MAP_KEY') ? 'live NASA FIRMS feed' : 'off until a FIRMS key is added',
     traffic: configured('TOMTOM_API_KEY') ? 'live TomTom flow' : 'built-in traffic simulation',
@@ -173,7 +180,9 @@ export function inspectSetup({ includeKeychain = true, authoritativeEnvironment 
       : { available: false, version: null },
     dependenciesInstalled,
     credentials,
-    capabilities: buildCapabilitySummary(credentials),
+    capabilities: buildCapabilitySummary(credentials, {
+      codexOAuth: codexOAuthStatus(),
+    }),
   };
 }
 
