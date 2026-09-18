@@ -489,3 +489,49 @@ Full `/api/ondemand/health` JSON (secret-free):
   "message": "OnDemand API reachable; chat probe succeeded."
 }
 ```
+
+## Step 5 — plugin-verified Vercel evidence (2026-09-18)
+
+Evidence supplied by the operator's Vercel-API tooling (`getVercelProject` / `listVercelDeployments` / `listVercelEnvVars`) on 2026-09-18 and recorded here verbatim; it was not re-queried from this build environment (which has no Vercel API access — see §9). Env-var **ids** below are Vercel metadata identifiers, not values; no secret value appears anywhere in this repository.
+
+### Project
+
+| Field | Value |
+|---|---|
+| Project | `ondemand-eand-spatial` — id `prj_VbHbEhFSDFkdXCqlq8XqONoFWQHO` |
+| Team | `schoolhack-web-team` (`team_aft8hHPiYnHp6I534L3DQScA`) |
+| Framework / plan | vite / pro |
+| Git link | `mk42-ai/ondemand-eand-spatial` (repoId 1366177817), production branch `main` |
+| Project `updatedAt` | 1789710821256 |
+| Custom domain | `ondemand-eand-spatial-opal.vercel.app` (verified, bound to branch `feat/exec-brief-v1.4-b7c0d3d`) |
+
+### Deployments
+
+| Deployment | State | URL / aliases | Git | Timestamps | Notes |
+|---|---|---|---|---|---|
+| Latest READY (preview target, **not** the `ondemand-serverless` branch) — `dpl_FKoHEVctqpLzNMaHV9sSRdmzcrw6` | READY (readySubstate STAGED) | `https://ondemand-eand-spatial-rnbt5ofc8-schoolhack-web-team.vercel.app`; alias `ondemand-eand-spatial-opal.vercel.app` | branch `feat/exec-brief-v1.4-b7c0d3d`, commit `b8cdcf501aa77ada93dde682a8c6fec35f9c5637` ("exec-brief v1.4.0 verification record") | createdAt 1789187529848 · buildingAt 1789187530783 · readyAt 1789187562890 | inspector `https://vercel.com/schoolhack-web-team/ondemand-eand-spatial/FKoHEVctqpLzNMaHV9sSRdmzcrw6`; lambdaRuntimeStats `nodejs: 2`; no build-error lines |
+| Production — `dpl_7CAoCxdEQRQ7W12mzwz4iGKDK4V9` | **BLOCKED** | `https://ondemand-eand-spatial-gk1p1ydur-schoolhack-web-team.vercel.app`; aliases `ondemand-eand-spatial-schoolhack-web-team.vercel.app`, `ondemand-eand-spatial-git-main-schoolhack-web-team.vercel.app` | commit `e799775a9815c96519a01635c8eb014ae6ae02dc` ("fix build issue") | createdAt 1789137161396 | — |
+
+**Blocked git-source deployments (9 ids listed by the tooling):** `dpl_X8MPQiEK1HdAghFDVJH1gwehjRFQ`, `dpl_41r6CgA19C4yDrF1TCw2FZvAD1Jf`, `dpl_CDVGparwS9NXHQnXvzMRSSrsRrBG`, `dpl_hmqPU37q4FMfB562ZvvX9t2D6cgr`, `dpl_3mhR1kgtKDG69iWqas6Yeha3MSVF`, `dpl_9wiV2ZGRG45DeYNoik5YKGm8FNQh`, `dpl_9UNerDejHsnkhdsENmsctmP43xa7`, `dpl_A45jP8NVJX6mHFcB888CZrT45TvP`, `dpl_BRY8mZjS5dxwHzGbTjk8GhRHKsNb` — all BLOCKED with `errorMessage: "The deployment was blocked because Vercel couldn't find a Git account for the commit author."` (commit author `goose-live-build@users.noreply.github.com`). No build-error lines exist for the READY deployments. A deployment listing filtered to the `ondemand-serverless` branch returned **0 deployments (total 0)** — i.e. **no real Vercel function-runtime deployment of this branch exists yet.**
+
+### Environment variables (19 total; ids are Vercel metadata, values never read)
+
+| Variable | Type | Env id | Note |
+|---|---|---|---|
+| `GODS_EYE_FLOW_VERSION` | plain | `usC3wgbut65gTkaR` | created this pass (production + preview, createdAt ≈ 1789710821) |
+| `ONDEMAND_REASONING_ENDPOINT_ID` | sensitive | `I0TXIH0rgSDwzEJB` | created this pass |
+| `ONDEMAND_FULFILLMENT_ENDPOINT_ID` | sensitive | `tdtHQKHrAMllvoir` | created this pass |
+| `ONDEMAND_SELFTEST_TOKEN` | sensitive | `NGrV0CvtudZY76Yj` | created this pass |
+| `VITE_SERVERLESS_MODE` | — | `jJi4gru0prYHBRJ9` | pre-existing |
+| `ONDEMAND_BASE_URL` | — | `yMQQNn22fENoPDsY` | pre-existing |
+| `ASK_ENABLED` | — | `gRQF3MguQvx3Cxqy` | pre-existing |
+| `ONDEMAND_API_KEY` | sensitive | `wNMsI3sIbGdQb59Y` | pre-existing — see the SECURITY note in `docs/audit/RUN-REPORT.md` (rotation) |
+| `CI` | — | `dTOvEUiy7hhAck00` | pre-existing |
+| `ONDEMAND_API_BASE`, `ONDEMAND_ENDPOINT_ID`, `ONDEMAND_REASONING_MODE` | — | — | pre-existing; accepted by this branch as documented aliases / canonical names (`docs/ONDEMAND_PROXY_DESIGN.md` §10) |
+| `ONDEMAND_KNOWLEDGE_PLUGIN_IDS` | — | — | pre-existing; **denied alias** on this branch (never read — `server/ondemand/config.js` deny-list) |
+| `ASK_THE_DEAL_ALLOWED_ORIGIN`, `DOC_*` URLs | — | — | pre-existing; belong to the exec-brief app, unused by this branch |
+| `ELEVENLABS_API_KEY` | sensitive | `eazEtCde0VLgUCIO` | pre-existing; **flagged — deny-listed by this branch (never read, never forwarded); recommend removal from the project** |
+
+### Conclusion
+
+**Stable deployment URL for the `ondemand-serverless` branch = NONE.** The sandbox previews (`sb-5hfcfkb7a79s.vercel.run`, `sb-pg1bhjba1gcs.vercel.run`, and this session's later `sb-26l9a6g6k6rt`, `sb-765981cquksp`, `sb-63r5liykgi73`) are ephemeral emulator previews. Consequently `src/registry/capabilities.json` keeps `endpoint_url: null` for the Seismic (`earthquake.search` / tool `earthquake_search`) and Fires (`fires.search` / tool `fire_detection_search`) rows, with `endpoint_url_pending_reason: "no stable Vercel function-runtime deployment of ondemand-serverless yet"` and the relative `endpoint_path` (`/api/sources/earthquakes`, `/api/sources/fires`) recorded instead; the dashboard registration (`docs/audit/gate3-row1-registration.md`) must wait for a READY deployment of this branch (`scripts/vercel-file-deploy.mjs` from an operator machine, §9).
