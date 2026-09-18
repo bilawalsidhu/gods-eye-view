@@ -99,8 +99,11 @@ test('does not hide real provider and HTTP failures', () => {
 test('the installed keyless HUD route stays successful after the voice quota is exhausted', async () => {
   const previousKey = process.env.OPENAI_API_KEY;
   const previousLimit = process.env.GEV_RATELIMIT_OPENAI_PER_MIN;
+  const previousCodexHome = process.env.CODEX_HOME;
   process.env.OPENAI_API_KEY = '';
   process.env.GEV_RATELIMIT_OPENAI_PER_MIN = '1';
+  // No Codex login on this lane either: both voice auth lanes are absent.
+  process.env.CODEX_HOME = '/nonexistent-gev-test-home';
   try {
     const routes = installOpenAiRoutes();
     const token = routes.get('/api/realtime/token');
@@ -111,7 +114,7 @@ test('the installed keyless HUD route stays successful after the voice quota is 
     const firstToken = await invokeRoute(token);
     const secondToken = await invokeRoute(token);
     assert.equal(firstToken.statusCode, 503);
-    assert.deepEqual(firstToken.body, { error: 'OPENAI_API_KEY is not set' });
+    assert.match(firstToken.body.error, /^OPENAI_API_KEY is not set/);
     assert.equal(secondToken.statusCode, 429);
 
     for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -126,5 +129,7 @@ test('the installed keyless HUD route stays successful after the voice quota is 
     else process.env.OPENAI_API_KEY = previousKey;
     if (previousLimit === undefined) delete process.env.GEV_RATELIMIT_OPENAI_PER_MIN;
     else process.env.GEV_RATELIMIT_OPENAI_PER_MIN = previousLimit;
+    if (previousCodexHome === undefined) delete process.env.CODEX_HOME;
+    else process.env.CODEX_HOME = previousCodexHome;
   }
 });

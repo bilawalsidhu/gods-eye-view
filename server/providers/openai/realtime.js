@@ -13,12 +13,13 @@ import {
 } from './constants.js';
 import { realtimeInstructions } from './instructions.js';
 import { GEV_REALTIME_TOOLS } from './tools.js';
+import { resolveOpenAiCredential } from './codex-auth.js';
 
 function createRealtimeTokenHandler({
   annotationGuidance,
   endpoint = 'https://api.openai.com/v1/realtime/client_secrets',
   fetchImpl = (...args) => fetch(...args),
-  resolveApiKey = () => process.env.OPENAI_API_KEY,
+  resolveApiKey = resolveOpenAiCredential,
   models = {},
 } = {}) {
   return async (req, res) => {
@@ -33,7 +34,33 @@ function createRealtimeTokenHandler({
     // Opt-in per-IP throttle (GEV_RATELIMIT_OPENAI_PER_MIN). No-op when unset.
     if (!enforceOptInRateLimit(openAiRateLimiter(), req, res)) return;
 
-    const apiKey = resolveApiKey();
+    // Voice auth resolves in layers: an explicit GEV_PREFER_CODEX_OAUTH pin,
+    // then OPENAI_API_KEY, then the operator's local Codex CLI login
+    // (ChatGPT subscription). Injected resolvers may still return a plain
+    // key string; the default returns a { token, source } credential.
+    // Resolution failures name the missing lanes and degrade to a 503
+    // instead of a dead mic.
+    let resolved;
+    try {
+      resolved = resolveApiKey();
+    } catch (error) {
+      res.statusCode = 503;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(
+        JSON.stringify({
+          error: error?.message || 'No OpenAI credential could be resolved',
+        }),
+      );
+      return;
+    }
+    const apiKey =
+      resolved !== null && typeof resolved === 'object'
+        ? resolved.token
+        : resolved;
+    const authSource =
+      resolved !== null && typeof resolved === 'object'
+        ? resolved.source
+        : 'env';
     if (!apiKey) {
       res.statusCode = 503;
       res.setHeader('Content-Type', 'application/json');
@@ -142,6 +169,8 @@ function createRealtimeTokenHandler({
       // bogus ?tier= was silently downgraded to standard.
       res.setHeader('X-GEV-Voice-Tier', tier);
       res.setHeader('X-GEV-Voice-Model', model);
+      // Which auth lane minted this secret — env key or the Codex CLI login.
+      res.setHeader('X-GEV-Voice-Auth', authSource);
       if (requestedTier && !isKnownVoiceTier(requestedTier)) {
         res.setHeader('X-GEV-Voice-Tier-Fallback', '1');
       }
