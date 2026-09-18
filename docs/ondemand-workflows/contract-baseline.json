@@ -1,825 +1,169 @@
 {
-  "generatedAtUtc": "2026-09-18T04:51:41.150Z",
-  "gate": "Gate 1 — live OnDemand contract validation",
-  "mode": "direct (live user-supplied key)",
-  "apiKey": "G7Gg…VjnL (masked; never stored)",
-  "baseUrl": "https://api.on-demand.io",
-  "credentialValidation": {
-    "endpoint": "POST /chat/v1/sessions",
-    "body": {
-      "externalUserId": "godseye-contract-test-2026-09-18",
-      "pluginIds": []
-    },
-    "httpStatus": 201,
-    "latencyMs": 249,
-    "utc": "2026-09-18T04:45:10.744Z",
-    "sessionId": "6aacc1d6ab2c7f21f3232d03",
-    "keyClassification": "ondemand",
-    "fallbacksRun": "none (2xx on the first documented call)"
-  },
-  "contractRun": {
-    "externalUserId": "godseye-contract-test-2026-09-18",
-    "sessionId": "6aacc33eb9401965d65923e0",
-    "fulfillmentEndpointId": "predefined-gpt-5.6-luna",
-    "reasoningModeSent": null,
-    "summary": {
-      "passed": 8,
-      "failed": 0,
-      "skipped": 2,
-      "totalMs": 31012,
-      "minMs": 485,
-      "maxMs": 14821,
-      "meanMs": 4430
-    },
-    "exitCode": 0,
-    "previousAttempt": {
-      "generatedAtUtc": "2026-09-18T04:50:14.316Z",
-      "summary": {
-        "passed": 7,
-        "failed": 1,
-        "skipped": 2,
-        "totalMs": 30393,
-        "minMs": 587,
-        "maxMs": 12788,
-        "meanMs": 4342
-      },
-      "onlyFailure": "step 6 TTS — script asserted Content-Type audio/*; the audio URL is served as application/octet-stream (MP3 bytes); assertion relaxed to sniff the container"
-    }
-  },
+  "ok": true,
+  "configured": true,
+  "generatedAtUtc": "2026-09-18T05:48:08.602Z",
+  "mode": "direct",
+  "sessionIdHash": "7387674f35cf97455621cdcf273ba5cb784b9f7041ac5f635537dbd2aefc330c",
+  "fulfillmentEndpointId": "predefined-gpt-5.6-luna",
   "steps": [
     {
       "step": 1,
       "name": "session create + reuse",
+      "status": "PASS",
       "httpStatus": 200,
-      "latencyMs": 485,
-      "utc": "2026-09-18T04:51:10.008Z",
-      "pass": true,
-      "skipped": false,
-      "skipReason": null,
-      "timeToFirstDeltaMs": null,
-      "contentType": null,
-      "bytes": null,
-      "notes": "POST /chat/v1/sessions (201, body {externalUserId,pluginIds}) then GET /chat/v1/sessions/{id} (200) — same sessionId reused by every later step"
+      "latencyMs": 265,
+      "ttfdMs": null,
+      "utc": "2026-09-18T05:47:39.426Z",
+      "detail": "sessionId=***"
     },
     {
       "step": 2,
       "name": "sync prompt",
+      "status": "PASS",
       "httpStatus": 200,
-      "latencyMs": 1936,
-      "utc": "2026-09-18T04:51:10.493Z",
-      "pass": true,
-      "skipped": false,
-      "skipReason": null,
-      "timeToFirstDeltaMs": null,
-      "contentType": null,
-      "bytes": null,
-      "notes": "POST …/query responseMode=sync, endpointId=predefined-gpt-5.6-luna; data.answer non-empty ('OK'); data keys observed: answer, messageId, metrics, sessionId, status"
+      "latencyMs": 2453,
+      "ttfdMs": null,
+      "utc": "2026-09-18T05:47:39.691Z",
+      "detail": "answer.length=2"
     },
     {
       "step": 3,
       "name": "SSE stream",
+      "status": "PASS",
       "httpStatus": 200,
-      "latencyMs": 3600,
-      "utc": "2026-09-18T04:51:12.429Z",
-      "pass": true,
-      "skipped": false,
-      "skipReason": null,
-      "timeToFirstDeltaMs": 1277,
-      "contentType": "text/event-stream; charset=utf-8",
-      "bytes": null,
-      "notes": "POST …/query responseMode=stream; Content-Type text/event-stream; heartbeat seen; 29 fulfillment deltas; data:[DONE] seen; no [ERROR]; eventTypes observed: fulfillment_thinking, fulfillment, metricsLog"
+      "latencyMs": 3786,
+      "ttfdMs": 1435,
+      "utc": "2026-09-18T05:47:42.144Z",
+      "detail": "heartbeat=true fulfillmentDeltas=25 timeToFirstDeltaMs=1435"
     },
     {
       "step": 4,
       "name": "built-in tool/plugin invocation",
+      "status": "SKIP",
       "httpStatus": 200,
-      "latencyMs": 125,
-      "utc": "2026-09-18T04:51:16.029Z",
-      "pass": false,
-      "skipped": true,
-      "skipReason": "no plugin id in env and the account's Agents API listing is empty (GET /plugin/v1/list -> HTTP 200, total=0); no documented chat agent id was invented",
-      "timeToFirstDeltaMs": null,
-      "contentType": null,
-      "bytes": null,
-      "notes": "SKIPPED — no plugin id in env and GET /plugin/v1/list (documented Agents API, §8) returned total=0 for this account; no undocumented chat agent id was invented"
+      "latencyMs": 165,
+      "ttfdMs": null,
+      "utc": "2026-09-18T05:47:45.930Z",
+      "skipReason": "no plugin id in env and the account's Agents API listing is empty (GET /plugin/v1/list -> HTTP 200, total=0); no documented chat agent id was invented"
     },
     {
       "step": 5,
       "name": "STT on in-script generated WAV",
+      "status": "PASS",
       "httpStatus": 200,
-      "latencyMs": 14821,
-      "utc": "2026-09-18T04:51:16.155Z",
-      "pass": true,
-      "skipped": false,
-      "skipReason": null,
-      "timeToFirstDeltaMs": null,
-      "contentType": null,
-      "bytes": null,
-      "notes": "in-script 16 kHz mono PCM WAV (440 Hz tone) uploaded via POST /media/v1/public/file/raw (plugins=plugin-1713958830, responseMode=sync) → data.url → POST /services/v1/public/service/execute/speech_to_text {audioUrl} → data.text is a string (empty for a pure tone)"
+      "latencyMs": 10840,
+      "ttfdMs": null,
+      "utc": "2026-09-18T05:47:46.095Z",
+      "detail": "mediaId=6aacd0827b8af592f50397d2 textLength=0"
     },
     {
       "step": 6,
       "name": "TTS",
+      "status": "PASS",
       "httpStatus": 200,
-      "latencyMs": 1533,
-      "utc": "2026-09-18T04:51:30.977Z",
-      "pass": true,
-      "skipped": false,
-      "skipReason": null,
-      "timeToFirstDeltaMs": null,
-      "contentType": "application/octet-stream",
-      "bytes": 42624,
-      "notes": "POST /services/v1/public/service/execute/text_to_speech {input,voice:'alloy',model:'tts-1'} → data.audioUrl → GET → 42,624 bytes, served as application/octet-stream with an MP3 frame signature (run 1 failed only on the script's audio/* assertion; fixed to sniff the container)"
+      "latencyMs": 2695,
+      "ttfdMs": null,
+      "utc": "2026-09-18T05:47:56.935Z",
+      "detail": "contentType=application/octet-stream bytes=41856 container=mp3"
     },
     {
       "step": 7,
       "name": "Media PNG analysis",
+      "status": "PASS",
       "httpStatus": 200,
-      "latencyMs": 6630,
-      "utc": "2026-09-18T04:51:32.511Z",
-      "pass": true,
-      "skipped": false,
-      "skipReason": null,
-      "timeToFirstDeltaMs": null,
-      "contentType": null,
-      "bytes": null,
-      "notes": "in-script 32×32 PNG uploaded via POST /media/v1/public/file/raw (plugins=plugin-1713958591, responseMode=sync) → data.id + actionStatus=completed + non-empty context"
+      "latencyMs": 6998,
+      "ttfdMs": null,
+      "utc": "2026-09-18T05:47:59.630Z",
+      "detail": "actionStatus=completed context=\"The image is a tiny abstract pixel-art or icon-like graphic composed of a tightly packed grid of square pixels, dominate\""
     },
     {
       "step": 8,
       "name": "workflow",
+      "status": "SKIP",
       "httpStatus": null,
       "latencyMs": 0,
-      "utc": "2026-09-18T04:51:39.142Z",
-      "pass": false,
-      "skipped": true,
-      "skipReason": "ONDEMAND_SPATIAL_FLOW_ID unset on the deployment — auto-skipped by design",
-      "timeToFirstDeltaMs": null,
-      "contentType": null,
-      "bytes": null,
-      "notes": "SKIPPED by design — ONDEMAND_SPATIAL_FLOW_ID unset; no workflow executed"
+      "ttfdMs": null,
+      "utc": "2026-09-18T05:48:06.628Z",
+      "skipReason": "ONDEMAND_SPATIAL_FLOW_ID unset on the deployment — auto-skipped by design"
     },
     {
       "step": 9,
       "name": "session-memory follow-up",
+      "status": "PASS",
       "httpStatus": 200,
-      "latencyMs": 2007,
-      "utc": "2026-09-18T04:51:39.142Z",
-      "pass": true,
-      "skipped": false,
-      "skipReason": null,
-      "timeToFirstDeltaMs": null,
-      "contentType": null,
-      "bytes": null,
-      "notes": "same session, sync follow-up — answer contained the step-2 code word (session memory confirmed)"
+      "latencyMs": 1974,
+      "ttfdMs": null,
+      "utc": "2026-09-18T05:48:06.628Z",
+      "detail": "answer contains the step-2 code word"
     },
     {
       "step": 10,
       "name": "latency summary",
+      "status": "PASS",
       "httpStatus": null,
       "latencyMs": 0,
-      "utc": "2026-09-18T04:51:41.150Z",
-      "pass": true,
-      "skipped": false,
-      "skipReason": null,
-      "timeToFirstDeltaMs": null,
-      "contentType": null,
-      "bytes": null,
-      "notes": "latency summary over executed steps"
+      "ttfdMs": null,
+      "utc": "2026-09-18T05:48:08.602Z",
+      "detail": "min=265ms max=10840ms mean=4144ms totalMs=29011"
     }
   ],
-  "liveDiscovery": {
-    "endpointsListing": {
-      "method": "GET",
-      "path": "/config/v1/public/endpoints",
-      "documented": false,
-      "note": "not in the public docs categories index nor docs.on-demand.io/llms.txt; path inferred from the platform's config service naming and verified live",
-      "httpStatus": 200,
-      "utc": "2026-09-18T04:46:00.776Z",
-      "total": 84,
-      "active": 23,
-      "inactive": 61
-    },
-    "reasoningModesListing": {
-      "method": "GET",
-      "path": "/config/v1/public/reasoning_modes",
-      "documented": false,
-      "httpStatus": 200,
-      "utc": "2026-09-18T04:46:00.988Z",
-      "predefinedCount": 13,
-      "userDefinedCount": 1,
-      "notFound404Variants": [
-        "/config/v1/public/reasoning-modes",
-        "/config/v1/public/reasoningModes"
-      ]
-    },
-    "agentsListing": {
-      "method": "GET",
-      "path": "/plugin/v1/list?page=1&limit=50",
-      "documented": "guide-only (docs.on-demand.io/docs/plugin-api.md, contract §8)",
-      "httpStatus": 200,
-      "utc": "2026-09-18T04:46:00.420Z",
-      "total": 0,
-      "withDocumentedIdsFilter": {
-        "httpStatus": 200,
-        "total": 0
+  "summary": {
+    "passed": 8,
+    "failed": 0,
+    "skipped": 2,
+    "totalMs": 29011,
+    "minMs": 265,
+    "maxMs": 10840,
+    "meanMs": 4144
+  },
+  "durationMs": 29177,
+  "_provenance": {
+    "source": "GET /api/ondemand/selftest on the sandbox emulator (server/serverless/dev-server.mjs serving dist/ + api/**), header x-selftest-token (one-time token, rotated after this run)",
+    "previewHost": "sb-5hfcfkb7a79s.vercel.run",
+    "sandboxId": "sbx_CHYYYEfPHVf9TgYwIrYaHLjqRuiB",
+    "runtime": "node v24.14.1; env injected at process start only (no .env file); ONDEMAND_API_KEY masked G7Gg…VjnL",
+    "configSources": {
+      "apiKey": {
+        "configured": true
+      },
+      "baseUrl": {
+        "configured": true,
+        "source": "ONDEMAND_BASE_URL"
+      },
+      "reasoningEndpointId": {
+        "configured": true,
+        "source": "ONDEMAND_ENDPOINT_ID"
+      },
+      "fulfillmentEndpointId": {
+        "configured": true,
+        "source": "ONDEMAND_ENDPOINT_ID"
+      },
+      "reasoningMode": {
+        "configured": true,
+        "source": "ONDEMAND_REASONING_MODE",
+        "valid": true
+      },
+      "flowVersion": {
+        "configured": true,
+        "source": "GODS_EYE_FLOW_VERSION"
+      },
+      "spatialFlowId": {
+        "configured": false,
+        "source": "unset"
       }
     },
-    "liveEndpointIdsActive": [
-      "byoi-c7f50d33-4dfa-4810-bcb0-924652020a36",
-      "predefined-cerebras-qwen-3.8-27b",
-      "predefined-claude-4-5-haiku",
-      "predefined-claude-fable-5.1",
-      "predefined-claude-opus-5",
-      "predefined-claude-sonnet-5",
-      "predefined-deepseek-flash",
-      "predefined-deepseek-v4-flash",
-      "predefined-deepseek-v4-flash-vision-exp",
-      "predefined-deepseek-v4-pro",
-      "predefined-gemini-3.8-flash",
-      "predefined-glm-5.3",
-      "predefined-glm-5.3-flash",
-      "predefined-gpt-5.6-luna",
-      "predefined-gpt-5.6-sol",
-      "predefined-gpt-5.6-terra",
-      "predefined-gpt-6-astra",
-      "predefined-kimi-k3",
-      "predefined-kimi-k3-fast",
-      "predefined-minimax-m3",
-      "predefined-muse_spark_1.3",
-      "predefined-qwen-3.8-max",
-      "predefined-xai-grok4.6"
-    ],
-    "liveEndpointIdsInactive": [
-      "predefined-claude-4-1-opus",
-      "predefined-claude-4-5-opus",
-      "predefined-claude-4-5-sonnet",
-      "predefined-claude-4-6-opus",
-      "predefined-claude-4-6-sonnet",
-      "predefined-claude-4-8-opus",
-      "predefined-claude-4-opus",
-      "predefined-claude-4-sonnet",
-      "predefined-claude-fable-5",
-      "predefined-deepseek-r1",
-      "predefined-deepseek-r1-distill-llama-70b",
-      "predefined-deepseek-v3",
-      "predefined-deepseek-v3.1",
-      "predefined-deepseek-v3.2",
-      "predefined-fugu",
-      "predefined-fugu-ultra",
-      "predefined-gemini-2.5-flash",
-      "predefined-gemini-2.5-pro-preview",
-      "predefined-gemini-3-flash-preview",
-      "predefined-gemini-3.1-pro-preview",
-      "predefined-gemini-3.5-flash",
-      "predefined-gemini-3.5-flash-lite",
-      "predefined-gemini-3.6-flash",
-      "predefined-gemini-3.7-flash",
-      "predefined-glm-4.7",
-      "predefined-glm-4.7-flash",
-      "predefined-glm-5",
-      "predefined-glm-5.1",
-      "predefined-glm-5.2",
-      "predefined-grok-build-0.1",
-      "predefined-k2-think",
-      "predefined-kimi-k2-thinking",
-      "predefined-kimi-k2.5",
-      "predefined-kimi-k2.6",
-      "predefined-minimax-m2.7",
-      "predefined-minimax-minimax-m2.5",
-      "predefined-muse_spark_1.2",
-      "predefined-openai-gpt4.1",
-      "predefined-openai-gpt4.1-mini",
-      "predefined-openai-gpt4.1-nano",
-      "predefined-openai-gpt4o",
-      "predefined-openai-gpt4o-mini",
-      "predefined-openai-gpt5-mini",
-      "predefined-openai-gpt5.4",
-      "predefined-openai-gpt5.5",
-      "predefined-openai-gpto3",
-      "predefined-openai-gpto3-mini",
-      "predefined-openai-gpto4-mini",
-      "predefined-openai-o3-pro",
-      "predefined-openai-oss",
-      "predefined-qwen-3.7-max",
-      "predefined-stealth-ox-alpha",
-      "predefined-xai-grok-code-fast-1",
-      "predefined-xai-grok4-2-reasoning",
-      "predefined-xai-grok4-fast",
-      "predefined-xai-grok4.1-fast",
-      "predefined-xai-grok4.1-fast-reasoning",
-      "predefined-xai-grok4.2-non-reasoning",
-      "predefined-xai-grok4.3",
-      "predefined-xai-grok4.5",
-      "predefined-z-ai/glm-5-turbo"
-    ],
-    "activeEndpointDetails": [
-      {
-        "endpointId": "byoi-c7f50d33-4dfa-4810-bcb0-924652020a36",
-        "name": "gpt-oss-120b",
-        "modelId": "deepseek/deepseek-v4-flash-0731",
-        "isPremium": false,
-        "reasoningEfforts": null,
-        "contextLength": 1000000,
-        "streamingSupported": true,
-        "fallbackEndpointId": null
-      },
-      {
-        "endpointId": "predefined-cerebras-qwen-3.8-27b",
-        "name": "cerebras-qwen-3.8",
-        "modelId": "qwen-3.8-27b",
-        "isPremium": true,
-        "reasoningEfforts": ["low", "medium", "max"],
-        "contextLength": 128000,
-        "streamingSupported": true,
-        "fallbackEndpointId": "predefined-xai-grok4.6"
-      },
-      {
-        "endpointId": "predefined-claude-4-5-haiku",
-        "name": "claude-4-5-haiku",
-        "modelId": "anthropic/claude-haiku-4-5@20251001",
-        "isPremium": false,
-        "reasoningEfforts": [],
-        "contextLength": 200000,
-        "streamingSupported": true,
-        "fallbackEndpointId": null
-      },
-      {
-        "endpointId": "predefined-claude-fable-5.1",
-        "name": "claude-fable-5-1",
-        "modelId": "anthropic/claude-fable-5-1",
-        "isPremium": true,
-        "reasoningEfforts": ["low", "medium", "max"],
-        "contextLength": 1000000,
-        "streamingSupported": true,
-        "fallbackEndpointId": "predefined-claude-fable-5.1"
-      },
-      {
-        "endpointId": "predefined-claude-opus-5",
-        "name": "claude-opus-5",
-        "modelId": "anthropic/claude-opus-5",
-        "isPremium": true,
-        "reasoningEfforts": ["low", "medium", "max"],
-        "contextLength": 1000000,
-        "streamingSupported": true,
-        "fallbackEndpointId": "predefined-claude-4-8-opus"
-      },
-      {
-        "endpointId": "predefined-claude-sonnet-5",
-        "name": "claude-sonnet-5",
-        "modelId": "anthropic/claude-sonnet-5",
-        "isPremium": true,
-        "reasoningEfforts": ["low", "medium", "max"],
-        "contextLength": 1000000,
-        "streamingSupported": true,
-        "fallbackEndpointId": "predefined-xai-grok4.3"
-      },
-      {
-        "endpointId": "predefined-deepseek-flash",
-        "name": "deepseek-v4.1-flash",
-        "modelId": "deepseek-flash",
-        "isPremium": true,
-        "reasoningEfforts": ["low", "medium", "max"],
-        "contextLength": 1000000,
-        "streamingSupported": true,
-        "fallbackEndpointId": "predefined-deepseek-v4-flash-vision-exp"
-      },
-      {
-        "endpointId": "predefined-deepseek-v4-flash",
-        "name": "deepseek-v4-flash-fast",
-        "modelId": "deepseek/deepseek-v4-flash-0731",
-        "isPremium": true,
-        "reasoningEfforts": ["low", "medium", "max"],
-        "contextLength": 1000000,
-        "streamingSupported": true,
-        "fallbackEndpointId": "predefined-deepseek-v4-flash-vision-exp"
-      },
-      {
-        "endpointId": "predefined-deepseek-v4-flash-vision-exp",
-        "name": "deepseek-v4-flash-vision-exp",
-        "modelId": "deepseek-v4-flash-vision-exp",
-        "isPremium": false,
-        "reasoningEfforts": ["low", "medium", "max"],
-        "contextLength": 1000000,
-        "streamingSupported": true,
-        "fallbackEndpointId": "predefined-deepseek-v4-flash"
-      },
-      {
-        "endpointId": "predefined-deepseek-v4-pro",
-        "name": "deepseek-v4-pro",
-        "modelId": "deepseek-v4-pro",
-        "isPremium": false,
-        "reasoningEfforts": [],
-        "contextLength": 1000000,
-        "streamingSupported": true,
-        "fallbackEndpointId": null
-      },
-      {
-        "endpointId": "predefined-gemini-3.8-flash",
-        "name": "gemini-3.8-flash",
-        "modelId": "gemini-3.8-flash",
-        "isPremium": false,
-        "reasoningEfforts": ["low", "medium", "max"],
-        "contextLength": 1000000,
-        "streamingSupported": true,
-        "fallbackEndpointId": null
-      },
-      {
-        "endpointId": "predefined-glm-5.3",
-        "name": "glm-5.3",
-        "modelId": "z-ai/glm-5.3",
-        "isPremium": false,
-        "reasoningEfforts": [],
-        "contextLength": 1000000,
-        "streamingSupported": true,
-        "fallbackEndpointId": "predefined-xai-grok4.6"
-      },
-      {
-        "endpointId": "predefined-glm-5.3-flash",
-        "name": "glm-5.3-flash",
-        "modelId": "z-ai/glm-5.3-flash",
-        "isPremium": false,
-        "reasoningEfforts": ["low", "medium", "max"],
-        "contextLength": 1000000,
-        "streamingSupported": true,
-        "fallbackEndpointId": "predefined-xai-grok4.6"
-      },
-      {
-        "endpointId": "predefined-gpt-5.6-luna",
-        "name": "gpt-5.6-luna",
-        "modelId": "gpt-5.6-luna",
-        "isPremium": false,
-        "reasoningEfforts": ["low", "medium", "max"],
-        "contextLength": 1050000,
-        "streamingSupported": true,
-        "fallbackEndpointId": null
-      },
-      {
-        "endpointId": "predefined-gpt-5.6-sol",
-        "name": "gpt-5.6-sol",
-        "modelId": "gpt-5.6-sol",
-        "isPremium": true,
-        "reasoningEfforts": ["low", "medium", "max"],
-        "contextLength": 1050000,
-        "streamingSupported": true,
-        "fallbackEndpointId": null
-      },
-      {
-        "endpointId": "predefined-gpt-5.6-terra",
-        "name": "gpt-5.6-terra",
-        "modelId": "gpt-5.6-terra",
-        "isPremium": true,
-        "reasoningEfforts": ["low", "medium", "max"],
-        "contextLength": 1049991,
-        "streamingSupported": true,
-        "fallbackEndpointId": null
-      },
-      {
-        "endpointId": "predefined-gpt-6-astra",
-        "name": "gpt-6-astra",
-        "modelId": "gpt-6-astra",
-        "isPremium": true,
-        "reasoningEfforts": ["low", "medium", "max"],
-        "contextLength": 1050000,
-        "streamingSupported": true,
-        "fallbackEndpointId": "predefined-gpt-5.6-sol"
-      },
-      {
-        "endpointId": "predefined-kimi-k3",
-        "name": "kimi-k3",
-        "modelId": "kimi-k3",
-        "isPremium": false,
-        "reasoningEfforts": ["low", "medium", "max"],
-        "contextLength": 1000000,
-        "streamingSupported": true,
-        "fallbackEndpointId": "predefined-xai-grok4.6"
-      },
-      {
-        "endpointId": "predefined-kimi-k3-fast",
-        "name": "kimi-k3-fast",
-        "modelId": "accounts/fireworks/routers/kimi-k3-fast",
-        "isPremium": true,
-        "reasoningEfforts": ["low", "medium", "max"],
-        "contextLength": 1000000,
-        "streamingSupported": true,
-        "fallbackEndpointId": null
-      },
-      {
-        "endpointId": "predefined-minimax-m3",
-        "name": "minimax-m3",
-        "modelId": "minimax/minimax-m3",
-        "isPremium": false,
-        "reasoningEfforts": [],
-        "contextLength": 1000000,
-        "streamingSupported": true,
-        "fallbackEndpointId": "predefined-xai-grok4.3"
-      },
-      {
-        "endpointId": "predefined-muse_spark_1.3",
-        "name": "muse-spark-1.3",
-        "modelId": "meta/muse-spark-1.3",
-        "isPremium": false,
-        "reasoningEfforts": ["low", "medium", "max"],
-        "contextLength": 1000000,
-        "streamingSupported": true,
-        "fallbackEndpointId": null
-      },
-      {
-        "endpointId": "predefined-qwen-3.8-max",
-        "name": "qwen-3.8-max",
-        "modelId": "qwen/qwen3.8-max",
-        "isPremium": false,
-        "reasoningEfforts": ["low", "medium", "max"],
-        "contextLength": 1000000,
-        "streamingSupported": true,
-        "fallbackEndpointId": null
-      },
-      {
-        "endpointId": "predefined-xai-grok4.6",
-        "name": "ondemand-grok-4.6",
-        "modelId": "grok-4.6",
-        "isPremium": false,
-        "reasoningEfforts": ["low", "medium", "max"],
-        "contextLength": 500000,
-        "streamingSupported": true,
-        "fallbackEndpointId": null
-      }
-    ],
-    "liveReasoningModes": {
-      "predefined": [
-        {
-          "modeId": "dynamic",
-          "modeName": "Sonnet 4.6",
-          "modelName": "Claude 4.6 Sonnet",
-          "rank": "16"
-        },
-        {
-          "modeId": "glm-4.7-flash",
-          "modeName": "GLM 4.7",
-          "modelName": "GLM 4.7",
-          "rank": "44"
-        },
-        {
-          "modeId": "gemini-3-flash",
-          "modeName": "Gemini 3 Flash",
-          "modelName": "Gemini 3 Flash",
-          "rank": "N/A"
-        },
-        {
-          "modeId": "grok-4-fast",
-          "modeName": "Grok-4.2 Fast reasoning",
-          "modelName": "Grok-4.2 fast reasoning",
-          "rank": "34"
-        },
-        {
-          "modeId": "gemini-3",
-          "modeName": "Gemini 3.1 Pro",
-          "modelName": "Gemini-3",
-          "rank": "16"
-        },
-        {
-          "modeId": "deepseek-v3.1",
-          "modeName": "Deepseek V3.2",
-          "modelName": "Deepseek V3.2",
-          "rank": "33"
-        },
-        {
-          "modeId": "haiku",
-          "modeName": "Haiku 4.5",
-          "modelName": "Claude Haiku 4.5",
-          "rank": "N/A"
-        },
-        {
-          "modeId": "glm-5-turbo",
-          "modeName": "GLM-5.1",
-          "modelName": "GLM-5.1",
-          "rank": "44"
-        },
-        {
-          "modeId": "minimax-m2",
-          "modeName": "MiniMax-M2.7",
-          "modelName": "MiniMax-M2.7",
-          "rank": "N/A"
-        },
-        {
-          "modeId": "gpt-5.4",
-          "modeName": "GPT-5.4",
-          "modelName": "OpenAI GPT-5.4",
-          "rank": "16"
-        },
-        {
-          "modeId": "gpt-5.4-pro",
-          "modeName": "GPT-5.4-Pro",
-          "modelName": "OpenAI GPT-5.4-pro",
-          "rank": "17"
-        },
-        {
-          "modeId": "opus",
-          "modeName": "Opus 4.7",
-          "modelName": "Claude 4.7 Opus",
-          "rank": "N/A"
-        },
-        {
-          "modeId": "kimi-k2",
-          "modeName": "Kimi-K2.6",
-          "modelName": "Kimi-K2.6",
-          "rank": "N/A"
-        }
-      ],
-      "userdefined": [
-        {
-          "modeId": "byor-019d817b-aa5c-7782-8de6-2a846f155727",
-          "modeName": "gemma4-ondemand",
-          "modelName": "Gemma 4 E2B On-Demand",
-          "rank": "N/A"
-        }
-      ]
-    },
-    "liveAgentToolIds": [],
-    "endpointSmokeChecks": [
-      {
-        "endpointId": "predefined-gemini-3.8-flash",
-        "status": 200,
-        "ms": 3542,
-        "answer": "PONG",
-        "dataKeys": ["answer", "messageId", "metrics", "sessionId", "status"]
-      },
-      {
-        "endpointId": "predefined-gpt-5.6-luna",
-        "status": 200,
-        "ms": 1861,
-        "answer": "PONG",
-        "dataKeys": ["answer", "messageId", "metrics", "sessionId", "status"]
-      },
-      {
-        "endpointId": "predefined-deepseek-v4-pro",
-        "status": 200,
-        "ms": 2519,
-        "answer": "PONG",
-        "dataKeys": ["answer", "messageId", "metrics", "sessionId", "status"]
-      },
-      {
-        "endpointId": "predefined-claude-sonnet-5",
-        "status": 200,
-        "ms": 2062,
-        "answer": "PONG",
-        "dataKeys": ["answer", "messageId", "metrics", "sessionId", "status"]
-      },
-      {
-        "endpointId": "predefined-claude-opus-5",
-        "status": 403,
-        "ms": 3083,
-        "answer": "",
-        "error": {
-          "errorCode": "content_policy_violation",
-          "message": "[fulfillment] content_policy_violation: Your request was blocked due to a content policy violation. Please revise your input and try again."
-        }
-      },
-      {
-        "endpointId": "predefined-claude-4-5-haiku",
-        "status": 200,
-        "ms": 2453,
-        "answer": "PONG",
-        "dataKeys": ["answer", "messageId", "metrics", "sessionId", "status"]
-      }
-    ],
-    "reasoningModeSmokeChecks": [
-      {
-        "reasoningMode": "haiku",
-        "endpointId": "predefined-gemini-3.8-flash",
-        "status": 200,
-        "contentType": "text/event-stream; charset=utf-8",
-        "ms": 4976,
-        "done": true,
-        "error": null,
-        "ttfdMs": 2904,
-        "eventTypes": ["fulfillment_thinking", "fulfillment", "metricsLog"],
-        "statusTypes": []
-      },
-      {
-        "reasoningMode": "dynamic",
-        "endpointId": "predefined-gemini-3.8-flash",
-        "status": 200,
-        "contentType": "text/event-stream; charset=utf-8",
-        "ms": 5151,
-        "done": true,
-        "error": null,
-        "ttfdMs": 3098,
-        "eventTypes": ["fulfillment_thinking", "fulfillment", "metricsLog"],
-        "statusTypes": []
-      },
-      {
-        "reasoningMode": "opus",
-        "endpointId": "predefined-gemini-3.8-flash",
-        "status": 200,
-        "contentType": "text/event-stream; charset=utf-8",
-        "ms": 5444,
-        "done": true,
-        "error": null,
-        "ttfdMs": 3377,
-        "eventTypes": ["fulfillment_thinking", "fulfillment", "metricsLog"],
-        "statusTypes": []
-      },
-      {
-        "reasoningMode": "grok-4-fast",
-        "endpointId": "predefined-gemini-3.8-flash",
-        "status": 200,
-        "contentType": "text/event-stream; charset=utf-8",
-        "ms": 4763,
-        "done": true,
-        "error": null,
-        "ttfdMs": 2689,
-        "eventTypes": ["fulfillment_thinking", "fulfillment", "metricsLog"],
-        "statusTypes": []
-      },
-      {
-        "reasoningMode": "low",
-        "endpointId": "predefined-gemini-3.8-flash",
-        "status": 200,
-        "contentType": "text/event-stream; charset=utf-8",
-        "ms": 4893,
-        "done": true,
-        "error": null,
-        "ttfdMs": 2778,
-        "eventTypes": ["fulfillment_thinking", "fulfillment", "metricsLog"],
-        "statusTypes": []
-      },
-      {
-        "reasoningMode": "high",
-        "endpointId": "predefined-gemini-3.8-flash",
-        "status": 200,
-        "contentType": "text/event-stream; charset=utf-8",
-        "ms": 5382,
-        "done": true,
-        "error": null,
-        "ttfdMs": 3323,
-        "eventTypes": ["fulfillment_thinking", "fulfillment", "metricsLog"],
-        "statusTypes": []
-      }
+    "repoCommitBeforeThisDocCommit": "2ed4d78dcf5dcd9ce490288eb003cda618b8bc6e",
+    "previousBaseline": "direct-mode CLI run of 2026-09-18T04:51Z, kept in git history (commit 1cd99a2, docs/ondemand-workflows/contract-baseline.json)",
+    "verificationUtc": [
+      "2026-09-18T05:47:35Z",
+      "2026-09-18T05:47:35Z",
+      "2026-09-18T05:47:35Z",
+      "2026-09-18T05:47:39Z",
+      "2026-09-18T05:47:39Z",
+      "2026-09-18T05:47:39Z",
+      "2026-09-18T05:47:39Z",
+      "2026-09-18T05:47:39Z",
+      "2026-09-18T05:48:54Z"
     ]
-  },
-  "chosenEndpointIds": {
-    "reasoning": {
-      "ASK": "haiku",
-      "INVESTIGATE": "dynamic",
-      "DEEP": "opus"
-    },
-    "fulfillment": {
-      "ASK": "predefined-gemini-3.8-flash",
-      "INVESTIGATE": "predefined-gpt-5.6-luna",
-      "DEEP": "predefined-claude-sonnet-5"
-    },
-    "fulfillmentFallbacks": {
-      "DEEP": "predefined-deepseek-v4-pro (non-premium, verified 200) if premium endpoints are restricted; predefined-claude-opus-5 returned 403 content_policy_violation on the smoke prompt and was not chosen"
-    },
-    "reasoningEffortValues": ["low", "medium", "max"],
-    "source": "reasoning modeIds verbatim from live GET /config/v1/public/reasoning_modes (predefined list, 2026-09-18T04:46:00Z) and each accepted by POST …/query responseMode=stream (200, [DONE]) on 2026-09-18T04:48Z; fulfillment endpointIds verbatim from live GET /config/v1/public/endpoints (status=active) and each verified with a sync query (200) on 2026-09-18T04:48Z; docs examples for reasoningMode are `low`, `high`, `grok-4-fast` (docs.on-demand.io/docs/chat-api.md, docs/query-and-responses-modes.md — contract §3.1/§12) and both `low` and `high` were also accepted live; reasoning_efforts values are the endpoint listing's own enumeration (low|medium|max). The blueprint §11.3 tier document was not available in this workspace, so tiers were assigned by model class: ASK = fast/flash, INVESTIGATE = balanced non-premium, DEEP = strongest verified.",
-    "caveat": "with zero agents on this account the RAG/reasoning stage is bypassed (contract §2), so a reasoningMode's effect is not observable — only its acceptance was verified"
-  },
-  "fieldProbes": [
-    {
-      "field": "maxTokens",
-      "status": 200,
-      "ms": 4928,
-      "answerLen": 4
-    },
-    {
-      "field": "responseFormat",
-      "status": 200,
-      "ms": 3464,
-      "answerLen": 4
-    },
-    {
-      "field": "reasoningEffort",
-      "status": 200,
-      "ms": 4251,
-      "answerLen": 4
-    },
-    {
-      "field": "contextMetadata (session create)",
-      "status": 201,
-      "ms": 158,
-      "echoed": [
-        {
-          "key": "probe",
-          "value": "gate1"
-        }
-      ]
-    },
-    {
-      "field": "DELETE /chat/v1/sessions/{id}",
-      "status": 200,
-      "ms": 232,
-      "body": {
-        "message": "Chat session deleted successfully"
-      }
-    }
-  ],
-  "repo": {
-    "branch": "ondemand-serverless",
-    "baseCommit": "0d41b6be5490db1f10a171f238be75db4d4ec3b4",
-    "headBeforeThisCommit": "d1c085caccfcfec93421476ef85142fb24c2c974",
-    "committedAs": "gate1: live contract baseline (see git log)"
-  },
-  "gate1Status": "EXITED — live contract validated with the user-supplied key (8 passed / 0 failed / 2 skipped by account state or design); residual: not yet observed on a Vercel function runtime"
+  }
 }

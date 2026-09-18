@@ -156,3 +156,38 @@ Notes: `/api/celestrak/active` reaches celestrak.org from the sandbox (a 200 wit
 - **Proxy mode (forced):** `node scripts/ondemand-contract-test.mjs --mode proxy --proxy-base https://ondemand-eand-spatial-opal.vercel.app/api/ondemand --json-out docs/ondemand-workflows/contract-baseline.json` at 2026-09-17T08:26:10Z (script commit `30791c7`): step 1 `session create + reuse` **FAIL 187 ms** — `proxy route not present at https://ondemand-eand-spatial-opal.vercel.app/api/ondemand (HTTP 404 The page could not be found NOT_FOUND)`; steps 2–9 **SKIP** (`dependency: step 1 failed`); step 10 latency summary PASS; `CONTRACT RESULT: mode=proxy passed=1 failed=1 skipped=8 totalMs=187`, exit 1. **Proxy mode was used because the key cannot be pulled; it could not exercise any contract shape because no God's Eye deployment is reachable.**
 - **Harness self-check (not a baseline):** the same command against the sandbox emulator (`https://sb-307x6fgbxmou.vercel.run/api/ondemand`, no key) at 2026-09-17T08:26:10Z reaches the proxy and fails at step 1 with the proxy's own `HTTP 503 {"error":"not_configured","message":"ONDEMAND_API_KEY is not set on the server."}` (275 ms), proving the harness wiring; recorded under `harnessSelfCheck` in `contract-baseline.json`.
 - **Gate 1 status:** EXIT BLOCKED — see `docs/audit/gates.md`.
+
+## 5. Selftest run on the sandbox emulator — 2026-09-18T05:47Z (commit 2ed4d78, sandbox sbx_CHYYYEfPHVf9TgYwIrYaHLjqRuiB)
+
+Deploy tier **T2** (the `vercel` CLI is a guardrail shim here — `vercel whoami` exits 126 — so T1/T1-newproject were impossible). The branch runs in a fresh node24 Vercel Sandbox via `npm run dev:serverless` over `dist/` + `api/**`; ONDEMAND_API_KEY (masked `G7Gg…VjnL`), ONDEMAND_SELFTEST_TOKEN, ONDEMAND_BASE_URL, ONDEMAND_ENDPOINT_ID=predefined-gpt-5.6-luna, ONDEMAND_REASONING_MODE=dynamic, GODS_EYE_FLOW_VERSION=0, VITE_SERVERLESS_MODE=1 were injected as process environment only — no `.env` file exists in the sandbox. `keyPresentAtRuntime: true`. Preview host: `sb-5hfcfkb7a79s.vercel.run`.
+
+| Route | Expected | Actual | UTC | Note |
+|---|---|---|---|---|
+| `GET /` | 200 | **200** | 2026-09-18T05:47:35Z | SPA shell (Cesium tags present) |
+| `GET /api/ondemand/health` | 200 configured | **200** | 2026-09-18T05:47:35Z | `ondemand: healthy, chat: healthy, speech: degraded (by design), media: healthy, workflow: healthy`, `configured: true`, `reasoningModeInvalid: false`; sources: baseUrl←ONDEMAND_BASE_URL, reasoningEndpointId←ONDEMAND_ENDPOINT_ID, fulfillmentEndpointId←ONDEMAND_ENDPOINT_ID, reasoningMode←ONDEMAND_REASONING_MODE (valid), flowVersion←GODS_EYE_FLOW_VERSION, spatialFlowId unset |
+| `GET /api/celestrak/active` | 200 TLE | **200** | 2026-09-18T05:47:35Z | legacy provider through `api/[...route].js`; first set: `CALSPHERE 1` / `1 00900U 64063C   26260.93151762  .00000…` |
+| `GET /api/ais-live` | 501 | **501** | 2026-09-18T05:47:39Z | `unavailable_in_serverless` (flagged off) |
+| `GET /api/realtime/token` | 501 | **501** | 2026-09-18T05:47:39Z | `unavailable_in_serverless` (flagged off) |
+| `GET /api/setup/status` | 404 | **404** | 2026-09-18T05:47:39Z | catch-all JSON `Unknown API route` (key panel unmounted) |
+| `GET /api/ondemand/selftest (no header)` | 404 (no header) | **404** | 2026-09-18T05:47:39Z | `{"error":"not_found"}` — route invisible without the token |
+| `GET /api/ondemand/selftest (with x-selftest-token)` | 200 (token) | **200** | 2026-09-18T05:47:39Z | 10-step JSON: passed 8 / failed 0 / skipped 2 (step 4: account has no agents; step 8: no flow id), ttfd 1,435 ms, durationMs 29,177; sessionIdHash only |
+| `GET /api/ondemand/selftest` (repeat 75 s after the previous run started) | 200 (window elapsed) | **200** | 2026-09-18T05:48:54Z | the limiter counts 60 s from the start of the last run, so a second full run was allowed |
+| `GET /api/ondemand/selftest` (2nd call 3 s after a run started, 2026-09-18T05:50:26Z) | 429 | **429** | 2026-09-18T05:50:29Z | in-flight/60-s limiter; `Retry-After` header present |
+
+Selftest step table (from the response; saved verbatim with provenance to `docs/ondemand-workflows/contract-baseline.json`):
+
+| # | Step | Status | HTTP | Latency ms | ttfd ms | Note |
+|---|---|---|---|---|---|---|
+| 1 | session create + reuse | PASS | 200 | 265 | — | sessionId=*** |
+| 2 | sync prompt | PASS | 200 | 2453 | — | answer.length=2 |
+| 3 | SSE stream | PASS | 200 | 3786 | 1435 | heartbeat=true fulfillmentDeltas=25 timeToFirstDeltaMs=1435 |
+| 4 | built-in tool/plugin invocation | SKIP | 200 | 165 | — | no plugin id in env and the account's Agents API listing is empty (GET /plugin/v1/list -> HTTP 200, total=0); no documented chat agent id wa |
+| 5 | STT on in-script generated WAV | PASS | 200 | 10840 | — | mediaId=6aacd0827b8af592f50397d2 textLength=0 |
+| 6 | TTS | PASS | 200 | 2695 | — | contentType=application/octet-stream bytes=41856 container=mp3 |
+| 7 | Media PNG analysis | PASS | 200 | 6998 | — | actionStatus=completed context="The image is a tiny abstract pixel-art or icon-like graphic composed of a tightly packed grid of square pixe |
+| 8 | workflow | SKIP | — | 0 | — | ONDEMAND_SPATIAL_FLOW_ID unset on the deployment — auto-skipped by design |
+| 9 | session-memory follow-up | PASS | 200 | 1974 | — | answer contains the step-2 code word |
+| 10 | latency summary | PASS | — | 0 | — | min=265ms max=10840ms mean=4144ms totalMs=29011 |
+
+Gates before deploy (commit 2ed4d78): `format:check` pass (930 files) · `check:boundaries` pass · `npm test` 4145 tests / 4144 pass / 0 fail / 1 skipped · `test:ondemand` 136/136 · `test:serverless` 30/30 · `vite build` exit 0 · functions under `api/`: 9 (`api/[...route].js` + 8 `api/ondemand/*.js`; `api/ondemand/_config.js` is an underscore helper, not a function).
+
