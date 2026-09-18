@@ -1,6 +1,6 @@
 import os from 'node:os';
 import { createMountRouter } from './router.js';
-import { createEarthquakesHandler } from './earthquakes-route.js';
+import { mountSourceRoutes } from './sources-mounts.js';
 
 /** VITE_SERVERLESS_MODE / SERVERLESS_MODE mirror the client-side build-time flag; VERCEL is set by the platform itself. */
 /** Accept the usual truthy spellings (`true`, `1`, `yes`) for an env flag. */
@@ -163,8 +163,9 @@ async function createServerlessApi({ serverlessMode: explicitMode } = {}) {
     });
   }
 
-  // Gate 3 row 1 — earthquake.search (USGS FDSN); served by the catch-all, not a separate function
-  router.use('/api/sources/earthquakes', createEarthquakesHandler());
+  // Gate 3 — every /api/sources/* adapter (row 1 earthquakes onwards) is
+  // served by this catch-all, not by separate functions (see sources-mounts.js).
+  mountSourceRoutes(router);
 
   for (const plugin of localProviderPlugins()) {
     if (SKIP_ALWAYS.has(plugin.name)) continue;

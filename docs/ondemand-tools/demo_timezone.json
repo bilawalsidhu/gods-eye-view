@@ -1,0 +1,121 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "God's Eye demo_timezone",
+    "version": "1.0.0",
+    "description": "Dynamic-capability probe: nautical time zone (UTC offset = longitude/15°, rounded) and local-time estimate for a coordinate. Computed locally by server/sources/demo-timezone.js; no upstream provider. Completeness is always 'estimated'."
+  },
+  "servers": [
+    {
+      "url": "https://<deployment>",
+      "description": "God's Eye deployment host (replace)"
+    }
+  ],
+  "paths": {
+    "/api/sources/demo/timezone": {
+      "get": {
+        "operationId": "demo_timezone",
+        "summary": "Nautical time-zone estimate for a coordinate",
+        "parameters": [
+          {
+            "name": "lat",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            }
+          },
+          {
+            "name": "lon",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            }
+          },
+          {
+            "name": "at",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Reference instant (ISO-8601 UTC); default now"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One estimate",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "source": {
+                      "type": "string"
+                    },
+                    "count": {
+                      "type": "integer"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "latitude": {
+                            "type": "number"
+                          },
+                          "longitude": {
+                            "type": "number"
+                          },
+                          "utc_offset": {
+                            "type": "string"
+                          },
+                          "utc_offset_hours": {
+                            "type": "integer"
+                          },
+                          "reference_utc": {
+                            "type": "string"
+                          },
+                          "local_time_estimate": {
+                            "type": "string"
+                          },
+                          "method": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "provenance": {
+                      "type": "object"
+                    },
+                    "query": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "unknown/invalid parameter — {error:{code,message,param}}"
+          }
+        }
+      }
+    }
+  },
+  "x-godseye": {
+    "capability_id": "demo.timezone",
+    "registry_status": "registered-unverified",
+    "ondemand_tool_id": null,
+    "adapter": "server/sources/demo-timezone.js"
+  }
+}

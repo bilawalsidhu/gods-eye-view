@@ -12,7 +12,13 @@
  *        missing id (body + env) is a 400, never a silent hardcoded default.
  */
 
-import { config, baseUrls, isConfigured } from './_config.js';
+import {
+  config,
+  baseUrls,
+  isConfigured,
+  tierDefaults,
+  TIER_DEFAULTS,
+} from './_config.js';
 import { ondemandFetch } from '../../server/ondemand/client.js';
 import {
   ensureSession,
@@ -50,7 +56,15 @@ const TOP_LEVEL_FIELDS = new Set([
   'fulfillmentOnly',
   'modelConfigs',
   'reasoningMode',
+  // Gate 3 capability loop (server/ondemand/capability-loop.js) — proxy-side
+  // fields, never forwarded upstream: `mode: 'capability-loop'`, the fresh
+  // spatial context and the tier whose TIER_DEFAULTS pick the endpoint.
+  'mode',
+  'spatialContext',
+  'tier',
 ]);
+const MODES = new Set(['chat', 'capability-loop']);
+const MAX_SPATIAL_CONTEXT_BYTES = 64 * 1024;
 const MODEL_CONFIG_FIELDS = new Set([
   'fulfillmentPrompt',
   'stopSequences',
@@ -101,6 +115,9 @@ export default async function handler(req, res) {
     fulfillmentOnly,
     modelConfigs,
     reasoningMode,
+    mode,
+    spatialContext,
+    tier,
   } = body;
   let { endpointId, responseMode } = body;
 
@@ -114,6 +131,32 @@ export default async function handler(req, res) {
   }
   if (Buffer.byteLength(query, 'utf8') > MAX_QUERY_BYTES) {
     sendJson(res, 400, { error: 'query_too_large', maxBytes: MAX_QUERY_BYTES });
+    return;
+  }
+  if (mode !== undefined && !MODES.has(mode)) {
+    sendJson(res, 400, { error: 'invalid_mode', allowed: [...MODES] });
+    return;
+  }
+  if (mode === 'capability-loop') {
+    await runCapabilityLoopRequest(res, {
+      sessionId,
+      userId,
+      query,
+      spatialContext,
+      tier,
+      pluginIds,
+      endpointId,
+      responseMode,
+    });
+    return;
+  }
+  if (spatialContext !== undefined || tier !== undefined) {
+    sendJson(res, 400, {
+      error: 'unknown_field',
+      field: spatialContext !== undefined ? 'spatialContext' : 'tier',
+      message:
+        'spatialContext/tier are only accepted with mode "capability-loop"',
+    });
     return;
   }
 
@@ -354,4 +397,103 @@ function validateModelConfigs(mc) {
     }
   }
   return null;
+}
+
+/**
+ * mode: 'capability-loop' — the interim decide→execute→answer loop
+ * (server/ondemand/capability-loop.js; docs/ONDEMAND_PROXY_DESIGN.md
+ * "Capability loop (interim pending dashboard tool IDs)"). Sync only. The
+ * endpoint comes from the tier's TIER_DEFAULTS (or an explicit endpointId);
+ * the tier's reasoningMode is recorded in the result, not sent (§3.1:
+ * stream-only field). Nothing is pre-fetched: only the capabilities OnDemand
+ * selected are executed, through server/sources/index.js.
+ */
+async function runCapabilityLoopRequest(
+  res,
+  {
+    sessionId,
+    userId,
+    query,
+    spatialContext,
+    tier,
+    pluginIds,
+    endpointId,
+    responseMode,
+  },
+) {
+  if (responseMode !== undefined && responseMode !== 'sync') {
+    sendJson(res, 400, {
+      error: 'invalid_responseMode',
+      message: 'mode "capability-loop" runs sync turns only',
+    });
+    return;
+  }
+  if (
+    spatialContext !== undefined &&
+    (spatialContext === null ||
+      typeof spatialContext !== 'object' ||
+      Array.isArray(spatialContext))
+  ) {
+    sendJson(res, 400, { error: 'invalid_spatialContext' });
+    return;
+  }
+  if (
+    spatialContext !== undefined &&
+    Buffer.byteLength(JSON.stringify(spatialContext), 'utf8') >
+      MAX_SPATIAL_CONTEXT_BYTES
+  ) {
+    sendJson(res, 400, {
+      error: 'spatialContext_too_large',
+      maxBytes: MAX_SPATIAL_CONTEXT_BYTES,
+    });
+    return;
+  }
+  if (tier !== undefined && typeof tier !== 'string') {
+    sendJson(res, 400, { error: 'invalid_tier' });
+    return;
+  }
+  const tierRow = tierDefaults(tier);
+  const resolvedTier = Object.keys(TIER_DEFAULTS).find(
+    (k) => TIER_DEFAULTS[k] === tierRow,
+  );
+  const [{ runCapabilityLoop, loadRegistry }, { SOURCE_ADAPTERS }] =
+    await Promise.all([
+      import('../../server/ondemand/capability-loop.js'),
+      import('../../server/sources/index.js'),
+    ]);
+  let registry;
+  try {
+    registry = await loadRegistry();
+  } catch {
+    sendJson(res, 500, {
+      error: 'registry_unavailable',
+      message: 'src/registry/capabilities.json could not be read',
+    });
+    return;
+  }
+  let result;
+  try {
+    result = await runCapabilityLoop({
+      query,
+      spatialContext: spatialContext ?? {},
+      tier: resolvedTier,
+      userId,
+      sessionId,
+      registry,
+      adapters: SOURCE_ADAPTERS,
+      ondemand: { fetch: ondemandFetch, chatBase: baseUrls().chat },
+      endpointId: endpointId ?? tierRow.fulfillmentEndpointId,
+      reasoningMode: tierRow.reasoningMode,
+      pluginIds: Array.isArray(pluginIds) ? pluginIds : [],
+    });
+  } catch (err) {
+    console.error('[capability-loop] failed:', err?.message || err);
+    sendJson(res, 502, {
+      error: 'proxy_error',
+      message: 'capability loop failed before an answer was produced',
+    });
+    return;
+  }
+  const status = result.ok ? 200 : result.error?.status === 422 ? 422 : 502;
+  sendJson(res, status, { mode: 'capability-loop', ...result });
 }

@@ -890,6 +890,171 @@ describe('api/ondemand/chat.js — smoke with stubbed fetch', () => {
   });
 });
 
+describe('api/ondemand/chat.js — mode "capability-loop" (server/ondemand/capability-loop.js)', () => {
+  const structured = {
+    message: 'Nautical zone estimate UTC+04:00 for 24.43N 54.65E.',
+    entities: [],
+    actions: [],
+    evidence: [],
+    sources: [
+      {
+        id: 'demo.timezone',
+        kind: 'capability',
+        label: 'demo.timezone',
+        status: 'used',
+      },
+    ],
+    suggestedNextActions: [],
+    runMeta: {
+      mode: 'capability-loop',
+      executed: ['demo.timezone'],
+      generatedAtUtc: '2026-09-18T08:00:00.000Z',
+    },
+  };
+
+  test('invalid mode -> 400; spatialContext/tier without the mode -> 400; non-sync responseMode -> 400', async () => {
+    configureWithKey();
+    activeStub = stubFetchSequence([
+      () => {
+        throw new Error('network should not be called');
+      },
+    ]);
+    let res = makeRes();
+    await chatHandler(
+      makeReq({
+        method: 'POST',
+        body: { userId: 'u', query: 'q', mode: 'agentic' },
+      }),
+      res,
+    );
+    assert.equal(res.statusCode, 400);
+    assert.equal(res.json().error, 'invalid_mode');
+    res = makeRes();
+    await chatHandler(
+      makeReq({
+        method: 'POST',
+        body: { userId: 'u', query: 'q', spatialContext: {} },
+      }),
+      res,
+    );
+    assert.equal(res.statusCode, 400);
+    assert.equal(res.json().field, 'spatialContext');
+    res = makeRes();
+    await chatHandler(
+      makeReq({
+        method: 'POST',
+        body: {
+          userId: 'u',
+          query: 'q',
+          mode: 'capability-loop',
+          responseMode: 'stream',
+        },
+      }),
+      res,
+    );
+    assert.equal(res.statusCode, 400);
+    assert.equal(res.json().error, 'invalid_responseMode');
+    res = makeRes();
+    await chatHandler(
+      makeReq({
+        method: 'POST',
+        body: {
+          userId: 'u',
+          query: 'q',
+          mode: 'capability-loop',
+          spatialContext: [1],
+        },
+      }),
+      res,
+    );
+    assert.equal(res.statusCode, 400);
+    assert.equal(res.json().error, 'invalid_spatialContext');
+    assert.equal(activeStub.calls.length, 0);
+  });
+
+  test('runs decide → execute (ONLY the selected, network-free demo.timezone) → answer in the same session; tier picks the endpoint', async () => {
+    configureWithKey();
+    activeStub = stubFetchSequence([
+      jsonResponse(201, { data: { id: 'sess-loop' } }),
+      jsonResponse(200, {
+        data: {
+          answer:
+            '{"decisions":[{"capabilityId":"demo.timezone","params":{"lat":24.43,"lon":54.65}}]}',
+          messageId: 'm1',
+        },
+      }),
+      jsonResponse(200, {
+        data: { answer: JSON.stringify(structured), messageId: 'm2' },
+      }),
+    ]);
+    const req = makeReq({
+      method: 'POST',
+      body: {
+        userId: 'loop-user',
+        query: 'What time zone is the airport in?',
+        mode: 'capability-loop',
+        tier: 'ASK',
+        spatialContext: { center: { latitude: 24.43, longitude: 54.65 } },
+      },
+    });
+    const res = makeRes();
+    await chatHandler(req, res);
+    assert.equal(res.statusCode, 200, res.text());
+    const body = res.json();
+    assert.equal(body.mode, 'capability-loop');
+    assert.equal(body.ok, true);
+    assert.equal(body.tier, 'ASK');
+    assert.equal(body.endpointId, 'predefined-gpt-5.6-luna');
+    assert.equal(body.reasoningMode, 'low');
+    assert.equal(body.reasoningModeSent, false);
+    assert.deepEqual(
+      body.executed.map((e) => [e.capabilityId, e.status, e.count]),
+      [['demo.timezone', 200, 1]],
+    );
+    assert.equal(body.validation.ok, true);
+    assert.ok(
+      body.catalogue.includes('earthquake.search') &&
+        body.catalogue.includes('demo.timezone'),
+    );
+    assert.equal(activeStub.calls.length, 3);
+    const [, decisionCall, answerCall] = activeStub.calls;
+    assert.ok(String(decisionCall.url).endsWith('/sessions/sess-loop/query'));
+    assert.ok(String(answerCall.url).endsWith('/sessions/sess-loop/query'));
+    const decisionBody = JSON.parse(decisionCall.init.body);
+    assert.equal(decisionBody.responseMode, 'sync');
+    assert.equal(decisionBody.endpointId, 'predefined-gpt-5.6-luna');
+    assert.equal('reasoningMode' in decisionBody, false);
+    const answerBody = JSON.parse(JSON.parse(answerCall.init.body).query);
+    assert.equal(answerBody.toolResults[0].data.items[0].utc_offset, '+04:00');
+    assert.equal(JSON.stringify(body).includes(TEST_KEY), false);
+  });
+
+  test('a hallucinated capability -> 422, nothing executed, only two upstream calls', async () => {
+    configureWithKey();
+    activeStub = stubFetchSequence([
+      jsonResponse(201, { data: { id: 'sess-loop' } }),
+      jsonResponse(200, {
+        data: {
+          answer: '{"decisions":[{"capabilityId":"weather.now","params":{}}]}',
+        },
+      }),
+    ]);
+    const res = makeRes();
+    await chatHandler(
+      makeReq({
+        method: 'POST',
+        body: { userId: 'u', query: 'q', mode: 'capability-loop' },
+      }),
+      res,
+    );
+    assert.equal(res.statusCode, 422);
+    const body = res.json();
+    assert.equal(body.decision.valid, false);
+    assert.deepEqual(body.executed, []);
+    assert.equal(activeStub.calls.length, 2);
+  });
+});
+
 describe('api/ondemand/media.js — smoke', () => {
   test('JSON url-create posts to POST {media} with the documented fields', async () => {
     configureWithKey();

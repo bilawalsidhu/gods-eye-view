@@ -1,7 +1,7 @@
 {
-  "$schema_note": "God's Eye spatial capability registry — Gate 3 rows",
-  "version": 2,
-  "updated_utc": "2026-09-18T07:40:00Z",
+  "$schema_note": "God's Eye spatial capability registry — Gate 3 rows. Row fields consumed by server/ondemand/capability-loop.js: id, provider, route, adapter (file; rows without one are never executed), status (PENDING / rendering-only rows are excluded from the catalogue), params (whitelist), required_params, description, coverage, license, attribution.",
+  "version": 3,
+  "updated_utc": "2026-09-18T08:20:00Z",
   "capabilities": [
     {
       "id": "earthquake.search",
@@ -14,7 +14,68 @@
       "persistent_connection": false,
       "status": "registered-unverified",
       "definition": "docs/ondemand-workflows/tools/earthquake_search.json",
-      "notes": "REST agent creation is dashboard-only in the live OnDemand docs (§8; re-confirmed 2026-09-18T07:09:37Z: GET /plugin/v1/list total 0). Status becomes 'live' once the tool is created in the dashboard (OpenAPI: docs/ondemand-workflows/tools/earthquake_search.openapi.json), its pluginId is pasted into ondemand_tool_id, and the end-to-end query invokes it. Selected by the workflow's capability_resolver node (docs/ondemand-workflows/README.md)."
+      "notes": "REST agent creation is dashboard-only in the live OnDemand docs (§8; re-confirmed 2026-09-18T07:09:37Z: GET /plugin/v1/list total 0). Status becomes 'live' once the tool is created in the dashboard (OpenAPI: docs/ondemand-workflows/tools/earthquake_search.openapi.json), its pluginId is pasted into ondemand_tool_id, and the end-to-end query invokes it. Selected by the workflow's capability_resolver node (docs/ondemand-workflows/README.md).",
+      "adapter": "server/sources/usgs-earthquakes.js",
+      "adapter_export": "fetchEarthquakes",
+      "description": "Search recent/historical earthquakes (USGS FDSN Event) by time window, magnitude and circle (latitude+longitude+maxradiuskm) or bounding box; returns observed events with UTC time, magnitude, depth, location, tsunami flag.",
+      "params": [
+        "starttime",
+        "endtime",
+        "minmagnitude",
+        "maxmagnitude",
+        "latitude",
+        "longitude",
+        "maxradiuskm",
+        "minlatitude",
+        "maxlatitude",
+        "minlongitude",
+        "maxlongitude",
+        "limit",
+        "orderby",
+        "mode"
+      ],
+      "required_params": [],
+      "license": {
+        "name": "USGS public domain (U.S. Government work)",
+        "url": "https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits",
+        "status": "ATTRIBUTION REQUIRED"
+      },
+      "attribution": "Earthquake data: U.S. Geological Survey (USGS) Earthquake Hazards Program, FDSN Event Web Service",
+      "tool_definition": "docs/ondemand-tools/earthquake_search.json",
+      "gate3_row": 1
+    },
+    {
+      "id": "demo.timezone",
+      "provider": "demo.timezone (nautical zones, computed locally)",
+      "route": "/api/sources/demo/timezone",
+      "ondemand_tool": "demo_timezone",
+      "ondemand_tool_id": null,
+      "coverage": "estimated",
+      "auth": "none",
+      "persistent_connection": false,
+      "status": "registered-unverified",
+      "adapter": "server/sources/demo-timezone.js",
+      "adapter_export": "fetchTimezone",
+      "description": "Estimate the nautical time zone (UTC offset = longitude/15°, rounded) and local time for a coordinate. Dynamic-capability probe of the capability loop; no upstream call.",
+      "params": [
+        "lat",
+        "lon",
+        "at"
+      ],
+      "required_params": [
+        "lat",
+        "lon"
+      ],
+      "definition": "docs/ondemand-tools/demo_timezone.json",
+      "tool_definition": "docs/ondemand-tools/demo_timezone.json",
+      "license": {
+        "name": "Repository (MIT, computed value — no upstream data)",
+        "url": "https://github.com/bilawalsidhu/gods-eye-view/blob/main/LICENSE",
+        "status": "OK"
+      },
+      "attribution": "God's Eye View demo.timezone (nautical zone estimate)",
+      "gate3_row": "dynamic-capability probe",
+      "notes": "Registered with ZERO frontend changes to prove OnDemand selects a capability purely from this registry (docs/audit/capability-loop-verification.md)."
     }
   ],
   "ondemand": {
