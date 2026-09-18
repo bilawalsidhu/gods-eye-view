@@ -3,6 +3,44 @@
 This changelog records public product changes. For the authoritative description
 of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md).
 
+## [0.9.2] — 2026-09-18
+
+### QA
+
+- The E2E heading-regression suite (b3) judges aircraft/military heading
+  alignment against the analytic flight arc sampled at the aircraft's
+  DISPLAYED position instead of its newest raw fix. During the poll phase
+  the newest fix legitimately predates the rendered time by up to one poll
+  interval, which at turn rates can be tens of degrees of legal tangent
+  lag — the old check misread that as a heading defect. Position anchoring
+  keeps the ±35° tolerance meaningful.
+- The sprite (b5) and heading (b3) suites classify OS-level network
+  disconnect codes (`ERR_NETWORK_CHANGED`, `ERR_INTERNET_DISCONNECTED`, …)
+  as tolerated environment noise — counted and reported, never silently
+  dropped, and generic `ERR_FAILED` still fails.
+- The radio-panel suite converges on "painted AND the label solve revision
+  held still", not paint alone — no more racing the arbiter's first pass.
+- The L9 matrix suite gets a measured 95-minute budget (its D-wave tail
+  overran the old 75) and pumps a frame through the render governor before
+  reading each bundled layer's stats, so late-loading layers no longer
+  read as empty.
+- The CCTV proxy test's wall-clock bounds get 100× headroom so a loaded
+  CI box's timer coalescing cannot flake them.
+
+### Coverage
+
+- `npm run test:coverage` now reports honest numbers: the traffic-timing
+  test boots a real vite dev server whose SSR module runner re-compiled the
+  whole traffic graph under a second filename, and c8 merged that copy's
+  near-zero counts into the real ones (flowMatch read 42.97% in the batch
+  but 100% solo). That one file is now skipped under coverage (it still
+  runs in `npm test`), enforced by runner-contract tests. Batch coverage
+  is 90.33%, with cctvViewshed at 100% and new seam tests for the CCTV
+  calibration/pose/catalog internals and the frustum-volume primitive.
+
+No user-facing behavior changes; the only served-surface delta is a
+test-seam export in the CCTV module.
+
 ## [0.9.1] — 2026-09-16
 
 ### Fixed
