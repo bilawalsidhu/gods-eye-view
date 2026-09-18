@@ -743,5 +743,11 @@
   "src/director/interactions/interactions.test.mjs",
   "scripts/qa-director-interactions.mjs",
   "src/director/sharing/sharing.test.mjs",
-  "scripts/qa-director-sharing.mjs"
+  "scripts/qa-director-sharing.mjs",
+  "server/providers/cellular.js",
+  "server/providers/cellular.test.mjs",
+  "src/layers/cellular/source.js",
+  "src/layers/cellular/source.test.mjs",
+  "src/layers/cellular/index.js",
+  "src/app/layers/cellularNetworks.js"
 ]
