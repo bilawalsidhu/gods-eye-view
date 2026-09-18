@@ -94,4 +94,27 @@
       </div>
     </div>
   </div>
+
+  <!-- OD VOICE: OnDemand turn-based voice (STT → chat/workflow → TTS). Filled and
+       moved beside the runtime-injected GEV MIC control by src/voice/ondemand/ui.js;
+       the existing #gev-voice-control is untouched. -->
+  <div id="od-voice-control" class="od-voice" data-state="idle" data-route="auto" aria-label="OnDemand voice">
+      <div class="od-voice-heading">
+        <span class="od-voice-kicker">OD VOICE</span>
+        <button id="od-voice-route" class="od-voice-route" type="button" aria-label="Thinking route: automatic" title="Thinking route — AUTO picks the workflow for spatial tasks, chat otherwise">AUTO</button>
+      </div>
+      <div class="od-voice-row">
+        <button id="od-voice-button" class="od-voice-btn" type="button" aria-pressed="false" aria-label="OnDemand voice — press to talk, press again to send, press while speaking to interrupt" title="OnDemand voice (turn-based: STT → chat/workflow → TTS)">
+          <span class="od-voice-mic" aria-hidden="true"></span>
+          <span class="od-voice-btn-label">TALK</span>
+        </button>
+        <div class="od-voice-meta">
+          <span id="od-voice-status" class="od-voice-chip" role="status" aria-live="polite">IDLE</span>
+          <span id="od-voice-detail" class="od-voice-detail">Turn-based · OnDemand STT → chat/workflow → TTS</span>
+        </div>
+      </div>
+      <div id="od-voice-transcript" class="od-voice-line od-voice-transcript" aria-live="polite"></div>
+      <div id="od-voice-answer" class="od-voice-line od-voice-answer" aria-live="polite"></div>
+      <div id="od-voice-workflow" class="od-voice-line od-voice-workflow" aria-live="off"></div>
+  </div>
   </div>

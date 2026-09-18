@@ -1,6 +1,8 @@
 import os from 'node:os';
 import { createMountRouter } from './router.js';
 import { mountSourceRoutes } from './sources-mounts.js';
+import { mountToolsRoute } from './tools-route.js';
+import { mountOndemandWorkflowSubpaths } from './ondemand-workflow-mount.js';
 
 /** VITE_SERVERLESS_MODE / SERVERLESS_MODE mirror the client-side build-time flag; VERCEL is set by the platform itself. */
 /** Accept the usual truthy spellings (`true`, `1`, `yes`) for an env flag. */
@@ -177,6 +179,15 @@ async function createServerlessApi({ serverlessMode: explicitMode } = {}) {
   // Gate 3 — every /api/sources/* adapter (row 1 earthquakes onwards) is
   // served by this catch-all, not by separate functions (see sources-mounts.js).
   mountSourceRoutes(router);
+  // OnDemand-callable tools (docs/plugins/*/openapi.json) — same catch-all,
+  // no extra function (server/serverless/tools-route.js).
+  mountToolsRoute(router);
+  // /api/ondemand/workflow/<execute|status|logs|outputs|stream>: Vercel only
+  // routes the literal api/ondemand/workflow.js file for the bare path, so
+  // the sub-paths land here and are rewritten onto its `?action=` contract
+  // (server/serverless/ondemand-workflow-mount.js; `stream` is the polling
+  // surface re-shaped as same-origin SSE, not an upstream stream).
+  mountOndemandWorkflowSubpaths(router);
 
   for (const plugin of localProviderPlugins()) {
     if (SKIP_ALWAYS.has(plugin.name)) continue;
