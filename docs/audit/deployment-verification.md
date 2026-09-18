@@ -397,3 +397,95 @@ Full `/api/ondemand/health?envNames=1` JSON (secret-free — names only):
   }
 }
 ```
+
+## 9. Runtime verification — emulator (no Vercel deployment possible) — 2026-09-18T09:28Z (commits 881e5a3 / 6dde6d0, sandbox `sbx_OUGpHn0VupD18WFXpWFYqikgdvM1`)
+
+**Label: emulator.** Preview `https://sb-63r5liykgi73.vercel.run`, `npm run dev:serverless` over `dist/` + `api/**` (Node v24.14.1; `npm ci` + `npm run build` 09:27:45Z–09:27:56Z; server up 09:28:11Z). Runtime-only env injected into the process: ONDEMAND_API_KEY `<redacted>`, ONDEMAND_SELFTEST_TOKEN `<redacted>` (fresh random token generated for this run), ONDEMAND_BASE_URL, ONDEMAND_SPATIAL_FLOW_ID=6aace534859f7b0abb53d99a (the repo's name for the flow id; also the built-in default), GODS_EYE_FLOW_VERSION=1, VITE_SERVERLESS_MODE=1, SERVERLESS_MODE=true. The only `.env` in the sandbox is the repo's non-secret serverless-mode file (`grep -c ONDEMAND_API_KEY .env` → 0). Function count 9.
+
+**Why this is not a Vercel function-runtime run.** (1) The credential supplied this turn as `VERCEL_TOKEN` is byte-identical to the OnDemand API key already in use (it authenticates against OnDemand: `GET /plugin/v1/list` → 200 at 09:18:11Z) — it is not a Vercel token, so it was NOT transmitted to `api.vercel.com` or `api.github.com` (sending a live third-party secret to unrelated auth endpoints would only leak it). (2) Independently of the token, this build environment cannot create Vercel deployments: the `vercel` CLI is a guardrail shim (exit 126) and calling the Vercel deployment API from here is off-limits by platform policy. The file-upload flow the task specifies is implemented, ready to run from an operator machine, in `scripts/vercel-file-deploy.mjs` (dry-run verified: 1,312 files, no `.env`, no tests, no docs; `--target production` refused; token from env only, redacted from output). Once a READY preview exists, repeat this table against it and save the selftest as `docs/ondemand-workflows/contract-baseline.vercel.json`.
+
+| Check | Expected | HTTP | Latency | UTC | Note |
+|---|---|---|---|---|---|
+| `GET /` | 200 | **200** | 57 ms | 2026-09-18T09:28:28.887Z | SPA shell, 59,348 bytes |
+| `GET /api/ondemand/health` | 200, chat/media/workflow healthy | **200** | 1,702 ms | 09:28:30.599Z | ondemand/chat/speech/media/workflow all **healthy**; sources: baseUrl←ONDEMAND_BASE_URL, reasoningEndpointId/fulfillmentEndpointId←default, flowVersion←GODS_EYE_FLOW_VERSION, spatialFlowId←ONDEMAND_SPATIAL_FLOW_ID; **leak grep**: full key, its first/last 8 characters and the selftest token absent from every response body |
+| `GET /api/ondemand/health?envNames=1` | names only | **200** | 176 ms | 09:28:30.786Z | names: ONDEMAND_API_KEY, ONDEMAND_BASE_URL, ONDEMAND_SELFTEST_TOKEN, ONDEMAND_SPATIAL_FLOW_ID, SERVERLESS_MODE, VITE_SERVERLESS_MODE (no values) |
+| `GET /api/celestrak/stations` (catch-all) | 200, real TLE | **200** | 1,073 ms | 09:28:31.870Z | `ISS (ZARYA)` / `1 25544U 98067A   26261.14280998 …` (3,360 bytes) |
+| `GET /api/ais-live` | 501 | **501** | 586 ms | 09:28:32.468Z | `unavailable_in_serverless` (AISStream WebSocket relay) |
+| `GET /api/realtime/token` | 501 | **501** | 43 ms | 09:28:32.522Z | `unavailable_in_serverless` (voice-realtime) |
+| `GET /api/setup/status` (key-setup) | 404 | **404** | 49 ms | 09:28:32.583Z | `{"error":"Unknown API route"}` |
+| `GET /api/sources/earthquakes?starttime=<now−24h>&minmagnitude=4.5&limit=50` | 200 | **200** | 338 ms | 09:28:32.933Z | **10 events** (e.g. `us7000ti89` M5.0 07:19Z, `us7000ti83` M4.7, `us7000ti7x` M4.7); USGS generated 09:28:32Z |
+| `GET /api/sources/earthquakes?latitude=25.2&longitude=55.3&maxradiuskm=1500&starttime=<now−30d>&minmagnitude=4&limit=100` (Gulf circle) | 200 | **200** | 297 ms | 09:28:33.243Z | **14 events** (e.g. `us7000thr6` M4.7 09-15, `us7000th9l` M4.3, `us7000tg53` M4.3) |
+| `GET /api/sources/earthquakes?foo=bar` | 400 | **400** | 46 ms | 09:28:33.300Z | `invalid_query`, `unknown:["foo"]` |
+| `GET /api/sources/fires?bbox=51,24,57,27` (row 2, no key on the emulator) | 503 | **503** | 44 ms | 09:28:33.355Z | `{"error":{"code":"not_configured","message":"NASA_FIRMS_MAP_KEY is not configured on the server; …","param":"NASA_FIRMS_MAP_KEY"}}` — structured, no upstream call |
+| `GET /api/sources/fires?bbox=…&sensor=x` | 400 | **400** | 41 ms | 09:28:33.407Z | `unknown_param` `sensor` (whitelist lists the eight accepted names) |
+| `GET /api/sources/demo/timezone?lat=24.433&lon=54.651` | 200 | **200** | 56 ms | 09:28:33.474Z | `+04:00`, completeness `estimated` |
+| `GET /api/ondemand/selftest` (no header) | 404 | **404** | 123 ms | 09:28:33.608Z | `{"error":"not_found"}` |
+| `GET /api/ondemand/selftest` (token) | 200, 9 passed | **200** | 45,473 ms | 09:28:46.216Z → 09:29:31.698Z | **passed 9 / failed 0 / skipped 1** (step 4: account has no agents); SSE **time-to-first-delta 1,783 ms** (emulator reference 1,435 ms → +348 ms); step 8 workflow `executionId=6aad046b859f7b0abb53da19`, **time-to-first-log 259 ms** (full-run reference 657 ms → −398 ms; different measurement point, see below); saved as `docs/ondemand-workflows/contract-baseline.emulator.json` |
+| `POST /api/ondemand/chat` `mode:"capability-loop"` — "active fires or earthquakes above magnitude 4 in this viewport in the last 7 days?", Gulf bbox 51,24,57,27, tier INVESTIGATE | 200, valid 7-key answer | **200** | 14,838 ms | 09:29:47.515Z | OnDemand selected **earthquake.search** (bbox params, 7-day window) **and fires.search** (bbox, day_range 7) from the 3-entry catalogue; executed both — USGS 200 count 0 (666 ms), FIRMS **503 not_configured** (no key); answer valid, sources `used` / `failed`, message states the fire check could not be completed; latencies session 205 / decision 3,381 / execute 666 / answer 10,353 ms; session id hashed |
+
+**ttfd / ttfl notes.** Time-to-first-delta is step 3's first `fulfillment` SSE chunk (1,783 ms here vs 1,435 ms reference — same endpoint `predefined-gpt-5.6-luna`, run-to-run variance). Time-to-first-log in the selftest is the first `GET /execution/{id}/logs` poll that returns ≥ 1 event after `execute` (259 ms), whereas the 657 ms reference was measured by the CLI verification run of 07:16Z with a 4 s poll interval — both show the workflow starts within the first second; the ~163 s end-to-end duration is unchanged by design.
+
+Full `/api/ondemand/health` JSON (secret-free):
+
+```json
+{
+  "ondemand": "healthy",
+  "chat": "healthy",
+  "speech": "healthy",
+  "media": "healthy",
+  "workflow": "healthy",
+  "plugins": {},
+  "configured": true,
+  "speechProbe": {
+    "cached": false,
+    "ageSec": 0
+  },
+  "reasoningModeInvalid": false,
+  "config": {
+    "tiers": {
+      "ASK": {
+        "fulfillmentEndpointId": "predefined-gpt-5.6-luna",
+        "reasoningMode": "low"
+      },
+      "INVESTIGATE": {
+        "fulfillmentEndpointId": "predefined-claude-sonnet-5",
+        "reasoningMode": "low"
+      },
+      "DEEP": {
+        "fulfillmentEndpointId": "predefined-claude-sonnet-5",
+        "reasoningMode": "high"
+      }
+    },
+    "apiKey": {
+      "configured": true
+    },
+    "baseUrl": {
+      "configured": true,
+      "source": "ONDEMAND_BASE_URL"
+    },
+    "reasoningEndpointId": {
+      "configured": true,
+      "source": "default"
+    },
+    "fulfillmentEndpointId": {
+      "configured": true,
+      "source": "default"
+    },
+    "reasoningMode": {
+      "configured": false,
+      "source": "unset",
+      "valid": true
+    },
+    "flowVersion": {
+      "configured": true,
+      "source": "GODS_EYE_FLOW_VERSION"
+    },
+    "spatialFlowId": {
+      "configured": true,
+      "source": "ONDEMAND_SPATIAL_FLOW_ID"
+    }
+  },
+  "checkedAt": "2026-09-18T09:28:28.944Z",
+  "message": "OnDemand API reachable; chat probe succeeded."
+}
+```

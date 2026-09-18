@@ -1,0 +1,230 @@
+{
+  "environment": "sandbox-emulator",
+  "note": "This is NOT a Vercel function-runtime run. A Vercel preview deployment could not be created from the agent build environment (vercel CLI = guardrail shim exit 126; calling the Vercel deployment API from here is off-limits; the credential supplied as VERCEL_TOKEN this turn was byte-identical to the OnDemand API key and was not a Vercel token). Produce docs/ondemand-workflows/contract-baseline.vercel.json by running scripts/vercel-file-deploy.mjs from an operator machine and then GET /api/ondemand/selftest against the READY deployment with the project's ONDEMAND_SELFTEST_TOKEN.",
+  "ok": true,
+  "configured": true,
+  "generatedAtUtc": "2026-09-18T09:29:31.692Z",
+  "mode": "direct",
+  "sessionIdHash": "544ef0cf3c498e9a17a4f6a1b1814f8fdcaa5ffb0e3e7f928e0d9621b5718bf4",
+  "fulfillmentEndpointId": "predefined-gpt-5.6-luna",
+  "steps": [
+    {
+      "step": 1,
+      "name": "session create + reuse",
+      "status": "PASS",
+      "httpStatus": 200,
+      "latencyMs": 369,
+      "ttfdMs": null,
+      "utc": "2026-09-18T09:28:46.307Z",
+      "detail": "sessionId=***"
+    },
+    {
+      "step": 2,
+      "name": "sync prompt",
+      "status": "PASS",
+      "httpStatus": 200,
+      "latencyMs": 1573,
+      "ttfdMs": null,
+      "utc": "2026-09-18T09:28:46.676Z",
+      "detail": "answer.length=2"
+    },
+    {
+      "step": 3,
+      "name": "SSE stream",
+      "status": "PASS",
+      "httpStatus": 200,
+      "latencyMs": 4128,
+      "ttfdMs": 1783,
+      "utc": "2026-09-18T09:28:48.249Z",
+      "detail": "heartbeat=true fulfillmentDeltas=27 timeToFirstDeltaMs=1783"
+    },
+    {
+      "step": 4,
+      "name": "built-in tool/plugin invocation",
+      "status": "SKIP",
+      "httpStatus": 200,
+      "latencyMs": 160,
+      "ttfdMs": null,
+      "utc": "2026-09-18T09:28:52.377Z",
+      "skipReason": "no plugin id in env and the account's Agents API listing is empty (GET /plugin/v1/list -> HTTP 200, total=0); no documented chat agent id was invented"
+    },
+    {
+      "step": 5,
+      "name": "STT on in-script generated WAV",
+      "status": "PASS",
+      "httpStatus": 200,
+      "latencyMs": 12860,
+      "ttfdMs": null,
+      "utc": "2026-09-18T09:28:52.537Z",
+      "detail": "mediaId=6aad04547b8af592f5039858 textLength=0"
+    },
+    {
+      "step": 6,
+      "name": "TTS",
+      "status": "PASS",
+      "httpStatus": 200,
+      "latencyMs": 2752,
+      "ttfdMs": null,
+      "utc": "2026-09-18T09:29:05.397Z",
+      "detail": "contentType=application/octet-stream bytes=43008 container=mp3"
+    },
+    {
+      "step": 7,
+      "name": "Media PNG analysis",
+      "status": "PASS",
+      "httpStatus": 200,
+      "latencyMs": 7665,
+      "ttfdMs": null,
+      "utc": "2026-09-18T09:29:08.149Z",
+      "detail": "actionStatus=completed context=\"The image is a tiny, highly pixelated abstract graphic composed of a compact rectangular field of vertical color bands a\""
+    },
+    {
+      "step": 8,
+      "name": "workflow",
+      "status": "PASS",
+      "httpStatus": 200,
+      "latencyMs": 14052,
+      "ttfdMs": null,
+      "utc": "2026-09-18T09:29:15.814Z",
+      "detail": "executionId=6aad046b859f7b0abb53da19 status=executing logEvents=5 timeToFirstLogMs=259 firstLogUtc=2026-09-18T09:29:15.996Z polledMs=13857"
+    },
+    {
+      "step": 9,
+      "name": "session-memory follow-up",
+      "status": "PASS",
+      "httpStatus": 200,
+      "latencyMs": 1825,
+      "ttfdMs": null,
+      "utc": "2026-09-18T09:29:29.866Z",
+      "detail": "answer contains the step-2 code word"
+    },
+    {
+      "step": 10,
+      "name": "latency summary",
+      "status": "PASS",
+      "httpStatus": null,
+      "latencyMs": 1,
+      "ttfdMs": null,
+      "utc": "2026-09-18T09:29:31.691Z",
+      "detail": "min=369ms max=14052ms mean=5653ms totalMs=45224"
+    }
+  ],
+  "summary": {
+    "passed": 9,
+    "failed": 0,
+    "skipped": 1,
+    "totalMs": 45224,
+    "minMs": 369,
+    "maxMs": 14052,
+    "meanMs": 5653
+  },
+  "durationMs": 45386,
+  "comparison": {
+    "sseTimeToFirstDeltaMs": {
+      "thisRun": 1783,
+      "emulatorReferenceMs": 1435,
+      "deltaMs": 348,
+      "note": "step 3 SSE stream time-to-first-delta; reference = the 1,435 ms emulator baseline quoted in the task"
+    },
+    "workflowTimeToFirstLogMs": {
+      "thisRun": 259,
+      "referenceMs": 657,
+      "deltaMs": -398,
+      "note": "step 8 = first poll returning >=1 log event after POST /workflow/{id}/execute (12 s polling window); reference 657 ms = the full 163 s verification run of 2026-09-18T07:16Z (docs/ondemand-workflows/verification-2026-09-18.json)"
+    }
+  },
+  "capabilityLoopRun": {
+    "route": "POST /api/ondemand/chat mode=capability-loop (tier INVESTIGATE)",
+    "utc": "2026-09-18T09:29:47.515Z",
+    "httpStatus": 200,
+    "totalMs": 14607,
+    "latencies": {
+      "sessionMs": 205,
+      "decisionMs": 3381,
+      "executeMs": 666,
+      "answerMs": 10353,
+      "totalMs": 14607
+    },
+    "sessionIdHash": "51d4347d2be8e998c4a32e393ac8b3c1adf1e5e82b64b1f19675dd84e6cd19c2",
+    "catalogue": [
+      "earthquake.search",
+      "demo.timezone",
+      "fires.search"
+    ],
+    "decision": [
+      {
+        "capabilityId": "earthquake.search",
+        "params": {
+          "starttime": "2026-09-11T09:29:47Z",
+          "endtime": "2026-09-18T09:29:47Z",
+          "minmagnitude": "4",
+          "minlatitude": "24",
+          "maxlatitude": "27",
+          "minlongitude": "51",
+          "maxlongitude": "57"
+        },
+        "reason": "Find M4+ earthquakes in viewport over last 7 days"
+      },
+      {
+        "capabilityId": "fires.search",
+        "params": {
+          "bbox": "51,24,57,27",
+          "day_range": "7"
+        },
+        "reason": "Find active fire detections in viewport over last 7 days"
+      }
+    ],
+    "executed": [
+      {
+        "capabilityId": "earthquake.search",
+        "status": 200,
+        "count": 0,
+        "ms": 666,
+        "error": null
+      },
+      {
+        "capabilityId": "fires.search",
+        "status": 503,
+        "count": null,
+        "ms": 0,
+        "error": {
+          "code": "not_configured",
+          "message": "NASA_FIRMS_MAP_KEY is not configured on the server; NASA FIRMS requires a free MAP_KEY",
+          "param": "NASA_FIRMS_MAP_KEY"
+        }
+      }
+    ],
+    "structuredResponseValid": true,
+    "sources": [
+      {
+        "id": "earthquake.search",
+        "kind": "capability",
+        "label": "USGS FDSN Event",
+        "status": "used"
+      },
+      {
+        "id": "fires.search",
+        "kind": "capability",
+        "label": "NASA FIRMS (LANCE near-real-time active fire)",
+        "status": "failed"
+      }
+    ]
+  },
+  "_provenance": {
+    "source": "GET /api/ondemand/selftest (x-selftest-token; one-time runtime token, redacted)",
+    "previewHost": "sb-63r5liykgi73.vercel.run",
+    "sandboxId": "sbx_OUGpHn0VupD18WFXpWFYqikgdvM1",
+    "runtime": "node v24.14.1; npm run dev:serverless over dist/ + api/**; runtime-only env (ONDEMAND_API_KEY [REDACTED], ONDEMAND_SELFTEST_TOKEN [REDACTED], ONDEMAND_BASE_URL, ONDEMAND_SPATIAL_FLOW_ID=6aace534859f7b0abb53d99a, GODS_EYE_FLOW_VERSION=1, VITE_SERVERLESS_MODE=1, SERVERLESS_MODE=true); no key in any file",
+    "healthAtRun": {
+      "ondemand": "healthy",
+      "chat": "healthy",
+      "speech": "healthy",
+      "media": "healthy",
+      "workflow": "healthy",
+      "configured": true
+    },
+    "healthCheckedAt": "2026-09-18T09:28:28.944Z",
+    "repoCommit": "6dde6d0",
+    "skippedSteps": "4 only (account has no agents — GET /plugin/v1/list total 0)"
+  }
+}

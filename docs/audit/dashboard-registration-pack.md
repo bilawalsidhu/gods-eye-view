@@ -1011,6 +1011,9 @@ NON-NEGOTIABLE RULES (apply throughout every stage)
 
 ### (c) Notes
 
+**Deployment host status (2026-09-18T09:30Z).** There is still no stable God's Eye deployment URL: a Vercel preview could not be created from the agent build environment (CLI guardrail shim, deployment API off-limits) and the credential supplied as `VERCEL_TOKEN` this turn was the OnDemand API key, not a Vercel token. Do **not** register the ephemeral sandbox host (`sb-….vercel.run`) — it expires within 90 minutes. Create the preview with `scripts/vercel-file-deploy.mjs` (operator machine, `VERCEL_TOKEN` in the shell only), then substitute its URL for `<deployment>` in every tool JSON before importing. Step-by-step registration for row 1: `docs/audit/gate3-row1-registration.md`.
+
+
 - **Replace the host placeholder before importing.** Both files use a
   placeholder server host — `earthquake_search.json` uses
   `https://<preview-host>` (in `http.url` and `openapi_fragment.servers[0].url`),

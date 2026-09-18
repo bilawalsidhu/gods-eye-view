@@ -57,3 +57,10 @@ The branch itself is green (4,144 upstream unit tests, 30 serverless + 93 ondema
 **Agent + nine skills — dashboard only.** No create endpoint is documented for agents (§8) or skills (§9), so nothing was invented: `docs/audit/dashboard-registration-pack.md` (agent prompt, `earthquake_search` tool JSON + OpenAPI, click-by-click steps, id paste table) and `docs/ondemand-skills/*.md` (nine SKILL.md bodies) are ready to paste; `src/registry/capabilities.json` carries the `ondemand.agent.pluginId` / `ondemand.skills[].skillId` slots (null until registered).
 
 **Residuals.** (i) attach the `earthquake_search` REST agent to the workflow's `capability_resolver`/`planner` nodes once it exists (`llm.plugins[{id}]`, then `node scripts/ondemand-workflow.mjs update <id>`); (ii) the webhook trigger URL is dashboard-only, so payload-driven runs are not yet exercised from the app; (iii) DEEP (`reasoningMode: high`) is not expressible on an `llm` node.
+
+## 2026-09-18T09:30Z — emulator verification, fork/PR, row 2 scaffold
+
+- **Git unblock:** fork `mk42-ai/gods-eye-view` created (`POST /repos/bilawalsidhu/gods-eye-view/forks` → 202, 09:18:59Z), `ondemand-serverless` pushed to the fork, PR **#657** `mk42-ai:ondemand-serverless → bilawalsidhu:main` opened at 09:20:00Z (https://github.com/bilawalsidhu/gods-eye-view/pull/657).
+- **Deployment:** still emulator-only — `docs/audit/deployment-verification.md` §9 (why, and the operator-side `scripts/vercel-file-deploy.mjs`). The credential supplied as `VERCEL_TOKEN` was the OnDemand API key (not transmitted anywhere but OnDemand).
+- **Selftest (emulator, 09:29:31Z):** 9 passed / 0 failed / 1 skipped; SSE ttfd 1,783 ms; workflow ttfl 259 ms — `docs/ondemand-workflows/contract-baseline.emulator.json`.
+- **Gate 3 row 2 (fires.search, NASA FIRMS / LANCE):** scaffold committed (`881e5a3`) — adapter, `/api/sources/fires` via the catch-all, tool JSON, registry row `registered-unverified`, 13 tests; live path on the emulator = `503 not_configured` (no `NASA_FIRMS_MAP_KEY`). Row 1 closure pack: `docs/audit/gate3-row1-registration.md`.

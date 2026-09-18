@@ -8,7 +8,7 @@
   "servers": [
     {
       "url": "https://<deployment>",
-      "description": "God's Eye deployment host (replace; the sandbox emulator host is ephemeral)"
+      "description": "God's Eye deployment host — REPLACE with the READY Vercel preview URL or project domain before importing (see x-godseye.deployment); the sandbox emulator host is ephemeral"
     }
   ],
   "paths": {
@@ -307,6 +307,12 @@
     "ondemand_tool_id": null,
     "adapter": "server/sources/nasa-firms.js",
     "auth": "env:NASA_FIRMS_MAP_KEY",
-    "attribution": "NASA FIRMS / LANCE"
+    "attribution": "NASA FIRMS / LANCE",
+    "deployment": {
+      "stable_url": null,
+      "status": "no Vercel deployment exists yet (2026-09-18T09:30Z): the build environment cannot create one (CLI guardrail; deployment API off-limits) and the credential supplied as VERCEL_TOKEN was the OnDemand API key, not a Vercel token — run scripts/vercel-file-deploy.mjs from an operator machine, then replace <deployment> with the READY preview URL (or the project domain)",
+      "last_emulator_host": "https://sb-63r5liykgi73.vercel.run (ephemeral sandbox, 2026-09-18 — expires within ~90 minutes; never register it in the dashboard)",
+      "planned_project": "ondemand-eand-spatial (prj_VbHbEhFSDFkdXCqlq8XqONoFWQHO, team_aft8hHPiYnHp6I534L3DQScA) — preview target only; production and the opal alias must not be touched"
+    }
   }
 }
