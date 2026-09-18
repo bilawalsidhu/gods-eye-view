@@ -5,6 +5,34 @@ import {
   FAST_FETCH_ALTITUDE,
 } from './policy.js';
 
+/**
+ * Operator-legible reason for a failed road fetch. The DATA LAYERS row shows
+ * it as `DEGRADED · OpenStreetMap · <reason>`; a raw "HTTP 406" would hide the
+ * one fact that matters — that the public Overpass mirrors refuse or time out
+ * for this deployment's egress (observed from Vercel on 2026-09-18), which no
+ * retry fixes and which a TomTom key does not work around (the simulation
+ * needs OSM roads to paint).
+ * @param {unknown} error
+ * @returns {string}
+ */
+export function describeRoadError(error) {
+  const message = String(error?.message || '');
+  const status = /Overpass API returned (\d{3})/.exec(message)?.[1];
+  if (status === '406' || status === '403') {
+    return `OpenStreetMap roads unavailable — public Overpass mirrors refuse this deployment (HTTP ${status}); simulated traffic needs OSM roads`;
+  }
+  if (status === '429') {
+    return 'OpenStreetMap roads unavailable — Overpass rate limited; retrying';
+  }
+  if (status && status.startsWith('5')) {
+    return `OpenStreetMap roads unavailable — Overpass mirrors unreachable (HTTP ${status})`;
+  }
+  if (/timeout|timed out|abort/i.test(message)) {
+    return 'OpenStreetMap roads unavailable — Overpass mirrors timed out';
+  }
+  return 'Road data temporarily unavailable';
+}
+
 export function createIngestion({
   state: layerState,
   services,
@@ -308,7 +336,7 @@ export function createIngestion({
     } catch (e) {
       if (e?.name === 'AbortError') return;
       if (generation === layerState._loadGeneration && !renderedSomething)
-        layerState._roadError = 'Road data temporarily unavailable';
+        layerState._roadError = describeRoadError(e);
       console.warn('[Data:Traffic] Fetch error:', e);
     } finally {
       if (generation === layerState._loadGeneration) {

@@ -94,6 +94,148 @@ test('malformed availability is an unavailable source rather than a keyless resp
   await assert.rejects(source.getStatus(), /Malformed traffic status/);
 });
 
+test('the status probe carries the scene point and returns the structured provider status', async () => {
+  const urls = [];
+  const source = createTrafficSource({
+    fetchImpl: async (url) => {
+      urls.push(url);
+      return Response.json(
+        {
+          hasKey: false,
+          dailyCount: 0,
+          budget: 40000,
+          requestCount: 0,
+          requestBudget: 2000,
+          provider: {
+            status: 'degraded',
+            source: 'TomTom',
+            fetchedAt: '2026-09-18T12:00:00.000Z',
+            error:
+              'TOMTOM_API_KEY not set — flow colours are simulated on live OSM roads',
+          },
+        },
+        {
+          headers: {
+            'X-Provider-Status': 'degraded',
+            'X-Provider-Source': 'TomTom',
+            'X-Provider-Fetched-At': '2026-09-18T12:00:00.000Z',
+            // Header fields are ASCII-only: the proxy's em dash arrives as '?'.
+            'X-Provider-Error':
+              'TOMTOM_API_KEY not set ? flow colours are simulated on live OSM roads',
+          },
+        },
+      );
+    },
+  });
+  const status = await source.getStatus({
+    point: { lat: 30.2672, lon: -97.7431 },
+  });
+  assert.equal(urls[0], '/api/tomtom/status?point=30.267,-97.743');
+  assert.equal(status.hasKey, false);
+  assert.equal(status.providerStatus.status, 'degraded');
+  assert.equal(status.providerStatus.source, 'TomTom');
+  assert.equal(
+    status.providerStatus.fetchedAtMs,
+    Date.parse('2026-09-18T12:00:00.000Z'),
+  );
+  assert.equal(
+    status.providerStatus.error,
+    'TOMTOM_API_KEY not set — flow colours are simulated on live OSM roads',
+    'the body reason (verbatim) outranks the ASCII-mangled header',
+  );
+  // No point / an invalid point → the plain status route; a legacy proxy body
+  // without provider fields yields providerStatus null.
+  const legacy = createTrafficSource({
+    fetchImpl: async (url) => {
+      urls.push(url);
+      return Response.json({ hasKey: true, dailyCount: 3, budget: 40000 });
+    },
+  });
+  assert.equal((await legacy.getStatus()).providerStatus, null);
+  assert.equal(urls[1], '/api/tomtom/status');
+  await legacy.getStatus({ point: { lat: 120, lon: 0 } });
+  assert.equal(urls[2], '/api/tomtom/status');
+});
+
+test('a failed flow tile carries the proxy code and provider reason', async () => {
+  const source = createTrafficSource({
+    fetchImpl: async () =>
+      Response.json(
+        {
+          error: 'bad_key',
+          provider: {
+            status: 'unavailable',
+            source: 'TomTom',
+            error: 'TomTom rejected TOMTOM_API_KEY',
+          },
+        },
+        {
+          status: 503,
+          headers: {
+            'X-Provider-Status': 'unavailable',
+            'X-Provider-Source': 'TomTom',
+            'X-Provider-Error': 'TomTom rejected TOMTOM_API_KEY',
+          },
+        },
+      ),
+  });
+  await assert.rejects(source.fetchFlowForBounds(bounds), (error) => {
+    assert.match(error.message, /flow tile \d+\/\d+\/\d+: HTTP 503 bad_key/);
+    assert.equal(error.status, 503);
+    assert.equal(error.code, 'bad_key');
+    assert.equal(error.provider.status, 'unavailable');
+    assert.equal(error.provider.error, 'TomTom rejected TOMTOM_API_KEY');
+    return true;
+  });
+  // A non-JSON failure (legacy proxy, gateway page) still throws the HTTP code.
+  const legacy = createTrafficSource({
+    fetchImpl: async () => new Response('Bad Gateway', { status: 502 }),
+  });
+  await assert.rejects(legacy.fetchFlowForBounds(bounds), (error) => {
+    assert.equal(error.message.endsWith('HTTP 502'), true);
+    assert.equal(error.code, null);
+    assert.equal(error.provider, null);
+    return true;
+  });
+});
+
+test('flow diagnostics report whether the latest tiles were live or last-good', async () => {
+  let providerHeader = 'stale';
+  const source = createTrafficSource({
+    fetchImpl: async () =>
+      new Response(fixture, {
+        headers: {
+          'X-Provider-Status': providerHeader,
+          'X-Provider-Source': 'TomTom',
+          'X-Provider-Fetched-At': '2026-09-18T12:00:00.000Z',
+          ...(providerHeader === 'stale'
+            ? { 'X-Provider-Error': 'TomTom flow tile unreachable (HTTP 502)' }
+            : {}),
+        },
+      }),
+  });
+  assert.equal(source.getFlowSessionStats().provider, null);
+  await source.fetchFlowForBounds(bounds);
+  const stale = source.getFlowSessionStats().provider;
+  assert.equal(stale.status, 'stale');
+  assert.equal(stale.fetchedAtMs, Date.parse('2026-09-18T12:00:00.000Z'));
+  assert.equal(stale.error, 'TomTom flow tile unreachable (HTTP 502)');
+  // Cached tiles keep their provenance until the cache is cleared.
+  await source.fetchFlowForBounds(bounds);
+  assert.equal(source.getFlowSessionStats().provider.status, 'stale');
+  source.resetFlowTileCache();
+  providerHeader = 'live';
+  await source.fetchFlowForBounds(bounds);
+  assert.equal(source.getFlowSessionStats().provider.status, 'live');
+  assert.equal(source.getFlowSessionStats().provider.error, null);
+  // A legacy proxy without provider headers reports null, not a guess.
+  const legacy = createTrafficSource({
+    fetchImpl: async () => new Response(fixture),
+  });
+  await legacy.fetchFlowForBounds(bounds);
+  assert.equal(legacy.getFlowSessionStats().provider, null);
+});
+
 test('traffic construction is inert and parameters belong to each layer', async () => {
   const { createTrafficLayer } = await import('./index.js');
   const source = createTrafficSource({

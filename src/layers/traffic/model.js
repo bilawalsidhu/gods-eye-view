@@ -12,6 +12,14 @@ import {
   JAM_DOT_DEPTH_PUNCH,
 } from './policy.js';
 
+/** DATA LAYERS row reason for a keyless deployment (rendered after "DEGRADED · TomTom · "). */
+export const TRAFFIC_KEYLESS_REASON =
+  'TOMTOM_API_KEY not set — showing simulated flow on live OSM roads (set TOMTOM_API_KEY in Vercel for live speeds)';
+
+/** DATA LAYERS row reason when `/api/tomtom/status` itself cannot be reached. */
+export const TRAFFIC_STATUS_UNREACHABLE_REASON =
+  'TomTom status unreachable — simulated flow';
+
 export function createModel({ state: layerState, services, parts, source }) {
   /** Build scene waypoints from source records; thinning and terrain remain rendering policy. */
   function parseRoads(roadData) {
@@ -225,12 +233,26 @@ export function createModel({ state: layerState, services, parts, source }) {
   /**
    * Derive the layer's honest feed presentation from its live-flow state.
    *
-   * The three states a user can be in, and what each must read as:
-   *  - keyless → `mode:'sim'` (the manager maps that to a FALLBACK chip) with a
-   *    label that never claims live data;
-   *  - live and healthy → LIVE with real coverage;
-   *  - live but flow-down → an `error` string, so the chip degrades and says
-   *    the colors on screen are simulated. Never a stale "LIVE · N% cov".
+   * `mode` is the CONFIGURED source ('live' = the proxy holds a TomTom key,
+   * 'sim' = keyless simulation on live OSM roads); health rides on the
+   * structured fields the DATA LAYERS row reads (src/data/feedState.js
+   * `layerFeedState`, src/ui/layerPanel.js `_buildMetaText`):
+   *
+   *  - not yet probed (boot, before the first enable) → today's FALLBACK
+   *    presentation: `mode:'sim'`, no status claim, the SIMULATED label;
+   *  - keyless → still `mode:'sim'`, but `status`/`providerStatus` 'degraded'
+   *    with `providerError` naming the variable, so the row reads
+   *    "DEGRADED · TomTom · TOMTOM_API_KEY not set — …" instead of a silent
+   *    FALLBACK. `error` stays null ON PURPOSE: src/loadingFeedback.js turns
+   *    any `stats.error` into a LOAD FAILED banner after every load, and
+   *    `layerFeedState` reads `error` + no data as UNAVAILABLE — a designed
+   *    fallback is neither;
+   *  - status probe unreachable → degraded WITH `error` (a real fault);
+   *  - live and healthy → LIVE with real coverage, `providerStatus` 'live', or
+   *    'stale' when the proxy served last-good tiles;
+   *  - live but flow-down (or the key rejected) → an `error` string, so the
+   *    chip degrades and says the colours on screen are simulated. Never a
+   *    stale "LIVE · N% cov".
    *
    * @param {Object} [input]
    * @param {boolean} [input.liveMode] - `/api/tomtom/status` reported a key.
@@ -238,7 +260,12 @@ export function createModel({ state: layerState, services, parts, source }) {
    * @param {string|null} [input.flowError] - `deriveTrafficFlowError` result, if any.
    * @param {number} [input.coveragePct] - Matched-road coverage, 0–100.
    * @param {boolean} [input.statusUnavailable] - The status probe itself failed.
-   * @returns {{mode:'live'|'sim', error:string|null, loadingLabel:string}}
+   * @param {boolean} [input.statusResolved] - The status probe has answered (or failed) at least once.
+   * @param {string|null} [input.probeError] - Keyed proxy reported the feed degraded before any tile (e.g. a rejected key).
+   * @param {string|null} [input.flowProviderStatus] - Provider status of the latest tile fetch ('live' | 'stale' | null).
+   * @returns {{mode:'live'|'sim', error:string|null, loadingLabel:string,
+   *   status:string|null, degraded:boolean, stale:boolean, providerStatus:string|null,
+   *   providerSource:string, providerError:string|null, source:string|null, coverage:string}}
    */
 
   function trafficFeedPresentation({
@@ -247,37 +274,89 @@ export function createModel({ state: layerState, services, parts, source }) {
     flowError = null,
     coveragePct = 0,
     statusUnavailable = false,
+    statusResolved = true,
+    probeError = null,
+    flowProviderStatus = null,
   } = {}) {
-    // `mode` is the CONFIGURED source (live key present vs keyless), not this
-    // instant's health — health rides on `error`. The qa-traffic harness pins
-    // that meaning.
     const mode = liveMode ? 'live' : 'sim';
-    if (liveMode && flowError) {
+    const base = {
+      mode,
+      providerSource: 'TomTom',
+      stale: false,
+      degraded: false,
+      status: null,
+      providerStatus: null,
+      providerError: null,
+      source: null,
+      coverage: 'simulated flow',
+    };
+    const outage = liveMode ? flowError || probeError : null;
+    if (liveMode && outage) {
       // One string for both fields. The manager's meta line renders `error` and
       // drops `loadingLabel` in its error branch, so the owner's SIMULATED copy
       // has to BE the error text or the steady state reverts to a bare
       // "TomTom daily budget reached" that never says what is on screen.
-      const degraded = `SIMULATED — ${flowError}`;
-      return { mode, error: degraded, loadingLabel: degraded };
+      const degraded = `SIMULATED — ${outage}`;
+      return {
+        ...base,
+        error: degraded,
+        loadingLabel: degraded,
+        status: 'degraded',
+        degraded: true,
+        providerStatus: 'degraded',
+        providerError: outage,
+        source: 'TomTom',
+      };
     }
     if (liveMode) {
+      const stale = flowProviderStatus === 'stale';
       return {
-        mode,
+        ...base,
         error: null,
         loadingLabel: fetching
           ? 'syncing LIVE traffic flow'
           : `LIVE · TomTom flow · ${coveragePct}% cov`,
+        status: stale ? 'stale' : 'live',
+        stale,
+        providerStatus: stale ? 'stale' : 'live',
+        // The roads stay OpenStreetMap's; only a stale flow feed names itself.
+        source: stale ? 'TomTom' : null,
+        coverage: `${coveragePct}% flow cov`,
+      };
+    }
+    if (statusUnavailable) {
+      // Simulating because the proxy could not be asked — a fault, unlike a
+      // keyless deployment, so it carries `error`.
+      return {
+        ...base,
+        error: TRAFFIC_STATUS_UNREACHABLE_REASON,
+        loadingLabel: 'SIMULATED — traffic service unreachable',
+        status: 'degraded',
+        degraded: true,
+        providerStatus: 'degraded',
+        providerError: TRAFFIC_STATUS_UNREACHABLE_REASON,
+        source: 'TomTom',
       };
     }
     // Keyless simulation — one terse line that names the mode and the remedy
     // (owner's copy shape). The chip's own progress text carries "working";
     // this line must never imply a live feed.
+    if (!statusResolved) {
+      return {
+        ...base,
+        error: null,
+        loadingLabel: 'SIMULATED — add TomTom key for live',
+      };
+    }
     return {
-      mode,
+      ...base,
       error: null,
-      loadingLabel: statusUnavailable
-        ? 'SIMULATED — traffic service unreachable'
-        : 'SIMULATED — add TomTom key for live',
+      loadingLabel: 'SIMULATED — add TomTom key for live',
+      status: 'degraded',
+      degraded: true,
+      providerStatus: 'degraded',
+      providerError: TRAFFIC_KEYLESS_REASON,
+      source: 'TomTom',
     };
   }
 

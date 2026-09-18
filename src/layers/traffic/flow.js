@@ -1,5 +1,10 @@
 import { matchFlowToRoads } from '../../data/flowMatch.js';
-import { TRAFFIC_TIMING_ENABLED, FLOW_RENDER_RACE_MS } from './policy.js';
+import {
+  TRAFFIC_TIMING_ENABLED,
+  FLOW_RENDER_RACE_MS,
+  FLOW_STATUS_RETRY_MS,
+  FLOW_STATUS_REFRESH_MS,
+} from './policy.js';
 
 export function createFlow({ state: layerState, services, parts, source }) {
   const { registerDynamicCredit, TOMTOM_CREDIT } = services.credits;
@@ -15,51 +20,162 @@ export function createFlow({ state: layerState, services, parts, source }) {
    * now" — the dots fall back to simulated white. Mirrors the
    * `deriveAisFeedError` honesty helper.
    *
-   * @param {Error|{name?:string, message?:string}|null|undefined} error - Rejection from the flow fetch.
+   * The proxy's structured failures (flowSource.js `tileError`: `code` +
+   * `provider.error`) name the real cause — a rejected key, a rate limit, an
+   * unreachable upstream — and a bare HTTP code is the legacy fallback.
+   *
+   * @param {Error|{name?:string, message?:string, code?:string, status?:number, provider?:{error?:string|null}}|null|undefined} error - Rejection from the flow fetch.
    * @returns {string|null} Short reason, or null for an aborted (superseded) fetch.
    */
 
   function deriveTrafficFlowError(error) {
     if (!error || error.name === 'AbortError') return null;
     const message = String(error.message || error);
-    const status = Number(message.match(/HTTP (\d{3})/)?.[1]);
-    if (status === 503) return 'TomTom key unavailable';
+    const status = Number.isFinite(error.status)
+      ? error.status
+      : Number(message.match(/HTTP (\d{3})/)?.[1]);
+    const providerError =
+      typeof error.provider?.error === 'string' && error.provider.error.trim()
+        ? error.provider.error.trim()
+        : null;
+    switch (error.code) {
+      case 'bad_key':
+        return 'TomTom rejected TOMTOM_API_KEY';
+      case 'no_key':
+        return 'TomTom key unavailable';
+      case 'budget':
+        return 'TomTom daily budget reached';
+      case 'rate_limited':
+        return providerError || 'TomTom rate limited';
+      case 'upstream':
+        return providerError || 'TomTom upstream unreachable';
+      default:
+        break;
+    }
+    if (status === 503) return providerError || 'TomTom key unavailable';
     if (status === 429) return 'TomTom daily budget reached';
     if (status === 502 || status === 504) return 'TomTom upstream unreachable';
     if (Number.isFinite(status)) return `TomTom flow error (HTTP ${status})`;
     return 'TomTom flow unavailable';
   }
 
+  /** Camera position as a {lat, lon} scene point (degrees), or null when unknown. */
+  function scenePoint() {
+    const carto = layerState._viewer?.camera?.positionCartographic;
+    if (!carto) return null;
+    const lat = (carto.latitude * 180) / Math.PI;
+    const lon = (carto.longitude * 180) / Math.PI;
+    return Number.isFinite(lat) &&
+      Number.isFinite(lon) &&
+      Math.abs(lat) <= 90 &&
+      Math.abs(lon) <= 180
+      ? { lat, lon }
+      : null;
+  }
+
+  /** Record one status answer: mode, provider status, probe sample, budgets. */
+  function adoptStatus(status) {
+    const wasLive = layerState._liveMode;
+    layerState._liveMode = Boolean(status?.hasKey);
+    layerState._flowStatusUnavailable = false;
+    layerState._flowStatusResolved = true;
+    layerState._flowStatusAt = Date.now();
+    layerState._flowProvider = status?.providerStatus || null;
+    layerState._flowSegment =
+      status?.flowSegment && typeof status.flowSegment === 'object'
+        ? status.flowSegment
+        : null;
+    layerState._flowBudget = {
+      date: typeof status?.date === 'string' ? status.date : null,
+      tiles: {
+        count: Number(status?.dailyCount) || 0,
+        budget: Number(status?.budget) || 0,
+      },
+      requests: {
+        count: Number(status?.requestCount) || 0,
+        budget: Number(status?.requestBudget) || 0,
+      },
+    };
+    // A keyed proxy that already knows the feed is unhealthy (rejected key,
+    // rate limit, unreachable upstream) says so before any tile is fetched;
+    // the first successful tile fetch clears this.
+    layerState._flowProbeError =
+      layerState._liveMode && layerState._flowProvider?.status === 'degraded'
+        ? layerState._flowProvider.error ||
+          layerState._flowSegment?.error ||
+          'TomTom flow probe failed'
+        : null;
+    if (layerState._liveMode && !wasLive) {
+      console.log('[Data:Traffic] TomTom key present — live flow mode');
+      registerDynamicCredit(layerState._viewer, TOMTOM_CREDIT);
+    }
+  }
+
   /**
    * Check `/api/tomtom/status` once per session and cache the result.
    * Live mode iff the server holds a TomTom key; the TomTom attribution credit
    * registers the first time live mode activates. Keyless or unreachable →
-   * simulation mode, exactly today's behavior.
+   * simulation mode. The probe carries the scene point so a keyed proxy can
+   * sample live speed there (`stats.flowSegment`).
+   *
+   * Pacing: a FAILED probe is retried on the next call once
+   * FLOW_STATUS_RETRY_MS has passed (a transient outage must not pin the
+   * session to "status unreachable"); a LIVE session refreshes the sample in
+   * the background at most every FLOW_STATUS_REFRESH_MS, and only from calls
+   * that already exist (enable + camera-driven loads), so an idle client never
+   * spends TomTom's request budget. Keyless sessions never re-ask.
    *
    * @returns {Promise<void>} Resolves when `_liveMode` is settled.
    */
 
   function ensureFlowStatus() {
+    const now = Date.now();
+    if (
+      layerState._flowStatusPromise &&
+      layerState._flowStatusUnavailable &&
+      now - layerState._flowStatusAt >= FLOW_STATUS_RETRY_MS
+    ) {
+      layerState._flowStatusPromise = null;
+    }
     if (!layerState._flowStatusPromise) {
       layerState._flowStatusPromise = source
-        .getStatus()
-        .then((status) => {
-          layerState._liveMode = Boolean(status?.hasKey);
-          layerState._flowStatusUnavailable = false;
-          if (layerState._liveMode) {
-            console.log('[Data:Traffic] TomTom key present — live flow mode');
-            registerDynamicCredit(layerState._viewer, TOMTOM_CREDIT);
-          }
-        })
+        .getStatus({ point: scenePoint() })
+        .then(adoptStatus)
         .catch((e) => {
           // Simulating because we could not ask, which is NOT the same as
           // "server says no key" — getStats() distinguishes the two.
           layerState._liveMode = false;
           layerState._flowStatusUnavailable = true;
+          layerState._flowStatusResolved = true;
+          layerState._flowStatusAt = Date.now();
+          layerState._flowProvider = null;
+          layerState._flowSegment = null;
+          layerState._flowProbeError = null;
           console.warn(
             '[Data:Traffic] TomTom status unreachable — simulated traffic:',
             e?.message || e,
           );
+        });
+    } else if (
+      layerState._liveMode &&
+      layerState._enabled &&
+      !layerState._flowStatusRefreshing &&
+      now - layerState._flowStatusAt >= FLOW_STATUS_REFRESH_MS
+    ) {
+      // Background refresh: the settled promise stays in place so loads never
+      // wait on it; only the sample/budget/probe fields move.
+      layerState._flowStatusRefreshing = true;
+      source
+        .getStatus({ point: scenePoint() })
+        .then((status) => {
+          if (layerState._liveMode) adoptStatus(status);
+        })
+        .catch(() => {
+          // Keep the last good answer; pace the next attempt like a success.
+          layerState._flowStatusAt = Date.now();
+        })
+        .finally(() => {
+          layerState._flowStatusRefreshing = false;
         });
     }
     return layerState._flowStatusPromise;
@@ -114,6 +230,8 @@ export function createFlow({ state: layerState, services, parts, source }) {
             ? Math.round((matchedCount / candidateCount) * 100)
             : 0;
         layerState._flowError = null;
+        // Real tiles arrived: whatever the status probe feared is moot.
+        layerState._flowProbeError = null;
       } catch (e) {
         if (e?.name === 'AbortError') return;
         // Same guard the success path gets: a superseded request rejecting late

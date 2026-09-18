@@ -127,36 +127,71 @@ export function createControls({ state: layerState, services, parts, source }) {
     /**
      * Return current layer statistics for UI status chips.
      * `mode` is the CONFIGURED source — 'live' (a TomTom key is present) or
-     * 'sim' (keyless simulation, which the manager renders as a FALLBACK chip);
-     * `error` carries this instant's health, so a live-configured layer whose
-     * flow feed went down reads DEGRADED with the reason instead of a stale
-     * LIVE coverage number. `flowCoveragePct` is matched roads / roads with any
-     * flow candidates (0–100 int); `tilesFetched` counts flow-tile requests
-     * issued to the proxy this session (decode-cache hits excluded).
+     * 'sim' (keyless simulation on live OSM roads). Health rides on the
+     * structured provider fields (src/data/feedState.js): a probed keyless
+     * deployment reads `status`/`providerStatus` 'degraded' with
+     * `providerError` naming TOMTOM_API_KEY; a healthy keyed layer reads
+     * `providerStatus` 'live' ('stale' while the proxy serves last-good
+     * tiles); `error` carries a real fault — Overpass roads unavailable, the
+     * status probe unreachable, a rejected key, a flow outage — so a
+     * live-configured layer whose flow feed went down reads DEGRADED with the
+     * reason instead of a stale LIVE coverage number. `flowCoveragePct` is
+     * matched roads / roads with any flow candidates (0–100 int);
+     * `tilesFetched` counts flow-tile requests issued to the proxy this
+     * session (decode-cache hits excluded); `flowSegment` is the live-speed
+     * sample the proxy probed at the scene point (keyed deployments only).
      * @returns {{count:number, lastUpdate:number|null, loading:boolean,
-     *   mode:'live'|'sim', error:string|null, flowCoveragePct:number,
-     *   tilesFetched:number}}
+     *   mode:'live'|'sim', error:string|null, status:string|null,
+     *   degraded:boolean, stale:boolean, providerStatus:string|null,
+     *   providerSource:string, providerError:string|null, coverage:string,
+     *   flowCoveragePct:number, tilesFetched:number, flowSegment:object|null}}
      */
     getStats() {
       // Outstanding flow work counts as loading: the paint race can leave a
       // TomTom request in flight after the roads have settled, and the shared
       // loading batch has to stay open long enough to announce its failure.
       const loading = layerState._fetching || layerState._flowPending > 0;
+      const flowSession = getFlowSessionStats() || {};
       const feed = parts.model.trafficFeedPresentation({
         liveMode: layerState._liveMode,
         fetching: loading,
         flowError: layerState._flowError,
         coveragePct: layerState._flowCoveragePct,
         statusUnavailable: layerState._flowStatusUnavailable,
+        statusResolved: layerState._flowStatusResolved,
+        probeError: layerState._flowProbeError,
+        flowProviderStatus: flowSession.provider?.status || null,
       });
+      const roadError = layerState._roadError;
+      // Named source for the row: the road feed when IT is the fault, else the
+      // flow provider whenever the presented state is about it.
+      const source = roadError ? 'OpenStreetMap' : feed.source;
       return {
         count: layerState._count,
         lastUpdate: layerState._lastUpdate,
         loading,
         mode: feed.mode,
-        error: layerState._roadError || feed.error,
+        error: roadError || feed.error,
+        ...(source ? { source } : {}),
+        status: roadError ? 'degraded' : feed.status,
+        degraded: Boolean(roadError) || feed.degraded,
+        stale: feed.stale,
+        providerStatus: feed.providerStatus,
+        providerSource: feed.providerSource,
+        providerError: feed.providerError,
+        providerFetchedAt:
+          flowSession.provider?.fetchedAtMs ??
+          layerState._flowProvider?.fetchedAtMs ??
+          null,
+        coverage: feed.coverage,
         flowCoveragePct: layerState._flowCoveragePct,
-        tilesFetched: getFlowSessionStats().tilesFetched,
+        tilesFetched: Number(flowSession.tilesFetched) || 0,
+        // Live-speed sample from the status probe (`/api/tomtom/status?point=`):
+        // { ok, currentSpeed, freeFlowSpeed, confidence, fetchedAt } — null
+        // keyless or before the first probe.
+        flowSegment: layerState._flowSegment,
+        // Daily TomTom budgets as last reported by the proxy (diagnostics).
+        flowBudget: layerState._flowBudget,
         ...(TRAFFIC_TIMING_ENABLED
           ? { trafficTiming: parts.timing.getTrafficTimingDiagnostics() }
           : {}),
