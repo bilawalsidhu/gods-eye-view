@@ -1,198 +1,825 @@
 {
-  "generatedAtUtc": "2026-09-17T08:26:10.849Z",
-  "finalProductionUrl": "https://ondemand-eand-spatial-opal.vercel.app",
-  "mode": "proxy",
-  "modeReason": "env-pull mode impossible: `vercel env pull` (and `vercel link`) refused by the execution-environment guardrail (exit 126, 2026-09-17T08:12:26Z) and ONDEMAND_API_KEY is a `sensitive` variable that Vercel never returns via pull; proxy mode was therefore forced, but finalProductionUrl/api/ondemand/* does not exist (404) \u2014 the host is not the God's Eye serverless build",
-  "deploymentUid": "dpl_FKoHEVctqpLzNMaHV9sSRdmzcrw6",
-  "vercelProjectId": "prj_VbHbEhFSDFkdXCqlq8XqONoFWQHO",
-  "vercelProjectName": "ondemand-eand-spatial",
-  "finalProductionUrlResolution": {
-    "godsEyeProjectFound": false,
-    "productionTarget": {
-      "deploymentUid": "dpl_7CAoCxdEQRQ7W12mzwz4iGKDK4V9",
-      "readyState": "BLOCKED",
-      "commitSha": "e799775a9815c96519a01635c8eb014ae6ae02dc",
-      "alias": "https://ondemand-eand-spatial-schoolhack-web-team.vercel.app",
-      "aliasProbe": "404 DEPLOYMENT_NOT_FOUND at 2026-09-17T08:09:45Z"
+  "generatedAtUtc": "2026-09-18T04:51:41.150Z",
+  "gate": "Gate 1 — live OnDemand contract validation",
+  "mode": "direct (live user-supplied key)",
+  "apiKey": "G7Gg…VjnL (masked; never stored)",
+  "baseUrl": "https://api.on-demand.io",
+  "credentialValidation": {
+    "endpoint": "POST /chat/v1/sessions",
+    "body": {
+      "externalUserId": "godseye-contract-test-2026-09-18",
+      "pluginIds": []
     },
-    "chosen": "READY preview alias (production BLOCKED)",
-    "servesGodsEyeBuild": false,
-    "healthProbe": "GET /api/ondemand/health -> 404 NOT_FOUND at 2026-09-17T08:09:46Z"
+    "httpStatus": 201,
+    "latencyMs": 249,
+    "utc": "2026-09-18T04:45:10.744Z",
+    "sessionId": "6aacc1d6ab2c7f21f3232d03",
+    "keyClassification": "ondemand",
+    "fallbacksRun": "none (2xx on the first documented call)"
   },
-  "commitSha": {
-    "deployed": "b8cdcf501aa77ada93dde682a8c6fec35f9c5637",
-    "deployedNote": "commit of mk42-ai/ondemand-eand-spatial (feat/exec-brief-v1.4-b7c0d3d) served at finalProductionUrl \u2014 NOT a commit of this repository",
-    "repoHead": "30791c7c75c0a1cf6e45a950d44f66f72cf9d08c",
-    "repoHeadNote": "HEAD of bilawalsidhu/gods-eye-view branch ondemand-serverless at the time of the run (the docs commit that adds this file comes after it)"
+  "contractRun": {
+    "externalUserId": "godseye-contract-test-2026-09-18",
+    "sessionId": "6aacc33eb9401965d65923e0",
+    "fulfillmentEndpointId": "predefined-gpt-5.6-luna",
+    "reasoningModeSent": null,
+    "summary": {
+      "passed": 8,
+      "failed": 0,
+      "skipped": 2,
+      "totalMs": 31012,
+      "minMs": 485,
+      "maxMs": 14821,
+      "meanMs": 4430
+    },
+    "exitCode": 0,
+    "previousAttempt": {
+      "generatedAtUtc": "2026-09-18T04:50:14.316Z",
+      "summary": {
+        "passed": 7,
+        "failed": 1,
+        "skipped": 2,
+        "totalMs": 30393,
+        "minMs": 587,
+        "maxMs": 12788,
+        "meanMs": 4342
+      },
+      "onlyFailure": "step 6 TTS — script asserted Content-Type audio/*; the audio URL is served as application/octet-stream (MP3 bytes); assertion relaxed to sniff the container"
+    }
   },
-  "externalUserId": "godseye-contract-test-2026-09-17",
-  "sessionId": null,
-  "proxyBase": "https://ondemand-eand-spatial-opal.vercel.app/api/ondemand",
   "steps": [
     {
       "step": 1,
       "name": "session create + reuse",
-      "ok": false,
+      "httpStatus": 200,
+      "latencyMs": 485,
+      "utc": "2026-09-18T04:51:10.008Z",
+      "pass": true,
       "skipped": false,
       "skipReason": null,
-      "latencyMs": 187,
-      "utc": "2026-09-17T08:26:10.662Z",
-      "error": "proxy route not present at https://ondemand-eand-spatial-opal.vercel.app/api/ondemand (HTTP 404 The page could not be found NOT_FOUND)"
+      "timeToFirstDeltaMs": null,
+      "contentType": null,
+      "bytes": null,
+      "notes": "POST /chat/v1/sessions (201, body {externalUserId,pluginIds}) then GET /chat/v1/sessions/{id} (200) — same sessionId reused by every later step"
     },
     {
       "step": 2,
       "name": "sync prompt",
-      "ok": false,
-      "skipped": true,
-      "skipReason": "dependency: step 1 failed",
-      "latencyMs": 0,
-      "utc": "2026-09-17T08:26:10.849Z"
+      "httpStatus": 200,
+      "latencyMs": 1936,
+      "utc": "2026-09-18T04:51:10.493Z",
+      "pass": true,
+      "skipped": false,
+      "skipReason": null,
+      "timeToFirstDeltaMs": null,
+      "contentType": null,
+      "bytes": null,
+      "notes": "POST …/query responseMode=sync, endpointId=predefined-gpt-5.6-luna; data.answer non-empty ('OK'); data keys observed: answer, messageId, metrics, sessionId, status"
     },
     {
       "step": 3,
       "name": "SSE stream",
-      "ok": false,
-      "skipped": true,
-      "skipReason": "dependency: step 1 failed",
-      "latencyMs": 0,
-      "utc": "2026-09-17T08:26:10.849Z"
+      "httpStatus": 200,
+      "latencyMs": 3600,
+      "utc": "2026-09-18T04:51:12.429Z",
+      "pass": true,
+      "skipped": false,
+      "skipReason": null,
+      "timeToFirstDeltaMs": 1277,
+      "contentType": "text/event-stream; charset=utf-8",
+      "bytes": null,
+      "notes": "POST …/query responseMode=stream; Content-Type text/event-stream; heartbeat seen; 29 fulfillment deltas; data:[DONE] seen; no [ERROR]; eventTypes observed: fulfillment_thinking, fulfillment, metricsLog"
     },
     {
       "step": 4,
       "name": "built-in tool/plugin invocation",
-      "ok": false,
+      "httpStatus": 200,
+      "latencyMs": 125,
+      "utc": "2026-09-18T04:51:16.029Z",
+      "pass": false,
       "skipped": true,
-      "skipReason": "dependency: step 1 failed",
-      "latencyMs": 0,
-      "utc": "2026-09-17T08:26:10.849Z"
+      "skipReason": "no plugin id in env and the account's Agents API listing is empty (GET /plugin/v1/list -> HTTP 200, total=0); no documented chat agent id was invented",
+      "timeToFirstDeltaMs": null,
+      "contentType": null,
+      "bytes": null,
+      "notes": "SKIPPED — no plugin id in env and GET /plugin/v1/list (documented Agents API, §8) returned total=0 for this account; no undocumented chat agent id was invented"
     },
     {
       "step": 5,
       "name": "STT on in-script generated WAV",
-      "ok": false,
-      "skipped": true,
-      "skipReason": "dependency: step 1 failed",
-      "latencyMs": 0,
-      "utc": "2026-09-17T08:26:10.849Z"
+      "httpStatus": 200,
+      "latencyMs": 14821,
+      "utc": "2026-09-18T04:51:16.155Z",
+      "pass": true,
+      "skipped": false,
+      "skipReason": null,
+      "timeToFirstDeltaMs": null,
+      "contentType": null,
+      "bytes": null,
+      "notes": "in-script 16 kHz mono PCM WAV (440 Hz tone) uploaded via POST /media/v1/public/file/raw (plugins=plugin-1713958830, responseMode=sync) → data.url → POST /services/v1/public/service/execute/speech_to_text {audioUrl} → data.text is a string (empty for a pure tone)"
     },
     {
       "step": 6,
       "name": "TTS",
-      "ok": false,
-      "skipped": true,
-      "skipReason": "dependency: step 1 failed",
-      "latencyMs": 0,
-      "utc": "2026-09-17T08:26:10.849Z"
+      "httpStatus": 200,
+      "latencyMs": 1533,
+      "utc": "2026-09-18T04:51:30.977Z",
+      "pass": true,
+      "skipped": false,
+      "skipReason": null,
+      "timeToFirstDeltaMs": null,
+      "contentType": "application/octet-stream",
+      "bytes": 42624,
+      "notes": "POST /services/v1/public/service/execute/text_to_speech {input,voice:'alloy',model:'tts-1'} → data.audioUrl → GET → 42,624 bytes, served as application/octet-stream with an MP3 frame signature (run 1 failed only on the script's audio/* assertion; fixed to sniff the container)"
     },
     {
       "step": 7,
       "name": "Media PNG analysis",
-      "ok": false,
-      "skipped": true,
-      "skipReason": "dependency: step 1 failed",
-      "latencyMs": 0,
-      "utc": "2026-09-17T08:26:10.849Z"
+      "httpStatus": 200,
+      "latencyMs": 6630,
+      "utc": "2026-09-18T04:51:32.511Z",
+      "pass": true,
+      "skipped": false,
+      "skipReason": null,
+      "timeToFirstDeltaMs": null,
+      "contentType": null,
+      "bytes": null,
+      "notes": "in-script 32×32 PNG uploaded via POST /media/v1/public/file/raw (plugins=plugin-1713958591, responseMode=sync) → data.id + actionStatus=completed + non-empty context"
     },
     {
       "step": 8,
       "name": "workflow",
-      "ok": false,
-      "skipped": true,
-      "skipReason": "dependency: step 1 failed",
+      "httpStatus": null,
       "latencyMs": 0,
-      "utc": "2026-09-17T08:26:10.849Z"
+      "utc": "2026-09-18T04:51:39.142Z",
+      "pass": false,
+      "skipped": true,
+      "skipReason": "ONDEMAND_SPATIAL_FLOW_ID unset on the deployment — auto-skipped by design",
+      "timeToFirstDeltaMs": null,
+      "contentType": null,
+      "bytes": null,
+      "notes": "SKIPPED by design — ONDEMAND_SPATIAL_FLOW_ID unset; no workflow executed"
     },
     {
       "step": 9,
       "name": "session-memory follow-up",
-      "ok": false,
-      "skipped": true,
-      "skipReason": "dependency: step 1 failed",
-      "latencyMs": 0,
-      "utc": "2026-09-17T08:26:10.849Z"
+      "httpStatus": 200,
+      "latencyMs": 2007,
+      "utc": "2026-09-18T04:51:39.142Z",
+      "pass": true,
+      "skipped": false,
+      "skipReason": null,
+      "timeToFirstDeltaMs": null,
+      "contentType": null,
+      "bytes": null,
+      "notes": "same session, sync follow-up — answer contained the step-2 code word (session memory confirmed)"
     },
     {
       "step": 10,
       "name": "latency summary",
-      "ok": true,
+      "httpStatus": null,
+      "latencyMs": 0,
+      "utc": "2026-09-18T04:51:41.150Z",
+      "pass": true,
       "skipped": false,
       "skipReason": null,
-      "latencyMs": 0,
-      "utc": "2026-09-17T08:26:10.849Z",
-      "detail": "min=187ms max=187ms mean=187ms totalMs=187"
+      "timeToFirstDeltaMs": null,
+      "contentType": null,
+      "bytes": null,
+      "notes": "latency summary over executed steps"
     }
   ],
-  "summary": {
-    "passed": 1,
-    "failed": 1,
-    "skipped": 8,
-    "totalMs": 187,
-    "minMs": 187,
-    "maxMs": 187,
-    "meanMs": 187
+  "liveDiscovery": {
+    "endpointsListing": {
+      "method": "GET",
+      "path": "/config/v1/public/endpoints",
+      "documented": false,
+      "note": "not in the public docs categories index nor docs.on-demand.io/llms.txt; path inferred from the platform's config service naming and verified live",
+      "httpStatus": 200,
+      "utc": "2026-09-18T04:46:00.776Z",
+      "total": 84,
+      "active": 23,
+      "inactive": 61
+    },
+    "reasoningModesListing": {
+      "method": "GET",
+      "path": "/config/v1/public/reasoning_modes",
+      "documented": false,
+      "httpStatus": 200,
+      "utc": "2026-09-18T04:46:00.988Z",
+      "predefinedCount": 13,
+      "userDefinedCount": 1,
+      "notFound404Variants": [
+        "/config/v1/public/reasoning-modes",
+        "/config/v1/public/reasoningModes"
+      ]
+    },
+    "agentsListing": {
+      "method": "GET",
+      "path": "/plugin/v1/list?page=1&limit=50",
+      "documented": "guide-only (docs.on-demand.io/docs/plugin-api.md, contract §8)",
+      "httpStatus": 200,
+      "utc": "2026-09-18T04:46:00.420Z",
+      "total": 0,
+      "withDocumentedIdsFilter": {
+        "httpStatus": 200,
+        "total": 0
+      }
+    },
+    "liveEndpointIdsActive": [
+      "byoi-c7f50d33-4dfa-4810-bcb0-924652020a36",
+      "predefined-cerebras-qwen-3.8-27b",
+      "predefined-claude-4-5-haiku",
+      "predefined-claude-fable-5.1",
+      "predefined-claude-opus-5",
+      "predefined-claude-sonnet-5",
+      "predefined-deepseek-flash",
+      "predefined-deepseek-v4-flash",
+      "predefined-deepseek-v4-flash-vision-exp",
+      "predefined-deepseek-v4-pro",
+      "predefined-gemini-3.8-flash",
+      "predefined-glm-5.3",
+      "predefined-glm-5.3-flash",
+      "predefined-gpt-5.6-luna",
+      "predefined-gpt-5.6-sol",
+      "predefined-gpt-5.6-terra",
+      "predefined-gpt-6-astra",
+      "predefined-kimi-k3",
+      "predefined-kimi-k3-fast",
+      "predefined-minimax-m3",
+      "predefined-muse_spark_1.3",
+      "predefined-qwen-3.8-max",
+      "predefined-xai-grok4.6"
+    ],
+    "liveEndpointIdsInactive": [
+      "predefined-claude-4-1-opus",
+      "predefined-claude-4-5-opus",
+      "predefined-claude-4-5-sonnet",
+      "predefined-claude-4-6-opus",
+      "predefined-claude-4-6-sonnet",
+      "predefined-claude-4-8-opus",
+      "predefined-claude-4-opus",
+      "predefined-claude-4-sonnet",
+      "predefined-claude-fable-5",
+      "predefined-deepseek-r1",
+      "predefined-deepseek-r1-distill-llama-70b",
+      "predefined-deepseek-v3",
+      "predefined-deepseek-v3.1",
+      "predefined-deepseek-v3.2",
+      "predefined-fugu",
+      "predefined-fugu-ultra",
+      "predefined-gemini-2.5-flash",
+      "predefined-gemini-2.5-pro-preview",
+      "predefined-gemini-3-flash-preview",
+      "predefined-gemini-3.1-pro-preview",
+      "predefined-gemini-3.5-flash",
+      "predefined-gemini-3.5-flash-lite",
+      "predefined-gemini-3.6-flash",
+      "predefined-gemini-3.7-flash",
+      "predefined-glm-4.7",
+      "predefined-glm-4.7-flash",
+      "predefined-glm-5",
+      "predefined-glm-5.1",
+      "predefined-glm-5.2",
+      "predefined-grok-build-0.1",
+      "predefined-k2-think",
+      "predefined-kimi-k2-thinking",
+      "predefined-kimi-k2.5",
+      "predefined-kimi-k2.6",
+      "predefined-minimax-m2.7",
+      "predefined-minimax-minimax-m2.5",
+      "predefined-muse_spark_1.2",
+      "predefined-openai-gpt4.1",
+      "predefined-openai-gpt4.1-mini",
+      "predefined-openai-gpt4.1-nano",
+      "predefined-openai-gpt4o",
+      "predefined-openai-gpt4o-mini",
+      "predefined-openai-gpt5-mini",
+      "predefined-openai-gpt5.4",
+      "predefined-openai-gpt5.5",
+      "predefined-openai-gpto3",
+      "predefined-openai-gpto3-mini",
+      "predefined-openai-gpto4-mini",
+      "predefined-openai-o3-pro",
+      "predefined-openai-oss",
+      "predefined-qwen-3.7-max",
+      "predefined-stealth-ox-alpha",
+      "predefined-xai-grok-code-fast-1",
+      "predefined-xai-grok4-2-reasoning",
+      "predefined-xai-grok4-fast",
+      "predefined-xai-grok4.1-fast",
+      "predefined-xai-grok4.1-fast-reasoning",
+      "predefined-xai-grok4.2-non-reasoning",
+      "predefined-xai-grok4.3",
+      "predefined-xai-grok4.5",
+      "predefined-z-ai/glm-5-turbo"
+    ],
+    "activeEndpointDetails": [
+      {
+        "endpointId": "byoi-c7f50d33-4dfa-4810-bcb0-924652020a36",
+        "name": "gpt-oss-120b",
+        "modelId": "deepseek/deepseek-v4-flash-0731",
+        "isPremium": false,
+        "reasoningEfforts": null,
+        "contextLength": 1000000,
+        "streamingSupported": true,
+        "fallbackEndpointId": null
+      },
+      {
+        "endpointId": "predefined-cerebras-qwen-3.8-27b",
+        "name": "cerebras-qwen-3.8",
+        "modelId": "qwen-3.8-27b",
+        "isPremium": true,
+        "reasoningEfforts": ["low", "medium", "max"],
+        "contextLength": 128000,
+        "streamingSupported": true,
+        "fallbackEndpointId": "predefined-xai-grok4.6"
+      },
+      {
+        "endpointId": "predefined-claude-4-5-haiku",
+        "name": "claude-4-5-haiku",
+        "modelId": "anthropic/claude-haiku-4-5@20251001",
+        "isPremium": false,
+        "reasoningEfforts": [],
+        "contextLength": 200000,
+        "streamingSupported": true,
+        "fallbackEndpointId": null
+      },
+      {
+        "endpointId": "predefined-claude-fable-5.1",
+        "name": "claude-fable-5-1",
+        "modelId": "anthropic/claude-fable-5-1",
+        "isPremium": true,
+        "reasoningEfforts": ["low", "medium", "max"],
+        "contextLength": 1000000,
+        "streamingSupported": true,
+        "fallbackEndpointId": "predefined-claude-fable-5.1"
+      },
+      {
+        "endpointId": "predefined-claude-opus-5",
+        "name": "claude-opus-5",
+        "modelId": "anthropic/claude-opus-5",
+        "isPremium": true,
+        "reasoningEfforts": ["low", "medium", "max"],
+        "contextLength": 1000000,
+        "streamingSupported": true,
+        "fallbackEndpointId": "predefined-claude-4-8-opus"
+      },
+      {
+        "endpointId": "predefined-claude-sonnet-5",
+        "name": "claude-sonnet-5",
+        "modelId": "anthropic/claude-sonnet-5",
+        "isPremium": true,
+        "reasoningEfforts": ["low", "medium", "max"],
+        "contextLength": 1000000,
+        "streamingSupported": true,
+        "fallbackEndpointId": "predefined-xai-grok4.3"
+      },
+      {
+        "endpointId": "predefined-deepseek-flash",
+        "name": "deepseek-v4.1-flash",
+        "modelId": "deepseek-flash",
+        "isPremium": true,
+        "reasoningEfforts": ["low", "medium", "max"],
+        "contextLength": 1000000,
+        "streamingSupported": true,
+        "fallbackEndpointId": "predefined-deepseek-v4-flash-vision-exp"
+      },
+      {
+        "endpointId": "predefined-deepseek-v4-flash",
+        "name": "deepseek-v4-flash-fast",
+        "modelId": "deepseek/deepseek-v4-flash-0731",
+        "isPremium": true,
+        "reasoningEfforts": ["low", "medium", "max"],
+        "contextLength": 1000000,
+        "streamingSupported": true,
+        "fallbackEndpointId": "predefined-deepseek-v4-flash-vision-exp"
+      },
+      {
+        "endpointId": "predefined-deepseek-v4-flash-vision-exp",
+        "name": "deepseek-v4-flash-vision-exp",
+        "modelId": "deepseek-v4-flash-vision-exp",
+        "isPremium": false,
+        "reasoningEfforts": ["low", "medium", "max"],
+        "contextLength": 1000000,
+        "streamingSupported": true,
+        "fallbackEndpointId": "predefined-deepseek-v4-flash"
+      },
+      {
+        "endpointId": "predefined-deepseek-v4-pro",
+        "name": "deepseek-v4-pro",
+        "modelId": "deepseek-v4-pro",
+        "isPremium": false,
+        "reasoningEfforts": [],
+        "contextLength": 1000000,
+        "streamingSupported": true,
+        "fallbackEndpointId": null
+      },
+      {
+        "endpointId": "predefined-gemini-3.8-flash",
+        "name": "gemini-3.8-flash",
+        "modelId": "gemini-3.8-flash",
+        "isPremium": false,
+        "reasoningEfforts": ["low", "medium", "max"],
+        "contextLength": 1000000,
+        "streamingSupported": true,
+        "fallbackEndpointId": null
+      },
+      {
+        "endpointId": "predefined-glm-5.3",
+        "name": "glm-5.3",
+        "modelId": "z-ai/glm-5.3",
+        "isPremium": false,
+        "reasoningEfforts": [],
+        "contextLength": 1000000,
+        "streamingSupported": true,
+        "fallbackEndpointId": "predefined-xai-grok4.6"
+      },
+      {
+        "endpointId": "predefined-glm-5.3-flash",
+        "name": "glm-5.3-flash",
+        "modelId": "z-ai/glm-5.3-flash",
+        "isPremium": false,
+        "reasoningEfforts": ["low", "medium", "max"],
+        "contextLength": 1000000,
+        "streamingSupported": true,
+        "fallbackEndpointId": "predefined-xai-grok4.6"
+      },
+      {
+        "endpointId": "predefined-gpt-5.6-luna",
+        "name": "gpt-5.6-luna",
+        "modelId": "gpt-5.6-luna",
+        "isPremium": false,
+        "reasoningEfforts": ["low", "medium", "max"],
+        "contextLength": 1050000,
+        "streamingSupported": true,
+        "fallbackEndpointId": null
+      },
+      {
+        "endpointId": "predefined-gpt-5.6-sol",
+        "name": "gpt-5.6-sol",
+        "modelId": "gpt-5.6-sol",
+        "isPremium": true,
+        "reasoningEfforts": ["low", "medium", "max"],
+        "contextLength": 1050000,
+        "streamingSupported": true,
+        "fallbackEndpointId": null
+      },
+      {
+        "endpointId": "predefined-gpt-5.6-terra",
+        "name": "gpt-5.6-terra",
+        "modelId": "gpt-5.6-terra",
+        "isPremium": true,
+        "reasoningEfforts": ["low", "medium", "max"],
+        "contextLength": 1049991,
+        "streamingSupported": true,
+        "fallbackEndpointId": null
+      },
+      {
+        "endpointId": "predefined-gpt-6-astra",
+        "name": "gpt-6-astra",
+        "modelId": "gpt-6-astra",
+        "isPremium": true,
+        "reasoningEfforts": ["low", "medium", "max"],
+        "contextLength": 1050000,
+        "streamingSupported": true,
+        "fallbackEndpointId": "predefined-gpt-5.6-sol"
+      },
+      {
+        "endpointId": "predefined-kimi-k3",
+        "name": "kimi-k3",
+        "modelId": "kimi-k3",
+        "isPremium": false,
+        "reasoningEfforts": ["low", "medium", "max"],
+        "contextLength": 1000000,
+        "streamingSupported": true,
+        "fallbackEndpointId": "predefined-xai-grok4.6"
+      },
+      {
+        "endpointId": "predefined-kimi-k3-fast",
+        "name": "kimi-k3-fast",
+        "modelId": "accounts/fireworks/routers/kimi-k3-fast",
+        "isPremium": true,
+        "reasoningEfforts": ["low", "medium", "max"],
+        "contextLength": 1000000,
+        "streamingSupported": true,
+        "fallbackEndpointId": null
+      },
+      {
+        "endpointId": "predefined-minimax-m3",
+        "name": "minimax-m3",
+        "modelId": "minimax/minimax-m3",
+        "isPremium": false,
+        "reasoningEfforts": [],
+        "contextLength": 1000000,
+        "streamingSupported": true,
+        "fallbackEndpointId": "predefined-xai-grok4.3"
+      },
+      {
+        "endpointId": "predefined-muse_spark_1.3",
+        "name": "muse-spark-1.3",
+        "modelId": "meta/muse-spark-1.3",
+        "isPremium": false,
+        "reasoningEfforts": ["low", "medium", "max"],
+        "contextLength": 1000000,
+        "streamingSupported": true,
+        "fallbackEndpointId": null
+      },
+      {
+        "endpointId": "predefined-qwen-3.8-max",
+        "name": "qwen-3.8-max",
+        "modelId": "qwen/qwen3.8-max",
+        "isPremium": false,
+        "reasoningEfforts": ["low", "medium", "max"],
+        "contextLength": 1000000,
+        "streamingSupported": true,
+        "fallbackEndpointId": null
+      },
+      {
+        "endpointId": "predefined-xai-grok4.6",
+        "name": "ondemand-grok-4.6",
+        "modelId": "grok-4.6",
+        "isPremium": false,
+        "reasoningEfforts": ["low", "medium", "max"],
+        "contextLength": 500000,
+        "streamingSupported": true,
+        "fallbackEndpointId": null
+      }
+    ],
+    "liveReasoningModes": {
+      "predefined": [
+        {
+          "modeId": "dynamic",
+          "modeName": "Sonnet 4.6",
+          "modelName": "Claude 4.6 Sonnet",
+          "rank": "16"
+        },
+        {
+          "modeId": "glm-4.7-flash",
+          "modeName": "GLM 4.7",
+          "modelName": "GLM 4.7",
+          "rank": "44"
+        },
+        {
+          "modeId": "gemini-3-flash",
+          "modeName": "Gemini 3 Flash",
+          "modelName": "Gemini 3 Flash",
+          "rank": "N/A"
+        },
+        {
+          "modeId": "grok-4-fast",
+          "modeName": "Grok-4.2 Fast reasoning",
+          "modelName": "Grok-4.2 fast reasoning",
+          "rank": "34"
+        },
+        {
+          "modeId": "gemini-3",
+          "modeName": "Gemini 3.1 Pro",
+          "modelName": "Gemini-3",
+          "rank": "16"
+        },
+        {
+          "modeId": "deepseek-v3.1",
+          "modeName": "Deepseek V3.2",
+          "modelName": "Deepseek V3.2",
+          "rank": "33"
+        },
+        {
+          "modeId": "haiku",
+          "modeName": "Haiku 4.5",
+          "modelName": "Claude Haiku 4.5",
+          "rank": "N/A"
+        },
+        {
+          "modeId": "glm-5-turbo",
+          "modeName": "GLM-5.1",
+          "modelName": "GLM-5.1",
+          "rank": "44"
+        },
+        {
+          "modeId": "minimax-m2",
+          "modeName": "MiniMax-M2.7",
+          "modelName": "MiniMax-M2.7",
+          "rank": "N/A"
+        },
+        {
+          "modeId": "gpt-5.4",
+          "modeName": "GPT-5.4",
+          "modelName": "OpenAI GPT-5.4",
+          "rank": "16"
+        },
+        {
+          "modeId": "gpt-5.4-pro",
+          "modeName": "GPT-5.4-Pro",
+          "modelName": "OpenAI GPT-5.4-pro",
+          "rank": "17"
+        },
+        {
+          "modeId": "opus",
+          "modeName": "Opus 4.7",
+          "modelName": "Claude 4.7 Opus",
+          "rank": "N/A"
+        },
+        {
+          "modeId": "kimi-k2",
+          "modeName": "Kimi-K2.6",
+          "modelName": "Kimi-K2.6",
+          "rank": "N/A"
+        }
+      ],
+      "userdefined": [
+        {
+          "modeId": "byor-019d817b-aa5c-7782-8de6-2a846f155727",
+          "modeName": "gemma4-ondemand",
+          "modelName": "Gemma 4 E2B On-Demand",
+          "rank": "N/A"
+        }
+      ]
+    },
+    "liveAgentToolIds": [],
+    "endpointSmokeChecks": [
+      {
+        "endpointId": "predefined-gemini-3.8-flash",
+        "status": 200,
+        "ms": 3542,
+        "answer": "PONG",
+        "dataKeys": ["answer", "messageId", "metrics", "sessionId", "status"]
+      },
+      {
+        "endpointId": "predefined-gpt-5.6-luna",
+        "status": 200,
+        "ms": 1861,
+        "answer": "PONG",
+        "dataKeys": ["answer", "messageId", "metrics", "sessionId", "status"]
+      },
+      {
+        "endpointId": "predefined-deepseek-v4-pro",
+        "status": 200,
+        "ms": 2519,
+        "answer": "PONG",
+        "dataKeys": ["answer", "messageId", "metrics", "sessionId", "status"]
+      },
+      {
+        "endpointId": "predefined-claude-sonnet-5",
+        "status": 200,
+        "ms": 2062,
+        "answer": "PONG",
+        "dataKeys": ["answer", "messageId", "metrics", "sessionId", "status"]
+      },
+      {
+        "endpointId": "predefined-claude-opus-5",
+        "status": 403,
+        "ms": 3083,
+        "answer": "",
+        "error": {
+          "errorCode": "content_policy_violation",
+          "message": "[fulfillment] content_policy_violation: Your request was blocked due to a content policy violation. Please revise your input and try again."
+        }
+      },
+      {
+        "endpointId": "predefined-claude-4-5-haiku",
+        "status": 200,
+        "ms": 2453,
+        "answer": "PONG",
+        "dataKeys": ["answer", "messageId", "metrics", "sessionId", "status"]
+      }
+    ],
+    "reasoningModeSmokeChecks": [
+      {
+        "reasoningMode": "haiku",
+        "endpointId": "predefined-gemini-3.8-flash",
+        "status": 200,
+        "contentType": "text/event-stream; charset=utf-8",
+        "ms": 4976,
+        "done": true,
+        "error": null,
+        "ttfdMs": 2904,
+        "eventTypes": ["fulfillment_thinking", "fulfillment", "metricsLog"],
+        "statusTypes": []
+      },
+      {
+        "reasoningMode": "dynamic",
+        "endpointId": "predefined-gemini-3.8-flash",
+        "status": 200,
+        "contentType": "text/event-stream; charset=utf-8",
+        "ms": 5151,
+        "done": true,
+        "error": null,
+        "ttfdMs": 3098,
+        "eventTypes": ["fulfillment_thinking", "fulfillment", "metricsLog"],
+        "statusTypes": []
+      },
+      {
+        "reasoningMode": "opus",
+        "endpointId": "predefined-gemini-3.8-flash",
+        "status": 200,
+        "contentType": "text/event-stream; charset=utf-8",
+        "ms": 5444,
+        "done": true,
+        "error": null,
+        "ttfdMs": 3377,
+        "eventTypes": ["fulfillment_thinking", "fulfillment", "metricsLog"],
+        "statusTypes": []
+      },
+      {
+        "reasoningMode": "grok-4-fast",
+        "endpointId": "predefined-gemini-3.8-flash",
+        "status": 200,
+        "contentType": "text/event-stream; charset=utf-8",
+        "ms": 4763,
+        "done": true,
+        "error": null,
+        "ttfdMs": 2689,
+        "eventTypes": ["fulfillment_thinking", "fulfillment", "metricsLog"],
+        "statusTypes": []
+      },
+      {
+        "reasoningMode": "low",
+        "endpointId": "predefined-gemini-3.8-flash",
+        "status": 200,
+        "contentType": "text/event-stream; charset=utf-8",
+        "ms": 4893,
+        "done": true,
+        "error": null,
+        "ttfdMs": 2778,
+        "eventTypes": ["fulfillment_thinking", "fulfillment", "metricsLog"],
+        "statusTypes": []
+      },
+      {
+        "reasoningMode": "high",
+        "endpointId": "predefined-gemini-3.8-flash",
+        "status": 200,
+        "contentType": "text/event-stream; charset=utf-8",
+        "ms": 5382,
+        "done": true,
+        "error": null,
+        "ttfdMs": 3323,
+        "eventTypes": ["fulfillment_thinking", "fulfillment", "metricsLog"],
+        "statusTypes": []
+      }
+    ]
   },
-  "smokeMatrix": [
+  "chosenEndpointIds": {
+    "reasoning": {
+      "ASK": "haiku",
+      "INVESTIGATE": "dynamic",
+      "DEEP": "opus"
+    },
+    "fulfillment": {
+      "ASK": "predefined-gemini-3.8-flash",
+      "INVESTIGATE": "predefined-gpt-5.6-luna",
+      "DEEP": "predefined-claude-sonnet-5"
+    },
+    "fulfillmentFallbacks": {
+      "DEEP": "predefined-deepseek-v4-pro (non-premium, verified 200) if premium endpoints are restricted; predefined-claude-opus-5 returned 403 content_policy_violation on the smoke prompt and was not chosen"
+    },
+    "reasoningEffortValues": ["low", "medium", "max"],
+    "source": "reasoning modeIds verbatim from live GET /config/v1/public/reasoning_modes (predefined list, 2026-09-18T04:46:00Z) and each accepted by POST …/query responseMode=stream (200, [DONE]) on 2026-09-18T04:48Z; fulfillment endpointIds verbatim from live GET /config/v1/public/endpoints (status=active) and each verified with a sync query (200) on 2026-09-18T04:48Z; docs examples for reasoningMode are `low`, `high`, `grok-4-fast` (docs.on-demand.io/docs/chat-api.md, docs/query-and-responses-modes.md — contract §3.1/§12) and both `low` and `high` were also accepted live; reasoning_efforts values are the endpoint listing's own enumeration (low|medium|max). The blueprint §11.3 tier document was not available in this workspace, so tiers were assigned by model class: ASK = fast/flash, INVESTIGATE = balanced non-premium, DEEP = strongest verified.",
+    "caveat": "with zero agents on this account the RAG/reasoning stage is bypassed (contract §2), so a reasoningMode's effect is not observable — only its acceptance was verified"
+  },
+  "fieldProbes": [
     {
-      "route": "GET /",
-      "expected": "200",
-      "actualStatus": 200,
-      "utc": "2026-09-17T08:12:13Z",
-      "note": "200 text/html but a different application (exec-brief app), not this repo's index.html"
+      "field": "maxTokens",
+      "status": 200,
+      "ms": 4928,
+      "answerLen": 4
     },
     {
-      "route": "GET /api/ondemand/health",
-      "expected": "200 configured/healthy",
-      "actualStatus": 404,
-      "utc": "2026-09-17T08:12:13Z",
-      "note": "Vercel platform NOT_FOUND (x-vercel-error: NOT_FOUND) \u2014 route absent; God's Eye functions are not deployed on this host; no env-var conclusion derivable"
+      "field": "responseFormat",
+      "status": 200,
+      "ms": 3464,
+      "answerLen": 4
     },
     {
-      "route": "GET /api/celestrak/active",
-      "expected": "200 with >=1 three-line TLE set",
-      "actualStatus": 404,
-      "utc": "2026-09-17T08:12:14Z",
-      "note": "NOT_FOUND \u2014 TLE assertion not evaluable"
+      "field": "reasoningEffort",
+      "status": 200,
+      "ms": 4251,
+      "answerLen": 4
     },
     {
-      "route": "GET /api/ais-live",
-      "expected": "501",
-      "actualStatus": 404,
-      "utc": "2026-09-17T08:12:14Z",
-      "note": "NOT_FOUND"
+      "field": "contextMetadata (session create)",
+      "status": 201,
+      "ms": 158,
+      "echoed": [
+        {
+          "key": "probe",
+          "value": "gate1"
+        }
+      ]
     },
     {
-      "route": "GET /api/realtime/token",
-      "expected": "501",
-      "actualStatus": 404,
-      "utc": "2026-09-17T08:12:14Z",
-      "note": "NOT_FOUND"
-    },
-    {
-      "route": "GET /api/setup/status",
-      "expected": "404 (catch-all JSON 'Unknown API route')",
-      "actualStatus": 404,
-      "utc": "2026-09-17T08:12:14Z",
-      "note": "Vercel NOT_FOUND text/plain, not the catch-all's JSON 404"
+      "field": "DELETE /chat/v1/sessions/{id}",
+      "status": 200,
+      "ms": 232,
+      "body": {
+        "message": "Chat session deleted successfully"
+      }
     }
   ],
-  "harnessSelfCheck": {
-    "note": "same command against the previous turn's ephemeral sandbox emulator running this branch (no ONDEMAND_API_KEY there) \u2014 proves the harness reaches the proxy; NOT a baseline and NOT a Vercel function runtime",
-    "proxyBase": "https://sb-307x6fgbxmou.vercel.run/api/ondemand",
-    "generatedAtUtc": "2026-09-17T08:26:11.182Z",
-    "step1": {
-      "ok": false,
-      "latencyMs": 275,
-      "error": "HTTP 503 (application/json; charset=utf-8): {\"error\":\"not_configured\",\"message\":\"ONDEMAND_API_KEY is not set on the server.\"}"
-    },
-    "summary": {
-      "passed": 1,
-      "failed": 1,
-      "skipped": 8,
-      "totalMs": 275,
-      "minMs": 275,
-      "maxMs": 275,
-      "meanMs": 275
-    }
+  "repo": {
+    "branch": "ondemand-serverless",
+    "baseCommit": "0d41b6be5490db1f10a171f238be75db4d4ec3b4",
+    "headBeforeThisCommit": "d1c085caccfcfec93421476ef85142fb24c2c974",
+    "committedAs": "gate1: live contract baseline (see git log)"
   },
-  "gate1Status": "EXIT BLOCKED \u2014 see docs/audit/gates.md"
+  "gate1Status": "EXITED — live contract validated with the user-supplied key (8 passed / 0 failed / 2 skipped by account state or design); residual: not yet observed on a Vercel function runtime"
 }

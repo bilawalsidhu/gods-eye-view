@@ -303,12 +303,16 @@ async function doFetch(url, init = {}, timeoutMs = TIMEOUT_MS) {
   if (MODE === 'direct' && !init.noKey) {
     headers.apikey = API_KEY;
   }
-  return fetch(url, {
+  const res = await fetch(url, {
     method: init.method || 'GET',
     headers,
     body,
     signal: AbortSignal.timeout(timeoutMs),
   });
+  // Remembered per step so the JSON report can carry the HTTP status of the
+  // step's final upstream call (reset by runStep before each step runs).
+  lastHttpStatus = res.status;
+  return res;
 }
 
 /** doFetch + response-body handling: throws StepHttpError-or-friendlier on a
@@ -588,18 +592,42 @@ async function assertAudioResponse(res) {
   }
   if (res.status !== 200)
     throw new Error(`expected HTTP 200, got ${res.status}`);
-  if (!contentType.startsWith('audio/'))
-    throw new Error(
-      `Content-Type does not start with audio/: "${contentType}"`,
-    );
   const buf = Buffer.from(await res.arrayBuffer());
   if (buf.length === 0) throw new Error('audio response had zero bytes');
+  // §6.2 only promises "the URL of the audio file" (the sample is an .mp3);
+  // the object store that serves it may label the bytes as
+  // application/octet-stream (observed live 2026-09-18). Accept an audio/*
+  // Content-Type, or a generic octet-stream whose bytes carry a recognisable
+  // audio container signature.
+  const container = audioContainerOf(buf);
+  const genericType =
+    contentType === '' || contentType.startsWith('application/octet-stream');
+  if (!contentType.startsWith('audio/') && !(genericType && container)) {
+    throw new Error(
+      `Content-Type "${contentType}" is not audio/* and the bytes carry no known audio signature`,
+    );
+  }
   return {
     value: true,
     contentType,
     bytes: buf.length,
-    detail: `contentType=${contentType} bytes=${buf.length}`,
+    detail: `contentType=${contentType || 'none'} bytes=${buf.length} container=${container || 'n/a'}`,
   };
+}
+
+/** Sniff the audio container from the leading bytes (MP3 ID3 tag or frame
+ * sync, RIFF/WAVE, OGG, FLAC, or an MP4/M4A ftyp box). Null when unknown. */
+function audioContainerOf(buf) {
+  if (buf.length < 12) return null;
+  const head4 = buf.subarray(0, 4).toString('latin1');
+  if (head4.startsWith('ID3')) return 'mp3';
+  if (buf[0] === 0xff && (buf[1] & 0xe0) === 0xe0) return 'mp3';
+  if (head4 === 'RIFF' && buf.subarray(8, 12).toString('latin1') === 'WAVE')
+    return 'wav';
+  if (head4 === 'OggS') return 'ogg';
+  if (head4 === 'fLaC') return 'flac';
+  if (buf.subarray(4, 8).toString('latin1') === 'ftyp') return 'mp4';
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -615,8 +643,11 @@ let passedCount = 0;
 let failedCount = 0;
 let skippedCount = 0;
 
+let lastHttpStatus = null;
+
 async function runStep(n, name, { dependsOn = [], run }) {
   const utc = nowIso();
+  lastHttpStatus = null;
   const depFail = dependsOn.find(
     (d) => stepStatus[d] && stepStatus[d] !== 'PASS',
   );
@@ -633,6 +664,7 @@ async function runStep(n, name, { dependsOn = [], run }) {
       skipReason: reason,
       latencyMs: 0,
       utc,
+      httpStatus: null,
     });
     return undefined;
   }
@@ -655,6 +687,7 @@ async function runStep(n, name, { dependsOn = [], run }) {
       skipReason: null,
       latencyMs: ms,
       utc,
+      httpStatus: lastHttpStatus,
       ...extra,
     });
     return value;
@@ -674,6 +707,7 @@ async function runStep(n, name, { dependsOn = [], run }) {
         skipReason: err.message,
         latencyMs: ms,
         utc,
+        httpStatus: lastHttpStatus,
       });
       return undefined;
     }
@@ -690,6 +724,7 @@ async function runStep(n, name, { dependsOn = [], run }) {
       skipReason: null,
       latencyMs: ms,
       utc,
+      httpStatus: lastHttpStatus,
       error: err.message,
     });
     return undefined;
@@ -845,10 +880,30 @@ async function step4() {
     );
   }
 
-  if (SPATIAL_AGENT_IDS.length === 0) throw new Skip(skipReason);
-  const { url, body } = buildStreamRequest(query, {
-    pluginIds: SPATIAL_AGENT_IDS,
-  });
+  let pluginIds = SPATIAL_AGENT_IDS;
+  if (pluginIds.length === 0) {
+    // No id supplied by env: ask the documented Agents API (§8, guide-only
+    // `GET /plugin/v1/list`) which agents THIS account actually has, and use
+    // the first one; an empty account skips honestly instead of inventing an id.
+    const listing = await fetchJson(
+      `${BASE_URL}/plugin/v1/list?page=1&limit=50`,
+      {
+        method: 'GET',
+      },
+    );
+    const plugins = listing.json?.data?.plugins || [];
+    const total = listing.json?.data?.total ?? plugins.length;
+    const first = plugins
+      .map((p) => p?.pluginId || p?.id)
+      .find((id) => typeof id === 'string' && id.length > 0);
+    if (!first) {
+      throw new Skip(
+        `no plugin id in env and the account's Agents API listing is empty (GET /plugin/v1/list -> HTTP ${listing.status}, total=${total}); no documented chat agent id was invented`,
+      );
+    }
+    pluginIds = [first];
+  }
+  const { url, body } = buildStreamRequest(query, { pluginIds });
   return assertToolInvocation(
     await readSseStream(url, body, { collectStatusLogs: true }),
   );
