@@ -1,4 +1,6 @@
 /* Preserve component and responsive rule order in one stylesheet entry. */
+/* Brand tokens first (single source of truth, docs/brand/BRAND_SOURCE.md). */
+@import './src/brand/tokens.css';
 @import './src/ui/styles/foundation.css';
 @import './src/ui/styles/controls.css';
 @import './src/ui/styles/location.css';

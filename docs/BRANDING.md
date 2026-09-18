@@ -1,64 +1,110 @@
-# OnDemand branding — assets, colour tokens, contrast, and what was intentionally left unchanged
+# OnDemand Spatial branding — assets, tokens, usage rules, retained identifiers
 
-Rebrand of the `ondemand-serverless` branch UI to **OnDemand Spatial Intelligence** (commit `chore(brand): rebrand UI to OnDemand`, 2026-09-18). Every asset below was fetched from an official OnDemand web property with HTTP 200 at the UTC time shown; nothing was invented. Derived files are marked and name their source.
+Product name: **OnDemand Spatial** (package `ondemand-spatial`, agent "OnDemand Spatial Intelligence Agent", workflow "OnDemand Spatial Advanced Workflow"). The brand assets and colour tokens below come **only** from the uploaded OnDemand brand guideline (`BrandGuidelines.pdf`, mediaId `6a27c273a71063f6d0f8a6c2`, 9 pages, sha256 `2992badc…c5fe6a`) and the supplied logo PNGs. Every value carries an evidence label; the full ledger with origins, hashes, page numbers and retrieval timestamps is `docs/brand/BRAND_SOURCE.md`. This set **replaces** the earlier assets that had been fetched from on-demand.io / files.readme.io (2026-09-18T10:02Z) — those files were overwritten in place on 2026-09-18 so that the template paths keep working.
 
-## 1. Logo assets in `public/brand/`
+Evidence labels: **DOCUMENTED** (printed in the PDF) · **DOCUMENT-OBSERVED** (read from the PDF's own drawings) · **SAMPLED** (measured from a supplied PNG) · **MEASURED-FROM-DIAGRAM** (p3 geometry) · **DERIVED** (this repo's choice).
 
-| File | Kind | Source (HTTP 200, UTC) | Notes |
+## 1. Assets in `public/brand/`
+
+The lockup is the guideline's own vector geometry: the circular mark + the stacked uppercase wordmark ("ON" over "DEMAND") recovered path-for-path from page 2 of the PDF with PyMuPDF (`page.get_drawings()`, items 26–34). Tight bbox 269.665 × 79.346 pt → aspect **3.40 : 1**; SVG `viewBox="0 0 272.839 82.52"` (2 % pad). Rendered at 4000 px the SVG measures 3954 × 1163 px (3.3998 : 1); the supplied low-resolution rasters of the same lockup measure 3.29–3.32 : 1 with the mark at 29.2–29.4 % of the width in both, i.e. the silhouettes match. The fill is a single attribute on one `<g>`, so any colour variant is a one-attribute change.
+
+| File | Bytes | Kind | Source | Notes |
+|---|---|---|---|---|
+| `logo-light.svg` | 3,888 | **original vector** (recovered) | PDF p2, right half (items 16–24 / 26–34) | Full lockup, `fill="#F7F7F5"` — the documented light variant for dark backgrounds (DOCUMENT-OBSERVED). Header lockup. |
+| `logo-dark.svg` | 3,888 | derived from the same paths | PDF p2 geometry + colour of the supplied green PNGs | Full lockup, `fill="#0D5849"` = Primary 1 (DOCUMENTED p9; SAMPLED as the ink of `logo_green.png`). For light backgrounds. The guideline itself shows no green lockup — see §4. |
+| `logo-black.svg` | 3,888 | **original vector** (recovered) | PDF p2, left half | Full lockup, `fill="#000000"`, exactly as printed. Print / monochrome use. |
+| `mark-light.svg` | 653 | original vector (recovered) | PDF p2 item 34 | Bare mark, `fill="#F7F7F5"`, square `viewBox 0 0 82.52 82.52`. Used in the `h1` logo slot on the dark UI. |
+| `mark-dark.svg` | 653 | derived | same path, `#0D5849` | Bare mark for light backgrounds. |
+| `mark.svg` | 748 | derived (icon version) | PDF p4 "icon version" proportions | 512 × 512 tile `#0D5849` with the mark in `#F7F7F5` at 65 % of the tile, centred (p4 dark tile: 103 pt mark in a 158 pt tile = 65 %). Corner radius 20 % is this repo's choice — p4 shows square corners. SVG favicon. |
+| `logo-light.png` / `logo-dark.png` | 45,495 / 43,223 | derived (MuPDF render of the SVGs) | — | 1200 × 363 px, RGBA transparent; single ink colour `#F7F7F5` / `#0D5849` (verified with PIL). |
+| `mark.png` | 20,872 | derived (render of `mark.svg`) | — | 512 × 512 px RGBA (the tile, transparent outside the rounded corners). |
+| `og-image.png` | 22,688 | derived | composition by this repo | 1200 × 630 px RGB, `#161616` ground with the `#F7F7F5` lockup centred at 60 % width (720 px). No text — no brand typeface is available (§2). |
+| `favicon-16.png` / `favicon-32.png` / `favicon-48.png` | 579 / 1,150 / 1,759 | derived (direct renders of `mark.svg`) | — | 16 / 32 / 48 px RGBA. |
+| `favicon.ico` | 15,086 | derived (`convert favicon-16.png favicon-32.png favicon-48.png favicon.ico`) | — | Contains three images: 16 × 16, 32 × 32, 48 × 48 (`identify favicon.ico`). |
+| `apple-touch-icon.png` | 6,791 | derived (render of `mark.svg`) | — | 180 × 180 px. |
+| `android-chrome-192.png` / `android-chrome-512.png` | 7,290 / 20,872 | derived (renders of `mark.svg`) | — | 192 × 192 / 512 × 512 px, referenced by `site.webmanifest`. |
+| `site.webmanifest` | 410 | derived | — | `name` "OnDemand Spatial", `short_name` "OD Spatial", both android-chrome icons, `theme_color #0D5849`, `background_color #161616`, `display standalone`, `start_url /`. |
+
+Not shipped: the supplied rasters themselves (`OD_logo_black_upload.png` is a different, mixed-case lockup with a tagline; the 420 × 136 green PNGs are low-resolution; `logo_dark.png` is a crop of the clear-space diagram with red guide-line residue). Details and hashes: `docs/brand/BRAND_SOURCE.md` §2.
+
+## 2. Colour and type tokens — `src/brand/tokens.css`
+
+All tokens are `--od-*` custom properties on `:root`, one per line, each with a comment stating hex, role, usage note and evidence label. The stylesheet is a standalone file; it takes effect only where it is imported. The pre-existing `--brand-*` variables in `src/ui/styles/foundation.css` are owned by the UI styles and were **not** modified by this extraction.
+
+| Token | Hex | Guideline label | Role in this repo | Evidence |
+|---|---|---|---|---|
+| `--od-green-900` (`--od-brand`) | `#0D5849` | "Primary" 1 — no name | brand colour, favicon tile, `logo-dark.svg`, primary button on light ground | DOCUMENTED p9 (+ SAMPLED ink of the green PNGs) |
+| `--od-green-700` | `#108B70` | "Primary" 2 | hover / secondary green on light ground — large text only | DOCUMENTED p9 |
+| `--od-green-500` (`--od-accent`) | `#3BB795` | "Primary" 3 | accent on the dark UI; dark ink on top of it | DOCUMENTED p9 |
+| `--od-green-200` (`--od-accent-soft`) | `#ADEDD6` | "Primary" 4 | soft accent / highlighted text on dark | DOCUMENTED p9 |
+| `--od-green-50` | `#EDFCF6` | "Primary" 5 | tinted panel on light ground; text on `#0D5849` | DOCUMENTED p9 |
+| `--od-neutral-600` | `#5B5B5B` | "Neutrals" 1 | secondary text on light ground | DOCUMENTED p9 |
+| `--od-neutral-400` | `#999999` | "Neutrals" 2 | muted text on dark ground only | DOCUMENTED p9 |
+| `--od-neutral-300` | `#C6C6C6` | "Neutrals" 3 | borders / dividers on light ground | DOCUMENTED p9 |
+| `--od-neutral-200` | `#D8D8D8` | "Neutrals" 4 | hairlines, input borders | DOCUMENTED p9 |
+| `--od-neutral-100` (`--od-text-on-dark`) | `#F3F3F3` | "Neutrals" 5 | body text on dark surfaces | DOCUMENTED p9 |
+| `--od-ink` (`--od-surface-dark`, `--od-text-on-light`) | `#161616` | not in palette | dark surface | DOCUMENT-OBSERVED p2 / p4 grounds |
+| `--od-paper` (`--od-surface-light`) | `#F7F7F5` | not in palette | light surface; the light logo colour | DOCUMENT-OBSERVED p2 / p4 |
+| `--od-logo-black` | `#000000` | — | `logo-black.svg` | DOCUMENT-OBSERVED p2 / p3 |
+| `--od-font-brand` | `"Söhne", "Inter", system-ui, …` | "Söhne" is the only typeface named (p7) | UI / brand type | DOCUMENTED family; commercial and not bundled → falls back to Inter (already loaded in `index.html`). **No weights, sizes or type scale are documented.** |
+| `--od-font-mono` | `"JetBrains Mono", ui-monospace, …` | — | code / telemetry | NOT DOCUMENTED — app convention |
+| `--od-logo-aspect` | `3.3986` | — | layout helper | MEASURED p2 |
+| `--od-logo-clear-space` / `--od-logo-clear-space-y` | `0.56` / `0.65` | — | fraction of lockup width (sides) / height (top & bottom) to keep clear | MEASURED-FROM-DIAGRAM p3 |
+| `--od-logo-icon-mark-ratio` | `0.65` | — | mark size inside the icon tile | MEASURED p4 |
+| minimum logo size | — | — | — | NOT DOCUMENTED — no token defined |
+
+### WCAG 2.x contrast (relative luminance per WCAG 2.1; AA normal text ≥ 4.5 : 1, AA large text ≥ 3 : 1)
+
+`#0A0B0B` is the app's existing page background (`--bg-dark`), not a guideline colour; it is included because the dark UI renders on it.
+
+| Foreground on background | Ratio | AA normal (≥ 4.5) | AA large (≥ 3) |
 |---|---|---|---|
-| `logo-light.svg` | **original** | `https://files.readme.io/69290e9-OD-full-Logo.svg` — the header logo of https://docs.on-demand.io (`<img alt="OnDemand AI" class="rm-Logo-img …" src=…>`), fetched 2026-09-18T10:02:56Z, 20,634 bytes, 571×190 | Full "OnDemand" wordmark with `fill="#FFFFFF"` (16 paths) — the light (white) variant for dark backgrounds; used in the app header and loading screen |
-| `logo-dark.svg` | **derived from** `https://files.readme.io/69290e9-OD-full-Logo.svg` | same fetch | Same mark with every `#FFFFFF` fill replaced by `#0F0F10` (docs brand `primary_color`, see §2) — the dark variant for light backgrounds, served via `<picture>` `(prefers-color-scheme: light)` |
-| `logo-light.png` / `logo-dark.png` | derived (ImageMagick 7 `convert -background none -density 300 … -resize 1142x380`) | from the two SVGs above | 1142×380, transparent background |
-| `mark.svg` | **original** | `https://app.on-demand.io/favicon.svg` (`<link rel="icon" href="/favicon.svg" type="image/svg+xml">` on https://app.on-demand.io), fetched 2026-09-18T10:02:57Z, 620 bytes, 48×48 | The circular "OD" mark, single path `fill="#1DAC89"`; used as the animated logo slot (`data-logo-gaze`) and SVG favicon |
-| `mark.png` | derived from `mark.svg` (`convert -density 600 … -resize 512x512`) | — | 512×512 transparent |
-| `favicon-32.png` | derived from `mark.png` (`-resize 32x32`) | — | 32×32. (The official `https://app.on-demand.io/favicon-32.png` and `https://on-demand.io/favicon-32.png` were also fetched, HTTP 200, but the served file is 48×48 — the upstream 32/48 names are swapped — so the icon was regenerated from the SVG mark at the correct size.) |
-| `apple-touch-icon.png` | derived from `mark.png` (`-resize 180x180 -gravity center -extent 180x180`) | — | 180×180 |
-| `favicon.ico` | derived from `mark.png` (`-define icon:auto-resize=16,32,48,64`) | — | 16/32/48/64 px. (Official ICOs fetched for reference: `https://on-demand.io/logo-light.ico` 200, 6 sizes up to 256 px; `https://files.readme.io/52eb008-favicon.ico` 200 — not copied because the SVG mark is the cleaner source.) |
+| `#F3F3F3` on `#161616` | 16.31 : 1 | PASS | PASS |
+| `#F3F3F3` on `#0A0B0B` | 17.76 : 1 | PASS | PASS |
+| `#3BB795` on `#0A0B0B` | 7.88 : 1 | PASS | PASS |
+| `#3BB795` on `#161616` | 7.23 : 1 | PASS | PASS |
+| `#ADEDD6` on `#0A0B0B` | 14.88 : 1 | PASS | PASS |
+| `#0A0B0B` on `#3BB795` (button text on accent) | 7.88 : 1 | PASS | PASS |
+| `#161616` on `#3BB795` | 7.23 : 1 | PASS | PASS |
+| `#F7F7F5` on `#0D5849` (light logo / text on brand green) | 7.80 : 1 | PASS | PASS |
+| `#EDFCF6` on `#0D5849` | 7.91 : 1 | PASS | PASS |
+| `#108B70` on `#F7F7F5` | 3.96 : 1 | **FAIL** | PASS |
+| `#0D5849` on `#F7F7F5` (green logo on light ground) | 7.80 : 1 | PASS | PASS |
+| `#5B5B5B` on `#F3F3F3` | 6.12 : 1 | PASS | PASS |
+| `#F7F7F5` on `#3BB795` (do not use light text on the accent) | 2.33 : 1 | **FAIL** | **FAIL** |
+| `#999999` on `#F3F3F3` (do not use on light ground) | 2.57 : 1 | **FAIL** | **FAIL** |
+| `#999999` on `#161616` | 6.35 : 1 | PASS | PASS |
 
-Other official assets fetched (HTTP 200, 2026-09-18T10:02:57Z) but not shipped: `https://app.on-demand.io/thumbnail.png` (679×354 og image), `https://on-demand.io/og-thumbnail.png` (1200×630), `https://files.readme.io/4c9cf4b-small-ondemand.png` (80×80). Pages inspected: `https://on-demand.io` (200, 10:02:37Z), `https://app.on-demand.io` (200, 10:02:38Z), `https://docs.on-demand.io` (200, 10:02:39Z), `https://on-demand.io/assets/index-VMQMQSoh.css` (200, 10:02:58Z). `public/logo.svg` (the previous mark) is kept only as the `logoGaze` fallback asset; its `<title>` now reads "OnDemand Spatial Intelligence (legacy mark)" and nothing references it.
+## 3. How the app uses the files
 
-## 2. Brand colour tokens (CSS variables in `src/ui/styles/foundation.css` `:root`)
+Asset-to-slot contract (the markup itself lives in `index.html` and `src/ui/templates/*.html`):
 
-| Token | Hex | Source (exact) | Applied to |
-|---|---|---|---|
-| `--brand-500` / `--accent` | `#1DAC89` | https://on-demand.io/assets/index-VMQMQSoh.css — Tailwind utilities `.bg-brand-500\/10 … \/70 {background-color:#1dac89…}` (13 occurrences); also `https://app.on-demand.io/favicon.svg` `<path … fill="#1DAC89">` | accent colour everywhere the UI previously used `#00d4ff` / `rgba(0,212,255,…)` (buttons, dividers, glows, active states), primary button background |
-| `--brand-300` | `#5ED8B2` | same CSS — `.border-brand-300\/20 … {border-color:#5ed8b2…}` and gradient `linear-gradient(180deg,#5ED8B2,#0B9F80)` | title accent ("Spatial Intelligence"), primary button hover, replaces the former `rgba(0,246,255,…)` glow |
-| `--brand-600` | `#0B9F80` | same CSS — `linear-gradient(180deg,#5ED8B2,#0B9F80)` and `linear-gradient(256.59deg,#0B9F80 26.48%,#0A4639 78.33%)` | reserved (gradients) |
-| `--brand-900` | `#0A4639` | same CSS — gradient end `#0A4639 78.33%` | reserved (gradients) |
-| `--brand-ink` / `--bg-dark` | `#0A0B0B` | same CSS — `.bg-\[\#0A0B0B\]\/60|80|90 {background-color:#0a0b0b…}` (site/header background) | page background, header background (`--header-bg: rgba(10,11,11,0.85)`), glass panels, primary button text, `<meta name="theme-color">` |
-| docs primary | `#0F0F10` | https://docs.on-demand.io page config `"brand":{"primary_color":"#0f0f10"` (readme.io project settings embedded in the HTML) | fill colour of the derived `logo-dark.svg` |
-| docs link | `#4E4E4E` | same page config `"link_color":"#4e4e4e"` | not applied (too low contrast on dark UI) |
-
-Text colours unchanged: `--text-primary: #E8EAED`, `--text-secondary: rgba(232,234,237,0.5)`.
-
-### WCAG AA contrast (normal text ≥ 4.5:1)
-
-| Pair | Ratio | Result |
+| Slot | File(s) | Notes |
 |---|---|---|
-| `#E8EAED` text on `#0A0B0B` header/page background | **16.35:1** | AA/AAA |
-| `#1DAC89` accent text on `#0A0B0B` | **6.86:1** | AA |
-| `#5ED8B2` title accent on `#0A0B0B` | **11.21:1** | AA/AAA |
-| Primary button: `#0A0B0B` text on `#1DAC89` background | **6.86:1** | AA (white text on `#1DAC89` would be 2.87:1 → rejected, hence dark ink on the button) |
-| Primary button hover: `#0A0B0B` on `#5ED8B2` | **11.21:1** | AA/AAA |
+| Header lockup | `<picture><source srcset="/brand/logo-dark.svg" media="(prefers-color-scheme: light)"><img src="/brand/logo-light.svg" alt="…"></picture>` | Light off-white lockup on the dark UI; the green lockup only when the OS asks for a light scheme. Both files share the same viewBox, so the swap does not reflow. |
+| `h1` logo slot (animated mark) | `/brand/mark-light.svg` | The bare mark, no tile — it sits directly on the dark header. Use `mark-dark.svg` on a light surface. |
+| Favicons | `/brand/mark.svg` (`type="image/svg+xml"`), `/brand/favicon.ico` (`sizes="any"`), `/brand/favicon-32.png`, `/brand/apple-touch-icon.png` (180), `/brand/site.webmanifest` → `android-chrome-192/512.png` | All are the p4 icon version (mark on a green tile). `theme_color` `#0D5849`. |
+| Social preview | `/brand/og-image.png` (1200 × 630, `og:image` / `twitter:image`) | Lockup on `#161616`, no text. |
+| Print / monochrome | `/brand/logo-black.svg` | As printed on p2. |
 
-## 3. What changed in the UI
+Sizing: keep the lockup's aspect (`--od-logo-aspect` 3.3986) — set only its height and let the width follow; never stretch (p5 "The logo proportions should be kept intact").
 
-`index.html` (title, description/og/twitter meta, theme-color, favicon + apple-touch-icon links to `/brand/*`), `src/ui/templates/scene-chrome.html` (header: `<picture>` logo-light/logo-dark by colour scheme + mark + wordmark text "OnDemand Spatial Intelligence", subtitle "POWERED BY ONDEMAND"), `src/ui/templates/hud-loading.html` (loading screen), `src/ui/styles/*.css` + `style.css` (brand tokens; every `#00d4ff` / `rgba(0,212,255,…)` / `rgb(0 212 255 / …)` / `rgba(0,246,255,…)` literal replaced by the brand values), `package.json` (`name: ondemand-spatial-intelligence`, description), `package-lock.json` root name, the 13 self-referencing package imports (`ondemand-spatial-intelligence/…`, they must match the package name), user-visible strings in `src/main.js` and `src/voice/realtimeViewport.js`, README.md and the user-facing docs under `docs/*.md` (product-name prose). Tests updated because they asserted user-facing values: `src/cockpitMarkup.test.mjs`, `src/panelStackLayout.test.mjs` (accent colour literals), `src/overpassProxy.test.mjs`, `src/tooling/nominatimSearchRoute.test.mjs` (User-Agent now `ondemand-spatial-intelligence/<version>`), plus the package-name import specifiers in 10 test files.
+## 4. Rules
 
-## 4. Intentionally unchanged internal identifiers
+- **Clear space (MEASURED-FROM-DIAGRAM, p3).** Keep at least **0.56 × the lockup width** free on the left and right and **0.65 × the lockup height** free above and below. The diagram draws a 150 pt band beside a 269.7 pt-wide lockup and 50–54 pt bands above/below a 79.3 pt-tall lockup, each band holding a 55 %-scaled ghost copy of the lockup; no numeric rule is printed. Measured from the lockup's own edges to the outer guides the margins are 0.60–0.61 W and 0.73–0.74 H, so the tokens are the tighter of the two readings — treat them as minimums.
+- **Icon version (DOCUMENTED, p4).** "Icon version is used wherever long version would not be recognizable because of size or where icon version is visually more appealing. Example: Social Media Profile Icons." The mark sits centred on a square tile at ≈ 65 % of the tile (p4 dark tile; the light tile shows 69 %). Documented tile pairs: `#F7F7F5` mark on `#161616`, `#161616` mark on `#F7F7F5`. The green tile + 20 % radius of `mark.svg` is this repo's derivation.
+- **Minimum size.** NOT DOCUMENTED — no numeric minimum exists on any page. The only trigger is p4's qualitative one: switch to the icon version when the wordmark would no longer be recognizable at the rendered size. No pixel threshold is invented here.
+- **Colour variants.** The guideline shows the lockup only in `#000000` on `#F7F7F5`, `#F7F7F5` on `#161616`, and the mark in `#161616` on `#F7F7F5`. The green `#0D5849` lockup/mark is taken from the supplied PNG assets; use it on light grounds (7.80 : 1) and never place light text on `#3BB795` (2.33 : 1).
+- **Don'ts (DOCUMENTED, p5, verbatim captions):** "Not enough contrast between background and logo" · "The logo proportions should be kept intact" · "The logo should not be rotated" · "The logo should have enough space around it".
+- **Typography.** The only documented typeface is Söhne (p7). It is commercial and not bundled; the token stack falls back to Inter. No weights, sizes or scale are documented, so the app's existing type scale is an app decision, not a brand rule.
 
-These are wired to persisted user state, the Vercel project, the OnDemand dashboard, or upstream repositories; renaming them would break behaviour or provenance. They remain the only matches of `grep -rniE "god'?s[ -]?eye"` outside `docs/audit/`.
+## 5. Retained internal identifiers (intentionally unchanged)
 
-| Identifier | Where | Reason |
-|---|---|---|
-| `GODS_EYE_FLOW_VERSION` (env var name) | `server/ondemand/config.js`, `api/ondemand/_config.js`, `.env.example`, `docs/ONDEMAND_PROXY_DESIGN.md`, tests | provisioned on the Vercel project (env id `usC3wgbut65gTkaR`) |
-| `GodsEye Advanced Spatial Workflow` (workflow name, id `6aace534859f7b0abb53d99a`) | `server/ondemand/workflow-definition.js`, `src/registry/capabilities.json`, `docs/ondemand-workflows/*` | live Agents Flow Builder workflow; renaming would desync the export and the dashboard |
-| `GodsEye Spatial Intelligence Agent`, skill slugs `godseye-*` | `src/registry/capabilities.json`, `docs/ondemand-skills/*`, `docs/audit/dashboard-registration-pack.md` | dashboard registration identifiers (pending) |
-| `godsEyeView.*` localStorage keys (`sceneProject.v2`, `cctv.calibration.v2`, `v8.panelPos.*`, `v6.panelCollapsed.*`, `voiceCost.*`, `cockpitWeatherEffects.enabled`) | `src/scenes/director.js`, `src/layers/cctv/policy.js`, `src/ui/panelPositionControls.js`, `src/voice/realtimePreferences.js`, `src/cockpitCloudEffects.js`, documented in `docs/KNOWN-ISSUES.md`, `docs/SCENE-DOCUMENT.md`, `docs/CURRENT-STATE.md` | persisted user data — renaming would wipe saved scenes, calibrations and layouts |
-| `window.__godsEyeView` debug global | `src/app/tools.js`, `src/voice/*.js`, `docs/APPLICATION.md`, QA scripts/tests | debugging contract used by the QA tooling |
-| `godsEyeView_<name>` post-processing stage names | `src/ui/visualEffects.js`, `src/layers/transit/selection.js` | internal Cesium stage identifiers |
-| `gods-eye-view-transit` / `gods-eye-view-transit-proxy/1.0` client identifiers, `Digitraffic-User: gods-eye-view` header | `src/data/transitFeeds.js`, `src/data/transitProxy.js`, `DATA_SOURCES.md` | registered `ET-Client-Name` / User-Agent / Digitraffic client values agreed with the feed operators |
-| `gods-eye-view` in GitHub / Pinokio URLs and the `bilawalsidhu/gods-eye-view` repository slug | `package.json` (`homepage`, `repository`, `bugs`), README/CONTRIBUTING/SECURITY badges and clone instructions, `.github/ISSUE_TEMPLATE/config.yml`, `docs/MAINTAINER_WORKFLOW.md`, `docs/CURRENT-STATE.md`, `docs/media/README.md`, `src/registry/capabilities.json` license URL, UA `+https://github.com/bilawalsidhu/gods-eye-view` | real upstream repository location (the fork is `mk42-ai/gods-eye-view`) |
-| `godseye-contract-test-*` / `godseye-selftest-*` externalUserId prefixes, `x-godseye` OpenAPI extension key | `server/ondemand/contract-steps.js`, `api/ondemand/selftest.js`, `docs/ondemand-tools/*.json`, `docs/ONDEMAND_API_CURRENT.md` §17 | recorded live values / tool-definition schema key |
-| `docs/audit/*`, `docs/ondemand-workflows/*` historical records | — | audit history is immutable by policy |
-| `scripts/*` QA/tooling messages | `scripts/qa-*.mjs`, `scripts/setup-doctor.mjs`, `scripts/track-regression.mjs` | developer tooling, not the shipped UI |
+The product name everywhere else is **"OnDemand Spatial"** (package `ondemand-spatial`, agent "OnDemand Spatial Intelligence Agent", workflow "OnDemand Spatial Advanced Workflow"). The following identifiers keep their historical `godsEyeView` / `gods-eye-view` spelling because they are wired to persisted user data, external registrations or upstream provenance:
+
+- `godsEyeView.*` localStorage keys (`sceneProject.v2`, `cctv.calibration.v2`, `v8.panelPos.*`, `v6.panelCollapsed.*`, `voiceCost.*`, `cockpitWeatherEffects.enabled`) — persisted user data;
+- `window.__godsEyeView` debug global — QA tooling contract;
+- `godsEyeView_<name>` Cesium post-processing stage names;
+- `gods-eye-view-transit` / `gods-eye-view-transit-proxy/1.0` ET-Client-Name + `Digitraffic-User: gods-eye-view` — client identifiers registered with feed operators;
+- `bilawalsidhu/gods-eye-view` upstream repository references;
+- `GODS_EYE_FLOW_VERSION` — kept as an accepted alias (checked first) of the canonical `ONDEMAND_SPATIAL_FLOW_VERSION`.

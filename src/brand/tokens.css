@@ -1,0 +1,56 @@
+/*
+ * OnDemand brand tokens — extracted from the uploaded "BrandGuidelines.pdf"
+ * (mediaId 6a27c273a71063f6d0f8a6c2, sha256 2992badc47a6b137e3337124de45ec21c35876700e52614e88171bb008c5fe6a,
+ * 9 pages 1920×1080, retrieved 2026-09-18T10:34:42Z; five later copies of the same file are byte-identical).
+ * Evidence ledger with page references and origins: docs/brand/BRAND_SOURCE.md. Usage notes: docs/BRANDING.md.
+ *
+ * Evidence labels used in the per-token comments:
+ *   DOCUMENTED            — printed as text in the guideline (p9 colour list, p7 typeface name).
+ *   DOCUMENT-OBSERVED     — read from the guideline's own drawings (page grounds / logo fills), not from a named palette.
+ *   SAMPLED from PNG      — measured from the supplied logo PNG assets.
+ *   MEASURED-FROM-DIAGRAM — taken from the geometry of the p3 clear-space diagram (no numeric text exists).
+ *   DERIVED / NOT DOCUMENTED — this repo's own choice; the guideline is silent.
+ *
+ * The guideline names NO per-colour brand names and NO usage roles — only the two group labels "Primary" and
+ * "Neutrals" (p9). Every role below ("darkest brand green", "accent", "surface" …) is assigned by this repo.
+ */
+:root {
+  /* ---- Primary (p9 group label "Primary", listed darkest → lightest; names not given in the guideline) ---- */
+  --od-green-900: #0D5849; /* Primary 1 — darkest brand green. Logo colour of the supplied PNG assets (SAMPLED ink of logo_green.png / logo_header.png = #0D5849, coincides with this documented value); use for primary buttons on light ground, the favicon tile and logo-dark.svg. DOCUMENTED: BrandGuidelines.pdf p9 "Primary" HEX #0D5849 */
+  --od-green-700: #108B70; /* Primary 2 — mid-dark green. Hover/secondary green on light ground, gradient stop; only 3.96:1 on #F7F7F5 → large text / non-text use only. DOCUMENTED: BrandGuidelines.pdf p9 "Primary" HEX #108B70 */
+  --od-green-500: #3BB795; /* Primary 3 — bright green. The accent on the dark UI (7.88:1 on #0A0B0B, 7.23:1 on #161616); use dark ink (#161616 / #0A0B0B) on top of it, never light text (2.33:1). DOCUMENTED: BrandGuidelines.pdf p9 "Primary" HEX #3BB795 */
+  --od-green-200: #ADEDD6; /* Primary 4 — pale mint. Soft accent / highlighted text on dark ground (14.88:1 on #0A0B0B), tinted chips on light ground with #161616 text. DOCUMENTED: BrandGuidelines.pdf p9 "Primary" HEX #ADEDD6 */
+  --od-green-50:  #EDFCF6; /* Primary 5 — near-white mint. Tinted panel / callout background on light ground, text on #0D5849 (7.91:1). DOCUMENTED: BrandGuidelines.pdf p9 "Primary" HEX #EDFCF6 */
+
+  /* ---- Neutrals (p9 group label "Neutrals", listed darkest → lightest; names not given in the guideline) ---- */
+  --od-neutral-600: #5B5B5B; /* Neutral 1 — dark grey. Secondary text on light ground (6.12:1 on #F3F3F3). DOCUMENTED: BrandGuidelines.pdf p9 "Neutrals" HEX #5B5B5B */
+  --od-neutral-400: #999999; /* Neutral 2 — mid grey. Muted text on DARK ground only (6.35:1 on #161616; fails on light ground, 2.57:1 on #F3F3F3), icons, placeholder text. DOCUMENTED: BrandGuidelines.pdf p9 "Neutrals" HEX #999999 */
+  --od-neutral-300: #C6C6C6; /* Neutral 3 — light grey. Borders and dividers on light ground, disabled text on dark ground. DOCUMENTED: BrandGuidelines.pdf p9 "Neutrals" HEX #C6C6C6 */
+  --od-neutral-200: #D8D8D8; /* Neutral 4 — lighter grey. Hairlines, input borders, inactive tracks. DOCUMENTED: BrandGuidelines.pdf p9 "Neutrals" HEX #D8D8D8 */
+  --od-neutral-100: #F3F3F3; /* Neutral 5 — off-white. Body text on dark surfaces (16.31:1 on #161616, 17.76:1 on #0A0B0B), light card surface. DOCUMENTED: BrandGuidelines.pdf p9 "Neutrals" HEX #F3F3F3 */
+
+  /* ---- Grounds observed in the guideline itself (NOT part of the named palette) ---- */
+  --od-ink:        #161616; /* Dark ground. Fill of the right-hand page half behind the light logo (p2) and of the dark icon tile (p4); also the mark colour on the light icon tile (p4). DOCUMENT-OBSERVED: BrandGuidelines.pdf p2 rect (960,0)-(1920,1080) fill #161616; p4 tile (401,515)-(559,676) fill #161616 */
+  --od-paper:      #F7F7F5; /* Light ground AND the light logo variant colour. Fill of the p2 left half / p3 / p4 / p5 page grounds and of the p2 right-half lockup. DOCUMENT-OBSERVED: BrandGuidelines.pdf p2 rect (0,0)-(960,1080) fill #F7F7F5; p2 lockup items 16–24 fill #F7F7F5 */
+  --od-logo-black: #000000; /* Fill of the lockup as printed on the light half of p2 and on the p3 clear-space diagram (logo-black.svg). DOCUMENT-OBSERVED: BrandGuidelines.pdf p2 drawing items 26–34 fill #000000; p3 items 11–19 fill #000000 */
+
+  /* ---- Semantic aliases (roles assigned by this repo — the guideline documents none) ---- */
+  --od-brand:         var(--od-green-900); /* Brand colour = Primary 1 #0D5849. DERIVED alias (role assigned by this repo). */
+  --od-accent:        var(--od-green-500); /* Accent on the dark UI = Primary 3 #3BB795 — 7.88:1 on the app background #0A0B0B, 7.23:1 on #161616 (WCAG AA/AAA normal text); pair with dark ink on filled controls. DERIVED alias. */
+  --od-accent-soft:   var(--od-green-200); /* Soft accent = Primary 4 #ADEDD6 — 14.88:1 on #0A0B0B. DERIVED alias. */
+  --od-surface-dark:  var(--od-ink);       /* Dark surface = #161616 (the guideline's own dark ground). DERIVED alias. */
+  --od-surface-light: var(--od-paper);     /* Light surface = #F7F7F5 (the guideline's own light ground). DERIVED alias. */
+  --od-text-on-dark:  var(--od-neutral-100); /* Text on dark surfaces = Neutral 5 #F3F3F3 — 16.31:1 on #161616. DERIVED alias. */
+  --od-text-on-light: var(--od-ink);       /* Text on light surfaces = #161616 — 16.87:1 on #F7F7F5 (p4 uses #161616 for the mark on the light tile). DERIVED alias. */
+
+  /* ---- Typography ---- */
+  --od-font-brand: "Söhne", "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; /* "Söhne" is the ONLY typeface the guideline names (DOCUMENTED: BrandGuidelines.pdf p7 — the word "Söhne" set at 194 pt plus a "Download Font" label). Söhne is a commercial Klim Type Foundry family and is NOT bundled in this repo, so the stack falls back to Inter, which index.html already loads from Google Fonts. NO weights, sizes, line-heights or type scale are documented anywhere in the PDF (p6–7 contain only the family name). */
+  --od-font-mono:  "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; /* NOT DOCUMENTED — app convention only (index.html already loads JetBrains Mono); the guideline names no monospace face. */
+
+  /* ---- Logo geometry ---- */
+  --od-logo-aspect: 3.3986; /* Width ÷ height of the full lockup (mark + stacked "ON"/"DEMAND"), tight bbox 269.665 × 79.346 pt on p2; the SVG viewBox 272.839 × 82.52 adds 1.587 pt (2 % of the height) on every side. MEASURED: BrandGuidelines.pdf p2 drawing items 26–34 (PyMuPDF get_drawings). */
+  --od-logo-clear-space:   0.56; /* Minimum clear space LEFT and RIGHT of the lockup as a fraction of the lockup WIDTH. MEASURED-FROM-DIAGRAM: BrandGuidelines.pdf p3 — the red guide bands are 150 pt wide beside a 269.7 pt lockup (0.556 W) and each band contains a 55 %-scaled grey copy of the lockup (148.3 pt wide); no numeric rule is printed. */
+  --od-logo-clear-space-y: 0.65; /* Minimum clear space ABOVE and BELOW the lockup as a fraction of the lockup HEIGHT. MEASURED-FROM-DIAGRAM: BrandGuidelines.pdf p3 — bands of 54 pt (top) / 50 pt (bottom) beside a 79.3 pt-tall lockup (0.63–0.68 H); each band holds a 43.7 pt-tall 55 %-scaled copy. */
+  --od-logo-icon-mark-ratio: 0.65; /* Icon version: bare mark ≈ 65 % of the square tile, centred. MEASURED: BrandGuidelines.pdf p4 dark tile 158 × 161 pt with a 103 pt mark (0.65 / 0.64); the light tile holds a 109 pt mark (0.69). The 20 % corner radius of mark.svg is this repo's choice — p4 shows square tiles. */
+  /* --od-logo-min-size: NOT DOCUMENTED — the guideline gives no numeric minimum size; p4 only says the icon version is used "wherever long version would not be recognizable because of size". No token is defined on purpose. */
+}

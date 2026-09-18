@@ -1,29 +1,37 @@
 /* ═══════════════════════════════════════════════
-   OnDemand Spatial Intelligence — Dark UI (OnDemand brand tokens, see docs/BRANDING.md)
+   OnDemand Spatial — Dark UI (OnDemand brand tokens, see docs/BRANDING.md)
    Apple meets Blade Runner
    ═══════════════════════════════════════════════ */
 
 :root {
-  /* OnDemand brand tokens — sources in docs/BRANDING.md */
-  --brand-500: #1dac89; /* on-demand.io .bg-brand-500, app.on-demand.io favicon.svg fill */
-  --brand-300: #5ed8b2; /* on-demand.io .border-brand-300 */
-  --brand-600: #0b9f80; /* on-demand.io gradient linear-gradient(180deg,#5ED8B2,#0B9F80) */
-  --brand-900: #0a4639; /* on-demand.io gradient end */
-  --brand-ink: #0a0b0b; /* on-demand.io .bg-[#0A0B0B] page/header background */
-  --header-bg: rgba(10, 11, 11, 0.85);
+  /* OnDemand brand tokens — official brand guidelines (docs/BRANDING.md,
+     palette p9). The single source of truth is src/brand/tokens.css
+     (--od-green-900/700/500/200/50, --od-neutral-*, --od-ink, --od-paper),
+     imported first by style.css; the hex fallbacks below mirror it so this
+     sheet still stands alone, and the legacy variable NAMES stay so every
+     consuming sheet keeps working. */
+  --brand-500: var(--od-green-500, #3bb795); /* Primary 3 — accent */
+  --brand-300: var(
+    --od-green-200,
+    #adedd6
+  ); /* Primary 4 — soft accent, hover */
+  --brand-600: var(--od-green-700, #108b70); /* Primary 2 */
+  --brand-900: var(--od-green-900, #0d5849); /* Primary 1 — brand green */
+  --brand-ink: var(--od-ink, #161616); /* the guideline's dark ground */
+  --header-bg: rgba(22, 22, 22, 0.85);
   --btn-primary-bg: var(--brand-500);
-  --btn-primary-text: var(--brand-ink);
+  --btn-primary-text: var(--brand-ink); /* #161616 on #3BB795 ≈ 7.5:1 */
   --btn-primary-hover: var(--brand-300);
-  --bg-dark: #0a0b0b;
-  --glass-bg: rgba(10, 11, 11, 0.78);
+  --bg-dark: var(--od-ink, #161616);
+  --glass-bg: rgba(22, 22, 22, 0.78);
   --glass-border: rgba(255, 255, 255, 0.08);
   --glass-border-hover: rgba(255, 255, 255, 0.15);
-  --accent: #1dac89;
-  --accent-dim: rgba(29, 172, 137, 0.15);
-  --accent-glow: rgba(29, 172, 137, 0.4);
-  --text-primary: #e8eaed;
-  --text-secondary: rgba(232, 234, 237, 0.5);
-  --text-dim: rgba(232, 234, 237, 0.3);
+  --accent: var(--od-green-500, #3bb795);
+  --accent-dim: rgba(59, 183, 149, 0.15);
+  --accent-glow: rgba(59, 183, 149, 0.4);
+  --text-primary: var(--od-neutral-100, #f3f3f3); /* Neutral 5 */
+  --text-secondary: rgba(243, 243, 243, 0.55);
+  --text-dim: rgba(243, 243, 243, 0.3);
   --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   --panel-radius: 16px;
@@ -403,7 +411,7 @@ body:has(.data-toggle-row[data-layer-id='alpr-cameras'] .data-toggle-btn.active)
     0 8px 32px rgba(0, 0, 0, 0.5),
     0 0 0 1px rgba(255, 255, 255, 0.03) inset,
     0 1px 0 rgba(255, 255, 255, 0.06) inset,
-    0 0 20px rgba(29, 172, 137, 0.08);
+    0 0 20px rgba(59, 183, 149, 0.08);
   backdrop-filter: blur(24px) saturate(1.4);
   -webkit-backdrop-filter: blur(24px) saturate(1.4);
   font-family: var(--font-mono);
@@ -415,8 +423,8 @@ body:has(.data-toggle-row[data-layer-id='alpr-cameras'] .data-toggle-btn.active)
   height: 34px;
   flex: 0 0 auto;
   color: var(--accent);
-  background: rgba(29, 172, 137, 0.06);
-  border: 1px solid rgba(29, 172, 137, 0.28);
+  background: rgba(59, 183, 149, 0.06);
+  border: 1px solid rgba(59, 183, 149, 0.28);
   border-radius: var(--btn-radius);
   font-family: var(--font-mono);
   font-size: 10px;
@@ -427,7 +435,7 @@ body:has(.data-toggle-row[data-layer-id='alpr-cameras'] .data-toggle-btn.active)
 #gev-voice-button:hover {
   color: #ffffff;
   border-color: var(--accent);
-  box-shadow: 0 0 12px rgba(29, 172, 137, 0.22);
+  box-shadow: 0 0 12px rgba(59, 183, 149, 0.22);
 }
 
 .gev-voice-readout {

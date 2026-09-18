@@ -1,0 +1,20 @@
+{
+  "name": "OnDemand Spatial",
+  "short_name": "OD Spatial",
+  "icons": [
+    {
+      "src": "/brand/android-chrome-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/brand/android-chrome-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "theme_color": "#0D5849",
+  "background_color": "#161616",
+  "display": "standalone",
+  "start_url": "/"
+}
