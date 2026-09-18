@@ -3,6 +3,7 @@ import {
   AIS_FIRST_CONNECT_GRACE_MS,
   AIS_FIRST_CONNECT_LABEL,
   AIS_HEALTHY_STATUSES,
+  AIS_NON_FAULT_STATUSES,
 } from './policy.js';
 
 export function createLifecycle({
@@ -76,7 +77,14 @@ export function createLifecycle({
   }
 
   function isGraceEligibleTransport(status) {
-    return AIS_HEALTHY_STATUSES.has(status) || status === 'connecting';
+    return (
+      AIS_HEALTHY_STATUSES.has(status) ||
+      status === 'connecting' ||
+      // 'empty' / 'degraded' (serverless collector) are answers, not faults:
+      // a zero-row poll in either keeps the first-connect grace running
+      // instead of tripping UNAVAILABLE.
+      AIS_NON_FAULT_STATUSES.has(status)
+    );
   }
 
   function isDefinitiveTransportFailure(status) {
@@ -117,6 +125,12 @@ export function createLifecycle({
     state.feed.firstConnectDeadline = null;
     state.feed.firstConnectTimer = null;
     state.feed.abort = null;
+    state.feed.providerStatus = null;
+    state.feed.providerError = null;
+    state.feed.source = null;
+    state.feed.collectorMode = null;
+    state.feed.sceneEmpty = false;
+    state.feed.statusMessage = null;
     state.billboardCollection = null;
     state.records.all = [];
     state.records.byMmsi = new Map();

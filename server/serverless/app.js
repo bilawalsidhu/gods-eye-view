@@ -102,6 +102,12 @@ const SKIP_ALWAYS = new Set(['gev-key-setup']);
 //    inert (it only returns the plugin descriptor), so simply never calling
 //    ITS `.configureServer()` is sufficient to prevent both the mount and
 //    the timer/socket — nothing needs to be undone afterwards.
+//    `/api/ais-live` is instead served by 'ais-serverless-proxy'
+//    (server/providers/vessels/ais-serverless.js): a request-driven, bounded
+//    per-scene collector (≤ AISSTREAM_COLLECT_MS on the socket, then close)
+//    with an edge-cached snapshot — and, without AISSTREAM_API_KEY, an
+//    AISHub fallback or a clearly labelled demo replay — mounted below
+//    BEFORE the provider loop so it owns the route unconditionally.
 const SKIP_WHEN_SERVERLESS = new Set(['ais-live-proxy']);
 
 /**
@@ -116,9 +122,14 @@ async function createServerlessApi({ serverlessMode: explicitMode } = {}) {
   if (serverlessMode) ensureWritableCwd();
 
   // Dynamic on purpose — see ensureWritableCwd's comment above.
-  const [{ localProviderPlugins }, { apiNotFoundPlugin }] = await Promise.all([
+  const [
+    { localProviderPlugins },
+    { apiNotFoundPlugin },
+    { aisServerlessProxy },
+  ] = await Promise.all([
     import('../providers/local.js'),
     import('../standalone/api-not-found.js'),
+    import('../providers/vessels/ais-serverless.js'),
   ]);
 
   const router = createMountRouter();
@@ -135,13 +146,13 @@ async function createServerlessApi({ serverlessMode: explicitMode } = {}) {
     // Registered BEFORE the provider layers below, so they intercept these
     // exact mounts unconditionally (Connect walks layers in registration
     // order and stops at the first one that responds without calling next()).
-    router.use(
-      '/api/ais-live',
-      unavailableInServerless(
-        'ais-live',
-        'Live vessel relay (AISStream WebSocket) is unavailable in the serverless deployment',
-      ),
-    );
+    //
+    // /api/ais-live (+ /track): the bounded per-scene AISStream collector
+    // replaces the persistent relay skipped via SKIP_WHEN_SERVERLESS. Its
+    // configureServer() only registers the middleware — no timer, no socket
+    // until a request arrives, and every socket it opens is closed within
+    // the same invocation.
+    aisServerlessProxy().configureServer(fakeServer);
     router.use(
       '/api/realtime/token',
       unavailableInServerless(

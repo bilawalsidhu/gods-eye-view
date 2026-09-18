@@ -26,10 +26,30 @@ export function normalizeVesselObservation(row, reference = null) {
   };
 }
 
+/** Provenance names the serverless collector reports per mode (server/providers/vessels/ais-serverless.js). */
+const COLLECTOR_SOURCES = Object.freeze({
+  demo: 'Demo replay',
+  aishub: 'AISHub',
+});
+
+/**
+ * Source label for a vessel payload: an explicit caller override wins, then
+ * the collector mode (demo replay / AISHub fallback must never read as
+ * AISStream), then the payload's own `source`, then the default.
+ */
+export function vesselPayloadSource(payload, explicit) {
+  if (typeof explicit === 'string' && explicit.trim()) return explicit;
+  const mode = payload?.collector?.mode;
+  if (COLLECTOR_SOURCES[mode]) return COLLECTOR_SOURCES[mode];
+  if (typeof payload?.source === 'string' && payload.source.trim())
+    return payload.source.trim();
+  return 'AISStream';
+}
+
 export function vesselSnapshot(
   payload,
   {
-    source = 'AISStream',
+    source,
     coverage = 'received AIS positions',
     referenceFor = (row) => String(row.mmsi || row.input_identifier || ''),
   } = {},
@@ -37,6 +57,7 @@ export function vesselSnapshot(
   if (!Array.isArray(payload?.rows))
     throw new LiveSourceError('malformed', 'Malformed vessel response');
   const rows = payload.rows;
+  const resolvedSource = vesselPayloadSource(payload, source);
   const records = [],
     ids = new Set();
   for (const row of rows) {
@@ -56,7 +77,7 @@ export function vesselSnapshot(
     );
   return {
     records,
-    source,
+    source: resolvedSource,
     coverage,
     complete: records.length === rows.length && !payload?.refreshing,
     rejectedCount: rows.length - records.length,
@@ -75,6 +96,17 @@ export function vesselSnapshot(
     silentForMs: finite(payload?.silentForMs),
     reconnectAttempt: finite(payload?.reconnectAttempt),
     rawRowCount: rows.length,
+    // Serverless collector provenance: which path produced the rows
+    // ('aisstream' | 'cache' | 'aishub' | 'demo' | 'idle'; null for the dev
+    // relay) and the guidance text for a legitimately empty scene.
+    collectorMode:
+      typeof payload?.collector?.mode === 'string'
+        ? payload.collector.mode
+        : null,
+    statusMessage:
+      typeof payload?.statusMessage === 'string' && payload.statusMessage.trim()
+        ? payload.statusMessage.trim()
+        : null,
   };
 }
 

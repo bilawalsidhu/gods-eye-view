@@ -2,6 +2,9 @@ export {
   PARTIAL_RETENTION_MS,
   SELECTED_PIN_REFRESHES,
   AIS_FIRST_CONNECT_LABEL,
+  AIS_NON_FAULT_STATUSES,
+  AIS_SCENE_HALF_WIDTH_DEG,
+  AIS_EMPTY_SCENE_MESSAGE,
 } from './recordPolicy.js';
 import { VESSEL_LABEL_GRID_PX } from '../../data/vesselLabels.js';
 
@@ -77,6 +80,11 @@ export const AIS_STATUS_REASON = {
   closed: 'feed disconnected',
   error: 'feed down',
   idle: 'feed idle',
+  // Serverless collector answers (server/providers/vessels/ais-serverless.js):
+  // neither is a fault — the ingestion turns 'empty' into guidance and a
+  // zero-row 'degraded' keeps the provider's own reason when it has one.
+  empty: 'no vessels in scene',
+  degraded: 'feed degraded',
 };
 
 /**
