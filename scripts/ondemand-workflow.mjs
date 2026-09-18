@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * scripts/ondemand-workflow.mjs — operator CLI for the GodsEye Advanced
- * Spatial Workflow on the OnDemand Agents Flow Builder.
+ * scripts/ondemand-workflow.mjs — operator CLI for the OnDemand Spatial
+ * Advanced Workflow on the OnDemand Agents Flow Builder.
  *
  * Uses ONLY the endpoints documented in docs/ONDEMAND_API_CURRENT.md §7.1
  * (base `https://api.on-demand.io/automation/api`, header `apikey`):
@@ -37,7 +37,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  buildGodsEyeWorkflowDefinition,
+  buildSpatialWorkflowDefinition,
   validateStructuredResponse,
   NODE_KEYS,
   WORKFLOW_NAME,
@@ -103,7 +103,7 @@ async function call(method, pathname, body) {
 }
 
 function buildBody() {
-  return buildGodsEyeWorkflowDefinition({
+  return buildSpatialWorkflowDefinition({
     actionSchemas: GEV_ACTION_SCHEMAS,
     tiers: TIER_DEFAULTS,
     fulfillmentEndpointId: config.fulfillmentEndpointId,

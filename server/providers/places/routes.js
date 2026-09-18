@@ -176,7 +176,7 @@ async function fetchRoute({
         // The endpoint is configured above; a redirect is the one way out of
         // it, so it is refused rather than followed.
         redirect: 'error',
-        headers: { 'User-Agent': 'ondemand-spatial-intelligence/dev (local)' },
+        headers: { 'User-Agent': 'ondemand-spatial/dev (local)' },
       }),
     );
     if (upstreamRes.status === 429) {

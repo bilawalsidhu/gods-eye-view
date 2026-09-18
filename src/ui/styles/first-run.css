@@ -25,7 +25,7 @@
   border-radius: 0.65rem;
   box-shadow:
     0 1.4rem 4.5rem rgba(0, 0, 0, 0.72),
-    0 0 2.5rem rgba(29, 172, 137, 0.09),
+    0 0 2.5rem rgba(59, 183, 149, 0.09),
     inset 0 0 0 1px rgba(255, 255, 255, 0.025);
   backdrop-filter: blur(28px) saturate(1.25);
   -webkit-backdrop-filter: blur(28px) saturate(1.25);
@@ -247,6 +247,29 @@
   color: rgba(54, 220, 255, 0.85);
 }
 
+/* Upstream credit line (src/ui/templates/welcome.html): small, muted, one
+   row under the footer — present, never competing with the mission tiles. */
+.first-run-credit {
+  margin: 0.4rem 0 0;
+  color: rgba(199, 225, 231, 0.42);
+  font-family: var(--font-mono);
+  font-size: 0.5rem;
+  letter-spacing: 0.04rem;
+  line-height: 1.35;
+}
+
+.first-run-credit a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: rgba(199, 225, 231, 0.3);
+  text-underline-offset: 0.12em;
+}
+
+.first-run-credit a:hover,
+.first-run-credit a:focus-visible {
+  color: rgba(225, 244, 248, 0.92);
+}
+
 /* Every surface that claims the screen hides the launcher. This list is the CSS
    half of the ESC arbitration: src/firstRunExperience.js watches these same
    classes and makes the launcher step aside, so a hidden card is never left
@@ -327,6 +350,9 @@ body.scene-playback-mode #first-run-launcher {
   }
   .first-run-footer {
     margin-top: 0.5rem;
+  }
+  .first-run-credit {
+    margin-top: 0.25rem;
   }
   .first-run-note {
     margin-top: 0.3rem;

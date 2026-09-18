@@ -10,6 +10,7 @@ import {
   DOCUMENTED_REASONING_MODES,
   TIER_DEFAULTS,
   FLOW_DEFAULTS,
+  FLOW_VERSION_ENV,
   tierDefaults,
   __reloadConfigForTests,
 } from './config.js';
@@ -38,6 +39,7 @@ const ENV_KEYS = [
   'ONDEMAND_REASONING_MODE',
   'ONDEMAND_REQUEST_TIMEOUT_MS',
   'GODS_EYE_FLOW_VERSION',
+  'ONDEMAND_SPATIAL_FLOW_VERSION',
 ];
 let savedEnv;
 
@@ -179,11 +181,13 @@ describe('server/ondemand/config.js — getConfig()', () => {
         'requestTimeoutMs',
         'tiers',
         'flowDefaults',
+        'flowVersionEnv',
       ].sort(),
     );
     assert.equal(cfg.apiKey, 'k-1');
     assert.equal(cfg.tiers, TIER_DEFAULTS);
     assert.equal(cfg.flowDefaults, FLOW_DEFAULTS);
+    assert.equal(cfg.flowVersionEnv, FLOW_VERSION_ENV);
     assert.deepEqual(Object.keys(cfg.baseUrls).sort(), [
       'automation',
       'chat',
@@ -344,26 +348,84 @@ describe('server/ondemand/config.js — TIER_DEFAULTS / tierDefaults() (benchmar
   });
 });
 
-describe('server/ondemand/config.js — flowVersion (GODS_EYE_FLOW_VERSION)', () => {
-  test('defaults to "1" (string, FLOW_DEFAULTS.flowVersion) when unset', () => {
+describe('server/ondemand/config.js — flowVersion (ONDEMAND_SPATIAL_FLOW_VERSION, alias GODS_EYE_FLOW_VERSION checked FIRST)', () => {
+  test('FLOW_VERSION_ENV is a frozen constant naming canonical, alias and the alias-first order', () => {
+    assert.ok(Object.isFrozen(FLOW_VERSION_ENV));
+    assert.ok(Object.isFrozen(FLOW_VERSION_ENV.order));
+    assert.deepEqual(FLOW_VERSION_ENV, {
+      canonical: 'ONDEMAND_SPATIAL_FLOW_VERSION',
+      alias: 'GODS_EYE_FLOW_VERSION',
+      order: ['GODS_EYE_FLOW_VERSION', 'ONDEMAND_SPATIAL_FLOW_VERSION', 'default'],
+    });
+    __reloadConfigForTests();
+    assert.equal(getConfig().flowVersionEnv, FLOW_VERSION_ENV);
+  });
+
+  test('defaults to "1" (string, FLOW_DEFAULTS.flowVersion) with source "default" when neither name is set', () => {
     __reloadConfigForTests();
     assert.equal(config.flowVersion, '1');
     assert.equal(config.flowVersion, FLOW_DEFAULTS.flowVersion);
     assert.equal(configSources().flowVersion, 'default');
+    assert.equal(getConfig().flowVersion, '1');
   });
 
-  test('an explicitly empty GODS_EYE_FLOW_VERSION still yields the default', () => {
+  test('alias only: honours GODS_EYE_FLOW_VERSION and names it as the source', () => {
+    process.env.GODS_EYE_FLOW_VERSION = '3';
+    __reloadConfigForTests();
+    assert.equal(config.flowVersion, '3');
+    assert.equal(configSources().flowVersion, 'GODS_EYE_FLOW_VERSION');
+    assert.equal(configSources().flowVersion, FLOW_VERSION_ENV.alias);
+  });
+
+  test('canonical only: honours ONDEMAND_SPATIAL_FLOW_VERSION and names it as the source', () => {
+    process.env.ONDEMAND_SPATIAL_FLOW_VERSION = '4';
+    __reloadConfigForTests();
+    assert.equal(config.flowVersion, '4');
+    assert.equal(configSources().flowVersion, 'ONDEMAND_SPATIAL_FLOW_VERSION');
+    assert.equal(configSources().flowVersion, FLOW_VERSION_ENV.canonical);
+  });
+
+  test('BOTH set with different values: the alias (already provisioned on Vercel) wins — alias-first', () => {
+    process.env.GODS_EYE_FLOW_VERSION = '3';
+    process.env.ONDEMAND_SPATIAL_FLOW_VERSION = '4';
+    __reloadConfigForTests();
+    assert.equal(config.flowVersion, '3');
+    assert.equal(configSources().flowVersion, 'GODS_EYE_FLOW_VERSION');
+    assert.equal(getConfig().sources.flowVersion, 'GODS_EYE_FLOW_VERSION');
+  });
+
+  test('a whitespace-only alias falls through to the canonical name', () => {
     process.env.GODS_EYE_FLOW_VERSION = '   ';
+    process.env.ONDEMAND_SPATIAL_FLOW_VERSION = '4';
+    __reloadConfigForTests();
+    assert.equal(config.flowVersion, '4');
+    assert.equal(configSources().flowVersion, 'ONDEMAND_SPATIAL_FLOW_VERSION');
+  });
+
+  test('explicitly empty alias AND canonical still yield the default (never an empty label)', () => {
+    process.env.GODS_EYE_FLOW_VERSION = '   ';
+    process.env.ONDEMAND_SPATIAL_FLOW_VERSION = '';
     __reloadConfigForTests();
     assert.equal(config.flowVersion, '1');
     assert.equal(configSources().flowVersion, 'default');
   });
 
-  test('honours GODS_EYE_FLOW_VERSION when set', () => {
-    process.env.GODS_EYE_FLOW_VERSION = '3';
-    __reloadConfigForTests();
-    assert.equal(config.flowVersion, '3');
-    assert.equal(configSources().flowVersion, 'GODS_EYE_FLOW_VERSION');
+  test('sources.flowVersion is always one of FLOW_VERSION_ENV.order (names only, never a value)', () => {
+    for (const env of [
+      {},
+      { GODS_EYE_FLOW_VERSION: '3' },
+      { ONDEMAND_SPATIAL_FLOW_VERSION: '4' },
+      { GODS_EYE_FLOW_VERSION: '3', ONDEMAND_SPATIAL_FLOW_VERSION: '4' },
+    ]) {
+      delete process.env.GODS_EYE_FLOW_VERSION;
+      delete process.env.ONDEMAND_SPATIAL_FLOW_VERSION;
+      Object.assign(process.env, env);
+      __reloadConfigForTests();
+      const source = configSources().flowVersion;
+      assert.ok(FLOW_VERSION_ENV.order.includes(source), source);
+      assert.notEqual(source, '3');
+      assert.notEqual(source, '4');
+    }
   });
 });
 
@@ -582,7 +644,7 @@ describe('server/ondemand/config.js — accepted env-var aliases (docs/ONDEMAND_
   });
 });
 
-describe('server/ondemand/config.js — FLOW_DEFAULTS (GodsEye Advanced Spatial Workflow v1, 2026-09-18)', () => {
+describe('server/ondemand/config.js — FLOW_DEFAULTS (OnDemand Spatial Advanced Workflow v1, 2026-09-18)', () => {
   test('is a frozen constant carrying the real workflow id and the version label "1"', () => {
     assert.ok(Object.isFrozen(FLOW_DEFAULTS));
     assert.deepEqual(Object.keys(FLOW_DEFAULTS).sort(), [
@@ -612,12 +674,12 @@ describe('server/ondemand/config.js — FLOW_DEFAULTS (GodsEye Advanced Spatial 
     assert.equal(configSources().spatialFlowId, 'default');
   });
 
-  test('the default flow id and version match the committed export docs/ondemand-workflows/gods-eye-advanced-v1.json', async () => {
+  test('the default flow id and version match the committed export docs/ondemand-workflows/ondemand-spatial-advanced-v1.json', async () => {
     const { readFile } = await import('node:fs/promises');
     const exported = JSON.parse(
       await readFile(
         new URL(
-          '../../docs/ondemand-workflows/gods-eye-advanced-v1.json',
+          '../../docs/ondemand-workflows/ondemand-spatial-advanced-v1.json',
           import.meta.url,
         ),
         'utf8',
@@ -628,7 +690,13 @@ describe('server/ondemand/config.js — FLOW_DEFAULTS (GodsEye Advanced Spatial 
       String(exported._export.flowVersion),
       FLOW_DEFAULTS.flowVersion,
     );
-    assert.equal(exported.workflow.name, 'GodsEye Advanced Spatial Workflow');
+    assert.equal(exported.workflow.name, 'OnDemand Spatial Advanced Workflow');
+    assert.equal(exported.createBody.name, 'OnDemand Spatial Advanced Workflow');
+    // Display-name rename only (PATCH /workflow/{id}/name, 2026-09-18T10:41:47Z):
+    // the id is the one FLOW_DEFAULTS carries, and the export records the
+    // rename it went through.
+    assert.equal(exported._export.rename.from, 'GodsEye Advanced Spatial Workflow');
+    assert.equal(exported._export.rename.to, 'OnDemand Spatial Advanced Workflow');
     assert.equal(exported.workflow.isActive, true);
   });
 });

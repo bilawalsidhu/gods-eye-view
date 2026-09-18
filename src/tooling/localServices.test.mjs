@@ -10,14 +10,14 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { overpassProxy } from 'ondemand-spatial-intelligence/server/providers/overpass';
-import { militaryInstallationsProxy } from 'ondemand-spatial-intelligence/server/providers/military-installations';
+import { overpassProxy } from 'ondemand-spatial/server/providers/overpass';
+import { militaryInstallationsProxy } from 'ondemand-spatial/server/providers/military-installations';
 import {
   regionalBriefProxy,
   weatherEffectsProxy,
-} from 'ondemand-spatial-intelligence/server/providers/regional';
-import { openAiRealtimeProxy } from 'ondemand-spatial-intelligence/server/providers/openai';
-import { keySetupEndpoint } from 'ondemand-spatial-intelligence/server/standalone/key-setup';
+} from 'ondemand-spatial/server/providers/regional';
+import { openAiRealtimeProxy } from 'ondemand-spatial/server/providers/openai';
+import { keySetupEndpoint } from 'ondemand-spatial/server/standalone/key-setup';
 import { realtimeInstructions } from '../../server/providers/openai/instructions.js';
 import { GEV_REALTIME_TOOLS } from '../../server/providers/openai/tools.js';
 

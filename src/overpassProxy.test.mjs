@@ -124,7 +124,7 @@ test('every mirror is asked with a User-Agent that identifies the application', 
     const agent = String(request.agent || '');
     assert.match(
       agent,
-      /^ondemand-spatial-intelligence\/\d/,
+      /^ondemand-spatial\/\d/,
       `${request.url} must name the application and its version`,
     );
     assert.ok(

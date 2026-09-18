@@ -17,8 +17,13 @@
  * config module ever moves, and one place (this file) to see every name a
  * handler is allowed to pull in.
  *
- * Reconciliation table (canonical -> alias -> default; full detail and
- * rationale in server/ondemand/config.js's header comment and
+ * Reconciliation table (canonical -> alias -> default — EXCEPT the
+ * `flowVersion` row, which is alias-first: `GODS_EYE_FLOW_VERSION` is the
+ * name already provisioned on the Vercel project (env id usC3wgbut65gTkaR)
+ * and keeps winning over the canonical `ONDEMAND_SPATIAL_FLOW_VERSION`
+ * until it is migrated; `FLOW_VERSION_ENV` / `getConfig().flowVersionEnv`
+ * carry the names and order. Full detail and rationale in
+ * server/ondemand/config.js's header comment and
  * docs/ONDEMAND_PROXY_DESIGN.md "Environment name reconciliation
  * (2026-09-18)"):
  *
@@ -28,7 +33,7 @@
  *   reasoningEndpointId   | ONDEMAND_REASONING_ENDPOINT_ID      | ONDEMAND_ENDPOINT_ID | 'low' (documented reasoningMode, §3.1/§12)
  *   fulfillmentEndpointId | ONDEMAND_FULFILLMENT_ENDPOINT_ID    | ONDEMAND_ENDPOINT_ID | 'predefined-gpt-5.6-luna' (ASK winner)
  *   reasoningMode         | ONDEMAND_REASONING_MODE (validated) | —                     | '' (field omitted upstream)
- *   flowVersion           | GODS_EYE_FLOW_VERSION               | —                     | '1' (FLOW_DEFAULTS)
+ *   flowVersion           | ONDEMAND_SPATIAL_FLOW_VERSION       | GODS_EYE_FLOW_VERSION (checked FIRST) | '1' (FLOW_DEFAULTS)
  *   spatialFlowId         | ONDEMAND_SPATIAL_FLOW_ID            | —                     | '6aace534859f7b0abb53d99a' (FLOW_DEFAULTS)
  *   defaultPluginIds      | ONDEMAND_SPATIAL_AGENT_ID           | — (DENIED alias)     | [] (no default)
  *   apiKey                | ONDEMAND_API_KEY                    | —                     | '' (no default)
@@ -50,8 +55,12 @@
  * Workflow defaults — `FLOW_DEFAULTS` (re-exported from the same module;
  * also `getConfig().flowDefaults`): the non-secret id and version label of
  * the workflow this repo created through the documented
- * `POST /automation/api/workflow/` on 2026-09-18 ("GodsEye Advanced
- * Spatial Workflow" v1 — docs/ondemand-workflows/README.md):
+ * `POST /automation/api/workflow/` on 2026-09-18 ("OnDemand Spatial
+ * Advanced Workflow" v1 — created as "GodsEye Advanced Spatial Workflow",
+ * display name changed 2026-09-18T10:41:47Z via the documented
+ * `PATCH /workflow/{id}/name`, id unchanged — export
+ * docs/ondemand-workflows/ondemand-spatial-advanced-v1.json,
+ * docs/ondemand-workflows/README.md):
  *
  *   spatialFlowId = '6aace534859f7b0abb53d99a'   (201 @ 2026-09-18T07:16:04Z,
  *                                                 activated 200 @ 07:16:14Z)

@@ -1,6 +1,6 @@
 /**
- * server/ondemand/workflow-definition.js — builds the `GodsEye Advanced
- * Spatial Workflow` (version 1) create-body for the OnDemand Agents Flow
+ * server/ondemand/workflow-definition.js — builds the `OnDemand Spatial
+ * Advanced Workflow` (version 1) create-body for the OnDemand Agents Flow
  * Builder, using ONLY the request vocabulary documented in
  * docs/ONDEMAND_API_CURRENT.md §7.1/§7.2 (OpenAPI `CreateWorkflowRequest`
  * of `POST https://api.on-demand.io/automation/api/workflow/`):
@@ -45,8 +45,25 @@
  * server/ondemand/workflow-definition.test.mjs are its only consumers.
  */
 
-export const WORKFLOW_NAME = 'GodsEye Advanced Spatial Workflow';
+export const WORKFLOW_NAME = 'OnDemand Spatial Advanced Workflow';
 export const WORKFLOW_VERSION = 1;
+
+/**
+ * The name the v1 workflow was CREATED under (POST /workflow/, HTTP 201,
+ * 2026-09-18T07:16:04Z) and that its frozen v1 node prompts still embed
+ * verbatim. The live workflow's display name was changed to WORKFLOW_NAME
+ * on 2026-09-18T10:41:47Z via the documented `PATCH /workflow/{id}/name`
+ * (HTTP 200) — display name only: id, version label, trigger and the nine
+ * node prompts are unchanged, and the committed export
+ * docs/ondemand-workflows/ondemand-spatial-advanced-v1.json is what
+ * server/ondemand/workflow-definition.test.mjs compares every prompt
+ * against, byte for byte. So the prompts below keep naming
+ * WORKFLOW_CREATED_AS (and the "God's Eye pipeline") on purpose: editing a
+ * prompt would be a v2 definition, which the OnDemand Spatial rename
+ * deliberately does not create. Only the create-body `name` (and every
+ * operator-facing label) uses WORKFLOW_NAME.
+ */
+export const WORKFLOW_CREATED_AS = 'GodsEye Advanced Spatial Workflow';
 
 /** Ordered node keys of the chain (the first is the source node fed by
  * the trigger payload; see the header comment for why there is no
@@ -303,7 +320,7 @@ function llmNode({ key, index, model, system, task, dependsOn, next }) {
  * @param {string} [options.nowIso]  timeline.now of the embedded fixture.
  * @returns {object} the documented CreateWorkflowRequest body.
  */
-export function buildGodsEyeWorkflowDefinition({
+export function buildSpatialWorkflowDefinition({
   actionSchemas,
   tiers,
   fulfillmentEndpointId,
@@ -341,7 +358,7 @@ export function buildGodsEyeWorkflowDefinition({
       model: modelFor('session_context'),
       dependsOn: null,
       next: 'spatial_context_builder',
-      system: `You are the Session Context node of the God's Eye spatial intelligence pipeline (workflow "${WORKFLOW_NAME}" v${WORKFLOW_VERSION}). You normalise the raw run input into a session envelope. ${JSON_ONLY}`,
+      system: `You are the Session Context node of the God's Eye spatial intelligence pipeline (workflow "${WORKFLOW_CREATED_AS}" v${WORKFLOW_VERSION}). You normalise the raw run input into a session envelope. ${JSON_ONLY}`,
       task: `RAW INPUT (the trigger payload — the JSON object sent under the webhook body's "payload" field):\n{trigger}\n\nIf the raw input above is a JSON object, use it. It may contain: "query" (string), "spatialContext" (object with the fields ${fields}), "capabilityCatalogue" (array), "session" (object: sessionId, externalUserId, locale, tier, priorTurns[]), "investigation" (object or null).\n\nIf the raw input is empty, missing, an unresolved placeholder such as "{trigger}", or not JSON (this happens when the workflow is started through the API execute endpoint, which carries no body), you are in SELFTEST mode: use exactly this fixture as the input and set "mode" to "selftest":\n${fixture}\n\nReturn exactly: {"mode": "live" | "selftest", "session": {"sessionId": string|null, "externalUserId": string|null, "locale": string|null, "tier": "ASK"|"INVESTIGATE"|"DEEP"|null, "priorTurns": []}, "query": string, "rawSpatialContext": object|null, "capabilityCatalogue": array, "investigation": object|null, "receivedAtUtc": string|null}. Copy rawSpatialContext and capabilityCatalogue through unchanged.`,
     }),
     llmNode({
@@ -414,7 +431,7 @@ export function buildGodsEyeWorkflowDefinition({
       dependsOn: 'synthesis',
       next: null,
       system: `You are the StructuredResponse formatter of the God's Eye pipeline — the workflow's final output. You reshape the synthesis into the client contract. The output object must have EXACTLY these seven keys and no others: ${keys}. ${JSON_ONLY}`,
-      task: `SYNTHESISED STATE (output of the previous node):\n{synthesis}\n\nReturn exactly one object with keys ${keys}:\n"message": the synthesis message unchanged;\n"entities": the synthesis entities unchanged;\n"actions": the actions list unchanged (each {"name","params","reason","findingIds"}) — drop any action whose name is not one of: ${actionNames.join(', ')};\n"evidence": the evidence list unchanged;\n"sources": [{"id": string, "kind": "in_view"|"capability", "label": e.g. "ADS-B (flights layer)", "AIS (ais-live-vessels layer)", "USGS FDSN Event (earthquake_search)", "status": "used"|"planned_not_executed"}] — one entry per distinct source layer in the evidence plus one per planned capability call;\n"suggestedNextActions": unchanged;\n"runMeta": {"workflow": "${WORKFLOW_NAME}", "flowVersion": ${WORKFLOW_VERSION}, "mode": state.mode, "intent": intent.intent, "tier": intent.tier, "confidence": intent.confidence, "selectedCapabilityIds": [ids from calls], "unknowns": <unknowns list>, "nodeChain": ${JSON.stringify(NODE_KEYS)}, "generatedAtUtc": state.spatialContext.timeline.now}.\nDo not add, rename or omit any of the seven keys.`,
+      task: `SYNTHESISED STATE (output of the previous node):\n{synthesis}\n\nReturn exactly one object with keys ${keys}:\n"message": the synthesis message unchanged;\n"entities": the synthesis entities unchanged;\n"actions": the actions list unchanged (each {"name","params","reason","findingIds"}) — drop any action whose name is not one of: ${actionNames.join(', ')};\n"evidence": the evidence list unchanged;\n"sources": [{"id": string, "kind": "in_view"|"capability", "label": e.g. "ADS-B (flights layer)", "AIS (ais-live-vessels layer)", "USGS FDSN Event (earthquake_search)", "status": "used"|"planned_not_executed"}] — one entry per distinct source layer in the evidence plus one per planned capability call;\n"suggestedNextActions": unchanged;\n"runMeta": {"workflow": "${WORKFLOW_CREATED_AS}", "flowVersion": ${WORKFLOW_VERSION}, "mode": state.mode, "intent": intent.intent, "tier": intent.tier, "confidence": intent.confidence, "selectedCapabilityIds": [ids from calls], "unknowns": <unknowns list>, "nodeChain": ${JSON.stringify(NODE_KEYS)}, "generatedAtUtc": state.spatialContext.timeline.now}.\nDo not add, rename or omit any of the seven keys.`,
     }),
   ];
 

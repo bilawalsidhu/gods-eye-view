@@ -50,12 +50,10 @@ function environment(t, values) {
 }
 
 test('live entry resolves in Node and aircraft normalization stays independently portable', async () => {
-  const entry =
-    await import('ondemand-spatial-intelligence/server/providers/live');
+  const entry = await import('ondemand-spatial/server/providers/live');
   assert.equal(entry.openSkyProxy, providers.openSkyProxy);
   assert.equal(entry.aisLiveProxy, providers.aisLiveProxy);
-  const normalizer =
-    await import('ondemand-spatial-intelligence/sources/adsb-lol');
+  const normalizer = await import('ondemand-spatial/sources/adsb-lol');
   assert.equal(
     normalizer.normalizeAdsbLolAircraftState,
     portable.normalizeAdsbLolAircraftState,

@@ -15,7 +15,7 @@ export const SOURCE_URL = 'local://demo-timezone';
 export const LICENSE = Object.freeze({
   name: 'Repository (MIT, computed value — no upstream data)',
   url: 'https://github.com/bilawalsidhu/gods-eye-view/blob/main/LICENSE',
-  attribution: "God's Eye View demo.timezone (nautical zone estimate)",
+  attribution: 'OnDemand Spatial demo.timezone (nautical zone estimate)',
 });
 export const SPEC = Object.freeze({
   lat: { type: 'number', required: true, min: -90, max: 90 },

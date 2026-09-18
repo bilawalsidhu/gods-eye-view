@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { promises as fsp } from 'node:fs';
-import { terrainHeightsProxy } from 'ondemand-spatial-intelligence/server/providers/terrain';
-import { tomtomProxy } from 'ondemand-spatial-intelligence/server/providers/traffic';
-import { firmsProxy } from 'ondemand-spatial-intelligence/server/providers/firms';
-import { gbfsProxy } from 'ondemand-spatial-intelligence/server/providers/gbfs';
+import { terrainHeightsProxy } from 'ondemand-spatial/server/providers/terrain';
+import { tomtomProxy } from 'ondemand-spatial/server/providers/traffic';
+import { firmsProxy } from 'ondemand-spatial/server/providers/firms';
+import { gbfsProxy } from 'ondemand-spatial/server/providers/gbfs';
 import { localProviderPlugins } from '../../server/providers/local.js';
 
 function install(plugin) {

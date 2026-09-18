@@ -193,7 +193,7 @@ export function createSelftestHandler({
         fulfillmentEndpointId,
         pluginIds: cfg.defaultPluginIds || [],
         flowId: cfg.spatialFlowId || '',
-        externalUserId: `godseye-selftest-${utcDateStamp()}`,
+        externalUserId: `ondemand-spatial-selftest-${utcDateStamp()}`,
       });
 
       const sessionIdHash = report.sessionId

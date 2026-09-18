@@ -137,7 +137,7 @@ test('a search reaches the upstream identified, and the answer is cached', async
       const headers = calls[0].options.headers;
       assert.match(
         String(headers['User-Agent']),
-        /ondemand-spatial-intelligence\/\d/,
+        /ondemand-spatial\/\d/,
         'the policy asks for a User-Agent identifying the application',
       );
       assert.ok(headers.Referer, 'a Referer is sent alongside it');

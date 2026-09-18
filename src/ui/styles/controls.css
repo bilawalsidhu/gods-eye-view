@@ -69,7 +69,7 @@
   letter-spacing: 1.8px;
   color: var(--accent);
   text-transform: uppercase;
-  text-shadow: 0 0 8px rgba(29, 172, 137, 0.3);
+  text-shadow: 0 0 8px rgba(59, 183, 149, 0.3);
 }
 
 .panel-drag-handle {
@@ -216,8 +216,8 @@
   border-color: var(--accent);
   background: var(--accent-dim);
   box-shadow:
-    0 0 20px rgba(29, 172, 137, 0.15),
-    0 0 0 1px rgba(29, 172, 137, 0.1) inset;
+    0 0 20px rgba(59, 183, 149, 0.15),
+    0 0 0 1px rgba(59, 183, 149, 0.1) inset;
 }
 
 .style-btn.active .btn-icon {
@@ -472,7 +472,7 @@
 .pp-toggle-btn.active {
   border-color: var(--accent);
   background: var(--accent-dim);
-  box-shadow: 0 0 12px rgba(29, 172, 137, 0.15);
+  box-shadow: 0 0 12px rgba(59, 183, 149, 0.15);
 }
 
 .pp-icon {
@@ -772,7 +772,7 @@
   color: var(--accent);
   border-color: var(--accent);
   background: var(--accent-dim);
-  box-shadow: 0 0 10px rgba(29, 172, 137, 0.15);
+  box-shadow: 0 0 10px rgba(59, 183, 149, 0.15);
 }
 
 .map-stack-chip.unavailable,
@@ -1086,8 +1086,8 @@ body.ui-clean-view #scene-runtime.active {
 #param-slider-panel:not(.collapsed) .param-panel-divider {
   background: linear-gradient(
     90deg,
-    rgb(29 172 137 / 28%),
-    rgba(29, 172, 137, 0.18) 58%,
+    rgb(59 183 149 / 28%),
+    rgba(59, 183, 149, 0.18) 58%,
     transparent
   );
 }

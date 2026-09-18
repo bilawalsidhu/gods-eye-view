@@ -44,6 +44,7 @@ const ENV_KEYS = [
   'ONDEMAND_ENDPOINT_ID',
   'ONDEMAND_REASONING_MODE',
   'GODS_EYE_FLOW_VERSION',
+  'ONDEMAND_SPATIAL_FLOW_VERSION',
   DENIED_ELEVENLABS_NAME,
 ];
 let savedEnv;
@@ -175,6 +176,15 @@ describe('api/ondemand/health.js', () => {
     assert.equal(body.config.reasoningMode.valid, true);
     assert.equal(body.config.flowVersion.configured, true);
     assert.equal(body.config.flowVersion.source, 'default');
+    // alias-first row: health names BOTH env names and how it resolved,
+    // never the value (server/ondemand/config.js FLOW_VERSION_ENV)
+    assert.deepEqual(body.config.flowVersion, {
+      configured: true,
+      source: 'default',
+      resolvedVia: 'default',
+      canonical: 'ONDEMAND_SPATIAL_FLOW_VERSION',
+      alias: 'GODS_EYE_FLOW_VERSION',
+    });
     // Since 2026-09-18 the workflow id has a non-secret built-in default
     // (server/ondemand/config.js FLOW_DEFAULTS) — configured, source
     // 'default'; the VALUE is still never surfaced by health.
@@ -252,6 +262,41 @@ describe('api/ondemand/health.js', () => {
       'predefined-gpt-5.6-luna',
     );
     assert.equal(body.config.tiers.DEEP.reasoningMode, 'high');
+  });
+
+  test('config.flowVersion reports resolvedVia "alias" when GODS_EYE_FLOW_VERSION (checked first) is set — never the value', async () => {
+    configureWithKey({
+      GODS_EYE_FLOW_VERSION: '7',
+      ONDEMAND_SPATIAL_FLOW_VERSION: '8',
+    });
+    activeStub = stubFetchSequence([...healthyReadProbes(), ttsEnvelope()]);
+    const res = await runHealth();
+    const body = res.json();
+    assert.deepEqual(body.config.flowVersion, {
+      configured: true,
+      source: 'GODS_EYE_FLOW_VERSION',
+      resolvedVia: 'alias',
+      canonical: 'ONDEMAND_SPATIAL_FLOW_VERSION',
+      alias: 'GODS_EYE_FLOW_VERSION',
+    });
+    assert.equal(/"flowVersion":\{[^}]*"7"/.test(res.text()), false);
+    assert.equal(/"flowVersion":\{[^}]*"8"/.test(res.text()), false);
+  });
+
+  test('config.flowVersion reports resolvedVia "canonical" when only ONDEMAND_SPATIAL_FLOW_VERSION is set (unkeyed response too)', async () => {
+    process.env.ONDEMAND_SPATIAL_FLOW_VERSION = '8';
+    __reloadConfigForTests(); // no key: the unkeyed body carries the same block
+    const res = await runHealth();
+    const body = res.json();
+    assert.equal(body.configured, false);
+    assert.deepEqual(body.config.flowVersion, {
+      configured: true,
+      source: 'ONDEMAND_SPATIAL_FLOW_VERSION',
+      resolvedVia: 'canonical',
+      canonical: 'ONDEMAND_SPATIAL_FLOW_VERSION',
+      alias: 'GODS_EYE_FLOW_VERSION',
+    });
+    assert.equal(/"flowVersion":\{[^}]*"8"/.test(res.text()), false);
   });
 
   test('reasoningModeInvalid is true (and config.reasoningMode.valid is false) when an undocumented ONDEMAND_REASONING_MODE is set', async () => {

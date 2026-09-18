@@ -8,7 +8,7 @@ from TeleGeography's [Submarine Cable Map](https://www.submarinecablemap.com/).
 This dataset is licensed by TeleGeography under
 **Creative Commons Attribution-NonCommercial-ShareAlike 3.0 (CC BY-NC-SA 3.0)**.
 It is bundled here for an out-of-the-box experience and is **excluded from the
-MIT license that covers OnDemand Spatial Intelligence's source code.**
+MIT license that covers OnDemand Spatial's source code.**
 
 - **Attribution required:** "© TeleGeography — submarinecablemap.com"
 - **NonCommercial:** the data may not be used commercially. If you use this

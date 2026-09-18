@@ -21,7 +21,7 @@
   box-shadow:
     0 12px 36px rgba(0, 0, 0, 0.58),
     0 0 0 1px rgba(255, 255, 255, 0.03) inset,
-    0 0 28px rgba(29, 172, 137, 0.06);
+    0 0 28px rgba(59, 183, 149, 0.06);
   backdrop-filter: blur(28px) saturate(1.35);
   -webkit-backdrop-filter: blur(28px) saturate(1.35);
   transform: translateX(-50%);
@@ -60,13 +60,13 @@
   min-width: 0;
   margin: -14px 0;
   padding: 19px 14px 12px;
-  border-color: rgba(29, 172, 137, 0.36);
+  border-color: rgba(59, 183, 149, 0.36);
   border-radius: 12px;
   background: rgba(8, 31, 42, 0.94);
   box-shadow:
     0 12px 30px rgba(0, 0, 0, 0.56),
-    0 0 26px rgba(29, 172, 137, 0.12),
-    0 0 0 1px rgba(29, 172, 137, 0.08) inset;
+    0 0 26px rgba(59, 183, 149, 0.12),
+    0 0 0 1px rgba(59, 183, 149, 0.08) inset;
 }
 
 #command-dock .gev-voice-kicker {

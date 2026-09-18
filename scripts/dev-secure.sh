@@ -151,7 +151,7 @@ resolve_opensky_credentials
 CCTV_AUSTIN_MAX_SOURCES="${CCTV_AUSTIN_MAX_SOURCES:-36}"
 CCTV_MAX_SOURCES="${CCTV_MAX_SOURCES:-48}"
 
-echo "Starting God's Eye View dev server..."
+echo "Starting OnDemand Spatial dev server..."
 echo "URL: http://localhost:${PORT}/"
 echo "Google Maps key source: ${GOOGLE_MAPS_API_KEY_SOURCE}"
 echo "OpenSky auth mode: ${OPENSKY_AUTH_MODE}"

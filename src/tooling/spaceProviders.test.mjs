@@ -6,11 +6,11 @@ import {
   rocketLaunchesProxy,
   launchLibraryRequestHeaders,
   LL2_CACHE_TTL_MS,
-} from 'ondemand-spatial-intelligence/server/providers/space';
+} from 'ondemand-spatial/server/providers/space';
 import {
   celestrakTleUrl,
   launchLibraryRecentUrl,
-} from 'ondemand-spatial-intelligence/sources/space';
+} from 'ondemand-spatial/sources/space';
 import * as compatibility from '../../server/providers/local.js';
 
 function install(plugin, preview = false) {

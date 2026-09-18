@@ -75,7 +75,7 @@ async function main() {
   const layers = arg('--layers', 'flights,earthquakes').split(',');
   const userId =
     arg('--user', '') ||
-    `godseye-capability-loop-${new Date().toISOString().slice(0, 10)}`;
+    `ondemand-spatial-capability-loop-${new Date().toISOString().slice(0, 10)}`;
   const reportPath = arg('--report', '');
   const tierRow = tierDefaults(tier);
   const resolvedTier =

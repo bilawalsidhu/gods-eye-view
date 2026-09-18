@@ -2,7 +2,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import {
-  buildGodsEyeWorkflowDefinition,
+  buildSpatialWorkflowDefinition,
   validateStructuredResponse,
   actionDigest,
   selftestFixture,
@@ -11,6 +11,7 @@ import {
   STRUCTURED_RESPONSE_KEYS,
   SPATIAL_CONTEXT_FIELDS,
   WORKFLOW_NAME,
+  WORKFLOW_CREATED_AS,
   WORKFLOW_VERSION,
 } from './workflow-definition.js';
 import { TIER_DEFAULTS, FLOW_DEFAULTS } from './config.js';
@@ -20,7 +21,7 @@ const ACTION_NAMES = GEV_ACTION_SCHEMAS.map((s) => s.name);
 const FULFILLMENT = 'predefined-gpt-5.6-luna';
 
 function build(nowIso = '2026-09-18T07:00:00.000Z') {
-  return buildGodsEyeWorkflowDefinition({
+  return buildSpatialWorkflowDefinition({
     actionSchemas: GEV_ACTION_SCHEMAS,
     tiers: TIER_DEFAULTS,
     fulfillmentEndpointId: FULFILLMENT,
@@ -85,7 +86,7 @@ const DOCUMENTED_PATHS = new Set([
   'enableMemory',
 ]);
 
-describe('server/ondemand/workflow-definition.js — GodsEye Advanced Spatial Workflow v1', () => {
+describe('server/ondemand/workflow-definition.js — OnDemand Spatial Advanced Workflow v1', () => {
   test('emits ONLY the documented CreateWorkflowRequest vocabulary (§7.2) — no invented fields', () => {
     const body = build();
     for (const p of keyPaths(body)) {
@@ -95,7 +96,20 @@ describe('server/ondemand/workflow-definition.js — GodsEye Advanced Spatial Wo
       );
     }
     assert.equal(body.name, WORKFLOW_NAME);
-    assert.equal(WORKFLOW_NAME, 'GodsEye Advanced Spatial Workflow');
+    assert.equal(WORKFLOW_NAME, 'OnDemand Spatial Advanced Workflow');
+    // Display-name rename only (PATCH /workflow/{id}/name, 2026-09-18T10:41:47Z):
+    // the frozen v1 prompts still embed the name the workflow was created
+    // under — a documented exception, not drift (see WORKFLOW_CREATED_AS).
+    assert.equal(WORKFLOW_CREATED_AS, 'GodsEye Advanced Spatial Workflow');
+    assert.ok(
+      body.nodes[0].llm.fulfillmentPrompt.includes(
+        `(workflow "${WORKFLOW_CREATED_AS}" v${WORKFLOW_VERSION})`,
+      ),
+    );
+    assert.equal(
+      body.nodes[0].llm.fulfillmentPrompt.includes(WORKFLOW_NAME),
+      false,
+    );
     assert.equal(WORKFLOW_VERSION, 1);
     assert.equal(String(WORKFLOW_VERSION), FLOW_DEFAULTS.flowVersion);
     assert.equal(body.trigger.type, 'webhook'); // in the documented enum cron|webhook
@@ -328,7 +342,7 @@ describe('server/ondemand/workflow-definition.js — GodsEye Advanced Spatial Wo
   test('build() rejects missing inputs instead of guessing a model id', () => {
     assert.throws(
       () =>
-        buildGodsEyeWorkflowDefinition({
+        buildSpatialWorkflowDefinition({
           actionSchemas: [],
           tiers: TIER_DEFAULTS,
           fulfillmentEndpointId: FULFILLMENT,
@@ -337,7 +351,7 @@ describe('server/ondemand/workflow-definition.js — GodsEye Advanced Spatial Wo
     );
     assert.throws(
       () =>
-        buildGodsEyeWorkflowDefinition({
+        buildSpatialWorkflowDefinition({
           actionSchemas: GEV_ACTION_SCHEMAS,
           tiers: {},
           fulfillmentEndpointId: FULFILLMENT,
@@ -346,7 +360,7 @@ describe('server/ondemand/workflow-definition.js — GodsEye Advanced Spatial Wo
     );
     assert.throws(
       () =>
-        buildGodsEyeWorkflowDefinition({
+        buildSpatialWorkflowDefinition({
           actionSchemas: GEV_ACTION_SCHEMAS,
           tiers: TIER_DEFAULTS,
           fulfillmentEndpointId: '',
@@ -401,11 +415,11 @@ describe('server/ondemand/workflow-definition.js — GodsEye Advanced Spatial Wo
   });
 
   describe('committed artefacts stay in sync with the builder', () => {
-    test('docs/ondemand-workflows/gods-eye-advanced-v1.json: the LIVE workflow object equals the current build (id = FLOW_DEFAULTS)', async () => {
+    test('docs/ondemand-workflows/ondemand-spatial-advanced-v1.json: the LIVE workflow object equals the current build (id = FLOW_DEFAULTS)', async () => {
       const exported = JSON.parse(
         await readFile(
           new URL(
-            '../../docs/ondemand-workflows/gods-eye-advanced-v1.json',
+            '../../docs/ondemand-workflows/ondemand-spatial-advanced-v1.json',
             import.meta.url,
           ),
           'utf8',
@@ -414,6 +428,8 @@ describe('server/ondemand/workflow-definition.js — GodsEye Advanced Spatial Wo
       const live = exported.workflow;
       assert.equal(live.id, FLOW_DEFAULTS.spatialFlowId);
       assert.equal(live.name, WORKFLOW_NAME);
+      assert.equal(exported._export.rename?.from, WORKFLOW_CREATED_AS);
+      assert.equal(exported._export.rename?.to, WORKFLOW_NAME);
       assert.equal(live.isActive, true);
       assert.equal(live.enableMemory, false);
       assert.equal(live.trigger.type, 'webhook');

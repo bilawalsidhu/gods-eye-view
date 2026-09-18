@@ -38,7 +38,7 @@
  *   reasoningEndpointId   | ONDEMAND_REASONING_ENDPOINT_ID      | ONDEMAND_ENDPOINT_ID    | 'low' (documented reasoningMode, §3.1/§12)
  *   fulfillmentEndpointId | ONDEMAND_FULFILLMENT_ENDPOINT_ID    | ONDEMAND_ENDPOINT_ID    | 'predefined-gpt-5.6-luna' (ASK winner)
  *   reasoningMode         | ONDEMAND_REASONING_MODE (validated) | —                        | '' (field omitted upstream)
- *   flowVersion           | GODS_EYE_FLOW_VERSION               | —                        | '1' (FLOW_DEFAULTS, 2026-09-18)
+ *   flowVersion           | ONDEMAND_SPATIAL_FLOW_VERSION       | GODS_EYE_FLOW_VERSION (checked FIRST) | '1' (FLOW_DEFAULTS, 2026-09-18)
  *   spatialFlowId         | ONDEMAND_SPATIAL_FLOW_ID            | —                        | '6aace534859f7b0abb53d99a' (FLOW_DEFAULTS)
  *   defaultPluginIds      | ONDEMAND_SPATIAL_AGENT_ID           | — (DENIED, see below)   | [] (no default)
  *   apiKey                | ONDEMAND_API_KEY                    | —                        | '' (no default)
@@ -68,14 +68,23 @@
  *     documented default tier, §17.5 INVESTIGATE — unchanged by the
  *     benchmark re-base, see docs/ONDEMAND_PROXY_DESIGN.md §10.2) with
  *     `reasoningModeInvalid: true` rather than being forwarded blind.
- *   - `flowVersion` (`GODS_EYE_FLOW_VERSION`) is informational only —
- *     workflow versioning is NOT FOUND IN LIVE DOCS (§7.3) — and is never
- *     sent upstream by any handler. Its default is FLOW_DEFAULTS.flowVersion
- *     ('1'): the version label of the workflow this repo created.
+ *   - `flowVersion` (`ONDEMAND_SPATIAL_FLOW_VERSION`, alias
+ *     `GODS_EYE_FLOW_VERSION`) is informational only — workflow versioning
+ *     is NOT FOUND IN LIVE DOCS (§7.3) — and is never sent upstream by any
+ *     handler. Its default is FLOW_DEFAULTS.flowVersion ('1'): the version
+ *     label of the workflow this repo created. This is the ONE row that is
+ *     reconciled ALIAS-FIRST (`reconcileAliasFirst`, order =
+ *     FLOW_VERSION_ENV.order): the Vercel project already provisions
+ *     `GODS_EYE_FLOW_VERSION` (env id usC3wgbut65gTkaR) and that value must
+ *     keep winning until the operator migrates it to the canonical name —
+ *     `sources.flowVersion` names which of the two (or 'default') resolved,
+ *     surfaced by api/ondemand/health.js `config.flowVersion.resolvedVia`.
  *   - `spatialFlowId` (`ONDEMAND_SPATIAL_FLOW_ID`) defaults to
  *     FLOW_DEFAULTS.spatialFlowId — the REAL id returned by the documented
  *     `POST /automation/api/workflow/` (201) on 2026-09-18T07:16:04Z for
- *     "GodsEye Advanced Spatial Workflow" v1 (docs/ondemand-workflows/
+ *     "OnDemand Spatial Advanced Workflow" v1 — created as "GodsEye
+ *     Advanced Spatial Workflow", display name changed 2026-09-18T10:41:47Z
+ *     via `PATCH /workflow/{id}/name`, id unchanged (docs/ondemand-workflows/
  *     README.md). A workflow id is not a secret (it is useless without the
  *     api key), which is why it may live here as a non-secret default.
  *   - DENY-LIST (docs/ONDEMAND_PROXY_DESIGN.md "Environment name
@@ -178,6 +187,55 @@ function reconcile(canonicalName, aliasName, defaultValue) {
     source: defaultValue === '' ? 'unset' : 'default',
   };
 }
+
+/**
+ * ALIAS-first / canonical-second / default-last reconciliation — the
+ * mirror image of `reconcile()` for the single row (`flowVersion`) whose
+ * legacy name is still the one provisioned on the deployment (see
+ * FLOW_VERSION_ENV). Same `{ value, source }` contract, same
+ * whitespace-only-is-unset rule: a blank alias falls through to the
+ * canonical name, a blank canonical falls through to the default.
+ *   - alias name set (non-empty)              -> source = aliasName
+ *   - canonical name set (non-empty)          -> source = canonicalName
+ *   - neither set, `defaultValue !== ''`      -> source = 'default'
+ *   - neither set, `defaultValue === ''`      -> source = 'unset'
+ */
+function reconcileAliasFirst(aliasName, canonicalName, defaultValue) {
+  const aliasValue = process.env[aliasName];
+  if (nonEmpty(aliasValue)) {
+    return { value: aliasValue, source: aliasName };
+  }
+  const canonicalValue = process.env[canonicalName];
+  if (nonEmpty(canonicalValue)) {
+    return { value: canonicalValue, source: canonicalName };
+  }
+  return {
+    value: defaultValue,
+    source: defaultValue === '' ? 'unset' : 'default',
+  };
+}
+
+/**
+ * Env names of the `flowVersion` row and the order they are consulted in
+ * (`reconcileAliasFirst` above). Canonical = the product's own name after
+ * the OnDemand Spatial rename; alias = the legacy name that the Vercel
+ * project already provisions (env id usC3wgbut65gTkaR). The alias is
+ * checked FIRST on purpose so that provisioned value keeps winning until
+ * the operator migrates it — flipping this order silently would change a
+ * live deployment's reported version label. `order` is exactly the set of
+ * values `sources.flowVersion` can take. Surfaced (names only) through
+ * `getConfig().flowVersionEnv` and api/ondemand/health.js
+ * `config.flowVersion`.
+ */
+export const FLOW_VERSION_ENV = Object.freeze({
+  canonical: 'ONDEMAND_SPATIAL_FLOW_VERSION',
+  alias: 'GODS_EYE_FLOW_VERSION',
+  order: Object.freeze([
+    'GODS_EYE_FLOW_VERSION',
+    'ONDEMAND_SPATIAL_FLOW_VERSION',
+    'default',
+  ]),
+});
 
 // DENY-LIST — see the header comment and docs/ONDEMAND_PROXY_DESIGN.md
 // "Environment name reconciliation (2026-09-18)". Built from parts (never a
@@ -303,20 +361,26 @@ export const TIER_DEFAULTS = Object.freeze({
 
 /**
  * Non-secret defaults of the Agents Flow Builder workflow this repository
- * owns — "GodsEye Advanced Spatial Workflow", version 1 (blueprint rules
+ * owns — "OnDemand Spatial Advanced Workflow", version 1 (blueprint rules
  * 22–23, 46–48). `spatialFlowId` is the real workflow id returned by the
  * documented `POST https://api.on-demand.io/automation/api/workflow/`
- * (HTTP 201, 2026-09-18T07:16:04.335Z) and activated via the documented
- * `POST /workflow/{id}/activate` (HTTP 200, 2026-09-18T07:16:14.101Z);
- * definition, export and node→module map: docs/ondemand-workflows/
- * gods-eye-advanced-v1.json and docs/ondemand-workflows/README.md.
- * `flowVersion` is this repository's own version label for that
- * definition (the API has no version field, §7.3) — bump it together with
- * the export whenever the definition changes.
+ * (HTTP 201, 2026-09-18T07:16:04.335Z, created as "GodsEye Advanced
+ * Spatial Workflow") and activated via the documented
+ * `POST /workflow/{id}/activate` (HTTP 200, 2026-09-18T07:16:14.101Z); its
+ * display name was changed to "OnDemand Spatial Advanced Workflow" on
+ * 2026-09-18T10:41:47Z via the documented `PATCH /workflow/{id}/name`
+ * (HTTP 200) — the id, version label, trigger and the nine node prompts
+ * are unchanged. Definition, export and node→module map:
+ * docs/ondemand-workflows/ondemand-spatial-advanced-v1.json and
+ * docs/ondemand-workflows/README.md. `flowVersion` is this repository's
+ * own version label for that definition (the API has no version field,
+ * §7.3) — bump it together with the export whenever the definition
+ * changes.
  *
  * Both are the DEFAULT branch of the `ONDEMAND_SPATIAL_FLOW_ID` /
- * `GODS_EYE_FLOW_VERSION` reconciliation rows (source 'default'); an env
- * var set on the deployment still wins. Re-exported through
+ * `ONDEMAND_SPATIAL_FLOW_VERSION` (alias `GODS_EYE_FLOW_VERSION`, checked
+ * first — see FLOW_VERSION_ENV) reconciliation rows (source 'default'); an
+ * env var set on the deployment still wins. Re-exported through
  * api/ondemand/_config.js like every other name here.
  */
 export const FLOW_DEFAULTS = Object.freeze({
@@ -402,9 +466,12 @@ function computeConfig() {
   // Informational only — never sent upstream (§7.3: workflow versioning is
   // NOT FOUND IN LIVE DOCS). String, not number: a version "1" vs 1 has no
   // semantic difference to any consumer, and a string avoids NaN handling.
-  const flowVersionResult = reconcile(
-    'GODS_EYE_FLOW_VERSION',
-    null,
+  // ALIAS-FIRST (the only such row — see FLOW_VERSION_ENV): the legacy
+  // GODS_EYE_FLOW_VERSION already provisioned on the Vercel project wins
+  // over the canonical ONDEMAND_SPATIAL_FLOW_VERSION until it is migrated.
+  const flowVersionResult = reconcileAliasFirst(
+    FLOW_VERSION_ENV.alias,
+    FLOW_VERSION_ENV.canonical,
     FLOW_DEFAULTS.flowVersion,
   );
 
@@ -558,8 +625,11 @@ export function requestTimeoutMs() {
  * accepted alias name, `'default'` (built-in default was used, e.g.
  * baseUrl/reasoningEndpointId/fulfillmentEndpointId/flowVersion/
  * spatialFlowId/an invalid reasoningMode), or `'unset'` (no default either — the field is simply
- * empty). NAMES ONLY, never values — safe to serialize verbatim in an HTTP
- * response (see api/ondemand/health.js's `?envNames=1`).
+ * empty). For `flowVersion` the possible names are exactly
+ * FLOW_VERSION_ENV.order ('GODS_EYE_FLOW_VERSION' |
+ * 'ONDEMAND_SPATIAL_FLOW_VERSION' | 'default'). NAMES ONLY, never values —
+ * safe to serialize verbatim in an HTTP response (see
+ * api/ondemand/health.js's `?envNames=1`).
  */
 export function configSources() {
   return { ...state.sources };
@@ -596,6 +666,9 @@ export function getConfig() {
     // FLOW_DEFAULTS); the reconciled values are `spatialFlowId` /
     // `flowVersion` above.
     flowDefaults: FLOW_DEFAULTS,
+    // Env NAMES (never values) of the alias-first `flowVersion` row and
+    // the order they are consulted in — see FLOW_VERSION_ENV.
+    flowVersionEnv: FLOW_VERSION_ENV,
     sources: configSources(),
   };
   assertNoDeniedKeys(result);

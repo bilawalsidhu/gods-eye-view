@@ -5,9 +5,10 @@
  * Contract reference: docs/ONDEMAND_API_CURRENT.md §7 "Agents Flow Builder /
  * Workflows", specifically the §7.1 endpoint table.
  *
- * GODS_EYE_FLOW_VERSION is intentionally never read anywhere in this file:
- * workflow versioning is NOT FOUND IN LIVE DOCS (§7.3) — see
- * docs/ONDEMAND_PROXY_DESIGN.md "Dropped env vars".
+ * ONDEMAND_SPATIAL_FLOW_VERSION (alias GODS_EYE_FLOW_VERSION) is
+ * intentionally never read anywhere in this file: workflow versioning is
+ * NOT FOUND IN LIVE DOCS (§7.3) — see docs/ONDEMAND_PROXY_DESIGN.md
+ * "Dropped env vars".
  */
 
 import { config, baseUrls, isConfigured } from './_config.js';

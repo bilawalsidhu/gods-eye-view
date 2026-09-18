@@ -68,8 +68,9 @@ function installServerlessNotice(doc = document) {
   const text = doc.createElement('span');
   text.style.cssText = 'flex:1 1 auto';
   text.textContent =
-    'Unavailable in serverless deployment: live vessels (AISStream relay) ' +
-    'and voice control (OpenAI Realtime) are turned off in this deployment.';
+    'OnDemand Spatial is running as a serverless deployment: live vessels ' +
+    '(AISStream relay) and voice control (OpenAI Realtime) need a persistent ' +
+    'server and are turned off here.';
   banner.appendChild(text);
 
   const dismiss = doc.createElement('button');

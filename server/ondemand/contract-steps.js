@@ -52,7 +52,7 @@
  *                          within this window — polling GET .../logs is
  *                          the only documented log surface, §7.1)
  *   workflowPollIntervalMs step 8 poll interval (default 2000)
- *   externalUserId         default `godseye-contract-test-<YYYY-MM-DD UTC>`
+ *   externalUserId         default `ondemand-spatial-contract-test-<YYYY-MM-DD UTC>`
  *   timeoutMs              per-request timeout, default 60000
  *   sseTimeoutMs           SSE request timeout, default 120000
  *   fetchImpl              fetch-compatible function, default
@@ -137,7 +137,8 @@ function resolveOptions(options = {}) {
       ? options.workflowPollIntervalMs
       : 2000;
   const externalUserId =
-    options.externalUserId || `godseye-contract-test-${utcDateStamp()}`;
+    options.externalUserId ||
+    `ondemand-spatial-contract-test-${utcDateStamp()}`;
   const timeoutMs =
     Number.isFinite(options.timeoutMs) && options.timeoutMs > 0
       ? options.timeoutMs
@@ -949,7 +950,7 @@ export async function runContractSteps(options = {}) {
   }
 
   async function step6() {
-    const input = "Contract test of the God's Eye View proxy.";
+    const input = 'Contract test of the OnDemand Spatial proxy.';
     if (MODE === 'proxy') {
       const res = await doFetch(proxyUrl('tts?format=audio'), {
         method: 'POST',

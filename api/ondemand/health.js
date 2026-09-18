@@ -61,11 +61,21 @@
  * with no API key set. `config.tiers` (added 2026-09-18) is the
  * benchmarked ASK/INVESTIGATE/DEEP table from `getConfig().tiers` — model
  * ids and reasoningMode names only, never a value read from the env.
+ * `config.flowVersion` (extended for the OnDemand Spatial rename) is
+ * `{ configured, source, resolvedVia, canonical, alias }`: `source` is the
+ * env NAME that won ('GODS_EYE_FLOW_VERSION' | 'ONDEMAND_SPATIAL_FLOW_VERSION'
+ * | 'default'), `resolvedVia` classifies it as 'alias' | 'canonical' |
+ * 'default', and `canonical`/`alias` echo the two NAMES from
+ * `getConfig().flowVersionEnv` — that row is reconciled ALIAS-FIRST (the
+ * legacy name is the one provisioned on the Vercel project), and this is
+ * where an operator sees which one is live. Still names only, never the
+ * value.
  *
  * Debug flag `?envNames=1` (added 2026-09-17 for the ondemand-eand-spatial
  * Vercel project — see docs/ONDEMAND_PROXY_DESIGN.md §5b): adds an `env`
  * object to the JSON body — `{ names, sources }` — reporting which env var
- * NAMES beginning with ONDEMAND_ or VITE_ (plus SERVERLESS_MODE, VERCEL,
+ * NAMES beginning with ONDEMAND_ or VITE_ (plus GODS_EYE_FLOW_VERSION — the
+ * accepted alias of ONDEMAND_SPATIAL_FLOW_VERSION — SERVERLESS_MODE, VERCEL,
  * VERCEL_ENV) exist on this deployment, and which NAME supplied each
  * logical config setting. NAMES ONLY; no env var value is ever included.
  * `names` also excludes the deny-listed env var names (see DENIED_ENV_NAMES
@@ -83,8 +93,11 @@ import {
   getRequestUrl,
 } from '../../server/ondemand/http.js';
 
+// GODS_EYE_FLOW_VERSION is the accepted (alias-first) alias of
+// ONDEMAND_SPATIAL_FLOW_VERSION — listed by name so `?envNames=1` shows the
+// legacy name is what is provisioned, not just that "something" resolved.
 const ENV_NAME_PATTERN =
-  /^(ONDEMAND_|VITE_|SERVERLESS_MODE$|VERCEL$|VERCEL_ENV$)/;
+  /^(ONDEMAND_|VITE_|GODS_EYE_FLOW_VERSION$|SERVERLESS_MODE$|VERCEL$|VERCEL_ENV$)/;
 
 // DENY-LIST — see server/ondemand/config.js's header comment and
 // docs/ONDEMAND_PROXY_DESIGN.md "Environment name reconciliation
@@ -142,12 +155,23 @@ function configDiagnostic(cfg) {
     flowVersion: {
       configured: notUnset('flowVersion'),
       source: src.flowVersion,
+      resolvedVia: flowVersionResolvedVia(src.flowVersion, cfg.flowVersionEnv),
+      canonical: cfg.flowVersionEnv.canonical,
+      alias: cfg.flowVersionEnv.alias,
     },
     spatialFlowId: {
       configured: notUnset('spatialFlowId'),
       source: src.spatialFlowId,
     },
   };
+}
+
+/** 'alias' | 'canonical' | 'default' — derived from the env NAME in
+ * `sources.flowVersion` against `getConfig().flowVersionEnv` (names only). */
+function flowVersionResolvedVia(source, flowVersionEnv) {
+  if (source === flowVersionEnv.alias) return 'alias';
+  if (source === flowVersionEnv.canonical) return 'canonical';
+  return 'default';
 }
 
 const PROBE_TIMEOUT_MS = 3000;

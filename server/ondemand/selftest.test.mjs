@@ -30,7 +30,7 @@ function happyReport() {
   return {
     generatedAtUtc: '2026-09-18T00:00:00.000Z',
     mode: 'direct',
-    externalUserId: 'godseye-selftest-2026-09-18',
+    externalUserId: 'ondemand-spatial-selftest-2026-09-18',
     sessionId: 'sess1',
     steps: [
       {

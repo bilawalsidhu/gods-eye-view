@@ -14,7 +14,7 @@ import {
  */
 const NOMINATIM_HEADERS = Object.freeze({
   'User-Agent':
-    'ondemand-spatial-intelligence/0.1 (+https://github.com/bilawalsidhu/gods-eye-view)',
+    'ondemand-spatial/0.1 (+https://github.com/bilawalsidhu/gods-eye-view)',
   Referer: 'https://github.com/bilawalsidhu/gods-eye-view',
 });
 

@@ -19,8 +19,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgba(29, 172, 137, 0.06);
-  border: 1px solid rgba(29, 172, 137, 0.34);
+  background: rgba(59, 183, 149, 0.06);
+  border: 1px solid rgba(59, 183, 149, 0.34);
   border-radius: 0.18rem;
   color: var(--text-secondary);
   font-family: var(--font-mono);
@@ -36,8 +36,8 @@
 
 .gev-voice-tier-btn:hover {
   color: var(--text-primary);
-  border-color: rgba(29, 172, 137, 0.6);
-  background: rgba(29, 172, 137, 0.12);
+  border-color: rgba(59, 183, 149, 0.6);
+  background: rgba(59, 183, 149, 0.12);
 }
 
 /* MINI engaged — amber, distinct from the cyan default so the cheaper tier
