@@ -1,7 +1,7 @@
 {
   "$schema_note": "God's Eye spatial capability registry — Gate 3 rows",
-  "version": 1,
-  "updated_utc": "2026-09-18T06:08:43Z",
+  "version": 2,
+  "updated_utc": "2026-09-18T07:40:00Z",
   "capabilities": [
     {
       "id": "earthquake.search",
@@ -14,7 +14,84 @@
       "persistent_connection": false,
       "status": "registered-unverified",
       "definition": "docs/ondemand-workflows/tools/earthquake_search.json",
-      "notes": "REST agent creation is dashboard-only in the live OnDemand docs (§8); status becomes 'live' once the tool is created in the dashboard and the end-to-end query invokes it."
+      "notes": "REST agent creation is dashboard-only in the live OnDemand docs (§8; re-confirmed 2026-09-18T07:09:37Z: GET /plugin/v1/list total 0). Status becomes 'live' once the tool is created in the dashboard (OpenAPI: docs/ondemand-workflows/tools/earthquake_search.openapi.json), its pluginId is pasted into ondemand_tool_id, and the end-to-end query invokes it. Selected by the workflow's capability_resolver node (docs/ondemand-workflows/README.md)."
     }
-  ]
+  ],
+  "ondemand": {
+    "workflow": {
+      "id": "6aace534859f7b0abb53d99a",
+      "name": "GodsEye Advanced Spatial Workflow",
+      "flowVersion": 1,
+      "created": "api",
+      "created_utc": "2026-09-18T07:16:04.335Z",
+      "activated_utc": "2026-09-18T07:16:14.101Z",
+      "definition": "docs/ondemand-workflows/gods-eye-advanced-v1.json",
+      "env": "ONDEMAND_SPATIAL_FLOW_ID (default FLOW_DEFAULTS.spatialFlowId in server/ondemand/config.js)"
+    },
+    "agent": {
+      "name": "GodsEye Spatial Intelligence Agent",
+      "pluginId": null,
+      "created": "dashboard-only",
+      "env": "ONDEMAND_SPATIAL_AGENT_ID",
+      "pack": "docs/audit/dashboard-registration-pack.md",
+      "notes": "Agent creation has no documented REST endpoint (docs/ONDEMAND_API_CURRENT.md §8); paste the pluginId (plugin-<digits>) returned by the dashboard here and into ONDEMAND_SPATIAL_AGENT_ID."
+    },
+    "skills": [
+      {
+        "slug": "godseye-spatial-context-reader",
+        "skillId": null,
+        "created": "dashboard-only",
+        "definition": "docs/ondemand-skills/godseye-spatial-context-reader.md"
+      },
+      {
+        "slug": "godseye-intent-classifier",
+        "skillId": null,
+        "created": "dashboard-only",
+        "definition": "docs/ondemand-skills/godseye-intent-classifier.md"
+      },
+      {
+        "slug": "godseye-capability-resolver",
+        "skillId": null,
+        "created": "dashboard-only",
+        "definition": "docs/ondemand-skills/godseye-capability-resolver.md"
+      },
+      {
+        "slug": "godseye-map-action-planner",
+        "skillId": null,
+        "created": "dashboard-only",
+        "definition": "docs/ondemand-skills/godseye-map-action-planner.md"
+      },
+      {
+        "slug": "godseye-seismic-analyst",
+        "skillId": null,
+        "created": "dashboard-only",
+        "definition": "docs/ondemand-skills/godseye-seismic-analyst.md"
+      },
+      {
+        "slug": "godseye-aviation-analyst",
+        "skillId": null,
+        "created": "dashboard-only",
+        "definition": "docs/ondemand-skills/godseye-aviation-analyst.md"
+      },
+      {
+        "slug": "godseye-maritime-analyst",
+        "skillId": null,
+        "created": "dashboard-only",
+        "definition": "docs/ondemand-skills/godseye-maritime-analyst.md"
+      },
+      {
+        "slug": "godseye-evidence-verifier",
+        "skillId": null,
+        "created": "dashboard-only",
+        "definition": "docs/ondemand-skills/godseye-evidence-verifier.md"
+      },
+      {
+        "slug": "godseye-structured-response-writer",
+        "skillId": null,
+        "created": "dashboard-only",
+        "definition": "docs/ondemand-skills/godseye-structured-response-writer.md"
+      }
+    ],
+    "skills_notes": "Skills have no documented REST create/attach endpoint (docs/ONDEMAND_API_CURRENT.md §9); paste each id returned by Dashboard → Skills → Create Skill into skillId."
+  }
 }
