@@ -201,6 +201,157 @@ describe('server/ondemand/contract-steps.js', () => {
       );
     });
 
+    test('direct mode with flowId: step 8 executes the workflow (no body), polls status + logs, PASSes with executionId/log detail', async () => {
+      const happy = makeHappyFetchStub();
+      const automationCalls = [];
+      let statusPolls = 0;
+      const fetchStub = async (url, init = {}) => {
+        const u = String(url);
+        const method = init.method || 'GET';
+        if (u.includes('/automation/api/')) {
+          automationCalls.push(`${method} ${u.split('/automation/api')[1]}`);
+          if (method === 'POST' && u.endsWith('/workflow/wf-live/execute')) {
+            assert.equal(
+              init.body,
+              undefined,
+              'execute must carry no body (§7.1)',
+            );
+            return jsonResponse(200, { executionID: 'exec-1' });
+          }
+          if (method === 'GET' && u.endsWith('/execution/exec-1')) {
+            statusPolls += 1;
+            return jsonResponse(200, {
+              data: {
+                id: 'exec-1',
+                status: statusPolls >= 2 ? 'success' : 'executing',
+                endedAtInMilliseconds: statusPolls >= 2 ? 1758179000000 : 0,
+              },
+            });
+          }
+          if (method === 'GET' && u.endsWith('/execution/exec-1/logs')) {
+            return jsonResponse(200, {
+              data: [
+                {
+                  nodeKey: '',
+                  message: 'starting workflow execution',
+                  timestamp: 1758178900000,
+                },
+                {
+                  nodeKey: 'session_context',
+                  message:
+                    'all dependencies satisfied, proceeding to task execution',
+                  timestamp: 1758178900050,
+                },
+              ],
+            });
+          }
+        }
+        return happy(url, init);
+      };
+
+      const report = await runContractSteps({
+        mode: 'direct',
+        apiKey: 'SENTINEL-KEY-123',
+        flowId: 'wf-live',
+        workflowPollMs: 5000,
+        workflowPollIntervalMs: 1,
+        fetchImpl: fetchStub,
+        log: () => {},
+      });
+
+      const byStep = Object.fromEntries(report.steps.map((s) => [s.step, s]));
+      assert.equal(byStep[8].ok, true);
+      assert.equal(byStep[8].skipped, false);
+      assert.equal(byStep[8].httpStatus, 200);
+      assert.equal(byStep[8].executionStatus, 'success');
+      assert.equal(byStep[8].logEvents, 2);
+      assert.equal(typeof byStep[8].timeToFirstLogMs, 'number');
+      assert.match(
+        byStep[8].detail,
+        /executionId=exec-1 status=success logEvents=2 timeToFirstLogMs=\d+ firstLogUtc=2025-09-18T/,
+      );
+      assert.equal(automationCalls[0], 'POST /workflow/wf-live/execute');
+      assert.ok(automationCalls.includes('GET /execution/exec-1'));
+      assert.ok(automationCalls.includes('GET /execution/exec-1/logs'));
+      assert.equal(report.summary.passed, 9);
+      assert.equal(report.summary.skipped, 1);
+      assert.ok(!JSON.stringify(report).includes('SENTINEL-KEY-123'));
+    });
+
+    test('direct mode with flowId: step 8 stops polling at workflowPollMs and still PASSes on the documented async "executing" status', async () => {
+      const happy = makeHappyFetchStub();
+      const fetchStub = async (url, init = {}) => {
+        const u = String(url);
+        const method = init.method || 'GET';
+        if (method === 'POST' && u.endsWith('/workflow/wf-slow/execute')) {
+          return jsonResponse(200, { executionID: 'exec-2' });
+        }
+        if (method === 'GET' && u.endsWith('/execution/exec-2')) {
+          return jsonResponse(200, {
+            data: { id: 'exec-2', status: 'executing' },
+          });
+        }
+        if (method === 'GET' && u.endsWith('/execution/exec-2/logs')) {
+          return jsonResponse(200, { data: [] });
+        }
+        return happy(url, init);
+      };
+      const report = await runContractSteps({
+        mode: 'direct',
+        apiKey: 'SENTINEL-KEY-123',
+        flowId: 'wf-slow',
+        workflowPollMs: 0,
+        fetchImpl: fetchStub,
+        log: () => {},
+      });
+      const byStep = Object.fromEntries(report.steps.map((s) => [s.step, s]));
+      assert.equal(byStep[8].ok, true);
+      assert.equal(byStep[8].executionStatus, 'executing');
+      assert.equal(byStep[8].logEvents, 0);
+      assert.equal(byStep[8].timeToFirstLogMs, null);
+      assert.match(
+        byStep[8].detail,
+        /status=executing logEvents=0 timeToFirstLogMs=n\/a/,
+      );
+    });
+
+    test('direct mode with flowId: an execute response without executionID FAILs step 8', async () => {
+      const happy = makeHappyFetchStub();
+      const fetchStub = async (url, init = {}) => {
+        const u = String(url);
+        if (
+          (init.method || 'GET') === 'POST' &&
+          u.endsWith('/workflow/wf-bad/execute')
+        ) {
+          return jsonResponse(200, { message: 'Workflow execution started' });
+        }
+        return happy(url, init);
+      };
+      const report = await runContractSteps({
+        mode: 'direct',
+        apiKey: 'SENTINEL-KEY-123',
+        flowId: 'wf-bad',
+        fetchImpl: fetchStub,
+        log: () => {},
+      });
+      const byStep = Object.fromEntries(report.steps.map((s) => [s.step, s]));
+      assert.equal(byStep[8].ok, false);
+      assert.equal(byStep[8].skipped, false);
+      assert.match(byStep[8].error, /executionID/);
+    });
+
+    test('buildDryPlan: step 8 describes execute + status/logs polling (no streaming endpoint) in both modes', () => {
+      const direct = buildDryPlan({ mode: 'direct', flowId: 'wf-live' });
+      assert.match(direct[7], /\/workflow\/wf-live\/execute \(no body\)/);
+      assert.match(direct[7], /\/logs for up to 12000ms/);
+      assert.match(direct[7], /no streaming-logs endpoint is documented/);
+      const proxy = buildDryPlan({
+        mode: 'proxy',
+        proxyBase: 'https://h/api/ondemand',
+      });
+      assert.match(proxy[7], /workflow\?action=logs&executionId=/);
+    });
+
     test('direct mode: a failing session-create step skips every dependent step', async () => {
       const fetchStub = async () =>
         new Response('service unavailable', { status: 503 });

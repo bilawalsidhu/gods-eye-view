@@ -43,6 +43,15 @@
  *   pluginIds              string[], direct-mode pluginIds source for
  *                          steps 4/9
  *   flowId                 direct-mode workflow id for step 8
+ *   workflowPollMs         step 8: how long to keep polling the execution
+ *                          for a terminal status after execute (default
+ *                          12000; the owned workflow takes ~160 s end to
+ *                          end, so the step normally reports the
+ *                          documented async 'executing' status plus the
+ *                          log events and time-to-first-log observed
+ *                          within this window — polling GET .../logs is
+ *                          the only documented log surface, §7.1)
+ *   workflowPollIntervalMs step 8 poll interval (default 2000)
  *   externalUserId         default `godseye-contract-test-<YYYY-MM-DD UTC>`
  *   timeoutMs              per-request timeout, default 60000
  *   sseTimeoutMs           SSE request timeout, default 120000
@@ -118,6 +127,15 @@ function resolveOptions(options = {}) {
     ? options.pluginIds.filter((s) => typeof s === 'string' && s.length > 0)
     : [];
   const flowId = options.flowId || '';
+  const workflowPollMs =
+    Number.isFinite(options.workflowPollMs) && options.workflowPollMs >= 0
+      ? options.workflowPollMs
+      : 12000;
+  const workflowPollIntervalMs =
+    Number.isFinite(options.workflowPollIntervalMs) &&
+    options.workflowPollIntervalMs > 0
+      ? options.workflowPollIntervalMs
+      : 2000;
   const externalUserId =
     options.externalUserId || `godseye-contract-test-${utcDateStamp()}`;
   const timeoutMs =
@@ -145,6 +163,8 @@ function resolveOptions(options = {}) {
     fulfillmentEndpointId,
     pluginIds,
     flowId,
+    workflowPollMs,
+    workflowPollIntervalMs,
     externalUserId,
     timeoutMs,
     sseTimeoutMs,
@@ -314,7 +334,7 @@ export function buildDryPlan(options = {}) {
       `STEP 5/10 STT on in-script generated WAV \u2014 POST ${proxyUrl('media')} body:{file,name,sessionId,plugins,sizeBytes,responseMode} then POST ${proxyUrl('stt')} body:{audioUrl}`,
       `STEP 6/10 TTS \u2014 POST ${proxyUrl('tts?format=audio')} body:{input,voice,model}`,
       `STEP 7/10 Media PNG analysis \u2014 POST ${proxyUrl('media')} body:{file,name,sessionId,plugins,sizeBytes,responseMode}`,
-      `STEP 8/10 workflow \u2014 GET ${proxyUrl('health?envNames=1')} (gate) then POST ${proxyUrl('workflow?action=execute')} then GET ${proxyUrl('workflow?action=status&executionId=')}${eid}`,
+      `STEP 8/10 workflow \u2014 GET ${proxyUrl('health?envNames=1')} (gate) then POST ${proxyUrl('workflow?action=execute')} then poll GET ${proxyUrl('workflow?action=status&executionId=')}${eid} + GET ${proxyUrl('workflow?action=logs&executionId=')}${eid} (polling only \u2014 no streaming-logs endpoint is documented, \u00a77.1)`,
       `STEP 9/10 session-memory follow-up \u2014 POST ${proxyUrl('chat')} body:{sessionId,query,responseMode}`,
       `STEP 10/10 latency summary \u2014 (no network; computed from steps 1-9)`,
     ];
@@ -327,7 +347,7 @@ export function buildDryPlan(options = {}) {
     `STEP 5/10 STT on in-script generated WAV \u2014 POST ${st.media}/raw body:{file,name,sessionId,plugins,sizeBytes,responseMode} then POST ${st.services}/execute/speech_to_text body:{audioUrl}`,
     `STEP 6/10 TTS \u2014 POST ${st.services}/execute/text_to_speech body:{input,voice,model}`,
     `STEP 7/10 Media PNG analysis \u2014 POST ${st.media}/raw body:{file,name,sessionId,plugins,sizeBytes,responseMode}`,
-    `STEP 8/10 workflow \u2014 POST ${st.automation}/workflow/${st.flowId || '<flowId>'}/execute (no body) then GET ${st.automation}/execution/${eid} (else SKIP if unset)`,
+    `STEP 8/10 workflow \u2014 POST ${st.automation}/workflow/${st.flowId || '<flowId>'}/execute (no body) then poll GET ${st.automation}/execution/${eid} + GET ${st.automation}/execution/${eid}/logs for up to ${st.workflowPollMs}ms (polling only \u2014 no streaming-logs endpoint is documented, \u00a77.1; else SKIP if unset)`,
     `STEP 9/10 session-memory follow-up \u2014 POST ${st.chat}/sessions/${sid}/query body:{query,endpointId,responseMode,pluginIds}`,
     `STEP 10/10 latency summary \u2014 (no network; computed from steps 1-9)`,
   ];
@@ -361,6 +381,8 @@ export async function runContractSteps(options = {}) {
     fulfillmentEndpointId: FULFILLMENT_ENDPOINT_ID,
     pluginIds: SPATIAL_AGENT_IDS,
     flowId: SPATIAL_FLOW_ID,
+    workflowPollMs: WORKFLOW_POLL_MS,
+    workflowPollIntervalMs: WORKFLOW_POLL_INTERVAL_MS,
     externalUserId: EXTERNAL_USER_ID,
     timeoutMs: TIMEOUT_MS,
     sseTimeoutMs: SSE_TIMEOUT_MS,
@@ -976,6 +998,59 @@ export async function runContractSteps(options = {}) {
     const skipReason =
       'ONDEMAND_SPATIAL_FLOW_ID unset on the deployment \u2014 auto-skipped by design';
 
+    // Execute is asynchronous (§7.3): `execute` returns an executionID at
+    // once and progress is read by polling GET /execution/{id} and
+    // GET /execution/{id}/logs — a streaming-logs endpoint is NOT FOUND IN
+    // LIVE DOCS (§7.1), so polling is the only documented log surface.
+    // The step PASSES on a real executionID + a readable status; it does
+    // not wait for the (~160 s) run to finish beyond WORKFLOW_POLL_MS.
+    const pollExecution = async (statusUrl, logsUrl) => {
+      const t0 = Date.now();
+      let status = null;
+      let logEvents = 0;
+      let timeToFirstLogMs = null;
+      let firstLogUtc = null;
+      for (;;) {
+        const st = await fetchJson(statusUrl, { method: 'GET' });
+        status = st.json?.data?.status ?? st.json?.status ?? null;
+        if (timeToFirstLogMs === null) {
+          const lg = await fetchJson(logsUrl, { method: 'GET' });
+          const entries = Array.isArray(lg.json?.data) ? lg.json.data : [];
+          if (entries.length > 0) {
+            logEvents = entries.length;
+            timeToFirstLogMs = Date.now() - t0;
+            const earliest = Math.min(
+              ...entries.map((e) => Number(e?.timestamp) || Infinity),
+            );
+            if (Number.isFinite(earliest))
+              firstLogUtc = new Date(earliest).toISOString();
+          }
+        } else {
+          const lg = await fetchJson(logsUrl, { method: 'GET' });
+          if (Array.isArray(lg.json?.data)) logEvents = lg.json.data.length;
+        }
+        const terminal =
+          typeof status === 'string' &&
+          !['executing', 'pending', 'running', 'queued'].includes(status);
+        if (terminal || Date.now() - t0 >= WORKFLOW_POLL_MS) break;
+        await new Promise((r) => setTimeout(r, WORKFLOW_POLL_INTERVAL_MS));
+      }
+      return {
+        status,
+        logEvents,
+        timeToFirstLogMs,
+        firstLogUtc,
+        polledMs: Date.now() - t0,
+      };
+    };
+    const shape = (executionId, polled) => ({
+      value: executionId,
+      executionStatus: polled.status,
+      logEvents: polled.logEvents,
+      timeToFirstLogMs: polled.timeToFirstLogMs,
+      detail: `executionId=${executionId} status=${polled.status ?? '?'} logEvents=${polled.logEvents} timeToFirstLogMs=${polled.timeToFirstLogMs ?? 'n/a'}${polled.firstLogUtc ? ` firstLogUtc=${polled.firstLogUtc}` : ''} polledMs=${polled.polledMs}`,
+    });
+
     if (MODE === 'proxy') {
       const health = await fetchJson(proxyUrl('health?envNames=1'), {
         method: 'GET',
@@ -987,16 +1062,12 @@ export async function runContractSteps(options = {}) {
       });
       const executionId = exec.json?.executionID;
       if (!executionId) throw new Error('response missing executionID');
-      const status = await fetchJson(
-        proxyUrl(
-          `workflow?action=status&executionId=${encodeURIComponent(executionId)}`,
-        ),
-        { method: 'GET' },
+      const eid = encodeURIComponent(executionId);
+      const polled = await pollExecution(
+        proxyUrl(`workflow?action=status&executionId=${eid}`),
+        proxyUrl(`workflow?action=logs&executionId=${eid}`),
       );
-      return {
-        value: executionId,
-        detail: `executionId=${executionId} status=${status.json?.data?.status ?? status.json?.status ?? '?'}`,
-      };
+      return shape(executionId, polled);
     }
 
     if (!SPATIAL_FLOW_ID) throw new Skip(skipReason);
@@ -1006,14 +1077,12 @@ export async function runContractSteps(options = {}) {
     );
     const executionId = exec.json?.executionID;
     if (!executionId) throw new Error('response missing executionID');
-    const status = await fetchJson(
-      `${AUTOMATION}/execution/${encodeURIComponent(executionId)}`,
-      { method: 'GET' },
+    const eid = encodeURIComponent(executionId);
+    const polled = await pollExecution(
+      `${AUTOMATION}/execution/${eid}`,
+      `${AUTOMATION}/execution/${eid}/logs`,
     );
-    return {
-      value: executionId,
-      detail: `executionId=${executionId} status=${status.json?.data?.status ?? status.json?.status ?? '?'}`,
-    };
+    return shape(executionId, polled);
   }
 
   async function step9() {
