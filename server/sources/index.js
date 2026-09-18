@@ -14,6 +14,7 @@
 
 import { fetchEarthquakes } from './usgs-earthquakes.js';
 import { fetchTimezone } from './demo-timezone.js';
+import { fetchFires } from './nasa-firms.js';
 
 /** Row 1 (USGS) predates the shared contract — adapt its result shape. */
 async function earthquakeSearch(params, ctx = {}) {
@@ -49,4 +50,8 @@ async function earthquakeSearch(params, ctx = {}) {
 export const SOURCE_ADAPTERS = Object.freeze({
   'earthquake.search': earthquakeSearch,
   'demo.timezone': (params, ctx) => fetchTimezone(params, ctx),
+  // Gate 3 row 2 — env is process.env here (the adapter reads only
+  // NASA_FIRMS_MAP_KEY from it and never echoes it).
+  'fires.search': (params, ctx) =>
+    fetchFires(params, { ...ctx, env: process.env }),
 });

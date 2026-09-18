@@ -1,7 +1,7 @@
 {
   "$schema_note": "God's Eye spatial capability registry — Gate 3 rows. Row fields consumed by server/ondemand/capability-loop.js: id, provider, route, adapter (file; rows without one are never executed), status (PENDING / rendering-only rows are excluded from the catalogue), params (whitelist), required_params, description, coverage, license, attribution.",
-  "version": 3,
-  "updated_utc": "2026-09-18T08:20:00Z",
+  "version": 4,
+  "updated_utc": "2026-09-18T09:30:00Z",
   "capabilities": [
     {
       "id": "earthquake.search",
@@ -76,6 +76,41 @@
       "attribution": "God's Eye View demo.timezone (nautical zone estimate)",
       "gate3_row": "dynamic-capability probe",
       "notes": "Registered with ZERO frontend changes to prove OnDemand selects a capability purely from this registry (docs/audit/capability-loop-verification.md)."
+    },
+    {
+      "id": "fires.search",
+      "provider": "NASA FIRMS (LANCE near-real-time active fire) — area CSV API",
+      "route": "/api/sources/fires",
+      "ondemand_tool": "fire_detection_search",
+      "ondemand_tool_id": null,
+      "coverage": "observed (NRT detections; cloud/overpass gaps)",
+      "auth": "env:NASA_FIRMS_MAP_KEY (free MAP_KEY; 503 not_configured when absent)",
+      "persistent_connection": false,
+      "status": "registered-unverified",
+      "adapter": "server/sources/nasa-firms.js",
+      "adapter_export": "fetchFires",
+      "description": "Active-fire detections (VIIRS NOAA-20/NOAA-21/SNPP or MODIS, NRT) inside a bounding box or a circle (latitude+longitude+radius_km → bbox) over the last 1–10 days; returns detections with UTC acquisition time, brightness, FRP, confidence, satellite/instrument, day/night.",
+      "params": [
+        "bbox",
+        "latitude",
+        "longitude",
+        "radius_km",
+        "source",
+        "day_range",
+        "date",
+        "limit"
+      ],
+      "required_params": [],
+      "definition": "docs/ondemand-tools/fire_detection_search.json",
+      "tool_definition": "docs/ondemand-tools/fire_detection_search.json",
+      "license": {
+        "name": "NASA Earthdata open data (FIRMS/LANCE) — free MAP_KEY required, attribution requested",
+        "url": "https://firms.modaps.eosdis.nasa.gov/api/area/",
+        "status": "LICENSE/KEY REQUIRED + ATTRIBUTION REQUIRED"
+      },
+      "attribution": "NASA FIRMS / LANCE",
+      "gate3_row": 2,
+      "notes": "Row 2 scaffold (2026-09-18): adapter, route via the catch-all, tool definition, tests. The MAP_KEY is not configured on the emulator, so live verification records the structured 503 not_configured path; status becomes 'live' once NASA_FIRMS_MAP_KEY is set on the deployment and the tool is registered in the OnDemand dashboard (docs/audit/gate3-row1-registration.md pattern)."
     }
   ],
   "ondemand": {
