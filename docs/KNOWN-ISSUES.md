@@ -20,10 +20,10 @@ Context:
 
 Current mitigation in runtime:
 - Fair per-road dot budget allocation (reduces hard starvation under global `MAX_DOTS` cap).
+- That fairness applies to the roads inside the camera rectangle plus a margin ring, before the rest of the fetched tile (trade-off: under a cap too small to seed every road, off-frame roads can drop to no dots).
 - Center-shift threshold (reduces stale overlap lock while panning).
 
 Next iteration candidates:
-- Prioritize currently visible road segments inside the active viewport before off-center segments.
 - Add neighbor prefetch ring for nearby tiles after jump-to-city actions.
 - Add adaptive dot cap by frame time (coverage first, density second).
 - Promote sync chip from loading indicator to true multi-phase progress.

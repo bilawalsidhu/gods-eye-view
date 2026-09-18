@@ -456,6 +456,8 @@
   "scripts/traffic-fixtures.mjs",
   "src/layers/traffic/navigation.test.mjs",
   "scripts/qa-traffic-navigation.mjs",
+  "src/layers/traffic/model.test.mjs",
+  "scripts/qa-traffic-viewport-budget.mjs",
   "src/ui/frameRateMonitor.js",
   "src/ui/frameRateMonitor.test.mjs",
   "src/layers/cctv/lifecycle.js",
