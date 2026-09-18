@@ -16,7 +16,9 @@ import mediaHandler from '../../api/ondemand/media.js';
 import sttHandler from '../../api/ondemand/stt.js';
 import ttsHandler from '../../api/ondemand/tts.js';
 import workflowHandler from '../../api/ondemand/workflow.js';
-import healthHandler from '../../api/ondemand/health.js';
+import healthHandler, {
+  __resetSpeechProbeCacheForTests,
+} from '../../api/ondemand/health.js';
 
 const TEST_KEY = 'test-key-abcd1234';
 // Constructed dynamically (never a literal) — these two names are
@@ -51,6 +53,7 @@ beforeEach(() => {
   savedEnv = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]]));
   for (const k of ENV_KEYS) delete process.env[k];
   __resetStoreForTests();
+  __resetSpeechProbeCacheForTests();
 });
 
 afterEach(() => {
@@ -60,11 +63,43 @@ afterEach(() => {
   }
   __reloadConfigForTests();
   __resetStoreForTests();
+  __resetSpeechProbeCacheForTests();
   if (activeStub) {
     activeStub.restore();
     activeStub = undefined;
   }
 });
+
+const TTS_PROBE_URL =
+  'https://api.on-demand.io/services/v1/public/service/execute/text_to_speech';
+// A sentinel audioUrl: health must never echo it back to a client.
+const TTS_AUDIO_URL_SENTINEL =
+  'https://cdn.example.test/tts/sentinel-3f9c1a.mp3';
+
+/** Documented §6.2 TTS envelope — what a healthy speech probe receives. */
+function ttsEnvelope() {
+  return jsonResponse(200, {
+    message: 'Service executed successfully',
+    data: { audioUrl: TTS_AUDIO_URL_SENTINEL },
+  });
+}
+
+/** The three read-only probes (chat, media, workflow) all healthy; the
+ * fourth entry (speech) is supplied by each test. */
+function healthyReadProbes() {
+  return [
+    jsonResponse(200, { message: 'ok', data: [] }),
+    jsonResponse(200, { message: 'ok', data: [] }),
+    jsonResponse(200, { message: 'ok', data: [] }),
+  ];
+}
+
+async function runHealth(url = '/api/ondemand/health') {
+  const req = makeReq({ method: 'GET', url });
+  const res = makeRes();
+  await healthHandler(req, res);
+  return res;
+}
 
 function configureWithKey(extraEnv = {}) {
   process.env.ONDEMAND_API_KEY = TEST_KEY;
@@ -108,8 +143,26 @@ describe('api/ondemand/health.js', () => {
         'reasoningMode',
         'flowVersion',
         'spatialFlowId',
+        'tiers',
       ].sort(),
     );
+    // benchmarked tier defaults (ids only) ride along even unkeyed
+    assert.deepEqual(body.config.tiers, {
+      ASK: {
+        fulfillmentEndpointId: 'predefined-gpt-5.6-luna',
+        reasoningMode: 'low',
+      },
+      INVESTIGATE: {
+        fulfillmentEndpointId: 'predefined-claude-sonnet-5',
+        reasoningMode: 'low',
+      },
+      DEEP: {
+        fulfillmentEndpointId: 'predefined-claude-sonnet-5',
+        reasoningMode: 'high',
+      },
+    });
+    // no probe ran, so there is nothing to report under speechProbe
+    assert.equal('speechProbe' in body, false);
     assert.equal(body.config.apiKey.configured, false);
     assert.equal(body.config.baseUrl.configured, true);
     assert.equal(body.config.baseUrl.source, 'default');
@@ -126,18 +179,14 @@ describe('api/ondemand/health.js', () => {
     assert.equal(body.config.spatialFlowId.source, 'unset');
   });
 
-  test('smoke: probes chat/media/workflow with apikey header and reports healthy', async () => {
+  test('smoke: probes chat/media/workflow (GET) + speech (POST TTS §6.2) with apikey header and reports healthy', async () => {
     configureWithKey();
-    activeStub = stubFetchSequence([
-      jsonResponse(200, { message: 'ok', data: [] }),
-      jsonResponse(200, { message: 'ok', data: [] }),
-      jsonResponse(200, { message: 'ok', data: [] }),
-    ]);
+    activeStub = stubFetchSequence([...healthyReadProbes(), ttsEnvelope()]);
     const req = makeReq({ method: 'GET', url: '/api/ondemand/health' });
     const res = makeRes();
     await healthHandler(req, res);
 
-    assert.equal(activeStub.calls.length, 3);
+    assert.equal(activeStub.calls.length, 4);
     assert.equal(
       activeStub.calls[0].url,
       'https://api.on-demand.io/chat/v1/sessions?limit=1',
@@ -150,30 +199,52 @@ describe('api/ondemand/health.js', () => {
       activeStub.calls[2].url,
       'https://api.on-demand.io/automation/api/workflow/?limit=1',
     );
+    assert.equal(activeStub.calls[3].url, TTS_PROBE_URL);
     for (const call of activeStub.calls) {
       assert.equal(call.init.headers.apikey, TEST_KEY);
     }
+    for (const call of activeStub.calls.slice(0, 3)) {
+      assert.equal(call.init.method, 'GET');
+    }
+    // the speech probe sends exactly the documented §6.2 fields, nothing else
+    const tts = activeStub.calls[3];
+    assert.equal(tts.init.method, 'POST');
+    assert.equal(tts.init.headers['Content-Type'], 'application/json');
+    assert.deepEqual(JSON.parse(tts.init.body), {
+      input: 'ok',
+      model: 'tts-1',
+      voice: 'alloy',
+    });
 
     assert.equal(res.statusCode, 200);
     const body = res.json();
     assert.equal(body.chat, 'healthy');
     assert.equal(body.media, 'healthy');
     assert.equal(body.workflow, 'healthy');
-    assert.equal(body.speech, 'degraded');
+    assert.equal(body.speech, 'healthy');
+    assert.deepEqual(body.speechProbe, { cached: false, ageSec: 0 });
     assert.equal(body.ondemand, 'healthy');
     assert.equal(body.configured, true);
     assert.deepEqual(body.plugins, {});
     assert.equal(body.error, undefined);
+    assert.equal(body.details, undefined);
+    // the synthesized audio URL is never echoed to a client
+    assert.equal(res.text().includes(TTS_AUDIO_URL_SENTINEL), false);
 
     // once a key is present, none of the five status fields may read
-    // 'not configured' — healthy/degraded/error only (speech stays
-    // 'degraded' by design, never 'not configured', once configured).
+    // 'not configured' — healthy/degraded/error only.
     for (const field of ['ondemand', 'chat', 'speech', 'media', 'workflow']) {
       assert.notEqual(body[field], 'not configured');
     }
     assert.equal(body.reasoningModeInvalid, false);
     assert.equal(body.config.apiKey.configured, true);
     assert.equal(body.config.fulfillmentEndpointId.source, 'default');
+    assert.equal(body.config.reasoningEndpointId.source, 'default');
+    assert.equal(
+      body.config.tiers.ASK.fulfillmentEndpointId,
+      'predefined-gpt-5.6-luna',
+    );
+    assert.equal(body.config.tiers.DEEP.reasoningMode, 'high');
   });
 
   test('reasoningModeInvalid is true (and config.reasoningMode.valid is false) when an undocumented ONDEMAND_REASONING_MODE is set', async () => {
@@ -197,6 +268,165 @@ describe('api/ondemand/health.js', () => {
     for (const field of ['ondemand', 'chat', 'speech', 'media', 'workflow']) {
       assert.notEqual(body[field], 'not configured');
     }
+  });
+});
+
+describe('api/ondemand/health.js — speech probe (POST text_to_speech §6.2, cached 10 min per warm instance)', () => {
+  test('first keyed call probes TTS (healthy, cached:false); the second within the window reuses it (cached:true) without another TTS fetch', async () => {
+    configureWithKey();
+    activeStub = stubFetchSequence([...healthyReadProbes(), ttsEnvelope()]);
+    const first = (await runHealth()).json();
+    assert.equal(activeStub.calls.length, 4);
+    assert.equal(activeStub.calls[3].url, TTS_PROBE_URL);
+    assert.equal(first.speech, 'healthy');
+    assert.deepEqual(first.speechProbe, { cached: false, ageSec: 0 });
+    activeStub.restore();
+
+    // second call: only the three read-only probes hit the network
+    activeStub = stubFetchSequence(healthyReadProbes());
+    const second = (await runHealth()).json();
+    assert.equal(activeStub.calls.length, 3);
+    assert.equal(
+      activeStub.calls.some((c) => c.url === TTS_PROBE_URL),
+      false,
+      'a fresh cached success must not synthesize audio again',
+    );
+    assert.equal(second.speech, 'healthy');
+    assert.equal(second.speechProbe.cached, true);
+    assert.equal(typeof second.speechProbe.ageSec, 'number');
+    assert.ok(second.speechProbe.ageSec >= 0 && second.speechProbe.ageSec < 60);
+    assert.equal(second.ondemand, 'healthy');
+  });
+
+  test('verbose=1 reports the speech probe latency/status under details.speech (no cached/ageSec there, no audioUrl anywhere)', async () => {
+    configureWithKey();
+    activeStub = stubFetchSequence([...healthyReadProbes(), ttsEnvelope()]);
+    const res = await runHealth('/api/ondemand/health?verbose=1');
+    const body = res.json();
+    assert.equal(body.details.speech.httpStatus, 200);
+    assert.equal(typeof body.details.speech.latencyMs, 'number');
+    assert.equal('cached' in body.details.speech, false);
+    assert.equal('ageSec' in body.details.speech, false);
+    assert.equal('status' in body.details.speech, false);
+    assert.equal(res.text().includes(TTS_AUDIO_URL_SENTINEL), false);
+  });
+
+  test('a timeout (TimeoutError/AbortError from fetch) -> speech "degraded" with the documented detail, never cached', async () => {
+    configureWithKey();
+    const timeoutStub = () => {
+      throw new DOMException(
+        'The operation was aborted due to timeout',
+        'TimeoutError',
+      );
+    };
+    activeStub = stubFetchSequence([...healthyReadProbes(), timeoutStub]);
+    const first = (await runHealth()).json();
+    assert.equal(activeStub.calls.length, 4);
+    assert.equal(first.speech, 'degraded');
+    assert.equal(first.chat, 'healthy');
+    assert.equal(first.ondemand, 'healthy'); // chat healthy still short-circuits the roll-up
+    assert.deepEqual(first.speechProbe, { cached: false, ageSec: 0 });
+    assert.equal(
+      first.details.speech.detail,
+      'speech probe timed out (>4.5 s); TTS is a synthesis call, not a read-only probe',
+    );
+    activeStub.restore();
+
+    // a non-healthy outcome is not memoised: the next call probes again
+    const abortStub = () => {
+      throw new DOMException('This operation was aborted', 'AbortError');
+    };
+    activeStub = stubFetchSequence([...healthyReadProbes(), abortStub]);
+    const second = (await runHealth()).json();
+    assert.equal(activeStub.calls.length, 4);
+    assert.equal(activeStub.calls[3].url, TTS_PROBE_URL);
+    assert.equal(second.speech, 'degraded');
+    assert.equal(second.speechProbe.cached, false);
+  });
+
+  test('the speech probe uses its own 4.5 s budget (AbortSignal on the TTS call), the read probes 3 s', async () => {
+    configureWithKey();
+    activeStub = stubFetchSequence([...healthyReadProbes(), ttsEnvelope()]);
+    await runHealth();
+    for (const call of activeStub.calls) {
+      assert.ok(call.init.signal instanceof AbortSignal);
+      assert.equal(call.init.signal.aborted, false);
+    }
+  });
+
+  test('401 from TTS -> speech "error" ("invalid key"), surfaced under details even without verbose', async () => {
+    configureWithKey();
+    activeStub = stubFetchSequence([
+      ...healthyReadProbes(),
+      jsonResponse(401, { message: 'Unauthorized' }),
+    ]);
+    const body = (await runHealth()).json();
+    assert.equal(body.speech, 'error');
+    assert.equal(body.details.speech.detail, 'invalid key');
+    assert.equal(body.speechProbe.cached, false);
+    assert.equal(body.ondemand, 'healthy'); // chat healthy
+  });
+
+  test('403 from TTS -> speech "error"; other non-2xx (500) and a 2xx without data.audioUrl -> "degraded" with the status', async () => {
+    configureWithKey();
+    activeStub = stubFetchSequence([
+      ...healthyReadProbes(),
+      jsonResponse(403, { message: 'Forbidden' }),
+    ]);
+    assert.equal((await runHealth()).json().speech, 'error');
+    activeStub.restore();
+
+    activeStub = stubFetchSequence([
+      ...healthyReadProbes(),
+      jsonResponse(500, { message: 'boom' }),
+    ]);
+    const degraded = (await runHealth()).json();
+    assert.equal(degraded.speech, 'degraded');
+    assert.equal(degraded.details.speech.httpStatus, 500);
+    assert.match(degraded.details.speech.detail, /HTTP 500/);
+    activeStub.restore();
+
+    activeStub = stubFetchSequence([
+      ...healthyReadProbes(),
+      jsonResponse(200, { message: 'ok', data: {} }),
+    ]);
+    const noUrl = (await runHealth()).json();
+    assert.equal(noUrl.speech, 'degraded');
+    assert.match(noUrl.details.speech.detail, /without data\.audioUrl/);
+    assert.equal(noUrl.speechProbe.cached, false);
+  });
+
+  test('a speech "error" rolls up to ondemand "error" when chat is not healthy', async () => {
+    configureWithKey();
+    activeStub = stubFetchSequence([
+      jsonResponse(500, { message: 'chat down' }),
+      jsonResponse(200, { message: 'ok', data: [] }),
+      jsonResponse(200, { message: 'ok', data: [] }),
+      jsonResponse(401, { message: 'Unauthorized' }),
+    ]);
+    const body = (await runHealth()).json();
+    assert.equal(body.chat, 'degraded');
+    assert.equal(body.speech, 'error');
+    assert.equal(body.ondemand, 'error');
+  });
+
+  test('unkeyed: every field "not configured", no fetch at all (no TTS synthesis), no speechProbe field', async () => {
+    __reloadConfigForTests(); // key already deleted by beforeEach
+    activeStub = stubFetchSequence([
+      () => {
+        throw new Error('fetch must not be called without an API key');
+      },
+    ]);
+    const res = await runHealth();
+    assert.equal(res.statusCode, 200);
+    const body = res.json();
+    assert.equal(activeStub.calls.length, 0);
+    for (const field of ['ondemand', 'chat', 'speech', 'media', 'workflow']) {
+      assert.equal(body[field], 'not configured');
+    }
+    assert.equal(body.configured, false);
+    assert.equal('speechProbe' in body, false);
+    assert.ok(body.config.tiers);
   });
 });
 

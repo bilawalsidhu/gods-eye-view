@@ -1,0 +1,13 @@
+# Speech services verification — 2026-09-18
+
+Services API per docs §6 (`POST https://api.on-demand.io/services/v1/public/service/execute/{text_to_speech|speech_to_text}`, header `apikey` `[REDACTED]`). Documented TTS models: `tts-1`, `tts-1-hd`; voices: alloy, echo, fable, onyx, nova, shimmer.
+
+| Step                      | Request (redacted)                                   | HTTP | Latency ms | Result                                                                                                                                                           | UTC                      |
+| ------------------------- | ---------------------------------------------------- | ---- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| TTS                       | `{input:'<41 chars>', model:'tts-1', voice:'alloy'}` | 200  | 3021       | `data.audioUrl` returned; download → HTTP 200, **52608 bytes**, MP3 frame signature, served as `application/octet-stream` from `airevprod.blob.core.windows.net` | 2026-09-18T06:44:55.754Z |
+| TTS (HD)                  | `{model:'tts-1-hd', voice:'nova'}`                   | 200  | 2606       | download HTTP 200, **39936 bytes**, `application/octet-stream`                                                                                                   | 2026-09-18T06:44:58.810Z |
+| STT (TTS output fed back) | `{audioUrl:'<audioUrl from the alloy call>'}`        | 200  | 410        | `data.text` = "The god's eye view proxy is verifying the speech services." — exact round-trip of the synthesized sentence                                        | 2026-09-18T06:45:01.425Z |
+
+**Outcome:** both services succeed on this account. One assertion in the brief does not hold as written: the audio download's `Content-Type` is `application/octet-stream`, not `audio/*` — the bytes are a valid MP3 (frame signature), the store just labels them generically. Clients (and the contract test, which already sniffs the container) must not require `audio/*`.
+
+**Actions taken:** `/api/ondemand/health` now runs a real cached TTS probe (`{input:'ok', model:'tts-1', voice:'alloy'}`, 4.5 s timeout, cached 10 min per warm instance) and reports `speech: healthy` on 2xx instead of the former by-design `degraded`. The two skipped selftest/contract steps are **not** speech steps — STT (step 5) and TTS (step 6) already run and pass; the skipped steps are 4 (built-in tool invocation — this account has 0 agents, see the plugin inventory) and 8 (workflow — no `ONDEMAND_SPATIAL_FLOW_ID`), and they stay skipped until an agent/workflow exists.
