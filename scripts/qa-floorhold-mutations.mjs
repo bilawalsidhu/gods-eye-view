@@ -25,7 +25,7 @@ const TESTS = [
   'src/data/renderAltitude.test.mjs',
 ];
 
-const FLIGHTS = 'src/data/flights.js';
+const FLIGHTS = 'src/layers/flights/motion.js';
 const FLOOR = 'src/data/groundFloor.js';
 const ALT = 'src/data/renderAltitude.js';
 
@@ -94,7 +94,7 @@ const MUTATIONS = [
   {
     defect: 'the held floor is stretched without bound (no drift limit)',
     edits: [
-      { file: FLIGHTS, from: '      <= HELD_FLOOR_MAX_DRIFT_KM)) {', to: '      <= Infinity)) {' },
+      { file: FLIGHTS, from: '<= HELD_FLOOR_MAX_DRIFT_KM', to: '<= Infinity' },
     ],
   },
   {
@@ -102,8 +102,8 @@ const MUTATIONS = [
     edits: [
       {
         file: FLIGHTS,
-        from: '  if (next.easedM == null && wasHeld && Number.isFinite(stoodOnM)',
-        to: '  if (false && next.easedM == null && wasHeld && Number.isFinite(stoodOnM)',
+        from: 'next.easedM == null && wasHeld && Number.isFinite(stoodOnM)',
+        to: 'false && next.easedM == null && wasHeld && Number.isFinite(stoodOnM)',
       },
     ],
   },
@@ -122,8 +122,8 @@ const MUTATIONS = [
     edits: [
       {
         file: FLIGHTS,
-        from: '  if (next.easedM == null && wasHeld && Number.isFinite(stoodOnM)',
-        to: '  if (next.easedM == null && Number.isFinite(stoodOnM)',
+        from: 'next.easedM == null && wasHeld && Number.isFinite(stoodOnM)',
+        to: 'next.easedM == null && Number.isFinite(stoodOnM)',
       },
     ],
   },
@@ -159,8 +159,8 @@ const MUTATIONS = [
     edits: [
       {
         file: FLIGHTS,
-        from: '  if (next.easedM == null && wasHeld && Number.isFinite(stoodOnM)\n    && Number.isFinite(effective) && effective < stoodOnM) {',
-        to: '  if (next.easedM == null && Number.isFinite(floor) && wasHeld && Number.isFinite(stoodOnM)\n    && Number.isFinite(effective) && effective < stoodOnM) {',
+        from: 'next.easedM == null && wasHeld && Number.isFinite(stoodOnM)',
+        to: 'next.easedM == null && Number.isFinite(floor) && wasHeld && Number.isFinite(stoodOnM)',
       },
     ],
   },
@@ -191,8 +191,8 @@ const MUTATIONS = [
     edits: [
       {
         file: FLIGHTS,
-        from: '      const closed = Math.min(FLOOR_EASE_MAX_STEP, 1 - Math.exp(-dtMs / FLOOR_EASE_TAU_MS));',
-        to: '      const closed = 1 - Math.exp(-dtMs / FLOOR_EASE_TAU_MS);',
+        from: 'FLOOR_EASE_MAX_STEP, 1 - Math.exp(-dtMs / FLOOR_EASE_TAU_MS),',
+        to: 'Infinity, 1 - Math.exp(-dtMs / FLOOR_EASE_TAU_MS),',
       },
     ],
   },
@@ -204,7 +204,7 @@ const MUTATIONS = [
       {
         file: FLIGHTS,
         from: '  if (state.retiredMs == null) {',
-        to: '  _displayFloorState.delete(icao24);\n  if (false) {',
+        to: '  flightState._displayFloorState.delete(icao24);\n  if (false) {',
       },
     ],
   },
@@ -213,8 +213,8 @@ const MUTATIONS = [
     edits: [
       {
         file: FLIGHTS,
-        from: '  return state.retiredMs != null && nowMs - state.retiredMs > FLOOR_SEED_GRACE_MS;',
-        to: '  return false;',
+        from: 'state.retiredMs != null && nowMs - state.retiredMs > FLOOR_SEED_GRACE_MS',
+        to: 'false',
       },
     ],
   },
@@ -291,12 +291,13 @@ for (const mut of MUTATIONS) {
   for (const e of mut.edits) {
     if (!backups.has(e.file)) backups.set(e.file, read(e.file));
     const cur = read(e.file);
-    if (!cur.includes(e.from)) {
+    const anchor = new RegExp(e.from.trim().split(/\s+/).map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s*'));
+    if (!anchor.test(cur)) {
       console.log(`  [STALE] ${mut.defect} — anchor not found in ${e.file}`);
       applied = false;
       break;
     }
-    write(e.file, cur.replace(e.from, e.to));
+    write(e.file, cur.replace(anchor, () => e.to.trim()));
   }
   if (applied) {
     const r = runTests();

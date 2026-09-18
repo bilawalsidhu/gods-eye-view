@@ -1,3 +1,4 @@
+import { expandApplicationHtml } from '../build/application-html.js';
 import { readStylesheet } from './testSupport/readStylesheet.mjs';
 import { GEV_REALTIME_TOOLS } from '../server/providers/openai/tools.js';
 import test from 'node:test';
@@ -221,8 +222,8 @@ test('the key handler refuses to act for a card that is not really on screen', (
   assert.match(module, /isActive: \(\) => !closing && isTopmost\(\)/);
   // Real visibility, not just the class: the class survives while CSS hides the
   // card, which is precisely how a Scene left an invisible ESC handler armed.
-  assert.match(module, /const isTopmost = \(\) => root\.isConnected/);
-  assert.match(module, /&& root\.getClientRects\(\)\.length > 0\s*\n\s*&& !coveredByOverlay\(\);/);
+  assert.match(module, /const isTopmost = \(\) =>\s*root\.isConnected/);
+  assert.match(module, /&&\s*root\.getClientRects\(\)\.length > 0 &&\s*!coveredByOverlay\(\);/);
   const keyboard = fs.readFileSync(new URL('./ui/surfaceKeyboard.js', import.meta.url), 'utf8');
   const handler = keyboard.slice(keyboard.indexOf('const onKeyDown = (event) => {'));
   assert.match(
@@ -372,7 +373,7 @@ test('the launcher yields on engage and waits when a surface is already up', () 
   assert.match(module, /dismiss\(\{ restoreFocus: false \}\)/);
   // A cheap attribute watch, not a per-frame poll — the render governor must
   // not see a new hold because of onboarding chrome.
-  assert.match(module, /attributes: true, attributeFilter: \['class'\]/);
+  assert.match(module, /attributes: true,\s*attributeFilter: \['class'\]/);
   assert.match(module, /surfaceObserver\?\.disconnect\(\)/);
   assert.doesNotMatch(module, /setInterval|requestAnimationFrame\(function poll/);
 });
@@ -535,7 +536,7 @@ test('no mission writes a preference the visitor did not choose by picking it', 
   const panelWrites = code.match(/setPanelCollapsed/g) || [];
   assert.equal(panelWrites.length, 1, 'exactly one panel reveal, on the Context path');
   const contextPath = code.slice(code.indexOf('setContextMode: async (mode)'), code.indexOf('setLayerEnabled:'));
-  assert.match(contextPath, /result\?\.ok[\s\S]*?setPanelCollapsed\?\.\('global-context-panel', false, \{ explicit: true \}\)/);
+  assert.match(contextPath, /result\?\.ok[\s\S]*?setPanelCollapsed\?\.\('global-context-panel', false, \{\s*explicit: true,?\s*\}\)/);
 });
 
 test('the decision table is written down where the next editor will read it', () => {
@@ -550,8 +551,8 @@ test('the decision table is written down where the next editor will read it', ()
 // ── Markup, startup ordering, accessibility ─────────────────────────────────
 
 test('markup, startup ordering and accessibility remain pinned', () => {
-  const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  const startup = fs.readFileSync(new URL('./standalone/startupChrome.js', import.meta.url), 'utf8');
+  const html = expandApplicationHtml(fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
+  const startup = fs.readFileSync(new URL('./app/startupChrome.js', import.meta.url), 'utf8');
   const css = readStylesheet(new URL('../style.css', import.meta.url));
 
   assert.match(html, /id="first-run-launcher" role="dialog"[^>]*aria-labelledby="first-run-title"[^>]*hidden/);
@@ -584,7 +585,7 @@ test('markup, startup ordering and accessibility remain pinned', () => {
 
   assert.match(startup, /styleManager\.initialRestorePromise/);
   assert.ok(startup.indexOf("loadingScreen.classList.add('hidden')") < startup.indexOf("loadingScreen.addEventListener('transitionend', revealFirstRun"));
-  assert.match(startup, /initFirstRunExperience\(\{ styleManager, dataManager \}\)/);
+  assert.match(startup, /initializeWelcome\?\.\(\{ styleManager, dataManager \}\)/);
 
   assert.match(css, /body\.ui-clean-view #first-run-launcher/);
   assert.match(css, /body\.recording-mode #first-run-launcher/);
@@ -656,14 +657,15 @@ test('the DISPLAY rail starts collapsed on a first run, and a stored choice wins
 // ── Voice: instruction-only, tool schema unchanged ─────────────────────
 
 test('the voice TOOL SCHEMA matches the pinned release — the mission mapping is instructions only', () => {
+  // ALPR deliberately adds its ID to the two layer menus and visibility aliases.
   // Canonical serialization pins every tool name, description, property and
   // ordering while allowing source formatting. Derived from the unchanged
   // release schema before formatting (the previous source-byte pin passed).
   const block = JSON.stringify(GEV_REALTIME_TOOLS);
-  assert.equal(block.length, 26121, 'serialized tool schema length drifted');
+  assert.equal(block.length, 26208, 'serialized tool schema length drifted');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    '11680affb4a7aebf142642c8185b28f2ee7d523407054c5b0c3962d933b045eb',
+    '135d4ec66239777da34a8476cdf8348574421d7afd2e981cc3490909a5bc8686',
     'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
   );
   const instructions = fs.readFileSync(new URL('../server/providers/openai/instructions.js', import.meta.url), 'utf8');
@@ -689,11 +691,11 @@ test('the voice TOOL SCHEMA matches the pinned release — the mission mapping i
 });
 
 test('every layer a mission drives is already in the shipped set_layer_visibility enum', () => {
-  const src = fs.readFileSync(new URL('../server/providers/openai/tools.js', import.meta.url), 'utf8');
-  const tool = src.slice(src.indexOf("name: 'set_layer_visibility'"), src.indexOf("name: 'show_data_layers_menu'"));
+  const tool = GEV_REALTIME_TOOLS.find(tool => tool.name === 'set_layer_visibility');
+  const allowedLayers = tool.parameters.properties.layerId.enum;
   const missionLayerIds = Object.values(FIRST_RUN_MISSIONS).flatMap((mission) => mission.layerIds || []);
   assert.ok(missionLayerIds.length > 0);
   for (const layerId of missionLayerIds) {
-    assert.ok(tool.includes(`'${layerId}'`), `${layerId} must already be an allowed enum value`);
+    assert.ok(allowedLayers.includes(layerId), `${layerId} must already be an allowed enum value`);
   }
 });

@@ -49,17 +49,24 @@ let _overlayHost = DEFAULT_TRACKED_OVERLAY_HOST;
  * @param {string} accent Source-owned accent color.
  * @returns {{title:string,details:string[],accent:string}}
  */
-export function trackedLabelModelFromText(text, accent = WORLD_OVERLAY_STYLE.accent) {
+export function trackedLabelModelFromText(
+  text,
+  accent = WORLD_OVERLAY_STYLE.accent,
+) {
   const raw = String(text || '').trim();
   if (!raw) return { title: '', details: [], accent };
   let lines;
   if (raw.includes('\n')) {
-    lines = raw.split('\n').map((line) => line.trim()).filter(Boolean);
+    lines = raw
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
   } else {
     const parts = raw.split(' · ');
-    lines = parts.length > 1
-      ? [parts[0].trim(), parts.slice(1).join(' · ').trim()]
-      : [raw];
+    lines =
+      parts.length > 1
+        ? [parts[0].trim(), parts.slice(1).join(' · ').trim()]
+        : [raw];
   }
   return { title: lines[0] || '', details: lines.slice(1), accent };
 }
@@ -101,7 +108,9 @@ export function cachedTrackedVisualPosition(entity) {
     try {
       const visual = entity.gevVisualPosition();
       if (visual) return visual;
-    } catch { /* fall through to the display position */ }
+    } catch {
+      /* fall through to the display position */
+    }
   }
   return cachedTrackedDisplayPosition(entity);
 }
@@ -140,10 +149,25 @@ export function createTrackedOverlayEntry(entity) {
     collisionGroup: 'ambient-card',
     priority: Number.MAX_SAFE_INTEGER,
     title,
-    details: Array.isArray(model.details) ? model.details.map((line) => String(line)) : [],
+    details: Array.isArray(model.details)
+      ? model.details.map((line) => String(line))
+      : [],
     accent: model.accent || WORLD_OVERLAY_STYLE.accent,
-    anchorRadiusPx: 10,
-    anchorRadiusScale: TRACKED_BILLBOARD_SCALE,
+    cardStyle: model.cardStyle,
+    selected: model.selected === true,
+    leaderStyle: model.leaderStyle,
+    leaderAnimationMs: model.leaderAnimationMs,
+    leaderAnimationStartedAt: model.leaderAnimationStartedAt,
+    leaderDrawRatio: model.leaderDrawRatio,
+    anchorRadiusPx: Number.isFinite(Number(model.anchorRadiusPx))
+      ? Math.max(0, Number(model.anchorRadiusPx))
+      : 10,
+    anchorRadiusScale: Object.prototype.hasOwnProperty.call(
+      model,
+      'anchorRadiusScale',
+    )
+      ? model.anchorRadiusScale
+      : TRACKED_BILLBOARD_SCALE,
     minAnchorGapPx: 16,
     anchorGapPaddingPx: 10,
     verticalOnly: true,
@@ -194,6 +218,12 @@ export function getActiveTrackedReadoutId() {
   return _activeEntryId;
 }
 
+/** Static-context layers whose click selection publishes the readout card. */
+const READOUT_CONTEXT_LAYERS = new Set([
+  'military-installations',
+  'alpr-cameras',
+]);
+
 /**
  * Initialize the model bridge and selection listeners. No render listener is
  * installed; the already-initialized world-overlay host owns the frame lane.
@@ -204,13 +234,14 @@ export function initTrackedReadout(viewer) {
   if (_viewer) destroyTrackedReadout();
   _viewer = viewer;
   _overlayHost.setVisible(TRACKED_OVERLAY_SOURCE_ID, true);
-  _trackedEntityChangedRemove = viewer.trackedEntityChanged?.addEventListener?.(() => {
-    if (viewer.trackedEntity) _selectedContext = null;
-    syncActiveEntity();
-  }) || null;
+  _trackedEntityChangedRemove =
+    viewer.trackedEntityChanged?.addEventListener?.(() => {
+      if (viewer.trackedEntity) _selectedContext = null;
+      syncActiveEntity();
+    }) || null;
   _contextSelectedHandler = (event) => {
     const record = event.detail;
-    if (record?.layerId === 'military-installations') {
+    if (READOUT_CONTEXT_LAYERS.has(record?.layerId)) {
       _selectedContext = record;
       publishEntity(record.entity);
       return;
@@ -221,7 +252,10 @@ export function initTrackedReadout(viewer) {
     }
   };
   _contextClearedHandler = (event) => {
-    if (!_selectedContext || event.detail?.layerId === _selectedContext.layerId) {
+    if (
+      !_selectedContext ||
+      event.detail?.layerId === _selectedContext.layerId
+    ) {
       _selectedContext = null;
       syncActiveEntity();
     }
@@ -231,8 +265,14 @@ export function initTrackedReadout(viewer) {
     if (!_viewer?.trackedEntity) clearTrackedSource();
   };
   window.addEventListener('gev:entity-selected', _contextSelectedHandler);
-  window.addEventListener('gev:entity-selection-cleared', _contextClearedHandler);
-  window.addEventListener('gev:awareness-subject-selected', _aircraftSelectedHandler);
+  window.addEventListener(
+    'gev:entity-selection-cleared',
+    _contextClearedHandler,
+  );
+  window.addEventListener(
+    'gev:awareness-subject-selected',
+    _aircraftSelectedHandler,
+  );
   syncActiveEntity();
   // Boot-verification contract: the track regression harness asserts this
   // exact line at init (dropped by the host migration; restored).
@@ -243,9 +283,18 @@ export function initTrackedReadout(viewer) {
 export function destroyTrackedReadout() {
   _trackedEntityChangedRemove?.();
   _trackedEntityChangedRemove = null;
-  if (_contextSelectedHandler) window.removeEventListener('gev:entity-selected', _contextSelectedHandler);
-  if (_contextClearedHandler) window.removeEventListener('gev:entity-selection-cleared', _contextClearedHandler);
-  if (_aircraftSelectedHandler) window.removeEventListener('gev:awareness-subject-selected', _aircraftSelectedHandler);
+  if (_contextSelectedHandler)
+    window.removeEventListener('gev:entity-selected', _contextSelectedHandler);
+  if (_contextClearedHandler)
+    window.removeEventListener(
+      'gev:entity-selection-cleared',
+      _contextClearedHandler,
+    );
+  if (_aircraftSelectedHandler)
+    window.removeEventListener(
+      'gev:awareness-subject-selected',
+      _aircraftSelectedHandler,
+    );
   _contextSelectedHandler = null;
   _contextClearedHandler = null;
   _aircraftSelectedHandler = null;

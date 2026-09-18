@@ -24,7 +24,9 @@
  * @returns {number} Heading in degrees [0..360), or NaN if unrecognized.
  */
 export function directionToHeading(value, allowBare = false) {
-  const text = String(value || '').trim().toUpperCase();
+  const text = String(value || '')
+    .trim()
+    .toUpperCase();
   if (!text) return NaN;
   // Explicit travel/intercardinal forms — safe on free-form text (a street
   // name almost never contains "NORTHBOUND" or a lone "NB" token).

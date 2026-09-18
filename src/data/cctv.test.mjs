@@ -14,6 +14,16 @@
 // computeFrustumGeometry is PURE (no viewer, no scene queries) so it runs under
 // plain node:test.
 import { test } from 'node:test';
+// Preserve structural pins across component qualification and formatter wrapping.
+function componentFunctionSource(fn) {
+  return fn
+    .toString()
+    .replace(/\blayerState\./g, '')
+    .replace(/\bparts\.\w+\./g, '')
+    .replace(/,\s*(?=\))/g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/\(\s+/g, '(');
+}
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -44,6 +54,7 @@ import cctvLayer, {
   deriveCalBadge,
   surfaceRegimeKey,
   calibrationPatchMovesAnchor,
+  migrateRangeScaleForFloor,
   cctvGeometryDrainPacing,
   createGeometryProgressNotifier,
   normalizeCoverageMode,
@@ -68,7 +79,12 @@ import {
 } from '../cctvFocusRequest.js';
 
 const CCTV_PRESENTATION_SOURCE = fs.readFileSync(
-  path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'ui', 'cctvPresentation.js'),
+  path.join(
+    path.dirname(fileURLToPath(import.meta.url)),
+    '..',
+    'ui',
+    'cctvPresentation.js',
+  ),
   'utf8',
 );
 
@@ -84,8 +100,12 @@ const GESTURE_TYPES = {
 function makeGestureHandler() {
   const actions = new Map();
   return {
-    setInputAction(callback, type) { actions.set(type, callback); },
-    fire(type, event) { actions.get(type)?.(event); },
+    setInputAction(callback, type) {
+      actions.set(type, callback);
+    },
+    fire(type, event) {
+      actions.get(type)?.(event);
+    },
   };
 }
 // Same spherical earth radius projectPoint uses (R = 6371 km) so the
@@ -117,7 +137,11 @@ function mag(v) {
 function viewDir(headingDeg, pitchDeg) {
   const h = toRad(headingDeg);
   const p = toRad(pitchDeg);
-  return { e: Math.sin(h) * Math.cos(p), n: Math.cos(h) * Math.cos(p), u: Math.sin(p) };
+  return {
+    e: Math.sin(h) * Math.cos(p),
+    n: Math.cos(h) * Math.cos(p),
+    u: Math.sin(p),
+  };
 }
 
 // A pose whose far cap sits well above ground (no clamping) so the raw plane
@@ -193,7 +217,10 @@ test('geometry drain coalesces 40 progress ticks and always publishes the final 
   assert.match(productionDrain, /processCctvGeometryDrainBatch/);
   assert.match(productionDrain, /_geoProgressNotifier\?\.progress\(\)/);
   assert.match(productionDrain, /_geoProgressNotifier\?\.finish\(\)/);
-  assert.doesNotMatch(productionDrain, /if \(_geoLoading\) notifyListeners\(\)/);
+  assert.doesNotMatch(
+    productionDrain,
+    /if \(_geoLoading\) notifyListeners\(\)/,
+  );
 });
 
 test('lazy coverage inserts nothing at catalog init, then materializes only eligible records', () => {
@@ -202,29 +229,57 @@ test('lazy coverage inserts nothing at catalog init, then materializes only elig
     coverageEntities: [],
   }));
   let insertCount = 0;
-  const build = (record) => Array.from({ length: 5 }, (_, entityIndex) => {
-    insertCount += 1;
-    return { id: `${record.camera.id}-${entityIndex}`, show: false };
-  });
+  const build = (record) =>
+    Array.from({ length: 5 }, (_, entityIndex) => {
+      insertCount += 1;
+      return { id: `${record.camera.id}-${entityIndex}`, show: false };
+    });
 
-  assert.equal(insertCount, 0, 'building a 100-camera catalog must insert zero coverage entities');
-  assert.doesNotMatch(cctvLayer.init.toString(), /buildCoverageEntities|ensure(?:Active|Visible)CoverageEntities/);
+  assert.equal(
+    insertCount,
+    0,
+    'building a 100-camera catalog must insert zero coverage entities',
+  );
+  assert.doesNotMatch(
+    componentFunctionSource(cctvLayer.init),
+    /buildCoverageEntities|ensure(?:Active|Visible)CoverageEntities/,
+  );
 
   const activated = materializeCctvActiveCoverageEntities(records[42], build);
   assert.equal(activated.length, 5);
   assert.equal(insertCount, 5, 'activation builds only the active camera set');
-  assert.equal(records.filter((record) => record.coverageEntities.length > 0).length, 1);
-  assert.match(setActiveCamera.toString(), /ensureActiveCoverageEntities\(record\)/);
+  assert.equal(
+    records.filter((record) => record.coverageEntities.length > 0).length,
+    1,
+  );
+  assert.match(
+    setActiveCamera.toString(),
+    /ensureActiveCoverageEntities\(record\)/,
+  );
 
   const visibleIds = new Set([
     ...records.slice(0, 14).map((record) => record.camera.id),
     records[42].camera.id,
   ]);
-  const coverageOn = materializeCctvVisibleCoverageEntities(records, visibleIds, build);
+  const coverageOn = materializeCctvVisibleCoverageEntities(
+    records,
+    visibleIds,
+    build,
+  );
   assert.equal(coverageOn.length, 14 * 5);
-  assert.equal(insertCount, 15 * 5, 'COVERAGE ON builds only remaining visible/eligible sets');
-  assert.equal(records.filter((record) => record.coverageEntities.length > 0).length, 15);
-  assert.match(refreshCoverageStyles.toString(), /ensureVisibleCoverageEntities\(_records, coverageVisible\)/);
+  assert.equal(
+    insertCount,
+    15 * 5,
+    'COVERAGE ON builds only remaining visible/eligible sets',
+  );
+  assert.equal(
+    records.filter((record) => record.coverageEntities.length > 0).length,
+    15,
+  );
+  assert.match(
+    componentFunctionSource(refreshCoverageStyles),
+    /ensureVisibleCoverageEntities\(_records, coverageVisible\)/,
+  );
   assert.equal(
     materializeCctvVisibleCoverageEntities(records, visibleIds, build).length,
     0,
@@ -262,10 +317,20 @@ test('default COVERAGE refresh materializes the active and visible camera frustu
     });
     refreshCoverageStyles();
 
-    const materialized = records.filter((record) => record.coverageEntities.length > 0);
-    assert.equal(inserted.length, 14 * 5, 'default COVERAGE ON builds the 14-camera visible cohort');
+    const materialized = records.filter(
+      (record) => record.coverageEntities.length > 0,
+    );
+    assert.equal(
+      inserted.length,
+      14 * 5,
+      'default COVERAGE ON builds the 14-camera visible cohort',
+    );
     assert.equal(materialized.length, 14);
-    assert.equal(activeRecord.coverageEntities.length, 5, 'the enable-time active camera is materialized');
+    assert.equal(
+      activeRecord.coverageEntities.length,
+      5,
+      'the enable-time active camera is materialized',
+    );
     assert.ok(
       materialized.some((record) => record !== activeRecord),
       'visible neighbors are materialized alongside the active camera',
@@ -301,10 +366,10 @@ test('geometry drain pacing yields to tracked and cockpit camera ownership', () 
     cctvGeometryDrainPacing({ trackedEntity: { id: 'flight-1' } }),
     { batchSize: 2, delayMs: 250 },
   );
-  assert.deepEqual(
-    cctvGeometryDrainPacing({ cockpitActive: true }),
-    { batchSize: 2, delayMs: 250 },
-  );
+  assert.deepEqual(cctvGeometryDrainPacing({ cockpitActive: true }), {
+    batchSize: 2,
+    delayMs: 250,
+  });
 
   const active = { id: 'active' };
   const queue = [{ id: 'near' }, { id: 'far' }, active];
@@ -316,13 +381,14 @@ test('geometry drain rechecks pacing when tracking releases between batches', ()
   let trackedEntity = { id: 'flight-1' };
   const queue = Array.from({ length: 10 }, (_, index) => index + 1);
   const visited = [];
-  const runBatch = () => processCctvGeometryDrainBatch({
-    queue,
-    readOwnership: () => ({ trackedEntity, cockpitActive: false }),
-    visit: (record) => visited.push(record),
-    progress: () => {},
-    complete: () => {},
-  });
+  const runBatch = () =>
+    processCctvGeometryDrainBatch({
+      queue,
+      readOwnership: () => ({ trackedEntity, cockpitActive: false }),
+      visit: (record) => visited.push(record),
+      progress: () => {},
+      complete: () => {},
+    });
 
   const trackedBatch = runBatch();
   assert.deepEqual(trackedBatch, { hasMore: true, batchSize: 2, delayMs: 250 });
@@ -330,18 +396,34 @@ test('geometry drain rechecks pacing when tracking releases between batches', ()
 
   trackedEntity = null;
   const untrackedBatch = runBatch();
-  assert.deepEqual(untrackedBatch, { hasMore: true, batchSize: 4, delayMs: 120 });
+  assert.deepEqual(untrackedBatch, {
+    hasMore: true,
+    batchSize: 4,
+    delayMs: 120,
+  });
   assert.deepEqual(visited, [1, 2, 3, 4, 5, 6]);
 
-  assert.match(processGeometryBatch.toString(), /processCctvGeometryDrainBatch/);
+  assert.match(
+    processGeometryBatch.toString(),
+    /processCctvGeometryDrainBatch/,
+  );
 });
 
 test('vFov formula: vFov = 2·atan(tan(hFov/2) / (16/9)); halfW/halfH follow', () => {
   const g = computeFrustumGeometry(UNCLAMPED_CAMERA, UNCLAMPED_GROUND);
   const expectedVFovRad = 2 * Math.atan(Math.tan(toRad(56) / 2) / ASPECT);
-  assert.ok(Math.abs(toRad(g.vFovDeg) - expectedVFovRad) < 1e-9, `vFovDeg=${g.vFovDeg}`);
-  assert.ok(Math.abs(g.halfW - 210 * Math.tan(toRad(56) / 2)) < 1e-6, `halfW=${g.halfW}`);
-  assert.ok(Math.abs(g.halfH - 210 * Math.tan(expectedVFovRad / 2)) < 1e-6, `halfH=${g.halfH}`);
+  assert.ok(
+    Math.abs(toRad(g.vFovDeg) - expectedVFovRad) < 1e-9,
+    `vFovDeg=${g.vFovDeg}`,
+  );
+  assert.ok(
+    Math.abs(g.halfW - 210 * Math.tan(toRad(56) / 2)) < 1e-6,
+    `halfW=${g.halfW}`,
+  );
+  assert.ok(
+    Math.abs(g.halfH - 210 * Math.tan(expectedVFovRad / 2)) < 1e-6,
+    `halfH=${g.halfH}`,
+  );
 });
 
 test('mount altitude = groundAlt + mountHeightM', () => {
@@ -356,7 +438,10 @@ test('cap center sits rangeM along the view axis from the mount (ε < 0.5 m)', (
   const d = viewDir(41, -5);
   const cap = enu(g.mount, g.capCenter);
   const expected = { e: d.e * 210, n: d.n * 210, u: d.u * 210 };
-  assert.ok(mag(sub(cap, expected)) < 0.5, `cap offset error ${mag(sub(cap, expected))} m`);
+  assert.ok(
+    mag(sub(cap, expected)) < 0.5,
+    `cap offset error ${mag(sub(cap, expected))} m`,
+  );
 });
 
 test('corner/plane coincidence: all 4 corners lie on the far-cap plane (ε < 0.5 m)', () => {
@@ -366,11 +451,17 @@ test('corner/plane coincidence: all 4 corners lie on the far-cap plane (ε < 0.5
   for (const key of ['tl', 'tr', 'br', 'bl']) {
     const cornerEnu = enu(g.mount, g.corners[key]);
     const offAxis = Math.abs(dot(sub(cornerEnu, capEnu), d));
-    assert.ok(offAxis < 0.5, `${key} is ${offAxis.toFixed(3)} m off the cap plane`);
+    assert.ok(
+      offAxis < 0.5,
+      `${key} is ${offAxis.toFixed(3)} m off the cap plane`,
+    );
     // Each corner is the half-diagonal away from the cap center.
     const diag = Math.hypot(g.halfW, g.halfH);
     const dist = mag(sub(cornerEnu, capEnu));
-    assert.ok(Math.abs(dist - diag) < 0.5, `${key} corner-to-center ${dist} vs diag ${diag}`);
+    assert.ok(
+      Math.abs(dist - diag) < 0.5,
+      `${key} corner-to-center ${dist} vs diag ${diag}`,
+    );
   }
 });
 
@@ -379,37 +470,97 @@ test('cap rectangle spans 2·halfW × 2·halfH (ε < 0.5 m)', () => {
   const m = g.mount;
   const width = mag(sub(enu(m, g.corners.tr), enu(m, g.corners.tl)));
   const height = mag(sub(enu(m, g.corners.tl), enu(m, g.corners.bl)));
-  assert.ok(Math.abs(width - 2 * g.halfW) < 0.5, `top width ${width} vs ${2 * g.halfW}`);
-  assert.ok(Math.abs(height - 2 * g.halfH) < 0.5, `left height ${height} vs ${2 * g.halfH}`);
+  assert.ok(
+    Math.abs(width - 2 * g.halfW) < 0.5,
+    `top width ${width} vs ${2 * g.halfW}`,
+  );
+  assert.ok(
+    Math.abs(height - 2 * g.halfH) < 0.5,
+    `left height ${height} vs ${2 * g.halfH}`,
+  );
   // Bottom edge too — the rectangle is a rectangle, not a trapezoid.
   const widthBottom = mag(sub(enu(m, g.corners.br), enu(m, g.corners.bl)));
-  assert.ok(Math.abs(widthBottom - 2 * g.halfW) < 0.5, `bottom width ${widthBottom}`);
+  assert.ok(
+    Math.abs(widthBottom - 2 * g.halfW) < 0.5,
+    `bottom width ${widthBottom}`,
+  );
 });
 
 test('unclamped pose: corners keep their true plane altitudes (no clamp applied)', () => {
   const g = computeFrustumGeometry(UNCLAMPED_CAMERA, UNCLAMPED_GROUND);
   const floor = UNCLAMPED_GROUND + FRUSTUM_GROUND_CLEARANCE_M;
   for (const key of ['tl', 'tr', 'br', 'bl']) {
-    assert.ok(g.corners[key].alt > floor + 1, `${key} alt ${g.corners[key].alt}`);
+    assert.ok(
+      g.corners[key].alt > floor + 1,
+      `${key} alt ${g.corners[key].alt}`,
+    );
   }
-  assert.ok(g.corners.tl.alt > g.corners.bl.alt, 'top corners sit above bottom corners');
+  assert.ok(
+    g.corners.tl.alt > g.corners.bl.alt,
+    'top corners sit above bottom corners',
+  );
 });
 
-test('ground clamp lifts the CAP CENTER only — the rectangle stays rigid (true pyramid)', () => {
+test('ground clearance lifts the whole rectangle rigidly until its lowest support clears the floor', () => {
   const g = computeFrustumGeometry(AUSTIN_FABRICATED_CAMERA, AUSTIN_GROUND);
   const floor = AUSTIN_GROUND + FRUSTUM_GROUND_CLEARANCE_M;
-  // Unclamped cap alt would be 160 + 210·sin(-24°) ≈ 74.6 m — far underground.
-  assert.equal(g.capCenter.alt, floor, 'cap center clamps exactly to the floor');
-  // Corners derive rigidly from the lifted center: alt = floor ± cos(pitch)·halfH.
-  // The bottom pair sits BELOW the floor (tiles occlude it) — per-corner clamping
-  // is what flattened the wireframe into a fan (owner field test 2026-07-04).
   const upVert = Math.cos(toRad(-24)) * g.halfH;
-  for (const key of ['tl', 'tr']) {
-    assert.ok(Math.abs(g.corners[key].alt - (floor + upVert)) < 1e-6, `${key} alt ${g.corners[key].alt}`);
-  }
+  // The bottom row is the limiting support on flat ground: it lands exactly on
+  // the floor and the rest of the rectangle rides up with it, rigidly.
+  assert.ok(g.liftM > 0, 'a downward pitch needs a lift');
+  assert.equal(
+    g.liftLimitedBy[0],
+    'b',
+    `limited by a bottom support, got ${g.liftLimitedBy}`,
+  );
   for (const key of ['bl', 'br']) {
-    assert.ok(Math.abs(g.corners[key].alt - (floor - upVert)) < 1e-6, `${key} alt ${g.corners[key].alt}`);
+    assert.ok(
+      Math.abs(g.corners[key].alt - floor) < 1e-6,
+      `${key} alt ${g.corners[key].alt} vs floor ${floor}`,
+    );
   }
+  assert.ok(
+    Math.abs(g.capCenter.alt - (floor + upVert)) < 1e-6,
+    'cap center sits one half-height above the floor',
+  );
+  for (const key of ['tl', 'tr']) {
+    assert.ok(
+      Math.abs(g.corners[key].alt - (floor + 2 * upVert)) < 1e-6,
+      `${key} alt ${g.corners[key].alt}`,
+    );
+  }
+  // Nothing on the rectangle is below the floor any more.
+  for (const key of ['tl', 'tr', 'bl', 'br'])
+    assert.ok(g.corners[key].alt >= floor - 1e-6, key);
+});
+
+test('measured ground under a far support raises the plane further, still rigidly', () => {
+  const flat = computeFrustumGeometry(AUSTIN_FABRICATED_CAMERA, AUSTIN_GROUND);
+  const rise = 30;
+  const lifted = computeFrustumGeometry(
+    AUSTIN_FABRICATED_CAMERA,
+    AUSTIN_GROUND,
+    null,
+    {
+      br: AUSTIN_GROUND + rise,
+    },
+  );
+  assert.ok(
+    Math.abs(lifted.liftM - (flat.liftM + rise)) < 1e-6,
+    'lift grows by exactly the rise',
+  );
+  assert.equal(lifted.liftLimitedBy, 'br');
+  assert.equal(lifted.footprintMeasured, true);
+  for (const key of ['tl', 'tr', 'bl', 'br']) {
+    assert.ok(
+      Math.abs(lifted.corners[key].alt - flat.corners[key].alt - rise) < 1e-6,
+      key,
+    );
+  }
+  assert.ok(
+    Math.abs(lifted.mount.alt - flat.mount.alt) < 1e-6,
+    'the mount does not move',
+  );
 });
 
 test('clamped pose keeps corner/plane coincidence and the rigid 2·halfW × 2·halfH span', () => {
@@ -423,23 +574,51 @@ test('clamped pose keeps corner/plane coincidence and the rigid 2·halfW × 2·h
   for (const key of ['tl', 'tr', 'br', 'bl']) {
     const cornerEnu = enu(g.mount, g.corners[key]);
     const offAxis = Math.abs(dot(sub(cornerEnu, capEnu), d));
-    assert.ok(offAxis < 0.5, `${key} is ${offAxis.toFixed(3)} m off the cap plane`);
+    assert.ok(
+      offAxis < 0.5,
+      `${key} is ${offAxis.toFixed(3)} m off the cap plane`,
+    );
     const dist = mag(sub(cornerEnu, capEnu));
-    assert.ok(Math.abs(dist - diag) < 0.5, `${key} corner-to-center ${dist} vs diag ${diag}`);
+    assert.ok(
+      Math.abs(dist - diag) < 0.5,
+      `${key} corner-to-center ${dist} vs diag ${diag}`,
+    );
   }
-  const width = mag(sub(enu(g.mount, g.corners.tr), enu(g.mount, g.corners.tl)));
-  const height = mag(sub(enu(g.mount, g.corners.tl), enu(g.mount, g.corners.bl)));
-  assert.ok(Math.abs(width - 2 * g.halfW) < 0.5, `width ${width} vs ${2 * g.halfW}`);
-  assert.ok(Math.abs(height - 2 * g.halfH) < 0.5, `height ${height} vs ${2 * g.halfH}`);
+  const width = mag(
+    sub(enu(g.mount, g.corners.tr), enu(g.mount, g.corners.tl)),
+  );
+  const height = mag(
+    sub(enu(g.mount, g.corners.tl), enu(g.mount, g.corners.bl)),
+  );
+  assert.ok(
+    Math.abs(width - 2 * g.halfW) < 0.5,
+    `width ${width} vs ${2 * g.halfW}`,
+  );
+  assert.ok(
+    Math.abs(height - 2 * g.halfH) < 0.5,
+    `height ${height} vs ${2 * g.halfH}`,
+  );
 });
 
 test('range override (activation probe clamp) shortens but never lengthens the range', () => {
-  const clamped = computeFrustumGeometry(UNCLAMPED_CAMERA, UNCLAMPED_GROUND, 100);
+  const clamped = computeFrustumGeometry(
+    UNCLAMPED_CAMERA,
+    UNCLAMPED_GROUND,
+    100,
+  );
   assert.equal(clamped.rangeM, 100);
   // halfW scales with the effective range.
   assert.ok(Math.abs(clamped.halfW - 100 * Math.tan(toRad(56) / 2)) < 1e-6);
-  const longer = computeFrustumGeometry(UNCLAMPED_CAMERA, UNCLAMPED_GROUND, 5000);
-  assert.equal(longer.rangeM, 210, 'an override beyond the pose range is ignored');
+  const longer = computeFrustumGeometry(
+    UNCLAMPED_CAMERA,
+    UNCLAMPED_GROUND,
+    5000,
+  );
+  assert.equal(
+    longer.rangeM,
+    210,
+    'an override beyond the pose range is ignored',
+  );
   const none = computeFrustumGeometry(UNCLAMPED_CAMERA, UNCLAMPED_GROUND, null);
   assert.equal(none.rangeM, 210);
 });
@@ -458,13 +637,16 @@ test('deactivation clears the probe clamp and restores nominal frustum geometry'
   };
   let rewrittenRange = null;
 
-  assert.equal(clearProbeClampOnDeactivation(record, (deactivated) => {
-    rewrittenRange = computeFrustumGeometry(
-      deactivated.camera,
-      UNCLAMPED_GROUND,
-      deactivated.probeClampRangeM,
-    ).rangeM;
-  }), true);
+  assert.equal(
+    clearProbeClampOnDeactivation(record, (deactivated) => {
+      rewrittenRange = computeFrustumGeometry(
+        deactivated.camera,
+        UNCLAMPED_GROUND,
+        deactivated.probeClampRangeM,
+      ).rangeM;
+    }),
+    true,
+  );
   assert.equal(record.probeClampRangeM, null);
   assert.equal(rewrittenRange, 210);
 });
@@ -493,22 +675,40 @@ test('CCTV disable hide sweep hides record visuals and destroys viewsheds withou
   ];
   const destroyed = [];
 
-  hideCctvRecordVisuals(records, (record) => {
-    destroyed.push(record.camera.id);
-    record.viewshedPrimitive = null;
-  }, 'a');
+  hideCctvRecordVisuals(
+    records,
+    (record) => {
+      destroyed.push(record.camera.id);
+      record.viewshedPrimitive = null;
+    },
+    'a',
+  );
 
-  assert.deepEqual(records.flatMap((record) => (record.coverageEntities || []).map((entity) => entity.show)), [false, false]);
+  assert.deepEqual(
+    records.flatMap((record) =>
+      (record.coverageEntities || []).map((entity) => entity.show),
+    ),
+    [false, false],
+  );
   assert.equal(records[0].projection.planeEntity.show, false);
   assert.deepEqual(destroyed, ['a', 'b']);
   assert.equal(records[0].viewshedPrimitive, null);
   assert.equal(records[1].viewshedPrimitive, null);
-  assert.deepEqual(records.map((record) => record.probeClampRangeM), [null, null]);
-  assert.deepEqual(records.map((record) => record.activationDone), [false, true]);
-  assert.deepEqual(records.map((record) => record.billboard), [
-    { color: 'keep-color', scale: 1.25 },
-    { color: 'keep-color', scale: 1 },
-  ]);
+  assert.deepEqual(
+    records.map((record) => record.probeClampRangeM),
+    [null, null],
+  );
+  assert.deepEqual(
+    records.map((record) => record.activationDone),
+    [false, true],
+  );
+  assert.deepEqual(
+    records.map((record) => record.billboard),
+    [
+      { color: 'keep-color', scale: 1.25 },
+      { color: 'keep-color', scale: 1 },
+    ],
+  );
 });
 
 test('real active monitor plane owns one protected host label and no native label entity', () => {
@@ -542,14 +742,26 @@ test('real active monitor plane owns one protected host label and no native labe
     });
     refreshCoverageStyles();
 
-    assert.ok(runtime.planeEntity, 'runtime guard requires a real monitor-plane entity');
+    assert.ok(
+      runtime.planeEntity,
+      'runtime guard requires a real monitor-plane entity',
+    );
     assert.equal(runtime.planeEntity.label, undefined);
-    assert.ok(runtime.planeEntity.plane, 'monitor plane geometry remains native');
-    assert.ok(viewer.entities.values.every((entity) => entity.label === undefined));
-    const publication = calls.find(([type, sourceId]) => (
-      type === 'entries' && sourceId === 'cctv-projection'
-    ));
-    assert.ok(publication, 'active projection must publish its associated host label');
+    assert.ok(
+      runtime.planeEntity.plane,
+      'monitor plane geometry remains native',
+    );
+    assert.ok(
+      viewer.entities.values.every((entity) => entity.label === undefined),
+    );
+    const publication = calls.find(
+      ([type, sourceId]) =>
+        type === 'entries' && sourceId === 'cctv-projection',
+    );
+    assert.ok(
+      publication,
+      'active projection must publish its associated host label',
+    );
     assert.deepEqual(publication[3], CCTV_PROJECTION_OVERLAY_SOURCE_OPTIONS);
     const entry = publication[2][0];
     assert.equal(entry.title, 'Congress & 6th Monitor');
@@ -565,7 +777,11 @@ test('real active monitor plane owns one protected host label and no native labe
       new Cesium.Cartesian3(),
     );
     _updateCctvProjectionPlaneForTest(record);
-    assert.equal(entry.position(), cachedPosition, 'host getter retains the authoritative cache');
+    assert.equal(
+      entry.position(),
+      cachedPosition,
+      'host getter retains the authoritative cache',
+    );
     assert.ok(
       Cesium.Cartesian3.equals(cachedPosition, record.frustumPositions.label),
       'plane geometry updates rewrite that shared host-label cache',
@@ -601,7 +817,10 @@ test('CCTV disable→enable defers the active-camera re-probe until its next act
   let probeCalls = 0;
   const probe = () => {
     probeCalls += 1;
-    record.probeClampRangeM = activationProbeClampRange(record.camera.rangeM, 150);
+    record.probeClampRangeM = activationProbeClampRange(
+      record.camera.rangeM,
+      150,
+    );
   };
   const setActiveCamera = () => {
     if (!cctvRecordNeedsActivation('active', 'active', record)) return;
@@ -614,7 +833,7 @@ test('CCTV disable→enable defers the active-camera re-probe until its next act
   assert.equal(record.activationDone, false);
   assert.equal(cctvRecordNeedsActivation('active', 'active', record), true);
   assert.doesNotMatch(
-    cctvLayer.enable.toString(),
+    componentFunctionSource(cctvLayer.enable),
     /setActiveCamera|runActivationObstructionProbe|pickFromRay/,
     'enable must restore nominal visuals without entering the activation probe path',
   );
@@ -627,14 +846,22 @@ test('CCTV disable→enable defers the active-camera re-probe until its next act
   assert.equal(cctvRecordNeedsActivation('active', 'active', record), false);
 
   setActiveCamera();
-  assert.equal(probeCalls, 1, 're-selecting the activated camera remains a no-op');
+  assert.equal(
+    probeCalls,
+    1,
+    're-selecting the activated camera remains a no-op',
+  );
 });
 
 test('CCTV focus distinguishes tracking ownership from a missing active camera', () => {
   let flyCalls = 0;
   const viewer = {
     trackedEntity: { id: 'tracked-flight' },
-    camera: { flyToBoundingSphere() { flyCalls += 1; } },
+    camera: {
+      flyToBoundingSphere() {
+        flyCalls += 1;
+      },
+    },
   };
   const record = {
     camera: { rangeM: 210, headingDeg: 41 },
@@ -661,7 +888,11 @@ test('CCTV focus reports when the camera flight starts', () => {
   let flyCalls = 0;
   const viewer = {
     trackedEntity: null,
-    camera: { flyToBoundingSphere() { flyCalls += 1; } },
+    camera: {
+      flyToBoundingSphere() {
+        flyCalls += 1;
+      },
+    },
   };
   const record = {
     camera: { rangeM: 210, headingDeg: 41 },
@@ -677,7 +908,11 @@ test('CCTV focus refuses camera flights while cockpit owns the view', () => {
   let flyCalls = 0;
   const viewer = {
     trackedEntity: null,
-    camera: { flyToBoundingSphere() { flyCalls += 1; } },
+    camera: {
+      flyToBoundingSphere() {
+        flyCalls += 1;
+      },
+    },
   };
   const record = {
     camera: { rangeM: 210, headingDeg: 41 },
@@ -710,25 +945,45 @@ test('CCTV repeated in-world clicks dispatch focus only for the one real activat
     CCTV_ACTIVATION_RESULT.UNCHANGED,
     CCTV_ACTIVATION_RESULT.UNCHANGED,
   ];
-  target.addEventListener(CCTV_FOCUS_REQUEST_EVENT, (event) => requests.push(event.detail));
+  target.addEventListener(CCTV_FOCUS_REQUEST_EVENT, (event) =>
+    requests.push(event.detail),
+  );
 
   const activate = (cameraId) => {
     activated.push(cameraId);
     return results.shift();
   };
-  assert.deepEqual([
-    activateCctvCameraFromWorldClick('atx-cam-3', activate, target),
-    activateCctvCameraFromWorldClick('atx-cam-3', activate, target),
-    activateCctvCameraFromWorldClick('atx-cam-3', activate, target),
-  ], [true, false, false]);
+  assert.deepEqual(
+    [
+      activateCctvCameraFromWorldClick('atx-cam-3', activate, target),
+      activateCctvCameraFromWorldClick('atx-cam-3', activate, target),
+      activateCctvCameraFromWorldClick('atx-cam-3', activate, target),
+    ],
+    [true, false, false],
+  );
 
   assert.deepEqual(activated, ['atx-cam-3', 'atx-cam-3', 'atx-cam-3']);
   assert.deepEqual(requests, [{ cameraId: 'atx-cam-3' }]);
-  assert.match(cctvLayer.init.toString(), /bindCctvWorldClickGesture\(_clickHandler/);
-  assert.match(cctvLayer.init.toString(), /_cctvOverlayHost\.hitTest/);
-  assert.match(cctvLayer.init.toString(), /sourceId: CCTV_OVERLAY_SOURCE_ID/);
-  assert.match(cctvLayer.init.toString(), /activateCctvCameraFromWorldClick\(cameraId, setActiveCamera\)/);
-  assert.match(cctvLayer.init.toString(), /activateCctvCameraFromWorldClick\(cardId, setActiveCamera\)/);
+  assert.match(
+    componentFunctionSource(cctvLayer.init),
+    /bindCctvWorldClickGesture\(_clickHandler/,
+  );
+  assert.match(
+    componentFunctionSource(cctvLayer.init),
+    /_cctvOverlayHost\.hitTest/,
+  );
+  assert.match(
+    componentFunctionSource(cctvLayer.init),
+    /sourceId: CCTV_OVERLAY_SOURCE_ID/,
+  );
+  assert.match(
+    componentFunctionSource(cctvLayer.init),
+    /activateCctvCameraFromWorldClick\(cameraId, setActiveCamera\)/,
+  );
+  assert.match(
+    componentFunctionSource(cctvLayer.init),
+    /activateCctvCameraFromWorldClick\(cardId, setActiveCamera\)/,
+  );
 });
 
 // ─── Empty-space deselection and stable null-active state ──────────────────
@@ -740,12 +995,18 @@ function makeDeselectViewer() {
     trackedEntity: { id: 'sibling-track-owner' },
     camera: {
       positionWC: Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672, 4_000),
-      positionCartographic: Cesium.Cartographic.fromDegrees(-97.7431, 30.2672, 4_000),
+      positionCartographic: Cesium.Cartographic.fromDegrees(
+        -97.7431,
+        30.2672,
+        4_000,
+      ),
       heading: 0.4,
       pitch: -0.7,
       roll: 0.1,
       transform: Cesium.Matrix4.clone(Cesium.Matrix4.IDENTITY),
-      flyToBoundingSphere() { this.flyCalls = (this.flyCalls || 0) + 1; },
+      flyToBoundingSphere() {
+        this.flyCalls = (this.flyCalls || 0) + 1;
+      },
     },
     scene: {
       canvas: { clientWidth: 1200, clientHeight: 800 },
@@ -773,32 +1034,70 @@ function makeDeselectRecord(id, index = 0) {
 }
 
 test('CCTV empty-click gate excludes every identified scene object, ADJUST, and null-active clicks', () => {
-  assert.equal(cctvEmptyClickDeselects(null, { activeCameraId: 'cam-1' }), true);
-  assert.equal(cctvEmptyClickDeselects(null, {
-    activeCameraId: 'cam-1',
-    calibrationMode: true,
-  }), false);
+  assert.equal(
+    cctvEmptyClickDeselects(null, { activeCameraId: 'cam-1' }),
+    true,
+  );
+  assert.equal(
+    cctvEmptyClickDeselects(null, {
+      activeCameraId: 'cam-1',
+      calibrationMode: true,
+    }),
+    false,
+  );
   assert.equal(cctvEmptyClickDeselects(null, { activeCameraId: null }), false);
-  assert.equal(cctvEmptyClickDeselects({ id: 'registered-sibling' }, {
-    activeCameraId: 'cam-1',
-  }), false);
-  assert.equal(cctvEmptyClickDeselects({ id: { id: 'unregistered-local-entity' } }, {
-    activeCameraId: 'cam-1',
-  }), false);
-  assert.equal(cctvEmptyClickDeselects({ primitive: { id: 'unregistered-primitive' } }, {
-    activeCameraId: 'cam-1',
-  }), false);
-  assert.equal(cctvEmptyClickDeselects({ id: '' }, {
-    activeCameraId: 'cam-1',
-  }), false, 'an empty-string scene ID is still identified rather than empty space');
-  assert.equal(cctvEmptyClickDeselects({ primitive: {} }, {
-    activeCameraId: 'cam-1',
-  }), true, 'an ID-less surface pick remains true empty space');
+  assert.equal(
+    cctvEmptyClickDeselects(
+      { id: 'registered-sibling' },
+      {
+        activeCameraId: 'cam-1',
+      },
+    ),
+    false,
+  );
+  assert.equal(
+    cctvEmptyClickDeselects(
+      { id: { id: 'unregistered-local-entity' } },
+      {
+        activeCameraId: 'cam-1',
+      },
+    ),
+    false,
+  );
+  assert.equal(
+    cctvEmptyClickDeselects(
+      { primitive: { id: 'unregistered-primitive' } },
+      {
+        activeCameraId: 'cam-1',
+      },
+    ),
+    false,
+  );
+  assert.equal(
+    cctvEmptyClickDeselects(
+      { id: '' },
+      {
+        activeCameraId: 'cam-1',
+      },
+    ),
+    false,
+    'an empty-string scene ID is still identified rather than empty space',
+  );
+  assert.equal(
+    cctvEmptyClickDeselects(
+      { primitive: {} },
+      {
+        activeCameraId: 'cam-1',
+      },
+    ),
+    true,
+    'an ID-less surface pick remains true empty space',
+  );
 
-  const initSource = cctvLayer.init.toString();
+  const initSource = componentFunctionSource(cctvLayer.init);
   assert.ok(
-    initSource.indexOf('if (pickedId !== null) return')
-      < initSource.indexOf('_cctvOverlayHost.hitTest'),
+    initSource.indexOf('if (pickedId !== null) return') <
+      initSource.indexOf('_cctvOverlayHost.hitTest'),
     'every identified sibling must win before an overlapping CCTV card hit test',
   );
   assert.match(initSource, /activeCameraId: _activeCameraId/);
@@ -816,14 +1115,20 @@ test('CCTV camera extraction requires layer ownership, not a colliding sibling I
     billboard,
     coverageEntities: [ownedCoverageEntity],
   };
-  _setCctvCoverageStateForTest({ records: [record], activeCameraId: 'shared-id' });
+  _setCctvCoverageStateForTest({
+    records: [record],
+    activeCameraId: 'shared-id',
+  });
   try {
     assert.equal(
       _extractPickedCameraIdForTest({ id: 'shared-id', primitive: billboard }),
       'shared-id',
     );
     assert.equal(
-      _extractPickedCameraIdForTest({ id: 'shared-id', primitive: { id: 'shared-id' } }),
+      _extractPickedCameraIdForTest({
+        id: 'shared-id',
+        primitive: { id: 'shared-id' },
+      }),
       null,
       'a sibling primitive with the same canonical ID cannot activate CCTV',
     );
@@ -854,10 +1159,16 @@ test('CCTV camera extraction requires layer ownership, not a colliding sibling I
 
 test('CCTV deselect publishes one null state and leaves the complete camera pose unchanged', () => {
   const viewer = makeDeselectViewer();
-  const record = { ...makeDeselectRecord('deselect-me'), probeClampRangeM: 150 };
+  const record = {
+    ...makeDeselectRecord('deselect-me'),
+    probeClampRangeM: 150,
+  };
   const publications = [];
   _setCctvOverlayHostForTest({
-    setEntries() {}, setVisible() {}, clearSource() {}, hitTest: () => null,
+    setEntries() {},
+    setVisible() {},
+    clearSource() {},
+    hitTest: () => null,
   });
   try {
     const runtime = _createCctvProjectionPlaneForTest(viewer, record);
@@ -870,11 +1181,15 @@ test('CCTV deselect publishes one null state and leaves the complete camera pose
       showProjection: true,
     });
     refreshCoverageStyles();
-    const unsubscribe = cctvLayer.subscribe((state) => publications.push(state));
+    const unsubscribe = cctvLayer.subscribe((state) =>
+      publications.push(state),
+    );
     const baselinePublications = publications.length;
     const pose = {
       positionWC: Cesium.Cartesian3.clone(viewer.camera.positionWC),
-      positionCartographic: Cesium.Cartographic.clone(viewer.camera.positionCartographic),
+      positionCartographic: Cesium.Cartographic.clone(
+        viewer.camera.positionCartographic,
+      ),
       heading: viewer.camera.heading,
       pitch: viewer.camera.pitch,
       roll: viewer.camera.roll,
@@ -883,7 +1198,11 @@ test('CCTV deselect publishes one null state and leaves the complete camera pose
     };
 
     assert.equal(deactivateActiveCamera(), true);
-    assert.equal(deactivateActiveCamera(), false, 'repeat deselect is idempotent');
+    assert.equal(
+      deactivateActiveCamera(),
+      false,
+      'repeat deselect is idempotent',
+    );
     assert.equal(publications.length, baselinePublications + 1);
     assert.equal(publications.at(-1).activeCameraId, null);
     assert.equal(publications.at(-1).activeCamera, null);
@@ -892,7 +1211,10 @@ test('CCTV deselect publishes one null state and leaves the complete camera pose
     assert.equal(record.probeClampRangeM, null);
     assert.equal(record.activationDone, false);
     assert.deepEqual(viewer.camera.positionWC, pose.positionWC);
-    assert.deepEqual(viewer.camera.positionCartographic, pose.positionCartographic);
+    assert.deepEqual(
+      viewer.camera.positionCartographic,
+      pose.positionCartographic,
+    );
     assert.equal(viewer.camera.heading, pose.heading);
     assert.equal(viewer.camera.pitch, pose.pitch);
     assert.equal(viewer.camera.roll, pose.roll);
@@ -908,8 +1230,14 @@ test('CCTV deselect publishes one null state and leaves the complete camera pose
 
 test('CCTV null-active coverage, auto-hop, cycling, and panel targets stay honest', () => {
   const viewer = makeDeselectViewer();
-  const records = Array.from({ length: 3 }, (_, index) => makeDeselectRecord(`cam-${index}`, index));
-  _setCctvOverlayHostForTest({ setEntries() {}, setVisible() {}, clearSource() {} });
+  const records = Array.from({ length: 3 }, (_, index) =>
+    makeDeselectRecord(`cam-${index}`, index),
+  );
+  _setCctvOverlayHostForTest({
+    setEntries() {},
+    setVisible() {},
+    clearSource() {},
+  });
   try {
     _setCctvCoverageStateForTest({
       viewer,
@@ -922,19 +1250,35 @@ test('CCTV null-active coverage, auto-hop, cycling, and panel targets stay hones
     assert.equal(deactivateActiveCamera(), true);
     refreshCoverageStyles();
     assert.equal(cctvLayer.getUIState().activeCameraId, null);
-    assert.ok(records.every((record) => record.coverageEntities.every((entity) => !entity.show)));
+    assert.ok(
+      records.every((record) =>
+        record.coverageEntities.every((entity) => !entity.show),
+      ),
+    );
     maybeAutoHop(1_000_000);
-    assert.equal(cctvLayer.getUIState().activeCameraId, null, 'elapsed auto-hop stays suspended');
+    assert.equal(
+      cctvLayer.getUIState().activeCameraId,
+      null,
+      'elapsed auto-hop stays suspended',
+    );
 
     assert.equal(cctvCycleIndex(-1, 1, records.length), 0);
     assert.equal(cctvCycleIndex(-1, -1, records.length), records.length - 1);
     assert.equal(cctvCycleIndex(2, 1, records.length), 0);
     assert.equal(cctvCycleIndex(0, -1, records.length), records.length - 1);
 
-    const renderer = CCTV_PRESENTATION_SOURCE.match(/_renderCctvState\(state\) \{[\s\S]*?\n\}\n/);
+    const renderer = CCTV_PRESENTATION_SOURCE.match(
+      /_renderCctvState\(state\) \{[\s\S]*?\n\}\n/,
+    );
     assert.ok(renderer, '_renderCctvState is missing');
-    assert.match(renderer[0], /else if \(!activeId\)[\s\S]*?selectedIndex = -1/);
-    assert.match(renderer[0], /_cctvFocusBtn\.disabled\s*=\s*!enabled\s*\|\|\s*cameras\.length === 0\s*\|\|\s*!activeId/);
+    assert.match(
+      renderer[0],
+      /else if \(!activeId\)[\s\S]*?selectedIndex = -1/,
+    );
+    assert.match(
+      renderer[0],
+      /_cctvFocusBtn\.disabled\s*=\s*!enabled\s*\|\|\s*cameras\.length === 0\s*\|\|\s*!activeId/,
+    );
   } finally {
     cctvLayer.setParams({ autoHop: false });
     _setCctvOverlayHostForTest();
@@ -945,8 +1289,12 @@ test('CCTV null-active coverage, auto-hop, cycling, and panel targets stay hones
 test('CCTV disable clears and hides its shared-host source through the real layer lifecycle', () => {
   const calls = [];
   _setCctvOverlayHostForTest({
-    clearSource(sourceId) { calls.push(['clear', sourceId]); },
-    setVisible(sourceId, visible) { calls.push(['visible', sourceId, visible]); },
+    clearSource(sourceId) {
+      calls.push(['clear', sourceId]);
+    },
+    setVisible(sourceId, visible) {
+      calls.push(['visible', sourceId, visible]);
+    },
   });
   try {
     _setCctvCoverageStateForTest({ enabled: true });
@@ -1024,8 +1372,13 @@ test('active CCTV camera is absent from host by default and protected only when 
       cctvLayer.setCardPresentationOptions({ activeCameraCardEnabled: true }),
       { activeCameraCardEnabled: true },
     );
-    const activeEntry = publications.at(-1).entries.find(({ id }) => id === activeRecord.camera.id);
-    assert.ok(activeEntry, 'opt-in republishes the active camera into the host');
+    const activeEntry = publications
+      .at(-1)
+      .entries.find(({ id }) => id === activeRecord.camera.id);
+    assert.ok(
+      activeEntry,
+      'opt-in republishes the active camera into the host',
+    );
     assert.equal(activeEntry.active, true);
     assert.equal(activeEntry.protected, true);
   } finally {
@@ -1041,16 +1394,26 @@ test('CCTV drag-then-release over a camera is inert, while a clean tap activates
   const handler = makeGestureHandler();
   const target = new EventTarget();
   const requests = [];
-  target.addEventListener(CCTV_FOCUS_REQUEST_EVENT, (event) => requests.push(event.detail));
-  bindCctvWorldClickGesture(handler, () => {
-    activateCctvCameraFromWorldClick('atx-cam-3', () => {
-      activationCalls += 1;
-      return CCTV_ACTIVATION_RESULT.ACTIVATED;
-    }, target);
-  }, {
-    now: () => timeMs,
-    eventTypes: GESTURE_TYPES,
-  });
+  target.addEventListener(CCTV_FOCUS_REQUEST_EVENT, (event) =>
+    requests.push(event.detail),
+  );
+  bindCctvWorldClickGesture(
+    handler,
+    () => {
+      activateCctvCameraFromWorldClick(
+        'atx-cam-3',
+        () => {
+          activationCalls += 1;
+          return CCTV_ACTIVATION_RESULT.ACTIVATED;
+        },
+        target,
+      );
+    },
+    {
+      now: () => timeMs,
+      eventTypes: GESTURE_TYPES,
+    },
+  );
 
   handler.fire(GESTURE_TYPES.LEFT_DOWN, { position: { x: 10, y: 10 } });
   timeMs = 20;
@@ -1098,8 +1461,12 @@ function fakeStorage(seed = {}) {
   const map = new Map(Object.entries(seed));
   return {
     getItem: (key) => (map.has(key) ? map.get(key) : null),
-    setItem: (key, value) => { map.set(key, String(value)); },
-    removeItem: (key) => { map.delete(key); },
+    setItem: (key, value) => {
+      map.set(key, String(value));
+    },
+    removeItem: (key) => {
+      map.delete(key);
+    },
     _dump: () => Object.fromEntries(map.entries()),
   };
 }
@@ -1108,11 +1475,22 @@ test('calibration v2 round-trip: writeCalibrationStoreV2 → readCalibrationStor
   const storage = fakeStorage();
   const savedAt = 1782800000000;
   const entry = new Map([
-    ['austin-42', {
-      values: { offsetNorthM: 12.5, offsetEastM: -3.0, headingDeg: 41.0, pitchDeg: 4.0, fovDeg: -8.0, rangeScale: 1.35, heightM: 6.0 },
-      source: 'manual',
-      savedAt,
-    }],
+    [
+      'austin-42',
+      {
+        values: {
+          offsetNorthM: 12.5,
+          offsetEastM: -3.0,
+          headingDeg: 41.0,
+          pitchDeg: 4.0,
+          fovDeg: -8.0,
+          rangeScale: 1.35,
+          heightM: 6.0,
+        },
+        source: 'manual',
+        savedAt,
+      },
+    ],
   ]);
   writeCalibrationStoreV2(entry, storage);
 
@@ -1132,7 +1510,22 @@ test('calibration v2 round-trip: writeCalibrationStoreV2 → readCalibrationStor
 test('calibration v2: removing an entry (reset) then re-writing produces an empty store', () => {
   const storage = fakeStorage();
   const entry = new Map([
-    ['sf-market-5th', { values: { offsetNorthM: 5, offsetEastM: 0, headingDeg: 0, pitchDeg: 0, fovDeg: 0, rangeScale: 1, heightM: 0 }, source: 'manual', savedAt: 1000 }],
+    [
+      'sf-market-5th',
+      {
+        values: {
+          offsetNorthM: 5,
+          offsetEastM: 0,
+          headingDeg: 0,
+          pitchDeg: 0,
+          fovDeg: 0,
+          rangeScale: 1,
+          heightM: 0,
+        },
+        source: 'manual',
+        savedAt: 1000,
+      },
+    ],
   ]);
   writeCalibrationStoreV2(entry, storage);
   assert.ok(readCalibrationStoreV2(storage).has('sf-market-5th'));
@@ -1143,15 +1536,31 @@ test('calibration v2: removing an entry (reset) then re-writing produces an empt
   writeCalibrationStoreV2(entry, storage);
 
   const restored = readCalibrationStoreV2(storage);
-  assert.equal(restored.size, 0, 'reset entry must be gone, base pose restored');
+  assert.equal(
+    restored.size,
+    0,
+    'reset entry must be gone, base pose restored',
+  );
 });
 
 test('calibration v2: malformed/partial entries are dropped defensively', () => {
   const storage = fakeStorage({
     [CCTV_CALIBRATION_STORAGE_KEY_V2]: JSON.stringify({
-      'ok-cam': { values: { offsetNorthM: 1, offsetEastM: 2, headingDeg: 3, pitchDeg: 4, fovDeg: 5, rangeScale: 1.1, heightM: 6 }, source: 'manual', savedAt: 42 },
+      'ok-cam': {
+        values: {
+          offsetNorthM: 1,
+          offsetEastM: 2,
+          headingDeg: 3,
+          pitchDeg: 4,
+          fovDeg: 5,
+          rangeScale: 1.1,
+          heightM: 6,
+        },
+        source: 'manual',
+        savedAt: 42,
+      },
       'no-values': { source: 'manual', savedAt: 42 },
-      'junk': 'not-an-object',
+      junk: 'not-an-object',
     }),
   });
   const restored = readCalibrationStoreV2(storage);
@@ -1162,12 +1571,24 @@ test('calibration v2: malformed/partial entries are dropped defensively', () => 
 test('calibration v2: a corrupt v1 key never leaks into the v2 store (v1 is dead data, never read)', () => {
   const storage = fakeStorage({
     [CCTV_CALIBRATION_STORAGE_KEY_V1]: JSON.stringify({
-      'austin-42': { offsetNorthM: 999, offsetEastM: 999, headingDeg: 999, pitchDeg: 0, fovDeg: 0, rangeScale: 1, heightM: 0 },
+      'austin-42': {
+        offsetNorthM: 999,
+        offsetEastM: 999,
+        headingDeg: 999,
+        pitchDeg: 0,
+        fovDeg: 0,
+        rangeScale: 1,
+        heightM: 0,
+      },
     }),
   });
   // v2 key is untouched/empty — v1's presence must have zero effect.
   const restored = readCalibrationStoreV2(storage);
-  assert.equal(restored.size, 0, 'v2 store must start empty — no legacy import (owner decision #3, §9.3)');
+  assert.equal(
+    restored.size,
+    0,
+    'v2 store must start empty — no legacy import (owner decision #3, §9.3)',
+  );
   assert.ok(!restored.has('austin-42'));
 });
 
@@ -1211,7 +1632,10 @@ test('calibrationPatchMovesAnchor: only north/east translation re-resolves groun
   assert.equal(calibrationPatchMovesAnchor({ offsetEastM: -5 }), true);
   assert.equal(calibrationPatchMovesAnchor({ headingDeg: 20 }), false);
   assert.equal(calibrationPatchMovesAnchor({ pitchDeg: -2, fovDeg: 5 }), false);
-  assert.equal(calibrationPatchMovesAnchor({ rangeScale: 1.2, heightM: 8 }), false);
+  assert.equal(
+    calibrationPatchMovesAnchor({ rangeScale: 1.2, heightM: 8 }),
+    false,
+  );
   assert.equal(calibrationPatchMovesAnchor(null), false);
 });
 
@@ -1243,38 +1667,75 @@ test('normalizeCoverageMode: garbage keeps the current mode', () => {
 function rgba(triples) {
   const out = new Uint8ClampedArray(triples.length * 4);
   triples.forEach(([r, g, b], i) => {
-    out[i * 4] = r; out[i * 4 + 1] = g; out[i * 4 + 2] = b; out[i * 4 + 3] = 255;
+    out[i * 4] = r;
+    out[i * 4 + 1] = g;
+    out[i * 4 + 2] = b;
+    out[i * 4 + 3] = 255;
   });
   return out;
 }
 
 test('frameSignatureFromPixels: identical pixels hash identically', () => {
-  const a = rgba([[1, 2, 3], [250, 128, 7], [0, 0, 0]]);
-  const b = rgba([[1, 2, 3], [250, 128, 7], [0, 0, 0]]);
+  const a = rgba([
+    [1, 2, 3],
+    [250, 128, 7],
+    [0, 0, 0],
+  ]);
+  const b = rgba([
+    [1, 2, 3],
+    [250, 128, 7],
+    [0, 0, 0],
+  ]);
   assert.equal(frameSignatureFromPixels(a), frameSignatureFromPixels(b));
 });
 
 test('frameSignatureFromPixels: a single changed channel changes the hash', () => {
-  const base = rgba([[10, 20, 30], [40, 50, 60]]);
-  const tweak = rgba([[10, 20, 31], [40, 50, 60]]);
-  assert.notEqual(frameSignatureFromPixels(base), frameSignatureFromPixels(tweak));
+  const base = rgba([
+    [10, 20, 30],
+    [40, 50, 60],
+  ]);
+  const tweak = rgba([
+    [10, 20, 31],
+    [40, 50, 60],
+  ]);
+  assert.notEqual(
+    frameSignatureFromPixels(base),
+    frameSignatureFromPixels(tweak),
+  );
 });
 
 test('frameSignatureFromPixels: order matters (a swap is not a collision)', () => {
-  const ab = rgba([[1, 2, 3], [9, 8, 7]]);
-  const ba = rgba([[9, 8, 7], [1, 2, 3]]);
+  const ab = rgba([
+    [1, 2, 3],
+    [9, 8, 7],
+  ]);
+  const ba = rgba([
+    [9, 8, 7],
+    [1, 2, 3],
+  ]);
   assert.notEqual(frameSignatureFromPixels(ab), frameSignatureFromPixels(ba));
 });
 
 test('frameSignatureFromPixels: alpha is deliberately ignored', () => {
   const opaque = new Uint8ClampedArray([5, 6, 7, 255]);
   const clear = new Uint8ClampedArray([5, 6, 7, 0]);
-  assert.equal(frameSignatureFromPixels(opaque), frameSignatureFromPixels(clear));
+  assert.equal(
+    frameSignatureFromPixels(opaque),
+    frameSignatureFromPixels(clear),
+  );
 });
 
 test('frameSignatureFromPixels: returns an unsigned 32-bit value', () => {
-  const sig = frameSignatureFromPixels(rgba([[255, 255, 255], [0, 0, 0]]));
-  assert.ok(Number.isInteger(sig) && sig >= 0 && sig <= 0xffffffff, `got ${sig}`);
+  const sig = frameSignatureFromPixels(
+    rgba([
+      [255, 255, 255],
+      [0, 0, 0],
+    ]),
+  );
+  assert.ok(
+    Number.isInteger(sig) && sig >= 0 && sig <= 0xffffffff,
+    `got ${sig}`,
+  );
 });
 
 test('frameSignatureFromPixels: empty or junk input yields null (always redraw)', () => {
@@ -1282,4 +1743,60 @@ test('frameSignatureFromPixels: empty or junk input yields null (always redraw)'
   assert.equal(frameSignatureFromPixels(null), null);
   assert.equal(frameSignatureFromPixels(undefined), null);
   assert.equal(frameSignatureFromPixels({}), null);
+});
+
+test('a saved rangeScale keeps its effective range when the catalog range floor drops', () => {
+  const saved = {
+    offsetNorthM: 0,
+    offsetEastM: 0,
+    headingDeg: 0,
+    pitchDeg: 0,
+    fovDeg: 0,
+    rangeScale: 1.5,
+    heightM: 0,
+  };
+  // A 145 m pack range used to be inflated to 220 m: 220 × 1.5 = 330 m. The
+  // migrated multiplier reproduces that on the honest 145 m base.
+  const migrated = migrateRangeScaleForFloor(saved, 145);
+  assert.ok(
+    Math.abs(145 * migrated.rangeScale - 330) < 1,
+    `${145 * migrated.rangeScale}`,
+  );
+  // A pack range at or above the old floor was never inflated: unchanged.
+  assert.equal(migrateRangeScaleForFloor(saved, 250).rangeScale, 1.5);
+  assert.equal(migrateRangeScaleForFloor(saved, 220).rangeScale, 1.5);
+  // The 3× ceiling still applies.
+  assert.equal(
+    migrateRangeScaleForFloor({ ...saved, rangeScale: 3 }, 145).rangeScale,
+    3,
+  );
+});
+
+test('the footprint lift is capped so a tower under the far edge cannot launch the plane', () => {
+  // Rises are placed under a BOTTOM support: the top row already sits one
+  // plane-height higher, so a rise there is absorbed by the tilt first.
+  const flat = computeFrustumGeometry(AUSTIN_FABRICATED_CAMERA, AUSTIN_GROUND);
+  const tower = computeFrustumGeometry(
+    AUSTIN_FABRICATED_CAMERA,
+    AUSTIN_GROUND,
+    null,
+    {
+      br: AUSTIN_GROUND + 240,
+    },
+  );
+  assert.equal(tower.liftCapped, true);
+  assert.ok(
+    Math.abs(tower.liftM - (flat.liftM + 60)) < 1e-6,
+    `lift ${tower.liftM} vs ${flat.liftM}`,
+  );
+  const hill = computeFrustumGeometry(
+    AUSTIN_FABRICATED_CAMERA,
+    AUSTIN_GROUND,
+    null,
+    {
+      br: AUSTIN_GROUND + 30,
+    },
+  );
+  assert.equal(hill.liftCapped, false);
+  assert.ok(Math.abs(hill.liftM - (flat.liftM + 30)) < 1e-6);
 });

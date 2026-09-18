@@ -20,6 +20,8 @@ import {
   paintThumbnail,
   paintTrack,
   paintTracked,
+  leaderRevealProgress,
+  tacticalCardRevealAlpha,
   placementVariants,
   roundedRectPath,
 } from './worldOverlayDraw.js';
@@ -484,6 +486,34 @@ test('shared tactical painter preserves FIRMS card metrics and top-rule treatmen
   assert.equal(ctx.calls.filter(([name]) => name === 'stroke').length, 2, 'leader + selected border');
   assert.equal(ctx.calls.filter(([name]) => name === 'fillText').length, 3);
   assert.equal(ctx.calls.at(-1)[0], 'restore');
+});
+
+test('selected elbow leader reveals from the glyph before its card fades in', () => {
+  const animation = {
+    leaderAnimationMs: 1000, leaderAnimationStartedAt: 100, leaderDrawRatio: 0.7,
+  };
+  assert.equal(leaderRevealProgress(animation, 100), 0);
+  assert.ok(leaderRevealProgress(animation, 450) > 0.8);
+  assert.equal(leaderRevealProgress(animation, 800), 1);
+  assert.equal(tacticalCardRevealAlpha(animation, 799), 0);
+  assert.ok(tacticalCardRevealAlpha(animation, 950) > 0.4);
+  assert.equal(tacticalCardRevealAlpha(animation, 1100), 1);
+  const ctx = mockContext();
+  const entry = {
+    variant: 'selected', selected: true, cardStyle: 'tactical', title: 'ALPR-2516',
+    details: ['OSM MAPPED'], accent: '#ff6474', leaderStyle: 'elbow',
+    leaderAnimationMs: 1, leaderAnimationStartedAt: 0,
+  };
+  entry._overlayLayout = measureOverlayEntry(ctx, entry, {});
+  const placement = placementVariants({
+    anchorX: 240, anchorY: 180, width: entry._overlayLayout.w, height: entry._overlayLayout.h,
+    viewportWidth: 500, viewportHeight: 300, gap: 20, leaderOffset: 30, verticalOnly: true,
+  })[0];
+  paintTacticalCard(ctx, entry, placement, 1);
+  assert.deepEqual(ctx.calls.find(([name]) => name === 'moveTo'), ['moveTo', 210, 180]);
+  const lines = ctx.calls.filter(([name]) => name === 'lineTo');
+  assert.ok(lines.length >= 2, 'leader draws horizontally from the glyph, then vertically to the card');
+  assert.ok(ctx.calls.some(([name, value]) => name === 'strokeStyle' && value === 'rgba(255, 100, 116, 0.95)'));
 });
 
 test('track display text is cached across measure and paint and invalidates on content change', () => {

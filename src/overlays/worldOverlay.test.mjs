@@ -1,3 +1,4 @@
+import { expandApplicationHtml } from '../../build/application-html.js';
 import { readStylesheet } from '../testSupport/readStylesheet.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -463,7 +464,7 @@ test('lifecycle is idempotent and teardown removes listeners, observers, and DOM
   assert.deepEqual(root.children, [canvas],
     'the overlay root carries only the shared card canvas');
   assert.doesNotMatch(
-    readFileSync(new URL('../../index.html', import.meta.url), 'utf8'),
+    expandApplicationHtml(readFileSync(new URL('../../index.html', import.meta.url), 'utf8')),
     /world-overlay-detection-surface/,
     'the surface is runtime host-owned, not static markup',
   );
@@ -1298,6 +1299,8 @@ test('UI exclusions stay per-rect: overlapping chrome never merges into a boundi
 
   assert.equal(getWorldOverlayDiagnostics().paintedCount, 1);
   const painted = getOverlayPaintRect('ambient', 'CLEAR-OF-BOTH');
+  assert.ok(Number.isFinite(painted.anchorX));
+  assert.ok(Number.isFinite(painted.anchorY));
   assert.ok(painted, 'the entry published a paint rectangle');
   for (const [name, rect] of Object.entries(chrome)) {
     assert.equal(rectsIntersect(painted, inflatedRect(rect)), false,
@@ -1813,6 +1816,85 @@ test('CCTV host binding preserves the smoothstep scale and 0.45/0.35 fade curve'
       assert.ok(Math.abs(scaleCall[2] - expected.scale) < 1e-12);
       assert.ok(Math.abs(paintedAlphas.at(-1) - expected.alpha) < 1e-12);
     }
+  } finally {
+    env.cleanup();
+  }
+});
+
+test('scene presentation samples once per frame and recovers after a callback failure', () => {
+  const env = installMockEnvironment({ width: 500, height: 400, dpr: 1 });
+  const alphas = [];
+  Object.defineProperty(env.ctx, 'globalAlpha', {
+    configurable: true,
+    get() { return alphas.at(-1) ?? 1; },
+    set(value) { alphas.push(value); },
+  });
+  initWorldOverlay(env.viewer);
+  const entry = createCctvThumbnailOverlayEntry({
+    id: 'scene-presentation', position: position(), title: 'SCENE',
+    frameSlot: { frame: { ready: true }, stamp: 1 }, active: true,
+  });
+  Object.assign(entry, {
+    horizonCull: false, maxDistance: Number.POSITIVE_INFINITY, edgeFade: 'none',
+    altitudeScale: null, altitudeFadeEnd: Number.POSITIVE_INFINITY,
+  });
+  let scale = 0.5;
+  let alpha = 0.8;
+  let leader = 0.5;
+  let content = 0.25;
+  let fail = false;
+  const sampled = { scale: 0, alpha: 0, leader: 0, content: 0 };
+  entry.presentationScale = () => { sampled.scale++; return scale; };
+  entry.sourceAlpha = () => {
+    sampled.alpha++;
+    if (fail) throw new Error('presentation unavailable');
+    return alpha;
+  };
+  entry.leaderProgress = () => { sampled.leader++; return leader; };
+  entry.contentAlpha = () => { sampled.content++; return content; };
+  const publish = () => setOverlayEntries('scene-presentation', [entry], {
+    cohortLimit: 1, collisionCapacity: 0,
+  });
+  const frame = () => {
+    env.ctx.calls.length = 0;
+    alphas.length = 0;
+    env.postRender.raise();
+  };
+  try {
+    publish();
+    frame();
+    assert.deepEqual(sampled, { scale: 1, alpha: 1, leader: 1, content: 1 });
+    assert.equal(env.ctx.calls.find(([name]) => name === 'scale')?.[1], 0.5);
+    assert.ok(Math.abs(alphas.at(-1) - 0.2) < 1e-12);
+    assert.ok(env.ctx.calls.some(([name]) => name === 'drawImage'));
+
+    fail = true;
+    assert.doesNotThrow(frame);
+    assert.equal(env.ctx.calls.some(([name]) => name === 'drawImage'), false);
+    assert.deepEqual(sampled, { scale: 2, alpha: 2, leader: 1, content: 1 });
+
+    fail = false;
+    scale = Number.NaN;
+    alpha = 2;
+    leader = Number.NaN;
+    content = 2;
+    frame();
+    assert.equal(env.ctx.calls.some(([name]) => name === 'scale'), false);
+    assert.equal(alphas.at(-1), 1);
+    assert.ok(env.ctx.calls.some(([name]) => name === 'drawImage'));
+
+    scale = 0;
+    frame();
+    assert.equal(env.ctx.calls.some(([name]) => name === 'drawImage'), false);
+
+    // Reusing the record for an ordinary card must not retain animated values.
+    Object.assign(entry, {
+      presentationScale: 1, sourceAlpha: 1, leaderProgress: 1, contentAlpha: 1,
+    });
+    publish();
+    frame();
+    assert.equal(alphas.at(-1), 1);
+    assert.ok(env.ctx.calls.some(([name]) => name === 'drawImage'));
   } finally {
     env.cleanup();
   }

@@ -714,6 +714,14 @@ try {
       if (controller.googleTileset) controller.googleTileset.show = false;
       controller.googleTileset = null;
       controller.cesiumToken = '';
+      // Availability is now composed in the source registry. Override only
+      // this fixture's choices, as the previous token-field seam did.
+      for (const source of controller._sources.values()) {
+        if (source.descriptor.requiresIon || source.descriptor.kind === 'photoreal') {
+          source.available = false;
+        }
+      }
+      controller._registry.state.hasCesiumIonToken = false;
       await styleManager._setMapStack('osm', { syncShare: false });
       styleManager._initMapStackControl();
     });
@@ -1257,9 +1265,10 @@ try {
       manager._setCommandDockPanelPinState(id, false, { persist: false, syncShare: false });
       manager.setPanelCollapsed(id, true, { persist: false, syncShare: false });
     }
-    const original = manager.setPanelCollapsed;
-    const probe = { transitions: [], restore: () => { manager.setPanelCollapsed = original; } };
-    manager.setPanelCollapsed = function (id, ...args) {
+    const chrome = manager._panelChrome;
+    const original = chrome.setPanelCollapsed;
+    const probe = { transitions: [], restore: () => { chrome.setPanelCollapsed = original; } };
+    chrome.setPanelCollapsed = function (id, ...args) {
       const before = document.getElementById(id)?.classList.contains('collapsed');
       const result = original.call(this, id, ...args);
       const after = document.getElementById(id)?.classList.contains('collapsed');
@@ -1466,7 +1475,8 @@ try {
         getStats: () => ({ count: 1, lastUpdate: Date.now(), source: 'Local focus fixture' }),
       });
       state.ids.push(transitionId);
-      manager._renderToggles();
+      const { application } = await import('/src/main.js');
+      application.getComponents().data.presentation.panel._renderToggles();
       const offId = manager.getAll().find((layer) => !state.ids.includes(layer.id) && layer.showInTogglePanel && !layer.enabled)?.id;
       return {
         ready: Boolean(offId), offId, fixtureIds: state.ids.slice(0, 2), transitionId,
@@ -1506,12 +1516,13 @@ try {
             JSON.stringify({ setup: enabled ? 'dev QA fixture' : 'real production OFF row; not activated', navigation, state }));
           await page.screenshot({ path: path.join(shotsDir, `${width}-data-${label.toLowerCase()}-focus.png`) });
           if (label === 'OFF') {
-            const passive = await page.evaluate((layerId) => {
+            const passive = await page.evaluate(async (layerId) => {
               const probe = window.__qaDataFocus;
               const focusBefore = document.activeElement;
               const productionBefore = JSON.stringify(probe.production());
               const durableBefore = localStorage.getItem('gev:layer-state:v2');
-              window.__godsEyeView.dataManager._refreshTogglePanel();
+              const { application } = await import('/src/main.js');
+              application.getComponents().data.presentation.refresh();
               return {
                 focusRetained: document.activeElement === focusBefore
                   && focusBefore.matches('.data-toggle-btn')
@@ -1617,7 +1628,8 @@ try {
       state.transition?.releaseDisable?.();
       const removed = [];
       for (const id of state.ids) removed.push(await window.__gevQaUnregisterLayer(manager, id));
-      manager._renderToggles();
+      const { application } = await import('/src/main.js');
+      application.getComponents().data.presentation.panel._renderToggles();
       window.__godsEyeView.styleManager.setPanelCollapsed('data-panel', state.collapsed, { persist: false, syncShare: false });
       // A native user-origin toggle legitimately asks the production state
       // coordinator to persist. Restore the exact pre-fixture value so this

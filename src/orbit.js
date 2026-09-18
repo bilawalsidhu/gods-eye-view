@@ -1,5 +1,8 @@
 import * as Cesium from 'cesium';
-import { holdContinuousRender, releaseContinuousRender } from './renderGovernor.js';
+import {
+  holdContinuousRender,
+  releaseContinuousRender,
+} from './renderGovernor.js';
 
 /**
  * OrbitController — smooth orbit around a target point.
@@ -54,7 +57,7 @@ export class OrbitController {
       const hpr = new Cesium.HeadingPitchRange(
         this.angle,
         Cesium.Math.toRadians(this.pitch),
-        this.radius
+        this.radius,
       );
       this.viewer.camera.lookAt(this.target, hpr);
     });

@@ -1,3 +1,6 @@
+import { readShellSource, shellMethod } from './testSupport/readShellSource.mjs';
+import { expandApplicationHtml } from '../build/application-html.js';
+import { readLayerSource } from './testSupport/readLayerSource.mjs';
 import { PanelLayoutController } from './ui/panelLayoutController.js';
 import { readShellElements } from './ui/shellElements.js';
 import { readStylesheet } from './testSupport/readStylesheet.mjs';
@@ -25,12 +28,12 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
-const ui = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'applicationShell.js'), 'utf8');
+const html = expandApplicationHtml(fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8'));
+const ui = readShellSource();
 const css = readStylesheet(path.join(ROOT, 'style.css'));
 const sceneDirector = fs.readFileSync(path.join(ROOT, 'src', 'scenes', 'director.js'), 'utf8');
-const manager = fs.readFileSync(path.join(ROOT, 'src', 'data', 'manager.js'), 'utf8');
-const contextLayer = fs.readFileSync(path.join(ROOT, 'src', 'data', 'militaryAwareness.js'), 'utf8');
+const manager = fs.readFileSync(path.join(ROOT, 'src', 'data', 'lifecycle.js'), 'utf8');
+const contextLayer = readLayerSource(path.join(ROOT, 'src', 'data', 'militaryAwareness.js'), 'utf8');
 const voiceActions = fs.readFileSync(path.join(ROOT, 'src', 'voice', 'gevActions.js'), 'utf8');
 
 test('Cockpit has one reset action beside its bottom exit path', () => {
@@ -42,7 +45,7 @@ test('Cockpit has one reset action beside its bottom exit path', () => {
   );
   const topCenterActions = html.match(/<nav id="top-center-actions"[\s\S]*?<\/nav>/);
   assert.ok(topCenterActions, 'Top-center globe actions are missing');
-  assert.match(topCenterActions[0], /id="clear-selected-layers"[\s\S]*?id="share-btn"[\s\S]*?id="reset-globe-view"/);
+  assert.match(topCenterActions[0], /id="clear-selected-layers"[\s\S]*?id="share-btn"[\s\S]*?id="tilt-map-view"[\s\S]*?id="north-up-view"[\s\S]*?id="reset-globe-view"/);
   assert.equal((html.match(/id="clear-selected-layers"/g) || []).length, 1, 'Clear Layers must have one DOM owner');
   assert.equal((html.match(/id="reset-globe-view"/g) || []).length, 1, 'Reset Globe must have one DOM owner');
   assert.equal((html.match(/id="cockpit-reset-globe"/g) || []).length, 1, 'Cockpit Reset must have one DOM owner');
@@ -201,7 +204,8 @@ test('programmatic Context layer changes cannot bypass explicit expansion policy
 });
 
 test('share startup isolates panel defaults from recipient-local collapse preferences', () => {
-  const parseIndex = ui.indexOf('this._initialShareState = this.shareLinkManager.parseInitialHash();');
+  const parseIndex = ui.indexOf('this._shareRestoration.attachLinks(this.shareLinkManager);');
+  assert.match(shellMethod('attachLinks').toString(), /this\._initialShareState = shareLinkManager\.parseInitialHash\(\)/);
   const panelChromeIndex = ui.indexOf('this._initPanelChrome();');
   assert.ok(parseIndex >= 0, 'initial share state must be parsed during UI construction');
   assert.ok(
@@ -209,11 +213,11 @@ test('share startup isolates panel defaults from recipient-local collapse prefer
     'share state must be known before panel chrome can read recipient-local preferences',
   );
   assert.equal(
-    (ui.match(/this\.shareLinkManager\.parseInitialHash\(\)/g) || []).length,
+    (ui.match(/shareLinkManager\.parseInitialHash\(\)/g) || []).length,
     1,
     'startup must parse the incoming share exactly once',
   );
-  const panelChrome = ui.match(/_initPanelChrome\(\) \{([\s\S]*?)\n  \}\n\n  \/\*\*/);
+  const panelChrome = { 1: shellMethod('_initPanelChrome').toString() };
   assert.ok(panelChrome, 'panel chrome initializer is missing');
   assert.match(
     panelChrome[1],
@@ -223,7 +227,7 @@ test('share startup isolates panel defaults from recipient-local collapse prefer
 });
 
 test('Cockpit owns a focused shared Display portal and compact Radio controls', () => {
-  const hiddenRule = css.match(/body\.cockpit-mode :is\(([^)]*)\)\s*\{\s*display:\s*none\s*!important;/);
+  const hiddenRule = css.match(/body\.cockpit-mode\s*:is\(([^)]*)\)\s*\{\s*display:\s*none\s*!important;/);
   assert.ok(hiddenRule, 'Cockpit hidden-chrome rule is missing');
   assert.match(css, /body\.cockpit-mode #right-context-rail\s*\{\s*display:\s*none\s*!important;/);
   assert.match(css, /body\.cockpit-mode #left-panel-stack > #scene-panel\s*\{\s*display:\s*none\s*!important;/);
@@ -236,13 +240,22 @@ test('Cockpit owns a focused shared Display portal and compact Radio controls', 
   assert.match(html, /id="clear-selected-layers"[^>]*aria-label="Clear selected data layers"/);
   assert.match(html, /id="reset-globe-view"[^>]*aria-label="Reset to full globe view"/);
   assert.match(css, /#top-center-actions\s*\{[\s\S]*?left:\s*50%;[\s\S]*?display:\s*flex;[\s\S]*?transform:\s*translateX\(-50%\)/);
+  assert.match(
+    css,
+    /@media \(max-width: 720px\)\s*\{[\s\S]*?#top-center-actions\s*\{[\s\S]*?right:\s*16px;[\s\S]*?left:\s*auto;[\s\S]*?transform:\s*none;/,
+  );
+  assert.match(css, /@media \(max-width: 720px\)\s*\{[\s\S]*?#style-indicator\s*\{\s*display:\s*none;/);
+  assert.match(
+    css,
+    /@media \(max-width: 520px\)\s*\{[\s\S]*?#title-bar h1 > span:last-child,[\s\S]*?#title-bar \.subtitle\s*\{\s*display:\s*none;/,
+  );
   assert.match(css, /body\.ui-clean-view #top-center-actions/);
   assert.match(css, /body\.recording-mode #top-center-actions/);
   assert.match(
     css,
-    /body\.scene-playback-mode :is\(#clear-selected-layers, #reset-globe-view\)\s*\{\s*display:\s*none !important;/,
+    /body\.scene-playback-mode\s*:is\([\s\S]*?#clear-selected-layers,[\s\S]*?#tilt-map-view,[\s\S]*?#north-up-view,[\s\S]*?#reset-globe-view[\s\S]*?\)\s*\{\s*display:\s*none !important;/,
   );
-  assert.match(sceneDirector, /this\._running = true;\s*this\._setPlaybackActive\(true\);/);
+  assert.match(sceneDirector, /this\._running = true;\s*this\._previewRun = preview;\s*if \(preview\) this\._setPlaybackActive\(true\);/);
   assert.match(sceneDirector, /styleManager\.setRecordingMode\(false\);\s*this\._setPlaybackActive\(false\);/);
   assert.match(SceneControls.prototype.setPlaybackActive.toString(), /document\.body\.classList\.toggle\('scene-playback-mode', active\)/);
   assert.equal((html.match(/id="hud-toggle"/g) || []).length, 1, 'HUD control must have one stateful DOM owner');
@@ -395,7 +408,9 @@ test('fresh Cockpit entry temporarily collapses map panels and exit restores the
     assert.match(entryPanels[1], new RegExp(`'${panelId}'`), `${panelId} must collapse on entry`);
   }
 
-  const callback = ui.match(/onEntered: \(\) => \{([\s\S]*?)\n      \},\n      onExited:/);
+  assert.match(ui, /onEntered: \(\) => this\.enterPanels\(\)/);
+  assert.match(ui, /enterPanels: \(\) => this\._panelChrome\.enterCockpit\(\)/);
+  const callback = { 1: shellMethod('enterCockpit').toString() };
   assert.ok(callback, 'Cockpit onEntered callback is missing');
   assert.match(
     callback[1],
@@ -424,7 +439,9 @@ test('fresh Cockpit entry temporarily collapses map panels and exit restores the
     'normal Context must not reopen over Cockpit',
   );
 
-  const exitCallback = ui.match(/onExited: \(\) => \{([\s\S]*?)\n      \},\n      restoreTrackingFrame:/);
+  assert.match(ui, /onExited: \(\) => this\.exitPanels\(\)/);
+  assert.match(ui, /exitPanels: \(\) => this\._panelChrome\.exitCockpit\(\)/);
+  const exitCallback = { 1: shellMethod('exitCockpit').toString() };
   assert.ok(exitCallback, 'Cockpit onExited callback is missing');
   assert.match(
     exitCallback[1],
@@ -462,11 +479,11 @@ test('real disclosure changes reconsider only their own temporary panel lane', (
 test('Cockpit hides the complete top-center globe action group', () => {
   assert.match(
     css,
-    /body\.cockpit-mode :is\([\s\S]*?#top-center-actions[\s\S]*?\)\s*\{\s*display: none !important;\s*\}/,
+    /body\.cockpit-mode\s*:is\([\s\S]*?#top-center-actions[\s\S]*?\)\s*\{\s*display: none !important;\s*\}/,
   );
   assert.match(
     css,
-    /body\.cockpit-mode :is\(#clear-selected-layers, #share-btn, #reset-globe-view\)\s*\{\s*display:\s*none !important;/,
+    /body\.cockpit-mode\s*:is\([\s\S]*?#clear-selected-layers,[\s\S]*?#share-btn,[\s\S]*?#tilt-map-view,[\s\S]*?#north-up-view,[\s\S]*?#reset-globe-view[\s\S]*?\)\s*\{\s*display:\s*none !important;/,
     'Cockpit must hide each map-only globe action even if its group layout is disturbed',
   );
 });
@@ -762,7 +779,7 @@ test('Global Context uses its dedicated right rail without a duplicate Data Laye
   assert.match(contextLayer, /id:\s*'military-awareness'[\s\S]*?showInTogglePanel:\s*false/);
   const panel = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'layerPanel.js'), 'utf8');
   assert.match(panel, /if \(!layer\.showInTogglePanel\) continue;/);
-  assert.match(manager, /getLayers: \(\) => this\.getAll\(\)/);
+  assert.match(fs.readFileSync(path.join(ROOT, 'src', 'app', 'layerPresentation.js'), 'utf8'), /getLayers: \(\) => this\.manager\.getAll\(\)/);
   assert.match(html, /id="global-context-panel"/);
   assert.match(html, /id="global-context-flights-btn"/);
   assert.match(html, /id="global-context-missions-btn"/);

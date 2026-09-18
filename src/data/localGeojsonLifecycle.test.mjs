@@ -54,7 +54,8 @@ test('destroy removes context records and permits a fresh replacement', async t 
   const oldEntity = [...getContextStore().entities.values()][0].entity;
   assert.equal(getContextStore().entities.size, 1);
   env.layer.disable(env.viewer);
-  assert.equal(getContextStore().entities.size, 1, 'disabled cached source retains its records');
+  assert.equal(getContextStore().entities.size, 0, 'disable releases its records with the source');
+  assert.equal(env.sources.size, 0, 'disable removes the built source from the scene');
   env.layer.destroy(env.viewer);
   assert.equal(getContextStore().entities.size, 0);
   assert.equal(env.sources.size, 0);
@@ -126,17 +127,41 @@ test('concurrent enable and disable/re-enable share one pending dataset load', a
   assert.equal([...env.sources][0].show, true);
 });
 
-test('disable during loading keeps the completed source hidden until re-enabled', async t => {
+test('disable during loading releases the completed source; re-enable rebuilds without refetching', async t => {
   const env = harness(t);
   const release = deferred();
-  t.mock.method(globalThis, 'fetch', async () => { await release.promise; return response(); });
+  const fetchMock = t.mock.method(globalThis, 'fetch', async () => { await release.promise; return response(); });
   const loading = env.layer.enable(env.viewer);
   env.layer.disable(env.viewer);
   release.resolve();
   await loading;
-  assert.equal([...env.sources][0].show, false);
+  assert.equal(env.sources.size, 0, 'a build that finishes after disable() is released, not parked hidden');
   assert.equal(env.listeners.size, 0);
+  assert.equal(getContextStore().entities.size, 0);
   await env.layer.enable(env.viewer);
-  assert.equal([...env.sources][0].show, true);
   assert.equal(env.sources.size, 1);
+  assert.equal([...env.sources][0].show, true);
+  assert.equal(fetchMock.mock.callCount(), 1, 'the parsed dataset is cached across the toggle');
+});
+
+test('a toggle-off frees the entities and a toggle-on rebuilds them from the cached dataset', async t => {
+  const env = harness(t);
+  const fetchMock = t.mock.method(globalThis, 'fetch', async () => response());
+  await env.layer.enable(env.viewer);
+  const first = [...env.sources][0];
+  assert.equal(first.entities.values.length, 1);
+  assert.equal(getContextStore().entities.size, 1);
+  env.layer.disable(env.viewer);
+  assert.equal(env.sources.size, 0, 'no data source stays registered while the layer is off');
+  assert.equal(getContextStore().entities.size, 0);
+  assert.equal(env.layer.getLodDiagnostics().total, 0);
+  assert.equal(env.layer.getStats().count, 1, 'the row keeps reporting the dataset size');
+  await env.layer.enable(env.viewer);
+  const second = [...env.sources][0];
+  assert.notEqual(second, first, 're-enable builds a fresh source');
+  assert.equal(second.show, true);
+  assert.equal(second.entities.values.length, 1);
+  assert.equal(getContextStore().entities.size, 1);
+  assert.equal(fetchMock.mock.callCount(), 1, 'no second fetch for a bundled dataset');
+  assert.equal(env.layer.getLodDiagnostics().total, 1);
 });

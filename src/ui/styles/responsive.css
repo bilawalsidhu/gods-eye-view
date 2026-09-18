@@ -28,6 +28,17 @@
     left: 20px;
   }
 
+  #top-center-actions {
+    top: max(12px, env(safe-area-inset-top));
+    right: 16px;
+    left: auto;
+    transform: none;
+  }
+
+  #style-indicator {
+    display: none;
+  }
+
   #title-bar h1 {
     font-size: 16px;
     letter-spacing: 4px;
@@ -39,6 +50,19 @@
 
   #title-bar .title-logo {
     width: 36px;
+  }
+
+  #title-bar .frame-rate-readout {
+    position: fixed;
+    top: 52px;
+    left: 20px;
+    margin: 0;
+    font-size: 10px;
+    line-height: 12px;
+  }
+
+  #title-bar:has(.frame-rate-readout:not([hidden])) .subtitle {
+    visibility: hidden;
   }
 
   #location-bar {
@@ -211,5 +235,17 @@
     top: 16px;
     max-width: calc(100vw - 24px);
     text-align: center;
+  }
+}
+
+@media (max-width: 520px) {
+  #title-bar {
+    top: 14px;
+    left: 16px;
+  }
+
+  #title-bar h1 > span:last-child,
+  #title-bar .subtitle {
+    display: none;
   }
 }
