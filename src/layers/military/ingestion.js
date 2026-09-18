@@ -3,6 +3,7 @@ import { ERROR_BACKOFF_INTERVAL } from './recordPolicy.js';
 /** Own military source acquisition, cancellation, freshness and error backoff. */
 export function createIngestion({
   feed,
+  getQuery = () => ({}),
   applySnapshot,
   setSourceLabel,
   applyPendingTrackingRestore,
@@ -29,15 +30,25 @@ export function createIngestion({
         : resourceController.signal;
       try {
         updateSignal.throwIfAborted();
-        const snapshot = await feed._source.getSnapshot(
-          {},
-          { signal: updateSignal },
-        );
+        const snapshot = await feed._source.getSnapshot(getQuery(viewer), {
+          signal: updateSignal,
+        });
         updateSignal.throwIfAborted();
         feed._lastStatus = snapshot.status ?? 200;
         feed._lastSource = snapshot.source;
         setSourceLabel(feed._lastSource);
-        feed._backoff = snapshot.stale || snapshot.freshness === 'unknown';
+        // MOVEMENT proxy status (server/providers/common/upstream.js): a
+        // `stale` last-good list backs off like a stale snapshot; a `degraded`
+        // alternative feed is current data and stays out of `error` so the
+        // global chip does not read LOAD FAILED — the row shows providerError.
+        const providerStatus = snapshot.providerStatus ?? null;
+        feed._providerStatus = providerStatus;
+        feed._providerError = snapshot.providerError ?? null;
+        feed._lastCoverage = snapshot.coverage ?? feed._lastCoverage;
+        feed._backoff =
+          snapshot.stale ||
+          snapshot.freshness === 'unknown' ||
+          providerStatus === 'stale';
         feed._retryAt = 0;
         feed._lastError =
           snapshot.reason ||
@@ -70,6 +81,9 @@ export function createIngestion({
         }
         feed._lastError =
           e?.name === 'LiveSourceError' ? e.message : 'Live data unavailable';
+        // The proxy answered without data (HTTP 503 + structured status).
+        feed._providerStatus = e?.status ? 'unavailable' : null;
+        feed._providerError = e?.name === 'LiveSourceError' ? e.message : null;
       } finally {
         feed._activeUpdateControllers.delete(resourceController);
       }
@@ -91,6 +105,9 @@ export function createMilitaryFeed(source) {
   feed._activeUpdateControllers = new Set();
   feed._lastStatus = null;
   feed._lastSource = source?.label || 'Aircraft';
+  feed._lastCoverage = 'military upstream snapshot';
+  feed._providerStatus = null;
+  feed._providerError = null;
   feed._trackingRefreshEpoch = 0;
   feed._lastTrackingRefreshOutcome = {
     epoch: 0,

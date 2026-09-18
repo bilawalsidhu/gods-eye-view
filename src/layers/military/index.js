@@ -37,6 +37,8 @@ export function createMilitaryFlightLayer({
   });
   parts.ingestion = createIngestion({
     feed: flightState.feed,
+    getQuery: (viewer) =>
+      parts.controller._militaryQuery(viewer || flightState._viewer),
     applySnapshot,
     setSourceLabel: (source) => {
       layer.source = source;
