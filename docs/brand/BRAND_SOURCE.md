@@ -109,3 +109,48 @@ Ordering note: the tokens are numbered 900→50 / 600→100 in the order the gui
 | DOCUMENT-OBSERVED (drawings in the PDF) | the lockup geometry and its vector paths (p2); the light-variant colour `#F7F7F5` and the grounds `#F7F7F5` / `#161616` (p2, p4); the `#000000` print colour (p2, p3); the icon-tile proportions (p4); the clear-space geometry (p3, MEASURED-FROM-DIAGRAM) |
 | SAMPLED (from supplied PNGs) | `#0D5849` as the ink of the green logo rasters (coincides with documented Primary 1); `#0D0D0D` ink and the alternative mixed-case lockup of the uploaded PNG; `logo_dark.png` being a p3 crop |
 | DERIVED (this repo's decisions) | every semantic alias and usage role; the 900/700/500/200/50 and 600–100 numbering; the green tile + 20 % radius of `mark.svg`; the 65 % mark ratio applied to a 512 px tile; the og-image composition (60 % width lockup on `#161616`); the 2 % viewBox pad; the font fallback stack; `--od-font-mono`; `site.webmanifest` names and colours |
+
+### Dark-header logo variant (recorded 2026-09-18)
+
+**What the dark header actually renders.** The application header
+(`src/ui/templates/scene-chrome.html`, lines 13–14) wires the lockup through a
+`<picture>` element:
+
+```html
+<picture class="brand-wordmark-logo" aria-hidden="true"><source srcset="/brand/logo-dark.svg" media="(prefers-color-scheme: light)" /><img src="/brand/logo-light.svg" alt="" /></picture>
+<h1><span class="title-logo brand-logo" data-logo-gaze data-logo-src="/brand/mark-light.svg" aria-hidden="true"><img src="/brand/mark-light.svg" alt="" /></span> <span class="brand-product">OnDemand <span class="title-accent">Spatial</span></span></h1>
+```
+
+- Default (and on every dark-scheme client, i.e. the console's own dark UI):
+  **`public/brand/logo-light.svg`** — the full lockup recovered as vector from
+  BrandGuidelines.pdf p2, single fill `#F7F7F5` (the guideline's documented
+  light variant for dark grounds, p2 right half), plus the bare mark
+  **`public/brand/mark-light.svg`** (`#F7F7F5`) in the `h1` logo slot
+  (`data-logo-src="/brand/mark-light.svg"`, inlined by the logo-gaze module).
+- Only when the operating system reports `prefers-color-scheme: light` does the
+  `<source>` swap the lockup to **`public/brand/logo-dark.svg`** (fill
+  `#0D5849`, Primary 1). The loading screen
+  (`src/ui/templates/hud-loading.html`, lines 7–8) uses the identical pair.
+- Favicons/OG are separate assets (`public/brand/mark.svg` tile,
+  `favicon*.png`, `og-image.png`) and are not affected by a header swap.
+
+**Decision: RETAINED AS-IS** (2026-09-18) — the light lockup on the dark header
+is the guideline-documented pairing (p2) and passes contrast (`#F7F7F5` on
+`#161616` ≈ 16.9:1).
+
+**Alternative variants available in the user's file store** (all listed in §2
+above with origins and hashes) should a swap ever be wanted:
+
+| Asset | What it is | Suitability for the dark header |
+|---|---|---|
+| `logo_green.png` / `logo_header.png` (420×136, ink `#0D5849`) | the same lockup rasterised in Primary 1 green | low contrast on `#161616` (≈ 2.2:1) — would need a light tile behind it |
+| `OD logo - black.png` (4746×1755, ink `#0D0D0D`) | a *different* mixed-case "On/Demand" design with a tagline line | black on a dark header is unreadable; also not the guideline lockup |
+| `logo_dark.png` (844×273) | a crop of the BrandGuidelines.pdf p3 clear-space diagram (black lockup plus red guide lines) | not a clean logo asset — diagram artefact |
+| `public/brand/logo-black.svg` (repo) | the p2 print variant, fill `#000000` | for light/print surfaces only |
+
+**How a swap would be done (one-file change):** either replace the bytes of
+`public/brand/logo-light.svg` with the chosen asset (keeping the file name so
+no template changes), or point the single `<img src="/brand/logo-light.svg">`
+in `src/ui/templates/scene-chrome.html` (and its twin in
+`src/ui/templates/hud-loading.html`) at the new file under `public/brand/`.
+Nothing else references the header lockup.

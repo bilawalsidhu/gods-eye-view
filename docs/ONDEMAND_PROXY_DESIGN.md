@@ -597,3 +597,34 @@ Same pattern as row 1 (§11), built on the shared helpers of `server/sources/_sh
 - **Tool definition:** `docs/ondemand-tools/fire_detection_search.json` (OpenAPI 3.0.3; `x-ondemand-spatial.capability_id = fires.search`). **Registry:** `src/registry/capabilities.json` row `fires.search`, status `registered-unverified`, `ondemand_tool_id: null` (agent-tool creation is dashboard-only, §8 of the API audit), `attribution: "NASA FIRMS / LANCE"`; the capability loop (§11c) includes the row in its catalogue, so OnDemand can already select it — without the key the executed result is the structured 503, which the answer turn reports as a failed source rather than inventing detections.
 - **Tests:** `server/sources/nasa-firms.test.mjs` — the 10 named cases (happy path, invalid input, missing key → 503 + no network, 429 + FIRMS quota text, 5xx×2 → 502, empty CSV, limit truncation → bounded, timeout → 504, malformed/Invalid MAP_KEY, cancellation → 499) plus helpers, the parity test against `src/data/firmsCsv.js`, and a deny-list test (only `NASA_FIRMS_MAP_KEY` is referenced; no `process.env` read in the adapter; key sentinel absent from every output).
 - **Live status:** the emulator has no `NASA_FIRMS_MAP_KEY`, so `docs/audit/deployment-verification.md` §9 records the 503 `not_configured` path and the 400 whitelist path; the 200 path is exercised only by the stubbed tests until a key is configured on the deployment.
+
+## Decisions closed 2026-09-18
+
+Recorded during the close-out of the OnDemand Spatial rebrand (branch
+`ondemand-serverless`, decisions taken 2026-09-18). The counts below are the
+per-category totals of this grep report (`RETAINED-ID` 1,250 hits,
+`FROZEN-V1` 64 hits at the time of the report).
+
+- **Group 1 — persisted-state / registered-client identifiers (1,250 hits:
+  `godsEyeView.*` storage keys, `window.__godsEyeView`, `godsEyeView_*` Cesium
+  stage names, `gods-eye-view-*` / `GodsEyeView/*` client identifiers, the
+  `scripts/qa-*.mjs` tooling that drives them).** DECISION = **KEEP UNCHANGED.**
+  Rationale: invisible to users; renaming persisted keys would wipe existing
+  users' saved state (scenes, CCTV calibrations, panel layouts, voice-cost
+  preferences) without a migration, and the client identifiers are registered
+  with the feed operators. Revisit only if a storage-key migration is
+  scheduled (then: read-old/write-new migration + a deprecation window, not a
+  rename).
+- **Group 2 — frozen v1 workflow-prompt strings (64 hits: the nine node
+  prompts of workflow `6aace534859f7b0abb53d99a` that self-describe as the
+  "God's Eye pipeline", `WORKFLOW_CREATED_AS`, the committed export and its
+  provenance notes).** DECISION = **LEAVE IN v1**; fold the wording change into
+  the v2 workflow publish when the workflow next changes for a functional
+  reason. Published workflow versions are immutable — a prompt edit is a new
+  definition, and the committed export must stay byte-identical to the live
+  v1 object (`server/ondemand/workflow-definition.test.mjs` compares every
+  prompt against it).
+- Note: the live dashboard workflow was renamed by **display name only** on
+  **2026-09-18 10:41:47Z** (`PATCH /automation/api/workflow/{id}/name` →
+  HTTP 200); the workflow ID `6aace534859f7b0abb53d99a`, the v1 label, the
+  trigger and the nine nodes are unchanged.

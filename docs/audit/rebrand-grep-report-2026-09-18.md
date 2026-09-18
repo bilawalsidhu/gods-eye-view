@@ -168,3 +168,34 @@ Generated after the OnDemand Spatial rename on branch `ondemand-serverless`. Sco
 | `src/voice/gevRealtime.test.mjs` | 6 | 0 | 0 | 0 | 0 | RETAINED-ID 6 |
 | `src/voice/realtimePreferences.js` | 3 | 0 | 0 | 0 | 0 | RETAINED-ID 3 |
 | `src/voice/realtimeViewport.js` | 1 | 0 | 0 | 0 | 0 | RETAINED-ID 1 |
+
+## Decisions closed 2026-09-18
+
+Recorded during the close-out of the OnDemand Spatial rebrand (branch
+`ondemand-serverless`, decisions taken 2026-09-18). The counts below are the
+per-category totals of this grep report (`RETAINED-ID` 1,250 hits,
+`FROZEN-V1` 64 hits at the time of the report).
+
+- **Group 1 — persisted-state / registered-client identifiers (1,250 hits:
+  `godsEyeView.*` storage keys, `window.__godsEyeView`, `godsEyeView_*` Cesium
+  stage names, `gods-eye-view-*` / `GodsEyeView/*` client identifiers, the
+  `scripts/qa-*.mjs` tooling that drives them).** DECISION = **KEEP UNCHANGED.**
+  Rationale: invisible to users; renaming persisted keys would wipe existing
+  users' saved state (scenes, CCTV calibrations, panel layouts, voice-cost
+  preferences) without a migration, and the client identifiers are registered
+  with the feed operators. Revisit only if a storage-key migration is
+  scheduled (then: read-old/write-new migration + a deprecation window, not a
+  rename).
+- **Group 2 — frozen v1 workflow-prompt strings (64 hits: the nine node
+  prompts of workflow `6aace534859f7b0abb53d99a` that self-describe as the
+  "God's Eye pipeline", `WORKFLOW_CREATED_AS`, the committed export and its
+  provenance notes).** DECISION = **LEAVE IN v1**; fold the wording change into
+  the v2 workflow publish when the workflow next changes for a functional
+  reason. Published workflow versions are immutable — a prompt edit is a new
+  definition, and the committed export must stay byte-identical to the live
+  v1 object (`server/ondemand/workflow-definition.test.mjs` compares every
+  prompt against it).
+- Note: the live dashboard workflow was renamed by **display name only** on
+  **2026-09-18 10:41:47Z** (`PATCH /automation/api/workflow/{id}/name` →
+  HTTP 200); the workflow ID `6aace534859f7b0abb53d99a`, the v1 label, the
+  trigger and the nine nodes are unchanged.
