@@ -1,0 +1,318 @@
+/* ASK ONDEMAND — the per-entity mini chatbot (src/ondemand/entityChat.js,
+   docs/ENTITY_CHAT.md). Brand tokens from src/brand/tokens.css: the accent is
+   --od-green-500 (#3BB795) with dark ink (--od-ink #161616) on filled
+   controls; body text is --od-neutral-100 on the dark ground. */
+
+/* The CONTEXT ▸ CONTACTS action that opens the overlay. Spans the action
+   grid so it never squeezes COCKPIT / SEARCH beside it. */
+.ask-ondemand-btn {
+  grid-column: 1 / -1;
+  min-height: 30px;
+  border-color: rgba(59, 183, 149, 0.55);
+  color: var(--od-green-200, #adedd6);
+  background: rgba(59, 183, 149, 0.14);
+  letter-spacing: 0.14em;
+}
+.ask-ondemand-btn:hover,
+.ask-ondemand-btn:focus-visible {
+  border-color: var(--od-green-500, #3bb795);
+  color: var(--od-ink, #161616);
+  background: var(--od-green-500, #3bb795);
+}
+.ask-ondemand-btn[hidden] {
+  display: none;
+}
+
+#ondemand-entity-chat {
+  position: fixed;
+  z-index: 185; /* above the first-run launcher (175), below key setup (190) */
+  right: max(18px, env(safe-area-inset-right));
+  bottom: max(88px, calc(env(safe-area-inset-bottom) + 72px));
+  width: min(26rem, calc(100vw - 2rem));
+  max-height: min(34rem, calc(100vh - 7rem));
+  max-height: min(34rem, calc(100dvh - 7rem));
+  display: flex;
+  flex-direction: column;
+  color: var(--od-neutral-100, #f3f3f3);
+  background: rgba(22, 22, 22, 0.94);
+  border: 1px solid rgba(59, 183, 149, 0.45);
+  border-radius: 12px;
+  box-shadow:
+    0 1.2rem 3.6rem rgba(0, 0, 0, 0.6),
+    0 0 1.6rem rgba(59, 183, 149, 0.12);
+  backdrop-filter: blur(20px) saturate(1.2);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
+  font: 11px/1.4 var(--font-sans, 'Inter', system-ui, sans-serif);
+  overflow: hidden;
+}
+#ondemand-entity-chat[hidden] {
+  display: none;
+}
+
+.od-chat__header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px 8px 12px;
+  border-bottom: 1px solid rgba(59, 183, 149, 0.28);
+  background: rgba(59, 183, 149, 0.08);
+}
+.od-chat__brand {
+  padding: 3px 7px;
+  border-radius: 6px;
+  color: var(--od-ink, #161616);
+  background: var(--od-green-500, #3bb795);
+  font: 700 8px/1 var(--font-mono, monospace);
+  letter-spacing: 0.16em;
+  white-space: nowrap;
+}
+.od-chat__titles {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+.od-chat__title {
+  overflow: hidden;
+  font: 600 11px/1.2 var(--font-mono, monospace);
+  letter-spacing: 0.06em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.od-chat__mgrs {
+  overflow: hidden;
+  color: var(--od-green-200, #adedd6);
+  font: 9px/1.2 var(--font-mono, monospace);
+  letter-spacing: 0.08em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.od-chat__key-state {
+  padding: 2px 6px;
+  border: 1px solid rgba(243, 243, 243, 0.18);
+  border-radius: 999px;
+  color: var(--od-neutral-400, #999999);
+  font: 8px/1.2 var(--font-mono, monospace);
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+.od-chat__key-state[data-key-source='request'] {
+  border-color: rgba(59, 183, 149, 0.6);
+  color: var(--od-green-200, #adedd6);
+}
+.od-chat__icon-btn {
+  min-width: 28px;
+  min-height: 24px;
+  padding: 0 7px;
+  border: 1px solid rgba(243, 243, 243, 0.16);
+  border-radius: 6px;
+  color: var(--od-neutral-100, #f3f3f3);
+  background: transparent;
+  font: 700 9px/1 var(--font-mono, monospace);
+  letter-spacing: 0.1em;
+  cursor: pointer;
+}
+.od-chat__icon-btn:hover,
+.od-chat__icon-btn:focus-visible {
+  border-color: var(--od-green-500, #3bb795);
+  color: var(--od-green-200, #adedd6);
+  outline: none;
+}
+.od-chat__close {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.od-chat__key-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(243, 243, 243, 0.08);
+  background: rgba(0, 0, 0, 0.25);
+}
+.od-chat__key-row[hidden] {
+  display: none;
+}
+.od-chat__key-label {
+  grid-column: 1 / -1;
+  color: var(--od-neutral-400, #999999);
+  font: 9px/1.3 var(--font-mono, monospace);
+  letter-spacing: 0.06em;
+}
+.od-chat__key-input {
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid rgba(243, 243, 243, 0.16);
+  border-radius: 6px;
+  color: var(--od-neutral-100, #f3f3f3);
+  background: rgba(0, 0, 0, 0.35);
+  font: 10px/1.2 var(--font-mono, monospace);
+}
+.od-chat__key-input:focus-visible {
+  border-color: var(--od-green-500, #3bb795);
+  outline: none;
+}
+
+.od-chat__status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 12px;
+  border-bottom: 1px solid rgba(243, 243, 243, 0.06);
+}
+.od-chat__status {
+  overflow: hidden;
+  color: var(--od-neutral-400, #999999);
+  font: 8px/1.3 var(--font-mono, monospace);
+  letter-spacing: 0.1em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.od-chat__badge {
+  flex: none;
+  padding: 2px 7px;
+  border-radius: 999px;
+  color: var(--od-ink, #161616);
+  background: var(--od-green-500, #3bb795);
+  font: 700 8px/1.3 var(--font-mono, monospace);
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+.od-chat__badge[hidden] {
+  display: none;
+}
+
+.od-chat__transcript {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 9rem;
+  padding: 10px 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-behavior: smooth;
+}
+.od-chat__msg {
+  max-width: 92%;
+  padding: 7px 9px;
+  border-radius: 9px;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.od-chat__msg--user {
+  align-self: flex-end;
+  color: var(--od-ink, #161616);
+  background: var(--od-green-500, #3bb795);
+}
+.od-chat__msg--assistant {
+  align-self: flex-start;
+  color: var(--od-neutral-100, #f3f3f3);
+  background: rgba(243, 243, 243, 0.08);
+  border: 1px solid rgba(243, 243, 243, 0.08);
+}
+.od-chat__msg--assistant[data-streaming='true']::after {
+  content: '▍';
+  margin-left: 2px;
+  color: var(--od-green-500, #3bb795);
+  animation: od-chat-caret 0.9s steps(2, end) infinite;
+}
+.od-chat__msg--system {
+  align-self: stretch;
+  max-width: none;
+  color: var(--od-green-200, #adedd6);
+  background: rgba(59, 183, 149, 0.1);
+  border: 1px dashed rgba(59, 183, 149, 0.4);
+  font: 9px/1.4 var(--font-mono, monospace);
+}
+.od-chat__msg--error {
+  align-self: stretch;
+  max-width: none;
+  color: #ffd3cc;
+  background: rgba(255, 92, 64, 0.12);
+  border: 1px solid rgba(255, 92, 64, 0.45);
+  font: 10px/1.4 var(--font-mono, monospace);
+}
+@keyframes od-chat-caret {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+.od-chat__composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  padding: 8px 12px 10px;
+  border-top: 1px solid rgba(59, 183, 149, 0.28);
+  background: rgba(0, 0, 0, 0.25);
+}
+.od-chat__input {
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid rgba(243, 243, 243, 0.16);
+  border-radius: 8px;
+  color: var(--od-neutral-100, #f3f3f3);
+  background: rgba(0, 0, 0, 0.35);
+  font: 11px/1.3 var(--font-sans, 'Inter', system-ui, sans-serif);
+}
+.od-chat__input::placeholder {
+  color: var(--od-neutral-400, #999999);
+}
+.od-chat__input:focus-visible {
+  border-color: var(--od-green-500, #3bb795);
+  outline: none;
+}
+.od-chat__btn {
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--od-green-500, #3bb795);
+  border-radius: 8px;
+  color: var(--od-ink, #161616);
+  background: var(--od-green-500, #3bb795);
+  font: 700 9px/1 var(--font-mono, monospace);
+  letter-spacing: 0.14em;
+  cursor: pointer;
+}
+.od-chat__btn:hover,
+.od-chat__btn:focus-visible {
+  background: var(--od-green-200, #adedd6);
+  border-color: var(--od-green-200, #adedd6);
+  outline: none;
+}
+.od-chat__btn:disabled {
+  cursor: progress;
+  opacity: 0.55;
+}
+.od-chat__btn--ghost {
+  color: var(--od-neutral-100, #f3f3f3);
+  background: transparent;
+  border-color: rgba(243, 243, 243, 0.2);
+}
+.od-chat__btn--ghost:hover,
+.od-chat__btn--ghost:focus-visible {
+  color: var(--od-ink, #161616);
+}
+
+body.cockpit-mode #ondemand-entity-chat,
+body.scene-playback-mode #ondemand-entity-chat {
+  display: none;
+}
+
+@media (max-width: 620px) {
+  #ondemand-entity-chat {
+    right: max(8px, env(safe-area-inset-right));
+    left: max(8px, env(safe-area-inset-left));
+    width: auto;
+    bottom: max(72px, calc(env(safe-area-inset-bottom) + 64px));
+  }
+}

@@ -3,6 +3,7 @@ import { initAnnotations } from '../annotations/index.js';
 import { initDrawTool } from '../annotations/drawTool.js';
 import { initGevVoiceCommands } from '../voice/gevRealtime.js';
 import { installScopeMask, destroyScopeMask } from '../scopeMask.js';
+import { installEntityChat } from '../ondemand/entityChat.js';
 import {
   installRenderGovernor,
   getRenderGovernorDiagnostics,
@@ -118,6 +119,11 @@ export function createApplicationTools({
   defer(() => {
     if (window.__godsEyeView === debug) delete window.__godsEyeView;
   });
+  // ASK ONDEMAND — per-entity mini chatbot on a selected aircraft / vessel /
+  // satellite (src/ondemand/entityChat.js, docs/ENTITY_CHAT.md). Follows the
+  // tracking layers' selection lanes; tears itself down on the app signal.
+  // `__godsEyeView.entityChat.openFirstVisible('aircraft')` drives it headless.
+  debug.entityChat = installEntityChat({ viewer, dataManager, signal });
   const voiceCommands = initGevVoiceCommands({
     ...voice,
     floorServices: operations.surface.groundFloor,

@@ -24,14 +24,21 @@ export class UpstreamError extends Error {
 
 /**
  * @param {string} userId - becomes `externalUserId` upstream.
- * @param {{ pluginIds?: string[], reuse?: boolean }} [opts]
+ * @param {{ pluginIds?: string[], reuse?: boolean, apiKeyOverride?: string }} [opts]
+ *   `apiKeyOverride` (a caller-supplied key resolved by
+ *   server/ondemand/client.js#resolveRequestKey) is forwarded to
+ *   ondemandFetch for the create call. A session created under someone
+ *   else's key belongs to THEIR OnDemand company, so it is never read from
+ *   nor written to this proxy's userId→sessionId store: BYO-key sessions are
+ *   always freshly created and only the caller keeps the id.
  * @returns {Promise<{ sessionId: string, externalUserId: string, reused: boolean, createdAt: string }>}
  */
 export async function ensureSession(userId, opts = {}) {
-  const { pluginIds, reuse = true } = opts;
+  const { pluginIds, reuse = true, apiKeyOverride } = opts;
   const store = getStore();
+  const usesOverrideKey = Boolean(apiKeyOverride);
 
-  if (reuse) {
+  if (reuse && !usesOverrideKey) {
     const existing = store.get(userId);
     if (existing) {
       return {
@@ -60,6 +67,7 @@ export async function ensureSession(userId, opts = {}) {
   const upstream = await ondemandFetch(`${baseUrls().chat}/sessions`, {
     method: 'POST',
     body: { externalUserId: userId, pluginIds: effectivePluginIds },
+    apiKeyOverride,
   });
 
   if (!upstream.ok) {
@@ -72,10 +80,12 @@ export async function ensureSession(userId, opts = {}) {
   const json = await upstream.json();
   const sessionId = json?.data?.id;
   const createdAt = json?.data?.createdAt || new Date().toISOString();
-  store.set(userId, {
-    sessionId,
-    createdAt,
-    lastUsedAt: new Date().toISOString(),
-  });
+  if (!usesOverrideKey) {
+    store.set(userId, {
+      sessionId,
+      createdAt,
+      lastUsedAt: new Date().toISOString(),
+    });
+  }
   return { sessionId, externalUserId: userId, reused: false, createdAt };
 }

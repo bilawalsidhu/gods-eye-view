@@ -19,7 +19,13 @@ import {
   tierDefaults,
   TIER_DEFAULTS,
 } from './_config.js';
-import { ondemandFetch } from '../../server/ondemand/client.js';
+import {
+  ondemandFetch,
+  bindOndemandFetch,
+  resolveRequestKey,
+  setKeySourceHeader,
+  KEY_OVERRIDE_MAX_LEN,
+} from '../../server/ondemand/client.js';
 import {
   ensureSession,
   UpstreamError,
@@ -77,7 +83,21 @@ const MODEL_CONFIG_FIELDS = new Set([
 export default async function handler(req, res) {
   if (rejectCrossOrigin(req, res)) return;
   if (!assertMethod(req, res, ['POST'])) return;
-  if (!isConfigured()) {
+  // Optional per-request key override (`x-ondemand-key`, docs/ENTITY_CHAT.md).
+  // Resolved once here, threaded into every upstream call below through
+  // `apiKeyOverride` / the bound fetch; only its SOURCE is ever echoed.
+  const keyOverride = resolveRequestKey(req);
+  if (keyOverride.rejected) {
+    setKeySourceHeader(res, 'server');
+    sendJson(res, 400, {
+      error: 'invalid_key_override',
+      message: `x-ondemand-key must be a non-empty printable-ASCII string of at most ${KEY_OVERRIDE_MAX_LEN} characters`,
+    });
+    return;
+  }
+  setKeySourceHeader(res, keyOverride.source);
+  const { apiKeyOverride } = keyOverride;
+  if (!isConfigured() && !apiKeyOverride) {
     sendJson(res, 503, {
       error: 'not_configured',
       message: 'ONDEMAND_API_KEY is not set on the server.',
@@ -147,6 +167,7 @@ export default async function handler(req, res) {
       pluginIds,
       endpointId,
       responseMode,
+      apiKeyOverride,
     });
     return;
   }
@@ -236,7 +257,7 @@ export default async function handler(req, res) {
   let resolvedSessionId = sessionId;
   if (!resolvedSessionId) {
     try {
-      const ensured = await ensureSession(userId);
+      const ensured = await ensureSession(userId, { apiKeyOverride });
       resolvedSessionId = ensured.sessionId;
     } catch (err) {
       if (err instanceof UpstreamError) {
@@ -276,6 +297,7 @@ export default async function handler(req, res) {
       upstream = await ondemandFetch(url, {
         method: 'POST',
         body: upstreamBody,
+        apiKeyOverride,
       });
     } catch {
       sendJson(res, 502, {
@@ -312,6 +334,7 @@ export default async function handler(req, res) {
       method: 'POST',
       body: upstreamBody,
       signal: controller.signal,
+      apiKeyOverride,
     });
   } catch {
     unwireEarly();
@@ -419,6 +442,7 @@ async function runCapabilityLoopRequest(
     pluginIds,
     endpointId,
     responseMode,
+    apiKeyOverride,
   },
 ) {
   if (responseMode !== undefined && responseMode !== 'sync') {
@@ -481,7 +505,10 @@ async function runCapabilityLoopRequest(
       sessionId,
       registry,
       adapters: SOURCE_ADAPTERS,
-      ondemand: { fetch: ondemandFetch, chatBase: baseUrls().chat },
+      ondemand: {
+        fetch: bindOndemandFetch(apiKeyOverride),
+        chatBase: baseUrls().chat,
+      },
       endpointId: endpointId ?? tierRow.fulfillmentEndpointId,
       reasoningMode: tierRow.reasoningMode,
       pluginIds: Array.isArray(pluginIds) ? pluginIds : [],

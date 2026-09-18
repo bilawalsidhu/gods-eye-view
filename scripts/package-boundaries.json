@@ -615,7 +615,8 @@
       "src/ui/styles/command-dock-sliding.css",
       "src/ui/styles/voice-cost.css",
       "src/ui/styles/first-run.css",
-      "src/ui/styles/provider-settings.css"
+      "src/ui/styles/provider-settings.css",
+      "src/ui/styles/ondemand-chat.css"
     ],
     "external": []
   },
@@ -1818,7 +1819,9 @@
       "src/director/sharing/lifetime.js",
       "src/director/authoring.js",
       "src/scenes/sharing.js",
-      "src/ui/sceneSharing.js"
+      "src/ui/sceneSharing.js",
+      "src/ondemand/entityChat.js",
+      "src/ondemand/entityContext.js"
     ],
     "external": [
       "@mapbox/vector-tile",

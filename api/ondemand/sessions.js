@@ -17,6 +17,11 @@ import {
   UpstreamError,
 } from '../../server/ondemand/session-service.js';
 import {
+  resolveRequestKey,
+  setKeySourceHeader,
+  KEY_OVERRIDE_MAX_LEN,
+} from '../../server/ondemand/client.js';
+import {
   sendJson,
   assertMethod,
   rejectCrossOrigin,
@@ -32,7 +37,20 @@ export default async function handler(req, res) {
   if (rejectCrossOrigin(req, res)) return;
   if (!assertMethod(req, res, ['GET', 'POST', 'DELETE'])) return;
 
-  if (!isConfigured()) {
+  // Optional per-request key override (`x-ondemand-key`, docs/ENTITY_CHAT.md).
+  // The value goes nowhere but ondemandFetch; only its SOURCE is echoed.
+  const keyOverride = resolveRequestKey(req);
+  if (keyOverride.rejected) {
+    setKeySourceHeader(res, 'server');
+    sendJson(res, 400, {
+      error: 'invalid_key_override',
+      message: `x-ondemand-key must be a non-empty printable-ASCII string of at most ${KEY_OVERRIDE_MAX_LEN} characters`,
+    });
+    return;
+  }
+  setKeySourceHeader(res, keyOverride.source);
+
+  if (!isConfigured() && !keyOverride.apiKeyOverride) {
     sendJson(res, 503, {
       error: 'not_configured',
       message: 'ONDEMAND_API_KEY is not set on the server.',
@@ -112,7 +130,11 @@ export default async function handler(req, res) {
     }
     const reuse = body.reuse === undefined ? true : Boolean(body.reuse);
 
-    const result = await ensureSession(userId, { pluginIds, reuse });
+    const result = await ensureSession(userId, {
+      pluginIds,
+      reuse,
+      apiKeyOverride: keyOverride.apiKeyOverride,
+    });
     if (result.reused) {
       sendJson(res, 200, {
         sessionId: result.sessionId,
