@@ -1,13 +1,13 @@
-# GodsEye Structured Response Writer
+# OnDemand Spatial Structured Response Writer
 
-**Dashboard fields** — Skill Name: `godseye-structured-response-writer` · Description: Writes the analyst-facing answer (3–8 plain sentences that quote literal values and separate verified from unverified and unchecked) and emits the God's Eye StructuredResponse with exactly the seven keys message, entities, actions, evidence, sources, suggestedNextActions, runMeta. · Category: `engineering` · Sample Prompts:
+**Dashboard fields** — Skill Name: `ondemand-spatial-structured-response-writer` · Description: Writes the analyst-facing answer (3–8 plain sentences that quote literal values and separate verified from unverified and unchecked) and emits the OnDemand Spatial StructuredResponse with exactly the seven keys message, entities, actions, evidence, sources, suggestedNextActions, runMeta. · Category: `engineering` · Sample Prompts:
 - "Turn these verified findings and actions into the final StructuredResponse."
 - "Write the analyst message for this run — verified first, then unverified, then what could not be checked."
 - "Format the answer as the seven-key contract and drop any action that is not a known MapAction."
 
 ## When to use this skill
-- As the last step of every God's Eye analysis: the findings are verified, the MapActions are planned, and the client now needs the contract object it renders and executes.
-- Whenever a response must be machine-consumed by the God's Eye UI (`actions` are dispatched to the map; `entities` drive selection; `sources` drive provenance labels).
+- As the last step of every OnDemand Spatial analysis: the findings are verified, the MapActions are planned, and the client now needs the contract object it renders and executes.
+- Whenever a response must be machine-consumed by the OnDemand Spatial UI (`actions` are dispatched to the map; `entities` drive selection; `sources` drive provenance labels).
 
 ## When NOT to use it
 - Before verification has run — an unverified plan must not be dressed up as a final answer.
@@ -29,7 +29,7 @@
 4. Copy `evidence` unchanged (`{findingId, entityId, field, value, sourceLayer}` rows from the verifier).
 5. Build `sources`: one entry per distinct `sourceLayer` in the evidence — `{id: <layerId>, kind: "in_view", label, status: "used"}` with labels `ADS-B (flights layer)`, `ADS-B (military layer)`, `AIS (ais-live-vessels layer)`, `USGS (earthquakes layer)` — plus one per planned capability call — `{id: <capabilityId>, kind: "capability", label: "USGS FDSN Event (earthquake_search)", status: "planned_not_executed"}` (or `"used"` when its result was present and cited).
 6. Copy `suggestedNextActions` unchanged — `[{label, action: {name, params} | null}]` — applying the same 28-name filter to `action.name`.
-7. Build `runMeta`: `{workflow: "GodsEye Advanced Spatial Workflow", flowVersion: 1, mode: state.mode ("live" | "selftest"), intent: intent.intent, tier: intent.tier, confidence: intent.confidence, selectedCapabilityIds: [ids from calls], unknowns: [...], nodeChain: ["session_context","spatial_context_builder","intent_classifier","capability_resolver","planner","verification","spatial_action_planner","synthesis","structured_response"], generatedAtUtc: state.spatialContext.timeline.now}`.
+7. Build `runMeta`: `{workflow: "OnDemand Spatial Advanced Workflow", flowVersion: 1, mode: state.mode ("live" | "selftest"), intent: intent.intent, tier: intent.tier, confidence: intent.confidence, selectedCapabilityIds: [ids from calls], unknowns: [...], nodeChain: ["session_context","spatial_context_builder","intent_classifier","capability_resolver","planner","verification","spatial_action_planner","synthesis","structured_response"], generatedAtUtc: state.spatialContext.timeline.now}`. (`workflow` is the current display name; the live v1 node prompt is frozen and still emits the pre-rename string `"GodsEye Advanced Spatial Workflow"` — accept either when validating a v1 run.)
 8. Emit ONE JSON object with exactly these seven keys in this order: `message, entities, actions, evidence, sources, suggestedNextActions, runMeta`. No extra keys (no `debug`, `findings`, `state`), no missing keys, no prose around the object.
 9. Self-check before emitting: every key present; `message` non-empty; every list is an array; every `actions[].name` is in the 28; every entity in the message appears in `entities`; every `sources[].status` is `used` or `planned_not_executed`.
 10. Keep numbers as numbers and ids as strings; never round evidence values in the message differently from the evidence rows.
@@ -62,7 +62,7 @@
   ],
   "suggestedNextActions": [ { "label": "Enable CCTV near approach area", "action": { "name": "control_cctv", "params": { "action": "nearest", "cameraQuery": "airport approach" } } } ],
   "runMeta": {
-    "workflow": "GodsEye Advanced Spatial Workflow",
+    "workflow": "OnDemand Spatial Advanced Workflow",
     "flowVersion": 1,
     "mode": "selftest",
     "intent": "anomaly_scan",
@@ -84,9 +84,9 @@
 - Never include any key, token, secret or secondary-provider credential in output.
 
 ## App module mapping
-- Mirrors the `synthesis` and `structured_response` nodes of "GodsEye Advanced Spatial Workflow" v1 (`server/ondemand/workflow-definition.js`); `validateStructuredResponse()` in the same module is the reference check (7 keys, 28 names).
+- Mirrors the `synthesis` and `structured_response` nodes of "OnDemand Spatial Advanced Workflow" v1 (`server/ondemand/workflow-definition.js`); `validateStructuredResponse()` in the same module is the reference check (7 keys, 28 names).
 - `src/voice/actionSchemas.js` — `GEV_ACTION_SCHEMAS`, the 28 names and parameter schemas the client enforces before dispatch; `src/voice/session.js` — action dispatch.
 - `api/ondemand/chat.js`, `api/ondemand/workflow.js` — the proxy routes that return fulfillment text / workflow node outputs to the client.
 - `docs/ondemand-workflows/verification-2026-09-18.json` — a real StructuredResponse produced by the live workflow, useful as a reference sample.
 
-## Version — `godseye-skills v1 — 2026-09-18 — pairs with workflow "GodsEye Advanced Spatial Workflow" v1 (id 6aace534859f7b0abb53d99a)`
+## Version — `ondemand-spatial-skills v1 — 2026-09-18 — pairs with workflow "OnDemand Spatial Advanced Workflow" v1 (id 6aace534859f7b0abb53d99a)`

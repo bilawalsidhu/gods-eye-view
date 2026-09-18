@@ -1,22 +1,30 @@
-# OnDemand dashboard registration pack — GodsEye (2026-09-18)
+# OnDemand dashboard registration pack — OnDemand Spatial (2026-09-18)
 
 ## 0. Purpose and status
 
-This pack is the hand-off document for the one part of the God's Eye ⇄ OnDemand
-integration that cannot be done by API: registering the **GodsEye Spatial
+This pack is the hand-off document for the one part of the OnDemand Spatial ⇄ OnDemand
+integration that cannot be done by API: registering the **OnDemand Spatial
 Intelligence Agent**, the **earthquake_search REST agent**, and the **nine
-GodsEye skills** in the OnDemand dashboard. It records exactly what was
+OnDemand Spatial skills** in the OnDemand dashboard. It records exactly what was
 already created via API in this run, why the remaining artifacts must be
 created by hand, the literal dashboard field values and file contents to
 paste, click-by-click steps citing the fetched documentation, and where each
 returned id must be pasted back into the repo afterwards.
 
+Regenerated 2026-09-18 under the product name **OnDemand Spatial** (package
+`ondemand-spatial`). Every name below is the post-rename value; the "Rename
+ledger" section at the end lists each old → new pair. Documentation URLs and
+their fetch timestamps, and every live-probe quote, are unchanged — they are
+facts about when the docs were read and what the API returned.
+
+Workflow 6aace534859f7b0abb53d99a v1 keeps its ID; only its display name changes in the dashboard (now 'OnDemand Spatial Advanced Workflow').
+
 | # | Component | Status | ID / evidence | Citation (URL + UTC) |
 |---|---|---|---|---|
-| 1 | Workflow "GodsEye Advanced Spatial Workflow" v1 | **CREATED VIA API** | id `6aace534859f7b0abb53d99a`. `POST https://api.on-demand.io/automation/api/workflow/` → HTTP 201 `{"id":"6aace534859f7b0abb53d99a"}` at `2026-09-18T07:16:04.335Z`. A first attempt using a documented `inputText` node got HTTP 400 `{"message":"input: text config missing"}` at `2026-09-18T07:15:04.217Z` and was dropped (not invented). Activated: `POST /workflow/6aace534859f7b0abb53d99a/activate` → HTTP 200 at `2026-09-18T07:16:14.101Z`. Executed: `POST /workflow/{id}/execute` → HTTP 200 at `2026-09-18T07:16:26.986Z`, executionID `6aace54bbb6a9a7035f431fc`, status `success`, duration 163,104 ms, time-to-first-log 657 ms; StructuredResponse valid. Export: `docs/ondemand-workflows/gods-eye-advanced-v1.json`. README: `docs/ondemand-workflows/README.md`. | This run's live API calls, 2026-09-18 (see §1 for the "no create endpoint" finding that makes the workflow API the *only* creatable artifact) |
-| 2 | Agent "GodsEye Spatial Intelligence Agent" | **DASHBOARD-ONLY, pending** | Not yet created; no id. Field values and system prompt to paste are in §2. | `https://docs.on-demand.io/docs/rest-based-plugins.md` (fetched 2026-09-18T07:20:32Z); `https://docs.on-demand.io/docs/agent-skills.md` (fetched 2026-09-18T07:20:32Z); live probe below |
+| 1 | Workflow "OnDemand Spatial Advanced Workflow" v1 (created as "GodsEye Advanced Spatial Workflow"; display name only renamed) | **CREATED VIA API** and **RENAMED (display name only)** | id `6aace534859f7b0abb53d99a` — **unchanged** by the rename; version label v1 (flowVersion "1") **unchanged**; trigger + the nine nodes + their prompts **unchanged**. `POST https://api.on-demand.io/automation/api/workflow/` → HTTP 201 `{"id":"6aace534859f7b0abb53d99a"}` at `2026-09-18T07:16:04.335Z`. A first attempt using a documented `inputText` node got HTTP 400 `{"message":"input: text config missing"}` at `2026-09-18T07:15:04.217Z` and was dropped (not invented). Activated: `POST /workflow/6aace534859f7b0abb53d99a/activate` → HTTP 200 at `2026-09-18T07:16:14.101Z`. Executed: `POST /workflow/{id}/execute` → HTTP 200 at `2026-09-18T07:16:26.986Z`, executionID `6aace54bbb6a9a7035f431fc`, status `success`, duration 163,104 ms, time-to-first-log 657 ms; StructuredResponse valid. **Rename (display name only), live:** `PATCH https://api.on-demand.io/automation/api/workflow/6aace534859f7b0abb53d99a/name` (contract §7.1 "Update name") → HTTP 200 at `2026-09-18T10:41:47.809Z`; re-read `GET /automation/api/workflow/{id}` → HTTP 200 at `2026-09-18T10:41:48.119Z` returning name `OnDemand Spatial Advanced Workflow`, `isActive` true, `lastModifiedAtInMilliseconds` 1789715764702 (identical to before the rename), 9 nodes. The node prompts still self-describe as the "God's Eye pipeline" (and still emit `runMeta.workflow` = the pre-rename string) because v1 is frozen — a prompt edit would be a v2 definition, deliberately not created. Export: `docs/ondemand-workflows/ondemand-spatial-advanced-v1.json` (renamed from `gods-eye-advanced-v1.json` and refreshed; its `_export.rename` block records the PATCH, `_export.firstExportedAtUtc` keeps the original 2026-09-18T07:19:44.067Z). README: `docs/ondemand-workflows/README.md`. | This run's live API calls, 2026-09-18 (see §1 for the "no create endpoint" finding that makes the workflow API the *only* creatable artifact) |
+| 2 | Agent "OnDemand Spatial Intelligence Agent" | **DASHBOARD-ONLY, pending** | Not yet created; no id. Field values and system prompt to paste are in §2. | `https://docs.on-demand.io/docs/rest-based-plugins.md` (fetched 2026-09-18T07:20:32Z); `https://docs.on-demand.io/docs/agent-skills.md` (fetched 2026-09-18T07:20:32Z); live probe below |
 | 3 | earthquake_search REST agent | **DASHBOARD-ONLY, pending** | Not yet created; no id (`ondemand_tool_id` is `null` in the registry). Files to paste are in §3. | `https://docs.on-demand.io/docs/rest-based-plugins.md` (fetched 2026-09-18T07:20:32Z); `https://docs.on-demand.io/docs/open-api-schema.md` (fetched 2026-09-18T07:20:33Z) |
-| 4 | 9 GodsEye skills | **DASHBOARD-ONLY, pending** | Not yet created; `ondemand.skills[]` all have `skillId: null`. Table and file paths are in §4. | `https://docs.on-demand.io/docs/agent-skills.md` (fetched 2026-09-18T07:20:32Z) |
+| 4 | 9 OnDemand Spatial skills | **DASHBOARD-ONLY, pending** | Not yet created; `ondemand.skills[]` all have `skillId: null`. Table and file paths are in §4. | `https://docs.on-demand.io/docs/agent-skills.md` (fetched 2026-09-18T07:20:32Z) |
 
 Live account probe confirming rows 2–4 have nothing to attach yet: `GET
 https://api.on-demand.io/plugin/v1/list?page=1&limit=50` → HTTP 200
@@ -62,14 +70,14 @@ documented and were used; no analogous endpoint exists for agents or skills.
 
 ---
 
-## 2. Agent: GodsEye Spatial Intelligence Agent
+## 2. Agent: OnDemand Spatial Intelligence Agent
 
 ### Dashboard field values
 
 | Field | Value |
 |---|---|
-| Agent Name | `GodsEye Spatial Intelligence Agent` |
-| Agent Description | "Analyses the live God's Eye globe view — aircraft, vessels, earthquakes and other in-view layers — and answers analyst questions with verified, citation-backed findings and a client-executable action plan. Consolidates the 9-stage GodsEye Advanced Spatial Workflow (context → classify → resolve → plan → verify → act → synthesise → respond) into one agent." |
+| Agent Name | `OnDemand Spatial Intelligence Agent` |
+| Agent Description | "Analyses the live OnDemand Spatial globe view — aircraft, vessels, earthquakes and other in-view layers — and answers analyst questions with verified, citation-backed findings and a client-executable action plan. Consolidates the 9-stage OnDemand Spatial Advanced Workflow (context → classify → resolve → plan → verify → act → synthesise → respond) into one agent." |
 | Agent Category | **Research** — chosen from the documented option list: Education, Sports, Travel, Writing, **Research**, Lifestyle, Programming, Astrology, Health, News, Food, Music, Gaming, Finance (`rest-based-plugins.md`, "Agent Category") |
 | Conversation Starters (≥3) | 1. "Scan the current view for anomalies." · 2. "What is that aircraft near the airport squawking?" · 3. "Summarise everything happening in this area right now." · 4. "Is anything unusual happening near the coastline in view?" |
 | Logo | Optional — not supplied in this run |
@@ -81,17 +89,19 @@ prompts (`session_context → spatial_context_builder → intent_classifier →
 capability_resolver → planner → verification → spatial_action_planner →
 synthesis → structured_response`, builder `server/ondemand/workflow-definition.js`),
 read verbatim from `/tmp/g6docs/node-prompts-excerpt.txt` and merged into one
-system prompt. Paste this whole block into the agent's system-prompt /
+system prompt, then re-issued under the OnDemand Spatial names (the live v1
+node prompts themselves are frozen and still say "God's Eye pipeline" — see
+§0 row 1). Paste this whole block into the agent's system-prompt /
 instructions field:
 
 ```
 ROLE
-You are the GodsEye Spatial Intelligence Agent, the single-agent
-consolidation of the God's Eye spatial-intelligence pipeline (workflow
-"GodsEye Advanced Spatial Workflow" v1, id 6aace534859f7b0abb53d99a; node
+You are the OnDemand Spatial Intelligence Agent, the single-agent
+consolidation of the OnDemand Spatial analysis pipeline (workflow
+"OnDemand Spatial Advanced Workflow" v1, id 6aace534859f7b0abb53d99a; node
 chain: session_context -> spatial_context_builder -> intent_classifier ->
 capability_resolver -> planner -> verification -> spatial_action_planner ->
-synthesis -> structured_response). You analyse the live God's Eye globe view
+synthesis -> structured_response). You analyse the live OnDemand Spatial globe view
 for an analyst and answer strictly from what is in view, from your attached
 capabilities, and from your attached skills.
 
@@ -257,7 +267,7 @@ runMeta.
   per distinct source layer in the evidence plus one per planned capability
   call.
 - "suggestedNextActions": unchanged.
-- "runMeta": {workflow: "GodsEye Advanced Spatial Workflow", flowVersion: 1,
+- "runMeta": {workflow: "OnDemand Spatial Advanced Workflow", flowVersion: 1,
   mode, intent, tier, confidence, selectedCapabilityIds, unknowns,
   nodeChain: ["session_context","spatial_context_builder",
   "intent_classifier","capability_resolver","planner","verification",
@@ -292,7 +302,7 @@ NON-NEGOTIABLE RULES (apply throughout every stage)
   "http": {
     "method": "GET",
     "url": "https://<preview-host>/api/sources/earthquakes",
-    "note": "replace <preview-host> with the deployed God's Eye host; the route is served by the api/[...route].js catch-all"
+    "note": "replace <preview-host> with the deployed OnDemand Spatial host; the route is served by the api/[...route].js catch-all"
   },
   "input_schema": {
     "$schema": "http://json-schema.org/draft-07/schema#",
@@ -484,9 +494,9 @@ NON-NEGOTIABLE RULES (apply throughout every stage)
   "openapi_fragment": {
     "openapi": "3.0.3",
     "info": {
-      "title": "God's Eye View — earthquake.search",
+      "title": "OnDemand Spatial — earthquake.search",
       "version": "1.0.0",
-      "description": "USGS FDSN Event Web Service earthquake search, proxied by God's Eye View."
+      "description": "USGS FDSN Event Web Service earthquake search, proxied by OnDemand Spatial."
     },
     "servers": [{ "url": "https://<preview-host>" }],
     "paths": {
@@ -690,20 +700,27 @@ NON-NEGOTIABLE RULES (apply throughout every stage)
 }
 ```
 
-### (b) `docs/ondemand-workflows/tools/earthquake_search.openapi.json` — verbatim
+### (b) `docs/ondemand-tools/earthquake_search.json` — the OpenAPI definition to paste, verbatim
+
+This is the file to paste into the dashboard's schema editor (its sibling
+`docs/ondemand-workflows/tools/earthquake_search.openapi.json` is byte-identical
+except for the five registry bookkeeping keys — `capability_id`,
+`registry_status`, `ondemand_tool_id`, `adapter`, `note` — at the top of
+`x-ondemand-spatial`). Embedded by re-reading the file after the
+`x-godseye` → `x-ondemand-spatial` extension-key rename, not hand-edited.
 
 ```json
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "God's Eye earthquake_search",
+    "title": "OnDemand Spatial earthquake_search",
     "version": "1.0.0",
-    "description": "Search recent/historical earthquakes from the USGS FDSN Event Web Service by time window, magnitude range and geographic area (circle or bounding box), proxied by the God's Eye View serverless route `api/[...route].js` -> `server/serverless/earthquakes-route.js` -> `server/sources/usgs-earthquakes.js`. Returns observed events with UTC time, magnitude, depth, location, tsunami flag and USGS URL. No authentication is required."
+    "description": "Search recent/historical earthquakes from the USGS FDSN Event Web Service by time window, magnitude range and geographic area (circle or bounding box), proxied by the OnDemand Spatial serverless route `api/[...route].js` -> `server/serverless/earthquakes-route.js` -> `server/sources/usgs-earthquakes.js`. Returns observed events with UTC time, magnitude, depth, location, tsunami flag and USGS URL. No authentication is required."
   },
   "servers": [
     {
       "url": "https://<deployment>",
-      "description": "God's Eye deployment host (replace)"
+      "description": "OnDemand Spatial deployment host — REPLACE with the READY Vercel preview URL or project domain before importing (see x-ondemand-spatial.deployment); the sandbox emulator host is ephemeral"
     }
   ],
   "paths": {
@@ -717,42 +734,64 @@ NON-NEGOTIABLE RULES (apply throughout every stage)
             "name": "starttime",
             "in": "query",
             "required": false,
-            "schema": { "type": "string", "example": "2024-01-01" },
+            "schema": {
+              "type": "string",
+              "example": "2024-01-01"
+            },
             "description": "Limit to events on or after this time (UTC). Accepts `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM:SS(Z)`; a date with no time means midnight UTC."
           },
           {
             "name": "endtime",
             "in": "query",
             "required": false,
-            "schema": { "type": "string", "example": "2024-01-31T23:59:59Z" },
+            "schema": {
+              "type": "string",
+              "example": "2024-01-31T23:59:59Z"
+            },
             "description": "Limit to events on or before this time (UTC). Same accepted formats as `starttime`."
           },
           {
             "name": "minmagnitude",
             "in": "query",
             "required": false,
-            "schema": { "type": "number", "minimum": -2, "maximum": 10 },
+            "schema": {
+              "type": "number",
+              "minimum": -2,
+              "maximum": 10
+            },
             "description": "Minimum event magnitude, inclusive."
           },
           {
             "name": "maxmagnitude",
             "in": "query",
             "required": false,
-            "schema": { "type": "number", "minimum": -2, "maximum": 10 },
+            "schema": {
+              "type": "number",
+              "minimum": -2,
+              "maximum": 10
+            },
             "description": "Maximum event magnitude, inclusive."
           },
           {
             "name": "latitude",
             "in": "query",
             "required": false,
-            "schema": { "type": "number", "minimum": -90, "maximum": 90 },
+            "schema": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            },
             "description": "Circle-search center latitude, degrees. Requires `longitude` and `maxradiuskm` together."
           },
           {
             "name": "longitude",
             "in": "query",
             "required": false,
-            "schema": { "type": "number", "minimum": -180, "maximum": 180 },
+            "schema": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            },
             "description": "Circle-search center longitude, degrees. Requires `latitude` and `maxradiuskm` together."
           },
           {
@@ -771,28 +810,44 @@ NON-NEGOTIABLE RULES (apply throughout every stage)
             "name": "minlatitude",
             "in": "query",
             "required": false,
-            "schema": { "type": "number", "minimum": -90, "maximum": 90 },
+            "schema": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            },
             "description": "Bounding-box south edge, degrees. Must be <= `maxlatitude`."
           },
           {
             "name": "maxlatitude",
             "in": "query",
             "required": false,
-            "schema": { "type": "number", "minimum": -90, "maximum": 90 },
+            "schema": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            },
             "description": "Bounding-box north edge, degrees. Must be >= `minlatitude`."
           },
           {
             "name": "minlongitude",
             "in": "query",
             "required": false,
-            "schema": { "type": "number", "minimum": -180, "maximum": 180 },
+            "schema": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            },
             "description": "Bounding-box west edge, degrees. Must be <= `maxlongitude`."
           },
           {
             "name": "maxlongitude",
             "in": "query",
             "required": false,
-            "schema": { "type": "number", "minimum": -180, "maximum": 180 },
+            "schema": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            },
             "description": "Bounding-box east edge, degrees. Must be >= `minlongitude`."
           },
           {
@@ -813,7 +868,12 @@ NON-NEGOTIABLE RULES (apply throughout every stage)
             "required": false,
             "schema": {
               "type": "string",
-              "enum": ["time", "time-asc", "magnitude", "magnitude-asc"],
+              "enum": [
+                "time",
+                "time-asc",
+                "magnitude",
+                "magnitude-asc"
+              ],
               "default": "time"
             },
             "description": "Sort order for the returned events."
@@ -824,7 +884,10 @@ NON-NEGOTIABLE RULES (apply throughout every stage)
             "required": false,
             "schema": {
               "type": "string",
-              "enum": ["query", "count"],
+              "enum": [
+                "query",
+                "count"
+              ],
               "default": "query"
             },
             "description": "Local switch (not forwarded to USGS): 'query' returns matching events, 'count' returns only the number of matching events (uses the FDSN `count` endpoint)."
@@ -835,7 +898,9 @@ NON-NEGOTIABLE RULES (apply throughout every stage)
             "description": "Matching earthquakes (mode=query, the default), or their count only (mode=count -- in which case `events` is omitted and `count` alone reflects the number of matching events).",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EarthquakeSearchResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EarthquakeSearchResponse"
+                }
               }
             }
           },
@@ -843,7 +908,9 @@ NON-NEGOTIABLE RULES (apply throughout every stage)
             "description": "Invalid query -- an unknown parameter, an out-of-range or malformed value, a mixed circle/bbox request, a partial circle, or an inverted bounding box. Also carries a USGS-rejected request (HTTP 400) passed through unchanged from the upstream FDSN service.",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/InvalidQueryError" }
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidQueryError"
+                }
               }
             }
           },
@@ -851,7 +918,9 @@ NON-NEGOTIABLE RULES (apply throughout every stage)
             "description": "Upstream error: USGS was unreachable or timed out after one retry, USGS returned a 5xx or a response body that was not valid JSON, or an unhandled exception occurred in the route handler. (The live route may occasionally surface this same failure under a different HTTP status, e.g. 404/500/503/504, depending on how USGS itself responded -- see server/sources/usgs-earthquakes.js `requestUsgs()`; this document models every such upstream failure uniformly under 502 per this schema's scope.)",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/UpstreamError" }
+                "schema": {
+                  "$ref": "#/components/schemas/UpstreamError"
+                }
               }
             }
           }
@@ -865,17 +934,31 @@ NON-NEGOTIABLE RULES (apply throughout every stage)
         "type": "object",
         "description": "Success body for mode=query (default). For mode=count, `events` is omitted and `count` alone reflects the number of matching events.",
         "properties": {
-          "source": { "type": "string", "enum": ["USGS"] },
-          "coverage": { "type": "string", "enum": ["observed"] },
+          "source": {
+            "type": "string",
+            "enum": [
+              "USGS"
+            ]
+          },
+          "coverage": {
+            "type": "string",
+            "enum": [
+              "observed"
+            ]
+          },
           "count": {
             "type": "integer",
             "description": "Number of events returned (mode=query) or matched (mode=count)."
           },
           "events": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/EarthquakeEvent" }
+            "items": {
+              "$ref": "#/components/schemas/EarthquakeEvent"
+            }
           },
-          "provenance": { "$ref": "#/components/schemas/Provenance" },
+          "provenance": {
+            "$ref": "#/components/schemas/Provenance"
+          },
           "query": {
             "type": "object",
             "description": "The request's own query parameters, exactly as forwarded from the HTTP layer into the adapter.",
@@ -886,13 +969,20 @@ NON-NEGOTIABLE RULES (apply throughout every stage)
       "EarthquakeEvent": {
         "type": "object",
         "properties": {
-          "id": { "type": "string", "nullable": true, "description": "USGS event id." },
+          "id": {
+            "type": "string",
+            "nullable": true,
+            "description": "USGS event id."
+          },
           "time_utc": {
             "type": "string",
             "nullable": true,
             "description": "ISO-8601 UTC origin time."
           },
-          "magnitude": { "type": "number", "nullable": true },
+          "magnitude": {
+            "type": "number",
+            "nullable": true
+          },
           "mag_type": {
             "type": "string",
             "nullable": true,
@@ -903,8 +993,14 @@ NON-NEGOTIABLE RULES (apply throughout every stage)
             "nullable": true,
             "description": "Hypocenter depth, kilometers."
           },
-          "lat": { "type": "number", "nullable": true },
-          "lon": { "type": "number", "nullable": true },
+          "lat": {
+            "type": "number",
+            "nullable": true
+          },
+          "lon": {
+            "type": "number",
+            "nullable": true
+          },
           "place": {
             "type": "string",
             "nullable": true,
@@ -912,7 +1008,10 @@ NON-NEGOTIABLE RULES (apply throughout every stage)
           },
           "tsunami": {
             "type": "integer",
-            "enum": [0, 1],
+            "enum": [
+              0,
+              1
+            ],
             "description": "1 if USGS flagged tsunami potential."
           },
           "alert": {
@@ -925,8 +1024,18 @@ NON-NEGOTIABLE RULES (apply throughout every stage)
             "nullable": true,
             "description": "USGS event page URL."
           },
-          "source": { "type": "string", "enum": ["USGS"] },
-          "coverage": { "type": "string", "enum": ["observed"] },
+          "source": {
+            "type": "string",
+            "enum": [
+              "USGS"
+            ]
+          },
+          "coverage": {
+            "type": "string",
+            "enum": [
+              "observed"
+            ]
+          },
           "retrieved_at_utc": {
             "type": "string",
             "description": "ISO-8601 UTC time this route fetched the data."
@@ -936,7 +1045,12 @@ NON-NEGOTIABLE RULES (apply throughout every stage)
       "Provenance": {
         "type": "object",
         "properties": {
-          "source": { "type": "string", "enum": ["USGS FDSN Event Web Service"] },
+          "source": {
+            "type": "string",
+            "enum": [
+              "USGS FDSN Event Web Service"
+            ]
+          },
           "url": {
             "type": "string",
             "description": "The exact upstream request URL, including format=geojson and all forwarded params."
@@ -946,9 +1060,17 @@ NON-NEGOTIABLE RULES (apply throughout every stage)
             "nullable": true,
             "description": "ISO-8601 UTC time USGS generated the response (from GeoJSON metadata.generated)."
           },
-          "api": { "type": "string", "nullable": true },
-          "title": { "type": "string", "nullable": true },
-          "retrieved_at_utc": { "type": "string" },
+          "api": {
+            "type": "string",
+            "nullable": true
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "retrieved_at_utc": {
+            "type": "string"
+          },
           "license": {
             "type": "string",
             "enum": [
@@ -961,33 +1083,53 @@ NON-NEGOTIABLE RULES (apply throughout every stage)
         "type": "object",
         "description": "server/serverless/earthquakes-route.js maps a validateQuery() failure (server/sources/usgs-earthquakes.js) to this shape; `unknown` is always present (possibly empty) and is what distinguishes this from UpstreamError.",
         "properties": {
-          "error": { "type": "string", "example": "invalid_query" },
+          "error": {
+            "type": "string",
+            "example": "invalid_query"
+          },
           "message": {
             "type": "string",
             "description": "Human-readable reason, e.g. \"Invalid limit: expected an integer >= 1\" or \"circle (latitude/longitude/maxradiuskm) and bbox (...) are mutually exclusive\"."
           },
           "unknown": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Names of any query parameters not recognised by the adapter. Empty when the failure was a value/range/mutual-exclusivity error rather than an unknown key."
           }
         },
-        "required": ["error", "message", "unknown"]
+        "required": [
+          "error",
+          "message",
+          "unknown"
+        ]
       },
       "UpstreamError": {
         "description": "Either the route's own unhandled-exception fallback (SourcesError) or a pass-through USGS/network failure (AdapterError). No `unknown` key -- that is what distinguishes this from InvalidQueryError.",
         "oneOf": [
-          { "$ref": "#/components/schemas/SourcesError" },
-          { "$ref": "#/components/schemas/AdapterError" }
+          {
+            "$ref": "#/components/schemas/SourcesError"
+          },
+          {
+            "$ref": "#/components/schemas/AdapterError"
+          }
         ]
       },
       "SourcesError": {
         "type": "object",
         "description": "server/serverless/earthquakes-route.js's outer catch-all: any unhandled exception in the handler.",
         "properties": {
-          "error": { "type": "string", "enum": ["sources_error"] }
+          "error": {
+            "type": "string",
+            "enum": [
+              "sources_error"
+            ]
+          }
         },
-        "required": ["error"]
+        "required": [
+          "error"
+        ]
       },
       "AdapterError": {
         "type": "object",
@@ -995,15 +1137,35 @@ NON-NEGOTIABLE RULES (apply throughout every stage)
         "properties": {
           "error": {
             "type": "string",
-            "enum": ["usgs_rejected", "usgs_unavailable", "usgs_timeout"]
+            "enum": [
+              "usgs_rejected",
+              "usgs_unavailable",
+              "usgs_timeout"
+            ]
           },
           "detail": {
             "type": "string",
             "description": "Up to 200 characters of the upstream response body, or the underlying network/timeout error message."
           }
         },
-        "required": ["error", "detail"]
+        "required": [
+          "error",
+          "detail"
+        ]
       }
+    }
+  },
+  "x-ondemand-spatial": {
+    "capability_id": "earthquake.search",
+    "registry_status": "registered-unverified",
+    "ondemand_tool_id": null,
+    "adapter": "server/sources/usgs-earthquakes.js",
+    "note": "copy of docs/ondemand-workflows/tools/earthquake_search.openapi.json (row 1) so every Gate 3 tool definition lives under docs/ondemand-tools/",
+    "deployment": {
+      "stable_url": null,
+      "status": "no Vercel deployment exists yet (2026-09-18T09:30Z): the build environment cannot create one (CLI guardrail; deployment API off-limits) and the credential supplied as VERCEL_TOKEN was the OnDemand API key, not a Vercel token — run scripts/vercel-file-deploy.mjs from an operator machine, then replace <deployment> with the READY preview URL (or the project domain)",
+      "last_emulator_host": "https://sb-63r5liykgi73.vercel.run (ephemeral sandbox, 2026-09-18 — expires within ~90 minutes; never register it in the dashboard)",
+      "planned_project": "ondemand-eand-spatial (prj_VbHbEhFSDFkdXCqlq8XqONoFWQHO, team_aft8hHPiYnHp6I534L3DQScA) — preview target only; production and the opal alias must not be touched"
     }
   }
 }
@@ -1011,15 +1173,20 @@ NON-NEGOTIABLE RULES (apply throughout every stage)
 
 ### (c) Notes
 
-**Deployment host status (2026-09-18T09:30Z).** There is still no stable God's Eye deployment URL: a Vercel preview could not be created from the agent build environment (CLI guardrail shim, deployment API off-limits) and the credential supplied as `VERCEL_TOKEN` this turn was the OnDemand API key, not a Vercel token. Do **not** register the ephemeral sandbox host (`sb-….vercel.run`) — it expires within 90 minutes. Create the preview with `scripts/vercel-file-deploy.mjs` (operator machine, `VERCEL_TOKEN` in the shell only), then substitute its URL for `<deployment>` in every tool JSON before importing. Step-by-step registration for row 1: `docs/audit/gate3-row1-registration.md`.
+**Deployment host status (2026-09-18T09:30Z).** There is still no stable OnDemand Spatial deployment URL: a Vercel preview could not be created from the agent build environment (CLI guardrail shim, deployment API off-limits) and the credential supplied as `VERCEL_TOKEN` this turn was the OnDemand API key, not a Vercel token. Do **not** register the ephemeral sandbox host (`sb-….vercel.run`) — it expires within 90 minutes. Create the preview with `scripts/vercel-file-deploy.mjs` (operator machine, `VERCEL_TOKEN` in the shell only), then substitute its URL for `<deployment>` in every tool JSON before importing. Step-by-step registration for row 1: `docs/audit/gate3-row1-registration.md`.
 
 
 - **Replace the host placeholder before importing.** Both files use a
-  placeholder server host — `earthquake_search.json` uses
-  `https://<preview-host>` (in `http.url` and `openapi_fragment.servers[0].url`),
-  `earthquake_search.openapi.json` uses `https://<deployment>`. Replace either
-  placeholder with the actual deployed God's Eye host before pasting the
-  OpenAPI document into the dashboard's schema field.
+  placeholder server host — `docs/ondemand-workflows/tools/earthquake_search.json`
+  uses `https://<preview-host>` (in `http.url` and `openapi_fragment.servers[0].url`),
+  `docs/ondemand-tools/earthquake_search.json` (and its `.openapi.json` sibling)
+  uses `https://<deployment>`. Replace either placeholder with the actual deployed
+  OnDemand Spatial host before pasting the OpenAPI document into the dashboard's
+  schema field.
+- **Extension key.** The vendor extension is `x-ondemand-spatial` (renamed from
+  `x-godseye` on 2026-09-18, every `docs/ondemand-tools/*.json` and
+  `docs/ondemand-workflows/tools/*.json` file re-parsed after the rename).
+  OpenAPI ignores `x-` keys, so the dashboard import is unaffected either way.
 - **The route is unauthenticated.** Per the OpenAPI `info.description`: *"No
   authentication is required."* No Configuration Fields (API key header,
   query param, etc.) need to be defined for this agent (`rest-based-plugins.md`,
@@ -1035,21 +1202,24 @@ NON-NEGOTIABLE RULES (apply throughout every stage)
 ## 4. The nine skills
 
 Each skill's `SKILL.md` body already lives at `docs/ondemand-skills/<slug>.md`
-in this repo; paste that file's full content into the dashboard's skill
-editor as described in §5(C). Dashboard fields (name/description/category/
-sample prompts) to enter alongside the paste are below.
+in this repo (the nine files were renamed `godseye-<x>.md` →
+`ondemand-spatial-<x>.md` on 2026-09-18 and their titles, slug lines and prose
+updated; the skill logic and prompts are otherwise unchanged); paste that
+file's full content into the dashboard's skill editor as described in §5(C).
+Dashboard fields (name/description/category/sample prompts) to enter
+alongside the paste are below.
 
 | # | slug | Skill Name | Description | Category | Sample Prompts | File |
 |---|---|---|---|---|---|---|
-| 1 | `godseye-spatial-context-reader` | GodsEye Spatial Context Reader | Validates and normalises a God's Eye viewport payload into the canonical 15-field spatial-context object and derives view-radius, entity-count, airborne/on-ground and emergency-squawk facts. | engineering | "Normalise this viewport payload into the spatial-context object." / "What is the current view radius and how many aircraft are airborne right now?" | `docs/ondemand-skills/godseye-spatial-context-reader.md` |
-| 2 | `godseye-intent-classifier` | GodsEye Intent Classifier | Classifies an analyst query against the live spatial context into one of nine intents, assigns an ASK/INVESTIGATE/DEEP tier, and extracts the query's entity/layer/time focus. | engineering | "Classify this query: 'is anything unusual near the airport?'" / "What tier and focus does 'show me vessels near the port over the last hour' need?" | `docs/ondemand-skills/godseye-intent-classifier.md` |
-| 3 | `godseye-capability-resolver` | GodsEye Capability Resolver | Selects which catalogued external capabilities (e.g. earthquake_search) apply to a classified intent, building call parameters only from each capability's documented params — never inventing a tool, route or field. | engineering | "Which capabilities apply to an anomaly scan over an airport with the earthquakes layer active?" / "Build the earthquake_search call for a 300 km radius around the current view center." | `docs/ondemand-skills/godseye-capability-resolver.md` |
-| 4 | `godseye-map-action-planner` | GodsEye Map Action Planner | Plans up to six client MapActions from a verified finding set, using only the 28 documented action names and their legal parameter keys. | engineering | "Plan actions to frame and annotate this verified anomaly." / "Which MapAction tracks a specific aircraft by callsign?" | `docs/ondemand-skills/godseye-map-action-planner.md` |
-| 5 | `godseye-seismic-analyst` | GodsEye Seismic Analyst | Interprets earthquake_search (USGS FDSN) results for the current view, flagging recent M≥4 events within the view radius as notable-or-higher findings with literal supporting values. | research | "Are there any recent earthquakes worth flagging near this view?" / "Summarise the seismic activity returned by earthquake_search for the last 30 days." | `docs/ondemand-skills/godseye-seismic-analyst.md` |
-| 6 | `godseye-aviation-analyst` | GodsEye Aviation Analyst | Reads ADS-B flights/military entities for emergency squawks (7500/7600/7700), abnormal on-ground speed and other airborne/on-ground anomalies, citing literal callsign, altitude, speed and squawk values. | research | "Is any aircraft in view squawking an emergency code?" / "Which aircraft are on the ground but moving unusually fast?" | `docs/ondemand-skills/godseye-aviation-analyst.md` |
-| 7 | `godseye-maritime-analyst` | GodsEye Maritime Analyst | Reads AIS vessel entities for vessels under way (speedKts > 1), navStatus anomalies and vessels inside sensitive corridors, citing literal MMSI, speed and navStatus values. | research | "Which vessels in view are currently under way?" / "Is any vessel inside the airport approach corridor?" | `docs/ondemand-skills/godseye-maritime-analyst.md` |
-| 8 | `godseye-evidence-verifier` | GodsEye Evidence Verifier | Adversarially re-checks every candidate finding against the raw spatial-context fields, marking each verified/unverified/rejected and building the literal evidence list that supports it. | engineering | "Verify this candidate finding against the current spatial context." / "Which of these findings are unsupported and should be rejected?" | `docs/ondemand-skills/godseye-evidence-verifier.md` |
-| 9 | `godseye-structured-response-writer` | GodsEye StructuredResponse Writer | Reshapes a synthesised analysis into the exact 7-key StructuredResponse contract (message, entities, actions, evidence, sources, suggestedNextActions, runMeta) the God's Eye client expects. | engineering | "Format this synthesis into the StructuredResponse contract." / "What sources entry corresponds to a used capability call versus a planned-but-not-executed one?" | `docs/ondemand-skills/godseye-structured-response-writer.md` |
+| 1 | `ondemand-spatial-spatial-context-reader` | OnDemand Spatial Spatial Context Reader | Validates and normalises an OnDemand Spatial viewport payload into the canonical 15-field spatial-context object and derives view-radius, entity-count, airborne/on-ground and emergency-squawk facts. | engineering | "Normalise this viewport payload into the spatial-context object." / "What is the current view radius and how many aircraft are airborne right now?" | `docs/ondemand-skills/ondemand-spatial-spatial-context-reader.md` |
+| 2 | `ondemand-spatial-intent-classifier` | OnDemand Spatial Intent Classifier | Classifies an analyst query against the live spatial context into one of nine intents, assigns an ASK/INVESTIGATE/DEEP tier, and extracts the query's entity/layer/time focus. | engineering | "Classify this query: 'is anything unusual near the airport?'" / "What tier and focus does 'show me vessels near the port over the last hour' need?" | `docs/ondemand-skills/ondemand-spatial-intent-classifier.md` |
+| 3 | `ondemand-spatial-capability-resolver` | OnDemand Spatial Capability Resolver | Selects which catalogued external capabilities (e.g. earthquake_search) apply to a classified intent, building call parameters only from each capability's documented params — never inventing a tool, route or field. | engineering | "Which capabilities apply to an anomaly scan over an airport with the earthquakes layer active?" / "Build the earthquake_search call for a 300 km radius around the current view center." | `docs/ondemand-skills/ondemand-spatial-capability-resolver.md` |
+| 4 | `ondemand-spatial-map-action-planner` | OnDemand Spatial Map Action Planner | Plans up to six client MapActions from a verified finding set, using only the 28 documented action names and their legal parameter keys. | engineering | "Plan actions to frame and annotate this verified anomaly." / "Which MapAction tracks a specific aircraft by callsign?" | `docs/ondemand-skills/ondemand-spatial-map-action-planner.md` |
+| 5 | `ondemand-spatial-seismic-analyst` | OnDemand Spatial Seismic Analyst | Interprets earthquake_search (USGS FDSN) results for the current view, flagging recent M≥4 events within the view radius as notable-or-higher findings with literal supporting values. | research | "Are there any recent earthquakes worth flagging near this view?" / "Summarise the seismic activity returned by earthquake_search for the last 30 days." | `docs/ondemand-skills/ondemand-spatial-seismic-analyst.md` |
+| 6 | `ondemand-spatial-aviation-analyst` | OnDemand Spatial Aviation Analyst | Reads ADS-B flights/military entities for emergency squawks (7500/7600/7700), abnormal on-ground speed and other airborne/on-ground anomalies, citing literal callsign, altitude, speed and squawk values. | research | "Is any aircraft in view squawking an emergency code?" / "Which aircraft are on the ground but moving unusually fast?" | `docs/ondemand-skills/ondemand-spatial-aviation-analyst.md` |
+| 7 | `ondemand-spatial-maritime-analyst` | OnDemand Spatial Maritime Analyst | Reads AIS vessel entities for vessels under way (speedKts > 1), navStatus anomalies and vessels inside sensitive corridors, citing literal MMSI, speed and navStatus values. | research | "Which vessels in view are currently under way?" / "Is any vessel inside the airport approach corridor?" | `docs/ondemand-skills/ondemand-spatial-maritime-analyst.md` |
+| 8 | `ondemand-spatial-evidence-verifier` | OnDemand Spatial Evidence Verifier | Adversarially re-checks every candidate finding against the raw spatial-context fields, marking each verified/unverified/rejected and building the literal evidence list that supports it. | engineering | "Verify this candidate finding against the current spatial context." / "Which of these findings are unsupported and should be rejected?" | `docs/ondemand-skills/ondemand-spatial-evidence-verifier.md` |
+| 9 | `ondemand-spatial-structured-response-writer` | OnDemand Spatial StructuredResponse Writer | Reshapes a synthesised analysis into the exact 7-key StructuredResponse contract (message, entities, actions, evidence, sources, suggestedNextActions, runMeta) the OnDemand Spatial client expects. | engineering | "Format this synthesis into the StructuredResponse contract." / "What sources entry corresponds to a used capability call versus a planned-but-not-executed one?" | `docs/ondemand-skills/ondemand-spatial-structured-response-writer.md` |
 
 Category values follow `agent-skills.md` ("Category — where it belongs, such
 as `documents`, `productivity`, or `engineering`"); `research` is used for the
@@ -1091,14 +1261,14 @@ shaping the pipeline, `engineering` for the six pipeline-mechanics skills.
    **not in docs — confirm in the dashboard**, applying the same
    private-by-default posture agent-skills.md documents for skills.)*
 
-### (B) Create the GodsEye Spatial Intelligence Agent and attach the REST agent + nine skills
+### (B) Create the OnDemand Spatial Intelligence Agent and attach the REST agent + nine skills
 
 1. From **My Agents**, click **Create Agents** again, this time creating the
    agent as a persona/chat agent rather than a REST agent. *(The exact agent
    type selector for a non-REST agent is **not in docs — confirm in the
    dashboard**; the fetched `rest-based-plugins.md` documents only the REST
    agent flow.)*
-2. Fill in **Agent Information** with the §2 values: Agent Name `GodsEye
+2. Fill in **Agent Information** with the §2 values: Agent Name `OnDemand
    Spatial Intelligence Agent`, Description, Category **Research**, and the
    4 Conversation Starters from §2. *(`rest-based-plugins.md`, "Agent
    Information")*
@@ -1150,7 +1320,7 @@ Repeat for each of the 9 rows in §4:
 ### (D) Read the workflow's webhook trigger URL and invoke it
 
 1. Go to **Agents** (`https://app.on-demand.io/agents`) and open the
-   workflow **GodsEye Advanced Spatial Workflow** (id
+   workflow **OnDemand Spatial Advanced Workflow** (id
    `6aace534859f7b0abb53d99a`). *(`creating-a-workflow.md`, "Accessing the
    Workflow Canvas"; live fact: `GET /workflow/{id}` returns
    `trigger.webhook = {auth:{username:"",password:""}}` only — the URL
@@ -1189,18 +1359,23 @@ Related environment variable names (`server/ondemand/config.js`):
 `ONDEMAND_API_KEY`; `ONDEMAND_BASE_URL` (alias `ONDEMAND_API_BASE`);
 `ONDEMAND_SPATIAL_AGENT_ID` (default `pluginIds` for chat sessions, no
 alias); `ONDEMAND_SPATIAL_FLOW_ID` (default `FLOW_DEFAULTS.spatialFlowId` =
-`6aace534859f7b0abb53d99a`); `GODS_EYE_FLOW_VERSION` (default
-`FLOW_DEFAULTS.flowVersion` = `"1"`); `ONDEMAND_REASONING_ENDPOINT_ID` /
+`6aace534859f7b0abb53d99a`); `ONDEMAND_SPATIAL_FLOW_VERSION` (canonical) with
+accepted alias `GODS_EYE_FLOW_VERSION`, resolved **alias-first** (alias →
+canonical → default `FLOW_DEFAULTS.flowVersion` = `"1"`) so the value already
+provisioned on the Vercel project (env id `usC3wgbut65gTkaR`) keeps winning;
+`/api/ondemand/health` reports `config.flowVersion.source` (the env NAME that
+resolved) plus `resolvedVia: alias|canonical|default`, `canonical`, `alias`;
+`ONDEMAND_REASONING_ENDPOINT_ID` /
 `ONDEMAND_FULFILLMENT_ENDPOINT_ID` (alias `ONDEMAND_ENDPOINT_ID`);
 `ONDEMAND_REASONING_MODE`; `ONDEMAND_SELFTEST_TOKEN`.
 
 | Returned id | Paste into | Key / field | Then |
 |---|---|---|---|
 | REST agent `pluginId` (from §5A) | `src/registry/capabilities.json` | `capabilities[id="earthquake.search"].ondemand_tool_id` | Set `status` to `"live"` once an end-to-end query has actually invoked it |
-| GodsEye agent `pluginId` (from §5B) | `src/registry/capabilities.json` **and** env `ONDEMAND_SPATIAL_AGENT_ID` | `ondemand.agent.pluginId`; Vercel project env + `.env.example` comment | `api/ondemand/sessions.js` starts defaulting `pluginIds` to it, and selftest step 4 stops being skipped |
+| OnDemand Spatial Intelligence Agent `pluginId` (from §5B) | `src/registry/capabilities.json` **and** env `ONDEMAND_SPATIAL_AGENT_ID` | `ondemand.agent.pluginId`; Vercel project env + `.env.example` comment | `api/ondemand/sessions.js` starts defaulting `pluginIds` to it, and selftest step 4 stops being skipped |
 | Each skill id (from §5C, one per slug) | `src/registry/capabilities.json` | `ondemand.skills[<slug>].skillId` | — |
 | Workflow id | *(already set)* `server/ondemand/config.js` `FLOW_DEFAULTS.spatialFlowId`, re-exported by `api/ondemand/_config.js`; `.env.example` `ONDEMAND_SPATIAL_FLOW_ID`; `capabilities.json` `ondemand.workflow.id` | — | Nothing further to do — recorded here for completeness only |
-| Workflow version | *(already set)* `GODS_EYE_FLOW_VERSION` / `FLOW_DEFAULTS.flowVersion` = `1` | — | Nothing further to do — recorded here for completeness only |
+| Workflow version | *(already set)* `ONDEMAND_SPATIAL_FLOW_VERSION` (alias `GODS_EYE_FLOW_VERSION`, alias-first) / `FLOW_DEFAULTS.flowVersion` = `1` | — | Nothing further to do — recorded here for completeness only |
 
 ---
 
@@ -1226,7 +1401,7 @@ Run these after pasting the ids from §6:
   pack; anywhere a key value would otherwise appear it is shown redacted as
   `****`. No credentials exist in, or are needed by, this pack.
 - Do not attach any secondary voice-provider key, or any retired plugin-id
-  list, to the GodsEye Spatial Intelligence Agent or to any of the nine
+  list, to the OnDemand Spatial Intelligence Agent or to any of the nine
   skills — neither is part of this pipeline's documented contract (§2, §4).
 - Skills must not contain secrets of any kind. Per `agent-skills.md`,
   "What's not allowed": no passwords, API keys, tokens or private keys; no
@@ -1236,3 +1411,40 @@ Run these after pasting the ids from §6:
   instructions telling the agent to ignore its rules or its user. All nine
   `docs/ondemand-skills/<slug>.md` files referenced in §4 are plain
   Markdown instructions with no embedded credentials.
+
+---
+
+## 9. Rename ledger (2026-09-18)
+
+Product rename applied on 2026-09-18. Nothing in this table changes an id;
+the only live mutation was the workflow display name (row "Workflow").
+
+| Item | Old | New | Notes |
+|---|---|---|---|
+| Product | God's Eye View (interim: OnDemand Spatial Intelligence) | **OnDemand Spatial** | prose everywhere; the upstream repository slug `bilawalsidhu/gods-eye-view` and the retained internal identifiers (`docs/BRANDING.md`) are unchanged |
+| Package / import name | `gods-eye-view` (interim: `ondemand-spatial-intelligence`) | `ondemand-spatial` | e.g. `ondemand-spatial/application`, `ondemand-spatial/build/vite` |
+| Agent | GodsEye Spatial Intelligence Agent | **OnDemand Spatial Intelligence Agent** | dashboard-only, not yet created (§2) |
+| Workflow (id unchanged) | `GodsEye Advanced Spatial Workflow` | `OnDemand Spatial Advanced Workflow` | id `6aace534859f7b0abb53d99a`, v1 (flowVersion "1"), trigger, nine nodes and prompts unchanged; `PATCH /automation/api/workflow/{id}/name` → 200 at 2026-09-18T10:41:47.809Z; `GET /automation/api/workflow/{id}` → 200 at 2026-09-18T10:41:48.119Z (`isActive` true, `lastModifiedAtInMilliseconds` 1789715764702, 9 nodes); export file `gods-eye-advanced-v1.json` → `ondemand-spatial-advanced-v1.json` |
+| Skill 1 | `godseye-spatial-context-reader` | `ondemand-spatial-spatial-context-reader` | display name GodsEye Spatial Context Reader → OnDemand Spatial Spatial Context Reader |
+| Skill 2 | `godseye-intent-classifier` | `ondemand-spatial-intent-classifier` | GodsEye Intent Classifier → OnDemand Spatial Intent Classifier |
+| Skill 3 | `godseye-capability-resolver` | `ondemand-spatial-capability-resolver` | GodsEye Capability Resolver → OnDemand Spatial Capability Resolver |
+| Skill 4 | `godseye-map-action-planner` | `ondemand-spatial-map-action-planner` | GodsEye Map Action Planner → OnDemand Spatial Map Action Planner |
+| Skill 5 | `godseye-seismic-analyst` | `ondemand-spatial-seismic-analyst` | GodsEye Seismic Analyst → OnDemand Spatial Seismic Analyst |
+| Skill 6 | `godseye-aviation-analyst` | `ondemand-spatial-aviation-analyst` | GodsEye Aviation Analyst → OnDemand Spatial Aviation Analyst |
+| Skill 7 | `godseye-maritime-analyst` | `ondemand-spatial-maritime-analyst` | GodsEye Maritime Analyst → OnDemand Spatial Maritime Analyst |
+| Skill 8 | `godseye-evidence-verifier` | `ondemand-spatial-evidence-verifier` | GodsEye Evidence Verifier → OnDemand Spatial Evidence Verifier |
+| Skill 9 | `godseye-structured-response-writer` | `ondemand-spatial-structured-response-writer` | GodsEye StructuredResponse Writer → OnDemand Spatial StructuredResponse Writer |
+| OpenAPI extension key | `x-godseye` | `x-ondemand-spatial` | `docs/ondemand-tools/*.json`, `docs/ondemand-workflows/tools/*.json`; server descriptions "God's Eye deployment host" → "OnDemand Spatial deployment host" |
+| externalUserId prefixes | `godseye-selftest-`, `godseye-contract-test-`, `godseye-capability-loop-` | `ondemand-spatial-selftest-`, `ondemand-spatial-contract-test-`, `ondemand-spatial-capability-loop-` | recorded past sessions (e.g. `godseye-contract-test-2026-09-18` in `docs/ONDEMAND_API_CURRENT.md` §17.2) keep their recorded values |
+| Env var (flow version) | `GODS_EYE_FLOW_VERSION` (the only name) | canonical `ONDEMAND_SPATIAL_FLOW_VERSION`, accepted alias `GODS_EYE_FLOW_VERSION` | resolution order **alias-first**: alias → canonical → default `'1'`, so the value already provisioned on the Vercel project (env id `usC3wgbut65gTkaR`) keeps winning; `/api/ondemand/health` reports `config.flowVersion.source` (the env NAME that resolved) plus `resolvedVia: alias\|canonical\|default`, `canonical`, `alias` |
+
+## 10. Still to do in the dashboard
+
+Nothing in this checklist can be done by API (§1); each step returns an id
+that is pasted back per §6.
+
+- [ ] Create the **OnDemand Spatial Intelligence Agent** (§2 field values + system prompt; steps §5B).
+- [ ] Create the **earthquake_search REST agent** from `docs/ondemand-tools/earthquake_search.json` with the host placeholder replaced (§3; steps §5A).
+- [ ] Create the **nine skills** `ondemand-spatial-<x>` from `docs/ondemand-skills/ondemand-spatial-<x>.md` (§4; steps §5C) and attach them to the agent.
+- [ ] Paste the returned ids back into `src/registry/capabilities.json` — `ondemand.agent.pluginId`, `capabilities[id="earthquake.search"].ondemand_tool_id`, `ondemand.skills[<slug>].skillId` — and set `ONDEMAND_SPATIAL_AGENT_ID` on the deployment (§6), then run the §7 verification.
+- [ ] Confirm in the dashboard that workflow `6aace534859f7b0abb53d99a` now displays as **OnDemand Spatial Advanced Workflow** (already renamed via the API; nothing to edit — v1 stays frozen, no v2).

@@ -5,7 +5,7 @@
   "http": {
     "method": "GET",
     "url": "https://<preview-host>/api/sources/earthquakes",
-    "note": "replace <preview-host> with the deployed God's Eye host; the route is served by the api/[...route].js catch-all"
+    "note": "replace <preview-host> with the deployed OnDemand Spatial host; the route is served by the api/[...route].js catch-all"
   },
   "input_schema": {
     "$schema": "http://json-schema.org/draft-07/schema#",
@@ -197,9 +197,9 @@
   "openapi_fragment": {
     "openapi": "3.0.3",
     "info": {
-      "title": "God's Eye View — earthquake.search",
+      "title": "OnDemand Spatial — earthquake.search",
       "version": "1.0.0",
-      "description": "USGS FDSN Event Web Service earthquake search, proxied by God's Eye View."
+      "description": "USGS FDSN Event Web Service earthquake search, proxied by OnDemand Spatial."
     },
     "servers": [{ "url": "https://<preview-host>" }],
     "paths": {

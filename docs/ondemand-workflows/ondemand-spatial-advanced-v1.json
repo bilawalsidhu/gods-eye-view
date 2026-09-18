@@ -2,13 +2,22 @@
   "_export": {
     "source": "GET https://api.on-demand.io/automation/api/workflow/{id} (docs/ONDEMAND_API_CURRENT.md §7.1 \"Get workflow\")",
     "note": "No documented \"Get Code\"/export endpoint exists (§7.3: NOT FOUND IN LIVE DOCS); this is the documented workflow object with credential-like fields stripped. Re-import: POST the \"createBody\" below to /automation/api/workflow/ (see README.md).",
-    "exportedAtUtc": "2026-09-18T07:19:44.067Z",
+    "firstExportedAtUtc": "2026-09-18T07:19:44.067Z",
+    "exportedAtUtc": "2026-09-18T10:41:48.119Z",
     "httpStatus": 200,
-    "flowVersion": 1
+    "flowVersion": 1,
+    "rename": {
+      "endpoint": "PATCH https://api.on-demand.io/automation/api/workflow/{id}/name (docs/ONDEMAND_API_CURRENT.md §7.1 \"Update name\")",
+      "atUtc": "2026-09-18T10:41:47.809Z",
+      "httpStatus": 200,
+      "from": "GodsEye Advanced Spatial Workflow",
+      "to": "OnDemand Spatial Advanced Workflow",
+      "note": "Display name only. The workflow id, version label (flowVersion 1), trigger, the nine nodes and their prompts are unchanged (lastModifiedAtInMilliseconds identical before and after); re-exported via GET /workflow/{id} immediately after the rename. The node prompts still self-describe as the \"God's Eye pipeline\" because the v1 definition is frozen — a prompt edit would be a v2 definition, which this rebrand deliberately does not create."
+    }
   },
   "workflow": {
     "id": "6aace534859f7b0abb53d99a",
-    "name": "GodsEye Advanced Spatial Workflow",
+    "name": "OnDemand Spatial Advanced Workflow",
     "companyID": "6692b763e851d28a036ab30e",
     "createdByUserID": "6692b763e851d28a036ab30f",
     "isActive": true,
@@ -267,7 +276,7 @@
     "contextMetadata": null
   },
   "createBody": {
-    "name": "GodsEye Advanced Spatial Workflow",
+    "name": "OnDemand Spatial Advanced Workflow",
     "trigger": {
       "type": "webhook",
       "webhook": {},

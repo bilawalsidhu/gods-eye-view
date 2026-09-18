@@ -1,6 +1,6 @@
-# GodsEye Map Action Planner
+# OnDemand Spatial Map Action Planner
 
-**Dashboard fields** — Skill Name: `godseye-map-action-planner` · Description: Turns verified spatial findings into at most six schema-valid MapActions (framing, tracking, layer control, annotation, follow-up queries) and proposes safe next-step suggestions. · Category: `engineering` · Sample Prompts:
+**Dashboard fields** — Skill Name: `ondemand-spatial-map-action-planner` · Description: Turns verified spatial findings into at most six schema-valid MapActions (framing, tracking, layer control, annotation, follow-up queries) and proposes safe next-step suggestions. · Category: `engineering` · Sample Prompts:
 - "Fly to the airport and highlight the aircraft you flagged."
 - "Turn on the earthquakes layer and mark the strongest nearby quake."
 - "Track that vessel and tell me what else I should check."
@@ -114,9 +114,9 @@ next_iss_pass(latitude?:number, longitude?:number, minElevationDeg?:number)
 - Never include any key, token, secret or secondary-provider credential in output.
 
 ## App module mapping
-- Mirrors workflow node `spatial_action_planner` in "GodsEye Advanced Spatial Workflow" v1.
+- Mirrors workflow node `spatial_action_planner` in "OnDemand Spatial Advanced Workflow" v1.
 - src/voice/actionSchemas.js — `GEV_ACTION_SCHEMAS`, the schema this skill's output must satisfy.
 - src/voice/commands.js — dispatches a validated MapAction to the app.
 - src/voice/session.js — carries context and findings into this planning step.
 
-## Version — `godseye-skills v1 — 2026-09-18 — pairs with workflow "GodsEye Advanced Spatial Workflow" v1 (id 6aace534859f7b0abb53d99a)`
+## Version — `ondemand-spatial-skills v1 — 2026-09-18 — pairs with workflow "OnDemand Spatial Advanced Workflow" v1 (id 6aace534859f7b0abb53d99a)`

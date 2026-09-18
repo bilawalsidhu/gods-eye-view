@@ -134,26 +134,26 @@ Notes: `/api/celestrak/active` reaches celestrak.org from the sandbox (a 200 wit
 | `ondemand-eand-spatial` (`prj_VbHbEhFSDFkdXCqlq8XqONoFWQHO`) production target | `dpl_7CAoCxdEQRQ7W12mzwz4iGKDK4V9`, commit `e799775a`, readyState **BLOCKED**; alias `https://ondemand-eand-spatial-schoolhack-web-team.vercel.app/` → **404 `DEPLOYMENT_NOT_FOUND`** (2026-09-17T08:09:45Z) |
 | `ondemand-eand-spatial` latest READY deployment | `dpl_FKoHEVctqpLzNMaHV9sSRdmzcrw6`, readyState READY (STAGED), alias `https://ondemand-eand-spatial-opal.vercel.app`, git ref `feat/exec-brief-v1.4-b7c0d3d`, commit `b8cdcf501aa77ada93dde682a8c6fec35f9c5637` of `mk42-ai/ondemand-eand-spatial` |
 | **finalProductionUrl** | **`https://ondemand-eand-spatial-opal.vercel.app`** — chosen because production is BLOCKED (rule: production alias only if READY, otherwise the READY preview alias) |
-| Does it serve `/api/ondemand/health`? | **No.** `GET /api/ondemand/health` → 404 `text/plain`, `x-vercel-error: NOT_FOUND` (2026-09-17T08:09:46Z). The host serves a different Vite application (`<html lang="en" data-theme="light">`, no Cesium assets). **It is not the God's Eye serverless build.** |
+| Does it serve `/api/ondemand/health`? | **No.** `GET /api/ondemand/health` → 404 `text/plain`, `x-vercel-error: NOT_FOUND` (2026-09-17T08:09:46Z). The host serves a different Vite application (`<html lang="en" data-theme="light">`, no Cesium assets). **It is not the OnDemand Spatial serverless build.** |
 | `vercel deploy` of the branch | not run — `vercel link` / `vercel deploy` / `vercel env pull` are refused by the environment guardrail (`vercel: BLOCKED by platform policy — the Vercel CLI is not available in this environment`, exit 126, 2026-09-17T08:12:26Z); no `.vercel/` or `.env.production.local` was created |
 
 ### 4.2 Production smoke matrix — `https://ondemand-eand-spatial-opal.vercel.app` (deployment `dpl_FKoHEVctqpLzNMaHV9sSRdmzcrw6`)
 
-| Route | Expected (God's Eye build) | Actual status | UTC | Note |
+| Route | Expected (OnDemand Spatial build) | Actual status | UTC | Note |
 |---|---|---|---|---|
 | `GET /` | 200 | **200** `text/html` | 2026-09-17T08:12:13Z | a different application (exec-brief app), not `index.html` of this repo |
-| `GET /api/ondemand/health` | 200, configured/healthy | **404** `text/plain` | 2026-09-17T08:12:13Z | Vercel platform `NOT_FOUND` — route does not exist on this deployment; no env-var finding can be derived because the God's Eye functions are not deployed here |
+| `GET /api/ondemand/health` | 200, configured/healthy | **404** `text/plain` | 2026-09-17T08:12:13Z | Vercel platform `NOT_FOUND` — route does not exist on this deployment; no env-var finding can be derived because the OnDemand Spatial functions are not deployed here |
 | `GET /api/celestrak/active` (legacy provider via catch-all) | 200 + ≥1 three-line TLE set | **404** | 2026-09-17T08:12:14Z | `NOT_FOUND` — no TLE data; assertion not evaluable |
 | `GET /api/ais-live` | 501 | **404** | 2026-09-17T08:12:14Z | `NOT_FOUND` |
 | `GET /api/realtime/token` | 501 | **404** | 2026-09-17T08:12:14Z | `NOT_FOUND` |
 | `GET /api/setup/status` | 404 (JSON `Unknown API route`) | **404** `text/plain` | 2026-09-17T08:12:14Z | Vercel `NOT_FOUND`, not the catch-all's JSON 404 |
 
-**Conclusion:** 0 / 6 expectations of the God's Eye build are met on `finalProductionUrl` because the branch is not deployed there. The same matrix against the previous turn's ephemeral sandbox running this branch (`https://sb-307x6fgbxmou.vercel.run`, evidence only, not a Vercel function runtime) at 2026-09-17T08:12:14Z gave 200 / 200 (all `not configured`, no key) / 200 with TLE (`CALSPHERE 1`, epoch `26259.82940569`) / 501 / 501 / 404 — i.e. 6 / 6 as designed.
+**Conclusion:** 0 / 6 expectations of the OnDemand Spatial build are met on `finalProductionUrl` because the branch is not deployed there. The same matrix against the previous turn's ephemeral sandbox running this branch (`https://sb-307x6fgbxmou.vercel.run`, evidence only, not a Vercel function runtime) at 2026-09-17T08:12:14Z gave 200 / 200 (all `not configured`, no key) / 200 with TLE (`CALSPHERE 1`, epoch `26259.82940569`) / 501 / 501 / 404 — i.e. 6 / 6 as designed.
 
 ### 4.3 Live 10-step contract test
 
 - **Key retrieval (`env-pull` mode):** `vercel env pull .env.production.local --environment=production` → refused by the guardrail (exit 126, 2026-09-17T08:12:26Z); additionally `ONDEMAND_API_KEY` is a `sensitive` variable on the project, which Vercel never returns via pull. No file was created; nothing to remove.
-- **Proxy mode (forced):** `node scripts/ondemand-contract-test.mjs --mode proxy --proxy-base https://ondemand-eand-spatial-opal.vercel.app/api/ondemand --json-out docs/ondemand-workflows/contract-baseline.json` at 2026-09-17T08:26:10Z (script commit `30791c7`): step 1 `session create + reuse` **FAIL 187 ms** — `proxy route not present at https://ondemand-eand-spatial-opal.vercel.app/api/ondemand (HTTP 404 The page could not be found NOT_FOUND)`; steps 2–9 **SKIP** (`dependency: step 1 failed`); step 10 latency summary PASS; `CONTRACT RESULT: mode=proxy passed=1 failed=1 skipped=8 totalMs=187`, exit 1. **Proxy mode was used because the key cannot be pulled; it could not exercise any contract shape because no God's Eye deployment is reachable.**
+- **Proxy mode (forced):** `node scripts/ondemand-contract-test.mjs --mode proxy --proxy-base https://ondemand-eand-spatial-opal.vercel.app/api/ondemand --json-out docs/ondemand-workflows/contract-baseline.json` at 2026-09-17T08:26:10Z (script commit `30791c7`): step 1 `session create + reuse` **FAIL 187 ms** — `proxy route not present at https://ondemand-eand-spatial-opal.vercel.app/api/ondemand (HTTP 404 The page could not be found NOT_FOUND)`; steps 2–9 **SKIP** (`dependency: step 1 failed`); step 10 latency summary PASS; `CONTRACT RESULT: mode=proxy passed=1 failed=1 skipped=8 totalMs=187`, exit 1. **Proxy mode was used because the key cannot be pulled; it could not exercise any contract shape because no OnDemand Spatial deployment is reachable.**
 - **Harness self-check (not a baseline):** the same command against the sandbox emulator (`https://sb-307x6fgbxmou.vercel.run/api/ondemand`, no key) at 2026-09-17T08:26:10Z reaches the proxy and fails at step 1 with the proxy's own `HTTP 503 {"error":"not_configured","message":"ONDEMAND_API_KEY is not set on the server."}` (275 ms), proving the harness wiring; recorded under `harnessSelfCheck` in `contract-baseline.json`.
 - **Gate 1 status:** EXIT BLOCKED — see `docs/audit/gates.md`.
 
@@ -292,7 +292,7 @@ Full `/api/ondemand/health` JSON (secret-free):
 
 Tier T2, preview `https://sb-765981cquksp.vercel.run`, `npm run dev:serverless` over `dist/` + `api/**` (Node v24.14.1; `npm ci` 07:30:43Z, `npm run build` 07:30:53Z–07:31:00Z, server listening 07:31:18Z). Runtime-only env injected into the process: ONDEMAND_API_KEY `****`, ONDEMAND_SELFTEST_TOKEN `****` (one-time), ONDEMAND_BASE_URL, **ONDEMAND_SPATIAL_FLOW_ID=6aace534859f7b0abb53d99a**, **GODS_EYE_FLOW_VERSION=1**, VITE_SERVERLESS_MODE=1, SERVERLESS_MODE=true, HOST/PORT. The only `.env` in the sandbox is the repo's 303-byte non-secret serverless-mode file (no key in it — verified `grep -c ONDEMAND_API_KEY .env` → 0). Function count 9 (unchanged; ≤ 12).
 
-Workflow under test: **`GodsEye Advanced Spatial Workflow` v1, id `6aace534859f7b0abb53d99a`**, created through the documented `POST /automation/api/workflow/` (201, 2026-09-18T07:16:04.335Z) and activated (200, 07:16:14.101Z) — full record in `docs/ondemand-workflows/README.md` and `docs/ondemand-workflows/verification-2026-09-18.json`.
+Workflow under test: **`GodsEye Advanced Spatial Workflow` v1, id `6aace534859f7b0abb53d99a`** (recorded at creation; display name changed 2026-09-18T10:41:47Z to "OnDemand Spatial Advanced Workflow", id unchanged), created through the documented `POST /automation/api/workflow/` (201, 2026-09-18T07:16:04.335Z) and activated (200, 07:16:14.101Z) — full record in `docs/ondemand-workflows/README.md` and `docs/ondemand-workflows/verification-2026-09-18.json`.
 
 | Check | Expected | HTTP | Latency ms | UTC | Note |
 |---|---|---|---|---|---|
@@ -518,7 +518,7 @@ Evidence supplied by the operator's Vercel-API tooling (`getVercelProject` / `li
 
 | Variable | Type | Env id | Note |
 |---|---|---|---|
-| `GODS_EYE_FLOW_VERSION` | plain | `usC3wgbut65gTkaR` | created this pass (production + preview, createdAt ≈ 1789710821) |
+| `GODS_EYE_FLOW_VERSION` | plain | `usC3wgbut65gTkaR` | created this pass (production + preview, createdAt ≈ 1789710821). Since the 2026-09-18 rebrand this name is the accepted **alias** of the canonical `ONDEMAND_SPATIAL_FLOW_VERSION`; resolution is alias-first (alias → canonical → default `'1'`) precisely so this provisioned value keeps winning without any Vercel change — `/api/ondemand/health` then reports `config.flowVersion.source: "GODS_EYE_FLOW_VERSION"`, `resolvedVia: "alias"`, plus `canonical` / `alias`. The recorded health payloads above (`source: "GODS_EYE_FLOW_VERSION"`) predate the `resolvedVia` field. |
 | `ONDEMAND_REASONING_ENDPOINT_ID` | sensitive | `I0TXIH0rgSDwzEJB` | created this pass |
 | `ONDEMAND_FULFILLMENT_ENDPOINT_ID` | sensitive | `tdtHQKHrAMllvoir` | created this pass |
 | `ONDEMAND_SELFTEST_TOKEN` | sensitive | `NGrV0CvtudZY76Yj` | created this pass |

@@ -1,6 +1,6 @@
-# GodsEye Intent Classifier
+# OnDemand Spatial Intent Classifier
 
-**Dashboard fields** — Skill Name: `godseye-intent-classifier` · Description: Classifies a user query plus normalized spatial context into one of nine intents with a confidence score, an ASK/INVESTIGATE/DEEP tier, a focus set, and a one-sentence rationale, using low reasoning effort. · Category: `engineering` · Sample Prompts:
+**Dashboard fields** — Skill Name: `ondemand-spatial-intent-classifier` · Description: Classifies a user query plus normalized spatial context into one of nine intents with a confidence score, an ASK/INVESTIGATE/DEEP tier, a focus set, and a one-sentence rationale, using low reasoning effort. · Category: `engineering` · Sample Prompts:
 - "Classify this query: 'Why did that vessel change course near the strait?'"
 - "What tier and intent apply to 'zoom into the earthquake cluster off Japan'?"
 - "Does this request need external data, and what's the one-sentence rationale?"
@@ -10,18 +10,18 @@
 - Whenever a request needs routing to ASK/INVESTIGATE/DEEP handling based on its complexity and whether it needs a capability beyond what's already on screen.
 
 ## When NOT to use it
-- To parse or validate the raw §13 spatial-context JSON — that is `godseye-spatial-context-reader`; this skill assumes normalized context as input.
-- To pick capabilities, build tool call params, or check a capability catalogue — that is `godseye-capability-resolver`.
+- To parse or validate the raw §13 spatial-context JSON — that is `ondemand-spatial-spatial-context-reader`; this skill assumes normalized context as input.
+- To pick capabilities, build tool call params, or check a capability catalogue — that is `ondemand-spatial-capability-resolver`.
 - To produce the final structured response, actions, or evidence — that belongs to later workflow steps (planner, verification, spatial_action_planner, synthesis, structured_response).
 - To spend more than one sentence of rationale or add exploratory analysis — this step is intentionally terse (low reasoning effort).
 
 ## Trigger conditions
-- A user query arrives together with a normalized spatial context (output of `godseye-spatial-context-reader`).
-- The workflow reaches the `intent_classifier` step of the "GodsEye Advanced Spatial Workflow", immediately after `spatial_context_builder` and before `capability_resolver`.
+- A user query arrives together with a normalized spatial context (output of `ondemand-spatial-spatial-context-reader`).
+- The workflow reaches the `intent_classifier` step of the "OnDemand Spatial Advanced Workflow", immediately after `spatial_context_builder` and before `capability_resolver`.
 - A caller needs to know whether a request can be answered from what's already visible (ASK), needs cross-layer reasoning or one external capability (INVESTIGATE), or needs a multi-step evidence chain (DEEP).
 
 ## Instructions
-1. Receive two inputs: the user's free-text query, and the normalized spatial context (plus derived facts) from `godseye-spatial-context-reader`.
+1. Receive two inputs: the user's free-text query, and the normalized spatial context (plus derived facts) from `ondemand-spatial-spatial-context-reader`.
 2. Read the query once; classify with the information given — do not ask follow-up questions.
 3. Select exactly one intent from: `anomaly_scan, entity_lookup, area_summary, navigate, layer_control, temporal_query, compare, explain, other`.
 4. Use `anomaly_scan` when the query looks for something unusual, unexpected, or emergency-related (e.g. squawk 7700, erratic vessel behavior, unexplained cluster).
@@ -54,7 +54,7 @@
 31. Treat a bare navigation phrase ("zoom in", "go north") as `navigate` at tier `ASK` unless it also asks a factual question, in which case favor the factual intent.
 32. Treat a request to add/remove/toggle a layer ("hide vessels", "turn on earthquakes") as `layer_control` at tier `ASK`.
 33. Never output `needsExternalData: true` unless tier is `INVESTIGATE` or `DEEP`.
-34. Never name a specific capability, tool, or route anywhere in this skill's output — that decision belongs entirely to `godseye-capability-resolver`.
+34. Never name a specific capability, tool, or route anywhere in this skill's output — that decision belongs entirely to `ondemand-spatial-capability-resolver`.
 35. Never repeat the raw query text verbatim inside `rationale`; state the reason in your own words.
 36. Do not let non-empty `contextWarnings` change the intent or tier by themselves unless the query concerns the specific field the warning names.
 37. Keep `focus.layers` limited to layerIds that actually appear in `activeLayers` or `entityCounts`; never invent a layerId not seen in the context.
@@ -93,12 +93,12 @@
 - Never write more than one sentence for `rationale`.
 - Never select a capability, tool, route, or param — out of scope for this skill.
 - Never fabricate an entityId, layerId, or timeWindow not supported by the query or context.
-- Never re-run or second-guess `godseye-spatial-context-reader`'s normalization; trust its output as given.
+- Never re-run or second-guess `ondemand-spatial-spatial-context-reader`'s normalization; trust its output as given.
 - Never emit an API key, token, secret, or credential in any field.
 
 ## App module mapping
-- Mirrors workflow node `intent_classifier` in the "GodsEye Advanced Spatial Workflow".
+- Mirrors workflow node `intent_classifier` in the "OnDemand Spatial Advanced Workflow".
 - `api/ondemand/chat.js` — sends the query and context into the workflow and receives this node's output.
 - `server/ondemand/config.js` — `tierDefaults()` / `TIER_DEFAULTS` define the model and reasoning effort applied per tier downstream of this classification.
 
-## Version — `godseye-skills v1 — 2026-09-18 — pairs with workflow "GodsEye Advanced Spatial Workflow" v1 (id 6aace534859f7b0abb53d99a)`
+## Version — `ondemand-spatial-skills v1 — 2026-09-18 — pairs with workflow "OnDemand Spatial Advanced Workflow" v1 (id 6aace534859f7b0abb53d99a)`

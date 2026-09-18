@@ -1,14 +1,14 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "God's Eye fire_detection_search",
+    "title": "OnDemand Spatial fire_detection_search",
     "version": "1.0.0",
-    "description": "Active-fire detections from NASA FIRMS (LANCE near-real-time: VIIRS NOAA-20 / NOAA-21 / Suomi-NPP, MODIS) inside a bounding box or a circle over the last 1–10 days, proxied by the God's Eye View serverless route api/[...route].js → server/sources/nasa-firms.js. The NASA FIRMS MAP_KEY lives ONLY in the deployment's NASA_FIRMS_MAP_KEY environment variable; the route answers 503 not_configured without it and never accepts or echoes a key. Attribution: NASA FIRMS / LANCE. Quota: 5,000 transactions per 10 minutes per MAP_KEY (multi-day requests count as several)."
+    "description": "Active-fire detections from NASA FIRMS (LANCE near-real-time: VIIRS NOAA-20 / NOAA-21 / Suomi-NPP, MODIS) inside a bounding box or a circle over the last 1–10 days, proxied by the OnDemand Spatial serverless route api/[...route].js → server/sources/nasa-firms.js. The NASA FIRMS MAP_KEY lives ONLY in the deployment's NASA_FIRMS_MAP_KEY environment variable; the route answers 503 not_configured without it and never accepts or echoes a key. Attribution: NASA FIRMS / LANCE. Quota: 5,000 transactions per 10 minutes per MAP_KEY (multi-day requests count as several)."
   },
   "servers": [
     {
       "url": "https://<deployment>",
-      "description": "God's Eye deployment host — REPLACE with the READY Vercel preview URL or project domain before importing (see x-godseye.deployment); the sandbox emulator host is ephemeral"
+      "description": "OnDemand Spatial deployment host — REPLACE with the READY Vercel preview URL or project domain before importing (see x-ondemand-spatial.deployment); the sandbox emulator host is ephemeral"
     }
   ],
   "paths": {
@@ -301,7 +301,7 @@
       }
     }
   },
-  "x-godseye": {
+  "x-ondemand-spatial": {
     "capability_id": "fires.search",
     "registry_status": "registered-unverified",
     "ondemand_tool_id": null,

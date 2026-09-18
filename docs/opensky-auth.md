@@ -1,6 +1,6 @@
 # OpenSky Auth Setup
 
-OnDemand Spatial Intelligence uses explicit auth modes for `/api/opensky`:
+OnDemand Spatial uses explicit auth modes for `/api/opensky`:
 
 - `OPENSKY_AUTH_MODE=oauth` (default, recommended)
 - `OPENSKY_AUTH_MODE=auto` (OAuth first, then Basic fallback)

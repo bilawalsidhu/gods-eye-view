@@ -98,7 +98,7 @@ hold, so the next shot cannot retake the camera. Camera claims still respect
 Cockpit's refusal. Already queued callbacks cannot move a replacement scene.
 The timing diagnostic includes the active authored camera animation.
 
-The renderer-independent `ondemand-spatial-intelligence/director` export provides
+The renderer-independent `ondemand-spatial/director` export provides
 `resolveCameraPose(scene, camera)`, `resolveCameraMove(scene, shot)` and
 `sampleCameraMove(move, progress)`. These expect validated/normalized data.
 Rendering and frame ownership live in `src/scenes/cameraMotion.js`; the existing

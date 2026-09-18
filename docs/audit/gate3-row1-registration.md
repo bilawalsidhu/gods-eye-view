@@ -1,4 +1,4 @@
-# Gate 3 row 1 — `earthquake_search` registration in the OnDemand dashboard (copy-paste pack)
+# Gate 3 row 1 — `earthquake_search` registration in the OnDemand dashboard (copy-paste pack) — OnDemand Spatial
 
 Status 2026-09-18T09:30Z: **`ondemand_tool_id: null`, registry status `registered-unverified`.** `docs/ONDEMAND_API_CURRENT.md` §8 documents **no programmatic agent-tool / plugin registration endpoint** — the only REST surface is `GET https://api.on-demand.io/plugin/v1/list` (re-probed with the runtime key on 2026-09-18T09:18:11Z → HTTP 200, `total: 0`); creation is dashboard-only ("My Agents → Create Agents", REST agents defined by an OpenAPI schema — https://docs.on-demand.io/docs/rest-based-plugins.md, retrieved 2026-09-17T05:56:31Z / re-read 2026-09-18T07:20:32Z). No endpoint was invented, nothing was registered by API, and the status can only move to `CREATED` / `TESTED` after the steps below.
 
@@ -53,20 +53,20 @@ Rules enforced by the adapter (`server/sources/usgs-earthquakes.js`): circle (`l
 
 ## 3. Full OpenAPI schema to paste (identical to `docs/ondemand-tools/earthquake_search.json`)
 
-Replace `https://<deployment>` in `servers[0].url` with the READY deployment host first.
+Replace `https://<deployment>` in `servers[0].url` with the READY deployment host first. Re-embedded from the file on 2026-09-18 after the product rename to **OnDemand Spatial** (`info.title` `OnDemand Spatial earthquake_search`, server description `OnDemand Spatial deployment host`, vendor extension `x-ondemand-spatial` — formerly `x-godseye`; OpenAPI ignores `x-` keys, so the dashboard import is unaffected).
 
 ```json
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "God's Eye earthquake_search",
+    "title": "OnDemand Spatial earthquake_search",
     "version": "1.0.0",
-    "description": "Search recent/historical earthquakes from the USGS FDSN Event Web Service by time window, magnitude range and geographic area (circle or bounding box), proxied by the God's Eye View serverless route `api/[...route].js` -> `server/serverless/earthquakes-route.js` -> `server/sources/usgs-earthquakes.js`. Returns observed events with UTC time, magnitude, depth, location, tsunami flag and USGS URL. No authentication is required."
+    "description": "Search recent/historical earthquakes from the USGS FDSN Event Web Service by time window, magnitude range and geographic area (circle or bounding box), proxied by the OnDemand Spatial serverless route `api/[...route].js` -> `server/serverless/earthquakes-route.js` -> `server/sources/usgs-earthquakes.js`. Returns observed events with UTC time, magnitude, depth, location, tsunami flag and USGS URL. No authentication is required."
   },
   "servers": [
     {
       "url": "https://<deployment>",
-      "description": "God's Eye deployment host — REPLACE with the READY Vercel preview URL or project domain before importing (see x-godseye.deployment); the sandbox emulator host is ephemeral"
+      "description": "OnDemand Spatial deployment host — REPLACE with the READY Vercel preview URL or project domain before importing (see x-ondemand-spatial.deployment); the sandbox emulator host is ephemeral"
     }
   ],
   "paths": {
@@ -501,7 +501,7 @@ Replace `https://<deployment>` in `servers[0].url` with the READY deployment hos
       }
     }
   },
-  "x-godseye": {
+  "x-ondemand-spatial": {
     "capability_id": "earthquake.search",
     "registry_status": "registered-unverified",
     "ondemand_tool_id": null,
@@ -548,3 +548,25 @@ Or ask through the deployed proxy: `POST https://<deployment>/api/ondemand/chat`
 ## 7. Row 2 (`fire_detection_search`) follows the same steps
 
 Schema: `docs/ondemand-tools/fire_detection_search.json`; endpoint `GET https://<deployment>/api/sources/fires`; **before** registering, set `NASA_FIRMS_MAP_KEY` on the deployment (free key from https://firms.modaps.eosdis.nasa.gov/api/area/) — until then the route answers `503 not_configured` by design and the dashboard test would fail. Attribution: `NASA FIRMS / LANCE`.
+
+## 8. Rename ledger (2026-09-18)
+
+The product was renamed to **OnDemand Spatial** (package `ondemand-spatial`) on 2026-09-18. Nothing in this pack changes an id or a route; the table lists every name this document depends on.
+
+| Item | Old | New |
+|---|---|---|
+| Product | God's Eye View (interim: OnDemand Spatial Intelligence) | OnDemand Spatial |
+| Package / import name | `gods-eye-view` (interim: `ondemand-spatial-intelligence`) | `ondemand-spatial` |
+| Agent | GodsEye Spatial Intelligence Agent | OnDemand Spatial Intelligence Agent |
+| Workflow (id `6aace534859f7b0abb53d99a` unchanged, v1 unchanged) | `GodsEye Advanced Spatial Workflow` | `OnDemand Spatial Advanced Workflow` — display name only, `PATCH /automation/api/workflow/{id}/name` → 200 at 2026-09-18T10:41:47.809Z; `GET /automation/api/workflow/{id}` → 200 at 2026-09-18T10:41:48.119Z (`isActive` true, `lastModifiedAtInMilliseconds` 1789715764702, 9 nodes); export `docs/ondemand-workflows/ondemand-spatial-advanced-v1.json` |
+| Nine skill slugs | `godseye-<x>` | `ondemand-spatial-<x>` (files `docs/ondemand-skills/ondemand-spatial-<x>.md`; full list in `docs/audit/dashboard-registration-pack.md` §9) |
+| OpenAPI extension key | `x-godseye` | `x-ondemand-spatial` (this file's §3 block, `docs/ondemand-tools/*.json`, `docs/ondemand-workflows/tools/*.json`) |
+| externalUserId prefixes | `godseye-selftest-` / `godseye-contract-test-` / `godseye-capability-loop-` | `ondemand-spatial-selftest-` / `ondemand-spatial-contract-test-` / `ondemand-spatial-capability-loop-` (recorded past sessions keep their recorded values) |
+| Flow-version env var | `GODS_EYE_FLOW_VERSION` (only name) | canonical `ONDEMAND_SPATIAL_FLOW_VERSION`, accepted alias `GODS_EYE_FLOW_VERSION`, resolved alias-first (alias → canonical → default `'1'`) so the value already provisioned on the Vercel project (env id `usC3wgbut65gTkaR`) keeps winning; `/api/ondemand/health` reports `config.flowVersion.source` plus `resolvedVia: alias\|canonical\|default`, `canonical`, `alias` |
+
+## 9. Still to do in the dashboard
+
+- [ ] Create the `earthquake_search` REST agent from §3 (host placeholder replaced) — §4 steps.
+- [ ] Create the **OnDemand Spatial Intelligence Agent** and the nine `ondemand-spatial-<x>` skills — `docs/audit/dashboard-registration-pack.md` §2, §4, §5.
+- [ ] Paste the returned ids back into `src/registry/capabilities.json` (`ondemand_tool_id`, `ondemand.agent.pluginId`, `ondemand.skills[<slug>].skillId`) and set `ONDEMAND_SPATIAL_AGENT_ID` on the deployment — §5.
+- [ ] Run the §6 end-to-end test and move the registry row to `TESTED`.

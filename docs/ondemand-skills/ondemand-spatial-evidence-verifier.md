@@ -1,6 +1,6 @@
-# GodsEye Evidence Verifier
+# OnDemand Spatial Evidence Verifier
 
-**Dashboard fields** — Skill Name: `godseye-evidence-verifier` · Description: Adversarially re-checks every candidate finding against the raw spatial context, marks it verified / unverified / rejected, downgrades unjustified severity and emits one evidence row per literal supporting value, keeping observed, inferred and unknown strictly apart. · Category: `research` · Sample Prompts:
+**Dashboard fields** — Skill Name: `ondemand-spatial-evidence-verifier` · Description: Adversarially re-checks every candidate finding against the raw spatial context, marks it verified / unverified / rejected, downgrades unjustified severity and emits one evidence row per literal supporting value, keeping observed, inferred and unknown strictly apart. · Category: `research` · Sample Prompts:
 - "Verify these findings against the raw context and reject anything not literally supported."
 - "Which of the flagged anomalies are actually backed by field values in the snapshot?"
 - "Produce the evidence table for finding f1 and downgrade its severity if it is not justified."
@@ -79,9 +79,9 @@
 - Never include any key, token, secret or secondary-provider credential in output.
 
 ## App module mapping
-- Mirrors the `verification` node of "GodsEye Advanced Spatial Workflow" v1 (`server/ondemand/workflow-definition.js`; the node prompt is the authoritative wording).
+- Mirrors the `verification` node of "OnDemand Spatial Advanced Workflow" v1 (`server/ondemand/workflow-definition.js`; the node prompt is the authoritative wording).
 - `docs/audit/media-grounding-verification.md` — provenance-labelling rules (observed vs inferred) applied to media, reused here for entity evidence.
 - `src/layers/flights/evidence.js`, `src/layers/vessels/evidence.js` — the evidence cards the UI renders from the same field names.
 - `server/ondemand/workflow-definition.js#validateStructuredResponse` — the shape check that runs on the final output downstream.
 
-## Version — `godseye-skills v1 — 2026-09-18 — pairs with workflow "GodsEye Advanced Spatial Workflow" v1 (id 6aace534859f7b0abb53d99a)`
+## Version — `ondemand-spatial-skills v1 — 2026-09-18 — pairs with workflow "OnDemand Spatial Advanced Workflow" v1 (id 6aace534859f7b0abb53d99a)`

@@ -1,24 +1,37 @@
-# OnDemand Agents Flow Builder — `GodsEye Advanced Spatial Workflow` (v1)
+# OnDemand Agents Flow Builder — `OnDemand Spatial Advanced Workflow` (v1)
 
 Gate 6 (blueprint rules 22–23, 46–48). This directory holds the definition, the
 live export, the verification record and the selftest baseline of the principal
-God's Eye workflow on the OnDemand **Agents Flow Builder**. Every endpoint,
+OnDemand Spatial workflow on the OnDemand **Agents Flow Builder**. Every endpoint,
 header, body field and node type used here comes from
 `docs/ONDEMAND_API_CURRENT.md` §7 (the live-docs audit); nothing undocumented was
 sent to the API.
+
+## Rename (2026-09-18) — display name only, v1 frozen
+
+| Item | Value |
+| ---- | ----- |
+| Old display name | `GodsEye Advanced Spatial Workflow` (the name at creation, 2026-09-18T07:16:04.335Z) |
+| New display name | **`OnDemand Spatial Advanced Workflow`** |
+| How | live, via the documented `PATCH https://api.on-demand.io/automation/api/workflow/6aace534859f7b0abb53d99a/name` (contract §7.1 "Update name") → **HTTP 200** at **2026-09-18T10:41:47.809Z** |
+| Re-read | `GET /automation/api/workflow/{id}` → **HTTP 200** at **2026-09-18T10:41:48.119Z** returning name `OnDemand Spatial Advanced Workflow`, `isActive: true`, `lastModifiedAtInMilliseconds: 1789715764702` (identical to before the rename), 9 nodes |
+| Unchanged | workflow id `6aace534859f7b0abb53d99a`; version label **v1** (`flowVersion` `"1"`); the trigger, the nine nodes and their prompts |
+| Export file | renamed `gods-eye-advanced-v1.json` → **`ondemand-spatial-advanced-v1.json`** and refreshed from that GET: `_export.rename` records the PATCH (endpoint, UTC, HTTP status, from/to), `_export.exportedAtUtc` is the re-read time and `_export.firstExportedAtUtc` keeps the original **2026-09-18T07:19:44.067Z** |
+| Frozen prompts | the node prompts inside the export still self-describe as the **"God's Eye pipeline"** and the `structured_response` task prompt still emits `runMeta.workflow` = `"GodsEye Advanced Spatial Workflow"`, because the v1 definition is frozen — a prompt edit would be a **v2** definition, which this rebrand deliberately does **not** create. Consumers validating a v1 run must accept that recorded string. |
+| Env var | the repo's version label is read from `ONDEMAND_SPATIAL_FLOW_VERSION` (canonical) with `GODS_EYE_FLOW_VERSION` as the accepted alias, resolved **alias-first** (alias → canonical → default `'1'`) so the value already provisioned on the Vercel project (env id `usC3wgbut65gTkaR`) keeps winning; `/api/ondemand/health` reports `config.flowVersion.source` (the env NAME that resolved) plus `resolvedVia: alias\|canonical\|default`, `canonical`, `alias` |
 
 ## Status (2026-09-18)
 
 | Item                     | Value                                                                                                                                                                                                                                                                                                   |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Workflow name            | `GodsEye Advanced Spatial Workflow`                                                                                                                                                                                                                                                                     |
+| Workflow name            | `OnDemand Spatial Advanced Workflow` (created as `GodsEye Advanced Spatial Workflow`; display name renamed live at 2026-09-18T10:41:47.809Z — see "Rename" above) |
 | Workflow id (real)       | `6aace534859f7b0abb53d99a` (company `6692b763e851d28a036ab30e`)                                                                                                                                                                                                                                         |
-| Version                  | **1** — the repo's own label (`GODS_EYE_FLOW_VERSION` / `FLOW_DEFAULTS.flowVersion`); the API has **no version field** (§7.3 "Versioning: NOT FOUND IN LIVE DOCS")                                                                                                                                      |
+| Version                  | **1** — the repo's own label (`ONDEMAND_SPATIAL_FLOW_VERSION`, alias `GODS_EYE_FLOW_VERSION` resolved alias-first / `FLOW_DEFAULTS.flowVersion`); the API has **no version field** (§7.3 "Versioning: NOT FOUND IN LIVE DOCS"); unchanged by the rename |
 | Created via              | **API** — `POST https://api.on-demand.io/automation/api/workflow/` (§7.1, header `apikey`) → **HTTP 201** `{"id":"6aace534859f7b0abb53d99a"}` at **2026-09-18T07:16:04.335Z** (395 ms)                                                                                                                  |
 | Activated via            | `POST /automation/api/workflow/6aace534859f7b0abb53d99a/activate` (§7.1) → **HTTP 200** at **2026-09-18T07:16:14.101Z**; `GET /workflow/{id}` at 07:16:14.336Z → `isActive: true`                                                                                                                       |
 | Verified via             | `POST /workflow/{id}/execute` → **HTTP 200** `{"executionID":"6aace54bbb6a9a7035f431fc"}` at **2026-09-18T07:16:26.986Z**; polled `GET /execution/{id}` + `GET /execution/{id}/logs` (78 calls, all 200); final status **`success`**, total **163,104 ms**, time-to-first-log **657 ms** (first log event 07:16:27.311Z, `starting workflow execution`); node outputs read via `GET /execution/{id}/node/outputs` (200) |
 | StructuredResponse       | **valid** — exactly `message, entities, actions, evidence, sources, suggestedNextActions, runMeta`; 6 actions, all among the 28 MapAction names: `fly_to_location, track_entity, set_layer_visibility, annotate_map, analyst_query, frame_overhead`                                                    |
-| Export                   | `gods-eye-advanced-v1.json` — the documented **`GET /workflow/{id}`** object (200 at 2026-09-18T07:19:44.067Z) with credential-like fields stripped, plus the re-import `createBody`. A "Get Code"/export endpoint is **NOT FOUND IN LIVE DOCS** (§7.3), so the documented read endpoint is the export |
+| Export                   | `ondemand-spatial-advanced-v1.json` (formerly `gods-eye-advanced-v1.json`) — the documented **`GET /workflow/{id}`** object (first export 200 at 2026-09-18T07:19:44.067Z; refreshed after the rename, 200 at 2026-09-18T10:41:48.119Z) with credential-like fields stripped, plus the re-import `createBody`. A "Get Code"/export endpoint is **NOT FOUND IN LIVE DOCS** (§7.3), so the documented read endpoint is the export |
 | Selftest (step 8)        | `GET /api/ondemand/selftest` on the sandbox emulator → **9 passed / 0 failed / 1 skipped** (only step 4 — the account has no agents); step 8 executed this workflow (execution `6aace8f487fc428d7c18a1f3`, time-to-first-log 298 ms) — see `contract-baseline.json`                                     |
 | Config defaults          | `server/ondemand/config.js` `FLOW_DEFAULTS = { spatialFlowId: '6aace534859f7b0abb53d99a', flowVersion: '1' }` (re-exported by `api/ondemand/_config.js`, documented in `.env.example`)                                                                                                                  |
 
@@ -65,7 +78,7 @@ brevity; the intended effort is recorded in the "tier" column.
 | 6   | Verification               | `verification`            | `llm` / `intermediate`    | `predefined-claude-sonnet-5` (INVESTIGATE; DEEP not expressible — see below) | `docs/audit/media-grounding-verification.md` (provenance rules), `src/layers/flights/evidence.js`, `src/layers/vessels/evidence.js`          | `{findings[{status verified\|unverified\|rejected}], evidence[], unknowns, …}`   |
 | 7   | Spatial Action Planner     | `spatial_action_planner`  | `llm` / `intermediate`    | `predefined-claude-sonnet-5` (INVESTIGATE)                              | **`src/voice/actionSchemas.js`** (`GEV_ACTION_SCHEMAS`, the 28 MapAction names + parameter schemas — embedded as a digest in the prompt), `src/voice/commands.js` | `{actions[{name ∈ 28, params, reason, findingIds}], suggestedNextActions, …}`    |
 | 8   | Synthesis                  | `synthesis`               | `llm` / `intermediate`    | `config.fulfillmentEndpointId` (default `predefined-gpt-5.6-luna`)      | `api/ondemand/chat.js` (fulfillment stage), `server/ondemand/sse.js`                                                                             | `{message, entities, …}`                                                         |
-| 9   | StructuredResponse output  | `structured_response`     | `llm` / `sink`            | `predefined-gpt-5.6-luna` (ASK)                                         | client contract consumed by the God's Eye UI (`src/voice/session.js` action dispatch); validated by `validateStructuredResponse()`                | exactly `{message, entities, actions, evidence, sources, suggestedNextActions, runMeta}` |
+| 9   | StructuredResponse output  | `structured_response`     | `llm` / `sink`            | `predefined-gpt-5.6-luna` (ASK)                                         | client contract consumed by the OnDemand Spatial UI (`src/voice/session.js` action dispatch); validated by `validateStructuredResponse()`                | exactly `{message, entities, actions, evidence, sources, suggestedNextActions, runMeta}` |
 
 Each node's `prompt` references its direct upstream output with the
 `{<nodeKey>}` placeholder and the first node reads the trigger payload with
@@ -135,7 +148,7 @@ next_iss_pass`.
 | Topic                                  | Finding                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Stream-logs endpoint                   | **NOT FOUND IN LIVE DOCS** (§7.1: "only the polling `GET …/logs` exists"). Verification and selftest poll `GET /execution/{id}` + `GET /execution/{id}/logs`; time-to-first-log = first poll that returned ≥1 log entry, minus the execute call time. `api/ondemand/workflow.js?action=stream-logs` keeps answering 501.                                                                                                       |
-| "Get Code" / export                    | **NOT FOUND IN LIVE DOCS** (§7.3). `gods-eye-advanced-v1.json` is the documented `GET /workflow/{id}` object; `POST /workflow/upload/config` (multipart `file`) is the only documented import-by-file surface and its file format is not documented, so re-import uses `POST /workflow/` with `createBody` instead.                                                                                                        |
+| "Get Code" / export                    | **NOT FOUND IN LIVE DOCS** (§7.3). `ondemand-spatial-advanced-v1.json` is the documented `GET /workflow/{id}` object; `POST /workflow/upload/config` (multipart `file`) is the only documented import-by-file surface and its file format is not documented, so re-import uses `POST /workflow/` with `createBody` instead.                                                                                                        |
 | Versioning                             | **NOT FOUND IN LIVE DOCS** (§7.3) — `flowVersion` is the repo's label (1).                                                                                                                                                                                                                                                                                                                                             |
 | Execute request body                   | None documented (§7.1) → API-triggered runs are SELFTEST-mode runs; live payloads go through the webhook trigger.                                                                                                                                                                                                                                                                                                       |
 | Webhook trigger URL                    | Generated by the platform and shown on the workflow canvas only; `GET /workflow/{id}` returns `trigger.webhook = {auth:{username:"",password:""}}` without a URL (live, 2026-09-18T07:16:13Z). Read it from the dashboard (`https://app.on-demand.io/agents` → this workflow → trigger node) and POST `{"payload": {...}}` to it (§7.2 / nodes guide).                                                                     |
@@ -149,7 +162,7 @@ next_iss_pass`.
 
 | File                                    | Purpose                                                                                                                                                       |
 | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `gods-eye-advanced-v1.json`             | Live export (`workflow` = documented GET object, secrets stripped) + `createBody` (re-import body) + `_export` provenance (UTC, HTTP status)                   |
+| `ondemand-spatial-advanced-v1.json`     | Live export (`workflow` = documented GET object, secrets stripped) + `createBody` (re-import body) + `_export` provenance (UTC, HTTP status, and the `rename` block for the 2026-09-18 display-name PATCH); renamed from `gods-eye-advanced-v1.json` |
 | `verification-2026-09-18.json`          | Verification record: every HTTP call (status, ms, UTC), the 29-event log sequence, per-node timings, the final StructuredResponse and its validation result   |
 | `contract-baseline.json`                | Selftest baseline (updated in place; previous runs in `history[]`)                                                                                            |
 | `tools/earthquake_search.json`          | Tool definition of the `earthquake_search` capability (Gate 3)                                                                                                |
@@ -162,15 +175,15 @@ next_iss_pass`.
 Prerequisite: `export ONDEMAND_API_KEY=…` in the shell only (never in a file).
 
 ```bash
-# 1. Render the body from the code (or use "createBody" from gods-eye-advanced-v1.json)
-node scripts/ondemand-workflow.mjs build > /tmp/godseye-create-body.json
+# 1. Render the body from the code (or use "createBody" from ondemand-spatial-advanced-v1.json)
+node scripts/ondemand-workflow.mjs build > /tmp/ondemand-spatial-create-body.json
 
 # 2. Create — documented POST /automation/api/workflow/ (§7.1) → 201 {"id": "<newId>"}
 node scripts/ondemand-workflow.mjs create
 #    equivalent curl:
 #    curl -sS -X POST "https://api.on-demand.io/automation/api/workflow/" \
 #      -H "apikey: $ONDEMAND_API_KEY" -H "Content-Type: application/json" \
-#      --data @/tmp/godseye-create-body.json
+#      --data @/tmp/ondemand-spatial-create-body.json
 
 # 3. Activate — documented POST /workflow/{id}/activate → 200
 node scripts/ondemand-workflow.mjs activate <newId>
@@ -179,7 +192,7 @@ node scripts/ondemand-workflow.mjs activate <newId>
 node scripts/ondemand-workflow.mjs verify <newId> --report docs/ondemand-workflows/verification-$(date -u +%F).json
 
 # 5. Export the documented GET object for the repo
-node scripts/ondemand-workflow.mjs export <newId> docs/ondemand-workflows/gods-eye-advanced-v1.json
+node scripts/ondemand-workflow.mjs export <newId> docs/ondemand-workflows/ondemand-spatial-advanced-v1.json
 ```
 
 Then paste `<newId>` into: `server/ondemand/config.js` `FLOW_DEFAULTS.spatialFlowId`
@@ -213,7 +226,9 @@ until the export and the defaults agree. To change prompts in place use
 | `POST /workflow/{id}/execute`                              | 200  | 2026-09-18T07:16:26.986Z | `{"executionID":"6aace54bbb6a9a7035f431fc"}`                                                 |
 | `GET /execution/{id}` × 38 + `GET /execution/{id}/logs` × 38 | 200 | 07:16:27.330Z → 07:19:09.879Z | status `executing` → `success`; 29 log events; time-to-first-log 657 ms                   |
 | `GET /execution/{id}/node/outputs`                         | 200  | 2026-09-18T07:19:10.090Z | outputs for all 9 nodes (+ `trigger` = `""`); `structured_response` parsed and validated      |
-| `GET /workflow/{id}` (export)                              | 200  | 2026-09-18T07:19:44.067Z | written to `gods-eye-advanced-v1.json`                                                       |
+| `GET /workflow/{id}` (export)                              | 200  | 2026-09-18T07:19:44.067Z | written to `gods-eye-advanced-v1.json` (the file has since been renamed `ondemand-spatial-advanced-v1.json`) |
+| `PATCH /workflow/{id}/name` (rename, display name only)    | 200  | 2026-09-18T10:41:47.809Z | `GodsEye Advanced Spatial Workflow` → `OnDemand Spatial Advanced Workflow`; id, v1, trigger, nodes and prompts unchanged |
+| `GET /workflow/{id}` (re-export after rename)              | 200  | 2026-09-18T10:41:48.119Z | name `OnDemand Spatial Advanced Workflow`, `isActive:true`, `lastModifiedAtInMilliseconds` 1789715764702 (identical), 9 nodes → `ondemand-spatial-advanced-v1.json` |
 
 Per-node execution time (ms): session_context 7,579 · spatial_context_builder
 8,492 · intent_classifier 8,908 · capability_resolver 12,157 · planner 26,201 ·

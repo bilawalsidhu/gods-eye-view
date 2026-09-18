@@ -1,6 +1,6 @@
 # Security
 
-OnDemand Spatial Intelligence is a local-first client for **public** data. It is built for exploration, demos, and learning — not as a hardened production service. This document explains the security model so you can run it safely and report issues responsibly.
+OnDemand Spatial is a local-first client for **public** data. It is built for exploration, demos, and learning — not as a hardened production service. This document explains the security model so you can run it safely and report issues responsibly.
 
 ## Reporting a vulnerability
 

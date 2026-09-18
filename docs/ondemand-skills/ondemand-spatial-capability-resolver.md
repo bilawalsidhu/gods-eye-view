@@ -1,23 +1,23 @@
-# GodsEye Capability Resolver
+# OnDemand Spatial Capability Resolver
 
-**Dashboard fields** — Skill Name: `godseye-capability-resolver` · Description: Selects capabilities strictly from the supplied catalogue, builds each tool call's params from only that entry's declared params, and lists needs the catalogue cannot meet — never inventing a capability, tool, route, or parameter. · Category: `engineering` · Sample Prompts:
+**Dashboard fields** — Skill Name: `ondemand-spatial-capability-resolver` · Description: Selects capabilities strictly from the supplied catalogue, builds each tool call's params from only that entry's declared params, and lists needs the catalogue cannot meet — never inventing a capability, tool, route, or parameter. · Category: `engineering` · Sample Prompts:
 - "Given this catalogue and intent, which capability (if any) should handle an earthquake search near the current view?"
 - "Build the earthquake_search call params for a 30-day window around the current center."
 - "This need has no matching capability — what goes in unmetNeeds?"
 
 ## When to use this skill
-- After `godseye-intent-classifier` produces an intent/tier/focus with `needsExternalData: true` (or the planner needs an external capability call), to translate that need into a concrete, catalogue-backed tool call.
+- After `ondemand-spatial-intent-classifier` produces an intent/tier/focus with `needsExternalData: true` (or the planner needs an external capability call), to translate that need into a concrete, catalogue-backed tool call.
 - Whenever a capability catalogue (`src/registry/capabilities.json`-shaped) is supplied and a need must be matched against it strictly by entry.
 - To compute `earthquake_search`'s circle-search params (latitude/longitude/maxradiuskm/starttime/minmagnitude/orderby/limit) from spatial context and derived facts.
 
 ## When NOT to use it
-- To classify intent or tier — that is `godseye-intent-classifier`.
-- To parse or normalize the raw spatial context — that is `godseye-spatial-context-reader`.
+- To classify intent or tier — that is `ondemand-spatial-intent-classifier`.
+- To parse or normalize the raw spatial context — that is `ondemand-spatial-spatial-context-reader`.
 - When `needsExternalData` is `false` and no other explicit need exists — return empty `selectedCapabilityIds`/`calls`, noting `unmetNeeds` only if something was actually unmet.
 - To invent a capability absent from the supplied catalogue, even if one would help — record it in `unmetNeeds` instead.
 
 ## Trigger conditions
-- The workflow reaches `capability_resolver` in the "GodsEye Advanced Spatial Workflow", immediately after `intent_classifier` and before `planner`.
+- The workflow reaches `capability_resolver` in the "OnDemand Spatial Advanced Workflow", immediately after `intent_classifier` and before `planner`.
 - The intent classification carries `needsExternalData: true`, or the focus names a need not covered by what's already on screen.
 - A caller supplies a capability catalogue and asks which entries apply and what params to call them with.
 
@@ -128,9 +128,9 @@
 - Never emit an API key, token, secret, or credential in any field.
 
 ## App module mapping
-- Mirrors workflow node `capability_resolver` in the "GodsEye Advanced Spatial Workflow".
+- Mirrors workflow node `capability_resolver` in the "OnDemand Spatial Advanced Workflow".
 - `src/registry/capabilities.json` — the capability catalogue this skill must resolve against, never extend from imagination.
 - `docs/ondemand-workflows/tools/earthquake_search.json` — the declared param list and constraints for the `earthquake_search` tool.
 - `server/serverless/earthquakes-route.js` — the live route (`/api/sources/earthquakes`) the resolved call ultimately reaches.
 
-## Version — `godseye-skills v1 — 2026-09-18 — pairs with workflow "GodsEye Advanced Spatial Workflow" v1 (id 6aace534859f7b0abb53d99a)`
+## Version — `ondemand-spatial-skills v1 — 2026-09-18 — pairs with workflow "OnDemand Spatial Advanced Workflow" v1 (id 6aace534859f7b0abb53d99a)`

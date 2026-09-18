@@ -1,6 +1,6 @@
 # Application construction
 
-`ondemand-spatial-intelligence/application` exports `createApplication`. Importing it does not
+`ondemand-spatial/application` exports `createApplication`. Importing it does not
 create a viewer, discover configuration, start requests, or attach browser
 listeners. Construction is also inactive until the caller invokes `start()`.
 
@@ -20,8 +20,8 @@ interpret provider names, environment variables, endpoints, or module paths.
 There is no module discovery or automatic import mechanism.
 
 ```js
-import { createApplication } from 'ondemand-spatial-intelligence/application';
-import { createApplicationViewer } from 'ondemand-spatial-intelligence/application/viewer';
+import { createApplication } from 'ondemand-spatial/application';
+import { createApplicationViewer } from 'ondemand-spatial/application/viewer';
 
 const app = createApplication({
   createScene({ defer }) {

@@ -1,6 +1,6 @@
-# GodsEye Aviation Analyst
+# OnDemand Spatial Aviation Analyst
 
-**Dashboard fields** — Skill Name: `godseye-aviation-analyst` · Description: Applies ADS-B anomaly heuristics (emergency squawks, ground-speed, low-altitude, heading/approach checks) to flights/military visibleEntities, citing literal values as evidence. · Category: `research` · Sample Prompts:
+**Dashboard fields** — Skill Name: `ondemand-spatial-aviation-analyst` · Description: Applies ADS-B anomaly heuristics (emergency squawks, ground-speed, low-altitude, heading/approach checks) to flights/military visibleEntities, citing literal values as evidence. · Category: `research` · Sample Prompts:
 - "Is anything unusual happening with air traffic near the airport right now?"
 - "Any aircraft squawking an emergency code in view?"
 - "Why did you flag that aircraft — is it just on approach?"
@@ -112,10 +112,10 @@
 - Never include any key, token, secret or secondary-provider credential in output.
 
 ## App module mapping
-- Mirrors the planner/verification nodes' aviation-specific heuristics in "GodsEye Advanced Spatial Workflow" v1.
+- Mirrors the planner/verification nodes' aviation-specific heuristics in "OnDemand Spatial Advanced Workflow" v1.
 - src/layers/flights/ — flights layer rendering and entity feed.
 - src/layers/military/ — military layer rendering and entity feed.
 - src/layers/aircraft/classification.js — civil/military classification used for context labeling.
 - server/providers/aircraft/ — ADS-B provider/source integration.
 
-## Version — `godseye-skills v1 — 2026-09-18 — pairs with workflow "GodsEye Advanced Spatial Workflow" v1 (id 6aace534859f7b0abb53d99a)`
+## Version — `ondemand-spatial-skills v1 — 2026-09-18 — pairs with workflow "OnDemand Spatial Advanced Workflow" v1 (id 6aace534859f7b0abb53d99a)`

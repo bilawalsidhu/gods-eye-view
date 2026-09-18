@@ -1,6 +1,6 @@
-# GodsEye Maritime Analyst
+# OnDemand Spatial Maritime Analyst
 
-**Dashboard fields** — Skill Name: `godseye-maritime-analyst` · Description: Applies AIS anomaly heuristics (navigation-status vs speed contradictions, vessels under way near an airport approach or restricted water, AIS gaps, ship-type context) to `ais-live-vessels` visibleEntities, citing literal AIS values as evidence. · Category: `research` · Sample Prompts:
+**Dashboard fields** — Skill Name: `ondemand-spatial-maritime-analyst` · Description: Applies AIS anomaly heuristics (navigation-status vs speed contradictions, vessels under way near an airport approach or restricted water, AIS gaps, ship-type context) to `ais-live-vessels` visibleEntities, citing literal AIS values as evidence. · Category: `research` · Sample Prompts:
 - "Is any vessel behaving unusually near the airport shoreline?"
 - "Which ships in view are moving although they report moored or at anchor?"
 - "Why did you flag MSC KHALIFA — is that just normal transit?"
@@ -11,7 +11,7 @@
 
 ## When NOT to use it
 - No `ais-live-vessels` entities in view and no maritime intent — do not scan proactively.
-- Aviation (ADS-B) or seismic questions — those belong to `godseye-aviation-analyst` and `godseye-seismic-analyst`.
+- Aviation (ADS-B) or seismic questions — those belong to `ondemand-spatial-aviation-analyst` and `ondemand-spatial-seismic-analyst`.
 - Do not use it to estimate destinations, cargo, ownership or flag state — none of that is in the AIS snapshot the app provides.
 
 ## Trigger conditions
@@ -92,9 +92,9 @@
 - Never include any key, token, secret or secondary-provider credential in output.
 
 ## App module mapping
-- Mirrors the planner/verification nodes' maritime heuristics in "GodsEye Advanced Spatial Workflow" v1 (`server/ondemand/workflow-definition.js`).
+- Mirrors the planner/verification nodes' maritime heuristics in "OnDemand Spatial Advanced Workflow" v1 (`server/ondemand/workflow-definition.js`).
 - `src/layers/vessels/` — `records.js` (AIS record shape), `evidence.js` (evidence cards), `policy.js`, `tracking.js`, `selection.js`.
 - `src/data/aisLiveVessels.js`, `src/data/aisStreamAdapter.js`, `src/data/aisWatchdog.js` — client feed, partial/stale snapshot handling (AIS gaps).
 - `server/providers/vessels/ais-live.js`, `server/providers/vessels/ais-store.js` — the AIS relay (501 in serverless mode until the maritime.live row lands, `docs/SERVERLESS_LIMITATIONS.md`).
 
-## Version — `godseye-skills v1 — 2026-09-18 — pairs with workflow "GodsEye Advanced Spatial Workflow" v1 (id 6aace534859f7b0abb53d99a)`
+## Version — `ondemand-spatial-skills v1 — 2026-09-18 — pairs with workflow "OnDemand Spatial Advanced Workflow" v1 (id 6aace534859f7b0abb53d99a)`

@@ -1,6 +1,6 @@
-# GodsEye Seismic Analyst
+# OnDemand Spatial Seismic Analyst
 
-**Dashboard fields** — Skill Name: `godseye-seismic-analyst` · Description: Plans and interprets USGS `earthquake_search` calls for the GodsEye earthquakes layer, classifying magnitude/depth/distance/recency/tsunami risk while never inventing events a call did not return. · Category: `research` · Sample Prompts:
+**Dashboard fields** — Skill Name: `ondemand-spatial-seismic-analyst` · Description: Plans and interprets USGS `earthquake_search` calls for the OnDemand Spatial earthquakes layer, classifying magnitude/depth/distance/recency/tsunami risk while never inventing events a call did not return. · Category: `research` · Sample Prompts:
 - "Are there any significant earthquakes near here in the last month?"
 - "Turn on the earthquakes layer and tell me about the strongest quake nearby."
 - "Is that earthquake close enough that a tsunami is a concern?"
@@ -11,7 +11,7 @@
 
 ## When NOT to use it
 - No seismic intent and the earthquakes layer is inactive — do not proactively suggest a search.
-- Do not use this skill to plan MapActions (layer toggles, camera moves); that is `godseye-map-action-planner`'s job — this skill only plans/interprets the `earthquake_search` capability call.
+- Do not use this skill to plan MapActions (layer toggles, camera moves); that is `ondemand-spatial-map-action-planner`'s job — this skill only plans/interprets the `earthquake_search` capability call.
 - Do not forecast, predict, or estimate future earthquake probability — USGS coverage here is `observed` history only, never a forecast.
 
 ## Trigger conditions
@@ -129,4 +129,4 @@
 - src/data/earthquakes.js — client-side data shaping.
 - docs/ondemand-workflows/tools/earthquake_search.json — tool parameter/output contract.
 
-## Version — `godseye-skills v1 — 2026-09-18 — pairs with workflow "GodsEye Advanced Spatial Workflow" v1 (id 6aace534859f7b0abb53d99a)`
+## Version — `ondemand-spatial-skills v1 — 2026-09-18 — pairs with workflow "OnDemand Spatial Advanced Workflow" v1 (id 6aace534859f7b0abb53d99a)`

@@ -1,4 +1,4 @@
-# OnDemand Spatial Intelligence — Testing Guide (voice map-annotation whiteboard + live tracking)
+# OnDemand Spatial — Testing Guide (voice map-annotation whiteboard + live tracking)
 
 > [!NOTE]
 > This is a **manual field-test scenario script** for the June-2026 whiteboard +

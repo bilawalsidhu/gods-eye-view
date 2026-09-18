@@ -316,7 +316,7 @@ The task's candidate list for `.env.example` was: `ONDEMAND_API_KEY`, `ONDEMAND_
 | `ONDEMAND_SPATIAL_FLOW_ID` | kept | workflow id for `POST /workflow/{id}/execute` (§7.1) |
 | `ONDEMAND_FULFILLMENT_ENDPOINT_ID` | kept | default `endpointId` of the fulfillment model (§3.1, §12) |
 | `ONDEMAND_REASONING_ENDPOINT_ID` | **dropped** | no "reasoning endpoint" exists in the docs; `reasoningMode` is a guide-only free string, stream-only (§3.1, §12). Replaced by the optional `ONDEMAND_REASONING_MODE` string. |
-| `GODS_EYE_FLOW_VERSION` | **dropped** | workflow versioning is **NOT FOUND IN LIVE DOCS** (§7.3); nothing reads it. |
+| `GODS_EYE_FLOW_VERSION` | **dropped** (2026-09-17) → **kept as the accepted alias** of the canonical `ONDEMAND_SPATIAL_FLOW_VERSION` (2026-09-18) | workflow versioning is **NOT FOUND IN LIVE DOCS** (§7.3), so the value is never sent upstream; it is the repo's own informational label of the created workflow definition (default `'1'`). Resolution is **alias-first** (`GODS_EYE_FLOW_VERSION` → `ONDEMAND_SPATIAL_FLOW_VERSION` → default) so the value already provisioned on the Vercel project (env id `usC3wgbut65gTkaR`) keeps winning; `/api/ondemand/health` reports `config.flowVersion.source` (the env NAME that resolved), `resolvedVia: alias\|canonical\|default`, `canonical`, `alias`. |
 | `ONDEMAND_REQUEST_TIMEOUT_MS` | added (local only) | proxy-side fetch timeout; explicitly *not* an OnDemand field |
 
 The FalKonEye blueprint's `ONDEMAND_DEFAULT_MODEL`, `ONDEMAND_PLUGIN_IDS`, `ONDEMAND_WORKFLOW_ID`,

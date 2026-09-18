@@ -1,6 +1,6 @@
-# GodsEye Spatial Context Reader
+# OnDemand Spatial Spatial Context Reader
 
-**Dashboard fields** — Skill Name: `godseye-spatial-context-reader` · Description: Parses and validates the GodsEye §13 spatial-context JSON payload (15 ordered fields), normalises center/visibleBounds/activeLayers/visibleEntities/timeline/userAction, and computes derived spatial facts (view radius, per-layer entity counts, airborne/on-ground counts, emergency squawks, vessels under way). · Category: `engineering` · Sample Prompts:
+**Dashboard fields** — Skill Name: `ondemand-spatial-spatial-context-reader` · Description: Parses and validates the OnDemand Spatial §13 spatial-context JSON payload (15 ordered fields), normalises center/visibleBounds/activeLayers/visibleEntities/timeline/userAction, and computes derived spatial facts (view radius, per-layer entity counts, airborne/on-ground counts, emergency squawks, vessels under way). · Category: `engineering` · Sample Prompts:
 - "Parse this spatial-context payload and return the normalized fields plus derived facts."
 - "Validate the current map-state JSON and list any missing or malformed §13 fields."
 - "How many aircraft are airborne and which vessels are under way in this view?"
@@ -11,13 +11,13 @@
 - When a payload may be incomplete or malformed and the caller needs an explicit `contextWarnings` report rather than a silent failure.
 
 ## When NOT to use it
-- To decide user intent, tier, or focus — use `godseye-intent-classifier`.
-- To pick capabilities, tools, or build API call params — use `godseye-capability-resolver`.
+- To decide user intent, tier, or focus — use `ondemand-spatial-intent-classifier`.
+- To pick capabilities, tools, or build API call params — use `ondemand-spatial-capability-resolver`.
 - When the input is already a normalized context object with `derived` and `contextWarnings` present — pass it through unchanged.
 - When no spatial-context payload was supplied at all — ask for the payload instead of fabricating one.
 
 ## Trigger conditions
-- A raw §13 payload arrives from the `session_context` step of the "GodsEye Advanced Spatial Workflow", or from any client emitting the same 15-field shape.
+- A raw §13 payload arrives from the `session_context` step of the "OnDemand Spatial Advanced Workflow", or from any client emitting the same 15-field shape.
 - A user or upstream node asks for view radius, entity counts, airborne/on-ground counts, emergency squawks, or vessels under way.
 - A payload is suspected incomplete and the caller wants a `contextWarnings` report.
 
@@ -128,10 +128,10 @@
 - Never emit an API key, token, secret, or credential in any field.
 
 ## App module mapping
-- Mirrors workflow nodes `session_context` and `spatial_context_builder` in the "GodsEye Advanced Spatial Workflow".
+- Mirrors workflow nodes `session_context` and `spatial_context_builder` in the "OnDemand Spatial Advanced Workflow".
 - `src/ui/context*.js` — captures and shapes the raw §13 payload in the client.
 - `src/app/stateChannel.js` — carries the payload from the UI to the workflow.
 - `src/layers/*/evidence.js` — per-layer entity field definitions used when normalizing `visibleEntities`.
 - `server/ondemand/workflow-definition.js` — builds and wires the `session_context` / `spatial_context_builder` nodes.
 
-## Version — `godseye-skills v1 — 2026-09-18 — pairs with workflow "GodsEye Advanced Spatial Workflow" v1 (id 6aace534859f7b0abb53d99a)`
+## Version — `ondemand-spatial-skills v1 — 2026-09-18 — pairs with workflow "OnDemand Spatial Advanced Workflow" v1 (id 6aace534859f7b0abb53d99a)`

@@ -1,5 +1,48 @@
 # Changelog
 
+## 2026-09-18 — Rebrand to OnDemand Spatial
+
+- Product and package rename: the product is now **OnDemand Spatial** (the
+  interim "OnDemand Spatial Intelligence" wording is gone) and the package /
+  import name is `ondemand-spatial` (e.g. `ondemand-spatial/application`,
+  `ondemand-spatial/build/vite`). The upstream repository slug
+  `bilawalsidhu/gods-eye-view`, its clone directory and the Pinokio app URL are
+  unchanged because they belong to the upstream project.
+- Brand assets rebuilt from the official OnDemand brand guidelines PDF: vector
+  lockup plus the favicon set under `public/brand/`, colour/typography tokens in
+  `src/brand/tokens.css`, and the source evidence (which page/asset each value
+  came from) in `docs/brand/BRAND_SOURCE.md`; `docs/BRANDING.md` describes the
+  assets, tokens and contrast checks.
+- Flow-version env var: canonical `ONDEMAND_SPATIAL_FLOW_VERSION` with the
+  accepted alias `GODS_EYE_FLOW_VERSION`, resolved **alias-first** (alias →
+  canonical → default `'1'`) so the value already provisioned on the Vercel
+  project keeps winning; `GET /api/ondemand/health` reports
+  `config.flowVersion.source` (the env NAME that resolved) plus
+  `resolvedVia: alias|canonical|default`, `canonical` and `alias`.
+- OnDemand workflow display name renamed live from `GodsEye Advanced Spatial
+  Workflow` to **`OnDemand Spatial Advanced Workflow`** via the documented
+  `PATCH /automation/api/workflow/{id}/name` (HTTP 200, 2026-09-18T10:41:47.809Z);
+  the id `6aace534859f7b0abb53d99a`, the v1 label, the trigger, the nine nodes
+  and their prompts are unchanged (the frozen v1 prompts still self-describe as
+  the "God's Eye pipeline"; no v2 was created). The export moved to
+  `docs/ondemand-workflows/ondemand-spatial-advanced-v1.json`.
+- Agent, skills and extension-key renames: the dashboard agent is the
+  **OnDemand Spatial Intelligence Agent**; the nine skills are
+  `ondemand-spatial-<x>` / "OnDemand Spatial <Skill Name>"
+  (`docs/ondemand-skills/ondemand-spatial-<x>.md`); the OpenAPI vendor
+  extension is `x-ondemand-spatial`; the selftest / contract-test /
+  capability-loop `externalUserId` prefixes are `ondemand-spatial-*`. The
+  registration pack (`docs/audit/dashboard-registration-pack.md`) carries the
+  full old → new ledger.
+- Serverless notice reworded for the new name, and a single upstream credit
+  line (naming the God's Eye View project and its author, MIT) added to the
+  first-run launcher — the only place that sentence appears.
+- Intentionally retained identifiers (persisted state and registered client
+  ids): `godsEyeView.*` localStorage keys, the `window.__godsEyeView` debug
+  global, `godsEyeView_*` Cesium stage names, the `gods-eye-view-transit` /
+  `Digitraffic-User: gods-eye-view` client identifiers and the User-Agent
+  suffix pointing at the upstream repository.
+
 - Distinguish PARTIAL vessel snapshots from STALE data in the layer panel, with
   accepted-record counts and unchanged retention, freshness and outage safeguards.
 
@@ -571,7 +614,7 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 - Separate explicit browser build settings from standalone environment loading
   and local provider middleware. Preserve provider behavior and root named exports.
 - Rename standalone browser startup to `src/standalone/` and add a Node-only
-  `ondemand-spatial-intelligence/build/vite` export with checked package ownership.
+  `ondemand-spatial/build/vite` export with checked package ownership.
 
 ### Development
 

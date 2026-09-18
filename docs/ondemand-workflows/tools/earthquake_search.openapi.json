@@ -1,14 +1,14 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "God's Eye earthquake_search",
+    "title": "OnDemand Spatial earthquake_search",
     "version": "1.0.0",
-    "description": "Search recent/historical earthquakes from the USGS FDSN Event Web Service by time window, magnitude range and geographic area (circle or bounding box), proxied by the God's Eye View serverless route `api/[...route].js` -> `server/serverless/earthquakes-route.js` -> `server/sources/usgs-earthquakes.js`. Returns observed events with UTC time, magnitude, depth, location, tsunami flag and USGS URL. No authentication is required."
+    "description": "Search recent/historical earthquakes from the USGS FDSN Event Web Service by time window, magnitude range and geographic area (circle or bounding box), proxied by the OnDemand Spatial serverless route `api/[...route].js` -> `server/serverless/earthquakes-route.js` -> `server/sources/usgs-earthquakes.js`. Returns observed events with UTC time, magnitude, depth, location, tsunami flag and USGS URL. No authentication is required."
   },
   "servers": [
     {
       "url": "https://<deployment>",
-      "description": "God's Eye deployment host — REPLACE with the READY Vercel preview URL or project domain before importing (see x-godseye.deployment); the sandbox emulator host is ephemeral"
+      "description": "OnDemand Spatial deployment host — REPLACE with the READY Vercel preview URL or project domain before importing (see x-ondemand-spatial.deployment); the sandbox emulator host is ephemeral"
     }
   ],
   "paths": {
@@ -443,7 +443,7 @@
       }
     }
   },
-  "x-godseye": {
+  "x-ondemand-spatial": {
     "deployment": {
       "stable_url": null,
       "status": "no Vercel deployment exists yet (2026-09-18T09:30Z): the build environment cannot create one (CLI guardrail; deployment API off-limits) and the credential supplied as VERCEL_TOKEN was the OnDemand API key, not a Vercel token — run scripts/vercel-file-deploy.mjs from an operator machine, then replace <deployment> with the READY preview URL (or the project domain)",

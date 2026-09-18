@@ -1,14 +1,14 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "God's Eye demo_timezone",
+    "title": "OnDemand Spatial demo_timezone",
     "version": "1.0.0",
     "description": "Dynamic-capability probe: nautical time zone (UTC offset = longitude/15°, rounded) and local-time estimate for a coordinate. Computed locally by server/sources/demo-timezone.js; no upstream provider. Completeness is always 'estimated'."
   },
   "servers": [
     {
       "url": "https://<deployment>",
-      "description": "God's Eye deployment host (replace)"
+      "description": "OnDemand Spatial deployment host (replace)"
     }
   ],
   "paths": {
@@ -112,7 +112,7 @@
       }
     }
   },
-  "x-godseye": {
+  "x-ondemand-spatial": {
     "capability_id": "demo.timezone",
     "registry_status": "registered-unverified",
     "ondemand_tool_id": null,
