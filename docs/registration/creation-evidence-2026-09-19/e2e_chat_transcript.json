@@ -1,0 +1,161 @@
+[
+ {
+  "step": "create_session",
+  "utc": "2026-09-19T11:40:52.219Z",
+  "request": {
+   "method": "POST",
+   "url": "https://api.on-demand.io/chat/v1/sessions",
+   "headers": {
+    "apikey": "<MASKED>",
+    "Content-Type": "application/json"
+   },
+   "body": {
+    "externalUserId": "ondemand-spatial-recheck-2026-09-19"
+   }
+  },
+  "response": {
+   "status": 201,
+   "body": {
+    "message": "Chat session created successfully",
+    "data": {
+     "id": "6aae74c46f9b84bf0f592378",
+     "companyId": "6692b763e851d28a036ab30e",
+     "externalUserId": "ondemand-spatial-recheck-2026-09-19",
+     "agentIds": [],
+     "pluginIds": [],
+     "contextMetadata": [],
+     "title": "",
+     "status": "draft",
+     "createdBy": "6692b763e851d28a036ab30f",
+     "createdAt": "2026-09-19T11:40:52.392533116Z",
+     "updatedAt": "2026-09-19T11:40:52.392533116Z",
+     "liveSettings": {
+      "enabled": false,
+      "mode": "on-events",
+      "destinations": {
+       "email": {
+        "enabled": false
+       },
+       "slack": {
+        "enabled": false
+       }
+      }
+     }
+    }
+   }
+  }
+ },
+ {
+  "step": "submit_query",
+  "utc": "2026-09-19T11:40:52.407Z",
+  "request": {
+   "method": "POST",
+   "url": "https://api.on-demand.io/chat/v1/sessions/6aae74c46f9b84bf0f592378/query",
+   "headers": {
+    "apikey": "<MASKED>",
+    "Content-Type": "application/json"
+   },
+   "body": {
+    "endpointId": null,
+    "query": "List the earthquakes above M4.5 in the last 24 hours (use the earthquake_search tool if it is available to you; otherwise say plainly that no earthquake tool is attached to this session).",
+    "responseMode": "sync",
+    "reasoningEffort": "low"
+   }
+  },
+  "response": {
+   "status": 400,
+   "body": {
+    "message": "endpointId is required",
+    "errorCode": "invalid_request"
+   }
+  }
+ },
+ {
+  "step": "submit_query (retry with endpointId)",
+  "utc": "2026-09-19T11:41:10.692Z",
+  "request": {
+   "method": "POST",
+   "url": "https://api.on-demand.io/chat/v1/sessions/6aae74c46f9b84bf0f592378/query",
+   "headers": {
+    "apikey": "<MASKED>",
+    "Content-Type": "application/json"
+   },
+   "body": {
+    "endpointId": null,
+    "query": "List the earthquakes above M4.5 in the last 24 hours (use the earthquake_search tool if it is available to you; otherwise say plainly that no earthquake tool is attached to this session).",
+    "responseMode": "sync",
+    "reasoningEffort": "low"
+   }
+  },
+  "response": {
+   "status": 400,
+   "body": {
+    "message": "endpointId is required",
+    "errorCode": "invalid_request"
+   }
+  }
+ },
+ {
+  "step": "submit_query (with endpointId)",
+  "utc": "2026-09-19T11:41:32.236Z",
+  "request": {
+   "method": "POST",
+   "url": "https://api.on-demand.io/chat/v1/sessions/6aae74c46f9b84bf0f592378/query",
+   "headers": {
+    "apikey": "<MASKED>",
+    "Content-Type": "application/json"
+   },
+   "body": {
+    "endpointId": "predefined-gemini-2.5-flash",
+    "query": "List the earthquakes above M4.5 in the last 24 hours (use the earthquake_search tool if it is available to you; otherwise say plainly that no earthquake tool is attached to this session).",
+    "responseMode": "sync",
+    "reasoningEffort": "low"
+   }
+  },
+  "response": {
+   "status": 400,
+   "body": {
+    "message": "endpointId predefined-gemini-2.5-flash is not active",
+    "errorCode": "invalid_request"
+   }
+  }
+ },
+ {
+  "step": "submit_query (active endpointId)",
+  "utc": "2026-09-19T11:41:54.095Z",
+  "request": {
+   "method": "POST",
+   "url": "https://api.on-demand.io/chat/v1/sessions/6aae74c46f9b84bf0f592378/query",
+   "headers": {
+    "apikey": "<MASKED>",
+    "Content-Type": "application/json"
+   },
+   "body": {
+    "endpointId": "predefined-gpt-5.6-luna",
+    "query": "List the earthquakes above M4.5 in the last 24 hours (use the earthquake_search tool if it is available to you; otherwise say plainly that no earthquake tool is attached to this session).",
+    "responseMode": "sync",
+    "reasoningEffort": "low"
+   }
+  },
+  "response": {
+   "status": 200,
+   "body": {
+    "message": "Chat query submitted successfully",
+    "data": {
+     "sessionId": "6aae74c46f9b84bf0f592378",
+     "messageId": "6aae750287dd0db069eb8983",
+     "answer": "No earthquake search tool is attached to this session, so I can\u2019t reliably list earthquakes above M4.5 from the last 24 hours.",
+     "metrics": {
+      "inputTokens": 1040,
+      "outputTokens": 66,
+      "totalTokens": 1106,
+      "ragTimeSec": 0.63,
+      "fulfillmentTimeSec": 1.78,
+      "totalTimeSec": 2.41
+     },
+     "status": "completed"
+    }
+   }
+  }
+ }
+]

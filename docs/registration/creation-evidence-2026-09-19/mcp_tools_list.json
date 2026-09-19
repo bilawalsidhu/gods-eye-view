@@ -1,0 +1,1689 @@
+{
+ "mcp_url": "https://mcp-server-prd.on-demand.io/mcp?apikey=<MASKED>",
+ "enumerated_at": "2026-09-19T11:33:28.462Z",
+ "server": {
+  "capabilities": {
+   "logging": {},
+   "tools": {
+    "listChanged": true
+   }
+  },
+  "protocolVersion": "2025-03-26",
+  "serverInfo": {
+   "name": "chat-proxy-mcp",
+   "version": "2.0.0"
+  }
+ },
+ "tools": [
+  {
+   "description": "Cancels a running workflow execution.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "executionId": {
+      "type": "string",
+      "description": "The unique ID of the execution to cancel"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "executionId"
+    ],
+    "additionalProperties": false
+   },
+   "name": "automation_api_execution_cancel"
+  },
+  {
+   "description": "Retrieves an execution by ID including status and timing.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "executionId": {
+      "type": "string",
+      "description": "The unique ID of the execution to retrieve"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "executionId"
+    ],
+    "additionalProperties": false
+   },
+   "name": "automation_api_execution_get_by_id"
+  },
+  {
+   "description": "Returns email delivery statistics for a workflow execution.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "executionId": {
+      "type": "string",
+      "description": "The unique ID of the execution"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "executionId"
+    ],
+    "additionalProperties": false
+   },
+   "name": "automation_api_execution_get_email_delivery_stats"
+  },
+  {
+   "description": "Retrieves execution logs for a workflow execution.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "executionId": {
+      "type": "string",
+      "description": "The unique ID of the execution"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "executionId"
+    ],
+    "additionalProperties": false
+   },
+   "name": "automation_api_execution_get_logs"
+  },
+  {
+   "description": "Retrieves node outputs for a workflow execution.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "executionId": {
+      "type": "string",
+      "description": "The unique ID of the execution"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "executionId"
+    ],
+    "additionalProperties": false
+   },
+   "name": "automation_api_execution_get_node_outputs"
+  },
+  {
+   "description": "Retrieves voice mode transcripts for a workflow execution.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "executionId": {
+      "type": "string",
+      "description": "The unique ID of the execution"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "executionId"
+    ],
+    "additionalProperties": false
+   },
+   "name": "automation_api_execution_get_transcript"
+  },
+  {
+   "description": "Lists executions for a workflow.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "workflowId": {
+      "type": "string",
+      "description": "The workflow ID to list executions for"
+     },
+     "afterId": {
+      "type": "string",
+      "description": "Pagination cursor (execution ID to start after)"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "workflowId"
+    ],
+    "additionalProperties": false
+   },
+   "name": "automation_api_execution_list"
+  },
+  {
+   "description": "Lists email delivery tracking records for a workflow execution.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "executionId": {
+      "type": "string",
+      "description": "The unique ID of the execution"
+     },
+     "afterId": {
+      "type": "string",
+      "description": "Pagination cursor"
+     },
+     "limit": {
+      "type": "integer",
+      "description": "Maximum number of records to return"
+     },
+     "status": {
+      "type": "string",
+      "description": "Filter by email delivery status"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "executionId"
+    ],
+    "additionalProperties": false
+   },
+   "name": "automation_api_execution_list_email_delivery_tracking"
+  },
+  {
+   "description": "Reports a problem with a workflow execution.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "executionId": {
+      "type": "string",
+      "description": "The unique ID of the execution"
+     },
+     "type": {
+      "type": "string",
+      "description": "Issue type"
+     },
+     "message": {
+      "type": "string",
+      "description": "Description of the problem"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "executionId",
+     "type",
+     "message"
+    ],
+    "additionalProperties": false
+   },
+   "name": "automation_api_execution_report_problem"
+  },
+  {
+   "description": "Activates a voice agent.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "voiceAgentId": {
+      "type": "string",
+      "description": "The unique ID of the voice agent to activate"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "voiceAgentId"
+    ],
+    "additionalProperties": false
+   },
+   "name": "automation_api_voice_agent_activate"
+  },
+  {
+   "description": "Deactivates a voice agent.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "voiceAgentId": {
+      "type": "string",
+      "description": "The unique ID of the voice agent to deactivate"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "voiceAgentId"
+    ],
+    "additionalProperties": false
+   },
+   "name": "automation_api_voice_agent_deactivate"
+  },
+  {
+   "description": "Retrieves a voice agent by ID including config and phone number.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "voiceAgentId": {
+      "type": "string",
+      "description": "The unique ID of the voice agent to retrieve"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "voiceAgentId"
+    ],
+    "additionalProperties": false
+   },
+   "name": "automation_api_voice_agent_get_by_id"
+  },
+  {
+   "description": "Lists voice agents with optional filters (name, active status).",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string",
+      "description": "Filter voice agents by name"
+     },
+     "isActive": {
+      "type": "boolean",
+      "description": "Filter by active status"
+     },
+     "afterId": {
+      "type": "string",
+      "description": "Pagination cursor (voice agent ID to start after)"
+     },
+     "resultCount": {
+      "type": "integer",
+      "description": "Maximum number of voice agents to return (default 50)"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "additionalProperties": false
+   },
+   "name": "automation_api_voice_agent_list"
+  },
+  {
+   "description": "Updates a voice agent name and configuration.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "voiceAgentId": {
+      "type": "string",
+      "description": "The unique ID of the voice agent to update"
+     },
+     "name": {
+      "type": "string",
+      "description": "Voice agent name"
+     },
+     "config": {
+      "type": "object",
+      "description": "Voice agent config: callerGreeting, persona, voice, pluginIDs, reasoningMode, instructionPrompt",
+      "additionalProperties": true
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "voiceAgentId",
+     "name",
+     "config"
+    ],
+    "additionalProperties": false
+   },
+   "name": "automation_api_voice_agent_update"
+  },
+  {
+   "description": "Retrieves a voice call record for a workflow execution.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "executionId": {
+      "type": "string",
+      "description": "The workflow execution ID to retrieve the voice call record for"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "executionId"
+    ],
+    "additionalProperties": false
+   },
+   "name": "automation_api_voice_call_get_by_execution_id"
+  },
+  {
+   "description": "Activates a workflow and sets up its trigger.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "workflowId": {
+      "type": "string",
+      "description": "The unique ID of the workflow to activate"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "workflowId"
+    ],
+    "additionalProperties": false
+   },
+   "name": "automation_api_workflow_activate"
+  },
+  {
+   "description": "Creates a new workflow with trigger, nodes, and delivery configuration.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string",
+      "description": "Workflow name"
+     },
+     "externalUserID": {
+      "type": "string",
+      "description": "Optional external user ID to associate with the workflow"
+     },
+     "trigger": {
+      "type": "object",
+      "description": "Workflow trigger configuration (type, cron, webhook, email, position, etc.)",
+      "additionalProperties": true
+     },
+     "nodes": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "additionalProperties": true
+      },
+      "description": "Array of workflow nodes (key, type, kind, llm, text, position, etc.)"
+     },
+     "delivery": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "additionalProperties": true
+      },
+      "description": "Array of delivery channel configurations (email, slack, webhook, phone)"
+     },
+     "contextMetadata": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "additionalProperties": true
+      },
+      "description": "Optional array of key-value context metadata pairs"
+     },
+     "enableMemory": {
+      "type": "boolean",
+      "description": "Whether to enable memory for this workflow"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "name",
+     "trigger",
+     "nodes",
+     "delivery"
+    ],
+    "additionalProperties": false
+   },
+   "name": "automation_api_workflow_create"
+  },
+  {
+   "description": "Deactivates a workflow and removes its trigger.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "workflowId": {
+      "type": "string",
+      "description": "The unique ID of the workflow to deactivate"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "workflowId"
+    ],
+    "additionalProperties": false
+   },
+   "name": "automation_api_workflow_deactivate"
+  },
+  {
+   "description": "Deletes a workflow by ID.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "workflowId": {
+      "type": "string",
+      "description": "The unique ID of the workflow to delete"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "workflowId"
+    ],
+    "additionalProperties": false
+   },
+   "name": "automation_api_workflow_delete"
+  },
+  {
+   "description": "Executes an active workflow. Returns an execution ID. Optionally pass toPhoneNumber for voice workflows.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "workflowId": {
+      "type": "string",
+      "description": "The unique ID of the workflow to execute"
+     },
+     "toPhoneNumber": {
+      "type": "string",
+      "description": "Optional phone number for voice/phone workflows (e.g. +1234567890)"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "workflowId"
+    ],
+    "additionalProperties": false
+   },
+   "name": "automation_api_workflow_execute"
+  },
+  {
+   "description": "Retrieves a workflow by ID including trigger, nodes, and delivery configuration.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "workflowId": {
+      "type": "string",
+      "description": "The unique ID of the workflow to retrieve"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "workflowId"
+    ],
+    "additionalProperties": false
+   },
+   "name": "automation_api_workflow_get_by_id"
+  },
+  {
+   "description": "Lists workflows with optional filters (keyword, active status, published status, external user ID).",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "after": {
+      "type": "string",
+      "description": "Pagination cursor (workflow ID to start after)"
+     },
+     "limit": {
+      "type": "integer",
+      "description": "Maximum number of workflows to return"
+     },
+     "keyword": {
+      "type": "string",
+      "description": "Search keyword to filter workflows by name"
+     },
+     "isActive": {
+      "type": "boolean",
+      "description": "Filter by active status"
+     },
+     "isPublished": {
+      "type": "boolean",
+      "description": "Filter by published status"
+     },
+     "externalUserID": {
+      "type": "string",
+      "description": "Filter by external user ID"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "additionalProperties": false
+   },
+   "name": "automation_api_workflow_list"
+  },
+  {
+   "description": "Updates the context metadata of a workflow.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "workflowId": {
+      "type": "string",
+      "description": "The unique ID of the workflow"
+     },
+     "contextMetadata": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "additionalProperties": true
+      },
+      "description": "Array of key-value context metadata pairs"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "workflowId",
+     "contextMetadata"
+    ],
+    "additionalProperties": false
+   },
+   "name": "automation_api_workflow_set_context_metadata"
+  },
+  {
+   "description": "Updates the name of a workflow.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "workflowId": {
+      "type": "string",
+      "description": "The unique ID of the workflow"
+     },
+     "name": {
+      "type": "string",
+      "description": "New workflow name"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "workflowId",
+     "name"
+    ],
+    "additionalProperties": false
+   },
+   "name": "automation_api_workflow_set_name"
+  },
+  {
+   "description": "Returns workflow statistics (total, active, published) for the company.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "externalUserID": {
+      "type": "string",
+      "description": "Optional external user ID to filter stats"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "additionalProperties": false
+   },
+   "name": "automation_api_workflow_stats"
+  },
+  {
+   "description": "Updates an existing workflow's trigger, nodes, and delivery configuration.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "workflowId": {
+      "type": "string",
+      "description": "The unique ID of the workflow to update"
+     },
+     "trigger": {
+      "type": "object",
+      "description": "Updated workflow trigger configuration",
+      "additionalProperties": true
+     },
+     "nodes": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "additionalProperties": true
+      },
+      "description": "Updated array of workflow nodes"
+     },
+     "delivery": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "additionalProperties": true
+      },
+      "description": "Updated array of delivery channel configurations"
+     },
+     "contextMetadata": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "additionalProperties": true
+      },
+      "description": "Optional updated context metadata"
+     },
+     "enableMemory": {
+      "type": "boolean",
+      "description": "Whether to enable memory for this workflow"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "workflowId",
+     "trigger",
+     "nodes",
+     "delivery"
+    ],
+    "additionalProperties": false
+   },
+   "name": "automation_api_workflow_update"
+  },
+  {
+   "description": "Get message by ID.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "sessionId": {
+      "type": "string",
+      "description": "The unique ID of the session"
+     },
+     "messageId": {
+      "type": "string",
+      "description": "The unique ID of the message to retrieve"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "sessionId",
+     "messageId"
+    ],
+    "additionalProperties": false
+   },
+   "name": "chat_v1_message_get_by_id"
+  },
+  {
+   "description": "Get all messages of a session.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "sessionId": {
+      "type": "string",
+      "description": "The unique ID of the session"
+     },
+     "externalUserId": {
+      "type": "string",
+      "description": "Filter messages by this user ID"
+     },
+     "sort": {
+      "type": "string",
+      "description": "Sort order: asc or desc (default desc)"
+     },
+     "cursor": {
+      "type": "string",
+      "description": "Pagination cursor for the next set of results"
+     },
+     "limit": {
+      "type": "integer",
+      "description": "Number of messages to return (default 10)"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "sessionId"
+    ],
+    "additionalProperties": false
+   },
+   "name": "chat_v1_messages_get_all"
+  },
+  {
+   "description": "Get a session by ID.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "sessionId": {
+      "type": "string",
+      "description": "The unique ID of the session to retrieve"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "sessionId"
+    ],
+    "additionalProperties": false
+   },
+   "name": "chat_v1_session_get_by_id"
+  },
+  {
+   "description": "Submits a query to an agent.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "sessionId": {
+      "type": "string",
+      "description": "The unique ID of the session to query"
+     },
+     "query": {
+      "type": "string",
+      "description": "The user's query text"
+     },
+     "endpointId": {
+      "type": "string",
+      "description": "The ID of the endpoint to send the query to"
+     },
+     "responseMode": {
+      "type": "string",
+      "description": "How to receive the response: sync, stream, or webhook"
+     },
+     "reasoningMode": {
+      "type": "string",
+      "description": "Controls reasoning complexity: low, medium, or max"
+     },
+     "reasoningEffort": {
+      "type": "string",
+      "description": "Controls reasoning effort: low, medium, or max"
+     },
+     "agentIds": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "Optional list of agent IDs to use for this query"
+     },
+     "modelConfigs": {
+      "type": "object",
+      "description": "Optional model configuration overrides for this query",
+      "additionalProperties": true
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "sessionId",
+     "query",
+     "endpointId",
+     "responseMode"
+    ],
+    "additionalProperties": false
+   },
+   "name": "chat_v1_session_submit_query"
+  },
+  {
+   "description": "Updates session metadata.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "sessionId": {
+      "type": "string",
+      "description": "The unique ID of the session to update"
+     },
+     "contextMetadata": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "additionalProperties": true
+      },
+      "description": "Array of key-value pairs to update session context"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "sessionId",
+     "contextMetadata"
+    ],
+    "additionalProperties": false
+   },
+   "name": "chat_v1_session_update_context"
+  },
+  {
+   "description": "Creates a new chat session.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "externalUserId": {
+      "type": "string",
+      "description": "A unique ID for the user (e.g. user-12345)"
+     },
+     "agentIds": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "Optional list of agent IDs to attach to this session"
+     },
+     "contextMetadata": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "additionalProperties": true
+      },
+      "description": "Optional array of key-value pairs for session context"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "externalUserId"
+    ],
+    "additionalProperties": false
+   },
+   "name": "chat_v1_sessions_create"
+  },
+  {
+   "description": "Lists all sessions.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "externalUserId": {
+      "type": "string",
+      "description": "Filter sessions by this user ID"
+     },
+     "sort": {
+      "type": "string",
+      "description": "Sort order: asc or desc (default desc)"
+     },
+     "cursor": {
+      "type": "string",
+      "description": "Pagination cursor for the next set of results"
+     },
+     "limit": {
+      "type": "integer",
+      "description": "Number of sessions to return (default 10)"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "additionalProperties": false
+   },
+   "name": "chat_v1_sessions_get_all"
+  },
+  {
+   "description": "Sends a plain-text email by publishing a send_email_core42 event to the CommEvents Redis stream.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "to": {
+      "type": "string",
+      "description": "Recipient email address"
+     },
+     "name": {
+      "type": "string",
+      "description": "Recipient name for the email template"
+     },
+     "subject": {
+      "type": "string",
+      "description": "Email subject line"
+     },
+     "body": {
+      "type": "string",
+      "description": "Plain text email body"
+     },
+     "params": {
+      "type": "string",
+      "description": "JSON object string for template params"
+     },
+     "companyId": {
+      "type": "string",
+      "description": "Company ID associated with the email event"
+     }
+    },
+    "required": [
+     "to",
+     "name",
+     "subject",
+     "body",
+     "params",
+     "companyId"
+    ],
+    "additionalProperties": false
+   },
+   "name": "comm_events_send_email"
+  },
+  {
+   "description": "Returns all available endpoints with their ID, name, and model ID.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "additionalProperties": false
+   },
+   "name": "config_v1_public_get_endpoints"
+  },
+  {
+   "description": "Returns the GitHub token stored for the company associated with the caller's API key.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "additionalProperties": false
+   },
+   "name": "config_v1_public_get_github_token"
+  },
+  {
+   "description": "Returns all available reasoning modes (predefined and user-defined), including mode ID, name, model name, and rank.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "additionalProperties": false
+   },
+   "name": "config_v1_public_get_reasoning_modes"
+  },
+  {
+   "description": "Creates a serverless application linked to a repository.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string",
+      "description": "Application name"
+     },
+     "dockerScriptPath": {
+      "type": "string",
+      "description": "Path to Dockerfile in the repository"
+     },
+     "appBuildMode": {
+      "type": "string",
+      "description": "Build mode (e.g. auto, manual)"
+     },
+     "branchName": {
+      "type": "string",
+      "description": "Git branch to build from"
+     },
+     "serverlessRepo": {
+      "type": "string",
+      "description": "ID of the serverless repository"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "name",
+     "serverlessRepo"
+    ],
+    "additionalProperties": false
+   },
+   "name": "config_v1_public_serverless_application_create"
+  },
+  {
+   "description": "Deletes a serverless application.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "applicationId": {
+      "type": "string",
+      "description": "The unique ID of the serverless application to delete"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "applicationId"
+    ],
+    "additionalProperties": false
+   },
+   "name": "config_v1_public_serverless_application_delete"
+  },
+  {
+   "description": "Lists all serverless applications.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "additionalProperties": false
+   },
+   "name": "config_v1_public_serverless_application_list"
+  },
+  {
+   "description": "Triggers a build for a serverless application.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "applicationId": {
+      "type": "string",
+      "description": "The unique ID of the serverless application to build"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "applicationId"
+    ],
+    "additionalProperties": false
+   },
+   "name": "config_v1_public_serverless_application_trigger_build"
+  },
+  {
+   "description": "Updates a serverless application.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "applicationId": {
+      "type": "string",
+      "description": "The unique ID of the serverless application"
+     },
+     "name": {
+      "type": "string",
+      "description": "Updated application name"
+     },
+     "dockerScriptPath": {
+      "type": "string",
+      "description": "Updated path to Dockerfile"
+     },
+     "appBuildMode": {
+      "type": "string",
+      "description": "Updated build mode"
+     },
+     "branchName": {
+      "type": "string",
+      "description": "Updated Git branch"
+     },
+     "serverlessRepo": {
+      "type": "string",
+      "description": "Updated serverless repository ID"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "applicationId"
+    ],
+    "additionalProperties": false
+   },
+   "name": "config_v1_public_serverless_application_update"
+  },
+  {
+   "description": "Retrieves container logs for a serverless endpoint.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "endpointId": {
+      "type": "string",
+      "description": "The serverless endpoint ID"
+     },
+     "type": {
+      "type": "string",
+      "description": "Log type filter"
+     },
+     "timeSpan": {
+      "type": "string",
+      "description": "Time span for logs (e.g. PT6H)"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "endpointId"
+    ],
+    "additionalProperties": false
+   },
+   "name": "config_v1_public_serverless_container_logs_get"
+  },
+  {
+   "description": "Creates a serverless endpoint for an application.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "targetPortNumber": {
+      "type": "integer",
+      "description": "Container port the endpoint listens on"
+     },
+     "application": {
+      "type": "string",
+      "description": "Serverless application ID"
+     },
+     "environment": {
+      "type": "string",
+      "description": "Deployment environment"
+     },
+     "endpointName": {
+      "type": "string",
+      "description": "Endpoint name"
+     },
+     "serverlessComputeType": {
+      "type": "string",
+      "description": "Compute type for the endpoint"
+     },
+     "maxInstanceCount": {
+      "type": "integer",
+      "description": "Maximum number of instances"
+     },
+     "minInstanceCount": {
+      "type": "integer",
+      "description": "Minimum number of instances"
+     },
+     "environmentVariables": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "additionalProperties": true
+      },
+      "description": "Array of {key, value} environment variables"
+     },
+     "authorization": {
+      "type": "object",
+      "description": "Optional authorization config (e.g. apiKey)",
+      "additionalProperties": true
+     },
+     "isPrivate": {
+      "type": "boolean",
+      "description": "Whether the endpoint is private"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "targetPortNumber",
+     "application",
+     "endpointName"
+    ],
+    "additionalProperties": false
+   },
+   "name": "config_v1_public_serverless_endpoint_create"
+  },
+  {
+   "description": "Deletes a serverless endpoint.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "endpointId": {
+      "type": "string",
+      "description": "The unique ID of the serverless endpoint to delete"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "endpointId"
+    ],
+    "additionalProperties": false
+   },
+   "name": "config_v1_public_serverless_endpoint_delete"
+  },
+  {
+   "description": "Lists all serverless endpoints.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "additionalProperties": false
+   },
+   "name": "config_v1_public_serverless_endpoint_list"
+  },
+  {
+   "description": "Triggers deployment of a serverless endpoint.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "endpointId": {
+      "type": "string",
+      "description": "The unique ID of the serverless endpoint to deploy"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "endpointId"
+    ],
+    "additionalProperties": false
+   },
+   "name": "config_v1_public_serverless_endpoint_trigger_deploy"
+  },
+  {
+   "description": "Updates a serverless endpoint.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "endpointId": {
+      "type": "string",
+      "description": "The unique ID of the serverless endpoint"
+     },
+     "targetPortNumber": {
+      "type": "integer",
+      "description": "Updated container port"
+     },
+     "application": {
+      "type": "string",
+      "description": "Updated application ID"
+     },
+     "environment": {
+      "type": "string",
+      "description": "Updated deployment environment"
+     },
+     "endpointName": {
+      "type": "string",
+      "description": "Updated endpoint name"
+     },
+     "serverlessComputeType": {
+      "type": "string",
+      "description": "Updated compute type"
+     },
+     "maxInstanceCount": {
+      "type": "integer",
+      "description": "Updated maximum instances"
+     },
+     "minInstanceCount": {
+      "type": "integer",
+      "description": "Updated minimum instances"
+     },
+     "environmentVariables": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "additionalProperties": true
+      },
+      "description": "Updated environment variables"
+     },
+     "authorization": {
+      "type": "object",
+      "description": "Updated authorization config",
+      "additionalProperties": true
+     },
+     "status": {
+      "type": "string",
+      "description": "Updated endpoint status"
+     },
+     "isPrivate": {
+      "type": "boolean",
+      "description": "Whether the endpoint is private"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "endpointId"
+    ],
+    "additionalProperties": false
+   },
+   "name": "config_v1_public_serverless_endpoint_update"
+  },
+  {
+   "description": "Retrieves image build details for a serverless application.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "applicationId": {
+      "type": "string",
+      "description": "The serverless application ID"
+     },
+     "runId": {
+      "type": "string",
+      "description": "Optional CI run ID"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "applicationId"
+    ],
+    "additionalProperties": false
+   },
+   "name": "config_v1_public_serverless_image_build_details_get"
+  },
+  {
+   "description": "Creates a serverless Git repository configuration.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "repoUrl": {
+      "type": "string",
+      "description": "Git repository URL"
+     },
+     "isRepoPublic": {
+      "type": "boolean",
+      "description": "Whether the repository is public"
+     },
+     "repoPlatform": {
+      "type": "string",
+      "description": "Repository platform (e.g. github, gitlab, bitbucket)"
+     },
+     "accessToken": {
+      "type": "string",
+      "description": "Access token for private repositories"
+     },
+     "name": {
+      "type": "string",
+      "description": "Repository display name"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "repoUrl",
+     "repoPlatform",
+     "name"
+    ],
+    "additionalProperties": false
+   },
+   "name": "config_v1_public_serverless_repo_create"
+  },
+  {
+   "description": "Deletes a serverless repository configuration.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "repoId": {
+      "type": "string",
+      "description": "The unique ID of the serverless repository to delete"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "repoId"
+    ],
+    "additionalProperties": false
+   },
+   "name": "config_v1_public_serverless_repo_delete"
+  },
+  {
+   "description": "Lists all serverless repository configurations.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "additionalProperties": false
+   },
+   "name": "config_v1_public_serverless_repo_list"
+  },
+  {
+   "description": "Updates a serverless repository configuration.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "repoId": {
+      "type": "string",
+      "description": "The unique ID of the serverless repository"
+     },
+     "repoUrl": {
+      "type": "string",
+      "description": "Updated Git repository URL"
+     },
+     "accessToken": {
+      "type": "string",
+      "description": "Updated access token for private repositories"
+     },
+     "isRepoPublic": {
+      "type": "boolean",
+      "description": "Whether the repository is public"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "repoId"
+    ],
+    "additionalProperties": false
+   },
+   "name": "config_v1_public_serverless_repo_update"
+  },
+  {
+   "description": "Create a plugin configuration for a plugin or agent. Accepts pluginId, active flag, and optional metadata/fields. Returns the created PluginConfiguration.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "pluginId": {
+      "type": "string",
+      "description": "The ID of the plugin or agent to configure"
+     },
+     "active": {
+      "type": "boolean",
+      "description": "true to enable the plugin configuration, false to disable"
+     },
+     "fields": {
+      "type": "object",
+      "description": "Optional fields object for the plugin configuration",
+      "additionalProperties": true
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "pluginId",
+     "active"
+    ],
+    "additionalProperties": false
+   },
+   "name": "plugin_v1_plugin_configuration_create"
+  },
+  {
+   "description": "Create a new plugin/agent. Requires name, identifier, description, logoUrl, type (chat|file), source (internal|external), and category. Returns the created plugin with its ID, pluginId, and agentId.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string",
+      "description": "Plugin name"
+     },
+     "identifier": {
+      "type": "string",
+      "description": "Plugin identifier/type (e.g. rest, mcp, internet, plugin_knowledge_chat)"
+     },
+     "description": {
+      "type": "string",
+      "description": "Plugin description"
+     },
+     "logoUrl": {
+      "type": "string",
+      "description": "URL of the plugin logo image"
+     },
+     "type": {
+      "type": "string",
+      "description": "Plugin type: chat or file"
+     },
+     "source": {
+      "type": "string",
+      "description": "Plugin source: internal or external"
+     },
+     "category": {
+      "type": "string",
+      "description": "Plugin category"
+     },
+     "fileSubType": {
+      "type": "string",
+      "description": "File plugin subtype: PRIMARYINGEST or SECONDARYINGEST (default PRIMARYINGEST)"
+     },
+     "chatSubType": {
+      "type": "string",
+      "description": "Chat plugin subtype: PRIMARYCHAT or SECONDARYCHAT (default PRIMARYCHAT)"
+     },
+     "conversationStarters": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "Optional list of conversation starter prompts"
+     },
+     "privacyPolicy": {
+      "type": "string",
+      "description": "Privacy policy URL or text"
+     },
+     "status": {
+      "type": "string",
+      "description": "Plugin status: private, public, or pending (default private)"
+     },
+     "action": {
+      "type": "object",
+      "description": "Optional plugin action config: {authentication, fields, schema, mcp}",
+      "additionalProperties": true
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "name",
+     "identifier",
+     "description",
+     "logoUrl",
+     "type",
+     "source",
+     "category"
+    ],
+    "additionalProperties": false
+   },
+   "name": "plugin_v1_plugin_create"
+  },
+  {
+   "description": "Generate a new AI-authored plugin/tool from a natural-language query (e.g. 'Create a tool to get weather by city using OpenWeather API'). Optionally accepts a sessionId.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "query": {
+      "type": "string",
+      "description": "Natural-language description of the tool to generate (e.g. 'Create a tool to get weather by city using OpenWeather API')"
+     },
+     "sessionId": {
+      "type": "string",
+      "description": "Optional session ID to associate with this generation request"
+     },
+     "isAutoSave": {
+      "type": "boolean",
+      "description": "If true, automatically save the generated tool (default false)"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "query"
+    ],
+    "additionalProperties": false
+   },
+   "name": "public_v1_plugin_ai_generated_tool_create"
+  },
+  {
+   "description": "Search for suggested plugins/agents by query. Returns plugin ID, name, description, logo URL, category, and type.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "query": {
+      "type": "string",
+      "description": "Search query to find relevant plugins/agents"
+     },
+     "limit": {
+      "type": "integer",
+      "description": "Maximum number of plugins to return (default 5)"
+     },
+     "timeoutMs": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default 300000)"
+     }
+    },
+    "required": [
+     "query"
+    ],
+    "additionalProperties": false
+   },
+   "name": "public_v1_suggest_plugins"
+  }
+ ]
+}

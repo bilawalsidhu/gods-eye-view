@@ -1,0 +1,173 @@
+[
+ {
+  "label": "plugin create (mcp-tool-name-derived)",
+  "method": "POST",
+  "url": "https://api.on-demand.io/plugin/v1/plugin",
+  "status": 404,
+  "utc": "2026-09-19T11:37:43.915Z",
+  "content_type": "text/plain; charset=utf-8",
+  "body_excerpt": "Not Found"
+ },
+ {
+  "label": "plugin create (plural)",
+  "method": "POST",
+  "url": "https://api.on-demand.io/plugin/v1/plugins",
+  "status": 404,
+  "utc": "2026-09-19T11:37:44.464Z",
+  "content_type": "text/plain; charset=utf-8",
+  "body_excerpt": "Not Found"
+ },
+ {
+  "label": "plugin create (/create)",
+  "method": "POST",
+  "url": "https://api.on-demand.io/plugin/v1/create",
+  "status": 404,
+  "utc": "2026-09-19T11:37:45.000Z",
+  "content_type": "text/plain; charset=utf-8",
+  "body_excerpt": "Not Found"
+ },
+ {
+  "label": "plugin create (root)",
+  "method": "POST",
+  "url": "https://api.on-demand.io/plugin/v1",
+  "status": 500,
+  "utc": "2026-09-19T11:37:45.536Z",
+  "content_type": "",
+  "body_excerpt": ""
+ },
+ {
+  "label": "plugins (bare)",
+  "method": "POST",
+  "url": "https://api.on-demand.io/plugins",
+  "status": 404,
+  "utc": "2026-09-19T11:37:45.983Z",
+  "content_type": "text/plain; charset=utf-8",
+  "body_excerpt": "{\"error_msg\":\"404 Route Not Found\"}\n"
+ },
+ {
+  "label": "agents (bare)",
+  "method": "POST",
+  "url": "https://api.on-demand.io/agents",
+  "status": 404,
+  "utc": "2026-09-19T11:37:46.363Z",
+  "content_type": "text/plain; charset=utf-8",
+  "body_excerpt": "{\"error_msg\":\"404 Route Not Found\"}\n"
+ },
+ {
+  "label": "chat agents",
+  "method": "POST",
+  "url": "https://api.on-demand.io/chat/v1/agents",
+  "status": 404,
+  "utc": "2026-09-19T11:37:46.718Z",
+  "content_type": "application/json; charset=utf-8",
+  "body_excerpt": "{\"message\":\"Route not found\",\"errorCode\":\"not_found\"}"
+ },
+ {
+  "label": "skills (bare)",
+  "method": "POST",
+  "url": "https://api.on-demand.io/skills",
+  "status": 404,
+  "utc": "2026-09-19T11:37:47.473Z",
+  "content_type": "text/plain; charset=utf-8",
+  "body_excerpt": "{\"error_msg\":\"404 Route Not Found\"}\n"
+ },
+ {
+  "label": "skills v1",
+  "method": "POST",
+  "url": "https://api.on-demand.io/skills/v1/skills",
+  "status": 404,
+  "utc": "2026-09-19T11:37:47.870Z",
+  "content_type": "text/plain; charset=utf-8",
+  "body_excerpt": "{\"error_msg\":\"404 Route Not Found\"}\n"
+ },
+ {
+  "label": "skill under plugin svc",
+  "method": "POST",
+  "url": "https://api.on-demand.io/plugin/v1/skills",
+  "status": 404,
+  "utc": "2026-09-19T11:37:48.244Z",
+  "content_type": "text/plain; charset=utf-8",
+  "body_excerpt": "Not Found"
+ },
+ {
+  "label": "skills under automation",
+  "method": "POST",
+  "url": "https://api.on-demand.io/automation/api/skills",
+  "status": 404,
+  "utc": "2026-09-19T11:37:48.743Z",
+  "content_type": "text/plain; charset=utf-8",
+  "body_excerpt": "Not Found"
+ },
+ {
+  "label": "skills list (bare)",
+  "method": "GET",
+  "url": "https://api.on-demand.io/skills",
+  "status": 404,
+  "utc": "2026-09-19T11:37:49.183Z",
+  "content_type": "text/plain; charset=utf-8",
+  "body_excerpt": "{\"error_msg\":\"404 Route Not Found\"}\n"
+ },
+ {
+  "label": "skills list under plugin svc",
+  "method": "GET",
+  "url": "https://api.on-demand.io/plugin/v1/skills",
+  "status": 400,
+  "utc": "2026-09-19T11:37:49.565Z",
+  "content_type": "application/json; charset=utf-8",
+  "body_excerpt": "{\"message\":\"Agent plugin not found\",\"errorCode\":\"invalid_request\"}"
+ },
+ {
+  "label": "agent tools list (documented guide-only)",
+  "method": "GET",
+  "url": "https://api.on-demand.io/plugin/v1/list?page=1&limit=5",
+  "status": 200,
+  "utc": "2026-09-19T11:37:50.022Z",
+  "content_type": "application/json; charset=utf-8",
+  "body_excerpt": "{\"message\":\"Agent fetched successfully\",\"page\":1,\"limit\":5,\"data\":{\"total\":0}}"
+ },
+ {
+  "label": "plugin config create (mcp-tool-name-derived)",
+  "method": "POST",
+  "url": "https://api.on-demand.io/plugin/v1/plugin-configuration",
+  "status": 404,
+  "utc": "2026-09-19T11:37:50.479Z",
+  "content_type": "text/plain; charset=utf-8",
+  "body_excerpt": "Not Found"
+ },
+ {
+  "label": "ai-generated tool (mcp-tool-name-derived)",
+  "method": "POST",
+  "url": "https://api.on-demand.io/public/v1/plugin/ai-generated-tool",
+  "status": 404,
+  "utc": "2026-09-19T11:37:51.008Z",
+  "content_type": "text/plain; charset=utf-8",
+  "body_excerpt": "{\"error_msg\":\"404 Route Not Found\"}\n"
+ },
+ {
+  "label": "suggest plugins (mcp-tool-name-derived)",
+  "method": "GET",
+  "url": "https://api.on-demand.io/public/v1/suggest-plugins?query=earthquake",
+  "status": 404,
+  "utc": "2026-09-19T11:37:51.361Z",
+  "content_type": "text/plain; charset=utf-8",
+  "body_excerpt": "{\"error_msg\":\"404 Route Not Found\"}\n"
+ },
+ {
+  "label": "plugin create diagnostic: empty body",
+  "method": "POST",
+  "url": "https://api.on-demand.io/plugin/v1",
+  "status": 400,
+  "utc": "2026-09-19T11:38:31.851Z",
+  "content_type": "application/json; charset=utf-8",
+  "body_excerpt": "{\"message\":\"Key: 'CreatePluginRequest.Name' Error:Field validation for 'Name' failed on the 'required' tag\\nKey: 'CreatePluginRequest.Identifier' Error:Field validation for 'Identifier' failed on the 'required' tag\\nKey: 'CreatePluginRequest.Description' Error:Field validation for 'Description' fail"
+ },
+ {
+  "label": "plugin create diagnostic: name only",
+  "method": "POST",
+  "url": "https://api.on-demand.io/plugin/v1",
+  "status": 400,
+  "utc": "2026-09-19T11:38:32.082Z",
+  "content_type": "application/json; charset=utf-8",
+  "body_excerpt": "{\"message\":\"Key: 'CreatePluginRequest.Identifier' Error:Field validation for 'Identifier' failed on the 'required' tag\\nKey: 'CreatePluginRequest.Description' Error:Field validation for 'Description' failed on the 'required' tag\\nKey: 'CreatePluginRequest.LogoUrl' Error:Field validation for 'LogoUrl"
+ }
+]

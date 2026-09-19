@@ -1,0 +1,263 @@
+{
+ "message": "success",
+ "data": {
+  "id": "6aace534859f7b0abb53d99a",
+  "name": "OnDemand Spatial Advanced Workflow",
+  "companyID": "6692b763e851d28a036ab30e",
+  "createdByUserID": "6692b763e851d28a036ab30f",
+  "isActive": true,
+  "createdAtInMilliseconds": 1789715764702,
+  "lastModifiedAtInMilliseconds": 1789715764702,
+  "enableMemory": false,
+  "trigger": {
+   "type": "webhook",
+   "webhook": {
+    "auth": {
+     "username": "",
+     "password": ""
+    }
+   },
+   "position": {
+    "x": -520,
+    "y": 200
+   },
+   "measured": {
+    "width": 0,
+    "height": 0
+   },
+   "nextNodeKeys": [
+    "session_context"
+   ]
+  },
+  "nodes": [
+   {
+    "key": "session_context",
+    "type": "llm",
+    "kind": "source",
+    "nextNodeKeys": [
+     "spatial_context_builder"
+    ],
+    "llm": {
+     "fulfillmentPrompt": "You are the Session Context node of the God's Eye spatial intelligence pipeline (workflow \"GodsEye Advanced Spatial Workflow\" v1). You normalise the raw run input into a session envelope. OUTPUT RULES: respond with ONE JSON object and nothing else \u2014 no prose, no Markdown fences, no comments. Never invent entities, coordinates, ids or measurements that are not present in your input; when something is missing write null or an empty array. Keep every string short.",
+     "prompt": "RAW INPUT (the trigger payload \u2014 the JSON object sent under the webhook body's \"payload\" field):\n{trigger}\n\nIf the raw input above is a JSON object, use it. It may contain: \"query\" (string), \"spatialContext\" (object with the fields camera, viewport, center, altitude, zoom, viewScale, mapStack, visibleBounds, activeLayers, selectedEntity, trackedEntity, visibleEntities, timeline, investigation, userAction), \"capabilityCatalogue\" (array), \"session\" (object: sessionId, externalUserId, locale, tier, priorTurns[]), \"investigation\" (object or null).\n\nIf the raw input is empty, missing, an unresolved placeholder such as \"{trigger}\", or not JSON (this happens when the workflow is started through the API execute endpoint, which carries no body), you are in SELFTEST mode: use exactly this fixture as the input and set \"mode\" to \"selftest\":\n{\"query\":\"What is unusual around this airport?\",\"spatialContext\":{\"camera\":{\"latitude\":24.4331,\"longitude\":54.6511,\"heightM\":12500,\"headingDeg\":0,\"pitchDeg\":-78,\"rollDeg\":0},\"viewport\":{\"widthPx\":1920,\"heightPx\":1080},\"center\":{\"latitude\":24.4331,\"longitude\":54.6511},\"altitude\":12500,\"zoom\":12.4,\"viewScale\":\"airport\",\"mapStack\":\"photoreal\",\"visibleBounds\":{\"north\":24.52,\"south\":24.35,\"east\":54.78,\"west\":54.52},\"activeLayers\":[\"flights\",\"earthquakes\",\"ais-live-vessels\"],\"selectedEntity\":null,\"trackedEntity\":null,\"visibleEntities\":[{\"layerId\":\"flights\",\"id\":\"icao24:896180\",\"callsign\":\"ETD11\",\"latitude\":24.451,\"longitude\":54.703,\"altitudeM\":1130,\"speedKts\":168,\"headingDeg\":311,\"squawk\":\"4021\",\"onGround\":false,\"source\":\"adsb\"},{\"layerId\":\"flights\",\"id\":\"icao24:8963f2\",\"callsign\":\"ETD9\",\"latitude\":24.419,\"longitude\":54.632,\"altitudeM\":0,\"speedKts\":12,\"headingDeg\":130,\"squawk\":\"2000\",\"onGround\":true,\"source\":\"adsb\"},{\"layerId\":\"flights\",\"id\":\"icao24:4b1a0c\",\"callsign\":\"SWR9DE\",\"latitude\":24.489,\"longitude\":54.571,\"altitudeM\":3350,\"speedKts\":240,\"headingDeg\":96,\"squawk\":\"7700\",\"onGround\":false,\"source\":\"adsb\"},{\"layerId\":\"ais-live-vessels\",\"id\":\"mmsi:470123000\",\"name\":\"AL DHAFRA 7\",\"latitude\":24.512,\"longitude\":54.612,\"speedKts\":0.2,\"courseDeg\":45,\"shipType\":\"tug\",\"navStatus\":\"moored\",\"source\":\"ais\"},{\"layerId\":\"ais-live-vessels\",\"id\":\"mmsi:636019876\",\"name\":\"MSC KHALIFA\",\"latitude\":24.535,\"longitude\":54.66,\"speedKts\":9.8,\"courseDeg\":275,\"shipType\":\"cargo\",\"navStatus\":\"under way using engine\",\"source\":\"ais\"}],\"timeline\":{\"mode\":\"live\",\"now\":\"2026-09-18T07:16:04.334Z\",\"playbackRate\":1},\"investigation\":null,\"userAction\":\"query\"},\"capabilityCatalogue\":[{\"id\":\"earthquake.search\",\"ondemand_tool\":\"earthquake_search\",\"route\":\"/api/sources/earthquakes\",\"provider\":\"USGS FDSN Event\",\"coverage\":\"observed\",\"description\":\"Search recent/historical earthquakes by time window, magnitude and circle (latitude+longitude+maxradiuskm) or bounding box.\",\"params\":[\"starttime\",\"endtime\",\"minmagnitude\",\"maxmagnitude\",\"latitude\",\"longitude\",\"maxradiuskm\",\"minlatitude\",\"maxlatitude\",\"minlongitude\",\"maxlongitude\",\"limit\",\"orderby\",\"mode\"]}]}\n\nReturn exactly: {\"mode\": \"live\" | \"selftest\", \"session\": {\"sessionId\": string|null, \"externalUserId\": string|null, \"locale\": string|null, \"tier\": \"ASK\"|\"INVESTIGATE\"|\"DEEP\"|null, \"priorTurns\": []}, \"query\": string, \"rawSpatialContext\": object|null, \"capabilityCatalogue\": array, \"investigation\": object|null, \"receivedAtUtc\": string|null}. Copy rawSpatialContext and capabilityCatalogue through unchanged.",
+     "model": "predefined-gpt-5.6-luna"
+    },
+    "position": {
+     "x": -200,
+     "y": 200
+    },
+    "measured": {
+     "width": 0,
+     "height": 0
+    }
+   },
+   {
+    "key": "spatial_context_builder",
+    "type": "llm",
+    "kind": "intermediate",
+    "dependencies": [
+     {
+      "nodeKey": "session_context"
+     }
+    ],
+    "nextNodeKeys": [
+     "intent_classifier"
+    ],
+    "llm": {
+     "fulfillmentPrompt": "You are the Spatial Context Builder node of the God's Eye pipeline. You validate and normalise the \u00a713 spatial-context object and derive compact geometry facts. OUTPUT RULES: respond with ONE JSON object and nothing else \u2014 no prose, no Markdown fences, no comments. Never invent entities, coordinates, ids or measurements that are not present in your input; when something is missing write null or an empty array. Keep every string short.",
+     "prompt": "SESSION ENVELOPE (output of the previous node):\n{session_context}\n\nBuild \"spatialContext\" with exactly these keys, in this order: camera, viewport, center, altitude, zoom, viewScale, mapStack, visibleBounds, activeLayers, selectedEntity, trackedEntity, visibleEntities, timeline, investigation, userAction. Rules: copy present values; set absent ones to null (arrays to []); \"center\" must be {latitude, longitude}; \"visibleBounds\" must be {north, south, east, west}; \"activeLayers\" must be an array of layer ids; \"visibleEntities\" must be an array of objects each keeping at least layerId, id, latitude, longitude plus every other field present; \"timeline\" must keep mode and now; \"userAction\" must be one of query|select|track|navigate|annotate|unknown.\nAlso compute \"derived\": {\"viewRadiusKm\": number|null (half the visibleBounds diagonal, great-circle, rounded to 0.1), \"entityCounts\": {\"<layerId>\": count}, \"airborne\": count of visibleEntities with onGround === false, \"onGround\": count with onGround === true, \"emergencySquawks\": [ids whose squawk is 7500, 7600 or 7700], \"vesselsUnderWay\": count of vessel entities whose speedKts > 1}.\nReturn exactly: {\"mode\": string, \"session\": object, \"query\": string, \"spatialContext\": object, \"derived\": object, \"capabilityCatalogue\": array, \"investigation\": object|null, \"contextWarnings\": [strings describing any field that was missing or malformed]}.",
+     "model": "predefined-gpt-5.6-luna"
+    },
+    "position": {
+     "x": 120,
+     "y": 200
+    },
+    "measured": {
+     "width": 0,
+     "height": 0
+    }
+   },
+   {
+    "key": "intent_classifier",
+    "type": "llm",
+    "kind": "intermediate",
+    "dependencies": [
+     {
+      "nodeKey": "spatial_context_builder"
+     }
+    ],
+    "nextNodeKeys": [
+     "capability_resolver"
+    ],
+    "llm": {
+     "fulfillmentPrompt": "You are the Intent Classifier node of the God's Eye pipeline. Classify quickly and tersely (low reasoning effort): no analysis, no explanation beyond one sentence. OUTPUT RULES: respond with ONE JSON object and nothing else \u2014 no prose, no Markdown fences, no comments. Never invent entities, coordinates, ids or measurements that are not present in your input; when something is missing write null or an empty array. Keep every string short.",
+     "prompt": "PIPELINE STATE (output of the previous node):\n{spatial_context_builder}\n\nClassify the user query against the spatial context. Return exactly: {\"intent\": one of \"anomaly_scan\" | \"entity_lookup\" | \"area_summary\" | \"navigate\" | \"layer_control\" | \"temporal_query\" | \"compare\" | \"explain\" | \"other\", \"confidence\": number 0-1, \"tier\": \"ASK\" | \"INVESTIGATE\" | \"DEEP\" (ASK = one fact or one navigation step; INVESTIGATE = needs cross-layer reasoning or an external capability; DEEP = multi-step investigation with evidence chains), \"focus\": {\"entityIds\": [ids from visibleEntities that the query is about, or []], \"layers\": [layer ids the query concerns], \"timeWindow\": {\"start\": ISO|null, \"end\": ISO|null}}, \"needsExternalData\": boolean, \"rationale\": one short sentence, \"state\": <the PIPELINE STATE object copied through unchanged>}.",
+     "model": "predefined-gpt-5.6-luna"
+    },
+    "position": {
+     "x": 440,
+     "y": 200
+    },
+    "measured": {
+     "width": 0,
+     "height": 0
+    }
+   },
+   {
+    "key": "capability_resolver",
+    "type": "llm",
+    "kind": "intermediate",
+    "dependencies": [
+     {
+      "nodeKey": "intent_classifier"
+     }
+    ],
+    "nextNodeKeys": [
+     "planner"
+    ],
+    "llm": {
+     "fulfillmentPrompt": "You are the Capability Resolver node of the God's Eye pipeline. You choose capabilities ONLY from the capability catalogue carried in the input; you never invent a capability, tool, route or parameter name. OUTPUT RULES: respond with ONE JSON object and nothing else \u2014 no prose, no Markdown fences, no comments. Never invent entities, coordinates, ids or measurements that are not present in your input; when something is missing write null or an empty array. Keep every string short.",
+     "prompt": "CLASSIFIED STATE (output of the previous node):\n{intent_classifier}\n\nRead state.capabilityCatalogue (each entry: id, ondemand_tool, route, provider, coverage, description, params[]). Select every capability whose description serves the intent and the active layers (for an anomaly scan over an airport with the earthquakes layer active, seismic context within a few hundred km over the last 30 days is relevant). For each selected capability build \"params\" using ONLY names listed in that entry's params[]; derive geographic values from state.spatialContext.center / visibleBounds and time values from state.spatialContext.timeline.now.\nReturn exactly: {\"selectedCapabilityIds\": [ids], \"calls\": [{\"capabilityId\": id, \"ondemandTool\": string, \"route\": string, \"params\": object, \"purpose\": one short sentence}], \"unmetNeeds\": [short strings for data the query needs but no catalogued capability provides], \"intent\": <intent object from the input without its state>, \"state\": <state copied through unchanged>}.",
+     "model": "predefined-gpt-5.6-luna"
+    },
+    "position": {
+     "x": 760,
+     "y": 200
+    },
+    "measured": {
+     "width": 0,
+     "height": 0
+    }
+   },
+   {
+    "key": "planner",
+    "type": "llm",
+    "kind": "intermediate",
+    "dependencies": [
+     {
+      "nodeKey": "capability_resolver"
+     }
+    ],
+    "nextNodeKeys": [
+     "verification"
+    ],
+    "llm": {
+     "fulfillmentPrompt": "You are the Planner node of the God's Eye pipeline. You produce an evidence-first analysis plan and the candidate findings that the in-view data already supports. Distinguish OBSERVED facts (present in visibleEntities / derived) from INFERENCES and from UNKNOWNS. OUTPUT RULES: respond with ONE JSON object and nothing else \u2014 no prose, no Markdown fences, no comments. Never invent entities, coordinates, ids or measurements that are not present in your input; when something is missing write null or an empty array. Keep every string short.",
+     "prompt": "RESOLVED STATE (output of the previous node):\n{capability_resolver}\n\nUsing state.spatialContext, state.derived, intent and calls, produce: \"steps\": ordered list of {\"id\": \"s1\"\u2026, \"kind\": \"observe\"|\"call_capability\"|\"compare\"|\"infer\"|\"present\", \"description\": short, \"usesCapabilityId\": id|null, \"inputs\": [entity ids or field names]}; \"candidateFindings\": [{\"id\": \"f1\"\u2026, \"claim\": one sentence, \"kind\": \"observed\"|\"inferred\", \"supportingEntityIds\": [ids], \"supportingFields\": [field paths], \"severity\": \"info\"|\"notable\"|\"high\"}] \u2014 an emergency squawk (7500/7600/7700) on an airborne aircraft, an aircraft moving fast while onGround, a vessel under way inside an airport approach corridor, or a recent M\u22654 earthquake within the view radius are all at least \"notable\"; \"assumptions\": [short strings]; \"unknowns\": [short strings, including every capability call whose result is not available inside this workflow run].\nReturn exactly: {\"plan\": {\"steps\": [...], \"candidateFindings\": [...], \"assumptions\": [...], \"unknowns\": [...]}, \"calls\": <copied>, \"intent\": <copied>, \"state\": <state copied through unchanged>}.",
+     "model": "predefined-claude-sonnet-5"
+    },
+    "position": {
+     "x": 1080,
+     "y": 200
+    },
+    "measured": {
+     "width": 0,
+     "height": 0
+    }
+   },
+   {
+    "key": "verification",
+    "type": "llm",
+    "kind": "intermediate",
+    "dependencies": [
+     {
+      "nodeKey": "planner"
+     }
+    ],
+    "nextNodeKeys": [
+     "spatial_action_planner"
+    ],
+    "llm": {
+     "fulfillmentPrompt": "You are the Verification node of the God's Eye pipeline. You are adversarial: re-check every candidate finding against the raw spatialContext fields and reject anything not literally supported by the input. OUTPUT RULES: respond with ONE JSON object and nothing else \u2014 no prose, no Markdown fences, no comments. Never invent entities, coordinates, ids or measurements that are not present in your input; when something is missing write null or an empty array. Keep every string short.",
+     "prompt": "PLANNED STATE (output of the previous node):\n{planner}\n\nFor each plan.candidateFindings entry: locate the supporting entity/field values in state.spatialContext; mark \"verified\" only if every supporting value exists and the claim follows from it; \"unverified\" if support is partial; \"rejected\" if contradicted or unsupported. Downgrade any severity that is not justified. Add \"evidence\": [{\"findingId\": id, \"entityId\": id|null, \"field\": path, \"value\": the literal value, \"sourceLayer\": layerId|null}] with one entry per supporting value actually found.\nReturn exactly: {\"findings\": [{\"id\",\"claim\",\"kind\",\"status\": \"verified\"|\"unverified\"|\"rejected\",\"severity\",\"supportingEntityIds\",\"note\": short}], \"evidence\": [...], \"unknowns\": <plan.unknowns plus anything new>, \"calls\": <copied>, \"intent\": <copied>, \"state\": <state copied through unchanged>}.",
+     "model": "predefined-claude-sonnet-5"
+    },
+    "position": {
+     "x": 1400,
+     "y": 200
+    },
+    "measured": {
+     "width": 0,
+     "height": 0
+    }
+   },
+   {
+    "key": "spatial_action_planner",
+    "type": "llm",
+    "kind": "intermediate",
+    "dependencies": [
+     {
+      "nodeKey": "verification"
+     }
+    ],
+    "nextNodeKeys": [
+     "synthesis"
+    ],
+    "llm": {
+     "fulfillmentPrompt": "You are the Spatial Action Planner node of the God's Eye pipeline. You emit the MapAction list the client will execute. You may ONLY use these 28 action names, with ONLY the parameter keys listed for each (a trailing ? marks an optional parameter; enum[...] lists the only legal values):\nfly_to_location(locationId?:enum[austin|sf|nyc|tokyo|london|paris|dubai|dc], query?:string, latitude?:number, longitude?:number, viewMode?:enum[close|overview], rangeM?:number, waitForArrival?:boolean)\nselect_nearest_aircraft(layerId:enum[flights|military], locationId?:enum[austin|sf|nyc|tokyo|london|paris|dubai|dc], locationQuery?:string, latitude?:number, longitude?:number)\nadjust_camera_zoom(direction:enum[in|out], amount:enum[little|medium|lot])\nzoom_to_globe()\nset_layer_visibility(layerId:enum[flights|military|earthquakes|satellites|rocket-launches|traffic|cctv|radio|bikeshare|ais-live-vessels|local-datacenters|local-dams|telegeography-submarine-cables|local-firms|alpr-cameras], enabled:boolean)\nshow_data_layers_menu(layerId?:enum[flights|military|earthquakes|satellites|traffic|cctv|radio|bikeshare|ais-live-vessels|local-datacenters|local-dams|telegeography-submarine-cables|local-firms|alpr-cameras])\nset_panel_open(panelId:enum[data-panel|location-bar|control-panel|cctv-panel|radio-panel|scene-panel|pp-toggles|global-context-panel], open:boolean)\nset_context_mode(mode:enum[off|contacts|flights|space-missions|missions])\ncontrol_cockpit(action:enum[enter|exit|previous|next|prev|status], targetLayer?:enum[flights|military|ais-live-vessels|military-installations], aircraftClass?:string)\nset_visual_style(style:enum[normal|retro|surveillance|thermal|anime|noir|snow])\nget_entity_context(scope?:enum[auto|selected|in_view], layerId?:enum[local-datacenters|local-dams|telegeography-submarine-cables|local-firms], limit?:number)\nget_current_view_state()\nset_hud(visible?:enum[on|off|auto], layout?:enum[tactical|operator|minimal])\nset_detection(enabled?:boolean, mode?:enum[sparse|balanced|dense], densityPct?:number, allocationStrategy?:enum[elastic|weighted])\nset_map_stack(stack:enum[photoreal|bing-aerial|bing-labels|esri-imagery|osm])\nset_post_processing(bloom?:object, sharpen?:object)\ncontrol_scene(action:enum[list|play|stop|next|status], sceneId?:string)\ncontrol_cctv(action:enum[enable|disable|select|next|prev|nearest|focus|coverage|viewshed|adjust|projection|autohop], cameraQuery?:string, enabled?:boolean)\ncontrol_radio(action:enum[enable|disable|play|resume|pause|stop|next|previous|volume|select|status], volumePct?:number, category?:enum[all|news|talk|weather|public-safety|aviation-marine|traffic-transit|music], locationId?:enum[austin|sf|nyc|tokyo|london|paris|dubai|dc], locationQuery?:string, latitude?:number, longitude?:number, country?:string, stationQuery?:string)\ntrack_entity(query:string, layerId?:string)\nstop_tracking()\nframe_overhead(target:enum[flights|military|satellites|vessels], radiusKm?:number)\nannotate_map(annotations:array<object>, flyTo?:boolean, persist?:boolean)\nclear_annotations()\nmove_camera(motion:enum[orbit|pan|tilt|rotate|stop], direction?:enum[left|right|up|down], speed?:enum[slow|normal|fast], mode?:enum[once|continuous])\nfly_route(label?:string, speed?:enum[slow|normal|fast])\nanalyst_query(layers?:array<string>, scope?:object, filters?:array<object>, sortBy?:string, sortDir?:enum[asc|desc], limit?:number, followUp?:boolean)\nnext_iss_pass(latitude?:number, longitude?:number, minElevationDeg?:number)\n\nAny action name or parameter key not in this list is forbidden. OUTPUT RULES: respond with ONE JSON object and nothing else \u2014 no prose, no Markdown fences, no comments. Never invent entities, coordinates, ids or measurements that are not present in your input; when something is missing write null or an empty array. Keep every string short.",
+     "prompt": "VERIFIED STATE (output of the previous node):\n{verification}\n\nPlan at most 6 actions that best present the verified findings to the analyst: e.g. fly_to_location with latitude/longitude/rangeM to frame the area of interest, track_entity for a verified anomalous entity (query = its callsign or name), set_layer_visibility to enable a layer the findings need, annotate_map to mark verified findings (each annotation an object with \"type\", \"latitude\", \"longitude\", \"label\"), analyst_query for a follow-up data question, frame_overhead to review traffic. Never emit an action for a rejected finding. Every action must be {\"name\": <one of the 28 names>, \"params\": {<only legal keys>}, \"reason\": short, \"findingIds\": [ids]}.\nReturn exactly: {\"actions\": [...], \"suggestedNextActions\": [{\"label\": short imperative, \"action\": {\"name\", \"params\"} | null}], \"findings\": <copied>, \"evidence\": <copied>, \"unknowns\": <copied>, \"calls\": <copied>, \"intent\": <copied>, \"state\": <state copied through unchanged>}.",
+     "model": "predefined-claude-sonnet-5"
+    },
+    "position": {
+     "x": 1720,
+     "y": 200
+    },
+    "measured": {
+     "width": 0,
+     "height": 0
+    }
+   },
+   {
+    "key": "synthesis",
+    "type": "llm",
+    "kind": "intermediate",
+    "dependencies": [
+     {
+      "nodeKey": "spatial_action_planner"
+     }
+    ],
+    "nextNodeKeys": [
+     "structured_response"
+    ],
+    "llm": {
+     "fulfillmentPrompt": "You are the Synthesis node of the God's Eye pipeline \u2014 the fulfillment stage. Write the analyst-facing answer: precise, calm, operational; lead with verified findings, then unverified ones clearly labelled, then what could not be checked. Never present an inference as an observation. OUTPUT RULES: respond with ONE JSON object and nothing else \u2014 no prose, no Markdown fences, no comments. Never invent entities, coordinates, ids or measurements that are not present in your input; when something is missing write null or an empty array. Keep every string short.",
+     "prompt": "ACTION-PLANNED STATE (output of the previous node):\n{spatial_action_planner}\n\nWrite \"message\": 3\u20138 sentences of plain text (no Markdown) answering state.query for the current view; name entities by callsign/name and id; quote the literal values (squawk, altitude, speed, distance) that support each verified finding; state explicitly when a capability call (e.g. earthquake search) was planned but its data was not available inside this run. Build \"entities\": [{\"id\", \"layerId\", \"label\": callsign or name, \"role\": \"finding\"|\"context\", \"latitude\", \"longitude\"}] for every entity referenced in the message.\nReturn exactly: {\"message\": string, \"entities\": [...], \"actions\": <copied>, \"suggestedNextActions\": <copied>, \"findings\": <copied>, \"evidence\": <copied>, \"unknowns\": <copied>, \"calls\": <copied>, \"intent\": <copied>, \"state\": <state copied through unchanged>}.",
+     "model": "predefined-gpt-5.6-luna"
+    },
+    "position": {
+     "x": 2040,
+     "y": 200
+    },
+    "measured": {
+     "width": 0,
+     "height": 0
+    }
+   },
+   {
+    "key": "structured_response",
+    "type": "llm",
+    "kind": "sink",
+    "dependencies": [
+     {
+      "nodeKey": "synthesis"
+     }
+    ],
+    "llm": {
+     "fulfillmentPrompt": "You are the StructuredResponse formatter of the God's Eye pipeline \u2014 the workflow's final output. You reshape the synthesis into the client contract. The output object must have EXACTLY these seven keys and no others: message, entities, actions, evidence, sources, suggestedNextActions, runMeta. OUTPUT RULES: respond with ONE JSON object and nothing else \u2014 no prose, no Markdown fences, no comments. Never invent entities, coordinates, ids or measurements that are not present in your input; when something is missing write null or an empty array. Keep every string short.",
+     "prompt": "SYNTHESISED STATE (output of the previous node):\n{synthesis}\n\nReturn exactly one object with keys message, entities, actions, evidence, sources, suggestedNextActions, runMeta:\n\"message\": the synthesis message unchanged;\n\"entities\": the synthesis entities unchanged;\n\"actions\": the actions list unchanged (each {\"name\",\"params\",\"reason\",\"findingIds\"}) \u2014 drop any action whose name is not one of: fly_to_location, select_nearest_aircraft, adjust_camera_zoom, zoom_to_globe, set_layer_visibility, show_data_layers_menu, set_panel_open, set_context_mode, control_cockpit, set_visual_style, get_entity_context, get_current_view_state, set_hud, set_detection, set_map_stack, set_post_processing, control_scene, control_cctv, control_radio, track_entity, stop_tracking, frame_overhead, annotate_map, clear_annotations, move_camera, fly_route, analyst_query, next_iss_pass;\n\"evidence\": the evidence list unchanged;\n\"sources\": [{\"id\": string, \"kind\": \"in_view\"|\"capability\", \"label\": e.g. \"ADS-B (flights layer)\", \"AIS (ais-live-vessels layer)\", \"USGS FDSN Event (earthquake_search)\", \"status\": \"used\"|\"planned_not_executed\"}] \u2014 one entry per distinct source layer in the evidence plus one per planned capability call;\n\"suggestedNextActions\": unchanged;\n\"runMeta\": {\"workflow\": \"GodsEye Advanced Spatial Workflow\", \"flowVersion\": 1, \"mode\": state.mode, \"intent\": intent.intent, \"tier\": intent.tier, \"confidence\": intent.confidence, \"selectedCapabilityIds\": [ids from calls], \"unknowns\": <unknowns list>, \"nodeChain\": [\"session_context\",\"spatial_context_builder\",\"intent_classifier\",\"capability_resolver\",\"planner\",\"verification\",\"spatial_action_planner\",\"synthesis\",\"structured_response\"], \"generatedAtUtc\": state.spatialContext.timeline.now}.\nDo not add, rename or omit any of the seven keys.",
+     "model": "predefined-gpt-5.6-luna"
+    },
+    "position": {
+     "x": 2360,
+     "y": 200
+    },
+    "measured": {
+     "width": 0,
+     "height": 0
+    }
+   }
+  ],
+  "delivery": null,
+  "contextMetadata": null
+ }
+}

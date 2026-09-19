@@ -1,0 +1,630 @@
+[
+ {
+  "slug": "fetchmedia",
+  "service": "Media API",
+  "title": "Fetch Media",
+  "method": "GET",
+  "path": "/media/v1/public/file",
+  "servers": [
+   "https://api.on-demand.io"
+  ],
+  "summary": "Fetch Media",
+  "security": [
+   {
+    "apikey": []
+   }
+  ]
+ },
+ {
+  "slug": "createmediaurl",
+  "service": "Media API",
+  "title": "Create Media URL",
+  "method": "POST",
+  "path": "/media/v1/public/file",
+  "servers": [
+   "https://api.on-demand.io"
+  ],
+  "summary": "Create Media URL",
+  "security": [
+   {
+    "apikey": []
+   }
+  ]
+ },
+ {
+  "slug": "deletemedia",
+  "service": "Media API",
+  "title": "Delete Media",
+  "method": "DELETE",
+  "path": "/media/v1/public/file/{fileId}",
+  "servers": [
+   "https://api.on-demand.io"
+  ],
+  "summary": "Delete Media",
+  "security": [
+   {
+    "apikey": []
+   }
+  ]
+ },
+ {
+  "slug": "convertaudiototext",
+  "service": "Services API",
+  "title": "Convert audio to text",
+  "method": "POST",
+  "path": "/execute/speech_to_text",
+  "servers": [
+   "https://api.on-demand.io/services/v1/public/service"
+  ],
+  "summary": "Convert audio to text",
+  "security": null
+ },
+ {
+  "slug": "converttexttoaudio",
+  "service": "Services API",
+  "title": "Convert text to audio",
+  "method": "POST",
+  "path": "/execute/text_to_speech",
+  "servers": [
+   "https://api.on-demand.io/services/v1/public/service"
+  ],
+  "summary": "Convert text to audio",
+  "security": null
+ },
+ {
+  "slug": "translatetext",
+  "service": "Services API",
+  "title": "Translate text to another language",
+  "method": "POST",
+  "path": "/execute/language_translation",
+  "servers": [
+   "https://api.on-demand.io/services/v1/public/service"
+  ],
+  "summary": "Translate text to another language",
+  "security": null
+ },
+ {
+  "slug": "createmqttuser",
+  "service": "MQTT User Management API",
+  "title": "Create a new MQTT user",
+  "method": "POST",
+  "path": "/config/v1/public/mqtt_user",
+  "servers": [
+   "https://gateway-dev.on-demand.io"
+  ],
+  "summary": "Create a new MQTT user",
+  "security": [
+   {
+    "ApiKeyAuth": []
+   }
+  ]
+ },
+ {
+  "slug": "deletemqttuser",
+  "service": "MQTT User Management API",
+  "title": "Delete an MQTT user",
+  "method": "DELETE",
+  "path": "/config/v1/public/mqtt_user/{userId}",
+  "servers": [
+   "https://gateway-dev.on-demand.io"
+  ],
+  "summary": "Delete an MQTT user",
+  "security": [
+   {
+    "ApiKeyAuth": []
+   }
+  ]
+ },
+ {
+  "slug": "post_public-projects",
+  "service": "Projects Management API",
+  "title": "Create a new project",
+  "method": "POST",
+  "path": "/public/projects",
+  "servers": [
+   "https://api.on-demand.io/chat/v1"
+  ],
+  "summary": "Create a new project",
+  "security": [
+   {
+    "ApiKeyAuth": []
+   }
+  ]
+ },
+ {
+  "slug": "get_public-projects",
+  "service": "Projects Management API",
+  "title": "List projects",
+  "method": "GET",
+  "path": "/public/projects",
+  "servers": [
+   "https://api.on-demand.io/chat/v1"
+  ],
+  "summary": "List projects",
+  "security": [
+   {
+    "ApiKeyAuth": []
+   }
+  ]
+ },
+ {
+  "slug": "get_public-projects-projectid",
+  "service": "Projects Management API",
+  "title": "Get project by ID",
+  "method": "GET",
+  "path": "/public/projects/{projectId}",
+  "servers": [
+   "https://api.on-demand.io/chat/v1"
+  ],
+  "summary": "Get project by ID",
+  "security": [
+   {
+    "ApiKeyAuth": []
+   }
+  ]
+ },
+ {
+  "slug": "patch_public-projects-projectid",
+  "service": "Projects Management API",
+  "title": "Update project",
+  "method": "PATCH",
+  "path": "/public/projects/{projectId}",
+  "servers": [
+   "https://api.on-demand.io/chat/v1"
+  ],
+  "summary": "Update project",
+  "security": [
+   {
+    "ApiKeyAuth": []
+   }
+  ]
+ },
+ {
+  "slug": "delete_public-projects-projectid",
+  "service": "Projects Management API",
+  "title": "Delete project",
+  "method": "DELETE",
+  "path": "/public/projects/{projectId}",
+  "servers": [
+   "https://api.on-demand.io/chat/v1"
+  ],
+  "summary": "Delete project",
+  "security": [
+   {
+    "ApiKeyAuth": []
+   }
+  ]
+ },
+ {
+  "slug": "get_public-sessions",
+  "service": "Projects Management API",
+  "title": "Get sessions by project ID",
+  "method": "GET",
+  "path": "/public/sessions",
+  "servers": [
+   "https://api.on-demand.io/chat/v1"
+  ],
+  "summary": "Get sessions by project ID",
+  "security": [
+   {
+    "ApiKeyAuth": []
+   }
+  ]
+ },
+ {
+  "slug": "post_approvalgate-executionid-approval-nodekey-approve",
+  "service": "Agents Flow Builder API",
+  "title": "Approve an approval gate node",
+  "method": "POST",
+  "path": "/approvalgate/{executionID}/approval/{nodeKey}/approve",
+  "servers": [
+   "https://api.on-demand.io/automation/api"
+  ],
+  "summary": "Approve an approval gate node",
+  "security": [
+   {
+    "ApiKeyAuth": []
+   }
+  ]
+ },
+ {
+  "slug": "post_approvalgate-executionid-approval-nodekey-reject",
+  "service": "Agents Flow Builder API",
+  "title": "Reject an approval gate node",
+  "method": "POST",
+  "path": "/approvalgate/{executionID}/approval/{nodeKey}/reject",
+  "servers": [
+   "https://api.on-demand.io/automation/api"
+  ],
+  "summary": "Reject an approval gate node",
+  "security": [
+   {
+    "ApiKeyAuth": []
+   }
+  ]
+ },
+ {
+  "slug": "get_execution-executionid",
+  "service": "Agents Flow Builder API",
+  "title": "Get execution by ID",
+  "method": "GET",
+  "path": "/execution/{executionID}",
+  "servers": [
+   "https://api.on-demand.io/automation/api"
+  ],
+  "summary": "Get execution by ID",
+  "security": [
+   {
+    "ApiKeyAuth": []
+   }
+  ]
+ },
+ {
+  "slug": "get_execution-executionid-delivery-track-email",
+  "service": "Agents Flow Builder API",
+  "title": "Get email delivery status for workflow executions.",
+  "method": "GET",
+  "path": "/execution/{executionID}/delivery/track/email",
+  "servers": [
+   "https://api.on-demand.io/automation/api"
+  ],
+  "summary": "Get email delivery status for workflow executions.",
+  "security": [
+   {
+    "ApiKeyAuth": []
+   }
+  ]
+ },
+ {
+  "slug": "get_execution-executionid-logs",
+  "service": "Agents Flow Builder API",
+  "title": "Get execution logs",
+  "method": "GET",
+  "path": "/execution/{executionID}/logs",
+  "servers": [
+   "https://api.on-demand.io/automation/api"
+  ],
+  "summary": "Get execution logs",
+  "security": [
+   {
+    "ApiKeyAuth": []
+   }
+  ]
+ },
+ {
+  "slug": "get_execution-executionid-node-outputs",
+  "service": "Agents Flow Builder API",
+  "title": "Get execution node outputs",
+  "method": "GET",
+  "path": "/execution/{executionID}/node/outputs",
+  "servers": [
+   "https://api.on-demand.io/automation/api"
+  ],
+  "summary": "Get execution node outputs",
+  "security": [
+   {
+    "ApiKeyAuth": []
+   }
+  ]
+ },
+ {
+  "slug": "post_execution-executionid-report-problem",
+  "service": "Agents Flow Builder API",
+  "title": "Report a problem with an execution",
+  "method": "POST",
+  "path": "/execution/{executionID}/report-problem",
+  "servers": [
+   "https://api.on-demand.io/automation/api"
+  ],
+  "summary": "Report a problem with an execution",
+  "security": [
+   {
+    "ApiKeyAuth": []
+   }
+  ]
+ },
+ {
+  "slug": "get_execution-executionid-transcript",
+  "service": "Agents Flow Builder API",
+  "title": "Get voice mode transcripts for an execution",
+  "method": "GET",
+  "path": "/execution/{executionID}/transcript",
+  "servers": [
+   "https://api.on-demand.io/automation/api"
+  ],
+  "summary": "Get voice mode transcripts for an execution",
+  "security": [
+   {
+    "ApiKeyAuth": []
+   }
+  ]
+ },
+ {
+  "slug": "get_execution-list",
+  "service": "Agents Flow Builder API",
+  "title": "List executions",
+  "method": "GET",
+  "path": "/execution/list",
+  "servers": [
+   "https://api.on-demand.io/automation/api"
+  ],
+  "summary": "List executions",
+  "security": [
+   {
+    "ApiKeyAuth": []
+   }
+  ]
+ },
+ {
+  "slug": "post_workflow",
+  "service": "Agents Flow Builder API",
+  "title": "Create a new workflow",
+  "method": "POST",
+  "path": "/workflow/",
+  "servers": [
+   "https://api.on-demand.io/automation/api"
+  ],
+  "summary": "Create a new workflow",
+  "security": [
+   {
+    "ApiKeyAuth": []
+   }
+  ]
+ },
+ {
+  "slug": "get_workflow",
+  "service": "Agents Flow Builder API",
+  "title": "List workflows",
+  "method": "GET",
+  "path": "/workflow/",
+  "servers": [
+   "https://api.on-demand.io/automation/api"
+  ],
+  "summary": "List workflows",
+  "security": [
+   {
+    "ApiKeyAuth": []
+   }
+  ]
+ },
+ {
+  "slug": "get_workflow-id",
+  "service": "Agents Flow Builder API",
+  "title": "Get workflow by ID",
+  "method": "GET",
+  "path": "/workflow/{id}",
+  "servers": [
+   "https://api.on-demand.io/automation/api"
+  ],
+  "summary": "Get workflow by ID",
+  "security": [
+   {
+    "ApiKeyAuth": []
+   }
+  ]
+ },
+ {
+  "slug": "patch_workflow-id",
+  "service": "Agents Flow Builder API",
+  "title": "Update workflow",
+  "method": "PATCH",
+  "path": "/workflow/{id}",
+  "servers": [
+   "https://api.on-demand.io/automation/api"
+  ],
+  "summary": "Update workflow",
+  "security": [
+   {
+    "ApiKeyAuth": []
+   }
+  ]
+ },
+ {
+  "slug": "delete_workflow-id",
+  "service": "Agents Flow Builder API",
+  "title": "Delete workflow",
+  "method": "DELETE",
+  "path": "/workflow/{id}",
+  "servers": [
+   "https://api.on-demand.io/automation/api"
+  ],
+  "summary": "Delete workflow",
+  "security": [
+   {
+    "ApiKeyAuth": []
+   }
+  ]
+ },
+ {
+  "slug": "post_workflow-id-activate",
+  "service": "Agents Flow Builder API",
+  "title": "Activate workflow",
+  "method": "POST",
+  "path": "/workflow/{id}/activate",
+  "servers": [
+   "https://api.on-demand.io/automation/api"
+  ],
+  "summary": "Activate workflow",
+  "security": [
+   {
+    "ApiKeyAuth": []
+   }
+  ]
+ },
+ {
+  "slug": "post_workflow-id-deactivate",
+  "service": "Agents Flow Builder API",
+  "title": "Deactivate workflow",
+  "method": "POST",
+  "path": "/workflow/{id}/deactivate",
+  "servers": [
+   "https://api.on-demand.io/automation/api"
+  ],
+  "summary": "Deactivate workflow",
+  "security": [
+   {
+    "ApiKeyAuth": []
+   }
+  ]
+ },
+ {
+  "slug": "post_workflow-id-execute",
+  "service": "Agents Flow Builder API",
+  "title": "Execute workflow",
+  "method": "POST",
+  "path": "/workflow/{id}/execute",
+  "servers": [
+   "https://api.on-demand.io/automation/api"
+  ],
+  "summary": "Execute workflow",
+  "security": [
+   {
+    "ApiKeyAuth": []
+   }
+  ]
+ },
+ {
+  "slug": "patch_workflow-id-name",
+  "service": "Agents Flow Builder API",
+  "title": "Update workflow name",
+  "method": "PATCH",
+  "path": "/workflow/{id}/name",
+  "servers": [
+   "https://api.on-demand.io/automation/api"
+  ],
+  "summary": "Update workflow name",
+  "security": [
+   {
+    "ApiKeyAuth": []
+   }
+  ]
+ },
+ {
+  "slug": "post_workflow-upload-config",
+  "service": "Agents Flow Builder API",
+  "title": "Upload workflow configuration",
+  "method": "POST",
+  "path": "/workflow/upload/config",
+  "servers": [
+   "https://api.on-demand.io/automation/api"
+  ],
+  "summary": "Upload workflow configuration",
+  "security": [
+   {
+    "ApiKeyAuth": []
+   }
+  ]
+ },
+ {
+  "slug": "createchatsession",
+  "service": "Chat API",
+  "title": "Create Chat Session",
+  "method": "POST",
+  "path": "/chat/v1/sessions",
+  "servers": [
+   "https://api.on-demand.io"
+  ],
+  "summary": "Create Chat Session",
+  "security": [
+   {
+    "apikey": []
+   }
+  ]
+ },
+ {
+  "slug": "getchatsessions",
+  "service": "Chat API",
+  "title": "Get Chat Sessions",
+  "method": "GET",
+  "path": "/chat/v1/sessions",
+  "servers": [
+   "https://api.on-demand.io"
+  ],
+  "summary": "Get Chat Sessions",
+  "security": [
+   {
+    "apikey": []
+   }
+  ]
+ },
+ {
+  "slug": "getchatsession",
+  "service": "Chat API",
+  "title": "Get Chat Session",
+  "method": "GET",
+  "path": "/chat/v1/sessions/{sessionId}",
+  "servers": [
+   "https://api.on-demand.io"
+  ],
+  "summary": "Get Chat Session",
+  "security": [
+   {
+    "apikey": []
+   }
+  ]
+ },
+ {
+  "slug": "getchatmessages",
+  "service": "Chat API",
+  "title": "Get Chat Messages",
+  "method": "GET",
+  "path": "/chat/v1/sessions/{sessionId}/messages",
+  "servers": [
+   "https://api.on-demand.io"
+  ],
+  "summary": "Get Chat Messages",
+  "security": [
+   {
+    "apikey": []
+   }
+  ]
+ },
+ {
+  "slug": "getchatmessage",
+  "service": "Chat API",
+  "title": "Get Chat Message",
+  "method": "GET",
+  "path": "/chat/v1/sessions/{sessionId}/messages/{messageId}",
+  "servers": [
+   "https://api.on-demand.io"
+  ],
+  "summary": "Get Chat Message",
+  "security": [
+   {
+    "apikey": []
+   }
+  ]
+ },
+ {
+  "slug": "submitquery",
+  "service": "Chat API",
+  "title": "Submit Query",
+  "method": "POST",
+  "path": "/chat/v1/sessions/{sessionId}/query",
+  "servers": [
+   "https://api.on-demand.io"
+  ],
+  "summary": "Submit Query",
+  "security": [
+   {
+    "apikey": []
+   }
+  ]
+ },
+ {
+  "slug": "updatelivesessionsettings",
+  "service": "Chat API",
+  "title": "Update Live Session Settings",
+  "method": "PUT",
+  "path": "/chat/v1/sessions/{sessionId}/live-settings",
+  "servers": [
+   "https://api.on-demand.io"
+  ],
+  "summary": "Update Live Session Settings",
+  "security": [
+   {
+    "apikey": []
+   }
+  ]
+ }
+]

@@ -1,0 +1,35 @@
+[
+ {
+  "utc": "2026-09-19T11:33:28.014Z",
+  "method": "initialize",
+  "http_status": 200,
+  "content_type": "application/json",
+  "session_id_present": true,
+  "result_keys": [
+   "capabilities",
+   "protocolVersion",
+   "serverInfo"
+  ],
+  "error": null
+ },
+ {
+  "utc": "2026-09-19T11:33:28.112Z",
+  "method": "notifications/initialized",
+  "http_status": 202,
+  "content_type": "",
+  "session_id_present": true,
+  "result_keys": null,
+  "error": null
+ },
+ {
+  "utc": "2026-09-19T11:33:28.380Z",
+  "method": "tools/list",
+  "http_status": 200,
+  "content_type": "application/json",
+  "session_id_present": true,
+  "result_keys": [
+   "tools"
+  ],
+  "error": null
+ }
+]
