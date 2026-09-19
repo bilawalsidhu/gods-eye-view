@@ -284,6 +284,17 @@ Ranges scanned (code points, HTML numeric entities `&#x…;`/`&#…;`, and JS es
 | `src/ui/styles/controls.css:825` | ▸ | CSS comment breadcrumb → ">" |
 | `src/ui/styles/ondemand-chat.css:6` | ▸ | CSS comment breadcrumb → ">" |
 
+### 3.3 Late finds — headless once-over of the non-DATA-LAYERS surfaces (2026-09-19T08:06Z–08:09Z, Austin + Galveston Bay, 1440×900)
+
+Two glyph icons survived the 18e2a68 inventory because neither is a layer row icon and both sit in surfaces that are hidden until an interaction (the ORBIT indicator only shows while orbiting; the SWAP chip only while Directions is on):
+
+| # | file:line (at 7cce6dd) | glyph | code point | component | label / role | replaced by |
+|---|---|---|---|---|---|---|
+| 138 | `src/ui/locationControls.js:148` | ↻ | U+21BB | ORBIT indicator (`#orbit-indicator .orbit-icon`) | orbit-mode mark beside the text "ORBIT" | rotate-ccw (`setIconContent`, 1 em, decorative) |
+| 139 | `src/layers/directions/index.js:140` | ⇄ | U+21C4 | Directions row chips | SWAP A/B chip label | move-horizontal via the new `chip.icon` path in `LayerPanel._syncRowControls` (`aria-label` "Swap A and B", 12 px icon in the 24 px chip) |
+
+The same sweep found the 33 icons inlined verbatim in `src/ui/templates/*.html` (presets, DISPLAY toggles, share, location tray, cockpit and context radio transport, collapse buttons, TR-3B) still carried the vendored files' `stroke-width="2"` while every icon LayerPanel creates renders at `ICON_STROKE_WIDTH` 1.75 — the inconsistency the UI/UX audit filed as F-16. The templates were normalised to `1.75` and `src/iconGlyphBoundary.test.mjs` now pins it for every `<svg data-icon>` in the assembled markup. The guard also forbids the arrow code points this UI drew icons with (U+21BA–U+21BB, U+21C4–U+21C6, U+2197); `→ ↔ ⇒ ↘` stay allowed as prose (§5).
+
 ## 4. Rendering contract (`src/ui/icons/layerIcon.js`, `src/ui/styles/icons.css`)
 
 | Concern | Contract |
@@ -323,3 +334,4 @@ Ranges scanned (code points, HTML numeric entities `&#x…;`/`&#…;`, and JS es
 | 04:21:33Z / 04:21:55Z / 04:34:49Z / 2026-09-19T04:40:19Z | `scripts/sync-lucide-icons.mjs` runs (56 → 57 icons after `arrow-right` was added) |
 | 04:24:10Z–04:35:01Z | Replacements in 61 source/template/CSS files; 12 tests updated; boundary test written (7 tests) |
 | 04:35:43Z–04:38:57Z | Gates: format ✓ (966 files) · boundaries ✓ (109 groups) · unit 4,358 pass / 0 fail / 1 skip ✓ · ondemand 219 ✓ · serverless 58 ✓ · build ✓ · 9 serverless functions ✓ |
+| 2026-09-19T08:06Z–08:09Z | Once-over of the non-DATA-LAYERS surfaces (headless, Austin + Galveston Bay): 2 glyph sites found and replaced (§3.3), 33 template icons normalised to stroke 1.75, arrows guard added |
