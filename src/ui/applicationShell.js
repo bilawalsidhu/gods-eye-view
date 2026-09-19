@@ -281,6 +281,7 @@ export class StyleManager extends ShellFacade {
         trafficLayer: services.trafficLayer,
         flyToPresetLocation: services.flyToPresetLocation,
         flyToPOI: services.flyToPOI,
+        flyToLandmark: services.flyToLandmark,
         GLOBE_VIEW: services.GLOBE_VIEW,
         flyToGlobeView: services.flyToGlobeView,
         interruptCameraMotion: services.interruptCameraMotion,

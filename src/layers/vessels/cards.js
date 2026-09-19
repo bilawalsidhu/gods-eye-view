@@ -31,6 +31,41 @@ export function createCards({
     if (!el) return;
     el.classList.remove('active');
     el.textContent = 'AIS: --';
+    const narrative = document.getElementById('hud-ais-narrative');
+    if (narrative) {
+      narrative.textContent = '';
+      narrative.classList.remove('active');
+    }
+  }
+
+  /**
+   * Renders the plain-language account beneath the AIS readout.
+   *
+   * Arrives asynchronously after selection, so it must tolerate being called
+   * for a vessel the operator has already clicked away from — the caller
+   * passes the mmsi it was fetched for and a stale one is dropped.
+   */
+  function setSelectedVesselNarrative(mmsi, payload) {
+    const el = document.getElementById('hud-ais-narrative');
+    if (!el) return;
+    if (!payload || !payload.headline) {
+      el.textContent = '';
+      el.classList.remove('active');
+      return;
+    }
+    const cargo = payload.cargo ? `CARGO: ${payload.cargo}` : '';
+    const origin = payload.origin ? `FROM: ${payload.origin}` : '';
+    const lines = [
+      payload.headline,
+      origin,
+      payload.heading,
+      cargo,
+      payload.why,
+    ].filter(Boolean);
+    if (payload.caveats?.length) lines.push(`· ${payload.caveats.join(' · ')}`);
+    el.dataset.mmsi = String(mmsi || '');
+    el.textContent = lines.join('\n');
+    el.classList.add('active');
   }
 
   function trimHudValue(value, maxLength) {
@@ -91,7 +126,24 @@ export function createCards({
       ].join(' · '),
     ];
     const destination = String(record.destination || '').trim();
-    if (destination) details.push(`→ ${trimHudValue(destination, 24)}`);
+    const eta = String(record.eta || '').trim();
+    if (destination)
+      details.push(
+        `→ ${trimHudValue(destination, 24)}${eta ? ` · ETA ${eta}` : ''}`,
+      );
+    else if (eta) details.push(`ETA ${eta}`);
+    const loading = formatLoadState(record);
+    if (loading) details.push(loading);
+    const status = String(record.navStatusText || '').trim();
+    if (status) details.push(trimHudValue(status, 28));
+    const registry = formatRegistry(record);
+    if (registry) details.push(registry);
+    // Sanctions last before the identity line: it is the line that changes
+    // what an operator does next, so it must not be pushed off by detail.
+    const sanctions = formatSanctions(record);
+    if (sanctions) details.push(sanctions);
+    const estimate = formatEstimate(record);
+    if (estimate) details.push(estimate);
     const stale = (record.missedRefreshes || 0) > 0;
     details.push(
       `MMSI ${record.mmsi || '--'} · ${formatPositionTime(record)}${stale ? ' · STALE' : ''}`,
@@ -158,6 +210,71 @@ export function createCards({
     return speed === null ? '--KT' : `${speed.toFixed(1)}KT`;
   }
 
+  /**
+   * Draught line for the selected card: the measured number always, plus the
+   * laden/ballast call only once the vessel's own observed range supports one.
+   * Cargo itself is never on the AIS wire — this is the nearest honest proxy.
+   */
+  function formatLoadState(record) {
+    const draught = record.draught;
+    if (!Number.isFinite(draught) || draught <= 0) return '';
+    const state = String(record.loadState || '').trim();
+    const suffix = state && state !== 'UNKNOWN' ? ` · ${state}` : '';
+    return `DRAUGHT ${draught.toFixed(1)}M${suffix}`;
+  }
+
+  /** Flag state, with the IMO number when the hull broadcasts a valid one. */
+  function formatRegistry(record) {
+    const flag = String(record.flag || '').trim();
+    const imo = String(record.imo || '').trim();
+    const parts = [];
+    if (flag) parts.push(trimHudValue(flag.toUpperCase(), 18));
+    if (imo && record.imoValid !== false) parts.push(`IMO ${imo}`);
+    return parts.join(' · ');
+  }
+
+  /**
+   * Sanctions line. The matched identifier is shown alongside the verdict:
+   * an IMO hit is an identity match, a name hit is a coincidence until proven
+   * otherwise, and an operator needs to see which one they have.
+   */
+  function formatSanctions(record) {
+    if (!record.sanctioned) return '';
+    const programs = String(record.sanctionPrograms || '').trim();
+    const confidence = String(record.sanctionConfidence || '').trim();
+    const qualifier = confidence === 'IMO' ? '' : ` (${confidence} MATCH)`;
+    return trimHudValue(
+      `⚠ SANCTIONED${qualifier}${programs ? `: ${programs}` : ''}`,
+      36,
+    );
+  }
+
+  /**
+   * Estimate line for a dead-reckoned contact.
+   *
+   * States plainly that this is not an observation, how old the last real fix
+   * is, and — when the vessel fell silent inside an area the feed can still
+   * hear — that it went dark rather than out of range.
+   */
+  function formatEstimate(record) {
+    if (!record.estimated) return '';
+    const age = formatElapsed(record.estAgeSec);
+    const confidence = Number.isFinite(record.estConfidence)
+      ? ` ${Math.round(record.estConfidence * 100)}%`
+      : '';
+    const holding = record.estMoved ? '' : ' HOLDING';
+    const gap = record.gapKind === 'DARK' ? ' · ⚠ WENT DARK' : '';
+    return trimHudValue(`EST +${age}${confidence}${holding}${gap}`, 36);
+  }
+
+  /** Compact elapsed time: "47m", "4h 12m". */
+  function formatElapsed(seconds) {
+    const total = Math.max(0, Math.round(Number(seconds) || 0));
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    return hours ? `${hours}h ${minutes}m` : `${minutes}m`;
+  }
+
   function formatHeading(heading) {
     return Number.isFinite(heading) ? `${Math.round(heading)}DEG` : '--DEG';
   }
@@ -171,6 +288,7 @@ export function createCards({
   return {
     updateSelectedVesselHud,
     resetSelectedVesselHud,
+    setSelectedVesselNarrative,
     trimHudValue,
     buildVesselCard,
     buildSelectedVesselCard,
@@ -180,6 +298,11 @@ export function createCards({
     displayVesselName,
     formatSpeed,
     formatHeading,
+    formatLoadState,
+    formatRegistry,
+    formatSanctions,
+    formatEstimate,
+    formatElapsed,
     formatPositionTime,
   };
 }

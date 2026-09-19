@@ -398,6 +398,56 @@ export function createQueries({
      * @param {string|number} mmsi Vessel MMSI.
      * @returns {boolean} True if a matching vessel was selected.
      */
+    /**
+     * Finds a vessel by MMSI, IMO or name and puts the camera on it.
+     *
+     * Checks the loaded records first, then falls back to the server, which
+     * knows every hull the feed has heard rather than only the rows this
+     * browser asked for. A server hit is flown to even when the record is not
+     * loaded locally — the vessel materialises as the view reaches it.
+     *
+     * @returns {Promise<{mmsi:string,name:string,latitude:number,longitude:number,selected:boolean}|null>}
+     */
+    async searchAndFocus(query, { signal } = {}) {
+      const q = String(query ?? '').trim();
+      if (q.length < 2) return null;
+
+      const local = this.findByQuery(q);
+      if (local) {
+        this.selectById(local.mmsi);
+        return { ...local, selected: true };
+      }
+
+      const source = vesselState._source;
+      if (typeof source?.searchVessels !== 'function') return null;
+      let matches = [];
+      try {
+        matches = await source.searchVessels(q, { signal, limit: 5 });
+      } catch {
+        return null;
+      }
+      const hit = matches.find(
+        (row) =>
+          Number.isFinite(Number(row?.lat)) &&
+          Number.isFinite(Number(row?.lon)),
+      );
+      if (!hit) return null;
+      // May be false when the hull is outside the rows this client loaded;
+      // the caller still flies there.
+      const selected = this.selectById(hit.mmsi);
+      return {
+        mmsi: String(hit.mmsi),
+        name: String(hit.name || hit.mmsi),
+        latitude: Number(hit.lat),
+        longitude: Number(hit.lon),
+        selected,
+        // An archived hull has stopped transmitting: this is where it was last
+        // heard, not where it is. Reported so the caller can say so.
+        archived: Boolean(hit.archived),
+        lastFixEpoch: Number(hit.lastFixEpoch) || null,
+      };
+    },
+
     selectById(mmsi) {
       if (mmsi === null || mmsi === undefined) return false;
       const target = String(mmsi).trim();

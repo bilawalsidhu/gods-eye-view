@@ -99,6 +99,54 @@ export class LocationNavigation {
     }
   }
 
+  /**
+   * Resolves a query against the live vessel feed and flies to a hit.
+   *
+   * Returns a location-shaped result so the existing search pipeline treats a
+   * vessel exactly like a place; returns null to fall through to geocoding.
+   * Never throws — a vessel-feed problem must not break location search.
+   */
+  async _searchVessel(query, options = {}) {
+    const layer = this.services?.aisLiveVesselsLayer;
+    const module = layer?.module || layer;
+    if (typeof module?.searchAndFocus !== 'function') return null;
+    let hit = null;
+    try {
+      hit = await module.searchAndFocus(query, { signal: options.signal });
+    } catch {
+      return null;
+    }
+    if (
+      !hit ||
+      !Number.isFinite(hit.latitude) ||
+      !Number.isFinite(hit.longitude)
+    ) {
+      return null;
+    }
+    if (options.beforeFly && options.beforeFly() === false) return null;
+    // A ship is a small target on open water: come in close and angled.
+    this.services.flyToLandmark?.(this.viewer, hit.latitude, hit.longitude, {
+      range: 6000,
+      pitch: -45,
+      buildingHeight: 0,
+      duration: 2.0,
+    });
+    // An archived hull's label says so, so the search history and the location
+    // readout never present a stale fix as a live contact.
+    const age =
+      hit.archived && hit.lastFixEpoch
+        ? ` · last seen ${new Date(hit.lastFixEpoch * 1000).toISOString().slice(5, 16).replace('T', ' ')}Z`
+        : '';
+    return {
+      lat: hit.latitude,
+      lng: hit.longitude,
+      label: hit.archived ? `${hit.name} (last known${age})` : hit.name,
+      kind: 'vessel',
+      mmsi: hit.mmsi,
+      archived: Boolean(hit.archived),
+    };
+  }
+
   _initLocationBar() {
     const { CITY_POIS, searchAndFlyTo, LocationSearch } = this.services;
     this._locationControls?.destroy();
@@ -110,11 +158,16 @@ export class LocationNavigation {
       isCurrent: (generation) =>
         !this._disposed && generation === this._navigationGeneration,
       beforeFly: (generation) => this._reassertNavigationHandoff(generation),
-      search: (query, options) =>
-        searchAndFlyTo(this.viewer, query, {
+      search: async (query, options) => {
+        // A vessel name or MMSI resolves against the live feed before the
+        // geocoder sees it — "NORDLYS" is a ship here, not a Norwegian place.
+        const vessel = await this._searchVessel(query, options);
+        if (vessel) return vessel;
+        return searchAndFlyTo(this.viewer, query, {
           placeSearch: this.placeSearch,
           ...options,
-        }),
+        });
+      },
       onError: (error) => console.error('[Search] Geocoding failed:', error),
     });
     this._locationLookupUnsubscribe = this._locationLookup.subscribe(
