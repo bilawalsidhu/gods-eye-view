@@ -20,6 +20,7 @@ import {
 } from './gevActions.js';
 import { MAP_STACKS } from '../mapStackController.js';
 import { GEV_REALTIME_TOOLS } from '../../server/providers/openai/tools.js';
+import { readFileSync } from 'node:fs';
 
 test('every live basemap is reachable by its own id — no enum value without a voice alias', () => {
   // B1 regression: a stack added to MAP_STACKS (and the set_map_stack enum)
@@ -3018,6 +3019,25 @@ test('front5: 0.99 km due EAST is the subject, though a degree box rejects it', 
     assert.equal(result.count, 116, 'and gets the window number the panel shows');
     assert.equal(result.window.centeredOn, 'N546PC');
   });
+});
+
+test('analyst_query tool enum includes satellites and local infrastructure', () => {
+  const tool = GEV_REALTIME_TOOLS.find((entry) => entry.name === 'analyst_query');
+  assert.ok(tool, 'analyst_query tool must still be findable');
+  const layers = tool.parameters.properties.layers.items.enum;
+  for (const layer of ['satellites', 'local-datacenters', 'local-dams']) {
+    assert.ok(layers.includes(layer), `${layer} must be queryable via analyst_query`);
+  }
+});
+
+test('analyst_query compact items keep satellite and infrastructure identity fields', () => {
+  const src = readFileSync(new URL('./gevActions.js', import.meta.url), 'utf8');
+  const start = src.indexOf('const compact = { layerKey: r.layerKey, id: r.id };');
+  assert.ok(start >= 0, 'analyst compact-field list must still be findable');
+  const block = src.slice(start, start + 900);
+  for (const field of ["'noradId'", "'satelliteClass'", "'group'", "'river'", "'output'", "'capacity'"]) {
+    assert.ok(block.includes(field), `${field} must ride on compact analyst items`);
+  }
 });
 
 // ── Keyless Radio location ───────────────────────────────────────────────────

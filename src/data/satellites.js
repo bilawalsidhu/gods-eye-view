@@ -47,5 +47,6 @@ export const getSatelliteOrbitTrack = layer.getSatelliteOrbitTrack;
 export {
   ISS_OVERLAY_SOURCE_ID,
   ISS_OVERLAY_SOURCE_OPTIONS,
+  mapAnalystRecord,
 } from '../layers/satellites/index.js';
 export default layer;

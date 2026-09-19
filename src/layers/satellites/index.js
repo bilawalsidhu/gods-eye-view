@@ -8,6 +8,7 @@ import { createTesting } from './testing.js';
 import { createInteraction } from './interaction.js';
 import { createLifecycle } from './lifecycle.js';
 import { createIngestion } from './ingestion.js';
+import { createQueries } from './queries.js';
 import { createState } from './state.js';
 
 /** Construct one layer with its own scene state and supplied application services. */
@@ -21,6 +22,7 @@ export function createSatellitesLayer({ services, source }) {
   parts.catalog = createCatalog(context);
   parts.labels = createLabels(context);
   parts.orbits = createOrbits(context);
+  parts.queries = createQueries(context);
   parts.rendering = createRendering(context);
   parts.tracking = createTracking(context);
   parts.testing = createTesting(context);
@@ -32,6 +34,7 @@ export function createSatellitesLayer({ services, source }) {
     parts.controls.methods,
     parts.lifecycle.methods,
     parts.ingestion.methods,
+    parts.queries.methods,
     {
       satelliteVisualsVisible: parts.controls.satelliteVisualsVisible,
       satelliteCatalogModeChanged: parts.controls.satelliteCatalogModeChanged,
@@ -71,3 +74,4 @@ export function createSatellitesLayer({ services, source }) {
 }
 export { ISS_OVERLAY_SOURCE_ID, ISS_OVERLAY_SOURCE_OPTIONS } from './policy.js';
 export { createSatelliteSource } from './source.js';
+export { mapAnalystRecord } from './queries.js';
