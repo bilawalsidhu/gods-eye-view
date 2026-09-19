@@ -327,7 +327,64 @@ as itemised in `docs/ONDEMAND_PROXY_DESIGN.md` §5–§6. All pre-existing provi
 
 ## 10. Function count and Hobby-limit compliance
 
-`find api -name '*.js'` → `api/[...route].js` + `api/ondemand/{sessions,chat,media,stt,tts,workflow,health}.js`
-= **8 Serverless Functions ≤ 12** (Vercel Hobby cap). The 28 legacy provider mounts share the single catch-all,
-so adding a provider route never adds a function. Helper modules live under `server/serverless/` and
-`server/ondemand/` (outside `api/`), so they are never counted as functions.
+`find api -name '*.js'` → `api/[...route].js` + `api/ondemand/{chat,health,media,selftest,sessions,stt,tts,workflow}.js`
+= **9 Serverless Functions ≤ 12** (Vercel Hobby cap; `api/ondemand/_config.js` is an underscore-prefixed
+private module, not a function — re-counted 2026-09-19). The legacy provider mounts share the single
+catch-all, so adding a provider route never adds a function. Helper modules live under
+`server/serverless/`, `server/ondemand/` and `server/providers/` (outside `api/`), so they are never
+counted as functions. Real-Vercel note (2026-09-18): the platform matches `api/[...route].js` for ONE
+path segment only, so `vercel.json` carries a first rewrite `/api/:__gev_api_path*` → `/api/route`
+and `server/serverless/vercel-adapter.js` strips the two query keys that rewrite injects
+(commit `7ae8a50`).
+
+## 11. Street Traffic road network — Overpass mirrors (closeout 2026-09-19)
+
+The Street Traffic layer paints its flow (live TomTom when `TOMTOM_API_KEY` is set, simulated
+otherwise) on OpenStreetMap roads fetched through the same-origin `POST /api/overpass` proxy
+(`server/providers/overpass.js` → `overpass/transport.js`). From cloud egress the public Overpass
+mirrors are not dependable: measured from Vercel `iad1` on 2026-09-18 and again from the agent
+sandbox on 2026-09-19T01:28Z (`[out:json][timeout:25];node(1);out;`, POST, this User-Agent,
+`Accept: application/json`) — `overpass.kumi.systems` 200 in 1.4 s, `overpass.private.coffee`
+round-robin members answering 200 in 1.7–4.7 s or timing out at 12 s, `overpass-api.de` /
+`lz4.` / `z.` HTTP 406 on every probe (client refusal; the community thread
+https://community.openstreetmap.org/t/overpass-api-error-406/143198 attributes it to the April 2026
+rule changes, resolved for some clients by an identifying `User-Agent` + POST body — this client
+already sends both and is still refused from these egresses).
+
+What the closeout changed — scoped to this adapter only (CelesTrak, OpenSky, adsb.lol/adsb.fi,
+AISStream, TomTom, the OnDemand proxy, the deny-list and the function count are untouched):
+
+- **Configurable mirrors.** `OVERPASS_ENDPOINTS` (canonical; comma-separated, trimmed, empty entries
+  ignored, duplicates collapse) → `OVERPASS_UPSTREAMS` (accepted alias, 2026-09-18) → the code default
+  `kumi.systems, private.coffee, overpass-api.de, lz4.overpass-api.de, z.overpass-api.de` (reachable
+  first, refusing mirrors kept LAST rather than dropped — a refusal is per-egress and may lift).
+  `server/providers/overpass/constants.js` `resolveOverpassEndpoints()`; the `road_network_status`
+  tool reports which name supplied the list (`endpointsSource`).
+- **Headers every mirror receives.** `User-Agent` = the ONE shared provider UA
+  (`server/providers/common/upstream.js` `PROVIDER_USER_AGENT`, `ondemand-spatial/<major.minor>
+  (+repo URL)`), `Accept: application/json`, `Content-Type: application/x-www-form-urlencoded`, body
+  `data=<query>` via POST. `src/tooling/overpassMirrors.test.mjs` pins them on every request.
+- **Rotation through the shared upstream helper.** Each mirror is one `fetchUpstream()` call
+  (per-attempt timeout, body cap, status vocabulary; `retries: 0` — the NEXT mirror is the retry).
+  HTTP 406 / 429 / any 5xx (plus 403 / 408), a rate-limit or runtime-error body, an oversized body,
+  a network error or a timeout all move to the next mirror. Per-mirror budget
+  `OVERPASS_MIRROR_TIMEOUT_MS` (default 12 s, was 22 s) and whole-rotation budget
+  `OVERPASS_TOTAL_TIMEOUT_MS` (default 40 s) keep a five-mirror rotation inside the 60 s function
+  ceiling; the road query carries an explicit `[timeout:20]`. A query every mirror rejects
+  (400-class) is still passed through as upstream's own verdict — never dressed up as an outage.
+- **DEGRADED rendering.** When every mirror fails the proxy answers **HTTP 503** with
+  `X-Provider-Status: degraded`, `X-Provider-Source: Overpass`, `X-Provider-Error: <reason>` and a
+  JSON body `{ error, provider, failures[] }`, where the reason summarises the rotation —
+  `all 5 mirrors failed · last: kumi.systems HTTP 406`, or `3 of 5 mirrors failed, 2 skipped (time
+  budget) · last: private.coffee timed out after 12 s`. Last-good roads from memory or disk still win
+  over that answer (served `stale`). The client (`src/layers/traffic/ingestion.js`
+  `describeRoadError`, `controls.js getStats`) presents it like every other MOVEMENT degradation —
+  `status`/`providerStatus` `degraded`, `providerError` = the reason, source `Overpass`, no `error`
+  (which would read UNAVAILABLE / LOAD FAILED) — so the DATA LAYERS row reads exactly
+  `DEGRADED · Overpass · <reason>` (with ` · retrying` appended only while the bounded retry is in
+  flight). Successful and stale answers now also carry `X-Provider-Status: live|stale` and
+  `X-Provider-Source: Overpass (<mirror>)`.
+- **Durable option.** A self-hosted or private Overpass instance (e.g. a regional extract in
+  `overpass-api` Docker, or a paid instance) listed FIRST in `OVERPASS_ENDPOINTS` makes the row LIVE
+  again from cloud egress; the public mirrors then serve only as fallbacks. Postpass is not
+  Overpass-QL compatible and is not a drop-in entry for this list.

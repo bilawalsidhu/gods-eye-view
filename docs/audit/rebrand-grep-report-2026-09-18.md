@@ -199,3 +199,20 @@ per-category totals of this grep report (`RETAINED-ID` 1,250 hits,
   **2026-09-18 10:41:47Z** (`PATCH /automation/api/workflow/{id}/name` →
   HTTP 200); the workflow ID `6aace534859f7b0abb53d99a`, the v1 label, the
   trigger and the nine nodes are unchanged.
+
+## Decisions (2026-09-19)
+
+Recorded by the closeout run of 2026-09-19 (see `docs/audit/closeout-2026-09-19.md` §B). These confirm and date
+the defaulted decisions of 2026-09-18; no code changed for them.
+
+1. **Persisted-state / registered-client identifiers (1,250 hits) — RETAIN UNCHANGED, no storage-key migration.**
+   They are invisible to users; renaming persisted keys would wipe every existing user's saved state without a
+   migration path. Revisit only if a storage-key migration is scheduled.
+2. **Frozen v1 workflow-prompt strings (64 hits) — LEAVE IN v1; reword only in workflow v2.** Published workflow
+   versions are immutable; the workflow's display name was already changed (2026-09-18T10:41:47Z, id
+   `6aace534859f7b0abb53d99a` unchanged) and the wording moves with the next functional change.
+
+Registration-pack re-grep 2026-09-19 (`GodsEye|Gods Eye|God's Eye|gods-eye|gods_eye`, case-insensitive):
+`docs/registration/ONDEMAND_REGISTRATION_PACK.md` 0 hits; 66 hits in the surrounding pack files are all
+rename-history rows, the frozen v1 prompts inside the workflow export, or immutable run records — retained under
+the two decisions above, no regeneration.

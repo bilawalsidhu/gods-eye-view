@@ -203,6 +203,7 @@
       "server/providers/common/http.js",
       "server/providers/common/rate-limit.js",
       "server/providers/common/request.js",
+      "server/providers/common/upstream.js",
       "server/providers/overpass.js",
       "server/providers/overpass/cache.js",
       "server/providers/overpass/constants.js",
@@ -223,6 +224,7 @@
     "exports": ["./server/providers/military-installations"],
     "modules": [
       "server/providers/common/http.js",
+      "server/providers/common/upstream.js",
       "server/providers/common/query.js",
       "server/providers/common/rate-limit.js",
       "server/providers/military-installations.js",

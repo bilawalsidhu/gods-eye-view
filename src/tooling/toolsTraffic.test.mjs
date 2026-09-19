@@ -116,7 +116,7 @@ test('roadNetworkConfig(): defaults, csv override, off switch, never the raw env
   const defaults = roadNetworkConfig({});
   assert.equal(defaults.source, 'overpass');
   assert.deepEqual(defaults.upstreams, [...OVERPASS_DEFAULT_UPSTREAMS]);
-  assert.equal(defaults.upstreams.length, 4);
+  assert.equal(defaults.upstreams.length, 5);
   assert.equal(defaults.blocker, ROAD_NETWORK_BLOCKER);
   assert.equal(
     defaults.blocker,
@@ -124,8 +124,10 @@ test('roadNetworkConfig(): defaults, csv override, off switch, never the raw env
   );
   assert.deepEqual(defaults.fromEnv, {
     ROAD_NETWORK_SOURCE: false,
+    OVERPASS_ENDPOINTS: false,
     OVERPASS_UPSTREAMS: false,
   });
+  assert.equal(defaults.endpointsSource, 'default');
 
   const overridden = roadNetworkConfig({
     ROAD_NETWORK_SOURCE: ' OFF ',
@@ -138,8 +140,10 @@ test('roadNetworkConfig(): defaults, csv override, off switch, never the raw env
   ]);
   assert.deepEqual(overridden.fromEnv, {
     ROAD_NETWORK_SOURCE: true,
+    OVERPASS_ENDPOINTS: false,
     OVERPASS_UPSTREAMS: true,
   });
+  assert.equal(overridden.endpointsSource, 'OVERPASS_UPSTREAMS');
   assert.equal(roadNetworkConfig({ ROAD_NETWORK_SOURCE: 'banana' }).source, 'overpass');
   assert.equal(parseOverpassUpstreams(''), null);
   assert.equal(parseOverpassUpstreams('garbage, more garbage'), null);
@@ -303,7 +307,7 @@ test('road_network_status: no params, default config, tomtom.configured=false wh
   assert.equal(data.source, 'overpass');
   assert.deepEqual(data.upstreams, [...OVERPASS_DEFAULT_UPSTREAMS]);
   assert.equal(data.blocker, ROAD_NETWORK_BLOCKER);
-  assert.deepEqual(data.fromEnv, { ROAD_NETWORK_SOURCE: false, OVERPASS_UPSTREAMS: false });
+  assert.deepEqual(data.fromEnv, { ROAD_NETWORK_SOURCE: false, OVERPASS_ENDPOINTS: false, OVERPASS_UPSTREAMS: false });
   assert.equal(data.tomtom.configured, false);
   assert.equal(data.tomtom.provider.status, 'degraded');
   assert.equal(res.body.provider.status, 'degraded');
@@ -321,7 +325,7 @@ test('road_network_status: env override is reported (source off, private mirror)
     assert.equal(res.status, 200, res.text);
     assert.equal(res.body.data.source, 'off');
     assert.deepEqual(res.body.data.upstreams, ['https://overpass.internal.example/api/interpreter']);
-    assert.deepEqual(res.body.data.fromEnv, { ROAD_NETWORK_SOURCE: true, OVERPASS_UPSTREAMS: true });
+    assert.deepEqual(res.body.data.fromEnv, { ROAD_NETWORK_SOURCE: true, OVERPASS_ENDPOINTS: false, OVERPASS_UPSTREAMS: true });
     assert.equal(res.body.provider.status, 'unavailable');
     assert.equal(res.body.provider.error, null);
     assert.ok(!res.text.includes('junk-token-xyz'), 'unparsed csv members are never echoed');

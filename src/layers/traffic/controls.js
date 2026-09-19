@@ -163,22 +163,39 @@ export function createControls({ state: layerState, services, parts, source }) {
         flowProviderStatus: flowSession.provider?.status || null,
       });
       const roadError = layerState._roadError;
+      // The road network failed with the proxy's structured DEGRADED status
+      // (server/providers/overpass.js, 2026-09-19): present it exactly as the
+      // other MOVEMENT proxies present a designed degradation — `status` /
+      // `providerStatus` 'degraded', `providerError` = the proxy's reason,
+      // source 'Overpass' — and NOT as `error`, which src/loadingFeedback.js
+      // turns into a LOAD FAILED banner and src/data/feedState.js reads (with
+      // no rendered roads) as UNAVAILABLE. The row therefore reads
+      // `DEGRADED · Overpass · all 5 mirrors failed · last: …` while the
+      // bounded retry keeps asking. A failure with no structured status (a
+      // legacy proxy, a 400 the query itself earned) keeps the fault path.
+      const roadDegraded = Boolean(
+        roadError && layerState._roadProvider?.status === 'degraded',
+      );
       // Named source for the row: the road feed when IT is the fault, else the
       // flow provider whenever the presented state is about it.
-      const source = roadError ? 'OpenStreetMap' : feed.source;
+      const source = roadDegraded
+        ? 'Overpass'
+        : roadError
+          ? 'OpenStreetMap'
+          : feed.source;
       return {
         count: layerState._count,
         lastUpdate: layerState._lastUpdate,
         loading,
         mode: feed.mode,
-        error: roadError || feed.error,
+        error: roadDegraded ? null : roadError || feed.error,
         ...(source ? { source } : {}),
         status: roadError ? 'degraded' : feed.status,
         degraded: Boolean(roadError) || feed.degraded,
         stale: feed.stale,
-        providerStatus: feed.providerStatus,
-        providerSource: feed.providerSource,
-        providerError: feed.providerError,
+        providerStatus: roadDegraded ? 'degraded' : feed.providerStatus,
+        providerSource: roadDegraded ? 'Overpass' : feed.providerSource,
+        providerError: roadDegraded ? roadError : feed.providerError,
         providerFetchedAt:
           flowSession.provider?.fetchedAtMs ??
           layerState._flowProvider?.fetchedAtMs ??
@@ -215,7 +232,9 @@ export function createControls({ state: layerState, services, parts, source }) {
         // in one had better be the honest one. This is also where LIVE vs
         // SIMULATED mode is surfaced, and it must never imply a live feed the
         // layer does not have.
-        loadingLabel: feed.loadingLabel,
+        // While the bounded retry re-asks the mirrors the row keeps its
+        // DEGRADED · Overpass · <reason> line and only appends `retrying`.
+        loadingLabel: roadDegraded ? 'retrying' : feed.loadingLabel,
       };
     },
   };

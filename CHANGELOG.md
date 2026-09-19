@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-09-19 — Closeout: configurable Overpass mirrors, `DEGRADED · Overpass · <reason>`, rename decisions
+
+- Street Traffic road network (`/api/overpass`, `server/providers/overpass/*`): mirror list from
+  `OVERPASS_ENDPOINTS` (comma-separated; alias `OVERPASS_UPSTREAMS`), default order re-measured 2026-09-19
+  (kumi.systems → private.coffee → overpass-api.de → lz4. → z.; refusing mirrors kept last). Every request
+  carries the shared provider `User-Agent`, `Accept: application/json` and a form-encoded POST body. Rotation
+  now runs through the shared upstream helper (`fetchUpstream`, one attempt per mirror, 12 s per mirror /
+  40 s per rotation — `OVERPASS_MIRROR_TIMEOUT_MS` / `OVERPASS_TOTAL_TIMEOUT_MS`) on HTTP 406 / 429 / 5xx,
+  rate-limit or runtime-error bodies, network errors and timeouts. When every mirror fails the proxy answers a
+  structured HTTP 503 (`X-Provider-Status: degraded`, reason `all 5 mirrors failed · last: <mirror> HTTP 406`)
+  instead of a 502 or a mirror's 406 page, and the DATA LAYERS row reads `DEGRADED · Overpass · <reason>`
+  (`src/layers/traffic`). New tests `src/tooling/overpassMirrors.test.mjs`; docs in
+  `docs/SERVERLESS_LIMITATIONS.md` §11 and `.env.example`.
+- Defaulted rename decisions recorded (`docs/audit/rebrand-grep-report-2026-09-18.md` "Decisions (2026-09-19)"):
+  persisted-state / registered-client identifiers stay unchanged (no storage-key migration); the frozen v1
+  workflow prompts stay until workflow v2. Registration pack unchanged (0 user-facing hits).
+- Closeout audit `docs/audit/closeout-2026-09-19.md`: exhaustive env-var table with the Vercel PRESENT/MISSING
+  state, flow-id variable and default quoted verbatim, gate counts, sandbox verification (health, selftest,
+  Austin + Galveston Bay badge transcriptions).
+
 ## 2026-09-18 — Vercel routing fix: multi-segment `/api/*` paths reach the catch-all
 
 First deployment of this branch into the real Vercel project

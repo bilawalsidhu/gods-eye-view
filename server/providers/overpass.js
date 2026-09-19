@@ -15,9 +15,12 @@ import {
   writeOverpassDisk,
 } from './overpass/cache.js';
 import {
+  OVERPASS_PROVIDER_SOURCE,
   overpassPayloadIsData,
   fetchOverpassPayload,
 } from './overpass/transport.js';
+import { overpassMirrorLabel } from './overpass/constants.js';
+import { providerStatus, statusHeaders } from './common/upstream.js';
 import { installRouteMiddleware } from './places/routes.js';
 
 /** @type {Map<string,Promise>} In-flight Overpass requests keyed by normalized query body. */
@@ -32,11 +35,39 @@ const _overpassRateLimiter = makeRateLimiter({
 });
 
 /**
+ * `X-Provider-*` headers for an Overpass proxy answer (the MOVEMENT status
+ * contract, server/providers/common/upstream.js): `live` for data straight
+ * from a mirror or from a fresh cache entry, `stale` when last-good data is
+ * served past its TTL, `degraded` for the structured all-mirrors-failed
+ * answer. `fetchedAt` is when the DATA was obtained (cache entries carry
+ * `cachedAt`), so the age is honest for cached answers. The proxy keeps its
+ * own `Cache-Control`, so the helper's is dropped here.
+ * @param {{status:number,endpoint?:string,cachedAt?:number,provider?:object}} payload
+ * @param {string} cacheStatus 'HIT' | 'MISS' | 'INFLIGHT' | 'DISK' | 'STALE'
+ */
+function providerHeadersFor(payload, cacheStatus) {
+  const isData = overpassPayloadIsData(payload);
+  const mirror =
+    payload.endpoint && payload.endpoint !== 'unknown'
+      ? ` (${overpassMirrorLabel(payload.endpoint)})`
+      : '';
+  const status = providerStatus({
+    status: isData ? (cacheStatus === 'STALE' ? 'stale' : 'live') : 'degraded',
+    source: `${OVERPASS_PROVIDER_SOURCE}${mirror}`,
+    fetchedAt: payload.cachedAt ?? Date.now(),
+    error: isData ? null : (payload.provider?.error ?? null),
+  });
+  const headers = statusHeaders(status);
+  delete headers['Cache-Control'];
+  return headers;
+}
+
+/**
  * Write a completed Overpass payload to the HTTP response.
  *
  * @param {import('http').ServerResponse} res - Node HTTP response.
  * @param {{status:number,body:string,contentType:string,endpoint:string}} payload
- * @param {string} [cacheStatus='MISS'] - 'HIT', 'MISS', or 'INFLIGHT'.
+ * @param {string} [cacheStatus='MISS'] - 'HIT', 'MISS', 'INFLIGHT', 'DISK' or 'STALE'.
  */
 function sendOverpassResponse(res, payload, cacheStatus = 'MISS') {
   res.writeHead(payload.status, {
@@ -44,8 +75,49 @@ function sendOverpassResponse(res, payload, cacheStatus = 'MISS') {
     'Cache-Control': 'public, max-age=15',
     'X-Overpass-Cache': cacheStatus,
     'X-Overpass-Upstream': payload.endpoint || 'unknown',
+    ...providerHeadersFor(payload, cacheStatus),
   });
   res.end(payload.body || '');
+}
+
+/**
+ * The structured "every mirror failed" answer: HTTP 503 (never a raw 502 or
+ * a mirror's 406 page), a JSON body `{ error, provider, failures }` and the
+ * `X-Provider-*` headers, so the DATA LAYERS row reads
+ * `DEGRADED · Overpass · <reason>` (src/layers/traffic/ingestion.js).
+ * @param {import('http').ServerResponse} res
+ * @param {object|null} provider  providerStatus() from the transport (or null)
+ * @param {Array<object>} [failures]
+ * @param {string} [endpoint]  last mirror tried
+ */
+function sendOverpassDegraded(
+  res,
+  provider,
+  failures = [],
+  endpoint = 'unknown',
+) {
+  const status = providerStatus({
+    status: 'degraded',
+    source: OVERPASS_PROVIDER_SOURCE,
+    error:
+      (typeof provider?.error === 'string' && provider.error.trim()) ||
+      'Overpass mirrors unavailable',
+    count: 0,
+  });
+  res.writeHead(503, {
+    'Content-Type': 'application/json',
+    'Retry-After': '30',
+    'X-Overpass-Cache': 'MISS',
+    'X-Overpass-Upstream': endpoint || 'unknown',
+    ...statusHeaders(status),
+  });
+  res.end(
+    JSON.stringify({
+      error: status.error,
+      provider: status,
+      failures: Array.isArray(failures) ? failures : [],
+    }),
+  );
 }
 
 /**
@@ -131,6 +203,15 @@ function overpassProxy({ routing = {} } = {}) {
               sendOverpassResponse(res, stale, 'STALE');
               return;
             }
+            if (preflight.payload?.provider) {
+              sendOverpassDegraded(
+                res,
+                preflight.payload.provider,
+                preflight.payload.failures,
+                preflight.payload.endpoint,
+              );
+              return;
+            }
           }
           if (preflight.source === 'DISK') {
             _overpassCache.set(cacheKey, preflight.payload);
@@ -185,18 +266,43 @@ function overpassProxy({ routing = {} } = {}) {
             sendOverpassResponse(res, stale, 'STALE');
             return;
           }
+          // Every mirror failed for infrastructure reasons (406/429/5xx,
+          // timeouts, network): the structured DEGRADED answer. A query every
+          // mirror rejected (400-class) carries no `provider` and is passed
+          // through as upstream's own verdict.
+          if (payload.provider) {
+            sendOverpassDegraded(
+              res,
+              payload.provider,
+              payload.failures,
+              payload.endpoint,
+            );
+            return;
+          }
         }
         sendOverpassResponse(res, payload, 'MISS');
       } catch (e) {
-        // Every mirror threw (network-level). Same serve-stale rule.
+        // Every mirror threw (network-level) or the proxy itself failed. Same
+        // serve-stale rule; otherwise the structured DEGRADED answer (HTTP
+        // 503 + reason) — never a bare 502 the row would print verbatim.
         const stale = cacheKey ? await readStaleOverpass(cacheKey) : null;
         if (stale) {
           sendOverpassResponse(res, stale, 'STALE');
           return;
         }
         console.error('[Overpass Proxy]', e.message);
-        res.writeHead(502, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Overpass proxy error' }));
+        sendOverpassDegraded(
+          res,
+          e?.provider ||
+            providerStatus({
+              status: 'degraded',
+              source: OVERPASS_PROVIDER_SOURCE,
+              error: `Overpass proxy error · ${String(e?.message || 'unknown').slice(0, 120)}`,
+              count: 0,
+            }),
+          e?.failures,
+          e?.failures?.[e.failures.length - 1]?.endpoint,
+        );
       }
     });
 

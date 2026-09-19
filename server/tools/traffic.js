@@ -263,8 +263,9 @@ export const tools = [
       '`source` is ROAD_NETWORK_SOURCE — "overpass" (default: OSM roads via ' +
       'the Overpass mirrors) or "off" (the OSM road fetch is disabled); ' +
       '`upstreams` is the ordered Overpass mirror list actually in force ' +
-      '(the OVERPASS_UPSTREAMS csv override when set, else the default public ' +
-      'mirrors); `blocker` is the fixed operator note explaining why public ' +
+      '(the OVERPASS_ENDPOINTS csv override — alias OVERPASS_UPSTREAMS — when ' +
+      'set, else the default public mirrors; `endpointsSource` names which); ' +
+      '`blocker` is the fixed operator note explaining why public ' +
       'mirrors are not dependable from cloud egress; `fromEnv` says whether ' +
       'each variable is set (never its value). `tomtom.configured` says ' +
       'whether live TomTom traffic is enabled (TOMTOM_API_KEY present). No ' +
@@ -273,6 +274,9 @@ export const tools = [
     cacheSeconds: 300,
     async handler(params, ctx) {
       const roadNetwork = roadNetworkConfig(ctx?.env || process.env);
+      const mirrorsOverridden =
+        roadNetwork.fromEnv.OVERPASS_ENDPOINTS ||
+        roadNetwork.fromEnv.OVERPASS_UPSTREAMS;
       let tomtom = { configured: null, provider: null };
       try {
         const status = await invokeTomTom(`${TOMTOM_ROUTE}/status`, {
@@ -297,15 +301,13 @@ export const tools = [
           status:
             roadNetwork.source === 'off'
               ? 'unavailable'
-              : roadNetwork.fromEnv.OVERPASS_UPSTREAMS
+              : mirrorsOverridden
                 ? 'live'
                 : 'degraded',
           source: `road-network:${roadNetwork.source}`,
           fetchedAt: (ctx?.now ? ctx.now() : new Date()).toISOString(),
           ageSec: 0,
-          error: roadNetwork.fromEnv.OVERPASS_UPSTREAMS
-            ? null
-            : roadNetwork.blocker,
+          error: mirrorsOverridden ? null : roadNetwork.blocker,
           count: roadNetwork.upstreams.length,
         },
       };

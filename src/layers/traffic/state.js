@@ -275,6 +275,13 @@ export function createState({ services }) {
   layerState._retryDelayMs = 1500;
   layerState._retryBoundsKey = null;
   layerState._roadError = null;
+  /**
+   * @type {{status:string,source:string|null,error:string|null}|null}
+   * Structured status of the last FAILED road fetch (the proxy's
+   * `DEGRADED · Overpass · <reason>` answer), null when roads loaded or the
+   * failure carried no status.
+   */
+  layerState._roadProvider = null;
 
   /** @type {number} 0–100 int — matched roads / roads with any flow candidates */
 
