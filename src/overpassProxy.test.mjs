@@ -11,7 +11,7 @@ import { mkdir, readFile, writeFile, unlink } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { Readable } from 'node:stream';
-import createViteConfig, { fetchOverpassPayload, overpassPayloadIsData, readOverpassDisk } from '../vite.config.js';
+import createViteConfig, { fetchOverpassPayload, overpassPayloadIsData, readOverpassDisk, resolveOverpassUpstreams } from '../vite.config.js';
 
 const ENDPOINTS = ['https://a.example/api', 'https://b.example/api', 'https://c.example/api'];
 
@@ -297,7 +297,11 @@ test('coalesced outage callers both receive last-good data, never a cached refus
         assert.equal(response.body, DATA.body);
         assert.equal(response.headers['X-Overpass-Cache'], 'STALE');
       }
-      assert.equal(fetches, 4, 'one shared, bounded mirror sequence');
+      // One pass over the chain, not one per caller. Counted from the resolved
+      // chain rather than hardcoded: an operator running their own instance
+      // (OVERPASS_EXTRA_UPSTREAMS) makes it longer than the built-in list, and
+      // the invariant under test is the coalescing, not the mirror count.
+      assert.equal(fetches, resolveOverpassUpstreams().length, 'one shared, bounded mirror sequence');
       assert.deepEqual(JSON.parse(await readFile(file, 'utf8')), stale);
     } finally {
       release.resolve();

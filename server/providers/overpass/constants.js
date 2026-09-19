@@ -29,6 +29,110 @@ const OVERPASS_UPSTREAMS = [
 ];
 
 /**
+ * Extra Overpass endpoints from OVERPASS_EXTRA_UPSTREAMS, tried BEFORE the
+ * built-in list.
+ *
+ * The built-in mirrors are not reachable from everywhere, and as of #648 they
+ * are not reachable from ANYWHERE for this app: overpass-api.de refuses any
+ * request whose User-Agent carries this project's name, and the operators asked
+ * — correctly — that heavy consumers run their own instance instead of rotating
+ * through the remaining free ones. A self-hosted endpoint belongs in the
+ * operator's environment, not in the repo's default list.
+ *
+ * Extras go FIRST: an endpoint someone configured deliberately is a better
+ * first try than one that just timed out for them, and each dead built-in costs
+ * a full OVERPASS_TIMEOUT_MS before the chain moves on.
+ *
+ * @param {string} raw Whitespace/comma-separated URL list.
+ * @returns {Array<string>} Valid absolute http(s) endpoint URLs, in order.
+ */
+function parseExtraOverpassUpstreams(raw) {
+  const out = [];
+  for (const token of String(raw ?? '').split(/[\s,]+/)) {
+    if (!token) continue;
+    let url;
+    try {
+      url = new URL(token);
+    } catch {
+      console.warn(
+        `[Overpass] ignoring unparseable OVERPASS_EXTRA_UPSTREAMS entry: ${token}`,
+      );
+      continue;
+    }
+    // Structural checks only. Unlike a world-editable OSM tag, this value comes
+    // from the operator's own env, so a private or localhost address is a
+    // legitimate self-hosted instance rather than an SSRF target.
+    if (
+      (url.protocol !== 'http:' && url.protocol !== 'https:') ||
+      url.username ||
+      url.password ||
+      !url.hostname
+    ) {
+      console.warn(
+        `[Overpass] ignoring unusable OVERPASS_EXTRA_UPSTREAMS entry: ${token}`,
+      );
+      continue;
+    }
+    if (!out.includes(url.href)) out.push(url.href);
+  }
+  return out;
+}
+
+/** @type {{raw: string|null, list: Array<string>, extras: Set<string>}} Resolved-chain memo. */
+let overpassUpstreamMemo = {
+  raw: null,
+  list: OVERPASS_UPSTREAMS,
+  extras: new Set(),
+};
+
+/** Re-resolve the chain only when the env value actually changed. */
+function overpassUpstreamState() {
+  const raw = process.env.OVERPASS_EXTRA_UPSTREAMS ?? '';
+  if (overpassUpstreamMemo.raw !== raw) {
+    const extra = parseExtraOverpassUpstreams(raw);
+    if (extra.length)
+      console.log(
+        `[Overpass] ${extra.length} extra upstream(s) from OVERPASS_EXTRA_UPSTREAMS, tried first`,
+      );
+    overpassUpstreamMemo = {
+      raw,
+      list: [...extra, ...OVERPASS_UPSTREAMS],
+      extras: new Set(extra),
+    };
+  }
+  return overpassUpstreamMemo;
+}
+
+/**
+ * The endpoint chain to try, extras first. Resolved lazily: module evaluation
+ * happens before the dev server copies `.env` into `process.env`, so reading the
+ * variable at module scope would always see undefined.
+ * @returns {Array<string>} Ordered endpoint URLs.
+ */
+function resolveOverpassUpstreams() {
+  return overpassUpstreamState().list;
+}
+
+/**
+ * Whether an endpoint came from OVERPASS_EXTRA_UPSTREAMS rather than the
+ * built-in list.
+ *
+ * This exists for the REGIONAL-EXTRACT hazard. A self-hosted instance built
+ * from a regional extract answers fast with HTTP 200 for the whole planet, but
+ * serves an empty element list everywhere outside its extract — which the proxy
+ * would otherwise store as a valid answer for 7 days, silently pinning every
+ * Overpass-backed layer to "no data here" for regions that do have data. An
+ * empty answer from an operator endpoint is therefore treated as that endpoint
+ * declining, not as data. Built-in planet mirrors keep the old meaning, where
+ * an empty result really can be the truth.
+ * @param {string} endpoint Endpoint URL from the resolved chain.
+ * @returns {boolean}
+ */
+function isExtraOverpassUpstream(endpoint) {
+  return overpassUpstreamState().extras.has(endpoint);
+}
+
+/**
  * TTL for FRESH cached Overpass responses (ms). Road geometry is static for
  * months — the original 45 s TTL forced a public-mirror round-trip on nearly
  * every viewport revisit and left nothing to serve when the mirrors 502
@@ -145,4 +249,7 @@ export {
   OVERPASS_UPSTREAMS,
   OVERPASS_USER_AGENT,
   OVERPASS_TIMEOUT_MS,
+  parseExtraOverpassUpstreams,
+  resolveOverpassUpstreams,
+  isExtraOverpassUpstream,
 };

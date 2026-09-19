@@ -1,0 +1,100 @@
+# Self-hosted Overpass API for the Overpass-backed layers (Street Traffic,
+# Mapped Installations, OSM webcams).
+#
+# Why this exists: the public Overpass mirrors are a shared, donation-funded
+# resource and this app's query volume is not a fair share of them (upstream
+# issue #648). Running your own instance is what the overpass-api.de operators
+# asked heavy consumers to do, and it is also simply better — road geometry
+# changes on the order of months, so a local copy answers in milliseconds
+# instead of seconds, with no rate limit and no network dependency.
+#
+#   docker compose -f docker-compose.overpass.yml up -d
+#
+# Then point the app at it in .env:
+#
+#   OVERPASS_EXTRA_UPSTREAMS=http://localhost:12345/api/interpreter
+#
+# See docs/SELF-HOSTED-OVERPASS.md for region choices, disk requirements and
+# import times.
+
+services:
+  overpass:
+    image: wiktorn/overpass-api:latest
+    # Parameterised so a second instance can be built alongside a working one —
+    # a planet import takes days, and destroying a serving regional database to
+    # start one leaves every Overpass-backed layer dead in the meantime. Run the
+    # new one under its own Compose project (-p) with its own name and port,
+    # then repoint OVERPASS_EXTRA_UPSTREAMS once it answers.
+    container_name: ${OVERPASS_CONTAINER_NAME:-gev-overpass}
+    ports:
+      - '${OVERPASS_LOCAL_PORT:-12345}:80'
+
+    # /db is the `overpass` user's home directory, and a fresh named volume
+    # inherits its 0700 mode. The CGI process that answers queries runs as a
+    # DIFFERENT user, so it cannot traverse /db to reach the dispatcher socket
+    # at /db/db/osm3s_osm_base — every query fails with
+    # "runtime error: open64: 13 Permission denied" while the import itself
+    # reports success. Relax the traversal bit once the import lands, then hand
+    # off to the image's own entrypoint unchanged.
+    entrypoint:
+      - /bin/sh
+      - -c
+      # `$$` escapes Compose's own variable interpolation so the shell sees `$@`
+      # — the image's CMD, forwarded unchanged.
+      - '(while [ ! -f /db/init_done ]; do sleep 5; done; chmod 755 /db) & exec /docker-entrypoint.sh "$$@"'
+      - --
+    # Overriding `entrypoint` clears the image's CMD, so restate it: the image's
+    # own entrypoint takes this path as its argument and runs nothing without it.
+    command: ['/app/docker-entrypoint.sh']
+    environment:
+      # `init` builds the database once from OVERPASS_PLANET_URL. The container
+      # then serves queries and applies minutely diffs.
+      OVERPASS_MODE: init
+
+      # WHICH REGION YOU GET. Default is Washington state (~360 MB download,
+      # ~2 GB on disk, ~15 min import) — small enough to prove the setup works
+      # before committing to a continent. Override with any Geofabrik extract:
+      #
+      #   North America  https://download.geofabrik.de/north-america-latest.osm.pbf
+      #   Europe         https://download.geofabrik.de/europe-latest.osm.pbf
+      #   Planet         https://planet.openstreetmap.org/pbf/planet-latest.osm.pbf
+      #
+      # Queries OUTSIDE your extract return no data. The app treats an empty
+      # answer from a configured endpoint as that endpoint declining rather
+      # than as "no roads here", so flying outside the region fails visibly
+      # instead of caching a blank for 7 days.
+      OVERPASS_PLANET_URL: ${OVERPASS_PLANET_URL:-https://download.geofabrik.de/north-america/us/washington-latest.osm.pbf}
+
+      # Geofabrik stopped publishing .osm.bz2 for US extracts, and this image
+      # expects bz2. Convert the .pbf in place before the import reads it.
+      OVERPASS_PLANET_PREPROCESS: 'mv /db/planet.osm.bz2 /db/planet.osm.pbf && osmium cat -o /db/planet.osm.bz2 /db/planet.osm.pbf && rm /db/planet.osm.pbf'
+
+      # No element history. The app only ever reads current geometry, and attic
+      # data roughly doubles both import time and disk.
+      OVERPASS_META: 'no'
+
+      # Minutely diffs keep the extract current. Raise to reduce chatter against
+      # the OSM replication servers; set OVERPASS_UPDATE_SLEEP=0 to freeze the
+      # snapshot entirely.
+      OVERPASS_UPDATE_SLEEP: '86400'
+
+      # Area generation is only needed by `is_in` / admin-boundary pivots, and
+      # it adds substantial import time. Street Traffic uses bbox queries and
+      # does not need it — uncomment if Mapped Installations misbehaves.
+      # OVERPASS_RULES_LOAD: '10'
+    volumes:
+      - overpass-db:/db
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'wget -qO- "http://localhost/api/interpreter?data=[out:json];out count;" >/dev/null || exit 1',
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30m
+    restart: unless-stopped
+
+volumes:
+  overpass-db:
