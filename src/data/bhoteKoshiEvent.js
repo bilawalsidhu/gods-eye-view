@@ -22,6 +22,7 @@ import {
   createBhoteKoshiEmbeddedMedia,
   resolveEmbeddedMediaSource,
 } from './bhoteKoshiEmbeddedMedia.js';
+import { iconMarkup, setIconContent } from '../ui/icons/layerIcon.js';
 
 export const BHOTE_KOSHI_LAYER_ID = 'bhote-koshi-2026';
 export const BHOTE_KOSHI_OVERLAY_SOURCE_ID = 'bhote-koshi-witnesses';
@@ -783,6 +784,21 @@ function setElementAttribute(element, attribute, value) {
   return true;
 }
 
+/**
+ * Inline Lucide icon + visible text on a control (`PLAY`, `PAUSE`, `REPLAY`),
+ * written only when the pair changes so an unchanged frame is a no-op. An
+ * empty icon name writes the text alone.
+ */
+function setIconLabel(element, icon, text) {
+  if (!element) return false;
+  if (!icon) return setElementProperty(element, 'textContent', text);
+  const key = `${icon}|${text}`;
+  if (element.dataset?.iconLabel === key) return false;
+  if (element.dataset) element.dataset.iconLabel = key;
+  setIconContent(element, icon, { text });
+  return true;
+}
+
 function collectPanelReferences(panel) {
   return Object.freeze({
     imagerySection: panel.querySelector('[data-role="imagery-comparison"]'),
@@ -821,7 +837,7 @@ function createPanel(event, handlers) {
         <div class="bhote-event-kicker">EVENT RECONSTRUCTION · 26 AUG 2026</div>
         <div class="bhote-event-title">BHOTE KOSHI OUTBURST FLOOD</div>
       </div>
-      <button class="bhote-event-icon-btn" type="button" data-action="close" title="Close event layer" aria-label="Close event layer">×</button>
+      <button class="bhote-event-icon-btn" type="button" data-action="close" title="Close event layer" aria-label="Close event layer">${iconMarkup('x')}</button>
     </div>
     <div class="bhote-event-status-row">
       <span class="bhote-event-status observed">OBSERVED IMAGERY</span>
@@ -845,21 +861,21 @@ function createPanel(event, handlers) {
       </div>
       <input class="bhote-event-range flood" data-role="progress" type="range" min="0" max="1000" value="0" aria-label="Schematic downstream progression" />
       <div class="bhote-event-story-nav" aria-label="Story beat navigation">
-        <button type="button" data-action="previous-beat" title="Previous story beat" aria-label="Previous story beat">‹</button>
+        <button type="button" data-action="previous-beat" title="Previous story beat" aria-label="Previous story beat">${iconMarkup('chevron-left')}</button>
         <div class="bhote-event-story-current">
           <span data-role="beat-index">01 / 06</span>
           <strong data-role="beat-title" aria-live="polite">CAUSE</strong>
           <small data-role="beat-meta">CAPTURE TIME UNVERIFIED</small>
         </div>
-        <button type="button" data-action="next-beat" title="Next story beat" aria-label="Next story beat">›</button>
+        <button type="button" data-action="next-beat" title="Next story beat" aria-label="Next story beat">${iconMarkup('chevron-right')}</button>
       </div>
       <div class="bhote-event-actions">
-        <button type="button" data-action="play">▶ PLAY</button>
-        <button type="button" data-action="play-scene" hidden title="Play the next shot and continue through this scene">▶ PLAY SCENE</button>
-        <button type="button" data-action="cinematic" aria-pressed="false">◉ CINEMATIC</button>
-        <button type="button" data-action="story-replay">↺ FULL STORY</button>
-        <button type="button" data-action="open-source">↗ OPEN ORIGINAL</button>
-        <button type="button" data-action="corridor">⌖ LOWER GORGE</button>
+        <button type="button" data-action="play">${iconMarkup('play')} PLAY</button>
+        <button type="button" data-action="play-scene" hidden title="Play the next shot and continue through this scene">${iconMarkup('play')} PLAY SCENE</button>
+        <button type="button" data-action="cinematic" aria-pressed="false">${iconMarkup('circle-dot')} CINEMATIC</button>
+        <button type="button" data-action="story-replay">${iconMarkup('rotate-ccw')} FULL STORY</button>
+        <button type="button" data-action="open-source">${iconMarkup('external-link')} OPEN ORIGINAL</button>
+        <button type="button" data-action="corridor">${iconMarkup('crosshair')} LOWER GORGE</button>
       </div>
     </section>
     <details class="bhote-event-evidence">
@@ -868,7 +884,7 @@ function createPanel(event, handlers) {
     </details>
     <div class="bhote-event-credit">
       <span>GEOLOCATIONS · GEO GEORGE SHADRACH</span>
-      <button type="button" data-action="geolocation-map">↗ OPEN PUBLIC MAP</button>
+      <button type="button" data-action="geolocation-map">${iconMarkup('external-link')} OPEN PUBLIC MAP</button>
     </div>
     <p class="bhote-event-caveat"><span data-role="caveat"></span><span data-role="imagery-cloud-note"> Clouds are preserved from the source imagery.</span></p>
   `;
@@ -2578,7 +2594,8 @@ export function createBhoteKoshiEventLayer({
     splitHandle.setAttribute('aria-valuemin', '0');
     splitHandle.setAttribute('aria-valuemax', '100');
     splitHandle.setAttribute('aria-orientation', 'horizontal');
-    splitHandle.textContent = '↔';
+    // Icon-only handle; its aria-label above names it.
+    setIconContent(splitHandle, 'move-horizontal');
     splitHandle.addEventListener('pointerdown', handleSplitPointerDown);
     splitHandle.addEventListener('pointermove', handleSplitPointerMove);
     splitHandle.addEventListener('pointerup', finishSplitPointerDrag);
@@ -2655,11 +2672,8 @@ export function createBhoteKoshiEventLayer({
   function syncCinematicButton() {
     const button = _panelRefs?.cinematicButton;
     if (!button) return;
-    setElementProperty(
-      button,
-      'textContent',
-      _cinematicActive ? '■ RELEASE CAMERA' : '◉ CINEMATIC',
-    );
+    if (_cinematicActive) setIconLabel(button, 'square', 'RELEASE CAMERA');
+    else setIconLabel(button, 'circle-dot', 'CINEMATIC');
     setElementAttribute(button, 'aria-pressed', String(_cinematicActive));
   }
 
@@ -3041,25 +3055,21 @@ export function createBhoteKoshiEventLayer({
         : `~${elapsedLabel(_progress, _event.reconstruction.elapsedSeconds)} / ` +
             elapsedLabel(1, _event.reconstruction.elapsedSeconds),
     );
-    const playLabel = sceneDirected
+    const [playIcon, playText] = sceneDirected
       ? _sceneActionPending && _sceneActionPending.type !== 'scene'
-        ? '… PLAYING SHOT'
-        : '▶ PLAY SHOT'
+        ? ['', '… PLAYING SHOT']
+        : ['play', 'PLAY SHOT']
       : _playing
-        ? 'Ⅱ PAUSE'
+        ? ['pause', 'PAUSE']
         : _progress >= 1
           ? _cinematicReplayArmed
-            ? '↺ REPLAY CINEMATIC'
-            : '↺ REPLAY'
-          : '▶ PLAY';
-    setElementProperty(_panelRefs.playButton, 'textContent', playLabel);
-    setElementProperty(
-      _panelRefs.playSceneButton,
-      'textContent',
-      _sceneActionPending?.type === 'scene'
-        ? '… PLAYING SCENE'
-        : '▶ PLAY SCENE',
-    );
+            ? ['rotate-ccw', 'REPLAY CINEMATIC']
+            : ['rotate-ccw', 'REPLAY']
+          : ['play', 'PLAY'];
+    setIconLabel(_panelRefs.playButton, playIcon, playText);
+    if (_sceneActionPending?.type === 'scene')
+      setIconLabel(_panelRefs.playSceneButton, '', '… PLAYING SCENE');
+    else setIconLabel(_panelRefs.playSceneButton, 'play', 'PLAY SCENE');
     setElementProperty(
       _panelRefs.playSceneButton,
       'disabled',
@@ -3076,11 +3086,7 @@ export function createBhoteKoshiEventLayer({
       'aria-label',
       `Continue ${_sceneContext?.sceneTitle || 'current scene'} from next shot`,
     );
-    setElementProperty(
-      _panelRefs.storyReplayButton,
-      'textContent',
-      '↺ FULL STORY',
-    );
+    setIconLabel(_panelRefs.storyReplayButton, 'rotate-ccw', 'FULL STORY');
     if (!sceneDirected) {
       setElementProperty(_panelRefs.storyReplayButton, 'disabled', false);
       setElementAttribute(
@@ -3801,7 +3807,7 @@ export function createBhoteKoshiEventLayer({
     name: 'Bhote Koshi Flood',
     // Scene-owned component; retain registration without a standalone menu row.
     showInTogglePanel: false,
-    icon: '🌊',
+    icon: 'waves',
     source: 'Vantor + GeoPera',
     updateInterval: 0,
     init,

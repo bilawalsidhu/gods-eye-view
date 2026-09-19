@@ -1,4 +1,5 @@
 import { createSurfaceKeyboard } from './ui/surfaceKeyboard.js';
+import { appendIcon, setIconContent } from './ui/icons/layerIcon.js';
 
 /**
  * The POWER UP surface — paste a key, get a power.
@@ -59,7 +60,11 @@ export function stripKeylessBasemapFromHash(hash) {
   }
 }
 
-const TIER_DOTS = Object.freeze({ metered: '🔴', free: '🟡' });
+/** Tier dot copy; the dot itself is an inline circle icon coloured by CSS. */
+const TIER_LABELS = Object.freeze({
+  metered: 'Metered — a billing-enabled account',
+  free: 'Free key — register, paste, done',
+});
 
 /** Build one key row. All content is our own registry text, set via textContent. */
 function buildRow(documentRef, key) {
@@ -79,11 +84,10 @@ function buildRow(documentRef, key) {
   title.textContent = key.title;
   const tier = documentRef.createElement('span');
   tier.className = 'key-setup-tier';
-  tier.textContent = TIER_DOTS[key.tier] || '';
-  tier.title =
-    key.tier === 'metered'
-      ? 'Metered — a billing-enabled account'
-      : 'Free key — register, paste, done';
+  tier.dataset.tier = key.tier === 'metered' ? 'metered' : 'free';
+  tier.title = TIER_LABELS[key.tier] || TIER_LABELS.free;
+  // Standalone status dot: the icon carries its own accessible name.
+  setIconContent(tier, 'circle', { label: tier.title }, documentRef);
   head.append(led, title, tier);
   if (key.clientExposed) {
     const exposed = documentRef.createElement('span');
@@ -108,7 +112,9 @@ function buildRow(documentRef, key) {
   get.href = key.getUrl;
   get.target = '_blank';
   get.rel = 'noopener noreferrer';
-  get.textContent = key.set ? 'MANAGE ↗' : 'GET KEY ↗';
+  // External link: label text plus a decorative external-link icon.
+  get.textContent = key.set ? 'MANAGE' : 'GET KEY';
+  appendIcon(get, 'external-link', {}, documentRef);
   head.append(get);
 
   const unlocks = documentRef.createElement('p');

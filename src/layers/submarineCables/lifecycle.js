@@ -7,7 +7,7 @@ export function createLifecycle({ state, parts, source, mapStackEventTarget }) {
   return {
     id: 'telegeography-submarine-cables',
     name: 'Submarine Cables',
-    icon: '≋',
+    icon: 'cable',
     source: source.label,
     updateInterval: 0,
     statsRefreshInterval: 500,

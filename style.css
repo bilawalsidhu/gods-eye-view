@@ -2,6 +2,8 @@
 /* Brand tokens first (single source of truth, docs/brand/BRAND_SOURCE.md). */
 @import './src/brand/tokens.css';
 @import './src/ui/styles/foundation.css';
+/* Inline Lucide icon contract (docs/brand/ICON_SOURCE.md) — before the components that size it. */
+@import './src/ui/styles/icons.css';
 @import './src/ui/styles/controls.css';
 @import './src/ui/styles/location.css';
 @import './src/ui/styles/status.css';

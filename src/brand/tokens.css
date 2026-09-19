@@ -52,5 +52,8 @@
   --od-logo-clear-space:   0.56; /* Minimum clear space LEFT and RIGHT of the lockup as a fraction of the lockup WIDTH. MEASURED-FROM-DIAGRAM: BrandGuidelines.pdf p3 — the red guide bands are 150 pt wide beside a 269.7 pt lockup (0.556 W) and each band contains a 55 %-scaled grey copy of the lockup (148.3 pt wide); no numeric rule is printed. */
   --od-logo-clear-space-y: 0.65; /* Minimum clear space ABOVE and BELOW the lockup as a fraction of the lockup HEIGHT. MEASURED-FROM-DIAGRAM: BrandGuidelines.pdf p3 — bands of 54 pt (top) / 50 pt (bottom) beside a 79.3 pt-tall lockup (0.63–0.68 H); each band holds a 43.7 pt-tall 55 %-scaled copy. */
   --od-logo-icon-mark-ratio: 0.65; /* Icon version: bare mark ≈ 65 % of the square tile, centred. MEASURED: BrandGuidelines.pdf p4 dark tile 158 × 161 pt with a 103 pt mark (0.65 / 0.64); the light tile holds a 109 pt mark (0.69). The 20 % corner radius of mark.svg is this repo's choice — p4 shows square tiles. */
+  /* ---- Iconography (DERIVED — the guideline documents no icon system; see docs/brand/ICON_SOURCE.md §2.3) ---- */
+  --od-icon-size: 18px; /* Default box of an inline Lucide icon (src/ui/icons/layerIcon.js); rows override per surface. DERIVED / NOT DOCUMENTED. */
+
   /* --od-logo-min-size: NOT DOCUMENTED — the guideline gives no numeric minimum size; p4 only says the icon version is used "wherever long version would not be recognizable because of size". No token is defined on purpose. */
 }

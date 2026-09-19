@@ -3,7 +3,7 @@
    --od-green-500 (#3BB795) with dark ink (--od-ink #161616) on filled
    controls; body text is --od-neutral-100 on the dark ground. */
 
-/* The CONTEXT ▸ CONTACTS action that opens the overlay. Spans the action
+/* The CONTEXT > CONTACTS action that opens the overlay. Spans the action
    grid so it never squeezes COCKPIT / SEARCH beside it. */
 .ask-ondemand-btn {
   grid-column: 1 / -1;

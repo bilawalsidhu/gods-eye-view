@@ -561,12 +561,17 @@
   position: absolute;
   left: 50%;
   top: 50%;
+  display: inline-grid;
+  place-items: center;
   color: #74dbff;
   font: 23px/1 sans-serif;
   transform-origin: 50% 50%;
-  text-shadow:
-    0 0 5px rgba(87, 223, 255, 0.9),
-    0 0 13px rgba(87, 223, 255, 0.35);
+  filter: drop-shadow(0 0 5px rgba(87, 223, 255, 0.9))
+    drop-shadow(0 0 13px rgba(87, 223, 255, 0.35));
+}
+.military-awareness-direction-arrow .od-icon {
+  display: block;
+  stroke-width: 2.5;
 }
 .military-awareness-direction-label {
   position: absolute;

@@ -6,7 +6,7 @@ export function createControls({ state: layerState, services, parts, source }) {
 
     name: 'Bikeshare',
 
-    icon: '🚲',
+    icon: 'bike',
 
     source: 'GBFS',
 

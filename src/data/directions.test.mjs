@@ -185,7 +185,7 @@ test('row chips: modes, arming, and command availability follow the state', () =
     status: 'ready',
     route,
   }).chips;
-  assert.equal(ready.find((c) => c.id === 'set-a').label, 'A ✓');
+  assert.equal(ready.find((c) => c.id === 'set-a').label, 'A SET');
   assert.equal(ready.find((c) => c.id === 'fly').disabled, false);
   assert.equal(ready.find((c) => c.id === 'swap').disabled, false);
   assert.equal(ready.find((c) => c.id === 'clear').disabled, false);

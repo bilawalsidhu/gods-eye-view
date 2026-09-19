@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { appendIcon } from '../ui/icons/layerIcon.js';
 
 const YOUTUBE_HOSTS = new Set([
   'youtube.com',
@@ -992,7 +993,8 @@ export function createBhoteKoshiEmbeddedMedia({
     link.href = source.url;
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
-    link.textContent = 'OPEN ORIGINAL ↗';
+    link.textContent = 'OPEN ORIGINAL';
+    appendIcon(link, 'external-link', {}, documentRef);
     footer.append(title, status, link);
     const body = documentRef.createElement('div');
     body.className = 'bhote-embedded-callout-body';

@@ -195,9 +195,10 @@ test('bindOdVoiceUi mirrors pipeline events: state chip, detail, transcript/answ
   assert.equal(ui.buttonLabel.textContent, 'SEND');
 
   pipeline.emit({ type: 'transcript', text: 'show military flights near me' });
-  assert.equal(ui.transcript.textContent, '› show military flights near me');
+  // The speaker chevron is an inline SVG (aria-hidden); only the text is read.
+  assert.equal(ui.transcript.textContent.trim(), 'show military flights near me');
   pipeline.emit({ type: 'answer', text: 'Military flights layer is on.', partial: true, source: 'chat' });
-  assert.equal(ui.answer.textContent, '‹ Military flights layer is on.');
+  assert.equal(ui.answer.textContent.trim(), 'Military flights layer is on.');
   assert.equal(ui.answer.dataset.partial, 'true');
   pipeline.emit({ type: 'workflow', phase: 'done', executionId: 'exec-1', status: 'success', timeToFirstLogMs: 1400, totalMs: 9000, actionCount: 2 });
   assert.equal(ui.workflow.textContent, 'workflow exec-1: success · first log 1400 ms · total 9000 ms · 2 action(s)');

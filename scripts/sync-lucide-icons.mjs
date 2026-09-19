@@ -1,0 +1,302 @@
+#!/usr/bin/env node
+/**
+ * Sync the Lucide icons this UI ships from the pinned `lucide-static` package.
+ *
+ *   node scripts/sync-lucide-icons.mjs            # svgo via npx (pinned), then normalise
+ *   node scripts/sync-lucide-icons.mjs --no-svgo  # offline: built-in minifier only
+ *
+ * Reads src/ui/icons/lucide-manifest.json (the only place icon names are
+ * declared), then for every entry:
+ *   1. copies node_modules/lucide-static/icons/<name>.svg,
+ *   2. optimises it with SVGO (viewBox preserved),
+ *   3. normalises the root element to the house contract —
+ *      viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+ *      stroke-linecap="round" stroke-linejoin="round" — and drops the class,
+ *   4. writes public/brand/icons/<name>.svg (one line + a licence comment),
+ * and finally writes public/brand/icons/LICENSE (verbatim from the package),
+ * public/brand/icons/LICENSE-icons.md (attribution), public/brand/icons/icons.json
+ * (slot id -> file / iconName / sourceUrl / license / retrievedAt) and
+ * regenerates src/ui/icons/lucideIcons.generated.js (the inner markup per
+ * icon, consumed by src/ui/icons/layerIcon.js in the browser and in Node tests
+ * alike — no bundler-specific `?raw` import is needed).
+ *
+ * The installed package version must equal the manifest version: a drift is
+ * an error, never a silent upgrade. Evidence ledger: docs/brand/ICON_SOURCE.md.
+ */
+import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import * as prettier from 'prettier';
+
+const ROOT = fileURLToPath(new URL('../', import.meta.url));
+const MANIFEST = path.join(ROOT, 'src/ui/icons/lucide-manifest.json');
+const PACKAGE_DIR = path.join(ROOT, 'node_modules/lucide-static');
+const OUT_DIR = path.join(ROOT, 'public/brand/icons');
+const GENERATED = path.join(ROOT, 'src/ui/icons/lucideIcons.generated.js');
+const SVGO_VERSION = '4.0.0';
+const ROOT_ATTRIBUTES = Object.freeze({
+  xmlns: 'http://www.w3.org/2000/svg',
+  width: '24',
+  height: '24',
+  viewBox: '0 0 24 24',
+  fill: 'none',
+  stroke: 'currentColor',
+  'stroke-width': '2',
+  'stroke-linecap': 'round',
+  'stroke-linejoin': 'round',
+});
+
+const now = () => new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+const sha256 = (buffer) => createHash('sha256').update(buffer).digest('hex');
+
+/** Split an SVG document into its root attributes and inner markup. */
+export function parseSvg(source) {
+  const match = /<svg\b([^>]*)>([\s\S]*?)<\/svg>\s*$/i.exec(source.trim());
+  if (!match) throw new Error('Not an SVG document');
+  const attributes = {};
+  for (const [, name, value] of match[1].matchAll(/([:\w-]+)\s*=\s*"([^"]*)"/g))
+    attributes[name] = value;
+  return { attributes, inner: match[2] };
+}
+
+/** Collapse inter-element whitespace; SVGO already strips comments and ids. */
+export function minifyInner(inner) {
+  return inner
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/>\s+</g, '><')
+    .replace(/\s+\/>/g, '/>')
+    .replace(/"\s*\/>/g, '"/>')
+    .trim();
+}
+
+/** Rebuild the document on the house contract (attribute order is fixed). */
+export function normalizeSvg(source, { name, version }) {
+  const { attributes, inner } = parseSvg(source);
+  if (attributes.viewBox && attributes.viewBox !== ROOT_ATTRIBUTES.viewBox)
+    throw new Error(`${name}: unexpected viewBox ${attributes.viewBox}`);
+  const body = minifyInner(inner);
+  if (!body) throw new Error(`${name}: empty icon body`);
+  if (/\b(?:fill|stroke)\s*=\s*"(?!none|currentColor)[^"]*"/.test(body))
+    throw new Error(`${name}: hard-coded colour inside the icon body`);
+  const head = Object.entries(ROOT_ATTRIBUTES)
+    .map(([key, value]) => `${key}="${value}"`)
+    .join(' ');
+  return {
+    inner: body,
+    svg: `<!-- lucide-static v${version} · ISC · https://lucide.dev/icons/${name} -->\n<svg ${head}>${body}</svg>\n`,
+  };
+}
+
+/** Slot-keyed manifest for consumers and tests: layer id / slot id -> icon file. */
+function writeIconsJson(manifest, installed, ledger) {
+  const retrievedAt = now();
+  const bytes = Object.fromEntries(ledger.map((entry) => [entry.name, entry]));
+  const slots = {};
+  for (const entry of manifest.icons) {
+    for (const slot of entry.slots || []) {
+      if (slots[slot]) throw new Error(`Slot ${slot} declared twice`);
+      slots[slot] = {
+        file: `public/brand/icons/${entry.name}.svg`,
+        iconName: entry.name,
+        sourceUrl: manifest.sourceUrlTemplate
+          .replace('{version}', installed.version)
+          .replace('{name}', entry.name),
+        license: installed.license,
+        retrievedAt,
+        replaces: entry.replaces,
+        sha256: bytes[entry.name].sha256,
+      };
+    }
+  }
+  const document = {
+    $comment:
+      'GENERATED by scripts/sync-lucide-icons.mjs from src/ui/icons/lucide-manifest.json. Keys are layer ids (DATA LAYERS rows) or UI slot ids; values point at the normalised SVG in this directory.',
+    set: installed.name,
+    version: installed.version,
+    license: installed.license,
+    source: manifest.source,
+    retrievedAt,
+    slots,
+  };
+  writeFileSync(
+    path.join(OUT_DIR, 'icons.json'),
+    `${JSON.stringify(document, null, 2)}\n`,
+  );
+}
+
+/** Human-readable attribution beside the verbatim package LICENSE. */
+function writeAttribution(installed) {
+  const licence = readFileSync(path.join(PACKAGE_DIR, 'LICENSE'), 'utf8');
+  writeFileSync(
+    path.join(OUT_DIR, 'LICENSE-icons.md'),
+    [
+      '# Icon attribution',
+      '',
+      `Every \`*.svg\` in this directory is copied from the npm package \`${installed.name}@${installed.version}\``,
+      `(${installed.homepage}, repository ${installed.repository?.url || 'https://github.com/lucide-icons/lucide'}),`,
+      'optimised with SVGO and normalised by `scripts/sync-lucide-icons.mjs`; the drawings themselves are',
+      'unchanged. Lucide is published under the ISC licence, and the icons it inherited from the Feather',
+      'project are under the MIT licence - both texts follow verbatim (also in `LICENSE` beside this file).',
+      'The slot -> icon mapping is `icons.json`; the evidence ledger is `docs/brand/ICON_SOURCE.md`.',
+      '',
+      '```',
+      licence.trimEnd(),
+      '```',
+      '',
+    ].join('\n'),
+  );
+}
+
+function runSvgo(inputDir, outputDir) {
+  const config = path.join(inputDir, '..', 'svgo.config.mjs');
+  writeFileSync(
+    config,
+    // SVGO 4's preset-default no longer removes the viewBox, so no override is
+    // needed; normalizeSvg() re-asserts it on every root element regardless.
+    [
+      'export default {',
+      '  multipass: true,',
+      "  plugins: ['preset-default'],",
+      '};',
+      '',
+    ].join('\n'),
+  );
+  execFileSync(
+    'npx',
+    [
+      '--yes',
+      '--package',
+      `svgo@${SVGO_VERSION}`,
+      '--',
+      'svgo',
+      '--config',
+      config,
+      '-f',
+      inputDir,
+      '-o',
+      outputDir,
+      '--quiet',
+    ],
+    { stdio: ['ignore', 'inherit', 'inherit'] },
+  );
+}
+
+export function syncLucideIcons({ svgo = true } = {}) {
+  const startedAt = now();
+  const manifest = JSON.parse(readFileSync(MANIFEST, 'utf8'));
+  const installed = JSON.parse(
+    readFileSync(path.join(PACKAGE_DIR, 'package.json'), 'utf8'),
+  );
+  if (installed.version !== manifest.version)
+    throw new Error(
+      `lucide-static ${installed.version} is installed but the manifest pins ${manifest.version}`,
+    );
+  if (installed.license !== manifest.license)
+    throw new Error(`Licence drift: package says ${installed.license}`);
+  const names = manifest.icons.map((entry) => entry.name);
+  if (new Set(names).size !== names.length)
+    throw new Error('Duplicate icon names in the manifest');
+
+  const work = mkdtempSync(path.join(tmpdir(), 'lucide-sync-'));
+  const rawDir = path.join(work, 'raw');
+  const optimisedDir = path.join(work, 'optimised');
+  mkdirSync(rawDir);
+  mkdirSync(optimisedDir);
+  for (const name of names) {
+    const file = path.join(PACKAGE_DIR, 'icons', `${name}.svg`);
+    if (!existsSync(file))
+      throw new Error(`lucide-static ${installed.version} has no icon ${name}`);
+    copyFileSync(file, path.join(rawDir, `${name}.svg`));
+  }
+  let optimiser = 'built-in minifier';
+  if (svgo) {
+    runSvgo(rawDir, optimisedDir);
+    optimiser = `svgo@${SVGO_VERSION} (preset-default, multipass)`;
+  }
+
+  mkdirSync(OUT_DIR, { recursive: true });
+  for (const stale of readdirSync(OUT_DIR)) {
+    if (stale.endsWith('.svg') && !names.includes(stale.replace(/\.svg$/, '')))
+      rmSync(path.join(OUT_DIR, stale));
+  }
+  const generated = {};
+  const ledger = [];
+  for (const name of names) {
+    const source = readFileSync(
+      path.join(svgo ? optimisedDir : rawDir, `${name}.svg`),
+      'utf8',
+    );
+    const { inner, svg } = normalizeSvg(source, {
+      name,
+      version: installed.version,
+    });
+    writeFileSync(path.join(OUT_DIR, `${name}.svg`), svg);
+    generated[name] = inner;
+    ledger.push({ name, bytes: Buffer.byteLength(svg), sha256: sha256(svg) });
+  }
+  copyFileSync(
+    path.join(PACKAGE_DIR, 'LICENSE'),
+    path.join(OUT_DIR, 'LICENSE'),
+  );
+  writeIconsJson(manifest, installed, ledger);
+  writeAttribution(installed);
+
+  const moduleSource = [
+    '// GENERATED by scripts/sync-lucide-icons.mjs — do not edit by hand.',
+    `// Source: lucide-static v${installed.version} (ISC) — ${manifest.source}`,
+    '// Inner markup of each normalised icon in public/icons/<name>.svg; the root',
+    '// <svg> element is composed by src/ui/icons/layerIcon.js.',
+    `export const LUCIDE_VERSION = '${installed.version}';`,
+    'export const LUCIDE_ICONS = Object.freeze({',
+    ...names.map((name) => `  '${name}': ${JSON.stringify(generated[name])},`),
+    '});',
+    '',
+  ].join('\n');
+  rmSync(work, { recursive: true, force: true });
+  return prettier
+    .resolveConfig(GENERATED)
+    .then((options) =>
+      prettier.format(moduleSource, { ...options, filepath: GENERATED }),
+    )
+    .then((formatted) => {
+      writeFileSync(GENERATED, formatted);
+      return {
+        startedAt,
+        finishedAt: now(),
+        package: `${installed.name}@${installed.version}`,
+        license: installed.license,
+        optimiser,
+        icons: ledger,
+        outDir: path.relative(ROOT, OUT_DIR),
+        generated: path.relative(ROOT, GENERATED),
+      };
+    });
+}
+
+if (
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
+  syncLucideIcons({ svgo: !process.argv.includes('--no-svgo') }).then(
+    (result) => {
+      console.log(JSON.stringify(result, null, 2));
+    },
+    (error) => {
+      console.error(error.message);
+      process.exitCode = 1;
+    },
+  );
+}

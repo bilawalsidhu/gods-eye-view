@@ -22,6 +22,7 @@
  *
  * The optional per-browser API key never reaches this module.
  */
+import { setIconContent } from '../../ui/icons/layerIcon.js';
 
 const ROUTE_LABELS = Object.freeze({
   auto: 'AUTO',
@@ -187,13 +188,25 @@ export function bindOdVoiceUi(
         setRoute(event.mode);
         break;
       case 'transcript':
-        if (transcript) transcript.textContent = `› ${truncate(event.text)}`;
+        // Speaker direction as an inline chevron icon, never a text glyph.
+        if (transcript)
+          setIconContent(
+            transcript,
+            'chevron-right',
+            { text: truncate(event.text) },
+            doc,
+          );
         break;
       case 'answer':
         if (answer) {
-          answer.textContent = event.text
-            ? `‹ ${truncate(event.text, 220)}`
-            : '';
+          if (event.text)
+            setIconContent(
+              answer,
+              'chevron-left',
+              { text: truncate(event.text, 220) },
+              doc,
+            );
+          else answer.textContent = '';
           answer.dataset.partial = String(Boolean(event.partial));
           answer.dataset.source = event.source || 'chat';
         }
@@ -203,7 +216,7 @@ export function bindOdVoiceUi(
           workflow.textContent = `local: ${event.results
             .map(
               (r) =>
-                `${r.layerId} ${r.enabled ? 'on' : 'off'}${r.ok ? '' : ' ✗'}`,
+                `${r.layerId} ${r.enabled ? 'on' : 'off'}${r.ok ? '' : ' (failed)'}`,
             )
             .join(', ')}`;
         }

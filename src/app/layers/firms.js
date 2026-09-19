@@ -19,7 +19,7 @@ export const firmsServices = {
 export function createApplicationFirms({ surface, ...options }) {
   return createLayer({
     ...options,
-    icon: options.icon ?? '▲',
+    icon: options.icon ?? 'flame',
     source: options.source ?? 'NASA FIRMS',
     feed: options.feed,
     services: { ...firmsServices, anchors: surface.anchors },

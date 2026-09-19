@@ -822,7 +822,7 @@
   outline: none;
 }
 
-/* DISPLAY ▸ Draw: shape segment, label field, colour, and the one-line hint */
+/* DISPLAY > Draw: shape segment, label field, colour, and the one-line hint */
 #draw-mode-row {
   min-width: 184px;
 }

@@ -31,9 +31,9 @@ export const DIRECTIONS_STEP_OVERLAY_SOURCE_OPTIONS = Object.freeze({
 
 /** Travel modes, keyed by the `/api/route` profile name. */
 export const DIRECTIONS_MODES = Object.freeze({
-  car: Object.freeze({ chip: 'DRIVE', word: 'Drive', icon: '🚗' }),
-  foot: Object.freeze({ chip: 'WALK', word: 'Walk', icon: '🚶' }),
-  bike: Object.freeze({ chip: 'BIKE', word: 'Bike', icon: '🚲' }),
+  car: Object.freeze({ chip: 'DRIVE', word: 'Drive', icon: 'car' }),
+  foot: Object.freeze({ chip: 'WALK', word: 'Walk', icon: 'footprints' }),
+  bike: Object.freeze({ chip: 'BIKE', word: 'Bike', icon: 'bike' }),
 });
 export const DEFAULT_DIRECTIONS_MODE = 'car';
 
@@ -115,7 +115,7 @@ export function directionsRowControls(state) {
   }));
   chips.push({
     id: 'set-a',
-    label: armed === 'a' ? 'CLICK MAP' : a ? 'A ✓' : 'SET A',
+    label: armed === 'a' ? 'CLICK MAP' : a ? 'A SET' : 'SET A',
     active: armed === 'a',
     state: armed === 'a' ? 'active' : 'idle',
     title:
@@ -126,7 +126,7 @@ export function directionsRowControls(state) {
   });
   chips.push({
     id: 'set-b',
-    label: armed === 'b' ? 'CLICK MAP' : b ? 'B ✓' : 'SET B',
+    label: armed === 'b' ? 'CLICK MAP' : b ? 'B SET' : 'SET B',
     active: armed === 'b',
     state: armed === 'b' ? 'active' : 'idle',
     title:
@@ -1248,7 +1248,7 @@ export function createDirectionsLayer({ services }) {
   const directionsLayer = {
     id: 'directions',
     name: 'Directions',
-    icon: '🧭',
+    icon: 'compass',
     source: 'OSM routing',
     updateInterval: 0,
 

@@ -6,6 +6,7 @@ import {
 } from '../../data/militaryAwarenessEngine.js';
 import { bearingBetweenCoordinates } from '../../cockpitMath.js';
 import { AWARENESS_PAGE_SIZE, CONTEXT_RIM_HEIGHT_M } from './policy.js';
+import { setIconContent } from '../../ui/icons/layerIcon.js';
 
 export function createRendering({
   state: layerState,
@@ -49,7 +50,8 @@ export function createRendering({
       marker.className = 'military-awareness-direction-marker';
       const arrow = document.createElement('span');
       arrow.className = 'military-awareness-direction-arrow';
-      arrow.textContent = '➜';
+      // Inline Lucide arrow; the marker label beside it carries the text.
+      setIconContent(arrow, 'arrow-right');
       const label = document.createElement('span');
       label.className = 'military-awareness-direction-label';
       marker.append(arrow, label);

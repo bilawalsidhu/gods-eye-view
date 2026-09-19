@@ -20,7 +20,7 @@ export function createInfrastructureLayers(services) {
       url: datacentersUrl,
       name: 'Datacenters',
       color: '#00ffff', // Cyan
-      icon: '▣',
+      icon: 'server',
       source: 'Local',
       labels: true,
       labelMax: 700,
@@ -35,7 +35,7 @@ export function createInfrastructureLayers(services) {
       url: damsUrl,
       name: 'Dams',
       color: '#0088ff', // Blue
-      icon: '▰',
+      icon: 'dam',
       source: 'USACE',
       labels: true,
       labelMax: 900,

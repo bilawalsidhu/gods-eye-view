@@ -92,7 +92,7 @@ export function createControls({ state: layerState, services, parts, source }) {
 
     name: 'Satellites',
 
-    icon: '🛰️',
+    icon: 'satellite',
 
     source: 'CelesTrak',
 
@@ -424,7 +424,7 @@ export function createControls({ state: layerState, services, parts, source }) {
         // Any explicit request for core clears the error, even when the mode did
         // NOT change: a failed dense load already reverted the param to core, so
         // a Space Missions restore of an already-core snapshot would otherwise
-        // leave the user staring at a DENSE ✕ they never caused.
+        // leave the user staring at a DENSE FAILED they never caused.
         layerState._denseStatus = 'idle';
         layerState._denseError = null;
       }
@@ -505,7 +505,7 @@ export function createControls({ state: layerState, services, parts, source }) {
         chips: [
           {
             id: 'catalog',
-            label: loading ? 'DENSE ···' : failed ? 'DENSE ✕' : 'DENSE',
+            label: loading ? 'DENSE ···' : failed ? 'DENSE FAILED' : 'DENSE',
             active,
             busy: loading,
             disabled: loading,

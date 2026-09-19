@@ -1,7 +1,7 @@
 /**
  * Manual whiteboard drawing: the Cesium + DOM half.
  *
- * DISPLAY ▸ Draw turns the globe into a whiteboard you draw on by hand: pick a
+ * DISPLAY > Draw turns the globe into a whiteboard you draw on by hand: pick a
  * shape (area, line or pin), click the vertices on the real world, double-click
  * or press Enter to finish, type a label. Each finished shape goes through the
  * SAME `annotationEngine.annotate()` the voice agent uses, with its geometry

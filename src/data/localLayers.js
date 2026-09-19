@@ -11,7 +11,7 @@ const [datacenters, dams] = createInfrastructureLayers(localGeoJsonServices);
 const fires = createFirmsHeatmapLayer({
   id: 'local-firms',
   name: 'FIRMS Active Fires',
-  icon: '▲',
+  icon: 'flame',
   source: 'NASA FIRMS · LIVE',
 });
 

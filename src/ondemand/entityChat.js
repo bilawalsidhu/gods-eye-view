@@ -32,6 +32,7 @@ import {
   SATELLITE_RADIUS_KM,
   MAX_NEARBY,
 } from './entityContext.js';
+import { setIconContent } from '../ui/icons/layerIcon.js';
 
 export const ENTITY_CHAT_ID = 'ondemand-entity-chat';
 export const API_KEY_STORAGE_KEY = 'ondemand.apiKey';
@@ -508,9 +509,10 @@ export function createEntityChat(deps = {}) {
     ui.close = el(document, 'button', {
       id: `${ENTITY_CHAT_ID}-close`,
       className: 'od-chat__icon-btn od-chat__close',
-      text: '×',
       attrs: { type: 'button', 'aria-label': 'Close ASK ONDEMAND' },
     });
+    // Inline Lucide close icon; the button's aria-label names it.
+    setIconContent(ui.close, 'x', {}, document);
     header.appendChild(ui.close);
     overlay.appendChild(header);
 

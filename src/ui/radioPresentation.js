@@ -1,3 +1,5 @@
+import { setIconContent } from './icons/layerIcon.js';
+
 /** Render Radio state without making playback or Context decisions. */
 export function renderRadioState(state) {
   if (this.destroyed || !state || !this._radioPanel) return;
@@ -127,7 +129,8 @@ export function renderRadioState(state) {
         ...state.categories.map((category) => {
           const option = document.createElement('option');
           option.value = category.id;
-          option.textContent = `● ${category.label} (${category.count})`;
+          // <option> cannot hold markup; the swatch is the option's own colour.
+          option.textContent = `${category.label} (${category.count})`;
           option.dataset.radioColor = category.color;
           option.style.color = category.color;
           option.setAttribute(
@@ -240,7 +243,10 @@ export function renderRadioState(state) {
         : 'Play';
     this._contextRadioMiniPlayBtn.disabled = !interactive || !hasStations;
     this._contextRadioMiniPlayBtn.classList.toggle('active', activePlayback);
-    this._contextRadioMiniPlayBtn.textContent = activePlayback ? 'Ⅱ' : '▶';
+    setIconContent(
+      this._contextRadioMiniPlayBtn,
+      activePlayback ? 'pause' : 'play',
+    );
     this._contextRadioMiniPlayBtn.setAttribute(
       'aria-label',
       `${action} ${selected ? 'selected' : 'nearest'} radio station`,
@@ -255,7 +261,10 @@ export function renderRadioState(state) {
         : 'Play';
     this._cockpitRadioPlayBtn.disabled = !interactive || !hasStations;
     this._cockpitRadioPlayBtn.classList.toggle('active', activePlayback);
-    this._cockpitRadioPlayBtn.textContent = activePlayback ? 'Ⅱ' : '▶';
+    setIconContent(
+      this._cockpitRadioPlayBtn,
+      activePlayback ? 'pause' : 'play',
+    );
     this._cockpitRadioPlayBtn.setAttribute(
       'aria-label',
       `${action} ${selected ? 'selected' : 'nearest'} radio station`,

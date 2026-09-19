@@ -232,7 +232,7 @@ test('Cockpit owns a focused shared Display portal and compact Radio controls', 
   assert.match(css, /body\.cockpit-mode #right-context-rail\s*\{\s*display:\s*none\s*!important;/);
   assert.match(css, /body\.cockpit-mode #left-panel-stack > #scene-panel\s*\{\s*display:\s*none\s*!important;/);
   assert.match(html, /id="cockpit-display-toggle-btn"[^>]*aria-controls="cockpit-display-panel"/);
-  assert.match(html, /id="cockpit-display-toggle-btn"[^>]*>◀<\/button>/);
+  assert.match(html, /id="cockpit-display-toggle-btn"[^>]*><svg [^>]*data-icon="chevron-left"[^>]*>[\s\S]*?<\/svg><\/button>/);
   assert.match(html, /data-cockpit-launcher="display"[\s\S]*?id="cockpit-display-toggle-btn"/);
   assert.match(html, /data-cockpit-display-slot="hud"/);
   assert.match(html, /data-cockpit-display-slot="detection"[\s\S]*?data-cockpit-display-slot="parameters"[\s\S]*?data-cockpit-display-slot="models3d"/);
@@ -263,7 +263,7 @@ test('Cockpit owns a focused shared Display portal and compact Radio controls', 
   assert.equal((html.match(/id="models3d-toggle"/g) || []).length, 1, '3D control must have one stateful DOM owner');
   assert.doesNotMatch(html, /id="cockpit-(?:hud|detection|models3d)-toggle"/);
   assert.match(html, /id="cockpit-radio-toggle-btn"[^>]*aria-controls="cockpit-radio-panel"/);
-  assert.match(html, /id="cockpit-radio-toggle-btn"[^>]*>◀<\/button>/);
+  assert.match(html, /id="cockpit-radio-toggle-btn"[^>]*><svg [^>]*data-icon="chevron-left"[^>]*>[\s\S]*?<\/svg><\/button>/);
   assert.match(html, /data-cockpit-launcher="radio"[\s\S]*?id="cockpit-radio-toggle-btn"/);
   const cockpitRadio = html.match(/id="cockpit-radio-panel"[\s\S]*?<\/div>\s*<\/div>\s*<\/aside>/);
   assert.ok(cockpitRadio, 'Cockpit compact Radio controls are missing');
@@ -277,8 +277,9 @@ test('Cockpit owns a focused shared Display portal and compact Radio controls', 
   assert.match(css, /is-expanded:has\(\[data-cockpit-launcher='display'\]\)[\s\S]*?box-shadow:\s*0 8px 32px rgba\(0, 0, 0, 0\.42\)/);
   assert.match(css, /\.cockpit-utility-control\.is-expanded \.cockpit-utility-launcher\s*\{[\s\S]*?border:\s*0;[\s\S]*?background:\s*transparent;[\s\S]*?box-shadow:\s*none;/);
   assert.match(css, /\.cockpit-utility-control\.is-expanded \.cockpit-utility-divider\s*\{[\s\S]*?linear-gradient\(\s*90deg,\s*rgb\(59 183 149 \/ 28%\),\s*rgba\(59, 183, 149, 0\.18\) 58%,\s*transparent\s*\)[\s\S]*?box-shadow:\s*0 0 7px rgba\(59, 183, 149, 0\.22\);/);
-  assert.match(radioBindings, /this\._cockpitDisplayToggleBtn\.textContent = displayOpen \? '▶' : '◀';/);
-  assert.match(radioBindings, /this\._cockpitRadioToggleBtn\.textContent = radioOpen \? '▶' : '◀';/);
+  // Tray toggles render inline Lucide chevrons (no text glyphs).
+  assert.match(radioBindings, /setIconContent\(\s*this\._cockpitDisplayToggleBtn,\s*displayOpen \? 'chevron-right' : 'chevron-left',?\s*\)/);
+  assert.match(radioBindings, /setIconContent\(\s*this\._cockpitRadioToggleBtn,\s*radioOpen \? 'chevron-right' : 'chevron-left',?\s*\)/);
   assert.match(css, /#cockpit-display-panel\s*\{[\s\S]*?display:\s*flex;[\s\S]*?gap:\s*7px;[\s\S]*?padding:\s*0;[\s\S]*?border-top:\s*0;/);
   assert.doesNotMatch(ui, /--cockpit-display-tab-width/);
   // These two widths size Cockpit Radio and nothing else. They were named for

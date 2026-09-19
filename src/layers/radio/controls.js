@@ -4,7 +4,7 @@ export function createControls({ state: layerState, services, parts, source }) {
 
     name: 'Radio',
 
-    icon: '◉',
+    icon: 'radio',
 
     source: 'Radio Browser',
 

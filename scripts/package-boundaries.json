@@ -388,7 +388,9 @@
       "src/loadingFeedback.js",
       "src/data/installationFeedback.js",
       "src/keySetupCore.mjs",
-      "src/data/feedState.js"
+      "src/data/feedState.js",
+      "src/ui/icons/layerIcon.js",
+      "src/ui/icons/lucideIcons.generated.js"
     ],
     "external": []
   },
@@ -399,7 +401,9 @@
       "src/ui/locationControls.js",
       "src/ui/locationSearch.js",
       "src/locationStatus.js",
-      "src/app/stateChannel.js"
+      "src/app/stateChannel.js",
+      "src/ui/icons/layerIcon.js",
+      "src/ui/icons/lucideIcons.generated.js"
     ],
     "external": []
   },
@@ -410,7 +414,9 @@
       "src/ui/radioControls.js",
       "src/ui/radioBindings.js",
       "src/ui/radioPresentation.js",
-      "src/ui/radioTunerModel.js"
+      "src/ui/radioTunerModel.js",
+      "src/ui/icons/layerIcon.js",
+      "src/ui/icons/lucideIcons.generated.js"
     ],
     "external": []
   },
@@ -589,7 +595,9 @@
       "src/ui/aircraftDisplay.js",
       "src/ui/layerBindings.js",
       "src/ui/displayBindings.js",
-      "src/ui/shellFacade.js"
+      "src/ui/shellFacade.js",
+      "src/ui/icons/layerIcon.js",
+      "src/ui/icons/lucideIcons.generated.js"
     ],
     "external": ["cesium"]
   },
@@ -907,7 +915,9 @@
       "src/layers/launches/source.js",
       "src/layers/launches/state.js",
       "src/layers/launches/testing.js",
-      "src/data/inputOwnership.js"
+      "src/data/inputOwnership.js",
+      "src/ui/icons/layerIcon.js",
+      "src/ui/icons/lucideIcons.generated.js"
     ],
     "external": ["cesium"]
   },
@@ -953,7 +963,9 @@
       "src/layers/awareness/state.js",
       "src/layers/awareness/subject.js",
       "src/layers/awareness/testing.js",
-      "src/ui/panelRailGeometry.js"
+      "src/ui/panelRailGeometry.js",
+      "src/ui/icons/layerIcon.js",
+      "src/ui/icons/lucideIcons.generated.js"
     ],
     "external": ["cesium"]
   },
@@ -1823,7 +1835,9 @@
       "src/scenes/sharing.js",
       "src/ui/sceneSharing.js",
       "src/ondemand/entityChat.js",
-      "src/ondemand/entityContext.js"
+      "src/ondemand/entityContext.js",
+      "src/ui/icons/layerIcon.js",
+      "src/ui/icons/lucideIcons.generated.js"
     ],
     "external": [
       "@mapbox/vector-tile",
@@ -2218,7 +2232,9 @@
       "src/sources/overpassFeaturesRecords.js",
       "src/sources/overpassFeatures.js",
       "src/sources/featureSource.js",
-      "src/sources/overpassRoads.js"
+      "src/sources/overpassRoads.js",
+      "src/ui/icons/layerIcon.js",
+      "src/ui/icons/lucideIcons.generated.js"
     ],
     "external": [
       "cesium",
@@ -2345,7 +2361,9 @@
       "src/ui/panelRailGeometry.js",
       "src/ui/panelRails.js",
       "src/ui/rightPanelRail.js",
-      "src/ui/uiLifetime.js"
+      "src/ui/uiLifetime.js",
+      "src/ui/icons/layerIcon.js",
+      "src/ui/icons/lucideIcons.generated.js"
     ],
     "external": []
   },

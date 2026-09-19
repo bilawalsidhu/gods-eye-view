@@ -61,6 +61,7 @@
     "satellite.js": "^6.0.2"
   },
   "devDependencies": {
+    "lucide-static": "1.47.0",
     "prettier": "3.9.6",
     "puppeteer": "^25.10.0",
     "sharp": "^0.35.4",

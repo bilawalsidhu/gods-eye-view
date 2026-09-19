@@ -285,7 +285,7 @@ test('a failed DENSE load reverts the mode rather than leaving an active chip', 
 
     assert.equal(settled.active, false, 'a 502 must never present as a live dense catalog');
     assert.equal(settled.state, 'error');
-    assert.equal(settled.label, 'DENSE ✕');
+    assert.equal(settled.label, 'DENSE FAILED');
     assert.match(settled.title, /502/, 'the chip explains why');
     assert.equal(satellitesLayer.getParams().catalog, 'core', 'the mode reverts to reality');
     assert.deepEqual(settled.params, { catalog: 'dense' }, 'clicking retries');
@@ -352,7 +352,7 @@ test('a 200 that yields no usable satellites is a failure, not a live catalog', 
 test('an explicit return to core clears a failure the user never caused', async () => {
   // Space Missions forces dense; if that load fails it reverts the param to
   // core itself. The mission's restore of an already-core snapshot then changes
-  // nothing — and used to leave DENSE ✕ latched on the user's row.
+  // nothing — and used to leave DENSE FAILED latched on the user's row.
   const originalFetch = globalThis.fetch;
   const warn = console.warn;
   console.warn = () => {};

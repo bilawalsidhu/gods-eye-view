@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { setIconContent } from '../../ui/icons/layerIcon.js';
 import {
   REPLAY_ASCENT_FALLBACK_SEC,
   REPLAY_ASCENT_MIN_SEC,
@@ -215,7 +216,10 @@ export function createReplay({ state: layerState, services, parts, source }) {
       );
       if (toggleButton) {
         toggleButton.disabled = !active;
-        toggleButton.textContent = layerState._replayPaused ? '▶' : 'Ⅱ';
+        setIconContent(
+          toggleButton,
+          layerState._replayPaused ? 'play' : 'pause',
+        );
         toggleButton.setAttribute(
           'aria-label',
           layerState._replayPaused ? 'Resume replay' : 'Pause replay',

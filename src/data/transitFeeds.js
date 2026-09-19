@@ -36,14 +36,18 @@ export const TRANSIT_MODES = Object.freeze([
   'unknown',
 ]);
 
-/** Per-mode icon used in labels and the selection card. */
+/**
+ * Per-mode Lucide icon name (src/ui/icons/lucide-manifest.json) for DOM
+ * surfaces. Canvas-drawn labels and the selection card say the mode in words
+ * instead — a glyph is never emitted (docs/brand/ICON_SOURCE.md).
+ */
 export const TRANSIT_MODE_ICON = Object.freeze({
-  bus: '🚌',
-  tram: '🚊',
-  subway: '🚇',
-  rail: '🚆',
-  ferry: '⛴️',
-  unknown: '🚏',
+  bus: 'bus',
+  tram: 'tram-front',
+  subway: 'train-front',
+  rail: 'train-front',
+  ferry: 'ship',
+  unknown: 'signpost',
 });
 
 /**

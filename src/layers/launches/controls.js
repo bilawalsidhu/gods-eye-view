@@ -4,7 +4,7 @@ export function createControls({ state: layerState, services, parts, source }) {
 
     name: 'Space Missions (30d)',
 
-    icon: '🚀',
+    icon: 'rocket',
 
     source: 'Launch Library 2',
 

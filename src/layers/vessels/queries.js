@@ -251,7 +251,7 @@ export function createQueries({
 
     name: 'Live AIS Vessels',
 
-    icon: '◭',
+    icon: 'ship',
 
     source: 'AISStream',
 

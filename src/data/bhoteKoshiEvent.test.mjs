@@ -1210,20 +1210,20 @@ test('Bhote Koshi scene beats preserve photoreal and never take camera ownership
     assert.equal(panel.querySelector('[data-role="time"]').textContent, '~0:30 / 2:00');
     assert.equal(panel.querySelector('[data-role="beat-index"]').textContent, '01 / 14');
     assert.equal(panel.querySelector('[data-role="beat-title"]').textContent, 'Global Incident Context');
-    assert.equal(panel.querySelector('[data-action="play"]').textContent, '▶ PLAY SHOT');
+    assert.equal(panel.querySelector('[data-action="play"]').textContent, 'PLAY SHOT');
     const playScene = panel.querySelector('[data-action="play-scene"]');
     assert.equal(playScene.hidden, false);
     assert.equal(playScene.disabled, false);
-    assert.equal(playScene.textContent, '▶ PLAY SCENE');
+    assert.equal(playScene.textContent, 'PLAY SCENE');
     assert.equal(playScene.getAttribute('aria-label'), 'Continue Nepal Flood Incident from next shot');
     assert.equal(panel.querySelector('[data-action="cinematic"]').hidden, true);
     assert.equal(panel.querySelector('[data-action="cinematic"]').disabled, true);
     assert.equal(panel.querySelector('[data-action="corridor"]').hidden, false);
     assert.equal(panel.querySelector('[data-action="corridor"]').disabled, false);
-    assert.doesNotMatch(panel.innerHTML, /data-action="witness"|◎ WITNESS/);
+    assert.doesNotMatch(panel.innerHTML, /data-action="witness"|WITNESS/);
     assert.match(panel.innerHTML, /data-action="open-source"/);
     const fullStory = panel.querySelector('[data-action="story-replay"]');
-    assert.equal(fullStory.textContent, '↺ FULL STORY');
+    assert.equal(fullStory.textContent, 'FULL STORY');
     assert.equal(fullStory.hidden, true, 'PLAY SCENE owns authored scene playback');
     assert.equal(fullStory.disabled, true);
     assert.equal(panel.querySelector('[data-action="open-source"]').hidden, true);
@@ -1247,7 +1247,9 @@ test('Bhote Koshi scene beats preserve photoreal and never take camera ownership
       (element) => element.className === 'bhote-koshi-split-handle',
     );
     assert.ok(splitHandle);
-    assert.equal(splitHandle.textContent, '↔');
+    // The divider glyph is now an inline SVG icon (not representable in this
+    // fake DOM, which cannot create namespaced elements): no text remains.
+    assert.equal(splitHandle.textContent, '');
     assert.equal(splitHandle.getAttribute('aria-valuenow'), '62');
     splitHandle.dispatch('pointerdown', {
       button: 0,
@@ -1299,7 +1301,7 @@ test('Bhote Koshi scene beats preserve photoreal and never take camera ownership
     assert.equal(playScene.disabled, true);
     assert.equal(playScene.textContent, '… PLAYING SCENE');
     assert.equal(panel.querySelector('[data-action="play"]').disabled, true);
-    assert.equal(panel.querySelector('[data-action="play"]').textContent, '▶ PLAY SHOT');
+    assert.equal(panel.querySelector('[data-action="play"]').textContent, 'PLAY SHOT');
     await playScene.dispatch('click');
     assert.deepEqual(sceneCalls.at(-1), {
       action: 'scene', sceneId: 'nepal-scene', shotId: 'global-context',
@@ -1308,7 +1310,7 @@ test('Bhote Koshi scene beats preserve photoreal and never take camera ownership
     finishScene({ started: true });
     await run;
     assert.equal(playScene.disabled, false);
-    assert.equal(playScene.textContent, '▶ PLAY SCENE');
+    assert.equal(playScene.textContent, 'PLAY SCENE');
     sceneClock.value = '500';
     sceneClock.dispatch('input');
     assert.equal(panel.querySelector('[data-role="time"]').textContent, '~1:00 / 2:00');
@@ -2422,7 +2424,7 @@ test('Bhote Koshi replay restores cinematic ownership unless the operator releas
     assert.equal(viewer._test.cameraTransforms.length, 1);
     assert.deepEqual(releases, ['bhote-koshi-playback']);
     const play = panel.querySelector('[data-action="play"]');
-    assert.equal(play.textContent, '↺ REPLAY CINEMATIC');
+    assert.equal(play.textContent, 'REPLAY CINEMATIC');
 
     play.dispatch('click');
     assert.equal(layer.getCinematicState().active, true);
@@ -2437,7 +2439,7 @@ test('Bhote Koshi replay restores cinematic ownership unless the operator releas
     assert.equal(layer.getCinematicState().active, false);
     assert.equal(viewer._test.cameraTransforms.length, 2);
     animationCallbacks[1](91001);
-    assert.equal(play.textContent, '↺ REPLAY');
+    assert.equal(play.textContent, 'REPLAY');
     const cameraLookCount = viewer._test.cameraLooks.length;
     play.dispatch('click');
     assert.equal(layer.getPlaybackState().playing, true);

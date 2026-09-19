@@ -2,6 +2,7 @@ import { layerFeedState } from '../data/feedState.js';
 export { layerFeedState } from '../data/feedState.js';
 import { GUIDANCE_STATUSES } from '../loadingFeedback.js';
 import { keySetupRequirement } from '../keySetupCore.mjs';
+import { createIcon } from './icons/layerIcon.js';
 const FEED_STATE_LABELS = Object.freeze({
   nominal: 'ON',
   loading: 'LOADING',
@@ -165,9 +166,14 @@ export class LayerPanel {
 
       const left = document.createElement('div');
       left.className = 'data-toggle-left';
+      // Inline Lucide SVG (layer.icon is a Lucide name, never a glyph); the
+      // visible name beside it is the accessible label, so the icon is
+      // decorative. Its colour follows the row's feed state (icons.css).
       const icon = document.createElement('span');
       icon.className = 'data-icon';
-      icon.textContent = layer.icon;
+      icon.dataset.icon = String(layer.icon || '');
+      const svg = createIcon(layer.icon, {}, document);
+      if (svg) icon.appendChild(svg);
       const name = document.createElement('span');
       name.className = 'data-name';
       name.textContent = panelLabel(layer);
@@ -185,6 +191,7 @@ export class LayerPanel {
       toggle.type = 'button';
       toggle.className = `data-toggle-btn${layer.enabled ? ' active' : ''}`;
       this._syncToggleButton(toggle, layer);
+      this._syncRowFeedState(row, toggle);
       this._bind(toggle, 'click', async () => {
         // Native `disabled` immediately evicts keyboard focus in Chromium. Keep
         // the lifecycle control focusable while it is busy, and enforce the
@@ -205,8 +212,10 @@ export class LayerPanel {
           console.warn(`[Data] ${layer.id} toggle error:`, error);
         } finally {
           const current = this.getAll().find(({ id }) => id === layer.id);
-          if (!this._destroyed && current && this._generation === generation)
+          if (!this._destroyed && current && this._generation === generation) {
             this._syncToggleButton(toggle, current);
+            this._syncRowFeedState(row, toggle);
+          }
         }
       });
 
@@ -441,6 +450,7 @@ export class LayerPanel {
       const btn = row.querySelector('.data-toggle-btn');
       if (btn) {
         this._syncToggleButton(btn, layer);
+        this._syncRowFeedState(row, btn);
       }
 
       const count = row.querySelector('.data-count');
@@ -595,6 +605,16 @@ export class LayerPanel {
         ? `${panelLabel(layer)}: ${button.textContent}. ${keyGuidance}`
         : `${panelLabel(layer)}: ${button.textContent}`,
     );
+  }
+
+  /**
+   * Mirror the toggle's feed state onto its row so the row icon can take the
+   * status colour (live green, stale amber, degraded orange, unavailable red,
+   * off neutral) without a second state machine.
+   */
+  _syncRowFeedState(row, button) {
+    if (!row?.dataset || !button?.dataset) return;
+    row.dataset.feedState = button.dataset.feedState || 'off';
   }
 
   _formatCount(n) {

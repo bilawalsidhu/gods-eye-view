@@ -16,7 +16,7 @@ export function createQueries({ state: layerState, services, parts, source }) {
     const label = record.stationName || `Dock ${record.stationId}`;
     // Truncate long station names to keep HUD readable
     const short = label.length > 24 ? label.slice(0, 22) + '…' : label;
-    return `🚲 ${short} [${bikes}/${capacity}]`;
+    return `BIKES ${short} [${bikes}/${capacity}]`;
   }
 
   /**
