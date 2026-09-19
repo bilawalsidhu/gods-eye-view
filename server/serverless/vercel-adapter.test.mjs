@@ -132,3 +132,23 @@ test('resolveRequestUrl (fallback rebuild) ignores the injected keys in req.quer
     '/api/tomtom/status?point=30.25%2C-97.75',
   );
 });
+
+test('rehydrateBody re-encodes a Vercel-pre-parsed form body (application/x-www-form-urlencoded) as the form string, not JSON', async () => {
+  // Real Vercel hands `/api/overpass` `{ data: '<Overpass QL>' }` for a form POST
+  // (observed 2026-09-19); the sanitizer needs `data=<query>` back.
+  const query = '[out:json][timeout:20];(way["highway"~"^(motorway|trunk)$"](30.24,-97.76,30.26,-97.74););out geom qt;';
+  const req = {
+    url: '/api/overpass',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: { data: query },
+  };
+  rehydrateBody(req);
+  const text = await readViaAsyncIterator(req);
+  const params = new URLSearchParams(text);
+  assert.deepEqual(params.getAll('data'), [query]);
+  assert.equal(text.startsWith('data='), true);
+  // a JSON body keeps the JSON path
+  const json = { url: '/api/x', headers: { 'content-type': 'application/json' }, body: { query: 'node(1);out;' } };
+  rehydrateBody(json);
+  assert.deepEqual(JSON.parse(await readViaAsyncIterator(json)), { query: 'node(1);out;' });
+});

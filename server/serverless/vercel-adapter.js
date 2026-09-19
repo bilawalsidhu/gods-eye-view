@@ -25,10 +25,40 @@
 
 const REHYDRATED = Symbol('gev.rehydrated');
 
-/** Build the Buffer a parsed `req.body` should have produced on the wire. */
-function bodyToBuffer(body) {
+/**
+ * Build the Buffer a parsed `req.body` should have produced on the wire.
+ *
+ * Vercel's Node runtime pre-parses by request Content-Type: a JSON body
+ * arrives as a plain object/array, and — verified on the real project on
+ * 2026-09-19 (deployment dpl_GDb1kCXDZRQzYdS8BzNTt5JvLuQq) — an
+ * `application/x-www-form-urlencoded` body ALSO arrives as a plain object
+ * (`{ data: '<Overpass QL>' }`). Re-serialising that object as JSON handed
+ * `/api/overpass` a body its `URLSearchParams` parser could not see a `data`
+ * field in ("Exactly one data query is required", HTTP 400), which took the
+ * whole Street Traffic road network down on Vercel while the local emulator
+ * (raw bodies) never showed it. Form bodies are therefore re-encoded as the
+ * form string they came from; JSON keeps the JSON path (whitespace only).
+ * @param {unknown} body
+ * @param {string} [contentType]
+ */
+function bodyToBuffer(body, contentType = '') {
   if (Buffer.isBuffer(body)) return body;
   if (typeof body === 'string') return Buffer.from(body, 'utf8');
+  if (
+    /application\/x-www-form-urlencoded/i.test(String(contentType || '')) &&
+    body &&
+    typeof body === 'object' &&
+    !Array.isArray(body)
+  ) {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(body)) {
+      for (const entry of Array.isArray(value) ? value : [value]) {
+        if (entry !== undefined && entry !== null)
+          params.append(key, String(entry));
+      }
+    }
+    return Buffer.from(params.toString(), 'utf8');
+  }
   // Vercel gives already-parsed JSON as a plain object/array for a
   // `application/json` request. Re-serialising changes only insignificant
   // whitespace — every consumer of this body (readRequestBodyCapped /
@@ -57,7 +87,10 @@ function rehydrateBody(req) {
   if (req[REHYDRATED]) return req;
   req[REHYDRATED] = true;
 
-  const buffer = bodyToBuffer(req.body);
+  const buffer = bodyToBuffer(
+    req.body,
+    req.headers?.['content-type'] ?? req.headers?.['Content-Type'] ?? '',
+  );
 
   // for await (const chunk of req)
   req[Symbol.asyncIterator] = function serverlessAsyncIterator() {
