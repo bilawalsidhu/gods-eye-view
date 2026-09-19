@@ -1,5 +1,10 @@
 # Changelog
 
+- Make CCTV discovery follow the map view, with city/camera/provider search,
+  distance ordering and an explicit worldwide scope. Keep panel navigation in
+  filtered results and explain missing local coverage instead of showing a
+  distant camera preview.
+
 - Distinguish PARTIAL vessel snapshots from STALE data in the layer panel, with
   accepted-record counts and unchanged retention, freshness and outage safeguards.
 

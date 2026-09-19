@@ -21,10 +21,27 @@ export function _renderCctvState(state) {
     this._calibrationEdit?.(false);
   }
   this._cctvState = state || null;
-  const cameras = state?.cameras || [];
+  const discovery = this.discoverCameras(state);
+  const cameras = discovery.cameras;
+  const localScope =
+    !!this.actions.readMapView && this._cctvScope?.value !== 'all';
+  const outsideView =
+    localScope &&
+    state?.activeCamera &&
+    !discovery.localIds.has(state.activeCameraId);
   const enabled = !!state?.enabled && !!this.actions.isEnabled();
-  const activeId = state?.activeCameraId || '';
-  const activeCamera = state?.activeCamera || null;
+  const activeId = outsideView ? '' : state?.activeCameraId || '';
+  const activeCamera = outsideView ? null : state?.activeCamera || null;
+
+  if (this._cctvDiscoveryStatus) {
+    this._cctvDiscoveryStatus.textContent = cameras.length
+      ? `${cameras.length} cameras ${localScope ? 'in map view' : 'across the world'} · nearest first`
+      : this._cctvSearch?.value?.trim()
+        ? 'No matching cameras. Try another search or All cameras.'
+        : localScope
+          ? 'No cameras in map view. Move the map or choose All cameras.'
+          : 'No cameras loaded.';
+  }
 
   // Auto-expand the panel when the active camera CHANGES to a new non-null
   // id while the layer is enabled. Covers click-on-globe, panel controls,
@@ -33,7 +50,7 @@ export function _renderCctvState(state) {
   // from re-expanding a panel the user deliberately collapsed, and timed
   // auto-hop transitions only expand on the first activation so the panel
   // does not pop open on every hop.
-  const effectiveActiveId = enabled ? activeId || null : null;
+  const effectiveActiveId = enabled ? state?.activeCameraId || null : null;
   const isFirstActivation = this._lastSeenCctvActiveId === null;
   if (
     effectiveActiveId &&
@@ -53,18 +70,22 @@ export function _renderCctvState(state) {
     this._cctvEnableBtn.textContent = enabled ? 'CCTV ON' : 'CCTV OFF';
   }
 
+  const cameraLabel = (camera) =>
+    `${camera.city} · ${camera.name}${Number.isFinite(camera.distanceKm) ? ` · ${camera.distanceKm < 1 ? '<1' : Math.round(camera.distanceKm).toLocaleString()} km` : ''}`;
   if (this._cctvSelect) {
     const shouldRebuild =
       this._cctvSelect.options.length !== cameras.length ||
       cameras.some(
-        (cam, idx) => this._cctvSelect.options[idx]?.value !== cam.id,
+        (cam, idx) =>
+          this._cctvSelect.options[idx]?.value !== cam.id ||
+          this._cctvSelect.options[idx]?.textContent !== cameraLabel(cam),
       );
     if (shouldRebuild) {
       this._cctvSelect.innerHTML = '';
       for (const camera of cameras) {
         const option = document.createElement('option');
         option.value = camera.id;
-        option.textContent = `${camera.city} · ${camera.name}`;
+        option.textContent = cameraLabel(camera);
         this._cctvSelect.appendChild(option);
       }
     }
@@ -74,19 +95,17 @@ export function _renderCctvState(state) {
       Array.from(this._cctvSelect.options).some((opt) => opt.value === activeId)
     ) {
       this._cctvSelect.value = activeId;
-    } else if (!activeId) {
+    } else {
       this._cctvSelect.selectedIndex = -1;
     }
   }
 
-  for (const btn of [
-    this._cctvNearestBtn,
-    this._cctvPrevBtn,
-    this._cctvNextBtn,
-  ]) {
+  for (const btn of [this._cctvPrevBtn, this._cctvNextBtn]) {
     if (!btn) continue;
     btn.disabled = !enabled || cameras.length === 0;
   }
+  if (this._cctvNearestBtn)
+    this._cctvNearestBtn.disabled = !enabled || !cameras.length;
   if (this._cctvFocusBtn) {
     this._cctvFocusBtn.disabled = !enabled || cameras.length === 0 || !activeId;
   }
@@ -160,7 +179,9 @@ export function _renderCctvState(state) {
         ? `${cameras.length} cameras loaded · click a camera to activate`
         : `${cameras.length} cameras loaded · enable CCTV to activate`;
     } else {
-      this._cctvMeta.textContent = 'Enable CCTV to load camera intersections';
+      this._cctvMeta.textContent = enabled
+        ? 'No camera selected in this area'
+        : 'Enable CCTV to load cameras';
     }
   }
 
@@ -187,7 +208,9 @@ export function _renderCctvState(state) {
 
   this._syncCctvSourceBadge(activeCamera, enabled);
   this._typeCctvSummary(
-    state?.summary ||
+    (outsideView
+      ? 'The selected camera is outside the map view. Choose a camera here, or switch to All cameras.'
+      : state?.summary) ||
       'Enable CCTV to start camera-linked intelligence summaries.',
   );
 }

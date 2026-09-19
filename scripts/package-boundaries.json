@@ -412,6 +412,7 @@
       "src/ui/cctvBindings.js",
       "src/ui/cctvCalibration.js",
       "src/ui/cctvControls.js",
+      "src/ui/cctvDiscovery.js",
       "src/ui/cctvFrames.js",
       "src/ui/cctvPresentation.js"
     ],
@@ -512,6 +513,7 @@
       "src/ui/cctvBindings.js",
       "src/ui/cctvCalibration.js",
       "src/ui/cctvControls.js",
+      "src/ui/cctvDiscovery.js",
       "src/ui/cctvFrames.js",
       "src/ui/cctvPresentation.js",
       "src/ui/clearLayersControl.js",
@@ -1628,6 +1630,7 @@
       "src/ui/cctvBindings.js",
       "src/ui/cctvCalibration.js",
       "src/ui/cctvControls.js",
+      "src/ui/cctvDiscovery.js",
       "src/ui/cctvFrames.js",
       "src/ui/cctvPresentation.js",
       "src/ui/clearLayersControl.js",

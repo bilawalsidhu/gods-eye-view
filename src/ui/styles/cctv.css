@@ -147,6 +147,8 @@
   opacity: 0.45;
 }
 
+#cctv-camera-search,
+#cctv-camera-scope,
 #cctv-camera-select {
   flex: 1;
   min-width: 0;
@@ -160,6 +162,8 @@
   outline: none;
 }
 
+#cctv-camera-search:focus-visible,
+#cctv-camera-scope:focus-visible,
 #cctv-camera-select:focus-visible {
   outline: 2px solid var(--text-primary);
   outline-offset: -3px;
@@ -348,4 +352,14 @@
   line-height: 1.45;
   color: #a8f7ff;
   text-shadow: 0 0 10px rgba(0, 212, 255, 0.18);
+}
+
+#cctv-camera-search {
+  width: 0;
+  flex: 2;
+}
+#cctv-discovery-status {
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
 }
