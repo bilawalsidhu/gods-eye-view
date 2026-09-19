@@ -36,6 +36,7 @@
       "server/providers/live.js",
       "server/providers/common/http.js",
       "server/providers/common/query.js",
+      "server/providers/common/upstream.js",
       "server/providers/aircraft/opensky.js",
       "server/providers/aircraft/adsb-lol.js",
       "server/providers/aircraft/enrichment.js",
@@ -84,8 +85,10 @@
     "modules": [
       "server/providers/space.js",
       "server/providers/space/celestrak.js",
+      "server/providers/space/celestrak-snapshot.js",
       "server/providers/space/launch-library.js",
       "server/providers/common/http.js",
+      "server/providers/common/upstream.js",
       "src/data/spaceProviderRequests.js",
       "src/sources/httpBody.js"
     ],
@@ -113,7 +116,11 @@
   "traffic-provider": {
     "runtime": "node",
     "exports": ["./server/providers/traffic"],
-    "modules": ["server/providers/traffic.js", "src/data/tomtomTiles.js"],
+    "modules": [
+      "server/providers/traffic.js",
+      "server/providers/common/upstream.js",
+      "src/data/tomtomTiles.js"
+    ],
     "external": []
   },
   "traffic-source": {
@@ -196,6 +203,7 @@
       "server/providers/common/http.js",
       "server/providers/common/rate-limit.js",
       "server/providers/common/request.js",
+      "server/providers/common/upstream.js",
       "server/providers/overpass.js",
       "server/providers/overpass/cache.js",
       "server/providers/overpass/constants.js",
@@ -216,6 +224,7 @@
     "exports": ["./server/providers/military-installations"],
     "modules": [
       "server/providers/common/http.js",
+      "server/providers/common/upstream.js",
       "server/providers/common/query.js",
       "server/providers/common/rate-limit.js",
       "server/providers/military-installations.js",
@@ -379,7 +388,9 @@
       "src/loadingFeedback.js",
       "src/data/installationFeedback.js",
       "src/keySetupCore.mjs",
-      "src/data/feedState.js"
+      "src/data/feedState.js",
+      "src/ui/icons/layerIcon.js",
+      "src/ui/icons/lucideIcons.generated.js"
     ],
     "external": []
   },
@@ -390,7 +401,9 @@
       "src/ui/locationControls.js",
       "src/ui/locationSearch.js",
       "src/locationStatus.js",
-      "src/app/stateChannel.js"
+      "src/app/stateChannel.js",
+      "src/ui/icons/layerIcon.js",
+      "src/ui/icons/lucideIcons.generated.js"
     ],
     "external": []
   },
@@ -401,7 +414,9 @@
       "src/ui/radioControls.js",
       "src/ui/radioBindings.js",
       "src/ui/radioPresentation.js",
-      "src/ui/radioTunerModel.js"
+      "src/ui/radioTunerModel.js",
+      "src/ui/icons/layerIcon.js",
+      "src/ui/icons/lucideIcons.generated.js"
     ],
     "external": []
   },
@@ -580,7 +595,9 @@
       "src/ui/aircraftDisplay.js",
       "src/ui/layerBindings.js",
       "src/ui/displayBindings.js",
-      "src/ui/shellFacade.js"
+      "src/ui/shellFacade.js",
+      "src/ui/icons/layerIcon.js",
+      "src/ui/icons/lucideIcons.generated.js"
     ],
     "external": ["cesium"]
   },
@@ -608,7 +625,8 @@
       "src/ui/styles/command-dock-sliding.css",
       "src/ui/styles/voice-cost.css",
       "src/ui/styles/first-run.css",
-      "src/ui/styles/provider-settings.css"
+      "src/ui/styles/provider-settings.css",
+      "src/ui/styles/ondemand-chat.css"
     ],
     "external": []
   },
@@ -870,7 +888,8 @@
       "src/layers/satellites/state.js",
       "src/layers/satellites/testing.js",
       "src/layers/satellites/tracking.js",
-      "src/data/inputOwnership.js"
+      "src/data/inputOwnership.js",
+      "src/sources/live/contract.js"
     ],
     "external": ["cesium", "satellite.js"]
   },
@@ -896,7 +915,9 @@
       "src/layers/launches/source.js",
       "src/layers/launches/state.js",
       "src/layers/launches/testing.js",
-      "src/data/inputOwnership.js"
+      "src/data/inputOwnership.js",
+      "src/ui/icons/layerIcon.js",
+      "src/ui/icons/lucideIcons.generated.js"
     ],
     "external": ["cesium"]
   },
@@ -942,7 +963,9 @@
       "src/layers/awareness/state.js",
       "src/layers/awareness/subject.js",
       "src/layers/awareness/testing.js",
-      "src/ui/panelRailGeometry.js"
+      "src/ui/panelRailGeometry.js",
+      "src/ui/icons/layerIcon.js",
+      "src/ui/icons/lucideIcons.generated.js"
     ],
     "external": ["cesium"]
   },
@@ -972,6 +995,7 @@
       "src/layers/traffic/style.js",
       "src/layers/traffic/timing.js",
       "src/layers/traffic/viewport.js",
+      "src/sources/live/contract.js",
       "src/sources/overpassRoads.js"
     ],
     "external": ["cesium", "pbf", "@mapbox/vector-tile"]
@@ -1809,7 +1833,11 @@
       "src/director/sharing/lifetime.js",
       "src/director/authoring.js",
       "src/scenes/sharing.js",
-      "src/ui/sceneSharing.js"
+      "src/ui/sceneSharing.js",
+      "src/ondemand/entityChat.js",
+      "src/ondemand/entityContext.js",
+      "src/ui/icons/layerIcon.js",
+      "src/ui/icons/lucideIcons.generated.js"
     ],
     "external": [
       "@mapbox/vector-tile",
@@ -2087,6 +2115,7 @@
       "src/layers/satellites/state.js",
       "src/layers/satellites/testing.js",
       "src/layers/satellites/tracking.js",
+      "src/sources/live/contract.js",
       "src/layers/submarineCables/geometry.js",
       "src/layers/submarineCables/index.js",
       "src/layers/submarineCables/ingestion.js",
@@ -2203,7 +2232,9 @@
       "src/sources/overpassFeaturesRecords.js",
       "src/sources/overpassFeatures.js",
       "src/sources/featureSource.js",
-      "src/sources/overpassRoads.js"
+      "src/sources/overpassRoads.js",
+      "src/ui/icons/layerIcon.js",
+      "src/ui/icons/lucideIcons.generated.js"
     ],
     "external": [
       "cesium",
@@ -2330,7 +2361,9 @@
       "src/ui/panelRailGeometry.js",
       "src/ui/panelRails.js",
       "src/ui/rightPanelRail.js",
-      "src/ui/uiLifetime.js"
+      "src/ui/uiLifetime.js",
+      "src/ui/icons/layerIcon.js",
+      "src/ui/icons/lucideIcons.generated.js"
     ],
     "external": []
   },
@@ -2479,7 +2512,10 @@
   },
   "satellites-source": {
     "exports": ["./layers/satellites/source"],
-    "modules": ["src/layers/satellites/source.js"],
+    "modules": [
+      "src/layers/satellites/source.js",
+      "src/sources/live/contract.js"
+    ],
     "external": []
   },
   "traffic-source-factory": {
@@ -2489,6 +2525,7 @@
       "src/layers/traffic/flowDecode.js",
       "src/layers/traffic/flowSource.js",
       "src/layers/traffic/source.js",
+      "src/sources/live/contract.js",
       "src/sources/overpassRoads.js"
     ],
     "external": ["@mapbox/vector-tile", "pbf"]

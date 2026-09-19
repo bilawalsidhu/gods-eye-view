@@ -1,0 +1,287 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "OnDemand Spatial Street Traffic (TomTom Flow Segment Data)",
+    "version": "1.0.0",
+    "description": "Live street-traffic speed at a point from TomTom Flow Segment Data — current speed vs free-flow speed, travel times, confidence and road closure for the road segment nearest to lat/lon — through the OnDemand Spatial TomTom proxy (60 s per-point cache, daily request budget governor, last-good served as \"stale\" when TomTom rate-limits or times out). Requires the deployment to have TOMTOM_API_KEY; without it the tool answers 503 `not_configured` with the exact fix (\"set it in Vercel to enable live traffic\") instead of guessing. The companion `road_network_status` tool reports the OSM road-network configuration (ROAD_NETWORK_SOURCE overpass|off, the Overpass mirror list in force, and the known blocker: public Overpass mirrors refuse or time out for cloud egress — set OVERPASS_UPSTREAMS to a private mirror).",
+    "x-ondemand-spatial": {
+      "pluginId": "traffic",
+      "category": "Research",
+      "conversationStarters": [
+        "How congested is traffic right now near the Texas State Capitol in Austin (lat 30.2747, lon -97.7404)?",
+        "Compare the current speed with the free-flow speed on the road nearest to lat 25.2048, lon 55.2708 in mph",
+        "Is live street traffic configured on this deployment, and which road-network source is in use?",
+        "Is there a road closure near lat 40.7580, lon -73.9855?"
+      ],
+      "auth": "none — same-origin proxy; upstream credentials stay server-side",
+      "generatedBy": "scripts/generate-tool-openapi.mjs"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://sb-1dqoce558p0v.vercel.run",
+      "description": "OnDemand Spatial deployment (preview or production)"
+    }
+  ],
+  "paths": {
+    "/api/tools/traffic_flow_at_point": {
+      "get": {
+        "operationId": "traffic_flow_at_point",
+        "summary": "Current vs free-flow traffic speed on the road nearest a point (TomTom)",
+        "description": "TomTom Flow Segment Data for the road segment closest to lat/lon: currentSpeed and freeFlowSpeed (in `unit`), current and free-flow travel times in seconds over the segment, confidence (0–1), roadClosure and the functional road class (frc, FRC0 motorway … FRC6 local). Served through the OnDemand Spatial proxy: 60 s cache per point (rounded to 0.01°), daily budget governor, last-good answers marked `provider.status: \"stale\"`. Without TOMTOM_API_KEY on the deployment the tool returns HTTP 503 with error code `not_configured` and the fix — it never fabricates a speed. A point with no mapped road nearby is a 400 `no_road_segment`. `data.roadNetwork` echoes the road-network configuration (see road_network_status).",
+        "parameters": [
+          {
+            "name": "lat",
+            "in": "query",
+            "required": true,
+            "description": "Latitude of the probe point in decimal degrees (WGS84).",
+            "schema": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            }
+          },
+          {
+            "name": "lon",
+            "in": "query",
+            "required": true,
+            "description": "Longitude of the probe point in decimal degrees (WGS84).",
+            "schema": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            }
+          },
+          {
+            "name": "zoom",
+            "in": "query",
+            "required": false,
+            "description": "TomTom zoom level used to pick the segment (0–22; higher = finer road network). Default 10.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 22,
+              "default": 10
+            }
+          },
+          {
+            "name": "unit",
+            "in": "query",
+            "required": false,
+            "description": "Speed unit for currentSpeed/freeFlowSpeed. Default KMPH.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "KMPH",
+                "MPH"
+              ],
+              "default": "KMPH"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tool result envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error (unknown/missing/invalid parameter)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Upstream failure with a structured reason",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Provider unavailable (missing key / no data) with a structured reason",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tools/road_network_status": {
+      "get": {
+        "operationId": "road_network_status",
+        "summary": "Road-network configuration: source, Overpass mirrors in force, known blocker",
+        "description": "Reports the road-network configuration point of this deployment (server/providers/overpass/constants.js roadNetworkConfig()): `source` is ROAD_NETWORK_SOURCE — \"overpass\" (default: OSM roads via the Overpass mirrors) or \"off\" (the OSM road fetch is disabled); `upstreams` is the ordered Overpass mirror list actually in force (the OVERPASS_UPSTREAMS csv override when set, else the default public mirrors); `blocker` is the fixed operator note explaining why public mirrors are not dependable from cloud egress; `fromEnv` says whether each variable is set (never its value). `tomtom.configured` says whether live TomTom traffic is enabled (TOMTOM_API_KEY present). No parameters.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Tool result envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error (unknown/missing/invalid parameter)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Upstream failure with a structured reason",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Provider unavailable (missing key / no data) with a structured reason",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Provider": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "live",
+              "stale",
+              "degraded",
+              "unavailable"
+            ]
+          },
+          "source": {
+            "type": "string"
+          },
+          "fetchedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "ageSec": {
+            "type": "integer",
+            "nullable": true
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          },
+          "count": {
+            "type": "integer",
+            "nullable": true
+          }
+        }
+      },
+      "ToolResult": {
+        "type": "object",
+        "required": [
+          "ok",
+          "tool",
+          "data"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "tool": {
+            "type": "string"
+          },
+          "params": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "provider": {
+            "$ref": "#/components/schemas/Provider"
+          },
+          "provenance": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "generatedAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ToolError": {
+        "type": "object",
+        "required": [
+          "ok",
+          "error"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "tool": {
+            "type": "string"
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "param": {
+                "type": "string"
+              }
+            }
+          },
+          "provider": {
+            "$ref": "#/components/schemas/Provider"
+          }
+        }
+      }
+    }
+  }
+}

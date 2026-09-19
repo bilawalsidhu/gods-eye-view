@@ -35,7 +35,7 @@ test('importing and constructing the package is inactive without browser globals
       `
     globalThis.fetch = () => { throw new Error('unexpected request'); };
     globalThis.setTimeout = () => { throw new Error('unexpected timer'); };
-    const { createApplication } = await import('gods-eye-view/application');
+    const { createApplication } = await import('ondemand-spatial/application');
     const fail = () => { throw new Error('unexpected construction'); };
     const app = createApplication({ createScene: fail, createControls: fail, createData: fail, createTools: fail });
     if (app.getState().status !== 'created') process.exit(1);
@@ -213,7 +213,7 @@ test('different application instances do not share lifecycle state', async () =>
 
 test('the separate viewer export imports without constructing a browser viewer', async () => {
   const { createApplicationViewer } =
-    await import('gods-eye-view/application/viewer');
+    await import('ondemand-spatial/application/viewer');
   assert.equal(typeof createApplicationViewer, 'function');
   assert.throws(() => createApplicationViewer({}), /containers are required/);
 });

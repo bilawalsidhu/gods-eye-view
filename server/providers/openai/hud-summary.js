@@ -62,7 +62,7 @@ async function handleHudSummary(req, res) {
           process.env.OPENAI_HUD_SUMMARY_MODEL ||
           OPENAI_HUD_SUMMARY_MODEL_DEFAULT,
         instructions: [
-          "Write one concise intelligence-HUD summary for God's Eye View.",
+          'Write one concise intelligence-HUD summary for OnDemand Spatial.',
           'Use only the supplied place, street, nearby-place, and enabled-layer text labels.',
           'Prefer the clearest named place and include a relevant enabled layer only when useful.',
           'Do not infer from coordinates or invent a place.',

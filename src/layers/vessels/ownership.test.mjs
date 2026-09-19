@@ -361,3 +361,190 @@ test('partial vessel snapshots preserve freshness and recover after a complete u
   layer.destroy();
   assert.equal(layer.getStats().partial, false);
 });
+
+test('serverless provider answers: demo replay reads DEGRADED with its reason, an empty scene reads as guidance, last-good reads STALE', async (t) => {
+  const originalDocument = globalThis.document;
+  globalThis.document = { getElementById: () => null };
+  t.after(() => {
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+  });
+  const { vesselSnapshot } = await import('../../sources/live/vessels.js');
+  const { layerFeedState } = await import('../../data/feedState.js');
+  const DEMO_ERROR = 'AISSTREAM_API_KEY not set - demo replay, not live AIS';
+  const demoRow = {
+    mmsi: '999000001',
+    name: 'DEMO REPLAY 1',
+    lat: 29.3,
+    lon: -94.7,
+    speed: 12,
+    course: 130,
+    heading: 130,
+    type: 'Demo replay (not live AIS)',
+    last_position_epoch: 1,
+  };
+  const provider = (snapshot, extra) => ({ ...snapshot, ...extra });
+  // Empty inland scene first (Austin): the row must not read UNAVAILABLE.
+  let current = provider(
+    vesselSnapshot({
+      rows: [],
+      status: 'empty',
+      source: 'Demo replay',
+      statusMessage:
+        'No vessels in scene (demo replay covers the Texas Gulf coast)',
+      collector: { mode: 'demo' },
+    }),
+    {
+      providerStatus: 'degraded',
+      providerError: DEMO_ERROR,
+      providerSource: 'Demo replay',
+    },
+  );
+  const { layer } = setup({ getSnapshot: async () => current });
+  layer.testing._beginAisSessionForTest();
+  await layer.update();
+  let stats = layer.getStats();
+  assert.equal(stats.status, 'empty');
+  assert.equal(
+    stats.statusMessage,
+    'No vessels in scene (demo replay covers the Texas Gulf coast)',
+  );
+  assert.equal(stats.error, null);
+  assert.equal(stats.loading, false);
+  assert.equal(stats.source, 'Demo replay');
+  assert.equal(stats.providerStatus, 'degraded');
+  assert.equal(stats.collectorMode, 'demo');
+  assert.equal(layerFeedState(stats), 'nominal');
+  assert.equal(layer.source, 'Demo replay');
+
+  // Coast scene: demo rows draw, and the row reads DEGRADED · Demo replay · <reason>.
+  current = provider(
+    vesselSnapshot({
+      rows: [demoRow],
+      status: 'degraded',
+      source: 'Demo replay',
+      error: DEMO_ERROR,
+      collector: { mode: 'demo' },
+    }),
+    {
+      providerStatus: 'degraded',
+      providerError: DEMO_ERROR,
+      providerSource: 'Demo replay',
+    },
+  );
+  await layer.update();
+  stats = layer.getStats();
+  assert.equal(stats.count, 1);
+  assert.equal(stats.status, undefined);
+  assert.equal(stats.statusMessage, undefined);
+  assert.equal(stats.error, DEMO_ERROR);
+  assert.equal(stats.providerStatus, 'degraded');
+  assert.equal(stats.providerError, DEMO_ERROR);
+  assert.equal(stats.source, 'Demo replay');
+  assert.equal(layerFeedState(stats), 'degraded');
+  assert.equal(layer.hasContact('999000001'), true);
+
+  // Live AISStream answer with a real vessel: healthy, LIVE provider status.
+  current = provider(
+    vesselSnapshot({
+      rows: [{ ...demoRow, mmsi: '211000001', name: 'REAL', type: '' }],
+      status: 'live',
+      source: 'AISStream',
+      collector: { mode: 'aisstream' },
+    }),
+    {
+      providerStatus: 'live',
+      providerError: null,
+      providerSource: 'AISStream',
+    },
+  );
+  await layer.update();
+  stats = layer.getStats();
+  assert.equal(stats.error, null);
+  assert.equal(stats.providerStatus, 'live');
+  assert.equal(stats.source, 'AISStream');
+  assert.equal(layerFeedState(stats), 'nominal');
+
+  // Socket failure bridged by last-good: STALE with the provider's own reason.
+  const STALE_ERROR = 'AISStream unreachable (ECONNRESET) - showing last-good';
+  current = provider(
+    vesselSnapshot({
+      rows: [{ ...demoRow, mmsi: '211000001', name: 'REAL', type: '' }],
+      status: 'stale',
+      source: 'AISStream',
+      error: STALE_ERROR,
+      collector: { mode: 'aisstream' },
+    }),
+    {
+      stale: true,
+      providerStatus: 'stale',
+      providerError: STALE_ERROR,
+      providerSource: 'AISStream',
+    },
+  );
+  await layer.update();
+  stats = layer.getStats();
+  assert.equal(stats.stale, true);
+  assert.equal(stats.error, STALE_ERROR);
+  assert.equal(layerFeedState(stats), 'stale');
+
+  // A live answer with zero rows in the scene (guidance text from the proxy)
+  // keeps the warm records and reads as guidance, not as a failure.
+  current = provider(
+    vesselSnapshot({
+      rows: [],
+      status: 'empty',
+      source: 'AISStream',
+      statusMessage: 'No vessels in scene',
+      collector: { mode: 'aisstream' },
+    }),
+    {
+      providerStatus: 'live',
+      providerError: null,
+      providerSource: 'AISStream',
+    },
+  );
+  await layer.update();
+  stats = layer.getStats();
+  assert.equal(stats.status, 'empty');
+  assert.equal(stats.statusMessage, 'No vessels in scene');
+  assert.equal(stats.count, 1);
+  assert.equal(layerFeedState(stats), 'stale');
+  layer.destroy();
+  stats = layer.getStats();
+  assert.equal(stats.status, undefined);
+  assert.equal(stats.providerStatus, null);
+  assert.equal(stats.source, undefined);
+});
+
+test('a zero-row degraded answer during first connect stays in the grace window instead of tripping UNAVAILABLE', async (t) => {
+  const originalDocument = globalThis.document;
+  globalThis.document = { getElementById: () => null };
+  t.after(() => {
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+  });
+  const { vesselSnapshot } = await import('../../sources/live/vessels.js');
+  const { layerFeedState } = await import('../../data/feedState.js');
+  const current = {
+    ...vesselSnapshot({
+      rows: [],
+      status: 'degraded',
+      source: 'AISHub',
+      error: 'AISHub allows one request per minute - next poll in 42 s',
+      collector: { mode: 'aishub' },
+    }),
+    providerStatus: 'degraded',
+    providerError: 'AISHub allows one request per minute - next poll in 42 s',
+  };
+  const { layer } = setup({ getSnapshot: async () => current });
+  layer.testing._beginAisSessionForTest();
+  await layer.update();
+  const stats = layer.getStats();
+  assert.equal(stats.status, undefined);
+  assert.equal(stats.loading, true);
+  assert.equal(stats.loadingLabel, 'awaiting first AIS position…');
+  assert.equal(stats.error, null);
+  assert.equal(layerFeedState(stats), 'loading');
+  layer.destroy();
+});

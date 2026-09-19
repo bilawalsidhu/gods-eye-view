@@ -1,0 +1,199 @@
+{
+  "$schema_note": "OnDemand Spatial capability registry — Gate 3 rows. Row fields consumed by server/ondemand/capability-loop.js: id, provider, route, adapter (file; rows without one are never executed), status (PENDING / rendering-only rows are excluded from the catalogue), params (whitelist), required_params, description, coverage, license, attribution.",
+  "version": 5,
+  "updated_utc": "2026-09-18T09:45:00Z",
+  "capabilities": [
+    {
+      "id": "earthquake.search",
+      "provider": "USGS FDSN Event",
+      "route": "/api/sources/earthquakes",
+      "endpoint_url": null,
+      "endpoint_url_pending_reason": "no stable Vercel function-runtime deployment of ondemand-serverless yet",
+      "endpoint_path": "/api/sources/earthquakes",
+      "ondemand_tool": "earthquake_search",
+      "ondemand_tool_id": null,
+      "coverage": "observed",
+      "auth": "none",
+      "persistent_connection": false,
+      "status": "registered-unverified",
+      "definition": "docs/ondemand-workflows/tools/earthquake_search.json",
+      "notes": "REST agent creation is dashboard-only in the live OnDemand docs (§8; re-confirmed 2026-09-18T07:09:37Z: GET /plugin/v1/list total 0). Status becomes 'live' once the tool is created in the dashboard (OpenAPI: docs/ondemand-workflows/tools/earthquake_search.openapi.json), its pluginId is pasted into ondemand_tool_id, and the end-to-end query invokes it. Selected by the workflow's capability_resolver node (docs/ondemand-workflows/README.md).",
+      "adapter": "server/sources/usgs-earthquakes.js",
+      "adapter_export": "fetchEarthquakes",
+      "description": "Search recent/historical earthquakes (USGS FDSN Event) by time window, magnitude and circle (latitude+longitude+maxradiuskm) or bounding box; returns observed events with UTC time, magnitude, depth, location, tsunami flag.",
+      "params": [
+        "starttime",
+        "endtime",
+        "minmagnitude",
+        "maxmagnitude",
+        "latitude",
+        "longitude",
+        "maxradiuskm",
+        "minlatitude",
+        "maxlatitude",
+        "minlongitude",
+        "maxlongitude",
+        "limit",
+        "orderby",
+        "mode"
+      ],
+      "required_params": [],
+      "license": {
+        "name": "USGS public domain (U.S. Government work)",
+        "url": "https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits",
+        "status": "ATTRIBUTION REQUIRED"
+      },
+      "attribution": "Earthquake data: U.S. Geological Survey (USGS) Earthquake Hazards Program, FDSN Event Web Service",
+      "tool_definition": "docs/ondemand-tools/earthquake_search.json",
+      "gate3_row": 1
+    },
+    {
+      "id": "demo.timezone",
+      "provider": "demo.timezone (nautical zones, computed locally)",
+      "route": "/api/sources/demo/timezone",
+      "ondemand_tool": "demo_timezone",
+      "ondemand_tool_id": null,
+      "coverage": "estimated",
+      "auth": "none",
+      "persistent_connection": false,
+      "status": "registered-unverified",
+      "adapter": "server/sources/demo-timezone.js",
+      "adapter_export": "fetchTimezone",
+      "description": "Estimate the nautical time zone (UTC offset = longitude/15°, rounded) and local time for a coordinate. Dynamic-capability probe of the capability loop; no upstream call.",
+      "params": [
+        "lat",
+        "lon",
+        "at"
+      ],
+      "required_params": [
+        "lat",
+        "lon"
+      ],
+      "definition": "docs/ondemand-tools/demo_timezone.json",
+      "tool_definition": "docs/ondemand-tools/demo_timezone.json",
+      "license": {
+        "name": "Repository (MIT, computed value — no upstream data)",
+        "url": "https://github.com/bilawalsidhu/gods-eye-view/blob/main/LICENSE",
+        "status": "OK"
+      },
+      "attribution": "OnDemand Spatial demo.timezone (nautical zone estimate)",
+      "gate3_row": "dynamic-capability probe",
+      "notes": "Registered with ZERO frontend changes to prove OnDemand selects a capability purely from this registry (docs/audit/capability-loop-verification.md)."
+    },
+    {
+      "id": "fires.search",
+      "provider": "NASA FIRMS (LANCE near-real-time active fire) — area CSV API",
+      "route": "/api/sources/fires",
+      "endpoint_url": null,
+      "endpoint_url_pending_reason": "no stable Vercel function-runtime deployment of ondemand-serverless yet",
+      "endpoint_path": "/api/sources/fires",
+      "ondemand_tool": "fire_detection_search",
+      "ondemand_tool_id": null,
+      "coverage": "observed (NRT detections; cloud/overpass gaps)",
+      "auth": "env:NASA_FIRMS_MAP_KEY (free MAP_KEY; 503 not_configured when absent)",
+      "persistent_connection": false,
+      "status": "registered-unverified",
+      "adapter": "server/sources/nasa-firms.js",
+      "adapter_export": "fetchFires",
+      "description": "Active-fire detections (VIIRS NOAA-20/NOAA-21/SNPP or MODIS, NRT) inside a bounding box or a circle (latitude+longitude+radius_km → bbox) over the last 1–10 days; returns detections with UTC acquisition time, brightness, FRP, confidence, satellite/instrument, day/night.",
+      "params": [
+        "bbox",
+        "latitude",
+        "longitude",
+        "radius_km",
+        "source",
+        "day_range",
+        "date",
+        "limit"
+      ],
+      "required_params": [],
+      "definition": "docs/ondemand-tools/fire_detection_search.json",
+      "tool_definition": "docs/ondemand-tools/fire_detection_search.json",
+      "license": {
+        "name": "NASA Earthdata open data (FIRMS/LANCE) — free MAP_KEY required, attribution requested",
+        "url": "https://firms.modaps.eosdis.nasa.gov/api/area/",
+        "status": "LICENSE/KEY REQUIRED + ATTRIBUTION REQUIRED"
+      },
+      "attribution": "NASA FIRMS / LANCE",
+      "gate3_row": 2,
+      "notes": "Row 2 scaffold (2026-09-18): adapter, route via the catch-all, tool definition, tests. The MAP_KEY is not configured on the emulator, so live verification records the structured 503 not_configured path; status becomes 'live' once NASA_FIRMS_MAP_KEY is set on the deployment and the tool is registered in the OnDemand dashboard (docs/audit/gate3-row1-registration.md pattern)."
+    }
+  ],
+  "ondemand": {
+    "workflow": {
+      "id": "6aace534859f7b0abb53d99a",
+      "name": "OnDemand Spatial Advanced Workflow",
+      "flowVersion": 1,
+      "created": "api",
+      "created_utc": "2026-09-18T07:16:04.335Z",
+      "activated_utc": "2026-09-18T07:16:14.101Z",
+      "definition": "docs/ondemand-workflows/ondemand-spatial-advanced-v1.json",
+      "env": "ONDEMAND_SPATIAL_FLOW_ID (default FLOW_DEFAULTS.spatialFlowId in server/ondemand/config.js)"
+    },
+    "agent": {
+      "name": "OnDemand Spatial Intelligence Agent",
+      "pluginId": null,
+      "created": "dashboard-only",
+      "env": "ONDEMAND_SPATIAL_AGENT_ID",
+      "pack": "docs/audit/dashboard-registration-pack.md",
+      "notes": "Agent creation has no documented REST endpoint (docs/ONDEMAND_API_CURRENT.md §8); paste the pluginId (plugin-<digits>) returned by the dashboard here and into ONDEMAND_SPATIAL_AGENT_ID."
+    },
+    "skills": [
+      {
+        "slug": "ondemand-spatial-spatial-context-reader",
+        "skillId": null,
+        "created": "dashboard-only",
+        "definition": "docs/ondemand-skills/ondemand-spatial-spatial-context-reader.md"
+      },
+      {
+        "slug": "ondemand-spatial-intent-classifier",
+        "skillId": null,
+        "created": "dashboard-only",
+        "definition": "docs/ondemand-skills/ondemand-spatial-intent-classifier.md"
+      },
+      {
+        "slug": "ondemand-spatial-capability-resolver",
+        "skillId": null,
+        "created": "dashboard-only",
+        "definition": "docs/ondemand-skills/ondemand-spatial-capability-resolver.md"
+      },
+      {
+        "slug": "ondemand-spatial-map-action-planner",
+        "skillId": null,
+        "created": "dashboard-only",
+        "definition": "docs/ondemand-skills/ondemand-spatial-map-action-planner.md"
+      },
+      {
+        "slug": "ondemand-spatial-seismic-analyst",
+        "skillId": null,
+        "created": "dashboard-only",
+        "definition": "docs/ondemand-skills/ondemand-spatial-seismic-analyst.md"
+      },
+      {
+        "slug": "ondemand-spatial-aviation-analyst",
+        "skillId": null,
+        "created": "dashboard-only",
+        "definition": "docs/ondemand-skills/ondemand-spatial-aviation-analyst.md"
+      },
+      {
+        "slug": "ondemand-spatial-maritime-analyst",
+        "skillId": null,
+        "created": "dashboard-only",
+        "definition": "docs/ondemand-skills/ondemand-spatial-maritime-analyst.md"
+      },
+      {
+        "slug": "ondemand-spatial-evidence-verifier",
+        "skillId": null,
+        "created": "dashboard-only",
+        "definition": "docs/ondemand-skills/ondemand-spatial-evidence-verifier.md"
+      },
+      {
+        "slug": "ondemand-spatial-structured-response-writer",
+        "skillId": null,
+        "created": "dashboard-only",
+        "definition": "docs/ondemand-skills/ondemand-spatial-structured-response-writer.md"
+      }
+    ],
+    "skills_notes": "Skills have no documented REST create/attach endpoint (docs/ONDEMAND_API_CURRENT.md §9); paste each id returned by Dashboard → Skills → Create Skill into skillId."
+  }
+}

@@ -1,7 +1,7 @@
 export const ACTION_DESCRIPTIONS = {
   fly_to_location: {
     description:
-      "Fly the God's Eye View camera to a known city, geocoded country/region/city/landmark, or explicit WGS84 coordinate. Countries/cities frame the whole place; landmarks/buildings use close framing.",
+      'Fly the OnDemand Spatial camera to a known city, geocoded country/region/city/landmark, or explicit WGS84 coordinate. Countries/cities frame the whole place; landmarks/buildings use close framing.',
     $position: 1,
     parameters: {
       properties: {
@@ -76,7 +76,8 @@ export const ACTION_DESCRIPTIONS = {
     $position: 1,
   },
   set_layer_visibility: {
-    description: "Enable or disable one registered God's Eye View data layer.",
+    description:
+      'Enable or disable one registered OnDemand Spatial data layer.',
     $position: 1,
     parameters: {
       properties: {
@@ -143,7 +144,7 @@ export const ACTION_DESCRIPTIONS = {
     },
   },
   set_visual_style: {
-    description: "Set the active God's Eye View visual filter/style.",
+    description: 'Set the active OnDemand Spatial visual filter/style.',
     $position: 1,
   },
   get_entity_context: {

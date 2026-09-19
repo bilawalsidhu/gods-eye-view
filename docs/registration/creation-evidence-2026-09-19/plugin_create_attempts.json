@@ -1,0 +1,744 @@
+[
+ {
+  "tool": "public_v1_suggest_plugins",
+  "request_args": {
+   "query": "search recent earthquakes from USGS by time window, magnitude range and geographic area (circle or bbox) for the OnDemand Spatial map",
+   "limit": 8
+  },
+  "is_error": null,
+  "response": "{\"message\": \"Successfully fetched suggested plugins\", \"plugins\": [{\"pluginId\": \"plugin-1772953290\", \"name\": \"Planet Satellite Imagery\", \"identifier\": \"rest_api\", \"description\": \"Search Planet Labs satellite imagery by location, date, and cloud cover. Returns metadata for PlanetScope (3m daily) and SkySat (0.5m) imagery. Each result includes a Planet Explorer URL for browser viewing AND a thumbnail_url that serves the actual satellite image as an embeddable PNG - use thumbnail_url when embedding imagery in intelligence reports or documents. No authentication needed for thumbnail access.\", \"category\": \"data_and_analytics\", \"type\": \"chat\", \"logoUrl\": \"https://prodnewcdn-hfcfgzbngwbsfcep.a03.azurefd.net/logo/logos/38e18b88-0516-4e48-8fc2-ec49ed113c6a-planet-satellite-imagery-77006c.png?se=2026-09-26T11%3A26%3A07Z&sig=<REDACTED-SAS-SIG>&ske=2026-09-26T11%3A26%3A07Z&skoid=<REDACTED>&sks=b&skt=2026-09-19T11%3A26%3A07Z&sktid=<REDACTED>&skv=2025-05-05&sp=r&sr=b&st=2026-09-19T11%3A36%3A07Z&sv=2025-05-05\", \"agentId\": \"agent-1772953290\"}, {\"pluginId\": \"plugin-1772952989\", \"name\": \"NASA FIRMS Fire Detector\", \"identifier\": \"rest_api\", \"description\": \"NASA FIRMS (Fire Information for Resource Management System) provides near real-time active fire and thermal anomaly detection from VIIRS and MODIS satellite instruments. Detects fires, explosions, and thermal events globally within 3 hours of satellite observation. Returns CSV data with latitude/longitude coordinates, brightness temperature, confidence scores, and fire radiative power (FRP) in megawatts. Supports detection by geographic bounding box or by country code. Ideal for strike detection, wildfire monitoring, industrial fire tracking, and thermal anomaly surveillance across the Gulf region and worldwide.\", \"category\": \"data_and_analytics\", \"type\": \"chat\", \"logoUrl\": \"https://prodnewcdn-hfcfgzbngwbsfcep.a03.azurefd.net/logo/logos/f3ba0f7d-4122-43f8-ab65-c00da8422214-nasa-firms-fire-detector-13703b.png?se=2026-09-26T11%3A26%3A07Z&sig=<REDACTED-SAS-SIG>&ske=2026-09-26T11%3A26%3A07Z&skoid=<REDACTED>&sks=b&skt=2026-09-19T11%3A26%3A07Z&sktid=<REDACTED>&skv=2025-05-05&sp=r&sr=b&st=2026-09-19T11%3A36%3A07Z&sv=2025-05-05\", \"agentId\": \"agent-1772952989\"}, {\"pluginId\": \"plugin-1784356219\", \"name\": \"YouTube Data API v3 - Captions\", \"identifier\": \"rest_api\", \"description\": \"Retrieve and download caption tracks and transcripts for YouTube videos, including timestamped English subtitles in SBV or VTT formats.\", \"category\": \"general\", \"type\": \"chat\", \"logoUrl\": \"https://prodnewcdn-hfcfgzbngwbsfcep.a03.azurefd.net/logo/logos/ai_logo/6692b763e851d28a036ab30e/1784356214.png?se=2026-09-26T11%3A26%3A07Z&sig=<REDACTED-SAS-SIG>&ske=2026-09-26T11%3A26%3A07Z&skoid=<REDACTED>&sks=b&skt=2026-09-19T11%3A26%3A07Z&sktid=<REDACTED>&skv=2025-05-05&sp=r&sr=b&st=2026-09-19T11%3A36%3A07Z&sv=2025-05-05\", \"agentId\": \"agent-1784356219\"}, {\"pluginId\": \"plugin-1784356865\", \"name\": \"YouTube Data API v3 - Captions\", \"identifier\": \"rest_api\", \"description\": \"List and download caption tracks and transcripts for YouTube videos using the official YouTube Data API v3. Retrieve available caption tracks by video ID and download transcript content in formats like SRT or VTT.\", \"category\": \"general\", \"type\": \"chat\", \"logoUrl\": \"https://prodnewcdn-hfcfgzbngwbsfcep.a03.azurefd.net/logo/logos/ai_logo/6692b763e851d28a036ab30e/1784356859.png?se=2026-09-26T11%3A26%3A07Z&sig=<REDACTED-SAS-SIG>&ske=2026-09-26T11%3A26%3A07Z&skoid=<REDACTED>&sks=b&skt=2026-09-19T11%3A26%3A07Z&sktid=<REDACTED>&skv=2025-05-05&sp=r&sr=b&st=2026-09-19T11%3A36%3A07Z&sv=2025-05-05\", \"agentId\": \"agent-1784356865\"}, {\"pluginId\": \"plugin-1713924030\", \"name\": \"Internet\", \"identifier\": \"rest_api\", \"description\": \"The tool retrieves up-to-date information from the web, such as weather reports, news articles, current events or general search results\", \"category\": \"research_and_insights\", \"type\": \"chat\", \"logoUrl\": \"https://prodnewcdn-hfcfgzbngwbsfcep.a03.azurefd.net/logo/images/plugin-1713924030__internet.png?se=2026-09-26T11%3A26%3A07Z&sig=<REDACTED-SAS-SIG>&ske=2026-09-26T11%3A26%3A07Z&skoid=<REDACTED>&sks=b&skt=2026-09-19T11%3A26%3A07Z&sktid=<REDACTED>&skv=2025-05-05&sp=r&sr=b&st=2026-09-19T11%3A36%3A07Z&sv=2025-05-05\", \"agentId\": \"agent-1713924030\"}, {\"pluginId\": \"plugin-1741871229\", \"name\": \"GPT Search\", \"identifier\": \"rest_api\", \"description\": \"An agent that harnesses the power of GPT-4o to analyze user inputs and generate thoughtful, context-aware responses, making it an invaluable agent for research and insights.\", \"category\": \"research_and_insights\", \"type\": \"chat\", \"logoUrl\": \"https://prodnewcdn-hfcfgzbngwbsfcep.a03.azurefd.net/logo/images/plugin-1741871229__gpt-search.png?se=2026-09-26T11%3A26%3A07Z&sig=<REDACTED-SAS-SIG>&ske=2026-09-26T11%3A26%3A07Z&skoid=<REDACTED>&sks=b&skt=2026-09-19T11%3A26%3A07Z&sktid=<REDACTED>&skv=2025-05-05&sp=r&sr=b&st=2026-09-19T11%3A36%3A07Z&sv=2025-05-05\", \"agentId\": \"agent-1741871229\"}, {\"pluginId\": \"plugin-1751872652\", \"name\": \"X Search Agent\", \"identifier\": \"rest_api\", \"description\": \"This tool is responsible for real time search using date range. country, it can provide info from the users x handle and it can fetch latest post of users account.\", \"category\": \"general\", \"type\": \"chat\", \"logoUrl\": \"https://prodnewcdn-hfcfgzbngwbsfcep.a03.azurefd.net/logo/images/plugin-1751872652__x-search-agent.png?se=2026-09-26T11%3A26%3A07Z&sig=<REDACTED-SAS-SIG>&ske=2026-09-26T11%3A26%3A07Z&skoid=<REDACTED>&sks=b&skt=2026-09-19T11%3A26%3A07Z&sktid=<REDACTED>&skv=2025-05-05&sp=r&sr=b&st=2026-09-19T11%3A36%3A07Z&sv=2025-05-05\", \"agentId\": \"agent-1751872652\"}, {\"pluginId\": \"plugin-1726291127\", \"name\": \"Universe Explorer\", \"identifier\": \"plugin_knowledge_chat\", \"description\": \"ACT AS EDUCATOR,PROVIDE THE REQUIRED DETAILS ACCORDING TO USER INPUT, PROVIDES THE DETAILS ABOUT PLANETS ORBIT,DIAMETER,DISTANCE FROM EARTH.\", \"category\": \"general\", \"type\": \"chat\", \"logoUrl\": \"https://prodnewcdn-hfcfgzbngwbsfcep.a03.azurefd.net/logo/images/plugin-1726291127__universe-explorer.png?se=2026-09-26T11%3A26%3A07Z&sig=<REDACTED-SAS-SIG>&ske=2026-09-26T11%3A26%3A07Z&skoid=<REDACTED>&sks=b&skt=2026-09-19T11%3A26%3A07Z&sktid=<REDACTED>&skv=2025-05-05&sp=r&sr=b&st=2026-09-19T11%3A36%3A07Z&sv=2025-05-05\", \"agentId\": \"agent-1726291127\"}]}",
+  "http_log": {
+   "utc": "2026-09-19T11:36:02.908Z",
+   "method": "tools/call",
+   "http_status": 200,
+   "content_type": "application/json",
+   "session_id_present": true,
+   "result_keys": [
+    "content"
+   ],
+   "error": null
+  },
+  "kind": "mcp_tools_call",
+  "utc": "2026-09-19T11:36:07.939Z"
+ },
+ {
+  "method": "GET",
+  "url": "https://api.on-demand.io/plugin/v1/list?page=1&limit=50",
+  "status": 200,
+  "response": "{\"message\": \"Agent fetched successfully\", \"page\": 1, \"limit\": 50, \"data\": {\"total\": 0}}",
+  "kind": "rest",
+  "utc": "2026-09-19T11:36:08.172Z"
+ },
+ {
+  "tool": "plugin_v1_plugin_create",
+  "request_args": {
+   "name": "earthquake_search",
+   "identifier": "rest",
+   "description": "Search recent/historical earthquakes from USGS by time window, magnitude range and geographic area (circle or bbox). Returns observed events with UTC time, magnitude, depth, location, tsunami flag and USGS URL.",
+   "logoUrl": "https://ondemand-eand-spatial-j8s1kk2zd-schoolhack-web-team.vercel.app/logo.svg",
+   "type": "chat",
+   "source": "external",
+   "category": "Research",
+   "status": "private",
+   "conversationStarters": [
+    "Find earthquakes above M5 in the last week",
+    "Search for earthquakes within 300km of these coordinates"
+   ],
+   "action": {
+    "authentication": {
+     "type": "none"
+    },
+    "fields": [],
+    "schema": {
+     "openapi": "3.0.3",
+     "info": {
+      "title": "OnDemand Spatial earthquake_search",
+      "version": "1.0.0",
+      "description": "Search recent/historical earthquakes from the USGS FDSN Event Web Service by time window, magnitude range and geographic area (circle or bounding box), proxied by the OnDemand Spatial serverless route `api/[...route].js` -> `server/serverless/earthquakes-route.js` -> `server/sources/usgs-earthquakes.js`. Returns observed events with UTC time, magnitude, depth, location, tsunami flag and USGS URL. No authentication is required."
+     },
+     "servers": [
+      {
+       "url": "https://sb-1np4tjtbq20v.vercel.run",
+       "description": "OnDemand Spatial deployment host (set 2026-09-19 by the API re-check; see README/READY_TO_PASTE for the re-point rule)"
+      }
+     ],
+     "paths": {
+      "/api/sources/earthquakes": {
+       "get": {
+        "operationId": "earthquake_search",
+        "summary": "Search recent/historical earthquakes (USGS FDSN)",
+        "description": "All query parameters are optional and are forwarded to the USGS FDSN Event Web Service `query` (or `count`) method after validation. A circle search (`latitude` + `longitude` + `maxradiuskm`) and a bounding-box search (`minlatitude`/`maxlatitude`/`minlongitude`/`maxlongitude`) are mutually exclusive -- supplying keys from both is a 400 error, and a partial circle (e.g. `latitude` without `maxradiuskm`) is also a 400 error. Any query parameter not listed below is rejected with 400 (`additionalProperties: false` on the underlying input schema).",
+        "parameters": [
+         {
+          "name": "starttime",
+          "in": "query",
+          "required": false,
+          "schema": {
+           "type": "string",
+           "example": "2024-01-01"
+          },
+          "description": "Limit to events on or after this time (UTC). Accepts `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM:SS(Z)`; a date with no time means midnight UTC."
+         },
+         {
+          "name": "endtime",
+          "in": "query",
+          "required": false,
+          "schema": {
+           "type": "string",
+           "example": "2024-01-31T23:59:59Z"
+          },
+          "description": "Limit to events on or before this time (UTC). Same accepted formats as `starttime`."
+         },
+         {
+          "name": "minmagnitude",
+          "in": "query",
+          "required": false,
+          "schema": {
+           "type": "number",
+           "minimum": -2,
+           "maximum": 10
+          },
+          "description": "Minimum event magnitude, inclusive."
+         },
+         {
+          "name": "maxmagnitude",
+          "in": "query",
+          "required": false,
+          "schema": {
+           "type": "number",
+           "minimum": -2,
+           "maximum": 10
+          },
+          "description": "Maximum event magnitude, inclusive."
+         },
+         {
+          "name": "latitude",
+          "in": "query",
+          "required": false,
+          "schema": {
+           "type": "number",
+           "minimum": -90,
+           "maximum": 90
+          },
+          "description": "Circle-search center latitude, degrees. Requires `longitude` and `maxradiuskm` together."
+         },
+         {
+          "name": "longitude",
+          "in": "query",
+          "required": false,
+          "schema": {
+           "type": "number",
+           "minimum": -180,
+           "maximum": 180
+          },
+          "description": "Circle-search center longitude, degrees. Requires `latitude` and `maxradiuskm` together."
+         },
+         {
+          "name": "maxradiuskm",
+          "in": "query",
+          "required": false,
+          "schema": {
+           "type": "number",
+           "minimum": 0,
+           "exclusiveMinimum": true,
+           "maximum": 20001.6
+          },
+          "description": "Circle-search radius, kilometers (max is USGS's own limit, half the Earth's circumference). Requires `latitude` and `longitude` together."
+         },
+         {
+          "name": "minlatitude",
+          "in": "query",
+          "required": false,
+          "schema": {
+           "type": "number",
+           "minimum": -90,
+           "maximum": 90
+          },
+          "description": "Bounding-box south edge, degrees. Must be <= `maxlatitude`."
+         },
+         {
+          "name": "maxlatitude",
+          "in": "query",
+          "required": false,
+          "schema": {
+           "type": "number",
+           "minimum": -90,
+           "maximum": 90
+          },
+          "description": "Bounding-box north edge, degrees. Must be >= `minlatitude`."
+         },
+         {
+          "name": "minlongitude",
+          "in": "query",
+          "required": false,
+          "schema": {
+           "type": "number",
+           "minimum": -180,
+           "maximum": 180
+          },
+          "description": "Bounding-box west edge, degrees. Must be <= `maxlongitude`."
+         },
+         {
+          "name": "maxlongitude",
+          "in": "query",
+          "required": false,
+          "schema": {
+           "type": "number",
+           "minimum": -180,
+           "maximum": 180
+          },
+          "description": "Bounding-box east edge, degrees. Must be >= `minlongitude`."
+         },
+         {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "schema": {
+           "type": "integer",
+           "minimum": 1,
+           "maximum": 200,
+           "default": 100
+          },
+          "description": "Maximum number of events to return. USGS itself allows up to 20000; this adapter caps it at 200. Defaults to 100."
+         },
+         {
+          "name": "orderby",
+          "in": "query",
+          "required": false,
+          "schema": {
+           "type": "string",
+           "enum": [
+            "time",
+            "time-asc",
+            "magnitude",
+            "magnitude-asc"
+           ],
+           "default": "time"
+          },
+          "description": "Sort order for the returned events."
+         },
+         {
+          "name": "mode",
+          "in": "query",
+          "required": false,
+          "schema": {
+           "type": "string",
+           "enum": [
+            "query",
+            "count"
+           ],
+           "default": "query"
+          },
+          "description": "Local switch (not forwarded to USGS): 'query' returns matching events, 'count' returns only the number of matching events (uses the FDSN `count` endpoint)."
+         }
+        ],
+        "responses": {
+         "200": {
+          "description": "Matching earthquakes (mode=query, the default), or their count only (mode=count -- in which case `events` is omitted and `count` alone reflects the number of matching events).",
+          "content": {
+           "application/json": {
+            "schema": {
+             "$ref": "#/components/schemas/EarthquakeSearchResponse"
+            }
+           }
+          }
+         },
+         "400": {
+          "description": "Invalid query -- an unknown parameter, an out-of-range or malformed value, a mixed circle/bbox request, a partial circle, or an inverted bounding box. Also carries a USGS-rejected request (HTTP 400) passed through unchanged from the upstream FDSN service.",
+          "content": {
+           "application/json": {
+            "schema": {
+             "$ref": "#/components/schemas/InvalidQueryError"
+            }
+           }
+          }
+         },
+         "502": {
+          "description": "Upstream error: USGS was unreachable or timed out after one retry, USGS returned a 5xx or a response body that was not valid JSON, or an unhandled exception occurred in the route handler. (The live route may occasionally surface this same failure under a different HTTP status, e.g. 404/500/503/504, depending on how USGS itself responded -- see server/sources/usgs-earthquakes.js `requestUsgs()`; this document models every such upstream failure uniformly under 502 per this schema's scope.)",
+          "content": {
+           "application/json": {
+            "schema": {
+             "$ref": "#/components/schemas/UpstreamError"
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     },
+     "components": {
+      "schemas": {
+       "EarthquakeSearchResponse": {
+        "type": "object",
+        "description": "Success body for mode=query (default). For mode=count, `events` is omitted and `count` alone reflects the number of matching events.",
+        "properties": {
+         "source": {
+          "type": "string",
+          "enum": [
+           "USGS"
+          ]
+         },
+         "coverage": {
+          "type": "string",
+          "enum": [
+           "observed"
+          ]
+         },
+         "count": {
+          "type": "integer",
+          "description": "Number of events returned (mode=query) or matched (mode=count)."
+         },
+         "events": {
+          "type": "array",
+          "items": {
+           "$ref": "#/components/schemas/EarthquakeEvent"
+          }
+         },
+         "provenance": {
+          "$ref": "#/components/schemas/Provenance"
+         },
+         "query": {
+          "type": "object",
+          "description": "The request's own query parameters, exactly as forwarded from the HTTP layer into the adapter.",
+          "additionalProperties": true
+         }
+        }
+       },
+       "EarthquakeEvent": {
+        "type": "object",
+        "properties": {
+         "id": {
+          "type": "string",
+          "nullable": true,
+          "description": "USGS event id."
+         },
+         "time_utc": {
+          "type": "string",
+          "nullable": true,
+          "description": "ISO-8601 UTC origin time."
+         },
+         "magnitude": {
+          "type": "number",
+          "nullable": true
+         },
+         "mag_type": {
+          "type": "string",
+          "nullable": true,
+          "description": "Magnitude scale, e.g. 'mww', 'mb'."
+         },
+         "depth_km": {
+          "type": "number",
+          "nullable": true,
+          "description": "Hypocenter depth, kilometers."
+         },
+         "lat": {
+          "type": "number",
+          "nullable": true
+         },
+         "lon": {
+          "type": "number",
+          "nullable": true
+         },
+         "place": {
+          "type": "string",
+          "nullable": true,
+          "description": "USGS human-readable location string."
+         },
+         "tsunami": {
+          "type": "integer",
+          "enum": [
+           0,
+           1
+          ],
+          "description": "1 if USGS flagged tsunami potential."
+         },
+         "alert": {
+          "type": "string",
+          "nullable": true,
+          "description": "PAGER alert level ('green'/'yellow'/'orange'/'red') or null."
+         },
+         "url": {
+          "type": "string",
+          "nullable": true,
+          "description": "USGS event page URL."
+         },
+         "source": {
+          "type": "string",
+          "enum": [
+           "USGS"
+          ]
+         },
+         "coverage": {
+          "type": "string",
+          "enum": [
+           "observed"
+          ]
+         },
+         "retrieved_at_utc": {
+          "type": "string",
+          "description": "ISO-8601 UTC time this route fetched the data."
+         }
+        }
+       },
+       "Provenance": {
+        "type": "object",
+        "properties": {
+         "source": {
+          "type": "string",
+          "enum": [
+           "USGS FDSN Event Web Service"
+          ]
+         },
+         "url": {
+          "type": "string",
+          "description": "The exact upstream request URL, including format=geojson and all forwarded params."
+         },
+         "generated": {
+          "type": "string",
+          "nullable": true,
+          "description": "ISO-8601 UTC time USGS generated the response (from GeoJSON metadata.generated)."
+         },
+         "api": {
+          "type": "string",
+          "nullable": true
+         },
+         "title": {
+          "type": "string",
+          "nullable": true
+         },
+         "retrieved_at_utc": {
+          "type": "string"
+         },
+         "license": {
+          "type": "string",
+          "enum": [
+           "USGS data are in the public domain (https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits)"
+          ]
+         }
+        }
+       },
+       "InvalidQueryError": {
+        "type": "object",
+        "description": "server/serverless/earthquakes-route.js maps a validateQuery() failure (server/sources/usgs-earthquakes.js) to this shape; `unknown` is always present (possibly empty) and is what distinguishes this from UpstreamError.",
+        "properties": {
+         "error": {
+          "type": "string",
+          "example": "invalid_query"
+         },
+         "message": {
+          "type": "string",
+          "description": "Human-readable reason, e.g. \"Invalid limit: expected an integer >= 1\" or \"circle (latitude/longitude/maxradiuskm) and bbox (...) are mutually exclusive\"."
+         },
+         "unknown": {
+          "type": "array",
+          "items": {
+           "type": "string"
+          },
+          "description": "Names of any query parameters not recognised by the adapter. Empty when the failure was a value/range/mutual-exclusivity error rather than an unknown key."
+         }
+        },
+        "required": [
+         "error",
+         "message",
+         "unknown"
+        ]
+       },
+       "UpstreamError": {
+        "description": "Either the route's own unhandled-exception fallback (SourcesError) or a pass-through USGS/network failure (AdapterError). No `unknown` key -- that is what distinguishes this from InvalidQueryError.",
+        "oneOf": [
+         {
+          "$ref": "#/components/schemas/SourcesError"
+         },
+         {
+          "$ref": "#/components/schemas/AdapterError"
+         }
+        ]
+       },
+       "SourcesError": {
+        "type": "object",
+        "description": "server/serverless/earthquakes-route.js's outer catch-all: any unhandled exception in the handler.",
+        "properties": {
+         "error": {
+          "type": "string",
+          "enum": [
+           "sources_error"
+          ]
+         }
+        },
+        "required": [
+         "error"
+        ]
+       },
+       "AdapterError": {
+        "type": "object",
+        "description": "server/sources/usgs-earthquakes.js requestUsgs(): a USGS-side or network-side failure passed through by the route as `{error, detail}`.",
+        "properties": {
+         "error": {
+          "type": "string",
+          "enum": [
+           "usgs_rejected",
+           "usgs_unavailable",
+           "usgs_timeout"
+          ]
+         },
+         "detail": {
+          "type": "string",
+          "description": "Up to 200 characters of the upstream response body, or the underlying network/timeout error message."
+         }
+        },
+        "required": [
+         "error",
+         "detail"
+        ]
+       }
+      }
+     },
+     "x-ondemand-spatial": {
+      "deployment": {
+       "stable_url": null,
+       "status": "no Vercel deployment exists yet (2026-09-18T09:30Z): the build environment cannot create one (CLI guardrail; deployment API off-limits) and the credential supplied as VERCEL_TOKEN was the OnDemand API key, not a Vercel token \u2014 run scripts/vercel-file-deploy.mjs from an operator machine, then replace <deployment> with the READY preview URL (or the project domain)",
+       "last_emulator_host": "https://sb-63r5liykgi73.vercel.run (ephemeral sandbox, 2026-09-18 \u2014 expires within ~90 minutes; never register it in the dashboard)",
+       "planned_project": "ondemand-eand-spatial (prj_VbHbEhFSDFkdXCqlq8XqONoFWQHO, team_aft8hHPiYnHp6I534L3DQScA) \u2014 preview target only; production and the opal alias must not be touched"
+      }
+     }
+    }
+   }
+  },
+  "is_error": true,
+  "response": "{\"message\": \"json: cannot unmarshal object into Go struct field PluginAction.action.schema of type string\", \"errorCode\": \"\"}",
+  "http_log": {
+   "utc": "2026-09-19T11:36:14.145Z",
+   "method": "tools/call",
+   "http_status": 200,
+   "content_type": "application/json",
+   "session_id_present": true,
+   "result_keys": [
+    "content",
+    "isError"
+   ],
+   "error": null
+  },
+  "kind": "mcp_tools_call",
+  "utc": "2026-09-19T11:36:14.363Z"
+ },
+ {
+  "tool": "plugin_v1_plugin_create",
+  "request_args": {
+   "name": "earthquake_search",
+   "identifier": "rest",
+   "description": "Search recent/historical earthquakes from USGS by time window, magnitude range and geographic area (circle or bbox). Returns observed events with UTC time, magnitude, depth, location, tsunami flag and USGS URL.",
+   "logoUrl": "https://ondemand-eand-spatial-j8s1kk2zd-schoolhack-web-team.vercel.app/logo.svg",
+   "type": "chat",
+   "source": "external",
+   "category": "Research",
+   "status": "private",
+   "conversationStarters": [
+    "Find earthquakes above M5 in the last week",
+    "Search for earthquakes within 300km of these coordinates"
+   ],
+   "action": {
+    "authentication": {
+     "type": "none"
+    },
+    "fields": [],
+    "schema": "{\"openapi\": \"3.0.3\", \"info\": {\"title\": \"OnDemand Spatial earthquake_search\", \"version\": \"1.0.0\", \"description\": \"Search recent/historical earthquakes from the USGS FDSN Event Web Service by time window, magnitude range and geographic area (circle or bounding box), proxied by the OnDemand Spatial serverless route `api/[...route].js` -> `server/serverless/earthquakes-route.js` -> `server/sources/usgs-earthquakes.js`. Returns observed events with UTC time, magnitude, depth, location, tsunami flag and USGS URL. No authentication is required.\"}, \"servers\": [{\"url\": \"https://sb-1np4tjtbq20v.vercel.run\", \"description\": \"OnDemand Spatial deployment host (set 2026-09-19 by the API re-check; see README/READY_TO_PASTE for the re-point rule)\"}], \"paths\": {\"/api/sources/earthquakes\": {\"get\": {\"operationId\": \"earthquake_search\", \"summary\": \"Search recent/historical earthquakes (USGS FDSN)\", \"description\": \"All query parameters are optional and are forwarded to the USGS FDSN Event Web Service `query` (or `count`) method after validation. A circle search (`latitude` + `longitude` + `maxradiuskm`) and a bounding-box search (`minlatitude`/`maxlatitude`/`minlongitude`/`maxlongitude`) are mutually exclusive -- supplying keys from both is a 400 error, and a partial circle (e.g. `latitude` without `maxradiuskm`) is also a 400 error. Any query parameter not listed below is rejected with 400 (`additionalProperties: false` on the underlying input schema).\", \"parameters\": [{\"name\": \"starttime\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"string\", \"example\": \"2024-01-01\"}, \"description\": \"Limit to events on or after this time (UTC). Accepts `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM:SS(Z)`; a date with no time means midnight UTC.\"}, {\"name\": \"endtime\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"string\", \"example\": \"2024-01-31T23:59:59Z\"}, \"description\": \"Limit to events on or before this time (UTC). Same accepted formats as `starttime`.\"}, {\"name\": \"minmagnitude\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": -2, \"maximum\": 10}, \"description\": \"Minimum event magnitude, inclusive.\"}, {\"name\": \"maxmagnitude\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": -2, \"maximum\": 10}, \"description\": \"Maximum event magnitude, inclusive.\"}, {\"name\": \"latitude\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": -90, \"maximum\": 90}, \"description\": \"Circle-search center latitude, degrees. Requires `longitude` and `maxradiuskm` together.\"}, {\"name\": \"longitude\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": -180, \"maximum\": 180}, \"description\": \"Circle-search center longitude, degrees. Requires `latitude` and `maxradiuskm` together.\"}, {\"name\": \"maxradiuskm\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": 0, \"exclusiveMinimum\": true, \"maximum\": 20001.6}, \"description\": \"Circle-search radius, kilometers (max is USGS's own limit, half the Earth's circumference). Requires `latitude` and `longitude` together.\"}, {\"name\": \"minlatitude\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": -90, \"maximum\": 90}, \"description\": \"Bounding-box south edge, degrees. Must be <= `maxlatitude`.\"}, {\"name\": \"maxlatitude\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": -90, \"maximum\": 90}, \"description\": \"Bounding-box north edge, degrees. Must be >= `minlatitude`.\"}, {\"name\": \"minlongitude\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": -180, \"maximum\": 180}, \"description\": \"Bounding-box west edge, degrees. Must be <= `maxlongitude`.\"}, {\"name\": \"maxlongitude\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": -180, \"maximum\": 180}, \"description\": \"Bounding-box east edge, degrees. Must be >= `minlongitude`.\"}, {\"name\": \"limit\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"integer\", \"minimum\": 1, \"maximum\": 200, \"default\": 100}, \"description\": \"Maximum number of events to return. USGS itself allows up to 20000; this adapter caps it at 200. Defaults to 100.\"}, {\"name\": \"orderby\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"string\", \"enum\": [\"time\", \"time-asc\", \"magnitude\", \"magnitude-asc\"], \"default\": \"time\"}, \"description\": \"Sort order for the returned events.\"}, {\"name\": \"mode\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"string\", \"enum\": [\"query\", \"count\"], \"default\": \"query\"}, \"description\": \"Local switch (not forwarded to USGS): 'query' returns matching events, 'count' returns only the number of matching events (uses the FDSN `count` endpoint).\"}], \"responses\": {\"200\": {\"description\": \"Matching earthquakes (mode=query, the default), or their count only (mode=count -- in which case `events` is omitted and `count` alone reflects the number of matching events).\", \"content\": {\"application/json\": {\"schema\": {\"$ref\": \"#/components/schemas/EarthquakeSearchResponse\"}}}}, \"400\": {\"description\": \"Invalid query -- an unknown parameter, an out-of-range or malformed value, a mixed circle/bbox request, a partial circle, or an inverted bounding box. Also carries a USGS-rejected request (HTTP 400) passed through unchanged from the upstream FDSN service.\", \"content\": {\"application/json\": {\"schema\": {\"$ref\": \"#/components/schemas/InvalidQueryError\"}}}}, \"502\": {\"description\": \"Upstream error: USGS was unreachable or timed out after one retry, USGS returned a 5xx or a response body that was not valid JSON, or an unhandled exception occurred in the route handler. (The live route may occasionally surface this same failure under a different HTTP status, e.g. 404/500/503/504, depending on how USGS itself responded -- see server/sources/usgs-earthquakes.js `requestUsgs()`; this document models every such upstream failure uniformly under 502 per this schema's scope.)\", \"content\": {\"application/json\": {\"schema\": {\"$ref\": \"#/components/schemas/UpstreamError\"}}}}}}}}, \"components\": {\"schemas\": {\"EarthquakeSearchResponse\": {\"type\": \"object\", \"description\": \"Success body for mode=query (default). For mode=count, `events` is omitted and `count` alone reflects the number of matching events.\", \"properties\": {\"source\": {\"type\": \"string\", \"enum\": [\"USGS\"]}, \"coverage\": {\"type\": \"string\", \"enum\": [\"observed\"]}, \"count\": {\"type\": \"integer\", \"description\": \"Number of events returned (mode=query) or matched (mode=count).\"}, \"events\": {\"type\": \"array\", \"items\": {\"$ref\": \"#/components/schemas/EarthquakeEvent\"}}, \"provenance\": {\"$ref\": \"#/components/schemas/Provenance\"}, \"query\": {\"type\": \"object\", \"description\": \"The request's own query parameters, exactly as forwarded from the HTTP layer into the adapter.\", \"additionalProperties\": true}}}, \"EarthquakeEvent\": {\"type\": \"object\", \"properties\": {\"id\": {\"type\": \"string\", \"nullable\": true, \"description\": \"USGS event id.\"}, \"time_utc\": {\"type\": \"string\", \"nullable\": true, \"description\": \"ISO-8601 UTC origin time.\"}, \"magnitude\": {\"type\": \"number\", \"nullable\": true}, \"mag_type\": {\"type\": \"string\", \"nullable\": true, \"description\": \"Magnitude scale, e.g. 'mww', 'mb'.\"}, \"depth_km\": {\"type\": \"number\", \"nullable\": true, \"description\": \"Hypocenter depth, kilometers.\"}, \"lat\": {\"type\": \"number\", \"nullable\": true}, \"lon\": {\"type\": \"number\", \"nullable\": true}, \"place\": {\"type\": \"string\", \"nullable\": true, \"description\": \"USGS human-readable location string.\"}, \"tsunami\": {\"type\": \"integer\", \"enum\": [0, 1], \"description\": \"1 if USGS flagged tsunami potential.\"}, \"alert\": {\"type\": \"string\", \"nullable\": true, \"description\": \"PAGER alert level ('green'/'yellow'/'orange'/'red') or null.\"}, \"url\": {\"type\": \"string\", \"nullable\": true, \"description\": \"USGS event page URL.\"}, \"source\": {\"type\": \"string\", \"enum\": [\"USGS\"]}, \"coverage\": {\"type\": \"string\", \"enum\": [\"observed\"]}, \"retrieved_at_utc\": {\"type\": \"string\", \"description\": \"ISO-8601 UTC time this route fetched the data.\"}}}, \"Provenance\": {\"type\": \"object\", \"properties\": {\"source\": {\"type\": \"string\", \"enum\": [\"USGS FDSN Event Web Service\"]}, \"url\": {\"type\": \"string\", \"description\": \"The exact upstream request URL, including format=geojson and all forwarded params.\"}, \"generated\": {\"type\": \"string\", \"nullable\": true, \"description\": \"ISO-8601 UTC time USGS generated the response (from GeoJSON metadata.generated).\"}, \"api\": {\"type\": \"string\", \"nullable\": true}, \"title\": {\"type\": \"string\", \"nullable\": true}, \"retrieved_at_utc\": {\"type\": \"string\"}, \"license\": {\"type\": \"string\", \"enum\": [\"USGS data are in the public domain (https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits)\"]}}}, \"InvalidQueryError\": {\"type\": \"object\", \"description\": \"server/serverless/earthquakes-route.js maps a validateQuery() failure (server/sources/usgs-earthquakes.js) to this shape; `unknown` is always present (possibly empty) and is what distinguishes this from UpstreamError.\", \"properties\": {\"error\": {\"type\": \"string\", \"example\": \"invalid_query\"}, \"message\": {\"type\": \"string\", \"description\": \"Human-readable reason, e.g. \\\"Invalid limit: expected an integer >= 1\\\" or \\\"circle (latitude/longitude/maxradiuskm) and bbox (...) are mutually exclusive\\\".\"}, \"unknown\": {\"type\": \"array\", \"items\": {\"type\": \"string\"}, \"description\": \"Names of any query parameters not recognised by the adapter. Empty when the failure was a value/range/mutual-exclusivity error rather than an unknown key.\"}}, \"required\": [\"error\", \"message\", \"unknown\"]}, \"UpstreamError\": {\"description\": \"Either the route's own unhandled-exception fallback (SourcesError) or a pass-through USGS/network failure (AdapterError). No `unknown` key -- that is what distinguishes this from InvalidQueryError.\", \"oneOf\": [{\"$ref\": \"#/components/schemas/SourcesError\"}, {\"$ref\": \"#/components/schemas/AdapterError\"}]}, \"SourcesError\": {\"type\": \"object\", \"description\": \"server/serverless/earthquakes-route.js's outer catch-all: any unhandled exception in the handler.\", \"properties\": {\"error\": {\"type\": \"string\", \"enum\": [\"sources_error\"]}}, \"required\": [\"error\"]}, \"AdapterError\": {\"type\": \"object\", \"description\": \"server/sources/usgs-earthquakes.js requestUsgs(): a USGS-side or network-side failure passed through by the route as `{error, detail}`.\", \"properties\": {\"error\": {\"type\": \"string\", \"enum\": [\"usgs_rejected\", \"usgs_unavailable\", \"usgs_timeout\"]}, \"detail\": {\"type\": \"string\", \"description\": \"Up to 200 characters of the upstream response body, or the underlying network/timeout error message.\"}}, \"required\": [\"error\", \"detail\"]}}}, \"x-ondemand-spatial\": {\"deployment\": {\"stable_url\": null, \"status\": \"no Vercel deployment exists yet (2026-09-18T09:30Z): the build environment cannot create one (CLI guardrail; deployment API off-limits) and the credential supplied as VERCEL_TOKEN was the OnDemand API key, not a Vercel token \\u2014 run scripts/vercel-file-deploy.mjs from an operator machine, then replace <deployment> with the READY preview URL (or the project domain)\", \"last_emulator_host\": \"https://sb-63r5liykgi73.vercel.run (ephemeral sandbox, 2026-09-18 \\u2014 expires within ~90 minutes; never register it in the dashboard)\", \"planned_project\": \"ondemand-eand-spatial (prj_VbHbEhFSDFkdXCqlq8XqONoFWQHO, team_aft8hHPiYnHp6I534L3DQScA) \\u2014 preview target only; production and the opal alias must not be touched\"}}}"
+   }
+  },
+  "is_error": true,
+  "response": "\"\"",
+  "http_log": {
+   "utc": "2026-09-19T11:36:18.219Z",
+   "method": "tools/call",
+   "http_status": 200,
+   "content_type": "application/json",
+   "session_id_present": true,
+   "result_keys": [
+    "content",
+    "isError"
+   ],
+   "error": null
+  },
+  "kind": "mcp_tools_call",
+  "utc": "2026-09-19T11:36:18.449Z"
+ },
+ {
+  "kind": "mcp_tools_call",
+  "utc": "2026-09-19T11:36:44.349Z",
+  "tool": "plugin_v1_plugin_create",
+  "variant": 3,
+  "request_args": {
+   "name": "earthquake_search",
+   "identifier": "rest",
+   "description": "Search recent/historical earthquakes from USGS by time window, magnitude range and geographic area (circle or bbox). Returns observed events with UTC time, magnitude, depth, location, tsunami flag and USGS URL.",
+   "logoUrl": "https://ondemand-eand-spatial-j8s1kk2zd-schoolhack-web-team.vercel.app/logo.svg",
+   "type": "chat",
+   "source": "external",
+   "category": "Research",
+   "status": "private",
+   "conversationStarters": [
+    "Find earthquakes above M5 in the last week",
+    "Search for earthquakes within 300km of these coordinates"
+   ],
+   "action": {
+    "schema": "{\"openapi\": \"3.0.3\", \"info\": {\"title\": \"OnDemand Spatial earthquake_search\", \"version\": \"1.0.0\", \"description\": \"Search recent/historical earthquakes from the USGS FDSN Event Web Service by time window, magnitude range and geographic area (circle or bounding box), proxied by the OnDemand Spatial serverless route `api/[...route].js` -> `server/serverless/earthquakes-route.js` -> `server/sources/usgs-earthquakes.js`. Returns observed events with UTC time, magnitude, depth, location, tsunami flag and USGS URL. No authentication is required.\"}, \"servers\": [{\"url\": \"https://sb-1np4tjtbq20v.vercel.run\", \"description\": \"OnDemand Spatial deployment host (set 2026-09-19 by the API re-check; see READY_TO_PASTE for the re-point rule)\"}], \"paths\": {\"/api/sources/earthquakes\": {\"get\": {\"operationId\": \"earthquake_search\", \"summary\": \"Search recent/historical earthquakes (USGS FDSN)\", \"description\": \"All query parameters are optional and are forwarded to the USGS FDSN Event Web Service `query` (or `count`) method after validation. A circle search (`latitude` + `longitude` + `maxradiuskm`) and a bounding-box search (`minlatitude`/`maxlatitude`/`minlongitude`/`maxlongitude`) are mutually exclusive -- supplying keys from both is a 400 error, and a partial circle (e.g. `latitude` without `maxradiuskm`) is also a 400 error. Any query parameter not listed below is rejected with 400 (`additionalProperties: false` on the underlying input schema).\", \"parameters\": [{\"name\": \"starttime\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"string\", \"example\": \"2024-01-01\"}, \"description\": \"Limit to events on or after this time (UTC). Accepts `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM:SS(Z)`; a date with no time means midnight UTC.\"}, {\"name\": \"endtime\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"string\", \"example\": \"2024-01-31T23:59:59Z\"}, \"description\": \"Limit to events on or before this time (UTC). Same accepted formats as `starttime`.\"}, {\"name\": \"minmagnitude\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": -2, \"maximum\": 10}, \"description\": \"Minimum event magnitude, inclusive.\"}, {\"name\": \"maxmagnitude\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": -2, \"maximum\": 10}, \"description\": \"Maximum event magnitude, inclusive.\"}, {\"name\": \"latitude\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": -90, \"maximum\": 90}, \"description\": \"Circle-search center latitude, degrees. Requires `longitude` and `maxradiuskm` together.\"}, {\"name\": \"longitude\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": -180, \"maximum\": 180}, \"description\": \"Circle-search center longitude, degrees. Requires `latitude` and `maxradiuskm` together.\"}, {\"name\": \"maxradiuskm\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": 0, \"exclusiveMinimum\": true, \"maximum\": 20001.6}, \"description\": \"Circle-search radius, kilometers (max is USGS's own limit, half the Earth's circumference). Requires `latitude` and `longitude` together.\"}, {\"name\": \"minlatitude\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": -90, \"maximum\": 90}, \"description\": \"Bounding-box south edge, degrees. Must be <= `maxlatitude`.\"}, {\"name\": \"maxlatitude\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": -90, \"maximum\": 90}, \"description\": \"Bounding-box north edge, degrees. Must be >= `minlatitude`.\"}, {\"name\": \"minlongitude\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": -180, \"maximum\": 180}, \"description\": \"Bounding-box west edge, degrees. Must be <= `maxlongitude`.\"}, {\"name\": \"maxlongitude\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": -180, \"maximum\": 180}, \"description\": \"Bounding-box east edge, degrees. Must be >= `minlongitude`.\"}, {\"name\": \"limit\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"integer\", \"minimum\": 1, \"maximum\": 200, \"default\": 100}, \"description\": \"Maximum number of events to return. USGS itself allows up to 20000; this adapter caps it at 200. Defaults to 100.\"}, {\"name\": \"orderby\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"string\", \"enum\": [\"time\", \"time-asc\", \"magnitude\", \"magnitude-asc\"], \"default\": \"time\"}, \"description\": \"Sort order for the returned events.\"}, {\"name\": \"mode\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"string\", \"enum\": [\"query\", \"count\"], \"default\": \"query\"}, \"description\": \"Local switch (not forwarded to USGS): 'query' returns matching events, 'count' returns only the number of matching events (uses the FDSN `count` endpoint).\"}], \"responses\": {\"200\": {\"description\": \"Matching earthquakes (mode=query, the default), or their count only (mode=count -- in which case `events` is omitted and `count` alone reflects the number of matching events).\", \"content\": {\"application/json\": {\"schema\": {\"$ref\": \"#/components/schemas/EarthquakeSearchResponse\"}}}}, \"400\": {\"description\": \"Invalid query -- an unknown parameter, an out-of-range or malformed value, a mixed circle/bbox request, a partial circle, or an inverted bounding box. Also carries a USGS-rejected request (HTTP 400) passed through unchanged from the upstream FDSN service.\", \"content\": {\"application/json\": {\"schema\": {\"$ref\": \"#/components/schemas/InvalidQueryError\"}}}}, \"502\": {\"description\": \"Upstream error: USGS was unreachable or timed out after one retry, USGS returned a 5xx or a response body that was not valid JSON, or an unhandled exception occurred in the route handler. (The live route may occasionally surface this same failure under a different HTTP status, e.g. 404/500/503/504, depending on how USGS itself responded -- see server/sources/usgs-earthquakes.js `requestUsgs()`; this document models every such upstream failure uniformly under 502 per this schema's scope.)\", \"content\": {\"application/json\": {\"schema\": {\"$ref\": \"#/components/schemas/UpstreamError\"}}}}}}}}, \"components\": {\"schemas\": {\"EarthquakeSearchResponse\": {\"type\": \"object\", \"description\": \"Success body for mode=query (default). For mode=count, `events` is omitted and `count` alone reflects the number of matching events.\", \"properties\": {\"source\": {\"type\": \"string\", \"enum\": [\"USGS\"]}, \"coverage\": {\"type\": \"string\", \"enum\": [\"observed\"]}, \"count\": {\"type\": \"integer\", \"description\": \"Number of events returned (mode=query) or matched (mode=count).\"}, \"events\": {\"type\": \"array\", \"items\": {\"$ref\": \"#/components/schemas/EarthquakeEvent\"}}, \"provenance\": {\"$ref\": \"#/components/schemas/Provenance\"}, \"query\": {\"type\": \"object\", \"description\": \"The request's own query parameters, exactly as forwarded from the HTTP layer into the adapter.\", \"additionalProperties\": true}}}, \"EarthquakeEvent\": {\"type\": \"object\", \"properties\": {\"id\": {\"type\": \"string\", \"nullable\": true, \"description\": \"USGS event id.\"}, \"time_utc\": {\"type\": \"string\", \"nullable\": true, \"description\": \"ISO-8601 UTC origin time.\"}, \"magnitude\": {\"type\": \"number\", \"nullable\": true}, \"mag_type\": {\"type\": \"string\", \"nullable\": true, \"description\": \"Magnitude scale, e.g. 'mww', 'mb'.\"}, \"depth_km\": {\"type\": \"number\", \"nullable\": true, \"description\": \"Hypocenter depth, kilometers.\"}, \"lat\": {\"type\": \"number\", \"nullable\": true}, \"lon\": {\"type\": \"number\", \"nullable\": true}, \"place\": {\"type\": \"string\", \"nullable\": true, \"description\": \"USGS human-readable location string.\"}, \"tsunami\": {\"type\": \"integer\", \"enum\": [0, 1], \"description\": \"1 if USGS flagged tsunami potential.\"}, \"alert\": {\"type\": \"string\", \"nullable\": true, \"description\": \"PAGER alert level ('green'/'yellow'/'orange'/'red') or null.\"}, \"url\": {\"type\": \"string\", \"nullable\": true, \"description\": \"USGS event page URL.\"}, \"source\": {\"type\": \"string\", \"enum\": [\"USGS\"]}, \"coverage\": {\"type\": \"string\", \"enum\": [\"observed\"]}, \"retrieved_at_utc\": {\"type\": \"string\", \"description\": \"ISO-8601 UTC time this route fetched the data.\"}}}, \"Provenance\": {\"type\": \"object\", \"properties\": {\"source\": {\"type\": \"string\", \"enum\": [\"USGS FDSN Event Web Service\"]}, \"url\": {\"type\": \"string\", \"description\": \"The exact upstream request URL, including format=geojson and all forwarded params.\"}, \"generated\": {\"type\": \"string\", \"nullable\": true, \"description\": \"ISO-8601 UTC time USGS generated the response (from GeoJSON metadata.generated).\"}, \"api\": {\"type\": \"string\", \"nullable\": true}, \"title\": {\"type\": \"string\", \"nullable\": true}, \"retrieved_at_utc\": {\"type\": \"string\"}, \"license\": {\"type\": \"string\", \"enum\": [\"USGS data are in the public domain (https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits)\"]}}}, \"InvalidQueryError\": {\"type\": \"object\", \"description\": \"server/serverless/earthquakes-route.js maps a validateQuery() failure (server/sources/usgs-earthquakes.js) to this shape; `unknown` is always present (possibly empty) and is what distinguishes this from UpstreamError.\", \"properties\": {\"error\": {\"type\": \"string\", \"example\": \"invalid_query\"}, \"message\": {\"type\": \"string\", \"description\": \"Human-readable reason, e.g. \\\"Invalid limit: expected an integer >= 1\\\" or \\\"circle (latitude/longitude/maxradiuskm) and bbox (...) are mutually exclusive\\\".\"}, \"unknown\": {\"type\": \"array\", \"items\": {\"type\": \"string\"}, \"description\": \"Names of any query parameters not recognised by the adapter. Empty when the failure was a value/range/mutual-exclusivity error rather than an unknown key.\"}}, \"required\": [\"error\", \"message\", \"unknown\"]}, \"UpstreamError\": {\"description\": \"Either the route's own unhandled-exception fallback (SourcesError) or a pass-through USGS/network failure (AdapterError). No `unknown` key -- that is what distinguishes this from InvalidQueryError.\", \"oneOf\": [{\"$ref\": \"#/components/schemas/SourcesError\"}, {\"$ref\": \"#/components/schemas/AdapterError\"}]}, \"SourcesError\": {\"type\": \"object\", \"description\": \"server/serverless/earthquakes-route.js's outer catch-all: any unhandled exception in the handler.\", \"properties\": {\"error\": {\"type\": \"string\", \"enum\": [\"sources_error\"]}}, \"required\": [\"error\"]}, \"AdapterError\": {\"type\": \"object\", \"description\": \"server/sources/usgs-earthquakes.js requestUsgs(): a USGS-side or network-side failure passed through by the route as `{error, detail}`.\", \"properties\": {\"error\": {\"type\": \"string\", \"enum\": [\"usgs_rejected\", \"usgs_unavailable\", \"usgs_timeout\"]}, \"detail\": {\"type\": \"string\", \"description\": \"Up to 200 characters of the upstream response body, or the underlying network/timeout error message.\"}}, \"required\": [\"error\", \"detail\"]}}}, \"x-ondemand-spatial\": {\"deployment\": {\"stable_url\": null, \"status\": \"no Vercel deployment exists yet (2026-09-18T09:30Z): the build environment cannot create one (CLI guardrail; deployment API off-limits) and the credential supplied as VERCEL_TOKEN was the OnDemand API key, not a Vercel token \\u2014 run scripts/vercel-file-deploy.mjs from an operator machine, then replace <deployment> with the READY preview URL (or the project domain)\", \"last_emulator_host\": \"https://sb-63r5liykgi73.vercel.run (ephemeral sandbox, 2026-09-18 \\u2014 expires within ~90 minutes; never register it in the dashboard)\", \"planned_project\": \"ondemand-eand-spatial (prj_VbHbEhFSDFkdXCqlq8XqONoFWQHO, team_aft8hHPiYnHp6I534L3DQScA) \\u2014 preview target only; production and the opal alias must not be touched\"}}}"
+   }
+  },
+  "raw_result": "{\"jsonrpc\": \"2.0\", \"id\": 3, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"\"}], \"isError\": true}}",
+  "http_log": {
+   "utc": "2026-09-19T11:36:44.349Z",
+   "method": "tools/call",
+   "http_status": 200,
+   "content_type": "application/json",
+   "session_id_present": true,
+   "result_keys": [
+    "content",
+    "isError"
+   ],
+   "error": null
+  }
+ },
+ {
+  "kind": "mcp_tools_call",
+  "utc": "2026-09-19T11:37:06.838Z",
+  "tool": "plugin_v1_plugin_create",
+  "variant": 4,
+  "request_args": {
+   "name": "earthquake_search",
+   "identifier": "rest",
+   "description": "Search recent/historical earthquakes from USGS by time window, magnitude range and geographic area (circle or bbox). Returns observed events with UTC time, magnitude, depth, location, tsunami flag and USGS URL.",
+   "logoUrl": "https://ondemand-eand-spatial-j8s1kk2zd-schoolhack-web-team.vercel.app/logo.svg",
+   "type": "chat",
+   "source": "external",
+   "category": "data_and_analytics",
+   "conversationStarters": [
+    "Find earthquakes above M5 in the last week",
+    "Search for earthquakes within 300km of these coordinates"
+   ],
+   "action": {
+    "schema": "{\"openapi\": \"3.0.3\", \"info\": {\"title\": \"OnDemand Spatial earthquake_search\", \"version\": \"1.0.0\", \"description\": \"Search recent/historical earthquakes from the USGS FDSN Event Web Service by time window, magnitude range and geographic area (circle or bounding box), proxied by the OnDemand Spatial serverless route `api/[...route].js` -> `server/serverless/earthquakes-route.js` -> `server/sources/usgs-earthquakes.js`. Returns observed events with UTC time, magnitude, depth, location, tsunami flag and USGS URL. No authentication is required.\"}, \"servers\": [{\"url\": \"https://sb-1np4tjtbq20v.vercel.run\", \"description\": \"OnDemand Spatial deployment host (set 2026-09-19 by the API re-check; see READY_TO_PASTE for the re-point rule)\"}], \"paths\": {\"/api/sources/earthquakes\": {\"get\": {\"operationId\": \"earthquake_search\", \"summary\": \"Search recent/historical earthquakes (USGS FDSN)\", \"description\": \"All query parameters are optional and are forwarded to the USGS FDSN Event Web Service `query` (or `count`) method after validation. A circle search (`latitude` + `longitude` + `maxradiuskm`) and a bounding-box search (`minlatitude`/`maxlatitude`/`minlongitude`/`maxlongitude`) are mutually exclusive -- supplying keys from both is a 400 error, and a partial circle (e.g. `latitude` without `maxradiuskm`) is also a 400 error. Any query parameter not listed below is rejected with 400 (`additionalProperties: false` on the underlying input schema).\", \"parameters\": [{\"name\": \"starttime\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"string\", \"example\": \"2024-01-01\"}, \"description\": \"Limit to events on or after this time (UTC). Accepts `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM:SS(Z)`; a date with no time means midnight UTC.\"}, {\"name\": \"endtime\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"string\", \"example\": \"2024-01-31T23:59:59Z\"}, \"description\": \"Limit to events on or before this time (UTC). Same accepted formats as `starttime`.\"}, {\"name\": \"minmagnitude\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": -2, \"maximum\": 10}, \"description\": \"Minimum event magnitude, inclusive.\"}, {\"name\": \"maxmagnitude\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": -2, \"maximum\": 10}, \"description\": \"Maximum event magnitude, inclusive.\"}, {\"name\": \"latitude\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": -90, \"maximum\": 90}, \"description\": \"Circle-search center latitude, degrees. Requires `longitude` and `maxradiuskm` together.\"}, {\"name\": \"longitude\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": -180, \"maximum\": 180}, \"description\": \"Circle-search center longitude, degrees. Requires `latitude` and `maxradiuskm` together.\"}, {\"name\": \"maxradiuskm\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": 0, \"exclusiveMinimum\": true, \"maximum\": 20001.6}, \"description\": \"Circle-search radius, kilometers (max is USGS's own limit, half the Earth's circumference). Requires `latitude` and `longitude` together.\"}, {\"name\": \"minlatitude\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": -90, \"maximum\": 90}, \"description\": \"Bounding-box south edge, degrees. Must be <= `maxlatitude`.\"}, {\"name\": \"maxlatitude\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": -90, \"maximum\": 90}, \"description\": \"Bounding-box north edge, degrees. Must be >= `minlatitude`.\"}, {\"name\": \"minlongitude\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": -180, \"maximum\": 180}, \"description\": \"Bounding-box west edge, degrees. Must be <= `maxlongitude`.\"}, {\"name\": \"maxlongitude\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": -180, \"maximum\": 180}, \"description\": \"Bounding-box east edge, degrees. Must be >= `minlongitude`.\"}, {\"name\": \"limit\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"integer\", \"minimum\": 1, \"maximum\": 200, \"default\": 100}, \"description\": \"Maximum number of events to return. USGS itself allows up to 20000; this adapter caps it at 200. Defaults to 100.\"}, {\"name\": \"orderby\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"string\", \"enum\": [\"time\", \"time-asc\", \"magnitude\", \"magnitude-asc\"], \"default\": \"time\"}, \"description\": \"Sort order for the returned events.\"}, {\"name\": \"mode\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"string\", \"enum\": [\"query\", \"count\"], \"default\": \"query\"}, \"description\": \"Local switch (not forwarded to USGS): 'query' returns matching events, 'count' returns only the number of matching events (uses the FDSN `count` endpoint).\"}], \"responses\": {\"200\": {\"description\": \"Matching earthquakes (mode=query, the default), or their count only (mode=count -- in which case `events` is omitted and `count` alone reflects the number of matching events).\", \"content\": {\"application/json\": {\"schema\": {\"$ref\": \"#/components/schemas/EarthquakeSearchResponse\"}}}}, \"400\": {\"description\": \"Invalid query -- an unknown parameter, an out-of-range or malformed value, a mixed circle/bbox request, a partial circle, or an inverted bounding box. Also carries a USGS-rejected request (HTTP 400) passed through unchanged from the upstream FDSN service.\", \"content\": {\"application/json\": {\"schema\": {\"$ref\": \"#/components/schemas/InvalidQueryError\"}}}}, \"502\": {\"description\": \"Upstream error: USGS was unreachable or timed out after one retry, USGS returned a 5xx or a response body that was not valid JSON, or an unhandled exception occurred in the route handler. (The live route may occasionally surface this same failure under a different HTTP status, e.g. 404/500/503/504, depending on how USGS itself responded -- see server/sources/usgs-earthquakes.js `requestUsgs()`; this document models every such upstream failure uniformly under 502 per this schema's scope.)\", \"content\": {\"application/json\": {\"schema\": {\"$ref\": \"#/components/schemas/UpstreamError\"}}}}}}}}, \"components\": {\"schemas\": {\"EarthquakeSearchResponse\": {\"type\": \"object\", \"description\": \"Success body for mode=query (default). For mode=count, `events` is omitted and `count` alone reflects the number of matching events.\", \"properties\": {\"source\": {\"type\": \"string\", \"enum\": [\"USGS\"]}, \"coverage\": {\"type\": \"string\", \"enum\": [\"observed\"]}, \"count\": {\"type\": \"integer\", \"description\": \"Number of events returned (mode=query) or matched (mode=count).\"}, \"events\": {\"type\": \"array\", \"items\": {\"$ref\": \"#/components/schemas/EarthquakeEvent\"}}, \"provenance\": {\"$ref\": \"#/components/schemas/Provenance\"}, \"query\": {\"type\": \"object\", \"description\": \"The request's own query parameters, exactly as forwarded from the HTTP layer into the adapter.\", \"additionalProperties\": true}}}, \"EarthquakeEvent\": {\"type\": \"object\", \"properties\": {\"id\": {\"type\": \"string\", \"nullable\": true, \"description\": \"USGS event id.\"}, \"time_utc\": {\"type\": \"string\", \"nullable\": true, \"description\": \"ISO-8601 UTC origin time.\"}, \"magnitude\": {\"type\": \"number\", \"nullable\": true}, \"mag_type\": {\"type\": \"string\", \"nullable\": true, \"description\": \"Magnitude scale, e.g. 'mww', 'mb'.\"}, \"depth_km\": {\"type\": \"number\", \"nullable\": true, \"description\": \"Hypocenter depth, kilometers.\"}, \"lat\": {\"type\": \"number\", \"nullable\": true}, \"lon\": {\"type\": \"number\", \"nullable\": true}, \"place\": {\"type\": \"string\", \"nullable\": true, \"description\": \"USGS human-readable location string.\"}, \"tsunami\": {\"type\": \"integer\", \"enum\": [0, 1], \"description\": \"1 if USGS flagged tsunami potential.\"}, \"alert\": {\"type\": \"string\", \"nullable\": true, \"description\": \"PAGER alert level ('green'/'yellow'/'orange'/'red') or null.\"}, \"url\": {\"type\": \"string\", \"nullable\": true, \"description\": \"USGS event page URL.\"}, \"source\": {\"type\": \"string\", \"enum\": [\"USGS\"]}, \"coverage\": {\"type\": \"string\", \"enum\": [\"observed\"]}, \"retrieved_at_utc\": {\"type\": \"string\", \"description\": \"ISO-8601 UTC time this route fetched the data.\"}}}, \"Provenance\": {\"type\": \"object\", \"properties\": {\"source\": {\"type\": \"string\", \"enum\": [\"USGS FDSN Event Web Service\"]}, \"url\": {\"type\": \"string\", \"description\": \"The exact upstream request URL, including format=geojson and all forwarded params.\"}, \"generated\": {\"type\": \"string\", \"nullable\": true, \"description\": \"ISO-8601 UTC time USGS generated the response (from GeoJSON metadata.generated).\"}, \"api\": {\"type\": \"string\", \"nullable\": true}, \"title\": {\"type\": \"string\", \"nullable\": true}, \"retrieved_at_utc\": {\"type\": \"string\"}, \"license\": {\"type\": \"string\", \"enum\": [\"USGS data are in the public domain (https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits)\"]}}}, \"InvalidQueryError\": {\"type\": \"object\", \"description\": \"server/serverless/earthquakes-route.js maps a validateQuery() failure (server/sources/usgs-earthquakes.js) to this shape; `unknown` is always present (possibly empty) and is what distinguishes this from UpstreamError.\", \"properties\": {\"error\": {\"type\": \"string\", \"example\": \"invalid_query\"}, \"message\": {\"type\": \"string\", \"description\": \"Human-readable reason, e.g. \\\"Invalid limit: expected an integer >= 1\\\" or \\\"circle (latitude/longitude/maxradiuskm) and bbox (...) are mutually exclusive\\\".\"}, \"unknown\": {\"type\": \"array\", \"items\": {\"type\": \"string\"}, \"description\": \"Names of any query parameters not recognised by the adapter. Empty when the failure was a value/range/mutual-exclusivity error rather than an unknown key.\"}}, \"required\": [\"error\", \"message\", \"unknown\"]}, \"UpstreamError\": {\"description\": \"Either the route's own unhandled-exception fallback (SourcesError) or a pass-through USGS/network failure (AdapterError). No `unknown` key -- that is what distinguishes this from InvalidQueryError.\", \"oneOf\": [{\"$ref\": \"#/components/schemas/SourcesError\"}, {\"$ref\": \"#/components/schemas/AdapterError\"}]}, \"SourcesError\": {\"type\": \"object\", \"description\": \"server/serverless/earthquakes-route.js's outer catch-all: any unhandled exception in the handler.\", \"properties\": {\"error\": {\"type\": \"string\", \"enum\": [\"sources_error\"]}}, \"required\": [\"error\"]}, \"AdapterError\": {\"type\": \"object\", \"description\": \"server/sources/usgs-earthquakes.js requestUsgs(): a USGS-side or network-side failure passed through by the route as `{error, detail}`.\", \"properties\": {\"error\": {\"type\": \"string\", \"enum\": [\"usgs_rejected\", \"usgs_unavailable\", \"usgs_timeout\"]}, \"detail\": {\"type\": \"string\", \"description\": \"Up to 200 characters of the upstream response body, or the underlying network/timeout error message.\"}}, \"required\": [\"error\", \"detail\"]}}}, \"x-ondemand-spatial\": {\"deployment\": {\"stable_url\": null, \"status\": \"no Vercel deployment exists yet (2026-09-18T09:30Z): the build environment cannot create one (CLI guardrail; deployment API off-limits) and the credential supplied as VERCEL_TOKEN was the OnDemand API key, not a Vercel token \\u2014 run scripts/vercel-file-deploy.mjs from an operator machine, then replace <deployment> with the READY preview URL (or the project domain)\", \"last_emulator_host\": \"https://sb-63r5liykgi73.vercel.run (ephemeral sandbox, 2026-09-18 \\u2014 expires within ~90 minutes; never register it in the dashboard)\", \"planned_project\": \"ondemand-eand-spatial (prj_VbHbEhFSDFkdXCqlq8XqONoFWQHO, team_aft8hHPiYnHp6I534L3DQScA) \\u2014 preview target only; production and the opal alias must not be touched\"}}}"
+   }
+  },
+  "raw_result": "{\"jsonrpc\": \"2.0\", \"id\": 3, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"\"}], \"isError\": true}}",
+  "http_log": {
+   "utc": "2026-09-19T11:37:06.838Z",
+   "method": "tools/call",
+   "http_status": 200,
+   "content_type": "application/json",
+   "session_id_present": true,
+   "result_keys": [
+    "content",
+    "isError"
+   ],
+   "error": null
+  }
+ },
+ {
+  "kind": "rest",
+  "utc": "2026-09-19T11:37:07.111Z",
+  "method": "GET",
+  "url": "https://api.on-demand.io/plugin/v1/list?page=1&limit=50",
+  "status": 200,
+  "response": "{\"message\": \"Agent fetched successfully\", \"page\": 1, \"limit\": 50, \"data\": {\"total\": 0}}"
+ },
+ {
+  "kind": "mcp_tools_call",
+  "utc": "2026-09-19T11:38:32.691Z",
+  "tool": "public_v1_plugin_ai_generated_tool_create",
+  "note": "DRAFT ONLY isAutoSave=false (capability probe, nothing persisted)",
+  "request_args": {
+   "query": "Create a tool named earthquake_search that calls GET https://sb-1np4tjtbq20v.vercel.run/api/sources/earthquakes (no authentication) with optional query parameters starttime, endtime, minmagnitude, maxmagnitude, latitude, longitude, maxradiuskm, minlatitude, maxlatitude, minlongitude, maxlongitude, limit, orderby, mode and returns USGS earthquake events (id, time_utc, magnitude, depth_km, lat, lon, place, tsunami, url)",
+   "isAutoSave": false
+  },
+  "raw_result": "null",
+  "http_log": {
+   "utc": "2026-09-19T11:38:32.692Z",
+   "method": "tools/call",
+   "http_status": 520,
+   "content_type": "application/json; charset=utf-8",
+   "session_id_present": true,
+   "result_keys": null,
+   "error": "{\"type\":\"https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-5xx-errors/error-520/\",\"title\":\"Error 520: Web server is returning an unknown error\",\"status\":520,\"detail\":\"The origin web server sent a response that Cloudflare could not parse. This may indicate the ori"
+  }
+ },
+ {
+  "kind": "mcp_tools_call",
+  "utc": "2026-09-19T11:39:49.845Z",
+  "tool": "plugin_v1_plugin_create",
+  "variant": 5,
+  "request_args": {
+   "name": "earthquake_search",
+   "identifier": "rest_api",
+   "description": "Search recent/historical earthquakes from USGS by time window, magnitude range and geographic area (circle or bbox). Returns observed events with UTC time, magnitude, depth, location, tsunami flag and USGS URL.",
+   "logoUrl": "https://ondemand-eand-spatial-j8s1kk2zd-schoolhack-web-team.vercel.app/logo.svg",
+   "type": "chat",
+   "source": "external",
+   "category": "Research",
+   "status": "private",
+   "conversationStarters": [
+    "Find earthquakes above M5 in the last week",
+    "Search for earthquakes within 300km of these coordinates"
+   ],
+   "action": {
+    "schema": "{\"openapi\": \"3.0.3\", \"info\": {\"title\": \"OnDemand Spatial earthquake_search\", \"version\": \"1.0.0\", \"description\": \"Search recent/historical earthquakes from the USGS FDSN Event Web Service by time window, magnitude range and geographic area (circle or bounding box), proxied by the OnDemand Spatial serverless route `api/[...route].js` -> `server/serverless/earthquakes-route.js` -> `server/sources/usgs-earthquakes.js`. Returns observed events with UTC time, magnitude, depth, location, tsunami flag and USGS URL. No authentication is required.\"}, \"servers\": [{\"url\": \"https://sb-1np4tjtbq20v.vercel.run\", \"description\": \"OnDemand Spatial deployment host (set 2026-09-19 by the API re-check; see READY_TO_PASTE for the re-point rule)\"}], \"paths\": {\"/api/sources/earthquakes\": {\"get\": {\"operationId\": \"earthquake_search\", \"summary\": \"Search recent/historical earthquakes (USGS FDSN)\", \"description\": \"All query parameters are optional and are forwarded to the USGS FDSN Event Web Service `query` (or `count`) method after validation. A circle search (`latitude` + `longitude` + `maxradiuskm`) and a bounding-box search (`minlatitude`/`maxlatitude`/`minlongitude`/`maxlongitude`) are mutually exclusive -- supplying keys from both is a 400 error, and a partial circle (e.g. `latitude` without `maxradiuskm`) is also a 400 error. Any query parameter not listed below is rejected with 400 (`additionalProperties: false` on the underlying input schema).\", \"parameters\": [{\"name\": \"starttime\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"string\", \"example\": \"2024-01-01\"}, \"description\": \"Limit to events on or after this time (UTC). Accepts `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM:SS(Z)`; a date with no time means midnight UTC.\"}, {\"name\": \"endtime\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"string\", \"example\": \"2024-01-31T23:59:59Z\"}, \"description\": \"Limit to events on or before this time (UTC). Same accepted formats as `starttime`.\"}, {\"name\": \"minmagnitude\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": -2, \"maximum\": 10}, \"description\": \"Minimum event magnitude, inclusive.\"}, {\"name\": \"maxmagnitude\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": -2, \"maximum\": 10}, \"description\": \"Maximum event magnitude, inclusive.\"}, {\"name\": \"latitude\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": -90, \"maximum\": 90}, \"description\": \"Circle-search center latitude, degrees. Requires `longitude` and `maxradiuskm` together.\"}, {\"name\": \"longitude\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": -180, \"maximum\": 180}, \"description\": \"Circle-search center longitude, degrees. Requires `latitude` and `maxradiuskm` together.\"}, {\"name\": \"maxradiuskm\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": 0, \"exclusiveMinimum\": true, \"maximum\": 20001.6}, \"description\": \"Circle-search radius, kilometers (max is USGS's own limit, half the Earth's circumference). Requires `latitude` and `longitude` together.\"}, {\"name\": \"minlatitude\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": -90, \"maximum\": 90}, \"description\": \"Bounding-box south edge, degrees. Must be <= `maxlatitude`.\"}, {\"name\": \"maxlatitude\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": -90, \"maximum\": 90}, \"description\": \"Bounding-box north edge, degrees. Must be >= `minlatitude`.\"}, {\"name\": \"minlongitude\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": -180, \"maximum\": 180}, \"description\": \"Bounding-box west edge, degrees. Must be <= `maxlongitude`.\"}, {\"name\": \"maxlongitude\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": -180, \"maximum\": 180}, \"description\": \"Bounding-box east edge, degrees. Must be >= `minlongitude`.\"}, {\"name\": \"limit\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"integer\", \"minimum\": 1, \"maximum\": 200, \"default\": 100}, \"description\": \"Maximum number of events to return. USGS itself allows up to 20000; this adapter caps it at 200. Defaults to 100.\"}, {\"name\": \"orderby\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"string\", \"enum\": [\"time\", \"time-asc\", \"magnitude\", \"magnitude-asc\"], \"default\": \"time\"}, \"description\": \"Sort order for the returned events.\"}, {\"name\": \"mode\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"string\", \"enum\": [\"query\", \"count\"], \"default\": \"query\"}, \"description\": \"Local switch (not forwarded to USGS): 'query' returns matching events, 'count' returns only the number of matching events (uses the FDSN `count` endpoint).\"}], \"responses\": {\"200\": {\"description\": \"Matching earthquakes (mode=query, the default), or their count only (mode=count -- in which case `events` is omitted and `count` alone reflects the number of matching events).\", \"content\": {\"application/json\": {\"schema\": {\"$ref\": \"#/components/schemas/EarthquakeSearchResponse\"}}}}, \"400\": {\"description\": \"Invalid query -- an unknown parameter, an out-of-range or malformed value, a mixed circle/bbox request, a partial circle, or an inverted bounding box. Also carries a USGS-rejected request (HTTP 400) passed through unchanged from the upstream FDSN service.\", \"content\": {\"application/json\": {\"schema\": {\"$ref\": \"#/components/schemas/InvalidQueryError\"}}}}, \"502\": {\"description\": \"Upstream error: USGS was unreachable or timed out after one retry, USGS returned a 5xx or a response body that was not valid JSON, or an unhandled exception occurred in the route handler. (The live route may occasionally surface this same failure under a different HTTP status, e.g. 404/500/503/504, depending on how USGS itself responded -- see server/sources/usgs-earthquakes.js `requestUsgs()`; this document models every such upstream failure uniformly under 502 per this schema's scope.)\", \"content\": {\"application/json\": {\"schema\": {\"$ref\": \"#/components/schemas/UpstreamError\"}}}}}}}}, \"components\": {\"schemas\": {\"EarthquakeSearchResponse\": {\"type\": \"object\", \"description\": \"Success body for mode=query (default). For mode=count, `events` is omitted and `count` alone reflects the number of matching events.\", \"properties\": {\"source\": {\"type\": \"string\", \"enum\": [\"USGS\"]}, \"coverage\": {\"type\": \"string\", \"enum\": [\"observed\"]}, \"count\": {\"type\": \"integer\", \"description\": \"Number of events returned (mode=query) or matched (mode=count).\"}, \"events\": {\"type\": \"array\", \"items\": {\"$ref\": \"#/components/schemas/EarthquakeEvent\"}}, \"provenance\": {\"$ref\": \"#/components/schemas/Provenance\"}, \"query\": {\"type\": \"object\", \"description\": \"The request's own query parameters, exactly as forwarded from the HTTP layer into the adapter.\", \"additionalProperties\": true}}}, \"EarthquakeEvent\": {\"type\": \"object\", \"properties\": {\"id\": {\"type\": \"string\", \"nullable\": true, \"description\": \"USGS event id.\"}, \"time_utc\": {\"type\": \"string\", \"nullable\": true, \"description\": \"ISO-8601 UTC origin time.\"}, \"magnitude\": {\"type\": \"number\", \"nullable\": true}, \"mag_type\": {\"type\": \"string\", \"nullable\": true, \"description\": \"Magnitude scale, e.g. 'mww', 'mb'.\"}, \"depth_km\": {\"type\": \"number\", \"nullable\": true, \"description\": \"Hypocenter depth, kilometers.\"}, \"lat\": {\"type\": \"number\", \"nullable\": true}, \"lon\": {\"type\": \"number\", \"nullable\": true}, \"place\": {\"type\": \"string\", \"nullable\": true, \"description\": \"USGS human-readable location string.\"}, \"tsunami\": {\"type\": \"integer\", \"enum\": [0, 1], \"description\": \"1 if USGS flagged tsunami potential.\"}, \"alert\": {\"type\": \"string\", \"nullable\": true, \"description\": \"PAGER alert level ('green'/'yellow'/'orange'/'red') or null.\"}, \"url\": {\"type\": \"string\", \"nullable\": true, \"description\": \"USGS event page URL.\"}, \"source\": {\"type\": \"string\", \"enum\": [\"USGS\"]}, \"coverage\": {\"type\": \"string\", \"enum\": [\"observed\"]}, \"retrieved_at_utc\": {\"type\": \"string\", \"description\": \"ISO-8601 UTC time this route fetched the data.\"}}}, \"Provenance\": {\"type\": \"object\", \"properties\": {\"source\": {\"type\": \"string\", \"enum\": [\"USGS FDSN Event Web Service\"]}, \"url\": {\"type\": \"string\", \"description\": \"The exact upstream request URL, including format=geojson and all forwarded params.\"}, \"generated\": {\"type\": \"string\", \"nullable\": true, \"description\": \"ISO-8601 UTC time USGS generated the response (from GeoJSON metadata.generated).\"}, \"api\": {\"type\": \"string\", \"nullable\": true}, \"title\": {\"type\": \"string\", \"nullable\": true}, \"retrieved_at_utc\": {\"type\": \"string\"}, \"license\": {\"type\": \"string\", \"enum\": [\"USGS data are in the public domain (https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits)\"]}}}, \"InvalidQueryError\": {\"type\": \"object\", \"description\": \"server/serverless/earthquakes-route.js maps a validateQuery() failure (server/sources/usgs-earthquakes.js) to this shape; `unknown` is always present (possibly empty) and is what distinguishes this from UpstreamError.\", \"properties\": {\"error\": {\"type\": \"string\", \"example\": \"invalid_query\"}, \"message\": {\"type\": \"string\", \"description\": \"Human-readable reason, e.g. \\\"Invalid limit: expected an integer >= 1\\\" or \\\"circle (latitude/longitude/maxradiuskm) and bbox (...) are mutually exclusive\\\".\"}, \"unknown\": {\"type\": \"array\", \"items\": {\"type\": \"string\"}, \"description\": \"Names of any query parameters not recognised by the adapter. Empty when the failure was a value/range/mutual-exclusivity error rather than an unknown key.\"}}, \"required\": [\"error\", \"message\", \"unknown\"]}, \"UpstreamError\": {\"description\": \"Either the route's own unhandled-exception fallback (SourcesError) or a pass-through USGS/network failure (AdapterError). No `unknown` key -- that is what distinguishes this from InvalidQueryError.\", \"oneOf\": [{\"$ref\": \"#/components/schemas/SourcesError\"}, {\"$ref\": \"#/components/schemas/AdapterError\"}]}, \"SourcesError\": {\"type\": \"object\", \"description\": \"server/serverless/earthquakes-route.js's outer catch-all: any unhandled exception in the handler.\", \"properties\": {\"error\": {\"type\": \"string\", \"enum\": [\"sources_error\"]}}, \"required\": [\"error\"]}, \"AdapterError\": {\"type\": \"object\", \"description\": \"server/sources/usgs-earthquakes.js requestUsgs(): a USGS-side or network-side failure passed through by the route as `{error, detail}`.\", \"properties\": {\"error\": {\"type\": \"string\", \"enum\": [\"usgs_rejected\", \"usgs_unavailable\", \"usgs_timeout\"]}, \"detail\": {\"type\": \"string\", \"description\": \"Up to 200 characters of the upstream response body, or the underlying network/timeout error message.\"}}, \"required\": [\"error\", \"detail\"]}}}, \"x-ondemand-spatial\": {\"deployment\": {\"stable_url\": null, \"status\": \"no Vercel deployment exists yet (2026-09-18T09:30Z): the build environment cannot create one (CLI guardrail; deployment API off-limits) and the credential supplied as VERCEL_TOKEN was the OnDemand API key, not a Vercel token \\u2014 run scripts/vercel-file-deploy.mjs from an operator machine, then replace <deployment> with the READY preview URL (or the project domain)\", \"last_emulator_host\": \"https://sb-63r5liykgi73.vercel.run (ephemeral sandbox, 2026-09-18 \\u2014 expires within ~90 minutes; never register it in the dashboard)\", \"planned_project\": \"ondemand-eand-spatial (prj_VbHbEhFSDFkdXCqlq8XqONoFWQHO, team_aft8hHPiYnHp6I534L3DQScA) \\u2014 preview target only; production and the opal alias must not be touched\"}}}"
+   }
+  },
+  "raw_result": "{\"jsonrpc\": \"2.0\", \"id\": 3, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"\"}], \"isError\": true}}",
+  "http_log": {
+   "utc": "2026-09-19T11:39:49.845Z",
+   "method": "tools/call",
+   "http_status": 200,
+   "content_type": "application/json",
+   "session_id_present": true,
+   "result_keys": [
+    "content",
+    "isError"
+   ],
+   "error": null
+  }
+ },
+ {
+  "kind": "mcp_tools_call",
+  "utc": "2026-09-19T11:39:50.135Z",
+  "tool": "plugin_v1_plugin_create",
+  "variant": 6,
+  "request_args": {
+   "name": "earthquake_search",
+   "identifier": "rest_api",
+   "description": "Search recent/historical earthquakes from USGS by time window, magnitude range and geographic area (circle or bbox). Returns observed events with UTC time, magnitude, depth, location, tsunami flag and USGS URL.",
+   "logoUrl": "https://ondemand-eand-spatial-j8s1kk2zd-schoolhack-web-team.vercel.app/logo.svg",
+   "type": "chat",
+   "source": "external",
+   "category": "data_and_analytics",
+   "status": "private",
+   "conversationStarters": [
+    "Find earthquakes above M5 in the last week",
+    "Search for earthquakes within 300km of these coordinates"
+   ],
+   "action": {
+    "schema": "{\"openapi\": \"3.0.3\", \"info\": {\"title\": \"OnDemand Spatial earthquake_search\", \"version\": \"1.0.0\", \"description\": \"Search recent/historical earthquakes from the USGS FDSN Event Web Service by time window, magnitude range and geographic area (circle or bounding box), proxied by the OnDemand Spatial serverless route `api/[...route].js` -> `server/serverless/earthquakes-route.js` -> `server/sources/usgs-earthquakes.js`. Returns observed events with UTC time, magnitude, depth, location, tsunami flag and USGS URL. No authentication is required.\"}, \"servers\": [{\"url\": \"https://sb-1np4tjtbq20v.vercel.run\", \"description\": \"OnDemand Spatial deployment host (set 2026-09-19 by the API re-check; see READY_TO_PASTE for the re-point rule)\"}], \"paths\": {\"/api/sources/earthquakes\": {\"get\": {\"operationId\": \"earthquake_search\", \"summary\": \"Search recent/historical earthquakes (USGS FDSN)\", \"description\": \"All query parameters are optional and are forwarded to the USGS FDSN Event Web Service `query` (or `count`) method after validation. A circle search (`latitude` + `longitude` + `maxradiuskm`) and a bounding-box search (`minlatitude`/`maxlatitude`/`minlongitude`/`maxlongitude`) are mutually exclusive -- supplying keys from both is a 400 error, and a partial circle (e.g. `latitude` without `maxradiuskm`) is also a 400 error. Any query parameter not listed below is rejected with 400 (`additionalProperties: false` on the underlying input schema).\", \"parameters\": [{\"name\": \"starttime\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"string\", \"example\": \"2024-01-01\"}, \"description\": \"Limit to events on or after this time (UTC). Accepts `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM:SS(Z)`; a date with no time means midnight UTC.\"}, {\"name\": \"endtime\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"string\", \"example\": \"2024-01-31T23:59:59Z\"}, \"description\": \"Limit to events on or before this time (UTC). Same accepted formats as `starttime`.\"}, {\"name\": \"minmagnitude\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": -2, \"maximum\": 10}, \"description\": \"Minimum event magnitude, inclusive.\"}, {\"name\": \"maxmagnitude\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": -2, \"maximum\": 10}, \"description\": \"Maximum event magnitude, inclusive.\"}, {\"name\": \"latitude\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": -90, \"maximum\": 90}, \"description\": \"Circle-search center latitude, degrees. Requires `longitude` and `maxradiuskm` together.\"}, {\"name\": \"longitude\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": -180, \"maximum\": 180}, \"description\": \"Circle-search center longitude, degrees. Requires `latitude` and `maxradiuskm` together.\"}, {\"name\": \"maxradiuskm\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": 0, \"exclusiveMinimum\": true, \"maximum\": 20001.6}, \"description\": \"Circle-search radius, kilometers (max is USGS's own limit, half the Earth's circumference). Requires `latitude` and `longitude` together.\"}, {\"name\": \"minlatitude\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": -90, \"maximum\": 90}, \"description\": \"Bounding-box south edge, degrees. Must be <= `maxlatitude`.\"}, {\"name\": \"maxlatitude\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": -90, \"maximum\": 90}, \"description\": \"Bounding-box north edge, degrees. Must be >= `minlatitude`.\"}, {\"name\": \"minlongitude\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": -180, \"maximum\": 180}, \"description\": \"Bounding-box west edge, degrees. Must be <= `maxlongitude`.\"}, {\"name\": \"maxlongitude\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"number\", \"minimum\": -180, \"maximum\": 180}, \"description\": \"Bounding-box east edge, degrees. Must be >= `minlongitude`.\"}, {\"name\": \"limit\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"integer\", \"minimum\": 1, \"maximum\": 200, \"default\": 100}, \"description\": \"Maximum number of events to return. USGS itself allows up to 20000; this adapter caps it at 200. Defaults to 100.\"}, {\"name\": \"orderby\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"string\", \"enum\": [\"time\", \"time-asc\", \"magnitude\", \"magnitude-asc\"], \"default\": \"time\"}, \"description\": \"Sort order for the returned events.\"}, {\"name\": \"mode\", \"in\": \"query\", \"required\": false, \"schema\": {\"type\": \"string\", \"enum\": [\"query\", \"count\"], \"default\": \"query\"}, \"description\": \"Local switch (not forwarded to USGS): 'query' returns matching events, 'count' returns only the number of matching events (uses the FDSN `count` endpoint).\"}], \"responses\": {\"200\": {\"description\": \"Matching earthquakes (mode=query, the default), or their count only (mode=count -- in which case `events` is omitted and `count` alone reflects the number of matching events).\", \"content\": {\"application/json\": {\"schema\": {\"$ref\": \"#/components/schemas/EarthquakeSearchResponse\"}}}}, \"400\": {\"description\": \"Invalid query -- an unknown parameter, an out-of-range or malformed value, a mixed circle/bbox request, a partial circle, or an inverted bounding box. Also carries a USGS-rejected request (HTTP 400) passed through unchanged from the upstream FDSN service.\", \"content\": {\"application/json\": {\"schema\": {\"$ref\": \"#/components/schemas/InvalidQueryError\"}}}}, \"502\": {\"description\": \"Upstream error: USGS was unreachable or timed out after one retry, USGS returned a 5xx or a response body that was not valid JSON, or an unhandled exception occurred in the route handler. (The live route may occasionally surface this same failure under a different HTTP status, e.g. 404/500/503/504, depending on how USGS itself responded -- see server/sources/usgs-earthquakes.js `requestUsgs()`; this document models every such upstream failure uniformly under 502 per this schema's scope.)\", \"content\": {\"application/json\": {\"schema\": {\"$ref\": \"#/components/schemas/UpstreamError\"}}}}}}}}, \"components\": {\"schemas\": {\"EarthquakeSearchResponse\": {\"type\": \"object\", \"description\": \"Success body for mode=query (default). For mode=count, `events` is omitted and `count` alone reflects the number of matching events.\", \"properties\": {\"source\": {\"type\": \"string\", \"enum\": [\"USGS\"]}, \"coverage\": {\"type\": \"string\", \"enum\": [\"observed\"]}, \"count\": {\"type\": \"integer\", \"description\": \"Number of events returned (mode=query) or matched (mode=count).\"}, \"events\": {\"type\": \"array\", \"items\": {\"$ref\": \"#/components/schemas/EarthquakeEvent\"}}, \"provenance\": {\"$ref\": \"#/components/schemas/Provenance\"}, \"query\": {\"type\": \"object\", \"description\": \"The request's own query parameters, exactly as forwarded from the HTTP layer into the adapter.\", \"additionalProperties\": true}}}, \"EarthquakeEvent\": {\"type\": \"object\", \"properties\": {\"id\": {\"type\": \"string\", \"nullable\": true, \"description\": \"USGS event id.\"}, \"time_utc\": {\"type\": \"string\", \"nullable\": true, \"description\": \"ISO-8601 UTC origin time.\"}, \"magnitude\": {\"type\": \"number\", \"nullable\": true}, \"mag_type\": {\"type\": \"string\", \"nullable\": true, \"description\": \"Magnitude scale, e.g. 'mww', 'mb'.\"}, \"depth_km\": {\"type\": \"number\", \"nullable\": true, \"description\": \"Hypocenter depth, kilometers.\"}, \"lat\": {\"type\": \"number\", \"nullable\": true}, \"lon\": {\"type\": \"number\", \"nullable\": true}, \"place\": {\"type\": \"string\", \"nullable\": true, \"description\": \"USGS human-readable location string.\"}, \"tsunami\": {\"type\": \"integer\", \"enum\": [0, 1], \"description\": \"1 if USGS flagged tsunami potential.\"}, \"alert\": {\"type\": \"string\", \"nullable\": true, \"description\": \"PAGER alert level ('green'/'yellow'/'orange'/'red') or null.\"}, \"url\": {\"type\": \"string\", \"nullable\": true, \"description\": \"USGS event page URL.\"}, \"source\": {\"type\": \"string\", \"enum\": [\"USGS\"]}, \"coverage\": {\"type\": \"string\", \"enum\": [\"observed\"]}, \"retrieved_at_utc\": {\"type\": \"string\", \"description\": \"ISO-8601 UTC time this route fetched the data.\"}}}, \"Provenance\": {\"type\": \"object\", \"properties\": {\"source\": {\"type\": \"string\", \"enum\": [\"USGS FDSN Event Web Service\"]}, \"url\": {\"type\": \"string\", \"description\": \"The exact upstream request URL, including format=geojson and all forwarded params.\"}, \"generated\": {\"type\": \"string\", \"nullable\": true, \"description\": \"ISO-8601 UTC time USGS generated the response (from GeoJSON metadata.generated).\"}, \"api\": {\"type\": \"string\", \"nullable\": true}, \"title\": {\"type\": \"string\", \"nullable\": true}, \"retrieved_at_utc\": {\"type\": \"string\"}, \"license\": {\"type\": \"string\", \"enum\": [\"USGS data are in the public domain (https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits)\"]}}}, \"InvalidQueryError\": {\"type\": \"object\", \"description\": \"server/serverless/earthquakes-route.js maps a validateQuery() failure (server/sources/usgs-earthquakes.js) to this shape; `unknown` is always present (possibly empty) and is what distinguishes this from UpstreamError.\", \"properties\": {\"error\": {\"type\": \"string\", \"example\": \"invalid_query\"}, \"message\": {\"type\": \"string\", \"description\": \"Human-readable reason, e.g. \\\"Invalid limit: expected an integer >= 1\\\" or \\\"circle (latitude/longitude/maxradiuskm) and bbox (...) are mutually exclusive\\\".\"}, \"unknown\": {\"type\": \"array\", \"items\": {\"type\": \"string\"}, \"description\": \"Names of any query parameters not recognised by the adapter. Empty when the failure was a value/range/mutual-exclusivity error rather than an unknown key.\"}}, \"required\": [\"error\", \"message\", \"unknown\"]}, \"UpstreamError\": {\"description\": \"Either the route's own unhandled-exception fallback (SourcesError) or a pass-through USGS/network failure (AdapterError). No `unknown` key -- that is what distinguishes this from InvalidQueryError.\", \"oneOf\": [{\"$ref\": \"#/components/schemas/SourcesError\"}, {\"$ref\": \"#/components/schemas/AdapterError\"}]}, \"SourcesError\": {\"type\": \"object\", \"description\": \"server/serverless/earthquakes-route.js's outer catch-all: any unhandled exception in the handler.\", \"properties\": {\"error\": {\"type\": \"string\", \"enum\": [\"sources_error\"]}}, \"required\": [\"error\"]}, \"AdapterError\": {\"type\": \"object\", \"description\": \"server/sources/usgs-earthquakes.js requestUsgs(): a USGS-side or network-side failure passed through by the route as `{error, detail}`.\", \"properties\": {\"error\": {\"type\": \"string\", \"enum\": [\"usgs_rejected\", \"usgs_unavailable\", \"usgs_timeout\"]}, \"detail\": {\"type\": \"string\", \"description\": \"Up to 200 characters of the upstream response body, or the underlying network/timeout error message.\"}}, \"required\": [\"error\", \"detail\"]}}}, \"x-ondemand-spatial\": {\"deployment\": {\"stable_url\": null, \"status\": \"no Vercel deployment exists yet (2026-09-18T09:30Z): the build environment cannot create one (CLI guardrail; deployment API off-limits) and the credential supplied as VERCEL_TOKEN was the OnDemand API key, not a Vercel token \\u2014 run scripts/vercel-file-deploy.mjs from an operator machine, then replace <deployment> with the READY preview URL (or the project domain)\", \"last_emulator_host\": \"https://sb-63r5liykgi73.vercel.run (ephemeral sandbox, 2026-09-18 \\u2014 expires within ~90 minutes; never register it in the dashboard)\", \"planned_project\": \"ondemand-eand-spatial (prj_VbHbEhFSDFkdXCqlq8XqONoFWQHO, team_aft8hHPiYnHp6I534L3DQScA) \\u2014 preview target only; production and the opal alias must not be touched\"}}}"
+   }
+  },
+  "raw_result": "{\"jsonrpc\": \"2.0\", \"id\": 4, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"\"}], \"isError\": true}}",
+  "http_log": {
+   "utc": "2026-09-19T11:39:50.135Z",
+   "method": "tools/call",
+   "http_status": 200,
+   "content_type": "application/json",
+   "session_id_present": true,
+   "result_keys": [
+    "content",
+    "isError"
+   ],
+   "error": null
+  }
+ },
+ {
+  "kind": "rest",
+  "utc": "2026-09-19T11:39:50.332Z",
+  "method": "GET",
+  "url": "https://api.on-demand.io/plugin/v1/list?page=1&limit=50",
+  "status": 200,
+  "response": "{\"message\": \"Agent fetched successfully\", \"page\": 1, \"limit\": 50, \"data\": {\"total\": 0}}"
+ }
+]

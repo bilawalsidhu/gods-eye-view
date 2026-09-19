@@ -23,8 +23,8 @@ export const KEY_SETUP_APPEND_HEADER =
 
 /**
  * Provider credentials, in display order — most magic per
- * minute first. `tier` mirrors the README's color legend: 'metered' (🔴) is a
- * billing-enabled account, 'free' (🟡) is a register-and-paste key.
+ * minute first. `tier` mirrors the README's color legend: 'metered' (red dot)
+ * is a billing-enabled account, 'free' (amber dot) is a register-and-paste key.
  * `clientExposed` marks the two keys that are injected into the browser
  * bundle by design (restrict them at the provider, per SECURITY.md).
  * `hidden` keeps advanced configuration out of the panel and missing-key count.

@@ -4,6 +4,45 @@ import {
   TILE_CACHE_MAX_ENTRIES,
   FAST_FETCH_ALTITUDE,
 } from './policy.js';
+import { providerStatusFromResponse } from '../../sources/live/contract.js';
+
+/**
+ * Operator-legible reason for a failed road fetch. The DATA LAYERS row shows
+ * it as `DEGRADED · Overpass · <reason>`. When the proxy answered with the
+ * structured MOVEMENT status (HTTP 503 + `X-Provider-*` / body `provider`,
+ * server/providers/overpass.js since 2026-09-19) its own reason is used
+ * VERBATIM — e.g. `all 5 mirrors failed · last: kumi.systems HTTP 406` — so
+ * the row names which mirror said what. The legacy mapping below stays for a
+ * proxy that reports no status: a raw "HTTP 406" would hide the one fact that
+ * matters — that the public Overpass mirrors refuse or time out for this
+ * deployment's egress (observed from Vercel on 2026-09-18), which no retry
+ * fixes and which a TomTom key does not work around (the simulation needs OSM
+ * roads to paint).
+ * @param {unknown} error
+ * @returns {string}
+ */
+export function describeRoadError(error) {
+  const providerReason =
+    typeof error?.provider?.error === 'string'
+      ? error.provider.error.trim()
+      : '';
+  if (providerReason) return providerReason;
+  const message = String(error?.message || '');
+  const status = /Overpass API returned (\d{3})/.exec(message)?.[1];
+  if (status === '406' || status === '403') {
+    return `OpenStreetMap roads unavailable — public Overpass mirrors refuse this deployment (HTTP ${status}); simulated traffic needs OSM roads`;
+  }
+  if (status === '429') {
+    return 'OpenStreetMap roads unavailable — Overpass rate limited; retrying';
+  }
+  if (status && status.startsWith('5')) {
+    return `OpenStreetMap roads unavailable — Overpass mirrors unreachable (HTTP ${status})`;
+  }
+  if (/timeout|timed out|abort/i.test(message)) {
+    return 'OpenStreetMap roads unavailable — Overpass mirrors timed out';
+  }
+  return 'Road data temporarily unavailable';
+}
 
 export function createIngestion({
   state: layerState,
@@ -67,7 +106,26 @@ export function createIngestion({
     );
 
     if (!response.ok) {
-      throw new Error(`Overpass API returned ${response.status}`);
+      // A structured DEGRADED answer (HTTP 503 + `X-Provider-*` headers and a
+      // JSON body `{ error, provider, failures }`) carries the proxy's own
+      // reason; attach it so describeRoadError() and getStats() can present
+      // `DEGRADED · Overpass · <reason>` instead of a bare status code.
+      let payload = null;
+      try {
+        payload = await response.json();
+      } catch {
+        payload = null;
+      }
+      const provider = providerStatusFromResponse(response, payload);
+      if (provider && typeof payload?.provider?.error === 'string') {
+        // Header values are ASCII-only (the middle dots in the reason arrive
+        // as '-'); the JSON body carries the reason verbatim.
+        provider.error = payload.provider.error.trim() || provider.error;
+      }
+      const error = new Error(`Overpass API returned ${response.status}`);
+      error.status = response.status;
+      error.provider = provider;
+      throw error;
     }
 
     if (!state) {
@@ -172,6 +230,7 @@ export function createIngestion({
       layerState._retryDelayMs = 1500;
     }
     layerState._roadError = null;
+    layerState._roadProvider = null;
 
     // Live mode: warm the flow-tile cache CONCURRENTLY with the Overpass road
     // fetch — sequential fetches doubled first-paint latency (field-test
@@ -307,8 +366,10 @@ export function createIngestion({
       renderedSomething = true;
     } catch (e) {
       if (e?.name === 'AbortError') return;
-      if (generation === layerState._loadGeneration && !renderedSomething)
-        layerState._roadError = 'Road data temporarily unavailable';
+      if (generation === layerState._loadGeneration && !renderedSomething) {
+        layerState._roadError = describeRoadError(e);
+        layerState._roadProvider = e?.provider || null;
+      }
       console.warn('[Data:Traffic] Fetch error:', e);
     } finally {
       if (generation === layerState._loadGeneration) {

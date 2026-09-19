@@ -87,16 +87,24 @@
   white-space: nowrap;
 }
 
+/* Tray chevrons: the Lucide chevron SVGs (public/brand/icons) as a currentColor
+   mask, so the pseudo-element stays a real icon rather than a text glyph. */
 #command-dock .panel-title::after,
 #command-dock .location-toolbar-label::after {
-  content: '›';
+  content: '';
+  display: inline-block;
+  width: 0.7rem;
+  height: 0.7rem;
   margin-left: 0.45rem;
-  color: rgba(54, 220, 255, 0.68);
-  font-size: 0.7rem;
+  vertical-align: -0.1em;
+  background-color: rgba(54, 220, 255, 0.68);
+  -webkit-mask: url('/brand/icons/chevron-right.svg') center / contain no-repeat;
+  mask: url('/brand/icons/chevron-right.svg') center / contain no-repeat;
 }
 
 #command-dock #control-panel .panel-title::after {
-  content: '‹';
+  -webkit-mask-image: url('/brand/icons/chevron-left.svg');
+  mask-image: url('/brand/icons/chevron-left.svg');
   margin-right: 0.45rem;
   margin-left: 0;
   float: left;
@@ -262,8 +270,8 @@
   padding: 0;
   border-radius: 50%;
   box-shadow:
-    0 0 0 0.2rem rgba(0, 212, 255, 0.06),
-    0 0 1rem rgba(0, 212, 255, 0.12);
+    0 0 0 0.2rem rgba(59, 183, 149, 0.06),
+    0 0 1rem rgba(59, 183, 149, 0.12);
 }
 
 #command-dock .gev-mic-orbit {

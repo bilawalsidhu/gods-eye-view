@@ -213,3 +213,20 @@ export const TILE_CACHE_MAX_ENTRIES = 64;
  */
 
 export const FLOW_RENDER_RACE_MS = 250;
+
+/**
+ * Milliseconds before a FAILED `/api/tomtom/status` probe is asked again (on
+ * the next enable or camera-driven load). A transient proxy hiccup must not
+ * pin the whole session to "TomTom status unreachable".
+ */
+
+export const FLOW_STATUS_RETRY_MS = 30_000;
+
+/**
+ * Minimum milliseconds between background status refreshes in LIVE mode —
+ * each one is a TomTom Flow Segment request (TOMTOM_DAILY_REQUEST_BUDGET,
+ * 2 000/day by default), so the sample follows the camera at most every five
+ * minutes and only when a load happens anyway. Keyless sessions never re-ask.
+ */
+
+export const FLOW_STATUS_REFRESH_MS = 300_000;

@@ -1,0 +1,1408 @@
+{
+ "generated_utc": "2026-09-19T11:32:31Z",
+ "records": [
+  {
+   "url": "https://docs.on-demand.io/",
+   "http_status": 200,
+   "content_type": "text/html; charset=utf-8",
+   "bytes": 203646,
+   "utc_timestamp": "2026-09-19T11:32:17Z",
+   "title": "Get Started",
+   "blocked": false,
+   "error": null,
+   "final_url": "https://docs.on-demand.io/docs/getting-started"
+  },
+  {
+   "url": "https://docs.on-demand.io/llms.txt",
+   "http_status": 200,
+   "content_type": "text/plain; charset=utf-8",
+   "bytes": 9493,
+   "utc_timestamp": "2026-09-19T11:32:18Z",
+   "title": "OnDemand AI Documentation",
+   "blocked": false,
+   "error": null,
+   "final_url": null
+  },
+  {
+   "url": "https://docs.on-demand.io/llms-full.txt",
+   "http_status": 404,
+   "content_type": "text/html; charset=utf-8",
+   "bytes": 116089,
+   "utc_timestamp": "2026-09-19T11:32:18Z",
+   "title": "OnDemand AI",
+   "blocked": false,
+   "error": null,
+   "final_url": null
+  },
+  {
+   "url": "https://docs.on-demand.io/sitemap.xml",
+   "http_status": 404,
+   "content_type": "text/html; charset=utf-8",
+   "bytes": 0,
+   "utc_timestamp": "2026-09-19T11:32:19Z",
+   "title": "",
+   "blocked": false,
+   "error": null,
+   "final_url": null
+  },
+  {
+   "url": "https://docs.on-demand.io/robots.txt",
+   "http_status": 200,
+   "content_type": "text/plain; charset=utf-8",
+   "bytes": 25,
+   "utc_timestamp": "2026-09-19T11:32:19Z",
+   "title": "",
+   "blocked": false,
+   "error": null,
+   "final_url": null
+  },
+  {
+   "url": "https://docs.on-demand.io/api-reference",
+   "http_status": 404,
+   "content_type": "text/html; charset=utf-8",
+   "bytes": 116089,
+   "utc_timestamp": "2026-09-19T11:32:20Z",
+   "title": "OnDemand AI",
+   "blocked": false,
+   "error": null,
+   "final_url": null
+  },
+  {
+   "url": "https://docs.on-demand.io/api-reference/introduction",
+   "http_status": 404,
+   "content_type": "text/html; charset=utf-8",
+   "bytes": 116154,
+   "utc_timestamp": "2026-09-19T11:32:20Z",
+   "title": "OnDemand AI",
+   "blocked": false,
+   "error": null,
+   "final_url": null
+  },
+  {
+   "url": "https://api.on-demand.io/",
+   "http_status": 404,
+   "content_type": "text/plain; charset=utf-8",
+   "bytes": 36,
+   "utc_timestamp": "2026-09-19T11:32:21Z",
+   "title": "",
+   "blocked": false,
+   "error": null,
+   "final_url": null
+  },
+  {
+   "url": "https://api.on-demand.io/docs",
+   "http_status": 404,
+   "content_type": "text/plain; charset=utf-8",
+   "bytes": 36,
+   "utc_timestamp": "2026-09-19T11:32:21Z",
+   "title": "",
+   "blocked": false,
+   "error": null,
+   "final_url": null
+  },
+  {
+   "url": "https://api.on-demand.io/openapi.json",
+   "http_status": 404,
+   "content_type": "application/json",
+   "bytes": 36,
+   "utc_timestamp": "2026-09-19T11:32:22Z",
+   "title": "",
+   "blocked": false,
+   "error": null,
+   "final_url": null
+  },
+  {
+   "url": "https://api.on-demand.io/swagger",
+   "http_status": 404,
+   "content_type": "text/plain; charset=utf-8",
+   "bytes": 36,
+   "utc_timestamp": "2026-09-19T11:32:22Z",
+   "title": "",
+   "blocked": false,
+   "error": null,
+   "final_url": null
+  },
+  {
+   "url": "https://gateway.on-demand.io/",
+   "http_status": 404,
+   "content_type": "text/plain; charset=utf-8",
+   "bytes": 36,
+   "utc_timestamp": "2026-09-19T11:32:23Z",
+   "title": "",
+   "blocked": false,
+   "error": null,
+   "final_url": null
+  },
+  {
+   "url": "https://gateway.on-demand.io/config/v1/public/docs/categories",
+   "http_status": 401,
+   "content_type": "text/plain; charset=utf-8",
+   "bytes": 62,
+   "utc_timestamp": "2026-09-19T11:32:23Z",
+   "title": "",
+   "blocked": false,
+   "error": null,
+   "final_url": null
+  },
+  {
+   "url": "https://app.on-demand.io/",
+   "http_status": 200,
+   "content_type": "text/html; charset=utf-8",
+   "bytes": 8866,
+   "utc_timestamp": "2026-09-19T11:32:24Z",
+   "title": "OnDemand",
+   "blocked": false,
+   "error": null,
+   "final_url": null
+  },
+  {
+   "url": "https://docs.on-demand.io/docs/agent-skills.md",
+   "http_status": 200,
+   "content_type": "text/markdown; charset=utf-8",
+   "bytes": 13394,
+   "utc_timestamp": "2026-09-19T11:32:24Z",
+   "title": "Agent Skills",
+   "blocked": false,
+   "error": null,
+   "final_url": null
+  },
+  {
+   "url": "https://docs.on-demand.io/docs/agent-skills.md.md",
+   "http_status": 404,
+   "content_type": "text/html; charset=utf-8",
+   "bytes": 116815,
+   "utc_timestamp": "2026-09-19T11:32:25Z",
+   "title": "OnDemand AI",
+   "blocked": false,
+   "error": null,
+   "final_url": null
+  },
+  {
+   "url": "https://docs.on-demand.io/docs/workflow-api.md",
+   "http_status": 200,
+   "content_type": "text/markdown; charset=utf-8",
+   "bytes": 12033,
+   "utc_timestamp": "2026-09-19T11:34:36Z",
+   "title": "Workflow API",
+   "blocked": false,
+   "error": null,
+   "final_url": null,
+   "pass": 2,
+   "earlier_attempt": {
+    "http_status": 429,
+    "utc_timestamp": "2026-09-19T11:32:25Z",
+    "blocked": true
+   }
+  },
+  {
+   "url": "https://docs.on-demand.io/docs/workflow-api",
+   "http_status": 200,
+   "content_type": "text/html; charset=utf-8",
+   "bytes": 224310,
+   "utc_timestamp": "2026-09-19T11:32:26Z",
+   "title": "Workflow API",
+   "blocked": false,
+   "error": null,
+   "final_url": null
+  },
+  {
+   "url": "https://docs.on-demand.io/docs/workflow-nodes.md",
+   "http_status": 200,
+   "content_type": "text/markdown; charset=utf-8",
+   "bytes": 7072,
+   "utc_timestamp": "2026-09-19T11:32:27Z",
+   "title": "Workflow Nodes",
+   "blocked": false,
+   "error": null,
+   "final_url": null
+  },
+  {
+   "url": "https://docs.on-demand.io/docs/workflow-api.md.md",
+   "http_status": 404,
+   "content_type": "text/html; charset=utf-8",
+   "bytes": 116815,
+   "utc_timestamp": "2026-09-19T11:32:27Z",
+   "title": "OnDemand AI",
+   "blocked": false,
+   "error": null,
+   "final_url": null
+  },
+  {
+   "url": "https://docs.on-demand.io/docs/workflow-nodes.md.md",
+   "http_status": 404,
+   "content_type": "text/html; charset=utf-8",
+   "bytes": 116825,
+   "utc_timestamp": "2026-09-19T11:32:28Z",
+   "title": "OnDemand AI",
+   "blocked": false,
+   "error": null,
+   "final_url": null
+  },
+  {
+   "url": "https://docs.on-demand.io/docs/creating-a-workflow.md",
+   "http_status": 200,
+   "content_type": "text/markdown; charset=utf-8",
+   "bytes": 5256,
+   "utc_timestamp": "2026-09-19T11:32:28Z",
+   "title": "Getting Started",
+   "blocked": false,
+   "error": null,
+   "final_url": null
+  },
+  {
+   "url": "https://docs.on-demand.io/reference/get_workflow.md.md",
+   "http_status": 404,
+   "content_type": "text/html; charset=utf-8",
+   "bytes": 116857,
+   "utc_timestamp": "2026-09-19T11:32:29Z",
+   "title": "OnDemand AI",
+   "blocked": false,
+   "error": null,
+   "final_url": null
+  },
+  {
+   "url": "https://docs.on-demand.io/reference/get_workflow.md",
+   "http_status": 200,
+   "content_type": "text/markdown; charset=utf-8",
+   "bytes": 11778,
+   "utc_timestamp": "2026-09-19T11:32:29Z",
+   "title": "List workflows",
+   "blocked": false,
+   "error": null,
+   "final_url": null
+  },
+  {
+   "url": "https://docs.on-demand.io/reference/post_workflow.md.md",
+   "http_status": 404,
+   "content_type": "text/html; charset=utf-8",
+   "bytes": 116862,
+   "utc_timestamp": "2026-09-19T11:32:30Z",
+   "title": "OnDemand AI",
+   "blocked": false,
+   "error": null,
+   "final_url": null
+  },
+  {
+   "url": "https://docs.on-demand.io/reference/post_workflow.md",
+   "http_status": 200,
+   "content_type": "text/markdown; charset=utf-8",
+   "bytes": 11222,
+   "utc_timestamp": "2026-09-19T11:32:30Z",
+   "title": "Create a new workflow",
+   "blocked": false,
+   "error": null,
+   "final_url": null
+  },
+  {
+   "url": "https://docs.on-demand.io/docs/creating-a-workflow.md.md",
+   "http_status": 404,
+   "content_type": "text/html; charset=utf-8",
+   "bytes": 116850,
+   "utc_timestamp": "2026-09-19T11:32:31Z",
+   "title": "OnDemand AI",
+   "blocked": false,
+   "error": null,
+   "final_url": null
+  },
+  {
+   "url": "https://docs.on-demand.io/reference/get_workflow-id.md.md",
+   "http_status": 429,
+   "content_type": "text/html; charset=UTF-8",
+   "bytes": 21810,
+   "utc_timestamp": "2026-09-19T11:32:31Z",
+   "title": "Hello there, human!",
+   "blocked": true,
+   "error": null,
+   "final_url": null
+  },
+  {
+   "url": "https://docs.on-demand.io/docs/plugin-api.md",
+   "http_status": 200,
+   "content_type": "text/markdown; charset=utf-8",
+   "bytes": 5837,
+   "utc_timestamp": "2026-09-19T11:34:22Z",
+   "title": "Agents API",
+   "blocked": false,
+   "error": null,
+   "final_url": null,
+   "pass": 2
+  },
+  {
+   "url": "https://docs.on-demand.io/docs/what-are-plugins.md",
+   "http_status": 200,
+   "content_type": "text/markdown; charset=utf-8",
+   "bytes": 5652,
+   "utc_timestamp": "2026-09-19T11:34:24Z",
+   "title": "What are Agents ?",
+   "blocked": false,
+   "error": null,
+   "final_url": null,
+   "pass": 2
+  },
+  {
+   "url": "https://docs.on-demand.io/docs/plugins.md",
+   "http_status": 200,
+   "content_type": "text/markdown; charset=utf-8",
+   "bytes": 4347,
+   "utc_timestamp": "2026-09-19T11:34:26Z",
+   "title": "Agents",
+   "blocked": false,
+   "error": null,
+   "final_url": null,
+   "pass": 2
+  },
+  {
+   "url": "https://docs.on-demand.io/docs/rest-based-plugins.md",
+   "http_status": 200,
+   "content_type": "text/markdown; charset=utf-8",
+   "bytes": 8993,
+   "utc_timestamp": "2026-09-19T11:34:28Z",
+   "title": "Rest API Agents",
+   "blocked": false,
+   "error": null,
+   "final_url": null,
+   "pass": 2
+  },
+  {
+   "url": "https://docs.on-demand.io/docs/rest-api-plugin-examples.md",
+   "http_status": 200,
+   "content_type": "text/markdown; charset=utf-8",
+   "bytes": 17607,
+   "utc_timestamp": "2026-09-19T11:34:30Z",
+   "title": "Rest API Agent Examples",
+   "blocked": false,
+   "error": null,
+   "final_url": null,
+   "pass": 2
+  },
+  {
+   "url": "https://docs.on-demand.io/docs/open-api-schema.md",
+   "http_status": 200,
+   "content_type": "text/markdown; charset=utf-8",
+   "bytes": 16875,
+   "utc_timestamp": "2026-09-19T11:34:32Z",
+   "title": "Open API Schema",
+   "blocked": false,
+   "error": null,
+   "final_url": null,
+   "pass": 2
+  },
+  {
+   "url": "https://docs.on-demand.io/docs/agents-flow-builder.md",
+   "http_status": 200,
+   "content_type": "text/markdown; charset=utf-8",
+   "bytes": 962,
+   "utc_timestamp": "2026-09-19T11:34:34Z",
+   "title": "Agents Flow Builder",
+   "blocked": false,
+   "error": null,
+   "final_url": null,
+   "pass": 2
+  },
+  {
+   "url": "https://docs.on-demand.io/reference/post_workflow-id-execute.md",
+   "http_status": 200,
+   "content_type": "text/markdown; charset=utf-8",
+   "bytes": 1814,
+   "utc_timestamp": "2026-09-19T11:34:38Z",
+   "title": "Execute workflow",
+   "blocked": false,
+   "error": null,
+   "final_url": null,
+   "pass": 2
+  },
+  {
+   "url": "https://docs.on-demand.io/reference/post_workflow-id-activate.md",
+   "http_status": 200,
+   "content_type": "text/markdown; charset=utf-8",
+   "bytes": 1318,
+   "utc_timestamp": "2026-09-19T11:34:40Z",
+   "title": "Activate workflow",
+   "blocked": false,
+   "error": null,
+   "final_url": null,
+   "pass": 2
+  },
+  {
+   "url": "https://docs.on-demand.io/reference/post_workflow-id-deactivate.md",
+   "http_status": 200,
+   "content_type": "text/markdown; charset=utf-8",
+   "bytes": 1326,
+   "utc_timestamp": "2026-09-19T11:34:42Z",
+   "title": "Deactivate workflow",
+   "blocked": false,
+   "error": null,
+   "final_url": null,
+   "pass": 2
+  },
+  {
+   "url": "https://docs.on-demand.io/reference/patch_workflow-id.md",
+   "http_status": 200,
+   "content_type": "text/markdown; charset=utf-8",
+   "bytes": 11028,
+   "utc_timestamp": "2026-09-19T11:34:44Z",
+   "title": "Update workflow",
+   "blocked": false,
+   "error": null,
+   "final_url": null,
+   "pass": 2
+  },
+  {
+   "url": "https://docs.on-demand.io/reference/get_workflow-id.md",
+   "http_status": 200,
+   "content_type": "text/markdown; charset=utf-8",
+   "bytes": 11429,
+   "utc_timestamp": "2026-09-19T11:34:46Z",
+   "title": "Get workflow by ID",
+   "blocked": false,
+   "error": null,
+   "final_url": null,
+   "pass": 2
+  },
+  {
+   "url": "https://docs.on-demand.io/reference/delete_workflow-id.md",
+   "http_status": 200,
+   "content_type": "text/markdown; charset=utf-8",
+   "bytes": 1382,
+   "utc_timestamp": "2026-09-19T11:34:48Z",
+   "title": "Delete workflow",
+   "blocked": false,
+   "error": null,
+   "final_url": null,
+   "pass": 2
+  },
+  {
+   "url": "https://docs.on-demand.io/reference/patch_workflow-id-name.md",
+   "http_status": 200,
+   "content_type": "text/markdown; charset=utf-8",
+   "bytes": 1833,
+   "utc_timestamp": "2026-09-19T11:34:50Z",
+   "title": "Update workflow name",
+   "blocked": false,
+   "error": null,
+   "final_url": null,
+   "pass": 2
+  },
+  {
+   "url": "https://docs.on-demand.io/reference/post_workflow-upload-config.md",
+   "http_status": 200,
+   "content_type": "text/markdown; charset=utf-8",
+   "bytes": 1629,
+   "utc_timestamp": "2026-09-19T11:34:52Z",
+   "title": "Upload workflow configuration",
+   "blocked": false,
+   "error": null,
+   "final_url": null,
+   "pass": 2
+  },
+  {
+   "url": "https://docs.on-demand.io/reference/get_execution-executionid-logs.md",
+   "http_status": 200,
+   "content_type": "text/markdown; charset=utf-8",
+   "bytes": 3805,
+   "utc_timestamp": "2026-09-19T11:34:54Z",
+   "title": "Get execution logs",
+   "blocked": false,
+   "error": null,
+   "final_url": null,
+   "pass": 2
+  },
+  {
+   "url": "https://docs.on-demand.io/docs/execution-api.md",
+   "http_status": 200,
+   "content_type": "text/markdown; charset=utf-8",
+   "bytes": 8888,
+   "utc_timestamp": "2026-09-19T11:34:56Z",
+   "title": "Execution API",
+   "blocked": false,
+   "error": null,
+   "final_url": null,
+   "pass": 2
+  },
+  {
+   "url": "https://docs.on-demand.io/docs/rules-to-publish-a-rest-api-plugin.md",
+   "http_status": 200,
+   "content_type": "text/markdown; charset=utf-8",
+   "bytes": 2618,
+   "utc_timestamp": "2026-09-19T11:34:58Z",
+   "title": "Rest API Agent Publishing Guidelines",
+   "blocked": false,
+   "error": null,
+   "final_url": null,
+   "pass": 2
+  },
+  {
+   "url": "https://docs.on-demand.io/docs/knowledge-plugin.md",
+   "http_status": 200,
+   "content_type": "text/markdown; charset=utf-8",
+   "bytes": 13678,
+   "utc_timestamp": "2026-09-19T11:35:00Z",
+   "title": "Knowledge Agent",
+   "blocked": false,
+   "error": null,
+   "final_url": null,
+   "pass": 2
+  },
+  {
+   "url": "https://docs.on-demand.io/docs/terminal-agent.md",
+   "http_status": 200,
+   "content_type": "text/markdown; charset=utf-8",
+   "bytes": 23976,
+   "utc_timestamp": "2026-09-19T11:35:02Z",
+   "title": "Terminal Agent",
+   "blocked": false,
+   "error": null,
+   "final_url": null,
+   "pass": 2
+  },
+  {
+   "url": "https://docs.on-demand.io/docs/what-are-connectors.md",
+   "http_status": 200,
+   "content_type": "text/markdown; charset=utf-8",
+   "bytes": 3112,
+   "utc_timestamp": "2026-09-19T11:35:04Z",
+   "title": "Connectors",
+   "blocked": false,
+   "error": null,
+   "final_url": null,
+   "pass": 2
+  },
+  {
+   "url": "https://docs.on-demand.io/docs/chat-api.md",
+   "http_status": 200,
+   "content_type": "text/markdown; charset=utf-8",
+   "bytes": 16084,
+   "utc_timestamp": "2026-09-19T11:35:06Z",
+   "title": "Chat API",
+   "blocked": false,
+   "error": null,
+   "final_url": null,
+   "pass": 2
+  },
+  {
+   "url": "https://docs.on-demand.io/docs/getting-started.md",
+   "http_status": 200,
+   "content_type": "text/markdown; charset=utf-8",
+   "bytes": 7476,
+   "utc_timestamp": "2026-09-19T11:35:08Z",
+   "title": "Get Started",
+   "blocked": false,
+   "error": null,
+   "final_url": null,
+   "pass": 2
+  },
+  {
+   "url": "https://docs.on-demand.io/docs/authentication.md",
+   "http_status": 200,
+   "content_type": "text/markdown; charset=utf-8",
+   "bytes": 4795,
+   "utc_timestamp": "2026-09-19T11:35:10Z",
+   "title": "Authentication",
+   "blocked": false,
+   "error": null,
+   "final_url": null,
+   "pass": 2
+  },
+  {
+   "url": "https://docs.on-demand.io/reference/intro-to-ondemand-api.md",
+   "http_status": 200,
+   "content_type": "text/markdown; charset=utf-8",
+   "bytes": 2957,
+   "utc_timestamp": "2026-09-19T11:35:12Z",
+   "title": "Get Started",
+   "blocked": false,
+   "error": null,
+   "final_url": null,
+   "pass": 2
+  },
+  {
+   "url": "https://docs.on-demand.io/reference/how-to-do-authentication.md",
+   "http_status": 200,
+   "content_type": "text/markdown; charset=utf-8",
+   "bytes": 1872,
+   "utc_timestamp": "2026-09-19T11:35:14Z",
+   "title": "Authentication",
+   "blocked": false,
+   "error": null,
+   "final_url": null,
+   "pass": 2
+  },
+  {
+   "url": "https://docs.on-demand.io/docs/chat-wokflow.md",
+   "http_status": 200,
+   "content_type": "text/markdown; charset=utf-8",
+   "bytes": 3587,
+   "utc_timestamp": "2026-09-19T11:35:16Z",
+   "title": "Chat Workflow",
+   "blocked": false,
+   "error": null,
+   "final_url": null,
+   "pass": 2
+  },
+  {
+   "url": "https://docs.on-demand.io/docs/mqttiot-plugins.md",
+   "http_status": 200,
+   "content_type": "text/markdown; charset=utf-8",
+   "bytes": 11722,
+   "utc_timestamp": "2026-09-19T11:35:18Z",
+   "title": "IoT(MQTT) Agents",
+   "blocked": false,
+   "error": null,
+   "final_url": null,
+   "pass": 2
+  },
+  {
+   "url": "https://docs.on-demand.io/reference/createchatsession.md",
+   "http_status": 200,
+   "content_type": "text/markdown; charset=utf-8",
+   "bytes": 6326,
+   "utc_timestamp": "2026-09-19T11:35:20Z",
+   "title": "Create Chat Session",
+   "blocked": false,
+   "error": null,
+   "final_url": null,
+   "pass": 2
+  },
+  {
+   "url": "https://docs.on-demand.io/reference/submitquery.md",
+   "http_status": 200,
+   "content_type": "text/markdown; charset=utf-8",
+   "bytes": 10816,
+   "utc_timestamp": "2026-09-19T11:35:22Z",
+   "title": "Submit Query",
+   "blocked": false,
+   "error": null,
+   "final_url": null,
+   "pass": 2
+  },
+  {
+   "url": "https://docs.on-demand.io/docs/general-faqs.md",
+   "http_status": 200,
+   "content_type": "text/markdown; charset=utf-8",
+   "bytes": 1261,
+   "utc_timestamp": "2026-09-19T11:35:24Z",
+   "title": "General FAQs",
+   "blocked": false,
+   "error": null,
+   "final_url": null,
+   "pass": 2
+  },
+  {
+   "url": "https://docs.on-demand.io/docs/what-is-playground.md",
+   "http_status": 200,
+   "content_type": "text/markdown; charset=utf-8",
+   "bytes": 7514,
+   "utc_timestamp": "2026-09-19T11:35:26Z",
+   "title": "What is Playground ?",
+   "blocked": false,
+   "error": null,
+   "final_url": null,
+   "pass": 2
+  },
+  {
+   "url": "https://docs.on-demand.io/reference/get_execution-executionid.md",
+   "http_status": 200,
+   "content_type": "text/markdown; charset=utf-8",
+   "bytes": 4215,
+   "utc_timestamp": "2026-09-19T11:35:28Z",
+   "title": "Get execution by ID",
+   "blocked": false,
+   "error": null,
+   "final_url": null,
+   "pass": 2
+  },
+  {
+   "url": "https://docs.on-demand.io/docs/mcp.md",
+   "http_status": 404,
+   "content_type": "text/html; charset=utf-8",
+   "bytes": 116755,
+   "utc_timestamp": "2026-09-19T11:35:30Z",
+   "title": "OnDemand AI",
+   "blocked": false,
+   "error": null,
+   "final_url": null,
+   "pass": 2
+  },
+  {
+   "url": "https://docs.on-demand.io/docs/mcp-server.md",
+   "http_status": 404,
+   "content_type": "text/html; charset=utf-8",
+   "bytes": 116790,
+   "utc_timestamp": "2026-09-19T11:35:32Z",
+   "title": "OnDemand AI",
+   "blocked": false,
+   "error": null,
+   "final_url": null,
+   "pass": 2
+  }
+ ],
+ "findings": {
+  "plugins": [
+   {
+    "quote": "To create a REST-based agent, you will need to: 1. Navigate to [My Agents](https://app.on-demand.io/rag-agents/my-agents) section and click on Create Agents. 2. Define your API's structure using the OpenAPI schema.",
+    "url": "https://docs.on-demand.io/docs/rest-based-plugins.md",
+    "kind": "dashboard",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "<Image alt=\"Create Rest API Plugin\" align=\"center\" border={true}",
+    "url": "https://docs.on-demand.io/docs/rest-based-plugins.md",
+    "kind": "dashboard",
+    "verified_verbatim": true,
+    "note": "screenshot alt text still uses the old 'Plugin' naming; the page itself now says 'Agents'"
+   },
+   {
+    "quote": "* **Import from URL:** If your API schema is available online, you can directly import it by providing the URL. * **Example Schema:** Start with an example schema and modify it to fit your API specifications.",
+    "url": "https://docs.on-demand.io/docs/rest-based-plugins.md",
+    "kind": "dashboard",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "You can create the Knowledge Agent directly through the provided link above, or you can access it from the UI under the category **My Agents**. Click on Create Agent to see the screen as shown below:",
+    "url": "https://docs.on-demand.io/docs/knowledge-plugin.md",
+    "kind": "dashboard",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "### Get Agents: To fetch the list of plugins based on plugin IDs. Endpoint URL: `/plugin/v1/list` Method: `GET`",
+    "url": "https://docs.on-demand.io/docs/plugin-api.md",
+    "kind": "api",
+    "verified_verbatim": true,
+    "note": "the ONLY plugin/agent REST endpoint documented is a read-only list; no create/update/delete endpoint appears anywhere in the crawled docs"
+   },
+   {
+    "quote": "curl -X GET 'https://api.on-demand.io/plugin/v1/list?pluginIds=plugin-1716806012,plugin-1717869021' \\ -H 'apikey: <replace_api_key>'",
+    "url": "https://docs.on-demand.io/docs/plugin-api.md",
+    "kind": "api",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "The OnDemand platform empowers users to create their own agents and leverage agents created by others.",
+    "url": "https://docs.on-demand.io/docs/plugin-api.md",
+    "kind": "unclear",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "In addition to accessing pre-built agents, the marketplace also supports the creation and sharing of user-generated agents. This feature empowers developers to build custom agents tailored to unique use cases and share them with the broader community.",
+    "url": "https://docs.on-demand.io/docs/what-are-plugins.md",
+    "kind": "dashboard",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "**Agents (Plugins):** Optional specialized tools (Knowledge, REST API, etc.) referenced by `pluginIds` that can be invoked during the RAG stage to gather context before fulfillment.",
+    "url": "https://docs.on-demand.io/docs/chat-api.md",
+    "kind": "api",
+    "verified_verbatim": true,
+    "note": "attaching existing plugins to a chat session via API (not creation)"
+   },
+   {
+    "quote": "\"pluginIds\": { \"type\": \"array\", \"description\": \"A list of plugin IDs to be used in the chat session.",
+    "url": "https://docs.on-demand.io/reference/createchatsession.md",
+    "kind": "api",
+    "verified_verbatim": true,
+    "note": "attach-only"
+   },
+   {
+    "quote": "and even create new plugins for the platform \u2014 all inside a single chat.",
+    "url": "https://docs.on-demand.io/docs/terminal-agent.md",
+    "kind": "unclear",
+    "verified_verbatim": true,
+    "note": "Terminal Agent product feature (chat-driven), not a documented REST endpoint or MCP tool"
+   },
+   {
+    "quote": "| `api-connector-builder` | Write a custom Python connector to a REST API that isn't in the marketplace |",
+    "url": "https://docs.on-demand.io/docs/terminal-agent.md",
+    "kind": "unclear",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "| `api-schema-generator` | Produce a validated OpenAPI specification for a real external API |",
+    "url": "https://docs.on-demand.io/docs/terminal-agent.md",
+    "kind": "unclear",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "Connectors are a specialized form of agents introduced to make authentication and user verification simpler and more convenient.",
+    "url": "https://docs.on-demand.io/docs/what-are-connectors.md",
+    "kind": "unclear",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "For compliance and security, connectors can only be created by On Demand. Users cannot create their own connectors.",
+    "url": "https://docs.on-demand.io/docs/what-are-connectors.md",
+    "kind": "unclear",
+    "verified_verbatim": true
+   }
+  ],
+  "agents": [
+   {
+    "quote": "- [Agents API](https://docs.on-demand.io/docs/plugin-api.md)",
+    "url": "https://docs.on-demand.io/llms.txt",
+    "kind": "unclear",
+    "verified_verbatim": true,
+    "note": "naming: the docs' 'Agents' == the API's 'plugins' (URL slugs still say plugin)"
+   },
+   {
+    "quote": "- [What are Agents ?](https://docs.on-demand.io/docs/what-are-plugins.md)",
+    "url": "https://docs.on-demand.io/llms.txt",
+    "kind": "unclear",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "- [Rest API Agent Examples](https://docs.on-demand.io/docs/rest-api-plugin-examples.md): This document provides a step-by-step guide for creating a REST API agent using the examples.",
+    "url": "https://docs.on-demand.io/llms.txt",
+    "kind": "unclear",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "To create a REST-based agent, you will need to: 1. Navigate to [My Agents](https://app.on-demand.io/rag-agents/my-agents) section and click on Create Agents.",
+    "url": "https://docs.on-demand.io/docs/rest-based-plugins.md",
+    "kind": "dashboard",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "3. Configure your agent with the necessary parameters and settings. 4. Test and validate your agent to ensure it operates correctly within our platform",
+    "url": "https://docs.on-demand.io/docs/rest-based-plugins.md",
+    "kind": "dashboard",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "The [Agents Marketplace](https://app.on-demand.io/rag-agents/marketplace) is a centralized platform where users can explore, discover, and utilize a variety of agents to extend the functionalities of AI models.",
+    "url": "https://docs.on-demand.io/docs/what-are-plugins.md",
+    "kind": "dashboard",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "Endpoint URL: `/plugin/v1/list` Method: `GET`",
+    "url": "https://docs.on-demand.io/docs/plugin-api.md",
+    "kind": "api",
+    "verified_verbatim": true,
+    "note": "list only \u2014 no 'create agent' endpoint documented"
+   },
+   {
+    "quote": "* **Agents Integration:** Select specific Agents (Knowledge, REST API, etc.) whose context or execution results should be made available to this LLM node during its execution.",
+    "url": "https://docs.on-demand.io/docs/workflow-nodes.md",
+    "kind": "dashboard",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "* **Agent:** Represents the execution of a specific Knowledge, REST API, or IoT Agent.",
+    "url": "https://docs.on-demand.io/docs/creating-a-workflow.md",
+    "kind": "dashboard",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "* **Agents:** Add Agent nodes and configure them to use any Agents you have subscribed to or created.",
+    "url": "https://docs.on-demand.io/docs/creating-a-workflow.md",
+    "kind": "dashboard",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "\"plugins\": [ { \"id\": \"plugin-1713924030\" } ]",
+    "url": "https://docs.on-demand.io/docs/workflow-api.md",
+    "kind": "api",
+    "verified_verbatim": true,
+    "note": "attaching an existing agent/plugin to a workflow node inside the Create Workflow request body"
+   },
+   {
+    "quote": "**Add agents/custom agents**- Allows users to add agents to the conversation window after subscribing to them from the agent marketplace.",
+    "url": "https://docs.on-demand.io/docs/what-is-playground.md",
+    "kind": "dashboard",
+    "verified_verbatim": true
+   }
+  ],
+  "skills": [
+   {
+    "quote": "- [Agent Skills](https://docs.on-demand.io/docs/agent-skills.md)",
+    "url": "https://docs.on-demand.io/llms.txt",
+    "kind": "unclear",
+    "verified_verbatim": true,
+    "note": "the only Skills page in the index; no /reference/ (API) page for skills is listed"
+   },
+   {
+    "quote": "**1. You write it.** A Skill is a Markdown file called `SKILL.md` \u2014 plain writing, no code required. If your skill needs helper files (scripts, templates, reference documents), you add them to a folder and upload the whole thing as a `.zip`.",
+    "url": "https://docs.on-demand.io/docs/agent-skills.md",
+    "kind": "dashboard",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "### Step 1 \u2014 Set up the Skill In your dashboard, open **Skills** and click **Create Skill**.",
+    "url": "https://docs.on-demand.io/docs/agent-skills.md",
+    "kind": "dashboard",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "**Uploading.** Zip the folder and drop it in. Use **Validate** first if you'd like to see the file list we detected before committing \u2014 it checks your structure without changing your skill.",
+    "url": "https://docs.on-demand.io/docs/agent-skills.md",
+    "kind": "dashboard",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "**3. Your agents use it.** Once approved, the skill is available to your agents. Publish it and any company on the platform can add it to their own library.",
+    "url": "https://docs.on-demand.io/docs/agent-skills.md",
+    "kind": "dashboard",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "Click **Subscribe**. The skill is added to your company's library and becomes available to your agents.",
+    "url": "https://docs.on-demand.io/docs/agent-skills.md",
+    "kind": "dashboard",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "Add the skill to an agent or a Playground session and your agent follows its instructions from that point on.",
+    "url": "https://docs.on-demand.io/docs/agent-skills.md",
+    "kind": "dashboard",
+    "verified_verbatim": true,
+    "note": "attach-to-agent is described as a UI action; no endpoint given"
+   },
+   {
+    "quote": "### Step 4\u2014 Test it Add your skill in the Playground and try your sample prompts.",
+    "url": "https://docs.on-demand.io/docs/agent-skills.md",
+    "kind": "dashboard",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "**Can I edit a published skill?**<br />Yes. Your changes go through the safety check again, then reach everyone who subscribed.",
+    "url": "https://docs.on-demand.io/docs/agent-skills.md",
+    "kind": "dashboard",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "| Custom skills per message | 10 |",
+    "url": "https://docs.on-demand.io/docs/terminal-agent.md",
+    "kind": "unclear",
+    "verified_verbatim": true
+   }
+  ],
+  "workflows": [
+   {
+    "quote": "1. Navigate to the [main Agents/Workflow section](https://app.on-demand.io/agents) in your OnDemand dashboard 2. Click the **\"Create Workflow\"** button, typically located in the top-right corner of the page.",
+    "url": "https://docs.on-demand.io/docs/creating-a-workflow.md",
+    "kind": "dashboard",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "Once you are satisfied with your workflow's design and test results, you need to **activate** it before it can be triggered automatically (via schedule or API).",
+    "url": "https://docs.on-demand.io/docs/creating-a-workflow.md",
+    "kind": "dashboard",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "Your workflow is now live and will run based on its configured trigger (e.g., at the specified CRON interval or when called by the [Workflow Execution API](https://app.on-demand.io/api-reference#/agents-flow-builder-api/post_workflow-id-execute)).",
+    "url": "https://docs.on-demand.io/docs/creating-a-workflow.md",
+    "kind": "api",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "**List of workflow endpoints** 1. [Create workflow](https://docs.on-demand.io/reference/post_workflow) 2. [List workflows](https://docs.on-demand.io/reference/get_workflow) 3. [Get workflow by ID](https://docs.on-demand.io/reference/get_workflow-id)",
+    "url": "https://docs.on-demand.io/docs/workflow-api.md",
+    "kind": "api",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "7. [Activate workflow](https://docs.on-demand.io/reference/post_workflow-id-activate) 8. [Deactivate workflow](https://docs.on-demand.io/reference/post_workflow-id-deactivate) 9. [Execute workflow](https://docs.on-demand.io/reference/post_workflow-id-execute)",
+    "url": "https://docs.on-demand.io/docs/workflow-api.md",
+    "kind": "api",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "curl --location 'https://api.on-demand.io/automation/api/workflow' \\ --header 'apikey: token-here' \\ --data '{ \"name\":\"Marketing reach out - voice\",",
+    "url": "https://docs.on-demand.io/docs/workflow-api.md",
+    "kind": "api",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "curl --location 'https://api.on-demand.io/automation/api/workflow?limit=50' \\ --header 'apikey: token-here'",
+    "url": "https://docs.on-demand.io/docs/workflow-api.md",
+    "kind": "api",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "\"plugins\": [ { \"id\": \"plugin-1713924030\" } ]",
+    "url": "https://docs.on-demand.io/docs/workflow-api.md",
+    "kind": "api",
+    "verified_verbatim": true,
+    "note": "plugins attached to an advancedVoiceMode node in the Create Workflow body"
+   },
+   {
+    "quote": "\"servers\": [ { \"url\": \"https://api.on-demand.io/automation/api\" } ], \"paths\": { \"/workflow/\": { \"post\": { \"summary\": \"Create a new workflow\",",
+    "url": "https://docs.on-demand.io/reference/post_workflow.md",
+    "kind": "api",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "\"plugins\": { \"type\": \"array\", \"items\": { \"$ref\": \"#/components/schemas/Plugin\" } }",
+    "url": "https://docs.on-demand.io/reference/post_workflow.md",
+    "kind": "api",
+    "verified_verbatim": true,
+    "note": "appears in the LLMMeta and AdvancedVoiceModeMeta node schemas \u2192 plugins/agents are attached to nodes via the API body"
+   },
+   {
+    "quote": "\"/workflow/{id}\": { \"patch\": { \"summary\": \"Update workflow\",",
+    "url": "https://docs.on-demand.io/reference/patch_workflow-id.md",
+    "kind": "api",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "\"/workflow/{id}\": { \"delete\": { \"summary\": \"Delete workflow\",",
+    "url": "https://docs.on-demand.io/reference/delete_workflow-id.md",
+    "kind": "api",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "\"/workflow/{id}/name\": { \"patch\": { \"summary\": \"Update workflow name\",",
+    "url": "https://docs.on-demand.io/reference/patch_workflow-id-name.md",
+    "kind": "api",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "\"/workflow/{id}/activate\": { \"post\": { \"summary\": \"Activate workflow\",",
+    "url": "https://docs.on-demand.io/reference/post_workflow-id-activate.md",
+    "kind": "api",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "\"/workflow/{id}/deactivate\": { \"post\": { \"summary\": \"Deactivate workflow\",",
+    "url": "https://docs.on-demand.io/reference/post_workflow-id-deactivate.md",
+    "kind": "api",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "\"/workflow/{id}/execute\": { \"post\": { \"summary\": \"Execute workflow\",",
+    "url": "https://docs.on-demand.io/reference/post_workflow-id-execute.md",
+    "kind": "api",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "\"200\": { \"description\": \"Workflow execution started\", \"content\": { \"application/json\": { \"schema\": { \"type\": \"object\", \"properties\": { \"executionID\": { \"type\": \"string\" }",
+    "url": "https://docs.on-demand.io/reference/post_workflow-id-execute.md",
+    "kind": "api",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "\"/workflow/upload/config\": { \"post\": { \"summary\": \"Upload workflow configuration\",",
+    "url": "https://docs.on-demand.io/reference/post_workflow-upload-config.md",
+    "kind": "api",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "\"securitySchemes\": { \"ApiKeyAuth\": { \"type\": \"apiKey\", \"in\": \"header\", \"name\": \"apikey\" } }",
+    "url": "https://docs.on-demand.io/reference/post_workflow-id-execute.md",
+    "kind": "api",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "List of workflow execution endpoints. 1. [List executions](https://docs.on-demand.io/reference/get_execution-list) 2. [Get execution logs](https://docs.on-demand.io/reference/get_execution-executionid-logs)",
+    "url": "https://docs.on-demand.io/docs/execution-api.md",
+    "kind": "api",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "\"/execution/{executionID}/logs\": { \"get\": { \"summary\": \"Get execution logs\",",
+    "url": "https://docs.on-demand.io/reference/get_execution-executionid-logs.md",
+    "kind": "api",
+    "verified_verbatim": true,
+    "note": "logs are a plain GET returning a JSON array of ExecutionLog objects; no SSE/streaming transport is documented"
+   },
+   {
+    "quote": "* **API Trigger:** * Allows you to start a workflow execution programmatically by making an HTTP POST request to a unique endpoint generated for your workflow.",
+    "url": "https://docs.on-demand.io/docs/workflow-nodes.md",
+    "kind": "api",
+    "verified_verbatim": true
+   },
+   {
+    "quote": "* **Agents Integration:** Select specific Agents (Knowledge, REST API, etc.) whose context or execution results should be made available to this LLM node during its execution.",
+    "url": "https://docs.on-demand.io/docs/workflow-nodes.md",
+    "kind": "dashboard",
+    "verified_verbatim": true
+   }
+  ],
+  "mcp": [
+   {
+    "quote": "\"mcp\":{\"state\":\"disabled\",\"custom_tools\":[],\"disabled_routes\":[],\"disabled_tools\":[]",
+    "url": "https://docs.on-demand.io/",
+    "kind": "unclear",
+    "verified_verbatim": true,
+    "note": "ReadMe (the docs-hosting platform) project config embedded in the page \u2014 ReadMe's own docs-MCP feature is DISABLED for this site; this is not an OnDemand product MCP server"
+   },
+   {
+    "quote": "\"mcp_server_card\":true",
+    "url": "https://docs.on-demand.io/",
+    "kind": "unclear",
+    "verified_verbatim": true,
+    "note": "ReadMe platform feature flag, not OnDemand documentation"
+   },
+   {
+    "quote": "| `mcp-graphs` | Render live, interactive charts and diagrams (flowcharts, node-link graphs) |",
+    "url": "https://docs.on-demand.io/docs/terminal-agent.md",
+    "kind": "unclear",
+    "verified_verbatim": true,
+    "note": "an internal Terminal Agent skill name; no MCP server URL, transport or tools list is documented"
+   }
+  ]
+ },
+ "endpoints_seen": [
+  {
+   "method": "GET",
+   "path": "/plugin/v1/list",
+   "url": "https://docs.on-demand.io/docs/plugin-api.md",
+   "matches_keyword": true,
+   "related_only": false
+  },
+  {
+   "method": "POST",
+   "path": "https://api.on-demand.io/automation/api/workflow",
+   "url": "https://docs.on-demand.io/docs/workflow-api.md",
+   "matches_keyword": true,
+   "related_only": false
+  },
+  {
+   "method": "GET",
+   "path": "https://api.on-demand.io/automation/api/workflow",
+   "url": "https://docs.on-demand.io/docs/workflow-api.md",
+   "matches_keyword": true,
+   "related_only": false
+  },
+  {
+   "method": "POST",
+   "path": "https://api.on-demand.io/automation/api/workflow/",
+   "url": "https://docs.on-demand.io/reference/post_workflow.md",
+   "matches_keyword": true,
+   "related_only": false
+  },
+  {
+   "method": "GET",
+   "path": "https://api.on-demand.io/automation/api/workflow/",
+   "url": "https://docs.on-demand.io/reference/get_workflow.md",
+   "matches_keyword": true,
+   "related_only": false
+  },
+  {
+   "method": "DELETE",
+   "path": "https://api.on-demand.io/automation/api/workflow/66e3f1bb60a439e502658247",
+   "url": "https://docs.on-demand.io/docs/workflow-api.md",
+   "matches_keyword": true,
+   "related_only": false
+  },
+  {
+   "method": "POST",
+   "path": "https://api.on-demand.io/automation/api/workflow/66e4448d2cac15eadc6d9ffb/activate",
+   "url": "https://docs.on-demand.io/docs/workflow-api.md",
+   "matches_keyword": true,
+   "related_only": false
+  },
+  {
+   "method": "POST",
+   "path": "https://api.on-demand.io/automation/api/workflow/66e4448d2cac15eadc6d9ffb/deactivate",
+   "url": "https://docs.on-demand.io/docs/workflow-api.md",
+   "matches_keyword": true,
+   "related_only": false
+  },
+  {
+   "method": "POST",
+   "path": "https://api.on-demand.io/automation/api/workflow/66e4448d2cac15eadc6d9ffb/execute",
+   "url": "https://docs.on-demand.io/docs/workflow-api.md",
+   "matches_keyword": true,
+   "related_only": false
+  },
+  {
+   "method": "PATCH",
+   "path": "https://api.on-demand.io/automation/api/workflow/6717522672e5ea587e393583/name",
+   "url": "https://docs.on-demand.io/docs/workflow-api.md",
+   "matches_keyword": true,
+   "related_only": false
+  },
+  {
+   "method": "PATCH",
+   "path": "https://api.on-demand.io/automation/api/workflow/67652617621ed048863aafe8",
+   "url": "https://docs.on-demand.io/docs/workflow-api.md",
+   "matches_keyword": true,
+   "related_only": false
+  },
+  {
+   "method": "GET",
+   "path": "https://api.on-demand.io/automation/api/workflow/6781182e5cb8b99af5975a6c",
+   "url": "https://docs.on-demand.io/docs/workflow-api.md",
+   "matches_keyword": true,
+   "related_only": false
+  },
+  {
+   "method": "POST",
+   "path": "https://api.on-demand.io/automation/api/workflow/upload/config",
+   "url": "https://docs.on-demand.io/reference/post_workflow-upload-config.md",
+   "matches_keyword": true,
+   "related_only": false
+  },
+  {
+   "method": "GET",
+   "path": "https://api.on-demand.io/automation/api/workflow/{id}",
+   "url": "https://docs.on-demand.io/reference/get_workflow-id.md",
+   "matches_keyword": true,
+   "related_only": false
+  },
+  {
+   "method": "PATCH",
+   "path": "https://api.on-demand.io/automation/api/workflow/{id}",
+   "url": "https://docs.on-demand.io/reference/patch_workflow-id.md",
+   "matches_keyword": true,
+   "related_only": false
+  },
+  {
+   "method": "DELETE",
+   "path": "https://api.on-demand.io/automation/api/workflow/{id}",
+   "url": "https://docs.on-demand.io/reference/delete_workflow-id.md",
+   "matches_keyword": true,
+   "related_only": false
+  },
+  {
+   "method": "POST",
+   "path": "https://api.on-demand.io/automation/api/workflow/{id}/activate",
+   "url": "https://docs.on-demand.io/reference/post_workflow-id-activate.md",
+   "matches_keyword": true,
+   "related_only": false
+  },
+  {
+   "method": "POST",
+   "path": "https://api.on-demand.io/automation/api/workflow/{id}/deactivate",
+   "url": "https://docs.on-demand.io/reference/post_workflow-id-deactivate.md",
+   "matches_keyword": true,
+   "related_only": false
+  },
+  {
+   "method": "POST",
+   "path": "https://api.on-demand.io/automation/api/workflow/{id}/execute",
+   "url": "https://docs.on-demand.io/reference/post_workflow-id-execute.md",
+   "matches_keyword": true,
+   "related_only": false
+  },
+  {
+   "method": "PATCH",
+   "path": "https://api.on-demand.io/automation/api/workflow/{id}/name",
+   "url": "https://docs.on-demand.io/reference/patch_workflow-id-name.md",
+   "matches_keyword": true,
+   "related_only": false
+  },
+  {
+   "method": "GET",
+   "path": "https://api.on-demand.io/plugin/v1/list",
+   "url": "https://docs.on-demand.io/docs/plugin-api.md",
+   "matches_keyword": true,
+   "related_only": false
+  }
+ ],
+ "discovery": {
+  "docs_urls_discovered": 147,
+  "matched_urls": [
+   "https://docs.on-demand.io/docs/agent-skills",
+   "https://docs.on-demand.io/docs/agent-skills.md",
+   "https://docs.on-demand.io/docs/workflow-api",
+   "https://docs.on-demand.io/docs/workflow-nodes",
+   "https://docs.on-demand.io/docs/workflow-api.md",
+   "https://docs.on-demand.io/docs/workflow-nodes.md",
+   "https://docs.on-demand.io/docs/creating-a-workflow",
+   "https://docs.on-demand.io/reference/get_workflow.md",
+   "https://docs.on-demand.io/reference/post_workflow.md",
+   "https://docs.on-demand.io/docs/creating-a-workflow.md",
+   "https://docs.on-demand.io/reference/get_workflow-id.md",
+   "https://docs.on-demand.io/reference/patch_workflow-id.md",
+   "https://docs.on-demand.io/reference/delete_workflow-id.md",
+   "https://docs.on-demand.io/reference/patch_workflow-id-name.md",
+   "https://docs.on-demand.io/reference/post_workflow-id-execute.md",
+   "https://docs.on-demand.io/reference/post_workflow-id-activate.md",
+   "https://docs.on-demand.io/reference/post_workflow-id-deactivate.md",
+   "https://docs.on-demand.io/reference/post_workflow-upload-config.md",
+   "https://docs.on-demand.io/docs/chat-wokflow",
+   "https://docs.on-demand.io/docs/chat-wokflow.md",
+   "https://docs.on-demand.io/docs/agents-flow-builder",
+   "https://docs.on-demand.io/docs/agents-flow-builder.md",
+   "https://docs.on-demand.io/docs/plugins",
+   "https://docs.on-demand.io/docs/plugins.md",
+   "https://docs.on-demand.io/docs/plugin-api",
+   "https://docs.on-demand.io/docs/plugin-api.md",
+   "https://docs.on-demand.io/docs/mqttiot-plugins",
+   "https://docs.on-demand.io/docs/what-are-plugins",
+   "https://docs.on-demand.io/docs/knowledge-plugin",
+   "https://docs.on-demand.io/docs/mqttiot-plugins.md",
+   "https://docs.on-demand.io/docs/rest-based-plugins",
+   "https://docs.on-demand.io/docs/what-are-plugins.md",
+   "https://docs.on-demand.io/docs/knowledge-plugin.md",
+   "https://docs.on-demand.io/docs/rest-based-plugins.md",
+   "https://docs.on-demand.io/docs/rest-api-plugin-examples",
+   "https://docs.on-demand.io/docs/rest-api-plugin-examples.md",
+   "https://docs.on-demand.io/docs/rules-to-publish-a-rest-api-plugin",
+   "https://docs.on-demand.io/docs/rules-to-publish-a-rest-api-plugin.md",
+   "https://docs.on-demand.io/docs/terminal-agent",
+   "https://docs.on-demand.io/docs/terminal-agent.md"
+  ]
+ },
+ "resumed_utc": "2026-09-19T11:35:32Z",
+ "endpoints_related_execution": [
+  {
+   "method": "GET",
+   "path": "https://api.on-demand.io/automation/api/execution/{executionID}",
+   "url": "https://docs.on-demand.io/reference/get_execution-executionid.md",
+   "matches_keyword": false,
+   "related_only": true
+  },
+  {
+   "method": "GET",
+   "path": "https://api.on-demand.io/automation/api/execution/{executionID}/logs",
+   "url": "https://docs.on-demand.io/reference/get_execution-executionid-logs.md",
+   "matches_keyword": false,
+   "related_only": true
+  },
+  {
+   "method": "POST",
+   "path": "https://api.on-demand.io/chat/v1/sessions",
+   "url": "https://docs.on-demand.io/reference/createchatsession.md",
+   "matches_keyword": false,
+   "related_only": true
+  },
+  {
+   "method": "POST",
+   "path": "https://api.on-demand.io/chat/v1/sessions/{sessionId}/query",
+   "url": "https://docs.on-demand.io/reference/submitquery.md",
+   "matches_keyword": false,
+   "related_only": true
+  }
+ ],
+ "observations": {
+  "llms_txt_mentions_mcp": false,
+  "llms_txt_skill_pages": [
+   "- [Agent Skills](https://docs.on-demand.io/docs/agent-skills.md)"
+  ],
+  "llms_txt_reference_pages_matching_plugin_agent_skill_tool": [],
+  "llms_txt_reference_pages_matching_workflow": [
+   "- [Get email delivery status for workflow executions.](https://docs.on-demand.io/reference/get_execution-executionid-delivery-track-email.md): Retrieves email delivery status for workflow executions.",
+   "- [Get voice mode transcripts for an execution](https://docs.on-demand.io/reference/get_execution-executionid-transcript.md): Retrieves transcripts for voice mode workflows. Returns unauthorized error if the workflow is not in advanced voice mode.",
+   "- [Create a new workflow](https://docs.on-demand.io/reference/post_workflow.md)",
+   "- [List workflows](https://docs.on-demand.io/reference/get_workflow.md)",
+   "- [Get workflow by ID](https://docs.on-demand.io/reference/get_workflow-id.md)",
+   "- [Update workflow](https://docs.on-demand.io/reference/patch_workflow-id.md)",
+   "- [Delete workflow](https://docs.on-demand.io/reference/delete_workflow-id.md)",
+   "- [Activate workflow](https://docs.on-demand.io/reference/post_workflow-id-activate.md)",
+   "- [Deactivate workflow](https://docs.on-demand.io/reference/post_workflow-id-deactivate.md)",
+   "- [Execute workflow](https://docs.on-demand.io/reference/post_workflow-id-execute.md)",
+   "- [Update workflow name](https://docs.on-demand.io/reference/patch_workflow-id-name.md)",
+   "- [Upload workflow configuration](https://docs.on-demand.io/reference/post_workflow-upload-config.md)"
+  ],
+  "sitemap_xml": "404 \u2014 no sitemap; discovery used llms.txt and the home-page navigation instead",
+  "llms_full_txt": "404 \u2014 no aggregate; individual .md pages fetched instead",
+  "api_on_demand_io_root_docs_openapi_swagger": "all 404 with body {\"error_msg\":\"404 Route Not Found\"} \u2014 no self-hosted API docs / OpenAPI document at api.on-demand.io",
+  "gateway_categories_unauthenticated": "401 {\"errorCode\":\"unauthenticated\",\"message\":\"No API key header\"} (fetched deliberately without any apikey header)",
+  "docs_mcp_pages": "/docs/mcp.md and /docs/mcp-server.md \u2192 404 (speculative URLs; not listed in llms.txt or nav)",
+  "rate_limiting_during_crawl": "docs.on-demand.io (ReadMe-hosted) answered 429 'Hello there, human!' (body contains 'challenge-platform') twice in pass 1 at 2 req/s; crawl paused and resumed at 1 req / 2 s \u2014 all remaining pages then returned 200",
+  "pass1_url_bug": "pass 1 appended '.md' to llms.txt links that already ended in '.md' (\u2192 11 '.md.md' 404s); those requests still count toward the 70-URL cap"
+ },
+ "built_utc": "2026-09-19T11:40:46Z",
+ "crawl_policy": {
+  "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36",
+  "timeout_s": 20,
+  "max_retries_per_url": 1,
+  "url_cap": 70,
+  "urls_fetched": 63,
+  "rate": "pass 1: 0.5 s between requests (2 req/s); pass 2: 2.0 s between requests",
+  "credentials_used": "none"
+ }
+}

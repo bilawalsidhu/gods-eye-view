@@ -1,0 +1,279 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "OnDemand Spatial Military Flights (adsb.lol /v2/mil)",
+    "version": "1.0.0",
+    "description": "Military aircraft currently broadcasting ADS-B/MLAT anywhere in the world — tankers, transports, patrol aircraft, trainers, helicopters and government fleets flagged military in the readsb database — around a point or inside a bounding box, with callsign, registration, type, position, altitude, speed, track, squawk and freshness. Sourced from adsb.lol /v2/mil with adsb.fi as fall-back through the same cached, cooldown-protected proxy the OnDemand Spatial military layer uses; every answer names the feed that answered and its status (live / stale / degraded).",
+    "x-ondemand-spatial": {
+      "pluginId": "military",
+      "category": "Research",
+      "conversationStarters": [
+        "Which military aircraft are flying within 600 nautical miles of Austin, Texas right now?",
+        "Are there any military tankers or transports over the Baltic Sea (box 54,10 to 60,30)?",
+        "List the military aircraft closest to Ramstein (49.44, 7.60) and what types they are.",
+        "How many military flights are currently tracked around the eastern Mediterranean (34, 33)?"
+      ],
+      "auth": "none — same-origin proxy; upstream credentials stay server-side",
+      "generatedBy": "scripts/generate-tool-openapi.mjs"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://sb-1dqoce558p0v.vercel.run",
+      "description": "OnDemand Spatial deployment (preview or production)"
+    }
+  ],
+  "paths": {
+    "/api/tools/military_flights_in_bbox": {
+      "get": {
+        "operationId": "military_flights_in_bbox",
+        "summary": "Military aircraft around a point or inside a bounding box",
+        "description": "Returns the military-flagged aircraft (readsb dbFlags & 1: air forces, navies, coast guards and government fleets that broadcast ADS-B/MLAT) currently tracked within radiusNm of lat/lon — or inside the lamin/lomin/lamax/lomax bounding box when all four are supplied — nearest first. The worldwide list comes from adsb.lol /v2/mil, with adsb.fi (and airplanes.live when enabled) as fall-backs; `provider.status` (live / stale / degraded) and `sourceFeed` say which feed answered and how fresh it is. Each row carries callsign, registration, type, description, position, altitudes (ft), ground speed (kt), track, vertical rate (fpm), squawk, seconds since last heard and the military / interesting / PIA / LADD flags. Coverage depends on community receivers: aircraft with transponders off or outside receiver range are not present.",
+        "parameters": [
+          {
+            "name": "lat",
+            "in": "query",
+            "required": true,
+            "description": "Scene centre latitude in decimal degrees (WGS84); distances are measured from this point.",
+            "schema": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            }
+          },
+          {
+            "name": "lon",
+            "in": "query",
+            "required": true,
+            "description": "Scene centre longitude in decimal degrees (WGS84); distances are measured from this point.",
+            "schema": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            }
+          },
+          {
+            "name": "radiusNm",
+            "in": "query",
+            "required": false,
+            "description": "Search radius in nautical miles around lat/lon (ignored when a full bounding box is given). Default 600.",
+            "schema": {
+              "type": "number",
+              "minimum": 10,
+              "maximum": 1500,
+              "default": 600
+            }
+          },
+          {
+            "name": "lamin",
+            "in": "query",
+            "required": false,
+            "description": "Bounding-box south edge (latitude). Optional; all four edges must be given to use a box.",
+            "schema": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            }
+          },
+          {
+            "name": "lomin",
+            "in": "query",
+            "required": false,
+            "description": "Bounding-box west edge (longitude). Optional.",
+            "schema": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            }
+          },
+          {
+            "name": "lamax",
+            "in": "query",
+            "required": false,
+            "description": "Bounding-box north edge (latitude). Optional.",
+            "schema": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            }
+          },
+          {
+            "name": "lomax",
+            "in": "query",
+            "required": false,
+            "description": "Bounding-box east edge (longitude). Optional.",
+            "schema": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of aircraft returned (nearest first). Default 200.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tool result envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error (unknown/missing/invalid parameter)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Upstream failure with a structured reason",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Provider unavailable (missing key / no data) with a structured reason",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Provider": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "live",
+              "stale",
+              "degraded",
+              "unavailable"
+            ]
+          },
+          "source": {
+            "type": "string"
+          },
+          "fetchedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "ageSec": {
+            "type": "integer",
+            "nullable": true
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          },
+          "count": {
+            "type": "integer",
+            "nullable": true
+          }
+        }
+      },
+      "ToolResult": {
+        "type": "object",
+        "required": [
+          "ok",
+          "tool",
+          "data"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "tool": {
+            "type": "string"
+          },
+          "params": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "provider": {
+            "$ref": "#/components/schemas/Provider"
+          },
+          "provenance": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "generatedAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ToolError": {
+        "type": "object",
+        "required": [
+          "ok",
+          "error"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "tool": {
+            "type": "string"
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "param": {
+                "type": "string"
+              }
+            }
+          },
+          "provider": {
+            "$ref": "#/components/schemas/Provider"
+          }
+        }
+      }
+    }
+  }
+}

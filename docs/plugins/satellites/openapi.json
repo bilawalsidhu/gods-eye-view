@@ -1,0 +1,423 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "OnDemand Spatial Satellites (CelesTrak)",
+    "version": "1.0.0",
+    "description": "Live satellite situational awareness from CelesTrak general-perturbation element sets, propagated server-side with SGP4: which satellites are over a place right now (with altitude, speed, ground distance and observer look angles) and when a given satellite — the ISS, Tiangong, a GPS/GLONASS/Galileo vehicle, a geostationary bird or a Starlink — next rises, culminates and sets for an observer. Backed by the same cached, fallback-protected CelesTrak proxy the OnDemand Spatial satellites layer uses; answers carry a provider status (live / stale / degraded / unavailable) and element-set provenance.",
+    "x-ondemand-spatial": {
+      "pluginId": "satellites",
+      "category": "Research",
+      "conversationStarters": [
+        "Which satellites are over Austin, Texas right now within 1000 km?",
+        "When does the ISS next pass over London above 10° elevation?",
+        "List the GPS satellites currently above the horizon for 48.85, 2.35.",
+        "Show the next Tiangong (CSS) passes over Tokyo in the coming 48 hours.",
+        "Are any geostationary satellites within 2000 km of the sub-satellite point over Nairobi?"
+      ],
+      "auth": "none — same-origin proxy; upstream credentials stay server-side",
+      "generatedBy": "scripts/generate-tool-openapi.mjs"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://sb-1dqoce558p0v.vercel.run",
+      "description": "OnDemand Spatial deployment (preview or production)"
+    }
+  ],
+  "paths": {
+    "/api/tools/list_satellites_in_scene": {
+      "get": {
+        "operationId": "list_satellites_in_scene",
+        "summary": "Satellites currently over a scene (SGP4 from CelesTrak TLEs)",
+        "description": "Propagates every satellite of the requested CelesTrak groups to the current time with SGP4 and returns those whose sub-satellite point lies within radiusKm of the scene point and whose elevation for an observer at that point is at least minElevationDeg. Results are sorted nearest-first and capped by limit; each row carries the sub-satellite latitude/longitude, altitude, speed, ground distance and the observer look angles (elevation, azimuth, slant range). Groups: stations (ISS, Tiangong, crewed/cargo vehicles), visual (brightest objects), gps-ops, glo-ops, galileo (navigation constellations), geo (geostationary belt) and starlink (large; opt-in). Use minElevationDeg ≥ 0 to keep only satellites above the local horizon.",
+        "parameters": [
+          {
+            "name": "lat",
+            "in": "query",
+            "required": true,
+            "description": "Scene / observer latitude in decimal degrees (WGS84).",
+            "schema": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            }
+          },
+          {
+            "name": "lon",
+            "in": "query",
+            "required": true,
+            "description": "Scene / observer longitude in decimal degrees (WGS84).",
+            "schema": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            }
+          },
+          {
+            "name": "radiusKm",
+            "in": "query",
+            "required": false,
+            "description": "Maximum ground distance (km) from the scene point to a satellite sub-satellite point. Default 1500.",
+            "schema": {
+              "type": "number",
+              "minimum": 50,
+              "maximum": 6000,
+              "default": 1500
+            }
+          },
+          {
+            "name": "groups",
+            "in": "query",
+            "required": false,
+            "description": "Comma-separated CelesTrak groups to search: stations, visual, gps-ops, glo-ops, galileo, geo, starlink. Default stations,visual,gps-ops,glo-ops,galileo,geo.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "stations",
+                "visual",
+                "gps-ops",
+                "glo-ops",
+                "galileo",
+                "geo",
+                "starlink"
+              ],
+              "default": [
+                "stations",
+                "visual",
+                "gps-ops",
+                "glo-ops",
+                "galileo",
+                "geo"
+              ]
+            }
+          },
+          {
+            "name": "minElevationDeg",
+            "in": "query",
+            "required": false,
+            "description": "Minimum elevation (degrees above the horizon) for an observer at the scene point. Default -90 (no elevation filter); use 0 for \"above the horizon\", 10 for comfortably visible.",
+            "schema": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90,
+              "default": -90
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of satellites returned (nearest first). Default 50.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tool result envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error (unknown/missing/invalid parameter)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Upstream failure with a structured reason",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Provider unavailable (missing key / no data) with a structured reason",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tools/satellite_passes": {
+      "get": {
+        "operationId": "satellite_passes",
+        "summary": "Upcoming passes of one satellite over an observer",
+        "description": "Predicts the rise, culmination and set times of one satellite (identified by NORAD catalogue id or a case-insensitive name substring such as \"ISS\" or \"TIANGONG\") for an observer at lat/lon over the next `hours`, using SGP4 on the newest CelesTrak element set. The `group` is searched first, then every other CelesTrak group (starlink last). Each pass reports UTC rise/max/set times, the maximum elevation, duration and rise/set azimuths; a pass already under way at the window start is flagged inProgress. Exactly one of noradId or name must be supplied. A satellite that is not in any group answers 404 not_found.",
+        "parameters": [
+          {
+            "name": "lat",
+            "in": "query",
+            "required": true,
+            "description": "Scene / observer latitude in decimal degrees (WGS84).",
+            "schema": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            }
+          },
+          {
+            "name": "lon",
+            "in": "query",
+            "required": true,
+            "description": "Scene / observer longitude in decimal degrees (WGS84).",
+            "schema": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            }
+          },
+          {
+            "name": "noradId",
+            "in": "query",
+            "required": false,
+            "description": "NORAD catalogue number of the satellite (e.g. 25544 for the ISS). Supply either noradId or name.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 999999
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "description": "Case-insensitive satellite name substring (e.g. \"ISS\", \"CSS (TIANHE)\", \"HST\"). An exact name match wins over a substring match. Supply either noradId or name.",
+            "schema": {
+              "type": "string",
+              "maxLength": 64
+            }
+          },
+          {
+            "name": "group",
+            "in": "query",
+            "required": false,
+            "description": "CelesTrak group to search first (default stations); the other groups are searched when the satellite is not found there.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "stations",
+                "visual",
+                "gps-ops",
+                "glo-ops",
+                "galileo",
+                "geo",
+                "starlink"
+              ],
+              "default": "stations"
+            }
+          },
+          {
+            "name": "hours",
+            "in": "query",
+            "required": false,
+            "description": "Prediction window length in hours from now. Default 24.",
+            "schema": {
+              "type": "number",
+              "minimum": 1,
+              "maximum": 72,
+              "default": 24
+            }
+          },
+          {
+            "name": "minElevationDeg",
+            "in": "query",
+            "required": false,
+            "description": "Elevation threshold (degrees) that defines a pass. Default 10.",
+            "schema": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 90,
+              "default": 10
+            }
+          },
+          {
+            "name": "stepSec",
+            "in": "query",
+            "required": false,
+            "description": "Coarse propagation step in seconds (rise/set are refined by bisection). Default 30.",
+            "schema": {
+              "type": "integer",
+              "minimum": 10,
+              "maximum": 120,
+              "default": 30
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tool result envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error (unknown/missing/invalid parameter)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Upstream failure with a structured reason",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Provider unavailable (missing key / no data) with a structured reason",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Provider": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "live",
+              "stale",
+              "degraded",
+              "unavailable"
+            ]
+          },
+          "source": {
+            "type": "string"
+          },
+          "fetchedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "ageSec": {
+            "type": "integer",
+            "nullable": true
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          },
+          "count": {
+            "type": "integer",
+            "nullable": true
+          }
+        }
+      },
+      "ToolResult": {
+        "type": "object",
+        "required": [
+          "ok",
+          "tool",
+          "data"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "tool": {
+            "type": "string"
+          },
+          "params": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "provider": {
+            "$ref": "#/components/schemas/Provider"
+          },
+          "provenance": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "generatedAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ToolError": {
+        "type": "object",
+        "required": [
+          "ok",
+          "error"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "tool": {
+            "type": "string"
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "param": {
+                "type": "string"
+              }
+            }
+          },
+          "provider": {
+            "$ref": "#/components/schemas/Provider"
+          }
+        }
+      }
+    }
+  }
+}

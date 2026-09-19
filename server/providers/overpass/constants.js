@@ -1,10 +1,13 @@
 import path from 'node:path';
+import { PROVIDER_USER_AGENT } from '../common/upstream.js';
 
 // ---------------------------------------------------------------------------
 // Overpass API proxy constants and cache state
 // ---------------------------------------------------------------------------
 /**
- * User-Agent sent to every Overpass mirror.
+ * User-Agent sent to every Overpass mirror — the ONE shared provider UA
+ * (server/providers/common/upstream.js PROVIDER_USER_AGENT: application name,
+ * package major.minor and a route back to the project).
  *
  * The OSM API usage policy asks for a "Valid User-Agent identifying application
  * and version"; a generic proxy label is not one. A mirror is free to refuse a
@@ -13,20 +16,168 @@ import path from 'node:path';
  * mirrors are left. Keep this honest and stable — if it is ever refused, the
  * answer is less query volume, not a new name.
  */
-const OVERPASS_USER_AGENT =
-  'gods-eye-view/0.1 (+https://github.com/bilawalsidhu/gods-eye-view)';
+const OVERPASS_USER_AGENT = PROVIDER_USER_AGENT;
 
-/** Ordered list of Overpass API mirrors; tried sequentially on failure/rate-limit. */
-const OVERPASS_UPSTREAMS = [
-  'https://overpass-api.de/api/interpreter',
+/**
+ * Default ordered list of Overpass API mirrors; tried sequentially on
+ * refusal / rate-limit / 5xx / network error / timeout. Overridable per
+ * deployment through `OVERPASS_ENDPOINTS` (canonical, closeout 2026-09-19) or
+ * its accepted alias `OVERPASS_UPSTREAMS` (2026-09-18) — see
+ * `resolveOverpassEndpoints` below.
+ *
+ * Order = reachability measured 2026-09-19T01:28Z from the agent sandbox with
+ * the tiny probe `[out:json][timeout:25];node(1);out;` (POST, this UA,
+ * `Accept: application/json`): kumi.systems answered 200 in 1.4 s;
+ * private.coffee is round-robin DNS with lagging members (200 in 1.7–4.7 s on
+ * two probes, a 12 s timeout on a third); overpass-api.de and its lz4./z.
+ * aliases answered HTTP 406 to every probe (client refusal — the same page
+ * from Vercel egress on 2026-09-18). Unreachable mirrors stay in the list,
+ * LAST, rather than being dropped: a refusal is per-egress and may lift.
+ */
+const OVERPASS_DEFAULT_UPSTREAMS = Object.freeze([
   'https://overpass.kumi.systems/api/interpreter',
-  'https://lz4.overpass-api.de/api/interpreter',
-  // Community full-planet instance (privateforge nonprofit) — added 2026-07-30
-  // when all three mirrors above refused this IP (likely a dev-traffic rate
-  // ban; refused connections fail in ms, so healthy mirrors above still win).
-  // Verified: planet coverage (Texas query), CORS *, ~5-20 s cold latency.
   'https://overpass.private.coffee/api/interpreter',
-];
+  'https://overpass-api.de/api/interpreter',
+  'https://lz4.overpass-api.de/api/interpreter',
+  'https://z.overpass-api.de/api/interpreter',
+]);
+
+/** Env names for the mirror list: canonical first, then the accepted alias. */
+const OVERPASS_ENDPOINTS_ENV = Object.freeze({
+  canonical: 'OVERPASS_ENDPOINTS',
+  alias: 'OVERPASS_UPSTREAMS',
+  order: Object.freeze(['OVERPASS_ENDPOINTS', 'OVERPASS_UPSTREAMS', 'default']),
+});
+
+// --- Road-network configuration point (env-driven, 2026-09-18) --------------
+/**
+ * Why this exists: from cloud egress (Vercel functions) the public Overpass
+ * mirrors are not a dependable road-network source — measured 2026-09-18:
+ * overpass-api.de answers HTTP 406 to this client, kumi.systems and
+ * private.coffee time out. The two env vars below are the operator's levers;
+ * `roadNetworkConfig()` reports them (never their raw values beyond the
+ * parsed list) so `GET /api/tools/road_network_status` can say why the OSM
+ * road fetch is degraded and what to set. The Overpass transport itself is
+ * unchanged apart from reading the parsed mirror list.
+ */
+/** Accepted `ROAD_NETWORK_SOURCE` values: 'overpass' (default) or 'off' (no OSM road fetch). */
+const ROAD_NETWORK_SOURCES = Object.freeze(['overpass', 'off']);
+
+/** Fixed operator-facing blocker text (verbatim in road_network_status). */
+const ROAD_NETWORK_BLOCKER =
+  'Public Overpass mirrors refuse or time out for cloud egress (overpass-api.de HTTP 406, kumi.systems/private.coffee timeouts — measured 2026-09-18); set OVERPASS_UPSTREAMS to a private mirror';
+
+/**
+ * Parse an `OVERPASS_ENDPOINTS` / `OVERPASS_UPSTREAMS` value: comma-separated
+ * absolute http(s) URLs (whitespace around and between entries is trimmed,
+ * empty entries are ignored, duplicates collapse, order is kept). Returns the
+ * parsed list, or null when the value is absent or holds no usable URL (→ the
+ * next name in `OVERPASS_ENDPOINTS_ENV.order` is consulted, then the default
+ * list).
+ * @param {unknown} value
+ * @returns {string[]|null}
+ */
+function parseOverpassEndpoints(value) {
+  if (typeof value !== 'string') return null;
+  const urls = [];
+  for (const part of value.split(/[,\s]+/)) {
+    const candidate = part.trim();
+    if (!candidate) continue;
+    try {
+      const url = new URL(candidate);
+      if (url.protocol !== 'https:' && url.protocol !== 'http:') continue;
+      if (!urls.includes(url.href)) urls.push(url.href);
+    } catch {
+      /* not a URL — ignored, never thrown at import time */
+    }
+  }
+  return urls.length ? urls : null;
+}
+
+/** Accepted alias of `parseOverpassEndpoints` (name used since 2026-09-18). */
+const parseOverpassUpstreams = parseOverpassEndpoints;
+
+/**
+ * The ordered mirror list in force for `env`, plus which name supplied it:
+ * `OVERPASS_ENDPOINTS` (canonical) → `OVERPASS_UPSTREAMS` (alias) → the
+ * default list. Never returns an empty list.
+ * @param {NodeJS.ProcessEnv} [env]
+ * @returns {{ endpoints: string[], source: 'OVERPASS_ENDPOINTS'|'OVERPASS_UPSTREAMS'|'default' }}
+ */
+function resolveOverpassEndpoints(env = process.env) {
+  for (const name of [
+    OVERPASS_ENDPOINTS_ENV.canonical,
+    OVERPASS_ENDPOINTS_ENV.alias,
+  ]) {
+    const parsed = parseOverpassEndpoints(env?.[name]);
+    if (parsed) return { endpoints: parsed, source: name };
+  }
+  return { endpoints: [...OVERPASS_DEFAULT_UPSTREAMS], source: 'default' };
+}
+
+/**
+ * Short operator-facing label for a mirror URL: its hostname without a
+ * leading `overpass.` label (`overpass.kumi.systems` → `kumi.systems`,
+ * `lz4.overpass-api.de` stays as is). Used in the DEGRADED reason string.
+ * @param {string} url
+ * @returns {string}
+ */
+function overpassMirrorLabel(url) {
+  try {
+    return new URL(String(url)).hostname.replace(/^overpass\./i, '');
+  } catch {
+    return String(url).slice(0, 60);
+  }
+}
+
+/** `ROAD_NETWORK_SOURCE` → 'overpass' | 'off' (anything unrecognised is the default). */
+function parseRoadNetworkSource(value) {
+  const source = String(value ?? '')
+    .trim()
+    .toLowerCase();
+  return ROAD_NETWORK_SOURCES.includes(source) ? source : 'overpass';
+}
+
+/**
+ * The road-network configuration as seen by the running process:
+ *   { source: 'overpass'|'off', upstreams: string[], endpointsSource:
+ *     'OVERPASS_ENDPOINTS'|'OVERPASS_UPSTREAMS'|'default', blocker: string,
+ *     fromEnv: { ROAD_NETWORK_SOURCE: boolean, OVERPASS_ENDPOINTS: boolean,
+ *                OVERPASS_UPSTREAMS: boolean } }
+ * `fromEnv` only says whether each variable is SET to a usable value (never
+ * its raw text); `env` is injectable for tests; production reads process.env
+ * at call time.
+ * @param {NodeJS.ProcessEnv} [env]
+ */
+function roadNetworkConfig(env = process.env) {
+  const source = parseRoadNetworkSource(env.ROAD_NETWORK_SOURCE);
+  const resolved = resolveOverpassEndpoints(env);
+  return {
+    source,
+    upstreams: [...resolved.endpoints],
+    endpointsSource: resolved.source,
+    blocker: ROAD_NETWORK_BLOCKER,
+    fromEnv: {
+      ROAD_NETWORK_SOURCE: Boolean(
+        String(env.ROAD_NETWORK_SOURCE ?? '').trim(),
+      ),
+      OVERPASS_ENDPOINTS: Boolean(
+        parseOverpassEndpoints(env[OVERPASS_ENDPOINTS_ENV.canonical]),
+      ),
+      OVERPASS_UPSTREAMS: Boolean(
+        parseOverpassEndpoints(env[OVERPASS_ENDPOINTS_ENV.alias]),
+      ),
+    },
+  };
+}
+
+/**
+ * Ordered list of Overpass API mirrors actually used by the transport:
+ * `OVERPASS_ENDPOINTS` (canonical) or `OVERPASS_UPSTREAMS` (alias) when set
+ * to a usable csv (read once at import, like every other constant here),
+ * otherwise the default list above.
+ */
+const OVERPASS_UPSTREAMS = resolveOverpassEndpoints(process.env).endpoints;
 
 /**
  * TTL for FRESH cached Overpass responses (ms). Road geometry is static for
@@ -53,8 +204,41 @@ const OVERPASS_BOUNDARY_DISK_TTL_MS = 30 * 86_400_000;
 /** Disk-cache directory for Overpass responses. */
 const OVERPASS_DISK_DIR = path.join(process.cwd(), '.gev-cache', 'overpass');
 
-/** Per-upstream fetch timeout (ms). */
-const OVERPASS_TIMEOUT_MS = 22000;
+/**
+ * Per-mirror request timeout (ms) — the HTTP budget ONE mirror gets before the
+ * transport rotates to the next. 12 s (was 22 s until 2026-09-19): the
+ * serverless function that hosts `/api/overpass` has a 60 s ceiling, and a
+ * five-mirror rotation at 22 s each could not finish inside it. Override with
+ * `OVERPASS_MIRROR_TIMEOUT_MS` (1 000–60 000). The road query itself carries
+ * an explicit `[timeout:20]` (src/layers/traffic/ingestion.js), so a mirror
+ * that is merely slow answers within the budget or not at all.
+ */
+const OVERPASS_TIMEOUT_MS = clampMs(
+  process.env.OVERPASS_MIRROR_TIMEOUT_MS,
+  12_000,
+  1_000,
+  60_000,
+);
+
+/**
+ * Whole-rotation budget (ms) across ALL mirrors for one request. Once spent,
+ * the remaining mirrors are not tried and the reason says so ("N skipped
+ * (time budget)"). 40 s leaves ~20 s of the 60 s function ceiling for stale
+ * lookups and the response. Override with `OVERPASS_TOTAL_TIMEOUT_MS`.
+ */
+const OVERPASS_TOTAL_TIMEOUT_MS = clampMs(
+  process.env.OVERPASS_TOTAL_TIMEOUT_MS,
+  40_000,
+  2_000,
+  120_000,
+);
+
+/** Integer-ms env parser with a default and a [min, max] clamp (never throws). */
+function clampMs(value, fallback, min, max) {
+  const n = Number.parseInt(String(value ?? ''), 10);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
 
 /** Max entries in the Overpass response cache (LRU-like, oldest evicted first). */
 const OVERPASS_CACHE_MAX_ENTRIES = 120;
@@ -142,7 +326,17 @@ export {
   OVERPASS_SIMPLIFY_MIN_POINTS,
   OVERPASS_SIMPLIFY_TOLERANCE_DEG,
   OVERPASS_MAX_RESPONSE_BYTES,
+  OVERPASS_DEFAULT_UPSTREAMS,
+  OVERPASS_ENDPOINTS_ENV,
   OVERPASS_UPSTREAMS,
   OVERPASS_USER_AGENT,
   OVERPASS_TIMEOUT_MS,
+  OVERPASS_TOTAL_TIMEOUT_MS,
+  ROAD_NETWORK_BLOCKER,
+  ROAD_NETWORK_SOURCES,
+  overpassMirrorLabel,
+  parseOverpassEndpoints,
+  parseOverpassUpstreams,
+  resolveOverpassEndpoints,
+  roadNetworkConfig,
 };

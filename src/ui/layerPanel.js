@@ -2,6 +2,7 @@ import { layerFeedState } from '../data/feedState.js';
 export { layerFeedState } from '../data/feedState.js';
 import { GUIDANCE_STATUSES } from '../loadingFeedback.js';
 import { keySetupRequirement } from '../keySetupCore.mjs';
+import { createIcon, setIconContent } from './icons/layerIcon.js';
 const FEED_STATE_LABELS = Object.freeze({
   nominal: 'ON',
   loading: 'LOADING',
@@ -115,7 +116,58 @@ export class LayerPanel {
     if (this._destroyed) return;
     this._releaseBindings();
     this._toggleContainer = container;
+    this._mountStatusRegion(container);
     this._renderToggles();
+    this._bindOverflowAffordance(container);
+  }
+
+  /**
+   * A polite live region beside the list (SC 4.1.3): feed-state changes of an
+   * enabled layer are announced as "<Layer>: <STATE>" without moving focus.
+   * Created once next to the list; reused across re-renders.
+   */
+  _mountStatusRegion(container) {
+    const parent = container?.parentNode;
+    if (!parent || typeof parent.querySelector !== 'function') return;
+    let region = parent.querySelector('.data-layer-status');
+    if (!region && typeof document !== 'undefined') {
+      region = document.createElement('div');
+      region.className = 'data-layer-status';
+      region.setAttribute('role', 'status');
+      region.setAttribute('aria-live', 'polite');
+      region.setAttribute('aria-atomic', 'true');
+      parent.appendChild(region);
+    }
+    this._statusRegion = region || null;
+  }
+
+  /**
+   * Scroll affordance for the clipped-row case: mirror "does the list
+   * overflow" and "is it scrolled to the end" onto the list so the stylesheet
+   * can fade its bottom edge while more rows are hidden below.
+   */
+  _bindOverflowAffordance(container) {
+    if (!container || typeof container.addEventListener !== 'function') return;
+    const sync = () => this._syncOverflowAffordance();
+    this._bind(container, 'scroll', sync);
+    if (typeof window !== 'undefined' && window.addEventListener) {
+      window.addEventListener('resize', sync);
+      this._removers.push(() => window.removeEventListener('resize', sync));
+    }
+    sync();
+  }
+
+  _syncOverflowAffordance() {
+    const list = this._toggleContainer;
+    if (!list?.dataset) return;
+    const scrollHeight = Number(list.scrollHeight) || 0;
+    const clientHeight = Number(list.clientHeight) || 0;
+    const scrollTop = Number(list.scrollTop) || 0;
+    const overflows = scrollHeight - clientHeight > 1;
+    list.dataset.overflow = String(overflows);
+    list.dataset.atEnd = String(
+      !overflows || scrollTop + clientHeight >= scrollHeight - 1,
+    );
   }
   _bind(element, type, listener) {
     element.addEventListener(type, listener);
@@ -165,12 +217,19 @@ export class LayerPanel {
 
       const left = document.createElement('div');
       left.className = 'data-toggle-left';
+      // Inline Lucide SVG (layer.icon is a Lucide name, never a glyph); the
+      // visible name beside it is the accessible label, so the icon is
+      // decorative. Its colour follows the row's feed state (icons.css).
       const icon = document.createElement('span');
       icon.className = 'data-icon';
-      icon.textContent = layer.icon;
+      icon.dataset.icon = String(layer.icon || '');
+      const svg = createIcon(layer.icon, {}, document);
+      if (svg) icon.appendChild(svg);
       const name = document.createElement('span');
       name.className = 'data-name';
       name.textContent = panelLabel(layer);
+      // Single-line labels ellipsise on narrow rows; the full name stays here.
+      name.title = panelLabel(layer);
       left.appendChild(icon);
       left.appendChild(name);
 
@@ -185,6 +244,7 @@ export class LayerPanel {
       toggle.type = 'button';
       toggle.className = `data-toggle-btn${layer.enabled ? ' active' : ''}`;
       this._syncToggleButton(toggle, layer);
+      this._syncRowFeedState(row, toggle);
       this._bind(toggle, 'click', async () => {
         // Native `disabled` immediately evicts keyboard focus in Chromium. Keep
         // the lifecycle control focusable while it is busy, and enforce the
@@ -205,8 +265,10 @@ export class LayerPanel {
           console.warn(`[Data] ${layer.id} toggle error:`, error);
         } finally {
           const current = this.getAll().find(({ id }) => id === layer.id);
-          if (!this._destroyed && current && this._generation === generation)
+          if (!this._destroyed && current && this._generation === generation) {
             this._syncToggleButton(toggle, current);
+            this._syncRowFeedState(row, toggle);
+          }
         }
       });
 
@@ -324,7 +386,23 @@ export class LayerPanel {
       }
       const state = chip.state || (chip.active ? 'active' : 'idle');
       button.className = `data-toggle-chip chip-${state}${chip.active ? ' active' : ''}`;
-      if (button.textContent !== chip.label) button.textContent = chip.label;
+      // An icon chip (`chip.icon` is a Lucide name — the Directions SWAP chip)
+      // renders an inline <svg>, never a text glyph; its accessible name comes
+      // from `ariaLabel` / `title` because the icon itself is decorative. The
+      // aria-label is set BEFORE the icon so setIconContent sees a labelled
+      // host and renders the icon aria-hidden. setIconContent is idempotent,
+      // so the per-refresh sync does not rebuild an unchanged icon.
+      const accessibleName = chip.ariaLabel || (chip.icon ? chip.title : '');
+      if (accessibleName) button.setAttribute('aria-label', accessibleName);
+      else if (typeof button.removeAttribute === 'function')
+        button.removeAttribute('aria-label');
+      if (chip.icon) {
+        button.dataset.chipIcon = chip.icon;
+        setIconContent(button, chip.icon, { text: chip.label || '' });
+      } else {
+        if (button.dataset.chipIcon) delete button.dataset.chipIcon;
+        if (button.textContent !== chip.label) button.textContent = chip.label;
+      }
       button.title = chip.title || '';
       button.disabled = Boolean(chip.disabled);
       button.setAttribute('aria-pressed', chip.active ? 'true' : 'false');
@@ -441,6 +519,7 @@ export class LayerPanel {
       const btn = row.querySelector('.data-toggle-btn');
       if (btn) {
         this._syncToggleButton(btn, layer);
+        this._syncRowFeedState(row, btn);
       }
 
       const count = row.querySelector('.data-count');
@@ -459,6 +538,7 @@ export class LayerPanel {
         row.querySelector('.data-row-list'),
       );
     }
+    this._syncOverflowAffordance();
   }
 
   _buildMetaText(layer) {
@@ -475,7 +555,10 @@ export class LayerPanel {
       return `UNCERTAIN · ${source} · lifecycle state requires reconciliation`;
     }
     const presentedError =
-      stats.error || stats.lastError || stats.managerRefreshError;
+      stats.error ||
+      stats.lastError ||
+      stats.managerRefreshError ||
+      (feedState === 'degraded' ? stats.providerError : null);
     if (presentedError) {
       if (typeof stats.retryInSec === 'number' && stats.retryInSec > 0) {
         return `${stateLabel} · ${source} · ${presentedError} · retry ${stats.retryInSec}s`;
@@ -497,6 +580,16 @@ export class LayerPanel {
         typeof stats.loadingLabel === 'string' && stats.loadingLabel.trim()
           ? stats.loadingLabel.trim()
           : 'loading...';
+      // A provider that already declared itself degraded (keyless TomTom,
+      // demo AIS replay) says so WHILE it loads too — the operator must not
+      // have to wait for a slow road fetch to learn the layer is not live.
+      if (
+        stats.providerStatus === 'degraded' &&
+        typeof stats.providerError === 'string' &&
+        stats.providerError.trim()
+      ) {
+        return `DEGRADED · ${source} · ${stats.providerError.trim()} · ${loadingLabel}`;
+      }
       return `${source} · ${loadingLabel}`;
     }
     if (feedState === 'fallback') {
@@ -526,6 +619,12 @@ export class LayerPanel {
     }
     if (typeof stats.loadingLabel === 'string' && stats.loadingLabel.trim()) {
       return `${source} · ${stats.loadingLabel.trim()}`;
+    }
+    // A MOVEMENT proxy that reported `live` (server/providers/common/
+    // upstream.js) is named as such, with the age of the DATA (not of the
+    // response), so an operator can tell a live feed from a cached one.
+    if (stats.providerStatus === 'live') {
+      return `LIVE · ${source} · ${ago}`;
     }
     return `${source} · ${ago}`;
   }
@@ -576,6 +675,35 @@ export class LayerPanel {
         ? `${panelLabel(layer)}: ${button.textContent}. ${keyGuidance}`
         : `${panelLabel(layer)}: ${button.textContent}`,
     );
+  }
+
+  /**
+   * Mirror the toggle's feed state onto its row so the row icon can take the
+   * status colour (live green, stale amber, degraded orange, unavailable red,
+   * off neutral) without a second state machine.
+   */
+  _syncRowFeedState(row, button) {
+    if (!row?.dataset || !button?.dataset) return;
+    const next = button.dataset.feedState || 'off';
+    const previous = row.dataset.feedState;
+    row.dataset.feedState = next;
+    // Announce a real transition of an enabled layer (LOADING -> ON,
+    // ON -> DEGRADED …) — not the initial paint and not OFF rows, so the
+    // region never chatters on a full re-render.
+    const badge = button.textContent;
+    if (
+      previous &&
+      previous !== next &&
+      next !== 'off' &&
+      this._statusRegion &&
+      typeof badge === 'string'
+    ) {
+      const label =
+        row.querySelector?.('.data-name')?.textContent ||
+        row.dataset.layerId ||
+        'Layer';
+      this._statusRegion.textContent = `${label}: ${badge}`;
+    }
   }
 
   _formatCount(n) {

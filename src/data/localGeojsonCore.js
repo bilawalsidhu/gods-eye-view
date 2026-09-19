@@ -320,7 +320,7 @@ export function createLocalGeoJsonLayer(
     url,
     name,
     color,
-    icon = '📍',
+    icon = 'map-pin',
     source = 'Local JSONL',
     labels = true,
     labelMax = DEFAULT_LABEL_MAX,

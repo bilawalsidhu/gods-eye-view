@@ -4,6 +4,7 @@ import {
   radioTunerPointerPosition,
   buildRadioTunerTicks,
 } from './radioTunerModel.js';
+import { setIconContent } from './icons/layerIcon.js';
 
 /** Bind Radio input using a RadioControls receiver and supplied actions. */
 export function bindRadioControls() {
@@ -48,7 +49,10 @@ export function bindRadioControls() {
     if (displayOpen) this.actions.revealStyleParameters();
     if (this._cockpitDisplayToggleBtn) {
       const action = displayOpen ? 'Collapse' : 'Expand';
-      this._cockpitDisplayToggleBtn.textContent = displayOpen ? '▶' : '◀';
+      setIconContent(
+        this._cockpitDisplayToggleBtn,
+        displayOpen ? 'chevron-right' : 'chevron-left',
+      );
       this._cockpitDisplayToggleBtn.setAttribute(
         'aria-label',
         `${action} Cockpit display options`,
@@ -57,7 +61,10 @@ export function bindRadioControls() {
     }
     if (this._cockpitRadioToggleBtn) {
       const action = radioOpen ? 'Collapse' : 'Expand';
-      this._cockpitRadioToggleBtn.textContent = radioOpen ? '▶' : '◀';
+      setIconContent(
+        this._cockpitRadioToggleBtn,
+        radioOpen ? 'chevron-right' : 'chevron-left',
+      );
       this._cockpitRadioToggleBtn.setAttribute(
         'aria-label',
         `${action} Cockpit Radio controls`,

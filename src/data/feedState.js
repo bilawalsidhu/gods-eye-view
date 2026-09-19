@@ -33,6 +33,14 @@ export function layerFeedState(stats = {}) {
   if (GUIDANCE_STATUSES.includes(status)) {
     return state.stale ? 'stale' : 'nominal';
   }
+  // MOVEMENT proxies (server/providers/common/upstream.js) report an explicit
+  // provider state; an explicit `degraded` (e.g. keyless TomTom simulation,
+  // an AIS demo replay, a regional fallback feed) outranks the source-name
+  // heuristics below so the row reads DEGRADED with its reason, never as a
+  // silent FALLBACK or a healthy ON.
+  if (status === 'degraded' || state.providerStatus === 'degraded')
+    return 'degraded';
+  if (state.providerStatus === 'stale') return 'stale';
   if (
     state.fallback === true ||
     status === 'fallback' ||
@@ -42,7 +50,8 @@ export function layerFeedState(stats = {}) {
   ) {
     return 'fallback';
   }
-  if (state.stale || status === 'stale') return 'stale';
+  if (state.stale || status === 'stale' || state.providerStatus === 'stale')
+    return 'stale';
   if (
     state.degraded ||
     presentedError ||

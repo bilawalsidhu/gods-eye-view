@@ -46,6 +46,15 @@ export function createQueries({
       // so the chip asks the operator to do the one thing that can.
       return 'API key rejected — check AISSTREAM_API_KEY';
     }
+    // A MOVEMENT proxy that named its own reason (X-Provider-Error, e.g.
+    // "AISStream unreachable (…) - showing last-good") is more specific than
+    // the relay-era wording below.
+    if (
+      typeof payload?.providerError === 'string' &&
+      payload.providerError.trim()
+    ) {
+      return payload.providerError.trim();
+    }
     if (status === 'stale') {
       const silentSec = Math.round(Number(payload?.silentForMs) / 1000);
       return Number.isFinite(silentSec) && silentSec > 0
@@ -86,6 +95,15 @@ export function createQueries({
         : 'awaiting first AIS message…';
     }
     if (!status) return null;
+    // A zero-row 'degraded' answer (AISHub cooldown, last-good exhausted)
+    // carries the provider's own reason.
+    if (
+      status === 'degraded' &&
+      typeof payload.providerError === 'string' &&
+      payload.providerError.trim()
+    ) {
+      return payload.providerError.trim();
+    }
     const detail =
       typeof payload.error === 'string' && payload.error.trim()
         ? payload.error.trim()
@@ -233,7 +251,7 @@ export function createQueries({
 
     name: 'Live AIS Vessels',
 
-    icon: '◭',
+    icon: 'ship',
 
     source: 'AISStream',
 
@@ -509,10 +527,26 @@ export function createQueries({
         error: state.feed.error,
         stale: state.feed.stale,
         partial: state.feed.partial,
+        // 'empty' is a GUIDANCE status (src/data/feedState.js): the provider
+        // answered and the scene holds no vessel, so the row reads
+        // "<source> · No vessels in scene" rather than UNAVAILABLE.
         status:
           state.feed.firstConnectPhase === 'unavailable'
             ? 'unavailable'
-            : undefined,
+            : state.feed.sceneEmpty
+              ? 'empty'
+              : undefined,
+        statusMessage: state.feed.sceneEmpty
+          ? state.feed.statusMessage
+          : undefined,
+        // MOVEMENT provider status of the last poll (X-Provider-*): 'live' |
+        // 'stale' | 'degraded' | 'unavailable' | null (dev relay), its reason,
+        // the provenance label ('AISStream' | 'Demo replay' | 'AISHub') and
+        // the serverless collector mode.
+        providerStatus: state.feed.providerStatus,
+        providerError: state.feed.providerError,
+        source: state.feed.source || undefined,
+        collectorMode: state.feed.collectorMode,
         transportStatus: state.feed.transportStatus,
         lastMessageAt: state.feed.lastMessageAt,
         rawRowCount: state.feed.rawRowCount,

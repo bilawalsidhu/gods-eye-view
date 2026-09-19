@@ -21,7 +21,9 @@ test('the complete Realtime tool payload retains its pre-extraction contract and
     .digest('hex');
   assert.equal(
     digest,
-    '956381c3456d3644ed7c9cda72910dc68a34d9191e0b3e414ee200c348245214',
+    // Re-derived 2026-09-18 (OnDemand Spatial rebrand): the product name in
+    // three tool descriptions changed from "God's Eye View"; nothing else.
+    'ca5e8d980966d16d06168f3607b5379534a5806f1862f747365273d4ebbee29d',
   );
 });
 

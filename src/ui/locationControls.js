@@ -1,4 +1,5 @@
 import { locationMiniStatus } from '../locationStatus.js';
+import { setIconContent } from './icons/layerIcon.js';
 const POI_KEYS = ['Q', 'W', 'E', 'R', 'T'];
 
 /** Location DOM, keyboard handling and pending row animation over supplied actions. */
@@ -133,7 +134,8 @@ export class LocationControls {
     if (this.destroyed || !this.elements.statusCity || !this.elements.statusPoi)
       return;
     const lines = locationMiniStatus(state);
-    this.elements.statusCity.textContent = lines.city;
+    // Pin icon + city text; the text is the label, so the icon is decorative.
+    setIconContent(this.elements.statusCity, 'map-pin', { text: lines.city });
     this.elements.statusPoi.textContent = lines.poi;
   }
   createOrbitIndicator() {
@@ -143,7 +145,9 @@ export class LocationControls {
       this.orbitIndicator.id = 'orbit-indicator';
       const icon = this.doc.createElement('span');
       icon.className = 'orbit-icon';
-      icon.textContent = '↻';
+      // Inline Lucide `rotate-ccw` (decorative — the visible text is the
+      // label), never the U+21BB text glyph the mark used to be.
+      setIconContent(icon, 'rotate-ccw', {}, this.doc);
       this.orbitIndicator.append(icon, ' ORBIT');
       this.doc.body.appendChild(this.orbitIndicator);
     }

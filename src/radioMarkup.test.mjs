@@ -188,7 +188,10 @@ test('no unchanged Realtime tool definition drifts silently', () => {
     .digest('hex')
     .slice(0, 16);
   // ALPR intentionally extends the two layer enums; retain the complete pin.
-  assert.equal(digest, '6963175a0c9a76de', 'an unchanged Realtime tool definition drifted');
+  // Re-derived 2026-09-18 for the OnDemand Spatial rebrand: the three tool
+  // descriptions that named the product (fly_to_location, set_layer_enabled,
+  // set_visual_style wording) now say "OnDemand Spatial"; nothing else moved.
+  assert.equal(digest, 'c301ddce07c90202', 'an unchanged Realtime tool definition drifted');
 });
 
 test('Radio volume and mission speed share the Sharpen slider visual language', () => {

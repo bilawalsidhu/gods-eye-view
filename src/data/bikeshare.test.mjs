@@ -32,8 +32,8 @@ test('selected bikeshare entry preserves source copy and protected-lane policy',
   assert.equal(entry.position, record.point.position);
   assert.equal(entry.title, 'Congress & 6th');
   assert.deepEqual(entry.details, [
-    '🚲 7 avail · 4 docks · 11 cap',
-    '⚠️ Not renting',
+    'BIKES 7 avail · 4 docks · 11 cap',
+    'WARNING Not renting',
   ]);
   assert.equal(entry.variant, 'selected');
   assert.equal(entry.selected, true);

@@ -15,7 +15,7 @@ export function createControls({ state: layerState, services, parts, source }) {
 
     name: 'CCTV',
 
-    icon: '📹',
+    icon: 'cctv',
 
     source: 'CCTV + Street View fallback',
 

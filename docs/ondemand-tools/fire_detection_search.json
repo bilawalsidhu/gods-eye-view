@@ -1,0 +1,318 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "OnDemand Spatial fire_detection_search",
+    "version": "1.0.0",
+    "description": "Active-fire detections from NASA FIRMS (LANCE near-real-time: VIIRS NOAA-20 / NOAA-21 / Suomi-NPP, MODIS) inside a bounding box or a circle over the last 1–10 days, proxied by the OnDemand Spatial serverless route api/[...route].js → server/sources/nasa-firms.js. The NASA FIRMS MAP_KEY lives ONLY in the deployment's NASA_FIRMS_MAP_KEY environment variable; the route answers 503 not_configured without it and never accepts or echoes a key. Attribution: NASA FIRMS / LANCE. Quota: 5,000 transactions per 10 minutes per MAP_KEY (multi-day requests count as several)."
+  },
+  "servers": [
+    {
+      "url": "https://<deployment>",
+      "description": "OnDemand Spatial deployment host — REPLACE with the READY Vercel preview URL or project domain before importing (see x-ondemand-spatial.deployment); the sandbox emulator host is ephemeral"
+    }
+  ],
+  "paths": {
+    "/api/sources/fires": {
+      "get": {
+        "operationId": "fire_detection_search",
+        "summary": "Search NASA FIRMS active-fire detections by area and day range",
+        "parameters": [
+          {
+            "name": "bbox",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 80
+            },
+            "description": "Bounding box \"west,south,east,north\" in degrees. Mutually exclusive with the circle parameters.",
+            "example": "51,24,57,27"
+          },
+          {
+            "name": "latitude",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            },
+            "description": "Circle centre latitude — requires longitude and radius_km; converted to a bounding box."
+          },
+          {
+            "name": "longitude",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            },
+            "description": "Circle centre longitude."
+          },
+          {
+            "name": "radius_km",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "minimum": 1,
+              "maximum": 1000
+            },
+            "description": "Circle radius in kilometres."
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "VIIRS_NOAA20_NRT",
+                "VIIRS_NOAA21_NRT",
+                "VIIRS_SNPP_NRT",
+                "MODIS_NRT"
+              ],
+              "default": "VIIRS_NOAA20_NRT"
+            },
+            "description": "FIRMS sensor product."
+          },
+          {
+            "name": "day_range",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10,
+              "default": 1
+            },
+            "description": "Number of days to search (ending today, or starting at `date`)."
+          },
+          {
+            "name": "date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "description": "Start date YYYY-MM-DD (UTC) for a historical window; omit for the most recent days."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 100
+            },
+            "description": "Maximum detections returned (cap 200); completeness reports 'bounded' when truncated."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Detections in the area",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "source": {
+                      "type": "string"
+                    },
+                    "sensor": {
+                      "type": "string"
+                    },
+                    "count": {
+                      "type": "integer"
+                    },
+                    "total_in_area": {
+                      "type": "integer"
+                    },
+                    "detections": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "latitude": {
+                            "type": "number"
+                          },
+                          "longitude": {
+                            "type": "number"
+                          },
+                          "observed_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "brightness_k": {
+                            "type": "number"
+                          },
+                          "brightness_secondary_k": {
+                            "type": "number"
+                          },
+                          "frp_mw": {
+                            "type": "number"
+                          },
+                          "confidence": {
+                            "type": "string",
+                            "description": "l/n/h (VIIRS) or 0–100 (MODIS)"
+                          },
+                          "satellite": {
+                            "type": "string"
+                          },
+                          "instrument": {
+                            "type": "string"
+                          },
+                          "daynight": {
+                            "type": "string",
+                            "enum": [
+                              "D",
+                              "N"
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    "area": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "bbox",
+                            "circle"
+                          ]
+                        },
+                        "bbox": {
+                          "type": "object"
+                        },
+                        "circle": {
+                          "type": "object"
+                        }
+                      }
+                    },
+                    "window": {
+                      "type": "object",
+                      "properties": {
+                        "day_range": {
+                          "type": "integer"
+                        },
+                        "start_date": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      }
+                    },
+                    "quota": {
+                      "type": "object",
+                      "properties": {
+                        "transactions_per_10min": {
+                          "type": "integer"
+                        },
+                        "note": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "provenance": {
+                      "type": "object",
+                      "properties": {
+                        "provider": {
+                          "type": "string"
+                        },
+                        "source_url": {
+                          "type": "string",
+                          "description": "upstream URL with the MAP_KEY replaced by <redacted>"
+                        },
+                        "license": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "url": {
+                              "type": "string"
+                            },
+                            "attribution": {
+                              "type": "string",
+                              "example": "NASA FIRMS / LANCE"
+                            }
+                          }
+                        },
+                        "fetched_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "freshness": {
+                          "type": "object"
+                        },
+                        "coverage": {
+                          "type": "object"
+                        },
+                        "completeness": {
+                          "type": "object",
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "partial",
+                                "sampled",
+                                "bounded",
+                                "estimated"
+                              ]
+                            },
+                            "reason": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "query": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Unknown/invalid/missing parameter — {error:{code:'unknown_param'|'invalid_param'|'missing_param', message, param}}"
+          },
+          "429": {
+            "description": "FIRMS quota exceeded — {error:{code:'rate_limited', message, retry_after?}}"
+          },
+          "502": {
+            "description": "Upstream unavailable / malformed / key rejected — {error:{code:'upstream_unavailable'|'malformed_upstream'|'upstream_auth', message}}"
+          },
+          "503": {
+            "description": "NASA_FIRMS_MAP_KEY not configured on the server — {error:{code:'not_configured', message, param:'NASA_FIRMS_MAP_KEY'}}"
+          },
+          "504": {
+            "description": "Upstream timeout after the retry — {error:{code:'upstream_timeout', message}}"
+          }
+        }
+      }
+    }
+  },
+  "x-ondemand-spatial": {
+    "capability_id": "fires.search",
+    "registry_status": "registered-unverified",
+    "ondemand_tool_id": null,
+    "adapter": "server/sources/nasa-firms.js",
+    "auth": "env:NASA_FIRMS_MAP_KEY",
+    "attribution": "NASA FIRMS / LANCE",
+    "deployment": {
+      "stable_url": null,
+      "status": "no Vercel deployment exists yet (2026-09-18T09:30Z): the build environment cannot create one (CLI guardrail; deployment API off-limits) and the credential supplied as VERCEL_TOKEN was the OnDemand API key, not a Vercel token — run scripts/vercel-file-deploy.mjs from an operator machine, then replace <deployment> with the READY preview URL (or the project domain)",
+      "last_emulator_host": "https://sb-63r5liykgi73.vercel.run (ephemeral sandbox, 2026-09-18 — expires within ~90 minutes; never register it in the dashboard)",
+      "planned_project": "ondemand-eand-spatial (prj_VbHbEhFSDFkdXCqlq8XqONoFWQHO, team_aft8hHPiYnHp6I534L3DQScA) — preview target only; production and the opal alias must not be touched"
+    }
+  }
+}

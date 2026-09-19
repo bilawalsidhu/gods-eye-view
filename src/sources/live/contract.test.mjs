@@ -292,6 +292,183 @@ test('classification identities include positionless aircraft without admitting 
   assert.equal(snapshot.complete, false);
 });
 
+test('civil adapter surfaces the MOVEMENT proxy status from headers and marks a last-good answer stale', async () => {
+  const degraded = createOpenSkySource({
+    now: () => now,
+    fetchImpl: async () =>
+      response(
+        { time: now / 1000, states: [aircraft] },
+        {
+          'x-provider-status': 'degraded',
+          'x-provider-source': 'adsb.lol',
+          'x-provider-fetched-at': new Date(now - 5000).toISOString(),
+          'x-provider-error':
+            'OpenSky unreachable from this deployment (connect timeout) - adsb.lol regional feed',
+          'x-flight-source': 'adsb.lol',
+          'x-flight-coverage': '250nm regional fallback',
+        },
+      ),
+  });
+  const snapshot = await degraded.getSnapshot({ latitude: 30, longitude: -97 });
+  assert.equal(snapshot.providerStatus, 'degraded');
+  assert.match(snapshot.providerError, /^OpenSky unreachable/);
+  assert.equal(snapshot.providerSource, 'adsb.lol');
+  assert.equal(snapshot.providerFetchedAtMs, now - 5000);
+  assert.equal(snapshot.source, 'adsb.lol');
+  assert.equal(snapshot.stale, false, 'an alternative feed is current data');
+  assert.equal(snapshot.records[0].id, 'abc123');
+  const stale = createOpenSkySource({
+    now: () => now,
+    fetchImpl: async () =>
+      response(
+        {
+          time: now / 1000 - 30,
+          states: [aircraft],
+          provider: {
+            status: 'stale',
+            source: 'OpenSky Network',
+            error:
+              'OpenSky rate limited (retry in 90s) - last-good OpenSky snapshot',
+          },
+        },
+        { 'x-flight-source': 'OpenSky Network' },
+      ),
+  });
+  const last = await stale.getSnapshot();
+  assert.equal(last.providerStatus, 'stale', 'body.provider is the fallback');
+  assert.equal(last.stale, true);
+  assert.equal(last.freshness, 'stale');
+  assert.match(last.providerError, /rate limited/);
+  const legacy = createOpenSkySource({
+    now: () => now,
+    fetchImpl: async () => response({ time: now / 1000, states: [aircraft] }),
+  });
+  const plain = await legacy.getSnapshot();
+  assert.equal(plain.providerStatus, null);
+  assert.equal(plain.providerError, null);
+  assert.equal(plain.stale, false);
+});
+
+test('a structured 503 rejects with the proxy reason instead of "HTTP 503" and honours a bounded Retry-After', async () => {
+  const source = createOpenSkySource({
+    fetchImpl: async () =>
+      response(
+        {
+          error: 'OpenSky rate limited (retry in 90s)',
+          provider: { status: 'unavailable', source: 'OpenSky Network' },
+        },
+        {
+          'x-provider-status': 'unavailable',
+          'x-provider-source': 'OpenSky Network',
+          'x-provider-error': 'OpenSky rate limited (retry in 90s)',
+          'retry-after': '90',
+        },
+        503,
+      ),
+  });
+  await assert.rejects(source.getSnapshot(), (error) => {
+    assert.equal(error.name, 'LiveSourceError');
+    assert.equal(error.status, 503);
+    assert.equal(error.message, 'OpenSky rate limited (retry in 90s)');
+    assert.equal(error.source, 'OpenSky Network');
+    assert.equal(error.retryAfterMs, 90000);
+    return true;
+  });
+  const capped = createAdsbLolSource({
+    fetchImpl: async () =>
+      response(
+        { error: 'adsb.lol HTTP 503', provider: { status: 'unavailable' } },
+        { 'x-provider-status': 'unavailable', 'retry-after': '99999' },
+        503,
+      ),
+  });
+  await assert.rejects(capped.getSnapshot(), (error) => {
+    assert.equal(error.message, 'adsb.lol HTTP 503');
+    assert.equal(error.retryAfterMs, 120000, 'Retry-After is bounded');
+    return true;
+  });
+  // Without a structured status the legacy OpenSky auth mapping still applies.
+  const denied = createOpenSkySource({
+    fetchImpl: async () =>
+      response(
+        { error: 'sensitive' },
+        { 'x-opensky-auth-reason': 'oauth_invalid_credentials' },
+        401,
+      ),
+  });
+  await assert.rejects(denied.getSnapshot(), {
+    message: 'OpenSky OAuth rejected credentials',
+    code: 'denied',
+  });
+});
+
+test('military adapter sends the scene anchor only with a radius and reads the proxy status and coverage', async () => {
+  const requests = [];
+  const source = createAdsbLolSource({
+    now: () => now,
+    fetchImpl: async (url) => {
+      requests.push(url);
+      return response(
+        { now, ac: [{ hex: 'abc123', lat: 30, lon: -97 }] },
+        {
+          'x-provider-status': 'degraded',
+          'x-provider-source': 'adsb.fi',
+          'x-provider-error': 'adsb.lol HTTP 502 - adsb.fi feed',
+          'x-provider-age-sec': '4',
+          'x-flight-coverage': '600nm around 30,-97',
+        },
+      );
+    },
+  });
+  const regional = await source.getSnapshot({
+    latitude: 30.123456,
+    longitude: -97,
+    radiusNm: 600,
+  });
+  assert.equal(
+    requests[0],
+    '/api/adsblol/mil?lat=30.1235&lon=-97.0000&radiusNm=600',
+  );
+  assert.equal(regional.providerStatus, 'degraded');
+  assert.equal(regional.providerError, 'adsb.lol HTTP 502 - adsb.fi feed');
+  assert.equal(regional.source, 'adsb.fi');
+  assert.equal(regional.coverage, '600nm around 30,-97');
+  assert.equal(regional.stale, false);
+  assert.equal(regional.reason, null);
+  assert.equal(
+    regional.observedAtMs,
+    now - 4000,
+    'provider age when no cache age header',
+  );
+  await source.getSnapshot({ latitude: 30, longitude: -97 });
+  assert.equal(requests[1], '/api/adsblol/mil', 'no radius → worldwide list');
+  await source.getIdentities({ latitude: 30, longitude: -97, radiusNm: 600 });
+  assert.equal(
+    requests[2],
+    '/api/adsblol/mil',
+    'identities are never filtered',
+  );
+  const stale = createAdsbLolSource({
+    now: () => now,
+    fetchImpl: async () =>
+      response(
+        { ac: [{ hex: 'abc123', lat: 30, lon: -97 }] },
+        {
+          'x-provider-status': 'stale',
+          'x-provider-source': 'adsb.lol',
+          'x-provider-error':
+            'adsb.lol rate limited (retry in 20s) - last-good adsb.lol list',
+          'x-ads-b-cache': 'STALE',
+          'x-ads-b-cache-age-ms': '13000',
+        },
+      ),
+  });
+  const last = await stale.getSnapshot();
+  assert.equal(last.stale, true);
+  assert.equal(last.observedAtMs, now - 13000);
+  assert.match(last.reason, /^adsb\.lol rate limited/);
+});
+
 test('identity lookup validates its response and honors body-parse cancellation', async () => {
   const malformed = createAdsbLolSource({
     fetchImpl: async () => response({ ac: [{}] }),

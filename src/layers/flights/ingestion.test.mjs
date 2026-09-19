@@ -83,3 +83,68 @@ test('civil acquisition publishes source time and uses a replaced source on the 
   assert.deepEqual(probe.labels, ['First', 'Second']);
   assert.equal(probe.restores.length, 2);
 });
+
+test('civil acquisition keeps a degraded proxy answer out of error, backs off a stale one with its reason and records an unavailable one', async () => {
+  const snapshots = [
+    {
+      records: [],
+      source: 'adsb.lol',
+      coverage: '250nm regional fallback',
+      observedAtMs: 5000,
+      ageMs: 1000,
+      freshness: 'current',
+      stale: false,
+      providerStatus: 'degraded',
+      providerError:
+        'OpenSky unreachable from this deployment (connect timeout) - adsb.lol regional feed',
+    },
+    {
+      records: [],
+      source: 'OpenSky Network',
+      coverage: '3.0deg scene box around 30.00,-97.00',
+      observedAtMs: 6000,
+      ageMs: 20000,
+      freshness: 'stale',
+      stale: true,
+      providerStatus: 'stale',
+      providerError:
+        'OpenSky rate limited (retry in 90s) - last-good OpenSky snapshot',
+    },
+  ];
+  const probe = setup({
+    async getSnapshot() {
+      return snapshots.shift();
+    },
+  });
+  await probe.update(null);
+  assert.equal(probe.feed._providerStatus, 'degraded');
+  assert.match(probe.feed._providerError, /^OpenSky unreachable/);
+  assert.equal(probe.feed._lastError, null, 'current data is not an error');
+  assert.equal(probe.feed._backoff, false);
+  assert.equal(probe.feed._lastSource, 'adsb.lol');
+  assert.equal(probe.feed._lastCoverage, '250nm regional fallback');
+  await probe.update(null);
+  assert.equal(probe.feed._providerStatus, 'stale');
+  assert.equal(probe.feed._backoff, true);
+  assert.equal(
+    probe.feed._lastError,
+    'OpenSky rate limited (retry in 90s) - last-good OpenSky snapshot',
+  );
+  assert.equal(probe.feed._lastUpdate, 6000);
+  const error = Object.assign(new Error('OpenSky HTTP 503 reason'), {
+    name: 'LiveSourceError',
+    status: 503,
+    retryAfterMs: 20000,
+    source: 'OpenSky Network',
+  });
+  probe.feed._source = {
+    async getSnapshot() {
+      throw error;
+    },
+  };
+  await probe.update(null);
+  assert.equal(probe.feed._providerStatus, 'unavailable');
+  assert.equal(probe.feed._providerError, 'OpenSky HTTP 503 reason');
+  assert.equal(probe.feed._lastError, 'OpenSky HTTP 503 reason');
+  assert.equal(probe.feed._backoff, true);
+});

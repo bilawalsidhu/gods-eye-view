@@ -264,7 +264,7 @@ export function createQueries({
 
     name: 'Live Flights',
 
-    icon: '✈️',
+    icon: 'plane',
 
     source: flightState.feed._lastSource,
 
@@ -926,15 +926,24 @@ export function createQueries({
             Math.ceil((flightState.feed._retryAt - Date.now()) / 1000),
           )
         : 0;
+      const providerStatus = flightState.feed._providerStatus ?? null;
       return {
         count: flightState.feed._count,
         lastUpdate: flightState.feed._lastUpdate,
-        stale: flightState.feed._backoff,
+        stale: flightState.feed._backoff || providerStatus === 'stale',
         error: flightState.feed._lastError,
         status: flightState.feed._lastStatus,
         retryInSec,
         source: flightState.feed._lastSource,
         coverage: flightState.feed._lastCoverage,
+        // MOVEMENT proxy status (server/providers/common/upstream.js): the
+        // DATA LAYERS row reads DEGRADED · <source> · <providerError> for an
+        // alternative feed, STALE for a last-good snapshot, LIVE otherwise.
+        providerStatus,
+        providerError: flightState.feed._providerError ?? null,
+        // With a structured status the source name is no longer a heuristic:
+        // only a `degraded` answer is a fallback (src/data/feedState.js).
+        ...(providerStatus ? { fallback: providerStatus === 'degraded' } : {}),
       };
     },
   };

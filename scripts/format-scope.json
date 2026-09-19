@@ -269,6 +269,7 @@
   "src/ui/styles/command-dock.css",
   "src/ui/styles/command-dock-sliding.css",
   "src/ui/styles/provider-settings.css",
+  "src/ui/styles/ondemand-chat.css",
   "src/ui/styles/radio.css",
   "src/ui/styles/responsive.css",
   "src/ui/styles/voice-cost.css",

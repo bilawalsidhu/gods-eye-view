@@ -67,7 +67,7 @@ retains the existing registered-stack behavior.
 
 ## Validation limits
 
-`gods-eye-view/director` exports `parseSceneDocument(text)`,
+`ondemand-spatial/director` exports `parseSceneDocument(text)`,
 `validateSceneDocument(project)`, `stringifySceneDocument(project)`,
 `SceneDocumentError`, `SCENE_DOCUMENT_VERSION` and `SCENE_DOCUMENT_LIMITS`.
 Validation is independent of the renderer, storage and recipes. Parsing checks

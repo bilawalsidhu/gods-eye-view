@@ -1,0 +1,194 @@
+{
+  "ok": true,
+  "configured": true,
+  "generatedAtUtc": "2026-09-18T07:32:20.361Z",
+  "mode": "direct",
+  "sessionIdHash": "0dcd524342c3c7c8817dcbc1d83651b3581a21cdb5e2bdc3db120cc978308bad",
+  "fulfillmentEndpointId": "predefined-gpt-5.6-luna",
+  "steps": [
+    {
+      "step": 1,
+      "name": "session create + reuse",
+      "status": "PASS",
+      "httpStatus": 200,
+      "latencyMs": 274,
+      "ttfdMs": null,
+      "utc": "2026-09-18T07:31:35.683Z",
+      "detail": "sessionId=***"
+    },
+    {
+      "step": 2,
+      "name": "sync prompt",
+      "status": "PASS",
+      "httpStatus": 200,
+      "latencyMs": 1371,
+      "ttfdMs": null,
+      "utc": "2026-09-18T07:31:35.957Z",
+      "detail": "answer.length=2"
+    },
+    {
+      "step": 3,
+      "name": "SSE stream",
+      "status": "PASS",
+      "httpStatus": 200,
+      "latencyMs": 4359,
+      "ttfdMs": 1956,
+      "utc": "2026-09-18T07:31:37.328Z",
+      "detail": "heartbeat=true fulfillmentDeltas=27 timeToFirstDeltaMs=1956"
+    },
+    {
+      "step": 4,
+      "name": "built-in tool/plugin invocation",
+      "status": "SKIP",
+      "httpStatus": 200,
+      "latencyMs": 193,
+      "ttfdMs": null,
+      "utc": "2026-09-18T07:31:41.687Z",
+      "skipReason": "no plugin id in env and the account's Agents API listing is empty (GET /plugin/v1/list -> HTTP 200, total=0); no documented chat agent id was invented"
+    },
+    {
+      "step": 5,
+      "name": "STT on in-script generated WAV",
+      "status": "PASS",
+      "httpStatus": 200,
+      "latencyMs": 14113,
+      "ttfdMs": null,
+      "utc": "2026-09-18T07:31:41.880Z",
+      "detail": "mediaId=6aace8de22b58594b497d506 textLength=0"
+    },
+    {
+      "step": 6,
+      "name": "TTS",
+      "status": "PASS",
+      "httpStatus": 200,
+      "latencyMs": 1887,
+      "ttfdMs": null,
+      "utc": "2026-09-18T07:31:55.993Z",
+      "detail": "contentType=application/octet-stream bytes=43008 container=mp3"
+    },
+    {
+      "step": 7,
+      "name": "Media PNG analysis",
+      "status": "PASS",
+      "httpStatus": 200,
+      "latencyMs": 6615,
+      "ttfdMs": null,
+      "utc": "2026-09-18T07:31:57.880Z",
+      "detail": "actionStatus=completed context=\"The image is an extremely small, low-resolution abstract pixel graphic composed of a symmetrical arrangement of vertical\""
+    },
+    {
+      "step": 8,
+      "name": "workflow",
+      "status": "PASS",
+      "httpStatus": 200,
+      "latencyMs": 14069,
+      "ttfdMs": null,
+      "utc": "2026-09-18T07:32:04.495Z",
+      "detail": "executionId=6aace8f487fc428d7c18a1f3 status=executing logEvents=5 timeToFirstLogMs=298 firstLogUtc=2026-09-18T07:32:04.722Z polledMs=13828"
+    },
+    {
+      "step": 9,
+      "name": "session-memory follow-up",
+      "status": "PASS",
+      "httpStatus": 200,
+      "latencyMs": 1797,
+      "ttfdMs": null,
+      "utc": "2026-09-18T07:32:18.564Z",
+      "detail": "answer contains the step-2 code word"
+    },
+    {
+      "step": 10,
+      "name": "latency summary",
+      "status": "PASS",
+      "httpStatus": null,
+      "latencyMs": 0,
+      "ttfdMs": null,
+      "utc": "2026-09-18T07:32:20.361Z",
+      "detail": "min=274ms max=14113ms mean=5561ms totalMs=44485"
+    }
+  ],
+  "summary": {
+    "passed": 9,
+    "failed": 0,
+    "skipped": 1,
+    "totalMs": 44485,
+    "minMs": 274,
+    "maxMs": 14113,
+    "meanMs": 5561
+  },
+  "durationMs": 44678,
+  "history": [
+    {
+      "generatedAtUtc": "2026-09-18T06:59:45.384Z",
+      "summary": {
+        "passed": 8,
+        "failed": 0,
+        "skipped": 2,
+        "totalMs": 31029,
+        "minMs": 282,
+        "maxMs": 13086,
+        "meanMs": 4433
+      },
+      "sessionIdHash": "fde1e441cc264035b589e174c43b005568c322d7070c6461417fbd196c6ed222",
+      "previewHost": "sb-26l9a6g6k6rt.vercel.run",
+      "note": "previous selftest run (8 passed / 0 failed / 2 skipped — steps 4 and 8 skipped: no agents, no ONDEMAND_SPATIAL_FLOW_ID)"
+    },
+    {
+      "generatedAtUtc": "2026-09-18T05:48:08.602Z",
+      "summary": {
+        "passed": 8,
+        "failed": 0,
+        "skipped": 2,
+        "totalMs": 29011,
+        "minMs": 265,
+        "maxMs": 10840,
+        "meanMs": 4144
+      },
+      "sessionIdHash": "7387674f35cf97455621cdcf273ba5cb784b9f7041ac5f635537dbd2aefc330c",
+      "previewHost": "sb-5hfcfkb7a79s.vercel.run",
+      "note": "previous selftest run (8 passed / 0 failed / 2 skipped)"
+    }
+  ],
+  "_provenance": {
+    "source": "GET /api/ondemand/selftest (x-selftest-token; one-time runtime token, redacted)",
+    "previewHost": "sb-765981cquksp.vercel.run",
+    "sandboxId": "sbx_DV7Jx2deyh9edv9XkSztio1dws7P",
+    "runtime": "node v24.14.1; runtime-only env (ONDEMAND_API_KEY [REDACTED], ONDEMAND_SELFTEST_TOKEN [REDACTED], ONDEMAND_BASE_URL, ONDEMAND_SPATIAL_FLOW_ID=6aace534859f7b0abb53d99a, GODS_EYE_FLOW_VERSION=1, VITE_SERVERLESS_MODE=1, SERVERLESS_MODE=true); tier defaults from TIER_DEFAULTS (no endpoint env overrides); the same two values are now also the built-in FLOW_DEFAULTS of server/ondemand/config.js",
+    "healthAtRun": {
+      "ondemand": "healthy",
+      "chat": "healthy",
+      "speech": "healthy",
+      "media": "healthy",
+      "workflow": "healthy",
+      "configured": true
+    },
+    "healthCheckedAt": "2026-09-18T07:31:33.106Z",
+    "repoCommitBeforeThisDocCommit": "aa6fd0c",
+    "workflow": {
+      "id": "6aace534859f7b0abb53d99a",
+      "name": "GodsEye Advanced Spatial Workflow",
+      "flowVersion": 1,
+      "createdVia": "POST /automation/api/workflow/ (HTTP 201, 2026-09-18T07:16:04.335Z)",
+      "activatedVia": "POST /workflow/{id}/activate (HTTP 200, 2026-09-18T07:16:14.101Z)",
+      "step8ExecutionId": "6aace8f487fc428d7c18a1f3",
+      "step8Note": "execute is asynchronous (§7.3); the step reports the documented 'executing' status plus the log events / time-to-first-log observed within its 12 s polling window (a streaming-logs endpoint is NOT FOUND IN LIVE DOCS §7.1); the full ~163 s run of the same workflow is recorded in docs/ondemand-workflows/verification-2026-09-18.json"
+    },
+    "skippedSteps": "4 only (account has no agents — GET /plugin/v1/list total 0); step 8 now PASSES against the created workflow",
+    "secondRunSameSandbox": {
+      "generatedAtUtc": "2026-09-18T07:33:27.606Z",
+      "summary": {
+        "passed": 9,
+        "failed": 0,
+        "skipped": 1,
+        "totalMs": 41564,
+        "minMs": 362,
+        "maxMs": 14104,
+        "meanMs": 5196
+      },
+      "sessionIdHash": "caedfaa9c4156b350e9aefdb155688b2f43f1c31f96b9c739cb1d6d0cef2952b",
+      "step8ExecutionId": "6aace938bb6a9a7035f43237",
+      "step8TimeToFirstLogMs": 276,
+      "rateLimitProbe": "third call at 2026-09-18T07:33:37.824Z (within 60 s of the second run's start) -> HTTP 429 {\"error\":\"rate_limited\",\"retryAfterSec\":9}, Retry-After: 9"
+    }
+  }
+}

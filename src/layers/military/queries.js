@@ -198,7 +198,7 @@ export function createQueries({
 
     name: 'Military Flights',
 
-    icon: '🎖️',
+    icon: 'shield',
 
     source: flightState.feed._lastSource,
 
@@ -797,15 +797,22 @@ export function createQueries({
             Math.ceil((flightState.feed._retryAt - Date.now()) / 1000),
           )
         : 0;
+      const providerStatus = flightState.feed._providerStatus ?? null;
       return {
         count: flightState.feed._count,
         lastUpdate: flightState.feed._lastUpdate,
-        stale: flightState.feed._backoff,
+        stale: flightState.feed._backoff || providerStatus === 'stale',
         error: flightState.feed._lastError,
         status: flightState.feed._lastStatus,
         retryInSec,
         source: flightState.feed._lastSource,
-        fallback: false,
+        coverage: flightState.feed._lastCoverage ?? null,
+        // MOVEMENT proxy status (server/providers/common/upstream.js): the
+        // DATA LAYERS row reads DEGRADED · adsb.fi · <providerError> when an
+        // alternative feed stands in, STALE for a last-good list, LIVE otherwise.
+        providerStatus,
+        providerError: flightState.feed._providerError ?? null,
+        fallback: providerStatus === 'degraded',
       };
     },
   };

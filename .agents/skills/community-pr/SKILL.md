@@ -1,6 +1,6 @@
 ---
 name: community-pr
-description: Review and integrate community pull requests in God's Eye View using its maintainer acceptance workflow. Use for contribution triage, PR acceptance reviews, or authorized integration; not for ordinary implementation work or opening the user's own PR.
+description: Review and integrate community pull requests in OnDemand Spatial using its maintainer acceptance workflow. Use for contribution triage, PR acceptance reviews, or authorized integration; not for ordinary implementation work or opening the user's own PR.
 ---
 
 # Community PR

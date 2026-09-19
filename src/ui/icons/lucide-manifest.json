@@ -1,0 +1,635 @@
+{
+  "$comment": "Single source of truth for the Lucide icons this UI ships. `node scripts/sync-lucide-icons.mjs` copies each icon from the pinned `lucide-static` package into public/brand/icons/, normalises it, and regenerates src/ui/icons/lucideIcons.generated.js. Evidence ledger and the emoji/glyph → icon mapping: docs/brand/ICON_SOURCE.md. The script also writes public/brand/icons/icons.json (slot -> file/iconName/sourceUrl/license/retrievedAt) and LICENSE-icons.md.",
+  "set": "lucide-static",
+  "version": "1.47.0",
+  "license": "ISC",
+  "source": "https://github.com/lucide-icons/lucide",
+  "icons": [
+    {
+      "name": "satellite",
+      "replaces": "🛰️ U+1F6F0 U+FE0F",
+      "usage": [
+        "DATA LAYERS › Movement › Satellites (src/layers/satellites/controls.js)"
+      ],
+      "slots": [
+        "satellites"
+      ]
+    },
+    {
+      "name": "plane",
+      "replaces": "✈️ U+2708 U+FE0F · &#x2708;",
+      "usage": [
+        "DATA LAYERS › Movement › Live Flights (src/layers/flights/queries.js)",
+        "DISPLAY › 3D aircraft toggle (src/ui/templates/display-controls.html)"
+      ],
+      "slots": [
+        "flights",
+        "display.models3d"
+      ]
+    },
+    {
+      "name": "shield",
+      "replaces": "🎖️ U+1F396 U+FE0F",
+      "usage": [
+        "DATA LAYERS › Movement › Military Flights (src/layers/military/queries.js)"
+      ],
+      "slots": [
+        "military"
+      ]
+    },
+    {
+      "name": "ship",
+      "replaces": "◭ U+25ED",
+      "usage": [
+        "DATA LAYERS › Movement › Live Vessels (src/layers/vessels/queries.js)",
+        "transit ferry mode (src/data/transitFeeds.js)"
+      ],
+      "slots": [
+        "ais-live-vessels",
+        "transit.mode.ferry"
+      ]
+    },
+    {
+      "name": "car",
+      "replaces": "🚗 U+1F697",
+      "usage": [
+        "DATA LAYERS › Movement › Street Traffic (src/layers/traffic/controls.js)",
+        "Directions DRIVE mode (src/layers/directions/index.js)"
+      ],
+      "slots": [
+        "traffic",
+        "directions.mode.car"
+      ]
+    },
+    {
+      "name": "bus",
+      "replaces": "🚌 U+1F68C",
+      "usage": [
+        "DATA LAYERS › Movement › Transit (src/layers/transit/lifecycle.js)",
+        "transit bus mode (src/data/transitFeeds.js)"
+      ],
+      "slots": [
+        "transit",
+        "transit.mode.bus"
+      ]
+    },
+    {
+      "name": "bike",
+      "replaces": "🚲 U+1F6B2",
+      "usage": [
+        "DATA LAYERS › Movement › Bike Share (src/layers/bikeshare/controls.js)",
+        "Directions BIKE mode (src/layers/directions/index.js)"
+      ],
+      "slots": [
+        "bikeshare",
+        "directions.mode.bike"
+      ]
+    },
+    {
+      "name": "cctv",
+      "replaces": "📹 U+1F4F9",
+      "usage": [
+        "DATA LAYERS › Cameras › Cameras (src/layers/cctv/controls.js)"
+      ],
+      "slots": [
+        "cctv"
+      ]
+    },
+    {
+      "name": "camera",
+      "replaces": "📷 U+1F4F7",
+      "usage": [
+        "DATA LAYERS › Cameras › Mapped ALPR Cameras (src/layers/alpr/index.js)"
+      ],
+      "slots": [
+        "alpr-cameras"
+      ]
+    },
+    {
+      "name": "radar",
+      "replaces": "⌖ U+2316",
+      "usage": [
+        "DATA LAYERS › Infrastructure › Military Installations (src/layers/installations/controls.js)"
+      ],
+      "slots": [
+        "military-installations"
+      ]
+    },
+    {
+      "name": "server",
+      "replaces": "▣ U+25A3",
+      "usage": [
+        "DATA LAYERS › Infrastructure › Data Centers (src/data/infrastructure.js)"
+      ],
+      "slots": [
+        "local-datacenters"
+      ]
+    },
+    {
+      "name": "cable",
+      "replaces": "≋ U+224B",
+      "usage": [
+        "DATA LAYERS › Infrastructure › Submarine Cables (src/layers/submarineCables/lifecycle.js)"
+      ],
+      "slots": [
+        "telegeography-submarine-cables"
+      ]
+    },
+    {
+      "name": "dam",
+      "replaces": "▰ U+25B0",
+      "usage": [
+        "DATA LAYERS › Infrastructure › Dams (src/data/infrastructure.js)"
+      ],
+      "slots": [
+        "local-dams"
+      ]
+    },
+    {
+      "name": "rocket",
+      "replaces": "🚀 U+1F680",
+      "usage": [
+        "DATA LAYERS › Events › Rocket Launches (src/layers/launches/controls.js)"
+      ],
+      "slots": [
+        "rocket-launches"
+      ]
+    },
+    {
+      "name": "activity",
+      "replaces": "🌋 U+1F30B",
+      "usage": [
+        "DATA LAYERS › Events › Earthquakes (src/layers/earthquakes/index.js)"
+      ],
+      "slots": [
+        "earthquakes"
+      ]
+    },
+    {
+      "name": "flame",
+      "replaces": "▲ U+25B2",
+      "usage": [
+        "DATA LAYERS › Events › Active Fires (src/app/constructCatalog.js, src/data/localLayers.js, src/app/layers/firms.js)"
+      ],
+      "slots": [
+        "local-firms"
+      ]
+    },
+    {
+      "name": "compass",
+      "replaces": "🧭 U+1F9ED",
+      "usage": [
+        "DATA LAYERS › Utilities › Directions (src/layers/directions/index.js)"
+      ],
+      "slots": [
+        "directions"
+      ]
+    },
+    {
+      "name": "radio",
+      "replaces": "◉ U+25C9",
+      "usage": [
+        "DATA LAYERS › Utilities › Radio (src/layers/radio/controls.js)"
+      ],
+      "slots": [
+        "radio"
+      ]
+    },
+    {
+      "name": "globe",
+      "replaces": "◎ U+25CE",
+      "usage": [
+        "Global Context awareness layer (src/layers/awareness/controls.js)"
+      ],
+      "slots": [
+        "military-awareness"
+      ]
+    },
+    {
+      "name": "waves",
+      "replaces": "🌊 U+1F30A",
+      "usage": [
+        "Bhote Koshi event layer (src/data/bhoteKoshiEvent.js)"
+      ],
+      "slots": [
+        "bhote-koshi-2026"
+      ]
+    },
+    {
+      "name": "locate",
+      "replaces": "◎ U+25CE",
+      "usage": [
+        "Bhote Koshi locator layer (src/data/bhoteKoshiLocator.js)"
+      ],
+      "slots": [
+        "bhote-koshi-locator"
+      ]
+    },
+    {
+      "name": "map-pin",
+      "replaces": "📍 U+1F4CD",
+      "usage": [
+        "Local GeoJSON layer default (src/data/localGeojsonCore.js)",
+        "LOCATION tray city line (src/ui/templates/command-dock.html, src/ui/locationControls.js)"
+      ],
+      "slots": [
+        "local-geojson.default",
+        "location.city"
+      ]
+    },
+    {
+      "name": "footprints",
+      "replaces": "🚶 U+1F6B6",
+      "usage": [
+        "Directions WALK mode (src/layers/directions/index.js)"
+      ],
+      "slots": [
+        "directions.mode.foot"
+      ]
+    },
+    {
+      "name": "tram-front",
+      "replaces": "🚊 U+1F68A",
+      "usage": [
+        "transit tram mode (src/data/transitFeeds.js)"
+      ],
+      "slots": [
+        "transit.mode.tram"
+      ]
+    },
+    {
+      "name": "train-front",
+      "replaces": "🚇 U+1F687 · 🚆 U+1F686",
+      "usage": [
+        "transit subway / rail modes (src/data/transitFeeds.js)"
+      ],
+      "slots": [
+        "transit.mode.subway",
+        "transit.mode.rail"
+      ]
+    },
+    {
+      "name": "signpost",
+      "replaces": "🚏 U+1F68F",
+      "usage": [
+        "transit unknown mode (src/data/transitFeeds.js)"
+      ],
+      "slots": [
+        "transit.mode.unknown"
+      ]
+    },
+    {
+      "name": "layers",
+      "replaces": "—",
+      "usage": [
+        "Fallback for an unregistered icon name (src/ui/icons/layerIcon.js) — never a glyph"
+      ],
+      "slots": [
+        "icon.fallback"
+      ]
+    },
+    {
+      "name": "chevron-left",
+      "replaces": "◀ U+25C0 · &#x25C0; · ‹ U+2039",
+      "usage": [
+        "Right-rail collapse buttons (src/ui/panelChrome.js, src/ui/templates/display-controls.html)",
+        "Cockpit display/radio tray toggles (src/ui/templates/cockpit.html, src/ui/radioBindings.js)",
+        "Mission prev (src/layers/launches/panel.js)",
+        "Previous story beat (src/data/bhoteKoshiEvent.js)",
+        "Command-dock compact chevrons (src/ui/styles/command-dock-compact.css)"
+      ],
+      "slots": [
+        "panel.collapse.right-rail.collapsed",
+        "cockpit.tray.toggle.closed",
+        "mission.prev",
+        "event.beat.prev",
+        "dock.tray.chevron.left"
+      ]
+    },
+    {
+      "name": "chevron-right",
+      "replaces": "▶ U+25B6 · › U+203A",
+      "usage": [
+        "Right-rail expand buttons (src/ui/panelChrome.js, src/ui/templates/context.html)",
+        "Cockpit tray toggles (src/ui/radioBindings.js)",
+        "Mission roster chevron / next (src/layers/launches/panel.js)",
+        "Next story beat (src/data/bhoteKoshiEvent.js)",
+        "Command-dock compact chevrons (src/ui/styles/command-dock-compact.css)"
+      ],
+      "slots": [
+        "panel.collapse.right-rail.expanded",
+        "cockpit.tray.toggle.open",
+        "mission.roster.chevron",
+        "mission.next",
+        "event.beat.next",
+        "dock.tray.chevron.right",
+        "voice.transcript.mark"
+      ]
+    },
+    {
+      "name": "plus",
+      "replaces": "+ U+002B (collapse-button glyph)",
+      "usage": [
+        "Collapsed panel expand buttons (src/ui/panelChrome.js, src/ui/templates/layer-panels.html, command-dock.html, context.html)"
+      ],
+      "slots": [
+        "panel.collapse.expand"
+      ]
+    },
+    {
+      "name": "minus",
+      "replaces": "− U+2212",
+      "usage": [
+        "Expanded panel collapse buttons (src/ui/panelChrome.js, src/ui/templates/display-controls.html)"
+      ],
+      "slots": [
+        "panel.collapse.collapse"
+      ]
+    },
+    {
+      "name": "skip-back",
+      "replaces": "◀◀ U+25C0×2",
+      "usage": [
+        "Radio previous station (src/ui/templates/cockpit.html, context.html)"
+      ],
+      "slots": [
+        "radio.prev"
+      ]
+    },
+    {
+      "name": "skip-forward",
+      "replaces": "▶▶ U+25B6×2",
+      "usage": [
+        "Radio next station (src/ui/templates/cockpit.html, context.html)"
+      ],
+      "slots": [
+        "radio.next"
+      ]
+    },
+    {
+      "name": "play",
+      "replaces": "▶ U+25B6",
+      "usage": [
+        "Radio play (src/ui/radioPresentation.js, templates)",
+        "Mission replay resume (src/layers/launches/replay.js)",
+        "Bhote Koshi PLAY / PLAY SHOT / PLAY SCENE (src/data/bhoteKoshiEvent.js)"
+      ],
+      "slots": [
+        "radio.play",
+        "mission.replay.resume",
+        "event.play"
+      ]
+    },
+    {
+      "name": "pause",
+      "replaces": "Ⅱ U+2161",
+      "usage": [
+        "Radio pause (src/ui/radioPresentation.js)",
+        "Mission replay pause (src/layers/launches/panel.js, replay.js)",
+        "Bhote Koshi PAUSE (src/data/bhoteKoshiEvent.js)"
+      ],
+      "slots": [
+        "radio.pause",
+        "mission.replay.pause",
+        "event.pause"
+      ]
+    },
+    {
+      "name": "x",
+      "replaces": "× U+00D7 (close-button glyph)",
+      "usage": [
+        "ASK ONDEMAND close (src/ondemand/entityChat.js)",
+        "Mission deselect / cancel replay (src/layers/launches/panel.js)",
+        "Bhote Koshi close (src/data/bhoteKoshiEvent.js)"
+      ],
+      "slots": [
+        "chat.close",
+        "mission.close",
+        "mission.replay.cancel",
+        "event.close"
+      ]
+    },
+    {
+      "name": "circle",
+      "replaces": "● U+25CF · ◯ U+25EF · 🔴 U+1F534 · 🟡 U+1F7E1",
+      "usage": [
+        "HUD REC dot, solid via CSS (src/hud.js)",
+        "VISUAL PRESETS › Normal (src/ui/templates/command-dock.html)",
+        "Key setup tier dots, coloured via CSS (src/keySetup.js)"
+      ],
+      "slots": [
+        "hud.rec",
+        "preset.normal",
+        "keysetup.tier"
+      ]
+    },
+    {
+      "name": "circle-dot",
+      "replaces": "◉ U+25C9",
+      "usage": [
+        "Bhote Koshi CINEMATIC (src/data/bhoteKoshiEvent.js)"
+      ],
+      "slots": [
+        "event.cinematic"
+      ]
+    },
+    {
+      "name": "square",
+      "replaces": "■ U+25A0 · □ U+25A1 · &#x25A1;",
+      "usage": [
+        "Bhote Koshi RELEASE CAMERA (src/data/bhoteKoshiEvent.js)",
+        "DISPLAY › Clean UI (src/ui/templates/display-controls.html)"
+      ],
+      "slots": [
+        "event.release-camera",
+        "display.clean-ui"
+      ]
+    },
+    {
+      "name": "rotate-ccw",
+      "replaces": "↺ U+21BA",
+      "usage": [
+        "Bhote Koshi REPLAY / FULL STORY (src/data/bhoteKoshiEvent.js)"
+      ],
+      "slots": [
+        "event.replay",
+        "event.full-story"
+      ]
+    },
+    {
+      "name": "external-link",
+      "replaces": "↗ U+2197",
+      "usage": [
+        "Key setup GET KEY / MANAGE (src/keySetup.js)",
+        "Bhote Koshi OPEN ORIGINAL / OPEN PUBLIC MAP (src/data/bhoteKoshiEvent.js, bhoteKoshiEmbeddedMedia.js)"
+      ],
+      "slots": [
+        "keysetup.get-key",
+        "event.open-original",
+        "event.open-map",
+        "media.open-original"
+      ]
+    },
+    {
+      "name": "crosshair",
+      "replaces": "⌖ U+2316",
+      "usage": [
+        "Bhote Koshi LOWER GORGE corridor (src/data/bhoteKoshiEvent.js)"
+      ],
+      "slots": [
+        "event.corridor"
+      ]
+    },
+    {
+      "name": "move-horizontal",
+      "replaces": "↔ U+2194",
+      "usage": [
+        "Bhote Koshi split-view handle (src/data/bhoteKoshiEvent.js)"
+      ],
+      "slots": [
+        "event.split-handle"
+      ]
+    },
+    {
+      "name": "arrow-right",
+      "replaces": "➜ U+279C",
+      "usage": [
+        "Global Context off-screen direction markers, rotated per bearing (src/layers/awareness/rendering.js)"
+      ],
+      "slots": [
+        "awareness.direction"
+      ]
+    },
+    {
+      "name": "search",
+      "replaces": "🔎 &#x1F50E;",
+      "usage": [
+        "LOCATION search toggle (src/ui/templates/command-dock.html)"
+      ],
+      "slots": [
+        "location.search"
+      ]
+    },
+    {
+      "name": "link",
+      "replaces": "🔗 &#x1F517;",
+      "usage": [
+        "Copy share link (src/ui/templates/scene-chrome.html)"
+      ],
+      "slots": [
+        "scene.share"
+      ]
+    },
+    {
+      "name": "tv",
+      "replaces": "▦ U+25A6",
+      "usage": [
+        "VISUAL PRESETS › CRT (src/ui/templates/command-dock.html)"
+      ],
+      "slots": [
+        "preset.retro"
+      ]
+    },
+    {
+      "name": "moon",
+      "replaces": "🌙 U+1F319",
+      "usage": [
+        "VISUAL PRESETS › NVG (src/ui/templates/command-dock.html)"
+      ],
+      "slots": [
+        "preset.surveillance"
+      ]
+    },
+    {
+      "name": "thermometer",
+      "replaces": "🌡️ U+1F321 U+FE0F",
+      "usage": [
+        "VISUAL PRESETS › FLIR (src/ui/templates/command-dock.html)"
+      ],
+      "slots": [
+        "preset.thermal"
+      ]
+    },
+    {
+      "name": "sparkles",
+      "replaces": "✦ U+2726",
+      "usage": [
+        "VISUAL PRESETS › Anime (src/ui/templates/command-dock.html)"
+      ],
+      "slots": [
+        "preset.anime"
+      ]
+    },
+    {
+      "name": "contrast",
+      "replaces": "◐ U+25D0",
+      "usage": [
+        "VISUAL PRESETS › Noir (src/ui/templates/command-dock.html)"
+      ],
+      "slots": [
+        "preset.noir"
+      ]
+    },
+    {
+      "name": "snowflake",
+      "replaces": "❄ U+2744",
+      "usage": [
+        "VISUAL PRESETS › Snow (src/ui/templates/command-dock.html)"
+      ],
+      "slots": [
+        "preset.snow"
+      ]
+    },
+    {
+      "name": "triangle",
+      "replaces": "🛸 U+1F6F8",
+      "usage": [
+        "Reclassify tracked contact as TR-3B (src/ui/templates/context.html)"
+      ],
+      "slots": [
+        "context.tr3b"
+      ]
+    },
+    {
+      "name": "scan-eye",
+      "replaces": "◎ &#x25CE;",
+      "usage": [
+        "DISPLAY › HUD toggle (src/ui/templates/display-controls.html)"
+      ],
+      "slots": [
+        "display.hud"
+      ]
+    },
+    {
+      "name": "scan",
+      "replaces": "▣ &#x25A3;",
+      "usage": [
+        "DISPLAY › DETECT toggle (src/ui/templates/display-controls.html)"
+      ],
+      "slots": [
+        "display.detection"
+      ]
+    },
+    {
+      "name": "sun",
+      "replaces": "✨ &#x2728;",
+      "usage": [
+        "DISPLAY › Bloom toggle (src/ui/templates/display-controls.html)"
+      ],
+      "slots": [
+        "display.bloom"
+      ]
+    },
+    {
+      "name": "focus",
+      "replaces": "🔍 &#x1F50D;",
+      "usage": [
+        "DISPLAY › Sharpen toggle (src/ui/templates/display-controls.html)"
+      ],
+      "slots": [
+        "display.sharpen"
+      ]
+    }
+  ],
+  "sourceUrlTemplate": "https://unpkg.com/lucide-static@{version}/icons/{name}.svg"
+}

@@ -134,7 +134,7 @@ export function createApplicationCatalog({
           surface,
           id: 'local-firms',
           name: 'FIRMS Active Fires',
-          icon: '▲',
+          icon: 'flame',
           source: 'NASA FIRMS · LIVE',
           feed: sources.firms,
         }),

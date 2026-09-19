@@ -100,6 +100,60 @@ export function createState({ services }) {
   layerState._flowStatusUnavailable = false;
 
   /**
+   * True once `/api/tomtom/status` has answered (or failed) at least once.
+   * Until then the layer has NOT asked whether a key exists, so getStats()
+   * presents the pre-probe simulation as today's FALLBACK rather than
+   * claiming "TOMTOM_API_KEY not set" about a deployment it never queried.
+   * @type {boolean}
+   */
+
+  layerState._flowStatusResolved = false;
+
+  /** @type {number} Epoch ms of the last settled status probe (retry / refresh pacing). */
+
+  layerState._flowStatusAt = 0;
+
+  /** @type {boolean} A background status refresh is in flight (live mode only). */
+
+  layerState._flowStatusRefreshing = false;
+
+  /**
+   * Structured provider status the proxy attached to the last status answer
+   * (src/sources/live/contract.js providerStatusFromResponse shape), or null
+   * for a legacy proxy.
+   * @type {{status:string, source:string|null, fetchedAtMs:number|null, ageSec:number|null, error:string|null}|null}
+   */
+
+  layerState._flowProvider = null;
+
+  /**
+   * Live-speed sample the proxy probed at the scene point (TomTom Flow
+   * Segment Data): `{ ok, currentSpeed, freeFlowSpeed, confidence, fetchedAt }`
+   * or `{ ok:false, error }`; null keyless or before the first probe.
+   * @type {object|null}
+   */
+
+  layerState._flowSegment = null;
+
+  /**
+   * Reason the status probe reported the keyed feed as degraded (a rejected
+   * key, a rate limit, an upstream timeout) BEFORE any tile was fetched. A
+   * successful tile fetch clears it; a failed one is reported via
+   * `_flowError` instead.
+   * @type {string|null}
+   */
+
+  layerState._flowProbeError = null;
+
+  /**
+   * Daily budget counters from the last status answer — tiles and non-tile
+   * requests — for the diagnostics surfaces.
+   * @type {{date:string|null, tiles:{count:number,budget:number}, requests:{count:number,budget:number}}|null}
+   */
+
+  layerState._flowBudget = null;
+
+  /**
    * Flow requests this layer still owns. The 250 ms paint race lets a flow
    * fetch outlive the road load that started it (cached roads settle
    * instantly), so `_fetching` alone under-reports the work in flight: the
@@ -221,6 +275,13 @@ export function createState({ services }) {
   layerState._retryDelayMs = 1500;
   layerState._retryBoundsKey = null;
   layerState._roadError = null;
+  /**
+   * @type {{status:string,source:string|null,error:string|null}|null}
+   * Structured status of the last FAILED road fetch (the proxy's
+   * `DEGRADED · Overpass · <reason>` answer), null when roads loaded or the
+   * failure carried no status.
+   */
+  layerState._roadProvider = null;
 
   /** @type {number} 0–100 int — matched roads / roads with any flow candidates */
 

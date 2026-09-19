@@ -86,7 +86,7 @@ storage: **reimport the bundle after reloading the app**. Missing bundle bytes
 fail explicitly, with no network fallback. This is file sharing, not a storage
 service or an offline basemap.
 
-Portable helpers are exported through `gods-eye-view/director`: `parseSceneShare`,
+Portable helpers are exported through `ondemand-spatial/director`: `parseSceneShare`,
 `readSceneShare`, `createSceneBundle`, `createBundleAssets`, `describeSceneShare`,
 `editSceneDetails` and `selectSceneDocument`. Loading and UI remain separate owners.
 `getSharingState()` reports copied dialog/asset counts for lifecycle diagnostics.

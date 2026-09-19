@@ -12,6 +12,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import createViteConfig, { fetchOverpassPayload, overpassPayloadIsData, readOverpassDisk } from '../vite.config.js';
+import { OVERPASS_DEFAULT_UPSTREAMS } from '../server/providers/overpass/constants.js';
 
 const ENDPOINTS = ['https://a.example/api', 'https://b.example/api', 'https://c.example/api'];
 
@@ -124,7 +125,7 @@ test('every mirror is asked with a User-Agent that identifies the application', 
     const agent = String(request.agent || '');
     assert.match(
       agent,
-      /^gods-eye-view\/\d/,
+      /^ondemand-spatial\/\d/,
       `${request.url} must name the application and its version`,
     );
     assert.ok(
@@ -297,7 +298,7 @@ test('coalesced outage callers both receive last-good data, never a cached refus
         assert.equal(response.body, DATA.body);
         assert.equal(response.headers['X-Overpass-Cache'], 'STALE');
       }
-      assert.equal(fetches, 4, 'one shared, bounded mirror sequence');
+      assert.equal(fetches, OVERPASS_DEFAULT_UPSTREAMS.length, 'one shared, bounded mirror sequence (every default mirror once)');
       assert.deepEqual(JSON.parse(await readFile(file, 'utf8')), stale);
     } finally {
       release.resolve();

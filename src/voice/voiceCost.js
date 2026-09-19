@@ -22,7 +22,7 @@
  * ------------------------------------------------------------------ */
 
 /**
- * ⚠️ VERIFY AT RELEASE — MODEL IDS AND PRICES ARE EXTERNAL FACTS THAT DRIFT. ⚠️
+ * WARNING — VERIFY AT RELEASE: MODEL IDS AND PRICES ARE EXTERNAL FACTS THAT DRIFT.
  *
  * Both model ids and every rate below were read from OpenAI's own model +
  * pricing pages on 2026-08-18:

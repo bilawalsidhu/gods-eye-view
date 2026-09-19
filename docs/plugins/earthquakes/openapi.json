@@ -1,0 +1,349 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "OnDemand Spatial Earthquake Search (USGS)",
+    "version": "1.0.0",
+    "description": "Search recent or historical earthquakes from the USGS FDSN Event Web Service by time window (UTC), magnitude range and geographic area — a circle (latitude + longitude + maxradiuskm) or a bounding box (minlatitude/maxlatitude/minlongitude/maxlongitude), never both. Returns observed events (id, UTC origin time, magnitude and type, depth km, lat/lon, place, tsunami flag, PAGER alert, USGS URL) plus a provenance block with the exact upstream request URL and the public-domain licence note; `mode=count` returns only the number of matching events. This is the OnDemand tool envelope over the Gate 3 route /api/sources/earthquakes (same adapter, same validation, same structured failures: invalid_query 400, usgs_rejected 400/404, usgs_unavailable 502/5xx, usgs_timeout 504). No authentication; USGS data are in the public domain. Results are capped at 200 events per call.",
+    "x-ondemand-spatial": {
+      "pluginId": "earthquakes",
+      "category": "Research",
+      "conversationStarters": [
+        "List earthquakes above magnitude 4.5 in the last 24 hours",
+        "Any earthquakes within 500 km of Abu Dhabi (lat 24.45, lon 54.65) this month?",
+        "Count M6+ events worldwide since 2026-01-01",
+        "Show the strongest earthquakes in the Gulf of Mexico box 18..31 N, -98..-80 E since 2025-01-01, largest first"
+      ],
+      "auth": "none — same-origin proxy; upstream credentials stay server-side",
+      "generatedBy": "scripts/generate-tool-openapi.mjs"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://sb-1dqoce558p0v.vercel.run",
+      "description": "OnDemand Spatial deployment (preview or production)"
+    }
+  ],
+  "paths": {
+    "/api/tools/earthquake_search": {
+      "get": {
+        "operationId": "earthquake_search",
+        "summary": "Search USGS earthquakes by time window, magnitude and area (circle or bbox)",
+        "description": "All parameters are optional. A circle search (latitude + longitude + maxradiuskm, all three) and a bounding-box search (minlatitude/maxlatitude/minlongitude/maxlongitude) are mutually exclusive; mixing them, a partial circle or an inverted box is a 400 `invalid_query`. Times are UTC. `mode=count` returns `count` only (no events). The answer carries `data.events` (normalised USGS features: id, time_utc, magnitude, mag_type, depth_km, lat, lon, place, tsunami 0|1, alert, url) and `provenance` (source, exact upstream URL, USGS generated time, retrieved_at_utc, public-domain licence). Failures keep the Gate 3 route's status and code: 400 usgs_rejected/invalid_query, 404 usgs_rejected, 502 usgs_unavailable, 504 usgs_timeout. Unknown parameters are a 400 `unknown_param`.",
+        "parameters": [
+          {
+            "name": "starttime",
+            "in": "query",
+            "required": false,
+            "description": "Limit to events on or after this time (UTC). `YYYY-MM-DD` (midnight UTC) or `YYYY-MM-DDTHH:MM:SS(Z)`.",
+            "schema": {
+              "type": "string",
+              "maxLength": 32
+            }
+          },
+          {
+            "name": "endtime",
+            "in": "query",
+            "required": false,
+            "description": "Limit to events on or before this time (UTC). Same formats as starttime.",
+            "schema": {
+              "type": "string",
+              "maxLength": 32
+            }
+          },
+          {
+            "name": "minmagnitude",
+            "in": "query",
+            "required": false,
+            "description": "Minimum event magnitude, inclusive.",
+            "schema": {
+              "type": "number",
+              "minimum": -2,
+              "maximum": 10
+            }
+          },
+          {
+            "name": "maxmagnitude",
+            "in": "query",
+            "required": false,
+            "description": "Maximum event magnitude, inclusive.",
+            "schema": {
+              "type": "number",
+              "minimum": -2,
+              "maximum": 10
+            }
+          },
+          {
+            "name": "latitude",
+            "in": "query",
+            "required": false,
+            "description": "Circle-search centre latitude (degrees). Requires longitude and maxradiuskm together; exclusive with the bounding-box keys.",
+            "schema": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            }
+          },
+          {
+            "name": "longitude",
+            "in": "query",
+            "required": false,
+            "description": "Circle-search centre longitude (degrees). Requires latitude and maxradiuskm together.",
+            "schema": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            }
+          },
+          {
+            "name": "maxradiuskm",
+            "in": "query",
+            "required": false,
+            "description": "Circle-search radius in kilometres (> 0, at most 20001.6 — half the Earth’s circumference). Requires latitude and longitude together.",
+            "schema": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 20001.6
+            }
+          },
+          {
+            "name": "minlatitude",
+            "in": "query",
+            "required": false,
+            "description": "Bounding-box south edge (degrees). Must be <= maxlatitude.",
+            "schema": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            }
+          },
+          {
+            "name": "maxlatitude",
+            "in": "query",
+            "required": false,
+            "description": "Bounding-box north edge (degrees). Must be >= minlatitude.",
+            "schema": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            }
+          },
+          {
+            "name": "minlongitude",
+            "in": "query",
+            "required": false,
+            "description": "Bounding-box west edge (degrees). Must be <= maxlongitude.",
+            "schema": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            }
+          },
+          {
+            "name": "maxlongitude",
+            "in": "query",
+            "required": false,
+            "description": "Bounding-box east edge (degrees). Must be >= minlongitude.",
+            "schema": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of events to return (default 100; the adapter caps any larger value at 200).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 100
+            }
+          },
+          {
+            "name": "orderby",
+            "in": "query",
+            "required": false,
+            "description": "Sort order of the returned events (default time = newest first).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "time",
+                "time-asc",
+                "magnitude",
+                "magnitude-asc"
+              ],
+              "default": "time"
+            }
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "description": "Local switch, not forwarded to USGS: \"query\" returns matching events, \"count\" returns only the number of matching events (FDSN count endpoint).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "query",
+                "count"
+              ],
+              "default": "query"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tool result envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error (unknown/missing/invalid parameter)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Upstream failure with a structured reason",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Provider unavailable (missing key / no data) with a structured reason",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Provider": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "live",
+              "stale",
+              "degraded",
+              "unavailable"
+            ]
+          },
+          "source": {
+            "type": "string"
+          },
+          "fetchedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "ageSec": {
+            "type": "integer",
+            "nullable": true
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          },
+          "count": {
+            "type": "integer",
+            "nullable": true
+          }
+        }
+      },
+      "ToolResult": {
+        "type": "object",
+        "required": [
+          "ok",
+          "tool",
+          "data"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "tool": {
+            "type": "string"
+          },
+          "params": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "provider": {
+            "$ref": "#/components/schemas/Provider"
+          },
+          "provenance": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "generatedAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ToolError": {
+        "type": "object",
+        "required": [
+          "ok",
+          "error"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "tool": {
+            "type": "string"
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "param": {
+                "type": "string"
+              }
+            }
+          },
+          "provider": {
+            "$ref": "#/components/schemas/Provider"
+          }
+        }
+      }
+    }
+  }
+}

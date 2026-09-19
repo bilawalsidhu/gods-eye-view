@@ -1,5 +1,9 @@
 /* Preserve component and responsive rule order in one stylesheet entry. */
+/* Brand tokens first (single source of truth, docs/brand/BRAND_SOURCE.md). */
+@import './src/brand/tokens.css';
 @import './src/ui/styles/foundation.css';
+/* Inline Lucide icon contract (docs/brand/ICON_SOURCE.md) — before the components that size it. */
+@import './src/ui/styles/icons.css';
 @import './src/ui/styles/controls.css';
 @import './src/ui/styles/location.css';
 @import './src/ui/styles/status.css';
@@ -17,5 +21,7 @@
 @import './src/ui/styles/command-dock-trays.css';
 @import './src/ui/styles/command-dock-sliding.css';
 @import './src/ui/styles/voice-cost.css';
+@import './src/ui/styles/voice-ondemand.css';
 @import './src/ui/styles/first-run.css';
 @import './src/ui/styles/provider-settings.css';
+@import './src/ui/styles/ondemand-chat.css';

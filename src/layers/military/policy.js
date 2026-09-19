@@ -4,6 +4,8 @@ export {
   LANDED_MISSING_POLL_LIMIT,
   MISSING_POLL_LIMIT,
   ERROR_BACKOFF_INTERVAL,
+  MILITARY_SCENE_RADIUS_NM,
+  MILITARY_REGIONAL_VIEW_MAX_HEIGHT_M,
 } from './recordPolicy.js';
 import * as Cesium from 'cesium';
 

@@ -1,4 +1,5 @@
 import { UiLifetime } from './uiLifetime.js';
+import { setIconContent } from './icons/layerIcon.js';
 import { PanelPositionControls } from './panelPositionControls.js';
 import { PanelLayoutController } from './panelLayoutController.js';
 import {
@@ -289,10 +290,12 @@ export class PanelChrome {
       .forEach((btn) => {
         const owner = btn.closest('[data-panel-id], #param-slider-panel');
         if (owner !== panelEl) return;
+        // Inline Lucide chevrons (right rail) or plus/minus; the button's
+        // aria-label below names the action, so the icon is decorative.
         if (isRightRail) {
-          btn.textContent = collapsed ? '◀' : '▶';
+          setIconContent(btn, collapsed ? 'chevron-left' : 'chevron-right');
         } else {
-          btn.textContent = collapsed ? '+' : '−';
+          setIconContent(btn, collapsed ? 'plus' : 'minus');
         }
         btn.setAttribute('aria-expanded', String(!collapsed));
         const panelName =

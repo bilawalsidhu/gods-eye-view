@@ -1,0 +1,1234 @@
+# ai-provider-hits.txt
+Generated (UTC): 2026-09-17T06:32:56Z
+Audited commit: 0d41b6be5490db1f10a171f238be75db4d4ec3b4 2026-09-16 11:57:56 -0700 Merge pull request #626 from bilawalsidhu/fix/vessel-partial-feed-status
+Command used: rg -n -i -e 'openai|api\.openai\.com|realtime|anthropic|claude|gemini|generativelanguage|openrouter|ollama|\bllm\b|chat[ _]?completion|speech|transcri|\btts\b|\bstt\b|whisper|ephemeral|client_secret' --max-columns 300 --max-columns-preview -g '!node_modules/**' -g '!dist/**' -g '!.git/**' -g '!docs/audit/**' .
+Tool: ripgrep 14.1.1 (rev 4649aa9700)
+
+## Hits per file (sorted desc)
+./src/voice/gevRealtime.test.mjs:133
+./docs/ONDEMAND_API_CURRENT.md:52
+./scripts/package-boundaries.json:51
+./src/keySetupCore.test.mjs:45
+./scripts/qa-l9-matrix.mjs:41
+./server/providers/openai/realtime.js:33
+./src/voice/realtimeController.js:27
+./docs/CURRENT-STATE.md:26
+./src/voice/voiceCost.js:25
+./scripts/dev-fresh.sh:23
+./src/tooling/localServices.test.mjs:22
+./src/pinokioEnvironment.test.mjs:20
+./src/voice/session.test.mjs:17
+./src/voice/realtimeTurns.js:16
+./src/radioMarkup.test.mjs:16
+./src/hudSummaryResponse.test.mjs:15
+./scripts/format-scope.json:15
+./README.md:15
+./src/voice/voiceCost.test.mjs:14
+./server/providers/openai/constants.js:14
+./server/providers/openai.js:14
+./scripts/dev-secure.sh:14
+./src/voice/realtimeOwners.test.mjs:13
+./src/voice/realtimeEvents.js:13
+./src/testSupport/readRealtimeSource.mjs:13
+./src/voice/realtimeBackend.js:12
+./server/providers/openai/hud-summary.js:12
+./src/voice/realtimeConnection.js:11
+./src/voice/realtimeBackend.test.mjs:11
+./src/setupDoctor.test.mjs:11
+./src/data/local_data/datacenters/datacenters.geojsonl:11
+./docs/VOICE-OWNERSHIP.md:10
+./server/providers/openai/rate-limit.js:9
+./server/providers/openai/debug-log.js:9
+./scripts/qa-voice-routing.mjs:9
+./src/voice/realtimeDiagnostics.js:8
+./DATA_SOURCES.md:8
+./src/data/transitFeeds.js:7
+./CHANGELOG.md:7
+./src/voice/realtimeViewport.js:6
+./src/voice/aircraftIdentityNarration.test.mjs:6
+./src/data/gtfsRealtime.js:6
+./package.json:6
+./src/voice/realtimeFacade.js:5
+./src/keySetupCore.mjs:5
+./scripts/setup-doctor.mjs:5
+./scripts/opensky-import-client.sh:5
+./docs/APPLICATION.md:5
+./src/firstRunExperience.test.mjs:4
+./scripts/pinokio-environment.mjs:4
+./SECURITY.md:4
+./src/voice/realtimeSession.js:3
+./src/voice/realtimeInput.js:3
+./src/voice/realtimeCost.js:3
+./src/voice/gevActions.js:3
+./src/voice/actionSchemas.test.mjs:3
+./src/pinokioLauncherContract.test.mjs:3
+./server/providers/openai/instructions.js:3
+./server/providers/local.js:3
+./server/providers/aircraft/opensky.js:3
+./scripts/qa-firstrun-mutations.mjs:3
+./pinokio/update.js:3
+./pinokio/start.js:3
+./pinokio/install.js:3
+./pinokio/_ENVIRONMENT:3
+./docs/opensky-auth.md:3
+./src/voice/realtimeRadio.js:2
+./src/voice/gevActions.test.mjs:2
+./src/voice/commands.js:2
+./src/tooling/previewServing.test.mjs:2
+./src/tooling/importDirections.test.mjs:2
+./src/toolProjectRoot.test.mjs:2
+./src/sources/transitService.js:2
+./src/keySetup.test.mjs:2
+./src/hudSummaryResponse.js:2
+./src/devFreshDotenv.test.mjs:2
+./src/devCctv.test.mjs:2
+./src/data/transitProxy.js:2
+./scripts/qa-radio.mjs:2
+./docs/CODE-BOUNDARIES.md:2
+./TESTING.md:2
+./CONTRIBUTING.md:2
+./src/voice/session.js:1
+./src/voice/realtimeInputPolicy.js:1
+./src/voice/gevRealtime.js:1
+./src/tooling/transitQa.test.mjs:1
+./src/tooling/liveProviders.test.mjs:1
+./src/sources/httpBody.js:1
+./src/sharelink.js:1
+./src/sharelink.celestial.test.mjs:1
+./src/services/requests.js:1
+./src/pinokioUpdatePreview.test.mjs:1
+./src/overlays/worldOverlayTokens.js:1
+./src/overlays/worldOverlayDraw.test.mjs:1
+./src/layers/vessels/selection.js:1
+./src/data/transitFeeds.test.mjs:1
+./src/data/local_data/telegeography_submarine_cables/cable-geo.json:1
+./src/data/gtfsRealtime.test.mjs:1
+./src/data/detectionHost.test.mjs:1
+./src/data/dataCredits.js:1
+./src/data/aisWatchdogTransport.test.mjs:1
+./src/data/aisStreamAdapter.js:1
+./src/app/tools.js:1
+./src/annotations/annotationEngine.js:1
+./server/providers/openai/tools.js:1
+./server/providers/common/rate-limit.js:1
+./scripts/track-regression.mjs:1
+./scripts/qa-sprites-b5.mjs:1
+./scripts/qa-perf.mjs:1
+./scripts/qa-overlay-baseline.mjs:1
+./scripts/qa-map-source-tray.mjs:1
+./scripts/qa-labels.mjs:1
+./scripts/qa-label-readability.mjs:1
+./scripts/qa-heading-b3.mjs:1
+./scripts/qa-cockpit-utility.mjs:1
+./scripts/qa-cockpit-plates.mjs:1
+./scripts/qa-camera-controls.mjs:1
+./scripts/qa-attribution-b12.mjs:1
+./scripts/check-import-directions.mjs:1
+
+## Full hit list (path:line:content, truncated to 300 chars)
+./package.json:31:    "openai-realtime",
+./package.json:116:    "./server/providers/openai": {
+./package.json:117:      "node": "./server/providers/openai.js"
+./package.json:175:    "./voice/controller": "./src/voice/realtimeController.js",
+./package.json:177:    "./voice/realtime-backend": "./src/voice/realtimeBackend.js",
+./package.json:219:    "./voice/realtime-session": "./src/voice/realtimeSession.js",
+./pinokio/install.js:22:          OPENAI_API_KEY: '{{env.OPENAI_API_KEY || ""}}',
+./pinokio/install.js:27:          OPENSKY_CLIENT_SECRET: '{{env.OPENSKY_CLIENT_SECRET || ""}}',
+./pinokio/install.js:29:          GEV_RATELIMIT_OPENAI_PER_MIN: '{{env.GEV_RATELIMIT_OPENAI_PER_MIN || ""}}',
+./pinokio/start.js:14:          OPENAI_API_KEY: '{{env.OPENAI_API_KEY || ""}}',
+./pinokio/start.js:19:          OPENSKY_CLIENT_SECRET: '{{env.OPENSKY_CLIENT_SECRET || ""}}',
+./pinokio/start.js:24:          GEV_RATELIMIT_OPENAI_PER_MIN: '{{env.GEV_RATELIMIT_OPENAI_PER_MIN || ""}}',
+./pinokio/update.js:13:          OPENAI_API_KEY: '{{env.OPENAI_API_KEY || ""}}',
+./pinokio/update.js:18:          OPENSKY_CLIENT_SECRET: '{{env.OPENSKY_CLIENT_SECRET || ""}}',
+./pinokio/update.js:20:          GEV_RATELIMIT_OPENAI_PER_MIN: '{{env.GEV_RATELIMIT_OPENAI_PER_MIN || ""}}',
+./pinokio/_ENVIRONMENT:16:# OPENAI_API_KEY=
+./pinokio/_ENVIRONMENT:21:# OPENSKY_CLIENT_SECRET=
+./pinokio/_ENVIRONMENT:31:GEV_RATELIMIT_OPENAI_PER_MIN=30
+./server/providers/local.js:20:import { openAiRealtimeProxy } from './openai.js';
+./server/providers/local.js:46:    openAiRealtimeProxy(),
+./server/providers/local.js:80:export { openAiRealtimeProxy } from './openai.js';
+./docs/CODE-BOUNDARIES.md:63:Realtime protocol implementation. Negative fixtures cover indirect helpers,
+./docs/CODE-BOUNDARIES.md:203:`server/providers/regional` and `server/providers/openai` own request handling
+./docs/APPLICATION.md:156:`createVoiceCommands` (`./voice/commands`). The default Realtime controller owns
+./docs/APPLICATION.md:159:`negotiate({ offerSdp, credential, signal })`. The Realtime-compatible adapter
+./docs/APPLICATION.md:160:(`./voice/realtime-backend`) accepts separate token and connection transports
+./docs/APPLICATION.md:169:model is bundled by this extraction. The Node Realtime provider accepts
+./docs/APPLICATION.md:170:`realtime: { endpoint, models: { standard, mini }, resolveApiKey, fetchImpl }`;
+./docs/opensky-auth.md:14:Import credentials from JSON (`clientId`/`clientSecret` or `client_id`/`client_secret`) into Keychain:
+./docs/opensky-auth.md:40:1. `OPENSKY_CLIENT_ID` + `OPENSKY_CLIENT_SECRET`
+./docs/opensky-auth.md:42:3. Keychain (`opensky-network` / `client_id`, `client_secret`)
+./scripts/qa-labels.mjs:262:        if (url.origin === appOrigin && url.pathname === '/api/openai/hud-summary') {
+./scripts/dev-fresh.sh:58:[[ -n "${OPENAI_API_KEY:-}" ]] && KEY_SETUP_EXTERNAL_KEYS+=(OPENAI_API_KEY)
+./scripts/dev-fresh.sh:63:[[ -n "${OPENSKY_CLIENT_SECRET:-}" ]] && KEY_SETUP_EXTERNAL_KEYS+=(OPENSKY_CLIENT_SECRET)
+./scripts/dev-fresh.sh:135:  parsed="$(node -e "const fs=require('fs');const p=process.argv[1];try{const raw=JSON.parse(fs.readFileSync(p,'utf8'));const id=String(raw.clientId??raw.client_id??'').trim();const secret=String(raw.clientSecret??raw.client_secret??'').trim();process.stdout.write(id+'\\t'+secret);}catch{process.exi [... omitted end of long line]
+./scripts/dev-fresh.sh:140:  local parsed_client_secret="${parsed#*$'\t'}"
+./scripts/dev-fresh.sh:145:  if [[ -z "${OPENSKY_CLIENT_SECRET}" && -n "${parsed_client_secret}" ]]; then
+./scripts/dev-fresh.sh:146:    OPENSKY_CLIENT_SECRET="${parsed_client_secret}"
+./scripts/dev-fresh.sh:164:  OPENSKY_CLIENT_SECRET="${OPENSKY_CLIENT_SECRET:-$(read_dotenv_value "OPENSKY_CLIENT_SECRET")}"
+./scripts/dev-fresh.sh:201:  if [[ "${OPENSKY_AUTH_MODE}" == "oauth" || "${OPENSKY_AUTH_MODE}" == "auto" ]] && [[ -z "${OPENSKY_CLIENT_SECRET}" ]]; then
+./scripts/dev-fresh.sh:203:      for acct in "client_secret" "client-secret" "secret"; do
+./scripts/dev-fresh.sh:204:        OPENSKY_CLIENT_SECRET="$(read_keychain_secret "${svc}" "${acct}")"
+./scripts/dev-fresh.sh:205:        if [[ -n "${OPENSKY_CLIENT_SECRET}" ]]; then
+./scripts/dev-fresh.sh:215:      OPENSKY_CLIENT_SECRET=""
+./scripts/dev-fresh.sh:223:      OPENSKY_CLIENT_SECRET=""
+./scripts/dev-fresh.sh:234:#   security add-generic-password -U -s "openai-api" -a "api-key" -w
+./scripts/dev-fresh.sh:235:OPENAI_API_KEY="${OPENAI_API_KEY:-$(read_dotenv_value "OPENAI_API_KEY")}"
+./scripts/dev-fresh.sh:241:OPENAI_API_KEY="${OPENAI_API_KEY:-$(read_keychain_secret "openai-api" "api-key")}"
+./scripts/dev-fresh.sh:294:    echo "!! This dev server brokers your configured API keys (OpenAI,"
+./scripts/dev-fresh.sh:297:    echo "!! Consider the opt-in per-IP throttles GEV_RATELIMIT_OPENAI_PER_MIN"
+./scripts/dev-fresh.sh:331:    if [[ -n "${OPENSKY_CLIENT_ID}" && -n "${OPENSKY_CLIENT_SECRET}" ]]; then
+./scripts/dev-fresh.sh:338:    if [[ -n "${OPENSKY_CLIENT_ID}" && -n "${OPENSKY_CLIENT_SECRET}" ]]; then
+./scripts/dev-fresh.sh:350:[[ -n "${OPENAI_API_KEY}" ]] && echo "OpenAI key (voice + HUD summary): configured" || echo "OpenAI key (voice + HUD summary): not set — GEV MIC disabled"
+./scripts/dev-fresh.sh:414:put_env_if_set OPENSKY_CLIENT_SECRET "${OPENSKY_CLIENT_SECRET}"
+./scripts/dev-fresh.sh:417:put_env_if_set OPENAI_API_KEY "${OPENAI_API_KEY}"
+./DATA_SOURCES.md:49:| **MBTA / MassDOT** (cdn.mbta.com) | Transit layer live vehicles and up to 15 minutes of recently observed positions, Greater Boston | MBTA / MassDOT open realtime vehicle data, used for the live view and up to fifteen minutes of recently observed positions; published for developer use and not agai [... omitted end of long line]
+./DATA_SOURCES.md:50:| **CapMetro** (data.texas.gov) | Transit layer live vehicles, Austin TX | CapMetro open realtime vehicle data, used for the live view; published for developer use and not against their use. | Attribution to CapMetro (courtesy text) |
+./DATA_SOURCES.md:51:| **Metro Transit** (Metropolitan Council) | Transit layer live vehicles, Minneapolis–St Paul | Metro Transit / Metropolitan Council open realtime vehicle data, used for the live view; published for developer use and not against their use. | Attribution to Metro Transit / Metropolitan Council (court [... omitted end of long line]
+./DATA_SOURCES.md:52:| **OVapi / Stichting OpenGeo** | Transit layer live vehicles, Netherlands | OVapi / Stichting OpenGeo open realtime vehicle data, used for the live view; published for developer use and not against their use. The client sends a User-Agent and conditional requests. | Attribution to OVapi / Stichting [... omitted end of long line]
+./DATA_SOURCES.md:53:| **Entur** (api.entur.io) | Transit layer live vehicles, Norway | Entur open realtime vehicle data, used for the live view; published for developer use and not against their use. The client sends the `ET-Client-Name` identifying header. | Attribution to Entur (courtesy text) |
+./DATA_SOURCES.md:54:| **TransLink** (Queensland Government) | Transit layer live vehicles, South East Queensland | TransLink / Queensland Government open realtime vehicle data, used for the live view; published for developer use and not against their use. | Attribution to TransLink / Queensland Government (courtesy tex [... omitted end of long line]
+./DATA_SOURCES.md:55:| **HSL** (realtime.hsl.fi) | Transit layer live vehicles, Helsinki | HSL (Helsinki Region Transport) open realtime vehicle data, used for the live view; published for developer use and not against their use. | Attribution to HSL (Helsinki Region Transport) (courtesy text) |
+./DATA_SOURCES.md:77:- **Transit (GTFS-Realtime).** The proxy requests only registered operator feeds, validates redirects, bounds responses, and uses conditional requests, short snapshot caching and failure backoff. All seven registered regions are live-enabled; each can be disabled independently. Vehicles use delayed  [... omitted end of long line]
+./docs/VOICE-OWNERSHIP.md:1:# Realtime voice ownership
+./docs/VOICE-OWNERSHIP.md:3:`realtimeController.js` composes the session and owns its status, UI bindings and
+./docs/VOICE-OWNERSHIP.md:4:overall lifetime. It coordinates startup and shutdown. `realtimeFacade.js`
+./docs/VOICE-OWNERSHIP.md:10:| `realtimeConnection.js` | Start generation, request cancellation, peer/data channel, acquired microphone stream and playback element |
+./docs/VOICE-OWNERSHIP.md:11:| `realtimeTurns.js` | Active and superseded responses, pending confirmations, deduplicated calls and action cancellation |
+./docs/VOICE-OWNERSHIP.md:12:| `realtimeRadio.js` | Speaker ducking, prepared playback, stronger-action reservations and playback observers |
+./docs/VOICE-OWNERSHIP.md:13:| `realtimeInput.js` | Physical Space gesture, microphone mute, input/output meters and their frame/listener lifetime |
+./docs/VOICE-OWNERSHIP.md:14:| `realtimeCost.js` | Next-session preferences and the current session's model-bound meter |
+./docs/VOICE-OWNERSHIP.md:15:| `realtimeViewport.js` | One retained image, bounded deletion identities and capture generation |
+./docs/VOICE-OWNERSHIP.md:16:| `realtimeDiagnostics.js` | Bounded error history and sanitized optional diagnostics |
+./CHANGELOG.md:38:- Separate Realtime connection, response/tool, Radio, input/audio, cost, viewport
+./CHANGELOG.md:105:- Separate voice session lifetime and common controls from the default Realtime protocol adapter.
+./CHANGELOG.md:106:- Add live public transit: vehicles from seven open GTFS-Realtime feeds played back a lag behind real time at their reported speed, a selected-vehicle trail with bounded MBTA history caching, mode-coloured detection brackets in every preset, and sprites that stay readable in night-vision and thermal [... omitted end of long line]
+./CHANGELOG.md:107:- Separate canonical voice action arguments from descriptive wording, preserving the existing Realtime tool inventory.
+./CHANGELOG.md:127:- Separate voice controls, Realtime connection requests and the action runner.
+./CHANGELOG.md:966:- Added OpenAI Realtime voice control, scene-aware entity context, viewport image
+./CHANGELOG.md:978:- Moved Realtime text-history trimming to the server-side retention policy while
+./server/providers/openai/rate-limit.js:6:// configured via .env. Building on first request (like the OPENAI_API_KEY reads) sees the loaded env;
+./server/providers/openai/rate-limit.js:8:let _openAiRateLimiter;
+./server/providers/openai/rate-limit.js:10:/** OpenAI cost endpoints (realtime/token + hud-summary). Null = unlimited (default). */
+./server/providers/openai/rate-limit.js:11:function openAiRateLimiter() {
+./server/providers/openai/rate-limit.js:12:  if (_openAiRateLimiter === undefined)
+./server/providers/openai/rate-limit.js:13:    _openAiRateLimiter = makeOptInRateLimiter(
+./server/providers/openai/rate-limit.js:14:      process.env.GEV_RATELIMIT_OPENAI_PER_MIN,
+./server/providers/openai/rate-limit.js:16:  return _openAiRateLimiter;
+./server/providers/openai/rate-limit.js:39:export { enforceOptInRateLimit, openAiRateLimiter };
+./server/providers/openai/hud-summary.js:2:import { enforceOptInRateLimit, openAiRateLimiter } from './rate-limit.js';
+./server/providers/openai/hud-summary.js:4:import { OPENAI_HUD_SUMMARY_MODEL_DEFAULT } from './constants.js';
+./server/providers/openai/hud-summary.js:6:function extractOpenAiResponseText(data) {
+./server/providers/openai/hud-summary.js:36:  const apiKey = process.env.OPENAI_API_KEY;
+./server/providers/openai/hud-summary.js:46:  // Opt-in per-IP throttle (GEV_RATELIMIT_OPENAI_PER_MIN). Keyless HUD
+./server/providers/openai/hud-summary.js:49:  if (!enforceOptInRateLimit(openAiRateLimiter(), req, res)) return;
+./server/providers/openai/hud-summary.js:54:    const response = await fetch('https://api.openai.com/v1/responses', {
+./server/providers/openai/hud-summary.js:62:          process.env.OPENAI_HUD_SUMMARY_MODEL ||
+./server/providers/openai/hud-summary.js:63:          OPENAI_HUD_SUMMARY_MODEL_DEFAULT,
+./server/providers/openai/hud-summary.js:77:    const summary = toFiveWordHudSummary(extractOpenAiResponseText(data));
+./server/providers/openai/hud-summary.js:86:          : data.error?.message || 'OpenAI HUD summary request failed',
+./server/providers/openai/hud-summary.js:94:        error: error?.message || 'OpenAI HUD summary request failed',
+./server/providers/openai/constants.js:5:const OPENAI_REALTIME_MODEL_DEFAULT = VOICE_MODELS.standard.id;
+./server/providers/openai/constants.js:7:const OPENAI_REALTIME_MODEL_MINI_DEFAULT = VOICE_MODELS.mini.id;
+./server/providers/openai/constants.js:9:const OPENAI_REALTIME_VOICE_DEFAULT = 'marin';
+./server/providers/openai/constants.js:11:const OPENAI_REALTIME_REASONING_DEFAULT = 'low';
+./server/providers/openai/constants.js:13:const OPENAI_REALTIME_CONTEXT_TOKENS_DEFAULT = 3000;
+./server/providers/openai/constants.js:15:const OPENAI_REALTIME_CONTEXT_RETENTION_DEFAULT = 0.5;
+./server/providers/openai/constants.js:17:const OPENAI_HUD_SUMMARY_MODEL_DEFAULT = 'gpt-5-nano';
+./server/providers/openai/constants.js:20:  OPENAI_HUD_SUMMARY_MODEL_DEFAULT,
+./server/providers/openai/constants.js:21:  OPENAI_REALTIME_MODEL_MINI_DEFAULT,
+./server/providers/openai/constants.js:22:  OPENAI_REALTIME_MODEL_DEFAULT,
+./server/providers/openai/constants.js:23:  OPENAI_REALTIME_VOICE_DEFAULT,
+./server/providers/openai/constants.js:24:  OPENAI_REALTIME_REASONING_DEFAULT,
+./server/providers/openai/constants.js:25:  OPENAI_REALTIME_CONTEXT_TOKENS_DEFAULT,
+./server/providers/openai/constants.js:26:  OPENAI_REALTIME_CONTEXT_RETENTION_DEFAULT,
+./src/voice/realtimeTurns.js:1:import { realtimeSessionEvent } from './realtimeEvents.js';
+./src/voice/realtimeTurns.js:11:} from './realtimeProtocol.js';
+./src/voice/realtimeTurns.js:14:export class RealtimeTurns {
+./src/voice/realtimeTurns.js:73:    return this.sendRealtimeEvent(
+./src/voice/realtimeTurns.js:102:    this.sendRealtimeEvent(itemEvent, 'client.user_text');
+./src/voice/realtimeTurns.js:147:   * The Realtime API rejects a second concurrent `response.create`
+./src/voice/realtimeTurns.js:168:    const sent = this.sendRealtimeEvent(
+./src/voice/realtimeTurns.js:179:  async handleRealtimeEvent(event) {
+./src/voice/realtimeTurns.js:187:    const sessionEvent = realtimeSessionEvent(payload);
+./src/voice/realtimeTurns.js:205:        console.warn('[GEV Realtime] Skipped overlapping response.create');
+./src/voice/realtimeTurns.js:220:          '[GEV Realtime] Ignored stale viewport item_not_found',
+./src/voice/realtimeTurns.js:234:      this.reportError('Realtime API', payload.error, {
+./src/voice/realtimeTurns.js:244:    if (payload.type === 'input_audio_buffer.speech_started') {
+./src/voice/realtimeTurns.js:585:    this.sendRealtimeEvent(
+./src/voice/realtimeTurns.js:634:        this.reportError('Realtime response failed', failErr, {
+./src/voice/realtimeTurns.js:688:    const sent = this.sendRealtimeEvent(
+./scripts/qa-heading-b3.mjs:521:        if (url.includes('/api/openai/hud-summary')) {
+./server/providers/openai/instructions.js:4:function realtimeInstructions(
+./server/providers/openai/instructions.js:46:    // GEV_REALTIME_TOOLS is deliberately untouched — deleting this one
+./server/providers/openai/instructions.js:73:export { realtimeInstructions };
+./src/voice/voiceCost.test.mjs:6:// OpenAI API as a model id.
+./src/voice/voiceCost.test.mjs:64:  assert.equal(VOICE_MODELS.standard.id, 'gpt-realtime-2');
+./src/voice/voiceCost.test.mjs:68:  assert.equal(VOICE_MODELS.mini.id, 'gpt-realtime-2.1-mini');
+./src/voice/voiceCost.test.mjs:86:  assert.equal(resolveVoiceModel('mini').id, 'gpt-realtime-2.1-mini');
+./src/voice/voiceCost.test.mjs:87:  assert.equal(resolveVoiceModel('standard').id, 'gpt-realtime-2');
+./src/voice/voiceCost.test.mjs:96:  // This is the guard that keeps an arbitrary querystring out of the OpenAI
+./src/voice/voiceCost.test.mjs:115:    assert.equal(resolved.id, 'gpt-realtime-2');
+./src/voice/voiceCost.test.mjs:445:  assert.equal(state.modelId, 'gpt-realtime-2.1-mini');
+./src/voice/voiceCost.test.mjs:460:  assert.equal(resolveVoiceModelById('gpt-realtime-2').tier, 'standard');
+./src/voice/voiceCost.test.mjs:461:  assert.equal(resolveVoiceModelById('gpt-realtime-2.1-mini').tier, 'mini');
+./src/voice/voiceCost.test.mjs:462:  assert.equal(resolveVoiceModelById('gpt-realtime-2').recognized, true);
+./src/voice/voiceCost.test.mjs:490:  const tracker = createVoiceCostTracker({ tier: 'mini', modelId: 'gpt-realtime-2' });
+./src/voice/voiceCost.test.mjs:491:  assert.equal(tracker.state().modelId, 'gpt-realtime-2');
+./src/voice/voiceCost.test.mjs:498:  const byModel = createVoiceCostTracker({ tier: 'mini', modelId: 'gpt-realtime-2' });
+./src/voice/actionSchemas.test.mjs:5:import { GEV_REALTIME_TOOLS } from '../../server/providers/openai/tools.js';
+./src/voice/actionSchemas.test.mjs:18:test('the complete Realtime tool payload retains its pre-extraction contract and wording', () => {
+./src/voice/actionSchemas.test.mjs:20:    .update(JSON.stringify(stable(GEV_REALTIME_TOOLS)))
+./src/voice/realtimeOwners.test.mjs:3:import { GevRealtimeController } from './realtimeController.js';
+./src/voice/realtimeOwners.test.mjs:4:import { RealtimeInput } from './realtimeInput.js';
+./src/voice/realtimeOwners.test.mjs:5:import { RealtimeViewport } from './realtimeViewport.js';
+./src/voice/realtimeOwners.test.mjs:56:  const controller = new GevRealtimeController({
+./src/voice/realtimeOwners.test.mjs:102:  const controller = new GevRealtimeController({
+./src/voice/realtimeOwners.test.mjs:131:    const owner = new RealtimeViewport({
+./src/voice/realtimeOwners.test.mjs:134:      operations: { sendRealtimeEvent(message) { sent.push(message); return true; } },
+./src/voice/realtimeOwners.test.mjs:149:  const owner = new RealtimeViewport({
+./src/voice/realtimeOwners.test.mjs:151:    operations: { sendRealtimeEvent(message) { sent.push(message); return true; } },
+./src/voice/realtimeOwners.test.mjs:173:  const owner = new RealtimeInput({
+./src/voice/realtimeOwners.test.mjs:202:  const create = () => new RealtimeInput({
+./src/voice/realtimeOwners.test.mjs:226:      const controller = new GevRealtimeController({
+./src/voice/realtimeOwners.test.mjs:246:      const pending = controller.handleRealtimeEvent({ data: JSON.stringify({
+./src/voice/session.test.mjs:4:import { realtimeSessionEvent } from './realtimeEvents.js';
+./src/voice/session.test.mjs:56:test('alternate protocol shares session events and action execution without Realtime', async () => {
+./src/voice/session.test.mjs:66:    type: 'transcript',
+./src/voice/session.test.mjs:86:      'transcript',
+./src/voice/session.test.mjs:118:      f.hooks.emit({ type: 'interruption', reason: 'user-speech' });
+./src/voice/session.test.mjs:178:test('wire events project only normalized transcript, interruption and completion fields', () => {
+./src/voice/session.test.mjs:180:    realtimeSessionEvent({
+./src/voice/session.test.mjs:181:      type: 'response.output_audio_transcript.delta',
+./src/voice/session.test.mjs:188:      type: 'transcript',
+./src/voice/session.test.mjs:197:    realtimeSessionEvent({
+./src/voice/session.test.mjs:198:      type: 'conversation.item.input_audio_transcription.completed',
+./src/voice/session.test.mjs:199:      transcript: 'Go',
+./src/voice/session.test.mjs:202:      type: 'transcript',
+./src/voice/session.test.mjs:210:    realtimeSessionEvent({ type: 'response.output_text.done', text: 'Done' })
+./src/voice/session.test.mjs:215:    realtimeSessionEvent({ type: 'input_audio_buffer.speech_started' }).type,
+./src/voice/session.test.mjs:219:    realtimeSessionEvent({
+./src/voice/session.test.mjs:226:    realtimeSessionEvent({
+./src/sharelink.celestial.test.mjs:226:test('copy adds a fresh ephemeral timestamp without aging the live URL', async () => {
+./src/toolProjectRoot.test.mjs:72:        'GOOGLE_MAPS_API_KEY=fixture-browser\nGOOGLE_MAPS_SERVER_API_KEY=fixture-server\nOPENAI_API_KEY=fixture-voice\n',
+./src/toolProjectRoot.test.mjs:83:require('node:fs').writeFileSync(process.env.TEST_CAPTURE, JSON.stringify({ cwd: process.cwd(), args: process.argv.slice(2), browser: process.env.GOOGLE_MAPS_API_KEY, server: process.env.GOOGLE_MAPS_SERVER_API_KEY, voice: process.env.OPENAI_API_KEY, provenance: process.env.GEV_KEY_SETUP_EXTERNAL_KEY [... omitted end of long line]
+./src/voice/session.js:5: * Events: state, transcript, action-call, action-result, interruption, completion.
+./src/voice/commands.js:2:import { createRealtimeSession } from './realtimeSession.js';
+./src/voice/commands.js:7:    createSession: createRealtimeSession,
+./src/voice/aircraftIdentityNarration.test.mjs:1:import { readRealtimeSource } from '../testSupport/readRealtimeSource.mjs';
+./src/voice/aircraftIdentityNarration.test.mjs:6:const voiceConfig = readFileSync(new URL('../../server/providers/openai/instructions.js', import.meta.url), 'utf8');
+./src/voice/aircraftIdentityNarration.test.mjs:7:const realtime = readRealtimeSource();
+./src/voice/aircraftIdentityNarration.test.mjs:25:  const followupStart = realtime.indexOf("if (result?.action === 'get_entity_context')");
+./src/voice/aircraftIdentityNarration.test.mjs:26:  const followupEnd = realtime.indexOf("if (result?.action === 'get_current_view_state')", followupStart);
+./src/voice/aircraftIdentityNarration.test.mjs:28:  const followup = realtime.slice(followupStart, followupEnd);
+./src/voice/gevRealtime.js:3:export * from './realtimeController.js';
+./src/voice/realtimeBackend.js:3:/** Realtime-compatible token and SDP requests, independent of microphone/UI ownership. */
+./src/voice/realtimeBackend.js:4:export function createRealtimeBackend({
+./src/voice/realtimeBackend.js:5:  tokenEndpoint = '/api/realtime/token',
+./src/voice/realtimeBackend.js:6:  callsEndpoint = 'https://api.openai.com/v1/realtime/calls',
+./src/voice/realtimeBackend.js:17:    protocol: 'openai-realtime',
+./src/voice/realtimeBackend.js:35:          reason || `Realtime token failed: HTTP ${response.status}`,
+./src/voice/realtimeBackend.js:39:        data?.value || data?.client_secret?.value || data?.client_secret;
+./src/voice/realtimeBackend.js:42:          'Realtime token response did not include a client secret',
+./src/voice/realtimeBackend.js:44:      const expiresAt = data?.expires_at ?? data?.client_secret?.expires_at;
+./src/voice/realtimeBackend.js:50:          'Realtime client secret has expired; reconnect to request a new one',
+./src/voice/realtimeBackend.js:70:          'Realtime client secret has expired; reconnect to request a new one',
+./src/voice/realtimeBackend.js:86:        throw new Error(`Realtime SDP failed: HTTP ${response.status}`);
+./src/voice/realtimeDiagnostics.js:3:export const ERROR_STORAGE_KEY = 'gev-realtime-errors';
+./src/voice/realtimeDiagnostics.js:5:export const DEBUG_LOG_URL = '/api/realtime/debug-log';
+./src/voice/realtimeDiagnostics.js:55:    .replace(/sk-(?:proj-)?[A-Za-z0-9_-]{20,}/g, '[Redacted OpenAI API key]')
+./src/voice/realtimeDiagnostics.js:57:    .replace(/"client_secret"\s*:\s*"[^"]+"/gi, '"client_secret":"[Redacted]"')
+./src/voice/realtimeDiagnostics.js:60:      '"value":"[Redacted ephemeral key]"',
+./src/voice/realtimeDiagnostics.js:144:export class RealtimeDiagnostics {
+./src/voice/realtimeDiagnostics.js:180:    console.error('[GEV Realtime]', record);
+./src/voice/realtimeDiagnostics.js:205:            file: '.gev-logs/realtime-conversations.jsonl',
+./src/voice/realtimeSession.js:1:import { GevRealtimeController } from './realtimeController.js';
+./src/voice/realtimeSession.js:4:export function createRealtimeSession({
+./src/voice/realtimeSession.js:7:  createController = (options) => new GevRealtimeController(options),
+./src/voice/realtimeFacade.js:2:export class RealtimeFacade {
+./src/voice/realtimeFacade.js:443:  handleRealtimeEvent(...args) {
+./src/voice/realtimeFacade.js:444:    return this._turns.handleRealtimeEvent(...args);
+./src/voice/realtimeFacade.js:507:  sendRealtimeEvent(...args) {
+./src/voice/realtimeFacade.js:508:    return this._connection.sendRealtimeEvent(...args);
+./scripts/qa-firstrun-mutations.mjs:35:  voiceInstructions: path.join(ROOT, 'server/providers/openai/instructions.js'),
+./scripts/qa-firstrun-mutations.mjs:36:  voiceTools: path.join(ROOT, 'server/providers/openai/tools.js'),
+./scripts/qa-firstrun-mutations.mjs:456:    defect: 'the voice TOOL SCHEMA is edited (a Realtime prompt-cache bust)',
+./src/voice/realtimeInputPolicy.js:5:// incoming Realtime stream is already clean speech audio.
+./src/voice/realtimeBackend.test.mjs:3:import { createRealtimeBackend } from './realtimeBackend.js';
+./src/voice/realtimeBackend.test.mjs:4:import { GevRealtimeController } from './realtimeController.js';
+./src/voice/realtimeBackend.test.mjs:8:    value: 'ephemeral-test',
+./src/voice/realtimeBackend.test.mjs:15:  const backend = createRealtimeBackend({
+./src/voice/realtimeBackend.test.mjs:28:      assert.equal(init.headers.Authorization, 'Bearer ephemeral-test');
+./src/voice/realtimeBackend.test.mjs:46:  const backend = createRealtimeBackend({
+./src/voice/realtimeBackend.test.mjs:57:  assert.equal((await backend.requestToken()).token, 'ephemeral-test');
+./src/voice/realtimeBackend.test.mjs:67:    const backend = createRealtimeBackend({
+./src/voice/realtimeBackend.test.mjs:72:  const backend = createRealtimeBackend({
+./src/voice/realtimeBackend.test.mjs:91:    const backend = createRealtimeBackend({
+./src/voice/realtimeBackend.test.mjs:114:  const controller = new GevRealtimeController({
+./src/voice/realtimeViewport.js:4:} from './realtimeProtocol.js';
+./src/voice/realtimeViewport.js:170:export class RealtimeViewport {
+./src/voice/realtimeViewport.js:205:    // the server-side retention_ratio truncation (see /api/realtime/token) —
+./src/voice/realtimeViewport.js:219:      this.sendRealtimeEvent(
+./src/voice/realtimeViewport.js:251:    // is still too large for the data channel, sendRealtimeEvent returns false
+./src/voice/realtimeViewport.js:255:    const sent = this.sendRealtimeEvent(
+./server/providers/openai/realtime.js:1:import { enforceOptInRateLimit, openAiRateLimiter } from './rate-limit.js';
+./server/providers/openai/realtime.js:7:  OPENAI_REALTIME_MODEL_MINI_DEFAULT,
+./server/providers/openai/realtime.js:8:  OPENAI_REALTIME_MODEL_DEFAULT,
+./server/providers/openai/realtime.js:9:  OPENAI_REALTIME_VOICE_DEFAULT,
+./server/providers/openai/realtime.js:10:  OPENAI_REALTIME_REASONING_DEFAULT,
+./server/providers/openai/realtime.js:11:  OPENAI_REALTIME_CONTEXT_TOKENS_DEFAULT,
+./server/providers/openai/realtime.js:12:  OPENAI_REALTIME_CONTEXT_RETENTION_DEFAULT,
+./server/providers/openai/realtime.js:14:import { realtimeInstructions } from './instructions.js';
+./server/providers/openai/realtime.js:15:import { GEV_REALTIME_TOOLS } from './tools.js';
+./server/providers/openai/realtime.js:17:function createRealtimeTokenHandler({
+./server/providers/openai/realtime.js:19:  endpoint = 'https://api.openai.com/v1/realtime/client_secrets',
+./server/providers/openai/realtime.js:21:  resolveApiKey = () => process.env.OPENAI_API_KEY,
+./server/providers/openai/realtime.js:33:    // Opt-in per-IP throttle (GEV_RATELIMIT_OPENAI_PER_MIN). No-op when unset.
+./server/providers/openai/realtime.js:34:    if (!enforceOptInRateLimit(openAiRateLimiter(), req, res)) return;
+./server/providers/openai/realtime.js:40:      res.end(JSON.stringify({ error: 'OPENAI_API_KEY is not set' }));
+./server/providers/openai/realtime.js:46:    // resolves to `standard` instead of reaching OpenAI as a model id, so a
+./server/providers/openai/realtime.js:63:          process.env.OPENAI_REALTIME_MODEL_MINI ||
+./server/providers/openai/realtime.js:64:          OPENAI_REALTIME_MODEL_MINI_DEFAULT
+./server/providers/openai/realtime.js:66:          process.env.OPENAI_REALTIME_MODEL ||
+./server/providers/openai/realtime.js:67:          OPENAI_REALTIME_MODEL_DEFAULT;
+./server/providers/openai/realtime.js:69:      process.env.OPENAI_REALTIME_VOICE || OPENAI_REALTIME_VOICE_DEFAULT;
+./server/providers/openai/realtime.js:71:      process.env.OPENAI_REALTIME_REASONING_EFFORT ||
+./server/providers/openai/realtime.js:72:      OPENAI_REALTIME_REASONING_DEFAULT;
+./server/providers/openai/realtime.js:78:          Number(process.env.OPENAI_REALTIME_CONTEXT_TOKENS) ||
+./server/providers/openai/realtime.js:79:            OPENAI_REALTIME_CONTEXT_TOKENS_DEFAULT,
+./server/providers/openai/realtime.js:87:        Number(process.env.OPENAI_REALTIME_CONTEXT_RETENTION) ||
+./server/providers/openai/realtime.js:88:          OPENAI_REALTIME_CONTEXT_RETENTION_DEFAULT,
+./server/providers/openai/realtime.js:93:        type: 'realtime',
+./server/providers/openai/realtime.js:115:        instructions: realtimeInstructions(annotationGuidance),
+./server/providers/openai/realtime.js:116:        tools: GEV_REALTIME_TOOLS,
+./server/providers/openai/realtime.js:129:          'OpenAI-Safety-Identifier': 'gev-local-dev',
+./server/providers/openai/realtime.js:154:          error: error?.message || 'Failed to create Realtime token',
+./server/providers/openai/realtime.js:161:export { createRealtimeTokenHandler };
+./server/providers/openai/debug-log.js:6:const REALTIME_DEBUG_LOG_MAX_BYTES = 8 * 1024 * 1024;
+./server/providers/openai/debug-log.js:9:  const REALTIME_DEBUG_LOG_DIR = path.join(sourceRoot, '.gev-logs');
+./server/providers/openai/debug-log.js:10:  const REALTIME_DEBUG_LOG_FILE = path.join(
+./server/providers/openai/debug-log.js:11:    REALTIME_DEBUG_LOG_DIR,
+./server/providers/openai/debug-log.js:12:    'realtime-conversations.jsonl',
+./server/providers/openai/debug-log.js:23:      const body = await readRequestBody(req, REALTIME_DEBUG_LOG_MAX_BYTES);
+./server/providers/openai/debug-log.js:25:      fs.mkdirSync(REALTIME_DEBUG_LOG_DIR, { recursive: true });
+./server/providers/openai/debug-log.js:27:        REALTIME_DEBUG_LOG_FILE,
+./server/providers/openai/debug-log.js:40:          error: error?.message || 'Failed to write Realtime debug log',
+./server/providers/openai/tools.js:4:export const GEV_REALTIME_TOOLS = createActionTools(ACTION_DESCRIPTIONS);
+./scripts/qa-perf.mjs:61: * one-shot. It would: when `/api/openai/hud-summary` is unreachable the summary
+./scripts/pinokio-environment.mjs:13:  'OPENAI_API_KEY',
+./scripts/pinokio-environment.mjs:18:  'OPENSKY_CLIENT_SECRET',
+./scripts/pinokio-environment.mjs:20:  'GEV_RATELIMIT_OPENAI_PER_MIN',
+./scripts/pinokio-environment.mjs:28:  GEV_RATELIMIT_OPENAI_PER_MIN: '30',
+./src/pinokioUpdatePreview.test.mjs:39: * about what the update path does to a checkout rather than about a transcript
+./docs/ONDEMAND_API_CURRENT.md:96:| 77 | https://docs.on-demand.io/reference/get_execution-executionid-transcript.md | 200 | 2026-09-17T05:56:33Z | 4142 |  |
+./docs/ONDEMAND_API_CURRENT.md:137:| 118 | https://gateway.on-demand.io/config/v1/public/docs/reference/api/get_execution-executionid-transcript | 200 | 2026-09-17T05:57:16Z | 1904 |  |
+./docs/ONDEMAND_API_CURRENT.md:286:{ "query": "What is AI?", "endpointId": "predefined-claude-sonnet-5", "responseMode": "sync", "pluginIds": [], "modelConfigs": { "temperature": 0.7 } }
+./docs/ONDEMAND_API_CURRENT.md:294:  -d '{"query":"What is AI?","endpointId":"predefined-claude-sonnet-5","responseMode":"sync","pluginIds":[]}'
+./docs/ONDEMAND_API_CURRENT.md:301:  body: JSON.stringify({ query: "What is AI?", endpointId: "predefined-claude-sonnet-5", responseMode: "sync", pluginIds: [] }),
+./docs/ONDEMAND_API_CURRENT.md:313:{ "query": "Get the city based on ip \"122.108.92.210\" and find the current weather in that city", "endpointId": "predefined-claude-sonnet-5", "responseMode": "stream", "pluginIds": [], "reasoningMode": "low" }
+./docs/ONDEMAND_API_CURRENT.md:321:  -d '{"query":"What is AI?","endpointId":"predefined-claude-sonnet-5","responseMode":"stream","pluginIds":[]}'
+./docs/ONDEMAND_API_CURRENT.md:329:  body: JSON.stringify({ query: "What is AI?", endpointId: "predefined-claude-sonnet-5", responseMode: "stream", pluginIds: [] }),
+./docs/ONDEMAND_API_CURRENT.md:399:**Analyze semantics.** "The OnDemand platform allows users to upload different types of media… It then thoroughly analyses the uploaded content to extract valuable insights. Users can interact with the platform's chat feature to ask questions… based on the insights." Processing is driven by the `plu [... omitted end of long line]
+./docs/ONDEMAND_API_CURRENT.md:413:Response 200: `message` ("Media Created"), `data{ id, companyId, sessionId, externalUserId, url, sourceUrl, extractedTextUrl, name, sizeBytes, source (document|audio|video|youtube|image), mimeType, extension, plugins[], context, extractedText, actionStatus, failedReason, isDeleted, responseMode, cre [... omitted end of long line]
+./docs/ONDEMAND_API_CURRENT.md:474:### 6.1 Audio → text (STT) — `POST …/execute/speech_to_text`
+./docs/ONDEMAND_API_CURRENT.md:479:- Language selection, response format, streaming / partial transcripts, timestamps, diarization: **NOT FOUND IN LIVE DOCS** (the body has exactly one field; there is no upload-bytes variant — host the file or upload it with the Media API first and use the returned `data.url`).
+./docs/ONDEMAND_API_CURRENT.md:480:- Response 200: `{ "message": "Service executed successfully", "data": { "text": "<transcript>" } }`.
+./docs/ONDEMAND_API_CURRENT.md:483:curl -X POST https://api.on-demand.io/services/v1/public/service/execute/speech_to_text \
+./docs/ONDEMAND_API_CURRENT.md:488:const stt = await (await fetch("https://api.on-demand.io/services/v1/public/service/execute/speech_to_text", { method: "POST",
+./docs/ONDEMAND_API_CURRENT.md:490:const transcript = stt.data.text;
+./docs/ONDEMAND_API_CURRENT.md:493:### 6.2 Text → audio (TTS) — `POST …/execute/text_to_speech`
+./docs/ONDEMAND_API_CURRENT.md:497:- Request JSON: `input` string **required**; `model` enum `tts-1 | tts-1-hd` (default `tts-1`; "tts-1: real-time/low latency, lower quality; tts-1-hd: higher quality"); `voice` enum `alloy | echo | fable | onyx | nova | shimmer` (default `alloy`).
+./docs/ONDEMAND_API_CURRENT.md:502:curl -X POST https://api.on-demand.io/services/v1/public/service/execute/text_to_speech \
+./docs/ONDEMAND_API_CURRENT.md:503:  -H "apikey: $ONDEMAND_API_KEY" -H "Content-Type: application/json" -d '{"input":"Hello from OnDemand","voice":"alloy","model":"tts-1"}'
+./docs/ONDEMAND_API_CURRENT.md:507:const tts = await (await fetch("https://api.on-demand.io/services/v1/public/service/execute/text_to_speech", { method: "POST",
+./docs/ONDEMAND_API_CURRENT.md:508:  headers: { apikey: process.env.ONDEMAND_API_KEY, "Content-Type": "application/json" }, body: JSON.stringify({ input: "Hello", voice: "alloy", model: "tts-1" }) })).json();
+./docs/ONDEMAND_API_CURRENT.md:509:const audioBytes = new Uint8Array(await (await fetch(tts.data.audioUrl)).arrayBuffer());
+./docs/ONDEMAND_API_CURRENT.md:514:`(src: https://docs.on-demand.io/reference/translatetext.md, retrieved 2026-09-17T05:56:32Z)`, in-app `.../reference/api/translatetext` (05:57:08Z). Note: the Cloud Services guide says "Currently, two APIs are available" (TTS, STT) while the reference lists three — translation is in the reference bu [... omitted end of long line]
+./docs/ONDEMAND_API_CURRENT.md:533:Base URL: `https://api.on-demand.io/automation/api`; header `apikey` (scheme `ApiKeyAuth`, header `apikey`). Sources: OpenAPI pages `reference/post_workflow.md`, `get_workflow.md`, `get_workflow-id.md`, `patch_workflow-id.md`, `delete_workflow-id.md`, `patch_workflow-id-name.md`, `post_workflow-id-a [... omitted end of long line]
+./docs/ONDEMAND_API_CURRENT.md:553:| Voice transcript | `GET /execution/{executionID}/transcript` | — | 200 `data[]` `{executionID, workflowID, content, responseID, eventID, itemID, author (user \| voice-server \| ond), createdAtInMilliseconds}`; 401 "Unauthorized access or non-voice mode workflow" |
+./docs/ONDEMAND_API_CURRENT.md:561:`trigger`: `type` enum **`cron` \| `webhook`** (required), `cron.expression` (6-place CRON, seconds first; guide samples also carry `cron.type: basic|advanced`), `webhook.url`, `webhook.auth{username,password}`, `webhook.whiteListedIPs[]`, `position{x,y}` (required), `measured{width,height}`, `nextN [... omitted end of long line]
+./docs/ONDEMAND_API_CURRENT.md:599:- **Attached:** at session level (`pluginIds` on `POST /chat/v1/sessions`), per query (`pluginIds` on `…/query`, max 20, replaces the session list), on media (`plugins`), in workflow nodes (`llm.plugins[{id}]`, `advancedVoiceMode.plugins[{id}]`), and in knowledge ingestion via `pluginInputs`. Docume [... omitted end of long line]
+./docs/ONDEMAND_API_CURRENT.md:630:| Claude Opus 5 | `claude-opus-5` | `predefined-claude-opus-5` |
+./docs/ONDEMAND_API_CURRENT.md:631:| Claude Sonnet 5 | `claude-sonnet-5` | `predefined-claude-sonnet-5` |
+./docs/ONDEMAND_API_CURRENT.md:632:| Claude Fable 5 | `claude-fable-5` | `predefined-claude-fable-5` |
+./docs/ONDEMAND_API_CURRENT.md:633:| Gemini 3.7 Flash | `gemini-3.7-flash` | `predefined-gemini-3.7-flash` |
+./docs/ONDEMAND_API_CURRENT.md:634:| Gemini 3.6 Flash | `gemini-3.6-flash` | `predefined-gemini-3.6-flash` |
+./docs/ONDEMAND_API_CURRENT.md:635:| Gemini 3.1 | `gemini-3.1` | `predefined-gemini-3.1-pro-preview` |
+./docs/ONDEMAND_API_CURRENT.md:646:"The list of predefined models may be updated over time. Please refer to the playground (`https://app.on-demand.io/playground`) for the most up to date list." Examples elsewhere in the docs still use the older ids `predefined-openai-gpt4o` (Submit Query spec example, guides) and `predefined-openai-g [... omitted end of long line]
+./docs/ONDEMAND_API_CURRENT.md:658:| Tool/agent selection | `pluginIds` (all OpenAPI schemas); `agentIds` (guide code samples); `plugins` (Media API, workflow nodes) | **Agents** ("What are Agents?", "My Agents", "Agents Marketplace"); formerly "Plugins" | Specialized extensions (Knowledge, REST API, IoT, Terminal, Connectors) invoke [... omitted end of long line]
+./docs/ONDEMAND_API_CURRENT.md:660:| Agent Flows / Workflows | "Agents Flow Builder API" — `workflow`, `execution`, `approvalgate` resources under `/automation/api` | **Agents Flow Builder** / "Workflow Builder" / "Create Workflow" (dashboard `app.on-demand.io/agents`) | DAG of trigger → nodes (`llm`, `inputText`, `advancedVoiceMode` [... omitted end of long line]
+./docs/ONDEMAND_API_CURRENT.md:662:| Endpoints / models | `endpointId` (`predefined-…`, BYOI, BYOM); workflow `llm.model` | **Models** page, "Fulfillment Models", BYOI/BYOM Management, Playground | The LLM endpoint that fulfils the query | `POST …/query.endpointId`; `POST /public/projects.endpointId`; `nodes[].llm.model` | https://do [... omitted end of long line]
+./docs/ONDEMAND_API_CURRENT.md:664:| Fulfillment prompt | `modelConfigs.fulfillmentPrompt`; workflow `llm.fulfillmentPrompt`; project `systemPrompt` | "Fulfillment Prompt" (LLM node), "system prompt" (Projects) | Instructions guiding the model's fulfilment; supports `{context}` / `{question}` placeholders | `POST …/query.modelConfigs [... omitted end of long line]
+./docs/ONDEMAND_API_CURRENT.md:670:| Advanced voice mode | `advancedVoiceMode` node; `delivery.channel: phone`; `GET /execution/{id}/transcript` | "Advanced Voice Mode Node", "Phone Call" delivery | Outbound phone-call voice conversation run by a workflow | `/automation/api/workflow*`, `/execution/{executionID}/transcript` | https:// [... omitted end of long line]
+./docs/ONDEMAND_API_CURRENT.md:674:## 14. Native realtime voice
+./docs/ONDEMAND_API_CURRENT.md:676:**Answer: N.** OnDemand does **not** expose a native, low-latency, full-duplex realtime voice API for developers (speech in → streaming transcription → agent/tool execution → streaming audio out in one session). Evidence checked:
+./docs/ONDEMAND_API_CURRENT.md:679:- STT accepts only a hosted `audioUrl` and returns a complete `text`; TTS returns a hosted `audioUrl`; neither documents streaming or partial results `(src: https://docs.on-demand.io/reference/convertaudiototext.md, retrieved 2026-09-17T05:56:32Z)`, `(src: https://docs.on-demand.io/reference/convert [... omitted end of long line]
+./docs/ONDEMAND_API_CURRENT.md:680:- The closest documented voice capability is workflow-only: the **Advanced Voice Mode node** "initiates a real-time, interactive voice conversation via an outbound phone call" (one per workflow, cannot be combined with LLM nodes, recipients set in a Phone Call delivery node), with transcripts readab [... omitted end of long line]
+./docs/ONDEMAND_API_CURRENT.md:683:**Supported path:** chain the documented services — `POST …/services/v1/public/service/execute/speech_to_text` (`audioUrl` → `data.text`) → `POST /chat/v1/sessions/{sessionId}/query` with `responseMode: "stream"` (SSE deltas; tool execution visible as `statusLog` events) → `POST …/execute/text_to_sp [... omitted end of long line]
+./docs/ONDEMAND_API_CURRENT.md:694:| `endpointId` | **CONFIRMED (values CHANGED)** | Field unchanged and required; the predefined id list is now the 18 ids in §12 (e.g. `predefined-claude-sonnet-5`); examples still cite `predefined-openai-gpt4o`, which is absent from the current table. | https://docs.on-demand.io/reference/submitquer [... omitted end of long line]
+./docs/ONDEMAND_API_CURRENT.md:697:| `fulfillmentPrompt` | **CONFIRMED** | `modelConfigs.fulfillmentPrompt` on Submit Query; `nodes[].llm.fulfillmentPrompt` on workflows. | https://docs.on-demand.io/reference/submitquery.md · https://docs.on-demand.io/docs/fulfillment-prompts.md · https://docs.on-demand.io/reference/post_workflow.md  [... omitted end of long line]
+./docs/ONDEMAND_API_CURRENT.md:705:The step-1 Perplexity searches (four queries, run by the orchestration layer) returned **no OnDemand API contract at all** — every source was either a YouTube overview ("OnDemand FULL Platform Overview", "The All-New OnDemand Platform: Full Overview", AICodeKing "This FULLY FREE AI Agent Platform ca [... omitted end of long line]
+./docs/ONDEMAND_API_CURRENT.md:709:- "No-code workflow builder" (Skywork, videos): confirmed — the visual Agents Flow Builder with trigger/LLM/agent/delivery nodes `(src: https://docs.on-demand.io/docs/creating-a-workflow.md, retrieved 2026-09-17T05:56:31Z)`.
+./docs/ONDEMAND_API_CURRENT.md:715:- "Free Claude 3.5 Sonnet" (AICodeKing title): contradicted/outdated — the current predefined list carries Claude Opus 5 / Sonnet 5 / Fable 5; no 3.5-generation id is listed `(src: https://docs.on-demand.io/docs/fulfillment-models.md, retrieved 2026-09-17T05:56:31Z)`.
+./docs/ONDEMAND_API_CURRENT.md:716:- Skywork's framing of OnDemand as primarily a chatbot/RAG product understates the documented surface: Media analysis, Services (STT/TTS/translation), Projects, MQTT/IoT agents, workflows with phone-call voice mode and approval gates, and the Terminal Agent are all documented APIs/features.
+./docs/ONDEMAND_API_CURRENT.md:729:- There is no documented **delete session**, no **session TTL**, no **`contextMetadata` on sessions**, no **`maxTokens`**, no **structured-output** option, no **file attachment on the query body**, no **REST key management**, no **skills API**, no **streaming workflow logs**, no **workflow export/"G [... omitted end of long line]
+./server/providers/common/rate-limit.js:5: * Opt-in per-IP rate limiter for the cost-bearing API proxies (OpenAI / Google).
+./scripts/qa-voice-routing.mjs:8: *    Sends TEXT turns through a real OpenAI Realtime session minted by the
+./scripts/qa-voice-routing.mjs:9: *    app's own /api/realtime/token endpoint — so the instructions + tool defs
+./scripts/qa-voice-routing.mjs:155:  // — multi-intent (assert ALL tools fire before speech) —
+./scripts/qa-voice-routing.mjs:189:  const res = await fetch(`${APP_URL}/api/realtime/token`, { method: 'POST' });
+./scripts/qa-voice-routing.mjs:192:  const value = body?.value || body?.client_secret?.value;
+./scripts/qa-voice-routing.mjs:193:  const model = body?.session?.model || 'gpt-realtime';
+./scripts/qa-voice-routing.mjs:198:/** One Realtime WS session that can run several text turns sequentially. */
+./scripts/qa-voice-routing.mjs:210:      const url = `wss://api.openai.com/v1/realtime?model=${encodeURIComponent(this.model)}`;
+./scripts/qa-voice-routing.mjs:256:      this.pending.errors.push(msg.error?.message || 'realtime error');
+./scripts/format-scope.json:107:  "server/providers/openai.js",
+./scripts/format-scope.json:108:  "server/providers/openai/constants.js",
+./scripts/format-scope.json:109:  "server/providers/openai/debug-log.js",
+./scripts/format-scope.json:110:  "server/providers/openai/hud-summary.js",
+./scripts/format-scope.json:111:  "server/providers/openai/instructions.js",
+./scripts/format-scope.json:112:  "server/providers/openai/rate-limit.js",
+./scripts/format-scope.json:113:  "server/providers/openai/realtime.js",
+./scripts/format-scope.json:114:  "server/providers/openai/tools.js",
+./scripts/format-scope.json:569:  "src/voice/realtimeBackend.js",
+./scripts/format-scope.json:570:  "src/voice/realtimeBackend.test.mjs",
+./scripts/format-scope.json:658:  "server/providers/openai/toolDescriptions.js",
+./scripts/format-scope.json:661:  "src/voice/realtimeSession.js",
+./scripts/format-scope.json:662:  "src/voice/realtimeEvents.js",
+./scripts/format-scope.json:687:  "src/data/gtfsRealtime.js",
+./scripts/format-scope.json:688:  "src/data/gtfsRealtime.test.mjs",
+./src/app/tools.js:4:import { initGevVoiceCommands } from '../voice/gevRealtime.js';
+./scripts/package-boundaries.json:255:  "openai-provider": {
+./scripts/package-boundaries.json:257:    "exports": ["./server/providers/openai"],
+./scripts/package-boundaries.json:262:      "server/providers/openai.js",
+./scripts/package-boundaries.json:263:      "server/providers/openai/constants.js",
+./scripts/package-boundaries.json:264:      "server/providers/openai/debug-log.js",
+./scripts/package-boundaries.json:265:      "server/providers/openai/hud-summary.js",
+./scripts/package-boundaries.json:266:      "server/providers/openai/instructions.js",
+./scripts/package-boundaries.json:267:      "server/providers/openai/rate-limit.js",
+./scripts/package-boundaries.json:268:      "server/providers/openai/realtime.js",
+./scripts/package-boundaries.json:269:      "server/providers/openai/tools.js",
+./scripts/package-boundaries.json:273:      "server/providers/openai/toolDescriptions.js",
+./scripts/package-boundaries.json:1153:      "./voice/realtime-backend",
+./scripts/package-boundaries.json:1156:      "./voice/realtime-session"
+./scripts/package-boundaries.json:1159:      "src/voice/realtimeController.js",
+./scripts/package-boundaries.json:1160:      "src/voice/realtimeBackend.js",
+./scripts/package-boundaries.json:1167:      "src/voice/realtimeSession.js",
+./scripts/package-boundaries.json:1168:      "src/voice/realtimeEvents.js",
+./scripts/package-boundaries.json:1169:      "src/voice/realtimePreferences.js",
+./scripts/package-boundaries.json:1170:      "src/voice/realtimeProtocol.js",
+./scripts/package-boundaries.json:1171:      "src/voice/realtimeDiagnostics.js",
+./scripts/package-boundaries.json:1172:      "src/voice/realtimeViewport.js",
+./scripts/package-boundaries.json:1173:      "src/voice/realtimeInputPolicy.js",
+./scripts/package-boundaries.json:1174:      "src/voice/realtimeInput.js",
+./scripts/package-boundaries.json:1175:      "src/voice/realtimeCost.js",
+./scripts/package-boundaries.json:1176:      "src/voice/realtimeFacade.js",
+./scripts/package-boundaries.json:1177:      "src/voice/realtimeRadio.js",
+./scripts/package-boundaries.json:1178:      "src/voice/realtimeTurns.js",
+./scripts/package-boundaries.json:1179:      "src/voice/realtimeConnection.js"
+./scripts/package-boundaries.json:1698:      "src/voice/gevRealtime.js",
+./scripts/package-boundaries.json:1700:      "src/voice/realtimeBackend.js",
+./scripts/package-boundaries.json:1701:      "src/voice/realtimeController.js",
+./scripts/package-boundaries.json:1726:      "src/voice/realtimeSession.js",
+./scripts/package-boundaries.json:1727:      "src/voice/realtimeEvents.js",
+./scripts/package-boundaries.json:1759:      "src/data/gtfsRealtime.js",
+./scripts/package-boundaries.json:1774:      "src/voice/realtimePreferences.js",
+./scripts/package-boundaries.json:1775:      "src/voice/realtimeProtocol.js",
+./scripts/package-boundaries.json:1776:      "src/voice/realtimeDiagnostics.js",
+./scripts/package-boundaries.json:1777:      "src/voice/realtimeViewport.js",
+./scripts/package-boundaries.json:1778:      "src/voice/realtimeInputPolicy.js",
+./scripts/package-boundaries.json:1779:      "src/voice/realtimeInput.js",
+./scripts/package-boundaries.json:1780:      "src/voice/realtimeCost.js",
+./scripts/package-boundaries.json:1781:      "src/voice/realtimeFacade.js",
+./scripts/package-boundaries.json:1782:      "src/voice/realtimeRadio.js",
+./scripts/package-boundaries.json:1783:      "src/voice/realtimeTurns.js",
+./scripts/package-boundaries.json:1784:      "src/voice/realtimeConnection.js",
+./scripts/package-boundaries.json:2196:      "src/data/gtfsRealtime.js",
+./scripts/package-boundaries.json:2548:      "src/data/gtfsRealtime.js",
+./scripts/package-boundaries.json:2562:      "src/data/gtfsRealtime.js",
+./scripts/package-boundaries.json:2582:      "src/data/gtfsRealtime.js",
+./scripts/package-boundaries.json:2653:      "src/data/gtfsRealtime.js",
+./scripts/package-boundaries.json:2679:      "src/data/gtfsRealtime.js",
+./scripts/opensky-import-client.sh:30:PARSED="$(node -e "const fs=require('fs');const p=process.argv[1];const raw=JSON.parse(fs.readFileSync(p,'utf8'));const id=String(raw.clientId??raw.client_id??'').trim();const secret=String(raw.clientSecret??raw.client_secret??'').trim();if(!id||!secret){process.exit(2)};process.stdout.write(id+'\t' [... omitted end of long line]
+./scripts/opensky-import-client.sh:37:CLIENT_SECRET="${PARSED#*$'\t'}"
+./scripts/opensky-import-client.sh:38:if [[ -z "${CLIENT_ID}" || -z "${CLIENT_SECRET}" ]]; then
+./scripts/opensky-import-client.sh:44:security add-generic-password -U -s "opensky-network" -a "client_secret" -w "${CLIENT_SECRET}" >/dev/null
+./scripts/opensky-import-client.sh:48:echo "  service=opensky-network account=client_secret"
+./README.md:9:Photorealistic 3D globe. Live aircraft, ships, satellites, earthquakes, traffic, and public cameras. Hands-free voice control powered by a realtime AI agent.
+./README.md:156:  billing-enabled, metered route + place search; OpenAI when you want to talk
+./README.md:203:7. **Talk to it** _(needs an OpenAI key)_: _"Take me to LAX and select the nearest airborne aircraft."_
+./README.md:228:> Voice needs an **OpenAI key**. Without one the entire app still runs — the mic button just reports voice is unavailable. The same key drives the **AI HUD summary**: a terse, five-word intelligence-style readout of the current view that regenerates as you move.
+./README.md:236:- **🔒 Honest and secure.** The agent only confirms actions that succeeded. Your `OPENAI_API_KEY` never touches the browser; the client only gets a short-lived session token.
+./README.md:287:| 🚌 **Transit**              | Live buses, trams, metros, trains and ferries with delayed playback between reports, selected-vehicle trails, and mode-coloured DETECT labels — Boston, Austin, Minneapolis, Helsinki, the Netherlands, Norway, South East Queensland                                         [... omitted end of long line]
+./README.md:332:_🎙️ = voice missions — they need an OpenAI key._
+./README.md:357:- **Server-side credentials.** Every API that touches a private key (OpenAI, AISStream, OpenSky OAuth, camera frames) is brokered through a hardened server-side proxy with SSRF protection, response caps, and sanitized errors. The only keys the browser sees are Google Maps and Cesium ion (restrict bo [... omitted end of long line]
+./README.md:358:- **No framework.** Vanilla JavaScript, **CesiumJS**, and **Vite** — plus **Google Photorealistic 3D Tiles** for the planet and the **OpenAI Realtime API** for voice. Fast to read, fast to hack on.
+./README.md:367:├── voice/                  # OpenAI Realtime session + 28 voice tools
+./README.md:395:| 🔴  | **OpenAI**      | 🎙️ The voice experience + AI HUD summary. The mini model works; the standard model is noticeably smarter. Want Gemini or another provider behind the mic? PRs welcome                | [platform.openai.com](https://platform.openai.com) — metered, see costs below                 [... omitted end of long line]
+./README.md:428:OPENAI_API_KEY="…" AISSTREAM_API_KEY="…" npm run dev -- --host localhost --port 4173
+./README.md:432:security add-generic-password -U -s "openai-api"      -a "api-key" -w
+./README.md:451:| **🔴 OpenAI voice**      | **The one that costs real money — so the app meters it for you.** Realtime audio runs a few cents per active minute; an evening of heavy use is single-digit dollars. A live session-spend readout sits next to the mic, with an STD/MINI model toggle, a $2 warning, and a **$5 [... omitted end of long line]
+./README.md:467:By default nobody else can reach your server — it binds to localhost. To share on your LAN, opt in explicitly (`npm run dev -- --host 0.0.0.0 --port 4173`, or `HOST=0.0.0.0 ./scripts/dev-fresh.sh` on macOS/Linux) — but know that ⚠️ **a LAN-visible server brokers your configured API keys to anyone who [... omitted end of long line]
+./src/keySetup.test.mjs:18:    { envVar: 'OPENAI_API_KEY', value: '  sk-abc  ' },
+./src/keySetup.test.mjs:24:  assert.deepEqual(updates, { OPENAI_API_KEY: 'sk-abc' });
+./src/hudSummaryResponse.test.mjs:8:import { openAiRealtimeProxy } from '../vite.config.js';
+./src/hudSummaryResponse.test.mjs:17:function installOpenAiRoutes() {
+./src/hudSummaryResponse.test.mjs:19:  openAiRealtimeProxy().configureServer({
+./src/hudSummaryResponse.test.mjs:100:  const previousKey = process.env.OPENAI_API_KEY;
+./src/hudSummaryResponse.test.mjs:101:  const previousLimit = process.env.GEV_RATELIMIT_OPENAI_PER_MIN;
+./src/hudSummaryResponse.test.mjs:102:  process.env.OPENAI_API_KEY = '';
+./src/hudSummaryResponse.test.mjs:103:  process.env.GEV_RATELIMIT_OPENAI_PER_MIN = '1';
+./src/hudSummaryResponse.test.mjs:105:    const routes = installOpenAiRoutes();
+./src/hudSummaryResponse.test.mjs:106:    const token = routes.get('/api/realtime/token');
+./src/hudSummaryResponse.test.mjs:107:    const hud = routes.get('/api/openai/hud-summary');
+./src/hudSummaryResponse.test.mjs:114:    assert.deepEqual(firstToken.body, { error: 'OPENAI_API_KEY is not set' });
+./src/hudSummaryResponse.test.mjs:125:    if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
+./src/hudSummaryResponse.test.mjs:126:    else process.env.OPENAI_API_KEY = previousKey;
+./src/hudSummaryResponse.test.mjs:127:    if (previousLimit === undefined) delete process.env.GEV_RATELIMIT_OPENAI_PER_MIN;
+./src/hudSummaryResponse.test.mjs:128:    else process.env.GEV_RATELIMIT_OPENAI_PER_MIN = previousLimit;
+./src/setupDoctor.test.mjs:81:    credential('OPENSKY_CLIENT_SECRET').keychain,
+./src/setupDoctor.test.mjs:83:      ['opensky-network', 'client_secret'],
+./src/setupDoctor.test.mjs:86:      ['opensky', 'client_secret'],
+./src/setupDoctor.test.mjs:96:    const spec = credential('OPENAI_API_KEY');
+./src/setupDoctor.test.mjs:153:    OPENAI_API_KEY: { configured: true, source: 'dotenv files' },
+./src/setupDoctor.test.mjs:158:    OPENSKY_CLIENT_SECRET: { configured: false },
+./src/setupDoctor.test.mjs:197:    'OPENAI_API_KEY',
+./src/setupDoctor.test.mjs:202:    'OPENSKY_CLIENT_SECRET',
+./src/setupDoctor.test.mjs:207:  credentials.OPENSKY_CLIENT_SECRET = { configured: true, source: 'environment' };
+./src/setupDoctor.test.mjs:229:    'OPENAI_API_KEY',
+./src/setupDoctor.test.mjs:234:    'OPENSKY_CLIENT_SECRET',
+./src/services/requests.js:24:    summary: '/api/openai/hud-summary',
+./TESTING.md:68:  **STOP** when done. (Needs `OPENAI_API_KEY`; `dev-fresh.sh` injects it from Keychain.)
+./TESTING.md:219:- **No GEV MIC button / voice errors:** `OPENAI_API_KEY` didn't load — use the console API for
+./CONTRIBUTING.md:46:- **🎙️ Extend voice control.** Voice arguments are defined in `src/voice/actionSchemas.js`, with server-side descriptions in `server/providers/openai/tools.js` and client-side execution in `src/voice/gevActions.js`. Keep the tool surface tight and the responses honest (confirm only what actually happ [... omitted end of long line]
+./CONTRIBUTING.md:55:- **Secrets stay server-side.** Anything needing a private key goes through a local proxy under `server/providers/`. The browser only ever sees the Google Maps key (which you restrict) and ephemeral tokens.
+./src/voice/gevRealtime.test.mjs:13:  GevRealtimeController,
+./src/voice/gevRealtime.test.mjs:34:} from './gevRealtime.js';
+./src/voice/gevRealtime.test.mjs:115:    const controller = new GevRealtimeController({
+./src/voice/gevRealtime.test.mjs:515:test('voice activation, speech, and push-to-talk pause Radio without an idle auto-resume', () => {
+./src/voice/gevRealtime.test.mjs:580:  const controller = new GevRealtimeController({
+./src/voice/gevRealtime.test.mjs:604:  const controller = new GevRealtimeController({
+./src/voice/gevRealtime.test.mjs:628:  await controller.handleRealtimeEvent({
+./src/voice/gevRealtime.test.mjs:645:  const controller = new GevRealtimeController({
+./src/voice/gevRealtime.test.mjs:700:  const controller = new GevRealtimeController({
+./src/voice/gevRealtime.test.mjs:710:  const pending = controller.handleRealtimeEvent({
+./src/voice/gevRealtime.test.mjs:733:  const controller = new GevRealtimeController({
+./src/voice/gevRealtime.test.mjs:758:  const controller = new GevRealtimeController({
+./src/voice/gevRealtime.test.mjs:776:test('active-response Realtime errors invalidate pending and in-flight Radio handoffs', async () => {
+./src/voice/gevRealtime.test.mjs:785:  const controller = new GevRealtimeController({
+./src/voice/gevRealtime.test.mjs:804:  await controller.handleRealtimeEvent({
+./src/voice/gevRealtime.test.mjs:863:  const controller = new GevRealtimeController({ runner, ui, radioLayer });
+./src/voice/gevRealtime.test.mjs:879:  await controller.handleRealtimeEvent(event({ type: 'response.created', response: { id: 'response-1' } }));
+./src/voice/gevRealtime.test.mjs:880:  await controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:889:  await controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:898:  await controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:909:  await controller.handleRealtimeEvent(event({ type: 'response.created', response: { id: 'response-confirm' } }));
+./src/voice/gevRealtime.test.mjs:910:  await controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:932:  const controller = new GevRealtimeController({
+./src/voice/gevRealtime.test.mjs:956:  await controller.handleRealtimeEvent(event({ type: 'response.created', response: { id: 'response-fail' } }));
+./src/voice/gevRealtime.test.mjs:957:  await controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:964:  await controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:968:  await controller.handleRealtimeEvent(event({ type: 'response.created', response: { id: 'response-fail-confirm' } }));
+./src/voice/gevRealtime.test.mjs:969:  await controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:982:test('detected speech cancels a prepared Radio handoff before a cancelled response completes', async () => {
+./src/voice/gevRealtime.test.mjs:994:  const controller = new GevRealtimeController({
+./src/voice/gevRealtime.test.mjs:1021:  await controller.handleRealtimeEvent(event({ type: 'response.created', response: { id: 'response-2' } }));
+./src/voice/gevRealtime.test.mjs:1022:  await controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:1031:  await controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:1035:  await controller.handleRealtimeEvent(event({ type: 'response.created', response: { id: 'response-2-confirm' } }));
+./src/voice/gevRealtime.test.mjs:1037:  await controller.handleRealtimeEvent(event({ type: 'input_audio_buffer.speech_started' }));
+./src/voice/gevRealtime.test.mjs:1039:  await controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:1048:test('a Radio tool result that resolves after speech interruption cannot re-arm playback', async () => {
+./src/voice/gevRealtime.test.mjs:1058:  const controller = new GevRealtimeController({
+./src/voice/gevRealtime.test.mjs:1080:  const pendingTool = controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:1089:  await controller.handleRealtimeEvent(event({ type: 'input_audio_buffer.speech_started' }));
+./src/voice/gevRealtime.test.mjs:1118:  const controller = new GevRealtimeController({
+./src/voice/gevRealtime.test.mjs:1133:  const pendingRadio = controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:1141:  await controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:1164:  const controller = new GevRealtimeController({
+./src/voice/gevRealtime.test.mjs:1179:  const pendingStyle = controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:1187:  await controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:1257:  const controller = new GevRealtimeController({
+./src/voice/gevRealtime.test.mjs:1273:    const pendingSelect = controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:1281:    await controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:1388:  const controller = new GevRealtimeController({
+./src/voice/gevRealtime.test.mjs:1407:    const pendingSelect = controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:1415:    await controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:1509:  const controller = new GevRealtimeController({
+./src/voice/gevRealtime.test.mjs:1525:  const pendingSelect = controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:1533:  const pendingPause = controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:1640:              const controller = new GevRealtimeController({
+./src/voice/gevRealtime.test.mjs:1660:              const pendingOn = controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:1670:              await controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:1774:      const controller = new GevRealtimeController({
+./src/voice/gevRealtime.test.mjs:1792:      const pendingSelect = controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:1800:      await controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:1845:      const controller = new GevRealtimeController({
+./src/voice/gevRealtime.test.mjs:1876:      const pendingPlayback = controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:1884:      await controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:1916:test('Realtime Radio route exceptions preserve the authoritative lifecycle summary', async () => {
+./src/voice/gevRealtime.test.mjs:1926:    const controller = new GevRealtimeController({
+./src/voice/gevRealtime.test.mjs:1943:    await controller.handleRealtimeEvent({
+./src/voice/gevRealtime.test.mjs:1978:  const controller = new GevRealtimeController({
+./src/voice/gevRealtime.test.mjs:2002:  const pendingSelect = controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:2010:  await controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:2056:  const controller = new GevRealtimeController({
+./src/voice/gevRealtime.test.mjs:2073:  const pendingPlay = controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:2081:  await controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:2164:  const controller = new GevRealtimeController({
+./src/voice/gevRealtime.test.mjs:2180:  const pendingSelect = controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:2188:  await controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:2252:      const controller = new GevRealtimeController({
+./src/voice/gevRealtime.test.mjs:2272:      const pendingPlay = controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:2280:      await controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:2315:  const controller = new GevRealtimeController({
+./src/voice/gevRealtime.test.mjs:2339:  const pendingSelect = controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:2347:  await controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:2409:  const controller = new GevRealtimeController({
+./src/voice/gevRealtime.test.mjs:2424:  const pendingSelect = controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:2500:      const controller = new GevRealtimeController({
+./src/voice/gevRealtime.test.mjs:2522:      await controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:2579:        const controller = new GevRealtimeController({
+./src/voice/gevRealtime.test.mjs:2622:        const pendingHandoff = controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:2627:        const pendingControl = controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:2681:      const controller = new GevRealtimeController({
+./src/voice/gevRealtime.test.mjs:2715:      const pendingStop = controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:2723:      await controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:2764:  const controller = new GevRealtimeController({
+./src/voice/gevRealtime.test.mjs:2816:  const controller = new GevRealtimeController({
+./src/voice/gevRealtime.test.mjs:2832:  await controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:2840:  await controller.handleRealtimeEvent(event({
+./src/voice/gevRealtime.test.mjs:2995:// The stored tier picks the OpenAI model id for the next session and the stored
+./src/voice/gevRealtime.test.mjs:3094:// Voice cost control — REAL handlers driven by a mocked Realtime event stream.
+./src/voice/gevRealtime.test.mjs:3095:// These exercise updateResponseState / handleRealtimeEvent / stop() rather than
+./src/voice/gevRealtime.test.mjs:3125:  const controller = new GevRealtimeController({
+./src/voice/gevRealtime.test.mjs:3155:    modelId: 'gpt-realtime-2',
+./src/voice/gevRealtime.test.mjs:3165:  assert.equal(after.modelId, 'gpt-realtime-2', 'session keeps its original model binding');
+./src/voice/gevRealtime.test.mjs:3174:    modelId: 'gpt-realtime-2',
+./src/voice/gevRealtime.test.mjs:3201:  assert.equal(controller.costTracker.state().modelId, 'gpt-realtime-2.1-mini');
+./src/voice/gevRealtime.test.mjs:3208:  await controller.handleRealtimeEvent({
+./src/voice/gevRealtime.test.mjs:3233:    modelId: 'gpt-realtime-2',
+./src/voice/gevRealtime.test.mjs:3237:  await controller.handleRealtimeEvent(fnCallEvent('set_hud', 'i1', 'c1'));
+./src/voice/gevRealtime.test.mjs:3240:  await controller.handleRealtimeEvent(doneEvent(usdUsage(9))); // trips the cap
+./src/voice/gevRealtime.test.mjs:3243:  await controller.handleRealtimeEvent(fnCallEvent('fly_to_location', 'i2', 'c2'));
+./src/voice/gevRealtime.test.mjs:3252:  await controller.handleRealtimeEvent({
+./src/voice/gevRealtime.test.mjs:3270:  await controller.handleRealtimeEvent({
+./src/voice/gevRealtime.test.mjs:3310:    modelId: 'gpt-realtime-2',
+./src/voice/gevRealtime.test.mjs:3327:  controller.costTracker = createVoiceCostTracker({ modelId: 'gpt-realtime-2' });
+./src/voice/gevRealtime.test.mjs:3360:    modelId: 'gpt-realtime-2',
+./src/voice/gevRealtime.test.mjs:3372:  assert.equal(state.modelId, 'gpt-realtime-2');
+./src/voice/gevRealtime.test.mjs:3382:  assert.equal(controller.costTracker.state().modelId, 'gpt-realtime-2.1-mini');
+./src/voice/gevRealtime.test.mjs:3390:  controller.costTracker = createVoiceCostTracker({ modelId: 'gpt-realtime-2' });
+./src/voice/gevRealtime.test.mjs:3404:  controller.costTracker = createVoiceCostTracker({ modelId: 'gpt-realtime-2' });
+./src/voice/gevRealtime.test.mjs:3415:    modelId: 'gpt-realtime-9-experimental',
+./src/voice/gevRealtime.test.mjs:3419:  const standard = createVoiceCostTracker({ modelId: 'gpt-realtime-2' });
+./src/voice/gevRealtime.test.mjs:3426: * The Realtime API rejects a second concurrent `response.create`
+./src/voice/gevRealtime.test.mjs:3434:  const controller = new GevRealtimeController({
+./src/voice/gevRealtime.test.mjs:3439:  controller.sendRealtimeEvent = (event, label) => {
+./src/voice/gevRealtime.test.mjs:3482:  controller.handleRealtimeEvent({
+./src/voice/gevRealtime.test.mjs:3523:  await controller.handleRealtimeEvent(lateToolEvent('resp_live', 'call_live'));
+./src/voice/gevRealtime.test.mjs:3537:  await controller.handleRealtimeEvent(lateToolEvent('resp_old', 'call_stale'));
+./src/voice/gevRealtime.test.mjs:3603:  const send = controller.sendRealtimeEvent;
+./src/voice/gevRealtime.test.mjs:3604:  controller.sendRealtimeEvent = (message, label) => {
+./src/voice/gevRealtime.test.mjs:3621:  await controller.handleRealtimeEvent(lateToolEvent('resp_old', 'call_stale'));
+./src/voice/gevRealtime.test.mjs:3664:  await controller.handleRealtimeEvent(lateToolEvent('resp_old', 'call_stale'));
+./src/voice/gevRealtime.test.mjs:3665:  await controller.handleRealtimeEvent(lateToolItemEvent('resp_old', 'call_stale'));
+./src/voice/gevRealtime.test.mjs:3676:  await controller.handleRealtimeEvent(lateToolEvent('resp_old', 'call_one'));
+./src/voice/gevRealtime.test.mjs:3677:  await controller.handleRealtimeEvent(lateToolItemEvent('resp_old', 'call_two', 'item_two'));
+./src/voice/realtimeCost.js:6:} from './realtimePreferences.js';
+./src/voice/realtimeCost.js:14:export class RealtimeCost {
+./src/voice/realtimeCost.js:70:   * fixed when the ephemeral token is minted, so a live session is deliberately
+./src/voice/realtimeInput.js:14:} from './realtimeInputPolicy.js';
+./src/voice/realtimeInput.js:15:import { shouldPauseRadioForVoice } from './realtimeProtocol.js';
+./src/voice/realtimeInput.js:18:export class RealtimeInput {
+./server/providers/aircraft/opensky.js:99:  const clientSecret = process.env.OPENSKY_CLIENT_SECRET;
+./server/providers/aircraft/opensky.js:110:          body: `grant_type=client_credentials&client_id=${encodeURIComponent(clientId)}&client_secret=${encodeURIComponent(clientSecret)}`,
+./server/providers/aircraft/opensky.js:571:                'OpenSky auth invalid. OAuth mode requires valid OPENSKY_CLIENT_ID and OPENSKY_CLIENT_SECRET.',
+./scripts/setup-doctor.mjs:16:  { name: 'OPENAI_API_KEY', label: 'OpenAI voice', keychain: [['openai-api', 'api-key']] },
+./scripts/setup-doctor.mjs:28:    name: 'OPENSKY_CLIENT_SECRET',
+./scripts/setup-doctor.mjs:31:      ['client_secret', 'client-secret', 'secret'].map((account) => [service, account])
+./scripts/setup-doctor.mjs:143:    flights: configured('OPENSKY_CLIENT_ID') && configured('OPENSKY_CLIENT_SECRET')
+./scripts/setup-doctor.mjs:146:    voice: configured('OPENAI_API_KEY') ? 'available' : 'off until an OpenAI key is added',
+./scripts/qa-overlay-baseline.mjs:175:    if (url.pathname === '/api/openai/hud-summary') {
+./scripts/qa-l9-matrix.mjs:129:  // FIRMS/TOMTOM/AIS/OPENAI/OPENSKY →
+./scripts/qa-l9-matrix.mjs:329:// Verdict lines are ANCHORED and matched across the WHOLE transcript, not
+./scripts/qa-l9-matrix.mjs:339: * Collect EVERY complete verdict line in a transcript.
+./scripts/qa-l9-matrix.mjs:345: * @param {string} text The transcript to scan.
+./scripts/qa-l9-matrix.mjs:429: * present in the harness transcript, so it cannot become a blanket excuse.
+./scripts/qa-l9-matrix.mjs:432: * @param {string} transcript The harness stdout+stderr.
+./scripts/qa-l9-matrix.mjs:435:function applyKnownConditions(verdict, conditions, transcript) {
+./scripts/qa-l9-matrix.mjs:437:  const hit = conditions.find((c) => c.when.test(transcript || ''));
+./scripts/qa-l9-matrix.mjs:526:    // Keep the full transcript of anything that did not pass — otherwise
+./scripts/qa-l9-matrix.mjs:632:  desc: 'No tracked .env, and no known-prefix credential literals (OpenAI/Google/AWS/GitHub/Slack/Stripe/private keys)',
+./scripts/qa-l9-matrix.mjs:644:      'sk-[A-Za-z0-9]{20,}',                 // OpenAI
+./scripts/qa-l9-matrix.mjs:721:      openai: /GEV_RATELIMIT_OPENAI_PER_MIN/.test(t),
+./scripts/qa-l9-matrix.mjs:996:  id: 'B19', group: 'B', desc: 'Realtime token endpoint mints an EPHEMERAL secret and never the raw key',
+./scripts/qa-l9-matrix.mjs:997:  needsKey: 'OPENAI', costly: true,
+./scripts/qa-l9-matrix.mjs:999:    const r = await jget('/api/realtime/token', { method: 'POST', timeoutMs: 30000 });
+./scripts/qa-l9-matrix.mjs:1003:    return /ek_|client_secret|value/.test(blob)
+./scripts/qa-l9-matrix.mjs:1004:      ? pass('ephemeral client secret returned; no raw key in the payload')
+./scripts/qa-l9-matrix.mjs:1012:    const guard = keyGuard('OPENAI', env.keys.OPENAI);
+./scripts/qa-l9-matrix.mjs:1014:    if (env.keys.OPENAI === true) return skip('server HAS an OpenAI key — the keyless path needs an unkeyed server', 'N/A');
+./scripts/qa-l9-matrix.mjs:1015:    const r = await jget('/api/realtime/token', { method: 'POST' });
+./scripts/qa-l9-matrix.mjs:1016:    return r.status === 503 && /OPENAI_API_KEY is not set/.test(r.text)
+./scripts/qa-l9-matrix.mjs:1017:      ? pass('503 "OPENAI_API_KEY is not set"')
+./scripts/qa-l9-matrix.mjs:1041:        && (r.json?.status === 'missing-key' || r.json?.error === 'no_key' || /OPENAI_API_KEY is not set/.test(r.text));
+./scripts/qa-l9-matrix.mjs:1049:      if (/(client_secret|api_?key|MAP_KEY)["']?\s*[:=]\s*["'][A-Za-z0-9_\-]{16,}/i.test(body)) leaked.push(`${p}: key-shaped assignment`);
+./scripts/qa-l9-matrix.mjs:1102:      // the transcript actually shows a 503. Explains, never excuses.
+./scripts/qa-l9-matrix.mjs:1104:      note: 'not key-tolerant — its "no console errors" assertion counts the honest keyless 503s (e.g. /api/openai/hud-summary) as errors; expected to PASS on the fully keyed server. Still a FAIL here.',
+./scripts/qa-l9-matrix.mjs:1878:    const keyish = requestUrls.filter((u) => u.startsWith(APP_ORIGIN) && /[?&](key|api_?key|token|client_secret)=[A-Za-z0-9_\-]{12,}/i.test(u));
+./scripts/qa-l9-matrix.mjs:1988:    const guard = keyGuard('OPENAI', env.keys.OPENAI);
+./scripts/qa-l9-matrix.mjs:1990:    if (env.keys.OPENAI === true) {
+./scripts/qa-l9-matrix.mjs:1991:      // Never start a session against a keyed server: that is a real Realtime
+./scripts/qa-l9-matrix.mjs:2025:    const saysKey = /OPENAI_API_KEY is not set/i.test(`${surfaced.errorDetail || ''} ${surfaced.recentError?.message || ''}`);
+./scripts/qa-l9-matrix.mjs:2032:      return fail(`voice surfaced an error state (${surfaced.status}) but never named the cause: errorDetail="${surfaced.errorDetail}" recentError=${JSON.stringify(surfaced.recentError)} — expected the OPENAI_API_KEY reason`);
+./scripts/qa-l9-matrix.mjs:2090:    // Minting a Realtime token is free, but --cheap promises to touch nothing
+./scripts/qa-l9-matrix.mjs:2091:    // cost-bearing; leave OpenAI presence unknown and let its checks skip.
+./scripts/qa-l9-matrix.mjs:2092:    env.keys.OPENAI = null;
+./scripts/qa-l9-matrix.mjs:2095:      const t = await jget('/api/realtime/token', { method: 'POST' });
+./scripts/qa-l9-matrix.mjs:2096:      if (t.status === 503 && /OPENAI_API_KEY is not set/.test(t.text)) env.keys.OPENAI = false;
+./scripts/qa-l9-matrix.mjs:2097:      else if (t.ok) env.keys.OPENAI = true;
+./scripts/qa-l9-matrix.mjs:2098:      else env.keys.OPENAI = 'error';
+./scripts/qa-l9-matrix.mjs:2099:    } catch { env.keys.OPENAI = 'error'; }
+./scripts/qa-l9-matrix.mjs:2148:  console.log(`  keys   : OpenSky ${keyLabel(env.keys.OPENSKY)} · FIRMS ${keyLabel(env.keys.FIRMS)} · TomTom ${keyLabel(env.keys.TOMTOM)} · AISStream ${keyLabel(env.keys.AIS)} · OpenAI ${keyLabel(env.keys.OPENAI)}`);
+./src/testSupport/readRealtimeSource.mjs:4:export function readRealtimeSource() {
+./src/testSupport/readRealtimeSource.mjs:6:    'realtimeConnection',
+./src/testSupport/readRealtimeSource.mjs:7:    'realtimeCost',
+./src/testSupport/readRealtimeSource.mjs:8:    'realtimeDiagnostics',
+./src/testSupport/readRealtimeSource.mjs:9:    'realtimeInput',
+./src/testSupport/readRealtimeSource.mjs:10:    'realtimeInputPolicy',
+./src/testSupport/readRealtimeSource.mjs:11:    'realtimePreferences',
+./src/testSupport/readRealtimeSource.mjs:12:    'realtimeProtocol',
+./src/testSupport/readRealtimeSource.mjs:13:    'realtimeRadio',
+./src/testSupport/readRealtimeSource.mjs:14:    'realtimeTurns',
+./src/testSupport/readRealtimeSource.mjs:15:    'realtimeViewport',
+./src/testSupport/readRealtimeSource.mjs:16:    'realtimeFacade',
+./src/testSupport/readRealtimeSource.mjs:17:    'realtimeController',
+./scripts/qa-map-source-tray.mjs:236:    if (url.origin === new URL(appUrl).origin && url.pathname === '/api/openai/hud-summary') {
+./scripts/qa-camera-controls.mjs:103:    if (url.pathname === '/api/openai/hud-summary')
+./scripts/qa-sprites-b5.mjs:226:        if (url.includes('/api/openai/hud-summary')) {
+./scripts/qa-cockpit-utility.mjs:157:    if (url.origin === new URL(appUrl).origin && url.pathname === '/api/openai/hud-summary') {
+./scripts/qa-radio.mjs:214:      if (url.origin === APP_ORIGIN && url.pathname === '/api/openai/hud-summary') {
+./scripts/qa-radio.mjs:2769:      'holding Space and assistant speech each pause an explicitly resumed station',
+./scripts/qa-label-readability.mjs:102:    note: 'dark water — a plate here must stay a whisper, not a box',
+./src/voice/gevActions.test.mjs:22:import { GEV_REALTIME_TOOLS } from '../../server/providers/openai/tools.js';
+./src/voice/gevActions.test.mjs:40:  const enumIds = GEV_REALTIME_TOOLS.find(tool => tool.name === 'set_map_stack').parameters.properties.stack.enum;
+./scripts/qa-cockpit-plates.mjs:271:      if (url.pathname === '/api/openai/hud-summary') {
+./scripts/check-import-directions.mjs:232:      if (/^src\/voice\/realtime/.test(to))
+./docs/CURRENT-STATE.md:37:Realtime voice composes separate connection, response/tool, Radio handoff, input
+./docs/CURRENT-STATE.md:112:Voice controls bind to a protocol-independent session factory. The default WebRTC adapter preserves the existing Realtime connection, push-to-talk, cost controls and radio handoff. Session subscriptions expose state, transcript, action call/result, interruption and completion events; stopping or rep [... omitted end of long line]
+./docs/CURRENT-STATE.md:114:Voice action argument schemas have one portable owner under `src/voice/actionSchemas.js`. The Realtime provider builds the same 28 tools using separate description-only metadata. Description customization cannot replace argument types, enum values or required fields.
+./docs/CURRENT-STATE.md:183:Realtime token and SDP requests live in a configurable backend, with independent
+./docs/CURRENT-STATE.md:599:Local voice has separate HUD-summary, debug-log and Realtime-token handlers,
+./docs/CURRENT-STATE.md:963:> `GEV_REALTIME_TOOLS` is **byte-identical to `main`** and pinned by sha256 in
+./docs/CURRENT-STATE.md:1430:>   an ephemeral `at` epoch-seconds field; ordinary live hash updates omit it.
+./docs/CURRENT-STATE.md:2486:- Voice control in `src/voice/` (OpenAI Realtime over WebRTC)
+./docs/CURRENT-STATE.md:2511:| Transit 🚌 | Operator GTFS-Realtime VehiclePositions (7 keyless regions, `src/data/transitFeeds.js`) | `src/layers/transit/` via `src/app/layers/transit.js` | `/api/transit` | 15s (poll + delayed playback) |
+./docs/CURRENT-STATE.md:3009:outcomes. Realtime suppression and settlement refresh all three fields together,
+./docs/CURRENT-STATE.md:3317:  That complete route is one atomic voice action, so Realtime sibling calls
+./docs/CURRENT-STATE.md:3346:`GEV MIC` button (bottom UI) starts an OpenAI Realtime session over WebRTC:
+./docs/CURRENT-STATE.md:3348:- **Token flow**: browser fetches a short-lived client secret from `/api/realtime/token`; the Vite middleware holds `OPENAI_API_KEY` and posts the full session config (instructions, tool schemas, VAD, truncation) to `api.openai.com/v1/realtime/client_secrets`. SDP exchange goes directly to `api.open [... omitted end of long line]
+./docs/CURRENT-STATE.md:3349:- **Session defaults** (env-tunable): model `gpt-realtime-2` (or `gpt-realtime-2.1-mini` when the MINI tier is selected — see the model-tier entry below), voice `marin`, reasoning effort `low`, semantic VAD with low eagerness, no response interruption, context window truncated to ~3,000 post-instruc [... omitted end of long line]
+./docs/CURRENT-STATE.md:3375:- **Context window**: only the latest viewport screenshot stays in context — the client deletes the prior image item (`conversation.item.delete`) before adding a new one (images are the most expensive item, re-billed every turn). Text history is bounded by the **server-side** `truncation: { type: 'r [... omitted end of long line]
+./docs/CURRENT-STATE.md:3377:  - **Tier selection.** `standard` = `gpt-realtime-2` (default), `mini` = `gpt-realtime-2.1-mini` (~3× cheaper per audio token). The client sends `?tier=` to `/api/realtime/token`; the endpoint resolves it through the shared registry, so an unknown, empty, or hostile value falls back to `standard` r [... omitted end of long line]
+./docs/CURRENT-STATE.md:3378:  - **Applies NEXT session.** The model is fixed when the ephemeral token is minted, so a live session always keeps the model it connected with; toggling mid-session only records the preference (the button title says so). The cost tracker's lifetime is the session's lifetime and its model binding is [... omitted end of long line]
+./docs/CURRENT-STATE.md:3379:  - **Env overrides.** `OPENAI_REALTIME_MODEL` / `OPENAI_REALTIME_MODEL_MINI` remain authoritative per tier, so a drifted upstream model id is a `.env` fix rather than a code change. Because an override can point a tier at any model, the client prices against the model id the server actually echoed, [... omitted end of long line]
+./docs/CURRENT-STATE.md:3384:  - **⚠️ Model ids and rates are external facts** read from OpenAI's model + pricing pages on 2026-08-18 and marked VERIFY-AT-RELEASE in `voiceCost.js`.
+./docs/CURRENT-STATE.md:3387:- **Diagnostics**: every client/server event is posted to `/api/realtime/debug-log` and appended to `.gev-logs/realtime-conversations.jsonl` (gitignored) with secret/image redaction; last 30 errors persist in `localStorage` (`gev-realtime-errors`); `window.__gevVoiceCommands.getDiagnostics()` in the [... omitted end of long line]
+./docs/CURRENT-STATE.md:3393:- **Degradation**: without `OPENAI_API_KEY`, `/api/realtime/token` returns 503 and the mic button surfaces the error; the rest of the app is unaffected.
+./docs/CURRENT-STATE.md:3397:- HUD `SUMMARY` readout requests a five-word intelligence-style summary from `/api/openai/hud-summary` (model `OPENAI_HUD_SUMMARY_MODEL`, default `gpt-5-nano`, minimal reasoning).
+./docs/CURRENT-STATE.md:3548:- Optional-key precedence in `dev-fresh.sh` is uniform — explicit shell env, then `.env`, then Keychain: `OPENAI_API_KEY` (Keychain `openai-api`/`api-key` — voice + HUD summary), `AISSTREAM_API_KEY` (`aisstream-api`/`api-key` — live vessels), `CESIUM_ION_TOKEN` (`cesium-ion`/`token` — Bing stacks),  [... omitted end of long line]
+./docs/CURRENT-STATE.md:3561:- `OPENAI_API_KEY` is server-side only; the browser receives ephemeral Realtime client secrets from `/api/realtime/token`.
+./docs/CURRENT-STATE.md:3569:- Realtime debug logs redact API keys, bearer tokens, client secrets, and image data URLs before writing to disk; request bodies are size-capped.
+./docs/CURRENT-STATE.md:3817:- Voice debug log: `tail -f .gev-logs/realtime-conversations.jsonl` (gitignored).
+./server/providers/openai.js:2:import { handleHudSummary } from './openai/hud-summary.js';
+./server/providers/openai.js:3:import { createDebugLogHandler } from './openai/debug-log.js';
+./server/providers/openai.js:4:import { createRealtimeTokenHandler } from './openai/realtime.js';
+./server/providers/openai.js:7: * Vite plugin: OpenAI Realtime ephemeral client secret.
+./server/providers/openai.js:9: * Keeps OPENAI_API_KEY server-side while the browser connects to the
+./server/providers/openai.js:10: * Realtime API over WebRTC with a short-lived secret.
+./server/providers/openai.js:12:function openAiRealtimeProxy({
+./server/providers/openai.js:15:  realtime = {},
+./server/providers/openai.js:18:    middlewares.use('/api/openai/hud-summary', handleHudSummary);
+./server/providers/openai.js:21:      '/api/realtime/debug-log',
+./server/providers/openai.js:26:      '/api/realtime/token',
+./server/providers/openai.js:27:      createRealtimeTokenHandler({ ...realtime, annotationGuidance }),
+./server/providers/openai.js:32:    name: 'openai-realtime-proxy',
+./server/providers/openai.js:42:export { openAiRealtimeProxy };
+./scripts/qa-attribution-b12.mjs:84:    if (url.origin === APP_ORIGIN && url.pathname === '/api/openai/hud-summary') {
+./src/pinokioLauncherContract.test.mjs:17:  'OPENAI_API_KEY',
+./src/pinokioLauncherContract.test.mjs:22:  'OPENSKY_CLIENT_SECRET',
+./src/pinokioLauncherContract.test.mjs:26:  'GEV_RATELIMIT_OPENAI_PER_MIN',
+./src/data/gtfsRealtime.test.mjs:11:} from './gtfsRealtime.js';
+./scripts/dev-secure.sh:56:  parsed="$(node -e "const fs=require('fs');const p=process.argv[1];try{const raw=JSON.parse(fs.readFileSync(p,'utf8'));const id=String(raw.clientId??raw.client_id??'').trim();const secret=String(raw.clientSecret??raw.client_secret??'').trim();process.stdout.write(id+'\\t'+secret);}catch{process.exi [... omitted end of long line]
+./scripts/dev-secure.sh:61:  local parsed_client_secret="${parsed#*$'\t'}"
+./scripts/dev-secure.sh:66:  if [[ -z "${OPENSKY_CLIENT_SECRET}" && -n "${parsed_client_secret}" ]]; then
+./scripts/dev-secure.sh:67:    OPENSKY_CLIENT_SECRET="${parsed_client_secret}"
+./scripts/dev-secure.sh:83:  OPENSKY_CLIENT_SECRET="${OPENSKY_CLIENT_SECRET:-}"
+./scripts/dev-secure.sh:120:  if [[ "${OPENSKY_AUTH_MODE}" == "oauth" || "${OPENSKY_AUTH_MODE}" == "auto" ]] && [[ -z "${OPENSKY_CLIENT_SECRET}" ]]; then
+./scripts/dev-secure.sh:122:      for acct in "client_secret" "client-secret" "secret"; do
+./scripts/dev-secure.sh:123:        OPENSKY_CLIENT_SECRET="$(read_keychain_secret "${svc}" "${acct}")"
+./scripts/dev-secure.sh:124:        if [[ -n "${OPENSKY_CLIENT_SECRET}" ]]; then
+./scripts/dev-secure.sh:134:      OPENSKY_CLIENT_SECRET=""
+./scripts/dev-secure.sh:142:      OPENSKY_CLIENT_SECRET=""
+./scripts/dev-secure.sh:174:    if [[ -n "${OPENSKY_CLIENT_ID}" && -n "${OPENSKY_CLIENT_SECRET}" ]]; then
+./scripts/dev-secure.sh:181:    if [[ -n "${OPENSKY_CLIENT_ID}" && -n "${OPENSKY_CLIENT_SECRET}" ]]; then
+./scripts/dev-secure.sh:200:OPENSKY_CLIENT_SECRET="${OPENSKY_CLIENT_SECRET}" \
+./SECURITY.md:20:| `OPENAI_API_KEY` | Server only | Browser fetches a short-lived **ephemeral** Realtime session token from `/api/realtime/token`; the real key never ships |
+./SECURITY.md:78:- **LAN exposure is an explicit opt-in**: `HOST=0.0.0.0 ./scripts/dev-fresh.sh`. The launcher prints a prominent warning plus your LAN URL. Understand what opting in means: **every device on that network can drive the proxies and spend your OpenAI / Google / OpenSky / AISStream / TomTom / FIRMS quot [... omitted end of long line]
+./SECURITY.md:79:- **App-level throttles (opt-in):** `GEV_RATELIMIT_OPENAI_PER_MIN` and `GEV_RATELIMIT_GOOGLE_PER_MIN` cap the cost-bearing endpoints per client IP per minute (over-limit requests receive a sanitized `429`). They are **per-IP, process-local, in-memory guards** — they reset on restart and are **not bi [... omitted end of long line]
+./SECURITY.md:80:- **Provider-side budgets are the real backstop.** For hard spend protection, configure limits where the money is: OpenAI platform usage limits, Google Cloud budget alerts + per-API quotas, and equivalent controls for any other keyed provider.
+./src/data/transitProxy.js:20:} from './gtfsRealtime.js';
+./src/data/transitProxy.js:230: * A DIFFERENTIAL feed is refused outright. Differential GTFS-Realtime carries
+./src/voice/gevActions.js:1284: * sequences shots for minutes and must not block the realtime tool loop.
+./src/voice/gevActions.js:1636:  // Realtime models can reasonably interpret "play news near Austin" as Play
+./src/voice/gevActions.js:3886: * Google Places, etc.) before it enters the voice LLM's scene context.
+./src/voice/realtimeConnection.js:20:export class RealtimeConnection {
+./src/voice/realtimeConnection.js:97:      // (OPENAI_REALTIME_MODEL[_MINI]) can point a tier at a different model,
+./src/voice/realtimeConnection.js:103:          `[GEV voice] unrecognised Realtime model "${costState.modelId}" — ` +
+./src/voice/realtimeConnection.js:131:        .querySelectorAll('audio[data-gev-realtime-audio="true"]')
+./src/voice/realtimeConnection.js:135:      this.audioEl.dataset.gevRealtimeAudio = 'true';
+./src/voice/realtimeConnection.js:189:          return this.handleRealtimeEvent(event);
+./src/voice/realtimeConnection.js:196:          'Realtime data channel',
+./src/voice/realtimeConnection.js:209:            'Realtime data channel closed',
+./src/voice/realtimeConnection.js:248:      this.reportError('Realtime connection', error, diagnostics);
+./src/voice/realtimeConnection.js:318:  sendRealtimeEvent(message, logEventName = 'client.event') {
+./src/voice/realtimeConnection.js:325:    // If that throw escaped it would abort handleRealtimeEvent BEFORE
+./scripts/track-regression.mjs:259:      if (url.origin === APP_ORIGIN && url.pathname === '/api/openai/hud-summary') {
+./src/data/gtfsRealtime.js:2: * @module gtfsRealtime
+./src/data/gtfsRealtime.js:3: * @description Minimal GTFS-Realtime decoder for VehiclePosition feeds.
+./src/data/gtfsRealtime.js:8: * `gtfs-realtime-bindings`, no protobufjs, no generated code: the GTFS-RT
+./src/data/gtfsRealtime.js:11: * Field numbers (gtfs-realtime.proto, v2.0):
+./src/data/gtfsRealtime.js:13: *   FeedHeader         1 gtfs_realtime_version, 2 incrementality, 3 timestamp
+./src/data/gtfsRealtime.js:151: * Decode a raw GTFS-Realtime FeedMessage.
+./src/voice/realtimeController.js:1:import { RealtimeConnection } from './realtimeConnection.js';
+./src/voice/realtimeController.js:2:import { RealtimeTurns } from './realtimeTurns.js';
+./src/voice/realtimeController.js:3:import { RealtimeViewport } from './realtimeViewport.js';
+./src/voice/realtimeController.js:4:import { RealtimeDiagnostics } from './realtimeDiagnostics.js';
+./src/voice/realtimeController.js:5:import { RealtimeRadio } from './realtimeRadio.js';
+./src/voice/realtimeController.js:6:import { RealtimeFacade } from './realtimeFacade.js';
+./src/voice/realtimeController.js:7:import { RealtimeCost } from './realtimeCost.js';
+./src/voice/realtimeController.js:8:import { RealtimeInput } from './realtimeInput.js';
+./src/voice/realtimeController.js:10:import { shouldPauseRadioForVoice } from './realtimeProtocol.js';
+./src/voice/realtimeController.js:11:import { postDebugLog } from './realtimeDiagnostics.js';
+./src/voice/realtimeController.js:18:} from './realtimePreferences.js';
+./src/voice/realtimeController.js:24:} from './realtimeProtocol.js';
+./src/voice/realtimeController.js:30:} from './realtimeViewport.js';
+./src/voice/realtimeController.js:43:} from './realtimeInputPolicy.js';
+./src/voice/realtimeController.js:45:import { createRealtimeBackend } from './realtimeBackend.js';
+./src/voice/realtimeController.js:56:export class GevRealtimeController extends RealtimeFacade {
+./src/voice/realtimeController.js:62:    backend = createRealtimeBackend(),
+./src/voice/realtimeController.js:80:    this._viewport = new RealtimeViewport({
+./src/voice/realtimeController.js:84:        sendRealtimeEvent: (...args) => this.sendRealtimeEvent(...args),
+./src/voice/realtimeController.js:87:    this._diagnostics = new RealtimeDiagnostics({
+./src/voice/realtimeController.js:97:    this._radio = new RealtimeRadio({
+./src/voice/realtimeController.js:113:    this._cost = new RealtimeCost({
+./src/voice/realtimeController.js:124:    this._input = new RealtimeInput({
+./src/voice/realtimeController.js:142:    this._turns = new RealtimeTurns({
+./src/voice/realtimeController.js:163:        sendRealtimeEvent: (...args) => this.sendRealtimeEvent(...args),
+./src/voice/realtimeController.js:175:    this._connection = new RealtimeConnection({
+./src/voice/realtimeController.js:195:        handleRealtimeEvent: (...args) => this.handleRealtimeEvent(...args),
+./src/voice/realtimeRadio.js:4:} from './realtimeProtocol.js';
+./src/voice/realtimeRadio.js:7:export class RealtimeRadio {
+./src/voice/voiceCost.js:3: * Voice model registry + Realtime session cost estimation.
+./src/voice/voiceCost.js:7: *   1. the browser voice UI (`gevRealtime.js`) — live "~$0.42" readout + caps
+./src/voice/voiceCost.js:8: *   2. the dev-server token endpoint (`vite.config.js` → `/api/realtime/token`)
+./src/voice/voiceCost.js:13: *     for a tier by NAME; only this module maps a tier to an OpenAI model id,
+./src/voice/voiceCost.js:14: *     so an unknown/hostile tier string can never reach the OpenAI API.
+./src/voice/voiceCost.js:27: * Both model ids and every rate below were read from OpenAI's own model +
+./src/voice/voiceCost.js:29: *   - https://developers.openai.com/api/docs/models/gpt-realtime-2
+./src/voice/voiceCost.js:30: *   - https://developers.openai.com/api/docs/models/gpt-realtime-2.1-mini
+./src/voice/voiceCost.js:31: *   - https://developers.openai.com/api/docs/pricing
+./src/voice/voiceCost.js:35: *   - `standard` MUST stay in sync with OPENAI_REALTIME_MODEL / the
+./src/voice/voiceCost.js:36: *     OPENAI_REALTIME_MODEL_DEFAULT constant in vite.config.js.
+./src/voice/voiceCost.js:37: *   - `mini` has no in-repo history — it is new here. OpenAI publishes both
+./src/voice/voiceCost.js:38: *     `gpt-realtime-2.1-mini` (current, used below) and an older
+./src/voice/voiceCost.js:39: *     `gpt-realtime-mini`; there is NO `gpt-realtime-2-mini`. If the id ever
+./src/voice/voiceCost.js:40: *     moves, override it with OPENAI_REALTIME_MODEL_MINI rather than editing
+./src/voice/voiceCost.js:52:    id: 'gpt-realtime-2',
+./src/voice/voiceCost.js:54:    /** USD per 1M tokens — gpt-realtime-2. */
+./src/voice/voiceCost.js:68:    id: 'gpt-realtime-2.1-mini',
+./src/voice/voiceCost.js:70:    /** USD per 1M tokens — gpt-realtime-2.1-mini (~3.2× cheaper on audio). */
+./src/voice/voiceCost.js:123:  // Rank by audio output — the dominant cost in a speech-to-speech session.
+./src/voice/voiceCost.js:132: * The tier a client asked for is only a request: `OPENAI_REALTIME_MODEL` /
+./src/voice/voiceCost.js:133: * `OPENAI_REALTIME_MODEL_MINI` can point a tier at any model id, so pricing by
+./src/voice/voiceCost.js:233: * Split one Realtime `response.done` usage object into billable token buckets.
+./src/voice/voiceCost.js:235: * The Realtime usage shape reports per-modality detail with CACHED TOKENS
+./src/voice/voiceCost.js:323: * Estimate the USD cost of one Realtime response's usage.
+./src/voice/realtimeEvents.js:1:/** Only this adapter knows the Realtime transcript and response event names. */
+./src/voice/realtimeEvents.js:2:export function realtimeSessionEvent(payload) {
+./src/voice/realtimeEvents.js:4:  if (type === 'input_audio_buffer.speech_started')
+./src/voice/realtimeEvents.js:5:    return { type: 'interruption', reason: 'user-speech' };
+./src/voice/realtimeEvents.js:6:  if (type === 'conversation.item.input_audio_transcription.completed')
+./src/voice/realtimeEvents.js:8:      type: 'transcript',
+./src/voice/realtimeEvents.js:10:      text: payload.transcript || '',
+./src/voice/realtimeEvents.js:16:      'response.output_audio_transcript.delta',
+./src/voice/realtimeEvents.js:17:      'response.output_audio_transcript.done',
+./src/voice/realtimeEvents.js:20:      'response.audio_transcript.delta',
+./src/voice/realtimeEvents.js:21:      'response.audio_transcript.done',
+./src/voice/realtimeEvents.js:28:      type: 'transcript',
+./src/voice/realtimeEvents.js:31:        ? (payload.transcript ?? payload.text ?? '')
+./src/data/aisStreamAdapter.js:174: * transcribed wholesale rather than hand-picked: a type missing from this list
+./src/data/detectionHost.test.mjs:874:    assert.ok(lightest > 0, 'the sky contact keeps a whisper rather than vanishing');
+./src/data/aisWatchdogTransport.test.mjs:8:// runs on an ephemeral localhost port; no network access is involved.
+./src/data/transitFeeds.test.mjs:57:    'https://cdn.mbta.com/realtime/VehiclePositions.pb',
+./src/keySetupCore.test.mjs:81:  const status = keySetupStatus({ OPENAI_API_KEY: '   ' });
+./src/keySetupCore.test.mjs:82:  assert.equal(status.keys.find((key) => key.id === 'openai').set, false);
+./src/keySetupCore.test.mjs:120:  const trimmed = validateKeySetupUpdates({ OPENAI_API_KEY: '  sk-abc123  ' });
+./src/keySetupCore.test.mjs:122:  assert.equal(trimmed.updates.OPENAI_API_KEY, 'sk-abc123');
+./src/keySetupCore.test.mjs:123:  assert.equal(validateKeySetupUpdates({ OPENAI_API_KEY: '' }).ok, false);
+./src/keySetupCore.test.mjs:124:  assert.equal(validateKeySetupUpdates({ OPENAI_API_KEY: '   ' }).ok, false);
+./src/keySetupCore.test.mjs:125:  assert.equal(validateKeySetupUpdates({ OPENAI_API_KEY: 'a\nb' }).ok, false, 'newline injection');
+./src/keySetupCore.test.mjs:126:  assert.equal(validateKeySetupUpdates({ OPENAI_API_KEY: 'a b' }).ok, false, 'inner space');
+./src/keySetupCore.test.mjs:127:  assert.equal(validateKeySetupUpdates({ OPENAI_API_KEY: 'kéy' }).ok, false, 'non-ASCII');
+./src/keySetupCore.test.mjs:129:    validateKeySetupUpdates({ OPENAI_API_KEY: 'x'.repeat(KEY_SETUP_VALUE_LIMIT + 1) }).ok,
+./src/keySetupCore.test.mjs:135:  assert.equal(validateKeySetupUpdates({ OPENAI_API_KEY: 42 }).ok, false);
+./src/keySetupCore.test.mjs:141:    'OPENAI_API_KEY=old-one',
+./src/keySetupCore.test.mjs:143:    'OPENAI_API_KEY=old-two',
+./src/keySetupCore.test.mjs:146:  const next = upsertDotenvValues(text, { OPENAI_API_KEY: 'new-key' });
+./src/keySetupCore.test.mjs:149:    'OPENAI_API_KEY=old-one',
+./src/keySetupCore.test.mjs:151:    'OPENAI_API_KEY=new-key',
+./src/keySetupCore.test.mjs:173:  const first = upsertDotenvValues('PORT=4173\n', { OPENAI_API_KEY: 'sk-1' });
+./src/keySetupCore.test.mjs:178:    'OPENAI_API_KEY=sk-1',
+./src/keySetupCore.test.mjs:185:    'OPENAI_API_KEY=sk-1',
+./src/keySetupCore.test.mjs:198:    'export OPENAI_API_KEY=old',
+./src/keySetupCore.test.mjs:199:    'NOT_OPENAI_API_KEY=keep-me',
+./src/keySetupCore.test.mjs:200:    'OPENAI_API_KEY_MINI=keep-me-too',
+./src/keySetupCore.test.mjs:202:  const next = upsertDotenvValues(text, { OPENAI_API_KEY: 'new' });
+./src/keySetupCore.test.mjs:204:  assert.equal(lines[0], 'OPENAI_API_KEY=new');
+./src/keySetupCore.test.mjs:205:  assert.equal(lines[1], 'NOT_OPENAI_API_KEY=keep-me');
+./src/keySetupCore.test.mjs:206:  assert.equal(lines[2], 'OPENAI_API_KEY_MINI=keep-me-too');
+./src/keySetupCore.test.mjs:210:  const once = upsertDotenvValues('', { OPENAI_API_KEY: 'sk-1', FIRMS_MAP_KEY: 'f-1' });
+./src/keySetupCore.test.mjs:211:  const twice = upsertDotenvValues(once, { OPENAI_API_KEY: 'sk-1', FIRMS_MAP_KEY: 'f-1' });
+./src/keySetupCore.test.mjs:221:    '# Optional: OpenAI Realtime voice control. Do not prefix with VITE_.',
+./src/keySetupCore.test.mjs:222:    'OPENAI_API_KEY=',
+./src/keySetupCore.test.mjs:223:    'OPENAI_REALTIME_MODEL=gpt-realtime-2',
+./src/keySetupCore.test.mjs:229:    OPENAI_API_KEY: 'sk-real',
+./src/keySetupCore.test.mjs:234:  assert.equal(lines[4], 'OPENAI_API_KEY=sk-real');
+./src/keySetupCore.test.mjs:235:  assert.equal(lines[5], 'OPENAI_REALTIME_MODEL=gpt-realtime-2', 'sibling key untouched');
+./src/keySetupCore.test.mjs:279:  const removal = validateKeySetupUpdates({ OPENAI_API_KEY: null });
+./src/keySetupCore.test.mjs:281:  assert.equal(removal.updates.OPENAI_API_KEY, null);
+./src/keySetupCore.test.mjs:282:  assert.equal(validateKeySetupUpdates({ OPENAI_API_KEY: '' }).ok, false, 'empty is a mistake, not a removal');
+./src/keySetupCore.test.mjs:288:    '# Optional: OpenAI Realtime voice control.',
+./src/keySetupCore.test.mjs:289:    'OPENAI_API_KEY=sk-live',
+./src/keySetupCore.test.mjs:292:  const next = upsertDotenvValues(text, { OPENAI_API_KEY: null });
+./src/keySetupCore.test.mjs:294:  assert.equal(lines[1], '# OPENAI_API_KEY=', 'active line commented out, not deleted');
+./src/keySetupCore.test.mjs:299:  const again = upsertDotenvValues(next, { OPENAI_API_KEY: 'sk-new' });
+./src/keySetupCore.test.mjs:300:  assert.equal(again.split('\n')[1], 'OPENAI_API_KEY=sk-new');
+./src/keySetupCore.test.mjs:337:    assert.equal(validateKeySetupUpdates({ OPENAI_API_KEY: bad }).ok, false, `${JSON.stringify(bad)} refused`);
+./src/keySetupCore.test.mjs:341:    assert.equal(validateKeySetupUpdates({ OPENAI_API_KEY: good }).ok, true, `${good} accepted`);
+./src/data/transitFeeds.js:3: * @description Registry of keyless, openly licensed GTFS-Realtime
+./src/data/transitFeeds.js:138:    url: 'https://cdn.mbta.com/realtime/VehiclePositions.pb',
+./src/data/transitFeeds.js:186:        "Metro Transit's GTFS-realtime feeds are refreshed every 5 seconds.",
+./src/data/transitFeeds.js:187:      note: 'The realtime feed is published from a developer page carrying operational guidance and no licence text of its own. The public-domain statement below belongs to the Metropolitan Council metadata for the COMPANION SCHEDULE dataset, not to this feed: "None. This dataset is public domain un [... omitted end of long line]
+./src/data/transitFeeds.js:199:    url: 'https://realtime.hsl.fi/realtime/vehicle-positions/v2/hsl',
+./src/data/transitFeeds.js:240:    url: 'https://api.entur.io/realtime/v1/gtfs-rt/vehicle-positions',
+./src/data/transitFeeds.js:261:    url: 'https://gtfsrt.api.translink.com.au/api/realtime/seq/VehiclePositions',
+./src/data/dataCredits.js:188:    html: 'Transit vehicles: operator GTFS-Realtime feeds (each operator is credited below when its vehicles are shown)',
+./src/devCctv.test.mjs:83:  const result = await launch({ GOOGLE_MAPS_API_KEY: 'fixture-shell-maps' }, 'GOOGLE_MAPS_API_KEY=fixture-file-maps\nOPENAI_API_KEY=fixture-file-voice\n');
+./src/devCctv.test.mjs:85:  assert.equal(result.env.OPENAI_API_KEY, 'fixture-file-voice');
+./src/overlays/worldOverlayTokens.js:90: * hue and its own relative weight, and the sky case lands at a whisper that is
+./src/keySetupCore.mjs:53:    id: 'openai',
+./src/keySetupCore.mjs:54:    title: 'OPENAI',
+./src/keySetupCore.mjs:56:    getUrl: 'https://platform.openai.com/api-keys',
+./src/keySetupCore.mjs:57:    envVars: Object.freeze(['OPENAI_API_KEY']),
+./src/keySetupCore.mjs:98:    envVars: Object.freeze(['OPENSKY_CLIENT_ID', 'OPENSKY_CLIENT_SECRET']),
+./src/pinokioEnvironment.test.mjs:24:  'OPENAI_API_KEY',
+./src/pinokioEnvironment.test.mjs:29:  'OPENSKY_CLIENT_SECRET',
+./src/pinokioEnvironment.test.mjs:44:  assert.equal(configured.GEV_RATELIMIT_OPENAI_PER_MIN, '30');
+./src/pinokioEnvironment.test.mjs:57:      'OPENAI_API_KEY=',
+./src/pinokioEnvironment.test.mjs:58:      'GEV_RATELIMIT_OPENAI_PER_MIN=45',
+./src/pinokioEnvironment.test.mjs:68:      OPENAI_API_KEY: 'global-openai',
+./src/pinokioEnvironment.test.mjs:69:      GEV_RATELIMIT_OPENAI_PER_MIN: '999',
+./src/pinokioEnvironment.test.mjs:80:    assert.equal(environment.OPENAI_API_KEY, '');
+./src/pinokioEnvironment.test.mjs:81:    assert.equal(environment.GEV_RATELIMIT_OPENAI_PER_MIN, '45');
+./src/pinokioEnvironment.test.mjs:96:    writeFileSync(filepath, 'OPENAI_API_KEY=app-value\nPINOKIO_SHARE_CLOUDFLARE=false\n');
+./src/pinokioEnvironment.test.mjs:99:      GEV_RATELIMIT_OPENAI_PER_MIN: '999',
+./src/pinokioEnvironment.test.mjs:108:    assert.equal(environment.OPENAI_API_KEY, 'app-value');
+./src/pinokioEnvironment.test.mjs:110:    assert.equal(environment.GEV_RATELIMIT_OPENAI_PER_MIN, '30');
+./src/pinokioEnvironment.test.mjs:118:    assert.match(persisted, /^OPENAI_API_KEY=app-value$/m);
+./src/pinokioEnvironment.test.mjs:119:    assert.doesNotMatch(persisted, /^GEV_RATELIMIT_OPENAI_PER_MIN=/m);
+./src/pinokioEnvironment.test.mjs:132:      'OPENAI_API_KEY=',
+./src/pinokioEnvironment.test.mjs:181:        'OPENAI_API_KEY=provider-value',
+./src/pinokioEnvironment.test.mjs:188:        OPENAI_API_KEY: 'global-value',
+./src/pinokioEnvironment.test.mjs:197:      assert.equal(environment.OPENAI_API_KEY, 'provider-value');
+./src/pinokioEnvironment.test.mjs:202:      assert.equal(readPinokioEnvironment(filepath).OPENAI_API_KEY, 'provider-value');
+./src/hudSummaryResponse.js:1:export const HUD_SUMMARY_UNCONFIGURED_CODE = 'OPENAI_NOT_CONFIGURED';
+./src/hudSummaryResponse.js:7: * @param {unknown} apiKey - Candidate server-side OpenAI credential.
+./src/sources/transitService.js:3: * GTFS-Realtime transit proxy for the Transit data layer.
+./src/sources/transitService.js:87: * Vite plugin: GTFS-Realtime VehiclePositions proxy for the Transit layer.
+./src/tooling/importDirections.test.mjs:126:      'src/voice/helper.js': "import './realtimeSession.js';",
+./src/tooling/importDirections.test.mjs:127:      'src/voice/realtimeSession.js': '',
+./src/sources/httpBody.js:58: * readResponseTextCapped — for protobuf upstreams (GTFS-Realtime).
+./src/tooling/transitQa.test.mjs:669:    assert.match(row, /open realtime vehicle data/);
+./src/tooling/liveProviders.test.mjs:66:    OPENSKY_CLIENT_SECRET: 'fixture-secret',
+./src/tooling/localServices.test.mjs:19:import { openAiRealtimeProxy } from 'gods-eye-view/server/providers/openai';
+./src/tooling/localServices.test.mjs:21:import { realtimeInstructions } from '../../server/providers/openai/instructions.js';
+./src/tooling/localServices.test.mjs:22:import { GEV_REALTIME_TOOLS } from '../../server/providers/openai/tools.js';
+./src/tooling/localServices.test.mjs:158:test('Realtime handler preserves tools and default instructions, isolates supplied annotation guidance, and keeps the upstream key server-side', async (t) => {
+./src/tooling/localServices.test.mjs:159:  env(t, 'OPENAI_API_KEY', 'fixture-upstream-secret');
+./src/tooling/localServices.test.mjs:160:  env(t, 'GEV_RATELIMIT_OPENAI_PER_MIN', undefined);
+./src/tooling/localServices.test.mjs:163:    assert.equal(url, 'https://api.openai.com/v1/realtime/client_secrets');
+./src/tooling/localServices.test.mjs:169:    return Response.json({ value: 'fixture-ephemeral' });
+./src/tooling/localServices.test.mjs:180:      install(openAiRealtimeProxy(options)).get('/api/realtime/token'),
+./src/tooling/localServices.test.mjs:189:      realtimeInstructions(guidance),
+./src/tooling/localServices.test.mjs:191:    assert.deepEqual(sent.at(-1).session.tools, GEV_REALTIME_TOOLS);
+./src/tooling/localServices.test.mjs:204:    const handler = install(openAiRealtimeProxy({ sourceRoot })).get(
+./src/tooling/localServices.test.mjs:205:      '/api/realtime/debug-log',
+./src/tooling/localServices.test.mjs:218:      '.gev-logs/realtime-conversations.jsonl',
+./src/tooling/localServices.test.mjs:227:  env(t, 'OPENAI_API_KEY', undefined);
+./src/tooling/localServices.test.mjs:234:    OPENAI_API_KEY: 'sk-fixture-only-not-a-real-key',
+./src/tooling/localServices.test.mjs:251:    /OPENAI_API_KEY=sk-fixture-only-not-a-real-key/,
+./src/tooling/localServices.test.mjs:259:test('Realtime service configuration selects compatible endpoint/model without forwarding request model IDs or keys', async () => {
+./src/tooling/localServices.test.mjs:261:    openAiRealtimeProxy({
+./src/tooling/localServices.test.mjs:262:      realtime: {
+./src/tooling/localServices.test.mjs:272:          assert.deepEqual(payload.session.tools, GEV_REALTIME_TOOLS);
+./src/tooling/localServices.test.mjs:277:  ).get('/api/realtime/token');
+./src/tooling/previewServing.test.mjs:45:    OPENAI_API_KEY: '',
+./src/tooling/previewServing.test.mjs:48:    OPENSKY_CLIENT_SECRET: '',
+./src/sharelink.js:598:    // fresh timestamp to its ephemeral URL without aging the live address.
+./src/radioMarkup.test.mjs:1:import { readRealtimeSource } from './testSupport/readRealtimeSource.mjs';
+./src/radioMarkup.test.mjs:2:import { GEV_REALTIME_TOOLS } from '../server/providers/openai/tools.js';
+./src/radioMarkup.test.mjs:22:const realtime = readRealtimeSource();
+./src/radioMarkup.test.mjs:23:const voice = readFileSync(new URL('./voice/actionSchemas.js', import.meta.url), 'utf8') + '\n' + ['toolDescriptions', 'instructions'].map(name => readFileSync(new URL(`../server/providers/openai/${name}.js`, import.meta.url), 'utf8')).join('\n');
+./src/radioMarkup.test.mjs:26:function realtimeTools() { return GEV_REALTIME_TOOLS; }
+./src/radioMarkup.test.mjs:28:test('Realtime schema exposes the authoritative 28-tool inventory', () => {
+./src/radioMarkup.test.mjs:29:  const tools = realtimeTools();
+./src/radioMarkup.test.mjs:50:test('the counting contract is stated in the Realtime instructions', () => {
+./src/radioMarkup.test.mjs:97:  const byName = new Map(realtimeTools().map((tool) => [tool.name, tool]));
+./src/radioMarkup.test.mjs:116:  const byName = new Map(realtimeTools().map((tool) => [tool.name, tool]));
+./src/radioMarkup.test.mjs:142:  const byName = new Map(realtimeTools().map((tool) => [tool.name, tool]));
+./src/radioMarkup.test.mjs:163:test('no unchanged Realtime tool definition drifts silently', () => {
+./src/radioMarkup.test.mjs:182:  const unchanged = realtimeTools()
+./src/radioMarkup.test.mjs:191:  assert.equal(digest, '6963175a0c9a76de', 'an unchanged Realtime tool definition drifted');
+./src/radioMarkup.test.mjs:284:  assert.deepEqual(realtimeTools().find(tool => tool.name === 'control_radio').parameters.properties.action.enum, ['enable', 'disable', 'play', 'resume', 'pause', 'stop', 'next', 'previous', 'volume', 'select', 'status']);
+./src/radioMarkup.test.mjs:353:  assert.match(realtime, /event\.origin === 'user' &&\s*event\.action === 'play' &&\s*this\.isActive\(\)[\s\S]*?this\.stop\(\{ preserveRadioPlayback: true \}\)/);
+./src/firstRunExperience.test.mjs:3:import { GEV_REALTIME_TOOLS } from '../server/providers/openai/tools.js';
+./src/firstRunExperience.test.mjs:664:  const block = JSON.stringify(GEV_REALTIME_TOOLS);
+./src/firstRunExperience.test.mjs:671:  const instructions = fs.readFileSync(new URL('../server/providers/openai/instructions.js', import.meta.url), 'utf8');
+./src/firstRunExperience.test.mjs:694:  const tool = GEV_REALTIME_TOOLS.find(tool => tool.name === 'set_layer_visibility');
+./src/annotations/annotationEngine.js:24: *   - own annotation state and the ephemeral fade-out lifecycle
+./src/overlays/worldOverlayDraw.test.mjs:618:test('the sky plate scale is a whisper, not a second plate', () => {
+./src/devFreshDotenv.test.mjs:73:    'GOOGLE_MAPS_API_KEY', 'CESIUM_ION_TOKEN', 'OPENAI_API_KEY', 'AISSTREAM_API_KEY',
+./src/devFreshDotenv.test.mjs:75:    'OPENSKY_CLIENT_SECRET', 'LL2_API_TOKEN',
+./src/data/local_data/telegeography_submarine_cables/cable-geo.json:1:{"type":"FeatureCollection","name":"submarine_cables","crs":{"type":"name","properties":{"name":"urn:ogc:def:crs:OGC:1.3:CRS84"}},"features":[{"type":"Feature","properties":{"id":"kunoa-north","name":"Kunoa North","color":"#939597","feature_id":"kunoa-north-0","coordinates":[-156.9665630882687,21.29 [... omitted end of long line]
+./src/layers/vessels/selection.js:185:   * the realtime/voice layer can describe what the user has selected.
+./src/data/local_data/datacenters/datacenters.geojsonl:2819:{"id":1342103501,"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[4.864964687,45.781413035],[4.865020427,45.781424853],[4.865086225,45.781273979],[4.865041968,45.781264591],[4.865030485,45.78126216],[4.864964687,45.781413035]]]},"properties":{"id":17304,"tags":{"name":"Centre de Calcul [... omitted end of long line]
+./src/data/local_data/datacenters/datacenters.geojsonl:2820:{"id":1342103499,"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[4.865006932,45.781582517],[4.865210277,45.781625684],[4.865274398,45.781478665],[4.865217821,45.781466679],[4.865278673,45.78132712],[4.865283618,45.781315888],[4.865086225,45.781273979],[4.865020427,45.781424853],[4.865 [... omitted end of long line]
+./src/data/local_data/datacenters/datacenters.geojsonl:2821:{"id":1342103500,"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[4.865217821,45.781466679],[4.865274398,45.781478665],[4.865340196,45.781327791],[4.865283618,45.781315888],[4.865278673,45.78132712],[4.865217821,45.781466679]]]},"properties":{"id":17307,"tags":{"name":"Centre de Calcul [... omitted end of long line]
+./src/data/local_data/datacenters/datacenters.geojsonl:2822:{"id":1288320747,"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[4.865210277,45.781625684],[4.865251683,45.781634485],[4.865261742,45.78163658],[4.865325863,45.781489561],[4.865274398,45.781478665],[4.865210277,45.781625684]]]},"properties":{"id":16589,"tags":{"name":"Centre de Calcul [... omitted end of long line]
+./src/data/local_data/datacenters/datacenters.geojsonl:2823:{"id":1342103498,"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[4.864956473,45.781571872],[4.865006932,45.781582517],[4.865010033,45.781575476],[4.86501984,45.781552929],[4.865071053,45.781435582],[4.865020427,45.781424853],[4.864959071,45.781565753],[4.864956473,45.781571872]]]},"pr [... omitted end of long line]
+./src/data/local_data/datacenters/datacenters.geojsonl:3919:{"id":8208598258,"type":"Feature","geometry":{"type":"Point","coordinates":[103.890470641,1.335332269]},"properties":{"id":25577,"tags":{"name":"STT Tai Seng 1","telecom":"data_center","website":"https://www.sttelemediagdc.com/","full_name":"ST Telemedia Tai Seng 1 Data Center"},"type":"data_center" [... omitted end of long line]
+./src/data/local_data/datacenters/datacenters.geojsonl:3927:{"id":8208595608,"type":"Feature","geometry":{"type":"Point","coordinates":[103.894015767,1.336574048]},"properties":{"id":25572,"tags":{"name":"STT Tai Seng 2","telecom":"data_center","website":"https://www.sttelemediagdc.com/","full_name":"ST Telemedia Tai Seng 2 Data Center"},"type":"data_center" [... omitted end of long line]
+./src/data/local_data/datacenters/datacenters.geojsonl:3934:{"id":8208598265,"type":"Feature","geometry":{"type":"Point","coordinates":[103.891456855,1.349364245]},"properties":{"id":25578,"tags":{"name":"STT Defu 1","height":"25","telecom":"data_center","website":"https://www.sttelemediagdc.com/","full_name":"ST Telemedia Defu 1 Data Center"},"type":"data_c [... omitted end of long line]
+./src/data/local_data/datacenters/datacenters.geojsonl:3935:{"id":8208598266,"type":"Feature","geometry":{"type":"Point","coordinates":[103.891582835,1.349899262]},"properties":{"id":25579,"tags":{"name":"STT Defu 2","height":"25","telecom":"data_center","website":"https://www.sttelemediagdc.com/","full_name":"ST Telemedia Defu 2 Data Center"},"type":"data_c [... omitted end of long line]
+./src/data/local_data/datacenters/datacenters.geojsonl:4033:{"id":380518633,"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[103.791306523,1.292316928],[103.791629562,1.292649271],[103.792469596,1.292099921],[103.792253762,1.291855924],[103.792038766,1.291832957],[103.791618833,1.292110566],[103.791306523,1.292316928]]]},"properties":{"id":6902 [... omitted end of long line]
+./src/data/local_data/datacenters/datacenters.geojsonl:4043:{"id":8208595600,"type":"Feature","geometry":{"type":"Point","coordinates":[103.746225966,1.327808086]},"properties":{"id":25547,"tags":{"name":"STT Jurong","telecom":"data_center","website":"https://www.sttelemediagdc.com/","full_name":"ST Telemedia Jurong Data Center"},"type":"data_center","osm_id [... omitted end of long line]
+
+## Source-code hits (excluding *.md, docs/, CHANGELOG.md, package-lock.json)
+./src/voice/gevRealtime.test.mjs:133
+./scripts/package-boundaries.json:51
+./src/keySetupCore.test.mjs:45
+./scripts/qa-l9-matrix.mjs:41
+./server/providers/openai/realtime.js:33
+./src/voice/realtimeController.js:27
+./src/voice/voiceCost.js:25
+./scripts/dev-fresh.sh:23
+./src/tooling/localServices.test.mjs:22
+./src/pinokioEnvironment.test.mjs:20
+./src/voice/session.test.mjs:17
+./src/voice/realtimeTurns.js:16
+./src/radioMarkup.test.mjs:16
+./src/hudSummaryResponse.test.mjs:15
+./scripts/format-scope.json:15
+./src/voice/voiceCost.test.mjs:14
+./server/providers/openai/constants.js:14
+./server/providers/openai.js:14
+./scripts/dev-secure.sh:14
+./src/voice/realtimeOwners.test.mjs:13
+./src/voice/realtimeEvents.js:13
+./src/testSupport/readRealtimeSource.mjs:13
+./src/voice/realtimeBackend.js:12
+./server/providers/openai/hud-summary.js:12
+./src/voice/realtimeConnection.js:11
+./src/voice/realtimeBackend.test.mjs:11
+./src/setupDoctor.test.mjs:11
+./src/data/local_data/datacenters/datacenters.geojsonl:11
+./server/providers/openai/rate-limit.js:9
+./server/providers/openai/debug-log.js:9
+./scripts/qa-voice-routing.mjs:9
+./src/voice/realtimeDiagnostics.js:8
+./src/data/transitFeeds.js:7
+./src/voice/realtimeViewport.js:6
+./src/voice/aircraftIdentityNarration.test.mjs:6
+./src/data/gtfsRealtime.js:6
+./package.json:6
+./src/voice/realtimeFacade.js:5
+./src/keySetupCore.mjs:5
+./scripts/setup-doctor.mjs:5
+./scripts/opensky-import-client.sh:5
+./src/firstRunExperience.test.mjs:4
+./scripts/pinokio-environment.mjs:4
+./src/voice/realtimeSession.js:3
+./src/voice/realtimeInput.js:3
+./src/voice/realtimeCost.js:3
+./src/voice/gevActions.js:3
+./src/voice/actionSchemas.test.mjs:3
+./src/pinokioLauncherContract.test.mjs:3
+./server/providers/openai/instructions.js:3
+./server/providers/local.js:3
+./server/providers/aircraft/opensky.js:3
+./scripts/qa-firstrun-mutations.mjs:3
+./pinokio/update.js:3
+./pinokio/start.js:3
+./pinokio/install.js:3
+./pinokio/_ENVIRONMENT:3
+./src/voice/realtimeRadio.js:2
+./src/voice/gevActions.test.mjs:2
+./src/voice/commands.js:2
+./src/tooling/previewServing.test.mjs:2
+./src/tooling/importDirections.test.mjs:2
+./src/toolProjectRoot.test.mjs:2
+./src/sources/transitService.js:2
+./src/keySetup.test.mjs:2
+./src/hudSummaryResponse.js:2
+./src/devFreshDotenv.test.mjs:2
+./src/devCctv.test.mjs:2
+./src/data/transitProxy.js:2
+./scripts/qa-radio.mjs:2
+./src/voice/session.js:1
+./src/voice/realtimeInputPolicy.js:1
+./src/voice/gevRealtime.js:1
+./src/tooling/transitQa.test.mjs:1
+./src/tooling/liveProviders.test.mjs:1
+./src/sources/httpBody.js:1
+./src/sharelink.js:1
+./src/sharelink.celestial.test.mjs:1
+./src/services/requests.js:1
+./src/pinokioUpdatePreview.test.mjs:1
+./src/overlays/worldOverlayTokens.js:1
+./src/overlays/worldOverlayDraw.test.mjs:1
+./src/layers/vessels/selection.js:1
+./src/data/transitFeeds.test.mjs:1
+./src/data/local_data/telegeography_submarine_cables/cable-geo.json:1
+./src/data/gtfsRealtime.test.mjs:1
+./src/data/detectionHost.test.mjs:1
+./src/data/dataCredits.js:1
+./src/data/aisWatchdogTransport.test.mjs:1
+./src/data/aisStreamAdapter.js:1
+./src/app/tools.js:1
+./src/annotations/annotationEngine.js:1
+./server/providers/openai/tools.js:1
+./server/providers/common/rate-limit.js:1
+./scripts/track-regression.mjs:1
+./scripts/qa-sprites-b5.mjs:1
+./scripts/qa-perf.mjs:1
+./scripts/qa-overlay-baseline.mjs:1
+./scripts/qa-map-source-tray.mjs:1
+./scripts/qa-labels.mjs:1
+./scripts/qa-label-readability.mjs:1
+./scripts/qa-heading-b3.mjs:1
+./scripts/qa-cockpit-utility.mjs:1
+./scripts/qa-cockpit-plates.mjs:1
+./scripts/qa-camera-controls.mjs:1
+./scripts/qa-attribution-b12.mjs:1
+./scripts/check-import-directions.mjs:1

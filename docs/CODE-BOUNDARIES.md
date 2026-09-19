@@ -19,7 +19,7 @@ excluded. The formatter validates every entry before writing any file.
 
 ## Current component ownership
 
-Package imports use `gods-eye-view`; `package.json` is the authoritative
+Package imports use `ondemand-spatial` (the package name); `package.json` is the authoritative
 export inventory. Use declared exports rather than reaching into internal files.
 
 | Owner                  | Responsibility and lifetime                                                                             |
@@ -96,13 +96,13 @@ Test modules and the Node-only allocation benchmark are outside browser runtime.
 
 ## Build and standalone server configuration
 
-`gods-eye-view/build/vite` is a separate Node-only export. `build/vite.js`
+`ondemand-spatial/build/vite` is a separate Node-only export. `build/vite.js`
 creates standard Cesium/Vite browser settings from explicit inputs. It imports
 only the declared `vite-plugin-cesium` build dependency, discovers no environment,
 and constructs no provider middleware. Call it from a Vite configuration:
 
 ```js
-import { createBrowserViteConfig } from 'gods-eye-view/build/vite';
+import { createBrowserViteConfig } from 'ondemand-spatial/build/vite';
 
 export default createBrowserViteConfig({
   plugins: [],
@@ -136,19 +136,19 @@ static metadata and recent-track storage. Neither area imports globe rendering.
 These plugins retain their existing process-scoped caches and server lifetime.
 Importing the entry does not start acquisition. The AIS plugin disposes its
 socket/watchdog on server close and re-reads configuration after restart.
-The portable `gods-eye-view/sources/adsb-lol` export normalizes existing aircraft
+The portable `ondemand-spatial/sources/adsb-lol` export normalizes existing aircraft
 records without importing Node middleware or a renderer. Browser layer/controller
 separation is outside this server extraction.
 
 ## Place-search and routing providers
 
-`gods-eye-view/server/providers/places` exports the Google nearby-place and
+`ondemand-spatial/server/providers/places` exports the Google nearby-place and
 text-search plugin, OSRM route registration, and their shared Node helpers.
 The existing Overpass plugin still mounts `/api/route` in its original order.
 Google credentials are resolved on each request; the default uses the existing
 server-key precedence, and callers may supply `resolveApiKey`.
 
-`gods-eye-view/sources/places` exports portable response projections for Google
+`ondemand-spatial/sources/places` exports portable response projections for Google
 place results and OSRM route results/profile aliases. These functions own no
 credentials, requests, caches, environment loading, or rendering. Callers retain
 input validation and upstream-response acceptance. The boundary check builds
@@ -159,13 +159,13 @@ service remain in their existing modules.
 
 ## Satellite and launch providers
 
-`gods-eye-view/server/providers/space` is a Node-only entry for the CelesTrak
+`ondemand-spatial/server/providers/space` is a Node-only entry for the CelesTrak
 and Launch Library 2 middleware. Separate files under `server/providers/space/`
 own each feed's acquisition, memory/disk cache and error handling. The existing
 local composition mounts them in the same order. Importing the entry performs
 no acquisition; factory calls create independent cache state.
 
-`gods-eye-view/sources/space` owns only fixed upstream URL construction: the
+`ondemand-spatial/sources/space` owns only fixed upstream URL construction: the
 CelesTrak group/TLE query and Launch Library's recent 30-day detailed feed.
 Callers supply the group or end date and own validation, credentials, transport,
 response limits and cache policy. The boundary gate checks this portable entry
@@ -174,19 +174,19 @@ in their existing browser modules.
 
 ## Terrain, traffic, fires and bike-share providers
 
-`gods-eye-view/server/providers/terrain`, `/traffic`, `/firms` and `/gbfs`
+`ondemand-spatial/server/providers/terrain`, `/traffic`, `/firms` and `/gbfs`
 are separate Node-only entries. Each owns its existing middleware and
 process-scoped cache or request handling. Standalone composition mounts them in
 the original order; their imports do not start acquisition.
 
-`gods-eye-view/sources/terrain` exports existing point-key, retry and cache
+`ondemand-spatial/sources/terrain` exports existing point-key, retry and cache
 reconstruction mechanics with injectable acquisition dependencies.
-`gods-eye-view/sources/traffic` exports tile math and budget calculations.
-`gods-eye-view/sources/gbfs` exports host/path acceptance and cache-header rules.
+`ondemand-spatial/sources/traffic` exports tile math and budget calculations.
+`ondemand-spatial/sources/gbfs` exports host/path acceptance and cache-header rules.
 These entries import no Node middleware, application configuration or rendering.
 Callers retain their request admission and transport policy.
 
-`gods-eye-view/sources/firms-csv` exports the existing CSV parser, header
+`ondemand-spatial/sources/firms-csv` exports the existing CSV parser, header
 recognition, acquisition-time conversion and trailing-day filter independently
 of the Node middleware. It imports no Node, DOM, rendering or network code.
 The Node provider continues using the same implementation; contract fixtures
@@ -217,7 +217,7 @@ and reject browser imports of these Node entries.
 
 ## Browser place search
 
-`gods-eye-view/search` exports an explicit geocoding service and Google/Photon
+`ondemand-spatial/search` exports an explicit geocoding service and Google/Photon
 adapters. The entry owns normalization, bounded caches, deadlines and fallback
 sequencing. It imports no application state, environment configuration, rendering
 or Node server code. Google transport is supplied by its caller.
@@ -230,7 +230,7 @@ reverse geocoding and nearby/text-search routes remain separate.
 
 ## Panel controls
 
-`gods-eye-view/ui/panels` owns collapse-button binding, nearest-panel Escape
+`ondemand-spatial/ui/panels` owns collapse-button binding, nearest-panel Escape
 handling, hover delays and delayed content-focus handoff. It accepts existing
 DOM elements and callbacks; importing it creates no browser state. `destroy()`
 removes owned listeners and cancels pending work without changing saved state
@@ -243,7 +243,7 @@ or server modules. Package checks and scoped formatting cover this entry.
 
 ## Surface keyboard handling
 
-`gods-eye-view/ui/surfaces` exports `createSurfaceKeyboard` from
+`ondemand-spatial/ui/surfaces` exports `createSurfaceKeyboard` from
 `src/ui/surfaceKeyboard.js`. It receives a root DOM node, an optional document,
 an `isActive` predicate, an `onEscape` action and an optional return-focus fallback.
 Construction is inert. `activate()` remembers the opener and installs one capture
@@ -261,7 +261,7 @@ independently from the standalone screens that consume it.
 
 ## Panel rail layout
 
-`gods-eye-view/ui/layout` exports synchronous `layoutLeftPanelRail` and
+`ondemand-spatial/ui/layout` exports synchronous `layoutLeftPanelRail` and
 `layoutRightPanelRail` passes, `measurePanelNaturalHeight`, and the existing pure
 corridor/allocation helpers. Separate modules own left placement, right placement,
 DOM height measurement and rail geometry. They import no application, renderer,
@@ -279,7 +279,7 @@ compatible through re-exports.
 
 ## Visual input
 
-`gods-eye-view/ui/input` exports `bindApplicationShortcuts` and
+`ondemand-spatial/ui/input` exports `bindApplicationShortcuts` and
 `createStyleParameters`. The shortcut binder owns one bubbling keydown listener
 and receives the document, editing target and explicit action callbacks.
 Parameter controls own only the supplied container's generated rows/listeners;
@@ -394,7 +394,7 @@ provides the corresponding per-owner contract. Changes identify `started`,
 `found`, `missing`, `failed`, `settled`, and the shell's `reset`; request IDs
 belong to their lookup owner. Only current requests publish accepted results.
 
-`gods-eye-view/scenes` exports `SceneDirector`. Its `subscribe(listener)` supplies
+`ondemand-spatial/scenes` exports `SceneDirector`. Its `subscribe(listener)` supplies
 small playback snapshots plus editing outcomes. Scene controls consume these
 updates to render the affected presentation; progress does not copy the project
 or rebuild shot rows. Project import/export outcomes include the project;
@@ -439,7 +439,7 @@ The Node build group also owns the allowlisted static HTML template assembler.
 
 ## Application catalog
 
-`gods-eye-view/application/catalog` captures caller-supplied layer instances and
+`ondemand-spatial/application/catalog` captures caller-supplied layer instances and
 matching registration metadata. `application/data` registers that catalog, attaches
 coordinators after registration and seals it before controls start restoration.
 `application/controls` binds its layer services from the same catalog. The existing
@@ -544,7 +544,7 @@ explicit operations. Both exports exclude Cesium, DOM and application assembly.
 The snapshot renderer applies record changes; rendering owns a weak map of
 geometry and billboard resources used by cards, picking and trails.
 
-`gods-eye-view/sources/reference` constructs fresh earthquake and bundled cable
+`ondemand-spatial/sources/reference` constructs fresh earthquake and bundled cable
 source instances independently of standalone setup. Individual sources remain
 available through `layers/earthquakes/source` and `layers/submarine-cables/source`.
 The latter retains the bundled dataset’s attribution and licensing requirements.

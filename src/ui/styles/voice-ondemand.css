@@ -1,0 +1,260 @@
+/* ------------------------------------------------------------------ *
+ * OD VOICE — OnDemand turn-based voice control (src/voice/ondemand/ui.js).
+ * A compact sibling of #gev-voice-control inside the flex #command-dock;
+ * appended after the dock passes so none of their cascades are touched.
+ * ------------------------------------------------------------------ */
+#command-dock > #od-voice-control,
+#od-voice-control {
+  position: relative;
+  z-index: 3;
+  display: grid;
+  grid-template-rows: auto auto auto auto auto;
+  flex: 0 0 var(--od-voice-width, clamp(11rem, 15vw, 13rem));
+  width: var(--od-voice-width, clamp(11rem, 15vw, 13rem));
+  min-width: 0;
+  min-height: 3.75rem;
+  margin: -0.65rem 0 -0.65rem 0.25rem;
+  padding: 0.28rem 0.5rem 0.3rem;
+  gap: 0.12rem;
+  overflow: hidden;
+  border: 1px solid rgba(59, 183, 149, 0.34);
+  border-radius: var(--panel-radius, 12px);
+  background: rgba(8, 31, 42, 0.94);
+  box-shadow:
+    0 12px 30px rgba(0, 0, 0, 0.56),
+    0 0 26px rgba(59, 183, 149, 0.1),
+    0 0 0 1px rgba(59, 183, 149, 0.08) inset;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  transform: none;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.od-voice-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.3rem;
+}
+
+.od-voice-kicker {
+  color: rgba(190, 221, 230, 0.58);
+  font-size: 0.39rem;
+  letter-spacing: 0.09rem;
+  white-space: nowrap;
+}
+
+.od-voice-route {
+  padding: 0 0.24rem;
+  height: 0.72rem;
+  min-width: 1.7rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(59, 183, 149, 0.06);
+  border: 1px solid rgba(59, 183, 149, 0.34);
+  border-radius: 0.18rem;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.4rem;
+  letter-spacing: 0.045rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.od-voice-route:hover {
+  color: var(--text-primary);
+  border-color: rgba(59, 183, 149, 0.6);
+  background: rgba(59, 183, 149, 0.12);
+}
+
+.od-voice-row {
+  display: grid;
+  grid-template-columns: 2.35rem 1fr;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.od-voice-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.1rem;
+  width: 2.35rem;
+  height: 2.35rem;
+  padding: 0;
+  background: radial-gradient(circle at 50% 40%, rgba(59, 183, 149, 0.22), rgba(8, 31, 42, 0.2) 70%);
+  border: 1px solid rgba(59, 183, 149, 0.45);
+  border-radius: 50%;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  cursor: pointer;
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    background var(--transition-fast);
+}
+
+.od-voice-btn:hover {
+  border-color: rgba(59, 183, 149, 0.8);
+  box-shadow: 0 0 14px rgba(59, 183, 149, 0.28);
+}
+
+.od-voice-mic {
+  display: block;
+  width: 0.55rem;
+  height: 0.85rem;
+  border-radius: 0.3rem;
+  background: rgba(190, 221, 230, 0.85);
+  box-shadow: 0 0.42rem 0 -0.28rem rgba(190, 221, 230, 0.55);
+}
+
+.od-voice-btn-label {
+  font-size: 0.36rem;
+  letter-spacing: 0.06rem;
+  color: rgba(190, 221, 230, 0.8);
+}
+
+.od-voice-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.od-voice-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 0.8rem;
+  padding: 0 0.3rem;
+  border: 1px solid rgba(123, 189, 211, 0.34);
+  border-radius: 0.4rem;
+  background: rgba(123, 189, 211, 0.08);
+  color: var(--text-primary);
+  font-size: 0.42rem;
+  letter-spacing: 0.08rem;
+  white-space: nowrap;
+}
+
+.od-voice-detail {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 0.38rem;
+  letter-spacing: 0.02rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.od-voice-line {
+  min-height: 0.55rem;
+  overflow: hidden;
+  font-size: 0.4rem;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.od-voice-transcript {
+  color: rgba(206, 232, 239, 0.86);
+}
+
+.od-voice-answer {
+  color: rgba(159, 226, 199, 0.95);
+}
+
+.od-voice-answer[data-partial='true']::after {
+  content: '▍';
+  opacity: 0.6;
+}
+
+.od-voice-answer[data-source='local'] {
+  color: rgba(255, 205, 120, 0.9);
+}
+
+.od-voice-workflow {
+  color: rgba(190, 221, 230, 0.55);
+  font-size: 0.36rem;
+}
+
+.od-voice-line:empty {
+  display: none;
+}
+
+/* State colours mirror the GEV MIC control vocabulary. */
+#od-voice-control[data-state='listening'] {
+  border-color: rgba(255, 92, 92, 0.6);
+  box-shadow:
+    0 12px 30px rgba(0, 0, 0, 0.56),
+    0 0 26px rgba(255, 92, 92, 0.18);
+}
+
+#od-voice-control[data-state='listening'] .od-voice-chip {
+  border-color: rgba(255, 92, 92, 0.6);
+  background: rgba(255, 92, 92, 0.16);
+}
+
+#od-voice-control[data-state='listening'] .od-voice-btn {
+  border-color: rgba(255, 92, 92, 0.85);
+  box-shadow: 0 0 16px rgba(255, 92, 92, 0.32);
+  animation: od-voice-pulse 1.4s ease-in-out infinite;
+}
+
+#od-voice-control[data-state='transcribing'] .od-voice-chip,
+#od-voice-control[data-state='thinking'] .od-voice-chip {
+  border-color: rgba(255, 205, 120, 0.6);
+  background: rgba(255, 205, 120, 0.14);
+}
+
+#od-voice-control[data-state='thinking'] .od-voice-btn {
+  animation: od-voice-pulse 2.2s ease-in-out infinite;
+}
+
+#od-voice-control[data-state='speaking'] .od-voice-chip {
+  border-color: rgba(59, 183, 149, 0.7);
+  background: rgba(59, 183, 149, 0.18);
+}
+
+#od-voice-control[data-state='speaking'] .od-voice-btn {
+  border-color: rgba(59, 183, 149, 0.9);
+  box-shadow: 0 0 16px rgba(59, 183, 149, 0.34);
+}
+
+#od-voice-control[data-state='error'] {
+  border-color: rgba(255, 120, 92, 0.6);
+}
+
+#od-voice-control[data-state='error'] .od-voice-chip {
+  border-color: rgba(255, 120, 92, 0.7);
+  background: rgba(255, 120, 92, 0.16);
+}
+
+#od-voice-control[data-state='error'] .od-voice-detail {
+  color: rgba(255, 170, 150, 0.95);
+}
+
+@keyframes od-voice-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.06);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #od-voice-control .od-voice-btn {
+    animation: none !important;
+  }
+}
+
+@media (max-width: 760px) {
+  #command-dock > #od-voice-control,
+  #od-voice-control {
+    --od-voice-width: 9.5rem;
+    margin-left: 0.15rem;
+  }
+}

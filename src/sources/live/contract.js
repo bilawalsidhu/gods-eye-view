@@ -123,3 +123,64 @@ export function httpError(response, source) {
     },
   );
 }
+
+/** The four provider states the MOVEMENT proxies report (see server/providers/common/upstream.js). */
+export const PROVIDER_STATUSES = Object.freeze([
+  'live',
+  'stale',
+  'degraded',
+  'unavailable',
+]);
+
+/**
+ * Read the structured provider status a MOVEMENT proxy attaches to its
+ * response — `X-Provider-Status` / `-Source` / `-Fetched-At` / `-Age-Sec` /
+ * `-Error` / `-Count` headers (server/providers/common/upstream.js
+ * `statusHeaders`), with a JSON body's `provider` object as the fallback for
+ * transports that drop custom headers. Returns null when the response carries
+ * neither, so callers can keep their pre-existing behaviour for legacy routes.
+ *
+ * @param {Response} response
+ * @param {any} [payload] parsed JSON body, if any
+ * @returns {{status:string,source:string|null,fetchedAtMs:number|null,ageSec:number|null,error:string|null,count:number|null}|null}
+ */
+export function providerStatusFromResponse(response, payload = null) {
+  const header = (name) => response?.headers?.get?.(name) ?? null;
+  const fromBody =
+    payload && typeof payload === 'object' && payload.provider
+      ? payload.provider
+      : null;
+  const rawStatus = String(
+    header('x-provider-status') || fromBody?.status || '',
+  ).toLowerCase();
+  if (!PROVIDER_STATUSES.includes(rawStatus)) return null;
+  const fetchedAtRaw = header('x-provider-fetched-at') || fromBody?.fetchedAt;
+  const fetchedAtMs = fetchedAtRaw ? epoch(Date.parse(fetchedAtRaw)) : null;
+  const ageSec = finite(header('x-provider-age-sec') ?? fromBody?.ageSec);
+  const count = finite(header('x-provider-count') ?? fromBody?.count);
+  const error = cleanText(header('x-provider-error') || fromBody?.error || '');
+  return {
+    status: rawStatus,
+    source:
+      cleanText(header('x-provider-source') || fromBody?.source || '') || null,
+    fetchedAtMs,
+    ageSec,
+    error: error || null,
+    count,
+  };
+}
+
+/**
+ * Human error for a MOVEMENT proxy response that carries no usable data
+ * (HTTP 503 + structured status). Prefers the proxy's own reason over a raw
+ * status code so the DATA LAYERS row never reads "HTTP 502".
+ */
+export function providerError(response, payload, source) {
+  const status = providerStatusFromResponse(response, payload);
+  const error = httpError(response, source);
+  const reason = status?.error || payload?.error;
+  if (typeof reason === 'string' && reason.trim())
+    error.message = reason.trim();
+  if (status?.source) error.source = status.source;
+  return error;
+}

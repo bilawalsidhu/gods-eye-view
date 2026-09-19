@@ -355,7 +355,7 @@ export function createModel({
   }
 
   /**
-   * Card model for an ambient fire detection, e.g. title "▲ 47 MW", detail
+   * Card model for an ambient fire detection, e.g. title "FIRE 47 MW", detail
    * "high · 14h · N20". Ages are computed against each detection's acquisition
    * time — with the live feed everything reads under 24 h (and a stale cache
    * reads truthfully old). Exported for unit tests.
@@ -380,7 +380,7 @@ export function createModel({
       cullPosition: candidate.cullPosition || candidate.position,
       gapPx: frpPixelSize(fire.frp),
       accent: accentForSeverity(detectionColorStop(fire).name),
-      title: `▲ ${formatFrp(fire.frp)} MW`,
+      title: `FIRE ${formatFrp(fire.frp)} MW`,
       details: [meta.join(' · ')],
       selected: false,
       priority: Number(fire.frp) || 0,

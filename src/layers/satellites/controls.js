@@ -92,7 +92,7 @@ export function createControls({ state: layerState, services, parts, source }) {
 
     name: 'Satellites',
 
-    icon: '🛰️',
+    icon: 'satellite',
 
     source: 'CelesTrak',
 
@@ -424,7 +424,7 @@ export function createControls({ state: layerState, services, parts, source }) {
         // Any explicit request for core clears the error, even when the mode did
         // NOT change: a failed dense load already reverted the param to core, so
         // a Space Missions restore of an already-core snapshot would otherwise
-        // leave the user staring at a DENSE ✕ they never caused.
+        // leave the user staring at a DENSE FAILED they never caused.
         layerState._denseStatus = 'idle';
         layerState._denseError = null;
       }
@@ -505,7 +505,7 @@ export function createControls({ state: layerState, services, parts, source }) {
         chips: [
           {
             id: 'catalog',
-            label: loading ? 'DENSE ···' : failed ? 'DENSE ✕' : 'DENSE',
+            label: loading ? 'DENSE ···' : failed ? 'DENSE FAILED' : 'DENSE',
             active,
             busy: loading,
             disabled: loading,
@@ -535,11 +535,23 @@ export function createControls({ state: layerState, services, parts, source }) {
         typeof listener === 'function' ? listener : null;
     },
 
+    /**
+     * Layer-row stats. `providerStatus` / `providerError` / `stale` come from
+     * the proxy's structured status (server/providers/common/upstream.js): a
+     * catalog served from the proxy's stale cache or the bundled snapshot reads
+     * STALE with the age of the DATA — `lastUpdate` is the data-fetch time the
+     * proxy reported, not the moment this client received it. `error` stays
+     * 'CelesTrak unreachable' ONLY when every group failed.
+     */
     getStats() {
+      const providerStatus = layerState._providerStatus || null;
+      const loaded = layerState._lastUpdate != null;
       return {
         count: layerState._count,
-        lastUpdate: layerState._lastUpdate,
-        stale: false,
+        lastUpdate: loaded
+          ? (layerState._providerFetchedAt ?? layerState._lastUpdate)
+          : null,
+        stale: providerStatus === 'stale',
         status:
           layerState._lastError === 'CelesTrak unreachable'
             ? 'unavailable'
@@ -547,6 +559,10 @@ export function createControls({ state: layerState, services, parts, source }) {
               ? 'degraded'
               : 'nominal',
         error: layerState._lastError,
+        providerStatus,
+        providerError: layerState._providerError || null,
+        providerSource: layerState._providerSource || null,
+        providerFetchedAt: layerState._providerFetchedAt ?? null,
       };
     },
   };

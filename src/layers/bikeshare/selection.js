@@ -33,14 +33,14 @@ export function createSelection({
 
     const lines = [
       stationLabel,
-      `🚲 ${bikes} avail · ${docks} docks · ${capacity} cap`,
+      `BIKES ${bikes} avail · ${docks} docks · ${capacity} cap`,
     ];
 
     // Append warnings for stations that are offline or partially non-operational
     const abnormal = [];
-    if (record?.isInstalled === false) abnormal.push('⚠️ Not installed');
-    if (record?.isRenting === false) abnormal.push('⚠️ Not renting');
-    if (record?.isReturning === false) abnormal.push('⚠️ Not returning');
+    if (record?.isInstalled === false) abnormal.push('WARNING Not installed');
+    if (record?.isRenting === false) abnormal.push('WARNING Not renting');
+    if (record?.isReturning === false) abnormal.push('WARNING Not returning');
     if (abnormal.length > 0) {
       lines.push(abnormal.join(' · '));
     }

@@ -40,7 +40,7 @@ function fire(overrides = {}) {
 
 test('buildFireCard: title carries FRP, detail carries conf/age/satellite', () => {
   const card = buildFireCard({ fire: fire(), position: { x: 1, y: 2, z: 3 } }, NOW);
-  assert.equal(card.title, '▲ 1520 MW');
+  assert.equal(card.title, 'FIRE 1520 MW');
   assert.equal(card.details.length, 1);
   assert.equal(card.details[0], 'high · 2h · N20');
   assert.equal(card.selected, false);
@@ -56,7 +56,7 @@ test('buildFireCard: missing acquisition time omits the age segment', () => {
 test('buildFireCard: SNPP satellite code renders as SNPP, weak fire is not red', () => {
   const card = buildFireCard({ fire: fire({ satellite: 'N', frp: 0.8, confidence: 0.3 }), position: {} }, NOW);
   assert.match(card.details[0], /SNPP$/);
-  assert.equal(card.title, '▲ 0.8 MW');
+  assert.equal(card.title, 'FIRE 0.8 MW');
   assert.notEqual(card.accent, accentForSeverity('red'));
 });
 

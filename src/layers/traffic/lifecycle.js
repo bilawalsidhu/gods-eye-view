@@ -147,6 +147,7 @@ export function createLifecycle({
       layerState._fetching = false;
       layerState._flowPending = 0;
       layerState._roadError = null;
+      layerState._roadProvider = null;
       parts.animation.clearDots();
       layerState._lastViewCenter = null;
       // A stale outage from the last session would misreport a fresh enable —

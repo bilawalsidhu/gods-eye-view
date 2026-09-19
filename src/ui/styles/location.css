@@ -130,7 +130,7 @@
   background: var(--accent-dim);
   border-color: var(--accent);
   color: var(--accent);
-  box-shadow: 0 0 12px rgba(0, 212, 255, 0.15);
+  box-shadow: 0 0 12px rgba(59, 183, 149, 0.15);
 }
 
 /* ── Expandable POI Row ──────────────────────── */
@@ -205,7 +205,7 @@
 .poi-pill.active {
   background: var(--accent-dim);
   border-color: var(--accent);
-  box-shadow: 0 0 12px rgba(0, 212, 255, 0.15);
+  box-shadow: 0 0 12px rgba(59, 183, 149, 0.15);
 }
 
 .poi-pill-name {
@@ -233,7 +233,7 @@
 
 .poi-pill.active .poi-pill-key {
   color: var(--accent);
-  background: rgba(0, 212, 255, 0.12);
+  background: rgba(59, 183, 149, 0.12);
 }
 
 /* ── Location Search ─────────────────────────── */
@@ -262,11 +262,16 @@
   outline: none;
   font-size: 14px;
   flex-shrink: 0;
+  /* The inline Lucide `search` icon strokes currentColor; a <button> without
+     a colour of its own renders it in the UA buttontext (black on this dark
+     tray) — 2026-09-19 icon once-over. */
+  color: var(--text-secondary);
 }
 
 .search-toggle-btn:hover {
   background: rgba(255, 255, 255, 0.08);
   border-color: var(--glass-border-hover);
+  color: var(--text-primary);
 }
 
 #location-search {

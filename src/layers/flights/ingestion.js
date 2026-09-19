@@ -38,14 +38,29 @@ export function createIngestion({
         feed._lastStatus = snapshot.status ?? 200;
         const sourceEpochMs = snapshot.observedAtMs;
         const sourceAgeMs = snapshot.ageMs;
-        const sourceStale = snapshot.stale || snapshot.freshness === 'unknown';
+        // The MOVEMENT proxy's structured status (server/providers/common/
+        // upstream.js): `stale` = a last-good snapshot, `degraded` = an
+        // alternative feed standing in. A degraded answer is still current
+        // data, so it is NOT an error here — the row reads DEGRADED with
+        // `providerError` (src/ui/layerPanel.js) without tripping the global
+        // LOAD FAILED chip the way `error` would (src/loadingFeedback.js).
+        const providerStatus = snapshot.providerStatus ?? null;
+        const providerError = snapshot.providerError ?? null;
+        const sourceStale =
+          snapshot.stale ||
+          snapshot.freshness === 'unknown' ||
+          providerStatus === 'stale';
         feed._backoff = sourceStale;
         feed._retryAt = 0;
         feed._lastError = sourceStale
-          ? sourceAgeMs == null
-            ? 'Source snapshot time unavailable'
-            : `Source snapshot ${Math.max(2, Math.round(sourceAgeMs / 60_000))} min old`
+          ? providerStatus === 'stale' && providerError
+            ? providerError
+            : sourceAgeMs == null
+              ? 'Source snapshot time unavailable'
+              : `Source snapshot ${Math.max(2, Math.round(sourceAgeMs / 60_000))} min old`
           : null;
+        feed._providerStatus = providerStatus;
+        feed._providerError = providerError;
         feed._lastSource = snapshot.source;
         feed._lastCoverage = snapshot.coverage;
         setSourceLabel(feed._lastSource);
@@ -78,6 +93,9 @@ export function createIngestion({
         }
         feed._lastError =
           e?.name === 'LiveSourceError' ? e.message : 'Live data unavailable';
+        // The proxy answered without data (HTTP 503 + structured status).
+        feed._providerStatus = e?.status ? 'unavailable' : null;
+        feed._providerError = e?.name === 'LiveSourceError' ? e.message : null;
       } finally {
         feed._activeUpdateControllers.delete(resourceController);
       }
@@ -100,6 +118,8 @@ export function createFlightFeed(source) {
   feed._lastStatus = null;
   feed._lastSource = source?.label || 'Aircraft';
   feed._lastCoverage = 'worldwide upstream snapshot';
+  feed._providerStatus = null;
+  feed._providerError = null;
   feed._trackingRefreshEpoch = 0;
   feed._lastTrackingRefreshOutcome = {
     epoch: 0,

@@ -69,7 +69,7 @@
   letter-spacing: 1.8px;
   color: var(--accent);
   text-transform: uppercase;
-  text-shadow: 0 0 8px rgba(0, 212, 255, 0.3);
+  text-shadow: 0 0 8px rgba(59, 183, 149, 0.3);
 }
 
 .panel-drag-handle {
@@ -119,12 +119,14 @@
 }
 
 .panel-collapse-btn {
-  width: 22px;
-  height: 22px;
+  width: 24px; /* SC 2.5.8 minimum target */
+  height: 24px;
   border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.03);
-  color: var(--text-dim);
+  /* WCAG 2.2 AA non-text contrast: --text-dim read 2.38:1 on the button
+     ground (UI/UX audit F-02); --text-readable-dim is 8:1. */
+  color: var(--text-readable-dim);
   font-family: var(--font-mono);
   font-size: 13px;
   line-height: 1;
@@ -216,8 +218,8 @@
   border-color: var(--accent);
   background: var(--accent-dim);
   box-shadow:
-    0 0 20px rgba(0, 212, 255, 0.15),
-    0 0 0 1px rgba(0, 212, 255, 0.1) inset;
+    0 0 20px rgba(59, 183, 149, 0.15),
+    0 0 0 1px rgba(59, 183, 149, 0.1) inset;
 }
 
 .style-btn.active .btn-icon {
@@ -292,7 +294,7 @@
   width: 128px;
   height: auto;
   margin: 0 auto 24px;
-  filter: drop-shadow(0 0 24px rgba(0, 246, 255, 0.42));
+  filter: drop-shadow(0 0 24px rgba(94, 216, 178, 0.42));
   animation: logo-pulse 2s ease-in-out infinite;
 }
 
@@ -472,12 +474,22 @@
 .pp-toggle-btn.active {
   border-color: var(--accent);
   background: var(--accent-dim);
-  box-shadow: 0 0 12px rgba(0, 212, 255, 0.15);
+  box-shadow: 0 0 12px rgba(59, 183, 149, 0.15);
 }
 
 .pp-icon {
   font-size: 14px;
   line-height: 1;
+  /* The inline Lucide icon strokes `currentColor`; without a colour of its
+     own the <button> falls back to the UA `buttontext` (black on this dark
+     glass — found by the 2026-09-19 icon once-over). Follow the label:
+     secondary text idle, the accent when the toggle is active. */
+  color: var(--text-secondary);
+  transition: color var(--transition-fast);
+}
+
+.pp-toggle-btn.active .pp-icon {
+  color: var(--accent);
 }
 
 .pp-icon.material-symbols-outlined {
@@ -772,7 +784,7 @@
   color: var(--accent);
   border-color: var(--accent);
   background: var(--accent-dim);
-  box-shadow: 0 0 10px rgba(0, 212, 255, 0.15);
+  box-shadow: 0 0 10px rgba(59, 183, 149, 0.15);
 }
 
 .map-stack-chip.unavailable,
@@ -822,7 +834,7 @@
   outline: none;
 }
 
-/* DISPLAY ▸ Draw: shape segment, label field, colour, and the one-line hint */
+/* DISPLAY > Draw: shape segment, label field, colour, and the one-line hint */
 #draw-mode-row {
   min-width: 184px;
 }
@@ -1086,8 +1098,8 @@ body.ui-clean-view #scene-runtime.active {
 #param-slider-panel:not(.collapsed) .param-panel-divider {
   background: linear-gradient(
     90deg,
-    rgb(0 212 255 / 28%),
-    rgba(0, 212, 255, 0.18) 58%,
+    rgb(59 183 149 / 28%),
+    rgba(59, 183, 149, 0.18) 58%,
     transparent
   );
 }

@@ -1,5 +1,143 @@
 # Changelog
 
+## 2026-09-19 — Closeout: configurable Overpass mirrors, `DEGRADED · Overpass · <reason>`, rename decisions
+
+- Street Traffic road network (`/api/overpass`, `server/providers/overpass/*`): mirror list from
+  `OVERPASS_ENDPOINTS` (comma-separated; alias `OVERPASS_UPSTREAMS`), default order re-measured 2026-09-19
+  (kumi.systems → private.coffee → overpass-api.de → lz4. → z.; refusing mirrors kept last). Every request
+  carries the shared provider `User-Agent`, `Accept: application/json` and a form-encoded POST body. Rotation
+  now runs through the shared upstream helper (`fetchUpstream`, one attempt per mirror, 12 s per mirror /
+  40 s per rotation — `OVERPASS_MIRROR_TIMEOUT_MS` / `OVERPASS_TOTAL_TIMEOUT_MS`) on HTTP 406 / 429 / 5xx,
+  rate-limit or runtime-error bodies, network errors and timeouts. When every mirror fails the proxy answers a
+  structured HTTP 503 (`X-Provider-Status: degraded`, reason `all 5 mirrors failed · last: <mirror> HTTP 406`)
+  instead of a 502 or a mirror's 406 page, and the DATA LAYERS row reads `DEGRADED · Overpass · <reason>`
+  (`src/layers/traffic`). New tests `src/tooling/overpassMirrors.test.mjs`; docs in
+  `docs/SERVERLESS_LIMITATIONS.md` §11 and `.env.example`.
+- Defaulted rename decisions recorded (`docs/audit/rebrand-grep-report-2026-09-18.md` "Decisions (2026-09-19)"):
+  persisted-state / registered-client identifiers stay unchanged (no storage-key migration); the frozen v1
+  workflow prompts stay until workflow v2. Registration pack unchanged (0 user-facing hits).
+- Closeout audit `docs/audit/closeout-2026-09-19.md`: exhaustive env-var table with the Vercel PRESENT/MISSING
+  state, flow-id variable and default quoted verbatim, gate counts, sandbox verification (health, selftest,
+  Austin + Galveston Bay badge transcriptions).
+
+## 2026-09-18 — Vercel routing fix: multi-segment `/api/*` paths reach the catch-all
+
+First deployment of this branch into the real Vercel project
+(`ondemand-eand-spatial`, preview `dpl_AHGWmpyKiDNxGX9TWpMK7Wbb3Nc6`, source
+`4dc98fc`) showed that Vercel's file-system routing matches only ONE path
+segment for `api/[...route].js`: `/api/opensky` and `/api/ais-live` were
+served, while `/api/celestrak/<group>`, `/api/adsblol/mil`, `/api/tomtom/*`
+and `/api/sources/earthquakes` answered the platform's own `NOT_FOUND` 404
+(no function invoked) — the local emulator (`server/serverless/dev-server.mjs`)
+routes every `/api/*` request to the catch-all and therefore never showed it.
+
+- `vercel.json`: new first rewrite `/api/:__gev_api_path*` →
+  `/api/route` (file-system functions such as `api/ondemand/*.js` still win;
+  everything else under `/api/` now reaches `api/[...route].js` with the
+  ORIGINAL pathname in `req.url`).
+- `server/serverless/vercel-adapter.js`: `resolveRequestUrl` strips the two
+  query keys Vercel injects on the way (`__gev_api_path`, the rewrite's
+  source parameter, and `...route`, the `[...route]` match) without
+  re-encoding the caller's own parameters — the strict
+  `/api/sources/earthquakes` validator otherwise answered
+  `Unknown parameter(s): path, ...route`. New `stripVercelInjectedQuery`
+  export + tests.
+- Verified on preview `dpl_743G2gRzJbm4Vxm9d1PZQtqJTo7i`: every MOVEMENT
+  endpoint 200 with a structured status (no 404/502), earthquakes 200.
+  Details: `docs/handover/ONDEMAND_SPATIAL_HANDOVER_2026-09-18.md`
+  → "Deployment outcome 2026-09-18".
+
+## 2026-09-18 — MOVEMENT data layers repaired for the serverless deployment
+
+Every DATA LAYERS › MOVEMENT row read UNAVAILABLE on the serverless preview
+(CelesTrak unreachable, OpenSky HTTP 502, adsb.lol HTTP 502, AIS relay
+unavailable, Street Traffic OFF). Full write-up: `docs/MOVEMENT-LAYERS.md`.
+
+- New shared provider helper `server/providers/common/upstream.js`: 10 s
+  timeouts, ≤ 2 jittered retries (never on 4xx), descriptive User-Agent, gzip,
+  body caps, a structured status (`live | stale | degraded | unavailable`,
+  `source`, `fetchedAt`, `error`) carried as `X-Provider-*` headers +
+  `body.provider`, last-good stores and edge `Cache-Control`. Every MOVEMENT
+  proxy answers 200 whenever any data exists and a structured 503 otherwise —
+  no raw 502 reaches the UI. `src/sources/live/contract.js` reads the status;
+  `src/data/feedState.js` / `src/ui/layerPanel.js` render `LIVE · source · age`,
+  `STALE`, `DEGRADED · source · reason` (also while a degraded provider is
+  still loading) and treat an empty scene as guidance, not a fault.
+- Satellites (CelesTrak): celestrak.org → celestrak.com → stale cache →
+  bundled snapshot `data/celestrak-active-snapshot.json` (7 groups incl.
+  Starlink; refreshed by the new `prebuild` step
+  `scripts/refresh-celestrak-snapshot.mjs --skip-if-fresh 6`, shipped via
+  `vercel.json includeFiles data/**`) → 503; edge cache
+  `s-maxage=3600, stale-while-revalidate=86400`; `X-TLE-Source`.
+- Live Flights (OpenSky): scene bounding box (`OPENSKY_BBOX_DEGREES`, default
+  ±1.5°) instead of the worldwide request, OAuth2 client credentials kept
+  (`OPENSKY_CLIENT_ID/SECRET`, cached token), 6 s single probe
+  (`OPENSKY_TIMEOUT_MS`, `OPENSKY_RETRIES`) and a 10 min breaker
+  (`OPENSKY_BREAKER_MS`) because opensky-network.org black-holes cloud egress;
+  fallbacks adsb.lol → adsb.fi → (opt-in) airplanes.live → last-good; 429
+  honours Retry-After.
+- Military Flights (adsb.lol): timeouts, adsb.fi / opt-in airplanes.live
+  fallbacks, last-good, optional server-side scene filter
+  (`?lat&lon&radiusNm`, `X-Flight-Coverage`) and `?point=1` mode.
+- Live Vessels (AISStream) on Vercel: new `ais-serverless.js` bounded collector
+  (≤ 8 s WebSocket per scene box, coalesced, cached 25 s in memory + optional
+  Vercel KV / Upstash REST, edge `s-maxage=30`), AISHub fallback
+  (`AISHUB_USERNAME`) and a clearly labelled demo replay (Texas Gulf coast)
+  when `AISSTREAM_API_KEY` is absent; the client sends the scene bbox and shows
+  "No vessels in scene" for an honestly empty box. The 501 guard is gone.
+- Street Traffic (TomTom): `/api/tomtom/flow-segment?point=lat,lon` (Flow
+  Segment Data), `provider` status + optional flow-segment probe on
+  `/api/tomtom/status`, tile timeout/retry/last-good, daily request budget
+  (`TOMTOM_DAILY_REQUEST_BUDGET`); keyless the layer turns ON with simulated
+  flow on live OSM roads and reads DEGRADED with the reason; a refused/timed-out
+  Overpass road fetch is named for the operator instead of a bare HTTP code.
+- `.env.example` documents every new variable; tests added for the helper and
+  each provider (network mocked); `npm test` 4,223 pass, `test:ondemand` 192,
+  `test:serverless` 47, function count unchanged (9).
+
+## 2026-09-18 — Rebrand to OnDemand Spatial
+
+- Product and package rename: the product is now **OnDemand Spatial** (the
+  interim "OnDemand Spatial Intelligence" wording is gone) and the package /
+  import name is `ondemand-spatial` (e.g. `ondemand-spatial/application`,
+  `ondemand-spatial/build/vite`). The upstream repository slug
+  `bilawalsidhu/gods-eye-view`, its clone directory and the Pinokio app URL are
+  unchanged because they belong to the upstream project.
+- Brand assets rebuilt from the official OnDemand brand guidelines PDF: vector
+  lockup plus the favicon set under `public/brand/`, colour/typography tokens in
+  `src/brand/tokens.css`, and the source evidence (which page/asset each value
+  came from) in `docs/brand/BRAND_SOURCE.md`; `docs/BRANDING.md` describes the
+  assets, tokens and contrast checks.
+- Flow-version env var: canonical `ONDEMAND_SPATIAL_FLOW_VERSION` with the
+  accepted alias `GODS_EYE_FLOW_VERSION`, resolved **alias-first** (alias →
+  canonical → default `'1'`) so the value already provisioned on the Vercel
+  project keeps winning; `GET /api/ondemand/health` reports
+  `config.flowVersion.source` (the env NAME that resolved) plus
+  `resolvedVia: alias|canonical|default`, `canonical` and `alias`.
+- OnDemand workflow display name renamed live from `GodsEye Advanced Spatial
+Workflow` to **`OnDemand Spatial Advanced Workflow`** via the documented
+  `PATCH /automation/api/workflow/{id}/name` (HTTP 200, 2026-09-18T10:41:47.809Z);
+  the id `6aace534859f7b0abb53d99a`, the v1 label, the trigger, the nine nodes
+  and their prompts are unchanged (the frozen v1 prompts still self-describe as
+  the "God's Eye pipeline"; no v2 was created). The export moved to
+  `docs/ondemand-workflows/ondemand-spatial-advanced-v1.json`.
+- Agent, skills and extension-key renames: the dashboard agent is the
+  **OnDemand Spatial Intelligence Agent**; the nine skills are
+  `ondemand-spatial-<x>` / "OnDemand Spatial <Skill Name>"
+  (`docs/ondemand-skills/ondemand-spatial-<x>.md`); the OpenAPI vendor
+  extension is `x-ondemand-spatial`; the selftest / contract-test /
+  capability-loop `externalUserId` prefixes are `ondemand-spatial-*`. The
+  registration pack (`docs/audit/dashboard-registration-pack.md`) carries the
+  full old → new ledger.
+- Serverless notice reworded for the new name, and a single upstream credit
+  line (naming the God's Eye View project and its author, MIT) added to the
+  first-run launcher — the only place that sentence appears.
+- Intentionally retained identifiers (persisted state and registered client
+  ids): `godsEyeView.*` localStorage keys, the `window.__godsEyeView` debug
+  global, `godsEyeView_*` Cesium stage names, the `gods-eye-view-transit` /
+  `Digitraffic-User: gods-eye-view` client identifiers and the User-Agent
+  suffix pointing at the upstream repository.
+
 - Distinguish PARTIAL vessel snapshots from STALE data in the layer panel, with
   accepted-record counts and unchanged retention, freshness and outage safeguards.
 
@@ -22,16 +160,13 @@
   with shared playback/seek interpolation, easing and holds. Navigation and
   manual input cancel authored motion; older scene files retain existing flights.
 
-
 - Director validates bounded version-3 scene files before replacing a project,
   preserves unreadable browser saves, migrates legacy bloom once and preserves
   zero-pitch/low-altitude camera and scope/detection edits. Project normalization has a separate owner.
 
-
 - Separate Director timing, seek calculations, playback clocks and registered
   scene-pack presentation rules. Preserve authored content and controls; Stop
   releases pending hold timers and stale ticks cannot affect replacement playback.
-
 
 - Keep parked transit vehicles aligned to their world course during camera orbits, fall back to reported bearing, and keep vehicles with no course consistently screen-up.
 
@@ -214,7 +349,6 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 ## [Unreleased]
 
 - Add bounded Director feature actions with accessible controls, explicit camera/layer admission and cancellation; restore pack geometry on same-shot seek. Preserve existing scenes and content attribution.
-
 
 - Give application request services, terrain/floor caches and annotation lookup state explicit owners and cancellation; share them across controls, layers and voice.
 
@@ -571,7 +705,7 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 - Separate explicit browser build settings from standalone environment loading
   and local provider middleware. Preserve provider behavior and root named exports.
 - Rename standalone browser startup to `src/standalone/` and add a Node-only
-  `gods-eye-view/build/vite` export with checked package ownership.
+  `ondemand-spatial/build/vite` export with checked package ownership.
 
 ### Development
 

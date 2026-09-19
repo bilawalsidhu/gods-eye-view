@@ -8,7 +8,7 @@ export function createControls({ state: layerState, services, parts, source }) {
 
     name: 'Mapped Installations',
 
-    icon: '⌖',
+    icon: 'radar',
 
     source: 'OpenStreetMap + optional Google Maps Places',
 
