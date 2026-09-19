@@ -245,6 +245,10 @@ Use the same controls before attributing a difference to the application:
 1. Record the exact GPU renderer and reject software-rendered or unavailable GPU
    strings.
 2. Use a 1440 x 900 viewport at device pixel ratio 1 and keep the page focused.
+   This baseline predates the render-resolution scale policy (September 2026):
+   on displays with devicePixelRatio > 1.5 the scene now renders at
+   `sceneResolutionScale` 0.75, so HiDPI captures are not comparable to the
+   August 2026 numbers without `?renderScale=1` (or a fresh baseline).
 3. Measure cache-disabled startup separately from cold layer activation and warm
    option switching.
 4. Repeat startup three times and compare medians.

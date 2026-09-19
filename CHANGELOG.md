@@ -22,12 +22,15 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   defaults `sceneResolutionScale` to 0.75 on displays whose `devicePixelRatio`
   exceeds 1.5, and 1.0 otherwise. The previous always-1.0 setting forced the
   backing store to CSS × DPR — ~106 MiB of color + depth on a 2560×1440 @ DPR
-  2 display, with ~4× the per-pixel fragment cost. The 0.75 scale cuts
-  dedicated GPU memory ~44% and per-frame fragment bandwidth ~44% with
-  negligible visible loss against the photoreal tiles (MSAA 2× hides the
-  upscale). `?renderScale=N` (0.5..2) forces an explicit value for A/B
-  capture. Policy lives in `src/sceneRenderScale.js` and is applied in
-  `src/main.js` next to the existing tile-cache policy.
+  2 display, with ~4× the per-pixel fragment cost. The 0.75 scale renders
+  0.75² = 56.25% as many pixels — a deterministic ~44% (43.75%) reduction in
+  color + depth backing-store bytes and in the per-pixel fragment-work bound.
+  That figure is an arithmetic consequence of the resolution change, not a
+  separately measured number; realized bandwidth savings vary with scene
+  overdraw and texture traffic. Visible loss against the photoreal tiles is
+  negligible (MSAA 2× hides the upscale). `?renderScale=N` (0.5..2) forces an
+  explicit value for A/B capture. Policy lives in `src/sceneRenderScale.js`
+  and is applied in `src/main.js` next to the existing tile-cache policy.
 
 ### Data
 
