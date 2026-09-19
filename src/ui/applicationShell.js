@@ -898,6 +898,9 @@ export class StyleManager extends ShellFacade {
         _cctvPrevBtn: this._cctvPrevBtn,
         _cctvProjectionBtn: this._cctvProjectionBtn,
         _cctvQualityChip: this._cctvQualityChip,
+        _cctvSearch: this._cctvSearch,
+        _cctvScope: this._cctvScope,
+        _cctvDiscoveryStatus: this._cctvDiscoveryStatus,
         _cctvSelect: this._cctvSelect,
         _cctvSourceBadge: this._cctvSourceBadge,
         _cctvSummary: this._cctvSummary,
@@ -907,6 +910,37 @@ export class StyleManager extends ShellFacade {
       },
       cctv: cctvLayer,
       actions: {
+        subscribeMapView: (callback) =>
+          this.viewer.camera.moveEnd.addEventListener(callback),
+        readMapView: () => {
+          const viewer = this.viewer;
+          const rectangle = viewer.camera.computeViewRectangle(
+            viewer.scene.globe.ellipsoid,
+          );
+          if (!rectangle) return null;
+          const canvas = viewer.scene.canvas;
+          const point = viewer.camera.pickEllipsoid(
+            new Cesium.Cartesian2(
+              canvas.clientWidth / 2,
+              canvas.clientHeight / 2,
+            ),
+            viewer.scene.globe.ellipsoid,
+          );
+          const center = point
+            ? Cesium.Cartographic.fromCartesian(point)
+            : Cesium.Rectangle.center(rectangle);
+          const degrees = Cesium.Math.toDegrees;
+          return {
+            west: degrees(rectangle.west),
+            east: degrees(rectangle.east),
+            south: degrees(rectangle.south),
+            north: degrees(rectangle.north),
+            center: {
+              lat: degrees(center.latitude),
+              lon: degrees(center.longitude),
+            },
+          };
+        },
         isEnabled: () => this._dataManager?.isEnabled('cctv'),
         setParams: (params, options) =>
           this._dataManager?.setLayerParams('cctv', params, options),

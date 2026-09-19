@@ -1273,7 +1273,7 @@ test('CCTV null-active coverage, auto-hop, cycling, and panel targets stay hones
     assert.ok(renderer, '_renderCctvState is missing');
     assert.match(
       renderer[0],
-      /else if \(!activeId\)[\s\S]*?selectedIndex = -1/,
+      /else \{\s*this\._cctvSelect\.selectedIndex = -1/,
     );
     assert.match(
       renderer[0],

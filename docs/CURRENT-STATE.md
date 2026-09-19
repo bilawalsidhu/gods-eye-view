@@ -1,5 +1,13 @@
 # God's Eye View Current State
 
+The CCTV panel defaults to cameras within the current map's geographic bounds,
+refreshing when map movement ends. Search matches city, camera name and provider;
+results show distance from the map center and sort nearest first. All cameras
+provides explicit worldwide discovery. Nearest and Previous/Next follow the
+filtered results. An active camera outside the local view is omitted from the
+panel preview, with an explanation and an empty state when coverage is absent;
+changing the map or search alone does not select a camera or navigate the globe.
+
 Vessel snapshot completeness is separate from freshness. A current snapshot with
 rejected or duplicate records shows PARTIAL with accepted/received counts; stale
 or unknown freshness and transport failures retain their warnings. Partial

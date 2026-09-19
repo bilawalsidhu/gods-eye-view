@@ -1,6 +1,13 @@
 export function _initCctvPanel() {
   if (!this._cctvPanel) return;
 
+  this.listen(this._cctvSearch, 'input', () =>
+    this._renderCctvState(this._cctvState),
+  );
+  this.listen(this._cctvScope, 'change', () =>
+    this._renderCctvState(this._cctvState),
+  );
+
   this.listen(this._cctvEnableBtn, 'click', async () => {
     this._actionGeneration++;
     await this.actions.toggleEnabled();
@@ -18,7 +25,10 @@ export function _initCctvPanel() {
     )
       return;
     this.actions.runExplicitFocus(
-      () => this.cctv.focusNearest({ focus: false }),
+      () => {
+        const camera = this.discoverCameras({ ...this._cctvState }).cameras[0];
+        return camera && this.cctv.selectCamera(camera.id) ? camera.id : null;
+      },
       (cameraId) => this.cctv.focusCamera(cameraId, 1.8),
     );
   });
@@ -35,7 +45,7 @@ export function _initCctvPanel() {
     )
       return;
     this.actions.runExplicitFocus(
-      () => this.cctv.cycleCamera(-1),
+      () => this.cycleDiscoveredCamera(-1),
       (cameraId) => this.cctv.focusCamera(cameraId, 1.4),
     );
   });
@@ -52,7 +62,7 @@ export function _initCctvPanel() {
     )
       return;
     this.actions.runExplicitFocus(
-      () => this.cctv.cycleCamera(1),
+      () => this.cycleDiscoveredCamera(1),
       (cameraId) => this.cctv.focusCamera(cameraId, 1.4),
     );
   });
@@ -70,9 +80,7 @@ export function _initCctvPanel() {
       (activeId && activeId !== this._cctvState?.activeCameraId)
     )
       return;
-    // Picking a camera from the dropdown flies to it. The catalog spans
-    // three metros, so a bare selection used to leave the view in the old
-    // city with a camera active thousands of km away.
+    // Explicit camera selection also navigates to its location.
     this.actions.runExplicitFocus(
       () => (this.cctv.selectCamera(cameraId) ? cameraId : null),
       (selectedId) => this.cctv.focusCamera(selectedId, 2.2),
