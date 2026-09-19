@@ -3,6 +3,21 @@
 This changelog records public product changes. For the authoritative description
 of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md).
 
+## [Unreleased]
+
+### Performance
+
+- **Voice-only view-target prewarm.** The move-end → depth-readback prewarm
+  (`scene.pickPosition` — the worst main-thread stall in the runtime profile,
+  docs/PERFORMANCE.md) is now gated by an active voice session. While the
+  Realtime controller sits at `idle`/`error` (the default for every
+  non-voice session), the listener still registers for the camera-verbs
+  contract but no longer triggers a depth readback. The controller flips
+  the counter on every `setStatus` (`connecting`/`listening`/`executing` →
+  on, `idle`/`error` → off). Voice tool callers see the same prewarm
+  behaviour as before; non-voice users stop paying the readback cost on
+  every camera move.
+
 ## [0.9.2] — 2026-09-18
 
 ### QA

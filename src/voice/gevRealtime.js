@@ -305,7 +305,7 @@ export function initGevVoiceCommands({ viewer, styleManager, dataManager, sceneD
   const runner = createGevActionRunner({ viewer, styleManager, dataManager, sceneDirector, annotations });
   const ui = createVoiceControl({ reset: true });
   const radioLayer = dataManager?.layers?.get('radio')?.module || null;
-  const controller = new GevRealtimeController({ runner, ui, radioLayer, dataManager });
+  const controller = new GevRealtimeController({ runner, ui, radioLayer, dataManager, viewer });
   // Deferred annotation outlines finish AFTER their tool result returned. Feed the
   // final outcome (resolved / failed) into the conversation so the model can honestly
   // confirm — or correct — what it narrated about a boundary it never saw land.
@@ -347,12 +347,15 @@ export class GevRealtimeController {
    *   ducking/pause handoff should be available.
    * @param {object|null} [root0.dataManager] - Layer manager consulted for
    *   layer lifecycle summaries and layer-addressed tools.
+   * @param {object|null} [root0.viewer] - Cesium viewer used to gate the
+   *   view-target depth-readback prewarm on live voice sessions.
    */
-  constructor({ runner, ui, radioLayer = null, dataManager = null }) {
+  constructor({ runner, ui, radioLayer = null, dataManager = null, viewer = null }) {
     this.runner = runner;
     this.ui = ui;
     this.radioLayer = radioLayer;
     this.dataManager = dataManager;
+    this.viewer = viewer;
     this.radioVoiceDucked = false;
     this.pc = null;
     this.dc = null;
@@ -449,6 +452,9 @@ export class GevRealtimeController {
     this.errors = loadStoredErrors();
     this.sessionId = createDebugSessionId();
     this.debugLog('controller.created', { status: this.status });
+    // The prewarm default is "active"; flip it off here because no session is
+    // running yet. Every later setStatus() call re-syncs via _syncViewTargetPrewarm.
+    this._syncViewTargetPrewarm(this.status);
   }
 
   isActive() {
@@ -1590,6 +1596,26 @@ export class GevRealtimeController {
     if (shouldPauseRadioForVoice({ status, pushToTalkKeyHeld: this.pushToTalkKeyHeld })) {
       this.pauseRadioForVoice();
     }
+    // Mirror voice activity into the view-target prewarm: every status where
+    // the session is usable (connecting / listening / executing) flips the
+    // prewarm ON so the next voice tool call short-circuits its first pick;
+    // idle/error flip it OFF so non-voice users do not pay the depth readback
+    // on every camera move (worst main-thread stall in runtime profiling).
+    this._syncViewTargetPrewarm(status);
+  }
+
+  /**
+   * Push the current voice status into the view-target prewarm counter so
+   * `scene.pickPosition` only runs while a session is in a state that could
+   * actually consume a fresh view target. Idempotent across status transitions.
+   * @param {string} status The status this setStatus call is committing.
+   * @returns {void}
+   */
+  _syncViewTargetPrewarm(status) {
+    const viewer = this.viewer;
+    if (!viewer || typeof viewer.__gevSetViewTargetPrewarmSessions !== 'function') return;
+    const isActive = status === 'connecting' || status === 'listening' || status === 'executing';
+    viewer.__gevSetViewTargetPrewarmSessions(isActive ? 1 : 0);
   }
 
   /**

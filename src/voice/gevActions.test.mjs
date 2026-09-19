@@ -2660,6 +2660,43 @@ test('an unexpected prewarm failure is logged once at debug level, never thrown'
   });
 });
 
+test('view-target prewarm is gated on active voice sessions', () => {
+  // The prewarm triggers a synchronous GPU depth readback — the worst main-thread
+  // stall in the runtime profile (docs/PERFORMANCE.md). With voice off, the
+  // listener must register (the existing contract for camera verbs) but it must
+  // NOT call pickPosition. Flipping the session counter to 1 re-arms it so
+  // voice callers still benefit from the prewarm.
+  withCapturedTimers(({ flush }) => {
+    const harness = createPrewarmHarness();
+    createGevActionRunner({
+      viewer: harness.viewer,
+      styleManager: {},
+      dataManager: { layers: new Map(), isEnabled: () => false, getAll: () => [] },
+    });
+    assert.ok(harness.hasListener(), 'prewarm must still register the moveEnd listener');
+
+    // Default state (no override yet): prewarm is active. Flip it OFF first
+    // so the first moveEnd tests the OFF path deterministically.
+    harness.viewer.__gevSetViewTargetPrewarmSessions(0);
+    harness.fireMoveEnd();
+    flush();
+    assert.equal(harness.calls.pickPosition, 0, 'no pick while voice is inactive');
+
+    // Voice starts; counter flips to 1; prewarm begins picking again.
+    harness.viewer.__gevSetViewTargetPrewarmSessions(1);
+    harness.fireMoveEnd();
+    flush();
+    assert.equal(harness.calls.pickPosition, 1, 'pick resumes after voice session opens');
+
+    // Voice stops; counter flips back; subsequent moves no longer pick.
+    harness.viewer.__gevSetViewTargetPrewarmSessions(0);
+    harness.fireMoveEnd();
+    flush();
+    assert.equal(harness.calls.pickPosition, 1, 'pick stops after voice session closes');
+  });
+});
+
+
 test('a lost cross-mode switch reports every mode field in the shared vocabulary', async () => {
   // The primary `mode` was translated first; the failure path also carries
   // `priorMode` and a diagnostic sentence naming the mode. One leaked internal

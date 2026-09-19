@@ -2187,7 +2187,19 @@ function installViewTargetPrewarm(viewer) {
   viewer.__gevViewTargetPrewarmInstalled = true;
   let timer = null;
   let reportedPrewarmFailure = false;
+  // The prewarm is ONLY useful when a voice tool call is about to happen: it
+  // short-circuits the first `getViewTargetCartesian` after a moveEnd. Without
+  // voice active, no caller asks, so the depth readback this listener triggers
+  // is wasted work — and that readback is the worst main-thread stall in the
+  // runtime profile (docs/PERFORMANCE.md). The gate below flips true on the
+  // first successful `start()` and false on every `stop()`. setVoiceSessionCount
+  // is the public surface so the controller owns the lifecycle.
+  let activeSessions = 1;
+  viewer.__gevSetViewTargetPrewarmSessions = (count) => {
+    activeSessions = Math.max(0, Math.trunc(count));
+  };
   viewer.camera.moveEnd.addEventListener(() => {
+    if (activeSessions <= 0) return;
     if (timer) window.clearTimeout(timer);
     timer = window.setTimeout(() => {
       timer = null;
