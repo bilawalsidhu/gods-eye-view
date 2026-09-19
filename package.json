@@ -81,7 +81,7 @@
     "eslint-plugin-unicorn": "^59.0.1",
     "globals": "^17.11.0",
     "playwright": "^1.62.1",
-    "puppeteer": "^24.37.5",
+    "puppeteer": "^25.11.0",
     "sharp": "^0.35.4",
     "vite": "^6.0.0",
     "vite-plugin-pwa": "^0.21.1",

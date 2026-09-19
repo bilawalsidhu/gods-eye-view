@@ -55,6 +55,27 @@ The dev server is a **key broker**: every server-side key above is spendable by 
 - **App-level throttles: opt-in in dev, default-on in production.** `GEV_RATELIMIT_OPENAI_PER_MIN` and `GEV_RATELIMIT_GOOGLE_PER_MIN` cap the cost-bearing endpoints per client IP per minute (over-limit requests receive a sanitized `429`). On the **dev server** they are opt-in — unset means unlimited, which is acceptable because the server is localhost-bound. On **Cloudflare Pages they are default-on** (30/min OpenAI, 60/min Google): a public deployment with no env configured must not run key-spending endpoints wide open. Setting a positive integer overrides the default; setting `0` explicitly disables the throttle. These are **per-IP, isolate-local, in-memory guards** — they reset on deploy and are **not billing caps**.
 - **Provider-side budgets are the real backstop.** For hard spend protection, configure limits where the money is: OpenAI platform usage limits, Google Cloud budget alerts + per-API quotas, and equivalent controls for any other keyed provider.
 
+## Known accepted risk — dev-only dependency advisories
+
+As of September 2026, `npm audit` reports two **low**-severity findings that are
+deliberately left unfixed: `@eslint/plugin-kit` < 0.3.4 (ReDoS in
+`ConfigCommentParser`, GHSA-xffm-g5w8-qvg7) pulled in by
+`eslint-plugin-unicorn` 59.x. There is no non-breaking fix — the advisory's
+automated remedy jumps to `eslint-plugin-unicorn` 75 (16 majors) and would
+rewrite the lint configuration. The vulnerability only engages when ESLint
+parses crafted in-source config comments, i.e. it requires running the linter
+on hostile source files; this repo lints its own reviewed code. Re-evaluate
+when `eslint-plugin-unicorn` publishes a 60.x with an updated `plugin-kit`.
+
+The two **high** advisories on `extract-zip` (symlink path traversal,
+GHSA-jmr9-qjv8-65gv / GHSA-7pqw-9j4j-h8q3, via `@puppeteer/browsers` ≤ 2.13)
+were closed in September 2026 by bumping `puppeteer` to ^25.11.0 —
+`@puppeteer/browsers` 3.x replaced `extract-zip` with `modern-tar`. This is a
+devDependency: nothing from it ships in the production bundle. Never resolve
+advisories with a blind `npm audit fix --force`; the runtime stack (Cesium,
+Vite) is intentionally pinned and tooling majors must be evaluated one at a
+time.
+
 ## Scope & expectations
 
 - The Vite server is a **development/preview** server. If you expose it beyond localhost, put it behind your own auth/proxy and review the bindings (see the threat model above).
