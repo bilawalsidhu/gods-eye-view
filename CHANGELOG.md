@@ -1,5 +1,8 @@
 # Changelog
 
+- Analyst queries can count and rank CelesTrak satellites and local
+  datacenter/dam infrastructure from in-memory layer records.
+
 - Distinguish PARTIAL vessel snapshots from STALE data in the layer panel, with
   accepted-record counts and unchanged retention, freshness and outage safeguards.
 

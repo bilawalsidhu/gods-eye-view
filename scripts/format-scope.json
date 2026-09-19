@@ -364,6 +364,7 @@
   "src/layers/satellites/ingestion.js",
   "src/layers/satellites/index.js",
   "src/layers/satellites/orbits.js",
+  "src/layers/satellites/queries.js",
   "src/layers/launches/lifecycle.js",
   "src/layers/launches/controls.js",
   "src/layers/launches/panel.js",

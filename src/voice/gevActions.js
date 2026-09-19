@@ -4243,6 +4243,12 @@ async function runAnalystQuery(
       'distanceKm',
       'confidence',
       'place',
+      'noradId',
+      'satelliteClass',
+      'group',
+      'river',
+      'output',
+      'capacity',
     ]) {
       if (r[k] !== null && r[k] !== undefined) compact[k] = r[k];
     }
