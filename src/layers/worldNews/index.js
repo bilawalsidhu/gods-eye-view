@@ -93,6 +93,7 @@ export function createWorldNewsLayer({
     request: null,
     morePagesLeft: 0,
     costPerRequest: null,
+    costMeasured: false,
     requested: 0,
     unplacedCount: 0,
     creditRegistered: false,
@@ -139,6 +140,7 @@ export function createWorldNewsLayer({
     state.unplacedCount = 0;
     state.morePagesLeft = 0;
     state.costPerRequest = null;
+    state.costMeasured = false;
   }
 
   function applySnapshot(snapshot) {
@@ -162,6 +164,8 @@ export function createWorldNewsLayer({
     state.costPerRequest = Number.isFinite(snapshot.costPerRequest)
       ? snapshot.costPerRequest
       : null;
+    state.costMeasured =
+      snapshot.costMeasured === true && state.costPerRequest !== null;
     // Data age, not response age: a stale proxy payload truthfully reads old.
     state.lastUpdate = Number.isFinite(snapshot.fetchedAt)
       ? snapshot.fetchedAt
@@ -265,7 +269,10 @@ export function createWorldNewsLayer({
     const cost = state.costPerRequest ?? 2;
     const spent = state.budget?.spent ?? 0;
     const limit = state.budget?.limit ?? '?';
-    const budgetLine = `1 request ≈ ${cost} points of today's budget (${spent}/${limit} used)`;
+    // The provider documents 1 point + 0.01 per result; without an
+    // X-API-Quota-Request header on the last response that is all we know.
+    const costNote = state.costMeasured ? '' : ' (estimate)';
+    const budgetLine = `1 request ≈ ${cost} points${costNote} of today's budget (${spent}/${limit} used)`;
     if (state.keyRequired) return 'Add a World News API key to load headlines';
     if (state.blocked)
       return `${BLOCKED_LABELS[state.blocked] || state.blocked} · ${budgetLine}`;
@@ -452,18 +459,36 @@ export function createWorldNewsLayer({
     getStats() {
       const now = Date.now();
       const rows = state.rows.length;
+      const cachedAge = state.lastUpdate
+        ? `cached ${formatAge(now - state.lastUpdate) || '<1h'}`
+        : null;
       const blockedLabel = state.blocked
         ? BLOCKED_LABELS[state.blocked] || state.blocked.toUpperCase()
         : null;
+      // A block on a cached batch names the block AND the age of the pins it
+      // still shows: the panel renders `error` for a stale row, so a bare
+      // `stale` flag read STALE with no reason (local QA, 2026-09-19).
+      const blockedText =
+        blockedLabel &&
+        rows &&
+        cachedAge &&
+        (state.stale || state.blocked === 'budget')
+          ? `${blockedLabel} · ${cachedAge}`
+          : blockedLabel;
+      // A transient upstream fault keeps its specific message (e.g. the HTTP
+      // status) when one exists; the generic label only covers a cache served
+      // during the proxy's backoff.
+      const namedBlock =
+        state.blocked && (state.blocked !== 'upstream' || !state.error);
       let loadingLabel = '';
       if (state.loading) {
         loadingLabel = rows ? 'refreshing...' : 'loading...';
       } else if (state.keyRequired) {
         loadingLabel = 'KEY REQUIRED';
-      } else if (state.blocked && state.blocked !== 'upstream') {
-        loadingLabel = blockedLabel;
+      } else if (namedBlock) {
+        loadingLabel = blockedText;
       } else if (state.stale) {
-        loadingLabel = `STALE · cached ${formatAge(now - state.lastUpdate) || '<1h'}`;
+        loadingLabel = `STALE · ${cachedAge || 'cached <1h'}`;
       } else if (state.error) {
         loadingLabel = state.error;
       } else if (state.lastUpdate) {
@@ -487,8 +512,8 @@ export function createWorldNewsLayer({
         blocked: state.blocked,
         error: state.keyRequired
           ? 'KEY REQUIRED'
-          : state.blocked && !rows
-            ? blockedLabel
+          : namedBlock
+            ? blockedText
             : state.error,
         status,
         statusMessage:

@@ -8,6 +8,7 @@ import {
   WORLD_NEWS_TTL_MS,
 } from 'gods-eye-view/server/providers/world-news';
 import { localProviderPlugins } from '../../server/providers/local.js';
+import { estimateWorldNewsPoints } from '../data/worldNewsArticles.js';
 
 function install(plugin) {
   const routes = new Map();
@@ -193,6 +194,7 @@ test('keyed flow: request shape, stripping, cache hit, TTL merge, retention purg
   assert.deepEqual(body.budget, { spent: 2, limit: 40, date: '2026-09-15' });
   assert.deepEqual(body.quota, { used: 2, left: 48 });
   assert.equal(body.costPerRequest, 2);
+  assert.equal(body.costMeasured, true);
   assert.equal(body.morePagesLeft, 3);
   assert.deepEqual(
     body.articles.map((a) => a.id),
@@ -423,4 +425,36 @@ test('LOAD MORE fetches the next offset, is capped per hour and counts against t
   const refreshed = json(await request('/'));
   assert.deepEqual(offsets.at(-1), 0);
   assert.equal(refreshed.morePagesLeft, 3);
+});
+
+test('a response without quota headers is charged at the documented estimate and labelled unmeasured', async (t) => {
+  isolate(t, { ...KEYLESS_ENV, WORLD_NEWS_API_KEY: 'fixture-key' });
+  t.mock.method(Date, 'now', () => T0);
+  let withHeaders = false;
+  t.mock.method(globalThis, 'fetch', async () => {
+    const news = [article(1), article(2), article(3)];
+    if (withHeaders) return page(news);
+    return new Response(
+      JSON.stringify({ offset: 0, number: 3, available: 500, news }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    );
+  });
+  const request = install(worldNewsProxy({ pageDelayMs: 0 }));
+  const estimate = estimateWorldNewsPoints(3);
+  const body = json(await request('/'));
+  assert.equal(body.costMeasured, false);
+  assert.equal(body.costPerRequest, estimate);
+  assert.equal(body.budget.spent, estimate);
+  assert.deepEqual(body.quota, { used: null, left: null });
+  const status = json(await request('/status'));
+  assert.equal(status.costMeasured, false);
+  assert.equal(status.costPerRequest, estimate);
+  withHeaders = true;
+  const more = json(await request('/more'));
+  assert.equal(
+    more.costMeasured,
+    true,
+    'a measured header wins once it appears',
+  );
+  assert.equal(more.costPerRequest, 2);
 });

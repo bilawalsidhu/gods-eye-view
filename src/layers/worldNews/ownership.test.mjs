@@ -216,6 +216,7 @@ function snapshot(rows, overrides = {}) {
     unplacedCount: 20 - rows.length,
     morePagesLeft: 2,
     costPerRequest: 2,
+    costMeasured: true,
     ...overrides,
   };
 }
@@ -474,9 +475,10 @@ test('an upstream fault degrades the row but keeps the previous headlines', asyn
   assert.equal(stats.loadingLabel, 'QUOTA EXHAUSTED · resets 00:00 UTC');
   assert.equal(
     stats.error,
-    'World News quota exhausted',
-    'with data the row names the fault, not the block',
+    'QUOTA EXHAUSTED · resets 00:00 UTC',
+    'with data the row names the block and when it lifts',
   );
+  assert.equal(layerFeedState(stats), 'degraded');
   assert.equal(h.chip('load-more').disabled, true);
 
   const empty = harness({
@@ -513,13 +515,20 @@ test('stale, budget-limited and empty batches read honestly on the chip', async 
     true,
     'a budget-frozen cache ages like a stale one',
   );
-  assert.equal(stats.loadingLabel, 'BUDGET REACHED · resumes 00:00 UTC');
+  assert.match(
+    stats.loadingLabel,
+    /^BUDGET REACHED · resumes 00:00 UTC · cached /,
+  );
   assert.equal(
     stats.error,
-    null,
+    stats.loadingLabel,
+    'the row names the block and the age of the pins it still shows',
+  );
+  assert.equal(
+    layerFeedState(stats),
+    'stale',
     'with data on the map the row is stale, not broken',
   );
-  assert.equal(layerFeedState(stats), 'stale');
   assert.equal(h.chip('load-more').disabled, true);
 
   reply = snapshot([]);
@@ -848,5 +857,22 @@ test('row-control listeners hear every async state change and survive throwing',
   assert.ok(notified >= 2, 'completion re-enables it');
   assert.equal(h.chip('load-more').disabled, false);
   h.layer.setRowControlsListener(null);
+  h.layer.destroy(h.viewer);
+});
+
+test('an unmeasured request cost is labelled as the documented estimate', async () => {
+  let reply = snapshot([ROW_A], { costPerRequest: 1.03, costMeasured: false });
+  const h = harness({ getSnapshot: async () => reply });
+  await h.layer.update(h.viewer);
+  assert.match(
+    h.chip('load-more').title,
+    /1 request ≈ 1\.03 points \(estimate\) of today's budget/,
+  );
+  reply = snapshot([ROW_A], { costPerRequest: null, costMeasured: false });
+  await h.layer.update(h.viewer);
+  assert.match(h.chip('load-more').title, /≈ 2 points \(estimate\) of/);
+  reply = snapshot([ROW_A]);
+  await h.layer.update(h.viewer);
+  assert.match(h.chip('load-more').title, /≈ 2 points of today's budget/);
   h.layer.destroy(h.viewer);
 });

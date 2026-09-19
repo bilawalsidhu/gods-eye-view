@@ -207,3 +207,12 @@ test('cancellation is honored before the request and during body parsing', async
     name: 'AbortError',
   });
 });
+
+test("the browser keeps the proxy's costMeasured flag and defaults it to false", async () => {
+  let { source } = recordingSource(
+    response(200, payload({ costMeasured: true })),
+  );
+  assert.equal((await source.getSnapshot()).costMeasured, true);
+  ({ source } = recordingSource(response(200, payload({}))));
+  assert.equal((await source.getSnapshot()).costMeasured, false);
+});

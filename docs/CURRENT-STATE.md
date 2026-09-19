@@ -1098,7 +1098,9 @@ coordinates of the location entity the headline names — nothing else) and kept
 for a 30-minute TTL. A batch older than 60 minutes is deleted, never served
 stale: the provider's terms cap caching at one hour. A persistent UTC-day
 point budget (`WORLD_NEWS_DAILY_POINT_BUDGET`, default 40) adds the provider's
-`X-API-Quota-Request` points per call (a rejected call still counts one); over
+`X-API-Quota-Request` points per call, or the documented estimate (1 point +
+0.01 per result, reported as `costMeasured: false`) when a response carries no
+such header (a rejected call still counts one); over
 it the proxy serves the retained batch with `blocked: 'budget'` or answers
 `429 {error:'budget'}`. Provider failures map to `bad_key` (401/403, until the
 key changes), `quota` (402, until 00:00 UTC), `rate_limited` (429, 10 s) and

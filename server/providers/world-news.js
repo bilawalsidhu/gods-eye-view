@@ -36,10 +36,12 @@ import { buildSearchNewsUrl, requestSearchNews } from './world-news/client.js';
  *
  * Budget governor (the TomTom pattern): a persistent counter keyed by UTC day
  * (.gev-cache/world-news/budget.json) adds the provider's X-API-Quota-Request
- * points for every upstream call — a rejected call still costs the flat
- * point — against WORLD_NEWS_DAILY_POINT_BUDGET (default 40 of the free plan's
- * 50). Over the cap the proxy serves the retained batch (`stale`, `blocked:
- * 'budget'`) or, without one, 429 {error:'budget'}.
+ * points for every upstream call — or the documented estimate (1 point +
+ * 0.01 per result) when the response carries no such header, which the
+ * payload reports as `costMeasured: false` — a rejected call still costs the
+ * flat point — against WORLD_NEWS_DAILY_POINT_BUDGET (default 40 of the free
+ * plan's 50). Over the cap the proxy serves the retained batch (`stale`,
+ * `blocked: 'budget'`) or, without one, 429 {error:'budget'}.
  *
  * Routes (one middleware; sub-paths):
  *   GET /api/world-news        → snapshot payload (see buildPayload)
@@ -109,6 +111,7 @@ export function worldNewsProxy({
     offset: 0,
     refreshedAt: null,
     measuredCost: null,
+    lastCharge: null,
     quota: null,
   });
   let state = freshState(null);
@@ -173,6 +176,9 @@ export function worldNewsProxy({
             : null,
           measuredCost: Number.isFinite(parsed.measuredCost)
             ? parsed.measuredCost
+            : null,
+          lastCharge: Number.isFinite(parsed.lastCharge)
+            ? parsed.lastCharge
             : null,
           quota:
             parsed.quota && typeof parsed.quota === 'object'
@@ -304,12 +310,12 @@ export function worldNewsProxy({
       try {
         const result = await requestSearchNews({ key, url, fetchImpl });
         const measured = result.quota.request;
-        recordSpend(
-          Number.isFinite(measured)
-            ? measured
-            : estimateWorldNewsPoints(result.news.length),
-        );
+        const charged = Number.isFinite(measured)
+          ? measured
+          : estimateWorldNewsPoints(result.news.length);
+        recordSpend(charged);
         if (Number.isFinite(measured)) state.measuredCost = measured;
+        state.lastCharge = charged;
         state.quota = { used: result.quota.used, left: result.quota.left };
         rejectedKey = null;
         return result;
@@ -382,7 +388,8 @@ export function worldNewsProxy({
       blocked,
       budget: budgetPayload(),
       quota: state.quota,
-      costPerRequest: state.measuredCost,
+      costPerRequest: state.measuredCost ?? state.lastCharge,
+      costMeasured: Number.isFinite(state.measuredCost),
       morePagesLeft: morePagesLeft(blocked),
       articles,
     };
@@ -401,7 +408,8 @@ export function worldNewsProxy({
       blocked,
       budget: budgetPayload(),
       quota: state.quota,
-      costPerRequest: state.measuredCost,
+      costPerRequest: state.measuredCost ?? state.lastCharge,
+      costMeasured: Number.isFinite(state.measuredCost),
       morePagesLeft: key ? morePagesLeft(blocked) : 0,
     };
   }

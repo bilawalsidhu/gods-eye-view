@@ -74,6 +74,7 @@ export function createWorldNewsSource({
       unplacedCount: finiteOrNull(payload.unplacedCount) ?? 0,
       morePagesLeft: finiteOrNull(payload.morePagesLeft) ?? 0,
       costPerRequest: finiteOrNull(payload.costPerRequest),
+      costMeasured: payload.costMeasured === true,
     };
   }
   return {
