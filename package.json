@@ -2,7 +2,8 @@
   "name": "gods-eye-view",
   "private": true,
   "version": "0.1.1",
-  "description": "A real-time intelligence console for planet Earth \u2014 photorealistic 3D globe, live aircraft/ships/satellites/earthquakes/CCTV, and hands-free voice control. Runs in a browser.",
+  "main": "electron/main.js",
+  "description": "A real-time intelligence console for planet Earth — photorealistic 3D globe, live aircraft/ships/satellites/earthquakes/CCTV, and hands-free voice control. Runs in a browser.",
   "type": "module",
   "license": "MIT",
   "author": "Bilawal Sidhu",
@@ -36,6 +37,8 @@
     "format": "node scripts/format.mjs --write",
     "format:check": "node scripts/format.mjs --check",
     "dev": "vite",
+    "desktop": "electron .",
+    "dist:linux": "electron-builder --linux AppImage deb",
     "dev:secure": "./scripts/dev-secure.sh",
     "opensky:import": "./scripts/opensky-import-client.sh",
     "build": "vite build",
@@ -50,17 +53,46 @@
     "@mapbox/vector-tile": "^3.0.0",
     "cesium": "^1.124.0",
     "egm96-universal": "^1.1.1",
+    "fast-xml-parser": "^5.11.1",
     "mgrs": "^2.1.0",
     "pbf": "^5.1.2",
-    "satellite.js": "^6.0.2"
+    "satellite.js": "^6.0.2",
+    "vite": "^6.4.3",
+    "vite-plugin-cesium": "^1.2.23"
   },
   "devDependencies": {
+    "electron": "^44.4.3",
+    "electron-builder": "^26.15.3",
     "prettier": "3.9.6",
     "puppeteer": "^25.10.0",
     "sharp": "^0.35.4",
-    "vite": "^6.0.0",
-    "vite-plugin-cesium": "^1.2.23",
     "ws": "^8.21.0"
+  },
+  "build": {
+    "appId": "ai.maptheworld.godseyeview.zhTW",
+    "productName": "上帝視角",
+    "asar": false,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "**/*",
+      "!release{,/**}",
+      "!docs{,/**}",
+      "!**/*.test.mjs",
+      "!**/.git{,/**}"
+    ],
+    "linux": {
+      "maintainer": "God's Eye View contributors <noreply@github.com>",
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Utility",
+      "icon": "build/icon.png",
+      "executableName": "gods-eye-view-zh-tw",
+      "artifactName": "Gods-Eye-View-zh-TW-${version}.${ext}"
+    }
   },
   "exports": {
     "./infrastructure": "./src/data/infrastructure.js",

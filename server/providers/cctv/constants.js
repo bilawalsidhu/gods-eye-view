@@ -236,6 +236,28 @@ export const CALGARY_DOWNTOWN = { lat: 51.0461, lon: -114.0626 };
  * body cannot be buffered without limit. */
 export const CALGARY_MAX_CATALOG_BYTES = 4 * 1024 * 1024;
 
+/** Taiwan National Freeway Bureau: one keyless MOTC XML catalog covering the
+ * national freeway network. Camera endpoints are MJPEG streams on these
+ * official hosts; the frame proxy extracts one JPEG for the existing UI. */
+export const TAIWAN_FREEWAY_CCTV_URL =
+  'https://tisvcloud.freeway.gov.tw/history/motc20/CCTV.xml';
+export const TAIWAN_FREEWAY_IMAGE_ORIGINS = Object.freeze([
+  'https://cctvn.freeway.gov.tw',
+  'https://cctvn5.freeway.gov.tw',
+  'https://cctvc.freeway.gov.tw',
+  'https://cctvs.freeway.gov.tw',
+  'https://cctv-ss02.thb.gov.tw',
+]);
+export const DEFAULT_TAIWAN_FREEWAY_MAX_SOURCES = 400;
+export const TAIWAN_FREEWAY_ANCHORS = Object.freeze([
+  { lat: 25.033, lon: 121.5654 }, // Taipei
+  { lat: 24.8138, lon: 120.9675 }, // Hsinchu
+  { lat: 24.1477, lon: 120.6736 }, // Taichung
+  { lat: 22.9999, lon: 120.2269 }, // Tainan
+  { lat: 22.6273, lon: 120.3014 }, // Kaohsiung
+]);
+export const TAIWAN_FREEWAY_MAX_CATALOG_BYTES = 4 * 1024 * 1024;
+
 /** Camera CATALOGS change rarely; 15 min keeps multi-megabyte upstream list refetches (Austin rows.json + 4 Caltrans districts + TfL + Ontario 511) infrequent. Frames are fetched per-request and are unaffected. */
 export const CCTV_SOURCE_CACHE_MS = 15 * 60 * 1000;
 /** Per-provider catalog-fetch timeout. Bounds the worst-case refresh so one

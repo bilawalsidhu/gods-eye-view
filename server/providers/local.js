@@ -22,7 +22,7 @@ import { googlePlacesContextProxy } from './places.js';
 import { keySetupEndpoint } from '../standalone/key-setup.js';
 
 /** Construct the local provider plugins in their established order. */
-function localProviderPlugins() {
+function localProviderPlugins({ keySetupSourceRoot = defaultSourceRoot } = {}) {
   return [
     openSkyProxy(),
     celestrakProxy(),
@@ -45,7 +45,7 @@ function localProviderPlugins() {
     trackBackfillProxies(),
     openAiRealtimeProxy(),
     googlePlacesContextProxy(),
-    keySetupEndpoint(),
+    keySetupEndpoint({ sourceRoot: keySetupSourceRoot }),
   ];
 }
 
