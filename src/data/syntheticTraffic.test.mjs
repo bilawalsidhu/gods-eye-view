@@ -11,6 +11,8 @@ import assert from 'node:assert/strict';
 import syntheticTrafficLayer, {
   _planPhantomsForTest,
   _sampleAlongPolylineForTest,
+  _rebuildPhantomsForTest,
+  _resetPhantomsForTest,
   _gtfsRtAnyFeedCoversRectForTest,
   SYNTHETIC_TRAFFIC_RENDER_BOUNDS,
 } from './syntheticTraffic.js';
@@ -129,4 +131,117 @@ test('syntheticTraffic: render-bounds surface documents phantom cap, stride, hei
   assert.equal(SYNTHETIC_TRAFFIC_RENDER_BOUNDS.maxPhantomVehicles, 350);
   assert.equal(SYNTHETIC_TRAFFIC_RENDER_BOUNDS.segmentStride, 6);
   assert.equal(SYNTHETIC_TRAFFIC_RENDER_BOUNDS.heightOffsetM, 5.0);
+});
+
+// ---------------------------------------------------------------------------
+// Rebuild lifecycle
+//
+// The original implementation checked the phantom cap BEFORE pruning the
+// previous generation, so refresh #2 rejected every build (350 stale entries
+// filled the cap) and pruneStale then emptied the layer — populated/blank
+// oscillation every 35s (audit 2026-09-18). These tests drive the real
+// rebuild path (`_rebuildPhantomsForTest` → production `rebuildPhantoms`)
+// against a real Cesium.PointPrimitiveCollection with a stand-in viewer.
+// ---------------------------------------------------------------------------
+
+/** ~1.1 km north-south segment (0.01° lat) — `phantomsForSegment` gives 3. */
+function longSegment(lon, lat) {
+  return {
+    coords: [[lon, lat], [lon, lat + 0.01]],
+    trafficLevel: 0.9,
+    roadType: 'primary',
+    closure: false,
+  };
+}
+
+test('syntheticTraffic: consecutive rebuilds keep the fleet stable (oscillation regression)', () => {
+  const primitives = { add: (p) => p, remove: () => {} };
+  const viewer = {
+    camera: { positionCartographic: { height: 1000 } },
+    scene: { primitives },
+  };
+  syntheticTrafficLayer.init(viewer);
+  try {
+    // enable() fires a void update(); with a stand-in camera (no
+    // computeViewRectangle) pollViewport finds no rect and never fetches.
+    syntheticTrafficLayer.enable(viewer);
+
+    // Enough ~1.1 km segments to FILL the 350-phantom cap — the original
+    // bug only engaged once `_phantoms.size >= MAX` (cap checked before the
+    // old fleet was pruned), so a small fleet would pass vacuously.
+    const segments = [];
+    for (let i = 0; i < 800; i++) {
+      segments.push(longSegment(-71.06 - i * 0.001, 42.35));
+    }
+    const plan = _planPhantomsForTest(segments);
+    assert.equal(plan.spawnablePhantoms, SYNTHETIC_TRAFFIC_RENDER_BOUNDS.maxPhantomVehicles,
+      'fixture must saturate the cap for this regression test to bite');
+
+    const first = _rebuildPhantomsForTest(segments);
+    assert.equal(first, SYNTHETIC_TRAFFIC_RENDER_BOUNDS.maxPhantomVehicles,
+      'first refresh must fill the fleet to the cap');
+
+    // The regression: refresh #2 (and #3) used to blank the layer because
+    // stale entries counted against the cap. The fleet must be IDENTICAL.
+    const second = _rebuildPhantomsForTest(segments);
+    assert.equal(second, first, 'second refresh blanked the fleet — stale cap accounting');
+    const third = _rebuildPhantomsForTest(segments);
+    assert.equal(third, first, 'third refresh must remain stable too');
+
+    assert.equal(syntheticTrafficLayer.getStats().count, first,
+      'getStats().count must track the live fleet');
+  } finally {
+    _resetPhantomsForTest();
+    syntheticTrafficLayer.destroy(viewer);
+  }
+});
+
+test('syntheticTraffic: rebuild from empty and closure-only inputs stay at zero without error', () => {
+  const primitives = { add: (p) => p, remove: () => {} };
+  const viewer = {
+    camera: { positionCartographic: { height: 1000 } },
+    scene: { primitives },
+  };
+  syntheticTrafficLayer.init(viewer);
+  try {
+    syntheticTrafficLayer.enable(viewer);
+    assert.equal(_rebuildPhantomsForTest([]), 0);
+    const closures = [
+      { coords: [[-71.06, 42.35], [-71.06, 42.36]], trafficLevel: 0, roadType: 'primary', closure: true },
+    ];
+    assert.equal(_rebuildPhantomsForTest(closures), 0,
+      'closure-only segments must not spawn phantoms');
+    assert.equal(syntheticTrafficLayer.getStats().count, 0);
+  } finally {
+    _resetPhantomsForTest();
+    syntheticTrafficLayer.destroy(viewer);
+  }
+});
+
+test('syntheticTraffic: sample positions pass through the same cache path as the per-frame callback', () => {
+  // Guard the buildPolylineCache → sampleAlongCache refactor: a 3-vertex
+  // polyline must interpolate through the middle vertex at t≈0.5, not cut
+  // a straight chord across it.
+  const bend = [
+    [-71.00, 42.30],
+    [-71.00, 42.32], // mid vertex — a straight chord would also pass near here,
+    [-71.02, 42.32], // but the END at (-71.02, 42.32) proves the second leg exists
+  ];
+  const end = _sampleAlongPolylineForTest(bend, 0.999999);
+  assert.ok(end, 'sample must resolve at t≈1');
+  assert.ok(Math.abs(end[0] - (-71.02)) < 1e-6, `end lon should be -71.02, got ${end[0]}`);
+  assert.ok(Math.abs(end[1] - 42.32) < 1e-6, `end lat should be 42.32, got ${end[1]}`);
+  const midFirstLeg = _sampleAlongPolylineForTest(bend, 0.5);
+  // Leg 1 (0.02° lat ≈ 2226 m) is LONGER than leg 2 (0.02° lon ≈ 1647 m at
+  // this latitude), so half the total length is still mid-leg-1: lon pinned
+  // at -71.00, lat between the endpoints.
+  assert.ok(Math.abs(midFirstLeg[0] - (-71.00)) < 1e-6,
+    `t=0.5 is mid-leg-1 so lon must be -71.00, got ${midFirstLeg[0]}`);
+  assert.ok(midFirstLeg[1] > 42.30 && midFirstLeg[1] < 42.32,
+    `t=0.5 lat must be strictly inside leg 1, got ${midFirstLeg[1]}`);
+  const corner = _sampleAlongPolylineForTest(bend, 2226.4 / 3873.1);
+  // The corner fraction = leg1 / (leg1 + leg2) ≈ 0.575 — the only t where
+  // lat hits 42.32 while lon is still ≈ -71.00 (cumulative-table correctness).
+  assert.ok(Math.abs(corner[1] - 42.32) < 1e-3,
+    `corner fraction should sit at lat 42.32, got ${corner[1]}`);
 });

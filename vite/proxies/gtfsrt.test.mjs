@@ -85,6 +85,15 @@ test('gtfsRtPolicy: gtfsRtFeedCoversRect — partial overlap (edge of service ar
   assert.equal(gtfsRtFeedCoversRect('mbta', partialBoston), true);
 });
 
+test('gtfsRtPolicy: MBTA bbox covers Worcester (commuter-rail reach, audit 2026-09-18)', () => {
+  // The original box stopped at west=-71.7, so a Worcester viewport reported
+  // "no feed covers" and spawned synthetic cars on top of real MBTA
+  // Framingham/Worcester-line vehicles.
+  const worcester = { south: 42.20, west: -72.05, north: 42.35, east: -71.75 };
+  assert.equal(gtfsRtFeedCoversRect('mbta', worcester), true);
+  assert.equal(gtfsRtAnyFeedCoversRect(worcester), true);
+});
+
 test('gtfsRtPolicy: gtfsRtFeedCoversRect — unknown feed id returns false (never throws)', () => {
   assert.equal(gtfsRtFeedCoversRect('not-a-real-feed', { south: 0, west: 0, north: 1, east: 1 }), false);
 });

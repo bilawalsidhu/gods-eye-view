@@ -49,6 +49,10 @@ const ACTIVATION_EXIT_ALTITUDE_M = 100_000;
  * themselves cache for 120s; faster polling just confirms "no change here". */
 const POLL_INTERVAL_MS = 35_000;
 
+/** Network timeout (ms) per flow-tiles fetch — same budget the GTFS-RT
+ * feeds use; a healthy proxy responds well inside it. */
+const FETCH_TIMEOUT_MS = 8_000;
+
 /** Maximum phantom vehicles rendered at once. Real segments in a busy city
  * viewport can exceed 5k polylines; 350 is well below the noise floor and
  * matches the visibility budget for a "traffic shows motion" overlay. */
@@ -152,73 +156,77 @@ function freeFlowSpeed(roadType) {
 }
 
 /**
- * Compute total polyline length in metres (haversine). We use metres so the
- * CallbackProperty can advance in real time at constant m/s regardless of
- * segment scale. Returns 0 for unusable inputs.
+ * Precompute a polyline's cumulative-length table. Built ONCE per phantom
+ * (at spawn); the per-frame sampler is then a binary search + degree-space
+ * lerp with zero allocations beyond the returned Cartesian3 — never a
+ * per-vertex `EllipsoidGeodesic` construction (that ran iterative geodesic
+ * math per phantom per frame in the original design).
+ *
+ * Metric: equirectangular scaling (111.32 km/deg lat, cos-lat-scaled lon).
+ * City-scale error vs. true geodesic is <0.5% — irrelevant for pacing an
+ * animated glyph, and it keeps the build pass free of trig iteration.
+ * Non-finite vertices contribute zero length; the sampler skips them.
+ *
  * @param {Array<[number, number]>} coords - Polyline in [lon, lat] degrees.
- * @returns {number} Path length, metres.
+ * @returns {{coords: Array<[number, number]>, cum: Float64Array, total: number}|null}
+ *   Cached polyline (cum[i] = metres from coords[0] to coords[i]), or null
+ *   when the polyline is unusable (fewer than 2 finite endpoints or ~zero length).
  */
-function polylineLengthMetres(coords) {
-  if (!Array.isArray(coords) || coords.length < 2) return 0;
-  let total = 0;
-  for (let i = 1; i < coords.length; i++) {
-    const [lon1, lat1] = coords[i - 1];
-    const [lon2, lat2] = coords[i];
-    if (!Number.isFinite(lon1) || !Number.isFinite(lat1)
-        || !Number.isFinite(lon2) || !Number.isFinite(lat2)) continue;
-    const start = Cesium.Cartographic.fromDegrees(lon1, lat1);
-    const end = Cesium.Cartographic.fromDegrees(lon2, lat2);
-    const geod = new Cesium.EllipsoidGeodesic(start, end);
-    total += geod.surfaceDistance;
-  }
-  return total;
-}
-
-/**
- * Sample a position on a polyline at a given fractional distance in [0,1].
- * Interpolates along the polyline linearly per-segment (the polyline is
- * already broken at intersections by TomTom, so this matches the
- * geographic reality closely enough for a moving glyph).
- * @param {Array<[number, number]>} coords - Polyline in [lon, lat] degrees.
- * @param {number} t - Fraction along the polyline, wrapped to [0,1).
- * @param {number} heightOffsetMetres - Vertical offset (m).
- * @returns {Cesium.Cartesian3|null} World-space position, or null if the
- *   polyline is unusable.
- */
-function sampleAlongPolyline(coords, t, heightOffsetMetres) {
+function buildPolylineCache(coords) {
   if (!Array.isArray(coords) || coords.length < 2) return null;
-  const lengths = [];
-  let total = 0;
-  for (let i = 1; i < coords.length; i++) {
+  const n = coords.length;
+  const cum = new Float64Array(n);
+  const metricLat = 111_320;
+  for (let i = 1; i < n; i++) {
     const [lon1, lat1] = coords[i - 1];
     const [lon2, lat2] = coords[i];
     if (!Number.isFinite(lon1) || !Number.isFinite(lat1)
         || !Number.isFinite(lon2) || !Number.isFinite(lat2)) {
-      lengths.push(0);
+      cum[i] = cum[i - 1];
       continue;
     }
-    const start = Cesium.Cartographic.fromDegrees(lon1, lat1);
-    const end = Cesium.Cartographic.fromDegrees(lon2, lat2);
-    lengths.push(new Cesium.EllipsoidGeodesic(start, end).surfaceDistance);
-    total += lengths.at(-1);
+    const midLatRad = ((lat1 + lat2) / 2) * (Math.PI / 180);
+    const dLat = (lat2 - lat1) * metricLat;
+    const dLon = (lon2 - lon1) * metricLat * Math.cos(midLatRad);
+    cum[i] = cum[i - 1] + Math.hypot(dLat, dLon);
   }
-  if (total <= 0) return null;
+  const total = cum[n - 1];
+  if (!(total > 1)) return null;
+  return { coords, cum, total };
+}
+
+/**
+ * Sample a world-space position at fraction t ∈ [0,1) along a cached
+ * polyline. Binary-searches the cumulative table, then lerps in degree
+ * space (TomTom breaks segments at intersections, so straight-line
+ * interpolation within one vertex span matches the road).
+ * @param {{coords: Array<[number, number]>, cum: Float64Array, total: number}} cache
+ *   - Table from `buildPolylineCache()`.
+ * @param {number} t - Fraction along the polyline, wrapped to [0,1).
+ * @param {number} heightOffsetMetres - Vertical offset (m).
+ * @returns {Cesium.Cartesian3|null} World-space position, or null when the cache is unusable.
+ */
+function sampleAlongCache(cache, t, heightOffsetMetres) {
+  if (!cache || !(cache.total > 0)) return null;
+  const { coords, cum, total } = cache;
   const wrapped = ((t % 1) + 1) % 1;
   const target = wrapped * total;
-  let acc = 0;
-  for (let i = 0; i < lengths.length; i++) {
-    const seg = lengths[i];
-    if (acc + seg >= target || i === lengths.length - 1) {
-      const t0 = seg > 0 ? (target - acc) / seg : 0;
-      const [lon1, lat1] = coords[i];
-      const [lon2, lat2] = coords[i + 1];
-      const lon = lon1 + (lon2 - lon1) * t0;
-      const lat = lat1 + (lat2 - lat1) * t0;
-      return Cesium.Cartesian3.fromDegrees(lon, lat, heightOffsetMetres);
-    }
-    acc += seg;
+  // Binary search: find lo such that cum[lo] <= target <= cum[lo + 1].
+  let lo = 0;
+  let hi = cum.length - 1;
+  while (lo + 1 < hi) {
+    const mid = (lo + hi) >> 1;
+    if (cum[mid] <= target) lo = mid; else hi = mid;
   }
-  return Cesium.Cartesian3.fromDegrees(coords[0][0], coords[0][1], heightOffsetMetres);
+  const span = cum[hi] - cum[lo];
+  const t0 = span > 0 ? (target - cum[lo]) / span : 0;
+  const a = coords[lo];
+  const b = coords[hi];
+  return Cesium.Cartesian3.fromDegrees(
+    a[0] + (b[0] - a[0]) * t0,
+    a[1] + (b[1] - a[1]) * t0,
+    heightOffsetMetres,
+  );
 }
 
 /**
@@ -241,31 +249,25 @@ function buildPhantom(segment, segmentIdx, vehicleIdx, generation) {
     }
     return null;
   }
-  const length = polylineLengthMetres(segment.coords);
-  if (length <= 1) return null;
   if (segment.closure) return null; // closed roads surface as segments, not moving glyphs
+
+  // One-time cost: cumulative-length table for this segment. Reused by the
+  // position callback every frame without rebuilding anything.
+  const cache = buildPolylineCache(segment.coords);
+  if (!cache) return null;
 
   const speed = freeFlowSpeed(segment.roadType) * Math.max(MIN_TRAFFIC_LEVEL, segment.trafficLevel);
   const phase = (vehicleIdx / 3) % 1; // stagger 0, 1/3, 2/3 along the path
   const startTime = performance.now() / 1000;
   const direction = vehicleIdx % 2 === 0 ? 1 : -1; // alternate
 
-  const initialPosition = sampleAlongPolyline(segment.coords, phase, PHANTOM_HEIGHT_OFFSET_M);
-  if (!initialPosition) return null;
-
   const positionCallback = new Cesium.CallbackProperty(() => {
     const elapsed = performance.now() / 1000 - startTime;
     const distance = direction * speed * elapsed;
-    const t = (phase + distance / length) % 1;
-    return sampleAlongPolyline(segment.coords, t, PHANTOM_HEIGHT_OFFSET_M);
+    const t = (phase + distance / cache.total) % 1;
+    return sampleAlongCache(cache, t, PHANTOM_HEIGHT_OFFSET_M);
   }, false);
 
-  const key = renderKey(segmentIdx, vehicleIdx, generation);
-  if (_phantoms.has(key)) {
-    const existing = _phantoms.get(key);
-    if (existing) existing.show = true;
-    return existing;
-  }
   const point = _pointCollection.add({
     position: positionCallback,
     color: synthColor(segment.trafficLevel),
@@ -276,8 +278,20 @@ function buildPhantom(segment, segmentIdx, vehicleIdx, generation) {
     translucencyByDistance: new Cesium.NearFarScalar(1200, 1.0, 350_000, 0.2),
     id: { source: 'synthetic-traffic', segmentIdx, vehicleIdx, generation },
   });
-  _phantoms.set(key, point);
+  _phantoms.set(renderKey(segmentIdx, vehicleIdx, generation), point);
   return point;
+}
+
+/**
+ * Phantoms to spawn on one segment. Longer roads carry more vehicles — a
+ * 1.2 km segment gets 3, a short block gets 1 — so the stagger offsets in
+ * `buildPhantom` are actually reachable (the original `1 + (i % 3)` formula
+ * only ever produced 1 because the stride guaranteed `i % 3 === 0`).
+ * @param {number} segmentLengthM - Segment length in metres (> 0).
+ * @returns {number} Phantom count for this segment, 1..3.
+ */
+function phantomsForSegment(segmentLengthM) {
+  return Math.min(3, Math.max(1, Math.round(segmentLengthM / 400)));
 }
 
 /**
@@ -362,6 +376,39 @@ function lngLatBoundsForViewport(viewer) {
 }
 
 /**
+ * Rebuild the phantom fleet from a decoded segment list. The OLD fleet is
+ * removed FIRST: render keys are generation-scoped, so nothing from the
+ * previous refresh is reusable, and the `MAX_PHANTOM_VEHICLES` cap in
+ * `buildPhantom` counts `_phantoms.size` — building before pruning would
+ * count stale entries against the cap and reject every new phantom
+ * (populated/blank oscillation, caught by audit 2026-09-18). Removal and
+ * re-add land in the same JS turn, so Cesium composites them in one frame
+ * with no visible flicker.
+ * @param {Array<{coords: number[][], trafficLevel: number, roadType: string, closure: boolean}>} segments
+ *   - Segments from `fetchFlowForBounds()`.
+ * @returns {number} Phantoms live after the rebuild.
+ */
+function rebuildPhantoms(segments) {
+  pruneStale(new Set()); // keys are generation-scoped ⇒ this drops the whole old fleet
+  _generation += 1;
+  const generation = _generation;
+  let phantomCount = 0;
+  for (let i = 0; i < segments.length; i += SEGMENT_STRIDE) {
+    if (phantomCount >= MAX_PHANTOM_VEHICLES) break;
+    const seg = segments[i];
+    if (!seg || seg.closure) continue;
+    const cache = buildPolylineCache(seg.coords);
+    if (!cache) continue;
+    const phantomsOnThisSegment = phantomsForSegment(cache.total);
+    for (let k = 0; k < phantomsOnThisSegment; k++) {
+      if (phantomCount >= MAX_PHANTOM_VEHICLES) break;
+      if (buildPhantom(seg, i, k, generation)) phantomCount++;
+    }
+  }
+  return phantomCount;
+}
+
+/**
  * One poll cycle for the visible viewport. If any registered GTFS-RT feed
  * covers the visible rect, the call short-circuits — a real feed presumably
  * wins there. Errors are surfaced via `_lastError`, not thrown (a transient
@@ -370,7 +417,6 @@ function lngLatBoundsForViewport(viewer) {
  */
 async function pollViewport() {
   if (!_viewer) return;
-  const camera = _viewer.camera;
   const rect = lngLatBoundsForViewport(_viewer);
   if (!rect) {
     pruneStale(new Set());
@@ -383,33 +429,13 @@ async function pollViewport() {
     return;
   }
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), POLL_INTERVAL_MS - 1000);
+  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   _inflight.add(controller);
   _loadingOps++;
   try {
     const segments = await fetchFlowForBounds(rect, { signal: controller.signal });
     if (!_enabled) return;
-    pruneStaleAfterCurrentBuild();
-    const liveKeys = new Set();
-    _generation += 1;
-    const generation = _generation;
-    let phantomCount = 0;
-    for (let i = 0; i < segments.length; i += SEGMENT_STRIDE) {
-      if (phantomCount >= MAX_PHANTOM_VEHICLES) break;
-      const seg = segments[i];
-      if (!seg || seg.closure) continue;
-      // Spawn 1–3 phantoms per picked segment, staggered along its length.
-      const phantomsOnThisSegment = 1 + (i % 3);
-      for (let k = 0; k < phantomsOnThisSegment; k++) {
-        const point = buildPhantom(seg, i, k, generation);
-        if (point) {
-          liveKeys.add(renderKey(i, k, generation));
-          phantomCount++;
-          if (phantomCount >= MAX_PHANTOM_VEHICLES) break;
-        }
-      }
-    }
-    pruneStale(liveKeys);
+    rebuildPhantoms(segments);
     _lastUpdate = Date.now();
     governorRequestRender('synthetic-traffic-update');
   } catch (error) {
@@ -421,18 +447,6 @@ async function pollViewport() {
     clearTimeout(timeoutId);
     _inflight.delete(controller);
     _loadingOps = Math.max(0, _loadingOps - 1);
-    void camera; // referenced for symmetry with future per-camera zoom tweaks
-  }
-}
-
-/**
- * Helper: hide all phantoms without removing primitives. Used while a new
- * batch is being built to prevent a half-frame visual flicker.
- */
-function pruneStaleAfterCurrentBuild() {
-  if (!_pointCollection) return;
-  for (const point of _phantoms.values()) {
-    if (point) point.show = false;
   }
 }
 
@@ -580,18 +594,11 @@ const syntheticTrafficLayer = {
 };
 
 /**
- * Test seam: build phantoms from a synthetic segments array WITHOUT
- * touching Cesium's globe or the live network. Lets unit tests validate the
- * segment-picking / stride / cap logic without a viewer.
+ * Test seam: plan the phantom rebuild for a segment array WITHOUT touching
+ * Cesium's globe or the live network. Mirrors `rebuildPhantoms`' picking
+ * (stride, closure skip, length-driven 1–3 count, cap) so tests can pin the
+ * planner without a viewer.
  *
- * Returns a summary describing what would be rendered:
- *   {
- *     totalSegments: number,
- *     eligibleSegments: number,           // non-closure segments inspected
- *     phantomBudget: number,              // MAX_PHANTOM_VEHICLES at write-time
- *     spawnablePhantoms: number,          // segment × 1..3 minus cap
- *     freeFlowSpeedMpsByType: { [roadType: string]: number }
- *   }
  * @param {Array<{coords: number[][], trafficLevel: number, roadType: string, closure: boolean}>} segments
  *   - Same shape as `decodeFlowTile()` output.
  * @returns {{
@@ -610,8 +617,10 @@ export function _planPhantomsForTest(segments) {
   for (let i = 0; i < segments.length; i += SEGMENT_STRIDE) {
     const seg = segments[i];
     if (!seg || seg.closure) continue;
+    const cache = buildPolylineCache(seg.coords);
+    if (!cache) continue;
     eligibleSegments++;
-    const desired = 1 + (i % 3);
+    const desired = phantomsForSegment(cache.total);
     const actual = Math.min(desired, MAX_PHANTOM_VEHICLES - spawnablePhantoms);
     if (actual <= 0) break;
     spawnablePhantoms += actual;
@@ -630,22 +639,53 @@ export function _planPhantomsForTest(segments) {
 }
 
 /**
- * Test seam: pure helper, isolated from Cesium. Sample a position on a
- * polyline at fraction t ∈ [0,1) — returns [lon, lat] in degrees for
- * easy assertion.
+ * Test seam: pure helper, isolated from rendering. Samples a position on a
+ * polyline at fraction t ∈ [0,1) through the SAME cache path the per-frame
+ * callback uses, and returns [lon, lat] in degrees for easy assertion.
  * @param {Array<[number, number]>} coords - Polyline in [lon, lat] degrees.
  * @param {number} t - Fraction along the polyline.
  * @returns {[number, number]|null} [lon, lat] at the sample, or null when
  *   the polyline is unusable.
  */
 export function _sampleAlongPolylineForTest(coords, t) {
-  const cart = sampleAlongPolyline(coords, t, 0);
+  const cache = buildPolylineCache(coords);
+  const cart = sampleAlongCache(cache, t, 0);
   if (!cart) return null;
   const carto = Cesium.Cartographic.fromCartesian(cart);
   return [
     Cesium.Math.toDegrees(carto.longitude),
     Cesium.Math.toDegrees(carto.latitude),
   ];
+}
+
+/**
+ * Test seam: run the REAL rebuild lifecycle (prune-old-first → build with
+ * cap accounting → generation bump) against a real
+ * `Cesium.PointPrimitiveCollection` — no viewer or network required. This
+ * is the path the populate/blank oscillation bug lived in, so the
+ * consecutive-refresh assertions in the unit suite run exactly what
+ * production runs.
+ *
+ * The layer must be init()'d with a stand-in viewer first (the collection
+ * must exist). Returns the live count after this refresh.
+ * @param {Array<{coords: number[][], trafficLevel: number, roadType: string, closure: boolean}>} segments
+ *   - Segments as `fetchFlowForBounds()` would return.
+ * @returns {number} Phantom count after the rebuild.
+ */
+export function _rebuildPhantomsForTest(segments) {
+  return rebuildPhantoms(segments);
+}
+
+/**
+ * Test seam: drop every phantom and reset generation state between test
+ * cases (mirrors the disable() teardown without requiring a viewer).
+ * @returns {void}
+ */
+export function _resetPhantomsForTest() {
+  if (_pointCollection) _pointCollection.removeAll();
+  _phantoms.clear();
+  _generation = 0;
+  _limitWarned = false;
 }
 
 /** Test seam: layer constant surface for the coverage tools. */

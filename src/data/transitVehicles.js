@@ -239,7 +239,10 @@ async function pollFeed(feedId) {
       liveKeys.add(key);
       renderVehicle(vehicle, { feedId, vehicleId: vid });
     }
-    pruneStaleVehicles(liveKeys);
+    // No per-feed prune here: `pruneStaleVehicles` sweeps the shared point
+    // map, and this feed's keys alone would delete every OTHER feed's
+    // just-rendered vehicles (the polls run concurrently under Promise.all).
+    // The union prune happens once in update() after all feeds report.
 
     return { feedId, vehicleIds: liveKeys };
   } catch (error) {
@@ -313,7 +316,16 @@ const transitVehiclesLayer = {
     governorRequestRender('transit-vehicles-update');
     const results = await Promise.all(GTFS_RT_FEED_IDS.map((feedId) => pollFeed(feedId)));
     if (!_enabled) return;
-    if (results.some((r) => r.vehicleIds.size > 0)) {
+    // Prune exactly once, against the UNION of every feed's live keys. A
+    // feed that failed this cycle contributes no keys, so its vehicles get
+    // one last-good cycle before they age out — deliberate, matching the
+    // partial-failure philosophy used by the other layers.
+    const liveKeys = new Set();
+    for (const result of results) {
+      for (const key of result.vehicleIds) liveKeys.add(key);
+    }
+    pruneStaleVehicles(liveKeys);
+    if (liveKeys.size > 0) {
       _lastUpdate = Date.now();
     }
   },

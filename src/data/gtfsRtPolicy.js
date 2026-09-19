@@ -45,14 +45,16 @@ export const GTFS_RT_FEEDS = Object.freeze({
  * rather miss a synthetic opportunity at the fringe. These are not
  * authoritative — they are "where this feed is plausibly the real source".
  *
- *   mbta     — Greater Boston / MBTA commuter rail reach.
- *              Real feed spans MBTA bus + subway + commuter rail lines.
+ *   mbta     — Greater Boston + MBTA commuter-rail reach: Providence south,
+ *              Worcester west (~-71.98), Newburyport/Lowell north, Plymouth
+ *              east. The original box stopped at -71.7 and told the synthetic
+ *              layer Worcester was uncovered (audit 2026-09-18).
  *   ovapi    — Netherlands nationwide (island of Bonaire excluded).
  *   metro-mn — Twin Cities + suburbs.
  * @type {{[feedId: string]: {south: number, west: number, north: number, east: number}}}
  */
 export const GTFS_RT_SERVICE_BBOXES = Object.freeze({
-  'mbta':     { south: 41.6,  west: -71.7, north: 42.7,   east: -70.6  },
+  'mbta':     { south: 41.5,  west: -72.1, north: 42.9,   east: -70.5  },
   'ovapi':    { south: 50.7,  west:   3.4, north: 53.5,   east:   7.3  },
   'metro-mn': { south: 44.5,  west: -94.0, north: 45.5,   east: -92.5  },
 });

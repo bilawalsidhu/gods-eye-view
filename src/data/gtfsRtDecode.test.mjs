@@ -15,64 +15,10 @@ import { decodeGtfsRtFeed } from './gtfsRtDecode.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURES = resolve(__dirname, 'fixtures');
 
-// Tiny protobuf encoder (just enough to express the GTFS-RT subset the
-// decoder reads). Hand-built so the round-trip test never depends on the
-// same library the system under test was prototyped against.
-function utf8(s) { return [...new TextEncoder().encode(s)]; }
-function varint(n) {
-  const out = [];
-  // GTFS-RT uses uint64 fields; clamp JS numbers via BigInt-safe path.
-  const big = BigInt(n);
-  let v = big;
-  while (v >= 0x80n) { out.push(Number((v & 0x7fn) | 0x80n)); v >>= 7n; }
-  out.push(Number(v));
-  return out;
-}
-function tag(fieldNum, wireType) { return varint((fieldNum << 3) | wireType); }
-function lenDelim(fieldNum, bytes) { return [...tag(fieldNum, 2), ...varint(bytes.length), ...bytes]; }
-function varintField(fieldNum, n) { return [...tag(fieldNum, 0), ...varint(n)]; }
-function stringField(fieldNum, s) { return lenDelim(fieldNum, utf8(s)); }
-function float32Field(fieldNum, n) {
-  const out = [...tag(fieldNum, 5)];
-  const buf = new ArrayBuffer(4);
-  new DataView(buf).setFloat32(0, n, true);
-  return [...out, ...new Uint8Array(buf)];
-}
-function buildPosition({ lat, lon, bearing, speed }) {
-  const bytes = [];
-  if (lat !== undefined) bytes.push(...float32Field(1, lat));
-  if (lon !== undefined) bytes.push(...float32Field(2, lon));
-  if (bearing !== undefined) bytes.push(...float32Field(3, bearing));
-  if (speed !== undefined) bytes.push(...float32Field(5, speed));
-  return bytes;
-}
-function buildTrip({ routeId, tripId }) {
-  const bytes = [];
-  if (tripId !== undefined) bytes.push(...stringField(1, tripId));
-  if (routeId !== undefined) bytes.push(...stringField(5, routeId));
-  return bytes;
-}
-function buildVehicle({ trip, position }) {
-  const bytes = [];
-  if (trip !== undefined) bytes.push(...lenDelim(1, buildTrip(trip)));
-  if (position !== undefined) bytes.push(...lenDelim(2, buildPosition(position)));
-  return bytes;
-}
-function buildEntity({ id, vehicle }) {
-  const bytes = [];
-  if (id !== undefined) bytes.push(...stringField(1, id));
-  if (vehicle !== undefined) bytes.push(...lenDelim(4, buildVehicle(vehicle))); // field 4 = vehicle
-  return bytes;
-}
-function encodeFeed({ header, entity }) {
-  const bytes = [];
-  const headerBytes = [];
-  if (header?.version) headerBytes.push(...stringField(1, header.version));
-  if (header?.timestamp !== undefined) headerBytes.push(...varintField(3, header.timestamp));
-  bytes.push(...lenDelim(1, headerBytes));
-  if (entity) bytes.push(...lenDelim(2, buildEntity(entity)));
-  return new Uint8Array(bytes);
-}
+// The tiny hand-rolled protobuf encoder lives in the shared test-support
+// module so the transitVehicles lifecycle suite can synthesize multi-feed
+// fixtures without duplicating the wire-format writers here.
+import { encodeFeed } from './gtfsRtTestEncode.mjs';
 
 test('decodeGtfsRtFeed: live MBTA feed parses to non-empty vehicles with positions', () => {
   const bytes = readFileSync(resolve(FIXTURES, 'mbta-vehicle-positions.pb'));

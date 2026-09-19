@@ -19,6 +19,7 @@ import transitVehiclesLayer, {
   TRANSIT_VEHICLE_RENDER_BOUNDS,
 } from './transitVehicles.js';
 import { GTFS_RT_FEEDS } from './gtfsRtPolicy.js';
+import { encodeFeed } from './gtfsRtTestEncode.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURES = resolve(__dirname, 'fixtures');
@@ -102,5 +103,145 @@ test('gtfsRtPolicy: GTFS_RT_FEEDS is keyed by lowercase id and points at https V
     assert.match(id, /^[a-z0-9-]+$/, `feed id "${id}" must be lowercase kebab-case`);
     assert.match(url, /^https:\/\//);
     assert.match(url, /vehiclepositions\.pb/i);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Poll lifecycle (multi-feed)
+//
+// The original implementation pruned per-feed inside pollFeed, so the LAST
+// feed to finish its Promise.all leg deleted every other feed's just-rendered
+// vehicles (audit 2026-09-18). These tests drive the real update() lifecycle
+// — mocked fetch, real Cesium.PointPrimitiveCollection, stand-in viewer —
+// where that bug lived.
+// ---------------------------------------------------------------------------
+
+/** Drain pending microtasks/macrotasks so enable()'s fire-and-forget update
+ * settles before assertions. A few setImmediate turns always suffice for the
+ * mocked-fetch chain. */
+async function settle(turns = 5) {
+  for (let i = 0; i < turns; i++) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+}
+
+/** Stand-in viewer: real altitude (gate opens), no computeViewRectangle, and
+ * a primitives sink that tolerates real Cesium collections. */
+function makeStubViewer() {
+  const added = [];
+  const primitives = {
+    add: (p) => { added.push(p); return p; },
+    remove: (p) => { const i = added.indexOf(p); if (i >= 0) added.splice(i, 1); return p; },
+  };
+  return {
+    camera: { positionCartographic: { height: 1000 } },
+    scene: { primitives },
+  };
+}
+
+test('transitVehicles: one poll renders vehicles from ALL feeds concurrently (cross-feed prune regression)', async () => {
+  // Three synthesized feeds with distinct geographies, mirroring the real
+  // registry (Boston / Netherlands / Twin Cities).
+  const feedBytes = new Map([
+    ['mbta', encodeFeed({
+      header: { version: '2.0' },
+      entity: [
+        { id: 'b1', vehicle: { trip: { routeId: 'Red' }, position: { lat: 42.35, lon: -71.06 } } },
+        { id: 'b2', vehicle: { trip: { routeId: 'Orange' }, position: { lat: 42.36, lon: -71.06 } } },
+      ],
+    })],
+    ['ovapi', encodeFeed({
+      header: { version: '2.0' },
+      entity: [
+        { id: 'n1', vehicle: { trip: { routeId: '1' }, position: { lat: 52.37, lon: 4.90 } } },
+      ],
+    })],
+    ['metro-mn', encodeFeed({
+      header: { version: '2.0' },
+      entity: [
+        { id: 'm1', vehicle: { trip: { routeId: '901' }, position: { lat: 44.97, lon: -93.26 } } },
+      ],
+    })],
+  ]);
+
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const path = String(url);
+    for (const [id, bytes] of feedBytes) {
+      if (path.endsWith(`/api/gtfsrt/${id}`)) {
+        return {
+          ok: true,
+          status: 200,
+          arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+        };
+      }
+    }
+    return { ok: false, status: 404 };
+  };
+
+  const viewer = makeStubViewer();
+  try {
+    transitVehiclesLayer.init(viewer);
+    transitVehiclesLayer.enable(viewer); // fires void update() with mocked fetch
+    await settle();
+    await transitVehiclesLayer.update(); // explicit second cycle: prune must not regress
+
+    const stats = transitVehiclesLayer.getStats();
+    assert.equal(stats.count, 4,
+      `expected 4 vehicles across all three feeds after a full poll, got ${stats.count}`);
+
+    const keys = transitVehiclesLayer.getDetectableObjects({ maxCount: 100 })
+      .map((o) => o.sourceId);
+    assert.ok(keys.some((k) => k.startsWith('mbta/')), 'MBTA vehicles missing after prune');
+    assert.ok(keys.some((k) => k.startsWith('ovapi/')), 'OVapi vehicles wiped by cross-feed prune');
+    assert.ok(keys.some((k) => k.startsWith('metro-mn/')), 'MetroMN vehicles wiped by cross-feed prune');
+    assert.ok(stats.lastUpdate != null, 'a poll with live vehicles must stamp lastUpdate');
+  } finally {
+    globalThis.fetch = realFetch;
+    transitVehiclesLayer.destroy(viewer);
+  }
+});
+
+test('transitVehicles: a failing feed contributes no keys but does not wipe the others', async () => {
+  const feedBytes = new Map([
+    ['mbta', encodeFeed({
+      header: { version: '2.0' },
+      entity: [
+        { id: 'b1', vehicle: { trip: { routeId: 'Red' }, position: { lat: 42.35, lon: -71.06 } } },
+      ],
+    })],
+    // ovapi + metro-mn intentionally NOT mocked → 404 path.
+  ]);
+
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const path = String(url);
+    for (const [id, bytes] of feedBytes) {
+      if (path.endsWith(`/api/gtfsrt/${id}`)) {
+        return {
+          ok: true,
+          status: 200,
+          arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+        };
+      }
+    }
+    return { ok: false, status: 404 };
+  };
+
+  const viewer = makeStubViewer();
+  try {
+    transitVehiclesLayer.init(viewer);
+    transitVehiclesLayer.enable(viewer);
+    await settle();
+    await transitVehiclesLayer.update();
+
+    const stats = transitVehiclesLayer.getStats();
+    assert.equal(stats.count, 1, 'only the healthy feed should render');
+    const keys = transitVehiclesLayer.getDetectableObjects().map((o) => o.sourceId);
+    assert.ok(keys.every((k) => k.startsWith('mbta/')), 'failed feeds must not leave stale keys');
+    assert.ok(stats.error == null || typeof stats.error === 'string');
+  } finally {
+    globalThis.fetch = realFetch;
+    transitVehiclesLayer.destroy(viewer);
   }
 });
