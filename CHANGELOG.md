@@ -1,5 +1,15 @@
 # Changelog
 
+- Credit adsbdb, which supplies the aircraft type, model name and registration
+  on enriched flights and the airline and origin/destination pair behind the
+  tracked contact's route strip. `DATA_SOURCES.md` now records the terms adsbdb
+  publishes — aircraft data from PlaneBase, and route data that is the work of
+  David Taylor, Edinburgh, and Jim Mason, Glasgow, and may not be copied into
+  another database without his permission — along with the request bounds and
+  the gitignored 24-hour cache that keep the app inside them. A matching
+  `DATA_CREDITS` entry surfaces the credit in the in-app Data attribution
+  popover, and a test pins the wording the route data requires.
+
 - Distinguish PARTIAL vessel snapshots from STALE data in the layer panel, with
   accepted-record counts and unchanged retention, freshness and outage safeguards.
 
