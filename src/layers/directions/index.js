@@ -137,7 +137,11 @@ export function directionsRowControls(state) {
   });
   chips.push({
     id: 'swap',
-    label: '⇄',
+    // Icon-only chip: an inline Lucide `move-horizontal` (rendered by
+    // LayerPanel from `icon`), never a text glyph; `ariaLabel` names it.
+    icon: 'move-horizontal',
+    label: '',
+    ariaLabel: 'Swap A and B',
     disabled: !(a && b) || routing,
     state: 'idle',
     title: 'Swap A and B',

@@ -145,7 +145,9 @@ export class LocationControls {
       this.orbitIndicator.id = 'orbit-indicator';
       const icon = this.doc.createElement('span');
       icon.className = 'orbit-icon';
-      icon.textContent = '↻';
+      // Inline Lucide `rotate-ccw` (decorative — the visible text is the
+      // label), never the U+21BB text glyph the mark used to be.
+      setIconContent(icon, 'rotate-ccw', {}, this.doc);
       this.orbitIndicator.append(icon, ' ORBIT');
       this.doc.body.appendChild(this.orbitIndicator);
     }

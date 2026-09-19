@@ -2,7 +2,7 @@ import { layerFeedState } from '../data/feedState.js';
 export { layerFeedState } from '../data/feedState.js';
 import { GUIDANCE_STATUSES } from '../loadingFeedback.js';
 import { keySetupRequirement } from '../keySetupCore.mjs';
-import { createIcon } from './icons/layerIcon.js';
+import { createIcon, setIconContent } from './icons/layerIcon.js';
 const FEED_STATE_LABELS = Object.freeze({
   nominal: 'ON',
   loading: 'LOADING',
@@ -386,7 +386,23 @@ export class LayerPanel {
       }
       const state = chip.state || (chip.active ? 'active' : 'idle');
       button.className = `data-toggle-chip chip-${state}${chip.active ? ' active' : ''}`;
-      if (button.textContent !== chip.label) button.textContent = chip.label;
+      // An icon chip (`chip.icon` is a Lucide name — the Directions SWAP chip)
+      // renders an inline <svg>, never a text glyph; its accessible name comes
+      // from `ariaLabel` / `title` because the icon itself is decorative. The
+      // aria-label is set BEFORE the icon so setIconContent sees a labelled
+      // host and renders the icon aria-hidden. setIconContent is idempotent,
+      // so the per-refresh sync does not rebuild an unchanged icon.
+      const accessibleName = chip.ariaLabel || (chip.icon ? chip.title : '');
+      if (accessibleName) button.setAttribute('aria-label', accessibleName);
+      else if (typeof button.removeAttribute === 'function')
+        button.removeAttribute('aria-label');
+      if (chip.icon) {
+        button.dataset.chipIcon = chip.icon;
+        setIconContent(button, chip.icon, { text: chip.label || '' });
+      } else {
+        if (button.dataset.chipIcon) delete button.dataset.chipIcon;
+        if (button.textContent !== chip.label) button.textContent = chip.label;
+      }
       button.title = chip.title || '';
       button.disabled = Boolean(chip.disabled);
       button.setAttribute('aria-pressed', chip.active ? 'true' : 'false');

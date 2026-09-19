@@ -131,6 +131,27 @@ a > .od-icon,
   --od-icon-size: 1em;
 }
 
+/* Icon-only DATA LAYERS chips (Directions SWAP): the inline icon replaces the
+   8px mono label, so it takes a fixed 12px box centred in the 24px target
+   instead of following the chip's font size. */
+.data-toggle-chip[data-chip-icon] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+}
+
+.data-toggle-chip[data-chip-icon] > .od-icon {
+  --od-icon-size: 12px;
+  vertical-align: middle;
+}
+
+/* ORBIT indicator mark: the icon follows the 13px mono text beside it. */
+.orbit-icon > .od-icon {
+  --od-icon-size: 1em;
+  vertical-align: -0.15em;
+}
+
 /* Location tray city line: pin icon before the text. */
 .location-mini-city .od-icon,
 #location-city .od-icon {
