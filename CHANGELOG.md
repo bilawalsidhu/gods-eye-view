@@ -1,5 +1,12 @@
 # Changelog
 
+- Report which upstream declined a Street Traffic road load. The layer row now
+  reads `Overpass rate-limited`, `Overpass timed out`, or
+  `Overpass refused the road query (HTTP 406)` instead of a general
+  "Road data temporarily unavailable", so a reader is not sent to check a
+  TomTom key when the public OpenStreetMap mirrors are the side that failed.
+  Failures the layer cannot classify keep the general line.
+
 - Distinguish PARTIAL vessel snapshots from STALE data in the layer panel, with
   accepted-record counts and unchanged retention, freshness and outage safeguards.
 
