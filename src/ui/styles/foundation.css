@@ -32,6 +32,12 @@
   --text-primary: var(--od-neutral-100, #f3f3f3); /* Neutral 5 */
   --text-secondary: rgba(243, 243, 243, 0.55);
   --text-dim: rgba(243, 243, 243, 0.3);
+  /* WCAG 2.2 AA companions (DERIVED — the brand guideline documents no UI
+     text roles): --text-readable-dim reads 8.2:1 and --control-border-aa
+     3.2:1 on the #121213 glass ground; --text-dim itself is 2.5:1 and is
+     kept for decorative use only. */
+  --text-readable-dim: rgba(243, 243, 243, 0.68);
+  --control-border-aa: rgba(255, 255, 255, 0.35);
   --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   --panel-radius: 16px;
@@ -723,4 +729,18 @@ button.brand-primary-btn {
 button.brand-primary-btn:hover {
   background: var(--btn-primary-hover);
   border-color: var(--btn-primary-hover);
+}
+
+/* SC 2.3.3 — honour the operating-system "reduce motion" preference for every
+   CSS animation and transition; the HUD REC blink (src/hud.js) checks the same
+   media query. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

@@ -610,6 +610,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0; /* let the label shrink instead of forcing a second line */
 }
 
 .data-icon {
@@ -623,12 +625,20 @@
   font-weight: 500;
   color: var(--text-primary);
   letter-spacing: 0.3px;
+  /* One line per row: a long label ("Military Flights", "Mapped ALPR
+     Cameras") must never wrap under its icon; the full name stays in the
+     element's title attribute. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .data-toggle-right {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  flex: none;
 }
 
 .data-count {
@@ -636,8 +646,9 @@
   font-size: 11px;
   letter-spacing: 0.5px;
   color: var(--text-secondary);
-  min-width: 30px;
+  min-width: 0;
   text-align: right;
+  white-space: nowrap;
 }
 
 .data-toggle-btn {
@@ -645,9 +656,12 @@
   font-family: var(--font-mono);
   font-size: 9px;
   letter-spacing: 1.5px;
-  color: var(--text-dim);
+  /* WCAG 2.2 AA: 9px text and the control boundary must stay readable on the
+     glass ground — --text-readable-dim is 8:1 and --control-border-aa 3.2:1
+     on #121213 (src/dataLayersA11y.test.mjs checks the ratios). */
+  color: var(--text-readable-dim);
   background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--control-border-aa);
   border-radius: 4px;
   cursor: pointer;
   transition:
@@ -659,6 +673,7 @@
     letter-spacing var(--transition-fast);
   outline: none;
   min-width: 38px;
+  min-height: 24px; /* SC 2.5.8 target size */
   text-align: center;
 }
 
@@ -674,8 +689,8 @@
 .data-toggle-btn.feed-partial,
 .data-toggle-btn.feed-fallback,
 .data-toggle-btn.feed-unavailable {
-  min-width: 82px;
-  letter-spacing: 0.8px;
+  min-width: 74px;
+  letter-spacing: 0.6px;
 }
 
 .data-toggle-btn:hover {
@@ -717,7 +732,7 @@
   font-family: var(--font-mono);
   font-size: 9px;
   letter-spacing: 0.5px;
-  color: var(--text-dim);
+  color: var(--text-readable-dim); /* was --text-dim: 2.5:1, below AA */
   padding-left: 26px;
   margin-top: 2px;
 }
@@ -739,13 +754,14 @@
 }
 
 .data-toggle-chip {
-  padding: 2px 7px;
+  padding: 4px 8px;
+  min-height: 24px; /* SC 2.5.8 target size */
   font-family: var(--font-mono);
   font-size: 8px;
   letter-spacing: 1.2px;
-  color: var(--text-dim);
+  color: var(--text-readable-dim);
   background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--control-border-aa);
   border-radius: 3px;
   cursor: pointer;
   transition:

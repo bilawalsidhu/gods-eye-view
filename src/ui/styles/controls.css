@@ -119,8 +119,8 @@
 }
 
 .panel-collapse-btn {
-  width: 22px;
-  height: 22px;
+  width: 24px; /* SC 2.5.8 minimum target */
+  height: 24px;
   border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.03);

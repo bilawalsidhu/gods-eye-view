@@ -116,7 +116,58 @@ export class LayerPanel {
     if (this._destroyed) return;
     this._releaseBindings();
     this._toggleContainer = container;
+    this._mountStatusRegion(container);
     this._renderToggles();
+    this._bindOverflowAffordance(container);
+  }
+
+  /**
+   * A polite live region beside the list (SC 4.1.3): feed-state changes of an
+   * enabled layer are announced as "<Layer>: <STATE>" without moving focus.
+   * Created once next to the list; reused across re-renders.
+   */
+  _mountStatusRegion(container) {
+    const parent = container?.parentNode;
+    if (!parent || typeof parent.querySelector !== 'function') return;
+    let region = parent.querySelector('.data-layer-status');
+    if (!region && typeof document !== 'undefined') {
+      region = document.createElement('div');
+      region.className = 'data-layer-status';
+      region.setAttribute('role', 'status');
+      region.setAttribute('aria-live', 'polite');
+      region.setAttribute('aria-atomic', 'true');
+      parent.appendChild(region);
+    }
+    this._statusRegion = region || null;
+  }
+
+  /**
+   * Scroll affordance for the clipped-row case: mirror "does the list
+   * overflow" and "is it scrolled to the end" onto the list so the stylesheet
+   * can fade its bottom edge while more rows are hidden below.
+   */
+  _bindOverflowAffordance(container) {
+    if (!container || typeof container.addEventListener !== 'function') return;
+    const sync = () => this._syncOverflowAffordance();
+    this._bind(container, 'scroll', sync);
+    if (typeof window !== 'undefined' && window.addEventListener) {
+      window.addEventListener('resize', sync);
+      this._removers.push(() => window.removeEventListener('resize', sync));
+    }
+    sync();
+  }
+
+  _syncOverflowAffordance() {
+    const list = this._toggleContainer;
+    if (!list?.dataset) return;
+    const scrollHeight = Number(list.scrollHeight) || 0;
+    const clientHeight = Number(list.clientHeight) || 0;
+    const scrollTop = Number(list.scrollTop) || 0;
+    const overflows = scrollHeight - clientHeight > 1;
+    list.dataset.overflow = String(overflows);
+    list.dataset.atEnd = String(
+      !overflows || scrollTop + clientHeight >= scrollHeight - 1,
+    );
   }
   _bind(element, type, listener) {
     element.addEventListener(type, listener);
@@ -177,6 +228,8 @@ export class LayerPanel {
       const name = document.createElement('span');
       name.className = 'data-name';
       name.textContent = panelLabel(layer);
+      // Single-line labels ellipsise on narrow rows; the full name stays here.
+      name.title = panelLabel(layer);
       left.appendChild(icon);
       left.appendChild(name);
 
@@ -469,6 +522,7 @@ export class LayerPanel {
         row.querySelector('.data-row-list'),
       );
     }
+    this._syncOverflowAffordance();
   }
 
   _buildMetaText(layer) {
@@ -614,7 +668,26 @@ export class LayerPanel {
    */
   _syncRowFeedState(row, button) {
     if (!row?.dataset || !button?.dataset) return;
-    row.dataset.feedState = button.dataset.feedState || 'off';
+    const next = button.dataset.feedState || 'off';
+    const previous = row.dataset.feedState;
+    row.dataset.feedState = next;
+    // Announce a real transition of an enabled layer (LOADING -> ON,
+    // ON -> DEGRADED …) — not the initial paint and not OFF rows, so the
+    // region never chatters on a full re-render.
+    const badge = button.textContent;
+    if (
+      previous &&
+      previous !== next &&
+      next !== 'off' &&
+      this._statusRegion &&
+      typeof badge === 'string'
+    ) {
+      const label =
+        row.querySelector?.('.data-name')?.textContent ||
+        row.dataset.layerId ||
+        'Layer';
+      this._statusRegion.textContent = `${label}: ${badge}`;
+    }
   }
 
   _formatCount(n) {

@@ -253,9 +253,13 @@ export class IntelHUD {
       if (el) el.textContent = this._formatUTC();
     }, 1000);
 
-    // REC blink — every 800ms
+    // REC blink — every 800ms (SC 2.3.3: held steady under reduce-motion)
     this._recBlinkInterval = setInterval(() => {
-      this._recBlinkState = !this._recBlinkState;
+      const reduceMotion =
+        typeof window !== 'undefined' &&
+        typeof window.matchMedia === 'function' &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      this._recBlinkState = reduceMotion ? true : !this._recBlinkState;
       const dot = document.getElementById('hud-rec-dot');
       if (dot)
         dot.style.visibility = this._recBlinkState ? 'visible' : 'hidden';

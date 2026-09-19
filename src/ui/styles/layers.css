@@ -90,7 +90,50 @@
 }
 
 .data-toggle-list::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
+}
+
+/* Scroll affordance: while the list overflows and is not scrolled to its end,
+   a fade over its bottom edge says "more rows below" — the row that used to
+   sit half-clipped at the panel edge (Street Traffic in a 5-row viewport) is
+   now visibly continued rather than cut. LayerPanel keeps the two data
+   attributes in sync on render, scroll and resize. */
+.data-panel-inner::after {
+  content: '';
+  position: absolute;
+  left: 16px;
+  right: 26px;
+  bottom: 12px;
+  height: 34px;
+  border-radius: 0 0 8px 8px;
+  background: linear-gradient(
+    to bottom,
+    rgba(18, 18, 19, 0),
+    rgba(18, 18, 19, 0.92)
+  );
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-fast);
+}
+
+.data-panel-inner:has(
+    .data-toggle-list[data-overflow='true']:not([data-at-end='true'])
+  )::after {
+  opacity: 1;
+}
+
+/* Announcements for assistive tech (feed-state changes) — visually hidden. */
+.data-layer-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
 .data-toggle-list::-webkit-scrollbar-track {
@@ -1291,8 +1334,10 @@
   padding: 2px 4px;
 }
 
-/* ALPR keeps its nearby count in the legend while a wider status chip is shown. */
-.data-toggle-row[data-layer-id='alpr-cameras']
+/* A wide status chip (DEGRADED, UNAVAILABLE, LOADING…) takes the count's
+   room so the label keeps its single line; ALPR additionally repeats the
+   nearby count in its legend. */
+.data-toggle-row
   .data-toggle-right:has(
     .data-toggle-btn:is(
       .feed-loading,
