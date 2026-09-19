@@ -15,6 +15,7 @@ import { expandApplicationHtml } from '../build/application-html.js';
 import {
   ICON_CLASS,
   ICON_FALLBACK,
+  ICON_STROKE_WIDTH,
   LUCIDE_VERSION,
   hasIcon,
   iconMarkup,
@@ -46,6 +47,12 @@ const FORBIDDEN = [
   ['U+2300–U+23FF miscellaneous technical', 0x2300, 0x23ff],
   ['U+2160–U+216F roman numerals used as glyphs', 0x2160, 0x216f],
   ['U+224B triple tilde', 0x224b, 0x224b],
+  // Arrows that this UI drew icons with (ORBIT mark, SWAP chip, FULL STORY /
+  // REPLAY marks, external-link marks). The block is not forbidden wholesale:
+  // → ↔ ⇒ ↘ remain prose in comments and title strings (ICON_SOURCE.md §5).
+  ['U+21BA–U+21BB open-circle arrows used as glyphs (↺ ↻)', 0x21ba, 0x21bb],
+  ['U+21C4–U+21C6 paired arrows used as glyphs (⇄ ⇅ ⇆)', 0x21c4, 0x21c6],
+  ['U+2197 north-east arrow used as an external-link glyph', 0x2197, 0x2197],
 ];
 const UI_ROOTS = ['src'];
 const UI_FILES = ['index.html', 'style.css'];
@@ -153,6 +160,20 @@ test('the assembled application markup renders icons, not glyphs', () => {
   assert.ok(icons.length >= 30, `expected inline icons, found ${icons.length}`);
   for (const name of icons)
     assert.ok(hasIcon(name), `unregistered icon ${name}`);
+  // Rendering contract (ICON_SOURCE.md §4): every inline icon — the ones
+  // inlined in templates as much as the ones LayerPanel creates — renders at
+  // ICON_STROKE_WIDTH, not the vendored files' stroke-width="2".
+  const roots = [...html.matchAll(/<svg [^>]*data-icon="[a-z0-9-]+"[^>]*>/g)];
+  const offStroke = roots
+    .map((match) => match[0])
+    .filter(
+      (tag) => !tag.includes(`stroke-width="${ICON_STROKE_WIDTH}"`),
+    );
+  assert.deepEqual(
+    offStroke,
+    [],
+    `template icons must carry stroke-width="${ICON_STROKE_WIDTH}"`,
+  );
   for (const expected of [
     'chevron-left',
     'skip-back',
@@ -621,3 +642,71 @@ test('a legacy emoji icon value still renders an <svg>, never the glyph', async 
     console.warn = originalWarn;
   }
 });
+
+test('an icon chip (Directions SWAP) renders an inline <svg> with an accessible name, never a glyph', async () => {
+  const documentRef = fakeDocument();
+  const previous = globalThis.document;
+  globalThis.document = documentRef;
+  try {
+    const { LayerPanel } = await import('./ui/layerPanel.js');
+    const layers = [
+      {
+        id: 'directions',
+        name: 'Directions',
+        icon: 'compass',
+        source: 'OSM routing',
+        enabled: true,
+        showInTogglePanel: true,
+        stats: {},
+      },
+    ];
+    const controls = {
+      chips: [
+        {
+          id: 'swap',
+          icon: 'move-horizontal',
+          label: '',
+          ariaLabel: 'Swap A and B',
+          title: 'Swap A and B',
+          state: 'idle',
+        },
+        { id: 'fly', label: 'FLY', state: 'idle' },
+      ],
+      legend: [],
+    };
+    const panel = new LayerPanel({
+      getLayers: () => layers,
+      isEnabled: () => true,
+      setEnabled: async () => {},
+      setLayerParams: () => {},
+      getRowControls: () => controls,
+      hasRowControls: () => true,
+      subscribeRowControls: () => null,
+    });
+    const container = new FakeNode('div');
+    panel.mount(container);
+    panel.refresh?.();
+    const chips = container.querySelectorAll('.data-toggle-chip');
+    assert.ok(chips.length >= 2, `expected chips, found ${chips.length}`);
+    const swap = chips.find((chip) => chip.dataset.chipId === 'swap');
+    assert.ok(swap, 'swap chip rendered');
+    const svg = swap.children.find((node) => node.tagName === 'svg');
+    assert.ok(svg, 'swap chip renders an inline <svg>');
+    assert.equal(svg.getAttribute('data-icon'), 'move-horizontal');
+    assert.equal(svg.getAttribute('stroke-width'), ICON_STROKE_WIDTH);
+    assert.equal(svg.getAttribute('aria-hidden'), 'true');
+    assert.equal(swap.getAttribute('aria-label'), 'Swap A and B');
+    assert.equal(swap.dataset.chipIcon, 'move-horizontal');
+    assert.deepEqual(
+      textNodes(swap).flatMap((text) => findForbiddenGlyphs(text)),
+      [],
+    );
+    // A text chip is untouched by the icon path.
+    const fly = chips.find((chip) => chip.dataset.chipId === 'fly');
+    assert.equal(textNodes(fly).join(''), 'FLY');
+    assert.ok(!fly.getAttribute('aria-label'), 'text chip has no aria-label');
+  } finally {
+    globalThis.document = previous;
+  }
+});
+

@@ -147,6 +147,24 @@ test('toggle, chip and collapse controls are at least 24 px tall and wide', () =
   assert.match(collapse, /height:\s*24px/);
 });
 
+// ── Icon colour (2026-09-19 icon once-over) ──────────────────────────────────
+
+test('DISPLAY toggle icons and panel collapse icons carry a readable colour of their own', () => {
+  // Inline Lucide icons stroke `currentColor`; a <button> with no colour of
+  // its own falls back to the UA `buttontext` (black on the dark glass).
+  const ppIcon = block(controlsCss, '.pp-icon');
+  assert.match(ppIcon, /color:\s*var\(--text-secondary\)/);
+  assert.match(
+    block(controlsCss, '.pp-toggle-btn.active .pp-icon'),
+    /color:\s*var\(--accent\)/,
+  );
+  // Non-text contrast (SC 1.4.11): the collapse icon reads 8:1, not 2.4:1.
+  assert.match(
+    block(controlsCss, '.panel-collapse-btn'),
+    /color:\s*var\(--text-readable-dim\)/,
+  );
+});
+
 // ── Live region (SC 4.1.3) ───────────────────────────────────────────────────
 
 class Node {

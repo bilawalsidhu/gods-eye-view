@@ -147,3 +147,15 @@ test('location and POI keys route once while form controls retain typing', () =>
   f.elements.resetButtons[1].fire('click');
   assert.deepEqual(f.calls, [['poi', 'a', 1], ['reset']]);
 });
+test('the ORBIT indicator mark is an inline icon request, never the U+21BB text glyph', () => {
+  const f = fixture();
+  const indicator = f.controls.createOrbitIndicator();
+  assert.equal(indicator.id, 'orbit-indicator');
+  const [mark] = indicator.children;
+  assert.equal(mark.className, 'orbit-icon');
+  // The fixture document cannot create SVG elements, so setIconContent falls
+  // back to an empty text node — what must never appear is the old glyph.
+  assert.equal(mark.textContent.includes('\u21bb'), false);
+  assert.equal(mark.textContent.trim(), '');
+  assert.equal(f.controls.createOrbitIndicator(), indicator, 'idempotent');
+});
