@@ -211,6 +211,24 @@
   opacity: 0.95;
 }
 
+/* Plain-language vessel account. Sentences, not telemetry, so it drops the
+   wide letter-spacing the numeric HUD uses and wraps instead of truncating. */
+.hud-ais-narrative {
+  margin-top: 5px;
+  max-width: 340px;
+  white-space: pre-line;
+  line-height: 1.4;
+  letter-spacing: 0.2px;
+  text-transform: none;
+  font-size: 11px;
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+
+.hud-ais-narrative.active {
+  opacity: 0.82;
+}
+
 .hud-classification {
   font-size: 12px;
   letter-spacing: 2.5px;

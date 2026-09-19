@@ -179,15 +179,21 @@ export function createRendering({
 
   function shipIcon(record, selected) {
     const cssColor = selected ? '#ffffff' : vesselTypeCss(record.type);
-    const key = `${cssColor}:${selected ? 'selected' : 'normal'}`;
+    // A dead-reckoned contact is drawn as a hollow, dashed hull: the shape and
+    // tint still identify it, but nothing about it reads as a solid fix.
+    const estimated = Boolean(record?.estimated);
+    const key = `${cssColor}:${selected ? 'selected' : 'normal'}${estimated ? ':est' : ''}`;
     if (vesselState.shipIconCache.has(key))
       return vesselState.shipIconCache.get(key);
 
     const stroke = selected ? 'rgba(6,26,32,0.95)' : 'rgba(4,18,24,0.9)';
     const strokeWidth = selected ? 1.1 : 0.7;
+    const hull = estimated
+      ? `fill="none" stroke="${cssColor}" stroke-width="1.6" stroke-dasharray="4 2.5"`
+      : `fill="${cssColor}" stroke="${stroke}" stroke-width="${strokeWidth}"`;
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
     <g transform="translate(16,16)">
-      <path d="M0,-14 L11,10 L4,7 L0,14 L-4,7 L-11,10 Z" fill="${cssColor}" stroke="${stroke}" stroke-width="${strokeWidth}" stroke-linejoin="round"/>
+      <path d="M0,-14 L11,10 L4,7 L0,14 L-4,7 L-11,10 Z" ${hull} stroke-linejoin="round"/>
     </g>
   </svg>`;
     const icon = 'data:image/svg+xml;base64,' + btoa(svg);

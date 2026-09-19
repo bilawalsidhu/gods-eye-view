@@ -195,17 +195,77 @@ export function createAisStreamSource({
       }
       return { ...vesselSnapshot(payload), status: response.status };
     },
-    async getTrack(reference, { signal } = {}) {
+    /**
+     * Plain-language account of one vessel. Server-side because the "why"
+     * comes from voyage history the browser never holds.
+     */
+    async getNarrative(mmsi, { signal } = {}) {
+      const url = new URL(`${apiUrl}/narrative`, origin());
+      url.searchParams.set('mmsi', String(mmsi));
       const { response, payload } = await readResponse(
         fetchImpl,
-        '/api/ais-live/track?mmsi=' + encodeURIComponent(reference),
+        url.toString(),
+        { signal, cache: 'no-store' },
+        'AIS narrative',
+      );
+      if (!response.ok) throw httpError(response, 'AIS narrative');
+      return payload;
+    },
+    /**
+     * Vessel track. Defaults to the durable store, which survives restarts and
+     * holds weeks rather than the process-local ring buffer's few dozen fixes.
+     * Falls back to the in-memory path when durable history is switched off,
+     * so a checkout without GEV_AIS_HISTORY still draws a trail.
+     */
+    /**
+     * Searches every vessel the server has heard, not just the rows this
+     * browser loaded. Returns [] rather than throwing on a bad query, so a
+     * search box can call it on every keystroke.
+     */
+    async searchVessels(query, { signal, limit = 12 } = {}) {
+      const q = String(query || '').trim();
+      if (q.length < 2) return [];
+      const url = new URL(`${apiUrl}/search`, origin());
+      url.searchParams.set('q', q);
+      url.searchParams.set('limit', String(limit));
+      const { response, payload } = await readResponse(
+        fetchImpl,
+        url.toString(),
+        { signal, cache: 'no-store' },
+        'AIS search',
+      );
+      if (!response.ok) return [];
+      const live = Array.isArray(payload?.matches) ? payload.matches : [];
+      // Archived hits come from the durable store when the live cache has
+      // forgotten a hull (or a restart emptied it). They carry a last-known
+      // fix rather than a current one and are flagged, but dropping them is
+      // what makes a real vessel name fall through to the geocoder.
+      const archived = Array.isArray(payload?.archived) ? payload.archived : [];
+      return [...live, ...archived];
+    },
+    async getTrack(reference, { signal, history = true, limit } = {}) {
+      const url = new URL(`${apiUrl}/track`, origin());
+      url.searchParams.set('mmsi', String(reference));
+      if (history) url.searchParams.set('history', '1');
+      if (Number.isFinite(Number(limit)))
+        url.searchParams.set('limit', String(Math.round(Number(limit))));
+      const { response, payload } = await readResponse(
+        fetchImpl,
+        url.toString(),
         { signal },
         'AIS live',
       );
       if (!response.ok) throw httpError(response, 'AIS live');
+      const samples = normalizeVesselTrack(payload?.samples);
+      // The durable route answers with an explicit hint when history is off;
+      // retry against the ring buffer rather than drawing nothing.
+      if (history && !samples.length && payload?.hint) {
+        return this.getTrack(reference, { signal, history: false, limit });
+      }
       return {
-        records: normalizeVesselTrack(payload?.samples),
+        records: samples,
         complete: false,
+        source: payload?.source || '',
       };
     },
   };

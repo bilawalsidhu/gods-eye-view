@@ -22,6 +22,30 @@ export function normalizeVessel(row) {
     heading: finiteNumber(row.heading),
     lastPositionUtc: String(row.last_position_UTC || ''),
     lastPositionEpoch: finiteNumber(row.last_position_epoch),
+    callSign: String(row.call_sign || ''),
+    draught: finiteNumber(row.draught),
+    loadState: String(row.load_state || ''),
+    eta: String(row.eta || ''),
+    length: finiteNumber(row.length),
+    beam: finiteNumber(row.beam),
+    navStatus: finiteNumber(row.nav_status),
+    navStatusText: String(row.nav_status_text || ''),
+    flag: String(row.flag || ''),
+    flagCode: String(row.flag_code || ''),
+    imoValid:
+      row.imo_valid === null || row.imo_valid === undefined
+        ? null
+        : Boolean(row.imo_valid),
+    sanctioned: Boolean(row.sanctioned),
+    sanctionConfidence: String(row.sanction_confidence || ''),
+    sanctionPrograms: String(row.sanction_programs || ''),
+    estimated: Boolean(row.estimated),
+    estMoved: Boolean(row.est_moved),
+    estAgeSec: finiteNumber(row.est_age_sec),
+    estConfidence: finiteNumber(row.est_confidence),
+    estFromLat: finiteNumber(row.est_from_lat),
+    estFromLon: finiteNumber(row.est_from_lon),
+    gapKind: String(row.gap_kind || ''),
     missedRefreshes: 0,
   };
 }
@@ -76,6 +100,27 @@ export class VesselRecords {
         record.heading = next.heading;
         record.lastPositionUtc = next.lastPositionUtc;
         record.lastPositionEpoch = next.lastPositionEpoch;
+        record.callSign = next.callSign;
+        record.draught = next.draught;
+        record.loadState = next.loadState;
+        record.eta = next.eta;
+        record.length = next.length;
+        record.beam = next.beam;
+        record.navStatus = next.navStatus;
+        record.navStatusText = next.navStatusText;
+        record.flag = next.flag;
+        record.flagCode = next.flagCode;
+        record.imoValid = next.imoValid;
+        record.sanctioned = next.sanctioned;
+        record.sanctionConfidence = next.sanctionConfidence;
+        record.sanctionPrograms = next.sanctionPrograms;
+        record.estimated = next.estimated;
+        record.estMoved = next.estMoved;
+        record.estAgeSec = next.estAgeSec;
+        record.estConfidence = next.estConfidence;
+        record.estFromLat = next.estFromLat;
+        record.estFromLon = next.estFromLon;
+        record.gapKind = next.gapKind;
         record.missedRefreshes = 0;
 
         effects.updated(record, before);

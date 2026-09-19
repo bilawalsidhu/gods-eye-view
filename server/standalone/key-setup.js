@@ -173,6 +173,22 @@ function keySetupEndpoint({ sourceRoot = defaultSourceRoot } = {}) {
           : 'file'
         : null;
     }
+    // Same provenance rule for the local-LLM settings, per env var: the panel
+    // may edit what its own store holds and must only REPORT what a shell,
+    // Keychain, or launcher supplied. Reported per name because someone can
+    // export GEV_LLM_BASE_URL while leaving the model to the panel.
+    if (status.llm?.envVars) {
+      status.llm.managed = Object.fromEntries(
+        Object.values(status.llm.envVars).map((name) => [
+          name,
+          String(process.env[name] ?? '').trim()
+            ? isExternallyManaged(name, inStore)
+              ? 'external'
+              : 'file'
+            : null,
+        ]),
+      );
+    }
     return { ...status, store: storeName() };
   };
   // Atomically replace the store's content: fresh same-dir temp created 0600

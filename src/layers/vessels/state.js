@@ -79,6 +79,15 @@ export function createVesselState({ source, services }) {
     /** @type {number} Monotonic token — invalidates in-flight backfill responses */
     trailBackfillToken: 0,
     trailAbort: null,
+    /**
+     * Camera follow. Vessels render as billboard primitives, which Cesium
+     * cannot track directly, so following pins an otherwise-empty entity to
+     * the hull's live position and tracks that instead.
+     * @type {Cesium.Entity|null}
+     */
+    followEntity: null,
+    /** @type {string|null} MMSI the camera is currently riding. */
+    followMmsi: null,
   };
   return vesselState;
 }

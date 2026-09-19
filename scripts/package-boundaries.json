@@ -42,10 +42,20 @@
       "server/providers/aircraft/tracks.js",
       "server/providers/vessels/ais-store.js",
       "server/providers/vessels/ais-live.js",
+      "server/providers/vessels/ais-history.js",
       "src/data/adsbLolFallback.js",
       "src/data/aisStreamAdapter.js",
       "src/data/aisWatchdog.js",
-      "src/sources/httpBody.js"
+      "src/sources/httpBody.js",
+      "server/providers/vessels/ais-identity.js",
+      "server/providers/vessels/ais-mid-table.js",
+      "server/providers/vessels/ais-sanctions.js",
+      "server/providers/vessels/ais-reckoning.js",
+      "server/providers/vessels/ais-partners.js",
+      "server/providers/vessels/ais-locode.js",
+      "server/providers/vessels/ais-narrative.js",
+      "server/providers/vessels/ais-cargo.js",
+      "server/providers/vessels/ais-origin.js"
     ],
     "external": ["ws"]
   },
@@ -267,11 +277,31 @@
       "server/providers/openai/rate-limit.js",
       "server/providers/openai/realtime.js",
       "server/providers/openai/tools.js",
+      "server/providers/llm/chat.js",
+      "server/providers/llm/config.js",
+      "server/providers/common/http.js",
+      "src/sources/httpBody.js",
+      "src/llmSettings.mjs",
       "src/hudSummaryResponse.js",
       "src/voice/voiceCost.js",
       "src/voice/actionSchemas.js",
       "server/providers/openai/toolDescriptions.js",
       "src/sources/rateLimit.js"
+    ],
+    "external": []
+  },
+  "llm-provider": {
+    "runtime": "node",
+    "exports": ["./server/providers/llm"],
+    "modules": [
+      "server/providers/common/http.js",
+      "server/providers/llm.js",
+      "server/providers/llm/chat.js",
+      "server/providers/llm/config.js",
+      "server/providers/llm/status.js",
+      "src/keySetupCore.mjs",
+      "src/llmSettings.mjs",
+      "src/sources/httpBody.js"
     ],
     "external": []
   },
@@ -283,6 +313,7 @@
       "server/providers/common/source-root.js",
       "server/standalone/key-setup.js",
       "src/keySetupCore.mjs",
+      "src/llmSettings.mjs",
       "server/standalone/key-setup-hardening.mjs"
     ],
     "external": []
@@ -366,7 +397,8 @@
       "src/ui/mapSource.js",
       "src/ui/mapSourceControls.js",
       "src/mapStackChips.js",
-      "src/keySetupCore.mjs"
+      "src/keySetupCore.mjs",
+      "src/llmSettings.mjs"
     ],
     "external": []
   },
@@ -379,6 +411,7 @@
       "src/loadingFeedback.js",
       "src/data/installationFeedback.js",
       "src/keySetupCore.mjs",
+      "src/llmSettings.mjs",
       "src/data/feedState.js"
     ],
     "external": []
@@ -490,6 +523,7 @@
       "src/data/militaryAwarenessEngine.js",
       "src/data/scenePick.js",
       "src/keySetupCore.mjs",
+      "src/llmSettings.mjs",
       "src/loadingFeedback.js",
       "src/locationStatus.js",
       "src/mapStackChips.js",
@@ -1142,7 +1176,8 @@
       "src/maps/imagery.js",
       "src/maps/registry.js",
       "src/maps/terrain.js",
-      "src/keySetupCore.mjs"
+      "src/keySetupCore.mjs",
+      "src/llmSettings.mjs"
     ],
     "external": ["cesium"]
   },
@@ -1357,6 +1392,7 @@
       "src/hudSummaryResponse.js",
       "src/keySetup.js",
       "src/keySetupCore.mjs",
+      "src/llmSettings.mjs",
       "src/keylessGeocoder.js",
       "src/layers/aircraft/classification.js",
       "src/layers/alpr/index.js",

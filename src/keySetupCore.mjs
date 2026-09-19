@@ -11,10 +11,21 @@
  * behavior below unit-testable.
  */
 
+import {
+  LLM_ENV_VARS,
+  LLM_ENV_VAR_NAMES,
+  llmSettingProblem,
+  llmSettingsStatus,
+  normalizeLlmBaseUrl,
+} from './llmSettings.mjs';
+
 /** Longest accepted key/token value. Real provider keys are all far shorter. */
 export const KEY_SETUP_VALUE_LIMIT = 512;
 
-/** Most env vars accepted in one save. The registry defines ten. */
+/**
+ * Most env vars accepted in one save. The credential registry defines ten and
+ * the local-LLM settings add three.
+ */
 export const KEY_SETUP_UPDATE_LIMIT = 16;
 
 /** Header line written above keys the panel appends to a .env file. */
@@ -324,12 +335,17 @@ export function admitKeySetupRequest({
   return { ok: true };
 }
 
-/** @returns {Set<string>} every env var the panel is allowed to write. */
+/**
+ * @returns {Set<string>} every env var the panel is allowed to write —
+ * provider credentials plus the local-LLM settings, which are configuration
+ * rather than secrets but live in the same store and the same panel.
+ */
 export function knownKeySetupEnvVars() {
   const names = new Set();
   for (const entry of KEY_SETUP_KEYS) {
     for (const envVar of entry.envVars) names.add(envVar);
   }
+  for (const envVar of LLM_ENV_VAR_NAMES) names.add(envVar);
   return names;
 }
 
@@ -383,6 +399,10 @@ export function keySetupStatus(env = {}) {
     keys,
     setCount: keys.filter((key) => key.set).length,
     total: keys.length,
+    // Which text backend the AI features target. Not a credential and never
+    // counted as a missing key: the default (hosted OpenAI) is exactly what
+    // the OPENAI row above already reports on.
+    llm: llmSettingsStatus(env),
   };
 }
 
@@ -445,7 +465,17 @@ export function validateKeySetupUpdates(body) {
         error: `${name} contains a character that is not valid in a key (#, quotes, $, \\, or backtick)`,
       };
     }
-    updates[name] = value;
+    // The local-LLM settings are the one group whose values have a shape
+    // beyond "printable key material": a provider must name a backend we
+    // implement, and a base URL must be an http(s) address. Refusing here
+    // means a typo is a red line in the panel, not a dead AI feature after
+    // a restart.
+    const problem = llmSettingProblem(name, value);
+    if (problem) return { ok: false, error: problem };
+    // Store the canonical base URL, not the shorthand someone typed, so what
+    // the panel shows back and what the proxy calls are the same string.
+    updates[name] =
+      name === LLM_ENV_VARS.baseUrl ? normalizeLlmBaseUrl(value) : value;
   }
   return { ok: true, updates };
 }

@@ -4,13 +4,22 @@ import { createAisStreamAdapter } from '../../../src/data/aisStreamAdapter.js';
 import { parseSilenceTimeoutEnv } from '../../../src/data/aisWatchdog.js';
 import { clampInt } from '../common/query.js';
 import {
-  AISSTREAM_CACHE_MAX,
-  AISSTREAM_STALE_MS,
+  aisCacheMax,
+  aisStaleMs,
   ingestAisStreamEnvelope,
   readAisTrack,
   aisStreamRows,
   newestAisPositionAt,
+  aisHistory,
+  closeAisHistory,
+  aisSanctions,
+  aisStreamRowFor,
+  searchAisVessels,
+  aisCacheStats,
 } from './ais-store.js';
+import { flagFromMmsi, isValidImo } from './ais-identity.js';
+import { createGfwClient, createBarentsWatchClient } from './ais-partners.js';
+import { buildVesselNarrative, narrativeText } from './ais-narrative.js';
 // ---------------------------------------------------------------------------
 // AISStream live vessel cache state
 // ---------------------------------------------------------------------------
@@ -96,13 +105,334 @@ export function aisLiveProxy() {
             );
             return;
           }
+          // ?history=1 reads the durable store instead of the process-local
+          // ring buffer — days of voyage rather than the last few dozen fixes.
+          const wantsHistory = /^(1|true|yes)$/i.test(
+            String(incoming.searchParams.get('history') || ''),
+          );
+          const history = wantsHistory ? aisHistory() : null;
+          if (wantsHistory && !history) {
+            res.end(
+              JSON.stringify({
+                mmsi,
+                samples: [],
+                source: 'durable history disabled',
+                hint: 'set GEV_AIS_HISTORY=1 to record voyage history',
+              }),
+            );
+            return;
+          }
+          if (history) {
+            const sinceSec = clampInt(
+              incoming.searchParams.get('sinceSec'),
+              0,
+              Number.MAX_SAFE_INTEGER,
+              0,
+            );
+            const limit = clampInt(
+              incoming.searchParams.get('limit'),
+              1,
+              50000,
+              5000,
+            );
+            const samples = history.readTrack(mmsi, { sinceSec, limit });
+            res.end(
+              JSON.stringify({
+                mmsi,
+                samples,
+                source: 'AISStream (durable history)',
+                retainedSec: history.retentionDays * 86400,
+                identity: history.readIdentity(mmsi),
+              }),
+            );
+            return;
+          }
           res.end(
             JSON.stringify({
               mmsi,
               samples: readAisTrack(mmsi),
               source: 'AISStream (accumulated since server start)',
-              retainedSec: Math.floor(AISSTREAM_STALE_MS / 1000),
+              retainedSec: Math.floor(aisStaleMs() / 1000),
             }),
+          );
+          return;
+        }
+
+        // Voyage intent over time: destination, ETA, draught and status, one
+        // row per change rather than per broadcast.
+        if (
+          incoming.pathname === '/voyages' ||
+          incoming.pathname.startsWith('/voyages/')
+        ) {
+          const mmsi = String(incoming.searchParams.get('mmsi') || '').trim();
+          res.statusCode = /^\d{5,10}$/.test(mmsi) ? 200 : 400;
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          res.setHeader('Cache-Control', 'no-store');
+          if (res.statusCode !== 200) {
+            res.end(
+              JSON.stringify({
+                error: 'mmsi query param required',
+                voyages: [],
+              }),
+            );
+            return;
+          }
+          const history = aisHistory();
+          if (!history) {
+            res.end(
+              JSON.stringify({
+                mmsi,
+                voyages: [],
+                source: 'durable history disabled',
+                hint: 'set GEV_AIS_HISTORY=1 to record voyage history',
+              }),
+            );
+            return;
+          }
+          const limit = clampInt(
+            incoming.searchParams.get('limit'),
+            1,
+            1000,
+            200,
+          );
+          res.end(
+            JSON.stringify({
+              mmsi,
+              voyages: history.readVoyages(mmsi, { limit }),
+              identity: history.readIdentity(mmsi),
+              source: 'AISStream (durable history)',
+            }),
+          );
+          return;
+        }
+
+        // Full dossier for one contact: registry, screening verdict with the
+        // matched list entries, and what the durable store knows about it.
+        if (
+          incoming.pathname === '/screen' ||
+          incoming.pathname.startsWith('/screen/')
+        ) {
+          const mmsi = String(incoming.searchParams.get('mmsi') || '').trim();
+          res.statusCode = /^\d{5,10}$/.test(mmsi) ? 200 : 400;
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          res.setHeader('Cache-Control', 'no-store');
+          if (res.statusCode !== 200) {
+            res.end(JSON.stringify({ error: 'mmsi query param required' }));
+            return;
+          }
+          const live = aisStreamRowFor(mmsi);
+          const history = aisHistory();
+          const identity = history?.readIdentity(mmsi) || null;
+          const imo = String(
+            incoming.searchParams.get('imo') ||
+              live?.imo ||
+              identity?.imo ||
+              '',
+          ).trim();
+          const name = live?.name || identity?.name || '';
+          const callSign = live?.call_sign || identity?.callSign || '';
+          const flag = flagFromMmsi(mmsi);
+          const screening = aisSanctions().screen({ imo, name, callSign });
+          res.end(
+            JSON.stringify({
+              mmsi,
+              name,
+              imo,
+              imoValid: imo ? isValidImo(imo) : null,
+              callSign,
+              flag: flag?.name || '',
+              flagCode: flag?.code || '',
+              mmsiKind: flag?.kind || '',
+              live: live || null,
+              identity,
+              sanctions: {
+                listed: screening.listed,
+                confidence: screening.confidence,
+                possibleNameMatch: screening.possibleNameMatch,
+                matches: screening.matches,
+                ...aisSanctions().status(),
+              },
+              voyages: history?.readVoyages(mmsi, { limit: 25 }) || [],
+            }),
+          );
+          return;
+        }
+
+        // Global Fishing Watch cross-reference: registry identity plus GFW's
+        // own AIS-off record, which either corroborates or contradicts the
+        // DARK verdict this app derives from local coverage alone.
+        if (incoming.pathname === '/gfw') {
+          const mmsi = String(incoming.searchParams.get('mmsi') || '').trim();
+          res.statusCode = /^\d{5,10}$/.test(mmsi) ? 200 : 400;
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          res.setHeader('Cache-Control', 'no-store');
+          if (res.statusCode !== 200) {
+            res.end(JSON.stringify({ error: 'mmsi query param required' }));
+            return;
+          }
+          const gfw = createGfwClient();
+          if (!gfw.configured) {
+            res.end(
+              JSON.stringify({
+                mmsi,
+                configured: false,
+                hint: 'set GFW_API_TOKEN (free, non-commercial: globalfishingwatch.org/our-apis/tokens)',
+              }),
+            );
+            return;
+          }
+          const search = await gfw.searchVessel(mmsi);
+          if (!search.ok) {
+            res.end(
+              JSON.stringify({ mmsi, configured: true, error: search.error }),
+            );
+            return;
+          }
+          const vesselId = search.matches[0]?.vesselId || '';
+          const gaps = vesselId
+            ? await gfw.gapEvents(vesselId, {
+                start: incoming.searchParams.get('start') || undefined,
+                end: incoming.searchParams.get('end') || undefined,
+              })
+            : { ok: true, events: [] };
+          res.end(
+            JSON.stringify({
+              mmsi,
+              configured: true,
+              matches: search.matches,
+              aisOffEvents: gaps.ok ? gaps.events : [],
+              eventsError: gaps.ok ? null : gaps.error,
+              attribution: 'Global Fishing Watch (non-commercial use)',
+            }),
+          );
+          return;
+        }
+
+        // Vessel search across the whole server cache, not just the rows a
+        // browser happens to hold.
+        if (incoming.pathname === '/search') {
+          const q = String(incoming.searchParams.get('q') || '').trim();
+          res.statusCode = 200;
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          res.setHeader('Cache-Control', 'no-store');
+          const limit = clampInt(
+            incoming.searchParams.get('limit'),
+            1,
+            200,
+            20,
+          );
+          const matches = q.length >= 2 ? searchAisVessels(q, limit) : [];
+          // The live cache is emptied by a restart and forgets a hull once it
+          // stops transmitting, so a miss falls back to persisted identities.
+          // Those rows carry no current position — they are marked `archived`
+          // so a caller never mistakes a last-known fix for a live one.
+          let archived = [];
+          if (!matches.length && q.length >= 2) {
+            const history = aisHistory();
+            archived = (history?.searchIdentities(q, limit) || []).map(
+              (row) => {
+                const last = history.lastFix(row.mmsi);
+                return {
+                  ...row,
+                  archived: true,
+                  lat: last?.lat ?? null,
+                  lon: last?.lon ?? null,
+                  lastFixEpoch: last?.t ?? null,
+                };
+              },
+            );
+          }
+          res.end(
+            JSON.stringify({
+              query: q,
+              matches,
+              archived,
+              count: matches.length + archived.length,
+              searched: matches.length
+                ? 'server cache'
+                : 'server cache + history',
+            }),
+          );
+          return;
+        }
+
+        // Plain-language account of a contact: what it is, what it is doing,
+        // where it is going and what the evidence says about why.
+        if (incoming.pathname === '/narrative') {
+          const mmsi = String(incoming.searchParams.get('mmsi') || '').trim();
+          res.statusCode = /^\d{5,10}$/.test(mmsi) ? 200 : 400;
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          res.setHeader('Cache-Control', 'no-store');
+          if (res.statusCode !== 200) {
+            res.end(JSON.stringify({ error: 'mmsi query param required' }));
+            return;
+          }
+          const row = aisStreamRowFor(mmsi);
+          if (!row) {
+            res.end(
+              JSON.stringify({ mmsi, error: 'vessel not in the live cache' }),
+            );
+            return;
+          }
+          // The draught trend that supplies the "why" lives in voyage history.
+          const history = aisHistory();
+          const voyages = history?.readVoyages(mmsi, { limit: 200 }) || [];
+          // The track supplies the origin: a departure is a stop followed by
+          // movement, which only the position record can show.
+          const track = history?.readTrack(mmsi, { limit: 2000 }) || [];
+          const narrative = buildVesselNarrative(row, voyages, track);
+          res.end(
+            JSON.stringify({
+              mmsi,
+              ...narrative,
+              text: narrativeText(narrative),
+              voyageSamples: voyages.length,
+            }),
+          );
+          return;
+        }
+
+        // Which optional partner feeds are wired up.
+        if (incoming.pathname === '/partners-status') {
+          res.statusCode = 200;
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          res.setHeader('Cache-Control', 'no-store');
+          res.end(
+            JSON.stringify({
+              partners: [
+                createGfwClient().status(),
+                createBarentsWatchClient().status(),
+              ],
+            }),
+          );
+          return;
+        }
+
+        // Sanctions list health, independent of any one vessel.
+        if (incoming.pathname === '/sanctions-status') {
+          res.statusCode = 200;
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          res.setHeader('Cache-Control', 'no-store');
+          aisSanctions().ensure();
+          res.end(JSON.stringify(aisSanctions().status()));
+          return;
+        }
+
+        // Operator visibility into what the durable store is holding.
+        if (incoming.pathname === '/history-stats') {
+          const history = aisHistory();
+          res.statusCode = 200;
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          res.setHeader('Cache-Control', 'no-store');
+          res.end(
+            JSON.stringify(
+              history
+                ? { enabled: true, cache: aisCacheStats(), ...history.stats() }
+                : {
+                    enabled: false,
+                    hint: 'set GEV_AIS_HISTORY=1 to record voyage history',
+                  },
+            ),
           );
           return;
         }
@@ -110,8 +440,8 @@ export function aisLiveProxy() {
         const maxRows = clampInt(
           incoming.searchParams.get('maxRows'),
           1,
-          AISSTREAM_CACHE_MAX,
-          AISSTREAM_CACHE_MAX,
+          aisCacheMax(),
+          aisCacheMax(),
         );
         const rows = aisStreamRows(maxRows);
 
@@ -359,6 +689,9 @@ function disposeAisStream() {
     _aisStreamTickTimer = null;
   }
   if (_aisAdapter) _aisAdapter.dispose();
+  // Commit whatever the history sink still holds before the process may exit,
+  // and drop the handle so a restart reopens against the reloaded .env.
+  closeAisHistory();
   // Drop the cached policy and re-arm LAZILY. Re-deriving budgets here would
   // read process.env before the restarted server's loadEnv() has repopulated
   // it, caching the outgoing configuration; the next ensure() runs after that.

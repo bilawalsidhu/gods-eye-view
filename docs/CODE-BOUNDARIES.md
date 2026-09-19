@@ -207,6 +207,16 @@ search shares the bounded transport. Regional place/news/weather acquisition is
 separate from briefing and weather-effect response caches. Voice handlers share
 existing rate limits and request reading; schemas and instructions are separate.
 
+`server/providers/llm` owns the local-model surface: provider configuration,
+the reachability/model-discovery probe behind `/api/llm/status`, and the
+OpenAI-compatible chat request the HUD summary uses when a local backend is
+selected. Its pure registry lives in `src/llmSettings.mjs` so the browser panel
+and the Node provider read one definition of what a provider is called, where
+it listens, and what it can do; the provider imports the browser-safe core and
+never the reverse. Nothing is created at import, `fetchImpl` is injectable, and
+every probe and chat failure resolves rather than throwing. Registration is
+development-only, like key setup.
+
 `server/standalone/key-setup` is explicitly standalone Node functionality.
 Its factory and the local voice factory accept `sourceRoot` for application-owned
 configuration/log files; defaults resolve the repository root. Local voice also
