@@ -18,7 +18,7 @@
  * surface. The honest seam is bytes-in / bytes-out.
  */
 
-import { readResponseTextCapped } from './_shared.js';
+import { readResponseBytesCapped } from './_shared.js';
 import {
   GTFSRT_MAX_BODY_BYTES,
   GTFSRT_PROXY_TIMEOUT_MS,
@@ -93,11 +93,16 @@ export function gtfsRtProxy() {
           // Cap the body WHILE STREAMING. GTFS-RT feeds are protobuf (<200 KB
           // typical; MBTA's is 47 KB) — the cap exists to refuse a runaway
           // upstream, not because any well-behaved feed approaches it.
+          //
+          // Binary fidelity: protobuf is rarely valid UTF-8, so the body must
+          // go through the byte reader. The original implementation used the
+          // TEXT reader + Buffer.from(text, 'binary'), which replaced invalid
+          // sequences with U+FFFD and corrupted every relayed feed (live
+          // smoke, 2026-09-19: "unsupported wire type 4" on real Metro Transit
+          // bytes; the Pages Function twin already used arrayBuffer()).
           let bytes;
           try {
-            const text = await readResponseTextCapped(upstream, GTFSRT_MAX_BODY_BYTES);
-            // The decoder reads bytes; we ship the body back as binary.
-            bytes = Buffer.from(text, 'binary');
+            bytes = await readResponseBytesCapped(upstream, GTFSRT_MAX_BODY_BYTES);
           } catch (error) {
             if (error?.code === 'RESPONSE_TOO_LARGE') {
               res.writeHead(502, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });

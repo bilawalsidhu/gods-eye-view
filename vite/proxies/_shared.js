@@ -159,6 +159,59 @@ export async function readResponseTextCapped(response, maxBytes) {
   return out;
 }
 
+/**
+ * Read a fetch() Response body as raw bytes under a hard cap — the
+ * binary-safe counterpart to `readResponseTextCapped`. Text decoding
+ * replaces non-UTF-8 sequences with U+FFFD, so anything relayed as binary
+ * (protobuf, tiles, media) MUST go through this reader instead; the GTFS-RT
+ * dev proxy corrupted every feed by passing protobuf through the text one
+ * (caught live, 2026-09-19). Same contract: an oversized declared
+ * Content-Length is rejected up front, a streamed body is capped while
+ * reading, and overruns throw { code:'RESPONSE_TOO_LARGE' }.
+ * @param {Response} response - fetch() Response to drain.
+ * @param {number} maxBytes - Hard byte ceiling.
+ * @returns {Promise<Uint8Array>} The exact upstream bytes.
+ */
+export async function readResponseBytesCapped(response, maxBytes) {
+  const declared = Number(response.headers.get('content-length'));
+  if (Number.isFinite(declared) && declared > maxBytes) {
+    const err = new Error('Upstream response too large');
+    err.code = 'RESPONSE_TOO_LARGE';
+    throw err;
+  }
+  const reader = response.body?.getReader?.();
+  if (!reader) {
+    const buf = new Uint8Array(await response.arrayBuffer());
+    if (buf.byteLength > maxBytes) {
+      const err = new Error('Upstream response too large');
+      err.code = 'RESPONSE_TOO_LARGE';
+      throw err;
+    }
+    return buf;
+  }
+  const chunks = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      try { await reader.cancel(); } catch { /* no-op */ }
+      const err = new Error('Upstream response too large');
+      err.code = 'RESPONSE_TOO_LARGE';
+      throw err;
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return out;
+}
+
 /** Parse a fetch() JSON response only after enforcing a hard byte cap. */
 export async function readResponseJsonCapped(response, maxBytes) {
   return JSON.parse(await readResponseTextCapped(response, maxBytes));
