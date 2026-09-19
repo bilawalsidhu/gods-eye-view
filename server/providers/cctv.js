@@ -17,6 +17,12 @@ import {
   CCTV_MAX_SOURCES_CEILING,
 } from './cctv/constants.js';
 import { sanitizeCctvRangeHeader } from './cctv/range.js';
+import {
+  makeStreetViewRateLimiter,
+  normalizeHeadingDeg,
+  resolveStreetViewTarget,
+} from './cctv/streetview.js';
+import { clientKey } from './common/rate-limit.js';
 import { googleServerApiKey } from './places/google-key.js';
 export { CCTV_FRAME_FETCH_TIMEOUT_MS, fetchCctvImageFromUpstream };
 /**
@@ -34,6 +40,9 @@ export { CCTV_FRAME_FETCH_TIMEOUT_MS, fetchCctvImageFromUpstream };
  */
 export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
   const getCctvSources = createCctvCatalog({ sourceRoot });
+  // Held per plugin instance rather than per module so the window belongs to
+  // the server that is actually serving, the way the catalog above does.
+  const allowStreetView = makeStreetViewRateLimiter();
   /** @type {Map<string,{id:string,status:string,sourceKind:string,label:string,message:string,updatedAt:number}>} */
   const health = new Map();
   /** Cap on health map entries to prevent unbounded growth. Sized to the
@@ -93,10 +102,10 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
       const sv = new URL('https://maps.googleapis.com/maps/api/streetview');
       sv.searchParams.set('size', '960x540');
       sv.searchParams.set('location', `${lat},${lon}`);
-      sv.searchParams.set(
-        'heading',
-        String(Number.isFinite(heading) ? heading : 0),
-      );
+      // fov and pitch are clamped below; heading wraps instead, because a
+      // bearing is periodic — 400 is 40, not "too far north". The client sends
+      // a rounded catalog bearing, so this only bites a hand-written query.
+      sv.searchParams.set('heading', String(normalizeHeadingDeg(heading)));
       sv.searchParams.set(
         'fov',
         String(Number.isFinite(fov) ? Math.max(20, Math.min(120, fov)) : 80),
@@ -351,8 +360,10 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
         const source = sourceById.get(cameraId);
         const label = url.searchParams.get('label') || source?.name || cameraId;
         const city = url.searchParams.get('city') || source?.city || '';
-        const lat = Number(url.searchParams.get('lat') || source?.lat);
-        const lon = Number(url.searchParams.get('lon') || source?.lon);
+        // `lat`/`lon` are still sent by the browser on every frame, but they
+        // are no longer read: the registered pose in `source` is the only
+        // thing a billable Street View lookup is aimed at. See
+        // `resolveStreetViewTarget`.
         const heading = Number(
           url.searchParams.get('heading') || source?.headingDeg,
         );
@@ -387,13 +398,24 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
           return;
         }
 
-        const sv = await streetViewFallback({
-          lat,
-          lon,
-          heading,
-          fov,
-          pitch,
-        });
+        // Street View is the only metered step in this chain, so a frame
+        // reaches it for a camera the catalog actually serves, at the pose
+        // that catalog recorded, and only within the per-IP window. A refusal
+        // is not something the viewer can act on, and the synthetic card
+        // below is already this route's answer for "no frame available", so a
+        // refused lookup takes that same exit rather than breaking the <img>
+        // element with a 429 the page has no way to render.
+        const streetViewTarget = resolveStreetViewTarget(source);
+        const sv =
+          streetViewTarget && allowStreetView(clientKey(req))
+            ? await streetViewFallback({
+                lat: streetViewTarget.lat,
+                lon: streetViewTarget.lon,
+                heading,
+                fov,
+                pitch,
+              })
+            : null;
         if (sv?.ok) {
           setHealth(cameraId, {
             status: 'degraded',
