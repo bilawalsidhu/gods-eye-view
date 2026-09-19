@@ -480,7 +480,7 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 - Add an optional, keyed **World News** layer: the latest place-tagged World
   News API headlines pinned at the place each headline names, aggregated per
-  place and colored by tone, with OPEN ARTICLE / NEXT STORY / LOAD MORE chips
+  place and colored by tone, with OPEN ARTICLE / LOAD MORE / PREV and NEXT STORY chips
   and a click-to-inspect readout card. The server-side `/api/world-news` proxy
   caches for 30 minutes, keeps nothing older than 60 minutes (the provider's
   caching limit), spends against a daily point governor

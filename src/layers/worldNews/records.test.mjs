@@ -262,7 +262,8 @@ test('headline truncation and age formatting follow the shared shapes', () => {
   assert.equal(long.length, 48);
   assert.ok(long.endsWith('…'));
   assert.equal(truncateHeadline(null), '');
-  assert.equal(formatAge(-1), '');
+  assert.equal(formatAge(-1), '<1h', 'a future-dated headline reads recent');
+  assert.equal(formatAge(NaN), '');
   assert.equal(formatAge(30 * 60_000), '<1h');
   assert.equal(formatAge(5 * 3_600_000), '5h');
   assert.equal(formatAge(3 * 86_400_000), '3d');

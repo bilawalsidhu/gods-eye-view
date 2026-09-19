@@ -405,6 +405,16 @@ export function createWorldNewsLayer({
           onClick: openSelectedArticle,
         },
       ];
+      // LOAD MORE comes before the paging chips: the panel appends chips that
+      // newly appear instead of reordering, so the always-present chips must
+      // precede the ones that exist only for a multi-story place.
+      chips.push({
+        id: 'load-more',
+        label: 'LOAD MORE',
+        title: loadMoreTitle(),
+        disabled: !canLoadMore(),
+        onClick: () => layer.loadMore(),
+      });
       if (group && group.count > 1) {
         chips.push(
           {
@@ -423,13 +433,6 @@ export function createWorldNewsLayer({
           },
         );
       }
-      chips.push({
-        id: 'load-more',
-        label: 'LOAD MORE',
-        title: loadMoreTitle(),
-        disabled: !canLoadMore(),
-        onClick: () => layer.loadMore(),
-      });
       const tally = { negative: 0, neutral: 0, positive: 0, unknown: 0 };
       for (const row of state.rows) tally[toneBand(row.sentiment)]++;
       const legend = TONE_LEGEND.map(({ band, label }) => ({
@@ -492,7 +495,9 @@ export function createWorldNewsLayer({
       } else if (state.error) {
         loadingLabel = state.error;
       } else if (state.lastUpdate) {
-        loadingLabel = `LIVE · ${rows} of ${state.requested} latest headlines place-tagged · updated ${formatAgoMinutes(now - state.lastUpdate)}`;
+        // The source label already ends in "· LIVE"; repeating it here made
+        // the row read "World News API · LIVE · LIVE · …".
+        loadingLabel = `${rows} of ${state.requested} latest headlines place-tagged · updated ${formatAgoMinutes(now - state.lastUpdate)}`;
       }
       const empty = !state.loading && !rows;
       const status = state.keyRequired

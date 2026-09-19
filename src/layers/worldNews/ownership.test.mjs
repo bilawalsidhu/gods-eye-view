@@ -310,7 +310,7 @@ test('lifecycle: pins, contexts, ambient labels and readout hooks follow enable/
   assert.equal(stats.status, undefined);
   assert.match(
     stats.loadingLabel,
-    /^LIVE · 3 of 20 latest headlines place-tagged · updated /,
+    /^3 of 20 latest headlines place-tagged · updated /,
   );
   assert.equal(layerFeedState(stats), 'nominal');
 
@@ -629,6 +629,11 @@ test('selection: chips, story paging, readout refresh and the injected opener', 
 
   assert.equal(h.layer.selectPlace('missing'), false);
   assert.equal(h.layer.selectPlace(ROTTERDAM), true);
+  assert.deepEqual(
+    h.chips().map((chip) => chip.id),
+    ['open-article', 'load-more', 'prev-story', 'next-story'],
+    'always-present chips precede the paging chips the panel appends',
+  );
   assert.equal(h.services.store.selectedId, ROTTERDAM);
   const rotterdam = h.entities().find((entity) => entity.id === ROTTERDAM);
   assert.equal(

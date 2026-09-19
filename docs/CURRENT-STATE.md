@@ -1114,7 +1114,8 @@ The browser layer (`src/layers/worldNews/`, factory
 `y`) aggregates headlines per place (coordinates rounded to three decimals),
 sizes each pin by story count, colors it by tone band (rose ≤ −0.3, indigo,
 seafoam ≥ 0.3) and publishes the shared readout card on click. Row chips: OPEN
-ARTICLE, PREV/NEXT STORY, LOAD MORE. Stats surface `keyRequired` (KEY
+ARTICLE, LOAD MORE, PREV/NEXT STORY (the paging chips appear only while a
+place with several stories is selected). Stats surface `keyRequired` (KEY
 REQUIRED), STALE, BUDGET REACHED, QUOTA EXHAUSTED, RATE LIMITED and INVALID
 KEY without ever failing the enable lifecycle. The "World News API" backlink
 credit is registered when the layer first receives data.

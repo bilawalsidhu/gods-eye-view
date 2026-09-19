@@ -234,7 +234,9 @@ export function mapAnalystRecord(row, index = 0) {
 
 /** Millisecond delta → "<1h" / "Xh" / "Xd", or '' for invalid input. */
 export function formatAge(deltaMs) {
-  if (!Number.isFinite(deltaMs) || deltaMs < 0) return '';
+  if (!Number.isFinite(deltaMs)) return '';
+  // Publisher timestamps run ahead of the server clock at times (local time
+  // labelled UTC upstream); a future date still means "recent", not unknown.
   const hours = deltaMs / 3600000;
   if (hours < 1) return '<1h';
   if (hours < 48) return `${Math.round(hours)}h`;
