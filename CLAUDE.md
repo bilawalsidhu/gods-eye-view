@@ -56,6 +56,8 @@ Each live layer is a separate module. All layers implement a common registration
 | Planets | `planets.js` | Computed ephemeris |
 | Earthquakes | `earthquakes.js` | USGS |
 | Traffic | `traffic.js` | TomTom tiles |
+| Transit vehicles | `transitVehicles.js` | GTFS-RT (MBTA, OVapi, Metro Transit) |
+| Synthetic traffic | `syntheticTraffic.js` | TomTom flow fallback (only where no GTFS-RT coverage) |
 | CCTV | `cctv.js` | City APIs (Austin, Caltrans, TfL) |
 | Radio | `radio.js` | Radio Browser |
 | Bikeshare | `bikeshare.js` | GBFS feeds |
