@@ -5,3 +5,4 @@ export {
   LL2_CACHE_TTL_MS,
   launchLibraryRequestHeaders,
 } from './space/launch-library.js';
+export { fireballsProxy, FIREBALL_CACHE_TTL_MS } from './space/fireballs.js';

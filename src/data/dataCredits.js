@@ -67,6 +67,13 @@ export const DATA_CREDITS = [
     html: 'Earthquakes: Data courtesy of the U.S. Geological Survey',
   },
   {
+    key: 'jpl-fireballs',
+    html:
+      'Fireballs (bolides): ' +
+      '<a href="https://cneos.jpl.nasa.gov/fireballs/" target="_blank" rel="noopener">NASA/JPL Fireball and Bolide Data</a>, ' +
+      'Center for Near Earth Object Studies',
+  },
+  {
     key: 'overpass',
     html:
       'Road geometry (traffic): ' +

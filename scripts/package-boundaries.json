@@ -85,6 +85,7 @@
       "server/providers/space.js",
       "server/providers/space/celestrak.js",
       "server/providers/space/launch-library.js",
+      "server/providers/space/fireballs.js",
       "server/providers/common/http.js",
       "src/data/spaceProviderRequests.js",
       "src/sources/httpBody.js"
@@ -828,6 +829,16 @@
     ],
     "external": ["cesium"]
   },
+  "fireballs": {
+    "exports": ["./layers/fireballs"],
+    "modules": [
+      "src/layers/fireballs/index.js",
+      "src/layers/fireballs/model.js",
+      "src/layers/fireballs/source.js",
+      "src/layers/fireballs/records.js"
+    ],
+    "external": ["cesium"]
+  },
   "fire-layer": {
     "exports": ["./layers/firms"],
     "modules": [
@@ -1225,6 +1236,7 @@
       "src/app/layers/bikeshare.js",
       "src/app/layers/cctv.js",
       "src/app/layers/earthquakes.js",
+      "src/app/layers/fireballs.js",
       "src/app/layers/firms.js",
       "src/app/layers/flights.js",
       "src/app/layers/militaryAwareness.js",
@@ -1287,6 +1299,7 @@
       "src/data/detectionRenderDemand.js",
       "src/data/earthquakes.js",
       "src/data/fireAnchors.js",
+      "src/data/fireballs.js",
       "src/data/firmsAdapt.js",
       "src/data/firmsHeatmap.js",
       "src/data/firmsLabels.js",
@@ -1422,6 +1435,9 @@
       "src/layers/earthquakes/index.js",
       "src/layers/earthquakes/model.js",
       "src/layers/earthquakes/source.js",
+      "src/layers/fireballs/index.js",
+      "src/layers/fireballs/model.js",
+      "src/layers/fireballs/source.js",
       "src/layers/firms/anchors.js",
       "src/layers/firms/cards.js",
       "src/layers/firms/index.js",
@@ -1729,6 +1745,7 @@
       "src/data/feedState.js",
       "src/layers/alpr/records.js",
       "src/layers/earthquakes/records.js",
+      "src/layers/fireballs/records.js",
       "src/layers/cctv/sourcePolicy.js",
       "src/sources/reference.js",
       "src/search/nominatim.js",
@@ -1843,6 +1860,7 @@
       "src/app/layers/bikeshare.js",
       "src/app/layers/cctv.js",
       "src/app/layers/earthquakes.js",
+      "src/app/layers/fireballs.js",
       "src/app/layers/firms.js",
       "src/app/layers/flights.js",
       "src/app/layers/militaryAwareness.js",
@@ -1984,6 +2002,9 @@
       "src/layers/earthquakes/index.js",
       "src/layers/earthquakes/model.js",
       "src/layers/earthquakes/source.js",
+      "src/layers/fireballs/index.js",
+      "src/layers/fireballs/model.js",
+      "src/layers/fireballs/source.js",
       "src/layers/firms/anchors.js",
       "src/layers/firms/cards.js",
       "src/layers/firms/index.js",
@@ -2167,6 +2188,7 @@
       "src/app/localGeojsonServices.js",
       "src/layers/alpr/records.js",
       "src/layers/earthquakes/records.js",
+      "src/layers/fireballs/records.js",
       "src/layers/cctv/sourcePolicy.js",
       "src/search/nominatim.js",
       "src/nominatimGeocode.js",
@@ -2499,6 +2521,8 @@
       "src/sources/reference.js",
       "src/layers/earthquakes/source.js",
       "src/layers/earthquakes/records.js",
+      "src/layers/fireballs/source.js",
+      "src/layers/fireballs/records.js",
       "src/layers/submarineCables/bundledSource.js"
     ],
     "external": []
