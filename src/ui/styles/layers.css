@@ -1164,9 +1164,12 @@
   border: 1px solid rgba(98, 181, 255, 0.22);
   border-radius: 5px;
   background: rgba(42, 113, 171, 0.08);
-  /* The saucer is a COLOR-font glyph: `color` and `text-shadow` cannot touch
-     it, so the dim/lit states are carried by `filter` alongside the border and
-     fill. 14px sits inside the 26px chip with breathing room. */
+  /* The mark is now an inline Lucide `triangle` (stroke: currentColor), so it
+     needs an ink of its own — without one a <button> falls back to the UA
+     buttontext (black on the dark panel). The dim/lit states are still carried
+     by `filter` alongside the border and fill, as they were for the former
+     colour-font saucer glyph. 14px sits inside the 26px chip with room. */
+  color: rgba(190, 220, 255, 0.95);
   font:
     14px/1 ui-monospace,
     SFMono-Regular,

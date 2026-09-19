@@ -262,11 +262,16 @@
   outline: none;
   font-size: 14px;
   flex-shrink: 0;
+  /* The inline Lucide `search` icon strokes currentColor; a <button> without
+     a colour of its own renders it in the UA buttontext (black on this dark
+     tray) — 2026-09-19 icon once-over. */
+  color: var(--text-secondary);
 }
 
 .search-toggle-btn:hover {
   background: rgba(255, 255, 255, 0.08);
   border-color: var(--glass-border-hover);
+  color: var(--text-primary);
 }
 
 #location-search {
