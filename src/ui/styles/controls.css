@@ -124,7 +124,9 @@
   border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.03);
-  color: var(--text-dim);
+  /* WCAG 2.2 AA non-text contrast: --text-dim read 2.38:1 on the button
+     ground (UI/UX audit F-02); --text-readable-dim is 8:1. */
+  color: var(--text-readable-dim);
   font-family: var(--font-mono);
   font-size: 13px;
   line-height: 1;
@@ -478,6 +480,16 @@
 .pp-icon {
   font-size: 14px;
   line-height: 1;
+  /* The inline Lucide icon strokes `currentColor`; without a colour of its
+     own the <button> falls back to the UA `buttontext` (black on this dark
+     glass — found by the 2026-09-19 icon once-over). Follow the label:
+     secondary text idle, the accent when the toggle is active. */
+  color: var(--text-secondary);
+  transition: color var(--transition-fast);
+}
+
+.pp-toggle-btn.active .pp-icon {
+  color: var(--accent);
 }
 
 .pp-icon.material-symbols-outlined {
