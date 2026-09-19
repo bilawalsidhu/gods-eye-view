@@ -18,6 +18,17 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   behaviour as before; non-voice users stop paying the readback cost on
   every camera move.
 
+- **Render-resolution scale policy (HiDPI GPU/dedicated memory)**. Cesium now
+  defaults `sceneResolutionScale` to 0.75 on displays whose `devicePixelRatio`
+  exceeds 1.5, and 1.0 otherwise. The previous always-1.0 setting forced the
+  backing store to CSS × DPR — ~106 MiB of color + depth on a 2560×1440 @ DPR
+  2 display, with ~4× the per-pixel fragment cost. The 0.75 scale cuts
+  dedicated GPU memory ~44% and per-frame fragment bandwidth ~44% with
+  negligible visible loss against the photoreal tiles (MSAA 2× hides the
+  upscale). `?renderScale=N` (0.5..2) forces an explicit value for A/B
+  capture. Policy lives in `src/sceneRenderScale.js` and is applied in
+  `src/main.js` next to the existing tile-cache policy.
+
 ## [0.9.2] — 2026-09-18
 
 ### QA

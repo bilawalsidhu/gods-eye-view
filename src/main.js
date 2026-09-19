@@ -48,6 +48,7 @@ import {
 } from './renderGovernor.js';
 import { setLogLevel, getLogLevel, peekLogBuffer, drainLogBuffer } from './logger.js';
 import { applyTilesetCachePolicy } from './tilesetCachePolicy.js';
+import { applySceneRenderScale } from './sceneRenderScale.js';
 import { installScopeMask } from './scopeMask.js';
 import { initFirstRunExperience } from './firstRunExperience.js';
 
@@ -177,6 +178,14 @@ async function init() {
     // holder and the camera is still (Phase 9 Batch P), restoring 60 on any
     // other hold or camera motion.
     viewer.targetFrameRate = 60;
+
+    // Render-resolution scale policy (Phase 9 Batch R — docs/PLAN.md, sceneRenderScale.js).
+    // On HiDPI displays the scene otherwise renders at CSS × DPR backing-store
+    // size — ~106 MiB of color+depth at 2560×1440 @ DPR 2 — for negligible
+    // visible benefit against the photoreal tiles. The policy scales to 0.75
+    // when DPR > 1.5 (cutting dedicated GPU memory ~44%) and 1.0 otherwise.
+    // `?renderScale=N` (0.5..2) forces an explicit value for A/B capture.
+    applySceneRenderScale(viewer);
 
     // Register per-layer data attribution into the "Data attribution" popover.
     // Required by each source's license (ODbL, CC BY-NC-SA, NASA FIRMS, etc.);
