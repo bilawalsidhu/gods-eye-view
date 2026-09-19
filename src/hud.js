@@ -218,6 +218,7 @@ export class IntelHUD {
           <div id="hud-gsd">GSD: --m  NIIRS: --</div>
           <div id="hud-alt">ALT: --m   SUN: --° EL</div>
           <div id="hud-ais-vessel" class="hud-ais-vessel">AIS: --</div>
+          <div id="hud-ais-narrative" class="hud-ais-narrative"></div>
         </div>
         <div class="hud-bracket">┘</div>
       </div>

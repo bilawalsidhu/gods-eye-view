@@ -410,6 +410,39 @@ _What the TomTom key buys you: rush-hour density painted on the city — then di
 
 Add these if you need higher polling allowances.
 
+### Or run the text AI locally — no key at all
+
+**POWER UP → Provider Settings → TEXT MODEL** points the text AI features at a
+model on your own machine instead of OpenAI. Pick a provider, set the base URL,
+choose a model, and press **TEST CONNECTION** — the panel says whether the
+server answers and lists the models it reports.
+
+|     | Provider      | Default base URL         | What it needs                                                       |
+| --- | ------------- | ------------------------ | ------------------------------------------------------------------- |
+| 🟢  | **Ollama**    | `http://localhost:11434` | `ollama serve` plus a pulled model (`ollama pull llama3.1:8b`)      |
+| 🟢  | **llama.cpp** | `http://localhost:8080`  | `llama-server -m model.gguf --port 8080` (its OpenAI-compatible /v1) |
+
+Equivalently, in `.env`:
+
+```bash
+GEV_LLM_PROVIDER=ollama          # openai (default) | ollama | llamacpp
+GEV_LLM_BASE_URL=http://localhost:11434
+GEV_LLM_MODEL=llama3.1:8b
+```
+
+**What a local model does:** the AI HUD summary and other chat-completions text
+work. Tool calling depends on the model you load.
+
+**What it does not do: voice.** GEV MIC is the OpenAI *Realtime* speech API over
+WebRTC — the browser trades an ephemeral secret for an SDP session against
+`api.openai.com/v1/realtime`. Neither Ollama nor llama.cpp implements that
+protocol, so voice control keeps needing `OPENAI_API_KEY`. The panel says so
+rather than letting you find out at the microphone.
+
+A local server that is not running never breaks anything: the HUD falls back to
+its own line, the globe and every layer are untouched, and `GET /api/llm/status`
+(loopback-only, dev server only) reports exactly what it found.
+
 `npm run doctor` reports Node/npm readiness, the primary provider routes, and
 where each configured provider was found without printing credential values.
 On macOS its Keychain-aware result previews `./scripts/dev-fresh.sh`; plain

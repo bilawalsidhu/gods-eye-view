@@ -116,6 +116,9 @@
     "./server/providers/openai": {
       "node": "./server/providers/openai.js"
     },
+    "./server/providers/llm": {
+      "node": "./server/providers/llm.js"
+    },
     "./server/standalone/key-setup": {
       "node": "./server/standalone/key-setup.js"
     },

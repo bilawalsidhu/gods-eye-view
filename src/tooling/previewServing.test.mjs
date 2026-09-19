@@ -7,9 +7,14 @@ import { localProviderPlugins } from '../../server/providers/local.js';
 import { apiNotFoundPlugin } from '../../server/standalone/api-not-found.js';
 import { makeFixtureRoot } from './fixtureRoot.mjs';
 
+// Surfaces that write credentials or probe this machine's own network exist
+// only under `vite dev`: they are loopback-only by design and have no business
+// on a built preview someone may serve.
+const DEVELOPMENT_ONLY_PLUGINS = new Set(['gev-key-setup', 'gev-llm-status']);
+
 test('data providers have both hooks; credential editing stays development-only', () => {
   for (const plugin of localProviderPlugins()) {
-    if (plugin.name === 'gev-key-setup') {
+    if (DEVELOPMENT_ONLY_PLUGINS.has(plugin.name)) {
       assert.equal(plugin.configurePreviewServer, undefined);
       assert.equal(
         plugin.apply({}, { command: 'serve', isPreview: true }),
