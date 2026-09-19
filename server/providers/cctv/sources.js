@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { XMLParser } from 'fast-xml-parser';
 import {
   DEFAULT_AUSTIN_ROWS_URL,
   DEFAULT_AUSTIN_MAX_SOURCES,
@@ -55,6 +56,11 @@ import {
   DEFAULT_CALGARY_MAX_SOURCES,
   CALGARY_DOWNTOWN,
   CALGARY_MAX_CATALOG_BYTES,
+  TAIWAN_FREEWAY_CCTV_URL,
+  TAIWAN_FREEWAY_IMAGE_ORIGINS,
+  DEFAULT_TAIWAN_FREEWAY_MAX_SOURCES,
+  TAIWAN_FREEWAY_ANCHORS,
+  TAIWAN_FREEWAY_MAX_CATALOG_BYTES,
   CCTV_SOURCE_FETCH_TIMEOUT_MS,
 } from './constants.js';
 import {
@@ -78,7 +84,10 @@ import {
   prioritizeSources,
 } from './normalize.js';
 import { directionToHeading } from '../../../src/data/directionText.js';
-import { readResponseJsonCapped } from '../common/http.js';
+import {
+  readCappedResponseText,
+  readResponseJsonCapped,
+} from '../common/http.js';
 /**
  * Fetch and parse Austin traffic camera records from the city Open Data portal.
  *
@@ -1589,6 +1598,157 @@ export async function loadCalgarySourcesFromOpenData() {
   } catch (error) {
     console.warn(
       '[CCTV] Calgary camera download error:',
+      error?.message || error,
+    );
+    return [];
+  }
+}
+
+const taiwanFreewayXmlParser = new XMLParser({
+  ignoreAttributes: true,
+  parseTagValue: false,
+  trimValues: true,
+});
+
+/** Accept only MJPEG endpoints published on the observed official hosts. */
+export function normalizeTaiwanFreewayStreamUrl(raw) {
+  try {
+    const parsed = new URL(String(raw ?? '').trim());
+    if (!TAIWAN_FREEWAY_IMAGE_ORIGINS.includes(parsed.origin)) return null;
+    if (parsed.pathname !== '/abs2mjpg/bmjpg') return null;
+    if (!parsed.searchParams.get('camera')) return null;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
+/** Convert one MOTC CCTV XML record to the shared source contract. */
+export function taiwanFreewayCameraToSource(record) {
+  if (!record || typeof record !== 'object') return null;
+  const providerId = String(record.CCTVID ?? '').trim();
+  const lat = toFiniteNumber(record.PositionLat);
+  const lon = toFiniteNumber(record.PositionLon);
+  const streamUrl = normalizeTaiwanFreewayStreamUrl(record.VideoStreamURL);
+  if (
+    !providerId ||
+    !streamUrl ||
+    !isPlausibleLatLon(lat, lon) ||
+    lat < 21.5 ||
+    lat > 26.5 ||
+    lon < 119 ||
+    lon > 123
+  ) {
+    return null;
+  }
+
+  const direction = String(record.RoadDirection ?? '')
+    .trim()
+    .toUpperCase();
+  const heading = { N: 0, E: 90, S: 180, W: 270 }[direction];
+  const road = String(record.RoadName ?? '').trim();
+  const mile = String(record.LocationMile ?? '').trim();
+  const start = String(record.RoadSection?.Start ?? '').trim();
+  const end = String(record.RoadSection?.End ?? '').trim();
+  const directionLabel = { N: '北向', E: '東向', S: '南向', W: '西向' }[
+    direction
+  ];
+  const name =
+    [road, mile, directionLabel].filter(Boolean).join(' ') || providerId;
+  const section = [start, end].filter(Boolean).join('－');
+  const label = section ? `${name} · ${section}` : name;
+
+  return {
+    id: `tw-freeway-${providerId}`,
+    name: label,
+    city: 'Taiwan',
+    cityId: 'taiwan',
+    provider: '交通部高速公路局',
+    lat,
+    lon,
+    headingDeg: Number.isFinite(heading)
+      ? heading
+      : fallbackHeadingFromId(providerId),
+    headingConfidence: Number.isFinite(heading) ? 'high' : 'low',
+    pitchDeg: -18,
+    fovDeg: 44,
+    rangeM: 145,
+    mountHeightM: 10,
+    groundElevationM: 50,
+    feedType: 'image',
+    url: streamUrl,
+    snapshotUrl: streamUrl,
+    sourceKind: 'taiwan-freeway-open-data',
+    license: '政府資料開放授權條款第1版',
+    credit: '交通部高速公路局',
+    code: cameraDisplayCode(label),
+  };
+}
+
+/** Parse the bounded official XML document into source records. */
+export function parseTaiwanFreewayCatalog(xml) {
+  let parsed;
+  try {
+    parsed = taiwanFreewayXmlParser.parse(String(xml ?? ''));
+  } catch {
+    return [];
+  }
+  const raw = parsed?.CCTVList?.CCTVs?.CCTV;
+  const rows = Array.isArray(raw) ? raw : raw ? [raw] : [];
+  const seen = new Set();
+  const cameras = [];
+  for (const row of rows) {
+    const camera = taiwanFreewayCameraToSource(row);
+    if (!camera || seen.has(camera.id)) continue;
+    seen.add(camera.id);
+    cameras.push(camera);
+  }
+  return cameras;
+}
+
+/** Fetch and prioritize the keyless Taiwan freeway CCTV catalog. */
+export async function loadTaiwanFreewaySourcesFromOpenData() {
+  try {
+    const endpoint =
+      process.env.CCTV_TAIWAN_FREEWAY_URL || TAIWAN_FREEWAY_CCTV_URL;
+    const response = await fetch(endpoint, {
+      headers: { Accept: 'application/xml' },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+    });
+    if (!response.ok || (response.status >= 300 && response.status < 400)) {
+      await response.body?.cancel().catch(() => {});
+      console.warn(
+        '[CCTV] Taiwan freeway catalog download failed:',
+        response.status,
+      );
+      return [];
+    }
+    const { tooLarge, text } = await readCappedResponseText(
+      response,
+      TAIWAN_FREEWAY_MAX_CATALOG_BYTES,
+    );
+    if (tooLarge) return [];
+    const cameras = parseTaiwanFreewayCatalog(text);
+    const maxRaw = Number(
+      process.env.CCTV_TAIWAN_FREEWAY_MAX_SOURCES ||
+        DEFAULT_TAIWAN_FREEWAY_MAX_SOURCES,
+    );
+    const maxCount = Number.isFinite(maxRaw)
+      ? Math.max(8, Math.min(1000, Math.floor(maxRaw)))
+      : DEFAULT_TAIWAN_FREEWAY_MAX_SOURCES;
+    const prioritized = prioritizeSources(
+      cameras,
+      maxCount,
+      TAIWAN_FREEWAY_ANCHORS,
+    );
+    console.log(
+      `[CCTV] Loaded Taiwan freeway camera sources: ${cameras.length} (using nearest ${prioritized.length})`,
+    );
+    return prioritized;
+  } catch (error) {
+    console.warn(
+      '[CCTV] Taiwan freeway camera download error:',
       error?.message || error,
     );
     return [];

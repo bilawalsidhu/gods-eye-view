@@ -278,6 +278,39 @@ async function readCappedResponseBytes(upstream, maxBytes) {
   }
 }
 
+/** Read the first complete JPEG from an MJPEG response without buffering the
+ * unbounded stream. */
+export async function readFirstMjpegFrame(upstream, maxBytes) {
+  if (!upstream?.body || typeof upstream.body.getReader !== 'function')
+    return null;
+  const reader = upstream.body.getReader();
+  let buffered = Buffer.alloc(0);
+  try {
+    while (buffered.length <= maxBytes) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffered = Buffer.concat([buffered, Buffer.from(value)]);
+      const start = buffered.indexOf(Buffer.from([0xff, 0xd8]));
+      if (start < 0) {
+        if (buffered.length > maxBytes) return null;
+        continue;
+      }
+      const end = buffered.indexOf(Buffer.from([0xff, 0xd9]), start + 2);
+      if (end >= 0) return buffered.subarray(start, end + 2);
+      if (buffered.length - start > maxBytes) return null;
+      if (start > 0) buffered = buffered.subarray(start);
+    }
+    return null;
+  } finally {
+    try {
+      await reader.cancel();
+    } catch {
+      /* already closed */
+    }
+    reader.releaseLock();
+  }
+}
+
 /** Open registered media within a header deadline; leave timely live bodies running. */
 export async function fetchCctvMediaUpstream(
   url,
@@ -500,13 +533,22 @@ export async function fetchCctvImageFromUpstream(
     );
     if (!upstream) return null;
     const contentType = upstream.headers.get('content-type') || '';
-    if (!upstream.ok || !contentType.startsWith('image/')) {
+    const isMjpeg = contentType
+      .toLowerCase()
+      .startsWith('multipart/x-mixed-replace');
+    if (!upstream.ok || (!contentType.startsWith('image/') && !isMjpeg)) {
       controller.abort();
       return null;
     }
-    const body = await readCappedResponseBytes(upstream, maxBytes);
+    const body = isMjpeg
+      ? await readFirstMjpegFrame(upstream, maxBytes)
+      : await readCappedResponseBytes(upstream, maxBytes);
     if (!body) return null;
-    return { ok: true, body, contentType };
+    return {
+      ok: true,
+      body,
+      contentType: isMjpeg ? 'image/jpeg' : contentType,
+    };
   } catch {
     return null;
   } finally {
