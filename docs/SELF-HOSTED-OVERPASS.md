@@ -148,6 +148,18 @@ import completes. Confirm with `docker ps` that it is `healthy` rather than
 `starting` — the healthcheck allows a 30-minute grace period, which a continent
 will exceed, so trust the logs over the health status for large imports.
 
+**Every query fails with `runtime error: open64: 13 Permission denied
+/db/db//osm3s_osm_base`, but the import reported success.** `/db` is the
+`overpass` user's home directory and a fresh named volume inherits its `0700`
+mode, so the CGI process — which runs as a different user — cannot traverse it
+to reach the dispatcher socket. The compose file handles this: its entrypoint
+waits for `/db/init_done` and then relaxes the traversal bit. If you are running
+the image directly rather than through the compose file, do it yourself once:
+
+```bash
+docker exec gev-overpass sh -c 'chmod 755 /db'
+```
+
 **Layers still unavailable after the import.** The dev server reads `.env` at
 startup, so restart it. Confirm the value took effect — the server logs
 `[Overpass] 1 extra upstream(s) from OVERPASS_EXTRA_UPSTREAMS, tried first` on

@@ -23,6 +23,24 @@ services:
     container_name: gev-overpass
     ports:
       - '${OVERPASS_LOCAL_PORT:-12345}:80'
+
+    # /db is the `overpass` user's home directory, and a fresh named volume
+    # inherits its 0700 mode. The CGI process that answers queries runs as a
+    # DIFFERENT user, so it cannot traverse /db to reach the dispatcher socket
+    # at /db/db/osm3s_osm_base — every query fails with
+    # "runtime error: open64: 13 Permission denied" while the import itself
+    # reports success. Relax the traversal bit once the import lands, then hand
+    # off to the image's own entrypoint unchanged.
+    entrypoint:
+      - /bin/sh
+      - -c
+      # `$$` escapes Compose's own variable interpolation so the shell sees `$@`
+      # — the image's CMD, forwarded unchanged.
+      - '(while [ ! -f /db/init_done ]; do sleep 5; done; chmod 755 /db) & exec /docker-entrypoint.sh "$$@"'
+      - --
+    # Overriding `entrypoint` clears the image's CMD, so restate it: the image's
+    # own entrypoint takes this path as its argument and runs nothing without it.
+    command: ['/app/docker-entrypoint.sh']
     environment:
       # `init` builds the database once from OVERPASS_PLANET_URL. The container
       # then serves queries and applies minutely diffs.
