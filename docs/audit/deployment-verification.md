@@ -535,3 +535,76 @@ Evidence supplied by the operator's Vercel-API tooling (`getVercelProject` / `li
 ### Conclusion
 
 **Stable deployment URL for the `ondemand-serverless` branch = NONE.** The sandbox previews (`sb-5hfcfkb7a79s.vercel.run`, `sb-pg1bhjba1gcs.vercel.run`, and this session's later `sb-26l9a6g6k6rt`, `sb-765981cquksp`, `sb-63r5liykgi73`) are ephemeral emulator previews. Consequently `src/registry/capabilities.json` keeps `endpoint_url: null` for the Seismic (`earthquake.search` / tool `earthquake_search`) and Fires (`fires.search` / tool `fire_detection_search`) rows, with `endpoint_url_pending_reason: "no stable Vercel function-runtime deployment of ondemand-serverless yet"` and the relative `endpoint_path` (`/api/sources/earthquakes`, `/api/sources/fires`) recorded instead; the dashboard registration (`docs/audit/gate3-row1-registration.md`) must wait for a READY deployment of this branch (`scripts/vercel-file-deploy.mjs` from an operator machine, §9).
+
+## 10. Real Vercel deployment from the closeout branch — 2026-09-19T02:37–02:45Z (commits `7a24c7a` → `0677f16`)
+
+Target: project `ondemand-eand-spatial` (`prj_VbHbEhFSDFkdXCqlq8XqONoFWQHO`), team `schoolhack-web-team`
+(`team_aft8hHPiYnHp6I534L3DQScA`), **preview target only** (never `--prod`). Token: the session's `VERCEL_TOKEN`
+(team-scoped; probes `GET /v9/projects/…` → 200, 21 env vars listed by name incl. `ONDEMAND_SPATIAL_WORKFLOW_ID`
+id `lTU2obzhz3oJXEMI` and `ONDEMAND_SPATIAL_FLOW_VERSION` id `siAgsm6hBOQrEYcY`; value never printed). Build first:
+`npm ci` (02:37:01Z, exit 0, 126 packages) · `npm run build` (exit 0, 10 s) · **9 functions** (`api/[...route].js`
++ `api/ondemand/{chat,health,media,selftest,sessions,stt,tts,workflow}.js`). Method (1) worked — CLI 59.23.2 via
+`npx`: `vercel link --scope schoolhack-web-team --project ondemand-eand-spatial --yes` then
+`vercel deploy --scope schoolhack-web-team --yes` with `VERCEL_PROJECT_ID`/`VERCEL_ORG_ID`/`VERCEL_TEAM_ID` unset
+in the child environment (the runtime's own `VERCEL_PROJECT_ID` points at a different project). No REST fallback
+was needed.
+
+| # | Deployment | readyState | createdAt (UTC) | build | source sha | inspector |
+|---|---|---|---|---|---|---|
+| 1 | `dpl_GDb1kCXDZRQzYdS8BzNTt5JvLuQq` · https://ondemand-eand-spatial-ogowq1fls-schoolhack-web-team.vercel.app | READY | 2026-09-19T02:37:44.614Z (epoch-ms 1789785464614) | 28.7 s (`Ready in 32s`) | `7a24c7a` | https://vercel.com/schoolhack-web-team/ondemand-eand-spatial/GDb1kCXDZRQzYdS8BzNTt5JvLuQq |
+| 2 | `dpl_33CfSGEWDxgimgodxnHzJUW3CbwT` · https://ondemand-eand-spatial-j8s1kk2zd-schoolhack-web-team.vercel.app | READY | 2026-09-19T02:41:20.097Z (epoch-ms 1789785680097) | 30.0 s (`Ready in 33s`) | `0677f16` | https://vercel.com/schoolhack-web-team/ondemand-eand-spatial/33CfSGEWDxgimgodxnHzJUW3CbwT |
+
+Both deployments carry `projectId prj_VbHbEhFSDFkdXCqlq8XqONoFWQHO`, `target: null` (preview), Node 24.x (from
+`package.json` `engines`), region `iad1`, `source: cli`, and inherit all 21 project env vars (listed by name on the
+deployment object). Production stays `dpl_7CAoCxdEQRQ7W12mzwz4iGKDK4V9` / `BLOCKED` ("Vercel couldn't find a Git
+account for the commit author") — untouched.
+
+### 10.1 Defect found on deployment #1 and fixed in deployment #2
+
+`POST /api/overpass` (the Street Traffic road network and every other Overpass-backed layer) answered **HTTP 400
+`{"error":"Exactly one data query is required"}`** on the real platform (02:39:14Z and 02:39:42Z, browser-identical
+`application/x-www-form-urlencoded` body). Root cause: Vercel's Node runtime pre-parses a form body into a plain
+object (`{ data: '<Overpass QL>' }`); `server/serverless/vercel-adapter.js` `rehydrateBody()` re-serialised it as
+JSON, so the sanitizer's `URLSearchParams` saw no `data` field. The local emulator passes raw bodies and never
+showed it. Fix `0677f16` (`bodyToBuffer()` re-encodes form bodies as the form string; JSON keeps the JSON path;
+test added, `test:serverless` 58/58). Re-deployed as #2 and re-verified below.
+
+### 10.2 Readings on deployment #2 (`https://ondemand-eand-spatial-j8s1kk2zd-schoolhack-web-team.vercel.app`) — latency = function-runtime baseline
+
+| UTC | Request | HTTP | ms | Reading |
+|---|---|---|---|---|
+| 2026-09-19T02:42:08Z | `GET /api/ondemand/health?envNames=1` | 200 | 1581 | `ondemand: healthy` (chat/speech/media/workflow all `healthy`), `configured: true`; **`config.flowVersion.source = "GODS_EYE_FLOW_VERSION"`, `resolvedVia = "alias"`** (canonical `ONDEMAND_SPATIAL_FLOW_VERSION`, alias `GODS_EYE_FLOW_VERSION`); **`config.spatialFlowId.source = "ONDEMAND_SPATIAL_WORKFLOW_ID"`, `resolvedVia = "canonical"`** (the new project variable is in force; alias `ONDEMAND_SPATIAL_FLOW_ID`); `env.names` = GODS_EYE_FLOW_VERSION ONDEMAND_API_BASE ONDEMAND_API_KEY ONDEMAND_BASE_URL ONDEMAND_ENDPOINT_ID ONDEMAND_FULFILLMENT_ENDPOINT_ID ONDEMAND_REASONING_ENDPOINT_ID ONDEMAND_REASONING_MODE ONDEMAND_SELFTEST_TOKEN ONDEMAND_SPATIAL_FLOW_VERSION ONDEMAND_SPATIAL_WORKFLOW_ID VERCEL VERCEL_ENV VITE_SERVERLESS_MODE |
+| 2026-09-19T02:42:10Z | `GET /api/sources/earthquakes?starttime=2026-09-18T02:42:10Z` (24 h window) | 200 | 773 | `source: USGS`, `coverage: observed`, **`count: 100`** (route default `limit=100`; USGS `orderby=time`), first event `ci41334967` M 1.21 2026-09-19T02:39:37.380Z "6 km E of Cabazon, CA" |
+| 2026-09-19T02:42:11Z | `GET /api/ondemand/selftest` (no token) | 404 | 96 | `{"error":"not_found"}` — token-gated by design. **Not run with the project token:** `ONDEMAND_SELFTEST_TOKEN` (env id `NGrV0CvtudZY76Yj`) is a `sensitive` variable; `GET /v9/projects/…/env/NGrV0CvtudZY76Yj?decrypt=true` → 200 with `decrypted: false` and **no value field**, so it cannot be read from the deployment environment through the API. The 9 / 0 / 1 result stands on the sandbox preview `https://sb-2wb9cvfm6b9q.vercel.run` (01:47:41Z, run-generated token). Operator step: run the selftest with the token from the dashboard. |
+| 2026-09-19T02:42:11Z | `/api/celestrak/stations` (Satellites) | 200 | 432 | `LIVE · CelesTrak` · n=20 |
+| 2026-09-19T02:42:11Z | `/api/opensky?lat=30.25146&lon=-97.7533` (Live Flights) | 200 | 6554 | `DEGRADED · adsb.lol · OpenSky unreachable from this deployment (connect timeout) - adsb.lol regional feed` · n=286 |
+| 2026-09-19T02:42:18Z | `/api/adsblol/mil?lat=30.25146&lon=-97.7533&radiusNm=600` (Military Flights) | 200 | 187 | `LIVE · adsb.lol` · n=12 |
+| 2026-09-19T02:42:18Z | `/api/ais-live?bbox=28.75146,-99.2533,31.75146,-96.2533&maxRows=200` (Live Vessels) | 200 | 70 | `DEGRADED · Demo replay · AISSTREAM_API_KEY not set - demo replay, not live AIS` · n=0 |
+| 2026-09-19T02:42:18Z | `/api/tomtom/status?point=30.25146,-97.7533` (Street Traffic status) | 200 | 78 | `DEGRADED · TomTom · TOMTOM_API_KEY not set - flow colours are simulated on live OSM roads` |
+| 2026-09-19T02:42:18Z | `POST /api/overpass` (Austin 1 km major roads, 1st call) | 503 | 25045 | `DEGRADED · Overpass · all 5 mirrors failed · last: z.overpass-api.de HTTP 406` — the structured all-mirrors-failed answer on the real platform (`X-Overpass-Upstream` https://z.overpass-api.de/api/interpreter, `Cache-Control: no-store`) |
+| 2026-09-19T02:42:43Z | `POST /api/overpass` (same query, 2nd call) | 200 | 15145 | `LIVE · Overpass (private.coffee)` — 14 ways; kumi.systems timed out from `iad1`, private.coffee answered |
+| 02:43:21Z | `POST /api/overpass` (different Austin bbox) | 200 | 1535 | 35 ways, no failures — the mirrors are intermittently reachable from `iad1`; the rotation absorbs it |
+
+Flow-version note: the expectation `source = ONDEMAND_SPATIAL_FLOW_VERSION` is **not** met and cannot be while
+`GODS_EYE_FLOW_VERSION` (`usC3wgbut65gTkaR`) is still on the project — `FLOW_VERSION_ENV.order` checks the alias
+first by design. Delete the alias (after confirming both hold the same value), redeploy, and the row reads
+`source = ONDEMAND_SPATIAL_FLOW_VERSION`, `resolvedVia = canonical`.
+
+### 10.3 Headless browser — Austin scene on deployment #2 (`docs/audit/assets/deployment-austin-1440x900.png`)
+
+Share-link load `#lat=30.25146&lon=-97.7533&alt=800&heading=0&pitch=-35&v=2&l=a.f.m.s.t&lo=s.c.d&hv=1&hud=tactical`
+(30°15'05.26"N 097°45'11.89"W, MGRS 14R PU 1994 4730; all five MOVEMENT toggles ON, DENSE satellites), headless
+Chromium 1440×900 via ui-validator, 75 s settle, DATA LAYERS panel expanded, captured 02:45:12Z. Acceptance eval
+true: every toggle `active`, no row contains `UNAVAILABLE` or `HTTP 502`. Row counts at capture: `ais-live-vessels:— flights:633 military:13 satellites:11.5K`.
+
+| Row | Badge (toggle) | Subtext (verbatim) |
+|---|---|---|
+| Satellites | `ON` | `LIVE · CelesTrak · 2m ago` |
+| Live Flights | `DEGRADED` | `DEGRADED · adsb.lol · OpenSky unreachable from this deployment (connect timeout) - adsb.lol regional feed` |
+| Military Flights | `ON` | `LIVE · adsb.lol · just now` |
+| Live Vessels | `ON` | `Demo replay · No vessels in scene (demo replay covers the Texas Gulf coast)` |
+| Street Traffic | `LOADING` | `DEGRADED · TomTom · TOMTOM_API_KEY not set — showing simulated flow on live OSM roads (set TOMTOM_API_KEY in Vercel for live speeds) · SIMULATED — add TomTom key for live` |
+
+Street Traffic was still fetching its roads at capture (badge `LOADING`, loading label appended): from `iad1` the
+Overpass rotation takes 12–25 s when kumi.systems times out (see 10.2). The vessels row reads the inland guidance
+line because the scene box (±1.5° around Austin) holds no demo vessel.
