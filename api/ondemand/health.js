@@ -75,6 +75,13 @@
  * (`canonical: 'ONDEMAND_SPATIAL_WORKFLOW_ID'`, `alias:
  * 'ONDEMAND_SPATIAL_FLOW_ID'`), reconciled CANONICAL-first; the workflow
  * id VALUE (even the non-secret built-in default) is never echoed here.
+ * `config.spatialAgentId` / `config.spatialToolId` (added 2026-09-19 —
+ * platform registration, docs/registration/CREATION_LOG_2026-09-19.md) are
+ * `{ configured, source, envName, pack }` where `source` is the resolved
+ * source CLASS 'env' | 'registration-pack' | 'unset' (env NAME
+ * `ONDEMAND_SPATIAL_AGENT_ID` / `ONDEMAND_SPATIAL_TOOL_ID` first, then the
+ * paste-back file `src/registry/capabilities.json`, else unset) — presence
+ * and source only; the id VALUE is never echoed by this route.
  *
  * Debug flag `?envNames=1` (added 2026-09-17 for the ondemand-eand-spatial
  * Vercel project — see docs/ONDEMAND_PROXY_DESIGN.md §5b): adds an `env`
@@ -171,6 +178,29 @@ function configDiagnostic(cfg) {
       canonical: cfg.workflowIdEnv.canonical,
       alias: cfg.workflowIdEnv.alias,
     },
+    // Platform-registration ids (2026-09-19) — presence + source ONLY.
+    spatialAgentId: registrationDiagnostic('spatialAgentId', cfg),
+    spatialToolId: registrationDiagnostic('spatialToolId', cfg),
+  };
+}
+
+/**
+ * `{ configured, source, envName, pack }` for one platform-registration id
+ * row (`spatialAgentId` = the OnDemand Spatial agent, `spatialToolId` = the
+ * `earthquake_search` REST tool). `source` is the resolved source CLASS,
+ * one of 'env' (the env NAME in `envName` is set), 'registration-pack'
+ * (the id was pasted into `pack` — src/registry/capabilities.json — but no
+ * env var is set) or 'unset' (neither). `configured` = source !== 'unset'.
+ * The id VALUE is never included — see server/ondemand/config.js
+ * REGISTRATION_ID_ENV / docs/registration/CREATION_LOG_2026-09-19.md.
+ */
+function registrationDiagnostic(row, cfg) {
+  const source = cfg.sources[row];
+  return {
+    configured: source !== 'unset',
+    source,
+    envName: cfg.registrationIdEnv[row],
+    pack: cfg.registrationIdEnv.pack,
   };
 }
 

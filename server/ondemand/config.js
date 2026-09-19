@@ -43,6 +43,17 @@
  *   defaultPluginIds      | ONDEMAND_SPATIAL_AGENT_ID           | — (DENIED, see below)   | [] (no default)
  *   apiKey                | ONDEMAND_API_KEY                    | —                        | '' (no default)
  *
+ *   Platform-registration ids (added 2026-09-19 — see REGISTRATION_ID_ENV
+ *   below; docs/registration/CREATION_LOG_2026-09-19.md §4–§5): resolved
+ *   env → registration pack → unset, and reported by /api/ondemand/health
+ *   as `config.<row>.source` ∈ 'env' | 'registration-pack' | 'unset' —
+ *   presence and source ONLY, the id value itself is never echoed.
+ *
+ *   Setting              | Env NAME                            | Registration-pack fallback (src/registry/capabilities.json)
+ *   -------------------- | ----------------------------------- | -----------------------------------------------------------
+ *   spatialAgentId (reg) | ONDEMAND_SPATIAL_AGENT_ID           | ondemand.agent.pluginId
+ *   spatialToolId        | ONDEMAND_SPATIAL_TOOL_ID            | capabilities[id="earthquake.search"].ondemand_tool_id
+ *
  *   Tier defaults (NOT env-reconciled — constants, see TIER_DEFAULTS /
  *   tierDefaults(); benchmark 2026-09-18, docs/audit/endpoint-benchmark.md):
  *
@@ -115,10 +126,115 @@
  * could carry `config.apiKey`.
  */
 
+import { readFileSync } from 'node:fs';
+
 /** An env var explicitly set to `""` (or whitespace-only) is treated as
  * unset, matching this module's long-standing `X || default` convention. */
 function nonEmpty(value) {
   return typeof value === 'string' && value.trim() !== '';
+}
+
+/**
+ * Platform-registration id rows (added 2026-09-19). The OnDemand platform
+ * has no public REST/MCP operation that creates a REST agent, an agent with
+ * a system prompt, or a skill (docs/registration/API_RECHECK_2026-09-19.md
+ * §1), so the ids the dashboard returns are pasted by a human into
+ * `src/registry/capabilities.json` (the "registration pack" paste-back
+ * file, docs/audit/dashboard-registration-pack.md §6) and/or provisioned
+ * as env vars. Each row resolves env NAME → registration pack → unset;
+ * the resolved SOURCE is one of REGISTRATION_ID_SOURCES and is the only
+ * thing api/ondemand/health.js reports (never the id value).
+ *
+ * `pack` is the repo-relative path of the paste-back file; `packKeys`
+ * documents where each row is read from inside it (names only).
+ */
+export const REGISTRATION_ID_ENV = Object.freeze({
+  spatialAgentId: 'ONDEMAND_SPATIAL_AGENT_ID',
+  spatialToolId: 'ONDEMAND_SPATIAL_TOOL_ID',
+  pack: 'src/registry/capabilities.json',
+  packKeys: Object.freeze({
+    spatialAgentId: 'ondemand.agent.pluginId',
+    spatialToolId: 'capabilities[id="earthquake.search"].ondemand_tool_id',
+  }),
+});
+
+/** Closed vocabulary of `sources.spatialAgentId` / `sources.spatialToolId`
+ * (and of `config.<row>.source` in the health response). */
+export const REGISTRATION_ID_SOURCES = Object.freeze([
+  'env',
+  'registration-pack',
+  'unset',
+]);
+
+const REGISTRATION_PACK_URL = new URL(
+  '../../src/registry/capabilities.json',
+  import.meta.url,
+);
+
+/** TEST-ONLY override of the parsed registration pack (see
+ * `__setRegistrationPackForTests()` below); `null` = read the real file. */
+let registrationPackOverride = null;
+
+/**
+ * Read the registration pack's two id slots. Synchronous by design: config
+ * is computed once per module load, the file is a ~200-line JSON that ships
+ * with every function (the same `new URL(..., import.meta.url)` pattern
+ * server/ondemand/capability-loop.js already relies on), and a missing or
+ * malformed file must degrade to "no pack value" — never throw at import.
+ * Returns `{ available, spatialAgentId, spatialToolId }` with `''` for an
+ * empty/null slot. Values stay inside this module's state; nothing here
+ * logs them.
+ */
+function readRegistrationPack() {
+  if (registrationPackOverride !== null) {
+    return normalizeRegistrationPack(registrationPackOverride);
+  }
+  try {
+    const parsed = JSON.parse(readFileSync(REGISTRATION_PACK_URL, 'utf8'));
+    return normalizeRegistrationPack(parsed);
+  } catch {
+    return { available: false, spatialAgentId: '', spatialToolId: '' };
+  }
+}
+
+/** Extract the two id slots from a parsed registration pack object
+ * (see REGISTRATION_ID_ENV.packKeys); anything that is not a non-empty
+ * string counts as absent. */
+function normalizeRegistrationPack(parsed) {
+  if (!parsed || typeof parsed !== 'object') {
+    return { available: false, spatialAgentId: '', spatialToolId: '' };
+  }
+  const agentSlot = parsed.ondemand?.agent?.pluginId;
+  const capabilities = Array.isArray(parsed.capabilities)
+    ? parsed.capabilities
+    : [];
+  const toolRow = capabilities.find((c) => c && c.id === 'earthquake.search');
+  const toolSlot = toolRow ? toolRow.ondemand_tool_id : undefined;
+  return {
+    available: true,
+    spatialAgentId: nonEmpty(agentSlot) ? agentSlot.trim() : '',
+    spatialToolId: nonEmpty(toolSlot) ? toolSlot.trim() : '',
+  };
+}
+
+/**
+ * env → registration pack → unset for one registration id row. The env
+ * value may be a comma/whitespace-separated list (ONDEMAND_SPATIAL_AGENT_ID
+ * already is one for `defaultPluginIds`); the row's single id is the first
+ * entry. A value that splits down to nothing (e.g. `" , "`) counts as
+ * unset, exactly like `defaultPluginIds`. Returns `{ value, source }` with
+ * `source` ∈ REGISTRATION_ID_SOURCES.
+ */
+function resolveRegistrationId(envName, packValue) {
+  const envValue = process.env[envName];
+  if (nonEmpty(envValue)) {
+    const first = splitIds(envValue)[0];
+    if (first) return { value: first, source: 'env' };
+  }
+  if (nonEmpty(packValue)) {
+    return { value: packValue.trim(), source: 'registration-pack' };
+  }
+  return { value: '', source: 'unset' };
 }
 
 // Contract §2.1 `pluginIds` schema: `maxItems: 20`. Applied here too since
@@ -530,6 +646,23 @@ function computeConfig() {
   // 'unset', not the env NAME that contributed nothing.
   if (defaultPluginIds.length === 0) defaultPluginIdsSource = 'unset';
 
+  // Platform-registration ids (2026-09-19): env NAME → registration pack →
+  // unset, per row (see REGISTRATION_ID_ENV / resolveRegistrationId). The
+  // agent row reads the SAME env var as `defaultPluginIds` above but is
+  // reported separately (with the pack fallback) so health can say where
+  // the id would come from; `defaultPluginIds` — what is actually sent
+  // upstream as `pluginIds` — deliberately stays env-only (opt-in), so
+  // pasting an id into the pack never changes upstream behaviour by itself.
+  const registrationPack = readRegistrationPack();
+  const spatialAgentIdResult = resolveRegistrationId(
+    REGISTRATION_ID_ENV.spatialAgentId,
+    registrationPack.spatialAgentId,
+  );
+  const spatialToolIdResult = resolveRegistrationId(
+    REGISTRATION_ID_ENV.spatialToolId,
+    registrationPack.spatialToolId,
+  );
+
   const timeoutRaw = Number(process.env.ONDEMAND_REQUEST_TIMEOUT_MS);
   const timeoutOverridden = Number.isFinite(timeoutRaw) && timeoutRaw > 0;
 
@@ -570,6 +703,14 @@ function computeConfig() {
     // Local proxy behaviour ONLY — NOT an OnDemand API field. Bounds every
     // upstream fetch except the SSE stream (which aborts on client close).
     requestTimeoutMs: timeoutOverridden ? timeoutRaw : 60000,
+    // Platform-registration ids — VALUES, server-side only (never logged,
+    // never serialised into a response; health reports `sources.*` only).
+    // `packAvailable` = the paste-back file was readable and parsed.
+    registrationIds: {
+      spatialAgentId: spatialAgentIdResult.value,
+      spatialToolId: spatialToolIdResult.value,
+      packAvailable: registrationPack.available,
+    },
     // Names only, never values — see configSources() below.
     sources: {
       apiKey: apiKeyResult.source,
@@ -583,6 +724,10 @@ function computeConfig() {
       requestTimeoutMs: timeoutOverridden
         ? 'ONDEMAND_REQUEST_TIMEOUT_MS'
         : 'default',
+      // 'env' | 'registration-pack' | 'unset' (REGISTRATION_ID_SOURCES) —
+      // a source CLASS rather than an env NAME, because the pack is a file.
+      spatialAgentId: spatialAgentIdResult.source,
+      spatialToolId: spatialToolIdResult.source,
     },
   };
 }
@@ -632,6 +777,11 @@ export const config = {
   },
   get requestTimeoutMs() {
     return state.requestTimeoutMs;
+  },
+  /** Resolved `ONDEMAND_SPATIAL_TOOL_ID` (env → registration pack → '').
+   * Server-side only — never log or return it. */
+  get spatialToolId() {
+    return state.registrationIds.spatialToolId;
   },
 };
 
@@ -714,10 +864,17 @@ export function getConfig() {
     // (ONDEMAND_SPATIAL_WORKFLOW_ID → ONDEMAND_SPATIAL_FLOW_ID → default)
     // and the order they are consulted in — see WORKFLOW_ID_ENV.
     workflowIdEnv: WORKFLOW_ID_ENV,
+    // Platform-registration ids (2026-09-19): resolved VALUES (server-side
+    // only) plus `packAvailable`; the env NAMES / pack path live in
+    // `registrationIdEnv` and the resolved SOURCE class of each row in
+    // `sources.spatialAgentId` / `sources.spatialToolId`.
+    registrationIds: { ...state.registrationIds },
+    registrationIdEnv: REGISTRATION_ID_ENV,
     sources: configSources(),
   };
   assertNoDeniedKeys(result);
   Object.freeze(result.baseUrls);
+  Object.freeze(result.registrationIds);
   Object.freeze(result.sources);
   return Object.freeze(result);
 }
@@ -731,4 +888,15 @@ export function getConfig() {
  */
 export function __reloadConfigForTests() {
   state = computeConfig();
+}
+
+/**
+ * TEST-ONLY. Replace the parsed registration pack (the object form of
+ * src/registry/capabilities.json) that `computeConfig()` consults for the
+ * 'registration-pack' fallback — pass `null` to read the real file again.
+ * Takes effect on the next `__reloadConfigForTests()`. Never called by
+ * production code paths.
+ */
+export function __setRegistrationPackForTests(pack) {
+  registrationPackOverride = pack === undefined ? null : pack;
 }

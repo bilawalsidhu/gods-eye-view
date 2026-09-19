@@ -13,7 +13,10 @@ import {
   FLOW_VERSION_ENV,
   WORKFLOW_ID_ENV,
   tierDefaults,
+  REGISTRATION_ID_ENV,
+  REGISTRATION_ID_SOURCES,
   __reloadConfigForTests,
+  __setRegistrationPackForTests,
 } from './config.js';
 
 // Constructed dynamically (never a literal in this file) so this test file
@@ -32,6 +35,7 @@ const ENV_KEYS = [
   'ONDEMAND_BASE_URL',
   'ONDEMAND_API_BASE',
   'ONDEMAND_SPATIAL_AGENT_ID',
+  'ONDEMAND_SPATIAL_TOOL_ID',
   DEPRECATED_KNOWLEDGE_ALIAS,
   'ONDEMAND_SPATIAL_WORKFLOW_ID',
   'ONDEMAND_SPATIAL_FLOW_ID',
@@ -156,6 +160,8 @@ describe('server/ondemand/config.js', () => {
       reasoningMode: 'unset',
       flowVersion: 'default',
       requestTimeoutMs: 'default',
+      spatialAgentId: 'unset',
+      spatialToolId: 'unset',
     });
   });
 });
@@ -185,9 +191,13 @@ describe('server/ondemand/config.js — getConfig()', () => {
         'flowDefaults',
         'flowVersionEnv',
         'workflowIdEnv',
+        'registrationIds',
+        'registrationIdEnv',
       ].sort(),
     );
     assert.equal(cfg.apiKey, 'k-1');
+    assert.equal(cfg.registrationIdEnv, REGISTRATION_ID_ENV);
+    assert.ok(Object.isFrozen(cfg.registrationIds));
     assert.equal(cfg.tiers, TIER_DEFAULTS);
     assert.equal(cfg.flowDefaults, FLOW_DEFAULTS);
     assert.equal(cfg.flowVersionEnv, FLOW_VERSION_ENV);
@@ -790,5 +800,133 @@ describe('server/ondemand/config.js — FLOW_DEFAULTS (OnDemand Spatial Advanced
     assert.equal(exported._export.rename.from, 'GodsEye Advanced Spatial Workflow');
     assert.equal(exported._export.rename.to, 'OnDemand Spatial Advanced Workflow');
     assert.equal(exported.workflow.isActive, true);
+  });
+});
+
+describe('server/ondemand/config.js — platform-registration ids (2026-09-19: env → registration pack → unset)', () => {
+  // A pack object in the shape of src/registry/capabilities.json with both
+  // slots filled — pasted ids are `plugin-<digits>` strings.
+  const FILLED_PACK = Object.freeze({
+    ondemand: { agent: { pluginId: 'plugin-424242' } },
+    capabilities: [
+      { id: 'something.else', ondemand_tool_id: 'plugin-999999' },
+      { id: 'earthquake.search', ondemand_tool_id: 'plugin-111111' },
+    ],
+  });
+
+  afterEach(() => {
+    __setRegistrationPackForTests(null);
+    __reloadConfigForTests();
+  });
+
+  test('REGISTRATION_ID_ENV names the two env vars, the paste-back file and its keys (names only)', () => {
+    assert.equal(REGISTRATION_ID_ENV.spatialAgentId, 'ONDEMAND_SPATIAL_AGENT_ID');
+    assert.equal(REGISTRATION_ID_ENV.spatialToolId, 'ONDEMAND_SPATIAL_TOOL_ID');
+    assert.equal(REGISTRATION_ID_ENV.pack, 'src/registry/capabilities.json');
+    assert.equal(REGISTRATION_ID_ENV.packKeys.spatialAgentId, 'ondemand.agent.pluginId');
+    assert.equal(
+      REGISTRATION_ID_ENV.packKeys.spatialToolId,
+      'capabilities[id="earthquake.search"].ondemand_tool_id',
+    );
+    assert.ok(Object.isFrozen(REGISTRATION_ID_ENV));
+    assert.deepEqual([...REGISTRATION_ID_SOURCES], ['env', 'registration-pack', 'unset']);
+  });
+
+  test('with nothing set, the REAL pack (both slots still null after the 2026-09-19 registration attempt) yields source "unset" and empty values', () => {
+    __reloadConfigForTests();
+    const cfg = getConfig();
+    assert.equal(cfg.registrationIds.packAvailable, true, 'src/registry/capabilities.json must be readable');
+    assert.equal(cfg.registrationIds.spatialAgentId, '');
+    assert.equal(cfg.registrationIds.spatialToolId, '');
+    assert.equal(cfg.sources.spatialAgentId, 'unset');
+    assert.equal(cfg.sources.spatialToolId, 'unset');
+    assert.equal(config.spatialToolId, '');
+  });
+
+  test('an env value resolves with source "env" and is readable server-side (first id of a list), but never appears in configSources()', () => {
+    process.env.ONDEMAND_SPATIAL_AGENT_ID = 'plugin-777777, plugin-888888';
+    process.env.ONDEMAND_SPATIAL_TOOL_ID = 'plugin-555555';
+    __reloadConfigForTests();
+    const cfg = getConfig();
+    assert.equal(cfg.sources.spatialAgentId, 'env');
+    assert.equal(cfg.sources.spatialToolId, 'env');
+    assert.equal(cfg.registrationIds.spatialAgentId, 'plugin-777777');
+    assert.equal(cfg.registrationIds.spatialToolId, 'plugin-555555');
+    assert.equal(config.spatialToolId, 'plugin-555555');
+    // `defaultPluginIds` (what is sent upstream) is unchanged by the new row.
+    assert.deepEqual(cfg.defaultPluginIds, ['plugin-777777', 'plugin-888888']);
+    const sourcesJson = JSON.stringify(configSources());
+    assert.ok(!sourcesJson.includes('plugin-777777'));
+    assert.ok(!sourcesJson.includes('plugin-555555'));
+  });
+
+  test('with no env var, ids pasted into the registration pack resolve with source "registration-pack"', () => {
+    __setRegistrationPackForTests(FILLED_PACK);
+    __reloadConfigForTests();
+    const cfg = getConfig();
+    assert.equal(cfg.sources.spatialAgentId, 'registration-pack');
+    assert.equal(cfg.sources.spatialToolId, 'registration-pack');
+    assert.equal(cfg.registrationIds.spatialAgentId, 'plugin-424242');
+    // The tool slot is the earthquake.search row, not the first capability.
+    assert.equal(cfg.registrationIds.spatialToolId, 'plugin-111111');
+    // The pack never feeds `defaultPluginIds` — upstream behaviour is opt-in via env.
+    assert.deepEqual(cfg.defaultPluginIds, []);
+    assert.equal(cfg.sources.defaultPluginIds, 'unset');
+  });
+
+  test('env wins over the registration pack, per row independently', () => {
+    __setRegistrationPackForTests(FILLED_PACK);
+    process.env.ONDEMAND_SPATIAL_TOOL_ID = 'plugin-222222';
+    __reloadConfigForTests();
+    const cfg = getConfig();
+    assert.equal(cfg.sources.spatialAgentId, 'registration-pack');
+    assert.equal(cfg.registrationIds.spatialAgentId, 'plugin-424242');
+    assert.equal(cfg.sources.spatialToolId, 'env');
+    assert.equal(cfg.registrationIds.spatialToolId, 'plugin-222222');
+  });
+
+  test('an env value that is only separators/whitespace falls through to the pack, then to "unset"', () => {
+    process.env.ONDEMAND_SPATIAL_AGENT_ID = ' , , ';
+    process.env.ONDEMAND_SPATIAL_TOOL_ID = '   ';
+    __setRegistrationPackForTests({ ondemand: { agent: { pluginId: 'plugin-424242' } } });
+    __reloadConfigForTests();
+    const cfg = getConfig();
+    assert.equal(cfg.sources.spatialAgentId, 'registration-pack');
+    assert.equal(cfg.sources.spatialToolId, 'unset');
+    assert.equal(cfg.registrationIds.spatialToolId, '');
+  });
+
+  test('a null/empty/malformed pack degrades to "unset" (never throws), and packAvailable reports it', () => {
+    for (const pack of [{}, { ondemand: {} }, { capabilities: 'nope' }, { ondemand: { agent: { pluginId: '' } } }]) {
+      __setRegistrationPackForTests(pack);
+      __reloadConfigForTests();
+      assert.equal(getConfig().sources.spatialAgentId, 'unset');
+      assert.equal(getConfig().sources.spatialToolId, 'unset');
+      assert.equal(getConfig().registrationIds.packAvailable, true);
+    }
+    __setRegistrationPackForTests(false); // unreadable / unparsable file
+    __reloadConfigForTests();
+    assert.equal(getConfig().registrationIds.packAvailable, false);
+    assert.equal(getConfig().sources.spatialAgentId, 'unset');
+    assert.equal(getConfig().sources.spatialToolId, 'unset');
+  });
+
+  test('sources.spatialAgentId / sources.spatialToolId are always one of REGISTRATION_ID_SOURCES', () => {
+    const cases = [
+      () => {},
+      () => {
+        process.env.ONDEMAND_SPATIAL_TOOL_ID = 'plugin-1';
+      },
+      () => __setRegistrationPackForTests(FILLED_PACK),
+    ];
+    for (const arrange of cases) {
+      __setRegistrationPackForTests(null);
+      delete process.env.ONDEMAND_SPATIAL_TOOL_ID;
+      arrange();
+      __reloadConfigForTests();
+      const s = configSources();
+      assert.ok(REGISTRATION_ID_SOURCES.includes(s.spatialAgentId), s.spatialAgentId);
+      assert.ok(REGISTRATION_ID_SOURCES.includes(s.spatialToolId), s.spatialToolId);
+    }
   });
 });

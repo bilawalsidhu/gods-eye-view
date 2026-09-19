@@ -1,6 +1,9 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { __reloadConfigForTests } from './config.js';
+import {
+  __reloadConfigForTests,
+  __setRegistrationPackForTests,
+} from './config.js';
 import { __resetStoreForTests } from './sessions-store.js';
 import {
   makeReq,
@@ -37,6 +40,7 @@ const ENV_KEYS = [
   'ONDEMAND_BASE_URL',
   'ONDEMAND_API_BASE',
   'ONDEMAND_SPATIAL_AGENT_ID',
+  'ONDEMAND_SPATIAL_TOOL_ID',
   DEPRECATED_KNOWLEDGE_ALIAS,
   'ONDEMAND_SPATIAL_WORKFLOW_ID',
   'ONDEMAND_SPATIAL_FLOW_ID',
@@ -145,6 +149,8 @@ describe('api/ondemand/health.js', () => {
         'reasoningMode',
         'flowVersion',
         'spatialFlowId',
+        'spatialAgentId',
+        'spatialToolId',
         'tiers',
       ].sort(),
     );
@@ -655,6 +661,100 @@ describe('api/ondemand/health.js — ?envNames=1 diagnostic (docs/ONDEMAND_PROXY
     // retired alias's sentinel value (ONDEMAND_SPATIAL_AGENT_ID was never
     // set in this test, so `plugins` must stay empty).
     assert.deepEqual(body.plugins, {});
+  });
+});
+
+describe('api/ondemand/health.js — platform-registration ids (2026-09-19: config.spatialAgentId / config.spatialToolId, presence + source only)', () => {
+  const OK3 = () =>
+    stubFetchSequence([
+      jsonResponse(200, { message: 'ok', data: [] }),
+      jsonResponse(200, { message: 'ok', data: [] }),
+      jsonResponse(200, { message: 'ok', data: [] }),
+    ]);
+  const FILLED_PACK = Object.freeze({
+    ondemand: { agent: { pluginId: 'plugin-424242' } },
+    capabilities: [{ id: 'earthquake.search', ondemand_tool_id: 'plugin-111111' }],
+  });
+
+  afterEach(() => {
+    __setRegistrationPackForTests(null);
+    __reloadConfigForTests();
+  });
+
+  test('"not configured" response: both rows are present with source "unset" and name the env var + paste-back file (never a value)', async () => {
+    __reloadConfigForTests(); // key deleted by beforeEach; real pack has null slots
+    const res = await runHealth();
+    const body = res.json();
+    assert.equal(body.ondemand, 'not configured');
+    assert.deepEqual(body.config.spatialAgentId, {
+      configured: false,
+      source: 'unset',
+      envName: 'ONDEMAND_SPATIAL_AGENT_ID',
+      pack: 'src/registry/capabilities.json',
+    });
+    assert.deepEqual(body.config.spatialToolId, {
+      configured: false,
+      source: 'unset',
+      envName: 'ONDEMAND_SPATIAL_TOOL_ID',
+      pack: 'src/registry/capabilities.json',
+    });
+  });
+
+  test('keyed response: env-provisioned ids report source "env" and the id VALUES never appear anywhere in the JSON', async () => {
+    const AGENT_SENTINEL = 'plugin-agent-never-leak-7c1d2e';
+    const TOOL_SENTINEL = 'plugin-tool-never-leak-3b9f0a';
+    configureWithKey({
+      ONDEMAND_SPATIAL_AGENT_ID: AGENT_SENTINEL,
+      ONDEMAND_SPATIAL_TOOL_ID: TOOL_SENTINEL,
+    });
+    activeStub = OK3();
+    const res = await runHealth('/api/ondemand/health?envNames=1');
+    assert.equal(res.statusCode, 200);
+    const raw = res.text();
+    // The pre-existing `plugins` map keys itself by the configured agent id
+    // (documented 2026-09-17 behaviour, `plugins.<id>: 'not probed'`), so
+    // the agent sentinel legitimately appears THERE and nowhere else; the
+    // tool id has no such consumer and must be absent from the whole body.
+    assert.equal(raw.includes(TOOL_SENTINEL), false);
+    const body = JSON.parse(raw);
+    assert.equal(body.config.spatialAgentId.source, 'env');
+    assert.equal(body.config.spatialAgentId.configured, true);
+    assert.equal(body.config.spatialToolId.source, 'env');
+    assert.equal(body.config.spatialToolId.configured, true);
+    assert.equal(JSON.stringify(body.config).includes(AGENT_SENTINEL), false);
+    assert.equal(JSON.stringify(body.config).includes(TOOL_SENTINEL), false);
+    assert.equal(body.env.sources.spatialAgentId, 'env');
+    assert.equal(body.env.sources.spatialToolId, 'env');
+    assert.ok(body.env.names.includes('ONDEMAND_SPATIAL_TOOL_ID'));
+  });
+
+  test('ids pasted into the registration pack (no env var) report source "registration-pack" and are still never echoed', async () => {
+    __setRegistrationPackForTests(FILLED_PACK);
+    configureWithKey();
+    activeStub = OK3();
+    const res = await runHealth();
+    const raw = res.text();
+    assert.equal(raw.includes('plugin-424242'), false);
+    assert.equal(raw.includes('plugin-111111'), false);
+    const body = JSON.parse(raw);
+    assert.equal(body.config.spatialAgentId.source, 'registration-pack');
+    assert.equal(body.config.spatialAgentId.configured, true);
+    assert.equal(body.config.spatialToolId.source, 'registration-pack');
+    assert.equal(body.config.spatialToolId.configured, true);
+    // pack ids do not feed the upstream default `pluginIds` (env opt-in only)
+    assert.deepEqual(body.plugins, {});
+  });
+
+  test('source is always one of env | registration-pack | unset, per row independently', async () => {
+    __setRegistrationPackForTests(FILLED_PACK);
+    configureWithKey({ ONDEMAND_SPATIAL_TOOL_ID: 'plugin-222222' });
+    activeStub = OK3();
+    const body = (await runHealth()).json();
+    assert.equal(body.config.spatialAgentId.source, 'registration-pack');
+    assert.equal(body.config.spatialToolId.source, 'env');
+    for (const row of ['spatialAgentId', 'spatialToolId']) {
+      assert.ok(['env', 'registration-pack', 'unset'].includes(body.config[row].source));
+    }
   });
 });
 
