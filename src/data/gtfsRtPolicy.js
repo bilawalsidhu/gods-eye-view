@@ -31,6 +31,32 @@ export const GTFS_RT_FEEDS = Object.freeze({
   'metro-mn': 'https://svc.metrotransit.org/mtgtfs/vehiclepositions.pb',
 });
 
+/**
+ * Approximate service-area bounding boxes for each GTFS-RT feed
+ * ({south, west, north, east} in degrees). Used by `syntheticTraffic.js`
+ * to decide when to spawn the TomTom-flow fallback vehicles: if the camera
+ * viewport (or the per-tile bounds) is covered by ANY feed's service area,
+ * the real feed is presumably the source of truth and synthetics stay
+ * silent there.
+ *
+ * Boxes are intentional looseness (≈ 30–60 km slack on each side) rather
+ * than exact transit authority boundaries: the cost of a missed real feed
+ * is high (we'd show synthetic cars where buses actually are), so we'd
+ * rather miss a synthetic opportunity at the fringe. These are not
+ * authoritative — they are "where this feed is plausibly the real source".
+ *
+ *   mbta     — Greater Boston / MBTA commuter rail reach.
+ *              Real feed spans MBTA bus + subway + commuter rail lines.
+ *   ovapi    — Netherlands nationwide (island of Bonaire excluded).
+ *   metro-mn — Twin Cities + suburbs.
+ * @type {{[feedId: string]: {south: number, west: number, north: number, east: number}}}
+ */
+export const GTFS_RT_SERVICE_BBOXES = Object.freeze({
+  'mbta':     { south: 41.6,  west: -71.7, north: 42.7,   east: -70.6  },
+  'ovapi':    { south: 50.7,  west:   3.4, north: 53.5,   east:   7.3  },
+  'metro-mn': { south: 44.5,  west: -94.0, north: 45.5,   east: -92.5  },
+});
+
 /** Public set of feed IDs the client may name. */
 export const GTFS_RT_FEED_IDS = Object.freeze(Object.keys(GTFS_RT_FEEDS));
 
@@ -68,4 +94,45 @@ export function isAllowedGtfsRtFeed(feedId) {
  */
 export function gtfsRtCacheControl() {
   return GTFS_RT_CACHE_CONTROL;
+}
+
+/**
+ * Does the named feed's service-area box cover the given rect? Pure
+ * degrees-vs-degrees — no dependency on Cesium — so it's safe for both
+ * the layer module (client) and any potential runtime-side filter.
+ *
+ * "Covers" here means intersection in BOTH axes (south<north, west<east);
+ * a feed whose box is disjoint is "not relevant" for the rect. The bbox
+ * entries are pre-validated by construction (south<north, west<east).
+ *
+ * @param {string} feedId - Feed id (`mbta`, `ovapi`, `metro-mn`).
+ * @param {{south: number, west: number, north: number, east: number}} rect - Target rectangle, degrees.
+ * @returns {boolean} True iff the feed's service area intersects the rect.
+ */
+export function gtfsRtFeedCoversRect(feedId, rect) {
+  if (!rect || !Number.isFinite(rect.south) || !Number.isFinite(rect.west)
+      || !Number.isFinite(rect.north) || !Number.isFinite(rect.east)) return false;
+  const box = GTFS_RT_SERVICE_BBOXES[feedId];
+  if (!box) return false;
+  if (rect.east <= rect.west || rect.north <= rect.south) return false;
+  if (rect.east <= box.west || box.east <= rect.west) return false;
+  if (rect.north <= box.south || box.north <= rect.south) return false;
+  return true;
+}
+
+/**
+ * True if ANY registered GTFS-RT feed's service area intersects the
+ * given rect. Used by `syntheticTraffic.js` to short-circuit
+ * ("no need to spawn fallback vehicles in Boston — the MBTA feed is the
+ * real source of truth here").
+ *
+ * @param {{south: number, west: number, north: number, east: number}} rect - Target rectangle, degrees.
+ * @returns {boolean} True if at least one feed covers the rect.
+ */
+export function gtfsRtAnyFeedCoversRect(rect) {
+  if (!rect) return false;
+  for (const feedId of GTFS_RT_FEED_IDS) {
+    if (gtfsRtFeedCoversRect(feedId, rect)) return true;
+  }
+  return false;
 }

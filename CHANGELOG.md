@@ -45,6 +45,21 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   hard cap so a future feed addition cannot silently blow the GPU budget.
   Attribution: MBTA, OVapi, Metro Transit developer feeds (3 credits added
   to `dataCredits.js`).
+- **Synthetic traffic vehicles (TomTom-flow fallback)**. A new
+  `syntheticTraffic` layer (`src/data/syntheticTraffic.js`) covers
+  viewports that no GTFS-RT feed serves — most of the world. It reads
+  the existing TomTom flow tiles via `fetchFlowForBounds()`, picks
+  strided eligible segments, and animates 1–3 phantom vehicles per
+  picked segment along the polyline via `CallbackProperty`. Speed is
+  scaled by `trafficLevel × road_type` (motorway ≈ 30 m/s free-flow,
+  residential ≈ 8 m/s), with a 0.05-floor so jams stay visible. The
+  layer is bbox-aware: when the camera viewport intersects any
+  registered GTFS-RT service area (`GTFS_RT_SERVICE_BBOXES` in
+  `gtfsRtPolicy.js`), the layer auto-suppresses so real buses don't
+  double up with synthetics. Camera altitude gate matches
+  transitVehicles (80 km enter / 100 km exit). Hard cap 350 phantoms
+  per refresh keeps the GPU budget honest. Attribution: the existing
+  dynamic `TOMTOM_CREDIT` is registered on first enable.
 
 ## [0.9.2] — 2026-09-18
 
