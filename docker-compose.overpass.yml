@@ -20,7 +20,12 @@
 services:
   overpass:
     image: wiktorn/overpass-api:latest
-    container_name: gev-overpass
+    # Parameterised so a second instance can be built alongside a working one —
+    # a planet import takes days, and destroying a serving regional database to
+    # start one leaves every Overpass-backed layer dead in the meantime. Run the
+    # new one under its own Compose project (-p) with its own name and port,
+    # then repoint OVERPASS_EXTRA_UPSTREAMS once it answers.
+    container_name: ${OVERPASS_CONTAINER_NAME:-gev-overpass}
     ports:
       - '${OVERPASS_LOCAL_PORT:-12345}:80'
 
