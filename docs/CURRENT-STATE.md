@@ -1,5 +1,11 @@
 # God's Eye View Current State
 
+Native `<select>` controls declare a dark colour scheme and explicit option
+colours, so the browser-painted option list matches the panel it drops out of.
+The scheme is declared on the controls rather than on the document root, so
+hand-tuned scrollbar and text-input skins are unchanged. Applies to the HUD
+layout, Scenes, CCTV camera, Radio filter and Draw colour menus.
+
 Vessel snapshot completeness is separate from freshness. A current snapshot with
 rejected or duplicate records shows PARTIAL with accepted/received counts; stale
 or unknown freshness and transport failures retain their warnings. Partial

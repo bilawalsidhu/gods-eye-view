@@ -1,5 +1,10 @@
 # Changelog
 
+- Render native `<select>` option lists in the dark UI palette. The closed
+  controls were already skinned, but the browser-painted popups fell back to the
+  platform light palette, leaving near-white option text on a white surface in
+  the HUD layout, Scenes, CCTV camera, Radio filter and Draw colour menus.
+
 - Distinguish PARTIAL vessel snapshots from STALE data in the layer panel, with
   accepted-record counts and unchanged retention, freshness and outage safeguards.
 
