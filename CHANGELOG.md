@@ -29,6 +29,23 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   capture. Policy lives in `src/sceneRenderScale.js` and is applied in
   `src/main.js` next to the existing tile-cache policy.
 
+### Data
+
+- **Transit vehicles (MBTA + OVapi + MetroMN)**. A new `transitVehicles`
+  layer polls keyless GTFS-Realtime `VehiclePositions.pb` feeds and renders
+  each vehicle as a route-coloured point primitive on the globe. A 200-LoC
+  hand-rolled protobuf decoder (`src/data/gtfsRtDecode.js`) reads the
+  GTFS-RT subset the layer needs (FeedMessage → entity[] → VehiclePosition →
+  trip/position/status/timestamp); the bundling trade-off (no
+  `gtfs-realtime-bindings` + `pbf` peer-dep) is documented in the file
+  header. The `/api/gtfsrt/<feedId>` proxy lives in both runtimes (Vite dev
+  middleware + Cloudflare Pages Function) with shared policy in
+  `src/data/gtfsRtPolicy.js` so they cannot drift. Camera altitude gate
+  (enter ≤ 80 km, exit ≥ 100 km) hides the layer from space. 5000-vehicle
+  hard cap so a future feed addition cannot silently blow the GPU budget.
+  Attribution: MBTA, OVapi, Metro Transit developer feeds (3 credits added
+  to `dataCredits.js`).
+
 ## [0.9.2] — 2026-09-18
 
 ### QA
