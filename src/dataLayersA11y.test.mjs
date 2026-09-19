@@ -19,6 +19,7 @@ const read = (relative) =>
 const radioCss = read('./ui/styles/radio.css');
 const layersCss = read('./ui/styles/layers.css');
 const controlsCss = read('./ui/styles/controls.css');
+const locationCss = read('./ui/styles/location.css');
 const foundationCss = read('./ui/styles/foundation.css');
 const layerPanelSource = read('./ui/layerPanel.js');
 const hudSource = read('./hud.js');
@@ -163,6 +164,13 @@ test('DISPLAY toggle icons and panel collapse icons carry a readable colour of t
     block(controlsCss, '.panel-collapse-btn'),
     /color:\s*var\(--text-readable-dim\)/,
   );
+  // LOCATION tray search toggle and the TR-3B reclassify chip host inline
+  // icons too — both must name an ink instead of inheriting buttontext.
+  assert.match(
+    block(locationCss, '.search-toggle-btn'),
+    /color:\s*var\(--text-secondary\)/,
+  );
+  assert.match(block(layersCss, '.tr3b-toggle'), /\bcolor:\s*rgba\(/);
 });
 
 // ── Live region (SC 4.1.3) ───────────────────────────────────────────────────
