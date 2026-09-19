@@ -132,6 +132,26 @@ export const DATA_CREDITS = [
     html: 'Bikeshare availability: GBFS operator feeds (e.g. Austin BCycle)',
   },
   {
+    key: 'gtfs-realtime-mbta',
+    html:
+      'Live transit vehicles (Boston): GTFS-Realtime VehiclePositions feed, ' +
+      '<a href="https://www.mbta.com/developers/gtfs" target="_blank" rel="noopener">MBTA</a> ' +
+      '(developer terms; refresh every ~10s)',
+  },
+  {
+    key: 'gtfs-realtime-ovapi',
+    html:
+      'Live transit vehicles (Netherlands): GTFS-Realtime VehiclePositions feed, ' +
+      '<a href="https://gtfs.ovapi.nl/" target="_blank" rel="noopener">OVapi</a> ' +
+      '(open data)',
+  },
+  {
+    key: 'gtfs-realtime-metro-mn',
+    html:
+      'Live transit vehicles (Twin Cities): GTFS-Realtime VehiclePositions feed, ' +
+      '<a href="https://www.metrotransit.org/data-products" target="_blank" rel="noopener">Metro Transit</a>',
+  },
+  {
     key: 'radio-browser',
     html:
       'Internet-radio station directory: ' +

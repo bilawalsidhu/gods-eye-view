@@ -28,6 +28,7 @@
  *  20. Google Places context                                      → proxies/google-places.js
  *  21. Session-analytics acknowledge                              → proxies/analytics.js
  *  22. Keyless geocode — OpenStreetMap Nominatim                  → proxies/geocode.js
+ *  23. Keyless GTFS-RT — VehiclePositions.pb feeds (MBTA/OVapi/MetroMN) → proxies/gtfsrt.js
  *
  * Shared infrastructure (rate limiters, same-site gates, capped readers,
  * OpenSky OAuth) lives in `vite/proxies/_shared.js`.
@@ -52,6 +53,7 @@ import { cctvProxy } from './vite/proxies/cctv.js';
 import { firmsProxy } from './vite/proxies/firms.js';
 import { gbfsProxy } from './vite/proxies/gbfs.js';
 import { geocodeProxy } from './vite/proxies/geocode.js';
+import { gtfsRtProxy } from './vite/proxies/gtfsrt.js';
 import { googlePlacesContextProxy } from './vite/proxies/google-places.js';
 import { militaryInstallationsProxy } from './vite/proxies/military-installations.js';
 import { openAiRealtimeProxy } from './vite/proxies/realtime.js';
@@ -100,6 +102,7 @@ export default defineConfig(({ mode }) => {
       openZenithProxy(),
       overpassProxy(),
       geocodeProxy(),
+      gtfsRtProxy(),
       militaryInstallationsProxy(),
       regionalBriefProxy(),
       weatherEffectsProxy(),

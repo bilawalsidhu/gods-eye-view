@@ -41,6 +41,7 @@ const DEV_API_BASE = ''; // Relative URLs — Vite dev server proxy handles rout
  * @property {string} militaryInstallations — Military installations
  * @property {string} regionalBrief  — Regional briefing
  * @property {string} geocode        — Keyless Nominatim geocode
+ * @property {string} gtfsRt        — Keyless GTFS-RT transit vehicle feeds
  */
 
 /**
@@ -91,6 +92,7 @@ const apiEndpoints = {
   militaryInstallations: `${API_BASE}/api/military-installations`,
   regionalBrief:    `${API_BASE}/api/regional-brief`,
   geocode:          `${API_BASE}/api/geocode`,
+  gtfsRt:           `${API_BASE}/api/gtfsrt`,
 };
 
 /**
@@ -201,6 +203,15 @@ export const api = {
    * @returns {string} Proxy URL with the upstream URL encoded as one segment.
    */
   gbfs: (upstreamUrl) => `${apiEndpoints.gbfs}/${encodeURIComponent(upstreamUrl)}`,
+
+  /**
+   * GTFS-Realtime VehiclePositions.pb feed by registry key.
+   * The feed registry (mbta, ovapi, metro-mn) lives in `src/data/gtfsRtPolicy.js`
+   * and is mirrored on the server, so the client only ever names a feed by id.
+   * @param {string} feedId - One of `GTFS_RT_FEED_IDS`.
+   * @returns {string} Proxy URL `/api/gtfsrt/<feedId>`.
+   */
+  gtfsRt: (feedId) => `${apiEndpoints.gtfsRt}/${encodeURIComponent(feedId)}`,
 
   // ── Map data ──────────────────────────────────────────────────────────
   /**

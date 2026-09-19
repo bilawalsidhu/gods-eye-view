@@ -52,6 +52,7 @@ const BUILDER_CALLS = [
   ['realtimeDebugLog', () => api.realtimeDebugLog()],
   ['hudSummary', () => api.hudSummary()],
   ['analytics', () => api.analytics()],
+  ['gtfsRt', () => api.gtfsRt('mbta')],
 ];
 
 /** Second path segment after /api — the routing bucket both runtimes key on. */
@@ -153,6 +154,7 @@ test('every builder emits the exact byte-for-byte URL its call site used to comp
     realtimeDebugLog: '/api/realtime/debug-log',
     hudSummary: '/api/openai/hud-summary',
     analytics: '/api/analytics',
+    gtfsRt: '/api/gtfsrt/mbta',
   };
   for (const [name, call] of BUILDER_CALLS) {
     assert.equal(call(), expected[name], `builder ${name} drifted from its client contract`);
@@ -176,6 +178,7 @@ test('base roots keep their exact production paths', () => {
   assert.equal(apiEndpoints.militaryInstallations, '/api/military-installations');
   assert.equal(apiEndpoints.regionalBrief, '/api/regional-brief');
   assert.equal(apiEndpoints.geocode, '/api/geocode');
+  assert.equal(apiEndpoints.gtfsRt, '/api/gtfsrt');
   assert.equal(Object.getPrototypeOf(apiEndpoints), Object.prototype, 'no surprise prototype');
 });
 
