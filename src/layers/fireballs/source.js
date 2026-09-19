@@ -9,7 +9,8 @@ export function createFireballSource({
     async getSnapshot({ signal } = {}) {
       signal?.throwIfAborted();
       const response = await fetchImpl(apiUrl, { signal });
-      if (!response.ok) throw new Error(`Fireball proxy HTTP ${response.status}`);
+      if (!response.ok)
+        throw new Error(`Fireball proxy HTTP ${response.status}`);
       const payload = await response.json();
       signal?.throwIfAborted();
       const rows = normalizeFireballSnapshot(payload);

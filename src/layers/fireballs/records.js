@@ -19,13 +19,22 @@ function signedCoordinate(magnitude, dir, positiveDir) {
   const value = Number(magnitude);
   if (!Number.isFinite(value)) return null;
   const normalizedDir = typeof dir === 'string' ? dir.trim().toUpperCase() : '';
-  if (normalizedDir !== positiveDir && normalizedDir !== oppositeDir(positiveDir))
+  if (
+    normalizedDir !== positiveDir &&
+    normalizedDir !== oppositeDir(positiveDir)
+  )
     return null;
   return normalizedDir === positiveDir ? value : -value;
 }
 
 function oppositeDir(positiveDir) {
-  return positiveDir === 'N' ? 'S' : positiveDir === 'S' ? 'N' : positiveDir === 'E' ? 'W' : 'E';
+  return positiveDir === 'N'
+    ? 'S'
+    : positiveDir === 'S'
+      ? 'N'
+      : positiveDir === 'E'
+        ? 'W'
+        : 'E';
 }
 
 /** Parse "YYYY-MM-DD HH:MM:SS" (UTC, per the API docs) into epoch ms. */

@@ -278,6 +278,18 @@ and snapshot source. The standalone adapter keeps the existing USGS daily feed,
 M2.5+ filtering, static discs, magnitude labels and analyst records. Disabling or
 destroying the layer cancels pending work and ignores late results.
 
+Fireball rendering is exposed through `./layers/fireballs`, with the same
+source/record/model/layer split as earthquakes. `src/layers/fireballs/source.js`
+reads `/api/fireballs`, a server-side proxy for NASA/JPL's Fireball and Bolide
+Data API (the upstream sends no CORS headers) with a 30 min memory + disk cache,
+single-flight refresh and serve-stale on upstream failure. `records.js` builds its
+column index from the response `fields` header, signs coordinates from the N/S/E/W
+columns and treats `null` altitude/velocity as unknown rather than zero. Markers are
+static ground-clamped discs plus a point, colored and sized by approximate impact
+energy (kt TNT); labels flow through the shared overlay host. Malformed snapshots
+preserve the last good entities, overlays, count and timestamp. The layer id is
+`fireballs` (share token `k`, Events panel group).
+
 ## Vessel components and sources
 
 `src/data/aisLiveVessels.js` assembles `createVesselLayer` from the
@@ -2503,6 +2515,7 @@ its criteria cannot be silently ignored.
 | Live AIS Vessels 🚢 | AISStream websocket | `src/data/aisLiveVessels.js` | `/api/ais-live` | 60s (+800ms visibility pass) |
 | Mapped Installations ⌖ | OpenStreetMap mapped context; on-demand Google Maps Places supplement | `src/data/militaryInstallations.js` | `/api/military-installations`, `/api/google/text-search` | viewport-driven + user search; while unavailable, auto-retry 30 s → 240 s backoff |
 | Earthquakes | USGS | `src/data/earthquakes.js` | — | 60s |
+| Fireballs ☄️ | NASA/JPL CNEOS Fireball and Bolide Data API | `src/data/fireballs.js` | `/api/fireballs` | 5 min (proxy cache 30 min) |
 | Satellites | CelesTrak | `src/data/satellites.js` | `/api/celestrak` | 120s |
 | Space Missions (30d) | Launch Library 2 + CelesTrak | `src/data/rocketLaunches.js` | `/api/launches` + `/api/celestrak/active` | 5 min |
 | Traffic | OSM Overpass (+ optional TomTom live flow) | `src/data/traffic.js` | `/api/overpass` + `/api/tomtom` | viewport-driven |

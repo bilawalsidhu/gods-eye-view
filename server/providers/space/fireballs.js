@@ -79,7 +79,8 @@ export function fireballsProxy() {
       throw error;
     }
     const parsed = JSON.parse(body);
-    if (!Array.isArray(parsed?.data)) throw new Error('malformed upstream response');
+    if (!Array.isArray(parsed?.data))
+      throw new Error('malformed upstream response');
     const fresh = { at: Date.now(), body };
     cache = fresh;
     void saveDiskCache(fresh);
