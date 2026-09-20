@@ -118,6 +118,13 @@ button > .od-icon:first-child:not(:only-child) {
   --od-icon-size: 16px;
 }
 
+/* Clear-layers (#top-center-actions): explicit 18px pin matching the row's
+   default (src/brand/tokens.css --od-icon-size), independent of the
+   neighbouring .share-icon's 16px override. */
+.od-icon--layers-minus {
+  --od-icon-size: 18px;
+}
+
 .military-awareness-direction-arrow {
   --od-icon-size: 23px;
 }

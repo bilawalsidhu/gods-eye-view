@@ -521,6 +521,16 @@
       ]
     },
     {
+      "name": "layers-minus",
+      "replaces": "layers_clear (Material Symbols Outlined ligature)",
+      "usage": [
+        "Top-centre actions › Clear selected data layers (src/ui/templates/scene-chrome.html)"
+      ],
+      "slots": [
+        "scene.clear-layers"
+      ]
+    },
+    {
       "name": "tv",
       "replaces": "▦ U+25A6",
       "usage": [

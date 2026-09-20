@@ -316,7 +316,47 @@ The same sweep found the 33 icons inlined verbatim in `src/ui/templates/*.html` 
 | `×` U+00D7 | "1×" replay speed, "×3" payload counts | Multiplication sign in numeric text. Close-button `×` glyphs were replaced (§3.1). |
 | `→ ↔ ⇒ ∓ ≈ ≤ ≥ −` | Code comments and log strings | Prose punctuation; none is rendered as an icon. |
 | `— · …` | UI copy separators ("UNAVAILABLE · CelesTrak", "—" for no count) | Typography, not iconography. |
-| Material Symbols Outlined ligatures (`radar`, `flight`, `chevron_left`, …) | Cockpit / context panels, `index.html` font subset | An existing outline icon *font*, not an emoji or text glyph; out of this change's scope. Migrating those 34 glyph names to the same Lucide set is the natural follow-up and would remove the Google Fonts request. |
+| Material Symbols Outlined ligatures (`radar`, `flight`, `chevron_left`, …) | Cockpit / context panels, `index.html` font subset | An existing outline icon *font*, not an emoji or text glyph; out of this change's scope except for `layers_clear`, migrated below. Migrating the remaining ~34 glyph names to the same Lucide set is the natural follow-up and would remove the Google Fonts request. |
+
+## 2026-09-20 Addendum — Clear-layers control migrated off Material Symbols
+
+| Field | Value |
+|---|---|
+| Site | `src/ui/templates/scene-chrome.html` → `#clear-selected-layers` (`#top-center-actions`, "Clear selected data layers") |
+| Replaced | `layers_clear` (Material Symbols Outlined ligature) |
+| With | Lucide `layers-minus` (`node_modules/lucide-static` **1.47.0**, ISC) |
+| Size / stroke | 18×18 CSS px, `stroke-width="1.75"` (`.od-icon--layers-minus`, `src/ui/styles/icons.css`) |
+| Manifest | `src/ui/icons/lucide-manifest.json` → `layers-minus` (slot `scene.clear-layers`) |
+| Font subset | `layers_clear` dropped from `icon_names=` in `index.html`; the Material Symbols `<link>` and `.material-symbols-outlined` CSS stay — 61 other ligature usages across 16 files still need them (below) |
+| Guard | `src/iconGlyphBoundary.test.mjs` gained `findMaterialSymbolsUsages()`, a test pinning the table below as a LEGACY allowlist (a count may fall, never rise; no file outside it may use the font; `layer-panels.html`/`layerPanel.js` stay at zero), and a self-test of the detector |
+
+`scene-chrome.html` keeps 3 *other*, pre-existing Material Symbols icons in the same `#top-center-actions` nav (`view_in_ar`, `navigation`, `public` — tilt / north-up / reset-globe) that are not data-layers controls and are out of this change's scope; only `layers_clear` was migrated there.
+
+#### Remaining Material Symbols inventory (measured 2026-09-20, right after this migration)
+
+| File | Count |
+|---|---|
+| `index.html` | 1 |
+| `src/celestialRing.js` | 2 |
+| `src/ui/cockpitLayout.js` | 2 |
+| `src/ui/cockpitSignals.js` | 1 |
+| `src/ui/styles/layers.css` | 4 |
+| `src/ui/styles/status.css` | 1 |
+| `src/ui/styles/first-run.css` | 1 |
+| `src/ui/styles/controls.css` | 1 |
+| `src/ui/styles/cockpit.css` | 8 |
+| `src/ui/styles/provider-settings.css` | 2 |
+| `src/ui/templates/cockpit.html` | 16 |
+| `src/ui/templates/scene-chrome.html` | 3 |
+| `src/ui/templates/display-controls.html` | 3 |
+| `src/ui/templates/context.html` | 6 |
+| `src/ui/templates/welcome.html` | 8 |
+| `src/ui/templates/provider-settings.html` | 2 |
+| **Total** | **61** |
+
+Counted by `findMaterialSymbolsUsages()` (`src/iconGlyphBoundary.test.mjs`): one hit per line carrying a `material-symbols-outlined` / `material-symbols` / `material-icons` class token, the Google Fonts `Material+Symbols` link, or an `@font-face` naming it. `src/ui/templates/layer-panels.html` and `src/ui/layerPanel.js` are confirmed at 0. This table is now pinned by that guard; a future per-surface migration lowers its row, never raises it.
+
+Note on the sync run: the icon set was regenerated with the pinned pipeline (`node scripts/sync-lucide-icons.mjs`, SVGO 4.0.0 via npx, 2026-09-20T07:31:46Z). All 57 previously committed icon files are byte-identical to their 2026-09-19 versions (their `retrievedAt` stamps in `icons.json` are unchanged); the only additions are `public/brand/icons/layers-minus.svg`, the `scene.clear-layers` slot in `icons.json` and the `layers-minus` entry in `lucideIcons.generated.js`.
 
 ## 6. Guard
 

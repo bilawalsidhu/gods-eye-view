@@ -4,7 +4,7 @@
   "version": "1.47.0",
   "license": "ISC",
   "source": "https://github.com/lucide-icons/lucide",
-  "retrievedAt": "2026-09-19T05:10:13Z",
+  "retrievedAt": "2026-09-20T07:31:46Z",
   "slots": {
     "satellites": {
       "file": "public/brand/icons/satellite.svg",
@@ -698,6 +698,15 @@
       "retrievedAt": "2026-09-19T05:10:13Z",
       "replaces": "🔗 &#x1F517;",
       "sha256": "7a3eae0d64c10d8f2e33a26c18fbe9517a69dc69b5be4f7c86bf63acf2edcdbc"
+    },
+    "scene.clear-layers": {
+      "file": "public/brand/icons/layers-minus.svg",
+      "iconName": "layers-minus",
+      "sourceUrl": "https://unpkg.com/lucide-static@1.47.0/icons/layers-minus.svg",
+      "license": "ISC",
+      "retrievedAt": "2026-09-20T07:31:46Z",
+      "replaces": "layers_clear (Material Symbols Outlined ligature)",
+      "sha256": "86a94419ea5451129b8204d500e63f333b9e0857b67ea0973f6155a0b9c5e264"
     },
     "preset.retro": {
       "file": "public/brand/icons/tv.svg",

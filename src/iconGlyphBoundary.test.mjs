@@ -710,3 +710,168 @@ test('an icon chip (Directions SWAP) renders an inline <svg> with an accessible 
   }
 });
 
+// ── Material Symbols ligature guard (docs/brand/ICON_SOURCE.md) ────────────
+// `layers_clear` (top-centre "Clear selected data layers") migrated to the
+// Lucide `layers-minus` icon on 2026-09-20. The cockpit/context/display/
+// provider/welcome surfaces (plus a few JS/CSS files) still render Material
+// Symbols; this pins their usage so it can only shrink as each surface
+// migrates to Lucide, never grow, and so no new file starts using the font.
+
+/**
+ * Every Material Symbols ligature-font usage in `text`, one entry per
+ * matching line: an HTML/SVG element whose `class` carries
+ * `material-symbols-outlined`, `material-symbols` or `material-icons`
+ * (captures the ligature name as its text content), a Google Fonts
+ * `Material+Symbols` stylesheet link, an `@font-face` naming "Material
+ * Symbols", or a bare reference to one of those class tokens (a CSS
+ * selector, or a JS class string / `querySelector` argument).
+ */
+export function findMaterialSymbolsUsages(text) {
+  const CLASS_TOKEN = /material-(?:symbols(?:-outlined)?|icons)/;
+  const ELEMENT =
+    /<([a-zA-Z][\w-]*)\b[^>]*\bclass="[^"]*\bmaterial-(?:symbols(?:-outlined)?|icons)\b[^"]*"[^>]*>([^<]*)/;
+  const FONT_LINK = /fonts\.googleapis\.com\/css2\?family=Material\+Symbols/;
+  const FONT_FACE_FAMILY = /Material\s*Symbols/;
+  const hits = [];
+  let inFontFace = false;
+  text.split('\n').forEach((line, index) => {
+    const lineNo = index + 1;
+    if (/@font-face/.test(line)) inFontFace = true;
+    if (inFontFace && FONT_FACE_FAMILY.test(line)) {
+      hits.push({ line: lineNo, kind: 'font-face', detail: line.trim() });
+      inFontFace = false;
+      return;
+    }
+    if (line.includes('}')) inFontFace = false;
+    const element = ELEMENT.exec(line);
+    if (element) {
+      const glyph = element[2].trim();
+      hits.push({
+        line: lineNo,
+        kind: 'element',
+        detail: glyph ? `<${element[1]}> "${glyph}"` : `<${element[1]}>`,
+      });
+      return;
+    }
+    if (FONT_LINK.test(line)) {
+      hits.push({ line: lineNo, kind: 'font-link', detail: line.trim() });
+      return;
+    }
+    if (CLASS_TOKEN.test(line))
+      hits.push({ line: lineNo, kind: 'reference', detail: line.trim() });
+  });
+  return hits;
+}
+
+/**
+ * file (repo-relative, POSIX separators) -> pinned Material Symbols usage
+ * count, measured 2026-09-20 immediately after the clear-layers migration.
+ * These are the not-yet-migrated cockpit/context/display/provider/welcome
+ * surfaces (docs/brand/ICON_SOURCE.md). A count may only decrease as a
+ * surface migrates to Lucide, never increase, and no file outside this list
+ * may carry a usage at all.
+ */
+const MATERIAL_SYMBOLS_LEGACY_ALLOWLIST = Object.freeze({
+  'index.html': 1,
+  'src/celestialRing.js': 2,
+  'src/ui/cockpitLayout.js': 2,
+  'src/ui/cockpitSignals.js': 1,
+  'src/ui/styles/layers.css': 4,
+  'src/ui/styles/status.css': 1,
+  'src/ui/styles/first-run.css': 1,
+  'src/ui/styles/controls.css': 1,
+  'src/ui/styles/cockpit.css': 8,
+  'src/ui/styles/provider-settings.css': 2,
+  'src/ui/templates/cockpit.html': 16,
+  'src/ui/templates/scene-chrome.html': 3,
+  'src/ui/templates/display-controls.html': 3,
+  'src/ui/templates/context.html': 6,
+  'src/ui/templates/welcome.html': 8,
+  'src/ui/templates/provider-settings.html': 2,
+});
+
+test('findMaterialSymbolsUsages catches ligature markup, the font link and @font-face, and ignores Lucide SVGs', () => {
+  const span = findMaterialSymbolsUsages(
+    '<span class="material-symbols-outlined" aria-hidden="true">layers_clear</span>',
+  );
+  assert.equal(span.length, 1);
+  assert.equal(span[0].kind, 'element');
+  assert.match(span[0].detail, /layers_clear/);
+
+  const link = findMaterialSymbolsUsages(
+    '<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,400,0,0&icon_names=close" rel="stylesheet" />',
+  );
+  assert.equal(link.length, 1);
+  assert.equal(link[0].kind, 'font-link');
+
+  const fontFace = findMaterialSymbolsUsages(
+    "@font-face {\n  font-family: 'Material Symbols Outlined';\n  src: url(fake.woff2);\n}\n",
+  );
+  assert.equal(fontFace.length, 1);
+  assert.equal(fontFace[0].kind, 'font-face');
+
+  const lucide = findMaterialSymbolsUsages(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" data-icon="layers-minus" class="od-icon od-icon--layers-minus" aria-hidden="true" focusable="false"><path d="M16 17h6"/></svg>',
+  );
+  assert.deepEqual(lucide, []);
+});
+
+test('Material Symbols usage is confined to the pinned legacy allowlist; layer-panels.html and layerPanel.js have none', () => {
+  const strictlyZero = [
+    'src/ui/templates/layer-panels.html',
+    'src/ui/layerPanel.js',
+  ];
+  const counts = {};
+  for (const file of uiSourceFiles()) {
+    const relative = path.relative(REPO_ROOT, file).split(path.sep).join('/');
+    const hits = findMaterialSymbolsUsages(readFileSync(file, 'utf8'));
+    if (hits.length) counts[relative] = hits.length;
+  }
+
+  for (const file of strictlyZero)
+    assert.equal(
+      counts[file] || 0,
+      0,
+      `${file} must not use the Material Symbols ligature font`,
+    );
+
+  // The clear-layers control itself is migrated, even though scene-chrome.html
+  // keeps 3 other, unrelated Material Symbols icons in the same nav (pinned
+  // in the allowlist below, docs/brand/ICON_SOURCE.md).
+  const sceneChrome = readFileSync(
+    path.join(REPO_ROOT, 'src/ui/templates/scene-chrome.html'),
+    'utf8',
+  );
+  assert.doesNotMatch(
+    sceneChrome,
+    /layers_clear/,
+    'clear-layers must not use the layers_clear ligature',
+  );
+  assert.match(
+    sceneChrome,
+    /<svg[^>]*\bdata-icon="layers-minus"/,
+    'clear-layers must render the inline layers-minus icon',
+  );
+
+  const unexpected = Object.keys(counts).filter(
+    (file) => !(file in MATERIAL_SYMBOLS_LEGACY_ALLOWLIST),
+  );
+  assert.deepEqual(
+    unexpected,
+    [],
+    `Material Symbols usage outside the pinned legacy allowlist (docs/brand/ICON_SOURCE.md): ${unexpected.join(', ')}`,
+  );
+
+  const regressed = Object.entries(counts)
+    .filter(([file, count]) => count > (MATERIAL_SYMBOLS_LEGACY_ALLOWLIST[file] ?? 0))
+    .map(
+      ([file, count]) =>
+        `${file}: ${count} > ${MATERIAL_SYMBOLS_LEGACY_ALLOWLIST[file]}`,
+    );
+  assert.deepEqual(
+    regressed,
+    [],
+    'Material Symbols usage regressed above its pinned count',
+  );
+});
+
