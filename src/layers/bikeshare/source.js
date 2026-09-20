@@ -1,3 +1,4 @@
+import { withBase } from '../../services/apiBase.js';
 /** Read a GBFS station document through the existing bounded server proxy. */
 export function createBikeshareSource({
   fetchImpl = (...args) => globalThis.fetch(...args),
@@ -9,7 +10,7 @@ export function createBikeshareSource({
         throw new TypeError('A public HTTPS GBFS URL is required');
       signal?.throwIfAborted();
       const response = await fetchImpl(
-        '/api/gbfs/' + encodeURIComponent(url.href),
+        withBase('/api/gbfs/' + encodeURIComponent(url.href)),
         { method: 'GET', headers: { Accept: 'application/json' }, signal },
       );
       if (!response.ok) throw new Error('GBFS HTTP ' + response.status);

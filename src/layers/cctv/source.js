@@ -1,3 +1,4 @@
+import { withBase } from '../../services/apiBase.js';
 import {
   ACTIVE_FRAME_REFRESH_MS,
   FRAME_ENDPOINT,
@@ -44,10 +45,10 @@ export function createCctvSource({
   }
   return {
     getCatalog(options) {
-      return read('/api/cctv/sources', 'sources', options);
+      return read(withBase('/api/cctv/sources'), 'sources', options);
     },
     getHealth(options) {
-      return read('/api/cctv/health', 'cameras', options);
+      return read(withBase('/api/cctv/health'), 'cameras', options);
     },
     getFrameUrl: frameUrlFor,
     getMediaUrl: mediaUrlFor,

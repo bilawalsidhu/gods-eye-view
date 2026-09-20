@@ -1,3 +1,4 @@
+import { withBase } from '../../services/apiBase.js';
 /**
  * @module layers/directions
  * @description Keyless A→B directions on the globe: drive, walk or cycle.
@@ -454,7 +455,7 @@ export function createDirectionsStepOverlayEntry(index, position, copy) {
  */
 export function directionsRequestUrl(mode, a, b) {
   const coords = `${a.lon.toFixed(6)},${a.lat.toFixed(6)};${b.lon.toFixed(6)},${b.lat.toFixed(6)}`;
-  return `/api/route?profile=${encodeURIComponent(mode)}&coords=${encodeURIComponent(coords)}&steps=1`;
+  return `${withBase('/api/route')}?profile=${encodeURIComponent(mode)}&coords=${encodeURIComponent(coords)}&steps=1`;
 }
 
 /**

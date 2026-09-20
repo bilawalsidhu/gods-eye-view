@@ -1,3 +1,4 @@
+import { withBase } from '../../services/apiBase.js';
 import { DIRECTORY_ENDPOINT, RADIO_UUID_RE } from './policy.js';
 
 /** Supply directory metadata and click reporting; audio stays with the broadcaster. */
@@ -19,7 +20,7 @@ export function createRadioSource({
         throw new Error('Invalid radio station id');
       signal?.throwIfAborted();
       const response = await fetchImpl(
-        `/api/radio/click/${encodeURIComponent(id)}`,
+        `${withBase('/api/radio/click')}/${encodeURIComponent(id)}`,
         {
           method: 'POST',
           signal,

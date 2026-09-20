@@ -22,14 +22,17 @@ test('explicit build inputs preserve browser-only defines, plugin order and loop
   ]);
   assert.ok(config.server.fs.deny.includes('**/ENVIRONMENT'));
   assert.ok(config.server.fs.deny.includes('.env.*'));
-  assert.equal(config.server.headers['X-Frame-Options'], 'DENY');
+  // Same-origin framing only — NADI embeds this app under /gods-eye/.
+  assert.equal(config.server.headers['X-Frame-Options'], 'SAMEORIGIN');
   assert.equal(
     config.server.headers['Content-Security-Policy'],
-    "frame-ancestors 'none'",
+    "frame-ancestors 'self'",
   );
+  assert.equal(config.base, '/');
   assert.deepEqual(config.define, {
     'import.meta.env.GOOGLE_MAPS_API_KEY': '"browser-fixture"',
     'import.meta.env.CESIUM_ION_TOKEN': '"ion-fixture"',
+    __GEV_BASE__: '"/"',
   });
   assert.equal(
     createBrowserViteConfig({ host: '0.0.0.0', port: '4800' }).server
@@ -40,6 +43,9 @@ test('explicit build inputs preserve browser-only defines, plugin order and loop
     createBrowserViteConfig({ host: '::', port: '4800' }).server.port,
     4800,
   );
+  const based = createBrowserViteConfig({ base: '/gods-eye/' });
+  assert.equal(based.base, '/gods-eye/');
+  assert.equal(based.define.__GEV_BASE__, '"/gods-eye/"');
 });
 
 test('build helper does not discover environment values or construct local providers', () => {
@@ -68,6 +74,15 @@ test('root config retains existing named exports and standalone provider order',
   );
   assert.equal(config.plugins.at(-2).name, 'gev-key-setup');
   assert.equal(config.plugins.at(-1).name, 'api-not-found');
+  assert.equal(config.base, '/');
+  const beforeBase = process.env.GEV_BASE_PATH;
+  process.env.GEV_BASE_PATH = '/gods-eye/';
+  try {
+    assert.equal(standaloneConfig({ mode: 'test' }).base, '/gods-eye/');
+  } finally {
+    if (beforeBase === undefined) delete process.env.GEV_BASE_PATH;
+    else process.env.GEV_BASE_PATH = beforeBase;
+  }
 });
 
 test('build export resolves in Node and has no browser fallback', async () => {

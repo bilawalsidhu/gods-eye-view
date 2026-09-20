@@ -1,3 +1,4 @@
+import { withBase } from '../services/apiBase.js';
 import { validCoordinate } from './geospatial.js';
 
 function labels(values) {
@@ -54,9 +55,9 @@ export function createHttpGeospatialProvider({
 } = {}) {
   const urls = {
     reverse: 'https://maps.googleapis.com/maps/api/geocode/json',
-    textSearch: '/api/google/text-search',
-    nearby: '/api/google/nearby-places',
-    route: '/api/route',
+    textSearch: withBase('/api/google/text-search'),
+    nearby: withBase('/api/google/nearby-places'),
+    route: withBase('/api/route'),
     ...endpoints,
   };
   async function json(endpoint, params, { signal } = {}) {

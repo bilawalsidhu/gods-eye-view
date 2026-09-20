@@ -1,3 +1,4 @@
+import { withBase } from '../../services/apiBase.js';
 import * as Cesium from 'cesium';
 
 /**
@@ -29,7 +30,7 @@ import * as Cesium from 'cesium';
 
 /** @const {string} Proxy endpoint for Overpass API queries */
 
-export const OVERPASS_URL = '/api/overpass';
+export const OVERPASS_URL = withBase('/api/overpass');
 
 /** @const {number} Meters — hide all traffic dots above this camera altitude */
 

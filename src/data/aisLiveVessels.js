@@ -1,10 +1,11 @@
+import { withBase } from '../services/apiBase.js';
 import { createApplicationVessels } from '../app/layers/aisLiveVessels.js';
 
 import { createAisStreamSource } from '../sources/live/standalone.js';
 
 const aisLiveVesselsLayer = createApplicationVessels({
   source: createAisStreamSource({
-    apiUrl: import.meta.env?.VITE_AIS_LIVE_API_URL || '/api/ais-live',
+    apiUrl: import.meta.env?.VITE_AIS_LIVE_API_URL || withBase('/api/ais-live'),
   }),
   options: {
     maxRows: import.meta.env?.VITE_AIS_LIVE_MAX_ROWS,

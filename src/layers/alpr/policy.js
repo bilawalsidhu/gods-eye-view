@@ -1,3 +1,4 @@
+import { withBase } from '../../services/apiBase.js';
 /**
  * @file Community-mapped automatic license plate reader (ALPR) camera layer.
  *
@@ -18,7 +19,7 @@
 
 export const LAYER_ID = 'alpr-cameras';
 
-export const OVERPASS_URL = '/api/overpass';
+export const OVERPASS_URL = withBase('/api/overpass');
 
 export const REQUEST_DEBOUNCE_MS = 500;
 

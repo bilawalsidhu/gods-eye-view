@@ -1,8 +1,9 @@
+import { withBase } from '../services/apiBase.js';
 import { DEFAULT_VOICE_TIER, resolveVoiceModel } from './voiceCost.js';
 
 /** Realtime-compatible token and SDP requests, independent of microphone/UI ownership. */
 export function createRealtimeBackend({
-  tokenEndpoint = '/api/realtime/token',
+  tokenEndpoint = withBase('/api/realtime/token'),
   callsEndpoint = 'https://api.openai.com/v1/realtime/calls',
   tokenTransport = (...args) => fetch(...args),
   connectionTransport = (...args) => fetch(...args),

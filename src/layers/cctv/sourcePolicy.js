@@ -1,9 +1,11 @@
-export const FRAME_ENDPOINT = '/api/cctv/frame';
+import { withBase } from '../../services/apiBase.js';
 
-export const SOURCE_ENDPOINT = '/api/cctv/sources';
+export const FRAME_ENDPOINT = withBase('/api/cctv/frame');
 
-export const HEALTH_ENDPOINT = '/api/cctv/health';
+export const SOURCE_ENDPOINT = withBase('/api/cctv/sources');
 
-export const MEDIA_ENDPOINT = '/api/cctv/media';
+export const HEALTH_ENDPOINT = withBase('/api/cctv/health');
+
+export const MEDIA_ENDPOINT = withBase('/api/cctv/media');
 
 export const ACTIVE_FRAME_REFRESH_MS = 10000;

@@ -1,3 +1,4 @@
+import { withBase } from '../../services/apiBase.js';
 import { CITY_BY_ID } from './registry.js';
 
 export function createIngestion({
@@ -14,7 +15,7 @@ export function createIngestion({
    */
 
   function toProxyUrl(upstreamUrl) {
-    return `/api/gbfs/${encodeURIComponent(upstreamUrl)}`;
+    return `${withBase('/api/gbfs')}/${encodeURIComponent(upstreamUrl)}`;
   }
 
   /** Increment the loading reference count and mark loading state active. */

@@ -1,6 +1,7 @@
+import { withBase } from '../../services/apiBase.js';
 export const RADIO_PREFIX = 'radio:';
 
-export const DIRECTORY_ENDPOINT = '/api/radio/stations';
+export const DIRECTORY_ENDPOINT = withBase('/api/radio/stations');
 
 export const HORIZON_TICK_MS = 250;
 

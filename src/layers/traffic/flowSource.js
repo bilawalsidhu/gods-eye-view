@@ -1,3 +1,4 @@
+import { withBase } from '../../services/apiBase.js';
 import { tilesForBounds } from '../../data/tomtomTiles.js';
 import { decodeFlowTile } from './flowDecode.js';
 /** Own one decoded flow cache and its session counters. */
@@ -58,9 +59,12 @@ export function createFlowTileSource({
           return cached.segments;
 
         _tilesFetched += 1;
-        const res = await fetchImpl(`/api/tomtom/flow/${z}/${x}/${y}.pbf`, {
-          signal,
-        });
+        const res = await fetchImpl(
+          `${withBase('/api/tomtom/flow')}/${z}/${x}/${y}.pbf`,
+          {
+            signal,
+          },
+        );
         if (!res.ok) throw new Error(`flow tile ${key}: HTTP ${res.status}`);
         const segments = decodeFlowTile(await res.arrayBuffer(), z, x, y);
         signal?.throwIfAborted();

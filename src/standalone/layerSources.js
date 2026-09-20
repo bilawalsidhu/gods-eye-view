@@ -1,3 +1,4 @@
+import { withBase } from '../services/apiBase.js';
 import {
   createOpenSkySource,
   createAdsbLolSource,
@@ -26,7 +27,8 @@ export function createStandaloneLayerSources() {
     flights: createOpenSkySource(),
     military: createAdsbLolSource(),
     vessels: createAisStreamSource({
-      apiUrl: import.meta.env?.VITE_AIS_LIVE_API_URL || '/api/ais-live',
+      apiUrl:
+        import.meta.env?.VITE_AIS_LIVE_API_URL || withBase('/api/ais-live'),
     }),
     cctv: createCctvSource(),
     radio: createRadioSource(),

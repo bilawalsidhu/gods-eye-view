@@ -1,3 +1,4 @@
+import { withBase } from '../../services/apiBase.js';
 /** Construct the existing live-fire endpoint without making a request. */
 export function createFirmsSource({
   fetchImpl = (...args) => globalThis.fetch(...args),
@@ -5,7 +6,7 @@ export function createFirmsSource({
   return {
     async getSnapshot({ signal } = {}) {
       signal?.throwIfAborted();
-      const response = await fetchImpl('/api/firms', {
+      const response = await fetchImpl(withBase('/api/firms'), {
         signal,
         cache: 'no-store',
       });

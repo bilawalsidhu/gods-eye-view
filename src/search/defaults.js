@@ -1,3 +1,4 @@
+import { withBase } from '../services/apiBase.js';
 import { createNominatimProvider } from './nominatim.js';
 import { createGeospatialServices } from './geospatial.js';
 import { createHttpGeospatialProvider } from './http.js';
@@ -63,7 +64,7 @@ export function createDefaultPlaceSearch({
                 const params = new URLSearchParams({ q: query });
                 if (bias) params.set('bounds', bias);
                 return fetchImpl(
-                  `${endpoints.nominatim || '/api/geocode'}?${params}`,
+                  `${endpoints.nominatim || withBase('/api/geocode')}?${params}`,
                   {
                     signal,
                   },
