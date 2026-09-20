@@ -26,7 +26,23 @@
 #
 #   tmp=$(mktemp -d)
 #   cp package.json package-lock.json "$tmp"/
+#   cp /nas/Temp/tmp/ci-security-ctx-q7/bin/aegis "$tmp"/bin/aegis
 #   docker build -f infrastructure/docker/ci-node.Dockerfile -t gev-ci-node:1 "$tmp"
+#
+# The aegis COPY needs bin/ in the context (see below). Refresh the binary
+# when the aegis checkout moves past v0.6.1 — it MUST be compiled inside a
+# bookworm container, not copied from this host (Debian 13, glibc 2.41):
+# host-built binaries die here with "GLIBC_2.38 not found" (node:24-slim is
+# bookworm, glibc 2.36). One-time build, same doctrine as dsc's
+# ci-security.Dockerfile:
+#
+#   bin=/nas/Temp/tmp/aegis-ctx-<rev>/bin
+#   mkdir -p "$bin"
+#   docker run --rm -v /nas/Temp/repos/aegis:/src:ro \
+#     -v /nas/Temp/tmp/aegis-build:/build -v "$bin":/out \
+#     -e CARGO_TARGET_DIR=/build/target rust:1-slim-bookworm sh -c \
+#     'cargo build --release --locked -p aegis-cli --manifest-path /src/Cargo.toml \
+#      && cp /build/target/release/aegis /out/'
 #
 # Size guard: the NAS daemon uses the vfs storage driver (every `docker
 # create` copies the image's full layer stack) and the runner has a
@@ -68,3 +84,9 @@ WORKDIR /lockfile
 COPY package.json package-lock.json ./
 RUN npm ci
 WORKDIR /
+
+# The aegis pattern scanner for the .gitforce.yml security job (secrets gate
+# over the committed .aegis-baseline.json). Statically versioned by the
+# Dockerfile header's rebuild recipe; the security job's output surfaces the
+# version so a stale binary is visible, not silent.
+COPY bin/aegis /usr/local/bin/aegis

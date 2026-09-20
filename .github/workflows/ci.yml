@@ -17,6 +17,15 @@
 #     followed by the bundle-budgets gate so dist growth is a reviewed
 #     decision (docs/PLAN.md Phase 7, issue #40).
 #
+# The Aegis pattern-scan gate (secrets, new findings vs the committed
+# .aegis-baseline.json) runs ONLY in .gitforce.yml: it needs the aegis
+# binary baked into the self-hosted gev-ci-node:1 image (bookworm-built
+# from the local aegis checkout — see
+# infrastructure/docker/ci-node.Dockerfile), which has no equivalent
+# install on GitHub-hosted runners. GitForge is the primary CI platform;
+# this backup workflow omits the gate rather than faking it with a weaker
+# scanner.
+#
 # Deployment stays manual (`npx wrangler pages deploy dist --project-name
 # globe --branch main`, see docs/RUNBOOK.md) — this workflow does not
 # deploy, so a green CI never implies a shipped site.

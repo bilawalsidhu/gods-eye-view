@@ -30,16 +30,36 @@
 #   a guaranteed failure. Rebuild gev-ci-node:1 when package-lock.json
 #   changes and gev-ci-rust:1 when rust/firms-renderer/Cargo.lock changes
 #   (instructions in the Dockerfile headers).
-# - The job graph is a LINEAR CHAIN (lint → test-node24 → test-node26 →
-#   coverage → build), not the GitHub workflow's fan-out, because all jobs
-#   of one run share the SAME workspace directory on this runner (GitHub
-#   gives each job a fresh VM). Jobs with `needs: [lint]` alone dispatch
-#   concurrently and their `npm ci` steps delete each other's node_modules
-#   mid-flight — measured 2026-09-15 as `Cannot find package
+# - The job graph is a LINEAR CHAIN (lint → security → test-node24 →
+#   test-node26 → coverage → build), not the GitHub workflow's fan-out,
+#   because all jobs of one run share the SAME workspace directory on this
+#   runner (GitHub gives each job a fresh VM). Jobs with `needs: [lint]`
+#   alone dispatch concurrently and their `npm ci` steps delete each other's
+#   node_modules mid-flight — measured 2026-09-15 as `Cannot find package
 #   'mersenne-twister'` from @cesium/engine with 410/580 packages on disk.
 #   dsc's fan-out .gitforce.yml hits the same wall (all runs red). The
 #   cost is wall-time serialization; the npm cache keeps each `npm ci`
 #   ~12 s, so the chain is acceptable.
+#
+# - The security job runs ONLY here, not in the GitHub workflow: the aegis
+#   binary is built from the local aegis checkout into the gev-ci-node:1
+#   image (bookworm, per the Dockerfile header) and is not installable on
+#   GitHub-hosted runners. Semantics follow dsc's proven gate: a scan for
+#   secrets-category, high-severity findings minus the committed
+#   .aegis-baseline.json fingerprints — the 68 accepted findings (triaged
+#   2026-09-15: doc-example keys, test localhost mocks, vendored cesium)
+#   pass; anything NEW fails the job. Canary-verified 2026-09-20: the
+#   baselined tree exits 0 and a planted random-shaped AWS key exits 1
+#   (the canonical AKIAIOSFODNN7EXAMPLE doc key is allowlisted by the
+#   scanner and is NOT a valid canary). Regenerate the baseline only when
+#   an accepted finding legitimately changes position:
+#
+#     aegis -f json scan --categories secrets --severity-threshold high . \
+#       | python3 -c 'import json,sys; d=json.load(sys.stdin);
+#         d["stats"]["inspection_ledger"]["units"]=[]; json.dump(d,open(".aegis-baseline.json","w"))'
+#
+#   (the raw scan's per-inspection ledger is ~6.8MB here; the slimmed file
+#   is ~40KB and matches identically under --baseline).
 name: gods-eye-view-ci
 version: "1.0"
 trigger_on:
@@ -56,6 +76,17 @@ jobs:
       - name: Audit production dependencies
         run: npm run check:audit
     timeout: 15m
+
+  # No `npm ci` — the pattern scan reads the checkout as-is and needs only
+  # the binary baked into the image. Version rides the step so a stale image
+  # is visible in the log, not silent.
+  - name: security
+    image: gev-ci-node:1
+    needs: [lint]
+    steps:
+      - name: Aegis pattern scan (new secrets findings only)
+        run: aegis --version && aegis scan --categories secrets --severity-threshold high --baseline .aegis-baseline.json .
+    timeout: 10m
 
   - name: test-node24
     image: gev-ci-node:1
