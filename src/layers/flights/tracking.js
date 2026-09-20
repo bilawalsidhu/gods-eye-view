@@ -194,9 +194,12 @@ export function createTracking({
     // aircraft silhouette until a ready model takes over; far contacts are pips.
     // Never destroy on entry: tearing down hundreds of live glTF instances
     // synchronously blocked Chrome's renderer into Page Unresponsive.
-    if (flightState._modelCollection) flightState._modelCollection.show = true;
-    flightState._trail?.setVisible(!next);
-    if (flightState._trailHeadEntity) flightState._trailHeadEntity.show = !next;
+    if (flightState._modelCollection)
+      flightState._modelCollection.show = !flightState._presentationSuppressed;
+    const trailVisible = !next && !flightState._presentationSuppressed;
+    flightState._trail?.setVisible(trailVisible);
+    if (flightState._trailHeadEntity)
+      flightState._trailHeadEntity.show = trailVisible;
     for (const [icao24, bb] of flightState._billboards)
       parts.rendering._applyFleetBillboardPresentation(icao24, bb);
     flightState._lastCamPoseSig = '';

@@ -62,6 +62,7 @@ test('military analyst record: full record maps every contract field', () => {
     speedMps: 231.5,
     heading: 92.1,
     verticalRateMps: 5.08,
+    positionTimeMs: null,
     onGround: false,
     military: true,
     aircraftClass: 'widebody',

@@ -171,7 +171,7 @@ export function createLifecycle({
       const activeViewer = viewer || state.viewer;
       components.rendering.ensureCollections(activeViewer);
       components.selection.installInteraction(activeViewer);
-      components.rendering.setVisible(true);
+      components.rendering.setVisible(!vesselState._presentationSuppressed);
       // Height-datum fix: warm the geoid grid once per layer-enable, never
       // blocking a poll. The first refresh may land pre-resolve (N = 0), and
       // the next is up to 60 s out — so re-floor in place on resolve. A load
@@ -240,6 +240,20 @@ export function createLifecycle({
       resetState();
     },
   };
+  Object.assign(methods, {
+    /**
+     * Hide or restore vessel visuals without changing the feed lifecycle.
+     * Time travel draws its own overlay while rewound; the feed, records and
+     * `getAnalystRecords()` keep working so history recording continues.
+     * @param {boolean} suppressed
+     */
+    setPresentationSuppressed(suppressed) {
+      const next = Boolean(suppressed);
+      if (vesselState._presentationSuppressed === next) return;
+      vesselState._presentationSuppressed = next;
+      components.rendering.setVisible(!next && state.feed.enabled);
+    },
+  });
 
   return {
     clearFirstConnectTimer,

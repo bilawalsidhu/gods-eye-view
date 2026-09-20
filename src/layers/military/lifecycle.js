@@ -114,10 +114,12 @@ export function createLifecycle({
      */
     enable(viewer) {
       if (flightState._billboardCollection)
-        flightState._billboardCollection.show = true;
+        flightState._billboardCollection.show =
+          !flightState._presentationSuppressed;
       holdContinuousRender('military'); // per-frame animator (perf wave 2)
       if (flightState._modelCollection)
-        flightState._modelCollection.show = true;
+        flightState._modelCollection.show =
+          !flightState._presentationSuppressed;
       parts.tracking._setCockpitContactMode(
         document.body.classList.contains('cockpit-mode'),
       );
@@ -300,5 +302,29 @@ export function createLifecycle({
     },
   };
 
+  Object.assign(methods, {
+    /**
+     * Hide or restore this layer's visuals without changing its lifecycle.
+     * Time travel draws its own overlay while rewound; data, polling and
+     * `getAnalystRecords()` keep working so history recording continues.
+     * @param {boolean} suppressed
+     */
+    setPresentationSuppressed(suppressed) {
+      const next = Boolean(suppressed);
+      if (flightState._presentationSuppressed === next) return;
+      flightState._presentationSuppressed = next;
+      const active = Boolean(flightState._preRenderRemove);
+      if (flightState._billboardCollection)
+        flightState._billboardCollection.show = !next && active;
+      if (flightState._modelCollection)
+        flightState._modelCollection.show = !next && active;
+      if (flightState._trackedModel && next)
+        flightState._trackedModel.show = false;
+      flightState._trail?.setVisible(!next && !flightState._cockpitContactMode);
+      if (flightState._trailHeadEntity)
+        flightState._trailHeadEntity.show =
+          !next && !flightState._cockpitContactMode;
+    },
+  });
   return { methods };
 }

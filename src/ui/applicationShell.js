@@ -18,6 +18,7 @@ import { RadioControls } from './radio.js';
 import { LocationNavigation } from './locationNavigation.js';
 import { bindClearLayersControl } from './layers.js';
 import { bindCameraOrientationControls } from './cameraOrientationControls.js';
+import { bindKeyboardFlight } from './keyboardFlight.js';
 import { createMapSourceControls } from './mapSource.js';
 import { STYLES } from './effects.js';
 
@@ -28,6 +29,9 @@ import { aircraftTrackingTarget } from '../cockpitTracking.js';
 import { ShellFeedback } from './shellFeedback.js';
 
 import { runCctvLayerEnableTransition } from '../cctvFocusPolicy.js';
+import { createPositionHistory } from '../history/positionHistory.js';
+import { createTimeTravel } from '../history/timeTravel.js';
+import { createTimeTravelControl } from './timeTravelControl.js';
 
 /**
  * Central UI orchestrator for the God's Eye View application.
@@ -323,6 +327,19 @@ export class StyleManager extends ShellFacade {
     this.hud = new IntelHUD(viewer, {
       placeSearch,
       summaryService: requestServices?.summary,
+      // The local model is shared with voice; keep HUD summaries rare and
+      // never let one queue ahead of a live voice turn.
+      summaryPolicy:
+        import.meta.env?.GEV_AI_PROVIDER === 'ollama'
+          ? {
+              minIntervalMs: 60_000,
+              timeoutMs: 30_000,
+              canRequest: () =>
+                !['connecting', 'listening', 'executing'].includes(
+                  document.getElementById('gev-voice-control')?.dataset?.status,
+                ),
+            }
+          : {},
     });
     this._recording.hud = this.hud;
     this._cockpitCoordinator = new CockpitCoordinator({
@@ -496,6 +513,8 @@ export class StyleManager extends ShellFacade {
         _toggleOrbit: (...args) => this._toggleOrbit(...args),
         toggleCleanView: (...args) => this.toggleCleanView(...args),
         _toggleCctvEnabled: (...args) => this._toggleCctvEnabled(...args),
+        _rewindHistory: () => this._timeTravel?.rewind(),
+        _resumeLiveHistory: () => this._timeTravel?.resumeLive(),
         _setBloomEnabled: (...args) => this._setBloomEnabled(...args),
         _setBloomIntensity: (...args) => this._setBloomIntensity(...args),
         _setSharpenEnabled: (...args) => this._setSharpenEnabled(...args),
@@ -540,12 +559,14 @@ export class StyleManager extends ShellFacade {
     this._initLocationBar();
     this._initShareButton();
     this._initCameraOrientationControls();
+    this._initKeyboardFlight();
     this._initClearSelectedLayersButton();
     this._initHUDToggle();
     this._initModels3dToggle();
     this._applyGlobalPostDefaults();
     this._initOrbit();
     this._initRecordingOverlay();
+    this._initTimeTravel();
     this._startAnimationLoop();
     this._startTrafficChipTicker();
     this._updateStyleMiniStatus();
@@ -1346,6 +1367,18 @@ export class StyleManager extends ShellFacade {
     );
   }
 
+  /** WASD/QE keyboard flight; idle while the cockpit drives the camera. */
+  _initKeyboardFlight() {
+    this._keyboardFlight?.destroy();
+    this._keyboardFlight = bindKeyboardFlight({
+      viewer: this.viewer,
+      documentRef: document,
+      searchInput: this._locationSearch,
+      isEnabled: () => !this.cockpitView?.active,
+      onMoveStart: () => this._cameraOrientationControls?.cancel?.(),
+    });
+  }
+
   /** Wire Google Maps-style tilt and north-up camera actions. */
   _initCameraOrientationControls() {
     this._cameraOrientationControls?.destroy();
@@ -1392,6 +1425,71 @@ export class StyleManager extends ShellFacade {
    * contact is independent of this toggle (see trackedModelRegime.js).
    * @returns {void}
    */
+
+  /**
+   * Record the live contact layers' positions from app start and mount the
+   * rewind/scrub controls. `window.__gevTimeTravel` is the stable programmatic
+   * seam used by the voice assistant.
+   */
+  _initTimeTravel() {
+    const { services } = this;
+    this._positionHistory = createPositionHistory({
+      dataManager: this._dataManager,
+    });
+    this._timeTravel = createTimeTravel({
+      viewer: this.viewer,
+      history: this._positionHistory,
+      resolveLayerModule: (layerId) =>
+        this._dataManager?.layers?.get?.(layerId)?.module || null,
+      requestRender: services.governorRequestRender,
+      holdRender: services.holdContinuousRender,
+      releaseRender: services.releaseContinuousRender,
+      onEnterRewind: () => {
+        // A follow camera chases a live contact; the live contact is hidden.
+        this._releaseFollowCamera({
+          preserveVesselSelection: false,
+          trackingOrigin: 'tool',
+        });
+        this._showToast('REWIND \u2014 live layers hidden');
+      },
+      onExitRewind: (reason) => {
+        if (reason === 'destroy') return;
+        this._showToast(
+          reason === 'caught-up' ? 'CAUGHT UP \u2014 LIVE' : 'LIVE',
+        );
+      },
+    });
+    this._timeTravelControl = createTimeTravelControl({
+      timeTravel: this._timeTravel,
+      notify: (message) => this._showToast(message),
+    });
+    const api = Object.freeze({
+      rewind: (offsetMs) => this._timeTravel?.rewind(offsetMs) ?? false,
+      seekTo: (timestampMs) => this._timeTravel?.seekTo(timestampMs) ?? false,
+      setRate: (rate) => this._timeTravel?.setRate(rate) ?? 1,
+      resumeLive: () => this._timeTravel?.resumeLive() ?? false,
+      forecast: (aheadMs) => this._timeTravel?.forecast?.(aheadMs) ?? false,
+      state: () => this._timeTravel?.state() ?? { mode: 'live' },
+      range: () =>
+        this._positionHistory?.range() ?? {
+          oldestT: NaN,
+          newestT: NaN,
+          count: 0,
+        },
+    });
+    this._timeTravelApi = api;
+    window.__gevTimeTravel = api;
+  }
+
+  /** Keep history recording attached to whichever manager the shell owns. */
+  attachDataManager(dataManager) {
+    const result = super.attachDataManager(dataManager);
+    // Stable read-only handle for other features (anomalies, incidents,
+    // predictions): trackOf(layerId, id), entitiesAt(t), range(), stats().
+    window.__gevPositionHistory = this._positionHistory;
+    this._positionHistory?.attach(dataManager);
+    return result;
+  }
 
   _initHUDToggle() {
     if (this._hudLayoutSelect) {
@@ -1466,8 +1564,14 @@ export class StyleManager extends ShellFacade {
     this._panelChrome.destroy();
     this._feedback.destroy();
 
+    this._timeTravelControl?.destroy();
+    this._timeTravel?.destroy();
+    this._positionHistory?.destroy();
+    if (window.__gevTimeTravel === this._timeTravelApi)
+      delete window.__gevTimeTravel;
     this._displayBindings.destroy();
     this._mapSourceControls?.destroy();
+    this._keyboardFlight?.destroy();
     this._cameraOrientationControls?.destroy();
     this._clearLayersControl?.destroy();
     this._cctvControls?.destroy();

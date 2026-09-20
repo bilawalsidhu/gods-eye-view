@@ -1,0 +1,358 @@
+/* GEV Remote — phone companion for the local voice assistant.
+   Mobile-first; mirrors the globe's dark navy + cyan mono look. */
+
+:root {
+  --bg-dark: #0a0a0f;
+  --bg-panel: #0f1220;
+  --glass-bg: rgba(12, 12, 20, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --accent: #00d4ff;
+  --accent-dim: rgba(0, 212, 255, 0.15);
+  --accent-glow: rgba(0, 212, 255, 0.4);
+  --warn: #ffb800;
+  --danger: #ff5c5c;
+  --text-primary: #e8eaed;
+  --text-secondary: rgba(232, 234, 237, 0.55);
+  --text-dim: rgba(232, 234, 237, 0.3);
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', ui-monospace,
+    monospace;
+  --radius: 10px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  background:
+    radial-gradient(
+      120% 60% at 50% -10%,
+      rgba(0, 212, 255, 0.08) 0%,
+      transparent 60%
+    ),
+    var(--bg-dark);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 15px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+button:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+:where(button, input):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Header */
+.remote-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: calc(10px + env(safe-area-inset-top)) 14px 10px;
+  background: var(--glass-bg);
+  border-bottom: 1px solid var(--glass-border);
+  backdrop-filter: blur(12px);
+}
+
+.remote-brand {
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  font-size: 13px;
+}
+
+.remote-brand span {
+  color: var(--accent);
+}
+
+.remote-host {
+  font-size: 11px;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.remote-pill {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  padding: 5px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.remote-pill::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  vertical-align: 1px;
+}
+
+.remote-pill[data-tone='active'] {
+  color: var(--accent);
+  border-color: var(--accent-dim);
+  background: var(--accent-dim);
+}
+
+.remote-pill[data-tone='busy'] {
+  color: var(--warn);
+  border-color: rgba(255, 184, 0, 0.3);
+}
+
+.remote-pill[data-tone='busy']::before {
+  animation: remote-pulse 0.9s ease-in-out infinite;
+}
+
+.remote-pill[data-tone='error'] {
+  color: var(--danger);
+  border-color: rgba(255, 92, 92, 0.3);
+}
+
+@keyframes remote-pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+/* Transcript feed */
+.remote-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.remote-feed {
+  flex: 1;
+  list-style: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 12px 14px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.line {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  gap: 10px;
+  align-items: start;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.02);
+  overflow-wrap: anywhere;
+}
+
+.line-tag {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+  padding-top: 3px;
+}
+
+.line--user {
+  border-color: var(--accent-dim);
+  background: rgba(0, 212, 255, 0.06);
+}
+
+.line--user .line-tag {
+  color: var(--accent);
+}
+
+.line--assistant {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.line--assistant .line-tag {
+  color: var(--text-secondary);
+}
+
+.line--tool {
+  padding-block: 5px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  border-style: dashed;
+}
+
+.line--system {
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: transparent;
+}
+
+.line--error {
+  color: #ffb3b3;
+  border-color: rgba(255, 92, 92, 0.35);
+  background: rgba(255, 92, 92, 0.08);
+}
+
+.line--error .line-tag {
+  color: var(--danger);
+}
+
+/* Composer */
+.remote-composer {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 14px calc(12px + env(safe-area-inset-bottom));
+  background: var(--glass-bg);
+  border-top: 1px solid var(--glass-border);
+  backdrop-filter: blur(12px);
+}
+
+.remote-chips {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.remote-chip {
+  padding: 9px 10px;
+  font-size: 12px;
+  text-align: left;
+  border-radius: 8px;
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  line-height: 1.3;
+  transition: border-color 150ms ease;
+}
+
+.remote-chip:not(:disabled):active {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.remote-form {
+  display: flex;
+  gap: 8px;
+}
+
+.remote-form input {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 12px;
+  font-size: 16px; /* prevents iOS zoom on focus */
+  border-radius: var(--radius);
+  border: 1px solid var(--glass-border);
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.remote-form input::placeholder {
+  color: var(--text-dim);
+}
+
+.remote-form button {
+  padding: 0 16px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  border-radius: var(--radius);
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #06111a;
+}
+
+.remote-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.remote-action {
+  flex: 1;
+  min-width: 120px;
+  padding: 11px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  border-radius: var(--radius);
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.remote-action--warn:not(:disabled) {
+  border-color: rgba(255, 184, 0, 0.45);
+  color: var(--warn);
+}
+
+.remote-action--mic[data-state='on'] {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+
+.remote-action--mic[data-state='hearing'] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #06111a;
+  box-shadow: 0 0 18px var(--accent-glow);
+}
+
+.remote-hint {
+  flex-basis: 100%;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+@media (min-width: 640px) {
+  body {
+    max-width: 640px;
+    margin: 0 auto;
+  }
+
+  .remote-chips {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}

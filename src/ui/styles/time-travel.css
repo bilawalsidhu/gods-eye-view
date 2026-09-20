@@ -1,0 +1,174 @@
+/* ── Time travel: dock rewind button + scrubber strip ── */
+#command-dock > #gev-time-travel {
+  position: relative;
+  inset: auto;
+  display: flex;
+  flex: 0 0 auto;
+  order: 10; /* the voice control re-parents dock children; stay last */
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  min-width: 0;
+  padding: 0 0.45rem;
+  border-left: 1px solid rgba(123, 189, 211, 0.16);
+  transform: none;
+}
+
+.gev-tt-rewind-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  width: 3.4rem;
+  height: 3rem;
+  padding: 0.3rem 0.35rem;
+  color: rgba(190, 221, 230, 0.78);
+  font-family: var(--font-mono);
+  font-size: 0.45rem;
+  letter-spacing: 0.1rem;
+  background: rgba(9, 24, 33, 0.7);
+  border: 1px solid rgba(123, 189, 211, 0.24);
+  border-radius: 0.4rem;
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    color 160ms ease,
+    background 160ms ease;
+}
+.gev-tt-rewind-btn:hover,
+.gev-tt-rewind-btn:focus-visible {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 70%, transparent);
+  outline: none;
+}
+#gev-time-travel[data-mode='rewind'] .gev-tt-rewind-btn {
+  color: #ffb547;
+  background: rgba(64, 38, 8, 0.6);
+  border-color: rgba(255, 181, 71, 0.6);
+  box-shadow: 0 0 12px rgba(255, 181, 71, 0.25);
+}
+.gev-tt-icon {
+  font-size: 0.95rem;
+  line-height: 1;
+}
+.gev-tt-label {
+  white-space: nowrap;
+}
+
+.gev-time-travel-scrubber {
+  position: fixed;
+  bottom: calc(2vh + 5.4rem);
+  left: 50%;
+  z-index: 144;
+  display: grid;
+  grid-template-columns: auto minmax(160px, 1fr) auto;
+  gap: 0.75rem;
+  align-items: center;
+  width: min(92vw, 860px);
+  padding: 0.45rem 0.9rem;
+  color: rgba(214, 236, 242, 0.9);
+  font-family: var(--font-mono);
+  background: rgba(24, 14, 4, 0.86);
+  border: 1px solid rgba(255, 181, 71, 0.5);
+  border-radius: 0.6rem;
+  box-shadow:
+    0 12px 36px rgba(0, 0, 0, 0.55),
+    0 0 24px rgba(255, 181, 71, 0.12);
+  backdrop-filter: blur(24px) saturate(1.3);
+  -webkit-backdrop-filter: blur(24px) saturate(1.3);
+  transform: translateX(-50%);
+}
+.gev-time-travel-scrubber[hidden] {
+  display: none;
+}
+.gev-tt-readout {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 7.5rem;
+}
+.gev-tt-kicker {
+  color: rgba(255, 181, 71, 0.85);
+  font-size: 0.45rem;
+  letter-spacing: 0.14rem;
+}
+.gev-time-travel-scrubber .gev-tt-offset {
+  min-width: 0;
+  color: #ffd27a;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+}
+.gev-tt-clock {
+  color: rgba(190, 221, 230, 0.62);
+  font-size: 0.55rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06rem;
+}
+.gev-time-travel-scrubber .gev-tt-range {
+  --accent: #ffb547;
+  --accent-glow: rgba(255, 181, 71, 0.55);
+}
+.gev-tt-transport {
+  display: flex;
+  gap: 0.3rem;
+  align-items: center;
+}
+.gev-tt-btn {
+  min-width: 2rem;
+  height: 1.7rem;
+  padding: 0 0.45rem;
+  color: rgba(214, 236, 242, 0.85);
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.06rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 0.3rem;
+  cursor: pointer;
+}
+.gev-tt-btn:hover,
+.gev-tt-btn:focus-visible {
+  color: #ffd27a;
+  border-color: rgba(255, 181, 71, 0.6);
+  outline: none;
+}
+.gev-tt-btn[aria-pressed='true'] {
+  color: #1a1004;
+  background: #ffb547;
+  border-color: #ffb547;
+}
+.gev-tt-live {
+  color: #7cf2ff;
+  border-color: rgba(0, 212, 255, 0.4);
+}
+.gev-tt-live:hover,
+.gev-tt-live:focus-visible {
+  color: #fff;
+  background: rgba(0, 212, 255, 0.28);
+  border-color: rgba(0, 212, 255, 0.7);
+}
+
+body.ui-clean-view .gev-time-travel-scrubber,
+body.recording-mode .gev-time-travel-scrubber {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+@media (max-width: 980px) {
+  .gev-time-travel-scrubber {
+    bottom: calc(2vh + 9rem);
+    width: calc(100vw - 24px);
+  }
+}
+@media (max-width: 720px) {
+  .gev-time-travel-scrubber {
+    grid-template-columns: 1fr auto;
+    bottom: calc(8px + 9rem);
+  }
+  .gev-time-travel-scrubber .gev-tt-range {
+    grid-column: 1 / -1;
+  }
+}

@@ -180,6 +180,7 @@ export function createQueries({
       speedMps: num(info?.speedMps),
       heading: num(info?.track),
       verticalRateMps: num(info?.verticalRateMps),
+      positionTimeMs: num(info?.lastContactEpochMs),
       onGround: info?.onGround === true,
       military: true,
       // A converted contact reports the class it RENDERS as (mirror of
@@ -626,7 +627,8 @@ export function createQueries({
     getAnalystRecords(maxCount = 2000) {
       if (
         !flightState._billboardCollection ||
-        !flightState._billboardCollection.show ||
+        (!flightState._billboardCollection.show &&
+          !flightState._presentationSuppressed) ||
         flightState.records.data.size === 0
       )
         return [];

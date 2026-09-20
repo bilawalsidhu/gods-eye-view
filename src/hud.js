@@ -688,6 +688,13 @@ export class IntelHUD {
     }
     if (!force && !this._summaryDirty) return;
     if (this.summaryPolicy.canRequest?.() === false) return;
+    const minIntervalMs = Number(this.summaryPolicy.minIntervalMs) || 0;
+    if (
+      !force &&
+      minIntervalMs &&
+      Date.now() - (this._lastSummaryRequestAt || 0) < minIntervalMs
+    )
+      return;
 
     const revision = this._summaryRevision;
     // Every caller invokes this as `void this._updateSummary(...)`, so nothing
@@ -718,9 +725,13 @@ export class IntelHUD {
     this._summaryDirty = false;
     this._lastSummarySignature = signature;
     const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 5000);
+    const timeout = window.setTimeout(
+      () => controller.abort(),
+      Number(this.summaryPolicy.timeoutMs) || 5000,
+    );
     this._summaryRequest = controller;
     try {
+      this._lastSummaryRequestAt = Date.now();
       this.summaryPolicy.onRequest?.();
       const response = await this.summaryService.summarize(context, {
         signal: controller.signal,

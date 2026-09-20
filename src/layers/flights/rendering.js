@@ -842,7 +842,7 @@ export function createRendering({
         fovyRad: flightState._viewer.camera.frustum.fovy,
         maximumPixelSize: TRACKED_MODEL_MAX_PX,
       });
-      flightState._trackedModel.show = true;
+      flightState._trackedModel.show = !flightState._presentationSuppressed;
     }
   }
 

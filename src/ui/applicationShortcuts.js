@@ -24,6 +24,8 @@ export function bindApplicationShortcuts({
   actions,
 }) {
   const onKeyDown = (event) => {
+    // Capture-phase owners (keyboard flight on WASD/QE) claim a press first.
+    if (event.defaultPrevented) return;
     const isFormControl =
       event.target?.matches?.('select, input, textarea') ||
       event.target === searchInput;
@@ -36,8 +38,12 @@ export function bindApplicationShortcuts({
     if (key === 'o') actions.toggleOrbit();
     if (key === 'v') actions.toggleCleanView();
     if (key === 'f') actions.toggleLayers();
+    // Shift+D always cycles detection; plain d belongs to keyboard flight
+    // whenever flight is enabled (it never reaches here in that case).
     if (key === 'd') actions.cycleDetection();
     if (key === 'c') actions.toggleCctv();
+    if (event.key === '[') actions.rewindHistory?.();
+    if (event.key === ']') actions.resumeLiveHistory?.();
   };
   documentRef.addEventListener('keydown', onKeyDown);
   return {

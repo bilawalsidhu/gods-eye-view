@@ -18,11 +18,13 @@ import { adsbLolProxy } from './aircraft/adsb-lol.js';
 import { aisLiveProxy } from './vessels/ais-live.js';
 import { trackBackfillProxies } from './aircraft/tracks.js';
 import { openAiRealtimeProxy } from './openai.js';
+import { ollamaProxy } from './ollama.js';
 import { googlePlacesContextProxy } from './places.js';
 import { keySetupEndpoint } from '../standalone/key-setup.js';
 
 /** Construct the local provider plugins in their established order. */
 function localProviderPlugins() {
+  const aiProvider = String(process.env.AI_PROVIDER || 'openai').toLowerCase();
   return [
     openSkyProxy(),
     celestrakProxy(),
@@ -43,7 +45,7 @@ function localProviderPlugins() {
     adsbLolProxy(),
     aisLiveProxy(),
     trackBackfillProxies(),
-    openAiRealtimeProxy(),
+    aiProvider === 'ollama' ? ollamaProxy() : openAiRealtimeProxy(),
     googlePlacesContextProxy(),
     keySetupEndpoint(),
   ];
@@ -78,6 +80,7 @@ export { resolveOverpassPreflight } from './overpass/cache.js';
 export { overpassPayloadIsData } from './overpass/transport.js';
 export { fetchOverpassPayload } from './overpass/transport.js';
 export { openAiRealtimeProxy } from './openai.js';
+export { ollamaProxy } from './ollama.js';
 export { MILITARY_INSTALLATION_ELEMENT_CAP } from './military-installations/constants.js';
 export { quantizeMilitaryInstallationBox } from './military-installations/query.js';
 export { militaryInstallationCacheKey } from './military-installations/query.js';
