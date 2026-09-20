@@ -1917,6 +1917,16 @@ test('model-eligibility enrichment spends the ambient bucket, dedupes, and refil
     mod._requestModelTypeEnrichmentForTest('cafe02');
     assert.equal(mod._ambientBudgetForTest(), 2, 'a re-asked plane never double-spends');
 
+    // Freeze the refill window for the exhaustion phase: the knobs are read
+    // lazily per refill, and with the 10 ms QA window a scheduler preemption
+    // between two synchronous asks can cross a boundary mid-phase (measured
+    // 2026-09-20 on a loaded box: a surprise refill clamped the bucket to 3
+    // between spends, and the exact-zero assertion saw 2). An hour-long
+    // window cannot elapse between adjacent statements, so the remaining
+    // spends are deterministic; the window is restored below for the refill
+    // phase, which needs a real crossing.
+    globalThis.window.__GEV_ENRICH_AMBIENT_QA.windowMs = 3_600_000;
+
     mod._requestModelTypeEnrichmentForTest('cafe03');
     mod._requestModelTypeEnrichmentForTest('cafe04');
     assert.equal(mod._ambientBudgetForTest(), 0, 'the bucket can reach exactly zero');
@@ -1929,6 +1939,7 @@ test('model-eligibility enrichment spends the ambient bucket, dedupes, and refil
     assert.equal(mod._ambientBudgetForTest(), 0, 'an empty bucket spends nothing');
 
     // A window later the bucket refills and the skipped plane is admitted.
+    globalThis.window.__GEV_ENRICH_AMBIENT_QA.windowMs = 10;
     await new Promise((r) => setTimeout(r, 35));
     mod._requestModelTypeEnrichmentForTest('cafe05');
     assert.equal(mod._ambientBudgetForTest(), 2, 'a skipped plane is admitted after refill');
