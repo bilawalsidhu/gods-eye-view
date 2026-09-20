@@ -259,6 +259,20 @@ export const DATA_CREDITS = [
       '(<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>)',
   },
   {
+    key: 'mdchart-cctv',
+    html:
+      'CCTV cameras &amp; live streams (Maryland): ' +
+      '<a href="https://chart.maryland.gov/" target="_blank" rel="noopener">Maryland CHART</a> — ' +
+      'Maryland Department of Transportation',
+  },
+  {
+    key: 'ddot-cctv',
+    html:
+      'CCTV camera locations (Washington, DC): ' +
+      '<a href="https://maps2.dcgis.dc.gov/dcgis/rest/services/DDOT/TrafficOperations/FeatureServer/2" target="_blank" rel="noopener">DDOT TrafficOperations / DC GIS</a> — ' +
+      'District Department of Transportation (locations only)',
+  },
+  {
     key: 'telegeography',
     html:
       'Submarine cables: © TeleGeography — ' +

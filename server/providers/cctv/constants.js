@@ -236,6 +236,27 @@ export const CALGARY_DOWNTOWN = { lat: 51.0461, lon: -114.0626 };
  * body cannot be buffered without limit. */
 export const CALGARY_MAX_CATALOG_BYTES = 4 * 1024 * 1024;
 
+/** Maryland CHART statewide live traffic cameras (JSON feed + HLS streams). */
+export const MDCHART_CAMERAS_URL =
+  'https://chart.maryland.gov/DataFeeds/GetCamerasJson';
+/** Only CHART streaming hosts may be registered — not chart.maryland.gov HTML players. */
+export const MDCHART_STREAM_HOST_PATTERN = /^strmr[0-9]+\.sha\.maryland\.gov$/i;
+export const DEFAULT_MDCHART_MAX_SOURCES = 600;
+/** Prioritization anchors: Baltimore, DC suburbs, Annapolis, BWI corridor. */
+export const MDCHART_ANCHORS = [
+  { lat: 39.2904, lon: -76.6122 }, // Baltimore
+  { lat: 38.9784, lon: -76.4922 }, // Annapolis
+  { lat: 39.1774, lon: -76.6684 }, // BWI
+  { lat: 39.084, lon: -77.151 }, // I-270 / DC suburbs
+  { lat: 38.627, lon: -76.885 }, // Southern MD / US-301
+];
+
+/** DDOT TrafficOperations CCTV locations (GIS only — no public live media URL). */
+export const DDOT_CCTV_FEATURE_QUERY_URL =
+  'https://maps2.dcgis.dc.gov/dcgis/rest/services/DDOT/TrafficOperations/FeatureServer/2/query?where=Operation_Status%3D1&outFields=CameraID,Location,Description,Operation_Status,Latitude,Longitude&returnGeometry=true&outSR=4326&f=json';
+export const DEFAULT_DDOT_MAX_SOURCES = 120;
+export const DC_CENTER = { lat: 38.9072, lon: -77.0369 };
+
 /** Camera CATALOGS change rarely; 15 min keeps multi-megabyte upstream list refetches (Austin rows.json + 4 Caltrans districts + TfL + Ontario 511) infrequent. Frames are fetched per-request and are unaffected. */
 export const CCTV_SOURCE_CACHE_MS = 15 * 60 * 1000;
 /** Per-provider catalog-fetch timeout. Bounds the worst-case refresh so one

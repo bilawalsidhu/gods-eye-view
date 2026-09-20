@@ -18,6 +18,8 @@ import {
   loadNswSourcesFromOpenData,
   loadCalgarySourcesFromOpenData,
 } from './sources.js';
+import { loadMdchartSourcesFromOpenData } from './mdchart.js';
+import { loadDdotSourcesFromGis } from './ddot.js';
 
 /** Env kill switch: unset or anything but "0" means enabled. */
 const envEnabled = (name) => String(process.env[name] || '1').trim() !== '0';
@@ -85,6 +87,16 @@ const LIVE_PACKS = [
     name: 'calgary',
     enabled: () => envEnabled('CCTV_CALGARY_ENABLED'),
     load: loadCalgarySourcesFromOpenData,
+  },
+  {
+    name: 'mdchart',
+    enabled: () => envEnabled('CCTV_MDCHART_ENABLED'),
+    load: loadMdchartSourcesFromOpenData,
+  },
+  {
+    name: 'ddot',
+    enabled: () => envEnabled('CCTV_DDOT_ENABLED'),
+    load: loadDdotSourcesFromGis,
   },
 ];
 /**
