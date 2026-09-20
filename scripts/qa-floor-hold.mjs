@@ -63,7 +63,20 @@ function record(name, ok, detail) {
 }
 
 fs.mkdirSync(OUT_DIR, { recursive: true });
-const chrome = (() => { try { return puppeteer.executablePath(); } catch { return undefined; } })();
+// Resolve Chrome the way the other regression harnesses do (qa-overlay-baseline):
+// explicit env override first, then puppeteer's own download, then platform
+// paths. puppeteer 25.x's executablePath() is ASYNC — passing the returned
+// Promise straight to launch() fails with "Browser was not found at the
+// configured executablePath ([object Promise])" on machines without the
+// bundled download (this NAS), which is why the harness died in 3.6 s there
+// while every sibling suite booted.
+const chrome = [
+  process.env.PUPPETEER_EXECUTABLE_PATH,
+  (() => { try { return puppeteer.executablePath(); } catch { return null; } })(),
+  '/usr/bin/google-chrome',
+  '/usr/bin/chromium',
+  '/usr/bin/chromium-browser',
+].find((candidate) => candidate && fs.existsSync(candidate)) || process.env.PUPPETEER_EXECUTABLE_PATH || '';
 const browser = await puppeteer.launch({
   headless: HEADFUL ? false : 'new',
   executablePath: chrome,

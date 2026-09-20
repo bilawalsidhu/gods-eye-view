@@ -28,9 +28,22 @@ if (fixtureSha256 !== expectedFixtureSha256) {
 }
 
 const appOrigin = new URL(appUrl).origin;
+// Resolve Chrome like the other harnesses: env override first, then
+// puppeteer's pinned download, then platform paths. puppeteer 25.x's
+// executablePath() is ASYNC — passed through raw it reaches launch() as a
+// Promise and dies with "Browser was not found at the configured
+// executablePath ([object Promise])" on machines without the bundled
+// download.
+const chromeExecutable = [
+  process.env.PUPPETEER_EXECUTABLE_PATH,
+  (() => { try { return puppeteer.executablePath(); } catch { return null; } })(),
+  '/usr/bin/google-chrome',
+  '/usr/bin/chromium',
+  '/usr/bin/chromium-browser',
+].find((candidate) => candidate && fs.existsSync(candidate)) || process.env.PUPPETEER_EXECUTABLE_PATH || '';
 const browser = await puppeteer.launch({
   headless: 'new',
-  executablePath: puppeteer.executablePath(),
+  executablePath: chromeExecutable,
   args: [
     '--no-sandbox',
     '--disable-setuid-sandbox',
