@@ -19,6 +19,31 @@ export function normalizeVesselObservation(row, reference = null) {
     speedMps: speedKts == null ? null : speedKts * 0.514444,
     courseDeg: finite(row.course),
     headingDeg: finite(row.heading),
+    callSign: String(row.call_sign || ''),
+    draughtM: finite(row.draught),
+    loadState: String(row.load_state || ''),
+    eta: String(row.eta || ''),
+    lengthM: finite(row.length),
+    beamM: finite(row.beam),
+    navStatus: finite(row.nav_status),
+    navStatusText: String(row.nav_status_text || ''),
+    flag: String(row.flag || ''),
+    flagCode: String(row.flag_code || ''),
+    mmsiKind: String(row.mmsi_kind || ''),
+    imoValid:
+      row.imo_valid === null || row.imo_valid === undefined
+        ? null
+        : Boolean(row.imo_valid),
+    sanctioned: Boolean(row.sanctioned),
+    sanctionConfidence: String(row.sanction_confidence || ''),
+    sanctionPrograms: String(row.sanction_programs || ''),
+    estimated: Boolean(row.estimated),
+    estMoved: Boolean(row.est_moved),
+    estAgeSec: finite(row.est_age_sec),
+    estConfidence: finite(row.est_confidence),
+    estFromLat: finite(row.est_from_lat),
+    estFromLon: finite(row.est_from_lon),
+    gapKind: String(row.gap_kind || ''),
     observedAtMs:
       epoch(row.last_position_epoch, 1000) ??
       epoch(Date.parse(row.last_position_UTC)),

@@ -121,7 +121,12 @@ export function createTracking({
       : AbortSignal.timeout(8000);
     let samples = null;
     try {
-      const track = await vesselState._source.getTrack?.(reference, { signal });
+      // Bound the durable read to what the trail can draw; the history store
+      // would otherwise hand back thousands of fixes to be thrown away.
+      const track = await vesselState._source.getTrack?.(reference, {
+        signal,
+        limit: TRAIL_MAX_POINTS,
+      });
       samples = track?.records ?? null;
     } catch {
       return; // silent — keep the live-accumulated trail

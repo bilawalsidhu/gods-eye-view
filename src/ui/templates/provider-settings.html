@@ -17,6 +17,17 @@
     <h2 id="key-setup-title">Power up the globe</h2>
     <p id="key-setup-description">The globe already flies keyless. Every key below switches on another real feed — paste one and it's saved into this app's local configuration, then the server restarts itself. Server-side keys stay on this machine; Google Maps and Cesium ion run in the browser and must be provider-restricted. Keys you configured elsewhere are shown but never touched.</p>
     <div class="key-setup-rows" data-key-setup-rows></div>
+    <!-- Local LLM. Rendered from the same /api/setup/status payload; the
+         section removes itself when the payload has no llm block. -->
+    <section class="key-setup-llm" data-key-setup-llm hidden>
+      <div class="key-setup-llm-head">
+        <span class="key-setup-llm-kicker">TEXT MODEL</span>
+        <button type="button" class="key-setup-llm-test" data-key-setup-llm-test>TEST CONNECTION</button>
+      </div>
+      <div class="key-setup-llm-fields" data-key-setup-llm-fields></div>
+      <datalist id="key-setup-llm-models" data-key-setup-llm-models></datalist>
+      <p class="key-setup-llm-note" data-key-setup-llm-note role="status" aria-live="polite"></p>
+    </section>
     <div class="key-setup-footer">
       <button type="button" class="key-setup-apply" data-key-setup-apply>SAVE KEYS</button>
       <span class="key-setup-hint">ESC to close</span>

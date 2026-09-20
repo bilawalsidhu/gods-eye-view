@@ -393,3 +393,128 @@ body.scene-playback-mode #key-setup {
   border-color: rgba(255, 170, 150, 0.65);
   outline: none;
 }
+
+/* ------------------------------------------------------------
+   Local LLM — which text backend the AI features target.
+   Same glass-and-cyan grammar as a key row; it is configuration
+   rather than a credential, so it sits below the rows in its own
+   block with a quieter border.
+   ------------------------------------------------------------ */
+.key-setup-llm {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.6rem;
+  padding: 0.6rem 0.7rem;
+  background: rgba(29, 69, 81, 0.1);
+  border: 1px dashed rgba(100, 200, 220, 0.24);
+  border-radius: 0.42rem;
+}
+
+.key-setup-llm[hidden] {
+  display: none;
+}
+
+.key-setup-llm-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.key-setup-llm-kicker {
+  color: rgba(54, 220, 255, 0.86);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.1rem;
+  text-transform: uppercase;
+}
+
+.key-setup-llm-test {
+  padding: 0.28rem 0.6rem;
+  color: rgba(54, 220, 255, 0.85);
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  letter-spacing: 0.08rem;
+  background: none;
+  border: 1px solid rgba(54, 220, 255, 0.35);
+  border-radius: 0.32rem;
+  cursor: pointer;
+  transition:
+    color var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.key-setup-llm-test:hover,
+.key-setup-llm-test:focus-visible {
+  color: rgba(225, 244, 248, 0.95);
+  border-color: rgba(54, 220, 255, 0.7);
+  outline: none;
+}
+
+.key-setup-llm-test[aria-disabled='true'] {
+  cursor: wait;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.key-setup-llm-fields {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.key-setup-llm-field {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.key-setup-llm-label {
+  color: rgba(171, 210, 220, 0.62);
+  font-family: var(--font-mono);
+  font-size: 0.52rem;
+  letter-spacing: 0.09rem;
+  text-transform: uppercase;
+}
+
+.key-setup-llm-field input,
+.key-setup-llm-field select {
+  width: 100%;
+  padding: 0.42rem 0.55rem;
+  color: rgba(225, 244, 248, 0.92);
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  background: rgba(4, 14, 20, 0.72);
+  border: 1px solid rgba(100, 200, 220, 0.22);
+  border-radius: 0.32rem;
+}
+
+.key-setup-llm-field input:focus,
+.key-setup-llm-field select:focus {
+  border-color: rgba(54, 220, 255, 0.65);
+  outline: none;
+}
+
+.key-setup-llm-field input::placeholder {
+  color: rgba(148, 178, 188, 0.42);
+}
+
+.key-setup-llm-field input:disabled,
+.key-setup-llm-field select:disabled {
+  color: rgba(198, 220, 226, 0.5);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.key-setup-llm-hint {
+  color: rgba(198, 220, 226, 0.5);
+  font-size: 0.58rem;
+  line-height: 1.35;
+}
+
+.key-setup-llm-note {
+  min-height: 1.1rem;
+  margin: 0;
+  color: rgba(199, 225, 231, 0.66);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  line-height: 1.4;
+}

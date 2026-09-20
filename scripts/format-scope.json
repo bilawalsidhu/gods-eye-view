@@ -744,5 +744,11 @@
   "src/director/interactions/interactions.test.mjs",
   "scripts/qa-director-interactions.mjs",
   "src/director/sharing/sharing.test.mjs",
-  "scripts/qa-director-sharing.mjs"
+  "scripts/qa-director-sharing.mjs",
+  "src/llmSettings.mjs",
+  "src/llmSettings.test.mjs",
+  "src/keySetupLlm.test.mjs",
+  "server/providers/llm/status.test.mjs",
+  "server/providers/llm/chat.test.mjs",
+  "server/providers/openai/hud-summary.test.mjs"
 ]

@@ -616,7 +616,9 @@ provider routes as development, including aircraft, satellites, terrain, traffic
 FIRMS, GBFS, Overpass and CCTV/media. Unmatched `/api` requests return a JSON 404
 in both modes instead of the application HTML. Browser routes retain SPA fallback.
 Credential editing (`/api/setup/*` and Provider Settings) is development-only;
-preview returns JSON 404 for those endpoints. Server credentials come from the
+preview returns JSON 404 for those endpoints. `/api/llm/status` — which reports
+the configured text backend, its reachability and its model list — shares that
+development-only, loopback-only admission for the same reason. Server credentials come from the
 local environment; browser keys are captured at build time. Rebuild after changing
 a browser key. Preview is for local build verification, not a production server.
 
@@ -3397,6 +3399,8 @@ silently demoting every later lookup for the session.
 - HUD `SUMMARY` readout requests a five-word intelligence-style summary from `/api/openai/hud-summary` (model `OPENAI_HUD_SUMMARY_MODEL`, default `gpt-5-nano`, minimal reasoning).
 - Input is the live basemap label context (place/street/nearby-place labels + enabled layers) — the model is instructed not to infer from coordinates.
 - Output is sanitized to exactly five words; falls back to the deterministic telemetry summary on error/timeout (5s abort); typewriter animation on update.
+- Backend is selectable (`GEV_LLM_PROVIDER`): `openai` (default, Responses API, unchanged), `ollama`, or `llamacpp`. Local providers use the OpenAI-compatible `/v1/chat/completions` at `GEV_LLM_BASE_URL` with `GEV_LLM_MODEL` and no API key; the OpenAI key is never sent to them.
+- An unreachable, unconfigured, or silent local model returns the same graceful "unconfigured" capability response as a keyless boot, so the HUD shows its deterministic line without logging and nothing else is affected.
 
 ### Place-search providers
 

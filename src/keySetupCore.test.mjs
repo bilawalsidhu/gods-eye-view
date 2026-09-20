@@ -107,11 +107,23 @@ test('Windows owner SID parsing reads only the structured user-SID CSV field', (
 
 test('validation accepts every registry env var and only those', () => {
   const known = knownKeySetupEnvVars();
-  for (const name of known) {
-    const verdict = validateKeySetupUpdates({ [name]: 'valid-value-123' });
-    assert.equal(verdict.ok, true, `${name} should validate`);
-    assert.equal(verdict.updates[name], 'valid-value-123');
+  // Credentials are opaque strings: any printable value is a plausible key.
+  for (const entry of KEY_SETUP_KEYS) {
+    for (const name of entry.envVars) {
+      assert.equal(known.has(name), true, `${name} should be writable`);
+      const verdict = validateKeySetupUpdates({ [name]: 'valid-value-123' });
+      assert.equal(verdict.ok, true, `${name} should validate`);
+      assert.equal(verdict.updates[name], 'valid-value-123');
+    }
   }
+  // The local-LLM settings are writable too, but they are configuration with
+  // a known shape rather than opaque key material, so they are checked
+  // against that shape instead (see src/keySetupLlm.test.mjs).
+  for (const name of ['GEV_LLM_PROVIDER', 'GEV_LLM_BASE_URL', 'GEV_LLM_MODEL']) {
+    assert.equal(known.has(name), true, `${name} should be writable`);
+  }
+  assert.equal(validateKeySetupUpdates({ GEV_LLM_MODEL: 'valid-value-123' }).ok, true);
+  assert.equal(validateKeySetupUpdates({ GEV_LLM_PROVIDER: 'valid-value-123' }).ok, false);
   assert.equal(validateKeySetupUpdates({ PATH: '/usr/bin' }).ok, false, 'PATH must be refused');
   assert.equal(validateKeySetupUpdates({ NODE_OPTIONS: '--x' }).ok, false, 'NODE_OPTIONS must be refused');
 });
