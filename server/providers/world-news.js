@@ -23,8 +23,13 @@ import { buildSearchNewsUrl, requestSearchNews } from './world-news/client.js';
  *
  * Upstream: GET https://api.worldnewsapi.com/search-news with
  * `add-entities=true` (the only way to receive geocoded location entities),
- * newest first, one page of WORLD_NEWS_PAGE_SIZE (default 100) articles per
- * refresh. The key comes from WORLD_NEWS_API_KEY server-side only and travels
+ * newest first, WORLD_NEWS_PAGES pages (default 3, max 5) of
+ * WORLD_NEWS_PAGE_SIZE (default 100) articles per refresh, reaching back
+ * WORLD_NEWS_WINDOW_HOURS (default 72). Paging is what adds headlines: only
+ * a title-mentioned place can be pinned, so roughly a third of any page
+ * reaches the map, and a wider window alone changes nothing because results
+ * arrive newest-first. Each page costs points — see estimateWorldNewsPoints.
+ * The key comes from WORLD_NEWS_API_KEY server-side only and travels
  * in the x-api-key header — the browser polls same-origin /api/world-news.
  *
  * Cache: TTL 30 min (45 min once the provider reports more than 4 points per
@@ -65,7 +70,22 @@ import { buildSearchNewsUrl, requestSearchNews } from './world-news/client.js';
 export const WORLD_NEWS_TTL_MS = 30 * 60_000;
 export const WORLD_NEWS_GATED_TTL_MS = 45 * 60_000;
 export const WORLD_NEWS_RETENTION_MS = 60 * 60_000;
-export const WORLD_NEWS_WINDOW_MS = 24 * 3_600_000;
+/**
+ * Default age limit for a headline, in hours (`WORLD_NEWS_WINDOW_HOURS`).
+ *
+ * Widening this does NOT by itself put more pins on the globe: results come
+ * back newest-first, so the first pages are the same articles whatever the
+ * window. Measured against the live provider on 2026-09-20, a 24-hour window
+ * already offered 13,507 English articles and a 72-hour window 52,859, yet
+ * both returned an identical first page. The window only decides how far back
+ * PAGING can reach; `WORLD_NEWS_PAGES` is what actually adds headlines.
+ */
+export const WORLD_NEWS_DEFAULT_WINDOW_HOURS = 72;
+export const WORLD_NEWS_MIN_WINDOW_HOURS = 1;
+export const WORLD_NEWS_MAX_WINDOW_HOURS = 168;
+/** Pages fetched per refresh (`WORLD_NEWS_PAGES`). Each page costs points. */
+export const WORLD_NEWS_DEFAULT_PAGES = 3;
+export const WORLD_NEWS_MAX_PAGES = 5;
 export const WORLD_NEWS_DEFAULT_BUDGET = 40;
 export const WORLD_NEWS_COST_GATE_POINTS = 4;
 export const WORLD_NEWS_GATED_PAGE_SIZE = 50;
@@ -134,7 +154,21 @@ export function worldNewsProxy({
       1_000_000,
       WORLD_NEWS_DEFAULT_BUDGET,
     );
-  const pages = () => clampInt(process.env.WORLD_NEWS_PAGES, 1, 3, 1);
+  const pages = () =>
+    clampInt(
+      process.env.WORLD_NEWS_PAGES,
+      1,
+      WORLD_NEWS_MAX_PAGES,
+      WORLD_NEWS_DEFAULT_PAGES,
+    );
+  /** Oldest publish time a headline may carry, as epoch ms. */
+  const windowMs = () =>
+    clampInt(
+      process.env.WORLD_NEWS_WINDOW_HOURS,
+      WORLD_NEWS_MIN_WINDOW_HOURS,
+      WORLD_NEWS_MAX_WINDOW_HOURS,
+      WORLD_NEWS_DEFAULT_WINDOW_HOURS,
+    ) * 3_600_000;
   const costGated = () =>
     Number.isFinite(state.measuredCost) &&
     state.measuredCost > WORLD_NEWS_COST_GATE_POINTS;
@@ -304,7 +338,7 @@ export function worldNewsProxy({
         number: pageSize(),
         offset,
         language: language(),
-        sinceMs: Date.now() - WORLD_NEWS_WINDOW_MS,
+        sinceMs: Date.now() - windowMs(),
         extraQuery: process.env.WORLD_NEWS_EXTRA_QUERY,
       });
       try {

@@ -61,6 +61,7 @@ const KEYLESS_ENV = {
   WORLD_NEWS_API_KEY: '',
   WORLD_NEWS_DAILY_POINT_BUDGET: undefined,
   WORLD_NEWS_PAGES: undefined,
+  WORLD_NEWS_WINDOW_HOURS: undefined,
   WORLD_NEWS_PAGE_SIZE: undefined,
   WORLD_NEWS_LANGUAGE: undefined,
   WORLD_NEWS_EXTRA_QUERY: undefined,
@@ -177,9 +178,10 @@ test('keyed flow: request shape, stripping, cache hit, TTL merge, retention purg
   assert.equal(url.searchParams.get('sort-direction'), 'DESC');
   assert.equal(url.searchParams.get('add-entities'), 'true');
   assert.equal(url.searchParams.get('language'), 'en');
+  // 72 hours back by default (WORLD_NEWS_WINDOW_HOURS).
   assert.equal(
     url.searchParams.get('earliest-publish-date'),
-    '2026-09-14 12:00:00',
+    '2026-09-12 12:00:00',
   );
   assert.equal(url.searchParams.has('api-key'), false);
   assert.equal(init.headers['x-api-key'], 'fixture-key');
@@ -385,6 +387,9 @@ test('LOAD MORE fetches the next offset, is capped per hour and counts against t
     ...KEYLESS_ENV,
     WORLD_NEWS_API_KEY: 'k1',
     WORLD_NEWS_PAGE_SIZE: '10',
+    // One page per refresh, so this covers /more's own offset walk and hourly
+    // cap rather than the initial-load page count (see the defaults test).
+    WORLD_NEWS_PAGES: '1',
   });
   let now = T0;
   t.mock.method(Date, 'now', () => now);
@@ -457,4 +462,60 @@ test('a response without quota headers is charged at the documented estimate and
     'a measured header wins once it appears',
   );
   assert.equal(more.costPerRequest, 2);
+});
+
+test('page count and time window are configurable, and clamped', async (t) => {
+  // Only a place named in the TITLE can be pinned, so roughly a third of any
+  // page reaches the map. Paging is the lever that adds headlines: a wider
+  // window alone returns the same newest articles first.
+  const run = async (env) => {
+    const calls = [];
+    isolate(t, { ...KEYLESS_ENV, WORLD_NEWS_API_KEY: 'k1', ...env });
+    t.mock.method(Date, 'now', () => T0);
+    t.mock.method(globalThis, 'fetch', async (raw) => {
+      const url = new URL(raw);
+      const size = Number(url.searchParams.get('number'));
+      const offset = Number(url.searchParams.get('offset'));
+      calls.push({
+        offset,
+        since: url.searchParams.get('earliest-publish-date'),
+      });
+      // Full pages, so the walk is never cut short by a short page.
+      return page(
+        Array.from({ length: size }, (_, i) => article(offset + i + 1)),
+        { request: 1 },
+      );
+    });
+    const request = install(worldNewsProxy({ pageDelayMs: 0 }));
+    json(await request('/'));
+    return calls;
+  };
+
+  const byDefault = await run({});
+  assert.equal(byDefault.length, 3, 'three pages per refresh by default');
+  assert.deepEqual(
+    byDefault.map(({ offset }) => offset),
+    [0, 100, 200],
+  );
+  assert.equal(byDefault[0].since, '2026-09-12 12:00:00'); // 72h before T0
+
+  assert.equal((await run({ WORLD_NEWS_PAGES: '1' })).length, 1);
+  assert.equal(
+    (await run({ WORLD_NEWS_PAGES: '99' })).length,
+    5,
+    'clamped to WORLD_NEWS_MAX_PAGES',
+  );
+
+  assert.equal(
+    (await run({ WORLD_NEWS_WINDOW_HOURS: '24' }))[0].since,
+    '2026-09-14 12:00:00',
+  );
+  assert.equal(
+    (await run({ WORLD_NEWS_WINDOW_HOURS: '100000' }))[0].since,
+    '2026-09-08 12:00:00', // clamped to 168h
+  );
+  assert.equal(
+    (await run({ WORLD_NEWS_WINDOW_HOURS: 'nonsense' }))[0].since,
+    '2026-09-12 12:00:00', // falls back to the 72h default
+  );
 });
