@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { onRequest } from './ais-live.ts';
+import { onRequest } from './ais-live.js';
 
 const ctx = (request) => ({ request });
 const get = () => new Request('https://example.com/api/ais-live');

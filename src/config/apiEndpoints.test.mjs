@@ -107,8 +107,11 @@ function pagesFunctionPrefixes() {
   for (const entry of readdirSync(apiDir, { withFileTypes: true })) {
     if (entry.name.startsWith('_')) continue; // _lib.js, _upstream.js — shared modules, not routes
     if (entry.isFile()) {
-      if (/\.(js|ts)$/.test(entry.name) && !entry.name.includes('.test.')) {
-        prefixes.add(entry.name.replace(/\.(js|ts)$/, ''));
+      // Handlers are .js by convention — the three legacy .ts Pages stubs
+      // were converted in the 2026-09-20 cleanup; a .ts handler file is now
+      // a parity failure, not an accepted variant.
+      if (/\.js$/.test(entry.name) && !entry.name.includes('.test.')) {
+        prefixes.add(entry.name.replace(/\.js$/, ''));
       }
       continue;
     }

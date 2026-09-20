@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { onRequest } from './analytics.ts';
+import { onRequest } from './analytics.js';
 
 const ctx = (request) => ({ request });
 const post = () => new Request('https://example.com/api/analytics', { method: 'POST' });
