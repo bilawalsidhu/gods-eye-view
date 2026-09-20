@@ -1797,6 +1797,18 @@ GitForge pipeline green.
     Each is re-validated solo in RUN 2 on a quiet box (load < 10) before
     the release commit; a red that survives the solo re-run is a REAL
     regression and blocks release.
+  - Also fixed in the wake of RUN 1: the ambient-budget exhaustion test
+    in `src/data/flights.test.mjs` raced its own 10 ms QA refill window
+    (a scheduler preemption between synchronous asks crossed a boundary
+    and clamped the bucket mid-phase) — the knobs are read lazily per
+    refill, so the test now freezes the window across the deterministic
+    phases; suite 3,790/3,790 green including under load.
+  - Coverage ratchet LANDED (2026-09-20): `test:coverage` now runs c8
+    with floors (lines 91, statements 91, functions 90, branches 80)
+    just below the measured 91.58/91.58/91.21/81.19 — the CI coverage
+    job gates collapse, not variance (ADR 0008). Dead `playwright`
+    devDependency dropped (zero references; puppeteer drives all
+    harnesses).
 - [ ] **Release & deploy**: version bump + changelog + tag; deploy →
   verify → publish (RUNBOOK pinned order); GitHub release.
 
