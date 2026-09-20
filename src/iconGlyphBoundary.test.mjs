@@ -13,6 +13,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expandApplicationHtml } from '../build/application-html.js';
 import {
+  checkBrandMarks,
+  scanBrandMarks,
+} from '../scripts/check-brand-marks.mjs';
+import {
   ICON_CLASS,
   ICON_FALLBACK,
   ICON_STROKE_WIDTH,
@@ -875,3 +879,78 @@ test('Material Symbols usage is confined to the pinned legacy allowlist; layer-p
   );
 });
 
+// ---------------------------------------------------------------------------
+// Brand mark: exactly one per header surface (2026-09-20)
+// ---------------------------------------------------------------------------
+
+/** Header surfaces and the template that owns each one. */
+const BRAND_MARK_SURFACES = Object.freeze({
+  '#title-bar': 'src/ui/templates/scene-chrome.html',
+  '#loading-screen': 'src/ui/templates/hud-loading.html',
+});
+
+test('each header surface template renders exactly one brand mark, tagged data-brand-mark', () => {
+  const records = Object.entries(BRAND_MARK_SURFACES).map(([surface, file]) => ({
+    file,
+    surface,
+    text: readFileSync(path.join(REPO_ROOT, file), 'utf8'),
+  }));
+  const { violations, marks } = checkBrandMarks(records);
+  assert.deepEqual(violations, [], violations.join('\n'));
+  for (const { file, surface } of records) {
+    const found = marks[file] || [];
+    assert.equal(
+      found.length,
+      1,
+      `${surface} (${file}) renders ${found.length} brand mark(s); expected exactly 1`,
+    );
+    assert.equal(found[0].hasAttribute, true, `${surface}: the brand mark lacks data-brand-mark`);
+  }
+});
+
+test('the assembled application markup renders one data-brand-mark per header surface and no untagged brand asset', () => {
+  const html = expandApplicationHtml(
+    readFileSync(path.join(REPO_ROOT, 'index.html'), 'utf8'),
+  );
+  const all = scanBrandMarks(html);
+  const untagged = all.filter((m) => !m.hasAttribute);
+  assert.deepEqual(
+    untagged.map((m) => `${m.line}: ${m.snippet}`),
+    [],
+    'every rendered brand asset must carry data-brand-mark',
+  );
+  assert.equal(
+    (html.match(/\bdata-brand-mark=/g) || []).length,
+    Object.keys(BRAND_MARK_SURFACES).length,
+    'one data-brand-mark per header surface (#title-bar, #loading-screen)',
+  );
+  // The stacked ON/DEMAND lockup no longer appears on any rendered surface.
+  assert.equal(/brand-wordmark-logo|brand-loader-wordmark|logo-light\.svg|logo-dark\.svg/.test(html), false, 'the lockup picture must not be rendered in the app markup');
+  for (const surface of Object.keys(BRAND_MARK_SURFACES)) {
+    const id = surface.slice(1);
+    const start = html.indexOf(`id="${id}"`);
+    assert.notEqual(start, -1, `${surface} is present in the assembled markup`);
+    // Slice up to the next top-level template comment / sibling surface to keep the window local.
+    const window = html.slice(start, start + 2500);
+    const count = (window.match(/\bdata-brand-mark=/g) || []).length;
+    assert.equal(count, 1, `${surface}: ${count} data-brand-mark element(s) in its markup window; expected exactly 1`);
+  }
+});
+
+test('the brand-mark scanner flags a duplicate mark and an untagged mark (guard self-test)', () => {
+  const duplicate = `<div id="x"><span class="brand-logo" data-brand-mark="mark"><img src="/brand/mark-light.svg" alt=""/></span>` +
+    `<picture class="brand-wordmark-logo" data-brand-mark="lockup"><img src="/brand/logo-light.svg" alt=""/></picture></div>`;
+  const untagged = `<span class="title-logo brand-logo" data-logo-gaze><img src="/brand/mark-light.svg" alt=""/></span>`;
+  const valid = `<link rel="icon" href="/brand/mark.svg"><meta property="og:image" content="/brand/og-image.png">` +
+    `<span class="brand-logo" data-brand-mark="mark"><img src="/brand/mark-light.svg" alt=""/></span>`;
+  const r = checkBrandMarks([
+    { file: 'dup.html', text: duplicate },
+    { file: 'untagged.html', text: untagged },
+    { file: 'valid.html', text: valid },
+  ]);
+  assert.equal(r.marks['dup.html'].length, 2);
+  assert.ok(r.violations.some((v) => v.startsWith('dup.html: renders 2 brand marks')), r.violations.join('\n'));
+  assert.ok(r.violations.some((v) => v.startsWith('untagged.html:1') && v.includes('without data-brand-mark')), r.violations.join('\n'));
+  assert.equal(r.marks['valid.html'].length, 1, 'favicon link and og:image meta are not rendered marks');
+  assert.equal(r.violations.filter((v) => v.startsWith('valid.html')).length, 0);
+});

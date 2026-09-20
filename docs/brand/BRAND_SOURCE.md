@@ -110,11 +110,18 @@ Ordering note: the tokens are numbered 900→50 / 600→100 in the order the gui
 | SAMPLED (from supplied PNGs) | `#0D5849` as the ink of the green logo rasters (coincides with documented Primary 1); `#0D0D0D` ink and the alternative mixed-case lockup of the uploaded PNG; `logo_dark.png` being a p3 crop |
 | DERIVED (this repo's decisions) | every semantic alias and usage role; the 900/700/500/200/50 and 600–100 numbering; the green tile + 20 % radius of `mark.svg`; the 65 % mark ratio applied to a 512 px tile; the og-image composition (60 % width lockup on `#161616`); the 2 % viewBox pad; the font fallback stack; `--od-font-mono`; `site.webmanifest` names and colours |
 
-### Dark-header logo variant (recorded 2026-09-18)
+### Dark-header logo variant (recorded 2026-09-18; amended 2026-09-20)
 
-**What the dark header actually renders.** The application header
-(`src/ui/templates/scene-chrome.html`, lines 13–14) wires the lockup through a
-`<picture>` element:
+**Amendment 2026-09-20 — one brand mark per surface.** The `<picture>` lockup
+described below was removed from `#title-bar` (and the identical one from
+`#loading-screen`) because it duplicated the circular mark rendered beside the
+product name in the same panel. The header now renders only the `h1` mark, tagged
+`data-brand-mark="mark"` (`docs/BRANDING.md` §4; guard: `scripts/check-brand-marks.mjs`).
+The paragraphs below are kept as the record of the 2026-09-18 state.
+
+**What the dark header rendered on 2026-09-18.** The application header
+(`src/ui/templates/scene-chrome.html`, lines 13–14 at that time) wired the lockup
+through a `<picture>` element:
 
 ```html
 <picture class="brand-wordmark-logo" aria-hidden="true"><source srcset="/brand/logo-dark.svg" media="(prefers-color-scheme: light)" /><img src="/brand/logo-light.svg" alt="" /></picture>

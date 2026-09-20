@@ -11,6 +11,11 @@
  *             expanded (incl. Global Context), 55 s settle; document-wide count; +1 with ASK ONDEMAND open.
  * Output: <out>/<scene>-scope<scope>.json plus PNG proofs (full viewport, DATA LAYERS panel, DISPLAY panel,
  * header crop, chat overlay). Runs in its own process; the browser is closed on every exit path.
+ *
+ * Brand-mark guard (2026-09-20): every header surface must render exactly ONE `[data-brand-mark]` element —
+ * `#title-bar` and `#loading-screen` exactly 1; chat overlay, Space Missions panel, cockpit and Global Context
+ * at most 1 — and no brand asset (`/brand/mark*`, `/brand/logo-*`) may render without the attribute. Any
+ * violation is listed in `result.brandMarkFailures`, printed, and makes the process exit 1.
  */
 import puppeteer from 'puppeteer';
 import fs from 'node:fs';
@@ -48,11 +53,41 @@ try {
   page.on('response', (r) => { result.network.total++; const s = r.status(); if (s === 502) result.network.status502.push(r.url()); else if (s >= 500) result.network.status5xx.push(`${s} ${r.url()}`); });
   page.on('console', (m) => { if (m.type() === 'error') result.console.errors.push(m.text().slice(0, 200)); });
   page.on('pageerror', (e) => result.console.pageErrors.push(String(e.message).slice(0, 200)));
+  // ---- brand-mark guard: one [data-brand-mark] per header surface ----
+  const BRAND_SURFACES = { 'header panel': '#title-bar', 'loading screen': '#loading-screen', 'chat overlay header': '#ondemand-entity-chat', 'Space Missions panel': '#space-mission-panel-host', 'cockpit': '#cockpit-hud', 'context': '#global-context-panel' };
+  const EXACTLY_ONE = new Set(['header panel', 'loading screen']);
+  const collectBrandMarks = (label) => page.evaluate((surfaces) => {
+    const out = { surfaces: {}, untagged: [] };
+    for (const [name, sel] of Object.entries(surfaces)) {
+      const el = document.querySelector(sel);
+      if (!el) { out.surfaces[name] = { selector: sel, present: false, count: null, untagged: 0 }; continue; }
+      const tagged = el.querySelectorAll('[data-brand-mark]').length;
+      const assets = [...el.querySelectorAll('img[src*="/brand/mark"], img[src*="/brand/logo-"], picture[class*="brand"], svg[data-brand-mark]')];
+      const untagged = assets.filter((a) => !a.closest('[data-brand-mark]')).length;
+      out.surfaces[name] = { selector: sel, present: true, count: tagged, untagged, textSample: (el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 60) };
+    }
+    out.documentTagged = document.querySelectorAll('[data-brand-mark]').length;
+    out.untagged = [...document.querySelectorAll('img[src*="/brand/mark"], img[src*="/brand/logo-"], picture[class*="brand"]')].filter((a) => !a.closest('[data-brand-mark]')).map((a) => a.outerHTML.slice(0, 120));
+    return out;
+  }, BRAND_SURFACES).then((r) => { r.label = label; r.at = new Date().toISOString(); return r; });
+  const assertBrandMarks = (snap) => {
+    const failures = [];
+    for (const [name, info] of Object.entries(snap.surfaces)) {
+      if (!info.present) continue;
+      if (EXACTLY_ONE.has(name) && info.count !== 1) failures.push(`${snap.label}: ${name} (${info.selector}) renders ${info.count} [data-brand-mark] element(s); expected exactly 1`);
+      if (!EXACTLY_ONE.has(name) && info.count > 1) failures.push(`${snap.label}: ${name} (${info.selector}) renders ${info.count} [data-brand-mark] element(s); expected at most 1`);
+      if (info.untagged > 0) failures.push(`${snap.label}: ${name} (${info.selector}) renders ${info.untagged} brand asset(s) without data-brand-mark`);
+    }
+    if (snap.untagged.length) failures.push(`${snap.label}: ${snap.untagged.length} brand asset(s) rendered without data-brand-mark: ${snap.untagged.join(' | ')}`);
+    return failures;
+  };
+  result.brandMarks = []; result.brandMarkFailures = [];
   const url = `${baseUrl}/?welcome=0${scene.hash}`; result.url = url;
   log('goto', url);
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 90000 });
   await page.waitForFunction(() => window.__godsEyeView?.dataManager && document.querySelectorAll('#data-toggles [data-layer-id]').length >= 18, { timeout: 90000 });
   result.appReadyAt = ts();
+  { const snap = await collectBrandMarks('at app-ready'); result.brandMarks.push(snap); result.brandMarkFailures.push(...assertBrandMarks(snap)); log('brand marks at app-ready', JSON.stringify(Object.fromEntries(Object.entries(snap.surfaces).map(([k, v]) => [k, v.present ? v.count : 'absent'])))); }
   await page.waitForFunction((lat, lon) => { const v = window.__godsEyeView?.viewer; if (!v) return false; const c = v.camera.positionCartographic; const d = Math.PI / 180; return Math.abs(c.latitude / d - lat) < 0.08 && Math.abs(c.longitude / d - lon) < 0.08; }, { timeout: 60000 }, scene.lat, scene.lon).catch(() => { result.cameraRestore = 'TIMEOUT'; });
   result.cameraRestoredAt = ts(); result.cameraAfterRestore = await cam(page);
   // enable layers by DATA LAYERS row name, after the camera restore
@@ -116,6 +151,7 @@ try {
     };
   });
   result.dom = await collect(); result.assertedAt = ts();
+  { const snap = await collectBrandMarks('after settle'); result.brandMarks.push(snap); result.brandMarkFailures.push(...assertBrandMarks(snap)); }
   log('svg', result.dom.svgDataIconCount, JSON.stringify(result.dom.strokeWidths), 'rows18', result.dom.rowsInlineSvg18, 'unavail', result.dom.unavailableBadges, 'clear', JSON.stringify(result.dom.clearLayers && { icon: result.dom.clearLayers.dataIcon, w: result.dom.clearLayers.w, sw: result.dom.clearLayers.strokeAttr, material: result.dom.clearLayers.materialInside }));
   // screenshots
   const clip = async (file, r, pad = 4) => { if (!r || r.width < 2 || r.height < 2) return null; const x = Math.max(0, r.x - pad), y = Math.max(0, r.y - pad); await page.screenshot({ path: file, clip: { x, y, width: Math.min(1440 - x, r.width + 2 * pad), height: Math.min(900 - y, r.height + 2 * pad) } }); return file; };
@@ -133,6 +169,7 @@ try {
   await pauseRender(true);
   if (result.chat?.chatVisible) { await page.screenshot({ path: `${prefix}-chat.png` }); result.shots.chat = `${prefix}-chat.png`; }
   result.domWithChat = await collect();
+  { const snap = await collectBrandMarks('with ASK ONDEMAND open'); result.brandMarks.push(snap); result.brandMarkFailures.push(...assertBrandMarks(snap)); log('brand marks with chat open', JSON.stringify(Object.fromEntries(Object.entries(snap.surfaces).map(([k, v]) => [k, v.present ? v.count : 'absent'])))); }
   await page.evaluate(() => { try { document.querySelector('.od-chat__close')?.click(); } catch {} });
   result.finishedAt = ts();
 } catch (e) {
@@ -142,4 +179,10 @@ try {
 }
 fs.writeFileSync(`${prefix}.json`, JSON.stringify(result, null, 2));
 console.log('RESULT_JSON', `${prefix}.json`);
-process.exitCode = result.error ? 1 : 0;
+if (result.brandMarkFailures && result.brandMarkFailures.length) {
+  console.error(`BRAND MARK GUARD FAILED (${result.brandMarkFailures.length}):`);
+  for (const f of result.brandMarkFailures) console.error(`  - ${f}`);
+} else if (result.brandMarks) {
+  console.log('BRAND MARK GUARD OK — one [data-brand-mark] per header surface:', JSON.stringify(result.brandMarks.map((s) => [s.label, Object.fromEntries(Object.entries(s.surfaces).filter(([, v]) => v.present).map(([k, v]) => [k, v.count]))])));
+}
+process.exitCode = result.error || (result.brandMarkFailures && result.brandMarkFailures.length) ? 1 : 0;

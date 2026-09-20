@@ -683,16 +683,6 @@ body:has(.data-toggle-row[data-layer-id='alpr-cameras'] .data-toggle-btn.active)
   padding: 10px 16px 10px 12px;
   backdrop-filter: blur(14px);
 }
-#title-bar .brand-wordmark-logo {
-  display: block;
-  height: 26px;
-  width: auto;
-}
-#title-bar .brand-wordmark-logo img {
-  display: block;
-  height: 26px;
-  width: auto;
-}
 #title-bar h1 {
   font-size: 15px;
   letter-spacing: 2px;
@@ -712,12 +702,6 @@ body:has(.data-toggle-row[data-layer-id='alpr-cameras'] .data-toggle-btn.active)
 .loader-content .loader-logo svg {
   width: 72px;
   height: 72px;
-}
-.loader-content .brand-loader-wordmark img {
-  display: block;
-  height: 30px;
-  width: auto;
-  margin: 0 auto 10px;
 }
 .brand-primary-btn,
 button.brand-primary-btn {

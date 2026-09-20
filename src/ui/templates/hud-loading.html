@@ -1,11 +1,11 @@
   <!-- Intelligence HUD Overlay -->
   <div id="intel-hud"></div>
 
-  <!-- Loading screen -->
+  <!-- Loading screen. One brand mark per surface (docs/BRANDING.md §4, 2026-09-20): the animated
+       mark + the "OnDemand Spatial" heading; the duplicate ON/DEMAND lockup was removed. -->
   <div id="loading-screen">
     <div class="loader-content">
-      <span class="loader-logo brand-logo" data-logo-gaze data-logo-src="/brand/mark-light.svg" aria-hidden="true"><img src="/brand/mark-light.svg" alt="" /></span>
-      <picture class="brand-loader-wordmark" aria-hidden="true"><source srcset="/brand/logo-dark.svg" media="(prefers-color-scheme: light)" /><img src="/brand/logo-light.svg" alt="" /></picture>
+      <span class="loader-logo brand-logo" data-brand-mark="mark" data-logo-gaze data-logo-src="/brand/mark-light.svg" aria-hidden="true"><img src="/brand/mark-light.svg" alt="" /></span>
       <h2>OnDemand <span class="title-accent">Spatial</span></h2>
       <p class="loader-status">Initializing photorealistic world...</p>
     </div>
