@@ -210,7 +210,7 @@ plain `npm test` keeps the allocation gate.
       above is the current truth; CI enforces lint + full suite (with the
       allocation gate) + build + bundle budgets on every push.
 
-## Phase 4 — WCAG 2.1 accessibility (IN PROGRESS)
+## Phase 4 — WCAG 2.1 accessibility (DONE 2026-09-20)
 
 Note on the bar: the original goal named AAA; this plan treats AA as the
 gate (AAA's 7:1 contrast and sign-language/extended-audio requirements are
@@ -241,7 +241,13 @@ visual identities) and fixes AAA-level items where they are free.
 - [x] Live axe pass over HUD, layer panel, first-run launcher, and voice
       overlay; triage the report into fixes. DONE 2026-09-13 — qa-a11y
       (boot + panel-expanded) reports 0 violations across
-      wcag2a/2aa/21aa/2aaa/21aaa + best-practice. Findings fixed:
+      wcag2a/2aa/21aa/2aaa/21aaa + best-practice. RE-VERIFIED 2026-09-20
+      against the current tree (after the sonarjs refactor waves touched
+      screenAnnotationRenderer, radioPanel, CockpitViewController,
+      splitFlap, worldOverlay): still 0 violations in both states; the
+      2 `incomplete` checks per state are axe's color-contrast /
+      color-contrast-enhanced probes that cannot statically evaluate text
+      composited over live globe imagery (not failures). Findings fixed:
       `#first-run-launcher` aria-allowed-role (aside + role=dialog → div);
       axe `region` landmark pass — named roles on the EXISTING shell
       containers (no wrappers, so nothing can re-anchor the fixed
@@ -1478,6 +1484,29 @@ GitForge pipeline green.
   is vendored `public/cesium/**`, docs prose, and test localhost mocks.
   Real items: **HSTS header missing** in `public/_headers`; CSP is
   Report-Only pending a quiet-report cycle (documented in the file).
+  BOTH REAL ITEMS CLOSED since that triage (verified 2026-09-20): the
+  CSP directive block in `public/_headers` is ENFORCING (flip piloted and
+  evidence-documented in the file, 2026-09-15) and
+  `Strict-Transport-Security: max-age=31536000; includeSubDomains` ships on
+  `/*` (preload deliberately omitted — operator decision).
+- **Pattern gate WIRED 2026-09-20**: `aegis scan --categories secrets
+  --severity-threshold high --baseline .aegis-baseline.json .` is now a
+  `security` job in the GitForge linear chain (`.gitforce.yml`, right
+  after lint; no `npm ci` — the scan reads the checkout as-is). The
+  committed `.aegis-baseline.json` (40 KB, 68 fingerprinted secrets-shaped
+  findings, slimmed from the 6.8 MB raw scan per dsc's recipe) pins the
+  accepted set, so only NEW fingerprints fail the job. Canary-verified:
+  baselined tree exits 0; a planted random-shaped AWS key exits 1
+  (hardcoded-password, `.aegis-canary3.cfg:2` in the canary log). NOTE for
+  future canaries: the canonical AWS doc key AKIAIOSFODNN7EXAMPLE is
+  allowlisted by the scanner and proves nothing. The binary rides
+  gev-ci-node:1 (`COPY bin/aegis`), bookworm-built from the local aegis
+  checkout because host-built (Debian 13, glibc 2.41) binaries die in the
+  image (`GLIBC_2.38 not found`) — rebuild recipe in the ci-node.Dockerfile
+  header. The GitHub workflow deliberately does NOT run this gate (no
+  aegis install path on hosted runners; documented in the ci.yml header).
+  Version check rides the job step (`aegis --version`) so a stale image is
+  visible in the log.
 - **Sibling best-practices review** (dsc, GitForge, backend-fixed): adopt
   (1) a formatter gate (`prettier --check`, dsc `lint:prettier`),
   (2) measurable JSDoc coverage tooling (dsc `docs:coverage` typedoc
@@ -1486,6 +1515,18 @@ GitForge pipeline green.
   pattern), (5) a ratcheting coverage threshold. gods-eye-view leads
   siblings on QA breadth (40 harnesses), RUNBOOK/KNOWN-ISSUES discipline,
   and CI verify depth — nothing to adopt there.
+  RESOLUTION 2026-09-20: (2) DONE then superseded — the jsdoc REQUIRE tier
+  was authored to zero and PROMOTED into the merge gate (Batch E/H), which
+  is stronger than a metric script; (4) DONE — `scripts/qa-all.mjs` (Batch
+  J, with per-suite argv/timeout contracts and the ENV-GATED class);
+  (3) ADOPTED — `docs/adr/` seeded with 11 records for the canonical
+  decisions (single-source vanilla JS, Pages Functions canonical, enforced
+  parity, cesium pins, retro default, render governor, CSP contract,
+  coverage boundary, keyless contract, GitForge primary, prettier
+  declined); (5) ADOPTED — c8 line/statement floors in the `test:coverage`
+  invocation (ratchet by raising the flags deliberately); (1) DECLINED
+  with evidence — post-hoc prettier would rewrite 505 files and disturb
+  the source-anchor regression tests right before a release (ADR 0011).
 - **Coverage 81.17%**: worst modules — logoGaze 26.5, cctvGizmo 30.4,
   cockpitCloudEffects 37.9, celestialRing 37.9, flowMatch 38.1, traffic
   46.6, opensky 47.7, bikeshare 57.8, splitFlap 59.7, gevActions 60.3,
@@ -1558,7 +1599,7 @@ GitForge pipeline green.
     `jsonResponse`/`rateLimitedResponse` helpers carry the same constant.
     Verified on the dist artifact: shell has HSTS + enforced CSP; API
     responses now answer with nosniff.
-- [ ] **Batches B/C/D (coverage waves)**: worst-module-first real tests
+- [x] **Batches B/C/D (coverage waves)**: worst-module-first real tests
   (wave 1 pure logic: logoGaze, flowMatch, celestialRing, splitFlap;
   wave 2 proxies/functions: opensky, tomtomTiles, bikeshare,
   cctvSources; wave 3 browser-coupled with existing mock seams:
@@ -1566,6 +1607,14 @@ GitForge pipeline green.
   director). Each wave: gates green + push; coverage number recorded
   per wave. 99% statements is the goal line; ratchet via a threshold
   in `test:coverage` once above 90%.
+  SUPERSEDED 2026-09-20 by the Phase 3 campaign (see Phase 3 close-out
+  entry): 91.59% lines (from 90.55%), 3,543→3,793 tests, the entire
+  mid-tail AND long tail eliminated, two production bugs found and fixed
+  along the way (syntheticTraffic frozen phantoms; telegeography stale
+  loading label), and the remaining boundary honestly documented as the
+  17 scene-coupled shells (ADR 0008) — the wave-3 modules among them.
+  The ratchet this batch called for landed as c8 floor flags in
+  `test:coverage`.
 - [x] **Batch E (lint)** (2026-09-15): `eslint-plugin-jsdoc` +
   `eslint-plugin-unicorn` (pinned 59.0.1 — 60.x needs ESLint 10) wired
   into the gate at error level, zero warnings retained. Gate keeps the
@@ -1720,6 +1769,34 @@ GitForge pipeline green.
   run 3 executed green-or-env-gated on the fixed tree.
 - [ ] **Validation**: e2e orchestrator over all 40 suites (fix reds as
   found), full local gates, GitForge green on the release commit.
+  RUN 1 (2026-09-20, 3h25m, shared NAS): 19/40 PASS, 6 ENV-GATED
+  (firms, l9-matrix owner-run items, traffic×3, voice-routing — keyless
+  by design), 15 FAIL — and the load average on the shared box ran
+  17–38 throughout (other tenants compiling Rust + running Python + four
+  concurrent agent sessions), which starves every timing-sensitive
+  assertion. Triage of all 15:
+  - HARNESS BUGS, fixed in this campaign (2): `qa-floor-hold.mjs` and
+    `qa-voice-wav.mjs` passed `puppeteer.executablePath()` raw to
+    `launch()` — puppeteer 25.x made that getter ASYNC, so launch died
+    with "Browser was not found at the configured executablePath
+    ([object Promise])" on machines without the bundled download. Both
+    now use the candidate-list idiom the other 28 harnesses already had
+    (env override first, then the pinned download, then platform paths;
+    existsSync-filtered).
+  - LOAD FLAKES (12): qa-attribution-b12 + qa-enrich-ambient (console
+    ERR_NETWORK_CHANGED on Google tile CDN — network blips, 20/21 and
+    10/11 real assertions passed), qa-cables-shot (180 s CDP
+    protocolTimeout mid-evaluate), qa-cockpit-utility (10 s cockpit-entry
+    waitFor), qa-flyroute-cinema (0.7 fps camera sampling), qa-height-
+    datum (terrain probes non-finite under starved LOD streaming),
+    qa-labels + qa-perf (perf bars: paint p95 28.7 ms vs 10 ms bar under
+    a box running 4× over its quiet baseline), qa-radio (pixel-layout
+    assertions mid-transition), qa-view-target-prewarm (0 picks served),
+    qa-traffic-baseline / qa-vessel-cards / qa-vessel-datum (60 s waits
+    on live TomTom capture / LIVE AISStream rows under contention).
+    Each is re-validated solo in RUN 2 on a quiet box (load < 10) before
+    the release commit; a red that survives the solo re-run is a REAL
+    regression and blocks release.
 - [ ] **Release & deploy**: version bump + changelog + tag; deploy →
   verify → publish (RUNBOOK pinned order); GitHub release.
 
