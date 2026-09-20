@@ -194,7 +194,18 @@ const WORKLOADS = [
     candidates: LOCAL_OVERLAY_COHORT_LIMIT * 2 + FIRMS_AMBIENT_COHORT_LIMIT
       + vesselOverlayCohortLimit(1600, 900) + 1 + CCTV_AMBIENT_CARD_MAX + 1
       + EARTHQUAKE_OVERLAY_COHORT_LIMIT + 3,
-    maxBytesPerFrame: 132_000,
+    // 2026-09-20: raised from 132_000 to 136_000. `git bisect` (good 7a24c7a,
+    // bad 219f634, probe run on Node 24.14.1) lands on 9ce49cd "feat(ui):
+    // replace emoji icons with SVG icon set", which widened every FIRMS ambient
+    // card title from "▲ NN MW" (7 chars) to "FIRE NN MW" (10 chars) in
+    // production (src/layers/firms/model.js) and in this probe's fixture; the
+    // wider cards raise the saturated collision-solver work by a measured
+    // median 132,952-132,953 B/frame (+0.72%, max 135,055) while the
+    // per-candidate median stayed at 225.0 B — no per-entry regression. Value
+    // = measured median × 1.02 = 135,612 → next 1,000 = 136,000 (2.3% headroom;
+    // the observed max chunk also fits). Decision recorded in
+    // docs/PERFORMANCE.md ("2026-09-20 — Phase-5 steady-frame budget").
+    maxBytesPerFrame: 136_000,
     maxBytesPerCandidatePerFrame: 225,
     saturated: true,
     ambientCardCapacity: AMBIENT_CARD_COLLISION_CAPACITY,

@@ -142,3 +142,36 @@ Use the same controls before attributing a difference to the application:
 
 Use this page as a regression baseline for one known hardware and browser
 configuration, not as a compatibility guarantee.
+
+## 2026-09-20 — Phase-5 steady-frame allocation budget raised to 136,000 B/frame
+
+Decision record for `src/overlays/worldOverlayAllocation.test.mjs`, workload
+"steady moving-source frames stay in budget with final Phase 5 host sources live
+(pre-cable-migration surface)".
+
+- **Symptom.** On the calibrated Node 24 runtime the probe failed with
+  `median 132,953 B/frame (max 135,055) > 132,000` (591 candidates / 345 painted,
+  480 frames / 120 solves); the per-candidate median was unchanged at 225.0 B.
+  The probe is skipped on other Node majors, which is why the 2026-09-19 passes
+  run on Node 22 reported the suite green.
+- **Bisect (Node 24.14.1, 2026-09-20T07:12Z-07:21Z).** `7a24c7a` green (13/13),
+  `1b9e9a8` red (12/13, median 132,952), first bad commit **`9ce49cd` "feat(ui):
+  replace emoji icons with SVG icon set"** (2026-09-19T05:25:51Z).
+- **Cause.** That commit changed the FIRMS ambient card title from `▲ NN MW`
+  (7 chars) to `FIRE NN MW` (10 chars) in production
+  (`src/layers/firms/model.js`) and in the probe fixture that mirrors it. With
+  the probe's 6 px/char text metric every ambient fire card is 18 px wider, so
+  the saturated ambient-card collision solver does measurably more overlap
+  work per frame. The overlay hot path itself was not touched by the commit and
+  no per-entry churn was introduced (225.0 B/candidate before and after).
+- **Decision.** No behaviour-neutral trim of >= 953 B/frame was identified in
+  the placement solver within the fix pass (the solver already uses index
+  loops and pooled scratch records), so the budget for this single row is
+  raised from 132,000 to **136,000 B/frame** = measured median 132,953 x 1.02
+  (135,612) rounded up to the next 1,000; the observed max chunk (135,055)
+  also fits. Every other row keeps its previous budget; the 225 B/candidate
+  ceiling is unchanged.
+- **Verification.** Probe green on Node 24.14.1 after the change; full unit
+  gate run three times (see the 2026-09-20 closeout addendum in
+  `docs/audit/closeout-2026-09-19.md` for the timestamps).
+
