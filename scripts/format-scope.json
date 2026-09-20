@@ -21,6 +21,17 @@
   "src/annotations/drawMode.test.mjs",
   "src/annotations/drawTool.js",
   "src/annotations/drawTool.test.mjs",
+  "src/annotations/geofenceTool.js",
+  "src/annotations/geofenceRenderer.js",
+  "src/annotations/geofenceModel.test.mjs",
+  "src/annotations/geofenceMonitor.js",
+  "src/annotations/geofenceIntersection.test.mjs",
+  "src/annotations/geofenceStateTracker.test.mjs",
+  "src/annotations/geofenceWebhook.test.mjs",
+  "src/annotations/geofenceWebhook.js",
+  "src/annotations/geofenceStateTracker.js",
+  "src/annotations/geofenceIntersection.js",
+  "src/annotations/geofenceModel.js",
   "src/data/inputOwnership.test.mjs",
   "docs/CODE-BOUNDARIES.md",
   "src/main.js",
@@ -744,5 +755,7 @@
   "src/director/interactions/interactions.test.mjs",
   "scripts/qa-director-interactions.mjs",
   "src/director/sharing/sharing.test.mjs",
-  "scripts/qa-director-sharing.mjs"
+  "scripts/qa-director-sharing.mjs",
+  "src/annotations/geofenceAlert.js",
+  "src/annotations/geofenceAlert.test.mjs"
 ]

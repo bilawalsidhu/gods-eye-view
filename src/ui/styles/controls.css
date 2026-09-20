@@ -868,6 +868,32 @@ body.gev-drawing #cesiumContainer canvas {
   cursor: crosshair;
 }
 
+/* DISPLAY ▸ Geofence: draw / edit / clear closed polygon */
+#geofence-actions-row {
+  flex-wrap: wrap;
+  row-gap: 6px;
+  min-width: 184px;
+}
+#geofence-actions-row .pp-mode-btn {
+  flex: 1 1 0;
+}
+#geofence-actions-row .pp-mode-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+#geofence-webhook-row,
+#geofence-test-row {
+  flex-wrap: wrap;
+  row-gap: 6px;
+  min-width: 184px;
+}
+#geofence-test-row .pp-mode-btn {
+  flex: 1 1 auto;
+}
+body.gev-geofencing #cesiumContainer canvas {
+  cursor: crosshair;
+}
+
 /* Proximity / All segmented control under the 3D toggle */
 #models3d-mode-row {
   min-width: 184px;
