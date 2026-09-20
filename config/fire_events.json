@@ -1,0 +1,100 @@
+{
+  "$comment": "Registered historic wildfire events replayed from the NASA FIRMS standard-processing archive. The /api/fire-history proxy only fetches events listed here — never client-supplied dates or boxes. bbox is [west, south, east, north] in degrees; dates are inclusive UTC days. `perimeter` (optional) names a whitelisted NIFC ArcGIS service and structured filters; the proxy builds the query itself and keeps the largest matching polygon as the event's final perimeter. Scaffold a new entry with `node scripts/fire-event-scaffold.mjs --name <incident> --year <YYYY>`.",
+  "events": [
+    {
+      "id": "camp-fire-2018",
+      "name": "Camp Fire",
+      "region": "Butte County, California, USA",
+      "startDate": "2018-11-08",
+      "endDate": "2018-11-25",
+      "bbox": [
+        -121.75,
+        39.65,
+        -121.3,
+        39.95
+      ],
+      "sources": [
+        "VIIRS_SNPP_SP",
+        "MODIS_SP"
+      ],
+      "summary": "Ignited near Pulga on 8 November 2018 and destroyed the town of Paradise within hours. Declared contained on 25 November 2018.",
+      "burnedHa": 62053,
+      "references": [
+        {
+          "label": "CAL FIRE incident page",
+          "url": "https://www.fire.ca.gov/incidents/2018/11/8/camp-fire/"
+        }
+      ],
+      "perimeter": {
+        "service": "nifc-history",
+        "incident": "CAMP",
+        "fireYear": "2018",
+        "unitId": "CABTU"
+      }
+    },
+    {
+      "id": "lahaina-2023",
+      "name": "Lahaina Fire",
+      "region": "Maui, Hawaii, USA",
+      "startDate": "2023-08-08",
+      "endDate": "2023-08-12",
+      "bbox": [
+        -156.75,
+        20.8,
+        -156.55,
+        20.98
+      ],
+      "sources": [
+        "VIIRS_SNPP_SP",
+        "VIIRS_NOAA20_SP",
+        "MODIS_SP"
+      ],
+      "summary": "Wind-driven fire that reached the town of Lahaina on 8 August 2023 during Hurricane Dora's passage south of the islands.",
+      "burnedHa": 878,
+      "references": [
+        {
+          "label": "Maui County wildfire updates",
+          "url": "https://www.mauicounty.gov/2536/Maui-Wildfire-Disaster-Updates"
+        }
+      ],
+      "perimeter": {
+        "service": "wfigs",
+        "incident": "Lahaina",
+        "state": "US-HI",
+        "discoveredAfter": "2023-08-01"
+      }
+    },
+    {
+      "id": "park-fire-2024",
+      "name": "Park Fire",
+      "region": "Butte and Tehama Counties, California, USA",
+      "startDate": "2024-07-24",
+      "endDate": "2024-09-26",
+      "bbox": [
+        -122.1,
+        39.75,
+        -121.3,
+        40.45
+      ],
+      "sources": [
+        "VIIRS_SNPP_SP",
+        "VIIRS_NOAA20_SP",
+        "MODIS_SP"
+      ],
+      "summary": "Started in Bidwell Park near Chico on 24 July 2024 and grew into the fourth-largest wildfire in California's recorded history.",
+      "burnedHa": 174000,
+      "references": [
+        {
+          "label": "CAL FIRE incident page",
+          "url": "https://www.fire.ca.gov/incidents/2024/7/24/park-fire/"
+        }
+      ],
+      "perimeter": {
+        "service": "wfigs",
+        "incident": "PARK",
+        "state": "US-CA",
+        "discoveredAfter": "2024-07-01"
+      }
+    }
+  ]
+}

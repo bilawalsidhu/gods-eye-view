@@ -236,6 +236,20 @@ export const DATA_CREDITS = [
       'part of NASA’s Earth Observing System Data and Information System (EOSDIS)',
   },
   {
+    key: 'fire-history',
+    html:
+      'Historic fires: NASA FIRMS standard-processing archive (VIIRS, MODIS) — ' +
+      'registered events fetched at runtime; see ' +
+      '<a href="https://earthdata.nasa.gov/firms" target="_blank" rel="noopener">earthdata.nasa.gov/firms</a>',
+  },
+  {
+    key: 'nifc-perimeters',
+    html:
+      'Historic fire perimeters: National Interagency Fire Center (NIFC) Open Data — ' +
+      'WFIGS Interagency Perimeters and Interagency Fire Perimeter History (U.S. public domain), ' +
+      '<a href="https://data-nifc.opendata.arcgis.com/" target="_blank" rel="noopener">data-nifc.opendata.arcgis.com</a>',
+  },
+  {
     key: 'drivebc-cctv',
     html:
       'CCTV cameras &amp; frames (British Columbia): ' +
