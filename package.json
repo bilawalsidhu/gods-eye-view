@@ -46,7 +46,7 @@
     "preview": "vite preview",
     "lint": "eslint . --max-warnings 0",
     "test": "node scripts/run-unit-tests.mjs",
-    "test:coverage": "c8 node scripts/run-unit-tests.mjs --parallel-only",
+    "test:coverage": "c8 --lines 91 --statements 91 --functions 90 --branches 80 node scripts/run-unit-tests.mjs --parallel-only",
     "test:track": "node scripts/track-regression.mjs",
     "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs",
     "qa:all": "node scripts/qa-all.mjs"
@@ -81,7 +81,6 @@
     "eslint-plugin-sonarjs": "^4.2.1",
     "eslint-plugin-unicorn": "^59.0.1",
     "globals": "^17.11.0",
-    "playwright": "^1.62.1",
     "puppeteer": "^25.11.0",
     "sharp": "^0.35.4",
     "typescript": "^6.0.3",
