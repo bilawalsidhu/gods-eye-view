@@ -1,5 +1,13 @@
+import Hls from 'hls.js';
 import { createStandaloneApplication } from './standalone/application.js';
 import { describeError } from './standalone/errors.js';
+import { initI18n } from './i18n/index.js';
+
+if (typeof window !== 'undefined') {
+  window.Hls = Hls;
+}
+
+initI18n();
 
 const application = createStandaloneApplication({
   googleApiKey: import.meta.env.GOOGLE_MAPS_API_KEY,

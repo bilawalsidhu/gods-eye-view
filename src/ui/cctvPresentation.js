@@ -164,10 +164,33 @@ export function _renderCctvState(state) {
     }
   }
 
+  const nextCameraId = enabled ? activeCamera?.id || '' : '';
+  const cameraChanged = Boolean(
+    (this._cctvFrame && this._cctvFrame.dataset.cameraId !== nextCameraId) ||
+    (this._cctvVideo && this._cctvVideo.dataset.cameraId !== nextCameraId),
+  );
+
+  const isVideo =
+    enabled &&
+    activeCamera &&
+    (activeCamera.feedType === 'hls' ||
+      activeCamera.feedType === 'mp4' ||
+      activeCamera.feedType === 'webm' ||
+      String(activeCamera.mediaUrl || '').includes('.m3u8'));
+
+  if (isVideo && this._cctvVideo) {
+    this._queueCctvVideo(activeCamera, cameraChanged);
+  } else if (this._cctvVideo) {
+    this._clearCctvVideo();
+  }
+
   if (this._cctvFrame) {
-    const nextSrc = enabled ? activeCamera?.frameUrl : null;
-    const nextCameraId = enabled ? activeCamera?.id || '' : '';
-    const cameraChanged = this._cctvFrame.dataset.cameraId !== nextCameraId;
+    const isMjpeg = activeCamera?.feedType === 'mjpeg';
+    const nextSrc = enabled
+      ? isMjpeg
+        ? activeCamera.mediaUrl || activeCamera.frameUrl
+        : activeCamera?.frameUrl
+      : null;
     const frameLoading = this._cctvFrame.dataset.loading === 'true';
     // A same-camera refresh waits for the current image to settle. Replacing
     // src every 10 seconds can cancel a slow but healthy decode forever and

@@ -56,6 +56,8 @@ import {
   CALGARY_DOWNTOWN,
   CALGARY_MAX_CATALOG_BYTES,
   CCTV_SOURCE_FETCH_TIMEOUT_MS,
+  DEFAULT_TAIWAN_SOURCE_FILE,
+  TAIWAN_STREAM_ORIGINS,
 } from './constants.js';
 import {
   toFiniteNumber,
@@ -1593,4 +1595,100 @@ export async function loadCalgarySourcesFromOpenData() {
     );
     return [];
   }
+}
+
+/**
+ * Basic Taiwan bounding box sanity check.
+ *
+ * @param {number} lat
+ * @param {number} lon
+ * @returns {boolean}
+ */
+export function isLikelyTaiwanCoordinate(lat, lon) {
+  return (
+    Number.isFinite(lat) &&
+    Number.isFinite(lon) &&
+    lat >= 21.8 &&
+    lat <= 25.5 &&
+    lon >= 119.8 &&
+    lon <= 122.2
+  );
+}
+
+/**
+ * Load curated Taiwan traffic CCTV camera sources from local JSON catalog.
+ *
+ * @param {object} [opts]
+ * @param {string} [opts.sourceRoot=process.cwd()]
+ * @returns {Array<object>}
+ */
+export function loadTaiwanSourcesFromCatalog({
+  sourceRoot = process.cwd(),
+} = {}) {
+  const sourceFile =
+    process.env.CCTV_TAIWAN_SOURCES_FILE || DEFAULT_TAIWAN_SOURCE_FILE;
+  const resolved = path.isAbsolute(sourceFile)
+    ? sourceFile
+    : path.resolve(sourceRoot, sourceFile);
+  let rows = [];
+  try {
+    if (!fs.existsSync(resolved)) {
+      console.warn('[CCTV] Taiwan source file missing:', resolved);
+      return [];
+    }
+    const parsed = JSON.parse(fs.readFileSync(resolved, 'utf8'));
+    rows = Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.warn(
+      '[CCTV] Taiwan source file read error:',
+      error?.message || error,
+    );
+    return [];
+  }
+
+  const cameras = [];
+  for (const item of rows) {
+    if (!item || typeof item !== 'object') continue;
+    const id = typeof item.id === 'string' ? item.id.trim() : '';
+    const url =
+      typeof item.url === 'string'
+        ? item.url.trim()
+        : typeof item.snapshotUrl === 'string'
+          ? item.snapshotUrl.trim()
+          : '';
+    if (!id || !url) continue;
+    if (!TAIWAN_STREAM_ORIGINS.some((o) => url.startsWith(o))) continue;
+    const lat = typeof item.lat === 'number' ? item.lat : NaN;
+    const lon = typeof item.lon === 'number' ? item.lon : NaN;
+    if (!isLikelyTaiwanCoordinate(lat, lon)) continue;
+
+    const headingDeg = toFiniteNumber(item.headingDeg, 0);
+    const pitchDeg = toFiniteNumber(item.pitchDeg, -16);
+    const fovDeg = toFiniteNumber(item.fovDeg, 65);
+    const rangeM = toFiniteNumber(item.rangeM, 500);
+
+    cameras.push({
+      ...item,
+      id,
+      url,
+      snapshotUrl: item.snapshotUrl || url,
+      feedType: item.feedType || 'mjpeg',
+      sourceKind: item.sourceKind || 'traffic-live',
+      provider: item.provider || 'Freeway Bureau (交通部高速公路局)',
+      city: item.city || 'Taiwan',
+      cityId: item.cityId || 'taiwan',
+      lat,
+      lon,
+      headingDeg,
+      pitchDeg,
+      fovDeg,
+      rangeM,
+      poseSource: item.poseSource || 'curated',
+      license:
+        item.license ||
+        'Open Government Data License, Republic of China (Taiwan) / CC-BY 4.0',
+    });
+  }
+  console.log('[CCTV] Loaded Taiwan camera sources:', cameras.length);
+  return cameras;
 }

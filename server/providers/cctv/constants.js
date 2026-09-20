@@ -255,3 +255,13 @@ export const CCTV_FRAME_MAX_BODY_BYTES = 16 * 1024 * 1024;
 export const CCTV_MEDIA_FETCH_TIMEOUT_MS = 15 * 1000;
 /** Declared size ceiling for fixed media responses. */
 export const CCTV_MEDIA_MAX_BODY_BYTES = 64 * 1024 * 1024;
+
+export const DEFAULT_TAIWAN_SOURCE_FILE = 'config/cctv_sources.taiwan.json';
+export const TAIWAN_STREAM_ORIGINS = Object.freeze([
+  'https://cctvn.freeway.gov.tw/',
+  'https://cctvc.freeway.gov.tw/',
+  'https://cctvs.freeway.gov.tw/',
+  'https://cctvn5.freeway.gov.tw/',
+  'https://storage.googleapis.com/',
+  'https://test-streams.mux.dev/',
+]);
