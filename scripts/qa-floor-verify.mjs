@@ -40,6 +40,28 @@ const browser = await puppeteer.launch({
 const page = await browser.newPage();
 await page.setViewport({ width: 1400, height: 900 });
 page.on('pageerror', (e) => console.log('[pageerror]', e.message));
+// Browser-side probe helper, installed document-wide: collect the billboard
+// and model primitives that sampleHeight must exclude (probes would otherwise
+// land on aircraft geometry). Billboards carry image + alignedAxis; models
+// carry activeAnimations + minimumPixelSize — the 3D-Tiles tileset has neither,
+// so excluding IT would leave sampleHeight with no mesh to read at all.
+page.evaluateOnNewDocument(() => {
+  window.__qaCollectExcludePrimitives = (root) => {
+    const excludes = [];
+    const walk = (coll) => {
+      const n = coll.length;
+      for (let i = 0; i < n; i++) {
+        let pr; try { pr = coll.get(i); } catch { continue; }
+        if (!pr) continue;
+        if (typeof pr.length === 'number' && typeof pr.get === 'function') { walk(pr); continue; }
+        if (pr.image !== undefined && pr.alignedAxis !== undefined) { excludes.push(pr); continue; }
+        if (pr.activeAnimations !== undefined && pr.minimumPixelSize !== undefined) excludes.push(pr);
+      }
+    };
+    walk(root);
+    return excludes;
+  };
+});
 await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 120000 });
 await page.waitForFunction(() => window.__godsEyeView?.dataManager && window.__godsEyeView?.viewer, { timeout: 150000 });
 await sleep(2000);
@@ -101,18 +123,7 @@ const report = await page.evaluate(() => {
   // would otherwise land on aircraft geometry. `activeAnimations` +
   // `minimumPixelSize` are Model-only — the 3D-Tiles tileset has neither, and
   // excluding IT would leave sampleHeight with no mesh to read at all.
-  const excludes = [];
-  const walk = (coll) => {
-    const n = coll.length;
-    for (let i = 0; i < n; i++) {
-      let pr; try { pr = coll.get(i); } catch { continue; }
-      if (!pr) continue;
-      if (typeof pr.length === 'number' && typeof pr.get === 'function') { walk(pr); continue; }
-      if (pr.image !== undefined && pr.alignedAxis !== undefined) { excludes.push(pr); continue; }
-      if (pr.activeAnimations !== undefined && pr.minimumPixelSize !== undefined) excludes.push(pr);
-    }
-  };
-  walk(v.scene.primitives);
+  const excludes = window.__qaCollectExcludePrimitives(v.scene.primitives);
   const out = [];
   for (const p of nearby) {
     const raw = ell.cartesianToCartographic(p.position);
@@ -209,18 +220,7 @@ if (buriedNow.size > 0) {
     const C = v.camera.positionCartographic.constructor;
     const center = ell.cartographicToCartesian(C.fromDegrees(window.__QA_SITE.lon, window.__QA_SITE.lat, 200));
     void center;
-    const excludes = [];
-    const walk = (coll) => {
-      const n = coll.length;
-      for (let i = 0; i < n; i++) {
-        let pr; try { pr = coll.get(i); } catch { continue; }
-        if (!pr) continue;
-        if (typeof pr.length === 'number' && typeof pr.get === 'function') { walk(pr); continue; }
-        if (pr.image !== undefined && pr.alignedAxis !== undefined) { excludes.push(pr); continue; }
-        if (pr.activeAnimations !== undefined && pr.minimumPixelSize !== undefined) excludes.push(pr);
-      }
-    };
-    walk(v.scene.primitives);
+    const excludes = window.__qaCollectExcludePrimitives(v.scene.primitives);
     const byIcao = new Map((layer.getDetectableObjects() || []).map((object) => [
       String(object.sourceId || '').trim().toLowerCase(), object,
     ]));

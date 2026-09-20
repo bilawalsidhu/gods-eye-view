@@ -890,7 +890,9 @@ test('a transient monument sweep is retried, never cached', async (t) => {
 test('empty sweep results cache as definitive (one query for the session)', async (t) => {
   const mocks = installResolverMocks(t, {
     geocode: () => geocodeBody(30.33, -97.74, ['premise'], 'November Monument, Austin'),
-    overpass: (ql) => (ql.includes(MONUMENT_MARKER) ? [] : []),
+    // Every sweep misses — the point under test is that the marker
+    // sweep's emptiness caches as definitive (exactly one query).
+    overpass: () => [],
   });
   const ask = () => resolveAnnotationTarget({ viewer: viewerAt(30.33, -97.74), target: 'November Monument' });
   assert.equal((await ask()).source, 'geocode');
@@ -1141,7 +1143,9 @@ test('neighborhood ladder: strict miss → loose named park beats a synthesized 
 test('neighborhood ladder: strict + loose miss → synthesized neighborhood blob', async (t) => {
   installResolverMocks(t, {
     geocode: () => geocodeBody(NBHD_ANCHOR.lat, NBHD_ANCHOR.lon, ['sublocality', 'political'], 'Xavier, Austin'),
-    overpass: (ql) => (ql.includes('["building"]') ? [] : []),
+    // Strict AND loose sweeps both miss — the resolver must fall through
+    // to the synthesized neighborhood blob.
+    overpass: () => [],
   });
   const resolved = await resolveAnnotationTarget({
     viewer: viewerAt(NBHD_ANCHOR.lat, NBHD_ANCHOR.lon),
@@ -1329,7 +1333,8 @@ test('grounds: no enclosing polygon → viewport-sized synthesized disc', async 
         ? geocodeBody(sizedAnchor.lat, sizedAnchor.lon, ['premise'], 'Juliet Capitol, Austin', { bounds: BOUNDS })
         : geocodeBody(plainAnchor.lat, plainAnchor.lon, ['premise'], 'Kilo Capitol, Austin');
     },
-    overpass: (ql) => (ql.includes('["leisure"]["name"]') ? [] : []),
+    // Named-leisure sweeps miss; geocode must supply the win.
+    overpass: () => [],
   });
   const sized = await resolveAnnotationTarget({
     viewer: viewerAt(sizedAnchor.lat, sizedAnchor.lon),

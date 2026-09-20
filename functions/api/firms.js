@@ -120,8 +120,7 @@ function mapKey(env) {
 /** Fetch + parse one keyed area feed. null = failed source. */
 async function fetchKeyedSource(key, source) {
   const url = `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${encodeURIComponent(key)}/${source}/world/2`;
-  const records = await parseCsvAt(url);
-  return records;
+  return parseCsvAt(url);
 }
 
 /** Fetch + parse the keyless public CSV. Throws on failure. */

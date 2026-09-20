@@ -32,6 +32,7 @@ import js from '@eslint/js';
 import globals from 'globals';
 import jsdoc from 'eslint-plugin-jsdoc';
 import unicorn from 'eslint-plugin-unicorn';
+import sonarjs from 'eslint-plugin-sonarjs';
 
 export default [
   {
@@ -201,6 +202,49 @@ export default [
       'unicorn/prefer-structured-clone': 'off', // structuredClone availability is per-realm here
       'unicorn/prefer-ternary': 'off', // if/return reads clearer in render code
       'unicorn/throw-new-error': 'error',
+    },
+  },
+
+  // ---------------------------------------------------------------------
+  // sonarjs (2026-09-20 quality campaign) — curated code-smell set, same
+  // philosophy as the unicorn block: bug-class detectors first, style
+  // opinions left off. The enabled rules target the failure modes vanilla
+  // event-driven JS actually produces: copy-pasted function bodies,
+  // duplicated branch arms, comparator-free sorts that mutate shared
+  // arrays, collections written but never read, assertions that always
+  // pass. Findings are fixed, not suppressed — offs carry reasons.
+  // ---------------------------------------------------------------------
+  {
+    plugins: { sonarjs },
+    rules: {
+      // --- bug classes ---
+      'sonarjs/no-alphabetical-sort': 'error', // sort((a,b)=>a-b) vs locale default
+      'sonarjs/no-misleading-array-reverse': 'error', // mutating a shared array via sort/reverse
+      'sonarjs/no-element-overwrite': 'error', // Map.set clobbering itself in a loop
+      'sonarjs/no-identical-expressions': 'error', // a === a, f(x) || f(x)
+      'sonarjs/no-try-promise': 'error', // returned (unawaited) promise escaping try/catch
+      'sonarjs/no-unthrown-error': 'error', // `throw new Error;` that never throws
+      'sonarjs/no-primitive-wrappers': 'error', // new String() coercion traps
+      'sonarjs/no-undefined-argument': 'error', // explicit undefined in a call
+      // --- copy-paste / dead-logic smells ---
+      'sonarjs/no-identical-functions': 'error',
+      'sonarjs/no-all-duplicated-branches': 'error',
+      'sonarjs/no-duplicated-branches': 'error', // if/else arms with identical bodies
+      'sonarjs/no-collapsible-if': 'error',
+      'sonarjs/no-redundant-boolean': 'error',
+      'sonarjs/no-redundant-jump': 'error',
+      // OFF: it rewrites `!(a > b)` into `a <= b`, which is NOT NaN-safe —
+      // `!(NaN > b)` is true but `NaN <= b` is false. This is a float-heavy
+      // geospatial codebase (missing coordinates, invalid interpolations),
+      // so the negated-boundary form is deliberate defensive style in the
+      // numeric paths. 78 hits, every one a comparison inversion.
+      'sonarjs/no-inverted-boolean-check': 'off',
+      'sonarjs/no-unused-collection': 'error',
+      'sonarjs/no-use-of-empty-return-value': 'error',
+      'sonarjs/no-collection-size-mischeck': 'error', // .size === 0 vs !isEmpty confusion
+      'sonarjs/no-extra-arguments': 'error',
+      'sonarjs/no-same-argument-assert': 'error', // assert.equal(x, x) — always true
+      'sonarjs/prefer-immediate-return': 'error',
     },
   },
 

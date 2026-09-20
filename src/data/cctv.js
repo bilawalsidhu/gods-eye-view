@@ -2573,7 +2573,6 @@ export function processGeometryBatch() {
   });
   if (batchResult.hasMore) {
     _geoQueueTimer = setTimeout(processGeometryBatch, batchResult.delayMs);
-    return;
   }
 }
 
@@ -3499,7 +3498,7 @@ function getPublicCameraState(record, activeId = null) {
 function uiState() {
   const active = getActiveRecord();
   const activeId = active?.camera.id || null;
-  const payload = {
+  return {
     enabled: _enabled,
     // Compat boolean + the full tri-state (viewshed design §3b).
     showCoverage: _coverageMode !== 'off',
@@ -3535,7 +3534,6 @@ function uiState() {
     cameras: _records.map((record) => getPublicCameraState(record, activeId)),
     summary: buildSummaryText(),
   };
-  return payload;
 }
 
 /** Dispatches the current UI state to all registered subscriber callbacks. */

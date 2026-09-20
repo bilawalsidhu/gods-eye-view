@@ -94,12 +94,10 @@ function decodeEntity(reader, end) {
       const vehEnd = reader.pos + len;
       entity.vehicle = decodeVehiclePosition(reader, vehEnd);
       reader.pos = vehEnd;
-    } else if (fieldNum === 3 && wireType === 2) {
-      // FeedEntity.trip_update (TripUpdate) — ignored for vehicle tracking
-      const len = reader.readVarint();
-      reader.pos += len;
-    } else if (fieldNum === 5 && wireType === 2) {
-      // FeedEntity.alert — ignored
+    } else if ((fieldNum === 3 || fieldNum === 5) && wireType === 2) {
+      // FeedEntity.trip_update (TripUpdate) and FeedEntity.alert — both are
+      // length-delimited blobs this decoder skips wholesale: vehicle tracking
+      // only consumes the VehiclePosition half of each FeedEntity.
       const len = reader.readVarint();
       reader.pos += len;
     } else {

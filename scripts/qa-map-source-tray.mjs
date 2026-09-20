@@ -104,6 +104,17 @@ try {
     }
     request.continue();
   });
+  // Browser-side probe helper, installed document-wide: snapshot of the
+  // global loading status triad (hidden/state/label/detail), shared by every
+  // scenario that asserts on the notice lifecycle.
+  page.evaluateOnNewDocument(() => {
+    window.__qaGlobalStatusSnapshot = () => ({
+      hidden: document.getElementById('global-loading-status').hidden,
+      state: document.getElementById('global-loading-status').dataset.state || null,
+      label: document.getElementById('global-loading-label').textContent.trim(),
+      detail: document.getElementById('global-loading-detail').textContent.trim(),
+    });
+  });
   await page.goto(appUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 });
   await page.waitForFunction(() => window.__godsEyeView?.styleManager, { timeout: 60_000 });
   await page.waitForFunction(
@@ -324,12 +335,7 @@ try {
   const acquiringLifecycle = await page.evaluate(async () => {
     const styleManager = window.__godsEyeView.styleManager;
     const status = document.getElementById('global-loading-status');
-    const snapshot = () => ({
-      hidden: status.hidden,
-      state: status.dataset.state || null,
-      label: document.getElementById('global-loading-label').textContent.trim(),
-      detail: document.getElementById('global-loading-detail').textContent.trim(),
-    });
+    const snapshot = window.__qaGlobalStatusSnapshot;
     // The notice renders on a scheduled timer; wait for the condition, not
     // a guessed frame budget.
     const waitFor = async (condition, timeoutMs = 3000) => {
@@ -394,14 +400,8 @@ try {
   const acquiringFailureArbitration = await page.evaluate(async () => {
     const styleManager = window.__godsEyeView.styleManager;
     const dataManager = styleManager._dataManager;
-    const status = document.getElementById('global-loading-status');
     const originalGetAll = dataManager.getAll;
-    const snapshot = () => ({
-      hidden: status.hidden,
-      state: status.dataset.state || null,
-      label: document.getElementById('global-loading-label').textContent.trim(),
-      detail: document.getElementById('global-loading-detail').textContent.trim(),
-    });
+    const snapshot = window.__qaGlobalStatusSnapshot;
     const waitForQueuedNotice = async (label, timeoutMs = 1000) => {
       const deadline = performance.now() + timeoutMs;
       while (styleManager._globalStatusNotice?.label !== label

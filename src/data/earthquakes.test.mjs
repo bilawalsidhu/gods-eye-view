@@ -310,10 +310,9 @@ test('the earthquakes layer installs no per-frame callback and no continuous-ren
 
 test('earthquake refresh reports failure and clears it only after a successful response', async () => {
   const originalFetch = globalThis.fetch;
-  const dataSources = [];
   const viewer = {
     dataSources: {
-      add(dataSource) { dataSources.push(dataSource); return dataSource; },
+      add(dataSource) { return dataSource; },
       remove() { return true; },
     },
   };

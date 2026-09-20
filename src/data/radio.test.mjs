@@ -54,6 +54,17 @@ import {
   stationMatchesRadioCategory,
 } from './radio.js';
 
+// Shared across the cluster-reconciliation cases: the fresh-identity mapper
+// and the membership→identity projection those assertions read.
+const reconcileWithFreshIds = (currentInput, previousInput) => reconcileRadioClusterCandidates(
+  currentInput,
+  previousInput,
+  (candidate) => `new:${candidate.id}`,
+);
+const membershipIdentities = (result) => Object.fromEntries(
+  result.map(({ membershipId, identityId }) => [membershipId, identityId]),
+);
+
 const stations = [
   { id: 'news', tags: ['News', 'Weather Radio', 'air traffic'] },
   { id: 'safety', tags: ['police scanner', 'emergency'] },
@@ -210,15 +221,15 @@ test('Radio allocates fresh disjoint cluster identities in canonical membership 
     let sequence = 0;
     return reconcileRadioClusterCandidates(input, [], () => `stable:${++sequence}`);
   };
-  const identities = (result) => Object.fromEntries(
-    result.map(({ membershipId, identityId }) => [membershipId, identityId]),
-  );
 
-  assert.deepEqual(identities(reconcile(current)), {
+  assert.deepEqual(membershipIdentities(reconcile(current)), {
     'z-membership': 'stable:2',
     'a-membership': 'stable:1',
   });
-  assert.deepEqual(identities(reconcile([...current].reverse())), identities(reconcile(current)));
+  assert.deepEqual(
+    membershipIdentities(reconcile([...current].reverse())),
+    membershipIdentities(reconcile(current)),
+  );
 });
 
 test('Radio split competition never falls through from a consumed majority to a historical minority', () => {
@@ -230,22 +241,14 @@ test('Radio split competition never falls through from a consumed majority to a 
     { id: 'strong-child', stationIds: ['a', 'b', 'c', 'd', 'e'] },
     { id: 'later-child', stationIds: ['f', 'g', 'h', 'i', 'x'] },
   ];
-  const reconcile = (currentInput, previousInput) => reconcileRadioClusterCandidates(
-    currentInput,
-    previousInput,
-    (candidate) => `new:${candidate.id}`,
-  );
-  const forward = reconcile(current, previous);
-  const permuted = reconcile([...current].reverse(), [...previous].reverse());
-  const identities = (result) => Object.fromEntries(
-    result.map(({ membershipId, identityId }) => [membershipId, identityId]),
-  );
+  const forward = reconcileWithFreshIds(current, previous);
+  const permuted = reconcileWithFreshIds([...current].reverse(), [...previous].reverse());
 
-  assert.deepEqual(identities(forward), {
+  assert.deepEqual(membershipIdentities(forward), {
     'strong-child': 'stable:majority',
     'later-child': 'new:later-child',
   });
-  assert.deepEqual(identities(permuted), identities(forward));
+  assert.deepEqual(membershipIdentities(permuted), membershipIdentities(forward));
 });
 
 test('Radio split identities cannot migrate to weaker children to increase inherited count', () => {
@@ -276,22 +279,14 @@ test('Radio duplicate prior records cannot assign one stable identity twice', ()
     { id: 'a-child', stationIds: ['a', 'b'] },
     { id: 'z-child', stationIds: ['c', 'd'] },
   ];
-  const reconcile = (currentInput, previousInput) => reconcileRadioClusterCandidates(
-    currentInput,
-    previousInput,
-    (candidate) => `new:${candidate.id}`,
-  );
-  const forward = reconcile(current, previous);
-  const permuted = reconcile([...current].reverse(), [...previous].reverse());
-  const identities = (result) => Object.fromEntries(
-    result.map(({ membershipId, identityId }) => [membershipId, identityId]),
-  );
+  const forward = reconcileWithFreshIds(current, previous);
+  const permuted = reconcileWithFreshIds([...current].reverse(), [...previous].reverse());
 
-  assert.deepEqual(identities(forward), {
+  assert.deepEqual(membershipIdentities(forward), {
     'a-child': 'stable:duplicate',
     'z-child': 'new:z-child',
   });
-  assert.deepEqual(identities(permuted), identities(forward));
+  assert.deepEqual(membershipIdentities(permuted), membershipIdentities(forward));
   assert.equal(forward.filter(({ identityId }) => identityId === 'stable:duplicate').length, 1);
 });
 

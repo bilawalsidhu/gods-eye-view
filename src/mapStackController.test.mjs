@@ -257,12 +257,8 @@ test('setStack back to photoreal: imagery removed, tileset restored, terrain unt
 
 test('M7: a slow ion switch resolving after a newer one must not commit or restomp imagery', async () => {
   let resolveBing;
-  const fromAssetIdCalls = [];
   const restore = stubCesiumStatics({
-    'IonImageryProvider.fromAssetId': (style) => {
-      fromAssetIdCalls.push(style);
-      return new Promise((resolve) => { resolveBing = resolve; });
-    },
+    'IonImageryProvider.fromAssetId': () => new Promise((resolve) => { resolveBing = resolve; }),
     'CesiumTerrainProvider.fromUrl': async () => ({ id: 'reearth' }),
   });
   try {

@@ -463,6 +463,66 @@ async function main() {
     }, SYNTH, APP_ORIGIN);
 
     console.log('Loading app...');
+    // ---- Shared in-page probe helpers (installed before app code) ----------
+    // Every scenario used to re-declare the same primitive-collection walk,
+    // billboard finder, and frame driver inside its evaluate body. They live
+    // on window next to __SYNTH so each scenario calls one definition instead
+    // of re-pasting its own copy.
+    await page.evaluateOnNewDocument(() => {
+      // Depth-first visit of every non-collection primitive under `root`.
+      window.__dfWalkPrimitives = (root, visit) => {
+        const walk = (coll) => {
+          const n = coll.length;
+          for (let i = 0; i < n; i++) {
+            let p;
+            try { p = coll.get(i); } catch { continue; }
+            if (!p) continue;
+            if (typeof p.length === 'number' && typeof p.get === 'function') { walk(p); continue; }
+            visit(p);
+          }
+        };
+        walk(root);
+      };
+      // Billboard primitive for an entity id (billboards carry image + alignedAxis).
+      window.__dfFindBB = (id) => {
+        let found = null;
+        window.__dfWalkPrimitives(window.__godsEyeView.viewer.scene.primitives, (p) => {
+          if (p.image !== undefined && p.alignedAxis !== undefined && p.id === id) found = p;
+        });
+        return found;
+      };
+      // Drive `frames` postRender ticks (requestRenderMode: one request = one
+      // tick), bounded so a stalled render loop resolves instead of hanging
+      // the harness. Options: onFrame(ticksSoFar), recordHeights (collect
+      // per-frame camera heights), returnCount (resolve with the count that
+      // actually ran — callers guard on it, because zero growth over zero
+      // frames proves nothing about a sampler).
+      window.__dfRunFrames = (frames, opts = {}) => new Promise((res) => {
+        const v = window.__godsEyeView.viewer;
+        const heights = [];
+        let n = 0;
+        let settled = false;
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          stop();
+          res(opts.returnCount ? n : opts.recordHeights ? heights : undefined);
+        };
+        const stop = v.scene.postRender.addEventListener(() => {
+          if (opts.onFrame) opts.onFrame(n);
+          if (opts.recordHeights) heights.push(v.camera.positionCartographic.height);
+          if (++n >= frames) {
+            finish();
+            return;
+          }
+          v.scene.requestRender();
+        });
+        const timer = setTimeout(finish, Math.max(15000, frames * 1500));
+        v.scene.requestRender();
+      });
+    });
+
     await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
     if (HEADFUL) await page.bringToFront();
 
@@ -1356,18 +1416,10 @@ async function main() {
         const v = window.__godsEyeView.viewer;
         const prims = v.scene.primitives;
         const out = [];
-        const walk = (coll) => {
-          const n = coll.length;
-          for (let i = 0; i < n; i++) {
-            const p = coll.get(i);
-            if (!p) continue;
-            // PrimitiveCollection has .length + .get
-            if (typeof p.length === 'number' && typeof p.get === 'function') { walk(p); continue; }
-            // A Cesium.Model has a modelMatrix (Matrix4: column-major Float64Array-like)
-            if (p.modelMatrix && typeof p.ready !== 'undefined') out.push(p);
-          }
-        };
-        walk(prims);
+        // A Cesium.Model has a modelMatrix (Matrix4: column-major Float64Array-like)
+        window.__dfWalkPrimitives(prims, (p) => {
+          if (p.modelMatrix && typeof p.ready !== 'undefined') out.push(p);
+        });
         // Prefer shown+ready models.
         const shown = out.filter((m) => m.show && m.ready);
         const pool = shown.length ? shown : out;
@@ -1518,26 +1570,7 @@ async function main() {
       const onTick = () => { heights.push(v.camera.positionCartographic.height); };
       const remove = v.scene.postRender.addEventListener(onTick);
       fl.trackById(icao); // the SWITCH — must NOT trigger the deselect pull-out flyTo
-      await new Promise((res) => {
-        let n = 0;
-        let settled = false;
-        const finish = () => {
-          if (settled) return;
-          settled = true;
-          clearTimeout(timer);
-          stop();
-          res();
-        };
-        const stop = v.scene.postRender.addEventListener(() => {
-          if (++n >= frames) {
-            finish();
-            return;
-          }
-          v.scene.requestRender();
-        });
-        const timer = setTimeout(finish, Math.max(15000, frames * 1500));
-        v.scene.requestRender();
-      });
+      await window.__dfRunFrames(frames);
       remove();
       return heights;
     }, planeB, 45);
@@ -1698,32 +1731,9 @@ async function main() {
       // Trusted mouse click through the browser event pipeline → the layer's
       // ScreenSpaceEventHandler LEFT_CLICK path (the exact H1 code path).
       await page.mouse.click(h1ClickPoint.x, h1ClickPoint.y);
-      const h1Heights = await page.evaluate(async (frames) => {
-        const v = window.__godsEyeView.viewer;
-        const heights = [];
-        await new Promise((res) => {
-          let n = 0;
-          let settled = false;
-          const finish = () => {
-            if (settled) return;
-            settled = true;
-            clearTimeout(timer);
-            stop();
-            res();
-          };
-          const stop = v.scene.postRender.addEventListener(() => {
-            heights.push(v.camera.positionCartographic.height);
-            if (++n >= frames) {
-              finish();
-              return;
-            }
-            v.scene.requestRender();
-          });
-          const timer = setTimeout(finish, Math.max(15000, frames * 1500));
-          v.scene.requestRender();
-        });
-        return heights;
-      }, 45);
+      const h1Heights = await page.evaluate((frames) => (
+        window.__dfRunFrames(frames, { recordHeights: true })
+      ), 45);
       const h1StillTracking = await evalPage((icao) => {
         const ti = window.__godsEyeView.dataManager.layers.get('flights').module.getTrackedInfo();
         return Boolean(ti && ti.icao24 === icao) && Boolean(window.__godsEyeView.viewer.trackedEntity);
@@ -1789,32 +1799,9 @@ async function main() {
     // The camera must NOT move after the release: no overview flyTo, no
     // snap — it stays where the follow left it. Sample heights across frames
     // (any transient flyTo would show up here), then read the settled pose.
-    const m3Heights = await page.evaluate(async (frames) => {
-      const v = window.__godsEyeView.viewer;
-      const heights = [];
-      await new Promise((res) => {
-        let n = 0;
-        let settled = false;
-        const finish = () => {
-          if (settled) return;
-          settled = true;
-          clearTimeout(timer);
-          stop();
-          res();
-        };
-        const stop = v.scene.postRender.addEventListener(() => {
-          heights.push(v.camera.positionCartographic.height);
-          if (++n >= frames) {
-            finish();
-            return;
-          }
-          v.scene.requestRender();
-        });
-        const timer = setTimeout(finish, Math.max(15000, frames * 1500));
-        v.scene.requestRender();
-      });
-      return heights;
-    }, 90);
+    const m3Heights = await page.evaluate((frames) => (
+      window.__dfRunFrames(frames, { recordHeights: true })
+    ), 90);
     await sleep(800); // any (regressed) 0.6 s flyTo would have finished by now
     const m3Final = await evalPage(() => {
       const c = window.__godsEyeView.viewer.camera.positionCartographic;
@@ -1960,21 +1947,9 @@ async function main() {
       const dm = window.__godsEyeView.dataManager;
       const fl = dm.layers.get('flights').module;
       const mil = dm.layers.get('military').module;
-      const findBB = (id) => {
-        let found = null;
-        const walk = (coll) => {
-          const n = coll.length;
-          for (let i = 0; i < n; i++) {
-            let p;
-            try { p = coll.get(i); } catch { continue; }
-            if (!p) continue;
-            if (typeof p.length === 'number' && typeof p.get === 'function') { walk(p); continue; }
-            if (p.image !== undefined && p.alignedAxis !== undefined && p.id === id) found = p;
-          }
-        };
-        walk(v.scene.primitives);
-        return found;
-      };
+      // Billboard finder is document-wide: window.__dfFindBB, installed with
+      // the shared probe helpers before app code runs.
+      const findBB = window.__dfFindBB;
       const snap = (id) => {
         const bb = findBB(id);
         if (!bb) return null;
@@ -2163,21 +2138,7 @@ async function main() {
       window.__SYNTH.military.push({ hex: 'bbb177', flight: 'MILGND7', lon: -97.7470, lat: 30.2685, altFt: 'ground', track: 120, gsKt: 0, t: 'C130', r: 'AF-177' });
       await fl.update(v);
       await mil.update(v);
-      const findBB = (id) => {
-        let found = null;
-        const walk = (coll) => {
-          const n = coll.length;
-          for (let i = 0; i < n; i++) {
-            let p;
-            try { p = coll.get(i); } catch { continue; }
-            if (!p) continue;
-            if (typeof p.length === 'number' && typeof p.get === 'function') { walk(p); continue; }
-            if (p.image !== undefined && p.alignedAxis !== undefined && p.id === id) found = p;
-          }
-        };
-        walk(v.scene.primitives);
-        return found;
-      };
+      const findBB = window.__dfFindBB;
       const flBB = findBB('aaa077');
       const milBB = findBB('bbb177');
       if (!flBB || !milBB) return { error: `ground billboards missing (fl=${Boolean(flBB)} mil=${Boolean(milBB)})` };
@@ -2201,20 +2162,11 @@ async function main() {
 
       // In-page model finder by pick id (fleet AND tracked standalone models carry it).
       await evalPage(() => {
-        window.__g3dFindModel = function (id) {
-          const v = window.__godsEyeView.viewer;
+        window.__g3dFindModel = (id) => {
           let found = null;
-          const walk = (coll) => {
-            const n = coll.length;
-            for (let i = 0; i < n; i++) {
-              let p;
-              try { p = coll.get(i); } catch { continue; }
-              if (!p) continue;
-              if (typeof p.length === 'number' && typeof p.get === 'function') { walk(p); continue; }
-              if (p.modelMatrix && typeof p.ready !== 'undefined' && p.id === id) found = p;
-            }
-          };
-          walk(v.scene.primitives);
+          window.__dfWalkPrimitives(window.__godsEyeView.viewer.scene.primitives, (p) => {
+            if (p.modelMatrix && typeof p.ready !== 'undefined' && p.id === id) found = p;
+          });
           return found;
         };
       });
@@ -2238,22 +2190,8 @@ async function main() {
       if (g3dModelsUp) {
         // (c) + handoff + (e): heights snapped, billboards handed off, snap one-shot.
         const g3dState = await evalPage(() => {
-          const v = window.__godsEyeView.viewer;
-          const findBB = (id) => {
-            let found = null;
-            const walk = (coll) => {
-              const n = coll.length;
-              for (let i = 0; i < n; i++) {
-                let p;
-                try { p = coll.get(i); } catch { continue; }
-                if (!p) continue;
-                if (typeof p.length === 'number' && typeof p.get === 'function') { walk(p); continue; }
-                if (p.image !== undefined && p.alignedAxis !== undefined && p.id === id) found = p;
-              }
-            };
-            walk(v.scene.primitives);
-            return found;
-          };
+          // Billboard finder is document-wide (window.__dfFindBB).
+          const findBB = window.__dfFindBB;
           const modelRadius = (id) => {
             const m = window.__g3dFindModel(id);
             return m ? Math.hypot(m.modelMatrix[12], m.modelMatrix[13], m.modelMatrix[14]) : null;
@@ -2306,7 +2244,6 @@ async function main() {
         const ACCESSOR_SEPARATION_EPSILON_M = 0.25;
         const weld = await page.evaluate(async (frames) => {
           const gev = window.__godsEyeView;
-          const v = gev.viewer;
           const dm = gev.dataManager;
           const targets = [
             { layer: 'flights', id: 'aaa077', center: [0, 0, 0] },
@@ -2314,17 +2251,8 @@ async function main() {
           ];
           const out = {};
           for (const t of targets) out[t.layer] = { maxDelta: 0, samples: 0, missing: 0 };
-          await new Promise((res) => {
-            let n = 0;
-            let settled = false;
-            const finish = () => {
-              if (settled) return;
-              settled = true;
-              clearTimeout(timer);
-              stop();
-              res();
-            };
-            const stop = v.scene.postRender.addEventListener(() => {
+          await window.__dfRunFrames(frames, {
+            onFrame: () => {
               for (const t of targets) {
                 const rec = out[t.layer];
                 const mod = dm.layers.get(t.layer)?.module;
@@ -2357,14 +2285,7 @@ async function main() {
                 if (d > rec.maxDelta) rec.maxDelta = d;
                 rec.samples++;
               }
-              if (++n >= frames) {
-                finish();
-                return;
-              }
-              v.scene.requestRender();
-            });
-            const timer = setTimeout(finish, Math.max(15000, frames * 1500));
-            v.scene.requestRender();
+            },
           });
           return out;
         }, 20);
@@ -2384,32 +2305,12 @@ async function main() {
         // load-bearing invariant — the absolute count just pins the fixtures.
         const callsBefore = g3dState.sampleCalls;
         const g3dProbeFrames = 60;
-        const framesRan = await page.evaluate(async (frames) => {
-          const v = window.__godsEyeView.viewer;
-          return new Promise((res) => {
-            let n = 0;
-            let settled = false;
-            const finish = () => {
-              if (settled) return;
-              settled = true;
-              clearTimeout(timer);
-              stop();
-              res(n);
-            };
-            const stop = v.scene.postRender.addEventListener(() => {
-              if (++n >= frames) {
-                finish();
-                return;
-              }
-              v.scene.requestRender();
-            });
-            // A timed-out driver resolves with the frames it DID run — the
-            // caller guards on that, because zero growth over zero frames
-            // proves nothing about the sampler.
-            const timer = setTimeout(finish, Math.max(15000, frames * 1500));
-            v.scene.requestRender();
-          });
-        }, g3dProbeFrames);
+        // A timed-out driver resolves with the frames it DID run — the caller
+        // guards on that, because zero growth over zero frames proves nothing
+        // about the sampler.
+        const framesRan = await page.evaluate((frames) => (
+          window.__dfRunFrames(frames, { returnCount: true })
+        ), g3dProbeFrames);
         await sleep(400);
         const callsAfter = await evalPage(() => window.__g3dSampleCalls);
         // Bounded-shape pin (round 5): with the boot-wide "no tiles" stub,
@@ -2552,41 +2453,10 @@ async function main() {
       // (this is also the app's default state the field report came from).
       dm.layers.get('flights').module.setParams({ models3d: false });
       dm.layers.get('military').module.setParams({ models3d: false });
-      const findBB = (id) => {
-        let found = null;
-        const walk = (coll) => {
-          const n = coll.length;
-          for (let i = 0; i < n; i++) {
-            let p;
-            try { p = coll.get(i); } catch { continue; }
-            if (!p) continue;
-            if (typeof p.length === 'number' && typeof p.get === 'function') { walk(p); continue; }
-            if (p.image !== undefined && p.alignedAxis !== undefined && p.id === id) found = p;
-          }
-        };
-        walk(v.scene.primitives);
-        return found;
-      };
-      const nextFrames = (n) => new Promise((res) => {
-        let count = 0;
-        let settled = false;
-        const finish = () => {
-          if (settled) return;
-          settled = true;
-          clearTimeout(timer);
-          rm();
-          res();
-        };
-        const rm = v.scene.postRender.addEventListener(() => {
-          if (++count >= n) {
-            finish();
-            return;
-          }
-          v.scene.requestRender();
-        });
-        const timer = setTimeout(finish, Math.max(10000, n * 1500));
-        v.scene.requestRender();
-      });
+      const findBB = window.__dfFindBB;
+      // Bounded by the shared driver's 15 s floor — strictly more patient
+      // than the 10 s this local variant used to ask for.
+      const nextFrames = (n) => window.__dfRunFrames(n);
       // Park the camera straight above the flights cluster (lift a live
       // billboard's position radially — no Cesium global needed in-page) so
       // every probe plane projects on-screen, then let rotations settle at
@@ -2694,20 +2564,7 @@ async function main() {
       window.__dfSkinM = null;
       v.scene.sampleHeight = () => (window.__dfSkinM == null ? undefined : window.__dfSkinM);
       fl.setParams({ models3d: false }); // billboards own the visual (T7 gate open)
-      window.__dfFindBB = (id) => {
-        let found = null;
-        const walk = (coll) => {
-          const n = coll.length;
-          for (let i = 0; i < n; i++) {
-            let p; try { p = coll.get(i); } catch { continue; }
-            if (!p) continue;
-            if (typeof p.length === 'number' && typeof p.get === 'function') { walk(p); continue; }
-            if (p.image !== undefined && p.alignedAxis !== undefined && p.id === id) found = p;
-          }
-        };
-        walk(v.scene.primitives);
-        return found;
-      };
+      // window.__dfFindBB is installed document-wide with the shared probe helpers.
       window.__dfCarto = (pos) => {
         const c = Cesium.Cartographic.fromCartesian(pos, Cesium.Ellipsoid.WGS84);
         return { lat: Cesium.Math.toDegrees(c.latitude), lon: Cesium.Math.toDegrees(c.longitude), h: c.height };
@@ -2736,22 +2593,14 @@ async function main() {
         let shown = 0;
         let hidden = 0;
         let rendering = 0;
-        const walk = (coll) => {
-          const n = coll.length;
-          for (let i = 0; i < n; i++) {
-            let p; try { p = coll.get(i); } catch { continue; }
-            if (!p) continue;
-            if (typeof p.length === 'number' && typeof p.get === 'function') { walk(p); continue; }
-            if (p.activeAnimations !== undefined && p.minimumPixelSize !== undefined) {
-              if (icao !== undefined && p.id !== icao) continue;
-              if (p.show) {
-                shown += 1;
-                if (p.ready === true) rendering += 1;
-              } else hidden += 1;
-            }
-          }
-        };
-        walk(v.scene.primitives);
+        window.__dfWalkPrimitives(v.scene.primitives, (p) => {
+          if (p.activeAnimations === undefined || p.minimumPixelSize === undefined) return;
+          if (icao !== undefined && p.id !== icao) return;
+          if (p.show) {
+            shown += 1;
+            if (p.ready === true) rendering += 1;
+          } else hidden += 1;
+        });
         return { shown, hidden, rendering };
       };
       // Ellipsoid height of the point a contact's MODEL is actually drawn at.
@@ -2761,29 +2610,21 @@ async function main() {
       // enthusiastically as one placed on the tile skin, ~240 m underground.
       window.__dfModelHeight = (icao) => {
         let h = null;
-        const walk = (coll) => {
-          const n = coll.length;
-          for (let i = 0; i < n; i++) {
-            let p; try { p = coll.get(i); } catch { continue; }
-            if (!p) continue;
-            if (typeof p.length === 'number' && typeof p.get === 'function') { walk(p); continue; }
-            if (p.activeAnimations !== undefined && p.minimumPixelSize !== undefined
-              && p.id === icao && p.modelMatrix) {
-              const m = p.modelMatrix;
-              // Cesium's default is the IDENTITY matrix — translation (0,0,0),
-              // the Earth's centre, which `Cartographic.fromCartesian` refuses.
-              // An admitted-but-never-placed model reads as "no height", which
-              // is the truth about it.
-              if (m[12] || m[13] || m[14]) {
-                const c = Cesium.Cartographic.fromCartesian(
-                  new Cesium.Cartesian3(m[12], m[13], m[14]), Cesium.Ellipsoid.WGS84,
-                );
-                h = c ? c.height : null;
-              }
-            }
+        window.__dfWalkPrimitives(v.scene.primitives, (p) => {
+          if (p.activeAnimations === undefined || p.minimumPixelSize === undefined
+            || p.id !== icao || !p.modelMatrix) return;
+          const m = p.modelMatrix;
+          // Cesium's default is the IDENTITY matrix — translation (0,0,0),
+          // the Earth's centre, which `Cartographic.fromCartesian` refuses.
+          // An admitted-but-never-placed model reads as "no height", which
+          // is the truth about it.
+          if (m[12] || m[13] || m[14]) {
+            const c = Cesium.Cartographic.fromCartesian(
+              new Cesium.Cartesian3(m[12], m[13], m[14]), Cesium.Ellipsoid.WGS84,
+            );
+            h = c ? c.height : null;
           }
-        };
-        walk(v.scene.primitives);
+        });
         return h;
       };
       // Tracked-contact model regime (2026-08-20). The tracked contact's model
@@ -3575,16 +3416,9 @@ async function main() {
         // group uses on `tilesLoaded`).
         const findFleetModel = (id) => {
           let found = null;
-          const walk = (coll) => {
-            const len = coll.length;
-            for (let i = 0; i < len; i++) {
-              let p; try { p = coll.get(i); } catch { continue; }
-              if (!p) continue;
-              if (typeof p.length === 'number' && typeof p.get === 'function') { walk(p); continue; }
-              if (p.activeAnimations !== undefined && p.minimumPixelSize !== undefined && p.id === id) found = p;
-            }
-          };
-          walk(v.scene.primitives);
+          window.__dfWalkPrimitives(v.scene.primitives, (p) => {
+            if (p.activeAnimations !== undefined && p.minimumPixelSize !== undefined && p.id === id) found = p;
+          });
           return found;
         };
         fl.setParams({ models3d: true });
@@ -3668,17 +3502,10 @@ async function main() {
         v.scene.requestRender();
         const countRendering = () => {
           let n = 0;
-          const walk = (coll) => {
-            const len = coll.length;
-            for (let i = 0; i < len; i++) {
-              let p; try { p = coll.get(i); } catch { continue; }
-              if (!p) continue;
-              if (typeof p.length === 'number' && typeof p.get === 'function') { walk(p); continue; }
-              if (p.activeAnimations !== undefined && p.minimumPixelSize !== undefined
-                && p.show && p.ready) n += 1;
-            }
-          };
-          walk(v.scene.primitives);
+          window.__dfWalkPrimitives(v.scene.primitives, (p) => {
+            if (p.activeAnimations !== undefined && p.minimumPixelSize !== undefined
+              && p.show && p.ready) n += 1;
+          });
           return n;
         };
         // Sample at the first moment the clamp has visibly applied — the

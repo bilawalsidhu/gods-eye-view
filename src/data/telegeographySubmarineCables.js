@@ -1015,7 +1015,7 @@ export function createTeleGeographySubmarineCableLayer({
     }
 
     if (geometry.type === 'Point') {
-      const coords = coordsFromPoint(geometry.coordinates);
+      const coords = coordsFromProperty(geometry.coordinates);
       if (!coords) return null;
       return { lon: coords[0], lat: coords[1] };
     }
@@ -1036,8 +1036,9 @@ export function createTeleGeographySubmarineCableLayer({
     };
   }
 
-  /** Read a `[lon, lat]` pair out of a feature's `coordinates` property.
-   * @param {*} value Raw property value.
+  /** Read a `[lon, lat]` pair out of a feature's `coordinates` property or a
+   * GeoJSON Point position (identical shape — one helper serves both).
+   * @param {*} value Raw coordinate pair.
    * @returns {number[]|null} `[lon, lat]` in degrees, or null when absent/non-numeric.
    */
   function coordsFromProperty(value) {
@@ -1048,17 +1049,6 @@ export function createTeleGeographySubmarineCableLayer({
     return [lon, lat];
   }
 
-  /** Read a `[lon, lat]` pair out of a GeoJSON Point position.
-   * @param {*} value Raw geometry coordinate array.
-   * @returns {number[]|null} `[lon, lat]` in degrees, or null when absent/non-numeric.
-   */
-  function coordsFromPoint(value) {
-    if (!Array.isArray(value) || value.length < 2) return null;
-    const lon = Number(value[0]);
-    const lat = Number(value[1]);
-    if (!Number.isFinite(lon) || !Number.isFinite(lat)) return null;
-    return [lon, lat];
-  }
 
   /** Flatten arbitrarily nested coordinate arrays into a flat `[lon, lat]` list.
    * @param {*} value GeoJSON coordinate array at any nesting depth.

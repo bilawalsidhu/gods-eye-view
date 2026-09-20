@@ -113,6 +113,19 @@ try {
     }
     request.continue();
   });
+  // Browser-side bounded-settle helper, installed document-wide so every
+  // probe reuses one definition instead of re-pasting it per evaluate: every
+  // await in these probes is bounded, so a no-show fails the check with
+  // evidence rather than hanging the whole harness on an unresolved promise.
+  page.evaluateOnNewDocument(() => {
+    window.__qaSettleWithin = (promise, ms) => Promise.race([
+      promise.then(
+        (value) => ({ settled: true, value }),
+        (error) => ({ settled: true, value: `error: ${String(error?.message || error)}` }),
+      ),
+      new Promise((resolve) => { setTimeout(() => resolve({ settled: false, value: null }), ms); }),
+    ]);
+  });
   await page.goto(appUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 });
   await page.waitForFunction(() => window.__godsEyeView?.styleManager, { timeout: 60_000 });
   await page.waitForFunction(
@@ -739,13 +752,7 @@ try {
     // Every await in this probe is bounded: the gated sibling teardown is the
     // behaviour under test, so a no-show has to fail the check with evidence
     // rather than hang the whole harness on an unresolved promise.
-    const settleWithin = (promise, ms) => Promise.race([
-      promise.then(
-        (value) => ({ settled: true, value }),
-        (error) => ({ settled: true, value: `error: ${String(error?.message || error)}` }),
-      ),
-      new Promise((resolve) => { setTimeout(() => resolve({ settled: false, value: null }), ms); }),
-    ]);
+    const settleWithin = window.__qaSettleWithin;
     window.__gevQaRegisterLayer(dataManager, {
       id: blockerId,
       name: 'QA slow Contacts sibling',
@@ -875,13 +882,7 @@ try {
     const { styleManager, dataManager } = window.__godsEyeView;
     const entry = dataManager.layers.get('military-installations');
     if (!entry?.module) return { exercised: false, reason: 'military-installations missing' };
-    const settleWithin = (promise, ms) => Promise.race([
-      promise.then(
-        (value) => ({ settled: true, value }),
-        (error) => ({ settled: true, value: `error: ${String(error?.message || error)}` }),
-      ),
-      new Promise((resolve) => { setTimeout(() => resolve({ settled: false, value: null }), ms); }),
-    ]);
+    const settleWithin = window.__qaSettleWithin;
     const row = () => [...document.querySelectorAll('#military-awareness-panel .military-awareness-row')]
       .find((candidate) => candidate.querySelector('strong')?.textContent?.trim() === 'Mapped installations');
     const installationCount = () => row()?.querySelector('b')?.textContent?.trim() || null;

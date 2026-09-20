@@ -342,6 +342,13 @@ function sharedFillStyles(env) {
 }
 
 /** Settle a frame so the arbiter has promoted its identities to render entries. */
+/** Count mode-banner fillText calls — the debug-banner assertion surface. */
+function countBannerPaints(env) {
+  return env.detectionCtx.calls.filter(([name, text]) => (
+    name === 'fillText' && /^(SPARSE|BALANCED|DENSE) {2}VIS:/.test(String(text))
+  )).length;
+}
+
 function settleFrame(env) {
   env.advance(250);
   env.postRender.raise();
@@ -422,21 +429,18 @@ test('detection lifecycle re-hosts unchanged painters behind the sole host liste
     env.postRender.raise();
     assert.equal(getDetectionDiagnostics().profile, 'DENSE');
 
-    const bannerCount = () => env.detectionCtx.calls.filter(([name, text]) => (
-      name === 'fillText' && /^(SPARSE|BALANCED|DENSE) {2}VIS:/.test(String(text))
-    )).length;
-    const beforeSuspend = bannerCount();
+    const beforeSuspend = countBannerPaints(env);
     suspendDetection('intercity');
     assert.equal(isDetectionSuspended(), true);
     assert.equal(surface.style.opacity, '0');
     env.postRender.raise();
-    assert.equal(bannerCount(), beforeSuspend);
+    assert.equal(countBannerPaints(env), beforeSuspend);
     assert.equal(env.postRender.listeners.size, 1);
     resumeDetection();
     env.postRender.raise();
     assert.equal(isDetectionSuspended(), false);
     assert.equal(surface.style.opacity, '1');
-    assert.ok(bannerCount() > beforeSuspend);
+    assert.ok(countBannerPaints(env) > beforeSuspend);
 
     // These are the exact engine calls made by military style presets after
     // their production UI gate chooses CRT/NVG/FLIR defaults.
@@ -723,10 +727,6 @@ test('detectionDebugRequested parses the query-string gate and nothing else', ()
 });
 
 test('the mode banner is absent by default and present behind the flag', () => {
-  const bannerPaints = (env) => env.detectionCtx.calls.filter(([name, text]) => (
-    name === 'fillText' && /^(SPARSE|BALANCED|DENSE) {2}VIS:/.test(String(text))
-  )).length;
-
   const painted = (search) => {
     const env = installEnvironment({ search });
     try {
@@ -740,7 +740,7 @@ test('the mode banner is absent by default and present behind the flag', () => {
         env.detectionCtx.calls.some(([name, path]) => name === 'stroke' && path instanceof MockPath2D),
         'detection still paints its contacts regardless of the debug gate',
       );
-      return bannerPaints(env);
+      return countBannerPaints(env);
     } finally {
       destroyDetection();
       destroyWorldOverlay();

@@ -93,7 +93,7 @@ test('adopts settled visibility without re-running lifecycle work', async () => 
 test('renders ordinary layer rows without recreating a panel-hidden coordinator', async () => {
   const originalDocument = globalThis.document;
   const makeElement = () => {
-    const element = {
+    return {
       children: [],
       className: '',
       dataset: {},
@@ -113,21 +113,11 @@ test('renders ordinary layer rows without recreating a panel-hidden coordinator'
           const id = selector.slice(16, -2);
           return this.children.find((child) => child.dataset.layerId === id) || null;
         }
-        const className = selector.startsWith('.') ? selector.slice(1) : '';
-        const visit = (node) => {
-          if (String(node.className).split(/\s+/).includes(className)) return node;
-          for (const child of node.children || []) {
-            const found = visit(child);
-            if (found) return found;
-          }
-          return null;
-        };
-        return visit(this);
+        return querySelectorByClass(this, selector);
       },
       set innerHTML(value) { if (value === '') this.children = []; },
       get innerHTML() { return ''; },
     };
-    return element;
   };
   globalThis.document = { createElement: makeElement };
   const mgr = new DataLayerManager({});
@@ -2730,9 +2720,23 @@ test('destroy settles an explicit refresh waiting behind invalidated periodic wo
 // the layer only declares what it wants, so the chip can never disagree with
 // the layer's real state.
 
+/** Depth-first class-name search shared by every DOM stub's querySelector. */
+function querySelectorByClass(root, selector) {
+  const className = selector.startsWith('.') ? selector.slice(1) : '';
+  const visit = (node) => {
+    if (String(node.className).split(/\s+/).includes(className)) return node;
+    for (const child of node.children || []) {
+      const found = visit(child);
+      if (found) return found;
+    }
+    return null;
+  };
+  return visit(root);
+}
+
 /** DOM double rich enough for the row-controls render path. */
 function makeControlElement() {
-  const element = {
+  return {
     children: [],
     className: '',
     dataset: {},
@@ -2769,21 +2773,11 @@ function makeControlElement() {
         const id = selector.slice(16, -2);
         return this.children.find((child) => child.dataset.layerId === id) || null;
       }
-      const className = selector.startsWith('.') ? selector.slice(1) : '';
-      const visit = (node) => {
-        if (String(node.className).split(/\s+/).includes(className)) return node;
-        for (const child of node.children || []) {
-          const found = visit(child);
-          if (found) return found;
-        }
-        return null;
-      };
-      return visit(this);
+      return querySelectorByClass(this, selector);
     },
     set innerHTML(value) { if (value === '') this.children = []; },
     get innerHTML() { return ''; },
   };
-  return element;
 }
 
 /** Collect every node in a rendered subtree carrying `className`. */
@@ -3105,7 +3099,7 @@ test('a layer that surrenders its row controls hides the block entirely', async 
 test('async chips carry state in the accessible name and announce self-driven changes', async () => {
   const originalDocument = globalThis.document;
   const makeElement = () => {
-    const element = {
+    return {
       children: [],
       className: '',
       dataset: {},
@@ -3119,22 +3113,10 @@ test('async chips carry state in the accessible name and announce self-driven ch
       addEventListener() {},
       setAttribute(name, value) { this.attributes[name] = String(value); },
       removeAttribute(name) { delete this.attributes[name]; },
-      querySelector(selector) {
-        const className = selector.startsWith('.') ? selector.slice(1) : '';
-        const visit = (node) => {
-          if (String(node.className).split(/\s+/).includes(className)) return node;
-          for (const child of node.children || []) {
-            const found = visit(child);
-            if (found) return found;
-          }
-          return null;
-        };
-        return visit(this);
-      },
+      querySelector(selector) { return querySelectorByClass(this, selector); },
       set innerHTML(value) { if (value === '') this.children = []; },
       get innerHTML() { return ''; },
     };
-    return element;
   };
   globalThis.document = { createElement: makeElement };
   const mgr = new DataLayerManager({});

@@ -44,6 +44,13 @@ const FULL_INFO = {
   operator: 'United States Air Force',
 };
 
+/** Billboard stand-in placed at a test coordinate — shared by the tie-break cases. */
+const billboardAt = (lon, lat) => ({
+  position: Cesium.Cartesian3.fromDegrees(lon, lat, 3000),
+  color: Cesium.Color.WHITE,
+  show: true,
+});
+
 test('military stats identify adsb.lol as the primary feed, not a fallback', () => {
   const stats = militaryFlightsLayer.getStats();
   assert.equal(stats.source, 'adsb.lol');
@@ -499,11 +506,6 @@ test('a registration never outranks another contact’s exact callsign', () => {
   // Feed order used to decide this: both identities landed in the same "exact"
   // bucket, so whichever contact the upstream Map listed first won and the same
   // spoken query could follow a different aircraft between polls.
-  const billboardAt = (lon, lat) => ({
-    position: Cesium.Cartesian3.fromDegrees(lon, lat, 3000),
-    color: Cesium.Color.WHITE,
-    show: true,
-  });
   const base = {
     type: 'C17', operator: 'USAF', altitudeFt: 25000, speedMps: 180,
     track: 90, klass: 'widebody', onGround: false,
@@ -533,11 +535,6 @@ test('a registration never outranks another contact’s exact callsign', () => {
 });
 
 test('two contacts matching at the same strength resolve deterministically', () => {
-  const billboardAt = (lon, lat) => ({
-    position: Cesium.Cartesian3.fromDegrees(lon, lat, 3000),
-    color: Cesium.Color.WHITE,
-    show: true,
-  });
   const base = {
     type: 'C130', operator: 'USAF', altitudeFt: 21000, speedMps: 150,
     track: 45, klass: 'turboprop', onGround: false,

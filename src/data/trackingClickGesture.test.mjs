@@ -26,6 +26,27 @@ function makeHandler() {
   };
 }
 
+/** RAF-clocked press harness shared by the quantization-floor cases: binds
+ * the gesture tracker against `element` and returns the bound press() plus
+ * everything the assertions inspect. */
+function bindRafPressHarness(element) {
+  const clock = domEventPressClock(element);
+  const handler = makeHandler();
+  const gestures = [];
+  bindTrackingClickGesture(handler, (_click, gesture) => {
+    gestures.push(gesture);
+  }, { now: clock.now, eventTypes: TYPES });
+  const press = (downOffset, upOffset) => {
+    const base = Math.round(performance.now());
+    element.fireDom('mousedown', { timeStamp: base + downOffset });
+    handler.fire(TYPES.LEFT_DOWN, { position: { x: 5, y: 5 } });
+    element.fireDom('mouseup', { timeStamp: base + upOffset });
+    handler.fire(TYPES.LEFT_UP, { position: { x: 5, y: 5 } });
+    handler.fire(TYPES.LEFT_CLICK, { position: { x: 5, y: 5 } });
+  };
+  return { clock, handler, gestures, press };
+}
+
 test('tracking click discrimination pins the travel/duration boundary matrix', () => {
   const matrix = [
     [{ travelPx: 0, durationMs: 0 }, true],
@@ -265,20 +286,7 @@ test('quantization floor forgives bursts, disables past half-window frames, reco
   globalThis.requestAnimationFrame = (cb) => { rafCallback = cb; return rafHandle; };
   globalThis.cancelAnimationFrame = () => { rafCallback = null; };
   try {
-    const clock = domEventPressClock(element);
-    const handler = makeHandler();
-    const gestures = [];
-    bindTrackingClickGesture(handler, (_click, gesture) => {
-      gestures.push(gesture);
-    }, { now: clock.now, eventTypes: TYPES });
-    const press = (downOffset, upOffset) => {
-      const base = Math.round(performance.now());
-      element.fireDom('mousedown', { timeStamp: base + downOffset });
-      handler.fire(TYPES.LEFT_DOWN, { position: { x: 5, y: 5 } });
-      element.fireDom('mouseup', { timeStamp: base + upOffset });
-      handler.fire(TYPES.LEFT_UP, { position: { x: 5, y: 5 } });
-      handler.fire(TYPES.LEFT_CLICK, { position: { x: 5, y: 5 } });
-    };
+    const { clock, gestures, press } = bindRafPressHarness(element);
 
     // Steady 16 ms cadence warms the recent peak to 16 → floor 32.
     let t = 1000;
@@ -339,20 +347,7 @@ test('learned tap quantization baseline forgives pipeline-explained press gaps',
   globalThis.requestAnimationFrame = (cb) => { rafCallback = cb; return rafHandle; };
   globalThis.cancelAnimationFrame = () => { rafCallback = null; };
   try {
-    const clock = domEventPressClock(element);
-    const handler = makeHandler();
-    const gestures = [];
-    bindTrackingClickGesture(handler, (_click, gesture) => {
-      gestures.push(gesture);
-    }, { now: clock.now, eventTypes: TYPES });
-    const press = (downOffset, upOffset) => {
-      const base = Math.round(performance.now());
-      element.fireDom('mousedown', { timeStamp: base + downOffset });
-      handler.fire(TYPES.LEFT_DOWN, { position: { x: 5, y: 5 } });
-      element.fireDom('mouseup', { timeStamp: base + upOffset });
-      handler.fire(TYPES.LEFT_UP, { position: { x: 5, y: 5 } });
-      handler.fire(TYPES.LEFT_CLICK, { position: { x: 5, y: 5 } });
-    };
+    const { clock, gestures, press } = bindRafPressHarness(element);
 
     // Healthy-looking 16 ms frames (the input pipeline is the thing that is
     // slow — its stamps straddle frames the sampler cannot see).

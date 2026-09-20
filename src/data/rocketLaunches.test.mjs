@@ -873,7 +873,6 @@ test('real mission build, select, refresh, deselect, disable, and destroy paths 
   const realHtmlImageElement = globalThis.HTMLImageElement;
   const realImageBitmap = globalThis.ImageBitmap;
   const realOffscreenCanvas = globalThis.OffscreenCanvas;
-  const listeners = new Map();
   const context = {
     strokeStyle: '',
     lineWidth: 1,
@@ -901,8 +900,8 @@ test('real mission build, select, refresh, deselect, disable, and destroy paths 
       this.disableRootEvents = false;
     }
 
-    addEventListener(type, handler) { listeners.set(`${this.tagName}:${type}`, handler); }
-    removeEventListener(type) { listeners.delete(`${this.tagName}:${type}`); }
+    addEventListener() {}
+    removeEventListener() {}
     appendChild(child) { child.parentElement = this; this.children.push(child); return child; }
     remove() {
       if (this.parentElement) {
@@ -920,8 +919,8 @@ test('real mission build, select, refresh, deselect, disable, and destroy paths 
     onmousewheel: undefined,
     createElement: (tagName) => new FakeElement(tagName),
     getElementById: () => null,
-    addEventListener(type, handler) { listeners.set(`document:${type}`, handler); },
-    removeEventListener(type) { listeners.delete(`document:${type}`); },
+    addEventListener() {},
+    removeEventListener() {},
   };
   const canvas = new FakeElement('canvas');
   const dataSources = [];

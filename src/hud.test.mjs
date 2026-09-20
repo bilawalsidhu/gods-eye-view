@@ -70,7 +70,7 @@ const SFO = { latDeg: 37.616, lonDeg: -122.368 };
 function makeElement(id) {
   const classes = new Set();
   const styleProps = {};
-  const element = {
+  return {
     id,
     textContent: '',
     dataset: {},
@@ -85,7 +85,6 @@ function makeElement(id) {
       contains: (name) => classes.has(name),
     },
   };
-  return element;
 }
 
 /**

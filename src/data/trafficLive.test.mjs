@@ -40,7 +40,7 @@ const overpassFixture = () => ({
 function makeViewer() {
   const added = [];
   const removed = [];
-  const viewer = {
+  return {
     scene: {
       primitives: {
         add: (p) => { added.push(p); return p; },
@@ -70,13 +70,11 @@ function makeViewer() {
     __added: added,
     __removed: removed,
   };
-  return viewer;
 }
 
 // Deliberately installed at module scope, before any test runs: the layer's
 // single status probe fires on the first enable, and every fetch in this
 // process must flow through this router. Restored when the file ends.
-const flowCalls = [];
 const globalsWithPrev = {};
 const fetchImpl = async (url) => {
   const u = String(url);
@@ -89,7 +87,6 @@ const fetchImpl = async (url) => {
       { headers: { 'Content-Type': 'application/json' } });
   }
   if (u.includes('/api/tomtom/flow/')) {
-    flowCalls.push(u);
     return new Response('keyless proxy', { status: 503 });
   }
   throw new Error(`live harness: unexpected fetch ${u}`);

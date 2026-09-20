@@ -143,7 +143,7 @@ export function createEarthquakesLayer({ overlayHost = DEFAULT_OVERLAY_HOST } = 
   let _lastError = null;
   let _enabled = false;
 
-  const layer = {
+  return {
   id: 'earthquakes',
   name: 'Earthquakes (24h)',
   icon: '🌋',
@@ -356,7 +356,6 @@ export function createEarthquakesLayer({ overlayHost = DEFAULT_OVERLAY_HOST } = 
     };
   },
   };
-  return layer;
 }
 
 const earthquakesLayer = createEarthquakesLayer();

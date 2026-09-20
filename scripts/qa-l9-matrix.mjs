@@ -266,8 +266,6 @@ function trafficFlowInconclusive(stats) {
     && !s.error;
 }
 
-/** Positively-identified "the target is not there at all" (never an HTTP error). */
-const CONNECTION_REFUSED_RE = /ECONNREFUSED|ECONNRESET|EHOSTUNREACH|ENOTFOUND|fetch failed|socket hang up|Connect Timeout/i;
 /** Harness preflight messages that positively mean "no server", not "harness broke". */
 const HARNESS_ENV_RE = /Dev server (?:not reachable|unavailable)|Dev server unavailable at|not reachable at http/i;
 
@@ -1270,11 +1268,10 @@ async function runBrowserGroup(record) {
   // reports HARNESS-CRASH — it verified nothing. It never degrades to a pass.
   const UNRESPONSIVE = Symbol('page-unresponsive');
   const mustEval = async (fn, arg = null, ms = 30000) => {
-    const outcome = await Promise.race([
+    return Promise.race([
       page.evaluate(fn, arg).then((value) => ({ ok: true, value }), (e) => ({ ok: false, reason: `page threw: ${String(e?.message || e).slice(0, 140)}` })),
       new Promise((r) => setTimeout(() => r({ ok: false, reason: `page did not answer within ${ms} ms`, unresponsive: UNRESPONSIVE }), ms)),
     ]);
-    return outcome;
   };
 
   const step = async (id, fn) => {
@@ -2349,8 +2346,10 @@ async function preflight() {
   // rather than quietly skipping as OWNER-RUN.
   const statusKey = async (path) => {
     let r;
-    try { r = await jget(path); } catch (e) {
-      return CONNECTION_REFUSED_RE.test(String(e?.message || e)) ? 'error' : 'error';
+    // A refused connection and any other throw read the same way here: the
+    // key state is UNKNOWN ('error'), and dependents fail rather than skip.
+    try { r = await jget(path); } catch {
+      return 'error';
     }
     if (r.status !== 200) return 'error';
     if (typeof r.json?.hasKey !== 'boolean') return 'error';

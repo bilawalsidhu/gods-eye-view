@@ -261,10 +261,7 @@ export function initRadioPanel(mgr) {
         stationIds: pool.map((station) => station.id),
         origin: 'user',
       });
-      if (!cycled) {
-        mgr._radioTunerBandPinnedForNavigation = false;
-        return;
-      }
+      if (!cycled) mgr._radioTunerBandPinnedForNavigation = false;
     };
     const toggleRadio = async (trigger) => {
       if (!mgr._dataManager?.layers?.has('radio')) return;

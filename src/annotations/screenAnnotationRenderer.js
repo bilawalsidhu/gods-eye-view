@@ -312,7 +312,6 @@ export function createScreenAnnotationRenderer(viewer, {
       delete rec.parts.ringInner;
       rec.parts.dot.setAttribute('r', String(LABEL_DOT_R));
       projectAll();
-      return;
     }
 
     // Area-type updates route through the hybrid proxy only.

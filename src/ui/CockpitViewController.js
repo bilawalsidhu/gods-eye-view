@@ -639,7 +639,6 @@ export class CockpitViewController {
       event.stopImmediatePropagation();
       if (!this.active && !this.isEntryAllowed()) return;
       if (this.active) this.exit(); else this.enter();
-      return;
     }
   }
 
