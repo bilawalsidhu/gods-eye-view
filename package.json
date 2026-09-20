@@ -40,9 +40,11 @@
     "opensky:import": "./scripts/opensky-import-client.sh",
     "build": "vite build",
     "preview": "vite preview",
+    "start": "vite preview --config server/standalone/render.config.js",
     "test": "node scripts/run-unit-tests.mjs",
     "test:track": "node scripts/track-regression.mjs",
     "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs",
+    "qa:console": "node scripts/qa-console.mjs",
     "check:boundaries": "node scripts/check-import-directions.mjs && node scripts/check-package-boundaries.mjs",
     "qa:transit": "node scripts/qa-transit.mjs"
   },

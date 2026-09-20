@@ -1,0 +1,1501 @@
+/* ═══════════════════════════════════════════════
+   OPERATIONS CONSOLE
+   Structural chrome over the globe: command bar, module rail,
+   dossier, status strip and command palette.
+
+   Additive by construction. Every host-application override in this
+   file is scoped to `body.gev-console`, so removing that one class
+   restores the original floating-panel interface untouched.
+   ═══════════════════════════════════════════════ */
+
+:root {
+  --gc-top-h: 46px;
+  --gc-strip-h: 26px;
+  --gc-chrome-h: 72px; /* --gc-top-h + --gc-strip-h, written out: the rail and
+                          dossier offsets are read by a cascade model that
+                          resolves one term at a time. */
+  --gc-gutter: 12px;
+  --gc-rail-w: 52px;
+  --gc-dossier-w: 348px;
+  /* The bottom band belongs to the application: the Cesium attribution, the
+     command dock, the mic pill and the toast all live there, and the credit
+     must stay visible. No console surface is anchored to it. */
+
+  --gc-ink: #dce8f2;
+  --gc-ink-dim: rgba(220, 232, 242, 0.56);
+  --gc-ink-faint: rgba(220, 232, 242, 0.3);
+  --gc-line: rgba(126, 168, 196, 0.16);
+  --gc-line-strong: rgba(126, 178, 208, 0.36);
+  --gc-surface: rgba(6, 10, 16, 0.82);
+  --gc-surface-deep: rgba(4, 7, 12, 0.92);
+  --gc-raise: rgba(18, 26, 36, 0.9);
+
+  --gc-signal: #35e3ff;
+  --gc-signal-soft: rgba(53, 227, 255, 0.14);
+  --gc-good: #2fdf9e;
+  --gc-warn: #ffb547;
+  --gc-bad: #ff5468;
+  --gc-wait: #7fb2ff;
+
+  --gc-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --gc-fast: 140ms;
+  --gc-slow: 260ms;
+  --gc-blur: blur(22px) saturate(150%);
+}
+
+/* The container is layout-transparent: each surface is independently
+   fixed, so none of them traps the palette inside a stacking context. */
+.gev-console {
+  display: contents;
+}
+.gev-console[hidden] {
+  display: none;
+}
+
+.gc-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ── Command bar ─────────────────────────────── */
+
+.gc-topbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 143;
+  display: flex;
+  align-items: stretch;
+  gap: 14px;
+  height: var(--gc-top-h);
+  padding: 0 12px 0 14px;
+  background: linear-gradient(
+    180deg,
+    var(--gc-surface-deep),
+    var(--gc-surface)
+  );
+  backdrop-filter: var(--gc-blur);
+  -webkit-backdrop-filter: var(--gc-blur);
+  border-bottom: 1px solid var(--gc-line);
+  box-shadow:
+    inset 0 -1px 0 rgba(255, 255, 255, 0.03),
+    0 12px 32px rgba(0, 0, 0, 0.42);
+  font-family: var(--font-mono);
+  color: var(--gc-ink);
+  user-select: none;
+}
+
+/* A single travelling hairline — the only motion in the bar. */
+.gc-topbar-scan {
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: 22%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--gc-signal),
+    transparent
+  );
+  opacity: 0.55;
+  animation: gc-scan 9s linear infinite;
+}
+
+@keyframes gc-scan {
+  from {
+    transform: translateX(-30%);
+  }
+  to {
+    transform: translateX(480%);
+  }
+}
+
+.gc-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: 0 0 auto;
+}
+
+.gc-brand-mark {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--gc-line-strong);
+  border-radius: 2px;
+  background: rgba(53, 227, 255, 0.07);
+}
+
+.gc-brand-mark img {
+  width: 17px;
+  height: 17px;
+  opacity: 0.94;
+}
+
+.gc-brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.gc-brand-text strong {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+}
+
+.gc-brand-text small {
+  font-size: 8px;
+  letter-spacing: 0.24em;
+  color: var(--gc-ink-faint);
+}
+
+.gc-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.gc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--gc-line);
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.015);
+  font-size: var(--gc-label, 9px);
+  letter-spacing: 0.14em;
+  white-space: nowrap;
+}
+
+.gc-chip em {
+  font-style: normal;
+  color: var(--gc-ink-faint);
+}
+
+.gc-chip b {
+  font-weight: 600;
+  color: var(--gc-ink-dim);
+}
+
+.gc-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--gc-ink-faint);
+  box-shadow: 0 0 0 0 currentColor;
+}
+
+.gc-chip[data-state='nominal'] {
+  border-color: rgba(47, 223, 158, 0.28);
+}
+.gc-chip[data-state='nominal'] .gc-dot {
+  background: var(--gc-good);
+  box-shadow: 0 0 8px rgba(47, 223, 158, 0.7);
+}
+.gc-chip[data-state='nominal'] b {
+  color: var(--gc-good);
+}
+.gc-chip[data-state='loading'] .gc-dot {
+  background: var(--gc-wait);
+  animation: gc-pulse 1.1s ease-in-out infinite;
+}
+.gc-chip[data-state='loading'] b {
+  color: var(--gc-wait);
+}
+.gc-chip[data-state='bad'] {
+  border-color: rgba(255, 84, 104, 0.32);
+}
+.gc-chip[data-state='bad'] .gc-dot {
+  background: var(--gc-bad);
+}
+.gc-chip[data-state='bad'] b {
+  color: var(--gc-bad);
+}
+
+@keyframes gc-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.28;
+  }
+}
+
+.gc-readout {
+  display: flex;
+  align-items: stretch;
+  flex: 1 1 auto;
+  min-width: 0;
+  justify-content: center;
+  overflow: hidden;
+  border-left: 1px solid var(--gc-line);
+  border-right: 1px solid var(--gc-line);
+}
+
+.gc-cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  /* Shrinkable on purpose: a crowded bar tightens the columns before the
+     media queries below drop one. Pinning the basis clips the readout. */
+  min-width: 0;
+  flex-basis: 74px;
+  padding: 0 11px;
+  border-right: 1px solid var(--gc-line);
+}
+
+.gc-cell:last-child {
+  border-right: 0;
+}
+
+.gc-cell-wide {
+  flex-basis: 152px;
+}
+
+.gc-cell-label {
+  font-size: 8px;
+  letter-spacing: 0.22em;
+  color: var(--gc-ink-faint);
+}
+
+.gc-cell-value {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  font-variant-numeric: tabular-nums;
+  color: var(--gc-ink);
+  white-space: nowrap;
+}
+
+.gc-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+
+.gc-perf {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.gc-perf-graph {
+  display: block;
+  width: 72px;
+  height: 20px;
+  opacity: 0.85;
+}
+
+.gc-perf-value {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.gc-perf-value b {
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.gc-perf-value em {
+  font-style: normal;
+  font-size: 8px;
+  letter-spacing: 0.2em;
+  color: var(--gc-ink-faint);
+}
+
+.gc-clock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.15;
+  padding-left: 12px;
+  border-left: 1px solid var(--gc-line);
+}
+
+.gc-clock-time {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+}
+
+.gc-clock-zone {
+  font-size: 8px;
+  letter-spacing: 0.18em;
+  color: var(--gc-ink-faint);
+}
+
+.gc-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.gc-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--gc-line-strong);
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--gc-ink-dim);
+  font-family: inherit;
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  cursor: pointer;
+  transition:
+    color var(--gc-fast) var(--gc-ease),
+    border-color var(--gc-fast) var(--gc-ease),
+    background-color var(--gc-fast) var(--gc-ease);
+}
+
+.gc-btn:hover {
+  color: var(--gc-ink);
+  border-color: var(--gc-signal);
+  background: var(--gc-signal-soft);
+}
+
+.gc-btn[aria-expanded='true'] {
+  color: var(--gc-signal);
+  border-color: var(--gc-signal);
+  background: var(--gc-signal-soft);
+}
+
+.gc-btn-quiet {
+  border-color: var(--gc-line);
+  color: var(--gc-ink-faint);
+}
+
+.gc-btn-icon {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+}
+
+.gc-btn-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.gc-kbd {
+  padding: 1px 4px;
+  border: 1px solid var(--gc-line);
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.04);
+  font-family: inherit;
+  font-size: 8.5px;
+  letter-spacing: 0.06em;
+  color: var(--gc-ink-faint);
+}
+
+/* ── Module rail ─────────────────────────────── */
+
+.gc-rail {
+  position: fixed;
+  top: calc(var(--gc-chrome-h) + var(--gc-gutter));
+  left: var(--gc-gutter);
+  z-index: 143;
+  width: var(--gc-rail-w);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 9px 0;
+  border: 1px solid var(--gc-line);
+  border-radius: 3px;
+  background: var(--gc-surface);
+  backdrop-filter: var(--gc-blur);
+  -webkit-backdrop-filter: var(--gc-blur);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.42);
+  font-family: var(--font-mono);
+}
+
+.gc-rail-btn {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--gc-ink-faint);
+  cursor: pointer;
+  transition:
+    color var(--gc-fast) var(--gc-ease),
+    background-color var(--gc-fast) var(--gc-ease);
+}
+
+.gc-rail-btn svg {
+  width: 19px;
+  height: 19px;
+}
+
+.gc-rail-btn:hover:not(:disabled) {
+  color: var(--gc-ink);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.gc-rail-btn.is-open {
+  color: var(--gc-signal);
+  background: linear-gradient(90deg, var(--gc-signal-soft), transparent);
+}
+
+/* The open marker rides the rail edge, not the button box. */
+.gc-rail-btn.is-open::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  background: var(--gc-signal);
+  box-shadow: 0 0 10px var(--gc-signal);
+}
+
+.gc-rail-btn:disabled {
+  opacity: 0.28;
+  cursor: default;
+}
+
+/* Name flyout: the rail stays 56px wide, the label never reflows it. */
+.gc-rail-label {
+  position: absolute;
+  left: calc(100% + 6px);
+  top: 50%;
+  transform: translateY(-50%) translateX(-4px);
+  padding: 4px 8px;
+  border: 1px solid var(--gc-line-strong);
+  border-radius: 2px;
+  background: var(--gc-raise);
+  backdrop-filter: var(--gc-blur);
+  -webkit-backdrop-filter: var(--gc-blur);
+  color: var(--gc-ink);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity var(--gc-fast) var(--gc-ease),
+    transform var(--gc-fast) var(--gc-ease);
+}
+
+.gc-rail-btn:hover .gc-rail-label,
+.gc-rail-btn:focus-visible .gc-rail-label {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
+}
+
+.gc-rail-divider {
+  width: 22px;
+  height: 1px;
+  margin: 7px 0;
+  background: var(--gc-line);
+}
+
+.gc-rail-spacer {
+  height: 6px;
+}
+
+.gc-rail-meter {
+  padding-top: 5px;
+  border-top: 1px solid var(--gc-line);
+  width: 26px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.1;
+}
+
+.gc-rail-meter b {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--gc-signal);
+  font-variant-numeric: tabular-nums;
+}
+
+.gc-rail-meter em {
+  font-style: normal;
+  font-size: 7.5px;
+  letter-spacing: 0.2em;
+  color: var(--gc-ink-faint);
+}
+
+/* ── Dossier ─────────────────────────────────── */
+
+.gc-dossier {
+  position: fixed;
+  top: calc(var(--gc-chrome-h) + var(--gc-gutter));
+  /* Stops well clear of the bottom band so the Cesium attribution and the mic
+     pill stay visible and clickable underneath. */
+  bottom: 104px;
+  right: var(--gc-gutter);
+  z-index: 148;
+  width: var(--gc-dossier-w);
+  max-width: calc(100vw - 2 * var(--gc-gutter));
+  display: flex;
+  flex-direction: column;
+  background: var(--gc-surface-deep);
+  backdrop-filter: var(--gc-blur);
+  -webkit-backdrop-filter: var(--gc-blur);
+  border: 1px solid var(--gc-line-strong);
+  border-radius: 3px;
+  box-shadow: 0 26px 70px rgba(0, 0, 0, 0.55);
+  font-family: var(--font-mono);
+  color: var(--gc-ink);
+  animation: gc-slide-in var(--gc-slow) var(--gc-ease);
+}
+
+.gc-dossier[hidden] {
+  display: none;
+}
+
+@keyframes gc-slide-in {
+  from {
+    transform: translateX(14px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+.gc-dossier-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 38px;
+  padding: 0 8px 0 4px;
+  border-bottom: 1px solid var(--gc-line);
+  flex: 0 0 auto;
+}
+
+.gc-tabs {
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+}
+
+.gc-tab {
+  position: relative;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: var(--gc-ink-faint);
+  font-family: inherit;
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  cursor: pointer;
+  transition: color var(--gc-fast) var(--gc-ease);
+}
+
+.gc-tab:hover {
+  color: var(--gc-ink-dim);
+}
+
+.gc-tab[aria-selected='true'] {
+  color: var(--gc-signal);
+}
+
+.gc-tab[aria-selected='true']::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: -1px;
+  height: 1px;
+  background: var(--gc-signal);
+  box-shadow: 0 0 8px var(--gc-signal);
+}
+
+.gc-icon-btn {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--gc-ink-faint);
+  cursor: pointer;
+  transition: color var(--gc-fast) var(--gc-ease);
+}
+
+.gc-icon-btn svg {
+  width: 13px;
+  height: 13px;
+}
+
+.gc-icon-btn:hover {
+  color: var(--gc-ink);
+  border-color: var(--gc-line);
+}
+
+.gc-view {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.gc-view[hidden] {
+  display: none;
+}
+
+.gc-empty {
+  margin: 14px;
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  color: var(--gc-ink-faint);
+}
+
+/* ── Analyst ─────────────────────────────────── */
+
+.gc-analyst-log {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 12px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--gc-line-strong) transparent;
+}
+
+.gc-turn {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gc-turn-role {
+  font-size: 8px;
+  letter-spacing: 0.22em;
+  color: var(--gc-ink-faint);
+}
+
+.gc-turn-body {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--gc-line);
+  border-left-width: 2px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.02);
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--gc-ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.gc-turn-operator .gc-turn-body {
+  border-left-color: var(--gc-ink-faint);
+  color: var(--gc-ink-dim);
+}
+
+.gc-turn-analyst .gc-turn-body {
+  border-left-color: var(--gc-signal);
+}
+
+.gc-turn[data-tone='pending'] .gc-turn-body {
+  color: var(--gc-ink-faint);
+  animation: gc-pulse 1.2s ease-in-out infinite;
+}
+
+.gc-turn[data-tone='error'] .gc-turn-body {
+  border-left-color: var(--gc-bad);
+  color: var(--gc-bad);
+}
+
+.gc-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 6px 12px 0;
+}
+
+.gc-suggestion {
+  padding: 4px 8px;
+  border: 1px solid var(--gc-line);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--gc-ink-faint);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  cursor: pointer;
+  transition:
+    color var(--gc-fast) var(--gc-ease),
+    border-color var(--gc-fast) var(--gc-ease);
+}
+
+.gc-suggestion:hover {
+  color: var(--gc-ink);
+  border-color: var(--gc-signal);
+}
+
+.gc-analyst-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  margin: 10px 12px 0;
+  padding: 6px;
+  border: 1px solid var(--gc-line-strong);
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.02);
+  flex: 0 0 auto;
+}
+
+.gc-analyst-form:focus-within {
+  border-color: var(--gc-signal);
+}
+
+.gc-analyst-form[data-available='false'] {
+  opacity: 0.55;
+}
+
+.gc-analyst-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-height: 132px;
+  border: 0;
+  background: transparent;
+  color: var(--gc-ink);
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  line-height: 1.5;
+  resize: none;
+}
+
+.gc-analyst-input:focus-visible {
+  outline-offset: -3px;
+}
+
+.gc-analyst-input::placeholder {
+  color: var(--gc-ink-faint);
+}
+
+.gc-send-btn {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  border: 1px solid var(--gc-line);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--gc-signal);
+  cursor: pointer;
+}
+
+.gc-send-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.gc-send-btn:disabled {
+  color: var(--gc-ink-faint);
+  cursor: default;
+}
+
+.gc-note {
+  margin: 7px 12px 12px;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  line-height: 1.5;
+  color: var(--gc-ink-faint);
+}
+
+.gc-note[data-tone='warn'] {
+  color: var(--gc-warn);
+}
+
+/* ── Feed roster ─────────────────────────────── */
+
+.gc-feed-list,
+.gc-event-log {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--gc-line-strong) transparent;
+}
+
+.gc-feed-row {
+  display: grid;
+  grid-template-columns: 26px 1fr auto;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 12px;
+  border-bottom: 1px solid rgba(126, 168, 196, 0.07);
+}
+
+.gc-feed-toggle {
+  position: relative;
+  width: 26px;
+  height: 14px;
+  border: 1px solid var(--gc-line-strong);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+  transition: border-color var(--gc-fast) var(--gc-ease);
+}
+
+.gc-feed-toggle::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--gc-ink-faint);
+  transition:
+    transform var(--gc-fast) var(--gc-ease),
+    background-color var(--gc-fast) var(--gc-ease);
+}
+
+.gc-feed-toggle[aria-pressed='true'] {
+  border-color: var(--gc-signal);
+  background: var(--gc-signal-soft);
+}
+
+.gc-feed-toggle[aria-pressed='true']::after {
+  transform: translateX(10px);
+  background: var(--gc-signal);
+}
+
+.gc-feed-toggle:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.gc-feed-toggle[aria-busy='true'] {
+  animation: gc-pulse 0.8s ease-in-out infinite;
+}
+
+.gc-feed-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.gc-feed-name {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--gc-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gc-feed-meta {
+  font-size: 8.5px;
+  letter-spacing: 0.14em;
+  color: var(--gc-ink-faint);
+}
+
+.gc-feed-row[data-tone='good'] .gc-feed-meta {
+  color: var(--gc-good);
+}
+.gc-feed-row[data-tone='warn'] .gc-feed-meta {
+  color: var(--gc-warn);
+}
+.gc-feed-row[data-tone='bad'] .gc-feed-meta {
+  color: var(--gc-bad);
+}
+.gc-feed-row[data-tone='wait'] .gc-feed-meta {
+  color: var(--gc-wait);
+}
+
+.gc-feed-count {
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--gc-ink-dim);
+}
+
+/* ── Event log ───────────────────────────────── */
+
+.gc-log-row {
+  display: grid;
+  grid-template-columns: 62px 1fr;
+  gap: 8px;
+  padding: 5px 12px;
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  color: var(--gc-ink-dim);
+}
+
+.gc-log-time {
+  color: var(--gc-ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.gc-log-row[data-tone='warn'] .gc-log-text {
+  color: var(--gc-warn);
+}
+.gc-log-row[data-tone='bad'] .gc-log-text {
+  color: var(--gc-bad);
+}
+
+/* ── Status strip ────────────────────────────── */
+
+.gc-substrip {
+  position: fixed;
+  top: var(--gc-top-h);
+  left: 0;
+  right: 0;
+  z-index: 143;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: var(--gc-strip-h);
+  padding: 0 14px;
+  background: var(--gc-surface);
+  backdrop-filter: var(--gc-blur);
+  -webkit-backdrop-filter: var(--gc-blur);
+  border-bottom: 1px solid var(--gc-line);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  color: var(--gc-ink-dim);
+  user-select: none;
+}
+
+.gc-status-layers {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.gc-status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px;
+  border: 1px solid var(--gc-line);
+  border-left-width: 2px;
+  border-radius: 2px;
+  white-space: nowrap;
+}
+
+.gc-status-chip em {
+  font-style: normal;
+  color: var(--gc-ink-dim);
+}
+
+.gc-status-chip b {
+  font-variant-numeric: tabular-nums;
+  color: var(--gc-ink);
+}
+
+.gc-status-chip[data-tone='good'] {
+  border-left-color: var(--gc-good);
+}
+.gc-status-chip[data-tone='warn'] {
+  border-left-color: var(--gc-warn);
+}
+.gc-status-chip[data-tone='bad'] {
+  border-left-color: var(--gc-bad);
+}
+.gc-status-chip[data-tone='wait'] {
+  border-left-color: var(--gc-wait);
+}
+
+.gc-status-idle,
+.gc-status-more {
+  color: var(--gc-ink-faint);
+}
+
+.gc-status-note {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: center;
+  color: var(--gc-ink-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gc-status-note[data-tone='warn'] {
+  color: var(--gc-warn);
+}
+
+.gc-status-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.gc-status-place {
+  color: var(--gc-ink-dim);
+  max-width: 26vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gc-status-sep {
+  width: 1px;
+  height: 11px;
+  background: var(--gc-line);
+}
+
+.gc-status-credit {
+  color: var(--gc-ink-faint);
+}
+
+/* ── Command palette ─────────────────────────── */
+
+.gc-palette {
+  position: fixed;
+  inset: 0;
+  z-index: 320;
+  display: grid;
+  place-items: start center;
+  padding-top: 16vh;
+  font-family: var(--font-mono);
+}
+
+.gc-palette[hidden] {
+  display: none;
+}
+
+.gc-palette-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(2, 5, 9, 0.68);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.gc-palette-window {
+  position: relative;
+  width: min(660px, calc(100vw - 32px));
+  max-height: 64vh;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--gc-line-strong);
+  border-radius: 3px;
+  background: rgba(8, 12, 18, 0.94);
+  backdrop-filter: var(--gc-blur);
+  -webkit-backdrop-filter: var(--gc-blur);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.5),
+    0 44px 120px rgba(0, 0, 0, 0.66);
+  overflow: hidden;
+  animation: gc-rise var(--gc-slow) var(--gc-ease);
+}
+
+@keyframes gc-rise {
+  from {
+    transform: translateY(-10px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* Corner ticks — the frame reads as an instrument, not a dialog. */
+.gc-palette-window::before,
+.gc-palette-window::after {
+  content: '';
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border: 1px solid var(--gc-signal);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.gc-palette-window::before {
+  top: 0;
+  left: 0;
+  border-right: 0;
+  border-bottom: 0;
+}
+
+.gc-palette-window::after {
+  bottom: 0;
+  right: 0;
+  border-left: 0;
+  border-top: 0;
+}
+
+.gc-palette-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  height: 50px;
+  border-bottom: 1px solid var(--gc-line);
+  flex: 0 0 auto;
+}
+
+.gc-palette-prompt {
+  color: var(--gc-signal);
+  font-size: 14px;
+}
+
+.gc-palette-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--gc-ink);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  letter-spacing: 0.01em;
+}
+
+/* The application-wide keyboard ring stays — a text field that fills its
+   frame just wears it inset, the way the Location search already does. */
+.gc-palette-input:focus-visible {
+  outline-offset: -3px;
+}
+
+.gc-palette-input::placeholder {
+  color: var(--gc-ink-faint);
+}
+
+.gc-palette-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--gc-line-strong) transparent;
+}
+
+.gc-palette-section {
+  padding: 9px 14px 4px;
+  font-size: 8px;
+  letter-spacing: 0.26em;
+  color: var(--gc-ink-faint);
+}
+
+.gc-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 14px;
+  border-left: 2px solid transparent;
+  cursor: pointer;
+}
+
+.gc-row.is-active {
+  border-left-color: var(--gc-signal);
+  background: var(--gc-signal-soft);
+}
+
+.gc-row[data-disabled='true'] {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.gc-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.gc-row-title {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--gc-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gc-row-sub {
+  font-size: 8.5px;
+  letter-spacing: 0.14em;
+  color: var(--gc-ink-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gc-row-state {
+  padding: 2px 6px;
+  border: 1px solid var(--gc-line);
+  border-radius: 2px;
+  font-size: 8px;
+  letter-spacing: 0.16em;
+  color: var(--gc-ink-faint);
+  flex: 0 0 auto;
+}
+
+/* Only a live state is signal-coloured; OFF is just a state, not an alert. */
+.gc-row-state[data-value='ON'],
+.gc-row-state[data-value='OPEN'],
+.gc-row-state[data-value='ACTIVE'] {
+  color: var(--gc-signal);
+  border-color: rgba(53, 227, 255, 0.35);
+}
+
+.gc-row-hint {
+  font-size: 9px;
+  color: var(--gc-ink-faint);
+  flex: 0 0 auto;
+}
+
+.gc-palette-empty {
+  padding: 22px 14px;
+  text-align: center;
+  font-size: 9.5px;
+  letter-spacing: 0.2em;
+  color: var(--gc-ink-faint);
+}
+
+.gc-palette-foot {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 14px;
+  height: 30px;
+  border-top: 1px solid var(--gc-line);
+  font-size: 8.5px;
+  letter-spacing: 0.16em;
+  color: var(--gc-ink-faint);
+  flex: 0 0 auto;
+}
+
+.gc-palette-foot span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.gc-palette-foot span:last-child {
+  margin-left: auto;
+}
+
+/* ── Stand-down affordance ───────────────────── */
+
+/* Below the style indicator on the right: the top-centre lane belongs to the
+   camera actions and the loading chip, both of which are back on screen the
+   moment the console stands down. */
+.gc-restore {
+  position: fixed;
+  top: 74px;
+  right: 36px;
+  z-index: 143;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 13px;
+  border: 1px solid var(--gc-line-strong);
+  border-radius: 2px;
+  background: rgba(8, 12, 18, 0.88);
+  backdrop-filter: var(--gc-blur);
+  -webkit-backdrop-filter: var(--gc-blur);
+  color: var(--gc-ink-dim);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  cursor: pointer;
+}
+
+.gc-restore[hidden] {
+  display: none;
+}
+
+.gc-restore:hover {
+  color: var(--gc-ink);
+  border-color: var(--gc-signal);
+}
+
+.gc-restore-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--gc-signal);
+  box-shadow: 0 0 8px var(--gc-signal);
+}
+
+/* ── Host chrome under the console ───────────── */
+
+/* The console carries the brand, so the standalone title block stands down
+   rather than colliding with the command bar. */
+body.gev-console #title-bar {
+  display: none;
+}
+
+/* Only the top band and the left gutter move. Everything anchored to the
+   bottom — the attribution credit, the command dock, the mic pill, the toast
+   — keeps the geometry the application already guarantees for it. */
+body.gev-console {
+  --left-stack-x: calc(var(--gc-gutter) + var(--gc-rail-w) + var(--gc-gutter));
+  --left-stack-top: 32vh;
+}
+
+body.gev-console #style-indicator,
+body.gev-console #top-center-actions {
+  top: calc(var(--gc-chrome-h) + 14px);
+}
+
+body.gev-console #global-loading-status {
+  top: calc(var(--gc-chrome-h) + 58px);
+}
+
+body.gev-console #intel-hud .hud-top-left {
+  left: calc(var(--gc-gutter) + var(--gc-rail-w) + 18px);
+}
+
+body.gev-console #intel-hud .hud-left-edge {
+  left: calc(var(--gc-gutter) + var(--gc-rail-w) + 8px);
+}
+
+/* An open dossier claims the right gutter, so the surfaces that live there
+   step aside horizontally rather than being covered. */
+body.gev-console.gev-console-dossier-open {
+  --right-rail-x: calc(var(--gc-dossier-w) + 2 * var(--gc-gutter));
+}
+
+body.gev-console.gev-console-dossier-open #gev-voice-control {
+  right: calc(var(--gc-dossier-w) + 2 * var(--gc-gutter));
+}
+
+body.gev-console.gev-console-dossier-open #style-indicator {
+  right: calc(var(--gc-dossier-w) + 2 * var(--gc-gutter));
+}
+
+/* Clean view and the first-person cockpit both claim the whole frame; the
+   console stands aside for them exactly as the other chrome does. */
+body.ui-clean-view .gc-topbar,
+body.ui-clean-view .gc-substrip,
+body.ui-clean-view .gc-rail,
+body.ui-clean-view .gc-dossier,
+body.ui-clean-view .gc-restore,
+body.cockpit-mode .gc-topbar,
+body.cockpit-mode .gc-substrip,
+body.cockpit-mode .gc-rail,
+body.cockpit-mode .gc-dossier,
+body.cockpit-mode .gc-restore {
+  display: none;
+}
+
+body.cockpit-mode.gev-console,
+body.ui-clean-view.gev-console {
+  --gc-top-h: 0px;
+  --gc-strip-h: 0px;
+  --gc-chrome-h: 0px;
+  --gc-rail-w: 0px;
+}
+
+/* ── Narrow viewports ────────────────────────── */
+
+/* The grid reference also rides the telemetry strip, so the wide cell is the
+   first thing the command bar gives up. */
+@media (max-width: 1420px) {
+  .gc-cell-wide {
+    display: none;
+  }
+}
+
+@media (max-width: 1180px) {
+  .gc-chip:not(#gev-console-chip-feeds) {
+    display: none;
+  }
+  .gc-cell {
+    min-width: 66px;
+    padding: 0 8px;
+  }
+}
+
+@media (max-width: 900px) {
+  :root {
+    --gc-top-h: 42px;
+    --gc-chrome-h: 68px;
+    --gc-rail-w: 44px;
+    --gc-dossier-w: 300px;
+  }
+  .gc-readout .gc-cell:nth-child(n + 4),
+  .gc-perf,
+  .gc-btn-label {
+    display: none;
+  }
+  .gc-btn {
+    padding: 0 8px;
+  }
+  .gc-rail-btn {
+    width: 34px;
+    height: 34px;
+  }
+}
+
+@media (max-width: 640px) {
+  .gc-rail,
+  .gc-substrip,
+  .gc-chips {
+    display: none;
+  }
+  body.gev-console {
+    --gc-rail-w: 0px;
+    --gc-strip-h: 0px;
+    --gc-chrome-h: 42px;
+    --left-stack-x: 12px;
+  }
+  .gc-dossier {
+    right: 0;
+    left: 0;
+    width: auto;
+    max-width: none;
+  }
+  .gc-palette {
+    padding-top: 10vh;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gc-topbar-scan {
+    animation: none;
+    opacity: 0.3;
+  }
+  .gc-dossier,
+  .gc-palette-window {
+    animation: none;
+  }
+  .gc-chip[data-state='loading'] .gc-dot,
+  .gc-turn[data-tone='pending'] .gc-turn-body,
+  .gc-feed-toggle[aria-busy='true'] {
+    animation: none;
+  }
+}

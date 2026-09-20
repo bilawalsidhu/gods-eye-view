@@ -271,7 +271,9 @@
       "src/voice/voiceCost.js",
       "src/voice/actionSchemas.js",
       "server/providers/openai/toolDescriptions.js",
-      "src/sources/rateLimit.js"
+      "src/sources/rateLimit.js",
+      "server/providers/openai/analyst.js",
+      "server/providers/openai/response-text.js"
     ],
     "external": []
   },

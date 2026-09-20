@@ -1,0 +1,106 @@
+# God's Eye View — Render Blueprint
+#
+# Deploys this checkout as one web service: `vite build` produces the bundle,
+# `vite preview` serves it together with the same API provider middleware the
+# dev server runs (see server/standalone/render.config.js). Every API key stays
+# on the server; only GOOGLE_MAPS_API_KEY and CESIUM_ION_TOKEN are compiled
+# into the browser bundle, by design — restrict those in their own consoles.
+#
+# Use it: push this repo, then Render → New → Blueprint → pick the repo.
+# Render prompts for every value marked `sync: false`; leave the ones you do
+# not have blank and the app starts with keyless fallbacks (Esri imagery,
+# anonymous OpenSky, simulated traffic). Add OPENAI_API_KEY to switch on voice
+# control and the console's scene analyst.
+#
+# The app is public once deployed. The proxies below spend YOUR provider quota
+# for anyone who loads the page, so the GEV_RATELIMIT_* caps are set here
+# rather than left unlimited. They are per-IP, per-process guards, not billing
+# caps — set provider-side budgets too (OpenAI → Limits, Google Cloud →
+# Budgets & alerts).
+
+services:
+  - type: web
+    name: gods-eye-view
+    runtime: node
+    # `starter` keeps the service always-on. `free` also works and costs
+    # nothing, but sleeps after inactivity, so the first load pays a cold
+    # start. If the build runs out of memory, move up to `standard`.
+    plan: starter
+    region: oregon
+    branch: main
+    autoDeployTrigger: commit
+    # --include=dev because the build (vite) and the server (vite preview) both
+    # live in devDependencies, and Render builds with NODE_ENV=production.
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm run start
+    healthCheckPath: /
+    envVars:
+      # ── Runtime ────────────────────────────────────────────────────────
+      # The version CI builds and tests on; package.json requires >=24.14.0.
+      - key: NODE_VERSION
+        value: 24.14.0
+      # Bind every interface so Render's proxy can reach the service. Render
+      # supplies PORT itself — do not set it here.
+      - key: HOST
+        value: 0.0.0.0
+      # Puppeteer is a devDependency used only by the QA scripts; skip the
+      # ~200 MB Chromium download on every build.
+      - key: PUPPETEER_SKIP_DOWNLOAD
+        value: '1'
+      # Extra hostnames this deployment answers to (custom domains), comma
+      # separated. Render's own *.onrender.com hostname is allowed
+      # automatically through RENDER_EXTERNAL_HOSTNAME.
+      - key: GEV_ALLOWED_HOSTS
+        sync: false
+
+      # ── Spend guards (per-IP, per-process; not billing caps) ───────────
+      - key: GEV_RATELIMIT_OPENAI_PER_MIN
+        value: '20'
+      - key: GEV_RATELIMIT_GOOGLE_PER_MIN
+        value: '60'
+
+      # ── OpenAI: voice control and the console analyst ──────────────────
+      # SERVER-SIDE ONLY. Without it the mic and the analyst report offline
+      # and everything else keeps working.
+      - key: OPENAI_API_KEY
+        sync: false
+      # Optional model overrides; the code ships working defaults.
+      # - key: OPENAI_ANALYST_MODEL
+      #   value: gpt-5-mini
+      # - key: OPENAI_HUD_SUMMARY_MODEL
+      #   value: gpt-5-nano
+
+      # ── Map sources ────────────────────────────────────────────────────
+      # CLIENT-EXPOSED: compiled into the browser bundle. Restrict it by HTTP
+      # referrer to this service's domain in the Google Cloud console.
+      - key: GOOGLE_MAPS_API_KEY
+        sync: false
+      # SERVER-SIDE ONLY: Places and the Street View CCTV fallback. Restrict
+      # by IP rather than referrer. Falls back to the key above when unset.
+      - key: GOOGLE_MAPS_SERVER_API_KEY
+        sync: false
+      # CLIENT-EXPOSED: use a public assets:read token with URL restrictions.
+      - key: CESIUM_ION_TOKEN
+        sync: false
+
+      # ── Live feeds (all optional; each layer degrades on its own) ───────
+      # `anon` keeps the aircraft layer working without credentials, at the
+      # public rate limit. Set `oauth` and the two values below for headroom.
+      - key: OPENSKY_AUTH_MODE
+        value: anon
+      - key: OPENSKY_CLIENT_ID
+        sync: false
+      - key: OPENSKY_CLIENT_SECRET
+        sync: false
+      # Live AIS vessels.
+      - key: AISSTREAM_API_KEY
+        sync: false
+      # NASA FIRMS active fires.
+      - key: FIRMS_MAP_KEY
+        sync: false
+      # TomTom live traffic; without it the layer uses the built-in simulation.
+      - key: TOMTOM_API_KEY
+        sync: false
+      # Higher Launch Library 2 allowance; public access works without it.
+      - key: LL2_API_TOKEN
+        sync: false

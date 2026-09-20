@@ -1,0 +1,182 @@
+  <!-- Operations Console: structural chrome layered over the globe. Every
+       surface is additive — removing `body.gev-console` restores the original
+       floating-panel interface untouched. -->
+  <div id="gev-console" class="gev-console" data-console-state="booting" hidden>
+
+    <!-- ── Command bar ─────────────────────────────────────────────── -->
+    <header id="gev-console-topbar" class="gc-topbar" role="banner">
+      <div class="gc-topbar-scan" aria-hidden="true"></div>
+
+      <div class="gc-brand">
+        <span class="gc-brand-mark" aria-hidden="true"><img src="/logo.svg" alt="" /></span>
+        <span class="gc-brand-text">
+          <strong>GOD'S EYE VIEW</strong>
+          <small>OPERATIONS CONSOLE</small>
+        </span>
+      </div>
+
+      <div class="gc-chips" role="status" aria-live="off">
+        <span id="gev-console-chip-link" class="gc-chip" data-state="nominal">
+          <i class="gc-dot" aria-hidden="true"></i><em>LINK</em><b>ONLINE</b>
+        </span>
+        <span id="gev-console-chip-feeds" class="gc-chip" data-state="idle">
+          <i class="gc-dot" aria-hidden="true"></i><em>FEEDS</em><b>0/0</b>
+        </span>
+        <span id="gev-console-chip-analyst" class="gc-chip" data-state="idle">
+          <i class="gc-dot" aria-hidden="true"></i><em>ANALYST</em><b>CHECKING</b>
+        </span>
+      </div>
+
+      <div id="gev-console-readout" class="gc-readout" role="group" aria-label="Camera telemetry">
+        <div class="gc-cell"><span class="gc-cell-label">LAT</span><span class="gc-cell-value" id="gev-console-lat">--</span></div>
+        <div class="gc-cell"><span class="gc-cell-label">LON</span><span class="gc-cell-value" id="gev-console-lon">--</span></div>
+        <div class="gc-cell"><span class="gc-cell-label">ELEV</span><span class="gc-cell-value" id="gev-console-elev">--</span></div>
+        <div class="gc-cell"><span class="gc-cell-label">HDG</span><span class="gc-cell-value" id="gev-console-hdg">--</span></div>
+        <div class="gc-cell"><span class="gc-cell-label">TILT</span><span class="gc-cell-value" id="gev-console-tilt">--</span></div>
+        <div class="gc-cell gc-cell-wide"><span class="gc-cell-label">GRID</span><span class="gc-cell-value" id="gev-console-grid">--</span></div>
+      </div>
+
+      <div class="gc-topbar-right">
+        <div class="gc-perf" title="Render rate">
+          <canvas id="gev-console-fps-graph" class="gc-perf-graph" width="72" height="20" aria-hidden="true"></canvas>
+          <span class="gc-perf-value"><b id="gev-console-fps">--</b><em>FPS</em></span>
+        </div>
+        <div class="gc-clock">
+          <span class="gc-clock-time" id="gev-console-clock">--:--:--</span>
+          <span class="gc-clock-zone" id="gev-console-date">UTC</span>
+        </div>
+        <div class="gc-topbar-actions">
+          <button id="gev-console-search-btn" class="gc-btn gc-btn-search" type="button" aria-label="Open the command palette">
+            <span class="gc-btn-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+            </span>
+            <span class="gc-btn-label">SEARCH</span>
+            <kbd class="gc-kbd" id="gev-console-search-kbd">⌘K</kbd>
+          </button>
+          <button id="gev-console-dossier-btn" class="gc-btn" type="button" aria-expanded="false" aria-controls="gev-console-dossier">
+            <span class="gc-btn-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5h16v13H4z"/><path d="M14 5.5v13M7 9h4M7 12h4"/></svg>
+            </span>
+            <span class="gc-btn-label">DOSSIER</span>
+          </button>
+          <button id="gev-console-exit-btn" class="gc-btn gc-btn-quiet" type="button" title="Return to the classic God's Eye View interface">
+            <span class="gc-btn-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 5.5H5.5v13H14"/><path d="M11 12h9"/><path d="m16.5 8.5 3.5 3.5-3.5 3.5"/></svg>
+            </span>
+            <span class="gc-btn-label">EXIT</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- ── Telemetry strip ─────────────────────────────────────────── -->
+    <div id="gev-console-statusbar" class="gc-substrip">
+      <div id="gev-console-active-layers" class="gc-status-layers" aria-label="Active data layers"></div>
+      <div id="gev-console-status-note" class="gc-status-note" role="status" aria-live="polite">STANDING BY</div>
+      <div class="gc-status-meta">
+        <span id="gev-console-place" class="gc-status-place">--</span>
+        <span class="gc-status-sep" aria-hidden="true"></span>
+        <span class="gc-status-credit">GEV · CESIUM</span>
+      </div>
+    </div>
+
+    <!-- ── Module rail ─────────────────────────────────────────────── -->
+    <nav id="gev-console-rail" class="gc-rail" aria-label="Console modules">
+      <button class="gc-rail-btn" type="button" data-console-panel="data-panel" aria-pressed="false">
+        <span class="gc-rail-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 3 7.5 12 12l9-4.5L12 3Z"/><path d="m3 12 9 4.5 9-4.5"/><path d="m3 16.5 9 4.5 9-4.5"/></svg></span>
+        <span class="gc-rail-label">LAYERS</span>
+      </button>
+      <button class="gc-rail-btn" type="button" data-console-panel="pp-toggles" aria-pressed="false">
+        <span class="gc-rail-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="9" cy="7" r="2.1"/><circle cx="15" cy="12" r="2.1"/><circle cx="8" cy="17" r="2.1"/></svg></span>
+        <span class="gc-rail-label">DISPLAY</span>
+      </button>
+      <button class="gc-rail-btn" type="button" data-console-panel="control-panel" aria-pressed="false">
+        <span class="gc-rail-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16Z" fill="currentColor" stroke="none"/></svg></span>
+        <span class="gc-rail-label">PRESETS</span>
+      </button>
+      <button class="gc-rail-btn" type="button" data-console-panel="location-bar" aria-pressed="false">
+        <span class="gc-rail-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg></span>
+        <span class="gc-rail-label">LOCATION</span>
+      </button>
+      <span class="gc-rail-divider" aria-hidden="true"></span>
+      <button class="gc-rail-btn" type="button" data-console-panel="cctv-panel" aria-pressed="false">
+        <span class="gc-rail-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M3.2 8.6 16.6 5l1.5 5.3L4.7 13.9 3.2 8.6Z"/><path d="M6.8 13.2v3.4a2.6 2.6 0 0 0 5.2 0"/><path d="m18.6 10.6 2.9-1.1"/></svg></span>
+        <span class="gc-rail-label">CAMERAS</span>
+      </button>
+      <button class="gc-rail-btn" type="button" data-console-panel="radio-panel" aria-pressed="false">
+        <span class="gc-rail-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="14" r="2.4"/><path d="M8 10.2a5.7 5.7 0 0 1 8 0M5.2 7.4a9.6 9.6 0 0 1 13.6 0"/><path d="M12 16.4V21"/></svg></span>
+        <span class="gc-rail-label">RADIO</span>
+      </button>
+      <button class="gc-rail-btn" type="button" data-console-panel="scene-panel" aria-pressed="false">
+        <span class="gc-rail-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="1.6"/><path d="M7.5 5v14M16.5 5v14M3 9.7h4.5M3 14.3h4.5M16.5 9.7H21M16.5 14.3H21"/></svg></span>
+        <span class="gc-rail-label">SCENES</span>
+      </button>
+      <button class="gc-rail-btn" type="button" data-console-panel="global-context-panel" aria-pressed="false">
+        <span class="gc-rail-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="6.8"/><circle cx="12" cy="12" r="1.9"/><path d="M12 2.3v2.6M12 19.1v2.6M2.3 12h2.6M19.1 12h2.6"/></svg></span>
+        <span class="gc-rail-label">CONTEXT</span>
+      </button>
+      <span class="gc-rail-spacer"></span>
+      <span class="gc-rail-meter" id="gev-console-rail-meter" title="Active data layers">
+        <b id="gev-console-rail-count">0</b><em>LIVE</em>
+      </span>
+    </nav>
+
+    <!-- ── Dossier ─────────────────────────────────────────────────── -->
+    <aside id="gev-console-dossier" class="gc-dossier" aria-label="Intelligence dossier" hidden>
+      <div class="gc-dossier-head">
+        <div class="gc-tabs" role="tablist" aria-label="Dossier sections">
+          <button id="gev-console-tab-analyst" class="gc-tab" type="button" role="tab" aria-selected="true" aria-controls="gev-console-view-analyst">ANALYST</button>
+          <button id="gev-console-tab-feeds" class="gc-tab" type="button" role="tab" aria-selected="false" aria-controls="gev-console-view-feeds" tabindex="-1">FEEDS</button>
+          <button id="gev-console-tab-log" class="gc-tab" type="button" role="tab" aria-selected="false" aria-controls="gev-console-view-log" tabindex="-1">LOG</button>
+        </div>
+        <button id="gev-console-dossier-close" class="gc-icon-btn" type="button" aria-label="Close the dossier">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+
+      <section id="gev-console-view-analyst" class="gc-view gc-view-analyst" role="tabpanel" aria-labelledby="gev-console-tab-analyst">
+        <div id="gev-console-analyst-log" class="gc-analyst-log" role="log" aria-live="polite" aria-relevant="additions"></div>
+        <div id="gev-console-analyst-suggestions" class="gc-suggestions" aria-label="Suggested questions"></div>
+        <form id="gev-console-analyst-form" class="gc-analyst-form">
+          <label class="gc-visually-hidden" for="gev-console-analyst-input">Ask the analyst about the current scene</label>
+          <textarea id="gev-console-analyst-input" class="gc-analyst-input" rows="1" placeholder="Ask about what is on screen…" autocomplete="off" spellcheck="false"></textarea>
+          <button id="gev-console-analyst-send" class="gc-send-btn" type="submit" aria-label="Send the question">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h14"/><path d="m12.5 6.5 6 5.5-6 5.5"/></svg>
+          </button>
+        </form>
+        <p id="gev-console-analyst-note" class="gc-note"></p>
+      </section>
+
+      <section id="gev-console-view-feeds" class="gc-view gc-view-feeds" role="tabpanel" aria-labelledby="gev-console-tab-feeds" hidden>
+        <div id="gev-console-feed-list" class="gc-feed-list"></div>
+      </section>
+
+      <section id="gev-console-view-log" class="gc-view gc-view-log" role="tabpanel" aria-labelledby="gev-console-tab-log" hidden>
+        <div id="gev-console-event-log" class="gc-event-log" role="log" aria-live="off"></div>
+      </section>
+    </aside>
+
+  </div>
+
+  <!-- ── Command palette ─────────────────────────────────────────── -->
+  <div id="gev-console-palette" class="gc-palette" hidden>
+    <div id="gev-console-palette-scrim" class="gc-palette-scrim"></div>
+    <div class="gc-palette-window" role="dialog" aria-modal="true" aria-label="Command palette">
+      <div class="gc-palette-field">
+        <span class="gc-palette-prompt" aria-hidden="true">&gt;</span>
+        <input id="gev-console-palette-input" class="gc-palette-input" type="text" role="combobox" aria-expanded="true" aria-controls="gev-console-palette-list" aria-autocomplete="list" placeholder="Run a command, jump to a city, toggle a feed…" autocomplete="off" spellcheck="false" />
+        <kbd class="gc-kbd">ESC</kbd>
+      </div>
+      <div id="gev-console-palette-list" class="gc-palette-list" role="listbox" aria-label="Commands"></div>
+      <div class="gc-palette-foot">
+        <span><kbd class="gc-kbd">↑</kbd><kbd class="gc-kbd">↓</kbd> NAVIGATE</span>
+        <span><kbd class="gc-kbd">↵</kbd> RUN</span>
+        <span id="gev-console-palette-count">0 COMMANDS</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Re-entry affordance while the console is stood down. -->
+  <button id="gev-console-restore" class="gc-restore" type="button" hidden>
+    <span class="gc-restore-dot" aria-hidden="true"></span>OPEN CONSOLE
+  </button>

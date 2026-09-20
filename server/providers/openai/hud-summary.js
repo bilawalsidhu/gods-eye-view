@@ -2,18 +2,7 @@ import { keylessHudSummaryResponse } from '../../../src/hudSummaryResponse.js';
 import { enforceOptInRateLimit, openAiRateLimiter } from './rate-limit.js';
 import { readRequestBody } from '../common/request.js';
 import { OPENAI_HUD_SUMMARY_MODEL_DEFAULT } from './constants.js';
-
-function extractOpenAiResponseText(data) {
-  if (typeof data?.output_text === 'string' && data.output_text.trim()) {
-    return data.output_text.trim();
-  }
-  if (!Array.isArray(data?.output)) return '';
-  return data.output
-    .flatMap((item) => (Array.isArray(item?.content) ? item.content : []))
-    .map((part) => part?.text || part?.output_text || '')
-    .join(' ')
-    .trim();
-}
+import { extractOpenAiResponseText } from './response-text.js';
 
 function toFiveWordHudSummary(value) {
   return String(value || '')
