@@ -9,6 +9,7 @@ import {
   beginDeferredNavigation,
   NAVIGATION_AUTHORITY_EVENT,
   reassertNavigationHandoff,
+  registerNavigationAuthorityListener,
   runExplicitNavigation,
   stampInitialShareGesture,
 } from './navigationPolicy.js';
@@ -26,6 +27,31 @@ test('layer authority announcements distinguish passive autofocus from direct in
     { reason: 'context-vessel-autofocus', cancelPendingSelection: false },
     { reason: 'context-vessel-focus', cancelPendingSelection: true },
   ]);
+});
+
+test('the authority listener is one registration with an idempotent disposer', () => {
+  const events = [];
+  const target = new EventTarget();
+  const dispose = registerNavigationAuthorityListener(target, (event) => {
+    events.push(event.detail.reason);
+  });
+  announceNavigationAuthority('first', { eventTarget: target });
+  announceNavigationAuthority('second', { eventTarget: target });
+  dispose();
+  dispose();
+  announceNavigationAuthority('third', { eventTarget: target });
+  assert.deepEqual(events, ['first', 'second'], 'a disposed listener must never fire again');
+});
+
+test('an unusable target or listener degrades to an inert disposer', () => {
+  const listener = () => {};
+  // Every refusal is still a callable disposer, so callers need no branch.
+  assert.doesNotThrow(() => registerNavigationAuthorityListener(null, listener)());
+  assert.doesNotThrow(() => registerNavigationAuthorityListener({}, listener)());
+  // A target that could add but not remove would leak the listener forever.
+  const addOnly = { addEventListener() {}, removeEventListener: undefined };
+  assert.doesNotThrow(() => registerNavigationAuthorityListener(addOnly, listener)());
+  assert.doesNotThrow(() => registerNavigationAuthorityListener(new EventTarget(), null)());
 });
 
 test('an initial globe gesture cancels the passive shared Follow selection', () => {
@@ -157,6 +183,13 @@ test('deferred intent stamps without releasing a camera owner', () => {
   const s = spy({ stamp: () => { s.log.push('stamp'); return 7; } });
   assert.equal(beginDeferredNavigation({ ...s, noun: 'location' }), 7);
   assert.deepEqual(s.log, ['stamp']);
+});
+
+test('a deferred intent is refused inside cockpit before anything is stamped', () => {
+  const s = spy();
+  assert.equal(beginDeferredNavigation({ cockpitActive: true, noun: 'vessel', ...s }), false);
+  assert.deepEqual(s.log, ['toast:Exit cockpit to fly to a vessel'],
+    'the refusal explains itself and nothing else happens');
 });
 
 test('disposed deferred intent is inert before stamp or UI mutation', () => {

@@ -13,6 +13,7 @@ import {
   clampScopeTerminusPct,
   installScopeMask,
   destroyScopeMask,
+  isScopeMaskEnabled,
   setScopeMaskEnabled,
   setScopeMaskFeather,
   SCOPE_TERMINUS_MIN_PCT,
@@ -103,8 +104,13 @@ test('backing-store scale is clamped to 1.5x (overlay-policy alignment, Phase 9)
  * Minimal DOM/matchMedia surface for the install path. Returns the created
  * canvas plus a `setDpr` that fires a real `(resolution: Ndppx)` change the
  * way moving a window between a 1x and a 2x monitor does.
+ *
+ * `dprWatch` selects the matchMedia flavor: 'modern' is the
+ * addEventListener form every current engine answers, 'legacy' is the
+ * deprecated addListener/removeListener pair (Safari < 14), and 'throws' is an
+ * engine that cannot answer a resolution query at all.
  */
-function stubScopeMaskDom({ width = 1000, height = 800, dpr = 1 } = {}) {
+function stubScopeMaskDom({ width = 1000, height = 800, dpr = 1, dprWatch = 'modern' } = {}) {
   const saved = { window: globalThis.window, document: globalThis.document, ResizeObserver: globalThis.ResizeObserver };
   // Records every fillStyle assignment and gradient stop so the paint's actual
   // colours (not just its call sequence) can be asserted.
@@ -133,14 +139,27 @@ function stubScopeMaskDom({ width = 1000, height = 800, dpr = 1 } = {}) {
     }),
   };
   const listeners = new Set();
+  const mediaQuery = () => {
+    if (dprWatch === 'throws') {
+      throw new Error('resolution queries unsupported');
+    }
+    const query = { media: null, matches: true };
+    if (dprWatch === 'legacy') {
+      query.addListener = (fn) => listeners.add(fn);
+      query.removeListener = (fn) => listeners.delete(fn);
+    } else {
+      query.addEventListener = (type, fn) => listeners.add(fn);
+      query.removeEventListener = (type, fn) => listeners.delete(fn);
+    }
+    return query;
+  };
   globalThis.window = {
     devicePixelRatio: dpr,
-    matchMedia: (query) => ({
-      media: query,
-      matches: true,
-      addEventListener: (type, fn) => listeners.add(fn),
-      removeEventListener: (type, fn) => listeners.delete(fn),
-    }),
+    matchMedia: (query) => {
+      const mq = mediaQuery();
+      mq.media = query;
+      return mq;
+    },
   };
   globalThis.document = { createElement: () => canvas };
   globalThis.ResizeObserver = class { observe() {} disconnect() {} };
@@ -154,6 +173,8 @@ function stubScopeMaskDom({ width = 1000, height = 800, dpr = 1 } = {}) {
     fillStyles: () => [...fillStyles],
     /** Every gradient stop added since install (feathered path). */
     gradientStops: () => [...gradientStops],
+    /** How many DPR listeners are currently armed on the stubbed matchMedia. */
+    dprListeners: () => listeners.size,
     setDpr(next) {
       globalThis.window.devicePixelRatio = next;
       for (const fn of [...listeners]) fn();
@@ -200,6 +221,73 @@ test('destroy tears the DPR watch down (no redraw after teardown)', () => {
     dom.setDpr(2);
     assert.equal(dom.canvas.width, 640, 'a destroyed mask must not repaint');
   } finally {
+    dom.restore();
+  }
+});
+
+test('the legacy addListener watch still tracks DPR changes and is torn down', () => {
+  const dom = stubScopeMaskDom({ width: 800, height: 600, dpr: 1, dprWatch: 'legacy' });
+  try {
+    installScopeMask({ container: dom.container });
+    assert.equal(dom.dprListeners(), 1, 'the pre-14 Safari form must be armed too');
+    dom.setDpr(2);
+    assert.equal(dom.canvas.width, 1200, 'a legacy DPR change repaints the backing store');
+    assert.equal(dom.canvas.height, 900);
+
+    destroyScopeMask();
+    assert.equal(dom.dprListeners(), 0, 'teardown must use the legacy removeListener form');
+    dom.setDpr(1);
+    assert.equal(dom.canvas.width, 1200, 'a destroyed mask must not repaint');
+  } finally {
+    dom.restore();
+  }
+});
+
+test('a matchMedia that cannot answer resolution queries leaves the install intact', () => {
+  const dom = stubScopeMaskDom({ width: 800, height: 600, dpr: 1, dprWatch: 'throws' });
+  try {
+    // No DPR watch is possible here — resize still covers the common case, so
+    // the failure must be swallowed, not propagated into the install path.
+    assert.doesNotThrow(() => installScopeMask({ container: dom.container }));
+    assert.equal(dom.dprListeners(), 0);
+    assert.equal(dom.canvas.width, 800, 'the seeded paint still ran at CSS size');
+    dom.setDpr(2);
+    assert.equal(dom.canvas.width, 800, 'and there is no listener left to fire');
+  } finally {
+    destroyScopeMask();
+    dom.restore();
+  }
+});
+
+test('the live camera signals sample the terminus while the scope is on', async () => {
+  const dom = stubScopeMaskDom({ width: 1000, height: 800, dpr: 1 });
+  const rig = stubScopeViewer(dom.container, SCOPE_TERMINUS_FAR_M + 4_000_000);
+  try {
+    installScopeMask(rig.viewer);
+    assert.equal(isScopeMaskEnabled(), true, 'the mask installs enabled');
+    const base = getScopeTerminusRepaintCount();
+
+    // preRender is the per-frame sampler: after the throttle window opens it
+    // reads the live altitude and repaints on a real step.
+    rig.setHeight(SCOPE_TERMINUS_NEAR_M);
+    await new Promise((resolve) => setTimeout(resolve, 140));
+    rig.raisePreRender();
+    assert.equal(getScopeTerminusAlpha(), SCOPE_TERMINUS_ALPHA_NEAR);
+    assert.equal(getScopeTerminusRepaintCount(), base + 1);
+
+    // Frames inside the 120 ms window are free: no read applies, no repaint.
+    rig.setHeight(SCOPE_TERMINUS_FAR_M);
+    rig.raisePreRender(4);
+    assert.equal(getScopeTerminusAlpha(), SCOPE_TERMINUS_ALPHA_NEAR,
+      'the sampler throttle swallows back-to-back frames');
+    assert.equal(getScopeTerminusRepaintCount(), base + 1);
+
+    // moveEnd is the settled pose and bypasses the throttle.
+    rig.raiseMoveEnd();
+    assert.equal(getScopeTerminusAlpha(), SCOPE_OUTSIDE_ALPHA);
+    assert.equal(getScopeTerminusRepaintCount(), base + 2);
+  } finally {
+    destroyScopeMask();
     dom.restore();
   }
 });

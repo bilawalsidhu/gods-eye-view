@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  fetchRegionalBrief,
   normalizeRegionalArticles,
   normalizeRegionalPlace,
   normalizeRegionalWeather,
@@ -40,6 +41,27 @@ test('normalizes weather values and labels WMO conditions', () => {
   assert.equal(weather.visibilityM, 18000);
   assert.equal(weatherCodeLabel(weather.weatherCode), 'PARTLY CLOUDY');
   assert.equal(normalizeRegionalWeather({ current: {} }), null);
+  // The rest of the WMO ladder, including both "unknown code" tails.
+  assert.equal(weatherCodeLabel(3), 'OVERCAST');
+  assert.equal(weatherCodeLabel(45), 'FOG');
+  assert.equal(weatherCodeLabel(48), 'FOG');
+  assert.equal(weatherCodeLabel(95), 'THUNDERSTORM');
+  assert.equal(weatherCodeLabel(96), 'THUNDERSTORM');
+  assert.equal(weatherCodeLabel(90), 'MIXED CONDITIONS');
+  assert.equal(weatherCodeLabel('nonsense'), 'CONDITIONS UNKNOWN');
+});
+
+test('an unparseable article href is dropped, not rendered as a link', () => {
+  // 'javascript:' is a valid URL with a non-http protocol (covered elsewhere);
+  // these strings cannot be parsed as URLs at all → safeHttpUrl's catch.
+  const articles = normalizeRegionalArticles({ articles: [
+    { title: 'No scheme', url: 'example.press/story' },
+    { title: 'Bare authority', url: 'http://' },
+    { title: 'Real story', url: 'https://example.press/ok' },
+  ] });
+  assert.equal(articles.length, 1);
+  assert.equal(articles[0].title, 'Real story');
+  assert.equal(articles[0].domain, 'example.press');
 });
 
 test('zone-naive Open-Meteo timestamps are pinned to UTC, zoned ones pass through', () => {
@@ -60,4 +82,36 @@ test('regional distance handles nearby movement and missing positions', () => {
   );
   assert.ok(distance > 11000 && distance < 11200);
   assert.equal(regionalDistanceM(null, null), Infinity);
+});
+
+test('fetchRegionalBrief builds the same-origin proxy URL and rejects bad input', async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url: String(url), init });
+    return new Response(JSON.stringify({ place: { label: 'Duluth' } }), { status: 200 });
+  };
+  try {
+    const payload = await fetchRegionalBrief(46.78671, -92.10053);
+    assert.deepEqual(payload, { place: { label: 'Duluth' } });
+    assert.equal(calls.length, 1);
+    assert.match(calls[0].url, /\/api\/regional-brief\?latitude=46\.78671&longitude=-92\.10053$/);
+    assert.deepEqual(calls[0].init, { signal: undefined }, 'only an (absent) signal is forwarded');
+
+    // Abort signals must reach the proxy for camera-follow callers.
+    const controller = new AbortController();
+    await fetchRegionalBrief(46.78671, -92.10053, { signal: controller.signal });
+    assert.equal(calls[1].init.signal, controller.signal);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  await assert.rejects(fetchRegionalBrief(Number.NaN, -92.1), /Valid coordinates are required/);
+  const original = globalThis.fetch;
+  globalThis.fetch = async () => new Response('boom', { status: 503 });
+  try {
+    await assert.rejects(fetchRegionalBrief(46.78671, -92.1), /Regional brief unavailable \(503\)/);
+  } finally {
+    globalThis.fetch = original;
+  }
 });

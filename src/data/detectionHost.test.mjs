@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import {
   countFadingRenderEntries,
+  cycleMode,
   destroyDetection,
   detectionDebugRequested,
   getDetectionDiagnostics,
@@ -12,12 +13,16 @@ import {
   getMode,
   initDetection,
   isDetectionSuspended,
+  markDetectionSourcesChanged,
   resumeDetection,
   setDetectionStyle,
   setDetectionTuning,
   setMode,
   suspendDetection,
 } from './detection.js';
+import { VIEW_PROJECTION_KEYS } from './detectionDraw.js';
+import { COCKPIT_BRACKET_OPACITY } from './detectionPresentation.js';
+import { getKeyholeFadeTuning, setKeyholeFadeTuning } from '../celestialRing.js';
 import {
   destroyWorldOverlay,
   initWorldOverlay,
@@ -724,6 +729,9 @@ test('detectionDebugRequested parses the query-string gate and nothing else', ()
   assert.equal(detectionDebugRequested('?detectdebug=1'), false, 'the flag is case-sensitive');
   assert.equal(detectionDebugRequested(undefined), false);
   assert.equal(detectionDebugRequested(null), false);
+  // A search value that cannot even be stringified reads as off rather than
+  // throwing out of `initDetection`.
+  assert.equal(detectionDebugRequested({ toString() { throw new Error('nope'); } }), false);
 });
 
 test('the mode banner is absent by default and present behind the flag', () => {
@@ -870,6 +878,398 @@ test('the backdrop feather reaches the canvas as a lighter plate against sky', (
       `sky plate ${lightest} must be markedly lighter than ground plate ${heaviest}`,
     );
   } finally {
+    env.cleanup();
+  }
+});
+
+// ── Mode state machine + Cockpit listener lifecycle ─────────────────────────
+// The pins above read the paint path; these read the decision state that feeds
+// it, each through an observable surface (mode labels, the mode-change
+// callback, the published diagnostics) rather than internals.
+
+test('an unrecognized mode label is a no-op and cycleMode parks then restores the profile', () => {
+  const env = installEnvironment();
+  const modes = [];
+  try {
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, [detectableLayer()], (mode) => modes.push(mode));
+    setMode('BALANCED');
+    assert.equal(getMode(), 'BALANCED');
+    const reported = modes.length;
+
+    setMode('NOPE');
+    assert.equal(getMode(), 'BALANCED', 'an unknown label must not disturb the active profile');
+    assert.equal(modes.length, reported, 'an unknown label fires no mode-change callback');
+
+    cycleMode();
+    assert.equal(getMode(), 'OFF', 'cycleMode parks an active profile');
+    assert.equal(modes.at(-1), 'OFF');
+    assert.equal(
+      env.document.getElementById('world-overlay-detection-surface').style.display,
+      'none',
+      'the sensor surface is hidden while parked',
+    );
+
+    cycleMode();
+    assert.equal(getMode(), 'BALANCED', 'cycleMode restores the parked profile, not a default');
+    assert.equal(modes.at(-1), 'BALANCED');
+    assert.equal(
+      env.document.getElementById('world-overlay-detection-surface').style.display,
+      'block',
+    );
+  } finally {
+    destroyDetection();
+    destroyWorldOverlay();
+    env.cleanup();
+  }
+});
+
+test('markDetectionSourcesChanged stamps the caller reason into the diagnostics, but not while OFF', () => {
+  const env = installEnvironment();
+  try {
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, [detectableLayer()], () => {});
+    setMode('DENSE');
+    settleFrame(env);
+    assert.equal(getDetectionDiagnostics().lastSourceChangeReason, undefined);
+
+    markDetectionSourcesChanged('ais-poll-tick');
+    assert.equal(
+      getDetectionDiagnostics().lastSourceChangeReason,
+      'ais-poll-tick',
+      'a poll tick has to say who asked for the re-solve',
+    );
+
+    setMode('OFF');
+    markDetectionSourcesChanged('must-not-stick');
+    assert.equal(
+      getDetectionDiagnostics().lastSourceChangeReason,
+      'ais-poll-tick',
+      'an OFF overlay has no solve to dirty, so the reason is left untouched',
+    );
+  } finally {
+    destroyDetection();
+    destroyWorldOverlay();
+    env.cleanup();
+  }
+});
+
+test('re-arming detection swaps its Cockpit listener, and the event reaches the brackets', () => {
+  const env = installEnvironment();
+  const cockpitListeners = [];
+  globalThis.window.addEventListener = (type, listener) => {
+    if (type === 'gev:cockpit-mode-changed') cockpitListeners.push(listener);
+  };
+  globalThis.window.removeEventListener = (type, listener) => {
+    const index = cockpitListeners.indexOf(listener);
+    if (index >= 0) cockpitListeners.splice(index, 1);
+  };
+  try {
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, [detectableLayer()], () => {});
+    const afterFirstInit = cockpitListeners.length;
+    assert.equal(afterFirstInit, 2, 'the host and detection each hold exactly one listener');
+
+    initDetection(env.viewer, [detectableLayer()], () => {});
+    assert.equal(
+      cockpitListeners.length,
+      afterFirstInit,
+      'a re-init must detach the listener it installed, never stack a second one',
+    );
+
+    setMode('DENSE');
+    settleFrame(env);
+    assert.equal(getDetectionDiagnostics().bracketPresentationOpacity, 1);
+    // Dispatch to every holder, exactly as a real DOM event would.
+    for (const listener of cockpitListeners) listener({ detail: { active: true } });
+    settleFrame(env);
+    assert.equal(
+      getDetectionDiagnostics().bracketPresentationOpacity,
+      COCKPIT_BRACKET_OPACITY,
+      'the Cockpit event drives the bracket presentation multiplier',
+    );
+    for (const listener of cockpitListeners) listener({});
+    settleFrame(env);
+    assert.equal(getDetectionDiagnostics().bracketPresentationOpacity, 1, 'no detail reads as off');
+  } finally {
+    destroyDetection();
+    destroyWorldOverlay();
+    env.cleanup();
+  }
+});
+
+// ── Candidate collection + bracket census ───────────────────────────────────
+
+test('a layer that throws while listing contacts is skipped and the rest of the field survives', () => {
+  const env = installEnvironment();
+  let polls = 0;
+  const brokenLayer = {
+    id: 'broken',
+    getDetectableObjects() {
+      polls++;
+      throw new Error('feed not ready yet');
+    },
+  };
+  try {
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, [brokenLayer, detectableLayer()], () => {});
+    setMode('DENSE');
+    settleFrame(env);
+    settleFrame(env);
+
+    assert.ok(polls >= 1, 'the broken layer really was polled');
+    assert.equal(
+      getDetectionDiagnostics().observationCount,
+      2,
+      'only the healthy layer contributed contacts',
+    );
+    assert.ok(
+      env.ctx.calls.some(([name, text]) => name === 'fillText' && text === 'TEST0'),
+      'the healthy layer still paints its callouts',
+    );
+  } finally {
+    destroyDetection();
+    destroyWorldOverlay();
+    env.cleanup();
+  }
+});
+
+test('vessel and uncategorized contacts earn callouts through the same cohort as aircraft', () => {
+  const env = installEnvironment();
+  try {
+    const objects = [
+      {
+        position: new Cesium.Cartesian3(-0.35, 0.15, 6_356_752),
+        sourceId: 'sea-1', id: 'MVONE', metric: '12KN', type: 'SEA',
+      },
+      {
+        position: new Cesium.Cartesian3(0.35, -0.15, 6_356_752),
+        sourceId: 'site-1', id: 'SITE1', metric: 'DC-4', type: 'DATACENTER',
+      },
+    ];
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, [{ id: 'ais-live-vessels', getDetectableObjects: () => objects }], () => {});
+    setMode('DENSE');
+    settleFrame(env);
+    settleFrame(env);
+
+    const painted = (text) => env.ctx.calls.some(([name, value]) => name === 'fillText' && value === text);
+    assert.equal(getDetectionDiagnostics().visibleCount, 2);
+    assert.ok(painted('MVONE'), 'a vessel contact takes a callout slot');
+    assert.ok(painted('SITE1'), 'a contact with no special-cased type still takes one');
+  } finally {
+    destroyDetection();
+    destroyWorldOverlay();
+    env.cleanup();
+  }
+});
+
+test('a tracked contact takes a bracket out of the protected budget but never a callout', () => {
+  const env = installEnvironment();
+  try {
+    const objects = [
+      {
+        position: new Cesium.Cartesian3(0, 0, 6_356_752),
+        sourceId: 'tracked-1', id: 'TRACKED', metric: 'FL300', type: 'AIR', skipLabel: true,
+      },
+      {
+        position: new Cesium.Cartesian3(0.4, -0.2, 6_356_752),
+        sourceId: 'civil-1', id: 'CIVIL1', metric: 'FL200', type: 'AIR',
+      },
+    ];
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, [{ id: 'flights', getDetectableObjects: () => objects }], () => {});
+    setMode('DENSE');
+    settleFrame(env);
+    settleFrame(env);
+
+    const diagnostics = getDetectionDiagnostics();
+    assert.equal(diagnostics.visibleCount, 2, 'the tracked contact is still bracketed');
+    assert.equal(diagnostics.protectedVisibleCount, 1, 'exactly one contact is tracked');
+    assert.equal(diagnostics.bracketOpacityCounts.hidden, 0, 'nothing faded out here');
+    assert.equal(
+      diagnostics.ambientLabelBudget,
+      Math.max(0, diagnostics.collectiveLabelBudget - diagnostics.protectedVisibleCount),
+      'the tracked contact is paid from the protected budget, not the ambient one',
+    );
+
+    const painted = (text) => env.ctx.calls.some(([name, value]) => name === 'fillText' && value === text);
+    assert.equal(painted('TRACKED'), false, 'a tracked contact must never take a label slot');
+    assert.equal(painted('CIVIL1'), true, 'the untracked contact keeps its callout');
+  } finally {
+    destroyDetection();
+    destroyWorldOverlay();
+    env.cleanup();
+  }
+});
+
+test('with the outside floor at zero, contacts beyond the keyhole vanish from the bracket census', () => {
+  const env = installEnvironment();
+  const tuning = getKeyholeFadeTuning();
+  try {
+    setKeyholeFadeTuning({ outsideOpacity: 0 });
+    const objects = [
+      {
+        position: new Cesium.Cartesian3(0, 0, 6_356_752),
+        sourceId: 'centre-1', id: 'CENTRE1', metric: 'FL300', type: 'AIR',
+      },
+      {
+        // Far enough into the corner to clear radius + feather at 800x600.
+        position: new Cesium.Cartesian3(-0.95, -0.95, 20_000_000),
+        sourceId: 'corner-1', id: 'CORNER1', metric: 'FL400', type: 'AIR',
+      },
+    ];
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, [{ id: 'flights', getDetectableObjects: () => objects }], () => {});
+    setMode('DENSE');
+    settleFrame(env);
+    settleFrame(env);
+
+    const diagnostics = getDetectionDiagnostics();
+    assert.equal(diagnostics.bracketOpacityCounts.hidden, 1, 'the corner contact faded past the feather');
+    assert.equal(diagnostics.visibleCount, 1, 'a fully faded bracket is not a visible contact');
+    const painted = (text) => env.ctx.calls.some(([name, value]) => name === 'fillText' && value === text);
+    assert.equal(painted('CORNER1'), false, 'nothing is spent labelling an invisible contact');
+    assert.equal(painted('CENTRE1'), true);
+  } finally {
+    setKeyholeFadeTuning(tuning);
+    destroyDetection();
+    destroyWorldOverlay();
+    env.cleanup();
+  }
+});
+
+// ── Projection worker delegation ────────────────────────────────────────────
+
+/** Install a controllable Worker stand-in; returns the instances it built. */
+function installMockWorker() {
+  const created = [];
+  const originalWorker = globalThis.Worker;
+  class MockWorker {
+    constructor(url) {
+      this.url = String(url);
+      this.listeners = new Map();
+      this.posted = [];
+      this.terminated = false;
+      created.push(this);
+    }
+
+    addEventListener(type, listener) {
+      const bucket = this.listeners.get(type) ?? [];
+      bucket.push(listener);
+      this.listeners.set(type, bucket);
+    }
+
+    postMessage(message) { this.posted.push(message); }
+
+    terminate() { this.terminated = true; }
+
+    emit(type, event) {
+      for (const listener of this.listeners.get(type) ?? []) listener(event);
+    }
+  }
+  globalThis.Worker = MockWorker;
+  return {
+    created,
+    restore() {
+      if (originalWorker === undefined) delete globalThis.Worker;
+      else globalThis.Worker = originalWorker;
+    },
+  };
+}
+
+test('projection rides the worker, a stored answer is reused, and a dead worker falls back', () => {
+  const env = installEnvironment();
+  const workerStub = installMockWorker();
+  try {
+    // Two contacts that are BOTH on screen, so the census below can tell a
+    // worker-projected frame from a main-thread one.
+    const objects = [
+      {
+        position: new Cesium.Cartesian3(-0.35, 0.15, 6_356_752),
+        sourceId: 'flight-a', id: 'WORKA', metric: 'FL300', type: 'AIR',
+      },
+      {
+        position: new Cesium.Cartesian3(0.35, -0.15, 6_356_752),
+        sourceId: 'flight-b', id: 'WORKB', metric: 'FL200', type: 'AIR',
+      },
+    ];
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, [{ id: 'flights', getDetectableObjects: () => objects }], () => {});
+    setMode('DENSE');
+    settleFrame(env);
+
+    // First frame: exactly one depth-1 request is posted, and the frame still
+    // paints from the synchronous projection instead of waiting on the answer.
+    assert.equal(workerStub.created.length, 1);
+    const worker = workerStub.created[0];
+    assert.match(worker.url, /detectionProjection\.worker\.js$/);
+    assert.equal(worker.posted.length, 1);
+    const request = worker.posted[0];
+    assert.equal(request.requestId, 1);
+    assert.equal(request.width, 800);
+    assert.equal(request.height, 600);
+    assert.equal(request.objectsById.size, 2);
+    assert.deepEqual(Object.keys(request.viewProjection), VIEW_PROJECTION_KEYS);
+    assert.equal(request.viewProjection.vp0, 1);
+    assert.equal(request.viewProjection.vp15, 1);
+    assert.equal(getDetectionDiagnostics().visibleCount, 2);
+
+    // Answer with the worker's own verdicts: one contact horizon-occluded and
+    // the other relocated to screen centre. The main-thread path just said BOTH
+    // were visible, so a changed census is the proof the answer was consumed.
+    const results = [...request.objectsById.entries()].map(([id, row]) => ({
+      id,
+      // flight-b (the +x contact) is reported horizon-occluded; flight-a is
+      // relocated to screen centre so only the answer can explain the frame.
+      visible: row.position.x < 0,
+      sx: 400,
+      sy: 300,
+      distance: 120_000,
+    }));
+    worker.emit('message', { data: { results } });
+
+    settleFrame(env);
+    assert.equal(worker.posted.length, 1, 'a matching stored answer is reused, never re-posted');
+    assert.equal(
+      getDetectionDiagnostics().visibleCount,
+      1,
+      'the worker horizon verdict outranks the main-thread projection once stored',
+    );
+    settleFrame(env);
+    // WORKB's callout is still in its fade-out tail from the earlier solve; the
+    // arbiter owns that exit, so let it drain before judging the field.
+    for (let frame = 0; frame < 5; frame++) settleFrame(env);
+    env.ctx.calls.length = 0;
+    settleFrame(env);
+    assert.ok(
+      env.ctx.calls.some(([name, text]) => name === 'fillText' && text === 'WORKA'),
+      'the surviving contact keeps its callout, fed by the worker projection',
+    );
+    assert.equal(
+      env.ctx.calls.some(([name, text]) => name === 'fillText' && text === 'WORKB'),
+      false,
+      'an occluded contact earns neither bracket nor callout',
+    );
+
+    // A worker error drops the exchange so the next draw projects on the main
+    // thread again instead of waiting forever, and arms a fresh worker.
+    worker.emit('error', { message: 'projection worker exploded' });
+    settleFrame(env);
+    assert.equal(workerStub.created.length, 2, 'the dead worker is replaced on the next draw');
+    assert.equal(worker.posted.length, 1, 'the dead worker is never posted to again');
+    assert.equal(
+      getDetectionDiagnostics().visibleCount,
+      2,
+      'the main-thread fallback keeps both contacts alive',
+    );
+
+    const replacement = workerStub.created.at(-1);
+    destroyDetection();
+    assert.equal(replacement.terminated, true, 'destroy tears the worker down');
+  } finally {
+    workerStub.restore();
+    destroyWorldOverlay();
     env.cleanup();
   }
 });

@@ -755,3 +755,84 @@ test('an ingester that throws does not take the process down', async () => {
   assert.equal(context.warnings.length, 1, 'the failure was reported, not fatal');
   assert.match(context.warnings[0], /message handling failed/);
 });
+
+// --- Transport edges the happy path never reaches ---------------------------
+
+test('a socket factory that returns nothing is a transport fault, not a crash', () => {
+  // `ws` can hand back undefined when the process is out of file descriptors.
+  const time = fakeClock();
+  const adapter = createAisStreamAdapter({
+    createSocket: () => null,
+    resolveUrl: () => 'ws://mock.invalid/stream',
+    buildSubscription: () => ({}),
+    ingestEnvelope: () => false,
+    clock: time.clock,
+  });
+  adapter.setWatchdogOptions(BUDGETS);
+
+  assert.doesNotThrow(() => adapter.ensure(ENV));
+  const snap = adapter.snapshot();
+  assert.equal(snap.status, 'reconnecting');
+  assert.match(snap.error, /socket factory returned nothing/);
+  assert.equal(adapter.debug().liveSockets, 0, 'nothing was registered for a socket that does not exist');
+});
+
+test('a subscription send that throws fails the generation on the fast rung', () => {
+  const context = setup();
+  context.adapter.ensure(ENV);
+  const socket = context.transport.created[0];
+  socket.send = () => { throw new Error('send on a dead socket'); };
+
+  assert.doesNotThrow(() => socket.emit('open'));
+  const snap = context.adapter.snapshot();
+  assert.equal(snap.status, 'reconnecting', 'a dead-at-handshake socket is an ordinary transport fault');
+  assert.match(snap.error, /send on a dead socket/);
+  assert.equal(socket.terminated, true, 'the unusable socket is hung up');
+});
+
+test('a Blob frame whose decode rejects is reported, never fatal', async () => {
+  const context = setup();
+  context.adapter.ensure(ENV);
+  const socket = context.transport.created[0];
+  socket.emit('open');
+
+  socket.emit('message', { text: async () => { throw new Error('blob read failed'); } });
+  await flush();
+
+  assert.equal(context.ingested.length, 0, 'nothing was ingested from an unreadable frame');
+  assert.equal(context.warnings.length, 1, 'the async pipeline rejection is reported');
+  assert.match(context.warnings[0], /message handling failed/);
+  assert.equal(context.adapter.snapshot().status, 'connecting', 'and granted no liveness');
+});
+
+test('an orphan Blob frame is dropped by the async pipeline before it is decoded', async () => {
+  // The Blob shape is the one path that suspends, so its ownership check runs
+  // after an await: a frame that arrives after the adapter gave up on the
+  // socket must be dropped there, not handed to the ingester.
+  const context = setup();
+  const first = await goLive(context);
+
+  context.time.advance(BUDGETS.recycleAfterMs + 1);
+  context.adapter.ensure(ENV); // terminate gen 1
+  const ingestedBefore = context.ingested.length;
+
+  first.emit('message', { text: async () => aisFrame('888888888') });
+  await flush();
+
+  assert.equal(first.terminated, true, 'the orphan was hung up');
+  assert.equal(context.ingested.length, ingestedBefore, 'the frame never reached the ingester');
+});
+
+test('dispose() hangs up a socket the current machine no longer knows about', async () => {
+  // setWatchdogOptions swaps the machine without touching the socket map, so a
+  // live socket can outlive its owner. dispose() must still abort it — a socket
+  // nobody owns would hold the AIS connection open until the process died.
+  const context = setup();
+  const socket = await goLive(context);
+
+  context.adapter.setWatchdogOptions(BUDGETS); // hot swap: the map keeps generation 1
+  context.adapter.dispose();
+
+  assert.equal(socket.terminated, true, 'the unowned socket was hard-aborted');
+  assert.equal(context.adapter.debug().liveSockets, 0);
+});

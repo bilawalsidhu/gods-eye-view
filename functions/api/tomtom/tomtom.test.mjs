@@ -173,3 +173,24 @@ test('the key never reaches any response body or header', async () => {
     stub.restore();
   }
 });
+
+test('the tile cache evicts its oldest entry past the 256-entry ceiling', async () => {
+  const stub = stubFetch(() => TILE_OK());
+  const env = { TOMTOM_API_KEY: 'test-key' };
+  try {
+    const tile = (x) => `/flow/10/${x}/3.pbf`;
+    for (let x = 0; x < 257; x += 1) {
+      const res = await onRequest(ctx(new Request(url(tile(x))), env));
+      assert.equal(res.status, 200, `tile ${x}`);
+    }
+    assert.equal(stub.calls.length, 257, 'each distinct tile costs one TomTom call');
+
+    const evicted = await onRequest(ctx(new Request(url(tile(0))), env));
+    assert.equal(evicted.headers.get('x-tomtom-cache'), 'MISS', 'the oldest entry was evicted');
+    const retained = await onRequest(ctx(new Request(url(tile(256))), env));
+    assert.equal(retained.headers.get('x-tomtom-cache'), 'HIT', 'the newest entry survives');
+    assert.equal(stub.calls.length, 258, 'only the evicted tile went back upstream');
+  } finally {
+    stub.restore();
+  }
+});

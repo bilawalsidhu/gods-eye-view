@@ -6,6 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  GEOCODE_CACHE_MAX_ENTRIES,
   GEOCODE_CACHE_TTL_MS,
   NOMINATIM_SEARCH_ENDPOINT,
   NOMINATIM_USER_AGENT,
@@ -247,4 +248,41 @@ test('resolveGeocodeRequest: a Nominatim 200 with zero rows is a legit no-match,
   assert.equal(outcome.status, 200);
   assert.deepEqual(outcome.payload.results, []);
   assert.equal(outcome.payload.attribution, '© OpenStreetMap contributors');
+});
+
+test('resolveGeocodeRequest: a joined refresh that fails is a 502, with one upstream call', async () => {
+  let calls = 0;
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const shared = deps({
+    fetchImpl: async () => {
+      calls += 1;
+      await gate;
+      throw new Error('upstream died');
+    },
+  });
+  const leader = resolveGeocodeRequest(shared);
+  const joined = resolveGeocodeRequest(shared);
+  release();
+  const [a, b] = await Promise.all([leader, joined]);
+  assert.equal(calls, 1, 'the second request joined the first refresh');
+  assert.equal(a.status, 502, 'the leader reports the upstream failure');
+  assert.equal(b.status, 502, 'the request that joined it fails the same way');
+  assert.deepEqual(b.payload, { error: 'Geocoder unavailable' });
+  assert.equal(b.cacheState, 'NONE');
+  assert.equal(b.cacheControl, 'no-store');
+});
+
+test('resolveGeocodeRequest: caching evicts the oldest query once the ceiling is passed', async () => {
+  const cache = new Map();
+  for (let i = 0; i < GEOCODE_CACHE_MAX_ENTRIES; i++) cache.set(`old-${i}`, { at: 0, payload: {} });
+
+  const outcome = await resolveGeocodeRequest(deps({ cache }));
+  assert.equal(outcome.cacheState, 'MISS');
+
+  assert.equal(cache.size, GEOCODE_CACHE_MAX_ENTRIES, 'the cache never grows past its ceiling');
+  assert.equal(cache.has('old-0'), false, 'the oldest entry is evicted first');
+  assert.equal(cache.has(`old-${GEOCODE_CACHE_MAX_ENTRIES - 1}`), true, 'newer entries survive');
+  assert.equal(cache.get(JSON.stringify(['test', 5, null]))?.payload, outcome.payload,
+    'the fresh answer is stored under its request key');
 });

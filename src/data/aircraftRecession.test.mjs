@@ -154,6 +154,16 @@ test('non-finite limb geometry falls back to identity factors with no ratio', ()
   );
 });
 
+test('a per-call tuning override with a non-finite radius still reads as identity', () => {
+  // Per-call overrides (A-B capture, evidence tooling) bypass
+  // setAircraftRecessionParams' clamps, so the inner guard — not the setter —
+  // is what keeps a NaN radius out of the shipped scale/alpha.
+  assert.deepEqual(
+    aircraftRecessionFactors({ cameraDistanceM: limb, cameraHeightM }, { earthRadiusM: Number.NaN }),
+    { scale: 1, alpha: 1, limbRatio: null },
+  );
+});
+
 test('setAircraftRecessionParams clamps, orders, and snapshots every tuning knob', () => {
   const original = getAircraftRecessionParams();
   try {
@@ -191,4 +201,23 @@ test('setAircraftRecessionParams clamps, orders, and snapshots every tuning knob
     setAircraftRecessionParams(original);
   }
   assert.equal(getAircraftRecessionParams().startLimbRatio, original.startLimbRatio, 'restore is exact');
+});
+
+test('a start patched past the blend end is corrected to a 1 m band', () => {
+  const original = getAircraftRecessionParams();
+  try {
+    // The default band ends at 4 500 000 m; a start above it would make the
+    // blend denominator negative and the taper math undefined.
+    const next = setAircraftRecessionParams({ globeViewBlendStartM: 5_000_000 });
+    assert.equal(next.globeViewBlendEndM, 4_500_000, 'the end is left alone');
+    assert.equal(next.globeViewBlendStartM, 4_499_999, 'start is pulled back to end - 1');
+    assert.equal(getAircraftRecessionParams().globeViewBlendStartM, 4_499_999);
+    // And the corrected band still eases to identity at its upper edge.
+    assert.deepEqual(
+      aircraftRecessionFactors({ cameraDistanceM: 20_000_000, cameraHeightM: 4_500_000 }),
+      { scale: 1, alpha: 1, limbRatio: null },
+    );
+  } finally {
+    setAircraftRecessionParams(original);
+  }
 });

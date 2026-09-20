@@ -12,6 +12,7 @@ import {
   onRequest,
   resetWeatherEffectsStateForTest,
 } from './weather-effects.js';
+import { WEATHER_EFFECTS_MAX_RESPONSE_BYTES } from '../../src/data/weatherEffectsPolicy.js';
 
 const BASE = 'https://example.com/api/weather-effects';
 const url = (query = '') => `${BASE}${query}`;
@@ -158,5 +159,50 @@ test('stale cache answers when refresh fails after a previously good fetch', asy
     assert.equal((await res.json()).status, 'stale');
   } finally {
     bad.restore();
+  }
+});
+
+test('an Open-Meteo document over the 512 KB cap is a 503, never a partial observation', async () => {
+  resetWeatherEffectsStateForTest();
+  const oversized = 'x'.repeat(WEATHER_EFFECTS_MAX_RESPONSE_BYTES + 1);
+  const upstream = stubUpstream(() => new Response(oversized, {
+    status: 200,
+    headers: { 'content-type': 'application/json' },
+  }));
+  try {
+    const res = await onRequest(ctx(new Request(url('?latitude=30.27&longitude=-97.74'))));
+    await expectJson(res, 503, { error: 'Weather effects are temporarily unavailable' });
+    assert.equal(res.headers.get('cache-control'), 'no-store');
+    assert.match(upstream.calls[0].fetchUrl, /^https:\/\/api\.open-meteo\.com\//);
+  } finally {
+    upstream.restore();
+  }
+});
+
+test('the 46th request in a minute from one client gets the dev 429 shape', async () => {
+  resetWeatherEffectsStateForTest();
+  const upstream = stubUpstream(() => new Response(OPEN_METEO_BODY, {
+    status: 200,
+    headers: { 'content-type': 'application/json' },
+  }));
+  try {
+    // A client key no other test in this file uses: the limiter is module state
+    // and `resetWeatherEffectsStateForTest` deliberately does not touch it.
+    const client = () => new Request(url('?latitude=&longitude='), {
+      headers: { 'CF-Connecting-IP': '203.0.113.77' },
+    });
+    // Rejected params are checked AFTER the limiter, so every 400 burns quota.
+    for (let i = 0; i < 45; i += 1) {
+      const res = await onRequest(ctx(client()));
+      await expectJson(res, 400, { error: 'Valid latitude and longitude are required' });
+    }
+    const limited = await onRequest(ctx(new Request(url('?latitude=30.27&longitude=-97.74'), {
+      headers: { 'CF-Connecting-IP': '203.0.113.77' },
+    })));
+    await expectJson(limited, 429, { error: 'Rate limit exceeded' });
+    assert.equal(limited.headers.get('retry-after'), '10');
+    assert.equal(upstream.calls.length, 0, 'the limiter sits in front of Open-Meteo');
+  } finally {
+    upstream.restore();
   }
 });

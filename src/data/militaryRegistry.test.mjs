@@ -10,6 +10,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  isMilitaryIcao,
+  refreshMilitaryRegistryIfStale,
   setMilitaryLayerActive,
   isMilitaryLayerActive,
   onMilitaryLayerActiveChange,
@@ -65,4 +67,43 @@ test('onMilitaryLayerActiveChange tolerates non-function listeners', () => {
   setMilitaryLayerActive(true);
   assert.equal(isMilitaryLayerActive(), true);
   setMilitaryLayerActive(false);
+});
+
+test('a failed registry poll keeps the known set and never wedges the poll slot', async () => {
+  const realFetch = globalThis.fetch;
+  const realNow = Date.now;
+  let calls = 0;
+  try {
+    setMilitaryLayerActive(false);
+    // One good poll first: classification must survive what follows.
+    globalThis.fetch = async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ ac: [{ hex: 'ADF001' }, { hex: ' RCH999 ' }, {}, { hex: '' }] }),
+    });
+    refreshMilitaryRegistryIfStale();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(isMilitaryIcao('adf001'), true);
+    assert.equal(isMilitaryIcao('rch999'), true, 'hexes are trimmed and lower-cased');
+    assert.equal(isMilitaryIcao(''), false, 'blank rows add nothing');
+
+    // A later poll fails: the set is add-only, so nothing is declassified.
+    const stampedAt = realNow();
+    Date.now = () => stampedAt + 120_000; // the 60 s poll window has elapsed
+    globalThis.fetch = () => { calls += 1; return Promise.reject(new Error('proxy offline')); };
+    refreshMilitaryRegistryIfStale();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(calls, 1);
+    assert.equal(isMilitaryIcao('adf001'), true, 'a transient outage does not declassify');
+    assert.equal(isMilitaryIcao('civil123'), false);
+
+    // The in-flight flag was released by the failure, so the next call polls.
+    refreshMilitaryRegistryIfStale();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(calls, 2, 'a failed poll is retried instead of being swallowed');
+  } finally {
+    globalThis.fetch = realFetch;
+    Date.now = realNow;
+    setMilitaryLayerActive(false);
+  }
 });

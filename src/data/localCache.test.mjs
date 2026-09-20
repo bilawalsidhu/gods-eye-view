@@ -152,3 +152,118 @@ test('clearLocalCache survives a failing removal and still clears its bookkeepin
   assert.doesNotThrow(() => clearLocalCache(), 'removal failure is swallowed as best effort');
   assert.deepEqual(readLocalCache('mine'), { hit: false, value: null }, 'the failed entry still reads as gone');
 });
+
+// ── the auto-probe path (no explicit injection) ─────────────────────────────
+// Production never calls setLocalCacheStorage: the module resolves its own
+// store from globalThis.localStorage and decides availability by probing it.
+
+test('an uninjected store is resolved by probing globalThis.localStorage', () => {
+  const original = globalThis.localStorage;
+  const store = stubStorage();
+  globalThis.localStorage = store;
+  try {
+    setLocalCacheStorage(undefined); // forget the injection and force the probe
+    assert.equal(writeLocalCache('k', { a: 1 }, { ttlMs: 1000, nowMs: 10 }), true);
+    assert.deepEqual(readLocalCache('k', { nowMs: 20 }), { hit: true, value: { a: 1 } });
+    assert.ok(store.getItem('gev:cache:k'), 'the value landed in the probed store');
+    assert.equal(store.getItem('gev:cache:__probe__'), null, 'the probe key cleans up after itself');
+  } finally {
+    globalThis.localStorage = original;
+    setLocalCacheStorage(null);
+  }
+});
+
+test('a missing global store disables the cache without throwing', () => {
+  const original = globalThis.localStorage;
+  globalThis.localStorage = undefined;
+  try {
+    setLocalCacheStorage(undefined);
+    assert.equal(writeLocalCache('k', { a: 1 }, { ttlMs: 1000 }), false);
+    assert.deepEqual(readLocalCache('k'), { hit: false, value: null });
+  } finally {
+    globalThis.localStorage = original;
+    setLocalCacheStorage(null);
+  }
+});
+
+test('a store that throws on the availability probe is treated as absent', () => {
+  const original = globalThis.localStorage;
+  // Safari private mode: storage exists but every access throws.
+  globalThis.localStorage = {
+    get length() { throw new Error('private mode'); },
+    key() { throw new Error('private mode'); },
+    getItem() { throw new Error('private mode'); },
+    setItem() { throw new Error('private mode'); },
+    removeItem() { throw new Error('private mode'); },
+  };
+  try {
+    setLocalCacheStorage(undefined);
+    assert.equal(writeLocalCache('k', { a: 1 }, { ttlMs: 1000 }), false);
+    assert.deepEqual(readLocalCache('k'), { hit: false, value: null });
+  } finally {
+    globalThis.localStorage = original;
+    setLocalCacheStorage(null);
+  }
+});
+
+// ── degradation edges inside the read/evict/trim paths ──────────────────────
+
+test('a corrupted entry whose removal throws still reads as a miss', () => {
+  const store = stubStorage();
+  setLocalCacheStorage(store);
+  store.setItem('gev:cache:bad', '{not json');
+  const originalRemove = store.removeItem;
+  store.removeItem = () => { throw new Error('store went read-only'); };
+  assert.deepEqual(readLocalCache('bad'), { hit: false, value: null },
+    'the drop is best effort; the miss is what matters');
+  store.removeItem = originalRemove;
+  assert.ok(store.getItem('gev:cache:bad'), 'the undropable entry is left in place, not half-deleted');
+});
+
+test('eviction survives a cold entry that refuses removal', () => {
+  const store = stubStorage();
+  setLocalCacheStorage(store);
+  for (let i = 0; i < 10; i += 1) {
+    store.setItem(`gev:cache:old-${i}`, JSON.stringify({ c: { i }, w: 0, t: 1e12 }));
+  }
+  const originalRemove = store.removeItem.bind(store);
+  store.removeItem = (k) => {
+    if (k === 'gev:cache:old-0') throw new Error('stale handle');
+    return originalRemove(k);
+  };
+  store.failNextWrite();
+  assert.equal(writeLocalCache('fresh', { hot: true }, { ttlMs: 1000, nowMs: 42 }), true,
+    'one stuck entry does not cost the write');
+  assert.ok(store.getItem('gev:cache:old-0'), 'the unremovable entry is left where it is');
+  assert.equal(store.getItem('gev:cache:old-1'), null, 'the next-coldest entry was still evicted');
+  assert.deepEqual(readLocalCache('fresh', { nowMs: 50 }).value, { hot: true });
+});
+
+test('trimLocalCache treats an unreadable store as nothing to trim', () => {
+  const hostile = {
+    get length() { return 5; },
+    key() { throw new Error('detached store'); },
+    getItem() { return null; },
+    setItem() {},
+    removeItem() {},
+  };
+  setLocalCacheStorage(hostile);
+  assert.doesNotThrow(() => trimLocalCache(2), 'an enumeration failure is a no-op, not a crash');
+});
+
+test('trimLocalCache survives an entry that refuses removal', () => {
+  const store = stubStorage();
+  setLocalCacheStorage(store);
+  for (let i = 0; i < 5; i += 1) {
+    store.setItem(`gev:cache:e${i}`, JSON.stringify({ c: { i }, w: 0, t: 1e12 }));
+  }
+  const originalRemove = store.removeItem.bind(store);
+  store.removeItem = (k) => {
+    if (k === 'gev:cache:e0') throw new Error('readonly entry');
+    return originalRemove(k);
+  };
+  assert.doesNotThrow(() => trimLocalCache(3));
+  assert.ok(store.getItem('gev:cache:e0'), 'the stuck entry survives the trim');
+  assert.equal(store.getItem('gev:cache:e1'), null, 'the next-coldest entry was still trimmed');
+  assert.ok(store.getItem('gev:cache:e4'), 'warm entries are untouched');
+});

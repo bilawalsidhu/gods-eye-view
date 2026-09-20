@@ -232,6 +232,73 @@ test('a partially mutating selected tracker is stopped when acquisition throws',
   ]);
 });
 
+test('a tracker that refuses instead of throwing is reported as the entry error', () => {
+  // (a) The SELECTED aircraft cannot be tracked. enter() must never be
+  // attempted, and the tracker that was possibly touched must be released.
+  const selectedCalls = [];
+  const refused = enterCockpitWithTracking({
+    cockpitView: {
+      readAircraftInfo: () => null,
+      enter: () => selectedCalls.push('enter'),
+    },
+    selectedLayer: {
+      trackById() { return false; },
+      stopTracking: () => selectedCalls.push('stop'),
+    },
+    selectedTarget: { layerId: 'flights', id: 'n585ha' },
+    selectionOrigin: 'voice',
+  });
+  assert.deepEqual(refused, {
+    entered: false,
+    error: 'Selected aircraft could not be tracked for Cockpit entry',
+  });
+  assert.deepEqual(selectedCalls, ['stop'], 'enter() is skipped, the adoption is undone');
+
+  // (b) The PRIOR aircraft cannot be reacquired. A rollback that fails must be
+  // reported, not silently treated as restored.
+  const rollbackCalls = [];
+  const unrestored = enterCockpitWithTracking({
+    cockpitView: {
+      readAircraftInfo: () => ({ layerId: 'flights', icao24: 'current' }),
+      enter: () => false,
+    },
+    currentLayer: { stopTracking: () => rollbackCalls.push('current:stop') },
+    rollbackLayer: {
+      stopTracking: () => rollbackCalls.push('prior:stop'),
+      trackById() { return false; },
+    },
+    rollbackTarget: { layerId: 'military', id: 'prior' },
+    selectionOrigin: 'voice',
+  });
+  assert.deepEqual(unrestored, {
+    entered: false,
+    error: 'Prior aircraft tracking could not be restored',
+  });
+  assert.deepEqual(rollbackCalls, ['current:stop', 'prior:stop']);
+});
+
+test('a throwing rollback and a throwing Cockpit cleanup cannot mask the entry error', () => {
+  const calls = [];
+  const result = enterCockpitWithTracking({
+    cockpitView: {
+      readAircraftInfo: () => ({ layerId: 'flights', icao24: 'current' }),
+      enter() { throw new Error('entry exploded'); },
+      exit() { throw new Error('exit exploded'); },
+    },
+    currentLayer: { stopTracking: () => calls.push('current:stop') },
+    rollbackLayer: {
+      stopTracking: () => calls.push('prior:stop'),
+      trackById() { throw new Error('rollback exploded'); },
+    },
+    rollbackTarget: { layerId: 'military', id: 'prior' },
+    selectionOrigin: 'voice',
+  });
+  assert.deepEqual(result, { entered: false, error: 'entry exploded' },
+    'the first failure is the reported one — a partial cleanup never rewrites it');
+  assert.deepEqual(calls, ['current:stop', 'prior:stop'],
+    'rollback still runs to completion, and a broken exit() aborts nothing further');
+});
+
 test('aircraft tracking targets normalize either supported aircraft identifier', () => {
   assert.deepEqual(
     aircraftTrackingTarget({ layerId: 'flights', icao24: 'abc123' }),

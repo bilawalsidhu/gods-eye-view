@@ -299,6 +299,151 @@ test('an empty catalog still serves the contract shapes without upstream calls',
   }
 });
 
+// ── Upstream failure ladder (media proxy) ──────────────────────────────────
+// Past the configured-URL gate the media proxy has four outcomes. The tests
+// above pin the happy stream and the no-URL 404; these pin the rest, each one
+// read back through the health tracker the /health route publishes — a camera
+// that degrades must say so somewhere a user can see.
+
+/** Read one camera's accumulated health entry. */
+const healthFor = async (cameraId) => {
+  const res = await onRequest(ctx('/api/cctv/health', { env: baseEnv() }));
+  return (await res.json()).cameras.find((camera) => camera.id === cameraId);
+};
+
+test('/media/:id relays the upstream HTTP status and marks the camera degraded', async () => {
+  const stub = stubFetch((url) => {
+    assert.equal(url, 'https://upstream.example/stream/cam-video.m3u8');
+    return Promise.resolve(new Response('upstream is down', { status: 503 }));
+  });
+  try {
+    const res = await onRequest(ctx('/api/cctv/media/cam-video', { env: baseEnv() }));
+    assert.equal(res.status, 503, 'the upstream status is relayed, not flattened to 502');
+    assert.equal(res.headers.get('Cache-Control'), 'no-store');
+    assert.deepEqual(await res.json(), { error: 'Upstream returned 503' });
+
+    const entry = await healthFor('cam-video');
+    assert.equal(entry.status, 'degraded');
+    assert.equal(entry.sourceKind, 'upstream');
+    assert.equal(entry.label, 'Configured CCTV Source', 'the catalog fills the provider in');
+    assert.equal(entry.message, 'Upstream HTTP 503');
+  } finally {
+    stub.restore();
+  }
+});
+
+test('/media/:id reports a video feed answering with a non-video body but still streams it', async () => {
+  const stub = stubFetch(() => Promise.resolve(new Response('#EXTM3U\n', {
+    status: 200,
+    headers: { 'Content-Type': 'text/plain' },
+  })));
+  try {
+    const res = await onRequest(ctx('/api/cctv/media/cam-video', { env: baseEnv() }));
+    assert.equal(res.status, 200, 'the bytes still flow — the mismatch is reported, not fatal');
+    assert.equal(await res.text(), '#EXTM3U\n');
+    assert.equal(res.headers.get('X-CCTV-Source'), 'live-media');
+
+    const entry = await healthFor('cam-video');
+    assert.equal(entry.status, 'degraded', 'the type mismatch is still surfaced to /health');
+    assert.equal(entry.message, 'Unexpected media type text/plain');
+  } finally {
+    stub.restore();
+  }
+});
+
+test('/media/:id refuses an upstream that declares an oversized fixed body', async () => {
+  let cancelled = false;
+  // A plain object on purpose: the declared length has to survive to the
+  // passthrough check, and the handler must cancel — not drain — the body.
+  const oversized = {
+    ok: true,
+    status: 200,
+    headers: new Headers({
+      'Content-Type': 'video/mp4',
+      'Content-Length': String(65 * 1024 * 1024),
+    }),
+    body: { cancel: () => { cancelled = true; return Promise.resolve(); } },
+  };
+  const stub = stubFetch(() => Promise.resolve(oversized));
+  try {
+    const res = await onRequest(ctx('/api/cctv/media/cam-video', { env: baseEnv() }));
+    assert.equal(res.status, 502);
+    assert.equal(res.headers.get('Cache-Control'), 'no-store');
+    assert.deepEqual(await res.json(), { error: 'Upstream media exceeds size cap' });
+    assert.equal(cancelled, true, 'the rejected upstream body is cancelled, never buffered');
+  } finally {
+    stub.restore();
+  }
+});
+
+test('/media/:id answers 502 when the upstream never answers, and records why', async () => {
+  const stub = stubFetch(() => Promise.reject(new Error('connection reset')));
+  try {
+    const res = await onRequest(ctx('/api/cctv/media/cam-video', { env: baseEnv() }));
+    assert.equal(res.status, 502, 'a dark upstream is a bounded failure, not a hung request');
+    assert.deepEqual(await res.json(), { error: 'Media proxy failed' });
+
+    const entry = await healthFor('cam-video');
+    assert.equal(entry.status, 'degraded');
+    assert.equal(entry.sourceKind, 'upstream');
+    assert.equal(entry.message, 'Media upstream timed out');
+  } finally {
+    stub.restore();
+  }
+});
+
+// ── Street View tier + the last-resort error shape ──────────────────────────
+
+test('/frame/:id falls back to a Street View frame when a server key is configured', async () => {
+  let streetViewUrl = '';
+  const stub = stubFetch((url) => {
+    streetViewUrl = url;
+    return Promise.resolve(new Response(new Uint8Array([9, 9, 9]), {
+      status: 200,
+      headers: { 'Content-Type': 'image/jpeg' },
+    }));
+  });
+  try {
+    const res = await onRequest(ctx('/api/cctv/frame/cam-bare', {
+      env: { ...baseEnv(), GOOGLE_MAPS_API_KEY: 'test-key' },
+    }));
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get('Content-Type'), 'image/jpeg');
+    assert.equal(res.headers.get('Cache-Control'), 'no-store');
+    assert.equal(res.headers.get('X-CCTV-Source'), 'streetview');
+    assert.deepEqual(new Uint8Array(await res.arrayBuffer()), new Uint8Array([9, 9, 9]));
+    assert.equal(stub.calls.length, 1, 'only the Street View call: a URL-less camera has no upstream');
+
+    const params = new URL(streetViewUrl).searchParams;
+    assert.equal(params.get('location'), '30.28,-97.73', 'the pose comes from the registered camera');
+    assert.equal(params.get('key'), 'test-key', 'the key never leaves the server');
+    assert.equal(params.get('size'), '960x540');
+
+    const entry = await healthFor('cam-bare');
+    assert.equal(entry.status, 'degraded', 'a stand-in frame is not a healthy camera');
+    assert.equal(entry.sourceKind, 'streetview');
+    assert.equal(entry.label, 'Google Street View');
+    assert.equal(entry.message, 'Fallback Street View frame');
+  } finally {
+    stub.restore();
+  }
+});
+
+test('a malformed camera id in the path degrades to the 500 JSON shape', async () => {
+  const stub = stubFetch(() => { throw new Error('must not be reached'); });
+  try {
+    // `%zz` is not a valid escape, so decoding the id throws; the Function has
+    // to answer its own error shape instead of letting the worker throw.
+    const res = await onRequest(ctx('/api/cctv/frame/%zz'));
+    assert.equal(res.status, 500);
+    assert.match(res.headers.get('Content-Type') || '', /^application\/json/);
+    assert.deepEqual(await res.json(), { error: 'CCTV proxy error' });
+    assert.equal(stub.calls.length, 0, 'nothing is fetched for an undecodable id');
+  } finally {
+    stub.restore();
+  }
+});
+
 // ── Street View fallback input clamps (body-cap/bbox-clamp sweep) ──────────
 // streetViewFallback is shared by both runtimes; out-of-range or hostile
 // inputs must never become a Google quota call.

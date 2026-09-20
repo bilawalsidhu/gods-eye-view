@@ -235,3 +235,20 @@ test('concurrent lookups for one key share a single upstream request', async () 
     globalThis.fetch = original;
   }
 });
+
+test('a network failure on a cold key answers found:false instead of throwing', async () => {
+  const original = globalThis.fetch;
+  let attempts = 0;
+  globalThis.fetch = async () => {
+    attempts += 1;
+    throw new Error('getaddrinfo ENOTFOUND');
+  };
+  try {
+    const res = await onRequest(ctx(new Request(url('/route/JBU5'))));
+    assert.equal(res.status, 200, 'an unreachable enricher is not a 5xx');
+    assert.deepEqual(await res.json(), { found: false });
+    assert.equal(attempts, 1, 'the failed lookup is not retried inside the request');
+  } finally {
+    globalThis.fetch = original;
+  }
+});

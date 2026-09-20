@@ -90,3 +90,19 @@ test('a proxy failure is a silent null — garnish never surfaces errors', async
   globalThis.fetch = async () => ({ ok: false, status: 502, json: async () => ({}) });
   assert.equal(await reverseGeocodePlace(30.2, -97.7), null);
 });
+
+test('a transport failure is a silent null that is NOT cached as a permanent negative', async (t) => {
+  const realFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = realFetch; });
+  let proxyHits = 0;
+  globalThis.fetch = () => {
+    proxyHits += 1;
+    return Promise.reject(new Error('socket hang up'));
+  };
+  assert.equal(await reverseGeocodePlace(31.5, -100.5), null);
+  assert.equal(await reverseGeocodePlace(31.5, -100.5), null);
+  assert.equal(
+    proxyHits, 2,
+    'a dead network is not an addressless cell: the in-flight slot cleared and the next look retries',
+  );
+});

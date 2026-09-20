@@ -6,6 +6,7 @@ import {
   fetchTerrainChunkWithRetry,
   resolveTerrainHeightRequest,
   terrainPointKey,
+  terrainRetryAfterMs,
 } from './terrainHeightsProxy.js';
 
 function result(id, ellipsoid) {
@@ -114,4 +115,64 @@ test('stale per-point entries serve through a failed refresh only when every poi
   });
   assert.equal(response.status, 200);
   assert.deepEqual(response.body.results.map((item) => item.id), ['stale-b', 'stale-a']);
+});
+
+test('Retry-After accepts an HTTP-date and clamps a past one to no wait', () => {
+  const now = Date.parse('2026-09-20T12:00:00.000Z');
+  assert.equal(terrainRetryAfterMs('5', now), 5000, 'delta-seconds is still the common case');
+  assert.equal(
+    terrainRetryAfterMs('Sun, 20 Sep 2026 12:00:30 GMT', now),
+    30_000,
+    'an HTTP-date resolves against the caller clock',
+  );
+  assert.equal(
+    terrainRetryAfterMs('Sun, 20 Sep 2026 11:00:00 GMT', now),
+    0,
+    'a date in the past must not produce a negative delay',
+  );
+  assert.equal(terrainRetryAfterMs('after the rush', now), null, 'unparseable text is no hint');
+  assert.equal(terrainRetryAfterMs('', now), null, 'an absent header is no hint');
+});
+
+test('an upstream that omits one height serves the stale entry and reports the gap', async () => {
+  const cache = new Map([
+    [terrainPointKey([1, 1]), { at: 0, result: result('stale-a', 11) }],
+    [terrainPointKey([2, 2]), { at: 0, result: result('stale-b', 22) }],
+  ]);
+  const response = await resolveTerrainHeightRequest({
+    points: [[1, 1], [2, 2]],
+    cache,
+    ttlMs: 100,
+    now: () => 1000,
+    fetchMissing: async () => [result('fresh-a', 12), null],
+  });
+  assert.equal(response.status, 200, 'every point still has a real height to serve');
+  assert.deepEqual(
+    response.body.results.map((item) => item.id),
+    ['fresh-a', 'stale-b'],
+    'the refreshed point is served fresh, the omitted one through its stale entry',
+  );
+  assert.equal(response.cacheChanged, true, 'the entry that did land is persisted');
+  assert.match(String(response.upstreamError), /omitted/, 'the gap is surfaced to the caller');
+});
+
+test('the default retry delay primitive really waits when sleep is not injected', async () => {
+  let attempts = 0;
+  const startedAt = Date.now();
+  const results = await fetchTerrainChunkWithRetry([[12.345678, 45.678912]], {
+    random: () => 0, // first backoff rung: 350 * 0.75 ≈ 263 ms
+    makeSignal: () => undefined,
+    fetchImpl: async () => {
+      attempts += 1;
+      return attempts === 1
+        ? { ok: false, status: 503, headers: { get: () => null } }
+        : { ok: true, status: 200, json: async () => ({ results: [result('recovered', 88)] }) };
+    },
+  });
+  assert.equal(attempts, 2);
+  assert.equal(results[0].id, 'recovered');
+  assert.ok(
+    Date.now() - startedAt >= 200,
+    'the uninjected sleep is a real pause, not an already-resolved promise',
+  );
 });

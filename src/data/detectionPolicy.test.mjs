@@ -202,3 +202,24 @@ test('legacy state migration removes contradictory mode/density pairs', () => {
     enabled: false, profile: 'SPARSE', densityPct: 25,
   });
 });
+
+test('an unrecognized profile label is reported as unknown, never coerced', () => {
+  assert.equal(normalizeProfile('cinema'), null);
+  assert.equal(normalizeProfile(''), null);
+  assert.equal(normalizeProfile(undefined), null);
+});
+
+test('an unrecognized legacy mode resolves from its density alone', () => {
+  // The caller landed here because the persisted mode named nothing the policy
+  // knows: the stored density is the only intent left, so it decides.
+  assert.deepEqual(migrateDetectionState('cinema', 80), {
+    enabled: true, profile: 'DENSE', densityPct: 75,
+  });
+  assert.deepEqual(migrateDetectionState('cinema', 40), {
+    enabled: true, profile: 'BALANCED', densityPct: 50,
+  });
+  // An unusable density falls through to the caller's fallback stop.
+  assert.deepEqual(migrateDetectionState('', undefined, 10), {
+    enabled: true, profile: 'SPARSE', densityPct: 0,
+  });
+});

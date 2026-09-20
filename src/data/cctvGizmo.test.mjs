@@ -224,6 +224,8 @@ function makeHarness(t) {
   const pick = { current: null };
   const drill = { current: [] };
   const pickThrows = { current: false };
+  const drillThrows = { current: false };
+  const rayThrows = { current: false };
   const currentRay = { current: null };
 
   const viewer = {
@@ -233,10 +235,18 @@ function makeHarness(t) {
         if (pickThrows.current) throw new Error('pick exploded');
         return pick.current;
       },
-      drillPick: () => drill.current,
+      drillPick: () => {
+        if (drillThrows.current) throw new Error('drill exploded');
+        return drill.current;
+      },
       screenSpaceCameraController: { enableInputs: true },
     },
-    camera: { getPickRay: () => currentRay.current },
+    camera: {
+      getPickRay: () => {
+        if (rayThrows.current) throw new Error('ray exploded');
+        return currentRay.current;
+      },
+    },
     entities: new Cesium.EntityCollection(),
   };
 
@@ -257,7 +267,7 @@ function makeHarness(t) {
 
   return {
     canvas, record, axes, viewer, gizmo, patches, ended, pick, drill,
-    pickThrows, currentRay,
+    pickThrows, drillThrows, rayThrows, currentRay,
     setActiveRecord: (r) => { activeRecord = r; },
     /** Fire a LEFT_DOWN at (100,100) with `ray` as the camera's pick ray. */
     down(r) {
@@ -623,4 +633,90 @@ test('controller: destroy removes entities, kills the handler, and commits an op
   h.canvas.dispatch('mousemove', { clientX: 120, clientY: 120, preventDefault() {} });
   h.canvas.dispatch('mouseup', { button: 0, clientX: 120, clientY: 120 });
   assert.equal(h.patches.length, 0, 'no patches after destroy');
+});
+
+// ── debug tracing + camera/ray failures ─────────────────────────────────────
+// `window.__gevGizmoDebug = true` is the QA switch field debugging relies on;
+// these tests prove the trace fires AND that every traced failure is survivable.
+
+test('controller: the debug flag traces pointer activity, pick failures and drill results', () => {
+  const h = makeHarness({ after: () => {} });
+  h.gizmo.setEnabled(true);
+  const { axes, record } = h;
+  const mount = record.frustumPositions.mount;
+
+  const debugLines = [];
+  const realDebug = console.debug;
+  const savedWindow = globalThis.window;
+  console.debug = (...args) => { debugLines.push(args.map(String).join(' ')); };
+  globalThis.window = { __gevGizmoDebug: true };
+  try {
+    // A throwing fast pick is traced, then the drill fallback still grabs.
+    h.pickThrows.current = true;
+    h.drill.current = [pickResultFor(h.viewer.entities, 'ring-heading')];
+    h.down(hitRayFromAbove(axes, mount));
+    assert.equal(h.gizmo.isDragging(), true, 'the traced pick failure does not block the grab');
+    assert.ok(debugLines.some((line) => line.includes('pick threw')),
+      'the fast-pick exception is traced');
+    assert.ok(debugLines.some((line) => line.includes('drillPick @')),
+      'drill results are traced with the screen position');
+    h.up();
+
+    // A throwing drillPick refuses the grab instead of propagating.
+    debugLines.length = 0;
+    h.drillThrows.current = true;
+    h.down(hitRayFromAbove(axes, mount));
+    assert.equal(h.gizmo.isDragging(), false, 'a drillPick failure never grabs');
+    assert.ok(debugLines.some((line) => line.includes('drillPick threw')),
+      'the drillPick exception is traced');
+    assert.ok(debugLines.some((line) => line.includes('LEFT_DOWN')),
+      'pointer activity itself is traced');
+  } finally {
+    console.debug = realDebug;
+    globalThis.window = savedWindow;
+  }
+
+  // With the flag off (the shipped default) nothing is traced at all.
+  debugLines.length = 0;
+  h.drillThrows.current = false;
+  h.pickThrows.current = true;
+  h.drill.current = [pickResultFor(h.viewer.entities, 'ring-heading')];
+  h.down(hitRayFromAbove(axes, mount));
+  assert.equal(debugLines.length, 0, 'debug tracing stays silent without the flag');
+  assert.equal(h.gizmo.isDragging(), true, 'the grab is unaffected');
+  h.up();
+});
+
+test('controller: a camera that cannot produce a pick ray refuses grabs and skips patches', () => {
+  const h = makeHarness({ after: () => {} });
+  h.gizmo.setEnabled(true);
+  const { axes, record } = h;
+  const mount = record.frustumPositions.mount;
+  h.pick.current = pickResultFor(h.viewer.entities, 'ring-heading');
+
+  // A getPickRay that throws is survivable: no grab, camera input untouched.
+  h.rayThrows.current = true;
+  h.down(hitRayFromAbove(axes, mount));
+  assert.equal(h.gizmo.isDragging(), false, 'no ray → no grab');
+  assert.equal(h.viewer.scene.screenSpaceCameraController.enableInputs, true,
+    'the camera controller is never frozen by a failed ray');
+
+  // A ray that dies mid-drag drops the frame's patch but keeps the drag alive.
+  h.rayThrows.current = false;
+  h.down(hitRayFromAbove(axes, mount));
+  assert.equal(h.gizmo.isDragging(), true);
+  const east20 = Cesium.Cartesian3.add(
+    mount,
+    Cesium.Cartesian3.multiplyByScalar(axes.east, 20, new Cesium.Cartesian3()),
+    new Cesium.Cartesian3(),
+  );
+  const sweep = hitRayFromAbove(axes, east20);
+  h.move(sweep);
+  assert.equal(h.patches.length, 1, 'the healthy frame patches normally');
+  h.rayThrows.current = true;
+  h.move(sweep);
+  assert.equal(h.patches.length, 1, 'a failed ray frame patches nothing');
+  assert.equal(h.gizmo.isDragging(), true, 'the drag survives a failed ray frame');
+  h.up();
+  assert.equal(h.ended.length, 1, 'the drag still commits its tail');
 });

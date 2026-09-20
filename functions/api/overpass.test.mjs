@@ -349,3 +349,28 @@ test('concurrent identical queries coalesce onto one upstream fetch', async () =
     stub.restore();
   }
 });
+
+test('a request joining an in-flight total failure answers the same 502 shape', async () => {
+  // The mirrors fail, but only after a tick: the joiner has to arrive while
+  // the owner's sweep is still pending, which is the only way to reach the
+  // shared-promise rejection path.
+  const stub = stubFetch(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    throw new Error('connect ECONNREFUSED');
+  });
+  try {
+    const owner = onRequest(ctx(new Request(url, { method: 'POST', body: goodBody() })));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const joiner = onRequest(ctx(new Request(url, { method: 'POST', body: goodBody() })));
+    const [a, b] = await Promise.all([owner, joiner]);
+
+    assert.equal(stub.calls.length, OVERPASS_UPSTREAMS.length, 'the joiner opens no second mirror sweep');
+    for (const [label, res] of [['owner', a], ['joiner', b]]) {
+      assert.equal(res.status, 502, label);
+      assert.deepEqual(await res.json(), { error: 'Overpass proxy error' }, label);
+      assert.equal(res.headers.get('x-overpass-cache'), null, `${label}: nothing was cached to serve`);
+    }
+  } finally {
+    stub.restore();
+  }
+});

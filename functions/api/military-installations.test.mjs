@@ -228,3 +228,49 @@ test('a degraded upstream (429 on every mirror) answers 503, never a truncated l
     stub.restore();
   }
 });
+
+test('the memory cache evicts its oldest cell past the 80-entry ceiling', async () => {
+  const stub = stubFetch(() => healthyUpstream({ count: 1 }));
+  try {
+    // exact=1 keys at 5 decimals, so every viewport here is its own cell.
+    const boxes = Array.from({ length: 81 }, (_, i) => boxParams({
+      south: -10 + i * 0.5, west: 10 + i * 0.5,
+      north: -9.5 + i * 0.5, east: 10.5 + i * 0.5,
+      exact: '1',
+    }));
+    for (const [i, query] of boxes.entries()) {
+      const res = await onRequest(ctx(request(query)));
+      assert.equal(res.status, 200, `box ${i}`);
+    }
+    const fetched = stub.calls.length;
+    assert.equal(fetched, 81, 'each distinct cell costs one Overpass query');
+
+    const evicted = await onRequest(ctx(request(boxes[0])));
+    assert.equal(evicted.headers.get('x-military-installations'), 'MISS', 'the oldest cell was evicted');
+    const retained = await onRequest(ctx(request(boxes[80])));
+    assert.equal(retained.headers.get('x-military-installations'), 'HIT', 'the newest cell survives');
+    assert.equal(stub.calls.length, fetched + 1, 'only the evicted cell went back upstream');
+  } finally {
+    stub.restore();
+  }
+});
+
+test('the 91st request in a minute gets the dev 429 shape before any upstream work', async () => {
+  const stub = stubFetch(() => { throw new Error('must not fetch'); });
+  try {
+    // An invalid box still clears the limiter (validation happens after it),
+    // so ninety 400s are exactly the per-client window.
+    const invalid = 'south=999&west=0&north=0&east=1';
+    for (let i = 0; i < 90; i += 1) {
+      const res = await onRequest(ctx(request(invalid)));
+      assert.equal(res.status, 400, `request ${i + 1} must be admitted`);
+    }
+    const limited = await onRequest(ctx(request()));
+    assert.equal(limited.status, 429);
+    assert.deepEqual(await limited.json(), { error: 'Rate limit exceeded' });
+    assert.equal(limited.headers.get('retry-after'), '5');
+    assert.equal(stub.calls.length, 0, 'the limiter sits in front of Overpass');
+  } finally {
+    stub.restore();
+  }
+});

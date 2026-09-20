@@ -477,6 +477,21 @@ test('a refused layer fails the mission by name, and a stalled flight never does
   assert.equal((await runFirstRunChoice('environmental', flightDown.deps)).ok, true);
 });
 
+test('a layer enable that REJECTS fails the mission by name instead of hanging', async () => {
+  // DataManager.setEnabled is a live subsystem: a session reset or a blown
+  // storage write surfaces as a rejection, and the tile must report it rather
+  // than await a promise that never settles.
+  const exploded = missionSpy({
+    layerResult: () => { throw new Error('session reset mid-enable'); },
+  });
+  const outcome = await runFirstRunChoice('environmental', exploded.deps);
+  assert.equal(outcome.ok, false);
+  assert.deepEqual(outcome.failedLayerIds, FIRST_RUN_MISSIONS.environmental.layerIds);
+  assert.deepEqual(exploded.calls.layerIds, FIRST_RUN_MISSIONS.environmental.layerIds,
+    'a rejected enable must not stop the remaining layers from being asked');
+  assert.equal(exploded.calls.globeFlights, 1, 'the framing flight still ran');
+});
+
 test('Explore manually touches nothing at all, and an unknown choice is inert', async () => {
   const spy = missionSpy();
   assert.equal((await runFirstRunChoice('explore', spy.deps)).ok, true);
@@ -920,6 +935,27 @@ test('an unclassed overlay sitting over the card centre disarms ESC entirely', (
   assert.equal(session.read(), null, 'and must not burn the session flag');
 });
 
+test('a throwing elementFromPoint is inconclusive, so ESC keeps working', () => {
+  const { root } = makeLauncherRoot();
+  const doc = makeDocument(root, {
+    elementFromPoint: () => { throw new Error('layout not ready'); },
+  });
+  const session = memoryStorage(FIRST_RUN_SESSION_KEY);
+  initFirstRunExperience({
+    styleManager: makeStyleManager(),
+    documentRef: doc,
+    storage: memoryStorage(FIRST_RUN_STORAGE_KEY),
+    sessionStorageRef: session,
+    location: { search: '' },
+  });
+  flushRaf();
+  const handled = pressKey(doc, { key: 'Escape' });
+  // Inconclusive counts as UNCOVERED on purpose: this guard exists to stop the
+  // launcher acting under a real overlay, never to become why ESC stopped.
+  assert.ok(handled.prevented, 'the card must stay armed when the hit test throws');
+  assert.equal(session.read(), 'dismissed');
+});
+
 test('a mission tile enables its layers with origin user and dismisses on success', async () => {
   const { root, buttons } = makeLauncherRoot();
   const doc = makeDocument(root);
@@ -1058,6 +1094,36 @@ test('Tab wraps inside the launcher: forward from the last control to the first'
   assert.equal(buttons[0].focusCalls, focusedAtReveal + 1);
 });
 
+test('Tab from OUTSIDE the card is pulled into the launcher, and shift-Tab wraps back', () => {
+  const { root, buttons, suppress } = makeLauncherRoot();
+  const doc = makeDocument(root);
+  initFirstRunExperience({
+    styleManager: makeStyleManager(),
+    documentRef: doc,
+    storage: memoryStorage(FIRST_RUN_STORAGE_KEY),
+    sessionStorageRef: memoryStorage(FIRST_RUN_SESSION_KEY),
+    location: { search: '' },
+  });
+  flushRaf();
+  const revealFocusCalls = buttons[0].focusCalls;
+
+  // The keyboard lives somewhere else (an app control behind the card): the
+  // first Tab is claimed and put on the FIRST tile instead of skipping past.
+  const outside = makeNode();
+  doc.activeElement = outside;
+  const forward = pressKey(doc, { key: 'Tab', shiftKey: false });
+  assert.ok(forward.prevented, 'Tab must not escape the launcher');
+  assert.equal(buttons[0].focusCalls, revealFocusCalls + 1);
+  assert.equal(suppress.focusCalls, 0);
+
+  // Shift-Tab from the first tile wraps to the LAST control, not out of the card.
+  doc.activeElement = buttons[0];
+  const backward = pressKey(doc, { key: 'Tab', shiftKey: true });
+  assert.ok(backward.prevented);
+  assert.equal(suppress.focusCalls, 1, 'the last control is the shift-Tab destination');
+  assert.equal(buttons[0].focusCalls, revealFocusCalls + 1);
+});
+
 test('the scroll affordance follows real overflow, not a constant', () => {
   const { root, choiceList } = makeLauncherRoot({ listOverflow: true });
   const doc = makeDocument(root);
@@ -1070,4 +1136,47 @@ test('the scroll affordance follows real overflow, not a constant', () => {
   });
   flushRaf();
   assert.equal(choiceList.dataset.scrollable, 'true');
+});
+
+test('a body class taking the screen mid-session yields without stealing focus', () => {
+  // The launcher watches body@class through a MutationObserver; the fake below
+  // hands the test the same callback the browser would invoke on a class change.
+  const observerCallbacks = [];
+  const realObserver = globalThis.MutationObserver;
+  class FakeMutationObserver {
+    constructor(callback) { observerCallbacks.push(callback); }
+    observe() {}
+    disconnect() {}
+  }
+  globalThis.MutationObserver = FakeMutationObserver;
+  const { root } = makeLauncherRoot();
+  const prior = makeNode();
+  const doc = makeDocument(root, { activeElement: prior });
+  const session = memoryStorage(FIRST_RUN_SESSION_KEY);
+  try {
+    initFirstRunExperience({
+      styleManager: makeStyleManager(),
+      documentRef: doc,
+      storage: memoryStorage(FIRST_RUN_STORAGE_KEY),
+      sessionStorageRef: session,
+      location: { search: '' },
+    });
+    flushRaf();
+    assert.ok(root.classList.contains('visible'), 'the launcher is up');
+    assert.equal(observerCallbacks.length, 1, 'one observer watches the body');
+
+    // Cockpit takes the screen while the card is up.
+    doc.body.className = 'cockpit-mode';
+    for (const callback of observerCallbacks) callback([], doc.body);
+    assert.ok(!root.classList.contains('visible'), 'the launcher yields');
+    assert.equal(root.getAttribute('aria-hidden'), 'true');
+    assert.equal(session.read(), 'dismissed', 'a yield is session-scoped like any dismissal');
+    assert.equal(prior.focusCalls, 0, 'focus stays with the surface that took the screen');
+
+    const handled = pressKey(doc, { key: 'Escape' });
+    assert.equal(handled.prevented, false, 'the yielded card no longer holds the key');
+  } finally {
+    if (typeof realObserver === 'function') globalThis.MutationObserver = realObserver;
+    else delete globalThis.MutationObserver;
+  }
 });

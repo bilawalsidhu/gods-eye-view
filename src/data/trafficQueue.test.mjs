@@ -71,3 +71,9 @@ test('locateAlongRoad: clamps beyond-road distances to the road end', () => {
 test('locateAlongRoad: zero-length segments are skipped safely', () => {
   assert.deepEqual(locateAlongRoad([0, 100], 50), { segIdx: 1, t: 0.5 });
 });
+
+test('locateAlongRoad: a road with no segments degrades to segment 0, t 0', () => {
+  // A flow tile whose polyline collapsed to nothing still has to answer the
+  // animator instead of throwing per dot per frame.
+  assert.deepEqual(locateAlongRoad([], 25), { segIdx: 0, t: 0 });
+});

@@ -201,3 +201,22 @@ test('helpers: haversine sanity + scope radius', () => {
   const scoped = applyScope(FLIGHTS, { kind: 'radius' }, { center: { lat: 30.27, lon: -97.74 }, km: 50 });
   assert.deepEqual(scoped.map((f) => f.id).sort(), ['GND1', 'SWA1']);
 });
+
+test('analyst: an unsupported layer is an honest failure naming what it can query', async () => {
+  const r = await makeEngine().query({ layers: ['flights', 'ghost-layer'] });
+  assert.equal(r.ok, false);
+  assert.match(r.error, /ghost-layer/, 'the unsupported layer is named');
+  assert.match(r.error, /flights/, 'so are the layers that would have worked');
+  assert.deepEqual(r.coverage, { layersQueried: [], scope: 'unsupported-layer' });
+});
+
+test('applyScope: an unrecognized scope kind passes the records through', () => {
+  // Fail-open by design: a scope kind a newer query parser emits must degrade
+  // to "everywhere", never to a silently empty answer.
+  const passthrough = applyScope(
+    FLIGHTS,
+    { kind: 'boulevard' },
+    { center: { lat: 0, lon: 0 }, km: 0 },
+  );
+  assert.deepEqual(passthrough.map((f) => f.id), FLIGHTS.map((f) => f.id));
+});

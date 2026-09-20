@@ -119,6 +119,23 @@ test('viewport growth retains the aligned corridor when midpoint centering would
   });
 });
 
+test('a corridor straddling the midpoint is balanced toward it while it stays usable', () => {
+  // Centering is a presentation win, not a requirement: when the centered lane
+  // is still at least the minimum height it is taken (the oversized bottom is
+  // pulled UP toward the midpoint), otherwise the aligned corridor is retained.
+  assert.deepEqual(resolvePanelStackCorridor({
+    viewportHeight: 1026,
+    safeTop: 420,
+    safeBottom: 700,
+    obstacleSafeTop: 41.04,
+    obstacleSafeBottom: 900,
+    minimumHeight: 164.16,
+  }), {
+    safeTop: 420,
+    safeBottom: 606,
+  });
+});
+
 test('minimum panel corridor expands upward without crossing the lower obstacle boundary', () => {
   const corridor = resolvePanelStackCorridor({
     viewportHeight: 1026,

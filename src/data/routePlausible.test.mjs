@@ -42,3 +42,18 @@ test('missing data never hides a route (cannot judge → allow)', () => {
     origin: { lat: null, lon: null }, destination: null,
   }), true);
 });
+
+test('one known endpoint far away cannot be judged, but still bounds the vertical trend', () => {
+  // Only the origin is known and the contact is nowhere near it: unlike the
+  // two-endpoint case there is no cross-track to test, so geometry must allow.
+  const single = { latDeg: 51.5, lonDeg: -0.12, altitudeM: 10_000, origin: SFO, destination: null };
+  assert.equal(routePlausible(single), true);
+  assert.equal(
+    routePlausible({ ...single, destination: LAX }),
+    false,
+    'with both endpoints known the same position IS judgeable',
+  );
+  // The trend check still runs on the single-endpoint shape: a low climb far
+  // from the only airport on the route is a real contradiction.
+  assert.equal(routePlausible({ ...single, altitudeM: 2500, verticalRateMps: 8 }), false);
+});

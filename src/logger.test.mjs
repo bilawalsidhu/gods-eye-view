@@ -128,6 +128,23 @@ test('non-string and Error details render into the buffered text, never throw', 
   assert.match(entry.text, /"cyclic":"object"/);
 });
 
+test('a detail JSON cannot stringify survives the render as String(part)', () => {
+  resetLoggerForTest();
+  const captured = captureConsole();
+  try {
+    const circular = { depth: 1 };
+    circular.self = circular; // JSON.stringify throws on the cycle
+    assert.doesNotThrow(() => logWarn('Test', 'snapshot', circular),
+      'a broken render must never break the caller');
+    assert.match(peekLogBuffer()[0].text, /\[Test\] snapshot \[object Object\]/);
+    // The console still received the RAW part, not the flattened fallback.
+    assert.equal(captured.calls.length, 1);
+    assert.equal(captured.calls[0].args[1], circular);
+  } finally {
+    captured.restore();
+  }
+});
+
 test('voice debug events land in the buffer with their sanitized record', () => {
   resetLoggerForTest();
   recordDebugEvent('session.starting', {

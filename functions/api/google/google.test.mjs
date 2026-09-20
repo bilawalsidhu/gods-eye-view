@@ -211,14 +211,19 @@ test('an upstream error status travels verbatim with the upstream message', asyn
   }
 });
 
-test('a transport failure answers the dev 502 shape', async () => {
+test('a transport failure answers the dev 502 shape on both places routes', async () => {
   const stub = stubFetch(() => { throw new Error('connect ECONNREFUSED'); });
   try {
-    const res = await onRequest(ctx(siteFetch('/nearby-places', 'lat=29.4&lon=-98.5')));
-    assert.equal(res.status, 502);
-    const body = await res.json();
-    assert.equal(body.error, 'connect ECONNREFUSED');
-    assert.deepEqual(body.places, []);
+    for (const [path, query] of [
+      ['/nearby-places', 'lat=29.4&lon=-98.5'],
+      ['/text-search', 'q=the%20alamo&lat=29.426&lon=-98.486'],
+    ]) {
+      const res = await onRequest(ctx(siteFetch(path, query)));
+      assert.equal(res.status, 502, path);
+      const body = await res.json();
+      assert.equal(body.error, 'connect ECONNREFUSED', path);
+      assert.deepEqual(body.places, [], path);
+    }
   } finally {
     stub.restore();
   }

@@ -7,6 +7,7 @@ import {
   getSelectedEntityContext,
   refreshTrackedSubjectContext,
   registerEntityContext,
+  removeEntityContextsForLayer,
   selectEntityContext,
   selectTrackedSubjectContext,
 } from './contextStore.js';
@@ -197,5 +198,35 @@ test('deselecting a satellite releases the slot without touching aircraft', () =
     clearTrackedSubjectContext('satellites');
     assert.equal(getSelectedEntityContext(), null, 'the satellite gave the slot back');
     assert.ok(getContextStore().entities.has('aaa001'), 'and the aircraft record is untouched');
+  });
+});
+
+test('a viewport refresh that drops the selected record reads as an eviction', () => {
+  withWindow((host) => {
+    const cleared = [];
+    host.addEventListener('gev:entity-selection-cleared', (event) => cleared.push(event.detail));
+    const dc = registerEntityContext({ __gevContextId: 'dc-7' }, {
+      id: 'dc-7', layerId: 'local-datacenters', label: 'Datacenter 7',
+    });
+    const dam = registerEntityContext({ __gevContextId: 'dam-3' }, {
+      id: 'dam-3', layerId: 'local-dams', label: 'Dam 3',
+    });
+    selectEntityContext(dc.entity);
+
+    removeEntityContextsForLayer('local-datacenters');
+    assert.equal(getSelectedEntityContext(), null, 'the slot is released');
+    assert.equal(getContextStore().entities.has('dc-7'), false, 'the record went with the refresh');
+    assert.deepEqual(
+      cleared,
+      [{ layerId: 'local-datacenters', reason: 'evicted' }],
+      'the operator never deselected anything, so the clear is labelled an eviction',
+    );
+
+    // Replacing the records of a layer the selection does NOT belong to must
+    // leave the selection (and its readout card) alone.
+    selectEntityContext(dam.entity);
+    removeEntityContextsForLayer('local-datacenters');
+    assert.equal(getSelectedEntityContext()?.id, 'dam-3');
+    assert.equal(cleared.length, 1, 'no clear event for a layer that owned nothing selected');
   });
 });

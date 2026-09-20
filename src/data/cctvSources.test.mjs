@@ -655,3 +655,67 @@ test('pack HTTP failures empty their packs independently but never blank the cat
     f.restore();
   }
 });
+
+test('the Austin cap reports its drop and breaks distance ties by source order', async (t) => {
+  const lines = captureConsole(t);
+  expireCatalogCache(t);
+  // 10 distinct live cameras (Austin ids are numeric-only): 7 increasingly
+  // west of downtown, then a PAIR sharing one coordinate (equal great-circle
+  // distance → the sort must fall back to source order), then the farthest of
+  // all. Cap 8 keeps 7 + ONE of the tied pair, so the tie-break — not the
+  // cap — decides the last slot.
+  const rows = [];
+  for (let i = 0; i < 7; i += 1) {
+    rows.push([String(700 + i), 'TURNED_ON', `Near ${i}`, `POINT(${-97.74 - i * 0.01} 30.27)`, '', null, null, null]);
+  }
+  rows.push(['800', 'TURNED_ON', 'Tied earlier row', 'POINT(-97.82 30.27)', '', null, null, null]);
+  rows.push(['801', 'TURNED_ON', 'Tied later row', 'POINT(-97.82 30.27)', '', null, null, null]);
+  rows.push(['900', 'TURNED_ON', 'Farthest', 'POINT(-97.99 30.27)', '', null, null, null]);
+  const f = installFetch([LIVE_HANDLERS[0]]);
+  const savedRows = AUSTIN_PAYLOAD.data;
+  AUSTIN_PAYLOAD.data = rows;
+  t.after(() => { AUSTIN_PAYLOAD.data = savedRows; });
+  try {
+    const catalog = await getCctvSources({
+      env: {
+        CCTV_FORCE_AUSTIN: '1',
+        CCTV_TFL_ENABLED: '0',
+        CCTV_CALTRANS_DISTRICTS: '',
+        CCTV_AUSTIN_MAX_SOURCES: '8',
+      },
+    });
+    const ids = new Set(catalog.map((s) => s.id));
+    assert.equal(ids.size, 8, 'the cap kept exactly 8 of the 10 live cameras');
+    for (let i = 0; i < 7; i += 1) assert.ok(ids.has(String(700 + i)), `camera ${700 + i} survived`);
+    assert.equal(f.urls.length, 1, 'only the Austin feed was consulted');
+    assert.ok(ids.has('800') && !ids.has('801'),
+      'equal distances are broken by source order: the earlier row wins the last slot');
+    assert.ok(!ids.has('900'), 'the farthest camera is the one dropped');
+    assert.ok(lines.log.some((l) => l.includes('Loaded Austin camera sources: 10 (using nearest 8)')),
+      'the cap is reported, not silent');
+  } finally {
+    f.restore();
+  }
+});
+
+test('a TfL HTTP failure empties the London pack and says which status', async (t) => {
+  const lines = captureConsole(t);
+  expireCatalogCache(t);
+  const f = installFetch([
+    LIVE_HANDLERS[0],
+    { match: (u) => u.includes('api.tfl.gov.uk'), reply: () => new Response('gateway timeout', { status: 503 }) },
+  ]);
+  try {
+    const catalog = await getCctvSources({
+      env: { CCTV_FORCE_AUSTIN: '1', CCTV_CALTRANS_DISTRICTS: '' },
+    });
+    assert.equal(f.urls.filter((u) => u.includes('api.tfl.gov.uk')).length, 1);
+    assert.equal(catalog.some((s) => s.id.startsWith('tfl-')), false,
+      'no London camera survives a failed list request');
+    assert.ok(lines.warn.some((l) => l.includes('TfL JamCam download failed: 503')),
+      'the upstream status is surfaced');
+    assert.ok(catalog.length > 0, 'Austin and configured cameras still list');
+  } finally {
+    f.restore();
+  }
+});

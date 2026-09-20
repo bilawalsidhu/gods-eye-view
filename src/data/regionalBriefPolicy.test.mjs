@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 
 import {
   REGIONAL_BRIEF_CACHE_MS,
+  REGIONAL_BRIEF_MAX_CACHE,
   REGIONAL_BRIEF_STALE_MS,
   buildRegionalBriefPayload,
   createNominatimPacing,
@@ -22,6 +23,7 @@ import {
   resolveRegionalBriefRequest,
   rssTag,
 } from './regionalBriefPolicy.js';
+import { regionalPointCacheKey } from './weatherEffectsPolicy.js';
 
 const SP = (query = '') => new URLSearchParams(query);
 
@@ -188,6 +190,46 @@ test('resolveRegionalBriefRequest: partial status when news is unavailable', asy
   assert.deepEqual(outcome.payload.articles, []);
 });
 
+test('resolveRegionalBriefRequest: a joined refresh that fails falls back with its requester', async () => {
+  let at = 1_000_000;
+  const deps = resolveDeps({ now: () => at, fetchImpl: HAPPY_FETCH.impl });
+  await resolveRegionalBriefRequest(deps); // seed the cache for this cell
+
+  at += REGIONAL_BRIEF_CACHE_MS + 1; // outside the fresh TTL, inside the stale window
+  const failing = mockFetch({}); // every upstream now fails
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const gatedFetch = async (url, init) => { await gate; return failing.impl(url, init); };
+
+  const leader = resolveRegionalBriefRequest({ ...deps, fetchImpl: gatedFetch });
+  const joined = resolveRegionalBriefRequest({ ...deps, fetchImpl: gatedFetch });
+  release();
+  const [leaderOutcome, joinedOutcome] = await Promise.all([leader, joined]);
+
+  assert.equal(joinedOutcome.cacheState, 'STALE',
+    'the joined request rides the same refresh and answers stale when it fails');
+  assert.equal(joinedOutcome.status, 200);
+  assert.equal(joinedOutcome.payload.status, 'stale');
+  assert.equal(joinedOutcome.cacheControl, 'no-store');
+  assert.equal(leaderOutcome.cacheState, 'STALE', 'the leader takes the identical stale tail');
+  assert.deepEqual(joinedOutcome.payload.coordinates, leaderOutcome.payload.coordinates);
+});
+
+test('resolveRegionalBriefRequest: caching evicts the oldest cell once the ceiling is passed', async () => {
+  const cache = new Map();
+  for (let i = 0; i < REGIONAL_BRIEF_MAX_CACHE; i++) cache.set(`old-${i}`, { payload: {}, cachedAt: 0 });
+
+  const outcome = await resolveRegionalBriefRequest({
+    ...resolveDeps({ fetchImpl: HAPPY_FETCH.impl, cache }),
+  });
+
+  assert.equal(cache.size, REGIONAL_BRIEF_MAX_CACHE, 'the cache never grows past its ceiling');
+  assert.equal(cache.has('old-0'), false, 'the oldest pre-existing cell was evicted first');
+  assert.equal(cache.has(`old-${REGIONAL_BRIEF_MAX_CACHE - 1}`), true, 'newcomers keep newer entries');
+  assert.equal(cache.get(regionalPointCacheKey({ latitude: 46.7867, longitude: -92.1005 }))?.payload,
+    outcome.payload);
+});
+
 test('fetchRegionalNews: GDELT fallback serves articles when RSS fails', async () => {
   const gdeltOnly = mockFetch({
     'api.gdeltproject.org': { articles: [{ title: 'GDELT story', url: 'https://example.press/g', domain: 'Example' }] },
@@ -245,6 +287,19 @@ test('readRegionalTextCapped enforces the byte cap on streaming bodies', async (
   assert.equal(await readRegionalTextCapped(small, 32), 'ok');
   const declared = new Response('x', { headers: { 'Content-Length': '9999' } });
   await assert.rejects(readRegionalTextCapped(declared, 32), (error) => error?.code === 'RESPONSE_TOO_LARGE');
+});
+
+test('readRegionalTextCapped falls back to response.text() when the body is not streamable', async () => {
+  // Runtimes without a readable response body (older workerd builds, some
+  // polyfills) expose no getReader() — the cap must still hold.
+  const readWithCap = async (text, maxBytes) => readRegionalTextCapped({
+    headers: new Headers(),
+    body: null,
+    text: async () => text,
+  }, maxBytes);
+
+  assert.equal(await readWithCap('ok-body', 32), 'ok-body');
+  await assert.rejects(readWithCap('y'.repeat(40), 32), (error) => error?.code === 'RESPONSE_TOO_LARGE');
 });
 
 test('fetchRegionalWeather collapses upstream failure to null', async () => {

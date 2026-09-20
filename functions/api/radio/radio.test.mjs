@@ -2,6 +2,7 @@ import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { onRequest, resetRadioStateForTest } from './[[path]].js';
+import { publicRadioHttpsUrl, radioProxyDestination } from './_broker.js';
 
 const url = (path = '') => `https://example.com/api/radio${path}`;
 const ctx = (request) => ({ request });
@@ -172,4 +173,18 @@ test('unknown subpaths get the dev 404 shape', async () => {
   const res = await onRequest(ctx(new Request(url('/anything-else'))));
   assert.equal(res.status, 404);
   assert.deepEqual(await res.json(), { error: 'Unknown radio route' });
+});
+
+test('URL policy helpers refuse unparseable input instead of throwing', () => {
+  for (const junk of ['', 'not a url at all', '::::', 'https://', '%zz']) {
+    assert.equal(publicRadioHttpsUrl(junk), null, JSON.stringify(junk));
+    assert.equal(radioProxyDestination(junk), null, JSON.stringify(junk));
+  }
+  // The accepting counterparts, so the refusals above mean "parsed and
+  // rejected on policy", never "every input is dropped".
+  assert.equal(publicRadioHttpsUrl('https://stream.example.com/live.mp3#frag'), 'https://stream.example.com/live.mp3');
+  assert.equal(
+    radioProxyDestination('https://de1.api.radio-browser.info/json/stations/search?name=kpop')?.host,
+    'de1.api.radio-browser.info',
+  );
 });

@@ -176,6 +176,44 @@ test('projection worker: AIR reticle rides the near/far curve with clamps', () =
   assert.equal(farU.halfH, 5, 'far AIR height clamps to the 5 px floor');
 });
 
+test('projection worker: a mid-range AIR distance interpolates instead of plateauing', () => {
+  posted.length = 0;
+  // 4,050 km sits strictly between the 1 km near plateau and the 8,000 km far
+  // plateau, so the reticle must ride the LINEAR ramp between them rather than
+  // snap to either end.
+  const midPos = geodeticToEcef(0, 50);
+  const distance = 4_050_000;
+  send({
+    objectsById: cohort([
+      { id: 'mid-untracked', type: 'AIR', skipLabel: false, position: midPos },
+      { id: 'mid-tracked', type: 'AIR', skipLabel: true, position: midPos },
+    ]),
+    viewProjection: ORTHO,
+    cameraPosition: camPos,
+    width: WIDTH,
+    height: HEIGHT,
+    occluderCameraPos: geodeticToEcef(0, 0, 5_000_000),
+    camPos: { x: midPos.x - distance, y: midPos.y, z: midPos.z },
+    requestId: 6,
+  });
+  assert.equal(posted[0].results.length, 2);
+  const [untracked, tracked] = posted[0].results;
+  assert.equal(untracked.distance, distance);
+  const t = (distance - 1000) / (8_000_000 - 1000);
+  const scale = 3.0 + (0.5 - 3.0) * t;
+  for (const [row, baseW, baseH, maxH, label] of [
+    [untracked, 9, 7, 38, 'untracked'],
+    [tracked, 14, 11, 38, 'tracked'],
+  ]) {
+    assert.ok(Math.abs(row.halfW - baseW * scale) < 1e-9, `${label} halfW ${row.halfW}`);
+    assert.ok(Math.abs(row.halfH - baseH * scale) < 1e-9, `${label} halfH ${row.halfH}`);
+    assert.ok(row.halfW > 7 && row.halfW < 48, `${label} width is off both clamps`);
+    assert.ok(row.halfH > 5 && row.halfH < maxH, `${label} height is off both clamps`);
+  }
+  assert.ok(untracked.halfW > 7 && untracked.halfW < 27,
+    `interpolated width ${untracked.halfW} lies strictly inside the 7 px floor … 27 px near plateau`);
+});
+
 test('projection worker: objects without a position are skipped, not crashed on', () => {
   posted.length = 0;
   send({

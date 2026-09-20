@@ -258,6 +258,13 @@ test('a route renders the flowing-dash material whose uniforms are written per f
     const fresh = material.getValue(undefined);
     assert.equal(fresh.repeat, 64);
     assert.equal(staticNumber(label.label.text), 'Ingress');
+    // Cesium's material cache compares properties with equals() before reusing
+    // a shader/pipeline: identity semantics keep each route's uniforms (its own
+    // color + flowing time) independent of every other route's.
+    assert.equal(material.equals(material), true, 'a material equals itself');
+    assert.equal(material.equals(new (material.constructor)('rgba(0,229,255,0.9)')), false,
+      'another instance is never equal, even with the same color');
+    assert.equal(material.equals(new Cesium.PolylineDashMaterialProperty()), false);
   } finally {
     restore();
   }
@@ -365,6 +372,88 @@ test('remove() retracts exactly this annotation and tolerates repeats', () => {
     renderer.remove({}); // never added: no throw
     assert.equal(dataSource.entities.values.length, 2);
     renderer.destroy();
+  } finally {
+    restore();
+  }
+});
+
+test('a sprawling footprint is decimated to exactly the 14-vertical cage budget', () => {
+  const restore = stubBrowserGlobals();
+  try {
+    const viewer = fakeViewer();
+    const renderer = createWorldAnnotationRenderer(viewer);
+    // 41 vertices (40 + closure) — far past the cage budget.
+    const sprawl = [];
+    for (let i = 0; i < 40; i += 1) {
+      const a = (i / 40) * Math.PI * 2;
+      sprawl.push([11.5 + 0.0004 * Math.cos(a), 48.1 + 0.0004 * Math.sin(a)]);
+    }
+    sprawl.push(sprawl[0]);
+    const anno = {
+      type: 'highlight',
+      anchor: { lon: 11.5, lat: 48.1, height: 45 },
+      ring: sprawl,
+      footprintKind: 'building',
+      buildingHeight: 25,
+      label: 'Terminal',
+    };
+    renderer.add(anno);
+    const [volume, cage] = entitiesOf(anno);
+    assert.equal(volume.polygon.hierarchy.getValue(undefined).positions.length, sprawl.length,
+      'the classification volume keeps every vertex of the footprint');
+    assert.equal(cage.polygon.hierarchy.getValue(undefined).positions.length, 14,
+      'the cage is evenly down-sampled to the budget, not truncated');
+    // Down-sampling must span the ring, not just its head: the last cage
+    // vertex sits at the bearing of a far-stride ring vertex, not vertex 13.
+    // (The cage ring is the 3 m buffered copy, so bearings — which the buffer
+    // preserves exactly — are the stable comparison, not raw distances.)
+    const cageRing = cage.polygon.hierarchy.getValue(undefined).positions;
+    const lastStride = Math.floor((13 * sprawl.length) / 14);
+    assert.ok(lastStride > 13, 'sanity: the final stride lands past the head of the ring');
+    const bearingOf = (lon, lat) => Math.atan2(lat - 48.1, lon - 11.5);
+    const bearingOfCartesian = (cartesian) => {
+      const c = Cesium.Cartographic.fromCartesian(cartesian);
+      return Math.atan2(
+        c.latitude - Cesium.Math.toRadians(48.1),
+        c.longitude - Cesium.Math.toRadians(11.5),
+      );
+    };
+    const got = bearingOfCartesian(cageRing.at(-1));
+    assert.ok(Math.abs(got - bearingOf(sprawl[lastStride][0], sprawl[lastStride][1])) < 0.05,
+      'the decimation stride reaches the far side of the ring');
+    assert.ok(Math.abs(got - bearingOf(sprawl[13][0], sprawl[13][1])) > 0.2,
+      'the cage is not simply the first 14 vertices');
+  } finally {
+    restore();
+  }
+});
+
+test('teardown tolerates a scene that is already coming apart', () => {
+  const restore = stubBrowserGlobals();
+  try {
+    const viewer = fakeViewer();
+    const renderer = createWorldAnnotationRenderer(viewer);
+    const anno = { ...PIN };
+    renderer.add(anno);
+    const count = anno._entities.length;
+    assert.ok(count > 0, 'the pin published entities');
+    const dataSource = viewer.ops.added[0];
+    let entityRemovals = 0;
+    dataSource.entities.remove = () => {
+      entityRemovals += 1;
+      throw new Error('entity collection detached');
+    };
+    renderer.remove(anno);
+    assert.equal(entityRemovals, count, 'every entity was still attempted, not just the first');
+    assert.equal(anno._entities, null, 'the list is released even though nothing was retracted');
+
+    let sourceRemovals = 0;
+    viewer.dataSources.remove = () => {
+      sourceRemovals += 1;
+      throw new Error('scene torn down');
+    };
+    renderer.destroy();
+    assert.equal(sourceRemovals, 1, 'destroy still makes its one removal attempt');
   } finally {
     restore();
   }

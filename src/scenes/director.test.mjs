@@ -57,6 +57,31 @@ const PROJECT_FIXTURE = {
   }],
 };
 
+/**
+ * The fixture project plus a second scene, so the panel tests have somewhere
+ * to move the selection to (a dropdown and shot rows only differentiate once
+ * there is a second target).
+ */
+const TWO_SCENE_PROJECT = {
+  version: 3,
+  scenes: [
+    ...PROJECT_FIXTURE.scenes,
+    {
+      id: 'scene-2',
+      title: 'Second Scene',
+      shots: [{
+        id: 'shot-c',
+        title: 'Shot C',
+        durationSec: 0.2,
+        holdSec: 0,
+        camera: { lat: 5, lon: 6, alt: 300000, heading: 0, pitch: -40, roll: 0 },
+        visual: { style: 'normal' },
+        layers: {},
+      }],
+    },
+  ],
+};
+
 /** Stub the browser globals the director touches, headlessly. */
 function installSceneRuntime(project = PROJECT_FIXTURE) {
   const originalDocument = globalThis.document;
@@ -165,6 +190,19 @@ function fakeViewer() {
 /** Yield enough turns for the director's pending awaits to advance. */
 async function settle(turns = 8) {
   for (let i = 0; i < turns; i++) await Promise.resolve();
+}
+
+/**
+ * Timer-backed poll for work that starts behind a click handler: the handler
+ * drops the director's promise, and a run's shot sleeps are real timers, so
+ * neither microtask turns nor an awaited call can observe the progress.
+ */
+async function waitFor(predicate, { budgetMs = 5000, stepMs = 20 } = {}) {
+  const deadline = Date.now() + budgetMs;
+  while (!predicate()) {
+    assert.ok(Date.now() < deadline, 'the awaited condition never held');
+    await new Promise((resolve) => setTimeout(resolve, stepMs));
+  }
 }
 
 /** Build a director over doubles, with the fixture project loaded. */
@@ -1250,4 +1288,283 @@ test('run refusals are reported, and a held shot keeps the ticker alive', async 
   assert.equal(result.started, true);
   assert.ok(Date.now() - startedAt >= 250, 'the hold was actually awaited');
   assert.equal(env.el('scene-status').textContent, 'Scene run complete');
+});
+
+// ── Panel wiring ────────────────────────────────────────────────────────────
+//
+// The listeners _initUI registers are the only path an operator has into
+// everything above, and they are the lines a refactor can drop silently: a
+// removed listener still leaves the method working for every test that calls
+// it directly. Each of these drives the real element through the fake DOM
+// rather than calling the method, so a dropped listener fails here.
+
+test('a corrupt localStorage entry falls back to the shipped recipes', () => {
+  const env = installPanelRuntime(null);
+  globalThis.localStorage.getItem = () => '{"version":3,"scenes":[{'; // a truncated write
+  try {
+    const director = new SceneDirector(fakeViewer(), fakeStyleManager(), fakeDataManager());
+    assert.deepEqual(
+      director._project.scenes.map((scene) => scene.id),
+      SCENE_RECIPES.map((recipe) => recipe.id),
+      'the unreadable project was replaced by the seeded recipes',
+    );
+    assert.equal(env.el('scene-status').textContent, 'Ready', 'the panel still mounted');
+  } finally {
+    env.restore();
+  }
+});
+
+test('a project whose scenes array is empty normalizes back to the recipes', () => {
+  const { director, env } = makePanelDirector({ project: { version: 3, scenes: [] } });
+  try {
+    assert.deepEqual(
+      director._project.scenes.map((scene) => scene.id),
+      SCENE_RECIPES.map((recipe) => recipe.id),
+      'an empty project is not stored as an empty project',
+    );
+    assert.equal(director._selectedSceneId, director._project.scenes[0].id);
+  } finally {
+    env.restore();
+  }
+});
+
+test('picking a scene in the dropdown selects that scene and its first shot', () => {
+  const { director, env } = makePanelDirector({ project: TWO_SCENE_PROJECT });
+  try {
+    const select = env.el('scene-select');
+    select.value = 'scene-2';
+    assert.equal(select.dispatch('change'), true, 'the change listener is wired');
+    assert.equal(director._selectedSceneId, 'scene-2');
+    assert.equal(director._selectedShotId, 'shot-c', 'the scene\'s first shot became the selection');
+
+    const rows = env.el('scene-shot-list').children;
+    assert.equal(rows.length, 1, 'the list was rebuilt for the newly selected scene');
+    assert.equal(rows[0].children[0].children[0].textContent, 'Shot C');
+    assert.equal(rows[0].classList.contains('active'), true, 'the new selection is marked active');
+  } finally {
+    env.restore();
+  }
+});
+
+test('a scene id that no longer exists falls back to the first scene', () => {
+  const { director, env } = makePanelDirector({ project: TWO_SCENE_PROJECT });
+  try {
+    director._selectedSceneId = 'scene-deleted';
+    director._renderSceneSelect();
+    assert.equal(director._selectedSceneId, 'scene-1');
+    assert.equal(env.el('scene-select').value, 'scene-1', 'the dropdown shows the recovered selection');
+  } finally {
+    env.restore();
+  }
+});
+
+test('a shot id that no longer exists falls back to the first shot', () => {
+  const { director, env } = makePanelDirector();
+  try {
+    director._selectedShotId = 'shot-deleted';
+    director._renderShotList();
+    assert.equal(director._selectedShotId, 'shot-a');
+    assert.equal(
+      env.el('scene-shot-list').children[0].classList.contains('active'), true,
+      'the recovered selection is the row marked active',
+    );
+  } finally {
+    env.restore();
+  }
+});
+
+test('clicking a shot row selects it and moves the active mark', () => {
+  const { director, env } = makePanelDirector();
+  try {
+    const labelB = env.el('scene-shot-list').children[1].children[0].children[0];
+    assert.equal(labelB.tagName, 'button', 'shot selection is a real button, not a clickable div');
+    labelB.dispatch('click');
+    assert.equal(director._selectedShotId, 'shot-b');
+
+    const rows = env.el('scene-shot-list').children;
+    assert.equal(rows[1].classList.contains('active'), true);
+    assert.equal(rows[0].classList.contains('active'), false, 'the previous selection lost its mark');
+  } finally {
+    env.restore();
+  }
+});
+
+test('double-clicking a shot row renames it through the prompt dialog', async () => {
+  const { director, env } = makePanelDirector();
+  const rowLabel = (index) => env.el('scene-shot-list').children[index].children[0].children[0];
+  try {
+    rowLabel(0).dispatch('dblclick');
+    const dialog = env.dialogs.at(-1);
+    assert.equal(dialog.className, 'gev-prompt-dialog', 'the rename prompt opened');
+    const input = dialog.children[1].children[1];
+    assert.equal(input.value, 'Shot A', 'the prompt starts from the current title');
+    input.value = '  Renamed A  ';
+    env.settleDialog(true);
+    await settle();
+
+    assert.equal(director._getShot('scene-1', 'shot-a').shot.title, 'Renamed A', 'the entry is trimmed');
+    assert.equal(rowLabel(0).textContent, 'Renamed A', 'the list was rebuilt with the new title');
+    assert.ok(env.storage.setCalls.length > 0, 'the rename was persisted');
+
+    // A whitespace-only entry is not a rename.
+    rowLabel(0).dispatch('dblclick');
+    env.dialogs.at(-1).children[1].children[1].value = '   ';
+    env.settleDialog(true);
+    await settle();
+    assert.equal(director._getShot('scene-1', 'shot-a').shot.title, 'Renamed A', 'a blank entry keeps the title');
+  } finally {
+    env.restore();
+  }
+});
+
+test('the LOAD row button loads that shot', async () => {
+  const { director, viewer, env } = makePanelDirector();
+  try {
+    env.el('scene-shot-list').children[1].children[0].children[1].children[0].dispatch('click');
+    await waitFor(() => viewer.flights.length === 1);
+    assert.equal(director._selectedShotId, 'shot-b', 'the loaded shot became the selection');
+    assert.equal(env.el('scene-status').textContent, 'Loaded: Fixture Scene / Shot B');
+  } finally {
+    env.restore();
+  }
+});
+
+test('the DEL row button confirms once and removes the shot', async () => {
+  const { director, env } = makePanelDirector();
+  try {
+    env.el('scene-shot-list').children[0].children[0].children[1].children[1].dispatch('click');
+    await settle();
+    env.settleDialog(true);
+    await waitFor(() => director._project.scenes[0].shots.length === 1);
+
+    assert.equal(director._selectedShotId, 'shot-b', 'the selection moved to the surviving shot');
+    assert.equal(env.el('scene-shot-list').children.length, 1, 'the list was rebuilt without it');
+    assert.ok(env.storage.setCalls.length > 0, 'the removal was persisted');
+  } finally {
+    env.restore();
+  }
+});
+
+test('the START button runs the selected scene to completion', async () => {
+  const { director, viewer, env } = makePanelDirector();
+  try {
+    assert.equal(env.el('scene-start-btn').dispatch('click'), true, 'the click listener is wired');
+    await waitFor(() => director._running === false);
+
+    assert.equal(viewer.flights.length, 2, 'both fixture shots flew');
+    assert.equal(env.el('scene-status').textContent, 'Scene run complete');
+    assert.ok(director._lastRun, 'the run was archived');
+  } finally {
+    env.restore();
+  }
+});
+
+test('the STOP button cancels the live run and its in-flight camera flight', () => {
+  const { director, viewer, env } = makePanelDirector();
+  try {
+    director._running = true;
+    director._runAbort = new AbortController();
+    director._runToken = { cancelled: false, signal: director._runAbort.signal };
+    const before = viewer.cancelledFlights;
+
+    env.el('scene-stop-btn').dispatch('click');
+
+    assert.equal(director._runToken.cancelled, true);
+    assert.equal(director._runAbort.signal.aborted, true);
+    assert.equal(viewer.cancelledFlights, before + 1, 'the camera flight was cancelled');
+    assert.equal(env.el('scene-status').textContent, 'Stopped', 'the button reports its own reason');
+  } finally {
+    director._running = false;
+    director._runToken = null;
+    env.restore();
+  }
+});
+
+test('the NEXT button loads the following shot', async () => {
+  const { director, env } = makePanelDirector();
+  try {
+    env.el('scene-next-btn').dispatch('click');
+    // The selection is reserved up front, before the load's awaits; the status
+    // only lands once the shot has actually been applied, so wait on that.
+    await waitFor(() => env.el('scene-status').textContent === 'Loaded: Fixture Scene / Shot B');
+    assert.equal(director._selectedShotId, 'shot-b');
+  } finally {
+    env.restore();
+  }
+});
+
+test('the EXPORT button serializes the live project', async () => {
+  const { director, env } = makePanelDirector();
+  try {
+    director._project.scenes[0].title = 'Renamed On Purpose';
+    env.el('scene-export-btn').dispatch('click');
+    assert.equal(env.objectURLs.length, 1, 'the download was staged');
+    const payload = JSON.parse(await env.objectURLs[0].text());
+    assert.equal(payload.scenes[0].title, 'Renamed On Purpose', 'the blob mirrors the live project');
+  } finally {
+    env.restore();
+  }
+});
+
+test('the IMPORT button opens the hidden file input', () => {
+  const { env } = makePanelDirector();
+  try {
+    const fileInput = env.el('scene-import-file');
+    let opened = 0;
+    fileInput.click = () => { opened += 1; };
+    env.el('scene-import-btn').dispatch('click');
+    assert.equal(opened, 1, 'the file picker was handed the click');
+  } finally {
+    env.restore();
+  }
+});
+
+test('picking an import file replaces the project and resets the input', async () => {
+  const { director, env } = makePanelDirector();
+  const fileInput = env.el('scene-import-file');
+  try {
+    // A picker that closed without a file must not touch the project.
+    fileInput.dispatch('change');
+    await settle(2);
+    assert.deepEqual(
+      director.listScenes(),
+      [{ id: 'scene-1', title: 'Fixture Scene', shots: 2 }],
+      'a change with no file selected is a no-op',
+    );
+
+    fileInput.files = [{
+      name: 'changed.json',
+      text: async () => JSON.stringify({
+        version: 3,
+        scenes: [{
+          id: 'via-change',
+          title: 'Via Change',
+          shots: [PROJECT_FIXTURE.scenes[0].shots[0]],
+        }],
+      }),
+    }];
+    fileInput.dispatch('change');
+    await waitFor(
+      () => fileInput.value === '' && env.el('scene-status').textContent === 'Imported changed.json',
+    );
+
+    assert.deepEqual(director.listScenes(), [{ id: 'via-change', title: 'Via Change', shots: 1 }]);
+    assert.equal(director._selectedSceneId, 'via-change');
+  } finally {
+    env.restore();
+  }
+});
+
+test('the DOWNLOAD button offers only an archived run', () => {
+  const { director, env } = makePanelDirector();
+  try {
+    env.el('scene-download-btn').dispatch('click');
+    assert.equal(env.objectURLs.length, 0, 'nothing is staged before a run has been archived');
+
+    director._lastRunJson = '{"wasCancelled":false}';
+    env.el('scene-download-btn').dispatch('click');
+    assert.equal(env.objectURLs.length, 1);
+  } finally {
+    env.restore();
+  }
 });

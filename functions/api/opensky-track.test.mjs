@@ -145,6 +145,56 @@ test('a failed OAuth exchange degrades to an anonymous read', async () => {
   }
 });
 
+test('a token transport failure degrades to an anonymous read too', async () => {
+  resetTrackCacheForTest();
+  const seen = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = async (fetchUrl, init) => {
+    seen.push({ fetchUrl: String(fetchUrl), init });
+    if (String(fetchUrl).includes('auth.opensky-network.org')) {
+      throw new Error('connect ECONNREFUSED');
+    }
+    return new Response(TRACK, { status: 200 });
+  };
+  try {
+    const res = await onRequest(ctx(new Request(url('?icao24=0de001')), {
+      OPENSKY_CLIENT_ID: 'id',
+      OPENSKY_CLIENT_SECRET: 'secret',
+    }));
+    assert.equal(res.status, 200, 'the track backfill still goes out');
+    const trackCall = seen.at(-1);
+    assert.deepEqual(trackCall.init.headers, {}, 'a dead token endpoint means no Authorization header');
+    assert.equal(seen.filter((c) => c.fetchUrl.includes('auth.opensky-network.org')).length, 1);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test('a token endpoint answering non-JSON degrades to an anonymous read too', async () => {
+  resetTrackCacheForTest();
+  const seen = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = async (fetchUrl, init) => {
+    seen.push({ fetchUrl: String(fetchUrl), init });
+    if (String(fetchUrl).includes('auth.opensky-network.org')) {
+      return new Response('<html>504 Gateway Time-out</html>', { status: 200 });
+    }
+    return new Response(TRACK, { status: 200 });
+  };
+  try {
+    const res = await onRequest(ctx(new Request(url('?icao24=0de002')), {
+      OPENSKY_CLIENT_ID: 'id',
+      OPENSKY_CLIENT_SECRET: 'secret',
+    }));
+    assert.equal(res.status, 200);
+    assert.equal(await res.text(), TRACK, 'the track document is untouched');
+    assert.deepEqual(seen.at(-1).init.headers, {}, 'an unusable grant means no Authorization header');
+    assert.equal(seen.filter((c) => c.fetchUrl.includes('auth.opensky-network.org')).length, 1);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
 test('a minted token is sent as a Bearer credential and reused across requests', async () => {
   resetTrackCacheForTest();
   const seen = [];

@@ -65,6 +65,14 @@ test('tracked position source reads only gevDisplayPosition and never entity.pos
   assert.equal(propertyReads, 0);
   assert.equal(cachedTrackedDisplayPosition({ position: entity.position }), null);
   assert.equal(propertyReads, 0);
+  // The read runs in the host's postRender phase: an accessor that throws must
+  // read as "no cache", not take the frame down with it.
+  assert.equal(
+    cachedTrackedDisplayPosition({
+      gevDisplayPosition() { throw new Error('dead reckoning blew up'); },
+    }),
+    null,
+  );
 });
 
 test('the tracked card anchors to the visual position without repurposing the display accessor', () => {

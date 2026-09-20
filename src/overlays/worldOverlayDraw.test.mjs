@@ -20,6 +20,7 @@ import {
   paintThumbnail,
   paintTrack,
   paintTracked,
+  paintOverlayEntry,
   placementVariants,
   roundedRectPath,
 } from './worldOverlayDraw.js';
@@ -595,4 +596,266 @@ test('the sky plate scale is a whisper, not a second plate', () => {
     ...Object.values(DETECTION_THEME_MAP).map((theme) => alphaOf(theme.calloutPlate)),
   );
   assert.ok(lightest * SKY_PLATE_SCALE < 0.12, 'the feathered plate must read as bare text');
+});
+
+// ── dispatch precedence, leader corners, accent derivation ──────────────────
+
+/** mockContext plus fillStyle recording, which the shared mock leaves unobserved. */
+function fillRecordingContext() {
+  const ctx = mockContext();
+  let current = '';
+  Object.defineProperty(ctx, 'fillStyle', {
+    get() { return current; },
+    set(next) { current = next; ctx.calls.push(['fillStyle', next]); },
+    configurable: true,
+  });
+  return ctx;
+}
+
+/** Entry with real measured geometry, placed above a mid-viewport anchor. */
+function measuredEntry(ctx, overrides = {}) {
+  const entry = { title: 'OBJ 1', details: ['A', 'B'], accent: '#39d0ff', ...overrides };
+  entry._overlayLayout = measureOverlayEntry(ctx, entry, {});
+  const placement = placementVariants({
+    anchorX: 100,
+    anchorY: 100,
+    width: entry._overlayLayout.w,
+    height: entry._overlayLayout.h,
+    viewportWidth: 400,
+    viewportHeight: 300,
+  })[0];
+  return { entry, placement };
+}
+
+test('paintOverlayEntry dispatches on precedence, so a conflicting variant cannot downgrade a card', () => {
+  // cardStyle 'tactical' outranks variant/selected. Only the tactical painter
+  // derives its leader colour from the accent, so the derived rgba() on the
+  // wire is the proof of which painter ran.
+  const tactical = fillRecordingContext();
+  const { entry: tacticalEntry, placement: tacticalPlacement } = measuredEntry(tactical, {
+    cardStyle: 'tactical',
+    variant: 'tracked',
+    selected: true,
+  });
+  assert.equal(paintOverlayEntry(tactical, tacticalEntry, tacticalPlacement), tacticalPlacement.rect);
+  assert.equal(tactical.calls.find(([name]) => name === 'strokeStyle')?.[1],
+    'rgba(57, 208, 255, 0.65)', 'tactical wins over the tracked variant');
+
+  // variant 'tracked' outranks selected: no chrome accent bar, raw accent leader.
+  const tracked = fillRecordingContext();
+  const { entry: trackedEntry, placement: trackedPlacement } = measuredEntry(tracked, {
+    variant: 'tracked',
+    selected: true,
+  });
+  paintOverlayEntry(tracked, trackedEntry, trackedPlacement);
+  assert.equal(tracked.calls.some(([name]) => name === 'fillRect'), false,
+    'the tracked readout has no accent bar, so it did not fall through to selected');
+
+  // selected outranks the remaining variants: the chrome carries the heavier bar.
+  const selected = fillRecordingContext();
+  const { entry: selectedEntry, placement: selectedPlacement } = measuredEntry(selected, {
+    variant: 'thumbnail',
+    selected: true,
+  });
+  paintOverlayEntry(selected, selectedEntry, selectedPlacement);
+  const selectedBar = selected.calls.find(([name]) => name === 'fillRect');
+  assert.equal(selectedBar?.[3], 3, 'selected bar is 3px, the heavier chrome treatment');
+
+  // thumbnail outranks card; card outranks track; track outranks label; label last.
+  const thumbnail = fillRecordingContext();
+  const { entry: thumbnailEntry, placement: thumbnailPlacement } = measuredEntry(thumbnail, {
+    variant: 'thumbnail',
+    image: { width: 192, height: 108 },
+  });
+  paintOverlayEntry(thumbnail, thumbnailEntry, thumbnailPlacement);
+  assert.ok(thumbnail.calls.some(([name]) => name === 'drawImage'), 'thumbnail wins over card');
+
+  const card = fillRecordingContext();
+  const { entry: cardEntry, placement: cardPlacement } = measuredEntry(card, { variant: 'card' });
+  paintOverlayEntry(card, cardEntry, cardPlacement);
+  assert.deepEqual(card.calls.filter(([name]) => name === 'fillText').map(([, text]) => text),
+    ['OBJ 1', 'A', 'B'], 'card renders title plus details');
+
+  const track = fillRecordingContext();
+  const { entry: trackEntry, placement: trackPlacement } = measuredEntry(track, { variant: 'track' });
+  paintOverlayEntry(track, trackEntry, trackPlacement);
+  assert.deepEqual(track.calls.filter(([name]) => name === 'fillText').map(([, text]) => text),
+    ['OBJ 1 · A'], 'track joins its first inline detail instead of falling through to label');
+
+  const label = fillRecordingContext();
+  const { entry: labelEntry, placement: labelPlacement } = measuredEntry(label);
+  paintOverlayEntry(label, labelEntry, labelPlacement);
+  assert.deepEqual(label.calls.filter(([name]) => name === 'fillText').map(([, text]) => text),
+    ['OBJ 1'], 'a variantless entry lands on the ambient label painter');
+});
+
+test('side-of-card leaders offset along the anchor row, not the card column', () => {
+  // A left/right placement keeps a positive leader offset (placementVariants
+  // only negates it for above/left), so its stub must shift the anchor X.
+  const ctx = mockContext();
+  const entry = { title: 'CAM 3', details: ['LIVE'] };
+  entry._overlayLayout = measureOverlayEntry(ctx, entry, {});
+  const [right] = placementVariants({
+    anchorX: 100,
+    anchorY: 100,
+    width: entry._overlayLayout.w,
+    height: entry._overlayLayout.h,
+    viewportWidth: 400,
+    viewportHeight: 300,
+    gap: 40,
+    leaderOffset: 12,
+    preferred: 'right',
+  });
+  assert.equal(right.corner, 'right');
+  paintCard(ctx, entry, right);
+  assert.deepEqual(ctx.calls.find(([name]) => name === 'moveTo'),
+    ['moveTo', right.leadFromX + right.leaderOffset, right.leadFromY],
+    'the side stub starts beside the anchor, not under it');
+});
+
+test('the tactical leader honours a zero offset and a side corner', () => {
+  // Detached cards (no leader offset) draw a stub straight out of the anchor.
+  const straight = mockContext();
+  const straightEntry = {
+    cardStyle: 'tactical',
+    title: 'FIRE',
+    details: ['high'],
+    accent: '#39d0ff',
+    _overlayLayout: { padX: 12, padY: 8, titleH: 14, lineH: 15 },
+  };
+  const straightPlacement = {
+    rect: { x: 40, y: 60, w: 90, h: 40 },
+    leadFromX: 55, leadFromY: 55, leadToX: 55, leadToY: 60,
+    leaderOffset: 0, paintScale: 1,
+  };
+  paintTacticalCard(straight, straightEntry, straightPlacement);
+  assert.deepEqual(straight.calls.find(([name]) => name === 'moveTo'), ['moveTo', 55, 55]);
+
+  // A side-corner tactical card (vessel/FIRS cards can sit beside their target)
+  // shifts the stub start by the offset like every other variant.
+  const side = mockContext();
+  const sideEntry = { ...straightEntry };
+  const sidePlacement = {
+    ...straightPlacement,
+    corner: 'left',
+    leaderOffset: 9,
+  };
+  paintTacticalCard(side, sideEntry, sidePlacement);
+  assert.deepEqual(side.calls.find(([name]) => name === 'moveTo'), ['moveTo', 64, 55]);
+});
+
+test('the tactical accent set is derived from hex and passed through unparseable tints', () => {
+  // FIRMS/vessel cards arrive with either form; the derivation must handle both
+  // and leave anything it cannot parse alone rather than inventing a colour.
+  const hex = fillRecordingContext();
+  const hexEntry = {
+    cardStyle: 'tactical', title: 'X', details: [], accent: '#39d0ff',
+    _overlayLayout: { padX: 12, padY: 8, titleH: 14, lineH: 15 },
+  };
+  const placement = {
+    rect: { x: 10, y: 20, w: 60, h: 24 },
+    leadFromX: 30, leadFromY: 30, leadToX: 30, leadToY: 20,
+    leaderOffset: 0, paintScale: 1,
+  };
+  paintTacticalCard(hex, hexEntry, placement);
+  assert.equal(hex.calls.find(([name]) => name === 'strokeStyle')?.[1], 'rgba(57, 208, 255, 0.65)');
+  assert.deepEqual(hexEntry._overlayTacticalAccentColors, {
+    accent: '#39d0ff',
+    leader: 'rgba(57, 208, 255, 0.65)',
+    border: 'rgba(57, 208, 255, 0.85)',
+    rule: 'rgba(57, 208, 255, 0.95)',
+  }, 'the derived set is memoized on the entry keyed by accent');
+
+  const opaque = fillRecordingContext();
+  const opaqueEntry = { ...hexEntry, accent: 'rebeccapurple' };
+  paintTacticalCard(opaque, opaqueEntry, placement);
+  assert.equal(opaque.calls.find(([name]) => name === 'strokeStyle')?.[1], 'rebeccapurple',
+    'an unparseable tint is painted as-is instead of silently going theme-default');
+});
+
+test('a thumbnail whose image slot dies mid-frame keeps its chrome and caption', () => {
+  // A source can replace/close the frame between the host's grab and this
+  // painter's drawImage. The card must not lose its border or its caption.
+  const ctx = mockContext();
+  ctx.drawImage = (...args) => {
+    ctx.calls.push(['drawImage', ...args]);
+    throw new Error('source closed');
+  };
+  const frameSlot = createFrameSlot();
+  frameSlot.frame = { width: 192, height: 108 };
+  const entry = createCctvThumbnailOverlayEntry({
+    id: 'cam-z',
+    position: { x: 1, y: 2, z: 3 },
+    title: 'Dead Feed Cam',
+    frameSlot,
+  });
+  entry._overlayLayout = measureOverlayEntry(mockContext(), entry, {});
+  const placement = placementVariants({
+    anchorX: 200, anchorY: 200,
+    width: entry._overlayLayout.w, height: entry._overlayLayout.h,
+    viewportWidth: 500, viewportHeight: 400,
+    gap: entry.gapPx, leaderOffset: entry.leaderOffsetPx, verticalOnly: true,
+  })[0];
+
+  assert.doesNotThrow(() => paintThumbnail(ctx, entry, placement, 1));
+  assert.equal(ctx.calls.filter(([name]) => name === 'drawImage').length, 1,
+    'drawImage was attempted exactly once');
+  assert.ok(ctx.calls.some(([name, text]) => name === 'fillText' && text === 'DEAD FEED CAM'),
+    'the caption still paints after the failed blit');
+  assert.equal(ctx.calls.at(-1)[0], 'restore', 'the painter still unwinds its save()');
+});
+
+// ── font invalidation timing ────────────────────────────────────────────────
+
+test('a resolved font-ready promise clears the measurement cache', async () => {
+  destroyWorldOverlayDraw();
+  clearWorldOverlayTextMeasureCache();
+  const ctx = mockContext();
+  globalThis.document = {
+    fonts: { ready: Promise.resolve(), addEventListener() {}, removeEventListener() {} },
+  };
+  measureWorldOverlayText(ctx, 'READY', '10px mono');
+  assert.equal(getWorldOverlayTextMeasureCacheSize(), 1);
+
+  installWorldOverlayFontInvalidation();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(getWorldOverlayTextMeasureCacheSize(), 0,
+    'once the webfont lands, every cached measurement is stale');
+
+  destroyWorldOverlayDraw();
+  clearWorldOverlayTextMeasureCache();
+  delete globalThis.document;
+});
+
+test('a stale font-ready promise does not wipe a newer generation of measurements', async () => {
+  // Hosts are torn down and rebuilt as scenes change. A `ready` promise captured
+  // by the OLD host can still land afterwards; it must not clear measurements
+  // the CURRENT host took, or every card would re-measure for a frame.
+  destroyWorldOverlayDraw();
+  const ctx = mockContext();
+  let releaseStaleReady;
+  globalThis.document = {
+    fonts: {
+      ready: new Promise((resolve) => { releaseStaleReady = resolve; }),
+      addEventListener() {},
+      removeEventListener() {},
+    },
+  };
+  installWorldOverlayFontInvalidation(); // generation G holds the stale promise
+  destroyWorldOverlayDraw(); // host gone, generation G+1
+
+  // The rebuilt host's font set never resolves, so only the stale promise can fire.
+  globalThis.document = {
+    fonts: { ready: new Promise(() => {}), addEventListener() {}, removeEventListener() {} },
+  };
+  installWorldOverlayFontInvalidation(); // generation G+2
+  measureWorldOverlayText(ctx, 'LIVE', '10px mono');
+  assert.equal(getWorldOverlayTextMeasureCacheSize(), 1);
+
+  releaseStaleReady();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(getWorldOverlayTextMeasureCacheSize(), 1,
+    'a stale invalidation must not wipe measurements the live host just took');
+  destroyWorldOverlayDraw();
+  delete globalThis.document;
 });

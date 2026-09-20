@@ -111,6 +111,84 @@ test('fetchFlowForBounds: fetches covering tiles via /api/tomtom and decodes', a
   }
 });
 
+// ── hand-encoded MVT: a corrupt feature inside an otherwise valid tile ──────
+//
+// The real fixture is well-formed, so the per-feature try/catch in
+// decodeFlowTile never runs against it. These helpers build a minimal
+// Mapbox Vector Tile protobuf by hand so a malformed feature can be placed
+// NEXT TO a good one — the contract under test is that the good feature
+// still decodes.
+
+const varintBytes = (value) => {
+  const out = [];
+  let rest = value;
+  do {
+    let byte = rest & 0x7f;
+    rest = Math.floor(rest / 128);
+    if (rest > 0) byte |= 0x80;
+    out.push(byte);
+  } while (rest > 0);
+  return out;
+};
+const sVarintBytes = (value) => varintBytes((value << 1) ^ (value >> 31));
+const tagBytes = (fieldNumber, wireType) => varintBytes((fieldNumber << 3) | wireType);
+const varintField = (fieldNumber, value) => [...tagBytes(fieldNumber, 0), ...varintBytes(value)];
+const bytesField = (fieldNumber, bytes) => [...tagBytes(fieldNumber, 2), ...varintBytes(bytes.length), ...bytes];
+const stringField = (fieldNumber, text) => bytesField(fieldNumber, [...Buffer.from(text, 'utf8')]);
+
+/** MVT geometry stream for one 2+ point line: moveTo + lineTo command words. */
+const encodeLine = (points) => {
+  const out = [...varintBytes((1 << 3) | 1), ...sVarintBytes(points[0][0]), ...sVarintBytes(points[0][1])];
+  let [prevX, prevY] = points[0];
+  out.push(...varintBytes(((points.length - 1) << 3) | 2));
+  for (const [x, y] of points.slice(1)) {
+    out.push(...sVarintBytes(x - prevX), ...sVarintBytes(y - prevY));
+    prevX = x; prevY = y;
+  }
+  return out;
+};
+
+/** Feature message: packed tags (2), geometry type (3), packed geometry (4). */
+const encodeFeature = ({ type, tags = [], geometry = null }) => {
+  const out = [];
+  if (tags.length > 0) out.push(...bytesField(2, tags.flatMap(([key, value]) => [...varintBytes(key), ...varintBytes(value)])));
+  out.push(...varintField(3, type));
+  if (geometry) out.push(...bytesField(4, geometry));
+  return out;
+};
+
+/** A 'Traffic flow' layer carrying one key (traffic_level) and one value (1). */
+const encodeFlowLayer = (features) => {
+  const out = [
+    ...stringField(1, 'Traffic flow'),
+    ...varintField(15, 2),
+    ...varintField(5, 4096),
+    ...stringField(3, 'traffic_level'),
+    ...bytesField(4, varintField(5, 1)),
+  ];
+  for (const feature of features) out.push(...bytesField(2, feature));
+  return out;
+};
+
+const encodeTile = (layers) => Uint8Array.from(layers.flatMap((layer) => bytesField(3, layer)));
+
+test('a malformed feature inside a valid tile is skipped, not fatal', () => {
+  const tile = encodeTile([encodeFlowLayer([
+    // Good LineString carrying traffic_level=1 → decodes to one segment.
+    encodeFeature({ type: 2, tags: [[0, 0]], geometry: encodeLine([[100, 200], [300, 400]]) }),
+    // Feature with a type but NO geometry → toGeoJSON throws 'feature has no geometry'.
+    encodeFeature({ type: 2 }),
+    // Geometry type 7 is not in the MVT spec → toGeoJSON throws 'unknown feature type'.
+    encodeFeature({ type: 7, geometry: encodeLine([[0, 0], [10, 10]]) }),
+  ])]);
+
+  const segments = decodeFlowTile(tile, FIXTURE_TILE.z, FIXTURE_TILE.x, FIXTURE_TILE.y);
+  assert.equal(segments.length, 1, 'the one decodable feature survives its broken siblings');
+  assert.equal(segments[0].trafficLevel, 1);
+  assert.equal(segments[0].coords.length, 2);
+  assert.equal(segments[0].closure, false);
+});
+
 test('fetchFlowForBounds: decode cache serves repeat calls within TTL (no refetch)', async () => {
   resetFlowTileCache();
   let calls = 0;
@@ -158,5 +236,42 @@ test('fetchFlowForBounds: non-OK tile responses reject when nothing succeeds', a
     await assert.rejects(fetchFlowForBounds(FIXTURE_BOUNDS));
   } finally {
     restore();
+  }
+});
+
+/** Bounds guaranteed to sit inside exactly one z12 tile: 1e-6° past its SW corner. */
+function singleTileBounds(lat, lon, zoom = 12) {
+  const n = 2 ** zoom;
+  const x = Math.floor(((lon + 180) / 360) * n);
+  const y = Math.floor(((1 - Math.asinh(Math.tan(lat * Math.PI / 180)) / Math.PI) / 2) * n);
+  const west = (x / n) * 360 - 180;
+  const south = Math.atan(Math.sinh(Math.PI * (1 - 2 * (y + 1) / n))) * 180 / Math.PI;
+  return { south: south + 1e-6, north: south + 2e-6, west: west + 1e-6, east: west + 2e-6 };
+}
+
+test('fetchFlowForBounds: decoding past the cache ceiling evicts the oldest tile only', async () => {
+  resetFlowTileCache();
+  const calls = [];
+  const restore = stubFetch(async (url) => {
+    calls.push(String(url));
+    return new Response(loadFixture(), { status: 200 });
+  });
+  try {
+    // One distinct tile per call; 70 exceeds the 64-entry decode cache, so the
+    // earliest entries must be evicted while the newest survive.
+    const boundsList = Array.from({ length: 70 }, (_, i) => singleTileBounds(28 + i * 0.5, -100 + i * 0.5));
+    for (const bounds of boundsList) await fetchFlowForBounds(bounds);
+    const fetched = calls.length;
+
+    const evicted = await fetchFlowForBounds(boundsList[0]);
+    assert.equal(calls.length, fetched + 1, 'the oldest tile was evicted and had to be re-fetched');
+    assert.ok(evicted.length > 50, 'the re-fetched tile decodes again, not to an empty shell');
+
+    await fetchFlowForBounds(boundsList[10]);
+    await fetchFlowForBounds(boundsList.at(-1));
+    assert.equal(calls.length, fetched + 1, 'newer entries stay cached after the eviction');
+  } finally {
+    restore();
+    resetFlowTileCache();
   }
 });

@@ -10,6 +10,7 @@ import {
   DEBUG_RECORD_MAX_DEPTH,
   DEBUG_RECORD_MAX_ENTRIES,
   DEBUG_STRING_MAX_CHARS,
+  extractOpenAiResponseText,
   isSecretLikeKey,
   sanitizeDebugRecord,
   sanitizeDebugString,
@@ -124,4 +125,35 @@ test('plain telemetry survives untouched: null, numbers, booleans, nested arrays
   assert.deepEqual(sanitizeDebugRecord(record), record);
   assert.equal(isSecretLikeKey('turnToken'), true);
   assert.equal(isSecretLikeKey('event'), false);
+});
+
+// ── OpenAI response shapes shared with the HUD-summary endpoint ──────────────
+
+test('extractOpenAiResponseText prefers the flat output_text and trims it', () => {
+  assert.equal(extractOpenAiResponseText({ output_text: '  Fog over the bay  ' }), 'Fog over the bay');
+  // A whitespace-only flat value is "no text", so the nested shape gets its turn.
+  assert.equal(extractOpenAiResponseText({ output_text: '   ' }), '');
+});
+
+test('extractOpenAiResponseText flattens nested output content parts', () => {
+  assert.equal(extractOpenAiResponseText({
+    output: [
+      { content: [{ type: 'output_text', text: 'North' }] },
+      { content: [{ type: 'text', text: 'sea' }, { type: 'refusal' }] },
+      { content: null },
+      {},
+      { content: [] },
+    ],
+  }), 'North sea', 'every text part joins with a space; partless items contribute nothing');
+  // Some shapes carry the text under `output_text` on the part instead of `text`.
+  assert.equal(extractOpenAiResponseText({ output: [{ content: [{ output_text: 'fallback' }] }] }), 'fallback');
+  // An item with no content array contributes nothing at all.
+  assert.equal(extractOpenAiResponseText({ output: [{ output_text: 'ignored' }, 'plain'] }), '');
+  assert.equal(extractOpenAiResponseText({ output: [] }), '');
+});
+
+test('extractOpenAiResponseText collapses unusable bodies to an empty string', () => {
+  for (const body of [null, undefined, {}, { output: 'not-an-array' }, { output: 7 }]) {
+    assert.equal(extractOpenAiResponseText(body), '', JSON.stringify(body) ?? String(body));
+  }
 });

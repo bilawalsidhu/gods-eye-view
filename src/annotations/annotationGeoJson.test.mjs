@@ -57,6 +57,30 @@ test('synthesized + building props are preserved', () => {
   assert.equal(roundTrip(bldg).buildingHeight, 24);
 });
 
+test('a hand-authored polygon with no gev:anchor falls back to the ring mean', () => {
+  // Importers other than this app (a hand-written fixture, a GIS export) have
+  // no `gev:anchor`; the anchor must be DERIVED, not left undefined.
+  const handDrawn = {
+    type: 'Feature',
+    geometry: { type: 'Polygon', coordinates: [[[0, 0], [2, 0], [2, 2], [0, 2], [0, 0]]] },
+    properties: { 'gev:type': 'area', 'gev:id': 'hand-1', 'gev:label': 'Quad' },
+  };
+  const anno = featureToAnnotation(handDrawn);
+  assert.ok(anno, 'a valid closed polygon imports');
+  // The GeoJSON closing duplicate is dropped BEFORE the mean, so the 5th
+  // position does not bias the centroid toward the first vertex.
+  assert.deepEqual(anno.anchor, { lon: 1, lat: 1 });
+  assert.deepEqual(anno.ring, [[0, 0], [2, 0], [2, 2], [0, 2]]);
+  // Re-exporting the import now carries the derived anchor, so the round trip
+  // is stable from the second generation on.
+  assert.deepEqual(annotationToFeature(anno).properties['gev:anchor'], [1, 1]);
+
+  // An unparseable `gev:anchor` falls back the same way instead of throwing.
+  const badAnchor = structuredClone(handDrawn);
+  badAnchor.properties['gev:anchor'] = ['not', 'a number'];
+  assert.deepEqual(featureToAnnotation(badAnchor).anchor, { lon: 1, lat: 1 });
+});
+
 test('route path round-trips with mode/distance/duration', () => {
   const path = [{ lon: -122.4, lat: 37.7, height: 5 }, { lon: -122.39, lat: 37.71, height: 6 }, { lon: -122.38, lat: 37.72, height: 7 }];
   const route = { type: 'route', id: 'anno-6', label: '590 m · 8 min', color: 'primary', ttlMs: null,

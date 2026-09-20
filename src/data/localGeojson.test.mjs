@@ -1070,6 +1070,30 @@ test('clicks that do not land on this layer change nothing', async () => {
   env.cleanup();
 });
 
+test('a same-layer entity with no fly-to target selects but never moves the camera', async () => {
+  const clickActions = [];
+  const env = await createRealLocalLayerHarness({ clickActions });
+  const flights = captureFlyTo(env.viewer);
+  // A polygon entity that carries no stem polyline (the layer could not
+  // compute a center for it): the polygon branch of the handler must not
+  // fly anywhere or lock the camera controller.
+  const stemless = {
+    __localLayerId: 'local-dams',
+    polygon: { hierarchy: { getValue: () => ({ positions: [] }) } },
+  };
+  env.viewer.scene.pick = () => ({ id: stemless });
+
+  clickActions[0]({ position: { x: 3, y: 3 } });
+
+  assert.equal(env.viewer.selectedEntity, stemless, 'a stemless layer entity is still selected');
+  assert.equal(flights.length, 0, 'no positions means no center to fly to');
+  assert.equal(env.viewer.scene.screenSpaceCameraController.enableInputs, true,
+    'the camera controller is never locked without a flight');
+
+  env.layer.destroy(env.viewer);
+  env.cleanup();
+});
+
 test('disable releases this layer selected entity and leaves every other one alone', async () => {
   const env = await createRealLocalLayerHarness();
   const entity = env.dataSources[0].entities.values[0];

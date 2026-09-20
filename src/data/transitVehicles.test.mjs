@@ -18,7 +18,7 @@ import transitVehiclesLayer, {
   _routeColorForTest,
   TRANSIT_VEHICLE_RENDER_BOUNDS,
 } from './transitVehicles.js';
-import { GTFS_RT_FEEDS } from './gtfsRtPolicy.js';
+import { GTFS_RT_FEEDS, GTFS_RT_FEED_IDS } from './gtfsRtPolicy.js';
 import { encodeFeed } from './gtfsRtTestEncode.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -241,6 +241,189 @@ test('transitVehicles: a failing feed contributes no keys but does not wipe the 
     assert.ok(keys.every((k) => k.startsWith('mbta/')), 'failed feeds must not leave stale keys');
     assert.ok(stats.error == null || typeof stats.error === 'string');
   } finally {
+    globalThis.fetch = realFetch;
+    transitVehiclesLayer.destroy(viewer);
+  }
+});
+
+/** A 200 protobuf response wrapping synthesized feed bytes. */
+function pbResponse(bytes) {
+  return {
+    ok: true,
+    status: 200,
+    arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+  };
+}
+
+test('transitVehicles: a vehicle that leaves the feed is pruned on the next cycle', async () => {
+  // GTFS-RT ids are stable for the trip's lifetime, so the only way a key
+  // disappears is a genuine run/train end. The sweep must delete the point
+  // AND its map entry, or the HUD would keep detecting a ghost vehicle.
+  let entities = [
+    { id: 'b1', vehicle: { trip: { routeId: 'Red' }, position: { lat: 42.35, lon: -71.06 } } },
+    { id: 'b2', vehicle: { trip: { routeId: 'Orange' }, position: { lat: 42.36, lon: -71.06 } } },
+  ];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => (String(url).endsWith('/api/gtfsrt/mbta')
+    ? pbResponse(encodeFeed({ header: { version: '2.0' }, entity: entities }))
+    : { ok: false, status: 404 });
+
+  const viewer = makeStubViewer();
+  try {
+    transitVehiclesLayer.init(viewer);
+    transitVehiclesLayer.enable(viewer);
+    await settle();
+    assert.equal(transitVehiclesLayer.getStats().count, 2);
+
+    entities = entities.slice(0, 1); // b2's trip ended between polls
+    await transitVehiclesLayer.update();
+
+    const keys = transitVehiclesLayer.getDetectableObjects().map((o) => o.sourceId);
+    assert.deepEqual(keys, ['mbta/b1'], 'the departed vehicle is swept, the survivor kept');
+    assert.equal(transitVehiclesLayer.getStats().count, 1);
+  } finally {
+    globalThis.fetch = realFetch;
+    transitVehiclesLayer.destroy(viewer);
+  }
+});
+
+test('transitVehicles: the altitude gate clears rendered vehicles and blocks polling until descent', async () => {
+  // Cities are unreadable from space: above the exit altitude the layer must
+  // drop its points and spend NO network, then re-render when you descend.
+  const bytes = encodeFeed({
+    header: { version: '2.0' },
+    entity: [
+      { id: 'b1', vehicle: { trip: { routeId: 'Red' }, position: { lat: 42.35, lon: -71.06 } } },
+      { id: 'b2', vehicle: { trip: { routeId: 'Orange' }, position: { lat: 42.36, lon: -71.06 } } },
+    ],
+  });
+  let polls = 0;
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (String(url).endsWith('/api/gtfsrt/mbta')) {
+      polls += 1;
+      return pbResponse(bytes);
+    }
+    return { ok: false, status: 404 };
+  };
+
+  const viewer = makeStubViewer();
+  try {
+    transitVehiclesLayer.init(viewer);
+    transitVehiclesLayer.enable(viewer);
+    await settle();
+    assert.equal(transitVehiclesLayer.getStats().count, 2);
+    const lastUpdate = transitVehiclesLayer.getStats().lastUpdate;
+    assert.ok(lastUpdate != null);
+
+    viewer.camera.positionCartographic.height = 250_000; // above the 100 km exit gate
+    polls = 0;
+    await transitVehiclesLayer.update();
+
+    assert.equal(transitVehiclesLayer.getStats().count, 0,
+      'a closed gate empties the rendered cohort');
+    assert.deepEqual(transitVehiclesLayer.getDetectableObjects(), [],
+      'nothing is detectable while the gate is closed');
+    assert.equal(polls, 0, 'a closed gate must not spend a single feed poll');
+    assert.equal(transitVehiclesLayer.getStats().lastUpdate, lastUpdate,
+      'the gated cycle is not a data update, so the freshness stamp survives');
+
+    viewer.camera.positionCartographic.height = 1000; // descend back into the band
+    await transitVehiclesLayer.update();
+    assert.equal(transitVehiclesLayer.getStats().count, 2, 'descent reopens the gate and re-renders');
+    assert.ok(polls >= 1, 'the reopened layer polls again');
+  } finally {
+    globalThis.fetch = realFetch;
+    transitVehiclesLayer.destroy(viewer);
+  }
+});
+
+test('transitVehicles: disable() aborts every in-flight feed poll', async () => {
+  // A disable mid-cycle must cut the network, not let three half-second feeds
+  // run to completion against a hidden layer.
+  const aborted = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (_url, init = {}) => new Promise((_resolve, reject) => {
+    init.signal.addEventListener('abort', () => {
+      aborted.push(init.signal.aborted);
+      const error = new Error('The operation was aborted.');
+      error.name = 'AbortError';
+      reject(error);
+    });
+  });
+
+  const viewer = makeStubViewer();
+  try {
+    transitVehiclesLayer.init(viewer);
+    transitVehiclesLayer.enable(viewer); // fires update() → three hanging fetches
+    await settle(2);
+    assert.equal(transitVehiclesLayer.getStats().loading, true, 'a poll is in flight');
+
+    transitVehiclesLayer.disable(viewer);
+
+    assert.equal(aborted.length, GTFS_RT_FEED_IDS.length,
+      'every in-flight controller got abort()');
+    assert.ok(aborted.every(Boolean), 'the fetches observed the abort on their signal');
+    assert.equal(transitVehiclesLayer.getStats().loading, false);
+    await settle(); // the AbortError rejections drain through pollFeed's catch
+    assert.equal(transitVehiclesLayer.getStats().error, undefined,
+      'a deliberate abort is not a feed failure and must not raise the error flag');
+  } finally {
+    globalThis.fetch = realFetch;
+    transitVehiclesLayer.destroy(viewer);
+  }
+});
+
+// The cap warning is one-shot module state (`_limitWarned` never resets), so
+// this test stays last in the file: running it earlier would silence the warn
+// for every later test.
+test('transitVehicles: the global point cap sheds new vehicles after warning once', async () => {
+  // 5001 vehicles: 5000 render, and the overflow is dropped rather than
+  // silently blowing the GPU budget.
+  const entities = [];
+  for (let i = 0; i < 5001; i++) {
+    entities.push({
+      id: `v${i}`,
+      vehicle: {
+        trip: { routeId: `R${i % 7}` },
+        position: { lat: 42.3 + (i % 50) / 1000, lon: -71.0 + (i % 40) / 1000 },
+      },
+    });
+  }
+  const bytes = encodeFeed({ header: { version: '2.0' }, entity: entities });
+
+  const warnings = [];
+  const realWarn = console.warn;
+  const realFetch = globalThis.fetch;
+  console.warn = (...args) => { warnings.push(args.join(' ')); };
+  globalThis.fetch = async (url) => (String(url).endsWith('/api/gtfsrt/mbta')
+    ? pbResponse(bytes)
+    : { ok: false, status: 404 });
+
+  const viewer = makeStubViewer();
+  try {
+    transitVehiclesLayer.init(viewer);
+    transitVehiclesLayer.enable(viewer);
+    await settle();
+
+    assert.equal(transitVehiclesLayer.getStats().count, 5000, 'the cap holds');
+    assert.equal(
+      warnings.filter((line) => line.includes('point cap reached')).length, 1,
+      'the cap is reported to the console exactly once, not per vehicle',
+    );
+    const keys = transitVehiclesLayer.getDetectableObjects({ maxCount: 5000 })
+      .map((o) => o.sourceId);
+    assert.ok(keys.includes('mbta/v0'), 'vehicles that fit are rendered');
+    assert.equal(keys.includes('mbta/v5000'), false, 'the overflow vehicle is not rendered');
+
+    await transitVehiclesLayer.update(); // second cycle: no new warning storm
+    assert.equal(transitVehiclesLayer.getStats().count, 5000);
+    assert.equal(
+      warnings.filter((line) => line.includes('point cap reached')).length, 1,
+      'the one-shot warn stays one-shot on later cycles',
+    );
+  } finally {
+    console.warn = realWarn;
     globalThis.fetch = realFetch;
     transitVehiclesLayer.destroy(viewer);
   }

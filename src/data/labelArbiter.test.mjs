@@ -504,3 +504,172 @@ test('live identities expose selected and temporal fading membership by layer/so
   ]));
   assert.equal(arbiter.liveIdentities({ includeFading: true, now: 1501 }).size, 0);
 });
+
+// ── quota allocation borrow loops (the pooled solve path) ───────────────────
+
+test('elastic even splits borrow unused entitlement back to the hungry layer', () => {
+  const objects = [
+    ...Array.from({ length: 3 }, (_, index) => candidate('flights', index)),
+    ...Array.from({ length: 3 }, (_, index) => candidate('satellites', index, 300 + index * 30)),
+  ];
+  const arbiter = new LabelArbiter();
+  arbiter.solve(objects, {
+    capacity: 4,
+    strategy: ALLOCATION_ELASTIC,
+    demandByLayer: { flights: 100, satellites: 1 },
+    now: 1000,
+  });
+  const diagnostics = arbiter.diagnostics();
+  assert.deepEqual(diagnostics.demand, { flights: 100, satellites: 1 });
+  assert.deepEqual(diagnostics.quotas, { flights: 3, satellites: 1 },
+    'satellites can only spend one slot, so its unused entitlement must reach flights');
+  assert.equal(diagnostics.selectedCount, 4, 'no budget is stranded');
+});
+
+test('weighted apportionment hands its stragglers to the work-conserving top-up', () => {
+  // Two heavy-weighted layers are demand-capped at one label each, so the
+  // sqrt(count) apportionment has nowhere to put its budget; the final borrow
+  // loop must still place every slot on the heavy-demand layer.
+  const objects = [
+    ...Array.from({ length: 2 }, (_, index) => candidate('lead-a', index, 200 + index * 30)),
+    ...Array.from({ length: 2 }, (_, index) => candidate('lead-b', index, 400 + index * 30)),
+    ...Array.from({ length: 2 }, (_, index) => candidate('heavy', index, 600 + index * 30)),
+  ];
+  const arbiter = new LabelArbiter();
+  arbiter.solve(objects, {
+    capacity: 11,
+    strategy: ALLOCATION_WEIGHTED,
+    demandByLayer: { 'lead-a': 1, 'lead-b': 1, heavy: 50 },
+    layerWeights: { 'lead-a': 10, 'lead-b': 10, heavy: 0.05 },
+    now: 1000,
+  });
+  assert.deepEqual(arbiter.diagnostics().quotas, { 'lead-a': 1, 'lead-b': 1, heavy: 9 });
+});
+
+test('a Map demand map is floored, drops non-positive entries, and backfills candidates', () => {
+  const objects = [
+    ...Array.from({ length: 3 }, (_, index) => candidate('flights', index)),
+    ...Array.from({ length: 2 }, (_, index) => candidate('satellites', index, 300 + index * 30)),
+  ];
+  const arbiter = new LabelArbiter();
+  arbiter.solve(objects, {
+    capacity: 5,
+    demandByLayer: new Map([['flights', 2.9], ['satellites', 0], ['ghost', 7]]),
+    now: 1000,
+  });
+  assert.deepEqual(arbiter.diagnostics().demand, { flights: 2, satellites: 2, ghost: 7 },
+    'fractional demand floors, zero demand falls back to the cohort size, and a '
+    + 'layer with candidates but no demand is not silently starved');
+});
+
+test('a candidate without a projected point anchors on its lead-line origin', () => {
+  // Cards rendered from a source that has no screen projection yet still carry
+  // a lead line; the spread queue needs a scalar anchor from somewhere.
+  const lead = {
+    key: 'flights:lead',
+    layerId: 'flights',
+    sourceId: 'lead',
+    priority: 0,
+    centerDistance: 0,
+    keyholeAlpha: 1,
+    placements: [{
+      corner: 'NE',
+      rect: { x: 40, y: 0, w: 20, h: 12 },
+      leadFromX: 31,
+      leadFromY: 7,
+    }],
+  };
+  const arbiter = new LabelArbiter();
+  arbiter.solve([lead], { capacity: 1, now: 1000 });
+  assert.deepEqual([lead._anchorX, lead._anchorY], [31, 7]);
+  assert.ok(arbiter.selectedKeys.has('flights:lead'), 'the lead-anchored card still places');
+});
+
+test('a card the coarse mask calls blocked is re-probed against real occupancy', () => {
+  // The spread queue's cheap per-anchor mask treats a card inside the 4 px
+  // breathing gap of a placed card as blocked, and a blocked-looking key is
+  // normally written off for the solve. The write-off is guarded by a re-probe
+  // of true occupancy: in a saturated field the just-placed neighbour's rect
+  // was never inserted into the hash, so a mere near miss must keep its label.
+  const overlaps = (a, b, padding = 4) => a.x < b.x + b.w + padding
+    && a.x + a.w + padding > b.x && a.y < b.y + b.h + padding && a.y + a.h + padding > b.y;
+
+  const capacity = 20;
+  const cohort = [];
+  for (let i = 0; i < capacity - 1; i++) {
+    const rect = { x: 20 + i * 200, y: 0, w: 20, h: 12 };
+    cohort.push({
+      key: `flights:a${i}`,
+      layerId: 'flights',
+      sourceId: `a${i}`,
+      priority: 100 - i,
+      centerDistance: rect.x,
+      keyholeAlpha: 1,
+      screenX: rect.x,
+      screenY: 6,
+      placements: [{ corner: 'NE', rect }],
+    });
+  }
+  // Sits 2 px below the 19th card — inside the gap, but not overlapping it.
+  const nearRect = { x: 20 + (capacity - 2) * 200, y: 14, w: 20, h: 12 };
+  cohort.push({
+    key: 'flights:near',
+    layerId: 'flights',
+    sourceId: 'near',
+    priority: 50,
+    centerDistance: nearRect.x,
+    keyholeAlpha: 1,
+    screenX: nearRect.x,
+    screenY: 20,
+    placements: [{ corner: 'SE', rect: nearRect }],
+  });
+  const tailRect = { x: 20 + (capacity - 1) * 200, y: 0, w: 20, h: 12 };
+  cohort.push({
+    key: 'flights:tail',
+    layerId: 'flights',
+    sourceId: 'tail',
+    priority: 10,
+    centerDistance: tailRect.x,
+    keyholeAlpha: 1,
+    screenX: tailRect.x,
+    screenY: 6,
+    placements: [{ corner: 'NE', rect: tailRect }],
+  });
+
+  const neighbourRect = cohort[capacity - 2].placements[0].rect;
+  assert.equal(overlaps(nearRect, neighbourRect), true, 'the gap mask flags the pair');
+  assert.equal(overlaps(nearRect, neighbourRect, 0), false, 'the cards do not truly collide');
+
+  const arbiter = new LabelArbiter();
+  arbiter.solve(cohort, { capacity, now: 1000, preserveIncumbents: false });
+  assert.ok(arbiter.selectedKeys.has('flights:near'),
+    'the near miss is placed rather than dismissed by the coarse mask');
+  assert.equal(arbiter.selectedKeys.has('flights:tail'), false,
+    'the field really is saturated: the lowest-priority card pays for it');
+});
+
+test('clear() forgets every solve artefact and scores a cohort like a fresh arbiter', () => {
+  const arbiter = new LabelArbiter();
+  const objects = Array.from({ length: 4 }, (_, index) => candidate('flights', index, index * 40));
+  arbiter.solve(objects, { capacity: 4, now: 1000 });
+  assert.equal(arbiter.selectedKeys.size, 4);
+  assert.ok(arbiter.diagnostics());
+  assert.equal(arbiter.states.size, 4);
+
+  arbiter.clear();
+  assert.equal(arbiter.states.size, 0);
+  assert.equal(arbiter.selectedKeys.size, 0);
+  assert.equal(arbiter.diagnostics(), null);
+  assert.equal(arbiter.solveRevision, 0);
+  assert.equal(arbiter.activeStateCount(), 0);
+
+  // A cleared arbiter must score an impossible cohort exactly like a brand-new
+  // one — no stale occupancy, no remembered incumbents.
+  const crowd = Array.from({ length: 4 }, (_, index) => ({
+    ...candidate('flights', index, 0),
+    placements: [{ corner: 'NE', rect: { x: 0, y: 0, w: 50, h: 20 } }],
+  }));
+  const expected = new LabelArbiter().solve(crowd, { capacity: 4, now: 9000 }).selectedCount;
+  const afterClear = arbiter.solve(crowd, { capacity: 4, now: 9000, preserveIncumbents: false });
+  assert.equal(afterClear.selectedCount, expected);
+});

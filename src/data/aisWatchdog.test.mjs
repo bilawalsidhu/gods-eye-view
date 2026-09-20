@@ -119,6 +119,36 @@ test('a key removed mid-session terminates the live socket', () => {
   assert.equal(h.openSockets.size, 0);
 });
 
+test('a missing WebSocket transport reports unsupported and never dials', () => {
+  // Cold: the environment says up front that it has no transport.
+  const cold = harness();
+  cold.configure({ ...LIVE_ENV, hasTransport: false });
+  cold.tick();
+  cold.advance(10 * 60_000);
+  cold.tick();
+
+  assert.deepEqual(cold.types(), [], 'no socket can be opened without a transport');
+  const snap = cold.snapshot();
+  assert.equal(snap.status, 'unsupported');
+  assert.equal(snap.error, 'Node WebSocket transport is unavailable');
+  assert.equal(snap.reconnectAttempt, 0, 'no ladder for a missing capability');
+  assert.equal(snap.nextAttemptAt, null);
+  assert.equal(isLiveAisStatus(snap.status), false);
+
+  // Live: a socket that loses its transport mid-session is torn down.
+  const warm = goLive(harness());
+  warm.configure({ ...LIVE_ENV, hasTransport: false });
+  assert.deepEqual(warm.types(), ['connect:1', 'terminate:1']);
+  assert.equal(warm.snapshot().status, 'unsupported');
+  assert.equal(warm.openSockets.size, 0);
+
+  // The capability arriving later recovers immediately, like a key would.
+  warm.configure();
+  warm.tick();
+  assert.deepEqual(warm.types(), ['connect:1', 'terminate:1', 'connect:2']);
+  assert.equal(warm.snapshot().status, 'connecting');
+});
+
 test('an open socket is not live until data actually arrives', () => {
   const h = harness();
   h.configure();

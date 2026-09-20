@@ -141,7 +141,7 @@ plain `npm test` keeps the allocation gate.
       and its refused-write rollback, focus restore + Tab wrapping, and the
       scroll-affordance overflow signal — following the extract-and-test rule
       rather than snapshotting the DOM.
-- [ ] Next weakest loaded modules per the report (2026-09-14, 80.82% lines
+- [x] Next weakest loaded modules per the report (2026-09-14, 80.82% lines
       overall): `logoGaze.js` (26.5%), `cctvGizmo.js` (30.4% — its pure math
       exports are tested; `createCalibrationGizmo` is viewer-coupled and
       belongs to the QA harness per the Cesium-coupling doctrine),
@@ -151,7 +151,49 @@ plain `npm test` keeps the allocation gate.
       DOM-init body the new tests exercise through the fake DOM; the wiring
       contracts are now pinned even though c8 cannot see inside the
       instrumented paths). Remaining wins here are per-module judgement calls,
-      not a bulk campaign.
+      not a bulk campaign. — CLOSED (2026-09-20): the mid-tail and long tail
+      were swept in one campaign (see the 2026-09-20 entry below).
+- [x] Mid-tail + long-tail coverage campaign (2026-09-20, OPEN → the honest
+      boundary): **91.59% lines** (c8, 95,285/104,038 statements, tests and
+      local_data excluded), **3,790 tests green** with the allocation gate.
+      What the campaign actually did, by evidence rather than line-chasing:
+      every module below the big-file boundary now has its real-logic gaps
+      closed with behavioral tests — `layerState`, `focusDeemphasis`,
+      `militaryInstallations`, `localGeojson` (minus one proven-dead polygon
+      arm), `worldOverlay`, `telegeographySubmarineCables`, `syntheticTraffic`,
+      `bikeshare`, `detection` (100→6), `functions/api/cctv/[[path]]` (49→0),
+      `scenes/director`, `gtfsRtDecode`, `transitVehicles`, `labelArbiter`,
+      `localCache`, `cctvGizmo`, `aisStreamAdapter`, `worldOverlayDraw`, the
+      `overpassPolicy` reject/failover surface (new suite), and 46 more files
+      in the ≤20-statement tail. What remains is the boundary, and it is
+      documented rather than fudged:
+      (1) **17 scene-coupled big modules carry 8,631 uncovered statements** —
+      `cctv.js` 1590, `flights.js` 1206, `rocketLaunches.js` 919,
+      `militaryFlights.js` 789, `traffic.js` 562, `radio.js` 515,
+      `satellites.js` 498, `gevActions.js` 448, `aisLiveVessels.js` 370,
+      `firmsHeatmap.js` 305, `locations.js` 284, `militaryAwareness.js` 259,
+      `gevRealtime.js` 242, `manager.js` 199, `screenAnnotationRenderer.js`
+      175, `flightsTracking.js` 146, `cameraVerbs.js` 124. These are per-frame
+      render loops, live-socket lifecycles, camera choreography, and WebGL
+      paint paths — the mock-armor boundary (Batch K): the pure logic in them
+      is extracted to policy modules (all tested), and the shells need a real
+      browser harness, not bigger stub farms. The honest next rock here is
+      layer-lifecycle integration suites under the QA harness (Phase 5), not
+      unit tests pretending a viewer exists.
+      (2) **24 files carry 122 justified statements** — each individually
+      recorded as defensive-by-construction: internal try/catch that already
+      swallows the failure (`hybridAnnotationRenderer` world-route catch —
+      proven unreachable by experiment), DEV-gated `import.meta.env` branches
+      (`worldOverlay` dev facade, telegeography invariant log), wall-clock TTL
+      arms without a clock seam, cache ceilings above reachable window traffic,
+      and comparators whose tie arms are invariant by construction
+      (`labelArbiter` pre-sorted buckets).
+      Two production bugs fell out of the campaign and are fixed:
+      `syntheticTraffic` phantoms were frozen at ECEF (0,0,0) — raw
+      PointPrimitives clone `position` at add() and never evaluate
+      CallbackProperties, so positions are now driven per rendered frame by a
+      `scene.preUpdate` sampler — and `telegeographySubmarineCables` left a
+      stale `loading...` label in getStats() after a failed load.
 - [x] Pages Functions: contract tests for the rate-limiter budget
       boundaries (per-IP window slide, positive override, `0` escape hatch,
       the deployment-wide backstop refusing a fresh IP at 20× the per-IP

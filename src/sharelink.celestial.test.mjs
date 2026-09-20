@@ -1,7 +1,7 @@
 import { readSource } from './testSupport/readSource.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ShareLinkManager, decodeShareCreatedAtMs } from './sharelink.js';
+import { ShareLinkManager, decodeShareCreatedAtMs, encodeStyleParamState } from './sharelink.js';
 import { createDefaultLayerState } from './data/layerState.js';
 
 const uiSource = readSource('./ui.js', import.meta.url);
@@ -29,16 +29,20 @@ function makeManager(hash = '') {
       window.location.hash = nextHash;
     },
   };
+  let fireCameraChanged = null;
   const viewer = {
     camera: {
-      changed: { addEventListener() {} },
+      changed: { addEventListener: (handler) => { fireCameraChanged = handler; } },
       positionCartographic: { latitude: 0, longitude: 0, height: 1000 },
       heading: 0,
       pitch: -Math.PI / 2,
       roll: 0,
     },
   };
-  return new ShareLinkManager(viewer);
+  const manager = new ShareLinkManager(viewer);
+  /** Test seam: the camera-changed signal Cesium fires while the user flies. */
+  manager.fireCameraChangedForTest = () => fireCameraChanged?.();
+  return manager;
 }
 
 function installClipboard(writeText) {
@@ -285,6 +289,118 @@ test('keyhole fade controls default and round-trip as normalized percentages', (
   const params = new URLSearchParams(window.location.hash.slice(1));
   assert.equal(params.get('kf'), '22');
   assert.equal(params.get('ko'), '30');
+});
+
+// ── The live state → hash channel (the signals that schedule the write) ──────
+
+/** Wait out the 500 ms share-hash debounce. */
+const afterDebounce = () => new Promise((resolve) => setTimeout(resolve, 560));
+
+test('a camera move schedules the debounced hash write', async () => {
+  const manager = makeManager();
+  try {
+    manager.viewer.camera.positionCartographic = {
+      latitude: 10 * Math.PI / 180,
+      longitude: 0,
+      height: 1200,
+    };
+    manager.fireCameraChangedForTest();
+    assert.ok(manager._debounceTimer, 'the camera listener must schedule a write');
+
+    await afterDebounce();
+    const params = new URLSearchParams(window.location.hash.slice(1));
+    assert.equal(params.get('lat'), '10.0000');
+    assert.equal(params.get('lon'), '0.0000');
+    assert.equal(params.get('alt'), '1200');
+  } finally {
+    manager.destroy();
+  }
+});
+
+test('a durable layer-preference change lands in the hash after the debounce', async () => {
+  const manager = makeManager();
+  try {
+    const layers = createDefaultLayerState();
+    layers.enabledLayerIds = ['radio'];
+    manager.setLayerStateProvider(() => layers);
+
+    manager.onLayerStateChange();
+    assert.ok(manager._debounceTimer);
+    await afterDebounce();
+    assert.equal(new URLSearchParams(window.location.hash.slice(1)).get('l'), 'r');
+  } finally {
+    manager.destroy();
+  }
+});
+
+test('a panel gesture claims its restore lane while pending, then writes the hash', async () => {
+  let restored = null;
+  const manager = makeManager('#v=2&lat=40&lon=-74&ui=c.c.0_d.c.0');
+  manager._onRestore = (state) => { restored = state; };
+  manager._isNavigationCurrent = () => false;
+  const state = manager.parseInitialHash();
+
+  // A panel toggle with no id is still a gesture, but claims no lane...
+  manager.onPanelStateChange();
+  assert.equal(manager._restoreAuthority.panels.size, 0);
+  assert.equal(manager._debounceTimer, null, 'hash writes stay suppressed during a restore');
+  // ...one WITH an id takes that panel out of the incoming share.
+  manager.onPanelStateChange('control-panel');
+  assert.equal(manager._restoreAuthority.panels.get('control-panel'), 1);
+
+  const result = await manager.applyState(state, { navigationToken: 1 });
+  assert.deepEqual(restored.panelState, {
+    specs: [{ id: 'data-panel', collapsed: false, pinned: null }],
+  });
+  assert.equal(result.panels, 'applied');
+
+  manager.completeInitialRestore();
+  manager.onPanelStateChange('control-panel');
+  assert.ok(manager._debounceTimer, 'once settled the same gesture schedules the write');
+  await afterDebounce();
+  assert.equal(new URLSearchParams(window.location.hash.slice(1)).has('ui'), false,
+    'with no panel provider installed there is nothing to serialize');
+  manager.destroy();
+});
+
+test('panel specs that encode to nothing keep the ui parameter out of the link', () => {
+  const manager = makeManager();
+  manager.setPanelStateProvider(() => ({ specs: [
+    { id: 'not-a-known-panel', collapsed: true },
+    { id: 'control-panel', collapsed: 'yes' }, // non-boolean collapse is not state
+  ] }));
+  clearTimeout(manager._debounceTimer);
+  manager._updateHash();
+  assert.equal(new URLSearchParams(window.location.hash.slice(1)).has('ui'), false);
+  manager.destroy();
+});
+
+test('scope feather percentages clamp to 0..100 on the way into the link', () => {
+  const manager = makeManager();
+  try {
+    for (const [input, expected] of [[250, '100'], [-5, '0'], [42.4, '42']]) {
+      manager.onToggleChange(false, false, { scopeFeatherPct: input });
+      clearTimeout(manager._debounceTimer);
+      manager._updateHash();
+      assert.equal(
+        new URLSearchParams(window.location.hash.slice(1)).get('scf'),
+        expected,
+        `scf from scopeFeatherPct=${input}`,
+      );
+    }
+  } finally {
+    manager.destroy();
+  }
+});
+
+test('preset parameters that encode to nothing keep the sp parameter out', () => {
+  const params = new URLSearchParams();
+  encodeStyleParamState(params, 'noir', { contrastAmt: 0.5 });
+  assert.equal(params.get('sp'), 'c.50', 'a real value still serializes');
+
+  encodeStyleParamState(params, 'noir', { contrastAmt: 'junk', grainAmt: Number.NaN });
+  assert.equal(params.has('sp'), false,
+    'a values object with nothing finite must clear the parameter, not write junk');
 });
 
 // ── `sce` is a BAND, not a free number (second review) ───────────────────────

@@ -142,3 +142,53 @@ test('an oversized geocode query is refused before the network', async (t) => {
   assert.equal(res.status, 400);
   assert.equal(called, false);
 });
+
+test('the answer cache evicts its oldest entry past the 300-entry ceiling', async (t) => {
+  let upstreamHits = 0;
+  const realFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = realFetch; });
+  globalThis.fetch = async () => {
+    upstreamHits += 1;
+    return new Response(ELEVATION_OK, { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+
+  // 301 distinct coordinate pairs -> 301 distinct cache keys, no rate limiter
+  // (the env opt-in is unset here, so the proxy is unlimited by design).
+  const coordinate = (i) => `lat=${(-60 + i * 0.2).toFixed(4)}&lon=${(10 + i * 0.2).toFixed(4)}`;
+  for (let i = 0; i < 301; i += 1) {
+    const res = await call({ url: `https://x.dev/api/openzenith/elevation?${coordinate(i)}` });
+    assert.equal(res.status, 200, `request ${i}`);
+  }
+  assert.equal(upstreamHits, 301, 'every distinct pair is a cold read');
+
+  const evicted = await call({ url: `https://x.dev/api/openzenith/elevation?${coordinate(0)}` });
+  assert.equal(evicted.headers.get('X-GEV-OpenZenith-Cache'), 'MISS', 'the oldest entry was evicted');
+  const retained = await call({ url: `https://x.dev/api/openzenith/elevation?${coordinate(300)}` });
+  assert.equal(retained.headers.get('X-GEV-OpenZenith-Cache'), 'HIT', 'the newest entry survives');
+  assert.equal(upstreamHits, 302, 'only the evicted entry had to be re-fetched');
+});
+
+test('an opt-in per-minute limiter answers the shared 429 shape', async (t) => {
+  let upstreamHits = 0;
+  const realFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = realFetch; });
+  globalThis.fetch = async () => {
+    upstreamHits += 1;
+    return new Response(ELEVATION_OK, { status: 200 });
+  };
+
+  // A limiter value no other test uses: the limiter cache is keyed on the raw
+  // env string, so a fresh value is a fresh window.
+  const env = { GEV_RATELIMIT_OPENZENITH_PER_MIN: '2' };
+  for (let i = 0; i < 2; i += 1) {
+    const res = await call({ env });
+    assert.equal(res.status, 200, `admitted request ${i + 1}`);
+  }
+  // The limiter sits IN FRONT of the answer cache: a repeat that would have
+  // been a free HIT is still throttled once the window is spent.
+  const limited = await call({ env });
+  assert.equal(limited.status, 429);
+  assert.deepEqual(await limited.json(), { error: 'Rate limit exceeded' });
+  assert.equal(limited.headers.get('retry-after'), '5');
+  assert.equal(upstreamHits, 1, 'the repeat was served from cache, not upstream');
+});

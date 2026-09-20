@@ -23,9 +23,14 @@ test('drops malformed and unsupported OSM features', () => {
   const result = normalizeMilitaryInstallations({ elements: [
     { type: 'node', id: 1, lat: 95, lon: 0, tags: { military: 'range' } },
     { type: 'node', id: 2, lat: 1, lon: 2, tags: { military: 'radar' } },
+    // Not one of node/way/relation: Overpass areas carry no placeable centre.
+    { type: 'area', id: 3, lat: 1, lon: 2, tags: { military: 'airfield' } },
+    // A non-safe-integer id cannot form a stable `osm:<type>:<id>` key.
+    { type: 'way', id: 4.5, center: { lat: 1, lon: 2 }, tags: { military: 'range' } },
+    { type: 'node', lat: 1, lon: 2, tags: { military: 'range' } },
   ] });
   assert.deepEqual(result.records, []);
-  assert.equal(result.droppedCount, 2);
+  assert.equal(result.droppedCount, 5);
 });
 
 test('an unnamed feature reads as its class, never as a raw OSM id', () => {

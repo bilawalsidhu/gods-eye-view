@@ -158,6 +158,11 @@ function longSegment(lon, lat) {
   };
 }
 
+/** Latitude (degrees) currently stored on a phantom point primitive. */
+const latitudeOf = (point) => Cesium.Math.toDegrees(
+  Cesium.Cartographic.fromCartesian(point.position).latitude,
+);
+
 test('syntheticTraffic: consecutive rebuilds keep the fleet stable (oscillation regression)', () => {
   const primitives = { add: (p) => p, remove: () => {} };
   const viewer = {
@@ -272,10 +277,12 @@ function rectangleFromDegrees(box) {
 }
 
 /** Stand-in viewer: altitude-bearing camera plus an optional viewport rect. */
-function makeViewer({ height = 1000, rect = null } = {}) {
+function makeViewer({ height = 1000, rect = null, preUpdate = null } = {}) {
   const camera = { positionCartographic: { height } };
   if (rect) camera.computeViewRectangle = () => rect;
-  return { camera, scene: { primitives: { add: (p) => p, remove: () => {} } } };
+  const scene = { primitives: { add: (p) => p, remove: () => {} } };
+  if (preUpdate) scene.preUpdate = preUpdate;
+  return { camera, scene };
 }
 
 /** Recording fetch stub. The caller owns `restore()` (try/finally). */
@@ -366,9 +373,6 @@ test('syntheticTraffic: phantom positions advance along the segment at free-flow
       'no phantom spawns at the ECEF origin');
 
     const speedMps = plan.freeFlowSpeedMpsByType.primary * 0.9; // longSegment trafficLevel
-    const latitudeOf = (point) => Cesium.Math.toDegrees(
-      Cesium.Cartographic.fromCartesian(point.position).latitude,
-    );
     const drive = () => _drivePhantomPositionsForTest();
 
     assert.ok(Math.abs(latitudeOf(points[0]) - 42.35) < 1e-9,
@@ -637,5 +641,53 @@ test('syntheticTraffic: the detection cohort is stride-sampled, capped and seed-
   } finally {
     _resetPhantomsForTest();
     syntheticTrafficLayer.destroy(viewer);
+  }
+});
+
+test('syntheticTraffic: init attaches the preUpdate position driver once and destroy detaches it', () => {
+  const listeners = new Set();
+  const viewer = makeViewer({
+    preUpdate: {
+      addEventListener: (fn) => listeners.add(fn),
+      removeEventListener: (fn) => listeners.delete(fn),
+    },
+  });
+
+  syntheticTrafficLayer.init(viewer);
+  assert.equal(listeners.size, 1, 'init registers exactly one per-frame driver');
+
+  const collectionProto = Cesium.PointPrimitiveCollection.prototype;
+  const realAdd = collectionProto.add;
+  const realPerformance = globalThis.performance;
+  const clock = { nowMs: 5_000_000 };
+  const points = [];
+  try {
+    syntheticTrafficLayer.init(viewer);
+    assert.equal(listeners.size, 1, 'a re-init never double-binds the driver');
+
+    collectionProto.add = function capture(options) {
+      const point = realAdd.call(this, options);
+      points.push(point);
+      return point;
+    };
+    globalThis.performance = { now: () => clock.nowMs };
+    assert.equal(_rebuildPhantomsForTest([longSegment(-71.06, 42.35)]), 3,
+      'fixture: a ~1.1 km segment carries three phantoms');
+
+    const [driver] = listeners;
+    const startLat = latitudeOf(points[0]);
+    clock.nowMs += 1000;
+    driver();
+    assert.ok(Math.abs(latitudeOf(points[0]) - startLat) > 1e-6,
+      'the attached listener is the real position driver, not a no-op');
+
+    syntheticTrafficLayer.destroy(viewer);
+    assert.equal(listeners.size, 0, 'destroy detaches the driver from the scene');
+    syntheticTrafficLayer.destroy(viewer);
+    assert.equal(listeners.size, 0, 'destroy is idempotent about the detach');
+  } finally {
+    globalThis.performance = realPerformance;
+    collectionProto.add = realAdd;
+    _resetPhantomsForTest();
   }
 });
