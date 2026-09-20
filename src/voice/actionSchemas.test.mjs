@@ -19,9 +19,10 @@ test('the complete Realtime tool payload pins the additive analyst and satellite
   const digest = createHash('sha256')
     .update(JSON.stringify(stable(GEV_REALTIME_TOOLS)))
     .digest('hex');
+  // Re-pinned for the Pattern Watch layer enums.
   assert.equal(
     digest,
-    '9e33ac0fa5a860a17bb6d79f2c43646b6c36d0c932590bf114814e891a1c96de',
+    'a86f17adcdee2d7a7d6d254aaab179143629bdcda7675336a7bea92083da9866',
   );
 });
 
@@ -86,6 +87,17 @@ test('all legacy action arguments are byte-identical after removing the delibera
   layers.enum = layers.enum.filter(
     (key) => !['satellites', 'local-datacenters', 'local-dams'].includes(key),
   );
+  // Pattern Watch adds 'flight-patterns' to the layer-visibility enums; strip
+  // that deliberate addition too so the legacy pin stays independent.
+  const stripPatterns = (node) => {
+    if (Array.isArray(node)) node.forEach(stripPatterns);
+    else if (node && typeof node === 'object') {
+      if (Array.isArray(node.enum))
+        node.enum = node.enum.filter((key) => key !== 'flight-patterns');
+      Object.values(node).forEach(stripPatterns);
+    }
+  };
+  stripPatterns(legacy);
   // Independently derived by executing trusted c9f9896 actionSchemas in the restricted container.
   assert.equal(
     createHash('sha256').update(JSON.stringify(legacy)).digest('hex'),
