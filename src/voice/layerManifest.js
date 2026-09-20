@@ -213,6 +213,18 @@ const layers = [
     },
   },
   {
+    id: 'flight-patterns',
+    aliases: [
+      'pattern watch',
+      'patterns',
+      'circling aircraft',
+      'circling planes',
+    ],
+    context: false,
+    noQuery:
+      'Derived from live flight tracks; not an independent query source.',
+  },
+  {
     id: 'weather-cyclones',
     aliases: ['cyclones', 'hurricanes', 'typhoons', 'tropical storms'],
     context: false,
