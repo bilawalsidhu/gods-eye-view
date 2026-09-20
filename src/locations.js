@@ -514,6 +514,61 @@ export const CITY_POIS = {
       },
     ],
   },
+  vancouver: {
+    name: 'Vancouver',
+    groundElevation: 5,
+    viewBounds: {
+      southwest: { lat: 49.19, lng: -123.28 },
+      northeast: { lat: 49.32, lng: -123.01 },
+    },
+    pois: [
+      {
+        name: 'Canada Place',
+        lat: 49.2888,
+        lon: -123.1111,
+        alt: 550,
+        pitch: -25,
+        heading: 300,
+        buildingHeight: 27,
+      },
+      {
+        name: 'Vancouver Lookout',
+        lat: 49.2856,
+        lon: -123.1113,
+        alt: 500,
+        pitch: -18,
+        heading: 30,
+        buildingHeight: 177,
+      },
+      {
+        name: 'Vancouver City Hall',
+        lat: 49.2827,
+        lon: -123.1207,
+        alt: 500,
+        pitch: -22,
+        heading: 180,
+        buildingHeight: 60,
+      },
+      {
+        name: 'BC Place',
+        lat: 49.2768,
+        lon: -123.112,
+        alt: 450,
+        pitch: -25,
+        heading: 15,
+        buildingHeight: 55,
+      },
+      {
+        name: 'Science World',
+        lat: 49.2734,
+        lon: -123.104,
+        alt: 450,
+        pitch: -25,
+        heading: 330,
+        buildingHeight: 45,
+      },
+    ],
+  },
 };
 
 /**

@@ -744,5 +744,7 @@
   "src/director/interactions/interactions.test.mjs",
   "scripts/qa-director-interactions.mjs",
   "src/director/sharing/sharing.test.mjs",
-  "scripts/qa-director-sharing.mjs"
+  "scripts/qa-director-sharing.mjs",
+  "scripts/build-vancouver-cctv.mjs",
+  "src/data/vancouverCctvPack.test.mjs"
 ]
