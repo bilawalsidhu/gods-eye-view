@@ -37,6 +37,16 @@ test('cameraHue: deterministic golden-angle spacing in [0, 360)', () => {
   }
 });
 
+test('cameraHue: non-finite index falls back to hue 0, fractional floors down', () => {
+  // Catalog indices are array positions upstream; a NaN/undefined there means
+  // "unknown camera", not a crash — the camera keeps a valid (hue-0) color.
+  assert.equal(cameraHue(Number.NaN), 0);
+  assert.equal(cameraHue(undefined), 0);
+  assert.equal(cameraHue(Number.POSITIVE_INFINITY), 0);
+  assert.equal(cameraHue(3.9), cameraHue(3), 'fractional index floors');
+  assert.equal(cameraHue(-2), cameraHue(0), 'negative index clamps to 0');
+});
+
 // NB: 20 points on a 360° wheel cap the best-possible min pairwise gap at 18°
 // (pigeonhole), so "≥20°" is unachievable for any assignment. Golden-angle
 // gives 12.4° min over the first 20 (measured) — assert ≥12° so a regression

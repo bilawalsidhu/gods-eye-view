@@ -429,3 +429,93 @@ test('an all-malformed feed fails the update and preserves the last-good entitie
     layer.destroy(viewer);
   }
 });
+
+test('a malformed USGS payload and a network throw both report failure without touching the live set', async () => {
+  const originalFetch = globalThis.fetch;
+  const viewer = {
+    dataSources: {
+      add(dataSource) { return dataSource; },
+      remove() { return true; },
+    },
+  };
+  const layer = createEarthquakesLayer({
+    overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
+  });
+  try {
+    layer.init(viewer);
+    layer.enable(viewer);
+    // Warm the layer with a valid empty feed before the failure modes.
+    globalThis.fetch = async () => ({ ok: true, json: async () => ({ features: [] }) });
+    assert.equal(await layer.update(viewer), true);
+    globalThis.fetch = async () => ({ ok: true, json: async () => ({ nope: true }) });
+    assert.equal(await layer.update(viewer), false, 'a non-feature payload is malformed');
+    assert.equal(layer.getStats().error, 'Malformed USGS response');
+
+    globalThis.fetch = async () => { throw new Error('socket hang up'); };
+    assert.equal(await layer.update(viewer), false);
+    assert.equal(layer.getStats().error, 'USGS network error');
+  } finally {
+    globalThis.fetch = originalFetch;
+    layer.destroy(viewer);
+  }
+});
+
+test('getAnalystRecords maps live entities to plain analyst rows with truncation', async () => {
+  const originalFetch = globalThis.fetch;
+  const dataSources = [];
+  const viewer = {
+    dataSources: {
+      add(dataSource) { dataSources.push(dataSource); return dataSource; },
+      remove() { return true; },
+    },
+  };
+  const layer = createEarthquakesLayer({
+    overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
+  });
+  try {
+    layer.init(viewer);
+    layer.enable(viewer);
+    globalThis.fetch = async () => ({
+      ok: true,
+      json: async () => ({
+        features: [
+          {
+            id: 'usgs700',
+            geometry: { coordinates: [-122.36, 37.61, 8.4] },
+            properties: { mag: 4.2, place: 'San Francisco Bay', time: 1_700_000_000_000 },
+          },
+          {
+            id: 'usgs701',
+            geometry: { coordinates: [-97.74, 30.27, 2] },
+            properties: { mag: 2.9, place: 'West Texas', time: 1_700_000_500_000 },
+          },
+        ],
+      }),
+    });
+    assert.equal(await layer.update(viewer), true);
+    layer.getStats();
+
+    // Disabled layer returns [] without touching entities.
+    layer.disable(viewer);
+    assert.deepEqual(layer.getAnalystRecords(), []);
+    layer.enable(viewer);
+
+    const records = layer.getAnalystRecords();
+    assert.equal(records.length, 2);
+    // Degrees round-trip through the ellipsoid, so compare within float noise.
+    assert.equal(records[0].id, 'usgs700');
+    assert.equal(records[0].magnitude, 4.2);
+    assert.equal(records[0].depthKm, 8.4);
+    assert.ok(Math.abs(records[0].lat - 37.61) < 1e-9);
+    assert.ok(Math.abs(records[0].lon - -122.36) < 1e-9);
+    assert.equal(records[0].timeMs, 1_700_000_000_000);
+    assert.equal(records[0].place, 'San Francisco Bay');
+    // Truncation takes the first N rows, never throws on a tiny limit.
+    assert.equal(layer.getAnalystRecords(1).length, 1);
+    assert.equal(layer.getAnalystRecords(0).length, 1, 'a non-positive limit clamps to one row');
+    assert.deepEqual(layer.getAnalystRecords(Number.NaN), records, 'a non-finite limit means default');
+  } finally {
+    globalThis.fetch = originalFetch;
+    layer.destroy(viewer);
+  }
+});

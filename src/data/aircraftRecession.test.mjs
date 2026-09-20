@@ -6,6 +6,8 @@ import {
   applyAircraftBillboardTreatment,
   applyAircraftModelTreatment,
   cameraLimbDistanceM,
+  getAircraftRecessionParams,
+  setAircraftRecessionParams,
 } from './aircraftRecession.js';
 
 const params = { ...DEFAULT_AIRCRAFT_RECESSION_PARAMS };
@@ -141,4 +143,52 @@ test('ambient model presentation receives composed alpha without changing blend 
   assert.deepEqual(model.color, { alpha: 0.2, rgb: 'amber' });
   assert.equal(model.colorBlendAmount, 0.9);
   assert.equal(applyAircraftModelTreatment({ model, baseColor: color, alpha: 0.2, params }), 0);
+});
+
+test('non-finite limb geometry falls back to identity factors with no ratio', () => {
+  // cameraHeightM in the active band but ≤ 0 after the guard cannot produce a
+  // finite limb distance: the inner guard must catch it, not the math.
+  assert.deepEqual(
+    aircraftRecessionFactors({ cameraDistanceM: 1000, cameraHeightM: Number.NaN }, params),
+    { scale: 1, alpha: 1, limbRatio: null },
+  );
+});
+
+test('setAircraftRecessionParams clamps, orders, and snapshots every tuning knob', () => {
+  const original = getAircraftRecessionParams();
+  try {
+    const next = setAircraftRecessionParams({
+      startLimbRatio: 1.5,        // clamped into [0, 0.99]
+      scaleFloor: 2,              // clamped into [0.05, 1]
+      alphaFloor: 0.001,          // clamped into [0.05, 1]
+      combinedAlphaFloor: -3,     // clamped into [0.05, 1]
+      globeViewBlendStartM: 0,    // floored at 1
+      globeViewBlendEndM: 0.5,    // forced ≥ start + 1
+      earthRadiusM: 0,            // floored at 1
+      writeEpsilon: -1,           // floored at 0
+    });
+    assert.equal(next.startLimbRatio, 0.99);
+    assert.equal(next.scaleFloor, 1);
+    assert.equal(next.alphaFloor, 0.05);
+    assert.equal(next.combinedAlphaFloor, 0.05);
+    assert.equal(next.globeViewBlendStartM, 1);
+    assert.equal(next.globeViewBlendEndM, 2);
+    assert.equal(next.earthRadiusM, 1);
+    assert.equal(next.writeEpsilon, 0);
+    // The returned snapshot must not alias module state: a later set cannot
+    // mutate a captured tuning object.
+    assert.notEqual(next, getAircraftRecessionParams());
+    const after = getAircraftRecessionParams();
+    assert.equal(after.startLimbRatio, 0.99, 'module tuning now carries the patch');
+    assert.equal(after.globeViewBlendEndM, 2);
+
+    // The legacy hard-threshold name remaps onto the blend end, and a
+    // start ≥ end patch is corrected to a 1 m band rather than accepted.
+    const legacy = setAircraftRecessionParams({ globeViewHeightM: 900, globeViewBlendStartM: 2000 });
+    assert.equal(legacy.globeViewBlendEndM, 2001, 'start ≥ end corrected against the remapped end');
+    assert.equal(legacy.globeViewBlendStartM, 2000);
+  } finally {
+    setAircraftRecessionParams(original);
+  }
+  assert.equal(getAircraftRecessionParams().startLimbRatio, original.startLimbRatio, 'restore is exact');
 });

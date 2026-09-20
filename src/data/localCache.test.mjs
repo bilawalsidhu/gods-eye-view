@@ -119,3 +119,36 @@ test('clearLocalCache removes only the app namespace', () => {
   assert.equal(store.getItem('gev:cache:mine'), null);
   assert.equal(store.getItem('other:key'), 'keep me');
 });
+
+test('a store that throws on access reads as unavailable, not as empty', () => {
+  const hostile = {
+    get length() { throw new Error('private mode'); },
+    key: () => { throw new Error('private mode'); },
+    getItem: () => { throw new Error('private mode'); },
+    setItem: () => { throw new Error('private mode'); },
+    removeItem: () => { throw new Error('private mode'); },
+  };
+  setLocalCacheStorage(hostile);
+  assert.equal(writeLocalCache('k', { a: 1 }, { ttlMs: 1000 }), false, 'the availability probe fails, so writes are dropped');
+  assert.deepEqual(readLocalCache('k'), { hit: false, value: null });
+});
+
+test('an entry without a payload field reads as a miss, not as a value', () => {
+  const store = stubStorage();
+  setLocalCacheStorage(store);
+  store.setItem('gev:cache:shapeless', JSON.stringify({ noPayload: true }));
+  assert.deepEqual(readLocalCache('shapeless'), { hit: false, value: null });
+});
+
+test('clearLocalCache survives a failing removal and still clears its bookkeeping', () => {
+  const store = stubStorage();
+  setLocalCacheStorage(store);
+  writeLocalCache('mine', { a: 1 }, { ttlMs: 60_000, nowMs: 0 });
+  const originalRemove = store.removeItem.bind(store);
+  store.removeItem = (k) => {
+    if (k === 'gev:cache:mine') throw new Error('readonly during teardown');
+    return originalRemove(k);
+  };
+  assert.doesNotThrow(() => clearLocalCache(), 'removal failure is swallowed as best effort');
+  assert.deepEqual(readLocalCache('mine'), { hit: false, value: null }, 'the failed entry still reads as gone');
+});
