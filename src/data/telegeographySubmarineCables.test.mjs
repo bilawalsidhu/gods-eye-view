@@ -1255,3 +1255,251 @@ test('an unchanged cohort never republishes, so a parked camera stays governor-i
 
   env.layer.destroy(env.viewer);
 });
+
+// ── Coverage: load failure surface, LEFT_CLICK pick routing, marker styling ──
+
+/** Screen position a synthetic left click reports. */
+const DEFAULT_CLICK_POSITION = { x: 5, y: 5 };
+
+/** The three host lifecycle calls, recorded the way the publisher issues them. */
+function recordingOverlayHost(log) {
+  return {
+    setVisible: (...args) => log.push(['visible', ...args]),
+    setEntries: (...args) => log.push(['entries', ...args]),
+    clearSource: (...args) => log.push(['clear', ...args]),
+  };
+}
+
+/**
+ * Harness for the layer's interaction and failure surface: a capturing
+ * ScreenSpaceEventHandler factory, a scene.pick the test aims, arbitrary
+ * fixtures, and an optionally failing fetch. Fetches resolve immediately.
+ */
+function createCableInteractionHarness({
+  cableFeatures = CABLE_FIXTURE.features,
+  landingFeatures = LANDING_FIXTURE.features,
+  fetchResponse = null,
+} = {}) {
+  const hostCalls = [];
+  const flights = [];
+  const listeners = { preRender: new Set(), moveEnd: new Set() };
+  const dataSources = [];
+  const addCalls = { count: 0 };
+  const clickActions = new Map();
+  let pickResult = null;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (fetchResponse) return fetchResponse;
+    const features = String(url).includes('landing-point') ? landingFeatures : cableFeatures;
+    return { ok: true, status: 200, json: async () => ({ type: 'FeatureCollection', features }) };
+  };
+  const layer = createTeleGeographySubmarineCableLayer({
+    overlayHost: recordingOverlayHost(hostCalls),
+    screenSpaceEventHandlerFactory: () => ({
+      setInputAction(action, type) { clickActions.set(type, action); },
+      destroy() {},
+    }),
+  });
+  const viewer = makeStubViewer(listeners, dataSources, addCalls);
+  viewer.camera.cancelFlight = () => flights.push(['cancel']);
+  viewer.camera.flyTo = (options) => flights.push(['flyTo', options]);
+  viewer.scene.pick = () => pickResult;
+  layer.init(viewer);
+
+  return {
+    layer,
+    viewer,
+    hostCalls,
+    dataSources,
+    flights,
+    setPick(value) { pickResult = value; },
+    leftClick(position) {
+      const action = clickActions.get(Cesium.ScreenSpaceEventType.LEFT_CLICK);
+      assert.equal(typeof action, 'function', 'init must install the LEFT_CLICK action');
+      action({ position: position || DEFAULT_CLICK_POSITION });
+    },
+    async enable() {
+      layer.enable(viewer);
+      for (let i = 0; i < 8; i++) await new Promise((resolve) => setTimeout(resolve, 0));
+    },
+    raiseSweep() {
+      for (const fn of listeners.preRender) fn();
+    },
+    restore() { globalThis.fetch = originalFetch; },
+  };
+}
+
+test('a failed asset fetch surfaces an HTTP error in the layer stats', async () => {
+  const env = createCableInteractionHarness({
+    fetchResponse: { ok: false, status: 503, json: async () => ({}) },
+  });
+  try {
+    await env.enable();
+    const stats = env.layer.getStats();
+    assert.match(stats.error, /HTTP 503/,
+      'the failing status reaches the user-visible error, not a silent empty layer');
+    assert.equal(stats.loading, false, 'the failed load stops reporting as loading');
+    assert.equal(stats.loadingLabel || '', '',
+      'the loading label is cleared with the loading flag — no permanently "loading..." stats');
+    assert.equal(stats.count, 0);
+    assert.equal(env.dataSources.length, 0, 'a failed load adds no data sources');
+  } finally {
+    env.restore();
+  }
+});
+
+test('LEFT_CLICK routes a resolved pick to a camera flight and ignores everything else', async () => {
+  const env = createCableInteractionHarness();
+  try {
+    await env.enable();
+    const cableEntity = env.dataSources
+      .find((source) => /Submarine Cables/.test(source.name || '')).entities.values[0];
+    const reference = cableEntity.__gevTeleGeography.reference;
+    const destinations = () => env.flights
+      .filter(([kind]) => kind === 'flyTo')
+      .map(([, options]) => options.destination);
+
+    // A click on a DISABLED layer flies nowhere, even on a perfect pick.
+    env.layer.disable();
+    env.setPick({ primitive: cableEntity });
+    env.leftClick();
+    assert.deepEqual(destinations(), [], 'a click on a disabled layer flies nowhere');
+    env.layer.enable(env.viewer);
+
+    // Each supported pick shape resolves to the same reference coordinate.
+    const pickShapes = [
+      { name: 'primitive in the pick map', pick: { primitive: cableEntity } },
+      { name: 'primitive carrying the layer tag', pick: { primitive: { __gevTeleGeography: cableEntity.__gevTeleGeography } } },
+      { name: 'primitive whose entity id carries a reference', pick: { primitive: { id: { reference } } } },
+      { name: 'entity in the pick map', pick: { id: cableEntity } },
+      { name: 'entity carrying the layer tag', pick: { id: cableEntity } },
+      { name: 'entity whose id carries a reference', pick: { id: { id: { reference } } } },
+    ];
+    for (const shape of pickShapes) {
+      env.setPick(shape.pick);
+      env.leftClick();
+    }
+    const expected = Cesium.Cartesian3.fromDegrees(reference.lon, reference.lat, 6500);
+    assert.equal(destinations().length, pickShapes.length,
+      'every resolvable pick shape flies to its reference');
+    for (const destination of destinations()) {
+      assert.ok(Cesium.Cartesian3.distance(destination, expected) < 0.01,
+        'the flight lands at the shared inspection altitude over the reference');
+    }
+    const options = env.flights.find(([kind]) => kind === 'flyTo')[1];
+    assert.equal(options.duration, 1.35);
+    assert.equal(options.orientation.heading, 0, 'the current heading is preserved');
+    assert.equal(options.orientation.pitch, Cesium.Math.toRadians(-52));
+    assert.equal(options.orientation.roll, 0);
+    assert.ok(env.flights.some(([kind]) => kind === 'cancel'), 'an in-flight camera flight is cancelled first');
+
+    // Picks that belong to nobody, or nothing at all, fly nowhere.
+    const before = destinations().length;
+    for (const shape of [null, { id: 'not-ours' }, { primitive: { id: 'not-ours' } }, { id: {} }]) {
+      env.setPick(shape);
+      env.leftClick();
+    }
+    assert.equal(destinations().length, before, 'an unresolvable pick never moves the camera');
+  } finally {
+    env.layer.destroy(env.viewer);
+    env.restore();
+  }
+});
+
+test('landing points style as translucent dots and Point geometry supplies the reference', async () => {
+  // GeoJSON Point features need a document-backed PinBuilder, which Node lacks,
+  // so the load is stubbed to hand back one point entity per feature. The
+  // styling and reference extraction under test still run for real.
+  const originalLoad = Cesium.GeoJsonDataSource.load;
+  Cesium.GeoJsonDataSource.load = async (json) => {
+    const source = new Cesium.CustomDataSource('stubbed-load');
+    for (const _feature of json.features) {
+      source.entities.add(new Cesium.Entity({
+        point: new Cesium.PointGraphics({ pixelSize: 4 }),
+      }));
+    }
+    return source;
+  };
+  const env = createCableInteractionHarness({
+    landingFeatures: [
+      {
+        type: 'Feature',
+        id: 'lisbon',
+        properties: { id: 'lisbon', name: 'Lisbon, Portugal' },
+        geometry: { type: 'Point', coordinates: [-9.1, 38.7] },
+      },
+      {
+        type: 'Feature',
+        id: 'tbd-island',
+        properties: { id: 'tbd-island', name: 'Unsurveyed Island', is_tbd: true },
+        geometry: { type: 'Point', coordinates: [10.5, 55.5] },
+      },
+    ],
+  });
+  try {
+    await env.enable();
+    const landingSource = env.dataSources
+      .find((source) => /Landing Points/.test(source.name || ''));
+    assert.ok(landingSource, 'the landing source was created');
+    const [surveyed, tbd] = landingSource.entities.values;
+
+    for (const entity of [surveyed, tbd]) {
+      assert.equal(entity.show, true);
+      assert.equal(entity.point.disableDepthTestDistance.getValue(), 0);
+      assert.equal(entity.point.color.getValue().alpha, 0.92, 'landing dots share the translucent blend');
+      assert.equal(entity.point.outlineWidth.getValue(), 1);
+    }
+    assert.equal(surveyed.point.pixelSize.getValue(), 7);
+    assert.equal(tbd.point.pixelSize.getValue(), 7 - 1, 'a TBD landing reads one pixel smaller');
+    assert.equal(surveyed.point.outlineColor.getValue().alpha, 0.45, 'landing dots use the cable outline');
+
+    // The reference coordinate came from the Point geometry itself.
+    env.raiseSweep();
+    const published = env.hostCalls.filter(([type]) => type === 'entries').at(-1);
+    const titles = published[2].map((entry) => entry.title);
+    assert.ok(titles.includes('Lisbon, Portugal'), 'the Point-geometry landing published a label');
+    assert.ok(titles.includes('Unsurveyed Island'), 'the TBD landing published a label too');
+    const landingStem = env.dataSources
+      .find((source) => /References/.test(source.name || '')).entities.values
+      .find((entity) => entity.id.startsWith('landing-point-reference-'));
+    const cartographic = Cesium.Cartographic.fromCartesian(landingStem.position.getValue());
+    assert.ok(Math.abs(Cesium.Math.toDegrees(cartographic.longitude) + 9.1) < 1e-6
+      && Math.abs(Cesium.Math.toDegrees(cartographic.latitude) - 38.7) < 1e-6,
+      'the stem stands on the Point geometry coordinate');
+  } finally {
+    Cesium.GeoJsonDataSource.load = originalLoad;
+    env.layer.destroy(env.viewer);
+    env.restore();
+  }
+});
+
+test('reference labels are clamped to the overlay card budget', async () => {
+  const longName = 'Atlantic Crossing Eighty Seven Segment Four Repeater Cluster';
+  assert.ok(longName.length > 34, 'the fixture name must exceed the card budget');
+  const env = createCableInteractionHarness({
+    cableFeatures: [{
+      type: 'Feature',
+      id: 'long-cable',
+      properties: { id: 'long-cable', name: longName },
+      geometry: { type: 'LineString', coordinates: [[-40, 35], [-30, 40]] },
+    }],
+  });
+  try {
+    await env.enable();
+    env.raiseSweep();
+    const published = env.hostCalls.filter(([type]) => type === 'entries').at(-1);
+    const entry = published[2].find((item) => item.title !== longName);
+    assert.ok(entry, 'the over-budget label was clamped');
+    assert.equal(entry.title.length, 34, 'the clamped label fits the card budget exactly');
+    assert.match(entry.title, /\.\.\.$/, 'the clamp is marked with an ellipsis');
+    assert.ok(longName.startsWith(entry.title.slice(0, -3)), 'the clamp keeps the readable head of the name');
+
+    // Control: a label inside the budget passes through untouched.
+    const untouched = published[2].map((item) => item.title)
+      .find((title) => title.length <= 33);
+    assert.ok(untouched, 'a short landing label is published verbatim');
+  } finally {
+    env.layer.destroy(env.viewer);
+    env.restore();
+  }
+});

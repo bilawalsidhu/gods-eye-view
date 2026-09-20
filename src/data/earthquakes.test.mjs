@@ -502,6 +502,7 @@ test('getAnalystRecords maps live entities to plain analyst rows with truncation
 
     const records = layer.getAnalystRecords();
     assert.equal(records.length, 2);
+    assert.equal(dataSources.length, 1, 'the analyst feed landed in exactly one data source');
     // Degrees round-trip through the ellipsoid, so compare within float noise.
     assert.equal(records[0].id, 'usgs700');
     assert.equal(records[0].magnitude, 4.2);

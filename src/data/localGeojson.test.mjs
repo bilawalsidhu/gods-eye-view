@@ -46,14 +46,39 @@ class MockLayerEvent {
 }
 
 /**
+ * The bundled dam the default harness serves. Polygon geometry: Cesium builds
+ * Point features through a canvas pin builder, which needs a DOM these tests
+ * do not have.
+ */
+const RUNTIME_DAM_FEATURE = JSON.stringify({
+  type: 'Feature',
+  id: 'real-dam',
+  properties: { name: 'Runtime Dam', tags: { associated_river: 'Test River' } },
+  geometry: {
+    type: 'Polygon',
+    coordinates: [[
+      [-97.70, 30.20],
+      [-97.69, 30.20],
+      [-97.69, 30.21],
+      [-97.70, 30.20],
+    ]],
+  },
+});
+
+/**
  * @param {object} [options]
  * @param {boolean} [options.sampleHeightSupported] Scene height-sampling capability.
  * @param {Function} [options.sampleHeight] Initial scene.sampleHeight behavior
  *   (default: throws like a scene whose tiles are not sampleable yet).
+ * @param {object[]} [options.clickActions] When given, the native click
+ *   handler is pushed here so a test can invoke it directly.
+ * @param {string} [options.dataset] JSONL body the fetch stub serves.
  */
 async function createRealLocalLayerHarness({
   sampleHeightSupported = false,
   sampleHeight = () => { throw new Error('tiles not sampleable yet'); },
+  clickActions = null,
+  dataset = RUNTIME_DAM_FEATURE,
 } = {}) {
   const originalFetch = globalThis.fetch;
   const originalWindow = globalThis.window;
@@ -64,20 +89,7 @@ async function createRealLocalLayerHarness({
   globalThis.fetch = async () => ({
     ok: true,
     status: 200,
-    text: async () => JSON.stringify({
-      type: 'Feature',
-      id: 'real-dam',
-      properties: { name: 'Runtime Dam', tags: { associated_river: 'Test River' } },
-      geometry: {
-        type: 'Polygon',
-        coordinates: [[
-          [-97.70, 30.20],
-          [-97.69, 30.20],
-          [-97.69, 30.21],
-          [-97.70, 30.20],
-        ]],
-      },
-    }),
+    text: async () => dataset,
   });
   globalThis.window = { dispatchEvent() {} };
   let sampleHeightImpl = sampleHeight;
@@ -124,7 +136,7 @@ async function createRealLocalLayerHarness({
     overlayHost,
     projectToWindow: () => ({ x: 400, y: 300 }),
     screenSpaceEventHandlerFactory: () => ({
-      setInputAction() {},
+      setInputAction(handler) { if (clickActions) clickActions.push(handler); },
       destroy() {},
     }),
   });
@@ -962,5 +974,206 @@ test('after the cap a camera-motion frame still samples, and re-opens the budget
     governorScene.renders,
     GROUND_SAMPLE_MAX_ARMED_RETRIES,
     'a grounded record asks for no further frames',
+  );
+});
+
+// ── Native pick handling (the click path the scene actually takes) ────────────
+//
+// The layer installs ONE global LEFT_CLICK handler; everything user-visible
+// about clicking a local feature flows from it: selection publication, and the
+// camera flight to the stem base or polygon center.
+
+/** Replace camera.flyTo with a recorder so a test can inspect the flight. */
+function captureFlyTo(viewer) {
+  const flights = [];
+  viewer.camera.flyTo = (options) => flights.push(options);
+  return flights;
+}
+
+/** Record the types of every event the harness window dispatches. */
+function captureWindowEvents() {
+  const types = [];
+  const realDispatch = globalThis.window.dispatchEvent.bind(globalThis.window);
+  globalThis.window.dispatchEvent = (event) => {
+    types.push(event.type);
+    return realDispatch(event);
+  };
+  return types;
+}
+
+test('clicking a stem selects it, publishes the context, and flies to its base', async () => {
+  const clickActions = [];
+  const env = await createRealLocalLayerHarness({ clickActions });
+  const flights = captureFlyTo(env.viewer);
+  const eventTypes = captureWindowEvents();
+  const entity = env.dataSources[0].entities.values[0];
+  env.viewer.scene.pick = () => ({ id: entity });
+
+  clickActions[0]({ position: { x: 400, y: 300 } });
+
+  assert.equal(env.viewer.selectedEntity, entity, 'the picked stem becomes the selected entity');
+  assert.ok(eventTypes.includes('gev:entity-selected'), 'the selection reaches the app');
+  assert.equal(flights.length, 1, 'one camera flight, to the surface base of the stem');
+  const destination = Cesium.Cartographic.fromCartesian(flights[0].destination);
+  assert.equal(Math.round(destination.height), 5000);
+  assert.ok(
+    Cesium.Math.toDegrees(destination.longitude) > -97.70
+      && Cesium.Math.toDegrees(destination.longitude) < -97.69
+      && Cesium.Math.toDegrees(destination.latitude) > 30.20
+      && Cesium.Math.toDegrees(destination.latitude) < 30.21,
+    `the flight targets the stem base, got ${Cesium.Math.toDegrees(destination.longitude)},`
+      + ` ${Cesium.Math.toDegrees(destination.latitude)}`,
+  );
+
+  // The camera controller is locked during the flight and released either way
+  // it ends — a cancelled flight must not leave the globe permanently frozen.
+  assert.equal(env.viewer.scene.screenSpaceCameraController.enableInputs, false);
+  flights[0].cancel();
+  assert.equal(env.viewer.scene.screenSpaceCameraController.enableInputs, true);
+  env.viewer.scene.screenSpaceCameraController.enableInputs = false;
+  flights[0].complete();
+  assert.equal(env.viewer.scene.screenSpaceCameraController.enableInputs, true);
+
+  env.layer.destroy(env.viewer);
+  env.cleanup();
+});
+
+test('clicks that do not land on this layer change nothing', async () => {
+  const clickActions = [];
+  const env = await createRealLocalLayerHarness({ clickActions });
+  const flights = captureFlyTo(env.viewer);
+  const foreign = { id: { __localLayerId: 'local-datacenters' } };
+  const select = () => env.viewer.selectedEntity;
+  assert.equal(select(), undefined);
+
+  // Nothing under the cursor.
+  env.viewer.scene.pick = () => null;
+  clickActions[0]({ position: { x: 1, y: 1 } });
+
+  // Something under the cursor that belongs to another layer.
+  env.viewer.scene.pick = () => foreign;
+  clickActions[0]({ position: { x: 1, y: 1 } });
+
+  assert.equal(flights.length, 0, 'a miss never moves the camera');
+  assert.equal(select(), undefined, 'a miss never selects');
+
+  // A disabled layer must ignore its own handler entirely: the handler
+  // outlives the layer (one per instance) and disable() does not remove it.
+  const entity = env.dataSources[0].entities.values[0];
+  env.viewer.scene.pick = () => ({ id: entity });
+  env.layer.disable(env.viewer);
+  clickActions[0]({ position: { x: 1, y: 1 } });
+  assert.equal(flights.length, 0);
+  assert.equal(select(), undefined);
+
+  env.layer.destroy(env.viewer);
+  env.cleanup();
+});
+
+test('disable releases this layer selected entity and leaves every other one alone', async () => {
+  const env = await createRealLocalLayerHarness();
+  const entity = env.dataSources[0].entities.values[0];
+  const foreign = { __localLayerId: 'local-datacenters' };
+  const untagged = { id: 'unrelated' };
+
+  env.viewer.selectedEntity = entity;
+  env.layer.disable(env.viewer);
+  assert.equal(env.viewer.selectedEntity, undefined,
+    'teardown must not leave a dangling selection pointing into a hidden source');
+
+  for (const survivor of [foreign, untagged]) {
+    env.viewer.selectedEntity = survivor;
+    env.layer.disable(env.viewer);
+    assert.equal(env.viewer.selectedEntity, survivor,
+      'another layer selection is not ours to clear');
+  }
+
+  env.layer.destroy(env.viewer);
+  env.cleanup();
+});
+
+test('the manager lifecycle hooks resolve without owning any layer work', async () => {
+  const env = await createRealLocalLayerHarness();
+  assert.equal(await env.layer.init(env.viewer), undefined);
+  assert.equal(await env.layer.update(env.viewer), undefined);
+  assert.equal(env.layer.getStats().count, 1, 'the dataset load happens on enable, not here');
+  env.layer.destroy(env.viewer);
+  env.cleanup();
+});
+
+test('cohort selection reports an empty cohort for degenerate input instead of throwing', () => {
+  const viewport = { maxEntries: 700, gridPx: 138, width: 800, height: 600 };
+  const record = { id: 'dam-1', priority: 10, screen: { x: 100, y: 100 }, entry: { id: 'dam-1' } };
+  const project = (candidate) => candidate.screen;
+
+  assert.deepEqual(selectLocalInfrastructureOverlayCohort([], { ...viewport, project }), []);
+  assert.deepEqual(selectLocalInfrastructureOverlayCohort([record], { ...viewport, maxEntries: 0, project }), [],
+    'a zero source cap materializes nothing');
+  assert.deepEqual(
+    selectLocalInfrastructureOverlayCohort([record], { ...viewport, cohortLimit: 0, project }),
+    [],
+    'a zero host cohort cap materializes nothing',
+  );
+  assert.deepEqual(
+    selectLocalInfrastructureOverlayCohort([record], { ...viewport, project: null }),
+    [],
+    'without a projection there is nothing to place',
+  );
+});
+
+test('unnamed features fall back to the layer generic singular title', () => {
+  assert.deepEqual(localInfrastructureOverlayCopy({ tags: {} }, 'local-datacenters'), {
+    title: 'Datacenter',
+    details: [],
+  });
+  assert.deepEqual(localInfrastructureOverlayCopy({ tags: {} }, 'local-dams'), {
+    title: 'Dam',
+    details: [],
+  });
+  assert.deepEqual(localInfrastructureOverlayCopy({ tags: {} }, 'local-something-else'), {
+    title: 'Feature',
+    details: [],
+  });
+
+  // The generic title also prefixes the two unnamed-but-descriptive shapes:
+  // an output rating and an OSM id.
+  assert.equal(localInfrastructureOverlayCopy({ output: '12 MW' }, 'local-dams').title, 'Dam 12 MW');
+  assert.equal(
+    localInfrastructureOverlayCopy({ osm_id: 12_345 }, 'local-datacenters').title,
+    'Datacenter 12345',
+  );
+});
+
+test('the self-armed retry frame grounds a stem on its own, with no camera motion', async (t) => {
+  const env = await createRealLocalLayerHarness({ sampleHeightSupported: true });
+  _resetRenderGovernorForTest();
+  installRenderGovernor({ scene: { requestRender() {} } });
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const clock = installFakeClock(t);
+  t.after(() => {
+    env.layer.destroy(env.viewer);
+    env.cleanup();
+    _resetRenderGovernorForTest();
+  });
+
+  setCameraAltitude(env, 20_000);
+  env.preRender.raise(); // the settling walk: tiles are not sampleable yet
+  assert.equal(baseHeightM(env), 0, 'the failed sample leaves the stem at ellipsoid height');
+
+  // The tiles arrive. The frame that grounds the stem is the one the layer
+  // armed for itself — the camera never moved, so no moveEnd frame exists.
+  clock.advance(2_100);
+  env.setSampleHeight(() => 210);
+  env.preRender.raise();
+
+  assert.ok(
+    Math.abs(baseHeightM(env) - 210) < 1e-6,
+    `the retry frame must ground the stem; base height ${baseHeightM(env)}`,
+  );
+  assert.equal(env.moveEnd.addCount, 1, 'only the enable-time listener was ever added');
+  assert.equal(
+    env.dataSources[0].entities.values[0].polyline.positions.getValue()[0],
+    env.dataSources[0].entities.values[0].__localBaseCartesian,
+    'the grounded base is the same array the stem polyline is drawn from',
   );
 });

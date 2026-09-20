@@ -718,6 +718,10 @@ export function createTeleGeographySubmarineCableLayer({
       // duplicate load while the real one is still in flight.
       if (generation === _loadGeneration) {
         _loading = false;
+        // Loading is over on EVERY owned exit (success, failure, abort) — a
+        // label left behind reported a permanently "loading..." layer to
+        // getStats() readers even while stats.loading was false.
+        _loadingLabel = '';
         if (_abort === abort) _abort = null;
       }
     }

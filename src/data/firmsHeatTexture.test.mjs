@@ -12,6 +12,8 @@ import assert from 'node:assert/strict';
 import {
   buildSplatInputs,
   computeHeatTextureLayout,
+  lastRendererError,
+  loadHeatRenderer,
   renderHeatTexture,
   textureDomainLon,
   wasmHeatRenderingEnabled,
@@ -192,4 +194,43 @@ test('splat heat parity: score order maps monotonically to brightness', () => {
   const byScore = [...cells].map(score);
   const hottestIdx = byScore.indexOf(Math.max(...byScore));
   assert.equal(inputs.brights[hottestIdx], Math.max(...inputs.brights));
+});
+
+test('kill switch reads ?firmsWasm=0 from the URL and survives a hostile location', () => {
+  const original = globalThis.location;
+  try {
+    globalThis.location = { search: '?firmsWasm=0' };
+    assert.equal(wasmHeatRenderingEnabled(), false, 'explicit ?firmsWasm=0 disables');
+    globalThis.location = { search: '?firmsWasm=1' };
+    assert.equal(wasmHeatRenderingEnabled(), true, 'any other value keeps it enabled');
+    globalThis.location = { get search() { throw new Error('denied'); } };
+    assert.equal(wasmHeatRenderingEnabled(), true, 'a throwing location degrades to enabled');
+  } finally {
+    if (original === undefined) delete globalThis.location;
+    else globalThis.location = original;
+  }
+});
+
+test('loadHeatRenderer: a missing artifact degrades to null with a remembered error', async () => {
+  // The glue lives at file:///wasm/... under the node harness (no location) —
+  // a guaranteed import failure, exactly the "artifact not built" path the
+  // entity fallback exists for.
+  const promise = loadHeatRenderer();
+  assert.ok(promise, 'returns a promise, never throws synchronously');
+  const renderer = await promise;
+  assert.equal(renderer, null, 'failed load resolves to null (entity path)');
+  const error = lastRendererError();
+  assert.ok(typeof error === 'string' && error.length > 0, 'captures the failure for getStats');
+  assert.ok(error.length <= 120, 'error message truncated for stats surfacing');
+});
+
+test('loadHeatRenderer: a failed attempt is remembered for the retry window', async () => {
+  const first = loadHeatRenderer();
+  await first;
+  // Within LOAD_RETRY_MS the cached promise is returned as-is — no re-import
+  // churn per rebuild while the artifact is absent.
+  const second = loadHeatRenderer();
+  assert.equal(second, first, 'same promise inside the retry window');
+  await assert.doesNotReject(second, 'the cached failure never rejects callers');
+  assert.equal(lastRendererError(), lastRendererError(), 'error stays stable across reads');
 });

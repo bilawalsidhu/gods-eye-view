@@ -2179,3 +2179,477 @@ test('diagnostics facade preserves the complete binding shape', () => {
   ];
   assert.deepEqual(Object.keys(diagnostics).sort(), fields.sort());
 });
+
+// ── Residual host behaviour ─────────────────────────────────────────────────
+// The remaining branches of the frame driver and its registration/validation
+// surface. Every test here asserts an observable the caller can see — a thrown
+// TypeError, a dropped paint rectangle, a mirror that empties — never "the line
+// ran".
+
+/** An interactive entry whose activation always accepts, for mirror tests. */
+const acceptActivation = () => true;
+
+/** An entry the accessible mirror will pick up, with optional overrides. */
+function accessibleEntry(id, overrides = {}) {
+  return selectedEntry(id, {
+    interactive: true,
+    accessibilityLabel: `Focus ${id}`,
+    activate: acceptActivation,
+    ...overrides,
+  });
+}
+
+test('lane registration rejects an unknown lane and a missing painter', () => {
+  const env = installMockEnvironment();
+  initWorldOverlay(env.viewer);
+  assert.throws(
+    () => registerWorldOverlayPaintLane('not-a-lane', () => {}),
+    (error) => error instanceof TypeError
+      && error.message === 'Unsupported WorldOverlay paint lane: not-a-lane',
+    'an unsupported lane id is a programming error, not a silent no-op',
+  );
+  assert.throws(
+    () => registerWorldOverlayPaintLane('detection'),
+    (error) => error instanceof TypeError
+      && error.message === 'WorldOverlay custom paint lane requires a painter callback',
+    'a lane without a painter would paint nothing every frame',
+  );
+  env.cleanup();
+});
+
+test('a lane registered after teardown is inert and never runs again', () => {
+  const env = installMockEnvironment();
+  destroyWorldOverlay();
+  let paints = 0;
+  const handle = registerWorldOverlayPaintLane('detection', () => { paints += 1; }, {
+    id: 'late-lane', active: true, target: 'detection',
+  });
+  assert.equal(handle.surface, null, 'an inert handle owns no surface');
+  assert.doesNotThrow(() => handle.setActive(true));
+  assert.doesNotThrow(() => handle.requestPaint());
+  assert.doesNotThrow(() => handle.unregister());
+
+  initWorldOverlay(env.viewer);
+  setOverlayEntries('late-lane-source', [selectedEntry('live')]);
+  env.postRender.raise();
+  assert.equal(paints, 0, 'the torn-down painter never runs again');
+  assert.equal(getWorldOverlayDiagnostics().paintedCount, 1,
+    'the host itself is fully functional after the late registration');
+  env.cleanup();
+});
+
+test('re-registering a lane id replaces the earlier painter', () => {
+  const env = installMockEnvironment();
+  initWorldOverlay(env.viewer);
+  const paintedBy = [];
+  registerWorldOverlayPaintLane('detection', () => { paintedBy.push('first'); }, {
+    id: 'probe', active: true, target: 'detection',
+  });
+  registerWorldOverlayPaintLane('detection', () => { paintedBy.push('second'); }, {
+    id: 'probe', active: true, target: 'detection',
+  });
+  env.postRender.raise();
+  assert.deepEqual(paintedBy, ['second'], 'only the newest painter for an id survives');
+  env.cleanup();
+});
+
+test('a missing or non-finite anchor is invisible before any culling policy runs', () => {
+  const entry = { horizonCull: false, viewportPadding: 0 };
+  const screen = { x: 50, y: 50 };
+  const viewport = { width: 100, height: 100 };
+  assert.equal(isOverlayPointVisible(entry, null, screen, viewport, null), false);
+  for (const axis of ['x', 'y', 'z']) {
+    assert.equal(
+      isOverlayPointVisible(
+        entry,
+        { x: 0, y: 0, z: 0, [axis]: Number.NaN },
+        screen,
+        viewport,
+        null,
+      ),
+      false,
+      `a NaN ${axis} coordinate must hide the anchor`,
+    );
+  }
+  assert.equal(
+    isOverlayPointVisible(entry, { x: 0, y: 0, z: Number.POSITIVE_INFINITY }, screen, viewport, null),
+    false,
+    'an infinite coordinate must hide the anchor',
+  );
+  assert.equal(
+    isOverlayPointVisible(entry, { x: 0, y: 0, z: 0 }, screen, viewport, null),
+    true,
+    'a finite anchor with no occluder stays visible',
+  );
+});
+
+test('checkVisibility decides exclusions both ways, with every option flag sent', () => {
+  const probe = (engineReportsVisible) => {
+    const env = installMockEnvironment({
+      width: 400,
+      height: 300,
+      dpr: 1,
+      // Below-host chrome: visible, it holds an absolute veto; invisible, it
+      // must not even reach the classifier.
+      occluders: [{
+        selector: '.hud-top-left',
+        parent: '#intel-hud',
+        rect: { left: 0, top: 0, width: 400, height: 300 },
+      }],
+    });
+    initWorldOverlay(env.viewer);
+    const optionsSeen = [];
+    const hud = env.document.querySelector('.hud-top-left');
+    hud.checkVisibility = (options) => {
+      optionsSeen.push(options);
+      return engineReportsVisible;
+    };
+    let uiRectCount = -1;
+    registerWorldOverlayPaintLane('detection', (frame) => {
+      uiRectCount = frame.uiRectCount;
+    }, { id: 'hud-probe', active: true, target: 'detection' });
+    setOverlayEntries('hud-probe-source', [selectedEntry('CONTACT')]);
+    env.postRender.raise();
+    const painted = getWorldOverlayDiagnostics().paintedCount;
+    env.cleanup();
+    return { painted, uiRectCount, optionsSeen };
+  };
+
+  const invisible = probe(false);
+  assert.deepEqual(invisible.optionsSeen, [{
+    contentVisibilityAuto: true,
+    opacityProperty: true,
+    visibilityProperty: true,
+    checkOpacity: true,
+    checkVisibilityCSS: true,
+  }], 'the probe carries both spellings so no engine vintage silently weakens the check');
+  assert.equal(invisible.uiRectCount, 0, 'engine-invisible chrome contributes no exclusion');
+  assert.equal(invisible.painted, 1, 'and therefore vetoes nothing');
+
+  const visible = probe(true);
+  assert.equal(visible.uiRectCount, 1, 'engine-visible chrome is inventoried');
+  assert.equal(visible.painted, 0, 'and keeps its absolute below-host veto');
+});
+
+test('a throttled occluder refresh defers, books one catch-up render, then rescans', async () => {
+  const env = installMockEnvironment({
+    occluders: [{ id: 'pp-toggles', rect: { left: 300, top: 40, width: 60, height: 200 } }],
+  });
+  initWorldOverlay(env.viewer);
+  setOverlayEntries('throttle', [selectedEntry('live')]);
+  env.postRender.raise(); // frame one: no previous sample, so the scan is forced
+  const scansAfterFirstFrame = env.selectorQueries.querySelectorAll;
+
+  const rendersBeforeMutation = env.viewer.scene.requestRenderCount;
+  env.mutationObservers[0].callback([{
+    type: 'attributes',
+    target: env.document.getElementById('pp-toggles'),
+    attributeName: 'class',
+  }]);
+  assert.equal(env.viewer.scene.requestRenderCount, rendersBeforeMutation + 1,
+    'the chrome attribute flip invalidates the host');
+  env.advanceTime(10);
+  env.postRender.raise(); // still inside the 100 ms window
+  assert.equal(env.selectorQueries.querySelectorAll, scansAfterFirstFrame,
+    'a refresh inside the throttle window must not rescan the DOM');
+  const rendersAfterDeferredFrame = env.viewer.scene.requestRenderCount;
+  assert.equal(rendersAfterDeferredFrame, rendersBeforeMutation + 1,
+    'the throttled frame itself spends no render');
+
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  assert.equal(env.viewer.scene.requestRenderCount, rendersAfterDeferredFrame + 1,
+    'the catch-up timer fires once and asks the scene for its frame');
+
+  env.advanceTime(200);
+  env.postRender.raise();
+  assert.ok(env.selectorQueries.querySelectorAll > scansAfterFirstFrame,
+    'the deferred inventory rescan happens on the next frame after the window');
+  env.cleanup();
+});
+
+test('a resize drops derived geometry only when the host has paint work', () => {
+  const env = installMockEnvironment({ width: 400, height: 300, dpr: 1 });
+  initWorldOverlay(env.viewer);
+  setOverlayEntries('resize', [selectedEntry('live')]);
+  env.postRender.raise();
+  assert.ok(getOverlayPaintRect('resize', 'live'), 'the entry published a rectangle');
+
+  const renders = env.viewer.scene.requestRenderCount;
+  env.window.dispatch('resize');
+  assert.equal(env.viewer.scene.requestRenderCount, renders + 1,
+    'a resize asks the scene for a frame');
+  assert.equal(getOverlayPaintRect('resize', 'live'), null,
+    'a resize drops the published-rectangle cache so placements rebuild');
+
+  env.postRender.raise();
+  assert.ok(getOverlayPaintRect('resize', 'live'), 'the next frame republishes it');
+
+  clearOverlaySource('resize');
+  env.postRender.raise();
+  const dormantRenders = env.viewer.scene.requestRenderCount;
+  env.window.dispatch('resize');
+  assert.equal(env.viewer.scene.requestRenderCount, dormantRenders,
+    'a dormant host ignores resize instead of keeping the scene awake');
+  env.cleanup();
+});
+
+test('an undelivered mutation batch falls back to a full inventory invalidation', () => {
+  const env = installMockEnvironment({
+    occluders: [{ id: 'pp-toggles', rect: { left: 300, top: 40, width: 60, height: 200 } }],
+  });
+  initWorldOverlay(env.viewer);
+  setOverlayEntries('mutations', [selectedEntry('live')]);
+  env.postRender.raise();
+  const scans = env.selectorQueries.querySelectorAll;
+  const renders = env.viewer.scene.requestRenderCount;
+
+  env.mutationObservers[0].callback(); // the runtime delivered no batch at all
+  assert.equal(env.viewer.scene.requestRenderCount, renders + 1,
+    'the conservative fallback still asks for a frame');
+  env.advanceTime(150);
+  env.postRender.raise();
+  assert.ok(env.selectorQueries.querySelectorAll > scans,
+    'and it rescans the inventory rather than trusting a pre-filter guess');
+  env.cleanup();
+});
+
+test('one entry whose position getter throws drops only itself from the frame', () => {
+  const env = installMockEnvironment();
+  initWorldOverlay(env.viewer);
+  setOverlayEntries('throws', [
+    accessibleEntry('broken', { position: () => { throw new Error('stale record'); } }),
+    accessibleEntry('healthy', { position: positionAtScreen(120, 90) }),
+  ]);
+  assert.doesNotThrow(() => env.postRender.raise(),
+    'one bad source must not take down the frame driver');
+  assert.equal(getWorldOverlayDiagnostics().paintedCount, 1, 'the healthy entry still paints');
+  assert.ok(getOverlayPaintRect('throws', 'healthy'));
+  assert.equal(getOverlayPaintRect('throws', 'broken'), null,
+    'the throwing entry drops out before it can publish a rectangle');
+  env.cleanup();
+});
+
+test('an opt-in anchor radius reserves the disc and starts the leader at its rim', () => {
+  const ANCHOR_X = 200;
+  const ANCHOR_Y = 150;
+  const probe = (overrides) => {
+    const env = installMockEnvironment({ width: 400, height: 300, dpr: 1 });
+    initWorldOverlay(env.viewer);
+    setOverlayEntries('anchor', [selectedEntry('CONTACT', {
+      position: positionAtScreen(ANCHOR_X, ANCHOR_Y),
+      ...overrides,
+    })]);
+    env.postRender.raise();
+    const rect = { ...getOverlayPaintRect('anchor', 'CONTACT') };
+    const leaderStarts = env.ctx.calls
+      .filter(([name]) => name === 'moveTo')
+      .map(([, x, y]) => ({ x, y }));
+    env.cleanup();
+    const clearance = rect.y >= ANCHOR_Y
+      ? rect.y - ANCHOR_Y
+      : ANCHOR_Y - (rect.y + rect.h);
+    const radius = overrides.anchorRadiusPx || 0;
+    return {
+      clearance,
+      rim: leaderStarts.find((point) => point.x === ANCHOR_X
+        && Math.abs(Math.abs(point.y - ANCHOR_Y) - radius) < 0.5),
+    };
+  };
+
+  const plain = probe({});
+  assert.equal(plain.clearance, 12, 'without an anchor radius the shipped 12 px gap applies');
+  assert.ok(plain.rim, 'the leader leaves the anchor itself');
+
+  const reserved = probe({ anchorRadiusPx: 24 });
+  assert.equal(reserved.clearance, 48,
+    'the card clears the anchor disc plus the same radius again');
+  assert.ok(reserved.rim, 'the leader starts on the disc rim');
+  assert.equal(Math.abs(reserved.rim.y - ANCHOR_Y), 24,
+    'the leader offset equals the anchor radius, not the label gap');
+});
+
+test('the accessible mirror empties through the legacy DOM path', () => {
+  const env = installMockEnvironment();
+  // A legacy engine without replaceChildren: only firstChild/removeChild.
+  const legacyList = env.document.createElement('div');
+  legacyList.id = 'world-overlay-action-list';
+  Object.defineProperties(legacyList, {
+    replaceChildren: { value: undefined, configurable: true },
+    firstChild: { get() { return this.children[0] || null; }, configurable: true },
+    removeChild: { value(child) {
+      const index = this.children.indexOf(child);
+      if (index >= 0) this.children.splice(index, 1);
+      child.parentElement = null;
+    }, configurable: true },
+  });
+  env.document.body.appendChild(legacyList);
+  initWorldOverlay(env.viewer);
+
+  setOverlayEntries('legacy-dom', [accessibleEntry('alpha')]);
+  env.postRender.raise();
+  assert.equal(legacyList.children.length, 1);
+
+  setOverlayEntries('legacy-dom', [accessibleEntry('beta')]);
+  env.postRender.raise();
+  assert.equal(legacyList.children.length, 1, 'the stale button was removed, not stacked');
+  assert.match(legacyList.children[0].textContent, /beta/);
+
+  clearOverlaySource('legacy-dom');
+  env.postRender.raise();
+  assert.equal(legacyList.children.length, 0, 'the mirror empties when the world empties');
+  env.cleanup();
+});
+
+test('the first dormant frame clears the canvas and the accessible mirror', () => {
+  const env = installMockEnvironment({ width: 400, height: 300, dpr: 1 });
+  initWorldOverlay(env.viewer);
+  setOverlayEntries('world', [accessibleEntry('CONTACT', {
+    position: positionAtScreen(200, 150),
+  })]);
+  env.postRender.raise();
+  const list = env.document.getElementById('world-overlay-action-list');
+  assert.equal(list.children.length, 1, 'the mirror carries the live target');
+  const clearsBefore = env.ctx.calls.filter(([name]) => name === 'clearRect').length;
+
+  assert.equal(clearOverlaySource('world'), true);
+  env.postRender.raise();
+  assert.equal(list.children.length, 0,
+    'a stale accessible button must not survive the world it pointed at');
+  assert.ok(env.ctx.calls.filter(([name]) => name === 'clearRect').length > clearsBefore,
+    'the pending canvas clear is spent on the dormant frame, not carried into a paint');
+  assert.equal(getWorldOverlayDiagnostics().paintedCount, 0);
+  env.cleanup();
+});
+
+test('initWorldOverlay refuses a viewer without scene.postRender', () => {
+  const env = installMockEnvironment();
+  assert.throws(
+    () => initWorldOverlay({ container: env.viewer.container, scene: {} }),
+    (error) => error instanceof TypeError
+      && error.message === 'initWorldOverlay requires a Cesium viewer with scene.postRender',
+    'a viewer that can never drive a frame must fail loudly at init',
+  );
+  env.cleanup();
+});
+
+test('teardown removes only its own diagnostics facade from window', () => {
+  const env = installMockEnvironment();
+  initWorldOverlay(env.viewer);
+
+  const foreign = { getDiagnostics: () => ({ foreign: true }) };
+  globalThis.window.__gevWorldOverlay = foreign;
+  destroyWorldOverlay();
+  assert.equal(globalThis.window.__gevWorldOverlay, foreign,
+    'a facade the host does not own is left alone');
+
+  globalThis.window.__gevWorldOverlay = { getDiagnostics: getWorldOverlayDiagnostics };
+  destroyWorldOverlay();
+  assert.equal(globalThis.window.__gevWorldOverlay, undefined,
+    'the host removes its own facade so stale diagnostics cannot be read');
+  env.cleanup();
+});
+
+// The mock camera sits at (0, 0, 10 000 000): the ellipsoid centre is hidden
+// behind the horizon from there, while anything above ~6 378 000 m on this axis
+// is visible. That makes the horizon policy observable without scene geometry.
+const ABOVE_LIMB = new Cesium.Cartesian3(0, 0, 12_000_000);
+const BEHIND_LIMB = { x: 0, y: 0, z: 0 };
+
+test('a published cull anchor drives the horizon test and is snapshotted', () => {
+  const env = installMockEnvironment();
+  initWorldOverlay(env.viewer);
+
+  const recycled = { ...BEHIND_LIMB };
+  setOverlayEntries('cull', [selectedEntry('LIMB', {
+    position: ABOVE_LIMB,
+    horizonCull: true,
+  }), { ...selectedEntry('LIFTED', {
+    position: ABOVE_LIMB,
+    horizonCull: true,
+  }), cullPosition: recycled }]);
+  env.postRender.raise();
+  assert.equal(getWorldOverlayDiagnostics().paintedCount, 1,
+    'the cull anchor decides the horizon test, not the render anchor');
+
+  recycled.z = 20_000_000;
+  env.postRender.raise();
+  assert.equal(getWorldOverlayDiagnostics().paintedCount, 1,
+    'a caller recycling its vector afterwards cannot change the decision');
+
+  setOverlayEntries('cull', [{ ...selectedEntry('LIFTED', {
+    position: ABOVE_LIMB,
+    horizonCull: true,
+  }), cullPosition: { x: 0, y: 0, z: 20_000_000 } }]);
+  env.postRender.raise();
+  assert.equal(getWorldOverlayDiagnostics().paintedCount, 1,
+    'a lifted cull anchor keeps a render anchor visible that the policy would pass anyway');
+
+  setOverlayEntries('cull', [{ ...selectedEntry('HOSTILE', {
+    position: ABOVE_LIMB,
+    horizonCull: true,
+  }), get cullPosition() { throw new Error('recycled under us'); } }]);
+  env.postRender.raise();
+  assert.equal(getWorldOverlayDiagnostics().paintedCount, 1,
+    'a throwing accessor degrades that one entry to "no cull anchor" instead of aborting the source');
+  env.cleanup();
+});
+
+test('a distance-scale curve shrinks a far card and keeps its leader one pixel', () => {
+  const CURVE = { near: 0, nearValue: 1, far: 20_000_000, farValue: 0.5 };
+  const cardAt = (z) => {
+    const env = installMockEnvironment({ width: 400, height: 300, dpr: 1 });
+    initWorldOverlay(env.viewer);
+    setOverlayEntries('range', [selectedEntry('RANGE', {
+      position: new Cesium.Cartesian3(0, 0, z),
+      distanceScale: CURVE,
+    })]);
+    env.postRender.raise();
+    const rect = { ...getOverlayPaintRect('range', 'RANGE') };
+    const strokes = env.ctx.calls
+      .filter(([name]) => name === 'lineWidth')
+      .map(([, value]) => value);
+    env.cleanup();
+    return { rect, strokes };
+  };
+
+  // The mock camera is 10 000 000 m from z = 0 and 20 000 000 m from z = 30e6.
+  const near = cardAt(0);
+  const far = cardAt(30_000_000);
+  assert.ok(Math.abs(near.rect.w / far.rect.w - 1.5) < 1e-6,
+    `card width tracks the curve (near ${near.rect.w} vs far ${far.rect.w})`);
+  assert.ok(near.strokes.some((width) => Math.abs(width - 1 / 0.75) < 1e-6),
+    'the leader counter-scales so it stays one CSS pixel wide');
+});
+
+test('a lane handle exposes its surface and toggles its painter on and off', () => {
+  const env = installMockEnvironment();
+  initWorldOverlay(env.viewer);
+  const paintedOn = [];
+  const shared = registerWorldOverlayPaintLane('ambient-label', (frame) => {
+    paintedOn.push(frame.ctx === env.ctx ? 'shared' : 'detection');
+  }, { id: 'lifecycle', active: true });
+  assert.equal(shared.surface, env.document.getElementById('world-overlay-canvas'),
+    'a shared-target lane hands out the host card canvas');
+
+  const detection = registerWorldOverlayPaintLane('detection', () => {}, {
+    id: 'lifecycle-detection', active: true, target: 'detection',
+  });
+  assert.equal(detection.surface, env.document.getElementById('world-overlay-detection-surface'),
+    'a detection-target lane hands out the blend surface');
+
+  env.postRender.raise();
+  assert.deepEqual(paintedOn, ['shared']);
+  const renders = env.viewer.scene.requestRenderCount;
+  shared.requestPaint();
+  assert.equal(env.viewer.scene.requestRenderCount, renders + 1,
+    'an explicit paint request asks the scene for a frame');
+
+  shared.setActive(false);
+  env.postRender.raise();
+  assert.deepEqual(paintedOn, ['shared'], 'a deactivated lane paints nothing');
+
+  shared.setActive(true);
+  env.postRender.raise();
+  assert.deepEqual(paintedOn, ['shared', 'shared'], 'reactivating the lane resumes painting');
+  env.cleanup();
+});

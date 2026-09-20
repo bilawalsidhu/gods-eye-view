@@ -499,3 +499,129 @@ test('a world add that fails mid-way leaves its landed entities removable', (t) 
   assert.equal(annotationGroups(svg).length, 1);
   renderer.destroy();
 });
+
+// ── Routing coverage: route drapes, untracked updates, label upgrades ────────
+
+test('route annotations drape the world path and caption the midpoint', (t) => {
+  installBrowserGlobals(t);
+  const { viewer, dataSources } = fakeViewer(-99, 31);
+  const renderer = createHybridAnnotationRenderer(viewer);
+  const path = [
+    { lon: -99, lat: 30, height: 0 },
+    { lon: -98, lat: 31, height: 0 },
+    { lon: -97, lat: 32, height: 0 },
+  ];
+  const anno = {
+    id: 'anno-route-1',
+    type: 'route',
+    color: 'primary',
+    label: 'Flight plan',
+    alpha: 1,
+    anchor: path[0],
+    ring: null,
+    footprintKind: null,
+    path,
+    synthesized: false,
+  };
+
+  renderer.add(anno);
+  assert.ok(dataSources[0].entities.values.length >= 1, 'the path drapes on the tiles');
+  const { svg } = findAnnotationGroup(globalThis.document);
+  assert.equal(annotationGroups(svg).length, 1, 'plus a screen callout');
+  const callout = svg.querySelector('.gev-anno-callout');
+  assert.ok(callout, 'the route carries its caption');
+
+  renderer.remove(anno);
+  assert.equal(dataSources[0].entities.values.length, 0, 'both routes release');
+  renderer.destroy();
+});
+
+test('update with an untracked id falls through to a full add', (t) => {
+  installBrowserGlobals(t);
+  const { viewer, dataSources } = fakeViewer(-99, 31);
+  const renderer = createHybridAnnotationRenderer(viewer);
+  const ring = [[-106, 25], [-93, 25], [-93, 36], [-106, 36], [-106, 25]];
+  const anno = {
+    id: 'anno-untracked',
+    type: 'area',
+    color: 'primary',
+    label: 'West Texas',
+    alpha: 1,
+    anchor: naiveRingCentroid(ring),
+    ring,
+    footprintKind: 'area',
+    synthesized: false,
+  };
+
+  // The engine only ever updates marks it added — but a restored session
+  // (state replayed before the renderer existed) hands update() an id the
+  // routing table has never seen. It must DRAW, not silently no-op.
+  renderer.update(anno);
+  assert.equal(dataSources[0].entities.values.length, 2, 'world drape materialized');
+  const { svg } = findAnnotationGroup(globalThis.document);
+  assert.equal(annotationGroups(svg).length, 1, 'screen caption materialized');
+
+  renderer.remove(anno);
+  renderer.destroy();
+});
+
+test('upgrading a world-only area with a label adds just the callout', (t) => {
+  installBrowserGlobals(t);
+  const { viewer, dataSources } = fakeViewer(-99, 31);
+  const renderer = createHybridAnnotationRenderer(viewer);
+  const ring = [[-106, 25], [-93, 25], [-93, 36], [-106, 36], [-106, 25]];
+  const anno = {
+    id: 'anno-late-label',
+    type: 'area',
+    color: 'primary',
+    label: null,
+    alpha: 1,
+    anchor: naiveRingCentroid(ring),
+    ring,
+    footprintKind: 'area',
+    synthesized: false,
+  };
+
+  renderer.add(anno);
+  assert.equal(dataSources[0].entities.values.length, 2, 'world drape first, no caption');
+  const { svg } = findAnnotationGroup(globalThis.document);
+  assert.equal(annotationGroups(svg).length, 0, 'label-less area is world-only');
+
+  anno.label = 'Named later';
+  renderer.update(anno);
+  assert.equal(dataSources[0].entities.values.length, 2, 'world geometry is NOT rebuilt');
+  assert.equal(annotationGroups(svg).length, 1, 'the callout joins the live mark');
+  assert.ok(svg.querySelector('.gev-anno-callout'), 'caption renders the late label');
+
+  renderer.remove(anno);
+  assert.equal(dataSources[0].entities.values.length, 0);
+  assert.equal(annotationGroups(svg).length, 0);
+  renderer.destroy();
+});
+
+test('sync hands the live set to both sub-renderers without state churn', (t) => {
+  installBrowserGlobals(t);
+  const { viewer, dataSources } = fakeViewer(-99, 31);
+  const renderer = createHybridAnnotationRenderer(viewer);
+  const ring = [[-106, 25], [-93, 25], [-93, 36], [-106, 36], [-106, 25]];
+  const anno = {
+    id: 'anno-sync',
+    type: 'area',
+    color: 'primary',
+    label: 'Synced',
+    alpha: 1,
+    anchor: naiveRingCentroid(ring),
+    ring,
+    footprintKind: 'area',
+    synthesized: false,
+  };
+  renderer.add(anno);
+
+  // The contract's batch reconcile hook — no-ops in both current routes, but
+  // it must stay tolerant of the engine's full annotation map.
+  renderer.sync(new Map([[anno.id, anno]]));
+  assert.equal(dataSources[0].entities.values.length, 2, 'nothing changed underneath');
+  const { svg } = findAnnotationGroup(globalThis.document);
+  assert.equal(annotationGroups(svg).length, 1);
+  renderer.destroy();
+});

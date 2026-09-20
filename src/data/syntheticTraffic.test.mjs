@@ -7,12 +7,16 @@
 // cannot regress without a unit test red-flashing.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import * as Cesium from 'cesium';
 
+import { resetFlowTileCache } from './flowTiles.js';
+import { tilesForBounds } from './tomtomTiles.js';
 import syntheticTrafficLayer, {
   _planPhantomsForTest,
   _sampleAlongPolylineForTest,
   _rebuildPhantomsForTest,
   _resetPhantomsForTest,
+  _drivePhantomPositionsForTest,
   _gtfsRtAnyFeedCoversRectForTest,
   SYNTHETIC_TRAFFIC_RENDER_BOUNDS,
 } from './syntheticTraffic.js';
@@ -244,4 +248,394 @@ test('syntheticTraffic: sample positions pass through the same cache path as the
   // lat hits 42.32 while lon is still ≈ -71.00 (cumulative-table correctness).
   assert.ok(Math.abs(corner[1] - 42.32) < 1e-3,
     `corner fraction should sit at lat 42.32, got ${corner[1]}`);
+});
+
+// ---------------------------------------------------------------------------
+// Viewport + poll cycle
+//
+// `pollViewport()` is the layer's only network surface, so these tests stub
+// `globalThis.fetch` and read the layer's decisions back through the tile URLs
+// it requests. The viewport rectangle arrives from a stand-in
+// `camera.computeViewRectangle()`; the radians→degrees conversion, the latitude
+// clamp and the GTFS-RT suppression gate all run before tile selection, so the
+// requested tile set pins each of those steps.
+// ---------------------------------------------------------------------------
+
+/** Degree box → Cesium.Rectangle in the radians a real camera would return. */
+function rectangleFromDegrees(box) {
+  return new Cesium.Rectangle(
+    Cesium.Math.toRadians(box.west),
+    Cesium.Math.toRadians(box.south),
+    Cesium.Math.toRadians(box.east),
+    Cesium.Math.toRadians(box.north),
+  );
+}
+
+/** Stand-in viewer: altitude-bearing camera plus an optional viewport rect. */
+function makeViewer({ height = 1000, rect = null } = {}) {
+  const camera = { positionCartographic: { height } };
+  if (rect) camera.computeViewRectangle = () => rect;
+  return { camera, scene: { primitives: { add: (p) => p, remove: () => {} } } };
+}
+
+/** Recording fetch stub. The caller owns `restore()` (try/finally). */
+function stubFetch(handler) {
+  const saved = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = (url, init) => {
+    calls.push(String(url));
+    return handler(url, init);
+  };
+  return { calls, restore: () => { globalThis.fetch = saved; } };
+}
+
+/** 'z/x/y' identity of a requested flow-tile proxy URL. */
+const tileKeyOf = (url) => url.split('/flow/')[1].replace('.pbf', '');
+
+/** Sorted z/x/y keys for the flow tiles covering a degree box at z12. */
+const expectedTileKeys = (box) => tilesForBounds(box, 12)
+  .map(({ z, x, y }) => `${z}/${x}/${y}`)
+  .sort();
+
+/** Sydney viewport — outside every registered GTFS-RT service box. */
+const SYDNEY_BOX = { south: -33.95, west: 150.9, north: -33.9, east: 150.95 };
+
+/** One poll of undecodable tile bytes: fetch + decode run, no segments come back. */
+const undecodableTile = async () => new Response(new ArrayBuffer(8), { status: 200 });
+
+/** Drain the fire-and-forget poll `enable()` starts (real macrotask turns). */
+const drain = async () => {
+  for (let i = 0; i < 4; i += 1) await new Promise((resolve) => setImmediate(resolve));
+};
+
+test('syntheticTraffic: non-finite polyline vertices void the spans they touch', () => {
+  // TomTom geometry is always finite, so this is pure length accounting: a
+  // span with a non-finite endpoint contributes zero length, which must never
+  // surface as NaN geometry downstream.
+  const segment = { trafficLevel: 0.9, roadType: 'primary', closure: false };
+
+  // A trailing NaN vertex only voids the last span — the finite leg survives
+  // and the segment plans exactly like its clean 2-vertex equivalent.
+  const clean = _planPhantomsForTest([{ coords: [[0, 0], [0, 0.01]], ...segment }]);
+  const trailing = _planPhantomsForTest([
+    { coords: [[0, 0], [0, 0.01], [Number.NaN, Number.NaN]], ...segment },
+  ]);
+  assert.equal(trailing.eligibleSegments, 1, 'a usable finite leg keeps the polyline eligible');
+  assert.equal(trailing.spawnablePhantoms, clean.spawnablePhantoms,
+    'the voided span added no phantom-carrying length');
+
+  // A NaN vertex in the middle voids BOTH spans → nothing measurable → rejected.
+  const mid = _planPhantomsForTest([
+    { coords: [[0, 0], [Number.NaN, 0.005], [0, 0.01]], ...segment },
+  ]);
+  assert.equal(mid.eligibleSegments, 0, 'a polyline with no measurable span spawns nothing');
+});
+
+test('syntheticTraffic: phantom positions advance along the segment at free-flow × traffic speed', () => {
+  const viewer = makeViewer();
+  syntheticTrafficLayer.init(viewer);
+  const collectionProto = Cesium.PointPrimitiveCollection.prototype;
+  const realAdd = collectionProto.add;
+  const realPerformance = globalThis.performance;
+  const clock = { nowMs: 10_000_000 };
+  const added = [];
+  const points = [];
+  try {
+    // Spy only: every add still reaches the real collection so render-key and
+    // cap bookkeeping run production code; the spy keeps BOTH the add options
+    // and the live primitive so the preUpdate driver's writes are observable.
+    collectionProto.add = function capture(options) {
+      const point = realAdd.call(this, options);
+      added.push(options);
+      points.push(point);
+      return point;
+    };
+    globalThis.performance = { now: () => clock.nowMs };
+
+    const plan = _planPhantomsForTest([longSegment(-71.06, 42.35)]);
+    assert.equal(_rebuildPhantomsForTest([longSegment(-71.06, 42.35)]), 3,
+      'a ~1.1 km segment carries three staggered phantoms');
+    assert.deepEqual(added.map((phantom) => phantom.id.vehicleIdx), [0, 1, 2]);
+    // Raw point primitives CLONE position at add() and never evaluate
+    // properties — a CallbackProperty here used to freeze every phantom at
+    // ECEF (0,0,0), inside the globe. The stored position must be a real
+    // Cartesian3 on the segment.
+    assert.ok(added.every((phantom) => phantom.position instanceof Cesium.Cartesian3),
+      'each phantom stores a plain Cartesian3, not an unevaluated property');
+    assert.ok(added.every((phantom) => Math.abs(phantom.position.x) + Math.abs(phantom.position.y) > 0),
+      'no phantom spawns at the ECEF origin');
+
+    const speedMps = plan.freeFlowSpeedMpsByType.primary * 0.9; // longSegment trafficLevel
+    const latitudeOf = (point) => Cesium.Math.toDegrees(
+      Cesium.Cartographic.fromCartesian(point.position).latitude,
+    );
+    const drive = () => _drivePhantomPositionsForTest();
+
+    assert.ok(Math.abs(latitudeOf(points[0]) - 42.35) < 1e-9,
+      `phantom 0 starts at the segment origin, got ${latitudeOf(points[0])}`);
+
+    clock.nowMs += 1000; // one second of travel
+    drive();
+    const travelledDeg = speedMps / 111_320;
+    assert.ok(Math.abs((latitudeOf(points[0]) - 42.35) - travelledDeg) < 1e-9,
+      `1 s of travel must cover ${travelledDeg}°, got ${latitudeOf(points[0]) - 42.35}`);
+
+    // Phantom 1 starts 1/3 along and runs against traffic — it must move south.
+    clock.nowMs += 1000;
+    drive();
+    const reverseLat = latitudeOf(points[1]);
+    assert.ok(reverseLat < 42.35 + 0.01 / 3 - 1e-4,
+      `odd phantoms run southbound, got ${reverseLat}`);
+
+    // 100 s at 14.85 m/s is 1.33 laps of a 1.113 km segment: the fraction wraps.
+    clock.nowMs = 10_000_000 + 100_000;
+    drive();
+    const wrappedLat = latitudeOf(points[0]);
+    const expectedLat = 42.35 + (((speedMps * 100) / 1113.2) % 1) * 0.01;
+    assert.ok(Math.abs(wrappedLat - expectedLat) < 1e-6,
+      `wrapped progress must land mid-segment, got ${wrappedLat} (want ${expectedLat})`);
+  } finally {
+    globalThis.performance = realPerformance;
+    collectionProto.add = realAdd;
+    _resetPhantomsForTest();
+    syntheticTrafficLayer.destroy(viewer);
+  }
+});
+
+test('syntheticTraffic: the altitude gate polls inside the band and drops the fleet above the exit', async () => {
+  const viewer = makeViewer({ height: 150_000, rect: rectangleFromDegrees(SYDNEY_BOX) });
+  const stub = stubFetch(undecodableTile);
+  syntheticTrafficLayer.init(viewer);
+  try {
+    resetFlowTileCache();
+    syntheticTrafficLayer.enable(viewer);
+    await drain();
+    assert.equal(stub.calls.length, 0, 'above the exit threshold the layer does not poll');
+
+    viewer.camera.positionCartographic.height = 90_000; // inside the band, gate still closed
+    await syntheticTrafficLayer.update();
+    await drain();
+    assert.equal(stub.calls.length, 0, 'descending into the band alone does not open the gate');
+
+    viewer.camera.positionCartographic.height = 1000;
+    await syntheticTrafficLayer.update();
+    await drain();
+    assert.deepEqual([...new Set(stub.calls.map(tileKeyOf))].sort(), expectedTileKeys(SYDNEY_BOX),
+      'crossing the enter threshold fetches exactly the flow tiles covering the viewport');
+    resetFlowTileCache(); // each later poll must reach the proxy again
+
+    _rebuildPhantomsForTest([longSegment(150.9, -33.95)]);
+    const before = stub.calls.length;
+    viewer.camera.positionCartographic.height = 95_000; // band, gate open → still polls
+    await syntheticTrafficLayer.update();
+    await drain();
+    assert.ok(stub.calls.length > before, 'the gate stays open below the exit threshold');
+    assert.equal(syntheticTrafficLayer.getStats().count, 0,
+      'an open gate hands the fleet to whatever the tiles say');
+
+    _rebuildPhantomsForTest([longSegment(150.9, -33.95)]);
+    const beforeExit = stub.calls.length;
+    viewer.camera.positionCartographic.height = 150_000;
+    await syntheticTrafficLayer.update();
+    await drain();
+    assert.equal(stub.calls.length, beforeExit, 'a closed gate polls nothing');
+    assert.equal(syntheticTrafficLayer.getStats().count, 0, 'leaving the band drops the fleet');
+  } finally {
+    stub.restore();
+    resetFlowTileCache();
+    _resetPhantomsForTest();
+    syntheticTrafficLayer.destroy(viewer);
+  }
+});
+
+test('syntheticTraffic: viewport latitude is clamped before tile selection', async () => {
+  // A near-polar camera: the raw rect reaches 89°N, tiles stop at the clamp.
+  const polarBox = { south: 84.9, west: 20, north: 89, east: 20.05 };
+  const viewer = makeViewer({ rect: rectangleFromDegrees(polarBox) });
+  const stub = stubFetch(undecodableTile);
+  syntheticTrafficLayer.init(viewer);
+  try {
+    resetFlowTileCache();
+    syntheticTrafficLayer.enable(viewer);
+    await drain();
+    assert.deepEqual([...new Set(stub.calls.map(tileKeyOf))].sort(), expectedTileKeys({ ...polarBox, north: 85 }),
+      'the 89°N edge must behave as the 85° clamp, not request polar rows');
+    assert.ok(expectedTileKeys(polarBox).length > expectedTileKeys({ ...polarBox, north: 85 }).length,
+      'fixture: the unclamped box would have requested polar rows');
+  } finally {
+    stub.restore();
+    resetFlowTileCache();
+    _resetPhantomsForTest();
+    syntheticTrafficLayer.destroy(viewer);
+  }
+});
+
+test('syntheticTraffic: an unusable viewport rectangle clears the fleet and fetches nothing', async () => {
+  const viewer = makeViewer();
+  const stub = stubFetch(undecodableTile);
+  syntheticTrafficLayer.init(viewer);
+  try {
+    syntheticTrafficLayer.enable(viewer);
+    _rebuildPhantomsForTest([longSegment(-71.06, 42.35)]);
+    assert.equal(syntheticTrafficLayer.getStats().count, 3, 'fixture needs a live fleet');
+
+    // A rect with non-finite edges converts to a NaN box → unusable.
+    viewer.camera.computeViewRectangle = () => rectangleFromDegrees({ south: 42, west: Number.NaN, north: 43, east: -71 });
+    await syntheticTrafficLayer.update();
+    assert.equal(syntheticTrafficLayer.getStats().count, 0, 'a NaN viewport drops the fleet');
+
+    // So does a camera that cannot resolve a rectangle at all.
+    viewer.camera.computeViewRectangle = () => undefined;
+    _rebuildPhantomsForTest([longSegment(-71.06, 42.35)]);
+    await syntheticTrafficLayer.update();
+    assert.equal(syntheticTrafficLayer.getStats().count, 0, 'a missing viewport drops the fleet');
+
+    assert.equal(stub.calls.length, 0, 'neither case may reach the flow proxy');
+  } finally {
+    stub.restore();
+    _resetPhantomsForTest();
+    syntheticTrafficLayer.destroy(viewer);
+  }
+});
+
+test('syntheticTraffic: a GTFS-RT feed owning the viewport silences and clears synthetics', async () => {
+  const bostonBox = { south: 42.3, west: -71.1, north: 42.4, east: -71.0 };
+  const viewer = makeViewer({ rect: rectangleFromDegrees(bostonBox) });
+  const stub = stubFetch(undecodableTile);
+  syntheticTrafficLayer.init(viewer);
+  try {
+    syntheticTrafficLayer.enable(viewer);
+    assert.equal(stub.calls.length, 0, 'no flow tiles are fetched under a real feed');
+
+    _rebuildPhantomsForTest([longSegment(-71.06, 42.35)]);
+    assert.equal(syntheticTrafficLayer.getStats().count, 3, 'fixture needs a live fleet');
+    await syntheticTrafficLayer.update();
+    assert.equal(syntheticTrafficLayer.getStats().count, 0,
+      'the poll drops synthetics a real feed is responsible for');
+    assert.equal(stub.calls.length, 0);
+  } finally {
+    stub.restore();
+    _resetPhantomsForTest();
+    syntheticTrafficLayer.destroy(viewer);
+  }
+});
+
+test('syntheticTraffic: disable() aborts an in-flight poll and settles without an error stat', async () => {
+  const viewer = makeViewer({ rect: rectangleFromDegrees(SYDNEY_BOX) });
+  const signals = [];
+  const stub = stubFetch((_url, init) => new Promise((resolve, reject) => {
+    signals.push(init.signal);
+    init.signal.addEventListener('abort', () => {
+      const abortError = new Error('The operation was aborted');
+      abortError.name = 'AbortError';
+      reject(abortError);
+    });
+  }));
+  syntheticTrafficLayer.init(viewer);
+  try {
+    syntheticTrafficLayer.enable(viewer); // fires poll #1
+    const pending = syntheticTrafficLayer.update(); // poll #2
+    assert.equal(new Set(signals).size, 2, 'fixture needs two polls in flight');
+
+    syntheticTrafficLayer.disable(viewer);
+    assert.ok(signals.every((signal) => signal.aborted), 'disable must abort every in-flight poll');
+    await pending;
+
+    const stats = syntheticTrafficLayer.getStats();
+    assert.equal(stats.loading, false, 'loading counter is reset by disable');
+    assert.equal(stats.error, undefined, 'an abort is a cancellation, not an error');
+    assert.equal(stats.count, 0);
+  } finally {
+    stub.restore();
+    _resetPhantomsForTest();
+    syntheticTrafficLayer.destroy(viewer);
+  }
+});
+
+test('syntheticTraffic: a completed poll with no usable segments still timestamps and clears the fleet', async () => {
+  const viewer = makeViewer({ rect: rectangleFromDegrees(SYDNEY_BOX) });
+  const stub = stubFetch(undecodableTile);
+  syntheticTrafficLayer.init(viewer);
+  try {
+    resetFlowTileCache();
+    syntheticTrafficLayer.enable(viewer);
+    await drain();
+    _rebuildPhantomsForTest([longSegment(150.9, -33.95)]);
+    assert.equal(syntheticTrafficLayer.getStats().count, 3, 'fixture needs a live fleet');
+
+    await syntheticTrafficLayer.update();
+    await drain();
+    const stats = syntheticTrafficLayer.getStats();
+    assert.equal(stats.count, 0, 'an empty segment list rebuilds an empty fleet');
+    assert.equal(stats.loading, false, 'the poll released its loading slot');
+    assert.ok(Number.isFinite(stats.lastUpdate), 'a completed poll is timestamped');
+    assert.equal(stats.error, undefined);
+    assert.ok(stats.tilesFetched >= stub.calls.length, 'tile accounting tracks the requests');
+    assert.equal(stats.totalCapacity, SYNTHETIC_TRAFFIC_RENDER_BOUNDS.maxPhantomVehicles);
+    assert.equal(stats.altitudeBand, '1 km');
+  } finally {
+    stub.restore();
+    resetFlowTileCache();
+    _resetPhantomsForTest();
+    syntheticTrafficLayer.destroy(viewer);
+  }
+});
+
+test('syntheticTraffic: a failing flow fetch surfaces the proxy error without throwing', async () => {
+  const viewer = makeViewer({ rect: rectangleFromDegrees(SYDNEY_BOX) });
+  const warn = [];
+  const savedWarn = console.warn;
+  console.warn = (...args) => warn.push(args.join(' '));
+  const stub = stubFetch(async () => new Response('nope', { status: 503 }));
+  syntheticTrafficLayer.init(viewer);
+  try {
+    resetFlowTileCache();
+    syntheticTrafficLayer.enable(viewer);
+    await syntheticTrafficLayer.update();
+    const stats = syntheticTrafficLayer.getStats();
+    assert.equal(stats.error, 'flow tile 12/3764/2458: HTTP 503',
+      'the first failing tile is reported to getStats() consumers');
+    assert.ok(warn.some((line) => line.includes('poll failed')), 'the failure is logged');
+    assert.equal(stats.loading, false, 'the failed poll released its loading slot');
+  } finally {
+    console.warn = savedWarn;
+    stub.restore();
+    resetFlowTileCache();
+    _resetPhantomsForTest();
+    syntheticTrafficLayer.destroy(viewer);
+  }
+});
+
+test('syntheticTraffic: the detection cohort is stride-sampled, capped and seed-offset', () => {
+  const viewer = makeViewer();
+  syntheticTrafficLayer.init(viewer);
+  try {
+    syntheticTrafficLayer.enable(viewer);
+    // Stride 6 picks segments 0 and 6 — two segments → six phantoms.
+    const segments = [];
+    for (let i = 0; i < 12; i += 1) segments.push(longSegment(-71.06 - i * 0.001, 42.35));
+    _rebuildPhantomsForTest(segments);
+    assert.equal(syntheticTrafficLayer.getStats().count, 6, 'fixture needs two 3-phantom segments');
+
+    const cohort = syntheticTrafficLayer.getDetectableObjects();
+    assert.equal(cohort.length, 6, 'no cap → every phantom is detectable');
+    assert.ok(cohort.every((entry) => entry.type === 'VEH' && entry.id.startsWith('🚗 synth/')),
+      'phantoms are HUD-vehicle entries keyed by their render key');
+    assert.ok(cohort.every((entry) => typeof entry.sourceId === 'string' && entry.position),
+      'each entry carries its render key and a position property');
+
+    const capped = syntheticTrafficLayer.getDetectableObjects({ maxCount: 2 });
+    assert.deepEqual(capped.map((entry) => entry.sourceId), [cohort[0].sourceId, cohort[3].sourceId],
+      'maxCount sets a stride of ceil(n / maxCount) starting at index 0');
+
+    const shifted = syntheticTrafficLayer.getDetectableObjects({ maxCount: 2, seed: 1 });
+    assert.deepEqual(shifted.map((entry) => entry.sourceId), [cohort[1].sourceId, cohort[4].sourceId],
+      'seed rotates the stride start deterministically');
+
+    const unbounded = syntheticTrafficLayer.getDetectableObjects({ maxCount: Number.NaN, seed: Number.NaN });
+    assert.equal(unbounded.length, 6, 'non-finite options fall back to the full cohort');
+  } finally {
+    _resetPhantomsForTest();
+    syntheticTrafficLayer.destroy(viewer);
+  }
 });

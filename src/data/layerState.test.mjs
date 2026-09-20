@@ -12,6 +12,7 @@ import {
   decodeLayerStateParams,
   encodeLayerStateParams,
   normalizeLayerState,
+  normalizeRadioFilter,
   parseStoredLayerState,
   serializeStoredLayerState,
   validateLayerStateRegistry,
@@ -1602,4 +1603,321 @@ test('the owner layer going away revokes the pending watch at any origin', async
     );
     f.coordinator.destroy();
   }
+});
+
+// ---------------------------------------------------------------------------
+// Codec rejection buckets. Every one of these is a value the codec must
+// DECLINE rather than invent: an unknown filter name, an unknown wire code, a
+// string form of an integer id, a registry that contradicts itself, and a
+// storage blob that is not JSON at all. Rejection means "fall back to the
+// default" (normalization) or "ignore the token" (decoding) — never a partial
+// interpretation that would smuggle a made-up preference into durable state.
+// ---------------------------------------------------------------------------
+
+test('radio filter values that name no filter normalize to the default', () => {
+  assert.equal(normalizeRadioFilter('news'), 'news');
+  assert.equal(normalizeRadioFilter('  GENRE:Jazz  '), 'genre:jazz');
+  for (const bad of ['', 'jazz', 'genre:', 'genre:has~tilde', 'genre:JAZZ^', 42, null]) {
+    assert.equal(
+      normalizeRadioFilter(bad),
+      null,
+      `a filter the radio layer cannot apply must be rejected: ${String(bad)}`,
+    );
+  }
+  // Through the durable-state door the rejection becomes the default, not a
+  // fabricated 'jazz' station list.
+  for (const bad of ['jazz', 'genre:', 42]) {
+    assert.equal(
+      normalizeLayerState({
+        enabledLayerIds: ['radio'],
+        options: { radio: { filter: bad, volume: 0.5 } },
+      }).options.radio.filter,
+      'all',
+    );
+  }
+});
+
+test('unknown radio wire codes are dropped instead of becoming a default-looking preference', () => {
+  // `z` is not a reserved code and not a `g-` tag: the token is ignored, and
+  // the resulting state is byte-identical to a link that said nothing at all.
+  const unknown = decodeLayerStateParams(new URLSearchParams('v=2&l=r&lo=r.f.z'));
+  assert.equal(unknown.options.radio.filter, 'all');
+  assert.equal(encode(unknown), 'v=2&l=r');
+
+  // The `g-` tag grammar is enforced on the way back in too.
+  const badTag = decodeLayerStateParams(new URLSearchParams('v=2&l=r&lo=r.f.g-'));
+  assert.equal(badTag.options.radio.filter, 'all');
+  assert.equal(encode(badTag), 'v=2&l=r');
+
+  // A well-formed custom tag still round-trips.
+  const tagged = decodeLayerStateParams(new URLSearchParams('v=2&l=r&lo=r.f.g-jazz'));
+  assert.equal(tagged.options.radio.filter, 'genre:jazz');
+});
+
+test('satellite tracking ids normalize from their string form to the stored integer', () => {
+  const normalize = (value) => normalizeLayerState({
+    enabledLayerIds: ['satellites'],
+    options: { satellites: { selectedSatTrackingId: value } },
+  }).options.satellites.selectedSatTrackingId;
+  assert.equal(normalize(' 25544 '), 25544, 'whitespace around a numeric id is trimmed');
+  assert.equal(normalize('25544.5'), null, 'a non-integer is not a catalog number');
+  assert.equal(normalize('0'), null, 'zero is not a positive catalog number');
+  assert.equal(normalize('-3'), null, 'nor is a negative one');
+});
+
+test('registry validation rejects every malformed contract before a manager can be sealed', () => {
+  assert.throws(() => validateLayerStateRegistry([]), /non-empty array/);
+  assert.throws(() => validateLayerStateRegistry('flights'), /non-empty array/);
+  assert.throws(
+    () => validateLayerStateRegistry([{ token: 'f', disposition: 'enabled-only' }]),
+    /missing id/,
+  );
+  assert.throws(
+    () => validateLayerStateRegistry([{ id: 'Bad Id', token: 'f', disposition: 'enabled-only' }]),
+    /Invalid layer-state id/,
+  );
+  assert.throws(
+    () => validateLayerStateRegistry([{ id: 'flights', token: 'FF', disposition: 'enabled-only' }]),
+    /Invalid layer-state token/,
+  );
+  assert.throws(
+    () => validateLayerStateRegistry([{ id: 'flights', token: 'f', disposition: 'default' }]),
+    /Invalid layer-state disposition/,
+  );
+  assert.throws(
+    () => validateLayerStateRegistry([{ id: 'flights', token: 'f', disposition: 'enabled+options' }]),
+    /option owner missing/,
+  );
+  assert.throws(
+    () => validateLayerStateRegistry([{
+      id: 'flights',
+      token: 'f',
+      disposition: 'enabled+options',
+      optionOwner: 'no-such-owner',
+    }]),
+    /option owner missing/,
+    'an option owner that owns no codecs is as useless as none at all',
+  );
+  assert.throws(
+    () => validateLayerStateRegistry([{
+      id: 'flights',
+      token: 'f',
+      disposition: 'enabled-only',
+      optionOwner: 'flights',
+    }]),
+    /cannot own options/,
+  );
+  assert.equal(
+    validateLayerStateRegistry([{
+      id: 'flights',
+      token: 'f',
+      disposition: 'enabled+options',
+      optionOwner: 'flights',
+    }]),
+    true,
+  );
+});
+
+test('a truncated storage blob degrades to defaults instead of throwing at startup', () => {
+  assert.equal(parseStoredLayerState('{"v":2,"l":["flights"],'), null);
+  assert.equal(parseStoredLayerState('not json at all'), null);
+});
+
+test('a blocked storage origin still boots from defaults and accepts explicit changes', async () => {
+  // No `storage` is injected: the coordinator reaches for the browser storage
+  // area itself and must tolerate it being absent (sandboxed iframe, disabled
+  // cookies) rather than failing construction or the first user toggle.
+  const share = shareSink();
+  const manager = productionManager();
+  const coordinator = new LayerStateCoordinator(manager, share);
+  await coordinator.start();
+  assert.equal(coordinator.source, 'defaults');
+
+  await manager.setEnabled('earthquakes', true, { origin: 'user' });
+  assert.deepEqual(coordinator.getDurableState().enabledLayerIds, ['earthquakes']);
+  assert.equal(share.updates > 0, true, 'the share provider still hears about the change');
+  coordinator.destroy();
+});
+
+test('a session with no shared follow has nothing to restore', async () => {
+  const manager = productionManager();
+  const coordinator = new LayerStateCoordinator(manager, shareSink(), { storage: memoryStorage() });
+  await coordinator.start({ allowLocalState: false });
+  assert.deepEqual(await coordinator.restoreShareTrackingSelection(), {
+    status: 'skipped',
+    reason: 'no-shared-target',
+  });
+  coordinator.destroy();
+
+  // A share payload that enables layers but tracks nothing is a share session
+  // with no follow in it either — and clearing a non-existent selection must
+  // report that it cleared nothing rather than writing a preference.
+  const shareState = createDefaultLayerState();
+  shareState.enabledLayerIds = ['flights', 'radio'];
+  const shareManager = productionManager();
+  const shareCoordinator = new LayerStateCoordinator(
+    shareManager,
+    shareSink(),
+    { storage: memoryStorage() },
+  );
+  await shareCoordinator.start({ shareLayerState: shareState });
+  assert.equal(shareCoordinator.source, 'share');
+  assert.deepEqual(await shareCoordinator.restoreShareTrackingSelection(), {
+    status: 'skipped',
+    reason: 'no-shared-target',
+  });
+  assert.equal(
+    shareCoordinator.cancelPendingShareTracking('explicit-navigation', { clearSelection: true }),
+    false,
+  );
+  assert.deepEqual(shareCoordinator.getDurableState().enabledLayerIds, ['flights', 'radio']);
+  shareCoordinator.destroy();
+});
+
+test('a coordinator refuses to seal against unfinalized layer registrations', () => {
+  assert.throws(
+    () => new LayerStateCoordinator(new DataLayerManager({}), shareSink()),
+    /finalized data-layer registrations/,
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Coordinator-side crash isolation. The manager's restore contract is "never
+// throws", but the coordinator is the last line of defense for a whole-batch
+// restore: one layer's transaction crashing must cost that layer its row, not
+// the batch.
+// ---------------------------------------------------------------------------
+
+test('a manager-level restore crash degrades to one failed row without losing siblings', async () => {
+  const manager = productionManager();
+  const realRestore = manager.restoreLayerState.bind(manager);
+  manager.restoreLayerState = (layerId, desired, options) => (
+    layerId === 'earthquakes'
+      ? Promise.reject(new TypeError('manager transaction crashed'))
+      : realRestore(layerId, desired, options)
+  );
+  const state = createDefaultLayerState();
+  state.enabledLayerIds = ['earthquakes', 'traffic'];
+  const coordinator = new LayerStateCoordinator(manager, shareSink(), { storage: memoryStorage() });
+  const results = await coordinator.start({ shareLayerState: state });
+
+  const crashed = results.find((result) => result.layerId === 'earthquakes');
+  assert.equal(crashed.succeeded, false);
+  assert.equal(crashed.phase, 'coordinator', 'the failure is attributed to the batch, not a phase');
+  assert.equal(crashed.errorClass, 'TypeError');
+  assert.equal(crashed.error, 'manager transaction crashed');
+  assert.equal(crashed.persistenceWrite, false);
+  assert.equal(crashed.settledEnabled, false, 'the row still reports where the layer really is');
+  assert.equal(crashed.cancellationReason, null);
+
+  assert.equal(manager.isEnabled('traffic'), true);
+  assert.equal(results.find((result) => result.layerId === 'traffic').succeeded, true);
+  coordinator.destroy();
+});
+
+test('an abort landing while the latch is still arming undoes the arm', async () => {
+  const f = pendingTrackingFixture();
+  const caller = new AbortController();
+  await f.coordinator.start({ shareLayerState: f.state, shareCreatedAtMs: f.copiedAtMs });
+
+  // Abort from inside the module's setParams: that call IS the arming, so this
+  // is the narrowest possible window — the caller cancelled, but the latch has
+  // already been accepted by the layer.
+  const module = f.manager.layers.get('flights').module;
+  const realSetParams = module.setParams.bind(module);
+  module.setParams = (next, options) => {
+    if (next?.selectedFlightsTrackingId === 'late007') caller.abort('caller-cancelled');
+    return realSetParams(next, options);
+  };
+
+  const result = await f.coordinator.restoreShareTrackingSelection({ signal: caller.signal });
+
+  assert.equal(result.status, 'cancelled');
+  assert.equal(result.classification, 'cancelled');
+  assert.equal(result.reason, 'caller-cancelled');
+  assert.deepEqual(f.cancellations, [{
+    origin: 'share-restore',
+    reason: 'caller-cancelled',
+  }], 'the just-armed latch is revoked instead of being left running for nobody');
+  assert.deepEqual(f.statuses, [], 'a caller that cancelled hears no progress and no verdict');
+
+  f.timers.runUntilIdle();
+  assert.equal(f.statuses.length, 0, 'no orphaned timer announces anything later');
+  f.coordinator.destroy();
+});
+
+test('a layer torn down mid-watch abandons the follow without announcing a verdict', async () => {
+  const f = pendingTrackingFixture();
+  await f.coordinator.start({ shareLayerState: f.state, shareCreatedAtMs: f.copiedAtMs });
+  await f.coordinator.restoreShareTrackingSelection();
+  assert.deepEqual(f.statuses.map((status) => status.classification), ['pending']);
+
+  // Teardown is not a visibility intent: the manager flips the layer's
+  // effective state to OFF and removes it outright without ever publishing a
+  // `visibility: false` change for the coordinator to react to.
+  const teardown = f.manager.destroyLayer('flights');
+  f.timers.runUntilIdle();
+
+  assert.deepEqual(
+    f.statuses.map((status) => status.classification),
+    ['pending', 'cancelled'],
+    'a poll that finds its owner gone must stand down instead of reaching a verdict',
+  );
+  assert.equal(f.statuses[1].reason, 'owner-layer-disabled');
+  await teardown;
+  f.coordinator.destroy();
+});
+
+test('a layer that cannot follow shared targets terminates the follow immediately', async () => {
+  // Satellites' module exposes no tracking resolver here, so the manager
+  // answers 'unsupported'. There is no latch to arm and nothing to wait for:
+  // holding the subject pending would just time out a window later with the
+  // same answer.
+  const manager = productionManager();
+  const statuses = [];
+  const state = createDefaultLayerState();
+  state.enabledLayerIds = ['satellites'];
+  state.options.satellites = { ...state.options.satellites, selectedSatTrackingId: 25544 };
+  const coordinator = new LayerStateCoordinator(manager, shareSink(), {
+    storage: memoryStorage(),
+    onTrackingRestoreStatus: (status) => statuses.push(status),
+  });
+  await coordinator.start({ shareLayerState: state, shareCreatedAtMs: 1_000 });
+
+  const result = await coordinator.restoreShareTrackingSelection();
+  assert.equal(result.status, 'unsupported');
+  assert.equal(result.classification, 'source-unavailable');
+  assert.equal(result.cleared, true);
+  assert.deepEqual(statuses.map((status) => status.classification), ['source-unavailable']);
+  assert.equal(
+    coordinator.getDurableState().options.satellites.selectedSatTrackingId,
+    null,
+    'the passive selection is cleared rather than left armed on an unable layer',
+  );
+  coordinator.destroy();
+});
+
+test('a resolver crash is held pending, then becomes one source-unavailable verdict', async () => {
+  const f = pendingTrackingFixture();
+  f.manager.resolveLayerTrackingTarget = () => Promise.reject(new Error('resolver exploded'));
+  await f.coordinator.start({ shareLayerState: f.state, shareCreatedAtMs: f.copiedAtMs });
+
+  const pending = await f.coordinator.restoreShareTrackingSelection();
+  assert.equal(pending.status, 'pending', 'a crash is a "not here yet", not a verdict');
+  assert.equal(pending.reason, 'resolver exploded', 'the crash message is carried, not swallowed');
+
+  f.timers.runUntilIdle();
+  const terminal = f.statuses.at(-1);
+  assert.deepEqual(
+    f.statuses.map((status) => status.classification),
+    ['pending', 'source-unavailable'],
+  );
+  assert.equal(terminal.reason, 'resolver exploded');
+  assert.equal(terminal.cleared, true);
+  assert.equal(
+    f.coordinator.getDurableState().options.flights.selectedFlightsTrackingId,
+    null,
+    'a crashed resolver cannot leave a follow armed forever',
+  );
+  f.coordinator.destroy();
 });

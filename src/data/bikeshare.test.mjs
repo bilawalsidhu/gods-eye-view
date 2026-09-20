@@ -114,16 +114,20 @@ const FLIPPED_STATUS = {
   data: { stations: [{ station_id: '3790', num_bikes_available: 0, num_docks_available: 11 }] }, // → red
 };
 
-/** GBFS fetch stub with runtime-mutable payloads and a holdable status gate. */
+/** GBFS fetch stub with runtime-mutable payloads and holdable status/info gates. */
 function makeGbfsStub() {
   const saved = globalThis.fetch;
   const calls = [];
-  const state = { infoPayload: AUSTIN_INFO, statusPayload: AUSTIN_STATUS, infoStatus: 200, statusStatus: 200, hold: null };
+  const state = {
+    infoPayload: AUSTIN_INFO, statusPayload: AUSTIN_STATUS,
+    infoStatus: 200, statusStatus: 200, hold: null, infoHold: null,
+  };
   globalThis.fetch = async (url) => {
     const decoded = decodeURIComponent(String(url));
     calls.push(decoded);
     if (decoded.includes('station_information.json')) {
       if (state.infoStatus !== 200) return new Response('nope', { status: state.infoStatus });
+      if (state.infoHold) return new Promise((resolve) => state.infoHold.resolvers.push(resolve));
       return new Response(JSON.stringify(state.infoPayload), { status: 200 });
     }
     if (decoded.includes('station_status.json')) {
@@ -135,15 +139,17 @@ function makeGbfsStub() {
     }
     throw new Error(`unexpected GBFS fetch: ${decoded}`);
   };
+  const releaseHoldOn = (key, payload) => {
+    const resolvers = state[key] ? state[key].resolvers.splice(0) : [];
+    state[key] = null;
+    for (const resolve of resolvers) resolve(new Response(JSON.stringify(payload), { status: 200 }));
+  };
   return {
     calls,
     state,
     restore: () => { globalThis.fetch = saved; },
-    releaseHold: (payload) => {
-      const resolvers = state.hold ? state.hold.resolvers.splice(0) : [];
-      state.hold = null;
-      for (const resolve of resolvers) resolve(new Response(JSON.stringify(payload), { status: 200 }));
-    },
+    releaseHold: (payload) => releaseHoldOn('hold', payload),
+    releaseInfoHold: (payload) => releaseHoldOn('infoHold', payload),
   };
 }
 
@@ -519,6 +525,387 @@ test('destroy while enabled runs the disable path first', async (t) => {
       assert.equal(viewer.addedPrimitives[0].show, false);
       assert.equal(viewer.removedPrimitives.length, 1, 'primitive released');
       assert.equal(bikeshareLayer.getDetectableObjects().length, 0);
+    } finally {
+      stub.restore();
+    }
+  });
+});
+
+// ── proximity / payload / selection edge behaviour ──────────────────────────
+// Same harness, aimed at the uncovered decision points: which lat/lon drives
+// activation, how the altitude gate hysteresis closes, what a city departure
+// does to its points and selection, and how tolerant the GBFS parsers are.
+
+/** Mocked setTimeout once per test — MockTimers refuses a second enable(). */
+const enableProximityClock = (t) => t.mock.timers.enable({ apis: ['setTimeout'] });
+
+/** Fire the debounced proximity check the way a real camera move would. */
+const moveCameraAndSettle = async (t, viewer, next) => {
+  viewer.setCamera(next);
+  for (const fn of viewer.cameraListeners.changed) fn();
+  t.mock.timers.tick(340);
+  await settle();
+};
+
+test('a tilted view loads the city under the view-rectangle center, not the camera position', async (t) => {
+  captureConsole(t);
+  await withBrowserEnvironment(t, async () => {
+    const stub = makeGbfsStub();
+    try {
+      // Camera parked over Tokyo (no registry city); the view box over Austin.
+      const viewer = makeViewer({ lat: 35.68, lon: 139.69 });
+      viewer.camera.computeViewRectangle = () => new Cesium.Rectangle(
+        Cesium.Math.toRadians(-97.9),
+        Cesium.Math.toRadians(30.2),
+        Cesium.Math.toRadians(-97.6),
+        Cesium.Math.toRadians(30.4),
+      );
+      bikeshareLayer.init(viewer);
+      bikeshareLayer.enable(viewer);
+      await settle();
+
+      assert.equal(bikeshareLayer.getStats().count, 4, 'Austin loaded from the view box');
+      assert.equal(stub.calls.length, 2, 'one info + one status fetch');
+      assert.ok(stub.calls[0].includes('austin.publicbikesystem.net'), 'the in-range city was fetched');
+
+      bikeshareLayer.destroy(viewer);
+    } finally {
+      stub.restore();
+    }
+  });
+});
+
+test('a camera with no resolvable position stops the proximity check before fetching', async (t) => {
+  captureConsole(t);
+  await withBrowserEnvironment(t, async () => {
+    const stub = makeGbfsStub();
+    try {
+      const viewer = makeViewer();
+      delete viewer.camera.positionCartographic;
+      bikeshareLayer.init(viewer);
+      bikeshareLayer.enable(viewer);
+      await settle();
+
+      assert.equal(stub.calls.length, 0, 'no feed is fetched without a look-at point');
+      assert.deepEqual(bikeshareLayer.getStats(), { count: 0, lastUpdate: null, loading: false });
+
+      bikeshareLayer.destroy(viewer);
+    } finally {
+      stub.restore();
+    }
+  });
+});
+
+test('a non-finite camera altitude keeps the gate closed', async (t) => {
+  captureConsole(t);
+  await withBrowserEnvironment(t, async () => {
+    const stub = makeGbfsStub();
+    try {
+      const viewer = makeViewer({ height: Number.NaN });
+      bikeshareLayer.init(viewer);
+      bikeshareLayer.enable(viewer);
+      await settle();
+
+      assert.equal(stub.calls.length, 0, 'an unreadable altitude never activates the layer');
+      assert.equal(bikeshareLayer.getStats().count, 0);
+
+      bikeshareLayer.destroy(viewer);
+    } finally {
+      stub.restore();
+    }
+  });
+});
+
+test('climbing back above the exit threshold closes the gate and unloads the city', async (t) => {
+  captureConsole(t);
+  await withBrowserEnvironment(t, async () => {
+    const stub = makeGbfsStub();
+    try {
+      const viewer = makeViewer({ height: 10_000 });
+      bikeshareLayer.init(viewer);
+      bikeshareLayer.enable(viewer);
+      await settle();
+      assert.equal(bikeshareLayer.getStats().count, 4, 'gate open at 10 km');
+
+      enableProximityClock(t);
+      await moveCameraAndSettle(t, viewer, { height: 60_000 });
+      assert.equal(bikeshareLayer.getStats().count, 0, 'above 52 km the gate closes and unloads');
+      assert.deepEqual(bikeshareLayer.getDetectableObjects(), []);
+
+      await moveCameraAndSettle(t, viewer, { height: 10_000 });
+      assert.equal(bikeshareLayer.getStats().count, 4, 'descending reopens the gate');
+      const statusCalls = stub.calls.filter((c) => c.includes('station_status.json')).length;
+      assert.equal(statusCalls, 2, 're-activation re-fetched status only (info was cached)');
+
+      bikeshareLayer.destroy(viewer);
+    } finally {
+      stub.restore();
+    }
+  });
+});
+
+test('leaving a city range drops its points and clears a selection that belonged to it', async (t) => {
+  captureConsole(t);
+  await withBrowserEnvironment(t, async () => {
+    const stub = makeGbfsStub();
+    try {
+      const viewer = makeViewer();
+      bikeshareLayer.init(viewer);
+      bikeshareLayer.enable(viewer);
+      await settle();
+      const key = 'austin-capmetro:3790';
+      const points = pointByKey(viewer.addedPrimitives[0]);
+
+      viewer.scene.pick = () => ({ primitive: { id: key } });
+      clickActionOf()({ position: { x: 5, y: 5 } });
+      assert.equal(points.get(key).show, false, 'fixture: station selected');
+
+      enableProximityClock(t);
+      await moveCameraAndSettle(t, viewer, { lat: 40, lon: -30 });
+
+      assert.equal(bikeshareLayer.getStats().count, 0, 'out-of-range city unloaded');
+      assert.equal(viewer.addedPrimitives[0].length, 0, 'its points were removed');
+      assert.equal(viewer.entities.values.length, 0, 'the selection went with the city');
+      assert.deepEqual(bikeshareLayer.getDetectableObjects(), []);
+
+      bikeshareLayer.destroy(viewer);
+    } finally {
+      stub.restore();
+    }
+  });
+});
+
+test('a station entity pick selects it without a primitive id', async (t) => {
+  captureConsole(t);
+  await withBrowserEnvironment(t, async () => {
+    const stub = makeGbfsStub();
+    try {
+      const viewer = makeViewer();
+      bikeshareLayer.init(viewer);
+      bikeshareLayer.enable(viewer);
+      await settle();
+      const key = 'austin-capmetro:3801';
+      const points = pointByKey(viewer.addedPrimitives[0]);
+
+      viewer.scene.pick = () => ({ id: key });
+      clickActionOf()({ position: { x: 5, y: 5 } });
+      assert.equal(points.get(key).show, false, 'entity-style pick result selects the station');
+      assert.equal(viewer.entities.values.length, 1, 'highlight entity published');
+
+      bikeshareLayer.destroy(viewer);
+    } finally {
+      stub.restore();
+    }
+  });
+});
+
+test('re-entering a city recolors stations from cached status while the refresh is in flight', async (t) => {
+  captureConsole(t);
+  await withBrowserEnvironment(t, async () => {
+    const stub = makeGbfsStub();
+    try {
+      const viewer = makeViewer();
+      bikeshareLayer.init(viewer);
+      bikeshareLayer.enable(viewer);
+      await settle();
+      assert.ok(closeTo(RGB(pointByKey(viewer.addedPrimitives[0]).get('austin-capmetro:3790').color)[1], 1),
+        '3790 starts green');
+
+      enableProximityClock(t);
+      await moveCameraAndSettle(t, viewer, { lat: 40, lon: -30 });
+      assert.equal(bikeshareLayer.getStats().count, 0, 'fixture: city unloaded');
+
+      stub.state.hold = { resolvers: [] }; // park the next status refresh
+      await moveCameraAndSettle(t, viewer, { lat: 30.27, lon: -97.74 });
+      const points = pointByKey(viewer.addedPrimitives[0]);
+      assert.equal(points.size, 4, 'the city re-rendered');
+      assert.ok(closeTo(RGB(points.get('austin-capmetro:3790').color)[1], 1),
+        'cached status colored the fresh points before the refresh returned');
+      const infoCalls = stub.calls.filter((c) => c.includes('station_information.json')).length;
+      assert.equal(infoCalls, 1, 'station info came from the session cache');
+
+      stub.releaseHold(FLIPPED_STATUS);
+      await settle();
+      assert.ok(closeTo(RGB(points.get('austin-capmetro:3790').color)[1], 68 / 255),
+        'the in-flight refresh took over once it landed');
+
+      bikeshareLayer.destroy(viewer);
+    } finally {
+      stub.restore();
+    }
+  });
+});
+
+test('station payloads are read from every documented GBFS shape and rejected when unusable', async (t) => {
+  const lines = captureConsole(t);
+  await withBrowserEnvironment(t, async () => {
+    const stub = makeGbfsStub();
+    const stations = AUSTIN_INFO.data.stations;
+    try {
+      const activate = async () => {
+        const viewer = makeViewer();
+        bikeshareLayer.init(viewer);
+        try {
+          bikeshareLayer.enable(viewer);
+          await settle();
+          return bikeshareLayer.getStats();
+        } finally {
+          bikeshareLayer.destroy(viewer);
+        }
+      };
+
+      const cases = [
+        ['station array under data', { data: stations }, 4, undefined],
+        ['locale-wrapped stations', { data: { en: { stations } } }, 4, undefined],
+        ['no stations at all', { data: { stations: [] } }, 0, 'GBFS fetch error'],
+        ['locale wrapper without a station array', { data: { en: { ttl: 10, feeds: [] } } }, 0, 'GBFS fetch error'],
+        ['non-object JSON body', null, 0, 'GBFS fetch error'],
+      ];
+      for (const [label, payload, expectedCount, expectedError] of cases) {
+        stub.state.infoPayload = payload;
+        const stats = await activate();
+        assert.equal(stats.count, expectedCount, `${label}: station count`);
+        assert.equal(stats.error, expectedError, `${label}: error stat`);
+      }
+      assert.ok(lines.warn.some((l) => l.includes('activate error')), 'failures surfaced');
+    } finally {
+      stub.restore();
+    }
+  });
+});
+
+test('GBFS flag strings coerce, and unrecognized strings fall back to operational', async (t) => {
+  captureConsole(t);
+  await withBrowserEnvironment(t, async () => {
+    const stub = makeGbfsStub();
+    try {
+      stub.state.statusPayload = { data: { stations: [
+        { station_id: '3790', num_bikes_available: 9, num_docks_available: 2, is_renting: 'no' },
+        { station_id: '3801', num_bikes_available: 2, num_docks_available: 18, is_installed: 'maybe' },
+        { station_id: 'off-1', num_bikes_available: 5, num_docks_available: 7, is_returning: 'false' },
+      ] } };
+
+      const viewer = makeViewer();
+      bikeshareLayer.init(viewer);
+      bikeshareLayer.enable(viewer);
+      await settle();
+
+      const points = pointByKey(viewer.addedPrimitives[0]);
+      const notRenting = RGB(points.get('austin-capmetro:3790').color);
+      assert.ok(closeTo(notRenting[0], 104 / 255) && closeTo(notRenting[3], 0.48),
+        "is_renting: 'no' renders the station muted");
+      const unknownFlag = RGB(points.get('austin-capmetro:3801').color);
+      assert.ok(closeTo(unknownFlag[0], 1) && closeTo(unknownFlag[1], 68 / 255),
+        "an unrecognized flag string falls back to operational → availability color");
+      const notReturning = RGB(points.get('austin-capmetro:off-1').color);
+      assert.ok(closeTo(notReturning[3], 0.48), "is_returning: 'false' renders muted");
+
+      bikeshareLayer.destroy(viewer);
+    } finally {
+      stub.restore();
+    }
+  });
+});
+
+test('points clamp to sampled terrain height and fall back to the fixed offset', async (t) => {
+  captureConsole(t);
+  await withBrowserEnvironment(t, async () => {
+    const stub = makeGbfsStub();
+    try {
+      const viewer = makeViewer();
+      viewer.scene.sampleHeightSupported = true;
+      viewer.scene.sampleHeight = (carto) => (
+        Cesium.Math.toDegrees(carto.latitude) > 30.27 ? 42.5 : Number.NaN
+      );
+      bikeshareLayer.init(viewer);
+      bikeshareLayer.enable(viewer);
+      await settle();
+
+      const points = pointByKey(viewer.addedPrimitives[0]);
+      const heightOf = (point) => Cesium.Cartographic.fromCartesian(point.position).height;
+      assert.ok(closeTo(heightOf(points.get('austin-capmetro:alt-1')), 44.5),
+        'lat 30.275 samples 42.5 m → point lifted to 44.5 m');
+      assert.ok(closeTo(heightOf(points.get('austin-capmetro:3790')), 2.0),
+        'a non-finite sample keeps the 2 m offset');
+
+      bikeshareLayer.destroy(viewer);
+    } finally {
+      stub.restore();
+    }
+  });
+});
+
+test('the global point cap stops rendering and warns once', async (t) => {
+  const lines = captureConsole(t);
+  await withBrowserEnvironment(t, async () => {
+    const stub = makeGbfsStub();
+    try {
+      const stations = [];
+      for (let i = 0; i < 8001; i += 1) {
+        stations.push({
+          station_id: `s${i}`,
+          name: `Overflow station ${i}`,
+          lat: 30.2 + (i % 50) * 0.001,
+          lon: -97.8 + Math.floor(i / 50) * 0.001,
+          capacity: 10,
+        });
+      }
+      stub.state.infoPayload = { data: { stations } };
+
+      const viewer = makeViewer();
+      bikeshareLayer.init(viewer);
+      bikeshareLayer.enable(viewer);
+      await settle();
+
+      assert.equal(bikeshareLayer.getStats().count, 8000, 'exactly MAX_TOTAL_POINTS render');
+      assert.equal(viewer.addedPrimitives[0].length, 8000);
+      assert.equal(lines.warn.filter((l) => l.includes('Point cap reached')).length, 1,
+        'the cap warning fires once, not per station');
+      assert.ok(stub.state, 'stub kept alive for readability');
+
+      bikeshareLayer.destroy(viewer);
+    } finally {
+      stub.restore();
+    }
+  });
+});
+
+test('stats name what the layer is waiting on', async (t) => {
+  captureConsole(t);
+  await withBrowserEnvironment(t, async () => {
+    const stub = makeGbfsStub();
+    try {
+      // 1. City feeds syncing: status refresh parked mid-activation.
+      stub.state.hold = { resolvers: [] };
+      const viewer = makeViewer();
+      bikeshareLayer.init(viewer);
+      bikeshareLayer.enable(viewer);
+      await settle();
+      assert.deepEqual(bikeshareLayer.getStats(), {
+        count: 4, lastUpdate: null, loading: true, loadingLabel: 'syncing 1 city feeds...',
+      });
+      stub.releaseHold(FLIPPED_STATUS);
+      await settle();
+      bikeshareLayer.destroy(viewer);
+
+      // 2. Nothing syncable left: the in-flight info fetch outlives its city.
+      stub.state.infoHold = { resolvers: [] };
+      const departing = makeViewer();
+      bikeshareLayer.init(departing);
+      bikeshareLayer.enable(departing);
+      await settle();
+      assert.equal(bikeshareLayer.getStats().loading, true, 'info fetch still in flight');
+
+      enableProximityClock(t);
+      await moveCameraAndSettle(t, departing, { lat: 40, lon: -30 });
+      const stats = bikeshareLayer.getStats();
+      assert.equal(stats.count, 0, 'the departing city unloaded');
+      assert.equal(stats.loading, true, 'the abandoned fetch still holds the loading flag');
+      assert.equal(stats.loadingLabel, 'scanning nearby systems...');
+
+      stub.releaseInfoHold(AUSTIN_INFO);
+      await settle();
+      bikeshareLayer.destroy(departing);
     } finally {
       stub.restore();
     }

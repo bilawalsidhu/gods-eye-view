@@ -23,10 +23,15 @@
  *   getDetectableObjects — for HUD detection overlay
  *   getStats()           — { count, lastUpdate, loading, error, ... }
  *
- * Animation: each phantom's position is a `CallbackProperty` that advances
- * along its segment polyline at a constant speed. The set is rebuilt on
- * every flow-tile refresh — phantoms are cheap to allocate, and the bbox
- * set can shift between viewports.
+ * Animation: each phantom carries a sampler closure the layer evaluates in
+ * `scene.preUpdate`, advancing along its segment polyline at a constant speed
+ * and writing the result to the point primitive. (A `CallbackProperty` does
+ * NOT work here — `PointPrimitiveCollection` clones `position` at add() and
+ * never evaluates properties, which left every phantom frozen at ECEF origin,
+ * inside the globe. The Entity visualizers that flights uses don't apply to
+ * raw point primitives.) The set is rebuilt on every flow-tile refresh —
+ * phantoms are cheap to allocate, and the bbox set can shift between
+ * viewports.
  */
 
 import * as Cesium from 'cesium';
@@ -102,8 +107,12 @@ const MAX_DETECTABLE_OBJECTS = 240;
 let _viewer = null;
 /** @type {Cesium.PointPrimitiveCollection|null} */
 let _pointCollection = null;
-/** @type {Map<string, Cesium.PointPrimitive>} Active phantoms keyed by composite id. */
+/** @type {Map<string, {point: Cesium.PointPrimitive, samplePosition: () => Cesium.Cartesian3}>}
+ * Active phantoms keyed by composite id. `samplePosition` is the per-frame
+ * sampler the preUpdate driver evaluates into `point.position`. */
 let _phantoms = new Map();
+/** @type {(()=>void)|null} Detaches the preUpdate position driver. */
+let _detachPositionDriver = null;
 /** @type {boolean} */
 let _enabled = false;
 /** @type {boolean} */
@@ -261,15 +270,17 @@ function buildPhantom(segment, segmentIdx, vehicleIdx, generation) {
   const startTime = performance.now() / 1000;
   const direction = vehicleIdx % 2 === 0 ? 1 : -1; // alternate
 
-  const positionCallback = new Cesium.CallbackProperty(() => {
+  // Sampled by the preUpdate driver each rendered frame and written to the
+  // primitive (raw PointPrimitives have no property evaluation of their own).
+  const samplePosition = () => {
     const elapsed = performance.now() / 1000 - startTime;
     const distance = direction * speed * elapsed;
     const t = (phase + distance / cache.total) % 1;
     return sampleAlongCache(cache, t, PHANTOM_HEIGHT_OFFSET_M);
-  }, false);
+  };
 
   const point = _pointCollection.add({
-    position: positionCallback,
+    position: samplePosition(),
     color: synthColor(segment.trafficLevel),
     pixelSize: 6,
     outlineColor: Cesium.Color.BLACK.withAlpha(0.35),
@@ -278,7 +289,7 @@ function buildPhantom(segment, segmentIdx, vehicleIdx, generation) {
     translucencyByDistance: new Cesium.NearFarScalar(1200, 1.0, 350_000, 0.2),
     id: { source: 'synthetic-traffic', segmentIdx, vehicleIdx, generation },
   });
-  _phantoms.set(renderKey(segmentIdx, vehicleIdx, generation), point);
+  _phantoms.set(renderKey(segmentIdx, vehicleIdx, generation), { point, samplePosition });
   return point;
 }
 
@@ -318,11 +329,43 @@ function synthColor(trafficLevel) {
 function pruneStale(liveKeys) {
   for (const key of _phantoms.keys()) {
     if (!liveKeys.has(key)) {
-      const point = _phantoms.get(key);
-      if (point && _pointCollection) _pointCollection.remove(point);
+      const entry = _phantoms.get(key);
+      if (entry?.point && _pointCollection) _pointCollection.remove(entry.point);
       _phantoms.delete(key);
     }
   }
+}
+
+/**
+ * Advance every phantom to its current along-segment position. Bound to
+ * `scene.preUpdate` while the layer is alive: raw point primitives store a
+ * plain Cartesian3 (cloned at add()), so WITHOUT this driver each phantom
+ * would sit frozen at its spawn position — the CallbackProperty originally
+ * passed here was never evaluated by Cesium at all.
+ *
+ * Runs only on rendered frames; under the render governor an idle scene keeps
+ * its last positions, which is exactly the requested still frame.
+ * @returns {void}
+ * @private
+ */
+function drivePhantomPositions() {
+  for (const { point, samplePosition } of _phantoms.values()) {
+    const position = samplePosition();
+    if (position) point.position = position;
+  }
+}
+
+/** Attach the per-frame position driver to a viewer's scene.
+ * @param {Cesium.Viewer} viewer - Init'd Cesium viewer.
+ * @returns {void}
+ */
+function attachPositionDriver(viewer) {
+  if (_detachPositionDriver || !viewer?.scene?.preUpdate) return;
+  viewer.scene.preUpdate.addEventListener(drivePhantomPositions);
+  _detachPositionDriver = () => {
+    viewer.scene.preUpdate.removeEventListener(drivePhantomPositions);
+    _detachPositionDriver = null;
+  };
 }
 
 /**
@@ -470,6 +513,7 @@ const syntheticTrafficLayer = {
     registerSpriteCollection('synthetic-traffic', _pointCollection);
     _pointCollection.show = false;
     restoreSpriteOrder(viewer);
+    attachPositionDriver(viewer);
   },
 
   enable(viewer) {
@@ -517,6 +561,7 @@ const syntheticTrafficLayer = {
 
   destroy(viewer) {
     if (_enabled) this.disable(viewer);
+    if (_detachPositionDriver) _detachPositionDriver();
     if (_pointCollection) {
       try { viewer.scene.primitives.remove(_pointCollection); } catch { /* no-op */ }
       _pointCollection = null;
@@ -537,9 +582,9 @@ const syntheticTrafficLayer = {
   getDetectableObjects(options = {}) {
     if (!_enabled || !_pointCollection || _phantoms.size === 0) return [];
     const records = [];
-    for (const [key, point] of _phantoms) {
-      if (!point?.show) continue;
-      records.push({ key, point });
+    for (const [key, entry] of _phantoms) {
+      if (!entry.point?.show) continue;
+      records.push({ key, point: entry.point });
     }
     if (records.length === 0) return [];
 
@@ -686,6 +731,15 @@ export function _resetPhantomsForTest() {
   _phantoms.clear();
   _generation = 0;
   _limitWarned = false;
+}
+
+/**
+ * Test seam: run the preUpdate position driver ONCE, exactly as a rendered
+ * frame would, so tests can assert phantom motion without a real scene loop.
+ * @returns {void}
+ */
+export function _drivePhantomPositionsForTest() {
+  drivePhantomPositions();
 }
 
 /** Test seam: layer constant surface for the coverage tools. */

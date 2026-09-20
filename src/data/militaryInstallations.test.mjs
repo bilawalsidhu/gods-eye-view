@@ -197,6 +197,7 @@ async function runInstallationLoad({
   exactSaturated = false,
   legacyPayload = false,
   failWith = null,
+  places = null,
 }) {
   const originalDocument = globalThis.document;
   const originalWindow = globalThis.window;
@@ -220,6 +221,10 @@ async function runInstallationLoad({
     if (failWith) {
       return { ok: false, status: 503, json: async () => ({ error: failWith }) };
     }
+    if (places && href.includes('/api/google/text-search')) {
+      const status = places.ok === false ? 500 : 200;
+      return { ok: status === 200, status, json: async () => places.body };
+    }
     const exact = href.includes('exact=1');
     const payload = {
       status: 'fresh',
@@ -233,9 +238,19 @@ async function runInstallationLoad({
   };
   const dataSources = [];
   const cameraFlights = [];
+  const moveEndListeners = [];
+  let pickResult = null;
   const viewer = {
     camera: {
-      moveEnd: { addEventListener() { return () => {}; } },
+      moveEnd: {
+        addEventListener(listener) {
+          moveEndListeners.push(listener);
+          return () => {
+            const index = moveEndListeners.indexOf(listener);
+            if (index >= 0) moveEndListeners.splice(index, 1);
+          };
+        },
+      },
       flyToBoundingSphere(sphere, options) { cameraFlights.push({ sphere, options }); },
       computeViewRectangle() {
         return {
@@ -249,7 +264,7 @@ async function runInstallationLoad({
     scene: {
       canvas: { addEventListener() {}, removeEventListener() {} },
       globe: { ellipsoid: Cesium.Ellipsoid.WGS84 },
-      pick() { return null; },
+      pick() { return pickResult; },
       // Enough surface for the real render governor to drive this viewer, so
       // one-shot render requests are observable.
       requestRenderMode: false,
@@ -274,6 +289,9 @@ async function runInstallationLoad({
   return {
     requests,
     cameraFlights,
+    viewer,
+    moveEnd: moveEndListeners,
+    setPick(value) { pickResult = value; },
     entities: () => dataSources[0]?.entities?.values || [],
     contextLabels: () => contextEvents,
     stats: () => militaryInstallationsLayer.getStats(),
@@ -288,6 +306,12 @@ async function runInstallationLoad({
       else globalThis.window = originalWindow;
     },
   };
+}
+
+/** Let the mock-timer-fired callbacks and their fetch continuations settle. */
+async function drainTimers() {
+  for (let i = 0; i < 5; i++) await Promise.resolve();
+  await new Promise((resolve) => setImmediate(resolve));
 }
 
 test('viewport membership keeps intersecting footprints and drops the snap ring', () => {
@@ -714,6 +738,11 @@ import fs from 'node:fs';
 const installationsSource = fs.readFileSync(
   new URL('./militaryInstallations.js', import.meta.url), 'utf8');
 
+/** The shipped debounce window, read from the module (it is not exported). */
+const REQUEST_DEBOUNCE_MS = Number(
+  installationsSource.match(/const REQUEST_DEBOUNCE_MS = (\d+)/)?.[1] ?? 500,
+);
+
 test('the unavailable retry backs off 30s to a 240s ceiling and restarts clean', () => {
   assert.equal(installationRetryDelayMs(0), 30000, 'first failure retries in 30s');
   assert.equal(installationRetryDelayMs(undefined), 30000, 'no prior delay means the minimum');
@@ -742,4 +771,231 @@ test('the retry is wired to every lifecycle edge, not just declared', () => {
   assert.match(installationsSource,
     /state\.enabled && !state\.loading\) loadInstallations\(\)/,
     'the fired retry re-checks enablement and never races an in-flight load');
+});
+
+// ── Coverage tests: footprint paint, click selection, debounce, retry ───────
+
+test('a way footprint paints as an outlined translucent polygon beside its dot', async () => {
+  const harness = await runInstallationLoad({
+    elements: [{
+      type: 'way',
+      id: 77,
+      // Overpass `out geom` shape: a bounds for the representative point plus a
+      // closed ring of lat/lon vertices.
+      bounds: { minlat: 30.4, minlon: -97.05, maxlat: 30.6, maxlon: -96.9 },
+      geometry: [
+        { lat: 30.4, lon: -97.05 }, { lat: 30.4, lon: -96.9 },
+        { lat: 30.6, lon: -96.9 }, { lat: 30.6, lon: -97.05 },
+      ],
+      tags: { military: 'airfield', name: 'Ringed Airfield' },
+    }],
+  });
+  try {
+    const entity = harness.entities().find((item) => item.id === 'osm:way:77');
+    assert.ok(entity, 'the way reached the map');
+    assert.ok(entity.polygon, 'a footprint record paints a polygon as well as a point');
+
+    const hierarchy = entity.polygon.hierarchy.getValue();
+    const ring = hierarchy.positions.map((position) => {
+      const cartographic = Cesium.Cartographic.fromCartesian(position);
+      return [
+        Number(Cesium.Math.toDegrees(cartographic.longitude).toFixed(6)),
+        Number(Cesium.Math.toDegrees(cartographic.latitude).toFixed(6)),
+      ];
+    });
+    assert.deepEqual(ring, [[-97.05, 30.4], [-96.9, 30.4], [-96.9, 30.6], [-97.05, 30.6]],
+      'the polygon ring is the feature geometry, converted to degrees');
+    assert.equal(entity.polygon.outline.getValue(), true, 'the footprint is outlined');
+    const fill = entity.polygon.material.color.getValue();
+    assert.ok(fill.alpha > 0 && fill.alpha < 0.5, 'the footprint fill is translucent, not solid');
+
+    const dot = harness.entities().find((item) => item.id === 'osm:way:77');
+    assert.equal(dot.point === undefined, false, 'the anchor dot still renders for the footprint');
+    assert.equal(dot.gevLabelModel.title, 'Ringed Airfield');
+  } finally {
+    harness.restore();
+  }
+});
+
+test('a left click on a rendered installation selects it; dead clicks change nothing', async () => {
+  // installInteraction builds a REAL Cesium handler, so capture the action the
+  // way Cesium stores it and drive it directly instead of synthesizing DOM events.
+  const actions = new Map();
+  const originalSetInputAction = Cesium.ScreenSpaceEventHandler.prototype.setInputAction;
+  Cesium.ScreenSpaceEventHandler.prototype.setInputAction = function capture(action, type) {
+    actions.set(type, action);
+    return originalSetInputAction.call(this, action, type);
+  };
+  const harness = await runInstallationLoad({
+    elements: [
+      { type: 'node', id: 42, lat: 30.2, lon: -97.7, tags: { military: 'base', name: 'Runtime Installation' } },
+    ],
+  });
+  try {
+    const click = actions.get(Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    assert.equal(typeof click, 'function', 'init installed the LEFT_CLICK handler');
+
+    const currentEntity = () => harness.entities().find((item) => item.id === 'osm:node:42');
+    assert.equal(currentEntity().point.pixelSize.getValue(), 9, 'an unselected dot is the small one');
+
+    harness.setPick({ id: { id: 'osm:node:42' } });
+    click({ position: { x: 10, y: 10 } });
+    assert.equal(harness.contextLabels().at(-1), 'Runtime Installation',
+      'a resolved pick reaches the context store as the selection');
+    assert.equal(currentEntity().point.pixelSize.getValue(), 13,
+      'selection repaints the dot at the selected size');
+
+    harness.setPick({ id: { id: 'osm:node:404' } });
+    click({ position: { x: 10, y: 10 } });
+    assert.equal(harness.contextLabels().at(-1), 'Runtime Installation',
+      'an unknown pick id leaves the selection alone');
+
+    // Cesium entity ids are frequently objects, not strings.
+    harness.setPick({ id: { id: { object: true } } });
+    click({ position: { x: 10, y: 10 } });
+    assert.equal(harness.contextLabels().length, 1, 'a non-string pick id is ignored');
+
+    // Nothing at all under the cursor.
+    harness.setPick(null);
+    click({ position: { x: 10, y: 10 } });
+    assert.equal(harness.contextLabels().length, 1, 'an empty pick is ignored');
+
+    // A click on a disabled layer must not reselect anything.
+    militaryInstallationsLayer.disable();
+    harness.setPick({ id: { id: 'osm:node:42' } });
+    click({ position: { x: 10, y: 10 } });
+    assert.equal(harness.contextLabels().length, 1, 'a disabled layer ignores clicks');
+  } finally {
+    Cesium.ScreenSpaceEventHandler.prototype.setInputAction = originalSetInputAction;
+    harness.restore();
+  }
+});
+
+test('a Places search merges unreviewed candidates and never duplicates mapped sites', async () => {
+  const harness = await runInstallationLoad({
+    elements: [
+      { type: 'node', id: 42, lat: 30.2, lon: -97.7, tags: { military: 'base', name: 'Runtime Installation' } },
+    ],
+    places: {
+      body: {
+        places: [
+          // A distinct hit, explicitly typed as military land.
+          { id: 'g1', name: 'Fort New Site', latitude: 30.3, longitude: -97.6, types: ['military_base'] },
+          // Same name + rounded coordinates as the mapped site: a duplicate.
+          { id: 'g2', name: 'Runtime Installation', latitude: 30.2, longitude: -97.7 },
+          // Unusable entries must be skipped, not rendered.
+          { id: '', name: 'No Id', latitude: 30.25, longitude: -97.65 },
+          { id: 'g4', name: 'Bad Coordinate', latitude: Number.NaN, longitude: -97.6 },
+        ],
+      },
+    },
+  });
+  try {
+    await militaryInstallationsLayer.searchNearby();
+    const placesRequest = harness.requests.find((href) => href.includes('/api/google/text-search'));
+    assert.ok(placesRequest, 'searchNearby fires the Places request');
+    const query = new URLSearchParams(placesRequest.split('?')[1]);
+    assert.equal(query.get('lat'), '30.50000', 'the search is centred on the viewport latitude');
+    assert.equal(query.get('lon'), '-97.50000', 'the search is centred on the viewport longitude');
+    assert.equal(query.get('radiusM'), '50000', 'a 1-degree view clamps the radius at 50 km');
+
+    const titles = harness.entities().map((entity) => entity.gevLabelModel?.title);
+    assert.deepEqual(titles, ['Runtime Installation', 'Fort New Site'],
+      'exactly one candidate joins the mapped site');
+    const candidate = harness.entities().at(-1);
+    assert.equal(candidate.id, 'google:g1');
+    assert.equal(candidate.gevLabelModel.details[0], 'MILITARY LAND',
+      'an explicitly typed military place renders as military land');
+
+    const stats = harness.stats();
+    assert.equal(stats.count, 2);
+    assert.equal(stats.error, null, 'a healthy Places search adds no caveat');
+    assert.equal(stats.status, 'ready');
+  } finally {
+    harness.restore();
+  }
+});
+
+test('a failed Places search keeps the mapped sites and says so', async () => {
+  const harness = await runInstallationLoad({
+    elements: [
+      { type: 'node', id: 42, lat: 30.2, lon: -97.7, tags: { military: 'base', name: 'Runtime Installation' } },
+    ],
+    places: { ok: false, body: { error: 'quota exhausted' } },
+  });
+  try {
+    await militaryInstallationsLayer.searchNearby();
+    const stats = harness.stats();
+    assert.deepEqual(harness.entities().map((entity) => entity.gevLabelModel?.title),
+      ['Runtime Installation'], 'the mapped site still renders');
+    assert.equal(stats.status, 'ready', 'a Places failure is not a layer failure');
+    assert.equal(stats.error, 'Google Places search unavailable; showing mapped sites',
+      'the caveat is surfaced instead of implied completeness');
+  } finally {
+    harness.restore();
+  }
+});
+
+test('a camera move debounces into exactly one viewport request', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const harness = await runInstallationLoad({
+    elements: [
+      { type: 'node', id: 43, lat: 30.2, lon: -97.7, tags: { military: 'base', name: 'Debounced Site' } },
+    ],
+  });
+  try {
+    const bootRequests = harness.requests.length;
+    const onMoveEnd = harness.moveEnd.at(-1);
+    assert.equal(typeof onMoveEnd, 'function', 'init subscribed scheduleLoad to camera moveEnd');
+
+    militaryInstallationsLayer.disable();
+    onMoveEnd();
+    t.mock.timers.tick(REQUEST_DEBOUNCE_MS);
+    await drainTimers();
+    assert.equal(harness.requests.length, bootRequests,
+      'a disabled layer never fetches, however much the camera moves');
+
+    militaryInstallationsLayer.enable();
+    onMoveEnd();
+    onMoveEnd();
+    onMoveEnd();
+    t.mock.timers.tick(REQUEST_DEBOUNCE_MS - 1);
+    await drainTimers();
+    assert.equal(harness.requests.length, bootRequests, 'nothing fires while the camera is settling');
+    t.mock.timers.tick(1);
+    await drainTimers();
+    assert.equal(harness.requests.length, bootRequests + 1,
+      'one settled camera move fires exactly one request');
+  } finally {
+    // Release the bounded floor resolve the successful load armed.
+    t.mock.timers.tick(FLOOR_RESOLVE_DEADLINE_MS + 1_000);
+    await drainTimers();
+    t.mock.timers.reset();
+    harness.restore();
+  }
+});
+
+test('an unavailable load retries itself on the backoff ladder, and disable cancels it', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const harness = await runInstallationLoad({ failWith: 'Overpass throttled' });
+  try {
+    assert.equal(harness.stats().status, 'unavailable');
+    const afterFirstLoad = harness.requests.length;
+    assert.ok(afterFirstLoad > 0, 'the initial viewport request was made');
+
+    t.mock.timers.tick(30_000);
+    await drainTimers();
+    assert.equal(harness.requests.length, afterFirstLoad + 1,
+      'a parked camera still gets its retry 30 s later');
+    assert.equal(harness.stats().status, 'unavailable', 'a retry that fails again stays unavailable');
+
+    militaryInstallationsLayer.disable();
+    t.mock.timers.tick(240_000);
+    await drainTimers();
+    assert.equal(harness.requests.length, afterFirstLoad + 1,
+      'disabling the layer cancels the pending retry');
+  } finally {
+    t.mock.timers.reset();
+    harness.restore();
+  }
 });
