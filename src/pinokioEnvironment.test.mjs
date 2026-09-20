@@ -28,6 +28,7 @@ const PROVIDER_FIELDS = [
   'OPENSKY_CLIENT_ID',
   'OPENSKY_CLIENT_SECRET',
   'LL2_API_TOKEN',
+  'OPENCELLID_API_KEY',
 ];
 
 test('the fresh template keeps provider credentials out of native Configure', () => {

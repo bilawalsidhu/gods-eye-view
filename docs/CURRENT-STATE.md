@@ -223,6 +223,38 @@ query. Movement within an accepted or pending query reuses it. Markers retain
 their Cesium identity and ground clamping while their geometry is unchanged;
 refreshes preserve selection without replaying a click event.
 
+The optional **Cellular Networks** layer is viewport-driven and separates mapped
+physical sites from community-observed logical cells. OpenStreetMap supplies the
+keyless site path through the local `/api/cellular-networks` provider; it preserves
+mapped operator, structure, height, reference, explicit technology tags and mapped
+sector-direction tags when present. Sector rays are drawn only from supplied
+azimuth tags and are not inferred coverage. At close zoom, an optional server-side
+`OPENCELLID_API_KEY` enables OpenCellID observations for GSM, UMTS, LTE, NR,
+NB-IoT and CDMA. Those records expose MCC/MNC/PLMN, LAC/TAC, Cell ID, PCI/PSC-like
+unit metadata when supplied, samples/signal metadata and the provider's estimated
+range. A logical cell is not treated as a physical tower, OpenCellID range is
+labeled as an estimate rather than an RF boundary, and the layer does not contain
+subscriber, SMS, IMSI or IMEI data. OpenCellID credentials never reach the browser.
+Datelined or extremely broad viewports do not query; site results are capped and
+clustered for rendering. OpenCellID requests are split into API-safe tiles. Views
+within a conservative 36-tile city-core budget query every visible tile; wider
+views query only the 12 nearest center tiles and report the result as partial, so
+cells remain useful from farther out without turning one camera position into
+several dozen API calls. Successful OpenCellID tiles stay in the in-memory cache for
+six hours, request batches use concurrency three, and an upstream rate-limit response
+opens a 15-minute in-process cooldown so camera movement does not immediately retry.
+Transient rate-limit/unavailable responses are not cached as successful snapshots.
+Saturated tiles are reported instead of implying complete coverage.
+Single-click selection on a mapped site or logical cell shows an anchored tactical
+popup while the existing double-click camera behavior remains independent.
+Estimated RANGE visualization is intentionally sparse: with no selection it shows
+only a small representative set of faint dashed estimated-radius rings, while a
+selected logical cell isolates one brighter solid ring. Rings use loaded terrain
+height plus a small visual offset and depth-fail material rather than per-cell
+ground-clamped ellipses. Selected records and Data attribution identify their
+source and license. Layer state includes `cellular-networks`, with row controls for
+sites, logical cells, mapped sectors, estimated range and technology filtering.
+
 Data Centers, Dams and Submarine Cables release their built Cesium data sources
 and record references when disabled. Parsed datasets remain cached for the layer
 lifetime, so re-enable rebuilds entities without downloading or parsing again;
@@ -2502,6 +2534,7 @@ its criteria cannot be silently ignored.
 | Military Flights 🎖️ | adsb.lol /v2/mil | `src/data/militaryFlights.js` | `/api/adsblol/mil` | 15s |
 | Live AIS Vessels 🚢 | AISStream websocket | `src/data/aisLiveVessels.js` | `/api/ais-live` | 60s (+800ms visibility pass) |
 | Mapped Installations ⌖ | OpenStreetMap mapped context; on-demand Google Maps Places supplement | `src/data/militaryInstallations.js` | `/api/military-installations`, `/api/google/text-search` | viewport-driven + user search; while unavailable, auto-retry 30 s → 240 s backoff |
+| Cellular Networks 📡 | OpenStreetMap mapped mobile sites; optional OpenCellID logical cells | `src/layers/cellular/` via `src/app/layers/cellularNetworks.js` | `/api/cellular-networks` (`OPENCELLID_API_KEY` optional) | viewport-driven; logical cells use bounded cached OpenCellID tiles |
 | Earthquakes | USGS | `src/data/earthquakes.js` | — | 60s |
 | Satellites | CelesTrak | `src/data/satellites.js` | `/api/celestrak` | 120s |
 | Space Missions (30d) | Launch Library 2 + CelesTrak | `src/data/rocketLaunches.js` | `/api/launches` + `/api/celestrak/active` | 5 min |
@@ -3545,7 +3578,7 @@ are omitted rather than framing the wrong part of the globe.
 - OpenSky default mode: OAuth (`OPENSKY_AUTH_MODE=oauth`; `anon` works without credentials)
 - Google key expected in Keychain service `google-maps-api` (or `GOOGLE_MAPS_API_KEY`, or `.env`)
 - OpenSky credentials expected in Keychain service `opensky-network` (or env, or `.env`); `OPENSKY_AUTH_MODE` and `OPENSKY_CREDENTIALS_FILE` read from `.env` too
-- Optional-key precedence in `dev-fresh.sh` is uniform — explicit shell env, then `.env`, then Keychain: `OPENAI_API_KEY` (Keychain `openai-api`/`api-key` — voice + HUD summary), `AISSTREAM_API_KEY` (`aisstream-api`/`api-key` — live vessels), `CESIUM_ION_TOKEN` (`cesium-ion`/`token` — Bing stacks), `TOMTOM_API_KEY` (`tomtom-api`/`api-key` — live traffic flow), `FIRMS_MAP_KEY` (`firms-map`/`map-key` — live fires), `LL2_API_TOKEN` (`.env` only)
+- Optional-key precedence in `dev-fresh.sh` is uniform — explicit shell env, then `.env`, then Keychain: `OPENAI_API_KEY` (Keychain `openai-api`/`api-key` — voice + HUD summary), `AISSTREAM_API_KEY` (`aisstream-api`/`api-key` — live vessels), `CESIUM_ION_TOKEN` (`cesium-ion`/`token` — Bing stacks), `TOMTOM_API_KEY` (`tomtom-api`/`api-key` — live traffic flow), `FIRMS_MAP_KEY` (`firms-map`/`map-key` — live fires), `LL2_API_TOKEN` (`.env` only), `OPENCELLID_API_KEY` (`.env` only — optional logical cellular cells)
 - An empty string is not "unset" on either side of the launcher, and both sides are handled. `scripts/read-dotenv-value.mjs` hides the requested key from `process.env` for the duration of the read (Vite's `loadEnv` otherwise lets an inherited empty export win over the parsed files) and restores it after. A key the launcher resolves to nothing is then removed from the dev server's environment outright (`env -u`), not merely omitted — the child inherits this shell's environment, and Vite backfills `.env` only over undefined variables, so an empty export in either place would shadow a configured key. `CCTV_CALTRANS_DISTRICTS` is the deliberate exception: empty is its documented Caltrans kill switch and is passed through as-is
 - `.env` supported via `.env.example` template
 
@@ -3938,3 +3971,5 @@ releases imagery layers/listeners on replacement. Destroy invalidates pending
 work and releases owned resources, including late factory results. Supplied 3D
 tilesets remain owned by the caller; tilesets created through the controller's
 factory are added to its viewer and removed on destruction.
+
+Cellular selection now renders an anchored Cesium popup directly on the selected site/cell, while estimated range rings sample loaded terrain heights and remain bounded for performance.

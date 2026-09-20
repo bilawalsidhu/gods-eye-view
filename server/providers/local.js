@@ -6,6 +6,7 @@ import { terrainHeightsProxy } from './terrain.js';
 import { adsbdbProxy } from './aircraft/enrichment.js';
 import { overpassProxy } from './overpass.js';
 import { militaryInstallationsProxy } from './military-installations.js';
+import { cellularNetworksProxy } from './cellular.js';
 import { regionalBriefProxy } from './regional/briefing.js';
 import { geocodeProxy } from './regional/place.js';
 import { weatherEffectsProxy } from './regional/weather-effects.js';
@@ -33,6 +34,7 @@ function localProviderPlugins() {
     adsbdbProxy(),
     overpassProxy(),
     militaryInstallationsProxy(),
+    cellularNetworksProxy(),
     regionalBriefProxy(),
     geocodeProxy(),
     weatherEffectsProxy(),

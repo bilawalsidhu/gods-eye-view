@@ -1,4 +1,13 @@
 # Changelog
+- Cellular Networks now uses a conservative OpenCellID request budget: complete city-core views may use up to 36 cached tiles, while wider views sample only the 12 nearest center tiles instead of issuing dozens of API calls; successful tile results are retained for six hours, rate-limit responses trip a 15-minute in-process cooldown, and transient OpenCellID failures are not cached as successful snapshots.
+
+- Tile OpenCellID viewport queries into canonical API-safe cells, reuse per-tile cache across pans, and surface tile-budget/partial/saturation state instead of reporting a misleading zero for larger city views.
+- Make Cellular Networks selection publish the shared tactical readout card for mapped sites and logical cells, and render estimated range rings above loaded terrain with depth-fail styling so RANGE stays visible without expensive ground-clamped ellipses.
+- Add a Cellular Networks layer with keyless OpenStreetMap mobile-site mapping
+  and optional server-side OpenCellID logical cells at close zoom. Show mapped
+  operators, technologies and sector directions where supplied; expose
+  PLMN/area/cell identifiers, observation metadata and estimated range without
+  presenting observations as subscriber data or authoritative RF coverage.
 
 - Credit adsbdb, which supplies the aircraft type, model name and registration
   on enriched flights and the airline and origin/destination pair behind the
@@ -228,6 +237,11 @@ This changelog records public product changes. For the authoritative description
 of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md).
 
 ## [Unreleased]
+
+- Refine Cellular Networks with center-budgeted OpenCellID loading for wider views and cleaner, selection-focused estimated range rings.
+
+- Cellular Networks: render a direct selected-marker popup for sites/cells and make estimated range rings terrain-following with an explicit render pulse.
+
 
 - Add bounded Director feature actions with accessible controls, explicit camera/layer admission and cancellation; restore pack geometry on same-shot seek. Preserve existing scenes and content attribution.
 

@@ -106,6 +106,14 @@ export const KEY_SETUP_KEYS = Object.freeze([
     envVars: Object.freeze(['LL2_API_TOKEN']),
     tier: 'free',
   }),
+  Object.freeze({
+    id: 'opencellid',
+    title: 'OPENCELLID',
+    unlocks: 'Logical cellular Cell IDs, technologies and estimated ranges',
+    getUrl: 'https://opencellid.org/',
+    envVars: Object.freeze(['OPENCELLID_API_KEY']),
+    tier: 'free',
+  }),
 ]);
 
 /** Hostnames a Provider Settings request may arrive under or originate from. */

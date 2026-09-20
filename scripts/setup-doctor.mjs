@@ -32,6 +32,7 @@ export const CREDENTIALS = Object.freeze([
     )),
   },
   { name: 'LL2_API_TOKEN', label: 'Launch Library 2', keychain: [] },
+  { name: 'OPENCELLID_API_KEY', label: 'OpenCellID cellular data', keychain: [] },
 ]);
 
 export function isConfiguredValue(value) {
@@ -150,6 +151,9 @@ export function buildCapabilitySummary(credentials) {
     missions: configured('LL2_API_TOKEN')
       ? 'Launch Library 2 token allowance'
       : 'Launch Library 2 public access',
+    cellular: configured('OPENCELLID_API_KEY')
+      ? 'mapped sites + OpenCellID logical cells at close zoom'
+      : 'mapped OpenStreetMap sites; logical Cell IDs off until an OpenCellID key is added',
   };
 }
 
@@ -203,6 +207,7 @@ export function formatSetupReport(report, { readyMessage } = {}) {
     `Fires:   ${report.capabilities.fires}`,
     `Traffic: ${report.capabilities.traffic}`,
     `Missions: ${report.capabilities.missions}`,
+    `Cellular: ${report.capabilities.cellular}`,
     '',
     'Configured providers:',
     ...CREDENTIALS.map((spec) => {
