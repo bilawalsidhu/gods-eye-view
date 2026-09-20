@@ -2,7 +2,7 @@
 
 .gesture-quick-toggle-fab {
   position: fixed;
-  bottom: 24px;
+  bottom: 88px;
   right: 24px;
   z-index: 1000;
   display: inline-flex;

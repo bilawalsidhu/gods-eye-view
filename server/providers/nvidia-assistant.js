@@ -4,9 +4,85 @@ import {
   executeTool,
   readMemory,
 } from './jarvis-tools.js';
+import { getProviderCandidates, getAllActiveSwarmCandidates } from './nvidia.js';
 
 const NVIDIA_DEFAULT_BASE_URL = 'https://integrate.api.nvidia.com/v1';
 const NVIDIA_DEFAULT_MODEL = 'nvidia/nemotron-3.5-lightning-30b-a3b';
+
+/**
+ * Dispatch inference with automatic failover across all configured provider candidates.
+ */
+export async function callProviderCompletion(basePayload, candidates) {
+  let lastError = null;
+  for (const candidate of candidates) {
+    try {
+      const isCohere = (candidate.baseUrl || '').includes('cohere.com');
+      const isNvidia = Boolean(candidate.isNvidia || (candidate.baseUrl || '').includes('nvidia.com'));
+      const url = isCohere
+        ? `${candidate.baseUrl.replace(/\/chat\/?$/, '')}/chat`
+        : `${candidate.baseUrl.replace(/\/chat\/completions\/?$/, '')}/chat/completions`;
+
+      const payload = {
+        ...basePayload,
+        model: candidate.model || candidate.id,
+      };
+      if (isNvidia) {
+        payload.chat_template_kwargs = { enable_thinking: false };
+      } else {
+        delete payload.chat_template_kwargs;
+      }
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${candidate.key}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://github.com/bilawalsidhu/gods-eye-view',
+          'X-Title': "God's Eye View",
+        },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(8000),
+      });
+
+      if (res.ok) {
+        if (isCohere) {
+          const cohereData = await res.json();
+          const text = cohereData?.message?.content?.[0]?.text || '';
+          const normalized = {
+            choices: [
+              {
+                message: {
+                  role: 'assistant',
+                  content: text,
+                },
+                delta: {
+                  content: text,
+                },
+              },
+            ],
+          };
+          return {
+            ok: true,
+            response: {
+              ok: true,
+              status: 200,
+              json: async () => normalized,
+              text: async () => JSON.stringify(normalized),
+            },
+            candidate,
+          };
+        }
+        return { ok: true, response: res, candidate };
+      }
+
+      const errText = await res.text().catch(() => '');
+      lastError = `${candidate.name} (${res.status}): ${errText}`;
+    } catch (err) {
+      lastError = `${candidate.name}: ${err.message}`;
+    }
+  }
+  return { ok: false, error: lastError || 'All AI inference providers failed' };
+}
 
 /** Models with built-in reasoning / thinking trace capabilities */
 const REASONING_MODELS = new Set([
@@ -26,20 +102,32 @@ const REASONING_MODELS = new Set([
  */
 export function getApiKeyPool() {
   const pool = [];
-  if (process.env.NVIDIA_API_KEYS) {
-    pool.push(
-      ...process.env.NVIDIA_API_KEYS.split(',')
+  const candidateVars = [
+    'NVIDIA_API_KEYS',
+    'NVIDIA_API_KEY',
+    'REQUESTY_API_KEY',
+    'GROQ_API_KEY',
+    'GEMINI_API_KEY',
+    'CEREBRAS_API_KEY',
+    'MISTRAL_API_KEY',
+    'OPENROUTER_API_KEY',
+    'COHERE_API_KEY',
+    'AION_API_KEY',
+    'ZHIPU_API_KEY',
+    'SAMBANOVA_API_KEY',
+    'TOGETHER_API_KEY',
+    'CLOUDFLARE_API_KEY',
+  ];
+  for (const varName of candidateVars) {
+    if (process.env[varName]) {
+      const keys = process.env[varName]
+        .split(',')
         .map((k) => k.trim())
-        .filter(Boolean),
-    );
-  }
-  if (process.env.NVIDIA_API_KEY) {
-    const keys = process.env.NVIDIA_API_KEY.split(',')
-      .map((k) => k.trim())
-      .filter(Boolean);
-    for (const key of keys) {
-      if (!pool.includes(key)) {
-        pool.push(key);
+        .filter(Boolean);
+      for (const key of keys) {
+        if (!pool.includes(key)) {
+          pool.push(key);
+        }
       }
     }
   }
@@ -49,6 +137,47 @@ export function getApiKeyPool() {
 let currentKeyIndex = 0;
 export function getNextApiKey(requestedKey = null) {
   if (requestedKey) return requestedKey;
+  const baseUrl = (process.env.NVIDIA_BASE_URL || '').toLowerCase();
+  if (baseUrl.includes('requesty.ai') && process.env.REQUESTY_API_KEY) {
+    return process.env.REQUESTY_API_KEY.split(',')[0].trim();
+  }
+  if (baseUrl.includes('groq.com') && process.env.GROQ_API_KEY) {
+    return process.env.GROQ_API_KEY.split(',')[0].trim();
+  }
+  if (baseUrl.includes('cerebras.ai') && process.env.CEREBRAS_API_KEY) {
+    return process.env.CEREBRAS_API_KEY.split(',')[0].trim();
+  }
+  if (baseUrl.includes('generativelanguage') && process.env.GEMINI_API_KEY) {
+    return process.env.GEMINI_API_KEY.split(',')[0].trim();
+  }
+  if (baseUrl.includes('mistral.ai') && process.env.MISTRAL_API_KEY) {
+    return process.env.MISTRAL_API_KEY.split(',')[0].trim();
+  }
+  if (baseUrl.includes('cohere.com') && process.env.COHERE_API_KEY) {
+    return process.env.COHERE_API_KEY.split(',')[0].trim();
+  }
+  if (baseUrl.includes('aionlabs.ai') && process.env.AION_API_KEY) {
+    return process.env.AION_API_KEY.split(',')[0].trim();
+  }
+  if (baseUrl.includes('bigmodel.cn') && process.env.ZHIPU_API_KEY) {
+    return process.env.ZHIPU_API_KEY.split(',')[0].trim();
+  }
+  if (baseUrl.includes('sambanova.ai') && process.env.SAMBANOVA_API_KEY) {
+    return process.env.SAMBANOVA_API_KEY.split(',')[0].trim();
+  }
+  if (
+    (baseUrl.includes('together.xyz') || baseUrl.includes('together.ai')) &&
+    process.env.TOGETHER_API_KEY
+  ) {
+    return process.env.TOGETHER_API_KEY.split(',')[0].trim();
+  }
+  if (baseUrl.includes('cloudflare.com') && process.env.CLOUDFLARE_API_KEY) {
+    return process.env.CLOUDFLARE_API_KEY.split(',')[0].trim();
+  }
+  if (baseUrl.includes('openrouter.ai') && process.env.OPENROUTER_API_KEY) {
+    return process.env.OPENROUTER_API_KEY.split(',')[0].trim();
+  }
+
   const pool = getApiKeyPool();
   if (pool.length === 0) return null;
   const key = pool[currentKeyIndex % pool.length];
@@ -558,33 +687,39 @@ export async function handleCouncilEnsemble({
         ? lastUserMsg.content.find((c) => c.type === 'text')?.text || ''
         : '';
 
-  const councilModels = [
-    {
-      id: 'openai/gpt-oss-20b',
-      name: 'GPT-OSS 20B',
-      role: '🧠 Logic & Reasoning Specialist',
-    },
-    {
-      id: 'mistralai/mistral-nemotron',
-      name: 'Mistral-Nemotron',
-      role: '🔮 Domain & Synthesis Specialist',
-    },
-    {
-      id: 'nvidia/nemotron-3.5-lightning-30b-a3b',
-      name: 'Nemotron 3.5',
-      role: '⚡ Tactical Execution Specialist',
-    },
-  ];
+  const activeSwarm = getAllActiveSwarmCandidates();
+  const councilModels = activeSwarm.length > 0
+    ? activeSwarm
+    : [
+        {
+          id: 'gemini-3.6-flash',
+          name: 'Gemini 3.6 Flash',
+          emblem: '🟢',
+          role: '🧠 Multimodal & 1M+ Context Intelligence',
+        },
+        {
+          id: 'openai/gpt-oss-20b',
+          name: 'GPT-OSS 20B',
+          emblem: '🚀',
+          role: '⚡ Sub-Second LPU Logic & Coding',
+        },
+        {
+          id: 'command-r-plus-08-2024',
+          name: 'Command R+',
+          emblem: '🧠',
+          role: '🔮 Enterprise Precision & RAG Citations',
+        },
+      ];
 
-  // Run council models simultaneously in parallel
+  // Run all active provider models simultaneously in parallel
   const councilPromises = councilModels.map(async (member) => {
     try {
       const payload = {
-        model: member.id,
+        model: member.model || member.id,
         messages: [
           {
             role: 'system',
-            content: `${systemPrompt}\n\nCouncil Member Directive: You are acting as the ${member.role}. Provide your best, most precise evaluation and solution for the user request.`,
+            content: `${systemPrompt}\n\nCouncil Member Directive: You are acting as the ${member.role} (${member.name}). Provide your best, most precise evaluation and solution for the user request.`,
           },
           ...messages,
         ],
@@ -592,31 +727,25 @@ export async function handleCouncilEnsemble({
         max_tokens: 1024,
         stream: false,
       };
-      const response = await fetch(`${baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-      if (!response.ok)
-        return { ...member, content: '(Model response unavailable)' };
-      const data = await response.json();
+      const memberCandidates = member.key ? [member] : getProviderCandidates(member.id);
+      const callRes = await callProviderCompletion(payload, memberCandidates);
+      if (!callRes.ok)
+        return { ...member, content: `(${member.name} unavailable: ${callRes.error})` };
+      const data = await callRes.response.json();
       return {
         ...member,
         content: data?.choices?.[0]?.message?.content || '(No output provided)',
         reasoning: data?.choices?.[0]?.message?.reasoning_content || null,
       };
     } catch (err) {
-      return { ...member, content: `(Execution note: ${err.message})` };
+      return { ...member, content: `(${member.name} note: ${err.message})` };
     }
   });
 
   const councilResults = await Promise.all(councilPromises);
 
   const deliberationSummary = councilResults
-    .map((m) => `### [Council Member: ${m.name} — ${m.role}]\n${m.content}`)
+    .map((m) => `### [${m.emblem || '🤖'} ${m.name} — ${m.role}]\n${m.content}`)
     .join('\n\n---\n\n');
 
   const synthesizerMessages = [
@@ -627,7 +756,8 @@ export async function handleCouncilEnsemble({
     ...messages,
   ];
 
-  const synthModel = 'nvidia/nemotron-3.5-lightning-30b-a3b';
+  const synthCandidates = getProviderCandidates(null);
+  const synthModel = synthCandidates[0]?.model || 'qwen/qwen3.8-27b';
 
   if (stream) {
     res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
@@ -651,22 +781,16 @@ export async function handleCouncilEnsemble({
     );
 
     try {
-      const synthResponse = await fetch(`${baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: synthModel,
-          messages: synthesizerMessages,
-          temperature: typeof temperature === 'number' ? temperature : 0.6,
-          max_tokens: 2048,
-          stream: true,
-        }),
-      });
+      const synthPayload = {
+        model: synthModel,
+        messages: synthesizerMessages,
+        temperature: typeof temperature === 'number' ? temperature : 0.6,
+        max_tokens: 2048,
+        stream: true,
+      };
+      const synthRes = await callProviderCompletion(synthPayload, synthCandidates);
 
-      if (!synthResponse.ok) {
+      if (!synthRes.ok) {
         const fallbackText =
           councilResults.find((r) => r.content && !r.content.startsWith('('))
             ?.content || 'Council deliberation concluded.';
@@ -678,7 +802,7 @@ export async function handleCouncilEnsemble({
         return;
       }
 
-      const reader = synthResponse.body.getReader();
+      const reader = synthRes.response.body.getReader();
       const decoder = new TextDecoder('utf-8');
       while (true) {
         const { done, value } = await reader.read();
@@ -698,29 +822,24 @@ export async function handleCouncilEnsemble({
 
   // Non-streaming
   try {
-    const synthResponse = await fetch(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: synthModel,
-        messages: synthesizerMessages,
-        temperature: typeof temperature === 'number' ? temperature : 0.6,
-        max_tokens: 2048,
-        stream: false,
-      }),
-    });
+    const synthPayload = {
+      model: synthModel,
+      messages: synthesizerMessages,
+      temperature: typeof temperature === 'number' ? temperature : 0.6,
+      max_tokens: 2048,
+      stream: false,
+    };
+    const synthRes = await callProviderCompletion(synthPayload, synthCandidates);
 
     let masterContent = '';
-    if (synthResponse.ok) {
-      const synthData = await synthResponse.json();
+    if (synthRes.ok) {
+      const synthData = await synthRes.response.json();
       masterContent = synthData?.choices?.[0]?.message?.content || '';
     }
     if (!masterContent) {
       masterContent =
-        councilResults[0]?.content || 'Council deliberation completed.';
+        councilResults.find((r) => r.content && !r.content.startsWith('('))?.content ||
+        'Council deliberation completed.';
     }
 
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -729,14 +848,7 @@ export async function handleCouncilEnsemble({
       JSON.stringify({
         ok: true,
         collaborationMode: 'council',
-        model: 'ensemble',
-        council: councilResults.map((r) => ({
-          name: r.name,
-          role: r.role,
-          model: r.id,
-          content: r.content,
-          reasoning: r.reasoning,
-        })),
+        council: councilResults,
         message: {
           role: 'assistant',
           content: masterContent,
@@ -777,11 +889,11 @@ export async function handleNvidiaAssistant(req, res) {
     return;
   }
 
-  const apiKey = getNextApiKey(body.apiKey);
-  if (!apiKey) {
+  const candidates = getProviderCandidates(body.model);
+  if (candidates.length === 0) {
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.statusCode = 503;
-    res.end(JSON.stringify({ error: 'NVIDIA_API_KEY is not configured' }));
+    res.end(JSON.stringify({ error: 'No AI provider key is configured in .env' }));
     return;
   }
 
@@ -835,15 +947,21 @@ export async function handleNvidiaAssistant(req, res) {
     }
   }
 
-  // 1. Council / Multi-Model Swarm Mode Check
-  if (model === 'ensemble' || model === 'council') {
+  // 1. Council / Multi-Model Swarm Mode Check (All providers run simultaneously)
+  if (
+    model === 'ensemble' ||
+    model === 'council' ||
+    model === 'swarm' ||
+    model === 'auto' ||
+    !model
+  ) {
     await handleCouncilEnsemble({
       messages,
       mode,
       systemPrompt,
       images,
-      apiKey,
-      baseUrl,
+      apiKey: candidates[0]?.key,
+      baseUrl: candidates[0]?.baseUrl || baseUrl,
       temperature,
       stream,
       res,
@@ -908,55 +1026,23 @@ export async function handleNvidiaAssistant(req, res) {
           temperature,
         });
 
-        let currentKey = apiKey;
-        let response = await fetch(`${baseUrl}/chat/completions`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${currentKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(payload),
-        });
-
-        if (!response.ok) {
-          currentKey = getNextApiKey() || currentKey;
-          const fallbackPayload = {
-            ...payload,
-            model: 'nvidia/nemotron-3.5-lightning-30b-a3b',
-          };
-          delete fallbackPayload.chat_template_kwargs;
-
-          response = await fetch(`${baseUrl}/chat/completions`, {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${currentKey}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(fallbackPayload),
-          });
-        }
-
-        if (!response.ok) {
-          const errText = await response.text().catch(() => '');
+        const callRes = await callProviderCompletion(payload, candidates);
+        if (!callRes.ok) {
           if (stream) {
             res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
             res.write(
-              `data: ${JSON.stringify({ error: `NVIDIA API error (${response.status}): ${errText}` })}\n\n`,
+              `data: ${JSON.stringify({ error: callRes.error })}\n\n`,
             );
             res.end();
           } else {
             res.setHeader('Content-Type', 'application/json; charset=utf-8');
-            res.statusCode = response.status || 502;
-            res.end(
-              JSON.stringify({
-                error: `NVIDIA NIM API error (${response.status}): ${errText}`,
-              }),
-            );
+            res.statusCode = 502;
+            res.end(JSON.stringify({ error: callRes.error }));
           }
           return;
         }
 
-        const data = await response.json();
+        const data = await callRes.response.json();
         const choice = data?.choices?.[0];
         const message = choice?.message || {};
         const toolCalls = message.tool_calls || [];
@@ -1085,46 +1171,16 @@ export async function handleNvidiaAssistant(req, res) {
       delete payload.tools;
       delete payload.tool_choice;
 
-      let currentKey = apiKey;
-      let response = await fetch(`${baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${currentKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        currentKey = getNextApiKey() || currentKey;
-        const fallbackPayload = {
-          ...payload,
-          model: 'nvidia/nemotron-3.5-lightning-30b-a3b',
-        };
-        delete fallbackPayload.tools;
-        delete fallbackPayload.tool_choice;
-        delete fallbackPayload.chat_template_kwargs;
-
-        response = await fetch(`${baseUrl}/chat/completions`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${currentKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(fallbackPayload),
-        });
-      }
-
-      if (!response.ok) {
-        const errText = await response.text().catch(() => '');
+      const callRes = await callProviderCompletion(payload, candidates);
+      if (!callRes.ok) {
         res.write(
-          `data: ${JSON.stringify({ error: `NVIDIA API error (${response.status}): ${errText}` })}\n\n`,
+          `data: ${JSON.stringify({ error: callRes.error })}\n\n`,
         );
         res.end();
         return;
       }
 
-      const reader = response.body.getReader();
+      const reader = callRes.response.body.getReader();
       const decoder = new TextDecoder('utf-8');
 
       while (true) {
@@ -1163,48 +1219,19 @@ export async function handleNvidiaAssistant(req, res) {
         temperature,
       });
 
-      let currentKey = apiKey;
-      let response = await fetch(`${baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${currentKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-
-      // Automatic failover on error (e.g. 401/404/410/422/429/500/503)
-      if (!response.ok) {
-        currentKey = getNextApiKey() || currentKey;
-        const fallbackPayload = {
-          ...payload,
-          model: 'nvidia/nemotron-3.5-lightning-30b-a3b',
-        };
-        delete fallbackPayload.chat_template_kwargs;
-
-        response = await fetch(`${baseUrl}/chat/completions`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${currentKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(fallbackPayload),
-        });
-      }
-
-      if (!response.ok) {
-        const errText = await response.text().catch(() => '');
+      const callRes = await callProviderCompletion(payload, candidates);
+      if (!callRes.ok) {
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
-        res.statusCode = response.status || 502;
+        res.statusCode = 502;
         res.end(
           JSON.stringify({
-            error: `NVIDIA NIM API error (${response.status}): ${errText}`,
+            error: callRes.error,
           }),
         );
         return;
       }
 
-      const data = await response.json();
+      const data = await callRes.response.json();
       const choice = data?.choices?.[0];
       const message = choice?.message || {};
       const toolCalls = message.tool_calls || [];

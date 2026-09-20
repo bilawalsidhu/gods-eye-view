@@ -362,3 +362,44 @@ test('server Google key remains supported without appearing in setup or its miss
   assert.ok(!JSON.stringify(status).includes('GOOGLE_MAPS_SERVER_API_KEY'));
   assert.ok(!JSON.stringify(status).includes(secret));
 });
+
+test('resolveProviderKeyStatuses differentiates individual provider keys and active router', () => {
+  // Test case 1: Requesty key stored in NVIDIA_API_KEY with Requesty base URL (current user situation)
+  const envRequesty = {
+    NVIDIA_API_KEY: 'rqsty-sk-1234567890abcdef',
+    NVIDIA_BASE_URL: 'https://router.requesty.ai/v1',
+    NVIDIA_MODEL: 'meta-llama/llama-3.3-70b-instruct',
+  };
+  const status1 = keySetupStatus(envRequesty);
+  assert.equal(status1.providerSummary.activeId, 'requesty');
+  assert.equal(status1.providerSummary.providers.requesty.set, true);
+  assert.equal(status1.providerSummary.providers.nvidia.set, false);
+  assert.equal(status1.providerSummary.providers.groq.set, false);
+  assert.equal(status1.providerSummary.providers.gemini.set, false);
+
+  // Test case 2: Native NVIDIA NIM key
+  const envNvidia = {
+    NVIDIA_API_KEY: 'nvapi-abcdef123456',
+    NVIDIA_BASE_URL: 'https://integrate.api.nvidia.com/v1',
+  };
+  const status2 = keySetupStatus(envNvidia);
+  assert.equal(status2.providerSummary.activeId, 'nvidia');
+  assert.equal(status2.providerSummary.providers.nvidia.set, true);
+  assert.equal(status2.providerSummary.providers.requesty.set, false);
+  assert.equal(status2.providerSummary.providers.groq.set, false);
+
+  // Test case 3: Dedicated multi-provider keys
+  const envMulti = {
+    NVIDIA_API_KEY: 'nvapi-123',
+    GROQ_API_KEY: 'gsk_123',
+    GEMINI_API_KEY: 'AIzaSy123',
+    NVIDIA_BASE_URL: 'https://api.groq.com/openai/v1',
+  };
+  const status3 = keySetupStatus(envMulti);
+  assert.equal(status3.providerSummary.activeId, 'groq');
+  assert.equal(status3.providerSummary.providers.groq.set, true);
+  assert.equal(status3.providerSummary.providers.gemini.set, true);
+  assert.equal(status3.providerSummary.providers.nvidia.set, true);
+  assert.equal(status3.providerSummary.providers.cerebras.set, false);
+});
+

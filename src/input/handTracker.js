@@ -99,21 +99,25 @@ export class HandTracker {
       // 1. Try initializing @vladmandic/human AI engine first
       try {
         const { Human } = await import('@vladmandic/human');
+        const localPath = typeof window !== 'undefined' ? '/node_modules/@vladmandic/human/models/' : 'https://cdn.jsdelivr.net/npm/@vladmandic/human/models/';
         this.human = new Human({
           backend: 'webgl',
-          modelBasePath: 'https://cdn.jsdelivr.net/npm/@vladmandic/human/models/',
+          modelBasePath: localPath,
           face: { enabled: false },
           body: { enabled: false },
           hand: {
             enabled: true,
             maxDetected: 1,
-            minConfidence: 0.45,
+            minConfidence: 0.35,
             landmarks: true,
             detector: { modelPath: 'handtrack.json' },
           },
           object: { enabled: false },
           gesture: { enabled: true },
         });
+        if (typeof this.human.load === 'function') {
+          await this.human.load();
+        }
       } catch (humanErr) {
         console.debug?.('[HandTracker] Falling back to MediaPipe:', humanErr);
         await this._loadScript();

@@ -73,10 +73,31 @@ export function createNvidiaSession({
       if (match) return match;
     }
 
+    let voiceModel = 'jarvis';
+    try {
+      const raw = localStorage.getItem('gev_jarvis_voice_settings');
+      if (raw) voiceModel = JSON.parse(raw).voiceModel || 'jarvis';
+    } catch {}
+
+    if (voiceModel === 'friday' || voiceModel === 'sophia') {
+      const femalePreferred = voices.find(
+        (v) =>
+          v.name.includes('Google UK English Female') ||
+          v.name.includes('Microsoft Hazel') ||
+          v.name.includes('Microsoft Susan') ||
+          v.name.includes('Moira') ||
+          v.name.includes('Samantha') ||
+          (v.lang.startsWith('en') && /female|woman|girl|aria|jenny/i.test(v.name)),
+      );
+      if (femalePreferred) return femalePreferred;
+    }
+
     // Prefer a clear, authoritative English voice
     const preferred = voices.find(
       (v) =>
         v.name.includes('Google UK English Male') ||
+        v.name.includes('Microsoft George') ||
+        v.name.includes('Microsoft Ryan') ||
         v.name.includes('Microsoft David') ||
         v.name.includes('Daniel') ||
         v.name.includes('Arthur') ||
@@ -211,6 +232,7 @@ export function createNvidiaSession({
                 { role: 'user', content: text },
               ],
               mode: currentMode,
+              model: 'council',
               context,
               webSearch: currentMode === 'research',
               stream: false,

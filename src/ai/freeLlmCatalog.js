@@ -15,6 +15,7 @@ export const FREE_LLM_PROVIDERS = Object.freeze([
     keyUrl: 'https://build.nvidia.com',
     keyPlaceholder: 'paste NVIDIA NIM Key (nvapi-...)',
     keyPrefix: 'nvapi-',
+    envVar: 'NVIDIA_API_KEY',
     models: Object.freeze([
       { id: 'nvidia/nemotron-3.5-lightning-30b-a3b', label: 'Nemotron 3.5 (Fast Tactical)' },
       { id: 'nvidia/nemotron-3-ultra-550b-a55b', label: 'Nemotron 550B (Deep Reasoning)' },
@@ -33,16 +34,17 @@ export const FREE_LLM_PROVIDERS = Object.freeze([
     icon: '🚀',
     badge: '500+ TOKENS/SEC',
     baseUrl: 'https://api.groq.com/openai/v1',
-    defaultModel: 'llama-3.3-70b-versatile',
+    defaultModel: 'openai/gpt-oss-20b',
     keyUrl: 'https://console.groq.com/keys',
     keyPlaceholder: 'paste Groq API Key (gsk_...)',
     keyPrefix: 'gsk_',
+    envVar: 'GROQ_API_KEY',
     models: Object.freeze([
-      { id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B (Versatile)' },
-      { id: 'llama-3.1-8b-instant', label: 'Llama 3.1 8B (Instant)' },
-      { id: 'deepseek-r1-distill-llama-70b', label: 'DeepSeek R1 Distill 70B' },
-      { id: 'mixtral-8x7b-32768', label: 'Mixtral 8x7B (32K)' },
-      { id: 'gemma2-9b-it', label: 'Gemma 2 9B' },
+      { id: 'openai/gpt-oss-20b', label: 'GPT-OSS 20B (Ultra Fast LPU)' },
+      { id: 'openai/gpt-oss-120b', label: 'GPT-OSS 120B (Deep Reasoning)' },
+      { id: 'qwen/qwen3.8-27b', label: 'Qwen 3.8 27B' },
+      { id: 'groq/compound', label: 'Groq Compound' },
+      { id: 'whisper-large-v3-turbo', label: 'Whisper Large v3 Turbo (Voice)' },
     ]),
     description: 'LPU inference engine with blistering 500+ tokens/sec output speed. Free rate-limited tier.',
   }),
@@ -52,15 +54,15 @@ export const FREE_LLM_PROVIDERS = Object.freeze([
     icon: '⚡',
     badge: '1,800 TOKENS/SEC',
     baseUrl: 'https://api.cerebras.ai/v1',
-    defaultModel: 'llama3.3-70b',
+    defaultModel: 'gpt-oss-120b',
     keyUrl: 'https://cloud.cerebras.ai/',
     keyPlaceholder: 'paste Cerebras API Key (csk-...)',
     keyPrefix: 'csk-',
+    envVar: 'CEREBRAS_API_KEY',
     models: Object.freeze([
-      { id: 'llama3.3-70b', label: 'Llama 3.3 70B (Wafer-Scale)' },
-      { id: 'llama3.1-8b', label: 'Llama 3.1 8B (Ultra Fast)' },
-      { id: 'deepseek-r1-distill-llama-70b', label: 'DeepSeek R1 Distill 70B' },
-      { id: 'qwq-32b', label: 'QwQ 32B (Reasoning)' },
+      { id: 'gpt-oss-120b', label: 'GPT-OSS 120B (Wafer-Scale)' },
+      { id: 'qwen-3.8-27b', label: 'Qwen 3.8 27B' },
+      { id: 'llama3.3-70b', label: 'Llama 3.3 70B' },
     ]),
     description: 'Wafer-scale engine with record-breaking 1,800 tokens/sec. 1M free tokens per day.',
   }),
@@ -70,16 +72,14 @@ export const FREE_LLM_PROVIDERS = Object.freeze([
     icon: '🟢',
     badge: '1,500 REQ/DAY FREE',
     baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai/',
-    defaultModel: 'gemini-2.5-flash',
+    defaultModel: 'gemini-3.6-flash',
     keyUrl: 'https://aistudio.google.com/app/apikey',
     keyPlaceholder: 'paste Gemini API Key (AIzaSy...)',
     keyPrefix: 'AIzaSy',
+    envVar: 'GEMINI_API_KEY',
     models: Object.freeze([
-      { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (1M Context)' },
-      { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite (High Speed)' },
+      { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash (1M Context, Verified Free)' },
       { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro (Complex Reasoning)' },
-      { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
-      { id: 'gemma-2-27b-it', label: 'Gemma 2 27B' },
     ]),
     description: '1,500 requests/day permanent free tier via Google AI Studio. 1M token context window.',
   }),
@@ -93,6 +93,7 @@ export const FREE_LLM_PROVIDERS = Object.freeze([
     keyUrl: 'https://console.mistral.ai/api-keys',
     keyPlaceholder: 'paste Mistral API Key',
     keyPrefix: '',
+    envVar: 'MISTRAL_API_KEY',
     models: Object.freeze([
       { id: 'mistral-small-latest', label: 'Mistral Small (Fast & Smart)' },
       { id: 'codestral-latest', label: 'Codestral (Code Specialist)' },
@@ -108,16 +109,16 @@ export const FREE_LLM_PROVIDERS = Object.freeze([
     icon: '🇨🇦',
     badge: '1,000 CALLS/MO',
     baseUrl: 'https://api.cohere.com/v2',
-    defaultModel: 'command-r-plus',
+    defaultModel: 'command-r-plus-08-2024',
     keyUrl: 'https://dashboard.cohere.com/api-keys',
     keyPlaceholder: 'paste Cohere API Key',
     keyPrefix: '',
+    envVar: 'COHERE_API_KEY',
     models: Object.freeze([
-      { id: 'command-r-plus', label: 'Command R+ (Frontier)' },
-      { id: 'command-r', label: 'Command R (Fast)' },
-      { id: 'command-r7b-12-2024', label: 'Command R7B (Lightweight)' },
-      { id: 'aya-expanse-32b', label: 'Aya Expanse 32B (Multilingual)' },
-      { id: 'aya-vision-32b', label: 'Aya Vision 32B (Multimodal)' },
+      { id: 'command-r-plus-08-2024', label: 'Command R+ (Enterprise Reasoning)' },
+      { id: 'command-r-08-2024', label: 'Command R (Fast)' },
+      { id: 'c4ai-aya-expanse-32b', label: 'Aya Expanse 32B (Multilingual)' },
+      { id: 'c4ai-aya-vision-32b', label: 'Aya Vision 32B (Multimodal)' },
     ]),
     description: '1,000 calls/month trial. Enterprise RAG, vision, and multilingual models.',
   }),
@@ -131,6 +132,7 @@ export const FREE_LLM_PROVIDERS = Object.freeze([
     keyUrl: 'https://aionlabs.ai',
     keyPlaceholder: 'paste Aion Labs Key',
     keyPrefix: 'aion-',
+    envVar: 'AION_API_KEY',
     models: Object.freeze([
       { id: 'aion-3.0', label: 'Aion 3.0 (128K Reasoning)' },
       { id: 'aion-3.0-mini', label: 'Aion 3.0 Mini' },
@@ -149,6 +151,7 @@ export const FREE_LLM_PROVIDERS = Object.freeze([
     keyUrl: 'https://open.bigmodel.cn/',
     keyPlaceholder: 'paste Zhipu API Key',
     keyPrefix: '',
+    envVar: 'ZHIPU_API_KEY',
     models: Object.freeze([
       { id: 'glm-4-flash', label: 'GLM-4 Flash (200K Context)' },
       { id: 'glm-4v-flash', label: 'GLM-4V Flash (Multimodal)' },
@@ -165,6 +168,7 @@ export const FREE_LLM_PROVIDERS = Object.freeze([
     keyUrl: 'https://cloud.sambanova.ai/',
     keyPlaceholder: 'paste SambaNova API Key',
     keyPrefix: '',
+    envVar: 'SAMBANOVA_API_KEY',
     models: Object.freeze([
       { id: 'Meta-Llama-3.3-70B-Instruct', label: 'Llama 3.3 70B (SambaNova)' },
       { id: 'Meta-Llama-3.1-8B-Instruct', label: 'Llama 3.1 8B (Instant)' },
@@ -183,6 +187,7 @@ export const FREE_LLM_PROVIDERS = Object.freeze([
     keyUrl: 'https://api.together.ai',
     keyPlaceholder: 'paste Together AI Key',
     keyPrefix: '',
+    envVar: 'TOGETHER_API_KEY',
     models: Object.freeze([
       { id: 'meta-llama/Llama-3.3-70B-Instruct-Turbo', label: 'Llama 3.3 70B Turbo' },
       { id: 'meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo', label: 'Llama 3.1 8B Turbo' },
@@ -199,8 +204,9 @@ export const FREE_LLM_PROVIDERS = Object.freeze([
     baseUrl: 'https://router.requesty.ai/v1',
     defaultModel: 'meta-llama/llama-3.3-70b-instruct',
     keyUrl: 'https://requesty.ai',
-    keyPlaceholder: 'paste Requesty API Key',
-    keyPrefix: '',
+    keyPlaceholder: 'paste Requesty API Key (rqsty-sk-...)',
+    keyPrefix: 'rqsty-',
+    envVar: 'REQUESTY_API_KEY',
     models: Object.freeze([
       { id: 'meta-llama/llama-3.3-70b-instruct', label: 'Llama 3.3 70B (Auto-Routed)' },
       { id: 'deepseek/deepseek-r1', label: 'DeepSeek R1' },
@@ -218,6 +224,7 @@ export const FREE_LLM_PROVIDERS = Object.freeze([
     keyUrl: 'https://dash.cloudflare.com',
     keyPlaceholder: 'paste Cloudflare AI Token',
     keyPrefix: '',
+    envVar: 'CLOUDFLARE_API_KEY',
     models: Object.freeze([
       { id: '@cf/meta/llama-3.3-70b-instruct', label: 'Llama 3.3 70B (CF Edge)' },
       { id: '@cf/meta/llama-3.1-8b-instruct', label: 'Llama 3.1 8B' },
@@ -236,6 +243,7 @@ export const FREE_LLM_PROVIDERS = Object.freeze([
     keyUrl: 'https://openrouter.ai/keys',
     keyPlaceholder: 'paste OpenRouter Key (sk-or-v1-...)',
     keyPrefix: 'sk-or-',
+    envVar: 'OPENROUTER_API_KEY',
     models: Object.freeze([
       { id: 'meta-llama/llama-3.3-70b-instruct:free', label: 'Llama 3.3 70B (Free)' },
       { id: 'deepseek/deepseek-r1:free', label: 'DeepSeek R1 (Free)' },
@@ -355,5 +363,48 @@ export function detectProviderFromKey(apiKey) {
   if (key.startsWith('csk-')) return findFreeLlmProvider('cerebras');
   if (key.startsWith('sk-or-')) return findFreeLlmProvider('openrouter');
   if (key.startsWith('aion-')) return findFreeLlmProvider('aion');
+  if (key.startsWith('rqsty-')) return findFreeLlmProvider('requesty');
   return FREE_LLM_PROVIDERS[0];
+}
+
+/**
+ * Check if a given key or baseUrl belongs to a specific provider.
+ * @param {string} providerId
+ * @param {string} key
+ * @param {string} baseUrl
+ * @returns {boolean}
+ */
+export function isKeyForProvider(providerId, key = '', baseUrl = '') {
+  const k = String(key || '').trim();
+  const url = String(baseUrl || '').toLowerCase();
+  switch (providerId) {
+    case 'nvidia':
+      return k.startsWith('nvapi-') || (k.length > 0 && !k.startsWith('rqsty-') && !k.startsWith('gsk_') && !k.startsWith('csk-') && !k.startsWith('AIzaSy') && !k.startsWith('sk-or-') && !k.startsWith('aion-') && url.includes('nvidia.com'));
+    case 'requesty':
+      return k.startsWith('rqsty-') || url.includes('requesty.ai');
+    case 'groq':
+      return k.startsWith('gsk_') || url.includes('groq.com');
+    case 'cerebras':
+      return k.startsWith('csk-') || url.includes('cerebras.ai');
+    case 'gemini':
+      return k.startsWith('AIzaSy') || url.includes('generativelanguage');
+    case 'openrouter':
+      return k.startsWith('sk-or-') || url.includes('openrouter.ai');
+    case 'aion':
+      return k.startsWith('aion-') || url.includes('aionlabs.ai');
+    case 'mistral':
+      return url.includes('mistral.ai');
+    case 'cohere':
+      return url.includes('cohere.com');
+    case 'zhipu':
+      return url.includes('bigmodel.cn');
+    case 'sambanova':
+      return url.includes('sambanova.ai');
+    case 'together':
+      return url.includes('together.xyz') || url.includes('together.ai');
+    case 'cloudflare':
+      return url.includes('cloudflare.com');
+    default:
+      return false;
+  }
 }

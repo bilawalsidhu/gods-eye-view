@@ -347,6 +347,11 @@ test('initAiCommandCenter supports Auto-MoE and Council Swarm modes', () => {
   assert.ok(handle);
   assert.ok(handle.msgEl);
   assert.ok(handle.contentDiv);
+
+  // Test appendVoiceExchange
+  assert.equal(typeof controller.appendVoiceExchange, 'function');
+  controller.appendVoiceExchange('Show flights over Tokyo', 'Tracking flights now.');
+  assert.ok(appendedNodes.length > 0);
 });
 
 test('initAiCommandCenter handles open/close toggles, FAB, top toggle, and drawer back buttons', () => {

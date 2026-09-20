@@ -596,7 +596,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .ai-collapse-btn {
@@ -2158,6 +2158,22 @@
   padding-right: 4px;
 }
 
+.ai-model-group-title {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #7ce8ff;
+  padding: 8px 4px 3px 4px;
+  border-bottom: 1px solid rgba(0, 212, 255, 0.15);
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-transform: uppercase;
+  user-select: none;
+}
+
 .ai-model-opt {
   display: flex;
   flex-direction: column;
@@ -3300,7 +3316,7 @@
 /* Floating HUD Quick-Toggle FAB */
 .ai-quick-toggle-fab {
   position: fixed;
-  bottom: 24px;
+  bottom: 88px;
   left: 24px;
   z-index: 1000;
   display: inline-flex;
@@ -3574,7 +3590,7 @@ body.ui-clean-view .ai-quick-toggle-fab {
 /* ═══════════ CCTV Surveillance PiP Grid ═══════════ */
 .cctv-pip-grid {
   position: fixed;
-  bottom: 24px;
+  bottom: 88px;
   right: 24px;
   z-index: 1000;
   display: flex;

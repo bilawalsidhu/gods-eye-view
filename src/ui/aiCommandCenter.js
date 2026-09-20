@@ -158,9 +158,73 @@ export function playAudioCue(type = 'wake', { audioContextRef = null } = {}) {
       gain.connect(ctx.destination);
       osc.start(now);
       osc.stop(now + 0.25);
+    } else if (type === 'comm') {
+      // 2-tone tactical radio chirp
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, now);
+      osc.frequency.setValueAtTime(1318.5, now + 0.04);
+      gain.gain.setValueAtTime(0.06, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.12);
     }
   } catch {}
 }
+
+/**
+ * AI Voice Personas / Voice Models with customized acoustic properties.
+ */
+export const VOICE_MODELS = Object.freeze({
+  jarvis: {
+    id: 'jarvis',
+    name: 'JARVIS Classic',
+    gender: 'male',
+    pitch: 0.92,
+    rate: 1.04,
+    preferredVoices: ['Google UK English Male', 'Microsoft George', 'Microsoft Ryan', 'Daniel', 'Arthur'],
+    description: 'British Tactical Commander (Deep RP Male)',
+  },
+  friday: {
+    id: 'friday',
+    name: 'FRIDAY Tactical',
+    gender: 'female',
+    pitch: 1.08,
+    rate: 1.12,
+    preferredVoices: ['Google UK English Female', 'Microsoft Hazel', 'Microsoft Susan', 'Moira', 'Samantha'],
+    description: 'Crisp Combat OS (Irish/British Female)',
+  },
+  edith: {
+    id: 'edith',
+    name: 'EDITH Cybernetic',
+    gender: 'neutral',
+    pitch: 0.96,
+    rate: 0.98,
+    preferredVoices: ['Alex', 'Fred', 'Microsoft David', 'Victoria'],
+    description: 'Calm High-Precision Tactical Synthetic',
+  },
+  sophia: {
+    id: 'sophia',
+    name: 'SOPHIA Neural',
+    gender: 'female',
+    pitch: 1.0,
+    rate: 1.0,
+    preferredVoices: ['Microsoft Jenny Natural', 'Microsoft Aria', 'Google US English', 'Zira'],
+    description: 'Warm Conversational Natural Human',
+  },
+  titan: {
+    id: 'titan',
+    name: 'TITAN Strategic',
+    gender: 'male',
+    pitch: 0.82,
+    rate: 0.94,
+    preferredVoices: ['Microsoft Guy Natural', 'Microsoft Mark', 'Tom', 'Bruce'],
+    description: 'Resonant Deep Bass Command Core',
+  },
+});
 
 /**
  * Detect written language from text script and lexical tokens.
@@ -218,38 +282,77 @@ export function detectTextLanguage(text) {
 }
 
 /**
- * Select the highest-quality browser TTS voice matching target language.
- * Prioritizes Microsoft Online / Natural, Google, Apple Neural voices.
+ * Select the highest-quality browser TTS voice matching target language and voice persona model.
+ * Prioritizes Microsoft Online / Natural, Google, Apple Neural voices matching persona timbre.
  */
-export function selectBestVoice(voices, targetLang, preferredVoiceName = '') {
+export function selectBestVoice(
+  voices,
+  targetLang,
+  preferredVoiceName = '',
+  voiceModelId = '',
+) {
   if (!voices || voices.length === 0) return null;
   if (preferredVoiceName) {
     const matched = voices.find((v) => v.name === preferredVoiceName);
     if (matched) return matched;
   }
+
   const primaryLang = (targetLang || 'en').split('-')[0].toLowerCase();
+  const modelProfile = voiceModelId ? VOICE_MODELS[voiceModelId] : null;
 
   // 1. Look for matching language with Neural / Natural / Online / Google in name
-  const natural = voices.find(
+  const naturalVoices = voices.filter(
     (v) =>
       v.lang.toLowerCase().startsWith(primaryLang) &&
       /natural|neural|online|google|siri|premium/i.test(v.name),
   );
-  if (natural) return natural;
 
-  // 2. Look for exact locale match (e.g. hi-IN or en-US)
+  if (naturalVoices.length > 0) {
+    if (modelProfile?.preferredVoices) {
+      for (const pref of modelProfile.preferredVoices) {
+        const match = naturalVoices.find((v) => v.name.includes(pref));
+        if (match) return match;
+      }
+    }
+    if (modelProfile?.gender === 'female') {
+      const fem = naturalVoices.find((v) =>
+        /female|woman|girl|aria|jenny|hazel|susan|moira|samantha/i.test(v.name),
+      );
+      if (fem) return fem;
+    } else if (modelProfile?.gender === 'male') {
+      const male = naturalVoices.find((v) =>
+        /male|man|boy|guy|george|ryan|daniel|david|mark|tom|bruce/i.test(v.name),
+      );
+      if (male) return male;
+    }
+    return naturalVoices[0];
+  }
+
+  // 2. Look for persona preferred voice from all voices
+  if (modelProfile?.preferredVoices) {
+    for (const pref of modelProfile.preferredVoices) {
+      const match = voices.find(
+        (v) =>
+          v.lang.toLowerCase().startsWith(primaryLang) &&
+          v.name.includes(pref),
+      );
+      if (match) return match;
+    }
+  }
+
+  // 3. Look for exact locale match (e.g. hi-IN or en-US)
   const exact = voices.find(
     (v) => v.lang.toLowerCase() === targetLang.toLowerCase(),
   );
   if (exact) return exact;
 
-  // 3. Look for primary language prefix match
+  // 4. Look for primary language prefix match
   const langMatch = voices.find((v) =>
     v.lang.toLowerCase().startsWith(primaryLang),
   );
   if (langMatch) return langMatch;
 
-  // 4. Default fallback to any voice
+  // 5. Default fallback to any voice
   return voices[0] || null;
 }
 
@@ -431,8 +534,9 @@ export function initAiCommandCenter({
   let voiceSettings = {
     lang: 'auto',
     preferredVoice: '',
-    rate: 1.0,
-    pitch: 1.0,
+    voiceModel: 'jarvis',
+    rate: 1.04,
+    pitch: 0.92,
     micLang: 'en-US',
   };
   try {
@@ -488,6 +592,7 @@ export function initAiCommandCenter({
   const voiceModal = panel.querySelector('.ai-voice-modal');
   const voiceModalCloseBtn = panel.querySelector('.ai-voice-modal-close-btn');
   const voiceLangSelect = panel.querySelector('#ai-voice-lang-select');
+  const voiceModelSelect = panel.querySelector('#ai-voice-model-select');
   const voicePickerSelect = panel.querySelector('#ai-voice-picker-select');
   const voiceRateSlider = panel.querySelector('#ai-voice-rate');
   const voiceRateVal = panel.querySelector('#ai-voice-rate-val');
@@ -825,8 +930,8 @@ export function initAiCommandCenter({
   if (modelBadge) {
     if (activeModel === 'auto') {
       modelBadge.textContent = '🎯 Auto-MoE';
-      modelBadge.title = 'Active: Auto-MoE (Intelligent Dynamic Task Routing)';
-    } else if (activeModel === 'ensemble' || activeModel === 'council') {
+      modelBadge.title = 'Active: Auto-MoE (All Models & Providers Working Simultaneously)';
+    } else if (activeModel === 'ensemble' || activeModel === 'council' || activeModel === 'swarm') {
       modelBadge.textContent = '👥 Council';
       modelBadge.title = 'Active: JARVIS Council (Multi-Model Swarm)';
     } else {
@@ -862,10 +967,12 @@ export function initAiCommandCenter({
       utterance.pitch = Number(voiceSettings.pitch) || 1.0;
 
       const voices = globalThis.speechSynthesis.getVoices?.() || [];
+      playAudioCue('comm');
       const chosenVoice = selectBestVoice(
         voices,
         targetLang,
         voiceSettings.preferredVoice,
+        voiceSettings.voiceModel || 'jarvis',
       );
       if (chosenVoice) utterance.voice = chosenVoice;
 
@@ -912,6 +1019,7 @@ export function initAiCommandCenter({
 
   // Sync initial voice settings to UI
   if (voiceLangSelect) voiceLangSelect.value = voiceSettings.lang || 'auto';
+  if (voiceModelSelect) voiceModelSelect.value = voiceSettings.voiceModel || 'jarvis';
   if (voiceRateSlider) {
     voiceRateSlider.value = String(voiceSettings.rate || 1.0);
     if (voiceRateVal) voiceRateVal.textContent = `${voiceSettings.rate}x`;
@@ -924,6 +1032,22 @@ export function initAiCommandCenter({
 
   voiceSettingsBtn?.addEventListener('click', () => switchView('voice'));
   voiceModalCloseBtn?.addEventListener('click', () => switchView('chat'));
+
+  voiceModelSelect?.addEventListener('change', () => {
+    voiceSettings.voiceModel = voiceModelSelect.value;
+    const model = VOICE_MODELS[voiceModelSelect.value];
+    if (model) {
+      voiceSettings.pitch = model.pitch;
+      voiceSettings.rate = model.rate;
+      if (voicePitchSlider) voicePitchSlider.value = String(model.pitch);
+      if (voicePitchVal) voicePitchVal.textContent = String(model.pitch.toFixed(2));
+      if (voiceRateSlider) voiceRateSlider.value = String(model.rate);
+      if (voiceRateVal) voiceRateVal.textContent = `${model.rate.toFixed(2)}x`;
+    }
+    saveVoiceSettings();
+    populateVoiceOptions();
+    speakText(`Voice model calibrated to ${model?.name || 'custom'}.`);
+  });
 
   voiceLangSelect?.addEventListener('change', () => {
     voiceSettings.lang = voiceLangSelect.value;
@@ -1422,20 +1546,50 @@ export function initAiCommandCenter({
       if (res.ok) {
         const data = await res.json();
         if (data.model) {
-          activeModel = data.model;
-          if (modelBadge) {
-            const shortModel = (data.model.split('/').pop() || data.model).replace(/-instruct|-it/g, '');
-            const url = data.baseUrl || '';
-            let prefix = '⚡';
-            let providerName = 'NVIDIA NIM';
-            if (url.includes('groq.com')) { prefix = '🚀'; providerName = 'Groq'; }
-            else if (url.includes('googleapis.com')) { prefix = '🟢'; providerName = 'Google Gemini'; }
-            else if (url.includes('mistral.ai')) { prefix = '🌪️'; providerName = 'Mistral AI'; }
-            else if (url.includes('cerebras.ai')) { prefix = '⚡'; providerName = 'Cerebras'; }
-            else if (url.includes('openrouter.ai')) { prefix = '🌐'; providerName = 'OpenRouter'; }
+          if (activeModel === 'council' || activeModel === 'ensemble' || activeModel === 'swarm' || activeModel === 'auto') {
+            if (modelBadge) {
+              const isConfigured = Boolean(data.configured);
+              modelBadge.textContent = `⚡ Omni-Swarm ${isConfigured ? '🟢' : '⚠️'}`;
+              modelBadge.title = `⚡ Omni-Provider Swarm Active | All configured AI providers running simultaneously in parallel`;
+              if (isConfigured) {
+                modelBadge.style.borderColor = 'rgba(57, 255, 20, 0.6)';
+                modelBadge.style.boxShadow = '0 0 8px rgba(57, 255, 20, 0.3)';
+              } else {
+                modelBadge.style.borderColor = 'rgba(255, 170, 0, 0.6)';
+                modelBadge.style.boxShadow = '0 0 8px rgba(255, 170, 0, 0.3)';
+              }
+            }
+          } else {
+            activeModel = data.model;
+            if (modelBadge) {
+              const shortModel = (data.model.split('/').pop() || data.model).replace(/-instruct|-it/g, '');
+              const url = data.baseUrl || '';
+              let prefix = '⚡';
+              let providerName = 'NVIDIA NIM';
+              if (url.includes('groq.com')) { prefix = '🚀'; providerName = 'Groq Cloud'; }
+              else if (url.includes('googleapis.com')) { prefix = '🟢'; providerName = 'Google Gemini'; }
+              else if (url.includes('cohere.com')) { prefix = '🧠'; providerName = 'Cohere'; }
+              else if (url.includes('sambanova.ai')) { prefix = '⚡'; providerName = 'SambaNova'; }
+              else if (url.includes('cerebras.ai')) { prefix = '⚡'; providerName = 'Cerebras'; }
+              else if (url.includes('mistral.ai')) { prefix = '🌪️'; providerName = 'Mistral AI'; }
+              else if (url.includes('openrouter.ai')) { prefix = '🌐'; providerName = 'OpenRouter'; }
+              else if (url.includes('aion')) { prefix = '🔮'; providerName = 'AionLabs'; }
+              else if (url.includes('requesty.ai')) { prefix = '⚡'; providerName = 'Requesty'; }
 
-            modelBadge.textContent = `${prefix} ${shortModel}`;
-            modelBadge.title = `Provider: ${providerName} (${url}) | Model: ${data.model}`;
+              const isConfigured = Boolean(data.configured);
+              const statusIcon = isConfigured ? '🟢' : '⚠️';
+              modelBadge.textContent = `${prefix} ${shortModel} ${statusIcon}`;
+              modelBadge.title = isConfigured
+                ? `✓ KEY SAVED & ACTIVE | Provider: ${providerName} (${url}) | Model: ${data.model}`
+                : `⚠️ NO KEY PASTED YET | Click to open POWER UP station and paste your key`;
+              if (isConfigured) {
+                modelBadge.style.borderColor = 'rgba(57, 255, 20, 0.6)';
+                modelBadge.style.boxShadow = '0 0 8px rgba(57, 255, 20, 0.3)';
+              } else {
+                modelBadge.style.borderColor = 'rgba(255, 170, 0, 0.6)';
+                modelBadge.style.boxShadow = '0 0 8px rgba(255, 170, 0, 0.3)';
+              }
+            }
           }
         }
       }
@@ -2529,7 +2683,7 @@ export function initAiCommandCenter({
     typingIndicator.innerHTML = `
       <div class="ai-msg-bubble">
         <span class="ai-typing-dots"><span></span><span></span><span></span></span>
-        <span>${currentMode === 'globe' ? 'Executing globe commands...' : currentMode === 'code' ? 'Writing & executing code...' : currentMode === 'auto' ? 'Running workflow...' : activeModel === 'ensemble' || activeModel === 'council' ? 'Council swarm deliberating...' : 'JARVIS thinking...'}</span>
+        <span>${currentMode === 'globe' ? 'Executing globe commands...' : currentMode === 'code' ? 'Writing & executing code...' : currentMode === 'auto' ? 'Running workflow...' : activeModel === 'ensemble' || activeModel === 'council' || activeModel === 'swarm' || activeModel === 'auto' ? '⚡ Omni-Provider Swarm deliberating simultaneously across all models...' : 'JARVIS thinking...'}</span>
       </div>
     `;
     messagesContainer?.appendChild(typingIndicator);
@@ -2578,7 +2732,9 @@ export function initAiCommandCenter({
       } else if (
         useStreaming &&
         currentMode !== 'code' &&
-        currentMode !== 'auto'
+        currentMode !== 'auto' &&
+        activeModel !== 'stabilityai/stable-diffusion-3-medium' &&
+        !/\b(generate (an? )?image|create (an? )?image|draw|paint|sketch|artwork|picture of)\b/i.test(text)
       ) {
         // Use SSE streaming for chat-like modes
         typingIndicator.remove();

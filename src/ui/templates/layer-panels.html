@@ -232,113 +232,90 @@
           </button>
         </div>
         <div class="ai-model-list">
+          <div class="ai-model-group-title">🎯 OMNI-PROVIDER SWARM & AUTO-ROUTER</div>
           <button type="button" class="ai-model-opt active" data-model="auto">
-            <span class="model-opt-name"
-              >🎯 Auto-Route (Intelligent Task MoE)</span
-            >
-            <span class="model-opt-tag"
-              >AUTOMATIC · DETECTS TASK DOMAIN & USES BEST SPECIALIZED
-              MODEL</span
-            >
+            <span class="model-opt-name">🎯 Auto-Route (Intelligent Task MoE)</span>
+            <span class="model-opt-tag">AUTOMATIC · DETECTS TASK DOMAIN & USES BEST SPECIALIZED PROVIDER</span>
           </button>
           <button type="button" class="ai-model-opt" data-model="ensemble">
-            <span class="model-opt-name"
-              >👥 JARVIS Council (Multi-Model Swarm)</span
-            >
-            <span class="model-opt-tag"
-              >SYNERGY · GPT-OSS + MISTRAL + NEMOTRON DELIBERATE
-              SIMULTANEOUSLY</span
-            >
+            <span class="model-opt-name">👥 JARVIS Omni-Swarm (All Providers Simultaneous)</span>
+            <span class="model-opt-tag">SYNERGY · GEMINI + GROQ + COHERE + CEREBRAS + SAMBANOVA + MISTRAL SIMULTANEOUS</span>
           </button>
-          <button
-            type="button"
-            class="ai-model-opt"
-            data-model="nvidia/nemotron-3.5-lightning-30b-a3b"
-          >
+
+          <div class="ai-model-group-title">🟢 GOOGLE GEMINI (HIGH SPEED & QUOTA)</div>
+          <button type="button" class="ai-model-opt" data-model="gemini-3.6-flash">
+            <span class="model-opt-name">🟢 Gemini 3.6 Flash</span>
+            <span class="model-opt-tag">RECOMMENDED · FAST MULTIMODAL REASONING & 1M+ CONTEXT</span>
+          </button>
+
+          <div class="ai-model-group-title">🚀 GROQ CLOUD LPU (SUB-SECOND INFERENCE)</div>
+          <button type="button" class="ai-model-opt" data-model="openai/gpt-oss-20b">
+            <span class="model-opt-name">🚀 GPT-OSS 20B (Groq LPU)</span>
+            <span class="model-opt-tag">ULTRA LOW LATENCY · HIGH PRECISION LOGIC & CODE</span>
+          </button>
+          <button type="button" class="ai-model-opt" data-model="openai/gpt-oss-120b">
+            <span class="model-opt-name">🚀 GPT-OSS 120B (Groq LPU)</span>
+            <span class="model-opt-tag">DEEP REASONING · MASSIVE 120B PARAMETER LPU ACCELERATION</span>
+          </button>
+
+          <div class="ai-model-group-title">🧠 COHERE (PRECISION CITATIONS & RAG)</div>
+          <button type="button" class="ai-model-opt" data-model="command-r-plus-08-2024">
+            <span class="model-opt-name">🧠 Cohere Command R+</span>
+            <span class="model-opt-tag">ENTERPRISE PRECISION · MULTI-STEP RAG & ADVANCED CITATIONS</span>
+          </button>
+
+          <div class="ai-model-group-title">⚡ CEREBRAS CLOUD (WAFER-SCALE RECORD SPEED)</div>
+          <button type="button" class="ai-model-opt" data-model="gpt-oss-120b">
+            <span class="model-opt-name">⚡ GPT-OSS 120B (Cerebras Wafer-Scale)</span>
+            <span class="model-opt-tag">BLISTERING 1,800 TOKENS/SEC · RECORD INFERENCE SPEED</span>
+          </button>
+
+          <div class="ai-model-group-title">⚡ SAMBANOVA (DATAFLOW ACCELERATION)</div>
+          <button type="button" class="ai-model-opt" data-model="Meta-Llama-3.3-70B-Instruct">
+            <span class="model-opt-name">⚡ Llama 3.3 70B (SambaNova)</span>
+            <span class="model-opt-tag">SN40L ACCELERATOR · HIGH-THROUGHPUT FRONTIER REASONING</span>
+          </button>
+
+          <div class="ai-model-group-title">🌪️ MISTRAL AI (SOVEREIGN EUROPEAN REASONING)</div>
+          <button type="button" class="ai-model-opt" data-model="mistral-small-latest">
+            <span class="model-opt-name">🌪️ Mistral Small (Latest)</span>
+            <span class="model-opt-tag">SOVEREIGN AI · ADVANCED REASONING & MULTILINGUAL SPECIALIST</span>
+          </button>
+
+          <div class="ai-model-group-title">🔮 AIONLABS (DEEP DEDUCTIVE INTELLIGENCE)</div>
+          <button type="button" class="ai-model-opt" data-model="aion-3.0">
+            <span class="model-opt-name">🔮 Aion 3.0</span>
+            <span class="model-opt-tag">128K CONTEXT · HYPOTHESIS & SCIENTIFIC REASONING</span>
+          </button>
+
+          <div class="ai-model-group-title">⚡ REQUESTY (SMART MULTI-ROUTER)</div>
+          <button type="button" class="ai-model-opt" data-model="openai/gpt-4o-mini">
+            <span class="model-opt-name">⚡ GPT-4o Mini (Requesty)</span>
+            <span class="model-opt-tag">SMART BALANCING · LOW LATENCY UNIVERSAL INFERENCE</span>
+          </button>
+
+          <div class="ai-model-group-title">🌐 OPENROUTER (COMMUNITY DECENTRALIZED)</div>
+          <button type="button" class="ai-model-opt" data-model="meta-llama/llama-3.3-70b-instruct:free">
+            <span class="model-opt-name">🌐 Llama 3.3 70B (OpenRouter Free)</span>
+            <span class="model-opt-tag">COMMUNITY TIER · PERMANENT ACCESSIBILITY</span>
+          </button>
+
+          <div class="ai-model-group-title">⚡ NVIDIA NIM (TACTICAL ACCELERATION)</div>
+          <button type="button" class="ai-model-opt" data-model="nvidia/nemotron-3.5-lightning-30b-a3b">
             <span class="model-opt-name">⚡ Nemotron 3.5 Lightning 30B</span>
-            <span class="model-opt-tag"
-              >RECOMMENDED · FAST TACTICAL REASONING & GLOBE CONTROL</span
-            >
+            <span class="model-opt-tag">TACTICAL REASONING · FAST MAMBA-TRANSFORMER GLOBE CONTROL</span>
           </button>
-          <button
-            type="button"
-            class="ai-model-opt"
-            data-model="nvidia/nemotron-3-ultra-550b-a55b"
-          >
+          <button type="button" class="ai-model-opt" data-model="nvidia/nemotron-3-ultra-550b-a55b">
             <span class="model-opt-name">🧠 Nemotron 550B Ultra</span>
-            <span class="model-opt-tag"
-              >FRONTIER DEEP REASONING · COMPLEX HYPOTHESES & DEDUCTIONS</span
-            >
+            <span class="model-opt-tag">FRONTIER DEEP REASONING · COMPLEX HYPOTHESES & DEDUCTIONS</span>
           </button>
-          <button
-            type="button"
-            class="ai-model-opt"
-            data-model="deepseek-ai/deepseek-r1"
-          >
+          <button type="button" class="ai-model-opt" data-model="deepseek-ai/deepseek-r1">
             <span class="model-opt-name">🔬 DeepSeek R1 (Thinking Trace)</span>
-            <span class="model-opt-tag"
-              >CHAIN OF THOUGHT · MATHEMATICAL & ALGORITHMIC PROOFS</span
-            >
+            <span class="model-opt-tag">CHAIN OF THOUGHT · MATHEMATICAL & ALGORITHMIC PROOFS</span>
           </button>
-          <button
-            type="button"
-            class="ai-model-opt"
-            data-model="openai/gpt-oss-20b"
-          >
-            <span class="model-opt-name">💻 GPT-OSS 20B (OpenAI / NVIDIA)</span>
-            <span class="model-opt-tag"
-              >STEP-BY-STEP REASONING · HIGH-PRECISION CODE & LOGIC</span
-            >
-          </button>
-          <button
-            type="button"
-            class="ai-model-opt"
-            data-model="meta/llama-3.3-70b-instruct"
-          >
-            <span class="model-opt-name">🦙 Llama 3.3 70B Instruct</span>
-            <span class="model-opt-tag"
-              >META FRONTIER 70B · TOP TIER GENERAL BENCHMARK LEADER</span
-            >
-          </button>
-          <button
-            type="button"
-            class="ai-model-opt"
-            data-model="meta/llama-3.2-11b-vision-instruct"
-          >
+          <button type="button" class="ai-model-opt" data-model="meta/llama-3.2-11b-vision-instruct">
             <span class="model-opt-name">👁️ Llama 3.2 11B Vision</span>
-            <span class="model-opt-tag"
-              >MULTI-MODAL · SATELLITE & CAMERA IMAGE COMPREHENSION</span
-            >
-          </button>
-          <button
-            type="button"
-            class="ai-model-opt"
-            data-model="stabilityai/stable-diffusion-3-medium"
-          >
-            <span class="model-opt-name">🎨 Stable Diffusion 3 Medium</span>
-            <span class="model-opt-tag"
-              >GENAI ART · TEXT-TO-IMAGE HIGH RESOLUTION SYNTHESIS</span
-            >
-          </button>
-          <button
-            type="button"
-            class="ai-model-opt"
-            data-model="mistralai/mistral-nemotron"
-          >
-            <span class="model-opt-name">🌐 Mistral-Nemotron</span>
-            <span class="model-opt-tag"
-              >MISTRAL + NEMOTRON HYBRID · MULTILINGUAL TITAN</span
-            >
-          </button>
-          <button
-            type="button"
-            class="ai-model-opt"
-            data-model="moonshotai/kimi-k3"
-          >
-            <span class="model-opt-name">📜 Kimi K3 (200K Long Context)</span>
-            <span class="model-opt-tag"
-              >LONG CONTEXT · MASSIVE DOCUMENT ANALYSIS & SUMMARIZATION</span
-            >
+            <span class="model-opt-tag">MULTI-MODAL · SATELLITE & CAMERA IMAGE COMPREHENSION</span>
           </button>
         </div>
       </div>
@@ -450,7 +427,7 @@
             type="button"
             class="ai-quick-model-btn active"
             data-model="auto"
-            title="Auto-Route: Automatically uses the best model for the task (Code, Math, Multilingual, etc.)"
+            title="Auto-Route: Automatically uses the best model for the task across providers"
           >
             🎯 Auto-MoE
           </button>
@@ -458,9 +435,33 @@
             type="button"
             class="ai-quick-model-btn"
             data-model="ensemble"
-            title="JARVIS Council: GPT-OSS + Mistral + Nemotron work together simultaneously!"
+            title="JARVIS Council: Multi-Model Swarm consensus"
           >
             👥 Council
+          </button>
+          <button
+            type="button"
+            class="ai-quick-model-btn"
+            data-model="gemini-3.6-flash"
+            title="Google Gemini 3.6 Flash (Fast multimodal intelligence)"
+          >
+            🟢 Gemini 3.6
+          </button>
+          <button
+            type="button"
+            class="ai-quick-model-btn"
+            data-model="openai/gpt-oss-20b"
+            title="Groq LPU GPT-OSS 20B (Sub-second reasoning & code)"
+          >
+            🚀 Groq 20B
+          </button>
+          <button
+            type="button"
+            class="ai-quick-model-btn"
+            data-model="command-r-plus-08-2024"
+            title="Cohere Command R+ (High-precision enterprise reasoning)"
+          >
+            🧠 Cohere R+
           </button>
           <button
             type="button"
@@ -469,38 +470,6 @@
             title="Nemotron 3.5 Lightning (Default · Fast reasoning)"
           >
             ⚡ Nemotron 3.5
-          </button>
-          <button
-            type="button"
-            class="ai-quick-model-btn"
-            data-model="openai/gpt-oss-20b"
-            title="GPT-OSS 20B (OpenAI reasoning & code)"
-          >
-            🧠 GPT-OSS 20B
-          </button>
-          <button
-            type="button"
-            class="ai-quick-model-btn"
-            data-model="mistralai/mistral-nemotron"
-            title="Mistral-Nemotron (Multilingual & analysis)"
-          >
-            🌐 Mistral-Nemo
-          </button>
-          <button
-            type="button"
-            class="ai-quick-model-btn"
-            data-model="meta/llama-3.2-11b-vision-instruct"
-            title="Llama 3.2 11B Vision (Images & vision)"
-          >
-            👁️ Llama Vision
-          </button>
-          <button
-            type="button"
-            class="ai-quick-model-btn"
-            data-model="meta/llama-3.2-90b-vision-instruct"
-            title="Llama 3.2 90B Vision (Flagship multimodal)"
-          >
-            👁️ Llama 90B
           </button>
         </div>
         <button
@@ -585,6 +554,18 @@
                 <option value="ru-RU">🇷🇺 Russian (Русский)</option>
                 <option value="it-IT">🇮🇹 Italian (Italiano)</option>
                 <option value="pt-BR">🇧🇷 Portuguese (Português)</option>
+              </select>
+            </div>
+            <div class="ai-setting-group">
+              <label class="ai-setting-label" for="ai-voice-model-select"
+                >🎙️ AI Voice Model / Persona</label
+              >
+              <select id="ai-voice-model-select" class="ai-setting-select">
+                <option value="jarvis">🛡️ JARVIS Classic (British Tactical Commander · Deep RP Male)</option>
+                <option value="friday">⚡ FRIDAY Tactical (Crisp Combat OS · Irish/British Female)</option>
+                <option value="edith">🤖 EDITH Cybernetic (Calm High-Precision Tactical Synthetic)</option>
+                <option value="sophia">🌟 SOPHIA Neural (Warm Conversational Natural Human)</option>
+                <option value="titan">🏛️ TITAN Strategic (Resonant Deep Bass Command Core)</option>
               </select>
             </div>
             <div class="ai-setting-group">

@@ -117,6 +117,7 @@ export class VisionGestureController {
     const { Human } = await import('@vladmandic/human');
 
     const cdns = [
+      '/node_modules/@vladmandic/human/models/',
       'https://cdn.jsdelivr.net/npm/@vladmandic/human/models/',
       'https://unpkg.com/@vladmandic/human/models/',
     ];
