@@ -67,11 +67,15 @@ test('npm test stays green on every supported engine, not only the calibrated on
   // processes recorded those functions executing (c8 measures 75.1%). The
   // runner still owns plan discovery; --parallel-only keeps the allocation
   // probes out, because coverage instrumentation allocates and would fail
-  // their calibrated budgets.
+  // their calibrated budgets. The threshold flags are the ratchet
+  // (docs/adr/0008): floors sit just below the measured baseline
+  // (91.58 stmts/lines, 91.21 funcs, 81.19 branches on 2026-09-20) so the
+  // job gates COLLAPSE, not variance — raise them deliberately, never let
+  // them slip.
   assert.equal(
     pkg.scripts['test:coverage'],
-    'c8 node scripts/run-unit-tests.mjs --parallel-only',
-    'coverage must go through the same runner, wrapped in c8, parallel-only',
+    'c8 --lines 91 --statements 91 --functions 90 --branches 80 node scripts/run-unit-tests.mjs --parallel-only',
+    'coverage must go through the same runner, wrapped in c8, parallel-only, with the ratchet floors',
   );
   assert.deepEqual(pkg.c8.include, ['src/**/*.js', 'functions/**/*.js']);
   assert.ok(pkg.c8.exclude.includes('**/*.test.mjs'));
