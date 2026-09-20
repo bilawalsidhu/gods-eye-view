@@ -30,16 +30,20 @@
 #   a guaranteed failure. Rebuild gev-ci-node:1 when package-lock.json
 #   changes and gev-ci-rust:1 when rust/firms-renderer/Cargo.lock changes
 #   (instructions in the Dockerfile headers).
-# - The job graph is a LINEAR CHAIN (lint → security → test-node24 →
-#   test-node26 → coverage → build), not the GitHub workflow's fan-out,
-#   because all jobs of one run share the SAME workspace directory on this
-#   runner (GitHub gives each job a fresh VM). Jobs with `needs: [lint]`
-#   alone dispatch concurrently and their `npm ci` steps delete each other's
-#   node_modules mid-flight — measured 2026-09-15 as `Cannot find package
-#   'mersenne-twister'` from @cesium/engine with 410/580 packages on disk.
-#   dsc's fan-out .gitforce.yml hits the same wall (all runs red). The
-#   cost is wall-time serialization; the npm cache keeps each `npm ci`
-#   ~12 s, so the chain is acceptable.
+# - The job graph is a LINEAR CHAIN with ONE safe parallel pair
+#   (lint → {security, test-node24} → test-node26 → coverage → build),
+#   not the GitHub workflow's fan-out, because all jobs of one run share
+#   the SAME workspace directory on this runner (GitHub gives each job a
+#   fresh VM). Jobs with `needs: [lint]` alone dispatch concurrently and
+#   their `npm ci` steps delete each other's node_modules mid-flight —
+#   measured 2026-09-15 as `Cannot find package 'mersenne-twister'` from
+#   @cesium/engine with 410/580 packages on disk. dsc's fan-out
+#   .gitforce.yml hits the same wall (all runs red). The one parallel pair
+#   is safe precisely because the security job runs NO npm — it only reads
+#   tracked files (baseline + checkout) while test-node24's `npm ci`
+#   churns node_modules, which aegis's gitignore-aware scan never enters.
+#   The cost of everything else is wall-time serialization; the npm cache
+#   keeps each `npm ci` ~12 s, so the chain is acceptable.
 #
 # - The security job runs ONLY here, not in the GitHub workflow: the aegis
 #   binary is built from the local aegis checkout into the gev-ci-node:1
