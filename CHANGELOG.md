@@ -1,5 +1,14 @@
 # Changelog
 
+- Report AIS speed and course that carry the standard "not available" code as
+  unknown instead of 102.3 knots and 360 degrees. Genuine readings, including a
+  stopped vessel's zero and the highest encodable values, are unchanged.
+
+- Render native `<select>` option lists in the dark UI palette. The closed
+  controls were already skinned, but the browser-painted popups fell back to the
+  platform light palette, leaving near-white option text on a white surface in
+  the HUD layout, Scenes, CCTV camera, Radio filter and Draw colour menus.
+
 - Credit adsbdb, which supplies the aircraft type, model name and registration
   on enriched flights and the airline and origin/destination pair behind the
   tracked contact's route strip. `DATA_SOURCES.md` now records adsbdb's
