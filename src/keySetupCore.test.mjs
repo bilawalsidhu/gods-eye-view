@@ -28,10 +28,10 @@ test('the boot provenance snapshot survives in-process Vite config re-evaluation
   // panel save has already set its values live on process.env. A recomputed
   // snapshot would classify the panel's own keys as external (read-only) until
   // a full process relaunch, so the first evaluation's snapshot must win.
-  const source = readFileSync(new URL('../vite.config.js', import.meta.url), 'utf8');
+  const source = readFileSync(new URL('../server/standalone/key-setup.js', import.meta.url), 'utf8');
   assert.match(
     source,
-    /const PROVIDER_ENV_AT_BOOT = globalThis\.__GEV_PROVIDER_ENV_AT_BOOT \?\?= Object\.freeze\(/,
+    /const PROVIDER_ENV_AT_BOOT\s*=\s*\(?globalThis\.__GEV_PROVIDER_ENV_AT_BOOT\s*\?\?=\s*Object\.freeze\(/,
   );
 });
 
@@ -63,7 +63,7 @@ test('the status payload reports presence without any credential material', () =
     // Secret missing: the OpenSky pair must read as NOT set.
   };
   const status = keySetupStatus(env);
-  assert.equal(status.total, KEY_SETUP_KEYS.length);
+  assert.equal(status.total, KEY_SETUP_KEYS.filter((key) => !key.hidden).length);
   const google = status.keys.find((key) => key.id === 'google-maps');
   assert.equal(google.set, true);
   const opensky = status.keys.find((key) => key.id === 'opensky');
@@ -340,4 +340,25 @@ test('validation rejects dotenv metacharacters that would round-trip wrong', () 
   for (const good of ['sk-AbC0-9_x', 'eyJhbGc.eyJzdWI.QWxpY2U', 'a1b2c3d4e5f6', 'AB+cd/ef=']) {
     assert.equal(validateKeySetupUpdates({ OPENAI_API_KEY: good }).ok, true, `${good} accepted`);
   }
+});
+
+test('server Google key remains supported without appearing in setup or its missing count', () => {
+  const secret = 'server-key-fixture';
+  assert.deepEqual(validateKeySetupUpdates({ GOOGLE_MAPS_SERVER_API_KEY: secret }), {
+    ok: true, updates: { GOOGLE_MAPS_SERVER_API_KEY: secret },
+  });
+  assert.equal(validateKeySetupUpdates({ GOOGLE_MAPS_SERVER_API_KEY: null }).ok, true);
+  const status = keySetupStatus({ GOOGLE_MAPS_SERVER_API_KEY: secret });
+  assert.deepEqual(status, keySetupStatus({}));
+  assert.equal(status.keys.some((key) => key.id === 'google-maps-server'), false);
+  assert.equal(keySetupRequirement('google-maps-server'), '');
+  assert.equal(status.keys.find((key) => key.id === 'google-maps').title, 'GOOGLE MAPS');
+  const allVisibleConfigured = Object.fromEntries(status.keys.flatMap((key) =>
+    key.envVars.map((name) => [name, 'configured-fixture']),
+  ));
+  const complete = keySetupStatus(allVisibleConfigured);
+  assert.equal(complete.setCount, complete.total, 'an absent server key must not leave setup incomplete');
+  assert.deepEqual(complete, keySetupStatus({ ...allVisibleConfigured, GOOGLE_MAPS_SERVER_API_KEY: secret }));
+  assert.ok(!JSON.stringify(status).includes('GOOGLE_MAPS_SERVER_API_KEY'));
+  assert.ok(!JSON.stringify(status).includes(secret));
 });

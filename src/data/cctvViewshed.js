@@ -46,7 +46,7 @@ export function cameraHue(index) {
  * @returns {{fill: Cesium.Color, fillActive: Cesium.Color, line: Cesium.Color, lineActive: Cesium.Color}}
  */
 export function viewshedColors(hueDeg) {
-  const hue = ((Number(hueDeg) % 360) + 360) % 360 / 360;
+  const hue = (((Number(hueDeg) % 360) + 360) % 360) / 360;
   return {
     fill: Cesium.Color.fromHsl(hue, 0.85, 0.6, FILL_ALPHA_IDLE),
     fillActive: Cesium.Color.fromHsl(hue, 0.85, 0.6, FILL_ALPHA_ACTIVE),
@@ -66,7 +66,13 @@ export function viewshedColors(hueDeg) {
  * @returns {{positions: Float64Array, indices: Uint16Array}}
  */
 export function frustumVolumeGeometryData(positions) {
-  const pts = [positions.mount, positions.tl, positions.tr, positions.br, positions.bl];
+  const pts = [
+    positions.mount,
+    positions.tl,
+    positions.tr,
+    positions.br,
+    positions.bl,
+  ];
   const flat = new Float64Array(15);
   pts.forEach((p, i) => {
     flat[i * 3] = p.x;
@@ -75,12 +81,7 @@ export function frustumVolumeGeometryData(positions) {
   });
   // apex=0, tl=1, tr=2, br=3, bl=4 — 4 side faces + far cap (2 triangles).
   const indices = new Uint16Array([
-    0, 1, 2,
-    0, 2, 3,
-    0, 3, 4,
-    0, 4, 1,
-    1, 2, 3,
-    1, 3, 4,
+    0, 1, 2, 0, 2, 3, 0, 3, 4, 0, 4, 1, 1, 2, 3, 1, 3, 4,
   ]);
   return { positions: flat, indices };
 }

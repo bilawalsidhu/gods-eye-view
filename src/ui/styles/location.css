@@ -1,0 +1,300 @@
+/* ── Location Bar ────────────────────────────── */
+#location-bar {
+  position: fixed;
+  bottom: 130px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  width: auto;
+  max-width: 720px;
+}
+
+#location-bar .panel-glow {
+  position: absolute;
+  inset: -20px;
+  background: radial-gradient(
+    ellipse at center,
+    var(--accent-dim) 0%,
+    transparent 60%
+  );
+  filter: blur(20px);
+  opacity: 0.25;
+  pointer-events: none;
+}
+
+.location-inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  padding: 8px 12px;
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.location-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  padding: 0 4px;
+}
+
+.location-toolbar-label {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 2px;
+  color: var(--text-dim);
+}
+
+.location-mini-status {
+  display: none;
+  gap: 2px;
+  padding: 0 4px 4px;
+}
+
+#location-bar.collapsed .location-mini-status {
+  display: grid;
+}
+
+.location-mini-city {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.8px;
+  color: #bdefff;
+}
+
+.location-mini-poi {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 1px;
+  color: var(--text-secondary);
+  max-width: 190px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.location-pills {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.location-pills::-webkit-scrollbar {
+  display: none;
+}
+
+.location-pill {
+  padding: 6px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    color var(--transition-fast),
+    transform var(--transition-fast);
+  outline: none;
+  white-space: nowrap;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  letter-spacing: 0.3px;
+}
+
+.location-pill:focus-visible,
+.poi-pill:focus-visible,
+.search-toggle-btn:focus-visible,
+#location-search:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: -3px;
+}
+
+.location-pill:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--glass-border-hover);
+  transform: translateY(-1px);
+}
+
+.location-pill.active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 12px rgba(0, 212, 255, 0.15);
+}
+
+/* ── Expandable POI Row ──────────────────────── */
+.poi-row-container {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition:
+    max-height 250ms cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 200ms ease,
+    padding 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  padding: 0 4px;
+}
+
+.poi-row-container.expanded {
+  max-height: 50px;
+  opacity: 1;
+  padding: 4px 4px 0;
+}
+
+.location-bar-divider {
+  height: 0;
+  border: none;
+  border-top: 1px solid var(--glass-border);
+  margin: 0 4px;
+  opacity: 0;
+  transition:
+    opacity 200ms ease,
+    margin 250ms ease;
+}
+
+.location-bar-divider.visible {
+  opacity: 1;
+  margin: 6px 4px;
+}
+
+.location-city-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.poi-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    color var(--transition-fast),
+    transform var(--transition-fast);
+  outline: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.poi-pill:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--glass-border-hover);
+  transform: translateY(-1px);
+}
+
+.poi-pill.active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  box-shadow: 0 0 12px rgba(0, 212, 255, 0.15);
+}
+
+.poi-pill-name {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  letter-spacing: 0.3px;
+}
+
+.poi-pill.active .poi-pill-name {
+  color: var(--accent);
+}
+
+.poi-pill-key {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 2px 5px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.poi-pill.active .poi-pill-key {
+  color: var(--accent);
+  background: rgba(0, 212, 255, 0.12);
+}
+
+/* ── Location Search ─────────────────────────── */
+.location-search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex-shrink: 0;
+}
+
+.search-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 50%;
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    color var(--transition-fast);
+  outline: none;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.search-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--glass-border-hover);
+}
+
+#location-search {
+  width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  outline: none;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  letter-spacing: 0.3px;
+  transition:
+    width var(--transition-smooth),
+    padding var(--transition-smooth);
+  caret-color: var(--accent);
+}
+
+#location-search.expanded {
+  width: 180px;
+  padding: 6px 10px;
+}
+
+#location-search::placeholder {
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+#location-search.searching {
+  opacity: 0.5;
+}

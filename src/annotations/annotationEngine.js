@@ -1,10 +1,20 @@
+import { defaultGeospatial } from '../search/defaults.js';
 import * as Cesium from 'cesium';
-import { holdContinuousRender, releaseContinuousRender } from '../renderGovernor.js';
-import { isRateLimitedOutcome, resolveAnnotationTarget } from './annotationResolver.js';
+import {
+  holdContinuousRender,
+  releaseContinuousRender,
+} from '../renderGovernor.js';
+import {
+  isRateLimitedOutcome,
+  resolveAnnotationTarget,
+  sampleGroundHeight,
+} from './annotationResolver.js';
+import { ringCentroid } from './drawMode.js';
 
 // Dev convenience: expose the app's Cesium instance for console/preview probing
 // (single shared module instance — avoids dual-Cesium state bugs when testing).
-if (typeof window !== 'undefined' && !window.__CESIUM__) window.__CESIUM__ = Cesium;
+if (typeof window !== 'undefined' && !window.__CESIUM__)
+  window.__CESIUM__ = Cesium;
 
 /**
  * Annotation engine — the voice agent's "whiteboard" over the 3D world.
@@ -23,7 +33,13 @@ const COLORS = new Set(['primary', 'amber', 'cyan', 'green', 'red']);
 // Entity FACTS the voice model may attach to an annotation (annotate_map.entityKind) —
 // what kind of thing the target IS, routing the resolver (e.g. point_feature keeps a
 // monument point-first). Unknown values are dropped, never guessed.
-const ENTITY_KINDS = new Set(['building', 'compound', 'district', 'street', 'point_feature']);
+const ENTITY_KINDS = new Set([
+  'building',
+  'compound',
+  'district',
+  'street',
+  'point_feature',
+]);
 const DEFAULT_TTL_MS = 22_000;
 const FADE_MS = 1200;
 // Hard ceiling on simultaneously-live marks. Protects against a runaway voice
@@ -49,11 +65,14 @@ const OUTLINE_UPGRADE_CONCURRENCY = 2;
  * retrying immediately. A thrown resolver counts as definitive — the pre-retry
  * catch→point behavior. Exported for tests.
  */
-export async function resolveOutlineWithRetry(resolveOutline, {
-  delaysMs = OUTLINE_RETRY_DELAYS_MS,
-  isStale = () => false,
-  waitFn = wait,
-} = {}) {
+export async function resolveOutlineWithRetry(
+  resolveOutline,
+  {
+    delaysMs = OUTLINE_RETRY_DELAYS_MS,
+    isStale = () => false,
+    waitFn = wait,
+  } = {},
+) {
   let retriedRateLimit = false;
   for (let attempt = 0; ; attempt += 1) {
     let fp;
@@ -66,7 +85,9 @@ export async function resolveOutlineWithRetry(resolveOutline, {
       // A throttle gets one deliberately spaced retry. If that retry is throttled
       // too, stop this mark's outline task instead of replaying the batch storm.
       if (retriedRateLimit || attempt >= delaysMs.length) return undefined;
-      const retryAfterMs = Number.isFinite(fp.retryAfterMs) ? fp.retryAfterMs : 0;
+      const retryAfterMs = Number.isFinite(fp.retryAfterMs)
+        ? fp.retryAfterMs
+        : 0;
       await waitFn(Math.max(retryAfterMs, delaysMs[attempt]));
       if (isStale()) return undefined;
       retriedRateLimit = true;
@@ -87,13 +108,16 @@ export async function resolveOutlineWithRetry(resolveOutline, {
  * geometry is unknown. Exported for tests.
  */
 export function normalizeTargetKey(target) {
-  const raw = String(target ?? '').trim().toLowerCase();
+  const raw = String(target ?? '')
+    .trim()
+    .toLowerCase();
   if (!raw) return null;
   const head = raw.split(',')[0].trim();
   return head || raw;
 }
 
 export function createAnnotationEngine({
+  placeSearch = defaultGeospatial,
   viewer,
   renderer,
   outlineRetryDelaysMs = OUTLINE_RETRY_DELAYS_MS,
@@ -101,6 +125,7 @@ export function createAnnotationEngine({
 }) {
   /** @type {Map<string, object>} live annotations keyed by id */
   const annotations = new Map();
+  let destroyed = false;
   let tickHandle = null;
   let assistFlightUntil = 0; // camera-assist debounce (see ensureMarksVisible)
   // Generation token + in-flight fetch controllers guard against clear / new-topic
@@ -119,12 +144,22 @@ export function createAnnotationEngine({
 
   function emitOutlineEvent(evt) {
     for (const listener of outlineListeners) {
-      try { listener(evt); } catch { /* a listener error must never break the upgrade */ }
+      try {
+        listener(evt);
+      } catch {
+        /* a listener error must never break the upgrade */
+      }
     }
   }
 
   function abortPending() {
-    for (const c of activeControllers) { try { c.abort(); } catch { /* no-op */ } }
+    for (const c of activeControllers) {
+      try {
+        c.abort();
+      } catch {
+        /* no-op */
+      }
+    }
     activeControllers.clear();
   }
 
@@ -170,11 +205,13 @@ export function createAnnotationEngine({
   function rollbackRendererState(anno) {
     try {
       renderer.remove(anno);
-    } catch { /* the renderer is already in a bad way; the original error wins */ }
+    } catch {
+      /* the renderer is already in a bad way; the original error wins */
+    }
   }
 
   function ensureTicking() {
-    if (tickHandle != null) return;
+    if (destroyed || tickHandle != null) return;
     const tick = () => {
       const now = performance.now();
       let changed = false;
@@ -222,6 +259,15 @@ export function createAnnotationEngine({
    * @returns {Promise<{ok, drawn, failed, ids, results}>}
    */
   async function annotate(requests, opts = {}) {
+    if (destroyed)
+      return {
+        ok: false,
+        drawn: 0,
+        failed: 0,
+        ids: [],
+        results: [],
+        error: 'destroyed',
+      };
     const list = Array.isArray(requests) ? requests : [requests];
     if (opts.clearPrevious) clear(); // bumps generation + aborts older pending work
 
@@ -242,7 +288,11 @@ export function createAnnotationEngine({
     // allSettled gives per-item error isolation (one failed item never aborts the batch); the
     // mutation pass below then runs in ORDER, so de-dup, the synchronous live-cap check, and output
     // order are all preserved exactly as the old serial loop had them.
-    const settled = await Promise.allSettled(list.map((spec) => resolveSpec(spec, controller.signal)));
+    const settled = await Promise.allSettled(
+      list.map((spec) =>
+        resolveSpec(spec, controller.signal, opts.flyTo === true),
+      ),
+    );
 
     try {
       for (let i = 0; i < list.length; i += 1) {
@@ -265,8 +315,15 @@ export function createAnnotationEngine({
           // stacked. De-dup runs BEFORE the cap so a re-narration still refreshes when full.
           const dup = findDuplicate(anno);
           if (dup) {
-            const labelChanged = String(dup.label || '').trim().toLowerCase() !== String(anno.label || '').trim().toLowerCase();
-            const colorChanged = (dup.color || 'primary') !== (anno.color || 'primary');
+            const labelChanged =
+              String(dup.label || '')
+                .trim()
+                .toLowerCase() !==
+              String(anno.label || '')
+                .trim()
+                .toLowerCase();
+            const colorChanged =
+              (dup.color || 'primary') !== (anno.color || 'primary');
             if (labelChanged || colorChanged) {
               // Same place + shape, but a NEW label and/or color ("Marina" → "Marina District",
               // or a recolor) → replace in place so the latest caption/color wins (count
@@ -300,13 +357,26 @@ export function createAnnotationEngine({
               ids.push(anno.id);
               if (!firstAnchor) firstAnchor = anno;
               if (typeof resolved.resolveOutline === 'function') {
-                startOutlineUpgrade(anno, resolved.resolveOutline, myGen, controller);
+                startOutlineUpgrade(
+                  anno,
+                  resolved.resolveOutline,
+                  myGen,
+                  controller,
+                );
               }
-              results.push({ ...okResult(anno, resolved, anno.id), duplicate: true });
+              results.push({
+                ...okResult(anno, resolved, anno.id),
+                duplicate: true,
+              });
             } else {
               // Identical re-narration → refresh the existing mark's lifecycle in place (keep
               // it visible whether persistent or TTL-based, and revive a fading-out one).
-              if (persist) { dup.ttlMs = null; } else { dup.createdAt = performance.now(); dup.ttlMs = anno.ttlMs; }
+              if (persist) {
+                dup.ttlMs = null;
+              } else {
+                dup.createdAt = performance.now();
+                dup.ttlMs = anno.ttlMs;
+              }
               dup.expiring = false;
               dup.fadeStart = null;
               ids.push(dup.id);
@@ -314,11 +384,19 @@ export function createAnnotationEngine({
               // A re-narration is also a RETRY: if the existing mark never got its outline
               // (transient Overpass miss), attach this call's deferred resolver to it.
               if (!dup.ring && typeof resolved.resolveOutline === 'function') {
-                startOutlineUpgrade(dup, resolved.resolveOutline, myGen, controller);
+                startOutlineUpgrade(
+                  dup,
+                  resolved.resolveOutline,
+                  myGen,
+                  controller,
+                );
               }
               // Same result builder as the fresh path (full metadata) but the existing id —
               // route fallback / approximate honesty fields survive a re-narration.
-              results.push({ ...okResult(anno, resolved, dup.id), duplicate: true });
+              results.push({
+                ...okResult(anno, resolved, dup.id),
+                duplicate: true,
+              });
             }
             continue;
           }
@@ -345,12 +423,23 @@ export function createAnnotationEngine({
           if (!firstAnchor) firstAnchor = anno;
           // Progressive: the point is on the board; trace the outline behind the narration.
           if (typeof resolved.resolveOutline === 'function') {
-            startOutlineUpgrade(anno, resolved.resolveOutline, myGen, controller);
+            startOutlineUpgrade(
+              anno,
+              resolved.resolveOutline,
+              myGen,
+              controller,
+            );
           }
           results.push(okResult(anno, resolved, anno.id));
         } catch (error) {
           if (superseded()) break;
-          results.push(failResult(spec, error?.message || 'annotation failed', Array.isArray(error?.failedTargets) ? error.failedTargets : null));
+          results.push(
+            failResult(
+              spec,
+              error?.message || 'annotation failed',
+              Array.isArray(error?.failedTargets) ? error.failedTargets : null,
+            ),
+          );
         }
       }
     } finally {
@@ -360,7 +449,14 @@ export function createAnnotationEngine({
     // A clear/new-topic landed mid-flight: drop everything this call produced and
     // do not touch the renderer or camera — the board now belongs to a newer call.
     if (superseded()) {
-      return { ok: false, drawn: 0, failed: results.length, ids: [], results, aborted: true };
+      return {
+        ok: false,
+        drawn: 0,
+        failed: results.length,
+        ids: [],
+        results,
+        aborted: true,
+      };
     }
 
     if (ids.length) {
@@ -381,16 +477,21 @@ export function createAnnotationEngine({
     };
   }
 
-  async function resolveSpec(spec, signal) {
+  async function resolveSpec(spec, signal, allowDistant = false) {
     const type = normalizeType(spec?.type);
+    // MANUAL geometry (drawTool.js): the person clicked the vertices, so there is
+    // nothing to resolve. Same record shapes as a resolved spec, source 'manual'.
+    if (isManualSpec(spec, type)) return resolveManualSpec(spec, type, viewer);
     if (type === 'route') {
       const points = Array.isArray(spec.points) ? spec.points : [];
-      if (points.length < 2) throw new Error('a route needs at least 2 waypoints');
+      if (points.length < 2)
+        throw new Error('a route needs at least 2 waypoints');
       const resolvedPts = [];
       const failed = [];
       for (const pt of points) {
         const name = pt.target ?? pt.name ?? null;
         const r = await resolveTarget({
+          placeSearch,
           viewer,
           target: name,
           latitude: pt.latitude,
@@ -398,6 +499,7 @@ export function createAnnotationEngine({
           screenX: pt.screenX,
           screenY: pt.screenY,
           footprint: false,
+          allowDistant,
           signal,
         });
         if (r) resolvedPts.push(r);
@@ -415,7 +517,12 @@ export function createAnnotationEngine({
       }
       // Real street-following route (OSM/OSRM), mode-aware.
       const mode = normalizeMode(spec.mode);
-      const routed = await fetchRoute(resolvedPts.map((p) => [p.lon, p.lat]), mode, signal);
+      const routed = await fetchRoute(
+        resolvedPts.map((p) => [p.lon, p.lat]),
+        mode,
+        signal,
+        placeSearch,
+      );
       if (routed) {
         return {
           path: routed.geometry.map(([lon, lat]) => ({ lon, lat, height: 0 })),
@@ -429,11 +536,20 @@ export function createAnnotationEngine({
       // Routing unavailable: do NOT pass off straight segments as a real route. Draw
       // a clearly-labeled direct line with great-circle distance and NO travel time.
       let straight = 0;
-      for (let i = 1; i < resolvedPts.length; i += 1) straight += greatCircleM(resolvedPts[i - 1], resolvedPts[i]);
-      return { path: resolvedPts, distanceM: straight, durationS: null, mode, source: resolvedPts[0].source, fallback: true };
+      for (let i = 1; i < resolvedPts.length; i += 1)
+        straight += greatCircleM(resolvedPts[i - 1], resolvedPts[i]);
+      return {
+        path: resolvedPts,
+        distanceM: straight,
+        durationS: null,
+        mode,
+        source: resolvedPts[0].source,
+        fallback: true,
+      };
     }
     if (type === 'arrow') {
       const from = await resolveTarget({
+        placeSearch,
         viewer,
         target: spec.target,
         latitude: spec.latitude,
@@ -441,9 +557,11 @@ export function createAnnotationEngine({
         screenX: spec.screenX,
         screenY: spec.screenY,
         footprint: false,
+        allowDistant,
         signal,
       });
       const to = await resolveTarget({
+        placeSearch,
         viewer,
         target: spec.toTarget,
         latitude: spec.toLatitude,
@@ -451,6 +569,7 @@ export function createAnnotationEngine({
         screenX: spec.toScreenX,
         screenY: spec.toScreenY,
         footprint: false,
+        allowDistant,
         signal,
       });
       if (!from || !to) {
@@ -465,10 +584,17 @@ export function createAnnotationEngine({
         err.failedTargets = failed;
         throw err;
       }
-      return { from, to, distanceM: greatCircleM(from, to), source: from.source };
+      return {
+        from,
+        to,
+        distanceM: greatCircleM(from, to),
+        source: from.source,
+      };
     }
-    const wantFootprint = type === 'area' ? spec.footprint !== false : Boolean(spec.footprint);
+    const wantFootprint =
+      type === 'area' ? spec.footprint !== false : Boolean(spec.footprint);
     return resolveTarget({
+      placeSearch,
       viewer,
       target: spec.target,
       latitude: spec.latitude,
@@ -476,7 +602,8 @@ export function createAnnotationEngine({
       screenX: spec.screenX,
       screenY: spec.screenY,
       footprint: wantFootprint,
-      intent: spec.intent === 'around_the_thing' ? 'around_the_thing' : 'the_thing',
+      intent:
+        spec.intent === 'around_the_thing' ? 'around_the_thing' : 'the_thing',
       entityKind: ENTITY_KINDS.has(spec?.entityKind) ? spec.entityKind : null,
       // The label often carries the ask's true shape when the target omits it
       // ("target: Texas State Capitol" + "label: Capitol grounds") — a resolver HINT only.
@@ -486,6 +613,7 @@ export function createAnnotationEngine({
       // timeout — field test 7 logs); deferring them lets the mark appear and the tool
       // result return while the outline resolves, then upgrades the mark in place.
       deferFootprint: wantFootprint,
+      allowDistant,
       signal,
     });
   }
@@ -509,11 +637,15 @@ export function createAnnotationEngine({
   }
 
   function drainOutlineQueue() {
-    while (activeOutlineUpgrades < OUTLINE_UPGRADE_CONCURRENCY && outlineQueue.length) {
+    while (
+      activeOutlineUpgrades < OUTLINE_UPGRADE_CONCURRENCY &&
+      outlineQueue.length
+    ) {
       const task = outlineQueue.shift();
-      const stale = task.myGen !== generation
-        || task.controller.signal.aborted
-        || !annotations.has(task.anno.id);
+      const stale =
+        task.myGen !== generation ||
+        task.controller.signal.aborted ||
+        !annotations.has(task.anno.id);
       if (stale) {
         if (task.anno._outlineTask === task) task.anno._outlineTask = null;
         releaseController(task.controller);
@@ -533,7 +665,10 @@ export function createAnnotationEngine({
       // proxy caches the late completion, so the retry is usually a warm cache hit.
       fp = await resolveOutlineWithRetry(resolveOutline, {
         delaysMs: outlineRetryDelaysMs,
-        isStale: () => myGen !== generation || controller.signal.aborted || !annotations.has(anno.id),
+        isStale: () =>
+          myGen !== generation ||
+          controller.signal.aborted ||
+          !annotations.has(anno.id),
       });
       if (myGen !== generation || controller.signal.aborted) return; // board superseded
       if (!annotations.has(anno.id)) return; // mark replaced/removed while resolving
@@ -561,11 +696,22 @@ export function createAnnotationEngine({
         // wins, exactly like the add-time replace path). Not an auto-clear — it removes
         // a second representation of the same mark, never a distinct one.
         for (const other of annotations.values()) {
-          if (other.id === anno.id || other.type !== 'area' || other.pendingOutline) continue;
-          if (!other.anchor || Math.abs(other.anchor.lon - anno.anchor.lon) >= 5e-4
-            || Math.abs(other.anchor.lat - anno.anchor.lat) >= 5e-4) continue;
-          if (Boolean(other.synthesized) !== Boolean(anno.synthesized)) continue;
-          if ((other.footprintKind || null) !== (anno.footprintKind || null)) continue;
+          if (
+            other.id === anno.id ||
+            other.type !== 'area' ||
+            other.pendingOutline
+          )
+            continue;
+          if (
+            !other.anchor ||
+            Math.abs(other.anchor.lon - anno.anchor.lon) >= 5e-4 ||
+            Math.abs(other.anchor.lat - anno.anchor.lat) >= 5e-4
+          )
+            continue;
+          if (Boolean(other.synthesized) !== Boolean(anno.synthesized))
+            continue;
+          if ((other.footprintKind || null) !== (anno.footprintKind || null))
+            continue;
           if (!ringsEqual(other.ring, anno.ring)) continue;
           annotations.delete(other.id);
           renderer.remove(other);
@@ -613,7 +759,12 @@ export function createAnnotationEngine({
       // Route-specific signal so the voice layer can be honest about an OSRM outage:
       // fallback=true means a straight direct line, not a real route.
       ...(anno.type === 'route'
-        ? { fallback: Boolean(anno.fallback), mode: anno.mode, distanceM: anno.distanceM, durationS: anno.durationS }
+        ? {
+            fallback: Boolean(anno.fallback),
+            mode: anno.mode,
+            distanceM: anno.distanceM,
+            durationS: anno.durationS,
+          }
         : {}),
     };
   }
@@ -627,13 +778,18 @@ export function createAnnotationEngine({
    *  degenerate geocode stacks on one point (several Capitol monuments) would erase each other. */
   function findDuplicate(anno) {
     if (!anno.anchor) return null;
-    const near = (a, b) => a && b && Math.abs(a.lon - b.lon) < 5e-4 && Math.abs(a.lat - b.lat) < 5e-4;
+    const near = (a, b) =>
+      a &&
+      b &&
+      Math.abs(a.lon - b.lon) < 5e-4 &&
+      Math.abs(a.lat - b.lat) < 5e-4;
     // FULL per-vertex geometry comparison (the live cap is only 120 and this runs solely for
     // candidates that already matched type+label+anchor, so it's cheap) — so two DIFFERENT
     // same-length rings/paths at the same anchor are never falsely merged.
     const ringSame = ringsEqual;
     const pathSame = (a, b) => {
-      const la = a ? a.length : 0; const lb = b ? b.length : 0;
+      const la = a ? a.length : 0;
+      const lb = b ? b.length : 0;
       if (la !== lb) return false;
       for (let i = 0; i < la; i++) if (!near(a[i], b[i])) return false;
       return true;
@@ -658,10 +814,12 @@ export function createAnnotationEngine({
           // the identity; the target is only the stand-in while geometry is unknown.
           if (!anno.targetKey || !ex.targetKey) continue;
           if (anno.targetKey !== ex.targetKey) continue;
-          if ((ex.intentKey || 'thing') !== (anno.intentKey || 'thing')) continue;
+          if ((ex.intentKey || 'thing') !== (anno.intentKey || 'thing'))
+            continue;
         } else {
           if (Boolean(ex.synthesized) !== Boolean(anno.synthesized)) continue;
-          if ((ex.footprintKind || null) !== (anno.footprintKind || null)) continue;
+          if ((ex.footprintKind || null) !== (anno.footprintKind || null))
+            continue;
           if (!ringSame(ex.ring, anno.ring)) continue;
         }
       } else if (anno.type === 'arrow') {
@@ -675,7 +833,13 @@ export function createAnnotationEngine({
         // point (e.g. several Texas Capitol monuments all geocoding to the dome centroid) — NOT a
         // duplicate. Only collapse a genuine re-narration of the SAME point (same label); distinct
         // labels stay as separate marks (their callouts de-collide in the renderer).
-        const sameLabel = String(ex.label || '').trim().toLowerCase() === String(anno.label || '').trim().toLowerCase();
+        const sameLabel =
+          String(ex.label || '')
+            .trim()
+            .toLowerCase() ===
+          String(anno.label || '')
+            .trim()
+            .toLowerCase();
         if (!sameLabel) continue;
       }
       return ex;
@@ -687,7 +851,11 @@ export function createAnnotationEngine({
     const type = normalizeType(spec?.type);
     const id = `anno-${++_seq}`;
     const color = COLORS.has(spec?.color) ? spec.color : 'primary';
-    const label = cleanLabel(spec?.label) || resolved?.label || resolved?.from?.label || null;
+    const label =
+      cleanLabel(spec?.label) ||
+      resolved?.label ||
+      resolved?.from?.label ||
+      null;
     const now = performance.now();
 
     const base = {
@@ -696,17 +864,27 @@ export function createAnnotationEngine({
       color,
       label,
       createdAt: now,
-      ttlMs: persist ? null : (Number(spec?.ttlMs) || DEFAULT_TTL_MS),
+      ttlMs: persist ? null : Number(spec?.ttlMs) || DEFAULT_TTL_MS,
       alpha: 0, // animate in
       bornAt: now,
       expiring: false,
     };
 
     if (type === 'route') {
-      const path = resolved.path.map((p) => ({ lon: p.lon, lat: p.lat, height: p.height }));
+      const path = resolved.path.map((p) => ({
+        lon: p.lon,
+        lat: p.lat,
+        height: p.height,
+      }));
       return {
         ...base,
-        label: composeRouteLabel(base.label, resolved.distanceM, resolved.durationS, resolved.mode, resolved.fallback),
+        label: composeRouteLabel(
+          base.label,
+          resolved.distanceM,
+          resolved.durationS,
+          resolved.mode,
+          resolved.fallback,
+        ),
         anchor: path[0],
         to: null,
         path,
@@ -722,8 +900,16 @@ export function createAnnotationEngine({
       return {
         ...base,
         label: appendDistance(base.label, resolved.distanceM),
-        anchor: { lon: resolved.from.lon, lat: resolved.from.lat, height: resolved.from.height },
-        to: { lon: resolved.to.lon, lat: resolved.to.lat, height: resolved.to.height },
+        anchor: {
+          lon: resolved.from.lon,
+          lat: resolved.from.lat,
+          height: resolved.from.height,
+        },
+        to: {
+          lon: resolved.to.lon,
+          lat: resolved.to.lat,
+          height: resolved.to.height,
+        },
         ring: null,
       };
     }
@@ -738,7 +924,7 @@ export function createAnnotationEngine({
       synthesized: Boolean(resolved.synthesized), // approximate buffered area → dashed render
       // Progressive outline: the anchor is placed, the footprint is still resolving —
       // the upgrade task fills ring/kind in place when it lands. Transient render state
-      // (not serialized to GeoJSON).
+      // (not persisted).
       pendingOutline: typeof resolved.resolveOutline === 'function',
       // Which THING + SHAPE was asked for — the dedup identity while geometry is still
       // pending (see findDuplicate). targetKey is the normalized place name with trailing
@@ -798,13 +984,17 @@ export function createAnnotationEngine({
         if (m.to) points.push(m.to);
       }
       if (!points.length || points.some((p) => isPointOnScreen(p))) return;
-      console.log(`[Annotations] auto-framing ${marks.length} off-screen mark(s)`);
+      console.log(
+        `[Annotations] auto-framing ${marks.length} off-screen mark(s)`,
+      );
       assistFlightUntil = performance.now() + 2600; // ~flight duration + settle
       if (marks.length === 1) {
         frameAnnotation(marks[0]);
         return;
       }
-      const cart = points.map((p) => Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.height || 0));
+      const cart = points.map((p) =>
+        Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.height || 0),
+      );
       const sphere = Cesium.BoundingSphere.fromPoints(cart);
       viewer.camera.flyToBoundingSphere(sphere, {
         offset: new Cesium.HeadingPitchRange(
@@ -825,9 +1015,20 @@ export function createAnnotationEngine({
     try {
       const camera = viewer.camera;
       const pos = Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.height || 0);
-      const cv = camera.frustum.computeCullingVolume(camera.position, camera.direction, camera.up);
-      if (cv.computeVisibility(new Cesium.BoundingSphere(pos, 1)) === Cesium.Intersect.OUTSIDE) return false;
-      const occluder = new Cesium.EllipsoidalOccluder(Cesium.Ellipsoid.WGS84, camera.position);
+      const cv = camera.frustum.computeCullingVolume(
+        camera.position,
+        camera.direction,
+        camera.up,
+      );
+      if (
+        cv.computeVisibility(new Cesium.BoundingSphere(pos, 1)) ===
+        Cesium.Intersect.OUTSIDE
+      )
+        return false;
+      const occluder = new Cesium.EllipsoidalOccluder(
+        Cesium.Ellipsoid.WGS84,
+        camera.position,
+      );
       return occluder.isPointVisible(pos);
     } catch {
       return true;
@@ -837,15 +1038,24 @@ export function createAnnotationEngine({
   function frameAnnotation(anno) {
     try {
       const target = anno.to
-        ? { lon: (anno.anchor.lon + anno.to.lon) / 2, lat: (anno.anchor.lat + anno.to.lat) / 2 }
+        ? {
+            lon: (anno.anchor.lon + anno.to.lon) / 2,
+            lat: (anno.anchor.lat + anno.to.lat) / 2,
+          }
         : anno.anchor;
       // No ring yet (progressive outline still resolving) → size the flight from the
       // Places viewport box when we have one, so a big compound isn't framed at
       // building scale while its outline is traced. Never re-fly when the ring lands.
-      const range = anno.ring ? ringRange(anno.ring) : (viewportRange(anno.viewport) || 600);
+      const range = anno.ring
+        ? ringRange(anno.ring)
+        : viewportRange(anno.viewport) || 600;
       viewer.camera.flyToBoundingSphere(
         new Cesium.BoundingSphere(
-          Cesium.Cartesian3.fromDegrees(target.lon, target.lat, anno.anchor.height || 0),
+          Cesium.Cartesian3.fromDegrees(
+            target.lon,
+            target.lat,
+            anno.anchor.height || 0,
+          ),
           range,
         ),
         {
@@ -865,6 +1075,19 @@ export function createAnnotationEngine({
   const engine = {
     annotate,
     clear,
+    destroy() {
+      if (destroyed) return;
+      destroyed = true;
+      try {
+        clear();
+      } finally {
+        if (tickHandle != null) cancelAnimationFrame(tickHandle);
+        tickHandle = null;
+        outlineListeners.clear();
+        releaseContinuousRender('annotations');
+        renderer.destroy();
+      }
+    },
     fadeOutAll,
     count: () => annotations.size,
     list: () => Array.from(annotations.values()),
@@ -875,7 +1098,7 @@ export function createAnnotationEngine({
      * upgrade task, AFTER the mark was mutated in place. Returns an unsubscribe fn.
      */
     onOutlineEvent(listener) {
-      if (typeof listener !== 'function') return () => {};
+      if (destroyed || typeof listener !== 'function') return () => {};
       outlineListeners.add(listener);
       return () => outlineListeners.delete(listener);
     },
@@ -885,12 +1108,36 @@ export function createAnnotationEngine({
      * Lays down a small San Francisco "tour" the way the voice agent would.
      */
     async demo() {
-      return annotate([
-        { type: 'highlight', target: 'Palace of Fine Arts, San Francisco', label: 'Palace of Fine Arts', color: 'amber' },
-        { type: 'area', target: 'Presidio of San Francisco', label: 'The Presidio (former Army base)', color: 'green', footprint: true },
-        { type: 'pin', target: 'Letterman Digital Arts Center, San Francisco', label: 'ILM / Lucasfilm', color: 'cyan' },
-        { type: 'arrow', target: 'Palace of Fine Arts, San Francisco', toTarget: 'Marina District, San Francisco', label: 'next to the Marina' },
-      ], { flyTo: true, clearPrevious: true, persist: true });
+      return annotate(
+        [
+          {
+            type: 'highlight',
+            target: 'Palace of Fine Arts, San Francisco',
+            label: 'Palace of Fine Arts',
+            color: 'amber',
+          },
+          {
+            type: 'area',
+            target: 'Presidio of San Francisco',
+            label: 'The Presidio (former Army base)',
+            color: 'green',
+            footprint: true,
+          },
+          {
+            type: 'pin',
+            target: 'Letterman Digital Arts Center, San Francisco',
+            label: 'ILM / Lucasfilm',
+            color: 'cyan',
+          },
+          {
+            type: 'arrow',
+            target: 'Palace of Fine Arts, San Francisco',
+            toTarget: 'Marina District, San Francisco',
+            label: 'next to the Marina',
+          },
+        ],
+        { flyTo: true, clearPrevious: true, persist: true },
+      );
     },
 
     /**
@@ -900,28 +1147,108 @@ export function createAnnotationEngine({
      */
     async tour() {
       clear();
-      flyTo({ lon: -122.4486, lat: 37.7960, height: 520, heading: 0, pitch: -26, duration: 3 });
+      flyTo({
+        lon: -122.4486,
+        lat: 37.796,
+        height: 520,
+        heading: 0,
+        pitch: -26,
+        duration: 3,
+      });
+      if (destroyed) return { ok: false };
       await wait(3200);
-      await annotate([{ type: 'highlight', target: 'Palace of Fine Arts, San Francisco', label: 'Palace of Fine Arts', color: 'amber' }], { persist: true });
+      await annotate(
+        [
+          {
+            type: 'highlight',
+            target: 'Palace of Fine Arts, San Francisco',
+            label: 'Palace of Fine Arts',
+            color: 'amber',
+          },
+        ],
+        { persist: true },
+      );
+      if (destroyed) return { ok: false };
       await wait(2600);
-      await annotate([{ type: 'arrow', target: 'Palace of Fine Arts, San Francisco', toTarget: 'Marina Green, San Francisco', label: 'next to the Marina', color: 'cyan' }], { persist: true });
+      await annotate(
+        [
+          {
+            type: 'arrow',
+            target: 'Palace of Fine Arts, San Francisco',
+            toTarget: 'Marina Green, San Francisco',
+            label: 'next to the Marina',
+            color: 'cyan',
+          },
+        ],
+        { persist: true },
+      );
+      if (destroyed) return { ok: false };
       await wait(2600);
-      flyTo({ lon: -122.4545, lat: 37.7880, height: 1500, heading: 18, pitch: -32, duration: 3 });
+      flyTo({
+        lon: -122.4545,
+        lat: 37.788,
+        height: 1500,
+        heading: 18,
+        pitch: -32,
+        duration: 3,
+      });
+      if (destroyed) return { ok: false };
       await wait(3200);
-      await annotate([{ type: 'area', target: 'Presidio of San Francisco', label: 'The Presidio — a former Army base', color: 'green', footprint: true }], { persist: true });
+      await annotate(
+        [
+          {
+            type: 'area',
+            target: 'Presidio of San Francisco',
+            label: 'The Presidio — a former Army base',
+            color: 'green',
+            footprint: true,
+          },
+        ],
+        { persist: true },
+      );
+      if (destroyed) return { ok: false };
       await wait(2800);
-      await annotate([{ type: 'pin', target: 'Letterman Digital Arts Center, San Francisco', label: 'ILM / Lucasfilm', color: 'red' }], { persist: true });
+      await annotate(
+        [
+          {
+            type: 'pin',
+            target: 'Letterman Digital Arts Center, San Francisco',
+            label: 'ILM / Lucasfilm',
+            color: 'red',
+          },
+        ],
+        { persist: true },
+      );
+      if (destroyed) return { ok: false };
       await wait(2600);
-      await annotate([{ type: 'route', color: 'amber', label: 'Crissy Field shoreline', points: [
-        { target: 'Palace of Fine Arts, San Francisco' },
-        { target: 'Crissy Field, San Francisco' },
-        { target: 'Fort Point, San Francisco' },
-      ] }], { persist: true });
+      await annotate(
+        [
+          {
+            type: 'route',
+            color: 'amber',
+            label: 'Crissy Field shoreline',
+            points: [
+              { target: 'Palace of Fine Arts, San Francisco' },
+              { target: 'Crissy Field, San Francisco' },
+              { target: 'Fort Point, San Francisco' },
+            ],
+          },
+        ],
+        { persist: true },
+      );
       return { ok: true, steps: 6 };
     },
   };
 
-  function flyTo({ lon, lat, height, heading = 0, pitch = -30, duration = 2.5 }) {
+  function flyTo({
+    lon,
+    lat,
+    height,
+    heading = 0,
+    pitch = -30,
+    duration = 2.5,
+  }) {
+    if (destroyed) return;
     try {
       viewer.camera.flyTo({
         destination: Cesium.Cartesian3.fromDegrees(lon, lat, height),
@@ -950,7 +1277,11 @@ function ringsEqual(a, b) {
   const lb = b ? b.length : 0;
   if (la !== lb) return false;
   for (let i = 0; i < la; i++) {
-    if (Math.abs(a[i][0] - b[i][0]) >= 1e-5 || Math.abs(a[i][1] - b[i][1]) >= 1e-5) return false;
+    if (
+      Math.abs(a[i][0] - b[i][0]) >= 1e-5 ||
+      Math.abs(a[i][1] - b[i][1]) >= 1e-5
+    )
+      return false;
   }
   return true;
 }
@@ -976,7 +1307,8 @@ function specTargets(spec) {
  * arrow endpoint) when known; otherwise it derives them from the spec.
  */
 function failResult(spec, error, failedTargets) {
-  const targets = (failedTargets && failedTargets.length) ? failedTargets : specTargets(spec);
+  const targets =
+    failedTargets && failedTargets.length ? failedTargets : specTargets(spec);
   return {
     ok: false,
     label: spec?.label || spec?.target || targets[0] || null,
@@ -988,7 +1320,8 @@ function failResult(spec, error, failedTargets) {
 
 function normalizeType(type) {
   const t = String(type || '').toLowerCase();
-  if (t === 'area' || t === 'polygon' || t === 'outline' || t === 'compound') return 'area';
+  if (t === 'area' || t === 'polygon' || t === 'outline' || t === 'compound')
+    return 'area';
   if (t === 'route' || t === 'path' || t === 'line') return 'route';
   if (t === 'arrow' || t === 'vector' || t === 'connector') return 'arrow';
   if (t === 'label' || t === 'callout' || t === 'text') return 'label';
@@ -1002,9 +1335,10 @@ function computeAlpha(anno, now) {
 
   if (anno.ttlMs == null && !anno.expiring) return fadeIn;
 
-  const fadeStart = anno.fadeStart != null
-    ? anno.fadeStart
-    : anno.createdAt + (anno.ttlMs || 0);
+  const fadeStart =
+    anno.fadeStart != null
+      ? anno.fadeStart
+      : anno.createdAt + (anno.ttlMs || 0);
   if (now < fadeStart) return fadeIn;
   const out = 1 - (now - fadeStart) / FADE_MS;
   if (out <= 0) anno.expiring = true;
@@ -1018,7 +1352,10 @@ function pendingAnimation(anno, now) {
   if (now - anno.bornAt < 260) return true; // fading in
   if (anno.expiring) return true; // fading out
   if (anno.ttlMs != null) {
-    const fadeStart = anno.fadeStart != null ? anno.fadeStart : anno.createdAt + (anno.ttlMs || 0);
+    const fadeStart =
+      anno.fadeStart != null
+        ? anno.fadeStart
+        : anno.createdAt + (anno.ttlMs || 0);
     return now < fadeStart + FADE_MS; // TTL fade still ahead or in progress
   }
   return false; // persistent + faded in → stable
@@ -1073,32 +1410,123 @@ function round5(n) {
   return Number.isFinite(n) ? Math.round(n * 1e5) / 1e5 : null;
 }
 
+/** A spec whose geometry was supplied by hand (drawTool.js) rather than by a name. */
+function isManualSpec(spec, type) {
+  if (!spec || spec.manual !== true) return false;
+  if (type === 'route')
+    return Array.isArray(spec.path) && spec.path.length >= 2;
+  if (type === 'area') return Array.isArray(spec.ring) && spec.ring.length >= 3;
+  return (
+    Number.isFinite(Number(spec.latitude)) &&
+    Number.isFinite(Number(spec.longitude))
+  );
+}
+
+/** [lon, lat] pairs or {lon, lat} objects → [lon, lat] pairs, invalid entries dropped. */
+function manualPairs(list) {
+  return (Array.isArray(list) ? list : [])
+    .map((p) =>
+      Array.isArray(p)
+        ? [Number(p[0]), Number(p[1])]
+        : [Number(p?.lon ?? p?.longitude), Number(p?.lat ?? p?.latitude)],
+    )
+    .filter(
+      ([lon, lat]) =>
+        Number.isFinite(lon) &&
+        Number.isFinite(lat) &&
+        Math.abs(lat) <= 90 &&
+        Math.abs(lon) <= 180,
+    );
+}
+
+/**
+ * Resolve a hand-drawn spec without any fetch. An area keeps its ring as a real
+ * (not synthesized) outline so it drapes solid; a line is a `route` with mode
+ * 'manual', its length as distance and no travel time; a pin is a point.
+ */
+function resolveManualSpec(spec, type, viewer) {
+  if (type === 'route') {
+    // height 0 is a placeholder, not a placement: the world renderer draws a
+    // route with clampToGround + CESIUM_3D_TILE classification, so the line is
+    // draped onto the photoreal surface whatever this number says.
+    const pts = manualPairs(spec.path).map(([lon, lat]) => ({
+      lon,
+      lat,
+      height: 0,
+    }));
+    if (pts.length < 2) throw new Error('a drawn line needs at least 2 points');
+    let distanceM = 0;
+    for (let i = 1; i < pts.length; i += 1)
+      distanceM += greatCircleM(pts[i - 1], pts[i]);
+    return {
+      path: pts,
+      distanceM,
+      durationS: null,
+      mode: 'manual',
+      source: 'manual',
+      fallback: false,
+    };
+  }
+  if (type === 'area') {
+    const ring = manualPairs(spec.ring);
+    if (ring.length < 3)
+      throw new Error('a drawn area needs at least 3 points');
+    // Averaged through ringCentroid, which unwraps longitudes first: a ring
+    // straddling the antimeridian has coordinates like [179.999, -179.999], and
+    // a raw mean of those puts the anchor on the Greenwich meridian, half a
+    // world from the shape it belongs to. A repeated closing vertex is dropped
+    // so it does not weight its own corner twice.
+    const distinct = closedRingWithoutRepeat(ring);
+    const centre = ringCentroid(distinct.map(([lon, lat]) => ({ lon, lat })));
+    const lon = centre.lon;
+    const lat = centre.lat;
+    return {
+      lon,
+      lat,
+      height: sampleGroundHeight(viewer, lon, lat),
+      ring,
+      footprintKind: 'area',
+      buildingHeight: null,
+      synthesized: false,
+      source: 'manual',
+    };
+  }
+  const lon = Number(spec.longitude);
+  const lat = Number(spec.latitude);
+  return {
+    lon,
+    lat,
+    height: sampleGroundHeight(viewer, lon, lat),
+    ring: null,
+    source: 'manual',
+  };
+}
+
+/** The ring's distinct positions: a closing vertex that repeats the first is dropped. */
+function closedRingWithoutRepeat(ring) {
+  if (ring.length < 2) return ring;
+  const [firstLon, firstLat] = ring[0];
+  const [lastLon, lastLat] = ring[ring.length - 1];
+  return firstLon === lastLon && firstLat === lastLat
+    ? ring.slice(0, -1)
+    : ring;
+}
+
 function normalizeMode(m) {
   const t = String(m || '').toLowerCase();
   if (t === 'car' || t === 'drive' || t === 'driving') return 'car';
-  if (t === 'bike' || t === 'cycle' || t === 'cycling' || t === 'bicycle') return 'bike';
+  if (t === 'bike' || t === 'cycle' || t === 'cycling' || t === 'bicycle')
+    return 'bike';
   return 'foot';
 }
 
-/** Fetch a real street-following route from the /api/route proxy (OSM/OSRM). */
-async function fetchRoute(coordPairs, mode, externalSignal) {
-  const controller = new AbortController();
-  const onAbort = () => controller.abort();
-  if (externalSignal) {
-    if (externalSignal.aborted) controller.abort();
-    else externalSignal.addEventListener('abort', onAbort, { once: true });
-  }
-  const timer = setTimeout(() => controller.abort(), 13000);
+/** Route failure remains an explicitly labelled direct line in the caller. */
+async function fetchRoute(coordPairs, mode, signal, service) {
   try {
-    const coords = coordPairs.map(([lon, lat]) => `${lon.toFixed(6)},${lat.toFixed(6)}`).join(';');
-    const res = await fetch(`/api/route?profile=${mode}&coords=${encodeURIComponent(coords)}`, { signal: controller.signal });
-    const data = await res.json();
-    if (data?.ok && Array.isArray(data.geometry) && data.geometry.length >= 2) return data;
-  } catch { /* routing unavailable / aborted → caller falls back to straight segments */ } finally {
-    clearTimeout(timer);
-    if (externalSignal) externalSignal.removeEventListener('abort', onAbort);
+    return (await service.route?.(coordPairs, mode, { signal })) || null;
+  } catch {
+    return null;
   }
-  return null;
 }
 
 function greatCircleM(a, b) {
@@ -1108,7 +1536,9 @@ function greatCircleM(a, b) {
   const dLon = toRad(b.lon - a.lon);
   const la1 = toRad(a.lat);
   const la2 = toRad(b.lat);
-  const h = Math.sin(dLat / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin(dLon / 2) ** 2;
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(la1) * Math.cos(la2) * Math.sin(dLon / 2) ** 2;
   return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
@@ -1123,6 +1553,7 @@ function composeRouteLabel(baseLabel, distM, durS, mode, fallback) {
   if (!dist) return baseLabel;
   const min = Number.isFinite(durS) ? Math.max(1, Math.round(durS / 60)) : null;
   const word = mode === 'car' ? 'drive' : mode === 'bike' ? 'ride' : 'walk';
+  if (mode === 'manual') return baseLabel ? `${baseLabel} — ${dist}` : dist;
   // Fallback = routing was unavailable, so we drew a straight line: label it as a
   // direct line with no travel time (never claim an "X min walk" we didn't compute).
   let metrics;

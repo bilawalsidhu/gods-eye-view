@@ -6,9 +6,12 @@ import rocketLaunchesLayer, {
   _setRocketMissionOverlayHostForTest,
   _setSelectedRocketMissionForTest,
   approximateOrbitPath,
+  bindMissionRosterItemKeyboardPreview,
+  captureMissionRosterFocus,
   buildMissionPaths,
   cameraHeadingForPath,
   compactLaunchSiteName,
+  createMissionRosterPreviewOwnership,
   createRocketMissionElementOverlayEntry,
   createRocketMissionMarkerOverlayEntry,
   formatMissionEventTime,
@@ -41,6 +44,8 @@ import rocketLaunchesLayer, {
   replayAscentDurationSeconds,
   replayStartAfterPause,
   replayVehicleScreenRotation,
+  resolveMissionRosterPreviewLaunch,
+  restoreMissionRosterFocus,
   releaseAircraftTracking,
   ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT,
   ROCKET_MISSION_AMBIENT_OVERLAY_COLLISION_CAPACITY,
@@ -488,6 +493,150 @@ test('preserves globe scale for roster hover previews', () => {
   assert.equal(missionHoverPreviewRange(18178265), 18178265);
   assert.equal(missionHoverPreviewRange(12000), 180000);
   assert.equal(missionHoverPreviewRange(Number.NaN), 5000000);
+});
+
+test('keyboard focus previews roster missions and clears without selecting them', () => {
+  const calls = [];
+  const ownership = createMissionRosterPreviewOwnership({
+    preview: (index) => calls.push(['preview', index]),
+    clear: () => calls.push(['clear']),
+  });
+
+  ownership.focus(2);
+  ownership.blur(3);
+  ownership.blur();
+
+  assert.deepEqual(calls, [
+    ['preview', 2],
+    ['preview', 3],
+    ['clear'],
+  ]);
+});
+
+test('rendered mission row focus and blur drive the preview ownership controller', () => {
+  const listeners = new Map();
+  const calls = [];
+  const button = {
+    addEventListener(type, listener) {
+      listeners.set(type, listener);
+    },
+  };
+  const nextButton = {
+    dataset: { missionRosterIndex: '4' },
+    closest: () => nextButton,
+  };
+  const roster = { contains: (candidate) => candidate === nextButton };
+  const ownership = {
+    pointerEnter: (index) => calls.push(['pointer-enter', index]),
+    pointerLeave: () => calls.push(['pointer-leave']),
+    focus: (index) => calls.push(['focus', index]),
+    blur: (index) => calls.push(['blur', index]),
+  };
+
+  bindMissionRosterItemKeyboardPreview(button, 2, ownership, roster);
+  listeners.get('mouseenter')();
+  listeners.get('mouseleave')();
+  listeners.get('focus')();
+  listeners.get('blur')({ relatedTarget: nextButton });
+  listeners.get('blur')({ relatedTarget: null });
+
+  assert.deepEqual(calls, [
+    ['pointer-enter', 2],
+    ['pointer-leave'],
+    ['focus', 2],
+    ['blur', 4],
+    ['blur', null],
+  ]);
+});
+
+test('leaving a hovered row for an internal roster gap restores keyboard preview', () => {
+  const calls = [];
+  const ownership = createMissionRosterPreviewOwnership({
+    preview: (index) => calls.push(['preview', index]),
+    clear: () => calls.push(['clear']),
+  });
+
+  ownership.focus(1);
+  ownership.pointerEnter(0);
+  ownership.pointerLeave();
+
+  assert.deepEqual(calls, [
+    ['preview', 1],
+    ['preview', 0],
+    ['preview', 1],
+  ]);
+});
+
+test('mission roster refresh restores keyboard focus by stable mission identity after reorder', () => {
+  const focused = {
+    dataset: { missionRosterId: 'mission-b' },
+    closest: () => focused,
+  };
+  let restored = false;
+  const replacement = {
+    dataset: { missionRosterId: 'mission-b' },
+    focus: ({ preventScroll }) => { restored = preventScroll; },
+  };
+  const list = {
+    contains: (candidate) => candidate === focused,
+    querySelectorAll: () => [
+      { dataset: { missionRosterId: 'mission-c' } },
+      replacement,
+      { dataset: { missionRosterId: 'mission-a' } },
+    ],
+  };
+
+  const snapshot = captureMissionRosterFocus(list, focused);
+  assert.deepEqual(snapshot, { launchId: 'mission-b' });
+  assert.equal(restoreMissionRosterFocus(list, snapshot, null), 'restored');
+  assert.equal(restored, true);
+});
+
+test('mission roster refresh continues after the list when the focused mission departed', () => {
+  const focused = {
+    dataset: { missionRosterId: 'departed' },
+    closest: () => focused,
+  };
+  let continuationFocused = false;
+  const list = {
+    contains: (candidate) => candidate === focused,
+    querySelectorAll: () => [{ dataset: { missionRosterId: 'remaining' } }],
+  };
+  const continuation = {
+    focus: ({ preventScroll }) => { continuationFocused = preventScroll; },
+  };
+
+  const snapshot = captureMissionRosterFocus(list, focused);
+  assert.equal(restoreMissionRosterFocus(list, snapshot, continuation), 'continued');
+  assert.equal(continuationFocused, true);
+});
+
+test('pending mission preview resolves the current refreshed record by identity', () => {
+  const stale = { id: 'mission-a', name: 'Stale' };
+  const current = { id: 'mission-a', name: 'Current' };
+
+  assert.equal(resolveMissionRosterPreviewLaunch([current], stale.id), current);
+  assert.equal(resolveMissionRosterPreviewLaunch([], stale.id), null);
+});
+
+test('latest roster input owns preview and restores the remaining owner on leave', () => {
+  const calls = [];
+  const ownership = createMissionRosterPreviewOwnership({
+    preview: (index) => calls.push(['preview', index]),
+    clear: () => calls.push(['clear']),
+  });
+
+  ownership.pointerEnter(0);
+  ownership.focus(1);
+  ownership.blur();
+  ownership.pointerLeave();
+
+  assert.deepEqual(calls, [
+    ['preview', 0],
+    ['preview', 1],
+    ['preview', 0],
+    ['clear'],
+  ]);
 });
 
 test('assigns distinct stable colors to mission operators', () => {
@@ -1252,4 +1401,17 @@ test('disable reports a semantic failure while restoring the satellites dependen
     () => rocketLaunchesLayer.disable(),
     /could not restore the satellites layer/,
   );
+});
+
+
+test('missing payload details stay unknown without inventing mass or classification', () => {
+  for (const [mass, expected] of [[null, null], [undefined, null], ['', null], ['  ', null],
+    [false, null], [-1, null], ['invalid', null], [0, 0], ['125', 125]]) {
+    const [launch] = normalizeRocketLaunches([{ id: 'mass', pad: { latitude: 1, longitude: 2 }, net: '2026-07-20T10:00:00Z',
+      payloads: [{ mass }] }], NOW);
+    assert.equal(launch.payloads[0].massKg, expected);
+    assert.equal(launch.payloads[0].name, 'Unnamed payload');
+  }
+  const [launch] = normalizeRocketLaunches([{ id: 'missing', pad: { latitude: 1, longitude: 2 }, net: '2026-07-20T10:00:00Z' }], NOW);
+  assert.deepEqual(launch.payloads, []);
 });

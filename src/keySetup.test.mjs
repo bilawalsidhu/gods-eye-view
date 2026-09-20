@@ -39,3 +39,26 @@ test('the first Google key strips ONLY the keyless OSM basemap from the share ha
   assert.equal(stripKeylessBasemapFromHash(''), null);
   assert.equal(stripKeylessBasemapFromHash(undefined), null);
 });
+
+test('aborting pending setup removes its surface and ignores a late response', async () => {
+  const { initKeySetup } = await import('./keySetup.js');
+  const removed = [];
+  const chip = { remove: () => removed.push('chip') };
+  const root = { dataset: {}, remove: () => removed.push('root') };
+  let resolveResponse;
+  let requestSignal;
+  const controller = new AbortController();
+  const pending = initKeySetup({
+    documentRef: { getElementById: (id) => id === 'key-setup-chip' ? chip : root },
+    signal: controller.signal,
+    fetchImpl: (_url, { signal }) => {
+      requestSignal = signal;
+      return new Promise((resolve) => { resolveResponse = resolve; });
+    },
+  });
+  controller.abort();
+  assert.equal(requestSignal.aborted, true);
+  assert.deepEqual(removed, ['chip', 'root']);
+  resolveResponse({ ok: true, json: async () => ({ keys: [] }) });
+  assert.equal(await pending, null);
+});

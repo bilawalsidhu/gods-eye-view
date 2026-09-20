@@ -61,7 +61,8 @@ function applyMode() {
  * @returns {void}
  */
 export function installRenderGovernor(viewer) {
-  if (!viewer?.scene) throw new TypeError('installRenderGovernor requires a Cesium viewer');
+  if (!viewer?.scene)
+    throw new TypeError('installRenderGovernor requires a Cesium viewer');
   _viewer = viewer;
   _installed = true;
   // Never let Cesium re-render on simulation-time deltas behind our back —
@@ -126,6 +127,15 @@ export function getRenderGovernorDiagnostics() {
     holds: [..._holds].sort(),
     recentRequests: [..._recentRequests],
   };
+}
+
+/** Release the installed viewer after its animation owners have stopped. */
+export function uninstallRenderGovernor(viewer) {
+  if (_viewer !== viewer) return;
+  _viewer = null;
+  _installed = false;
+  _holds.clear();
+  _recentRequests.length = 0;
 }
 
 /** Test seam: reset module state between unit tests. */

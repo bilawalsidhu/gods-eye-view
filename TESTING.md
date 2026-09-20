@@ -218,3 +218,27 @@ While recording, call out anything in these areas — this is the feedback I mos
 - **No planes:** OpenSky data may be momentarily sparse; scroll out or wait a poll cycle.
 - **No GEV MIC button / voice errors:** `OPENAI_API_KEY` didn't load — use the console API for
   the annotation tests and skip the voice-only ones (§2).
+
+
+## Browser harness renderers
+
+The first-run, view-target prewarm, cockpit-plates and floor-hold harnesses
+select Metal on macOS and SwiftShader on other platforms. Cockpit-plates also
+accepts `--swiftshader` on macOS; floor-hold retains `--angle=<backend>`.
+Floor-hold explicitly selects 2D aircraft mode because it measures billboard
+positions; the tracking suite covers the 3D handoff.
+Software runs validate their assertions but do not establish real-GPU visual
+correctness. Floor-hold retains both mesh and DEM checks: an unavailable mesh
+oracle fails the run even when the DEM check passes. Record the backend with
+any screenshots and run GPU visual checks separately when needed.
+
+FIRMS refactoring can be checked without a configured server key using
+`node scripts/qa-firms.mjs --url http://localhost:4173 --fixtures`. This explicit
+fixture mode exercises populated display, aggregation, cards, keyless and stale
+responses, and selection/camera handoff. It does not establish live-source
+acceptance; omit `--fixtures` with a configured FIRMS key for that check.
+
+Director authoring and sharing acceptance: `node scripts/qa-director-sharing.mjs`
+checks installed import previews, draft validation, file-bundle round trips,
+cancellation, resource ownership and narrow-screen controls. Run alongside the
+scene-controls, camera, pack, interaction and timing harnesses.

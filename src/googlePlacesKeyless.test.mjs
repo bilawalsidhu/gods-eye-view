@@ -55,6 +55,8 @@ test('builds the keyless capability response only for a blank key', () => {
 });
 
 test('keyless Places routes stay successful after the Google quota is exhausted', async () => {
+  const previousServerKey = process.env.GOOGLE_MAPS_SERVER_API_KEY;
+  process.env.GOOGLE_MAPS_SERVER_API_KEY = '';
   const previousKey = process.env.GOOGLE_MAPS_API_KEY;
   const previousLimit = process.env.GEV_RATELIMIT_GOOGLE_PER_MIN;
   process.env.GOOGLE_MAPS_API_KEY = '';
@@ -81,6 +83,8 @@ test('keyless Places routes stay successful after the Google quota is exhausted'
       assert.deepEqual(textResponse.body, KEYLESS_PAYLOAD);
     }
   } finally {
+    if (previousServerKey === undefined) delete process.env.GOOGLE_MAPS_SERVER_API_KEY;
+    else process.env.GOOGLE_MAPS_SERVER_API_KEY = previousServerKey;
     if (previousKey === undefined) delete process.env.GOOGLE_MAPS_API_KEY;
     else process.env.GOOGLE_MAPS_API_KEY = previousKey;
     if (previousLimit === undefined) delete process.env.GEV_RATELIMIT_GOOGLE_PER_MIN;

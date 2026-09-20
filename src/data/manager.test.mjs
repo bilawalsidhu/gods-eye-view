@@ -105,6 +105,7 @@ test('renders ordinary layer rows without recreating a panel-hidden coordinator'
       },
       appendChild(child) { this.children.push(child); return child; },
       addEventListener() {},
+      removeEventListener() {},
       setAttribute(name, value) { this.attributes[name] = String(value); },
       querySelector(selector) {
         if (selector.startsWith('[data-layer-id="')) {
@@ -2756,7 +2757,9 @@ function makeControlElement() {
     },
     focus() { if (globalThis.document) globalThis.document.activeElement = this; },
     addEventListener(name, handler) { this.listeners[name] = handler; },
+    removeEventListener(name, handler) { if (this.listeners[name] === handler) delete this.listeners[name]; },
     setAttribute(name, value) { this.attributes[name] = String(value); },
+    getAttribute(name) { return this.attributes[name] ?? null; },
     closest(selector) {
       const className = selector.slice(1);
       return String(this.className).split(/\s+/).includes(className) ? this : null;
@@ -2782,6 +2785,163 @@ function makeControlElement() {
   };
   return element;
 }
+
+test('keyboard focus survives Data Layer enabling and disabling transitions', async () => {
+  const originalDocument = globalThis.document;
+  globalThis.document = { createElement: makeControlElement, activeElement: null };
+  const mgr = new DataLayerManager({});
+  let releaseEnable;
+  let releaseDisable;
+  const calls = { enable: 0, disable: 0 };
+  mgr.register({
+    id: 'focus-layer',
+    name: 'Focus layer',
+    icon: '',
+    source: 'Local focus fixture',
+    updateInterval: -1,
+    init() {},
+    enable() {
+      calls.enable += 1;
+      return new Promise((resolve) => { releaseEnable = resolve; });
+    },
+    disable() {
+      calls.disable += 1;
+      return new Promise((resolve) => { releaseDisable = resolve; });
+    },
+    update() {},
+    destroy() {},
+    getStats() { return { count: 1, lastUpdate: Date.now() }; },
+  });
+  const container = makeControlElement();
+
+  const waitFor = async (predicate, label) => {
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      if (predicate()) return;
+      await Promise.resolve();
+    }
+    assert.fail(`timed out waiting for ${label}`);
+  };
+
+  try {
+    mgr.buildTogglePanel(container);
+    const row = container.querySelector('[data-layer-id="focus-layer"]');
+    const button = row.querySelector('.data-toggle-btn');
+    button.focus();
+
+    const enablingClick = button.listeners.click();
+    await waitFor(() => typeof releaseEnable === 'function', 'enable transition');
+    assert.equal(globalThis.document.activeElement, button);
+    assert.equal(button.disabled, false, 'ENABLING never uses native disabled');
+    assert.equal(button.getAttribute('aria-disabled'), 'true');
+    assert.equal(button.getAttribute('aria-busy'), 'true');
+    assert.equal(button.textContent, 'ENABLING');
+    await button.listeners.click();
+    assert.equal(calls.enable, 1, 'repeat activation is inert while enabling');
+    assert.equal(mgr.layers.get('focus-layer').visibilityIntentEpoch, 1);
+
+    releaseEnable();
+    await enablingClick;
+    assert.equal(globalThis.document.activeElement, button);
+    assert.equal(button.disabled, false);
+    assert.equal(button.getAttribute('aria-disabled'), 'false');
+    assert.equal(button.getAttribute('aria-busy'), 'false');
+    assert.equal(mgr.isEnabled('focus-layer'), true);
+
+    const disablingClick = button.listeners.click();
+    await waitFor(() => typeof releaseDisable === 'function', 'disable transition');
+    assert.equal(globalThis.document.activeElement, button);
+    assert.equal(button.disabled, false, 'DISABLING never uses native disabled');
+    assert.equal(button.getAttribute('aria-disabled'), 'true');
+    assert.equal(button.getAttribute('aria-busy'), 'true');
+    assert.equal(button.textContent, 'DISABLING');
+    await button.listeners.click();
+    assert.equal(calls.disable, 1, 'repeat activation is inert while disabling');
+    assert.equal(mgr.layers.get('focus-layer').visibilityIntentEpoch, 2);
+
+    releaseDisable();
+    await disablingClick;
+    assert.equal(globalThis.document.activeElement, button);
+    assert.equal(button.disabled, false);
+    assert.equal(button.getAttribute('aria-disabled'), 'false');
+    assert.equal(button.getAttribute('aria-busy'), 'false');
+    assert.equal(mgr.isEnabled('focus-layer'), false);
+  } finally {
+    releaseEnable?.();
+    releaseDisable?.();
+    await mgr.destroyAll();
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+  }
+});
+
+test('a failed Data Layer transition clears busy state without losing keyboard focus', async () => {
+  const originalDocument = globalThis.document;
+  const originalWarn = console.warn;
+  globalThis.document = { createElement: makeControlElement, activeElement: null };
+  console.warn = () => {};
+  const mgr = new DataLayerManager({});
+  let rejectEnable;
+  let enableCalls = 0;
+  mgr.register({
+    id: 'focus-failure-layer',
+    name: 'Focus failure layer',
+    icon: '',
+    source: 'Local focus fixture',
+    updateInterval: -1,
+    init() {},
+    enable() {
+      enableCalls += 1;
+      if (enableCalls > 1) return true;
+      return new Promise((resolve, reject) => { rejectEnable = reject; });
+    },
+    disable() { return true; },
+    update() {},
+    destroy() {},
+    getStats() { return { count: 0, lastUpdate: null }; },
+  });
+  const container = makeControlElement();
+
+  try {
+    mgr.buildTogglePanel(container);
+    const button = container
+      .querySelector('[data-layer-id="focus-failure-layer"]')
+      .querySelector('.data-toggle-btn');
+    button.focus();
+
+    const failedClick = button.listeners.click();
+    for (let attempt = 0; attempt < 20 && typeof rejectEnable !== 'function'; attempt += 1) {
+      await Promise.resolve();
+    }
+    assert.equal(typeof rejectEnable, 'function');
+    assert.equal(globalThis.document.activeElement, button);
+    assert.equal(button.getAttribute('aria-disabled'), 'true');
+    assert.equal(button.getAttribute('aria-busy'), 'true');
+
+    rejectEnable(new Error('QA enable rejected'));
+    await failedClick;
+    assert.equal(globalThis.document.activeElement, button, 'failure settlement preserves focus');
+    assert.equal(button.disabled, false);
+    assert.equal(button.getAttribute('aria-disabled'), 'false');
+    assert.equal(button.getAttribute('aria-busy'), 'false');
+    assert.equal(button.textContent, 'OFF');
+    assert.deepEqual(mgr.getLayerLifecycleState('focus-failure-layer'), {
+      enabled: false,
+      lifecycleState: 'disabled',
+      uncertain: false,
+    });
+
+    await button.listeners.click();
+    assert.equal(enableCalls, 2, 'the settled control accepts a later retry');
+    assert.equal(globalThis.document.activeElement, button);
+    assert.equal(mgr.isEnabled('focus-failure-layer'), true);
+  } finally {
+    rejectEnable?.(new Error('test cleanup'));
+    console.warn = originalWarn;
+    await mgr.destroyAll();
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+  }
+});
 
 /** Collect every node in a rendered subtree carrying `className`. */
 function collectByClass(node, className) {
@@ -3092,6 +3252,84 @@ test('a layer that surrenders its row controls hides the block entirely', async 
     mgr._refreshTogglePanel();
     assert.equal(controls.hidden, false, 'the row returns when the owner releases it');
     assert.equal(collectByClass(controls, 'data-toggle-chip').length, 1);
+  } finally {
+    await mgr.destroyAll();
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+  }
+});
+
+test('layer metadata shows a guidance prompt without reporting it as a fault', () => {
+  const mgr = new DataLayerManager({});
+  const text = mgr._buildMetaText({
+    enabled: true,
+    source: 'OpenStreetMap',
+    stats: { status: 'zoom-in', error: null, count: 0, statusMessage: 'Zoom in to search mapped installations' },
+  });
+  assert.match(text, /Zoom in to search mapped installations$/);
+  assert.doesNotMatch(text, /UNAVAILABLE|DEGRADED/);
+});
+
+
+test('panel remount releases old listeners and destruction revokes retained controls', async () => {
+  const originalDocument = globalThis.document;
+  globalThis.document = { createElement: makeControlElement, activeElement: null };
+  const manager = new DataLayerManager({});
+  const layer = makeSlowLayer('lifecycle-panel', { updateInterval: -1 });
+  let rowListener;
+  layer.module.getRowControls = () => ({ chips: [] });
+  layer.module.setRowControlsListener = (listener) => { rowListener = listener; };
+  manager.register(layer.module);
+  try {
+    const first = makeControlElement();
+    manager.buildTogglePanel(first);
+    const oldButton = first.querySelector('.data-toggle-btn');
+    const retainedClick = oldButton.listeners.click;
+    const second = makeControlElement();
+    manager.buildTogglePanel(second);
+    assert.equal(oldButton.listeners.click, undefined);
+    await retainedClick();
+    assert.equal(layer.calls.enable, 0, 'a revoked generation cannot issue actions');
+    const currentButton = second.querySelector('.data-toggle-btn');
+    assert.equal(typeof currentButton.listeners.click, 'function');
+    assert.equal(typeof rowListener, 'function');
+    await manager.destroyAll();
+    assert.equal(currentButton.listeners.click, undefined);
+    assert.equal(rowListener, null);
+  } finally {
+    await manager.destroyAll();
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+  }
+});
+
+test('row action chips use live disabled state and descriptive counts without writing parameters', async () => {
+  const originalDocument = globalThis.document;
+  globalThis.document = { createElement: makeControlElement };
+  const mgr = new DataLayerManager({});
+  const layer = makeRowControlLayer();
+  let calls = 0, blocked = false;
+  layer.module.getStats = () => ({ count: 3, countLabel: '3 nearby' });
+  layer.module.getRowControls = () => ({ chips: [{ id: 'find', label: 'SHOW NEAREST', disabled: blocked, onClick: () => calls++ }] });
+  layer.module.setParams = () => { throw new Error('navigation must not write persistent params'); };
+  mgr.register(layer.module);
+  const container = makeControlElement();
+  try {
+    mgr.buildTogglePanel(container);
+    await mgr.setEnabled('satellites', true);
+    const row = container.querySelector('[data-layer-id="satellites"]');
+    assert.equal(row.querySelector('.data-count').textContent, '3 nearby');
+    const controls = row.querySelector('.data-toggle-controls');
+    const chip = collectByClass(controls, 'data-toggle-chip')[0];
+    controls.listeners.click({ target: chip });
+    assert.equal(calls, 1);
+    blocked = true;
+    controls.listeners.click({ target: chip });
+    assert.equal(calls, 1, 'live disabled descriptor wins before row repaint');
+    blocked = false;
+    await mgr.setEnabled('satellites', false);
+    controls.listeners.click({ target: chip });
+    assert.equal(calls, 1, 'disabled layer cannot navigate');
   } finally {
     await mgr.destroyAll();
     if (originalDocument === undefined) delete globalThis.document;

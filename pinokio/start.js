@@ -8,6 +8,7 @@ module.exports = {
         env: {
           HOST: '127.0.0.1',
           PORT: '{{port}}',
+          GOOGLE_MAPS_SERVER_API_KEY: '{{env.GOOGLE_MAPS_SERVER_API_KEY || ""}}',
           GOOGLE_MAPS_API_KEY: '{{env.GOOGLE_MAPS_API_KEY || ""}}',
           CESIUM_ION_TOKEN: '{{env.CESIUM_ION_TOKEN || ""}}',
           OPENAI_API_KEY: '{{env.OPENAI_API_KEY || ""}}',
