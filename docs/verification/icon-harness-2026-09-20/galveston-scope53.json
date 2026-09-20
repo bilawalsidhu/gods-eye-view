@@ -1,0 +1,1392 @@
+{
+  "scene": "Galveston Bay",
+  "sceneKey": "galveston",
+  "scope": "53",
+  "baseUrl": "https://sb-4hcy4jcldizn.vercel.run",
+  "layersRequested": [
+    "Satellites",
+    "Live Flights",
+    "Military Flights",
+    "Live Vessels",
+    "Street Traffic",
+    "Data Centers"
+  ],
+  "settleMs": 45000,
+  "startedAt": "2026-09-20T07:51:24.668Z",
+  "network": {
+    "total": 266,
+    "status502": [],
+    "status5xx": [
+      "503 https://sb-4hcy4jcldizn.vercel.run/api/ondemand/sessions"
+    ]
+  },
+  "console": {
+    "errors": [
+      "Failed to load resource: the server responded with a status of 404 ()",
+      "Failed to load resource: the server responded with a status of 503 ()"
+    ],
+    "pageErrors": []
+  },
+  "url": "https://sb-4hcy4jcldizn.vercel.run/?welcome=0#lat=29.45&lon=-94.85&alt=45000&heading=0&pitch=-55&v=2&hv=1&hud=tactical",
+  "appReadyAt": "2026-09-20T07:51:38.591Z",
+  "cameraRestoredAt": "2026-09-20T07:51:46.872Z",
+  "cameraAfterRestore": {
+    "lat": 29.45,
+    "lon": -94.85,
+    "altM": 45000
+  },
+  "layersEnabled": [
+    {
+      "name": "Satellites",
+      "id": "satellites",
+      "action": "setEnabled",
+      "enabled": true
+    },
+    {
+      "name": "Live Flights",
+      "id": "flights",
+      "action": "setEnabled",
+      "enabled": true
+    },
+    {
+      "name": "Military Flights",
+      "id": "military",
+      "action": "setEnabled",
+      "enabled": true
+    },
+    {
+      "name": "Live Vessels",
+      "id": "ais-live-vessels",
+      "action": "setEnabled",
+      "enabled": true
+    },
+    {
+      "name": "Street Traffic",
+      "id": "traffic",
+      "action": "setEnabled",
+      "enabled": true
+    },
+    {
+      "name": "Data Centers",
+      "id": "local-datacenters",
+      "action": "setEnabled",
+      "enabled": true
+    }
+  ],
+  "panels": {
+    "data-panel": "expanded",
+    "pp-toggles": "expanded",
+    "global-context-panel": "expanded"
+  },
+  "settledAt": "2026-09-20T07:52:44.126Z",
+  "cameraAfterSettle": {
+    "lat": 29.45,
+    "lon": -94.85,
+    "altM": 45000
+  },
+  "dom": {
+    "svgDataIconCount": 54,
+    "strokeWidths": {
+      "1.75": 54
+    },
+    "blackIcons": 0,
+    "blackIconNames": [],
+    "perPanel": {
+      "top-center-actions": {
+        "total": 2,
+        "stroke175": 2,
+        "visible": 2,
+        "names": {
+          "layers-minus": 1,
+          "link": 1
+        }
+      },
+      "cockpit-display-toggle-btn": {
+        "total": 1,
+        "stroke175": 1,
+        "visible": 0,
+        "names": {
+          "chevron-left": 1
+        }
+      },
+      "cockpit-radio-toggle-btn": {
+        "total": 1,
+        "stroke175": 1,
+        "visible": 0,
+        "names": {
+          "chevron-left": 1
+        }
+      },
+      "cockpit-radio-prev-btn": {
+        "total": 1,
+        "stroke175": 1,
+        "visible": 0,
+        "names": {
+          "skip-back": 1
+        }
+      },
+      "cockpit-radio-play-btn": {
+        "total": 1,
+        "stroke175": 1,
+        "visible": 0,
+        "names": {
+          "play": 1
+        }
+      },
+      "cockpit-radio-next-btn": {
+        "total": 1,
+        "stroke175": 1,
+        "visible": 0,
+        "names": {
+          "skip-forward": 1
+        }
+      },
+      "command-dock": {
+        "total": 3,
+        "stroke175": 3,
+        "visible": 0,
+        "names": {
+          "plus": 1,
+          "map-pin": 1,
+          "search": 1
+        }
+      },
+      "control-panel-popover": {
+        "total": 7,
+        "stroke175": 7,
+        "visible": 0,
+        "names": {
+          "circle": 1,
+          "tv": 1,
+          "moon": 1,
+          "thermometer": 1,
+          "sparkles": 1,
+          "contrast": 1,
+          "snowflake": 1
+        }
+      },
+      "data-panel": {
+        "total": 19,
+        "stroke175": 19,
+        "visible": 19,
+        "names": {
+          "minus": 1,
+          "satellite": 1,
+          "plane": 1,
+          "shield": 1,
+          "ship": 1,
+          "car": 1,
+          "bus": 1,
+          "bike": 1,
+          "cctv": 1,
+          "camera": 1,
+          "radar": 1,
+          "server": 1,
+          "cable": 1,
+          "dam": 1,
+          "rocket": 1,
+          "activity": 1,
+          "flame": 1,
+          "compass": 1,
+          "radio": 1
+        }
+      },
+      "scene-panel": {
+        "total": 1,
+        "stroke175": 1,
+        "visible": 0,
+        "names": {
+          "plus": 1
+        }
+      },
+      "pp-toggles": {
+        "total": 7,
+        "stroke175": 7,
+        "visible": 0,
+        "names": {
+          "chevron-left": 1,
+          "scan": 1,
+          "minus": 1,
+          "plane": 1,
+          "square": 1,
+          "sun": 1,
+          "focus": 1
+        }
+      },
+      "hud-toggle": {
+        "total": 1,
+        "stroke175": 1,
+        "visible": 0,
+        "names": {
+          "scan-eye": 1
+        }
+      },
+      "cctv-panel": {
+        "total": 1,
+        "stroke175": 1,
+        "visible": 0,
+        "names": {
+          "chevron-left": 1
+        }
+      },
+      "context-radio-dock": {
+        "total": 3,
+        "stroke175": 3,
+        "visible": 0,
+        "names": {
+          "skip-back": 1,
+          "play": 1,
+          "skip-forward": 1
+        }
+      },
+      "global-context-panel": {
+        "total": 2,
+        "stroke175": 2,
+        "visible": 1,
+        "names": {
+          "chevron-right": 1,
+          "triangle": 1
+        }
+      },
+      "radio-panel": {
+        "total": 1,
+        "stroke175": 1,
+        "visible": 1,
+        "names": {
+          "plus": 1
+        }
+      },
+      "hud-rec-dot": {
+        "total": 1,
+        "stroke175": 1,
+        "visible": 1,
+        "names": {
+          "circle": 1
+        }
+      },
+      "other:#orbit-indicator": {
+        "total": 1,
+        "stroke175": 1,
+        "visible": 1,
+        "names": {
+          "rotate-ccw": 1
+        }
+      }
+    },
+    "rows": [
+      {
+        "id": "satellites",
+        "name": "Satellites",
+        "badge": "ON",
+        "feedState": "nominal",
+        "subtext": "LIVE · CelesTrak · 5m ago | DENSE | STATION 20 | NAV 91 | GEO 567 | VISUAL 153",
+        "icon": {
+          "name": "satellite",
+          "w": 18,
+          "h": 18,
+          "strokeAttr": "1.75",
+          "strokeComputed": "1.75px",
+          "color": "rgb(59, 183, 149)",
+          "ariaHidden": "true"
+        }
+      },
+      {
+        "id": "flights",
+        "name": "Live Flights",
+        "badge": "DEGRADED",
+        "feedState": "degraded",
+        "subtext": "DEGRADED · adsb.lol · OpenSky unreachable from this deployment (connect timeout) - adsb.lol regional feed",
+        "icon": {
+          "name": "plane",
+          "w": 18,
+          "h": 18,
+          "strokeAttr": "1.75",
+          "strokeComputed": "1.75px",
+          "color": "rgb(255, 173, 114)",
+          "ariaHidden": "true"
+        }
+      },
+      {
+        "id": "military",
+        "name": "Military Flights",
+        "badge": "ON",
+        "feedState": "nominal",
+        "subtext": "LIVE · adsb.lol · 9s ago",
+        "icon": {
+          "name": "shield",
+          "w": 18,
+          "h": 18,
+          "strokeAttr": "1.75",
+          "strokeComputed": "1.75px",
+          "color": "rgb(59, 183, 149)",
+          "ariaHidden": "true"
+        }
+      },
+      {
+        "id": "ais-live-vessels",
+        "name": "Live Vessels",
+        "badge": "DEGRADED",
+        "feedState": "degraded",
+        "subtext": "DEGRADED · Demo replay · AISSTREAM_API_KEY not set - demo replay, not live AIS",
+        "icon": {
+          "name": "ship",
+          "w": 18,
+          "h": 18,
+          "strokeAttr": "1.75",
+          "strokeComputed": "1.75px",
+          "color": "rgb(255, 173, 114)",
+          "ariaHidden": "true"
+        }
+      },
+      {
+        "id": "traffic",
+        "name": "Street Traffic",
+        "badge": "DEGRADED",
+        "feedState": "degraded",
+        "subtext": "DEGRADED · TomTom · TOMTOM_API_KEY not set — showing simulated flow on live OSM roads (set TOMTOM_API_KEY in Vercel for live speeds)",
+        "icon": {
+          "name": "car",
+          "w": 18,
+          "h": 18,
+          "strokeAttr": "1.75",
+          "strokeComputed": "1.75px",
+          "color": "rgb(255, 173, 114)",
+          "ariaHidden": "true"
+        }
+      },
+      {
+        "id": "transit",
+        "name": "Transit",
+        "badge": "OFF",
+        "feedState": "off",
+        "subtext": "GTFS-RT · never",
+        "icon": {
+          "name": "bus",
+          "w": 18,
+          "h": 18,
+          "strokeAttr": "1.75",
+          "strokeComputed": "1.75px",
+          "color": "rgb(153, 153, 153)",
+          "ariaHidden": "true"
+        }
+      },
+      {
+        "id": "bikeshare",
+        "name": "Bike Share",
+        "badge": "OFF",
+        "feedState": "off",
+        "subtext": "GBFS · never",
+        "icon": {
+          "name": "bike",
+          "w": 18,
+          "h": 18,
+          "strokeAttr": "1.75",
+          "strokeComputed": "1.75px",
+          "color": "rgb(153, 153, 153)",
+          "ariaHidden": "true"
+        }
+      },
+      {
+        "id": "cctv",
+        "name": "Cameras",
+        "badge": "OFF",
+        "feedState": "off",
+        "subtext": "CCTV + Street View fallback · never",
+        "icon": {
+          "name": "cctv",
+          "w": 18,
+          "h": 18,
+          "strokeAttr": "1.75",
+          "strokeComputed": "1.75px",
+          "color": "rgb(153, 153, 153)",
+          "ariaHidden": "true"
+        }
+      },
+      {
+        "id": "alpr-cameras",
+        "name": "Mapped ALPR Cameras",
+        "badge": "OFF",
+        "feedState": "off",
+        "subtext": "OpenStreetMap · community mapped · never",
+        "icon": {
+          "name": "camera",
+          "w": 18,
+          "h": 18,
+          "strokeAttr": "1.75",
+          "strokeComputed": "1.75px",
+          "color": "rgb(153, 153, 153)",
+          "ariaHidden": "true"
+        }
+      },
+      {
+        "id": "military-installations",
+        "name": "Mapped Installations",
+        "badge": "OFF",
+        "feedState": "off",
+        "subtext": "OpenStreetMap + optional Google Maps Places · never",
+        "icon": {
+          "name": "radar",
+          "w": 18,
+          "h": 18,
+          "strokeAttr": "1.75",
+          "strokeComputed": "1.75px",
+          "color": "rgb(153, 153, 153)",
+          "ariaHidden": "true"
+        }
+      },
+      {
+        "id": "local-datacenters",
+        "name": "Data Centers",
+        "badge": "ON",
+        "feedState": "nominal",
+        "subtext": "Local · 53s ago",
+        "icon": {
+          "name": "server",
+          "w": 18,
+          "h": 18,
+          "strokeAttr": "1.75",
+          "strokeComputed": "1.75px",
+          "color": "rgb(59, 183, 149)",
+          "ariaHidden": "true"
+        }
+      },
+      {
+        "id": "telegeography-submarine-cables",
+        "name": "Submarine Cables",
+        "badge": "OFF",
+        "feedState": "off",
+        "subtext": "TeleGeography · never",
+        "icon": {
+          "name": "cable",
+          "w": 18,
+          "h": 18,
+          "strokeAttr": "1.75",
+          "strokeComputed": "1.75px",
+          "color": "rgb(153, 153, 153)",
+          "ariaHidden": "true"
+        }
+      },
+      {
+        "id": "local-dams",
+        "name": "Dams",
+        "badge": "OFF",
+        "feedState": "off",
+        "subtext": "USACE · never",
+        "icon": {
+          "name": "dam",
+          "w": 18,
+          "h": 18,
+          "strokeAttr": "1.75",
+          "strokeComputed": "1.75px",
+          "color": "rgb(153, 153, 153)",
+          "ariaHidden": "true"
+        }
+      },
+      {
+        "id": "rocket-launches",
+        "name": "Space Missions (30d)",
+        "badge": "OFF",
+        "feedState": "off",
+        "subtext": "Launch Library 2 · never",
+        "icon": {
+          "name": "rocket",
+          "w": 18,
+          "h": 18,
+          "strokeAttr": "1.75",
+          "strokeComputed": "1.75px",
+          "color": "rgb(153, 153, 153)",
+          "ariaHidden": "true"
+        }
+      },
+      {
+        "id": "earthquakes",
+        "name": "Earthquakes (24h)",
+        "badge": "OFF",
+        "feedState": "off",
+        "subtext": "USGS · never",
+        "icon": {
+          "name": "activity",
+          "w": 18,
+          "h": 18,
+          "strokeAttr": "1.75",
+          "strokeComputed": "1.75px",
+          "color": "rgb(153, 153, 153)",
+          "ariaHidden": "true"
+        }
+      },
+      {
+        "id": "local-firms",
+        "name": "Active Fires",
+        "badge": "OFF",
+        "feedState": "off",
+        "subtext": "NASA FIRMS · LIVE · never",
+        "icon": {
+          "name": "flame",
+          "w": 18,
+          "h": 18,
+          "strokeAttr": "1.75",
+          "strokeComputed": "1.75px",
+          "color": "rgb(153, 153, 153)",
+          "ariaHidden": "true"
+        }
+      },
+      {
+        "id": "directions",
+        "name": "Directions",
+        "badge": "OFF",
+        "feedState": "off",
+        "subtext": "OSM routing · never",
+        "icon": {
+          "name": "compass",
+          "w": 18,
+          "h": 18,
+          "strokeAttr": "1.75",
+          "strokeComputed": "1.75px",
+          "color": "rgb(153, 153, 153)",
+          "ariaHidden": "true"
+        }
+      },
+      {
+        "id": "radio",
+        "name": "Radio",
+        "badge": "OFF",
+        "feedState": "off",
+        "subtext": "Radio Browser · never",
+        "icon": {
+          "name": "radio",
+          "w": 18,
+          "h": 18,
+          "strokeAttr": "1.75",
+          "strokeComputed": "1.75px",
+          "color": "rgb(153, 153, 153)",
+          "ariaHidden": "true"
+        }
+      }
+    ],
+    "rowCount": 18,
+    "rowsInlineSvg18": 18,
+    "rowsStroke175Computed": 18,
+    "rowIconsBlack": 0,
+    "emojiDataLayersText": 0,
+    "emojiDataLayersMarkup": 0,
+    "emojiDocument": 0,
+    "glyphsText": 0,
+    "glyphsMarkup": 0,
+    "unavailableBadges": 0,
+    "unavailableStrings": 0,
+    "http502Strings": 0,
+    "header": {
+      "titleBarPresent": true,
+      "lockup": {
+        "src": "/brand/logo-light.svg",
+        "loaded": true,
+        "naturalWidth": 273
+      },
+      "title": "OnDemand Spatial",
+      "subtitle": "SPATIAL INTELLIGENCE CONSOLE",
+      "shareLinkIcon": {
+        "dataIcon": "link",
+        "strokeAttr": "1.75",
+        "visible": true
+      }
+    },
+    "clearLayers": {
+      "hasSvgIcon": true,
+      "dataIcon": "layers-minus",
+      "w": 18,
+      "h": 18,
+      "strokeAttr": "1.75",
+      "strokeComputed": "1.75px",
+      "color": "rgba(243, 243, 243, 0.55)",
+      "materialInside": false,
+      "innerHTML": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" data-icon=\"layers-minus\" class=\"od-icon"
+    },
+    "materialSymbols": {
+      "total": 30,
+      "visible": 6,
+      "byPanel": {
+        "other:#celestial-ring-overlay": 2,
+        "top-center-actions": 3,
+        "cockpit-speed-rim": 1,
+        "cockpit-altitude-rim": 1,
+        "cockpit-vision-previous": 1,
+        "cockpit-vision-next": 1,
+        "cockpit-hud": 2,
+        "cockpit-context-previous": 1,
+        "cockpit-context-next": 1,
+        "cockpit-context-toggle": 1,
+        "cockpit-context-direction": 1,
+        "cockpit-route": 1,
+        "cockpit-brief-previous": 1,
+        "cockpit-brief-next": 1,
+        "cockpit-signal-toggle": 1,
+        "cockpit-reset-globe": 1,
+        "other:#map-view-switch": 1,
+        "pp-toggles": 3,
+        "context-radio-dock": 3,
+        "global-context-panel": 2,
+        "cockpit-entry": 1
+      },
+      "ligatures": [
+        "light_mode",
+        "dark_mode",
+        "view_in_ar",
+        "navigation",
+        "public",
+        "arrow_right",
+        "arrow_left",
+        "chevron_left",
+        "chevron_right",
+        "my_location",
+        "arrow_drop_down",
+        "skip_previous",
+        "skip_next",
+        "chevron_left",
+        "navigation",
+        "east",
+        "chevron_left",
+        "chevron_right",
+        "right_panel_close",
+        "public",
+        "close_fullscreen",
+        "adjust",
+        "draw",
+        "flare",
+        "radio",
+        "open_in_full",
+        "close",
+        "radar",
+        "rocket_launch",
+        "flight"
+      ]
+    },
+    "rects": {
+      "titleBar": {
+        "x": 36,
+        "y": 32,
+        "width": 354.8125,
+        "height": 104.875,
+        "top": 32,
+        "right": 390.8125,
+        "bottom": 136.875,
+        "left": 36
+      },
+      "clearBtn": {
+        "x": 614,
+        "y": 32,
+        "width": 36,
+        "height": 36,
+        "top": 32,
+        "right": 650,
+        "bottom": 68,
+        "left": 614
+      },
+      "share": {
+        "x": 658,
+        "y": 32,
+        "width": 36,
+        "height": 36,
+        "top": 32,
+        "right": 694,
+        "bottom": 68,
+        "left": 658
+      },
+      "dataPanel": {
+        "x": 52,
+        "y": 266.359375,
+        "width": 280,
+        "height": 451.1875,
+        "top": 266.359375,
+        "right": 332,
+        "bottom": 717.546875,
+        "left": 52
+      },
+      "pp": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      }
+    }
+  },
+  "assertedAt": "2026-09-20T07:52:44.151Z",
+  "shots": {
+    "full": "/tmp/goose-work/work/6692b763e851d28a036ab30e/6aab3596cc6f5bb3618917b7/gods-eye-view/docs/verification/icon-harness-2026-09-20/galveston-scope53-full.png",
+    "dataLayers": "/tmp/goose-work/work/6692b763e851d28a036ab30e/6aab3596cc6f5bb3618917b7/gods-eye-view/docs/verification/icon-harness-2026-09-20/galveston-scope53-data-layers.png",
+    "header": "/tmp/goose-work/work/6692b763e851d28a036ab30e/6aab3596cc6f5bb3618917b7/gods-eye-view/docs/verification/icon-harness-2026-09-20/galveston-scope53-header.png",
+    "clearLayers": "/tmp/goose-work/work/6692b763e851d28a036ab30e/6aab3596cc6f5bb3618917b7/gods-eye-view/docs/verification/icon-harness-2026-09-20/galveston-scope53-clear-layers.png",
+    "display": "/tmp/goose-work/work/6692b763e851d28a036ab30e/6aab3596cc6f5bb3618917b7/gods-eye-view/docs/verification/icon-harness-2026-09-20/galveston-scope53-display.png",
+    "chat": "/tmp/goose-work/work/6692b763e851d28a036ab30e/6aab3596cc6f5bb3618917b7/gods-eye-view/docs/verification/icon-harness-2026-09-20/galveston-scope53-chat.png"
+  },
+  "displayPanel": {
+    "wasHidden": true,
+    "rect": {
+      "x": 1116,
+      "y": 266.390625,
+      "width": 272,
+      "height": 488,
+      "top": 266.390625,
+      "right": 1388,
+      "bottom": 754.390625,
+      "left": 1116
+    },
+    "icons": 8,
+    "strokes": [
+      "1.75"
+    ]
+  },
+  "chat": {
+    "opened": "aircraft",
+    "svgDataIconCount": 55,
+    "strokeWidths": {
+      "1.75": 55
+    },
+    "closeIcon": {
+      "dataIcon": "x",
+      "strokeAttr": "1.75"
+    },
+    "chatVisible": true
+  },
+  "domWithChat": {
+    "svgDataIconCount": 55,
+    "strokeWidths": {
+      "1.75": 55
+    },
+    "blackIcons": 0,
+    "blackIconNames": [],
+    "perPanel": {
+      "top-center-actions": {
+        "total": 2,
+        "stroke175": 2,
+        "visible": 2,
+        "names": {
+          "layers-minus": 1,
+          "link": 1
+        }
+      },
+      "cockpit-display-toggle-btn": {
+        "total": 1,
+        "stroke175": 1,
+        "visible": 0,
+        "names": {
+          "chevron-left": 1
+        }
+      },
+      "cockpit-radio-toggle-btn": {
+        "total": 1,
+        "stroke175": 1,
+        "visible": 0,
+        "names": {
+          "chevron-left": 1
+        }
+      },
+      "cockpit-radio-prev-btn": {
+        "total": 1,
+        "stroke175": 1,
+        "visible": 0,
+        "names": {
+          "skip-back": 1
+        }
+      },
+      "cockpit-radio-play-btn": {
+        "total": 1,
+        "stroke175": 1,
+        "visible": 0,
+        "names": {
+          "play": 1
+        }
+      },
+      "cockpit-radio-next-btn": {
+        "total": 1,
+        "stroke175": 1,
+        "visible": 0,
+        "names": {
+          "skip-forward": 1
+        }
+      },
+      "command-dock": {
+        "total": 3,
+        "stroke175": 3,
+        "visible": 0,
+        "names": {
+          "plus": 1,
+          "map-pin": 1,
+          "search": 1
+        }
+      },
+      "control-panel-popover": {
+        "total": 7,
+        "stroke175": 7,
+        "visible": 0,
+        "names": {
+          "circle": 1,
+          "tv": 1,
+          "moon": 1,
+          "thermometer": 1,
+          "sparkles": 1,
+          "contrast": 1,
+          "snowflake": 1
+        }
+      },
+      "data-panel": {
+        "total": 19,
+        "stroke175": 19,
+        "visible": 19,
+        "names": {
+          "minus": 1,
+          "satellite": 1,
+          "plane": 1,
+          "shield": 1,
+          "ship": 1,
+          "car": 1,
+          "bus": 1,
+          "bike": 1,
+          "cctv": 1,
+          "camera": 1,
+          "radar": 1,
+          "server": 1,
+          "cable": 1,
+          "dam": 1,
+          "rocket": 1,
+          "activity": 1,
+          "flame": 1,
+          "compass": 1,
+          "radio": 1
+        }
+      },
+      "scene-panel": {
+        "total": 1,
+        "stroke175": 1,
+        "visible": 0,
+        "names": {
+          "plus": 1
+        }
+      },
+      "pp-toggles": {
+        "total": 7,
+        "stroke175": 7,
+        "visible": 0,
+        "names": {
+          "chevron-left": 1,
+          "scan": 1,
+          "minus": 1,
+          "plane": 1,
+          "square": 1,
+          "sun": 1,
+          "focus": 1
+        }
+      },
+      "hud-toggle": {
+        "total": 1,
+        "stroke175": 1,
+        "visible": 0,
+        "names": {
+          "scan-eye": 1
+        }
+      },
+      "cctv-panel": {
+        "total": 1,
+        "stroke175": 1,
+        "visible": 0,
+        "names": {
+          "chevron-left": 1
+        }
+      },
+      "context-radio-dock": {
+        "total": 3,
+        "stroke175": 3,
+        "visible": 0,
+        "names": {
+          "skip-back": 1,
+          "play": 1,
+          "skip-forward": 1
+        }
+      },
+      "global-context-panel": {
+        "total": 2,
+        "stroke175": 2,
+        "visible": 1,
+        "names": {
+          "chevron-right": 1,
+          "triangle": 1
+        }
+      },
+      "radio-panel": {
+        "total": 1,
+        "stroke175": 1,
+        "visible": 1,
+        "names": {
+          "plus": 1
+        }
+      },
+      "hud-rec-dot": {
+        "total": 1,
+        "stroke175": 1,
+        "visible": 1,
+        "names": {
+          "circle": 1
+        }
+      },
+      "other:#orbit-indicator": {
+        "total": 1,
+        "stroke175": 1,
+        "visible": 1,
+        "names": {
+          "rotate-ccw": 1
+        }
+      },
+      "ondemand-entity-chat-close": {
+        "total": 1,
+        "stroke175": 1,
+        "visible": 1,
+        "names": {
+          "x": 1
+        }
+      }
+    },
+    "rows": [
+      {
+        "id": "satellites",
+        "name": "Satellites",
+        "badge": "ON",
+        "feedState": "nominal",
+        "subtext": "LIVE · CelesTrak · 5m ago | DENSE | STATION 20 | NAV 91 | GEO 567 | VISUAL 153",
+        "icon": {
+          "name": "satellite",
+          "w": 18,
+          "h": 18,
+          "strokeAttr": "1.75",
+          "strokeComputed": "1.75px",
+          "color": "rgb(59, 183, 149)",
+          "ariaHidden": "true"
+        }
+      },
+      {
+        "id": "flights",
+        "name": "Live Flights",
+        "badge": "DEGRADED",
+        "feedState": "degraded",
+        "subtext": "DEGRADED · adsb.lol · OpenSky unreachable from this deployment (connect timeout) - adsb.lol regional feed",
+        "icon": {
+          "name": "plane",
+          "w": 18,
+          "h": 18,
+          "strokeAttr": "1.75",
+          "strokeComputed": "1.75px",
+          "color": "rgb(255, 173, 114)",
+          "ariaHidden": "true"
+        }
+      },
+      {
+        "id": "military",
+        "name": "Military Flights",
+        "badge": "ON",
+        "feedState": "nominal",
+        "subtext": "LIVE · adsb.lol · just now",
+        "icon": {
+          "name": "shield",
+          "w": 18,
+          "h": 18,
+          "strokeAttr": "1.75",
+          "strokeComputed": "1.75px",
+          "color": "rgb(59, 183, 149)",
+          "ariaHidden": "true"
+        }
+      },
+      {
+        "id": "ais-live-vessels",
+        "name": "Live Vessels",
+        "badge": "STALE",
+        "feedState": "stale",
+        "subtext": "Demo replay · No vessels in scene (demo replay covers the Texas Gulf coast)",
+        "icon": {
+          "name": "ship",
+          "w": 18,
+          "h": 18,
+          "strokeAttr": "1.75",
+          "strokeComputed": "1.75px",
+          "color": "rgb(255, 210, 122)",
+          "ariaHidden": "true"
+        }
+      },
+      {
+        "id": "traffic",
+        "name": "Street Traffic",
+        "badge": "DEGRADED",
+        "feedState": "degraded",
+        "subtext": "DEGRADED · TomTom · TOMTOM_API_KEY not set — showing simulated flow on live OSM roads (set TOMTOM_API_KEY in Vercel for live speeds)",
+        "icon": {
+          "name": "car",
+          "w": 18,
+          "h": 18,
+          "strokeAttr": "1.75",
+          "strokeComputed": "1.75px",
+          "color": "rgb(255, 173, 114)",
+          "ariaHidden": "true"
+        }
+      },
+      {
+        "id": "transit",
+        "name": "Transit",
+        "badge": "OFF",
+        "feedState": "off",
+        "subtext": "GTFS-RT · never",
+        "icon": {
+          "name": "bus",
+          "w": 18,
+          "h": 18,
+          "strokeAttr": "1.75",
+          "strokeComputed": "1.75px",
+          "color": "rgb(153, 153, 153)",
+          "ariaHidden": "true"
+        }
+      },
+      {
+        "id": "bikeshare",
+        "name": "Bike Share",
+        "badge": "OFF",
+        "feedState": "off",
+        "subtext": "GBFS · never",
+        "icon": {
+          "name": "bike",
+          "w": 18,
+          "h": 18,
+          "strokeAttr": "1.75",
+          "strokeComputed": "1.75px",
+          "color": "rgb(153, 153, 153)",
+          "ariaHidden": "true"
+        }
+      },
+      {
+        "id": "cctv",
+        "name": "Cameras",
+        "badge": "OFF",
+        "feedState": "off",
+        "subtext": "CCTV + Street View fallback · never",
+        "icon": {
+          "name": "cctv",
+          "w": 18,
+          "h": 18,
+          "strokeAttr": "1.75",
+          "strokeComputed": "1.75px",
+          "color": "rgb(153, 153, 153)",
+          "ariaHidden": "true"
+        }
+      },
+      {
+        "id": "alpr-cameras",
+        "name": "Mapped ALPR Cameras",
+        "badge": "OFF",
+        "feedState": "off",
+        "subtext": "OpenStreetMap · community mapped · never",
+        "icon": {
+          "name": "camera",
+          "w": 18,
+          "h": 18,
+          "strokeAttr": "1.75",
+          "strokeComputed": "1.75px",
+          "color": "rgb(153, 153, 153)",
+          "ariaHidden": "true"
+        }
+      },
+      {
+        "id": "military-installations",
+        "name": "Mapped Installations",
+        "badge": "OFF",
+        "feedState": "off",
+        "subtext": "OpenStreetMap + optional Google Maps Places · never",
+        "icon": {
+          "name": "radar",
+          "w": 18,
+          "h": 18,
+          "strokeAttr": "1.75",
+          "strokeComputed": "1.75px",
+          "color": "rgb(153, 153, 153)",
+          "ariaHidden": "true"
+        }
+      },
+      {
+        "id": "local-datacenters",
+        "name": "Data Centers",
+        "badge": "ON",
+        "feedState": "nominal",
+        "subtext": "Local · 59s ago",
+        "icon": {
+          "name": "server",
+          "w": 18,
+          "h": 18,
+          "strokeAttr": "1.75",
+          "strokeComputed": "1.75px",
+          "color": "rgb(59, 183, 149)",
+          "ariaHidden": "true"
+        }
+      },
+      {
+        "id": "telegeography-submarine-cables",
+        "name": "Submarine Cables",
+        "badge": "OFF",
+        "feedState": "off",
+        "subtext": "TeleGeography · never",
+        "icon": {
+          "name": "cable",
+          "w": 18,
+          "h": 18,
+          "strokeAttr": "1.75",
+          "strokeComputed": "1.75px",
+          "color": "rgb(153, 153, 153)",
+          "ariaHidden": "true"
+        }
+      },
+      {
+        "id": "local-dams",
+        "name": "Dams",
+        "badge": "OFF",
+        "feedState": "off",
+        "subtext": "USACE · never",
+        "icon": {
+          "name": "dam",
+          "w": 18,
+          "h": 18,
+          "strokeAttr": "1.75",
+          "strokeComputed": "1.75px",
+          "color": "rgb(153, 153, 153)",
+          "ariaHidden": "true"
+        }
+      },
+      {
+        "id": "rocket-launches",
+        "name": "Space Missions (30d)",
+        "badge": "OFF",
+        "feedState": "off",
+        "subtext": "Launch Library 2 · never",
+        "icon": {
+          "name": "rocket",
+          "w": 18,
+          "h": 18,
+          "strokeAttr": "1.75",
+          "strokeComputed": "1.75px",
+          "color": "rgb(153, 153, 153)",
+          "ariaHidden": "true"
+        }
+      },
+      {
+        "id": "earthquakes",
+        "name": "Earthquakes (24h)",
+        "badge": "OFF",
+        "feedState": "off",
+        "subtext": "USGS · never",
+        "icon": {
+          "name": "activity",
+          "w": 18,
+          "h": 18,
+          "strokeAttr": "1.75",
+          "strokeComputed": "1.75px",
+          "color": "rgb(153, 153, 153)",
+          "ariaHidden": "true"
+        }
+      },
+      {
+        "id": "local-firms",
+        "name": "Active Fires",
+        "badge": "OFF",
+        "feedState": "off",
+        "subtext": "NASA FIRMS · LIVE · never",
+        "icon": {
+          "name": "flame",
+          "w": 18,
+          "h": 18,
+          "strokeAttr": "1.75",
+          "strokeComputed": "1.75px",
+          "color": "rgb(153, 153, 153)",
+          "ariaHidden": "true"
+        }
+      },
+      {
+        "id": "directions",
+        "name": "Directions",
+        "badge": "OFF",
+        "feedState": "off",
+        "subtext": "OSM routing · never",
+        "icon": {
+          "name": "compass",
+          "w": 18,
+          "h": 18,
+          "strokeAttr": "1.75",
+          "strokeComputed": "1.75px",
+          "color": "rgb(153, 153, 153)",
+          "ariaHidden": "true"
+        }
+      },
+      {
+        "id": "radio",
+        "name": "Radio",
+        "badge": "OFF",
+        "feedState": "off",
+        "subtext": "Radio Browser · never",
+        "icon": {
+          "name": "radio",
+          "w": 18,
+          "h": 18,
+          "strokeAttr": "1.75",
+          "strokeComputed": "1.75px",
+          "color": "rgb(153, 153, 153)",
+          "ariaHidden": "true"
+        }
+      }
+    ],
+    "rowCount": 18,
+    "rowsInlineSvg18": 18,
+    "rowsStroke175Computed": 18,
+    "rowIconsBlack": 0,
+    "emojiDataLayersText": 0,
+    "emojiDataLayersMarkup": 0,
+    "emojiDocument": 0,
+    "glyphsText": 0,
+    "glyphsMarkup": 0,
+    "unavailableBadges": 0,
+    "unavailableStrings": 0,
+    "http502Strings": 0,
+    "header": {
+      "titleBarPresent": true,
+      "lockup": {
+        "src": "/brand/logo-light.svg",
+        "loaded": true,
+        "naturalWidth": 273
+      },
+      "title": "OnDemand Spatial",
+      "subtitle": "SPATIAL INTELLIGENCE CONSOLE",
+      "shareLinkIcon": {
+        "dataIcon": "link",
+        "strokeAttr": "1.75",
+        "visible": true
+      }
+    },
+    "clearLayers": {
+      "hasSvgIcon": true,
+      "dataIcon": "layers-minus",
+      "w": 18,
+      "h": 18,
+      "strokeAttr": "1.75",
+      "strokeComputed": "1.75px",
+      "color": "rgba(243, 243, 243, 0.55)",
+      "materialInside": false,
+      "innerHTML": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" data-icon=\"layers-minus\" class=\"od-icon"
+    },
+    "materialSymbols": {
+      "total": 30,
+      "visible": 6,
+      "byPanel": {
+        "other:#celestial-ring-overlay": 2,
+        "top-center-actions": 3,
+        "cockpit-speed-rim": 1,
+        "cockpit-altitude-rim": 1,
+        "cockpit-vision-previous": 1,
+        "cockpit-vision-next": 1,
+        "cockpit-hud": 2,
+        "cockpit-context-previous": 1,
+        "cockpit-context-next": 1,
+        "cockpit-context-toggle": 1,
+        "cockpit-context-direction": 1,
+        "cockpit-route": 1,
+        "cockpit-brief-previous": 1,
+        "cockpit-brief-next": 1,
+        "cockpit-signal-toggle": 1,
+        "cockpit-reset-globe": 1,
+        "other:#map-view-switch": 1,
+        "pp-toggles": 3,
+        "context-radio-dock": 3,
+        "global-context-panel": 2,
+        "cockpit-entry": 1
+      },
+      "ligatures": [
+        "light_mode",
+        "dark_mode",
+        "view_in_ar",
+        "navigation",
+        "public",
+        "arrow_right",
+        "arrow_left",
+        "chevron_left",
+        "chevron_right",
+        "my_location",
+        "arrow_drop_down",
+        "skip_previous",
+        "skip_next",
+        "chevron_left",
+        "navigation",
+        "east",
+        "chevron_left",
+        "chevron_right",
+        "right_panel_close",
+        "public",
+        "close_fullscreen",
+        "adjust",
+        "draw",
+        "flare",
+        "radio",
+        "open_in_full",
+        "close",
+        "radar",
+        "rocket_launch",
+        "flight"
+      ]
+    },
+    "rects": {
+      "titleBar": {
+        "x": 36,
+        "y": 32,
+        "width": 354.8125,
+        "height": 104.875,
+        "top": 32,
+        "right": 390.8125,
+        "bottom": 136.875,
+        "left": 36
+      },
+      "clearBtn": {
+        "x": 614,
+        "y": 32,
+        "width": 36,
+        "height": 36,
+        "top": 32,
+        "right": 650,
+        "bottom": 68,
+        "left": 614
+      },
+      "share": {
+        "x": 658,
+        "y": 32,
+        "width": 36,
+        "height": 36,
+        "top": 32,
+        "right": 694,
+        "bottom": 68,
+        "left": 658
+      },
+      "dataPanel": {
+        "x": 52,
+        "y": 266.359375,
+        "width": 280,
+        "height": 451.1875,
+        "top": 266.359375,
+        "right": 332,
+        "bottom": 717.546875,
+        "left": 52
+      },
+      "pp": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      }
+    }
+  },
+  "finishedAt": "2026-09-20T07:52:50.912Z"
+}
