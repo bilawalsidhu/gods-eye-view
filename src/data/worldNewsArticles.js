@@ -18,6 +18,21 @@ export const WORLD_NEWS_PLACE_MAX_CHARS = 120;
 /** Documented request cost and per-result share (worldnewsapi.com/docs). */
 export const WORLD_NEWS_REQUEST_POINTS = 1;
 export const WORLD_NEWS_POINTS_PER_RESULT = 0.01;
+/**
+ * Extra per-result share charged for `add-entities=true`, measured against the
+ * live provider on 2026-09-20 (X-API-Quota-Request, 1000-point plan):
+ *
+ *   number=100, entities off -> 2.0 points   (1 + 0.01 * 100)
+ *   number=100, entities on  -> 12.0 points  (1 + 0.11 * 100)
+ *   number=2,   entities on  -> 1.22 points  (1 + 0.11 * 2)
+ *
+ * Every search this proxy makes asks for entities, because the location
+ * entities ARE the place tags — without them a headline cannot be pinned. So
+ * the surcharge is unavoidable and belongs in the estimate: charging the
+ * entity-free rate understated a full page by 6x, which let the daily budget
+ * guard authorize six times the points it thought it was spending.
+ */
+export const WORLD_NEWS_ENTITY_POINTS_PER_RESULT = 0.1;
 
 function cleanText(value, max) {
   if (typeof value !== 'string') return null;
@@ -187,12 +202,26 @@ export function parseWorldNewsQuota(headers) {
 /**
  * Documented cost of one search-news request when the provider sends no
  * X-API-Quota-Request header.
+ *
+ * Defaults to the entity-bearing rate because every search this proxy makes
+ * sets `add-entities=true`; an estimate that flattered the caller would be
+ * worse than none, since the budget guard spends against it.
+ *
  * @param {number} resultCount Results returned by the request.
+ * @param {boolean} [withEntities=true] Whether the request asked for entities.
  * @returns {number} Points.
  */
-export function estimateWorldNewsPoints(resultCount) {
+export function estimateWorldNewsPoints(resultCount, withEntities = true) {
   const results = Math.max(0, Math.floor(Number(resultCount) || 0));
-  return WORLD_NEWS_REQUEST_POINTS + WORLD_NEWS_POINTS_PER_RESULT * results;
+  const perResult =
+    WORLD_NEWS_POINTS_PER_RESULT +
+    (withEntities ? WORLD_NEWS_ENTITY_POINTS_PER_RESULT : 0);
+  // Two decimals, as the provider itself reports points: binary floating point
+  // turns 1 + 0.11 * 12 into 2.3200000000000003, and this value is shown to
+  // the operator as well as spent against the budget.
+  return (
+    Math.round((WORLD_NEWS_REQUEST_POINTS + perResult * results) * 100) / 100
+  );
 }
 
 /**

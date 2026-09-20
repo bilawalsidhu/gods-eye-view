@@ -226,11 +226,19 @@ test('quota headers parse from Headers objects and plain records; missing → nu
   });
 });
 
-test('documented cost estimate: one point plus a hundredth per result', () => {
-  assert.equal(estimateWorldNewsPoints(100), 2);
+test('cost estimate charges the entity surcharge this proxy actually pays', () => {
+  // Measured against the live provider on 2026-09-20 via X-API-Quota-Request.
+  // Every search sets add-entities=true (the location entities ARE the place
+  // tags), so the entity rate is the default: estimating at the entity-free
+  // rate understated a full page 6x and let the budget guard overspend.
+  assert.equal(estimateWorldNewsPoints(100), 12); // measured 12.0
+  assert.equal(estimateWorldNewsPoints(2), 1.22); // measured 1.22
   assert.equal(estimateWorldNewsPoints(0), 1);
   assert.equal(estimateWorldNewsPoints(-4), 1);
-  assert.equal(estimateWorldNewsPoints('12'), 1.12);
+  assert.equal(estimateWorldNewsPoints('12'), 2.32);
+  // The entity-free rate remains the documented 1 + 0.01 per result.
+  assert.equal(estimateWorldNewsPoints(100, false), 2); // measured 2.0
+  assert.equal(estimateWorldNewsPoints(0, false), 1);
 });
 
 test('retention keeps only batches inside the window; merge lets the newest fetch win', () => {
