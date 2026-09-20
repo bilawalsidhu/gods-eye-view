@@ -271,9 +271,14 @@
       "src/voice/voiceCost.js",
       "src/voice/actionSchemas.js",
       "server/providers/openai/toolDescriptions.js",
-      "src/sources/rateLimit.js"
+      "server/providers/nvidia.js",
+      "src/sources/rateLimit.js",
+      "server/providers/nvidia-assistant.js",
+      "server/providers/jarvis-tools.js",
+      "server/providers/nvidia-genai.js",
+      "server/providers/nvidia-vision.js"
     ],
-    "external": []
+    "external": ["qrcode"]
   },
   "standalone-key-setup": {
     "runtime": "node",
@@ -574,9 +579,32 @@
       "src/ui/visualPresets.js",
       "src/ui/visualSettings.js",
       "src/worldFocus.js",
-      "src/data/feedState.js"
+      "src/data/feedState.js",
+      "src/ui/aiCommandCenter.js",
+      "src/audio/tacticalAudio.js",
+      "src/audio/cockpitAmbiance.js",
+      "src/ui/audioControls.js",
+      "src/ui/radialMenu.js",
+      "src/layers/trajectoryPredictor.js",
+      "src/overlays/trajectoryOverlay.js",
+      "src/layers/geofenceEngine.js",
+      "src/layers/geofenceRenderer.js",
+      "src/ui/geofenceControls.js",
+      "src/data/timelineCache.js",
+      "src/ui/timelineScrubber.js",
+      "src/input/handTracker.js",
+      "src/input/gestureMapper.js",
+      "src/input/gestureOverlay.js",
+      "src/ui/gestureControls.js",
+      "src/gestures/touchGestures.js",
+      "src/gestures/visionGestures.js",
+      "src/gestures/gestureDockControl.js",
+      "src/ai/freeLlmCatalog.js",
+      "src/effects/weatherParticles.js",
+      "src/export/missionDossier.js",
+      "src/ui/exportControls.js"
     ],
-    "external": ["cesium"]
+    "external": ["cesium", "satellite.js", "@vladmandic/human"]
   },
   "ui-styles": {
     "exports": ["./ui/styles"],
@@ -602,7 +630,8 @@
       "src/ui/styles/command-dock-sliding.css",
       "src/ui/styles/voice-cost.css",
       "src/ui/styles/first-run.css",
-      "src/ui/styles/provider-settings.css"
+      "src/ui/styles/provider-settings.css",
+      "src/ui/styles/gestures.css"
     ],
     "external": []
   },
@@ -1104,6 +1133,7 @@
       "src/voice/session.js",
       "src/voice/sessionCommands.js",
       "src/voice/realtimeSession.js",
+      "src/voice/nvidiaSession.js",
       "src/voice/realtimeEvents.js"
     ],
     "external": []
@@ -1648,6 +1678,7 @@
       "src/voice/session.js",
       "src/voice/sessionCommands.js",
       "src/voice/realtimeSession.js",
+      "src/voice/nvidiaSession.js",
       "src/voice/realtimeEvents.js",
       "src/app/localGeojsonServices.js",
       "src/data/feedState.js",
@@ -1685,10 +1716,34 @@
       "src/layers/transit/movement.js",
       "src/layers/transit/qaMetrics.js",
       "src/layers/transit/source.js",
-      "src/sources/transitHistory.js"
+      "src/sources/transitHistory.js",
+      "src/ui/aiCommandCenter.js",
+      "src/audio/tacticalAudio.js",
+      "src/audio/cockpitAmbiance.js",
+      "src/ui/audioControls.js",
+      "src/ui/radialMenu.js",
+      "src/layers/trajectoryPredictor.js",
+      "src/overlays/trajectoryOverlay.js",
+      "src/layers/geofenceEngine.js",
+      "src/layers/geofenceRenderer.js",
+      "src/ui/geofenceControls.js",
+      "src/data/timelineCache.js",
+      "src/ui/timelineScrubber.js",
+      "src/input/handTracker.js",
+      "src/input/gestureMapper.js",
+      "src/input/gestureOverlay.js",
+      "src/ui/gestureControls.js",
+      "src/gestures/touchGestures.js",
+      "src/gestures/visionGestures.js",
+      "src/gestures/gestureDockControl.js",
+      "src/ai/freeLlmCatalog.js",
+      "src/effects/weatherParticles.js",
+      "src/export/missionDossier.js",
+      "src/ui/exportControls.js"
     ],
     "external": [
       "@mapbox/vector-tile",
+      "@vladmandic/human",
       "cesium",
       "egm96-universal",
       "mgrs",

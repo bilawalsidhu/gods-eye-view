@@ -1,0 +1,24 @@
+{
+  "title": "Write a haiku about space",
+  "mode": "general",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Write a haiku about space"
+    },
+    {
+      "role": "assistant",
+      "content": "**Celestial hush**  \nStars whisper in the dark void—  \nEternity breathes."
+    },
+    {
+      "role": "user",
+      "content": "Compare React vs Vue vs Svelte"
+    },
+    {
+      "role": "assistant",
+      "content": "## Quick‑Reference Comparison\n\n| Feature | **React** | **Vue** | **Svelte** |\n|---------|------------|---------|------------|\n| **Core Paradigm** | JSX + virtual DOM | Templates + virtual DOM | Compile‑time conversion (no virtual DOM) |\n| **Learning Curve** | Moderate – need JSX, state hooks, context, etc. | Low – HTML‑like templates, reactive data, optional JSX | Very Low – plain HTML/CSS/JS, reactive assignments |\n| **Reactivity** | Explicit (`useState`, `useEffect`) | Declarative (`data`, `computed`, watchers) | Automatic – variable assignments trigger updates |\n| **Bundle Size** | ~30 kB (minified) | ~30 kB (minified) | 0 kB runtime; compiled output ~10–20 kB |\n| **Performance** | Fast, but diffing overhead | Fast, similar diffing | Highest – no runtime diffing, compiled to efficient JS |\n| **Tooling** | Create‑React‑App, Vite, Next.js, Remix | Vue CLI, Vite, Nuxt | Vite, SvelteKit |\n| **Community & Ecosystem** | Huge – millions of packages, Redux, MobX, etc. | Large – Vuex, Pinia, Nuxt, Vite | Growing – SvelteKit, stores, community plugins |\n| **TypeScript Support** | Mature, TSX, extensive type defs | Excellent, TS + Vue 3’s Composition API | Excellent, TS + compiler‑level type checking |\n| **State Management** | Redux, MobX, Context API | Vuex, Pinia | Stores, reactive primitives (`writable`) |\n| **SSR / Static Site** | Next.js, Remix, Gatsby | Nuxt.js | SvelteKit |\n| **Hot‑Reload** | Fast, React Fast Refresh | Fast, Vue HMR | Fast, Svelte HMR |\n| **IDE/Editor Support** | VS Code, IntelliSense | VS Code, Vetur, Volar | VS Code, Svelte VS Code |\n| **Adoption** | Facebook, Instagram, WhatsApp Web, many enterprise apps | Alibaba, Xiaomi, Laravel, many small‑to‑medium apps | GitHub, Vercel, small teams, prototypes |\n| **Maturity** | 15 yrs | 12 yrs | 8 yrs |\n\n---\n\n## In‑Depth Highlights\n\n### React\n- **Pros**\n  - Huge ecosystem; mature tooling (`React Native`, `Next.js`, `Expo`).\n  - Strong community support; vast number of tutorials, libraries.\n  - Flexibility: you can mix JSX or TSX, use functional or class components.\n  - Excellent for complex state logic (Redux Toolkit, Zustand, Recoil).\n- **Cons**\n  - JSX can feel verbose; boilerplate for simple UIs.\n  - Virtual DOM diffing adds runtime overhead (though negligible for most apps).\n  - Boilerplate for state management; learning Redux can be steep.\n\n### Vue\n- **Pros**\n  - Intuitive template syntax that feels like vanilla HTML.\n  - Two‑way data binding (`v-model`) simplifies form handling.\n  - Composition API offers a hybrid of React‑style hooks & Vue’s reactivity.\n  - Integrated CLI and ecosystem (Nuxt, Vue Router, Pinia) streamline full‑stack dev.\n- **Cons**\n  - Smaller ecosystem than React (though still robust).\n  - Historically, Vue 2 had some quirks; Vue 3 fixed many but migration still needed for legacy projects.\n  - Some argue the reactivity system can be opaque for newcomers.\n\n### Svelte\n- **Pros**\n  - **Zero‑runtime**: compiled to highly optimized vanilla JS – no virtual DOM.\n  - Minimal boilerplate; reactive assignments (`let count = 0; $: doubled = count * 2;`).\n  - Extremely fast initial load and runtime updates for small‑to‑medium UIs.\n  - Great for prototypes and small teams; less code to maintain.\n- **Cons**\n  - Smaller ecosystem; fewer third‑party libraries.\n  - Tooling still evolving (SvelteKit is maturing).\n  - TypeScript support is solid but can be more verbose for complex types.\n  - Community is growing but not yet as large as React or Vue.\n\n---\n\n## Choosing the Right Tool\n\n| Use Case | Recommended |\n|----------|------------|\n| **Enterprise‑grade, large team, complex state** | React |\n| **Rapid MVP with HTML‑like templates** | Vue |\n| **Performance‑critical, small to medium apps, prototypes** | Svelte |\n| **Cross‑"
+    }
+  ],
+  "createdAt": "2026-09-20T09:32:38.239Z",
+  "updatedAt": "2026-09-20T09:32:38.239Z"
+}

@@ -149,6 +149,15 @@ function keySetupEndpoint({ sourceRoot = defaultSourceRoot } = {}) {
   // provenance closes the equal-value ambiguity: an exported X remains
   // external even when the editable store independently contains X.
   const isExternallyManaged = (name, inStore) => {
+    // NVIDIA NIM keys are always editable in the in-app POWER UP station so users can paste/update them freely
+    if (
+      name === 'NVIDIA_API_KEY' ||
+      name === 'NVIDIA_API_KEYS' ||
+      name === 'NVIDIA_MODEL' ||
+      name === 'NVIDIA_BASE_URL'
+    ) {
+      return false;
+    }
     const wasExternalAtBoot = pinokioManaged()
       ? false
       : LAUNCHER_AT_BOOT === 'dev-fresh'

@@ -38,10 +38,28 @@ export function createVoiceCommands({
     ui.button.setAttribute('aria-label', 'Toggle voice control');
     if (ui.helpDetail) ui.helpDetail.textContent = 'Activate to toggle voice';
   }
+  const dispatchVoiceEvent = (name, detail) => {
+    if (
+      typeof window !== 'undefined' &&
+      typeof window.dispatchEvent === 'function' &&
+      typeof CustomEvent === 'function'
+    ) {
+      try {
+        window.dispatchEvent(new CustomEvent(name, { detail }));
+      } catch {}
+    }
+  };
+
   // Retain the existing controller's inspection surface for browser tools.
   const controls = adapter.controller || session;
   controls.session = session;
+  controls.runner = runner;
+  if (typeof window !== 'undefined') {
+    window.__gevVoiceSession = session;
+    dispatchVoiceEvent('gev:voice-session', { session });
+  }
   const updateStatus = session.subscribe((event) => {
+    dispatchVoiceEvent('gev:voice-event', { session, event });
     if (event.type !== 'state') return;
     ui.root.dataset.status = event.state;
     ui.status.textContent =
@@ -68,6 +86,12 @@ export function createVoiceCommands({
   session.signal.addEventListener(
     'abort',
     () => {
+      if (
+        typeof window !== 'undefined' &&
+        window.__gevVoiceSession === session
+      ) {
+        delete window.__gevVoiceSession;
+      }
       ui.button.removeEventListener('click', buttonHandler);
       annotationUnsubscribe?.();
       updateStatus();
@@ -76,6 +100,9 @@ export function createVoiceCommands({
     { once: true },
   );
   if (session.disposed) {
+    if (typeof window !== 'undefined' && window.__gevVoiceSession === session) {
+      delete window.__gevVoiceSession;
+    }
     ui.button.removeEventListener('click', buttonHandler);
     annotationUnsubscribe?.();
     updateStatus();

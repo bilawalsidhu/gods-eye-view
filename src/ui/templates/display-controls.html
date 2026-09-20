@@ -115,6 +115,23 @@
         <span class="draw-hint" id="draw-hint" aria-live="polite"></span>
       </div>
     </div>
+    <div class="pp-toggle-group" id="tactical-suite-group">
+      <button class="pp-toggle-btn" id="tactical-suite-toggle" title="Tactical Operations: Audio, Gestures, Geofences, Timeline, Intel" aria-pressed="false">
+        <span class="pp-icon material-symbols-outlined" aria-hidden="true">radar</span>
+        <span class="pp-label">Tactical</span>
+      </button>
+      <div class="pp-slider-row" id="tactical-suite-row" style="display: none; flex-direction: column; gap: 6px; padding: 8px 4px; width: 100%;">
+        <div style="display: flex; gap: 4px; width: 100%;">
+          <button class="pp-mode-btn" id="tactical-sfx-btn" type="button" title="Tactical Audio & SFX" style="flex: 1;">🔊 SFX</button>
+          <button class="pp-mode-btn" id="tactical-gesture-btn" type="button" title="Webcam Hand Gesture Tracking" style="flex: 1;">🖐️ Hand</button>
+        </div>
+        <div style="display: flex; gap: 4px; width: 100%;">
+          <button class="pp-mode-btn" id="tactical-geofence-btn" type="button" title="Perimeter Geofences & Alerts" style="flex: 1;">🛡️ Fence</button>
+          <button class="pp-mode-btn" id="tactical-timeline-btn" type="button" title="4D Replay Timeline" style="flex: 1;">⏪ Replay</button>
+        </div>
+        <button class="pp-mode-btn" id="tactical-export-btn" type="button" title="Export Mission Dossier Briefing" style="width: 100%;">📋 Export Intel</button>
+      </div>
+    </div>
     <div class="pp-toggle-group">
       <button class="pp-toggle-btn" id="celestial-toggle" title="Celestial ring — reveal the full globe" aria-pressed="false">
         <span class="pp-icon material-symbols-outlined" aria-hidden="true">flare</span>

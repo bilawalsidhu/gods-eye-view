@@ -1,4 +1,5 @@
 import { createSurfaceKeyboard } from './ui/surfaceKeyboard.js';
+import { FREE_LLM_PROVIDERS } from './ai/freeLlmCatalog.js';
 
 /**
  * The POWER UP surface — paste a key, get a power.
@@ -59,6 +60,15 @@ export function stripKeylessBasemapFromHash(hash) {
   }
 }
 
+export const NVIDIA_MODEL_PRESETS = Object.freeze([
+  { id: 'nvidia/nemotron-3.5-lightning-30b-a3b', label: '⚡ Nemotron 3.5' },
+  { id: 'nvidia/nemotron-3-ultra-550b-a55b', label: '🧠 Nemotron 550B' },
+  { id: 'moonshotai/kimi-k3', label: '👁️ Kimi K3' },
+  { id: 'meta/llama-3.3-70b-instruct', label: '🦙 Llama 3.3 70B' },
+  { id: 'deepseek-ai/deepseek-r1', label: '🔬 DeepSeek R1' },
+  { id: 'mistralai/mistral-large-2-instruct', label: '🌊 Mistral Large 2' },
+]);
+
 const TIER_DOTS = Object.freeze({ metered: '🔴', free: '🟡' });
 
 /** Build one key row. All content is our own registry text, set via textContent. */
@@ -116,22 +126,80 @@ function buildRow(documentRef, key) {
   unlocks.textContent = key.unlocks;
 
   row.append(head, unlocks);
-  if (!external) {
+  if (!external || key.id.startsWith('nvidia')) {
     const fields = documentRef.createElement('div');
     fields.className = 'key-setup-fields';
     for (const envVar of key.envVars) {
       const input = documentRef.createElement('input');
-      // Passwords-style so a pasted key never shows on a shared or recorded
-      // screen — this app gets screen-recorded a lot.
-      input.type = 'password';
+      // Model names are public and selectable; keys are secret.
+      input.type = envVar.includes('MODEL') ? 'text' : 'password';
       input.autocomplete = 'off';
       input.spellcheck = false;
       input.dataset.envVar = envVar;
       input.setAttribute('aria-label', envVar);
-      input.placeholder = key.set
-        ? `${envVar} saved — paste to replace`
-        : `paste ${envVar}`;
+      if (envVar === 'NVIDIA_API_KEY') {
+        input.placeholder = key.set
+          ? 'Universal Free AI Key saved — paste to replace'
+          : 'Paste Free AI Key (NVIDIA, Gemini, Groq, Mistral, OpenRouter)';
+      } else {
+        input.placeholder = key.set
+          ? `${envVar} saved — paste to replace`
+          : `paste ${envVar}`;
+      }
       fields.append(input);
+
+      if (envVar === 'NVIDIA_API_KEY') {
+        const baseUrlInput = documentRef.createElement('input');
+        baseUrlInput.type = 'hidden';
+        baseUrlInput.dataset.envVar = 'NVIDIA_BASE_URL';
+        baseUrlInput.value = '';
+        fields.append(baseUrlInput);
+
+        const modelInput = documentRef.createElement('input');
+        modelInput.type = 'hidden';
+        modelInput.dataset.envVar = 'NVIDIA_MODEL';
+        modelInput.value = '';
+        fields.append(modelInput);
+
+        const presetsContainer = documentRef.createElement('div');
+        presetsContainer.className = 'key-setup-model-presets';
+        for (const provider of FREE_LLM_PROVIDERS) {
+          const chip = documentRef.createElement('button');
+          chip.type = 'button';
+          chip.className = 'key-setup-preset-chip';
+          chip.textContent = `${provider.icon} ${provider.name}`;
+          chip.title = `${provider.name} (${provider.badge}) — ${provider.description}`;
+          chip.addEventListener('click', () => {
+            input.placeholder = provider.keyPlaceholder;
+            get.href = provider.keyUrl;
+            get.textContent = 'GET FREE KEY ↗';
+            unlocks.textContent = `${provider.name}: ${provider.description}`;
+            baseUrlInput.value = provider.baseUrl;
+            modelInput.value = provider.defaultModel;
+            input.focus?.();
+          });
+          presetsContainer.append(chip);
+        }
+        fields.append(presetsContainer);
+      }
+
+      if (envVar === 'NVIDIA_MODEL') {
+        const presetsContainer = documentRef.createElement('div');
+        presetsContainer.className = 'key-setup-model-presets';
+        for (const preset of NVIDIA_MODEL_PRESETS) {
+          const chip = documentRef.createElement('button');
+          chip.type = 'button';
+          chip.className = 'key-setup-preset-chip';
+          chip.textContent = preset.label;
+          chip.title = `Select ${preset.id}`;
+          chip.addEventListener('click', () => {
+            input.value = preset.id;
+            input.focus?.();
+          });
+          presetsContainer.append(chip);
+        }
+        fields.append(presetsContainer);
+      }
     }
     if (key.managed === 'file') {
       const remove = documentRef.createElement('button');

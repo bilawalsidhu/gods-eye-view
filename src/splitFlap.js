@@ -59,6 +59,8 @@
  * One-line kill switch. Flip to `false` and every chip goes back to a plain
  * instant text swap with no other code change.
  */
+import { getTacticalAudio } from './audio/tacticalAudio.js';
+
 export const SPLIT_FLAP_ENABLED = true;
 
 /** Time one character spends flipping. */
@@ -515,6 +517,9 @@ export function setSplitFlapText(element, text, options = {}) {
   host.cells.replaceChildren(...cellNodes);
   element.classList.add(ACTIVE_CLASS);
   element.style.setProperty('--gev-flap-dur', `${charMs}ms`);
+  try {
+    getTacticalAudio().playClack();
+  } catch {}
 
   // Width, phase one. A GROWING label reserves its new columns the instant the
   // cells go in, so ease from what was on screen to the cascade width. A

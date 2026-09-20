@@ -1,0 +1,255 @@
+/* ==========================================================================
+   GEV Multimodal Gesture System: Touch & AI Vision HUD Styling
+   ========================================================================== */
+
+/* 1. Touchégg-style Floating Gesture Notification Toast */
+.gev-gesture-toast {
+  position: fixed;
+  top: 72px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-20px) scale(0.95);
+  background: rgba(4, 14, 22, 0.85);
+  border: 1px solid rgba(0, 240, 255, 0.4);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 0 0 16px rgba(0, 240, 255, 0.25);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #00f0ff;
+  padding: 8px 18px;
+  border-radius: 20px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 200ms cubic-bezier(0.16, 1, 0.3, 1),
+              transform 200ms cubic-bezier(0.16, 1, 0.3, 1),
+              visibility 200ms;
+  z-index: 9999;
+}
+
+.gev-gesture-toast.visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0) scale(1);
+}
+
+.gev-gesture-toast .toast-icon {
+  font-size: 16px;
+  filter: drop-shadow(0 0 6px rgba(0, 240, 255, 0.8));
+}
+
+.gev-gesture-toast .toast-text {
+  color: #e0f7fa;
+}
+
+/* 2. Cybernetic Vision HUD PiP Window */
+#gev-gesture-vision-hud {
+  position: fixed;
+  bottom: 84px;
+  right: 20px;
+  width: 240px;
+  background: rgba(4, 14, 22, 0.92);
+  border: 1px solid rgba(0, 240, 255, 0.35);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.75), 0 0 20px rgba(0, 240, 255, 0.2);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  overflow: hidden;
+  z-index: 9000;
+  transition: opacity 250ms ease, transform 250ms ease, height 250ms ease;
+  user-select: none;
+}
+
+#gev-gesture-vision-hud.hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(20px) scale(0.9);
+}
+
+#gev-gesture-vision-hud.minimized .pip-viewport {
+  display: none;
+}
+
+#gev-gesture-vision-hud.minimized {
+  width: 200px;
+}
+
+/* PiP Header */
+.pip-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: rgba(0, 240, 255, 0.08);
+  border-bottom: 1px solid rgba(0, 240, 255, 0.2);
+  cursor: grab;
+}
+
+.pip-header:active {
+  cursor: grabbing;
+}
+
+.pip-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pip-radar-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #00f0ff;
+  box-shadow: 0 0 8px #00f0ff;
+  animation: pip-pulse 1.6s infinite ease-in-out;
+}
+
+@keyframes pip-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.3; transform: scale(0.75); }
+}
+
+.pip-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #00f0ff;
+  text-transform: uppercase;
+}
+
+.pip-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pip-btn {
+  background: transparent;
+  border: none;
+  color: rgba(0, 240, 255, 0.7);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 5px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pip-btn:hover {
+  background: rgba(0, 240, 255, 0.2);
+  color: #fff;
+}
+
+/* PiP Viewport & Canvas */
+.pip-viewport {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: #02070c;
+  overflow: hidden;
+}
+
+.pip-video {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1); /* Mirror camera */
+  opacity: 0.45;
+}
+
+.pip-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* CRT Scanline Overlay in PiP */
+.pip-viewport::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
+  background-size: 100% 4px;
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+/* PiP Telemetry Footer */
+.pip-footer {
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(0, 0, 0, 0.4);
+  border-top: 1px solid rgba(0, 240, 255, 0.15);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+}
+
+.pip-gesture-badge {
+  color: #00f0ff;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  text-shadow: 0 0 6px rgba(0, 240, 255, 0.6);
+}
+
+.pip-fps-value {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* 3. Dock Gesture Button */
+#gev-gesture-toggle {
+  background: rgba(4, 14, 22, 0.8);
+  border: 1px solid rgba(0, 240, 255, 0.25);
+  color: rgba(0, 240, 255, 0.8);
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 180ms ease;
+}
+
+#gev-gesture-toggle:hover {
+  background: rgba(0, 240, 255, 0.12);
+  border-color: rgba(0, 240, 255, 0.6);
+  color: #fff;
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.3);
+}
+
+#gev-gesture-toggle.active {
+  background: rgba(0, 240, 255, 0.2);
+  border-color: #00f0ff;
+  color: #00f0ff;
+  box-shadow: 0 0 16px rgba(0, 240, 255, 0.45);
+}
+
+#gev-gesture-toggle.active .gesture-icon {
+  animation: gesture-pulse 1.5s infinite alternate ease-in-out;
+}
+
+@keyframes gesture-pulse {
+  0% { transform: scale(1); filter: drop-shadow(0 0 4px #00f0ff); }
+  100% { transform: scale(1.15); filter: drop-shadow(0 0 10px #00f0ff); }
+}

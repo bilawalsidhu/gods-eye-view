@@ -11,11 +11,11 @@
  * behavior below unit-testable.
  */
 
-/** Longest accepted key/token value. Real provider keys are all far shorter. */
-export const KEY_SETUP_VALUE_LIMIT = 512;
+/** Longest accepted key/token value (increased to 4096 to support multi-key pools). */
+export const KEY_SETUP_VALUE_LIMIT = 4096;
 
-/** Most env vars accepted in one save. The registry defines ten. */
-export const KEY_SETUP_UPDATE_LIMIT = 16;
+/** Most env vars accepted in one save. The registry defines eleven. */
+export const KEY_SETUP_UPDATE_LIMIT = 32;
 
 /** Header line written above keys the panel appends to a .env file. */
 export const KEY_SETUP_APPEND_HEADER =
@@ -56,6 +56,35 @@ export const KEY_SETUP_KEYS = Object.freeze([
     getUrl: 'https://platform.openai.com/api-keys',
     envVars: Object.freeze(['OPENAI_API_KEY']),
     tier: 'metered',
+  }),
+  Object.freeze({
+    id: 'nvidia',
+    title: 'NVIDIA NIM (UNIVERSAL AI KEY)',
+    unlocks:
+      'One key accesses all NVIDIA AI models (Nemotron 3.5, 550B, Llama 3.3, DeepSeek R1, Kimi, Voice & HUD)',
+    getUrl: 'https://build.nvidia.com',
+    envVars: Object.freeze(['NVIDIA_API_KEY']),
+    tier: 'free',
+  }),
+  Object.freeze({
+    id: 'nvidia-model',
+    title: 'NVIDIA NIM MODEL',
+    unlocks:
+      'Active NIM model (Nemotron 3.5, Ultra 550B, Kimi K3, Llama 3.3, DeepSeek R1)',
+    getUrl: 'https://build.nvidia.com/explore/discover',
+    envVars: Object.freeze(['NVIDIA_MODEL']),
+    tier: 'free',
+    hidden: true,
+  }),
+  Object.freeze({
+    id: 'nvidia-base-url',
+    title: 'FREE LLM BASE URL',
+    unlocks:
+      'OpenAI-compatible Base URL (NVIDIA NIM, Groq, Gemini, Mistral, Cerebras, OpenRouter)',
+    getUrl: 'https://github.com/mnfst/awesome-free-llm-apis',
+    envVars: Object.freeze(['NVIDIA_BASE_URL']),
+    tier: 'free',
+    hidden: true,
   }),
   Object.freeze({
     id: 'aisstream',

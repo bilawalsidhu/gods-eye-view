@@ -1,0 +1,88 @@
+/* ⏪ 4D Historical Timeline Scrubber */
+
+.gev-timeline-bar {
+  position: fixed;
+  bottom: 72px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 750px;
+  max-width: 90vw;
+  height: 52px;
+  background: rgba(6, 16, 26, 0.94);
+  border: 1px solid rgba(0, 240, 255, 0.35);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.75), 0 0 15px rgba(0, 240, 255, 0.15);
+  backdrop-filter: blur(14px);
+  z-index: 1050;
+  display: flex;
+  flex-direction: column;
+  padding: 6px 14px;
+  user-select: none;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.gev-timeline-bar.hidden {
+  display: none !important;
+}
+
+.gev-timeline-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.gev-timeline-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.gev-timeline-btn {
+  background: rgba(0, 240, 255, 0.1);
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  border-radius: 4px;
+  color: #00f0ff;
+  font-family: 'Geist Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.gev-timeline-btn:hover,
+.gev-timeline-btn.active {
+  background: rgba(0, 240, 255, 0.28);
+  border-color: #00f0ff;
+  box-shadow: 0 0 8px rgba(0, 240, 255, 0.4);
+}
+
+.gev-timeline-clock {
+  font-family: 'Geist Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: #00f0ff;
+  letter-spacing: 0.08em;
+  text-shadow: 0 0 6px rgba(0, 240, 255, 0.5);
+}
+
+.gev-timeline-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.gev-timeline-slider {
+  flex: 1;
+  accent-color: #00f0ff;
+  height: 6px;
+  cursor: pointer;
+}
+
+.gev-timeline-preset-tag {
+  font-family: 'Geist Mono', monospace;
+  font-size: 9px;
+  color: #8fa3b5;
+  white-space: nowrap;
+}

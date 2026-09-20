@@ -14,8 +14,12 @@
     <p class="subtitle">NO PLACE LEFT BEHIND</p>
   </div>
 
-  <!-- Style indicator -->
+  <!-- Style indicator & Tactical Telemetry -->
   <div id="style-indicator">
+    <div class="hud-telemetry-badge" title="Orbital Mission Time (UTC)">
+      <span class="hud-pulse-dot" aria-hidden="true"></span>
+      <span id="zulu-clock" class="tabular-nums">ZULU --:--:--Z</span>
+    </div>
     <span class="indicator-label">ACTIVE STYLE</span>
     <span class="indicator-value" id="active-style-name">NORMAL</span>
   </div>
@@ -35,10 +39,30 @@
       <span class="camera-compass-n" aria-hidden="true">N</span>
       <span class="camera-compass-needle material-symbols-outlined" aria-hidden="true">navigation</span>
     </button>
+    <button id="top-ai-toggle-btn" class="top-ai-toggle-btn" type="button" aria-label="Toggle JARVIS AI Assistant" title="Toggle JARVIS AI Assistant (Ctrl+K)">
+      <span class="material-symbols-outlined" aria-hidden="true">bolt</span>
+      <span class="top-ai-btn-text">JARVIS</span>
+    </button>
     <button id="reset-globe-view" type="button" aria-label="Reset to full globe view" title="Reset camera and return to full globe view">
       <span class="material-symbols-outlined" aria-hidden="true">public</span>
     </button>
   </nav>
+
+  <!-- Floating Global JARVIS AI HUD Quick-Toggle FAB -->
+  <button id="ai-quick-toggle-fab" class="ai-quick-toggle-fab" type="button" aria-label="Toggle JARVIS AI Assistant" title="Toggle JARVIS AI Assistant (Ctrl+K)">
+    <span class="ai-fab-pulse" aria-hidden="true"></span>
+    <span class="ai-fab-icon" aria-hidden="true">🤖</span>
+    <span class="ai-fab-text">JARVIS</span>
+    <kbd class="ai-fab-shortcut">Ctrl+K</kbd>
+  </button>
+
+  <!-- Floating Tactical Hand Gesture Quick-Toggle FAB -->
+  <button id="gesture-quick-toggle-fab" class="gesture-quick-toggle-fab" type="button" aria-label="Toggle Webcam Hand Gesture Control" title="Toggle Hand Gesture Control (Press G)">
+    <span class="gesture-fab-pulse" aria-hidden="true"></span>
+    <span class="gesture-fab-icon" aria-hidden="true">🖐️</span>
+    <span class="gesture-fab-text">GESTURES</span>
+    <kbd class="gesture-fab-shortcut">G</kbd>
+  </button>
   <div id="global-loading-status" role="status" aria-live="polite" aria-atomic="true" hidden>
     <span id="global-loading-label">LOADING LIVE DATA</span>
     <span id="global-loading-detail"></span>

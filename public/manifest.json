@@ -1,0 +1,27 @@
+{
+  "name": "JARVIS - God's Eye View",
+  "short_name": "JARVIS",
+  "description": "Universal AI Assistant — Chat, Code, Automate, Research, Study. Powered by NVIDIA NIM free models.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#00d4ff",
+  "background_color": "#040e16",
+  "icons": [
+    {
+      "src": "/jarvis-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/jarvis-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "utilities", "education"],
+  "screenshots": [],
+  "prefer_related_applications": false
+}

@@ -20,6 +20,20 @@ import { createMapSourceControls } from './mapSource.js';
 import { STYLES } from './effects.js';
 import { bindDisplayControls } from './displayControls.js';
 import { bindApplicationShortcuts } from './visualInput.js';
+import { getTacticalAudio } from '../audio/tacticalAudio.js';
+import { CockpitAmbiance } from '../audio/cockpitAmbiance.js';
+import { AudioControls } from './audioControls.js';
+import { RadialMenu } from './radialMenu.js';
+import { TrajectoryOverlay } from '../overlays/trajectoryOverlay.js';
+import { GeofenceEngine } from '../layers/geofenceEngine.js';
+import { GeofenceRenderer } from '../layers/geofenceRenderer.js';
+import { GeofenceControls } from './geofenceControls.js';
+import { TimelineCache } from '../data/timelineCache.js';
+import { TimelineScrubber } from './timelineScrubber.js';
+import { GestureControls } from './gestureControls.js';
+import { TouchGestureController } from '../gestures/touchGestures.js';
+import { WeatherParticles } from '../effects/weatherParticles.js';
+import { ExportControls } from './exportControls.js';
 
 import * as Cesium from 'cesium';
 import { decodeBloomIntensity } from '../bloom.js';
@@ -645,8 +659,19 @@ export class StyleManager {
     this._navigationOwnerChangedRemover =
       viewer.trackedEntityChanged.addEventListener((entity) => {
         if (entity && !this._disposed)
-          this._stampNavigation({ cancelPendingSelection: false });
+          this._stampNavigation({
+            cancelPendingSelection: false,
+          });
       });
+    viewer.trackedEntityChanged.addEventListener((entity) => {
+      if (entity && !this._disposed) {
+        this.audioEngine?.playLock();
+        this.trajectoryOverlay?.showTrajectoryForEntity(entity);
+      } else if (!this._disposed) {
+        this.audioEngine?.playRelease();
+        this.trajectoryOverlay?.clear();
+      }
+    });
     // Vessel/installation focus flies without ever assigning a tracked entity,
     // so it cannot reach the listener above. It announces instead.
     this._removeNavigationAuthorityListener =
@@ -657,6 +682,75 @@ export class StyleManager {
             event?.detail?.cancelPendingSelection !== false,
         });
       });
+
+    // ── Immersive Upgrade Systems ──────────────────────
+    this.audioEngine = getTacticalAudio();
+    this.cockpitAmbiance = new CockpitAmbiance({ audioEngine: this.audioEngine });
+
+    this.radialMenu = new RadialMenu({
+      viewer: this.viewer,
+      audioEngine: this.audioEngine,
+      onAction: (action, entity) => this._handleRadialAction(action, entity),
+    });
+    if (this.viewer?.container) {
+      this.radialMenu.bind(this.viewer.container);
+    }
+
+    this.trajectoryOverlay = new TrajectoryOverlay(this.viewer);
+    this.geofenceEngine = new GeofenceEngine({ audioEngine: this.audioEngine });
+    this.geofenceRenderer = new GeofenceRenderer(this.viewer);
+    this.timelineCache = new TimelineCache();
+    this._historicalEntities = null;
+
+    if (typeof document !== 'undefined') {
+      this.weatherParticles = new WeatherParticles({
+        container: this.viewer?.container || document.body,
+      });
+
+      this.audioControls = new AudioControls({
+        container: null,
+        audioEngine: this.audioEngine,
+      });
+      this.geofenceControls = new GeofenceControls({
+        container: null,
+        engine: this.geofenceEngine,
+        renderer: this.geofenceRenderer,
+        viewer: this.viewer,
+      });
+      this.timelineScrubber = new TimelineScrubber({
+        container: null,
+        cache: this.timelineCache,
+        audioEngine: this.audioEngine,
+        onScrub: (entities, timestamp, isLive) => {
+          this._historicalEntities = isLive ? null : entities;
+        },
+      });
+      this.gestureControls = new GestureControls({
+        container: null,
+        audioEngine: this.audioEngine,
+        onAction: (action, payload) => this._handleGestureAction(action, payload),
+        onError: (err) => {
+          this._showToast(`Hand tracking notice: ${err?.message || 'Webcam unavailable'}`);
+        },
+        onStatusChange: (enabled) => {
+          const gestureBtn = document.getElementById('tactical-gesture-btn');
+          gestureBtn?.classList.toggle('active', enabled);
+          const fab = document.getElementById('gesture-quick-toggle-fab');
+          fab?.classList.toggle('active', enabled);
+        },
+      });
+      this.touchGestures = new TouchGestureController({
+        targetEl: this.viewer?.scene?.canvas || (typeof document !== 'undefined' ? document.body : null),
+        viewer: this.viewer,
+      });
+      this.exportControls = new ExportControls({
+        container: null,
+        audioEngine: this.audioEngine,
+        getData: () => this._collectDossierData(),
+      });
+
+      this._initTacticalSuiteControls();
+    }
   }
 
   // Compatibility reads for existing controls, scene snapshots and Cockpit.
@@ -2860,6 +2954,7 @@ export class StyleManager {
       restore = false,
     } = {},
   ) {
+    this.audioEngine?.playStyleChange();
     return this._visualSettings.setStyle(...arguments);
   }
 
@@ -3320,6 +3415,7 @@ export class StyleManager {
     this._stampNavigation();
     interruptCameraMotion('reset-globe');
     this._stopOrbit();
+    this.audioEngine?.playGlobeReset();
     this.cockpitView?.exit({ restoreTracking: false });
     try {
       militaryAwarenessLayer.releaseCameraOwnership?.({ origin: 'tool' });
@@ -3651,6 +3747,296 @@ export class StyleManager {
     return this._shareRestoration._settleInitialShareRestore(...arguments);
   }
 
+  getCameraFocalPoint() {
+    if (!this.viewer?.camera) return { latDeg: 0, lonDeg: 0, altitudeM: 0 };
+    try {
+      const ray = this.viewer.camera.getPickRay(
+        new Cesium.Cartesian2(
+          this.viewer.canvas.width / 2,
+          this.viewer.canvas.height / 2,
+        ),
+      );
+      const pos = this.viewer.scene?.globe?.pick?.(ray, this.viewer.scene);
+      if (pos) {
+        const carto = Cesium.Cartographic.fromCartesian(pos);
+        return {
+          latDeg: (carto.latitude * 180) / Math.PI,
+          lonDeg: (carto.longitude * 180) / Math.PI,
+          altitudeM: carto.height,
+        };
+      }
+    } catch {}
+    const carto = this.viewer.camera.positionCartographic;
+    return {
+      latDeg: (carto?.latitude * 180) / Math.PI || 0,
+      lonDeg: (carto?.longitude * 180) / Math.PI || 0,
+      altitudeM: carto?.height || 0,
+    };
+  }
+
+  _collectDossierData() {
+    const focal = this.getCameraFocalPoint();
+    const cameraState = {
+      latDeg: focal.latDeg,
+      lonDeg: focal.lonDeg,
+      altitudeM: this.viewer?.camera?.positionCartographic?.height || focal.altitudeM,
+      headingDeg: (this.viewer?.camera?.heading * 180) / Math.PI || 0,
+      pitchDeg: (this.viewer?.camera?.pitch * 180) / Math.PI || -90,
+    };
+
+    let trackedEntity = null;
+    const active = this.viewer?.trackedEntity;
+    if (active) {
+      trackedEntity = {
+        id: active.name || active.id || 'TARGET',
+        type: active.properties?.type?.getValue?.() || 'AIRCRAFT',
+        speedKts: active.properties?.speed?.getValue?.() || 0,
+        altitudeM: active.properties?.altitude?.getValue?.() || 0,
+        headingDeg: active.properties?.heading?.getValue?.() || 0,
+        latDeg: focal.latDeg,
+        lonDeg: focal.lonDeg,
+      };
+    }
+
+    return {
+      operationName: "GOD'S EYE VIEW TACTICAL INTEL BRIEFING",
+      timestamp: new Date(),
+      cameraState,
+      trackedEntity,
+      geofences: this.geofenceEngine?.getZones() || [],
+      weather: this._lastWeatherObservation || { available: false },
+    };
+  }
+
+  _handleRadialAction(action, entity) {
+    if (!entity) return;
+    switch (action) {
+      case 'lock':
+      case 'chase':
+        this.viewer.trackedEntity = entity;
+        this.audioEngine?.playLock();
+        this._showToast(`Target acquired: ${entity.id || entity.name || 'Contact'}`);
+        break;
+      case 'cockpit':
+        enterCockpitWithTracking(entity, this.viewer, this.cockpitView);
+        break;
+      case 'cctv':
+        if (entity.position) {
+          const time = this.viewer.clock.currentTime;
+          const pos = entity.position.getValue ? entity.position.getValue(time) : entity.position;
+          routeCctvFocusRequest(
+            { kind: 'cctv', position: pos },
+            (activate, focus) => this._runExplicitCctvFocus(activate, focus),
+            (id, dur) => this.services?.cctvLayer?.focusCamera(id, dur),
+          );
+        }
+        break;
+      case 'trajectory':
+        if (this.trajectoryOverlay) {
+          this.trajectoryOverlay.showTrajectoryForEntity(entity);
+          this._showToast(`Extrapolating trajectory for ${entity.id || entity.name}`);
+        }
+        break;
+      case 'inspect':
+        if (this.hud?.setMode) this.hud.setMode('on');
+        this._showToast(`Telemetry inspector opened`);
+        break;
+      case 'watchlist':
+        this._showToast(`Added ${entity.id || entity.name} to priority alert watchlist`);
+        this.audioEngine?.playAlert();
+        break;
+      case 'dismiss':
+        this.radialMenu?.close();
+        break;
+    }
+  }
+
+  _initTacticalSuiteControls() {
+    if (typeof document === 'undefined') return;
+
+    const toggle = document.getElementById('tactical-suite-toggle');
+    const row = document.getElementById('tactical-suite-row');
+    const sfxBtn = document.getElementById('tactical-sfx-btn');
+    const gestureBtn = document.getElementById('tactical-gesture-btn');
+    const fenceBtn = document.getElementById('tactical-geofence-btn');
+    const timelineBtn = document.getElementById('tactical-timeline-btn');
+    const exportBtn = document.getElementById('tactical-export-btn');
+    const gestureFab = document.getElementById('gesture-quick-toggle-fab');
+
+    toggle?.addEventListener('click', () => {
+      const isVisible = row?.style.display === 'flex';
+      if (row) row.style.display = isVisible ? 'none' : 'flex';
+      toggle.classList.toggle('active', !isVisible);
+      toggle.setAttribute('aria-pressed', String(!isVisible));
+    });
+
+    sfxBtn?.addEventListener('click', () => {
+      const isMuted = !this.audioEngine?.isMuted();
+      this.audioEngine?.setMuted(isMuted);
+      sfxBtn.classList.toggle('active', !isMuted);
+      sfxBtn.textContent = isMuted ? '🔇 Muted' : '🔊 SFX';
+      this._showToast(isMuted ? 'Tactical Audio Muted' : 'Tactical Audio Enabled');
+    });
+
+    gestureBtn?.addEventListener('click', () => {
+      this.gestureControls?.toggle();
+    });
+
+    gestureFab?.addEventListener('click', () => {
+      this.gestureControls?.toggle();
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (
+        (e.key === 'g' || e.key === 'G') &&
+        !e.ctrlKey &&
+        !e.altKey &&
+        !e.metaKey &&
+        !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)
+      ) {
+        e.preventDefault();
+        this.gestureControls?.toggle();
+      }
+    });
+
+    fenceBtn?.addEventListener('click', () => {
+      const focal = this.getCameraFocalPoint();
+      const count = (this.geofenceEngine?.getZones().length || 0) + 1;
+      const zoneName = `Zone-${count}`;
+      this.geofenceEngine?.addCircularZone({
+        name: zoneName,
+        center: { lat: focal.latDeg, lon: focal.lonDeg },
+        radiusM: 50000,
+        minAltM: 0,
+        maxAltM: 12000,
+      });
+      this.geofenceRenderer?.render(this.geofenceEngine?.getZones());
+      this.audioEngine?.playLock();
+      this._showToast(`Deployed Tactical Perimeter: ${zoneName}`);
+    });
+
+    timelineBtn?.addEventListener('click', () => {
+      const isShown = this.timelineScrubber?.toggle();
+      timelineBtn.classList.toggle('active', isShown);
+      this._showToast(isShown ? '4D Timeline Replay Active' : 'Returned to Live Real-Time Feed');
+    });
+
+    exportBtn?.addEventListener('click', () => {
+      this.exportControls?.exportDossier();
+      this._showToast('Exported Tactical Mission Dossier');
+    });
+  }
+
+  _handleGestureAction(action, payload) {
+    switch (action) {
+      case 'pan':
+        if (this.viewer?.camera && payload?.pointTip) {
+          const dx = payload.pointTip.x - 0.5;
+          if (Math.abs(dx) > 0.08) {
+            this.viewer.camera.rotate(Cesium.Cartesian3.UNIT_Z, -dx * 0.02);
+          }
+        }
+        break;
+      case 'pinch_zoom': {
+        const delta = (payload?.pinchDist || 0.05) - 0.05;
+        if (this.viewer?.camera && Math.abs(delta) > 0.008) {
+          const amount = delta * 50000;
+          if (amount > 0) {
+            this.viewer.camera.zoomOut(amount);
+          } else {
+            this.viewer.camera.zoomIn(-amount);
+          }
+        }
+        break;
+      }
+      case 'toggle_lock':
+        if (this.viewer?.trackedEntity) {
+          this.viewer.trackedEntity = undefined;
+          this.audioEngine?.playRelease();
+          this._showToast('Tracking lock disengaged');
+        } else if (this.viewer?.selectedEntity) {
+          this.viewer.trackedEntity = this.viewer.selectedEntity;
+          this.audioEngine?.playLock();
+          this._showToast(
+            `Tracking locked: ${this.viewer.selectedEntity.name || this.viewer.selectedEntity.id || 'Target'}`,
+          );
+        } else if (this._currentTarget) {
+          this._toggleOrbit();
+          this._showToast('Target orbit lock engaged');
+        } else {
+          const flightsLayer = this.services?.flightsLayer;
+          const entity = flightsLayer?.dataSource?.entities?.values?.[0];
+          if (entity && this.viewer) {
+            this.viewer.trackedEntity = entity;
+            this.audioEngine?.playLock();
+            this._showToast(`Tracking locked: ${entity.name || entity.id || 'Flight Contact'}`);
+          } else {
+            this._showToast('Select an entity on globe to lock tracking');
+          }
+        }
+        break;
+      case 'reset_globe':
+        if (typeof this.resetToGlobeView === 'function') {
+          this.resetToGlobeView();
+        } else if (this._navigation?.resetView) {
+          this._navigation.resetView();
+        }
+        this._showToast('Globe reset to home view');
+        break;
+      case 'toggle_cockpit':
+        if (this.cockpitView?.active) {
+          const res = this.controlCockpit('exit');
+          this._showToast(res.ok ? 'Exited Cockpit View' : 'Cockpit already inactive');
+        } else {
+          if (!this.cockpitView.isEntryAllowed?.()) {
+            if (!this.getContextModeState()?.active) {
+              this.setContextMode('contacts');
+            }
+            const flightsLayer = this.services?.flightsLayer;
+            const entity = this.viewer?.trackedEntity || flightsLayer?.dataSource?.entities?.values?.[0];
+            if (entity && this.viewer) {
+              this.viewer.trackedEntity = entity;
+            }
+          }
+          const res = this.controlCockpit('enter');
+          if (res.ok) {
+            this._showToast('Engaged Cockpit View');
+          } else {
+            this._showToast(res.error || 'Select a flight to enter Cockpit');
+          }
+        }
+        break;
+      case 'export_dossier':
+        this.exportControls?.exportDossier();
+        this._showToast('Exported Tactical Mission Dossier');
+        break;
+      case 'cycle_style': {
+        const styles = ['normal', 'retro', 'surveillance', 'thermal', 'anime', 'noir', 'snow'];
+        const currIdx = styles.indexOf(this.activeStyle);
+        const next = styles[(currIdx + 1) % styles.length];
+        this.setStyle(next);
+        this._showToast(`Visual Preset: ${next.toUpperCase()}`);
+        break;
+      }
+      case 'toggle_voice': {
+        const voiceBtn = document.getElementById('voice-control-btn') || document.querySelector('.gev-voice-btn');
+        voiceBtn?.click();
+        break;
+      }
+      case 'confirm':
+        this._showToast('Gesture confirmed');
+        break;
+      case 'dismiss':
+        this.radialMenu?.close();
+        this._showToast('Dismissed');
+        break;
+      case 'next_contact':
+      case 'prev_contact':
+        this.services?.flightsLayer?.focusNext?.();
+        break;
+    }
+  }
+
   /**
    * Tear down the StyleManager — cancel animation loop, clear intervals,
    * and release resources. Call this before discarding the instance to
@@ -3704,6 +4090,17 @@ export class StyleManager {
       this._awarenessClearedHandler = null;
     }
 
+    this.radialMenu?.destroy();
+    this.trajectoryOverlay?.destroy();
+    this.geofenceRenderer?.destroy();
+    this.audioControls?.destroy();
+    this.geofenceControls?.destroy();
+    this.timelineScrubber?.destroy();
+    this.gestureControls?.destroy();
+    this.touchGestures?.detach();
+    this.exportControls?.destroy();
+    this.weatherParticles?.destroy();
+
     // Invalidate any in-flight Context transaction the same way a newer request
     // would. Without this, a reinstatement already past its awaits could
     // re-enable a mode's entry layer and republish `_contextMode` while the
@@ -3748,3 +4145,4 @@ export class StyleManager {
     this._visualSettings.destroy();
   }
 }
+

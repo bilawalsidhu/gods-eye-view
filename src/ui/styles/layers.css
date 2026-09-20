@@ -15,6 +15,13 @@
     top var(--transition-fast),
     bottom var(--transition-fast);
 }
+#left-panel-stack:has(#ai-command-panel:not(.collapsed)) {
+  width: min(440px, calc(100vw - 32px));
+}
+#left-panel-stack > #ai-command-panel {
+  pointer-events: auto;
+  width: 100%;
+}
 
 #data-panel {
   --panel-expanded-width: 280px;

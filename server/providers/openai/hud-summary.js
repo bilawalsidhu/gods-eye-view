@@ -2,6 +2,7 @@ import { keylessHudSummaryResponse } from '../../../src/hudSummaryResponse.js';
 import { enforceOptInRateLimit, openAiRateLimiter } from './rate-limit.js';
 import { readRequestBody } from '../common/request.js';
 import { OPENAI_HUD_SUMMARY_MODEL_DEFAULT } from './constants.js';
+import { queryNvidiaHudSummary } from '../nvidia.js';
 
 function extractOpenAiResponseText(data) {
   if (typeof data?.output_text === 'string' && data.output_text.trim()) {
@@ -34,7 +35,9 @@ async function handleHudSummary(req, res) {
   }
 
   const apiKey = process.env.OPENAI_API_KEY;
-  const keyless = keylessHudSummaryResponse(apiKey);
+  const nvidiaKey = process.env.NVIDIA_API_KEY;
+  const effectiveKey = apiKey || nvidiaKey;
+  const keyless = keylessHudSummaryResponse(effectiveKey);
   if (keyless) {
     res.statusCode = keyless.statusCode;
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -51,6 +54,21 @@ async function handleHudSummary(req, res) {
   try {
     const body = await readRequestBody(req, 64 * 1024);
     const context = JSON.parse(body || '{}');
+
+    if (nvidiaKey && (!apiKey || process.env.AI_PROVIDER === 'nvidia')) {
+      const summaryText = await queryNvidiaHudSummary(context, nvidiaKey);
+      const summary = toFiveWordHudSummary(summaryText);
+      res.statusCode = summary ? 200 : 502;
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-store');
+      res.end(
+        JSON.stringify({
+          summary: summary || null,
+          error: summary ? null : 'NVIDIA HUD summary returned empty',
+        }),
+      );
+      return;
+    }
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: {

@@ -300,6 +300,32 @@
   color: rgba(148, 178, 188, 0.42);
 }
 
+.key-setup-model-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+}
+
+.key-setup-preset-chip {
+  padding: 0.22rem 0.45rem;
+  color: rgba(180, 230, 245, 0.88);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  background: rgba(10, 32, 44, 0.7);
+  border: 1px solid rgba(70, 180, 210, 0.3);
+  border-radius: 0.25rem;
+  cursor: pointer;
+  transition: all var(--transition-fast, 150ms ease);
+}
+
+.key-setup-preset-chip:hover {
+  background: rgba(30, 80, 110, 0.85);
+  border-color: rgba(69, 224, 255, 0.8);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
 .key-setup-footer {
   margin-top: 0.85rem;
 }

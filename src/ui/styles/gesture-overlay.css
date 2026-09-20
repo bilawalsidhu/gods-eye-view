@@ -1,0 +1,429 @@
+/* 🖐️ Gesture Control PiP Overlay & Badges */
+
+.gesture-quick-toggle-fab {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 1000;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(4, 16, 28, 0.9);
+  border: 1px solid rgba(0, 240, 255, 0.45);
+  border-radius: 24px;
+  color: #00f0ff;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  box-shadow:
+    0 6px 24px rgba(0, 0, 0, 0.65),
+    0 0 18px rgba(0, 240, 255, 0.25);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+  pointer-events: auto;
+}
+
+.gesture-quick-toggle-fab:hover {
+  background: rgba(0, 240, 255, 0.2);
+  border-color: #00f0ff;
+  color: #ffffff;
+  transform: translateY(-2px) scale(1.04);
+  box-shadow:
+    0 8px 28px rgba(0, 0, 0, 0.75),
+    0 0 28px rgba(0, 240, 255, 0.5);
+}
+
+.gesture-quick-toggle-fab.active {
+  border-color: #00ffaa;
+  background: rgba(0, 255, 170, 0.16);
+  color: #00ffaa;
+  box-shadow:
+    0 0 20px rgba(0, 255, 170, 0.35),
+    inset 0 0 12px rgba(0, 255, 170, 0.1);
+}
+
+.gesture-fab-pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #00f0ff;
+  box-shadow: 0 0 8px #00f0ff;
+  animation: gev-fab-pulse 2s infinite ease-in-out;
+}
+
+@keyframes gev-fab-pulse {
+  0%, 100% { opacity: 0.4; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+
+.gesture-quick-toggle-fab.active .gesture-fab-pulse {
+  background: #00ffaa;
+  box-shadow: 0 0 8px #00ffaa;
+}
+
+.gesture-fab-icon {
+  font-size: 14px;
+}
+
+.gesture-fab-shortcut {
+  font-size: 9px;
+  background: rgba(0, 240, 255, 0.15);
+  border: 1px solid rgba(0, 240, 255, 0.35);
+  border-radius: 4px;
+  padding: 1px 5px;
+  color: #8fa3b5;
+}
+
+body.recording-mode .gesture-quick-toggle-fab,
+body.ui-clean-view .gesture-quick-toggle-fab {
+  display: none !important;
+}
+
+.gev-gesture-pip {
+  position: fixed;
+  bottom: 74px;
+  right: 24px;
+  width: 320px;
+  max-width: calc(100vw - 48px);
+  background: rgba(5, 16, 26, 0.96);
+  border: 1px solid rgba(0, 240, 255, 0.45);
+  border-radius: 12px;
+  box-shadow:
+    0 16px 48px rgba(0, 0, 0, 0.85),
+    0 0 24px rgba(0, 240, 255, 0.25),
+    inset 0 1px 0 rgba(0, 240, 255, 0.3);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  z-index: 1100;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1), transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+}
+
+.gev-gesture-pip.hidden {
+  opacity: 0;
+  transform: translateY(16px) scale(0.96);
+  pointer-events: none;
+}
+
+.gev-gesture-pip-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: linear-gradient(90deg, rgba(0, 240, 255, 0.15), rgba(4, 18, 32, 0.6));
+  border-bottom: 1px solid rgba(0, 240, 255, 0.25);
+  font-family: var(--font-mono, 'Geist Mono', monospace);
+}
+
+.gev-gesture-header-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.gev-gesture-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #00ffaa;
+  box-shadow: 0 0 8px #00ffaa;
+  animation: gev-fab-pulse 2s infinite ease-in-out;
+}
+
+.gev-gesture-title-text {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: #00f0ff;
+  text-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
+}
+
+.gev-gesture-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.gev-gesture-mode-chip {
+  font-size: 8.5px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 10px;
+  background: rgba(0, 240, 255, 0.15);
+  border: 1px solid rgba(0, 240, 255, 0.35);
+  color: #00f0ff;
+  letter-spacing: 0.05em;
+}
+
+.gev-gesture-mode-chip.error {
+  background: rgba(255, 60, 60, 0.2);
+  border-color: #ff3c3c;
+  color: #ff8888;
+}
+
+.gev-gesture-pip-close {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  border-radius: 4px;
+  color: #8fa3b5;
+  cursor: pointer;
+  font-size: 11px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.gev-gesture-pip-close:hover {
+  background: rgba(255, 60, 60, 0.3);
+  border-color: #ff3c3c;
+  color: #ffffff;
+}
+
+.gev-gesture-canvas-wrapper {
+  position: relative;
+  width: 100%;
+  height: 190px;
+  background: #02080d;
+  overflow: hidden;
+}
+
+.gev-gesture-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+  opacity: 0.88;
+  filter: contrast(1.1) brightness(0.95);
+  z-index: 1;
+}
+
+.gev-gesture-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.gev-gesture-hud-brackets {
+  position: absolute;
+  inset: 10px;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.gev-bracket {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-color: rgba(0, 240, 255, 0.5);
+  border-style: solid;
+}
+
+.gev-bracket.tl { top: 0; left: 0; border-width: 2px 0 0 2px; }
+.gev-bracket.tr { top: 0; right: 0; border-width: 2px 2px 0 0; }
+.gev-bracket.bl { bottom: 0; left: 0; border-width: 0 0 2px 2px; }
+.gev-bracket.br { bottom: 0; right: 0; border-width: 0 2px 2px 0; }
+
+.gev-gesture-badge {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 240, 255, 0.25);
+  border: 1px solid #00f0ff;
+  border-radius: 14px;
+  padding: 3px 12px;
+  font-family: var(--font-mono, monospace);
+  font-size: 9.5px;
+  font-weight: 800;
+  color: #ffffff;
+  white-space: nowrap;
+  letter-spacing: 0.06em;
+  text-shadow: 0 0 8px #00f0ff;
+  box-shadow: 0 0 14px rgba(0, 240, 255, 0.4);
+  pointer-events: none;
+  z-index: 4;
+  animation: gev-badge-pulse 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes gev-badge-pulse {
+  from { box-shadow: 0 0 8px rgba(0, 240, 255, 0.3); }
+  to { box-shadow: 0 0 18px rgba(0, 240, 255, 0.8); }
+}
+
+.gev-gesture-deck {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px;
+  background: rgba(2, 10, 18, 0.98);
+  border-top: 1px solid rgba(0, 240, 255, 0.2);
+  max-height: 200px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.gev-gesture-deck::-webkit-scrollbar {
+  width: 4px;
+}
+
+.gev-gesture-deck::-webkit-scrollbar-thumb {
+  background: rgba(0, 240, 255, 0.3);
+  border-radius: 2px;
+}
+
+.gev-gesture-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  background: rgba(0, 240, 255, 0.05);
+  border: 1px solid rgba(0, 240, 255, 0.22);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  text-align: left;
+  color: #e0f0ff;
+  outline: none;
+}
+
+.gev-gesture-card:hover {
+  background: rgba(0, 240, 255, 0.16);
+  border-color: #00f0ff;
+  transform: translateX(3px);
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.3);
+}
+
+.gev-gesture-card.active {
+  background: rgba(0, 255, 170, 0.28) !important;
+  border-color: #00ffaa !important;
+  box-shadow: 0 0 16px rgba(0, 255, 170, 0.6) !important;
+  transform: scale(1.02);
+}
+
+.gev-gesture-card-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.gev-gesture-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+
+.gev-gesture-card-title {
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #00f0ff;
+}
+
+.gev-gesture-card-sub {
+  font-size: 9px;
+  color: #8fa3b5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gev-gesture-card-kbd {
+  font-family: var(--font-mono, monospace);
+  font-size: 9px;
+  font-weight: 700;
+  color: #00f0ff;
+  background: rgba(0, 240, 255, 0.12);
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+/* Gesture Help Card Modal */
+.gev-gesture-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgba(0, 5, 10, 0.7);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.gev-gesture-card {
+  width: 440px;
+  max-width: 95vw;
+  background: rgba(10, 22, 36, 0.95);
+  border: 1px solid rgba(0, 240, 255, 0.5);
+  border-radius: 10px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.8), 0 0 25px rgba(0, 240, 255, 0.25);
+  padding: 20px;
+  font-family: 'Inter', system-ui, sans-serif;
+  color: #e0f0ff;
+}
+
+.gev-gesture-card-title {
+  font-family: 'Geist Mono', monospace;
+  font-size: 14px;
+  font-weight: 700;
+  color: #00f0ff;
+  letter-spacing: 0.1em;
+  margin-bottom: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.gev-gesture-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 10px;
+  font-size: 11px;
+}
+
+.gev-gesture-grid-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0, 240, 255, 0.06);
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+.gev-gesture-grid-icon {
+  font-size: 18px;
+}
+
+.gev-gesture-grid-text strong {
+  display: block;
+  font-family: 'Geist Mono', monospace;
+  font-size: 10px;
+  color: #00f0ff;
+}
+
+.gev-gesture-grid-text span {
+  font-size: 9px;
+  color: #8fa3b5;
+}

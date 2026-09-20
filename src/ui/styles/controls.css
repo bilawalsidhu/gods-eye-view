@@ -14,11 +14,11 @@
   inset: -30px;
   background: radial-gradient(
     ellipse at center bottom,
-    var(--accent-dim) 0%,
-    transparent 60%
+    var(--accent-glow) 0%,
+    transparent 65%
   );
-  filter: blur(30px);
-  opacity: 0.4;
+  filter: blur(32px);
+  opacity: 0.35;
   pointer-events: none;
 }
 
@@ -31,9 +31,10 @@
   backdrop-filter: blur(24px) saturate(1.4);
   -webkit-backdrop-filter: blur(24px) saturate(1.4);
   box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.5),
-    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
-    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+    0 8px 32px rgba(0, 0, 0, 0.6),
+    0 0 24px rgba(0, 240, 255, 0.08),
+    0 0 0 1px rgba(0, 240, 255, 0.1) inset,
+    0 1px 0 rgba(255, 255, 255, 0.1) inset;
 }
 
 .panel-header {
@@ -119,6 +120,9 @@
 }
 
 .panel-collapse-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 22px;
   height: 22px;
   border-radius: 6px;
@@ -216,17 +220,19 @@
   border-color: var(--accent);
   background: var(--accent-dim);
   box-shadow:
-    0 0 20px rgba(0, 212, 255, 0.15),
-    0 0 0 1px rgba(0, 212, 255, 0.1) inset;
+    0 0 20px var(--accent-glow),
+    0 0 0 1px var(--accent) inset;
 }
 
 .style-btn.active .btn-icon {
   color: var(--accent);
-  text-shadow: 0 0 12px var(--accent-glow);
+  text-shadow: 0 0 14px var(--accent-glow);
 }
 
 .style-btn.active .btn-label {
-  color: var(--text-primary);
+  color: var(--accent);
+  font-weight: 600;
+  text-shadow: 0 0 8px var(--accent-glow);
 }
 
 .btn-icon {

@@ -1127,8 +1127,38 @@ export function createGevActionRunner({
       return annotateMap(annotations, args);
     }
 
-    if (name === 'clear_annotations') {
-      return clearAnnotations(annotations);
+    if (name === 'draw_geofence') {
+      const radiusM = (Number(args.radiusKm) || 50) * 1000;
+      const zoneName = args.name || 'Perimeter Zone';
+      const center = styleManager?.getCameraFocalPoint?.() || { latDeg: 0, lonDeg: 0 };
+      const zone = {
+        id: `zone-${Date.now()}`,
+        name: zoneName,
+        type: 'circle',
+        center,
+        radiusM,
+        alertLevel: 'warning',
+      };
+      styleManager?.geofenceEngine?.addZone(zone);
+      styleManager?.geofenceRenderer?.render(styleManager.geofenceEngine.getZones());
+      return { ok: true, action: 'draw_geofence', zone };
+    }
+
+    if (name === 'clear_geofences') {
+      styleManager?.geofenceEngine?.clearZones();
+      styleManager?.geofenceRenderer?.clear();
+      return { ok: true, action: 'clear_geofences' };
+    }
+
+    if (name === 'export_dossier') {
+      styleManager?.exportControls?.exportDossier();
+      return { ok: true, action: 'export_dossier' };
+    }
+
+    if (name === 'toggle_gestures') {
+      const targetState = args.enable !== undefined ? Boolean(args.enable) : !styleManager?.gestureControls?.isEnabled;
+      styleManager?.gestureControls?.toggle(targetState);
+      return { ok: true, action: 'toggle_gestures', enabled: targetState };
     }
 
     throw new Error(`Unknown GEV tool: ${name}`);
