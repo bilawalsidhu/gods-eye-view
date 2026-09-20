@@ -9,9 +9,11 @@ export function createBrowserViteConfig({
   cesiumToken,
   host = 'localhost',
   port = 4173,
+  base = '/',
   command,
 } = {}) {
   return {
+    base,
     plugins: [cesium(), applicationHtmlPlugin(), ...plugins],
     ...(publicDir === undefined ? {} : { publicDir }),
     // A production build must not clean the dependency cache a running dev
@@ -38,15 +40,18 @@ export function createBrowserViteConfig({
       fs: {
         deny: ['.env', '.env.*', '*.{crt,pem}', '**/.git/**', '**/ENVIRONMENT'],
       },
-      // These headers protect the document containing Provider Settings.
+      // Same-origin framing only: the app may be embedded by a page on its
+      // own origin (NADI serves it under /gods-eye/); third-party sites
+      // still cannot frame the document that hosts Provider Settings.
       headers: {
-        'X-Frame-Options': 'DENY',
-        'Content-Security-Policy': "frame-ancestors 'none'",
+        'X-Frame-Options': 'SAMEORIGIN',
+        'Content-Security-Policy': "frame-ancestors 'self'",
       },
     },
     define: {
       'import.meta.env.GOOGLE_MAPS_API_KEY': JSON.stringify(googleApiKey),
       'import.meta.env.CESIUM_ION_TOKEN': JSON.stringify(cesiumToken),
+      __GEV_BASE__: JSON.stringify(base),
     },
     build: { chunkSizeWarningLimit: 1500 },
   };

@@ -18,6 +18,7 @@ export default defineConfig(({ command, mode }) => {
     cesiumToken: process.env.CESIUM_ION_TOKEN,
     host: process.env.HOST,
     port: process.env.PORT,
+    base: process.env.GEV_BASE_PATH || '/',
     command,
   });
 });
