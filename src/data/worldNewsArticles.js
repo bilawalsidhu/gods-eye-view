@@ -118,14 +118,17 @@ function mentionedInTitle(entity) {
  * @param {unknown} entities Provider `entities[]` for one article.
  * @returns {object|null} The chosen entity, or null when none qualifies.
  */
-export function topLocationEntity(entities, { near = null } = {}) {
+export function topLocationEntity(
+  entities,
+  { near = null, titleOnly = true } = {},
+) {
   if (!Array.isArray(entities)) return null;
   const usable = entities.filter(
     (entity) =>
       entity &&
       typeof entity === 'object' &&
       LOCATION_TYPES.has(String(entity.type || '').toUpperCase()) &&
-      mentionedInTitle(entity) &&
+      (!titleOnly || mentionedInTitle(entity)) &&
       finiteInRange(entity.latitude, 90) &&
       finiteInRange(entity.longitude, 180),
   );
@@ -159,7 +162,7 @@ export function topLocationEntity(entities, { near = null } = {}) {
  */
 export function normalizeWorldNewsArticle(
   article,
-  { thumbnails = false, near = null } = {},
+  { thumbnails = false, near = null, titleOnly = true } = {},
 ) {
   if (!article || typeof article !== 'object') return null;
   const rawId = article.id;
@@ -169,7 +172,7 @@ export function normalizeWorldNewsArticle(
   const title = cleanText(article.title, WORLD_NEWS_TITLE_MAX_CHARS);
   const url = httpUrl(article.url);
   if (!validId || !title || !url) return null;
-  const location = topLocationEntity(article.entities, { near });
+  const location = topLocationEntity(article.entities, { near, titleOnly });
   if (!location) return null;
   const place = cleanText(location.name, WORLD_NEWS_PLACE_MAX_CHARS);
   if (!place) return null;
@@ -190,7 +193,10 @@ export function normalizeWorldNewsArticle(
     lat: location.latitude,
     lon: location.longitude,
     place,
-    placeFoundIn: 'title',
+    // Where the pinned place was named. 'title' is the global feed's whole
+    // contract; a region fetch may pin on a body mention, and saying so is
+    // what keeps that honest rather than passing it off as a headline place.
+    placeFoundIn: mentionedInTitle(location) ? 'title' : 'content',
     placeMentions: Math.max(0, Math.floor(Number(location.mentions) || 0)),
     // Opt-in (WORLD_NEWS_THUMBNAILS) and https-only: the URL is a LINK the
     // browser resolves against the publisher, never an image this server

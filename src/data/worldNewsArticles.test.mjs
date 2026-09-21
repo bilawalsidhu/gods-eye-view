@@ -382,3 +382,59 @@ test('a region fetch pins the title place nearest the view, not the loudest', ()
   assert.equal(record.place, 'Moscow');
   assert.equal(record.lat, 55.75);
 });
+
+test('a region fetch may pin on a body mention, and says so', () => {
+  // location-filter selects an article by ANY location entity, so the place
+  // that matched the circle is often not the one in the title. Measured
+  // 2026-09-21: a Moscow 50 km request returned 25 articles that all carried
+  // a Moscow entity at 29 km, but only one named Moscow in its title; the
+  // rest titled "Russia" and would pin at the country centroid 3,601 km away.
+  const moscow = {
+    type: 'LOC',
+    name: 'Moscow',
+    latitude: 55.75,
+    longitude: 37.62,
+    found_in: 'content',
+    mentions: 4,
+  };
+  const russia = {
+    type: 'LOC',
+    name: 'Russia',
+    latitude: 60,
+    longitude: 100,
+    found_in: 'title',
+    mentions: 1,
+  };
+  const raw = {
+    id: 21,
+    title: 'Russia signals new terms',
+    url: 'https://e.com/21',
+    publish_date: '2026-09-21 09:00:00',
+    entities: [russia, moscow],
+  };
+
+  // Global feed: titles only, unchanged — the body mention cannot pin.
+  const global = normalizeWorldNewsArticle(raw);
+  assert.equal(global.place, 'Russia');
+  assert.equal(global.placeFoundIn, 'title');
+
+  // Region feed: the matched place wins, and is reported as a body mention.
+  const region = normalizeWorldNewsArticle(raw, {
+    titleOnly: false,
+    near: { lat: 55.5, lon: 37.5 },
+  });
+  assert.equal(region.place, 'Moscow');
+  assert.equal(region.lat, 55.75);
+  assert.equal(region.placeFoundIn, 'content');
+
+  // A title place still reports 'title' when it is the one chosen.
+  assert.equal(
+    normalizeWorldNewsArticle(raw, {
+      titleOnly: false,
+      near: { lat: 60, lon: 100 },
+    }).placeFoundIn,
+    'title',
+  );
+  // Body-only entities remain unpinnable for the global feed.
+  assert.equal(normalizeWorldNewsArticle({ ...raw, entities: [moscow] }), null);
+});

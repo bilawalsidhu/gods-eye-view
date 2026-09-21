@@ -635,12 +635,19 @@ export function worldNewsProxy({
         batches: [
           {
             at: now,
-            // Pin the title place NEAREST this view: a headline can name
-            // several, and the loudest is not always the one the circle
-            // matched (a Moscow query returned a story that pinned in France).
+            // Pin on the entity that MATCHED the circle, title or not.
+            // location-filter selects an article by ANY of its location
+            // entities, so insisting on a title place threw away the very
+            // reason the article came back: measured 2026-09-21, a Moscow
+            // 50 km request returned 25 articles that ALL carried a Moscow
+            // entity at 29 km, yet only one named Moscow in its title — the
+            // rest titled "Russia" and pinned 3,601 km away at the country
+            // centroid. Records pinned this way report placeFoundIn
+            // 'content', so they are never mistaken for headline places.
             articles: normalizeWorldNewsArticles(result.news, {
               thumbnails: thumbnails(),
               near: region.center,
+              titleOnly: false,
             }),
             requested: result.news.length,
           },
