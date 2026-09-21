@@ -43,6 +43,17 @@ export const DATA_CREDITS = [
       '(ODbL 1.0)',
   },
   {
+    key: 'adsbdb',
+    html:
+      'Aircraft type, registration &amp; flight routes: ' +
+      '<a href="https://www.adsbdb.com" target="_blank" rel="noopener">adsbdb</a> ' +
+      '· aircraft data from PlaneBase · ICAO-to-N-number conversion by ' +
+      'Guillaume Michel · route data is the work of ' +
+      'David Taylor, Edinburgh, and Jim Mason, Glasgow, and may not be ' +
+      'copied, published, or incorporated into other databases without the ' +
+      'explicit permission of David J Taylor, Edinburgh',
+  },
+  {
     key: 'aisstream',
     html:
       'Live vessels (AIS): ' +
