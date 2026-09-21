@@ -25,24 +25,51 @@ const browser = await puppeteer.launch({
 });
 try {
   const page = await browser.newPage();
+  // App-side console/page errors land in this log too — a wedged lifecycle
+  // usually has a page-side symptom that never reaches the Node stack trace.
+  page.on('console', (msg) => {
+    if (msg.type() === 'error' || msg.type() === 'warning') console.log(`[page:${msg.type()}] ${msg.text()}`);
+  });
+  page.on('pageerror', (err) => console.log(`[pageerror] ${err.message}`));
   // A settled scene stops producing BeginFrames, so neither the boot waits
   // below nor the 240-frame settle would ever observe a tick — pump frames
   // from Node instead of hoping rAF flows (headlessFrames.mjs header).
   await installCompositorFramePump(page);
   await page.setViewport({ width: 1440, height: 860 });
   await page.goto(url, { waitUntil: 'domcontentloaded' });
+  console.log('[step] domcontentloaded');
   await page.waitForFunction(() => Boolean(window.__godsEyeView?.viewer), { timeout: 90_000 });
+  console.log('[step] viewer ready');
   await new Promise((r) => setTimeout(r, 12_000));
+  console.log('[step] boot settle done — wrangling layers');
   await page.evaluate(async (layerId) => {
     const gev = window.__godsEyeView;
     gev.viewer.camera.cancelFlight();
+    // One layer whose disable lifecycle never settles must not wedge the
+    // whole suite (RUN 3d: an unbounded await here protocolTimedOut with zero
+    // suite output, at load 6.49). Race each transition and name stragglers.
+    const raced = (promise, label, ms = 20_000) => Promise.race([
+      promise.catch(() => 'error'),
+      new Promise((resolve) => setTimeout(() => resolve(`TIMEOUT ${label} >${ms}ms`), ms)),
+    ]);
+    const stragglers = [];
     for (const [id, entry] of gev.dataManager.layers) {
       if (entry.enabled && id !== layerId) {
-        try { await gev.dataManager.setEnabled(id, false, { origin: 'user' }); } catch { /* shot only */ }
+        const outcome = await raced(
+          gev.dataManager.setEnabled(id, false, { origin: 'user' }),
+          `disable ${id}`,
+        );
+        if (typeof outcome === 'string') stragglers.push(outcome);
       }
     }
-    await gev.dataManager.setEnabled(layerId, true, { origin: 'user' });
+    const enabled = await raced(
+      gev.dataManager.setEnabled(layerId, true, { origin: 'user' }),
+      `enable ${layerId}`,
+    );
+    if (typeof enabled === 'string') stragglers.push(enabled);
+    if (stragglers.length) console.warn(`lifecycle stragglers: ${stragglers.join('; ')}`);
   }, LAYER_ID);
+  console.log('[step] layers wrangled');
 
   const views = [
     { name: 'atlantic', lon: -40, lat: 35, height: 4_500_000 },
