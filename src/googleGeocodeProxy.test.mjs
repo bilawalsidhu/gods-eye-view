@@ -73,6 +73,10 @@ test('geocoder query and viewport bias are validated before Google is paid', () 
     'north,-97.9|30.4,-97.6',
     '91,-97.9|30.4,-97.6',
     '30.1,-181|30.4,-97.6',
+    // A blank component must not read as 0 — that is the equator, not a corner.
+    '30.1,-97.9|30.4,',
+    '30.1,|30.4,-97.6',
+    '30.1,-97.9| ,-97.6',
   ])
     assert.equal(geocodeBounds(new URLSearchParams({ bounds })), null);
 });
@@ -82,10 +86,7 @@ test('the geocode routes keep the key server-side and answer in Google shape', a
   const routes = installRoutes({
     fetchImpl: async (url) => {
       upstream.push(new URL(String(url)));
-      return {
-        ok: true,
-        json: async () => ({ status: 'OK', results: [{ place_id: 'fixture' }] }),
-      };
+      return Response.json({ status: 'OK', results: [{ place_id: 'fixture' }] });
     },
   });
   const forward = routes.get('/api/google/geocode');
@@ -123,7 +124,7 @@ test('a bad or keyless geocode request never reaches Google', async () => {
   const upstream = [];
   const fetchImpl = async (url) => {
     upstream.push(String(url));
-    return { ok: true, json: async () => ({ status: 'OK', results: [] }) };
+    return Response.json({ status: 'OK', results: [] });
   };
 
   const routes = installRoutes({ fetchImpl });
@@ -164,4 +165,40 @@ test('a bad or keyless geocode request never reaches Google', async () => {
     }
 
   assert.deepEqual(upstream, []);
+});
+
+test('an upstream failure reaches the browser as fixed public text', async () => {
+  const routes = installRoutes({
+    fetchImpl: async () => {
+      throw new Error('connect ECONNREFUSED 10.0.0.7:443');
+    },
+  });
+  for (const path of ['/api/google/geocode', '/api/google/reverse-geocode']) {
+    const response = await invokeRoute(routes.get(path), {
+      url: '/?address=Austin&lat=30&lon=-97',
+    });
+    assert.equal(response.statusCode, 502);
+    assert.deepEqual(response.body, {
+      status: 'UNKNOWN_ERROR',
+      results: [],
+      error: 'Google Geocoding request failed',
+    });
+  }
+});
+
+test('an oversized upstream body is dropped rather than buffered', async () => {
+  const routes = installRoutes({
+    // Two hundred times the 256 KiB ceiling, declared honestly.
+    fetchImpl: async () =>
+      Response.json({ status: 'OK', results: [{ pad: 'x'.repeat(52_428_800) }] }),
+  });
+  const response = await invokeRoute(routes.get('/api/google/geocode'), {
+    url: '/?address=Austin',
+  });
+  assert.equal(response.statusCode, 502);
+  assert.deepEqual(response.body, {
+    status: 'UNKNOWN_ERROR',
+    results: [],
+    error: 'Google Geocoding request failed',
+  });
 });

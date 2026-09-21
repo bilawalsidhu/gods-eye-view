@@ -4,6 +4,7 @@ import {
   keylessGoogleGeocodeResponse,
 } from './google-key.js';
 import { makeOptInRateLimiter, clientKey } from '../common/rate-limit.js';
+import { readResponseJsonCapped } from '../common/http.js';
 import {
   projectNearbyPlaces,
   projectTextSearchPlaces,
@@ -46,6 +47,16 @@ export function validatePlacesCoordinates(searchParams) {
 /** Longest accepted geocoder query. Real place names are far shorter. */
 const GEOCODE_MAX_QUERY = 200;
 
+/**
+ * Upstream deadline and body ceiling for the geocode routes. The deadline stays
+ * armed through body consumption, so a stalled upstream cannot hold a handler
+ * open, and the cap bounds a chunked or length-omitted reply. A geocode answer
+ * is a handful of results; 256 KiB is far above any honest one.
+ */
+const GEOCODE_UPSTREAM_TIMEOUT_MS = 10_000;
+
+const GEOCODE_MAX_RESPONSE_BYTES = 256 * 1024;
+
 /** Validate a free-text geocoder query before consuming request quota. */
 export function validateGeocodeAddress(searchParams) {
   const address = String(searchParams.get('address') || '').trim();
@@ -66,8 +77,12 @@ export function geocodeBounds(searchParams) {
   if (!raw) return null;
   const corners = raw.split('|');
   if (corners.length !== 2) return null;
-  const numbers = corners.flatMap((corner) => corner.split(',').map(Number));
-  if (numbers.length !== 4 || !numbers.every(Number.isFinite)) return null;
+  const parts = corners.flatMap((corner) => corner.split(','));
+  // A blank component must be refused before Number() turns it into 0 and a
+  // half-written corner like `30.4,` reads as the equator.
+  if (parts.length !== 4 || parts.some((part) => !part.trim())) return null;
+  const numbers = parts.map(Number);
+  if (!numbers.every(Number.isFinite)) return null;
   const [swLat, swLon, neLat, neLon] = numbers;
   if (Math.abs(swLat) > 90 || Math.abs(neLat) > 90) return null;
   if (Math.abs(swLon) > 180 || Math.abs(neLon) > 180) return null;
@@ -379,31 +394,48 @@ export function googlePlacesContextProxy({
           for (const [name, value] of Object.entries(query.params))
             upstream.searchParams.set(name, value);
           upstream.searchParams.set('key', apiKey);
+          const deadline = AbortSignal.timeout(GEOCODE_UPSTREAM_TIMEOUT_MS);
           const response = await fetchImpl(upstream.toString(), {
             redirect: 'error',
+            signal: deadline,
           });
-          const data = await response.json().catch(() => null);
+          // An unreadable, oversized or timed-out body is not an answer: it
+          // falls through to the same shaped failure as a refusal below.
+          const data = await readResponseJsonCapped(
+            response,
+            GEOCODE_MAX_RESPONSE_BYTES,
+            deadline,
+          ).catch(() => null);
+
+          // A body we could not read is an upstream failure, not an answer with
+          // a status of its own, so it does not borrow the upstream's code.
+          if (!data) {
+            res.statusCode = 502;
+            res.setHeader('Content-Type', 'application/json; charset=utf-8');
+            res.end(
+              JSON.stringify({
+                status: 'UNKNOWN_ERROR',
+                results: [],
+                error: 'Google Geocoding request failed',
+              }),
+            );
+            return;
+          }
 
           res.statusCode = response.ok ? 200 : response.status;
           res.setHeader('Content-Type', 'application/json; charset=utf-8');
           res.setHeader('Cache-Control', 'private, max-age=300');
-          res.end(
-            JSON.stringify(
-              data ?? {
-                status: 'UNKNOWN_ERROR',
-                results: [],
-                error: 'Google Geocoding request failed',
-              },
-            ),
-          );
-        } catch (error) {
+          res.end(JSON.stringify(data));
+        } catch {
+          // Fixed public text: a transport, URL or runtime message would
+          // describe the server to the browser (SECURITY.md, sanitized errors).
           res.statusCode = 502;
           res.setHeader('Content-Type', 'application/json; charset=utf-8');
           res.end(
             JSON.stringify({
               status: 'UNKNOWN_ERROR',
               results: [],
-              error: error?.message || 'Google Geocoding request failed',
+              error: 'Google Geocoding request failed',
             }),
           );
         }
