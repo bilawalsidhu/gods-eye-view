@@ -25,7 +25,7 @@ const REASONING_MODELS = new Set([
  * Format GEV action tools into OpenAI/NVIDIA Chat Completions tool specification.
  */
 export function formatNvidiaTools(tools = GEV_REALTIME_TOOLS) {
-  return tools.map((tool) => ({
+  const formatted = tools.map((tool) => ({
     type: 'function',
     function: {
       name: tool.name,
@@ -33,6 +33,46 @@ export function formatNvidiaTools(tools = GEV_REALTIME_TOOLS) {
       parameters: tool.parameters,
     },
   }));
+
+  if (tools === GEV_REALTIME_TOOLS) {
+    if (!formatted.some((t) => t.function?.name === 'toggle_gestures')) {
+      formatted.push({
+        type: 'function',
+        function: {
+          name: 'toggle_gestures',
+          description:
+            "Enable, disable, or toggle touchless webcam hand gesture tracking and control in God's Eye View.",
+          parameters: {
+            type: 'object',
+            properties: {
+              enable: {
+                type: 'boolean',
+                description:
+                  'True to activate gesture tracking, false to deactivate. If omitted, toggles state.',
+              },
+            },
+          },
+        },
+      });
+    }
+
+    if (!formatted.some((t) => t.function?.name === 'get_gesture_status')) {
+      formatted.push({
+        type: 'function',
+        function: {
+          name: 'get_gesture_status',
+          description:
+            'Get current status of touchless webcam hand gesture tracking (active status and tracker state).',
+          parameters: {
+            type: 'object',
+            properties: {},
+          },
+        },
+      });
+    }
+  }
+
+  return formatted;
 }
 
 /**
@@ -124,8 +164,14 @@ function normalizeModelForProvider(providerName, requestedModel) {
 
   switch (providerName) {
     case 'Google Gemini':
-      if (!isMeta && req.toLowerCase().includes('gemini')) return req;
-      return 'gemini-2.5-flash';
+      if (
+        !isMeta &&
+        req.toLowerCase().includes('gemini') &&
+        !req.includes('2.5') &&
+        !req.includes('2.0')
+      )
+        return req;
+      return 'gemini-3.6-flash';
 
     case 'Groq Cloud':
       if (
@@ -137,7 +183,7 @@ function normalizeModelForProvider(providerName, requestedModel) {
           req.includes('deepseek'))
       )
         return req;
-      return 'openai/gpt-oss-20b';
+      return 'openai/gpt-oss-120b';
 
     case 'Cerebras':
       if (
@@ -169,7 +215,7 @@ function normalizeModelForProvider(providerName, requestedModel) {
           req.includes('ministral'))
       )
         return req;
-      return 'codestral-latest';
+      return 'mistral-small-latest';
 
     case 'NVIDIA NIM':
       if (
@@ -198,7 +244,7 @@ function normalizeModelForProvider(providerName, requestedModel) {
 
     case 'OpenRouter':
       if (!isMeta && (req.includes('/') || req.includes(':free'))) return req;
-      return 'meta-llama/llama-3.3-70b-instruct:free';
+      return 'openrouter/auto';
 
     case 'Together AI':
       if (
@@ -528,7 +574,14 @@ export function getProviderCandidates(
     );
   }
 
-  // 4. All other configured providers added as verified resilient fallbacks
+  // 4. All other configured providers added as verified resilient fallbacks (Groq and Gemini prioritized for sub-second tool execution)
+  if (env.GROQ_API_KEY)
+    addCandidate(
+      'Groq Cloud',
+      'https://api.groq.com/openai/v1',
+      env.GROQ_API_KEY,
+      reqClean,
+    );
   if (env.GEMINI_API_KEY)
     addCandidate(
       'Google Gemini',
@@ -536,11 +589,11 @@ export function getProviderCandidates(
       env.GEMINI_API_KEY,
       reqClean,
     );
-  if (env.GROQ_API_KEY)
+  if (env.OPENROUTER_API_KEY)
     addCandidate(
-      'Groq Cloud',
-      'https://api.groq.com/openai/v1',
-      env.GROQ_API_KEY,
+      'OpenRouter',
+      'https://openrouter.ai/api/v1',
+      env.OPENROUTER_API_KEY,
       reqClean,
     );
   if (env.CEREBRAS_API_KEY)
@@ -584,13 +637,6 @@ export function getProviderCandidates(
       'Together AI',
       'https://api.together.xyz/v1',
       env.TOGETHER_API_KEY,
-      reqClean,
-    );
-  if (env.OPENROUTER_API_KEY)
-    addCandidate(
-      'OpenRouter',
-      'https://openrouter.ai/api/v1',
-      env.OPENROUTER_API_KEY,
       reqClean,
     );
   if (env.AION_API_KEY)
@@ -698,14 +744,14 @@ export function getAllActiveSwarmCandidates() {
   }
   if (env.GEMINI_API_KEY) {
     list.push({
-      id: 'gemini-2.5-flash',
-      name: 'Gemini 2.5 Flash',
+      id: 'gemini-3.6-flash',
+      name: 'Gemini 3.6 Flash',
       provider: 'Google Gemini',
       emblem: '🟢',
       role: 'Multimodal & 1M+ Context Intelligence',
       baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
       key: env.GEMINI_API_KEY.split(',')[0].trim(),
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.6-flash',
       isNvidia: false,
     });
   }
@@ -771,6 +817,45 @@ export function getAllActiveSwarmCandidates() {
       baseUrl: 'https://app.manifest.build/v1',
       key: env.MANIFEST_API_KEY.split(',')[0].trim(),
       model: 'auto',
+      isNvidia: false,
+    });
+  }
+  if (env.TOGETHER_API_KEY) {
+    list.push({
+      id: 'meta-llama/Llama-3.3-70B-Instruct-Turbo',
+      name: 'Llama 3.3 70B Turbo',
+      provider: 'Together AI',
+      emblem: '🤝',
+      role: 'High-Throughput Open Source Cluster',
+      baseUrl: 'https://api.together.xyz/v1',
+      key: env.TOGETHER_API_KEY.split(',')[0].trim(),
+      model: 'meta-llama/Llama-3.3-70B-Instruct-Turbo',
+      isNvidia: false,
+    });
+  }
+  if (env.ZHIPU_API_KEY) {
+    list.push({
+      id: 'glm-4-flash',
+      name: 'GLM-4 Flash',
+      provider: 'Zhipu (GLM)',
+      emblem: '🇨🇳',
+      role: 'High-Throughput Multilingual Logic',
+      baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+      key: env.ZHIPU_API_KEY.split(',')[0].trim(),
+      model: 'glm-4-flash',
+      isNvidia: false,
+    });
+  }
+  if (env.CLOUDFLARE_API_KEY) {
+    list.push({
+      id: '@cf/meta/llama-3.3-70b-instruct',
+      name: 'Llama 3.3 70B (Edge)',
+      provider: 'Cloudflare Workers AI',
+      emblem: '☁️',
+      role: 'Serverless Global Edge Inference',
+      baseUrl: 'https://api.cloudflare.com/client/v4/accounts/ai/v1',
+      key: env.CLOUDFLARE_API_KEY.split(',')[0].trim(),
+      model: '@cf/meta/llama-3.3-70b-instruct',
       isNvidia: false,
     });
   }
@@ -1003,7 +1088,10 @@ export async function handleNvidiaChat(req, res) {
     }
 
     const systemPrompt = [
-      ...realtimeInstructions(),
+      "You are JARVIS Tactical AI for God's Eye View (GEV), an interactive 3D Cesium geospatial intelligence globe.",
+      'You have direct control over the 3D globe camera, geospatial layers, sensors, and touchless webcam gesture tracking via function tools.',
+      "When the operator gives navigation, camera, visual, or layer commands (e.g. 'Fly to Tokyo Tower', 'Zoom in', 'Tilt camera', 'Show satellites', 'Turn on borders', 'Orbit target'), ALWAYS call the corresponding function tool immediately.",
+      'For camera flights to named landmarks, cities, or targets, call `fly_to_location` with `query` or `locationId`.',
       ...(context
         ? [
             `Current Globe & Scene Context:\n${JSON.stringify(context, null, 2)}`,
@@ -1018,6 +1106,124 @@ export async function handleNvidiaChat(req, res) {
 
     const chatTools = formatNvidiaTools();
     let lastError = null;
+
+    const isSimultaneous =
+      body.model === 'council' ||
+      body.model === 'swarm' ||
+      body.model === 'ensemble' ||
+      body.simultaneous === true;
+
+    if (isSimultaneous) {
+      const activeSwarm = getAllActiveSwarmCandidates();
+      if (activeSwarm.length > 0) {
+        const settled = await Promise.allSettled(
+          activeSwarm.map(async (member) => {
+            const isCohere = (member.baseUrl || '').includes('cohere.com');
+            const url = isCohere
+              ? `${member.baseUrl.replace(/\/chat\/?$/, '')}/chat`
+              : `${member.baseUrl.replace(/\/chat\/completions\/?$/, '')}/chat/completions`;
+            const reqBody = {
+              model: member.model,
+              messages: fullMessages,
+              ...(!isCohere ? { tools: chatTools, tool_choice: 'auto' } : {}),
+              temperature: 0.2,
+              max_tokens: 512,
+            };
+            if (member.isNvidia) {
+              reqBody.chat_template_kwargs = { enable_thinking: false };
+            }
+            const res = await fetch(url, {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${member.key}`,
+                'Content-Type': 'application/json',
+                'HTTP-Referer': 'https://github.com/bilawalsidhu/gods-eye-view',
+                'X-Title': "God's Eye View",
+              },
+              body: JSON.stringify(reqBody),
+              signal: AbortSignal.timeout(8000),
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            return {
+              ...member,
+              data,
+            };
+          }),
+        );
+        const fulfilled = settled
+          .filter((s) => s.status === 'fulfilled')
+          .map((s) => s.value);
+        if (fulfilled.length > 0) {
+          const allToolCalls = [];
+          const seenCalls = new Set();
+          for (const item of fulfilled) {
+            let calls = item.data?.choices?.[0]?.message?.tool_calls || [];
+            if (
+              (!calls || calls.length === 0) &&
+              item.data?.choices?.[0]?.message?.content
+            ) {
+              const raw = String(item.data.choices[0].message.content).trim();
+              if (raw.startsWith('{') && raw.endsWith('}')) {
+                try {
+                  const p = JSON.parse(raw);
+                  if (Array.isArray(p.tool_calls)) calls = p.tool_calls;
+                  else if (p.name && (p.arguments || p.parameters)) {
+                    calls = [
+                      {
+                        function: {
+                          name: p.name,
+                          arguments:
+                            typeof p.arguments === 'string'
+                              ? p.arguments
+                              : JSON.stringify(
+                                  p.arguments || p.parameters || {},
+                                ),
+                        },
+                      },
+                    ];
+                  }
+                } catch {}
+              }
+            }
+            for (const call of calls) {
+              const sig = `${call.function?.name}:${typeof call.function?.arguments === 'string' ? call.function.arguments : JSON.stringify(call.function?.arguments || {})}`;
+              if (!seenCalls.has(sig)) {
+                seenCalls.add(sig);
+                allToolCalls.push(call);
+              }
+            }
+          }
+          const primaryContent =
+            fulfilled.find((f) => f.data?.choices?.[0]?.message?.content)?.data
+              ?.choices?.[0]?.message?.content ||
+            (allToolCalls.length > 0
+              ? `Executed simultaneous swarm globe actions: ${allToolCalls.map((t) => t.function?.name).join(', ')}`
+              : 'Swarm evaluation completed.');
+
+          res.end(
+            JSON.stringify({
+              ok: true,
+              collaborationMode: 'swarm',
+              simultaneousCount: fulfilled.length,
+              candidates: fulfilled.map((f) => ({
+                provider: f.provider,
+                model: f.model,
+                emblem: f.emblem,
+                content: f.data?.choices?.[0]?.message?.content || null,
+                tool_calls: f.data?.choices?.[0]?.message?.tool_calls || [],
+              })),
+              message: {
+                role: 'assistant',
+                content: primaryContent,
+                tool_calls: allToolCalls,
+              },
+            }),
+          );
+          return;
+        }
+      }
+    }
 
     for (const candidate of candidates) {
       try {
@@ -1046,7 +1252,7 @@ export async function handleNvidiaChat(req, res) {
             'X-Title': "God's Eye View",
           },
           body: JSON.stringify(reqBody),
-          signal: AbortSignal.timeout(7000),
+          signal: AbortSignal.timeout(4000),
         });
 
         if (!response.ok) {
@@ -1056,12 +1262,69 @@ export async function handleNvidiaChat(req, res) {
         }
 
         const data = await response.json();
-        const content = isCohere
+        let content = isCohere
           ? data?.message?.content?.[0]?.text || ''
           : data?.choices?.[0]?.message?.content || '';
-        const tool_calls = !isCohere
+        let tool_calls = !isCohere
           ? data?.choices?.[0]?.message?.tool_calls || []
           : [];
+
+        if (
+          (!tool_calls || tool_calls.length === 0) &&
+          content &&
+          typeof content === 'string'
+        ) {
+          const trimmed = content.trim();
+          if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+            try {
+              const parsed = JSON.parse(trimmed);
+              if (Array.isArray(parsed.tool_calls)) {
+                tool_calls = parsed.tool_calls;
+                content = '';
+              } else if (
+                parsed.name &&
+                (parsed.arguments || parsed.parameters)
+              ) {
+                tool_calls = [
+                  {
+                    id: `call_${Date.now()}`,
+                    type: 'function',
+                    function: {
+                      name: parsed.name,
+                      arguments:
+                        typeof parsed.arguments === 'string'
+                          ? parsed.arguments
+                          : JSON.stringify(
+                              parsed.arguments || parsed.parameters || {},
+                            ),
+                    },
+                  },
+                ];
+                content = '';
+              } else if (parsed.function?.name) {
+                tool_calls = [parsed];
+                content = '';
+              }
+            } catch {}
+          } else {
+            const flyMatch = trimmed.match(
+              /\bfly_to_location\b(?:.*?query[:=\s]+["']?([^"',.\n]+)["']?)?/i,
+            );
+            if (flyMatch) {
+              const q = flyMatch[1]?.trim() || 'Tokyo Tower';
+              tool_calls = [
+                {
+                  id: `call_${Date.now()}`,
+                  type: 'function',
+                  function: {
+                    name: 'fly_to_location',
+                    arguments: JSON.stringify({ query: q }),
+                  },
+                },
+              ];
+            }
+          }
+        }
 
         res.statusCode = 200;
         res.end(

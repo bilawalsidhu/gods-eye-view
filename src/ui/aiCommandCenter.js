@@ -89,14 +89,37 @@ const MODE_PRESETS = {
  * Procedural Web Audio Sound Synthesizer — zero external audio assets required.
  * Generates futuristic sci-fi chimes, wake-word pings, tactical alert sirens, and data chirps.
  */
+let _sharedCueAudioCtx = null;
+function getSharedCueContext(audioContextRef) {
+  if (audioContextRef) {
+    if (typeof audioContextRef === 'function') {
+      try {
+        return new audioContextRef();
+      } catch {
+        return null;
+      }
+    }
+    return audioContextRef;
+  }
+  if (_sharedCueAudioCtx && _sharedCueAudioCtx.state !== 'closed') {
+    if (_sharedCueAudioCtx.state === 'suspended') {
+      _sharedCueAudioCtx.resume().catch(() => {});
+    }
+    return _sharedCueAudioCtx;
+  }
+  const AudioCtx = globalThis.AudioContext || globalThis.webkitAudioContext;
+  if (!AudioCtx) return null;
+  try {
+    _sharedCueAudioCtx = new AudioCtx();
+    return _sharedCueAudioCtx;
+  } catch {
+    return null;
+  }
+}
+
 export function playAudioCue(type = 'wake', { audioContextRef = null } = {}) {
   try {
-    const AudioCtx =
-      audioContextRef ||
-      globalThis.AudioContext ||
-      globalThis.webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = typeof AudioCtx === 'function' ? new AudioCtx() : AudioCtx;
+    const ctx = getSharedCueContext(audioContextRef);
     if (!ctx || typeof ctx.createOscillator !== 'function') return;
     const now = ctx.currentTime || 0;
 
@@ -380,11 +403,64 @@ export function selectBestVoice(
 }
 
 /**
- * Format markdown-like text to HTML safely with code highlighting.
+ * Extracts and cleans thinking/reasoning traces from model outputs.
+ * Supports <think>...</think>, ```thought...```, and leading reasoning blocks.
  */
-export function formatMarkdown(text) {
+export function extractThinking(text) {
+  if (!text) return { content: '', reasoning: '' };
+  let cleaned = String(text);
+  let reasoning = '';
+
+  // 1. Closed <think>...</think>, <thought>...</thought>, or <reasoning>...</reasoning>
+  const thinkRegex =
+    /<(?:think|thought|reasoning)>([\s\S]*?)<\/(?:think|thought|reasoning)>/gi;
+  let match;
+  while ((match = thinkRegex.exec(cleaned)) !== null) {
+    reasoning = (reasoning ? reasoning + '\n\n' : '') + match[1].trim();
+  }
+  cleaned = cleaned.replace(thinkRegex, '').trim();
+
+  // 2. Unclosed <think>, <thought>, <reasoning> during active streaming
+  const unclosedThink = /<(?:think|thought|reasoning)>([\s\S]*)$/i;
+  const unclosedMatch = unclosedThink.exec(cleaned);
+  if (unclosedMatch) {
+    reasoning = (reasoning ? reasoning + '\n\n' : '') + unclosedMatch[1].trim();
+    cleaned = cleaned.replace(unclosedThink, '').trim();
+  }
+
+  // 3. Fenced thought blocks ```thought ... ```
+  const thoughtBlock = /```(?:thought|thinking)\n?([\s\S]*?)```/gi;
+  let tbMatch;
+  while ((tbMatch = thoughtBlock.exec(cleaned)) !== null) {
+    reasoning = (reasoning ? reasoning + '\n\n' : '') + tbMatch[1].trim();
+  }
+  cleaned = cleaned.replace(thoughtBlock, '').trim();
+
+  // 4. "Here's a thinking process: ..."
+  if (cleaned.startsWith("Here's a thinking process:")) {
+    const parts = cleaned.split(/\n\n(?=[A-Z#*])/);
+    if (parts.length > 1) {
+      reasoning = (reasoning ? reasoning + '\n\n' : '') + parts[0].trim();
+      cleaned = parts.slice(1).join('\n\n').trim();
+    }
+  }
+
+  return { content: cleaned, reasoning };
+}
+
+/**
+ * Format markdown-like text to HTML safely with code highlighting, tables, and structured styling.
+ */
+export function formatMarkdown(text, { hideThinking = true } = {}) {
   if (!text) return '';
-  let escaped = text
+  let src = String(text);
+  if (hideThinking) {
+    const extracted = extractThinking(src);
+    src = extracted.content;
+  }
+  if (!src) return '';
+
+  let escaped = src
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
@@ -393,6 +469,25 @@ export function formatMarkdown(text) {
   escaped = escaped.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => {
     const langLabel = lang || 'javascript';
     return `<div class="ai-code-block"><div class="ai-code-header"><span class="ai-code-lang">${langLabel}</span><div class="ai-code-actions"><button type="button" class="ai-code-btn ai-run-btn" title="Run code in sandbox">▶ Run</button><button type="button" class="ai-code-btn ai-debug-btn" title="Autonomous debug loop">⚡ Auto-Debug</button><button type="button" class="ai-code-btn ai-copy-btn" onclick="navigator.clipboard.writeText(this.closest('.ai-code-block').querySelector('code').textContent).then(()=>{this.textContent='✓ Copied';setTimeout(()=>this.textContent='Copy',1500)})">Copy</button></div></div><pre><code class="language-${langLabel}">${code.trim()}</code></pre></div>`;
+  });
+
+  // Markdown tables
+  escaped = escaped.replace(/((?:\|[^\n]+\|\n?)+)/g, (tableMatch) => {
+    const rows = tableMatch.trim().split('\n').filter(Boolean);
+    if (rows.length < 2) return tableMatch;
+    let tableHtml = '<div class="ai-table-wrapper"><table class="ai-table">';
+    rows.forEach((row, i) => {
+      if (i === 1 && /^\s*\|?\s*[-:]+[-| :]*\s*\|?\s*$/.test(row)) return;
+      const cols = row
+        .split('|')
+        .map((c) => c.trim())
+        .slice(1, -1);
+      const tag = i === 0 ? 'th' : 'td';
+      tableHtml +=
+        '<tr>' + cols.map((c) => `<${tag}>${c}</${tag}>`).join('') + '</tr>';
+    });
+    tableHtml += '</table></div>';
+    return tableHtml;
   });
 
   // Inline code: `...`
@@ -517,6 +612,77 @@ function formatToolExecution(exec) {
     <summary>${status} <strong>${name}</strong> <span class="ai-tool-iter">iter ${exec.iteration || 1}</span> <span class="ai-tool-args">${argsStr}</span></summary>
     ${detail}
   </details>`;
+}
+
+/**
+ * Detect whether a user prompt represents a God's Eye View 3D Globe action,
+ * navigation command, geospatial layer toggle, or tactical camera maneuver.
+ */
+export function isGlobePrompt(text) {
+  if (!text || typeof text !== 'string') return false;
+  const p = text.trim().toLowerCase();
+  if (!p) return false;
+
+  // Direct camera / flight commands
+  if (
+    /\b(?:fly|flight|take me|navigate|head|travel|pan|zoom|tilt|orbit|rotate|look at|show me|go to)\b/i.test(
+      p,
+    )
+  ) {
+    return true;
+  }
+
+  // Common geospatial entities
+  if (
+    /\b(?:satellite|satellites|aircraft|airplane|flight|flights|ads-b|plane|planes|vessel|vessels|ship|ships|ais|marine|maritime)\b/i.test(
+      p,
+    )
+  ) {
+    return true;
+  }
+
+  // Globe environment, lighting & visual parameters
+  if (
+    /\b(?:globe|earth|map|terrain|coordinates|elevation|latitude|longitude|standoff|heading|pitch|roll|time of day|daylight|night mode|night vision|sunlight|solar)\b/i.test(
+      p,
+    )
+  ) {
+    return true;
+  }
+
+  // Layer toggles & sensors
+  if (
+    /\b(?:borders|country borders|weather layer|clouds|osm|buildings|radar|transponder|squawk|tactical grid|hud summary)\b/i.test(
+      p,
+    )
+  ) {
+    return true;
+  }
+
+  // Tactical operations
+  if (
+    /\b(?:target lock|lock target|lock onto|track flight|track vessel|dossier|sitrep|measure distance)\b/i.test(
+      p,
+    )
+  ) {
+    return true;
+  }
+
+  // Touchless gesture control
+  if (/\b(?:gesture|gestures|touchless|webcam control)\b/i.test(p)) {
+    return true;
+  }
+
+  // Notable cities and world landmarks frequently queried on the 3D globe
+  if (
+    /\b(?:tokyo|paris|london|austin|nyc|new york|san francisco|dubai|dc|washington|hawaii|fuji|eiffel|tower|kremlin|pentagon|taj mahal|colosseum|sydney|beijing|cairo|rome|berlin)\b/i.test(
+      p,
+    )
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 /**
@@ -1890,10 +2056,15 @@ export function initAiCommandCenter({
       bubble.appendChild(councilBox);
     }
 
-    if (reasoning) {
+    // Extract thinking traces from text if present
+    const extracted = extractThinking(text);
+    const cleanText = extracted.content;
+    const finalReasoning = reasoning || extracted.reasoning;
+
+    if (finalReasoning) {
       const thinkBox = documentRef.createElement('details');
       thinkBox.className = 'ai-thinking-box';
-      thinkBox.innerHTML = `<summary>🧠 Thinking Process</summary><div>${formatMarkdown(reasoning)}</div>`;
+      thinkBox.innerHTML = `<summary class="ai-thinking-summary">💭 Tactical Reasoning Trace</summary><div class="ai-thinking-content">${formatMarkdown(finalReasoning, { hideThinking: false })}</div>`;
       bubble.appendChild(thinkBox);
     }
 
@@ -1927,7 +2098,7 @@ export function initAiCommandCenter({
 
     const contentDiv = documentRef.createElement('div');
     contentDiv.className = 'ai-msg-content';
-    contentDiv.innerHTML = formatMarkdown(text);
+    contentDiv.innerHTML = formatMarkdown(cleanText);
     bubble.appendChild(contentDiv);
 
     if (role === 'assistant') {
@@ -1941,7 +2112,7 @@ export function initAiCommandCenter({
         .querySelector('.ai-msg-copy-btn')
         ?.addEventListener('click', async (e) => {
           try {
-            await navigator.clipboard?.writeText(text);
+            await navigator.clipboard?.writeText(cleanText || text);
             e.target.textContent = '✓ Copied';
             setTimeout(() => {
               e.target.textContent = '📋 Copy';
@@ -1951,12 +2122,12 @@ export function initAiCommandCenter({
       actionsDiv
         .querySelector('.ai-msg-speak-btn')
         ?.addEventListener('click', () => {
-          speakText(text);
+          speakText(cleanText || text);
         });
       bubble.appendChild(actionsDiv);
 
-      if (autoSpeak && text) {
-        speakText(text);
+      if (autoSpeak && (cleanText || text)) {
+        speakText(cleanText || text);
       }
     }
 
@@ -1980,7 +2151,23 @@ export function initAiCommandCenter({
       performChatSearch(searchInput.value);
     }
 
-    return { msgEl, bubble, headerDiv, contentDiv };
+    const updateThinking = (reasoningText) => {
+      let box = bubble.querySelector('.ai-thinking-box');
+      if (!box && reasoningText) {
+        box = documentRef.createElement('details');
+        box.className = 'ai-thinking-box';
+        bubble.insertBefore(box, contentDiv);
+      }
+      if (box) {
+        if (!reasoningText) {
+          box.remove();
+        } else {
+          box.innerHTML = `<summary class="ai-thinking-summary">💭 Tactical Reasoning Trace</summary><div class="ai-thinking-content">${formatMarkdown(reasoningText, { hideThinking: false })}</div>`;
+        }
+      }
+    };
+
+    return { msgEl, bubble, headerDiv, contentDiv, updateThinking };
   }
 
   // Toggle panel collapse/expand smoothly
@@ -2503,6 +2690,7 @@ export function initAiCommandCenter({
   // SSE Streaming handler
   async function handleStreamingSend(text, currentImages, textFiles) {
     let fullContent = '';
+    let reasoningBuffer = '';
     const handle = appendMessage('assistant', '');
 
     try {
@@ -2628,13 +2816,30 @@ export function initAiCommandCenter({
               }
               continue;
             }
-            const delta =
-              parsed.choices?.[0]?.delta?.content ||
+            const deltaReasoning =
               parsed.choices?.[0]?.delta?.reasoning_content ||
+              parsed.choices?.[0]?.delta?.reasoning ||
               '';
+            if (deltaReasoning) {
+              reasoningBuffer += deltaReasoning;
+              handle.updateThinking?.(reasoningBuffer);
+            }
+
+            const delta = parsed.choices?.[0]?.delta?.content || '';
             if (delta) {
               fullContent += delta;
-              handle.contentDiv.innerHTML = formatMarkdown(fullContent);
+              const { content: cleanStream, reasoning: streamReasoning } =
+                extractThinking(fullContent);
+              if (streamReasoning) {
+                reasoningBuffer =
+                  (reasoningBuffer ? reasoningBuffer + '\n\n' : '') +
+                  streamReasoning;
+                handle.updateThinking?.(reasoningBuffer);
+              }
+              handle.contentDiv.innerHTML = formatMarkdown(
+                cleanStream ||
+                  (reasoningBuffer ? '_Formulating tactical response..._' : ''),
+              );
               const dist =
                 messagesContainer.scrollHeight -
                 messagesContainer.scrollTop -
@@ -2652,9 +2857,18 @@ export function initAiCommandCenter({
         }
       }
 
-      if (!fullContent) fullContent = 'Response completed.';
-      handle.contentDiv.innerHTML = formatMarkdown(fullContent);
-      messages.push({ role: 'assistant', content: fullContent });
+      const { content: cleanFinal, reasoning: finalExtraReasoning } =
+        extractThinking(fullContent);
+      if (finalExtraReasoning) {
+        reasoningBuffer =
+          (reasoningBuffer ? reasoningBuffer + '\n\n' : '') +
+          finalExtraReasoning;
+        handle.updateThinking?.(reasoningBuffer);
+      }
+      const finalDisplay =
+        cleanFinal || (fullContent ? fullContent : 'Response completed.');
+      handle.contentDiv.innerHTML = formatMarkdown(finalDisplay);
+      messages.push({ role: 'assistant', content: finalDisplay });
 
       // Connect copy and speak actions for the streamed response
       const copyBtn = handle.bubble?.querySelector?.('.ai-msg-copy-btn');
@@ -2850,8 +3064,9 @@ export function initAiCommandCenter({
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
 
     try {
-      if (currentMode === 'globe') {
-        // Route to globe control endpoint
+      const isGlobeAction = currentMode === 'globe' || isGlobePrompt(text);
+      if (isGlobeAction) {
+        // Route to globe control endpoint (/api/nvidia/chat) which contains full GEV action tools
         const response = await fetch('/api/nvidia/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -2874,18 +3089,64 @@ export function initAiCommandCenter({
         } else {
           const toolCalls = data.message?.tool_calls || [];
           if (toolCalls.length > 0) {
-            appendMessage(
-              'assistant',
-              `Executed globe actions: ${toolCalls.map((t) => t.function?.name).join(', ')}`,
-            );
             for (const call of toolCalls) {
-              await globeActionFn(
-                call.function?.name,
-                JSON.parse(call.function?.arguments || '{}'),
-              );
+              const name = call.function?.name;
+              let args = {};
+              try {
+                args =
+                  typeof call.function?.arguments === 'string'
+                    ? JSON.parse(call.function.arguments || '{}')
+                    : call.function?.arguments || {};
+              } catch {}
+              await globeActionFn(name, args);
             }
-          }
-          if (data.message?.content) {
+
+            const actionSummaries = toolCalls
+              .map((t) => {
+                const name = t.function?.name;
+                let args = {};
+                try {
+                  args =
+                    typeof t.function?.arguments === 'string'
+                      ? JSON.parse(t.function.arguments || '{}')
+                      : t.function?.arguments || {};
+                } catch {}
+                if (name === 'fly_to_location') {
+                  const target =
+                    args.query ||
+                    (args.locationId
+                      ? args.locationId.toUpperCase()
+                      : 'coordinates');
+                  return `✈️ **Camera Vector**: Inbound to **${target}**`;
+                }
+                if (name === 'zoom_camera') {
+                  return `🔍 **Camera Altitude**: Zoom adjusted (${args.direction || 'active'})`;
+                }
+                if (name === 'tilt_camera') {
+                  return `📐 **Camera Pitch**: ${args.pitch !== undefined ? `${args.pitch}°` : 'adjusted'}`;
+                }
+                if (name === 'orbit_camera') {
+                  return `🔄 **Orbital Tracking**: Active around target`;
+                }
+                if (name === 'toggle_layer') {
+                  return `🗺️ **Layer Status**: \`${args.layerId}\` ${args.enable ? 'activated' : 'deactivated'}`;
+                }
+                if (name === 'toggle_gestures') {
+                  return `👋 **Touchless Gestures**: ${args.enable ? 'online' : 'standby'}`;
+                }
+                if (name === 'set_time_of_day') {
+                  return `☀️ **Lighting / Solar**: Set to ${args.time || args.hour || 'target phase'}`;
+                }
+                return `⚡ **Action Executed**: \`${name}\``;
+              })
+              .join('\n- ');
+
+            const defaultText = `### 🛰️ Tactical Globe Directive Executed\n- ${actionSummaries}\n\n*Camera guidance and geospatial layers updated in real time.*`;
+            const contentToDisplay =
+              data.message?.content?.trim() || defaultText;
+            appendMessage('assistant', contentToDisplay);
+            messages.push({ role: 'assistant', content: contentToDisplay });
+          } else if (data.message?.content) {
             appendMessage('assistant', data.message.content);
             messages.push({ role: 'assistant', content: data.message.content });
           }
@@ -3454,6 +3715,54 @@ export function initAiCommandCenter({
     toggleWakeWord,
     isWakeWordActive: () => wakeWordActive,
     playAudioCue,
+    setGestureStatus: ({ enabled, lastGesture } = {}) => {
+      const pill = panel.querySelector('.ai-gesture-status-pill');
+      if (pill) {
+        if (!enabled) {
+          pill.textContent = '🖐️ GESTURE: STANDBY';
+          pill.classList.remove('active', 'triggered');
+        } else {
+          pill.textContent = lastGesture
+            ? `🖐️ ${lastGesture}`
+            : '🖐️ GESTURE: ACTIVE';
+          pill.classList.add('active');
+          if (lastGesture) {
+            pill.classList.add('triggered');
+            setTimeout(() => pill.classList.remove('triggered'), 1200);
+          }
+        }
+      }
+    },
+    handleGestureTargetLock: (entity) => {
+      const name = entity?.name || entity?.id || 'contact';
+      const prompt = `Provide immediate tactical reconnaissance and SITREP on locked target: "${name}".`;
+      if (inputEl) {
+        inputEl.value = prompt;
+        void handleSend();
+      }
+      playAudioCue('alert');
+    },
+    requestTacticalSitrep: () => {
+      const prompt =
+        'Tactical SITREP: Summarize current airspace, maritime traffic, and active threats in view.';
+      if (inputEl) {
+        inputEl.value = prompt;
+        void handleSend();
+      }
+      playAudioCue('recon');
+    },
+    toggleVoice: () => {
+      micBtn?.click();
+    },
+    confirmPendingAction: () => {
+      playAudioCue('data');
+    },
+    dismissCurrentAction: () => {
+      if (currentAbortController) {
+        currentAbortController.abort();
+      }
+      playAudioCue('comm');
+    },
   };
   droneRecon._aiController = controller;
   geoPlotter._aiController = controller;

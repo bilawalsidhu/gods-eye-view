@@ -4000,6 +4000,21 @@ export class StyleManager {
             this._showToast('Select an entity on globe to lock tracking');
           }
         }
+        if (
+          this.viewer?.trackedEntity &&
+          typeof window !== 'undefined' &&
+          window.__gevAiCommandCenter
+        ) {
+          window.__gevAiCommandCenter.handleGestureTargetLock?.(
+            this.viewer.trackedEntity,
+          );
+        }
+        break;
+      case 'ai_sitrep':
+        if (typeof window !== 'undefined' && window.__gevAiCommandCenter) {
+          window.__gevAiCommandCenter.requestTacticalSitrep?.();
+          this._showToast('AI Tactical SITREP requested');
+        }
         break;
       case 'reset_globe':
         if (typeof this.resetToGlobeView === 'function') {
@@ -4057,17 +4072,36 @@ export class StyleManager {
         break;
       }
       case 'toggle_voice': {
-        const voiceBtn =
-          document.getElementById('voice-control-btn') ||
-          document.querySelector('.gev-voice-btn');
-        voiceBtn?.click();
+        if (
+          typeof window !== 'undefined' &&
+          window.__gevAiCommandCenter?.toggleVoice
+        ) {
+          window.__gevAiCommandCenter.toggleVoice();
+        } else {
+          const voiceBtn =
+            document.getElementById('voice-control-btn') ||
+            document.querySelector('.gev-voice-btn');
+          voiceBtn?.click();
+        }
         break;
       }
       case 'confirm':
+        if (
+          typeof window !== 'undefined' &&
+          window.__gevAiCommandCenter?.confirmPendingAction
+        ) {
+          window.__gevAiCommandCenter.confirmPendingAction();
+        }
         this._showToast('Gesture confirmed');
         break;
       case 'dismiss':
         this.radialMenu?.close();
+        if (
+          typeof window !== 'undefined' &&
+          window.__gevAiCommandCenter?.dismissCurrentAction
+        ) {
+          window.__gevAiCommandCenter.dismissCurrentAction();
+        }
         this._showToast('Dismissed');
         break;
       case 'next_contact':

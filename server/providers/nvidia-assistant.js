@@ -720,7 +720,7 @@ export async function handleCouncilEnsemble({
     return;
   }
 
-  const councilModels = activeSwarm.slice(0, 6);
+  const councilModels = activeSwarm;
 
   // Run all active provider models simultaneously in parallel using allSettled for resilience
   const councilPromises = councilModels.map(async (member) => {
@@ -730,7 +730,7 @@ export async function handleCouncilEnsemble({
         messages: [
           {
             role: 'system',
-            content: `${systemPrompt}\n\nCouncil Member Directive: You are acting as the ${member.role} (${member.name}). Provide your best, most precise evaluation and solution for the user request.`,
+            content: `${systemPrompt}\n\nCouncil Member Directive: You are acting as the ${member.role} (${member.name}). Provide your best, most precise evaluation and solution for the user request. Be concise, tactical, and structured. Do not output raw thinking traces.`,
           },
           ...messages,
         ],
@@ -774,7 +774,7 @@ export async function handleCouncilEnsemble({
   const synthesizerMessages = [
     {
       role: 'system',
-      content: `${systemPrompt}\n\nYou are the Presiding Executive Coordinator of the JARVIS Council of Models.\nSpecialized AI models have analyzed this exact mission simultaneously in parallel.\n\nHere are their respective perspectives and outputs:\n\n${deliberationSummary}\n\nYOUR TASK AS EXECUTIVE COORDINATOR:\nSynthesize a single, authoritative, harmonious master response. Integrate their best points, verify code and logic, resolve any contradictions, and present the final master answer with supreme clarity and elegance.`,
+      content: `${systemPrompt}\n\nYou are the Presiding Executive Coordinator of the JARVIS Council of Models.\nAll specialized AI models from across all configured providers have analyzed this mission simultaneously in parallel.\n\nHere are their respective perspectives and outputs:\n\n${deliberationSummary}\n\nYOUR TASK AS EXECUTIVE COORDINATOR:\nSynthesize a single, authoritative, harmonious master response. Integrate their best points, verify code and logic, resolve any contradictions, and present the final master answer with supreme clarity and elegance.\n\nFORMAT YOUR RESPONSE STRUCTURALLY:\n- **Executive SITREP**: 1-2 sentence direct high-impact summary.\n- **Key Intelligence & Findings**: Clear bullet points with bold titles.\n- **Tactical Data / Telemetry**: Tables or code blocks where applicable.\n- **Actionable Directives / Next Commands**: Suggested next commands for the operator.\nDo NOT output internal raw thinking monologue or <think> tags in your response.`,
     },
     ...messages,
   ];
@@ -965,16 +965,62 @@ export async function handleNvidiaAssistant(req, res) {
     systemPrompt += `\n\nCurrent Globe Geospatial Context:\n${JSON.stringify(context, null, 2)}`;
   }
 
-  // Inject persistent memory context for personalization
+  // Inject persistent memory context for personalization & reasoning
   try {
     const mem = await readMemory();
-    const memKeys = Object.keys(mem);
-    if (memKeys.length > 0) {
-      const memSummary = memKeys
-        .slice(0, 20)
-        .map((k) => `${k}: ${JSON.stringify(mem[k].value)}`)
+    const entries = Object.entries(mem);
+    if (entries.length > 0) {
+      const lastUserMsg = [...messages]
+        .reverse()
+        .find((m) => m.role === 'user');
+      const userText =
+        typeof lastUserMsg?.content === 'string'
+          ? lastUserMsg.content.toLowerCase()
+          : '';
+      const queryTokens = userText
+        .split(/[^a-zA-Z0-9_-]+/)
+        .filter((t) => t.length > 2);
+
+      // Score memories by query relevance and recency
+      const ranked = entries.map(([k, v]) => {
+        const kLower = k.toLowerCase();
+        const catLower = (v?.category || '').toLowerCase();
+        const valStr = JSON.stringify(v?.value ?? '').toLowerCase();
+        const tags = Array.isArray(v?.tags)
+          ? v.tags.map((t) => String(t).toLowerCase())
+          : [];
+
+        let relevance = 0;
+        for (const token of queryTokens) {
+          if (kLower.includes(token)) relevance += 15;
+          if (tags.some((t) => t.includes(token))) relevance += 10;
+          if (catLower.includes(token)) relevance += 8;
+          if (valStr.includes(token)) relevance += 5;
+        }
+        return {
+          key: k,
+          val: v?.value,
+          category: v?.category || 'general',
+          tags: v?.tags || [],
+          updatedAt: v?.updatedAt || '',
+          relevance,
+        };
+      });
+
+      ranked.sort((a, b) => {
+        if (b.relevance !== a.relevance) return b.relevance - a.relevance;
+        return (b.updatedAt || '').localeCompare(a.updatedAt || '');
+      });
+
+      const selectedMemories = ranked.slice(0, 25);
+      const memSummary = selectedMemories
+        .map((m) => {
+          const tagPart = m.tags.length ? ` [tags: ${m.tags.join(', ')}]` : '';
+          return `• [${m.category}] ${m.key}${tagPart}: ${JSON.stringify(m.val)}`;
+        })
         .join('\n');
-      systemPrompt += `\n\nYour Persistent Memory (use to personalize responses):\n${memSummary}`;
+
+      systemPrompt += `\n\nYour Persistent Memory (use to personalize responses and recall past knowledge):\n${memSummary}`;
     }
   } catch {
     /* memory injection is optional */

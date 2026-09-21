@@ -42,16 +42,25 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        // Cache successful responses
-        if (response.ok) {
+        // Cache successful full responses (avoid 206 Partial Content which throws in Cache API)
+        if (
+          response.ok &&
+          response.status === 200 &&
+          event.request.url.startsWith('http')
+        ) {
           const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          caches
+            .open(CACHE_NAME)
+            .then((cache) => cache.put(event.request, clone))
+            .catch(() => {});
         }
         return response;
       })
       .catch(() => {
         // Offline fallback
-        return caches.match(event.request).then((cached) => cached || new Response('Offline', { status: 503 }));
+        return caches
+          .match(event.request)
+          .then((cached) => cached || new Response('Offline', { status: 503 }));
       }),
   );
 });

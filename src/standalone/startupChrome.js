@@ -30,10 +30,26 @@ export function startStandaloneChrome(options) {
               lat: Number(CesiumRef.Math.toDegrees(carto.latitude).toFixed(4)),
               lon: Number(CesiumRef.Math.toDegrees(carto.longitude).toFixed(4)),
               altMeters: Math.round(carto.height),
+              headingDeg: Math.round(
+                CesiumRef.Math.toDegrees(camera.heading || 0),
+              ),
+              pitchDeg: Math.round(CesiumRef.Math.toDegrees(camera.pitch || 0)),
+              rollDeg: Math.round(CesiumRef.Math.toDegrees(camera.roll || 0)),
             };
           }
         } catch {
           // Camera reading is optional
+        }
+        try {
+          const tracked = gev.viewer?.trackedEntity;
+          if (tracked) {
+            context.trackedEntity = {
+              id: tracked.id || null,
+              name: tracked.name || null,
+            };
+          }
+        } catch {
+          // Tracked entity reading is optional
         }
         return context;
       },

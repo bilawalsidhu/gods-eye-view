@@ -276,12 +276,13 @@ export class GestureMapper {
       case GESTURE_NAMES.OPEN_PALM:
         return 'reset_globe';
       case GESTURE_NAMES.PEACE_SIGN:
-      case GESTURE_NAMES.TWO_FINGERS_UP:
         return 'toggle_cockpit';
+      case GESTURE_NAMES.TWO_FINGERS_UP:
+        return 'ai_sitrep';
       case GESTURE_NAMES.HANG_LOOSE:
-        return 'export_dossier';
+        return 'toggle_voice';
       case GESTURE_NAMES.THUMBS_UP:
-        return 'cycle_style';
+        return 'confirm';
       case GESTURE_NAMES.THUMBS_DOWN:
         return 'dismiss';
       default:

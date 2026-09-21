@@ -1127,27 +1127,104 @@
   }
 }
 
-/* ═══════════ Thinking Box ═══════════ */
+/* ═══════════ Thinking Box (Collapsible & Tactical) ═══════════ */
 .ai-thinking-box {
-  margin-bottom: 8px;
-  padding: 8px 12px;
-  background: rgba(10, 22, 36, 0.9);
+  margin-bottom: 10px;
+  background: rgba(14, 24, 38, 0.75);
+  border: 1px solid rgba(129, 140, 248, 0.25);
   border-left: 3px solid #818cf8;
-  border-radius: 0 6px 6px 0;
-  font-size: 0.62rem;
+  border-radius: 6px;
+  font-size: 0.72rem;
   font-family: var(--font-mono, monospace);
   color: rgba(175, 210, 235, 0.85);
-  max-height: 110px;
-  overflow-y: auto;
-  box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.3);
+  box-shadow: inset 0 0 14px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
+  transition: all 0.2s ease;
 }
 
+.ai-thinking-box summary.ai-thinking-summary,
 .ai-thinking-box summary {
   cursor: pointer;
+  padding: 6px 10px;
   color: #a5b4fc;
-  font-weight: 700;
+  font-weight: 600;
   outline: none;
   letter-spacing: 0.04em;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ai-thinking-box summary:hover {
+  color: #c7d2fe;
+}
+
+.ai-thinking-box .ai-thinking-content {
+  padding: 8px 12px 10px;
+  border-top: 1px solid rgba(129, 140, 248, 0.15);
+  max-height: 220px;
+  overflow-y: auto;
+  line-height: 1.45;
+  background: rgba(8, 14, 24, 0.55);
+}
+
+/* ═══════════ Gesture Status Pill ═══════════ */
+.ai-status-pill.ai-gesture-status-pill {
+  transition: all 0.25s ease;
+  font-weight: 600;
+}
+
+.ai-status-pill.ai-gesture-status-pill.active {
+  border-color: rgba(0, 255, 170, 0.55);
+  color: #00ffaa;
+  background: rgba(0, 255, 170, 0.1);
+  box-shadow: 0 0 10px rgba(0, 255, 170, 0.25);
+}
+
+.ai-status-pill.ai-gesture-status-pill.triggered {
+  border-color: rgba(255, 170, 0, 0.85);
+  color: #ffaa00;
+  background: rgba(255, 170, 0, 0.18);
+  box-shadow: 0 0 14px rgba(255, 170, 0, 0.45);
+  transform: scale(1.04);
+}
+
+/* ═══════════ Tactical Markdown Tables ═══════════ */
+.ai-table-wrapper {
+  margin: 10px 0;
+  overflow-x: auto;
+  border: 1px solid rgba(0, 210, 255, 0.2);
+  border-radius: 6px;
+  background: rgba(10, 20, 32, 0.85);
+}
+
+.ai-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.74rem;
+  font-family: var(--font-mono, monospace);
+  text-align: left;
+}
+
+.ai-table th {
+  background: rgba(0, 210, 255, 0.12);
+  color: #00d2ff;
+  padding: 6px 10px;
+  border-bottom: 1px solid rgba(0, 210, 255, 0.25);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ai-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  color: #e0ecf6;
+}
+
+.ai-table tr:hover td {
+  background: rgba(0, 210, 255, 0.04);
 }
 
 /* ═══════════ Tool Execution Display ═══════════ */

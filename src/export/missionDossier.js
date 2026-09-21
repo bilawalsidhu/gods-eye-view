@@ -1,10 +1,10 @@
 /**
-* Mission Dossier & Intel Package Exporter.
-*
-* Compiles real-time spatial intelligence, active contact telemetry,
-* perimeter geofence status, and weather observations into structured briefing
-* packages (Markdown, JSON, and print-ready dossiers).
-*/
+ * Mission Dossier & Intel Package Exporter.
+ *
+ * Compiles real-time spatial intelligence, active contact telemetry,
+ * perimeter geofence status, and weather observations into structured briefing
+ * packages (Markdown, JSON, and print-ready dossiers).
+ */
 
 /**
  * Generate formatted Markdown intelligence briefing dossier.

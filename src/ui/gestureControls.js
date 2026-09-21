@@ -94,6 +94,12 @@ export class GestureControls {
     const toggleBtn = this.root?.querySelector('.gev-gesture-toggle-btn');
     toggleBtn?.classList.toggle('active', this.isEnabled);
     this.onStatusChange?.(this.isEnabled);
+    if (typeof window !== 'undefined' && window.__gevAiCommandCenter) {
+      window.__gevAiCommandCenter.setGestureStatus?.({
+        enabled: this.isEnabled,
+        lastGesture: null,
+      });
+    }
 
     if (this.isEnabled) {
       this.audioEngine.playLock();
@@ -150,6 +156,14 @@ export class GestureControls {
   _handleMappedAction(action, payload) {
     if (!this.isEnabled && !payload?.simulated) return;
     this.audioEngine.playClick();
+    this.lastAction = action;
+    this.lastPayload = payload;
+    if (typeof window !== 'undefined' && window.__gevAiCommandCenter) {
+      window.__gevAiCommandCenter.setGestureStatus?.({
+        enabled: this.isEnabled,
+        lastGesture: payload?.gesture || action,
+      });
+    }
     this.onAction?.(action, payload);
   }
 
@@ -162,11 +176,11 @@ export class GestureControls {
     this.modalEl.innerHTML = `
       <div class="gev-gesture-card">
         <div class="gev-gesture-card-title">
-          <span>🖐️ TACTICAL GESTURE REFERENCE</span>
+          <span>🖐️ TACTICAL GESTURE & AI REFERENCE</span>
           <button class="gev-gesture-pip-close" id="gev-gesture-modal-close">✕</button>
         </div>
         <p style="font-size: 11px; color: #8fa3b5; margin-bottom: 12px;">
-          Hold gesture in webcam view to trigger commands without touching mouse or keyboard:
+          Hold gesture in webcam view to trigger globe & AI commands without touching mouse or keyboard:
         </p>
         <div class="gev-gesture-grid">
           <div class="gev-gesture-grid-item">
@@ -180,49 +194,63 @@ export class GestureControls {
             <span class="gev-gesture-grid-icon">✊</span>
             <div class="gev-gesture-grid-text">
               <strong>CLOSED FIST</strong>
-              <span>Lock / Unlock target</span>
+              <span>Lock target + prompt AI SITREP</span>
             </div>
           </div>
           <div class="gev-gesture-grid-item">
             <span class="gev-gesture-grid-icon">🤏</span>
             <div class="gev-gesture-grid-text">
               <strong>PINCH</strong>
-              <span>Zoom in & out</span>
+              <span>Smooth optical zoom in / out</span>
             </div>
           </div>
           <div class="gev-gesture-grid-item">
             <span class="gev-gesture-grid-icon">✋</span>
             <div class="gev-gesture-grid-text">
               <strong>OPEN PALM</strong>
-              <span>Reset globe home</span>
+              <span>Reset globe home view</span>
             </div>
           </div>
           <div class="gev-gesture-grid-item">
             <span class="gev-gesture-grid-icon">👆</span>
             <div class="gev-gesture-grid-text">
               <strong>TWO FINGERS</strong>
-              <span>Toggle Cockpit view</span>
+              <span>Trigger AI Tactical Reconnaissance</span>
             </div>
           </div>
           <div class="gev-gesture-grid-item">
             <span class="gev-gesture-grid-icon">✌️</span>
             <div class="gev-gesture-grid-text">
               <strong>PEACE SIGN</strong>
-              <span>Cycle visual styles</span>
+              <span>Toggle Cockpit View</span>
             </div>
           </div>
           <div class="gev-gesture-grid-item">
             <span class="gev-gesture-grid-icon">🤙</span>
             <div class="gev-gesture-grid-text">
               <strong>SHAKA / HANG LOOSE</strong>
-              <span>Toggle Voice Control</span>
+              <span>Talk to JARVIS / Toggle Voice</span>
+            </div>
+          </div>
+          <div class="gev-gesture-grid-item">
+            <span class="gev-gesture-grid-icon">👍</span>
+            <div class="gev-gesture-grid-text">
+              <strong>THUMBS UP</strong>
+              <span>Confirm / Approve AI proposal</span>
+            </div>
+          </div>
+          <div class="gev-gesture-grid-item">
+            <span class="gev-gesture-grid-icon">👎</span>
+            <div class="gev-gesture-grid-text">
+              <strong>THUMBS DOWN</strong>
+              <span>Cancel AI action / Dismiss</span>
             </div>
           </div>
           <div class="gev-gesture-grid-item">
             <span class="gev-gesture-grid-icon">🫱</span>
             <div class="gev-gesture-grid-text">
               <strong>SWIPE HAND</strong>
-              <span>Next / Prev contact</span>
+              <span>Next / Prev contact focus</span>
             </div>
           </div>
         </div>

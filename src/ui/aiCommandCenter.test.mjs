@@ -1,6 +1,52 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { formatMarkdown, initAiCommandCenter, detectTextLanguage, selectBestVoice, playAudioCue } from './aiCommandCenter.js';
+import { formatMarkdown, extractThinking, initAiCommandCenter, detectTextLanguage, selectBestVoice, playAudioCue, isGlobePrompt } from './aiCommandCenter.js';
+
+test('isGlobePrompt accurately identifies 3D globe, flight, camera and landmark queries', () => {
+  assert.equal(isGlobePrompt('Fly to Tokyo Tower'), true);
+  assert.equal(isGlobePrompt('Take me to Paris'), true);
+  assert.equal(isGlobePrompt('Zoom in on the target'), true);
+  assert.equal(isGlobePrompt('Show satellites in orbit'), true);
+  assert.equal(isGlobePrompt('Tilt camera 45 degrees'), true);
+  assert.equal(isGlobePrompt('What is the capital of France?'), false);
+  assert.equal(isGlobePrompt('Write a javascript function to sort an array'), false);
+});
+
+test('extractThinking cleanly separates <think> tags from output', () => {
+  const raw =
+    '<think>Checking satellite telemetry for ISS</think>### Orbit Confirmed\nISS altitude is 418km.';
+  const res = extractThinking(raw);
+  assert.equal(res.reasoning, 'Checking satellite telemetry for ISS');
+  assert.equal(res.content, '### Orbit Confirmed\nISS altitude is 418km.');
+
+  // Also support <thought> and <reasoning> tags from various reasoning model formats
+  const rawThought =
+    '<thought>Deep chain of thought evaluation</thought>Target solution verified.';
+  const resThought = extractThinking(rawThought);
+  assert.equal(resThought.reasoning, 'Deep chain of thought evaluation');
+  assert.equal(resThought.content, 'Target solution verified.');
+
+  const rawReasoning =
+    '<reasoning>Analyzing geodetic parameters</reasoning>Bearing is 045 degrees.';
+  const resReasoning = extractThinking(rawReasoning);
+  assert.equal(resReasoning.reasoning, 'Analyzing geodetic parameters');
+  assert.equal(resReasoning.content, 'Bearing is 045 degrees.');
+});
+
+test('formatMarkdown converts markdown tables to structured html', () => {
+  const md = '| Column A | Column B |\n|---|---|\n| Data 1 | Data 2 |';
+  const html = formatMarkdown(md);
+  assert.ok(html.includes('<table class="ai-table">'));
+  assert.ok(html.includes('<th>Column A</th>'));
+  assert.ok(html.includes('<td>Data 1</td>'));
+});
+
+test('formatMarkdown hides <think> traces by default', () => {
+  const md = '<think>Internal deliberation</think>Operational summary ready.';
+  const html = formatMarkdown(md);
+  assert.ok(!html.includes('Internal deliberation'));
+  assert.ok(html.includes('Operational summary ready.'));
+});
 
 test('formatMarkdown converts markdown tags safely to html', () => {
   const md = '**Bold text** and *italic* and `code`';

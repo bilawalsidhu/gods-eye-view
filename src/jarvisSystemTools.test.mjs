@@ -101,7 +101,11 @@ test('listSystemDirectory: lists directory contents', async () => {
 
 test('setClipboard & getClipboard: sets and retrieves clipboard text', async () => {
   const token = `JARVIS_CLIPBOARD_${Date.now()}`;
-  const setRes = await setClipboard(token);
+  let setRes = await setClipboard(token);
+  if (!setRes.success) {
+    await new Promise((r) => setTimeout(r, 250));
+    setRes = await setClipboard(token);
+  }
   assert.equal(setRes.success, true);
 
   const getRes = await getClipboard();

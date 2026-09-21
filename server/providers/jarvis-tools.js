@@ -711,12 +711,12 @@ export async function getClipboard() {
   const isWin = process.platform === 'win32';
   if (isWin) {
     const res = await executeSystemCommand('Get-Clipboard | Out-String', {
-      timeout: 3000,
+      timeout: 8000,
     });
     return { text: (res.stdout || '').trim() };
   } else {
     const res = await executeSystemCommand('xclip -o || pbpaste', {
-      timeout: 3000,
+      timeout: 8000,
     });
     return { text: (res.stdout || '').trim() };
   }
@@ -731,12 +731,12 @@ export async function setClipboard(text) {
   if (isWin) {
     const encoded = Buffer.from(text, 'utf-8').toString('base64');
     const cmd = `$bytes = [System.Convert]::FromBase64String("${encoded}"); $str = [System.Text.Encoding]::UTF8.GetString($bytes); Set-Clipboard -Value $str;`;
-    const res = await executeSystemCommand(cmd, { timeout: 3000 });
+    const res = await executeSystemCommand(cmd, { timeout: 8000 });
     return { success: res.exitCode === 0, bytes: Buffer.byteLength(text) };
   } else {
     const res = await executeSystemCommand(
       `printf "%s" "${text.replace(/"/g, '\\"')}" | (xclip -selection clipboard || pbcopy)`,
-      { timeout: 3000 },
+      { timeout: 8000 },
     );
     return { success: res.exitCode === 0 };
   }
@@ -1373,36 +1373,128 @@ export async function readMemory() {
   }
 }
 
-/** Set a key-value pair in memory. */
-export async function setMemory(key, value) {
+/** Set a key-value pair in memory with optional category and tags. */
+export async function setMemory(
+  key,
+  value,
+  { category = 'general', tags = [] } = {},
+) {
+  if (!key || typeof key !== 'string') {
+    throw new Error('Memory key must be a non-empty string');
+  }
   const mem = await readMemory();
-  mem[key] = { value, updatedAt: new Date().toISOString() };
+  const existing = mem[key] || {};
+  const normalizedTags = Array.isArray(tags)
+    ? tags.map((t) => String(t).trim()).filter(Boolean)
+    : typeof tags === 'string'
+      ? tags
+          .split(',')
+          .map((t) => t.trim())
+          .filter(Boolean)
+      : [];
+
+  mem[key] = {
+    value,
+    category: String(category || existing.category || 'general').toLowerCase(),
+    tags: normalizedTags.length > 0 ? normalizedTags : existing.tags || [],
+    createdAt: existing.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    accessCount: (existing.accessCount || 0) + 1,
+  };
   await fs.writeFile(MEMORY_FILE, JSON.stringify(mem, null, 2), 'utf-8');
-  return { key, stored: true };
+  return { key, stored: true, category: mem[key].category };
 }
 
 /** Delete a key from memory. */
 export async function deleteMemory(key) {
+  if (!key) return { key, deleted: false };
   const mem = await readMemory();
+  const existed = Object.prototype.hasOwnProperty.call(mem, key);
   delete mem[key];
   await fs.writeFile(MEMORY_FILE, JSON.stringify(mem, null, 2), 'utf-8');
-  return { key, deleted: true };
+  return { key, deleted: existed };
 }
 
-/** Search memory by partial key match. */
-export async function searchMemory(query) {
+/** Search memory by partial key, tag, or content match with relevance scoring. */
+export async function searchMemory(
+  query,
+  { category = null, limit = 50 } = {},
+) {
   const mem = await readMemory();
-  const q = query.toLowerCase();
-  const matches = Object.entries(mem)
-    .filter(
-      ([k, v]) =>
-        k.toLowerCase().includes(q) ||
-        JSON.stringify(v.value).toLowerCase().includes(q),
-    )
-    .map(([k, v]) => ({ key: k, ...v }));
+  const q = typeof query === 'string' ? query.trim().toLowerCase() : '';
+  const cat =
+    typeof category === 'string' ? category.trim().toLowerCase() : null;
+
+  const entries = Object.entries(mem);
+  const scored = [];
+
+  for (const [k, v] of entries) {
+    const itemCategory = (v.category || 'general').toLowerCase();
+    if (cat && itemCategory !== cat) continue;
+
+    const valStr = JSON.stringify(v?.value ?? '').toLowerCase();
+    const keyLower = k.toLowerCase();
+    const tagsLower = Array.isArray(v?.tags)
+      ? v.tags.map((t) => String(t).toLowerCase())
+      : [];
+
+    let score = 0;
+    if (!q) {
+      score = 1;
+    } else {
+      if (keyLower === q) score += 100;
+      else if (keyLower.startsWith(q)) score += 50;
+      else if (keyLower.includes(q)) score += 25;
+
+      if (tagsLower.includes(q)) score += 40;
+      else if (tagsLower.some((t) => t.includes(q))) score += 20;
+
+      if (valStr.includes(q)) score += 15;
+    }
+
+    if (score > 0) {
+      scored.push({
+        key: k,
+        ...v,
+        score,
+      });
+    }
+  }
+
+  scored.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    return (b.updatedAt || '').localeCompare(a.updatedAt || '');
+  });
+
+  const matches = scored.slice(0, limit);
   const result = Object.fromEntries(matches.map((m) => [m.key, m]));
   result.matches = matches;
+  result.count = matches.length;
+  result.totalStored = entries.length;
   return result;
+}
+
+/** Get memory system diagnostic statistics */
+export async function getMemoryStats() {
+  const mem = await readMemory();
+  const keys = Object.keys(mem);
+  const categories = {};
+  for (const k of keys) {
+    const c = mem[k]?.category || 'general';
+    categories[c] = (categories[c] || 0) + 1;
+  }
+  return {
+    totalKeys: keys.length,
+    categories,
+    lastUpdated:
+      keys.length > 0
+        ? keys
+            .map((k) => mem[k]?.updatedAt)
+            .filter(Boolean)
+            .sort()
+            .reverse()[0] || null
+        : null,
+  };
 }
 
 // ── 6. Conversation Session Management ──
@@ -1486,9 +1578,19 @@ const TOOL_REGISTRY = {
   delete_file: async (args) => deleteFile(args.path),
   scrape_url: async (args) => scrapeUrl(args.url),
   calculate: async (args) => calculate(args.expression),
-  remember: async (args) => setMemory(args.key, args.value),
-  recall: async (args) => searchMemory(args.query),
+  remember: async (args) =>
+    setMemory(args.key, args.value, {
+      category: args.category,
+      tags: args.tags,
+    }),
+  recall: async (args) =>
+    searchMemory(args.query, {
+      category: args.category,
+      limit: args.limit,
+    }),
   forget: async (args) => deleteMemory(args.key),
+  memory_stats: async () => getMemoryStats(),
+  get_memory_stats: async () => getMemoryStats(),
 
   // Full Computer & Host Automation
   system_command: async (args) =>
@@ -1749,7 +1851,7 @@ export const JARVIS_TOOL_SCHEMAS = [
     function: {
       name: 'remember',
       description:
-        'Store a key-value pair in persistent memory. Use to remember facts, user preferences, context across conversations.',
+        'Store a key-value pair in persistent memory. Use to remember facts, user preferences, mission context across conversations.',
       parameters: {
         type: 'object',
         properties: {
@@ -1758,6 +1860,17 @@ export const JARVIS_TOOL_SCHEMAS = [
             description: 'Memory key (e.g. "user_name", "project_stack")',
           },
           value: { type: 'string', description: 'Value to remember' },
+          category: {
+            type: 'string',
+            enum: ['general', 'tactical', 'preferences', 'mission', 'system'],
+            description:
+              'Optional category classification for structured memory',
+          },
+          tags: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Optional semantic tags for associative retrieval',
+          },
         },
         required: ['key', 'value'],
       },
@@ -1774,10 +1887,27 @@ export const JARVIS_TOOL_SCHEMAS = [
         properties: {
           query: {
             type: 'string',
-            description: 'Search query to match against memory keys and values',
+            description:
+              'Search query to match against memory keys, tags, and values',
+          },
+          category: {
+            type: 'string',
+            description: 'Optional category filter',
           },
         },
         required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'memory_stats',
+      description:
+        'Get diagnostic statistics on stored persistent memory, categories breakdown, and recency.',
+      parameters: {
+        type: 'object',
+        properties: {},
       },
     },
   },

@@ -1169,6 +1169,18 @@ export function createGevActionRunner({
       return { ok: true, action: 'toggle_gestures', enabled: targetState };
     }
 
+    if (name === 'get_gesture_status') {
+      const isEnabled = Boolean(styleManager?.gestureControls?.isEnabled);
+      return {
+        ok: true,
+        action: 'get_gesture_status',
+        enabled: isEnabled,
+        trackerRunning: Boolean(
+          styleManager?.gestureControls?.tracker?.isRunning,
+        ),
+      };
+    }
+
     throw new Error(`Unknown GEV tool: ${name}`);
   };
 }

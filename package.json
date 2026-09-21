@@ -9,7 +9,7 @@
   "homepage": "https://github.com/bilawalsidhu/gods-eye-view#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/bilawalsidhu/gods-eye-view.git"
+    "url": "git+https://github.com/bilawalsidhu/gods-eye-view.git"
   },
   "bugs": {
     "url": "https://github.com/bilawalsidhu/gods-eye-view/issues"
@@ -49,8 +49,11 @@
   "dependencies": {
     "@mapbox/vector-tile": "^3.0.0",
     "@vladmandic/human": "^3.3.6",
+    "body-parser": "^2.3.0",
     "cesium": "^1.124.0",
     "egm96-universal": "^1.1.1",
+    "express": "^5.2.1",
+    "joi": "^18.2.9",
     "mgrs": "^2.1.0",
     "pbf": "^5.1.2",
     "qrcode": "^1.5.4",
@@ -242,5 +245,10 @@
     "./layers/transit/standalone": "./src/data/transit.js",
     "./layers/transit/source": "./src/layers/transit/source.js",
     "./sources/transit-service": "./src/sources/transitService.js"
+  },
+  "main": "vite.config.js",
+  "directories": {
+    "doc": "docs",
+    "test": "test"
   }
 }

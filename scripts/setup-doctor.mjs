@@ -161,10 +161,14 @@ export function buildCapabilitySummary(credentials) {
 export function inspectSetup({ includeKeychain = true, authoritativeEnvironment = false, rootDir = ROOT } = {}) {
   const node = classifyNodeVersion();
   const npm = npmProcessSpec();
-  const npmResult = spawnSync(npm.command, ['--version'], {
-    encoding: 'utf8',
-    shell: npm.shell,
-  });
+  const npmResult = npm.shell
+    ? spawnSync(`${npm.command} --version`, {
+        encoding: 'utf8',
+        shell: true,
+      })
+    : spawnSync(npm.command, ['--version'], {
+        encoding: 'utf8',
+      });
   const credentials = Object.fromEntries(CREDENTIALS.map((spec) => [
     spec.name,
     resolveCredential(spec, { includeKeychain, authoritativeEnvironment, rootDir }),

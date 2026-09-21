@@ -117,14 +117,17 @@ export function createNvidiaSession({
       return;
     try {
       window.speechSynthesis.cancel();
-      // Clean up markdown and code from speech
+      // Clean up markdown, thinking blocks, and code from speech
       const cleanText = text
+        .replace(/<think>[\s\S]*?<\/think>/gi, '')
         .replace(/```[\s\S]*?```/g, 'Code block omitted.')
         .replace(/`[^`]+`/g, '')
         .replace(/\*\*([^*]+)\*\*/g, '$1')
         .replace(/\*([^*]+)\*/g, '$1')
         .replace(/#{1,6}\s/g, '')
         .replace(/https?:\/\/\S+/g, 'link')
+        .replace(/[\u{1F300}-\u{1F9FF}]/gu, '')
+        .trim()
         .slice(0, 350); // Limit speech length
 
       const utterance = new SpeechSynthesisUtterance(cleanText);

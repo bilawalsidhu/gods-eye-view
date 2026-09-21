@@ -95,11 +95,13 @@
   z-index: 2;
 }
 
-.gev-radial-item:hover {
+.gev-radial-item:hover,
+.gev-radial-item:focus-visible {
   background: rgba(0, 240, 255, 0.22);
   border-color: #00f0ff;
   box-shadow: 0 0 25px rgba(0, 240, 255, 0.6), inset 0 0 10px rgba(0, 240, 255, 0.3);
   transform: scale(1.18);
+  outline: none;
 }
 
 .gev-radial-icon {
@@ -121,7 +123,8 @@
   white-space: nowrap;
 }
 
-.gev-radial-item:hover .gev-radial-label {
+.gev-radial-item:hover .gev-radial-label,
+.gev-radial-item:focus-visible .gev-radial-label {
   color: #ffffff;
   text-shadow: 0 0 6px #00f0ff;
 }
