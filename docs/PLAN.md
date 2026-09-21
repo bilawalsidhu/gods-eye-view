@@ -1803,6 +1803,40 @@ GitForge pipeline green.
     and clamped the bucket mid-phase) — the knobs are read lazily per
     refill, so the test now freezes the window across the deterministic
     phases; suite 3,790/3,790 green including under load.
+  RUN 2 (2026-09-20, still load 18–47 — other tenants, not our
+  processes): the 14 RUN 1 reds re-ran; enrich-ambient + floor-hold
+  went green, and two DETERMINISTIC reds root-caused (both harness
+  bugs, shipped code correct — probe-verified 2026-09-20):
+  - `qa-view-target-prewarm` asserted the pre-replay contract of
+    b3de30c: the view-target prewarm now only re-picks on moveEnd while
+    a voice session is active (its `pickPosition` depth readback is the
+    worst main-thread stall otherwise). The suite ran voice-idle, so
+    "0 pick call(s) served" was the OPTIMIZATION WORKING. The harness
+    now drives the gate through the shipped public surface
+    (`viewer.__gevSetViewTargetPrewarmSessions`) — asserting BOTH the
+    crash-guard (picks served with a session active) and the perf
+    property (zero picks with no session), which nothing covered
+    before.
+  - NEW FAILURE CLASS — headless rAF starvation: in headless Chrome,
+    requestAnimationFrame is serviced only while the compositor
+    produces BeginFrames; a settled scene (render governor + no
+    animations) stops producing them, so a rAF-scheduled layout pass
+    sits pending through ANY wall-clock wait. This deterministically
+    broke `qa-radio` twice: (1) the Tactical lane-restore assertion —
+    the owner-close release rides `scheduleLeftPanelLayout`'s
+    reconsider rAF, which never ran (probe: frame id frozen across a
+    360 ms wait, released by one forced frame; HUD-off phases masked
+    it because their direct sync path releases auto-collapsed panels
+    itself); (2) the voice-takeover assertion measured
+    `#context-radio-mini-play-btn` same-tick after the class-driven
+    reveal — 0×0 at t=0, 70.7×28 after one frame. `qa-radio.mjs` now
+    installs a page binding that forces a compositor frame (screenshot)
+    and waits on scheduler drain / laid-out rects instead of sleeps.
+  - Remaining RUN 2 reds all re-classified as the known contention
+    families (wait timeouts on live TomTom/AIS capture, render-count
+    perf bars, protocolTimeout mid-evaluate, ERR_NETWORK_CHANGED under
+    interface contention); RUN 3 re-validates them at load < 10 before
+    the release commit.
   - Coverage ratchet LANDED (2026-09-20): `test:coverage` now runs c8
     with floors (lines 91, statements 91, functions 90, branches 80)
     just below the measured 91.58/91.58/91.21/81.19 — the CI coverage
@@ -1949,3 +1983,195 @@ operator decision required).
 - [ ] **Batch L (close)**: full gates + GitForge pipeline + release;
   Pages redeploy only if `src/` or the served surface changed
   (harness/test/docs-only cycles leave `dist` byte-identical).
+  *Superseded by Phase 11 Batch O/P — cycle 2 closed without its own
+  release; the close gates rolled into cycle 3's v0.10.0.*
+
+## Phase 11 — Quality campaign cycle 3 (2026-09-18 → 2026-09-21, v0.10.0)
+
+Third audit-driven cycle, on the v0.9.2 tree. Entry baseline (all
+measured, not asserted): 3,790 unit tests green; c8 91.58 lines /
+91.58 statements / 91.21 functions / 81.19 branches; ESLint at the
+strictest tier (sonarjs code-smell ruleset added this cycle, 44
+findings fixed, zero warnings); WCAG 2.1 AA→AAA pass; aegis
+secrets-scan gate wired into the commit path; 11 ADRs (0001–0011).
+Release target v0.10.0 (minor: two new layers + the regional-brief
+production API endpoint). Cycle 2's Batch L close gates are folded in
+here.
+
+### 11.1 Findings ledger (measured this cycle)
+
+- **NEW FAILURE CLASS — headless rAF starvation** (details in the
+  Phase 7 RUN 2 block): headless Chrome services
+  `requestAnimationFrame` only while the compositor produces
+  BeginFrames; a settled scene stops producing them, so rAF-scheduled
+  work sits pending through any wall-clock sleep. Harness canon
+  extracted from the two qa-radio breaks: (1) poll the REAL contract
+  (laid-out rect, reconsider flags consumed) — never sleep-then-measure,
+  and never "frame handle === null" (ambient activity keeps
+  re-scheduling frames, so the handle never goes null even though the
+  work landed); (2) pump BeginFrames from Node via
+  `page.screenshot({optimizeForSpeed:true})` installed with
+  `page.exposeFunction` so an in-evaluate await can drive it
+  mid-evaluate.
+- **Contract-drift class**: qa-view-target-prewarm asserted the
+  pre-b3de30c prewarm behavior and so read the optimization working as
+  a failure. Policy going forward: a commit that changes an observable
+  runtime contract updates its QA harness in the SAME commit — the
+  suite is part of the change's definition of done.
+- **Load-contention envelope quantified**: shared NAS, other tenants'
+  load 17–93 observed this cycle. Timing bars fail deterministically
+  under contention and pass solo (radio catalog 1,418 ms at load 8.6
+  vs 5,310 ms FAIL at 34.7). Policy: contention-class reds are
+  re-validated solo at load < 15 (quiet-window watcher pattern) before
+  a release commit; a red that survives the solo re-run is a real
+  regression and blocks. Also: `git push` triggers the GitForge
+  pipeline whose container churn breaks local browser suites
+  (ERR_NETWORK_CHANGED) — HOLD pushes while any Puppeteer suite runs.
+- **Drain-condition anti-pattern** (from the same qa-radio work): a
+  settle loop keyed on scheduler internals (`_leftStackLayoutFrame !==
+  null`) never terminates; the app-level flags the rAF consumes
+  (`_leftStackReconsiderAutoCollapse`) are the drain contract.
+- **Coverage shape (honest bound)**: the residual gap to 99% is
+  browser-coupled render/RAF internals — traffic's DEV-only timing
+  pass (reachable only through the vite-booted test, excluded from
+  coverage by design) and cctv's projection/hover pipeline (mock-armor
+  territory). The bound is inventoried in Phase 10 Batch K, not chased
+  with mock-asserting tests.
+- **Deliberately not adopted (cycle 3)**: prettier (ADR 0011 — ESLint
+  stylistic rules already enforce format; two formatters fight);
+  playwright (dropped entirely — zero references, puppeteer drives all
+  harnesses); resolutionScale idle-downscale (carried from 9.3).
+
+### 11.2 Batches
+
+- [x] **Batch M — hardening sweep** (2026-09-18…20): sonarjs ruleset +
+      44 fixes; WCAG AA→AAA pass; aegis pre-commit secrets gate;
+      DATA_SOURCES.md two-way parity test; coverage ratchet floors in
+      `test:coverage` (91/91/90/80 — gates collapse, not variance,
+      ADR 0008); playwright devDependency removed; GTFS-RT relay fixed
+      to serve bodies as bytes.
+- [x] **Batch N — RUN 1/2 harness repairs** (2026-09-20): the two
+      puppeteer 25.x `executablePath()` async-getter breaks
+      (qa-floor-hold, qa-voice-wav); the flights ambient-budget test's
+      self-race; the prewarm gate contract rewrite (drives the shipped
+      `__gevSetViewTargetPrewarmSessions` surface, asserts BOTH
+      directions); the qa-radio rAF pump + contract polling (both
+      previously-red assertions pass under contention in RUN 3b,
+      load 34.7).
+- [ ] **Batch O — RUN 3 quiet-window sweep**: the 12 remaining
+      contention-class suites re-run solo at load < 15; a surviving
+      red is a real regression and blocks release. Includes the
+      prewarm gate-off delta=1 attribution read (instrumented stack in
+      the suite output) — expected outcome per the b3de30c design is a
+      benign uncached depth-path consumer at gate-off that the
+      gate-ON prewarm cache would have served; if the stack names a
+      hot consumer the gate misses, that is a follow-up fix, not a
+      suite tweak.
+- [ ] **Batch P — release 0.10.0**: CHANGELOG 0.10.0 fold (done,
+      uncommitted) + version bump (done, uncommitted); commit, push
+      BOTH remotes gitforge-first (only when no browser suite is
+      running); GitForge pipeline green on the release commit (verify
+      read-only via sqlite — CLI token staleness is expected); tag
+      v0.10.0 (tag names are immutable — the v0.8.0 burn); GitHub
+      release; Cloudflare Pages deploy → verify → publish (RUNBOOK
+      pinned order).
+
+### 11.3 Forward roadmap — cycles 4+ (drafted 2026-09-20)
+
+Ranked by leverage. Each item states its acceptance criterion so the
+next cycle opens by executing, not re-planning. Cycle 4 entry
+requires a re-measured baseline using the same metrics as 10.1/11.1
+so trend lines stay comparable.
+
+**R1 — QA determinism library (P1, small, do first).**
+`scripts/lib/` holds one module today (`webglLaunchArgs.mjs`). Extract
+this cycle's proven pattern into `scripts/lib/headlessFrames.mjs`:
+`installCompositorFramePump(page)`, `waitForLaidOutRect(page, id,
+{attempts})`, and a `waitForStable(sampleFn, {interval, samples})`
+helper. Migrate the suites with class-driven-reveal or rAF-coupled
+assertions (qa-cockpit-utility, qa-cctv-v2, qa-labels, plus any RUN 3
+suite that needs it). Add a lint/grep guard that fails CI on
+`setTimeout`-immediately-before-rect-read in `scripts/qa-*.mjs` (the
+sleep-then-measure smell). Acceptance: library exists with JSDoc, ≥3
+suites migrated, grep guard green, and the pattern is documented in
+the scripts README header.
+
+**R2 — Coverage ratchet schedule toward the 99% line (P1,
+mechanical).** Floors today: lines 91 / statements 91 / functions 90 /
+branches 80 against measured 91.58/91.58/91.21/81.19. Schedule: wave
+5 attacks the largest non-mock-armor gaps first (re-run the per-module
+c8 report to rank; the Phase 10 Batch K inventory is the starting
+list), raises floors to 93/93/92/83 in the same commit as the tests
+that earn it; wave 6 → 95/95/94/86. Terminal state is honest: either
+99% is reached, or ADR 0008's boundary gets the final module list with
+the mock-armor rationale per module — a documented bound, not an
+abandoned number. Acceptance per wave: floors and tests in one commit,
+`test:coverage` green locally and in GitForge CI.
+
+**R3 — Quiet-window QA wrapper as first-class tooling (P1, tiny).**
+This cycle's ad-hoc `run3c-wait-quiet.sh` becomes
+`scripts/qa-when-quiet.mjs`: poll /proc/loadavg (or a `--max-load`
+flag), then execute a suite list with the orchestrator's argv
+contract, writing one tally log. Paired with a flake-taxonomy section
+in the QA orchestrator's header comment (ERR_NETWORK_CHANGED /
+protocolTimeout / waitFor-timeout / perf-bar classes and their
+quiet-box re-run policy) so triage starts from the classification.
+Acceptance: wrapper used for one full orchestrator pass; taxonomy
+documented where qa-all.mjs already documents its ENV-GATED class.
+
+**R4 — Module-boundary audit round 2 (P2).** The Batch 5 ui.js split
+(10,500 → 6,438 lines) proved the seam-by-banner method. Next
+candidates, ranked by size × churn: `src/voice/gevRealtime.js` (the
+WebRTC state machine + UI in one file), `src/data/flightsTracking.js`
+(1,284 lines, healthy but now the shared-pipeline chokepoint — worth
+a config-schema contract test pinning all 24 factory keys), and
+`src/data/detection.js` + `src/overlays/worldOverlay.js` (lane
+architecture deserves an ADR — it is the answer to "how do screen
+space and world space compose here"). Acceptance: a written module
+map with the next three seams ranked, and the ADR for the overlay-lane
+architecture drafted.
+
+**R5 — WCAG AAA documentation pass (P2, small).** ~~Phase 4 landed the
+AA→AAA fixes; what is missing is the criteria ledger~~ DONE
+2026-09-20 (executed early, same cycle): `docs/ACCESSIBILITY.md`
+carries the full 25-criterion AAA ledger (MET 12 / PARTIAL 3 / N/A 8
+/ UNMET 2), linked from CLAUDE.md's testing section, with the
+tooling fact that drove its necessity verified against the installed
+package — axe-core 4.13.0 has ZERO rules tagged `wcag21aaa` (and only
+3 `wcag2aaa` rules), so automated AAA coverage is near-zero and the
+ledger, not the audit tag, is the AAA assurance of record. qa-a11y's
+tag list carries a comment pointing there.
+
+**R6 — WASM candidate pipeline, measurement-gated (P3).** The
+contract stands: no WASM port without a profiler scene showing the
+target in per-frame CPU self-time top-10 (SGP4 disqualified
+2026-09-14 by exactly this rule). Candidates to MEASURE, not port:
+labelArbiter solve at DENSE density (label lanes at 125 ms throttle),
+the synchronous projection fallback path in detection.js, AIS row
+normalization under bulk updates. Each gets a one-line MEASURED
+verdict in docs/PERFORMANCE.md; disqualified candidates are recorded
+so they are never re-proposed. Acceptance: three verdict lines or the
+measurement scenes to produce them.
+
+**R7 — Production surface growth decisions (P2/P3, decision-gated).**
+Three standing decisions, each needing a one-page decision doc before
+any code: (1) AISStream in production = Durable Objects relay (paid
+Workers plan) — cost vs vessels-stay-dev-only; (2) the keyed
+dev-only middlewares (the deferred list in this file: gbfs, tomtom,
+firms, google-\*, military-installations, regional-brief,
+weather-effects) get a key-signup pass keyed to
+DATA_SERVICES_CATALOG.md; (3) per-isolate rate limiting (accepted
+burst-protection-only) — revisit if accounting is ever needed.
+Acceptance: three decision docs under docs/adr/ or explicit keep-as-is
+notes in the deferred list.
+
+**R8 — Release cadence contract (P1, tiny, this cycle's lessons made
+policy).** ~~Document in docs/RUNBOOK.md~~ DONE 2026-09-20 (executed
+early, same cycle — Batch P follows it): the RUNBOOK gained a
+"Release cadence policy" section pinning the version policy (minor =
+new layer or production API surface, patch = fixes), the changelog
+fold rule (new dated block per release; pre-fold working notes
+demoted under a dated banner, never deleted), tag-name immutability
+(the v0.8.0 burn — pick the next name, never reuse), GitForge-first
+push order with the hold-while-suites-run rule from 11.1, and
+deploy → verify → tag → publish as the only sanctioned sequence.

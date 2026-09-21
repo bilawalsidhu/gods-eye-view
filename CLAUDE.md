@@ -123,6 +123,8 @@ Use plain filenames — `node --test` silently skips bracketed paths like `[[pat
 
 CI (`.github/workflows/ci.yml`) runs lint + the full suite (with `GEV_REQUIRE_ALLOCATION_GATE=1`) + build on every push/PR.
 
+Accessibility: WCAG 2.1 A/AA is the gate (axe audit via `scripts/qa-a11y.mjs`, plus pinned census/contrast tests); the criterion-by-criterion AAA conformance ledger lives in `docs/ACCESSIBILITY.md` — axe has no `wcag21aaa`-tagged rules, so AAA claims rest on that ledger, not the audit tag.
+
 Force AIS refresh for testing (layer modules live at `dataManager.layers.get(id).module` — there is no `_getLayer` helper):
 ```js
 window.__godsEyeView?.dataManager?.layers?.get?.('ais-live-vessels')?.module?._loadLivePositionsForTest?.()

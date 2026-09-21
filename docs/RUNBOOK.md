@@ -1,6 +1,6 @@
 # God's Eye View — Runbook
 
-Updated: August 29, 2026
+Updated: September 20, 2026
 
 Operational commands and procedures: local development, quality gates,
 deploying to production, verifying a deployment, and the failure modes that
@@ -64,6 +64,33 @@ version diverged for the project's whole first life. Never again:
 
 Deploys are explicit and manual (Cloudflare Pages, project `globe`); there is
 no auto-deploy job in CI by design.
+
+### Release cadence policy
+
+The rules every release follows, so the checklist above never needs
+re-derivation (formalized 2026-09-20 after the v0.10.0 prep):
+
+- **Version policy**: **minor** for a new data layer or a new production API
+  surface (Pages Function route); **patch** for fixes, perf, and docs.
+  Never bump major without a breaking-API discussion in PLAN.md first.
+- **Changelog fold rule**: each release gets a new dated `## [x.y.z]` block
+  at the top, written from user-visible changes only. Pre-fold working notes
+  are demoted under a dated banner ("retained verbatim… do not treat their
+  headers as shipping state"), never deleted — history stays auditable.
+- **Tag names are immutable**: an existing tag name can never be reused
+  (the v0.8.0 burn proved this the hard way — an interrupted release forced
+  v0.8.1). Pick the next number; never re-point or re-create a name.
+- **Push order**: GitForge remote first, then GitHub (mirror). GitForge CI
+  is the pipeline of record (ADR 0010); a red GitHub Actions run is not a
+  code signal.
+- **Hold pushes while browser QA runs**: a push triggers the GitForge
+  pipeline, and its container churn on the shared workspace breaks any
+  concurrently running Puppeteer suite (`ERR_NETWORK_CHANGED` mid-navigation).
+  Commit locally during a QA run; push only after the last suite exits.
+- **Order is pinned**: build → deploy → verify (checklist below) → tag →
+  publish. Publishing before verification risks burning a version number on
+  an unverified artifact — the repo's immutable-releases setting makes that
+  mistake permanent (see the v0.8.1 note below).
 
 ```bash
 npm run build

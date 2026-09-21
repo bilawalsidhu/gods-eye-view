@@ -67,6 +67,10 @@ try {
       resultTypes: ['violations'],
       runOnly: {
         type: 'tags',
+        // `wcag2aaa` matches 3 rules in axe 4.13 and `wcag21aaa` matches
+        // NONE — automated AAA coverage is near-zero, so a clean AAA run
+        // here is necessary but nowhere near sufficient. The AAA assurance
+        // of record is the manual ledger: docs/ACCESSIBILITY.md.
         values: ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag2aaa', 'wcag21aaa', 'best-practice'],
       },
     }));
