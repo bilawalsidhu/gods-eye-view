@@ -919,7 +919,7 @@ try {
 
     const realFetch = window.fetch;
     let released = false;
-    let requestSeen = false;
+    let requestSeen = 0;
     let transition = null;
     let disabledCleanly = false;
     // The module refetches on a 500 ms camera-moveEnd debounce. The checks
@@ -954,12 +954,17 @@ try {
         let url = null;
         try { url = new URL(raw, window.location.href); } catch { return realFetch(input, init); }
         if (url.pathname !== '/api/military-installations') return realFetch(input, init);
-        requestSeen = true;
+        requestSeen += 1;
         // The FIRST request is held unabortable: a hung upstream genuinely
         // stays pending, and the module's moveEnd debounce refetch must not
         // tear the held window down — the moment request #1 rejects with
         // AbortError the enable transaction settles, the 'enabling' lifecycle
         // the assertions below sample is gone, and the row never mounts.
+        // Later requests DO honour the signal: RUN 3g — `requestSeen` was a
+        // boolean, so `requestSeen > 1` never fired and EVERY request was
+        // unabortable, corrupting the module's abort/refetch lifecycle the
+        // scenario exists to observe (the enable transaction read 'enabled'
+        // while requests were still held).
         const signal = requestSeen > 1 ? init?.signal : null;
         return new Promise((resolve, reject) => {
           let done = false;
@@ -1054,7 +1059,7 @@ try {
       return {
         exercised: true,
         disabledCleanly,
-        stubEngaged: requestSeen,
+        stubEngaged: requestSeen > 0,
         started,
         contacts,
         pendingLifecycle,
