@@ -583,52 +583,6 @@ export class StyleManager extends ShellFacade {
     // return so the time-driven reducer catches up on real elapsed time — and
     // re-arms its own ticker if the batch is still running.
     this._feedback.observeVisibility();
-    this._cctvRequestFocusHandler = (event) =>
-      routeCctvFocusRequest(
-        event,
-        (activate, focus) => this._runExplicitCctvFocus(activate, focus),
-        (cameraId, durationSec) => cctvLayer.focusCamera(cameraId, durationSec),
-      );
-    this._removeCctvRequestFocusListener = registerCctvFocusRequestListener(
-      window,
-      this._cctvRequestFocusHandler,
-    );
-    this._worldRequestFocusHandler = (event) =>
-      routeWorldFocusRequest(
-        event,
-        (detail, fly) => this._runExplicitWorldFocus(detail, fly),
-        (detail) => flyToWorldTarget(this.viewer, detail),
-      );
-    this._removeWorldRequestFocusListener = registerWorldFocusRequestListener(
-      window,
-      this._worldRequestFocusHandler,
-    );
-    this._navigationOwnerChangedRemover =
-      viewer.trackedEntityChanged.addEventListener((entity) => {
-        if (entity && !this._disposed)
-          this._stampNavigation({
-            cancelPendingSelection: false,
-          });
-      });
-    viewer.trackedEntityChanged.addEventListener((entity) => {
-      if (entity && !this._disposed) {
-        this.audioEngine?.playLock();
-        this.trajectoryOverlay?.showTrajectoryForEntity(entity);
-      } else if (!this._disposed) {
-        this.audioEngine?.playRelease();
-        this.trajectoryOverlay?.clear();
-      }
-    });
-    // Vessel/installation focus flies without ever assigning a tracked entity,
-    // so it cannot reach the listener above. It announces instead.
-    this._removeNavigationAuthorityListener =
-      registerNavigationAuthorityListener(window, (event) => {
-        if (this._disposed) return;
-        this._stampNavigation({
-          cancelPendingSelection:
-            event?.detail?.cancelPendingSelection !== false,
-        });
-      });
 
     // ── Immersive Upgrade Systems ──────────────────────
     this.audioEngine = getTacticalAudio();
@@ -646,6 +600,16 @@ export class StyleManager extends ShellFacade {
     }
 
     this.trajectoryOverlay = new TrajectoryOverlay(this.viewer);
+    this.viewer?.trackedEntityChanged?.addEventListener((entity) => {
+      if (entity && !this._disposed) {
+        this.audioEngine?.playLock();
+        this.trajectoryOverlay?.showTrajectoryForEntity(entity);
+      } else if (!this._disposed) {
+        this.audioEngine?.playRelease();
+        this.trajectoryOverlay?.clear();
+      }
+    });
+
     this.geofenceEngine = new GeofenceEngine({ audioEngine: this.audioEngine });
     this.geofenceRenderer = new GeofenceRenderer(this.viewer);
     this.timelineCache = new TimelineCache();
