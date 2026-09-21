@@ -68,7 +68,9 @@
  * the canonical control order and center their combined stack at 50vh.
  */
 #left-panel-stack.layout-tail
-  > :is(#data-panel, #cctv-panel, #satellite-panel, #scene-panel):not(.collapsed) {
+  > :is(#data-panel, #cctv-panel, #satellite-panel, #scene-panel):not(
+    .collapsed
+  ) {
   box-sizing: border-box;
   flex: 0 0 var(--left-panel-allocated-height);
   height: var(--left-panel-allocated-height);

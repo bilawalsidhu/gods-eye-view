@@ -49,7 +49,9 @@ export function createPanel({ state: layerState, services, parts, source }) {
     if (!list || !status || !count) return;
 
     const catalogSize = layerState._catalog?.size || 0;
-    count.textContent = catalogSize ? `${catalogSize.toLocaleString()} LOADED` : '—';
+    count.textContent = catalogSize
+      ? `${catalogSize.toLocaleString()} LOADED`
+      : '—';
 
     if (!layerState._enabled) {
       status.textContent = 'ENABLE SATELLITES TO SEARCH';
@@ -122,7 +124,9 @@ export function createPanel({ state: layerState, services, parts, source }) {
   }
 
   function trackSatelliteSearchResult(noradId) {
-    const tracked = parts.controls.methods.trackById(noradId, { origin: 'user' });
+    const tracked = parts.controls.methods.trackById(noradId, {
+      origin: 'user',
+    });
     if (tracked) renderSatelliteSearchResults();
     return tracked;
   }
