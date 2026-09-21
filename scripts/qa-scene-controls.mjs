@@ -85,6 +85,9 @@ try {
   );
   promptValue = '<b>QA shot</b>';
   await page.click('.scene-shot-label', { count: 2 });
+  await page.waitForSelector('.scene-shot-rename', { visible: true });
+  await page.type('.scene-shot-rename', promptValue);
+  await page.keyboard.press('Enter');
   await page.waitForFunction(
     () =>
       document.querySelector('.scene-shot-label')?.textContent ===
@@ -151,7 +154,20 @@ try {
   const projectFile = path.join(shots, 'project.json');
   fs.writeFileSync(projectFile, JSON.stringify(fixture));
   const input = await page.$('#scene-import-file');
+  const beforePreview = await page.evaluate(() =>
+    JSON.stringify(window.__godsEyeView.sceneDirector._project),
+  );
   await input.uploadFile(projectFile);
+  await page.waitForSelector('[data-director-apply-import]');
+  check(
+    'Import preview leaves the current project untouched',
+    await page.evaluate(
+      (saved) =>
+        JSON.stringify(window.__godsEyeView.sceneDirector._project) === saved,
+      beforePreview,
+    ),
+  );
+  await page.click('[data-director-apply-import]');
   await page.waitForFunction(
     () =>
       document.getElementById('scene-status').textContent ===
@@ -259,8 +275,8 @@ try {
   await input.uploadFile(badFile);
   await page.waitForFunction(() =>
     document
-      .getElementById('scene-status')
-      .textContent.includes('invalid JSON'),
+      .querySelector('[data-director-dialog] [role=status]')
+      ?.textContent.includes('invalid JSON'),
   );
   check(
     'Invalid import reports failure and preserves the current project',
@@ -271,6 +287,45 @@ try {
           'QA Scene',
     ),
   );
+  const savedBefore = await page.evaluate(() =>
+    localStorage.getItem('godsEyeView.sceneProject.v2'),
+  );
+  const futureFile = path.join(shots, 'future.json');
+  fs.writeFileSync(futureFile, JSON.stringify({ version: 99, scenes: [] }));
+  await input.uploadFile(futureFile);
+  await page.waitForFunction(() =>
+    document
+      .querySelector('[data-director-dialog] [role=status]')
+      ?.textContent.includes('$.version'),
+  );
+  check(
+    'Unsupported versions leave authored state and saved bytes unchanged',
+    await page.evaluate(
+      (saved) =>
+        localStorage.getItem('godsEyeView.sceneProject.v2') === saved &&
+        window.__godsEyeView.sceneDirector._getSelectedScene().title ===
+          'QA Scene',
+      savedBefore,
+    ),
+  );
+  const malformed = structuredClone(fixture);
+  malformed.scenes[0].shots[0].camera.lat = 91;
+  const malformedFile = path.join(shots, 'malformed.json');
+  fs.writeFileSync(malformedFile, JSON.stringify(malformed));
+  await input.uploadFile(malformedFile);
+  await page.waitForFunction(() =>
+    document
+      .querySelector('[data-director-dialog] [role=status]')
+      ?.textContent.includes('camera.lat'),
+  );
+  check(
+    'Invalid camera field identifies its path without replacing the project',
+    await page.evaluate(
+      (saved) => localStorage.getItem('godsEyeView.sceneProject.v2') === saved,
+      savedBefore,
+    ),
+  );
+  await page.keyboard.press('Escape');
   await page.screenshot({ path: path.join(shots, 'desktop.png') });
   await page.setViewport({ width: 390, height: 844 });
   await page.screenshot({ path: path.join(shots, 'narrow.png') });

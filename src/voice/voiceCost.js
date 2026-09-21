@@ -122,7 +122,7 @@ export function isKnownVoiceTier(tier) {
 export function mostExpensiveVoiceModel() {
   // Rank by audio output — the dominant cost in a speech-to-speech session.
   return Object.values(VOICE_MODELS).reduce((worst, entry) =>
-    entry.rates.audioOutput > worst.rates.audioOutput ? entry : worst
+    entry.rates.audioOutput > worst.rates.audioOutput ? entry : worst,
   );
 }
 
@@ -191,7 +191,10 @@ export const VOICE_COST_LIMIT_OFF = 'off';
  */
 export function normalizeCostLimits(limits) {
   const clean = (value, fallback) => {
-    if (typeof value === 'string' && value.trim().toLowerCase() === VOICE_COST_LIMIT_OFF) {
+    if (
+      typeof value === 'string' &&
+      value.trim().toLowerCase() === VOICE_COST_LIMIT_OFF
+    ) {
       return Infinity;
     }
     if (value === Infinity) return Infinity;
@@ -209,7 +212,8 @@ export function normalizeCostLimits(limits) {
 /** Convert limits to a JSON-safe shape that round-trips a disabled threshold. */
 export function serializeCostLimits(limits) {
   const normalized = normalizeCostLimits(limits);
-  const encode = (value) => (Number.isFinite(value) ? value : VOICE_COST_LIMIT_OFF);
+  const encode = (value) =>
+    Number.isFinite(value) ? value : VOICE_COST_LIMIT_OFF;
   return {
     warnUsd: encode(normalized.warnUsd),
     capUsd: encode(normalized.capUsd),
@@ -269,7 +273,7 @@ export function splitUsageTokens(usage) {
     if (!cached && nonNegative(inDetails.cached_tokens) > 0) {
       audioCached = Math.min(
         nonNegative(inDetails.cached_tokens),
-        nonNegative(inDetails.audio_tokens)
+        nonNegative(inDetails.audio_tokens),
       );
     }
     textIn = Math.max(0, nonNegative(inDetails.text_tokens) - textCached);
@@ -289,12 +293,15 @@ export function splitUsageTokens(usage) {
   // to audio (priciest) so a partial payload over-estimates, never under.
   const inputResidual = Math.max(
     0,
-    inputTotal - (textIn + audioIn + imageIn + textCached + audioCached + imageCached)
+    inputTotal -
+      (textIn + audioIn + imageIn + textCached + audioCached + imageCached),
   );
   audioIn += inputResidual;
 
   const textOut = outDetails ? nonNegative(outDetails.text_tokens) : 0;
-  let audioOut = outDetails ? nonNegative(outDetails.audio_tokens) : outputTotal;
+  let audioOut = outDetails
+    ? nonNegative(outDetails.audio_tokens)
+    : outputTotal;
   const outputResidual = Math.max(0, outputTotal - (textOut + audioOut));
   audioOut += outputResidual;
 

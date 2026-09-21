@@ -124,12 +124,66 @@ test('an additional imagery source needs no controller branch and owns its cache
   assert.equal(reads, 1);
   assert.equal(terrainReads, 1);
   assert.equal(env.imagery.length, 1);
-  assert.equal(env.removed[0].destroy, true);
+  assert.equal(
+    env.removed.length,
+    0,
+    'same provider keeps its loaded imagery layer',
+  );
   env.controller.destroy();
   env.controller.destroy();
   await settle();
   assert.equal(env.imagery.length, 0);
+  assert.equal(env.removed[0].destroy, true);
   assert.equal(destroys, 1);
+});
+
+test('repeated Esri shot handoffs retain imagery and keep tile fallback live', async () => {
+  const env = publicFixture();
+  await env.controller.setStack('esri-imagery');
+  const layer = env.imagery[0];
+  const generation = env.controller.getSwitchGeneration();
+  const errors = env.providers.get('esri-imagery').errorEvent;
+  for (let i = 0; i < 3; i++) await env.controller.setStack('esri-imagery');
+  assert.equal(env.imagery[0], layer);
+  assert.equal(env.removed.length, 0);
+  assert.equal(errors.size, 1);
+  assert.equal(env.controller.getSwitchGeneration(), generation + 3);
+  errors.raise();
+  errors.raise();
+  await settle();
+  assert.equal(env.controller.getActiveId(), 'osm');
+  assert.equal(env.removed.length, 1);
+  assert.equal(errors.size, 0);
+  env.controller.destroy();
+});
+
+test('returning to the live provider supersedes a pending switch without rebuilding imagery', async () => {
+  const env = publicFixture();
+  await env.controller.setStack('esri-imagery');
+  const layer = env.imagery[0];
+  let resolve;
+  env.registry.sources.find(
+    (source) => source.descriptor.id === 'osm',
+  ).imagery = () =>
+    new Promise((done) => {
+      resolve = done;
+    });
+  const pending = env.controller.setStack('osm');
+  await settle();
+  await env.controller.setStack('esri-imagery');
+  resolve(env.providers.get('osm'));
+  await pending;
+  assert.equal(env.controller.getActiveId(), 'esri-imagery');
+  assert.equal(env.imagery[0], layer);
+  assert.equal(env.removed.length, 0);
+  await env.controller.setStack('photoreal');
+  assert.equal(env.imagery.length, 0);
+  assert.equal(env.tileset.show, true);
+  await env.controller.setStack('esri-imagery');
+  assert.notEqual(env.imagery[0], layer, 'a removed layer must be recreated');
+  assert.equal(env.viewer.scene.globe.show, true);
+  assert.equal(env.tileset.show, false);
+  env.controller.destroy();
 });
 
 test('a destroyed controller aborts creation and disposes a late provider without touching the scene', async () => {

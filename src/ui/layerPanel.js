@@ -7,9 +7,65 @@ const FEED_STATE_LABELS = Object.freeze({
   loading: 'LOADING',
   degraded: 'DEGRADED',
   stale: 'STALE',
+  partial: 'PARTIAL',
   fallback: 'FALLBACK',
   unavailable: 'UNAVAILABLE',
 });
+
+// Presentation order is independent of catalog registration and startup order.
+const PANEL_GROUPS = [
+  {
+    label: 'Movement',
+    ids: [
+      'satellites',
+      'flights',
+      'military',
+      'ais-live-vessels',
+      'traffic',
+      'transit',
+      'bikeshare',
+    ],
+  },
+  {
+    label: 'Cameras',
+    ids: ['cctv', 'alpr-cameras'],
+  },
+  {
+    label: 'Infrastructure',
+    ids: [
+      'military-installations',
+      'local-datacenters',
+      'telegeography-submarine-cables',
+      'local-dams',
+    ],
+  },
+  {
+    label: 'Events',
+    ids: ['rocket-launches', 'earthquakes', 'local-firms'],
+  },
+  {
+    label: 'Utilities',
+    ids: ['directions', 'radio'],
+  },
+];
+const PANEL_ORDER = PANEL_GROUPS.flatMap(({ label, ids }) =>
+  ids.map((id) => ({ id, label })),
+);
+const PANEL_POSITIONS = new Map(
+  PANEL_ORDER.map(({ id }, index) => [id, index]),
+);
+const PANEL_LABELS = {
+  'ais-live-vessels': 'Live Vessels',
+  bikeshare: 'Bike Share',
+  cctv: 'Cameras',
+  'alpr-cameras': 'Mapped ALPR Cameras',
+  'local-datacenters': 'Data Centers',
+  'local-firms': 'Active Fires',
+};
+
+function panelLabel(layer) {
+  return PANEL_LABELS[layer.id] || layer.name;
+}
 
 /**
  * Guidance for a control a missing provider key is holding back.
@@ -81,8 +137,25 @@ export class LayerPanel {
     this._toggleContainer.innerHTML = '';
 
     const generation = this._generation;
-    for (const layer of this.getAll()) {
+    const layers = this.getAll()
+      .slice()
+      .sort(
+        (a, b) =>
+          (PANEL_POSITIONS.get(a.id) ?? PANEL_ORDER.length) -
+          (PANEL_POSITIONS.get(b.id) ?? PANEL_ORDER.length),
+      );
+    let previousGroup = '';
+    for (const layer of layers) {
       if (!layer.showInTogglePanel) continue;
+      const group =
+        PANEL_ORDER[PANEL_POSITIONS.get(layer.id)]?.label ?? 'Other layers';
+      if (group && group !== previousGroup) {
+        const heading = document.createElement('h3');
+        heading.className = 'data-layer-group-heading';
+        heading.textContent = group;
+        this._toggleContainer.appendChild(heading);
+      }
+      previousGroup = group;
       const row = document.createElement('div');
       row.className = 'data-toggle-row';
       row.dataset.layerId = layer.id;
@@ -97,7 +170,7 @@ export class LayerPanel {
       icon.textContent = layer.icon;
       const name = document.createElement('span');
       name.className = 'data-name';
-      name.textContent = layer.name;
+      name.textContent = panelLabel(layer);
       left.appendChild(icon);
       left.appendChild(name);
 
@@ -433,6 +506,17 @@ export class LayerPanel {
           : stats.coverage || ago;
       return `${stateLabel} · ${source} · ${detail}`;
     }
+    if (feedState === 'partial') {
+      const { acceptedRowCount, rawRowCount } = stats;
+      const detail =
+        Number.isInteger(acceptedRowCount) &&
+        Number.isInteger(rawRowCount) &&
+        acceptedRowCount >= 0 &&
+        rawRowCount > acceptedRowCount
+          ? `${acceptedRowCount} of ${rawRowCount} records accepted`
+          : 'incomplete snapshot';
+      return `${stateLabel} · ${source} · ${detail} · ${ago}`;
+    }
     if (feedState === 'stale') {
       const retry =
         typeof stats.retryInSec === 'number' && stats.retryInSec > 0
@@ -489,8 +573,8 @@ export class LayerPanel {
     button.setAttribute(
       'aria-label',
       keyGuidance
-        ? `${layer.name}: ${button.textContent}. ${keyGuidance}`
-        : `${layer.name}: ${button.textContent}`,
+        ? `${panelLabel(layer)}: ${button.textContent}. ${keyGuidance}`
+        : `${panelLabel(layer)}: ${button.textContent}`,
     );
   }
 

@@ -2860,6 +2860,55 @@ async function main() {
         tick();
         setTimeout(() => { done = true; res(); }, ms);
       });
+      // A timer can expire while the camera is new but the model/cache still
+      // belongs to the old frame. Observe the first completed exit frame,
+      // including a wrong result; never wait for visibility or height to pass.
+      window.__dfObserveTrackedExit = async ({ scene, trackedEntity, trackedModel,
+        getTrackedModel, getTrackedEntity, getTrackedId, getCameraHeight,
+        exitHeight, read, now = Date.now, setTimer = setTimeout, clearTimer = clearTimeout }) => {
+        const deadline = now() + 5000;
+        let removePre, removePost, removeError, timer;
+        let preFrame = null;
+        try {
+          return await new Promise((resolve) => {
+            let finished = false;
+            const finish = (result) => { if (!finished) { finished = true; resolve(result); } };
+            const valid = () => {
+              try {
+                if (now() > deadline) return 'tracked exit observation exceeded its 5000 ms deadline';
+                if (getTrackedEntity() !== trackedEntity || getTrackedId() !== 'aaa097') return 'tracked exit fixture identity changed';
+                if (!trackedModel || getTrackedModel() !== trackedModel) return 'tracked exit model identity changed';
+                if (!(getCameraHeight() > exitHeight)) return 'tracked exit camera left the exit regime';
+                return null;
+              } catch { return 'tracked exit fixture validation failed'; }
+            };
+            removePre = scene.preUpdate.addEventListener(() => {
+              if (finished) return;
+              const error = valid();
+              if (error) { finish({ error }); return; }
+              if (preFrame == null) preFrame = scene.frameState.frameNumber;
+            });
+            removePost = scene.postRender.addEventListener(() => {
+              if (finished || preFrame == null) return;
+              const error = valid();
+              if (error) { finish({ error }); return; }
+              if (scene.frameState.frameNumber === preFrame) {
+                finish({ error: 'tracked exit observation has no new rendered frame' }); return;
+              }
+              try {
+                const snapshot = read();
+                finish(snapshot ? { ...snapshot, observationFrame: scene.frameState.frameNumber }
+                  : { error: 'tracked exit snapshot missing' });
+              } catch { finish({ error: 'tracked exit snapshot failed' }); }
+            });
+            removeError = scene.renderError.addEventListener(() => finish({ error: 'tracked exit render failed' }));
+            timer = setTimer(() => finish({ error: 'tracked exit update did not complete within 5000 ms' }), 5000);
+            scene.requestRender();
+          });
+        } finally {
+          clearTimer(timer); removePre?.(); removePost?.(); removeError?.();
+        }
+      };
       // Cesium Models in the scene, split by visibility (duck-typed the same
       // way the harness excludes them from height probes).
       //
@@ -3378,10 +3427,30 @@ async function main() {
         // the billboard — which MUST be floored, or a tracked grounded contact
         // renders buried at any distance the operator pulls out to. This is the
         // coverage the toggle used to reach; the zoom regime reaches it now.
+        const findOwnModel = () => {
+          let found = null;
+          const walk = (collection) => {
+            for (let i = 0; i < collection.length; i++) {
+              const item = collection.get(i);
+              if (typeof item?.get === 'function' && typeof item.length === 'number') walk(item);
+              else if (item?.id === 'aaa097' && item.activeAnimations !== undefined
+                && item.minimumPixelSize !== undefined) found = item;
+            }
+          };
+          walk(v.scene.primitives);
+          return found;
+        };
+        const trackedEntity = v.trackedEntity;
+        const trackedModel = findOwnModel();
         const achievedOut = await window.__dfZoomAbove(window.__dfRegime.exit + 5000);
-        await window.__dfSettle(1500);
-        const zoomedOut = readTracked();
-        if (!zoomedOut) return { error: 'tracked entity has no position (zoomed out)' };
+        const zoomedOut = await window.__dfObserveTrackedExit({
+          scene: v.scene, trackedEntity, trackedModel, getTrackedModel: findOwnModel,
+          getTrackedEntity: () => v.trackedEntity,
+          getTrackedId: () => fl.getTrackedInfo()?.icao24,
+          getCameraHeight: window.__dfCamH, exitHeight: window.__dfRegime.exit,
+          read: readTracked,
+        });
+        if (zoomedOut.error) return { error: zoomedOut.error };
 
         const out = {
           rawH: d0.h,
@@ -3643,11 +3712,10 @@ async function main() {
       }
 
       // ---- F3: the LOADING window is billboard-owned, not model-owned ------
-      // A fleet model is registered with Cesium's default show=true the instant
-      // its glTF resolves, but the handoff waits for `ready`; and a tracked
-      // model is null for the whole load even though the regime is already
-      // active. Both windows leave the BILLBOARD as the visual, so both must
-      // stay floored — ownership means actually rendering.
+      // Stress the fleet ownership predicate with synthetic show=true/ready=false
+      // flags. Production admission keeps the model hidden; these shadows do
+      // not simulate Cesium's internal loading/draw state. The tracked check
+      // below separately samples the no-rendering-model window.
       const dfLoading = await evalPage(async () => {
         const v = window.__godsEyeView.viewer;
         const Cesium = await import('/node_modules/cesium/Build/Cesium/index.js');
@@ -3663,13 +3731,8 @@ async function main() {
         };
         const out = {};
 
-        // (a) FLEET: reach the real admitted-but-not-ready window. A fleet model
-        // is registered in `_models` with Cesium's default show=true the moment
-        // its glTF resolves, while the billboard handoff waits for `ready` — so
-        // for a tick the model claims the visual it is not drawing. That window
-        // is ~one fleet tick wide, so hold the state open by shadowing the two
-        // flags on the instance (the same defineProperty trick the ground-3d
-        // group uses on `tilesLoaded`).
+        // (a) FLEET: retain the adversarial flags until this contact has passed
+        // through its installed fleet update and that frame has completed.
         const findFleetModel = (id) => {
           let found = null;
           const walk = (coll) => {
@@ -3698,8 +3761,26 @@ async function main() {
         // assigns `model.show = false` for a not-ready model, and assigning to a
         // non-writable own property throws in strict mode — which lands inside
         // Cesium's render loop and stops rendering for the rest of the run.
+        const priorReady = Object.getOwnPropertyDescriptor(fleetModel, 'ready');
+        const priorShow = Object.getOwnPropertyDescriptor(fleetModel, 'show');
+        let armed = false;
+        let processedFrame = null;
+        let sample = null;
+        let removePostRender = null;
+        try {
         Object.defineProperty(fleetModel, 'ready', { get: () => false, set: () => {}, configurable: true });
-        Object.defineProperty(fleetModel, 'show', { get: () => true, set: () => {}, configurable: true });
+        Object.defineProperty(fleetModel, 'show', {
+          get: () => true,
+          set: (value) => {
+            // Both the not-ready handoff and horizon cull clear show AFTER
+            // computing this contact's display floor. Neither a timer nor an
+            // unrelated rendered frame proves that this aircraft was processed.
+            if (armed && value === false && processedFrame == null) {
+              processedFrame = v.scene.frameState.frameNumber;
+            }
+          },
+          configurable: true,
+        });
         const bb = window.__dfFindBB('aaa097');
         if (!bb) return { error: 'aaa097 billboard missing' };
         bb.show = true; // the handoff would not have hidden it: the model is not ready
@@ -3713,21 +3794,45 @@ async function main() {
         fl._clearDisplayFloorStateForTest();
         const seededFleet = d0.h + 45;
         floorAround(d0, seededFleet);
-        // reportMeshFloorCell is a direct test seam and does not schedule a
-        // Cesium frame. Force the CallbackProperty to re-evaluate before the
-        // assertion, matching the request-render fix in the retained-model
-        // scenario above.
-        v.scene.requestRender();
-        await window.__dfSettle(900);
-        const bbAfter = window.__dfFindBB('aaa097');
-        out.fleetModelReady = fleetModel.ready;
-        out.fleetModelShow = fleetModel.show;
-        out.fleetBillboardVisible = !!bbAfter?.show;
-        out.fleetSeeded = seededFleet;
-        out.fleetH = bbAfter ? window.__dfCarto(bbAfter.position).h : null;
-        delete fleetModel.ready;
-        delete fleetModel.show;
-        fl.setParams({ models3d: false });
+        const tickDeadline = Date.now() + 5000;
+        removePostRender = v.scene.postRender.addEventListener(() => {
+          if (sample || processedFrame == null || v.scene.frameState.frameNumber < processedFrame) return;
+          if (Date.now() > tickDeadline) {
+            sample = { error: 'fleet loading fixture completed after its 5000 ms deadline' };
+            return;
+          }
+          const currentBb = window.__dfFindBB('aaa097');
+          const currentModel = findFleetModel('aaa097');
+          sample = {
+            fleetTickCompleted: true,
+            fleetFrame: v.scene.frameState.frameNumber,
+            fleetModelReady: fleetModel.ready,
+            fleetModelShow: fleetModel.show,
+            fleetBillboardVisible: !!currentBb?.show,
+            fleetSeeded: seededFleet,
+            fleetH: currentBb ? window.__dfCarto(currentBb.position).h : null,
+          };
+          if (currentBb !== bb || currentModel !== fleetModel || fleetModel.isDestroyed()
+            || fl.getTrackedInfo()) sample.error = 'fleet loading fixture changed before its completed frame';
+        });
+        armed = true;
+        // This is a setup-completion deadline, not a visual latency budget.
+        // Take the FIRST completed fleet result, even when its height is wrong;
+        // never poll the height until the assertion happens to pass.
+        do {
+          await window.__dfSettle(50);
+        } while (!sample && Date.now() < tickDeadline);
+        if (!sample) return { error: 'fleet loading fixture did not complete an aircraft update within 5000 ms' };
+        Object.assign(out, sample);
+        } finally {
+          armed = false;
+          removePostRender?.();
+          if (priorReady) Object.defineProperty(fleetModel, 'ready', priorReady);
+          else delete fleetModel.ready;
+          if (priorShow) Object.defineProperty(fleetModel, 'show', priorShow);
+          else delete fleetModel.show;
+          fl.setParams({ models3d: false });
+        }
         await window.__dfSettle(400);
 
         // (b) TRACKED, regime ACTIVE but no model yet. Turning 3D on while
@@ -3771,7 +3876,8 @@ async function main() {
         skip('display-floor/loading: fleet model loading window', dfLoading.skipped);
       } else {
         record('display-floor/loading: a fleet model that is shown-but-not-ready does not own the visual',
-          !dfLoading.error && dfLoading.fleetModelShow === true && dfLoading.fleetModelReady === false
+          !dfLoading.error && dfLoading.fleetTickCompleted === true
+            && dfLoading.fleetModelShow === true && dfLoading.fleetModelReady === false
             && dfLoading.fleetBillboardVisible === true
             && Number.isFinite(dfLoading.fleetH)
             && dfLoading.fleetH >= dfLoading.fleetSeeded + DISPLAY_FLOOR_LIFT_M - 0.5,
@@ -3955,6 +4061,7 @@ async function main() {
       delete window.__dfPriorTilesLoadedDescriptor;
       delete window.__dfSkinSamples;
       delete window.__dfSkinM;
+      delete window.__dfObserveTrackedExit;
       await fl.update(v);
     });
 

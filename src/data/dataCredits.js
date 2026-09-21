@@ -43,6 +43,17 @@ export const DATA_CREDITS = [
       '(ODbL 1.0)',
   },
   {
+    key: 'adsbdb',
+    html:
+      'Aircraft type, registration &amp; flight routes: ' +
+      '<a href="https://www.adsbdb.com" target="_blank" rel="noopener">adsbdb</a> ' +
+      '· aircraft data from PlaneBase · ICAO-to-N-number conversion by ' +
+      'Guillaume Michel · route data is the work of ' +
+      'David Taylor, Edinburgh, and Jim Mason, Glasgow, and may not be ' +
+      'copied, published, or incorporated into other databases without the ' +
+      'explicit permission of David J Taylor, Edinburgh',
+  },
+  {
     key: 'aisstream',
     html:
       'Live vessels (AIS): ' +
@@ -184,6 +195,10 @@ export const DATA_CREDITS = [
       '<a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noopener">fix the map</a>',
   },
   {
+    key: 'gtfs-rt',
+    html: 'Transit vehicles: operator GTFS-Realtime feeds (each operator is credited below when its vehicles are shown)',
+  },
+  {
     key: 'radio-browser',
     html:
       'Internet-radio station directory: ' +
@@ -285,6 +300,49 @@ export const NATURAL_EARTH_CREDIT = {
   html:
     'Physical region boundaries from ' +
     '<a href="https://www.naturalearthdata.com" target="_blank" rel="noopener">Natural Earth</a> (public domain)',
+};
+
+/**
+ * Per-feed transit credit, registered the first time that feed's vehicles
+ * render (see `src/data/transitFeeds.js` for the license of each).
+ * @param {{ id: string, attribution: string, license: string, licenseUrl: string }} feed
+ * @returns {{ key: string, html: string }}
+ */
+export function transitFeedCredit(feed) {
+  const escape = (text) =>
+    String(text)
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;');
+  return {
+    key: `transit-${feed.id}`,
+    html:
+      `Transit (${escape(feed.attribution)}): ` +
+      `<a href="${escape(feed.licenseUrl)}" target="_blank" rel="noopener">${escape(feed.license)}</a>`,
+  };
+}
+
+/** Registered when the Bhote Koshi event reconstruction activates. */
+export const BHOTE_KOSHI_CREDIT = {
+  key: 'bhote-koshi-2026',
+  html:
+    'Bhote Koshi 2026 event imagery and derived reconstruction: ' +
+    '<a href="https://vantor.com/company/open-data-program" target="_blank" rel="noopener">Vantor Open Data</a> ' +
+    'and <a href="https://github.com/geo-pera/bhotekoshi-2026-reconstruction" target="_blank" rel="noopener">GeoPera</a> ' +
+    '(CC BY-NC 4.0); terrain © Re:Earth / Mapterhorn (CC BY 4.0)',
+};
+
+/** Registered when the scene-friendly Nepal incident locator activates. */
+export const BHOTE_KOSHI_LOCATOR_CREDIT = {
+  key: 'bhote-koshi-locator',
+  html:
+    'Nepal administrative boundary and nearby-city locations: ' +
+    '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> ' +
+    '(ODbL 1.0); incident-place anchors use an owner-curated, source-verified geolocation union; ' +
+    'flood corridor derived from the ' +
+    '<a href="https://github.com/geo-pera/bhotekoshi-2026-reconstruction/blob/main/vectors/river_centerline.geojson" target="_blank" rel="noopener">GeoPera river centerline</a> ' +
+    '(CC BY-NC 4.0)',
 };
 
 /** @type {Set<string>} Keys of dynamic credits already registered this session. */

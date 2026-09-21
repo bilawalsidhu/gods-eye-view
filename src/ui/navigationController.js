@@ -1,3 +1,4 @@
+import { createStateChannel } from '../app/stateChannel.js';
 import * as Cesium from 'cesium';
 import {
   beginDeferredNavigation,
@@ -18,6 +19,7 @@ export class NavigationController {
     getDataManager,
     stopOrbit,
     showToast,
+    cancelOrientation = () => {},
   }) {
     Object.assign(this, {
       viewer,
@@ -30,8 +32,12 @@ export class NavigationController {
       getDataManager,
       stopOrbit,
       showToast,
+      cancelOrientation,
     });
     this._navigationGeneration = 0;
+    this._cameraHandoffs = createStateChannel(() => ({
+      generation: this._navigationGeneration,
+    }));
     this._activeLocationSearchGeneration = null;
     this._disposed = false;
   }
@@ -39,9 +45,11 @@ export class NavigationController {
     cancelPendingSelection = true,
     clearSearchedLocation = true,
   } = {}) {
+    this.cancelOrientation();
     const { flightsLayer, militaryFlightsLayer, satellitesLayer } =
       this.tracking;
     this._navigationGeneration += 1;
+    this._cameraHandoffs?.publish();
     // A newer destination owns the camera, so the last free-text search is no
     // longer where we are. DEFERRED navigation opts out here and clears at the
     // reassert seam instead: a geocode that never resolves moves no camera, and
@@ -188,6 +196,27 @@ export class NavigationController {
     });
   }
 
+  /** Change the viewing angle without clearing selection or follow ownership. */
+  runOrientation(noun, navigate) {
+    return runExplicitNavigation({
+      disposed: this._disposed,
+      cockpitActive: this.isCockpitActive(),
+      noun,
+      showToast: (text) => this.showToast(text),
+      stamp: () =>
+        this._stampNavigation({
+          cancelPendingSelection: false,
+          clearSearchedLocation: false,
+        }),
+      release: () => {
+        this.interruptCameraMotion('camera-orientation');
+        this.stopOrbit();
+        this.viewer.camera.cancelFlight();
+      },
+      navigate,
+    });
+  }
+
   _beginDeferredNavigation(
     noun = 'location',
     { cancelPendingSelection = true } = {},
@@ -223,8 +252,14 @@ export class NavigationController {
       },
     });
   }
+  /** Subscribe to ownership changes without claiming the camera or exposing mutable state. */
+  subscribeCameraHandoff(listener) {
+    return this._cameraHandoffs.subscribe(listener, { emitCurrent: false });
+  }
   stop() {
     this._disposed = true;
+    this._cameraHandoffs?.publish();
+    this._cameraHandoffs?.destroy();
   }
   destroy() {
     this.stop();

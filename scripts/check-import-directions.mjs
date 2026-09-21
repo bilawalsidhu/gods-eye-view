@@ -35,9 +35,12 @@ const portableExport = (key) =>
   /^\.\/layers\/(?:flights|military|vessels)\/(?:records|ingestion)$/.test(
     key,
   ) ||
-  ['./voice/action-schemas', './voice/session', './data/lifecycle'].includes(
-    key,
-  );
+  [
+    './director',
+    './voice/action-schemas',
+    './voice/session',
+    './data/lifecycle',
+  ].includes(key);
 
 /** Check every runtime file, plus transitive portable/source graphs, independently of bundler reachability. */
 export function checkImportDirections(root) {

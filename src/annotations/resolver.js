@@ -1,3 +1,16 @@
+import { requireFeatureSource } from '../sources/featureSource.js';
+import { createOverpassFeatureSource } from '../sources/overpassFeatures.js';
+import {
+  ringAreaM2,
+  stitchLine,
+  bufferCorridor,
+  simplifyRing,
+  closeRing,
+  ringCentroid,
+  approximateAreaM2,
+  approximateDistanceM,
+  pointInPolygon,
+} from '../sources/featureGeometry.js';
 import { defaultGeospatial } from '../search/defaults.js';
 import * as Cesium from 'cesium';
 import { lookupNeighborhoodRing } from '../data/neighborhoodPolygons.js';
@@ -12,13 +25,16 @@ import {
 import { unavailablePlaceSearch } from '../search/placeSearch.js';
 import { isPickedWorldPosition } from '../data/scenePick.js';
 
-/** Own annotation lookup caches and the supplied boundary query service. */
+/** Own annotation lookup caches and ranking of supplied feature candidates. */
 export function createAnnotationResolver({
   boundarySource,
   signal: lifetime,
+  featureSource = createOverpassFeatureSource({
+    boundarySource,
+    signal: lifetime,
+  }),
 } = {}) {
-  if (typeof boundarySource?.query !== 'function')
-    throw new TypeError('Annotation boundaries require a query service');
+  requireFeatureSource(featureSource);
   lifetime?.throwIfAborted();
 
   /**
@@ -764,20 +780,6 @@ export function createAnnotationResolver({
   }
 
   /** Shoelace area (m²) of a [[lon,lat], ...] ring in a local equirectangular projection. */
-  function ringAreaM2(ring) {
-    if (!Array.isArray(ring) || ring.length < 3) return 0;
-    const mLat = 111_320;
-    const mLon = mLat * Math.cos(Cesium.Math.toRadians(ring[0][1]));
-    let area = 0;
-    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-      const xi = ring[i][0] * mLon;
-      const yi = ring[i][1] * mLat;
-      const xj = ring[j][0] * mLon;
-      const yj = ring[j][1] * mLat;
-      area += xj * yi - xi * yj;
-    }
-    return Math.abs(area) / 2;
-  }
 
   /** Resolve a name through the supplied service; geometry selection stays here. */
   async function geocodePlace(query, biasRect, signal, placeSearch) {
@@ -979,25 +981,6 @@ export function createAnnotationResolver({
     return value?.rateLimited === true;
   }
 
-  /** POST an Overpass QL query and return elements, a transient null, or a throttle object. */
-  async function overpassJson(query, timeoutMs = 14000, signal) {
-    const controller = new AbortController();
-    const detach = linkAbort(controller, signal);
-    const timer = window.setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      return await boundarySource.query(query, {
-        signal: lifetime
-          ? AbortSignal.any([lifetime, controller.signal])
-          : controller.signal,
-      });
-    } catch {
-      return null;
-    } finally {
-      window.clearTimeout(timer);
-      detach();
-    }
-  }
-
   /**
    * Resolve an administrative boundary (country/state/county/city/neighborhood).
    * `is_in(point)` returns every admin area containing the point at all levels;
@@ -1014,10 +997,9 @@ export function createAnnotationResolver({
     const cachedFp = cacheRead(footprintCache, cacheKey);
     if (cachedFp !== undefined) return cachedFp;
 
-    const candidates = await overpassJson(
-      `[out:json][timeout:25];is_in(${lat},${lon})->.a;area.a["boundary"="administrative"]["admin_level"];out tags;`,
-      14000,
-      signal,
+    const candidates = await featureSource.getAdministrativeAreas(
+      { lat, lon },
+      { signal: signal },
     );
     if (isRateLimitedOutcome(candidates)) return candidates;
     if (!candidates) return undefined; // transient upstream failure (vs null = definitive miss)
@@ -1025,17 +1007,17 @@ export function createAnnotationResolver({
     const queryWords = normalizedWords(query);
     const scored = [];
     for (const el of candidates) {
-      if (el.type !== 'area' || !el.tags) continue;
+      if (el.category !== 'administrative') continue;
       // Match against the FULL name set (incl. official_name) so the query can still hit a
       // verbose official name — but score COMPLETENESS against the CORE name only. A long
       // official_name ("City and County of San Francisco") otherwise DILUTES the real
       // boundary's completeness and lets a less-specific duplicate ("San Francisco County")
       // win — which then has no backing relation and collapses the whole resolution to a dot.
       const coreWords = normalizedWords(
-        [el.tags.name, el.tags['name:en']].filter(Boolean).join(' '),
+        [el.names.primary, el.names.english].filter(Boolean).join(' '),
       );
       const fullWords = normalizedWords(
-        [el.tags.name, el.tags['name:en'], el.tags.official_name]
+        [el.names.primary, el.names.english, el.names.official]
           .filter(Boolean)
           .join(' '),
       );
@@ -1053,7 +1035,7 @@ export function createAnnotationResolver({
       // one (decisively outranks a "<name> County" style duplicate).
       const exactName =
         coreWords.size === queryWords.size && coreOverlap === queryWords.size;
-      const level = Number(el.tags.admin_level) || 99;
+      const level = Number(el.level) || 99;
       // Bias toward the scope's specificity: city/neighborhood prefer the MORE specific
       // (higher admin_level) match; state/country prefer the broader one.
       let levelBias;
@@ -1109,19 +1091,17 @@ export function createAnnotationResolver({
       // 16 s turned finishable region pivots (Sicilia's dense coastline) into permanent
       // "transients" — every retry died the same death (field test 2026-07-23). The
       // outline is progressive, so a long budget blocks nothing; repeats are disk-cached.
-      const relEls = await overpassJson(
-        `[out:json][timeout:25];area(${cand.el.id})->.x;rel(pivot.x);out geom;`,
-        28000,
-        signal,
-      );
+      const relEls = await featureSource.getAreaGeometry(cand.el.id, {
+        signal: signal,
+      });
       if (isRateLimitedOutcome(relEls)) return relEls;
       if (relEls === null) {
         transient = true;
         break;
       } // network blip — don't definitively fail
-      const relEl = relEls.find((e) => e.type === 'relation');
+      const relEl = relEls[0];
       if (!relEl) continue; // no relation backing this area — try the next candidate
-      const coords = elementCoordinates(relEl);
+      const coords = relEl.coordinates;
       if (coords.length < 3) continue; // incomplete geometry — try the next
 
       let ring = closeRing(coords.map((p) => [p.lon, p.lat]));
@@ -1184,25 +1164,20 @@ export function createAnnotationResolver({
    */
   async function fetchPlaceArea(lat, lon, query, signal) {
     const queryWords = normalizedWords(query);
-    const els = await overpassJson(
-      `[out:json][timeout:20];(` +
-        `way(around:1500,${lat},${lon})["place"~"neighbourhood|suburb|quarter|borough"]["name"];` +
-        `relation(around:1500,${lat},${lon})["place"~"neighbourhood|suburb|quarter|borough"]["name"];` +
-        `relation(around:1500,${lat},${lon})["boundary"="place"]["name"];` +
-        `);out tags geom;`,
-      14000,
-      signal,
+    const els = await featureSource.getNeighborhoodAreas(
+      { lat, lon },
+      { signal: signal },
     );
     if (isRateLimitedOutcome(els)) return els;
     if (els === null) return undefined; // transient upstream failure (vs [] = no match)
     let bestRing = null;
     let bestScore = 0;
     for (const el of els) {
-      const coords = elementCoordinates(el);
+      const coords = el.coordinates;
       if (coords.length < 3) continue;
-      const tags = el.tags || {};
+      const names = el.names;
       const nameWords = normalizedWords(
-        [tags.name, tags['name:en']].filter(Boolean).join(' '),
+        [names.primary, names.english].filter(Boolean).join(' '),
       );
       const overlap = wordOverlap(queryWords, nameWords);
       if (!overlap) continue;
@@ -1238,26 +1213,20 @@ export function createAnnotationResolver({
     const queryWords = normalizedWords(query);
 
     // Tier C — a same-named district / quarter / named commercial area.
-    const areaEls = await overpassJson(
-      `[out:json][timeout:20];(` +
-        `way(around:450,${lat},${lon})["place"~"quarter|neighbourhood|suburb|city_block"];` +
-        `relation(around:450,${lat},${lon})["place"~"quarter|neighbourhood|suburb"];` +
-        `way(around:450,${lat},${lon})["landuse"~"commercial|retail"]["name"];` +
-        `relation(around:450,${lat},${lon})["landuse"~"commercial|retail"]["name"]["type"="multipolygon"];` +
-        `);out tags geom;`,
-      14000,
-      signal,
+    const areaEls = await featureSource.getStreetAreas(
+      { lat, lon },
+      { signal: signal },
     );
     if (isRateLimitedOutcome(areaEls)) return areaEls;
     if (areaEls) {
       let bestRing = null;
       let bestScore = 0;
       for (const el of areaEls) {
-        const coords = elementCoordinates(el);
+        const coords = el.coordinates;
         if (coords.length < 3) continue;
-        const tags = el.tags || {};
+        const names = el.names;
         const nameWords = normalizedWords(
-          [tags.name, tags['name:en']].filter(Boolean).join(' '),
+          [names.primary, names.english].filter(Boolean).join(' '),
         );
         const overlap = wordOverlap(queryWords, nameWords);
         if (!overlap) continue;
@@ -1277,23 +1246,20 @@ export function createAnnotationResolver({
     }
 
     // Tier F — buffer the matching centerline into a corridor ribbon (workhorse).
-    const wayEls = await overpassJson(
-      `[out:json][timeout:20];way(around:320,${lat},${lon})["highway"]["name"];out geom;`,
-      14000,
-      signal,
+    const wayEls = await featureSource.getStreetLines(
+      { lat, lon },
+      { signal: signal },
     );
     if (isRateLimitedOutcome(wayEls)) return wayEls;
     if (wayEls) {
       const segments = [];
       for (const el of wayEls) {
-        const tags = el.tags || {};
+        const names = el.names;
         const nameWords = normalizedWords(
-          [tags.name, tags['name:en']].filter(Boolean).join(' '),
+          [names.primary, names.english].filter(Boolean).join(' '),
         );
         if (!wordOverlap(queryWords, nameWords)) continue;
-        const geom = (el.geometry || []).filter(
-          (p) => Number.isFinite(p?.lat) && Number.isFinite(p?.lon),
-        );
+        const geom = el.coordinates;
         if (geom.length >= 2) segments.push(geom.map((p) => [p.lon, p.lat]));
       }
       if (segments.length) {
@@ -1315,119 +1281,6 @@ export function createAnnotationResolver({
     const definitive = areaEls !== null && wayEls !== null;
     negCache(footprintCache, cacheKey, signal, definitive);
     return definitive ? null : undefined;
-  }
-
-  /** Chain street way-segments into one contiguous polyline by endpoint matching. */
-  function stitchLine(segments) {
-    const same = (a, b) => approximateDistanceM(a[1], a[0], b[1], b[0]) < 2;
-    const remaining = segments.map((s) => s.slice());
-    let line = remaining.shift();
-    let advanced = true;
-    while (advanced && remaining.length) {
-      advanced = false;
-      for (let i = 0; i < remaining.length; i++) {
-        const s = remaining[i];
-        if (same(line[line.length - 1], s[0])) line = line.concat(s.slice(1));
-        else if (same(line[line.length - 1], s[s.length - 1]))
-          line = line.concat(s.slice(0, -1).reverse());
-        else if (same(line[0], s[s.length - 1]))
-          line = s.slice(0, -1).concat(line);
-        else if (same(line[0], s[0])) line = s.slice(1).reverse().concat(line);
-        else continue;
-        remaining.splice(i, 1);
-        advanced = true;
-        break;
-      }
-    }
-    return line;
-  }
-
-  /** Offset a centerline into a closed corridor ring (~2*halfWidthM wide). */
-  function bufferCorridor(line, halfWidthM) {
-    const lat0 = line[0][1];
-    const mLon = 111320 * Math.cos((lat0 * Math.PI) / 180);
-    const mLat = 111320;
-    const P = line.map(([lon, lat]) => [lon * mLon, lat * mLat]);
-    const left = [];
-    const right = [];
-    for (let i = 0; i < P.length; i++) {
-      const a = P[Math.max(0, i - 1)];
-      const b = P[Math.min(P.length - 1, i + 1)];
-      let dx = b[0] - a[0];
-      let dy = b[1] - a[1];
-      const len = Math.hypot(dx, dy) || 1;
-      dx /= len;
-      dy /= len;
-      const nx = -dy;
-      const ny = dx;
-      left.push([P[i][0] + nx * halfWidthM, P[i][1] + ny * halfWidthM]);
-      right.push([P[i][0] - nx * halfWidthM, P[i][1] - ny * halfWidthM]);
-    }
-    const ring = [...left, ...right.reverse(), left[0]];
-    return ring.map(([x, y]) => [x / mLon, y / mLat]);
-  }
-
-  /** Douglas–Peucker ring simplification with a metres tolerance. Pre-decimates
-   *  very large rings (state/country) to keep the recursion shallow. */
-  function simplifyRing(ring, tolM) {
-    if (ring.length <= 24) return ring;
-    let pts = ring;
-    // Hard-cap the input to Douglas-Peucker so a pathological 50k-point country
-    // boundary can't dominate a frame, even with the iterative implementation.
-    if (pts.length > 4000) {
-      const step = Math.ceil(pts.length / 4000);
-      pts = pts.filter((_, i) => i % step === 0 || i === ring.length - 1);
-    }
-    const lat0 = pts[0][1];
-    const tol = tolM / (111320 * Math.cos((lat0 * Math.PI) / 180));
-    const out = douglasPeucker(pts, tol);
-    return out.length >= 4 ? out : ring;
-  }
-
-  function douglasPeucker(points, tol) {
-    const n = points.length;
-    if (n < 3) return points.slice();
-    // Iterative, index-based (no per-call array slicing / recursion), so a large
-    // state/country boundary can't blow the call stack or thrash GC and freeze the
-    // main thread during a voice turn.
-    const keep = new Uint8Array(n);
-    keep[0] = 1;
-    keep[n - 1] = 1;
-    const stack = [[0, n - 1]];
-    while (stack.length) {
-      const seg = stack.pop();
-      const first = seg[0];
-      const last = seg[1];
-      let index = -1;
-      let maxD = 0;
-      const a = points[first];
-      const b = points[last];
-      for (let i = first + 1; i < last; i += 1) {
-        const dist = perpDistance(points[i], a, b);
-        if (dist > maxD) {
-          maxD = dist;
-          index = i;
-        }
-      }
-      if (maxD > tol && index > first) {
-        keep[index] = 1;
-        stack.push([first, index]);
-        stack.push([index, last]);
-      }
-    }
-    const out = [];
-    for (let i = 0; i < n; i += 1) if (keep[i]) out.push(points[i]);
-    return out;
-  }
-
-  function perpDistance(p, a, b) {
-    const dx = b[0] - a[0];
-    const dy = b[1] - a[1];
-    const len2 = dx * dx + dy * dy;
-    if (len2 === 0) return Math.hypot(p[0] - a[0], p[1] - a[1]);
-    let t = ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len2;
-    t = Math.max(0, Math.min(1, t));
-    return Math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy));
   }
 
   /**
@@ -1466,30 +1319,10 @@ export function createAnnotationResolver({
     const cachedFp = cacheRead(footprintCache, cacheKey);
     if (cachedFp !== undefined) return cachedFp;
 
-    // `out geom` (not `out tags geom`) so relation members come back WITH their
-    // way geometry — needed to trace multipolygon compounds like the Presidio.
-    const overpassQuery = `
-    [out:json][timeout:25];
-    (
-      way(around:320,${lat},${lon})["building"];
-      relation(around:320,${lat},${lon})["building"];
-      way(around:1800,${lat},${lon})["landuse"];
-      relation(around:1800,${lat},${lon})["landuse"];
-      way(around:1800,${lat},${lon})["leisure"];
-      relation(around:1800,${lat},${lon})["leisure"];
-      way(around:1800,${lat},${lon})["aeroway"="aerodrome"];
-      relation(around:1800,${lat},${lon})["aeroway"="aerodrome"];
-      way(around:1800,${lat},${lon})["natural"="water"]["name"];
-      relation(around:1800,${lat},${lon})["natural"="water"]["name"]["type"="multipolygon"];
-      way(around:1200,${lat},${lon})["shop"="mall"];
-      relation(around:1200,${lat},${lon})["shop"="mall"];
-      way(around:800,${lat},${lon})["amenity"];
-      way(around:800,${lat},${lon})["tourism"];
+    const elements = await featureSource.getFootprints(
+      { lat, lon },
+      { signal: signal },
     );
-    out geom;
-  `;
-
-    const elements = await overpassJson(overpassQuery, 12000, signal);
     if (isRateLimitedOutcome(elements)) return elements;
     if (elements === null || signal?.aborted) return undefined;
     const fp = selectFootprint(elements, lat, lon, query, mode);
@@ -1500,8 +1333,6 @@ export function createAnnotationResolver({
     negCache(footprintCache, cacheKey, signal, true); // got a response, no match → definitive
     return null;
   }
-
-  const ENCLOSING_RADIUS_M = 600; // sweep this far for an enclosing named non-building polygon
 
   /**
    * Find the REAL enclosing "grounds / compound / campus" polygon containing a point
@@ -1532,30 +1363,14 @@ export function createAnnotationResolver({
     const cached = cacheRead(enclosingAreaCache, cacheKey);
     if (cached !== undefined) return cached;
 
-    // Named non-building polygons near the point. `out geom` returns inline geometry so it
-    // stitches with elementCoordinates/stitchRing (multipolygon outers). Buildings are EXCLUDED
-    // in JS below (a tag filter can't drop a relation whose members include a building).
-    const q = `
-    [out:json][timeout:25];
-    (
-      way(around:${ENCLOSING_RADIUS_M},${lat},${lon})["leisure"]["name"];
-      relation(around:${ENCLOSING_RADIUS_M},${lat},${lon})["leisure"]["name"]["type"="multipolygon"];
-      way(around:${ENCLOSING_RADIUS_M},${lat},${lon})["landuse"]["name"];
-      relation(around:${ENCLOSING_RADIUS_M},${lat},${lon})["landuse"]["name"]["type"="multipolygon"];
-      way(around:${ENCLOSING_RADIUS_M},${lat},${lon})["boundary"]["name"];
-      relation(around:${ENCLOSING_RADIUS_M},${lat},${lon})["boundary"]["name"];
-      way(around:${ENCLOSING_RADIUS_M},${lat},${lon})["amenity"]["name"];
-      relation(around:${ENCLOSING_RADIUS_M},${lat},${lon})["amenity"]["name"]["type"="multipolygon"];
-      way(around:${ENCLOSING_RADIUS_M},${lat},${lon})["natural"="water"]["name"];
-      relation(around:${ENCLOSING_RADIUS_M},${lat},${lon})["natural"="water"]["name"]["type"="multipolygon"];
-    );
-    out geom;
-  `;
     // Fail-fast budget: an opportunistic enrichment, not worth blocking on a hung Overpass —
     // but generous enough (12 s ≈ the footprint fetch budget) that an ordinary slow mirror
-    // doesn't strand a grounds mark as a point. overpassJson returns null on a transient
+    // doesn't strand a grounds mark as a point. The feature source returns null on a transient
     // failure (timeout/502).
-    const elements = await overpassJson(q, 12000, signal);
+    const elements = await featureSource.getEnclosingAreas(
+      { lat, lon },
+      { signal: signal },
+    );
     if (isRateLimitedOutcome(elements)) return elements;
     if (elements === null) return undefined; // transient upstream failure (vs [] = definitive no-match)
 
@@ -1564,8 +1379,8 @@ export function createAnnotationResolver({
     let bestArea = Infinity;
     let bestNameMatch = false;
     for (const el of elements) {
-      if (el.tags?.building) continue; // exclude buildings (the exact feature, never the grounds)
-      const coords = elementCoordinates(el);
+      if (el.building) continue; // exclude buildings (the exact feature, never the grounds)
+      const coords = el.coordinates;
       if (coords.length < 3) continue;
       if (!pointInPolygon(lon, lat, coords)) continue; // require genuine containment
       const ringLonLat = closeRing(coords.map((p) => [p.lon, p.lat]));
@@ -1577,10 +1392,10 @@ export function createAnnotationResolver({
       // makes the Capitol land on "Capitol Square" even though the user said "grounds".
       const nameWords = normalizedWords(
         [
-          el.tags?.name,
-          el.tags?.['name:en'],
-          el.tags?.official_name,
-          el.tags?.alt_name,
+          el.names.primary,
+          el.names.english,
+          el.names.official,
+          el.names.alternate,
         ]
           .filter(Boolean)
           .join(' '),
@@ -1606,7 +1421,6 @@ export function createAnnotationResolver({
     return null;
   }
 
-  const MONUMENT_RADIUS_M = 2500; // search this far from the view centre for a named monument
   /** A target that reads like a fine-grained monument/marker (vs a building/district). */
   function isMonumentLikeQuery(query) {
     return /\b(monument|memorial|statue|sculpture|fountain|cenotaph|obelisk|plaque|bust)\b/i.test(
@@ -1675,18 +1489,10 @@ export function createAnnotationResolver({
       // timeout, and one caller's clear() must not kill the others' snap).
       let pending = monumentInflight.get(centerKey);
       if (!pending) {
-        const q = `
-        [out:json][timeout:20];
-        (
-          nwr(around:${MONUMENT_RADIUS_M},${lat},${lon})["historic"~"memorial|monument|statue|tomb"];
-          nwr(around:${MONUMENT_RADIUS_M},${lat},${lon})["tourism"="artwork"]["name"];
-          nwr(around:${MONUMENT_RADIUS_M},${lat},${lon})["memorial"]["name"];
-        );
-        out center tags;
-      `;
         // Short timeout + fail-fast: this is an opportunistic snap, not worth blocking narration
-        // on a slow/overloaded Overpass. overpassJson returns null on a transient failure.
-        pending = overpassJson(q, 6000)
+        // on a slow/overloaded Overpass. The feature source returns null on a transient failure.
+        pending = featureSource
+          .getMonuments({ lat, lon }, { signal: undefined })
           .then((elements) => {
             if (elements === null || isRateLimitedOutcome(elements))
               return null; // transient — NEVER cached (a poisoned bucket
@@ -1694,16 +1500,12 @@ export function createAnnotationResolver({
             const feats = [];
             for (const el of elements) {
               const name =
-                el.tags?.name ||
-                el.tags?.['name:en'] ||
-                el.tags?.official_name ||
-                el.tags?.alt_name;
+                el.names.primary ||
+                el.names.english ||
+                el.names.official ||
+                el.names.alternate;
               if (!name) continue;
-              const p = Number.isFinite(el.lat)
-                ? { lat: el.lat, lon: el.lon }
-                : el.center
-                  ? { lat: el.center.lat, lon: el.center.lon }
-                  : null;
+              const p = el.point;
               if (!p) continue;
               feats.push({
                 name,
@@ -1767,20 +1569,20 @@ export function createAnnotationResolver({
     let bestScore = -Infinity;
 
     for (const element of elements) {
-      const coords = elementCoordinates(element);
+      const coords = element.coordinates;
       if (coords.length < 3) continue;
 
-      const tags = element.tags || {};
-      const isBuilding = Boolean(tags.building);
+      const names = element.names;
+      const isBuilding = element.building;
       const areaM2 = approximateAreaM2(coords);
 
       const nameWords = normalizedWords(
         [
-          tags.name,
-          tags['name:en'],
-          tags.official_name,
-          tags.alt_name,
-          tags.short_name,
+          names.primary,
+          names.english,
+          names.official,
+          names.alternate,
+          names.short,
         ]
           .filter(Boolean)
           .join(' '),
@@ -1848,219 +1650,15 @@ export function createAnnotationResolver({
         best = {
           ring: closeRing(coords.map((p) => [p.lon, p.lat])),
           kind: isBuilding ? 'building' : 'area',
-          heightM: isBuilding ? buildingHeightFromTags(tags, areaM2) : null,
+          heightM: isBuilding
+            ? (element.heightM ??
+              Math.max(10, Math.min(70, Math.sqrt(Math.max(1, areaM2)) * 0.6)))
+            : null,
         };
       }
     }
 
     return best;
-  }
-
-  /** Estimate a building's height (m) from OSM tags, falling back to footprint size. */
-  function buildingHeightFromTags(tags, areaM2) {
-    const explicit = parseMeters(tags.height || tags['building:height']);
-    if (explicit) return explicit;
-    const levels = Number.parseFloat(tags['building:levels']);
-    const roof = parseMeters(tags['roof:height']) || 0;
-    if (Number.isFinite(levels) && levels > 0) return levels * 3.3 + roof;
-    const side = Math.sqrt(Math.max(1, areaM2));
-    return Math.max(10, Math.min(70, side * 0.6));
-  }
-
-  function parseMeters(value) {
-    if (value == null) return 0;
-    const n = Number.parseFloat(String(value).replace(',', '.'));
-    if (!Number.isFinite(n) || n <= 0) return 0;
-    return /\b(ft|feet|foot)\b/i.test(String(value)) ? n * 0.3048 : n;
-  }
-
-  // --- geometry helpers -------------------------------------------------------
-
-  function elementCoordinates(element) {
-    if (Array.isArray(element.geometry)) {
-      return element.geometry.filter(
-        (p) => Number.isFinite(p?.lat) && Number.isFinite(p?.lon),
-      );
-    }
-    if (!Array.isArray(element.members)) return [];
-    // For a multipolygon relation the boundary is split across several outer
-    // ways (the Presidio has 8), so chain them into one ring by matching
-    // endpoints rather than taking a single segment.
-    const outerWays = element.members
-      .filter(
-        (m) => (m.role === 'outer' || !m.role) && Array.isArray(m.geometry),
-      )
-      .map((m) =>
-        m.geometry.filter(
-          (p) => Number.isFinite(p?.lat) && Number.isFinite(p?.lon),
-        ),
-      )
-      .filter((w) => w.length >= 2);
-    return stitchRing(outerWays);
-  }
-
-  /**
-   * Stitch relation outer ways into a footprint ring. Builds ALL connected
-   * components (a multipolygon outer boundary is split across several ways), then
-   * returns the largest component whose endpoints actually meet — a true closed
-   * ring. If no component closes cleanly, it accepts the largest only when the
-   * endpoint gap is small relative to its own span (a minor seam); otherwise the
-   * relation geometry is incomplete and it returns [] rather than fabricate a
-   * straight chord across the gap (the reported bay-spanning blob).
-   */
-  function stitchRing(ways) {
-    if (!ways.length) return [];
-    const components = buildRingComponents(ways);
-    if (!components.length) return [];
-
-    const CLOSE_TOL_M = 30; // endpoints within 30 m → a genuinely closed ring
-    const closed = components.filter((c) => endpointGapM(c) <= CLOSE_TOL_M);
-    if (closed.length) {
-      // Pick by projected AREA, not vertex count — a small, highly-detailed island
-      // must not beat the large simple mainland. (For a disjoint multipolygon this
-      // returns only the largest closed outer ring; full multi-ring rendering is a
-      // renderer change tracked separately.)
-      return largestByArea(closed);
-    }
-
-    // Nothing closes exactly. Bridge a seam ONLY when the gap is BOTH a small
-    // fraction of the feature's own span (so half a compound's boundary missing is
-    // rejected) AND under a hard absolute ceiling (so a state/country can never get a
-    // kilometres-long chord — the bay blob). A complete relation closes at ~0; a
-    // genuine seam (e.g. the Presidio's ~few-hundred-m coastline gap) bridges; a
-    // truly incomplete relation is rejected → point fallback.
-    const largest = largestByArea(components);
-    const allow = Math.min(ringSpanM(largest) * 0.15, 1200);
-    return endpointGapM(largest) <= allow ? largest : [];
-  }
-
-  /** Largest component by projected area (each component is an array of {lat,lon}). */
-  function largestByArea(components) {
-    let best = components[0];
-    let bestArea = approximateAreaM2(best);
-    for (let i = 1; i < components.length; i += 1) {
-      const area = approximateAreaM2(components[i]);
-      if (area > bestArea) {
-        bestArea = area;
-        best = components[i];
-      }
-    }
-    return best;
-  }
-
-  /** Rough diameter (m) of a chain's bounding box. */
-  function ringSpanM(chain) {
-    let minLat = Infinity;
-    let maxLat = -Infinity;
-    let minLon = Infinity;
-    let maxLon = -Infinity;
-    for (const p of chain) {
-      if (p.lat < minLat) minLat = p.lat;
-      if (p.lat > maxLat) maxLat = p.lat;
-      if (p.lon < minLon) minLon = p.lon;
-      if (p.lon > maxLon) maxLon = p.lon;
-    }
-    return approximateDistanceM(minLat, minLon, maxLat, maxLon);
-  }
-
-  /** Chain ways into maximal connected components by endpoint matching. */
-  function buildRingComponents(ways) {
-    const same = (a, b) =>
-      Math.abs(a.lon - b.lon) < 1e-7 && Math.abs(a.lat - b.lat) < 1e-7;
-    const remaining = ways.map((w) => w.slice());
-    const components = [];
-    while (remaining.length) {
-      let chain = remaining.shift();
-      let grew = true;
-      while (grew) {
-        grew = false;
-        const head = chain[0];
-        const tail = chain[chain.length - 1];
-        for (let i = 0; i < remaining.length; i += 1) {
-          const w = remaining[i];
-          const ws = w[0];
-          const we = w[w.length - 1];
-          if (same(tail, ws)) chain = chain.concat(w.slice(1));
-          else if (same(tail, we))
-            chain = chain.concat(w.slice(0, -1).reverse());
-          else if (same(head, we)) chain = w.slice(0, -1).concat(chain);
-          else if (same(head, ws)) chain = w.slice(1).reverse().concat(chain);
-          else continue;
-          remaining.splice(i, 1);
-          grew = true;
-          break;
-        }
-      }
-      components.push(chain);
-    }
-    return components;
-  }
-
-  /** Great-circle distance (m) between a chain's first and last vertex. */
-  function endpointGapM(chain) {
-    if (!chain || chain.length < 2) return Infinity;
-    const a = chain[0];
-    const b = chain[chain.length - 1];
-    return approximateDistanceM(a.lat, a.lon, b.lat, b.lon);
-  }
-
-  function closeRing(ring) {
-    if (ring.length < 3) return ring;
-    const [fx, fy] = ring[0];
-    const [lx, ly] = ring[ring.length - 1];
-    if (fx !== lx || fy !== ly) ring.push([fx, fy]);
-    return ring;
-  }
-
-  function ringCentroid(ring) {
-    if (!ring || ring.length < 3) return null;
-    let sumLat = 0;
-    let sumLon = 0;
-    for (const [lon, lat] of ring) {
-      sumLat += lat;
-      sumLon += lon;
-    }
-    return { lat: sumLat / ring.length, lon: sumLon / ring.length };
-  }
-
-  function approximateAreaM2(coords) {
-    // Shoelace in a local equirectangular projection (good enough for buildings).
-    if (coords.length < 3) return 0;
-    const lat0 = coords[0].lat;
-    const mPerDegLat = 111_320;
-    const mPerDegLon = mPerDegLat * Math.cos(Cesium.Math.toRadians(lat0));
-    let area = 0;
-    for (let i = 0, j = coords.length - 1; i < coords.length; j = i++) {
-      const xi = coords[i].lon * mPerDegLon;
-      const yi = coords[i].lat * mPerDegLat;
-      const xj = coords[j].lon * mPerDegLon;
-      const yj = coords[j].lat * mPerDegLat;
-      area += xj * yi - xi * yj;
-    }
-    return Math.abs(area) / 2;
-  }
-
-  function approximateDistanceM(latA, lonA, latB, lonB) {
-    const latScale = 111_320;
-    const lonScale =
-      latScale * Math.cos(Cesium.Math.toRadians((latA + latB) / 2));
-    return Math.hypot((latB - latA) * latScale, (lonB - lonA) * lonScale);
-  }
-
-  function pointInPolygon(lon, lat, coords) {
-    let inside = false;
-    for (let i = 0, j = coords.length - 1; i < coords.length; j = i++) {
-      const a = coords[i];
-      const b = coords[j];
-      const intersects =
-        a.lat > lat !== b.lat > lat &&
-        lon <
-          ((b.lon - a.lon) * (lat - a.lat)) /
-            (b.lat - a.lat || Number.EPSILON) +
-            a.lon;
-      if (intersects) inside = !inside;
-    }
-    return inside;
   }
 
   function normalizedWords(value) {
