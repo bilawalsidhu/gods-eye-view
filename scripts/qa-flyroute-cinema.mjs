@@ -205,9 +205,21 @@ try {
     // A still camera BEFORE the flight is the pre-flight arming/floor
     // hold, not a finished dolly: without this gate the shot loop ended
     // during that hold (run3h: 5 shots @ 2000 ms, none of the 81 s flight).
-    if (!trace.marks.some((m) => m.label === 'flight-start')) return 0;
-    const rows = trace.rows;
+    const startT = trace.marks.find((m) => m.label === 'flight-start')?.t ?? 0;
+    if (!startT) return 0;
+    const rows = trace.rows.filter((r) => r.t > startT);
     if (rows.length < 3) return 0;
+    // …and the hold can straddle the mark: the camera jumps onto the route
+    // start and THEN sits through the mesh-probe acquisition (slow under
+    // SwiftShader), so stillness only counts once the dolly has actually
+    // been seen to move (run3i: 3 shots — the break fired inside that hold).
+    let seenMotion = false;
+    for (let i = 1; i < rows.length; i += 1) {
+      const moved = Math.abs(rows[i].lon - rows[i - 1].lon) + Math.abs(rows[i].lat - rows[i - 1].lat)
+        + (Math.abs(rows[i].height - rows[i - 1].height) / 1e5);
+      if (moved > 1e-7) { seenMotion = true; break; }
+    }
+    if (!seenMotion) return 0;
     const last = rows.at(-1);
     // Freshness gate: the sampler rides postRender, so at software-GL cadence
     // a row can predate the camera's actual state by over a second. Without
