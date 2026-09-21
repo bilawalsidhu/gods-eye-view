@@ -33,6 +33,16 @@ export const SUITE_TIMEOUT_OVERRIDES = {
   'qa-overlay-baseline.mjs': 1_800_000,
 };
 
+// Suites that exit nonzero with a self-declared key gate cannot run on this
+// machine by design — we do not fabricate credentials. Both orchestrators
+// recognize these markers in a failing suite's output and report it as
+// ENV-GATED instead of FAIL.
+export const ENV_GATE_MARKERS = [
+  'run against the keyed dev server',
+  'the A/B needs live flow',
+  'OPENAI_API_KEY is not set',
+];
+
 /**
  * Resolve a suite's argv: its override if declared, otherwise the standard
  * `[baseUrl, --url baseUrl]` contract.

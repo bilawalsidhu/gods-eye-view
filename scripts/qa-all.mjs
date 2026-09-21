@@ -48,7 +48,7 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { suiteArgv, suiteTimeoutMs } from './lib/qaSuiteContracts.mjs';
+import { ENV_GATE_MARKERS, suiteArgv, suiteTimeoutMs } from './lib/qaSuiteContracts.mjs';
 import process from 'node:process';
 
 const argv = process.argv.slice(2);
@@ -71,15 +71,8 @@ const SCRIPTS_DIR = path.resolve(path.dirname(new URL(import.meta.url).pathname)
 // entrypoints cannot drift.
 
 
-// Suites that exit nonzero with a self-declared key gate ("Server has no X
-// key — run against the keyed dev server") cannot run on this machine by
-// design — we do not fabricate credentials. They are reported as ENV-GATED,
-// listed in the summary, and do not fail the run.
-const ENV_GATE_MARKERS = [
-  'run against the keyed dev server',
-  'the A/B needs live flow',
-  'OPENAI_API_KEY is not set',
-];
+// The marker list lives in `scripts/lib/qaSuiteContracts.mjs`, shared with
+// the quiet-window runner so the ENV-GATED classification cannot drift.
 
 function discoverSuites() {
   return fs

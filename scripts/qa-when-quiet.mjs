@@ -7,8 +7,9 @@
  * identical code).
  *
  * Complements `qa-all.mjs` (same suite discovery, same per-suite argv and
- * timeout contracts from `scripts/lib/qaSuiteContracts.mjs`) and adds the
- * load gate qa-all does not have:
+ * timeout contracts, same ENV-GATED key-gate classification — all from
+ * `scripts/lib/qaSuiteContracts.mjs`) and adds the load gate qa-all does
+ * not have:
  *
  *   node scripts/qa-when-quiet.mjs                        # ALL suites, load < 15
  *   node scripts/qa-when-quiet.mjs labels perf            # just these suites
@@ -29,7 +30,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
-import { suiteArgv, suiteTimeoutMs } from './lib/qaSuiteContracts.mjs';
+import { ENV_GATE_MARKERS, suiteArgv, suiteTimeoutMs } from './lib/qaSuiteContracts.mjs';
 
 const argv = process.argv.slice(2);
 const getFlag = (name) => argv.includes(name);
@@ -114,10 +115,11 @@ tally(`=== quiet window open: load ${load} < ${MAX_LOAD} at ${new Date().toISOSt
 
 // ── The sweep (sequential — one browser at a time on this box) ───────────────
 const failures = [];
+const envGated = [];
 for (const suite of suites) {
   const started = new Date().toISOString();
   tally(`=== ${suite} (load ${currentLoad()}) ${started} ===`);
-  const result = await new Promise((resolve) => {
+  const { code, logText } = await new Promise((resolve) => {
     const child = spawn(
       process.execPath,
       [path.join(SCRIPTS_DIR, suite), ...suiteArgv(suite, BASE_URL)],
@@ -126,17 +128,29 @@ for (const suite of suites) {
     const logStream = fs.createWriteStream(path.join(LOG_DIR, `${suite}.log`));
     child.stdout.pipe(logStream);
     child.stderr.pipe(logStream);
+    // In-memory copy for gate classification: the stream flushes
+    // asynchronously, so re-reading the file here can miss the final lines —
+    // exactly where a suite prints its key-gate message.
+    let logText = '';
+    child.stdout.on('data', (chunk) => { logText += chunk; });
+    child.stderr.on('data', (chunk) => { logText += chunk; });
     const timer = setTimeout(() => child.kill('SIGKILL'), suiteTimeoutMs(suite, DEFAULT_TIMEOUT_MS));
-    child.on('exit', (code) => {
+    child.on('exit', (exitCode) => {
       clearTimeout(timer);
-      resolve(code);
+      resolve({ code: exitCode, logText });
     });
   });
   const minutes = ((Date.now() - Date.parse(started)) / 60_000).toFixed(1);
-  tally(`${suite} exit=${result ?? 'signal'} (${minutes} min)`);
-  if (result !== 0) failures.push(suite);
+  // A nonzero exit that self-declares a missing key is ENV-GATED (keyless by
+  // design), not a failure — same contract as qa-all.mjs.
+  const gated = code !== 0 && ENV_GATE_MARKERS.some((marker) => logText.includes(marker));
+  tally(`${suite} exit=${code ?? 'signal'}${gated ? ' ENV-GATED' : ''} (${minutes} min)`);
+  if (gated) envGated.push(suite);
+  else if (code !== 0) failures.push(suite);
 }
 
-tally(`=== ${suites.length - failures.length}/${suites.length} PASS ===`);
+const gatedSuffix = envGated.length ? ` (${envGated.length} env-gated, keyless by design)` : '';
+tally(`=== ${suites.length - failures.length - envGated.length}/${suites.length} PASS${gatedSuffix} ===`);
+if (envGated.length) tally(`env-gated: ${envGated.join(', ')}`);
 if (failures.length) tally(`failed: ${failures.join(', ')}`);
 process.exit(failures.length ? 1 : 0);

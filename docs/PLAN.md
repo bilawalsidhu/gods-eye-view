@@ -2067,6 +2067,27 @@ here.
       gate-ON prewarm cache would have served; if the stack names a
       hot consumer the gate misses, that is a follow-up fix, not a
       suite tweak.
+      RUN 3c outcome (2026-09-20 21:27, load 2.8 → 31 over the
+      sweep): the two suites that started in the quiet window PASSED
+      (qa-view-target-prewarm 12/12 — quiet run showed gate-off delta
+      0, resolving the delta=1 mystery as the HUD summary interval's
+      un-prewarmed depth ask landing in-window; the b3de30c assertion
+      now tolerates delta===1 only with a /getViewTarget/ stack), and
+      qa-attribution-b12. The other 10 ran under load 17–31: 7 pure
+      contention (height-datum, traffic-baseline, vessel-cards,
+      vessel-datum, flyroute-cinema, labels, perf), 1 rAF-starvation
+      fixed in-flight (cables-shot), 1 partially-fixed with an open
+      hang (cockpit-utility, 45/52 green then a wedged evaluate), and
+      qa-voice-wav — root cause NOT the server env: `.env` line 30 is
+      `OPENAI_API_KEY=` with an EMPTY value (the earlier "key present"
+      check used a masking sed that hid the empty value). qa-all.mjs
+      classifies that literal output as ENV-GATED (keyless by design);
+      the ENV_GATE_MARKERS list moved to
+      `scripts/lib/qaSuiteContracts.mjs` and qa-when-quiet.mjs now
+      applies the same classification, so direct/selective sweeps
+      cannot misreport a key gate as FAIL again. RUN 3d = the
+      corrected re-run: 9 suites via `scripts/qa-when-quiet.mjs
+      --max-load 10` (voice-wav excluded as ENV-GATED).
 - [ ] **Batch P — release 0.10.0**: CHANGELOG 0.10.0 fold (done,
       uncommitted) + version bump (done, uncommitted); commit, push
       BOTH remotes gitforge-first (only when no browser suite is
