@@ -11,7 +11,9 @@
  * error on the demo path, with no scene and no tracking involved.
  *
  * This harness flies the camera the way the demo does and asserts the flight
- * produces zero uncaught errors and zero unhandled rejections.
+ * produces zero uncaught errors and zero unhandled rejections. It also proves
+ * the prewarm's session gate (a voice-active camera move re-picks; a
+ * voice-idle one serves zero depth picks).
  *
  *   QA_BASE_URL=http://localhost:4173 node scripts/qa-view-target-prewarm.mjs
  *
@@ -166,7 +168,23 @@ try {
     // The counter proves the prewarm re-picked under injection, so a clean
     // result cannot be clean merely because nothing ran.
     let pickCalls = 0;
-    scene.pickPosition = () => { pickCalls += 1; return current; };
+    let lastPickStack = '';
+    scene.pickPosition = () => {
+      pickCalls += 1;
+      // Attribution: if a pick ever lands in the gate-off window, this stack
+      // names the caller — a REAL depth-path consumer the voice gate does
+      // not cover, which is exactly what the assertion exists to surface.
+      lastPickStack = (new Error()).stack || '';
+      return current;
+    };
+
+    // The moveEnd prewarm is gated on active voice sessions (it exists to
+    // short-circuit the first pick of an imminent voice tool call, and its
+    // depth readback is the worst main-thread stall otherwise). Drive the gate
+    // through the same public surface the voice controller uses, so this
+    // harness tracks the shipped lifecycle rather than a module internal.
+    const setPrewarmSessions = viewer.__gevSetViewTargetPrewarmSessions;
+    const gateAvailable = typeof setPrewarmSessions === 'function';
 
     const hudErrors = [];
     const nudge = (step) => {
@@ -183,6 +201,9 @@ try {
     };
 
     try {
+      // Voice-active: the gate ON is the only condition under which the
+      // prewarm owes anybody a pick.
+      setPrewarmSessions?.(1);
       for (let step = 0; step < shapes.length; step += 1) {
         current = shapes[step].value;
         // Nudge the camera so the 2.5 s view-target cache misses and the
@@ -206,19 +227,64 @@ try {
           hudErrors.push(`${shapes[step].name}: ${String(error?.message || error)}`);
         }
       }
+
+      // Voice-idle (the state every non-voice visitor is in): a camera move
+      // must serve ZERO depth picks — that readback is the perf property the
+      // gate exists to protect. Baseline on a STABILITY WINDOW, not an
+      // instant: a just-scheduled warm runs up to debounce (120 ms) + idle
+      // timeout (500 ms) after its nudge, and RUN 3 caught one straddling an
+      // instant snapshot. Two consecutive 600 ms samples agreeing means every
+      // scheduled warm has drained.
+      const stablePicks = async () => {
+        let last = -1;
+        for (let sample = 0; sample < 12; sample += 1) {
+          await new Promise((resolve) => setTimeout(resolve, 600));
+          if (pickCalls === last) return pickCalls;
+          last = pickCalls;
+        }
+        return pickCalls;
+      };
+      const picksAtGateOn = await stablePicks();
+      setPrewarmSessions?.(0);
+      nudge(shapes.length);
+      const gateOffPicks = await stablePicks();
+
+      return {
+        hudErrors,
+        shapes: shapes.length,
+        pickCalls,
+        gateAvailable,
+        picksAtGateOn,
+        gateOffPicks,
+        gateOffPickStack: gateOffPicks > picksAtGateOn
+          ? lastPickStack.split('\n').slice(1, 7).join(' | ')
+          : '',
+      };
     } finally {
       if (originalPick) Object.defineProperty(scene, 'pickPosition', originalPick);
       else delete scene.pickPosition;
     }
-    return { hudErrors, shapes: shapes.length, pickCalls };
   });
-  console.log(`  · injected ${injection.shapes} degenerate pick shapes; ${injection.pickCalls} pick(s) served; HUD context threw ${injection.hudErrors.length}×`);
+  console.log(`  · injected ${injection.shapes} degenerate pick shapes; ${injection.pickCalls} pick(s) served (gate-off delta ${injection.gateOffPicks - injection.picksAtGateOn}); HUD context threw ${injection.hudErrors.length}×`);
+  if (injection.gateOffPickStack) {
+    console.log(`  · gate-off pick attribution: ${injection.gateOffPickStack}`);
+  }
   await new Promise((resolve) => setTimeout(resolve, 1_500));
 
   check(
-    'the injected picks actually reached the shipped code',
+    'the prewarm session-gate surface is available',
+    injection.gateAvailable,
+    injection.gateAvailable ? '__gevSetViewTargetPrewarmSessions installed' : 'gate setter missing — checks below would be vacuous',
+  );
+  check(
+    'with a voice session active, the injected picks actually reached the shipped code',
     injection.pickCalls > 0,
     `${injection.pickCalls} pick call(s) served`,
+  );
+  check(
+    'with no voice session, a camera move serves zero depth picks',
+    injection.gateOffPicks === injection.picksAtGateOn,
+    `gate ON ${injection.picksAtGateOn} → gate OFF ${injection.gateOffPicks} (delta must be 0)`,
   );
   check(
     'a degenerate depth pick does not break the HUD view-target context',
@@ -332,6 +398,9 @@ try {
       legs: legReports,
       injectedShapes: injection.shapes,
       injectedPickCalls: injection.pickCalls,
+      prewarmGateAvailable: injection.gateAvailable,
+      picksAtGateOn: injection.picksAtGateOn,
+      picksAtGateOff: injection.gateOffPicks,
       hudContextErrors: injection.hudErrors,
       voidBoundaryRejections: boundaryRejections,
       pageErrors,

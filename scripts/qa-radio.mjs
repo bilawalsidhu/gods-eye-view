@@ -120,6 +120,40 @@ async function awaitRenderedFrame(page) {
   }));
 }
 
+// The lane allocator defers its reconsider pass to requestAnimationFrame, and
+// a settled scene stops producing frames — headless Chrome only services rAF
+// while the compositor produces BeginFrames, so the pass can sit pending
+// through any wall-clock wait (probe 2026-09-20: frame id frozen across a
+// 360 ms wait, then released by a single forced frame). Installed as a page
+// binding so an in-evaluate await can drive it while the evaluate is still on
+// the stack: each call forces a compositor frame via a screenshot, which
+// unblocks the pending rAF without the harness touching the layout itself.
+async function installCompositorFramePump(page) {
+  await page.exposeFunction('__qaForceCompositorFrame', () => {
+    return page.screenshot({ optimizeForSpeed: true }).catch(() => null);
+  });
+}
+
+// A same-tick getBoundingClientRect right after a class-driven
+// collapse/reveal legitimately reads 0×0: the browser lays the new state out
+// on the next frame, and a settled headless scene produces no frames on its
+// own (probe 2026-09-20: 0×0 same-tick → 70.7×28 after one forced frame).
+// Poll for a laid-out rect, forcing a frame whenever the poll stalls.
+async function waitForLaidOutRect(page, elementId) {
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const rect = await page.evaluate((id) => {
+      const el = document.getElementById(id);
+      if (!el) return null;
+      const box = el.getBoundingClientRect();
+      return { width: box.width, height: box.height };
+    }, elementId);
+    if (rect && rect.width > 0 && rect.height > 0) return rect;
+    await page.evaluate(() => window.__qaForceCompositorFrame?.());
+    await sleep(100);
+  }
+  return null;
+}
+
 async function main() {
   const response = await fetch(APP_URL).catch(() => null);
   if (!response?.ok) {
@@ -281,6 +315,7 @@ async function main() {
     // modal measurably interfered with the globe-label, panel-lane, and
     // Context-expansion checks below (L9 matrix D8): the harness is not
     // testing onboarding — qa-firstrun.mjs owns that surface.
+    await installCompositorFramePump(page);
     await page.goto(`${APP_URL}${APP_URL.includes('?') ? '&' : '?'}welcome=0`, { waitUntil: 'domcontentloaded', timeout: 60_000 });
     await page.waitForFunction(() => window.__godsEyeView?.dataManager, { timeout: 60_000 });
     await page.waitForFunction(() => window.__godsEyeView?.styleManager?._dataManager?.layers?.has('radio'), { timeout: 60_000 });
@@ -1838,10 +1873,31 @@ async function main() {
         // below for a reason no user can produce (matrix run 5).
         setPanelThroughInstalledControl('scene-panel', true);
         setPanelThroughInstalledControl('pp-toggles', true);
-        await new Promise((resolve) => setTimeout(resolve, 360));
+        // The release rides a rAF-scheduled reconsider pass. A settled scene
+        // stops producing frames and headless Chrome then leaves that rAF
+        // pending indefinitely, so wait on the pass actually running — the
+        // reconsider flags (set at schedule time, consumed inside the frame
+        // that performs the release) are the contract. The frame HANDLES are
+        // deliberately not awaited: ambient activity keeps re-scheduling
+        // layout frames, so "both handles null" may never occur even though
+        // the release landed long before.
+        let restoreLayoutSettled = false;
+        for (let attempt = 0; attempt < 12; attempt += 1) {
+          const pending = manager._leftStackReconsiderAutoCollapse === true
+            || manager._rightStackReconsiderAutoCollapse === true;
+          if (!pending) {
+            restoreLayoutSettled = true;
+            break;
+          }
+          if (typeof window.__qaForceCompositorFrame === 'function') {
+            await window.__qaForceCompositorFrame();
+          }
+          await new Promise((resolve) => setTimeout(resolve, 150));
+        }
         manager._syncLeftPanelAdaptiveLayout();
         manager._syncRightPanelAdaptiveLayout();
         result.tacticalAutoRestore = {
+          restoreLayoutSettled,
           dataExpanded: !dataPanel.classList.contains('collapsed'),
           dataAutoMarkerCleared: !dataPanel.classList.contains('layout-auto-collapsed'),
           dataAriaExpanded: dataPanel.querySelector('[data-collapse-target="data-panel"]')?.getAttribute('aria-expanded'),
@@ -1986,7 +2042,8 @@ async function main() {
     );
     check(
       'closing Tactical lane owners restores eligible temporary siblings without changing disclosure truth',
-      multiExpandedPanelLayout.tacticalAutoRestore.dataExpanded
+      multiExpandedPanelLayout.tacticalAutoRestore.restoreLayoutSettled
+        && multiExpandedPanelLayout.tacticalAutoRestore.dataExpanded
         && multiExpandedPanelLayout.tacticalAutoRestore.dataAutoMarkerCleared
         && multiExpandedPanelLayout.tacticalAutoRestore.dataAriaExpanded === 'true'
         && multiExpandedPanelLayout.tacticalAutoRestore.contextExpanded
@@ -2805,10 +2862,15 @@ async function main() {
       idleVoice.audioState === 'paused',
       idleVoice.audioState,
     );
-    const manualPlayTarget = await page.evaluate(() => {
+    await page.evaluate(() => {
       const manager = window.__godsEyeView.styleManager;
       manager.setPanelCollapsed('global-context-panel', true);
       manager._setRadioDisclosure(true);
+    });
+    // The reveal lays out on the next frame; a settled headless scene needs
+    // one pumped before the rect exists (see waitForLaidOutRect).
+    const miniRect = await waitForLaidOutRect(page, 'context-radio-mini-play-btn');
+    const manualPlayTarget = await page.evaluate(() => {
       const button = document.getElementById('context-radio-mini-play-btn');
       const rect = button.getBoundingClientRect();
       const style = getComputedStyle(button);
@@ -2826,7 +2888,7 @@ async function main() {
     check(
       'manual voice takeover targets the visible compact Radio Play control',
       manualPlayTarget.visible && manualPlayTarget.enabled,
-      JSON.stringify(manualPlayTarget),
+      JSON.stringify({ ...manualPlayTarget, settleRect: miniRect }),
     );
     if (manualPlayTarget.visible && manualPlayTarget.enabled) {
       await page.click('#context-radio-mini-play-btn');
