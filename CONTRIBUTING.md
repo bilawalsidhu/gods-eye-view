@@ -37,6 +37,39 @@ configuration through the development app or environment file. Unknown API
 paths return JSON 404 responses. Vite preview is for checking a local build;
 it is not a production server.
 
+## Feature regression gates
+
+Those three are the baseline, not the whole story. Most features also have a
+dedicated headless gate under `scripts/qa-*.mjs` that drives the real app and
+asserts that feature's contract. **Run the gate covering whatever you touched**,
+and say which one you ran in the PR.
+
+Feature gates and a few supporting modules live under the same filename pattern:
+
+```bash
+ls scripts/qa-*.mjs            # gates and their supporting modules
+head -40 scripts/qa-radio.mjs  # what this runnable gate proves and how to run it
+```
+
+Runnable gate entrypoints document what they assert and how to invoke them.
+Most need a dev server; some also need a specific provider key or port. Follow
+the entrypoint's header rather than assuming every matching file accepts the
+same arguments. Only a couple (`qa:map-source-tray`, `qa:transit`) have an
+`npm run` alias.
+
+If you aren't sure which gate covers your change, search `docs/CURRENT-STATE.md`
+for the feature: it names the gate for many of them, and it's the authoritative
+runtime reference either way. `scripts/qa-l9-matrix.mjs` aggregates the broader
+release-candidate checks and selected harnesses; it does not replace the focused
+gate for the feature you changed.
+
+> **CI does not cover this for you.** The workflow runs the setup policy
+> checks, the formatting and package-boundary checks, the unit suite and the
+> production build, plus a Windows onboarding job. It runs neither
+> `npm run test:track` nor any `qa-*.mjs` gate — both need a live dev server
+> and a browser. Include the applicable local run in your PR's validation
+> evidence.
+
 ## Good first contributions
 
 The highest-leverage places to jump in:
@@ -82,7 +115,7 @@ ownership and adoption process.
 ## Pull requests
 
 1. Branch off `main`.
-2. Keep `npm run build`, `npm test`, and `npm run test:track` green and avoid new console errors.
+2. Keep `npm run build`, `npm test`, and `npm run test:track` green and avoid new console errors, plus the [feature gate](#feature-regression-gates) for the area you touched.
 3. If you change runtime behavior, update `docs/CURRENT-STATE.md` and `CHANGELOG.md` in the same PR.
 4. If you add or change a data source, update [DATA_SOURCES.md](DATA_SOURCES.md) with its license and attribution. **Don't add data you don't have the right to redistribute** — fetch it at runtime instead.
 5. Describe what you changed and how you verified it (screenshots welcome for anything visual).
