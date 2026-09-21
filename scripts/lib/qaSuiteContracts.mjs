@@ -31,6 +31,11 @@ export const SUITE_TIMEOUT_OVERRIDES = {
   // 95 min keeps ≈9 min of headroom for load swings.
   'qa-l9-matrix.mjs': 5_700_000,
   'qa-overlay-baseline.mjs': 1_800_000,
+  // Heaviest suite on the box (52 checks: cockpit + tracking + CCTV +
+  // overlays). Its armored probe survives a mid-run burst (renderer
+  // unresponsive ~5 min, then recovery — RUN 3i), but the cumulative
+  // degraded throughput needs more than the 15-min default ceiling.
+  'qa-cockpit-utility.mjs': 1_500_000,
 };
 
 // Suites that exit nonzero with a self-declared key gate cannot run on this

@@ -92,6 +92,9 @@ function runSuite(suite) {
       {
         env: { ...process.env, QA_BASE_URL: BASE_URL },
         stdio: ['ignore', 'pipe', 'pipe'],
+        // detached: the suite leads its own process group, so the ceiling
+        // kill below can take its whole tree down.
+        detached: true,
       },
     );
     const logPath = path.join(LOG_DIR, `${suite}.log`);
@@ -108,7 +111,11 @@ function runSuite(suite) {
     let timedOut = false;
     const timer = setTimeout(() => {
       timedOut = true;
-      child.kill('SIGKILL');
+      // Kill the process GROUP, not just the suite process: the suite's
+      // puppeteer browser is a grandchild, and killing only node orphaned a
+      // Chrome that pegged ~7 cores for 40+ minutes and manufactured phantom
+      // load (RUN 3i ceiling kill poisoned the quiet gate for the sweep).
+      try { process.kill(-child.pid, 'SIGKILL'); } catch { child.kill('SIGKILL'); }
     }, timeoutMs);
 
     child.on('close', (code) => {

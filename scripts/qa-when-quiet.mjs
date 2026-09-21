@@ -131,7 +131,9 @@ for (const suite of suites) {
     const child = spawn(
       process.execPath,
       [path.join(SCRIPTS_DIR, suite), ...suiteArgv(suite, BASE_URL)],
-      { env: { ...process.env, QA_BASE_URL: BASE_URL } },
+      // detached: the suite leads its own process group, so the ceiling kill
+      // below can take its whole tree down.
+      { env: { ...process.env, QA_BASE_URL: BASE_URL }, detached: true },
     );
     const logStream = fs.createWriteStream(path.join(LOG_DIR, `${suite}.log`));
     child.stdout.pipe(logStream);
@@ -142,7 +144,14 @@ for (const suite of suites) {
     let logText = '';
     child.stdout.on('data', (chunk) => { logText += chunk; });
     child.stderr.on('data', (chunk) => { logText += chunk; });
-    const timer = setTimeout(() => child.kill('SIGKILL'), suiteTimeoutMs(suite, DEFAULT_TIMEOUT_MS));
+    const timer = setTimeout(() => {
+      // Kill the process GROUP, not just the suite process: the suite's
+      // puppeteer browser is a grandchild, and killing only node orphaned a
+      // Chrome that pegged ~7 cores and manufactured phantom load the quiet
+      // gate then waited out (RUN 3i ceiling kill poisoned the rest of the
+      // sweep).
+      try { process.kill(-child.pid, 'SIGKILL'); } catch { child.kill('SIGKILL'); }
+    }, suiteTimeoutMs(suite, DEFAULT_TIMEOUT_MS));
     child.on('exit', (exitCode) => {
       clearTimeout(timer);
       resolve({ code: exitCode, logText });
