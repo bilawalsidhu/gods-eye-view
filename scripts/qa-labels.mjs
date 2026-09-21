@@ -14,6 +14,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
+import { installCompositorFramePump } from './lib/headlessFrames.mjs';
 
 const argv = process.argv.slice(2);
 const getFlag = (name) => argv.includes(name);
@@ -227,6 +228,7 @@ async function main() {
   const failedResponses = [];
   try {
     const page = await browser.newPage();
+    await installCompositorFramePump(page);
     await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1 });
     page.on('console', (message) => {
       if (message.type() !== 'error') return;
@@ -396,7 +398,14 @@ async function main() {
         }
         requestAnimationFrame(sample);
       };
-      requestAnimationFrame(sample);
+      // Kickstart the frame clock: a settled scene produces no BeginFrames,
+      // so the rAF sample loop above never fires until one frame is forced
+      // (headlessFrames.mjs). After this first forced frame the orbit
+      // interval's requestRender keeps frames flowing via canvas damage.
+      const kickstarted = typeof window.__qaForceCompositorFrame === 'function'
+        ? window.__qaForceCompositorFrame()
+        : Promise.resolve();
+      kickstarted.then(() => requestAnimationFrame(sample));
       return Object.fromEntries(layerIds.map((layerId) => [layerId, field[layerId].length]));
     }, { fieldCounts: FIELD_COUNTS, normalCounts: NORMAL_COUNTS });
 

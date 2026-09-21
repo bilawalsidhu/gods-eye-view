@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer';
+import { installCompositorFramePump } from './lib/headlessFrames.mjs';
 import { webglLaunchArgs } from './lib/webglLaunchArgs.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -24,6 +25,10 @@ const browser = await puppeteer.launch({
   args: [...webglLaunchArgs(), '--no-sandbox'],
 });
 const page = await browser.newPage();
+// Double-rAF waits below hang forever on a settled scene (headless Chrome
+// services rAF only while BeginFrames flow) — pump frames from Node instead
+// (see scripts/lib/headlessFrames.mjs for the failure class).
+await installCompositorFramePump(page);
 const failures = [];
 const consoleErrors = [];
 const localHttpErrors = [];
@@ -1551,7 +1556,11 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 120));
     const during = read();
     manager.setPanelCollapsed('data-panel', false, { persist: false, syncShare: false });
-    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    // Two pumped frames (not double-rAF): a settled scene produces no
+    // BeginFrames, so a rAF-chain wait would hang this evaluate until the
+    // protocol timeout.
+    await window.__qaForceCompositorFrame?.();
+    await window.__qaForceCompositorFrame?.();
     const dataRect = document.getElementById('data-panel')?.getBoundingClientRect();
     const contactRect = document.getElementById('cockpit-context')?.getBoundingClientRect();
     const clearancePx = dataRect && contactRect ? contactRect.top - dataRect.bottom : null;
@@ -1774,7 +1783,11 @@ try {
     const manager = window.__godsEyeView.styleManager;
     const standard = document.getElementById('pp-toggles');
     const cockpit = document.getElementById('cockpit-display-panel');
-    const waitFrames = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    // Pumped, not double-rAF: on a settled scene no BeginFrames flow, so a
+    // rAF-chain wait hangs until the protocol timeout (headlessFrames.mjs).
+    const waitFrames = async () => {
+      for (let i = 0; i < 2; i += 1) await window.__qaForceCompositorFrame?.();
+    };
     // Scroll-event trace: identifies which move/restore produces the final
     // cockpit offset when the round trip drifts.
     const trace = [];
