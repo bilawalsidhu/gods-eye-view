@@ -1,5 +1,6 @@
 import { admitKeySetupRequest } from '../../src/keySetupCore.mjs';
 import { createLlmStatusHandler } from './llm/status.js';
+import { createLlmRuntimeHandler } from './llm/runtime-route.js';
 
 /**
  * Vite plugin: local-LLM health and model discovery.
@@ -30,6 +31,19 @@ function llmStatusProxy({ fetchImpl, timeoutMs } = {}) {
         env: process.env,
       }),
   });
+  const runtimeHandler = createLlmRuntimeHandler({
+    admit: (req) =>
+      admitKeySetupRequest({
+        method: req.method,
+        remoteAddress: req.socket?.remoteAddress,
+        hostHeader: req.headers?.host,
+        protocol: req.socket?.encrypted ? 'https:' : 'http:',
+        origin: req.headers?.origin,
+        contentType: req.headers?.['content-type'],
+        proxyHeaders: req.headers || {},
+        env: process.env,
+      }),
+  });
   return {
     name: 'gev-llm-status',
     // Same window as Provider Settings itself: `vite preview` resolves with
@@ -39,6 +53,11 @@ function llmStatusProxy({ fetchImpl, timeoutMs } = {}) {
       command === 'serve' && !isPreview,
     configureServer(server) {
       server.middlewares.use('/api/llm/status', handler);
+      server.middlewares.use('/api/llm/runtime', runtimeHandler);
+      // Deliberately no teardown on close: saving settings restarts the dev
+      // server, and killing a model that took a minute to load at exactly the
+      // moment the operator finished configuring it is the wrong behaviour.
+      // The launcher detects a server still listening and offers to stop it.
     },
   };
 }

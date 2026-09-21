@@ -301,7 +301,9 @@
       "server/providers/llm/status.js",
       "src/keySetupCore.mjs",
       "src/llmSettings.mjs",
-      "src/sources/httpBody.js"
+      "src/sources/httpBody.js",
+      "server/providers/llm/runtime.js",
+      "server/providers/llm/runtime-route.js"
     ],
     "external": []
   },

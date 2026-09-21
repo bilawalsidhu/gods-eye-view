@@ -26,6 +26,20 @@
       </div>
       <div class="key-setup-llm-fields" data-key-setup-llm-fields></div>
       <datalist id="key-setup-llm-models" data-key-setup-llm-models></datalist>
+      <!-- Launcher. Hidden unless the dev server exposes /api/llm/runtime and
+           the selected provider is a local one that is actually installed. -->
+      <div class="key-setup-llm-runtime" data-key-setup-llm-runtime hidden>
+        <div class="key-setup-llm-runtime-row">
+          <label class="key-setup-llm-runtime-label" for="key-setup-llm-local-model">LOCAL MODEL</label>
+          <select id="key-setup-llm-local-model" class="key-setup-llm-runtime-select" data-key-setup-llm-local-model></select>
+        </div>
+        <div class="key-setup-llm-runtime-actions">
+          <button type="button" class="key-setup-llm-start" data-key-setup-llm-start>START SERVER</button>
+          <button type="button" class="key-setup-llm-stop" data-key-setup-llm-stop hidden>STOP SERVER</button>
+          <span class="key-setup-llm-runtime-state" data-key-setup-llm-runtime-state></span>
+        </div>
+        <pre class="key-setup-llm-runtime-log" data-key-setup-llm-runtime-log hidden></pre>
+      </div>
       <p class="key-setup-llm-note" data-key-setup-llm-note role="status" aria-live="polite"></p>
     </section>
     <div class="key-setup-footer">

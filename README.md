@@ -457,6 +457,15 @@ advanced `dev-fresh.sh` configuration.
 For headless machines, coding agents, or scripted setups:
 
 ```bash
+**Don't want to run it from a terminal?** Provider Settings can start the model
+server for you. Pick **OLLAMA** or **LLAMA.CPP**, choose a model from the list
+the app discovered on your machine, and press **START SERVER**. llama.cpp
+models are found by scanning `~/models`, `~/.cache/llama.cpp` and
+`~/.local/share/models` for `.gguf` files — point `GEV_LLM_MODEL_DIR` somewhere
+else if yours live elsewhere. The server keeps running when the app restarts,
+and **STOP SERVER** shuts down the one this session started. Set
+`GEV_LLM_ALLOW_SPAWN=0` to remove the button.
+
 # Put keys in .env (see .env.example), or pass them as env vars:
 OPENAI_API_KEY="…" AISSTREAM_API_KEY="…" npm run dev -- --host localhost --port 4173
 

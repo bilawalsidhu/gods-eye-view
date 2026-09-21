@@ -518,3 +518,101 @@ body.scene-playback-mode #key-setup {
   font-size: 0.58rem;
   line-height: 1.4;
 }
+
+/* Local model launcher. Sits inside the TEXT MODEL section and only appears
+   when the dev server can actually start a runtime. */
+.key-setup-llm-runtime {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(120, 220, 255, 0.14);
+  display: grid;
+  gap: 8px;
+}
+
+.key-setup-llm-runtime-row {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  align-items: center;
+  gap: 10px;
+}
+
+.key-setup-llm-runtime-label {
+  font-size: 10px;
+  letter-spacing: 1.4px;
+  opacity: 0.72;
+}
+
+.key-setup-llm-runtime-select {
+  width: 100%;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 11px;
+  color: inherit;
+  background: rgba(8, 24, 32, 0.72);
+  border: 1px solid rgba(120, 220, 255, 0.24);
+  border-radius: 4px;
+}
+
+.key-setup-llm-runtime-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.key-setup-llm-start,
+.key-setup-llm-stop {
+  padding: 5px 12px;
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 1.4px;
+  cursor: pointer;
+  color: inherit;
+  background: rgba(10, 32, 42, 0.8);
+  border: 1px solid rgba(120, 220, 255, 0.34);
+  border-radius: 4px;
+}
+
+.key-setup-llm-start:hover:not(:disabled),
+.key-setup-llm-stop:hover:not(:disabled) {
+  border-color: rgba(120, 220, 255, 0.62);
+}
+
+.key-setup-llm-start:disabled,
+.key-setup-llm-stop:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.key-setup-llm-stop {
+  border-color: rgba(255, 150, 120, 0.4);
+}
+
+.key-setup-llm-runtime-state {
+  font-size: 10px;
+  letter-spacing: 1px;
+  opacity: 0.8;
+}
+
+.key-setup-llm-runtime-state[data-running='true'] {
+  color: #6ef2c0;
+}
+
+.key-setup-llm-runtime-state[data-error='true'] {
+  color: #ff9c7a;
+}
+
+/* Launch output, shown only when something needs explaining. */
+.key-setup-llm-runtime-log {
+  margin: 0;
+  max-height: 112px;
+  overflow: auto;
+  padding: 6px 8px;
+  font-size: 10px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  opacity: 0.74;
+  background: rgba(4, 16, 22, 0.72);
+  border: 1px solid rgba(120, 220, 255, 0.14);
+  border-radius: 4px;
+}

@@ -360,6 +360,18 @@ export async function initKeySetup({
   const llmModelList = root.querySelector('[data-key-setup-llm-models]');
   const llmNote = root.querySelector('[data-key-setup-llm-note]');
   const llmTestButton = root.querySelector('[data-key-setup-llm-test]');
+  const runtimeHost = root.querySelector('[data-key-setup-llm-runtime]');
+  const runtimeModelSelect = root.querySelector(
+    '[data-key-setup-llm-local-model]',
+  );
+  const runtimeStartButton = root.querySelector('[data-key-setup-llm-start]');
+  const runtimeStopButton = root.querySelector('[data-key-setup-llm-stop]');
+  const runtimeStateLabel = root.querySelector(
+    '[data-key-setup-llm-runtime-state]',
+  );
+  const runtimeLog = root.querySelector('[data-key-setup-llm-runtime-log]');
+  let runtimeBusy = false;
+  let runtimeSnapshot = null;
   let llmBusy = false;
   let llmControls = null;
 
@@ -427,6 +439,169 @@ export async function initKeySetup({
   };
 
   /** Probe whatever is currently typed, without saving it first. */
+  /**
+   * Renders the launcher from a /api/llm/runtime snapshot.
+   *
+   * The whole section hides unless the endpoint exists (production builds do
+   * not mount it), spawning is permitted, and the selected provider is a local
+   * runtime that is actually installed — an offer to start something that
+   * cannot start is worse than no offer.
+   */
+  const renderRuntime = () => {
+    if (!runtimeHost) return;
+    const provider = llmControls?.provider?.value?.trim() || '';
+    const info = runtimeSnapshot?.providers?.[provider];
+    const usable =
+      Boolean(runtimeSnapshot?.spawnAllowed) && Boolean(info?.installed);
+    runtimeHost.hidden = !usable;
+    if (!usable) return;
+
+    const state = runtimeSnapshot.runtime || {};
+    const running =
+      Boolean(state.running) &&
+      (state.provider === provider || state.managed === false);
+
+    if (runtimeModelSelect) {
+      const models = info.models || [];
+      const previous = runtimeModelSelect.value;
+      runtimeModelSelect.replaceChildren();
+      if (!models.length) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = 'No local models found';
+        runtimeModelSelect.append(option);
+        runtimeModelSelect.disabled = true;
+      } else {
+        for (const model of models) {
+          const option = document.createElement('option');
+          option.value = model.id;
+          option.textContent = model.sizeBytes
+            ? `${model.label} (${(model.sizeBytes / 1073741824).toFixed(1)} GB)`
+            : model.label;
+          runtimeModelSelect.append(option);
+        }
+        runtimeModelSelect.disabled = running;
+        if (previous && models.some((m) => m.id === previous)) {
+          runtimeModelSelect.value = previous;
+        } else if (running && state.model) {
+          runtimeModelSelect.value = state.model;
+        }
+      }
+      // Ollama loads models on demand, so it needs no pick at launch.
+      runtimeModelSelect.closest('.key-setup-llm-runtime-row').hidden =
+        info.modelKind !== 'path';
+    }
+
+    if (runtimeStartButton) {
+      runtimeStartButton.hidden = running;
+      runtimeStartButton.disabled =
+        runtimeBusy || !info.models?.length
+          ? info.modelKind === 'path' && !info.models?.length
+          : runtimeBusy;
+    }
+    if (runtimeStopButton) {
+      // Only a child this session started can be stopped by pid; an older one
+      // is reported honestly rather than offered a button that cannot work.
+      runtimeStopButton.hidden = !running || state.managed === false;
+      runtimeStopButton.disabled = runtimeBusy;
+    }
+    if (runtimeStateLabel) {
+      runtimeStateLabel.dataset.running = String(running);
+      runtimeStateLabel.textContent = running
+        ? state.managed
+          ? `RUNNING · pid ${state.pid} · port ${state.port}`
+          : `RUNNING on port ${state.port} · started outside this session`
+        : 'NOT RUNNING';
+    }
+  };
+
+  const showRuntimeLog = (lines) => {
+    if (!runtimeLog) return;
+    const text = (lines || []).join('\n');
+    runtimeLog.hidden = !text;
+    runtimeLog.textContent = text;
+  };
+
+  /** Reads the launcher snapshot. A missing endpoint simply hides the section. */
+  const refreshRuntime = async () => {
+    if (!runtimeHost) return;
+    try {
+      const response = await doFetch('/api/llm/runtime', {
+        cache: 'no-store',
+        signal: lifetime.signal,
+      });
+      if (!response.ok) {
+        runtimeSnapshot = null;
+        runtimeHost.hidden = true;
+        return;
+      }
+      runtimeSnapshot = await response.json();
+    } catch {
+      runtimeSnapshot = null;
+      runtimeHost.hidden = true;
+      return;
+    }
+    if (disposed) return;
+    renderRuntime();
+  };
+
+  const postRuntime = async (body, workingLabel) => {
+    if (disposed || runtimeBusy) return;
+    runtimeBusy = true;
+    renderRuntime();
+    sayLlm(workingLabel);
+    try {
+      const response = await doFetch('/api/llm/runtime', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: lifetime.signal,
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (disposed) return;
+      runtimeSnapshot = payload;
+      showRuntimeLog(payload?.runtime?.log);
+      sayLlm(
+        payload.error
+          ? payload.error
+          : payload.runtime?.running
+            ? `Server running on port ${payload.runtime.port}. Set BASE URL to http://localhost:${payload.runtime.port} and save.`
+            : 'Server stopped.',
+      );
+    } catch (error) {
+      // A launcher failure must never take the settings panel down with it.
+      sayLlm(`Launcher failed: ${error?.message || error}`);
+    } finally {
+      runtimeBusy = false;
+      if (!disposed) renderRuntime();
+    }
+  };
+
+  const onStartRuntime = () =>
+    postRuntime(
+      {
+        action: 'start',
+        provider: llmControls?.provider?.value?.trim(),
+        model: runtimeModelSelect?.value || '',
+        port: portFromBaseUrl(llmControls?.baseUrl?.value),
+      },
+      'Starting the model server — a large model can take a minute…',
+    );
+
+  const onStopRuntime = () => postRuntime({ action: 'stop' }, 'Stopping…');
+
+  /** Port from the panel's BASE URL, so the launcher matches what gets saved. */
+  const portFromBaseUrl = (value) => {
+    const text = String(value || '').trim();
+    if (!text) return undefined;
+    try {
+      const port = new URL(text.includes('://') ? text : `http://${text}`).port;
+      return port ? Number(port) : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+
   const onTestLlm = async () => {
     if (disposed || llmBusy || !llmControls) return;
     llmBusy = true;
@@ -480,6 +655,9 @@ export async function initKeySetup({
     // stays reachable this session (and via ?setup=1) to swap or verify keys.
     chip.hidden = status.setCount >= status.total;
     renderLlm(status.llm);
+    // The launcher is a separate endpoint (it exists only on the dev server),
+    // so it is read alongside rather than as part of the status payload.
+    refreshRuntime();
     if (!rowsHost) return;
     rowsHost.textContent = '';
     for (const key of status.keys || [])
@@ -610,6 +788,9 @@ export async function initKeySetup({
   closeButton?.addEventListener('click', close);
   applyButton?.addEventListener('click', onApply);
   llmTestButton?.addEventListener('click', onTestLlm);
+  runtimeStartButton?.addEventListener('click', onStartRuntime);
+  runtimeStopButton?.addEventListener('click', onStopRuntime);
+  llmControls?.provider?.addEventListener?.('change', renderRuntime);
   // Remove buttons are rendered per row; delegate so re-renders stay wired.
   rowsHost?.addEventListener('click', (event) => {
     const button = event.target?.closest?.('[data-key-setup-remove]');
@@ -655,6 +836,8 @@ export async function initKeySetup({
     closeButton?.removeEventListener('click', close);
     applyButton?.removeEventListener('click', onApply);
     llmTestButton?.removeEventListener('click', onTestLlm);
+    runtimeStartButton?.removeEventListener('click', onStartRuntime);
+    runtimeStopButton?.removeEventListener('click', onStopRuntime);
   };
   return { open: openDialog, close, render, destroy };
 }
