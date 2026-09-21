@@ -1345,6 +1345,7 @@
 
 .satellite-search-controls {
   display: flex;
+  flex: 0 0 auto;
   flex-wrap: wrap;
   gap: 6px;
 }
@@ -1390,6 +1391,7 @@
 
 .satellite-search-roster {
   display: grid;
+  flex: 0 0 auto;
   min-height: 0;
   gap: 8px;
   padding: 9px;
