@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "manifest": {
+      "url": "https://app.manifest.build/api/v1/mcp",
+      "serverUrl": "https://app.manifest.build/api/v1/mcp"
+    }
+  }
+}
