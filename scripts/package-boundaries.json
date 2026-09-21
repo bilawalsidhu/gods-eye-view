@@ -138,6 +138,8 @@
     "modules": [
       "server/providers/gbfs.js",
       "server/providers/common/http.js",
+      "server/providers/common/rate-limit.js",
+      "src/sources/rateLimit.js",
       "src/data/gbfsSource.js",
       "src/sources/httpBody.js"
     ],
