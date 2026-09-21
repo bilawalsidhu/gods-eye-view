@@ -639,6 +639,22 @@
       "slots": [
         "display.sharpen"
       ]
+    },
+    {
+      "name": "message-square",
+      "replaces": "— (new control 2026-09-21: camera-chat toggle)",
+      "usage": [
+        "CCTV panel › ASK ONDEMAND camera chat toggle (src/ui/templates/layer-panels.html #cctv-ask-btn)"
+      ],
+      "slots": []
+    },
+    {
+      "name": "image-plus",
+      "replaces": "— (new control 2026-09-21: attach camera frame)",
+      "usage": [
+        "ASK ONDEMAND › attach the current camera frame to the next question (src/ondemand/entityChat.js)"
+      ],
+      "slots": []
     }
   ],
   "sourceUrlTemplate": "https://unpkg.com/lucide-static@{version}/icons/{name}.svg"

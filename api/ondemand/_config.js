@@ -83,3 +83,5 @@
  * server/ondemand/deny-list.test.mjs.
  */
 export * from '../../server/ondemand/config.js';
+// Camera-chat profile defaults (non-secret; docs/ONDEMAND_CAMERA_CHAT_ADDENDUM_2026-09-21.md).
+export * from '../../server/ondemand/camera-chat-config.js';

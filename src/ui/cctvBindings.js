@@ -6,6 +6,16 @@ export function _initCctvPanel() {
     await this.actions.toggleEnabled();
   });
 
+  // ASK ONDEMAND about the active camera: the chat controller
+  // (src/ondemand/entityChat.js, installed by src/app/tools.js) listens for
+  // this event and opens ONE session for the camera.
+  this.listen(this._cctvAskBtn, 'click', () => {
+    const cameraId = this._cctvState?.activeCameraId || null;
+    window.dispatchEvent(
+      new CustomEvent('gev:ask-camera', { detail: { cameraId } }),
+    );
+  });
+
   this.listen(this._cctvNearestBtn, 'click', async () => {
     const generation = ++this._actionGeneration;
     const activeId = this._cctvState?.activeCameraId;

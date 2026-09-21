@@ -52,6 +52,11 @@ export function _renderCctvState(state) {
     this._cctvEnableBtn.classList.toggle('active', enabled);
     this._cctvEnableBtn.textContent = enabled ? 'CCTV ON' : 'CCTV OFF';
   }
+  if (this._cctvAskBtn) {
+    // Only meaningful with an active camera (the chat needs its id/pose).
+    this._cctvAskBtn.hidden = !(enabled && activeId);
+    this._cctvAskBtn.disabled = !(enabled && activeId);
+  }
 
   if (this._cctvSelect) {
     const shouldRebuild =

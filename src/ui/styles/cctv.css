@@ -70,6 +70,21 @@
   margin-bottom: 0;
 }
 
+/* ASK ONDEMAND camera-chat toggle: inline Lucide icon + short label. */
+.cctv-ask-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.cctv-ask-btn .od-icon {
+  width: 14px;
+  height: 14px;
+}
+.cctv-ask-btn[data-chat-open='true'] {
+  border-color: var(--od-green-500, #3bb795);
+  color: var(--od-green-200, #adedd6);
+}
+
 .cctv-calibration-block {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 9px;

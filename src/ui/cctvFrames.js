@@ -78,6 +78,9 @@ export function _settleCctvFrame(token, src, ok) {
 
   this._cctvFrame.dataset.error = '';
   this._cctvFrame.src = src;
+  // Load time of the frame now on screen — the camera chat reports it as the
+  // frame timestamp it attaches (src/ondemand/cameraContext.js).
+  this._cctvFrame.dataset.loadedAt = String(Date.now());
   this._cctvFrame.classList.add('active');
   this._cctvFrameWrap?.classList.add('has-frame');
   syncBadge();

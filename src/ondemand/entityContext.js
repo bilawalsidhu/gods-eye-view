@@ -22,13 +22,20 @@ import { LayerPanel } from '../ui/layerPanel.js';
 
 export const ENTITY_CONTEXT_SCHEMA = 'ondemand-spatial/entity-chat/1';
 export const MAX_NEARBY = 10;
-export const ENTITY_KINDS = Object.freeze(['aircraft', 'vessel', 'satellite']);
+export const ENTITY_KINDS = Object.freeze([
+  'aircraft',
+  'vessel',
+  'satellite',
+  'camera',
+]);
 /** Selection-lane layer id → entity kind. */
 export const LAYER_KIND = Object.freeze({
   flights: 'aircraft',
   military: 'aircraft',
   'ais-live-vessels': 'vessel',
   satellites: 'satellite',
+  // Live street camera (CCTV layer) — docs/ONDEMAND_CAMERA_CHAT_ADDENDUM_2026-09-21.md
+  cctv: 'camera',
 });
 /** Ground radius searched for nearby aircraft/vessels (km). */
 export const NEARBY_RADIUS_KM = 250;
@@ -47,7 +54,7 @@ const toMgrsRaw =
     ? mgrsModule.forward
     : mgrsModule.default?.forward;
 
-/** @param {string} layerId @returns {'aircraft'|'vessel'|'satellite'|null} */
+/** @param {string} layerId @returns {'aircraft'|'vessel'|'satellite'|'camera'|null} */
 export function kindForLayer(layerId) {
   return LAYER_KIND[layerId] || null;
 }
@@ -117,6 +124,47 @@ export function bearingDeg(lat1, lon1, lat2, lon2) {
       Math.cos(toRad(lat2)) *
       Math.cos(toRad(lon2 - lon1));
   return ((((Math.atan2(y, x) * 180) / Math.PI) % 360) + 360) % 360;
+}
+
+/** "MARTIN LUTHER KING JR BLVD / COMAL ST" → ["Martin Luther King Jr Blvd", "Comal St"]. */
+export function splitIntersection(name) {
+  const text = textOrNull(name);
+  if (!text) return [];
+  return text
+    .split(/\s*(?:\/|&|\bat\b|\band\b|@)\s*/i)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .slice(0, 4)
+    .map((part) =>
+      part.replace(/[A-Za-z]+/g, (word) =>
+        STREET_ACRONYMS.has(word.toUpperCase())
+          ? word.toUpperCase()
+          : word.charAt(0).toUpperCase() + word.slice(1).toLowerCase(),
+      ),
+    );
+}
+/** Road-name tokens kept upper-case when the feed shouts the whole label. */
+const STREET_ACRONYMS = new Set([
+  'MLK',
+  'IH',
+  'US',
+  'FM',
+  'RM',
+  'SH',
+  'NB',
+  'SB',
+  'EB',
+  'WB',
+  'SVRD',
+]);
+
+const CARDINALS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+/** Compass heading (°) → 8-point cardinal, or null. */
+export function cardinalFor(headingDeg) {
+  const value = finiteOrNull(headingDeg);
+  if (value === null) return null;
+  const normalized = ((value % 360) + 360) % 360;
+  return CARDINALS[Math.round(normalized / 45) % 8];
 }
 
 function round(value, digits) {
@@ -263,6 +311,57 @@ export function normalizeEntity(kind, entity = {}, { sourceFeed = null } = {}) {
       courseDeg: round(e.course, 0),
       observedAtUtc: isoOrNull(
         e.lastPositionUtc ?? e.lastPositionEpoch ?? e.observedAtUtc,
+      ),
+    };
+  }
+  if (kind === 'camera') {
+    const id = textOrNull(e.cameraId ?? e.id);
+    const streets = Array.isArray(e.streets)
+      ? e.streets
+          .map((v) => textOrNull(v))
+          .filter(Boolean)
+          .slice(0, 4)
+      : splitIntersection(e.name ?? e.label);
+    return {
+      ...base,
+      id,
+      cameraId: id,
+      name: textOrNull(e.name) || textOrNull(e.label) || id,
+      intersection: textOrNull(e.intersection) || textOrNull(e.name) || null,
+      streets,
+      city: textOrNull(e.city),
+      provider: textOrNull(e.provider),
+      feedType: textOrNull(e.feedType),
+      sourceStatus: textOrNull(e.sourceStatus),
+      sourceLabel: textOrNull(e.sourceLabel),
+      altitudeM: round(e.elevationM ?? e.absoluteHeightM, 0),
+      mountHeightM: round(e.mountHeightM, 1),
+      headingDeg: round(e.headingDeg ?? e.heading, 0),
+      headingCardinal: cardinalFor(e.headingDeg ?? e.heading),
+      pitchDeg: round(e.pitchDeg, 0),
+      fovDeg: round(e.fovDeg, 0),
+      rangeM: round(e.rangeM, 0),
+      frame:
+        e.frame && typeof e.frame === 'object'
+          ? {
+              url: textOrNull(e.frame.url),
+              capturedAtUtc: isoOrNull(
+                e.frame.capturedAtUtc ?? e.frame.capturedAt,
+              ),
+              ageSec: finiteOrNull(e.frame.ageSec),
+              status: textOrNull(e.frame.status),
+              mediaId: textOrNull(e.frame.mediaId),
+            }
+          : null,
+      roads: Array.isArray(e.roads)
+        ? e.roads.slice(0, 12).map(trimRecord)
+        : null,
+      traffic:
+        e.traffic && typeof e.traffic === 'object'
+          ? trimRecord(e.traffic)
+          : null,
+      observedAtUtc: isoOrNull(
+        e.frame?.capturedAtUtc ?? e.observedAtUtc ?? e.lastUpdate,
       ),
     };
   }
@@ -754,7 +853,27 @@ const ENTITY_LABEL = {
   aircraft: 'aircraft',
   vessel: 'vessel',
   satellite: 'satellite',
+  camera: 'live street camera',
 };
+
+/**
+ * Extra instruction lines for the camera kind: frame, lanes and traffic
+ * questions are answered from the JSON (roads/traffic/frame blocks) plus any
+ * media context OnDemand extracted from an attached frame.
+ */
+export function cameraInstructionLines(context) {
+  const entity = context?.entity || {};
+  const streets = Array.isArray(entity.streets) ? entity.streets : [];
+  const looking = entity.headingCardinal
+    ? `looking ${entity.headingCardinal} (${entity.headingDeg}°)`
+    : 'heading not reported';
+  return [
+    `The camera is a fixed traffic camera${streets.length ? ` at the intersection of ${streets.join(' and ')}` : ''}, ${looking}, FOV ${entity.fovDeg ?? 'n/a'}°.`,
+    '`entity.roads` lists the OpenStreetMap ways within ~60 m of the camera (name, highway class, lanes, lanes:forward/backward, oneway, maxspeed, turn:lanes when tagged); `entity.traffic` is the live Street Traffic layer sample (mode live/sim, currentSpeed vs freeFlowSpeed, closedRoads) and `layers` shows the current MOVEMENT toggles. Answer lane questions ("how many lanes", "which lanes are open toward X") from those blocks and say "not tagged" when a value is missing — never guess lane counts.',
+    'When a camera frame was attached to the session through the Media API, its extracted content is part of this conversation: describe only what that content supports (vehicles, pedestrians, crosswalk occupancy, signal state, lane occupancy) and say when the frame does not show something.',
+    'For questions about current incidents, closures or news, use the web search agent attached to this session and cite the source name and time; if no result is available, say so.',
+  ];
+}
 
 /**
  * The compact instruction that precedes the JSON context (≤ 2 KB).
@@ -780,6 +899,9 @@ export function entitySystemInstruction(context) {
     `The operator has selected a ${kind}: ${label} at MGRS ${mgrs} (scene "${context?.scene?.name || 'unknown'}").`,
     'The JSON block after this instruction is the ground truth for this conversation: the selected entity (fields are null when the feed did not report them), the camera scene, the status text of EVERY data layer exactly as the DATA LAYERS panel shows it, the nearest aircraft/vessels/satellites (capped at 10 each) and the tool catalogue this console can call.',
     'Rules: answer concisely (2–6 sentences or a short list) in plain text; state units (m, kt, km, °); never invent identity, route or position data that is not in the JSON — say "not reported" instead; when a layer is DEGRADED/STALE/FALLBACK/UNAVAILABLE, say so before relying on it; distances are great-circle from the selected entity.',
+    ...(context?.entity?.kind === 'camera'
+      ? cameraInstructionLines(context)
+      : []),
     toolNames
       ? `Tools available to the console (you cannot call them yourself; recommend by name when useful): ${toolNames}.`
       : 'No tool catalogue was available for this session.',

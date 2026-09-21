@@ -123,6 +123,25 @@
   font-size: 15px;
   line-height: 1;
 }
+/* Camera kind: attach the current frame to the next question. */
+.od-chat__attach {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+}
+.od-chat__attach[hidden] {
+  display: none;
+}
+.od-chat__attach .od-icon {
+  width: 16px;
+  height: 16px;
+}
+.od-chat__attach[data-attach='pending'] {
+  border-color: var(--od-green-500, #3bb795);
+  color: var(--od-green-200, #adedd6);
+  background: rgba(59, 183, 149, 0.18);
+}
 
 .od-chat__key-row {
   display: grid;
@@ -250,7 +269,7 @@
 
 .od-chat__composer {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 6px;
   padding: 8px 12px 10px;
   border-top: 1px solid rgba(59, 183, 149, 0.28);

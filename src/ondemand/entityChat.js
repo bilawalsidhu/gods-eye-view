@@ -27,11 +27,14 @@
 import {
   buildEntityContext,
   entitySystemPrompt,
+  entitySystemInstruction,
+  fitContextToBudget,
   kindForLayer,
   normalizeEntity,
   SATELLITE_RADIUS_KM,
   MAX_NEARBY,
 } from './entityContext.js';
+import { resolveCameraEntity, summarizeRoads } from './cameraContext.js';
 import { setIconContent } from '../ui/icons/layerIcon.js';
 
 export const ENTITY_CHAT_ID = 'ondemand-entity-chat';
@@ -40,6 +43,14 @@ export const API_KEY_HEADER = 'x-ondemand-key';
 export const API_KEY_MAX_LEN = 128;
 export const EXTERNAL_USER_PREFIX = 'ondemand-spatial-entity-';
 export const ASK_BUTTON_ID = 'ask-ondemand-btn';
+/** localStorage prefix for the per-camera session id (one session per camera). */
+export const SESSION_STORAGE_PREFIX = 'ondemand.session.';
+/** Proxy profile name for camera turns (server applies endpoint/agents/mode). */
+export const CAMERA_PROFILE = 'camera';
+/** Pages of history pulled on open (limit per page comes from the server). */
+export const HISTORY_MAX_PAGES = 3;
+/** Byte budget for the per-turn fulfillmentPrompt context (camera turns). */
+export const TURN_CONTEXT_BYTES = 12 * 1024;
 /** Every selector a harness needs to drive the overlay headlessly. */
 export const SELECTORS = Object.freeze({
   askButton: `#${ASK_BUTTON_ID}`,
@@ -58,14 +69,17 @@ export const SELECTORS = Object.freeze({
   input: `#${ENTITY_CHAT_ID}-input`,
   send: `#${ENTITY_CHAT_ID}-send`,
   close: `#${ENTITY_CHAT_ID}-close`,
+  attach: `#${ENTITY_CHAT_ID}-attach`,
   message: '.od-chat__msg',
   assistantMessage: '.od-chat__msg--assistant',
+  historyMessage: '.od-chat__msg[data-history="true"]',
 });
 const PRINTABLE_ASCII = /^[\x21-\x7e]+$/;
 const KIND_LABEL = Object.freeze({
   aircraft: 'AIRCRAFT',
   vessel: 'VESSEL',
   satellite: 'SATELLITE',
+  camera: 'CAMERA',
 });
 
 /** A usable key: printable ASCII, 1..128 chars (mirrors the proxy rule). */
@@ -103,6 +117,81 @@ export function writeStoredApiKey(storage, value) {
   } catch {
     return null;
   }
+}
+
+/** Stored `{ sessionId, createdAtUtc }` for an entity key, or null. */
+export function readStoredSession(storage, entityKey) {
+  try {
+    const raw = storage?.getItem?.(`${SESSION_STORAGE_PREFIX}${entityKey}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return typeof parsed?.sessionId === 'string' && parsed.sessionId
+      ? {
+          sessionId: parsed.sessionId,
+          createdAtUtc: parsed.createdAtUtc || null,
+        }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Persist (or clear, for null) the entity key → session id mapping. */
+export function writeStoredSession(storage, entityKey, record) {
+  try {
+    const key = `${SESSION_STORAGE_PREFIX}${entityKey}`;
+    if (!record?.sessionId) storage?.removeItem?.(key);
+    else
+      storage?.setItem?.(
+        key,
+        JSON.stringify({
+          sessionId: String(record.sessionId),
+          createdAtUtc: record.createdAtUtc || new Date().toISOString(),
+        }),
+      );
+  } catch {
+    // storage unavailable — the session stays in memory only
+  }
+}
+
+/**
+ * Flatten a cursor-paginated `GET …/messages` payload list (oldest first)
+ * into transcript rows. Media messages become a system line; the context
+ * prime turn (its query starts with the analyst instruction) is collapsed.
+ */
+export function historyRows(pages) {
+  const messages = [];
+  for (const page of Array.isArray(pages) ? pages : [])
+    for (const message of Array.isArray(page?.data) ? page.data : [])
+      messages.push(message);
+  messages.sort((a, b) =>
+    String(a?.createdAt || '').localeCompare(String(b?.createdAt || '')),
+  );
+  const rows = [];
+  for (const message of messages) {
+    if (message?.type === 'media') {
+      rows.push({
+        role: 'system',
+        text: `frame attached · ${message.media?.name || message.media?.id || 'media'}${message.createdAt ? ` · ${message.createdAt}` : ''}`,
+        id: message.id || null,
+      });
+      continue;
+    }
+    const query = typeof message?.query === 'string' ? message.query : '';
+    const answer = typeof message?.answer === 'string' ? message.answer : '';
+    if (query.startsWith('You are the OnDemand Spatial analyst')) {
+      rows.push({
+        role: 'system',
+        text: `context loaded earlier · OnDemand: ${answer || 'ok'}`,
+        id: message.id || null,
+      });
+      continue;
+    }
+    if (query) rows.push({ role: 'user', text: query, id: message.id || null });
+    if (answer)
+      rows.push({ role: 'assistant', text: answer, id: message.id || null });
+  }
+  return rows;
 }
 
 /** `ondemand-spatial-entity-<yyyy-mm-dd>` (UTC date). */
@@ -331,7 +420,7 @@ export function resolveSelectedEntity({
     (selection?.layerId ? { ...selection } : null);
   const layerId = selection?.layerId || record?.layerId || null;
   const kind = kindForLayer(layerId);
-  if (!kind) return null;
+  if (!kind || kind === 'camera') return null;
   const module = dataManager?.layers?.get?.(layerId)?.module;
   let live = null;
   try {
@@ -411,6 +500,15 @@ export function createEntityChat(deps = {}) {
       globalThis.performance?.now ? globalThis.performance.now() : Date.now());
   const apiBase = deps.apiBase ?? '';
   const endpointId = deps.endpointId ?? null;
+  const resolveCamera =
+    deps.resolveCamera ??
+    ((input) =>
+      resolveCameraEntity({
+        dataManager: deps.dataManager,
+        document,
+        fetch: fetchImpl,
+        ...input,
+      }));
   const buildContext =
     deps.buildContext ??
     ((input) =>
@@ -436,6 +534,11 @@ export function createEntityChat(deps = {}) {
     turns: [],
     messages: [],
     error: null,
+    attachNext: false,
+    lastAttachment: null,
+    history: { loaded: false, pages: 0, rows: 0, error: null },
+    cameraConfig: null,
+    apiCalls: [],
   };
   /** entityKey → { promise, sessionId, context, primedOk, error } */
   const sessions = new Map();
@@ -598,9 +701,28 @@ export function createEntityChat(deps = {}) {
       text: 'SEND',
       attrs: { type: 'submit' },
     });
+    // Camera kind only: attach the current frame to the next question
+    // (inline Lucide image-plus; the aria-label names it).
+    ui.attach = el(document, 'button', {
+      id: `${ENTITY_CHAT_ID}-attach`,
+      className: 'od-chat__icon-btn od-chat__attach',
+      attrs: {
+        type: 'button',
+        'aria-label': 'Attach the current camera frame to the next question',
+        'aria-pressed': 'false',
+        title: 'Attach current camera frame',
+      },
+    });
+    setIconContent(ui.attach, 'image-plus', {}, document);
+    ui.attach.hidden = true;
+    composer.appendChild(ui.attach);
     composer.appendChild(ui.input);
     composer.appendChild(ui.send);
     overlay.appendChild(composer);
+    ui.attach.addEventListener('click', (event) => {
+      event?.preventDefault?.();
+      setAttachNext(!state.attachNext);
+    });
 
     composer.addEventListener('submit', (event) => {
       event?.preventDefault?.();
@@ -653,6 +775,128 @@ export function createEntityChat(deps = {}) {
     writeStoredApiKey(storage, value);
     syncKeyState();
     return Boolean(readStoredApiKey(storage));
+  }
+
+  function setAttachNext(on) {
+    state.attachNext = Boolean(on) && state.kind === 'camera';
+    if (!ui.attach) return;
+    ui.attach.setAttribute('aria-pressed', state.attachNext ? 'true' : 'false');
+    ui.attach.setAttribute(
+      'data-attach',
+      state.attachNext ? 'pending' : 'idle',
+    );
+    ui.attach.title = state.attachNext
+      ? 'Frame will be attached to the next question (click to cancel)'
+      : 'Attach current camera frame';
+  }
+
+  function noteApiCall(entry) {
+    state.apiCalls.push({ atUtc: new Date(now()).toISOString(), ...entry });
+    if (state.apiCalls.length > 50) state.apiCalls.shift();
+  }
+
+  /** Camera turns: the analyst instruction + a budget-fitted fresh context. */
+  function turnPrompt(context) {
+    const instruction = entitySystemInstruction(context).replace(
+      /\nReply to this first message with exactly: READY$/,
+      '',
+    );
+    const fitted = fitContextToBudget(context, TURN_CONTEXT_BYTES);
+    return `${instruction}\n\nCONTEXT_JSON:\n${JSON.stringify(fitted)}`;
+  }
+
+  /**
+   * Capture the frame the panel shows (same-origin proxy URL) and upload it
+   * through the Media API proxy, linked to the session by `sessionId`
+   * (docs/media-api: multipart file, name, sessionId, plugins, sizeBytes,
+   * responseMode). Resolves `{ mediaId, name, bytes, capturedAtUtc }`.
+   */
+  async function attachFrame(entry, context) {
+    const frame = context?.entity?.frame;
+    if (!frame?.url) throw new Error('no camera frame to attach');
+    const started = performanceNow();
+    const frameResponse = await fetchImpl(frame.url, { cache: 'no-store' });
+    if (!frameResponse?.ok)
+      throw new Error(`frame fetch failed · HTTP ${frameResponse?.status}`);
+    const blob = await frameResponse.blob();
+    const mime =
+      blob.type && /^image\//.test(blob.type) ? blob.type : 'image/jpeg';
+    const extension = mime === 'image/png' ? 'png' : 'jpg';
+    const capturedAtUtc = frame.capturedAtUtc || new Date(now()).toISOString();
+    const name = `${(context?.entity?.cameraId || 'camera').replace(/[^A-Za-z0-9_-]+/g, '_')}-${capturedAtUtc.replace(/[:.]/g, '-')}.${extension}`;
+    const plugin = state.cameraConfig?.imagePluginId;
+    if (!plugin)
+      throw new Error('image plugin id unavailable (health not loaded)');
+    const form = new FormData();
+    form.append('file', blob, name);
+    form.append('name', name);
+    form.append('sessionId', entry.sessionId);
+    form.append('plugins', plugin);
+    form.append('sizeBytes', String(blob.size));
+    form.append('responseMode', 'sync');
+    const response = await fetchImpl(`${apiBase}/api/ondemand/media`, {
+      method: 'POST',
+      headers: keyHeaders({ Accept: 'application/json' }),
+      body: form,
+    });
+    const json = await readJsonSafe(response);
+    noteApiCall({
+      call: 'media.upload',
+      url: '/api/ondemand/media',
+      status: response.status,
+      ms: Math.round(performanceNow() - started),
+    });
+    if (!response.ok) throw new Error(proxyErrorMessage(response.status, json));
+    const mediaId = json?.data?.id;
+    if (!mediaId) throw new Error('media upload returned no data.id');
+    return {
+      mediaId: String(mediaId),
+      name,
+      bytes: blob.size,
+      mime,
+      capturedAtUtc,
+      actionStatus: json?.data?.actionStatus || null,
+      context:
+        typeof json?.data?.context === 'string' ? json.data.context : null,
+    };
+  }
+
+  /**
+   * Cursor-paginated history (GET …/messages via the proxy, docs reference
+   * getchatmessages): first page without `cursor`, then `pagination.next`
+   * until it is an empty string or HISTORY_MAX_PAGES is reached.
+   */
+  async function loadHistory(entry) {
+    const pages = [];
+    let cursor = null;
+    const limit = state.cameraConfig?.historyLimit || 20;
+    for (let page = 0; page < HISTORY_MAX_PAGES; page += 1) {
+      const params = new URLSearchParams({
+        sessionId: entry.sessionId,
+        limit: String(limit),
+        sort: 'desc',
+      });
+      if (cursor) params.set('cursor', cursor);
+      const started = performanceNow();
+      const response = await fetchImpl(
+        `${apiBase}/api/ondemand/sessions?${params.toString()}`,
+        { headers: keyHeaders({ Accept: 'application/json' }) },
+      );
+      const json = await readJsonSafe(response);
+      noteApiCall({
+        call: 'sessions.messages',
+        url: `/api/ondemand/sessions?sessionId=…&limit=${limit}${cursor ? '&cursor=…' : ''}`,
+        status: response.status,
+        ms: Math.round(performanceNow() - started),
+      });
+      if (!response.ok)
+        throw new Error(proxyErrorMessage(response.status, json));
+      pages.push(json);
+      cursor =
+        typeof json?.pagination?.next === 'string' ? json.pagination.next : '';
+      if (!cursor) break;
+    }
+    return pages;
   }
 
   function setStatus(text) {
@@ -713,6 +957,7 @@ export function createEntityChat(deps = {}) {
     const entity = context?.entity || {};
     const kind = KIND_LABEL[entity.kind] || 'ENTITY';
     const label = entity.callsign || entity.name || entity.id || 'UNKNOWN';
+    if (ui.attach) ui.attach.hidden = entity.kind !== 'camera';
     if (ui.title) ui.title.textContent = `${kind} · ${label}`;
     if (ui.mgrs)
       ui.mgrs.textContent = `MGRS ${context?.scene?.coordinates?.mgrs || '---'}`;
@@ -736,12 +981,15 @@ export function createEntityChat(deps = {}) {
   function ensureSession(entityKey, input) {
     const existing = sessions.get(entityKey);
     if (existing) return existing;
+    const isCamera = input?.kind === 'camera';
     const entry = {
       sessionId: null,
       context: null,
       primedOk: false,
       error: null,
       primeMs: null,
+      reused: false,
+      historyRows: [],
     };
     entry.promise = (async () => {
       setStatus('BUILDING CONTEXT…');
@@ -751,16 +999,65 @@ export function createEntityChat(deps = {}) {
         state.context = context;
         renderHeader(context);
       }
+      // One session per camera, persisted across page loads: reuse the
+      // stored id (history is reloaded below) instead of opening another.
+      const stored = isCamera ? readStoredSession(storage, entityKey) : null;
+      if (stored) {
+        entry.sessionId = stored.sessionId;
+        entry.reused = true;
+        if (state.entityKey === entityKey) state.sessionId = entry.sessionId;
+        setStatus(
+          `RELOADING HISTORY · session ${shortSession(entry.sessionId)}`,
+        );
+        try {
+          const pages = await loadHistory(entry);
+          entry.historyRows = historyRows(pages);
+          state.history = {
+            loaded: true,
+            pages: pages.length,
+            rows: entry.historyRows.length,
+            error: null,
+          };
+          entry.primedOk = true;
+          entry.primeAnswer = `history ${entry.historyRows.length} rows`;
+          entry.primeMs = 0;
+          return entry;
+        } catch (error) {
+          // The stored session is gone (404) or unreadable — forget it and
+          // open a fresh one below.
+          state.history = {
+            loaded: false,
+            pages: 0,
+            rows: 0,
+            error: error?.message || String(error),
+          };
+          writeStoredSession(storage, entityKey, null);
+          entry.sessionId = null;
+          entry.reused = false;
+        }
+      }
       setStatus('OPENING SESSION…');
+      const startedSession = performanceNow();
       const sessionResponse = await postJson('/api/ondemand/sessions', {
         userId: externalUserIdFor(new Date(now())),
         reuse: false,
       });
       const sessionBody = await readJsonSafe(sessionResponse);
+      noteApiCall({
+        call: 'sessions.create',
+        url: '/api/ondemand/sessions',
+        status: sessionResponse.status,
+        ms: Math.round(performanceNow() - startedSession),
+      });
       if (!sessionResponse.ok || !sessionBody?.sessionId) {
         throw new Error(proxyErrorMessage(sessionResponse.status, sessionBody));
       }
       entry.sessionId = String(sessionBody.sessionId);
+      if (isCamera)
+        writeStoredSession(storage, entityKey, {
+          sessionId: entry.sessionId,
+          createdAtUtc: sessionBody.createdAt || new Date(now()).toISOString(),
+        });
       if (state.entityKey === entityKey) state.sessionId = entry.sessionId;
       setStatus(`LOADING CONTEXT · session ${shortSession(entry.sessionId)}`);
       const started = performanceNow();
@@ -772,9 +1069,16 @@ export function createEntityChat(deps = {}) {
         fulfillmentOnly: true,
       };
       if (endpointId) primeBody.endpointId = endpointId;
+      if (isCamera) primeBody.profile = CAMERA_PROFILE;
       const primeResponse = await postJson('/api/ondemand/chat', primeBody);
       const primeJson = await readJsonSafe(primeResponse);
       entry.primeMs = Math.round(performanceNow() - started);
+      noteApiCall({
+        call: 'chat.prime',
+        url: '/api/ondemand/chat',
+        status: primeResponse.status,
+        ms: entry.primeMs,
+      });
       if (!primeResponse.ok) {
         entry.error = proxyErrorMessage(primeResponse.status, primeJson);
         entry.primedOk = false;
@@ -798,6 +1102,12 @@ export function createEntityChat(deps = {}) {
   function summarizeContext(context) {
     const layers = Array.isArray(context?.layers) ? context.layers : [];
     const enabled = layers.filter((row) => row.enabled).length;
+    if (context?.entity?.kind === 'camera') {
+      const frame = context.entity.frame?.capturedAtUtc
+        ? `frame ${context.entity.frame.capturedAtUtc}`
+        : 'no frame';
+      return `${enabled}/${layers.length} layers on · ${summarizeRoads(context.entity.roads)} · ${frame}`;
+    }
     const nearby = ['aircraft', 'vessels', 'satellites'].reduce(
       (sum, key) =>
         sum +
@@ -841,7 +1151,24 @@ export function createEntityChat(deps = {}) {
       renderHeader(buildEntityContext({ entity, kind: resolvedKind }));
     }
     syncKeyState();
+    setAttachNext(false);
     ui.input.focus?.();
+    if (resolvedKind === 'camera' && !state.cameraConfig) {
+      const health = await fetchJsonTolerant(
+        fetchImpl,
+        `${apiBase}/api/ondemand/health`,
+        keyHeaders(),
+      );
+      state.cameraConfig = health?.cameraChat || null;
+      state.serverConfigured = health?.configured === true;
+      if (health && health.configured !== true && !readStoredApiKey(storage)) {
+        setStatus('NOT CONFIGURED · ONDEMAND_API_KEY is not set on the server');
+        appendMessage(
+          'error',
+          'OnDemand is not configured on this deployment (health: "not configured"). Set ONDEMAND_API_KEY on the server, or paste a key under KEY, to chat about this camera.',
+        );
+      }
+    }
     const entry = ensureSession(entityKey, { entity, kind: resolvedKind });
     const fresh = !entry.sessionId && !entry.error;
     try {
@@ -856,11 +1183,23 @@ export function createEntityChat(deps = {}) {
     state.sessionId = entry.sessionId;
     state.context = entry.context;
     renderHeader(entry.context);
+    if (fresh && entry.reused && entry.historyRows.length) {
+      for (const row of entry.historyRows) {
+        const message = appendMessage(row.role, row.text);
+        message.node?.setAttribute?.('data-history', 'true');
+        if (row.id) message.node?.setAttribute?.('data-message-id', row.id);
+      }
+    }
     if (entry.primedOk) {
       setStatus(
         `READY · ${summarizeContext(entry.context)} · session ${shortSession(entry.sessionId)}`,
       );
-      if (fresh)
+      if (fresh && entry.reused)
+        appendMessage(
+          'system',
+          `Session resumed · ${entry.historyRows.length} history rows · ${summarizeContext(entry.context)}`,
+        );
+      else if (fresh)
         appendMessage(
           'system',
           `Context loaded (${summarizeContext(entry.context)}) in ${entry.primeMs} ms · OnDemand: ${entry.primeAnswer || 'ok'}`,
@@ -875,7 +1214,7 @@ export function createEntityChat(deps = {}) {
   }
 
   /** Stream one user message through the proxy. Resolves when the turn ends. */
-  async function send(text) {
+  async function send(text, options = {}) {
     const query = typeof text === 'string' ? text.trim() : '';
     if (!query || state.busy || !state.open || destroyed) return null;
     const entityKey = state.entityKey;
@@ -888,8 +1227,9 @@ export function createEntityChat(deps = {}) {
     if (ui.send) ui.send.disabled = true;
     if (ui.input) ui.input.value = '';
     appendMessage('user', query);
-    const assistant = appendMessage('assistant', '');
-    assistant.node?.setAttribute?.('data-streaming', 'true');
+    // The assistant bubble is created once the turn is ready to stream so a
+    // camera "frame attached" note lands between the question and the answer.
+    let assistant = null;
     const turn = {
       query,
       firstTokenMs: null,
@@ -897,6 +1237,9 @@ export function createEntityChat(deps = {}) {
       chars: 0,
       ok: false,
       error: null,
+      attachment: null,
+      events: 0,
+      status: null,
     };
     state.turns.push(turn);
     try {
@@ -907,17 +1250,54 @@ export function createEntityChat(deps = {}) {
       }
       if (!entry.sessionId)
         throw new Error(entry.error || 'session unavailable');
-      setStatus('STREAMING…');
-      setLatency(null);
-      abortController =
-        typeof AbortController === 'function' ? new AbortController() : null;
-      const started = performanceNow();
       const body = {
         sessionId: entry.sessionId,
         query,
         responseMode: 'stream',
       };
       if (endpointId) body.endpointId = endpointId;
+      if (state.kind === 'camera') {
+        body.profile = CAMERA_PROFILE;
+        // Fresh context every turn (frame time, traffic sample, layers).
+        let context = entry.context;
+        try {
+          const refreshed = await resolveCamera({
+            cameraId:
+              entry.context?.entity?.cameraId || state.entity?.cameraId || null,
+          });
+          if (refreshed?.entity) {
+            context = await buildContext({
+              entity: refreshed.entity,
+              kind: 'camera',
+            });
+            entry.context = context;
+            state.context = context;
+            renderHeader(context);
+          }
+        } catch {
+          // keep the last context
+        }
+        body.modelConfigs = { fulfillmentPrompt: turnPrompt(context) };
+        if (state.attachNext || options.attachFrame) {
+          setStatus('ATTACHING FRAME…');
+          const attachment = await attachFrame(entry, context);
+          state.lastAttachment = attachment;
+          turn.attachment = attachment;
+          body.attachment = { mediaId: attachment.mediaId };
+          appendMessage(
+            'system',
+            `frame attached · ${attachment.name} · ${attachment.bytes} B · media ${attachment.mediaId}${attachment.actionStatus ? ` · ${attachment.actionStatus}` : ''}`,
+          );
+          setAttachNext(false);
+        }
+      }
+      assistant = appendMessage('assistant', '');
+      assistant.node?.setAttribute?.('data-streaming', 'true');
+      setStatus('STREAMING…');
+      setLatency(null);
+      abortController =
+        typeof AbortController === 'function' ? new AbortController() : null;
+      const started = performanceNow();
       const response = await fetchImpl(`${apiBase}/api/ondemand/chat`, {
         method: 'POST',
         headers: keyHeaders({
@@ -926,6 +1306,14 @@ export function createEntityChat(deps = {}) {
         }),
         body: JSON.stringify(body),
         signal: abortController?.signal,
+      });
+      turn.status = response.status;
+      noteApiCall({
+        call: 'chat.stream',
+        url: '/api/ondemand/chat',
+        status: response.status,
+        ms: Math.round(performanceNow() - started),
+        attachment: body.attachment?.mediaId || null,
       });
       if (!response.ok) {
         throw new Error(
@@ -939,6 +1327,7 @@ export function createEntityChat(deps = {}) {
       let streamError = null;
       const handle = (events) => {
         for (const event of events) {
+          if (event.type !== 'heartbeat') turn.events += 1;
           if (event.type === 'fulfillment') {
             if (turn.firstTokenMs === null) {
               turn.firstTokenMs = Math.round(performanceNow() - started);
@@ -982,6 +1371,7 @@ export function createEntityChat(deps = {}) {
       );
     } catch (error) {
       turn.error = error?.message || String(error);
+      if (!assistant) assistant = appendMessage('assistant', '');
       if (!assistant.text) {
         assistant.node?.setAttribute?.('data-role', 'error');
         assistant.node?.classList?.remove?.('od-chat__msg--assistant');
@@ -994,7 +1384,7 @@ export function createEntityChat(deps = {}) {
       );
       setStatus('TURN FAILED');
     } finally {
-      assistant.node?.removeAttribute?.('data-streaming');
+      assistant?.node?.removeAttribute?.('data-streaming');
       abortController = null;
       state.busy = false;
       if (ui.send) ui.send.disabled = false;
@@ -1034,6 +1424,8 @@ export function createEntityChat(deps = {}) {
 
   /** Open the chat for whatever the operator has selected on the globe. */
   function openSelected() {
+    if (kindForLayer(state.selection?.layerId) === 'camera')
+      return openCamera({ cameraId: state.selection?.id ?? null });
     const resolved = resolveSelectedEntity({
       dataManager: deps.dataManager,
       window: win,
@@ -1043,6 +1435,43 @@ export function createEntityChat(deps = {}) {
       state.error = 'nothing selected';
       return Promise.resolve(null);
     }
+    return open(resolved);
+  }
+
+  /**
+   * Open the chat for the CCTV layer's active camera (or `cameraId`):
+   * resolves the camera entity with lanes/traffic/frame and opens ONE
+   * session for it (docs/ONDEMAND_CAMERA_CHAT_ADDENDUM_2026-09-21.md).
+   */
+  async function openCamera({ cameraId = null } = {}) {
+    // Show the panel immediately; the lanes lookup (Overpass) can take a
+    // few seconds and must never make the button feel dead.
+    buildDom();
+    if (!state.open) {
+      ui.overlay.hidden = false;
+      ui.overlay.setAttribute('data-open', 'true');
+      ui.overlay.setAttribute('data-entity-kind', 'camera');
+      state.open = true;
+      setStatus('RESOLVING CAMERA…');
+    }
+    let resolved = null;
+    try {
+      resolved = await resolveCamera({ cameraId });
+    } catch (error) {
+      state.error = error?.message || String(error);
+      return null;
+    }
+    if (!resolved?.entity?.id) {
+      state.error = 'no active camera — enable CCTV and select a camera first';
+      setStatus('NO ACTIVE CAMERA');
+      if (!state.entityKey) appendMessage('error', state.error);
+      return null;
+    }
+    state.selection = {
+      layerId: 'cctv',
+      id: resolved.entity.id,
+      label: resolved.entity.name,
+    };
     return open(resolved);
   }
 
@@ -1106,6 +1535,12 @@ export function createEntityChat(deps = {}) {
       selection: state.selection ? { ...state.selection } : null,
       hasStoredKey: Boolean(readStoredApiKey(storage)),
       error: state.error,
+      attachNext: state.attachNext,
+      lastAttachment: state.lastAttachment ? { ...state.lastAttachment } : null,
+      history: { ...state.history },
+      cameraConfig: state.cameraConfig ? { ...state.cameraConfig } : null,
+      serverConfigured: state.serverConfigured ?? null,
+      apiCalls: state.apiCalls.map((call) => ({ ...call })),
     };
   }
 
@@ -1113,6 +1548,8 @@ export function createEntityChat(deps = {}) {
     open,
     openSelected,
     openFirstVisible,
+    openCamera,
+    setAttachNext,
     send,
     close,
     destroy,
@@ -1180,6 +1617,10 @@ export function installEntityChat({
   const button = document?.getElementById?.(ASK_BUTTON_ID);
   const onAsk = () => void controller.openSelected();
   button?.addEventListener?.('click', onAsk);
+  // CCTV panel ASK button (src/ui/cctvBindings.js) — the camera chat.
+  const onAskCamera = (event) =>
+    void controller.openCamera({ cameraId: event?.detail?.cameraId ?? null });
+  win?.addEventListener?.('gev:ask-camera', onAskCamera);
   const teardown = () => {
     win?.removeEventListener?.(
       'gev:awareness-subject-selected',
@@ -1189,6 +1630,7 @@ export function installEntityChat({
     win?.removeEventListener?.('gev:awareness-subject-cleared', onCleared);
     win?.removeEventListener?.('gev:entity-selection-cleared', onCleared);
     button?.removeEventListener?.('click', onAsk);
+    win?.removeEventListener?.('gev:ask-camera', onAskCamera);
     controller.destroy();
   };
   if (signal?.aborted) teardown();

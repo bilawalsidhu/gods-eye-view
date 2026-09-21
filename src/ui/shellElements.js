@@ -127,6 +127,7 @@ export function readShellElements(document = globalThis.document) {
     ),
     _leftPanelStack: document.getElementById('left-panel-stack'),
     _cctvEnableBtn: document.getElementById('cctv-enable-btn'),
+    _cctvAskBtn: document.getElementById('cctv-ask-btn'),
     _cctvNearestBtn: document.getElementById('cctv-nearest-btn'),
     _cctvPrevBtn: document.getElementById('cctv-prev-btn'),
     _cctvNextBtn: document.getElementById('cctv-next-btn'),

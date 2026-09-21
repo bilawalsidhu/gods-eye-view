@@ -50,7 +50,8 @@
     "test:track": "node scripts/track-regression.mjs",
     "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs",
     "check:boundaries": "node scripts/check-import-directions.mjs && node scripts/check-package-boundaries.mjs && node scripts/check-brand-marks.mjs",
-    "qa:transit": "node scripts/qa-transit.mjs"
+    "qa:transit": "node scripts/qa-transit.mjs",
+    "qa:chat": "node scripts/qa-chat-harness.mjs"
   },
   "dependencies": {
     "@mapbox/vector-tile": "^3.0.0",

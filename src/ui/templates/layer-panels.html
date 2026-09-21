@@ -29,6 +29,8 @@
       <div class="cctv-controls">
         <button id="cctv-enable-btn" class="scene-btn">CCTV OFF</button>
         <button id="cctv-nearest-btn" class="scene-btn">NEAREST</button>
+        <!-- ASK ONDEMAND about the active camera (docs/ONDEMAND_CAMERA_CHAT_ADDENDUM_2026-09-21.md). Lucide message-square; hidden until a camera is active. -->
+        <button id="cctv-ask-btn" class="scene-btn cctv-ask-btn" type="button" title="Ask OnDemand about this camera (frame, lanes, traffic)" aria-label="Ask OnDemand about the active camera" hidden><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" data-icon="message-square" class="od-icon od-icon--message-square" aria-hidden="true" focusable="false"><path d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"/></svg><span class="cctv-ask-label">ASK</span></button>
       </div>
       <div class="cctv-controls">
         <button id="cctv-prev-btn" class="scene-btn">PREV</button>

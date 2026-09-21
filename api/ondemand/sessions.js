@@ -7,10 +7,19 @@
  *
  * POST   /api/ondemand/sessions            -> create-or-reuse (§2.1)
  * GET    /api/ondemand/sessions?userId=    -> local lookup only
+ * GET    /api/ondemand/sessions?sessionId=&cursor=&limit=&sort=
+ *                                          -> cursor-paginated message history
+ *                                             (GET {chat}/sessions/{id}/messages,
+ *                                             docs reference getchatmessages:
+ *                                             cursor omitted on the first page,
+ *                                             then `pagination.next`; limit
+ *                                             1..50 default 10; sort asc|desc)
  * DELETE /api/ondemand/sessions?userId=    -> local mapping removal only
  */
 
-import { isConfigured } from './_config.js';
+import { isConfigured, baseUrls } from './_config.js';
+import { ondemandFetch } from '../../server/ondemand/client.js';
+import { shapeUpstreamError } from '../../server/ondemand/errors.js';
 import { getStore } from '../../server/ondemand/sessions-store.js';
 import {
   ensureSession,
@@ -32,6 +41,11 @@ import {
 
 const MAX_USER_ID_LEN = 128;
 const MAX_PLUGIN_IDS = 20;
+const MAX_SESSION_ID_LEN = 128;
+const MAX_CURSOR_LEN = 512;
+const HISTORY_LIMIT_MIN = 1;
+const HISTORY_LIMIT_MAX = 50;
+const HISTORY_SORTS = new Set(['asc', 'desc']);
 
 export default async function handler(req, res) {
   if (rejectCrossOrigin(req, res)) return;
@@ -60,7 +74,12 @@ export default async function handler(req, res) {
 
   try {
     if (req.method === 'GET') {
-      const userId = getRequestUrl(req).searchParams.get('userId');
+      const params = getRequestUrl(req).searchParams;
+      if (params.has('sessionId')) {
+        await listMessages(res, params, keyOverride.apiKeyOverride);
+        return;
+      }
+      const userId = params.get('userId');
       if (!userId) {
         sendJson(res, 400, { error: 'userId_required' });
         return;
@@ -159,4 +178,84 @@ export default async function handler(req, res) {
       message: 'Unexpected error contacting OnDemand.',
     });
   }
+}
+
+/**
+ * GET {chat}/sessions/{sessionId}/messages — forwarded verbatim (message
+ * objects and `pagination.next` untouched) so the browser can page through a
+ * camera's history on panel open. Only the documented query params travel.
+ */
+async function listMessages(res, params, apiKeyOverride) {
+  const sessionId = params.get('sessionId') || '';
+  if (
+    sessionId.length === 0 ||
+    sessionId.length > MAX_SESSION_ID_LEN ||
+    !/^[A-Za-z0-9_-]+$/.test(sessionId)
+  ) {
+    sendJson(res, 400, { error: 'invalid_sessionId' });
+    return;
+  }
+  const upstream = new URL(
+    `${baseUrls().chat}/sessions/${encodeURIComponent(sessionId)}/messages`,
+  );
+  const cursor = params.get('cursor');
+  if (cursor) {
+    if (cursor.length > MAX_CURSOR_LEN) {
+      sendJson(res, 400, { error: 'invalid_cursor' });
+      return;
+    }
+    upstream.searchParams.set('cursor', cursor);
+  }
+  const limitRaw = params.get('limit');
+  if (limitRaw !== null) {
+    const limit = Number.parseInt(limitRaw, 10);
+    if (
+      !Number.isInteger(limit) ||
+      limit < HISTORY_LIMIT_MIN ||
+      limit > HISTORY_LIMIT_MAX
+    ) {
+      sendJson(res, 400, {
+        error: 'invalid_limit',
+        min: HISTORY_LIMIT_MIN,
+        max: HISTORY_LIMIT_MAX,
+      });
+      return;
+    }
+    upstream.searchParams.set('limit', String(limit));
+  }
+  const sort = params.get('sort');
+  if (sort !== null) {
+    if (!HISTORY_SORTS.has(sort)) {
+      sendJson(res, 400, { error: 'invalid_sort', allowed: [...HISTORY_SORTS] });
+      return;
+    }
+    upstream.searchParams.set('sort', sort);
+  }
+  const externalUserId = params.get('externalUserId');
+  if (externalUserId) {
+    if (externalUserId.length > MAX_USER_ID_LEN) {
+      sendJson(res, 400, { error: 'invalid_externalUserId' });
+      return;
+    }
+    upstream.searchParams.set('externalUserId', externalUserId);
+  }
+  const response = await ondemandFetch(upstream.toString(), {
+    method: 'GET',
+    apiKeyOverride,
+  });
+  if (!response.ok) {
+    sendJson(res, response.status, await shapeUpstreamError(response));
+    return;
+  }
+  let json;
+  try {
+    json = await response.json();
+  } catch {
+    sendJson(res, 502, {
+      error: 'proxy_error',
+      message: 'OnDemand returned a non-JSON messages response.',
+    });
+    return;
+  }
+  sendJson(res, 200, json);
 }

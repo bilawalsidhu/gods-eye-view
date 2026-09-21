@@ -18,6 +18,8 @@ import {
   isConfigured,
   tierDefaults,
   TIER_DEFAULTS,
+  applyCameraProfile,
+  CAMERA_PROFILE,
 } from './_config.js';
 import {
   ondemandFetch,
@@ -68,7 +70,18 @@ const TOP_LEVEL_FIELDS = new Set([
   'mode',
   'spatialContext',
   'tier',
+  // Camera chat (docs/ONDEMAND_CAMERA_CHAT_ADDENDUM_2026-09-21.md) — proxy-side
+  // fields, never forwarded upstream: `profile: 'camera'` applies the
+  // server-side camera defaults (endpointId, pluginIds, reasoningMode) to
+  // whatever the body omitted; `attachment` names the Media API file the
+  // browser attached to this session for THIS turn, so the proxy can pick
+  // the vision endpoint (the media itself is already linked upstream by its
+  // `sessionId` — the query body has no documented attachment field).
+  'profile',
+  'attachment',
 ]);
+const PROFILES = new Set([CAMERA_PROFILE]);
+const MAX_ATTACHMENT_ID_LEN = 128;
 const MODES = new Set(['chat', 'capability-loop']);
 const MAX_SPATIAL_CONTEXT_BYTES = 64 * 1024;
 const MODEL_CONFIG_FIELDS = new Set([
@@ -138,8 +151,12 @@ export default async function handler(req, res) {
     mode,
     spatialContext,
     tier,
+    profile,
+    attachment,
   } = body;
   let { endpointId, responseMode } = body;
+  let { pluginIds: effectivePluginIds, reasoningMode: effectiveReasoningMode } =
+    body;
 
   if (!sessionId && !userId) {
     sendJson(res, 400, { error: 'sessionId_or_userId_required' });
@@ -194,6 +211,39 @@ export default async function handler(req, res) {
     return;
   }
 
+  if (profile !== undefined && !PROFILES.has(profile)) {
+    sendJson(res, 400, { error: 'invalid_profile', allowed: [...PROFILES] });
+    return;
+  }
+  if (attachment !== undefined) {
+    const mediaId = attachment && typeof attachment === 'object' ? attachment.mediaId : attachment;
+    if (
+      typeof mediaId !== 'string' ||
+      mediaId.length === 0 ||
+      mediaId.length > MAX_ATTACHMENT_ID_LEN
+    ) {
+      sendJson(res, 400, {
+        error: 'invalid_attachment',
+        message: `attachment must be a Media API file id (string ≤ ${MAX_ATTACHMENT_ID_LEN} chars) or { mediaId }`,
+      });
+      return;
+    }
+  }
+  let profileApplied = [];
+  if (profile === CAMERA_PROFILE) {
+    const resolved = applyCameraProfile(
+      { endpointId, pluginIds, reasoningMode, responseMode },
+      { hasAttachment: attachment !== undefined },
+    );
+    endpointId = resolved.endpointId;
+    effectivePluginIds = resolved.pluginIds;
+    effectiveReasoningMode = resolved.reasoningMode;
+    profileApplied = resolved.applied;
+    res.setHeader('X-OnDemand-Profile', CAMERA_PROFILE);
+    if (profileApplied.length)
+      res.setHeader('X-OnDemand-Profile-Applied', profileApplied.join(','));
+  }
+
   endpointId =
     endpointId === undefined ? config.fulfillmentEndpointId : endpointId;
   if (!endpointId) {
@@ -206,10 +256,10 @@ export default async function handler(req, res) {
   }
 
   if (
-    pluginIds !== undefined &&
-    (!Array.isArray(pluginIds) ||
-      pluginIds.length > MAX_PLUGIN_IDS ||
-      pluginIds.some((p) => typeof p !== 'string'))
+    effectivePluginIds !== undefined &&
+    (!Array.isArray(effectivePluginIds) ||
+      effectivePluginIds.length > MAX_PLUGIN_IDS ||
+      effectivePluginIds.some((p) => typeof p !== 'string'))
   ) {
     sendJson(res, 400, {
       error: 'invalid_pluginIds',
@@ -249,7 +299,10 @@ export default async function handler(req, res) {
     cleanModelConfigs = modelConfigs;
   }
 
-  if (reasoningMode !== undefined && typeof reasoningMode !== 'string') {
+  if (
+    effectiveReasoningMode !== undefined &&
+    typeof effectiveReasoningMode !== 'string'
+  ) {
     sendJson(res, 400, { error: 'invalid_reasoningMode' });
     return;
   }
@@ -276,14 +329,14 @@ export default async function handler(req, res) {
     query,
     endpointId,
     responseMode,
-    pluginIds,
+    pluginIds: effectivePluginIds,
     fulfillmentOnly,
     modelConfigs: cleanModelConfigs,
   };
   // reasoningMode is guide-only and documented as relevant only in stream
   // mode (§3.1 / §12) — never sent on a sync query.
-  if (responseMode === 'stream' && reasoningMode !== undefined) {
-    upstreamBody.reasoningMode = reasoningMode;
+  if (responseMode === 'stream' && effectiveReasoningMode !== undefined) {
+    upstreamBody.reasoningMode = effectiveReasoningMode;
   }
   for (const key of Object.keys(upstreamBody)) {
     if (upstreamBody[key] === undefined) delete upstreamBody[key];

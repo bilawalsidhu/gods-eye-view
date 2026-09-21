@@ -97,7 +97,12 @@
  * semantics above apply identically whether or not the flag is present.
  */
 
-import { getConfig, baseUrls, isConfigured } from './_config.js';
+import {
+  getConfig,
+  baseUrls,
+  isConfigured,
+  cameraChatPublicConfig,
+} from './_config.js';
 import { ondemandFetch } from '../../server/ondemand/client.js';
 import {
   assertMethod,
@@ -270,6 +275,10 @@ export default async function handler(req, res) {
       configured: false,
       reasoningModeInvalid: cfg.reasoningModeInvalid,
       config: configDiagnostic(cfg),
+      // Camera-chat profile defaults (ids/mode names only, never a key) —
+      // docs/ONDEMAND_CAMERA_CHAT_ADDENDUM_2026-09-21.md. Published keyless
+      // too so the panel can show WHICH endpoint/agents it would use.
+      cameraChat: cameraChatPublicConfig(),
       checkedAt,
       message:
         'ONDEMAND_API_KEY is not set. Set it in the Vercel project Environment Variables (or in .env for local dev) and redeploy/restart.',
@@ -333,6 +342,7 @@ export default async function handler(req, res) {
     speechProbe: { cached, ageSec },
     reasoningModeInvalid: cfg.reasoningModeInvalid,
     config: configDiagnostic(cfg),
+    cameraChat: cameraChatPublicConfig(),
     checkedAt,
     message: messageFor(ondemand),
   };

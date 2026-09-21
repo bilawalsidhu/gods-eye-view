@@ -1836,6 +1836,7 @@
       "src/ui/sceneSharing.js",
       "src/ondemand/entityChat.js",
       "src/ondemand/entityContext.js",
+      "src/ondemand/cameraContext.js",
       "src/ui/icons/layerIcon.js",
       "src/ui/icons/lucideIcons.generated.js"
     ],
