@@ -11,6 +11,7 @@ import { createApplicationBikeshare } from './layers/bikeshare.js';
 import { createApplicationDirections } from './layers/directions.js';
 import { createApplicationTransit } from './layers/transit.js';
 import { createApplicationInstallations } from './layers/militaryInstallations.js';
+import { createApplicationWaterQuality } from './layers/waterQuality.js';
 import { createApplicationSatellites } from './layers/satellites.js';
 import { createApplicationLaunches } from './layers/rocketLaunches.js';
 import { createApplicationAlpr } from './layers/alprCameras.js';
@@ -38,6 +39,7 @@ const SOURCE_METHODS = Object.freeze({
   ],
   bikeshare: ['getStations'],
   installations: ['getMappedSites', 'searchNearby'],
+  waterQuality: ['getStations', 'getResults'],
   satellites: ['readGroup'],
   launches: ['getLaunches', 'getActiveTle'],
   alpr: ['fetch'],
@@ -122,6 +124,10 @@ export function createApplicationCatalog({
         createApplicationDirections(),
         vessels,
         installations,
+        createApplicationWaterQuality({
+          surface,
+          source: sources.waterQuality,
+        }),
         createApplicationAwareness({
           flights,
           military,

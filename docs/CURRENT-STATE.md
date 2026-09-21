@@ -1,5 +1,27 @@
 # God's Eye View Current State
 
+Water Quality is a keyless, camera-driven layer over the Water Quality Portal.
+Monitoring sites load per viewport through `/api/water-quality/sites`; a selected
+site loads its measurements separately through `/api/water-quality/results`, on
+its own controller, so a camera move cannot cancel a card fetch in progress. One
+analyte family is active at a time and each family resolves to a list of upstream
+vocabulary values, because a single value loses sites the portal indexes under an
+alternate spelling. Concentrations colour nothing: markers carry the family
+colour and the card states values, units, sample dates and non-detects with their
+reporting limits. A selected site reads as a backed, left-aligned table: one
+row per analyte with the most recent value, concentrations in a fixed-width
+column, standard short forms for portal names too wide for the card, and
+non-detects collapsed into a single count so detections lead. Unlisted analyte
+names are elided rather than renamed, and the unabbreviated name stays on the
+entity context. Sample age is reported separately from feed freshness — a site
+sampled years ago is ordinary for this data and never reads as a stale feed — and
+the PFAS family declares that ultrashort-chain C2/C3 analytes are absent from the
+monitoring vocabulary. The proxy validates the analyte family against an
+allow-list, bounds the viewport to two degrees — measured, because the upstream
+times out past roughly three — caps responses, snaps requests
+onto a shared cache grid, coalesces in-flight work and serves last-good data when
+the upstream fails.
+
 AIS encodes speed over ground in 0.1-knot units and course over ground in
 0.1-degree units, reserving the top code of each field for "not available", so
 those reports arrive as 102.3 knots and 360 degrees. Both are stored as unknown,

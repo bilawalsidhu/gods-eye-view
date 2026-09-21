@@ -230,6 +230,23 @@
     ],
     "external": []
   },
+  "water-quality-provider": {
+    "runtime": "node",
+    "exports": ["./server/providers/water-quality"],
+    "modules": [
+      "server/providers/common/http.js",
+      "server/providers/common/query.js",
+      "server/providers/common/rate-limit.js",
+      "server/providers/water-quality.js",
+      "server/providers/water-quality/cache.js",
+      "server/providers/water-quality/constants.js",
+      "server/providers/water-quality/csv.js",
+      "server/providers/water-quality/query.js",
+      "src/sources/httpBody.js",
+      "src/sources/rateLimit.js"
+    ],
+    "external": []
+  },
   "regional-provider": {
     "runtime": "node",
     "exports": ["./server/providers/regional"],
@@ -917,6 +934,26 @@
       "src/layers/installations/state.js",
       "src/layers/installations/viewport.js",
       "src/data/inputOwnership.js"
+    ],
+    "external": ["cesium"]
+  },
+  "water-quality-layer": {
+    "exports": ["./layers/water-quality"],
+    "modules": [
+      "src/data/inputOwnership.js",
+      "src/data/waterQualityFeedback.js",
+      "src/layers/waterQuality/controls.js",
+      "src/layers/waterQuality/index.js",
+      "src/layers/waterQuality/ingestion.js",
+      "src/layers/waterQuality/lifecycle.js",
+      "src/layers/waterQuality/measurements.js",
+      "src/layers/waterQuality/model.js",
+      "src/layers/waterQuality/policy.js",
+      "src/layers/waterQuality/rendering.js",
+      "src/layers/waterQuality/selection.js",
+      "src/layers/waterQuality/source.js",
+      "src/layers/waterQuality/state.js",
+      "src/layers/waterQuality/viewport.js"
     ],
     "external": ["cesium"]
   },
@@ -1809,7 +1846,21 @@
       "src/director/sharing/lifetime.js",
       "src/director/authoring.js",
       "src/scenes/sharing.js",
-      "src/ui/sceneSharing.js"
+      "src/ui/sceneSharing.js",
+      "src/app/layers/waterQuality.js",
+      "src/data/waterQualityFeedback.js",
+      "src/layers/waterQuality/controls.js",
+      "src/layers/waterQuality/index.js",
+      "src/layers/waterQuality/ingestion.js",
+      "src/layers/waterQuality/lifecycle.js",
+      "src/layers/waterQuality/measurements.js",
+      "src/layers/waterQuality/model.js",
+      "src/layers/waterQuality/policy.js",
+      "src/layers/waterQuality/rendering.js",
+      "src/layers/waterQuality/selection.js",
+      "src/layers/waterQuality/source.js",
+      "src/layers/waterQuality/state.js",
+      "src/layers/waterQuality/viewport.js"
     ],
     "external": [
       "@mapbox/vector-tile",
@@ -2203,7 +2254,21 @@
       "src/sources/overpassFeaturesRecords.js",
       "src/sources/overpassFeatures.js",
       "src/sources/featureSource.js",
-      "src/sources/overpassRoads.js"
+      "src/sources/overpassRoads.js",
+      "src/app/layers/waterQuality.js",
+      "src/data/waterQualityFeedback.js",
+      "src/layers/waterQuality/controls.js",
+      "src/layers/waterQuality/index.js",
+      "src/layers/waterQuality/ingestion.js",
+      "src/layers/waterQuality/lifecycle.js",
+      "src/layers/waterQuality/measurements.js",
+      "src/layers/waterQuality/model.js",
+      "src/layers/waterQuality/policy.js",
+      "src/layers/waterQuality/rendering.js",
+      "src/layers/waterQuality/selection.js",
+      "src/layers/waterQuality/source.js",
+      "src/layers/waterQuality/state.js",
+      "src/layers/waterQuality/viewport.js"
     ],
     "external": [
       "cesium",
@@ -2464,6 +2529,14 @@
     "modules": [
       "src/layers/installations/source.js",
       "src/data/militaryInstallationData.js"
+    ],
+    "external": []
+  },
+  "water-quality-source": {
+    "exports": ["./layers/water-quality/source"],
+    "modules": [
+      "src/layers/waterQuality/policy.js",
+      "src/layers/waterQuality/source.js"
     ],
     "external": []
   },

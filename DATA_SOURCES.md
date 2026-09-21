@@ -26,6 +26,7 @@ How to read this:
 | **The Space Devs — Launch Library 2 v2.3**                            | Recent launch, payload, stage, and recovery metadata for Space Missions (30d)                                                       | [The Space Devs terms of use](https://github.com/TheSpaceDevs/Tutorials/blob/main/faqs/faq_TSD.md#terms-of-use): data may be used and shared in any form; avoid forwarding it without added value; attribution is encouraged (not mandatory). [Official API limits](https://ll.thespacedevs.com/docs/): 15 unauthenticated calls/hour; optional token | "Launch Library 2 — The Space Devs" (courtesy attribution)                                                                                  |
 | **Esri World Imagery** (ArcGIS Online tile service)                   | The keyless satellite basemap — the default landing when no Google/ion credential is configured, and the "Esri Satellite" map stack | [Esri Master Agreement](https://www.esri.com/en-us/legal/terms/full-master-agreement): the public World Imagery service is usable in public-facing apps with attribution; no key is required for this classic endpoint, but Esri governs and can change access — an app at scale should review current ArcGIS Location Platform terms                 | "Powered by Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community" (provider carries the service's own credit line) |
 | **USGS**                                                              | Earthquakes                                                                                                                         | U.S. public domain                                                                                                                                                                                                                                                                                                                                    | "Data courtesy of the U.S. Geological Survey"                                                                                               |
+| **Water Quality Portal** (USGS / EPA / NWQMC)                         | Viewport-bounded water-quality monitoring sites and their per-site measurements (PFAS, nutrients, metals, microbiological, radiochemical) | U.S. public domain; federated service aggregating USGS, EPA and 400+ state, tribal and local agencies. Contributing organizations retain their own terms; results are episodic samples, not a live sensor feed | "Water Quality Portal — USGS, EPA and contributing agencies" plus the per-site contributing organization |
 | **OpenStreetMap (Overpass API)**                                      | Road geometry for traffic                                                                                                           | ODbL 1.0                                                                                                                                                                                                                                                                                                                                              | "© OpenStreetMap contributors"                                                                                                              |
 | **TomTom Traffic API** (flow vector tiles)                            | Live congestion coloring for the traffic layer (optional, BYOK)                                                                     | [TomTom for Developers terms](https://developer.tomtom.com) (proprietary, your own key; free tier currently 200K tile requests/month — see [current pricing](https://docs.tomtom.com/pricing/))                                                                                                                                                       | "Traffic flow data © TomTom" — registered when live mode activates                                                                          |
 | **OpenStreetMap (Overpass API)**                                      | Viewport-bounded mapped installation context for Global Context                                                                     | ODbL 1.0                                                                                                                                                                                                                                                                                                                                              | "© OpenStreetMap contributors" (incomplete mapped context)                                                                                  |
@@ -152,6 +153,23 @@ Suomi-NPP) clamped to the trailing 24 h, cached 30 min to respect the shared MAP
 transaction quota. Requires a free `FIRMS_MAP_KEY`
 (https://firms.modaps.eosdis.nasa.gov/api/map_key/); the layer is empty without it.
 The former bundled 2026-05-25 snapshot was removed 2026-07-16.
+
+### Water Quality Portal coverage
+
+Sites and results are **fetched live at runtime** through the `/api/water-quality`
+proxy; nothing is stored in this repo. Two limits are surfaced in the app rather
+than left to the reader:
+
+- **Sampling is episodic.** A site in view may not have been sampled for years.
+  The layer reports the trailing window it queried ("sites sampled since YYYY")
+  and the per-site sample date, and deliberately does not treat sample age as a
+  stale feed.
+- **The analyte vocabulary is not exhaustive.** Regulated PFAS analytes
+  (including GenX / hexafluoropropylene oxide dimer acid) are present, but
+  ultrashort-chain C2/C3 compounds — trifluoroacetic acid (TFA) and
+  perfluoropropanoic acid (PFPrA) — return no matches in the portal's
+  characteristic vocabulary and are absent from routine monitoring. An absent
+  marker means "not monitored here", never "not present".
 
 ### Natural Earth physical regions (`natural_earth/`)
 

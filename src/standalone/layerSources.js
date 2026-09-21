@@ -9,6 +9,7 @@ import { createTransitSource } from '../layers/transit/source.js';
 import { createTrafficSource } from '../layers/traffic/source.js';
 import { createBikeshareSource } from '../layers/bikeshare/source.js';
 import { createInstallationSource } from '../layers/installations/source.js';
+import { createWaterQualitySource } from '../layers/waterQuality/source.js';
 import { createSatelliteSource } from '../layers/satellites/source.js';
 import { createLaunchSource } from '../layers/launches/source.js';
 import { createOverpassAlprSource } from '../layers/alpr/source.js';
@@ -31,6 +32,7 @@ export function createStandaloneLayerSources() {
     transit: createTransitSource(),
     bikeshare: createBikeshareSource(),
     installations: createInstallationSource(),
+    waterQuality: createWaterQualitySource(),
     satellites: createSatelliteSource(),
     launches: createLaunchSource(),
     alpr: createOverpassAlprSource(),

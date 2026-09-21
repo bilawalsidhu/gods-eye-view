@@ -115,6 +115,13 @@ export const DATA_CREDITS = [
       'via Nominatim (ODbL 1.0)',
   },
   {
+    key: 'water-quality-portal',
+    html:
+      'Water quality monitoring: ' +
+      '<a href="https://www.waterqualitydata.us/" target="_blank" rel="noopener">Water Quality Portal</a> ' +
+      '(USGS, EPA and contributing agencies; U.S. public domain)',
+  },
+  {
     key: 'open-meteo',
     html:
       'Cockpit current conditions: ' +
