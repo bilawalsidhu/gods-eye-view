@@ -12,6 +12,7 @@ const SHARE_PANEL_STATE_SPECS = Object.freeze([
   { id: 'data-panel' },
   { id: 'cctv-panel' },
   { id: 'radio-panel' },
+  { id: 'satellite-panel' },
   { id: 'scene-panel' },
   { id: 'global-context-panel' },
   { id: 'pp-toggles' },
@@ -21,6 +22,7 @@ const SHARE_PANEL_STATE_SPECS = Object.freeze([
 const COCKPIT_ENTRY_COLLAPSE_PANEL_IDS = Object.freeze([
   'data-panel',
   'cctv-panel',
+  'satellite-panel',
   'scene-panel',
   'pp-toggles',
   'global-context-panel',

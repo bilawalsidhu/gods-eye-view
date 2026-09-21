@@ -4,8 +4,8 @@ import { satelliteClassColor } from '../../data/satelliteClass.js';
 /**
  * Satellite Orbits — Real-time positions via CelesTrak TLE + SGP4 propagation.
  *
- * Loads six CelesTrak groups (~840 sats): stations, visual, GPS, GLONASS,
- * Galileo, and the geosynchronous belt. Optional dense mode (setParams
+ * Loads seven CelesTrak groups (~880 sats): stations, visual, GPS, GLONASS,
+ * Galileo, the geosynchronous belt, and ICEYE (by name query). Optional dense mode (setParams
  * catalog:'dense') adds the Starlink shell as points-only extras.
  * Renders positions via PointPrimitiveCollection, orbital paths as polylines.
  * Click any satellite to track it with camera follow + orbital path.
@@ -49,6 +49,8 @@ export const CATALOG_GROUPS = [
   { tag: 'glonass', path: 'glo-ops' },
   { tag: 'galileo', path: 'galileo' },
   { tag: 'geo', path: 'geo' },
+  // No CelesTrak GROUP exists for ICEYE; the proxy maps this path to a NAME query.
+  { tag: 'iceye', path: 'iceye' },
 ];
 
 // Dense-catalog mode (setParams({ catalog: 'dense' })): Starlink shell as
@@ -78,6 +80,12 @@ export const TRACK_VIEW_FROM_LEO = new Cesium.Cartesian3(
 );
 
 export const HIGH_ORBIT_ALTITUDE_M = 2000000;
+
+/** Earth constants for classifying an orbit from its TLE mean motion (WGS-72, as SGP4 uses). */
+
+export const EARTH_RADIUS_KM = 6378.135;
+
+export const EARTH_MU_KM3_S2 = 398600.8;
 
 export const TRACK_VIEW_FROM_HIGH_SCALE = 4;
 // ≈ 2900 km back for MEO/GEO
@@ -145,6 +153,12 @@ export const POINT_STYLES = {
   geo: {
     pixelSize: 5,
     color: _classColor('geo'),
+    outlineColor: POINT_OUTLINE,
+    outlineWidth: 0,
+  },
+  iceye: {
+    pixelSize: 6,
+    color: _classColor('iceye'),
     outlineColor: POINT_OUTLINE,
     outlineWidth: 0,
   },

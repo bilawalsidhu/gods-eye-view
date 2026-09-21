@@ -53,6 +53,10 @@ test('portable requests keep fixed origins, encode group data and preserve the 3
   assert.equal(tle.pathname, '/NORAD/elements/gp.php');
   assert.equal(tle.searchParams.get('GROUP'), 'stations&FORMAT=json');
   assert.equal(tle.searchParams.get('FORMAT'), 'tle');
+  const iceye = celestrakTleUrl('iceye');
+  assert.equal(iceye.searchParams.get('NAME'), 'ICEYE');
+  assert.equal(iceye.searchParams.has('GROUP'), false);
+  assert.equal(iceye.searchParams.get('FORMAT'), 'tle');
   const end = new Date('2026-03-01T12:34:56.000Z');
   const url = launchLibraryRecentUrl(end);
   assert.equal(url.origin, 'https://ll.thespacedevs.com');

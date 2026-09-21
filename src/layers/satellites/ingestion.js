@@ -165,6 +165,7 @@ export function createIngestion({
         console.log(
           `[Data:Satellites] ${layerState._count} satellites active, ISS path shown`,
         );
+        parts.controls._notifyRowControls();
 
         // Re-apply dense mode after a full catalog rebuild (fire-and-forget —
         // _loadDenseCatalog handles its own errors and token invalidation).

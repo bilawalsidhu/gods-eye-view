@@ -4,7 +4,31 @@ import {
   satelliteClassLegend,
 } from '../../data/satelliteClass.js';
 import * as Cesium from 'cesium';
-import { ISS_NORAD, POINT_STYLES } from './policy.js';
+import {
+  EARTH_MU_KM3_S2,
+  EARTH_RADIUS_KM,
+  HIGH_ORBIT_ALTITUDE_M,
+  ISS_NORAD,
+  POINT_STYLES,
+} from './policy.js';
+
+/**
+ * Whether an orbit stays in Low Earth Orbit (apogee altitude at or below
+ * 2,000 km). Derived from the TLE's mean motion and eccentricity, so it needs
+ * no SGP4 propagation and is safe to run over the whole catalog.
+ * @param {{ no?: number, ecco?: number }} satrec satellite.js record (`no` in rad/min).
+ * @returns {boolean} True for LEO.
+ */
+export function isLowEarthOrbit(satrec) {
+  const meanMotionRadPerSec = Number(satrec?.no) / 60;
+  if (!(meanMotionRadPerSec > 0)) return false;
+  const semiMajorAxisKm = Math.cbrt(
+    EARTH_MU_KM3_S2 / (meanMotionRadPerSec * meanMotionRadPerSec),
+  );
+  const apogeeAltitudeKm =
+    semiMajorAxisKm * (1 + (Number(satrec.ecco) || 0)) - EARTH_RADIUS_KM;
+  return apogeeAltitudeKm <= HIGH_ORBIT_ALTITUDE_M / 1000;
+}
 
 export function createControls({ state: layerState, services, parts, source }) {
   const { isExplicitLayerStateOrigin } = services.layerState;
@@ -28,6 +52,11 @@ export function createControls({ state: layerState, services, parts, source }) {
       layerState._rowControlsListener?.();
     } catch (error) {
       console.warn('[Data:Satellites] row-controls listener failed:', error);
+    }
+    try {
+      parts.panel?.renderSatelliteSearchResults?.();
+    } catch (error) {
+      console.warn('[Data:Satellites] search panel refresh failed:', error);
     }
   }
 
@@ -204,6 +233,60 @@ export function createControls({ state: layerState, services, parts, source }) {
         longitude: pos.longitude,
         altitudeM: pos.altitude,
       };
+    },
+
+    /**
+     * Search the catalog for satellites by name/NORAD-id substring and/or
+     * CelesTrak group, for the satellite search panel roster. Unlike
+     * `findByQuery` (first/best match only) this returns every match, sorted
+     * by name and capped at `limit` — the panel needs a browsable list, not
+     * a "go there" shortcut. Position is freshly propagated via SGP4, but
+     * only for the page of results returned, never the full candidate set.
+     * @param {string} [query] NORAD id or partial/case-insensitive name; empty matches everything in scope.
+     * @param {{ group?: string|null, orbit?: 'leo'|null, limit?: number }} [options] `orbit: 'leo'` keeps only Low Earth Orbit satellites.
+     * @returns {{ results: Array<{ noradId: number, name: string, group: string|undefined, position: Cesium.Cartesian3, latitude: number, longitude: number, altitudeM: number }>, matchCount: number }}
+     */
+    searchAll(query, { group = null, orbit = null, limit = 50 } = {}) {
+      if (!layerState._catalog || layerState._catalog.size === 0)
+        return { results: [], matchCount: 0 };
+      const q = String(query ?? '').trim();
+      const lower = q.toLowerCase();
+      const isNumeric = /^\d+$/.test(q);
+
+      const candidates = [];
+      for (const [noradId, sat] of layerState._catalog) {
+        if (group && sat.group !== group) continue;
+        if (orbit === 'leo' && !isLowEarthOrbit(sat.satrec)) continue;
+        if (q) {
+          const idMatch = isNumeric && noradId === Number(q);
+          if (!idMatch && !sat.name.toLowerCase().includes(lower)) continue;
+        }
+        candidates.push({ noradId, sat });
+      }
+      candidates.sort((a, b) => a.sat.name.localeCompare(b.sat.name));
+
+      const cap = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 50;
+      const now = new Date();
+      const results = [];
+      for (const { noradId, sat } of candidates) {
+        if (results.length >= cap) break;
+        const pos = parts.orbits.propagatePosition(sat.satrec, now);
+        if (!pos) continue;
+        results.push({
+          noradId,
+          name: sat.name.trim(),
+          group: sat.group,
+          position: Cesium.Cartesian3.fromDegrees(
+            pos.longitude,
+            pos.latitude,
+            pos.altitude,
+          ),
+          latitude: pos.latitude,
+          longitude: pos.longitude,
+          altitudeM: pos.altitude,
+        });
+      }
+      return { results, matchCount: candidates.length };
     },
 
     /**

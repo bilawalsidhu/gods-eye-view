@@ -161,5 +161,17 @@ export function createState({ services }) {
   state._lookupTleText = null;
 
   state._lookupTleEntries = [];
+
+  // Satellite search panel (left-stack UI) — DOM ref + current query/filter.
+
+  state._satellitePanel = null;
+
+  state._satelliteSearchQuery = '';
+
+  state._satelliteSearchGroup = '';
+
+  state._satelliteSearchOrbit = '';
+
+  state._satelliteSearchDebounce = null;
   return state;
 }

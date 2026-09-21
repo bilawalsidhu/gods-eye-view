@@ -1306,3 +1306,212 @@
   .data-count {
   display: none;
 }
+
+/* ── Satellite Search Panel ──────────────────── */
+#satellite-panel {
+  --panel-expanded-width: 300px;
+}
+
+#satellite-panel .panel-glow {
+  position: absolute;
+  inset: -18px;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(0, 212, 255, 0.16) 0%,
+    transparent 65%
+  );
+  filter: blur(16px);
+  opacity: 0.25;
+  pointer-events: none;
+}
+
+.satellite-panel-inner {
+  position: relative;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--panel-radius);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: calc(100vh - 24px);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+}
+
+.satellite-search-controls {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+[data-satellite-search-input] {
+  flex: 1 1 100%;
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 7px;
+  color: var(--text-primary);
+  padding: 6px 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  outline: none;
+  caret-color: #22e6e6;
+  transition: border-color var(--transition-fast);
+}
+
+[data-satellite-search-input]:focus {
+  border-color: rgba(34, 230, 230, 0.58);
+}
+
+[data-satellite-search-input]::placeholder {
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+[data-satellite-search-group],
+[data-satellite-search-orbit] {
+  flex: 1 1 0;
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 7px;
+  color: var(--text-primary);
+  padding: 6px 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  outline: none;
+}
+
+.satellite-search-roster {
+  display: grid;
+  flex: 0 0 auto;
+  min-height: 0;
+  gap: 8px;
+  padding: 9px;
+  border: 1px solid rgba(98, 181, 255, 0.2);
+  border-radius: 7px;
+  background: rgba(4, 17, 31, 0.28);
+}
+
+.satellite-search-roster-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 1px 3px 7px;
+  border-bottom: 1px solid rgba(34, 230, 230, 0.14);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.satellite-search-roster-header span {
+  color: rgba(190, 230, 230, 0.46);
+  font-size: 7px;
+  letter-spacing: 0.1em;
+}
+
+.satellite-search-roster-header output {
+  flex: 0 0 auto;
+  color: #22e6e6;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+}
+
+.satellite-search-list {
+  display: grid;
+  max-height: min(38vh, 380px);
+  gap: 4px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-right: 3px;
+  scrollbar-color: rgba(34, 230, 230, 0.38) transparent;
+  scrollbar-width: thin;
+}
+
+.satellite-search-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 12px;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 38px;
+  padding: 7px 7px;
+  border: 1px solid rgba(98, 181, 255, 0.13);
+  border-radius: 4px;
+  color: #d8ffff;
+  background: rgba(42, 113, 171, 0.045);
+  font-family: 'JetBrains Mono', monospace;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    transform 0.15s ease;
+}
+
+.satellite-search-item:hover,
+.satellite-search-item:focus-visible {
+  border-color: rgba(34, 230, 230, 0.58);
+  outline: none;
+  background: rgba(34, 230, 230, 0.09);
+  transform: translateX(2px);
+}
+
+.satellite-search-item.is-tracked {
+  border-color: rgba(34, 230, 230, 0.6);
+  background: rgba(34, 230, 230, 0.12);
+}
+
+.satellite-search-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.satellite-search-copy strong,
+.satellite-search-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.satellite-search-copy strong {
+  color: #d8ffff;
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.07em;
+}
+
+.satellite-search-copy small {
+  color: rgba(190, 230, 230, 0.48);
+  font-size: 7px;
+  letter-spacing: 0.035em;
+}
+
+.satellite-search-chevron {
+  color: rgba(34, 230, 230, 0.54);
+  font-size: 16px;
+  line-height: 1;
+  text-align: center;
+}
+
+.satellite-search-item.is-tracked .satellite-search-chevron {
+  color: #22e6e6;
+}
+
+.satellite-search-empty {
+  padding: 18px 10px;
+  color: rgba(190, 230, 230, 0.48);
+  font:
+    8px/1.5 'JetBrains Mono',
+    monospace;
+  letter-spacing: 0.09em;
+  text-align: center;
+}

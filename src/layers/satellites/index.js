@@ -8,6 +8,7 @@ import { createTesting } from './testing.js';
 import { createInteraction } from './interaction.js';
 import { createLifecycle } from './lifecycle.js';
 import { createIngestion } from './ingestion.js';
+import { createPanel } from './panel.js';
 import { createState } from './state.js';
 
 /** Construct one layer with its own scene state and supplied application services. */
@@ -27,6 +28,7 @@ export function createSatellitesLayer({ services, source }) {
   parts.interaction = createInteraction(context);
   parts.lifecycle = createLifecycle(context);
   parts.ingestion = createIngestion(context);
+  parts.panel = createPanel(context);
   return Object.assign(
     {},
     parts.controls.methods,

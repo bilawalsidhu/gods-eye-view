@@ -5,6 +5,7 @@ const GROUPS = new Set([
   'glo-ops',
   'galileo',
   'geo',
+  'iceye',
   'starlink',
 ]);
 

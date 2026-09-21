@@ -12,6 +12,45 @@
     </div>
   </div>
 
+  <!-- Satellite Search Panel -->
+  <div id="satellite-panel" class="panel-collapsible collapsed" data-panel-id="satellite-panel">
+    <div class="panel-glow"></div>
+    <div class="satellite-panel-inner">
+      <div class="panel-header">
+        <span class="panel-title">SATELLITE SEARCH</span>
+        <span class="panel-divider"></span>
+        <button class="panel-collapse-btn" data-collapse-target="satellite-panel" title="Collapse panel">+</button>
+      </div>
+      <div class="satellite-search-controls">
+        <input type="text" data-satellite-search-input placeholder="Search by name or NORAD ID..." autocomplete="off" spellcheck="false" aria-label="Search satellites by name or NORAD ID" />
+        <select data-satellite-search-group aria-label="Filter satellites by group">
+          <option value="">All Groups</option>
+          <option value="stations">Space Stations</option>
+          <option value="visual">Visual (Brightest)</option>
+          <option value="gps-ops">GPS</option>
+          <option value="glonass">GLONASS</option>
+          <option value="galileo">Galileo</option>
+          <option value="geo">GEO Belt</option>
+          <option value="iceye">ICEYE (Imaging)</option>
+          <option value="dense">Starlink (Dense)</option>
+        </select>
+        <select data-satellite-search-orbit aria-label="Filter satellites by orbit">
+          <option value="">Any Orbit</option>
+          <option value="leo">LEO</option>
+        </select>
+      </div>
+      <div class="satellite-search-roster">
+        <div class="satellite-search-roster-header">
+          <span data-satellite-search-status>ENABLE SATELLITES TO SEARCH</span>
+          <output data-satellite-search-count>—</output>
+        </div>
+        <div class="satellite-search-list" data-satellite-search-list>
+          <div class="satellite-search-empty">ENABLE THE SATELLITES LAYER, THEN SEARCH BY NAME OR NORAD ID</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- CCTV Coverage Panel -->
   <div id="cctv-panel" class="panel-collapsible collapsed" data-panel-id="cctv-panel">
     <div class="panel-glow"></div>
