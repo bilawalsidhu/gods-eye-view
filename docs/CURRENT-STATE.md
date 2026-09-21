@@ -592,6 +592,18 @@ responses are cancelled. Buffered snapshots have a 16 MiB streaming cap; an
 oversized image remains an upstream miss and uses the normal fallback chain.
 The existing declared media size ceiling remains 64 MiB.
 
+The Street View step of the CCTV frame fallback is the only metered call in that
+chain, so it is bounded separately. A frame reaches Street View only for a camera
+the catalog serves, and only at that camera's registered latitude and longitude:
+`lat` and `lon` on the query string are still sent by the browser but are no
+longer read. A pose that is absent, non-numeric or off-globe is refused before
+the request is made, heading wraps into `[0, 360)` beside the existing fov and
+pitch clamps, and admission is capped at 240 lookups per minute per client with a
+720 aggregate backstop, sized above the 16-card ambient drain refreshing every 10
+seconds. A refused lookup returns the existing synthetic card rather than an error
+status, so frame delivery for registered cameras and the upstream and synthetic
+steps are unchanged.
+
 
 ## GBFS upstream bounds
 
