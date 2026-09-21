@@ -61,6 +61,11 @@ export const ANALYST_LAYERS = {
     text: ['place'],
     flags: [],
   },
+  'fire-perimeters': {
+    numeric: ['acres', 'containedPct', 'personnel', 'costToDate'],
+    text: ['name', 'state', 'county', 'cause', 'behavior', 'complexity'],
+    flags: [],
+  },
 };
 
 const EARTH_R_KM = 6371;

@@ -1729,6 +1729,12 @@
       "src/data/feedState.js",
       "src/layers/alpr/records.js",
       "src/layers/earthquakes/records.js",
+      "src/app/layers/perimeters.js",
+      "src/layers/perimeters/index.js",
+      "src/layers/perimeters/source.js",
+      "src/layers/perimeters/records.js",
+      "src/layers/perimeters/cards.js",
+      "src/layers/perimeters/inciweb.js",
       "src/layers/cctv/sourcePolicy.js",
       "src/sources/reference.js",
       "src/search/nominatim.js",
@@ -2167,6 +2173,12 @@
       "src/app/localGeojsonServices.js",
       "src/layers/alpr/records.js",
       "src/layers/earthquakes/records.js",
+      "src/app/layers/perimeters.js",
+      "src/layers/perimeters/index.js",
+      "src/layers/perimeters/source.js",
+      "src/layers/perimeters/records.js",
+      "src/layers/perimeters/cards.js",
+      "src/layers/perimeters/inciweb.js",
       "src/layers/cctv/sourcePolicy.js",
       "src/search/nominatim.js",
       "src/nominatimGeocode.js",
@@ -2499,6 +2511,8 @@
       "src/sources/reference.js",
       "src/layers/earthquakes/source.js",
       "src/layers/earthquakes/records.js",
+      "src/layers/perimeters/source.js",
+      "src/layers/perimeters/records.js",
       "src/layers/submarineCables/bundledSource.js"
     ],
     "external": []
@@ -2692,6 +2706,25 @@
       "src/sources/overpassFeaturesRecords.js",
       "src/sources/overpassFeatures.js",
       "src/sources/featureSource.js"
+    ],
+    "external": []
+  },
+  "perimeters": {
+    "exports": ["./layers/perimeters"],
+    "modules": [
+      "src/layers/perimeters/index.js",
+      "src/layers/perimeters/source.js",
+      "src/layers/perimeters/records.js",
+      "src/layers/perimeters/cards.js",
+      "src/layers/perimeters/inciweb.js"
+    ],
+    "external": ["cesium"]
+  },
+  "perimeters-source": {
+    "exports": ["./layers/perimeters/source"],
+    "modules": [
+      "src/layers/perimeters/records.js",
+      "src/layers/perimeters/source.js"
     ],
     "external": []
   }
