@@ -666,6 +666,7 @@
 .data-toggle-btn.feed-loading,
 .data-toggle-btn.feed-degraded,
 .data-toggle-btn.feed-stale,
+.data-toggle-btn.feed-partial,
 .data-toggle-btn.feed-fallback,
 .data-toggle-btn.feed-unavailable {
   min-width: 82px;
@@ -685,6 +686,7 @@
 }
 
 .data-toggle-btn.active.feed-stale,
+.data-toggle-btn.active.feed-partial,
 .data-toggle-btn.active.feed-fallback {
   color: #ffd27a;
   border-color: rgba(255, 190, 82, 0.75);

@@ -25,6 +25,7 @@ export function createEvidence({
     state.feed.loaded = true;
     state.feed.error = null;
     state.feed.stale = false;
+    state.feed.partial = false;
     state.feed.lastUpdate = Date.now();
     state.feed.transportStatus = 'synthetic';
     state.feed.lastMessageAt = null;
