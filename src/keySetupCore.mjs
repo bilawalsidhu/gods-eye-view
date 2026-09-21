@@ -99,6 +99,14 @@ export const KEY_SETUP_KEYS = Object.freeze([
     tier: 'free',
   }),
   Object.freeze({
+    id: 'tdx',
+    title: 'TDX 運輸資料流通服務',
+    unlocks: 'Taiwan provincial-highway & city CCTV live streams',
+    getUrl: 'https://tdx.transportdata.tw/register',
+    envVars: Object.freeze(['TDX_CLIENT_ID', 'TDX_CLIENT_SECRET']),
+    tier: 'free',
+  }),
+  Object.freeze({
     id: 'launch-library',
     title: 'LAUNCH LIBRARY',
     unlocks: 'Higher space-missions request allowance',

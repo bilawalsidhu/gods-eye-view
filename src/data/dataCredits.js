@@ -246,6 +246,13 @@ export const DATA_CREDITS = [
       '<a href="https://tarktee.transpordiamet.ee/" target="_blank" rel="noopener">tarktee.transpordiamet.ee</a> (courtesy)',
   },
   {
+    key: 'taiwan-freeway-cctv',
+    html:
+      'CCTV live streams (Taiwan freeways): 交通部高速公路局 Freeway Bureau, MOTC — ' +
+      '<a href="https://tisvcloud.freeway.gov.tw/" target="_blank" rel="noopener">tisvcloud.freeway.gov.tw</a> (政府資料開放授權條款); ' +
+      'provincial-highway &amp; city cameras via <a href="https://tdx.transportdata.tw/" target="_blank" rel="noopener">TDX</a> when configured',
+  },
+  {
     key: 'warendorf-cctv',
     html:
       'Webcam (Warendorf): <a href="https://www.warendorf.de/" target="_blank" rel="noopener">Stadt Warendorf</a> (courtesy); ' +

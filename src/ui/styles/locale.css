@@ -1,0 +1,43 @@
+/* Localization plugin (src/i18n/localize.js): language toggle + CJK font
+   fallback. JetBrains Mono / Inter carry no CJK glyphs, so Traditional
+   Chinese falls through to the platform's TC UI font instead of a random
+   system default. */
+:root[data-locale='zh-TW'] {
+  --font-mono:
+    'JetBrains Mono', 'Noto Sans TC', 'Microsoft JhengHei', 'PingFang TC',
+    'Heiti TC', monospace;
+  --font-sans:
+    'Inter', 'Noto Sans TC', 'Microsoft JhengHei', 'PingFang TC', 'Heiti TC',
+    -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.gev-locale-toggle {
+  position: fixed;
+  top: 8px;
+  right: 10px;
+  z-index: 10050;
+  min-width: 44px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 11px;
+  border: 1px solid rgba(0, 220, 255, 0.35);
+  background: rgba(4, 12, 18, 0.72);
+  color: rgba(170, 242, 255, 0.95);
+  font:
+    600 11px/20px 'JetBrains Mono',
+    'Microsoft JhengHei',
+    'PingFang TC',
+    monospace;
+  letter-spacing: 1px;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+}
+
+.gev-locale-toggle:hover {
+  border-color: rgba(0, 220, 255, 0.7);
+}
+
+.gev-locale-toggle:focus-visible {
+  outline: 2px solid rgba(0, 220, 255, 0.9);
+  outline-offset: 2px;
+}

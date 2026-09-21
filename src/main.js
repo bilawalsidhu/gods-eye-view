@@ -1,5 +1,9 @@
 import { createStandaloneApplication } from './standalone/application.js';
 import { describeError } from './standalone/errors.js';
+import { installLocalization } from './i18n/localize.js';
+
+// 繁體中文 plugin: translates the rendered UI and mounts the language toggle.
+installLocalization();
 
 const application = createStandaloneApplication({
   googleApiKey: import.meta.env.GOOGLE_MAPS_API_KEY,

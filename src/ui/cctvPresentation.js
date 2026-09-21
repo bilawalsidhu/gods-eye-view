@@ -165,7 +165,13 @@ export function _renderCctvState(state) {
   }
 
   if (this._cctvFrame) {
-    const nextSrc = enabled ? activeCamera?.frameUrl : null;
+    // Live MJPEG cameras play their stream in the preview; everything else
+    // keeps the refreshed still.
+    const liveSrc =
+      String(activeCamera?.feedType || '').toLowerCase() === 'mjpeg'
+        ? activeCamera?.mediaUrl
+        : null;
+    const nextSrc = enabled ? liveSrc || activeCamera?.frameUrl : null;
     const nextCameraId = enabled ? activeCamera?.id || '' : '';
     const cameraChanged = this._cctvFrame.dataset.cameraId !== nextCameraId;
     const frameLoading = this._cctvFrame.dataset.loading === 'true';
@@ -178,7 +184,7 @@ export function _renderCctvState(state) {
       (cameraChanged ||
         (!frameLoading && this._cctvFrame.dataset.currentSrc !== nextSrc))
     ) {
-      this._queueCctvFrame(nextSrc, nextCameraId, cameraChanged);
+      this._queueCctvFrame(nextSrc, nextCameraId, cameraChanged, !!liveSrc);
     }
     if (!nextSrc) {
       this._clearCctvFrame();

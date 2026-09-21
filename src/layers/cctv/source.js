@@ -26,6 +26,10 @@ function frameUrlFor(camera, refreshMs = ACTIVE_FRAME_REFRESH_MS) {
   return `${FRAME_ENDPOINT}/${encodeURIComponent(camera.id)}?${params.toString()}`;
 }
 function mediaUrlFor(camera) {
+  // A live MJPEG stream is one long response; a rotating cache-buster would
+  // make every consumer reconnect whenever it rebuilt the URL.
+  if (String(camera?.feedType || '').toLowerCase() === 'mjpeg')
+    return `${MEDIA_ENDPOINT}/${encodeURIComponent(camera.id)}`;
   return `${MEDIA_ENDPOINT}/${encodeURIComponent(camera.id)}?ts=${Math.floor(Date.now() / 15000)}`;
 }
 /** Supply catalog/health records and the existing registered camera URL families. */

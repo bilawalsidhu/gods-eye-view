@@ -5,6 +5,8 @@ import {
   PLANE_OUTLINE_COLOR,
   PROJECTION_CANVAS_WIDTH,
   PROJECTION_CANVAS_HEIGHT,
+  MJPEG_CAPTURE_FPS,
+  MJPEG_RECONNECT_MS,
 } from './policy.js';
 
 export function createProjection({
@@ -176,7 +178,11 @@ export function createProjection({
     const ctx = canvas.getContext('2d', { alpha: true });
 
     const feedType = parts.model.normalizeFeedType(record.camera.feedType);
-    const mode = parts.model.isVideoFeedType(feedType) ? 'video' : 'image';
+    const mode = parts.model.isVideoFeedType(feedType)
+      ? 'video'
+      : feedType === 'mjpeg'
+        ? 'mjpeg'
+        : 'image';
     const runtime = {
       mode,
       canvas,
@@ -224,6 +230,29 @@ export function createProjection({
         video.play().catch(() => {});
       });
       runtime.video = video;
+    } else if (mode === 'mjpeg') {
+      // Live MJPEG: an <img> holds the multipart stream and is blitted onto the
+      // canvas at MJPEG_DRAW_INTERVAL_MS. The canvas is re-exposed as a
+      // MediaStream-backed <video> so the monitor plane takes Cesium's native
+      // per-frame video texture path instead of the 1 Hz canvas buffer swap.
+      runtime.mjpegUrl = parts.frames.mediaUrlFor(record.camera);
+      runtime.lastMjpegDrawAt = 0;
+      runtime.mjpegRetryTimer = 0;
+      runtime.image = new Image();
+      runtime.image.decoding = 'async';
+      if (typeof canvas.captureStream === 'function') {
+        const video = document.createElement('video');
+        video.muted = true;
+        video.autoplay = true;
+        video.playsInline = true;
+        try {
+          video.srcObject = canvas.captureStream(MJPEG_CAPTURE_FPS);
+          runtime.video = video;
+        } catch {
+          runtime.video = null;
+        }
+      }
+      setMjpegStreaming(runtime, true);
     } else {
       const img = new Image();
       img.decoding = 'async';
@@ -254,7 +283,10 @@ export function createProjection({
     const positions =
       record.frustumPositions || parts.geometry.frustumCartesians(geometry);
     runtime.planeMaterial = new Cesium.ImageMaterialProperty({
-      image: mode === 'video' && runtime.video ? runtime.video : canvas,
+      image:
+        (mode === 'video' || mode === 'mjpeg') && runtime.video
+          ? runtime.video
+          : canvas,
       transparent: true,
       color: Cesium.Color.WHITE.withAlpha(0.95),
     });
@@ -268,6 +300,37 @@ export function createProjection({
    * @param {Object} record - Camera record.
    * @returns {Object|null} The record's projection runtime.
    */
+
+  function setMjpegStreaming(runtime, on) {
+    if (!runtime || runtime.mode !== 'mjpeg' || !runtime.image) return;
+    const img = runtime.image;
+    // A pending reconnect already owns the resume; don't collapse its backoff.
+    if (on && runtime.mjpegRetryTimer) return;
+    clearTimeout(runtime.mjpegRetryTimer);
+    runtime.mjpegRetryTimer = 0;
+    if (!on) {
+      if (!runtime.mjpegStreaming) return;
+      runtime.mjpegStreaming = false;
+      img.onerror = null;
+      // Dropping src closes the multipart connection (and the proxy's
+      // upstream connection with it).
+      img.removeAttribute('src');
+      return;
+    }
+    if (runtime.mjpegStreaming) return;
+    runtime.mjpegStreaming = true;
+    img.onerror = () => {
+      // The upstream closed or refused: reconnect while this feed is wanted.
+      if (!runtime.mjpegStreaming) return;
+      runtime.mjpegStreaming = false;
+      runtime.mjpegRetryTimer = setTimeout(() => {
+        runtime.mjpegRetryTimer = 0;
+        setMjpegStreaming(runtime, true);
+      }, MJPEG_RECONNECT_MS);
+    };
+    const sep = runtime.mjpegUrl.includes('?') ? '&' : '?';
+    img.src = `${runtime.mjpegUrl}${sep}session=${Date.now()}`;
+  }
 
   function ensureProjectionRuntime(record) {
     if (!record) return null;
@@ -288,6 +351,8 @@ export function createProjection({
 
   function destroyProjectionRuntime(runtime) {
     if (!runtime) return;
+    setMjpegStreaming(runtime, false);
+    runtime.video?.srcObject?.getTracks?.().forEach((track) => track.stop());
     if (runtime.video) {
       runtime.video.pause();
       runtime.video.removeAttribute('src');
@@ -357,16 +422,16 @@ export function createProjection({
 
   function pauseInactiveProjectionFeeds(activeId) {
     for (const record of layerState._records) {
-      if (!record.projection?.video) continue;
-      if (
+      const runtime = record.projection;
+      if (!runtime?.video && runtime?.mode !== 'mjpeg') continue;
+      const wanted =
         record.camera.id === activeId &&
         layerState._enabled &&
-        layerState._showProjection
-      ) {
-        record.projection.video.play().catch(() => {});
-      } else {
-        record.projection.video.pause();
-      }
+        layerState._showProjection;
+      setMjpegStreaming(runtime, wanted);
+      if (!runtime.video) continue;
+      if (wanted) runtime.video.play().catch(() => {});
+      else runtime.video.pause();
     }
   }
   return {
@@ -381,5 +446,6 @@ export function createProjection({
     startProjectionLoop,
     stopProjectionLoop,
     pauseInactiveProjectionFeeds,
+    setMjpegStreaming,
   };
 }

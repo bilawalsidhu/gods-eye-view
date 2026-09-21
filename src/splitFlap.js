@@ -54,6 +54,7 @@
  * odometer is the CASCADE — the left-to-right sweep that makes a departure
  * board read as a departure board.
  */
+import { localizeUiText } from './i18n/localize.js';
 
 /**
  * One-line kill switch. Flip to `false` and every chip goes back to a plain
@@ -446,7 +447,9 @@ function settle(element, expected, easeMs) {
  */
 export function setSplitFlapText(element, text, options = {}) {
   if (!element) return false;
-  const next = String(text ?? '');
+  // Localize before the idempotence check: the chip must flap to the label the
+  // viewer reads, or the DOM translator and the ticker would fight every tick.
+  const next = localizeUiText(String(text ?? ''));
   // Upgrade to the permanent shell FIRST, so that one-time structural change
   // happens on a tick where the text is not changing. Every subsequent label
   // change is then a lone characterData mutation (invariant 1).

@@ -10,11 +10,13 @@ import {
   fetchCctvImageFromUpstream,
   fetchTxdotSnapshot,
   fetchCctvMediaUpstream,
+  fetchMjpegSnapshot,
   watchDownstreamClose,
 } from './cctv/media.js';
 import {
   CCTV_FRAME_FETCH_TIMEOUT_MS,
   CCTV_MAX_SOURCES_CEILING,
+  MJPEG_SNAPSHOT_CACHE_MS,
 } from './cctv/constants.js';
 import { sanitizeCctvRangeHeader } from './cctv/range.js';
 import { googleServerApiKey } from './places/google-key.js';
@@ -59,6 +61,26 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
     });
   };
 
+  /** Recent MJPEG stills by camera id, plus in-flight grabs, so ambient cards
+   * and the frame route share one short upstream connection per camera. */
+  const mjpegSnapshots = new Map();
+  const MJPEG_SNAPSHOT_CACHE_MAX = 256;
+  const cachedMjpegSnapshot = (cameraId, url) => {
+    const now = Date.now();
+    const hit = mjpegSnapshots.get(cameraId);
+    if (hit && (hit.pending || now - hit.at <= MJPEG_SNAPSHOT_CACHE_MS))
+      return hit.pending || Promise.resolve(hit.result);
+    if (mjpegSnapshots.size >= MJPEG_SNAPSHOT_CACHE_MAX) {
+      mjpegSnapshots.delete(mjpegSnapshots.keys().next().value);
+    }
+    const pending = fetchMjpegSnapshot(url).then((result) => {
+      mjpegSnapshots.set(cameraId, { at: Date.now(), result, pending: null });
+      return result;
+    });
+    mjpegSnapshots.set(cameraId, { at: now, result: null, pending });
+    return pending;
+  };
+
   /** Snapshot all camera health entries as an array. */
   const listHealth = () => Array.from(health.values());
 
@@ -68,9 +90,10 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
     return {
       id: cameraId,
       feedType,
-      mediaUrl: isVideoFeedType(feedType)
-        ? `/api/cctv/media/${encodeURIComponent(cameraId)}`
-        : null,
+      mediaUrl:
+        isVideoFeedType(feedType) || feedType === 'mjpeg'
+          ? `/api/cctv/media/${encodeURIComponent(cameraId)}`
+          : null,
       frameUrl: `/api/cctv/frame/${encodeURIComponent(cameraId)}`,
       provider: source?.provider || '',
       sourceKind:
@@ -270,12 +293,15 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
               return;
             }
 
+            const liveFeed = isVideoFeedType(feedType) || feedType === 'mjpeg';
             if (
-              isVideoFeedType(feedType) &&
-              !(
-                contentType.startsWith('video/') ||
-                contentType.includes('mpegurl')
-              )
+              (isVideoFeedType(feedType) &&
+                !(
+                  contentType.startsWith('video/') ||
+                  contentType.includes('mpegurl')
+                )) ||
+              (feedType === 'mjpeg' &&
+                !contentType.toLowerCase().startsWith('multipart/'))
             ) {
               setHealth(cameraId, {
                 status: 'degraded',
@@ -286,18 +312,16 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
             } else {
               setHealth(cameraId, {
                 status: 'ok',
-                sourceKind: isVideoFeedType(feedType) ? 'live' : 'snapshot',
+                sourceKind: liveFeed ? 'live' : 'snapshot',
                 label: source?.provider || 'Configured source',
-                message: isVideoFeedType(feedType)
+                message: liveFeed
                   ? 'Live stream connected'
                   : 'Snapshot feed connected',
               });
             }
 
             await proxyMediaResponse(res, upstream, {
-              sourceHeader: isVideoFeedType(feedType)
-                ? 'live-media'
-                : 'upstream-image',
+              sourceHeader: liveFeed ? 'live-media' : 'upstream-image',
             });
             return;
           } catch (error) {
@@ -357,8 +381,14 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
             ? source?.url
             : '');
 
-        const upstreamImage =
-          source?.sourceKind === 'txdot-its'
+        // MJPEG-only cameras publish no still: cut one from the live stream.
+        const mjpegStill =
+          !source?.snapshotUrl &&
+          normalizeFeedType(source?.feedType) === 'mjpeg' &&
+          source?.url;
+        const upstreamImage = mjpegStill
+          ? await cachedMjpegSnapshot(cameraId, source.url)
+          : source?.sourceKind === 'txdot-its'
             ? await fetchTxdotSnapshot(upstreamCandidate)
             : await fetchCctvImageFromUpstream(upstreamCandidate);
         if (upstreamImage?.ok) {

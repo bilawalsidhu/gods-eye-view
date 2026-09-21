@@ -255,3 +255,40 @@ export const CCTV_FRAME_MAX_BODY_BYTES = 16 * 1024 * 1024;
 export const CCTV_MEDIA_FETCH_TIMEOUT_MS = 15 * 1000;
 /** Declared size ceiling for fixed media responses. */
 export const CCTV_MEDIA_MAX_BODY_BYTES = 64 * 1024 * 1024;
+
+/** Taiwan Freeway Bureau (交通部高速公路局) CCTV catalog: the keyless MOTC
+ * standard XML published on tisvcloud (~1,900 cameras, refreshed daily). Every
+ * camera's VideoStreamURL is a live MJPEG stream on a *.freeway.gov.tw host. */
+export const TAIWAN_FREEWAY_CCTV_URL =
+  'https://tisvcloud.freeway.gov.tw/history/motc20/CCTV.xml';
+export const DEFAULT_TAIWAN_FREEWAY_MAX_SOURCES = 600;
+/** Hard ceiling on the freeway catalog body (~1.2 MB today). */
+export const TAIWAN_FREEWAY_MAX_CATALOG_BYTES = 16 * 1024 * 1024;
+/** TDX (Transport Data eXchange) — provincial highway + city CCTV. Needs a free
+ * TDX_CLIENT_ID / TDX_CLIENT_SECRET pair; the pack is skipped without one. */
+export const TDX_TOKEN_URL =
+  'https://tdx.transportdata.tw/auth/realms/TDXConnect/protocol/openid-connect/token';
+export const TDX_API_ORIGIN = 'https://tdx.transportdata.tw';
+export const DEFAULT_TDX_CCTV_CITIES =
+  'Taipei,NewTaipei,Taoyuan,Taichung,Tainan,Kaohsiung';
+export const DEFAULT_TDX_MAX_SOURCES = 600;
+/** Ground-elevation prior (m) until the client's terrain sample lands; most
+ * cameras sit on the western plain. */
+export const TAIWAN_GROUND_ELEVATION_M = 40;
+/** Prioritization anchors along the west-coast corridor plus Yilan/Hualien,
+ * so a cap keeps national coverage instead of only Taipei. */
+export const TAIWAN_ANCHORS = [
+  { lat: 25.0478, lon: 121.5319 }, // Taipei
+  { lat: 25.0129, lon: 121.4657 }, // New Taipei (Banqiao)
+  { lat: 24.9936, lon: 121.301 }, // Taoyuan
+  { lat: 24.8138, lon: 120.9675 }, // Hsinchu
+  { lat: 24.1477, lon: 120.6736 }, // Taichung
+  { lat: 23.4801, lon: 120.4491 }, // Chiayi
+  { lat: 22.9999, lon: 120.227 }, // Tainan
+  { lat: 22.6273, lon: 120.3014 }, // Kaohsiung
+  { lat: 24.757, lon: 121.7533 }, // Yilan
+];
+/** A live MJPEG snapshot reads at most this much before giving up on a frame. */
+export const MJPEG_SNAPSHOT_MAX_BYTES = 4 * 1024 * 1024;
+/** Snapshot reuse window: ambient cards and the frame route share one grab. */
+export const MJPEG_SNAPSHOT_CACHE_MS = 5 * 1000;

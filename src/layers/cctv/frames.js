@@ -10,6 +10,7 @@ import {
   PROJECTION_ACTIVE_REFRESH_MS,
   PROJECTION_IDLE_REFRESH_MS,
   PLACEHOLDER_REPAINT_MS,
+  MJPEG_DRAW_INTERVAL_MS,
 } from './policy.js';
 
 export function createFrames({ state: layerState, services, parts, source }) {
@@ -110,8 +111,9 @@ export function createFrames({ state: layerState, services, parts, source }) {
    * Pushes fresh pixels into the monitor plane material. Called every
    * projection tick.
    *
-   * Video feeds are skipped entirely — their HTMLVideoElement uniform is
-   * updated per-frame by Cesium natively (H5). Image/webcam-frame feeds swap
+   * Video feeds (and MJPEG feeds re-exposed through a canvas MediaStream) are
+   * skipped entirely — their HTMLVideoElement uniform is updated per-frame by
+   * Cesium natively (H5). Image/webcam-frame feeds swap
    * the double-buffer canvas reference, throttled to PROJECTION_TEXTURE_SWAP_MS.
    *
    * @param {Object} record - Camera record with an initialized projection runtime.
@@ -119,7 +121,7 @@ export function createFrames({ state: layerState, services, parts, source }) {
 
   function refreshProjectionTextures(record) {
     const runtime = record?.projection;
-    if (!runtime || runtime.mode === 'video') return;
+    if (!runtime || runtime.video) return;
     const now = Date.now();
     if (
       now - parts.model.safeNumber(runtime.lastTextureSwapAt, 0) <
@@ -305,6 +307,32 @@ export function createFrames({ state: layerState, services, parts, source }) {
         return;
       }
       paintPlaceholderThrottled(record, runtime, health);
+      return;
+    }
+
+    if (runtime.mode === 'mjpeg') {
+      const img = runtime.image;
+      if (runtime.mjpegStreaming && img?.naturalWidth > 0) {
+        const now = performance.now();
+        if (now - runtime.lastMjpegDrawAt < MJPEG_DRAW_INTERVAL_MS) return;
+        runtime.lastMjpegDrawAt = now;
+        try {
+          runtime.ctx.drawImage(
+            img,
+            0,
+            0,
+            PROJECTION_CANVAS_WIDTH,
+            PROJECTION_CANVAS_HEIGHT,
+          );
+          runtime.canvasStamp = (runtime.canvasStamp || 0) + 1;
+          runtime.lastPlaceholderPaintAt = 0;
+          return;
+        } catch {
+          /* decode race between multipart parts — fall through */
+        }
+      }
+      if (!runtime.lastMjpegDrawAt)
+        paintPlaceholderThrottled(record, runtime, health);
       return;
     }
 

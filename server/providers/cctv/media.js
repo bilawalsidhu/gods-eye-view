@@ -7,6 +7,7 @@ import {
   CCTV_MEDIA_MAX_BODY_BYTES,
   NSW_IMAGE_ORIGIN,
   NSW_IMAGE_USER_AGENT,
+  MJPEG_SNAPSHOT_MAX_BYTES,
 } from './constants.js';
 /**
  * Generate a synthetic SVG billboard image for a CCTV camera placeholder.
@@ -513,4 +514,104 @@ export async function fetchCctvImageFromUpstream(
     clearTimeout(timeoutId);
     controller.abort();
   }
+}
+
+/**
+ * Pull one JPEG out of a live MJPEG (multipart/x-mixed-replace) stream and
+ * close the connection. Ambient cards and the frame route need a still, and
+ * MJPEG-only providers (Taiwan Freeway Bureau) publish no snapshot URL.
+ *
+ * A part's own Content-Length is used when present; otherwise the JPEG is
+ * delimited by its SOI/EOI markers.
+ *
+ * @param {string} url - Server-registered MJPEG stream URL.
+ * @param {object} [options]
+ * @param {typeof fetch} [options.fetchImpl=fetch]
+ * @param {number} [options.timeoutMs=CCTV_FRAME_FETCH_TIMEOUT_MS]
+ * @param {number} [options.maxBytes=MJPEG_SNAPSHOT_MAX_BYTES]
+ * @returns {Promise<{ok:true,body:Buffer,contentType:string}|null>}
+ */
+export async function fetchMjpegSnapshot(
+  url,
+  {
+    fetchImpl = fetch,
+    timeoutMs = CCTV_FRAME_FETCH_TIMEOUT_MS,
+    maxBytes = MJPEG_SNAPSHOT_MAX_BYTES,
+  } = {},
+) {
+  if (!url || !/^https?:\/\//i.test(url)) return null;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  let reader = null;
+  try {
+    const upstream = await fetchWithinHost(
+      url,
+      {
+        headers: { 'User-Agent': cctvUpstreamUserAgent(url) },
+        signal: controller.signal,
+      },
+      fetchImpl,
+    );
+    if (!upstream?.ok || !upstream.body) return null;
+    const contentType = upstream.headers.get('content-type') || '';
+    if (contentType.startsWith('image/')) {
+      // Some hosts answer a stream URL with a plain still.
+      const body = await readCappedResponseBytes(upstream, maxBytes);
+      return body ? { ok: true, body, contentType } : null;
+    }
+    if (!contentType.toLowerCase().startsWith('multipart/')) return null;
+    reader = upstream.body.getReader();
+    let buffer = Buffer.alloc(0);
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) return null;
+      buffer = Buffer.concat([buffer, Buffer.from(value)]);
+      if (buffer.length > maxBytes) return null;
+      const jpeg = extractFirstMultipartJpeg(buffer);
+      if (jpeg) return { ok: true, body: jpeg, contentType: 'image/jpeg' };
+    }
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeoutId);
+    try {
+      reader?.cancel().catch(() => {});
+    } catch {
+      /* already closed */
+    }
+    controller.abort();
+  }
+}
+
+/**
+ * Find the first complete JPEG in a buffered multipart MJPEG prefix.
+ *
+ * @param {Buffer} buffer
+ * @returns {Buffer|null}
+ */
+export function extractFirstMultipartJpeg(buffer) {
+  const soi = buffer.indexOf(Buffer.from([0xff, 0xd8, 0xff]));
+  if (soi < 0) return null;
+  const headerText = buffer
+    .subarray(Math.max(0, soi - 512), soi)
+    .toString('latin1');
+  const lengths = [...headerText.matchAll(/content-length:\s*(\d+)/gi)];
+  const declared = lengths.length
+    ? Number(lengths[lengths.length - 1][1])
+    : NaN;
+  if (Number.isFinite(declared) && declared > 3) {
+    if (buffer.length < soi + declared) return null;
+    // Some servers count the part's trailing CRLF in its Content-Length.
+    let end = soi + declared;
+    while (
+      end > soi + 2 &&
+      (buffer[end - 1] === 0x0a || buffer[end - 1] === 0x0d)
+    )
+      end--;
+    return buffer[end - 2] === 0xff && buffer[end - 1] === 0xd9
+      ? Buffer.from(buffer.subarray(soi, end))
+      : null;
+  }
+  const eoi = buffer.indexOf(Buffer.from([0xff, 0xd9]), soi + 3);
+  return eoi < 0 ? null : Buffer.from(buffer.subarray(soi, eoi + 2));
 }

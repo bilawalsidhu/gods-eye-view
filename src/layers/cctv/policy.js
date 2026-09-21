@@ -87,6 +87,15 @@ export const CCTV_CALIBRATION_STORAGE_KEY_V2 =
 
 export const PROJECTION_TEXTURE_SWAP_MS = 1000;
 
+// Live MJPEG feeds (Taiwan freeway cameras publish ~10 fps): canvas blit
+// cadence and the frame rate of the canvas MediaStream the plane samples.
+
+export const MJPEG_DRAW_INTERVAL_MS = 80;
+
+export const MJPEG_CAPTURE_FPS = 12;
+
+export const MJPEG_RECONNECT_MS = 5000;
+
 export const PROJECTION_VERT_ASPECT =
   PROJECTION_CANVAS_WIDTH / PROJECTION_CANVAS_HEIGHT;
 
