@@ -394,6 +394,18 @@ async function main() {
           const mod = window.__godsEyeView.dataManager.layers.get('cctv').module;
           return mod.getUIState().cameras.find((camera) => camera.id === id) || null;
         }, cam.id);
+        // Coverage entities exist only for the active camera's neighbor
+        // cohort (COVERAGE_NEIGHBOR_LIMIT within COVERAGE_NEIGHBOR_RADIUS_KM
+        // in cctv.js) — a camera outside it never receives a `ray-tl`
+        // polyline, so probing far cities without activating them asserts a
+        // state the app intentionally does not build (RUN 3c/3e: whichever
+        // city held the fallback-active camera passed, the other two failed
+        // 8/8). Drive each probed camera through the module's own selection
+        // path first; readCameraGround's entity wait then bounds the build.
+        await page.evaluate((id) => {
+          const mod = window.__godsEyeView.dataManager.layers.get('cctv').module;
+          return mod.selectCamera(id);
+        }, cam.id);
         const geom = await readCameraGround(page, cam.id);
         if (!geom || !Number.isFinite(geom.groundM)) {
           record(`${label} ${cam.id}: record ground reads finitely`, false, 'ray-tl entity missing or non-finite height');
