@@ -172,14 +172,15 @@ test('render displays active provider pill and differentiates chips with NO KEY 
   );
   assert.equal(hasNoKeyTag, true, 'Unconfigured chips must display ⚪ NO KEY');
 
-  // Verify that all 13 providers have dedicated input fields with their respective envVars
+  // Verify that all providers have dedicated input fields with their respective envVars
   const providerInputs = elements.filter(
     (el) => el.tagName === 'INPUT' && el.dataset?.envVar && el.type === 'password'
   );
-  assert.equal(providerInputs.length, 13, 'Must render exactly 13 segregated password inputs');
+  assert.equal(providerInputs.length, 14, 'Must render exactly 14 segregated password inputs');
 
   const expectedVars = [
     'NVIDIA_API_KEY',
+    'MANIFEST_API_KEY',
     'REQUESTY_API_KEY',
     'GROQ_API_KEY',
     'GEMINI_API_KEY',

@@ -90,7 +90,11 @@ export class GeofenceControls {
 
   _showBreachBanner(alert) {
     if (!this.banner) return;
-    const entityName = alert.entity?.callsign || alert.entity?.name || alert.entity?.id || 'CONTACT';
+    const entityName =
+      alert.entity?.callsign ||
+      alert.entity?.name ||
+      alert.entity?.id ||
+      'CONTACT';
     const zoneName = alert.zone?.name || 'ZONE';
 
     this.banner.innerHTML = `
@@ -160,17 +164,22 @@ export class GeofenceControls {
 
     const zones = this.engine.getZones();
     if (!zones.length) {
-      listEl.innerHTML = '<div style="font-size:10px;color:#8fa3b5;padding:8px;">No active perimeter zones.</div>';
+      listEl.innerHTML =
+        '<div style="font-size:10px;color:#8fa3b5;padding:8px;">No active perimeter zones.</div>';
       return;
     }
 
-    listEl.innerHTML = zones.map((z) => `
+    listEl.innerHTML = zones
+      .map(
+        (z) => `
       <div class="gev-geofence-item" data-id="${z.id}">
         <span class="gev-geofence-item-name">${z.name}</span>
         <span class="gev-geofence-item-radius">${Math.round(z.radiusM / 1000)} km</span>
         <button class="gev-geofence-del-btn" title="Delete Zone">✕</button>
       </div>
-    `).join('');
+    `,
+      )
+      .join('');
 
     listEl.querySelectorAll('.gev-geofence-del-btn').forEach((btn) => {
       btn.addEventListener('click', (e) => {

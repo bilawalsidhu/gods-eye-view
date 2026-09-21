@@ -5,7 +5,8 @@
  * under the 8% CPU / GPU budget with exponential moving average coordinate smoothing.
  */
 
-const MEDIAPIPE_HANDS_CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js';
+const MEDIAPIPE_HANDS_CDN =
+  'https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js';
 
 export class HandTracker {
   /**
@@ -48,7 +49,9 @@ export class HandTracker {
     if (window.Hands) return true;
 
     return new Promise((resolve, reject) => {
-      const existing = document.querySelector(`script[src="${MEDIAPIPE_HANDS_CDN}"]`);
+      const existing = document.querySelector(
+        `script[src="${MEDIAPIPE_HANDS_CDN}"]`,
+      );
       if (existing) {
         if (window.Hands) {
           resolve(true);
@@ -60,14 +63,22 @@ export class HandTracker {
             resolve(true);
           }
         }, 50);
-        existing.addEventListener('load', () => {
-          clearInterval(checkInterval);
-          resolve(true);
-        }, { once: true });
-        existing.addEventListener('error', () => {
-          clearInterval(checkInterval);
-          reject(new Error('Failed to load MediaPipe Hands'));
-        }, { once: true });
+        existing.addEventListener(
+          'load',
+          () => {
+            clearInterval(checkInterval);
+            resolve(true);
+          },
+          { once: true },
+        );
+        existing.addEventListener(
+          'error',
+          () => {
+            clearInterval(checkInterval);
+            reject(new Error('Failed to load MediaPipe Hands'));
+          },
+          { once: true },
+        );
         setTimeout(() => {
           clearInterval(checkInterval);
           if (window.Hands) resolve(true);
@@ -90,8 +101,13 @@ export class HandTracker {
    */
   async start() {
     if (this.isRunning) return;
-    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
-      this.onError?.(new Error('Camera API not available in this browser environment'));
+    if (
+      typeof navigator === 'undefined' ||
+      !navigator.mediaDevices?.getUserMedia
+    ) {
+      this.onError?.(
+        new Error('Camera API not available in this browser environment'),
+      );
       return;
     }
 
@@ -99,7 +115,10 @@ export class HandTracker {
       // 1. Try initializing @vladmandic/human AI engine first
       try {
         const { Human } = await import('@vladmandic/human');
-        const localPath = typeof window !== 'undefined' ? '/node_modules/@vladmandic/human/models/' : 'https://cdn.jsdelivr.net/npm/@vladmandic/human/models/';
+        const localPath =
+          typeof window !== 'undefined'
+            ? '/node_modules/@vladmandic/human/models/'
+            : 'https://cdn.jsdelivr.net/npm/@vladmandic/human/models/';
         this.human = new Human({
           backend: 'webgl',
           modelBasePath: localPath,
@@ -125,7 +144,8 @@ export class HandTracker {
         // Initialize MediaPipe Hands as fallback
         if (window.Hands && !this.hands) {
           this.hands = new window.Hands({
-            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
+            locateFile: (file) =>
+              `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
           });
 
           this.hands.setOptions({
@@ -164,7 +184,9 @@ export class HandTracker {
 
       if (this.videoEl.readyState < 2) {
         await new Promise((resolve) => {
-          this.videoEl.addEventListener('loadeddata', () => resolve(), { once: true });
+          this.videoEl.addEventListener('loadeddata', () => resolve(), {
+            once: true,
+          });
           setTimeout(resolve, 1000);
         });
       }
@@ -242,13 +264,20 @@ export class HandTracker {
 
     // Exponential Moving Average (EMA) smoothing
     if (!this._smoothedLandmarks) {
-      this._smoothedLandmarks = raw.map((p) => ({ x: p.x, y: p.y, z: p.z || 0 }));
+      this._smoothedLandmarks = raw.map((p) => ({
+        x: p.x,
+        y: p.y,
+        z: p.z || 0,
+      }));
     } else {
       const alpha = this.smoothing;
       for (let i = 0; i < raw.length; i++) {
-        this._smoothedLandmarks[i].x = alpha * raw[i].x + (1 - alpha) * this._smoothedLandmarks[i].x;
-        this._smoothedLandmarks[i].y = alpha * raw[i].y + (1 - alpha) * this._smoothedLandmarks[i].y;
-        this._smoothedLandmarks[i].z = alpha * (raw[i].z || 0) + (1 - alpha) * this._smoothedLandmarks[i].z;
+        this._smoothedLandmarks[i].x =
+          alpha * raw[i].x + (1 - alpha) * this._smoothedLandmarks[i].x;
+        this._smoothedLandmarks[i].y =
+          alpha * raw[i].y + (1 - alpha) * this._smoothedLandmarks[i].y;
+        this._smoothedLandmarks[i].z =
+          alpha * (raw[i].z || 0) + (1 - alpha) * this._smoothedLandmarks[i].z;
       }
     }
 

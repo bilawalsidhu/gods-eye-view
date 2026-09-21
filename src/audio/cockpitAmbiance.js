@@ -38,7 +38,10 @@ export class CockpitAmbiance {
       // Master gain for this ambiance instance
       this._masterGain = ctx.createGain();
       this._masterGain.gain.setValueAtTime(0.0001, now);
-      this._masterGain.gain.linearRampToValueAtTime(this._targetVolume, now + 1.2);
+      this._masterGain.gain.linearRampToValueAtTime(
+        this._targetVolume,
+        now + 1.2,
+      );
 
       // Stereo panner for bank angle spatial shifts
       if (typeof ctx.createStereoPanner === 'function') {

@@ -1,10 +1,10 @@
 /**
- * Mission Dossier & Intel Package Exporter.
- *
- * Compiles real-time spatial intelligence, active contact telemetry,
- * perimeter geofence status, and weather observations into structured briefing
- * packages (Markdown, JSON, and print-ready dossiers).
- */
+* Mission Dossier & Intel Package Exporter.
+*
+* Compiles real-time spatial intelligence, active contact telemetry,
+* perimeter geofence status, and weather observations into structured briefing
+* packages (Markdown, JSON, and print-ready dossiers).
+*/
 
 /**
  * Generate formatted Markdown intelligence briefing dossier.
@@ -20,7 +20,8 @@ export function generateMarkdownDossier({
   geofences = [],
   weather = {},
 } = {}) {
-  const zuluTime = new Date(timestamp).toISOString().replace('T', ' ').slice(0, 19) + 'Z';
+  const zuluTime =
+    new Date(timestamp).toISOString().replace('T', ' ').slice(0, 19) + 'Z';
 
   let md = `# 🛰️ ${operationName}\n\n`;
   md += `**CLASSIFICATION:** \`${classification}\`  \n`;
@@ -58,7 +59,9 @@ export function generateMarkdownDossier({
   if (geofences && geofences.length) {
     md += `| Zone Name | Type | Radius / Bounds | Alert Level |\n|---|---|---|---|\n`;
     for (const z of geofences) {
-      const radius = z.radiusM ? `${Math.round(z.radiusM / 1000)} km` : `${z.vertices?.length || 0} vertices`;
+      const radius = z.radiusM
+        ? `${Math.round(z.radiusM / 1000)} km`
+        : `${z.vertices?.length || 0} vertices`;
       md += `| **${z.name}** | \`${z.type}\` | ${radius} | \`${z.alertLevel.toUpperCase()}\` |\n`;
     }
     md += `\n`;

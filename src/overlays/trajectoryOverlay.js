@@ -111,20 +111,20 @@ export class TrajectoryOverlay {
 
     heading = Number(
       entity?.properties?.heading?.getValue?.() ||
-      entity?.heading ||
-      entity?.trueTrack ||
-      0,
+        entity?.heading ||
+        entity?.trueTrack ||
+        0,
     );
     speed = Number(
       entity?.properties?.speed?.getValue?.() ||
-      entity?.speed ||
-      entity?.groundSpeedKts ||
-      250,
+        entity?.speed ||
+        entity?.groundSpeedKts ||
+        250,
     );
     verticalRate = Number(
       entity?.properties?.verticalRate?.getValue?.() ||
-      entity?.verticalRate ||
-      0,
+        entity?.verticalRate ||
+        0,
     );
 
     const segments = predictVehicleTrajectory({

@@ -1563,7 +1563,8 @@ export const JARVIS_TOOL_SCHEMAS = [
         properties: {
           prompt: {
             type: 'string',
-            description: 'Detailed visual prompt describing the image to generate',
+            description:
+              'Detailed visual prompt describing the image to generate',
           },
           aspect_ratio: {
             type: 'string',

@@ -383,7 +383,11 @@
   flex-direction: column;
   gap: 0.25rem;
   padding: 0.45rem 0.65rem;
-  background: linear-gradient(135deg, rgba(0, 212, 255, 0.12), rgba(10, 40, 60, 0.4));
+  background: linear-gradient(
+    135deg,
+    rgba(0, 212, 255, 0.12),
+    rgba(10, 40, 60, 0.4)
+  );
   border: 1px solid rgba(0, 212, 255, 0.45);
   border-radius: 0.35rem;
   margin-bottom: 0.35rem;
@@ -494,7 +498,11 @@
 
 .key-setup-preset-chip.is-active {
   border-color: #00d4ff;
-  background: linear-gradient(135deg, rgba(0, 212, 255, 0.25), rgba(10, 50, 70, 0.8));
+  background: linear-gradient(
+    135deg,
+    rgba(0, 212, 255, 0.25),
+    rgba(10, 50, 70, 0.8)
+  );
   box-shadow: 0 0 8px rgba(0, 212, 255, 0.35);
   color: #ffffff;
   font-weight: 600;
@@ -640,7 +648,9 @@
   background: rgba(14, 38, 51, 0.45);
   border: 1px solid rgba(54, 220, 255, 0.16);
   border-radius: 0.38rem;
-  transition: border-color var(--transition-fast), background var(--transition-fast);
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast);
 }
 
 .key-setup-provider-card:hover {

@@ -99,7 +99,10 @@ export class RadialMenu {
     const radius = 100;
     const padding = 150;
     const x = Math.max(padding, Math.min(window.innerWidth - padding, clientX));
-    const y = Math.max(padding, Math.min(window.innerHeight - padding, clientY));
+    const y = Math.max(
+      padding,
+      Math.min(window.innerHeight - padding, clientY),
+    );
 
     this.menuEl = doc.createElement('div');
     this.menuEl.className = 'gev-radial-menu';
@@ -116,9 +119,7 @@ export class RadialMenu {
       entity?._id ||
       (typeof entity === 'string' ? entity : 'TARGET');
     const entityType =
-      entity?.properties?.type?.getValue?.() ||
-      entity?.entityType ||
-      'CONTACT';
+      entity?.properties?.type?.getValue?.() || entity?.entityType || 'CONTACT';
 
     center.innerHTML = `
       <div class="gev-radial-center-id" title="${entityName}">${String(entityName).slice(0, 10)}</div>

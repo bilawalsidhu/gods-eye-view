@@ -32,7 +32,13 @@ function dist(p1, p2) {
  */
 export function getFingerExtensions(lm) {
   if (!Array.isArray(lm) || lm.length < 21) {
-    return { thumb: false, index: false, middle: false, ring: false, pinky: false };
+    return {
+      thumb: false,
+      index: false,
+      middle: false,
+      ring: false,
+      pinky: false,
+    };
   }
 
   const wrist = lm[0];
@@ -77,7 +83,10 @@ export function classifyHandGesture(lm) {
     return {
       gesture: GESTURE_NAMES.PINCH,
       confidence: Math.max(0, 1 - pinchDist / 0.08),
-      details: { pinchDist, center: { x: (lm[4].x + lm[8].x) / 2, y: (lm[4].y + lm[8].y) / 2 } },
+      details: {
+        pinchDist,
+        center: { x: (lm[4].x + lm[8].x) / 2, y: (lm[4].y + lm[8].y) / 2 },
+      },
     };
   }
 
@@ -94,9 +103,17 @@ export function classifyHandGesture(lm) {
   // 5. Peace sign (V) or Two Fingers Up (index & middle extended, ring & pinky folded)
   if (ext.index && ext.middle && !ext.ring && !ext.pinky) {
     if (indexMiddleDist > 0.04) {
-      return { gesture: GESTURE_NAMES.PEACE_SIGN, confidence: 0.9, details: { spread: indexMiddleDist } };
+      return {
+        gesture: GESTURE_NAMES.PEACE_SIGN,
+        confidence: 0.9,
+        details: { spread: indexMiddleDist },
+      };
     }
-    return { gesture: GESTURE_NAMES.TWO_FINGERS_UP, confidence: 0.85, details: {} };
+    return {
+      gesture: GESTURE_NAMES.TWO_FINGERS_UP,
+      confidence: 0.85,
+      details: {},
+    };
   }
 
   // 6. Index Finger Point (only index extended)
@@ -177,7 +194,10 @@ export class GestureMapper {
 
     if (swipeAction) {
       this.onAction?.(swipeAction, { type: 'swipe' });
-      return { rawGesture: GESTURE_NAMES.SWIPE_RIGHT, firedAction: swipeAction };
+      return {
+        rawGesture: GESTURE_NAMES.SWIPE_RIGHT,
+        firedAction: swipeAction,
+      };
     }
 
     const { gesture, details } = classifyHandGesture(landmarks);
@@ -186,7 +206,10 @@ export class GestureMapper {
     if (gesture === GESTURE_NAMES.INDEX_POINT) {
       this.onAction?.('pan', { pointTip: details.pointTip });
     } else if (gesture === GESTURE_NAMES.PINCH) {
-      this.onAction?.('pinch_zoom', { pinchDist: details.pinchDist, center: details.center });
+      this.onAction?.('pinch_zoom', {
+        pinchDist: details.pinchDist,
+        center: details.center,
+      });
     }
 
     // Temporal majority voting across recent frames to eliminate flicker

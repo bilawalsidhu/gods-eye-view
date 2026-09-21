@@ -17,16 +17,29 @@ export const FREE_LLM_PROVIDERS = Object.freeze([
     keyPrefix: 'nvapi-',
     envVar: 'NVIDIA_API_KEY',
     models: Object.freeze([
-      { id: 'nvidia/nemotron-3.5-lightning-30b-a3b', label: 'Nemotron 3.5 (Fast Tactical)' },
-      { id: 'nvidia/nemotron-3-ultra-550b-a55b', label: 'Nemotron 550B (Deep Reasoning)' },
+      {
+        id: 'nvidia/nemotron-3.5-lightning-30b-a3b',
+        label: 'Nemotron 3.5 (Fast Tactical)',
+      },
+      {
+        id: 'nvidia/nemotron-3-ultra-550b-a55b',
+        label: 'Nemotron 550B (Deep Reasoning)',
+      },
       { id: 'deepseek-ai/deepseek-r1', label: 'DeepSeek R1 (Thinking Trace)' },
       { id: 'meta/llama-3.3-70b-instruct', label: 'Llama 3.3 70B' },
-      { id: 'meta/llama-3.2-11b-vision-instruct', label: 'Llama 3.2 Vision (11B)' },
+      {
+        id: 'meta/llama-3.2-11b-vision-instruct',
+        label: 'Llama 3.2 Vision (11B)',
+      },
       { id: 'openai/gpt-oss-20b', label: 'GPT-OSS 20B (Code & Logic)' },
-      { id: 'mistralai/mistral-nemotron', label: 'Mistral-Nemotron (Multilingual)' },
+      {
+        id: 'mistralai/mistral-nemotron',
+        label: 'Mistral-Nemotron (Multilingual)',
+      },
       { id: 'moonshotai/kimi-k3', label: 'Kimi K3 (200K Long Context)' },
     ]),
-    description: '1,000 free requests. Top-tier frontier open weights hosted on NVIDIA DGX Cloud.',
+    description:
+      '1,000 free requests. Top-tier frontier open weights hosted on NVIDIA DGX Cloud.',
   }),
   Object.freeze({
     id: 'groq',
@@ -46,7 +59,8 @@ export const FREE_LLM_PROVIDERS = Object.freeze([
       { id: 'groq/compound', label: 'Groq Compound' },
       { id: 'whisper-large-v3-turbo', label: 'Whisper Large v3 Turbo (Voice)' },
     ]),
-    description: 'LPU inference engine with blistering 500+ tokens/sec output speed. Free rate-limited tier.',
+    description:
+      'LPU inference engine with blistering 500+ tokens/sec output speed. Free rate-limited tier.',
   }),
   Object.freeze({
     id: 'cerebras',
@@ -64,7 +78,8 @@ export const FREE_LLM_PROVIDERS = Object.freeze([
       { id: 'qwen-3.8-27b', label: 'Qwen 3.8 27B' },
       { id: 'llama3.3-70b', label: 'Llama 3.3 70B' },
     ]),
-    description: 'Wafer-scale engine with record-breaking 1,800 tokens/sec. 1M free tokens per day.',
+    description:
+      'Wafer-scale engine with record-breaking 1,800 tokens/sec. 1M free tokens per day.',
   }),
   Object.freeze({
     id: 'gemini',
@@ -78,10 +93,14 @@ export const FREE_LLM_PROVIDERS = Object.freeze([
     keyPrefix: 'AIzaSy',
     envVar: 'GEMINI_API_KEY',
     models: Object.freeze([
-      { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash (1M Context, Verified Free)' },
+      {
+        id: 'gemini-3.6-flash',
+        label: 'Gemini 3.6 Flash (1M Context, Verified Free)',
+      },
       { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro (Complex Reasoning)' },
     ]),
-    description: '1,500 requests/day permanent free tier via Google AI Studio. 1M token context window.',
+    description:
+      '1,500 requests/day permanent free tier via Google AI Studio. 1M token context window.',
   }),
   Object.freeze({
     id: 'mistral',
@@ -101,7 +120,8 @@ export const FREE_LLM_PROVIDERS = Object.freeze([
       { id: 'ministral-8b-latest', label: 'Ministral 8B' },
       { id: 'ministral-3b-latest', label: 'Ministral 3B' },
     ]),
-    description: 'Sovereign European AI models with free credit allowance on signup.',
+    description:
+      'Sovereign European AI models with free credit allowance on signup.',
   }),
   Object.freeze({
     id: 'cohere',
@@ -115,12 +135,16 @@ export const FREE_LLM_PROVIDERS = Object.freeze([
     keyPrefix: '',
     envVar: 'COHERE_API_KEY',
     models: Object.freeze([
-      { id: 'command-r-plus-08-2024', label: 'Command R+ (Enterprise Reasoning)' },
+      {
+        id: 'command-r-plus-08-2024',
+        label: 'Command R+ (Enterprise Reasoning)',
+      },
       { id: 'command-r-08-2024', label: 'Command R (Fast)' },
       { id: 'c4ai-aya-expanse-32b', label: 'Aya Expanse 32B (Multilingual)' },
       { id: 'c4ai-aya-vision-32b', label: 'Aya Vision 32B (Multimodal)' },
     ]),
-    description: '1,000 calls/month trial. Enterprise RAG, vision, and multilingual models.',
+    description:
+      '1,000 calls/month trial. Enterprise RAG, vision, and multilingual models.',
   }),
   Object.freeze({
     id: 'aion',
@@ -139,7 +163,8 @@ export const FREE_LLM_PROVIDERS = Object.freeze([
       { id: 'aion-2.0', label: 'Aion 2.0' },
       { id: 'aion-rp-llama-3.1-8b', label: 'Aion RP Llama 3.1 8B' },
     ]),
-    description: '15 RPM, 20K tokens/day free tier. Deep reasoning specialist with 128K context.',
+    description:
+      '15 RPM, 20K tokens/day free tier. Deep reasoning specialist with 128K context.',
   }),
   Object.freeze({
     id: 'zhipu',
@@ -156,7 +181,8 @@ export const FREE_LLM_PROVIDERS = Object.freeze([
       { id: 'glm-4-flash', label: 'GLM-4 Flash (200K Context)' },
       { id: 'glm-4v-flash', label: 'GLM-4V Flash (Multimodal)' },
     ]),
-    description: 'Permanent free tier. Highly efficient Chinese/English bilingual and vision models.',
+    description:
+      'Permanent free tier. Highly efficient Chinese/English bilingual and vision models.',
   }),
   Object.freeze({
     id: 'sambanova',
@@ -175,7 +201,8 @@ export const FREE_LLM_PROVIDERS = Object.freeze([
       { id: 'DeepSeek-R1-Distill-Llama-70B', label: 'DeepSeek R1 Distill 70B' },
       { id: 'Qwen2.5-Coder-32B-Instruct', label: 'Qwen 2.5 Coder 32B' },
     ]),
-    description: 'Reconfigurable dataflow SN40L architecture delivering ultra-fast throughput.',
+    description:
+      'Reconfigurable dataflow SN40L architecture delivering ultra-fast throughput.',
   }),
   Object.freeze({
     id: 'together',
@@ -189,12 +216,22 @@ export const FREE_LLM_PROVIDERS = Object.freeze([
     keyPrefix: '',
     envVar: 'TOGETHER_API_KEY',
     models: Object.freeze([
-      { id: 'meta-llama/Llama-3.3-70B-Instruct-Turbo', label: 'Llama 3.3 70B Turbo' },
-      { id: 'meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo', label: 'Llama 3.1 8B Turbo' },
-      { id: 'deepseek-ai/DeepSeek-R1-Distill-Llama-70B', label: 'DeepSeek R1 Distill 70B' },
+      {
+        id: 'meta-llama/Llama-3.3-70B-Instruct-Turbo',
+        label: 'Llama 3.3 70B Turbo',
+      },
+      {
+        id: 'meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo',
+        label: 'Llama 3.1 8B Turbo',
+      },
+      {
+        id: 'deepseek-ai/DeepSeek-R1-Distill-Llama-70B',
+        label: 'DeepSeek R1 Distill 70B',
+      },
       { id: 'Qwen/Qwen2.5-72B-Instruct-Turbo', label: 'Qwen 2.5 72B Turbo' },
     ]),
-    description: 'Broad open model catalog with low-latency dedicated inference infrastructure.',
+    description:
+      'Broad open model catalog with low-latency dedicated inference infrastructure.',
   }),
   Object.freeze({
     id: 'requesty',
@@ -208,11 +245,15 @@ export const FREE_LLM_PROVIDERS = Object.freeze([
     keyPrefix: 'rqsty-',
     envVar: 'REQUESTY_API_KEY',
     models: Object.freeze([
-      { id: 'meta-llama/llama-3.3-70b-instruct', label: 'Llama 3.3 70B (Auto-Routed)' },
+      {
+        id: 'meta-llama/llama-3.3-70b-instruct',
+        label: 'Llama 3.3 70B (Auto-Routed)',
+      },
       { id: 'deepseek/deepseek-r1', label: 'DeepSeek R1' },
       { id: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
     ]),
-    description: 'Smart AI router that automatically discovers and connects the fastest free endpoints.',
+    description:
+      'Smart AI router that automatically discovers and connects the fastest free endpoints.',
   }),
   Object.freeze({
     id: 'cloudflare',
@@ -226,12 +267,22 @@ export const FREE_LLM_PROVIDERS = Object.freeze([
     keyPrefix: '',
     envVar: 'CLOUDFLARE_API_KEY',
     models: Object.freeze([
-      { id: '@cf/meta/llama-3.3-70b-instruct', label: 'Llama 3.3 70B (CF Edge)' },
+      {
+        id: '@cf/meta/llama-3.3-70b-instruct',
+        label: 'Llama 3.3 70B (CF Edge)',
+      },
       { id: '@cf/meta/llama-3.1-8b-instruct', label: 'Llama 3.1 8B' },
-      { id: '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b', label: 'DeepSeek R1 Distill 32B' },
-      { id: '@cf/qwen/qwen2.5-coder-32b-instruct', label: 'Qwen 2.5 Coder 32B' },
+      {
+        id: '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b',
+        label: 'DeepSeek R1 Distill 32B',
+      },
+      {
+        id: '@cf/qwen/qwen2.5-coder-32b-instruct',
+        label: 'Qwen 2.5 Coder 32B',
+      },
     ]),
-    description: '10,000 neurons/day permanent free allocation running on global edge network.',
+    description:
+      '10,000 neurons/day permanent free allocation running on global edge network.',
   }),
   Object.freeze({
     id: 'openrouter',
@@ -245,13 +296,38 @@ export const FREE_LLM_PROVIDERS = Object.freeze([
     keyPrefix: 'sk-or-',
     envVar: 'OPENROUTER_API_KEY',
     models: Object.freeze([
-      { id: 'meta-llama/llama-3.3-70b-instruct:free', label: 'Llama 3.3 70B (Free)' },
+      {
+        id: 'meta-llama/llama-3.3-70b-instruct:free',
+        label: 'Llama 3.3 70B (Free)',
+      },
       { id: 'deepseek/deepseek-r1:free', label: 'DeepSeek R1 (Free)' },
-      { id: 'google/gemini-2.0-flash-exp:free', label: 'Gemini 2.0 Flash (Free)' },
-      { id: 'qwen/qwen-2.5-coder-32b-instruct:free', label: 'Qwen 2.5 Coder (Free)' },
+      {
+        id: 'google/gemini-2.0-flash-exp:free',
+        label: 'Gemini 2.0 Flash (Free)',
+      },
+      {
+        id: 'qwen/qwen-2.5-coder-32b-instruct:free',
+        label: 'Qwen 2.5 Coder (Free)',
+      },
       { id: 'mistralai/mistral-7b-instruct:free', label: 'Mistral 7B (Free)' },
     ]),
-    description: 'Unified gateway aggregating free community models with standard OpenAI compatibility.',
+    description:
+      'Unified gateway aggregating free community models with standard OpenAI compatibility.',
+  }),
+  Object.freeze({
+    id: 'manifest',
+    name: 'Manifest Gateway',
+    icon: '🦚',
+    badge: 'LLM ROUTER',
+    baseUrl: 'https://app.manifest.build/v1',
+    defaultModel: 'auto',
+    keyUrl: 'https://app.manifest.build',
+    keyPlaceholder: 'paste Manifest Harness Key (mnfst_...)',
+    keyPrefix: 'mnfst_',
+    envVar: 'MANIFEST_API_KEY',
+    models: Object.freeze([{ id: 'auto', label: 'Auto Router (Manifest)' }]),
+    description:
+      'Unified LLM gateway & router dynamically dispatching queries with smart fallbacks.',
   }),
 ]);
 
@@ -260,43 +336,168 @@ export const FREE_LLM_PROVIDERS = Object.freeze([
  */
 export const NVIDIA_MODEL_REGISTRY = Object.freeze({
   tactical: Object.freeze([
-    { id: 'nvidia/nemotron-3.5-lightning-30b-a3b', label: 'Nemotron 3.5 Lightning (Fast)', speed: 'Ultra', provider: 'NVIDIA' },
-    { id: 'nvidia/nemotron-3-ultra-550b-a55b', label: 'Nemotron 550B Ultra', speed: 'Deep', provider: 'NVIDIA' },
-    { id: 'meta/llama-3.3-70b-instruct', label: 'Llama 3.3 70B Instruct', speed: 'Fast', provider: 'NVIDIA / Meta' },
+    {
+      id: 'nvidia/nemotron-3.5-lightning-30b-a3b',
+      label: 'Nemotron 3.5 Lightning (Fast)',
+      speed: 'Ultra',
+      provider: 'NVIDIA',
+    },
+    {
+      id: 'nvidia/nemotron-3-ultra-550b-a55b',
+      label: 'Nemotron 550B Ultra',
+      speed: 'Deep',
+      provider: 'NVIDIA',
+    },
+    {
+      id: 'meta/llama-3.3-70b-instruct',
+      label: 'Llama 3.3 70B Instruct',
+      speed: 'Fast',
+      provider: 'NVIDIA / Meta',
+    },
   ]),
   vision: Object.freeze([
-    { id: 'meta/llama-3.2-11b-vision-instruct', label: 'Llama 3.2 Vision (11B)', speed: 'Fast', provider: 'NVIDIA' },
-    { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash Vision', speed: 'Fast', provider: 'Google' },
-    { id: 'aya-vision-32b', label: 'Aya Vision 32B', speed: 'Medium', provider: 'Cohere' },
-    { id: 'glm-4v-flash', label: 'GLM-4V Flash', speed: 'Ultra', provider: 'Zhipu' },
+    {
+      id: 'meta/llama-3.2-11b-vision-instruct',
+      label: 'Llama 3.2 Vision (11B)',
+      speed: 'Fast',
+      provider: 'NVIDIA',
+    },
+    {
+      id: 'gemini-2.5-flash',
+      label: 'Gemini 2.5 Flash Vision',
+      speed: 'Fast',
+      provider: 'Google',
+    },
+    {
+      id: 'aya-vision-32b',
+      label: 'Aya Vision 32B',
+      speed: 'Medium',
+      provider: 'Cohere',
+    },
+    {
+      id: 'glm-4v-flash',
+      label: 'GLM-4V Flash',
+      speed: 'Ultra',
+      provider: 'Zhipu',
+    },
   ]),
   genai: Object.freeze([
-    { id: 'stabilityai/stable-diffusion-3-medium', label: 'Stable Diffusion 3 Medium', speed: 'Image', provider: 'NVIDIA' },
-    { id: 'black-forest-labs/flux-1-schnell', label: 'Flux.1 Schnell', speed: 'Image', provider: 'NVIDIA' },
+    {
+      id: 'stabilityai/stable-diffusion-3-medium',
+      label: 'Stable Diffusion 3 Medium',
+      speed: 'Image',
+      provider: 'NVIDIA',
+    },
+    {
+      id: 'black-forest-labs/flux-1-schnell',
+      label: 'Flux.1 Schnell',
+      speed: 'Image',
+      provider: 'NVIDIA',
+    },
   ]),
   code: Object.freeze([
-    { id: 'openai/gpt-oss-20b', label: 'GPT-OSS 20B (Code Specialist)', speed: 'Ultra', provider: 'OpenAI/NVIDIA' },
-    { id: 'codestral-latest', label: 'Codestral Latest', speed: 'Fast', provider: 'Mistral' },
-    { id: 'qwen/qwen-2.5-coder-32b-instruct:free', label: 'Qwen 2.5 Coder 32B', speed: 'Fast', provider: 'OpenRouter' },
-    { id: 'Qwen2.5-Coder-32B-Instruct', label: 'Qwen 2.5 Coder (SambaNova)', speed: 'Blazing', provider: 'SambaNova' },
+    {
+      id: 'openai/gpt-oss-20b',
+      label: 'GPT-OSS 20B (Code Specialist)',
+      speed: 'Ultra',
+      provider: 'OpenAI/NVIDIA',
+    },
+    {
+      id: 'codestral-latest',
+      label: 'Codestral Latest',
+      speed: 'Fast',
+      provider: 'Mistral',
+    },
+    {
+      id: 'qwen/qwen-2.5-coder-32b-instruct:free',
+      label: 'Qwen 2.5 Coder 32B',
+      speed: 'Fast',
+      provider: 'OpenRouter',
+    },
+    {
+      id: 'Qwen2.5-Coder-32B-Instruct',
+      label: 'Qwen 2.5 Coder (SambaNova)',
+      speed: 'Blazing',
+      provider: 'SambaNova',
+    },
   ]),
   reasoning: Object.freeze([
-    { id: 'nvidia/nemotron-3-ultra-550b-a55b', label: 'Nemotron 550B Ultra', speed: 'Deep', provider: 'NVIDIA' },
-    { id: 'deepseek-ai/deepseek-r1', label: 'DeepSeek R1 (Thinking Trace)', speed: 'Deep', provider: 'NVIDIA' },
-    { id: 'aion-3.0', label: 'Aion 3.0 (128K Reasoning)', speed: 'Deep', provider: 'Aion Labs' },
-    { id: 'qwq-32b', label: 'QwQ 32B Reasoning', speed: 'Fast', provider: 'Cerebras' },
-    { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', speed: 'Deep', provider: 'Google' },
+    {
+      id: 'nvidia/nemotron-3-ultra-550b-a55b',
+      label: 'Nemotron 550B Ultra',
+      speed: 'Deep',
+      provider: 'NVIDIA',
+    },
+    {
+      id: 'deepseek-ai/deepseek-r1',
+      label: 'DeepSeek R1 (Thinking Trace)',
+      speed: 'Deep',
+      provider: 'NVIDIA',
+    },
+    {
+      id: 'aion-3.0',
+      label: 'Aion 3.0 (128K Reasoning)',
+      speed: 'Deep',
+      provider: 'Aion Labs',
+    },
+    {
+      id: 'qwq-32b',
+      label: 'QwQ 32B Reasoning',
+      speed: 'Fast',
+      provider: 'Cerebras',
+    },
+    {
+      id: 'gemini-2.5-pro',
+      label: 'Gemini 2.5 Pro',
+      speed: 'Deep',
+      provider: 'Google',
+    },
   ]),
   global: Object.freeze([
-    { id: 'mistralai/mistral-nemotron', label: 'Mistral-Nemotron Multilingual', speed: 'Fast', provider: 'NVIDIA / Mistral' },
-    { id: 'aya-expanse-32b', label: 'Aya Expanse 32B', speed: 'Fast', provider: 'Cohere' },
-    { id: 'moonshotai/kimi-k3', label: 'Kimi K3 (200K Long Context)', speed: 'Medium', provider: 'NVIDIA' },
-    { id: 'glm-4-flash', label: 'GLM-4 Flash (200K)', speed: 'Ultra', provider: 'Zhipu' },
+    {
+      id: 'mistralai/mistral-nemotron',
+      label: 'Mistral-Nemotron Multilingual',
+      speed: 'Fast',
+      provider: 'NVIDIA / Mistral',
+    },
+    {
+      id: 'aya-expanse-32b',
+      label: 'Aya Expanse 32B',
+      speed: 'Fast',
+      provider: 'Cohere',
+    },
+    {
+      id: 'moonshotai/kimi-k3',
+      label: 'Kimi K3 (200K Long Context)',
+      speed: 'Medium',
+      provider: 'NVIDIA',
+    },
+    {
+      id: 'glm-4-flash',
+      label: 'GLM-4 Flash (200K)',
+      speed: 'Ultra',
+      provider: 'Zhipu',
+    },
   ]),
   speed: Object.freeze([
-    { id: 'llama3.3-70b', label: 'Cerebras Llama 3.3 (1,800 t/s)', speed: '1800 t/s', provider: 'Cerebras' },
-    { id: 'llama-3.3-70b-versatile', label: 'Groq Llama 3.3 (500+ t/s)', speed: '500 t/s', provider: 'Groq' },
-    { id: 'Meta-Llama-3.3-70B-Instruct', label: 'SambaNova Llama 3.3', speed: '400 t/s', provider: 'SambaNova' },
+    {
+      id: 'llama3.3-70b',
+      label: 'Cerebras Llama 3.3 (1,800 t/s)',
+      speed: '1800 t/s',
+      provider: 'Cerebras',
+    },
+    {
+      id: 'llama-3.3-70b-versatile',
+      label: 'Groq Llama 3.3 (500+ t/s)',
+      speed: '500 t/s',
+      provider: 'Groq',
+    },
+    {
+      id: 'Meta-Llama-3.3-70B-Instruct',
+      label: 'SambaNova Llama 3.3',
+      speed: '400 t/s',
+      provider: 'SambaNova',
+    },
   ]),
 });
 
@@ -313,17 +514,34 @@ export function getAllProviders() {
 export function getModelCapabilities(modelId) {
   if (!modelId) return { modality: 'text', context: '32k', speed: 'normal' };
   const id = String(modelId).toLowerCase();
-  const isVision = id.includes('vision') || id.includes('4v') || id.includes('image');
-  const isReasoning = id.includes('r1') || id.includes('550b') || id.includes('qwq') || id.includes('pro') || id.includes('aion');
-  const isCode = id.includes('code') || id.includes('coder') || id.includes('gpt-oss');
-  const isSpeed = id.includes('cerebras') || id.includes('groq') || id.includes('sambanova') || id.includes('lightning');
+  const isVision =
+    id.includes('vision') || id.includes('4v') || id.includes('image');
+  const isReasoning =
+    id.includes('r1') ||
+    id.includes('550b') ||
+    id.includes('qwq') ||
+    id.includes('pro') ||
+    id.includes('aion');
+  const isCode =
+    id.includes('code') || id.includes('coder') || id.includes('gpt-oss');
+  const isSpeed =
+    id.includes('cerebras') ||
+    id.includes('groq') ||
+    id.includes('sambanova') ||
+    id.includes('lightning');
 
   return {
     modality: isVision ? 'multimodal' : 'text',
     isReasoning,
     isCode,
     isSpeed,
-    context: id.includes('gemini') ? '1M' : id.includes('kimi') || id.includes('glm') ? '200K' : id.includes('aion') ? '128K' : '32K-128K',
+    context: id.includes('gemini')
+      ? '1M'
+      : id.includes('kimi') || id.includes('glm')
+        ? '200K'
+        : id.includes('aion')
+          ? '128K'
+          : '32K-128K',
   };
 }
 
@@ -344,7 +562,8 @@ export function findFreeLlmProvider(idOrUrl) {
   const query = String(idOrUrl).trim().toLowerCase();
   return (
     FREE_LLM_PROVIDERS.find(
-      (p) => p.id.toLowerCase() === query || p.baseUrl.toLowerCase().includes(query)
+      (p) =>
+        p.id.toLowerCase() === query || p.baseUrl.toLowerCase().includes(query),
     ) || null
   );
 }
@@ -364,6 +583,7 @@ export function detectProviderFromKey(apiKey) {
   if (key.startsWith('sk-or-')) return findFreeLlmProvider('openrouter');
   if (key.startsWith('aion-')) return findFreeLlmProvider('aion');
   if (key.startsWith('rqsty-')) return findFreeLlmProvider('requesty');
+  if (key.startsWith('mnfst_')) return findFreeLlmProvider('manifest');
   return FREE_LLM_PROVIDERS[0];
 }
 
@@ -379,7 +599,20 @@ export function isKeyForProvider(providerId, key = '', baseUrl = '') {
   const url = String(baseUrl || '').toLowerCase();
   switch (providerId) {
     case 'nvidia':
-      return k.startsWith('nvapi-') || (k.length > 0 && !k.startsWith('rqsty-') && !k.startsWith('gsk_') && !k.startsWith('csk-') && !k.startsWith('AIzaSy') && !k.startsWith('sk-or-') && !k.startsWith('aion-') && url.includes('nvidia.com'));
+      return (
+        k.startsWith('nvapi-') ||
+        (k.length > 0 &&
+          !k.startsWith('rqsty-') &&
+          !k.startsWith('gsk_') &&
+          !k.startsWith('csk-') &&
+          !k.startsWith('AIzaSy') &&
+          !k.startsWith('sk-or-') &&
+          !k.startsWith('aion-') &&
+          !k.startsWith('mnfst_') &&
+          url.includes('nvidia.com'))
+      );
+    case 'manifest':
+      return k.startsWith('mnfst_') || url.includes('manifest.build');
     case 'requesty':
       return k.startsWith('rqsty-') || url.includes('requesty.ai');
     case 'groq':

@@ -22,7 +22,8 @@ export class TouchGestureController {
    * @param {(gesture: GestureEvent) => void} [options.onGesture] - Callback for gestures
    */
   constructor({ targetEl, viewer = null, onGesture = null } = {}) {
-    this.targetEl = targetEl || (typeof document !== 'undefined' ? document.body : null);
+    this.targetEl =
+      targetEl || (typeof document !== 'undefined' ? document.body : null);
     this.viewer = viewer;
     this.onGesture = onGesture;
     this.enabled = true;
@@ -44,15 +45,28 @@ export class TouchGestureController {
   }
 
   attach() {
-    if (!this.targetEl || typeof this.targetEl.addEventListener !== 'function') return;
-    this.targetEl.addEventListener('touchstart', this._boundTouchStart, { passive: false });
-    this.targetEl.addEventListener('touchmove', this._boundTouchMove, { passive: false });
-    this.targetEl.addEventListener('touchend', this._boundTouchEnd, { passive: false });
-    this.targetEl.addEventListener('touchcancel', this._boundTouchCancel, { passive: false });
+    if (!this.targetEl || typeof this.targetEl.addEventListener !== 'function')
+      return;
+    this.targetEl.addEventListener('touchstart', this._boundTouchStart, {
+      passive: false,
+    });
+    this.targetEl.addEventListener('touchmove', this._boundTouchMove, {
+      passive: false,
+    });
+    this.targetEl.addEventListener('touchend', this._boundTouchEnd, {
+      passive: false,
+    });
+    this.targetEl.addEventListener('touchcancel', this._boundTouchCancel, {
+      passive: false,
+    });
   }
 
   detach() {
-    if (!this.targetEl || typeof this.targetEl.removeEventListener !== 'function') return;
+    if (
+      !this.targetEl ||
+      typeof this.targetEl.removeEventListener !== 'function'
+    )
+      return;
     this.targetEl.removeEventListener('touchstart', this._boundTouchStart);
     this.targetEl.removeEventListener('touchmove', this._boundTouchMove);
     this.targetEl.removeEventListener('touchend', this._boundTouchEnd);
@@ -73,7 +87,10 @@ export class TouchGestureController {
   }
 
   showToast(text, icon = '⚡') {
-    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+    if (
+      typeof navigator !== 'undefined' &&
+      typeof navigator.vibrate === 'function'
+    ) {
       try {
         navigator.vibrate(12);
       } catch {
@@ -112,8 +129,14 @@ export class TouchGestureController {
 
     if (this.startFingerCount >= 2) {
       const coords = Array.from(this.activeTouches.values());
-      this.initialDistance = Math.hypot(coords[0].x - coords[1].x, coords[0].y - coords[1].y);
-      this.initialAngle = Math.atan2(coords[1].y - coords[0].y, coords[1].x - coords[0].x);
+      this.initialDistance = Math.hypot(
+        coords[0].x - coords[1].x,
+        coords[0].y - coords[1].y,
+      );
+      this.initialAngle = Math.atan2(
+        coords[1].y - coords[0].y,
+        coords[1].x - coords[0].x,
+      );
     }
   }
 
@@ -207,12 +230,18 @@ export class TouchGestureController {
     const now = Date.now();
 
     // 2-Finger double tap detection
-    if (this.startFingerCount === 2 && !this.gestureRecognized && this.activeTouches.size === 2) {
+    if (
+      this.startFingerCount === 2 &&
+      !this.gestureRecognized &&
+      this.activeTouches.size === 2
+    ) {
       const touches = Array.from(this.activeTouches.values());
       const maxDuration = 300;
       const maxMove = 20;
       const wasTap = touches.every(
-        (t) => now - t.startTime < maxDuration && Math.hypot(t.x - t.startX, t.y - t.startY) < maxMove
+        (t) =>
+          now - t.startTime < maxDuration &&
+          Math.hypot(t.x - t.startX, t.y - t.startY) < maxMove,
       );
       if (wasTap) {
         const timeSinceLastTap = now - (this._lastTwoFingerTap || 0);
@@ -266,7 +295,10 @@ export class TouchGestureController {
         if (this.viewer?.camera) {
           this.viewer.camera.flyHome?.(1.5) ||
             this.viewer.camera.flyTo?.({
-              destination: (typeof Cesium !== 'undefined' ? Cesium.Cartesian3.fromDegrees(0, 20, 20000000) : null),
+              destination:
+                typeof Cesium !== 'undefined'
+                  ? Cesium.Cartesian3.fromDegrees(0, 20, 20000000)
+                  : null,
               duration: 1.5,
             });
         }
@@ -278,7 +310,10 @@ export class TouchGestureController {
           this.viewer.camera.setView?.({
             orientation: {
               heading: this.viewer.camera.heading || 0,
-              pitch: (typeof Cesium !== 'undefined' ? Cesium.Math.toRadians(-90) : -1.57),
+              pitch:
+                typeof Cesium !== 'undefined'
+                  ? Cesium.Math.toRadians(-90)
+                  : -1.57,
               roll: 0,
             },
           });
@@ -288,10 +323,19 @@ export class TouchGestureController {
       case 'next_layer':
       case 'prev_layer': {
         const isNext = action === 'next_layer';
-        this.showToast(isNext ? 'NEXT PRESET ➔ (3-Finger Swipe)' : 'PREV PRESET ⬅ (3-Finger Swipe)', '🎨');
-        const styleBtns = Array.from(document.querySelectorAll('#style-buttons .style-btn'));
+        this.showToast(
+          isNext
+            ? 'NEXT PRESET ➔ (3-Finger Swipe)'
+            : 'PREV PRESET ⬅ (3-Finger Swipe)',
+          '🎨',
+        );
+        const styleBtns = Array.from(
+          document.querySelectorAll('#style-buttons .style-btn'),
+        );
         if (styleBtns.length) {
-          const currentIndex = styleBtns.findIndex((b) => b.classList.contains('active'));
+          const currentIndex = styleBtns.findIndex((b) =>
+            b.classList.contains('active'),
+          );
           const nextIndex = isNext
             ? (currentIndex + 1) % styleBtns.length
             : (currentIndex - 1 + styleBtns.length) % styleBtns.length;
@@ -308,9 +352,11 @@ export class TouchGestureController {
 
       case 'collapse_hud':
         this.showToast('TACTICAL MINIMIZE (3-Finger Swipe Down)', '🔽');
-        document.querySelectorAll('#command-dock .panel-collapsible:not(.collapsed)').forEach((panel) => {
-          panel.classList.add('collapsed');
-        });
+        document
+          .querySelectorAll('#command-dock .panel-collapsible:not(.collapsed)')
+          .forEach((panel) => {
+            panel.classList.add('collapsed');
+          });
         break;
     }
   }

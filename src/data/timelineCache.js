@@ -50,7 +50,9 @@ export class TimelineCache {
       const req = store.getAll();
       req.onsuccess = () => {
         if (Array.isArray(req.result) && req.result.length) {
-          this._snapshots = req.result.sort((a, b) => a.timestampMs - b.timestampMs);
+          this._snapshots = req.result.sort(
+            (a, b) => a.timestampMs - b.timestampMs,
+          );
           if (this._snapshots.length > this.maxSnapshots) {
             this._snapshots = this._snapshots.slice(-this.maxSnapshots);
           }

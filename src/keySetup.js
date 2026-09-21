@@ -95,7 +95,9 @@ function buildRow(documentRef, key, status = null) {
   led.className = 'key-setup-led';
   led.setAttribute('aria-hidden', 'true');
   const title = documentRef.createElement('strong');
-  title.textContent = isAiRow ? 'FREE AI ENGINES (13 PROVIDERS)' : key.title;
+  title.textContent = isAiRow
+    ? `FREE AI ENGINES (${FREE_LLM_PROVIDERS.length} PROVIDERS)`
+    : key.title;
 
   const statusBadge = documentRef.createElement('span');
   if (isAiRow) {
@@ -146,9 +148,9 @@ function buildRow(documentRef, key, status = null) {
   get.target = '_blank';
   get.rel = 'noopener noreferrer';
   get.textContent = isAiRow
-    ? (providerMap[activeId]?.set
-        ? `MANAGE ${activeProvider.name.toUpperCase()} ↗`
-        : `GET FREE ${activeProvider.name.toUpperCase()} KEY ↗`)
+    ? providerMap[activeId]?.set
+      ? `MANAGE ${activeProvider.name.toUpperCase()} ↗`
+      : `GET FREE ${activeProvider.name.toUpperCase()} KEY ↗`
     : key.set
       ? 'MANAGE ↗'
       : 'GET KEY ↗';
@@ -229,7 +231,7 @@ function buildRow(documentRef, key, status = null) {
       // 2. Clear Instruction
       const hint = documentRef.createElement('div');
       hint.className = 'key-setup-provider-hint';
-      hint.innerHTML = `👇 <b>13 Dedicated Provider Slots</b> — Every provider has its own separate input field. Paste keys for any or all providers below without overwriting other keys:`;
+      hint.innerHTML = `👇 <b>${FREE_LLM_PROVIDERS.length} Dedicated Provider Slots</b> — Every provider has its own separate input field. Paste keys for any or all providers below without overwriting other keys:`;
       fields.append(hint);
 
       // Hidden inputs that carry active engine configuration updates if changed
@@ -279,9 +281,14 @@ function buildRow(documentRef, key, status = null) {
         chip.addEventListener('click', () => {
           chipEls.forEach((c) => c.classList.remove('selected'));
           chip.classList.add('selected');
-          const targetCard = fields.querySelector(`[data-provider-id="${provider.id}"]`);
+          const targetCard = fields.querySelector(
+            `[data-provider-id="${provider.id}"]`,
+          );
           if (targetCard) {
-            targetCard.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+            targetCard.scrollIntoView?.({
+              behavior: 'smooth',
+              block: 'nearest',
+            });
             targetCard.querySelector('input[data-env-var]')?.focus?.();
           }
         });
@@ -339,11 +346,7 @@ function buildRow(documentRef, key, status = null) {
 
         const statusTag = documentRef.createElement('span');
         statusTag.className = `chip-status-tag ${
-          pSaved
-            ? pActive
-              ? 'tag-active'
-              : 'tag-saved'
-            : 'tag-missing'
+          pSaved ? (pActive ? 'tag-active' : 'tag-saved') : 'tag-missing'
         }`;
         statusTag.textContent = pSaved
           ? pActive

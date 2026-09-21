@@ -4,7 +4,10 @@ import {
   executeTool,
   readMemory,
 } from './jarvis-tools.js';
-import { getProviderCandidates, getAllActiveSwarmCandidates } from './nvidia.js';
+import {
+  getProviderCandidates,
+  getAllActiveSwarmCandidates,
+} from './nvidia.js';
 
 const NVIDIA_DEFAULT_BASE_URL = 'https://integrate.api.nvidia.com/v1';
 const NVIDIA_DEFAULT_MODEL = 'nvidia/nemotron-3.5-lightning-30b-a3b';
@@ -17,7 +20,9 @@ export async function callProviderCompletion(basePayload, candidates) {
   for (const candidate of candidates) {
     try {
       const isCohere = (candidate.baseUrl || '').includes('cohere.com');
-      const isNvidia = Boolean(candidate.isNvidia || (candidate.baseUrl || '').includes('nvidia.com'));
+      const isNvidia = Boolean(
+        candidate.isNvidia || (candidate.baseUrl || '').includes('nvidia.com'),
+      );
       const url = isCohere
         ? `${candidate.baseUrl.replace(/\/chat\/?$/, '')}/chat`
         : `${candidate.baseUrl.replace(/\/chat\/completions\/?$/, '')}/chat/completions`;
@@ -105,6 +110,7 @@ export function getApiKeyPool() {
   const candidateVars = [
     'NVIDIA_API_KEYS',
     'NVIDIA_API_KEY',
+    'MANIFEST_API_KEY',
     'REQUESTY_API_KEY',
     'GROQ_API_KEY',
     'GEMINI_API_KEY',
@@ -138,6 +144,9 @@ let currentKeyIndex = 0;
 export function getNextApiKey(requestedKey = null) {
   if (requestedKey) return requestedKey;
   const baseUrl = (process.env.NVIDIA_BASE_URL || '').toLowerCase();
+  if (baseUrl.includes('manifest.build') && process.env.MANIFEST_API_KEY) {
+    return process.env.MANIFEST_API_KEY.split(',')[0].trim();
+  }
   if (baseUrl.includes('requesty.ai') && process.env.REQUESTY_API_KEY) {
     return process.env.REQUESTY_API_KEY.split(',')[0].trim();
   }
@@ -534,7 +543,12 @@ export function routeModelForPrompt({
   }
 
   // 0. Multi-Modal Vision / Images
-  if (hasImages || /\b(analyze (this|the) (image|screenshot|photo)|what is in this (image|photo)|describe this image)\b/i.test(p)) {
+  if (
+    hasImages ||
+    /\b(analyze (this|the) (image|screenshot|photo)|what is in this (image|photo)|describe this image)\b/i.test(
+      p,
+    )
+  ) {
     return {
       model: 'meta/llama-3.2-11b-vision-instruct',
       reason: 'Multi-modal vision intelligence and image comprehension',
@@ -688,28 +702,29 @@ export async function handleCouncilEnsemble({
         : '';
 
   const activeSwarm = getAllActiveSwarmCandidates();
-  const councilModels = activeSwarm.length > 0
-    ? activeSwarm
-    : [
-        {
-          id: 'gemini-3.6-flash',
-          name: 'Gemini 3.6 Flash',
-          emblem: '🟢',
-          role: '🧠 Multimodal & 1M+ Context Intelligence',
-        },
-        {
-          id: 'openai/gpt-oss-20b',
-          name: 'GPT-OSS 20B',
-          emblem: '🚀',
-          role: '⚡ Sub-Second LPU Logic & Coding',
-        },
-        {
-          id: 'command-r-plus-08-2024',
-          name: 'Command R+',
-          emblem: '🧠',
-          role: '🔮 Enterprise Precision & RAG Citations',
-        },
-      ];
+  const councilModels =
+    activeSwarm.length > 0
+      ? activeSwarm
+      : [
+          {
+            id: 'gemini-3.6-flash',
+            name: 'Gemini 3.6 Flash',
+            emblem: '🟢',
+            role: '🧠 Multimodal & 1M+ Context Intelligence',
+          },
+          {
+            id: 'openai/gpt-oss-20b',
+            name: 'GPT-OSS 20B',
+            emblem: '🚀',
+            role: '⚡ Sub-Second LPU Logic & Coding',
+          },
+          {
+            id: 'command-r-plus-08-2024',
+            name: 'Command R+',
+            emblem: '🧠',
+            role: '🔮 Enterprise Precision & RAG Citations',
+          },
+        ];
 
   // Run all active provider models simultaneously in parallel
   const councilPromises = councilModels.map(async (member) => {
@@ -727,10 +742,15 @@ export async function handleCouncilEnsemble({
         max_tokens: 1024,
         stream: false,
       };
-      const memberCandidates = member.key ? [member] : getProviderCandidates(member.id);
+      const memberCandidates = member.key
+        ? [member]
+        : getProviderCandidates(member.id);
       const callRes = await callProviderCompletion(payload, memberCandidates);
       if (!callRes.ok)
-        return { ...member, content: `(${member.name} unavailable: ${callRes.error})` };
+        return {
+          ...member,
+          content: `(${member.name} unavailable: ${callRes.error})`,
+        };
       const data = await callRes.response.json();
       return {
         ...member,
@@ -788,7 +808,10 @@ export async function handleCouncilEnsemble({
         max_tokens: 2048,
         stream: true,
       };
-      const synthRes = await callProviderCompletion(synthPayload, synthCandidates);
+      const synthRes = await callProviderCompletion(
+        synthPayload,
+        synthCandidates,
+      );
 
       if (!synthRes.ok) {
         const fallbackText =
@@ -829,7 +852,10 @@ export async function handleCouncilEnsemble({
       max_tokens: 2048,
       stream: false,
     };
-    const synthRes = await callProviderCompletion(synthPayload, synthCandidates);
+    const synthRes = await callProviderCompletion(
+      synthPayload,
+      synthCandidates,
+    );
 
     let masterContent = '';
     if (synthRes.ok) {
@@ -838,8 +864,8 @@ export async function handleCouncilEnsemble({
     }
     if (!masterContent) {
       masterContent =
-        councilResults.find((r) => r.content && !r.content.startsWith('('))?.content ||
-        'Council deliberation completed.';
+        councilResults.find((r) => r.content && !r.content.startsWith('('))
+          ?.content || 'Council deliberation completed.';
     }
 
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -893,7 +919,9 @@ export async function handleNvidiaAssistant(req, res) {
   if (candidates.length === 0) {
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.statusCode = 503;
-    res.end(JSON.stringify({ error: 'No AI provider key is configured in .env' }));
+    res.end(
+      JSON.stringify({ error: 'No AI provider key is configured in .env' }),
+    );
     return;
   }
 
@@ -1030,9 +1058,7 @@ export async function handleNvidiaAssistant(req, res) {
         if (!callRes.ok) {
           if (stream) {
             res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
-            res.write(
-              `data: ${JSON.stringify({ error: callRes.error })}\n\n`,
-            );
+            res.write(`data: ${JSON.stringify({ error: callRes.error })}\n\n`);
             res.end();
           } else {
             res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -1173,9 +1199,7 @@ export async function handleNvidiaAssistant(req, res) {
 
       const callRes = await callProviderCompletion(payload, candidates);
       if (!callRes.ok) {
-        res.write(
-          `data: ${JSON.stringify({ error: callRes.error })}\n\n`,
-        );
+        res.write(`data: ${JSON.stringify({ error: callRes.error })}\n\n`);
         res.end();
         return;
       }

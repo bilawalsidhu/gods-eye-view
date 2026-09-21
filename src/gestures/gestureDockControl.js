@@ -7,7 +7,10 @@ import { VisionGestureController } from './visionGestures.js';
  * @param {HTMLElement} [options.container] - Container to append dock button to (defaults to #command-dock)
  * @returns {{ controller: VisionGestureController, toggleBtn: HTMLElement, pipEl: HTMLElement, destroy: Function }}
  */
-export function createGestureDockControl({ viewer = null, container = null } = {}) {
+export function createGestureDockControl({
+  viewer = null,
+  container = null,
+} = {}) {
   if (typeof document === 'undefined') {
     return {
       controller: new VisionGestureController({ viewer }),
@@ -99,9 +102,7 @@ export function createGestureDockControl({ viewer = null, container = null } = {
     toggleBtn.innerHTML = `<span class="gesture-icon">🖐️</span> <span class="gesture-label">GESTURE</span>`;
 
     const targetContainer =
-      container ||
-      document.getElementById('command-dock') ||
-      document.body;
+      container || document.getElementById('command-dock') || document.body;
 
     if (targetContainer) {
       const locationBar = document.getElementById('location-bar');

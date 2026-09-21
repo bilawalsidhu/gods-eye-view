@@ -23,9 +23,10 @@ export async function analyzeImage({
     throw new Error('NVIDIA_API_KEY is not configured');
   }
 
-  const imageUrl = image.startsWith('data:') || image.startsWith('http')
-    ? image
-    : `data:image/jpeg;base64,${image}`;
+  const imageUrl =
+    image.startsWith('data:') || image.startsWith('http')
+      ? image
+      : `data:image/jpeg;base64,${image}`;
 
   const payload = {
     model,
@@ -106,6 +107,11 @@ export async function handleNvidiaVisionAnalyze(req, res) {
     res.end(JSON.stringify(result));
   } catch (error) {
     res.statusCode = 500;
-    res.end(JSON.stringify({ ok: false, error: error.message || 'Vision analysis failed' }));
+    res.end(
+      JSON.stringify({
+        ok: false,
+        error: error.message || 'Vision analysis failed',
+      }),
+    );
   }
 }

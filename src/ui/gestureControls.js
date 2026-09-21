@@ -140,7 +140,10 @@ export class GestureControls {
     this.overlay?.highlightGesture(gestureName);
     const action = this.mapper?._mapGestureToAction(gestureName);
     if (action) {
-      this._handleMappedAction(action, { simulated: true, gesture: gestureName });
+      this._handleMappedAction(action, {
+        simulated: true,
+        gesture: gestureName,
+      });
     }
   }
 
@@ -226,9 +229,11 @@ export class GestureControls {
       </div>
     `;
 
-    this.modalEl.querySelector('#gev-gesture-modal-close')?.addEventListener('click', () => {
-      this.closeHelpModal();
-    });
+    this.modalEl
+      .querySelector('#gev-gesture-modal-close')
+      ?.addEventListener('click', () => {
+        this.closeHelpModal();
+      });
 
     this.modalEl.addEventListener('click', (e) => {
       if (e.target === this.modalEl) this.closeHelpModal();

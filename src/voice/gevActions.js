@@ -1130,7 +1130,10 @@ export function createGevActionRunner({
     if (name === 'draw_geofence') {
       const radiusM = (Number(args.radiusKm) || 50) * 1000;
       const zoneName = args.name || 'Perimeter Zone';
-      const center = styleManager?.getCameraFocalPoint?.() || { latDeg: 0, lonDeg: 0 };
+      const center = styleManager?.getCameraFocalPoint?.() || {
+        latDeg: 0,
+        lonDeg: 0,
+      };
       const zone = {
         id: `zone-${Date.now()}`,
         name: zoneName,
@@ -1140,7 +1143,9 @@ export function createGevActionRunner({
         alertLevel: 'warning',
       };
       styleManager?.geofenceEngine?.addZone(zone);
-      styleManager?.geofenceRenderer?.render(styleManager.geofenceEngine.getZones());
+      styleManager?.geofenceRenderer?.render(
+        styleManager.geofenceEngine.getZones(),
+      );
       return { ok: true, action: 'draw_geofence', zone };
     }
 
@@ -1156,7 +1161,10 @@ export function createGevActionRunner({
     }
 
     if (name === 'toggle_gestures') {
-      const targetState = args.enable !== undefined ? Boolean(args.enable) : !styleManager?.gestureControls?.isEnabled;
+      const targetState =
+        args.enable !== undefined
+          ? Boolean(args.enable)
+          : !styleManager?.gestureControls?.isEnabled;
       styleManager?.gestureControls?.toggle(targetState);
       return { ok: true, action: 'toggle_gestures', enabled: targetState };
     }

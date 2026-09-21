@@ -10,9 +10,9 @@ import {
   NVIDIA_MODEL_REGISTRY,
 } from './freeLlmCatalog.js';
 
-test('FREE_LLM_PROVIDERS exports all 13 providers from awesome-free-llm-apis', () => {
+test('FREE_LLM_PROVIDERS exports all providers from awesome-free-llm-apis', () => {
   const ids = FREE_LLM_PROVIDERS.map((p) => p.id);
-  assert.equal(ids.length, 13);
+  assert.equal(ids.length, 14);
   assert.ok(ids.includes('nvidia'));
   assert.ok(ids.includes('gemini'));
   assert.ok(ids.includes('groq'));
@@ -26,6 +26,7 @@ test('FREE_LLM_PROVIDERS exports all 13 providers from awesome-free-llm-apis', (
   assert.ok(ids.includes('together'));
   assert.ok(ids.includes('requesty'));
   assert.ok(ids.includes('cloudflare'));
+  assert.ok(ids.includes('manifest'));
 });
 
 test('findFreeLlmProvider retrieves provider by ID or URL substring', () => {

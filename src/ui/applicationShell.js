@@ -685,7 +685,9 @@ export class StyleManager {
 
     // ── Immersive Upgrade Systems ──────────────────────
     this.audioEngine = getTacticalAudio();
-    this.cockpitAmbiance = new CockpitAmbiance({ audioEngine: this.audioEngine });
+    this.cockpitAmbiance = new CockpitAmbiance({
+      audioEngine: this.audioEngine,
+    });
 
     this.radialMenu = new RadialMenu({
       viewer: this.viewer,
@@ -728,9 +730,12 @@ export class StyleManager {
       this.gestureControls = new GestureControls({
         container: null,
         audioEngine: this.audioEngine,
-        onAction: (action, payload) => this._handleGestureAction(action, payload),
+        onAction: (action, payload) =>
+          this._handleGestureAction(action, payload),
         onError: (err) => {
-          this._showToast(`Hand tracking notice: ${err?.message || 'Webcam unavailable'}`);
+          this._showToast(
+            `Hand tracking notice: ${err?.message || 'Webcam unavailable'}`,
+          );
         },
         onStatusChange: (enabled) => {
           const gestureBtn = document.getElementById('tactical-gesture-btn');
@@ -740,7 +745,9 @@ export class StyleManager {
         },
       });
       this.touchGestures = new TouchGestureController({
-        targetEl: this.viewer?.scene?.canvas || (typeof document !== 'undefined' ? document.body : null),
+        targetEl:
+          this.viewer?.scene?.canvas ||
+          (typeof document !== 'undefined' ? document.body : null),
         viewer: this.viewer,
       });
       this.exportControls = new ExportControls({
@@ -3779,7 +3786,8 @@ export class StyleManager {
     const cameraState = {
       latDeg: focal.latDeg,
       lonDeg: focal.lonDeg,
-      altitudeM: this.viewer?.camera?.positionCartographic?.height || focal.altitudeM,
+      altitudeM:
+        this.viewer?.camera?.positionCartographic?.height || focal.altitudeM,
       headingDeg: (this.viewer?.camera?.heading * 180) / Math.PI || 0,
       pitchDeg: (this.viewer?.camera?.pitch * 180) / Math.PI || -90,
     };
@@ -3815,7 +3823,9 @@ export class StyleManager {
       case 'chase':
         this.viewer.trackedEntity = entity;
         this.audioEngine?.playLock();
-        this._showToast(`Target acquired: ${entity.id || entity.name || 'Contact'}`);
+        this._showToast(
+          `Target acquired: ${entity.id || entity.name || 'Contact'}`,
+        );
         break;
       case 'cockpit':
         enterCockpitWithTracking(entity, this.viewer, this.cockpitView);
@@ -3823,7 +3833,9 @@ export class StyleManager {
       case 'cctv':
         if (entity.position) {
           const time = this.viewer.clock.currentTime;
-          const pos = entity.position.getValue ? entity.position.getValue(time) : entity.position;
+          const pos = entity.position.getValue
+            ? entity.position.getValue(time)
+            : entity.position;
           routeCctvFocusRequest(
             { kind: 'cctv', position: pos },
             (activate, focus) => this._runExplicitCctvFocus(activate, focus),
@@ -3834,7 +3846,9 @@ export class StyleManager {
       case 'trajectory':
         if (this.trajectoryOverlay) {
           this.trajectoryOverlay.showTrajectoryForEntity(entity);
-          this._showToast(`Extrapolating trajectory for ${entity.id || entity.name}`);
+          this._showToast(
+            `Extrapolating trajectory for ${entity.id || entity.name}`,
+          );
         }
         break;
       case 'inspect':
@@ -3842,7 +3856,9 @@ export class StyleManager {
         this._showToast(`Telemetry inspector opened`);
         break;
       case 'watchlist':
-        this._showToast(`Added ${entity.id || entity.name} to priority alert watchlist`);
+        this._showToast(
+          `Added ${entity.id || entity.name} to priority alert watchlist`,
+        );
         this.audioEngine?.playAlert();
         break;
       case 'dismiss':
@@ -3875,7 +3891,9 @@ export class StyleManager {
       this.audioEngine?.setMuted(isMuted);
       sfxBtn.classList.toggle('active', !isMuted);
       sfxBtn.textContent = isMuted ? '🔇 Muted' : '🔊 SFX';
-      this._showToast(isMuted ? 'Tactical Audio Muted' : 'Tactical Audio Enabled');
+      this._showToast(
+        isMuted ? 'Tactical Audio Muted' : 'Tactical Audio Enabled',
+      );
     });
 
     gestureBtn?.addEventListener('click', () => {
@@ -3892,7 +3910,9 @@ export class StyleManager {
         !e.ctrlKey &&
         !e.altKey &&
         !e.metaKey &&
-        !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)
+        !['INPUT', 'TEXTAREA', 'SELECT'].includes(
+          document.activeElement?.tagName,
+        )
       ) {
         e.preventDefault();
         this.gestureControls?.toggle();
@@ -3918,7 +3938,11 @@ export class StyleManager {
     timelineBtn?.addEventListener('click', () => {
       const isShown = this.timelineScrubber?.toggle();
       timelineBtn.classList.toggle('active', isShown);
-      this._showToast(isShown ? '4D Timeline Replay Active' : 'Returned to Live Real-Time Feed');
+      this._showToast(
+        isShown
+          ? '4D Timeline Replay Active'
+          : 'Returned to Live Real-Time Feed',
+      );
     });
 
     exportBtn?.addEventListener('click', () => {
@@ -3969,7 +3993,9 @@ export class StyleManager {
           if (entity && this.viewer) {
             this.viewer.trackedEntity = entity;
             this.audioEngine?.playLock();
-            this._showToast(`Tracking locked: ${entity.name || entity.id || 'Flight Contact'}`);
+            this._showToast(
+              `Tracking locked: ${entity.name || entity.id || 'Flight Contact'}`,
+            );
           } else {
             this._showToast('Select an entity on globe to lock tracking');
           }
@@ -3986,14 +4012,18 @@ export class StyleManager {
       case 'toggle_cockpit':
         if (this.cockpitView?.active) {
           const res = this.controlCockpit('exit');
-          this._showToast(res.ok ? 'Exited Cockpit View' : 'Cockpit already inactive');
+          this._showToast(
+            res.ok ? 'Exited Cockpit View' : 'Cockpit already inactive',
+          );
         } else {
           if (!this.cockpitView.isEntryAllowed?.()) {
             if (!this.getContextModeState()?.active) {
               this.setContextMode('contacts');
             }
             const flightsLayer = this.services?.flightsLayer;
-            const entity = this.viewer?.trackedEntity || flightsLayer?.dataSource?.entities?.values?.[0];
+            const entity =
+              this.viewer?.trackedEntity ||
+              flightsLayer?.dataSource?.entities?.values?.[0];
             if (entity && this.viewer) {
               this.viewer.trackedEntity = entity;
             }
@@ -4011,7 +4041,15 @@ export class StyleManager {
         this._showToast('Exported Tactical Mission Dossier');
         break;
       case 'cycle_style': {
-        const styles = ['normal', 'retro', 'surveillance', 'thermal', 'anime', 'noir', 'snow'];
+        const styles = [
+          'normal',
+          'retro',
+          'surveillance',
+          'thermal',
+          'anime',
+          'noir',
+          'snow',
+        ];
         const currIdx = styles.indexOf(this.activeStyle);
         const next = styles[(currIdx + 1) % styles.length];
         this.setStyle(next);
@@ -4019,7 +4057,9 @@ export class StyleManager {
         break;
       }
       case 'toggle_voice': {
-        const voiceBtn = document.getElementById('voice-control-btn') || document.querySelector('.gev-voice-btn');
+        const voiceBtn =
+          document.getElementById('voice-control-btn') ||
+          document.querySelector('.gev-voice-btn');
         voiceBtn?.click();
         break;
       }
@@ -4145,4 +4185,3 @@ export class StyleManager {
     this._visualSettings.destroy();
   }
 }
-

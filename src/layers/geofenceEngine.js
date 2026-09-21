@@ -21,7 +21,10 @@ export function haversineDistanceM(lat1, lon1, lat2, lon2) {
 
   const a =
     Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
-    Math.cos(phi1) * Math.cos(phi2) * Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+    Math.cos(phi1) *
+      Math.cos(phi2) *
+      Math.sin(deltaLambda / 2) *
+      Math.sin(deltaLambda / 2);
 
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return EARTH_RADIUS_M * c;
@@ -43,8 +46,7 @@ export function isPointInPolygon(lat, lon, vertices) {
     const yj = vertices[j].latDeg;
 
     const intersect =
-      yi > lat !== yj > lat &&
-      lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi;
+      yi > lat !== yj > lat && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi;
 
     if (intersect) inside = !inside;
   }
@@ -151,7 +153,12 @@ export class GeofenceEngine {
    */
   checkCoordinateInZone(lat, lon, zone) {
     if (zone.type === 'circle' && zone.center) {
-      const d = haversineDistanceM(lat, lon, zone.center.latDeg, zone.center.lonDeg);
+      const d = haversineDistanceM(
+        lat,
+        lon,
+        zone.center.latDeg,
+        zone.center.lonDeg,
+      );
       return {
         inside: d <= zone.radiusM,
         distanceM: Math.abs(d - zone.radiusM),
@@ -176,12 +183,17 @@ export class GeofenceEngine {
     const alerts = [];
 
     for (const entity of entities) {
-      if (!entity || entity.latDeg === undefined || entity.lonDeg === undefined) continue;
+      if (!entity || entity.latDeg === undefined || entity.lonDeg === undefined)
+        continue;
       const entityId = entity.id || entity.name || 'entity';
 
       for (const zone of this.zones) {
         // Match filter
-        if (zone.filter !== 'all' && entity.type && zone.filter !== entity.type) {
+        if (
+          zone.filter !== 'all' &&
+          entity.type &&
+          zone.filter !== entity.type
+        ) {
           continue;
         }
 

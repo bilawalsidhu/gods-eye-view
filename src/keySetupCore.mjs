@@ -59,7 +59,7 @@ export const KEY_SETUP_KEYS = Object.freeze([
   }),
   Object.freeze({
     id: 'nvidia',
-    title: 'FREE AI ENGINES (13 PROVIDERS)',
+    title: 'FREE AI ENGINES (14 PROVIDERS)',
     unlocks:
       'Access 82+ frontier open-weight models (NVIDIA NIM, Requesty, Groq, Gemini, Mistral, Cerebras, etc.)',
     getUrl: 'https://build.nvidia.com',
@@ -191,6 +191,15 @@ export const KEY_SETUP_KEYS = Object.freeze([
     unlocks: '20+ free community models unified',
     getUrl: 'https://openrouter.ai/keys',
     envVars: Object.freeze(['OPENROUTER_API_KEY']),
+    tier: 'free',
+    hidden: true,
+  }),
+  Object.freeze({
+    id: 'manifest-key',
+    title: 'MANIFEST API KEY',
+    unlocks: 'Unified LLM gateway with smart multi-model routing & fallbacks',
+    getUrl: 'https://app.manifest.build',
+    envVars: Object.freeze(['MANIFEST_API_KEY']),
     tier: 'free',
     hidden: true,
   }),
@@ -503,7 +512,9 @@ export function isKeySetupExternallyManaged({
  */
 export function resolveProviderKeyStatuses(env = {}) {
   const nvidiaKey = String(env.NVIDIA_API_KEY ?? '').trim();
-  const baseUrl = String(env.NVIDIA_BASE_URL ?? '').trim().toLowerCase();
+  const baseUrl = String(env.NVIDIA_BASE_URL ?? '')
+    .trim()
+    .toLowerCase();
 
   const isReqKey = nvidiaKey.startsWith('rqsty-');
   const isGroqKey = nvidiaKey.startsWith('gsk_');
@@ -511,9 +522,14 @@ export function resolveProviderKeyStatuses(env = {}) {
   const isGeminiKey = nvidiaKey.startsWith('AIzaSy');
   const isOpenRouterKey = nvidiaKey.startsWith('sk-or-');
   const isAionKey = nvidiaKey.startsWith('aion-');
+  const isManifestKey = nvidiaKey.startsWith('mnfst_');
 
   const hasKey = (name) => String(env[name] ?? '').trim().length > 0;
 
+  const manifestSet =
+    hasKey('MANIFEST_API_KEY') ||
+    isManifestKey ||
+    (hasKey('NVIDIA_API_KEY') && baseUrl.includes('manifest.build'));
   const requestySet =
     hasKey('REQUESTY_API_KEY') ||
     isReqKey ||
@@ -564,7 +580,8 @@ export function resolveProviderKeyStatuses(env = {}) {
     isCerebrasKey ||
     isGeminiKey ||
     isOpenRouterKey ||
-    isAionKey;
+    isAionKey ||
+    isManifestKey;
   const isThirdPartyUrl =
     baseUrl.includes('requesty.ai') ||
     baseUrl.includes('groq.com') ||
@@ -577,7 +594,8 @@ export function resolveProviderKeyStatuses(env = {}) {
     baseUrl.includes('bigmodel.cn') ||
     baseUrl.includes('sambanova.ai') ||
     baseUrl.includes('together') ||
-    baseUrl.includes('cloudflare');
+    baseUrl.includes('cloudflare') ||
+    baseUrl.includes('manifest.build');
 
   const isNvapi = nvidiaKey.startsWith('nvapi-');
   const nvidiaSet =
@@ -585,11 +603,16 @@ export function resolveProviderKeyStatuses(env = {}) {
     (isNvapi || (!isThirdPartyKey && !isThirdPartyUrl));
 
   let activeId = 'nvidia';
-  if (baseUrl.includes('requesty.ai') || isReqKey) activeId = 'requesty';
+  if (baseUrl.includes('manifest.build') || isManifestKey)
+    activeId = 'manifest';
+  else if (baseUrl.includes('requesty.ai') || isReqKey) activeId = 'requesty';
   else if (baseUrl.includes('groq.com') || isGroqKey) activeId = 'groq';
-  else if (baseUrl.includes('cerebras.ai') || isCerebrasKey) activeId = 'cerebras';
-  else if (baseUrl.includes('generativelanguage') || isGeminiKey) activeId = 'gemini';
-  else if (baseUrl.includes('openrouter.ai') || isOpenRouterKey) activeId = 'openrouter';
+  else if (baseUrl.includes('cerebras.ai') || isCerebrasKey)
+    activeId = 'cerebras';
+  else if (baseUrl.includes('generativelanguage') || isGeminiKey)
+    activeId = 'gemini';
+  else if (baseUrl.includes('openrouter.ai') || isOpenRouterKey)
+    activeId = 'openrouter';
   else if (baseUrl.includes('aionlabs.ai') || isAionKey) activeId = 'aion';
   else if (baseUrl.includes('mistral.ai')) activeId = 'mistral';
   else if (baseUrl.includes('cohere.com')) activeId = 'cohere';
@@ -602,6 +625,7 @@ export function resolveProviderKeyStatuses(env = {}) {
     activeId,
     providers: {
       nvidia: { set: Boolean(nvidiaSet), envVar: 'NVIDIA_API_KEY' },
+      manifest: { set: Boolean(manifestSet), envVar: 'MANIFEST_API_KEY' },
       requesty: { set: Boolean(requestySet), envVar: 'REQUESTY_API_KEY' },
       groq: { set: Boolean(groqSet), envVar: 'GROQ_API_KEY' },
       cerebras: { set: Boolean(cerebrasSet), envVar: 'CEREBRAS_API_KEY' },
@@ -631,7 +655,9 @@ export function keySetupStatus(env = {}) {
     if (entry.id === 'nvidia') {
       set = Object.values(providerSummary.providers).some((p) => p.set);
     } else {
-      const values = entry.envVars.map((name) => String(env[name] ?? '').trim());
+      const values = entry.envVars.map((name) =>
+        String(env[name] ?? '').trim(),
+      );
       set = values.every((value) => value.length > 0);
     }
     return {

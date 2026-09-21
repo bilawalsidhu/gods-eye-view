@@ -99,7 +99,10 @@ export async function generateImage({
     throw new Error('No image payload received from generation provider');
   }
 
-  const hash = createHash('md5').update(prompt + Date.now()).digest('hex').slice(0, 10);
+  const hash = createHash('md5')
+    .update(prompt + Date.now())
+    .digest('hex')
+    .slice(0, 10);
   const filename = `gen_${hash}.png`;
   const filepath = join(GENERATED_DIR, filename);
 
@@ -157,6 +160,11 @@ export async function handleNvidiaGenAiImage(req, res) {
     res.end(JSON.stringify(result));
   } catch (error) {
     res.statusCode = 500;
-    res.end(JSON.stringify({ ok: false, error: error.message || 'Image generation failed' }));
+    res.end(
+      JSON.stringify({
+        ok: false,
+        error: error.message || 'Image generation failed',
+      }),
+    );
   }
 }

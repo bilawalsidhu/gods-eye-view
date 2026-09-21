@@ -87,7 +87,8 @@ export function createNvidiaSession({
           v.name.includes('Microsoft Susan') ||
           v.name.includes('Moira') ||
           v.name.includes('Samantha') ||
-          (v.lang.startsWith('en') && /female|woman|girl|aria|jenny/i.test(v.name)),
+          (v.lang.startsWith('en') &&
+            /female|woman|girl|aria|jenny/i.test(v.name)),
       );
       if (femalePreferred) return femalePreferred;
     }
@@ -101,7 +102,9 @@ export function createNvidiaSession({
         v.name.includes('Microsoft David') ||
         v.name.includes('Daniel') ||
         v.name.includes('Arthur') ||
-        (v.lang.startsWith('en') && v.name.toLowerCase().includes('natural') && v.name.toLowerCase().includes('male')) ||
+        (v.lang.startsWith('en') &&
+          v.name.toLowerCase().includes('natural') &&
+          v.name.toLowerCase().includes('male')) ||
         (v.lang.startsWith('en') && v.name.toLowerCase().includes('male')),
     );
     return (
@@ -308,7 +311,10 @@ export function createNvidiaSession({
             isFinal: true,
           });
           speakText(spokenReply);
-          if (typeof window !== 'undefined' && window.__gevAiCommandCenter?.appendVoiceExchange) {
+          if (
+            typeof window !== 'undefined' &&
+            window.__gevAiCommandCenter?.appendVoiceExchange
+          ) {
             window.__gevAiCommandCenter.appendVoiceExchange(text, spokenReply);
           }
         }
@@ -334,7 +340,10 @@ export function createNvidiaSession({
             isFinal: true,
           });
           speakText(spokenReply);
-          if (typeof window !== 'undefined' && window.__gevAiCommandCenter?.appendVoiceExchange) {
+          if (
+            typeof window !== 'undefined' &&
+            window.__gevAiCommandCenter?.appendVoiceExchange
+          ) {
             window.__gevAiCommandCenter.appendVoiceExchange(text, spokenReply);
           }
         }

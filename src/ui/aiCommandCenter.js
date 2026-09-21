@@ -185,7 +185,13 @@ export const VOICE_MODELS = Object.freeze({
     gender: 'male',
     pitch: 0.92,
     rate: 1.04,
-    preferredVoices: ['Google UK English Male', 'Microsoft George', 'Microsoft Ryan', 'Daniel', 'Arthur'],
+    preferredVoices: [
+      'Google UK English Male',
+      'Microsoft George',
+      'Microsoft Ryan',
+      'Daniel',
+      'Arthur',
+    ],
     description: 'British Tactical Commander (Deep RP Male)',
   },
   friday: {
@@ -194,7 +200,13 @@ export const VOICE_MODELS = Object.freeze({
     gender: 'female',
     pitch: 1.08,
     rate: 1.12,
-    preferredVoices: ['Google UK English Female', 'Microsoft Hazel', 'Microsoft Susan', 'Moira', 'Samantha'],
+    preferredVoices: [
+      'Google UK English Female',
+      'Microsoft Hazel',
+      'Microsoft Susan',
+      'Moira',
+      'Samantha',
+    ],
     description: 'Crisp Combat OS (Irish/British Female)',
   },
   edith: {
@@ -212,7 +224,12 @@ export const VOICE_MODELS = Object.freeze({
     gender: 'female',
     pitch: 1.0,
     rate: 1.0,
-    preferredVoices: ['Microsoft Jenny Natural', 'Microsoft Aria', 'Google US English', 'Zira'],
+    preferredVoices: [
+      'Microsoft Jenny Natural',
+      'Microsoft Aria',
+      'Google US English',
+      'Zira',
+    ],
     description: 'Warm Conversational Natural Human',
   },
   titan: {
@@ -221,7 +238,12 @@ export const VOICE_MODELS = Object.freeze({
     gender: 'male',
     pitch: 0.82,
     rate: 0.94,
-    preferredVoices: ['Microsoft Guy Natural', 'Microsoft Mark', 'Tom', 'Bruce'],
+    preferredVoices: [
+      'Microsoft Guy Natural',
+      'Microsoft Mark',
+      'Tom',
+      'Bruce',
+    ],
     description: 'Resonant Deep Bass Command Core',
   },
 });
@@ -321,7 +343,9 @@ export function selectBestVoice(
       if (fem) return fem;
     } else if (modelProfile?.gender === 'male') {
       const male = naturalVoices.find((v) =>
-        /male|man|boy|guy|george|ryan|daniel|david|mark|tom|bruce/i.test(v.name),
+        /male|man|boy|guy|george|ryan|daniel|david|mark|tom|bruce/i.test(
+          v.name,
+        ),
       );
       if (male) return male;
     }
@@ -333,8 +357,7 @@ export function selectBestVoice(
     for (const pref of modelProfile.preferredVoices) {
       const match = voices.find(
         (v) =>
-          v.lang.toLowerCase().startsWith(primaryLang) &&
-          v.name.includes(pref),
+          v.lang.toLowerCase().startsWith(primaryLang) && v.name.includes(pref),
       );
       if (match) return match;
     }
@@ -930,12 +953,20 @@ export function initAiCommandCenter({
   if (modelBadge) {
     if (activeModel === 'auto') {
       modelBadge.textContent = '🎯 Auto-MoE';
-      modelBadge.title = 'Active: Auto-MoE (All Models & Providers Working Simultaneously)';
-    } else if (activeModel === 'ensemble' || activeModel === 'council' || activeModel === 'swarm') {
+      modelBadge.title =
+        'Active: Auto-MoE (All Models & Providers Working Simultaneously)';
+    } else if (
+      activeModel === 'ensemble' ||
+      activeModel === 'council' ||
+      activeModel === 'swarm'
+    ) {
       modelBadge.textContent = '👥 Council';
       modelBadge.title = 'Active: JARVIS Council (Multi-Model Swarm)';
     } else {
-      const clean = (activeModel.split('/').pop() || activeModel).replace(/-instruct|-it/g, '');
+      const clean = (activeModel.split('/').pop() || activeModel).replace(
+        /-instruct|-it/g,
+        '',
+      );
       modelBadge.textContent = clean;
       modelBadge.title = `Active Model: ${activeModel}`;
     }
@@ -1019,7 +1050,8 @@ export function initAiCommandCenter({
 
   // Sync initial voice settings to UI
   if (voiceLangSelect) voiceLangSelect.value = voiceSettings.lang || 'auto';
-  if (voiceModelSelect) voiceModelSelect.value = voiceSettings.voiceModel || 'jarvis';
+  if (voiceModelSelect)
+    voiceModelSelect.value = voiceSettings.voiceModel || 'jarvis';
   if (voiceRateSlider) {
     voiceRateSlider.value = String(voiceSettings.rate || 1.0);
     if (voiceRateVal) voiceRateVal.textContent = `${voiceSettings.rate}x`;
@@ -1040,7 +1072,8 @@ export function initAiCommandCenter({
       voiceSettings.pitch = model.pitch;
       voiceSettings.rate = model.rate;
       if (voicePitchSlider) voicePitchSlider.value = String(model.pitch);
-      if (voicePitchVal) voicePitchVal.textContent = String(model.pitch.toFixed(2));
+      if (voicePitchVal)
+        voicePitchVal.textContent = String(model.pitch.toFixed(2));
       if (voiceRateSlider) voiceRateSlider.value = String(model.rate);
       if (voiceRateVal) voiceRateVal.textContent = `${model.rate.toFixed(2)}x`;
     }
@@ -1466,7 +1499,8 @@ export function initAiCommandCenter({
     switchView('chat');
     if (notify) {
       const msgCount = messages.length;
-      const ctxNote = msgCount > 0 ? ` (Context preserved: ${msgCount} messages)` : '';
+      const ctxNote =
+        msgCount > 0 ? ` (Context preserved: ${msgCount} messages)` : '';
       if (selectedModel === 'auto') {
         appendMessage(
           'assistant',
@@ -1546,7 +1580,12 @@ export function initAiCommandCenter({
       if (res.ok) {
         const data = await res.json();
         if (data.model) {
-          if (activeModel === 'council' || activeModel === 'ensemble' || activeModel === 'swarm' || activeModel === 'auto') {
+          if (
+            activeModel === 'council' ||
+            activeModel === 'ensemble' ||
+            activeModel === 'swarm' ||
+            activeModel === 'auto'
+          ) {
             if (modelBadge) {
               const isConfigured = Boolean(data.configured);
               modelBadge.textContent = `⚡ Omni-Swarm ${isConfigured ? '🟢' : '⚠️'}`;
@@ -1562,19 +1601,40 @@ export function initAiCommandCenter({
           } else {
             activeModel = data.model;
             if (modelBadge) {
-              const shortModel = (data.model.split('/').pop() || data.model).replace(/-instruct|-it/g, '');
+              const shortModel = (
+                data.model.split('/').pop() || data.model
+              ).replace(/-instruct|-it/g, '');
               const url = data.baseUrl || '';
               let prefix = '⚡';
               let providerName = 'NVIDIA NIM';
-              if (url.includes('groq.com')) { prefix = '🚀'; providerName = 'Groq Cloud'; }
-              else if (url.includes('googleapis.com')) { prefix = '🟢'; providerName = 'Google Gemini'; }
-              else if (url.includes('cohere.com')) { prefix = '🧠'; providerName = 'Cohere'; }
-              else if (url.includes('sambanova.ai')) { prefix = '⚡'; providerName = 'SambaNova'; }
-              else if (url.includes('cerebras.ai')) { prefix = '⚡'; providerName = 'Cerebras'; }
-              else if (url.includes('mistral.ai')) { prefix = '🌪️'; providerName = 'Mistral AI'; }
-              else if (url.includes('openrouter.ai')) { prefix = '🌐'; providerName = 'OpenRouter'; }
-              else if (url.includes('aion')) { prefix = '🔮'; providerName = 'AionLabs'; }
-              else if (url.includes('requesty.ai')) { prefix = '⚡'; providerName = 'Requesty'; }
+              if (url.includes('groq.com')) {
+                prefix = '🚀';
+                providerName = 'Groq Cloud';
+              } else if (url.includes('googleapis.com')) {
+                prefix = '🟢';
+                providerName = 'Google Gemini';
+              } else if (url.includes('cohere.com')) {
+                prefix = '🧠';
+                providerName = 'Cohere';
+              } else if (url.includes('sambanova.ai')) {
+                prefix = '⚡';
+                providerName = 'SambaNova';
+              } else if (url.includes('cerebras.ai')) {
+                prefix = '⚡';
+                providerName = 'Cerebras';
+              } else if (url.includes('mistral.ai')) {
+                prefix = '🌪️';
+                providerName = 'Mistral AI';
+              } else if (url.includes('openrouter.ai')) {
+                prefix = '🌐';
+                providerName = 'OpenRouter';
+              } else if (url.includes('aion')) {
+                prefix = '🔮';
+                providerName = 'AionLabs';
+              } else if (url.includes('requesty.ai')) {
+                prefix = '⚡';
+                providerName = 'Requesty';
+              }
 
               const isConfigured = Boolean(data.configured);
               const statusIcon = isConfigured ? '🟢' : '⚠️';
@@ -2026,7 +2086,10 @@ export function initAiCommandCenter({
     } else if (event.type === 'action-call') {
       const argsStr = event.arguments
         ? Object.entries(event.arguments)
-            .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`)
+            .map(
+              ([k, v]) =>
+                `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`,
+            )
             .join(', ')
         : '';
       appendMessage(
@@ -2734,7 +2797,9 @@ export function initAiCommandCenter({
         currentMode !== 'code' &&
         currentMode !== 'auto' &&
         activeModel !== 'stabilityai/stable-diffusion-3-medium' &&
-        !/\b(generate (an? )?image|create (an? )?image|draw|paint|sketch|artwork|picture of)\b/i.test(text)
+        !/\b(generate (an? )?image|create (an? )?image|draw|paint|sketch|artwork|picture of)\b/i.test(
+          text,
+        )
       ) {
         // Use SSE streaming for chat-like modes
         typingIndicator.remove();

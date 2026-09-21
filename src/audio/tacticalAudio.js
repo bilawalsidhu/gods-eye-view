@@ -100,16 +100,22 @@ class TacticalAudioEngine {
     if (this._unlocked || typeof window === 'undefined') return;
     const unlock = () => {
       if (this._ctx && this._ctx.state === 'suspended') {
-        this._ctx.resume().then(() => {
-          this._unlocked = true;
-        }).catch(() => {});
+        this._ctx
+          .resume()
+          .then(() => {
+            this._unlocked = true;
+          })
+          .catch(() => {});
       } else {
         this._unlocked = true;
       }
       window.removeEventListener('pointerdown', unlock);
       window.removeEventListener('keydown', unlock);
     };
-    window.addEventListener('pointerdown', unlock, { passive: true, once: true });
+    window.addEventListener('pointerdown', unlock, {
+      passive: true,
+      once: true,
+    });
     window.addEventListener('keydown', unlock, { passive: true, once: true });
   }
 
@@ -137,13 +143,15 @@ class TacticalAudioEngine {
       const bufferSize = Math.floor(ctx.sampleRate * 2);
       const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
       const output = buffer.getChannelData(0);
-      let b0 = 0, b1 = 0, b2 = 0;
+      let b0 = 0,
+        b1 = 0,
+        b2 = 0;
       for (let i = 0; i < bufferSize; i++) {
         const white = Math.random() * 2 - 1;
         // Pink noise approximation
         b0 = 0.99886 * b0 + white * 0.0555179;
         b1 = 0.99332 * b1 + white * 0.0750759;
-        b2 = 0.96900 * b2 + white * 0.1538520;
+        b2 = 0.969 * b2 + white * 0.153852;
         output[i] = (b0 + b1 + b2 + white * 0.5362) * 0.11;
       }
       this._noiseBuffer = buffer;

@@ -6,11 +6,27 @@
  */
 
 const SKELETON_CONNECTIONS = Object.freeze([
-  [0, 1], [1, 2], [2, 3], [3, 4],       // Thumb
-  [0, 5], [5, 6], [6, 7], [7, 8],       // Index
-  [5, 9], [9, 10], [10, 11], [11, 12],  // Middle
-  [9, 13], [13, 14], [14, 15], [15, 16],// Ring
-  [13, 17], [0, 17], [17, 18], [18, 19], [19, 20], // Pinky
+  [0, 1],
+  [1, 2],
+  [2, 3],
+  [3, 4], // Thumb
+  [0, 5],
+  [5, 6],
+  [6, 7],
+  [7, 8], // Index
+  [5, 9],
+  [9, 10],
+  [10, 11],
+  [11, 12], // Middle
+  [9, 13],
+  [13, 14],
+  [14, 15],
+  [15, 16], // Ring
+  [13, 17],
+  [0, 17],
+  [17, 18],
+  [18, 19],
+  [19, 20], // Pinky
 ]);
 
 export class GestureOverlay {
@@ -21,7 +37,8 @@ export class GestureOverlay {
    * @param {(gestureName: string) => void} [options.onSimulate]
    */
   constructor({ container = null, onClose = null, onSimulate = null } = {}) {
-    this.container = container || (typeof document !== 'undefined' ? document.body : null);
+    this.container =
+      container || (typeof document !== 'undefined' ? document.body : null);
     this.onClose = onClose;
     this.onSimulate = onSimulate;
     this.root = null;
@@ -199,7 +216,11 @@ export class GestureOverlay {
       this.ctx.fillText('MANUAL GESTURE CONSOLE', w / 2, h / 2 - 10);
       this.ctx.fillStyle = '#8fa3b5';
       this.ctx.font = '10px monospace';
-      this.ctx.fillText('Click gesture cards below to trigger', w / 2, h / 2 + 10);
+      this.ctx.fillText(
+        'Click gesture cards below to trigger',
+        w / 2,
+        h / 2 + 10,
+      );
     }
   }
 
@@ -258,7 +279,8 @@ export class GestureOverlay {
     // Draw joints and fingertips
     ctx.shadowBlur = 4;
     pts.forEach((pt, idx) => {
-      const isTip = idx === 4 || idx === 8 || idx === 12 || idx === 16 || idx === 20;
+      const isTip =
+        idx === 4 || idx === 8 || idx === 12 || idx === 16 || idx === 20;
       ctx.beginPath();
       ctx.arc(pt.x, pt.y, isTip ? 4.5 : 2.5, 0, Math.PI * 2);
       ctx.fillStyle = isTip ? '#ffffff' : '#00f0ff';

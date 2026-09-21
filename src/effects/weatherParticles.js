@@ -15,7 +15,8 @@ export class WeatherParticles {
    * @param {HTMLElement} [options.container]
    */
   constructor({ container = null } = {}) {
-    this.container = container || (typeof document !== 'undefined' ? document.body : null);
+    this.container =
+      container || (typeof document !== 'undefined' ? document.body : null);
     this.canvas = null;
     this.ctx = null;
     this.isActive = false;
@@ -69,7 +70,10 @@ export class WeatherParticles {
    */
   updateWeather(profile = {}) {
     this.profile = { ...this.profile, ...profile };
-    const hasPrecip = (this.profile.rain > 0.05 || this.profile.snow > 0.05 || this.profile.storm > 0.1);
+    const hasPrecip =
+      this.profile.rain > 0.05 ||
+      this.profile.snow > 0.05 ||
+      this.profile.storm > 0.1;
 
     if (hasPrecip && !this.isActive) {
       this.start();
@@ -151,7 +155,10 @@ export class WeatherParticles {
 
     // Random lightning flash during storms
     if (this.profile.lightning > 0.3) {
-      if (Math.random() < 0.008 * this.profile.lightning && this._lightningAlpha <= 0) {
+      if (
+        Math.random() < 0.008 * this.profile.lightning &&
+        this._lightningAlpha <= 0
+      ) {
         this._lightningAlpha = 0.85;
       }
     }
@@ -174,7 +181,10 @@ export class WeatherParticles {
         p.y += (120 + cockpitBoost * 0.3) * p.z * dt;
         p.x += (windX + Math.sin(p.sway) * 40) * dt;
 
-        if (p.y > h) { p.y = -10; p.x = Math.random() * w; }
+        if (p.y > h) {
+          p.y = -10;
+          p.x = Math.random() * w;
+        }
         if (p.x > w) p.x = 0;
         if (p.x < 0) p.x = w;
 
@@ -193,13 +203,19 @@ export class WeatherParticles {
         p.y += fallSpeed * dt;
         p.x += windX * dt;
 
-        if (p.y > h) { p.y = -20; p.x = Math.random() * w; }
+        if (p.y > h) {
+          p.y = -20;
+          p.x = Math.random() * w;
+        }
         if (p.x > w) p.x = 0;
         if (p.x < 0) p.x = w;
 
         ctx.beginPath();
         ctx.moveTo(p.x, p.y);
-        ctx.lineTo(p.x + windX * 0.05, p.y + p.length * p.z * (1 + cockpitBoost * 0.002));
+        ctx.lineTo(
+          p.x + windX * 0.05,
+          p.y + p.length * p.z * (1 + cockpitBoost * 0.002),
+        );
         ctx.stroke();
       }
     }

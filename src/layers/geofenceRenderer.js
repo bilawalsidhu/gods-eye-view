@@ -41,7 +41,11 @@ export class GeofenceRenderer {
       if (zone.type === 'circle' && zone.center) {
         this.dataSource.entities.add({
           id: `geofence-${zone.id}`,
-          position: Cesium.Cartesian3.fromDegrees(zone.center.lonDeg, zone.center.latDeg, 0),
+          position: Cesium.Cartesian3.fromDegrees(
+            zone.center.lonDeg,
+            zone.center.latDeg,
+            0,
+          ),
           ellipse: {
             semiMajorAxis: zone.radiusM,
             semiMinorAxis: zone.radiusM,
@@ -79,7 +83,8 @@ export class GeofenceRenderer {
     const entity = this.dataSource?.entities?.getById(`geofence-${zoneId}`);
     if (!entity) return;
 
-    const originalMaterial = entity.ellipse?.material || entity.polygon?.material;
+    const originalMaterial =
+      entity.ellipse?.material || entity.polygon?.material;
     const flashMaterial = Cesium.Color.RED.withAlpha(0.45);
 
     let step = 0;

@@ -16,7 +16,9 @@ export function classifyHandPose(landmarks, gestures = []) {
   }
 
   // Built-in gesture check from human
-  const gestureNames = gestures.map((g) => (typeof g === 'string' ? g : g.gesture || ''));
+  const gestureNames = gestures.map((g) =>
+    typeof g === 'string' ? g : g.gesture || '',
+  );
   if (gestureNames.some((g) => g.includes('thumbs up'))) {
     return { name: 'thumbs_up', label: 'CONFIRM', icon: '👍', confidence: 0.9 };
   }
@@ -29,30 +31,58 @@ export function classifyHandPose(landmarks, gestures = []) {
   const wrist = landmarks[0];
 
   // Pinch check: Distance between thumb tip (4) and index tip (8)
-  const pinchDist = Math.hypot(thumbTip[0] - indexTip[0], thumbTip[1] - indexTip[1]);
+  const pinchDist = Math.hypot(
+    thumbTip[0] - indexTip[0],
+    thumbTip[1] - indexTip[1],
+  );
   if (pinchDist < 0.08) {
-    return { name: 'pinch', label: 'PINCH ZOOM', icon: '🤏', confidence: 0.88, distance: pinchDist };
+    return {
+      name: 'pinch',
+      label: 'PINCH ZOOM',
+      icon: '🤏',
+      confidence: 0.88,
+      distance: pinchDist,
+    };
   }
 
   // Check finger extension relative to wrist
-  const indexExtended = Math.hypot(indexTip[0] - wrist[0], indexTip[1] - wrist[1]) > 0.28;
-  const middleCurled = Math.hypot(middleTip[0] - wrist[0], middleTip[1] - wrist[1]) < 0.22;
-  const ringCurled = Math.hypot(ringTip[0] - wrist[0], ringTip[1] - wrist[1]) < 0.22;
-  const pinkyCurled = Math.hypot(pinkyTip[0] - wrist[0], pinkyTip[1] - wrist[1]) < 0.22;
+  const indexExtended =
+    Math.hypot(indexTip[0] - wrist[0], indexTip[1] - wrist[1]) > 0.28;
+  const middleCurled =
+    Math.hypot(middleTip[0] - wrist[0], middleTip[1] - wrist[1]) < 0.22;
+  const ringCurled =
+    Math.hypot(ringTip[0] - wrist[0], ringTip[1] - wrist[1]) < 0.22;
+  const pinkyCurled =
+    Math.hypot(pinkyTip[0] - wrist[0], pinkyTip[1] - wrist[1]) < 0.22;
 
   // Pointing check: Only index extended, others curled
   if (indexExtended && middleCurled && ringCurled && pinkyCurled) {
-    return { name: 'point', label: 'TARGET LOCK', icon: '👉', confidence: 0.85 };
+    return {
+      name: 'point',
+      label: 'TARGET LOCK',
+      icon: '👉',
+      confidence: 0.85,
+    };
   }
 
   // Fist check: All fingertips close to wrist
   const allCurled = !indexExtended && middleCurled && ringCurled && pinkyCurled;
   if (allCurled || gestureNames.some((g) => g.includes('fist'))) {
-    return { name: 'fist', label: 'GRAB & ROTATE', icon: '✊', confidence: 0.9 };
+    return {
+      name: 'fist',
+      label: 'GRAB & ROTATE',
+      icon: '✊',
+      confidence: 0.9,
+    };
   }
 
   // Open palm
-  return { name: 'open_palm', label: 'HOVER / SCAN', icon: '🖐️', confidence: 0.75 };
+  return {
+    name: 'open_palm',
+    label: 'HOVER / SCAN',
+    icon: '🖐️',
+    confidence: 0.75,
+  };
 }
 
 /**
@@ -151,7 +181,10 @@ export class VisionGestureController {
 
         // 10 second timeout for model download
         const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error(`Timeout loading from ${cdn}`)), 10000),
+          setTimeout(
+            () => reject(new Error(`Timeout loading from ${cdn}`)),
+            10000,
+          ),
         );
 
         if (typeof humanInstance.load === 'function') {
@@ -161,7 +194,10 @@ export class VisionGestureController {
         this.human = humanInstance;
         return this.human;
       } catch (err) {
-        console.warn(`[VisionGestures] Model load failed on ${cdn}:`, err.message);
+        console.warn(
+          `[VisionGestures] Model load failed on ${cdn}:`,
+          err.message,
+        );
         lastError = err;
       }
     }
@@ -266,7 +302,11 @@ export class VisionGestureController {
         this.lastHandPos = null;
         this.lastPinchDist = null;
         if (!res.face || res.face.length === 0) {
-          this.currentGesture = { name: 'none', label: 'SCANNING...', icon: '🔍' };
+          this.currentGesture = {
+            name: 'none',
+            label: 'SCANNING...',
+            icon: '🔍',
+          };
         }
       }
 
@@ -293,7 +333,7 @@ export class VisionGestureController {
     const screenPos = mapHandToScreenCoords(
       palm,
       typeof window !== 'undefined' ? window.innerWidth : 1920,
-      typeof window !== 'undefined' ? window.innerHeight : 1080
+      typeof window !== 'undefined' ? window.innerHeight : 1080,
     );
 
     this.onGesture?.(pose);
@@ -317,7 +357,8 @@ export class VisionGestureController {
       if (this.lastPinchDist !== null && this.viewer?.camera) {
         const dDist = pose.distance - this.lastPinchDist;
         if (Math.abs(dDist) > 0.002) {
-          const height = this.viewer.camera.positionCartographic?.height || 5000000;
+          const height =
+            this.viewer.camera.positionCartographic?.height || 5000000;
           const zoomAmount = dDist * height * 1.5;
           if (zoomAmount > 0) {
             this.viewer.camera.zoomOut?.(zoomAmount);
@@ -332,14 +373,20 @@ export class VisionGestureController {
     }
 
     // 3. Point: Raycast & Reticle
-    if (pose.name === 'point' && this.viewer?.camera && typeof Cesium !== 'undefined') {
+    if (
+      pose.name === 'point' &&
+      this.viewer?.camera &&
+      typeof Cesium !== 'undefined'
+    ) {
       const indexTip = hand.landmarks[8];
       const tipCoords = mapHandToScreenCoords(
         indexTip,
         window.innerWidth,
-        window.innerHeight
+        window.innerHeight,
       );
-      const ray = this.viewer.camera.getPickRay?.(new Cesium.Cartesian2(tipCoords.x, tipCoords.y));
+      const ray = this.viewer.camera.getPickRay?.(
+        new Cesium.Cartesian2(tipCoords.x, tipCoords.y),
+      );
       if (ray) {
         this.targetRay = ray;
       }
@@ -357,7 +404,7 @@ export class VisionGestureController {
                 gesture: 'thumbs_up',
                 message: 'Gesture: Command confirmed via neural hand signal 👍',
               },
-            })
+            }),
           );
         }
       }

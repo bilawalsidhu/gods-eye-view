@@ -15,7 +15,12 @@ export class TimelineScrubber {
    * @param {(entities: Array<object> | null, timestampMs: number, isLive: boolean) => void} options.onScrub
    * @param {TacticalAudioEngine} [options.audioEngine]
    */
-  constructor({ container = null, cache, onScrub = null, audioEngine = null } = {}) {
+  constructor({
+    container = null,
+    cache,
+    onScrub = null,
+    audioEngine = null,
+  } = {}) {
     this.container = container;
     this.cache = cache;
     this.onScrub = onScrub;
@@ -89,7 +94,10 @@ export class TimelineScrubber {
   }
 
   toggle(show = undefined) {
-    const willShow = show !== undefined ? Boolean(show) : this.root?.classList.contains('hidden');
+    const willShow =
+      show !== undefined
+        ? Boolean(show)
+        : this.root?.classList.contains('hidden');
     if (willShow) {
       this.show();
     } else {
@@ -189,7 +197,13 @@ export class TimelineScrubber {
     // Sync slider position
     const range = this.cache.getTimeRange();
     const totalSpan = Math.max(60000, range.endMs - range.startMs);
-    const pct = Math.max(0, Math.min(1000, Math.round(((timestampMs - range.startMs) / totalSpan) * 1000)));
+    const pct = Math.max(
+      0,
+      Math.min(
+        1000,
+        Math.round(((timestampMs - range.startMs) / totalSpan) * 1000),
+      ),
+    );
     if (this._sliderEl) this._sliderEl.value = String(pct);
 
     const entities = this.cache.getEntitiesAtTime(timestampMs);

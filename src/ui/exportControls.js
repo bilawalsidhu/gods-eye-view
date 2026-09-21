@@ -5,7 +5,10 @@
  * operational picture as a Markdown briefing dossier or JSON dump.
  */
 
-import { generateMarkdownDossier, downloadFile } from '../export/missionDossier.js';
+import {
+  generateMarkdownDossier,
+  downloadFile,
+} from '../export/missionDossier.js';
 import { getTacticalAudio } from '../audio/tacticalAudio.js';
 
 export class ExportControls {

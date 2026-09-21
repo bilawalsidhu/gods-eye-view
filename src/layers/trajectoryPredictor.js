@@ -37,7 +37,7 @@ export function extrapolateGreatCircle(latDeg, lonDeg, bearingDeg, distanceM) {
   const x = cosDelta - sinPhi1 * sinPhi2;
   const lambda2 = lambda1 + Math.atan2(y, x);
 
-  const finalLon = ((lambda2 * 180) / Math.PI + 540) % 360 - 180;
+  const finalLon = (((lambda2 * 180) / Math.PI + 540) % 360) - 180;
   return {
     latDeg: (phi2 * 180) / Math.PI,
     lonDeg: finalLon,
@@ -63,10 +63,10 @@ export function extrapolateGreatCircle(latDeg, lonDeg, bearingDeg, distanceM) {
  *   waypoints: Array<{ latDeg: number, lonDeg: number, altitudeM: number, timeSec: number }>
  * }>}
  */
-export function predictVehicleTrajectory(state, {
-  horizonsSec = [300, 900, 1800],
-  stepSec = 30,
-} = {}) {
+export function predictVehicleTrajectory(
+  state,
+  { horizonsSec = [300, 900, 1800], stepSec = 30 } = {},
+) {
   const {
     latDeg = 0,
     lonDeg = 0,
@@ -89,17 +89,24 @@ export function predictVehicleTrajectory(state, {
   const maxHorizon = Math.max(...horizonsSec);
   const totalSteps = Math.ceil(maxHorizon / stepSec);
 
-  const allWaypoints = [{
-    latDeg: currentLat,
-    lonDeg: currentLon,
-    altitudeM: currentAlt,
-    timeSec: 0,
-  }];
+  const allWaypoints = [
+    {
+      latDeg: currentLat,
+      lonDeg: currentLon,
+      altitudeM: currentAlt,
+      timeSec: 0,
+    },
+  ];
 
   for (let step = 1; step <= totalSteps; step++) {
     const elapsedSec = step * stepSec;
     const distanceM = speedMps * stepSec;
-    const nextCoord = extrapolateGreatCircle(currentLat, currentLon, headingDeg, distanceM);
+    const nextCoord = extrapolateGreatCircle(
+      currentLat,
+      currentLon,
+      headingDeg,
+      distanceM,
+    );
 
     currentLat = nextCoord.latDeg;
     currentLon = nextCoord.lonDeg;
@@ -171,7 +178,10 @@ export function predictSatelliteOrbit(
 
       if (positionAndVelocity && positionAndVelocity.position) {
         const gmst = satellite.gstime(date);
-        const geodetic = satellite.eciToGeodetic(positionAndVelocity.position, gmst);
+        const geodetic = satellite.eciToGeodetic(
+          positionAndVelocity.position,
+          gmst,
+        );
 
         const latDeg = (geodetic.latitude * 180) / Math.PI;
         const lonDeg = (geodetic.longitude * 180) / Math.PI;
