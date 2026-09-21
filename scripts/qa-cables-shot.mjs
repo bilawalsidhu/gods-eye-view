@@ -86,22 +86,17 @@ try {
         orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
       });
     }, view);
-    // Let the sweep + labels settle. Each forced frame services the pending
-    // requestRender — the original 240-tick `requestAnimationFrame` chain
-    // hung forever here: on a settled scene the compositor produces no
-    // BeginFrames, so the FIRST rAF of the chain never fired and the
-    // evaluate ran into its 300 s protocolTimeout.
-    await page.evaluate(async () => {
-      const v = window.__godsEyeView.viewer;
-      for (let ticks = 0; ticks < 240; ticks += 1) {
-        v.scene.requestRender?.();
-        if (typeof window.__qaForceCompositorFrame === 'function') {
-          await window.__qaForceCompositorFrame();
-        } else {
-          await new Promise((resolve) => requestAnimationFrame(resolve));
-        }
-      }
-    });
+    // Let the sweep + labels settle. The settle loop lives in NODE, not
+    // inside one evaluate: each pumped frame is a Node→page screenshot
+    // roundtrip, and 240 of them inside a single evaluate exceed that
+    // evaluate's own 300 s protocolTimeout (RUN 3e) even though every step
+    // is healthy — protocolTimeout bounds ONE CDP call, not a loop. (And the
+    // original in-page `requestAnimationFrame` chain never fired at all on a
+    // settled scene — no BeginFrames, no ticks; see headlessFrames.mjs.)
+    for (let ticks = 0; ticks < 90; ticks += 1) {
+      await page.evaluate(() => window.__godsEyeView.viewer.scene.requestRender?.());
+      await page.screenshot({ optimizeForSpeed: true });
+    }
     await new Promise((r) => setTimeout(r, 1_000));
     const path = new URL(`../qa-shots/cables-${tag}-${view.name}.png`, import.meta.url).pathname;
     await page.screenshot({ path });
