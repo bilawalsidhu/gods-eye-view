@@ -22,7 +22,11 @@ export const GESTURE_NAMES = Object.freeze({
 
 function dist(p1, p2) {
   if (!p1 || !p2) return 0;
-  return Math.hypot(p1.x - p2.x, p1.y - p2.y);
+  const x1 = p1.x !== undefined ? p1.x : p1[0] !== undefined ? p1[0] : 0;
+  const y1 = p1.y !== undefined ? p1.y : p1[1] !== undefined ? p1[1] : 0;
+  const x2 = p2.x !== undefined ? p2.x : p2[0] !== undefined ? p2[0] : 0;
+  const y2 = p2.y !== undefined ? p2.y : p2[1] !== undefined ? p2[1] : 0;
+  return Math.hypot(x1 - x2, y1 - y2);
 }
 
 /**
@@ -80,12 +84,20 @@ export function classifyHandGesture(lm) {
 
   // 2. Pinch gesture (thumb tip & index tip touching or very close)
   if (pinchDist < 0.08) {
+    const x4 =
+      lm[4].x !== undefined ? lm[4].x : lm[4][0] !== undefined ? lm[4][0] : 0;
+    const y4 =
+      lm[4].y !== undefined ? lm[4].y : lm[4][1] !== undefined ? lm[4][1] : 0;
+    const x8 =
+      lm[8].x !== undefined ? lm[8].x : lm[8][0] !== undefined ? lm[8][0] : 0;
+    const y8 =
+      lm[8].y !== undefined ? lm[8].y : lm[8][1] !== undefined ? lm[8][1] : 0;
     return {
       gesture: GESTURE_NAMES.PINCH,
       confidence: Math.max(0, 1 - pinchDist / 0.08),
       details: {
         pinchDist,
-        center: { x: (lm[4].x + lm[8].x) / 2, y: (lm[4].y + lm[8].y) / 2 },
+        center: { x: (x4 + x8) / 2, y: (y4 + y8) / 2 },
       },
     };
   }

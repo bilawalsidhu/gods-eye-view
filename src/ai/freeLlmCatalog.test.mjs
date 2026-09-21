@@ -4,6 +4,7 @@ import {
   FREE_LLM_PROVIDERS,
   findFreeLlmProvider,
   detectProviderFromKey,
+  findProviderForModel,
   getAllProviders,
   getModelCapabilities,
   getModelsForCategory,
@@ -67,3 +68,16 @@ test('getModelsForCategory returns categorized models from registry', () => {
   const genai = getModelsForCategory('genai');
   assert.ok(genai.length > 0);
 });
+
+test('findProviderForModel accurately identifies provider for various models', () => {
+  assert.equal(findProviderForModel('gemini-2.5-flash')?.id, 'gemini');
+  assert.equal(findProviderForModel('codestral-latest')?.id, 'mistral');
+  assert.equal(findProviderForModel('command-r-plus-08-2024')?.id, 'cohere');
+  assert.equal(findProviderForModel('cerebras/gpt-oss-120b')?.id, 'cerebras');
+  assert.equal(findProviderForModel('groq/openai/gpt-oss-20b')?.id, 'groq');
+  assert.equal(findProviderForModel('qwen/qwen3.8-27b')?.id, 'groq');
+  assert.equal(findProviderForModel('nvidia/nemotron-3.5-lightning-30b-a3b')?.id, 'nvidia');
+  assert.equal(findProviderForModel('meta-llama/llama-3.3-70b-instruct:free')?.id, 'openrouter');
+  assert.equal(findProviderForModel('Meta-Llama-3.3-70B-Instruct')?.id, 'sambanova');
+});
+

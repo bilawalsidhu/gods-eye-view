@@ -255,10 +255,14 @@ export class GestureOverlay {
     }
 
     // Mirror horizontally so it feels natural like a mirror
-    const pts = landmarks.map((lm) => ({
-      x: (1 - lm.x) * w,
-      y: lm.y * h,
-    }));
+    const pts = landmarks.map((lm) => {
+      const lx = lm.x !== undefined ? lm.x : lm[0] !== undefined ? lm[0] : 0;
+      const ly = lm.y !== undefined ? lm.y : lm[1] !== undefined ? lm[1] : 0;
+      return {
+        x: (1 - lx) * w,
+        y: ly * h,
+      };
+    });
 
     // Draw skeletal lines with neon cybernetic styling
     ctx.strokeStyle = 'rgba(0, 240, 255, 0.85)';

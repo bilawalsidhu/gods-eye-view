@@ -298,7 +298,13 @@ function buildRow(documentRef, key, status = null) {
       }
       fields.append(presetsContainer);
 
-      // 4. Segregated list of ALL 13 providers — each with its OWN dedicated input field!
+      // 4. Segregated list of ALL providers with Multi-Provider Concurrency banner!
+      const swarmBanner = documentRef.createElement('div');
+      swarmBanner.className = 'key-setup-swarm-banner';
+      swarmBanner.innerHTML =
+        '⚡ <strong>Multi-Provider Concurrency Enabled:</strong> All providers with saved keys operate simultaneously in parallel in Omni-Swarm consensus & Auto-MoE routing, or independently by choosing specific models in the console.';
+      fields.append(swarmBanner);
+
       const providersList = documentRef.createElement('div');
       providersList.className = 'key-setup-providers-list';
 
@@ -325,7 +331,7 @@ function buildRow(documentRef, key, status = null) {
         radio.name = 'key_setup_active_provider';
         radio.value = provider.id;
         radio.checked = pActive;
-        radio.title = `Select ${provider.name} as active engine`;
+        radio.title = `Select ${provider.name} as default engine`;
         radio.addEventListener('change', () => {
           if (radio.checked) {
             baseUrlInput.value = provider.baseUrl;
@@ -351,7 +357,7 @@ function buildRow(documentRef, key, status = null) {
         statusTag.textContent = pSaved
           ? pActive
             ? '⚡ ACTIVE'
-            : '🟢 SAVED'
+            : '🟢 READY'
           : '⚪ NO KEY';
 
         titleGroup.append(radioLabel, badge, statusTag);

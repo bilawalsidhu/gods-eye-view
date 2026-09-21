@@ -702,31 +702,27 @@ export async function handleCouncilEnsemble({
         : '';
 
   const activeSwarm = getAllActiveSwarmCandidates();
-  const councilModels =
-    activeSwarm.length > 0
-      ? activeSwarm
-      : [
-          {
-            id: 'gemini-3.6-flash',
-            name: 'Gemini 3.6 Flash',
-            emblem: '🟢',
-            role: '🧠 Multimodal & 1M+ Context Intelligence',
-          },
-          {
-            id: 'openai/gpt-oss-20b',
-            name: 'GPT-OSS 20B',
-            emblem: '🚀',
-            role: '⚡ Sub-Second LPU Logic & Coding',
-          },
-          {
-            id: 'command-r-plus-08-2024',
-            name: 'Command R+',
-            emblem: '🧠',
-            role: '🔮 Enterprise Precision & RAG Citations',
-          },
-        ];
+  if (!activeSwarm || activeSwarm.length === 0) {
+    const errMsg =
+      'No AI inference provider key is configured in .env. Please configure at least one key in Provider Settings.';
+    if (stream) {
+      res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('Cache-Control', 'no-cache, no-transform');
+      res.write(`data: ${JSON.stringify({ error: errMsg })}\n\n`);
+      res.write('data: [DONE]\n\n');
+      res.end();
+    } else {
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.statusCode = 503;
+      res.end(JSON.stringify({ ok: false, error: errMsg }));
+    }
+    return;
+  }
 
-  // Run all active provider models simultaneously in parallel
+  const councilModels = activeSwarm.slice(0, 6);
+
+  // Run all active provider models simultaneously in parallel using allSettled for resilience
   const councilPromises = councilModels.map(async (member) => {
     try {
       const payload = {
@@ -762,7 +758,14 @@ export async function handleCouncilEnsemble({
     }
   });
 
-  const councilResults = await Promise.all(councilPromises);
+  const settled = await Promise.allSettled(councilPromises);
+  const councilResults = settled.map((s, idx) => {
+    if (s.status === 'fulfilled') return s.value;
+    return {
+      ...councilModels[idx],
+      content: `(${councilModels[idx].name} timeout: ${s.reason?.message || 'unresponsive'})`,
+    };
+  });
 
   const deliberationSummary = councilResults
     .map((m) => `### [${m.emblem || '🤖'} ${m.name} — ${m.role}]\n${m.content}`)
@@ -771,13 +774,14 @@ export async function handleCouncilEnsemble({
   const synthesizerMessages = [
     {
       role: 'system',
-      content: `${systemPrompt}\n\nYou are the Presiding Executive Coordinator of the JARVIS Council of Models.\nThree specialized AI models have analyzed this exact mission simultaneously in parallel.\n\nHere are their respective perspectives and outputs:\n\n${deliberationSummary}\n\nYOUR TASK AS EXECUTIVE COORDINATOR:\nSynthesize a single, authoritative, harmonious master response. Integrate their best points, verify code and logic, resolve any contradictions, and present the final master answer with supreme clarity and elegance.`,
+      content: `${systemPrompt}\n\nYou are the Presiding Executive Coordinator of the JARVIS Council of Models.\nSpecialized AI models have analyzed this exact mission simultaneously in parallel.\n\nHere are their respective perspectives and outputs:\n\n${deliberationSummary}\n\nYOUR TASK AS EXECUTIVE COORDINATOR:\nSynthesize a single, authoritative, harmonious master response. Integrate their best points, verify code and logic, resolve any contradictions, and present the final master answer with supreme clarity and elegance.`,
     },
     ...messages,
   ];
 
   const synthCandidates = getProviderCandidates(null);
-  const synthModel = synthCandidates[0]?.model || 'qwen/qwen3.8-27b';
+  const synthModel =
+    synthCandidates[0]?.model || 'nvidia/nemotron-3.5-lightning-30b-a3b';
 
   if (stream) {
     res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
@@ -825,12 +829,25 @@ export async function handleCouncilEnsemble({
         return;
       }
 
-      const reader = synthRes.response.body.getReader();
-      const decoder = new TextDecoder('utf-8');
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        res.write(decoder.decode(value, { stream: true }));
+      if (synthRes.response?.body?.getReader) {
+        const reader = synthRes.response.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          res.write(decoder.decode(value, { stream: true }));
+        }
+      } else {
+        const data = await synthRes.response.json().catch(() => ({}));
+        const content =
+          data?.choices?.[0]?.message?.content ||
+          data?.choices?.[0]?.delta?.content ||
+          '';
+        if (content) {
+          res.write(
+            `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`,
+          );
+        }
       }
       res.write('data: [DONE]\n\n');
       res.end();
@@ -915,7 +932,7 @@ export async function handleNvidiaAssistant(req, res) {
     return;
   }
 
-  const candidates = getProviderCandidates(body.model);
+  let candidates = getProviderCandidates(body.model, body.provider);
   if (candidates.length === 0) {
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.statusCode = 503;
@@ -975,14 +992,8 @@ export async function handleNvidiaAssistant(req, res) {
     }
   }
 
-  // 1. Council / Multi-Model Swarm Mode Check (All providers run simultaneously)
-  if (
-    model === 'ensemble' ||
-    model === 'council' ||
-    model === 'swarm' ||
-    model === 'auto' ||
-    !model
-  ) {
+  // 1. Council / Multi-Model Swarm Mode Check (Only when explicitly selected)
+  if (model === 'ensemble' || model === 'council' || model === 'swarm') {
     await handleCouncilEnsemble({
       messages,
       mode,
@@ -1015,6 +1026,13 @@ export async function handleNvidiaAssistant(req, res) {
       hasImages: images.length > 0,
     });
     effectiveModel = routedMeta.model;
+    const routedCandidates = getProviderCandidates(
+      effectiveModel,
+      body.provider,
+    );
+    if (routedCandidates.length > 0) {
+      candidates = routedCandidates;
+    }
   }
 
   // Check if this request needs tool execution loop

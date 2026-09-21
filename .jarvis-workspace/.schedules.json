@@ -298,5 +298,50 @@
     "runCount": 0,
     "lastRunAt": null,
     "lastResult": null
+  },
+  {
+    "id": "task_1789975578765_ubqb",
+    "name": "Unit Test Task",
+    "tool": null,
+    "command": "echo \"scheduled ok\"",
+    "args": {},
+    "message": null,
+    "delaySeconds": 10,
+    "intervalSeconds": 0,
+    "createdAt": "2026-09-21T07:26:18.765Z",
+    "status": "cancelled",
+    "runCount": 0,
+    "lastRunAt": null,
+    "lastResult": null
+  },
+  {
+    "id": "task_1789976148201_2vxu",
+    "name": "Unit Test Task",
+    "tool": null,
+    "command": "echo \"scheduled ok\"",
+    "args": {},
+    "message": null,
+    "delaySeconds": 10,
+    "intervalSeconds": 0,
+    "createdAt": "2026-09-21T07:35:48.201Z",
+    "status": "cancelled",
+    "runCount": 0,
+    "lastRunAt": null,
+    "lastResult": null
+  },
+  {
+    "id": "task_1789977064753_l07y",
+    "name": "Unit Test Task",
+    "tool": null,
+    "command": "echo \"scheduled ok\"",
+    "args": {},
+    "message": null,
+    "delaySeconds": 10,
+    "intervalSeconds": 0,
+    "createdAt": "2026-09-21T07:51:04.753Z",
+    "status": "cancelled",
+    "runCount": 0,
+    "lastRunAt": null,
+    "lastResult": null
   }
 ]

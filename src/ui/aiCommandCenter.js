@@ -545,6 +545,7 @@ export function initAiCommandCenter({
   const messages = [];
   const attachedFiles = [];
   let isStreaming = false;
+  let currentAbortController = null;
   let useStreaming = true;
   let currentSessionId = `session_${Date.now()}`;
 
@@ -1147,8 +1148,14 @@ export function initAiCommandCenter({
   // Emergency Unlock & Reset button
   function unlockAndResetChat() {
     isStreaming = false;
+    currentAbortController?.abort();
+    currentAbortController = null;
     globalThis.speechSynthesis?.cancel?.();
-    if (sendBtn) sendBtn.disabled = false;
+    if (sendBtn) {
+      sendBtn.disabled = false;
+      sendBtn.innerHTML = '<span>⚡</span> SEND';
+      sendBtn.classList.remove('ai-send-btn-stop');
+    }
     if (inputEl) {
       inputEl.disabled = false;
       inputEl.focus();
@@ -1484,10 +1491,14 @@ export function initAiCommandCenter({
         modelBadge.textContent = '🎯 Auto-MoE';
         modelBadge.title =
           'Active: Auto-MoE (Intelligent Dynamic Task Routing)';
-      } else if (selectedModel === 'ensemble' || selectedModel === 'council') {
+      } else if (
+        selectedModel === 'ensemble' ||
+        selectedModel === 'council' ||
+        selectedModel === 'swarm'
+      ) {
         modelBadge.textContent = '👥 Council';
         modelBadge.title =
-          'Active: JARVIS Council (Multi-Model Swarm: GPT-OSS 20B + Mistral + Nemotron)';
+          'Active: JARVIS Council (Multi-Provider Swarm running concurrently across all providers)';
       } else {
         const cleanName = (
           selectedModel.split('/').pop() || selectedModel
@@ -1504,12 +1515,16 @@ export function initAiCommandCenter({
       if (selectedModel === 'auto') {
         appendMessage(
           'assistant',
-          `🎯 **Intelligent Auto-MoE active.** Prompts will automatically analyze domain and route to the best specialized model (Code/Reasoning → GPT-OSS 20B, Multilingual → Mistral-Nemotron, Globe/General → Nemotron 3.5)${ctxNote}.`,
+          `🎯 **Intelligent Auto-MoE active.** Prompts will automatically analyze domain and route to the best specialized model and provider dynamically${ctxNote}.`,
         );
-      } else if (selectedModel === 'ensemble' || selectedModel === 'council') {
+      } else if (
+        selectedModel === 'ensemble' ||
+        selectedModel === 'council' ||
+        selectedModel === 'swarm'
+      ) {
         appendMessage(
           'assistant',
-          `👥 **JARVIS Multi-Model Council activated.** Prompts will execute concurrently across GPT-OSS 20B, Mistral-Nemotron, and Nemotron 3.5 simultaneously, followed by an executive consensus synthesis${ctxNote}.`,
+          `👥 **JARVIS Omni-Swarm Council activated.** Prompts will execute concurrently across your configured providers (Gemini, Groq, Cerebras, Mistral, Cohere, SambaNova, NVIDIA) in parallel, followed by consensus synthesis${ctxNote}.`,
         );
       } else {
         const cleanName = (
@@ -1588,8 +1603,11 @@ export function initAiCommandCenter({
           ) {
             if (modelBadge) {
               const isConfigured = Boolean(data.configured);
-              modelBadge.textContent = `⚡ Omni-Swarm ${isConfigured ? '🟢' : '⚠️'}`;
-              modelBadge.title = `⚡ Omni-Provider Swarm Active | All configured AI providers running simultaneously in parallel`;
+              const swarmCount =
+                data.swarmCount ||
+                (data.activeProviders ? data.activeProviders.length : 1);
+              modelBadge.textContent = `⚡ Omni-Swarm (${swarmCount}) ${isConfigured ? '🟢' : '⚠️'}`;
+              modelBadge.title = `⚡ Omni-Provider Swarm Active | ${swarmCount} AI providers configured and running simultaneously in parallel`;
               if (isConfigured) {
                 modelBadge.style.borderColor = 'rgba(57, 255, 20, 0.6)';
                 modelBadge.style.boxShadow = '0 0 8px rgba(57, 255, 20, 0.3)';
@@ -1599,48 +1617,109 @@ export function initAiCommandCenter({
               }
             }
           } else {
-            activeModel = data.model;
+            let hasSavedModel = false;
+            try {
+              hasSavedModel = Boolean(
+                localStorage.getItem('jarvis_active_model'),
+              );
+            } catch {}
+            if (!hasSavedModel) {
+              activeModel = data.model;
+            }
             if (modelBadge) {
+              const currentOrDataModel = activeModel || data.model;
               const shortModel = (
-                data.model.split('/').pop() || data.model
+                currentOrDataModel.split('/').pop() || currentOrDataModel
               ).replace(/-instruct|-it/g, '');
-              const url = data.baseUrl || '';
               let prefix = '⚡';
-              let providerName = 'NVIDIA NIM';
-              if (url.includes('groq.com')) {
+              let providerName = 'AI Provider';
+              const lower = currentOrDataModel.toLowerCase();
+              if (lower.startsWith('groq') || lower.includes('groq')) {
                 prefix = '🚀';
                 providerName = 'Groq Cloud';
-              } else if (url.includes('googleapis.com')) {
+              } else if (
+                lower.startsWith('gemini') ||
+                lower.includes('gemini')
+              ) {
                 prefix = '🟢';
                 providerName = 'Google Gemini';
-              } else if (url.includes('cohere.com')) {
-                prefix = '🧠';
-                providerName = 'Cohere';
-              } else if (url.includes('sambanova.ai')) {
-                prefix = '⚡';
-                providerName = 'SambaNova';
-              } else if (url.includes('cerebras.ai')) {
+              } else if (
+                lower.startsWith('cerebras') ||
+                lower.includes('cerebras')
+              ) {
                 prefix = '⚡';
                 providerName = 'Cerebras';
-              } else if (url.includes('mistral.ai')) {
+              } else if (
+                lower.startsWith('mistral') ||
+                lower.includes('codestral') ||
+                lower.includes('pixtral')
+              ) {
                 prefix = '🌪️';
                 providerName = 'Mistral AI';
-              } else if (url.includes('openrouter.ai')) {
+              } else if (
+                lower.startsWith('cohere') ||
+                lower.includes('command-r')
+              ) {
+                prefix = '🧠';
+                providerName = 'Cohere';
+              } else if (
+                lower.startsWith('deepseek') ||
+                lower.includes('deepseek')
+              ) {
+                prefix = '🔬';
+                providerName = 'DeepSeek';
+              } else if (
+                lower.startsWith('sambanova') ||
+                lower.includes('sambanova')
+              ) {
+                prefix = '⚡';
+                providerName = 'SambaNova';
+              } else if (
+                lower.startsWith('openrouter') ||
+                lower.includes('openrouter')
+              ) {
                 prefix = '🌐';
                 providerName = 'OpenRouter';
-              } else if (url.includes('aion')) {
-                prefix = '🔮';
-                providerName = 'AionLabs';
-              } else if (url.includes('requesty.ai')) {
+              } else if (
+                lower.startsWith('together') ||
+                lower.includes('together')
+              ) {
+                prefix = '🤝';
+                providerName = 'Together AI';
+              } else if (lower.includes('nemotron')) {
                 prefix = '⚡';
-                providerName = 'Requesty';
+                providerName = 'NVIDIA NIM';
+              } else {
+                const url = data.baseUrl || '';
+                if (url.includes('groq.com')) {
+                  prefix = '🚀';
+                  providerName = 'Groq Cloud';
+                } else if (url.includes('googleapis.com')) {
+                  prefix = '🟢';
+                  providerName = 'Google Gemini';
+                } else if (url.includes('cohere.com')) {
+                  prefix = '🧠';
+                  providerName = 'Cohere';
+                } else if (url.includes('sambanova.ai')) {
+                  prefix = '⚡';
+                  providerName = 'SambaNova';
+                } else if (url.includes('cerebras.ai')) {
+                  prefix = '⚡';
+                  providerName = 'Cerebras';
+                } else if (url.includes('mistral.ai')) {
+                  prefix = '🌪️';
+                  providerName = 'Mistral AI';
+                } else if (url.includes('openrouter.ai')) {
+                  prefix = '🌐';
+                  providerName = 'OpenRouter';
+                }
               }
 
               const isConfigured = Boolean(data.configured);
               const statusIcon = isConfigured ? '🟢' : '⚠️';
               modelBadge.textContent = `${prefix} ${shortModel} ${statusIcon}`;
               modelBadge.title = isConfigured
-                ? `✓ KEY SAVED & ACTIVE | Provider: ${providerName} (${url}) | Model: ${data.model}`
+                ? `✓ KEY SAVED & ACTIVE | Model: ${currentOrDataModel} (${providerName})`
                 : `⚠️ NO KEY PASTED YET | Click to open POWER UP station and paste your key`;
               if (isConfigured) {
                 modelBadge.style.borderColor = 'rgba(57, 255, 20, 0.6)';
@@ -2452,6 +2531,7 @@ export function initAiCommandCenter({
           persona: currentPersona,
           temperature: currentTemperature,
         }),
+        signal: currentAbortController?.signal,
       });
 
       if (latencyDisplay) {
@@ -2597,6 +2677,14 @@ export function initAiCommandCenter({
         speakText(fullContent);
       }
     } catch (err) {
+      if (err.name === 'AbortError') {
+        fullContent += '\n\n*(Generation stopped by operator)*';
+        handle.contentDiv.innerHTML = formatMarkdown(fullContent);
+        if (fullContent.trim()) {
+          messages.push({ role: 'assistant', content: fullContent });
+        }
+        return;
+      }
       handle.contentDiv.innerHTML = formatMarkdown(
         `⚠️ Stream error: ${err.message}`,
       );
@@ -2605,10 +2693,13 @@ export function initAiCommandCenter({
 
   // Send message
   async function handleSend() {
+    if (isStreaming) {
+      currentAbortController?.abort();
+      return;
+    }
     if (!inputEl) return;
     const text = inputEl.value.trim();
     if (!text && attachedFiles.length === 0) return;
-    if (isStreaming) return;
 
     inputEl.value = '';
     const currentImages = attachedFiles
@@ -2738,7 +2829,12 @@ export function initAiCommandCenter({
     }
 
     isStreaming = true;
-    if (sendBtn) sendBtn.disabled = true;
+    currentAbortController = new AbortController();
+    if (sendBtn) {
+      sendBtn.disabled = false;
+      sendBtn.innerHTML = '<span>⏹</span> STOP';
+      sendBtn.classList.add('ai-send-btn-stop');
+    }
 
     // Show visual typing indicator
     const typingIndicator = documentRef.createElement('div');
@@ -2761,8 +2857,10 @@ export function initAiCommandCenter({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             messages,
+            model: activeModel,
             context: globeContextFn(),
           }),
+          signal: currentAbortController?.signal,
         });
 
         const data = await response.json();
@@ -2833,6 +2931,7 @@ export function initAiCommandCenter({
             persona: currentPersona,
             temperature: currentTemperature,
           }),
+          signal: currentAbortController?.signal,
         });
 
         const data = await response.json();
@@ -2882,12 +2981,21 @@ export function initAiCommandCenter({
     } catch (err) {
       typingIndicator.remove();
       hideToolStatus();
-      appendMessage('assistant', `⚠️ Network error: ${err.message || err}`);
+      if (err.name === 'AbortError') {
+        appendMessage('assistant', '_Operation stopped by user._');
+      } else {
+        appendMessage('assistant', `⚠️ Network error: ${err.message || err}`);
+      }
     } finally {
       typingIndicator.remove();
       hideToolStatus();
       isStreaming = false;
-      if (sendBtn) sendBtn.disabled = false;
+      currentAbortController = null;
+      if (sendBtn) {
+        sendBtn.disabled = false;
+        sendBtn.innerHTML = '<span>⚡</span> SEND';
+        sendBtn.classList.remove('ai-send-btn-stop');
+      }
       inputEl.focus();
 
       // Auto-save session every few messages

@@ -1616,6 +1616,19 @@
   transform: translateY(-1px);
 }
 
+.ai-chat-btn.ai-send-btn-stop {
+  background: linear-gradient(135deg, #ff3344 0%, #cc1122 100%) !important;
+  color: #ffffff !important;
+  border: none !important;
+  box-shadow: 0 0 14px rgba(255, 51, 68, 0.5) !important;
+}
+
+.ai-chat-btn.ai-send-btn-stop:hover {
+  filter: brightness(1.2) !important;
+  box-shadow: 0 0 22px rgba(255, 51, 68, 0.8) !important;
+  transform: translateY(-1px);
+}
+
 .ai-chat-btn:disabled {
   opacity: 0.3;
   cursor: not-allowed;

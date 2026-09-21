@@ -15,6 +15,14 @@ export function classifyHandPose(landmarks, gestures = []) {
     return { name: 'none', label: 'NO HAND', icon: '❓', confidence: 0 };
   }
 
+  // Robust coordinate access supporting both [x, y, z] and {x, y, z}
+  const getX = (p) =>
+    p ? (p.x !== undefined ? p.x : p[0] !== undefined ? p[0] : 0) : 0;
+  const getY = (p) =>
+    p ? (p.y !== undefined ? p.y : p[1] !== undefined ? p[1] : 0) : 0;
+  const pointDist = (p1, p2) =>
+    Math.hypot(getX(p1) - getX(p2), getY(p1) - getY(p2));
+
   // Built-in gesture check from human
   const gestureNames = gestures.map((g) =>
     typeof g === 'string' ? g : g.gesture || '',
@@ -31,10 +39,7 @@ export function classifyHandPose(landmarks, gestures = []) {
   const wrist = landmarks[0];
 
   // Pinch check: Distance between thumb tip (4) and index tip (8)
-  const pinchDist = Math.hypot(
-    thumbTip[0] - indexTip[0],
-    thumbTip[1] - indexTip[1],
-  );
+  const pinchDist = pointDist(thumbTip, indexTip);
   if (pinchDist < 0.08) {
     return {
       name: 'pinch',
@@ -46,14 +51,10 @@ export function classifyHandPose(landmarks, gestures = []) {
   }
 
   // Check finger extension relative to wrist
-  const indexExtended =
-    Math.hypot(indexTip[0] - wrist[0], indexTip[1] - wrist[1]) > 0.28;
-  const middleCurled =
-    Math.hypot(middleTip[0] - wrist[0], middleTip[1] - wrist[1]) < 0.22;
-  const ringCurled =
-    Math.hypot(ringTip[0] - wrist[0], ringTip[1] - wrist[1]) < 0.22;
-  const pinkyCurled =
-    Math.hypot(pinkyTip[0] - wrist[0], pinkyTip[1] - wrist[1]) < 0.22;
+  const indexExtended = pointDist(indexTip, wrist) > 0.28;
+  const middleCurled = pointDist(middleTip, wrist) < 0.22;
+  const ringCurled = pointDist(ringTip, wrist) < 0.22;
+  const pinkyCurled = pointDist(pinkyTip, wrist) < 0.22;
 
   // Pointing check: Only index extended, others curled
   if (indexExtended && middleCurled && ringCurled && pinkyCurled) {
@@ -76,6 +77,17 @@ export function classifyHandPose(landmarks, gestures = []) {
     };
   }
 
+  // Peace / V sign: Index and middle extended, ring and pinky curled
+  const middleExtended = pointDist(middleTip, wrist) > 0.28;
+  if (indexExtended && middleExtended && ringCurled && pinkyCurled) {
+    return {
+      name: 'peace',
+      label: 'COCKPIT VIEW',
+      icon: '✌️',
+      confidence: 0.9,
+    };
+  }
+
   // Open palm
   return {
     name: 'open_palm',
@@ -87,16 +99,20 @@ export function classifyHandPose(landmarks, gestures = []) {
 
 /**
  * Maps normalized camera coordinates (mirrored horizontally) to screen space.
- * @param {[number, number]} point - [x, y] in [0, 1]
+ * @param {[number, number]|{x: number, y: number}} point - Point in [0, 1]
  * @param {number} width - Screen width
  * @param {number} height - Screen height
  * @returns {{ x: number, y: number }}
  */
 export function mapHandToScreenCoords(point, width, height) {
-  if (!point || point.length < 2) return { x: 0, y: 0 };
+  if (!point) return { x: 0, y: 0 };
+  const rawX =
+    point.x !== undefined ? point.x : point[0] !== undefined ? point[0] : 0;
+  const rawY =
+    point.y !== undefined ? point.y : point[1] !== undefined ? point[1] : 0;
   // Mirror x coordinate so hand moves naturally with user
-  const mirroredX = 1 - Math.max(0, Math.min(1, point[0]));
-  const clampedY = Math.max(0, Math.min(1, point[1]));
+  const mirroredX = 1 - Math.max(0, Math.min(1, rawX));
+  const clampedY = Math.max(0, Math.min(1, rawY));
   return {
     x: Math.round(mirroredX * width),
     y: Math.round(clampedY * height),

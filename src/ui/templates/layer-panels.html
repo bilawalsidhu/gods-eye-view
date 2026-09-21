@@ -242,26 +242,40 @@
             <span class="model-opt-tag">SYNERGY · GEMINI + GROQ + COHERE + CEREBRAS + SAMBANOVA + MISTRAL SIMULTANEOUS</span>
           </button>
 
-          <div class="ai-model-group-title">🟢 GOOGLE GEMINI (HIGH SPEED & QUOTA)</div>
+          <div class="ai-model-group-title">🟢 GOOGLE GEMINI (HIGH SPEED & 1M+ CONTEXT)</div>
+          <button type="button" class="ai-model-opt" data-model="gemini-2.5-flash">
+            <span class="model-opt-name">🟢 Gemini 2.5 Flash</span>
+            <span class="model-opt-tag">RECOMMENDED · NEXT-GEN ULTRA FAST MULTIMODAL & 1M CONTEXT</span>
+          </button>
+          <button type="button" class="ai-model-opt" data-model="gemini-2.5-pro">
+            <span class="model-opt-name">🟢 Gemini 2.5 Pro</span>
+            <span class="model-opt-tag">DEEP REASONING · MASSIVE 2M MULTIMODAL HORIZON</span>
+          </button>
+          <button type="button" class="ai-model-opt" data-model="gemini-2.0-flash-thinking-exp">
+            <span class="model-opt-name">🟢 Gemini 2.0 Flash Thinking</span>
+            <span class="model-opt-tag">THINKING TRACE · BUILT-IN EXTENDED REASONING</span>
+          </button>
           <button type="button" class="ai-model-opt" data-model="gemini-3.6-flash">
             <span class="model-opt-name">🟢 Gemini 3.6 Flash</span>
-            <span class="model-opt-tag">RECOMMENDED · FAST MULTIMODAL REASONING & 1M+ CONTEXT</span>
+            <span class="model-opt-tag">HIGH QUOTA · 1,500 REQ/DAY PERMANENT FREE TIER</span>
           </button>
 
           <div class="ai-model-group-title">🚀 GROQ CLOUD LPU (SUB-SECOND INFERENCE)</div>
           <button type="button" class="ai-model-opt" data-model="openai/gpt-oss-20b">
-            <span class="model-opt-name">🚀 GPT-OSS 20B (Groq LPU)</span>
+            <span class="model-opt-name">🚀 GPT-OSS 20B (Groq LPU 750 t/s)</span>
             <span class="model-opt-tag">ULTRA LOW LATENCY · HIGH PRECISION LOGIC & CODE</span>
           </button>
           <button type="button" class="ai-model-opt" data-model="openai/gpt-oss-120b">
             <span class="model-opt-name">🚀 GPT-OSS 120B (Groq LPU)</span>
             <span class="model-opt-tag">DEEP REASONING · MASSIVE 120B PARAMETER LPU ACCELERATION</span>
           </button>
-
-          <div class="ai-model-group-title">🧠 COHERE (PRECISION CITATIONS & RAG)</div>
-          <button type="button" class="ai-model-opt" data-model="command-r-plus-08-2024">
-            <span class="model-opt-name">🧠 Cohere Command R+</span>
-            <span class="model-opt-tag">ENTERPRISE PRECISION · MULTI-STEP RAG & ADVANCED CITATIONS</span>
+          <button type="button" class="ai-model-opt" data-model="llama-3.3-70b-versatile">
+            <span class="model-opt-name">🚀 Llama 3.3 70B (Groq 500+ t/s)</span>
+            <span class="model-opt-tag">FRONTIER SPEED · 70B PARAMETERS AT 500 TOKENS/SEC</span>
+          </button>
+          <button type="button" class="ai-model-opt" data-model="qwen/qwen3.8-27b">
+            <span class="model-opt-name">🚀 Qwen 3.8 27B (Groq LPU)</span>
+            <span class="model-opt-tag">HIGH DENSITY · FAST CHINESE/ENGLISH GENERALIST</span>
           </button>
 
           <div class="ai-model-group-title">⚡ CEREBRAS CLOUD (WAFER-SCALE RECORD SPEED)</div>
@@ -269,35 +283,59 @@
             <span class="model-opt-name">⚡ GPT-OSS 120B (Cerebras Wafer-Scale)</span>
             <span class="model-opt-tag">BLISTERING 1,800 TOKENS/SEC · RECORD INFERENCE SPEED</span>
           </button>
+          <button type="button" class="ai-model-opt" data-model="llama3.3-70b">
+            <span class="model-opt-name">⚡ Llama 3.3 70B (Cerebras 1,800 t/s)</span>
+            <span class="model-opt-tag">WAFER-SCALE CS-3 · MAXIMUM SPEED 70B INFERENCE</span>
+          </button>
+          <button type="button" class="ai-model-opt" data-model="llama3.1-8b">
+            <span class="model-opt-name">⚡ Llama 3.1 8B (Cerebras 2,200 t/s)</span>
+            <span class="model-opt-tag">INSTANT FEEDBACK · RECORD 2,200 TOKENS/SEC</span>
+          </button>
+
+          <div class="ai-model-group-title">🌪️ MISTRAL AI (SOVEREIGN EUROPEAN REASONING)</div>
+          <button type="button" class="ai-model-opt" data-model="codestral-latest">
+            <span class="model-opt-name">💻 Codestral (Code Intelligence)</span>
+            <span class="model-opt-tag">CODE SPECIALIST · ADVANCED CODEGEN & DEBUG LOOPS</span>
+          </button>
+          <button type="button" class="ai-model-opt" data-model="mistral-small-latest">
+            <span class="model-opt-name">🌪️ Mistral Small (Latest)</span>
+            <span class="model-opt-tag">SOVEREIGN AI · ADVANCED REASONING & MULTILINGUAL SPECIALIST</span>
+          </button>
+          <button type="button" class="ai-model-opt" data-model="mistral-large-latest">
+            <span class="model-opt-name">🌪️ Mistral Large (Flagship)</span>
+            <span class="model-opt-tag">FLAGSHIP MODEL · ENTERPRISE COMPLEX REASONING</span>
+          </button>
+          <button type="button" class="ai-model-opt" data-model="pixtral-12b-2409">
+            <span class="model-opt-name">👁️ Pixtral 12B (Vision)</span>
+            <span class="model-opt-tag">MULTIMODAL · HIGH-RESOLUTION VISUAL REASONING</span>
+          </button>
+
+          <div class="ai-model-group-title">🧠 COHERE (PRECISION CITATIONS & RAG)</div>
+          <button type="button" class="ai-model-opt" data-model="command-r-plus-08-2024">
+            <span class="model-opt-name">🧠 Cohere Command R+</span>
+            <span class="model-opt-tag">ENTERPRISE PRECISION · MULTI-STEP RAG & ADVANCED CITATIONS</span>
+          </button>
+          <button type="button" class="ai-model-opt" data-model="command-r-08-2024">
+            <span class="model-opt-name">🧠 Cohere Command R (Fast)</span>
+            <span class="model-opt-tag">STRUCTURED OUTPUTS · LOW LATENCY RAG SPECIALIST</span>
+          </button>
+          <button type="button" class="ai-model-opt" data-model="c4ai-aya-expanse-32b">
+            <span class="model-opt-name">🌐 Aya Expanse 32B (Cohere)</span>
+            <span class="model-opt-tag">MULTILINGUAL · NATIVE COMPREHENSION IN 23 LANGUAGES</span>
+          </button>
 
           <div class="ai-model-group-title">⚡ SAMBANOVA (DATAFLOW ACCELERATION)</div>
           <button type="button" class="ai-model-opt" data-model="Meta-Llama-3.3-70B-Instruct">
             <span class="model-opt-name">⚡ Llama 3.3 70B (SambaNova)</span>
             <span class="model-opt-tag">SN40L ACCELERATOR · HIGH-THROUGHPUT FRONTIER REASONING</span>
           </button>
-
-          <div class="ai-model-group-title">🌪️ MISTRAL AI (SOVEREIGN EUROPEAN REASONING)</div>
-          <button type="button" class="ai-model-opt" data-model="mistral-small-latest">
-            <span class="model-opt-name">🌪️ Mistral Small (Latest)</span>
-            <span class="model-opt-tag">SOVEREIGN AI · ADVANCED REASONING & MULTILINGUAL SPECIALIST</span>
+          <button type="button" class="ai-model-opt" data-model="DeepSeek-R1-Distill-Llama-70B">
+            <span class="model-opt-name">🔬 DeepSeek R1 Distill 70B (SambaNova)</span>
+            <span class="model-opt-tag">REASONING TRACE · HIGH-SPEED DATAFLOW INFERENCE</span>
           </button>
-
-          <div class="ai-model-group-title">🔮 AIONLABS (DEEP DEDUCTIVE INTELLIGENCE)</div>
-          <button type="button" class="ai-model-opt" data-model="aion-3.0">
-            <span class="model-opt-name">🔮 Aion 3.0</span>
-            <span class="model-opt-tag">128K CONTEXT · HYPOTHESIS & SCIENTIFIC REASONING</span>
-          </button>
-
-          <div class="ai-model-group-title">⚡ REQUESTY (SMART MULTI-ROUTER)</div>
-          <button type="button" class="ai-model-opt" data-model="openai/gpt-4o-mini">
-            <span class="model-opt-name">⚡ GPT-4o Mini (Requesty)</span>
-            <span class="model-opt-tag">SMART BALANCING · LOW LATENCY UNIVERSAL INFERENCE</span>
-          </button>
-
-          <div class="ai-model-group-title">🌐 OPENROUTER (COMMUNITY DECENTRALIZED)</div>
-          <button type="button" class="ai-model-opt" data-model="meta-llama/llama-3.3-70b-instruct:free">
-            <span class="model-opt-name">🌐 Llama 3.3 70B (OpenRouter Free)</span>
-            <span class="model-opt-tag">COMMUNITY TIER · PERMANENT ACCESSIBILITY</span>
+          <button type="button" class="ai-model-opt" data-model="Qwen2.5-Coder-32B-Instruct">
+            <span class="model-opt-name">💻 Qwen 2.5 Coder 32B (SambaNova)</span>
+            <span class="model-opt-tag">DEVELOPER CORE · ULTRA FAST RECONFIGURABLE COMPILER</span>
           </button>
 
           <div class="ai-model-group-title">⚡ NVIDIA NIM (TACTICAL ACCELERATION)</div>
@@ -313,9 +351,45 @@
             <span class="model-opt-name">🔬 DeepSeek R1 (Thinking Trace)</span>
             <span class="model-opt-tag">CHAIN OF THOUGHT · MATHEMATICAL & ALGORITHMIC PROOFS</span>
           </button>
+          <button type="button" class="ai-model-opt" data-model="deepseek-ai/deepseek-v3">
+            <span class="model-opt-name">⚡ DeepSeek V3 (671B MoE)</span>
+            <span class="model-opt-tag">FRONTIER MOE · STATE OF THE ART GENERAL INTELLIGENCE</span>
+          </button>
+          <button type="button" class="ai-model-opt" data-model="meta/llama-3.3-70b-instruct">
+            <span class="model-opt-name">⚡ Llama 3.3 70B Instruct (NVIDIA)</span>
+            <span class="model-opt-tag">DGX HOSTED · FRONTIER OPEN WEIGHT REASONING</span>
+          </button>
           <button type="button" class="ai-model-opt" data-model="meta/llama-3.2-11b-vision-instruct">
             <span class="model-opt-name">👁️ Llama 3.2 11B Vision</span>
             <span class="model-opt-tag">MULTI-MODAL · SATELLITE & CAMERA IMAGE COMPREHENSION</span>
+          </button>
+
+          <div class="ai-model-group-title">🌐 OPENROUTER (COMMUNITY DECENTRALIZED)</div>
+          <button type="button" class="ai-model-opt" data-model="meta-llama/llama-3.3-70b-instruct:free">
+            <span class="model-opt-name">🌐 Llama 3.3 70B (OpenRouter Free)</span>
+            <span class="model-opt-tag">COMMUNITY TIER · PERMANENT ACCESSIBILITY</span>
+          </button>
+          <button type="button" class="ai-model-opt" data-model="deepseek/deepseek-r1:free">
+            <span class="model-opt-name">🔬 DeepSeek R1 (OpenRouter Free)</span>
+            <span class="model-opt-tag">THINKING CO-T · UNRESTRICTED COMMUNITY ACCESS</span>
+          </button>
+          <button type="button" class="ai-model-opt" data-model="qwen/qwen-2.5-coder-32b-instruct:free">
+            <span class="model-opt-name">💻 Qwen 2.5 Coder 32B (OpenRouter Free)</span>
+            <span class="model-opt-tag">CODE SYNTHESIS · COMMUNITY ACCELERATED TIER</span>
+          </button>
+          <button type="button" class="ai-model-opt" data-model="sophosympatheia/rogue-rose-103b-v0.2:free">
+            <span class="model-opt-name">🌹 Rogue Rose 103B (Uncensored)</span>
+            <span class="model-opt-tag">OPEN CREATIVE · UNCENSORED TACTICAL STORYTELLING</span>
+          </button>
+
+          <div class="ai-model-group-title">🔮 AIONLABS & ZHIPU (GLOBAL REASONING)</div>
+          <button type="button" class="ai-model-opt" data-model="aion-3.0">
+            <span class="model-opt-name">🔮 Aion 3.0 (128K Reasoning)</span>
+            <span class="model-opt-tag">128K CONTEXT · HYPOTHESIS & SCIENTIFIC REASONING</span>
+          </button>
+          <button type="button" class="ai-model-opt" data-model="glm-4-flash">
+            <span class="model-opt-name">🇨🇳 GLM-4 Flash (Zhipu 200K)</span>
+            <span class="model-opt-tag">PERMANENT FREE · 200K HIGH SPEED BILINGUAL</span>
           </button>
         </div>
       </div>
@@ -350,9 +424,9 @@
             type="button"
             class="ai-mode-tab"
             data-mode="globe"
-            title="Control the 3D globe"
+            title="Interactive 3D Globe camera & layer execution"
           >
-            🌐 Globe
+            🌍 Globe
           </button>
           <button
             type="button"
@@ -435,41 +509,73 @@
             type="button"
             class="ai-quick-model-btn"
             data-model="ensemble"
-            title="JARVIS Council: Multi-Model Swarm consensus"
+            title="JARVIS Council: Multi-Model Swarm consensus across all providers"
           >
             👥 Council
           </button>
           <button
             type="button"
             class="ai-quick-model-btn"
-            data-model="gemini-3.6-flash"
-            title="Google Gemini 3.6 Flash (Fast multimodal intelligence)"
+            data-model="gemini-2.5-flash"
+            title="Google Gemini 2.5 Flash (Next-gen fast multimodal intelligence)"
           >
-            🟢 Gemini 3.6
+            🟢 Gemini 2.5
           </button>
           <button
             type="button"
             class="ai-quick-model-btn"
             data-model="openai/gpt-oss-20b"
-            title="Groq LPU GPT-OSS 20B (Sub-second reasoning & code)"
+            title="Groq LPU GPT-OSS 20B (Sub-second reasoning & code 750 t/s)"
           >
             🚀 Groq 20B
           </button>
           <button
             type="button"
             class="ai-quick-model-btn"
+            data-model="llama3.3-70b"
+            title="Cerebras Llama 3.3 70B (Wafer-Scale 1,800 t/s)"
+          >
+            ⚡ Cerebras 1.8k
+          </button>
+          <button
+            type="button"
+            class="ai-quick-model-btn"
+            data-model="codestral-latest"
+            title="Mistral Codestral (Code intelligence & autonomous debugging)"
+          >
+            💻 Codestral
+          </button>
+          <button
+            type="button"
+            class="ai-quick-model-btn"
+            data-model="deepseek-ai/deepseek-r1"
+            title="DeepSeek R1 (Thinking trace chain-of-thought proofs)"
+          >
+            🔬 DeepSeek R1
+          </button>
+          <button
+            type="button"
+            class="ai-quick-model-btn"
             data-model="command-r-plus-08-2024"
-            title="Cohere Command R+ (High-precision enterprise reasoning)"
+            title="Cohere Command R+ (High-precision enterprise reasoning & citations)"
           >
             🧠 Cohere R+
           </button>
           <button
             type="button"
             class="ai-quick-model-btn"
-            data-model="nvidia/nemotron-3.5-lightning-30b-a3b"
-            title="Nemotron 3.5 Lightning (Default · Fast reasoning)"
+            data-model="Meta-Llama-3.3-70B-Instruct"
+            title="SambaNova Llama 3.3 70B (SN40L Dataflow Acceleration)"
           >
-            ⚡ Nemotron 3.5
+            ⚡ SambaNova
+          </button>
+          <button
+            type="button"
+            class="ai-quick-model-btn"
+            data-model="nvidia/nemotron-3.5-lightning-30b-a3b"
+            title="Nemotron 3.5 Lightning (Default · Fast tactical globe control)"
+          >
+            ⚡ Nemotron
           </button>
         </div>
         <button

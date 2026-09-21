@@ -633,6 +633,24 @@
   border-radius: 0 0.25rem 0.25rem 0;
 }
 
+.key-setup-swarm-banner {
+  padding: 0.45rem 0.65rem;
+  background: rgba(0, 212, 255, 0.08);
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  border-left: 3px solid #00d4ff;
+  border-radius: 0.35rem;
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  color: #b5e8fc;
+  line-height: 1.4;
+  margin-top: 0.4rem;
+  margin-bottom: 0.2rem;
+}
+
+.key-setup-swarm-banner strong {
+  color: #00f0ff;
+}
+
 .key-setup-providers-list {
   display: flex;
   flex-direction: column;

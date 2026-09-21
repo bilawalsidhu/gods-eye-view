@@ -30,10 +30,36 @@ test('classifyHandPose identifies pinch when thumb and index are close', () => {
   assert.equal(res.icon, '🤏');
 });
 
-test('mapHandToScreenCoords mirrors X and clamps properly', () => {
-  const coords = mapHandToScreenCoords([0.2, 0.4], 1000, 500);
-  assert.equal(coords.x, 800); // (1 - 0.2) * 1000 = 800
-  assert.equal(coords.y, 200); // 0.4 * 500 = 200
+test('classifyHandPose works with { x, y, z } object landmarks for pinch and peace', () => {
+  // Object-based landmarks (e.g. MediaPipe / HandTracker)
+  const objLandmarks = Array.from({ length: 21 }, () => ({ x: 0.5, y: 0.5, z: 0 }));
+  objLandmarks[4] = { x: 0.5, y: 0.5, z: 0 };
+  objLandmarks[8] = { x: 0.52, y: 0.51, z: 0 };
+
+  const pinchRes = classifyHandPose(objLandmarks);
+  assert.equal(pinchRes.name, 'pinch');
+  assert.equal(pinchRes.icon, '🤏');
+
+  // Peace sign with object landmarks: wrist at bottom, index & middle up, ring & pinky down
+  const peaceLandmarks = Array.from({ length: 21 }, () => ({ x: 0.5, y: 0.8, z: 0 }));
+  peaceLandmarks[0] = { x: 0.5, y: 0.9, z: 0 }; // Wrist
+  peaceLandmarks[8] = { x: 0.45, y: 0.2, z: 0 }; // Index extended high
+  peaceLandmarks[12] = { x: 0.55, y: 0.2, z: 0 }; // Middle extended high
+  peaceLandmarks[16] = { x: 0.5, y: 0.85, z: 0 }; // Ring curled low
+  peaceLandmarks[20] = { x: 0.5, y: 0.85, z: 0 }; // Pinky curled low
+  const peaceRes = classifyHandPose(peaceLandmarks);
+  assert.equal(peaceRes.name, 'peace');
+  assert.equal(peaceRes.icon, '✌️');
+});
+
+test('mapHandToScreenCoords mirrors X and clamps properly for arrays and objects', () => {
+  const coordsArr = mapHandToScreenCoords([0.2, 0.4], 1000, 500);
+  assert.equal(coordsArr.x, 800); // (1 - 0.2) * 1000 = 800
+  assert.equal(coordsArr.y, 200); // 0.4 * 500 = 200
+
+  const coordsObj = mapHandToScreenCoords({ x: 0.2, y: 0.4 }, 1000, 500);
+  assert.equal(coordsObj.x, 800);
+  assert.equal(coordsObj.y, 200);
 });
 
 test('calculateHeadParallaxOffset clamps offsets within safe angular limits', () => {

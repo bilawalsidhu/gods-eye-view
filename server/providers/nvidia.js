@@ -91,191 +91,536 @@ export function resolveEffectiveAiKey(bodyKey = null) {
   return defaultKey ? defaultKey.split(',')[0].trim() : null;
 }
 
+function normalizeModelForProvider(providerName, requestedModel) {
+  let req = String(requestedModel || '').trim();
+  if (req.includes('/')) {
+    const slash = req.indexOf('/');
+    const prefix = req.slice(0, slash).toLowerCase();
+    if (
+      [
+        'groq',
+        'gemini',
+        'mistral',
+        'cerebras',
+        'cohere',
+        'sambanova',
+        'together',
+        'openrouter',
+        'aion',
+        'zhipu',
+        'cloudflare',
+      ].includes(prefix)
+    ) {
+      req = req.slice(slash + 1);
+    }
+  }
+  const isMeta =
+    !req ||
+    req === 'auto' ||
+    req === 'router' ||
+    req === 'council' ||
+    req === 'ensemble' ||
+    req === 'swarm';
+
+  switch (providerName) {
+    case 'Google Gemini':
+      if (!isMeta && req.toLowerCase().includes('gemini')) return req;
+      return 'gemini-2.5-flash';
+
+    case 'Groq Cloud':
+      if (
+        !isMeta &&
+        (req.includes('qwen') ||
+          req.includes('gpt-oss') ||
+          req.includes('llama') ||
+          req.includes('compound') ||
+          req.includes('deepseek'))
+      )
+        return req;
+      return 'openai/gpt-oss-20b';
+
+    case 'Cerebras':
+      if (
+        !isMeta &&
+        (req.includes('gpt-oss') ||
+          req.includes('qwen') ||
+          req.includes('llama') ||
+          req.includes('deepseek'))
+      )
+        return req;
+      return 'gpt-oss-120b';
+
+    case 'Cohere':
+      if (
+        !isMeta &&
+        (req.includes('command-r') ||
+          req.includes('cohere') ||
+          req.includes('aya'))
+      )
+        return req;
+      return 'command-r-plus-08-2024';
+
+    case 'Mistral AI':
+      if (
+        !isMeta &&
+        (req.includes('mistral') ||
+          req.includes('codestral') ||
+          req.includes('pixtral') ||
+          req.includes('ministral'))
+      )
+        return req;
+      return 'codestral-latest';
+
+    case 'NVIDIA NIM':
+      if (
+        !isMeta &&
+        (req.startsWith('nvidia/') ||
+          req.startsWith('meta/') ||
+          req.startsWith('deepseek-ai/') ||
+          req.startsWith('mistralai/') ||
+          req.startsWith('qwen/') ||
+          req.startsWith('moonshotai/') ||
+          req.startsWith('openai/'))
+      ) {
+        return req;
+      }
+      return 'nvidia/nemotron-3.5-lightning-30b-a3b';
+
+    case 'SambaNova':
+      if (
+        !isMeta &&
+        (req.includes('Llama') ||
+          req.includes('Qwen') ||
+          req.includes('DeepSeek'))
+      )
+        return req;
+      return 'Meta-Llama-3.3-70B-Instruct';
+
+    case 'OpenRouter':
+      if (!isMeta && (req.includes('/') || req.includes(':free'))) return req;
+      return 'meta-llama/llama-3.3-70b-instruct:free';
+
+    case 'Together AI':
+      if (
+        !isMeta &&
+        (req.includes('Llama') ||
+          req.includes('together') ||
+          req.includes('Qwen') ||
+          req.includes('DeepSeek'))
+      )
+        return req;
+      return 'meta-llama/Llama-3.3-70B-Instruct-Turbo';
+
+    case 'AionLabs':
+      if (!isMeta && req.includes('aion')) return req;
+      return 'aion-3.0';
+
+    case 'Zhipu (GLM)':
+      if (!isMeta && (req.includes('glm') || req.includes('zhipu'))) return req;
+      return 'glm-4-flash';
+
+    case 'Cloudflare':
+      if (!isMeta && req.startsWith('@cf/')) return req;
+      return '@cf/meta/llama-3.3-70b-instruct';
+
+    default:
+      if (!isMeta) return req;
+      return 'nvidia/nemotron-3.5-lightning-30b-a3b';
+  }
+}
+
 /**
  * Return ordered candidate providers for inference execution with automatic failover.
+ * Allows diff providers to work independently (when targeted by model/provider) or simultaneously (in swarm).
  */
-export function getProviderCandidates(requestedModel = null) {
+export function getProviderCandidates(
+  requestedModel = null,
+  preferredProvider = null,
+) {
   const candidates = [];
   const env = process.env;
-  const reqLower = String(requestedModel || '').toLowerCase();
+  let reqClean = String(requestedModel || '').trim();
+  let explicitProvider = preferredProvider
+    ? String(preferredProvider).toLowerCase()
+    : null;
 
-  // If a specific model was requested, match its provider first
-  if (reqLower.includes('gemini') && env.GEMINI_API_KEY) {
-    candidates.push({
-      name: 'Google Gemini',
-      baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
-      key: env.GEMINI_API_KEY.split(',')[0].trim(),
-      model: reqLower.includes('3.6')
-        ? 'gemini-3.6-flash'
-        : requestedModel || 'gemini-3.6-flash',
-      isNvidia: false,
-    });
-  } else if (
-    (reqLower.includes('groq') || reqLower.includes('gpt-oss')) &&
-    env.GROQ_API_KEY
-  ) {
-    candidates.push({
-      name: 'Groq Cloud',
-      baseUrl: 'https://api.groq.com/openai/v1',
-      key: env.GROQ_API_KEY.split(',')[0].trim(),
-      model: requestedModel || 'openai/gpt-oss-20b',
-      isNvidia: false,
-    });
-  } else if (
-    (reqLower.includes('cohere') || reqLower.includes('command-r')) &&
-    env.COHERE_API_KEY
-  ) {
-    candidates.push({
-      name: 'Cohere',
-      baseUrl: 'https://api.cohere.com/v2',
-      key: env.COHERE_API_KEY.split(',')[0].trim(),
-      model: requestedModel || 'command-r-plus-08-2024',
-      isNvidia: false,
-    });
+  // Detect provider prefix e.g. "groq/openai/gpt-oss-20b"
+  if (reqClean.includes('/')) {
+    const slash = reqClean.indexOf('/');
+    const prefix = reqClean.slice(0, slash).toLowerCase();
+    if (
+      [
+        'groq',
+        'gemini',
+        'mistral',
+        'cerebras',
+        'cohere',
+        'sambanova',
+        'together',
+        'openrouter',
+        'aion',
+        'zhipu',
+        'cloudflare',
+        'nvidia',
+      ].includes(prefix)
+    ) {
+      if (!explicitProvider) explicitProvider = prefix;
+      reqClean = reqClean.slice(slash + 1);
+    }
   }
 
-  // Active configured provider from .env
+  const reqLower = reqClean.toLowerCase();
+  const isMeta =
+    !reqClean ||
+    reqClean === 'auto' ||
+    reqClean === 'router' ||
+    reqClean === 'council' ||
+    reqClean === 'ensemble' ||
+    reqClean === 'swarm';
+
+  const addCandidate = (name, baseUrl, key, model, isNvidia = false) => {
+    if (!key || candidates.some((c) => c.name === name)) return;
+    candidates.push({
+      name,
+      baseUrl,
+      key: String(key).split(',')[0].trim(),
+      model: normalizeModelForProvider(name, model),
+      isNvidia,
+    });
+  };
+
+  // 1. Explicit Preferred Provider (if specified)
+  if (explicitProvider) {
+    if (explicitProvider.includes('gemini') && env.GEMINI_API_KEY) {
+      addCandidate(
+        'Google Gemini',
+        'https://generativelanguage.googleapis.com/v1beta/openai',
+        env.GEMINI_API_KEY,
+        reqClean,
+      );
+    } else if (explicitProvider.includes('groq') && env.GROQ_API_KEY) {
+      addCandidate(
+        'Groq Cloud',
+        'https://api.groq.com/openai/v1',
+        env.GROQ_API_KEY,
+        reqClean,
+      );
+    } else if (explicitProvider.includes('cerebras') && env.CEREBRAS_API_KEY) {
+      addCandidate(
+        'Cerebras',
+        'https://api.cerebras.ai/v1',
+        env.CEREBRAS_API_KEY,
+        reqClean,
+      );
+    } else if (explicitProvider.includes('mistral') && env.MISTRAL_API_KEY) {
+      addCandidate(
+        'Mistral AI',
+        'https://api.mistral.ai/v1',
+        env.MISTRAL_API_KEY,
+        reqClean,
+      );
+    } else if (explicitProvider.includes('cohere') && env.COHERE_API_KEY) {
+      addCandidate(
+        'Cohere',
+        'https://api.cohere.com/v2',
+        env.COHERE_API_KEY,
+        reqClean,
+      );
+    } else if (
+      explicitProvider.includes('sambanova') &&
+      env.SAMBANOVA_API_KEY
+    ) {
+      addCandidate(
+        'SambaNova',
+        'https://api.sambanova.ai/v1',
+        env.SAMBANOVA_API_KEY,
+        reqClean,
+      );
+    } else if (explicitProvider.includes('together') && env.TOGETHER_API_KEY) {
+      addCandidate(
+        'Together AI',
+        'https://api.together.xyz/v1',
+        env.TOGETHER_API_KEY,
+        reqClean,
+      );
+    } else if (
+      explicitProvider.includes('openrouter') &&
+      env.OPENROUTER_API_KEY
+    ) {
+      addCandidate(
+        'OpenRouter',
+        'https://openrouter.ai/api/v1',
+        env.OPENROUTER_API_KEY,
+        reqClean,
+      );
+    } else if (explicitProvider.includes('aion') && env.AION_API_KEY) {
+      addCandidate(
+        'AionLabs',
+        'https://api.aionlabs.ai/v1',
+        env.AION_API_KEY,
+        reqClean,
+      );
+    } else if (explicitProvider.includes('zhipu') && env.ZHIPU_API_KEY) {
+      addCandidate(
+        'Zhipu (GLM)',
+        'https://open.bigmodel.cn/api/paas/v4',
+        env.ZHIPU_API_KEY,
+        reqClean,
+      );
+    } else if (
+      explicitProvider.includes('cloudflare') &&
+      env.CLOUDFLARE_API_KEY
+    ) {
+      addCandidate(
+        'Cloudflare',
+        'https://api.cloudflare.com/client/v4/accounts/ai/v1',
+        env.CLOUDFLARE_API_KEY,
+        reqClean,
+      );
+    } else if (explicitProvider.includes('nvidia') && env.NVIDIA_API_KEY) {
+      addCandidate(
+        'NVIDIA NIM',
+        'https://integrate.api.nvidia.com/v1',
+        env.NVIDIA_API_KEY,
+        reqClean,
+        true,
+      );
+    }
+  }
+
+  // 2. Exact Model Matching to Destination Provider
+  if (!isMeta) {
+    if (reqLower.includes('gemini') && env.GEMINI_API_KEY) {
+      addCandidate(
+        'Google Gemini',
+        'https://generativelanguage.googleapis.com/v1beta/openai',
+        env.GEMINI_API_KEY,
+        reqClean,
+      );
+    } else if (
+      (reqLower.includes('groq') ||
+        reqLower.includes('qwen3.8') ||
+        reqLower.includes('compound') ||
+        (reqLower.includes('gpt-oss-20b') && env.GROQ_API_KEY)) &&
+      env.GROQ_API_KEY
+    ) {
+      addCandidate(
+        'Groq Cloud',
+        'https://api.groq.com/openai/v1',
+        env.GROQ_API_KEY,
+        reqClean,
+      );
+    } else if (
+      (reqLower.includes('cerebras') ||
+        (reqLower.includes('120b') && env.CEREBRAS_API_KEY)) &&
+      env.CEREBRAS_API_KEY
+    ) {
+      addCandidate(
+        'Cerebras',
+        'https://api.cerebras.ai/v1',
+        env.CEREBRAS_API_KEY,
+        reqClean,
+      );
+    } else if (
+      (reqLower.includes('codestral') ||
+        reqLower.includes('mistral') ||
+        reqLower.includes('pixtral') ||
+        reqLower.includes('ministral')) &&
+      env.MISTRAL_API_KEY
+    ) {
+      addCandidate(
+        'Mistral AI',
+        'https://api.mistral.ai/v1',
+        env.MISTRAL_API_KEY,
+        reqClean,
+      );
+    } else if (
+      (reqLower.includes('command-r') ||
+        reqLower.includes('cohere') ||
+        reqLower.includes('aya')) &&
+      env.COHERE_API_KEY
+    ) {
+      addCandidate(
+        'Cohere',
+        'https://api.cohere.com/v2',
+        env.COHERE_API_KEY,
+        reqClean,
+      );
+    } else if (
+      (reqLower.includes('sambanova') ||
+        (reqClean.includes('Meta-Llama') && env.SAMBANOVA_API_KEY)) &&
+      env.SAMBANOVA_API_KEY
+    ) {
+      addCandidate(
+        'SambaNova',
+        'https://api.sambanova.ai/v1',
+        env.SAMBANOVA_API_KEY,
+        reqClean,
+      );
+    } else if (reqLower.includes('together') && env.TOGETHER_API_KEY) {
+      addCandidate(
+        'Together AI',
+        'https://api.together.xyz/v1',
+        env.TOGETHER_API_KEY,
+        reqClean,
+      );
+    } else if (
+      (reqLower.includes(':free') || reqLower.includes('openrouter')) &&
+      env.OPENROUTER_API_KEY
+    ) {
+      addCandidate(
+        'OpenRouter',
+        'https://openrouter.ai/api/v1',
+        env.OPENROUTER_API_KEY,
+        reqClean,
+      );
+    } else if (reqLower.includes('aion') && env.AION_API_KEY) {
+      addCandidate(
+        'AionLabs',
+        'https://api.aionlabs.ai/v1',
+        env.AION_API_KEY,
+        reqClean,
+      );
+    } else if (
+      (reqLower.includes('glm') || reqLower.includes('zhipu')) &&
+      env.ZHIPU_API_KEY
+    ) {
+      addCandidate(
+        'Zhipu (GLM)',
+        'https://open.bigmodel.cn/api/paas/v4',
+        env.ZHIPU_API_KEY,
+        reqClean,
+      );
+    } else if (reqLower.startsWith('@cf/') && env.CLOUDFLARE_API_KEY) {
+      addCandidate(
+        'Cloudflare',
+        'https://api.cloudflare.com/client/v4/accounts/ai/v1',
+        env.CLOUDFLARE_API_KEY,
+        reqClean,
+      );
+    } else if (
+      (reqLower.includes('nemotron') || reqLower.startsWith('nvidia/')) &&
+      env.NVIDIA_API_KEY
+    ) {
+      addCandidate(
+        'NVIDIA NIM',
+        'https://integrate.api.nvidia.com/v1',
+        env.NVIDIA_API_KEY,
+        reqClean,
+        true,
+      );
+    }
+  }
+
+  // 3. Active configured provider from .env as next priority
   const currentBaseUrl =
     env.NVIDIA_BASE_URL || 'https://integrate.api.nvidia.com/v1';
   const effectiveKey = resolveEffectiveAiKey();
   if (effectiveKey) {
     const isNvidia = currentBaseUrl.includes('nvidia.com');
-    candidates.push({
-      name: isNvidia ? 'NVIDIA NIM' : 'Active Provider',
-      baseUrl: currentBaseUrl,
-      key: effectiveKey,
-      model:
-        requestedModel ||
-        env.NVIDIA_MODEL ||
-        'nvidia/nemotron-3.5-lightning-30b-a3b',
+    const providerName = isNvidia ? 'NVIDIA NIM' : 'Active Provider';
+    addCandidate(
+      providerName,
+      currentBaseUrl,
+      effectiveKey,
+      reqClean || env.NVIDIA_MODEL,
       isNvidia,
-    });
+    );
   }
 
-  // Verified Fallback Candidates (Google Gemini -> Groq -> Cohere -> OpenRouter -> NVIDIA)
-  if (
-    env.GEMINI_API_KEY &&
-    !candidates.some((c) => c.name === 'Google Gemini')
-  ) {
-    candidates.push({
-      name: 'Google Gemini',
-      baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
-      key: env.GEMINI_API_KEY.split(',')[0].trim(),
-      model: 'gemini-3.6-flash',
-      isNvidia: false,
-    });
-  }
-  if (env.GROQ_API_KEY && !candidates.some((c) => c.name === 'Groq Cloud')) {
-    candidates.push({
-      name: 'Groq Cloud',
-      baseUrl: 'https://api.groq.com/openai/v1',
-      key: env.GROQ_API_KEY.split(',')[0].trim(),
-      model: 'qwen/qwen3.8-27b',
-      isNvidia: false,
-    });
-  }
-  if (
-    env.OPENROUTER_API_KEY &&
-    !candidates.some((c) => c.name === 'OpenRouter')
-  ) {
-    candidates.push({
-      name: 'OpenRouter',
-      baseUrl: 'https://openrouter.ai/api/v1',
-      key: env.OPENROUTER_API_KEY.split(',')[0].trim(),
-      model: 'meta-llama/llama-3.3-70b-instruct',
-      isNvidia: false,
-    });
-  }
-  if (env.MISTRAL_API_KEY && !candidates.some((c) => c.name === 'Mistral AI')) {
-    candidates.push({
-      name: 'Mistral AI',
-      baseUrl: 'https://api.mistral.ai/v1',
-      key: env.MISTRAL_API_KEY.split(',')[0].trim(),
-      model: 'open-mistral-7b',
-      isNvidia: false,
-    });
-  }
-  if (env.COHERE_API_KEY && !candidates.some((c) => c.name === 'Cohere')) {
-    candidates.push({
-      name: 'Cohere',
-      baseUrl: 'https://api.cohere.com/v2',
-      key: env.COHERE_API_KEY.split(',')[0].trim(),
-      model: 'command-r-plus-08-2024',
-      isNvidia: false,
-    });
-  }
-  if (env.NVIDIA_API_KEY && !candidates.some((c) => c.name === 'NVIDIA NIM')) {
-    candidates.push({
-      name: 'NVIDIA NIM',
-      baseUrl: 'https://integrate.api.nvidia.com/v1',
-      key: env.NVIDIA_API_KEY.split(',')[0].trim(),
-      model: 'meta/llama-3.2-11b-vision-instruct',
-      isNvidia: true,
-    });
-  }
-  if (env.CEREBRAS_API_KEY && !candidates.some((c) => c.name === 'Cerebras')) {
-    candidates.push({
-      name: 'Cerebras',
-      baseUrl: 'https://api.cerebras.ai/v1',
-      key: env.CEREBRAS_API_KEY.split(',')[0].trim(),
-      model: 'gpt-oss-120b',
-      isNvidia: false,
-    });
-  }
-  if (
-    env.SAMBANOVA_API_KEY &&
-    !candidates.some((c) => c.name === 'SambaNova')
-  ) {
-    candidates.push({
-      name: 'SambaNova',
-      baseUrl: 'https://api.sambanova.ai/v1',
-      key: env.SAMBANOVA_API_KEY.split(',')[0].trim(),
-      model: 'Meta-Llama-3.3-70B-Instruct',
-      isNvidia: false,
-    });
-  }
-  if (env.AION_API_KEY && !candidates.some((c) => c.name === 'AionLabs')) {
-    candidates.push({
-      name: 'AionLabs',
-      baseUrl: 'https://api.aionlabs.ai/v1',
-      key: env.AION_API_KEY.split(',')[0].trim(),
-      model: 'aion-3.0',
-      isNvidia: false,
-    });
-  }
-  if (env.REQUESTY_API_KEY && !candidates.some((c) => c.name === 'Requesty')) {
-    candidates.push({
-      name: 'Requesty',
-      baseUrl: 'https://router.requesty.ai/v1',
-      key: env.REQUESTY_API_KEY.split(',')[0].trim(),
-      model: 'openai/gpt-4o-mini',
-      isNvidia: false,
-    });
-  }
-  if (
-    env.TOGETHER_API_KEY &&
-    !candidates.some((c) => c.name === 'Together AI')
-  ) {
-    candidates.push({
-      name: 'Together AI',
-      baseUrl: 'https://api.together.xyz/v1',
-      key: env.TOGETHER_API_KEY.split(',')[0].trim(),
-      model: 'meta-llama/Llama-3.3-70B-Instruct-Turbo',
-      isNvidia: false,
-    });
-  }
-  if (
-    env.MANIFEST_API_KEY &&
-    !candidates.some((c) => c.name === 'Manifest Gateway')
-  ) {
-    candidates.push({
-      name: 'Manifest Gateway',
-      baseUrl: 'https://app.manifest.build/v1',
-      key: env.MANIFEST_API_KEY.split(',')[0].trim(),
-      model: 'auto',
-      isNvidia: false,
-    });
-  }
+  // 4. All other configured providers added as verified resilient fallbacks
+  if (env.GEMINI_API_KEY)
+    addCandidate(
+      'Google Gemini',
+      'https://generativelanguage.googleapis.com/v1beta/openai',
+      env.GEMINI_API_KEY,
+      reqClean,
+    );
+  if (env.GROQ_API_KEY)
+    addCandidate(
+      'Groq Cloud',
+      'https://api.groq.com/openai/v1',
+      env.GROQ_API_KEY,
+      reqClean,
+    );
+  if (env.CEREBRAS_API_KEY)
+    addCandidate(
+      'Cerebras',
+      'https://api.cerebras.ai/v1',
+      env.CEREBRAS_API_KEY,
+      reqClean,
+    );
+  if (env.MISTRAL_API_KEY)
+    addCandidate(
+      'Mistral AI',
+      'https://api.mistral.ai/v1',
+      env.MISTRAL_API_KEY,
+      reqClean,
+    );
+  if (env.COHERE_API_KEY)
+    addCandidate(
+      'Cohere',
+      'https://api.cohere.com/v2',
+      env.COHERE_API_KEY,
+      reqClean,
+    );
+  if (env.NVIDIA_API_KEY)
+    addCandidate(
+      'NVIDIA NIM',
+      'https://integrate.api.nvidia.com/v1',
+      env.NVIDIA_API_KEY,
+      reqClean,
+      true,
+    );
+  if (env.SAMBANOVA_API_KEY)
+    addCandidate(
+      'SambaNova',
+      'https://api.sambanova.ai/v1',
+      env.SAMBANOVA_API_KEY,
+      reqClean,
+    );
+  if (env.TOGETHER_API_KEY)
+    addCandidate(
+      'Together AI',
+      'https://api.together.xyz/v1',
+      env.TOGETHER_API_KEY,
+      reqClean,
+    );
+  if (env.OPENROUTER_API_KEY)
+    addCandidate(
+      'OpenRouter',
+      'https://openrouter.ai/api/v1',
+      env.OPENROUTER_API_KEY,
+      reqClean,
+    );
+  if (env.AION_API_KEY)
+    addCandidate(
+      'AionLabs',
+      'https://api.aionlabs.ai/v1',
+      env.AION_API_KEY,
+      reqClean,
+    );
+  if (env.ZHIPU_API_KEY)
+    addCandidate(
+      'Zhipu (GLM)',
+      'https://open.bigmodel.cn/api/paas/v4',
+      env.ZHIPU_API_KEY,
+      reqClean,
+    );
+  if (env.REQUESTY_API_KEY)
+    addCandidate(
+      'Requesty',
+      'https://router.requesty.ai/v1',
+      env.REQUESTY_API_KEY,
+      reqClean,
+    );
+  if (env.MANIFEST_API_KEY)
+    addCandidate(
+      'Manifest Gateway',
+      'https://app.manifest.build/v1',
+      env.MANIFEST_API_KEY,
+      reqClean,
+    );
 
   return candidates;
 }
@@ -353,14 +698,14 @@ export function getAllActiveSwarmCandidates() {
   }
   if (env.GEMINI_API_KEY) {
     list.push({
-      id: 'gemini-2.0-flash',
-      name: 'Gemini 2.0 Flash',
+      id: 'gemini-2.5-flash',
+      name: 'Gemini 2.5 Flash',
       provider: 'Google Gemini',
       emblem: '🟢',
       role: 'Multimodal & 1M+ Context Intelligence',
       baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
       key: env.GEMINI_API_KEY.split(',')[0].trim(),
-      model: 'gemini-2.0-flash',
+      model: 'gemini-2.5-flash',
       isNvidia: false,
     });
   }
@@ -429,6 +774,148 @@ export function getAllActiveSwarmCandidates() {
       isNvidia: false,
     });
   }
+
+  // If only 1 provider is configured, build a diverse 3-specialist council using models available on that provider
+  if (list.length === 1) {
+    const single = list[0];
+    if (single.provider === 'NVIDIA NIM') {
+      return [
+        {
+          id: 'nvidia/nemotron-3.5-lightning-30b-a3b',
+          name: 'Nemotron 3.5',
+          provider: 'NVIDIA NIM',
+          emblem: '⚡',
+          role: 'Tactical Fast Reasoning',
+          baseUrl: single.baseUrl,
+          key: single.key,
+          model: 'nvidia/nemotron-3.5-lightning-30b-a3b',
+          isNvidia: true,
+        },
+        {
+          id: 'meta/llama-3.3-70b-instruct',
+          name: 'Llama 3.3 70B',
+          provider: 'NVIDIA NIM',
+          emblem: '🧠',
+          role: 'Deep Knowledge & Code',
+          baseUrl: single.baseUrl,
+          key: single.key,
+          model: 'meta/llama-3.3-70b-instruct',
+          isNvidia: true,
+        },
+        {
+          id: 'deepseek-ai/deepseek-r1',
+          name: 'DeepSeek R1',
+          provider: 'NVIDIA NIM',
+          emblem: '🔮',
+          role: 'Chain-of-Thought Logic',
+          baseUrl: single.baseUrl,
+          key: single.key,
+          model: 'deepseek-ai/deepseek-r1',
+          isNvidia: true,
+        },
+      ];
+    }
+    if (single.provider === 'Google Gemini') {
+      return [
+        {
+          id: 'gemini-2.5-flash',
+          name: 'Gemini 2.5 Flash',
+          provider: 'Google Gemini',
+          emblem: '⚡',
+          role: 'Fast Multimodal Reasoning',
+          baseUrl: single.baseUrl,
+          key: single.key,
+          model: 'gemini-2.5-flash',
+          isNvidia: false,
+        },
+        {
+          id: 'gemini-1.5-pro',
+          name: 'Gemini 1.5 Pro',
+          provider: 'Google Gemini',
+          emblem: '🧠',
+          role: 'Deep Analysis & 1M Context',
+          baseUrl: single.baseUrl,
+          key: single.key,
+          model: 'gemini-1.5-pro',
+          isNvidia: false,
+        },
+        {
+          id: 'gemini-1.5-flash',
+          name: 'Gemini 1.5 Flash',
+          provider: 'Google Gemini',
+          emblem: '🚀',
+          role: 'Rapid Verification',
+          baseUrl: single.baseUrl,
+          key: single.key,
+          model: 'gemini-1.5-flash',
+          isNvidia: false,
+        },
+      ];
+    }
+    if (single.provider === 'Groq Cloud') {
+      return [
+        {
+          id: 'qwen/qwen3.8-27b',
+          name: 'Qwen 3.8 27B',
+          provider: 'Groq Cloud',
+          emblem: '⚡',
+          role: 'Ultra-Fast Logic',
+          baseUrl: single.baseUrl,
+          key: single.key,
+          model: 'qwen/qwen3.8-27b',
+          isNvidia: false,
+        },
+        {
+          id: 'llama-3.3-70b-versatile',
+          name: 'Llama 3.3 70B',
+          provider: 'Groq Cloud',
+          emblem: '🧠',
+          role: 'Deep Knowledge & Code',
+          baseUrl: single.baseUrl,
+          key: single.key,
+          model: 'llama-3.3-70b-versatile',
+          isNvidia: false,
+        },
+        {
+          id: 'openai/gpt-oss-20b',
+          name: 'GPT-OSS 20B',
+          provider: 'Groq Cloud',
+          emblem: '🚀',
+          role: 'High-Throughput Reasoning',
+          baseUrl: single.baseUrl,
+          key: single.key,
+          model: 'openai/gpt-oss-20b',
+          isNvidia: false,
+        },
+      ];
+    }
+  }
+
+  // If no specific provider matched but an active key exists, create a default council
+  if (list.length === 0) {
+    const activeKey = resolveEffectiveAiKey();
+    if (activeKey) {
+      const baseUrl =
+        env.NVIDIA_BASE_URL || 'https://integrate.api.nvidia.com/v1';
+      const isNvidia = baseUrl.includes('nvidia.com');
+      return [
+        {
+          id: 'primary',
+          name: isNvidia ? 'Nemotron 3.5' : 'Active Model',
+          provider: isNvidia ? 'NVIDIA NIM' : 'Active Provider',
+          emblem: '⚡',
+          role: 'Primary Tactical Reasoning',
+          baseUrl,
+          key: activeKey,
+          model: isNvidia
+            ? 'nvidia/nemotron-3.5-lightning-30b-a3b'
+            : env.NVIDIA_MODEL || 'auto',
+          isNvidia,
+        },
+      ];
+    }
+  }
+
   return list;
 }
 
@@ -619,13 +1106,35 @@ export function handleNvidiaStatus(req, res) {
 
   const apiKey = resolveEffectiveAiKey();
   const baseUrl = process.env.NVIDIA_BASE_URL || NVIDIA_DEFAULT_BASE_URL;
+  const env = process.env;
+  const activeProviders = [];
+  if (env.NVIDIA_API_KEY) activeProviders.push('NVIDIA NIM');
+  if (env.GEMINI_API_KEY) activeProviders.push('Google Gemini');
+  if (env.GROQ_API_KEY) activeProviders.push('Groq Cloud');
+  if (env.CEREBRAS_API_KEY) activeProviders.push('Cerebras');
+  if (env.MISTRAL_API_KEY) activeProviders.push('Mistral AI');
+  if (env.COHERE_API_KEY) activeProviders.push('Cohere');
+  if (env.SAMBANOVA_API_KEY) activeProviders.push('SambaNova');
+  if (env.TOGETHER_API_KEY) activeProviders.push('Together AI');
+  if (env.OPENROUTER_API_KEY) activeProviders.push('OpenRouter');
+  if (env.AION_API_KEY) activeProviders.push('AionLabs');
+  if (env.ZHIPU_API_KEY) activeProviders.push('Zhipu (GLM)');
+  if (env.CLOUDFLARE_API_KEY) activeProviders.push('Cloudflare');
+  if (env.REQUESTY_API_KEY) activeProviders.push('Requesty');
+  if (env.MANIFEST_API_KEY) activeProviders.push('Manifest Gateway');
+
   res.statusCode = 200;
   res.end(
     JSON.stringify({
-      configured: Boolean(apiKey && apiKey.trim().length > 0),
+      configured: Boolean(
+        (apiKey && apiKey.trim().length > 0) || activeProviders.length > 0,
+      ),
       baseUrl,
       model: process.env.NVIDIA_MODEL || NVIDIA_DEFAULT_MODEL,
       hudModel: process.env.NVIDIA_HUD_MODEL || NVIDIA_DEFAULT_HUD_MODEL,
+      activeProviders,
+      multiProviderReady: activeProviders.length > 1,
+      swarmCount: activeProviders.length,
     }),
   );
 }
