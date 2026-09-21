@@ -9,6 +9,7 @@ const GROUP_LABELS = {
   glonass: 'GLONASS',
   galileo: 'Galileo',
   geo: 'GEO Belt',
+  iceye: 'ICEYE (Imaging)',
   dense: 'Starlink (Dense)',
 };
 

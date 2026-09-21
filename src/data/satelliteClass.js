@@ -41,6 +41,14 @@ export const SATELLITE_CLASSES = Object.freeze({
     color: '#4fd8ff',
     blurb: 'GNSS navigation — GPS, GLONASS, Galileo',
   }),
+  imaging: Object.freeze({
+    label: 'IMAGING',
+    // Mint green — a hue no other class uses, and clear of the military amber
+    // band. Bright enough to find among the LEO dots, but still dimmer than the
+    // STATION class.
+    color: '#5dffa1',
+    blurb: 'Commercial Earth-imaging satellites — ICEYE radar (SAR)',
+  }),
   geo: Object.freeze({
     label: 'GEO',
     // Violet, unchanged. Already the app's "space" semantic (the detection
@@ -72,6 +80,7 @@ export const SATELLITE_CLASSES = Object.freeze({
 export const SATELLITE_CLASS_ORDER = Object.freeze([
   'station',
   'nav',
+  'imaging',
   'geo',
   'visual',
   'comms',
@@ -89,6 +98,7 @@ const GROUP_CLASS = Object.freeze({
   glonass: Object.freeze({ klass: 'nav', subtype: 'GLONASS' }),
   galileo: Object.freeze({ klass: 'nav', subtype: 'GALILEO' }),
   geo: Object.freeze({ klass: 'geo', subtype: null }),
+  iceye: Object.freeze({ klass: 'imaging', subtype: 'ICEYE' }),
   dense: Object.freeze({ klass: 'comms', subtype: 'STARLINK' }),
 });
 

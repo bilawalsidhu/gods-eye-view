@@ -43,7 +43,7 @@ async function settleChip(maxTicks = 50) {
 }
 
 /** Every CelesTrak group the catalog ingests, plus the dense-mode tag. */
-const INGESTED_GROUPS = ['stations', 'visual', 'gps-ops', 'glonass', 'galileo', 'geo', 'dense'];
+const INGESTED_GROUPS = ['stations', 'visual', 'gps-ops', 'glonass', 'galileo', 'geo', 'iceye', 'dense'];
 
 test('every ingested CelesTrak group resolves to a real class', () => {
   // Guards against drift: adding a group to CATALOG_GROUPS without classifying
@@ -64,6 +64,13 @@ test('the three GNSS constellations share one NAV color and split by subtype', (
   assert.equal(satelliteClassLabel('gps-ops'), 'NAV · GPS');
   assert.equal(satelliteClassLabel('glonass'), 'NAV · GLONASS');
   assert.equal(satelliteClassLabel('galileo'), 'NAV · GALILEO');
+});
+
+test('ICEYE satellites form their own IMAGING class, not NAV or VISUAL', () => {
+  assert.equal(satelliteClassLabel('iceye'), 'IMAGING · ICEYE');
+  assert.equal(satelliteClassColor('iceye'), SATELLITE_CLASSES.imaging.color);
+  assert.notEqual(satelliteClassColor('iceye'), satelliteClassColor('visual'));
+  assert.notEqual(satelliteClassColor('iceye'), satelliteClassColor('gps-ops'));
 });
 
 test('class labels name the type, and the ISS names itself', () => {
