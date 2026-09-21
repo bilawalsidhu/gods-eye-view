@@ -1,5 +1,16 @@
 # Changelog
 
+- Bound what a caller can grow through `/api/terrain/heights`. Every distinct
+  5-decimal point was a permanent in-memory entry, a permanent line in an
+  uncapped `.gev-cache/terrain-heights.json`, and a live upstream call, with
+  nothing limiting the rate and only a finite-number check on the coordinates.
+  Coordinates outside WGS-84 range are now rejected with `400`, the point cache
+  holds at most 50,000 entries and evicts oldest-first, a cache file above
+  24 MB is not read back, and the route is limited to 90 requests/minute per
+  client (270 global). Evicting a point costs one refetch, never a wrong
+  answer, since terrain does not move. Ordinary use is unaffected: a full
+  `test:track` run drives 10 requests, peaking at 8/min.
+
 - Enable responsive trackpad pinch zoom on the globe. Browser pixel-mode
   `Ctrl+wheel` pinch gestures now reach Cesium with bounded amplification,
   while ordinary wheel, line-mode and touch-pinch inputs retain their existing
