@@ -2084,17 +2084,22 @@ requires a re-measured baseline using the same metrics as 10.1/11.1
 so trend lines stay comparable.
 
 **R1 — QA determinism library (P1, small, do first).**
-`scripts/lib/` holds one module today (`webglLaunchArgs.mjs`). Extract
-this cycle's proven pattern into `scripts/lib/headlessFrames.mjs`:
-`installCompositorFramePump(page)`, `waitForLaidOutRect(page, id,
-{attempts})`, and a `waitForStable(sampleFn, {interval, samples})`
-helper. Migrate the suites with class-driven-reveal or rAF-coupled
-assertions (qa-cockpit-utility, qa-cctv-v2, qa-labels, plus any RUN 3
-suite that needs it). Add a lint/grep guard that fails CI on
-`setTimeout`-immediately-before-rect-read in `scripts/qa-*.mjs` (the
-sleep-then-measure smell). Acceptance: library exists with JSDoc, ≥3
-suites migrated, grep guard green, and the pattern is documented in
-the scripts README header.
+~~Extract this cycle's proven pattern into
+`scripts/lib/headlessFrames.mjs`…~~ DONE 2026-09-20 (executed
+early, same cycle): `scripts/lib/headlessFrames.mjs` carries
+`installCompositorFramePump` / `waitForLaidOutRect` /
+`waitForStable` with the failure class documented in its header;
+qa-radio, qa-cables-shot, qa-cockpit-utility and qa-labels are
+migrated (the latter three because RUN 3c caught them carrying the
+same latent hang — cables-shot's 240-tick rAF settle, two double-rAF
+waits in cockpit-utility, and labels' rAF sample loop, all of which
+never fire on a settled scene). A `sleep-then-rect` grep guard was
+prototyped for CI and REJECTED as too noisy: all six raw hits are
+legitimate (each is preceded by a forced frame or samples an
+animation over time). The enforceable guard is
+`src/headlessFramesContract.test.mjs`: no suite may redefine the
+helpers inline, and any suite driving the pump binding must import
+its installer — single source, so the contract cannot drift.
 
 **R2 — Coverage ratchet schedule toward the 99% line (P1,
 mechanical).** Floors today: lines 91 / statements 91 / functions 90 /
@@ -2109,15 +2114,15 @@ abandoned number. Acceptance per wave: floors and tests in one commit,
 `test:coverage` green locally and in GitForge CI.
 
 **R3 — Quiet-window QA wrapper as first-class tooling (P1, tiny).**
-This cycle's ad-hoc `run3c-wait-quiet.sh` becomes
-`scripts/qa-when-quiet.mjs`: poll /proc/loadavg (or a `--max-load`
-flag), then execute a suite list with the orchestrator's argv
-contract, writing one tally log. Paired with a flake-taxonomy section
-in the QA orchestrator's header comment (ERR_NETWORK_CHANGED /
-protocolTimeout / waitFor-timeout / perf-bar classes and their
-quiet-box re-run policy) so triage starts from the classification.
-Acceptance: wrapper used for one full orchestrator pass; taxonomy
-documented where qa-all.mjs already documents its ENV-GATED class.
+~~This cycle's ad-hoc `run3c-wait-quiet.sh` becomes
+`scripts/qa-when-quiet.mjs`…~~ DONE 2026-09-20 (executed early,
+same cycle): the wrapper polls /proc/loadavg against `--max-load`
+and runs suites with the orchestrator's argv/timeout contracts,
+which moved to `scripts/lib/qaSuiteContracts.mjs` so the two
+entrypoints cannot drift; qa-all's header now carries the five-class
+flake taxonomy (contention, transport, rAF starvation, harness
+drift, real defect). Acceptance (one full pass through the wrapper)
+is pending: RUN 3c's quiet re-runs will go through it.
 
 **R4 — Module-boundary audit round 2 (P2).** The Batch 5 ui.js split
 (10,500 → 6,438 lines) proved the seam-by-banner method. Next
