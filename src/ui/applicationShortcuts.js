@@ -24,6 +24,26 @@ export function bindApplicationShortcuts({
   actions,
 }) {
   const onKeyDown = (event) => {
+    if (
+      event.key.toLowerCase() === 'k' &&
+      (event.ctrlKey || event.metaKey) &&
+      !event.altKey &&
+      !event.shiftKey
+    ) {
+      if (
+        event.defaultPrevented ||
+        event.isComposing ||
+        event.target?.matches?.('select, input, textarea') ||
+        event.target?.isContentEditable ||
+        event.target === searchInput
+      )
+        return;
+      if (actions.focusLayerFinder) {
+        event.preventDefault();
+        actions.focusLayerFinder();
+      }
+      return;
+    }
     const isFormControl =
       event.target?.matches?.('select, input, textarea') ||
       event.target === searchInput;

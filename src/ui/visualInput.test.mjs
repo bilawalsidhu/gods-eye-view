@@ -57,6 +57,7 @@ function shortcuts() {
     'toggleOrbit',
     'toggleCleanView',
     'toggleLayers',
+    'focusLayerFinder',
     'cycleDetection',
     'toggleCctv',
   ];
@@ -123,6 +124,32 @@ test('shortcut extraction does not change repeat or modifier policy', () => {
   const f = shortcuts();
   f.press('h', new Element(), { repeat: true, ctrlKey: true });
   assert.deepEqual(f.calls, [['toggleHud']]);
+});
+
+test('Layer Finder shortcut accepts Control/Meta and respects editing and claimed events', () => {
+  const f = shortcuts();
+  let prevented = 0;
+  const preventDefault = () => prevented++;
+  f.press('k', new Element(), { ctrlKey: true, preventDefault });
+  f.press('K', new Element(), { metaKey: true, preventDefault });
+  assert.deepEqual(f.calls, [['focusLayerFinder'], ['focusLayerFinder']]);
+  for (const tag of ['INPUT', 'SELECT', 'TEXTAREA'])
+    f.press('k', new Element(tag), { ctrlKey: true, preventDefault });
+  const editable = new Element();
+  editable.isContentEditable = true;
+  f.press('k', editable, { metaKey: true, preventDefault });
+  for (const flag of ['defaultPrevented', 'isComposing', 'altKey', 'shiftKey'])
+    f.press('k', new Element(), {
+      ctrlKey: true,
+      [flag]: true,
+      preventDefault,
+    });
+  f.press('k');
+  assert.equal(f.calls.length, 2);
+  assert.equal(prevented, 2);
+  f.controller.destroy();
+  f.press('k', new Element(), { ctrlKey: true, preventDefault });
+  assert.equal(f.calls.length, 2);
 });
 
 test('destroy synchronously removes shortcuts and a replacement binds once', () => {
