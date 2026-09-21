@@ -1806,87 +1806,119 @@ try {
   );
 
   await ensureCockpitSession();
-  const portalScroll = await page.evaluate(async () => {
+  // The portal round-trip probe used to be ONE evaluate with in-page
+  // `waitFrames()` between phases — but every `__qaForceCompositorFrame` is
+  // a Node→page screenshot roundtrip (headlessFrames.mjs), and ~16 of them
+  // inside a single evaluate pushed that one call past its own 300 s
+  // protocolTimeout under a load burst (run3h: the same code that finished
+  // inside run3g's 9.6 min timed out at 7.0). protocolTimeout bounds ONE
+  // CDP call, not a loop: the phases run as short evaluates, the pump
+  // happens in NODE between them, and the probe state rides on
+  // `window.__qaPortalProbe`.
+  const pumpFrames = async (frames = 2) => {
+    for (let i = 0; i < frames; i += 1) await page.screenshot({ optimizeForSpeed: true });
+  };
+  await page.evaluate(() => {
     const manager = window.__godsEyeView.styleManager;
     const standard = document.getElementById('pp-toggles');
     const cockpit = document.getElementById('cockpit-display-panel');
-    // Pumped, not double-rAF: on a settled scene no BeginFrames flow, so a
-    // rAF-chain wait hangs until the protocol timeout (headlessFrames.mjs).
-    const waitFrames = async () => {
-      for (let i = 0; i < 2; i += 1) await window.__qaForceCompositorFrame?.();
-    };
     // Scroll-event trace: identifies which move/restore produces the final
     // cockpit offset when the round trip drifts.
-    const trace = [];
-    let tracePhase = 'prep';
+    window.__qaPortalTrace = [];
+    const probeState = { phase: 'prep', prior: {} };
+    window.__qaPortalProbe = probeState;
     cockpit.addEventListener('scroll', () => {
-      trace.push(`cockpit=${cockpit.scrollTop} owner=${JSON.stringify(manager._displayPortalScrollRestoreOwner)}`
-        + ` active=${manager._cockpitDisplayPortalActive} saved=${manager._cockpitDisplayScrollTop} phase=${tracePhase}`);
+      window.__qaPortalTrace.push(`cockpit=${cockpit.scrollTop} owner=${JSON.stringify(manager._displayPortalScrollRestoreOwner)}`
+        + ` active=${manager._cockpitDisplayPortalActive} saved=${manager._cockpitDisplayScrollTop} phase=${probeState.phase}`);
     }, { passive: true });
-    const priorStandardMaxHeight = standard.style.maxHeight;
-    const priorStandardHeight = standard.style.height;
-    const priorStandardOverflow = standard.style.overflowY;
-    const priorCockpitMaxHeight = cockpit.style.maxHeight;
-    const priorCockpitHeight = cockpit.style.height;
-    const priorCockpitOverflow = cockpit.style.overflowY;
-    const standardWasCollapsed = standard.classList.contains('collapsed');
+    probeState.prior = {
+      standardMaxHeight: standard.style.maxHeight,
+      standardHeight: standard.style.height,
+      standardOverflow: standard.style.overflowY,
+      cockpitMaxHeight: cockpit.style.maxHeight,
+      cockpitHeight: cockpit.style.height,
+      cockpitOverflow: cockpit.style.overflowY,
+      standardWasCollapsed: standard.classList.contains('collapsed'),
+    };
     manager._setCockpitDisplayPortalActive(false);
     document.body.classList.remove('cockpit-mode');
-    await waitFrames();
+  });
+  await pumpFrames();
+  await page.evaluate(() => {
+    const standard = document.getElementById('pp-toggles');
     standard.classList.remove('collapsed');
     standard.style.height = '120px';
     standard.style.maxHeight = '120px';
     standard.style.overflowY = 'auto';
     standard.scrollTop = Math.min(80, standard.scrollHeight - standard.clientHeight);
-    await waitFrames();
-    const standardBefore = standard.scrollTop;
-    tracePhase = 'activate-1';
+  });
+  await pumpFrames();
+  const standardBefore = await page.evaluate(() => document.getElementById('pp-toggles').scrollTop);
+  await page.evaluate(() => {
+    const manager = window.__godsEyeView.styleManager;
+    window.__qaPortalProbe.phase = 'activate-1';
     document.body.classList.add('cockpit-mode');
     manager._setCockpitDisplayPortalActive(true);
     manager._setCockpitDisclosure('display', true);
-    await waitFrames();
+  });
+  await pumpFrames();
+  await page.evaluate(() => {
+    const cockpit = document.getElementById('cockpit-display-panel');
     cockpit.style.height = '120px';
     cockpit.style.maxHeight = '120px';
     cockpit.style.overflowY = 'auto';
-    tracePhase = 'seed-cockpit-60';
+    window.__qaPortalProbe.phase = 'seed-cockpit-60';
     cockpit.scrollTop = Math.min(60, cockpit.scrollHeight - cockpit.clientHeight);
-    await waitFrames();
-    const cockpitBefore = cockpit.scrollTop;
-    tracePhase = 'deactivate';
+  });
+  await pumpFrames();
+  const cockpitBefore = await page.evaluate(() => document.getElementById('cockpit-display-panel').scrollTop);
+  await page.evaluate(() => {
+    const manager = window.__godsEyeView.styleManager;
+    window.__qaPortalProbe.phase = 'deactivate';
     document.body.classList.remove('cockpit-mode');
     manager._setCockpitDisplayPortalActive(false);
-    await waitFrames();
-    const standardAfter = standard.scrollTop;
-    const standardSaved = manager._standardDisplayScrollTop;
-    const standardClientHeight = standard.clientHeight;
-    const standardScrollHeight = standard.scrollHeight;
-    tracePhase = 'activate-2';
+  });
+  await pumpFrames();
+  const standardRead = await page.evaluate(() => ({
+    standardAfter: document.getElementById('pp-toggles').scrollTop,
+    standardSaved: window.__godsEyeView.styleManager._standardDisplayScrollTop,
+    standardClientHeight: document.getElementById('pp-toggles').clientHeight,
+    standardScrollHeight: document.getElementById('pp-toggles').scrollHeight,
+  }));
+  await page.evaluate(() => {
+    const manager = window.__godsEyeView.styleManager;
+    window.__qaPortalProbe.phase = 'activate-2';
     document.body.classList.add('cockpit-mode');
     manager._setCockpitDisplayPortalActive(true);
     manager._setCockpitDisclosure('display', true);
-    await waitFrames();
-    const cockpitAfter = cockpit.scrollTop;
-    await new Promise((resolve) => setTimeout(resolve, 250));
-    const cockpitSettled = cockpit.scrollTop;
-    standard.style.height = priorStandardHeight;
-    standard.style.maxHeight = priorStandardMaxHeight;
-    standard.style.overflowY = priorStandardOverflow;
-    cockpit.style.height = priorCockpitHeight;
-    cockpit.style.maxHeight = priorCockpitMaxHeight;
-    cockpit.style.overflowY = priorCockpitOverflow;
-    standard.classList.toggle('collapsed', standardWasCollapsed);
-    return {
-      standardBefore,
-      standardAfter,
-      standardSaved,
-      standardClientHeight,
-      standardScrollHeight,
-      cockpitBefore,
-      cockpitAfter,
-      cockpitSettled,
-      trace,
-    };
   });
+  await pumpFrames();
+  const cockpitAfter = await page.evaluate(() => document.getElementById('cockpit-display-panel').scrollTop);
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  const cockpitSettled = await page.evaluate(() => document.getElementById('cockpit-display-panel').scrollTop);
+  await page.evaluate(() => {
+    const prior = window.__qaPortalProbe.prior;
+    const standard = document.getElementById('pp-toggles');
+    const cockpit = document.getElementById('cockpit-display-panel');
+    standard.style.height = prior.standardHeight;
+    standard.style.maxHeight = prior.standardMaxHeight;
+    standard.style.overflowY = prior.standardOverflow;
+    cockpit.style.height = prior.cockpitHeight;
+    cockpit.style.maxHeight = prior.cockpitMaxHeight;
+    cockpit.style.overflowY = prior.cockpitOverflow;
+    standard.classList.toggle('collapsed', prior.standardWasCollapsed);
+  });
+  const portalScroll = {
+    standardBefore,
+    standardAfter: standardRead.standardAfter,
+    standardSaved: standardRead.standardSaved,
+    standardClientHeight: standardRead.standardClientHeight,
+    standardScrollHeight: standardRead.standardScrollHeight,
+    cockpitBefore,
+    cockpitAfter,
+    cockpitSettled,
+    trace: await page.evaluate(() => window.__qaPortalTrace),
+  };
   check(
     'Display portal round trip preserves standard and Cockpit scroll owners',
     portalScroll.standardBefore > 0

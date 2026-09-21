@@ -514,7 +514,12 @@ async function main() {
     // measurement even when there are no non-solve frames in this backend.
     const paintSource = normalFrames.length ? normalFrames : normalFieldFrames;
     const paintP95 = percentile(paintSource.map((sample) => sample.paintMs), 0.95);
-    const paintMax = Math.max(...paintSource.map((sample) => sample.paintMs));
+    // The valve's skip counter is cumulative, so its delta spans ALL frames
+    // in the window — solve frames included. The provocation side of the
+    // check below must therefore read the max across the same population:
+    // run3h showed skips with a non-solve max of 15.2 ms because the >22 ms
+    // paints landed on solve frames this filter excluded.
+    const paintMax = Math.max(...normalFieldFrames.map((sample) => sample.paintMs));
     const throttles = normalSamples.frames.map((sample) => sample.throttleSkipCount).filter(Number.isFinite);
     const throttleDelta = throttles.length ? Math.max(...throttles) - Math.min(...throttles) : 0;
     const normalPlacementOverflow = normalFieldFrames.filter(
