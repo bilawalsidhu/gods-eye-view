@@ -1,5 +1,14 @@
 # Changelog
 
+- Move Google geocoding behind the local server. Forward and reverse lookups now
+  go through `/api/google/geocode` and `/api/google/reverse-geocode` with the
+  server key, joining Places and Street View. Google's Geocoding web service
+  refuses referrer-restricted keys, so the previous browser call left
+  `SECURITY.md`'s advice and working search mutually exclusive: the bundled
+  browser key had to be unrestricted for search to work at all. That key now
+  needs the Map Tiles API only. Keyless sessions and the Photon/Nominatim
+  fallback order are unchanged.
+
 - Enable responsive trackpad pinch zoom on the globe. Browser pixel-mode
   `Ctrl+wheel` pinch gestures now reach Cesium with bounded amplification,
   while ordinary wheel, line-mode and touch-pinch inputs retain their existing

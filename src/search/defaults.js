@@ -40,18 +40,23 @@ export function createDefaultPlaceSearch({
       ...(selected
         ? [selected]
         : [
+            // Google answers through the local proxy, which holds the server
+            // key: its Geocoding web service refuses referrer-restricted keys,
+            // so calling it from here would force the bundled browser key to be
+            // left unrestricted (#363). That key still gates the provider,
+            // because a keyless session must not spend a request to learn it
+            // has no Google: the proxy's "not configured" reads as an
+            // unanswered provider, which stops the chain caching the negative
+            // Photon or Nominatim then produces.
             createGoogleGeocoder({
               request(query, { bias, signal }) {
-                const key = resolveApiKey?.();
-                if (!key) return null;
-                const url = new URL(
-                  endpoints.geocode ||
-                    'https://maps.googleapis.com/maps/api/geocode/json',
+                if (!resolveApiKey?.()) return null;
+                const params = new URLSearchParams({ address: query });
+                if (bias) params.set('bounds', bias);
+                return fetchImpl(
+                  `${endpoints.geocode || '/api/google/geocode'}?${params}`,
+                  { signal },
                 );
-                url.searchParams.set('address', query);
-                url.searchParams.set('key', key);
-                if (bias) url.searchParams.set('bounds', bias);
-                return fetchImpl(url.toString(), { signal });
               },
             }),
             createPhotonGeocoder({ fetchImpl, endpoint: endpoints.photon }),

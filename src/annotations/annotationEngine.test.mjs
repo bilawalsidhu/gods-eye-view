@@ -400,7 +400,7 @@ test('outline upgrade updates the rendered element in place without remove/add',
   };
   let overpassCall = 0;
   globalThis.fetch = async (url) => {
-    if (String(url).startsWith('https://maps.googleapis.com/')) {
+    if (String(url).startsWith('/api/google/geocode')) {
       return { json: async () => ({
         status: 'OK',
         results: [{
