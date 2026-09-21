@@ -21,11 +21,34 @@
  * several default to their own historical port, e.g. qa-attribution-b12 →
  * :4300, so the flag must win). Start the dev server and Xvfb before running;
  * this script does not manage either.
+ *
+ * Flake taxonomy — classify a red into one of these BEFORE touching code
+ * (details and history in docs/PLAN.md 11.1):
+ *   1. CONTENTION — timing bars, waitFor timeouts on live-data capture,
+ *      protocolTimeout, paint p95: fails when the shared box is loaded
+ *      (other tenants), passes solo. Re-run on a quiet box before believing
+ *      it (`scripts/qa-when-quiet.mjs` automates the gate). A red that
+ *      survives a solo re-run is a REAL regression.
+ *   2. TRANSPORT — `net::ERR_NETWORK_CHANGED` and other disconnect-path
+ *      codes on tile/CDN fetches: OS-level network events, no product
+ *      change prevents them. Count and report; never fail on them.
+ *   3. HEADLESS rAF STARVATION — an evaluate that never returns
+ *      (protocolTimeout) or a 0×0/same-tick measurement: a settled scene
+ *      produces no BeginFrames, so rAF-scheduled work sits pending through
+ *      any sleep. Fix with scripts/lib/headlessFrames.mjs (pump + poll the
+ *      real contract), never with a longer sleep.
+ *   4. HARNESS DRIFT — the suite asserts a contract the product legitimately
+ *      changed (e.g. a new optimization gate). Fix the suite in the same
+ *      commit that changes the contract, or the optimization reads as a
+ *      regression.
+ *   5. REAL DEFECT — product failure reproducible solo on a quiet box.
+ *      Blocks release.
  */
 
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { suiteArgv, suiteTimeoutMs } from './lib/qaSuiteContracts.mjs';
 import process from 'node:process';
 
 const argv = process.argv.slice(2);
@@ -43,31 +66,10 @@ const LOG_DIR = path.resolve(getOpt('--log-dir', '.gev-logs/qa-all'));
 
 const SCRIPTS_DIR = path.resolve(path.dirname(new URL(import.meta.url).pathname));
 
-// Per-suite invocation/timeout overrides. Most suites take `[url, --url url]`;
-// the map exists for the few that don't:
-//  - qa-voice-wav reads argv[2] as the app URL and argv[3] as the WAV fixture
-//    path, so a `--url` flag would be mistaken for a fixture path.
-//  - qa-cockpit-plates asserts real-GPU plate rendering unless `--swiftshader`
-//    is passed (its structural-plate mode). This NAS has no GPU, so the
-//    default mode can never pass here; SwiftShader mode still exercises the
-//    full plate pipeline.
-const SUITE_ARGV_OVERRIDES = {
-  'qa-voice-wav.mjs': (baseUrl) => [baseUrl],
-  'qa-cockpit-plates.mjs': (baseUrl) => [baseUrl, '--url', baseUrl, '--swiftshader'],
-};
+// Per-suite invocation/timeout contracts live in `scripts/lib/qaSuiteContracts.mjs`,
+// shared with the quiet-window runner (`scripts/qa-when-quiet.mjs`) so the two
+// entrypoints cannot drift.
 
-// Wall-clock ceiling per suite. The default covers the ordinary harnesses;
-// the two matrix/baseline suites embed long inner waits (qa-l9-matrix even
-// runs `npm test` inside itself) and were measured to need more.
-const SUITE_TIMEOUT_OVERRIDES = {
-  // Measured 2026-09-16 on the shared NAS box under software WebGL: 4500 s
-  // still ended the run after D8 (≈82 min through D8 under the concurrent
-  // dsc load bursts), while the morning run's D9-D12 tail took ≈4 min
-  // (D8 log 12:49:36 → overlay-baseline json 12:52:41) — ≈86 min total.
-  // 95 min keeps ≈9 min of headroom for load swings.
-  'qa-l9-matrix.mjs': 5_700_000,
-  'qa-overlay-baseline.mjs': 1_800_000,
-};
 
 // Suites that exit nonzero with a self-declared key gate ("Server has no X
 // key — run against the keyed dev server") cannot run on this machine by
@@ -89,10 +91,8 @@ function discoverSuites() {
 
 function runSuite(suite) {
   return new Promise((resolve) => {
-    const extraArgs = SUITE_ARGV_OVERRIDES[suite]
-      ? SUITE_ARGV_OVERRIDES[suite](BASE_URL)
-      : [BASE_URL, '--url', BASE_URL];
-    const timeoutMs = SUITE_TIMEOUT_OVERRIDES[suite] ?? SUITE_TIMEOUT_MS;
+    const extraArgs = suiteArgv(suite, BASE_URL);
+    const timeoutMs = suiteTimeoutMs(suite, SUITE_TIMEOUT_MS);
     const child = spawn(
       process.execPath,
       [path.join(SCRIPTS_DIR, suite), ...extraArgs],
