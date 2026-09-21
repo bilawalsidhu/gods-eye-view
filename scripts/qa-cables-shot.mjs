@@ -6,6 +6,7 @@
  */
 import puppeteer from 'puppeteer';
 import { mkdirSync } from 'node:fs';
+import { installCompositorFramePump } from './lib/headlessFrames.mjs';
 
 const argv = process.argv;
 const url = argv.includes('--url') ? argv[argv.indexOf('--url') + 1] : 'http://localhost:4214';
@@ -24,6 +25,10 @@ const browser = await puppeteer.launch({
 });
 try {
   const page = await browser.newPage();
+  // A settled scene stops producing BeginFrames, so neither the boot waits
+  // below nor the 240-frame settle would ever observe a tick — pump frames
+  // from Node instead of hoping rAF flows (headlessFrames.mjs header).
+  await installCompositorFramePump(page);
   await page.setViewport({ width: 1440, height: 860 });
   await page.goto(url, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => Boolean(window.__godsEyeView?.viewer), { timeout: 90_000 });
@@ -54,16 +59,22 @@ try {
         orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
       });
     }, view);
-    // Let the sweep + labels settle with frames flowing.
-    await page.evaluate(() => new Promise((resolve) => {
+    // Let the sweep + labels settle. Each forced frame services the pending
+    // requestRender — the original 240-tick `requestAnimationFrame` chain
+    // hung forever here: on a settled scene the compositor produces no
+    // BeginFrames, so the FIRST rAF of the chain never fired and the
+    // evaluate ran into its 300 s protocolTimeout.
+    await page.evaluate(async () => {
       const v = window.__godsEyeView.viewer;
-      let ticks = 0;
-      const tick = () => {
+      for (let ticks = 0; ticks < 240; ticks += 1) {
         v.scene.requestRender?.();
-        if (++ticks < 240) requestAnimationFrame(tick); else resolve();
-      };
-      requestAnimationFrame(tick);
-    }));
+        if (typeof window.__qaForceCompositorFrame === 'function') {
+          await window.__qaForceCompositorFrame();
+        } else {
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+        }
+      }
+    });
     await new Promise((r) => setTimeout(r, 1_000));
     const path = new URL(`../qa-shots/cables-${tag}-${view.name}.png`, import.meta.url).pathname;
     await page.screenshot({ path });
