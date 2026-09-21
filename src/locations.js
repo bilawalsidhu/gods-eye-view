@@ -1,3 +1,4 @@
+import { createOverpassFeatureSource } from './sources/overpassFeatures.js';
 import { applicationServices } from './services/application.js';
 import * as Cesium from 'cesium';
 import {
@@ -891,7 +892,18 @@ export async function searchAndFlyTo(viewer, query, options = {}) {
 
   const shouldResolveBuilding = navigationMode === 'precise-place';
   const buildingBounds = shouldResolveBuilding
-    ? await resolveBuildingBounds(lat, lng, query, options.boundaries)
+    ? await resolveBuildingBounds(
+        lat,
+        lng,
+        query,
+        options.features ??
+          (options.boundaries
+            ? createOverpassFeatureSource({
+                boundarySource: options.boundaries,
+              })
+            : undefined),
+        options.signal,
+      )
     : null;
   const range = requestedRange || defaultRangeForNavigationMode(navigationMode);
   if (!mayFly()) return CANCELLED_SEARCH;
@@ -1340,36 +1352,22 @@ async function resolveBuildingBounds(
   lat,
   lon,
   query,
-  boundaries = applicationServices.boundaries,
+  features = applicationServices.features,
+  signal,
 ) {
-  const overpassQuery = `
-    [out:json][timeout:10];
-    (
-      way(around:180,${lat},${lon})["building"];
-      relation(around:180,${lat},${lon})["building"];
-      way(around:180,${lat},${lon})["man_made"];
-      relation(around:180,${lat},${lon})["man_made"];
-      way(around:180,${lat},${lon})["tourism"="attraction"];
-      relation(around:180,${lat},${lon})["tourism"="attraction"];
-    );
-    out tags center geom;
-  `;
-  const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 6000);
   try {
-    const elements = await boundaries.query(overpassQuery, {
-      signal: controller.signal,
-    });
+    const candidates = await features.getFocusFootprints(
+      { lat, lon },
+      { signal },
+    );
     return selectBuildingBounds(
-      Array.isArray(elements) ? elements : [],
+      Array.isArray(candidates) ? candidates : [],
       lat,
       lon,
       query,
     );
   } catch {
     return null;
-  } finally {
-    window.clearTimeout(timeout);
   }
 }
 
@@ -1377,11 +1375,11 @@ function selectBuildingBounds(elements, targetLat, targetLon, query) {
   const queryWords = normalizedWords(query);
   const candidates = [];
   for (const element of elements) {
-    const coordinates = elementCoordinates(element);
+    const coordinates = element.coordinates;
     if (coordinates.length < 3) continue;
     const bounds = coordinateBounds(coordinates, targetLat);
     if (!bounds || bounds.width < 2 || bounds.depth < 2) continue;
-    const tags = element.tags || {};
+    const names = element.names;
     const center = element.center || averageCoordinate(coordinates);
     const distanceM = approximateDistanceM(
       targetLat,
@@ -1390,22 +1388,24 @@ function selectBuildingBounds(elements, targetLat, targetLon, query) {
       center.lon,
     );
     const nameWords = normalizedWords(
-      [tags.name, tags['name:en'], tags.official_name, tags.alt_name]
+      [names.primary, names.english, names.official, names.alternate]
         .filter(Boolean)
         .join(' '),
     );
     const nameScore = wordOverlap(queryWords, nameWords);
     const containsTarget = pointInPolygon(targetLon, targetLat, coordinates);
-    const height = buildingHeightFromTags(tags, bounds);
+    const height =
+      element.heightM ??
+      Math.max(12, Math.min(80, Math.max(bounds.width, bounds.depth) * 0.8));
     candidates.push({
       lat: center.lat,
       lon: center.lon,
       height,
       width: bounds.width,
       depth: bounds.depth,
-      osmName: tags.name || tags['name:en'] || null,
-      osmType: element.type,
-      osmId: element.id,
+      osmName: names.primary || names.english || null,
+      osmType: element.provenance?.type,
+      osmId: element.provenance?.id,
       score: nameScore * 1000 + (containsTarget ? 500 : 0) - distanceM,
     });
   }
@@ -1413,22 +1413,6 @@ function selectBuildingBounds(elements, targetLat, targetLon, query) {
   candidates.sort((a, b) => b.score - a.score);
   const { score, ...best } = candidates[0];
   return best;
-}
-
-function elementCoordinates(element) {
-  if (Array.isArray(element.geometry)) {
-    return element.geometry.filter(
-      (point) => Number.isFinite(point?.lat) && Number.isFinite(point?.lon),
-    );
-  }
-  if (!Array.isArray(element.members)) return [];
-  return element.members.flatMap((member) =>
-    Array.isArray(member.geometry)
-      ? member.geometry.filter(
-          (point) => Number.isFinite(point?.lat) && Number.isFinite(point?.lon),
-        )
-      : [],
-  );
 }
 
 function coordinateBounds(coordinates, latitude) {
@@ -1442,22 +1426,6 @@ function coordinateBounds(coordinates, latitude) {
     width: approximateDistanceM(latitude, west, latitude, east),
     depth: approximateDistanceM(south, west, north, west),
   };
-}
-
-function buildingHeightFromTags(tags, bounds) {
-  const explicitHeight = parseMeters(tags.height || tags['building:height']);
-  if (explicitHeight) return explicitHeight;
-  const levels = Number.parseFloat(tags['building:levels']);
-  const roofHeight = parseMeters(tags['roof:height']) || 0;
-  if (Number.isFinite(levels) && levels > 0) return levels * 3.3 + roofHeight;
-  return Math.max(12, Math.min(80, Math.max(bounds.width, bounds.depth) * 0.8));
-}
-
-function parseMeters(value) {
-  if (value == null) return 0;
-  const number = Number.parseFloat(String(value).replace(',', '.'));
-  if (!Number.isFinite(number) || number <= 0) return 0;
-  return /\b(ft|feet|foot)\b/i.test(String(value)) ? number * 0.3048 : number;
 }
 
 function averageCoordinate(coordinates) {

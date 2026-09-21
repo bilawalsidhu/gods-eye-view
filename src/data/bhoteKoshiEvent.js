@@ -1000,6 +1000,8 @@ export function createBhoteKoshiEventLayer({
   let _sceneMediaPlaybackBeatId = null;
   let _sceneMediaPlaybackCompletedBeatId = null;
   let _sceneMediaPlaybackTimer = null;
+  let _sceneMediaOwner = null;
+  let _removeSceneMediaAbort = null;
   let _witnessEmbedActive = false;
   let _sceneRevealAnimationFrame = null;
   let _sceneRevealHoldActive = false;
@@ -1261,8 +1263,41 @@ export function createBhoteKoshiEventLayer({
     return true;
   }
 
+  // Playback authority is supplied by the Director, never restored from params.
+  function setSceneMediaPlayback(owner = null) {
+    _removeSceneMediaAbort?.();
+    _removeSceneMediaAbort = null;
+    _sceneMediaOwner = owner;
+    stopSceneMediaPlayback();
+    releaseEvidenceVideo({ restorePoster: false });
+    _embeddedMedia?.hide?.({ immediate: true });
+    _embeddedEvidenceIndex = -1;
+    _sceneMediaPlaybackCompletedBeatId = null;
+    if (owner?.token?.signal) {
+      const signal = owner.token.signal;
+      const cancel = () => setSceneMediaPlayback();
+      if (signal.aborted) cancel();
+      else {
+        signal.addEventListener('abort', cancel, { once: true });
+        _removeSceneMediaAbort = () =>
+          signal.removeEventListener('abort', cancel);
+      }
+    }
+  }
+
+  function sceneMediaPlaybackActive() {
+    return (
+      _sceneMediaOwner != null &&
+      !_sceneMediaOwner.token.cancelled &&
+      !_sceneMediaOwner.token.signal?.aborted &&
+      _sceneMediaOwner.sceneId === _sceneContext?.sceneId &&
+      _sceneMediaOwner.shotId === _sceneContext?.shotId
+    );
+  }
+
   function sceneEvidenceMediaAutoplays() {
     return (
+      sceneMediaPlaybackActive() &&
       _presentation === BHOTE_KOSHI_SCENE_PRESENTATION &&
       _sceneSurface === BHOTE_KOSHI_SCENE_EVIDENCE_BEAT &&
       _sceneControls.evidenceMediaAutoplay === true &&
@@ -1333,7 +1368,7 @@ export function createBhoteKoshiEventLayer({
     stopSceneMediaPlayback({ pauseMedia: false });
     _sceneMediaPlaybackBeatId = beatId;
     _embeddedMedia?.play?.();
-    if (sceneUsesTrimmedMedia(beatId)) {
+    if (sceneUsesTrimmedMedia(beatId) && _embeddedEvidenceIndex === index) {
       const deadline = Date.now() + 18000;
       const check = () => {
         if (
@@ -1414,6 +1449,14 @@ export function createBhoteKoshiEventLayer({
       !sceneEvidenceMediaAutoplays() ||
       !sceneUsesTrimmedMedia(beatId)
     )
+      return null;
+    const media = _evidenceTimeline.find(
+      (item) => item.observation?.id === beatId,
+    )?.observation?.media;
+    // Deliberate provider suppression is a source card, not a player waiting
+    // to load. Returning no gate selects the Director's authored card dwell.
+    // A local clip still owns playback; a starting supported provider still waits.
+    if (_embeddedMedia?.supportsPlayback === false && !media?.videoPath)
       return null;
     return {
       pending:
@@ -2103,6 +2146,7 @@ export function createBhoteKoshiEventLayer({
       releaseEvidenceVideo();
       _embeddedEvidenceIndex = -1;
       const warmingEvidence =
+        sceneMediaPlaybackActive() &&
         _presentation === BHOTE_KOSHI_SCENE_PRESENTATION &&
         _sceneSurface === BHOTE_KOSHI_SCENE_EVIDENCE_BEAT;
       // Keep the same preload across camera frames; stop/disable still cancels it.
@@ -3476,6 +3520,7 @@ export function createBhoteKoshiEventLayer({
   }
 
   async function disable() {
+    setSceneMediaPlayback();
     _enabled = false;
     ++_comparisonSurfaceGeneration;
     _mapStackController?.clearTerrainComparison?.();
@@ -3770,6 +3815,7 @@ export function createBhoteKoshiEventLayer({
     setParams,
     getParams,
     getSceneShotMediaHold,
+    setSceneMediaPlayback,
     getStats() {
       return {
         count: _enabled ? 1 : 0,

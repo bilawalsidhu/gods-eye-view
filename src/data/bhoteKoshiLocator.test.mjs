@@ -5,6 +5,8 @@ import { INCIDENT_OVERVIEW_HOLD_SEC, INCIDENT_OVERVIEW_PLACES } from './bhoteKos
 import { BHOTE_KOSHI_FLOOD_PATH } from './bhoteKoshiFloodPath.js';
 import * as Cesium from 'cesium';
 import { SceneDirector } from '../scenes/director.js';
+import { createPlaybackClock } from '../director/clock.js';
+import { createDefaultScenePacks } from '../scenes/packs/defaults.js';
 import {
   anchoredCalloutPresentation,
   BHOTE_KOSHI_CITY_CONTEXT_PRESENTATION,
@@ -503,11 +505,14 @@ for (const phase of ['timer', 'move-end', 'approach', 'orbit']) {
       ...nonRunningAnimation(),
     });
     const director = {
+      _clock: createPlaybackClock({ isRunning: () => false, timingForShot: () => null, onProgress() {} }),
+      _scenePacks: createDefaultScenePacks(),
       dataManager: { layers: new Map([[layer.id, { module: layer }]]) },
       viewer,
       _sceneSeekGeneration: 0,
       _loadGeneration: 0,
       _cancelActiveSceneTravel: SceneDirector.prototype._cancelActiveSceneTravel,
+      _setSceneMediaPlayback: SceneDirector.prototype._setSceneMediaPlayback,
     };
     try {
       layer.setParams({ presentation: BHOTE_KOSHI_TRIGGER_RECORD_PRESENTATION });

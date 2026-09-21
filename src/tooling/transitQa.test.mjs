@@ -328,6 +328,7 @@ test('sensor sampler waits for postRender and reads framebuffer pixels; stopped 
     globalThis.Image = previousImage;
   });
   const identity = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+  const readRows = [];
   let listener,
     reads = 0,
     render = true;
@@ -336,6 +337,7 @@ test('sensor sampler waits for postRender and reads framebuffer pixels; stopped 
     UNSIGNED_BYTE: 2,
     readPixels(x, y, w, h, format, type, buffer) {
       reads++;
+      readRows.push(y);
       buffer.set([255, 255, 255, 255]);
     },
   };
@@ -408,13 +410,70 @@ test('sensor sampler waits for postRender and reads framebuffer pixels; stopped 
     },
   };
   const page = { evaluate: async (fn, ...args) => fn(...args) };
+  const sampledLayer =
+    window.__godsEyeView.dataManager.layers.get('transit').module;
+  const originalState = sampledLayer._transitStateForTest;
+  sampledLayer._transitStateForTest = () => {
+    const state = originalState();
+    state._vehicles.get('bus').marker.position.y = 0.0025; // Screen y = 199.5.
+    return state;
+  };
   const pixels = await sampleTransitPixels(page, {});
+  sampledLayer._transitStateForTest = originalState;
+  assert.deepEqual(
+    readRows.slice(0, 9),
+    [201, 200, 199, 201, 200, 199, 201, 200, 199],
+    'fractional CSS coordinates must invert the floored framebuffer row',
+  );
   assert.ok(
     reads >= 13,
     'centre, rings and background come from WebGL readPixels',
   );
   assert.ok(Math.abs(pixels[0].centre - 1) < 1e-6);
   assert.equal(listener, null);
+  // An opaque window/panel is not a sensor core. Choose another solid patch,
+  // and reject a raster with no white interior even though alpha/picking pass.
+  for (let i = 0; i < raster.length; i += 4) raster.fill(0, i, i + 3);
+  assert.equal((await sampleTransitPixels(page, {})).length, 0);
+  raster.fill(255);
+  for (let y = 6; y <= 9; y++)
+    for (let x = 0; x < 16; x++) {
+      const i = (y * 16 + x) * 4;
+      raster.fill(0, i, i + 3);
+    }
+  assert.equal(
+    (await sampleTransitPixels(page, {})).length,
+    1,
+    'a body patch away from the central panel remains eligible',
+  );
+  // A narrow centre can be opaque yet put the framebuffer sample on its
+  // antialiased side. Prefer the wider solid band above it, before reading luma.
+  raster.fill(0);
+  for (let y = 0; y < 16; y++)
+    for (let x = 0; x < 16; x++) {
+      const wide = y >= 3 && y <= 5;
+      if ((wide && x >= 3 && x <= 12) || (x >= 7 && x <= 9))
+        raster.fill(255, (y * 16 + x) * 4, (y * 16 + x + 1) * 4);
+    }
+  const readStart = readRows.length;
+  assert.equal((await sampleTransitPixels(page, {})).length, 1);
+  assert.ok(
+    readRows[readStart] > 204,
+    'centre samples use the widest solid band',
+  );
+  raster.fill(255);
+  sampledLayer._transitStateForTest = () => {
+    const state = originalState();
+    state._vehicles.get('bus').mode = 'tram';
+    return state;
+  };
+  const tramStart = readRows.length;
+  assert.equal((await sampleTransitPixels(page, {})).length, 1);
+  assert.ok(
+    readRows[tramStart] > 204,
+    'equal-width tram bands prefer the upper solid body',
+  );
+  sampledLayer._transitStateForTest = originalState;
   scene.pick = () => ({ id: 'overlapping-label' });
   assert.equal(
     (await sampleTransitPixels(page, {})).length,

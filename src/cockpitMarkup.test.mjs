@@ -408,7 +408,8 @@ test('fresh Cockpit entry temporarily collapses map panels and exit restores the
     assert.match(entryPanels[1], new RegExp(`'${panelId}'`), `${panelId} must collapse on entry`);
   }
 
-  assert.match(ui, /onEntered: \(\) => this\._panelChrome\.enterCockpit\(\)/);
+  assert.match(ui, /onEntered: \(\) => this\.enterPanels\(\)/);
+  assert.match(ui, /enterPanels: \(\) => this\._panelChrome\.enterCockpit\(\)/);
   const callback = { 1: shellMethod('enterCockpit').toString() };
   assert.ok(callback, 'Cockpit onEntered callback is missing');
   assert.match(
@@ -438,7 +439,8 @@ test('fresh Cockpit entry temporarily collapses map panels and exit restores the
     'normal Context must not reopen over Cockpit',
   );
 
-  assert.match(ui, /onExited: \(\) => this\._panelChrome\.exitCockpit\(\)/);
+  assert.match(ui, /onExited: \(\) => this\.exitPanels\(\)/);
+  assert.match(ui, /exitPanels: \(\) => this\._panelChrome\.exitCockpit\(\)/);
   const exitCallback = { 1: shellMethod('exitCockpit').toString() };
   assert.ok(exitCallback, 'Cockpit onExited callback is missing');
   assert.match(

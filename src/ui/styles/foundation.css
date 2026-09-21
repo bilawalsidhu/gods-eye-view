@@ -34,6 +34,10 @@
   --text-primary: #e8f4fc;
   --text-secondary: #d5e4f9;
   --text-dim: #849495;
+
+  /* Opaque surface for browser-painted menus, which cannot use --glass-bg. */
+  --menu-bg: #12121c;
+
   --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   --panel-radius: 14px;
@@ -177,6 +181,26 @@
 ):focus-visible {
   outline: 2px solid var(--text-primary) !important;
   outline-offset: 2px;
+}
+
+/* Native `<select>` popups are painted by the browser, not by this sheet: the
+   closed control inherits its panel skin, but the option list falls back to the
+   platform's light palette unless the control declares a scheme. Declare it on
+   the controls rather than on :root so the app keeps its own hand-tuned
+   scrollbar and input skins, and set the option colors explicitly because the
+   popup surface is not themed on every platform. */
+select {
+  color-scheme: dark;
+}
+
+select option,
+select optgroup {
+  background-color: var(--menu-bg);
+  color: var(--text-primary);
+}
+
+select option:disabled {
+  color: var(--text-dim);
 }
 
 html,

@@ -508,6 +508,7 @@ export function createQueries({
           : state.feed.loadingLabel,
         error: state.feed.error,
         stale: state.feed.stale,
+        partial: state.feed.partial,
         status:
           state.feed.firstConnectPhase === 'unavailable'
             ? 'unavailable'

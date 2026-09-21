@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createApplication } from './application.js';
+import { installTrackpadPinchZoom } from './viewer.js';
 
 const phases = ['Scene', 'Controls', 'Data', 'Tools'];
 function fixture(overrides = {}) {
@@ -216,4 +217,116 @@ test('the separate viewer export imports without constructing a browser viewer',
     await import('gods-eye-view/application/viewer');
   assert.equal(typeof createApplicationViewer, 'function');
   assert.throws(() => createApplicationViewer({}), /containers are required/);
+});
+
+function pinchFixture({ zoomEventTypes } = {}) {
+  const handlers = new Set();
+  const relayed = [];
+  const container = {
+    addEventListener(type, handler, options) {
+      assert.equal(type, 'wheel');
+      assert.deepEqual(options, { capture: true, passive: false });
+      handlers.add(handler);
+    },
+    removeEventListener(type, handler, capture) {
+      assert.equal(type, 'wheel');
+      assert.equal(capture, true);
+      handlers.delete(handler);
+    },
+    emit(event) {
+      for (const handler of handlers) handler(event);
+    },
+  };
+  const canvas = {
+    dispatchEvent(event) {
+      // A real canvas dispatch crosses the container's capture listener again.
+      container.emit(event);
+      relayed.push(event);
+      return true;
+    },
+  };
+  const controller = { zoomEventTypes };
+  const viewer = {
+    container,
+    canvas,
+    scene: { screenSpaceCameraController: controller },
+  };
+  const createEvent = (init = {}) => ({
+    deltaX: 0,
+    deltaY: 0,
+    deltaZ: 0,
+    deltaMode: 0,
+    screenX: 0,
+    screenY: 0,
+    clientX: 0,
+    clientY: 0,
+    ctrlKey: false,
+    defaultPrevented: false,
+    propagationStopped: false,
+    preventDefault() {
+      this.defaultPrevented = true;
+    },
+    stopPropagation() {
+      this.propagationStopped = true;
+    },
+    ...init,
+  });
+  return { viewer, controller, container, handlers, relayed, createEvent };
+}
+
+test('trackpad pinch adds the Ctrl+wheel binding without replacing Cesium inputs', () => {
+  const original = [1, 2, 3];
+  const f = pinchFixture({ zoomEventTypes: original });
+  const dispose = installTrackpadPinchZoom(f.viewer, {
+    createWheelEvent: (_type, init) => f.createEvent(init),
+  });
+  assert.deepEqual(f.controller.zoomEventTypes.slice(0, 3), original);
+  assert.equal(f.controller.zoomEventTypes.length, 4);
+
+  const plain = f.createEvent({ deltaY: 2 });
+  f.container.emit(plain);
+  assert.equal(plain.defaultPrevented, false);
+  const lineMode = f.createEvent({ ctrlKey: true, deltaY: 2, deltaMode: 1 });
+  f.container.emit(lineMode);
+  assert.equal(lineMode.defaultPrevented, false);
+  assert.equal(f.relayed.length, 0);
+
+  dispose();
+  dispose();
+  assert.equal(f.controller.zoomEventTypes, original);
+  assert.equal(f.handlers.size, 0);
+});
+
+test('trackpad pinch relays pixel deltas once with bounded amplification', () => {
+  const f = pinchFixture({ zoomEventTypes: [1, 2, 3] });
+  installTrackpadPinchZoom(f.viewer, {
+    createWheelEvent: (_type, init) => f.createEvent(init),
+  });
+
+  const small = f.createEvent({ ctrlKey: true, deltaY: 2 });
+  f.container.emit(small);
+  assert.equal(small.defaultPrevented, true);
+  assert.equal(small.propagationStopped, true);
+  assert.equal(f.relayed.length, 1);
+  assert.equal(f.relayed[0].deltaY, 16);
+  assert.equal(f.relayed[0].ctrlKey, true);
+
+  const large = f.createEvent({ ctrlKey: true, deltaY: -100 });
+  f.container.emit(large);
+  assert.equal(f.relayed.length, 2);
+  assert.equal(f.relayed[1].deltaY, -120);
+});
+
+test('trackpad pinch falls back to the original event when relay construction fails', () => {
+  const f = pinchFixture({ zoomEventTypes: [1, 2, 3] });
+  installTrackpadPinchZoom(f.viewer, {
+    createWheelEvent() {
+      throw new Error('unsupported');
+    },
+  });
+  const event = f.createEvent({ ctrlKey: true, deltaY: 2 });
+  f.container.emit(event);
+  assert.equal(event.defaultPrevented, false);
+  assert.equal(event.propagationStopped, false);
+  assert.equal(f.relayed.length, 0);
 });

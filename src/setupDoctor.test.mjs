@@ -12,6 +12,7 @@ import {
   isConfiguredValue,
   npmProcessSpec,
   readDoctorDotenvValue,
+  resolveOpenSkyAuthMode,
   resolveCredential,
 } from '../scripts/setup-doctor.mjs';
 
@@ -145,6 +146,67 @@ test('doctor reads the dotenv ladder without requiring Vite to be installed', ()
   }
 });
 
+test('doctor resolves OpenSky auth mode with launcher-compatible precedence', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'gev-doctor-opensky-mode-'));
+  try {
+    writeFileSync(path.join(root, '.env'), 'OPENSKY_AUTH_MODE=anon\n');
+    assert.equal(resolveOpenSkyAuthMode({ environment: {}, rootDir: root }), 'anon');
+    assert.equal(resolveOpenSkyAuthMode({ environment: { OPENSKY_AUTH_MODE: 'oauth' }, rootDir: root }), 'oauth');
+    assert.equal(resolveOpenSkyAuthMode({ environment: { OPENSKY_AUTH_MODE: '' }, rootDir: root }), 'anon');
+    assert.equal(resolveOpenSkyAuthMode({ environment: { OPENSKY_AUTH_MODE: 'invalid' }, rootDir: root }), 'oauth');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('doctor reports keyless anonymous OpenSky access for explicit anon mode', () => {
+  const credentials = {
+    OPENSKY_CLIENT_ID: { configured: true },
+    OPENSKY_CLIENT_SECRET: { configured: true },
+  };
+  assert.equal(
+    buildCapabilitySummary(credentials, { openSkyAuthMode: 'anon' }).flights,
+    'OpenSky keyless anonymous access (rate-limited)',
+  );
+});
+
+test('doctor retains OAuth capability wording for a complete client pair', () => {
+  const credentials = {
+    OPENSKY_CLIENT_ID: { configured: true },
+    OPENSKY_CLIENT_SECRET: { configured: true },
+  };
+  assert.equal(
+    buildCapabilitySummary(credentials, { openSkyAuthMode: 'oauth' }).flights,
+    'OpenSky OAuth credentials present (runtime mode and validity not verified)',
+  );
+});
+
+test('doctor reports Basic mode without inferring runtime auth from OAuth credentials', () => {
+  const oauthCredentials = {
+    OPENSKY_CLIENT_ID: { configured: true },
+    OPENSKY_CLIENT_SECRET: { configured: true },
+  };
+  for (const credentials of [{}, oauthCredentials]) {
+    assert.equal(
+      buildCapabilitySummary(credentials, { openSkyAuthMode: 'basic' }).flights,
+      'OpenSky Basic mode selected (credential presence and validity not verified)',
+    );
+  }
+});
+
+test('doctor reports auto mode without assuming its eventual credential choice', () => {
+  const oauthCredentials = {
+    OPENSKY_CLIENT_ID: { configured: true },
+    OPENSKY_CLIENT_SECRET: { configured: true },
+  };
+  for (const credentials of [{}, oauthCredentials]) {
+    assert.equal(
+      buildCapabilitySummary(credentials, { openSkyAuthMode: 'auto' }).flights,
+      'OpenSky auto mode selected (runtime credential choice and validity not verified)',
+    );
+  }
+});
+
 test('doctor describes the credential ladder without exposing values', () => {
   const credentials = {
     GOOGLE_MAPS_API_KEY: { configured: false },
@@ -163,7 +225,7 @@ test('doctor describes the credential ladder without exposing values', () => {
   assert.match(capabilities.map, /Bing and world-terrain stacks/);
   assert.equal(capabilities.voice, 'available');
   assert.match(capabilities.missions, /token allowance/);
-  assert.equal(capabilities.flights, 'OpenSky OAuth credentials not configured');
+  assert.equal(capabilities.flights, 'OpenSky keyless anonymous access (rate-limited)');
 
   const report = formatSetupReport({
     ready: true,

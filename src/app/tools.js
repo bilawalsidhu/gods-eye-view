@@ -21,6 +21,7 @@ export function createApplicationTools({
   voice = {},
   startChrome,
   onSceneDirector,
+  sceneDataPacks,
   signal,
   defer,
 }) {
@@ -28,6 +29,7 @@ export function createApplicationTools({
   const { styleManager, weatherEffects, cockpitCloudEffects } = controls;
   const { dataManager } = data;
   const sceneDirector = new SceneDirector(viewer, styleManager, dataManager, {
+    dataPacks: sceneDataPacks,
     isMapStackAvailable: (id) =>
       mapStackController?.isStackAvailable(id) === true,
   });

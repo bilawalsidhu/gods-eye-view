@@ -509,6 +509,8 @@
       "src/styles/surveillance.js",
       "src/styles/thermal.js",
       "src/ui/applicationShell.js",
+      "src/ui/locationNavigation.js",
+      "src/ui/cockpitCoordinator.js",
       "src/ui/cameraOrientationControls.js",
       "src/ui/applicationShortcuts.js",
       "src/ui/cctv.js",
@@ -602,7 +604,11 @@
       "src/ai/freeLlmCatalog.js",
       "src/effects/weatherParticles.js",
       "src/export/missionDossier.js",
-      "src/ui/exportControls.js"
+      "src/ui/exportControls.js",
+      "src/ui/aircraftDisplay.js",
+      "src/ui/layerBindings.js",
+      "src/ui/displayBindings.js",
+      "src/ui/shellFacade.js"
     ],
     "external": ["cesium", "satellite.js", "@vladmandic/human"]
   },
@@ -635,6 +641,29 @@
     ],
     "external": []
   },
+  "director": {
+    "exports": ["./director"],
+    "modules": [
+      "src/director/playback.js",
+      "src/director/clock.js",
+      "src/director/timeline.js",
+      "src/director/document.js",
+      "src/director/documentFields.js",
+      "src/director/cameraDocument.js",
+      "src/director/camera.js",
+      "src/director/packs/source.js",
+      "src/director/packs/session.js",
+      "src/director/packs/geojson.js",
+      "src/director/packs/manifest.js",
+      "src/director/interactions/document.js",
+      "src/director/interactions/session.js",
+      "src/director/sharing/bundle.js",
+      "src/director/sharing/preview.js",
+      "src/director/sharing/lifetime.js",
+      "src/director/authoring.js"
+    ],
+    "external": []
+  },
   "scenes": {
     "exports": ["./scenes"],
     "modules": [
@@ -644,6 +673,8 @@
       "src/data/bhoteKoshiFloodPath.js",
       "src/maps/catalog.js",
       "src/scenes/director.js",
+      "src/scenes/playbackAdapter.js",
+      "src/director/playback.js",
       "src/scenes/recipes.js",
       "src/scenes/scenePolicy.js",
       "src/bloom.js",
@@ -651,7 +682,36 @@
       "src/ui/scenes.js",
       "src/ui/sceneControls.js",
       "src/ui/scenePresentation.js",
-      "src/contextModePolicy.js"
+      "src/contextModePolicy.js",
+      "src/director/clock.js",
+      "src/director/timeline.js",
+      "src/scenes/shotPresentation.js",
+      "src/scenes/packs/registry.js",
+      "src/scenes/packs/defaults.js",
+      "src/scenes/packs/nepal.js",
+      "src/director/document.js",
+      "src/scenes/project.js",
+      "src/director/documentFields.js",
+      "src/director/cameraDocument.js",
+      "src/director/camera.js",
+      "src/scenes/cameraMotion.js",
+      "src/director/packs/source.js",
+      "src/director/packs/session.js",
+      "src/director/packs/geojson.js",
+      "src/director/packs/manifest.js",
+      "src/scenes/dataPacks/controller.js",
+      "src/scenes/dataPacks/presentation.js",
+      "src/scenes/dataPacks/geometry.js",
+      "src/director/interactions/document.js",
+      "src/director/interactions/session.js",
+      "src/scenes/interactions.js",
+      "src/data/inputOwnership.js",
+      "src/director/sharing/bundle.js",
+      "src/director/sharing/preview.js",
+      "src/director/sharing/lifetime.js",
+      "src/director/authoring.js",
+      "src/scenes/sharing.js",
+      "src/ui/sceneSharing.js"
     ],
     "external": ["cesium"]
   },
@@ -940,7 +1000,8 @@
       "src/layers/traffic/state.js",
       "src/layers/traffic/style.js",
       "src/layers/traffic/timing.js",
-      "src/layers/traffic/viewport.js"
+      "src/layers/traffic/viewport.js",
+      "src/sources/overpassRoads.js"
     ],
     "external": ["cesium", "pbf", "@mapbox/vector-tile"]
   },
@@ -1134,7 +1195,18 @@
       "src/voice/sessionCommands.js",
       "src/voice/realtimeSession.js",
       "src/voice/nvidiaSession.js",
-      "src/voice/realtimeEvents.js"
+      "src/voice/realtimeEvents.js",
+      "src/voice/realtimePreferences.js",
+      "src/voice/realtimeProtocol.js",
+      "src/voice/realtimeDiagnostics.js",
+      "src/voice/realtimeViewport.js",
+      "src/voice/realtimeInputPolicy.js",
+      "src/voice/realtimeInput.js",
+      "src/voice/realtimeCost.js",
+      "src/voice/realtimeFacade.js",
+      "src/voice/realtimeRadio.js",
+      "src/voice/realtimeTurns.js",
+      "src/voice/realtimeConnection.js"
     ],
     "external": []
   },
@@ -1547,6 +1619,8 @@
       "src/renderGovernor.js",
       "src/rightRailPolicy.js",
       "src/scenes/director.js",
+      "src/scenes/playbackAdapter.js",
+      "src/director/playback.js",
       "src/scenes/recipes.js",
       "src/scenes/scenePolicy.js",
       "src/scopeMask.js",
@@ -1576,6 +1650,8 @@
       "src/styles/surveillance.js",
       "src/styles/thermal.js",
       "src/ui/applicationShell.js",
+      "src/ui/locationNavigation.js",
+      "src/ui/cockpitCoordinator.js",
       "src/ui/cameraOrientationControls.js",
       "src/ui/applicationShortcuts.js",
       "src/ui/cctv.js",
@@ -1739,7 +1815,55 @@
       "src/ai/freeLlmCatalog.js",
       "src/effects/weatherParticles.js",
       "src/export/missionDossier.js",
-      "src/ui/exportControls.js"
+      "src/ui/exportControls.js",
+      "src/sources/featureGeometry.js",
+      "src/sources/overpassFeaturesRecords.js",
+      "src/sources/overpassFeatures.js",
+      "src/sources/featureSource.js",
+      "src/sources/overpassRoads.js",
+      "src/ui/aircraftDisplay.js",
+      "src/ui/layerBindings.js",
+      "src/ui/displayBindings.js",
+      "src/ui/shellFacade.js",
+      "src/voice/realtimePreferences.js",
+      "src/voice/realtimeProtocol.js",
+      "src/voice/realtimeDiagnostics.js",
+      "src/voice/realtimeViewport.js",
+      "src/voice/realtimeInputPolicy.js",
+      "src/voice/realtimeInput.js",
+      "src/voice/realtimeCost.js",
+      "src/voice/realtimeFacade.js",
+      "src/voice/realtimeRadio.js",
+      "src/voice/realtimeTurns.js",
+      "src/voice/realtimeConnection.js",
+      "src/director/clock.js",
+      "src/director/timeline.js",
+      "src/scenes/shotPresentation.js",
+      "src/scenes/packs/registry.js",
+      "src/scenes/packs/defaults.js",
+      "src/scenes/packs/nepal.js",
+      "src/director/document.js",
+      "src/scenes/project.js",
+      "src/director/documentFields.js",
+      "src/director/cameraDocument.js",
+      "src/director/camera.js",
+      "src/scenes/cameraMotion.js",
+      "src/director/packs/source.js",
+      "src/director/packs/session.js",
+      "src/director/packs/geojson.js",
+      "src/director/packs/manifest.js",
+      "src/scenes/dataPacks/controller.js",
+      "src/scenes/dataPacks/presentation.js",
+      "src/scenes/dataPacks/geometry.js",
+      "src/director/interactions/document.js",
+      "src/director/interactions/session.js",
+      "src/scenes/interactions.js",
+      "src/director/sharing/bundle.js",
+      "src/director/sharing/preview.js",
+      "src/director/sharing/lifetime.js",
+      "src/director/authoring.js",
+      "src/scenes/sharing.js",
+      "src/ui/sceneSharing.js"
     ],
     "external": [
       "@mapbox/vector-tile",
@@ -2129,7 +2253,12 @@
       "src/layers/transit/movement.js",
       "src/layers/transit/qaMetrics.js",
       "src/layers/transit/source.js",
-      "src/sources/transitHistory.js"
+      "src/sources/transitHistory.js",
+      "src/sources/featureGeometry.js",
+      "src/sources/overpassFeaturesRecords.js",
+      "src/sources/overpassFeatures.js",
+      "src/sources/featureSource.js",
+      "src/sources/overpassRoads.js"
     ],
     "external": [
       "cesium",
@@ -2178,7 +2307,11 @@
       "src/nominatimGeocode.js",
       "src/data/regionalModel.js",
       "src/sources/httpBody.js",
-      "src/sources/nominatim.js"
+      "src/sources/nominatim.js",
+      "src/sources/featureGeometry.js",
+      "src/sources/overpassFeaturesRecords.js",
+      "src/sources/overpassFeatures.js",
+      "src/sources/featureSource.js"
     ],
     "external": [
       "cesium",
@@ -2196,7 +2329,11 @@
   },
   "ui-navigation": {
     "exports": ["./ui/navigation"],
-    "modules": ["src/navigationPolicy.js", "src/ui/navigationController.js"],
+    "modules": [
+      "src/navigationPolicy.js",
+      "src/ui/navigationController.js",
+      "src/app/stateChannel.js"
+    ],
     "external": ["cesium"]
   },
   "ui-share-restoration": {
@@ -2379,7 +2516,10 @@
   },
   "installations-source": {
     "exports": ["./layers/installations/source"],
-    "modules": ["src/layers/installations/source.js"],
+    "modules": [
+      "src/layers/installations/source.js",
+      "src/data/militaryInstallationData.js"
+    ],
     "external": []
   },
   "launches-source": {
@@ -2403,7 +2543,8 @@
       "src/data/tomtomTiles.js",
       "src/layers/traffic/flowDecode.js",
       "src/layers/traffic/flowSource.js",
-      "src/layers/traffic/source.js"
+      "src/layers/traffic/source.js",
+      "src/sources/overpassRoads.js"
     ],
     "external": ["@mapbox/vector-tile", "pbf"]
   },
@@ -2532,7 +2673,11 @@
       "src/services/terrainHeights.js",
       "src/sources/sourceSlot.js",
       "src/layers/transit/source.js",
-      "src/sources/transitHistory.js"
+      "src/sources/transitHistory.js",
+      "src/sources/featureGeometry.js",
+      "src/sources/overpassFeaturesRecords.js",
+      "src/sources/overpassFeatures.js",
+      "src/sources/featureSource.js"
     ],
     "external": ["cesium", "egm96-universal", "pbf"]
   },
@@ -2594,5 +2739,15 @@
       "src/sources/rateLimit.js"
     ],
     "external": ["pbf"]
+  },
+  "map-feature-source": {
+    "exports": ["./sources/map-features"],
+    "modules": [
+      "src/sources/featureGeometry.js",
+      "src/sources/overpassFeaturesRecords.js",
+      "src/sources/overpassFeatures.js",
+      "src/sources/featureSource.js"
+    ],
+    "external": []
   }
 }
