@@ -1,5 +1,9 @@
 # Changelog
 
+- Add a compact Layer Finder to DATA LAYERS, with immediate name/source filtering,
+  Ctrl/Cmd+K to open and focus, and Escape to clear. Filtering preserves layer
+  state, group order and keyboard focus during refreshes.
+
 - Enable responsive trackpad pinch zoom on the globe. Browser pixel-mode
   `Ctrl+wheel` pinch gestures now reach Cesium with bounded amplification,
   while ordinary wheel, line-mode and touch-pinch inputs retain their existing

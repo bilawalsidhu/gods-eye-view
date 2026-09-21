@@ -2505,6 +2505,16 @@ Historical planning documents may not match runtime behavior.
 
 ### Active Data Layers in Runtime
 
+The expanded DATA LAYERS panel includes a compact Layer Finder. It filters
+displayed labels, underlying layer names and descriptor sources immediately,
+using case-insensitive substring matching. Empty groups are hidden; ordering,
+enabled state and existing control nodes are preserved. Ctrl/Cmd+K opens the
+panel and focuses the finder unless another editing control or keyboard surface
+owns the interaction. Escape clears a query first; with an empty query, the
+existing panel disclosure collapses the panel and restores focus. Search stays
+local to panel presentation and is not saved or shared. Browser coverage lives
+in `scripts/qa-layer-panel.mjs`.
+
 Qualified Radio playback requests—category, station, country, coordinates, or
 nearby place—always use station selection. Unqualified “turn on/start the radio”
 requests use Play; a qualified Play-shaped tool call is normalized to Select so

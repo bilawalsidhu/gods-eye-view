@@ -74,6 +74,34 @@
   min-height: 0;
 }
 
+#layer-finder {
+  width: 100%;
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  margin: 0 0 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  font: 11px var(--font-sans);
+}
+
+#layer-finder::placeholder {
+  color: var(--text-secondary);
+}
+
+#layer-finder:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: -3px;
+}
+
+#data-panel.collapsed #layer-finder,
+.data-toggle-row[hidden],
+.data-layer-group-heading[hidden] {
+  display: none !important;
+}
+
 .data-toggle-list {
   display: flex;
   flex-direction: column;

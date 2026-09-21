@@ -135,6 +135,19 @@ export class LayerPanel {
     if (this._destroyed || !this._toggleContainer) return;
     this._releaseBindings();
     this._toggleContainer.innerHTML = '';
+    const finder =
+      this._toggleContainer.parentElement?.querySelector('#layer-finder');
+    if (finder) {
+      this._bind(finder, 'input', () => this._filterRows());
+      this._bind(finder, 'keydown', (event) => {
+        if (event.key !== 'Escape' || !finder.value || event.isComposing)
+          return;
+        event.preventDefault();
+        event.stopPropagation();
+        finder.value = '';
+        this._filterRows();
+      });
+    }
 
     const generation = this._generation;
     const layers = this.getAll()
@@ -269,6 +282,37 @@ export class LayerPanel {
       }
 
       this._toggleContainer.appendChild(row);
+    }
+    this._filterRows();
+  }
+
+  // Keep controls and subscriptions mounted: searching is presentation only.
+  _filterRows() {
+    const finder =
+      this._toggleContainer.parentElement?.querySelector('#layer-finder');
+    if (!finder) return;
+    const query = finder.value.trim().toLowerCase();
+    const layers = new Map(this.getAll().map((layer) => [layer.id, layer]));
+    let heading;
+    for (const node of this._toggleContainer.children) {
+      if (node.classList.contains('data-layer-group-heading')) {
+        heading = node;
+        heading.hidden = true;
+        continue;
+      }
+      const layer = layers.get(node.dataset.layerId);
+      if (!layer) continue;
+      node.hidden = ![
+        panelLabel(layer),
+        layer.name,
+        layer.source,
+        layer.stats?.source,
+      ].some((value) =>
+        String(value || '')
+          .toLowerCase()
+          .includes(query),
+      );
+      if (!node.hidden && heading) heading.hidden = false;
     }
   }
 
@@ -459,6 +503,7 @@ export class LayerPanel {
         row.querySelector('.data-row-list'),
       );
     }
+    this._filterRows();
   }
 
   _buildMetaText(layer) {

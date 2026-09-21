@@ -3,6 +3,77 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 
+test('finder filters descriptor labels, names and sources without replacing rows or issuing actions', async () => {
+  const { LayerPanel } = await import('./layerPanel.js');
+  const layers = [
+    { id: 'cctv', name: 'CCTV', source: 'City feeds', enabled: true },
+    {
+      id: 'local-firms',
+      name: 'FIRMS',
+      source: 'NASA',
+      stats: { source: 'VIIRS' },
+      enabled: false,
+    },
+    { id: 'custom', name: 'Custom layer', enabled: false },
+  ];
+  const finder = { value: '' };
+  const heading = () => ({
+    classList: { contains: () => true },
+    hidden: false,
+  });
+  const row = (id) => ({
+    classList: { contains: () => false },
+    dataset: { layerId: id },
+    hidden: false,
+  });
+  const cameras = heading();
+  const events = heading();
+  const other = heading();
+  const rows = layers.map(({ id }) => row(id));
+  const children = [cameras, rows[0], events, rows[1], other, rows[2]];
+  const before = structuredClone(layers);
+  const panel = new LayerPanel({
+    getLayers: () => layers,
+    setEnabled: () => assert.fail('search must not change enabled state'),
+    setLayerParams: () => assert.fail('search must not write parameters'),
+  });
+  panel._toggleContainer = {
+    parentElement: { querySelector: () => finder },
+    children,
+  };
+  for (const query of ['fire', 'AcTiVe FiReS', 'firms', 'NASA', 'viirs']) {
+    finder.value = query;
+    panel._filterRows();
+    assert.deepEqual(
+      rows.map(({ hidden }) => hidden),
+      [true, false, true],
+    );
+    assert.deepEqual(
+      [cameras.hidden, events.hidden, other.hidden],
+      [true, false, true],
+    );
+  }
+  for (const query of ['cam', 'CCTV', 'city']) {
+    finder.value = query;
+    panel._filterRows();
+    assert.deepEqual(
+      rows.map(({ hidden }) => hidden),
+      [false, true, true],
+    );
+  }
+  finder.value = 'no match';
+  panel._filterRows();
+  assert.ok(children.every(({ hidden }) => hidden));
+  for (const query of ['', '   ']) {
+    finder.value = query;
+    panel._filterRows();
+    assert.ok(children.every(({ hidden }) => !hidden));
+  }
+  assert.deepEqual(layers, before);
+  assert.equal(panel._toggleContainer.children, children);
+  panel.destroy();
+});
+
 test('panel presentation places Transit between Street Traffic and Bike Share in Movement', () => {
   const source = readFileSync(
     new URL('./layerPanel.js', import.meta.url),

@@ -82,6 +82,15 @@ export class DisplayBindings {
         toggleCleanView: () => this.toggleCleanView(),
         toggleLayers: () =>
           document.getElementById('data-panel').classList.toggle('active'),
+        focusLayerFinder: () => {
+          const panel = document.getElementById('data-panel');
+          const finder = panel?.querySelector('#layer-finder');
+          if (!finder) return;
+          panel.classList.add('active');
+          if (panel.classList.contains('collapsed'))
+            panel.querySelector('[data-collapse-target="data-panel"]')?.click();
+          finder.focus();
+        },
         cycleDetection: () => {
           this.shareLinkManager?.claimRestoreLane?.('visual');
           this.claimDetection();
