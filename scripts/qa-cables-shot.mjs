@@ -93,9 +93,15 @@ try {
     // is healthy — protocolTimeout bounds ONE CDP call, not a loop. (And the
     // original in-page `requestAnimationFrame` chain never fired at all on a
     // settled scene — no BeginFrames, no ticks; see headlessFrames.mjs.)
+    // The loop is wall-clock capped as well as tick-capped: on a contended
+    // box a single pumped frame can take 2-4 s, and 90 of those blew the
+    // runner's 15-minute suite ceiling (RUN 3f). 20 real compositor frames
+    // is the floor for a static camera's tile refinement; 90 the ceiling.
+    const settleStarted = Date.now();
     for (let ticks = 0; ticks < 90; ticks += 1) {
       await page.evaluate(() => window.__godsEyeView.viewer.scene.requestRender?.());
       await page.screenshot({ optimizeForSpeed: true });
+      if (ticks >= 19 && Date.now() - settleStarted > 60_000) break;
     }
     await new Promise((r) => setTimeout(r, 1_000));
     const path = new URL(`../qa-shots/cables-${tag}-${view.name}.png`, import.meta.url).pathname;
