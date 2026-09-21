@@ -3,36 +3,14 @@
 This changelog records public product changes. For the authoritative description
 of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md).
 
-## [Unreleased]
+## [0.10.0] — 2026-09-20
 
-### Performance
+New live layers (transit + synthetic traffic), the production regional-brief
+API, two render-performance policies, and a quality-infrastructure wave:
+strictest lint tier (sonarjs), 11 architecture decision records, an
+aegis secrets gate in CI, and a coverage ratchet that fails on collapse.
 
-- **Voice-only view-target prewarm.** The move-end → depth-readback prewarm
-  (`scene.pickPosition` — the worst main-thread stall in the runtime profile,
-  docs/PERFORMANCE.md) is now gated by an active voice session. While the
-  Realtime controller sits at `idle`/`error` (the default for every
-  non-voice session), the listener still registers for the camera-verbs
-  contract but no longer triggers a depth readback. The controller flips
-  the counter on every `setStatus` (`connecting`/`listening`/`executing` →
-  on, `idle`/`error` → off). Voice tool callers see the same prewarm
-  behaviour as before; non-voice users stop paying the readback cost on
-  every camera move.
-
-- **Render-resolution scale policy (HiDPI GPU/dedicated memory)**. Cesium now
-  defaults `sceneResolutionScale` to 0.75 on displays whose `devicePixelRatio`
-  exceeds 1.5, and 1.0 otherwise. The previous always-1.0 setting forced the
-  backing store to CSS × DPR — ~106 MiB of color + depth on a 2560×1440 @ DPR
-  2 display, with ~4× the per-pixel fragment cost. The 0.75 scale renders
-  0.75² = 56.25% as many pixels — a deterministic ~44% (43.75%) reduction in
-  color + depth backing-store bytes and in the per-pixel fragment-work bound.
-  That figure is an arithmetic consequence of the resolution change, not a
-  separately measured number; realized bandwidth savings vary with scene
-  overdraw and texture traffic. Visible loss against the photoreal tiles is
-  negligible (MSAA 2× hides the upscale). `?renderScale=N` (0.5..2) forces an
-  explicit value for A/B capture. Policy lives in `src/sceneRenderScale.js`
-  and is applied in `src/main.js` next to the existing tile-cache policy.
-
-### Data
+### Added
 
 - **Transit vehicles (MBTA + OVapi + MetroMN)**. A new `transitVehicles`
   layer polls keyless GTFS-Realtime `VehiclePositions.pb` feeds and renders
@@ -63,6 +41,111 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   transitVehicles (80 km enter / 100 km exit). Hard cap 350 phantoms
   per refresh keeps the GPU budget honest. Attribution: the existing
   dynamic `TOMTOM_CREDIT` is registered on first enable.
+- **Regional brief API on production**. The legacy always-empty Pages
+  Function stub behind the cockpit's Regional News card was replaced by a
+  real implementation shared with the dev middleware via
+  `src/data/regionalBriefPolicy.js`, so production deployments serve the
+  same briefs local development does (dev/prod parity contract, ADR 0003).
+- **Aegis secrets gate in CI**. A bookworm-built aegis binary rides the
+  `gev-ci-node:1` pipeline image; the GitForge security job scans for
+  high-severity secrets against `.aegis-baseline.json` so only NEW
+  findings fail the build. Documented allowlisted doc-keys stay allowlisted.
+- **Coverage ratchet**. `test:coverage` runs c8 with floors (lines 91,
+  statements 91, functions 90, branches 80) just below the measured
+  baseline (91.58/91.58/91.21/81.19 on 2026-09-20) — the CI job gates
+  collapse, not variance (ADR 0008).
+- **Architecture decision records**. `docs/adr/` seeds 12 records covering
+  the decisions a contributor can't derive from the code: single-source
+  vanilla JS, Pages Functions as the canonical keyless runtime, enforced
+  dev/prod parity, Cesium version pins, CRT first-run default, render
+  governor, enforced CSP, the coverage boundary, the keyless contract,
+  GitForge as primary CI, why prettier was declined, and the
+  world-overlay lane host that all screen-space annotation renders
+  through.
+- **DATA_SOURCES.md parity test**. `dataCredits.test.mjs` now enforces
+  two-way key parity between `dataCredits.js` and `DATA_SOURCES.md`, so a
+  layer added to one cannot silently miss the other.
+
+### Performance
+
+- **Voice-only view-target prewarm.** The move-end → depth-readback prewarm
+  (`scene.pickPosition` — the worst main-thread stall in the runtime profile,
+  docs/PERFORMANCE.md) is now gated by an active voice session. While the
+  Realtime controller sits at `idle`/`error` (the default for every
+  non-voice session), the listener still registers for the camera-verbs
+  contract but no longer triggers a depth readback. The controller flips
+  the counter on every `setStatus` (`connecting`/`listening`/`executing` →
+  on, `idle`/`error` → off). Voice tool callers see the same prewarm
+  behaviour as before; non-voice users stop paying the readback cost on
+  every camera move.
+
+- **Render-resolution scale policy (HiDPI GPU/dedicated memory)**. Cesium now
+  defaults `sceneResolutionScale` to 0.75 on displays whose `devicePixelRatio`
+  exceeds 1.5, and 1.0 otherwise. The previous always-1.0 setting forced the
+  backing store to CSS × DPR — ~106 MiB of color + depth on a 2560×1440 @ DPR
+  2 display, with ~4× the per-pixel fragment cost. The 0.75 scale renders
+  0.75² = 56.25% as many pixels — a deterministic ~44% (43.75%) reduction in
+  color + depth backing-store bytes and in the per-pixel fragment-work bound.
+  That figure is an arithmetic consequence of the resolution change, not a
+  separately measured number; realized bandwidth savings vary with scene
+  overdraw and texture traffic. Visible loss against the photoreal tiles is
+  negligible (MSAA 2× hides the upscale). `?renderScale=N` (0.5..2) forces an
+  explicit value for A/B capture. Policy lives in `src/sceneRenderScale.js`
+  and is applied in `src/main.js` next to the existing tile-cache policy.
+
+### Fixed
+
+- **GTFS-RT proxy relayed bodies as bytes, not UTF-8 text** — protobuf
+  payloads passing through the dev middleware as text could be mangled
+  by re-encoding; both runtimes now relay `Uint8Array` bodies.
+- **Synthetic-traffic phantoms frozen at ECEF origin** — an audit catch:
+  vehicles animated around Cartesian(0,0,0) instead of their segment
+  when a refresh raced a viewport move; plus cross-feed prune and
+  bbox-suppression oscillation fixes in the same sweep.
+- **QA harness drift** (two deterministic reds, shipped code correct):
+  `qa-floor-hold.mjs`/`qa-voice-wav.mjs` passed puppeteer 25's now-async
+  `executablePath()` raw to `launch()`; `qa-radio.mjs` gained a
+  compositor-frame pump after headless rAF starvation was proven to
+  leave rAF-scheduled layout passes pending indefinitely; and
+  `qa-view-target-prewarm.mjs` now tests b3de30c's actual contract
+  (picks served with a voice session active, zero without) instead of
+  the pre-gate behaviour.
+
+### Changed
+
+- **Strictest lint tier**. eslint now validates JSDoc (types + require
+  tiers) and runs `eslint-plugin-sonarjs`; all 44 code-smell findings
+  fixed, zero warnings tolerated.
+- **`test:coverage` floors + `--parallel-only`** (see Added) and the
+  `playwright` devDependency dropped — puppeteer drives every harness;
+  nothing imported playwright.
+
+### Accessibility
+
+- **WCAG 2.1 AA→AAA pass** (2026-09-13, re-verified 2026-09-20): axe
+  audit reports 0 violations in both audited states; focus-visible
+  rings restored on the DISPLAY rail, accessible names added to
+  nameless sliders and the search input, shell landmark roles pinned,
+  layer-chip state folded into accessible names with polite
+  live-region announcements, and HUD contrast fixed scrim-first
+  against the measured worst-case composite (old tokens failed AA at
+  2.96:1; now 9.69:1 / 5.67:1 worst case, identity hues untouched).
+- **AAA conformance ledger**: `docs/ACCESSIBILITY.md` assesses all 25
+  WCAG 2.1 AAA criteria individually (MET 12 / PARTIAL 3 / N/A 8 /
+  UNMET 2, each with rationale) — necessary because axe-core 4.13.0
+  ships zero rules tagged `wcag21aaa`, so the automated AAA run is
+  near-empty and the ledger is the assurance of record.
+
+### Security
+
+- **puppeteer ^25.11.0** — closes 2 high-severity `extract-zip`
+  advisories in the transitive dependency chain.
+
+## [Unreleased]
+
+_Working notes below this line are retained verbatim from June–August
+2026, predate the 0.8.0–0.9.2 release fold, and are kept for history —
+do not treat their headers as shipping state._
 
 ## [0.9.2] — 2026-09-18
 

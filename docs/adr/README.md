@@ -27,3 +27,5 @@ drift.
 - [0008 — Coverage boundary: behavior tests over scene-coupled shells](0008-coverage-boundary.md)
 - [0009 — Keyless endpoints answer 200 with `unavailable: true`](0009-keyless-contract.md)
 - [0010 — GitForge is the primary CI platform](0010-gitforge-primary-ci.md)
+- [0011 — Prettier is declined; ESLint owns format](0011-prettier-declined.md)
+- [0012 — Screen-space annotation renders through the world-overlay lane host](0012-world-overlay-lane-architecture.md)
