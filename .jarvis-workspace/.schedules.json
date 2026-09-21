@@ -478,5 +478,20 @@
     "runCount": 0,
     "lastRunAt": null,
     "lastResult": null
+  },
+  {
+    "id": "task_1790005559411_9e7n",
+    "name": "Unit Test Task",
+    "tool": null,
+    "command": "echo \"scheduled ok\"",
+    "args": {},
+    "message": null,
+    "delaySeconds": 10,
+    "intervalSeconds": 0,
+    "createdAt": "2026-09-21T15:45:59.411Z",
+    "status": "cancelled",
+    "runCount": 0,
+    "lastRunAt": null,
+    "lastResult": null
   }
 ]
