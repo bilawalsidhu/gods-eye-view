@@ -40,6 +40,8 @@ export const SUITE_TIMEOUT_OVERRIDES = {
 export const ENV_GATE_MARKERS = [
   'run against the keyed dev server',
   'the A/B needs live flow',
+  'the baseline needs live OSM',
+  'live AIS needs a keyed server',
   'OPENAI_API_KEY is not set',
 ];
 

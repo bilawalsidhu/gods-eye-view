@@ -146,6 +146,17 @@ async function main() {
     process.exit(2);
   }
 
+  // The datum assertions are made against LIVE rows; a server without
+  // AISSTREAM_API_KEY reports `missing-key` up front, and without this gate
+  // the run boiled down to a per-port capture timeout with no vessels at all
+  // (observed on this box). (Text matched by ENV_GATE_MARKERS in
+  // scripts/lib/qaSuiteContracts.mjs.)
+  const feed = await fetch(`${APP_URL}/api/ais-live?status=1`).then((r) => r.json()).catch(() => null);
+  if (feed?.status === 'missing-key') {
+    console.error('AISSTREAM_API_KEY is not set — live AIS needs a keyed server.');
+    process.exit(2);
+  }
+
   fs.mkdirSync(OUT_DIR, { recursive: true });
 
   const chromeExecutable = findChromeExecutable();

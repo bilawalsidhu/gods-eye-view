@@ -296,6 +296,26 @@ async function main() {
     process.exit(2);
   }
 
+  // The subject of this capture is the LIVE road→dot causal chain, so unlike
+  // the TomTom leg (intercepted keyless above) the Overpass leg must be real:
+  // no fabricated road data. Probe it with a one-node query before paying for
+  // the browser boot — overpass-api.de answers datacenter egress with Apache
+  // 406 (content-negotiation block) and the kumi/private.coffee mirrors may
+  // not complete TLS at all, in which case the capture would otherwise burn
+  // its full 120 s wait per state and fail with a bare TimeoutError (observed
+  // in qa-all, run3e, and run3g on this box). (Text matched by
+  // ENV_GATE_MARKERS in scripts/lib/qaSuiteContracts.mjs.)
+  const probeQuery = '[out:json][timeout:10];node(30.26,-97.75,30.2701,-97.7401);out 1;';
+  const probe = await fetch(`${APP_URL}/api/overpass`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `data=${encodeURIComponent(probeQuery)}`,
+  }).then((r) => r.ok).catch(() => false);
+  if (!probe) {
+    console.error('No reachable Overpass mirror — the baseline needs live OSM.');
+    process.exit(2);
+  }
+
   const executablePath = findChromeExecutable();
   const browser = await puppeteer.launch({
     headless: HEADFUL ? false : 'new',

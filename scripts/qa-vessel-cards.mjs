@@ -218,6 +218,19 @@ async function main() {
     process.exit(2);
   }
 
+  // In live mode the feed must actually be able to connect. On a server
+  // without AISSTREAM_API_KEY the proxy reports `missing-key` up front; the
+  // alternative was a full browser boot per port followed by the capture
+  // timeout with 0 entries (observed in qa-all, run3e, run3g on this box).
+  // (Text matched by ENV_GATE_MARKERS in scripts/lib/qaSuiteContracts.mjs.)
+  if (DATA_MODE === 'live') {
+    const feed = await fetch(`${APP_URL}/api/ais-live?status=1`).then((r) => r.json()).catch(() => null);
+    if (feed?.status === 'missing-key') {
+      console.error('AISSTREAM_API_KEY is not set — live AIS needs a keyed server.');
+      process.exit(2);
+    }
+  }
+
   fs.mkdirSync(OUT_DIR, { recursive: true });
 
   const chromeExecutable = findChromeExecutable();
