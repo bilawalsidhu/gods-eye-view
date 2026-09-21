@@ -277,6 +277,10 @@ export function createAlprCamerasLayer({ source, services } = {}) {
       clearSelection();
       clearRendered();
       setAlprStatus('idle');
+      state.moveEndRemove?.();
+      state.moveEndRemove = null;
+      state.postRenderRemove?.();
+      state.postRenderRemove = null;
     },
     update() {
       return loadCameras();

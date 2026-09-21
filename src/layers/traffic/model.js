@@ -10,6 +10,8 @@ import {
   DENSITY_MULT,
   JAM_DOT_FAR_SCALE,
   JAM_DOT_DEPTH_PUNCH,
+  MIN_ROAD_TERRAIN_HEIGHT_M,
+  MAX_ROAD_TERRAIN_HEIGHT_M,
 } from './policy.js';
 
 export function createModel({ state: layerState, services, parts, source }) {
@@ -56,7 +58,13 @@ export function createModel({ state: layerState, services, parts, source }) {
           firstCoord[1],
         );
         const sampled = layerState._viewer.scene.sampleHeight(carto);
-        if (Number.isFinite(sampled)) baseHeight = sampled;
+        if (
+          Number.isFinite(sampled) &&
+          sampled >= MIN_ROAD_TERRAIN_HEIGHT_M &&
+          sampled <= MAX_ROAD_TERRAIN_HEIGHT_M
+        ) {
+          baseHeight = sampled;
+        }
       }
 
       // Pre-compute Cartesian3 waypoints (lon, lat, height) for fast lerp animation

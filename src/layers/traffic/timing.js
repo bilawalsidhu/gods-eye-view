@@ -3,6 +3,8 @@ import {
   TRAFFIC_TIMING_ENABLED,
   MAX_WAYPOINTS_PER_ROAD,
   DOT_HEIGHT_OFFSET,
+  MIN_ROAD_TERRAIN_HEIGHT_M,
+  MAX_ROAD_TERRAIN_HEIGHT_M,
 } from './policy.js';
 
 export function createTiming({ state: layerState, services, parts, source }) {
@@ -295,7 +297,13 @@ export function createTiming({ state: layerState, services, parts, source }) {
         _trafficTimingSampleHeightMs +=
           performance.now() - _trafficTimingSampleStart;
         /* TRACE_ONLY_END */
-        if (Number.isFinite(sampled)) baseHeight = sampled;
+        if (
+          Number.isFinite(sampled) &&
+          sampled >= MIN_ROAD_TERRAIN_HEIGHT_M &&
+          sampled <= MAX_ROAD_TERRAIN_HEIGHT_M
+        ) {
+          baseHeight = sampled;
+        }
       }
 
       /* TRACE_ONLY_BEGIN */
