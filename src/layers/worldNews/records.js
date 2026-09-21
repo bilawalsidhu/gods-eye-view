@@ -17,6 +17,15 @@ function isHttpUrl(value) {
   }
 }
 
+function isHttpsUrl(value) {
+  if (typeof value !== 'string' || !value) return false;
+  try {
+    return new URL(value).protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 /** Optional provider text: a trimmed string, or null for anything else. */
 function optionalText(value) {
   if (typeof value !== 'string') return null;
@@ -81,6 +90,10 @@ export function normalizeWorldNewsSnapshot(payload) {
       category: optionalText(article.category),
       language: optionalText(article.language),
       sourceCountry: optionalText(article.sourceCountry),
+      // Present only when the proxy runs with WORLD_NEWS_THUMBNAILS. https
+      // only: the browser loads it straight from the publisher, so an http
+      // URL would be blocked as mixed content and is treated as absent.
+      image: isHttpsUrl(article.image) ? article.image : null,
       lat,
       lon,
       place: optionalText(article.place),

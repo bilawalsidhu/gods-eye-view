@@ -3,6 +3,7 @@ import * as render from '../../renderGovernor.js';
 import * as context from '../../data/contextStore.js';
 import * as picking from '../../data/pickRegistry.js';
 import { refreshTrackedReadout } from '../../data/trackedReadout.js';
+import { hitTestWorldOverlay } from '../../overlays/worldOverlay.js';
 import {
   registerDynamicCredit,
   WORLD_NEWS_CREDIT,
@@ -17,7 +18,10 @@ export function createApplicationWorldNews({ source, ...options }) {
       render,
       context,
       picking,
-      overlays: { refreshReadout: refreshTrackedReadout },
+      overlays: {
+        refreshReadout: refreshTrackedReadout,
+        hitTest: hitTestWorldOverlay,
+      },
       credits: { register: registerDynamicCredit },
     },
     overlayHost,

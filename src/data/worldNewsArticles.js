@@ -6,8 +6,10 @@
  * returns whole articles (body text, images, bylines) and, with
  * `add-entities=true`, an `entities[]` list whose location entries carry
  * geocoded coordinates. Only the compact, place-bearing record built here
- * ever leaves the server: no article text, no images, no author names and no
- * person or organization entities.
+ * ever leaves the server: no article text, no author names and no person or
+ * organization entities. The publisher's image URL is opt-in
+ * (`{thumbnails: true}`, wired to WORLD_NEWS_THUMBNAILS) and https-only; it
+ * is a link for the browser to resolve, never an image this server fetches.
  */
 
 /** Entity types the provider uses for places; matched case-insensitively. */
@@ -49,6 +51,16 @@ function httpUrl(value) {
   } catch {
     return null;
   }
+}
+
+/**
+ * https-only URL. A thumbnail is loaded by the browser on a page that is often
+ * served over https, so an http image would be blocked as mixed content anyway
+ * — rejecting it here keeps a dead URL out of the record entirely.
+ */
+function httpsUrl(value) {
+  const url = httpUrl(value);
+  return url && url.protocol === 'https:' ? url : null;
 }
 
 function finiteInRange(value, limit) {
@@ -115,7 +127,10 @@ export function topLocationEntity(entities) {
  * @param {unknown} article Raw provider article.
  * @returns {object|null}
  */
-export function normalizeWorldNewsArticle(article) {
+export function normalizeWorldNewsArticle(
+  article,
+  { thumbnails = false } = {},
+) {
   if (!article || typeof article !== 'object') return null;
   const rawId = article.id;
   const validId =
@@ -147,6 +162,13 @@ export function normalizeWorldNewsArticle(article) {
     place,
     placeFoundIn: 'title',
     placeMentions: Math.max(0, Math.floor(Number(location.mentions) || 0)),
+    // Opt-in (WORLD_NEWS_THUMBNAILS) and https-only: the URL is a LINK the
+    // browser resolves against the publisher, never an image this server
+    // fetches, stores or re-serves. Absent unless asked for, so the default
+    // record is byte-identical to the contract shipped without thumbnails.
+    ...(thumbnails && httpsUrl(article.image)
+      ? { image: httpsUrl(article.image).href }
+      : {}),
   };
 }
 
@@ -164,12 +186,12 @@ function newestFirst(a, b) {
  * @param {unknown} news Provider `news[]`.
  * @returns {Array<object>}
  */
-export function normalizeWorldNewsArticles(news) {
+export function normalizeWorldNewsArticles(news, options) {
   if (!Array.isArray(news)) return [];
   const seen = new Set();
   const records = [];
   for (const article of news) {
-    const record = normalizeWorldNewsArticle(article);
+    const record = normalizeWorldNewsArticle(article, options);
     if (!record || seen.has(record.id)) continue;
     seen.add(record.id);
     records.push(record);

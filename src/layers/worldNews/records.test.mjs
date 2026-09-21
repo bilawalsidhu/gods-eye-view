@@ -48,6 +48,8 @@ test('a well-formed payload becomes rows that keep only the contract fields', ()
     category: 'environment',
     language: 'en',
     sourceCountry: 'es',
+    // Absent from the payload unless the proxy runs with thumbnails on.
+    image: null,
     lat: 39.4699,
     lon: -0.3763,
     place: 'Valencia',

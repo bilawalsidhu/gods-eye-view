@@ -348,8 +348,11 @@ test('lifecycle: pins, contexts, ambient labels and readout hooks follow enable/
   assert.deepEqual(rotterdam.gevLabelModel.details.slice(1), [
     'Rotterdam · 1/2 stories here',
     'TONE NEGATIVE (-0.50)',
-    'Source: World News API',
+    // A story with a link says so: the card itself opens the publisher.
+    'Click to open · World News API',
   ]);
+  assert.equal(rotterdam.gevLabelModel.interactive, true);
+  assert.equal(rotterdam.gevLabelModel.url, ROW_A.url);
   assert.equal(rotterdam.gevLabelModel.accent, '#ff5c8a');
 
   const context = h.services.store.entities.get(ROTTERDAM);

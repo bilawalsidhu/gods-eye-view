@@ -23,12 +23,18 @@ import {
  * them. Context records carry the headline, place and publisher — never
  * authors or person/organization entities.
  */
+/**
+ * @param {object} options
+ * @param {() => void} [options.onCardActivate] Run when the operator clicks
+ *   the selected place's readout card (opens the headline at its publisher).
+ */
 export function createWorldNewsPresentation({
   state,
   services,
   overlayHost,
   screenSpaceEventHandlerFactory = (viewer) =>
     new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas),
+  onCardActivate,
 }) {
   const { governorRequestRender } = services.render;
   const {
@@ -233,6 +239,18 @@ export function createWorldNewsPresentation({
       // A tool owns the pointer (src/data/inputOwnership.js): yield the click.
       if (!isPointerFree()) return;
       if (!state.enabled) return;
+      // The readout card sits ON TOP of the globe, so it gets first refusal:
+      // a click that lands on the selected place's card opens that headline
+      // at the publisher. Only that card is interactive, so any other hit
+      // falls through to the pick below exactly as before.
+      const hit = services.overlays?.hitTest?.(
+        click.position.x,
+        click.position.y,
+      );
+      if (hit?.entryId && hit.entryId === state.selectedId) {
+        onCardActivate?.();
+        return;
+      }
       const picked = viewer.scene.pick(click.position);
       const id = resolvePickId(picked);
       if (id && state.groupById.has(id)) {

@@ -115,6 +115,8 @@ export function createWorldNewsLayer({
     services,
     overlayHost,
     screenSpaceEventHandlerFactory,
+    // Declared below and hoisted: clicking the card opens the story it shows.
+    onCardActivate: () => openSelectedArticle(),
   });
 
   function selectedStory() {

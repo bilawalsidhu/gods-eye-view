@@ -59,7 +59,11 @@ import { buildSearchNewsUrl, requestSearchNews } from './world-news/client.js';
  * each serves the retained batch when one exists.
  *
  * Only compact records reach the browser (src/data/worldNewsArticles.js):
- * no article text, images, bylines or person/organization entities.
+ * no article text, bylines or person/organization entities. Publisher image
+ * URLs are opt-in (WORLD_NEWS_THUMBNAILS, default off) and are only ever a
+ * LINK the browser resolves against the publisher — this server never fetches,
+ * stores or re-serves an image, which is what keeps a thumbnail a link rather
+ * than redistribution of someone else's copyrighted photo.
  *
  * @param {object} [options]
  * @param {number} [options.pageDelayMs=1200] Minimum spacing between upstream calls.
@@ -160,6 +164,15 @@ export function worldNewsProxy({
       1,
       WORLD_NEWS_MAX_PAGES,
       WORLD_NEWS_DEFAULT_PAGES,
+    );
+  /**
+   * Opt-in publisher thumbnail URLs (`WORLD_NEWS_THUMBNAILS`). Off by default:
+   * the image is the publisher's, and a link the browser resolves is a very
+   * different act from this server fetching and re-serving one.
+   */
+  const thumbnails = () =>
+    /^(1|true|yes|on)$/i.test(
+      String(process.env.WORLD_NEWS_THUMBNAILS || '').trim(),
     );
   /** Oldest publish time a headline may carry, as epoch ms. */
   const windowMs = () =>
@@ -374,7 +387,9 @@ export function worldNewsProxy({
         const result = await upstream(key, page * size);
         fetchedPages++;
         batch.requested += result.news.length;
-        for (const record of normalizeWorldNewsArticles(result.news))
+        for (const record of normalizeWorldNewsArticles(result.news, {
+          thumbnails: thumbnails(),
+        }))
           batch.articles.push(record);
         if (result.news.length < size) break;
       } catch (error) {
@@ -424,6 +439,10 @@ export function worldNewsProxy({
       quota: state.quota,
       costPerRequest: state.measuredCost ?? state.lastCharge,
       costMeasured: Number.isFinite(state.measuredCost),
+      // Whether records may carry `image`. Cached batches outlive an env
+      // change, so the client is told what this payload actually holds
+      // rather than inferring it from the presence of a field.
+      thumbnails: thumbnails(),
       morePagesLeft: morePagesLeft(blocked),
       articles,
     };
@@ -466,7 +485,9 @@ export function worldNewsProxy({
         ...retainWithinWindow(state.batches, now, WORLD_NEWS_RETENTION_MS),
         {
           at: now,
-          articles: normalizeWorldNewsArticles(result.news),
+          articles: normalizeWorldNewsArticles(result.news, {
+            thumbnails: thumbnails(),
+          }),
           requested: result.news.length,
         },
       ];

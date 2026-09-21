@@ -99,6 +99,7 @@ export function buildLabelModel(group, storyIndex = 0, nowMs = Date.now()) {
     : '';
   const domain = article?.domain || 'unknown source';
   const place = String(group?.place || 'Unnamed place');
+  const url = typeof article?.url === 'string' ? article.url : null;
   return {
     title: String(article?.title || place),
     details: [
@@ -108,8 +109,14 @@ export function buildLabelModel(group, storyIndex = 0, nowMs = Date.now()) {
         (Number.isFinite(article?.sentiment)
           ? ` (${article.sentiment.toFixed(2)})`
           : ''),
-      'Source: World News API',
+      url ? 'Click to open · World News API' : 'Source: World News API',
     ],
     accent: TONE_COLORS[band] || TONE_COLORS.unknown,
+    // The card is the natural place to click through to the story, but it
+    // only accepts clicks when there IS a story to open — otherwise it would
+    // swallow a click the globe should have received.
+    interactive: Boolean(url),
+    url,
+    image: typeof article?.image === 'string' ? article.image : null,
   };
 }

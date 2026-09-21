@@ -278,3 +278,51 @@ test('retention keeps only batches inside the window; merge lets the newest fetc
   );
   assert.deepEqual(retainWithinWindow(undefined, now, hour), []);
 });
+
+test('publisher image is opt-in, https-only, and never on by default', () => {
+  const raw = {
+    id: 7,
+    title: 'Flood warning in Hanover',
+    url: 'https://example.com/7',
+    image: 'https://cdn.example.com/hero.jpg',
+    publish_date: '2026-09-15 10:00:00',
+    entities: [
+      {
+        type: 'LOC',
+        name: 'Hanover',
+        latitude: 18.4,
+        longitude: -78.1,
+        found_in: 'title',
+        mentions: 2,
+      },
+    ],
+  };
+  // Default: the record is exactly the no-thumbnail contract.
+  assert.equal('image' in normalizeWorldNewsArticle(raw), false);
+  assert.equal('image' in normalizeWorldNewsArticles([raw])[0], false);
+
+  const opted = normalizeWorldNewsArticle(raw, { thumbnails: true });
+  assert.equal(opted.image, 'https://cdn.example.com/hero.jpg');
+  assert.equal(
+    normalizeWorldNewsArticles([raw], { thumbnails: true })[0].image,
+    'https://cdn.example.com/hero.jpg',
+  );
+
+  // http would be blocked as mixed content, so it never enters the record.
+  for (const image of [
+    'http://cdn.example.com/hero.jpg',
+    'javascript:alert(1)',
+    'not a url',
+    '',
+    null,
+    undefined,
+    42,
+  ]) {
+    assert.equal(
+      'image' in
+        normalizeWorldNewsArticle({ ...raw, image }, { thumbnails: true }),
+      false,
+      String(image),
+    );
+  }
+});
