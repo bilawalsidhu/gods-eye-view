@@ -3908,6 +3908,19 @@ requests report an unavailable source. Leaving the traffic altitude range or
 disabling the layer cancels pending work; superseded road and flow requests cannot
 release the current request or keep its loading indicator active.
 
+### Traffic dot budget priority
+
+Traffic allocates dot budgets fairly across roads, and applies that fairness to
+the roads the camera rectangle reaches before the rest of the fetched tile. A
+margin ring holds roads just beyond the frame in the same tier, and never
+narrows below the camera move that skips a reload, so a small pan does not pop
+dots in. Roads beyond the ring keep every dot the visible tier leaves unused,
+and an uncapped view still reaches all of them. A cap too small to seed every
+road seeds the visible ones first, which means roads outside the frame can drop
+to no dots where they previously kept one. With no viewer, or a rectangle that
+cannot be used — a zero span, or the wrapped form reported across the
+antimeridian — allocation is unchanged in every respect.
+
 ### Optional frame-rate readout
 
 Backtick (`) toggles an FPS readout beneath the title logo. It counts actual

@@ -164,7 +164,9 @@ export function createRendering({
    * Clear existing dots and re-spawn them for the given road set and altitude.
    *
    * When zoomed out (>5 km), only major road types are rendered to reduce clutter.
-   * Dot budgets are allocated fairly across visible roads via `allocateRoadDotBudgets`.
+   * Dot budgets are allocated fairly across visible roads via
+   * `allocateRoadDotBudgets`, which fills the roads inside the camera rectangle
+   * before the rest of the fetched tile.
    *
    * @param {Array} roads    - Parsed road objects to render.
    * @param {number} altitude - Camera altitude in meters.
@@ -224,10 +226,14 @@ export function createRendering({
           visibleRoadCount: filteredRoads.length,
         })
       : null;
+    // The live rectangle, not the one the fetch was centred on: a render can
+    // follow a cached tile or a late flow response, and the budget should
+    // follow where the camera is now.
     const roadBudgets = parts.model.allocateRoadDotBudgets(
       filteredRoads,
       altitude,
       MAX_DOTS,
+      layerState._viewer ? parts.viewport.getViewBounds() : null,
     );
     for (let i = 0; i < filteredRoads.length; i++) {
       const road = filteredRoads[i];
