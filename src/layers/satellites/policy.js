@@ -79,6 +79,12 @@ export const TRACK_VIEW_FROM_LEO = new Cesium.Cartesian3(
 
 export const HIGH_ORBIT_ALTITUDE_M = 2000000;
 
+/** Earth constants for classifying an orbit from its TLE mean motion (WGS-72, as SGP4 uses). */
+
+export const EARTH_RADIUS_KM = 6378.135;
+
+export const EARTH_MU_KM3_S2 = 398600.8;
+
 export const TRACK_VIEW_FROM_HIGH_SCALE = 4;
 // ≈ 2900 km back for MEO/GEO
 

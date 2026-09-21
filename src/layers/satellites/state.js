@@ -170,6 +170,8 @@ export function createState({ services }) {
 
   state._satelliteSearchGroup = '';
 
+  state._satelliteSearchOrbit = '';
+
   state._satelliteSearchDebounce = null;
   return state;
 }

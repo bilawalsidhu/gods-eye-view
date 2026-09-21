@@ -4,7 +4,31 @@ import {
   satelliteClassLegend,
 } from '../../data/satelliteClass.js';
 import * as Cesium from 'cesium';
-import { ISS_NORAD, POINT_STYLES } from './policy.js';
+import {
+  EARTH_MU_KM3_S2,
+  EARTH_RADIUS_KM,
+  HIGH_ORBIT_ALTITUDE_M,
+  ISS_NORAD,
+  POINT_STYLES,
+} from './policy.js';
+
+/**
+ * Whether an orbit stays in Low Earth Orbit (apogee altitude at or below
+ * 2,000 km). Derived from the TLE's mean motion and eccentricity, so it needs
+ * no SGP4 propagation and is safe to run over the whole catalog.
+ * @param {{ no?: number, ecco?: number }} satrec satellite.js record (`no` in rad/min).
+ * @returns {boolean} True for LEO.
+ */
+export function isLowEarthOrbit(satrec) {
+  const meanMotionRadPerSec = Number(satrec?.no) / 60;
+  if (!(meanMotionRadPerSec > 0)) return false;
+  const semiMajorAxisKm = Math.cbrt(
+    EARTH_MU_KM3_S2 / (meanMotionRadPerSec * meanMotionRadPerSec),
+  );
+  const apogeeAltitudeKm =
+    semiMajorAxisKm * (1 + (Number(satrec.ecco) || 0)) - EARTH_RADIUS_KM;
+  return apogeeAltitudeKm <= HIGH_ORBIT_ALTITUDE_M / 1000;
+}
 
 export function createControls({ state: layerState, services, parts, source }) {
   const { isExplicitLayerStateOrigin } = services.layerState;
@@ -219,10 +243,10 @@ export function createControls({ state: layerState, services, parts, source }) {
      * a "go there" shortcut. Position is freshly propagated via SGP4, but
      * only for the page of results returned, never the full candidate set.
      * @param {string} [query] NORAD id or partial/case-insensitive name; empty matches everything in scope.
-     * @param {{ group?: string|null, limit?: number }} [options]
+     * @param {{ group?: string|null, orbit?: 'leo'|null, limit?: number }} [options] `orbit: 'leo'` keeps only Low Earth Orbit satellites.
      * @returns {{ results: Array<{ noradId: number, name: string, group: string|undefined, position: Cesium.Cartesian3, latitude: number, longitude: number, altitudeM: number }>, matchCount: number }}
      */
-    searchAll(query, { group = null, limit = 50 } = {}) {
+    searchAll(query, { group = null, orbit = null, limit = 50 } = {}) {
       if (!layerState._catalog || layerState._catalog.size === 0)
         return { results: [], matchCount: 0 };
       const q = String(query ?? '').trim();
@@ -232,6 +256,7 @@ export function createControls({ state: layerState, services, parts, source }) {
       const candidates = [];
       for (const [noradId, sat] of layerState._catalog) {
         if (group && sat.group !== group) continue;
+        if (orbit === 'leo' && !isLowEarthOrbit(sat.satrec)) continue;
         if (q) {
           const idMatch = isNumeric && noradId === Number(q);
           if (!idMatch && !sat.name.toLowerCase().includes(lower)) continue;

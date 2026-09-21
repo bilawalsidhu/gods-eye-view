@@ -66,15 +66,17 @@ export function createPanel({ state: layerState, services, parts, source }) {
 
     const query = layerState._satelliteSearchQuery || '';
     const group = layerState._satelliteSearchGroup || '';
-    if (!query.trim() && !group) {
-      status.textContent = 'TYPE A NAME/NORAD ID, OR PICK A GROUP';
+    const orbit = layerState._satelliteSearchOrbit || '';
+    if (!query.trim() && !group && !orbit) {
+      status.textContent = 'TYPE A NAME/NORAD ID, OR PICK A FILTER';
       list.innerHTML =
-        '<div class="satellite-search-empty">TYPE TO SEARCH, OR FILTER BY GROUP ABOVE</div>';
+        '<div class="satellite-search-empty">TYPE TO SEARCH, OR FILTER BY GROUP / ORBIT ABOVE</div>';
       return;
     }
 
     const { results, matchCount } = parts.controls.methods.searchAll(query, {
       group: group || null,
+      orbit: orbit || null,
       limit: RESULT_LIMIT,
     });
 
@@ -134,6 +136,7 @@ export function createPanel({ state: layerState, services, parts, source }) {
 
     const input = panel.querySelector('[data-satellite-search-input]');
     const groupSelect = panel.querySelector('[data-satellite-search-group]');
+    const orbitSelect = panel.querySelector('[data-satellite-search-orbit]');
     const list = panel.querySelector('[data-satellite-search-list]');
 
     input?.addEventListener('input', (event) => {
@@ -143,6 +146,11 @@ export function createPanel({ state: layerState, services, parts, source }) {
 
     groupSelect?.addEventListener('change', (event) => {
       layerState._satelliteSearchGroup = event.currentTarget.value;
+      renderSatelliteSearchResults();
+    });
+
+    orbitSelect?.addEventListener('change', (event) => {
+      layerState._satelliteSearchOrbit = event.currentTarget.value;
       renderSatelliteSearchResults();
     });
 

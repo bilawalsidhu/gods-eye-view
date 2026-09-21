@@ -1345,11 +1345,12 @@
 
 .satellite-search-controls {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
 }
 
 [data-satellite-search-input] {
-  flex: 1 1 auto;
+  flex: 1 1 100%;
   min-width: 0;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -1373,9 +1374,10 @@
   font-style: italic;
 }
 
-[data-satellite-search-group] {
-  flex: 0 0 auto;
-  max-width: 118px;
+[data-satellite-search-group],
+[data-satellite-search-orbit] {
+  flex: 1 1 0;
+  min-width: 0;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 7px;
