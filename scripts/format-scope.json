@@ -745,5 +745,6 @@
   "scripts/qa-director-interactions.mjs",
   "src/director/sharing/sharing.test.mjs",
   "scripts/qa-director-sharing.mjs",
-  "src/data/aisStreamSentinels.test.mjs"
+  "src/data/aisStreamSentinels.test.mjs",
+  "src/terrainHeightsClientCache.test.mjs"
 ]

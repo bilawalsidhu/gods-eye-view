@@ -1,7 +1,7 @@
 import { ensureGeoidReady, geoidHeight } from '../data/geoid.js';
 
 /** Construct an instance-owned terrainHeights service with explicit dependencies. */
-export function createTerrainHeights({ source, signal }) {
+export function createTerrainHeights({ source, signal, cacheMaxEntries }) {
   if (typeof source?.getHeights !== 'function')
     throw new TypeError('Terrain heights require a source');
   signal?.throwIfAborted();
@@ -53,6 +53,44 @@ export function createTerrainHeights({ source, signal }) {
    * @type {Map<string, {ellipsoid: number, source: 'reearth'|'geoid-fallback', retryAt?: number}>}
    */
   const cache = new Map();
+
+  /**
+   * Entry ceiling for the cache above.
+   *
+   * Without one it grows for as long as a session resolves new coordinates:
+   * every 5dp point is its own key, and nothing ever removed one. Sized from
+   * the server side of the same traffic — this project's
+   * `.gev-cache/terrain-heights.json`, which receives exactly the points this
+   * module asks for, held 6,189 entries after ordinary use. 50,000 is eight
+   * times that working set (~5 MB at roughly 100 bytes per entry) and matches
+   * the ceiling the proxy applies to its own copy. Overridable so the ceiling
+   * can be exercised as behaviour rather than asserted as a constant.
+   */
+  const CACHE_MAX_ENTRIES = cacheMaxEntries ?? 50_000;
+
+  /**
+   * Trim to the ceiling, dropping the oldest insertions first.
+   *
+   * Insertion order, not true LRU: a Map iterates in insertion order, so this
+   * is O(1) per eviction with nothing to maintain on the read path — and the
+   * read path runs per frame. The cost of evicting a point that is still in
+   * view is one re-resolve on the next warm, never a wrong height, because
+   * terrain does not move.
+   *
+   * Called ONCE PER BATCH, after the response has been assembled — never from
+   * the write itself. `resolveEllipsoidalGround` assembles its result by
+   * reading each key back out of this cache, so evicting mid-batch would turn
+   * points it had just resolved into `{ellipsoid: null, source:'unresolved'}`
+   * whenever a single batch exceeded the ceiling. A batch is therefore always
+   * answered in full, and the ceiling is restored immediately afterwards.
+   */
+  function pruneCache() {
+    while (cache.size > CACHE_MAX_ENTRIES) {
+      const oldest = cache.keys().next().value;
+      if (oldest === undefined) break;
+      cache.delete(oldest);
+    }
+  }
 
   /**
    * Builds the rounded cache key shared between the in-memory cache and the
@@ -259,12 +297,16 @@ export function createTerrainHeights({ source, signal }) {
     // Assemble the output in the original input order from the cache. A point
     // the upstream omitted has NO entry (round 6 — deliberately uncached so it
     // retries later): report it unresolved instead of throwing.
-    return work.map((item) => {
+    const answer = work.map((item) => {
       const entry = cache.get(item.key);
       return entry
         ? { ellipsoid: entry.ellipsoid, source: entry.source }
         : { ellipsoid: null, source: 'unresolved' };
     });
+    // Only now is it safe to trim: every value this batch owes has been read
+    // back out of the cache and materialized above.
+    pruneCache();
+    return answer;
   }
 
   signal?.addEventListener('abort', () => cache.clear(), { once: true });

@@ -1826,6 +1826,13 @@ This is the current runtime/source-of-truth snapshot for the project.
 >   tunings. Ambient overlap includes each sprite's own rendered extent. The
 >   gated AIS, CCTV, and satellite passes retain an active-emphasis count so a
 >   settled dim contact always completes its release after tracking ends.
+> - **Client terrain cache ceiling:** the browser-side resolver
+>   (`createTerrainHeights`) keeps its own Map of 5-decimal points and now holds
+>   at most 50,000, dropping oldest-insertion-first. Trimming happens once per
+>   batch, *after* the response has been assembled — the resolver reads its
+>   answer back out of that cache, so trimming mid-batch would report points it
+>   had just resolved as unresolved. An evicted point costs one re-resolve and
+>   never a wrong height.
 > - **Terrain-height resilience:** `/api/terrain/heights` caches canonical
 >   5-decimal points individually, reconstructs reordered/overlapping batches
 >   in exact request order, and refreshes only missing or stale points. Upstream

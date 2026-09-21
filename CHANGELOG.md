@@ -1,5 +1,14 @@
 # Changelog
 
+- Cap the browser-side terrain-height cache. `createTerrainHeights` keyed a Map
+  by 5-decimal coordinate and never removed an entry, so it grew for as long as
+  a session kept resolving new points. It now holds at most 50,000, dropping
+  oldest-insertion-first, which leaves ordinary sessions entirely warm — the
+  matching server cache reached 6,189 points in real use. Trimming runs once
+  per batch, after the response is assembled, because the resolver reads its
+  own answer back out of the cache; an evicted point costs one re-resolve and
+  never a wrong height.
+
 - Enable responsive trackpad pinch zoom on the globe. Browser pixel-mode
   `Ctrl+wheel` pinch gestures now reach Cesium with bounded amplification,
   while ordinary wheel, line-mode and touch-pinch inputs retain their existing
