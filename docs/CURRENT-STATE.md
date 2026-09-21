@@ -1,5 +1,48 @@
 # God's Eye View Current State
 
+Vessel snapshot completeness is separate from freshness. A current snapshot with
+rejected or duplicate records shows PARTIAL with accepted/received counts; stale
+or unknown freshness and transport failures retain their warnings. Partial
+snapshots still retain missing contacts within the existing age and row limits.
+A complete successful snapshot clears the partial indicator.
+
+Director imports now open a non-mutating preview before Apply. EDIT DETAILS
+authors validated anchor, camera, pack and interaction drafts; SHARE SCENE exports
+a selected scene or a bounded bundle of explicitly chosen pack files. Bundled
+bytes remain in memory until replacement/teardown and require reimport after a
+page reload. Stop releases rendering while retaining replay bytes. Cancellation
+and stale drafts cannot replace newer project state. See [authoring and sharing](DIRECTOR-SHARING.md).
+
+Director version-6 documents add bounded, scene-local feature actions. Settled
+LOAD/seek exposes keyboard-accessible text/source cards, anchor focus, explicit
+shot transitions and admitted layer state changes. Pointer claims take priority;
+Stop/replacement/teardown cancel pending actions and release handlers and UI.
+Same-shot seeks rebuild selected packs and restore declared layer baselines.
+See [scene actions](DIRECTOR-INTERACTIONS.md). Existing scenes/assets and credit remain.
+
+Director version-5 documents add scene-local data-pack manifests and per-shot
+selection. Registered sources acquire bounded, cancellable assets separately from
+GeoJSON, PNG and manually played media presentation. Storage paths, attribution
+and geographic placement remain distinct; Stop/replacement releases resources.
+Import acquires nothing. See [data packs](DIRECTOR-DATA-PACKS.md). Existing scene
+content, assets and credit remain unchanged.
+
+Director version-4 documents add named geographic anchors and optional explicit
+camera moves with easing, duration and holds. Playback and seek share one
+coordinate sampler; navigation/manual input revokes authored motion and pending
+holds. Anchor heights and explicit endpoints require the WGS84 ellipsoid
+reference. Legacy projects retain their ordinary flights, content and edits.
+See [camera directions](DIRECTOR-CAMERA.md).
+
+Realtime voice composes separate connection, response/tool, Radio handoff, input
+and audio-meter, cost, viewport-context and diagnostic owners. The existing
+controller exports and session/backend contracts remain available. Tool protocol,
+response wording, push-to-talk timing, model preferences and Radio confirmation
+order are preserved. Stopped connections, stale offers and delayed captures cannot affect a
+replacement session; audio meters release failed initialization and reject revoked
+frames. Delayed action results and post-capture continuations cannot resume a
+stopped conversation or send output into a replacement. See [voice ownership](VOICE-OWNERSHIP.md).
+
 ## Local Realtime voice
 
 - The mic panel stores a CLOUD/LOCAL provider choice. CLOUD keeps the existing
@@ -41,43 +84,6 @@
   from ordinary text, so function markup does not reach TTS. Tool-result
   follow-ups use the backend's configured output budget; there is no
   client-side 80-token limit.
-
-Director imports now open a non-mutating preview before Apply. EDIT DETAILS
-authors validated anchor, camera, pack and interaction drafts; SHARE SCENE exports
-a selected scene or a bounded bundle of explicitly chosen pack files. Bundled
-bytes remain in memory until replacement/teardown and require reimport after a
-page reload. Stop releases rendering while retaining replay bytes. Cancellation
-and stale drafts cannot replace newer project state. See [authoring and sharing](DIRECTOR-SHARING.md).
-
-Director version-6 documents add bounded, scene-local feature actions. Settled
-LOAD/seek exposes keyboard-accessible text/source cards, anchor focus, explicit
-shot transitions and admitted layer state changes. Pointer claims take priority;
-Stop/replacement/teardown cancel pending actions and release handlers and UI.
-Same-shot seeks rebuild selected packs and restore declared layer baselines.
-See [scene actions](DIRECTOR-INTERACTIONS.md). Existing scenes/assets and credit remain.
-
-Director version-5 documents add scene-local data-pack manifests and per-shot
-selection. Registered sources acquire bounded, cancellable assets separately from
-GeoJSON, PNG and manually played media presentation. Storage paths, attribution
-and geographic placement remain distinct; Stop/replacement releases resources.
-Import acquires nothing. See [data packs](DIRECTOR-DATA-PACKS.md). Existing scene
-content, assets and credit remain unchanged.
-
-Director version-4 documents add named geographic anchors and optional explicit
-camera moves with easing, duration and holds. Playback and seek share one
-coordinate sampler; navigation/manual input revokes authored motion and pending
-holds. Anchor heights and explicit endpoints require the WGS84 ellipsoid
-reference. Legacy projects retain their ordinary flights, content and edits.
-See [camera directions](DIRECTOR-CAMERA.md).
-
-Realtime voice composes separate connection, response/tool, Radio handoff, input
-and audio-meter, cost, viewport-context and diagnostic owners. The existing
-controller exports and session/backend contracts remain available. Tool protocol,
-response wording, push-to-talk timing, model preferences and Radio confirmation
-order are preserved. Stopped connections, stale offers and delayed captures cannot affect a
-replacement session; audio meters release failed initialization and reject revoked
-frames. Delayed action results and post-capture continuations cannot resume a
-stopped conversation or send output into a replacement. See [voice ownership](VOICE-OWNERSHIP.md).
 
 The application shell composes focused state owners for navigation, destination
 lookup/orbit, Cockpit, visual settings, panel layout, aircraft display and layer
