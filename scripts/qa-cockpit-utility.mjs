@@ -39,6 +39,13 @@ page.on('console', (message) => {
   }
 });
 page.on('pageerror', (error) => consoleErrors.push(error.message));
+// `error` (not `pageerror`) is the renderer-crash event: a wedged CDP
+// evaluate that ends in protocolTimeout has twice (RUN 3c/3d) been the only
+// symptom — this listener is the evidence that names the class.
+page.on('error', (error) => {
+  console.log(`[renderer-crash] ${error.message}`);
+  consoleErrors.push(`renderer: ${error.message}`);
+});
 page.on('response', (response) => {
   const url = new URL(response.url());
   const expectedOptionalTrackMiss = response.status() === 404
@@ -649,7 +656,9 @@ try {
   // stale billboards list hex ids with old altitudes whose tracking never
   // lands.
   const ensureTrackedFlight = async () => {
-    const state = await page.evaluate(async () => {
+    let state;
+    try {
+      state = await page.evaluate(async () => {
       const { viewer, dataManager } = window.__godsEyeView;
       const settle = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
       const alive = () => {
@@ -684,6 +693,19 @@ try {
       }
       return { reacquired: false, feedEmpty: !ranked.length, attempted };
     });
+    } catch (error) {
+      // Every await inside the probe is bounded, so a failure here means the
+      // page never answered at all — distinguish a slow main thread from a
+      // crashed renderer before continuing (protocolTimeout alone names
+      // neither).
+      const probe = await Promise.race([
+        page.evaluate(() => 'alive').catch((probeError) => `eval-error: ${probeError.message.split('\n')[0]}`),
+        new Promise((resolve) => setTimeout(() => resolve('probe-timeout'), 8_000)),
+      ]);
+      const verdict = probe === 'alive' ? 'slow-main-thread' : 'RENDERER UNRESPONSIVE';
+      console.log(`WARN ensureTrackedFlight evaluate failed (${verdict}): ${error.message.split('\n')[0]}`);
+      state = { reacquired: false, evaluateError: true };
+    }
     if (state.reacquired) {
       console.log(`INFO live subject attrition: re-tracked via ${state.via}${state.id ? ` (${state.id})` : ''}`);
     } else if (state.feedEmpty) {
