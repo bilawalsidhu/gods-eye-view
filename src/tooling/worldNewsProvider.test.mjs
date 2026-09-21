@@ -492,10 +492,10 @@ test('page count and time window are configurable, and clamped', async (t) => {
   };
 
   const byDefault = await run({});
-  assert.equal(byDefault.length, 3, 'three pages per refresh by default');
+  assert.equal(byDefault.length, 5, 'five pages per refresh by default');
   assert.deepEqual(
     byDefault.map(({ offset }) => offset),
-    [0, 100, 200],
+    [0, 100, 200, 300, 400],
   );
   assert.equal(byDefault[0].since, '2026-09-12 12:00:00'); // 72h before T0
 

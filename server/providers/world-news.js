@@ -23,7 +23,7 @@ import { buildSearchNewsUrl, requestSearchNews } from './world-news/client.js';
  *
  * Upstream: GET https://api.worldnewsapi.com/search-news with
  * `add-entities=true` (the only way to receive geocoded location entities),
- * newest first, WORLD_NEWS_PAGES pages (default 3, max 5) of
+ * newest first, WORLD_NEWS_PAGES pages (default 5, max 5) of
  * WORLD_NEWS_PAGE_SIZE (default 100) articles per refresh, reaching back
  * WORLD_NEWS_WINDOW_HOURS (default 72). Paging is what adds headlines: only
  * a title-mentioned place can be pinned, so roughly a third of any page
@@ -87,8 +87,14 @@ export const WORLD_NEWS_RETENTION_MS = 60 * 60_000;
 export const WORLD_NEWS_DEFAULT_WINDOW_HOURS = 72;
 export const WORLD_NEWS_MIN_WINDOW_HOURS = 1;
 export const WORLD_NEWS_MAX_WINDOW_HOURS = 168;
-/** Pages fetched per refresh (`WORLD_NEWS_PAGES`). Each page costs points. */
-export const WORLD_NEWS_DEFAULT_PAGES = 3;
+/**
+ * Pages fetched per refresh (`WORLD_NEWS_PAGES`). Each page costs points, and
+ * paging is the only setting that adds headlines, so this is the coverage/cost
+ * dial. At the cost-gated 50-result page that is ~6.5 points a page: five
+ * pages is ~32.5 a refresh, which needs a budget well above the 40 that suits
+ * the free tier. Drop to 1 on the free plan.
+ */
+export const WORLD_NEWS_DEFAULT_PAGES = 5;
 export const WORLD_NEWS_MAX_PAGES = 5;
 export const WORLD_NEWS_DEFAULT_BUDGET = 40;
 export const WORLD_NEWS_COST_GATE_POINTS = 4;
@@ -333,8 +339,22 @@ export function worldNewsProxy({
     if (error?.quota) {
       state.quota = { used: error.quota.used, left: error.quota.left };
     }
-    // Never log the URL or the error body — only the stable code.
-    console.warn(`[world-news-proxy] upstream failed (${code})`);
+    // Never log the URL or the provider's body — either can carry the key or
+    // article text. The HTTP status and our own message are safe and are what
+    // makes a failure diagnosable: "upstream failed (upstream)" alone cannot
+    // tell a timeout from a 500 from a dropped connection, which left a real
+    // LOAD MORE failure on 2026-09-21 impossible to explain after the fact.
+    const detail = [
+      Number.isFinite(error?.status) ? `HTTP ${error.status}` : null,
+      typeof error?.message === 'string' && error.message
+        ? error.message
+        : null,
+    ]
+      .filter(Boolean)
+      .join(' — ');
+    console.warn(
+      `[world-news-proxy] upstream failed (${code})${detail ? `: ${detail}` : ''}`,
+    );
     return code;
   }
 
