@@ -519,3 +519,45 @@ test('page count and time window are configurable, and clamped', async (t) => {
     '2026-09-12 12:00:00', // falls back to the 72h default
   );
 });
+
+test('a page size that shrinks mid-refresh does not cut paging short', async (t) => {
+  // The measured-cost gate halves the page size once the first response
+  // reveals the cost, so page 1 asks for 100 and page 2 onwards for 50. A
+  // 50-result page compared against a captured size of 100 looked like the
+  // provider had run out, so paging stopped after two pages however many
+  // WORLD_NEWS_PAGES asked for, and the offset walked past unread articles.
+  isolate(t, {
+    ...KEYLESS_ENV,
+    WORLD_NEWS_API_KEY: 'k1',
+    WORLD_NEWS_PAGES: '5',
+  });
+  t.mock.method(Date, 'now', () => T0);
+  const calls = [];
+  t.mock.method(globalThis, 'fetch', async (raw) => {
+    const url = new URL(raw);
+    const number = Number(url.searchParams.get('number'));
+    calls.push({ number, offset: Number(url.searchParams.get('offset')) });
+    // Over the gate threshold, so every later page is the halved size.
+    return page(
+      Array.from({ length: number }, (_, i) =>
+        article(calls.length * 1000 + i),
+      ),
+      { request: 12 },
+    );
+  });
+  const request = install(worldNewsProxy({ pageDelayMs: 0 }));
+  const body = json(await request('/'));
+
+  assert.equal(calls.length, 5, 'all five pages are fetched');
+  assert.deepEqual(
+    calls.map(({ number }) => number),
+    [100, 50, 50, 50, 50],
+    'the gate halves the page after the first response',
+  );
+  // Offsets follow the articles actually read, so nothing is skipped.
+  assert.deepEqual(
+    calls.map(({ offset }) => offset),
+    [0, 100, 150, 200, 250],
+  );
+  assert.equal(body.requested, 300);
+});

@@ -362,13 +362,13 @@ export function worldNewsProxy({
    * One upstream page through the serial gate (≥ pageDelayMs apart). Records
    * the measured cost; a rejected request still charges the flat point.
    */
-  function upstream(key, offset) {
+  function upstream(key, offset, number = pageSize()) {
     const run = async () => {
       const gap = lastUpstreamAt + pageDelayMs - Date.now();
       if (gap > 0) await sleep(gap);
       lastUpstreamAt = Date.now();
       const url = buildSearchNewsUrl({
-        number: pageSize(),
+        number,
         offset,
         language: language(),
         sinceMs: Date.now() - windowMs(),
@@ -398,14 +398,24 @@ export function worldNewsProxy({
 
   /** Full refresh: sequential pages; partial success keeps earlier pages. */
   async function refresh(key, now) {
-    const size = pageSize();
     const batch = { at: now, articles: [], requested: 0 };
     let fetchedPages = 0;
     let failure = null;
+    // Walk the real article count, not page*size: the measured-cost gate can
+    // halve the page size DURING a refresh, because the first response is what
+    // reveals the cost. Deriving the offset from a stale size skipped the
+    // articles between the assumed and the actual page end.
+    let offset = 0;
     for (let page = 0; page < pages(); page++) {
+      // Re-read per page for the same reason, and hold the size the request
+      // actually asked for: comparing a 50-result page against a captured 100
+      // read as "the provider ran out", so paging stopped after two pages
+      // whatever WORLD_NEWS_PAGES said.
+      const size = pageSize();
       try {
-        const result = await upstream(key, page * size);
+        const result = await upstream(key, offset, size);
         fetchedPages++;
+        offset += result.news.length;
         batch.requested += result.news.length;
         for (const record of normalizeWorldNewsArticles(result.news, {
           thumbnails: thumbnails(),
@@ -418,7 +428,7 @@ export function worldNewsProxy({
       }
     }
     if (failure && fetchedPages === 0) throw failure;
-    return { batch, nextOffset: fetchedPages * size, failure };
+    return { batch, nextOffset: offset, failure };
   }
 
   function applyRefresh({ batch, nextOffset }, now) {
