@@ -22,7 +22,7 @@ test('the complete Realtime tool payload pins the additive analyst, satellite an
   assert.equal(
     digest,
     // Re-derived for the additive `local-adsb` set_layer_visibility value.
-    '07c2439e085cce9b9e1b36dfd01e2a688e66957db464c740627dd378536d904b',
+    '4de5c78425d8233794cfd37fdb797605ae93611ba71b7208f4d912b587a0e859',
   );
 });
 
@@ -85,12 +85,26 @@ test('all legacy action arguments are byte-identical after removing the delibera
   const layers = legacy.find((tool) => tool.name === 'analyst_query').parameters
     .properties.layers.items;
   layers.enum = layers.enum.filter(
-    (key) => !['satellites', 'local-datacenters', 'local-dams'].includes(key),
+    (key) =>
+      ![
+        'satellites',
+        'local-datacenters',
+        'local-dams',
+        'fire-perimeters',
+      ].includes(key),
   );
   // Local ADS-B is an additive set_layer_visibility enum value.
   const visibility = legacy.find((tool) => tool.name === 'set_layer_visibility')
     .parameters.properties.layerId;
-  visibility.enum = visibility.enum.filter((key) => key !== 'local-adsb');
+  visibility.enum = visibility.enum.filter(
+    (key) => !['local-adsb', 'fire-perimeters'].includes(key),
+  );
+  for (const tool of legacy) {
+    for (const value of Object.values(tool.parameters.properties)) {
+      if (value.enum)
+        value.enum = value.enum.filter((key) => key !== 'fire-perimeters');
+    }
+  }
   // Independently derived by executing trusted c9f9896 actionSchemas in the restricted container.
   assert.equal(
     createHash('sha256').update(JSON.stringify(legacy)).digest('hex'),

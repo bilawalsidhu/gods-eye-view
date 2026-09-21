@@ -664,10 +664,10 @@ test('the voice TOOL SCHEMA matches the pinned release — the mission mapping i
   const block = JSON.stringify(GEV_REALTIME_TOOLS);
   // Re-derived for the additive `local-adsb` set_layer_visibility value and
   // its common-name mapping; the missions still ride existing tools.
-  assert.equal(block.length, 27378, 'serialized tool schema length drifted');
+  assert.equal(block.length, 27432, 'serialized tool schema length drifted');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    '1947e9df228b3fd66a874ca462b5e5a29d800191b0180823903628be8888bc52',
+    'a2a4a787f4528f75b01f3f42caec636f29c37452c0d45b11f4f986171d6be57d',
     'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
   );
   const instructions = fs.readFileSync(new URL('../server/providers/openai/instructions.js', import.meta.url), 'utf8');
