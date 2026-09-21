@@ -99,24 +99,32 @@ const tally = (line) => {
 };
 
 // ── The load gate ────────────────────────────────────────────────────────────
-const startedAt = Date.now();
-let load = currentLoad();
-while (load >= MAX_LOAD) {
-  const waitedMin = (Date.now() - startedAt) / 60_000;
-  if (waitedMin > WAIT_MAX_MIN) {
-    tally(`GAVE UP after ${Math.round(waitedMin)} min — load ${load} never dropped below ${MAX_LOAD}`);
-    process.exit(1);
+// Gated per suite, not once per sweep: RUN 3d opened on load 6.49 and an
+// external burst hit 27.8 before the second suite started. A quiet WINDOW,
+// not a quiet instant, is what timing-sensitive suites need.
+async function awaitQuietWindow(label) {
+  const startedAt = Date.now();
+  let load = currentLoad();
+  while (load >= MAX_LOAD) {
+    const waitedMin = (Date.now() - startedAt) / 60_000;
+    if (waitedMin > WAIT_MAX_MIN) {
+      tally(`GAVE UP before ${label} after ${Math.round(waitedMin)} min — load ${load} never dropped below ${MAX_LOAD}`);
+      process.exit(1);
+    }
+    process.stdout.write(`load ${load} ≥ ${MAX_LOAD} — waiting (${Math.round(waitedMin)} min elapsed)\r`);
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+    load = currentLoad();
   }
-  process.stdout.write(`load ${load} ≥ ${MAX_LOAD} — waiting (${Math.round(waitedMin)} min elapsed)\r`);
-  await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-  load = currentLoad();
+  tally(`=== quiet window open for ${label}: load ${load} < ${MAX_LOAD} at ${new Date().toISOString()} ===`);
 }
-tally(`=== quiet window open: load ${load} < ${MAX_LOAD} at ${new Date().toISOString()} ===`);
+
+await awaitQuietWindow('the sweep');
 
 // ── The sweep (sequential — one browser at a time on this box) ───────────────
 const failures = [];
 const envGated = [];
 for (const suite of suites) {
+  await awaitQuietWindow(suite);
   const started = new Date().toISOString();
   tally(`=== ${suite} (load ${currentLoad()}) ${started} ===`);
   const { code, logText } = await new Promise((resolve) => {
