@@ -1,4 +1,4 @@
-import { enforceOptInRateLimit, openAiRateLimiter } from './rate-limit.js';
+import { enforceRateLimit, openAiRateLimiter } from './rate-limit.js';
 import {
   resolveVoiceModel,
   isKnownVoiceTier,
@@ -30,8 +30,8 @@ function createRealtimeTokenHandler({
       return;
     }
 
-    // Opt-in per-IP throttle (GEV_RATELIMIT_OPENAI_PER_MIN). No-op when unset.
-    if (!enforceOptInRateLimit(openAiRateLimiter(), req, res)) return;
+    // Per-IP throttle (GEV_RATELIMIT_OPENAI_PER_MIN). On by default; 0 disables.
+    if (!enforceRateLimit(openAiRateLimiter(), req, res)) return;
 
     const apiKey = resolveApiKey();
     if (!apiKey) {
