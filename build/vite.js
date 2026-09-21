@@ -7,16 +7,19 @@ import cesium from 'vite-plugin-cesium';
  * required: Knockout (bundled inside @cesium/widgets) resolves the global
  * object with `(0, eval)("this")` at module load, and without it the Cesium
  * widget never initializes (verified in headless Chrome). It also covers
- * Cesium's WASM decoders. Widen any other directive only for a real violation.
+ * Cesium's WASM decoders. `blob:` is required in the built app: Cesium's
+ * bundled workers bootstrap through `importScripts(blob:...)`, which a worker
+ * checks against script-src (the dev server loads them by URL instead).
+ * Widen any other directive only for a real violation.
  */
 export const BROWSER_CSP = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-eval'",
+  "script-src 'self' 'unsafe-eval' blob:",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' data: https://fonts.gstatic.com",
   "img-src 'self' data: blob: https:",
   "media-src 'self' blob: https:",
-  "connect-src 'self' https: wss: ws:",
+  "connect-src 'self' blob: data: https: wss: ws:",
   "worker-src 'self' blob:",
   "child-src 'self' blob:",
   "manifest-src 'self'",

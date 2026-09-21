@@ -26,7 +26,7 @@ test('explicit build inputs preserve browser-only defines, plugin order and loop
   const csp = config.server.headers['Content-Security-Policy'];
   assert.equal(csp, BROWSER_CSP);
   for (const directive of [
-    "script-src 'self' 'unsafe-eval'",
+    "script-src 'self' 'unsafe-eval' blob:",
     "object-src 'none'",
     "base-uri 'self'",
     "frame-ancestors 'none'",

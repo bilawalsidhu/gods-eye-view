@@ -27,9 +27,15 @@
  * boundary.
  */
 export const PROXY_SIGNALS = Object.freeze([
-  'forwarded', 'via', 'x-forwarded-for', 'x-forwarded-host',
-  'x-forwarded-port', 'x-forwarded-proto', 'x-real-ip',
-  'cf-connecting-ip', 'cf-ray',
+  'forwarded',
+  'via',
+  'x-forwarded-for',
+  'x-forwarded-host',
+  'x-forwarded-port',
+  'x-forwarded-proto',
+  'x-real-ip',
+  'cf-connecting-ip',
+  'cf-ray',
 ]);
 
 /**
@@ -43,9 +49,12 @@ export const PROXY_SIGNALS = Object.freeze([
  * @returns {string|null}
  */
 function requestAuthority(hostHeader, protocol) {
-  const raw = String(hostHeader || '').trim().toLowerCase();
+  const raw = String(hostHeader || '')
+    .trim()
+    .toLowerCase();
   const scheme = String(protocol || '').toLowerCase();
-  if (!raw || !['http:', 'https:'].includes(scheme) || /[\s/?#@]/.test(raw)) return null;
+  if (!raw || !['http:', 'https:'].includes(scheme) || /[\s/?#@]/.test(raw))
+    return null;
   try {
     return new URL(`${scheme}//${raw}`).origin;
   } catch {
@@ -69,11 +78,10 @@ function requestAuthority(hostHeader, protocol) {
  *  4. otherwise ok. Non-browser loopback tools and the LAN opt-in (which may
  *     carry neither `Origin` nor `Sec-Fetch-Site`) pass here.
  *
- * @param {{method?: string, hostHeader?: string, protocol?: string, origin?: string, secFetchSite?: string, proxyHeaders?: Record<string,string>}} req
+ * @param {{hostHeader?: string, protocol?: string, origin?: string, secFetchSite?: string, proxyHeaders?: Record<string,string>}} req
  * @returns {{ok: true} | {ok: false, status: 403, error: string}}
  */
 export function admitSameSiteRequest({
-  method,
   hostHeader,
   protocol = 'http:',
   origin,
@@ -82,20 +90,36 @@ export function admitSameSiteRequest({
 } = {}) {
   // (1) A request carrying reverse-proxy / CDN forwarding headers did not
   // originate on this machine, whatever its socket says.
-  if (PROXY_SIGNALS.some((name) => String(proxyHeaders[name] || '').trim() !== '')) {
-    return { ok: false, status: 403, error: 'Proxied requests are not accepted' };
+  if (
+    PROXY_SIGNALS.some((name) => String(proxyHeaders[name] || '').trim() !== '')
+  ) {
+    return {
+      ok: false,
+      status: 403,
+      error: 'Proxied requests are not accepted',
+    };
   }
   // (2) The browser tells us when a request is cross-site. `none` is a typed
   // URL / bookmark; `same-origin` is the app itself. Anything else (cross-site,
   // same-site but cross-origin) is refused.
-  const site = String(secFetchSite || '').trim().toLowerCase();
+  const site = String(secFetchSite || '')
+    .trim()
+    .toLowerCase();
   if (site !== '' && site !== 'same-origin' && site !== 'none') {
-    return { ok: false, status: 403, error: 'Cross-site requests are not accepted' };
+    return {
+      ok: false,
+      status: 403,
+      error: 'Cross-site requests are not accepted',
+    };
   }
   // (3) If Origin is present it must exactly equal the request's own authority.
   if (origin !== undefined && origin !== null && origin !== '') {
     if (origin === 'null') {
-      return { ok: false, status: 403, error: 'Opaque origins are not accepted' };
+      return {
+        ok: false,
+        status: 403,
+        error: 'Opaque origins are not accepted',
+      };
     }
     const authority = requestAuthority(hostHeader, protocol);
     let parsedOrigin;
@@ -104,14 +128,19 @@ export function admitSameSiteRequest({
     } catch {
       return { ok: false, status: 403, error: 'Unrecognized Origin refused' };
     }
-    const exactOrigin = parsedOrigin.username === ''
-      && parsedOrigin.password === ''
-      && parsedOrigin.pathname === '/'
-      && parsedOrigin.search === ''
-      && parsedOrigin.hash === ''
-      && parsedOrigin.origin === authority;
+    const exactOrigin =
+      parsedOrigin.username === '' &&
+      parsedOrigin.password === '' &&
+      parsedOrigin.pathname === '/' &&
+      parsedOrigin.search === '' &&
+      parsedOrigin.hash === '' &&
+      parsedOrigin.origin === authority;
     if (!exactOrigin) {
-      return { ok: false, status: 403, error: 'Cross-origin requests are not accepted' };
+      return {
+        ok: false,
+        status: 403,
+        error: 'Cross-origin requests are not accepted',
+      };
     }
   }
   return { ok: true };

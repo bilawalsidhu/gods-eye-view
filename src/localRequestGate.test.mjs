@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { admitSameSiteRequest } from './localRequestGate.mjs';
 
 const same = {
-  method: 'POST',
   hostHeader: 'localhost:4173',
   protocol: 'http:',
   origin: 'http://localhost:4173',
@@ -12,7 +11,6 @@ const same = {
 
 test('the honest same-origin browser request is admitted', () => {
   assert.equal(admitSameSiteRequest(same).ok, true);
-  assert.equal(admitSameSiteRequest({ ...same, method: 'GET' }).ok, true);
 });
 
 test('a cross-site Origin is refused', () => {
@@ -29,7 +27,6 @@ test('an opaque Origin ("null") is refused even when Host would match', () => {
 
 test('Sec-Fetch-Site cross-site without an Origin is refused (the <img> case)', () => {
   const r = admitSameSiteRequest({
-    method: 'GET',
     hostHeader: 'localhost:4173',
     protocol: 'http:',
     secFetchSite: 'cross-site',
@@ -63,7 +60,6 @@ test('same-origin Origin with Sec-Fetch-Site same-origin is admitted', () => {
 
 test('no Origin and no Sec-Fetch headers (curl / Node harness) is admitted', () => {
   const r = admitSameSiteRequest({
-    method: 'POST',
     hostHeader: 'localhost:4173',
     protocol: 'http:',
   });
@@ -72,7 +68,6 @@ test('no Origin and no Sec-Fetch headers (curl / Node harness) is admitted', () 
 
 test('Sec-Fetch-Site none (typed URL / bookmark) is admitted', () => {
   const r = admitSameSiteRequest({
-    method: 'GET',
     hostHeader: 'localhost:4173',
     protocol: 'http:',
     secFetchSite: 'none',
@@ -84,7 +79,6 @@ test('a LAN remote address is irrelevant: the function takes no remoteAddress', 
   // The credential-panel gate requires a loopback socket; this gate does not.
   // Passing a LAN-shaped Host/Origin pair must still match (LAN opt-in works).
   const lan = admitSameSiteRequest({
-    method: 'GET',
     hostHeader: '192.168.1.5:4173',
     protocol: 'http:',
     origin: 'http://192.168.1.5:4173',

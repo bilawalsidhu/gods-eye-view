@@ -14,7 +14,6 @@ import { admitSameSiteRequest } from '../../../src/localRequestGate.mjs';
  */
 export function admitSameSite(req, res) {
   const verdict = admitSameSiteRequest({
-    method: req.method,
     hostHeader: req.headers?.host,
     protocol: req.socket?.encrypted ? 'https:' : 'http:',
     origin: req.headers?.origin,

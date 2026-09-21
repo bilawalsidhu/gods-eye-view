@@ -51,13 +51,15 @@ export function googlePlacesContextProxy({
 } = {}) {
   function install(middlewares) {
     middlewares.use('/api/google/nearby-places', async (req, res) => {
+      // Gate first, like the OpenAI routes: a cross-site caller learns nothing
+      // about this endpoint's method surface.
+      if (admitSameSite(req, res)) return;
       if (req.method !== 'GET') {
         res.statusCode = 405;
         res.setHeader('Content-Type', 'application/json');
         res.end(JSON.stringify({ error: 'Method not allowed', places: [] }));
         return;
       }
-      if (admitSameSite(req, res)) return;
 
       // Keyless place context has no provider cost, so it resolves before the
       // paid-endpoint limiter can consume or exhaust quota (mirrors the HUD
