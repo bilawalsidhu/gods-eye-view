@@ -1,5 +1,16 @@
 # Changelog
 
+- Throttle the cost-bearing proxies by default instead of on request. The
+  OpenAI endpoints (`/api/realtime/token`, `/api/openai/hud-summary`) now allow
+  30 requests per minute per client IP and the Google Places endpoints
+  (`/api/google/nearby-places`, `/api/google/text-search`) 120 — the caps the
+  Pinokio build already ships, so the packaged app is unaffected and only an
+  unconfigured server changes, from unlimited to what the product already runs
+  with. `GEV_RATELIMIT_OPENAI_PER_MIN` and `GEV_RATELIMIT_GOOGLE_PER_MIN` still
+  override the caps, and exactly `0` disables them; a value that cannot be read
+  as a number now falls back to the default rather than to unlimited, so a typo
+  cannot silently disarm the guard.
+
 - Enable responsive trackpad pinch zoom on the globe. Browser pixel-mode
   `Ctrl+wheel` pinch gestures now reach Cesium with bounded amplification,
   while ordinary wheel, line-mode and touch-pinch inputs retain their existing
