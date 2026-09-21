@@ -15,6 +15,7 @@ import {
   normalizeWorldNewsArticles,
   retainWithinWindow,
 } from '../../src/data/worldNewsArticles.js';
+import { parseNewsRegionQuery } from '../../src/data/worldNewsRegion.js';
 import { buildSearchNewsUrl, requestSearchNews } from './world-news/client.js';
 
 /**
@@ -155,6 +156,14 @@ export function worldNewsProxy({
   const blockedUntil = { quota: 0, rate_limited: 0, upstream: 0 };
   let rejectedKey = null;
   let extraPageTimes = [];
+  /**
+   * "This view" batches, keyed by the region descriptor. Deliberately separate
+   * from `state`: the global feed is the free default and must keep behaving
+   * exactly as before whether or not anyone ever opens region mode.
+   * @type {Map<string, {batches:Array<object>, refreshedAt:number}>}
+   */
+  const regionCache = new Map();
+  let regionFetchTimes = [];
 
   const apiKey = () => String(process.env.WORLD_NEWS_API_KEY || '').trim();
   const budgetLimit = () =>
@@ -180,6 +189,22 @@ export function worldNewsProxy({
     /^(1|true|yes|on)$/i.test(
       String(process.env.WORLD_NEWS_THUMBNAILS || '').trim(),
     );
+  /** Operator kill switch for "this view" fetching (`WORLD_NEWS_REGION_MODE`). */
+  const regionMode = () =>
+    !/^(0|false|no|off)$/i.test(
+      String(process.env.WORLD_NEWS_REGION_MODE || '').trim(),
+    );
+  /**
+   * Results per region fetch. Points are charged on results RETURNED, not
+   * requested (verified 2026-09-21: asking 25 over a sparse region returned 1
+   * and cost 1.11), so a generous page is cheap where there is little news.
+   */
+  const regionPageSize = () =>
+    clampInt(process.env.WORLD_NEWS_REGION_PAGE_SIZE, 1, 100, 25);
+  const regionFetchesPerHour = () =>
+    clampInt(process.env.WORLD_NEWS_REGION_FETCHES_PER_HOUR, 1, 60, 6);
+  const regionCacheMax = () =>
+    clampInt(process.env.WORLD_NEWS_REGION_CACHE_MAX, 1, 200, 12);
   /** Oldest publish time a headline may carry, as epoch ms. */
   const windowMs = () =>
     clampInt(
@@ -362,12 +387,13 @@ export function worldNewsProxy({
    * One upstream page through the serial gate (≥ pageDelayMs apart). Records
    * the measured cost; a rejected request still charges the flat point.
    */
-  function upstream(key, offset, number = pageSize()) {
+  function upstream(key, offset, number = pageSize(), region = null) {
     const run = async () => {
       const gap = lastUpstreamAt + pageDelayMs - Date.now();
       if (gap > 0) await sleep(gap);
       lastUpstreamAt = Date.now();
       const url = buildSearchNewsUrl({
+        region,
         number,
         offset,
         language: language(),
@@ -497,6 +523,148 @@ export function worldNewsProxy({
     };
   }
 
+  /**
+   * Apply the provider's one-hour caching limit to every region entry, drop
+   * entries left with nothing, then bound the map. Eviction is LRU: a hit
+   * re-inserts its key, so the end of the map is the most recently used and
+   * the front is the coldest — a camera that revisits a city keeps it.
+   */
+  function purgeRegions(now) {
+    for (const [key, entry] of regionCache) {
+      const batches = retainWithinWindow(
+        entry.batches,
+        now,
+        WORLD_NEWS_RETENTION_MS,
+      );
+      if (!batches.length) regionCache.delete(key);
+      else regionCache.set(key, { ...entry, batches });
+    }
+    const max = regionCacheMax();
+    while (regionCache.size > max)
+      regionCache.delete(regionCache.keys().next().value);
+    const hourAgo = now - 3_600_000;
+    regionFetchTimes = regionFetchTimes.filter((at) => at > hourAgo);
+  }
+
+  /** Mark a region entry most-recently-used (see purgeRegions). */
+  function touchRegion(regionKey) {
+    const entry = regionCache.get(regionKey);
+    if (!entry) return null;
+    regionCache.delete(regionKey);
+    regionCache.set(regionKey, entry);
+    return entry;
+  }
+
+  function regionPayload(region, entry, { stale, blocked }) {
+    const articles = entry ? mergeBatchArticles(entry.batches) : [];
+    const requested = entry
+      ? entry.batches.reduce(
+          (total, batch) => total + (batch.requested || 0),
+          0,
+        )
+      : 0;
+    return {
+      fetchedAt: entry?.refreshedAt ?? null,
+      stale,
+      ttlMs: ttlMs(),
+      retentionMs: WORLD_NEWS_RETENTION_MS,
+      pageSize: regionPageSize(),
+      count: articles.length,
+      requested,
+      placedCount: articles.length,
+      unplacedCount: Math.max(0, requested - articles.length),
+      blocked,
+      budget: budgetPayload(),
+      quota: state.quota,
+      costPerRequest: state.measuredCost ?? state.lastCharge,
+      costMeasured: Number.isFinite(state.measuredCost),
+      thumbnails: thumbnails(),
+      // Region batches are a single page, so there is no second page to walk.
+      morePagesLeft: 0,
+      region: {
+        band: region.band,
+        key: region.key,
+        center: region.center,
+        radiusKm: region.radiusKm,
+      },
+      regionFetchesLeft: Math.max(
+        0,
+        regionFetchesPerHour() - regionFetchTimes.length,
+      ),
+      articles,
+    };
+  }
+
+  /** "This view": one page filtered to a circle the operator is looking at. */
+  async function handleRegion(key, now, region, sendJson) {
+    const cached = touchRegion(region.key);
+    if (cached && now - cached.refreshedAt < ttlMs()) {
+      sendJson(
+        200,
+        regionPayload(region, cached, { stale: false, blocked: null }),
+      );
+      return;
+    }
+    const blocked = currentBlocked(now, key);
+    if (blocked) {
+      if (cached)
+        sendJson(200, regionPayload(region, cached, { stale: true, blocked }));
+      else sendJson(FAILURE_STATUS[blocked], { error: blocked });
+      return;
+    }
+    // The hourly cap is the backstop behind the client's own debounce: a
+    // scripted or wedged camera must not be able to spend all day.
+    if (regionFetchTimes.length >= regionFetchesPerHour()) {
+      if (cached)
+        sendJson(
+          200,
+          regionPayload(region, cached, {
+            stale: true,
+            blocked: 'region_rate',
+          }),
+        );
+      else sendJson(429, { error: 'region_rate' });
+      return;
+    }
+    try {
+      const result = await upstream(key, 0, regionPageSize(), region);
+      regionFetchTimes.push(now);
+      regionCache.delete(region.key);
+      regionCache.set(region.key, {
+        refreshedAt: now,
+        batches: [
+          {
+            at: now,
+            // Pin the title place NEAREST this view: a headline can name
+            // several, and the loudest is not always the one the circle
+            // matched (a Moscow query returned a story that pinned in France).
+            articles: normalizeWorldNewsArticles(result.news, {
+              thumbnails: thumbnails(),
+              near: region.center,
+            }),
+            requested: result.news.length,
+          },
+        ],
+      });
+      purgeRegions(now);
+      sendJson(
+        200,
+        regionPayload(region, regionCache.get(region.key), {
+          stale: false,
+          blocked: null,
+        }),
+      );
+    } catch (error) {
+      const code = noteFailure(error, now, key);
+      if (cached)
+        sendJson(
+          200,
+          regionPayload(region, cached, { stale: true, blocked: code }),
+        );
+      else sendJson(FAILURE_STATUS[code] || 502, { error: code });
+    }
+  }
+
   /** One explicit extra page beyond the snapshot — user-initiated spend. */
   async function handleMore(key, now, sendJson) {
     if (extraPageTimes.length >= WORLD_NEWS_MAX_EXTRA_PAGES_PER_HOUR) {
@@ -569,6 +737,27 @@ export function worldNewsProxy({
         }
         if (!allow(clientKey(req))) {
           sendJson(429, { error: 'rate_limited' });
+          return;
+        }
+        // A view region arrives as query parameters. It is validated before it
+        // can reach the provider: unknown parameters are IGNORED upstream and
+        // answered 200 with the whole global feed, so a malformed region that
+        // fell back to global would be cached and shown as regional news.
+        const params = new URLSearchParams(
+          String(req.url || '').split('?')[1] || '',
+        );
+        const parsed = parseNewsRegionQuery(params, language());
+        if (!parsed.ok) {
+          sendJson(400, { error: 'bad_region', reason: parsed.reason });
+          return;
+        }
+        if (parsed.region && subPath === '') {
+          if (!regionMode()) {
+            sendJson(503, { error: 'region_off' });
+            return;
+          }
+          purgeRegions(now);
+          await handleRegion(key, now, parsed.region, sendJson);
           return;
         }
         if (subPath === '/more' && hasData()) {

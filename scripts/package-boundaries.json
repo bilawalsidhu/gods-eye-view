@@ -144,7 +144,9 @@
       "src/sources/rateLimit.js",
       "src/sources/httpBody.js",
       "src/data/tomtomTiles.js",
-      "src/data/worldNewsArticles.js"
+      "src/data/worldNewsArticles.js",
+      "src/data/worldNewsRegion.js",
+      "src/data/trafficBounds.js"
     ],
     "external": []
   },

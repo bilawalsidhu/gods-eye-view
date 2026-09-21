@@ -326,3 +326,59 @@ test('publisher image is opt-in, https-only, and never on by default', () => {
     );
   }
 });
+
+test('a region fetch pins the title place nearest the view, not the loudest', () => {
+  // Measured 2026-09-21: a Moscow region query returned a story whose
+  // most-mentioned title place was France, so it pinned in France. With the
+  // view supplied, the nearest title place wins and the pin keeps its promise.
+  const moscow = {
+    type: 'LOC',
+    name: 'Moscow',
+    latitude: 55.75,
+    longitude: 37.62,
+    found_in: 'title',
+    mentions: 1,
+  };
+  const france = {
+    type: 'LOC',
+    name: 'France',
+    latitude: 46,
+    longitude: 2,
+    found_in: 'title',
+    mentions: 5,
+  };
+  const entities = [france, moscow];
+  assert.equal(topLocationEntity(entities).name, 'France', 'unchanged default');
+  assert.equal(
+    topLocationEntity(entities, { near: { lat: 55.5, lon: 37.5 } }).name,
+    'Moscow',
+  );
+  // Ties and junk fall back to the mention ranking rather than throwing.
+  assert.equal(topLocationEntity(entities, { near: null }).name, 'France');
+  assert.equal(
+    topLocationEntity(entities, { near: { lat: NaN, lon: 3 } }).name,
+    'France',
+  );
+
+  // Longitude wraps, so a view just west of the dateline prefers its neighbour.
+  const fiji = { ...moscow, name: 'Fiji', latitude: -17.7, longitude: 178 };
+  const samoa = { ...france, name: 'Samoa', latitude: -13.8, longitude: -172 };
+  assert.equal(
+    topLocationEntity([fiji, samoa], { near: { lat: -14, lon: 179 } }).name,
+    'Fiji',
+  );
+
+  // The record built from it carries the nearer place through.
+  const record = normalizeWorldNewsArticle(
+    {
+      id: 11,
+      title: 'Talks in Moscow and Paris',
+      url: 'https://e.com/11',
+      publish_date: '2026-09-21 10:00:00',
+      entities,
+    },
+    { near: { lat: 55.5, lon: 37.5 } },
+  );
+  assert.equal(record.place, 'Moscow');
+  assert.equal(record.lat, 55.75);
+});

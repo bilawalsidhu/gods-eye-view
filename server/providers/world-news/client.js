@@ -18,6 +18,17 @@ const RESERVED_QUERY_KEYS = new Set([
   'earliest-publish-date',
   'language',
   'api-key',
+  // Geographic targeting is the proxy's to set from the view. An operator
+  // pinning one of these in WORLD_NEWS_EXTRA_QUERY would silently fight the
+  // region the user is looking at, and the provider IGNORES parameters it does
+  // not know, so the collision would surface as plausible-looking wrong news
+  // rather than an error.
+  'location-filter',
+  'text',
+  'text-match-indexes',
+  'source-country',
+  'source-countries',
+  'entities',
 ]);
 
 const UPSTREAM_CODES = Object.freeze({
@@ -63,6 +74,9 @@ export function parseExtraQuery(raw) {
  * @param {string} [options.language] ISO 639-1 code; empty means all.
  * @param {number} [options.sinceMs] Earliest publish time to include.
  * @param {string} [options.extraQuery] WORLD_NEWS_EXTRA_QUERY value.
+ * @param {{center:{lat:number,lon:number}, radiusKm:number}} [options.region]
+ *   Validated view region (see parseNewsRegionQuery). Emits `location-filter`,
+ *   which the provider caps at 100 km — pass only a checked descriptor.
  * @returns {string}
  */
 export function buildSearchNewsUrl({
@@ -71,6 +85,7 @@ export function buildSearchNewsUrl({
   language = '',
   sinceMs,
   extraQuery = '',
+  region = null,
 }) {
   const params = new URLSearchParams();
   params.set('number', String(number));
@@ -78,6 +93,12 @@ export function buildSearchNewsUrl({
   params.set('sort', 'publish-time');
   params.set('sort-direction', 'DESC');
   params.set('add-entities', 'true');
+  if (region?.center && Number.isFinite(region.radiusKm)) {
+    params.set(
+      'location-filter',
+      `${region.center.lat},${region.center.lon},${region.radiusKm}`,
+    );
+  }
   if (language) params.set('language', language);
   if (Number.isFinite(sinceMs))
     params.set('earliest-publish-date', formatWorldNewsDate(sinceMs));

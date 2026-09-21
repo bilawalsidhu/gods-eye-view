@@ -68,6 +68,22 @@ function finiteInRange(value, limit) {
 }
 
 /**
+ * Squared degree gap between an entity and a point, with longitude wrapped so
+ * the dateline does not read as half a world. Ordering only, so the cheap
+ * equirectangular form is enough — no trigonometry, no allocation.
+ */
+function squaredDegreeGap(entity, near) {
+  const dLat = entity.latitude - near.lat;
+  let dLon = Math.abs(entity.longitude - near.lon);
+  if (dLon > 180) dLon = 360 - dLon;
+  // Longitudes converge toward the poles; without this a point 10 deg east at
+  // 70N would outrank one 5 deg north of the camera.
+  const scale = Math.cos((near.lat * Math.PI) / 180);
+  const x = dLon * scale;
+  return dLat * dLat + x * x;
+}
+
+/**
  * Normalize the provider's publish date. The documented form is
  * "YYYY-MM-DD HH:MM:SS" in UTC; an explicit ISO offset is honored when present.
  * @param {unknown} raw Provider `publish_date`.
@@ -102,7 +118,7 @@ function mentionedInTitle(entity) {
  * @param {unknown} entities Provider `entities[]` for one article.
  * @returns {object|null} The chosen entity, or null when none qualifies.
  */
-export function topLocationEntity(entities) {
+export function topLocationEntity(entities, { near = null } = {}) {
   if (!Array.isArray(entities)) return null;
   const usable = entities.filter(
     (entity) =>
@@ -113,6 +129,20 @@ export function topLocationEntity(entities) {
       finiteInRange(entity.latitude, 90) &&
       finiteInRange(entity.longitude, 180),
   );
+  // A region fetch asked about ONE place, but a headline can name several, and
+  // the most-mentioned one is not always the one the query matched: a Moscow
+  // request returned a story that pinned in France (measured 2026-09-21). When
+  // a region is supplied the nearest title place wins, so "news for this view"
+  // keeps its promise. Without one the ranking is unchanged.
+  if (Number.isFinite(near?.lat) && Number.isFinite(near?.lon)) {
+    usable.sort(
+      (a, b) =>
+        squaredDegreeGap(a, near) - squaredDegreeGap(b, near) ||
+        (Number(b.mentions) || 0) - (Number(a.mentions) || 0) ||
+        String(a.name || '').localeCompare(String(b.name || '')),
+    );
+    return usable[0] || null;
+  }
   usable.sort(
     (a, b) =>
       (Number(b.mentions) || 0) - (Number(a.mentions) || 0) ||
@@ -129,7 +159,7 @@ export function topLocationEntity(entities) {
  */
 export function normalizeWorldNewsArticle(
   article,
-  { thumbnails = false } = {},
+  { thumbnails = false, near = null } = {},
 ) {
   if (!article || typeof article !== 'object') return null;
   const rawId = article.id;
@@ -139,7 +169,7 @@ export function normalizeWorldNewsArticle(
   const title = cleanText(article.title, WORLD_NEWS_TITLE_MAX_CHARS);
   const url = httpUrl(article.url);
   if (!validId || !title || !url) return null;
-  const location = topLocationEntity(article.entities);
+  const location = topLocationEntity(article.entities, { near });
   if (!location) return null;
   const place = cleanText(location.name, WORLD_NEWS_PLACE_MAX_CHARS);
   if (!place) return null;
