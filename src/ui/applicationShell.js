@@ -704,6 +704,7 @@ export class StyleManager extends ShellFacade {
       });
 
       this._initTacticalSuiteControls();
+    }
     this._layerBindings.observeCamera();
   }
 
