@@ -10,6 +10,7 @@ import {
   resolvePerMinuteCap,
 } from '../server/providers/common/rate-limit.js';
 import { OPENAI_DEFAULT_PER_MIN } from '../server/providers/openai/rate-limit.js';
+import { handleHudSummary } from '../server/providers/openai/hud-summary.js';
 import {
   googlePlacesContextProxy,
   GOOGLE_DEFAULT_PER_MIN,
@@ -41,14 +42,17 @@ function install(plugin) {
   return routes;
 }
 
-function request(handler, { url = '/', method = 'POST' } = {}) {
+function request(
+  handler,
+  { url = '/', method = 'POST', remoteAddress = '127.0.0.1' } = {},
+) {
   return new Promise((resolve, reject) => {
     const req = Readable.from([]);
     Object.assign(req, {
       method,
       url,
       headers: { host: 'localhost:4173', 'content-type': 'application/json' },
-      socket: { remoteAddress: '127.0.0.1' },
+      socket: { remoteAddress },
     });
     const headers = {};
     const res = {
@@ -147,6 +151,57 @@ test('the realtime token route throttles by default, and says so in a 429', asyn
   assert.ok(
     upstreamCalls <= OPENAI_DEFAULT_PER_MIN,
     'a throttled request must be refused before it reaches OpenAI, or it still costs money',
+  );
+});
+
+test('the HUD summary route throttles the paid path, never the free one', async (t) => {
+  env(t, 'OPENAI_API_KEY', 'fixture-upstream-secret');
+  let upstreamCalls = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    upstreamCalls += 1;
+    return Response.json({ output_text: 'five word hud summary here' });
+  });
+
+  // Its own client address: the limiter is cached at module scope and shared
+  // across the OpenAI routes, so the realtime case above has already spent
+  // 127.0.0.1's budget inside this process.
+  const from = '10.9.9.9';
+  const statuses = [];
+  for (let i = 0; i < OPENAI_DEFAULT_PER_MIN; i += 1)
+    statuses.push(
+      (await request(handleHudSummary, { remoteAddress: from })).status,
+    );
+  assert.deepEqual(
+    statuses,
+    Array(OPENAI_DEFAULT_PER_MIN).fill(200),
+    'the default must not throttle ordinary HUD use',
+  );
+
+  const overLimit = await request(handleHudSummary, { remoteAddress: from });
+  assert.equal(overLimit.status, 429);
+  assert.equal(overLimit.headers['retry-after'], '5');
+  assert.equal(JSON.parse(overLimit.body).error, 'Rate limit exceeded');
+  assert.equal(
+    overLimit.body.includes('fixture-upstream-secret'),
+    false,
+    'a throttled reply must not leak the server-held key',
+  );
+  assert.ok(
+    upstreamCalls <= OPENAI_DEFAULT_PER_MIN,
+    'a throttled request must be refused before it reaches OpenAI, or it still costs money',
+  );
+
+  // The keyless HUD answer is deliberately NOT throttled: it is composed
+  // locally, spends nothing upstream, and capping it would only take the free
+  // HUD away from an unconfigured install. Same exhausted client, no key.
+  delete process.env.OPENAI_API_KEY;
+  const free = await request(handleHudSummary, { remoteAddress: from });
+  assert.equal(free.status, 200, 'the free path answers past a spent budget');
+  assert.equal(JSON.parse(free.body).configured, false);
+  assert.equal(
+    upstreamCalls <= OPENAI_DEFAULT_PER_MIN,
+    true,
+    'the free path reaches no provider',
   );
 });
 
