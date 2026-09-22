@@ -571,6 +571,32 @@ test('probeMeshFloorM reports COVERAGE, not just a height', () => {
   assert.equal(partial.requested, 2);
 });
 
+test('probeMeshFloorM rejects physically impossible depths (RUN 3m regression)', () => {
+  // An unloaded tile answered -14,971 m under SwiftShader; adopting it as the
+  // floor seeded the dolly 15 km down, skipped the arming hold, and set the
+  // camera's first eye underground. An answer no natural surface can produce
+  // is silence, not a floor — and it must not count as coverage either.
+  const GARBAGE = -14971;
+  const allGarbage = probeMeshFloorM(
+    { sampleHeight: () => GARBAGE },
+    [{ lat: 30.26, lon: -97.74 }, { lat: 30.27, lon: -97.74 }],
+  );
+  assert.equal(allGarbage.heightM, Number.NaN, 'no plausible answer — no height');
+  assert.equal(allGarbage.sampled, 0, 'garbage does not count as coverage');
+  assert.equal(allGarbage.requested, 2);
+  // One garbage cell alongside one real one: the real answer stands and the
+  // garbage cell is reported as unreached, keeping the arm/safe-hold in force.
+  const mixed = probeMeshFloorM(
+    { sampleHeight: (c) => (c.longitude < 0 ? GARBAGE : 116) },
+    [{ lat: 30.26, lon: -97.74 }, { lat: 30.26, lon: 1 }],
+  );
+  assert.equal(mixed.heightM, 116, 'the plausible answer survives');
+  assert.equal(mixed.sampled, 1, 'the garbage cell counts as unreached');
+  // Absurd ALTITUDE is the same lie from the other direction.
+  assert.equal(probeMeshFloorM({ sampleHeight: () => 45000 }, [{ lat: 1, lon: 1 }]).sampled, 0,
+    'nothing rendered is a 45 km surface');
+});
+
 test('a PARTIALLY warm corridor is unresolved, and probes only the cold cells', () => {
   // One cached cell says nothing about the ground under the other seven.
   // Treating it as an answer let the dolly descend to 460 m over a 1,600 m

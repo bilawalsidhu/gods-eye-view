@@ -505,6 +505,20 @@ function acquireCorridorFloor(state, takeWhole) {
   return true;
 }
 
+/** Physical-plausibility band for a rendered-surface probe answer. Earth's
+ * deepest natural surface is ~-10.9 km (ocean trench — where no mesh tile is
+ * streamed and no driving route is drawn) and its tallest is ~+8.8 km, so an
+ * answer outside the band is not a surface any route flies over: it is an
+ * unloaded/placeholder tile reporting a garbage depth (RUN 3m: sampleHeight
+ * answered -14,971 m on a not-yet-streamed SwiftShader tile; adopting it
+ * seeded the floor 15 km down, skipped the arming hold entirely, and set the
+ * camera's first eye at -14.7 km before the per-frame raw clamp snapped it
+ * back). Gated at the SOURCE, exactly like the silence of an unstreamed
+ * tile: an impossible answer contributes nothing and does not count as
+ * coverage. */
+const PROBE_PLAUSIBLE_MIN_M = -1000;
+const PROBE_PLAUSIBLE_MAX_M = 9000;
+
 /**
  * Highest rendered surface across a handful of corridor cells, with the number
  * of cells that actually answered — a cell whose tiles are not streamed yet
@@ -524,6 +538,7 @@ export function probeMeshFloorM(scene, cells) {
       const carto = Cesium.Cartographic.fromDegrees(cell.lon, cell.lat, 0, _probeCarto);
       const height = scene.sampleHeight(carto);
       if (!Number.isFinite(height)) continue;
+      if (height < PROBE_PLAUSIBLE_MIN_M || height > PROBE_PLAUSIBLE_MAX_M) continue;
       sampled += 1;
       heightM = Number.isFinite(heightM) ? Math.max(heightM, height) : height;
     } catch { /* tiles not ready for this cell */ }
