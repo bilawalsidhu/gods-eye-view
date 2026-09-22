@@ -6,6 +6,7 @@ import { parseEnv } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { projectRoot } from './project-root.mjs';
 import { selectMapStartupRoute } from '../src/mapStartup.js';
+import { setupLocalVoice } from './setup-local-voice.mjs';
 
 const ROOT = projectRoot(import.meta.url);
 const OPENSKY_AUTH_MODE_DEFAULT = 'oauth';
@@ -185,6 +186,27 @@ export function buildCapabilitySummary(
   };
 }
 
+/**
+ * Local voice readiness. The bundled profile is Apple Silicon only, so the
+ * answer is either "ready", "not for this machine", or the exact command that
+ * makes LOCAL work — never a bare failure.
+ */
+export function inspectLocalVoice({
+  platform = process.platform,
+  architecture = process.arch,
+  environment = process.env,
+} = {}) {
+  if (platform !== 'darwin' || architecture !== 'arm64') return 'Apple Silicon only';
+  const binary = spawnSync(environment.GEV_LOCAL_AI_BIN || 'local-ai', ['--version'], { encoding: 'utf8' });
+  if (binary.status !== 0) return 'LocalAI missing; brew install localai, then npm run voice:local:setup';
+  try {
+    setupLocalVoice({ environment, platform, architecture, checkOnly: true });
+    return 'ready (LocalAI pipeline installed)';
+  } catch (error) {
+    return String(error?.message || error);
+  }
+}
+
 export function inspectSetup({ includeKeychain = true, authoritativeEnvironment = false, rootDir = ROOT } = {}) {
   const node = classifyNodeVersion();
   const npm = npmProcessSpec();
@@ -205,9 +227,12 @@ export function inspectSetup({ includeKeychain = true, authoritativeEnvironment 
       : { available: false, version: null },
     dependenciesInstalled,
     credentials,
-    capabilities: buildCapabilitySummary(credentials, {
-      openSkyAuthMode: resolveOpenSkyAuthMode({ authoritativeEnvironment, rootDir }),
-    }),
+    capabilities: {
+      ...buildCapabilitySummary(credentials, {
+        openSkyAuthMode: resolveOpenSkyAuthMode({ authoritativeEnvironment, rootDir }),
+      }),
+      localVoice: inspectLocalVoice(),
+    },
   };
 }
 
@@ -233,6 +258,7 @@ export function formatSetupReport(report, { readyMessage } = {}) {
     `Map:     ${report.capabilities.map}`,
     `Flights: ${report.capabilities.flights}`,
     `Voice:   ${report.capabilities.voice}`,
+    `LocalAI: ${report.capabilities.localVoice}`,
     `Vessels: ${report.capabilities.vessels}`,
     `Fires:   ${report.capabilities.fires}`,
     `Traffic: ${report.capabilities.traffic}`,

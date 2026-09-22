@@ -1,5 +1,6 @@
 import { enforceOptInRateLimit, openAiRateLimiter } from './rate-limit.js';
 import {
+  LOCAL_VOICE_MODEL,
   resolveVoiceModel,
   isKnownVoiceTier,
 } from '../../../src/voice/voiceCost.js';
@@ -30,6 +31,36 @@ function createRealtimeTokenHandler({
       return;
     }
 
+    const query = (() => {
+      try {
+        return new URL(req.url || '', 'http://localhost').searchParams;
+      } catch {
+        return new URLSearchParams();
+      }
+    })();
+    const provider = String(
+      query.get('provider') || process.env.GEV_VOICE_PROVIDER || '',
+    ).toLowerCase();
+    if (provider === 'local') {
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('X-GEV-Voice-Model', LOCAL_VOICE_MODEL.id);
+      res.setHeader('X-GEV-Voice-Tier', 'standard');
+      res.end(
+        JSON.stringify({
+          value: 'local',
+          callsUrl: '/api/realtime/local-calls',
+          session: { model: LOCAL_VOICE_MODEL.id },
+          sessionUpdate: {
+            instructions: realtimeInstructions(annotationGuidance),
+            tools: GEV_REALTIME_TOOLS,
+            tool_choice: 'auto',
+          },
+        }),
+      );
+      return;
+    }
+
     // Opt-in per-IP throttle (GEV_RATELIMIT_OPENAI_PER_MIN). No-op when unset.
     if (!enforceOptInRateLimit(openAiRateLimiter(), req, res)) return;
 
@@ -47,15 +78,7 @@ function createRealtimeTokenHandler({
     // bad querystring degrades to a normal session rather than a dead mic.
     // The env overrides stay authoritative per tier (see .env.example) —
     // a wrong upstream model id is then a config fix, not a code change.
-    const requestedTier = (() => {
-      try {
-        return new URL(req.url || '', 'http://localhost').searchParams.get(
-          'tier',
-        );
-      } catch {
-        return null;
-      }
-    })();
+    const requestedTier = query.get('tier');
     const tier = resolveVoiceModel(requestedTier).tier;
     const model =
       tier === 'mini'

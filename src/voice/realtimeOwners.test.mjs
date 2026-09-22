@@ -50,6 +50,181 @@ function browser(t) {
   return { peers, streams, Peer };
 }
 
+function localPreference(t) {
+  let provider = 'local';
+  installGlobals(t, { localStorage: {
+    getItem: (key) => key === 'godsEyeView.voice.provider' ? provider : null,
+    setItem(key, value) { if (key === 'godsEyeView.voice.provider') provider = value; },
+  } });
+  return (value) => { provider = value; };
+}
+
+function localController(options = {}) {
+  return new GevRealtimeController({
+    runner: async () => ({ ok: true }),
+    backend: {
+      async requestToken() {
+        return { token: 'local', model: 'gpt-realtime', sessionUpdate: {
+          instructions: 'Use the supplied tools.', tools: [{ type: 'function', name: 'fixture' }],
+        } };
+      },
+      async negotiate() { return 'answer'; },
+    },
+    debugSink: null,
+    ui: { root: { dataset: {}, classList: { remove() {} }, querySelectorAll: () => [], remove() {} }, status: {}, detail: {} },
+    ...options,
+  });
+}
+
+test('LOCAL configures tools before enabling microphone tracks, including a Space hold during connection', async (t) => {
+  const { peers, streams } = browser(t);
+  localPreference(t);
+  installGlobals(t, { fetch: async () => Response.json({ state: 'ready' }) });
+  const controller = localController();
+  t.after(() => controller.stop());
+  await controller.start({ pushToTalk: true });
+  assert.equal(streams[0].track.enabled, false);
+  controller.pushToTalkKeyHeld = true;
+  controller._input.setMicrophoneEnabled(true);
+  assert.equal(streams[0].track.enabled, false, 'Space cannot bypass session configuration');
+  const channel = peers[0].channel;
+  const send = channel.send;
+  channel.send = function (message) {
+    assert.equal(streams[0].track.enabled, false, 'microphone remains muted while configuration is sent');
+    send.call(this, message);
+  };
+  channel.handlers.get('open')();
+  assert.equal(channel.sent[0].type, 'session.update');
+  assert.equal(channel.sent[0].session.tools[0].name, 'fixture');
+  assert.equal(streams[0].track.enabled, true);
+  assert.equal(controller.pendingSessionUpdate, null);
+});
+
+test('a failed LOCAL session update closes transport and releases the muted microphone', async (t) => {
+  const { peers, streams } = browser(t);
+  localPreference(t);
+  installGlobals(t, { fetch: async () => Response.json({ state: 'ready' }) });
+  const controller = localController();
+  await controller.start();
+  peers[0].channel.send = () => { throw new Error('send failed'); };
+  peers[0].channel.handlers.get('open')();
+  assert.equal(controller.status, 'error');
+  assert.equal(streams[0].track.enabled, false);
+  assert.equal(streams[0].track.stops, 1);
+  assert.equal(controller.dc, null);
+  assert.equal(controller.pendingSessionUpdate, null);
+  assert.equal(controller.sessionVoiceProvider, null);
+});
+
+test('stopping LOCAL warm-up aborts its request and ignores a late setup reply after CLOUD connects', async (t) => {
+  const { streams } = browser(t);
+  const select = localPreference(t);
+  let finish;
+  let signal;
+  let setupRequests = 0;
+  installGlobals(t, { fetch: async (_url, options) => {
+    signal = options.signal;
+    return { json: () => new Promise(resolve => { finish = resolve; }) };
+  } });
+  const controller = localController({
+    openProviderSettings: () => { setupRequests++; },
+    backend: {
+      async requestToken() { return { token: 'cloud', model: resolveVoiceModel('mini').id }; },
+      async negotiate() { return 'answer'; },
+    },
+  });
+  const first = controller.start();
+  while (!finish) await new Promise(resolve => setImmediate(resolve));
+  assert.equal(controller.status, 'connecting');
+  assert.equal(streams.length, 0, 'warm-up precedes microphone acquisition');
+  controller.stop();
+  assert.equal(signal.aborted, true);
+  select('openai');
+  await controller.start();
+  controller.dc.handlers.get('open')();
+  finish({ state: 'needs-setup', detail: 'old reply' });
+  await first;
+  assert.equal(setupRequests, 0);
+  assert.equal(controller.status, 'listening');
+  assert.equal(controller.sessionVoiceProvider, 'openai');
+  assert.equal(controller.localBackendState, null);
+  controller.stop();
+});
+
+test('a late LOCAL token cannot configure the replacement CLOUD session', async (t) => {
+  browser(t);
+  const select = localPreference(t);
+  let finish;
+  installGlobals(t, { fetch: async () => Response.json({ state: 'ready' }) });
+  const controller = localController({ backend: {
+    requestToken({ provider }) {
+      return provider === 'local'
+        ? new Promise(resolve => { finish = resolve; })
+        : Promise.resolve({ token: 'cloud', model: resolveVoiceModel('mini').id });
+    },
+    async negotiate() { return 'answer'; },
+  } });
+  const first = controller.start();
+  while (!finish) await new Promise(resolve => setImmediate(resolve));
+  controller.stop();
+  select('openai');
+  await controller.start();
+  finish({ token: 'local', sessionUpdate: { instructions: 'stale' } });
+  await first;
+  controller.dc.handlers.get('open')();
+  assert.deepEqual(controller.dc.sent, []);
+  assert.equal(controller.pendingSessionUpdate, null);
+  assert.equal(controller.sessionVoiceProvider, 'openai');
+  controller.stop();
+});
+
+test('provider switch or full teardown cancels delayed local setup and polling', async (t) => {
+  browser(t);
+  for (const removeUi of [false, true]) {
+    let finish;
+    let signal;
+    let setupRequests = 0;
+    installGlobals(t, { fetch: async (_url, options) => {
+      signal = options.signal;
+      return { json: () => new Promise(resolve => { finish = resolve; }) };
+    } });
+    const controller = localController({ openProviderSettings: () => { setupRequests++; } });
+    const pending = controller.ensureLocalBackend();
+    while (!finish) await new Promise(resolve => setImmediate(resolve));
+    if (removeUi) controller.stop({ removeUi: true });
+    else controller.setVoiceProvider('openai');
+    assert.equal(signal.aborted, true);
+    finish({ state: 'needs-setup', detail: 'old reply' });
+    await pending;
+    assert.equal(setupRequests, 0);
+    assert.equal(controller.localBackendState.state, 'starting');
+    assert.equal(controller.localBackendPollTimer, null);
+  }
+});
+
+test('a superseded status poll cannot reopen setup or replace the current watcher', async (t) => {
+  browser(t);
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let finish;
+  let setupRequests = 0;
+  installGlobals(t, { fetch: async () => ({
+    json: () => new Promise(resolve => { finish = resolve; }),
+  }) });
+  const controller = localController({ openProviderSettings: () => { setupRequests++; } });
+  controller.voiceProvider = 'local';
+  controller.watchLocalBackend({ openSetup: true });
+  t.mock.timers.tick(2000);
+  while (!finish) await new Promise(resolve => setImmediate(resolve));
+  controller.watchLocalBackend();
+  const replacementTimer = controller.localBackendPollTimer;
+  finish({ state: 'needs-setup', detail: 'stale poll' });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(setupRequests, 0);
+  assert.equal(controller.localBackendState, null);
+  assert.equal(controller.localBackendPollTimer, replacementTimer);
+  controller.stop({ removeUi: true });
+});
+
 test('retained peer and channel callbacks cannot act after stop or enter a replacement session', async (t) => {
   const { peers, streams } = browser(t);
   const actions = [];

@@ -275,15 +275,40 @@
     ],
     "external": []
   },
+  "localai-provider": {
+    "runtime": "node",
+    "exports": ["./server/providers/localai"],
+    "modules": [
+      "server/providers/localai.js",
+      "server/providers/localai/constants.js",
+      "server/providers/localai/files.js"
+    ],
+    "external": []
+  },
   "standalone-key-setup": {
     "runtime": "node",
     "exports": ["./server/standalone/key-setup"],
     "modules": [
       "scripts/pinokio-environment.mjs",
+      "scripts/setup-local-voice.mjs",
       "server/providers/common/source-root.js",
+      "server/providers/localai/files.js",
       "server/standalone/key-setup.js",
+      "server/standalone/local-voice.js",
       "src/keySetupCore.mjs",
-      "server/standalone/key-setup-hardening.mjs"
+      "server/standalone/key-setup-hardening.mjs",
+      "src/voice/localVoiceSetupCore.mjs"
+    ],
+    "external": []
+  },
+  "standalone-local-voice": {
+    "runtime": "node",
+    "exports": ["./server/standalone/local-voice"],
+    "modules": [
+      "scripts/setup-local-voice.mjs",
+      "server/providers/localai/files.js",
+      "server/standalone/local-voice.js",
+      "src/voice/localVoiceSetupCore.mjs"
     ],
     "external": []
   },
@@ -1167,6 +1192,7 @@
       "src/voice/realtimeSession.js",
       "src/voice/realtimeEvents.js",
       "src/voice/realtimePreferences.js",
+      "src/voice/realtimeProvider.js",
       "src/voice/realtimeProtocol.js",
       "src/voice/realtimeDiagnostics.js",
       "src/voice/realtimeViewport.js",
@@ -1697,6 +1723,8 @@
       "src/voice/gevActions.js",
       "src/voice/gevRealtime.js",
       "src/voice/layerSummary.js",
+      "src/voice/localVoiceRow.js",
+      "src/voice/localVoiceSetupCore.mjs",
       "src/voice/realtimeBackend.js",
       "src/voice/realtimeController.js",
       "src/voice/voiceCost.js",
@@ -1772,6 +1800,7 @@
       "src/ui/displayBindings.js",
       "src/ui/shellFacade.js",
       "src/voice/realtimePreferences.js",
+      "src/voice/realtimeProvider.js",
       "src/voice/realtimeProtocol.js",
       "src/voice/realtimeDiagnostics.js",
       "src/voice/realtimeViewport.js",

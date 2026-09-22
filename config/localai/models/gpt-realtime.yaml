@@ -1,0 +1,23 @@
+# God's Eye View — low-latency local voice pipeline.
+name: gpt-realtime
+pipeline:
+  vad: silero-vad-ggml
+  transcription: parakeet-cpp-realtime_eou_120m-v1
+  # `auto` is resolved by the GEV setup helper before this config is installed.
+  # Replacing it with a concrete model name is the manual override path.
+  llm: auto
+  tts: kokoro
+
+  disable_thinking: true
+  max_history_items: 4
+
+  turn_detection:
+    type: semantic_vad
+    eagerness: high
+    retranscribe: false
+
+  streaming:
+    transcription: true
+    llm: false
+    tts: false
+    clause_chunking: false

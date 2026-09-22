@@ -6,6 +6,7 @@ import { RealtimeRadio } from './realtimeRadio.js';
 import { RealtimeFacade } from './realtimeFacade.js';
 import { RealtimeCost } from './realtimeCost.js';
 import { RealtimeInput } from './realtimeInput.js';
+import { RealtimeProvider } from './realtimeProvider.js';
 
 import { shouldPauseRadioForVoice } from './realtimeProtocol.js';
 import { postDebugLog } from './realtimeDiagnostics.js';
@@ -15,6 +16,10 @@ export {
   writeStoredVoiceTier,
   readStoredVoiceLimits,
   writeStoredVoiceLimits,
+  readStoredVoiceProvider,
+  writeStoredVoiceProvider,
+  VOICE_PROVIDERS,
+  DEFAULT_VOICE_PROVIDER,
 } from './realtimePreferences.js';
 export {
   shouldPauseRadioForVoice,
@@ -64,6 +69,7 @@ export class GevRealtimeController extends RealtimeFacade {
     debugSink = postDebugLog,
     actionExecutor,
     onSessionEvent,
+    openProviderSettings = null,
   }) {
     super();
     this.actionExecutor = actionExecutor;
@@ -77,6 +83,20 @@ export class GevRealtimeController extends RealtimeFacade {
     this.ui = ui;
     this.radioLayer = radioLayer;
     this.dataManager = dataManager;
+    this.openProviderSettings = openProviderSettings;
+    this._provider = new RealtimeProvider({
+      readUi: () => this.ui,
+      readStatus: () => this.status,
+      readStartEpoch: () => this.startEpoch,
+      readSessionProvider: () => this.sessionVoiceProvider,
+      readOpenProviderSettings: () => this.openProviderSettings,
+      operations: {
+        isActive: (...args) => this.isActive(...args),
+        isVoiceSessionSettled: (...args) => this.isVoiceSessionSettled(...args),
+        syncCostUi: (...args) => this.syncCostUi(...args),
+        setStatus: (...args) => this.setStatus(...args),
+      },
+    });
     this._viewport = new RealtimeViewport({
       readChannel: () => this.dc,
 
@@ -124,6 +144,9 @@ export class GevRealtimeController extends RealtimeFacade {
     this._input = new RealtimeInput({
       readUi: () => this.ui,
       readStream: () => this.stream,
+      readMicrophoneReady: () =>
+        this.sessionVoiceProvider !== 'local' ||
+        (this.dc?.readyState === 'open' && !this.pendingSessionUpdate),
       readStatus: () => this.status,
       operations: {
         isActive: (...args) => this.isActive(...args),
@@ -135,6 +158,7 @@ export class GevRealtimeController extends RealtimeFacade {
 
     this.buttonHandler = null;
     this.tierHandler = null;
+    this.providerHandler = null;
     this.annotationEventUnsubscribe = null;
 
     this.status = 'idle';
@@ -146,6 +170,7 @@ export class GevRealtimeController extends RealtimeFacade {
       readDataManager: () => this.dataManager,
       readRadioLayer: () => this.radioLayer,
       radio: this._radio,
+      readSessionProvider: () => this.sessionVoiceProvider,
       viewport: this._viewport,
       operations: {
         cancelRadioHandoff: (...args) => this.cancelRadioHandoff(...args),
@@ -178,11 +203,14 @@ export class GevRealtimeController extends RealtimeFacade {
       readStatus: () => this.status,
       input: this._input,
       cost: this._cost,
+      provider: this._provider,
       operations: {
         isActive: (...args) => this.isActive(...args),
         pauseRadioForVoice: (...args) => this.pauseRadioForVoice(...args),
         stop: (...args) => this.stop(...args),
         syncCostUi: (...args) => this.syncCostUi(...args),
+        awaitLocalBackendReady: (...args) =>
+          this.awaitLocalBackendReady(...args),
         setStatus: (...args) => this.setStatus(...args),
         debugLog: (...args) => this.debugLog(...args),
         connectionDiagnostics: (...args) => this.connectionDiagnostics(...args),
@@ -255,6 +283,11 @@ export class GevRealtimeController extends RealtimeFacade {
       this.ui.tierButton.removeEventListener('click', this.tierHandler);
       this.tierHandler = null;
     }
+    if (removeUi) this._provider.dispose();
+    if (removeUi && this.ui?.providerButton && this.providerHandler) {
+      this.ui.providerButton.removeEventListener('click', this.providerHandler);
+      this.providerHandler = null;
+    }
     if (removeUi) this._input.detachBindings();
     if (removeUi && this.annotationEventUnsubscribe) {
       // Full teardown (re-init path): stop listening to the long-lived annotation
@@ -269,6 +302,7 @@ export class GevRealtimeController extends RealtimeFacade {
     if (!preserveStatus && !removeUi) {
       this.setStatus('idle', 'Voice off');
     }
+    this.syncProviderUi();
     this.setRadioVoiceDucking(false);
     if (removeUi) this.emitSessionEvent({ type: 'disposed' });
   }

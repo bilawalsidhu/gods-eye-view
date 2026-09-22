@@ -34,6 +34,26 @@
     background var(--transition-fast);
 }
 
+/* Local backend lifecycle on the provider button. Warming reads as busy, not
+   broken; a backend that failed to start must not look identical to a ready
+   one, which is the whole point of surfacing the state here. */
+#gev-voice-provider[data-backend='starting'] {
+  color: #9fb4c7;
+  border-color: rgba(159, 180, 199, 0.5);
+  background: rgba(159, 180, 199, 0.1);
+}
+#gev-voice-provider[data-backend='ready'] {
+  color: #7ce8a4;
+  border-color: rgba(124, 232, 164, 0.55);
+  background: rgba(124, 232, 164, 0.12);
+}
+#gev-voice-provider[data-backend='stopped'],
+#gev-voice-provider[data-backend='unavailable'] {
+  color: #ff9b9b;
+  border-color: rgba(255, 155, 155, 0.55);
+  background: rgba(255, 155, 155, 0.12);
+}
+
 .gev-voice-tier-btn:hover {
   color: var(--text-primary);
   border-color: rgba(0, 212, 255, 0.6);
@@ -78,6 +98,7 @@
   display: none;
 }
 
+/* Author-level display rules must yield when provider capabilities hide these. */
 .gev-voice-tier-btn[hidden],
 .gev-voice-cost-value[hidden] {
   display: none;

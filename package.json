@@ -40,6 +40,8 @@
     "opensky:import": "./scripts/opensky-import-client.sh",
     "build": "vite build",
     "preview": "vite preview",
+    "voice:local:setup": "node scripts/setup-local-voice.mjs",
+    "voice:local:check": "node scripts/setup-local-voice.mjs --check",
     "test": "node scripts/run-unit-tests.mjs",
     "test:track": "node scripts/track-regression.mjs",
     "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs",
@@ -116,8 +118,14 @@
     "./server/providers/openai": {
       "node": "./server/providers/openai.js"
     },
+    "./server/providers/localai": {
+      "node": "./server/providers/localai.js"
+    },
     "./server/standalone/key-setup": {
       "node": "./server/standalone/key-setup.js"
+    },
+    "./server/standalone/local-voice": {
+      "node": "./server/standalone/local-voice.js"
     },
     "./search": "./src/search/index.js",
     "./ui/panels": "./src/ui/panelDisclosure.js",

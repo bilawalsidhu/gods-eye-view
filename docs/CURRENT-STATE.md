@@ -57,6 +57,48 @@ replacement session; audio meters release failed initialization and reject revok
 frames. Delayed action results and post-capture continuations cannot resume a
 stopped conversation or send output into a replacement. See [voice ownership](VOICE-OWNERSHIP.md).
 
+## Local Realtime voice
+
+- The mic panel stores a CLOUD/LOCAL provider choice. CLOUD keeps the existing
+  OpenAI Realtime session and STD/MINI pricing controls. LOCAL hides those
+  pricing controls, reports backend startup and preload state, and runs the
+  same voice instructions and 28 tools against LocalAI's WebRTC endpoint.
+- The Apple Silicon reference profile uses Silero VAD, Parakeet Realtime EOU
+  120M STT, hardware-selected MiniCPM5 MLX 4-bit, and Kokoro TTS. `llm: auto`
+  chooses MiniCPM5-1B on 8 GB-class Macs and MiniCPM5-2B when at least 10 GiB
+  of unified memory is available; a concrete pipeline `llm:` remains an
+  operator override. Provider Settings shows the recommendation and detected
+  unified-memory budget. `npm run
+  voice:local:setup` installs the profile; `npm run voice:local:check` verifies
+  it without mutation. Both read the pipeline config for the stage list, so
+  swapping a model is a YAML edit rather than a code change. Setup installs the
+  backends those stages name and downloads language-model weights so a first
+  LOCAL session never waits on a silent multi-gigabyte fetch (about 5.5 GB
+  installed). `npm run doctor` reports the same readiness. Reasoning is disabled
+  in the shipped profile. The thinking compatibility patch is skipped on
+  LocalAI builds that already honor `enable_thinking=false`.
+- LocalAI signalling is relayed through the dev server to avoid browser CORS
+  configuration and to translate the raw SDP offer into LocalAI 4.9.0's JSON
+  request shape. Media still uses the negotiated WebRTC connection.
+- The POWER UP panel installs local voice in place: `GET /api/setup/local-voice`
+  reports supported/ready/step state plus the resolved/recommended LLM and
+  hardware budget, and `POST` starts the profile's plan, both
+  behind the same loopback admission gate as the key endpoints. The row shows
+  `brew install localai` as a command rather than running a package manager.
+  Choosing LOCAL opens this panel when setup is missing; returning from the
+  terminal rechecks the binary and reveals INSTALL without a reload.
+- The backend status endpoint answers `ready`, `starting`, `needs-setup`,
+  `unavailable` or `stopped`. `needs-setup` names the command that installs the
+  missing piece and ends the session attempt instead of retrying; a warm-up
+  reports download progress and fails only after it stops progressing.
+- GEV starts only loopback LocalAI targets and owns only the child process it
+  created. Remote targets must already be running. A spawned child is stopped
+  with the dev server.
+- MiniCPM output is buffered until its parser separates structured tool calls
+  from ordinary text, so function markup does not reach TTS. Tool-result
+  follow-ups use the backend's configured output budget; there is no
+  client-side 80-token limit.
+
 The application shell composes focused state owners for navigation, destination
 lookup/orbit, Cockpit, visual settings, panel layout, aircraft display and layer
 bindings. Keyboard/display subscriptions have a separate lifetime; existing
@@ -405,7 +447,6 @@ editing/playback actions while retaining persistence, camera and layer sequencin
 Shot selection updates the highlight without replacing the row, preserving
 native double-click rename. Replacing rows revokes their old listeners. Disposal stops controls immediately;
 late file and failed-action completions cannot update removed presentation.
-
 ## Cockpit component ownership
 
 Cockpit presentation is separated from its camera/controller behavior. Existing
@@ -416,7 +457,6 @@ Superseded portal frames cannot repaint old state or steal focus after disposal;
 retained Cockpit actions cannot restart a disposed controller. Input, subscriptions
 and queued panel work stop before asynchronous layer restoration; final camera
 and portal cleanup follows that restoration.
-
 
 ## Context coordination
 

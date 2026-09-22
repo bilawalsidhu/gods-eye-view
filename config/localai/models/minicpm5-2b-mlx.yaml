@@ -1,0 +1,13 @@
+# MiniCPM5-2B — official 4-bit MLX weights for Apple Silicon.
+name: minicpm5-2b-mlx
+backend: mlx
+context_size: 16384
+known_usecases: [chat, completion]
+parameters:
+  model: openbmb/MiniCPM5-2B-MLX
+  temperature: 0.1
+  top_p: 0.95
+options:
+  - use_jinja:true
+template:
+  use_tokenizer_template: true

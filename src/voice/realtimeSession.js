@@ -14,7 +14,11 @@ export function createRealtimeSession({
   });
   return {
     controller,
-    capabilities: { costControls: true, pushToTalk: true },
+    capabilities: {
+      costControls: true,
+      providerSelection: true,
+      pushToTalk: true,
+    },
     start: (settings) => controller.start(settings),
     stop: (settings) => controller.stop(settings),
     sendText: (text) => controller.sendTextCommand(text),
@@ -28,7 +32,16 @@ export function createRealtimeSession({
           controller.tierHandler,
         );
       }
+      if (controller.ui.providerButton) {
+        controller.providerHandler = () => controller.toggleVoiceProvider();
+        controller.ui.providerButton.addEventListener(
+          'click',
+          controller.providerHandler,
+        );
+      }
       controller.syncCostUi();
+      controller.syncProviderUi();
+      controller.refreshLocalBackendStatus();
       controller.bindPushToTalkShortcut();
     },
   };

@@ -82,3 +82,37 @@ export function writeStoredVoiceLimits(limits, storage) {
   }
   return normalized;
 }
+
+const VOICE_PROVIDER_STORAGE_KEY = 'godsEyeView.voice.provider';
+export const VOICE_PROVIDERS = Object.freeze(['openai', 'local']);
+const CONFIGURED_VOICE_PROVIDER = String(
+  import.meta.env?.GEV_VOICE_PROVIDER || '',
+).toLowerCase();
+export const DEFAULT_VOICE_PROVIDER = VOICE_PROVIDERS.includes(
+  CONFIGURED_VOICE_PROVIDER,
+)
+  ? CONFIGURED_VOICE_PROVIDER
+  : 'openai';
+
+/** Read the persisted voice provider, falling back safely after corruption. */
+export function readStoredVoiceProvider(storage) {
+  try {
+    const raw = voiceStorage(storage)?.getItem(VOICE_PROVIDER_STORAGE_KEY);
+    return VOICE_PROVIDERS.includes(raw) ? raw : DEFAULT_VOICE_PROVIDER;
+  } catch {
+    return DEFAULT_VOICE_PROVIDER;
+  }
+}
+
+/** Persist the provider used by the next session. Never throws. */
+export function writeStoredVoiceProvider(provider, storage) {
+  const resolved = VOICE_PROVIDERS.includes(provider)
+    ? provider
+    : DEFAULT_VOICE_PROVIDER;
+  try {
+    voiceStorage(storage)?.setItem(VOICE_PROVIDER_STORAGE_KEY, resolved);
+  } catch {
+    /* best effort */
+  }
+  return resolved;
+}
