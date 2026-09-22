@@ -15,7 +15,11 @@ How to read this:
 
 | Source                                                                | Used for                                                                                                                            | License / terms                                                                                                                                                                                                                                                                                                                                       | Attribution                                                                                                                                 |
 | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| **NOAA GFS (wind)** | Global 10 m wind, optional 2 m temperature and mean sea-level pressure for Wind | U.S. public domain (NOAA); keyless via NOAA Open Data on AWS | "NOAA Global Forecast System (GFS)" (courtesy; not an endorsement) |
+| **NOAA GFS (wind)** (`noaa-gfs-bdp-pds.s3.amazonaws.com`) | Global 10 m wind, optional 2 m temperature and mean sea-level pressure for Wind. Keyless; latest 6-hourly 0.25° cycle, byte-range GRIB2 reads, cached for an hour | U.S. public domain (NOAA); keyless via NOAA Open Data on AWS | "NOAA Global Forecast System (GFS)" (courtesy; not an endorsement) |
+| **ECMWF IFS (wind)** (`data.ecmwf.int/forecasts`, ECMWF Open Data) | The alternative Wind model: 10 m wind, optional 2 m temperature and mean sea-level pressure. Keyless; latest 6-hourly 0.25° run, byte-range GRIB2 reads, cached for an hour | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) plus the [ECMWF Terms of Use](https://apps.ecmwf.int/datasets/licences/general/) | "This service is based on data and products of the European Centre for Medium-Range Weather Forecasts (ECMWF)", with the CC BY 4.0 link, the modification notice and ECMWF's liability disclaimer — shown in-app |
+| **NOAA nowCOAST observed weather** (`nowcoast.noaa.gov/geoserver/observations/{weather_radar,satellite}/ows`, WMS 1.1.1) | Rain radar (MRMS base reflectivity, contiguous US, about 4-minute updates) and Satellite clouds (GOES-19/18 Band 14 regional infrared, about 5-minute updates; global infrared mosaic, hourly). Keyless; layer metadata refreshed every 2 minutes, exact-time images cached for up to 24 hours | [NOAA disclaimer](https://oceanservice.noaa.gov/disclaimer.html) | "NOAA nowCOAST · NWS/OAR MRMS radar; NESDIS GOES and global satellite partners" |
+| **NOAA nowCOAST lightning density** (`nowcoast.noaa.gov/geoserver/observations/lightning_detection/ows`) | Lightning density: 15-minute accumulated strike density on an approximately 8 km grid, Americas and Pacific. Keyless; layer metadata refreshed every 10 minutes, exact-time images cached for up to 24 hours | NOAA Level-5 derived product from Vaisala NLDN/GLD360; the [product description](https://ocean.weather.gov/lightning/lightning_pdd.php) permits public distribution of this density product, not of raw Vaisala detections | "NOAA/NWS nowCOAST; derived from Vaisala NLDN/GLD360" |
+| **NOAA NHC / CPHC advisories** (`www.nhc.noaa.gov/CurrentStorms.json` + the `mapservices.weather.noaa.gov` tropical weather summary MapServer) | Cyclone advisories: storm positions, forecast tracks, points and cones for the Atlantic and eastern/central North Pacific. Keyless through `/api/cyclones`; cached for 5 minutes | [NWS public-data terms](https://www.weather.gov/disclaimer); no endorsement implied | "NOAA/NWS NHC / CPHC" |
 | **OpenStreetMap ALPR camera locations** (including DeFlock community mapping) | Optional mapped automatic license-plate-reader camera layer | [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/); commercial use permitted with applicable attribution and database share-alike obligations | [© OpenStreetMap contributors](https://www.openstreetmap.org/copyright); [DeFlock](https://deflock.org) community mapping |
 | **Google Map Tiles API** (Photorealistic 3D Tiles) + Places/Geocoding | The 3D globe, voice scene context, and on-demand nearby installation search                                                         | Google Maps Platform ToS (proprietary, your own key + billing)                                                                                                                                                                                                                                                                                        | "Google" / "Google Maps" logo — **shown in-app**, required                                                                                  |
 | **OpenSky Network**                                                   | Primary worldwide live-flight snapshot                                                                                              | Non-commercial research/education license                                                                                                                                                                                                                                                                                                             | Schäfer et al., _"Bringing Up OpenSky"_, IPSN 2014 + opensky-network.org                                                                    |
@@ -42,7 +46,7 @@ How to read this:
 | **Stadt Warendorf webcam**                                            | Webcam frames, Marktplatz / Historisches Rathaus (`config/cctv_sources.warendorf.json`)                                             | Public municipal webcam data                                                                                                                                                                                                                                                                                                                          | "Stadt Warendorf — webcam.warendorf.de" (courtesy); mount and heading derived from OSM geometry, "© OpenStreetMap contributors" (ODbL)      |
 | **Live Traffic NSW (Transport for NSW)**                              | CCTV camera catalog + frames, New South Wales                                                                                       | [CC BY 4.0](https://opendata.transport.nsw.gov.au/) — attribution REQUIRED                                                                                                                                                                                                                                                                            | "Live Traffic NSW — Transport for NSW"                                                                                                      |
 | **Caltrans (cwwp2.dot.ca.gov)**                                       | CCTV camera catalogs + frames, California districts                                                                                 | Public Caltrans traffic camera data                                                                                                                                                                                                                                                                                                                   | "Caltrans — cwwp2.dot.ca.gov" (courtesy)                                                                                                    |
-| **DelDOT (video.deldot.gov)**                                         | CCTV camera catalog + live HTTPS HLS video, Delaware                                                                                 | Public DelDOT traffic camera streams via the [DelDOT traffic map](https://deldot.gov/map/)                                                                                                                                                                                                                                                            |"DelDOT — Delaware Department of Transportation" (courtesy)                                                                                 |
+| **DelDOT (video.deldot.gov)**                                         | CCTV camera catalog (`tmc.deldot.gov/json/videocamera.json`, cached for 15 minutes) + live HTTPS HLS video, Delaware. Keyless        | Public DelDOT traffic camera streams via the [DelDOT traffic map](https://deldot.gov/map/)                                                                                                                                                                                                                                                            | "DelDOT — Delaware Department of Transportation" (courtesy)                                                                                 |
 | **TfL Open Data (JamCams)**                                           | CCTV camera catalog + frames, London                                                                                                | [TfL Open Data terms](https://tfl.gov.uk/info-for/open-data-users/) — attribution REQUIRED                                                                                                                                                                                                                                                            | "Powered by TfL Open Data. Contains OS data © Crown copyright and database rights"                                                          |
 | **Ontario 511**                                                       | CCTV camera catalog + frames, Ontario highways including Kitchener-area routes                                                      | [Open Government Licence – Ontario](https://www.ontario.ca/page/open-government-licence-ontario)                                                                                                                                                                                                                                                      | "Ontario 511" plus Open Government Licence - Ontario                                                                                        |
 | **Fintraffic / Digitraffic (weathercams)**                            | CCTV camera catalog + frames, Finland                                                                                               | [CC BY 4.0](https://www.digitraffic.fi/en/terms-of-service/) — attribution REQUIRED                                                                                                                                                                                                                                                                   | "Fintraffic / digitraffic.fi, license CC BY 4.0"                                                                                            |
@@ -156,42 +160,6 @@ transaction quota. Requires a free `FIRMS_MAP_KEY`
 (https://firms.modaps.eosdis.nasa.gov/api/map_key/); the layer is empty without it.
 The former bundled 2026-05-25 snapshot was removed 2026-07-16.
 
-### ECMWF IFS wind
-
-Wind also offers ECMWF IFS 10 m forecasts from the keyless [ECMWF Open Data](https://www.ecmwf.int/en/forecasts/datasets/open-data) service. The proxy reads its JSON Lines inventory and byte-range fetches 10u/10v GRIB messages, optionally adding 2t (2 m temperature) or msl (mean sea-level pressure) from the same run and forecast time. It resamples these fields to the approximately 1° display grid. Data is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The [ECMWF Terms of Use](https://apps.ecmwf.int/datasets/licences/general/) also apply. In-app attribution identifies this service as based on ECMWF data and products, links the CC BY 4.0 licence, identifies resampling and animation as modifications, and retains the required ECMWF liability disclaimer. Both model issue time and the selected forecast valid time appear in the layer row. These are model forecasts, not observations.
-
-### NOAA GFS wind
-
-The optional **Wind** layer animates the global 10 m wind field from NOAA's
-Global Forecast System (GFS). The `/api/wind` server-side proxy selects the
-latest available 0.25° cycle, reads its `.idx` inventory, byte-range fetches only
-the `UGRD`/`VGRD` 10 m GRIB2 messages, optionally adding `TMP` at 2 m or
-`PRMSL` at mean sea level from the same run and forecast time. It decodes the
-selected messages with ecCodes (WASM), resamples to a compact grid (1° by
-default), and serves a manifest plus Float32 U/V and optional scalar values. It is keyless, cached
-per cycle for an hour, and is a **forecast, not an observation**: the particles
-show model flow, not measured wind. The renderer bakes bounded curves through
-the sampled field and animates their phase on the GPU, with a canvas fallback.
-Any display lift is a visual aid and does not change the forecast's 10 m level.
-NOAA GFS data is U.S. public domain; the credit above is a courtesy and does not
-imply endorsement.
-
-For both models, optional temperature is normalized from K to °C and pressure
-from Pa to hPa before delivery. A missing, malformed or timed-out companion field
-does not discard valid wind: the manifest marks that field unavailable, and the
-UI retains wind without inventing scalar values. The proxy caches by model and
-requested field, with bounded current/previous grids and shared in-flight loads.
-Wind speed shading is computed locally from U/V and needs no companion download.
-The legend and map-center reading explain units and forecast validity; the
-animation is a visual flow through one forecast, not advancing forecast time.
-Optional globe relief uses existing terrain vertex normals for view lighting;
-without those normals it shades global globe curvature only, not local terrain
-relief. Neither mode represents measured sunlight or a new elevation source.
-This Wind prototype adds no cloud-volume or radar data. Mapped.earth's public
-bundles were studied for rendering ideas, but
-no code or assets were reused and no application licence granting reuse was
-found. Its presentation is not a weather-data source for this implementation.
-
 ### Natural Earth physical regions (`natural_earth/`)
 
 Curated from the **Natural Earth 10m physical vectors** (https://www.naturalearthdata.com/ —
@@ -230,9 +198,43 @@ Douglas-Peucker simplification, 6-decimal rounding).
 
 ---
 
-## In-app attribution
+## Weather sources
 
-The required Google Maps / Cesium credit renders on the on-globe credit line (`#cesium-credits`, bottom-left) and must stay visible — including in clean-view and recording modes (the whole line, logo + "Google Maps" + the "Data attribution" link, stays on screen; only the GEV panels/HUD fade). The layer-specific credits (adsb.lol, TeleGeography, OSM datacenters/dams/roads, NASA FIRMS, CelesTrak, USGS, City of Austin, Fintraffic, GBFS, Radio Browser, OpenSky, AISStream) are registered into the expandable **"Data attribution"** popover on that credit line via `viewer.creditDisplay.addStaticCredit(new Cesium.Credit(html, /* showOnScreen */ false))` — see `src/data/dataCredits.js`. When you add a new data source, add its license and attribution to this file **and** append an entry to `DATA_CREDITS` in `src/data/dataCredits.js` so it surfaces in the app.
+### ECMWF IFS wind
+
+Wind also offers ECMWF IFS 10 m forecasts from the keyless [ECMWF Open Data](https://www.ecmwf.int/en/forecasts/datasets/open-data) service. The proxy reads its JSON Lines inventory and byte-range fetches 10u/10v GRIB messages, optionally adding 2t (2 m temperature) or msl (mean sea-level pressure) from the same run and forecast time. It resamples these fields to the approximately 1° display grid. Data is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The [ECMWF Terms of Use](https://apps.ecmwf.int/datasets/licences/general/) also apply. In-app attribution identifies this service as based on ECMWF data and products, links the CC BY 4.0 licence, identifies resampling and animation as modifications, and retains the required ECMWF liability disclaimer. Both model issue time and the selected forecast valid time appear in the WEATHER panel. These are model forecasts, not observations.
+
+### NOAA GFS wind
+
+The optional **Wind** layer animates the global 10 m wind field from NOAA's
+Global Forecast System (GFS). The `/api/wind` server-side proxy selects the
+latest available 0.25° cycle, reads its `.idx` inventory, byte-range fetches only
+the `UGRD`/`VGRD` 10 m GRIB2 messages, optionally adding `TMP` at 2 m or
+`PRMSL` at mean sea level from the same run and forecast time. It decodes the
+selected messages with ecCodes (WASM), resamples to a compact grid (1° by
+default), and serves a manifest plus Float32 U/V and optional scalar values. It is keyless, cached
+per cycle for an hour, and is a **forecast, not an observation**: the particles
+show model flow, not measured wind. The renderer bakes bounded curves through
+the sampled field and animates their phase on the GPU, with a canvas fallback.
+Any display lift is a visual aid and does not change the forecast's 10 m level.
+NOAA GFS data is U.S. public domain; the credit above is a courtesy and does not
+imply endorsement.
+
+For both models, optional temperature is normalized from K to °C and pressure
+from Pa to hPa before delivery. A missing, malformed or timed-out companion field
+does not discard valid wind: the manifest marks that field unavailable, and the
+UI retains wind without inventing scalar values. The proxy caches by model and
+requested field, with bounded current/previous grids and shared in-flight loads.
+Wind speed shading is computed locally from U/V and needs no companion download.
+The legend and map-center reading explain units and forecast validity; the
+animation is a visual flow through one forecast, not advancing forecast time.
+Optional globe relief uses existing terrain vertex normals for view lighting;
+without those normals it shades global globe curvature only, not local terrain
+relief. Neither mode represents measured sunlight or a new elevation source.
+This Wind prototype adds no cloud-volume or radar data. Mapped.earth's public
+bundles were studied for rendering ideas, but
+no code or assets were reused and no application licence granting reuse was
+found. Its presentation is not a weather-data source for this implementation.
 
 ### Observed weather: NOAA nowCOAST
 
@@ -246,8 +248,8 @@ services: `https://nowcoast.noaa.gov/geoserver/observations/weather_radar/ows` a
   Coverage gaps do not mean no precipitation. The numeric legend follows NOAA's
   `weather_radar_base_reflectivity` style.
 - `goes_longwave_imagery`: GOES-19/18 Band 14, approximately 2 km, 5-minute updates,
-  regional North America. Filtered infrared softly dims pixels with a linear
-  brightness ramp from 0.40 to 0.70; Full infrared retains source alpha. This
+  regional North America. **Clouds only** softly dims pixels with a linear
+  brightness ramp from 0.40 to 0.70; **Full image** retains source alpha. This
   is a display filter, not a cloud mask or measured cloud volume.
 - `global_longwave_imagery_mosaic`: approximately 3 km, hourly, nominal 60°S–60°N
   coverage and typically 2–3-hour latency. It is slower global context.
@@ -263,8 +265,17 @@ and filters it once, then crops 256 px tiles bounded to the manifest extent at
 maximum level 3. This broad context view has a coarser display resolution than
 its 3 km source. No browser reprojection is used. Browser imagery owns a displayed
 frame and a staging frame, retaining the outgoing layer for one render after
-admission; the proxy has an 8-request
-concurrency budget, 12-second deadline, 1 MiB tile / 4 MiB global PNG caps and a shared 16 MiB/128-image cache.
+admission.
+
+On Google 3D Tiles each observed product is instead a raised shell showing one
+whole-extent image per frame (up to 4096×2048; global infrared 2048×1024). Every
+product except global infrared also draws a 4096×2048 detail window around the
+view, requested with a 2:1 `bbox` inside the product bounds, rounded to 0.25°.
+The proxy has an 8-request concurrency budget and a 12-second deadline; tiles
+(256, 512 or 1024 px) are capped at 1 MiB or 4 bytes per pixel plus 64 KiB,
+whichever is larger, and whole-extent and detail images at 16 MiB. Its shared
+cache holds up to 128 images and 16 MiB, each exact-time image for at most 24
+hours.
 Metadata refreshes every two minutes with explicitly stale last-good fallback.
 No key, new dependency, image reprojection job, or full-disk image download is needed.
 
@@ -319,5 +330,9 @@ NOAA hazard provenance and freshness work
 The fixed nowCOAST imagery and NHC advisory implementations are original maintainer
 work; this acknowledgement does not represent merging those four PRs or equate
 NOAA density imagery with the raw GLM product.
+
+---
+
+## In-app attribution
 
 The required Google Maps / Cesium credit renders on the on-globe credit line (`#cesium-credits`, bottom-left) and must stay visible — including in clean-view and recording modes (the whole line, logo + "Google Maps" + the "Data attribution" link, stays on screen; only the GEV panels/HUD fade). The layer-specific credits (adsb.lol, adsbdb, TeleGeography, OSM datacenters/dams/roads, NASA FIRMS, CelesTrak, USGS, City of Austin, Fintraffic, GBFS, Radio Browser, OpenSky, AISStream) are registered into the expandable **"Data attribution"** popover on that credit line via `viewer.creditDisplay.addStaticCredit(new Cesium.Credit(html, /* showOnScreen */ false))` — see `src/data/dataCredits.js`. When you add a new data source, add its license and attribution to this file **and** append an entry to `DATA_CREDITS` in `src/data/dataCredits.js` so it surfaces in the app.

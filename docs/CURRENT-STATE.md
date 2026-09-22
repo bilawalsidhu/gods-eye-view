@@ -146,12 +146,11 @@ messages use each product's eligibility gap (30 minutes, or three hours for the
 global mosaic). Wind shows forecast valid and issue times and does not follow
 history. Satellite clouds uses Clouds only / Full image configuration labels.
 
-Left weather rows retain the toggle, one status line with a source tooltip,
-configuration chips and the cyclone selection/focus list. Cyclone advisory,
-position time, wind, pressure, geometry status and the official advisory link
-live in the card. Controls opens the corresponding left row. The panel hides
-when empty, auto-expands once per page session and then preserves the user's
-collapsed state. Status lines reserve their space and refreshes are coalesced
+Left weather rows retain only the toggle and one status line with a source
+tooltip. Configuration and the cyclone Storms list live in the cards, as do the
+cyclone advisory, position time, wind, pressure, geometry status and the
+official advisory link. The panel hides when empty, auto-expands once per page
+session and then preserves the user's collapsed state. Status lines reserve their space and refreshes are coalesced
 per frame. Generic keyed rail cards and the native rail timeline preserve DOM
 nodes and avoid identical writes; the weather panel owns descriptor mapping.
 Inspection emphasizes the chosen scalar and marks the exact sampled location;
@@ -2637,7 +2636,7 @@ test:track` 43 tracking invariants · headless QA harnesses under
 > ISS pass prediction, and per-layer data attribution. Gate at close: unit 98/98, build clean,
 > track 19/19, + five QA harnesses (heading 16/16, sprites 9/9, cctv 5/5, failstate 5/5,
 > attribution 18/18). New modules: `src/data/{motionModel,aircraftMeta,aircraftClass,aircraftIcons,issPass,routePlausible,dataCredits}.js`.
-> The live runtime now declares 28 voice tools; the 17→20 count above is retained only as milestone history.
+> The live runtime now declares 29 voice tools; the 17→20 count above is retained only as milestone history.
 
 ## Canonical Docs Order
 
@@ -3526,7 +3525,7 @@ silently demoting every later lookup for the session.
 
 - **Token flow**: browser fetches a short-lived client secret from `/api/realtime/token`; the Vite middleware holds `OPENAI_API_KEY` and posts the full session config (instructions, tool schemas, VAD, truncation) to `api.openai.com/v1/realtime/client_secrets`. SDP exchange goes directly to `api.openai.com/v1/realtime/calls` with the ephemeral token.
 - **Session defaults** (env-tunable): model `gpt-realtime-2` (or `gpt-realtime-2.1-mini` when the MINI tier is selected — see the model-tier entry below), voice `marin`, reasoning effort `low`, semantic VAD with low eagerness, no response interruption, context window truncated to ~3,000 post-instruction tokens with 0.5 retention ratio — the conversational window stays short because map state is fetched live per turn.
-- **Twenty-eight tools** (schemas defined server-side in `vite.config.js`, executed client-side in `src/voice/gevActions.js`): `fly_to_location`, `select_nearest_aircraft`, `adjust_camera_zoom`, `zoom_to_globe`, `set_layer_visibility`, `show_data_layers_menu`, `set_panel_open`, `set_visual_style`, `get_entity_context`, `get_current_view_state`, `set_hud`, `set_detection`, `set_map_stack`, `set_post_processing`, `control_scene`, `control_cctv`, `set_context_mode`, `control_cockpit`, `control_radio`, `track_entity`, `stop_tracking`, `frame_overhead`, `annotate_map`, `clear_annotations`, `move_camera`, `fly_route`, `analyst_query`, and `next_iss_pass`.
+- **Twenty-nine tools** (argument schemas in `src/voice/actionSchemas.js`, served with their descriptions by `server/providers/openai/tools.js`, executed client-side in `src/voice/gevActions.js`): `fly_to_location`, `select_nearest_aircraft`, `adjust_camera_zoom`, `zoom_to_globe`, `set_layer_visibility`, `show_data_layers_menu`, `set_panel_open`, `set_visual_style`, `get_entity_context`, `get_current_view_state`, `set_hud`, `set_detection`, `set_map_stack`, `set_post_processing`, `control_scene`, `control_cctv`, `set_context_mode`, `control_cockpit`, `control_radio`, `track_entity`, `stop_tracking`, `frame_overhead`, `annotate_map`, `clear_annotations`, `move_camera`, `fly_route`, `analyst_query`, `next_iss_pass`, and `next_satellite_pass`.
 
 > **Reading `npm test` totals:** the count depends on the Node major. The two
 > GC-bracketed allocation microbenchmarks (`src/data/focusAllocations.test.mjs`
@@ -4166,9 +4165,9 @@ restoring a host joins the retained history target. The wind row explicitly says
 “Forecast · does not follow history” while the observed clock is in history mode.
 The catalog exposes `weatherClock` and destroys it with its lifetime signal.
 
-Existing row controls retain source, opacity, coverage navigation and transport;
-no controls move in this pass. The viewer clock is untouched. Observation layers
-are off by default; share/persist includes appearance and product, while history
+Source, opacity, coverage navigation and transport controls live in the WEATHER
+panel's cards and timeline, not in the rows. The viewer clock is untouched.
+Observation layers are off by default; share/persist includes appearance and product, while history
 is transient and shared links open latest. Rendering retains the previous frame
 when an incoming frame fails; no eligible historical frame instead hides imagery.
 
