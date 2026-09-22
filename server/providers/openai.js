@@ -1,13 +1,17 @@
 import { defaultSourceRoot } from './common/source-root.js';
 import { handleHudSummary } from './openai/hud-summary.js';
 import { createDebugLogHandler } from './openai/debug-log.js';
-import { createRealtimeTokenHandler } from './openai/realtime.js';
+import {
+  createRealtimeOAuthLoginHandler,
+  createRealtimeOAuthStatusHandler,
+  createRealtimeTokenHandler,
+} from './openai/realtime.js';
 
 /**
  * Vite plugin: OpenAI Realtime ephemeral client secret.
  *
- * Keeps OPENAI_API_KEY server-side while the browser connects to the
- * Realtime API over WebRTC with a short-lived secret.
+ * Keeps the selected cloud credential server-side while the browser connects
+ * to the Realtime API over WebRTC with a short-lived secret.
  */
 function openAiRealtimeProxy({
   sourceRoot = defaultSourceRoot,
@@ -25,6 +29,16 @@ function openAiRealtimeProxy({
     middlewares.use(
       '/api/realtime/token',
       createRealtimeTokenHandler({ ...realtime, annotationGuidance }),
+    );
+
+    middlewares.use(
+      '/api/realtime/oauth-status',
+      createRealtimeOAuthStatusHandler(realtime),
+    );
+
+    middlewares.use(
+      '/api/realtime/oauth-login',
+      createRealtimeOAuthLoginHandler(realtime),
     );
   }
 
