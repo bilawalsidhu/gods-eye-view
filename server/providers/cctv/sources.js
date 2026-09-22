@@ -56,6 +56,13 @@ import {
   CALGARY_DOWNTOWN,
   CALGARY_MAX_CATALOG_BYTES,
   CCTV_SOURCE_FETCH_TIMEOUT_MS,
+  NE511_GRAPHQL_URL,
+  NE511_IMAGE_ORIGIN,
+  NE511_BOUNDS,
+  NE511_CAMERAS_QUERY,
+  NE511_ANCHORS,
+  NE511_GROUND_ELEVATION_M,
+  DEFAULT_NE511_MAX_SOURCES,
 } from './constants.js';
 import {
   toFiniteNumber,
@@ -76,8 +83,10 @@ import {
   cameraDisplayCode,
   rowArrayToObject,
   prioritizeSources,
+  isLikelyNebraskaCoordinate,
 } from './normalize.js';
 import { directionToHeading } from '../../../src/data/directionText.js';
+import { loadRoadHeadings, joinRoadHeadings } from './headings.js';
 import { readResponseJsonCapped } from '../common/http.js';
 /**
  * Fetch and parse Austin traffic camera records from the city Open Data portal.
@@ -1589,6 +1598,176 @@ export async function loadCalgarySourcesFromOpenData() {
   } catch (error) {
     console.warn(
       '[CCTV] Calgary camera download error:',
+      error?.message || error,
+    );
+    return [];
+  }
+}
+
+/**
+ * Canonical still URL for one Nebraska 511 camera view, or '' if not accepted.
+ *
+ * The `?<epoch-ms>` cache-buster is stripped so each camera registers one
+ * stable URL; pinning the timestamp would freeze the view at whatever the
+ * catalog refresh last saw. The host is checked rather than trusted, so no
+ * upstream field can steer the frame proxy off-host.
+ *
+ * @param {string} value - Upstream view URL.
+ * @returns {string}
+ */
+export function normalizeNe511ImageUrl(value) {
+  const raw = String(value || '').trim();
+  if (!raw.startsWith(NE511_IMAGE_ORIGIN)) return '';
+  try {
+    const parsed = new URL(raw);
+    // Frame filenames are `vid-<road><ref>-<view>.jpg`; anything else is not a
+    // still this pack knows how to serve.
+    if (!/^\/images\/[A-Za-z0-9_-]+\.jpg$/.test(parsed.pathname)) return '';
+    return `${parsed.origin}${parsed.pathname}`;
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * One Nebraska 511 map feature -> one catalog source, or null.
+ *
+ * A mast can expose several angles sharing one position, so the first usable
+ * view wins and the rest are dropped, as with Ontario 511; fanning them out
+ * would stack gizmos on a point.
+ *
+ * Heading is always the id-hash fallback. Titles look directional but are
+ * positional — "I-80: Scale E of Lincoln" is where the camera sits, not where
+ * it looks — so reading a facing out of them would aim most cones wrongly.
+ *
+ * @param {object} feature - One `mapFeatures` entry.
+ * @returns {?object} Normalized source, or null when unusable.
+ */
+export function ne511CameraToSource(feature) {
+  if (feature?.__typename !== 'Camera') return null;
+  if (feature.active === false) return null;
+  const rawId = /^camera\/([A-Za-z0-9_-]+)$/.exec(
+    String(feature?.uri || '').trim(),
+  )?.[1];
+  if (!rawId) return null;
+
+  // A camera's bbox is a degenerate point, so all four numbers agree.
+  const bbox = Array.isArray(feature?.bbox) ? feature.bbox : [];
+  const lon = toFiniteNumber(bbox[0]);
+  const lat = toFiniteNumber(bbox[1]);
+  if (!isLikelyNebraskaCoordinate(lat, lon)) return null;
+
+  // `category` is advisory: views marked VIDEO carry an empty HLS `src` and
+  // still resolve to a JPEG, so every view is judged on its URL.
+  const views = Array.isArray(feature?.views) ? feature.views : [];
+  let url = '';
+  for (const view of views) {
+    url = normalizeNe511ImageUrl(view?.url);
+    if (url) break;
+  }
+  if (!url) return null;
+
+  const title = String(feature?.title || '').trim();
+  // Titles read "<route>: <place>", and this network follows corridors rather
+  // than cities, so the route is the meaningful grouping.
+  const [route, place] = title.includes(':')
+    ? [
+        title.slice(0, title.indexOf(':')).trim(),
+        title.slice(title.indexOf(':') + 1).trim(),
+      ]
+    : ['', title];
+  const cameraId = `ne511-${rawId}`;
+
+  return {
+    id: cameraId,
+    name: title || `Nebraska 511 Camera ${rawId}`,
+    city: route || 'Nebraska',
+    cityId: 'nebraska',
+    provider: 'Nebraska 511',
+    lat,
+    lon,
+    headingDeg: fallbackHeadingFromId(cameraId),
+    headingConfidence: 'low',
+    pitchDeg: -18,
+    fovDeg: 44,
+    rangeM: 145,
+    mountHeightM: 8,
+    groundElevationM: NE511_GROUND_ELEVATION_M,
+    feedType: 'image',
+    url,
+    snapshotUrl: url,
+    sourceKind: 'ne511-graphql',
+    license: 'Nebraska 511 - Nebraska Department of Transportation',
+    code: cameraDisplayCode(route || place || rawId),
+  };
+}
+
+/**
+ * Fetch Nebraska 511 (NDOT) highway cameras. Keyless: one POST returns the
+ * statewide list; frames are stills on a separate NDOT host.
+ *
+ * The POST refuses redirects so the list host cannot be steered, and frame
+ * URLs are validated in ne511CameraToSource rather than read from the payload.
+ *
+ * @returns {Promise<Array<object>>} Normalized camera source objects.
+ */
+export async function loadNe511SourcesFromGraphQL() {
+  try {
+    const resp = await fetch(NE511_GRAPHQL_URL, {
+      method: 'POST',
+      redirect: 'manual',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        'User-Agent': 'gods-eye-view-cctv-proxy/1.0',
+      },
+      body: JSON.stringify({
+        query: NE511_CAMERAS_QUERY,
+        variables: {
+          input: { ...NE511_BOUNDS, layerSlugs: ['normalCameras'] },
+        },
+      }),
+      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+    });
+    if (!resp.ok) {
+      console.warn('[CCTV] Nebraska 511 camera download failed:', resp.status);
+      return [];
+    }
+    const body = await resp.json();
+    // GraphQL reports failure in the body with HTTP 200, both as top-level
+    // `errors` and as a per-query `error` object.
+    const queryResult = body?.data?.mapFeaturesQuery;
+    const failure =
+      body?.errors?.[0]?.message || queryResult?.error?.message || '';
+    if (failure) {
+      console.warn('[CCTV] Nebraska 511 camera query error:', failure);
+      return [];
+    }
+    const features = Array.isArray(queryResult?.mapFeatures)
+      ? queryResult.mapFeatures
+      : [];
+
+    const cameras = features.map(ne511CameraToSource).filter(Boolean);
+    const unique = Array.from(
+      new Map(cameras.map((camera) => [camera.id, camera])).values(),
+    );
+    const maxRaw = Number(
+      process.env.CCTV_NE511_MAX_SOURCES || DEFAULT_NE511_MAX_SOURCES,
+    );
+    const maxCount = Number.isFinite(maxRaw)
+      ? Math.max(8, Math.min(900, Math.floor(maxRaw)))
+      : DEFAULT_NE511_MAX_SOURCES;
+    const prioritized = prioritizeSources(unique, maxCount, NE511_ANCHORS);
+    // NDOT publishes no bearing, so the headings above are id-hash priors.
+    // The sidecar replaces them where it has a road-aligned bearing.
+    const aligned = joinRoadHeadings(prioritized, loadRoadHeadings());
+    console.log(
+      `[CCTV] Loaded Nebraska 511 camera sources: ${unique.length} active (using nearest ${prioritized.length})`,
+    );
+    return aligned;
+  } catch (error) {
+    console.warn(
+      '[CCTV] Nebraska 511 camera download error:',
       error?.message || error,
     );
     return [];

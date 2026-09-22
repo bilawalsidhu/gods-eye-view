@@ -2520,7 +2520,8 @@ its criteria cannot be silently ignored.
 | Satellites | CelesTrak | `src/data/satellites.js` | `/api/celestrak` | 120s |
 | Space Missions (30d) | Launch Library 2 + CelesTrak | `src/data/rocketLaunches.js` | `/api/launches` + `/api/celestrak/active` | 5 min |
 | Traffic | OSM Overpass (+ optional TomTom live flow) | `src/data/traffic.js` | `/api/overpass` + `/api/tomtom` | viewport-driven |
-| CCTV | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Street View fallback | `src/data/cctv.js` | `/api/cctv` | 10s (active) |
+| CCTV | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Nebraska 511 (NE) + Street View fallback | `src/data/cctv.js` | `/api/cctv` | 10s (active) |
+| Message Signs | Electronic message signs — Nebraska 511 (NDOT) pack | `src/data/messageSigns.js` | `/api/signs` | 60s |
 | Radio | Radio Browser (public-domain station directory) | `src/data/radio.js` | `/api/radio/stations`, `/api/radio/click/:uuid` | 45 min directory refresh |
 | Transit 🚌 | Operator GTFS-Realtime VehiclePositions (7 keyless regions, `src/data/transitFeeds.js`) | `src/layers/transit/` via `src/app/layers/transit.js` | `/api/transit` | 15s (poll + delayed playback) |
 | Bikeshare 🚲 | GBFS (Lyft + BCycle) | `src/data/bikeshare.js` | `/api/gbfs` | 60s |
@@ -3171,6 +3172,57 @@ silently demoting every later lookup for the session.
   sources. Ontario 511 (2026-09-12) adds keyless highway cameras including Kitchener-area routes
   (cap 1,000, all enabled rows from the current ~944-camera catalog). All sources are RAW PRIOR
   poses, and the layer is stills-first.
+  Nebraska 511 (cap 350, `CCTV_NE511_MAX_SOURCES`, kill switch `CCTV_NE511_ENABLED=0`)
+  adds NDOT highway cameras statewide. The catalog is one keyless POST to the CARS-X
+  GraphQL endpoint behind the 511 site (`mapFeaturesQuery`,
+  `layerSlugs: ["normalCameras"]`) at a zoom past the server's clustering threshold; at
+  the site's own statewide zoom dense areas collapse into `Cluster` entries carrying no
+  camera. A mast may expose several angles sharing one position, and the first usable view
+  wins, as with Ontario 511. Headings are the id-hash fallback at low confidence unless the
+  precomputed sidecar supplies one: the titles look directional but are positional
+  ("I-80: Scale E of Lincoln" is where the camera sits, not where it looks). Frame URLs are
+  validated against `dot511.nebraska.gov/images/` and stripped of their `?<epoch-ms>`
+  cache-buster so each camera registers one stable URL, and the POST refuses redirects so
+  the list host cannot be steered.
+  `scripts/precompute-ne511-headings.mjs` resolves each camera against OSM road
+  geometry offline and writes `src/data/local_data/ne511_headings/`, which
+  `server/providers/cctv/headings.js` joins at catalog load. It runs offline because
+  `server/providers/cctv` may not import the overpass package (check:boundaries) and
+  one `around` query per camera on every refresh is the API sweep the Overpass usage
+  policy asks heavy consumers to replace with a local extract. A road axis fixes the
+  LINE a camera looks along but not which way down it, so `headingConfidence` stays
+  `low` and the calibration badge still reports a raw prior. An entry applies only
+  while the camera still sits where it was sampled (`positionKey`).
+
+## Message signs
+
+The `message-signs` layer (share token `k`) renders electronic message signs as
+readable board faces rather than markers. Like the CCTV layer it is
+agency-agnostic: one layer, N packs under `server/providers/messageSigns.js`,
+each with its own env kill switch. Nebraska 511 (NDOT, `SIGNS_NE511_ENABLED`)
+is the first pack.
+
+The route is server-side by necessity: the upstream POST answers
+`Access-Control-Allow-Origin: *`, but its JSON content type forces a CORS
+preflight, and the OPTIONS request is served by the SPA's S3 host as HTML with
+no CORS headers. `server/providers/messageSigns/ne511.js` supplies the pack and
+the shared route serves it at `/api/signs`, cached 60 s, keeping the last good
+list when a refresh fails.
+
+Sign titles carry a true travel bearing ("I-80: I-80 WB Mile 447.5"), so
+headings are high-confidence. The board's FACE points the REVERSE of that
+bearing: a sign addresses oncoming traffic, so facing it along the direction of
+travel would show its back to every driver reading it.
+
+The face is a Cesium plane, not a billboard, so it cannot be read from behind;
+because Cesium planes are double-sided and render the text mirrored from the
+rear, an opaque housing panel sits behind each face to occlude it. The board
+stands at the resolved ground floor plus its mount height — `fromDegrees` takes
+an ellipsoidal height, so the bare mount height buries it — and the face stays
+hidden until that floor resolves, with a board glyph carrying the sign. That
+glyph is also the click target and draws at every range, since the face reads
+as edge-on from above. Clicking flies to read the board head-on. Multi-page
+boards cycle at `PAGE_DWELL_MS`; single-page boards start no timer.
   sources. Fintraffic Finland road weather cameras (2026-09-13; cap 300, `CCTV_FINTRAFFIC_MAX_SOURCES`,
   kill switch `CCTV_FINTRAFFIC_ENABLED=0`) are the fourth pack: one keyless GeoJSON station list
   covering the whole country, where one *preset* (a station's fixed view) is one camera — 806
