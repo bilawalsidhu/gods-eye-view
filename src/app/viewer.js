@@ -1,5 +1,10 @@
 import * as Cesium from 'cesium';
 
+import {
+  applyRenderQuality,
+  resolveRenderQualityName,
+} from './renderQuality.js';
+
 const PINCH_ZOOM_MULTIPLIER = 8;
 const MAX_PINCH_PIXEL_DELTA = 120;
 
@@ -124,6 +129,13 @@ export function createApplicationViewer({ container, creditContainer }) {
   });
   try {
     viewer.targetFrameRate = 60;
+    // Opt-in only: `quality` defaults to 'high', which reproduces the
+    // msaaSamples/resolutionScale above exactly. See ./renderQuality.js for
+    // the measurements behind the other presets.
+    applyRenderQuality(
+      viewer,
+      resolveRenderQualityName(globalThis.location?.search),
+    );
     viewer.scene.globe.show = false;
     viewer.scene.skyAtmosphere.show = true;
     viewer.scene.skyAtmosphere.atmosphereLightIntensity = 18;

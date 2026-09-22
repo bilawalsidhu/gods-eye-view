@@ -3605,6 +3605,21 @@ are omitted rather than framing the wrong part of the globe.
 - Detection mode is user-controlled and should persist when switching styles. Since 2026-08-22 it also STARTS on — Dense @ 75% for every style on a first run, Normal included — as a `GLOBAL_POST_DEFAULTS` baseline that does NOT set `_detectionUserOverridden`. Exception (unchanged): selecting a military style (CRT/NVG/FLIR) auto-enables the same Dense preset, but only until the user manually changes detection this session (`_detectionUserOverridden` gate), after which style switches never touch it.
 - Detection runs in the bottom lane of the shared host's single world-overlay `postRender`
   listener (not `preRender`) to eliminate bounding-box drift at close zoom.
+- **Render quality is an opt-in URL preset (`src/app/renderQuality.js`).** The viewer is
+  constructed at `msaaSamples: 4` and Cesium's default `resolutionScale` of 1.0; `?quality=`
+  selects a preset applied immediately after construction (both properties are runtime-settable,
+  so the WebGL context is never rebuilt). `high` is the default and reproduces the construction
+  values exactly, so behaviour is unchanged unless a user opts in; an unknown, empty or malformed
+  value falls back to `high` rather than throwing, and a viewer without a scene is left alone.
+  `balanced` = msaa 2 / scale 0.85, `performance` = msaa 1 / scale 0.6. Measured on an Intel
+  UHD 770 (1264x705 canvas, keyless basemap, no layers, parked camera, warm tile cache, frames
+  counted from `scene.postRender`): **17.9 fps default, 22.6 balanced, 35.1 performance**.
+  Two changes that sound like wins measured as noise on that hardware and are deliberately NOT in
+  any preset: dropping `preserveDrawingBuffer` (17.9 -> 18.2, overlapping samples over two runs)
+  and removing every `backdrop-filter` (+6% one run, -1% the next). Frame time fits roughly
+  22 ms fixed + 40 ms/megapixel, so the fixed term bounds that machine near ~44 fps regardless of
+  preset; the presets buy back the resolution-dependent half only.
+
 - **Detection takes NO continuous-render hold (2026-08-22, `src/data/detectionRenderDemand.js`).**
   It repaints on CHANGE and asks the governor for exactly one more frame while work that spans
   frames is still outstanding. This is load-bearing for the detection-on-by-default flip: the old

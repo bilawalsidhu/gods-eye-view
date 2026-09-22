@@ -1,5 +1,12 @@
 # Changelog
 
+- Add opt-in render-quality presets for weak GPUs. `?quality=balanced` and
+  `?quality=performance` set `scene.msaaSamples` and `viewer.resolutionScale`
+  together; the default (`high`) reproduces the previous settings exactly, so
+  nothing changes unless a user asks for it. Measured on an Intel UHD 770:
+  17.9 fps as shipped, 22.6 balanced, 35.1 performance. An unknown value falls
+  back to the default.
+
 - Remove the spurious scrollbars that appeared on both panel stacks at narrow
   widths (720px and below) as soon as a panel was expanded. The stacks scroll
   vertically there, and each panel's decorative glow, absolutely positioned

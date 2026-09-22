@@ -29,6 +29,7 @@
   "src/app/application.js",
   "src/app/application.test.mjs",
   "src/app/mapLifecycle.test.mjs",
+  "src/app/renderQuality.test.mjs",
   "src/app/startupCamera.test.mjs",
   "src/app/viewer.js",
   "src/standalone/application.js",
