@@ -197,6 +197,20 @@
     overflow-y: auto;
   }
 
+  /* Both stacks are scroll containers at this width (overflow-y above), which
+     also makes their overflow-x compute to auto. Each panel's decorative
+     .panel-glow is absolutely positioned with a negative inset (-18px/-20px),
+     so inside a scroll container it stops being harmless paint and becomes
+     18–20px of scrollable overflow on BOTH axes: a horizontal scrollbar band
+     under the expanded panel plus a vertical scrollbar that scrolls nothing
+     but glow. Pin the glow to the panel box here — its blur is ink overflow,
+     which never scrolls — instead of clipping the rail, which would also clip
+     legitimate content such as the Context radio popover. */
+  #left-panel-stack .panel-glow,
+  #right-context-rail .panel-glow {
+    inset: 0;
+  }
+
   #right-context-rail > #pp-toggles {
     width: 100%;
   }
