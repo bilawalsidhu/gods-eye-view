@@ -898,13 +898,76 @@ test('the tileset host draws a raised shell and drapes nothing, at any camera he
   assert.equal(diagnostics.height, 6_200);
   assert.equal(diagnostics.time, times[0]);
   assert.equal(diagnostics.error, null);
-  assert.equal(h.viewer.camera.moveEnd.size, 0, 'no camera listeners');
+  assert.equal(
+    h.viewer.camera.moveEnd.size,
+    1,
+    'one camera listener, for the detail window only',
+  );
   assert.equal(await h.rendering.prefetch(snapshot, times[1]), true);
   assert.equal(h.rendering.getDiagnostics().cache.mosaics, 2);
   h.rendering.clear();
   assert.equal(h.shells().length, 0);
   assert.equal(h.postRender.size, 0);
+  assert.equal(h.viewer.camera.moveEnd.size, 0);
   assert.equal(h.rendering.getDiagnostics().cache.mosaics, 0);
+});
+
+test('a switch to 3D Tiles windows the current view; the globe host never requests a window', async () => {
+  let host;
+  const urls = [];
+  const h = renderingHarness({
+    getHost: () => host,
+    decodeImage: shellDecode,
+    fetchImpl: async (url) => {
+      urls.push(url);
+      return mockResponse();
+    },
+  });
+  h.viewer.camera = {
+    moveEnd: event(),
+    computeViewRectangle: () => Cesium.Rectangle.fromDegrees(-100, 35, -98, 36),
+  };
+  host = { collection: h.viewer.imageryLayers, kind: 'globe' };
+  const globe = h.rendering.setFrame(snapshot, times[0]);
+  h.settle();
+  assert.equal(await globe, true);
+  assert.equal(await h.rendering.prefetch(snapshot, times[1]), true);
+  h.viewer.camera.moveEnd.emit();
+  await flush();
+  assert.equal(h.shells().length, 0);
+  assert.equal(h.viewer.camera.moveEnd.size, 0);
+  assert.equal(h.rendering.getDiagnostics().shell, undefined);
+  assert.ok(urls.length > 0);
+  assert.ok(urls.every((url) => !url.includes('bbox=')));
+
+  host = { collection: new ImageryLayerCollection(), kind: 'tileset' };
+  assert.equal(h.rendering.rehome(), true);
+  await flush();
+  h.renderShells();
+  await flush();
+  h.renderShells();
+  const detail = urls.filter((url) => url.includes('bbox='));
+  assert.deepEqual(
+    detail.map((url) =>
+      new URL(url, 'https://example.test').searchParams.get('bbox'),
+    ),
+    ['-102,34,-96,37'],
+  );
+  const diagnostics = h.rendering.getDiagnostics();
+  assert.equal(diagnostics.time, times[0]);
+  assert.equal(diagnostics.shell.detail.ready, true);
+  assert.equal(h.shells().length, 2);
+  host = { collection: h.viewer.imageryLayers, kind: 'globe' };
+  assert.equal(h.rendering.rehome(), true);
+  assert.equal(h.shells().length, 0, 'both shell surfaces go with the host');
+  await flush();
+  h.settle();
+  await flush();
+  assert.equal(h.rendering.getDiagnostics().host, 'globe');
+  assert.equal(h.rendering.getDiagnostics().loading, false);
+  assert.equal(h.viewer.camera.moveEnd.size, 0);
+  assert.equal(urls.filter((url) => url.includes('bbox=')).length, 1);
+  h.rendering.clear();
 });
 
 test('host switches tear one renderer down and restage the retained frame on the other', async () => {
@@ -1005,9 +1068,10 @@ test('a host without imagery keeps the active shell and its frame', async () => 
 });
 
 test('each product owns its shell height; a product change replaces the shell', async () => {
+  let width = 2048;
   const h = renderingHarness({
     getHost: () => ({ collection: null, kind: 'tileset' }),
-    decodeImage: async () => ({ width: 2048, height: 1024, close() {} }),
+    decodeImage: async () => ({ width, height: width / 2, close() {} }),
   });
   const global = h.rendering.setFrame(
     { ...snapshot, product: 'clouds' },
@@ -1018,6 +1082,7 @@ test('each product owns its shell height; a product change replaces the shell', 
   assert.equal(await global, true);
   const [first] = h.shells();
   assert.equal(h.rendering.getDiagnostics().height, 5_500);
+  width = 4096;
   const lightning = h.rendering.setFrame(
     { ...snapshot, product: 'lightning' },
     times[0],
@@ -1262,9 +1327,9 @@ for (const [id, product] of [
     t.mock.timers.enable({ apis: ['setTimeout'] });
     t.mock.method(Date, 'now', () => Date.parse(times[2]));
     const size =
-      product === 'radar' || product === 'clouds-regional'
-        ? { width: 4096, height: 2048 }
-        : { width: 2048, height: 1024 };
+      product === 'clouds'
+        ? { width: 2048, height: 1024 }
+        : { width: 4096, height: 2048 };
     let host;
     const h = renderingHarness({
       getHost: () => host,

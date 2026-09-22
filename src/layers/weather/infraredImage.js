@@ -48,9 +48,10 @@ export function decodeInfraredImage(blob, signal) {
   });
 }
 
-/** Fetch one capped whole-extent frame and draw it into a canvas. Infrared frames
- * get the display transfer; a canvas also keeps Cesium's texture row order, which
- * an ImageBitmap upload would not. The decoded image is always released. */
+/** Fetch one capped whole-extent frame, or a `bbox` detail window of it, and draw
+ * it into a canvas. Infrared frames get the display transfer; a canvas also keeps
+ * Cesium's texture row order, which an ImageBitmap upload would not. The decoded
+ * image is always released. */
 export async function acquireWeatherImage(
   product,
   time,
@@ -58,6 +59,7 @@ export async function acquireWeatherImage(
     signal,
     mode,
     size,
+    bbox = null,
     maxBytes,
     createCanvas,
     fetchImpl,
@@ -66,7 +68,7 @@ export async function acquireWeatherImage(
     onFetched = () => {},
   },
 ) {
-  const response = await fetchImpl(weatherImageUrl(product, time, size), {
+  const response = await fetchImpl(weatherImageUrl(product, time, size, bbox), {
     signal,
   });
   if (!response.ok) throw new Error(`Weather HTTP ${response.status}`);

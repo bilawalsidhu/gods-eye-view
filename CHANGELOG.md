@@ -2,6 +2,13 @@
 
 ## Unreleased — weather review
 
+- On 3D Tiles, draw a 4096×2048 detail window around the view over each
+  observed-weather shell except global infrared. It follows the view on camera
+  move end, keeps its place while the view stays near its centre, and hides
+  until its image is ready after a move. The image proxy accepts a 2:1 `bbox`
+  inside the product bounds, rounded to 0.25°. Lightning's whole-extent image
+  is now 4096×2048; each shell caches up to 96 MiB of decoded images.
+
 - On 3D Tiles, show observed weather and the wind color field as raised,
   translucent shells (5.0–6.6 km, lightning highest) with one full-extent image
   per frame instead of draping onto tiles; they show at any camera height.

@@ -15,7 +15,7 @@ const PRODUCTS = Object.freeze({
       'Observed 15-minute lightning strike density on an approximately 8 km grid, scaled as strikes/km²/min ×10³. Ground-network density, not individual GLM flashes.',
     attribution: 'NOAA/NWS nowCOAST; derived from Vaisala NLDN/GLD360',
     metadataTtlMs: 600_000,
-    image: Object.freeze({ width: 2048, height: 1024 }),
+    image: Object.freeze({ width: 4096, height: 2048 }),
   }),
   radar: Object.freeze({
     service: 'weather_radar',
@@ -54,6 +54,9 @@ const PRODUCTS = Object.freeze({
 
 // Whole-extent images: 2:1 sizes up to each product's largest (the default).
 const IMAGE_SIZES = Object.freeze(['1024x512', '2048x1024', '4096x2048']);
+// Detail windows: any product up to 4096×2048 (the default).
+const DETAIL_IMAGE = Object.freeze({ width: 4096, height: 2048 });
+const BBOX_STEP = 0.25;
 const MAX_IMAGE_BYTES = 16 * 1024 * 1024;
 
 function failure(code, status = 503) {
@@ -164,6 +167,34 @@ export function parseWeatherCapabilities(xml, product, nowMs = Date.now()) {
     .slice(-26);
   if (!recent.length) throw failure('weather_observations_expired');
   return { bounds, times: recent.slice(-13), allowedTimes: recent };
+}
+
+/** A detail window `west,south,east,north` in degrees, rounded to 0.25° so cache
+ * keys repeat, with a 2:1 aspect within 1 %; null when absent. Containment in
+ * the product bounds is checked once the metadata is known. */
+export function weatherImageBbox(value) {
+  if (value === null) return null;
+  const parts = value.split(',');
+  if (
+    parts.length !== 4 ||
+    parts.some((part) => !/^-?\d{1,3}(?:\.\d{1,6})?$/.test(part))
+  )
+    throw failure('invalid_weather_bbox', 400);
+  // `+ 0` turns a rounded -0 into 0 so equal windows share one key.
+  const [west, south, east, north] = parts.map(
+    (part) => Math.round(Number(part) / BBOX_STEP) * BBOX_STEP + 0,
+  );
+  if (
+    west < -180 ||
+    east > 180 ||
+    south < -90 ||
+    north > 90 ||
+    west >= east ||
+    south >= north ||
+    Math.abs((east - west) / (north - south) / 2 - 1) > 0.01
+  )
+    throw failure('invalid_weather_bbox', 400);
+  return [west, south, east, north];
 }
 
 /** GeographicTilingScheme's two longitude tiles and one latitude tile at level zero. */
@@ -406,7 +437,7 @@ export function weatherProxy({
         url.pathname === '/manifest'
           ? ['product']
           : url.pathname === '/image'
-            ? ['product', 'time', 'size']
+            ? ['product', 'time', 'size', 'bbox']
             : ['product', 'time', 'z', 'x', 'y', 'size'];
       if (
         req.url.length > 512 ||
@@ -420,7 +451,10 @@ export function weatherProxy({
       if (!Object.hasOwn(PRODUCTS, product))
         return json(res, 400, { error: 'unknown_weather_product' });
       const wholeImage = url.pathname === '/image';
-      const largest = PRODUCTS[product].image;
+      const detailBox = wholeImage
+        ? weatherImageBbox(url.searchParams.get('bbox'))
+        : null;
+      const largest = detailBox ? DETAIL_IMAGE : PRODUCTS[product].image;
       const size =
         url.searchParams.get('size') ??
         (wholeImage ? `${largest.width}x${largest.height}` : '256');
@@ -465,16 +499,26 @@ export function weatherProxy({
         now() - Date.parse(time) > 24 * HOUR
       )
         throw failure('unknown_weather_time', 400);
+      if (
+        detailBox &&
+        (detailBox[0] < value.bounds.west ||
+          detailBox[1] < value.bounds.south ||
+          detailBox[2] > value.bounds.east ||
+          detailBox[3] > value.bounds.north)
+      )
+        throw failure('invalid_weather_bbox', 400);
       // A single advertised extent keeps NOAA's global reflectance contrast
       // consistent across the image; independently normalized tiles create seams.
-      const bbox = wholeImage
-        ? [
-            value.bounds.west,
-            value.bounds.south,
-            value.bounds.east,
-            value.bounds.north,
-          ]
-        : tileBounds;
+      const bbox =
+        detailBox ??
+        (wholeImage
+          ? [
+              value.bounds.west,
+              value.bounds.south,
+              value.bounds.east,
+              value.bounds.north,
+            ]
+          : tileBounds);
       const [width, height] = wholeImage
         ? size.split('x').map(Number)
         : [Number(size), Number(size)];
@@ -486,7 +530,8 @@ export function weatherProxy({
           : Math.max(1024 * 1024, width ** 2 * 4 + 65_536),
       };
       // NOAA WMS capabilities advertise no MaxWidth/MaxHeight. One GetMap
-      // returns a whole 4096×2048 extent or a 1024 px tile without composition.
+      // returns a whole 4096×2048 extent or window, or a 1024 px tile, without
+      // composition. Images are keyed by product, time, size and bbox.
       const key = `${product}:${time}:${wholeImage ? `image:${size}:${bbox.join(',')}` : `tile:${size}:${coords.join('/')}`}`;
       let cached = tiles.get(key);
       if (cached && now() - cached.at <= 24 * HOUR) {

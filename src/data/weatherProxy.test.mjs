@@ -4,6 +4,7 @@ import { EventEmitter } from 'node:events';
 import {
   weatherProxy,
   parseWeatherCapabilities,
+  weatherImageBbox,
   weatherTileBounds,
 } from '../../server/providers/weather.js';
 
@@ -95,7 +96,7 @@ test('lightning density uses a fixed observed WMS product with attribution and t
     manifest.imageUrl,
     `/api/weather${wholeImage(TIME, 'lightning')}`,
   );
-  assert.deepEqual(manifest.imageSize, { width: 2048, height: 1024 });
+  assert.deepEqual(manifest.imageSize, { width: 4096, height: 2048 });
   assert.equal((await request(tile({ product: 'lightning' }))).statusCode, 200);
   const map = calls[1].url;
   assert.equal(map.origin, 'https://nowcoast.noaa.gov');
@@ -680,7 +681,7 @@ test('whole-image route rejects unknown products, sizes above each product limit
   for (const url of [
     wholeImage(TIME, 'other'),
     wholeImage() + '&size=4096x2048',
-    wholeImage(TIME, 'lightning') + '&size=4096x2048',
+    wholeImage(TIME, 'lightning') + '&size=8192x4096',
     wholeImage(TIME, 'radar') + '&size=8192x4096',
     wholeImage(TIME, 'radar') + '&size=2048x2048',
     wholeImage(TIME, 'radar') + '&size=512x256',
@@ -691,7 +692,7 @@ test('whole-image route rejects unknown products, sizes above each product limit
     wholeImage() + '&width=4096',
     wholeImage() + '&height=2048',
     wholeImage() + '&z=0',
-    wholeImage() + '&bbox=-180,-90,180,90',
+    wholeImage() + '&bbox=-180,-90,180',
     wholeImage() + '&host=http://127.0.0.1',
     wholeImage() + '&layers=other',
     wholeImage() + '&time=' + encodeURIComponent(TIME),
@@ -787,7 +788,7 @@ test('every product serves one whole-extent image at its advertised bounds, size
   for (const [product, name, width] of [
     ['radar', NAMES[0], 4096],
     ['clouds-regional', NAMES[2], 4096],
-    ['lightning', NAMES[3], 2048],
+    ['lightning', NAMES[3], 4096],
     ['clouds', NAMES[1], 2048],
   ]) {
     maps.length = 0;
@@ -816,6 +817,131 @@ test('every product serves one whole-extent image at its advertised bounds, size
     );
     assert.equal(maps.length, 2, 'the explicit default shares the cache entry');
   }
+});
+
+test('detail windows take a rounded 2:1 bbox inside the product bounds, cached by product, time, size and bbox', async () => {
+  const maps = [];
+  const { request } = install({
+    fetchImpl: async (url) => {
+      if (url.includes('GetCapabilities')) return new Response(xml());
+      const params = new URL(url).searchParams;
+      maps.push(params);
+      return image(
+        png(Number(params.get('width')), Number(params.get('height'))),
+      );
+    },
+  });
+  const detail = (product, bbox, extra = '') =>
+    `${wholeImage(TIME, product)}&bbox=${bbox}${extra}`;
+  for (const [product, name] of [
+    ['radar', NAMES[0]],
+    ['clouds-regional', NAMES[2]],
+    ['lightning', NAMES[3]],
+    ['clouds', NAMES[1]],
+  ]) {
+    maps.length = 0;
+    const response = await request(detail(product, '-102,34,-96,37'));
+    assert.equal(response.statusCode, 200, product);
+    assert.equal(
+      response.headers['Cache-Control'],
+      'public, max-age=86400, immutable',
+    );
+    assert.equal(response.body.readUInt32BE(16), 4096, 'every product');
+    assert.equal(response.body.readUInt32BE(20), 2048);
+    assert.equal(maps[0].get('layers'), name);
+    assert.equal(maps[0].get('time'), TIME);
+    assert.deepEqual(
+      ['bbox', 'width', 'height'].map((key) => maps[0].get(key)),
+      ['-102,34,-96,37', '4096', '2048'],
+    );
+    assert.deepEqual(
+      (await request(detail(product, '-102.1,34.05,-95.9,37.1'))).body,
+      response.body,
+      'values round to 0.25° so nearby requests repeat',
+    );
+    assert.equal(
+      (await request(detail(product, '-102,34,-96,37', '&size=4096x2048')))
+        .statusCode,
+      200,
+    );
+    assert.equal(maps.length, 1, 'rounded and explicit-default requests hit');
+    const smaller = detail(product, '-102,34,-96,37', '&size=2048x1024');
+    assert.equal((await request(smaller)).statusCode, 200);
+    assert.equal(maps.length, 2, 'size is part of the cache identity');
+    assert.equal(maps[1].get('width'), '2048');
+    assert.equal(
+      (await request(detail(product, '-97,34,-91,37'))).statusCode,
+      200,
+    );
+    assert.equal(maps.length, 3, 'bbox is part of the cache identity');
+    assert.equal((await request(wholeImage(TIME, product))).statusCode, 200);
+    assert.equal(maps.length, 4, 'the full extent keeps its own entry');
+    assert.equal(maps[3].get('bbox'), '-130,20,-60,55');
+  }
+  maps.length = 0;
+  assert.equal(
+    (await request(detail('radar', '-120,25,-70,50.25'))).statusCode,
+    200,
+    'within 1 % of 2:1',
+  );
+  assert.equal(maps[0].get('bbox'), '-120,25,-70,50.25');
+  for (const bbox of [
+    '-120,25,-70,50.5',
+    '-134,30,-122,36',
+    '-70,40,-58,46',
+    '-100,17,-94,20',
+    '-100,53,-94,56',
+  ]) {
+    const response = await request(detail('radar', bbox));
+    assert.equal(response.statusCode, 400, bbox);
+    assert.equal(response.headers['Cache-Control'], 'no-store');
+    assert.deepEqual(body(response), { error: 'invalid_weather_bbox' });
+  }
+  assert.equal(maps.length, 1, 'rejected windows never reach NOAA');
+});
+
+test('malformed detail windows fail before any upstream request', async () => {
+  let calls = 0;
+  const { request } = install({
+    fetchImpl: async () => {
+      calls++;
+      throw new Error('unexpected fetch');
+    },
+  });
+  for (const bbox of [
+    '',
+    '-102,34,-96',
+    '-102,34,-96,37,1',
+    'a,b,c,d',
+    '-102,34,-96,3e1',
+    '-102,34,-96,+37',
+    '-102,%2034,-96,37',
+    '-1020,34,-96,37',
+    '-102.1234567,34,-96,37',
+    '-96,34,-102,37',
+    '-102,37,-96,34',
+    '-102,34,-96,40',
+    '-102,34,-90,37',
+    '-190,34,-178,40',
+    '-102,85,-94,91',
+    '-100,34,-100,34',
+  ]) {
+    const response = await request(`${wholeImage(TIME, 'radar')}&bbox=${bbox}`);
+    assert.equal(response.statusCode, 400, bbox);
+    assert.deepEqual(body(response), { error: 'invalid_weather_bbox' });
+  }
+  for (const url of [
+    `${wholeImage(TIME, 'radar')}&bbox=-102,34,-96,37&size=8192x4096`,
+    `${wholeImage(TIME, 'radar')}&bbox=-102,34,-96,37&bbox=-102,34,-96,37`,
+    `${tile()}&bbox=-102,34,-96,37`,
+    '/manifest?product=radar&bbox=-102,34,-96,37',
+  ])
+    assert.equal((await request(url)).statusCode, 400, url);
+  assert.equal(calls, 0);
+  assert.equal(weatherImageBbox(null), null);
+  const rounded = weatherImageBbox('-0.1,-0.05,5.9,2.95');
+  assert.deepEqual(rounded, [0, 0, 6, 3]);
+  assert.ok(Object.is(rounded[0], 0), 'no negative zero in cache keys');
 });
 
 test('global whole images and tiles share a byte budget without sharing cache identities', async () => {

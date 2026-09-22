@@ -72,11 +72,27 @@ Globe tiled products use 256 px tiles to maximum level 6. The tile proxy accepts
 size=256 (default), 512 or 1024 and keys cached bytes by size, retaining the
 24-hour immutable response and eight upstream slots. The image proxy serves every
 product as one whole-extent PNG at its advertised bounds, up to 4096×2048 for
-radar and regional infrared and 2048×1024 for lightning and global infrared
+radar, regional infrared and lightning and 2048×1024 for global infrared
 (`size=W×H`, default the maximum), capped at 16 MiB and cached by product, time
 and size. NOAA returned each of these sizes from a single request in a live
 check; the WMS capabilities advertise no size maximum. Devices whose texture
 limit is below the product size request halved images.
+On 3D Tiles, each shell except global infrared also draws a detail window: a
+second surface at the same height, drawn right after the full-extent one, with a
+4096×2048 image of the area around the view. On camera move end and host switch
+the window is centred on the camera's ground footprint, max(2 × its longitude
+span, 6°) wide and half as tall, on a 0.5° grid inside the product bounds. It is
+used only while narrower than half the product's longitude extent and while the
+view overlaps the product; it moves only when the view centre leaves its inner
+half or the span changes by more than 50 %. Once the detail image has drawn,
+the full-extent surface leaves that area out, so the two never blend. A new
+frame swaps the full-extent image first and keeps the previous detail image
+until the new one decodes; a moved window hides until its image arrives. Global
+infrared contrast depends on the requested extent, so it keeps one image. The
+image proxy accepts `bbox=west,south,east,north` for every product: inside the
+product bounds, 2:1 within 1 %, rounded to 0.25°, up to 4096×2048 (the
+default), cached by product, time, size and bbox. Diagnostics report
+`shell.detail` (`bbox`, `size`, `ready`, `enabled`).
 Clouds only applies a soft brightness ramp to decoded pixels once, using
 Cesium's sRGB-to-linear conversion (`channel ** 2.2`) and smoothstep from 0.40
 to 0.70. The old 0.55 threshold is the ramp midpoint. RGB and source alpha are
@@ -92,12 +108,14 @@ decoded tile once; shells process each whole frame once.
 Exact-time tile and image responses are immutable for 24 hours; manifests and
 errors remain uncached. Each globe renderer retains up to 6 processed global
 mosaics in a least-recently-used cache keyed by observation time and infrared
-mode (up to 48 MiB of canvas pixels). Each shell keeps decoded frames in a
-least-recently-used cache bounded at 48 MiB; the shown frame and the newest
-decode are never evicted. Disable clears the caches. Cache hits skip
+mode (up to 48 MiB of canvas pixels). Each shell keeps decoded full-extent and
+detail images in one least-recently-used cache bounded at 96 MiB, keyed by
+time, mode and window; the shown images and the newest decodes are never
+evicted. Disable clears the caches. Cache hits skip
 fetch/decode and report `mosaic.cached: true` with zero decode time.
 During playback, a successful frame warms the next advertised observation,
-wrapping at the end. Global imagery and shells warm a decoded frame; globe tiled
+wrapping at the end. Global imagery warms a decoded frame and shells warm the
+next frame and its detail window; globe tiled
 products fetch at most eight level-0/1 tiles intersecting the view and product
 bounds. Prefetch is best effort, has a deadline, and cancels on frame
 replacement, pause, suspension or clear. Diagnostics expose the renderer

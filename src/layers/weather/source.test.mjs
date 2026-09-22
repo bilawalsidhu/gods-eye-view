@@ -5,6 +5,7 @@ import {
   validateWeatherSnapshot,
   weatherImageUrl,
   weatherTileUrl,
+  WEATHER_DETAIL_SIZE,
   WEATHER_IMAGE_SIZES,
 } from './source.js';
 const time = '2026-09-16T02:00:00.000Z';
@@ -92,7 +93,7 @@ test('whole-extent image URLs are same origin and omit the default largest size'
     ['radar', 4096],
     ['clouds-regional', 4096],
     ['clouds', 2048],
-    ['lightning', 2048],
+    ['lightning', 4096],
   ]) {
     assert.deepEqual(WEATHER_IMAGE_SIZES[product], {
       width,
@@ -115,12 +116,49 @@ test('whole-extent image URLs are same origin and omit the default largest size'
     );
   }
   for (const size of [
-    { width: 4096, height: 2048 },
+    { width: 8192, height: 4096 },
     { width: 2048, height: 2048 },
     { width: 512, height: 256 },
     { width: '1024', height: 512 },
   ])
     assert.throws(() => weatherImageUrl('lightning', time, size), /size/);
+  assert.throws(
+    () => weatherImageUrl('clouds', time, { width: 4096, height: 2048 }),
+    /size/,
+  );
   assert.throws(() => weatherImageUrl('other', time), /frame/);
   assert.throws(() => weatherImageUrl('radar', 'latest'), /frame/);
+});
+
+test('detail-window image URLs carry the bbox and omit the default detail size', () => {
+  const box = { west: -102, south: 34, east: -96, north: 37 };
+  assert.deepEqual(WEATHER_DETAIL_SIZE, { width: 4096, height: 2048 });
+  for (const product of ['radar', 'clouds-regional', 'lightning', 'clouds']) {
+    const url = `/api/weather/image?product=${product}&time=${encodeURIComponent(time)}&bbox=-102,34,-96,37`;
+    assert.equal(weatherImageUrl(product, time, {}, box), url);
+    assert.equal(
+      weatherImageUrl(product, time, { width: 4096, height: 2048 }, box),
+      url,
+      'every product has a 4096×2048 detail default',
+    );
+    assert.equal(
+      weatherImageUrl(product, time, { width: 2048, height: 1024 }, box),
+      `${url}&size=2048x1024`,
+    );
+  }
+  assert.equal(
+    weatherImageUrl('radar', time, {}, { ...box, west: -97.5, east: -91.5 }),
+    `/api/weather/image?product=radar&time=${encodeURIComponent(time)}&bbox=-97.5,34,-91.5,37`,
+  );
+  for (const bad of [
+    { ...box, west: -96 },
+    { ...box, north: 34 },
+    { ...box, east: Number.NaN },
+    { west: -102, south: 34, east: -96 },
+  ])
+    assert.throws(() => weatherImageUrl('radar', time, {}, bad), /window/);
+  assert.throws(
+    () => weatherImageUrl('radar', time, { width: 8192, height: 4096 }, box),
+    /size/,
+  );
 });
