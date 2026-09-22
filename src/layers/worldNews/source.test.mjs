@@ -216,3 +216,79 @@ test("the browser keeps the proxy's costMeasured flag and defaults it to false",
   ({ source } = recordingSource(response(200, payload({}))));
   assert.equal((await source.getSnapshot()).costMeasured, false);
 });
+
+const MOSCOW_REGION = Object.freeze({
+  band: 'local',
+  key: 'l:en:56:37.5:50',
+  center: { lat: 56, lon: 37.5 },
+  radiusKm: 50,
+});
+
+test('a view fetch asks the base endpoint for one circle', async () => {
+  const { source, calls } = recordingSource(
+    response(
+      200,
+      payload({
+        region: MOSCOW_REGION,
+        regionFetchesLeft: 4,
+        morePagesLeft: 0,
+      }),
+    ),
+  );
+  const snapshot = await source.getRegionSnapshot({ region: MOSCOW_REGION });
+  assert.equal(calls.length, 1);
+  assert.equal(
+    calls[0].url,
+    '/api/world-news?region=view&lat=56&lon=37.5&radius=50',
+  );
+  assert.deepEqual(snapshot.region, MOSCOW_REGION);
+  assert.equal(snapshot.regionFetchesLeft, 4);
+  assert.equal(snapshot.rows.length, 1);
+});
+
+test('the global feed carries no region, so a snapshot reports null', async () => {
+  const { source } = recordingSource(response(200, payload()));
+  const snapshot = await source.getSnapshot();
+  assert.equal(snapshot.region, null);
+  assert.equal(snapshot.regionFetchesLeft, null);
+});
+
+test('a half-formed region descriptor reads as global, never as NaN degrees', async () => {
+  for (const region of [
+    { band: 'local', center: { lat: 56 }, radiusKm: 50 },
+    { band: 'local', center: { lat: 56, lon: 37.5 } },
+    { band: 'local', center: null, radiusKm: 50 },
+    'moscow',
+    [],
+  ]) {
+    const { source } = recordingSource(response(200, payload({ region })));
+    assert.equal(
+      (await source.getSnapshot()).region,
+      null,
+      `expected ${JSON.stringify(region)} to read as global`,
+    );
+  }
+});
+
+test('a view with no circle is refused here, before it can reach the proxy', async () => {
+  const { source, calls } = recordingSource(response(200, payload()));
+  await assert.rejects(
+    source.getRegionSnapshot({ region: { band: 'global', key: 'g:en' } }),
+    (error) => error.code === 'bad_region',
+  );
+  assert.equal(calls.length, 0, 'nothing is fetched for a global-band view');
+});
+
+test('the view-specific proxy codes each get their own human message', async () => {
+  for (const [code, pattern] of [
+    ['bad_region', /circle/i],
+    ['region_off', /off/i],
+    ['region_rate', /hour/i],
+  ]) {
+    const { source } = recordingSource(response(429, { error: code }));
+    await assert.rejects(
+      source.getRegionSnapshot({ region: MOSCOW_REGION }),
+      (error) => error.code === code && pattern.test(error.message),
+    );
+  }
+});

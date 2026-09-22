@@ -54,3 +54,25 @@ export const HEADLINE_LABEL_CHARS = 48;
 
 /** Headlines within ~100 m share one pin; keys round to this many decimals. */
 export const PLACE_KEY_DECIMALS = 3;
+
+/**
+ * Cap on how far the camera's look-at ground point may be pulled from nadir
+ * when deriving the centre of a "news in view" circle, in kilometres.
+ *
+ * Matches the provider's own 100 km radius cap (NEWS_REGION_MAX_RADIUS_KM):
+ * a hit farther from nadir than the widest circle we could ever fetch is the
+ * camera grazing the horizon, not something the operator is looking AT.
+ */
+export const REGION_LOOKAT_PULL_KM = 100;
+
+/**
+ * Fallback retention window for headline batches held in the browser, in
+ * milliseconds. The proxy sends the real one as `retentionMs`; this is what
+ * the layer assumes if a payload ever arrives without it.
+ *
+ * The map accumulates batches, so it needs the same one-hour cap the provider's
+ * terms place on caching and the proxy already enforces — a pin that outlived
+ * that window would be the browser holding provider data longer than the
+ * server is allowed to.
+ */
+export const DEFAULT_RETENTION_MS = 60 * 60_000;

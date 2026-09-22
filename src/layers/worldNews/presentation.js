@@ -254,8 +254,15 @@ export function createWorldNewsPresentation({
       const picked = viewer.scene.pick(click.position);
       const id = resolvePickId(picked);
       if (id && state.groupById.has(id)) {
-        if (id !== state.selectedId || getSelectedEntityContext()?.id !== id)
-          selectPlace(id);
+        const alreadyOurs =
+          id === state.selectedId && getSelectedEntityContext()?.id === id;
+        if (!alreadyOurs) selectPlace(id);
+        // A second click on the place already selected walks its stories. The
+        // card says "1/8 stories here" directly under the cursor and used to
+        // offer no way to reach the other seven — the paging chips live in a
+        // side panel that may be scrolled out of sight entirely. One story
+        // means nothing to walk, so that stays a no-op.
+        else stepStory(1);
         return;
       }
       // A pick that belongs to a sibling layer (e.g. an aircraft) is not

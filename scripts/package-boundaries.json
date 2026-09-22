@@ -1972,12 +1972,15 @@
       "src/ui/recentImagery.js",
       "src/ui/imageryBoxTool.js",
       "src/app/layers/worldNews.js",
+      "src/data/worldNewsRegion.js",
+      "src/data/worldNewsArticles.js",
       "src/layers/worldNews/index.js",
       "src/layers/worldNews/model.js",
       "src/layers/worldNews/policy.js",
       "src/layers/worldNews/presentation.js",
       "src/layers/worldNews/records.js",
-      "src/layers/worldNews/source.js"
+      "src/layers/worldNews/source.js",
+      "src/layers/worldNews/viewport.js"
     ],
     "external": [
       "hls.js",
@@ -2438,12 +2441,15 @@
       "src/layers/recentImagery/thumbnails.js",
       "src/maps/imageryHost.js",
       "src/app/layers/worldNews.js",
+      "src/data/worldNewsRegion.js",
+      "src/data/worldNewsArticles.js",
       "src/layers/worldNews/index.js",
       "src/layers/worldNews/model.js",
       "src/layers/worldNews/policy.js",
       "src/layers/worldNews/presentation.js",
       "src/layers/worldNews/records.js",
-      "src/layers/worldNews/source.js"
+      "src/layers/worldNews/source.js",
+      "src/layers/worldNews/viewport.js"
     ],
     "external": [
       "hls.js",
@@ -2978,6 +2984,10 @@
       "src/layers/worldNews/presentation.js",
       "src/layers/worldNews/records.js",
       "src/layers/worldNews/source.js",
+      "src/layers/worldNews/viewport.js",
+      "src/data/worldNewsRegion.js",
+      "src/data/worldNewsArticles.js",
+      "src/data/trafficBounds.js",
       "src/data/inputOwnership.js"
     ],
     "external": ["cesium"]

@@ -1,4 +1,5 @@
 import { API_URL, MORE_URL } from './policy.js';
+import { newsRegionQueryString } from '../../data/worldNewsRegion.js';
 import { normalizeWorldNewsSnapshot } from './records.js';
 
 /** Proxy error codes → the human message the row shows (contract v1). */
@@ -8,10 +9,36 @@ const ERROR_MESSAGES = Object.freeze({
   budget: 'daily news budget exhausted',
   rate_limited: 'World News rate-limited',
   pages: 'extra pages exhausted',
+  bad_region: 'this view is not a valid news circle',
+  region_off: 'view fetching is off on this server',
+  region_rate: 'view fetches exhausted this hour',
 });
 
 function finiteOrNull(value) {
   return Number.isFinite(value) ? value : null;
+}
+
+/**
+ * The region a payload says it is, or null for the global feed.
+ * A half-formed descriptor reads as global rather than as a circle the row
+ * would then describe with NaN coordinates.
+ * @param {unknown} region Proxy `region` field.
+ * @returns {{band:string, key:string|null,
+ *   center:{lat:number, lon:number}, radiusKm:number}|null}
+ */
+function normalizeRegion(region) {
+  if (!region || typeof region !== 'object' || Array.isArray(region))
+    return null;
+  const lat = finiteOrNull(region.center?.lat);
+  const lon = finiteOrNull(region.center?.lon);
+  const radiusKm = finiteOrNull(region.radiusKm);
+  if (lat === null || lon === null || radiusKm === null) return null;
+  return {
+    band: typeof region.band === 'string' ? region.band : 'local',
+    key: typeof region.key === 'string' ? region.key : null,
+    center: { lat, lon },
+    radiusKm,
+  };
 }
 
 /**
@@ -75,6 +102,15 @@ export function createWorldNewsSource({
       morePagesLeft: finiteOrNull(payload.morePagesLeft) ?? 0,
       costPerRequest: finiteOrNull(payload.costPerRequest),
       costMeasured: payload.costMeasured === true,
+      // How long the browser may keep this batch on the map. The provider's
+      // terms cap caching at one hour and the proxy enforces the same window;
+      // an accumulating map has to honour it too.
+      retentionMs: finiteOrNull(payload.retentionMs),
+      // Which feed this batch IS, as the proxy describes it — not what was
+      // asked for. The global endpoint carries no region, so a plain refresh
+      // landing on top of a pinned circle correctly reads as global again.
+      region: normalizeRegion(payload.region),
+      regionFetchesLeft: finiteOrNull(payload.regionFetchesLeft),
     };
   }
   return {
@@ -85,6 +121,23 @@ export function createWorldNewsSource({
     /** GET /api/world-news/more — one extra page merged into that batch. */
     loadMore({ signal } = {}) {
       return request(MORE_URL, signal);
+    },
+    /**
+     * GET /api/world-news?region=view&… — one page filtered to a circle.
+     * @param {{center:{lat:number,lon:number}, radiusKm:number}} region
+     *   Local-band descriptor from resolveViewerRegion; a global-band view has
+     *   no circle to ask for and is rejected here rather than upstream.
+     * @param {AbortSignal} [signal]
+     * @returns {Promise<object>} Snapshot, as getSnapshot.
+     */
+    getRegionSnapshot({ region, signal } = {}) {
+      const query = newsRegionQueryString(region);
+      if (!query) {
+        const error = new Error(ERROR_MESSAGES.bad_region);
+        error.code = 'bad_region';
+        return Promise.reject(error);
+      }
+      return request(`${API_URL}?${query}`, signal);
     },
   };
 }

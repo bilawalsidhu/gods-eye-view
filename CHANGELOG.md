@@ -478,6 +478,34 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ### Added
 
+- **World News ▸ NEWS IN VIEW**: fetch the headlines for the circle the camera
+  is framing, and GLOBAL FEED to go back. The chip says which circle it would
+  ask for before you spend anything, and explains itself when the view is too
+  wide — the provider matches a geocoded centroid inside a radius it caps at
+  100 km, so a continental view has no circle that covers it and is refused
+  rather than silently clamped. A fetched circle is pinned: refreshes re-ask
+  for it instead of reverting to the worldwide feed, and they do not follow the
+  camera, so a drifting view cannot spend budget nobody asked to spend. The
+  centre is snapped to a 0.5° grid before it leaves the browser, so nearby
+  views share one cached circle. Operator controls: `WORLD_NEWS_REGION_MODE`
+  (kill switch), `WORLD_NEWS_REGION_FETCHES_PER_HOUR` (default 6),
+  `WORLD_NEWS_REGION_PAGE_SIZE` and `WORLD_NEWS_REGION_CACHE_MAX`.
+
+- Clicking a World News pin that is already selected steps to the next story
+  at that place, wrapping at the end. The readout card counts "1/8 stories
+  here" directly under the cursor and previously offered no way to reach the
+  other seven — PREV/NEXT STORY live in a side panel that may be scrolled out
+  of sight. The card now names the pin as the control, and says "Click this
+  card to open" so each line points at its own target. A place with one story
+  still ignores the second click.
+
+- **World News pins accumulate.** Every fetch ADDS to the map: asking about a
+  second city keeps the first, and GLOBAL FEED joins the worldwide headlines to
+  whatever views are pinned rather than replacing them. **CLEAR PINS** is the
+  only control that takes pins off. Headlines still age out after the hour the
+  provider allows a response to be cached, and are de-duplicated by article id,
+  so overlapping circles re-date a headline instead of doubling it.
+
 - Add an optional, keyed **World News** layer: the latest place-tagged World
   News API headlines pinned at the place each headline names, aggregated per
   place and colored by tone, with OPEN ARTICLE / LOAD MORE / PREV and NEXT STORY chips

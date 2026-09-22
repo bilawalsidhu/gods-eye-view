@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import {
+  DEFAULT_RETENTION_MS,
   KEY_ID,
   LAYER_ICON,
   LAYER_ID,
@@ -11,6 +12,10 @@ import {
   WORLD_NEWS_OVERLAY_SOURCE_ID,
 } from './policy.js';
 import {
+  mergeBatchArticles,
+  retainWithinWindow,
+} from '../../data/worldNewsArticles.js';
+import {
   aggregatePlaces,
   formatAge,
   formatAgoMinutes,
@@ -18,18 +23,45 @@ import {
   toneBand,
 } from './model.js';
 import { createWorldNewsPresentation } from './presentation.js';
+import {
+  describeNewsRegion,
+  NEWS_REGION_MAX_RADIUS_KM,
+} from '../../data/worldNewsRegion.js';
+import { resolveViewerRegion, watchCameraSettle } from './viewport.js';
 export * from './model.js';
 export * from './policy.js';
 export { createWorldNewsSource } from './source.js';
 
 /** Proxy `blocked` codes the row can name; anything else reads as an error. */
 const BLOCKED_LABELS = Object.freeze({
-  budget: 'BUDGET REACHED · resumes 00:00 UTC',
-  quota: 'QUOTA EXHAUSTED · resets 00:00 UTC',
+  // `budget` is THIS install's own daily cap, not the provider's plan — see
+  // blockedLabel(), which fills in both numbers. `quota` is the provider
+  // actually refusing (HTTP 402); only that one means the plan is spent.
+  budget: 'LOCAL DAILY CAP REACHED',
+  quota: 'PROVIDER QUOTA EXHAUSTED · resets 00:00 UTC',
   rate_limited: 'RATE LIMITED',
   bad_key: 'INVALID KEY',
   upstream: 'UPSTREAM UNAVAILABLE',
+  region_rate: 'VIEW FETCHES SPENT · resets hourly',
+  region_off: 'VIEW FETCHING OFF',
 });
+
+/**
+ * Region failures that will not fix themselves on the next tick, so the pinned
+ * circle is dropped rather than retried every refresh: the server has view
+ * fetching switched off, or it rejected the circle outright.
+ */
+const PERMANENT_REGION_FAILURES = Object.freeze(['region_off', 'bad_region']);
+
+/**
+ * Failures that concern only the view circle. They are reported on the chip,
+ * never as a layer block: the worldwide feed is unaffected by all of them.
+ */
+const REGION_ONLY_FAILURES = Object.freeze([
+  'region_off',
+  'bad_region',
+  'region_rate',
+]);
 
 const TONE_LEGEND = Object.freeze([
   { band: 'negative', label: 'Negative tone' },
@@ -58,6 +90,8 @@ export function createWorldNewsLayer({
   credit = null,
   openArticle = (url) => globalThis.open?.(url, '_blank', 'noopener'),
   screenSpaceEventHandlerFactory,
+  /** Injectable clock; retention is the one thing here that turns on real time. */
+  clock = () => Date.now(),
 } = {}) {
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('World News requires a snapshot source');
@@ -83,6 +117,26 @@ export function createWorldNewsLayer({
     error: null,
     /** LOAD MORE failure text; the base feed row stays honest on its own. */
     moreError: null,
+    /** NEWS IN VIEW failure text, kept off the base feed row for the same reason. */
+    regionError: null,
+    /**
+     * Every batch still on the map, as `{at, articles, region}`, oldest first.
+     * A fetch ADDS one — views and the worldwide feed accumulate, so asking
+     * about a second city never wipes the first. Only three things remove a
+     * pin: the provider's retention window, the render cap, and CLEAR PINS.
+     */
+    batches: [],
+    /** Retention window the proxy declares; see DEFAULT_RETENTION_MS. */
+    retentionMs: DEFAULT_RETENTION_MS,
+    /**
+     * What the ten-minute refresh re-asks for: a circle, or null for the
+     * worldwide feed. The last successful fetch sets it. It is NOT "what the
+     * map shows" — the map shows everything that has not aged out.
+     */
+    refreshTarget: null,
+    regionFetchesLeft: null,
+    /** Disposer for the camera-settle listener that repaints the chip. */
+    cameraWatch: null,
     /** Data age (proxy fetchedAt), not response age. */
     lastUpdate: null,
     rows: [],
@@ -133,6 +187,11 @@ export function createWorldNewsLayer({
     state.lastUpdate = null;
     state.error = null;
     state.moreError = null;
+    state.regionError = null;
+    state.batches = [];
+    state.retentionMs = DEFAULT_RETENTION_MS;
+    state.refreshTarget = null;
+    state.regionFetchesLeft = null;
     state.stale = false;
     state.blocked = null;
     state.budget = null;
@@ -145,11 +204,84 @@ export function createWorldNewsLayer({
     state.costMeasured = false;
   }
 
+  /**
+   * Add one fetched batch to the map and return the headlines now on it.
+   *
+   * Batches accumulate, so a second view never wipes the first. Two things
+   * bound that: the same one-hour retention window the proxy enforces (the
+   * provider's terms cap caching there, and a browser holding pins longer
+   * would break the promise the server keeps), and de-duplication by article
+   * id, so refetching an overlapping circle re-dates a headline instead of
+   * doubling it.
+   *
+   * @param {object} snapshot Validated proxy snapshot.
+   * @returns {Array<object>} Merged rows, newest first.
+   */
+  function admitBatch(snapshot) {
+    const now = clock();
+    // Dated by when the BROWSER received it, not by the proxy's `fetchedAt`.
+    // The two agree whenever the clocks do, and when they do not — a browser
+    // clock off by hours is ordinary — receipt time still bounds how long a
+    // pin lives, where proxy time would silently blank the whole map.
+    // Either way this is stricter than the layer used to be: before the map
+    // accumulated, rows simply stayed until a fetch replaced them.
+    state.batches = retainWithinWindow(
+      [
+        ...state.batches,
+        { at: now, articles: snapshot.rows, region: snapshot.region ?? null },
+      ],
+      now,
+      state.retentionMs,
+    );
+    return mergeBatchArticles(state.batches);
+  }
+
+  /**
+   * What the pins currently on the map cover: the worldwide feed, a set of
+   * distinct circles, or both. Derived from the retained batches, so it stays
+   * true as they age out.
+   * @returns {{global: boolean, regions: Array<object>}}
+   */
+  function mapScope() {
+    const regions = new Map();
+    let global = false;
+    for (const batch of state.batches) {
+      if (batch.region)
+        regions.set(
+          batch.region.key ?? describeNewsRegion(batch.region),
+          batch.region,
+        );
+      else global = true;
+    }
+    return { global, regions: [...regions.values()] };
+  }
+
+  /** Operator-facing phrase for what the map holds, following a row count. */
+  function describeScope() {
+    const { global, regions } = mapScope();
+    if (!regions.length) return 'latest headlines';
+    if (!global && regions.length === 1)
+      return `headlines ${describeNewsRegion(regions[0])}`;
+    const views = `${regions.length} view${regions.length === 1 ? '' : 's'}`;
+    return global
+      ? `headlines from the worldwide feed and ${views}`
+      : `headlines from ${views}`;
+  }
+
   function applySnapshot(snapshot) {
     state.keyRequired = false;
     state.error = null;
     state.moreError = null;
-    state.rows = snapshot.rows;
+    state.regionError = null;
+    // The payload names the feed it came from, so the refresh follows the last
+    // thing actually fetched without anyone having to remember to set it.
+    state.refreshTarget = snapshot.region ?? null;
+    state.regionFetchesLeft = Number.isFinite(snapshot.regionFetchesLeft)
+      ? snapshot.regionFetchesLeft
+      : null;
+    if (Number.isFinite(snapshot.retentionMs) && snapshot.retentionMs > 0)
+      state.retentionMs = snapshot.retentionMs;
+    state.rows = admitBatch(snapshot);
     state.stale = snapshot.stale === true;
     state.blocked = snapshot.blocked ?? null;
     state.budget = snapshot.budget ?? null;
@@ -172,16 +304,17 @@ export function createWorldNewsLayer({
     state.lastUpdate = Number.isFinite(snapshot.fetchedAt)
       ? snapshot.fetchedAt
       : Date.now();
-    const groups = aggregatePlaces(snapshot.rows).slice(0, MAX_RENDERED_PLACES);
+    // Everything retained, not just this batch: the map is cumulative.
+    const groups = aggregatePlaces(state.rows).slice(0, MAX_RENDERED_PLACES);
     state.groups = groups;
     state.groupById = new Map(groups.map((group) => [group.id, group]));
     renderPlaces(Date.now());
-    if (credit && snapshot.rows.length && !state.creditRegistered) {
+    if (credit && state.rows.length && !state.creditRegistered) {
       state.creditRegistered =
         services.credits?.register?.(state.viewer, credit) !== false;
     }
     console.log(
-      `[Data:WorldNews] Updated: ${snapshot.rows.length} headlines at ${groups.length} places`,
+      `[Data:WorldNews] +${snapshot.rows.length} from ${describeNewsRegion(snapshot.region ?? null)} → ${state.rows.length} headlines at ${groups.length} places`,
     );
   }
 
@@ -189,6 +322,10 @@ export function createWorldNewsLayer({
     state.keyRequired = true;
     state.error = null;
     state.moreError = null;
+    state.regionError = null;
+    state.batches = [];
+    state.refreshTarget = null;
+    state.regionFetchesLeft = null;
     state.stale = false;
     state.blocked = null;
     state.rows = [];
@@ -233,6 +370,18 @@ export function createWorldNewsLayer({
       if (kind === 'refresh') {
         state.error = message;
         if (BLOCKED_LABELS[code]) state.blocked = code;
+      } else if (kind === 'region') {
+        state.regionError = message;
+        if (code === 'region_rate') state.regionFetchesLeft = 0;
+        // A circle this server will never serve is unpinned, or every refresh
+        // from here on would re-ask for it and re-fail.
+        if (PERMANENT_REGION_FAILURES.includes(code))
+          state.refreshTarget = null;
+        // Only an account-wide fault blocks the layer. The view-specific codes
+        // leave the worldwide feed perfectly usable, so they stay on the chip
+        // instead of greying out the whole row.
+        if (BLOCKED_LABELS[code] && !REGION_ONLY_FAILURES.includes(code))
+          state.blocked = code;
       } else {
         state.moreError = message;
         if (code === 'pages') state.morePagesLeft = 0;
@@ -267,21 +416,123 @@ export function createWorldNewsLayer({
     return true;
   }
 
-  function loadMoreTitle() {
+  /**
+   * Human label for a `blocked` code.
+   *
+   * `budget` gets both numbers spelled out. It is this install's own daily
+   * spending cap (`WORLD_NEWS_DAILY_POINT_BUDGET`), NOT the provider's plan,
+   * and the bare words "BUDGET REACHED" over an UNAVAILABLE row read as "the
+   * provider cut you off" — reported 2026-09-22 against a plan that still had
+   * 420 of 1000 points left. Naming the cap, the count and what the provider
+   * actually reports makes the difference impossible to miss, and says which
+   * knob to turn.
+   *
+   * @param {string|null} code Proxy blocked code.
+   * @returns {string}
+   */
+  function blockedLabel(code) {
+    if (!code) return '';
+    if (code !== 'budget')
+      return BLOCKED_LABELS[code] || String(code).toUpperCase();
+    const spent = state.budget?.spent;
+    const limit = state.budget?.limit;
+    const left = state.quota?.left;
+    const counts =
+      Number.isFinite(spent) && Number.isFinite(limit)
+        ? ` ${spent}/${limit} points`
+        : '';
+    const provider = Number.isFinite(left)
+      ? ` · provider quota still has ${left}`
+      : '';
+    return `${BLOCKED_LABELS.budget}${counts}${provider} · raise WORLD_NEWS_DAILY_POINT_BUDGET`;
+  }
+
+  function budgetLine() {
     const cost = state.costPerRequest ?? 2;
     const spent = state.budget?.spent ?? 0;
     const limit = state.budget?.limit ?? '?';
     // The provider documents 1 point + 0.01 per result; without an
     // X-API-Quota-Request header on the last response that is all we know.
     const costNote = state.costMeasured ? '' : ' (estimate)';
-    const budgetLine = `1 request ≈ ${cost} points${costNote} of today's budget (${spent}/${limit} used)`;
+    return `1 request ≈ ${cost} points${costNote} of today's budget (${spent}/${limit} used)`;
+  }
+
+  function loadMoreTitle() {
+    const budget = budgetLine();
     if (state.keyRequired) return 'Add a World News API key to load headlines';
-    if (state.blocked)
-      return `${BLOCKED_LABELS[state.blocked] || state.blocked} · ${budgetLine}`;
-    if (state.moreError) return `${state.moreError} · ${budgetLine}`;
+    if (state.blocked) return `${blockedLabel(state.blocked)} · ${budget}`;
+    if (state.moreError) return `${state.moreError} · ${budget}`;
+    // A view batch is one page by construction (the proxy sends morePagesLeft
+    // 0 for every region), which is not the same thing as an hour spent.
+    if (state.refreshTarget)
+      return `A view is a single page — fetch the worldwide feed to page further · ${budget}`;
     if (state.morePagesLeft <= 0)
-      return `No extra pages left this hour · ${budgetLine}`;
-    return `Fetch one more page of headlines (${state.morePagesLeft} left this hour) · ${budgetLine}`;
+      return `No extra pages left this hour · ${budget}`;
+    return `Fetch one more page of headlines (${state.morePagesLeft} left this hour) · ${budget}`;
+  }
+
+  /**
+   * The circle the camera frames right now, re-read on demand.
+   * A camera read can throw on a degenerate scene; that reads as "no usable
+   * circle", which disables the chip rather than breaking the whole panel.
+   */
+  function viewRegion() {
+    if (!state.viewer) return null;
+    try {
+      return resolveViewerRegion(state.viewer);
+    } catch (error) {
+      console.warn('[Data:WorldNews] view region unavailable:', error);
+      return null;
+    }
+  }
+
+  function canFetchRegion(region) {
+    return (
+      canFetchGlobal() &&
+      region?.band === 'local' &&
+      typeof source.getRegionSnapshot === 'function'
+    );
+  }
+
+  function canFetchGlobal() {
+    return (
+      state.enabled && !state.loading && !state.keyRequired && !state.blocked
+    );
+  }
+
+  function newsInViewTitle(region) {
+    const budget = budgetLine();
+    if (state.keyRequired) return 'Add a World News API key to fetch headlines';
+    if (state.blocked) return `${blockedLabel(state.blocked)} · ${budget}`;
+    if (state.regionError) return `${state.regionError} · ${budget}`;
+    // The provider matches a geocoded CENTROID inside a circle capped at
+    // 100 km, so a continental view has no circle that covers it. Saying so
+    // is kinder than a greyed-out chip with no reason.
+    if (region?.band !== 'local')
+      return `Zoom in to a city first — a news circle is capped at ${NEWS_REGION_MAX_RADIUS_KM} km across the ground, and this view is wider · ${budget}`;
+    const left = Number.isFinite(state.regionFetchesLeft)
+      ? ` (${state.regionFetchesLeft} left this hour)`
+      : '';
+    return `Fetch the headlines ${describeNewsRegion(region)}${left} · ${budget}`;
+  }
+
+  function globalFeedTitle() {
+    const budget = budgetLine();
+    if (state.keyRequired) return 'Add a World News API key to fetch headlines';
+    if (state.blocked) return `${blockedLabel(state.blocked)} · ${budget}`;
+    // Additive, exactly like NEWS IN VIEW: the worldwide feed joins whatever
+    // views are already pinned instead of replacing them.
+    return `Add the latest worldwide headlines to the map · ${budget}`;
+  }
+
+  function clearPinsTitle() {
+    if (!state.rows.length) return 'No headline pins to clear';
+    // describeNewsRegion answers "whole earth" for no circle, which reads
+    // oddly as the object of "adds ... again".
+    const next = state.refreshTarget
+      ? `the headlines ${describeNewsRegion(state.refreshTarget)}`
+      : 'the worldwide feed';
+    return `Remove all ${state.rows.length} headline pins from the map. The layer is live, so the next refresh adds ${next} again.`;
   }
 
   const layer = {
@@ -303,6 +554,13 @@ export function createWorldNewsLayer({
       viewer.dataSources.add(state.dataSource);
       overlayHost.setVisible(WORLD_NEWS_OVERLAY_SOURCE_ID, false);
       installInteraction(viewer);
+      // NEWS IN VIEW is enabled or not depending on how wide the view is, but
+      // the layer panel only repaints on layer status changes. Without this
+      // the chip would stay greyed out after the operator zoomed in far
+      // enough to use it.
+      state.cameraWatch = watchCameraSettle(viewer, () => {
+        if (state.enabled) notifyRowControls();
+      });
       console.log('[Data:WorldNews] Initialized');
     },
 
@@ -333,6 +591,19 @@ export function createWorldNewsLayer({
 
     update(viewer, { signal = null } = {}) {
       if (!state.enabled || !state.dataSource) return Promise.resolve(false);
+      // A pinned circle is re-asked for rather than quietly replaced by the
+      // worldwide feed — and it is re-asked for as PINNED, not re-derived from
+      // wherever the camera has drifted to since, which would spend budget the
+      // operator never asked to spend. Within the proxy's TTL this is a cache
+      // hit and costs nothing.
+      const region = state.refreshTarget;
+      if (region && typeof source.getRegionSnapshot === 'function')
+        return load(
+          (requestSignal) =>
+            source.getRegionSnapshot({ region, signal: requestSignal }),
+          'region',
+          signal,
+        );
       return load(
         (requestSignal) => source.getSnapshot({ signal: requestSignal }),
         'refresh',
@@ -350,9 +621,66 @@ export function createWorldNewsLayer({
       );
     },
 
+    /**
+     * NEWS IN VIEW chip: replace the shown batch with one page filtered to the
+     * circle the camera frames, and pin it so refreshes keep it.
+     * @returns {Promise<boolean>} False when the view has no usable circle.
+     */
+    fetchViewRegion() {
+      const region = viewRegion();
+      if (!canFetchRegion(region)) return Promise.resolve(false);
+      return load(
+        (requestSignal) =>
+          source.getRegionSnapshot({ region, signal: requestSignal }),
+        'region',
+      );
+    },
+
+    /**
+     * GLOBAL FEED chip: add the worldwide newest-first feed to the map. It
+     * merges with whatever views are pinned rather than replacing them, and it
+     * points the refresh back at the worldwide feed.
+     * @returns {Promise<boolean>} False when busy or unavailable.
+     */
+    showGlobalFeed() {
+      if (!canFetchGlobal()) return Promise.resolve(false);
+      return load(
+        (requestSignal) => source.getSnapshot({ signal: requestSignal }),
+        'refresh',
+      );
+    },
+
+    /**
+     * CLEAR PINS chip: take every headline off the map. The only control that
+     * removes a pin — every fetch adds. Purely local: nothing is requested and
+     * no budget is spent, and the next refresh will repopulate from the live
+     * feed, which is what a live layer does.
+     * @returns {boolean} False when there was nothing to clear.
+     */
+    clearPins() {
+      if (!state.enabled || !state.batches.length) return false;
+      state.batches = [];
+      state.rows = [];
+      state.groups = [];
+      state.groupById = new Map();
+      // Without this the row would read "empty" as though the feed had come
+      // back with nothing, which is a different fact about the world.
+      state.lastUpdate = null;
+      // renderPlaces settles the selection itself, and evicts rather than
+      // deselects when the selected place is no longer on the map — which is
+      // exactly what just happened to every one of them.
+      renderPlaces(Date.now());
+      notifyRowControls();
+      governorRequestRender('world-news');
+      console.log('[Data:WorldNews] Pins cleared');
+      return true;
+    },
+
     destroy(viewer = state.viewer) {
       layer.disable();
       destroyInteraction();
+      state.cameraWatch?.();
+      state.cameraWatch = null;
       if (state.dataSource && viewer)
         viewer.dataSources.remove(state.dataSource, true);
       state.dataSource = null;
@@ -415,8 +743,42 @@ export function createWorldNewsLayer({
         label: 'LOAD MORE',
         title: loadMoreTitle(),
         disabled: !canLoadMore(),
+        // `busy` is what earns the wait cursor; a chip that is merely
+        // unavailable gets "not-allowed" and explains itself in the title.
+        busy: state.loading,
         onClick: () => layer.loadMore(),
       });
+      // Fetching. All three are always present and explain themselves when
+      // disabled, for the ordering reason above: a chip that came and went
+      // would be appended in the wrong place when it returned. None of them
+      // is `active` — they are actions that ADD to the map, not modes, and a
+      // lit chip would imply the map showed only that one thing.
+      const region = viewRegion();
+      chips.push(
+        {
+          id: 'news-in-view',
+          label: 'NEWS IN VIEW',
+          title: newsInViewTitle(region),
+          disabled: !canFetchRegion(region),
+          busy: state.loading,
+          onClick: () => layer.fetchViewRegion(),
+        },
+        {
+          id: 'global-news',
+          label: 'GLOBAL FEED',
+          title: globalFeedTitle(),
+          disabled: !canFetchGlobal(),
+          busy: state.loading,
+          onClick: () => layer.showGlobalFeed(),
+        },
+        {
+          id: 'clear-pins',
+          label: 'CLEAR PINS',
+          title: clearPinsTitle(),
+          disabled: !state.enabled || !state.rows.length,
+          onClick: () => layer.clearPins(),
+        },
+      );
       if (group && group.count > 1) {
         chips.push(
           {
@@ -467,19 +829,17 @@ export function createWorldNewsLayer({
       const cachedAge = state.lastUpdate
         ? `cached ${formatAge(now - state.lastUpdate) || '<1h'}`
         : null;
-      const blockedLabel = state.blocked
-        ? BLOCKED_LABELS[state.blocked] || state.blocked.toUpperCase()
-        : null;
+      const blockedName = state.blocked ? blockedLabel(state.blocked) : null;
       // A block on a cached batch names the block AND the age of the pins it
       // still shows: the panel renders `error` for a stale row, so a bare
       // `stale` flag read STALE with no reason (local QA, 2026-09-19).
       const blockedText =
-        blockedLabel &&
+        blockedName &&
         rows &&
         cachedAge &&
         (state.stale || state.blocked === 'budget')
-          ? `${blockedLabel} · ${cachedAge}`
-          : blockedLabel;
+          ? `${blockedName} · ${cachedAge}`
+          : blockedName;
       // A transient upstream fault keeps its specific message (e.g. the HTTP
       // status) when one exists; the generic label only covers a cache served
       // during the proxy's backoff.
@@ -498,8 +858,16 @@ export function createWorldNewsLayer({
         loadingLabel = state.error;
       } else if (state.lastUpdate) {
         // The source label already ends in "· LIVE"; repeating it here made
-        // the row read "World News API · LIVE · LIVE · …".
-        loadingLabel = `${rows} of ${state.requested} latest headlines place-tagged · updated ${formatAgoMinutes(now - state.lastUpdate)}`;
+        // the row read "World News API · LIVE · LIVE · …". The map is
+        // cumulative, so the row names what is actually on it: it must never
+        // read as the whole world while it holds two cities, nor quote one
+        // batch's "of N scanned" once several have been merged.
+        const ago = formatAgoMinutes(now - state.lastUpdate);
+        const singleGlobalBatch =
+          state.batches.length === 1 && !state.batches[0].region;
+        loadingLabel = singleGlobalBatch
+          ? `${rows} of ${state.requested} latest headlines place-tagged · updated ${ago}`
+          : `${rows} ${describeScope()} place-tagged · updated ${ago}`;
       }
       const empty = !state.loading && !rows;
       const status = state.keyRequired
@@ -525,7 +893,9 @@ export function createWorldNewsLayer({
         status,
         statusMessage:
           status === 'empty'
-            ? 'No place-tagged headlines in the latest batch'
+            ? state.refreshTarget
+              ? `No place-tagged headlines ${describeNewsRegion(state.refreshTarget)}`
+              : 'No place-tagged headlines in the latest batch'
             : undefined,
         loadingLabel,
       };

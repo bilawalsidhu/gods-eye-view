@@ -767,8 +767,18 @@
 /* Async sub-controls: a chip must never read ACTIVE before the data it turns
    on actually exists, so loading and failure are their own visible states. */
 .data-toggle-chip:disabled {
-  cursor: wait;
+  /* Most disabled chips are not waiting for anything — they are unavailable,
+     and the title says why. A wait cursor here promised a request that was
+     never in flight. */
+  cursor: not-allowed;
   opacity: 0.7;
+}
+
+/* Only a chip with a request actually in flight says "wait". Declared after
+   the rule above: both have the same specificity, so source order decides. */
+.data-toggle-chip.chip-loading,
+.data-toggle-chip[aria-busy='true'] {
+  cursor: wait;
 }
 
 .data-toggle-chip.chip-loading {

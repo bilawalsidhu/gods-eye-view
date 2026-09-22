@@ -104,12 +104,21 @@ export function buildLabelModel(group, storyIndex = 0, nowMs = Date.now()) {
     title: String(article?.title || place),
     details: [
       age ? `${domain} · ${age} ago` : domain,
-      count > 1 ? `${place} · ${index + 1}/${count} stories here` : place,
+      // The counter invites paging, so it has to say where the control is:
+      // clicking the pin again is the nearest one, and the only one visible
+      // without the layer panel open.
+      count > 1
+        ? `${place} · ${index + 1}/${count} stories here · click the pin for the next`
+        : place,
       `TONE ${band.toUpperCase()}` +
         (Number.isFinite(article?.sentiment)
           ? ` (${article.sentiment.toFixed(2)})`
           : ''),
-      url ? 'Click to open · World News API' : 'Source: World News API',
+      // "Click to open" was unambiguous when the card was the only thing worth
+      // clicking; now that the pin pages, each line names its own target.
+      url
+        ? 'Click this card to open · World News API'
+        : 'Source: World News API',
     ],
     accent: TONE_COLORS[band] || TONE_COLORS.unknown,
     // The card is the natural place to click through to the story, but it

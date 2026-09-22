@@ -36,6 +36,36 @@ function fakeViewer() {
   };
 }
 
+/**
+ * A camera framing a city, so "NEWS IN VIEW" has a circle to ask for. Without
+ * one the default fake viewer reports no view rectangle at all, which is a
+ * global-band view and leaves the chip correctly disabled.
+ */
+function framedCamera({ lat = 55.75, lon = 37.62, spanDeg = 0.5 } = {}) {
+  const listeners = new Set();
+  return {
+    listeners,
+    settle: () => {
+      for (const fn of [...listeners]) fn();
+    },
+    camera: {
+      computeViewRectangle: () =>
+        Cesium.Rectangle.fromDegrees(
+          lon - spanDeg / 2,
+          lat - spanDeg / 2,
+          lon + spanDeg / 2,
+          lat + spanDeg / 2,
+        ),
+      positionCartographic: Cesium.Cartographic.fromDegrees(lon, lat, 60_000),
+      pickEllipsoid: () => Cesium.Cartesian3.fromDegrees(lon, lat),
+      moveEnd: {
+        addEventListener: (fn) => listeners.add(fn),
+        removeEventListener: (fn) => listeners.delete(fn),
+      },
+    },
+  };
+}
+
 function fakeServices() {
   const calls = [];
   const store = { entities: new Map(), selectedId: null };
@@ -221,8 +251,12 @@ function snapshot(rows, overrides = {}) {
   };
 }
 
-function harness(source, { credit = { key: 'test-credit', html: 'x' } } = {}) {
+function harness(
+  source,
+  { credit = { key: 'test-credit', html: 'x' }, framed = null, clock } = {},
+) {
   const viewer = fakeViewer();
+  if (framed) viewer.camera = framed.camera;
   const services = fakeServices();
   const overlayHost = fakeOverlayHost();
   const handlers = fakeHandlerFactory();
@@ -234,6 +268,7 @@ function harness(source, { credit = { key: 'test-credit', html: 'x' } } = {}) {
     credit,
     openArticle: (url) => opened.push(url),
     screenSpaceEventHandlerFactory: handlers.factory,
+    ...(clock ? { clock } : {}),
   });
   layer.init(viewer);
   layer.enable(viewer);
@@ -346,10 +381,10 @@ test('lifecycle: pins, contexts, ambient labels and readout hooks follow enable/
     'newest story first',
   );
   assert.deepEqual(rotterdam.gevLabelModel.details.slice(1), [
-    'Rotterdam · 1/2 stories here',
+    'Rotterdam · 1/2 stories here · click the pin for the next',
     'TONE NEGATIVE (-0.50)',
     // A story with a link says so: the card itself opens the publisher.
-    'Click to open · World News API',
+    'Click this card to open · World News API',
   ]);
   assert.equal(rotterdam.gevLabelModel.interactive, true);
   assert.equal(rotterdam.gevLabelModel.url, ROW_A.url);
@@ -475,10 +510,13 @@ test('an upstream fault degrades the row but keeps the previous headlines', asyn
   assert.equal(await h.layer.update(h.viewer), true);
   stats = h.layer.getStats();
   assert.equal(stats.blocked, 'quota');
-  assert.equal(stats.loadingLabel, 'QUOTA EXHAUSTED · resets 00:00 UTC');
+  assert.equal(
+    stats.loadingLabel,
+    'PROVIDER QUOTA EXHAUSTED · resets 00:00 UTC',
+  );
   assert.equal(
     stats.error,
-    'QUOTA EXHAUSTED · resets 00:00 UTC',
+    'PROVIDER QUOTA EXHAUSTED · resets 00:00 UTC',
     'with data the row names the block and when it lifts',
   );
   assert.equal(layerFeedState(stats), 'degraded');
@@ -493,7 +531,13 @@ test('an upstream fault degrades the row but keeps the previous headlines', asyn
   });
   assert.equal(await empty.layer.update(empty.viewer), true);
   stats = empty.layer.getStats();
-  assert.equal(stats.error, 'BUDGET REACHED · resumes 00:00 UTC');
+  // The local cap is not the provider's quota, so the row must say which one
+  // stopped it and which knob lifts it. With no payload to quote there are no
+  // numbers, only the cause.
+  assert.equal(
+    stats.error,
+    'LOCAL DAILY CAP REACHED · raise WORLD_NEWS_DAILY_POINT_BUDGET',
+  );
   assert.equal(stats.status, 'unavailable');
   assert.equal(stats.stale, true);
   assert.equal(layerFeedState(stats), 'unavailable');
@@ -520,7 +564,7 @@ test('stale, budget-limited and empty batches read honestly on the chip', async 
   );
   assert.match(
     stats.loadingLabel,
-    /^BUDGET REACHED · resumes 00:00 UTC · cached /,
+    /^LOCAL DAILY CAP REACHED 4\/50 points · provider quota still has 90 · raise WORLD_NEWS_DAILY_POINT_BUDGET · cached /,
   );
   assert.equal(
     stats.error,
@@ -534,6 +578,9 @@ test('stale, budget-limited and empty batches read honestly on the chip', async 
   );
   assert.equal(h.chip('load-more').disabled, true);
 
+  // The map accumulates, so an empty batch on top of pinned rows is not an
+  // empty map. Clear first, then let a batch come back with nothing.
+  h.layer.clearPins();
   reply = snapshot([]);
   await h.layer.update(h.viewer);
   stats = h.layer.getStats();
@@ -634,7 +681,15 @@ test('selection: chips, story paging, readout refresh and the injected opener', 
   assert.equal(h.layer.selectPlace(ROTTERDAM), true);
   assert.deepEqual(
     h.chips().map((chip) => chip.id),
-    ['open-article', 'load-more', 'prev-story', 'next-story'],
+    [
+      'open-article',
+      'load-more',
+      'news-in-view',
+      'global-news',
+      'clear-pins',
+      'prev-story',
+      'next-story',
+    ],
     'always-present chips precede the paging chips the panel appends',
   );
   assert.equal(h.services.store.selectedId, ROTTERDAM);
@@ -653,7 +708,7 @@ test('selection: chips, story paging, readout refresh and the injected opener', 
   assert.equal(rotterdam.gevLabelModel.title, ROW_B.title);
   assert.equal(
     rotterdam.gevLabelModel.details[1],
-    'Rotterdam · 2/2 stories here',
+    'Rotterdam · 2/2 stories here · click the pin for the next',
   );
   assert.equal(rotterdam.gevLabelModel.details[2], 'TONE POSITIVE (0.60)');
   assert.equal(rotterdam.gevLabelModel.accent, '#4fd1a5');
@@ -732,13 +787,22 @@ test('clicks select our pins, yield to sibling-owned picks, and clear on empty s
   h.layer.destroy(h.viewer);
 });
 
-test('a refresh that drops the selected place evicts rather than deselects', async () => {
+test('losing the selected place evicts rather than deselects', async () => {
   let rows = [ROW_A, ROW_C];
   const h = harness({ getSnapshot: async () => snapshot(rows) });
   await h.layer.update(h.viewer);
   h.layer.selectPlace(ROTTERDAM);
+  // A refresh can no longer take a place away — the map accumulates — so the
+  // way a selected place goes is CLEAR PINS, and the contract is the same:
+  // the context is evicted, not quietly deselected.
   rows = [ROW_C];
   await h.layer.update(h.viewer);
+  assert.equal(
+    h.services.store.selectedId,
+    ROTTERDAM,
+    'a refresh keeps every pin, so the selection survives it',
+  );
+  assert.equal(h.layer.clearPins(), true);
   assert.deepEqual(h.services.calls.filter(([op]) => op === 'clear').at(-1), [
     'clear',
     'world-news',
@@ -747,7 +811,13 @@ test('a refresh that drops the selected place evicts rather than deselects', asy
   assert.equal(h.chip('open-article').disabled, true);
   assert.deepEqual(
     h.entities().map((entity) => entity.id),
+    [],
+  );
+  await h.layer.update(h.viewer);
+  assert.deepEqual(
+    h.entities().map((entity) => entity.id),
     [TOKYO],
+    'and the live feed repopulates on the next tick',
   );
 
   // A retained selection survives the refresh and republishes its card.
@@ -824,20 +894,28 @@ test('legend tallies every story by tone and the analyst seam mirrors the rows',
   assert.ok(legend.every((item) => /named in the headline/.test(item.blurb)));
   const records = h.layer.getAnalystRecords();
   assert.equal(records.length, 3);
-  assert.deepEqual(records[0], {
-    id: 'wn-a',
-    title: ROW_A.title,
-    domain: 'a.example',
-    url: 'https://a.example/1',
-    publishedAt: ROW_A.publishedAt,
-    sentiment: -0.5,
-    category: 'business',
-    place: 'Rotterdam',
-    sourceCountry: 'nl',
-    lat: 51.92,
-    lon: 4.48,
-  });
-  assert.equal(records[2].sentiment, null);
+  assert.deepEqual(
+    records.map((record) => record.id),
+    ['wn-c', 'wn-a', 'wn-b'],
+    'merged batches are newest first, whatever order each arrived in',
+  );
+  assert.deepEqual(
+    records.find((record) => record.id === 'wn-a'),
+    {
+      id: 'wn-a',
+      title: ROW_A.title,
+      domain: 'a.example',
+      url: 'https://a.example/1',
+      publishedAt: ROW_A.publishedAt,
+      sentiment: -0.5,
+      category: 'business',
+      place: 'Rotterdam',
+      sourceCountry: 'nl',
+      lat: 51.92,
+      lon: 4.48,
+    },
+  );
+  assert.equal(records[0].sentiment, null, 'wn-c carries no tone score');
   assert.equal(h.layer.getAnalystRecords(2).length, 2);
   h.layer.disable(h.viewer);
   assert.deepEqual(h.layer.getAnalystRecords(), []);
@@ -882,5 +960,501 @@ test('an unmeasured request cost is labelled as the documented estimate', async 
   reply = snapshot([ROW_A]);
   await h.layer.update(h.viewer);
   assert.match(h.chip('load-more').title, /≈ 2 points of today's budget/);
+  h.layer.destroy(h.viewer);
+});
+
+const MOSCOW_CIRCLE = Object.freeze({
+  band: 'local',
+  key: 'l:en:56:37.5:50',
+  center: { lat: 56, lon: 37.5 },
+  radiusKm: 50,
+});
+
+/** A region batch as the proxy answers it: one page, no second page to walk. */
+function regionSnapshot(rows, overrides = {}) {
+  return snapshot(rows, {
+    morePagesLeft: 0,
+    region: MOSCOW_CIRCLE,
+    regionFetchesLeft: 5,
+    ...overrides,
+  });
+}
+
+/** A source that records which feed was asked for, in order. */
+function regionSource({ global: globalReply, region: regionReply }) {
+  const asked = [];
+  return {
+    asked,
+    getSnapshot: async () => {
+      asked.push('global');
+      return typeof globalReply === 'function' ? globalReply() : globalReply;
+    },
+    getRegionSnapshot: async ({ region }) => {
+      asked.push(region);
+      return typeof regionReply === 'function' ? regionReply() : regionReply;
+    },
+  };
+}
+
+test('NEWS IN VIEW has nothing to ask for until the camera frames a city', async () => {
+  const wide = harness(regionSource({ global: snapshot([ROW_A]) }));
+  await wide.layer.update(wide.viewer);
+  assert.equal(wide.chip('news-in-view').disabled, true);
+  assert.match(
+    wide.chip('news-in-view').title,
+    /Zoom in to a city first — a news circle is capped at 100 km/,
+  );
+  assert.equal(await wide.layer.fetchViewRegion(), false, 'nothing is spent');
+  wide.layer.destroy(wide.viewer);
+
+  const close = harness(regionSource({ global: snapshot([ROW_A]) }), {
+    framed: framedCamera(),
+  });
+  await close.layer.update(close.viewer);
+  assert.equal(close.chip('news-in-view').disabled, false);
+  assert.match(
+    close.chip('news-in-view').title,
+    /Fetch the headlines within 50 km of 56.0, 37.5/,
+  );
+  close.layer.destroy(close.viewer);
+});
+test('fetching a view ADDS its headlines and keeps what is already pinned', async () => {
+  const source = regionSource({
+    global: snapshot([ROW_A, ROW_C]),
+    region: regionSnapshot([ROW_B]),
+  });
+  const h = harness(source, { framed: framedCamera() });
+  await h.layer.update(h.viewer);
+  assert.deepEqual(source.asked, ['global']);
+  assert.match(h.layer.getStats().loadingLabel, /latest headlines/);
+  assert.equal(h.chip('clear-pins').disabled, false);
+
+  assert.equal(await h.chip('news-in-view').onClick(), true);
+  assert.deepEqual(
+    source.asked[1],
+    {
+      band: 'local',
+      key: 'l:en:56:37.5:50',
+      center: { lat: 56, lon: 37.5 },
+      radiusKm: 50,
+    },
+    'the circle the camera frames is what gets asked for',
+  );
+  assert.deepEqual(
+    h.layer
+      .getAnalystRecords()
+      .map((record) => record.id)
+      .sort(),
+    ['wn-a', 'wn-b', 'wn-c'],
+    'the view joins the worldwide batch instead of replacing it',
+  );
+  assert.match(
+    h.layer.getStats().loadingLabel,
+    /3 headlines from the worldwide feed and 1 view place-tagged/,
+  );
+  h.layer.destroy(h.viewer);
+});
+
+test('a second view adds to the first — asking about Tokyo keeps Moscow', async () => {
+  const batches = [
+    regionSnapshot([ROW_B]),
+    regionSnapshot([ROW_C], {
+      region: {
+        band: 'local',
+        key: 'l:en:35.5:139.5:25',
+        center: { lat: 35.5, lon: 139.5 },
+        radiusKm: 25,
+      },
+    }),
+  ];
+  let next = 0;
+  const source = {
+    asked: [],
+    getSnapshot: async () => {
+      source.asked.push('global');
+      return snapshot([ROW_A]);
+    },
+    getRegionSnapshot: async ({ region }) => {
+      source.asked.push(region.key);
+      return batches[next++];
+    },
+  };
+  const framed = framedCamera();
+  const h = harness(source, { framed });
+  await h.layer.fetchViewRegion();
+  assert.deepEqual(
+    h.layer.getAnalystRecords().map((record) => record.id),
+    ['wn-b'],
+  );
+  // Fly to Tokyo and ask again.
+  h.viewer.camera = framedCamera({
+    lat: 35.68,
+    lon: 139.69,
+    spanDeg: 0.25,
+  }).camera;
+  await h.layer.fetchViewRegion();
+  assert.deepEqual(
+    h.layer
+      .getAnalystRecords()
+      .map((record) => record.id)
+      .sort(),
+    ['wn-b', 'wn-c'],
+    'the first circle stays on the map',
+  );
+  assert.match(
+    h.layer.getStats().loadingLabel,
+    /2 headlines from 2 views place-tagged/,
+  );
+  h.layer.destroy(h.viewer);
+});
+
+test('a refresh re-asks for the pinned circle instead of reverting to the world', async () => {
+  const source = regionSource({
+    global: snapshot([ROW_A]),
+    region: regionSnapshot([ROW_B]),
+  });
+  const h = harness(source, { framed: framedCamera() });
+  await h.layer.update(h.viewer);
+  await h.layer.fetchViewRegion();
+  await h.layer.update(h.viewer);
+  assert.deepEqual(
+    source.asked.map((entry) => (entry === 'global' ? 'global' : entry.key)),
+    ['global', 'l:en:56:37.5:50', 'l:en:56:37.5:50'],
+    'the pinned circle survives the ten-minute tick',
+  );
+  h.layer.destroy(h.viewer);
+});
+
+test('a pinned refresh re-asks for the PINNED circle, not wherever the camera went', async () => {
+  const source = regionSource({
+    global: snapshot([ROW_A]),
+    region: regionSnapshot([ROW_B]),
+  });
+  const framed = framedCamera();
+  const h = harness(source, { framed });
+  await h.layer.update(h.viewer);
+  await h.layer.fetchViewRegion();
+  // The operator flies to Tokyo without touching the chip.
+  h.viewer.camera = framedCamera({ lat: 35.68, lon: 139.69 }).camera;
+  await h.layer.update(h.viewer);
+  assert.equal(
+    source.asked.at(-1).key,
+    'l:en:56:37.5:50',
+    'a drifting camera must not spend budget the operator did not ask to spend',
+  );
+  assert.equal(framed.listeners.size, 1, 'the camera watch is installed once');
+  h.layer.destroy(h.viewer);
+});
+
+test('GLOBAL FEED adds the worldwide feed without taking the views away', async () => {
+  const source = regionSource({
+    global: snapshot([ROW_A, ROW_C]),
+    region: regionSnapshot([ROW_B]),
+  });
+  const h = harness(source, { framed: framedCamera() });
+  await h.layer.fetchViewRegion();
+  assert.equal(h.chip('global-news').disabled, false, 'always available');
+  assert.match(h.chip('global-news').title, /Add the latest worldwide/);
+  assert.equal(await h.chip('global-news').onClick(), true);
+  assert.deepEqual(
+    h.layer
+      .getAnalystRecords()
+      .map((record) => record.id)
+      .sort(),
+    ['wn-a', 'wn-b', 'wn-c'],
+    'the circle stays pinned under the worldwide feed',
+  );
+  // And the refresh now follows the worldwide feed again.
+  await h.layer.update(h.viewer);
+  assert.equal(source.asked.at(-1), 'global');
+  h.layer.destroy(h.viewer);
+});
+
+test('CLEAR PINS is the only control that takes pins off the map', async () => {
+  const source = regionSource({
+    global: snapshot([ROW_A, ROW_C]),
+    region: regionSnapshot([ROW_B]),
+  });
+  const h = harness(source, { framed: framedCamera() });
+  assert.equal(h.chip('clear-pins').disabled, true, 'nothing to clear yet');
+  assert.match(h.chip('clear-pins').title, /No headline pins to clear/);
+  await h.layer.update(h.viewer);
+  await h.layer.fetchViewRegion();
+  assert.equal(h.entities().length, 2, 'Rotterdam and Tokyo');
+  assert.match(
+    h.chip('clear-pins').title,
+    /Remove all 3 headline pins from the map\. The layer is live, so the next refresh adds the headlines within 50 km of 56\.0, 37\.5 again\./,
+  );
+
+  assert.equal(h.chip('clear-pins').onClick(), true);
+  assert.deepEqual(h.layer.getAnalystRecords(), []);
+  assert.deepEqual(
+    h.entities().map((entity) => entity.id),
+    [],
+  );
+  assert.equal(h.chip('clear-pins').disabled, true);
+  const stats = h.layer.getStats();
+  assert.equal(stats.lastUpdate, null, 'an emptied map is not a stale one');
+  assert.equal(stats.loadingLabel, '');
+  assert.equal(h.layer.clearPins(), false, 'and it is idempotent');
+  h.layer.destroy(h.viewer);
+});
+
+test('a batch leaves the map once the provider retention window passes', async () => {
+  let now = 1_000_000;
+  const source = regionSource({
+    global: snapshot([ROW_A]),
+    region: regionSnapshot([ROW_B]),
+  });
+  const h = harness(source, { framed: framedCamera(), clock: () => now });
+  await h.layer.update(h.viewer);
+  await h.layer.fetchViewRegion();
+  assert.deepEqual(
+    h.layer
+      .getAnalystRecords()
+      .map((record) => record.id)
+      .sort(),
+    ['wn-a', 'wn-b'],
+    'the worldwide batch and the circle are both on the map',
+  );
+  // An hour and a minute later neither of those may be held any longer: the
+  // provider's terms cap caching at an hour and the proxy obeys it, so a
+  // browser accumulating pins has to obey it too.
+  now += 61 * 60_000;
+  await h.layer.update(h.viewer);
+  assert.deepEqual(
+    h.layer.getAnalystRecords().map((record) => record.id),
+    ['wn-b'],
+    'only the batch just fetched is still inside the window',
+  );
+  h.layer.destroy(h.viewer);
+});
+
+test('an exhausted hourly cap stays on the chip and leaves the world feed alone', async () => {
+  const failure = Object.assign(new Error('view fetches exhausted this hour'), {
+    code: 'region_rate',
+  });
+  const h = harness(
+    {
+      getSnapshot: async () => snapshot([ROW_A]),
+      getRegionSnapshot: async () => {
+        throw failure;
+      },
+    },
+    { framed: framedCamera() },
+  );
+  await h.layer.update(h.viewer);
+  assert.equal(
+    await h.layer.fetchViewRegion(),
+    true,
+    'a failure is not a revert',
+  );
+  const stats = h.layer.getStats();
+  assert.equal(stats.error, null, 'the worldwide feed is not degraded');
+  assert.equal(stats.blocked, null);
+  assert.deepEqual(
+    h.layer.getAnalystRecords().map((record) => record.id),
+    ['wn-a'],
+    'the rows already on the map stay',
+  );
+  assert.match(h.chip('news-in-view').title, /exhausted this hour/);
+  h.layer.destroy(h.viewer);
+});
+
+test('a server with view fetching off stops re-asking for the circle', async () => {
+  let regionReply = () => regionSnapshot([ROW_B]);
+  const source = {
+    asked: [],
+    getSnapshot: async () => {
+      source.asked.push('global');
+      return snapshot([ROW_A]);
+    },
+    getRegionSnapshot: async ({ region }) => {
+      source.asked.push(region.key);
+      return regionReply();
+    },
+  };
+  const h = harness(source, { framed: framedCamera() });
+  await h.layer.update(h.viewer);
+  await h.layer.fetchViewRegion();
+  regionReply = () => {
+    throw Object.assign(new Error('view fetching is off on this server'), {
+      code: 'region_off',
+    });
+  };
+  await h.layer.update(h.viewer);
+  await h.layer.update(h.viewer);
+  assert.deepEqual(
+    source.asked,
+    ['global', 'l:en:56:37.5:50', 'l:en:56:37.5:50', 'global'],
+    'the next tick returns to the worldwide feed rather than re-failing',
+  );
+  assert.deepEqual(
+    h.layer.getAnalystRecords().map((record) => record.id),
+    ['wn-a', 'wn-b'],
+    'and the circle it did fetch stays on the map',
+  );
+  h.layer.destroy(h.viewer);
+});
+
+test('an empty circle says it is empty HERE, not that the world has no news', async () => {
+  const h = harness(
+    regionSource({
+      global: snapshot([ROW_A]),
+      region: regionSnapshot([], { requested: 0, unplacedCount: 0 }),
+    }),
+    { framed: framedCamera() },
+  );
+  await h.layer.fetchViewRegion();
+  const stats = h.layer.getStats();
+  assert.equal(stats.status, 'empty');
+  assert.equal(
+    stats.statusMessage,
+    'No place-tagged headlines within 50 km of 56.0, 37.5',
+  );
+  h.layer.destroy(h.viewer);
+});
+
+test('the chip repaints when the camera settles, not only on a layer status change', async () => {
+  const framed = framedCamera();
+  const h = harness(regionSource({ global: snapshot([ROW_A]) }), { framed });
+  await h.layer.update(h.viewer);
+  let notified = 0;
+  h.layer.setRowControlsListener(() => notified++);
+  framed.settle();
+  assert.equal(notified, 1, 'a settled camera may have changed the circle');
+  h.layer.disable(h.viewer);
+  notified = 0;
+  framed.settle();
+  assert.equal(notified, 0, 'a disabled layer stays quiet');
+  h.layer.destroy(h.viewer);
+  assert.equal(framed.listeners.size, 0, 'destroy detaches the camera watch');
+});
+
+test('LOAD MORE explains a pinned view rather than blaming a spent hour', async () => {
+  const h = harness(
+    regionSource({
+      global: snapshot([ROW_A]),
+      region: regionSnapshot([ROW_B]),
+    }),
+    { framed: framedCamera() },
+  );
+  await h.layer.update(h.viewer);
+  assert.match(h.chip('load-more').title, /2 left this hour/);
+  await h.layer.fetchViewRegion();
+  // The proxy sends morePagesLeft 0 for every region, so the chip is off; the
+  // reason is the shape of a view batch, not an exhausted allowance.
+  assert.equal(h.chip('load-more').disabled, true);
+  assert.match(
+    h.chip('load-more').title,
+    /A view is a single page — fetch the worldwide feed to page further/,
+  );
+  assert.equal(await h.layer.loadMore(), false, 'and it cannot be clicked');
+  h.layer.destroy(h.viewer);
+});
+
+test('only a chip with a request in flight reads busy; the rest read unavailable', async () => {
+  let resolve;
+  const h = harness(
+    {
+      getSnapshot: () =>
+        new Promise((done) => {
+          resolve = done;
+        }),
+    },
+    // No framed camera: NEWS IN VIEW is disabled because the view is too wide.
+  );
+  const pending = h.layer.update(h.viewer);
+  for (const id of ['load-more', 'global-news']) {
+    assert.equal(h.chip(id).disabled, true, `${id} is disabled while loading`);
+    assert.equal(h.chip(id).busy, true, `${id} is genuinely waiting`);
+  }
+  resolve(snapshot([ROW_A]));
+  await pending;
+  // Idle: a chip that is merely unavailable must never claim to be waiting.
+  assert.equal(h.chip('news-in-view').disabled, true);
+  assert.equal(h.chip('news-in-view').busy, false);
+  assert.match(h.chip('news-in-view').title, /Zoom in to a city first/);
+  assert.equal(h.chip('global-news').disabled, false);
+  assert.equal(h.chip('global-news').busy, false);
+  h.layer.destroy(h.viewer);
+});
+
+test('clicking a selected pin again walks its stories, and wraps', async () => {
+  // ROW_A and ROW_B share the Rotterdam pin; ROW_C is Tokyo on its own.
+  const h = harness({
+    getSnapshot: async () => snapshot([ROW_A, ROW_B, ROW_C]),
+  });
+  await h.layer.update(h.viewer);
+  let picked = null;
+  h.viewer.scene.pick = () => picked;
+  const card = () =>
+    h
+      .setEvents()
+      .at(-1)?.[2]
+      ?.find((entry) => entry.id === h.services.store.selectedId);
+  const counter = () =>
+    h.layer
+      .getRowControls()
+      .chips.find((chip) => chip.id === 'open-article')
+      ?.title?.match(/at (.+?) in a new tab/)?.[1];
+
+  picked = { id: h.entities().find((entity) => entity.id === ROTTERDAM) };
+  h.handler.click();
+  assert.equal(h.services.store.selectedId, ROTTERDAM, 'first click selects');
+  assert.equal(counter(), 'a.example', 'story 1 of 2');
+
+  // Second click on the same pin: no re-selection, just the next story.
+  const selectsBefore = h.services.calls.filter(
+    ([op]) => op === 'select',
+  ).length;
+  h.handler.click();
+  assert.equal(
+    h.services.calls.filter(([op]) => op === 'select').length,
+    selectsBefore,
+    'paging is not a re-selection',
+  );
+  assert.equal(counter(), 'b.example', 'story 2 of 2');
+
+  // And it wraps rather than sticking at the end.
+  h.handler.click();
+  assert.equal(counter(), 'a.example', 'back to story 1');
+
+  // A place with a single story has nothing to walk, so a second click is
+  // still a no-op rather than a flicker.
+  picked = { id: h.entities().find((entity) => entity.id === TOKYO) };
+  h.handler.click();
+  assert.equal(h.services.store.selectedId, TOKYO);
+  assert.equal(counter(), 'c.example');
+  h.handler.click();
+  assert.equal(counter(), 'c.example', 'one story stays put');
+  h.layer.destroy(h.viewer);
+});
+
+test('the card opens the story; only the pin under it pages', async () => {
+  const h = harness({ getSnapshot: async () => snapshot([ROW_A, ROW_B]) });
+  await h.layer.update(h.viewer);
+  let picked = null;
+  h.viewer.scene.pick = () => picked;
+  const shown = () =>
+    h.layer.getRowControls().chips.find((chip) => chip.id === 'open-article')
+      ?.title;
+
+  picked = { id: h.entities().find((entity) => entity.id === ROTTERDAM) };
+  h.handler.click();
+  assert.match(shown(), /a\.example/, 'story 1 of 2');
+
+  // The card sits ON TOP of the pin, so it gets first refusal: a click that
+  // lands on it opens the publisher and must NOT also advance the story.
+  h.services.overlays.hitTest = () => ({ entryId: ROTTERDAM });
+  h.handler.click();
+  assert.deepEqual(h.opened, [ROW_A.url], 'the card opened its own story');
+  assert.match(shown(), /a\.example/, 'and the card did not page past it');
+
+  // A card hit for some other layer's entry is not ours: fall through.
+  h.services.overlays.hitTest = () => ({ entryId: 'someone-elses-entry' });
+  h.handler.click();
+  assert.match(shown(), /b\.example/, 'the pin under it still pages');
+  assert.deepEqual(h.opened, [ROW_A.url], 'and nothing else was opened');
   h.layer.destroy(h.viewer);
 });

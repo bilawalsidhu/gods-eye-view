@@ -35,7 +35,10 @@ test('radius snaps up to an accepted value, and refuses what the provider caps',
 test('a view wider than the provider cap is global, not a clamped circle', () => {
   // Clamping would silently fetch a circle that does not cover what the
   // operator is looking at, and cache it as if it did.
-  assert.equal(resolveNewsRegion({ rect: rectAround(0, 0, 45) }).band, 'global');
+  assert.equal(
+    resolveNewsRegion({ rect: rectAround(0, 0, 45) }).band,
+    'global',
+  );
   assert.equal(resolveNewsRegion({ rect: null }).band, 'global');
   assert.equal(resolveNewsRegion({ rect: undefined }).band, 'global');
   // A horizon gaze reports a near-hemispheric span.
@@ -43,7 +46,10 @@ test('a view wider than the provider cap is global, not a clamped circle', () =>
     viewRadiusKm({ west: -170, east: 170, south: -80, north: 80 }),
     Number.POSITIVE_INFINITY,
   );
-  assert.equal(resolveNewsRegion({ rect: { west: 1, east: 2 } }).band, 'global');
+  assert.equal(
+    resolveNewsRegion({ rect: { west: 1, east: 2 } }).band,
+    'global',
+  );
   assert.equal(resolveNewsRegion({ rect: rectAround(0, 0, 0) }).band, 'global');
 });
 
