@@ -170,6 +170,43 @@ do not treat their headers as shipping state._
   read as empty.
 - The CCTV proxy test's wall-clock bounds get 100× headroom so a loaded
   CI box's timer coalescing cannot flake them.
+- The quiet-window sweep triage (RUN 3c–3g) fixed seven suites by root
+  cause instead of bar-nudging: qa-cables-shot settles in Node (a 240-tick
+  pumped loop inside one evaluate exceeds that evaluate's own
+  protocolTimeout — it bounds ONE CDP call, not a loop) with a wall-clock
+  cap under load; qa-height-datum activates each probed camera (coverage
+  entities exist only for the active camera's neighbor cohort); qa-
+  cockpit-utility's request stub counts requests (a boolean counter made
+  every held request ignore the module's AbortSignal); qa-flyroute-cinema
+  separates acquisition from cruise at ~1 fps sampling; qa-labels gets a
+  software-GL paint budget (its 10 ms bar predates the SwiftShader backend
+  it pins; observed floor 25–31 ms) and asserts the relief valve engages
+  only on slow paints; qa-perf stubs the HUD summary (a keyless server
+  re-types it every 15 s, so 16 consecutive quiet seconds never exist) and
+  uses a software-GL motion floor with the 5×-idle ratio intact.
+- Suites that need a live upstream self-declare it: qa-traffic-baseline
+  probes `/api/overpass` ('the baseline needs live OSM'), qa-vessel-cards
+  and qa-vessel-datum check `/api/ais-live` status ('live AIS needs a
+  keyed server') — matched by `ENV_GATE_MARKERS` in
+  `scripts/lib/qaSuiteContracts.mjs` so both orchestrators report ENV-GATED
+  instead of FAIL. No live-feed suite fabricates data to look green.
+- qa-cockpit-utility's portal round-trip probe runs its phases as short
+  evaluates with the compositor pump in Node between them — ~16 pump
+  roundtrips inside one evaluate exceeded that evaluate's own
+  protocolTimeout under a load burst. Its ceiling is 25 minutes: the
+  armored probe survives a mid-run burst, but the degraded throughput
+  cannot fit the 15-minute default.
+- qa-flyroute-cinema's capture loop no longer ends on pre-flight or
+  post-jump stillness: the break requires the flight-start mark AND
+  observed motion after it, so the arming/mesh-probe holds cannot cut an
+  81-second flight to three frames. Its derivative checks (peak
+  acceleration, roll rate, descent/climb, cruise wander) are
+  density-conditional — below the 60-sample floor they report
+  INCONCLUSIVE with evidence instead of failing on quantization spikes.
+- Both orchestrators spawn suites in their own process group and kill the
+  GROUP on ceiling timeout: killing only the node process orphaned a
+  Chrome that pegged ~7 cores for 40 minutes and manufactured the very
+  load the quiet-window gate was waiting out.
 
 ### Coverage
 

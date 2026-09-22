@@ -2155,9 +2155,36 @@ here.
           matched by ENV_GATE_MARKERS ('the baseline needs live OSM',
           'live AIS needs a keyed server') — replacing a bare
           TimeoutError/0-entries FAIL with an honest ENV-GATED.
-      RUN 3h = verdict re-run of the six changed suites (cockpit-
-      utility, flyroute-cinema, labels, perf) plus the three newly-
-      gated ones; green-or-ENV-GATED completes Phase 5.
+      RUN 3h outcome (2026-09-21 07:34, all seven): perf 24/24 GREEN
+      (the stub + software-GL floors verified); traffic-baseline,
+      vessel-cards, vessel-datum all ENV-GATED in <0.1 min (the
+      preflights fire before any browser boot — verified); labels
+      FAILED with the relief-valve invariant's own population bug
+      (skip delta spans all normal-field frames; the provocation max
+      sampled only non-solve steady frames → skips legitimately
+      provoked by slow paints on solve frames read as unprovoked);
+      flyroute's derivative checks all correctly INCONCLUSIVE at 27
+      samples/0.6 fps, but its shot loop cut to 5 frames during the
+      PRE-flight arming hold (still ≥1.5 s with fresh rows before
+      flight-start); cockpit-utility's portal probe (the last wedge)
+      passed after moving its ~16-pump loop from one evaluate into
+      Node-driven phases, then hit the runner's 15-min ceiling when a
+      mid-run burst left the renderer unresponsive ~5 min — and that
+      ceiling SIGKILL orphaned the suite's Chrome (PPID=1, ~7 cores
+      for 40 min), which manufactured the very load the gate then
+      waited out. RUN 3i fixes: labels valve invariant reads the max
+      over the SAME population the counter spans (GREEN 2.9 min);
+      flyroute still-break requires observed motion after flight-
+      start; both orchestrators spawn suites detached and kill the
+      process GROUP on ceiling; cockpit ceiling 25 min (measured
+      precedent). RUN 3i: labels GREEN; flyroute still cut at 3
+      frames — the post-jump mesh-probe hold straddles the mark, so
+      the break now also requires motion seen after flight-start.
+      RUN 3j was poisoned by a box-wide egress outage mid-run (every
+      external host ERR_ADDRESS_UNREACHABLE; flyroute could not boot;
+      cockpit's Dense/Sparse voice check — GREEN in 3g and 3h — lost
+      its live tracked-flight subject). RUN 3k = clean re-run of the
+      pair; green completes Phase 5.
 - [ ] **Batch P — release 0.10.0**: CHANGELOG 0.10.0 fold (done,
       uncommitted) + version bump (done, uncommitted); commit, push
       BOTH remotes gitforge-first (only when no browser suite is
