@@ -95,6 +95,7 @@ export class PanelLayoutController {
     this._ppToggles = document.getElementById('pp-toggles');
     this._cctvPanel = document.getElementById('cctv-panel');
     this._weatherPanel = document.getElementById('weather-panel');
+    this._recentImageryPanel = document.getElementById('recent-imagery-panel');
     this._sliderPanel = document.getElementById('param-slider-panel');
     this._detectionBtn = document.getElementById('detection-toggle');
   }
@@ -195,7 +196,11 @@ export class PanelLayoutController {
     this._ppToggles.querySelector('.pp-header-row')?.removeAttribute('title');
     stack.prepend(this._ppToggles);
     const globalContextPanel = document.getElementById('global-context-panel');
-    for (const panel of [this._cctvPanel, this._weatherPanel]) {
+    for (const panel of [
+      this._cctvPanel,
+      this._weatherPanel,
+      this._recentImageryPanel,
+    ]) {
       if (!panel) continue;
       for (const property of ['top', 'right', 'bottom', 'left', 'z-index'])
         panel.style.removeProperty(property);
@@ -222,6 +227,7 @@ export class PanelLayoutController {
         this._ppToggles,
         this._cctvPanel,
         this._weatherPanel,
+        this._recentImageryPanel,
         globalContextPanel,
       ]) {
         if (panel) this._rightStackResizeObserver.observe(panel);

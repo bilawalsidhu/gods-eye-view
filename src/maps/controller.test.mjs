@@ -717,3 +717,125 @@ test('a lease stays owned until its restoration settles, so a rival cannot read 
   ]);
   env.controller.destroy();
 });
+
+test('subscribe hears every settled activation — silent switches, fallbacks and recoveries — until unsubscribed or destroyed', async () => {
+  const env = publicFixture();
+  const heard = [];
+  const off = env.controller.subscribe((state) =>
+    heard.push([state.activeId, state.status]),
+  );
+  assert.equal(typeof off, 'function');
+  assert.equal(typeof env.controller.subscribe(null), 'function');
+  await env.controller.setStack('esri-imagery');
+  assert.deepEqual(heard, [['esri-imagery', 'ready']]);
+  // A silent switch mutes onChange but not the subscription.
+  const changesBefore = env.changes.length;
+  await env.controller.setStack('photoreal', { silent: true });
+  assert.equal(env.changes.length, changesBefore, 'onChange stays silent');
+  assert.deepEqual(heard.at(-1), ['photoreal', 'ready']);
+  // A subscriber that throws does not stop the others.
+  const noisy = env.controller.subscribe(() => {
+    throw new Error('listener failed');
+  });
+  const warn = console.warn;
+  const warnings = [];
+  console.warn = (...args) => warnings.push(args);
+  try {
+    await env.controller.setStack('esri-imagery');
+  } finally {
+    console.warn = warn;
+  }
+  assert.equal(warnings.length, 1);
+  assert.deepEqual(heard.at(-1), ['esri-imagery', 'ready']);
+  noisy();
+  off();
+  await env.controller.setStack('photoreal');
+  assert.equal(heard.length, 3, 'unsubscribed listeners hear nothing');
+  env.controller.destroy();
+
+  // A failed activation that recovers still settles once, on the recovery.
+  const recovering = fixture(
+    {
+      defaultId: 'first',
+      recoveryId: 'recovery',
+      sources: [
+        {
+          descriptor: descriptor('first'),
+          imagery: async () => {
+            throw new Error('first offline');
+          },
+        },
+        { descriptor: descriptor('recovery'), imagery: async () => ({}) },
+      ],
+    },
+    { onError: () => {} },
+  );
+  const recovered = [];
+  recovering.controller.subscribe((state) => recovered.push(state.activeId));
+  await recovering.controller.setStack('first');
+  assert.deepEqual(recovered, ['recovery']);
+  recovering.controller.destroy();
+  await recovering.controller.setStack('first');
+  assert.deepEqual(recovered, ['recovery'], 'a destroyed controller is mute');
+});
+
+test('each switch generation reports its origin: an outside setStack is manual, a fallback or recovery automatic', async () => {
+  const env = publicFixture();
+  const heard = [];
+  env.controller.subscribe((state) =>
+    heard.push([state.activeId, state.switchOrigin]),
+  );
+  await env.controller.setStack('esri-imagery');
+  assert.equal(env.controller.getSwitchOrigin(), 'manual');
+  const generation = env.controller.getSwitchGeneration();
+  // Two tile failures: the controller falls back to OSM on its own.
+  const errors = env.providers.get('esri-imagery').errorEvent;
+  errors.raise();
+  errors.raise();
+  await settle();
+  assert.equal(env.controller.getActiveId(), 'osm');
+  assert.equal(env.controller.getSwitchGeneration(), generation + 1);
+  assert.equal(env.controller.getSwitchOrigin(), 'automatic');
+  assert.equal(env.controller.getState().switchOrigin, 'automatic');
+  // A silent switch from outside is still the caller's choice.
+  await env.controller.setStack('photoreal', { silent: true });
+  assert.equal(env.controller.getSwitchOrigin(), 'manual');
+  assert.deepEqual(heard, [
+    ['esri-imagery', 'manual'],
+    ['osm', 'automatic'],
+    ['photoreal', 'manual'],
+  ]);
+  env.controller.destroy();
+
+  // A failed activation that recovers settles as automatic.
+  const recovering = fixture(
+    {
+      defaultId: 'first',
+      recoveryId: 'recovery',
+      sources: [
+        {
+          descriptor: descriptor('first'),
+          imagery: async () => {
+            throw new Error('first offline');
+          },
+        },
+        { descriptor: descriptor('recovery'), imagery: async () => ({}) },
+      ],
+    },
+    { onError: () => {} },
+  );
+  const recovered = [];
+  recovering.controller.subscribe((state) =>
+    recovered.push([state.activeId, state.switchOrigin]),
+  );
+  await recovering.controller.setStack('first');
+  assert.equal(recovering.controller.getActiveId(), 'recovery');
+  assert.equal(recovering.controller.getSwitchOrigin(), 'automatic');
+  await recovering.controller.setStack('recovery');
+  assert.equal(recovering.controller.getSwitchOrigin(), 'manual');
+  assert.deepEqual(recovered, [
+    ['recovery', 'automatic'],
+    ['recovery', 'manual'],
+  ]);
+  recovering.controller.destroy();
+});

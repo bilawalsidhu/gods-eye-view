@@ -798,5 +798,15 @@
   "scripts/qa-weather-journey.mjs",
   "scripts/qa-weather-swap.mjs",
   "scripts/qa-weather-teardown.mjs",
-  "src/layers/weather/imageryHost.test.mjs"
+  "src/layers/weather/imageryHost.test.mjs",
+  "src/layers/recentImagery/model.test.mjs",
+  "src/layers/recentImagery/catalog.test.mjs",
+  "src/maps/imageryHost.test.mjs",
+  "src/layers/recentImagery/rendering.test.mjs",
+  "src/layers/recentImagery/thumbnails.test.mjs",
+  "src/layers/recentImagery/index.test.mjs",
+  "src/ui/imageryBoxTool.test.mjs",
+  "src/ui/recentImagery.test.mjs",
+  "src/layers/recentImagery/testDoubles.mjs",
+  "scripts/qa-recent-imagery.mjs"
 ]

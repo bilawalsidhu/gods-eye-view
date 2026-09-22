@@ -1,5 +1,20 @@
 # Changelog
 
+- Add a **Recent Imagery** data layer (NASA GIBS · HLS + VIIRS, keyless).
+  Select a box (drag, the current view, or around a pin; up to 1,000 km a
+  side) and the right-rail panel lists the last 30 days of Sentinel-2 /
+  Landsat (30 m) and, when switched on, VIIRS daily overview imagery over it,
+  with thumbnails and scene cloud. Three modes: IMAGE shows one day, VS
+  BASEMAP swipes it against the map, A / B swipes two days; a SHOW or A / B
+  chip on each day card pins it, arrow keys preview the focused day while a
+  slot is empty, and no control moves when anything changes. While imagery is
+  shown on Google 3D the map switches to Esri and comes back when it is
+  cleared. Either image exports as a PNG; box, pins, mode and split travel in
+  share links; the NASA acknowledgement is in the credits and
+  `DATA_SOURCES.md`. The swipe is now shared with the Nepal scene
+  (`src/ui/imagerySplit.js`, `src/maps/imageryComparison.js`), and
+  `MapSourceController.subscribe()` reports every settled map switch.
+
 ## Unreleased — weather review
 
 - On 3D Tiles, draw a 4096×2048 detail window around the view on each
@@ -88,6 +103,7 @@
 Add feed provenance to analyst/view answers and HUD context while retaining existing response fields and runner ownership (Matt Van Horn, #347).
 
 Analyst records for loaded satellites, datacenters and dams, with explicit bounded count/rank coverage (Matt Van Horn, #351).
+
 - Remove the spurious scrollbars that appeared on both panel stacks at narrow
   widths (720px and below) as soon as a panel was expanded. The stacks scroll
   vertically there, and each panel's decorative glow, absolutely positioned

@@ -70,6 +70,12 @@ export class LayerPresentation {
   mount(container) {
     this.panel.mount(container);
   }
+  /** Hand the Recent Imagery readout factory to the panel (see LayerPanel). */
+  attachRecentImagery(factory) {
+    // Detaching never builds a panel that teardown already released.
+    if (factory) this.panel.attachRecentImagery(factory);
+    else this._panel?.attachRecentImagery(null);
+  }
   refresh() {
     this._panel?._refreshTogglePanel();
   }

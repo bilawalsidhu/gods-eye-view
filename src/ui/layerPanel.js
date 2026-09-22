@@ -31,11 +31,12 @@ const PANEL_GROUPS = [
   },
   {
     label: 'Cameras',
-    ids: ['cctv', 'alpr-cameras'],
+    ids: ['cctv', 'recent-imagery'],
   },
   {
     label: 'Infrastructure',
     ids: [
+      'alpr-cameras',
       'military-installations',
       'local-datacenters',
       'telegeography-submarine-cables',
@@ -126,6 +127,8 @@ export class LayerPanel {
     this._removers = [];
     this._destroyed = false;
     this._cancelRowControlsRefresh = null;
+    this._recentImageryFactory = null;
+    this._recentImageryPanel = null;
   }
   mount(container) {
     if (this._destroyed) return;
@@ -138,7 +141,28 @@ export class LayerPanel {
         container?.ownerDocument?.getElementById?.('weather-panel-body'),
       setLayerParams: this.setLayerParams,
     });
+    this._mountRecentImagery();
     this._renderToggles();
+  }
+  /**
+   * Host the Recent Imagery readout in its rail body, like the weather
+   * readout. The application supplies the factory once the layer, viewer and
+   * box tool exist; a remount rebuilds the readout in place.
+   * @param {((container: HTMLElement) => { destroy: () => void } | null) | null} factory
+   */
+  attachRecentImagery(factory) {
+    if (this._destroyed) return;
+    this._recentImageryFactory = typeof factory === 'function' ? factory : null;
+    this._mountRecentImagery();
+  }
+  _mountRecentImagery() {
+    this._recentImageryPanel?.destroy();
+    this._recentImageryPanel = null;
+    const container = this._toggleContainer?.ownerDocument?.getElementById?.(
+      'recent-imagery-panel-body',
+    );
+    if (container && this._recentImageryFactory)
+      this._recentImageryPanel = this._recentImageryFactory(container) || null;
   }
   _bind(element, type, listener) {
     element.addEventListener(type, listener);
@@ -156,6 +180,9 @@ export class LayerPanel {
     this._releaseBindings();
     this._weatherPanel?.destroy();
     this._weatherPanel = null;
+    this._recentImageryPanel?.destroy();
+    this._recentImageryPanel = null;
+    this._recentImageryFactory = null;
     this._toggleContainer = null;
   }
   _renderToggles() {

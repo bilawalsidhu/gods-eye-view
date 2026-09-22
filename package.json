@@ -152,6 +152,7 @@
     "./aircraft": "./src/layers/aircraft/index.js",
     "./layers/vessels": "./src/layers/vessels/index.js",
     "./layers/earthquakes": "./src/layers/earthquakes/index.js",
+    "./layers/recent-imagery": "./src/layers/recentImagery/index.js",
     "./sources/firms-csv": "./src/data/firmsCsv.js",
     "./layers/firms": "./src/layers/firms/index.js",
     "./layers/satellites": "./src/layers/satellites/index.js",

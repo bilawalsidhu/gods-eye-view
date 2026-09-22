@@ -631,7 +631,8 @@
       "src/ui/styles/voice-cost.css",
       "src/ui/styles/first-run.css",
       "src/ui/styles/provider-settings.css",
-      "src/ui/styles/weather.css"
+      "src/ui/styles/weather.css",
+      "src/ui/styles/recent-imagery.css"
     ],
     "external": []
   },
@@ -848,6 +849,18 @@
       "src/layers/earthquakes/model.js",
       "src/layers/earthquakes/source.js",
       "src/layers/earthquakes/records.js"
+    ],
+    "external": ["cesium"]
+  },
+  "recent-imagery": {
+    "exports": ["./layers/recent-imagery"],
+    "modules": [
+      "src/layers/recentImagery/index.js",
+      "src/layers/recentImagery/model.js",
+      "src/layers/recentImagery/catalog.js",
+      "src/layers/recentImagery/rendering.js",
+      "src/layers/recentImagery/thumbnails.js",
+      "src/maps/imageryHost.js"
     ],
     "external": ["cesium"]
   },
@@ -1169,7 +1182,8 @@
       "src/maps/imagery.js",
       "src/maps/registry.js",
       "src/maps/terrain.js",
-      "src/keySetupCore.mjs"
+      "src/keySetupCore.mjs",
+      "src/maps/imageryHost.js"
     ],
     "external": ["cesium"]
   },
@@ -1875,7 +1889,16 @@
       "src/layers/cyclones/index.js",
       "src/layers/cyclones/rendering.js",
       "src/layers/cyclones/labels.js",
-      "src/layers/cyclones/source.js"
+      "src/layers/cyclones/source.js",
+      "src/app/layers/recentImagery.js",
+      "src/layers/recentImagery/index.js",
+      "src/layers/recentImagery/model.js",
+      "src/layers/recentImagery/catalog.js",
+      "src/layers/recentImagery/rendering.js",
+      "src/layers/recentImagery/thumbnails.js",
+      "src/maps/imageryHost.js",
+      "src/ui/recentImagery.js",
+      "src/ui/imageryBoxTool.js"
     ],
     "external": [
       "hls.js",
@@ -2298,7 +2321,14 @@
       "src/layers/cyclones/index.js",
       "src/layers/cyclones/rendering.js",
       "src/layers/cyclones/labels.js",
-      "src/layers/cyclones/source.js"
+      "src/layers/cyclones/source.js",
+      "src/app/layers/recentImagery.js",
+      "src/layers/recentImagery/index.js",
+      "src/layers/recentImagery/model.js",
+      "src/layers/recentImagery/catalog.js",
+      "src/layers/recentImagery/rendering.js",
+      "src/layers/recentImagery/thumbnails.js",
+      "src/maps/imageryHost.js"
     ],
     "external": [
       "hls.js",

@@ -577,3 +577,47 @@ test('narrow-screen rails pin every hosted panel glow inside its panel box', () 
     );
   }
 });
+
+test('right layout ignores a hidden panel: no lane, no gap, no auto-collapse', () => {
+  const f = fixture('right');
+  const imagery = element('recent-imagery-panel', { height: 0 });
+  imagery.hidden = true;
+  imagery.scrollHeight = 0;
+  imagery.rect.height = 0;
+  f.stack.children.push(imagery);
+  imagery.parentElement = f.stack;
+  // A tall panel expands into focus mode: the hidden sibling is not among the
+  // later panels that focus mode collapses, and it counts for nothing.
+  f.expand(f.first, 900);
+  f.run();
+  assert.equal(f.stack.dataset.layoutMode, 'focus');
+  assert.equal(imagery.classList.contains('collapsed'), false);
+  assert.equal(imagery.classList.contains('layout-auto-collapsed'), false);
+  assert.equal(f.stack.dataset.expandedCount, '1');
+  assert.equal(
+    imagery.style.getPropertyValue('--right-panel-allocated-height'),
+    '',
+  );
+  assert.equal(imagery.getAttribute('aria-hidden'), undefined);
+  const alone = parseFloat(
+    f.first.style.getPropertyValue('--right-panel-allocated-height'),
+  );
+  // Shown (and expanded) it joins the allocation like any other panel.
+  imagery.hidden = false;
+  imagery.scrollHeight = 300;
+  imagery.rect.height = 300;
+  const retriesBefore = f.retries();
+  f.run();
+  assert.ok(
+    f.collapsed.includes('recent-imagery-panel'),
+    'focus mode collapses the later panel and asks for another pass',
+  );
+  assert.equal(f.retries(), retriesBefore + 1);
+  f.run();
+  assert.equal(f.stack.dataset.expandedCount, '1');
+  assert.ok(
+    parseFloat(
+      f.first.style.getPropertyValue('--right-panel-allocated-height'),
+    ) <= alone,
+  );
+});
