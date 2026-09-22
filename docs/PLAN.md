@@ -2412,15 +2412,20 @@ per 11.3's entry rule: baseline re-measured with the same metrics as
 - **Coverage floor vs the 99% goal**: the gated metric sits at
   91.58/91.58/91.21/81.20. R2's schedule (waves 5 → 93/93/92/83,
   wave 6 → 95/95/94/86, terminal per ADR 0008) is the sanctioned
-  path. Ranked attack list by missed lines+branches (c8 JSON,
-  2026-09-22): traffic.js (1349 L / 109 B, 46.6% lines — excluding
-  the by-design-excluded DEV timing pass), bikeshare.js (707/24,
-  57.8%), celestialRing.js (449/3, 37.9%), firstRunExperience.js
-  (335/1, 48.2%), cctvSources.js (425/44, 66.0%),
-  rocketLaunches.js (910/282, 74.8% lines but 282 missed branches),
-  radio.js (515/233 — branch-heavy), gevActions.js (1381/278 —
-  browser-coupled UI, mock-armor territory), flights.js (1215/198),
-  militaryFlights.js (789/179), annotationResolver.js (705/158).
+  path. Ranked attack list by the GATED text reporter
+  (corrected same-day: the c8 JSON summary disagrees with the text
+  reporter — pre-remap file sets — and must not be used for
+  rankings; text-report numbers, %lines/%branches): cctv.js
+  67.9/69.1 (the largest file, largest pool), flights.js 74.8/71.2,
+  militaryFlights.js 74.9/60.5, rocketLaunches.js 78.0/61.0,
+  traffic.js 78.1/65.6 (excluding the by-design-excluded DEV timing
+  pass), screenAnnotationRenderer.js 78.4/61.3, locations.js 80.0,
+  satellites.js 81.6/61.6, firmsHeatmap.js 83.5/75.3; branch-heavy
+  with lines already high: cockpitUtilityLayout 46.7 branch,
+  cctvFocusPolicy 61.1, panelStackLayout 63.8, gbfsPolicy 63.6,
+  gtfsRtPolicy 68.4, flightsTracking 71.3, radio.js 71.9. The
+  binding constraint is branches (+1.8pp needed for the wave-5
+  floor), not lines.
 - **Module boundaries (R4 round 2)**: ui.js was split in cycle 2
   (10,500 → 6,680 today). Next seams ranked by size × churn:
   `src/voice/gevRealtime.js` (3,021 — WebRTC state machine + UI in
