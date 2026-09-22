@@ -495,6 +495,7 @@
   "src/layers/cctv/source.test.mjs",
   "src/data/alprCameras.js",
   "src/data/alprCameras.test.mjs",
+  "src/data/dataCredits.test.mjs",
   "src/layers/alpr/index.js",
   "src/layers/alpr/model.js",
   "src/layers/alpr/policy.js",
@@ -743,5 +744,6 @@
   "src/director/interactions/interactions.test.mjs",
   "scripts/qa-director-interactions.mjs",
   "src/director/sharing/sharing.test.mjs",
-  "scripts/qa-director-sharing.mjs"
+  "scripts/qa-director-sharing.mjs",
+  "src/data/aisStreamSentinels.test.mjs"
 ]

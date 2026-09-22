@@ -1,5 +1,19 @@
 # God's Eye View Current State
 
+AIS encodes speed over ground in 0.1-knot units and course over ground in
+0.1-degree units, reserving the top code of each field for "not available", so
+those reports arrive as 102.3 knots and 360 degrees. Both are stored as unknown,
+and vessel cards, the HUD and analyst queries show a missing measurement rather
+than a reading. Heading keeps its existing separate check for its own sentinel.
+Genuine readings are unchanged, including a stopped vessel's zero and the
+highest speed and course the fields can encode.
+
+Native `<select>` controls declare a dark colour scheme and explicit option
+colours, so the browser-painted option list matches the panel it drops out of.
+The scheme is declared on the controls rather than on the document root, so
+hand-tuned scrollbar and text-input skins are unchanged. Applies to the HUD
+layout, Scenes, CCTV camera, Radio filter and Draw colour menus.
+
 Vessel snapshot completeness is separate from freshness. A current snapshot with
 rejected or duplicate records shows PARTIAL with accepted/received counts; stale
 or unknown freshness and transport failures retain their warnings. Partial
@@ -3543,6 +3557,7 @@ are omitted rather than framing the wrong part of the globe.
 - Build gate: `npm run build`
 - Network access: local-only by default (`HOST=localhost` in dev-fresh.sh); LAN is an explicit opt-in via `HOST=0.0.0.0` (launcher prints a key-exposure warning + LAN URL; see SECURITY.md)
 - OpenSky default mode: OAuth (`OPENSKY_AUTH_MODE=oauth`; `anon` works without credentials)
+- Setup doctor resolves `OPENSKY_AUTH_MODE` from the environment and dotenv files. Explicit `anon` and OAuth mode without a client pair report keyless anonymous access (rate-limited); a complete OAuth pair retains the existing presence-only capability wording. Basic and auto modes report the selected mode without guessing which credentials runtime will accept. The proxy's auth behavior is unchanged.
 - Google key expected in Keychain service `google-maps-api` (or `GOOGLE_MAPS_API_KEY`, or `.env`)
 - OpenSky credentials expected in Keychain service `opensky-network` (or env, or `.env`); `OPENSKY_AUTH_MODE` and `OPENSKY_CREDENTIALS_FILE` read from `.env` too
 - Optional-key precedence in `dev-fresh.sh` is uniform — explicit shell env, then `.env`, then Keychain: `OPENAI_API_KEY` (Keychain `openai-api`/`api-key` — voice + HUD summary), `AISSTREAM_API_KEY` (`aisstream-api`/`api-key` — live vessels), `CESIUM_ION_TOKEN` (`cesium-ion`/`token` — Bing stacks), `TOMTOM_API_KEY` (`tomtom-api`/`api-key` — live traffic flow), `FIRMS_MAP_KEY` (`firms-map`/`map-key` — live fires), `LL2_API_TOKEN` (`.env` only)
@@ -3558,6 +3573,7 @@ are omitted rather than framing the wrong part of the globe.
 - A cold OpenSky failure uses the current camera subpoint only to request a cached adsb.lol point fallback capped at 250 nm. A fresh OpenSky response or last-good cache wins; a nominally successful worldwide snapshot more than two minutes old prefers viewport-scoped adsb.lol when available, otherwise the stale source is reported honestly. The fallback is visibly source-labeled and is never presented as a worldwide snapshot.
 - GBFS proxy refuses upstream redirects (`redirect: 'manual'`; any 3xx becomes a 502 and the redirect target is logged server-side only) and enforces its 5 MB response cap while the body streams, cancelling the upstream read past the cap; CCTV health map is bounded.
 - Proxy error payloads are sanitized (no internal error details returned to clients).
+- That holds for the OpenAI and CCTV media paths too: `/api/openai/hud-summary` never relays OpenAI's own `error.message`, `/api/realtime/token` passes successful ephemeral-token responses through but answers with a fixed error when minting fails or upstream rejects the request, and a failed CCTV media fetch stores a fixed camera health `message` — `GET /api/cctv/health` serializes that field and the CCTV panel renders it as a status label, so it is a client surface as much as the response body is.
 - `OPENAI_API_KEY` is server-side only; the browser receives ephemeral Realtime client secrets from `/api/realtime/token`.
 - `AISSTREAM_API_KEY` is server-side only; the browser reads the same-origin `/api/ais-live` cache.
 - `/api/google/nearby-places` keeps the Google key out of Places requests issued for voice scene context.
@@ -3568,9 +3584,14 @@ are omitted rather than framing the wrong part of the globe.
 - Track endpoints: `/api/ais-live/track?mmsi=` (server-accumulated ring buffers; sub-route handled before the rows snapshot), `/api/opensky-track?icao24=` (OAuth, 60s cache, sanitized errors, independent OpenSky credit bucket), `/api/adsblol/trace?hex=` (60s cache, 5MB cap, ODbL attribution required in UI), `/api/aeroapi/flights/{ident}[/track]` (FlightAware AeroAPI, issue #446; keyed via `FLIGHTAWARE_AEROAPI_KEY`, fixed upstream host, ident/track path allowlist, whitelisted query params, 5-min cache, 5MB cap, sanitized errors).
 - Flight-track backfill composition (`composeSource` in `src/sources/live/contract.js`): the civil flights layer's `getTrack` first tries OpenSky `/tracks` (and adsb.lol trace via the military source), then falls back to `createAeroApiSource` when the primary history is empty or fails. The fallback resolves icao24 → fa_flight_id through the tracked record's registration/callsign (parallel ident queries, newest in-window `scheduled_out` wins) before fetching the track; failures are silent (the trail stays local-only). Fallback results are tagged `historySource` + `credit`, and the layer registers the FlightAware credit through the shared `registerDynamicCredit` service on first use.
 - Realtime debug logs redact API keys, bearer tokens, client secrets, and image data URLs before writing to disk; request bodies are size-capped.
+- `/api/realtime/debug-log` enforces an always-on 120-per-client/400-global one-minute limiter (not the opt-in `GEV_RATELIMIT_OPENAI_PER_MIN` bucket the cost-bearing OpenAI routes share), appends asynchronously through a serialized queue, and rotates `realtime-conversations.jsonl` at 32 MB keeping one prior generation, so the sink is bounded at twice that regardless of session length. A malformed record answers 400 and a failed write 500, both with a fixed message.
 
 ## UI/UX Runtime Defaults
 
+- Trackpad pinch zoom is registered as Cesium's `Ctrl+wheel` camera input.
+  Pixel-mode pinch deltas receive bounded amplification before reaching the
+  canvas; ordinary wheel, line/page-mode and native touch-pinch paths are left
+  unchanged. The application scene owns and removes the relay listener.
 - Z ladder: panels promote within 100–139 (renormalized on wrap), voice pill 150, toast 200, clean-view exit 300.
 - Panel POSITION keys are versioned `v8` (`godsEyeView.v8.panelPos.<id>`); collapsed-state keys remain `v6`. The one-time position reset clears stale DISPLAY placements that could overlap the Context rail.
 - Map Source lives in the bottom Visual Presets tray. The left accordion contains no MAP STACK panel, and the `k` panel token that addressed it is gone from the share registry, so legacy `ui=k...` state takes the ordinary unknown-token skip.
@@ -3579,6 +3600,7 @@ are omitted rather than framing the wrong part of the globe.
 - The desktop right rail (`#right-context-rail`) owns `DISPLAY`, `CCTV`, its active parameter controls, and `GLOBAL CONTEXT` as one fixed responsive stack in that order. Its compact buttons use the same 176 px width as the left accordion and one consistent 50 px height, share the left stack's 52 px edge inset and measured top baseline across HUD variants, then constrain themselves against visible HUD/chrome rectangles and the remaining vertical corridor. `DISPLAY` is no longer draggable and legacy saved coordinates are ignored.
 - The right rail is labeled **DISPLAY** (formerly "MOVE") and groups, in order, HUD, DETECT, Bloom, Sharpen, 3D, Clean-UI (HUD + DETECT promoted to the top). Its expanded controls retain the same compact 176 px width as the right-side tabs instead of growing to the wider Context detail-card width. It starts expanded on first run and respects the user's later `v6` collapse choice. Collapses/expands with directional chevrons (`◀` collapsed, `▶` expanded).
 - Display and Context use matching 330 px expanded widths and matching compact tab dimensions. The parameter panel is part of Display's expanded content. DISPLAY may remain open beside one contextual panel; CCTV and Context are mutually exclusive. In Tactical HUD, expanding CCTV or Context hides the other contextual launcher while DISPLAY remains independently available. The most recently opened right-rail panel owns the constrained lane even when it appears later in DOM order; passive restoration and automatic disclosure do not replace that explicit owner. Minimal and other HUD layouts retain the collapsed launchers; when their active panel exceeds the measured corridor, the rail reserves sibling heights and gaps and scrolls the active panel internally.
+- At 720px and below both panel stacks (`#left-panel-stack`, `#right-context-rail`) go edge-to-edge and scroll vertically. Every hosted panel's decorative `.panel-glow` is pinned to its panel box there (`inset: 0` in `src/ui/styles/responsive.css`): on desktop the glow overhangs the panel by 18–20 px as harmless paint, but inside a scroll container that overhang is scrollable overflow on both axes and drew a horizontal scrollbar band plus a vertical scrollbar that scrolled nothing but glow whenever CCTV, Context, Data Layers or Scenes was expanded. The glow's blur is ink overflow and never scrolls, so the look is unchanged. Do not fix this by clipping the stacks: `overflow-x: clip` would also clip the Context radio popover and would not remove the vertical scrollbar. Pinned by `src/ui/panelRails.test.mjs` against every `(max-width: 720px)` block in the flattened stylesheet.
 - `STYLE PRESETS` and `LOCATIONS` start collapsed, expand on intentional hover/click, and auto-collapse after hover leave delay.
 - Collapsed mini-status indicators show active style and active location/landmark.
 - Detection mode is user-controlled and should persist when switching styles. Since 2026-08-22 it also STARTS on — Dense @ 75% for every style on a first run, Normal included — as a `GLOBAL_POST_DEFAULTS` baseline that does NOT set `_detectionUserOverridden`. Exception (unchanged): selecting a military style (CRT/NVG/FLIR) auto-enables the same Dense preset, but only until the user manually changes detection this session (`_detectionUserOverridden` gate), after which style switches never touch it.
@@ -3801,7 +3823,8 @@ easier to meet (detection is now on more often), but does not create it.
 - Traffic runs in `sim` mode (white dots, hardcoded speeds) unless `TOMTOM_API_KEY`
   is configured (env or Keychain `tomtom-api`/`api-key`), which enables `live` mode:
   TomTom flow vector tiles via the budget-governed `/api/tomtom` proxy
-  (`.gev-cache/tomtom/`, 120 s TTL, `TOMTOM_DAILY_TILE_BUDGET` default 40k/day),
+  (`.gev-cache/tomtom/`, 120 s TTL, `TOMTOM_DAILY_TILE_BUDGET` default 6k/day,
+  sized so a 31-day month stays inside TomTom's 200K/month free allowance),
   decoded client-side (`flowTiles.js`), matched onto Overpass roads
   (`flowMatch.js`), and rendered as green/amber/red dot color + speed/density
   scaling (`trafficFlowStyle.js`); closures spawn no dots; unmatched roads stay
