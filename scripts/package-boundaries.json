@@ -1037,6 +1037,16 @@
     ],
     "external": ["cesium"]
   },
+  "live-trains": {
+    "exports": ["./layers/trains"],
+    "modules": [
+      "src/layers/trains/index.js",
+      "src/layers/trains/policy.js",
+      "src/layers/trains/records.js",
+      "src/layers/trains/source.js"
+    ],
+    "external": ["cesium"]
+  },
   "alpr-cameras": {
     "exports": ["./layers/alpr"],
     "modules": [
@@ -1048,7 +1058,10 @@
       "src/layers/alpr/overlay.js",
       "src/layers/alpr/source.js",
       "src/data/inputOwnership.js",
-      "src/layers/alpr/records.js"
+      "src/layers/alpr/records.js",
+      "src/layers/alpr/cordon.js",
+      "src/layers/alpr/cordonSource.js",
+      "src/layers/alpr/cordonOverlay.js"
     ],
     "external": ["cesium"]
   },
@@ -1366,6 +1379,9 @@
       "src/layers/alpr/visuals.js",
       "src/layers/alpr/overlay.js",
       "src/layers/alpr/source.js",
+      "src/layers/alpr/cordon.js",
+      "src/layers/alpr/cordonSource.js",
+      "src/layers/alpr/cordonOverlay.js",
       "src/layers/awareness/controls.js",
       "src/layers/awareness/dependencies.js",
       "src/layers/awareness/focus.js",
@@ -1928,6 +1944,9 @@
       "src/layers/alpr/visuals.js",
       "src/layers/alpr/overlay.js",
       "src/layers/alpr/source.js",
+      "src/layers/alpr/cordon.js",
+      "src/layers/alpr/cordonSource.js",
+      "src/layers/alpr/cordonOverlay.js",
       "src/layers/awareness/controls.js",
       "src/layers/awareness/dependencies.js",
       "src/layers/awareness/focus.js",

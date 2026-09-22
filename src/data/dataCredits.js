@@ -101,6 +101,12 @@ export const DATA_CREDITS = [
       'community mapping includes <a href="https://deflock.org" target="_blank" rel="noopener">DeFlock</a>',
   },
   {
+    key: 'live-trains-amtraker',
+    html:
+      'Live train positions: Amtrak GPS telemetry via the ' +
+      '<a href="https://amtraker.com" target="_blank" rel="noopener">Amtraker</a> community API',
+  },
+  {
     key: 'military-installations-osm',
     html:
       'Mapped installation context: ' +
