@@ -1,6 +1,7 @@
 import { indexMapSources } from './registry.js';
 import * as Cesium from 'cesium';
 import { createMapCredits } from './credits.js';
+import { acquireImageryComparison } from './imageryComparison.js';
 
 /** Coordinate source lifetimes and scene changes; the registry owns provider choices. */
 export class MapSourceController {
@@ -96,6 +97,16 @@ export class MapSourceController {
   }
   _emitChange(status) {
     this._onChange?.(this.getState(status));
+  }
+
+  /**
+   * Lease the map for an imagery comparison. switchPolicy: 'preserve' (never
+   * switch) | 'esri' (switch to Esri imagery from any other stack) |
+   * 'esri-if-photoreal' (switch only when Google 3D is active). Throws while
+   * another owner holds the lease; see acquireImageryComparison().
+   */
+  acquireImageryComparison(options) {
+    return acquireImageryComparison(this, options);
   }
 
   async setStack(id, { silent = false } = {}) {

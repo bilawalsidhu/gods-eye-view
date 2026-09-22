@@ -458,3 +458,262 @@ test('imagery host tileset follows supplied, owned and globe map sources', async
   controller.destroy();
   assert.equal(controller.getImageryHostTileset(), null);
 });
+
+function leaseFixture() {
+  const env = publicFixture();
+  const switches = [];
+  const setStack = env.controller.setStack.bind(env.controller);
+  env.controller.setStack = (id, options) => {
+    switches.push(id);
+    return setStack(id, options);
+  };
+  return { ...env, switches };
+}
+
+test('an imagery comparison lease rejects a second owner synchronously until released', async () => {
+  const env = leaseFixture();
+  const lease = env.controller.acquireImageryComparison({
+    owner: 'nepal',
+    switchPolicy: 'preserve',
+  });
+  assert.throws(
+    () => env.controller.acquireImageryComparison({ owner: 'recent' }),
+    /held by nepal/,
+  );
+  assert.deepEqual(await lease.ready, {
+    status: 'ready',
+    activeId: 'photoreal',
+  });
+  await lease.release();
+  const next = env.controller.acquireImageryComparison({ owner: 'recent' });
+  assert.deepEqual(await next.ready, {
+    status: 'ready',
+    activeId: 'photoreal',
+  });
+  await next.release();
+  assert.deepEqual(env.switches, []);
+  env.controller.destroy();
+});
+
+test("the 'esri' policy switches from any other stack and release restores it", async () => {
+  for (const initial of ['photoreal', 'osm']) {
+    const env = leaseFixture();
+    if (initial !== env.controller.getActiveId())
+      await env.controller.setStack(initial);
+    env.switches.length = 0;
+    const lease = env.controller.acquireImageryComparison({
+      owner: 'nepal',
+      switchPolicy: 'esri',
+    });
+    assert.deepEqual(await lease.ready, {
+      status: 'ready',
+      activeId: 'esri-imagery',
+    });
+    assert.equal(env.controller.getActiveId(), 'esri-imagery');
+    await lease.release();
+    assert.equal(env.controller.getActiveId(), initial);
+    assert.deepEqual(env.switches, ['esri-imagery', initial]);
+    env.controller.destroy();
+  }
+});
+
+test("the 'esri-if-photoreal' policy leaves any 2D basemap alone", async () => {
+  const photoreal = leaseFixture();
+  const fromPhotoreal = photoreal.controller.acquireImageryComparison({
+    owner: 'recent',
+    switchPolicy: 'esri-if-photoreal',
+  });
+  assert.equal((await fromPhotoreal.ready).activeId, 'esri-imagery');
+  await fromPhotoreal.release();
+  assert.deepEqual(photoreal.switches, ['esri-imagery', 'photoreal']);
+  photoreal.controller.destroy();
+
+  const osm = leaseFixture();
+  await osm.controller.setStack('osm');
+  osm.switches.length = 0;
+  const fromOsm = osm.controller.acquireImageryComparison({
+    owner: 'recent',
+    switchPolicy: 'esri-if-photoreal',
+  });
+  assert.deepEqual(await fromOsm.ready, { status: 'ready', activeId: 'osm' });
+  await fromOsm.release();
+  assert.equal(osm.controller.getActiveId(), 'osm');
+  assert.deepEqual(osm.switches, []);
+  osm.controller.destroy();
+});
+
+test("the 'preserve' policy never switches, whatever is active", async () => {
+  for (const initial of ['photoreal', 'esri-imagery', 'osm']) {
+    const env = leaseFixture();
+    if (initial !== env.controller.getActiveId())
+      await env.controller.setStack(initial);
+    env.switches.length = 0;
+    const lease = env.controller.acquireImageryComparison({
+      owner: 'nepal',
+    });
+    assert.deepEqual(await lease.ready, { status: 'ready', activeId: initial });
+    await lease.release();
+    assert.equal(env.controller.getActiveId(), initial);
+    assert.deepEqual(env.switches, []);
+    env.controller.destroy();
+  }
+});
+
+test('release keeps an operator choice made while the comparison was open', async () => {
+  const env = leaseFixture();
+  const lease = env.controller.acquireImageryComparison({
+    owner: 'nepal',
+    switchPolicy: 'esri',
+  });
+  await lease.ready;
+  await env.controller.setStack('osm');
+  await lease.release();
+  assert.equal(env.controller.getActiveId(), 'osm');
+  assert.deepEqual(env.switches, ['esri-imagery', 'osm']);
+  env.controller.destroy();
+});
+
+test('release keeps a fallback that replaced the comparison stack', async () => {
+  const env = leaseFixture();
+  const lease = env.controller.acquireImageryComparison({
+    owner: 'nepal',
+    switchPolicy: 'esri',
+  });
+  await lease.ready;
+  const errors = env.providers.get('esri-imagery').errorEvent;
+  errors.raise();
+  errors.raise();
+  await settle();
+  assert.equal(env.controller.getActiveId(), 'osm');
+  await lease.release();
+  assert.equal(env.controller.getActiveId(), 'osm');
+  assert.deepEqual(env.switches, ['esri-imagery', 'osm']);
+  env.controller.destroy();
+});
+
+test('release during acquisition lets no late activation survive', async () => {
+  const env = leaseFixture();
+  let resolve;
+  env.registry.sources.find(
+    (source) => source.descriptor.id === 'esri-imagery',
+  ).imagery = () =>
+    new Promise((done) => {
+      resolve = done;
+    });
+  const lease = env.controller.acquireImageryComparison({
+    owner: 'nepal',
+    switchPolicy: 'esri',
+  });
+  await settle();
+  const releasing = lease.release();
+  resolve(env.providers.get('esri-imagery'));
+  assert.deepEqual(await lease.ready, {
+    status: 'superseded',
+    activeId: 'photoreal',
+  });
+  await releasing;
+  await settle();
+  assert.equal(env.controller.getActiveId(), 'photoreal');
+  assert.equal(env.viewer.scene.globe.show, false);
+  assert.equal(env.imagery.length, 0);
+  assert.equal(env.tileset.show, true);
+  assert.deepEqual(env.switches, ['esri-imagery', 'photoreal']);
+  env.controller.destroy();
+});
+
+test('release is idempotent and frees the lease for the next owner', async () => {
+  const env = leaseFixture();
+  const lease = env.controller.acquireImageryComparison({
+    owner: 'nepal',
+    switchPolicy: 'esri',
+  });
+  await lease.ready;
+  const first = lease.release();
+  assert.equal(lease.release(), first);
+  await first;
+  await lease.release();
+  assert.deepEqual(env.switches, ['esri-imagery', 'photoreal']);
+  const next = env.controller.acquireImageryComparison({
+    owner: 'recent',
+    switchPolicy: 'esri',
+  });
+  assert.equal((await next.ready).status, 'ready');
+  await next.release();
+  assert.deepEqual(env.switches, [
+    'esri-imagery',
+    'photoreal',
+    'esri-imagery',
+    'photoreal',
+  ]);
+  env.controller.destroy();
+});
+
+test('an unavailable comparison stack reports failure and release leaves the map alone', async () => {
+  const env = leaseFixture();
+  const errors = [];
+  env.controller._onError = (message) => errors.push(message);
+  const esri = env.controller._sources.get('esri-imagery');
+  esri.available = false;
+  esri.unavailableReason = 'Esri offline';
+  const lease = env.controller.acquireImageryComparison({
+    owner: 'nepal',
+    switchPolicy: 'esri',
+  });
+  assert.deepEqual(await lease.ready, {
+    status: 'failed',
+    activeId: 'photoreal',
+  });
+  await lease.release();
+  assert.deepEqual(env.switches, ['esri-imagery']);
+  assert.deepEqual(errors, ['Esri offline']);
+  assert.equal(env.controller.getActiveId(), 'photoreal');
+  env.controller.destroy();
+});
+
+test('a lease stays owned until its restoration settles, so a rival cannot read the comparison stack as its own', async () => {
+  const env = leaseFixture();
+  const lease = env.controller.acquireImageryComparison({
+    owner: 'recent',
+    switchPolicy: 'esri-if-photoreal',
+  });
+  assert.equal((await lease.ready).activeId, 'esri-imagery');
+  // Hold the restore switch open: the map is still on Esri while it runs.
+  const setStack = env.controller.setStack;
+  let finishRestore;
+  env.controller.setStack = (id, options) =>
+    new Promise((resolve) => {
+      finishRestore = () => resolve(setStack(id, options));
+    });
+  const releasing = lease.release();
+  assert.equal(typeof finishRestore, 'function', 'the restore was issued');
+  assert.throws(
+    () =>
+      env.controller.acquireImageryComparison({
+        owner: 'nepal',
+        switchPolicy: 'esri',
+      }),
+    /held by recent/,
+    'the pending restoration still owns the lease',
+  );
+  finishRestore();
+  await releasing;
+  assert.equal(env.controller.getActiveId(), 'photoreal');
+  env.controller.setStack = setStack;
+  const next = env.controller.acquireImageryComparison({
+    owner: 'nepal',
+    switchPolicy: 'esri',
+  });
+  assert.deepEqual(await next.ready, {
+    status: 'ready',
+    activeId: 'esri-imagery',
+  });
+  await next.release();
+  assert.equal(env.controller.getActiveId(), 'photoreal');
+  assert.deepEqual(env.switches, [
+    'esri-imagery',
+    'photoreal',
+    'esri-imagery',
+    'photoreal',
+  ]);
+  env.controller.destroy();
+});

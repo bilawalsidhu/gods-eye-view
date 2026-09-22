@@ -1162,6 +1162,7 @@
       "src/maps/availability.js",
       "src/maps/catalog.js",
       "src/maps/controller.js",
+      "src/maps/imageryComparison.js",
       "src/maps/credits.js",
       "src/maps/defaultSources.js",
       "src/maps/google3d.js",
@@ -1228,6 +1229,7 @@
     "modules": [
       "src/scenes/nepalEvidencePack.js",
       "src/data/bhoteKoshiEvent.js",
+      "src/ui/imagerySplit.js",
       "src/data/bhoteKoshiEmbeddedMedia.js",
       "src/data/bhoteKoshiLocator.js",
       "src/data/bhoteKoshiIncidentPlaces.js",
@@ -1616,6 +1618,7 @@
       "src/maps/availability.js",
       "src/maps/catalog.js",
       "src/maps/controller.js",
+      "src/maps/imageryComparison.js",
       "src/maps/credits.js",
       "src/maps/defaultSources.js",
       "src/maps/google3d.js",
@@ -1893,6 +1896,8 @@
     "exports": ["./application/layers"],
     "modules": [
       "src/data/bhoteKoshiEvent.js",
+      "src/ui/imagerySplit.js",
+      "src/maps/imageryComparison.js",
       "src/data/bhoteKoshiEmbeddedMedia.js",
       "src/data/bhoteKoshiLocator.js",
       "src/data/bhoteKoshiIncidentPlaces.js",
