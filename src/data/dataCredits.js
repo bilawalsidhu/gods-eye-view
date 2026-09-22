@@ -78,6 +78,15 @@ export const DATA_CREDITS = [
     html: 'Earthquakes: Data courtesy of the U.S. Geological Survey',
   },
   {
+    key: 'au-fire',
+    html:
+      'AU Fire Incidents: ' +
+      '<a href="https://www.rfs.nsw.gov.au/" target="_blank" rel="noopener">NSW Rural Fire Service</a> ' +
+      ' &amp; ' +
+      '<a href="https://emergency.vic.gov.au/" target="_blank" rel="noopener">Emergency Management Victoria</a> ' +
+      '— public GeoJSON feeds',
+  },
+  {
     key: 'overpass',
     html:
       'Road geometry (traffic): ' +

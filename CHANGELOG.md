@@ -1,5 +1,14 @@
 # Changelog
 
+- Add AU Fire Incidents layer aggregating NSW Rural Fire Service and Emergency
+  Management Victoria public GeoJSON feeds. The layer renders coloured dots
+  (size and colour encode alert level and area) plus perimeter polygons draped
+  on Google Photorealistic 3D Tiles via `ClassificationType.CESIUM_3D_TILE`;
+  dots are centred on the perimeter centroid when one is available. Overlays
+  are managed through the shared overlay host and update on entity selection.
+  The server-side proxy (`/api/au-fire`, TTL 2 min) fetches both feeds in
+  parallel and serves stale on failure. Layer id: `au-fire`.
+
 - Remove the spurious scrollbars that appeared on both panel stacks at narrow
   widths (720px and below) as soon as a panel was expanded. The stacks scroll
   vertically there, and each panel's decorative glow, absolutely positioned

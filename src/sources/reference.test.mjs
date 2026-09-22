@@ -12,10 +12,12 @@ test('reference factories retain compatibility without starting acquisition or s
   assert.equal(createReferenceSources, createStandaloneReferenceSources);
   const first = createReferenceSources();
   const second = createReferenceSources();
-  assert.deepEqual(Object.keys(first), ['earthquakes', 'cables']);
+  assert.deepEqual(Object.keys(first), ['earthquakes', 'cables', 'auFire']);
   assert.notEqual(first.earthquakes, second.earthquakes);
   assert.notEqual(first.cables, second.cables);
+  assert.notEqual(first.auFire, second.auFire);
   assert.equal(typeof first.earthquakes.getSnapshot, 'function');
   assert.equal(typeof first.cables.fetch, 'function');
+  assert.equal(typeof first.auFire.getSnapshot, 'function');
   assert.equal(requests, 0);
 });

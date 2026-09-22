@@ -2529,6 +2529,7 @@ its criteria cannot be silently ignored.
 | Dams ▰ | OpenInfraMap/OSM extract (bundled) | `src/data/localLayers.js` | — | static |
 | Submarine Cables ◠ | TeleGeography public map (bundled) | `src/data/telegeographySubmarineCables.js` | — | static |
 | FIRMS Active Fires ▲ | NASA FIRMS live (VIIRS ×3 NRT, trailing 24h) | `src/data/firmsHeatmap.js` | `/api/firms` (`FIRMS_MAP_KEY`) | 10 min (proxy TTL 30 min) |
+| AU Fire Incidents 🔥 | NSW Rural Fire Service (major incidents) + Emergency Management Victoria | `src/layers/auFire/` via `src/app/layers/auFire.js` | `/api/au-fire` | 2 min |
 
 Directions is a keyless front end to the routing the voice agent already
 uses. Its row chips are the whole interface: DRIVE / WALK / BIKE pick the
