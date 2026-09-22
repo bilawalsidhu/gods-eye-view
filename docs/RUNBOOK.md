@@ -173,6 +173,34 @@ bump or tag). Verified: production alias serves the new bundle
 reverse-geocode 200, debug-log 204; celestrak 502 and launches 429 persist
 as documented above. First GitForge-CI-green commit to ship.
 
+### 2026-09-22 verification run (v0.10.0 deploy, production alias)
+
+Deployed from `main` at `b3c8c97` (the release commit) with
+`npx wrangler pages deploy dist --project-name globe --branch main`;
+GitForge pipeline on that commit was green before the deploy. The whole
+checklist is now scripted: `node scripts/verify-prod-render.mjs` boots the
+production alias headless, skips the first-run modal
+(`gev:first-run-mission-session:v1` written before page scripts run), sets the
+camera over KAUS (derived from live instances — the bundle does not expose
+`window.Cesium`), forces a rendered frame past the governor, and probes the
+Functions surface same-origin.
+
+| Check | Result |
+| --- | --- |
+| `/` (app shell) | 200 |
+| `/api/openzenith/elevation` | 200 — Austin elevation **99 m**, the RUNBOOK's expected value |
+| `/api/openzenith/reverse-geocode` | 200 (`place.display_name`) |
+| `/api/cctv/sources` | 200 |
+| `POST /api/realtime/debug-log` | 204 |
+| `/api/radio/stations` | 200 |
+| `/api/regional-brief?latitude=…&longitude=…` | **200 with real place + weather** — the new 0.10.0 production API works (GET with `latitude`/`longitude`; a POST probe correctly 405s, a `lat`/`lon` probe correctly 400s) |
+| `/api/celestrak/stations` | 502 — the documented CF-egress block, unchanged |
+| Photoreal globe | **Renders** — headless screenshot over KAUS shows the Colorado River, MetCenter ponds, and airport runways; 219/221 `googleapis.com` tile requests 200 (2 status-0 entries are resource-timing noise) |
+
+Note for the next run: assert the tile stream with a threshold, not strict
+equality — a CDN stream legitimately mixes 304 revalidations into an otherwise
+healthy frame.
+
 ## Credentials & environment
 
 All keys are optional except `GOOGLE_MAPS_API_KEY`. See `.env.example` for the
