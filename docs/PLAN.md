@@ -2058,7 +2058,7 @@ here.
       directions); the qa-radio rAF pump + contract polling (both
       previously-red assertions pass under contention in RUN 3b,
       load 34.7).
-- [ ] **Batch O — RUN 3 quiet-window sweep**: the 12 remaining
+- [x] **Batch O — RUN 3 quiet-window sweep**: the 12 remaining
       contention-class suites re-run solo at load < 15; a surviving
       red is a real regression and blocks release. Includes the
       prewarm gate-off delta=1 attribution read (instrumented stack in
@@ -2216,6 +2216,42 @@ here.
       quiet gate now requires two consecutive sub-threshold samples
       (run3l opened at 6.9 into a co-tenant aegis storm that reached
       load 33 — the 1-min average lags a ramping spike).
+      RUN 3m ADJUDICATED IT, and the defect was REAL product code:
+      the floor cache was innocent (113-132 m all flight) but
+      `scene.sampleHeight` answered -14,971 m on a not-yet-streamed
+      tile; the probe adopted it as the floor AND counted it as
+      coverage, `floorKnown` came back true on garbage, the arming
+      hold was skipped entirely, and the camera's first eye was set
+      at -14.7 km before the per-frame raw clamp snapped it back
+      (the snap also read as a 58 m/s² wall-time acceleration spike).
+      Fix 83c0594 gates `probeMeshFloorM` to the physical band
+      (Earth's surfaces span ~-10.9 km trench to ~+8.8 km peak; no
+      route is flown over either): an impossible answer is silence at
+      the source, exactly like an unstreamed tile, and does not count
+      as coverage — so the designed degradation (arming hold, safe
+      seed, per-frame refinement) stays in force. RUN 3n then failed
+      on harness drift: having edited cameraVerbs.js, Vite stamped the
+      app's module URL `?t=<stamp>` and the harness's bare
+      `import('/src/cameraVerbs.js')` created a SECOND instance whose
+      motion slot is empty — the completion poll read null and broke
+      at 2 frames. The suite now resolves the exact URL the app
+      booted (resource timing, captured before any harness import)
+      and imports that string. RUN 3o reached 25/27: the loop broke
+      via the null-clear (correct) but the completion report compared
+      the last PROGRESS sample (97%) instead of the null; and the
+      accel check manufactured 74 m/s² from a 3.9 s frame gap +
+      0.04 s double frame while the camera moved a metronomic 10.3 m
+      every frame. Fix 562158f: the null-clear IS the completion
+      signal once the flight engaged, and acceleration is differenced
+      in the dolly's OWN time base (min(0.25 s, wall gap) of
+      simulation time per frame) over 5-frame MEDIANS — postRender
+      occasionally re-renders without a motion tick (27/365
+      single-frame advance dropouts), which a mean turns into a
+      45.7 m/s² ghost. RUN 3p: GREEN, 28 checks, 0 fail — flight ran
+      to completion (47 frames, 674 s wall, slot cleared), peak sim
+      accel 24.1 m/s², min AGL 248 m, cruise range 34 m, floor
+      acquisition 88 m. Batch O closed: every suite green or honestly
+      ENV-GATED.
 - [ ] **Batch P — release 0.10.0**: CHANGELOG 0.10.0 fold (done,
       uncommitted) + version bump (done, uncommitted); commit, push
       BOTH remotes gitforge-first (only when no browser suite is

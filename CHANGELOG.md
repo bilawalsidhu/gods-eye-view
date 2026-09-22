@@ -102,6 +102,17 @@ aegis secrets gate in CI, and a coverage ratchet that fails on collapse.
   vehicles animated around Cartesian(0,0,0) instead of their segment
   when a refresh raced a viewport move; plus cross-feed prune and
   bbox-suppression oscillation fixes in the same sweep.
+- **Route dolly could seed its floor from an impossible mesh answer** —
+  on a not-yet-streamed tile, `scene.sampleHeight` answered -14,971 m
+  (RUN 3m's per-frame trace, software GL); the mesh probe adopted it as
+  the floor and counted it as coverage, so the arming hold was skipped
+  on a garbage `floorKnown` and the camera's first eye was set ~15 km
+  underground before the per-frame raw clamp snapped it back.
+  `probeMeshFloorM` now treats an answer outside the physical band
+  (~-10.9 km trench to ~+8.8 km peak) as silence at the source — it
+  contributes nothing and does not count as coverage — so the designed
+  degradation (arming hold, safe seed, per-frame refinement) stays in
+  force.
 - **QA harness drift** (two deterministic reds, shipped code correct):
   `qa-floor-hold.mjs`/`qa-voice-wav.mjs` passed puppeteer 25's now-async
   `executablePath()` raw to `launch()`; `qa-radio.mjs` gained a
@@ -196,17 +207,33 @@ do not treat their headers as shipping state._
   protocolTimeout under a load burst. Its ceiling is 25 minutes: the
   armored probe survives a mid-run burst, but the degraded throughput
   cannot fit the 15-minute default.
-- qa-flyroute-cinema's capture loop no longer ends on pre-flight or
-  post-jump stillness: the break requires the flight-start mark AND
-  observed motion after it, so the arming/mesh-probe holds cannot cut an
-  81-second flight to three frames. Its derivative checks (peak
-  acceleration, roll rate, descent/climb, cruise wander) are
+- qa-flyroute-cinema's capture loop ends on the DOLLY'S OWN COMPLETION —
+  `getActiveCameraMotion()` clearing to null — never on stillness (every
+  stillness heuristic misread an acquisition hold as finished) and never
+  on wall clock alone: `advanceRouteFlight` clamps its tick to 0.25 s of
+  simulation time per rendered frame, so at software-GL cadence the
+  81-second flight needs 5–9 wall minutes and a wall-clock budget cut it
+  at ~17% with a false-passing wings-level bar. Module state is read
+  through the exact URL the app booted (resource timing) — a bare
+  harness import creates a second empty instance once the dev server has
+  stamped the module `?t=` after an edit. Acceleration is differenced in
+  the dolly's sim time over 5-frame medians: wall-time windows turn a
+  3.9 s frame gap into a 74 m/s² ghost, and postRender re-renders without
+  a motion tick (27/365 single-frame dropouts) into 45.7. Its derivative
+  checks (roll rate, descent/climb, cruise wander) remain
   density-conditional — below the 60-sample floor they report
   INCONCLUSIVE with evidence instead of failing on quantization spikes.
 - Both orchestrators spawn suites in their own process group and kill the
   GROUP on ceiling timeout: killing only the node process orphaned a
   Chrome that pegged ~7 cores for 40 minutes and manufactured the very
-  load the quiet-window gate was waiting out.
+  load the quiet-window gate was waiting out. The quiet gate itself now
+  requires two consecutive sub-threshold samples — the 1-minute average
+  lags a ramping co-tenant storm, and a single quiet reading once opened
+  a sweep at load 6.9 into a spike that reached 33.
+- Closed the sweep: RUN 3p is green on the last suite — 28 checks, 0
+  fail; the flight ran to completion (47 frames over 674 s wall, slot
+  cleared), peak sim acceleration 24.1 m/s², min AGL 248 m, cruise range
+  34 m. Every QA suite is now green or honestly ENV-GATED.
 
 ### Coverage
 
