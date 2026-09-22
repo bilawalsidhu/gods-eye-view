@@ -10,20 +10,39 @@ export const WEATHER_SHELL_HEIGHTS = Object.freeze({
   radar: 6_200,
   lightning: 6_600,
 });
-// Decoded canvases per renderer, full-extent and detail images alike. The shown
-// images and the newest decodes are never evicted, so while playback warms the
-// next frame four 4096×2048 canvases may exceed the budget.
-export const WEATHER_SHELL_CACHE_BYTES = 96 * 1024 * 1024;
+// Decoded canvases per renderer, full-extent and detail images alike: the shown
+// frame and the warmed next frame, each full-extent and detail (four 4096×2048
+// canvases); nothing older survives them. Cesium holds the shown canvases
+// through the material uniforms in any case.
+export const WEATHER_SHELL_CACHE_BYTES = 128 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 16 * 1024 * 1024;
 const MATERIAL_TYPE = 'WeatherFrame';
 // Renders after an image swap: one queues the upload, one uploads and draws, one spare.
 const UPLOAD_FRAMES = 3;
-// An empty texture-coordinate rectangle: nothing is cut out.
-const NO_CUTOUT = Object.freeze({ west: 0, south: 0, east: -1, north: -1 });
+// An empty detail window: the full-extent image shows everywhere.
+const NO_WINDOW = Object.freeze({ west: 0, south: 0, east: -1, north: -1 });
 // Detail windows, in degrees.
 const DETAIL_MIN_WIDTH = 6;
 const DETAIL_GRID = 0.5;
 const shellHeights = new WeakMap();
+// Cesium binds a 1×1 white texture to an image uniform until its first upload:
+// draw nothing until the full-extent image has arrived, and sample the detail
+// image only once it has arrived. The window is west, south, east, north in the
+// full-extent image's texture coordinates.
+const MATERIAL_SOURCE = `czm_material czm_getMaterial(czm_materialInput materialInput)
+{
+  czm_material material = czm_getDefaultMaterial(materialInput);
+  vec2 st = materialInput.st;
+  vec4 coarse = texture(image, st);
+  vec2 dst = (st - window.xy) / max(window.zw - window.xy, vec2(1e-6));
+  float inside = float(all(greaterThanEqual(st, window.xy)) && all(lessThanEqual(st, window.zw)));
+  float useDetail = inside * step(1.5, float(detailDimensions.x));
+  vec4 c = mix(coarse, texture(detail, clamp(dst, 0.0, 1.0)), useDetail);
+  material.diffuse = czm_gammaCorrect(c.rgb);
+  material.alpha = c.a * alpha * step(1.5, float(imageDimensions.x));
+  return material;
+}
+`;
 
 function registerMaterial(cesium) {
   const cache = cesium.Material._materialCache;
@@ -35,22 +54,22 @@ function registerMaterial(cesium) {
       type: MATERIAL_TYPE,
       uniforms: {
         image: cesium.Material.DefaultImageId,
+        detail: cesium.Material.DefaultImageId,
         alpha: 1,
-        cutout: { type: 'vec4', x: 0, y: 0, z: -1, w: -1 },
+        window: { type: 'vec4', x: 0, y: 0, z: -1, w: -1 },
       },
-      components: {
-        diffuse: 'texture(image, materialInput.st).rgb',
-        // Cesium binds a 1×1 white texture until the first upload; draw nothing
-        // until then. The cutout (west, south, east, north in texture
-        // coordinates) leaves room for a detail surface drawn over it.
-        alpha:
-          'texture(image, materialInput.st).a * alpha * step(1.5, float(imageDimensions.x))' +
-          ' * (1.0 - float(all(greaterThanEqual(materialInput.st, cutout.xy)) && all(lessThanEqual(materialInput.st, cutout.zw))))',
-      },
+      // Diffuse and alpha share these samples, so one source, not components.
+      source: MATERIAL_SOURCE,
     },
     translucent: false,
   });
 }
+
+const sameEdges = (a, b) =>
+  a.west === b.west &&
+  a.south === b.south &&
+  a.east === b.east &&
+  a.north === b.north;
 
 /** Keep weather shells first in the primitive collection, in ascending height:
  * higher shells draw over lower ones and other opaque content draws over both. */
@@ -69,14 +88,13 @@ export function orderWeatherShells(primitives, primitive, height) {
   for (const item of ordered.reverse()) primitives.lowerToBottom(item);
 }
 
-/** One raised rectangle drawing one image. `order` places it among the shells
- * (default its height). The owner calls destroy(). */
+/** One raised rectangle drawing one full-extent image and, inside a window of
+ * it, an optional detail image. The owner calls destroy(). */
 export function createShellSurface({
   viewer,
   cesium,
   rectangle,
   height,
-  order = height,
   onSettled = () => {},
 }) {
   registerMaterial(cesium);
@@ -116,24 +134,63 @@ export function createShellSurface({
     allowPicking: false,
   });
   primitives.add(primitive);
-  orderWeatherShells(primitives, primitive, order);
+  orderWeatherShells(primitives, primitive, height);
   let image = null;
   let frames = 0;
+  // The detail image, its own upload count and a window waiting for it to draw.
+  let detail = null;
+  let detailFrames = 0;
+  let pendingWindow = null;
   let offRender = null;
   let destroyed = false;
 
-  const uploaded = () => {
-    const size = material.uniforms.imageDimensions;
-    return (
-      image !== null &&
-      (!size || (size.x === image.width && size.y === image.height))
+  const fits = (size, value) =>
+    !size || (size.x === value.width && size.y === value.height);
+  const uploaded = () =>
+    image !== null && fits(material.uniforms.imageDimensions, image);
+  const detailDrawn = () =>
+    detail !== null &&
+    detailFrames === 0 &&
+    fits(material.uniforms.detailDimensions, detail);
+  const drawn = () =>
+    primitive.ready &&
+    uploaded() &&
+    frames === 0 &&
+    (detail === null || (detailDrawn() && pendingWindow === null));
+  function appliedWindow() {
+    const { x, y, z, w } = material.uniforms.window;
+    return z < x ? null : { west: x, south: y, east: z, north: w };
+  }
+  function setWindow(rect) {
+    const next = rect ?? NO_WINDOW;
+    const { x, y, z, w } = material.uniforms.window;
+    if (
+      x === next.west &&
+      y === next.south &&
+      z === next.east &&
+      w === next.north
+    )
+      return;
+    material.uniforms.window = new cesium.Cartesian4(
+      next.west,
+      next.south,
+      next.east,
+      next.north,
     );
-  };
-  const drawn = () => primitive.ready && uploaded() && frames === 0;
+    scene.requestRender();
+  }
   // The render governor may idle the scene; request frames only until the
-  // asynchronous geometry is ready and the latest image has been drawn.
+  // asynchronous geometry is ready and the latest images have been drawn.
   function tick() {
-    if (frames > 0 && primitive.ready) frames--;
+    if (primitive.ready) {
+      if (frames > 0) frames--;
+      if (detailFrames > 0) detailFrames--;
+    }
+    // A texture is never shown at another window's place.
+    if (pendingWindow && primitive.ready && detailDrawn()) {
+      setWindow(pendingWindow);
+      pendingWindow = null;
+    }
     if (primitive.show && !drawn()) {
       scene.requestRender();
       return;
@@ -161,25 +218,36 @@ export function createShellSurface({
       material.uniforms.alpha = value;
       scene.requestRender();
     },
-    /** Hide a rectangle in texture coordinates (0–1); null restores it. */
-    setCutout(rect) {
-      const next = rect ?? NO_CUTOUT;
-      const { x, y, z, w } = material.uniforms.cutout;
-      if (
-        destroyed ||
-        (x === next.west &&
-          y === next.south &&
-          z === next.east &&
-          w === next.north)
-      )
+    /** Draw `next` inside `rect` (west, south, east, north in the full-extent
+     * image's texture coordinates, 0–1); null clears it. In the same window only
+     * the image changes, and Cesium keeps drawing the previous texture until
+     * this one is uploaded. A different window applies once its image has
+     * drawn; until then the full-extent image covers it. */
+    setDetail(next, rect) {
+      if (destroyed) return;
+      if (!next) {
+        if (detail === null) return;
+        detail = null;
+        detailFrames = 0;
+        pendingWindow = null;
+        material.uniforms.detail = cesium.Material.DefaultImageId;
+        setWindow(null);
+        scene.requestRender();
         return;
-      material.uniforms.cutout = new cesium.Cartesian4(
-        next.west,
-        next.south,
-        next.east,
-        next.north,
-      );
-      scene.requestRender();
+      }
+      if (next !== detail) {
+        detail = next;
+        material.uniforms.detail = next;
+        detailFrames = UPLOAD_FRAMES;
+      }
+      const applied = appliedWindow();
+      if (applied && sameEdges(applied, rect)) {
+        pendingWindow = null;
+      } else {
+        setWindow(null);
+        pendingWindow = rect;
+      }
+      wake();
     },
     /** Returns whether visibility changed. */
     setShow(value) {
@@ -201,6 +269,8 @@ export function createShellSurface({
       // Primitive.destroy leaves the material and its texture alive.
       if (!material.isDestroyed()) material.destroy();
       image = null;
+      detail = null;
+      pendingWindow = null;
       scene.requestRender();
     },
     getDiagnostics() {
@@ -211,6 +281,8 @@ export function createShellSurface({
         show: primitive.show,
         alpha: material.uniforms.alpha,
         rendering: offRender !== null,
+        // `uploaded` once the detail image has drawn; the window applies after.
+        detail: { uploaded: detailDrawn(), window: appliedWindow() },
       };
     },
   };
@@ -225,12 +297,6 @@ function fitTexture(cesium, { width, height }) {
   }
   return { width, height };
 }
-
-const sameEdges = (a, b) =>
-  a.west === b.west &&
-  a.south === b.south &&
-  a.east === b.east &&
-  a.north === b.north;
 
 /** The detail window for a view footprint over product bounds (both in degrees;
  * a footprint across the antimeridian has west > east), or null when the
@@ -296,8 +362,8 @@ export function detailWindow(footprint, bounds, previous = null) {
 
 /** Observed weather on 3D Tiles: one raised shell per product and one
  * full-extent image per frame. The previous image stays until the next is ready.
- * A second surface at the same height shows a sharper image of a window around
- * the view, cut out of the full-extent surface so the two never blend. */
+ * Inside a window around the view the same surface samples a sharper image of
+ * that area, so the two images share one mesh and never blend. */
 export function createWeatherShell({
   viewer,
   cesium,
@@ -331,7 +397,7 @@ export function createWeatherShell({
   let imageBytes = 0;
   let prefetchJob = null;
   let prefetchedKey = null;
-  // The detail window for the shown bounds, the surface drawing it and its fetch.
+  // The detail window for the shown bounds, the image drawn in it and its fetch.
   let view = null;
   let viewBounds = null;
   let detail = null;
@@ -393,31 +459,25 @@ export function createWeatherShell({
     evict([key, ...keep]);
     return { ...result, cached: false };
   }
-  /** Show the detail surface with the full-extent surface; once it has drawn,
-   * cut its window out of the full-extent image. */
-  function syncDetail() {
-    const shown = Boolean(detail) && visible();
-    detail?.surface.setShow(shown);
-    detail?.surface.setAlpha(detail.revealed ? alpha : 0);
-    if (!shown || !detail.revealed || !current) {
-      surface?.setCutout(null);
-      return;
-    }
+  /** The detail box in the full-extent image's texture coordinates. */
+  function detailRect() {
     const b = current.extent;
     const w = detail.box;
     const x = b.east - b.west;
     const y = b.north - b.south;
-    surface?.setCutout({
+    return {
       west: (w.west - b.west) / x,
       south: (w.south - b.south) / y,
       east: (w.east - b.west) / x,
       north: (w.north - b.south) / y,
-    });
+    };
+  }
+  function syncDetail() {
+    if (detail && current) surface?.setDetail(detail.image, detailRect());
+    else surface?.setDetail(null);
   }
   function applyVisibility() {
-    const changed = surface?.setShow(visible()) ?? false;
-    syncDetail();
-    return changed;
+    return surface?.setShow(visible()) ?? false;
   }
   function cancelDetail() {
     clearTimeout(detailJob?.timeout);
@@ -425,56 +485,29 @@ export function createWeatherShell({
     detailJob = null;
   }
   function dropDetail() {
-    const previous = detail;
     detail = null;
-    // Restore the full-extent image in the same turn the detail goes away.
-    syncDetail();
-    previous?.surface.destroy();
+    // The full-extent image covers the window in the same turn.
+    surface?.setDetail(null);
   }
   function installDetail(job, image) {
     if (detailJob !== job) return;
     clearTimeout(job.timeout);
     detailJob = null;
-    if (detail && boundsKey(detail.box) !== boundsKey(job.box)) dropDetail();
-    if (detail) {
-      // Same window: Cesium keeps drawing the previous texture until this one is uploaded.
-      detail.key = job.key;
-      detail.surface.setImage(image);
-    } else {
-      // A new window stages invisibly; the full-extent image covers until it draws.
-      const { west, south, east, north } = job.box;
-      const next = { box: job.box, key: job.key, revealed: false };
-      next.surface = createShellSurface({
-        viewer,
-        cesium,
-        height,
-        // Drawn right after this shell's full-extent surface.
-        order: height + 0.5,
-        rectangle: cesium.Rectangle.fromDegrees(west, south, east, north),
-        onSettled: () => {
-          if (detail !== next || next.revealed) return;
-          next.revealed = true;
-          syncDetail();
-        },
-      });
-      detail = next;
-      next.surface.setAlpha(0);
-      next.surface.setImage(image);
-    }
-    evict();
+    detail = { box: job.box, key: job.key, image, stale: false };
     syncDetail();
+    evict();
     scene.requestRender();
   }
   function failDetail(job) {
     if (detailJob !== job) return;
     clearTimeout(job.timeout);
     detailJob = null;
-    // Never leave another frame's detail over the shown frame.
-    if (detail && detail.key !== wantedDetail()) dropDetail();
+    if (detail?.stale) dropDetail();
     scene.requestRender();
   }
-  /** Bring the detail surface to the shown frame and window. The previous detail
-   * image stays until the next is decoded unless the window itself moved. */
+  /** Bring the detail to the shown frame and window. The previous detail image
+   * stays until the next is decoded unless the window itself moved, and over at
+   * most one newer frame (see commit). */
   function refreshDetail() {
     const key = wantedDetail();
     if (!key) {
@@ -483,9 +516,16 @@ export function createWeatherShell({
       return;
     }
     if (detail && boundsKey(detail.box) !== boundsKey(view)) dropDetail();
-    if (!visible() || detail?.key === key) {
+    syncDetail();
+    if (detail?.key === key) {
+      detail.stale = false;
       cancelDetail();
-      syncDetail();
+      return;
+    }
+    // Another frame's detail: the next commit drops it unless replaced first.
+    if (detail) detail.stale = true;
+    if (!visible()) {
+      cancelDetail();
       return;
     }
     if (detailJob?.key === key) return;
@@ -596,6 +636,8 @@ export function createWeatherShell({
     // The full-extent image swaps first; the detail follows for the same time.
     watchCamera();
     if (viewBounds !== current.bounds) computeView();
+    // An older frame's detail stays over at most one newer frame.
+    if (detail?.stale && detail.key !== wantedDetail()) dropDetail();
     refreshDetail();
     frame.resolve(true);
     scene.requestRender();
@@ -750,7 +792,6 @@ export function createWeatherShell({
     setAlpha(value) {
       alpha = value;
       surface?.setAlpha(alpha);
-      syncDetail();
       scene.requestRender();
     },
     clear() {
@@ -772,25 +813,30 @@ export function createWeatherShell({
       scene.requestRender();
     },
     getDiagnostics() {
-      const drawn = detail?.surface.getDiagnostics();
+      const drawn = surface?.getDiagnostics();
+      const applied = drawn?.detail.window;
       return {
         host: 'shell',
         height,
         imageSize: { ...size },
-        shell: surface
+        shell: drawn
           ? {
-              ...surface.getDiagnostics(),
+              ...drawn,
               detail: {
                 bbox: view
                   ? [view.west, view.south, view.east, view.north]
                   : null,
                 size: { ...detailSize },
+                // The wanted window is applied and its image drawn.
                 ready: Boolean(
-                  detail?.revealed &&
+                  detail &&
+                  current &&
                   detail.key === wantedDetail() &&
                   drawn.ready &&
-                  drawn.uploaded &&
-                  drawn.show,
+                  drawn.show &&
+                  drawn.detail.uploaded &&
+                  applied &&
+                  sameEdges(applied, detailRect()),
                 ),
                 enabled: view !== null,
               },
@@ -801,8 +847,7 @@ export function createWeatherShell({
           bytes: imageBytes,
           prefetching: !!prefetchJob,
         },
-        imageryCount:
-          Number(!!surface) + Number(!!incoming?.surface) + Number(!!detail),
+        imageryCount: Number(!!surface) + Number(!!incoming?.surface),
         mosaic: (incoming || current)?.mosaic,
         infrared: (incoming || current)?.infrared ?? 'filtered',
         loading: !!incoming,

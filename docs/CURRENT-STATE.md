@@ -77,17 +77,18 @@ radar, regional infrared and lightning and 2048×1024 for global infrared
 and size. NOAA returned each of these sizes from a single request in a live
 check; the WMS capabilities advertise no size maximum. Devices whose texture
 limit is below the product size request halved images.
-On 3D Tiles, each shell except global infrared also draws a detail window: a
-second surface at the same height, drawn right after the full-extent one, with a
-4096×2048 image of the area around the view. On camera move end and host switch
-the window is centred on the camera's ground footprint, max(2 × its longitude
-span, 6°) wide and half as tall, on a 0.5° grid inside the product bounds. It is
-used only while narrower than half the product's longitude extent and while the
-view overlaps the product; it moves only when the view centre leaves its inner
-half or the span changes by more than 50 %. Once the detail image has drawn,
-the full-extent surface leaves that area out, so the two never blend. A new
-frame swaps the full-extent image first and keeps the previous detail image
-until the new one decodes; a moved window hides until its image arrives. Global
+On 3D Tiles, each shell except global infrared also draws a detail window: the
+shell's own surface samples a second, 4096×2048 image of the area around the
+view inside that window, so the two images share one mesh and never blend. On
+camera move end and host switch the window is centred on the camera's ground
+footprint, max(2 × its longitude span, 6°) wide and half as tall, on a 0.5° grid
+inside the product bounds. It is used only while narrower than half the
+product's longitude extent and while the view overlaps the product; it moves
+only when the view centre leaves its inner half or the span changes by more
+than 50 %. A window applies once its image has drawn; until then the
+full-extent image covers it. A new frame swaps the full-extent image first and
+keeps the previous detail image until the new one decodes, over at most one
+newer frame; a moved window hides until its image arrives. Global
 infrared contrast depends on the requested extent, so it keeps one image. The
 image proxy accepts `bbox=west,south,east,north` for every product: inside the
 product bounds, 2:1 within 1 %, rounded to 0.25°, up to 4096×2048 (the
@@ -109,9 +110,10 @@ Exact-time tile and image responses are immutable for 24 hours; manifests and
 errors remain uncached. Each globe renderer retains up to 6 processed global
 mosaics in a least-recently-used cache keyed by observation time and infrared
 mode (up to 48 MiB of canvas pixels). Each shell keeps decoded full-extent and
-detail images in one least-recently-used cache bounded at 96 MiB, keyed by
-time, mode and window; the shown images and the newest decodes are never
-evicted. Disable clears the caches. Cache hits skip
+detail images in one least-recently-used cache bounded at 128 MiB, keyed by
+time, mode and window: the shown frame and the warmed next frame, each
+full-extent and detail; nothing older survives them. Disable clears the caches.
+Cache hits skip
 fetch/decode and report `mosaic.cached: true` with zero decode time.
 During playback, a successful frame warms the next advertised observation,
 wrapping at the end. Global imagery warms a decoded frame and shells warm the

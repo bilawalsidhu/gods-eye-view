@@ -956,10 +956,10 @@ test('a switch to 3D Tiles windows the current view; the globe host never reques
   const diagnostics = h.rendering.getDiagnostics();
   assert.equal(diagnostics.time, times[0]);
   assert.equal(diagnostics.shell.detail.ready, true);
-  assert.equal(h.shells().length, 2);
+  assert.equal(h.shells().length, 1, 'the detail draws on the shell surface');
   host = { collection: h.viewer.imageryLayers, kind: 'globe' };
   assert.equal(h.rendering.rehome(), true);
-  assert.equal(h.shells().length, 0, 'both shell surfaces go with the host');
+  assert.equal(h.shells().length, 0, 'the shell surface goes with the host');
   await flush();
   h.settle();
   await flush();

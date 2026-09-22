@@ -11,6 +11,7 @@ export function createShellCesium({ maximumTextureSize = 0 } = {}) {
       this.uniforms = {
         ...template.fabric.uniforms,
         imageDimensions: { type: 'ivec3', x: 1, y: 1 },
+        detailDimensions: { type: 'ivec3', x: 1, y: 1 },
       };
       this.destroyed = false;
       created.materials.push(this);
@@ -129,16 +130,23 @@ export function createShellScene() {
   };
 }
 
-/** Render: finish asynchronous geometry, upload each shown material's image. */
+/** Render: finish asynchronous geometry, upload each shown material's images.
+ * An image uniform back at the default binds Cesium's 1×1 texture. */
 export function renderShells(cesium, scene, count = 4) {
   for (let i = 0; i < count; i++) {
     for (const primitive of cesium.created.primitives) {
       if (primitive.destroyed || !primitive.show) continue;
       primitive.ready = true;
       const { uniforms } = primitive.appearance.material;
-      if (typeof uniforms.image === 'object') {
-        uniforms.imageDimensions.x = uniforms.image.width;
-        uniforms.imageDimensions.y = uniforms.image.height;
+      for (const name of ['image', 'detail']) {
+        const dimensions = uniforms[`${name}Dimensions`];
+        if (!dimensions) continue;
+        const bound =
+          typeof uniforms[name] === 'object'
+            ? uniforms[name]
+            : { width: 1, height: 1 };
+        dimensions.x = bound.width;
+        dimensions.y = bound.height;
       }
     }
     scene.postRender.emit();
