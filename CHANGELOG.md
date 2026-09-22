@@ -1,5 +1,16 @@
 # Changelog
 
+- Present a CCTV camera's synthesized bearing as an estimate instead of a
+  surveyed fact (issue #639). Packs that publish no facing fall back to an
+  id-hash heading marked `headingConfidence: 'low'` — about 71% of a default
+  catalog — but nothing consumed the flag, so the guessed bearing drew the
+  same panel readout, monitor-plane label and near-opaque projection as a
+  measured one. The panel and summary now render `HDG ~x° (EST)`, the
+  monitor-plane label carries a `BEARING ESTIMATED` line, and the plane draws
+  visibly translucent; a manual SAVE CAL clears all three, because the facing
+  is then human-set. `src/layers/cctv/headingConfidence.test.mjs` pins the
+  behavior.
+
 - Remove the spurious scrollbars that appeared on both panel stacks at narrow
   widths (720px and below) as soon as a panel was expanded. The stacks scroll
   vertically there, and each panel's decorative glow, absolutely positioned

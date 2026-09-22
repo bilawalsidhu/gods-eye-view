@@ -438,6 +438,16 @@ export const PLANE_OUTLINE_COLOR =
   Cesium.Color.fromCssColorString('#6be8ff').withAlpha(0.55);
 
 /**
+ * Monitor-plane texture alpha by bearing provenance (issue #639). A surveyed
+ * or manually calibrated bearing draws near-opaque; a synthesized bearing
+ * (`headingConfidence: 'low'`, the id-hash prior) draws visibly translucent
+ * so the projection reads as provisional rather than authoritative.
+ */
+
+export const PLANE_ALPHA_SURVEYED_BEARING = 0.95;
+export const PLANE_ALPHA_ESTIMATED_BEARING = 0.55;
+
+/**
  * Card budget while the staggered geometry drain is running — the raised
  * 20/28/40 tiers resume when loading completes (see refreshAmbientCards).
  */

@@ -70,6 +70,7 @@ export function createCctvLayer({ services, source }) {
       readCalibrationStoreV2: parts.calibration.readCalibrationStoreV2,
       writeCalibrationStoreV2: parts.calibration.writeCalibrationStoreV2,
       deriveCalBadge: parts.calibration.deriveCalBadge,
+      headingIsEstimated: parts.model.headingIsEstimated,
       computeFrustumGeometry: parts.geometry.computeFrustumGeometry,
       activationProbeClampRange: parts.geometry.activationProbeClampRange,
       frameSignatureFromPixels: parts.frames.frameSignatureFromPixels,

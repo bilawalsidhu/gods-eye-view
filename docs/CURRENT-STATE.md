@@ -3178,6 +3178,16 @@ silently demoting every later lookup for the session.
   on the main road spine. `CCTV_MAX_SOURCES` is a 4,000 catalog-wide ceiling shared round-robin
   across packs, so a lower global cap thins every region instead of starving the last pack.
   ~1,100 cameras total, all RAW PRIOR poses, stills-first.
+- **CCTV bearing provenance (issue #639):** cameras whose pack publishes no facing carry the
+  id-hash fallback heading with `headingConfidence: 'low'` (~71% of a default catalog), and that
+  provenance is now consumed instead of discarded. `headingIsEstimated(camera)` (model.js —
+  low confidence and no manual SAVE CAL, a provenance fact, not a revived quality score) drives:
+  the layer summary and panel meta line rendering `HDG ~x° EST` / `HDG ~x° (EST)` instead of a
+  bare `HDG x°`, `headingConfidence`/`headingEstimated` on the public camera state, a
+  `BEARING ESTIMATED` detail line on the monitor-plane label (kept current on placement updates
+  so SAVE CAL clears it live), and the monitor plane drawing at 0.55 alpha instead of 0.95
+  (`PLANE_ALPHA_*_BEARING`, policy.js) so a synthesized facing never reads as surveyed.
+  `src/layers/cctv/headingConfidence.test.mjs` pins the truth table, label line and alpha gap.
 - **CCTV v3 UX — viewshed + calibration gizmo** (built 2026-07-05 and field
   validated 2026-07-21): the COVERAGE toggle is a
   tri-state cycle `OFF → ON → VIEWSHED`; viewshed mode renders each visible camera's frustum

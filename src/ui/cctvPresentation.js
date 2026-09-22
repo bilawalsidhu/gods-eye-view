@@ -154,7 +154,12 @@ export function _renderCctvState(state) {
         ? this._calBadgeLabel(activeCamera.calBadge)
         : '';
       const projLabel = state?.showProjection !== false ? 'MONITOR' : 'OFF';
-      this._cctvMeta.textContent = `${activeCamera.city} · HDG ${Math.round(activeCamera.headingDeg)}° · FOV ${Math.round(activeCamera.fovDeg)}° · RANGE ${Math.round(activeCamera.rangeM)}m · ${projLabel}${calBadge ? ` · ${calBadge}` : ''} · ${provider}${credit}${statusMsg}`;
+      // headingEstimated (issue #639): an id-hash prior renders as "~…° (EST)"
+      // so a guessed facing never reads like a surveyed one.
+      const hdgLabel = activeCamera.headingEstimated
+        ? `HDG ~${Math.round(activeCamera.headingDeg)}° (EST)`
+        : `HDG ${Math.round(activeCamera.headingDeg)}°`;
+      this._cctvMeta.textContent = `${activeCamera.city} · ${hdgLabel} · FOV ${Math.round(activeCamera.fovDeg)}° · RANGE ${Math.round(activeCamera.rangeM)}m · ${projLabel}${calBadge ? ` · ${calBadge}` : ''} · ${provider}${credit}${statusMsg}`;
     } else if (cameras.length > 0) {
       this._cctvMeta.textContent = enabled
         ? `${cameras.length} cameras loaded · click a camera to activate`

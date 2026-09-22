@@ -3,6 +3,8 @@ import {
   CCTV_PROJECTION_OVERLAY_SOURCE_ID,
   CCTV_PROJECTION_OVERLAY_SOURCE_OPTIONS,
   PLANE_OUTLINE_COLOR,
+  PLANE_ALPHA_SURVEYED_BEARING,
+  PLANE_ALPHA_ESTIMATED_BEARING,
   PROJECTION_CANVAS_WIDTH,
   PROJECTION_CANVAS_HEIGHT,
 } from './policy.js';
@@ -17,11 +19,18 @@ export function createProjection({
 
   /**
    * Build the protected label associated with one active monitor plane.
-   * @param {{cameraId: string, name: string, position: Cesium.Cartesian3|Function}} input
+   * A synthesized bearing (issue #639) carries a BEARING ESTIMATED detail
+   * line so the plane's direction never reads as surveyed.
+   * @param {{cameraId: string, name: string, position: Cesium.Cartesian3|Function, headingEstimated?: boolean}} input
    * @returns {Object} Shared-host presentation entry.
    */
 
-  function createCctvProjectionOverlayEntry({ cameraId, name, position }) {
+  function createCctvProjectionOverlayEntry({
+    cameraId,
+    name,
+    position,
+    headingEstimated = false,
+  }) {
     return {
       id: String(cameraId),
       position,
@@ -32,7 +41,7 @@ export function createProjection({
       collisionGroup: 'ambient-card',
       priority: Number.MAX_SAFE_INTEGER - 1,
       title: String(name || cameraId || 'CAMERA'),
-      details: [],
+      details: headingEstimated ? ['BEARING ESTIMATED'] : [],
       accent: '#6be8ff',
       interactive: false,
       gapPx: 6,
@@ -69,6 +78,15 @@ export function createProjection({
       record.camera,
       positions.capCenter,
     );
+    // SAVE CAL can land while the plane is up: keep the estimated-bearing
+    // detail line current with the camera's live provenance.
+    if (runtime.overlayEntry) {
+      runtime.overlayEntry.details = parts.model.headingIsEstimated(
+        record.camera,
+      )
+        ? ['BEARING ESTIMATED']
+        : [];
+    }
     if (runtime.planeEntity.plane) {
       runtime.planeEntity.plane.dimensions = new Cesium.Cartesian2(
         geometry.halfW * 2,
@@ -130,6 +148,7 @@ export function createProjection({
       cameraId: runtime.cameraId,
       name: record.camera.name,
       position: () => runtime.labelPosition,
+      headingEstimated: parts.model.headingIsEstimated(record.camera),
     });
     runtime.planeEntity = layerState._viewer.entities.add({
       id: `cctv-${record.camera.id}-plane`,
@@ -253,10 +272,16 @@ export function createProjection({
       );
     const positions =
       record.frustumPositions || parts.geometry.frustumCartesians(geometry);
+    // A plane whose direction is an id-hash prior draws visibly translucent
+    // (issue #639) — the projection stays usable but never reads as a
+    // surveyed facing.
+    const planeAlpha = parts.model.headingIsEstimated(record.camera)
+      ? PLANE_ALPHA_ESTIMATED_BEARING
+      : PLANE_ALPHA_SURVEYED_BEARING;
     runtime.planeMaterial = new Cesium.ImageMaterialProperty({
       image: mode === 'video' && runtime.video ? runtime.video : canvas,
       transparent: true,
-      color: Cesium.Color.WHITE.withAlpha(0.95),
+      color: Cesium.Color.WHITE.withAlpha(planeAlpha),
     });
     createProjectionPlane(record, runtime, geometry, positions);
 

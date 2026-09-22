@@ -124,6 +124,24 @@ export function createModel({ state: layerState, services, parts, source }) {
   }
 
   /**
+   * True when the camera's rendered bearing is a synthesized prior rather than
+   * a published or human-set facing: the pack marked the heading
+   * low-confidence (the id-hash fallback, see `fallbackHeadingFromId` in
+   * server/providers/cctv/normalize.js) and no manual calibration has been
+   * saved. A provenance fact, not a quality score — only an explicit 'low'
+   * marks the bearing estimated, and a manual SAVE CAL clears it because the
+   * facing is then human-set.
+   * @param {{headingConfidence?: string, calSource?: string|null}} camera
+   * @returns {boolean}
+   */
+
+  function headingIsEstimated(camera) {
+    if (!camera) return false;
+    if (camera.calSource === 'manual') return false;
+    return String(camera.headingConfidence || '').toLowerCase() === 'low';
+  }
+
+  /**
    * Rounds a value to the nearest multiple of `step`.
    * @param {number} value
    * @param {number} [step=0.1]
@@ -548,6 +566,7 @@ export function createModel({ state: layerState, services, parts, source }) {
     isVideoFeedType,
     safeNumber,
     headingFromId,
+    headingIsEstimated,
     quantize,
     normalizeCoverageMode,
     offsetDegrees,

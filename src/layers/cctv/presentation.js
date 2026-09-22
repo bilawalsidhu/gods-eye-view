@@ -32,10 +32,16 @@ export function createPresentation({
     const health = layerState._healthById.get(active.camera.id) || null;
     const calBadge = parts.calibration.deriveCalBadge(active.camera);
 
+    // A synthesized bearing (id-hash prior, issue #639) reads as an estimate,
+    // never as a measured facing.
+    const headingText = parts.model.headingIsEstimated(active.camera)
+      ? `HDG ~${Math.round(active.camera.headingDeg)}° EST`
+      : `HDG ${Math.round(active.camera.headingDeg)}°`;
+
     return [
       `${active.camera.city.toUpperCase()} CCTV`,
       `${active.camera.name.toUpperCase()}`,
-      `HDG ${Math.round(active.camera.headingDeg)}°`,
+      headingText,
       `FOV ${Math.round(active.camera.fovDeg)}°`,
       `COVERAGE ${area.toFixed(2)}km²`,
       overlapCount > 0 ? `OVERLAP ${overlapCount} cams` : 'ISOLATED VIEW',
@@ -76,6 +82,11 @@ export function createPresentation({
       lat: camera.lat,
       lon: camera.lon,
       headingDeg: camera.headingDeg,
+      // Bearing provenance (issue #639): the pack-supplied confidence plus the
+      // derived flag consumers render — true means headingDeg is the id-hash
+      // prior, so the panel presents the bearing as provisional.
+      headingConfidence: String(camera.headingConfidence || '').toLowerCase(),
+      headingEstimated: parts.model.headingIsEstimated(camera),
       pitchDeg: camera.pitchDeg,
       fovDeg: camera.fovDeg,
       rangeM: camera.rangeM,

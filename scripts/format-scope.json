@@ -493,6 +493,7 @@
   "src/data/cctvNswSource.test.mjs",
   "src/data/cctvTxdotSource.test.mjs",
   "src/layers/cctv/source.test.mjs",
+  "src/layers/cctv/headingConfidence.test.mjs",
   "src/data/alprCameras.js",
   "src/data/alprCameras.test.mjs",
   "src/data/dataCredits.test.mjs",
