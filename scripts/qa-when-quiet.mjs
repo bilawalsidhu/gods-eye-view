@@ -104,18 +104,31 @@ const tally = (line) => {
 // not a quiet instant, is what timing-sensitive suites need.
 async function awaitQuietWindow(label) {
   const startedAt = Date.now();
-  let load = currentLoad();
-  while (load >= MAX_LOAD) {
-    const waitedMin = (Date.now() - startedAt) / 60_000;
-    if (waitedMin > WAIT_MAX_MIN) {
-      tally(`GAVE UP before ${label} after ${Math.round(waitedMin)} min — load ${load} never dropped below ${MAX_LOAD}`);
-      process.exit(1);
+  // Two consecutive quiet samples before opening the window: the 1-minute
+  // load average lags the box, so a single quiet reading can land mid-spike
+  // while a co-tenant's scan is still RAMPING (run3l opened at 6.9 with the
+  // instantaneous load already at 21 and climbing to 33 — the suite then ran
+  // inside the storm). The second sample closes that gap.
+  let quietStreak = 0;
+  for (;;) {
+    const load = currentLoad();
+    if (load < MAX_LOAD) {
+      quietStreak += 1;
+      if (quietStreak >= 2) {
+        tally(`=== quiet window open for ${label}: load ${load} < ${MAX_LOAD} at ${new Date().toISOString()} ===`);
+        return;
+      }
+    } else {
+      quietStreak = 0;
+      const waitedMin = (Date.now() - startedAt) / 60_000;
+      if (waitedMin > WAIT_MAX_MIN) {
+        tally(`GAVE UP before ${label} after ${Math.round(waitedMin)} min — load ${load} never dropped below ${MAX_LOAD}`);
+        process.exit(1);
+      }
+      process.stdout.write(`load ${load} ≥ ${MAX_LOAD} — waiting (${Math.round(waitedMin)} min elapsed)\r`);
     }
-    process.stdout.write(`load ${load} ≥ ${MAX_LOAD} — waiting (${Math.round(waitedMin)} min elapsed)\r`);
     await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-    load = currentLoad();
   }
-  tally(`=== quiet window open for ${label}: load ${load} < ${MAX_LOAD} at ${new Date().toISOString()} ===`);
 }
 
 await awaitQuietWindow('the sweep');
