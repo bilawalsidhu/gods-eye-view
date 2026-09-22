@@ -180,17 +180,30 @@ try {
 
   // ── Run 1: the full cinematic flight ──────────────────────────────────
   await installSampler();
+  // Resolve the EXACT module URL the app booted with, BEFORE any harness
+  // import can create a second module record. When the dev server has
+  // invalidated a module (its file changed since the last run) the app's
+  // graph loads '/src/cameraVerbs.js?t=<stamp>' while a bare
+  // import('/src/cameraVerbs.js') would create a SECOND instance whose
+  // motion slot is empty no matter what the app is doing (run3n broke at 2
+  // frames reading an empty instance this way). The app's own fetch shows up
+  // in resource timing; importing that exact string joins its record.
+  const motionUrl = await page.evaluate(() => {
+    const names = performance.getEntriesByType('resource').map((e) => e.name)
+      .filter((n) => n.includes('/src/cameraVerbs.js'));
+    return names.at(-1) ?? '/src/cameraVerbs.js';
+  });
   const flight = await run('fly_route', { label: 'cinema evidence', speed: 'normal' });
   await page.evaluate(() => window.__gevFlyTrace.marks.push({ label: 'flight-start', t: performance.now() }));
   report(flight?.ok === true, 'fly_route accepted',
     `distanceM=${flight?.distanceM} durationS=${flight?.durationS} waypoints=${flight?.waypoints}`);
   if (!flight?.ok) throw new Error(`fly_route refused: ${flight?.error}`);
-  const coldPath = await page.evaluate(async () => {
+  const coldPath = await page.evaluate(async (url) => {
     try {
-      const mod = await import('/src/cameraVerbs.js');
+      const mod = await import(url);
       return mod.getActiveCameraMotion?.() ?? null;
     } catch { return 'module-unavailable'; }
-  });
+  }, motionUrl);
   if (coldPath && coldPath !== 'module-unavailable') {
     report(true, 'cold-path telemetry read from the live flight',
       `arming=${coldPath.arming} floorKnown=${coldPath.floorKnown} viaMeshProbe=${coldPath.floorFromMeshProbe}${
@@ -215,6 +228,7 @@ try {
   let shotIndex = 0;
   let lastProgress = null;
   let everEngaged = false;
+  let completed = false;
   let moduleLost = false;
   for (;;) {
     const file = path.join(OUT_DIR, `flight-${String(shotIndex).padStart(2, '0')}.png`);
@@ -222,20 +236,27 @@ try {
     await page.screenshot({ path: file });
     shots.push({ file, at });
     shotIndex += 1;
-    const active = await page.evaluate(async () => {
+    const active = await page.evaluate(async (url) => {
       try {
-        const mod = await import('/src/cameraVerbs.js');
+        const mod = await import(url);
         const motion = mod.getActiveCameraMotion?.();
         return motion && motion.kind === 'route' ? (motion.progress ?? null) : null;
       } catch { return 'module-unavailable'; }
-    });
+    }, motionUrl);
     if (active === 'module-unavailable') {
       // Module state unreadable (HMR would do this mid-run) — ride to the
       // budget rather than spinning forever.
       moduleLost = true;
       if (Date.now() - startedAt > budgetMs) break;
     } else if (active === null) {
-      if (everEngaged || shotIndex > 1) break; // dolly slot cleared: flight over
+      if (everEngaged || shotIndex > 1) {
+        // Dolly slot cleared: the flight is over. The last PROGRESS sample
+        // read before the clear is not the completion value (run3o broke at
+        // 97% + null and reported it as an incomplete flight) — the null IS
+        // the completion signal once the flight engaged.
+        completed = everEngaged;
+        break;
+      }
       // Cleared before the second shot with no progress ever seen: the flight
       // never engaged — ride to the budget so the failure is visible.
       if (Date.now() - startedAt > budgetMs) break;
@@ -245,11 +266,11 @@ try {
     }
     await sleep(SHOT_EVERY_MS);
   }
-  report(Boolean(everEngaged && lastProgress === null) || lastProgress >= 0.99,
+  report(completed || lastProgress >= 0.99,
     'the flight ran to completion inside the capture window',
-    `progress at last sample: ${lastProgress === null
-      ? (everEngaged ? 'complete — dolly slot cleared' : 'never engaged')
-      : `${(lastProgress * 100).toFixed(0)}%`}${moduleLost ? ' (module unreadable mid-run)' : ''} — ${shots.length} frames over ${((Date.now() - startedAt) / 1000).toFixed(0)} s wall`);
+    `progress at last sample: ${completed
+      ? 'complete — dolly slot cleared'
+      : lastProgress === null ? 'never engaged' : `${(lastProgress * 100).toFixed(0)}%`}${moduleLost ? ' (module unreadable mid-run)' : ''} — ${shots.length} frames over ${((Date.now() - startedAt) / 1000).toFixed(0)} s wall`);
   const trace = await readTrace();
   await page.evaluate(() => window.__gevFlyTraceRemove?.());
   report(shots.length >= 6, 'screenshot sequence captured', `${shots.length} frames @ ${SHOT_EVERY_MS}ms`);
@@ -259,7 +280,13 @@ try {
   // the height alone cannot say whether the camera flew or the floor lied).
   const traceFloors = await page.evaluate(async (samples) => {
     try {
-      const mod = await import('/src/data/groundFloor.js');
+      // Same instance rule as the motion reads: import the URL the app
+      // actually booted, or a post-edit ?t= stamp hands this read an empty
+      // cache and the evidence reads "cold" when the app's cache is warm.
+      const url = performance.getEntriesByType('resource').map((e) => e.name)
+        .filter((n) => n.includes('/src/data/groundFloor.js')).at(-1)
+        ?? '/src/data/groundFloor.js';
+      const mod = await import(url);
       return samples.map(({ lat, lon }) => mod.cachedGroundFloor(lat, lon));
     } catch { return samples.map(() => null); }
   }, trace.rows.map((r) => ({ lat: r.lat, lon: r.lon })));
@@ -406,16 +433,42 @@ try {
     `speed rose 10% → 90% of peak over ${riseMs.toFixed(0)} ms`);
   report(peakV < 40 * 1.35, 'the easing keeps the shipped pace — the plateau IS the speed word',
     `peak ${peakV.toFixed(1)} m/s over a 40 m/s mean (${(flight.distanceM / flight.durationS).toFixed(1)} m/s reported)`);
-  // Acceleration, differenced across NON-overlapping speed windows so the
-  // 400 ms averaging is not differentiated against itself.
+  // Acceleration in the DOLLY'S OWN TIME BASE. The renderer's frame cadence
+  // on software GL is irregular — 0.3-4 s gaps with occasional double frames
+  // — and wall-time window differencing manufactures spikes out of that
+  // cadence alone (run3o: 74 m/s² at a 3.9 s gap + 0.04 s double frame while
+  // the camera moved a metronomic 10.3 m on EVERY frame). advanceRouteFlight
+  // advances exactly min(0.25 s, wall gap) of simulation time per rendered
+  // frame, so velocity and acceleration measured in SIMULATION time read the
+  // designed easing and are immune to when the renderer delivers frames.
+  const SIM_STEP_S = 0.25;
+  const simT = [0];
+  const simV = [0];
+  for (let i = 1; i < rows.length; i += 1) {
+    const simDt = Math.min(SIM_STEP_S, (rows[i].t - rows[i - 1].t) / 1000);
+    simT.push(simT[i - 1] + simDt);
+    simV.push(simDt > 0 ? sampleDistanceM(rows[i - 1], rows[i]) / simDt : 0);
+  }
+  // K frames = ~1 sim second, and the MEDIAN of each window: postRender
+  // occasionally fires without a motion tick (a re-render of the same camera,
+  // 27 of 365 frames in run3o — single-frame advance dropouts of 1-2 m against
+  // a metronomic 10.3 m), and a mean lets one dropout shift a window by a
+  // quarter; a median absorbs it (45.7 → 23.7 m/s², the residue being the
+  // designed ease-out decel).
+  const K = 5;
+  const windowMedian = (from, to) => {
+    const sample = simV.slice(from, to).sort((a, b) => a - b);
+    return sample[sample.length >> 1];
+  };
   let peakAccel = 0;
-  for (let i = 0, j = 0; i < speeds.length; i += 1) {
-    while (j < speeds.length - 1 && speeds[j].t - speeds[i].t < 400) j += 1;
-    const dt = (speeds[j].t - speeds[i].t) / 1000;
-    if (dt >= 0.3) peakAccel = Math.max(peakAccel, Math.abs(speeds[j].v - speeds[i].v) / dt);
+  for (let i = 2 * K; i < rows.length; i += 1) {
+    const dt = simT[i] - simT[i - K];
+    if (dt > 0) {
+      peakAccel = Math.max(peakAccel, Math.abs(windowMedian(i - K + 1, i + 1) - windowMedian(i - 2 * K + 1, i - K + 1)) / dt);
+    }
   }
   derivativeReport(peakAccel < 40, 'no velocity discontinuity anywhere on the route',
-    `peak |acceleration| ${peakAccel.toFixed(1)} m/s² (a hard start would read in the hundreds)`);
+    `peak |acceleration| ${peakAccel.toFixed(1)} m/s² in the dolly's sim time (a hard start or stop would read in the hundreds)`);
 
   // Altitude shaping and terrain clearance, read off the real camera. The
   // floors are the SAME reads the trace dump captured — the cache is
