@@ -35,6 +35,56 @@ const MODE_KEYWORDS = {
 
 const WAKE_WORDS = ['hey jarvis', 'jarvis', 'hey j.a.r.v.i.s'];
 
+/**
+ * Pick the best speech-synthesis voice for a given text and voice model.
+ * Pure helper — safe to call outside a session (no side effects).
+ */
+export function selectVoiceForText(text = '', voiceModel = 'jarvis') {
+  if (typeof window === 'undefined' || !window.speechSynthesis) return null;
+  const voices = window.speechSynthesis.getVoices();
+  if (!voices || voices.length === 0) return null;
+
+  let targetLang = 'en';
+  if (/[ऀ-ॿ]/.test(text)) targetLang = 'hi';
+  else if (/[぀-ヿ]/.test(text)) targetLang = 'ja';
+  else if (/[一-鿿]/.test(text)) targetLang = 'zh';
+  else if (/[Ѐ-ӿ]/.test(text)) targetLang = 'ru';
+
+  if (targetLang !== 'en') {
+    const match = voices.find((v) => v.lang.startsWith(targetLang));
+    if (match) return match;
+  }
+
+  if (voiceModel === 'friday' || voiceModel === 'sophia') {
+    const female = voices.find(
+      (v) =>
+        v.name.includes('Google UK English Female') ||
+        v.name.includes('Microsoft Hazel') ||
+        v.name.includes('Microsoft Susan') ||
+        v.name.includes('Moira') ||
+        v.name.includes('Samantha') ||
+        (v.lang.startsWith('en') &&
+          /female|woman|girl|aria|jenny/i.test(v.name)),
+    );
+    if (female) return female;
+  }
+
+  const preferred = voices.find(
+    (v) =>
+      v.name.includes('Google UK English Male') ||
+      v.name.includes('Microsoft George') ||
+      v.name.includes('Microsoft Ryan') ||
+      v.name.includes('Microsoft David') ||
+      v.name.includes('Daniel') ||
+      v.name.includes('Arthur') ||
+      (v.lang.startsWith('en') &&
+        v.name.toLowerCase().includes('natural') &&
+        v.name.toLowerCase().includes('male')) ||
+      (v.lang.startsWith('en') && v.name.toLowerCase().includes('male')),
+  );
+  return preferred || voices.find((v) => v.lang.startsWith('en')) || voices[0];
+}
+
 export function createNvidiaSession({
   emit,
   runAction,
@@ -50,8 +100,10 @@ export function createNvidiaSession({
   let wakeWordActive = false;
   let recognitionStopped = false;
   let restartCount = 0;
+  let lastTranscriptAt = 0;
   const RESTART_MAX = 3;
   const RESTART_DELAY_MS = 500;
+  const SILENCE_RESTART_MS = 4000;
   const conversationHistory = [];
 
   const SpeechRecognition =
@@ -424,6 +476,7 @@ export function createNvidiaSession({
         }
 
         if (finalTranscript.trim()) {
+          lastTranscriptAt = Date.now();
           void processCommand(finalTranscript.trim());
         }
       };
@@ -448,6 +501,17 @@ export function createNvidiaSession({
 
       recognition.onend = () => {
         if (active && !isProcessing && !recognitionStopped) {
+          const silentFor = Date.now() - lastTranscriptAt;
+          // If we've been listening without a final transcript for a while,
+          // give the operator a brief pause instead of immediately restarting.
+          if (silentFor > SILENCE_RESTART_MS) {
+            emit({
+              type: 'state',
+              state: 'listening',
+              detail: `JARVIS listening (${currentMode.toUpperCase()})...`,
+            });
+            return;
+          }
           if (restartCount < RESTART_MAX) {
             restartCount++;
             setTimeout(() => {

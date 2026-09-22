@@ -1235,8 +1235,44 @@ export function initAiCommandCenter({
     }
     saveVoiceSettings();
     populateVoiceOptions();
+    syncPersonaCardSelection();
     speakText(`Voice model calibrated to ${model?.name || 'custom'}.`);
   });
+
+  // Persona card quick-select
+  panel.querySelectorAll('.ai-persona-card').forEach((card) => {
+    card.addEventListener('click', () => {
+      const persona = card.dataset.persona;
+      if (!persona) return;
+      voiceSettings.voiceModel = persona;
+      if (voiceModelSelect) voiceModelSelect.value = persona;
+      const model = VOICE_MODELS[persona];
+      if (model) {
+        voiceSettings.pitch = model.pitch;
+        voiceSettings.rate = model.rate;
+        if (voicePitchSlider) voicePitchSlider.value = String(model.pitch);
+        if (voicePitchVal)
+          voicePitchVal.textContent = String(model.pitch.toFixed(2));
+        if (voiceRateSlider) voiceRateSlider.value = String(model.rate);
+        if (voiceRateVal)
+          voiceRateVal.textContent = `${model.rate.toFixed(2)}x`;
+      }
+      saveVoiceSettings();
+      populateVoiceOptions();
+      syncPersonaCardSelection();
+      speakText(`Voice model calibrated to ${model?.name || persona}.`);
+    });
+  });
+
+  function syncPersonaCardSelection() {
+    panel.querySelectorAll('.ai-persona-card').forEach((card) => {
+      card.classList.toggle(
+        'active',
+        card.dataset.persona === voiceSettings.voiceModel,
+      );
+    });
+  }
+  syncPersonaCardSelection();
 
   voiceLangSelect?.addEventListener('change', () => {
     voiceSettings.lang = voiceLangSelect.value;
@@ -1268,6 +1304,8 @@ export function initAiCommandCenter({
 
   voiceTestBtn?.addEventListener('click', () => {
     const lang = voiceSettings.lang === 'auto' ? 'en-US' : voiceSettings.lang;
+    const personaProfile =
+      VOICE_MODELS[voiceSettings.voiceModel] || VOICE_MODELS.jarvis;
     let sample =
       'Hello Operator, JARVIS voice synthesis online and calibrated.';
     if (lang.startsWith('hi'))
@@ -1285,6 +1323,8 @@ export function initAiCommandCenter({
       sample = '你好，我是贾维斯。多语言语音合成系统已就绪。';
     else if (lang.startsWith('ru'))
       sample = 'Здравствуйте, я Джарвис. Голосовая система откалибрована.';
+    else
+      sample = `Testing ${personaProfile.name} persona: ${personaProfile.description}.`;
     speakText(sample);
   });
   voiceStopBtn?.addEventListener('click', () => {
@@ -2094,9 +2134,48 @@ export function initAiCommandCenter({
       const actionsDiv = documentRef.createElement('div');
       actionsDiv.className = 'ai-msg-actions';
       actionsDiv.innerHTML = `
+        <button type="button" class="ai-msg-action-btn ai-msg-like-btn" title="Good response">👍</button>
+        <button type="button" class="ai-msg-action-btn ai-msg-dislike-btn" title="Needs work">👎</button>
+        <button type="button" class="ai-msg-action-btn ai-msg-regen-btn" title="Regenerate">🔄 Regenerate</button>
+        <button type="button" class="ai-msg-action-btn ai-msg-branch-btn" title="Branch from here">🌿 Branch</button>
         <button type="button" class="ai-msg-action-btn ai-msg-copy-btn" title="Copy response to clipboard">📋 Copy</button>
         <button type="button" class="ai-msg-action-btn ai-msg-speak-btn" title="Speak this response">🔊 Speak</button>
       `;
+
+      const likeBtn = actionsDiv.querySelector('.ai-msg-like-btn');
+      const dislikeBtn = actionsDiv.querySelector('.ai-msg-dislike-btn');
+      const regenBtn = actionsDiv.querySelector('.ai-msg-regen-btn');
+      const branchBtn = actionsDiv.querySelector('.ai-msg-branch-btn');
+
+      let feedback = null;
+      likeBtn?.addEventListener('click', () => {
+        feedback = 'good';
+        likeBtn.classList.add('active');
+        dislikeBtn.classList.remove('active');
+        likeBtn.textContent = '👍 ✓';
+        playAudioCue('data');
+      });
+      dislikeBtn?.addEventListener('click', () => {
+        feedback = 'bad';
+        dislikeBtn.classList.add('active');
+        likeBtn.classList.remove('active');
+        dislikeBtn.textContent = '👎 ✗';
+        playAudioCue('alert');
+      });
+      regenBtn?.addEventListener('click', () => {
+        const lastUser = [...messages].reverse().find((m) => m.role === 'user');
+        if (lastUser && inputEl) {
+          inputEl.value = lastUser.content;
+          void handleSend();
+        }
+        playAudioCue('comm');
+      });
+      branchBtn?.addEventListener('click', () => {
+        if (typeof controller.branchConversation === 'function') {
+          controller.branchConversation(msgEl);
+        }
+        playAudioCue('data');
+      });
       actionsDiv
         .querySelector('.ai-msg-copy-btn')
         ?.addEventListener('click', async (e) => {
@@ -3708,6 +3787,29 @@ export function initAiCommandCenter({
     setVoiceSettings: (newSettings) => {
       Object.assign(voiceSettings, newSettings);
       saveVoiceSettings();
+    },
+    /**
+     * Branch the conversation at a given message element. Marks the message
+     * as a branch point, clears subsequent messages, and lets the operator
+     * continue from that turn without losing the prefix.
+     */
+    branchConversation: (messageEl) => {
+      if (!messageEl) return;
+      const index = messagesContainer?.children
+        ? Array.from(messagesContainer.children).indexOf(messageEl)
+        : -1;
+      if (index < 0) return;
+      // Keep messages up to and including the branch point
+      const branchAt = Math.max(0, index);
+      const kept = messages.slice(0, branchAt + 1);
+      // Remove DOM siblings after the branch point
+      while (messagesContainer.children.length > branchAt + 1) {
+        messagesContainer.children[branchAt + 1].remove();
+      }
+      messageEl.classList.add('ai-branch-point');
+      messages.length = 0;
+      messages.push(...kept);
+      playAudioCue('data');
     },
     droneRecon,
     cctvGrid,
