@@ -61,6 +61,11 @@ export const ANALYST_LAYERS = {
     text: ['place'],
     flags: [],
   },
+  'alpr-cameras': {
+    numeric: ['directionDeg'],
+    text: ['operator', 'manufacturer', 'cameraType', 'zone', 'ref'],
+    flags: [],
+  },
 };
 
 const EARTH_R_KM = 6371;

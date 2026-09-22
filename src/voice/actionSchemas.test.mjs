@@ -19,9 +19,11 @@ test('the complete Realtime tool payload retains its pre-extraction contract and
   const digest = createHash('sha256')
     .update(JSON.stringify(stable(GEV_REALTIME_TOOLS)))
     .digest('hex');
+  // Re-pinned for the ALPR analyst extension (analyst_query layers enum +
+  // layer/filter description wording).
   assert.equal(
     digest,
-    '956381c3456d3644ed7c9cda72910dc68a34d9191e0b3e414ee200c348245214',
+    '1c0ed488771866e6cc95c04159835f4487c111aea4ce883e5fe628dcc3db837f',
   );
 });
 
