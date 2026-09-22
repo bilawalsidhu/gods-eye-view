@@ -19,6 +19,7 @@ import { createApplicationFirms } from './layers/firms.js';
 import { createApplicationEarthquakes } from './layers/earthquakes.js';
 import { createApplicationTrains } from './layers/liveTrains.js';
 import { createApplicationPatterns } from './layers/patternWatch.js';
+import { createApplicationPedestrians } from './layers/melbournePedestrians.js';
 import { createApplicationCables } from './layers/submarineCables.js';
 import { createInfrastructureLayers } from '../data/infrastructure.js';
 import { localGeoJsonServices } from './localGeojsonServices.js';
@@ -47,6 +48,7 @@ const SOURCE_METHODS = Object.freeze({
   earthquakes: ['getSnapshot'],
   cables: ['fetch'],
   trains: ['getSnapshot'],
+  pedestrians: ['getSnapshot'],
 });
 
 /** Construct the current catalog without choosing any source provider.
@@ -122,6 +124,7 @@ export function createApplicationCatalog({
         createApplicationRadio({ surface, source: sources.radio }),
         createApplicationTransit({ surface, source: sources.transit }),
         createApplicationTrains({ source: sources.trains }),
+        createApplicationPedestrians({ source: sources.pedestrians }),
         createApplicationBikeshare({ source: sources.bikeshare }),
         createApplicationDirections(),
         vessels,

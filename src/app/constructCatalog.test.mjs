@@ -39,7 +39,7 @@ test('catalogs construct distinct layers and classification from their supplied 
     signal: b.signal,
     surface: fixtureSurface(b.signal),
   });
-  assert.equal(first.layers.length, 23);
+  assert.equal(first.layers.length, 24);
   assert.ok(first.get('transit'));
   const order = first.layers.map(({ id }) => id);
   assert.deepEqual(
@@ -50,6 +50,7 @@ test('catalogs construct distinct layers and classification from their supplied 
       'radio',
       'transit',
       'live-trains',
+      'melbourne-pedestrians',
       'bikeshare',
       'directions',
     ],

@@ -90,6 +90,13 @@ export const DATA_CREDITS = [
       'community mapping includes <a href="https://deflock.org" target="_blank" rel="noopener">DeFlock</a>',
   },
   {
+    key: 'melbourne-pedestrians',
+    html:
+      'Melbourne foot-traffic counts: ' +
+      '<a href="https://data.melbourne.vic.gov.au" target="_blank" rel="noopener">City of Melbourne Pedestrian Counting System</a> ' +
+      '(<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>; fixed street counters, central Melbourne)',
+  },
+  {
     key: 'live-trains-amtraker',
     html:
       'Live train positions: Amtrak GPS telemetry via the ' +

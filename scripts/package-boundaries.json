@@ -1037,6 +1037,16 @@
     ],
     "external": ["cesium"]
   },
+  "melbourne-pedestrians": {
+    "exports": ["./layers/pedestrians"],
+    "modules": [
+      "src/layers/pedestrians/index.js",
+      "src/layers/pedestrians/policy.js",
+      "src/layers/pedestrians/records.js",
+      "src/layers/pedestrians/source.js"
+    ],
+    "external": ["cesium"]
+  },
   "pattern-watch": {
     "exports": ["./layers/patterns"],
     "modules": [
