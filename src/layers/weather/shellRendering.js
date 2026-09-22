@@ -182,14 +182,16 @@ export function createShellSurface({
   // The render governor may idle the scene; request frames only until the
   // asynchronous geometry is ready and the latest images have been drawn.
   function tick() {
-    if (primitive.ready) {
+    // Cesium updates a material only while its primitive is shown, so hidden
+    // frames upload nothing and count for nothing.
+    if (primitive.ready && primitive.show) {
       if (frames > 0) frames--;
       if (detailFrames > 0) detailFrames--;
-    }
-    // A texture is never shown at another window's place.
-    if (pendingWindow && primitive.ready && detailDrawn()) {
-      setWindow(pendingWindow);
-      pendingWindow = null;
+      // A texture is never shown at another window's place.
+      if (pendingWindow && detailDrawn()) {
+        setWindow(pendingWindow);
+        pendingWindow = null;
+      }
     }
     if (primitive.show && !drawn()) {
       scene.requestRender();
