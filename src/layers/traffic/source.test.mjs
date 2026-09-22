@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { createTrafficSource } from './source.js';
+import { clampBoundsAroundCenter } from '../../data/trafficBounds.js';
 const bounds = { south: 30.267, west: -97.744, north: 30.268, east: -97.743 };
 const fixture = readFileSync(
   new URL(
@@ -86,6 +87,28 @@ test('road requests have finite bounds and retain the two-pass query', async () 
     new URLSearchParams(calls[1][1].body).get('data'),
     /residential/,
   );
+});
+test('antimeridian clamps produce road bounds accepted on either side', async () => {
+  const calls = [];
+  const source = createTrafficSource({
+    fetchImpl: async (...args) => {
+      calls.push(args);
+      return new Response('{"elements":[]}');
+    },
+  });
+  for (const centerLon of [179.99, -179.99]) {
+    const clamped = clampBoundsAroundCenter(
+      {
+        south: -0.02,
+        north: 0.02,
+        west: 179.98,
+        east: -179.98,
+      },
+      { lat: 0, lon: centerLon },
+    );
+    await source.requestRoads(clamped);
+  }
+  assert.equal(calls.length, 2);
 });
 test('malformed availability is an unavailable source rather than a keyless response', async () => {
   const source = createTrafficSource({
