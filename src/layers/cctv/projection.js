@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import Hls from 'hls.js';
 import {
   CCTV_PROJECTION_OVERLAY_SOURCE_ID,
   CCTV_PROJECTION_OVERLAY_SOURCE_OPTIONS,
@@ -223,6 +224,34 @@ export function createProjection({
       video.addEventListener('canplay', () => {
         video.play().catch(() => {});
       });
+      video.addEventListener('error', () => {
+        if (runtime.mode !== 'video' || runtime.video !== video) return;
+        runtime.mode = 'image';
+        runtime.video = null;
+        const img = new Image();
+        img.decoding = 'async';
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          runtime.imageLoading = false;
+          runtime.imageReady = true;
+          runtime.imageStamp = Date.now();
+        };
+        img.onerror = () => {
+          runtime.imageLoading = false;
+          runtime.imageReady = false;
+        };
+        runtime.image = img;
+        runtime.lastImageRefreshAt = 0;
+        parts.frames.refreshProjectionImage(record, true);
+      });
+      if (feedType === 'hls' && Hls.isSupported()) {
+        const hls = new Hls({ enableWorker: true });
+        hls.loadSource(record.camera.streamUrl || parts.frames.mediaUrlFor(record.camera));
+        hls.attachMedia(video);
+        runtime.hls = hls;
+      } else {
+        video.src = record.camera.streamUrl || parts.frames.mediaUrlFor(record.camera);
+      }
       runtime.video = video;
     } else {
       const img = new Image();
@@ -288,6 +317,8 @@ export function createProjection({
 
   function destroyProjectionRuntime(runtime) {
     if (!runtime) return;
+    runtime.hls?.destroy();
+    runtime.hls = null;
     if (runtime.video) {
       runtime.video.pause();
       runtime.video.removeAttribute('src');

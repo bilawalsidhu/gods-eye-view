@@ -4,6 +4,17 @@ export const DEFAULT_AUSTIN_ROWS_URL =
   'https://data.austintexas.gov/api/views/b4k4-adkb/rows.json?accessType=DOWNLOAD';
 /** Default cap on Austin cameras after distance-based prioritization. */
 export const DEFAULT_AUSTIN_MAX_SOURCES = 250;
+/** COtrip / CDOT statewide camera map feed. */
+export const DENVER_CAMERAS_URL =
+  'https://api-511x-co.carsprogram.org/cameras/map-features';
+export const DENVER_STREAM_ORIGIN = 'https://publicstreamer2.cotrip.org/';
+export const DENVER_SNAPSHOT_ORIGIN =
+  'https://cocam.carsprogram.org/Snapshots/';
+export const DEFAULT_DENVER_MAX_SOURCES = 300;
+export const DENVER_ANCHORS = [
+  { lat: 39.7392, lon: -104.9903 },
+  { lat: 39.5572, lon: -104.9185 },
+];
 /**
  * Catalog-wide safety ceiling on served cameras. Each pack already caps
  * itself (nearest-to-anchor first); this bound only matters when the packs

@@ -6,6 +6,7 @@ import { loadGroundHeights, joinGroundHeights } from './groundHeights.js';
 import { normalizeSourceItem } from './normalize.js';
 import {
   loadAustinSourcesFromOpenData,
+  loadDenverSourcesFromOpenData,
   loadCaltransSourcesFromOpenData,
   loadTflSourcesFromOpenData,
   loadOntarioSourcesFromOpenData,
@@ -31,6 +32,11 @@ const envEnabled = (name) => String(process.env[name] || '1').trim() !== '0';
  */
 const LIVE_PACKS = [
   { name: 'austin', enabled: () => true, load: loadAustinSourcesFromOpenData },
+  {
+    name: 'denver',
+    enabled: () => envEnabled('CCTV_DENVER_ENABLED'),
+    load: loadDenverSourcesFromOpenData,
+  },
   {
     name: 'caltrans',
     enabled: () => true,

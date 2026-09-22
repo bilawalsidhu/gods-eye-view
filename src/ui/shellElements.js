@@ -141,6 +141,7 @@ export function readShellElements(document = globalThis.document) {
     _cctvCalibSaveBtn: document.getElementById('cctv-calib-save-btn'),
     _cctvCalibResetBtn: document.getElementById('cctv-calib-reset-btn'),
     _cctvFrame: document.getElementById('cctv-frame'),
+    _cctvLive: document.getElementById('cctv-live'),
     _cctvFrameWrap: document.getElementById('cctv-frame-wrap'),
     _cctvSourceBadge: document.getElementById('cctv-source-badge'),
     _cctvMeta: document.getElementById('cctv-meta'),

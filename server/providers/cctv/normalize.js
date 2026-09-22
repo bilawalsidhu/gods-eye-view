@@ -499,6 +499,7 @@ export function normalizeSourceItem(item) {
     groundElevationM: toFiniteNumber(item.groundElevationM),
     feedType: normalizeFeedType(item.feedType || item.type || ''),
     url: typeof item.url === 'string' ? item.url : '',
+    streamUrl: typeof item.streamUrl === 'string' ? item.streamUrl : '',
     snapshotUrl: typeof item.snapshotUrl === 'string' ? item.snapshotUrl : '',
     license: String(item.license || item.licenseNote || ''),
     // Per-camera attribution for feeds a partner supplies inside a pack

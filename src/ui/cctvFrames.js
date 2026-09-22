@@ -1,3 +1,5 @@
+import Hls from 'hls.js';
+
 export function _clearCctvFrame() {
   this._cctvFrameRequestToken += 1;
   if (this._cctvFramePreloader) {
@@ -13,7 +15,56 @@ export function _clearCctvFrame() {
     this._cctvFrame.dataset.loading = '';
     this._cctvFrame.dataset.error = '';
   }
+  if (this._cctvLive) {
+    this._cctvHls?.destroy();
+    this._cctvHls = null;
+    this._cctvLive.pause?.();
+    this._cctvLive.removeAttribute('src');
+    this._cctvLive.classList.remove('active');
+    this._cctvLive.dataset.cameraId = '';
+    this._cctvLive.dataset.error = '';
+  }
   this._cctvFrameWrap?.classList.remove('loading', 'has-frame');
+}
+
+export function _queueCctvLive(src, cameraId) {
+  if (this.destroyed || !this._cctvLive || !src) return false;
+  const live = this._cctvLive;
+  const token = ++this._cctvFrameRequestToken;
+  this._cctvHls?.destroy();
+  this._cctvHls = null;
+  live.pause?.();
+  live.classList.remove('active');
+  live.dataset.cameraId = cameraId;
+  live.dataset.error = '';
+  live.onloadeddata = () => {
+    if (this.destroyed || token !== this._cctvFrameRequestToken) return;
+    live.classList.add('active');
+    this._cctvFrameWrap?.classList.add('has-frame');
+    this._syncCctvSourceBadge(this._cctvState?.activeCamera, true);
+    live.play().catch(() => {});
+  };
+  live.onerror = () => {
+    if (this.destroyed || token !== this._cctvFrameRequestToken) return;
+    live.dataset.error = 'true';
+    live.classList.remove('active');
+    this._syncCctvSourceBadge(this._cctvState?.activeCamera, true);
+    const fallback = this._cctvState?.activeCamera?.frameUrl;
+    if (fallback) this._queueCctvFrame(fallback, cameraId, false);
+  };
+  if (/\.m3u8(?:$|[?#])/i.test(src) && Hls.isSupported()) {
+    const hls = new Hls({ enableWorker: true });
+    this._cctvHls = hls;
+    hls.on(Hls.Events.ERROR, (_event, data) => {
+      if (data?.fatal) live.onerror?.();
+    });
+    hls.loadSource(src);
+    hls.attachMedia(live);
+  } else {
+    live.src = src;
+  }
+  live.load();
+  return true;
 }
 
 export function _queueCctvFrame(src, cameraId, cameraChanged) {
@@ -102,9 +153,11 @@ export function _syncCctvSourceBadge(activeCamera, enabled) {
     this._cctvSourceBadge.dataset.frameState = 'error';
     return;
   }
-  const kind = String(
+  const kind = this._cctvLive?.classList.contains('active')
+    ? 'LIVE'
+    : String(
     activeCamera.sourceKind || activeCamera.feedType || 'unknown',
-  ).toUpperCase();
+    ).toUpperCase();
   const status = String(activeCamera.sourceStatus || 'unknown').toUpperCase();
   this._cctvSourceBadge.textContent = `${kind} · ${status}`;
   this._cctvSourceBadge.dataset.frameState = 'ready';

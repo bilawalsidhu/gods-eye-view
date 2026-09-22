@@ -4,6 +4,11 @@ import {
   DEFAULT_AUSTIN_ROWS_URL,
   DEFAULT_AUSTIN_MAX_SOURCES,
   AUSTIN_DOWNTOWN,
+  DENVER_CAMERAS_URL,
+  DENVER_STREAM_ORIGIN,
+  DENVER_SNAPSHOT_ORIGIN,
+  DEFAULT_DENVER_MAX_SOURCES,
+  DENVER_ANCHORS,
   CALTRANS_CCTV_URL,
   DEFAULT_CALTRANS_DISTRICTS,
   DEFAULT_CALTRANS_MAX_SOURCES,
@@ -178,6 +183,94 @@ export async function loadAustinSourcesFromOpenData() {
       '[CCTV] Austin source download error:',
       error?.message || error,
     );
+    return [];
+  }
+}
+
+/** Fetch the official COtrip/CDOT GeoJSON camera map and retain live views. */
+export async function loadDenverSourcesFromOpenData() {
+  try {
+    const resp = await fetch(
+      process.env.CCTV_DENVER_CAMERAS_URL || DENVER_CAMERAS_URL,
+      {
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+      },
+    );
+    if (!resp.ok) {
+      console.warn('[CCTV] Denver source download failed:', resp.status);
+      return [];
+    }
+    const payload = await resp.json();
+    const cameras = [];
+    for (const feature of payload?.features || []) {
+      const props = feature?.properties;
+      const coords = feature?.geometry?.coordinates;
+      const id = props?.id == null ? '' : String(props.id).trim();
+      const lat = toFiniteNumber(coords?.[1]);
+      const lon = toFiniteNumber(coords?.[0]);
+      const view = Array.isArray(props?.views)
+        ? props.views.find((item) => !item?.broken && item?.url)
+        : null;
+      const streamUrl = String(view?.url || '').trim();
+      const snapshotUrl = String(view?.videoPreviewUrl || '').trim();
+      const isOfficialUrl = (value, origin) => {
+        try {
+          const url = new URL(value);
+          return url.protocol === 'https:' && url.hostname === new URL(origin).hostname;
+        } catch {
+          return false;
+        }
+      };
+      if (
+        !id ||
+        !Number.isFinite(lat) ||
+        !Number.isFinite(lon) ||
+        lat < 36.8 ||
+        lat > 41.1 ||
+        lon < -109.1 ||
+        lon > -102.0 ||
+        !isOfficialUrl(streamUrl, DENVER_STREAM_ORIGIN) ||
+        !isOfficialUrl(snapshotUrl, DENVER_SNAPSHOT_ORIGIN)
+      )
+        continue;
+
+      cameras.push({
+        id: `denver-${id}`,
+        name: String(view?.name || props?.name || `Colorado camera ${id}`),
+        city: 'Denver',
+        cityId: 'denver',
+        provider: 'Colorado DOT / COtrip',
+        lat,
+        lon,
+        headingDeg: fallbackHeadingFromId(`denver-${id}`),
+        headingConfidence: 'low',
+        pitchDeg: -18,
+        fovDeg: 44,
+        rangeM: 145,
+        mountHeightM: 8,
+        groundElevationM: 1600,
+        feedType: 'hls',
+        url: streamUrl,
+        streamUrl,
+        snapshotUrl,
+        sourceKind: 'cotrip-open-data',
+        license: 'Public Colorado DOT traffic camera feed',
+      });
+    }
+    const maxRaw = Number(
+      process.env.CCTV_DENVER_MAX_SOURCES || DEFAULT_DENVER_MAX_SOURCES,
+    );
+    const maxCount = Number.isFinite(maxRaw)
+      ? Math.max(8, Math.min(600, Math.floor(maxRaw)))
+      : DEFAULT_DENVER_MAX_SOURCES;
+    const prioritized = prioritizeSources(cameras, maxCount, DENVER_ANCHORS);
+    console.log(
+      `[CCTV] Loaded Denver camera sources: ${cameras.length} (using nearest ${prioritized.length})`,
+    );
+    return prioritized;
+  } catch (error) {
+    console.warn('[CCTV] Denver source download error:', error?.message || error);
     return [];
   }
 }

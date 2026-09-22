@@ -165,6 +165,7 @@ export function _renderCctvState(state) {
   }
 
   if (this._cctvFrame) {
+    const nextLiveSrc = enabled ? activeCamera?.mediaUrl : null;
     const nextSrc = enabled ? activeCamera?.frameUrl : null;
     const nextCameraId = enabled ? activeCamera?.id || '' : '';
     const cameraChanged = this._cctvFrame.dataset.cameraId !== nextCameraId;
@@ -173,8 +174,11 @@ export function _renderCctvState(state) {
     // src every 10 seconds can cancel a slow but healthy decode forever and
     // leave SNAPSHOT · OK beside a blank/loading preview. Camera changes are
     // immediate so navigation never waits on the prior camera's request.
-    if (
+    if (nextLiveSrc && (cameraChanged || this._cctvLive?.dataset.cameraId !== nextCameraId)) {
+      this._queueCctvLive(nextLiveSrc, nextCameraId);
+    } else if (
       nextSrc &&
+      !this._cctvLive?.classList.contains('active') &&
       (cameraChanged ||
         (!frameLoading && this._cctvFrame.dataset.currentSrc !== nextSrc))
     ) {

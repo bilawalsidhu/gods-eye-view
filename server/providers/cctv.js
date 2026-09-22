@@ -153,6 +153,11 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
               mountHeightM: source.mountHeightM,
               groundElevationM: source.groundElevationM,
               feedType: normalizeFeedType(source.feedType),
+              streamUrl: source.streamUrl || '',
+              mediaUrl: isVideoFeedType(normalizeFeedType(source.feedType))
+                ? source.streamUrl ||
+                  `/api/cctv/media/${encodeURIComponent(source.id)}`
+                : null,
               sourceKind:
                 source.sourceKind || (source.url ? 'configured' : 'fallback'),
               poseSource: source.poseSource,
