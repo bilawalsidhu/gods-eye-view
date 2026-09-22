@@ -706,8 +706,11 @@ export function createWeatherShell({
         prefetchJob = job;
         const { signal } = job.controller;
         job.timeout = setTimeout(() => job.controller.abort(), timeoutMs);
-        await acquire(time, mode, signal);
-        if (box) await acquire(time, mode, signal, { box, keep: [coarse] });
+        // Both images at once: one after the other would outlast playback's step.
+        await Promise.all([
+          acquire(time, mode, signal, { keep: box ? [key] : [] }),
+          box ? acquire(time, mode, signal, { box, keep: [coarse] }) : null,
+        ]);
         signal.throwIfAborted();
         if (prefetchJob === job) prefetchedKey = key;
         return true;
