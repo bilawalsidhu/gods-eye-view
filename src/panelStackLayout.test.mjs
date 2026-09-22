@@ -119,6 +119,124 @@ test('viewport growth retains the aligned corridor when midpoint centering would
   });
 });
 
+// --- Branch floor (cycle 4): the allocation/clamp exits are contracts -------
+
+test('allocation degenerate inputs: empty set, zero corridor, malformed heights', () => {
+  assert.deepEqual(allocatePanelStackHeights({ naturalHeights: [], availableHeight: 500 }), [],
+    'no expanded panels → no allocations');
+  assert.deepEqual(allocatePanelStackHeights({ naturalHeights: [300, 200], availableHeight: 0 }), [0, 0],
+    'a zero corridor starves every panel equally');
+  assert.deepEqual(allocatePanelStackHeights({ naturalHeights: [Number.NaN, -80], availableHeight: 500 }), [0, 0],
+    'malformed naturals coerce to 0 and are still allocated');
+  assert.deepEqual(allocatePanelStackHeights({ naturalHeights: [300], availableHeight: Number.NaN }), [0],
+    'a malformed corridor is not a fit corridor');
+});
+
+test('allocation: panels already at the floor scale down proportionally when floors saturate', () => {
+  // Two panels with a 96 floor and a 150 corridor: floors sum 192 > 150, so the
+  // floors themselves are what shrinks — 96 × 150/192 = 75 exactly.
+  const allocated = allocatePanelStackHeights({
+    naturalHeights: [300, 200],
+    availableHeight: 150,
+  });
+  assert.deepEqual(allocated, [75, 75]);
+  // An exact floor fit takes the proportional branch with scale 1.
+  assert.deepEqual(allocatePanelStackHeights({
+    naturalHeights: [96, 96],
+    availableHeight: 192,
+  }), [96, 96]);
+});
+
+test('allocation: zero minimum height leaves the floors at zero and skips the unmet pass', () => {
+  assert.deepEqual(allocatePanelStackHeights({
+    naturalHeights: [300, 200],
+    availableHeight: 100,
+    minimumHeight: 0,
+  }), [60, 40], 'base is all zeros, so the whole corridor is shared by unmet share');
+  // All-natural-zero panels with a real minimum: unmet stays 0 → the base passes.
+  assert.deepEqual(allocatePanelStackHeights({
+    naturalHeights: [0, 0],
+    availableHeight: 100,
+  }), [0, 0]);
+});
+
+test('bottom boundary: malformed gap and base coerce, hostile tops still clamp', () => {
+  assert.equal(resolveLeftStackBottomBoundary({ baseBottom: Number.NaN }), 0,
+    'a malformed inset boundary collapses to 0 rather than Infinity');
+  assert.equal(resolveLeftStackBottomBoundary({ baseBottom: 700, safeGap: Number.NaN }), 700,
+    'a malformed gap behaves as no gap');
+  assert.equal(
+    resolveLeftStackBottomBoundary({ baseBottom: 700, obstacles: [{ top: -50 }] }),
+    -50,
+    'an obstacle above the viewport top (negative top) genuinely limits the lane',
+  );
+});
+
+test('auto-collapse: zero-natural and malformed later panels never collapse', () => {
+  assert.deepEqual(panelStackAutoCollapseIndices({
+    naturalHeights: [520, 0, Number.NaN, 180],
+    allocatedHeights: [520, 40, 1, 90],
+  }), [], 'zero-natural has no share to defend; 90/180 sits exactly at the strict threshold');
+  assert.deepEqual(panelStackAutoCollapseIndices({
+    naturalHeights: [520, 200],
+    allocatedHeights: [520, 100],
+    minimumVisibleRatio: Number.NaN,
+  }), [], 'a malformed threshold behaves as 0 → everything visible is useful');
+  assert.deepEqual(panelStackAutoCollapseIndices({
+    naturalHeights: [520],
+    allocatedHeights: [10],
+  }), [], 'a single lane has no later competitor, whatever the allocation');
+  // The threshold comparison is strict: exactly at the threshold stays expanded.
+  assert.deepEqual(panelStackAutoCollapseIndices({
+    naturalHeights: [520, 200],
+    allocatedHeights: [520, 100],
+    minimumVisibleRatio: 0.5,
+  }), []);
+});
+
+test('corridor clamp: malformed viewport, inverted obstacle bounds, and an unusable centering', () => {
+  // Malformed viewport → height 1, so the boundary band collapses to the
+  // obstacle top (5) and both edges clamp into it.
+  assert.deepEqual(resolvePanelStackCorridor({
+    viewportHeight: Number.NaN,
+    safeTop: 10,
+    safeBottom: 20,
+    obstacleSafeTop: 5,
+    obstacleSafeBottom: 30,
+    minimumHeight: 0,
+  }), { safeTop: 5, safeBottom: 5 });
+  // An obstacle-safe bottom above the viewport clamps to the viewport height;
+  // a bottom below the top collapses the boundary band to the top.
+  assert.deepEqual(resolvePanelStackCorridor({
+    viewportHeight: 800,
+    safeTop: 100,
+    safeBottom: 700,
+    obstacleSafeTop: 50,
+    obstacleSafeBottom: 900,
+    minimumHeight: 0,
+  }), { safeTop: 100, safeBottom: 700 }, 'a boundary past the viewport pins at the viewport height');
+  assert.deepEqual(resolvePanelStackCorridor({
+    viewportHeight: 800,
+    safeTop: 100,
+    safeBottom: 700,
+    obstacleSafeTop: 600,
+    obstacleSafeBottom: 100,
+    minimumHeight: 0,
+  }), { safeTop: 600, safeBottom: 600 }, 'inverted obstacle bounds collapse to the top boundary');
+  // A corridor entirely below the midpoint never takes the centering branch,
+  // and the minimum pass moves the TOP up to the floor, then re-clamps.
+  const low = resolvePanelStackCorridor({
+    viewportHeight: 800,
+    safeTop: 700,
+    safeBottom: 760,
+    obstacleSafeTop: 0,
+    obstacleSafeBottom: 790,
+    minimumHeight: 100,
+  });
+  assert.deepEqual(low, { safeTop: 660, safeBottom: 760 },
+    'a 60px lane at the viewport bottom grows to 100px by moving its top');
+});
+
 test('a corridor straddling the midpoint is balanced toward it while it stays usable', () => {
   // Centering is a presentation win, not a requirement: when the centered lane
   // is still at least the minimum height it is taken (the oversized bottom is

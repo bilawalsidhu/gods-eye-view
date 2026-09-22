@@ -224,3 +224,15 @@ export async function lookupNeighborhoodRing(lat, lon, matchName) {
   }
   return best ? { ring: best.ring, name: best.name } : null;
 }
+
+// Internals, exported for the geometry/degradation contract tests. The loader
+// map stays live: tests may swap a pack's memoized loader and must delete the
+// entry afterwards so production re-memoizes the real one.
+export const __internals = {
+  normalize,
+  pointInRing,
+  toPolygons,
+  containingOuterRing,
+  largestOuterRing,
+  cityLoaders: _cityLoaders,
+};

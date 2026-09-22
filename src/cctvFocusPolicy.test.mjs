@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  mergeCctvEnableOwnership,
   runCctvLayerEnableFocus,
   runCctvLayerEnableTransition,
 } from './cctvFocusPolicy.js';
@@ -97,4 +98,67 @@ test('CCTV disable transition does not emit enable-ownership diagnostics', async
   assert.equal(result, null);
   assert.deepEqual(transitions, [false]);
   assert.deepEqual(diagnostics, []);
+});
+
+// --- Branch floor (cycle 4): the quiet exits are contracts too --------------
+
+test('a failed nearest-camera activation aborts the focus without a flight', () => {
+  assert.equal(runCctvLayerEnableFocus({
+    activate: () => null,
+    fly: () => { throw new Error('fly must not run'); },
+  }), false, 'no camera → false, and the caller skips its flight');
+  assert.equal(runCctvLayerEnableFocus({}), false, 'no activate at all → false');
+});
+
+test('an absent fly on a free camera resolves undefined — activation only', () => {
+  const calls = [];
+  const result = runCctvLayerEnableFocus({
+    activate: () => { calls.push('activate'); return 'cam-near'; },
+  });
+  assert.equal(result, undefined, 'no fly supplied → fire-and-forget activation');
+  assert.deepEqual(calls, ['activate'], 'activate ran, no fly to follow');
+});
+
+test('ownership merge is conservative on both axes', () => {
+  assert.deepEqual(mergeCctvEnableOwnership(), {
+    trackedEntity: null, cockpitActive: false,
+  }, 'no observations at all → nothing owned');
+  assert.deepEqual(
+    mergeCctvEnableOwnership({ trackedEntity: { id: 'a' }, cockpitActive: false }, { trackedEntity: { id: 'b' }, cockpitActive: false }),
+    { trackedEntity: { id: 'a' }, cockpitActive: false },
+    'the before-snapshot wins when both sides tracked',
+  );
+  assert.deepEqual(
+    mergeCctvEnableOwnership({ trackedEntity: null, cockpitActive: false }, { trackedEntity: { id: 'b' }, cockpitActive: true }),
+    { trackedEntity: { id: 'b' }, cockpitActive: true },
+    'an after-snapshot owner still suppresses',
+  );
+  assert.equal(
+    mergeCctvEnableOwnership({ cockpitActive: 1 }, { cockpitActive: 'yes' }).cockpitActive,
+    true, 'truthy observations coerce to a boolean flag',
+  );
+});
+
+test('the transition tolerates missing sinks and a withheld focus request', async () => {
+  // No readOwnership, no setEnabled, focus withheld: resolves null quietly.
+  assert.equal(await runCctvLayerEnableTransition({
+    target: true, shouldFocus: () => false, activate: () => 'cam-near',
+  }), null, 'shouldFocus false → null with every sink optional');
+  // target false with sinks missing entirely.
+  assert.equal(await runCctvLayerEnableTransition({ target: false, shouldFocus: () => true }), null);
+});
+
+test('a non-true truthy target skips diagnostics but still focuses', async () => {
+  const diagnostics = [];
+  const result = await runCctvLayerEnableTransition({
+    target: 1,
+    readOwnership: () => ({}),
+    setEnabled: async () => {},
+    shouldFocus: () => true,
+    activate: () => 'cam-near',
+    fly: (id) => `flew-${id}`,
+    debug: (...args) => diagnostics.push(args),
+  });
+  assert.equal(result, 'flew-cam-near', 'the focus policy runs for any truthy target');
+  assert.deepEqual(diagnostics, [], 'the enable diagnostics gate on target === true');
 });

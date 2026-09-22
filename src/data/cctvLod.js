@@ -97,7 +97,8 @@ export function hasFiniteCctvViewport(viewW, viewH) {
  * @param {number} sy - Screen anchor y in CSS px.
  * @param {number} viewW - Viewport width in CSS px.
  * @param {number} viewH - Viewport height in CSS px.
- * @returns {number} Center offset in [0, 1] (1 when the anchor or viewport is unusable).
+ * @returns {number} Center offset in [0, 1] — 0 for an unusable viewport
+ *   (every anchor reads as centered), 1 for an unusable anchor.
  */
 export function screenCenterFraction(sx, sy, viewW, viewH) {
   if (!hasFiniteCctvViewport(viewW, viewH)) return 0;

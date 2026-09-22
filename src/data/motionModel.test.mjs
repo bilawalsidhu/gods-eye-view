@@ -341,3 +341,125 @@ test('corridorPathLatLon returns nothing without a display position', () => {
     extrapolating: true, displayLat: Number.NaN, displayLon: -97.66, courseDeg: 0, speedMps: 10, lookaheadSec: 60,
   }), []);
 });
+
+// --- Branch floor (cycle 4): coercion guards and quiet fallbacks -------------
+
+test('displayedKinematics falls back to reported values and fails soft to null', () => {
+  // Derived garbage → the reported pair.
+  assert.deepEqual(displayedKinematics({
+    derivedSpeedMps: Number.NaN, derivedTrackDeg: undefined,
+    reportedSpeedMps: 65, reportedTrackDeg: 12,
+  }), { speedMps: 65, trackDeg: 12 });
+  // Negative magnitudes clamp to 0 — speed never displays negative.
+  assert.deepEqual(displayedKinematics({
+    derivedSpeedMps: -5, derivedTrackDeg: 90,
+  }), { speedMps: 0, trackDeg: 90 });
+  // Nothing usable → nulls, not NaN.
+  assert.deepEqual(displayedKinematics({}), { speedMps: null, trackDeg: null });
+});
+
+test('staleCoastLimitSeconds bounds are themselves guarded', () => {
+  const fix = 1_000_000;
+  // Malformed floor/ceiling fall back to the 60/300 defaults.
+  assert.equal(staleCoastLimitSeconds({
+    fixEpochMs: fix, lastContactEpochMs: fix + 85_000,
+    minimumSec: Number.NaN, maximumSec: 'x',
+  }), 145);
+  // A malformed grace behaves as the 60 s default grace.
+  assert.equal(staleCoastLimitSeconds({
+    fixEpochMs: fix, lastContactEpochMs: fix + 30_000, contactGraceSec: Number.NaN,
+  }), 90);
+  // A ceiling below the floor is raised to the floor.
+  assert.equal(staleCoastLimitSeconds({
+    fixEpochMs: fix, lastContactEpochMs: fix + 600_000, minimumSec: 120, maximumSec: 30,
+  }), 120);
+  // Unusable clocks answer the floor directly.
+  assert.equal(staleCoastLimitSeconds({ fixEpochMs: 'x', lastContactEpochMs: fix }), 60);
+});
+
+test('turn-rate windows reject short, fast-sampled, and NaN histories', () => {
+  assert.equal(estimateTurnRateDps([]), 0);
+  assert.equal(estimateTurnRateDps([{ t: 0, trackDeg: 10 }]), 0);
+  // Samples closer than 2 s or farther than 120 s apart are skipped.
+  assert.equal(estimateTurnRateDps([
+    { tSec: 0, trackDeg: 10 }, { tSec: 1, trackDeg: 40 },
+  ]), 0, 'sub-2 s spacing is jitter, not a turn');
+  assert.equal(estimateTurnRateDps([
+    { tSec: 0, trackDeg: 10 }, { tSec: 121, trackDeg: 40 },
+  ]), 0, 'gaps beyond 120 s say nothing about the current turn');
+  assert.equal(estimateTurnRateDps([
+    { tSec: 0, trackDeg: Number.NaN }, { tSec: 10, trackDeg: 40 },
+  ]), 0, 'a NaN heading poisons only its own pair');
+  assert.equal(turnRateFromFixHistory([]), 0);
+  const t0 = Cesium.JulianDate.fromDate(new Date(0));
+  const t1 = Cesium.JulianDate.addSeconds(t0, 10, new Cesium.JulianDate());
+  assert.equal(turnRateFromFixHistory([
+    { time: t0, track: Number.NaN }, { time: t1, track: 5 },
+  ]), 0, 'a NaN heading poisons only its own pair');
+});
+
+test('courseBetweenCartesians: vertical-only motion has no course', () => {
+  // Same lat/lon, 100 m higher: the chord clears the 25 m gate but the
+  // horizontal displacement is < 1 m — a climb has no course.
+  const below = Cesium.Cartesian3.fromDegrees(AUSTIN.lon, AUSTIN.lat, AUSTIN.alt);
+  const above = Cesium.Cartesian3.fromDegrees(AUSTIN.lon, AUSTIN.lat, AUSTIN.alt + 100);
+  assert.equal(courseBetweenCartesians(below, above), null);
+});
+
+test('projectGroundArcLatLon passes malformed coordinates through untouched', () => {
+  assert.deepEqual(projectGroundArcLatLon(Number.NaN, 5, 90, 100, 0, 10), { lat: Number.NaN, lon: 5 });
+  assert.deepEqual(projectGroundArcLatLon(5, Number.NaN, 90, 100, 0, 10), { lat: 5, lon: Number.NaN });
+});
+
+test('corridorPathLatLon: malformed kinematics degrade to a single-point path', () => {
+  // NaN display position → no path at all.
+  assert.deepEqual(corridorPathLatLon({
+    extrapolating: true, displayLat: Number.NaN, displayLon: 5,
+    courseDeg: 90, speedMps: 100, lookaheadSec: 10,
+  }), []);
+  // Extrapolating with NaN speed / lookahead → the display point only.
+  const start = { lat: 30, lon: -97 };
+  assert.deepEqual(corridorPathLatLon({
+    extrapolating: true, displayLat: 30, displayLon: -97,
+    courseDeg: 90, speedMps: Number.NaN, lookaheadSec: 10,
+  }), [start]);
+  assert.deepEqual(corridorPathLatLon({
+    extrapolating: true, displayLat: 30, displayLon: -97,
+    courseDeg: 90, speedMps: 100, lookaheadSec: Number.NaN,
+  }), [start]);
+  assert.deepEqual(corridorPathLatLon({
+    extrapolating: true, displayLat: 30, displayLon: -97,
+    courseDeg: 90, speedMps: 0, lookaheadSec: 10,
+  }), [start], 'a stationary contact has no corridor');
+});
+
+test('synthesizeForwardKinematicsFix guards its inputs and keeps prior kinematics', async () => {
+  const position = Cesium.Cartesian3.fromDegrees(AUSTIN.lon, AUSTIN.lat, AUSTIN.alt);
+  const time = Cesium.JulianDate.fromDate(new Date(1_000_000));
+  // Guard exits.
+  assert.equal(synthesizeForwardKinematicsFix(null, { epochMs: 2_000_000 }), null);
+  assert.equal(synthesizeForwardKinematicsFix({ position }, { epochMs: 2_000_000 }), null);
+  assert.equal(synthesizeForwardKinematicsFix({ position, time }, {}), null,
+    'no next epoch → nothing to synthesize');
+  assert.equal(synthesizeForwardKinematicsFix(
+    { position, time, epochMs: 2_000_000 }, { epochMs: 2_000_000 },
+  ), null, 'a next epoch at-or-before the fix is not forward');
+  // Derivation path: epochMs absent on the fix → the JulianDate clock is used;
+  // absent velocity/track/turn → prior zero kinematics carried forward.
+  const fix = synthesizeForwardKinematicsFix(
+    { position, time }, { epochMs: 1_010_000 },
+  );
+  assert.equal(fix.epochMs, 1_010_000);
+  assert.equal(fix.velocity, 0);
+  assert.equal(fix.track, 0);
+  // The new epoch is projected along the PRIOR kinematics: 10 m/s for 100 s.
+  const moving = synthesizeForwardKinematicsFix(
+    { position, epochMs: 1_000_000, time, velocity: 10, track: 0, turnRateDps: Number.NaN },
+    { epochMs: 1_010_000, velocity: Number.NaN, track: Number.NaN },
+  );
+  assert.equal(moving.velocity, 10, 'malformed next kinematics carry the prior values');
+  assert.equal(moving.track, 0);
+  // The epoch delta is 10 s: 10 m/s × 10 s = 100 m of straight travel.
+  const travelled = Cesium.Cartesian3.distance(position, moving.position);
+  assert.ok(Math.abs(travelled - 100) < 2, `10 m/s × 10 s ≈ 100 m (got ${travelled.toFixed(1)} m)`);
+});

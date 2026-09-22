@@ -92,3 +92,123 @@ test('taxonomy aliases: old names reach the renamed DataSF polygon', async () =>
   // and a confident wrong polygon would block the live resolver ladder.
   assert.equal(await lookupNeighborhoodRing(37.7793, -122.4193, 'Downtown/Civic Center'), null);
 });
+
+// --- Branch floor (cycle 4): geometry kernels and pack degradation -----------
+
+import { __internals } from './neighborhoodPolygons.js';
+
+const { normalize, pointInRing, toPolygons, containingOuterRing, largestOuterRing, cityLoaders } = __internals;
+
+test('the normalize key folds case, punctuation, and whitespace runs to single spaces', () => {
+  assert.equal(normalize('Financial District/South Beach'), 'financial district south beach');
+  assert.equal(normalize('  Mission\tDistrict  '), 'mission district');
+  assert.equal(normalize('Outer---Mission'), 'outer mission');
+  assert.equal(normalize(''), '');
+  assert.equal(normalize(null), '', 'null input is an empty key, not a crash');
+});
+
+test('pointInRing is a real ray-cast: edges, vertices, and outside all classify', () => {
+  const square = [[0, 0], [10, 0], [10, 10], [0, 10]];
+  assert.equal(pointInRing(5, 5, square), true);
+  assert.equal(pointInRing(15, 5, square), false);
+  assert.equal(pointInRing(-1, -1, square), false);
+  // A concave notch is honored — a bbox test would misclassify this point.
+  // The notch vertex (6,4) pulls the top boundary DOWN into the polygon, so
+  // the region above the V (like (5,7)) is a bite taken OUT of the shape.
+  const notched = [[0, 0], [10, 0], [10, 10], [6, 4], [2, 10], [0, 10]];
+  assert.equal(pointInRing(5, 3, notched), true, 'below the notch is inside');
+  assert.equal(pointInRing(5, 7, notched), false, 'inside the notch bite is outside');
+});
+
+test('toPolygons folds geometry variants; junk degrades to an empty set', () => {
+  const poly = [[[0, 0], [1, 0], [1, 1], [0, 0]]];
+  assert.deepEqual(toPolygons({ type: 'Polygon', coordinates: poly }), [poly]);
+  assert.deepEqual(toPolygons({ type: 'MultiPolygon', coordinates: [poly] }), [poly]);
+  assert.deepEqual(toPolygons({ type: 'LineString', coordinates: [] }), [],
+    'an unsupported geometry type carries no polygons');
+  assert.deepEqual(toPolygons(null), []);
+  assert.deepEqual(toPolygons(undefined), []);
+});
+
+test('containingOuterRing honors holes and skips degenerate parts', () => {
+  const degenerate = { geometry: { type: 'Polygon', coordinates: [[[0, 0], [1, 0]]] } };
+  assert.equal(containingOuterRing(degenerate, 0.5, 0.5), null,
+    'a 2-vertex ring is degenerate, not a boundary');
+  const withHole = {
+    geometry: {
+      type: 'Polygon',
+      coordinates: [
+        [[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]],
+        [[4, 4], [6, 4], [6, 6], [4, 6], [4, 4]], // hole
+      ],
+    },
+  };
+  assert.ok(containingOuterRing(withHole, 1, 1), 'inside the outer ring → returned');
+  assert.equal(containingOuterRing(withHole, 5, 5), null, 'inside the hole → null');
+  assert.equal(containingOuterRing({ geometry: null }, 1, 1), null);
+});
+
+test('largestOuterRing picks the part with the most vertices across a MultiPolygon', () => {
+  const small = [[0, 0], [1, 0], [1, 1], [0, 0]];
+  const big = [[0, 0], [2, 0], [2, 2], [0, 2], [0, 1], [0, 0]];
+  // GeoJSON nesting: a polygon is [ring, …holes], a MultiPolygon is [polygon, …].
+  assert.deepEqual(largestOuterRing({ type: 'MultiPolygon', coordinates: [[small], [big]] }), big);
+  assert.deepEqual(largestOuterRing({ type: 'Polygon', coordinates: [big] }), big);
+  // The degeneracy guard lives in containingOuterRing, not here: any
+  // non-empty ring counts as usable for the name-match fallback.
+  assert.deepEqual(largestOuterRing({ type: 'Polygon', coordinates: [[[0, 0]]] }), [[0, 0]]);
+  assert.equal(largestOuterRing({ type: 'Polygon', coordinates: [] }), null,
+    'a polygon with no rings at all has no fallback ring');
+  assert.equal(largestOuterRing(null), null);
+});
+
+test('an empty or punctuation-only name in a covered city resolves to null', async () => {
+  // Inside SF: the name gate runs before any polygon work.
+  assert.equal(await lookupNeighborhoodRing(37.7793, -122.4193, ''), null);
+  assert.equal(await lookupNeighborhoodRing(37.7793, -122.4193, '///'), null,
+    'a name with no word characters has an empty match key');
+  assert.equal(await lookupNeighborhoodRing(37.7793, -122.4193, null), null);
+});
+
+test('a failed or malformed city pack degrades to null once, without poisoning the memo', async () => {
+  const warn = console.warn;
+  const warnings = [];
+  console.warn = (...args) => warnings.push(args);
+  try {
+    // Swap the memoized pack for a rejecting one and re-resolve.
+    cityLoaders.delete('san-francisco');
+    cityLoaders.set('san-francisco', async () => { throw new Error('chunk gone'); });
+    assert.equal(await lookupNeighborhoodRing(37.7793, -122.4193, 'Chinatown'), null,
+      'a failed pack looks like no coverage to the caller');
+    assert.ok(warnings.some((args) => String(args[0]).includes('san-francisco pack unavailable')),
+      'the degradation warns once, out loud');
+    // A pack whose payload is malformed degrades to an empty feature set.
+    cityLoaders.delete('san-francisco');
+    cityLoaders.set('san-francisco', async () => ({ features: 'corrupt' }));
+    assert.equal(await lookupNeighborhoodRing(37.7793, -122.4193, 'Chinatown'), null);
+    // Features without names, unusable geometry, or no containing ring are skipped.
+    cityLoaders.delete('san-francisco');
+    cityLoaders.set('san-francisco', async () => ({
+      features: [
+        { properties: {}, geometry: { type: 'Polygon', coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] } },
+        { properties: { name: 'No Geometry' } },
+        {
+          properties: { name: 'Far Away' },
+          geometry: { type: 'Polygon', coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] },
+        },
+        {
+          properties: { name: 'Chinatown Annex' },
+          geometry: { type: 'Polygon', coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] },
+        },
+      ],
+    }));
+    assert.equal(await lookupNeighborhoodRing(37.7793, -122.4193, 'Chinatown'), null,
+      'name matches with no real geometry resolve to null, not a wrong polygon');
+  } finally {
+    // Restore the real pack for any later lookups in this process.
+    cityLoaders.delete('san-francisco');
+    console.warn = warn;
+  }
+  const restored = await lookupNeighborhoodRing(37.7793, -122.4193, 'Chinatown');
+  assert.equal(restored?.name, 'Chinatown', 'the real pack re-memoizes after the swap');
+});

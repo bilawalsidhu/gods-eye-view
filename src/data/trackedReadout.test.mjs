@@ -12,6 +12,8 @@ import {
   refreshTrackedReadout,
   trackedLabelModelFromText,
 } from './trackedReadout.js';
+import { WORLD_OVERLAY_STYLE } from '../overlays/worldOverlayTokens.js';
+const WORLD_ACCENT = WORLD_OVERLAY_STYLE.accent;
 
 function makeCesiumEvent() {
   const listeners = new Set();
@@ -293,5 +295,120 @@ test('civilian and military trail heads use the lower-centre model anchor and we
     );
     assert.ok(source.includes('const MODEL_COLOR_BLEND_AMOUNT = 0.94;'),
       `${name} keeps diffuse texture contribution weak through code-side MIX`);
+  }
+});
+
+// --- Branch floor (cycle 4): the coercion and lifecycle quiet exits ----------
+
+test('label model coerces empty, single-part, and whitespace-only text', () => {
+  assert.deepEqual(trackedLabelModelFromText(''),
+    { title: '', details: [], accent: WORLD_ACCENT }, 'empty text → an empty model');
+  assert.deepEqual(trackedLabelModelFromText(null), { title: '', details: [], accent: WORLD_ACCENT });
+  assert.deepEqual(trackedLabelModelFromText('   '), { title: '', details: [], accent: WORLD_ACCENT },
+    'whitespace-only text is an empty model, not a whitespace title');
+  assert.deepEqual(trackedLabelModelFromText('NUCLEAR SUB', '#fff'),
+    { title: 'NUCLEAR SUB', details: [], accent: '#fff' }, 'no separators → title only, no details');
+  // Trim runs BEFORE the separator split: a trailing-empty separator never
+  // matches, so the whole string stays the title.
+  assert.deepEqual(trackedLabelModelFromText('X · '), { title: 'X ·', details: [], accent: WORLD_ACCENT });
+  assert.deepEqual(trackedLabelModelFromText('A\n\nB'), { title: 'A', details: ['B'], accent: WORLD_ACCENT },
+    'newline parsing drops blank lines');
+  // A leading separator loses its space to the trim, so it never matches:
+  // the whole string stays the title. (The title `|| ''` guard is defensive —
+  // both split paths produce a non-empty head after trim — and is not
+  // reachable by real input.)
+  assert.deepEqual(trackedLabelModelFromText(' · X'), { title: '· X', details: [], accent: WORLD_ACCENT });
+});
+
+test('position caches and entry ids degrade to null, never to fresh reads', () => {
+  // A cache accessor that RETURNS null is "no cache", distinct from throwing.
+  assert.equal(cachedTrackedDisplayPosition({ gevDisplayPosition: () => null }), null);
+  assert.equal(cachedTrackedDisplayPosition(null), null);
+  // Ids: explicit gevTrackedId wins, then entity:<id>, then unpublishable.
+  assert.equal(createTrackedOverlayEntry({
+    gevTrackedId: 'explicit:1', gevDisplayPosition: () => ({}),
+    gevLabelModel: { title: 'T' },
+  }).id, 'explicit:1');
+  assert.equal(createTrackedOverlayEntry({
+    id: 'cesium-7', gevDisplayPosition: () => ({}), gevLabelModel: { title: 'T' },
+  }).id, 'entity:cesium-7', 'no explicit id → the entity:<id> fallback');
+  assert.equal(createTrackedOverlayEntry({
+    gevDisplayPosition: () => ({}), gevLabelModel: { title: 'T' },
+  }), null, 'no id at all → unpublishable');
+  assert.equal(createTrackedOverlayEntry({
+    gevTrackedId: 'x:1', gevDisplayPosition: () => ({}), gevLabelModel: { title: '   ' },
+  }), null, 'a whitespace title publishes nothing');
+  assert.equal(createTrackedOverlayEntry({
+    gevTrackedId: 'x:1', gevDisplayPosition: () => ({}), gevLabelModel: { details: [] },
+  }), null, 'a missing title publishes nothing');
+  assert.equal(createTrackedOverlayEntry(null), null);
+  // Malformed model bags coerce: details non-array → [], accent falsy → the theme accent.
+  const entry = createTrackedOverlayEntry({
+    gevTrackedId: 'x:2', gevDisplayPosition: () => ({}),
+    gevLabelModel: { title: 'T', details: 'corrupt', accent: '' },
+  });
+  assert.deepEqual(entry.details, []);
+  assert.equal(entry.accent, WORLD_ACCENT);
+});
+
+test('lifecycle guards: re-init and null viewer are no-ops; context survives tracking loss', () => {
+  const originalWindow = globalThis.window;
+  const fakeWindow = new EventTarget();
+  const changed = makeCesiumEvent();
+  const recorder = makeHostRecorder();
+  globalThis.window = fakeWindow;
+  _setTrackedOverlayHostForTest(recorder.host);
+  try {
+    initTrackedReadout(null);
+    assert.equal(recorder.calls.length, 0, 'a null viewer initializes nothing');
+    // A viewer without the trackedEntityChanged event still initializes —
+    // the subscription is optional. Re-init with a DIFFERENT viewer tears the
+    // first one down on the way in.
+    const bareViewer = { trackedEntity: null };
+    initTrackedReadout(bareViewer);
+    const viewer = { trackedEntity: null, trackedEntityChanged: changed };
+    initTrackedReadout(viewer);
+    initTrackedReadout(viewer);
+    const callsAfterInit = recorder.calls.length;
+    initTrackedReadout(viewer);
+    assert.equal(recorder.calls.length, callsAfterInit, 're-init with the same viewer is a no-op');
+    // Selecting an installation, then LOSING the tracked entity must not wipe
+    // the installation card (the loss branch only clears when a track exists).
+    const installation = {
+      gevTrackedId: 'installations:x',
+      gevDisplayPosition: () => ({ x: 1, y: 2, z: 3 }),
+      gevLabelModel: { title: 'FORT', details: [] },
+    };
+    fakeWindow.dispatchEvent(new CustomEvent('gev:entity-selected', {
+      detail: { layerId: 'military-installations', entity: installation },
+    }));
+    assert.equal(getActiveTrackedReadoutId(), 'installations:x');
+    viewer.trackedEntity = null;
+    changed.raise();
+    assert.equal(getActiveTrackedReadoutId(), 'installations:x',
+      'a tracking loss with no active track leaves a context card alone');
+    // The cleared handler ignores clear events from OTHER layers.
+    fakeWindow.dispatchEvent(new CustomEvent('gev:entity-selection-cleared', {
+      detail: { layerId: 'ais-live-vessels' },
+    }));
+    assert.equal(getActiveTrackedReadoutId(), 'installations:x', 'foreign clears do not close the card');
+    // An awareness-subject selection drops the context card; with no tracked
+    // entity behind it, the source clears outright.
+    fakeWindow.dispatchEvent(new CustomEvent('gev:awareness-subject-selected', { detail: {} }));
+    assert.equal(getActiveTrackedReadoutId(), null, 'subject selection closes a context card');
+    // A tracking win clears a context card: raise the change with an entity armed.
+    viewer.trackedEntity = installation;
+    changed.raise();
+    fakeWindow.dispatchEvent(new CustomEvent('gev:entity-selected', {
+      detail: { layerId: 'military-installations', entity: installation },
+    }));
+    assert.equal(getActiveTrackedReadoutId(), 'installations:x');
+    viewer.trackedEntity = { id: 'plane' };
+    changed.raise();
+    assert.equal(getActiveTrackedReadoutId(), null, 'a new track preempts the context card');
+  } finally {
+    destroyTrackedReadout();
+    _setTrackedOverlayHostForTest();
+    globalThis.window = originalWindow;
   }
 });

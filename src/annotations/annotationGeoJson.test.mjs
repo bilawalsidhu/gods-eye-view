@@ -140,3 +140,149 @@ test('malformed input fails CLOSED (returns null / skips)', () => {
   assert.deepEqual(featureCollectionToAnnotations({ type: 'X' }), []);
   assert.deepEqual(annotationsToFeatureCollection('nope'), { type: 'FeatureCollection', features: [] });
 });
+
+// --- Branch floor (cycle 4): the coercion edges the round-trips skip ---------
+
+test('nullish optional fields survive as null; absent ids/labels default', () => {
+  // ttlMs 0 is a REAL value (expire immediately) — ?? must keep it, not null it.
+  const pin = { type: 'pin', id: 'x', label: 'L', color: 'primary', ttlMs: 0,
+    anchor: { lon: 1, lat: 2 } };
+  assert.equal(annotationToFeature(pin).properties['gev:ttlMs'], 0);
+  assert.equal(roundTrip(pin).ttlMs, 0);
+  // A mark with none of the optional fields carries explicit nulls.
+  const bare = annotationToFeature({ type: 'label', anchor: { lon: 5, lat: 6 } });
+  assert.equal(bare.properties['gev:id'], null);
+  assert.equal(bare.properties['gev:label'], null);
+  assert.equal(featureToAnnotation(bare).color, 'primary', 'import defaults the color');
+});
+
+test('height handling: non-finite heights degrade to 2D on both sides', () => {
+  // NaN height is treated as absent, not carried as NaN.
+  assert.deepEqual(annotationToFeature({ type: 'pin', anchor: { lon: 1, lat: 2, height: Number.NaN } })
+    .geometry.coordinates, [1, 2]);
+  assert.deepEqual(featureToAnnotation({
+    type: 'Feature', geometry: { type: 'Point', coordinates: [1, 2, Number.NaN] },
+    properties: { 'gev:type': 'pin' },
+  }).anchor, { lon: 1, lat: 2 });
+  assert.equal(featureToAnnotation({
+    type: 'Feature', geometry: { type: 'Point', coordinates: [1] }, properties: { 'gev:type': 'pin' },
+  }), null, 'a one-element position has no latitude');
+});
+
+test('route and arrow reject degenerate geometry on export', () => {
+  // A route with fewer than two valid vertices fails, including after junk filtering.
+  assert.equal(annotationToFeature({ type: 'route', path: [] }), null);
+  assert.equal(annotationToFeature({ type: 'route', path: [{ lon: 1, lat: 2 }] }), null);
+  assert.equal(annotationToFeature({ type: 'route', path: [{ lon: 'x', lat: 2 }, { lon: 1, lat: 2 }] }), null,
+    'junk vertices are filtered before the length check, not padded');
+  assert.equal(annotationToFeature({ type: 'route', path: 'corrupt' }), null);
+  // An arrow with a broken tip fails closed.
+  assert.equal(annotationToFeature({ type: 'arrow', anchor: { lon: 1, lat: 2 }, to: null }), null);
+  assert.equal(annotationToFeature({ type: 'arrow', anchor: null, to: { lon: 1, lat: 2 } }), null);
+});
+
+test('area export validates every ring vertex and closes open rings', () => {
+  // One malformed vertex fails the WHOLE area, not just that vertex.
+  assert.equal(annotationToFeature({
+    type: 'area',
+    ring: [[0, 0], [1, 0], [null, 1]],
+  }), null);
+  // An open ring gains the closing duplicate exactly once.
+  const f = annotationToFeature({
+    type: 'area',
+    ring: [[0, 0], [4, 0], [4, 4], [0, 4]],
+  });
+  assert.equal(f.geometry.coordinates[0].length, 5);
+  assert.deepEqual(f.geometry.coordinates[0].at(-1), [0, 0]);
+  // An already-closed ring is NOT double-closed.
+  const closed = annotationToFeature({
+    type: 'area',
+    ring: [[0, 0], [4, 0], [4, 4], [0, 4], [0, 0]],
+  });
+  assert.equal(closed.geometry.coordinates[0].length, 5);
+  // A two-vertex ring is below the polygon minimum -> the Point fallback,
+  // which requires an anchor: without one the mark is unpublishable.
+  assert.equal(annotationToFeature({ type: 'area', ring: [[0, 0], [1, 1]] }), null,
+    'a degenerate area with no anchor exports nothing');
+  assert.equal(annotationToFeature({
+    type: 'area', ring: [[0, 0], [1, 1]], anchor: { lon: 0.5, lat: 0.5 },
+  }).geometry.type, 'Point');
+});
+
+test('area import drops the closing duplicate only above the triangle floor', () => {
+  // Exactly the 4-position closed triangle: pop would leave 3 < … wait — the
+  // pop requires length > 3, so the minimum closed triangle KEEPS its duplicate
+  // only when dropping it would go below 3; 4 positions → drop → 3. Pinned:
+  const tri = featureToAnnotation({
+    type: 'Feature',
+    geometry: { type: 'Polygon', coordinates: [[[0, 0], [1, 0], [0, 1], [0, 0]]] },
+    properties: { 'gev:type': 'area' },
+  });
+  assert.deepEqual(tri.ring, [[0, 0], [1, 0], [0, 1]], 'the closing duplicate is dropped at the minimum');
+  // A polygon whose ring is malformed inside fails closed.
+  assert.equal(featureToAnnotation({
+    type: 'Feature',
+    geometry: { type: 'Polygon', coordinates: [[[0, 0], ['x', 0], [0, 1], [0, 0]]] },
+    properties: { 'gev:type': 'area' },
+  }), null);
+  // A Polygon carrying a non-area type is a mismatch.
+  assert.equal(featureToAnnotation({
+    type: 'Feature',
+    geometry: { type: 'Polygon', coordinates: [[[0, 0], [1, 0], [0, 1], [0, 0]]] },
+    properties: { 'gev:type': 'pin' },
+  }), null);
+  // A degenerate area Point imports with its area fields pinned.
+  const pt = featureToAnnotation({
+    type: 'Feature',
+    geometry: { type: 'Point', coordinates: [1, 2] },
+    properties: { 'gev:type': 'area', 'gev:synthesized': true, 'gev:footprintKind': 'area' },
+  });
+  assert.equal(pt.synthesized, true);
+  assert.equal(pt.buildingHeight, null, 'a point area has no building height');
+  // Geometry the declared type never uses fails closed.
+  assert.equal(featureToAnnotation({
+    type: 'Feature', geometry: { type: 'MultiPoint', coordinates: [[0, 0]] },
+    properties: { 'gev:type': 'label' },
+  }), null);
+});
+
+test('route import carries the fallback flag and rejects malformed vertices', () => {
+  assert.equal(featureToAnnotation({
+    type: 'Feature',
+    geometry: { type: 'LineString', coordinates: [[0, 0], [1, 1], ['x', 1]] },
+    properties: { 'gev:type': 'route' },
+  }), null, 'one malformed vertex fails the route');
+  const out = featureToAnnotation({
+    type: 'Feature',
+    geometry: { type: 'LineString', coordinates: [[0, 0], [1, 1]] },
+    properties: { 'gev:type': 'route', 'gev:fallback': 1 },
+  });
+  assert.equal(out.fallback, true, 'truthy flags coerce');
+  assert.equal(out.anchor, out.path[0], 'a route anchors at its first path vertex');
+});
+
+test('route/arrow optional fields default when absent', () => {
+  // A route without mode/distance/duration carries explicit nulls.
+  const bare = annotationToFeature({ type: 'route', path: [{ lon: 0, lat: 0 }, { lon: 1, lat: 1 }] });
+  assert.equal(bare.properties['gev:mode'], null);
+  assert.equal(bare.properties['gev:distanceM'], null);
+  assert.equal(bare.properties['gev:durationS'], null);
+  // A distance of 0 is a real value — ?? keeps it.
+  const zeroed = annotationToFeature({
+    type: 'route', path: [{ lon: 0, lat: 0 }, { lon: 1, lat: 1 }], distanceM: 0, durationS: 0,
+  });
+  assert.equal(zeroed.properties['gev:distanceM'], 0);
+  assert.equal(zeroed.properties['gev:durationS'], 0);
+  // Arrow import rejects either broken endpoint.
+  assert.equal(featureToAnnotation({
+    type: 'Feature', geometry: { type: 'LineString', coordinates: [[0, 0], ['x', 1]] },
+    properties: { 'gev:type': 'arrow' },
+  }), null);
+  // ringCentroid degrades to null for junk rings.
+  const noAnchor = featureToAnnotation({
+    type: 'Feature',
+    geometry: { type: 'Polygon', coordinates: [[[0, 0], [1, 0], [0, 1], [0, 0]]] },
+    properties: { 'gev:type': 'area' },
+  });
+  assert.deepEqual(noAnchor.anchor, { lon: 1 / 3, lat: 1 / 3 });
+});

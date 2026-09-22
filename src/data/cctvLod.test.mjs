@@ -504,3 +504,176 @@ test('staticFrameRefreshMs follows known pack cadences and bounds explicit value
   assert.equal(staticFrameRefreshMs({ frameRefreshMs: 3_000_000 }), 1_200_000);
   assert.equal(staticFrameRefreshMs({ provider: 'Unknown Provider' }), 300_000);
 });
+
+// --- Branch floor (cycle 4): the coercion guards across the LOD engine -------
+
+test('budgets, viewport, and percentile guards coerce malformed inputs', () => {
+  // A NaN camera height falls back to the city-height default.
+  assert.deepEqual(cctvLodBudgets(Number.NaN), { cardLimit: CCTV_AMBIENT_CARD_MID },
+    'CITY_HEIGHT_M is the default band');
+  assert.deepEqual(cctvLodBudgets(-50), { cardLimit: CCTV_AMBIENT_CARD_MIN },
+    'a negative height clamps to ground level');
+  assert.equal(hasFiniteCctvViewport(Number.NaN, 800), false);
+  assert.equal(hasFiniteCctvViewport(0, 0), false);
+  // An unusable viewport scores 0 (every anchor reads as centered); an
+  // unusable ANCHOR scores 1 (maximally off-center — no position to trust).
+  assert.equal(screenCenterFraction(50, 50, 0, 0), 0);
+  assert.equal(screenCenterFraction(Number.NaN, 50, 800, 600), 1);
+  // Spread percentile clamps into [0,1]; junk distances are ignored.
+  assert.equal(cctvCandidateSpreadKm([1, 2, 3], 1.5), 3, 'a >1 percentile clamps to max');
+  assert.equal(cctvCandidateSpreadKm('junk', 0.9), 0, 'a non-array pool has no spread');
+  assert.equal(cctvCandidateSpreadKm([Number.NaN], 0.9), 0);
+});
+
+test('blendCenterRankKm guards every term', () => {
+  assert.equal(blendCenterRankKm(Number.NaN, 0.5, 10), Infinity,
+    'a non-finite distance is Infinity, not NaN');
+  assert.equal(blendCenterRankKm(-5, 0.5, 10), 0 + 0.5 * 10 * 0.5,
+    'a negative distance clamps to 0; the center term still contributes');
+  assert.equal(blendCenterRankKm(10, Number.NaN, 10),
+    (1 - CCTV_CARD_CENTER_WEIGHT) * 10 + CCTV_CARD_CENTER_WEIGHT * 10,
+    'a malformed fraction reads as maximally off-center and pays the full center term');
+  assert.equal(blendCenterRankKm(10, 0.5, Number.NaN), (1 - CCTV_CARD_CENTER_WEIGHT) * 10,
+    'no spread collapses the center term to zero (distance only)');
+  assert.equal(blendCenterRankKm(10, 0.5, 10, Number.NaN), 10,
+    'a malformed weight behaves as 0 (distance only)');
+  assert.equal(blendCenterRankKm(10, 2, 100, 5), 100, 'out-of-range fraction and weight clamp into [0,1]');
+});
+
+test('distributeCctvCards tolerates junk budgets, pools, and viewports', () => {
+  assert.deepEqual(distributeCctvCards(candidates(5), { budget: Number.NaN }), [],
+    'a malformed budget selects nothing');
+  assert.deepEqual(distributeCctvCards('junk', { budget: 4 }), []);
+  // Rows need finite screen coordinates; give them a corner point each.
+  const placed = candidates(5).map((c, i) => ({ ...c, sx: 10 + i * 100, sy: 10 }));
+  assert.equal(distributeCctvCards(placed, { budget: 4, viewW: Number.NaN, viewH: Number.NaN }).length, 4,
+    'a degenerate viewport still selects (1×1 fallback grid)');
+  assert.equal(distributeCctvCards(candidates(5), { budget: 4, viewW: 800, viewH: 600 }).length, 0,
+    'rows without screen coordinates are never selected');
+  // Junk entries drop; the placed survivors still select.
+  const placedNear = candidates(3).map((c) => ({ ...c, sx: 50, sy: 50 }));
+  assert.equal(distributeCctvCards([null, undefined, ...placedNear], { budget: 4, viewW: 800, viewH: 600 }).length, 3,
+    'null rows are dropped, not crash-selected');
+});
+
+test('rank ordering is total: ties fall through distance, screen position, then id', () => {
+  // Equal rank and distance → the id tiebreak keeps ordering stable.
+  const tied = selectCctvLod([
+    { id: 'b', distanceKm: 1, inView: true },
+    { id: 'a', distanceKm: 1, inView: true },
+  ], { cameraHeightM: 500 });
+  assert.deepEqual(tied.cardIds, ['a', 'b']);
+  // Candidates without screen coordinates sort last (Infinity coercion).
+  const rep = selectCctvLod(candidates(8), { cameraHeightM: 500 });
+  assert.ok(rep.cardIds.length > 0);
+  // A candidate over the budget breaks out of the per-cell fill.
+  const tiny = selectCctvLod(candidates(3), { cameraHeightM: 500 });
+  assert.equal(tiny.cardIds.length, 3);
+});
+
+test('eviction grace keeps the cap, evicts oldest-in-grace first', () => {
+  const now = 1_000_000;
+  // 2 fresh selections + 2 built cards that fell out = 4 against a 3-card
+  // cap: the grace cards absorb the pressure, oldest-in-grace evicting first.
+  const result = applyEvictionGrace({
+    selectedIds: ['new-a', 'new-b'],
+    builtIds: ['old-miss', 'old-clean'],
+    graceState: new Map([
+      ['old-miss', { misses: 1, since: now - 60_000 }],
+      ['old-clean', { misses: 0, since: now - 30_000 }],
+    ]),
+    cardLimit: 3,
+    nowMs: now,
+    graceMs: 120_000,
+  });
+  assert.equal(result.keepIds.length, 3);
+  // Deterministic eviction: the oldest grace entry goes under cap pressure.
+  assert.deepEqual(result.evictIds, ['old-miss']);
+  // The survivor carries its incremented grace state forward.
+  assert.deepEqual(result.graceState.get('old-clean'), { misses: 1, since: now - 30_000 });
+  assert.equal(result.graceState.has('new-a'), false, 'selected cards need no grace state');
+});
+
+test('static-frame cadence clamps explicit values and maps providers', () => {
+  assert.equal(staticFrameRefreshMs({ frameRefreshMs: 1_000 }), 60_000, 'sub-minute clamps up');
+  assert.equal(staticFrameRefreshMs({ frameRefreshMs: 99 * 60 * 1000 }), 20 * 60 * 1000,
+    'beyond twenty minutes clamps down');
+  assert.equal(staticFrameRefreshMs({ frameRefreshMs: 90_000 }), 90_000, 'in-range values pass through');
+  assert.equal(staticFrameRefreshMs({ frameRefreshMs: Number.NaN, provider: 'austin' }) > 0, true,
+    'a malformed explicit falls to the provider default, not NaN');
+  assert.equal(staticFrameRefreshMs({ provider: '  CALTRANS  ' }) > 0, true,
+    'provider matching trims and lowercases');
+  assert.equal(staticFrameRefreshMs({}), 5 * 60 * 1000, 'unknown providers take the conservative default');
+});
+
+test('malformed percentile, screened junk pool, and the defensive top-up fill', () => {
+  // A malformed percentile resolves to the minimum order statistic.
+  assert.equal(cctvCandidateSpreadKm([1, 2, 3], Number.NaN), 1);
+  // A non-array pool under a valid viewport yields no cards, no throw.
+  assert.deepEqual(selectCctvLod('junk', { cameraHeightM: 500, viewW: 800, viewH: 600 }).cardIds, []);
+  // The top-up fill runs when the distribution pass drops every candidate
+  // (no screen anchors) and honors the card limit mid-loop.
+  const anchorless = candidates(25).map((c) => ({ ...c, sx: Number.NaN, sy: Number.NaN }));
+  const rep = selectCctvLod(anchorless, { cameraHeightM: 0, viewW: 800, viewH: 600 });
+  assert.equal(rep.cardIds.length, CCTV_AMBIENT_CARD_MIN,
+    'anchorless candidates fall back to ranked fill, capped at the budget');
+});
+
+test('duplicate ids resolve through every comparator tiebreak arm', () => {
+  // Viewport 800×600 → center (400,300), half-diagonal 500.
+  // Documented bound: the sx/sy Infinity-coercion arms (a NaN anchor past the
+  // center-fraction arm) are unreachable — a NaN anchor reads as fraction 1,
+  // which no finite anchor can share, so the fraction arm always decides first.
+  // Likewise `Math.hypot(centerX, centerY) || 1` in screenCenterFraction cannot
+  // fall to 1: a viewport that passes hasFiniteCctvViewport has hypot > 0.
+  const rep = selectCctvLod([
+    // Nearest eye distance wins: the later, closer duplicate replaces.
+    { id: 'd1', distanceKm: 9, inView: true },
+    { id: 'd1', distanceKm: 3, inView: true },
+    // Equal distance, more central duplicate replaces (center-fraction arm).
+    { id: 'd2', distanceKm: 5, inView: true, sx: 100, sy: 100 },
+    { id: 'd2', distanceKm: 5, inView: true, sx: 700, sy: 300 },
+    // Equal distance and fraction, upper-left x wins (sx arm).
+    { id: 'd3', distanceKm: 5, inView: true, sx: 700, sy: 300 },
+    { id: 'd3', distanceKm: 5, inView: true, sx: 100, sy: 300 },
+    // Equal through x, upper-left y wins (sy arm).
+    { id: 'd4', distanceKm: 5, inView: true, sx: 100, sy: 400 },
+    { id: 'd4', distanceKm: 5, inView: true, sx: 100, sy: 200 },
+    // A bit-identical duplicate changes nothing (0 keeps the incumbent).
+    { id: 'd5', distanceKm: 5, inView: true, sx: 100, sy: 200 },
+    { id: 'd5', distanceKm: 5, inView: true, sx: 100, sy: 200 },
+  ], { cameraHeightM: 500, viewW: 800, viewH: 600 });
+  for (const id of ['d1', 'd2', 'd3', 'd4', 'd5']) {
+    assert.equal(rep.cardIds.filter((x) => x === id).length, 1, `${id} survives exactly once`);
+  }
+});
+
+test('grace eviction breaks since-ties on more misses, and over-cap selections clamp', () => {
+  const now = 1_000_000;
+  // Equal first-miss timestamps: the card with more accumulated misses goes.
+  const tie = applyEvictionGrace({
+    selectedIds: ['keep'],
+    builtIds: ['m2', 'm5'],
+    graceState: new Map([
+      ['m2', { misses: 0, since: now - 30_000 }],
+      ['m5', { misses: 3, since: now - 30_000 }],
+    ]),
+    cardLimit: 2,
+    nowMs: now,
+    graceMs: 120_000,
+  });
+  assert.deepEqual(tie.evictIds, ['m5']);
+  assert.deepEqual(tie.keepIds.sort(), ['keep', 'm2']);
+  // A selection already over the limit clamps capacity to 0: no grace card
+  // survives cap pressure.
+  const over = applyEvictionGrace({
+    selectedIds: ['a', 'b', 'c', 'd'],
+    builtIds: ['old'],
+    graceState: new Map([['old', { misses: 0, since: now - 30_000 }]]),
+    cardLimit: 2,
+    nowMs: now,
+    graceMs: 120_000,
+  });
+  assert.deepEqual(over.evictIds, ['old']);
+  assert.equal(over.keepIds.length, 4);
+});

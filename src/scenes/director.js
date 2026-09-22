@@ -1432,3 +1432,13 @@ export class SceneDirector {
     }
   }
 }
+
+// Pure normalizers, exported for the contract tests that pin storage/import
+// migration. They touch no browser or Cesium state.
+export {
+  normalizeBloomState,
+  normalizeLayerEntry,
+  normalizeProject,
+  normalizeShot,
+  recipeToScene,
+};

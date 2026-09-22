@@ -69,12 +69,12 @@ test('npm test stays green on every supported engine, not only the calibrated on
   // probes out, because coverage instrumentation allocates and would fail
   // their calibrated budgets. The threshold flags are the ratchet
   // (docs/adr/0008): floors sit just below the measured baseline
-  // (91.58 stmts/lines, 91.21 funcs, 81.19 branches on 2026-09-20) so the
-  // job gates COLLAPSE, not variance — raise them deliberately, never let
-  // them slip.
+  // (91.59 stmts/lines, 91.21 funcs, 82.12 branches on 2026-09-22, cycle-4
+  // wave 5) so the job gates COLLAPSE, not variance — raise them
+  // deliberately, never let them slip.
   assert.equal(
     pkg.scripts['test:coverage'],
-    'c8 --lines 91 --statements 91 --functions 90 --branches 80 node scripts/run-unit-tests.mjs --parallel-only',
+    'c8 --lines 91 --statements 91 --functions 91 --branches 82 node scripts/run-unit-tests.mjs --parallel-only',
     'coverage must go through the same runner, wrapped in c8, parallel-only, with the ratchet floors',
   );
   assert.deepEqual(pkg.c8.include, ['src/**/*.js', 'functions/**/*.js']);

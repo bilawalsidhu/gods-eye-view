@@ -14,7 +14,14 @@ import { readSource } from '../testSupport/readSource.js';
 import assert from 'node:assert/strict';
 import { test, mock } from 'node:test';
 
-import { SceneDirector } from './director.js';
+import {
+  SceneDirector,
+  normalizeBloomState,
+  normalizeLayerEntry,
+  normalizeProject,
+  normalizeShot,
+  recipeToScene,
+} from './director.js';
 import { SCENE_TRACKING_PARAM_KEYS } from './scenePolicy.js';
 import { SCENE_RECIPES } from './recipes.js';
 
@@ -1566,5 +1573,262 @@ test('the DOWNLOAD button offers only an archived run', () => {
     assert.equal(env.objectURLs.length, 1);
   } finally {
     env.restore();
+  }
+});
+
+// --- Branch floor (cycle 4): the pure storage/import normalizers -------------
+// Exported from director.js for exactly these tests; they touch no browser
+// state, so they are pinned directly rather than through a mocked manager.
+
+test('normalizeLayerEntry accepts boolean shorthand and object forms', () => {
+  assert.deepEqual(normalizeLayerEntry(true), { enabled: true });
+  assert.deepEqual(normalizeLayerEntry(0), { enabled: false }, 'falsy shorthand is a disabled layer');
+  assert.deepEqual(normalizeLayerEntry({ enabled: 1, params: { alt: 5 } }),
+    { enabled: true, params: { alt: 5 } });
+  assert.deepEqual(normalizeLayerEntry({ enabled: false, params: 'corrupt' }),
+    { enabled: false, params: undefined }, 'a non-object params bag is dropped, not carried');
+  // The params bag is a clone: mutating the normalized copy never reaches the input.
+  const params = { a: 1 };
+  const normalized = normalizeLayerEntry({ enabled: true, params });
+  normalized.params.a = 999;
+  assert.equal(params.a, 1, 'params deep-clone detaches the stored project from live state');
+});
+
+test('normalizeBloomState migrates scale versions and coerces malformed input', () => {
+  // Explicit v2 value passes through clamped.
+  assert.deepEqual(normalizeBloomState({ enabled: true, intensity: 60, version: 2 }),
+    { enabled: true, intensity: 60, version: 2 });
+  // No explicit version on a legacy project (v1 schema) decodes the inverted
+  // 0..100 scale: 30 legacy → (100-30)*2 = 140 v2.
+  assert.deepEqual(normalizeBloomState({ intensity: 30 }, { projectVersion: 1 }),
+    { enabled: false, intensity: 140, version: 2 });
+  // Current-schema project without a stored version reads the v2 scale.
+  assert.equal(normalizeBloomState({}, {}).intensity, 50, 'missing intensity → fallback 50 read as v2');
+  assert.deepEqual(normalizeBloomState(undefined, { fallbackIntensity: 120 }),
+    { enabled: false, intensity: 120, version: 2 });
+  // A malformed stored intensity falls back, never poisons the pipeline.
+  assert.equal(
+    normalizeBloomState({ intensity: 'garbage', version: 2 }, {}).intensity, 50);
+  // v1 scale with a value above the legacy max is already-v2 by convention.
+  assert.equal(normalizeBloomState({ intensity: 150 }, { projectVersion: 1 }).intensity, 150,
+    'unversioned 0..200-scale values pass through un-inverted');
+});
+
+test('normalizeShot coerces every malformed camera and visual field to a sane default', () => {
+  const shot = normalizeShot({
+    durationSec: 'garbage', holdSec: -3,
+    camera: { lat: '10.5', lon: Number.NaN, alt: 50, heading: 'x', pitch: 0, roll: null },
+    visual: {
+      style: '', sharpen: { enabled: true, intensity: 250 },
+      hud: { visible: 'yes', variant: 7 },
+      detection: { mode: 9, density: 140 },
+      styleParams: 'corrupt',
+    },
+    layers: { flights: true, vessels: { enabled: 1, params: { lo: 1 } } },
+  }, 2);
+  assert.equal(shot.title, 'Shot 3', 'index drives the fallback title');
+  assert.equal(shot.durationSec, 4, 'unparseable duration → the 4s default');
+  assert.equal(shot.holdSec, 0, 'negative hold clamps to 0');
+  assert.deepEqual(shot.camera, {
+    lat: 10.5, lon: 0, alt: 100, heading: 0, pitch: -35, roll: 0,
+  }, 'alt floors at 100 m; a literal 0 pitch is falsy → the -35 default; NaN/poisoned fields land on defaults');
+  assert.equal(shot.visual.style, 'normal');
+  assert.deepEqual(shot.visual.sharpen, { enabled: true, intensity: 100 }, 'sharpen clamps to 0..100');
+  assert.deepEqual(shot.visual.hud, { visible: true, variant: 'tactical' },
+    'non-boolean visibility and non-string variants fall back');
+  assert.deepEqual(shot.visual.detection, { mode: 'OFF', density: 100 });
+  assert.deepEqual(shot.visual.styleParams, {});
+  assert.deepEqual(shot.layers.vessels, { enabled: true, params: { lo: 1 } });
+  assert.deepEqual(shot.layers.flights, { enabled: true });
+  // Absent shot: everything defaults, ids are generated.
+  const empty = normalizeShot(null, 0);
+  assert.match(empty.id, /^shot-/);
+  assert.equal(empty.title, 'Shot 1');
+  assert.equal(empty.camera.alt, 800, 'no altitude → the 800 m default');
+  assert.equal(empty.camera.pitch, -35);
+  assert.equal(empty.visual.sharpen.intensity, 65, 'no sharpen value → the 65 default');
+  assert.equal(empty.visual.detection.density, 35);
+  assert.deepEqual(empty.layers, {});
+  // styleParams cloning detaches the stored project.
+  const shared = { contrast: 2 };
+  const cloned = normalizeShot({ visual: { styleParams: shared } });
+  cloned.visual.styleParams.contrast = 99;
+  assert.equal(shared.contrast, 2);
+});
+
+test('normalizeProject rebuilds defaults for junk input and keeps titled empty scenes', () => {
+  // Junk inputs all fall back to the recipe-derived default project.
+  for (const junk of [null, 5, 'x', undefined]) {
+    const project = normalizeProject(junk);
+    assert.equal(project.version, 3);
+    assert.ok(project.scenes.length >= 1, 'default project always has the shipped recipes');
+  }
+  // Empty scene arrays also rebuild defaults.
+  assert.equal(normalizeProject({ scenes: [] }).scenes.length >= 1, true);
+  // A titled scene with no shots survives; a shotless untitled one survives
+  // too — the title fallback means every scene clears the keep filter.
+  const project = normalizeProject({
+    version: 'garbage', createdAt: '2026-01-01T00:00:00.000Z',
+    scenes: [
+      { id: 'kept', title: 'Kept', shots: [] },
+      { shots: [] },
+      { id: 'with-shot', shots: [{ id: 's1', camera: { lat: 5 } }] },
+    ],
+  });
+  assert.equal(project.scenes.length, 3);
+  assert.equal(project.scenes[1].title, 'Scene 2', 'untitled scenes take their positional fallback title');
+  assert.equal(project.createdAt, '2026-01-01T00:00:00.000Z', 'the original creation stamp survives');
+  assert.match(project.updatedAt, /^\d{4}-/);
+  // A legacy project version flows into bloom migration (v1 scale un-inverted).
+  const legacy = normalizeProject({ scenes: [{ shots: [{ visual: { bloom: { intensity: 25 } } }] }] });
+  assert.equal(legacy.scenes[0].shots[0].visual.bloom.intensity, 150, '(100-25)*2 = 150');
+});
+
+test('recipeToScene derives one shot per keyframe with shared visual state', () => {
+  const scene = recipeToScene({
+    id: 'r-test', title: 'Test recipe', style: 'night',
+    cameraPath: [
+      { lat: 1, lon: 2, alt: 3000, duration: 2, hold: 1 },
+      { lat: 3, lon: 4, alt: 500, duration: 0, heading: 90 },
+    ],
+    layers: { flights: true, vessels: { enabled: 1, params: { a: 1 } } },
+    post: { bloom: -1, sharpen: 'yes', detectionMode: 'BALANCED', styleParams: { contrast: 2 } },
+    ui: { hudMode: 'off' },
+  });
+  assert.match(scene.id, /^r-test/) ;
+  assert.equal(scene.title, 'Test recipe');
+  assert.equal(scene.shots.length, 2, 'one shot per cameraPath keyframe');
+  assert.deepEqual(scene.shots[0].camera, {
+    lat: 1, lon: 2, alt: 3000, heading: 0, pitch: -40, roll: 0,
+  }, 'recipe camera defaults: heading 0, pitch -40, roll 0');
+  assert.equal(scene.shots[1].durationSec, 4, 'a zero duration takes the shot default');
+  assert.equal(scene.shots[0].holdSec, 1);
+  // bloom -1 is numeric and not > 0 → disabled; its intensity still migrates.
+  assert.equal(scene.shots[0].visual.bloom.enabled, false);
+  assert.equal(scene.shots[0].visual.bloom.intensity, 200,
+    '(-1) v1 → round(-1)=0 legacy → (100-0)*2 = 200');
+  assert.equal(scene.shots[0].visual.sharpen.enabled, true, 'truthy non-boolean sharpen enables');
+  assert.deepEqual(scene.shots[0].visual.hud, { visible: false, variant: 'tactical' },
+    'hudMode off hides the HUD; non-minimal modes map to tactical');
+  assert.equal(scene.shots[0].visual.detection.mode, 'BALANCED');
+  // hudMode absent → minimal + visible; non-numeric bloom → enabled by truthiness, default intensity.
+  const minimal = recipeToScene({
+    id: 'r2', cameraPath: [{ lat: 0, lon: 0, alt: 1000 }],
+    post: { bloom: 'glow', sharpen: 0 },
+  });
+  assert.deepEqual(minimal.shots[0].visual.hud, { visible: true, variant: 'minimal' });
+  assert.equal(minimal.shots[0].visual.bloom.enabled, true);
+  assert.equal(minimal.shots[0].visual.bloom.intensity, 0, 'non-numeric bloom → the default intensity');
+  assert.equal(minimal.shots[0].visual.sharpen.enabled, false, 'sharpen 0 is falsy');
+  assert.deepEqual(minimal.shots[0].layers, {}, 'an undeclared layer set normalizes to an empty bag per shot');
+});
+
+// --- Branch floor (cycle 4): the cheap controller quiet-exits ----------------
+
+test('selection lookups resolve null for unknown ids instead of throwing', () => {
+  const { director, restore } = makeDirector();
+  try {
+    director._selectedSceneId = 'no-such-scene';
+    assert.equal(director._getSelectedScene(), null, 'unknown selection → null');
+    const known = director._project.scenes[0];
+    director._selectedSceneId = known.id;
+    assert.equal(director._getSelectedScene(), known);
+    // Unknown scene id or shot id → both pair members degrade independently.
+    assert.equal(director._getShot('nope', 'x').scene, undefined);
+    const scene = director._project.scenes[0];
+    assert.equal(director._getShot(scene.id, 'nope').shot, undefined);
+    assert.equal(director._getShot(scene.id, scene.shots[0].id).shot, scene.shots[0]);
+  } finally {
+    restore();
+  }
+});
+
+test('findSceneByQuery matches ids exactly, titles case-insensitively, and returns summaries', () => {
+  const { director, restore } = makeDirector();
+  try {
+    assert.equal(director.findSceneByQuery(''), null, 'empty query → no scene');
+    assert.equal(director.findSceneByQuery('   '), null, 'whitespace query → no scene');
+    assert.equal(director.findSceneByQuery('zzz-not-a-scene'), null);
+    assert.equal(director.findSceneByQuery(null), null, 'a null query is not a crash');
+    const scene = director._project.scenes[0];
+    // The contract returns a voice-read-back SUMMARY, not the live scene object.
+    assert.deepEqual(director.findSceneByQuery(scene.id),
+      { id: scene.id, title: scene.title, shots: scene.shots.length }, 'exact id hit');
+    assert.deepEqual(director.findSceneByQuery(scene.title.toUpperCase()),
+      { id: scene.id, title: scene.title, shots: scene.shots.length },
+      'exact title hit is case-insensitive');
+    const partial = scene.title.split(/\s+/)[0].slice(0, 3);
+    assert.equal(director.findSceneByQuery(partial).id, scene.id, 'title substring hit');
+  } finally {
+    restore();
+  }
+});
+
+test('stopScene is a no-op when idle, and cancels token, abort, and camera when running', () => {
+  const { director, viewer, restore } = makeDirector();
+  try {
+    director.stopScene();
+    assert.equal(viewer.cancelledFlights, 0, 'idle stop touches nothing');
+    director._running = true;
+    director._runAbort = new AbortController();
+    director._runToken = { cancelled: false, signal: director._runAbort.signal };
+    director.stopScene('Test stop');
+    assert.equal(director._runToken.cancelled, true);
+    assert.equal(director._runAbort.signal.aborted, true);
+    assert.equal(viewer.cancelledFlights, 1);
+    assert.deepEqual(director._activeRun.events.at(-1).type, 'scene_stopped');
+    // The keydown path lands in the same place.
+    director._running = true;
+    director._runToken.cancelled = false;
+    director._onKeyDown({ key: 'a' });
+    assert.equal(director._runToken.cancelled, false, 'non-Escape never stops a run');
+    director._onKeyDown({ key: 'Escape' });
+    assert.equal(director._runToken.cancelled, true, 'Escape stops a running scene');
+    assert.deepEqual(director._activeRun.events.at(-1).payload.reason, 'Stopped (Esc)');
+  } finally {
+    restore();
+  }
+});
+
+test('loadShot refuses to fly during a run or for unknown ids', async () => {
+  const { director, viewer, restore } = makeDirector();
+  try {
+    const scene = director._project.scenes[0];
+    director._running = true;
+    await director.loadShot(scene.id, scene.shots[0].id);
+    assert.equal(viewer.flights.length, 0, 'a run owns the camera; loads do not steal it');
+    director._running = false;
+    await director.loadShot('nope', 'nope');
+    assert.equal(viewer.flights.length, 0, 'unknown ids → no flight, no throw');
+  } finally {
+    restore();
+  }
+});
+
+test('a stored project with a shotless first scene leaves shot selection null', () => {
+  const project = {
+    version: 3,
+    scenes: [{ id: 'empty', title: 'Empty', shots: [] }],
+  };
+  const { director, restore } = makeDirector({ project });
+  try {
+    assert.equal(director._selectedSceneId, 'empty');
+    assert.equal(director._selectedShotId, null, 'no shots → no shot selection');
+    // And the run engine reports the empty queue instead of starting.
+    return director.startScene('empty').then((result) => {
+      assert.deepEqual(result, { started: false, reason: 'no-shots' });
+    });
+  } finally {
+    restore();
+  }
+});
+
+test('startScene refuses to double-run', async () => {
+  const { director, restore } = makeDirector();
+  try {
+    director._running = true;
+    assert.deepEqual(await director.startScene(), { started: false, reason: 'already-running' });
+  } finally {
+    restore();
   }
 });

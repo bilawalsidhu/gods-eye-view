@@ -46,7 +46,7 @@
     "preview": "vite preview",
     "lint": "eslint . --max-warnings 0",
     "test": "node scripts/run-unit-tests.mjs",
-    "test:coverage": "c8 --lines 91 --statements 91 --functions 90 --branches 80 node scripts/run-unit-tests.mjs --parallel-only",
+    "test:coverage": "c8 --lines 91 --statements 91 --functions 91 --branches 82 node scripts/run-unit-tests.mjs --parallel-only",
     "test:track": "node scripts/track-regression.mjs",
     "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs",
     "qa:all": "node scripts/qa-all.mjs"
