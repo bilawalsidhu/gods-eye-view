@@ -287,7 +287,10 @@ the body renderer. Set `hidden` while empty so the allocator ignores it, and
 expand through the existing collapse button only on first appearance per page
 session, and only when the chrome marked the restored state as a default
 (`data-collapsed-preference`), never over a stored or shared choice. Preserve
-the user's later collapse choice, including body remounts.
+the user's later collapse choice, including body remounts. Mark the body
+`data-rail-scroller` when it scrolls: the rail's measuring pass lifts its
+`max-height` and puts the scroll offset back afterwards. Panel bodies only
+scroll on an open-card change, with one write, never on a refresh.
 
 Compose `createRailCards({ container, document, onParams, onOpen })` and
 `createRailTimeline({ container, document, onCommit, onPreview, onStep,

@@ -327,7 +327,7 @@
   height: auto !important;
   max-height: none !important;
 }
-#right-context-rail[data-rail-measuring] #weather-panel-body,
+#right-context-rail[data-rail-measuring] [data-rail-scroller],
 #right-context-rail[data-rail-measuring] .space-mission-roster-list {
   max-height: none !important;
 }

@@ -129,6 +129,13 @@ export function layoutRightPanelRail({
     (panel) => !exclusive || !panel.classList.contains('collapsed'),
   );
   const displayScrollTop = readDisplayScrollTop();
+  // Measuring lifts each opted-in scroller's max-height, which clamps its
+  // scroll offset; remember the offsets to put back afterwards.
+  const scrollers = [
+    ...(stack.querySelectorAll?.('[data-rail-scroller]') || []),
+  ]
+    .map((node) => [node, node.scrollTop || 0])
+    .filter(([, top]) => top > 0);
   const naturalHeights = new Map();
   // Remove live height allocations through a synchronous CSS override. Keeping
   // the stored properties intact avoids REMOVE/SET churn on unchanged panels.
@@ -147,6 +154,8 @@ export function layoutRightPanelRail({
     }
   } finally {
     stack.removeAttribute('data-rail-measuring');
+    for (const [node, top] of scrollers)
+      if (node.scrollTop !== top) node.scrollTop = top;
   }
   const gap = parseFloat(getComputedStyle(stack).rowGap) || 0;
   const naturalHeight =

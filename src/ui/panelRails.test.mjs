@@ -445,6 +445,37 @@ test('right rail restores presentation even when intrinsic measurement throws', 
   assert.equal(f.stack.getAttribute('data-rail-measuring'), undefined);
 });
 
+test('right rail measuring pass keeps an opted-in scroller position', () => {
+  const f = fixture('right');
+  f.expand(f.first, 300);
+  let scrollTop = 240;
+  let writes = 0;
+  let clamp = true;
+  const body = {
+    get scrollTop() {
+      return scrollTop;
+    },
+    set scrollTop(value) {
+      writes++;
+      scrollTop = value;
+    },
+  };
+  f.stack.querySelectorAll = (selector) =>
+    selector === '[data-rail-scroller]' ? [body] : [];
+  const setAttribute = f.stack.setAttribute;
+  f.stack.setAttribute = (name, value) => {
+    setAttribute(name, value);
+    // The lifted max-height removes the overflow and clamps the offset.
+    if (clamp && name === 'data-rail-measuring') scrollTop = 0;
+  };
+  f.run();
+  assert.equal(scrollTop, 240);
+  assert.equal(writes, 1);
+  clamp = false;
+  f.run();
+  assert.equal(writes, 1, 'an unclamped offset is not rewritten');
+});
+
 for (const variant of ['minimal', 'full']) {
   test(`right rail does not retry collapse that the ${variant} HUD immediately restores`, () => {
     const f = fixture('right', { hud: { visible: true, variant } });
