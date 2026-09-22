@@ -1767,8 +1767,12 @@ GitForge pipeline green.
   src/main.js. Evidence: run 2 14/40 → every red root-caused (env-gated
   keys, harness drift, orchestrator bugs, contract defect, load);
   run 3 executed green-or-env-gated on the fixed tree.
-- [ ] **Validation**: e2e orchestrator over all 40 suites (fix reds as
+- [x] **Validation**: e2e orchestrator over all 40 suites (fix reds as
   found), full local gates, GitForge green on the release commit.
+  (Closed 2026-09-22: RUN 3p verdict is Batch O's all-green/ENV-GATED
+  ledger; the pre-release gate battery + GitForge runs on `b3c8c97`
+  and `f2a4c9f` are Batch P's record. RUN 1 narrative retained below
+  as triage history.)
   RUN 1 (2026-09-20, 3h25m, shared NAS): 19/40 PASS, 6 ENV-GATED
   (firms, l9-matrix owner-run items, traffic×3, voice-routing — keyless
   by design), 15 FAIL — and the load average on the shared box ran
@@ -1843,8 +1847,20 @@ GitForge pipeline green.
     job gates collapse, not variance (ADR 0008). Dead `playwright`
     devDependency dropped (zero references; puppeteer drives all
     harnesses).
-- [ ] **Release & deploy**: version bump + changelog + tag; deploy →
+- [x] **Release & deploy**: version bump + changelog + tag; deploy →
   verify → publish (RUNBOOK pinned order); GitHub release.
+  **Landed 2026-09-22 as v0.10.0.** Release commit `b3c8c97`; the
+  full pre-release gate battery (lint, 3,840 unit tests with the
+  allocation gate, build, bundle budgets, prod audit) passed before
+  tagging, and GitForge CI ran green on the release commit before the
+  deploy. Deploy verified per RUNBOOK — headless
+  `scripts/verify-prod-render.mjs` boots the production alias, skips
+  the first-run modal, forces a rendered frame over KAUS (photoreal
+  Colorado River / MetCenter / runway detail), and probes the Functions
+  surface same-origin: regional-brief 200 with real place + weather
+  (the 0.10.0 headline API), debug-log 204, cctv/radio/elevation 200,
+  celestrak 502 unchanged (documented CF-egress block). Tag `v0.10.0`
+  then GitHub release published last, on the verified artifact.
 
 ### 9.3 Deliberately not adopted (reasons)
 
@@ -1980,11 +1996,12 @@ operator decision required).
     frame loops, and layer lifecycle — mock-armor territory where the tests
     would assert the mocks. Recorded here so the next wave starts from the
     inventory, not a percentage.
-- [ ] **Batch L (close)**: full gates + GitForge pipeline + release;
+- [x] **Batch L (close)**: full gates + GitForge pipeline + release;
   Pages redeploy only if `src/` or the served surface changed
   (harness/test/docs-only cycles leave `dist` byte-identical).
   *Superseded by Phase 11 Batch O/P — cycle 2 closed without its own
-  release; the close gates rolled into cycle 3's v0.10.0.*
+  release; the close gates rolled into cycle 3's v0.10.0, which
+  shipped 2026-09-22 (see Batch P's record).*
 
 ## Phase 11 — Quality campaign cycle 3 (2026-09-18 → 2026-09-21, v0.10.0)
 
@@ -2252,14 +2269,19 @@ here.
       accel 24.1 m/s², min AGL 248 m, cruise range 34 m, floor
       acquisition 88 m. Batch O closed: every suite green or honestly
       ENV-GATED.
-- [ ] **Batch P — release 0.10.0**: CHANGELOG 0.10.0 fold (done,
-      uncommitted) + version bump (done, uncommitted); commit, push
-      BOTH remotes gitforge-first (only when no browser suite is
-      running); GitForge pipeline green on the release commit (verify
-      read-only via sqlite — CLI token staleness is expected); tag
-      v0.10.0 (tag names are immutable — the v0.8.0 burn); GitHub
-      release; Cloudflare Pages deploy → verify → publish (RUNBOOK
-      pinned order).
+- [x] **Batch P — release 0.10.0**: CHANGELOG 0.10.0 fold + version
+      bump committed as `b3c8c97` (with the traffic sampleHeight
+      hardening `17ba451` just before it); pushed BOTH remotes
+      gitforge-first with no browser suite running; GitForge pipeline
+      green on the release commit (sqlite read-only — runner pickup
+      took ~2 min per job, all 5+ jobs succeeded); **deployed and
+      verified before tagging** (RUNBOOK pinned order: headless prod
+      render + Functions probes all green, recorded in RUNBOOK);
+      tag `v0.10.0` on `b3c8c97`, pushed both remotes; GitHub release
+      published last from the CHANGELOG block.
+      *Note: the fresh-release body text of the 0.10.0 CHANGELOG block
+      kept its fold-time intro ("11 architecture decision records");
+      the tree actually carries 12 — intro prose, not the ADR ledger.*
 
 ### 11.3 Forward roadmap — cycles 4+ (drafted 2026-09-20)
 

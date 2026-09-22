@@ -7,7 +7,7 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 New live layers (transit + synthetic traffic), the production regional-brief
 API, two render-performance policies, and a quality-infrastructure wave:
-strictest lint tier (sonarjs), 11 architecture decision records, an
+strictest lint tier (sonarjs), 12 architecture decision records, an
 aegis secrets gate in CI, and a coverage ratchet that fails on collapse.
 
 ### Added
