@@ -24,6 +24,7 @@ import {
   GeoDataPlotter,
   GeospatialThreatScanner,
 } from './tactical/index.js';
+import { JARVIS_API, NVIDIA_API, OPENAI_API } from './apiEndpoints.js';
 
 /** Quick action prompts per mode */
 const MODE_PRESETS = {
@@ -837,9 +838,12 @@ export function initAiCommandCenter({
   const wakewordStatusBadge = panel.querySelector('#ai-wakeword-status');
 
   // Tactical Superpower Sub-Controllers
+  // Create the controller object first so tactical sub-controllers can
+  // reference it directly during construction (no fragile post-hoc wiring).
+  const controller = {};
   const droneRecon = new DroneReconController({
     getViewer: () => globalThis.__godsEyeView?.viewer,
-    aiController: null,
+    aiController: controller,
     playCue: playAudioCue,
   });
 
@@ -851,7 +855,7 @@ export function initAiCommandCenter({
 
   const geoPlotter = new GeoDataPlotter({
     getViewer: () => globalThis.__godsEyeView?.viewer,
-    aiController: null,
+    aiController: controller,
     documentRef,
     playCue: playAudioCue,
   });
@@ -859,7 +863,7 @@ export function initAiCommandCenter({
 
   const threatScanner = new GeospatialThreatScanner({
     getViewer: () => globalThis.__godsEyeView?.viewer,
-    aiController: null,
+    aiController: controller,
     documentRef,
     playCue: playAudioCue,
   });
@@ -868,6 +872,10 @@ export function initAiCommandCenter({
   // Hands-Free Wake-Word Intercom Engine
   let wakeWordActive = false;
   let wakeRecognition = null;
+  let wakeWordStopped = false;
+  let wakeRestartCount = 0;
+  const WAKE_RESTART_MAX = 3;
+  const WAKE_RESTART_DELAY_MS = 500;
   const SpeechRecClass =
     globalThis.SpeechRecognition || globalThis.webkitSpeechRecognition;
 
@@ -950,32 +958,41 @@ export function initAiCommandCenter({
       wakeRecognition.onerror = (e) => {
         if (
           wakeWordActive &&
+          !wakeWordStopped &&
           e?.error !== 'no-speech' &&
           e?.error !== 'aborted'
         ) {
-          setTimeout(() => {
-            if (wakeWordActive) {
-              try {
-                wakeRecognition.start?.();
-              } catch {}
-            }
-          }, 1000);
+          if (wakeRestartCount < WAKE_RESTART_MAX) {
+            wakeRestartCount++;
+            setTimeout(() => {
+              if (wakeWordActive && !wakeWordStopped) {
+                try {
+                  wakeRecognition.start?.();
+                } catch {}
+              }
+            }, WAKE_RESTART_DELAY_MS);
+          }
         }
       };
 
       wakeRecognition.onend = () => {
-        if (wakeWordActive) {
-          setTimeout(() => {
-            if (wakeWordActive) {
-              try {
-                wakeRecognition.start?.();
-              } catch {}
-            }
-          }, 300);
+        if (wakeWordActive && !wakeWordStopped) {
+          if (wakeRestartCount < WAKE_RESTART_MAX) {
+            wakeRestartCount++;
+            setTimeout(() => {
+              if (wakeWordActive && !wakeWordStopped) {
+                try {
+                  wakeRecognition.start?.();
+                } catch {}
+              }
+            }, WAKE_RESTART_DELAY_MS);
+          }
         }
       };
 
       wakeRecognition.start?.();
+      wakeWordStopped = false;
+      wakeRestartCount = 0;
       wakeWordActive = true;
       syncWakeWordUi();
       playAudioCue('wake');
@@ -995,6 +1012,8 @@ export function initAiCommandCenter({
 
   function stopWakeWordEngine() {
     wakeWordActive = false;
+    wakeWordStopped = true;
+    wakeRestartCount = 0;
     if (wakeRecognition) {
       try {
         wakeRecognition.stop?.();
@@ -1032,36 +1051,6 @@ export function initAiCommandCenter({
     if (topNavToggleBtn) {
       topNavToggleBtn.classList?.toggle?.('active', !isCollapsed);
       topNavToggleBtn.setAttribute?.('aria-expanded', String(!isCollapsed));
-    }
-  }
-
-  function togglePanel(forceOpen = null) {
-    const isCurrentlyCollapsed = panel.classList.contains('collapsed');
-    const shouldOpen =
-      forceOpen !== null ? Boolean(forceOpen) : isCurrentlyCollapsed;
-    const targetCollapsed = !shouldOpen;
-
-    if (panel.classList.contains('collapsed') !== targetCollapsed) {
-      if (collapseBtn && typeof collapseBtn.click === 'function') {
-        collapseBtn.click();
-      }
-      if (panel.classList.contains('collapsed') !== targetCollapsed) {
-        panel.classList.toggle('collapsed', targetCollapsed);
-      }
-    }
-
-    syncPanelUiState();
-
-    if (shouldOpen) {
-      if (inputEl) setTimeout(() => inputEl.focus?.(), 80);
-    }
-    if (
-      typeof globalThis.dispatchEvent === 'function' &&
-      typeof Event === 'function'
-    ) {
-      try {
-        globalThis.dispatchEvent(new Event('resize'));
-      } catch {}
     }
   }
 
@@ -1740,7 +1729,7 @@ export function initAiCommandCenter({
   // Update memory count in status bar
   async function updateMemoryCount() {
     try {
-      const res = await fetch('/api/jarvis/memory');
+      const res = await fetch(JARVIS_API.memory);
       if (res.ok) {
         const data = await res.json();
         const count = Object.keys(data.memory || {}).length;
@@ -1757,7 +1746,7 @@ export function initAiCommandCenter({
   // Fetch active model status & free provider
   async function updateActiveModel() {
     try {
-      const res = await fetch('/api/nvidia/status');
+      const res = await fetch(NVIDIA_API.status);
       if (res.ok) {
         const data = await res.json();
         if (data.model) {
@@ -2186,6 +2175,18 @@ export function initAiCommandCenter({
       panel.classList.toggle('collapsed', !shouldOpen);
     }
     syncPanelUiState();
+
+    if (shouldOpen) {
+      if (inputEl) setTimeout(() => inputEl.focus?.(), 80);
+    }
+    if (
+      typeof globalThis.dispatchEvent === 'function' &&
+      typeof Event === 'function'
+    ) {
+      try {
+        globalThis.dispatchEvent(new Event('resize'));
+      } catch {}
+    }
   }
 
   // File attachment handling (images + text files)
@@ -2427,7 +2428,7 @@ export function initAiCommandCenter({
   // Conversation History
   async function loadHistory() {
     try {
-      const res = await fetch('/api/jarvis/sessions');
+      const res = await fetch(JARVIS_API.sessions);
       if (!res.ok) return;
       const data = await res.json();
       if (!historyList) return;
@@ -2479,7 +2480,7 @@ export function initAiCommandCenter({
       const title =
         messages.find((m) => m.role === 'user')?.content?.slice(0, 50) ||
         'Untitled';
-      await fetch('/api/jarvis/sessions', {
+      await fetch(JARVIS_API.sessions, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -2501,7 +2502,7 @@ export function initAiCommandCenter({
 
   async function loadSessionById(sessionId) {
     try {
-      const res = await fetch('/api/jarvis/sessions', {
+      const res = await fetch(JARVIS_API.sessions, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'load', sessionId }),
@@ -2536,7 +2537,7 @@ export function initAiCommandCenter({
 
   async function deleteSessionById(sessionId) {
     try {
-      await fetch('/api/jarvis/sessions', {
+      await fetch(JARVIS_API.sessions, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'delete', sessionId }),
@@ -2573,7 +2574,7 @@ export function initAiCommandCenter({
   async function showDeviceModal() {
     if (!deviceModal) return;
     try {
-      const res = await fetch('/api/jarvis/device-info');
+      const res = await fetch(JARVIS_API.deviceInfo);
       if (res.ok) {
         const data = await res.json();
         if (deviceQrBox && data.qrSvg) {
@@ -2636,7 +2637,7 @@ export function initAiCommandCenter({
       const origText = runBtn.textContent;
       runBtn.textContent = '⏳ Running...';
       try {
-        const res = await fetch('/api/jarvis/execute', {
+        const res = await fetch(JARVIS_API.execute, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -2702,7 +2703,7 @@ export function initAiCommandCenter({
           : text;
 
       const startTime = Date.now();
-      const response = await fetch('/api/nvidia/assistant', {
+      const response = await fetch(NVIDIA_API.assistant, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -3067,7 +3068,7 @@ export function initAiCommandCenter({
       const isGlobeAction = currentMode === 'globe' || isGlobePrompt(text);
       if (isGlobeAction) {
         // Route to globe control endpoint (/api/nvidia/chat) which contains full GEV action tools
-        const response = await fetch('/api/nvidia/chat', {
+        const response = await fetch(NVIDIA_API.chat, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -3175,7 +3176,7 @@ export function initAiCommandCenter({
             : text;
 
         const startTime = Date.now();
-        const response = await fetch('/api/nvidia/assistant', {
+        const response = await fetch(NVIDIA_API.assistant, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -3348,7 +3349,7 @@ export function initAiCommandCenter({
   // System Telemetry Polling & Action
   async function refreshSystemTelemetry() {
     try {
-      const res = await fetch('/api/jarvis/system-info');
+      const res = await fetch(JARVIS_API.systemInfo);
       if (res.ok) {
         const data = await res.json();
         if (data.ok && data.info) {
@@ -3372,7 +3373,7 @@ export function initAiCommandCenter({
   // Host System Automation & Diagnostics Controller
   async function refreshDiagnosticsWidget() {
     try {
-      const res = await fetch('/api/jarvis/diagnostics');
+      const res = await fetch(JARVIS_API.diagnostics);
       if (!res.ok) return;
       const data = await res.json();
       const diag = data.diagnostics;
@@ -3419,7 +3420,7 @@ export function initAiCommandCenter({
           .join('');
       }
 
-      void fetch('/api/jarvis/execute', {
+      void fetch(JARVIS_API.execute, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tool: 'ping_host', args: { host: '8.8.8.8' } }),
@@ -3444,7 +3445,7 @@ export function initAiCommandCenter({
     const listEl = panel.querySelector('#ai-sys-windows-list');
     if (!listEl) return;
     try {
-      const res = await fetch('/api/jarvis/windows');
+      const res = await fetch(JARVIS_API.windows);
       if (!res.ok) return;
       const data = await res.json();
       const wins = data.windows || [];
@@ -3478,7 +3479,7 @@ export function initAiCommandCenter({
     const listEl = panel.querySelector('#ai-sys-tasks-list');
     if (!listEl) return;
     try {
-      const res = await fetch('/api/jarvis/schedules');
+      const res = await fetch(JARVIS_API.schedules);
       if (!res.ok) return;
       const data = await res.json();
       const tasks = data.tasks || [];
@@ -3529,7 +3530,7 @@ export function initAiCommandCenter({
 
       try {
         if (action === 'screenshot') {
-          const res = await fetch('/api/jarvis/execute', {
+          const res = await fetch(JARVIS_API.execute, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ tool: 'take_screenshot', args: {} }),
@@ -3555,7 +3556,7 @@ export function initAiCommandCenter({
         } else if (action === 'diagnose') {
           await refreshDiagnosticsWidget();
         } else if (action === 'clean') {
-          const res = await fetch('/api/jarvis/execute', {
+          const res = await fetch(JARVIS_API.execute, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ tool: 'clean_temp_files', args: {} }),
@@ -3564,7 +3565,7 @@ export function initAiCommandCenter({
           alert(data.result?.message || 'Cleaned temp files.');
           await refreshDiagnosticsWidget();
         } else if (action === 'mute') {
-          await fetch('/api/jarvis/execute', {
+          await fetch(JARVIS_API.execute, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -3587,7 +3588,7 @@ export function initAiCommandCenter({
       const focusBtn = e.target.closest('.ai-sys-focus-win-btn');
       if (focusBtn) {
         const pid = focusBtn.dataset.pid;
-        await fetch('/api/jarvis/execute', {
+        await fetch(JARVIS_API.execute, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -3600,7 +3601,7 @@ export function initAiCommandCenter({
       const closeBtn = e.target.closest('.ai-sys-close-win-btn');
       if (closeBtn) {
         const pid = closeBtn.dataset.pid;
-        await fetch('/api/jarvis/execute', {
+        await fetch(JARVIS_API.execute, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -3642,7 +3643,7 @@ export function initAiCommandCenter({
       msgInput?.value?.trim() || 'JARVIS scheduled alarm triggered!';
 
     try {
-      await fetch('/api/jarvis/schedules', {
+      await fetch(JARVIS_API.schedules, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, delaySeconds, message }),
@@ -3660,7 +3661,7 @@ export function initAiCommandCenter({
       const cancelBtn = e.target.closest('.ai-sys-cancel-task-btn');
       if (cancelBtn) {
         const taskId = cancelBtn.dataset.taskId;
-        await fetch('/api/jarvis/schedules', {
+        await fetch(JARVIS_API.schedules, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'cancel', taskId }),
@@ -3681,7 +3682,7 @@ export function initAiCommandCenter({
     }
   }
 
-  const controller = {
+  Object.assign(controller, {
     toggle: togglePanel,
     setMode,
     switchView,
@@ -3763,10 +3764,7 @@ export function initAiCommandCenter({
       }
       playAudioCue('comm');
     },
-  };
-  droneRecon._aiController = controller;
-  geoPlotter._aiController = controller;
-  threatScanner._aiController = controller;
+  });
   panel._aiCommandController = controller;
   if (typeof globalThis !== 'undefined') {
     globalThis.__gevAiCommandCenter = controller;

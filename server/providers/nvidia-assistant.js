@@ -517,6 +517,167 @@ async function executeToolCalls(toolCalls, emitToolEvent) {
 }
 
 /**
+ * Approximate context-window sizes (in tokens) for the models routed by GEV.
+ * Conservative upper bounds used to compute a safe conversation-history budget.
+ */
+const MODEL_CONTEXT_WINDOWS = {
+  'nvidia/nemotron-3.5-lightning-30b-a3b': 32768,
+  'nvidia/nemotron-3-ultra-550b-a55b': 32768,
+  'openai/gpt-oss-20b': 32768,
+  'mistralai/mistral-nemotron': 32768,
+  'deepseek-ai/deepseek-r1': 32768,
+  'deepseek-ai/deepseek-v3': 32768,
+  'qwen/qwen2.5-72b-instruct': 32768,
+  'qwen/qwen2.5-coder-32b-instruct': 32768,
+  'poolside/laguna-xs-2.1': 32768,
+  'moonshotai/kimi-k3': 200000,
+  'meta/llama-3.2-11b-vision-instruct': 8192,
+  'meta/llama-3.3-70b-instruct': 8192,
+  'stabilityai/stable-diffusion-3-medium': 4096,
+  default: 8192,
+};
+
+/** Default conversation-history token budget when the model window is unknown. */
+const DEFAULT_HISTORY_BUDGET = 8000;
+
+/**
+ * Estimate the token count of a message array.
+ * Uses a rough ~4 chars/token heuristic plus a small per-message overhead for
+ * role/metadata framing. Intentionally conservative so we never approach the
+ * real context limit.
+ */
+export function estimateMessageTokens(messages) {
+  if (!Array.isArray(messages)) return 0;
+  let total = 0;
+  for (const m of messages) {
+    let text = '';
+    if (typeof m.content === 'string') {
+      text = m.content;
+    } else if (Array.isArray(m.content)) {
+      for (const part of m.content) {
+        if (!part) continue;
+        if (typeof part.text === 'string') text += part.text;
+        else if (typeof part === 'string') text += part;
+      }
+    } else if (m.content == null) {
+      text = '';
+    }
+    // ~4 chars/token plus 4 tokens overhead for role/stop/format framing.
+    total += Math.ceil(text.length / 4) + 4;
+    if (Array.isArray(m.tool_calls)) {
+      total += Math.ceil(JSON.stringify(m.tool_calls).length / 4);
+    }
+  }
+  return Math.ceil(total);
+}
+
+/**
+ * Trim a conversation history so it fits within a token budget.
+ * Keeps the most recent messages that fit, and ALWAYS retains the last user
+ * message (even if it alone exceeds the budget). Returns a new array and
+ * never mutates the input.
+ */
+export function trimContextMessages(messages, maxTokens) {
+  if (!Array.isArray(messages) || messages.length === 0) return [];
+  const budget = Math.max(1, Math.floor(maxTokens));
+
+  let lastUserIndex = -1;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === 'user') {
+      lastUserIndex = i;
+      break;
+    }
+  }
+
+  const kept = [];
+  let used = 0;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    const cost = estimateMessageTokens([msg]);
+    const isLastUser = i === lastUserIndex;
+    // Stop once the budget is exceeded, unless this is the last user message.
+    if (!isLastUser && used + cost > budget && kept.length > 0) break;
+    kept.unshift(msg);
+    used += cost;
+    if (isLastUser) break;
+  }
+  return kept;
+}
+
+/**
+ * Build a compact summary of the oldest N messages, suitable for prepending
+ * as a single system message before the trimmed recent history.
+ *
+ * Each message is truncated to a short excerpt so the summary itself stays
+ * well under the token budget (a verbatim dump of dropped messages would
+ * defeat the purpose of trimming).
+ */
+export function summarizeOldMessages(messages, count) {
+  const n = Math.max(0, Math.floor(count));
+  if (n === 0 || !Array.isArray(messages) || messages.length === 0) return null;
+  const old = messages.slice(0, n);
+  const MAX_SUMMARY_MSGS = 20;
+  const MAX_EXCERPT = 160;
+  const parts = [];
+  let userCount = 0;
+  let assistantCount = 0;
+  const sampled =
+    old.length > MAX_SUMMARY_MSGS
+      ? [...old.slice(0, MAX_SUMMARY_MSGS), old[old.length - 1]]
+      : old;
+  for (const m of sampled) {
+    let text = '';
+    if (typeof m.content === 'string') {
+      text = m.content;
+    } else if (Array.isArray(m.content)) {
+      text = m.content
+        .map((p) => (p && typeof p.text === 'string' ? p.text : ''))
+        .join(' ');
+    }
+    if (!text) continue;
+    const excerpt =
+      text.length > MAX_EXCERPT ? `${text.slice(0, MAX_EXCERPT)}…` : text;
+    parts.push(`- ${m.role}: ${excerpt}`);
+  }
+  userCount = old.filter((m) => m.role === 'user').length;
+  assistantCount = old.filter((m) => m.role === 'assistant').length;
+  const summary = parts.join('\n') || '(no content)';
+  return {
+    role: 'system',
+    content: `[Previous conversation summary]: ${userCount} user message(s), ${assistantCount} assistant response(s). ${summary}`,
+  };
+}
+
+/**
+ * Resolve a safe conversation-history token budget for the given model.
+ * Reserves space for the system prompt, tools, web/memory injection, and the
+ * expected response so the history alone never pushes the request over the
+ * model's context window.
+ */
+export function resolveHistoryBudget(model) {
+  const window = MODEL_CONTEXT_WINDOWS[model] || MODEL_CONTEXT_WINDOWS.default;
+  // Reserve ~45% of the window for system prompt, tools, and expected response.
+  const reserved = Math.floor(window * 0.45);
+  const budget = window - reserved;
+  return Math.max(1024, Math.min(budget, DEFAULT_HISTORY_BUDGET));
+}
+
+/**
+ * Trim and optionally summarize a conversation history before it is sent to
+ * the model. Keeps budget-conscious recent context while folding older
+ * exchanges into a single compact summary system message.
+ */
+export function prepareContextForModel(messages, model) {
+  const budget = resolveHistoryBudget(model);
+  const trimmed = trimContextMessages(messages, budget);
+  if (trimmed.length === messages.length || messages.length === 0)
+    return trimmed;
+  const dropped = messages.length - trimmed.length;
+  const summary = summarizeOldMessages(messages, dropped);
+  return summary ? [summary, ...trimmed] : trimmed;
+}
+
+/**
  * Intelligent Model Router (Auto-MoE):
  * Automatically analyzes the user's prompt, domain, and language to route to the optimal free model.
  */
@@ -1041,7 +1202,7 @@ export async function handleNvidiaAssistant(req, res) {
   // 1. Council / Multi-Model Swarm Mode Check (Only when explicitly selected)
   if (model === 'ensemble' || model === 'council' || model === 'swarm') {
     await handleCouncilEnsemble({
-      messages,
+      messages: prepareContextForModel(messages, effectiveModel),
       mode,
       systemPrompt,
       images,
@@ -1081,6 +1242,11 @@ export async function handleNvidiaAssistant(req, res) {
     }
   }
 
+  // Token-aware context budgeting: trim long conversation histories so the
+  // request never exceeds the active model's context window. Reserves room
+  // for the system prompt, tools, web/memory injection, and the response.
+  const preparedMessages = prepareContextForModel(messages, effectiveModel);
+
   // Check if this request needs tool execution loop
   const toolCapableModes = new Set([
     'computer',
@@ -1099,7 +1265,7 @@ export async function handleNvidiaAssistant(req, res) {
   // If tools are wanted, always run the iterative tool execution loop first
   if (wantsTools) {
     try {
-      let currentMessages = [...messages];
+      let currentMessages = [...preparedMessages];
       let allToolResults = [];
       let finalContent = '';
       let finalReasoning = null;
@@ -1250,7 +1416,7 @@ export async function handleNvidiaAssistant(req, res) {
       }
 
       const payload = buildPayload({
-        messages,
+        messages: preparedMessages,
         mode,
         model: effectiveModel,
         images,
@@ -1288,7 +1454,7 @@ export async function handleNvidiaAssistant(req, res) {
 
   // Non-streaming mode with iterative tool execution loop
   try {
-    let currentMessages = [...messages];
+    let currentMessages = [...preparedMessages];
     let allToolResults = [];
     let finalContent = '';
     let finalReasoning = null;

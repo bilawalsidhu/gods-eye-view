@@ -48,6 +48,10 @@ export function createNvidiaSession({
   let isProcessing = false;
   let currentMode = 'general';
   let wakeWordActive = false;
+  let recognitionStopped = false;
+  let restartCount = 0;
+  const RESTART_MAX = 3;
+  const RESTART_DELAY_MS = 500;
   const conversationHistory = [];
 
   const SpeechRecognition =
@@ -443,16 +447,25 @@ export function createNvidiaSession({
       };
 
       recognition.onend = () => {
-        if (active && !isProcessing) {
-          try {
-            recognition.start();
-          } catch {
-            /* ignore restart error */
+        if (active && !isProcessing && !recognitionStopped) {
+          if (restartCount < RESTART_MAX) {
+            restartCount++;
+            setTimeout(() => {
+              if (active && !isProcessing && !recognitionStopped) {
+                try {
+                  recognition.start();
+                } catch {
+                  /* ignore restart error */
+                }
+              }
+            }, RESTART_DELAY_MS);
           }
         }
       };
 
       recognition.start();
+      recognitionStopped = false;
+      restartCount = 0;
     } catch (err) {
       emit({
         type: 'state',
@@ -463,6 +476,8 @@ export function createNvidiaSession({
   }
 
   function stopRecognition() {
+    recognitionStopped = true;
+    restartCount = 0;
     if (recognition) {
       try {
         recognition.stop();
