@@ -2387,3 +2387,92 @@ demoted under a dated banner, never deleted), tag-name immutability
 (the v0.8.0 burn — pick the next name, never reuse), GitForge-first
 push order with the hold-while-suites-run rule from 11.1, and
 deploy → verify → tag → publish as the only sanctioned sequence.
+
+## Phase 12 — Quality campaign cycle 4 (2026-09-22, OPEN)
+
+Fourth audit-driven cycle, opening on the v0.10.0 tree (`3564409`)
+per 11.3's entry rule: baseline re-measured with the same metrics as
+10.1/11.1 before any work.
+
+### 12.1 Baseline (measured 2026-09-22)
+
+| Metric | 11.1 | C4 | Note |
+| --- | --- | --- | --- |
+| Unit tests | 3,790 | 3,837 | +47 this cycle's route-dolly + plausibility tests |
+| Lines / statements | 91.58 / 91.58 | 91.58 / 91.58 | flat — the ratchet held through v0.10.0's changes |
+| Functions | 91.21 | 91.21 | flat |
+| Branches | 81.19 | 81.20 | flat |
+| Lint | strictest tier, 0 warnings | clean | `eslint . --max-warnings 0` |
+| Aegis secrets (CI flags + baseline) | 68 accepted, 0 new | 0 new, score 0 | `aegis scan --categories secrets --severity-threshold high --baseline .aegis-baseline.json .` |
+| AAA accessibility | ledger MET 12 / PARTIAL 3 / N/A 8 / UNMET 2 | unchanged | docs/ACCESSIBILITY.md is the assurance of record |
+| QA verdict | Batch O all green / ENV-GATED (RUN 3p) | carried | v0.10.0 shipped on it |
+
+### 12.2 Gap analysis (honest)
+
+- **Coverage floor vs the 99% goal**: the gated metric sits at
+  91.58/91.58/91.21/81.20. R2's schedule (waves 5 → 93/93/92/83,
+  wave 6 → 95/95/94/86, terminal per ADR 0008) is the sanctioned
+  path. Ranked attack list by missed lines+branches (c8 JSON,
+  2026-09-22): traffic.js (1349 L / 109 B, 46.6% lines — excluding
+  the by-design-excluded DEV timing pass), bikeshare.js (707/24,
+  57.8%), celestialRing.js (449/3, 37.9%), firstRunExperience.js
+  (335/1, 48.2%), cctvSources.js (425/44, 66.0%),
+  rocketLaunches.js (910/282, 74.8% lines but 282 missed branches),
+  radio.js (515/233 — branch-heavy), gevActions.js (1381/278 —
+  browser-coupled UI, mock-armor territory), flights.js (1215/198),
+  militaryFlights.js (789/179), annotationResolver.js (705/158).
+- **Module boundaries (R4 round 2)**: ui.js was split in cycle 2
+  (10,500 → 6,680 today). Next seams ranked by size × churn:
+  `src/voice/gevRealtime.js` (3,021 — WebRTC state machine + UI in
+  one file), `src/data/flightsTracking.js` (shared-pipeline
+  chokepoint — needs the 24-factory-key config-schema contract test),
+  `src/data/cctv.js` (4,958 — now the largest file). ADR 0012
+  (overlay-lane architecture) already landed, so R4's remaining
+  acceptance is the written module map + the flightsTracking contract
+  test.
+- **WASM candidates (R6)**: no MEASURED verdict lines yet in
+  docs/PERFORMANCE.md for labelArbiter-at-DENSE, detection.js's
+  synchronous projection fallback, or AIS bulk row normalization.
+  Contract: measured into the per-frame CPU top-10 or disqualified
+  with numbers.
+- **Production surface decisions (R7)**: three standing decisions
+  still lack one-page decision docs (AIS Durable Objects relay;
+  keyed-dev-only-middlewares key-signup pass; per-isolate rate
+  limiting).
+- **Everything else is green or contractually bounded**: lint, aegis,
+  a11y, QA verdict, docs structure. No red pre-existing issues are
+  known entering this cycle.
+
+### 12.3 Batches
+
+- [ ] **Batch Q (R2 wave 5)**: real tests for the pure-logic paths of
+  bikeshare, celestialRing, firstRunExperience (policy halves),
+  cctvSources (catalog parsing), rocketLaunches (parse/normalize),
+  traffic (non-timing paths); raise floors to 93/93/92/83 in the SAME
+  commit. Acceptance: `test:coverage` green locally and in GitForge CI
+  at the new floors.
+- [ ] **Batch R (R2 wave 6)**: next tranche — radio branches,
+  flights/militaryFlights parse paths, annotationResolver geocode
+  fallbacks, satellites SGP4 edges → 95/95/94/86, or the ADR 0008
+  terminal module list if the residual proves mock-armor. Acceptance:
+  floors green, or the boundary documented per module with the mock-
+  armor rationale.
+- [ ] **Batch S (R4)**: written module map (next three seams ranked
+  with evidence) + flightsTracking 24-factory-key config-schema
+  contract test. Acceptance: map committed to docs/, contract test in
+  CI.
+- [ ] **Batch T (R6)**: three MEASURED WASM-candidate verdict lines in
+  docs/PERFORMANCE.md (labelArbiter DENSE, detection sync-projection
+  fallback, AIS bulk normalization) — each with the profiler scene
+  that produced the number, or a disqualification with numbers.
+- [ ] **Batch U (R7)**: three decision docs (ADR or explicit
+  keep-as-is note in the deferred list) for AIS-in-production, the
+  key-signup pass, per-isolate limiting.
+- [ ] **Batch V (validation)**: RUN 4 — full e2e orchestrator pass
+  through `qa-when-quiet` (all suites green or honestly ENV-GATED),
+  axe audit green, docs-coverage spot audit. GitForge green on the
+  cycle's commits.
+- [ ] **Batch W (release)**: v0.10.1 (patch — tests, docs, harness; no
+  new API surface planned) via the RUNBOOK pinned order: gate battery
+  → release commit → GitForge green → deploy → verify (scripted prod
+  render + Functions probes) → tag → publish.
