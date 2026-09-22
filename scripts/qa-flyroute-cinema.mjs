@@ -197,59 +197,76 @@ try {
        TERRAIN_DELAY_MS ? ` (terrain proxy held back ${TERRAIN_DELAY_MS} ms, ${terrainRequests} request(s))` : ''}`);
   }
 
-  // Liveness is read off the CAMERA, never off a module import: under Vite the
-  // dev server hands a dynamic import its own module instance after any HMR
-  // update, whose motion slot is empty no matter what the app is doing.
-  const stillForMs = () => page.evaluate(() => {
-    const trace = window.__gevFlyTrace;
-    // A still camera BEFORE the flight is the pre-flight arming/floor
-    // hold, not a finished dolly: without this gate the shot loop ended
-    // during that hold (run3h: 5 shots @ 2000 ms, none of the 81 s flight).
-    const startT = trace.marks.find((m) => m.label === 'flight-start')?.t ?? 0;
-    if (!startT) return 0;
-    const rows = trace.rows.filter((r) => r.t > startT);
-    if (rows.length < 3) return 0;
-    // …and the hold can straddle the mark: the camera jumps onto the route
-    // start and THEN sits through the mesh-probe acquisition (slow under
-    // SwiftShader), so stillness only counts once the dolly has actually
-    // been seen to move (run3i: 3 shots — the break fired inside that hold).
-    let seenMotion = false;
-    for (let i = 1; i < rows.length; i += 1) {
-      const moved = Math.abs(rows[i].lon - rows[i - 1].lon) + Math.abs(rows[i].lat - rows[i - 1].lat)
-        + (Math.abs(rows[i].height - rows[i - 1].height) / 1e5);
-      if (moved > 1e-7) { seenMotion = true; break; }
-    }
-    if (!seenMotion) return 0;
-    const last = rows.at(-1);
-    // Freshness gate: the sampler rides postRender, so at software-GL cadence
-    // a row can predate the camera's actual state by over a second. Without
-    // this gate a sparse stream reads as "still" and cuts the shot loop early
-    // (RUN 3g: 3 frames @ 2000 ms).
-    if (performance.now() - last.t > 700) return 0;
-    for (let i = rows.length - 2; i >= 0; i -= 1) {
-      const moved = Math.abs(rows[i].lon - last.lon) + Math.abs(rows[i].lat - last.lat)
-        + (Math.abs(rows[i].height - last.height) / 1e5);
-      if (moved > 1e-7) return last.t - rows[i].t;
-    }
-    return last.t - rows[0].t;
-  });
-
-  const budgetMs = Math.min(180000, ((flight.durationS || 40) + 10) * 1000);
+  // The shot loop exits on the DOLLY'S OWN COMPLETION, never on stillness and
+  // never on wall-clock alone. Every stillness heuristic tried here misread an
+  // acquisition hold as completion — the pre-flight arming hold (run3h: 5
+  // shots, none of the flight), the post-jump mesh-probe hold straddling the
+  // flight-start mark (run3i), the route-start jump masquerading as "seen
+  // motion" (run3k). And wall-clock cannot work either: advanceRouteFlight
+  // clamps its step to 0.25 s of SIMULATION time per rendered frame, so at
+  // software-GL cadence (~0.6-1 fps) an 81 s flight takes 5-9 WALL minutes —
+  // the run3l budget cut the flight at ~17% and the wings-level bar
+  // false-passed on a between-corners sample. getActiveCameraMotion() clears
+  // to null exactly when the route completes (the same observable the
+  // interrupt case reads); the budget stays only as a runaway cap.
+  const budgetMs = Math.min(900000, ((flight.durationS || 40) * 6 + 180) * 1000);
   const shots = [];
   const startedAt = Date.now();
   let shotIndex = 0;
-  while (Date.now() - startedAt < budgetMs) {
+  let lastProgress = null;
+  let everEngaged = false;
+  let moduleLost = false;
+  for (;;) {
     const file = path.join(OUT_DIR, `flight-${String(shotIndex).padStart(2, '0')}.png`);
     const at = await page.evaluate(() => performance.now());
     await page.screenshot({ path: file });
     shots.push({ file, at });
     shotIndex += 1;
+    const active = await page.evaluate(async () => {
+      try {
+        const mod = await import('/src/cameraVerbs.js');
+        const motion = mod.getActiveCameraMotion?.();
+        return motion && motion.kind === 'route' ? (motion.progress ?? null) : null;
+      } catch { return 'module-unavailable'; }
+    });
+    if (active === 'module-unavailable') {
+      // Module state unreadable (HMR would do this mid-run) — ride to the
+      // budget rather than spinning forever.
+      moduleLost = true;
+      if (Date.now() - startedAt > budgetMs) break;
+    } else if (active === null) {
+      if (everEngaged || shotIndex > 1) break; // dolly slot cleared: flight over
+      // Cleared before the second shot with no progress ever seen: the flight
+      // never engaged — ride to the budget so the failure is visible.
+      if (Date.now() - startedAt > budgetMs) break;
+    } else {
+      lastProgress = active;
+      everEngaged = true;
+    }
     await sleep(SHOT_EVERY_MS);
-    if (Date.now() - startedAt > 5000 && (await stillForMs()) > 1500) break;
   }
+  report(Boolean(everEngaged && lastProgress === null) || lastProgress >= 0.99,
+    'the flight ran to completion inside the capture window',
+    `progress at last sample: ${lastProgress === null
+      ? (everEngaged ? 'complete — dolly slot cleared' : 'never engaged')
+      : `${(lastProgress * 100).toFixed(0)}%`}${moduleLost ? ' (module unreadable mid-run)' : ''} — ${shots.length} frames over ${((Date.now() - startedAt) / 1000).toFixed(0)} s wall`);
   const trace = await readTrace();
   await page.evaluate(() => window.__gevFlyTraceRemove?.());
   report(shots.length >= 6, 'screenshot sequence captured', `${shots.length} frames @ ${SHOT_EVERY_MS}ms`);
+  // Full per-frame telemetry INCLUDING the floor cache each row would read,
+  // so any failed bar can be triaged off-line without re-running the flight
+  // (run3l: a -14.8 km AGL reading hid between two screenshots 11 s apart;
+  // the height alone cannot say whether the camera flew or the floor lied).
+  const traceFloors = await page.evaluate(async (samples) => {
+    try {
+      const mod = await import('/src/data/groundFloor.js');
+      return samples.map(({ lat, lon }) => mod.cachedGroundFloor(lat, lon));
+    } catch { return samples.map(() => null); }
+  }, trace.rows.map((r) => ({ lat: r.lat, lon: r.lon })));
+  fs.writeFileSync(path.join(OUT_DIR, 'flight-trace.json'), JSON.stringify({
+    marks: trace.marks,
+    rows: trace.rows.map((r, i) => ({ ...r, floorM: traceFloors[i] })),
+  }, null, 2));
 
   // ── Measure the REAL camera ───────────────────────────────────────────
   // Only the dolly's own frames count. The sampler is installed before the
@@ -400,14 +417,11 @@ try {
   derivativeReport(peakAccel < 40, 'no velocity discontinuity anywhere on the route',
     `peak |acceleration| ${peakAccel.toFixed(1)} m/s² (a hard start would read in the hundreds)`);
 
-  // Altitude shaping and terrain clearance, read off the real camera.
+  // Altitude shaping and terrain clearance, read off the real camera. The
+  // floors are the SAME reads the trace dump captured — the cache is
+  // session-long and one-shot latched, so a re-read cannot differ.
   const heights = rows.map((r) => r.height);
-  const floors = await page.evaluate(async (samples) => {
-    try {
-      const mod = await import('/src/data/groundFloor.js');
-      return samples.map(({ lat, lon }) => mod.cachedGroundFloor(lat, lon));
-    } catch { return samples.map(() => null); }
-  }, rows.map((r) => ({ lat: r.lat, lon: r.lon })));
+  const floors = rows.map((r, i) => traceFloors[trace.rows.indexOf(rows[i])]);
   // The strongest terrain check available: the eye against the RENDERED
   // surface under it, sampled live. Independent of our own floor cache, and
   // therefore the one that would catch flying inside a building or a hillside.

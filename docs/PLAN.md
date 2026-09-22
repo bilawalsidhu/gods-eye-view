@@ -2185,6 +2185,37 @@ here.
       cockpit's Dense/Sparse voice check — GREEN in 3g and 3h — lost
       its live tracked-flight subject). RUN 3k = clean re-run of the
       pair; green completes Phase 5.
+      RUN 3k delivered: cockpit-utility GREEN (8.1 min, portal
+      round-trip probe clean); flyroute still cut at 3 frames — the
+      route-start jump itself satisfies any "motion seen" gate, so
+      camera position alone cannot distinguish hold-from-finished.
+      RUN 3l attacked that with the correct fix — the shot loop exits
+      on BUDGET, no stillness heuristic at all — and exposed two
+      deeper facts. (1) STRUCTURAL: `advanceRouteFlight` clamps its
+      tick to 0.25 s of SIMULATION time per rendered frame, so at
+      software-GL cadence (~0.6-1 fps) the 81 s evidence flight needs
+      5-9 WALL minutes; the 91 s wall budget cut the flight at ~17%
+      and the wings-level bar false-passed on a between-corners
+      sample. Wall-clock can never cover this flight; the loop now
+      polls `getActiveCameraMotion()` (null = route complete, the
+      same observable the interrupt case reads) and the budget is a
+      runaway cap only (suite ceiling 25 min). (2) OPEN ANOMALY: with
+      the flight's early window finally sampled, min AGL read
+      -14,799 m with a 6,618 m/s climb spike and 15,083 m of vertical
+      range, while all 9 screenshots show a normal 206-400 m flight —
+      a ≤2.3 s excursion hiding between shots. The descent cap
+      (≤10 m/s of clamped sim time) mathematically forbids a real
+      dive that deep, the start math is floor+90, and `floorFn` is
+      `cachedGroundFloor` (null-when-cold, prior-gated mesh cells), so
+      the prime suspect is a poisoned ~+15,100 m floor cell dragging
+      the camera UP (climbs are uncapped by design) rather than the
+      camera diving. RUN 3m adds a per-frame trace dump (height +
+      floorM + live surfaceM per row) to adjudicate: surfaceM ≈ 15 km
+      at the excursion = real camera flight; surfaceM ≈ 150 m while
+      height spikes = the floor cache lying. Also this window: the
+      quiet gate now requires two consecutive sub-threshold samples
+      (run3l opened at 6.9 into a co-tenant aegis storm that reached
+      load 33 — the 1-min average lags a ramping spike).
 - [ ] **Batch P — release 0.10.0**: CHANGELOG 0.10.0 fold (done,
       uncommitted) + version bump (done, uncommitted); commit, push
       BOTH remotes gitforge-first (only when no browser suite is

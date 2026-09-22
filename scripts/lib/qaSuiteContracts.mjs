@@ -36,6 +36,13 @@ export const SUITE_TIMEOUT_OVERRIDES = {
   // unresponsive ~5 min, then recovery — RUN 3i), but the cumulative
   // degraded throughput needs more than the 15-min default ceiling.
   'qa-cockpit-utility.mjs': 1_500_000,
+  // The dolly clamps its tick to 0.25 s of SIMULATION time per rendered
+  // frame (advanceRouteFlight), so at software-GL cadence (~0.6-1 fps) the
+  // 81 s evidence flight needs 5-9 WALL minutes — a wall-clock capture window
+  // cannot cover it (run3l cut the flight at ~17%). The suite now exits on
+  // the dolly's own completion signal; this ceiling just bounds the whole
+  // run (boot + setup + flight + interrupt case + analysis).
+  'qa-flyroute-cinema.mjs': 1_500_000,
 };
 
 // Suites that exit nonzero with a self-declared key gate cannot run on this
