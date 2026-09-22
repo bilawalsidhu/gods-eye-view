@@ -13,6 +13,8 @@ import {
   reportMeshFloorCell, cachedMeshFloor, cachedGroundFloor,
   setMeshFloorPreferred, meshFloorPreferred, _clearMeshFloorCellsForTest,
   neighborFloorM,
+  plausibleSurfaceHeightM,
+  SURFACE_PLAUSIBLE_MIN_M, SURFACE_PLAUSIBLE_MAX_M,
 } from './groundFloor.js';
 import {
   corridorPathLatLon, projectGroundArcLatLon,
@@ -114,6 +116,32 @@ test('all mesh-floor writers share the asymmetric real-DEM acceptance window', (
   assert.equal(meshFloorSampleWithinPrior(84.99, 100), false);
   assert.equal(meshFloorSampleWithinPrior(180.01, 100), false);
   assert.equal(meshFloorSampleWithinPrior(120, null), false);
+});
+
+// --- Plausibility band (RUN 3m, 2026-09-21) --------------------------------
+// scene.sampleHeight answers garbage depth (-14,971 m) on a not-yet-streamed
+// tile. Camera verbs and traffic both adopted it as a surface. An answer no
+// natural surface could produce is silence at the source, so consumers gate
+// through one predicate instead of re-rolling local Number.isFinite checks.
+
+test('plausibleSurfaceHeightM accepts finite in-band surfaces', () => {
+  assert.equal(plausibleSurfaceHeightM(0), true, 'sea level is a surface');
+  assert.equal(plausibleSurfaceHeightM(113.7), true, 'KAUS apron band');
+  assert.equal(plausibleSurfaceHeightM(8848), true, 'Everest fits inside the band');
+  assert.equal(plausibleSurfaceHeightM(-418), true, 'Dead Sea shore is natural');
+  assert.equal(plausibleSurfaceHeightM(SURFACE_PLAUSIBLE_MIN_M), true, 'band edges inclusive');
+  assert.equal(plausibleSurfaceHeightM(SURFACE_PLAUSIBLE_MAX_M), true);
+});
+
+test('plausibleSurfaceHeightM rejects the RUN 3m garbage-depth classes', () => {
+  assert.equal(plausibleSurfaceHeightM(-14971), false, 'the sampled mesh garbage that sank the camera');
+  assert.equal(plausibleSurfaceHeightM(45000), false, 'nothing rendered is a 45 km surface');
+  assert.equal(plausibleSurfaceHeightM(Number.NaN), false);
+  assert.equal(plausibleSurfaceHeightM(Number.POSITIVE_INFINITY), false);
+  assert.equal(plausibleSurfaceHeightM(undefined), false);
+  assert.equal(plausibleSurfaceHeightM(null), false);
+  assert.equal(plausibleSurfaceHeightM(SURFACE_PLAUSIBLE_MIN_M - 0.01), false, 'just under the band');
+  assert.equal(plausibleSurfaceHeightM(SURFACE_PLAUSIBLE_MAX_M + 0.01), false, 'just over the band');
 });
 
 // --- Display-time floor (2026-08-19, buried taxiing contacts at KAUS) -------

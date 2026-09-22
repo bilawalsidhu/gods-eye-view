@@ -12,6 +12,7 @@ import {
   trafficBucketTier,
 } from './trafficPresetStyle.js';
 import { queuePlatoons, locateAlongRoad } from './trafficQueue.js';
+import { plausibleSurfaceHeightM } from './groundFloor.js';
 import { registerDynamicCredit, TOMTOM_CREDIT } from './dataCredits.js';
 import { holdContinuousRender, releaseContinuousRender } from '../renderGovernor.js';
 
@@ -588,7 +589,9 @@ function parseRoads(overpassData) {
     if (_viewer?.scene?.sampleHeightSupported && firstCoord) {
       const carto = Cesium.Cartographic.fromDegrees(firstCoord[0], firstCoord[1]);
       const sampled = _viewer.scene.sampleHeight(carto);
-      if (Number.isFinite(sampled)) baseHeight = sampled;
+      // A surface no natural tile could report (an unloaded tile's garbage
+      // depth) is silence, not a road elevation — see groundFloor.js.
+      if (plausibleSurfaceHeightM(sampled)) baseHeight = sampled;
     }
 
     // Pre-compute Cartesian3 waypoints (lon, lat, height) for fast lerp animation
@@ -1924,7 +1927,9 @@ function parseRoadsTimed(overpassData, trace) {
       /* TRACE_ONLY_BEGIN */
       _trafficTimingSampleHeightMs += performance.now() - _trafficTimingSampleStart;
       /* TRACE_ONLY_END */
-      if (Number.isFinite(sampled)) baseHeight = sampled;
+      // A surface no natural tile could report (an unloaded tile's garbage
+      // depth) is silence, not a road elevation — see groundFloor.js.
+      if (plausibleSurfaceHeightM(sampled)) baseHeight = sampled;
     }
 
     /* TRACE_ONLY_BEGIN */

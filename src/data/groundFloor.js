@@ -444,6 +444,30 @@ export function meshFloorSampleWithinPrior(heightM, priorM) {
     && heightM <= priorM + MESH_FLOOR_ABOVE_PRIOR_M;
 }
 
+/** Physical-plausibility band for any rendered-surface reading. Earth's
+ * surfaces span about -10.9 km (ocean trench — where no mesh tile is
+ * streamed and no street is drawn) to +8.8 km, so an answer outside the
+ * band is not a surface any consumer flies over or draws on: it is an
+ * unloaded/placeholder tile reporting a garbage depth. RUN 3m caught the
+ * route dolly seeding its floor 15 km underground from one such answer;
+ * the band is shared here so every `scene.sampleHeight` consumer gates the
+ * lie at the source instead of each re-deriving it.
+ * @param {number} heightM A sampled surface height, ellipsoidal meters.
+ * @returns {boolean} True when the answer could be a real surface. */
+export const SURFACE_PLAUSIBLE_MIN_M = -1000;
+export const SURFACE_PLAUSIBLE_MAX_M = 9000;
+
+/**
+ * Whether a rendered-surface reading is physically possible at all.
+ * @param {number} heightM Sampled height, ellipsoidal meters.
+ * @returns {boolean} True when the reading could be a real surface.
+ */
+export function plausibleSurfaceHeightM(heightM) {
+  return Number.isFinite(heightM)
+    && heightM >= SURFACE_PLAUSIBLE_MIN_M
+    && heightM <= SURFACE_PLAUSIBLE_MAX_M;
+}
+
 /**
  * Validate and record a rendered-mesh floor through the single shared gate.
  * Callers must not bypass this with raw `reportMeshFloorCell`: a coarse-LOD,
