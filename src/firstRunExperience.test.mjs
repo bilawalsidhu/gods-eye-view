@@ -665,10 +665,10 @@ test('the voice TOOL SCHEMA matches the pinned release — the mission mapping i
   // alpr-cameras layer enum and wording) and for live-trains joining the two
   // layer-visibility enums.
   const block = JSON.stringify(GEV_REALTIME_TOOLS);
-  assert.equal(block.length, 26521, 'serialized tool schema length drifted');
+  assert.equal(block.length, 26557, 'serialized tool schema length drifted');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    'dfbae78f4f5e3d1314f0d7e49408e4f65c2502ddedb5716ec3e720e95bb70b6f',
+    '95be3656fb47359acd48c3a47c0f1165e842b7e8fa489c3d5f46ed68282f4039',
     'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
   );
   const instructions = fs.readFileSync(new URL('../server/providers/openai/instructions.js', import.meta.url), 'utf8');

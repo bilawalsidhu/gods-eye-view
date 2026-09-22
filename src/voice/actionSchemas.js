@@ -139,6 +139,7 @@ const schemas = [
             'local-firms',
             'alpr-cameras',
             'live-trains',
+            'flight-patterns',
           ],
         },
         enabled: {
@@ -172,6 +173,7 @@ const schemas = [
             'local-firms',
             'alpr-cameras',
             'live-trains',
+            'flight-patterns',
           ],
         },
       },

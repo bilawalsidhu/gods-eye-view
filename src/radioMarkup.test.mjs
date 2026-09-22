@@ -189,7 +189,7 @@ test('no unchanged Realtime tool definition drifts silently', () => {
     .slice(0, 16);
   // ALPR and live-trains intentionally extend the two layer enums, and
   // analyst_query gains the alpr-cameras layer; retain the complete pin.
-  assert.equal(digest, 'd4f9f84f9b9c71c8', 'an unchanged Realtime tool definition drifted');
+  assert.equal(digest, 'a63a9b291bf5a07d', 'an unchanged Realtime tool definition drifted');
 });
 
 test('Radio volume and mission speed share the Sharpen slider visual language', () => {

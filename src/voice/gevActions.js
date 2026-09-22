@@ -225,6 +225,10 @@ const LAYER_ALIASES = new Map([
   ['live trains', 'live-trains'],
   ['amtrak', 'live-trains'],
   ['amtrak trains', 'live-trains'],
+  ['pattern watch', 'flight-patterns'],
+  ['patterns', 'flight-patterns'],
+  ['circling aircraft', 'flight-patterns'],
+  ['circling planes', 'flight-patterns'],
 ]);
 
 const CITY_ALIASES = new Map([

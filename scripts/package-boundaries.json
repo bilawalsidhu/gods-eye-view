@@ -1037,6 +1037,15 @@
     ],
     "external": ["cesium"]
   },
+  "pattern-watch": {
+    "exports": ["./layers/patterns"],
+    "modules": [
+      "src/layers/patterns/index.js",
+      "src/layers/patterns/policy.js",
+      "src/layers/patterns/circling.js"
+    ],
+    "external": ["cesium"]
+  },
   "live-trains": {
     "exports": ["./layers/trains"],
     "modules": [
