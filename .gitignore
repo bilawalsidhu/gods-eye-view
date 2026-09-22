@@ -30,3 +30,6 @@ pinokio/.installed
 
 # Transient: a release interrupted mid-assembly (npm run changelog recovers it)
 changelog.d/.assembling/
+# Operator-supplied layers — see docs/USER-LAYERS.md. Local layers stay out
+# of diffs and pull requests.
+src/userLayers/*.layer.js
