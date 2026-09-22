@@ -1,3 +1,4 @@
+import { readStylesheet } from '../testSupport/readStylesheet.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
@@ -487,3 +488,92 @@ for (const variant of ['minimal', 'full']) {
     assert.equal(f.second.classList.contains('collapsed'), false);
   });
 }
+// ── Narrow-screen rail overflow pin ──────────────────────────────────────────
+// At ≤720px both panel stacks become scroll containers (overflow-y: auto),
+// which also makes their overflow-x compute to auto. Each panel's decorative
+// .panel-glow is absolutely positioned with a negative inset, so inside a
+// scroll container that overhang is no longer harmless paint: it becomes
+// 18–20px of scrollable overflow on both axes, drawing a horizontal scrollbar
+// band under the expanded CCTV/Context/Data panel plus a vertical scrollbar
+// that scrolls nothing but glow. The narrow block therefore pins every hosted
+// glow to its panel box.
+
+/** Strip comments and return the bodies of every ≤720px media block. */
+function narrowScreenBlocks(css) {
+  const source = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  const blocks = [];
+  let from = 0;
+  for (;;) {
+    const start = source.indexOf('@media (max-width: 720px) {', from);
+    if (start === -1) break;
+    const open = source.indexOf('{', start);
+    let depth = 0;
+    let close = -1;
+    for (let index = open; index < source.length; index += 1) {
+      if (source[index] === '{') depth += 1;
+      if (source[index] === '}' && (depth -= 1) === 0) {
+        close = index;
+        break;
+      }
+    }
+    assert.notEqual(close, -1, 'unterminated narrow-screen media block');
+    blocks.push(source.slice(open + 1, close));
+    from = close + 1;
+  }
+  assert.ok(blocks.length, 'narrow-screen media block is missing');
+  return blocks;
+}
+
+/** Split a flat (non-nested) rule list into [selectors, declarations] pairs. */
+function flatRules(block) {
+  assert.doesNotMatch(block, /@media/, 'nested media queries are not modelled');
+  return [...block.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(
+    ([, selectors, declarations]) => [
+      selectors.split(',').map((part) => part.trim().replace(/\s+/g, ' ')),
+      declarations,
+    ],
+  );
+}
+
+test('narrow-screen rails pin every hosted panel glow inside its panel box', () => {
+  const css = readStylesheet(new URL('../../style.css', import.meta.url));
+  for (const panel of [
+    'data-panel',
+    'scene-panel',
+    'cctv-panel',
+    'global-context-panel',
+  ]) {
+    assert.match(
+      css,
+      new RegExp(`#${panel} \\.panel-glow \\{[^}]*\\binset: -\\d+px;`),
+      `${panel} glow no longer overhangs its panel; revisit this pin`,
+    );
+  }
+  const narrow = narrowScreenBlocks(css).flatMap(flatRules);
+  const scrollingRails = [
+    ...new Set(
+      narrow
+        .filter(([, declarations]) =>
+          /\boverflow(?:-y)?:\s*(?:auto|scroll)\b/.test(declarations),
+        )
+        .flatMap(([selectors]) => selectors)
+        .filter((selector) =>
+          /^#(?:left-panel-stack|right-context-rail)$/.test(selector),
+        ),
+    ),
+  ].sort();
+  assert.deepEqual(scrollingRails, [
+    '#left-panel-stack',
+    '#right-context-rail',
+  ]);
+  for (const rail of scrollingRails) {
+    assert.ok(
+      narrow.some(
+        ([selectors, declarations]) =>
+          selectors.includes(`${rail} .panel-glow`) &&
+          /(?:^|;)\s*inset:\s*0\s*;/.test(declarations),
+      ),
+      `${rail} scrolls at ≤720px but does not pin its panel glows (inset: 0)`,
+    );
+  }
+});

@@ -88,6 +88,16 @@
 Add feed provenance to analyst/view answers and HUD context while retaining existing response fields and runner ownership (Matt Van Horn, #347).
 
 Analyst records for loaded satellites, datacenters and dams, with explicit bounded count/rank coverage (Matt Van Horn, #351).
+- Remove the spurious scrollbars that appeared on both panel stacks at narrow
+  widths (720px and below) as soon as a panel was expanded. The stacks scroll
+  vertically there, and each panel's decorative glow, absolutely positioned
+  with a negative inset, became 18–20px of scrollable overflow on both axes: a
+  horizontal scrollbar band under the expanded CCTV, Context, Data Layers or
+  Scenes panel plus a vertical scrollbar that scrolled nothing but glow. The
+  narrow-screen rules now pin the glow to its panel box; the stacks still
+  scroll for genuinely tall content such as an expanded DISPLAY panel, and the
+  Context radio popover is not clipped. `src/ui/panelRails.test.mjs` pins the
+  rule against every 720px media block.
 
 - Enable responsive trackpad pinch zoom on the globe. Browser pixel-mode
   `Ctrl+wheel` pinch gestures now reach Cesium with bounded amplification,
