@@ -2,6 +2,7 @@ import { readResponseJsonCapped } from '../../sources/httpBody.js';
 
 export const WEATHER_PRODUCTS = Object.freeze([
   'radar',
+  'radar-global',
   'clouds',
   'clouds-regional',
   'lightning',
@@ -38,7 +39,7 @@ export function validateWeatherSnapshot(value, product) {
     value.latest !== times.at(-1) ||
     value.tileSize !== 256 ||
     value.maxLevel !== 6 ||
-    value.tilingScheme !== 'geographic'
+    !['geographic', 'web-mercator'].includes(value.tilingScheme)
   )
     throw new Error('Malformed weather manifest');
   return value;
@@ -47,6 +48,7 @@ export function validateWeatherSnapshot(value, product) {
 /** Largest whole-extent image per product; also the proxy default size. */
 export const WEATHER_IMAGE_SIZES = Object.freeze({
   radar: Object.freeze({ width: 4096, height: 2048 }),
+  'radar-global': Object.freeze({ width: 4096, height: 2048 }),
   'clouds-regional': Object.freeze({ width: 4096, height: 2048 }),
   clouds: Object.freeze({ width: 2048, height: 1024 }),
   lightning: Object.freeze({ width: 4096, height: 2048 }),
@@ -85,7 +87,6 @@ export function weatherImageUrl(
       width > largest.width
     )
       throw new Error('Invalid weather image size');
-    // The largest size is the proxy default: one frame has one URL.
     if (width !== largest.width) size = `&size=${width}x${height}`;
   }
   return `/api/weather/image?product=${product}&time=${encodeURIComponent(time)}${box}${size}`;
@@ -96,7 +97,6 @@ export function weatherTileUrl(product, time, { size } = {}) {
     throw new Error('Invalid weather frame');
   if (size !== undefined && ![256, 512, 1024].includes(size))
     throw new Error('Invalid weather tile size');
-  // Construct locally; never accept a manifest-provided host or template.
   return `/api/weather/tile?product=${product}&time=${encodeURIComponent(time)}&z={z}&x={x}&y={y}${size === undefined ? '' : `&size=${size}`}`;
 }
 
