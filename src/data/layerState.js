@@ -655,6 +655,117 @@ export function validateLayerStateRegistry(registry = LAYER_STATE_REGISTRY) {
 validateLayerStateRegistry();
 
 /** Produce the complete durable default state. */
+
+/* ------------------------------------------------------------------ *
+ * Operator-supplied ("user") layers
+ *
+ * A built-in layer owns a one-character share token (`^[a-z0-9]$`) — 36
+ * slots, globally contended. A locally added layer must not spend one: it
+ * would collide with whatever upstream assigns next, and the collision only
+ * surfaces on someone's next rebase.
+ *
+ * So user layers are addressed by **id** in their own `ul` share field
+ * instead of by token in `l`. Nothing below consumes the token namespace.
+ *
+ * This lives in layerState.js rather than its own module on purpose: eight
+ * package boundaries already own this file, and a new sibling module would
+ * have to be declared in every one of them.
+ * ------------------------------------------------------------------ */
+
+/** Same grammar the built-in registry enforces for ids. */
+const USER_LAYER_ID_GRAMMAR = /^[a-z0-9-]+$/;
+
+/** Bound the registry so a runaway loader cannot produce unusable links. */
+export const MAX_USER_LAYERS = 16;
+
+let entries = Object.freeze([]);
+
+/**
+ * Seal the set of user layers. Replaces any previous set.
+ *
+ * `reservedIds` is supplied by the caller (the built-in layer ids) so this
+ * module needs no knowledge of them. Throws rather than silently dropping a
+ * bad entry: a layer that vanishes quietly is far harder to diagnose than one
+ * that refuses to load.
+ */
+function sealUserLayers(candidates, { reservedIds = [] } = {}) {
+  const list = Array.isArray(candidates) ? candidates : [];
+  if (list.length > MAX_USER_LAYERS)
+    throw new Error(`Too many user layers (max ${MAX_USER_LAYERS})`);
+  const reserved = new Set(reservedIds);
+  const seen = new Set();
+  const normalized = list.map((entry) => {
+    const id = entry?.id;
+    if (typeof id !== 'string' || !USER_LAYER_ID_GRAMMAR.test(id))
+      throw new Error(`Invalid user-layer id: ${String(id)}`);
+    if (reserved.has(id))
+      throw new Error(`User-layer id collides with a built-in layer: ${id}`);
+    if (seen.has(id)) throw new Error(`Duplicate user-layer id: ${id}`);
+    seen.add(id);
+    if (typeof entry.createLayer !== 'function')
+      throw new Error(`User layer "${id}" must supply a createLayer function`);
+    return Object.freeze({
+      id,
+      label: typeof entry.label === 'string' && entry.label ? entry.label : id,
+      createLayer: entry.createLayer,
+    });
+  });
+  // Sorted so enabled-id order — and therefore the encoded link — is stable
+  // regardless of the order the loader happened to discover files in.
+  normalized.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  entries = Object.freeze(normalized);
+  return entries;
+}
+
+/** Every registered user layer, id-sorted. */
+export function userLayerEntries() {
+  return entries;
+}
+
+/**
+ * Serialization metadata for the registered user layers.
+ *
+ * `DataLayerManager.finalizeRegistrations` seals the registered layers against
+ * this metadata and refuses any layer that has no disposition, so a user layer
+ * has to appear here as well as in the codec or the application will not
+ * start. User layers are enabled/disabled only — the option codec (`lo`) is
+ * keyed by built-in tokens, which user layers deliberately do not have.
+ */
+export function userLayerMetadata() {
+  return entries.map((entry) =>
+    Object.freeze({ id: entry.id, disposition: 'enabled-only' }),
+  );
+}
+
+/** Ids only, id-sorted — what the layer-state codec works in. */
+export function userLayerIds() {
+  return entries.map((entry) => entry.id);
+}
+
+/** True when `id` belongs to a registered user layer. */
+export function isUserLayerId(id) {
+  return entries.some((entry) => entry.id === id);
+}
+
+/** Test hook: drop every registered user layer. */
+export function resetUserLayersForTest() {
+  entries = Object.freeze([]);
+}
+
+/** Bound the `ul` field the same way `l` is bounded. */
+const MAX_USER_LAYERS_CHARS = 256;
+
+/**
+ * Register operator-supplied layers with the state machinery.
+ *
+ * This is the one public door: it owns the built-in-id collision check,
+ * because this module owns the built-in id list. Call it once at startup,
+ * before any state is decoded or restored.
+ */
+export function registerUserLayers(entries) {
+  return sealUserLayers(entries, { reservedIds: REGISTERED_LAYER_IDS });
+}
+
 export function createDefaultLayerState() {
   return {
     version: LAYER_STATE_VERSION,
@@ -673,9 +784,12 @@ export function normalizeLayerState(candidate) {
       ? input.enabledLayerIds.map(String)
       : [],
   );
-  const enabledLayerIds = REGISTERED_LAYER_IDS.filter((id) =>
-    requestedEnabled.has(id),
-  );
+  // Built-ins first in registry order, then user layers in id order, so the
+  // canonical form stays deterministic no matter what order callers supply.
+  const enabledLayerIds = [
+    ...REGISTERED_LAYER_IDS.filter((id) => requestedEnabled.has(id)),
+    ...userLayerIds().filter((id) => requestedEnabled.has(id)),
+  ];
   const enabled = new Set(enabledLayerIds);
   const options = Object.fromEntries(
     OPTION_OWNER_IDS.map((ownerId) => [
@@ -735,6 +849,12 @@ export function encodeLayerStateParams(params, state) {
       .map((entry) => entry.token)
       .join('.'),
   );
+  // User layers ride in their own field, addressed by id, so they never spend
+  // a share token. Absent when none are on, exactly like `lo`.
+  const enabledUserLayerIds = userLayerIds().filter((id) => enabled.has(id));
+  if (enabledUserLayerIds.length)
+    params.set('ul', enabledUserLayerIds.join('.'));
+  else params.delete('ul');
   const encodedOptions = [];
   for (const ownerId of OPTION_OWNER_IDS) {
     const ownerEntry = REGISTRY_BY_ID.get(ownerId);
@@ -771,6 +891,16 @@ export function decodeLayerStateParams(params) {
   const enabledLayerIds = layerTokens.map(
     (token) => REGISTRY_BY_TOKEN.get(token).id,
   );
+  // `ul` deliberately does NOT fail the payload on an unknown id, unlike `l`.
+  // An unknown TOKEN means a corrupt or future link and must fail closed. An
+  // unknown user-layer id just means the link came from someone whose local
+  // layers differ from yours — the built-in half of their link is still
+  // perfectly valid, so drop what we do not have and restore the rest.
+  const rawUserLayers = String(params.get('ul') || '');
+  if (rawUserLayers.length > MAX_USER_LAYERS_CHARS) return null;
+  const knownUserLayerIds = new Set(userLayerIds());
+  for (const id of rawUserLayers.split('.').filter(Boolean))
+    if (knownUserLayerIds.has(id)) enabledLayerIds.push(id);
   const rawOptions = {};
   for (const assignment of rawOptionsField.split('_')) {
     if (!assignment) continue;

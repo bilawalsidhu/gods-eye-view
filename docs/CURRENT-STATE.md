@@ -720,6 +720,35 @@ future driver fix restores the effect with no code change; iOS/iPadOS platform
 detection is the backstop for when no probe context can be created. Applied
 during viewer construction, before any tile builds a draw command.
 
+## User layers
+
+Layer modules placed in `src/userLayers/` as `<name>.layer.js` are discovered at
+build time and registered without any edit to a tracked file; those files are
+gitignored, so a local layer never enters a diff and never conflicts on an
+upstream sync. Discovery is build-time because the bundler has to see the
+specifiers, and a runtime dynamic import would be neither bundled nor allowed
+by the application's content-security policy.
+
+User layers carry no one-character share token. The built-in token space is 36
+slots and globally contended, so a locally added layer that took one would
+collide with the next upstream assignment. They are addressed by id in a
+separate `ul` share field instead, capped at 16 layers and 256 characters. An
+unknown id in `ul` is skipped so a link authored on an install with different
+layers still restores its built-in half, while an unknown token in `l` still
+fails the payload closed. Local storage is id-keyed already and needs nothing
+extra.
+
+Each registered user layer also contributes an `enabled-only` serialization
+disposition, which the catalog pairs with its instance and
+`finalizeRegistrations` seals against; a layer registered in the codec alone
+fails startup with a serialization registry mismatch.
+
+Registration validates the id grammar, rejects collisions with built-in ids and
+duplicates, requires a `createLayer` factory, and sorts by id so discovery order
+cannot reach the encoded link. Panel visibility defaults to on for user layers.
+See `docs/USER-LAYERS.md`.
+
+
 ## Map Source control ownership
 
 Map Source controls own chip listeners, source-state subscriptions and selection
