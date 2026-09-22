@@ -4,22 +4,12 @@ import {
   resolveImageryHost,
   imageryHostStatus,
   NO_IMAGERY_HOST,
-  WEATHER_TILESET_MIN_HEIGHT_METERS,
 } from './imageryHost.js';
 
-test('height suspension applies strictly below 60 km to tilesets, with no-host precedence', () => {
-  assert.equal(WEATHER_TILESET_MIN_HEIGHT_METERS, 60_000);
-  for (const height of [1200, 59_999, 60_000, 60_001]) {
-    const camera = { positionCartographic: { height } };
-    assert.equal(
-      imageryHostStatus({ kind: 'tileset' }, camera),
-      height < WEATHER_TILESET_MIN_HEIGHT_METERS
-        ? 'Hidden below 60 km on 3D Tiles'
-        : null,
-    );
-    assert.equal(imageryHostStatus({ kind: 'globe' }, camera), null);
-    assert.equal(imageryHostStatus({ kind: 'none' }, camera), NO_IMAGERY_HOST);
-  }
+test('only a missing host suspends weather; 3D Tiles has no height gate', () => {
+  assert.equal(imageryHostStatus({ kind: 'tileset' }), null);
+  assert.equal(imageryHostStatus({ kind: 'globe' }), null);
+  assert.equal(imageryHostStatus({ kind: 'none' }), NO_IMAGERY_HOST);
 });
 
 test('visible globe takes precedence over a tileset', () => {

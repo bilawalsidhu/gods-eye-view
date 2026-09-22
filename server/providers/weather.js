@@ -15,6 +15,7 @@ const PRODUCTS = Object.freeze({
       'Observed 15-minute lightning strike density on an approximately 8 km grid, scaled as strikes/km²/min ×10³. Ground-network density, not individual GLM flashes.',
     attribution: 'NOAA/NWS nowCOAST; derived from Vaisala NLDN/GLD360',
     metadataTtlMs: 600_000,
+    image: Object.freeze({ width: 2048, height: 1024 }),
   }),
   radar: Object.freeze({
     service: 'weather_radar',
@@ -25,6 +26,7 @@ const PRODUCTS = Object.freeze({
       'Contiguous United States; gaps do not establish absence of precipitation.',
     description:
       'Observed MRMS radar base reflectivity (dBZ), approximately 1 km and 4-minute updates; not a rainfall forecast.',
+    image: Object.freeze({ width: 4096, height: 2048 }),
   }),
   clouds: Object.freeze({
     service: 'satellite',
@@ -35,6 +37,7 @@ const PRODUCTS = Object.freeze({
       'Global mosaic with incomplete polar coverage; nominal coverage 60°S–60°N.',
     description:
       'Longwave infrared cloud and land/sea temperature patterns, approximately 3 km; hourly updates with 2–3 hour source latency. Not a cloud-only mask.',
+    image: Object.freeze({ width: 2048, height: 1024 }),
   }),
   'clouds-regional': Object.freeze({
     service: 'satellite',
@@ -45,8 +48,13 @@ const PRODUCTS = Object.freeze({
       'GOES East/West regional North American coverage; not a global image.',
     description:
       'GOES-19/18 longwave infrared Band 14 cloud and surface temperature patterns, approximately 2 km and 5-minute updates. Not a cloud-only mask.',
+    image: Object.freeze({ width: 4096, height: 2048 }),
   }),
 });
+
+// Whole-extent images: 2:1 sizes up to each product's largest (the default).
+const IMAGE_SIZES = Object.freeze(['1024x512', '2048x1024', '4096x2048']);
+const MAX_IMAGE_BYTES = 16 * 1024 * 1024;
 
 function failure(code, status = 503) {
   return Object.assign(new Error(code), { code, status });
@@ -370,14 +378,10 @@ export function weatherProxy({
       tileTemplate: time
         ? `/api/weather/tile?product=${product}&time=${encodeURIComponent(time)}&z={z}&x={x}&y={y}`
         : null,
-      ...(product === 'clouds'
-        ? {
-            imageUrl: time
-              ? `/api/weather/image?product=clouds&time=${encodeURIComponent(time)}`
-              : null,
-            imageSize: { width: 2048, height: 1024 },
-          }
-        : {}),
+      imageUrl: time
+        ? `/api/weather/image?product=${product}&time=${encodeURIComponent(time)}`
+        : null,
+      imageSize: { ...spec.image },
     };
   }
   function json(res, status, body) {
@@ -402,7 +406,7 @@ export function weatherProxy({
         url.pathname === '/manifest'
           ? ['product']
           : url.pathname === '/image'
-            ? ['product', 'time']
+            ? ['product', 'time', 'size']
             : ['product', 'time', 'z', 'x', 'y', 'size'];
       if (
         req.url.length > 512 ||
@@ -416,11 +420,22 @@ export function weatherProxy({
       if (!Object.hasOwn(PRODUCTS, product))
         return json(res, 400, { error: 'unknown_weather_product' });
       const wholeImage = url.pathname === '/image';
-      const size = url.searchParams.get('size') ?? '256';
-      if (!['256', '512', '1024'].includes(size))
-        throw failure('invalid_weather_tile_size', 400);
-      if (wholeImage && product !== 'clouds')
-        throw failure('invalid_weather_image_product', 400);
+      const largest = PRODUCTS[product].image;
+      const size =
+        url.searchParams.get('size') ??
+        (wholeImage ? `${largest.width}x${largest.height}` : '256');
+      if (
+        wholeImage
+          ? !IMAGE_SIZES.includes(size) ||
+            Number.parseInt(size, 10) > largest.width
+          : !['256', '512', '1024'].includes(size)
+      )
+        throw failure(
+          wholeImage
+            ? 'invalid_weather_image_size'
+            : 'invalid_weather_tile_size',
+          400,
+        );
       if (url.pathname === '/manifest') {
         try {
           const value = await getMetadata(product, controller.signal);
@@ -460,16 +475,19 @@ export function weatherProxy({
             value.bounds.north,
           ]
         : tileBounds;
-      const imageShape = wholeImage
-        ? { width: 2048, height: 1024, maxBytes: 4 * 1024 * 1024 }
-        : {
-            width: Number(size),
-            height: Number(size),
-            maxBytes: Math.max(1024 * 1024, Number(size) ** 2 * 4 + 65_536),
-          };
-      // NOAA WMS capabilities advertise no MaxWidth/MaxHeight. Radar, GOES and
-      // lightning GetMap requests support 1024 square pixels without composition.
-      const key = `${product}:${time}:${wholeImage ? `image:${bbox.join(',')}` : `tile:${size}:${coords.join('/')}`}`;
+      const [width, height] = wholeImage
+        ? size.split('x').map(Number)
+        : [Number(size), Number(size)];
+      const imageShape = {
+        width,
+        height,
+        maxBytes: wholeImage
+          ? MAX_IMAGE_BYTES
+          : Math.max(1024 * 1024, width ** 2 * 4 + 65_536),
+      };
+      // NOAA WMS capabilities advertise no MaxWidth/MaxHeight. One GetMap
+      // returns a whole 4096×2048 extent or a 1024 px tile without composition.
+      const key = `${product}:${time}:${wholeImage ? `image:${size}:${bbox.join(',')}` : `tile:${size}:${coords.join('/')}`}`;
       let cached = tiles.get(key);
       if (cached && now() - cached.at <= 24 * HOUR) {
         tiles.delete(key);

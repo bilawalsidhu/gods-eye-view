@@ -44,10 +44,30 @@ export function validateWeatherSnapshot(value, product) {
   return value;
 }
 
-export function weatherImageUrl(time) {
-  if (!Number.isFinite(Date.parse(time)))
+/** Largest whole-extent image per product; also the proxy default size. */
+export const WEATHER_IMAGE_SIZES = Object.freeze({
+  radar: Object.freeze({ width: 4096, height: 2048 }),
+  'clouds-regional': Object.freeze({ width: 4096, height: 2048 }),
+  clouds: Object.freeze({ width: 2048, height: 1024 }),
+  lightning: Object.freeze({ width: 2048, height: 1024 }),
+});
+
+export function weatherImageUrl(product, time, { width, height } = {}) {
+  if (!WEATHER_PRODUCTS.includes(product) || !Number.isFinite(Date.parse(time)))
     throw new Error('Invalid weather frame');
-  return `/api/weather/image?product=clouds&time=${encodeURIComponent(time)}`;
+  const largest = WEATHER_IMAGE_SIZES[product];
+  let size = '';
+  if (width !== undefined || height !== undefined) {
+    if (
+      ![1024, 2048, 4096].includes(width) ||
+      height !== width / 2 ||
+      width > largest.width
+    )
+      throw new Error('Invalid weather image size');
+    // The largest size is the proxy default: one frame has one URL.
+    if (width !== largest.width) size = `&size=${width}x${height}`;
+  }
+  return `/api/weather/image?product=${product}&time=${encodeURIComponent(time)}${size}`;
 }
 
 export function weatherTileUrl(product, time, { size } = {}) {

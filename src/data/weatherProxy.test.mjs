@@ -91,7 +91,11 @@ test('lightning density uses a fixed observed WMS product with attribution and t
   assert.match(manifest.coverage, /not global/);
   assert.match(manifest.attribution, /Vaisala/);
   assert.equal(manifest.observedAt, TIME);
-  assert.equal(manifest.imageUrl, undefined);
+  assert.equal(
+    manifest.imageUrl,
+    `/api/weather${wholeImage(TIME, 'lightning')}`,
+  );
+  assert.deepEqual(manifest.imageSize, { width: 2048, height: 1024 });
   assert.equal((await request(tile({ product: 'lightning' }))).statusCode, 200);
   const map = calls[1].url;
   assert.equal(map.origin, 'https://nowcoast.noaa.gov');
@@ -106,7 +110,6 @@ test('lightning density uses a fixed observed WMS product with attribution and t
   clock += 2000;
   await request('/manifest?product=lightning');
   assert.equal(calls.length, 3);
-  assert.equal((await request(wholeImage(TIME, 'lightning'))).statusCode, 400);
 });
 
 test('capabilities select exact leaves and preserve irregular observation times', () => {
@@ -191,13 +194,13 @@ test('manifest provides honest coverage, actual frame times and a same-origin ti
       product === 'radar' ? /not a rainfall forecast/ : /Not a cloud-only mask/,
     );
     if (product === 'clouds') assert.match(value.description, /2–3 hour/);
-    if (product === 'clouds') {
-      assert.equal(value.imageUrl, `/api/weather${wholeImage()}`);
-      assert.deepEqual(value.imageSize, { width: 2048, height: 1024 });
-    } else {
-      assert.equal(value.imageUrl, undefined);
-      assert.equal(value.imageSize, undefined);
-    }
+    assert.equal(value.imageUrl, `/api/weather${wholeImage(TIME, product)}`);
+    assert.deepEqual(
+      value.imageSize,
+      product === 'clouds'
+        ? { width: 2048, height: 1024 }
+        : { width: 4096, height: 2048 },
+    );
   }
   for (const call of calls) {
     assert.equal(call.url.hostname, 'nowcoast.noaa.gov');
@@ -666,7 +669,7 @@ test('global infrared image uses one fixed advertised extent and exact 2048x1024
   );
 });
 
-test('whole-image route rejects other products, dimensions, coordinates and arbitrary destinations', async () => {
+test('whole-image route rejects unknown products, sizes above each product limit, coordinates and arbitrary destinations', async () => {
   let calls = 0;
   const { request } = install({
     fetchImpl: async () => {
@@ -675,8 +678,16 @@ test('whole-image route rejects other products, dimensions, coordinates and arbi
     },
   });
   for (const url of [
-    wholeImage(TIME, 'radar'),
-    wholeImage(TIME, 'clouds-regional'),
+    wholeImage(TIME, 'other'),
+    wholeImage() + '&size=4096x2048',
+    wholeImage(TIME, 'lightning') + '&size=4096x2048',
+    wholeImage(TIME, 'radar') + '&size=8192x4096',
+    wholeImage(TIME, 'radar') + '&size=2048x2048',
+    wholeImage(TIME, 'radar') + '&size=512x256',
+    wholeImage(TIME, 'radar') + '&size=2048X1024',
+    wholeImage(TIME, 'radar') + '&size=02048x1024',
+    wholeImage(TIME, 'radar') + '&size=2048',
+    wholeImage(TIME, 'radar') + '&size=1024x512&size=2048x1024',
     wholeImage() + '&width=4096',
     wholeImage() + '&height=2048',
     wholeImage() + '&z=0',
@@ -715,11 +726,11 @@ test('whole-image observations must be advertised and unavailable manifests expo
   assert.equal(manifest.imageUrl, null);
 });
 
-test('whole-image PNG bounds reject wrong dimensions and cap declared or streamed bytes at 4 MiB', async () => {
+test('whole-image PNG bounds reject wrong dimensions and cap declared or streamed bytes at 16 MiB', async () => {
   for (const bytes of [
     png(256, 256),
     png(2048, 2048),
-    png(2048, 1024, 4 * 1024 * 1024 + 1),
+    png(2048, 1024, 16 * 1024 * 1024 + 1),
   ]) {
     const { request } = install({
       fetchImpl: async (url) =>
@@ -741,7 +752,7 @@ test('whole-image PNG bounds reject wrong dimensions and cap declared or streame
             {
               headers: {
                 'Content-Type': 'image/png',
-                'Content-Length': String(4 * 1024 * 1024 + 1),
+                'Content-Length': String(16 * 1024 * 1024 + 1),
               },
             },
           ),
@@ -752,13 +763,59 @@ test('whole-image PNG bounds reject wrong dimensions and cap declared or streame
     fetchImpl: async (url) =>
       url.includes('GetCapabilities')
         ? new Response(xml())
-        : image(png(2048, 1024, 2 * 1024 * 1024)),
+        : image(png(4096, 2048, 6 * 1024 * 1024)),
   });
   assert.equal(
-    (await valid.request(wholeImage())).statusCode,
+    (await valid.request(wholeImage(TIME, 'clouds-regional'))).statusCode,
     200,
-    'whole image may exceed the tile-only 1 MiB cap',
+    'a whole regional frame may exceed the 4 MiB tile cap',
   );
+});
+
+test('every product serves one whole-extent image at its advertised bounds, sized up to its limit', async () => {
+  const maps = [];
+  const { request } = install({
+    fetchImpl: async (url) => {
+      if (url.includes('GetCapabilities')) return new Response(xml());
+      const params = new URL(url).searchParams;
+      maps.push(params);
+      return image(
+        png(Number(params.get('width')), Number(params.get('height'))),
+      );
+    },
+  });
+  for (const [product, name, width] of [
+    ['radar', NAMES[0], 4096],
+    ['clouds-regional', NAMES[2], 4096],
+    ['lightning', NAMES[3], 2048],
+    ['clouds', NAMES[1], 2048],
+  ]) {
+    maps.length = 0;
+    const response = await request(wholeImage(TIME, product));
+    assert.equal(response.statusCode, 200, product);
+    assert.equal(
+      response.headers['Cache-Control'],
+      'public, max-age=86400, immutable',
+    );
+    assert.equal(response.body.readUInt32BE(16), width);
+    assert.equal(response.body.readUInt32BE(20), width / 2);
+    assert.equal(maps.length, 1, 'one upstream request, no composition');
+    assert.equal(maps[0].get('layers'), name);
+    assert.equal(maps[0].get('bbox'), '-130,20,-60,55');
+    assert.equal(maps[0].get('width'), String(width));
+    assert.equal(maps[0].get('height'), String(width / 2));
+    const smaller = `${wholeImage(TIME, product)}&size=1024x512`;
+    assert.equal((await request(smaller)).statusCode, 200);
+    assert.equal(maps.length, 2, 'size is part of the cache identity');
+    assert.equal(maps[1].get('width'), '1024');
+    assert.deepEqual((await request(smaller)).body.readUInt32BE(16), 1024);
+    assert.equal(
+      (await request(`${wholeImage(TIME, product)}&size=${width}x${width / 2}`))
+        .statusCode,
+      200,
+    );
+    assert.equal(maps.length, 2, 'the explicit default shares the cache entry');
+  }
 });
 
 test('global whole images and tiles share a byte budget without sharing cache identities', async () => {

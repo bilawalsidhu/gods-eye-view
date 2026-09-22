@@ -31,7 +31,7 @@ function createCanvas() {
   return canvas;
 }
 
-test('real Cesium geographic raster provider crops level 0/1 wind tiles with preserved pixels', async () => {
+test('real Cesium geographic provider crops level 0/1 tiles from a decoded canvas with preserved pixels', async () => {
   const raster = createFieldRaster(
     {
       nx: 8,
@@ -51,9 +51,14 @@ test('real Cesium geographic raster provider crops level 0/1 wind tiles with pre
     362,
   );
   const credit = new Cesium.Credit('NOAA GFS');
+  const texture = {
+    width: raster.width,
+    height: raster.height,
+    rgba: raster.rgba,
+  };
   const provider = createRasterTileProvider({
     cesium: Cesium,
-    raster,
+    texture,
     credit,
     createCanvas,
   });

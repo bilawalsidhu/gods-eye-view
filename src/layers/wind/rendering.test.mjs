@@ -3,7 +3,11 @@ import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 
 import { createWindRendering } from './rendering.js';
-import { WEATHER_TILESET_MIN_HEIGHT_METERS } from '../weather/imageryHost.js';
+import { NO_IMAGERY_HOST } from '../weather/imageryHost.js';
+import {
+  createShellCesium,
+  createShellScene,
+} from '../weather/shellFixture.mjs';
 
 function event() {
   const listeners = new Set();
@@ -30,7 +34,9 @@ function harness({
   onStatusChange,
   getHost,
   eventTarget,
+  shell = false,
 } = {}) {
+  const shellScene = shell ? createShellScene() : null;
   const strokes = [];
   const clears = [];
   const textures = [];
@@ -172,10 +178,17 @@ function harness({
       },
       preRender,
       requestRender() {},
+      ...(shellScene
+        ? {
+            primitives: shellScene.primitives,
+            postRender: shellScene.postRender,
+          }
+        : {}),
     },
     isDestroyed: () => false,
   };
   const cesium = {
+    ...(shell ? createShellCesium() : {}),
     GeographicTilingScheme: Cesium.GeographicTilingScheme,
     Credit: Cesium.Credit,
     Event: Cesium.Event,
@@ -221,8 +234,10 @@ function harness({
     motion,
     preRender,
     viewer,
+    cesium,
     imagery,
     removed,
+    primitives: () => shellScene?.primitives.items ?? [],
   };
 }
 
@@ -975,11 +990,12 @@ for (const eventName of ['preRender', 'moveEnd']) {
   });
 }
 
-test('scalar host replaces incompatible providers and retains imagery through no-host events', () => {
+test('scalar field becomes a raised shell on 3D Tiles and survives no-host events', () => {
   const eventTarget = new EventTarget();
   let host;
   const h = harness({
     eventTarget,
+    shell: true,
     getHost: () =>
       host ?? { collection: h.viewer.imageryLayers, kind: 'globe' },
   });
@@ -989,55 +1005,55 @@ test('scalar host replaces incompatible providers and retains imagery through no
   h.rendering.start();
   const original = h.imagery[0];
   assert.ok(original);
-  const items = [];
-  const collection = {
-    add(layer) {
-      items.push(layer);
-    },
-    addImageryProvider(provider) {
-      const layer = { provider };
-      items.push(layer);
-      return layer;
-    },
-    remove(layer, destroy) {
-      items.splice(items.indexOf(layer), 1);
-      if (destroy) layer.destroyed = true;
-    },
-    get length() {
-      return items.length;
-    },
-    get: (i) => items[i],
-    raiseToTop(layer) {
-      items.push(...items.splice(items.indexOf(layer), 1));
+  assert.equal(h.rendering.getDiagnostics().host, 'globe');
+  const tiles = {
+    addImageryProvider() {
+      throw new Error('nothing drapes on 3D Tiles');
     },
   };
-  host = { collection, kind: 'tileset' };
+  host = { collection: tiles, kind: 'tileset' };
   eventTarget.dispatchEvent(new Event('gev:map-stack-changed'));
   assert.equal(h.imagery.length, 0);
-  const tiled = items[0];
-  assert.notEqual(tiled, original);
-  assert.equal(tiled.provider.maximumLevel, 2);
-  assert.equal(tiled.provider.tileWidth, 512);
-  assert.equal(tiled.provider.tileHeight, 512);
   assert.equal(h.removed[0].destroy, true);
+  const [primitive] = h.primitives();
+  const geometry = primitive.options.geometryInstances.geometry.options;
+  assert.equal(geometry.height, 5_000);
+  assert.equal(geometry.rectangle, h.cesium.Rectangle.MAX_VALUE);
+  const material = primitive.appearance.material;
   assert.equal(h.textures.length, 2);
-  assert.equal(h.textures[1].width, 720);
-  assert.equal(h.textures[1].height, 362);
+  assert.equal(material.uniforms.image, h.textures[1]);
+  assert.equal(h.textures[1].width, 360);
+  assert.equal(h.textures[1].height, 181);
+  assert.equal(material.uniforms.alpha, 0.85);
+  assert.equal(primitive.show, true);
+  const diagnostics = h.rendering.getDiagnostics();
+  assert.equal(diagnostics.host, 'shell');
+  assert.equal(diagnostics.imageryActive, true);
+  assert.equal(diagnostics.shell.height, 5_000);
   host = { collection: null, kind: 'none' };
   eventTarget.dispatchEvent(new Event('gev:map-stack-changed'));
-  assert.equal(items.length, 0);
-  assert.equal(
-    h.rendering.getDiagnostics().imageryError,
-    'Hidden by this map source · choose a globe map',
-  );
-  host = { collection, kind: 'tileset' };
+  assert.equal(primitive.show, false);
+  assert.equal(h.rendering.getDiagnostics().imageryError, NO_IMAGERY_HOST);
+  h.viewer.scene.camera.moveEnd.emit();
+  assert.equal(primitive.show, false, 'camera events keep it hidden');
+  host = { collection: tiles, kind: 'tileset' };
   h.rendering.rehome();
-  assert.deepEqual(items, [tiled]);
+  assert.deepEqual(h.primitives(), [primitive]);
+  assert.equal(primitive.show, true);
+  assert.equal(h.textures.length, 2, 'the retained shell is reused');
   assert.equal(h.rendering.getDiagnostics().imageryError, null);
+  host = null;
+  h.rendering.rehome();
+  assert.equal(primitive.destroyed, true);
+  assert.equal(material.destroyed, true);
+  assert.equal(h.primitives().length, 0);
+  assert.equal(h.imagery.length, 1);
+  assert.equal(h.rendering.getDiagnostics().host, 'globe');
   h.rendering.destroy();
-  assert.equal(tiled.destroyed, true);
+  assert.equal(h.imagery.length, 0);
+  assert.equal(h.viewer.scene.postRender.size, 0);
   eventTarget.dispatchEvent(new Event('gev:map-stack-changed'));
-  assert.equal(items.length, 0);
+  assert.equal(h.primitives().length, 0);
 });
 
 test('scalar installation with no host reports hidden and installs on restore', () => {
@@ -1060,7 +1076,7 @@ test('scalar installation with no host reports hidden and installs on restore', 
 });
 
 for (const overlay of ['speed', 'temperature', 'pressure']) {
-  test(`${overlay} tileset alpha changes only on moveEnd, install or rehome in 0.1 steps`, () => {
+  test(`${overlay} shell alpha follows the height fade in 0.1 steps on moveEnd, install or rehome`, () => {
     const gpu = {
       supported: () => true,
       setField: () => true,
@@ -1074,6 +1090,7 @@ for (const overlay of ['speed', 'temperature', 'pressure']) {
     };
     let kind = 'tileset';
     const h = harness({
+      shell: true,
       createGpuRendering: () => gpu,
       getHost: () => ({ collection: h.viewer.imageryLayers, kind }),
     });
@@ -1091,51 +1108,43 @@ for (const overlay of ['speed', 'temperature', 'pressure']) {
     h.rendering.setOptions({ overlay });
     h.rendering.setField(field);
     h.rendering.start();
-    const layer = h.imagery[0];
-    assert.equal(layer.provider.maximumLevel, 2);
-    assert.equal(layer.alpha, overlay === 'temperature' ? 0.5 : 0.4);
-    let writes = layer.alphaWrites;
+    assert.equal(h.imagery.length, 0);
+    const [primitive] = h.primitives();
+    const { uniforms } = primitive.appearance.material;
+    assert.equal(uniforms.alpha, overlay === 'temperature' ? 0.5 : 0.4);
+    let alpha = uniforms.alpha;
+    let writes = 0;
+    Object.defineProperty(uniforms, 'alpha', {
+      get: () => alpha,
+      set(value) {
+        alpha = value;
+        writes++;
+      },
+    });
     camera.positionCartographic.height = 100_000;
     h.preRender.emit();
     h.rendering.setOptions({ paused: true });
-    assert.equal(
-      layer.alphaWrites,
-      writes,
-      'preRender and pause do not change tileset alpha',
-    );
+    assert.equal(writes, 0, 'preRender and pause do not change the shell');
     camera.moveEnd.emit();
-    assert.equal(layer.alpha, 0);
-    assert.equal(layer.show, false);
-    for (const height of [
-      WEATHER_TILESET_MIN_HEIGHT_METERS - 1,
-      WEATHER_TILESET_MIN_HEIGHT_METERS,
-      WEATHER_TILESET_MIN_HEIGHT_METERS + 1,
-    ]) {
-      camera.positionCartographic.height = height;
-      camera.moveEnd.emit();
-      assert.equal(
-        layer.alpha,
-        0,
-        'existing fade still hides the field above the hard floor',
-      );
-      assert.equal(layer.show, false);
-    }
+    assert.equal(uniforms.alpha, 0);
+    assert.equal(primitive.show, false);
+    camera.positionCartographic.height = 59_999;
+    camera.moveEnd.emit();
+    assert.equal(uniforms.alpha, 0, 'the fade still hides the field low down');
+    assert.equal(primitive.show, false);
     camera.positionCartographic.height = Math.sqrt(200_000 * 1_200_000);
     camera.moveEnd.emit();
-    writes = layer.alphaWrites;
+    assert.equal(primitive.show, true);
+    writes = 0;
     camera.positionCartographic.height *= 1.01;
     camera.moveEnd.emit();
-    assert.equal(
-      layer.alphaWrites,
-      writes,
-      'same quantization bucket avoids draw-command rebuilds',
-    );
+    assert.equal(writes, 0, 'the same quantization bucket writes nothing');
     camera.positionCartographic.height = 1_200_000;
     h.rendering.rehome();
-    assert.equal(layer.alpha, overlay === 'temperature' ? 1 : 0.9);
+    assert.equal(uniforms.alpha, overlay === 'temperature' ? 1 : 0.9);
     kind = 'globe';
     h.rendering.rehome();
-    assert.notEqual(h.imagery[0], layer);
+    assert.equal(primitive.destroyed, true);
     assert.equal(h.imagery[0].provider.options.tileWidth, 360);
     assert.equal(h.imagery[0].alpha, overlay === 'temperature' ? 1 : 0.85);
     h.rendering.destroy();
@@ -1144,13 +1153,14 @@ for (const overlay of ['speed', 'temperature', 'pressure']) {
 }
 
 for (const overlay of ['speed', 'temperature', 'pressure']) {
-  test(`${overlay} canvas fallback keeps the tileset hard floor without changing globe alpha`, () => {
+  test(`${overlay} canvas fallback shows the shell at street level without changing globe alpha`, () => {
     let kind = 'tileset';
     const h = harness({
+      shell: true,
       getHost: () => ({ collection: h.viewer.imageryLayers, kind }),
     });
     const camera = h.viewer.scene.camera;
-    camera.positionCartographic.height = WEATHER_TILESET_MIN_HEIGHT_METERS - 1;
+    camera.positionCartographic.height = 1200;
     h.rendering.attach();
     h.rendering.setOptions({ overlay });
     h.rendering.setField({
@@ -1162,26 +1172,22 @@ for (const overlay of ['speed', 'temperature', 'pressure']) {
       },
     });
     h.rendering.start();
-    const layer = h.imagery[0];
+    const [primitive] = h.primitives();
     const textures = h.textures.length;
     const baseAlpha = overlay === 'temperature' ? 1 : 0.85;
-    assert.equal(layer.show, false);
-    assert.equal(layer.alpha, baseAlpha);
-    camera.positionCartographic.height = WEATHER_TILESET_MIN_HEIGHT_METERS;
+    assert.equal(primitive.show, true, 'no height gate on 3D Tiles');
+    assert.equal(primitive.appearance.material.uniforms.alpha, baseAlpha);
     camera.moveEnd.emit();
-    assert.equal(layer.show, true);
-    camera.positionCartographic.height = 1200;
     h.preRender.emit();
-    assert.equal(layer.show, true, 'tileset visibility waits for moveEnd');
-    camera.moveEnd.emit();
-    assert.equal(layer.show, false);
+    assert.equal(primitive.show, true);
     assert.equal(
       h.textures.length,
       textures,
-      'height changes keep the field texture',
+      'camera changes keep the field texture',
     );
     kind = 'globe';
     h.rendering.rehome();
+    assert.equal(primitive.destroyed, true);
     assert.equal(h.imagery[0].show, true);
     assert.equal(h.imagery[0].alpha, baseAlpha);
     h.rendering.destroy();

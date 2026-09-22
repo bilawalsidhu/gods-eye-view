@@ -48,12 +48,17 @@ export function decodeInfraredImage(blob, signal) {
   });
 }
 
-/** Acquire one capped global mosaic before adding any imagery layer. */
-export async function acquireInfraredMosaic(
+/** Fetch one capped whole-extent frame and draw it into a canvas. Infrared frames
+ * get the display transfer; a canvas also keeps Cesium's texture row order, which
+ * an ImageBitmap upload would not. The decoded image is always released. */
+export async function acquireWeatherImage(
+  product,
   time,
   {
     signal,
     mode,
+    size,
+    maxBytes,
     createCanvas,
     fetchImpl,
     decodeImage = decodeInfraredImage,
@@ -61,9 +66,11 @@ export async function acquireInfraredMosaic(
     onFetched = () => {},
   },
 ) {
-  const response = await fetchImpl(weatherImageUrl(time), { signal });
+  const response = await fetchImpl(weatherImageUrl(product, time, size), {
+    signal,
+  });
   if (!response.ok) throw new Error(`Weather HTTP ${response.status}`);
-  const bytes = await readResponseBytesCapped(response, MAX_MOSAIC_BYTES);
+  const bytes = await readResponseBytesCapped(response, maxBytes);
   signal.throwIfAborted();
   onFetched();
   const started = now();
@@ -73,11 +80,28 @@ export async function acquireInfraredMosaic(
   );
   try {
     signal.throwIfAborted();
-    if (image.width !== 2048 || image.height !== 1024)
-      throw new Error('Invalid infrared mosaic dimensions');
-    const texture = processInfraredImage(image, mode, createCanvas);
+    if (image.width !== size.width || image.height !== size.height)
+      throw new Error('Invalid weather image dimensions');
+    let texture;
+    if (product === 'clouds' || product === 'clouds-regional')
+      texture = processInfraredImage(image, mode, createCanvas);
+    else {
+      texture = createCanvas();
+      texture.width = image.width;
+      texture.height = image.height;
+      texture.getContext('2d').drawImage(image, 0, 0);
+    }
     return { texture, decodeMs: now() - started };
   } finally {
     image.close?.();
   }
+}
+
+/** Acquire one capped global mosaic before adding any imagery layer. */
+export function acquireInfraredMosaic(time, options) {
+  return acquireWeatherImage('clouds', time, {
+    ...options,
+    size: { width: 2048, height: 1024 },
+    maxBytes: MAX_MOSAIC_BYTES,
+  });
 }

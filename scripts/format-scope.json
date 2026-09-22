@@ -742,6 +742,8 @@
   "src/layers/weather/clock.js",
   "src/layers/weather/clock.test.mjs",
   "src/layers/weather/rendering.js",
+  "src/layers/weather/shellRendering.js",
+  "src/layers/weather/shellRendering.test.mjs",
   "src/layers/weather/infraredAlpha.js",
   "src/layers/weather/infraredAlpha.test.mjs",
   "src/layers/weather/infraredImage.js",

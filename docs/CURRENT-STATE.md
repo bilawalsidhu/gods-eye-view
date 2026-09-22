@@ -23,13 +23,12 @@ moves through a fixed forecast; it does not advance forecast time.
 Temperature is air temperature at 2 m in °C; pressure is mean sea-level pressure
 in hPa. Optional companion fields come from the same model run/forecast as the
 wind. A missing or invalid companion leaves usable wind visible and identifies
-the selected field as unavailable. The color texture drapes the globe basemap or
-the active photorealistic 3D Tiles. With GPU rendering, the color field fades out
-below ~1,200 km camera height and is hidden at or below 200 km. Globe imagery
-keeps the smooth per-frame fade. On 3D Tiles, alpha is quantized to 0.1 steps
-and updated only on camera move end, installation or rehome, limiting Cesium's
-model draw-command rebuilds. The tileset field uses a 720×362 raster served as
-256 px geographic tiles with maximum level 2; the globe keeps its single image.
+the selected field as unavailable. The color texture drapes the globe basemap; on
+photorealistic 3D Tiles the same 360×181 raster is a raised shell 5 km above the
+ellipsoid. With GPU rendering, the color field fades out below ~1,200 km camera
+height and is hidden at or below 200 km. Globe imagery keeps the smooth
+per-frame fade. On 3D Tiles, the shell alpha is quantized to 0.1 steps and
+updated only on camera move end, installation or rehome.
 GPU wind curves follow the sampled forecast field. Their 12 km display lift is a
 rendering aid; the source remains 10 m wind,
 not a forecast at the displayed height or a street-level observation.
@@ -57,28 +56,27 @@ catalog construction owns each instance.
 
 Wind animates one forecast without advancing forecast time. Separate Weather
 observation layers provide radar and satellite history; none claims measured cloud volume.
-Weather imagery drapes onto the active globe or photorealistic 3D Tiles, retaining
-its observation when the map source changes. A map without an imagery host pauses
-history while metadata refresh continues, then resumes when a host returns.
-On 3D Tiles, observed weather imagery hides below 60 km camera height to avoid
-re-mapping dense tiles; it retains the shown frame and playback intent, then
-resumes at or above 60 km. Globe hosts are unaffected.
-On 3D Tiles, radar, regional infrared and lightning use 1024 px tiles with
-maximum levels 5 below 400 km, 4 from 400 km through 1.5 Mm, and 3 above
-1.5 Mm. Band changes use 10% hysteresis on camera move-end and stage the
-retained observation through the existing frame swap. Cesium clamps draping
-to maximumLevel - 1 and truncates imagery above 10 textures per primitive;
-the coarser coverage reduces texture demand without changing layer order.
-Globe tiled products retain 256 px / maximum level 6. Global mosaic crops use
-maximum level 3 on both hosts; wind color fields use 512 px / maximum level 2
-on 3D Tiles and retain the single raster on globe hosts. Diagnostics expose
-the draping band, tile size and maximum level (null on globe hosts).
-The tile proxy accepts size=256 (default), 512 or 1024 and keys cached bytes
-by size, retaining the 24-hour immutable response and eight upstream slots.
-NOAA radar, regional infrared and lightning returned 1024×1024 PNGs in a
-live request check; their WMS capabilities advertise no image-size maximum.
-Google-host altitude coverage, simultaneous four-layer texture counts and
-transition visibility still require the browser altitude probe.
+Weather imagery drapes onto the globe basemap. On photorealistic 3D Tiles each
+observed product is instead a raised, translucent shell: one rectangle over the
+product bounds at a fixed height (global infrared 5.5 km, regional infrared
+5.8 km, radar 6.2 km, lightning 6.6 km) showing one full-extent image per frame.
+Draping onto 3D Tiles was limited by Cesium's per-primitive texture budget and
+rebuilt every tile's coverage on each change; shells avoid both and show at any
+camera height. Shells draw first in the opaque pass, in height order,
+alpha-blended without depth writes: lightning draws over the other products,
+other map content draws over the shells, and shells are not pickable. A
+map-source change tears down one renderer and restages the shown observation on
+the other. A map without an imagery host pauses history while metadata refresh
+continues, then resumes when a host returns.
+Globe tiled products use 256 px tiles to maximum level 6. The tile proxy accepts
+size=256 (default), 512 or 1024 and keys cached bytes by size, retaining the
+24-hour immutable response and eight upstream slots. The image proxy serves every
+product as one whole-extent PNG at its advertised bounds, up to 4096×2048 for
+radar and regional infrared and 2048×1024 for lightning and global infrared
+(`size=W×H`, default the maximum), capped at 16 MiB and cached by product, time
+and size. NOAA returned each of these sizes from a single request in a live
+check; the WMS capabilities advertise no size maximum. Devices whose texture
+limit is below the product size request halved images.
 Clouds only applies a soft brightness ramp to decoded pixels once, using
 Cesium's sRGB-to-linear conversion (`channel ** 2.2`) and smoothstep from 0.40
 to 0.70. The old 0.55 threshold is the ramp midpoint. RGB and source alpha are
@@ -86,29 +84,30 @@ preserved in Full image mode; both modes use the chosen layer opacity. This
 is a display filter, not a cloud mask. Satellite share links retain the display
 mode; observation history remains transient and links open latest.
 Global infrared fetches one capped 4 MiB, 2048×1024 mosaic per frame and decodes
-and processes it before staging. Globe hosts crop that canvas into 256 px tiles;
-3D Tiles hosts use 512 px crops on a geographic 2×1 root grid bounded to the
-manifest extent, avoiding
-request-dependent contrast seams. Maximum level 3 accommodates Cesium 1.138's
-`maximumLevel - 1` draping coverage clamp. Rehoming rebuilds crop providers
-while reusing the decoded mosaic.
-Regional infrared retains network tiles and processes each decoded tile once.
+and processes it before staging. Globe hosts crop that canvas into 256 px tiles
+to maximum level 3 on a geographic 2×1 root grid bounded to the manifest extent,
+avoiding request-dependent contrast seams.
+On globe hosts, regional infrared retains network tiles and processes each
+decoded tile once; shells process each whole frame once.
 Exact-time tile and image responses are immutable for 24 hours; manifests and
-errors remain uncached. Each weather renderer retains up to 6 processed global
+errors remain uncached. Each globe renderer retains up to 6 processed global
 mosaics in a least-recently-used cache keyed by observation time and infrared
-mode (up to 48 MiB of canvas pixels). Disable clears the cache. Cache hits skip
+mode (up to 48 MiB of canvas pixels). Each shell keeps decoded frames in a
+least-recently-used cache bounded at 48 MiB; the shown frame and the newest
+decode are never evicted. Disable clears the caches. Cache hits skip
 fetch/decode and report `mosaic.cached: true` with zero decode time.
 During playback, a successful frame warms the next advertised observation,
-wrapping at the end. Global imagery warms a decoded mosaic; tiled products fetch
-at most eight level-0/1 tiles intersecting the view and product bounds. Prefetch
-is best effort, has a deadline, and cancels on frame replacement, pause,
-suspension or clear. Diagnostics expose mosaic count and active prefetch state.
+wrapping at the end. Global imagery and shells warm a decoded frame; globe tiled
+products fetch at most eight level-0/1 tiles intersecting the view and product
+bounds. Prefetch is best effort, has a deadline, and cancels on frame
+replacement, pause, suspension or clear. Diagnostics expose the renderer
+(`host`), mosaic count and active prefetch state.
 Browser cache reuse and scrub-back latency still require browser verification.
-Both Google tileset routes load draped imagery asynchronously so tiles keep
-drawing their own texture while weather loads. A replacement becomes visible
-before the previous layer retires on the next rendered frame; failed acquisition
-or staging retains the previous observation. Imagery ordering skips already
-ordered layers. Diagnostics expose the infrared mode and mosaic fetch/decode state.
+On globe hosts a replacement becomes visible before the previous layer retires
+on the next rendered frame; a shell keeps its previous texture until the new
+image is uploaded. Failed acquisition or staging retains the previous
+observation. Imagery ordering skips already ordered layers. Diagnostics expose
+the infrared mode and mosaic fetch/decode state.
 Throttled weather requests (429/503) get at most three retries per tile within
 a frame, independent of other tiles; successful requests reset only their own
 counter, and closing a frame clears its retry state.

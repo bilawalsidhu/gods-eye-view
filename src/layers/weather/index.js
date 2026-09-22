@@ -112,7 +112,7 @@ export function createWeatherLayer({
 
   function checkHost(resume = true) {
     const host = getHost();
-    const status = imageryHostStatus(host, viewer?.camera);
+    const status = imageryHostStatus(host);
     const changed = host.collection !== hostCollection || hostStatus !== status;
     hostCollection = host.collection;
     hostStatus = status;

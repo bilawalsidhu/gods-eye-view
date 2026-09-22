@@ -2,7 +2,7 @@ import { weatherTileUrl } from './source.js';
 import { orderWeatherImagery } from './imageryOrder.js';
 import { imageryHostStatus } from './imageryHost.js';
 import { createRasterTileProvider } from './rasterTiles.js';
-import { drapingProfile } from './drapingProfile.js';
+import { createWeatherShell } from './shellRendering.js';
 import { readResponseBytesCapped } from '../../sources/httpBody.js';
 import {
   acquireInfraredMosaic,
@@ -14,18 +14,18 @@ const GLOBAL_TILE_MAXIMUM_LEVEL = 3;
 const MAX_MOSAICS = 6;
 const MAX_PREFETCH_TILES = 8;
 
-/** Own at most a displayed and a staging frame. Use native Cesium tile scheduling,
- * projection and texture disposal; the application clock is never touched. */
-export function createWeatherRendering({
+/** Globe imagery: own at most a displayed and a staging frame. Use native Cesium
+ * tile scheduling, projection and texture disposal; the application clock is never touched. */
+function createGlobeRendering({
   viewer,
   cesium,
-  getHost = () => ({ collection: viewer.imageryLayers, kind: 'globe' }),
-  onChange = () => {},
-  timeoutMs = 25_000,
-  now = () => performance.now(),
-  fetchImpl = (...args) => globalThis.fetch(...args),
+  getHost,
+  onChange,
+  timeoutMs,
+  now,
+  fetchImpl,
   decodeImage,
-  createCanvas = () => document.createElement('canvas'),
+  createCanvas,
 }) {
   let current = null;
   let incoming = null;
@@ -36,57 +36,12 @@ export function createWeatherRendering({
   const mosaics = new Map();
   let prefetchJob = null;
   let prefetchedKey = null;
-  let draping = null;
-  let offProfileCamera = null;
 
-  function profile(kind, product) {
-    if (kind === 'tileset') {
-      return product === 'clouds'
-        ? {
-            band: 'global',
-            tileSize: 512,
-            maximumLevel: GLOBAL_TILE_MAXIMUM_LEVEL,
-          }
-        : (draping ??
-            drapingProfile(viewer.camera?.positionCartographic?.height));
-    }
+  function profile(product) {
     return {
       tileSize: 256,
       maximumLevel: product === 'clouds' ? GLOBAL_TILE_MAXIMUM_LEVEL : 6,
     };
-  }
-  function sameProfile(frame, next) {
-    return (
-      frame.profile.tileSize === next.tileSize &&
-      frame.profile.maximumLevel === next.maximumLevel
-    );
-  }
-  function restage() {
-    const host = getHost();
-    if (
-      frameHidden ||
-      incoming ||
-      !current ||
-      imageryHostStatus(host, viewer.camera)
-    )
-      return;
-    if (
-      current.kind !== host.kind ||
-      !sameProfile(current, profile(host.kind, current.product))
-    )
-      void api.setFrame(current.snapshot, current.time, {
-        infrared: current.infrared,
-      });
-  }
-  function watchProfile() {
-    offProfileCamera ??= viewer.camera?.moveEnd?.addEventListener(() => {
-      if (getHost().kind === 'tileset')
-        draping = drapingProfile(
-          viewer.camera?.positionCartographic?.height,
-          draping?.band,
-        );
-      rehome();
-    });
   }
 
   function cancelPrefetch() {
@@ -135,7 +90,7 @@ export function createWeatherRendering({
     if (!coverage) return [];
     const scheme = new cesium.GeographicTilingScheme();
     const template = weatherTileUrl(snapshot.product, time, {
-      size: profile(getHost().kind, snapshot.product).tileSize,
+      size: profile(snapshot.product).tileSize,
     });
     const urls = [];
     for (let z = 0; z <= 1; z++) {
@@ -190,16 +145,15 @@ export function createWeatherRendering({
     remove(previous);
     previous.resolve(false);
   }
-  function rehome(rebuild = true) {
+  function rehome() {
     const host = getHost();
-    const { collection, kind } = host;
-    const hidden =
-      frameHidden || imageryHostStatus(host, viewer.camera) !== null;
+    const { collection } = host;
+    const hidden = frameHidden || imageryHostStatus(host) !== null;
     const changed =
       (current && current.collection !== collection) ||
       (incoming && incoming.collection !== collection);
     const visibilityChanged = current && current.layer.show === hidden;
-    if (changed || imageryHostStatus(host, viewer.camera) !== null) {
+    if (changed || imageryHostStatus(host) !== null) {
       cancelPrefetch();
       cancelIncoming();
       for (const frame of retiring) remove(frame);
@@ -216,12 +170,10 @@ export function createWeatherRendering({
         orderWeatherImagery(collection, current.layer, current.priority);
       }
     }
-    if (kind !== 'tileset') draping = null;
     if (changed || visibilityChanged) viewer.scene.requestRender();
-    if (rebuild) restage();
     return Boolean(changed || visibilityChanged);
   }
-  const api = {
+  return {
     rehome,
     cancelPrefetch,
     async prefetch(snapshot, time, { infrared = 'filtered' } = {}) {
@@ -230,7 +182,7 @@ export function createWeatherRendering({
         if (
           frameHidden ||
           incoming ||
-          imageryHostStatus(getHost(), viewer.camera) ||
+          imageryHostStatus(getHost()) ||
           !snapshot.times.includes(time)
         )
           return false;
@@ -266,20 +218,16 @@ export function createWeatherRendering({
     async setFrame(snapshot, time, { signal, infrared = 'filtered' } = {}) {
       signal?.throwIfAborted();
       cancelPrefetch();
-      rehome(false);
+      rehome();
       cancelIncoming();
       const host = getHost();
       const { collection, kind } = host;
-      if (imageryHostStatus(host, viewer.camera)) return false;
-      if (kind === 'tileset')
-        draping ??= drapingProfile(viewer.camera?.positionCartographic?.height);
-      watchProfile();
-      const nextProfile = profile(kind, snapshot.product);
+      if (imageryHostStatus(host)) return false;
+      const nextProfile = profile(snapshot.product);
       if (
         current?.time === time &&
         current.product === snapshot.product &&
         current.kind === kind &&
-        sameProfile(current, nextProfile) &&
         current.infrared === infrared
       )
         return true;
@@ -297,7 +245,6 @@ export function createWeatherRendering({
         controller: new AbortController(),
         collection,
         kind,
-        profile: nextProfile,
         priority:
           snapshot.product === 'lightning'
             ? 3
@@ -353,9 +300,6 @@ export function createWeatherRendering({
         frame.resolve(ok);
         viewer.scene.requestRender();
         onChange();
-        // A move may cross another band while acquisition is in flight. Finish
-        // the owned request first, then stage the latest profile exactly once.
-        if (ok) restage();
       };
       const abort = () => {
         if (incoming === frame) cancelIncoming();
@@ -539,9 +483,6 @@ export function createWeatherRendering({
       viewer.scene.requestRender();
     },
     clear() {
-      offProfileCamera?.();
-      offProfileCamera = null;
-      draping = null;
       cancelPrefetch();
       cancelIncoming();
       remove(current);
@@ -554,10 +495,7 @@ export function createWeatherRendering({
     },
     getDiagnostics() {
       return {
-        draping:
-          getHost().kind === 'tileset'
-            ? profile('tileset', (incoming || current)?.product)
-            : null,
+        host: 'globe',
         cache: { mosaics: mosaics.size, prefetching: !!prefetchJob },
         imageryCount:
           Number(!!current) + Number(!!incoming?.layer) + retiring.size,
@@ -571,9 +509,159 @@ export function createWeatherRendering({
         deferredTiles: incoming?.deferred.size ?? 0,
         loadedTiles: (incoming || current)?.loaded ?? 0,
         frameLoadMs: current?.loadMs ?? null,
-        error: imageryHostStatus(getHost(), viewer.camera) || lastError,
+        error: imageryHostStatus(getHost()) || lastError,
       };
     },
   };
-  return api;
+}
+
+/** Globe hosts keep draped imagery; 3D Tiles hosts get a raised shell per product.
+ * A host switch tears one renderer down and restages the last frame on the other. */
+export function createWeatherRendering({
+  viewer,
+  cesium,
+  getHost = () => ({ collection: viewer.imageryLayers, kind: 'globe' }),
+  onChange = () => {},
+  timeoutMs = 25_000,
+  now = () => performance.now(),
+  fetchImpl = (...args) => globalThis.fetch(...args),
+  decodeImage,
+  createCanvas = () => document.createElement('canvas'),
+  createShell = createWeatherShell,
+}) {
+  const shared = {
+    viewer,
+    cesium,
+    getHost,
+    onChange,
+    timeoutMs,
+    now,
+    fetchImpl,
+    decodeImage,
+    createCanvas,
+  };
+  const globe = createGlobeRendering(shared);
+  let shell = null;
+  let active = null;
+  let alpha = 0.7;
+  let hidden = false;
+  let shown = null;
+  let restaging = null;
+
+  // A host without imagery keeps the active renderer, which retains its frame.
+  const wanted = () => {
+    const { kind } = getHost();
+    return kind === 'tileset'
+      ? 'shell'
+      : kind === 'globe'
+        ? 'globe'
+        : (active ?? 'globe');
+  };
+  const renderer = () => (active === 'shell' ? shell : globe);
+  function shellFor(product) {
+    if (shell?.product === product) return shell;
+    shell?.clear();
+    shell = createShell({ ...shared, product });
+    shell.setAlpha(alpha);
+    shell.setHidden(hidden);
+    return shell;
+  }
+  function restage(frame) {
+    const target =
+      active === 'shell' ? shellFor(frame.snapshot.product) : globe;
+    restaging = frame;
+    const settle = (ok) => {
+      if (restaging !== frame) return;
+      restaging = null;
+      if (!ok) onChange();
+    };
+    target
+      .setFrame(frame.snapshot, frame.time, { infrared: frame.infrared })
+      .then(settle, () => settle(false));
+  }
+  function switchHost() {
+    const next = wanted();
+    if (next === active) return false;
+    const previous = active;
+    active = next;
+    if (previous === null) return false;
+    restaging = null;
+    if (previous === 'shell') {
+      shell?.clear();
+      shell = null;
+    } else globe.clear();
+    if (active === 'globe') {
+      globe.setAlpha(alpha);
+      if (hidden) globe.setHidden(true);
+    }
+    if (shown && !hidden) restage(shown);
+    viewer.scene.requestRender();
+    return true;
+  }
+  return {
+    rehome() {
+      const switched = switchHost();
+      if (active === 'shell' && !shell) return switched;
+      return renderer().rehome() || switched;
+    },
+    cancelPrefetch() {
+      renderer()?.cancelPrefetch();
+    },
+    prefetch(snapshot, time, options) {
+      switchHost();
+      if (active === 'shell' && shell?.product !== snapshot.product)
+        return Promise.resolve(false);
+      return renderer().prefetch(snapshot, time, options);
+    },
+    async setFrame(snapshot, time, options = {}) {
+      options.signal?.throwIfAborted();
+      switchHost();
+      restaging = null;
+      const target = active === 'shell' ? shellFor(snapshot.product) : globe;
+      const ok = await target.setFrame(snapshot, time, options);
+      if (ok)
+        shown = { snapshot, time, infrared: options.infrared ?? 'filtered' };
+      return ok;
+    },
+    setHidden(value) {
+      hidden = Boolean(value);
+      if (hidden) restaging = null;
+      renderer()?.setHidden(hidden);
+    },
+    setAlpha(value) {
+      alpha = value;
+      renderer()?.setAlpha(value);
+    },
+    clear() {
+      restaging = null;
+      shown = null;
+      hidden = false;
+      shell?.clear();
+      shell = null;
+      globe.clear();
+    },
+    getDiagnostics() {
+      const diagnostics =
+        active === 'shell' && shell
+          ? shell.getDiagnostics()
+          : active === 'shell'
+            ? {
+                host: 'shell',
+                cache: { mosaics: 0, bytes: 0, prefetching: false },
+                imageryCount: 0,
+                infrared: 'filtered',
+                loading: false,
+                time: null,
+                hidden,
+                product: null,
+                frameLoadMs: null,
+                error: imageryHostStatus(getHost()),
+              }
+            : globe.getDiagnostics();
+      // A host switch restages the retained frame; keep reporting its time.
+      return restaging && !hidden && diagnostics.time === null
+        ? { ...diagnostics, time: restaging.time }
+        : diagnostics;
+    },
+  };
 }
