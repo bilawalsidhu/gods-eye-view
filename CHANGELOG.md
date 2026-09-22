@@ -3,7 +3,7 @@
 This changelog records public product changes. For the authoritative description
 of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md).
 
-## [0.10.0] — 2026-09-20
+## [0.10.0] — 2026-09-22
 
 New live layers (transit + synthetic traffic), the production regional-brief
 API, two render-performance policies, and a quality-infrastructure wave:
@@ -112,7 +112,10 @@ aegis secrets gate in CI, and a coverage ratchet that fails on collapse.
   (~-10.9 km trench to ~+8.8 km peak) as silence at the source — it
   contributes nothing and does not count as coverage — so the designed
   degradation (arming hold, safe seed, per-frame refinement) stays in
-  force.
+  force. The band is exported once as `plausibleSurfaceHeightM` and now
+  gates both traffic road-start `sampleHeight` sites too, which shared
+  the same hole (`Number.isFinite` only — garbage would sink road dots
+  ~15 km underground on an unloaded tile).
 - **QA harness drift** (two deterministic reds, shipped code correct):
   `qa-floor-hold.mjs`/`qa-voice-wav.mjs` passed puppeteer 25's now-async
   `executablePath()` raw to `launch()`; `qa-radio.mjs` gained a
