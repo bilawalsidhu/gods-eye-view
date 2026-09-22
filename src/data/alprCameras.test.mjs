@@ -1241,3 +1241,140 @@ test('zone, ref and verification date appear on the card only when mapped', asyn
     h.restore();
   }
 });
+
+test('CORDON measures town entries end-to-end and clears on demand', async () => {
+  const h = cameraHarness();
+  try {
+    // Square town around the harness view center (30.27, −97.74).
+    const townRing = [
+      { lat: 30.265, lon: -97.745 },
+      { lat: 30.265, lon: -97.735 },
+      { lat: 30.275, lon: -97.735 },
+      { lat: 30.275, lon: -97.745 },
+      { lat: 30.265, lon: -97.745 },
+    ];
+    const jsonResponse = (payload) => ({
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      json: async () => payload,
+    });
+    h.setFetch(async (url, options) => {
+      const body = decodeURIComponent(String(options?.body || ''));
+      if (body.includes('is_in'))
+        return jsonResponse({
+          elements: [
+            {
+              type: 'area',
+              id: 3600000123,
+              tags: {
+                boundary: 'administrative',
+                admin_level: '8',
+                name: 'Testville',
+              },
+            },
+          ],
+        });
+      if (body.includes('pivot'))
+        return jsonResponse({
+          elements: [
+            {
+              type: 'relation',
+              id: 123,
+              members: [{ role: 'outer', geometry: townRing }],
+            },
+          ],
+        });
+      if (body.includes('highway'))
+        return jsonResponse({
+          elements: [
+            {
+              type: 'way',
+              id: 1,
+              tags: { highway: 'primary', name: 'Main Street' },
+              geometry: [
+                { lat: 30.27, lon: -97.75 },
+                { lat: 30.27, lon: -97.74 },
+              ],
+            },
+            {
+              type: 'way',
+              id: 2,
+              tags: { highway: 'residential', name: 'Quiet Road' },
+              geometry: [
+                { lat: 30.268, lon: -97.734 },
+                { lat: 30.268, lon: -97.74 },
+              ],
+            },
+          ],
+        });
+      // The remaining query is the camera fetch: one reader on Main Street.
+      return cameraResponse([cameraNode(42, { lat: 30.2701, lon: -97.7445 })]);
+    });
+    await alprCamerasLayer.update();
+
+    const chip = () =>
+      alprCamerasLayer.getRowControls().chips.find((c) => c.id === 'cordon');
+    assert.equal(chip().label, 'CORDON');
+    assert.equal(await chip().onClick(), true, 'the analysis lands');
+
+    const legend = alprCamerasLayer.getRowControls().legend;
+    assert.equal(legend.length, 2);
+    assert.equal(legend[1].label, 'Cordon · Testville');
+    assert.equal(legend[1].count, 1, 'one uncovered gate');
+    assert.match(
+      legend[1].blurb,
+      /1 of 2 road entries pass a mapped reader \(50%\)/,
+    );
+    assert.match(legend[1].blurb, /majors 1\/1/);
+    assert.match(legend[1].blurb, /floor, not a registry\./);
+
+    assert.equal(chip().label, 'CLEAR CORDON');
+    assert.equal(chip().onClick(), true);
+    assert.equal(chip().label, 'CORDON');
+    assert.equal(
+      alprCamerasLayer.getRowControls().legend.length,
+      1,
+      'clearing removes the cordon legend',
+    );
+  } finally {
+    h.restore();
+  }
+});
+
+test('a cordon cannot outlive disable, and errors surface in the legend', async () => {
+  const h = cameraHarness();
+  try {
+    h.setFetch(async (url, options) => {
+      const body = decodeURIComponent(String(options?.body || ''));
+      if (body.includes('is_in'))
+        return {
+          ok: true,
+          status: 200,
+          headers: { get: () => null },
+          json: async () => ({ elements: [] }),
+        };
+      return cameraResponse();
+    });
+    await alprCamerasLayer.update();
+    const chip = () =>
+      alprCamerasLayer.getRowControls().chips.find((c) => c.id === 'cordon');
+    assert.equal(
+      await chip().onClick(),
+      false,
+      'no boundary is a clean failure',
+    );
+    const legend = alprCamerasLayer.getRowControls().legend;
+    assert.equal(legend[1].label, 'Cordon');
+    assert.match(legend[1].blurb, /No town boundary is mapped/);
+    alprCamerasLayer.disable();
+    assert.equal(
+      alprCamerasLayer.getRowControls().legend.length,
+      1,
+      'disable clears cordon state',
+    );
+    assert.equal(chip().disabled, true, 'the chip needs an enabled layer');
+  } finally {
+    h.restore();
+  }
+});
