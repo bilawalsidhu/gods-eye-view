@@ -575,3 +575,82 @@ test('all five headers retain descriptor icons and disclosure state when opened 
   }
   view.destroy();
 });
+
+test('a change of open card scrolls its header into view once; refreshes never move the body', () => {
+  const f = fixture();
+  const body = f.container;
+  const writes = [];
+  const intoView = [];
+  const rects = new Map();
+  let scrollTop = 240;
+  Object.defineProperty(body, 'scrollTop', {
+    configurable: true,
+    get: () => scrollTop,
+    set: (value) => {
+      writes.push(value);
+      scrollTop = value;
+    },
+  });
+  body.clientHeight = 200;
+  body.getBoundingClientRect = () => ({ top: 100, height: 200 });
+  const create = f.document.createElement;
+  f.document.createElement = (tag) => {
+    const node = create(tag);
+    node.getBoundingClientRect = function () {
+      return rects.get(this.dataset.cardId) || { top: 0, height: 0 };
+    };
+    node.scrollIntoView = function () {
+      intoView.push(this.dataset.cardId);
+    };
+    return node;
+  };
+  // Rectangles are viewport coordinates; the body's visible top is at 100.
+  const place = (id, top, height) => rects.set(id, { top: 100 + top, height });
+  const view = createWeatherPanel(f);
+  view.update([cyclone, wind, radar]);
+  assert.deepEqual(opened(f), [cyclone.id]);
+
+  // Plain refreshes: clock, identical and changed descriptors, the open header.
+  f.state({ mode: 'history', target: ticks[0] });
+  view.update([cyclone, wind, radar]);
+  view.update([
+    { ...cyclone, summary: { ...cyclone.summary, status: 'Updated' } },
+    wind,
+    radar,
+  ]);
+  clickHeader(f, cyclone.id);
+  assert.deepEqual(writes, [], 'no scroll writes without a change of card');
+
+  // Opened below the fold: the smallest move that shows the whole card.
+  place(radar.id, 150, 120);
+  clickHeader(f, radar.id);
+  assert.deepEqual(opened(f), [radar.id]);
+  assert.deepEqual(writes, [240 + 70], 'one write, placed by the opened card');
+
+  // Taller than the body: the header goes to the top.
+  place(wind.id, 40, 480);
+  clickHeader(f, wind.id);
+  assert.deepEqual(writes.slice(1), [310 + 40]);
+
+  // Header left above the view by the collapse: back to the top edge.
+  place(cyclone.id, -60, 120);
+  clickHeader(f, cyclone.id);
+  assert.deepEqual(writes.slice(2), [350 - 60]);
+
+  // Already fully visible: nothing to do.
+  place(radar.id, 20, 100);
+  clickHeader(f, radar.id);
+  assert.equal(writes.length, 3);
+
+  // A newly enabled layer opens and is revealed the same way.
+  place(lightning.id, 190, 60);
+  view.update([cyclone, wind, radar, lightning]);
+  assert.deepEqual(opened(f), [lightning.id]);
+  assert.deepEqual(writes.slice(3), [290 + 50]);
+
+  f.state({ mode: 'latest' });
+  view.update([cyclone, wind, radar, lightning]);
+  assert.equal(writes.length, 4, 'refresh after a reveal leaves it alone');
+  assert.deepEqual(intoView, [], 'ancestor scrollers are never moved');
+  view.destroy();
+});

@@ -1,3 +1,10 @@
+import {
+  CYCLONE_ACCENT,
+  CYCLONE_MARKER_PX,
+  CYCLONE_SELECTED_ACCENT,
+  createCycloneLabels,
+} from './labels.js';
+
 /** Only geometry from the displayed status advisory is eligible for rendering. */
 export function coherentCycloneGeometry(storm) {
   return (
@@ -6,14 +13,18 @@ export function coherentCycloneGeometry(storm) {
   );
 }
 
-/** Static Cesium entities with owned horizon culling; no timers or clock. */
-export function createCycloneRendering({ viewer, cesium: C }) {
+/**
+ * Static Cesium entities with owned horizon culling; no timers or clock.
+ * Storm names and lead hours are published to the shared overlay host at the
+ * same anchors the points use.
+ */
+export function createCycloneRendering({ viewer, cesium: C, overlayHost }) {
+  const labels = createCycloneLabels({ host: overlayHost });
   let source = null,
     generation = 0,
     selected = null,
     destroyed = false;
   let centers = new Map(),
-    forecasts = new Map(),
     spheres = new Map();
   let entityStorms = new WeakMap();
   let entityIds = new Set();
@@ -22,8 +33,8 @@ export function createCycloneRendering({ viewer, cesium: C }) {
     removePreRender = null,
     pointOccluder = null,
     sphereOccluder = null;
-  const blue = C.Color.fromCssColorString('#7fe6ed');
-  const gold = C.Color.fromCssColorString('#ffe19a');
+  const blue = C.Color.fromCssColorString(CYCLONE_ACCENT);
+  const gold = C.Color.fromCssColorString(CYCLONE_SELECTED_ACCENT);
   const white = C.Color.WHITE;
   const render = () => {
     if (!viewer.isDestroyed?.()) viewer.scene.requestRender();
@@ -83,11 +94,10 @@ export function createCycloneRendering({ viewer, cesium: C }) {
     selected = id;
     for (const [stormId, entity] of centers) {
       entity.point.color = stormId === id ? gold : blue;
-      entity.point.pixelSize = stormId === id ? 12 : 9;
-      entity.label.fillColor = stormId === id ? gold : white;
+      entity.point.pixelSize =
+        stormId === id ? CYCLONE_MARKER_PX.selected : CYCLONE_MARKER_PX.storm;
     }
-    for (const [stormId, entities] of forecasts)
-      for (const entity of entities) entity.label.show = stormId === id;
+    labels.setSelection(id);
     render();
   }
   return {
@@ -97,12 +107,12 @@ export function createCycloneRendering({ viewer, cesium: C }) {
       const owner = ++generation;
       const next = new C.CustomDataSource('weather-cyclones');
       const nextCenters = new Map(),
-        nextForecasts = new Map(),
         nextSpheres = new Map();
       const nextEntityStorms = new WeakMap();
       const nextEntityIds = new Set();
       const nextCounts = { storms: 0, tracks: 0, cones: 0, forecastPoints: 0 };
       const nextHorizonStorms = [];
+      const nextLabels = [];
       const position = ({ longitude, latitude }) =>
         C.Cartesian3.fromDegrees(longitude, latitude, 0);
       const coordinate = (pair) =>
@@ -128,27 +138,22 @@ export function createCycloneRendering({ viewer, cesium: C }) {
             point: {
               heightReference: C.HeightReference.CLAMP_TO_GROUND,
               disableDepthTestDistance: Number.POSITIVE_INFINITY,
-              pixelSize: 9,
+              pixelSize: CYCLONE_MARKER_PX.storm,
               color: blue,
               outlineColor: C.Color.BLACK,
               outlineWidth: 2,
             },
-            label: {
-              heightReference: C.HeightReference.CLAMP_TO_GROUND,
-              disableDepthTestDistance: Number.POSITIVE_INFINITY,
-              text: storm.name,
-              font: '13px sans-serif',
-              fillColor: white,
-              outlineColor: C.Color.BLACK,
-              outlineWidth: 3,
-              style: C.LabelStyle.FILL_AND_OUTLINE,
-              pixelOffset: new C.Cartesian2(12, -12),
-              horizontalOrigin: C.HorizontalOrigin.LEFT,
-              showBackground: true,
-              backgroundColor: C.Color.BLACK.withAlpha(0.55),
-            },
           });
           nextCenters.set(storm.id, entity);
+          const label = {
+            id: storm.id,
+            name: storm.name,
+            classification: storm.classification,
+            windKt: storm.windKt,
+            position: center,
+            forecasts: [],
+          };
+          nextLabels.push(label);
           nextCounts.storms++;
           if (coherentCycloneGeometry(storm)) {
             const lines =
@@ -209,44 +214,25 @@ export function createCycloneRendering({ viewer, cesium: C }) {
               );
               nextCounts.cones++;
             });
-            const points = [];
             for (const [index, point] of storm.forecastPoints.entries()) {
               if (point.tauHours === 0) continue;
               const p = position(point.position);
               extent.push(p);
-              points.push(
-                addEntity({
-                  id: `cyclone:${storm.id}:forecast:${index}`,
-                  position: p,
-                  point: {
-                    heightReference: C.HeightReference.CLAMP_TO_GROUND,
-                    disableDepthTestDistance: Number.POSITIVE_INFINITY,
-                    pixelSize: 5,
-                    color: white,
-                    outlineColor: C.Color.BLACK,
-                    outlineWidth: 1,
-                  },
-                  label: {
-                    heightReference: C.HeightReference.CLAMP_TO_GROUND,
-                    disableDepthTestDistance: Number.POSITIVE_INFINITY,
-                    distanceDisplayCondition: new C.DistanceDisplayCondition(
-                      0,
-                      4_000_000,
-                    ),
-                    text: `${point.tauHours} h`,
-                    font: '11px sans-serif',
-                    fillColor: white,
-                    outlineColor: C.Color.BLACK,
-                    outlineWidth: 2,
-                    style: C.LabelStyle.FILL_AND_OUTLINE,
-                    pixelOffset: new C.Cartesian2(8, -8),
-                    show: false,
-                  },
-                }),
-              );
+              addEntity({
+                id: `cyclone:${storm.id}:forecast:${index}`,
+                position: p,
+                point: {
+                  heightReference: C.HeightReference.CLAMP_TO_GROUND,
+                  disableDepthTestDistance: Number.POSITIVE_INFINITY,
+                  pixelSize: CYCLONE_MARKER_PX.forecast,
+                  color: white,
+                  outlineColor: C.Color.BLACK,
+                  outlineWidth: 1,
+                },
+              });
+              label.forecasts.push({ tauHours: point.tauHours, position: p });
               nextCounts.forecastPoints++;
             }
-            nextForecasts.set(storm.id, points);
           }
           const sphere = C.BoundingSphere.fromPoints(extent);
           // A status-only point still has a useful regional camera destination.
@@ -263,13 +249,13 @@ export function createCycloneRendering({ viewer, cesium: C }) {
         remove(source);
         source = next;
         centers = nextCenters;
-        forecasts = nextForecasts;
         spheres = nextSpheres;
         entityStorms = nextEntityStorms;
         entityIds = nextEntityIds;
         counts = nextCounts;
         horizonStorms = nextHorizonStorms;
         syncHorizonListener();
+        labels.setSnapshot(nextLabels, selected);
         select(selected);
         return true;
       } catch (error) {
@@ -301,8 +287,8 @@ export function createCycloneRendering({ viewer, cesium: C }) {
       sphereOccluder = null;
       remove(source);
       source = null;
+      labels.clear();
       centers.clear();
-      forecasts.clear();
       spheres.clear();
       entityStorms = new WeakMap();
       entityIds.clear();

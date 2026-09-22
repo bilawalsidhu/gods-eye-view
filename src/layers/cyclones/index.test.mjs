@@ -261,6 +261,81 @@ test('map selection yields to pointer owners and owns only its enabled handler',
   );
   assert.equal(handlers[1].destroyed, true);
 });
+test('a click on a storm card or lead-hour label selects that storm without picking', async () => {
+  const handlers = [];
+  let picks = 0,
+    overlayHit = null,
+    hostArgument;
+  const layer = createCyclonesLayer({
+    feed: { getSnapshot: async () => snapshot([storm(), storm('ep162026')]) },
+    cesium: {
+      ScreenSpaceEventType: { LEFT_CLICK: 'left' },
+      ScreenSpaceEventHandler: class {
+        constructor() {
+          handlers.push(this);
+        }
+        setInputAction(callback) {
+          this.click = callback;
+        }
+        destroy() {}
+      },
+    },
+    overlayHost: 'host',
+    createRendering: ({ overlayHost }) => {
+      hostArgument = overlayHost;
+      return {
+        setSnapshot: async () => true,
+        setSelection() {},
+        clear() {},
+        destroy() {},
+        pickStorm: () => null,
+        ownsPickId: () => false,
+        getDiagnostics: () => ({}),
+      };
+    },
+    hitTestOverlay: () => overlayHit,
+  });
+  const canvas = new EventTarget();
+  canvas.getBoundingClientRect = () => ({ left: 0, top: 0 });
+  layer.init({
+    scene: {
+      canvas,
+      pick() {
+        picks++;
+        return { content: {} };
+      },
+    },
+  });
+  assert.equal(hostArgument, 'host', 'the overlay host reaches the renderer');
+  layer.enable();
+  await layer.update();
+  assert.equal(layer.getDiagnostics().selectedId, 'ep152026');
+  const click = { position: { x: 10, y: 20 } };
+  overlayHit = { sourceId: 'weather-cyclones', entryId: 'storm:ep162026' };
+  handlers[0].click(click);
+  assert.equal(layer.getDiagnostics().selectedId, 'ep162026');
+  assert.equal(layer.getDiagnostics().selectionIntent, 'user');
+  overlayHit = { sourceId: 'weather-cyclones', entryId: 'lead:ep152026:24' };
+  handlers[0].click(click);
+  assert.equal(layer.getDiagnostics().selectedId, 'ep152026');
+  // A card from a superseded advisory is not empty map.
+  overlayHit = { sourceId: 'weather-cyclones', entryId: 'storm:al019999' };
+  handlers[0].click(click);
+  assert.equal(layer.getDiagnostics().selectedId, 'ep152026');
+  // The native release snapshot carries the card identity too.
+  const up = new Event('pointerup');
+  Object.assign(up, { clientX: 10, clientY: 20 });
+  overlayHit = { sourceId: 'weather-cyclones', entryId: 'storm:ep162026' };
+  canvas.dispatchEvent(up);
+  overlayHit = null;
+  handlers[0].click(click);
+  assert.equal(layer.getDiagnostics().selectedId, 'ep162026');
+  assert.equal(picks, 0, 'card clicks never fall through to the scene');
+  handlers[0].click(click);
+  assert.equal(picks, 1);
+  assert.equal(layer.getDiagnostics().selectedId, null, 'empty map clears');
+  layer.destroy();
+});
 function harness(
   feed = { getSnapshot: async () => snapshot() },
   { reducedMotion = false } = {},

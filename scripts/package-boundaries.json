@@ -1871,6 +1871,7 @@
       "src/layers/weather/imageryHost.js",
       "src/layers/cyclones/index.js",
       "src/layers/cyclones/rendering.js",
+      "src/layers/cyclones/labels.js",
       "src/layers/cyclones/source.js"
     ],
     "external": [
@@ -2291,6 +2292,7 @@
       "src/layers/weather/imageryHost.js",
       "src/layers/cyclones/index.js",
       "src/layers/cyclones/rendering.js",
+      "src/layers/cyclones/labels.js",
       "src/layers/cyclones/source.js"
     ],
     "external": [

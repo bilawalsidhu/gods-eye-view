@@ -10,6 +10,10 @@ import {
   createCycloneRendering,
   coherentCycloneGeometry,
 } from './rendering.js';
+import {
+  CYCLONE_OVERLAY_SOURCE_ID,
+  cycloneStormIdFromEntryId,
+} from './labels.js';
 
 const utc = (value) =>
   value ? `${value.slice(5, 16).replace('T', ' ')} UTC` : 'Unavailable';
@@ -32,6 +36,7 @@ const number = (value, unit) =>
 export function createCyclonesLayer({
   feed,
   hitTestOverlay = hitTestWorldOverlay,
+  overlayHost,
   cesium = Cesium,
   createRendering = createCycloneRendering,
   matchMedia = globalThis.matchMedia?.bind(globalThis),
@@ -83,6 +88,10 @@ export function createCyclonesLayer({
     // rectangles. A vessel selection does that synchronously in the same click.
     const canvas = viewer.scene.canvas;
     let capturedHit = null;
+    const overlayHit = (x, y) => {
+      const hit = hitTestOverlay(x, y);
+      return { sourceId: hit?.sourceId, entryId: hit?.entryId };
+    };
     const capture = (event) => {
       capturedHit = null;
       const point = event.changedTouches?.[0] || event;
@@ -91,7 +100,7 @@ export function createCyclonesLayer({
       const rect = canvas.getBoundingClientRect();
       const x = point.clientX - rect.left,
         y = point.clientY - rect.top;
-      capturedHit = { x, y, sourceId: hitTestOverlay(x, y)?.sourceId };
+      capturedHit = { x, y, ...overlayHit(x, y) };
     };
     const resetCapture = () => {
       capturedHit = null;
@@ -134,10 +143,17 @@ export function createCyclonesLayer({
         nativeHit &&
         Math.abs(nativeHit.x - click.position.x) < 1 &&
         Math.abs(nativeHit.y - click.position.y) < 1;
-      const sourceId = captureMatches
-        ? nativeHit.sourceId
-        : hitTestOverlay(click.position.x, click.position.y)?.sourceId;
-      if (sourceId === VESSEL_OVERLAY_SOURCE_ID) return;
+      const hit = captureMatches
+        ? nativeHit
+        : overlayHit(click.position.x, click.position.y);
+      if (hit.sourceId === VESSEL_OVERLAY_SOURCE_ID) return;
+      // Storm cards and lead-hour labels paint on the same canvas; a click on
+      // one selects its storm. An id from a superseded advisory changes nothing.
+      if (hit.sourceId === CYCLONE_OVERLAY_SOURCE_ID) {
+        const id = cycloneStormIdFromEntryId(hit.entryId);
+        if (id) layer.setParams({ stormId: id });
+        return;
+      }
       const picked = viewer.scene.pick(click.position);
       const id = rendering?.pickStorm(picked);
       if (id) layer.setParams({ stormId: id });
@@ -159,7 +175,7 @@ export function createCyclonesLayer({
     updateInterval: 300_000,
     init(nextViewer) {
       viewer = nextViewer;
-      rendering = createRendering({ viewer, cesium });
+      rendering = createRendering({ viewer, cesium, overlayHost });
     },
     attachShellServices(services) {
       runNavigation =

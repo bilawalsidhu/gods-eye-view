@@ -32,6 +32,25 @@ const set = (node, key, value) => {
   if (node[key] !== value) node[key] = value;
 };
 
+/**
+ * Bring a newly opened card into the scrolled body: nearest alignment, or its
+ * header at the top when the card is taller than the body. One write to the
+ * body's own scroll position, without animation; ancestors never move.
+ */
+function revealCard(scroller, card) {
+  const height = scroller?.clientHeight;
+  if (!(height > 0) || !scroller.getBoundingClientRect) return;
+  if (typeof card?.getBoundingClientRect !== 'function') return;
+  const view = scroller.getBoundingClientRect();
+  const box = card.getBoundingClientRect();
+  const top = box.top - view.top - (scroller.clientTop || 0);
+  const delta =
+    top < 0 || box.height > height
+      ? top
+      : Math.max(0, top + box.height - height);
+  if (delta) scroller.scrollTop = (scroller.scrollTop || 0) + delta;
+}
+
 /** Map weather descriptors and the observed clock into reusable rail readouts. */
 export function createWeatherPanel({
   container,
@@ -70,6 +89,8 @@ export function createWeatherPanel({
   let previousIds = null;
   let hasAppeared = false;
   let openId = openDocuments.get(document) || null;
+  // Open card as last shown; null until cards are on screen.
+  let shownOpenId = null;
   const timeline = createRailTimeline({
     container: timelineHost,
     document,
@@ -209,6 +230,14 @@ export function createWeatherPanel({
     });
     cards.update(models.filter(({ id }) => !OBSERVED.has(id)));
     observedCards.update(models.filter(({ id }) => OBSERVED.has(id)));
+    // Only a change of open card moves the scroll position; refreshes leave it.
+    if (shownOpenId !== null && openId !== shownOpenId) {
+      const open = [...cardsHost.children, ...observedCardsHost.children].find(
+        (node) => node.dataset?.cardId === openId,
+      );
+      revealCard(container, open);
+    }
+    shownOpenId = active.length ? openId : null;
     const hidden = active.length === 0;
     set(root, 'hidden', hidden);
     if (count) set(count, 'textContent', String(active.length));

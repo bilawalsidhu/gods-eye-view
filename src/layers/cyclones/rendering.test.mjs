@@ -2,6 +2,31 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { createCycloneRendering } from './rendering.js';
+import { CYCLONE_OVERLAY_SOURCE_ID } from './labels.js';
+
+/** Records what the renderer publishes to the shared overlay host. */
+function overlayRecorder() {
+  const calls = [];
+  return {
+    calls,
+    host: {
+      setEntries: (source, entries, options) =>
+        calls.push({ kind: 'entries', source, entries, options }),
+      setVisible: (source, visible) =>
+        calls.push({ kind: 'visible', source, visible }),
+      clearSource: (source) => calls.push({ kind: 'clear', source }),
+    },
+    get publishes() {
+      return calls.filter(({ kind }) => kind === 'entries').length;
+    },
+    published() {
+      return calls.findLast(({ kind }) => kind === 'entries')?.entries || [];
+    },
+    entry(id) {
+      return this.published().find((entry) => entry.id === id) || null;
+    },
+  };
+}
 
 function harness({ deferred = false } = {}) {
   const sources = [],
@@ -105,6 +130,7 @@ function harness({ deferred = false } = {}) {
     },
   };
   let renders = 0;
+  const overlay = overlayRecorder();
   const viewer = {
     camera: { positionWC: { x: 6378487, y: 0, z: 0 } },
     scene: {
@@ -135,7 +161,12 @@ function harness({ deferred = false } = {}) {
     },
   };
   return {
-    rendering: createCycloneRendering({ viewer, cesium }),
+    rendering: createCycloneRendering({
+      viewer,
+      cesium,
+      overlayHost: overlay.host,
+    }),
+    overlay,
     sources,
     completions,
     viewer,
@@ -214,11 +245,17 @@ test('horizon culling updates only changed entities and keeps selection independ
     if (entity.position) h.visibility.points.set(entity.position, false);
   h.visibility.spheres.set(sphere, false);
   h.rendering.setSelection('ep152026');
+  const publishes = h.overlay.publishes;
   const before = h.renders;
   h.frame();
   assert.ok(far.every((e) => e.show === false));
   assert.ok(near.every((e) => e.show === true));
-  assert.equal(forecast.label.show, true);
+  assert.equal(
+    h.overlay.entry('lead:ep152026:12').position,
+    forecast.position,
+    'the host culls labels at the same anchors the points use',
+  );
+  assert.equal(h.overlay.publishes, publishes, 'culling never republishes');
   assert.equal(h.renders, before + 1);
   assert.equal(h.visibility.writes, far.length);
   assert.equal(h.visibility.pointCalls.length, 4);
@@ -245,13 +282,18 @@ test('horizon culling updates only changed entities and keeps selection independ
   assert.equal(h.sphereOccluders[0].cameraPosition, h.viewer.camera.positionWC);
 
   h.rendering.setSelection('near');
-  assert.equal(forecast.label.show, false);
-  assert.equal(near.find((e) => e.id.endsWith('forecast:0')).label.show, true);
+  assert.equal(h.overlay.entry('lead:ep152026:12'), null);
+  assert.equal(
+    h.overlay.entry('lead:near:12').position,
+    near.find((e) => e.id.endsWith('forecast:0')).position,
+  );
   h.visibility.points.set(forecast.position, true);
   const beforeReveal = h.renders;
+  const revealPublishes = h.overlay.publishes;
   h.frame();
   assert.equal(forecast.show, true);
-  assert.equal(forecast.label.show, false);
+  assert.equal(h.overlay.entry('lead:ep152026:12'), null);
+  assert.equal(h.overlay.publishes, revealPublishes);
   assert.equal(far[0].show, false);
   assert.equal(h.renders, beforeReveal + 1);
   h.rendering.destroy();
@@ -317,7 +359,12 @@ test('real Cesium culls far storms and retains partially visible extents with ei
         remove() {},
       },
     };
-    const rendering = createCycloneRendering({ viewer, cesium: Cesium });
+    const overlay = overlayRecorder();
+    const rendering = createCycloneRendering({
+      viewer,
+      cesium: Cesium,
+      overlayHost: overlay.host,
+    });
     const at = (id, longitude) => ({
       ...storm(),
       id,
@@ -345,22 +392,32 @@ test('real Cesium culls far storms and retains partially visible extents with ei
     await rendering.setSnapshot({
       storms: [at('near', 0), at('far', 180), at('limb', 5)],
     });
+    rendering.setSelection('near');
     viewer.scene.preRender.raiseEvent();
     const entities = sources[0].entities.values;
     for (const entity of entities.filter((e) => e.position)) {
-      for (const graphic of [entity.point, entity.label]) {
-        assert.equal(
-          graphic.heightReference.getValue(),
-          Cesium.HeightReference.CLAMP_TO_GROUND,
+      assert.equal(
+        entity.point.heightReference.getValue(),
+        Cesium.HeightReference.CLAMP_TO_GROUND,
+      );
+      assert.equal(entity.point.disableDepthTestDistance.getValue(), Infinity);
+      assert.equal(entity.label, undefined, 'no Cesium label graphics');
+      const published = overlay.entry(
+        entity.id.includes(':forecast:')
+          ? `lead:${entity.id.split(':')[1]}:24`
+          : `storm:${entity.id.split(':')[1]}`,
+      );
+      if (entity.id.startsWith('cyclone:near:')) {
+        assert.ok(
+          Cesium.Cartesian3.equals(
+            published.position,
+            entity.position.getValue(),
+          ),
         );
-        assert.equal(graphic.disableDepthTestDistance.getValue(), Infinity);
+        assert.equal(published.horizonCull, true);
       }
-      if (entity.id.includes(':forecast:')) {
-        assert.equal(
-          entity.label.distanceDisplayCondition.getValue().far,
-          4_000_000,
-        );
-      }
+      if (entity.id === 'cyclone:near:forecast:0')
+        assert.equal(published.maxDistance, 4_000_000);
     }
     assert.ok(
       entities
@@ -481,9 +538,10 @@ test('static entities preserve polygon parts, holes and geographic seam coordina
   });
   h.rendering.setSelection('ep152026');
   assert.equal(
-    entities.find((e) => e.id.endsWith('forecast:0')).label.show,
-    true,
+    h.overlay.entry('lead:ep152026:12').position,
+    entities.find((e) => e.id.endsWith('forecast:0')).position,
   );
+  assert.ok(entities.every((e) => e.label === undefined));
   assert.ok(h.rendering.getFocusSphere('ep152026').radius >= 500000);
   h.rendering.destroy();
   assert.equal(h.sources.length, 0);
@@ -538,4 +596,74 @@ test('aborting a pending add retains the prior complete source', async () => {
   assert.equal(h.sources.length, 1);
   assert.equal(h.rendering.getDiagnostics().storms, 1);
   h.rendering.destroy();
+});
+
+test('labels publish committed anchors to the shared overlay and follow selection and clear', async () => {
+  const h = harness({ deferred: true });
+  const pending = h.rendering.setSnapshot({
+    storms: [storm(), { ...storm(), id: 'near', name: 'Near' }],
+  });
+  assert.equal(h.overlay.calls.length, 0, 'nothing publishes before commit');
+  h.completions.shift()();
+  assert.equal(await pending, true);
+  const entities = h.sources[0].entities.values;
+  const center = (id) => entities.find((e) => e.id === `cyclone:${id}:center`);
+  assert.deepEqual(
+    h.overlay.calls
+      .slice(0, 2)
+      .map(({ kind, source, visible }) => [kind, source, visible]),
+    [
+      ['visible', CYCLONE_OVERLAY_SOURCE_ID, true],
+      ['entries', CYCLONE_OVERLAY_SOURCE_ID, undefined],
+    ],
+  );
+  assert.deepEqual(
+    h.overlay.published().map((entry) => entry.id),
+    ['storm:ep152026', 'storm:near'],
+    'no selection, no lead-hour labels',
+  );
+  assert.equal(h.overlay.entry('storm:near').title, 'Near');
+  assert.equal(h.overlay.entry('storm:near').position, center('near').position);
+
+  h.rendering.setSelection('near');
+  assert.equal(center('near').point.pixelSize, 12);
+  assert.equal(center('ep152026').point.pixelSize, 9);
+  assert.equal(h.overlay.entry('storm:near').variant, 'selected');
+  assert.equal(h.overlay.entry('storm:ep152026').variant, 'card');
+  assert.ok(h.overlay.entry('lead:near:12'));
+  const publishes = h.overlay.publishes;
+  h.rendering.setSelection('near');
+  assert.equal(h.overlay.publishes, publishes, 'unchanged selection is quiet');
+
+  // A refresh republishes the new anchors with the retained selection.
+  const refresh = h.rendering.setSnapshot({
+    storms: [{ ...storm(), id: 'near', name: 'Near' }],
+  });
+  h.completions.shift()();
+  await refresh;
+  assert.deepEqual(
+    h.overlay.published().map((entry) => [entry.id, entry.variant]),
+    [
+      ['storm:near', 'selected'],
+      ['lead:near:12', 'card'],
+    ],
+  );
+  assert.equal(
+    h.overlay.entry('storm:near').position,
+    h.sources[0].entities.values[0].position,
+  );
+
+  // A superseded addition never publishes, and clear hides the source.
+  const stale = h.rendering.setSnapshot({ storms: [storm()] });
+  h.rendering.clear();
+  const afterClear = h.overlay.calls.slice(-2);
+  assert.deepEqual(afterClear, [
+    { kind: 'clear', source: CYCLONE_OVERLAY_SOURCE_ID },
+    { kind: 'visible', source: CYCLONE_OVERLAY_SOURCE_ID, visible: false },
+  ]);
+  h.completions.shift()();
+  assert.equal(await stale, false);
+  assert.equal(h.overlay.calls.at(-1), afterClear[1]);
+  h.rendering.destroy();
+  assert.equal(h.overlay.calls.at(-1), afterClear[1]);
 });
