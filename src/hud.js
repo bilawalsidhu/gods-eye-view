@@ -18,16 +18,36 @@ import * as Cesium from 'cesium';
 import { forward as toMGRS } from 'mgrs';
 import { CITY_POIS } from './locations.js';
 import { composeLocalityTag } from './hudLocality.js';
-import { ellipsoidalToMslDisplayM, ensureGeoidReady, geoidHeight } from './data/geoid.js';
+import {
+  ellipsoidalToMslDisplayM,
+  ensureGeoidReady,
+  geoidHeight,
+} from './data/geoid.js';
 import { getBasemapLabelContext } from './voice/gevActions.js';
 import { isHudSummaryUnconfigured } from './hudSummaryResponse.js';
 
 /** Color palettes keyed by shader mode; applied as CSS custom properties. */
 const HUD_COLORS = {
-  surveillance: { main: 'rgba(51, 255, 51, 0.8)',  glow: 'rgba(51, 255, 51, 0.5)',  border: 'rgba(51, 255, 51, 0.2)' },
-  thermal:      { main: 'rgba(255, 255, 255, 0.7)', glow: 'rgba(255, 255, 255, 0.4)', border: 'rgba(255, 255, 255, 0.15)' },
-  retro:        { main: 'rgba(255, 170, 0, 0.8)',   glow: 'rgba(255, 170, 0, 0.5)',   border: 'rgba(255, 170, 0, 0.2)' },
-  _default:     { main: 'rgba(0, 255, 255, 0.6)',   glow: 'rgba(0, 255, 255, 0.4)',   border: 'rgba(0, 255, 255, 0.15)' },
+  surveillance: {
+    main: 'rgba(51, 255, 51, 0.8)',
+    glow: 'rgba(51, 255, 51, 0.5)',
+    border: 'rgba(51, 255, 51, 0.2)',
+  },
+  thermal: {
+    main: 'rgba(255, 255, 255, 0.7)',
+    glow: 'rgba(255, 255, 255, 0.4)',
+    border: 'rgba(255, 255, 255, 0.15)',
+  },
+  retro: {
+    main: 'rgba(255, 170, 0, 0.8)',
+    glow: 'rgba(255, 170, 0, 0.5)',
+    border: 'rgba(255, 170, 0, 0.2)',
+  },
+  _default: {
+    main: 'rgba(0, 255, 255, 0.6)',
+    glow: 'rgba(0, 255, 255, 0.4)',
+    border: 'rgba(0, 255, 255, 0.15)',
+  },
 };
 
 /** Shader modes that automatically show the HUD overlay. */
@@ -45,13 +65,14 @@ const HUD_SUMMARY_INTERVAL_MS = 15000;
 const HUD_GEOID_CELL_DEG = 0.01;
 
 /** Flattened list of all city POIs for nearest-point lookups. */
-const NEARBY_POINTS = Object.values(CITY_POIS)
-  .flatMap((city) => city.pois.map((poi) => ({
+const NEARBY_POINTS = Object.values(CITY_POIS).flatMap((city) =>
+  city.pois.map((poi) => ({
     city: city.name,
     poi: poi.name,
     lat: poi.lat,
     lon: poi.lon,
-  })));
+  })),
+);
 
 /**
  * Full-screen intelligence HUD overlay rendered on top of the Cesium canvas.
@@ -66,7 +87,15 @@ export class IntelHUD {
    * @param {Cesium.Viewer} viewer - The Cesium Viewer instance used for
    *   camera telemetry and coordinate derivation.
    */
-  constructor(viewer, { placeSearch, summaryPolicy = {}, basemapContext = {}, summaryService = applicationServices.summary } = {}) {
+  constructor(
+    viewer,
+    {
+      placeSearch,
+      summaryPolicy = {},
+      basemapContext = {},
+      summaryService = applicationServices.summary,
+    } = {},
+  ) {
     this.summaryService = summaryService;
     this.summaryPolicy = summaryPolicy;
     this.basemapContext = basemapContext;
@@ -227,7 +256,8 @@ export class IntelHUD {
     this._recBlinkInterval = setInterval(() => {
       this._recBlinkState = !this._recBlinkState;
       const dot = document.getElementById('hud-rec-dot');
-      if (dot) dot.style.visibility = this._recBlinkState ? 'visible' : 'hidden';
+      if (dot)
+        dot.style.visibility = this._recBlinkState ? 'visible' : 'hidden';
     }, 800);
 
     // Camera-derived data — 4 updates/second (250ms)
@@ -269,8 +299,12 @@ export class IntelHUD {
       if (!this._geoidRequested) {
         this._geoidRequested = true;
         ensureGeoidReady()
-          .then(() => { this._geoidReady = true; })
-          .catch(() => { /* readout falls back to the uncorrected height */ });
+          .then(() => {
+            this._geoidReady = true;
+          })
+          .catch(() => {
+            /* readout falls back to the uncorrected height */
+          });
       }
       return null;
     }
@@ -331,9 +365,13 @@ export class IntelHUD {
     // Equation (GIQE) simplified form: NIIRS = 10.25 - 3.32 * log10(GSD_inches).
     const gsd = Math.max(0.01, altM * 0.000375);
     const gsdInches = gsd * 39.37;
-    const niirs = Math.max(0, Math.min(9, 10.25 - 3.32 * Math.log10(gsdInches)));
+    const niirs = Math.max(
+      0,
+      Math.min(9, 10.25 - 3.32 * Math.log10(gsdInches)),
+    );
     const gsdEl = document.getElementById('hud-gsd');
-    if (gsdEl) gsdEl.textContent = `GSD: ${gsd.toFixed(2)}m  NIIRS: ${niirs.toFixed(1)}`;
+    if (gsdEl)
+      gsdEl.textContent = `GSD: ${gsd.toFixed(2)}m  NIIRS: ${niirs.toFixed(1)}`;
 
     // Altitude — reported as height above MEAN SEA LEVEL. `altM` is the raw
     // ellipsoidal camera height, which reads far below zero wherever the geoid
@@ -344,7 +382,8 @@ export class IntelHUD {
     const geoidN = this._geoidUndulationM(latDeg, lonDeg);
     const altMslM = ellipsoidalToMslDisplayM(altM, geoidN);
     const sunEl = this._estimateSunElevation(latDeg, lonDeg);
-    if (altEl) altEl.textContent = `ALT: ${Math.round(altMslM)}m   SUN: ${sunEl.toFixed(1)}° EL`;
+    if (altEl)
+      altEl.textContent = `ALT: ${Math.round(altMslM)}m   SUN: ${sunEl.toFixed(1)}° EL`;
 
     // Collection timestamp
     const collEl = document.getElementById('hud-coll');
@@ -435,7 +474,10 @@ export class IntelHUD {
     if (type === 'lat') dir = decimal >= 0 ? 'N' : 'S';
     else dir = decimal >= 0 ? 'E' : 'W';
 
-    const degStr = type === 'lon' ? String(deg).padStart(3, '0') : String(deg).padStart(2, '0');
+    const degStr =
+      type === 'lon'
+        ? String(deg).padStart(3, '0')
+        : String(deg).padStart(2, '0');
     return `${degStr}°${String(min).padStart(2, '0')}'${String(sec).padStart(5, '0')}"${dir}`;
   }
 
@@ -457,12 +499,20 @@ export class IntelHUD {
     const solarNoon = 12;
     const hourAngle = (hours - solarNoon) * 15;
     // Solar declination approximation (~23.45 deg amplitude sinusoidal over the year)
-    const declination = 23.45 * Math.sin(Cesium.Math.toRadians((360 / 365) * (now.getUTCDate() + 30 * now.getUTCMonth() - 81)));
+    const declination =
+      23.45 *
+      Math.sin(
+        Cesium.Math.toRadians(
+          (360 / 365) * (now.getUTCDate() + 30 * now.getUTCMonth() - 81),
+        ),
+      );
     const latRad = Cesium.Math.toRadians(lat);
     const decRad = Cesium.Math.toRadians(declination);
     const haRad = Cesium.Math.toRadians(hourAngle);
     // Standard formula: sin(el) = sin(lat)*sin(dec) + cos(lat)*cos(dec)*cos(ha)
-    const sinEl = Math.sin(latRad) * Math.sin(decRad) + Math.cos(latRad) * Math.cos(decRad) * Math.cos(haRad);
+    const sinEl =
+      Math.sin(latRad) * Math.sin(decRad) +
+      Math.cos(latRad) * Math.cos(decRad) * Math.cos(haRad);
     // Clamp to [-1,1] to guard against floating-point drift before asin
     return Cesium.Math.toDegrees(Math.asin(Math.max(-1, Math.min(1, sinEl))));
   }
@@ -489,8 +539,10 @@ export class IntelHUD {
   _regionLabel(lat, lon) {
     if (lat > 72) return 'ARCTIC';
     if (lat < -60) return 'ANTARCTIC';
-    if (lat >= 5 && lat <= 83 && lon >= -170 && lon <= -50) return 'NORTH AMERICA';
-    if (lat >= -60 && lat <= 15 && lon >= -90 && lon <= -30) return 'SOUTH AMERICA';
+    if (lat >= 5 && lat <= 83 && lon >= -170 && lon <= -50)
+      return 'NORTH AMERICA';
+    if (lat >= -60 && lat <= 15 && lon >= -90 && lon <= -30)
+      return 'SOUTH AMERICA';
     if (lat >= 34 && lat <= 72 && lon >= -25 && lon <= 45) return 'EUROPE';
     if (lat >= -35 && lat <= 38 && lon >= -20 && lon <= 55) return 'AFRICA';
     if (lat >= 5 && lat <= 80 && lon >= 45 && lon <= 180) return 'ASIA';
@@ -519,7 +571,10 @@ export class IntelHUD {
     const latSpan = Math.abs(north - south);
     // 111 km/deg is the approximate surface distance per degree of latitude;
     // longitude distance is scaled by cos(lat) to account for meridian convergence.
-    const widthKm = Math.max(0, lonSpan * 111 * Math.cos(Cesium.Math.toRadians(latDeg)));
+    const widthKm = Math.max(
+      0,
+      lonSpan * 111 * Math.cos(Cesium.Math.toRadians(latDeg)),
+    );
     const heightKm = Math.max(0, latSpan * 111);
     return { widthKm, heightKm };
   }
@@ -537,8 +592,9 @@ export class IntelHUD {
     const toRad = (deg) => Cesium.Math.toRadians(deg);
     const dLat = toRad(lat2 - lat1);
     const dLon = toRad(lon2 - lon1);
-    const a = Math.sin(dLat / 2) ** 2
-      + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
     return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 
@@ -583,9 +639,10 @@ export class IntelHUD {
     // together, so they must never disagree. The view band above deliberately
     // keeps the ellipsoidal height: its thresholds were tuned against it.
     const altDisplayM = Number.isFinite(m.altMslM) ? m.altMslM : m.altM;
-    const altTag = altDisplayM >= 1000
-      ? `${(altDisplayM / 1000).toFixed(1)}KM`
-      : `${Math.round(altDisplayM)}M`;
+    const altTag =
+      altDisplayM >= 1000
+        ? `${(altDisplayM / 1000).toFixed(1)}KM`
+        : `${Math.round(altDisplayM)}M`;
     const winTag = window
       ? `${Math.max(1, Math.round(window.widthKm))}x${Math.max(1, Math.round(window.heightKm))}KM`
       : 'N/A';
@@ -665,7 +722,9 @@ export class IntelHUD {
     this._summaryRequest = controller;
     try {
       this.summaryPolicy.onRequest?.();
-      const response = await this.summaryService.summarize(context, { signal: controller.signal });
+      const response = await this.summaryService.summarize(context, {
+        signal: controller.signal,
+      });
       const data = response.data;
       if (revision !== this._summaryRevision) return;
       if (isHudSummaryUnconfigured(response.status, data)) {
@@ -701,10 +760,16 @@ export class IntelHUD {
   }
 
   async _summaryContext() {
-    const labels = await getBasemapLabelContext(this.viewer, this.placeSearch, this.basemapContext);
-    const enabledLayers = this._dataManager?.getAll?.()
-      ?.filter((layer) => layer.enabled)
-      .map((layer) => layer.name) || [];
+    const labels = await getBasemapLabelContext(
+      this.viewer,
+      this.placeSearch,
+      this.basemapContext,
+    );
+    const enabledLayers =
+      this._dataManager
+        ?.getAll?.()
+        ?.filter((layer) => layer.enabled)
+        .map((layer) => layer.name) || [];
     return {
       placeLabels: labels.placeLabels,
       streetLabels: labels.streetLabels,

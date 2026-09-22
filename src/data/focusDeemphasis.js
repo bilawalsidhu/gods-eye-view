@@ -59,24 +59,35 @@ function focusTargetEmphasisResolved(
   previouslyFarther,
 ) {
   if (!target?.screenRect || !spriteScreenPosition) return 1;
-  if (!Number.isFinite(spriteScreenPosition.x) || !Number.isFinite(spriteScreenPosition.y)) return 1;
+  if (
+    !Number.isFinite(spriteScreenPosition.x) ||
+    !Number.isFinite(spriteScreenPosition.y)
+  )
+    return 1;
 
   // Published rects already contain their publication-time padding. The
   // delta keeps direct pure-function calls and runtime A/B overrides honest.
   // The ambient extent makes overlap mean visual overlap, not center-point
   // containment: a class-sized icon whose edge intrudes into the focus rect
   // yields even when its center remains just outside it.
-  const paddingDelta = tuning.paddingPx - (Number.isFinite(target.paddingPx) ? target.paddingPx : 0);
+  const paddingDelta =
+    tuning.paddingPx -
+    (Number.isFinite(target.paddingPx) ? target.paddingPx : 0);
   const hysteresis = previouslyCompeting ? tuning.hysteresisPx : 0;
-  const expansionX = paddingDelta + hysteresis
-    + Math.max(0, Number.isFinite(spriteHalfWidthPx) ? spriteHalfWidthPx : 0);
-  const expansionY = paddingDelta + hysteresis
-    + Math.max(0, Number.isFinite(spriteHalfHeightPx) ? spriteHalfHeightPx : 0);
+  const expansionX =
+    paddingDelta +
+    hysteresis +
+    Math.max(0, Number.isFinite(spriteHalfWidthPx) ? spriteHalfWidthPx : 0);
+  const expansionY =
+    paddingDelta +
+    hysteresis +
+    Math.max(0, Number.isFinite(spriteHalfHeightPx) ? spriteHalfHeightPx : 0);
   const rect = target.screenRect;
-  const inside = spriteScreenPosition.x >= rect.left - expansionX
-    && spriteScreenPosition.x <= rect.right + expansionX
-    && spriteScreenPosition.y >= rect.top - expansionY
-    && spriteScreenPosition.y <= rect.bottom + expansionY;
+  const inside =
+    spriteScreenPosition.x >= rect.left - expansionX &&
+    spriteScreenPosition.x <= rect.right + expansionX &&
+    spriteScreenPosition.y >= rect.top - expansionY &&
+    spriteScreenPosition.y <= rect.bottom + expansionY;
   if (!inside) return 1;
 
   const floor = clamp(tuning.dimFloor, 0.01, 1);
@@ -88,24 +99,33 @@ function focusTargetEmphasisResolved(
   const fartherThreshold = Number.isFinite(target.cameraDistance)
     ? target.cameraDistance + (previouslyFarther ? -distanceBand : distanceBand)
     : Number.NaN;
-  const farther = !Number.isFinite(spriteCameraDistance)
-    || !Number.isFinite(fartherThreshold)
-    || spriteCameraDistance >= fartherThreshold;
+  const farther =
+    !Number.isFinite(spriteCameraDistance) ||
+    !Number.isFinite(fartherThreshold) ||
+    spriteCameraDistance >= fartherThreshold;
   if (farther) return floor;
   if (tuning.nearerBehavior === 'partial') return floor + (1 - floor) * 0.5;
   return 1;
 }
 
 function smoothFocusEmphasisResolved(current, target, elapsedMs, tuning) {
-  const from = clamp(Number.isFinite(current) ? current : 1, tuning.dimFloor, 1);
+  const from = clamp(
+    Number.isFinite(current) ? current : 1,
+    tuning.dimFloor,
+    1,
+  );
   const to = clamp(Number.isFinite(target) ? target : 1, tuning.dimFloor, 1);
   if (Math.abs(to - from) < Number.EPSILON) return to;
   const duration = to < from ? tuning.attackMs : tuning.releaseMs;
   if (duration <= 0) return to;
-  const t = clamp((Number.isFinite(elapsedMs) ? elapsedMs : 0) / duration, 0, 1);
+  const t = clamp(
+    (Number.isFinite(elapsedMs) ? elapsedMs : 0) / duration,
+    0,
+    1,
+  );
   // Cubic ease-out reaches the exact endpoint at the configured duration and
   // stays continuous when a moving contact reverses direction mid-transition.
-  const eased = 1 - ((1 - t) ** 3);
+  const eased = 1 - (1 - t) ** 3;
   return clamp(from + (to - from) * eased, tuning.dimFloor, 1);
 }
 
@@ -118,18 +138,24 @@ function smoothFocusEmphasisResolved(current, target, elapsedMs, tuning) {
  */
 export function setFocusDeemphasisParams(patch = {}) {
   const next = { ..._params };
-  if (Number.isFinite(patch.paddingPx)) next.paddingPx = Math.max(0, patch.paddingPx);
-  if (Number.isFinite(patch.dimFloor)) next.dimFloor = clamp(patch.dimFloor, 0.01, 1);
+  if (Number.isFinite(patch.paddingPx))
+    next.paddingPx = Math.max(0, patch.paddingPx);
+  if (Number.isFinite(patch.dimFloor))
+    next.dimFloor = clamp(patch.dimFloor, 0.01, 1);
   if (['allow', 'dim', 'partial'].includes(patch.nearerBehavior)) {
     next.nearerBehavior = patch.nearerBehavior;
   }
-  if (Number.isFinite(patch.hysteresisPx)) next.hysteresisPx = Math.max(0, patch.hysteresisPx);
+  if (Number.isFinite(patch.hysteresisPx))
+    next.hysteresisPx = Math.max(0, patch.hysteresisPx);
   if (Number.isFinite(patch.distanceHysteresisRatio)) {
     next.distanceHysteresisRatio = clamp(patch.distanceHysteresisRatio, 0, 0.5);
   }
-  if (Number.isFinite(patch.attackMs)) next.attackMs = Math.max(0, patch.attackMs);
-  if (Number.isFinite(patch.releaseMs)) next.releaseMs = Math.max(0, patch.releaseMs);
-  if (Number.isFinite(patch.writeEpsilon)) next.writeEpsilon = Math.max(0, patch.writeEpsilon);
+  if (Number.isFinite(patch.attackMs))
+    next.attackMs = Math.max(0, patch.attackMs);
+  if (Number.isFinite(patch.releaseMs))
+    next.releaseMs = Math.max(0, patch.releaseMs);
+  if (Number.isFinite(patch.writeEpsilon))
+    next.writeEpsilon = Math.max(0, patch.writeEpsilon);
   _params = next;
   return { ..._params };
 }
@@ -171,11 +197,22 @@ export function publishFocusTargetFromCachedPosition({
   heightPx = 24,
   params,
 }) {
-  if (!ownerLayer || id === null || id === undefined || !scene || !camera || !displayPosition) {
+  if (
+    !ownerLayer ||
+    id === null ||
+    id === undefined ||
+    !scene ||
+    !camera ||
+    !displayPosition
+  ) {
     clearFocusTarget(ownerLayer, id);
     return null;
   }
-  const screen = Cesium.SceneTransforms.worldToWindowCoordinates(scene, displayPosition, _scratchScreen);
+  const screen = Cesium.SceneTransforms.worldToWindowCoordinates(
+    scene,
+    displayPosition,
+    _scratchScreen,
+  );
   if (!screen || !Number.isFinite(screen.x) || !Number.isFinite(screen.y)) {
     clearFocusTarget(ownerLayer, id);
     return null;
@@ -195,12 +232,19 @@ export function publishFocusTargetFromCachedPosition({
       bottom: screen.y + halfHeight + padding,
     },
     paddingPx: padding,
-    cameraDistance: Cesium.Cartesian3.distance(camera.positionWC, displayPosition),
+    cameraDistance: Cesium.Cartesian3.distance(
+      camera.positionWC,
+      displayPosition,
+    ),
     frameNumber: scene.frameState?.frameNumber ?? -1,
   };
   if (appeared) {
     for (const listener of _focusAppearListeners) {
-      try { listener(); } catch (e) { console.warn('[focus] appear listener error:', e); }
+      try {
+        listener();
+      } catch (e) {
+        console.warn('[focus] appear listener error:', e);
+      }
     }
   }
   return _focusTarget;
@@ -311,15 +355,18 @@ export function smoothFocusEmphasis(current, target, elapsedMs, params) {
  * every needed property before the next call; never retain it as a snapshot.
  * @returns {{factor:number, changed:boolean, transitioning:boolean,active:boolean,desired:number}}
  */
-export function advanceSpriteFocus(sprite, {
-  screenPosition,
-  cameraDistance,
-  nowMs,
-  target = _focusTarget,
-  params,
-  spriteHalfWidthPx = 0,
-  spriteHalfHeightPx = spriteHalfWidthPx,
-}) {
+export function advanceSpriteFocus(
+  sprite,
+  {
+    screenPosition,
+    cameraDistance,
+    nowMs,
+    target = _focusTarget,
+    params,
+    spriteHalfWidthPx = 0,
+    spriteHalfHeightPx = spriteHalfWidthPx,
+  },
+) {
   const tuning = resolvedParams(params);
   let state = _spriteStates.get(sprite);
   if (!state) {
@@ -369,12 +416,18 @@ export function advanceSpriteFocus(sprite, {
     state.desired = desired;
   }
   const elapsedMs = Math.max(0, nowMs - state.transitionStartMs);
-  const next = smoothFocusEmphasisResolved(state.transitionFrom, desired, elapsedMs, tuning);
+  const next = smoothFocusEmphasisResolved(
+    state.transitionFrom,
+    desired,
+    elapsedMs,
+    tuning,
+  );
   const changed = Math.abs(next - state.factor) > tuning.writeEpsilon;
   state.factor = next;
   state.desired = desired;
-  state.wasFarther = tuning.nearerBehavior !== 'dim'
-    && Math.abs(desired - tuning.dimFloor) <= tuning.writeEpsilon;
+  state.wasFarther =
+    tuning.nearerBehavior !== 'dim' &&
+    Math.abs(desired - tuning.dimFloor) <= tuning.writeEpsilon;
   const transitioning = Math.abs(next - desired) > tuning.writeEpsilon;
   const active = Math.abs(next - 1) > tuning.writeEpsilon;
 
@@ -426,12 +479,18 @@ export function advanceProjectedSpriteFocus(
     _advanceResult.desired = 1;
     return _advanceResult;
   }
-  const screen = position && scene
-    ? Cesium.SceneTransforms.worldToWindowCoordinates(scene, position, _scratchScreen)
-    : null;
-  const cameraDistance = position && camera?.positionWC
-    ? Cesium.Cartesian3.distance(camera.positionWC, position)
-    : Number.NaN;
+  const screen =
+    position && scene
+      ? Cesium.SceneTransforms.worldToWindowCoordinates(
+          scene,
+          position,
+          _scratchScreen,
+        )
+      : null;
+  const cameraDistance =
+    position && camera?.positionWC
+      ? Cesium.Cartesian3.distance(camera.positionWC, position)
+      : Number.NaN;
   return advanceSpriteFocus(sprite, {
     screenPosition: screen,
     cameraDistance,
@@ -451,8 +510,10 @@ export function advanceProjectedSpriteFocus(
  * @returns {boolean}
  */
 export function focusPassIsNeeded(target, activeCount) {
-  return target !== null && target !== undefined
-    || (Number.isFinite(activeCount) && activeCount > 0);
+  return (
+    (target !== null && target !== undefined) ||
+    (Number.isFinite(activeCount) && activeCount > 0)
+  );
 }
 
 /**
@@ -466,8 +527,9 @@ export function nearFarScalarValueAtDistance(scalar, cameraDistanceM) {
   if (!scalar || !Number.isFinite(cameraDistanceM)) return 1;
   const nearSq = scalar.near * scalar.near;
   const farSq = scalar.far * scalar.far;
-  if (!Number.isFinite(nearSq) || !Number.isFinite(farSq) || farSq <= nearSq) return 1;
-  const rawT = ((cameraDistanceM * cameraDistanceM) - nearSq) / (farSq - nearSq);
+  if (!Number.isFinite(nearSq) || !Number.isFinite(farSq) || farSq <= nearSq)
+    return 1;
+  const rawT = (cameraDistanceM * cameraDistanceM - nearSq) / (farSq - nearSq);
   const t = Math.pow(clamp(rawT, 0, 1), 0.2);
   return scalar.nearValue + (scalar.farValue - scalar.nearValue) * t;
 }
@@ -507,6 +569,8 @@ export function forgetSpriteFocus(sprite) {
  */
 export function focusAlphaNeedsWrite(currentAlpha, nextAlpha, params) {
   const tuning = resolvedParams(params);
-  return !Number.isFinite(currentAlpha)
-    || Math.abs(currentAlpha - nextAlpha) > tuning.writeEpsilon;
+  return (
+    !Number.isFinite(currentAlpha) ||
+    Math.abs(currentAlpha - nextAlpha) > tuning.writeEpsilon
+  );
 }

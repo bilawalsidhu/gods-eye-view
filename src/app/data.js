@@ -2,7 +2,7 @@ import { LayerLifecycle } from '../data/lifecycle.js';
 import { LayerPresentation } from './layerPresentation.js';
 /** Register the application layer catalog before allowing state restoration. */
 export function createApplicationData({
-  scene: { viewer },
+  scene: { viewer, mapStackController },
   controls: { styleManager },
   catalog,
   allowQaRegistration,
@@ -27,6 +27,8 @@ export function createApplicationData({
     throw new TypeError('An application layer catalog is required');
   for (const layer of catalog.layers) dataManager.register(layer);
   for (const layer of catalog.layers) layer.attachDataManager?.(dataManager);
+  for (const layer of catalog.layers)
+    layer.attachMapStackController?.(mapStackController);
   // Restoration starts only after the caller's complete registry is sealed.
   dataManager.finalizeRegistrations(catalog.metadata);
   if (allowQaRegistration) {

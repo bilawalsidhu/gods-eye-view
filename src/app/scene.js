@@ -1,6 +1,9 @@
 import { createApplicationOperations } from './operations.js';
 import * as Cesium from 'cesium';
-import { createApplicationViewer } from '../app/viewer.js';
+import {
+  createApplicationViewer,
+  installTrackpadPinchZoom,
+} from '../app/viewer.js';
 import { registerDataCredits } from '../data/dataCredits.js';
 import { configureCreditKeyboardAccess } from '../creditKeyboard.js';
 import { MapStackController } from '../mapStackController.js';
@@ -52,6 +55,7 @@ export async function createApplicationScene({
     uninstallRenderGovernor(viewer);
     if (!viewer.isDestroyed()) viewer.destroy();
   });
+  defer(installTrackpadPinchZoom(viewer));
   registerDataCredits(viewer, credits);
   configureCreditKeyboardAccess(document);
   loaderStatus.textContent =

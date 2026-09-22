@@ -1,24 +1,9 @@
 export {
   readResponseTextCapped,
   readResponseJsonCapped,
+  readResponseBytesCapped,
+  coalesceProxyRequest,
 } from '../../../src/sources/httpBody.js';
-
-/**
- * Return the existing promise for a cache key, or create one and remove it
- * only when that exact promise settles.
- */
-export function coalesceProxyRequest(inFlight, key, create) {
-  const existing = inFlight.get(key);
-  if (existing) return { promise: existing, shared: true };
-  let promise;
-  promise = Promise.resolve()
-    .then(create)
-    .finally(() => {
-      if (inFlight.get(key) === promise) inFlight.delete(key);
-    });
-  inFlight.set(key, promise);
-  return { promise, shared: false };
-}
 
 /**
  * Read a fetch Response body as text while enforcing a hard byte cap during
