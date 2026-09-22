@@ -59,6 +59,8 @@ const RIGHT_STACK_OBSTACLE_SELECTOR = [
   '#cesium-credits .cesium-credit-textContainer',
   '#command-dock',
   '#gev-voice-control',
+  '#gev-deepseek-chat',
+  '#ds-chat-toggle',
 ].join(', ');
 export class PanelLayoutController {
   constructor({

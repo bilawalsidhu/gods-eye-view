@@ -58,6 +58,14 @@ export const KEY_SETUP_KEYS = Object.freeze([
     tier: 'metered',
   }),
   Object.freeze({
+    id: 'deepseek',
+    title: 'DEEPSEEK',
+    unlocks: 'AI actions & intelligence summary',
+    getUrl: 'https://platform.deepseek.com/api_keys',
+    envVars: Object.freeze(['DEEPSEEK_API_KEY']),
+    tier: 'metered',
+  }),
+  Object.freeze({
     id: 'aisstream',
     title: 'AISSTREAM',
     unlocks: 'Live ships, worldwide',
