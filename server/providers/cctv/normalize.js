@@ -367,6 +367,18 @@ export function isLikelyCalgaryCoordinate(lat, lon) {
   );
 }
 
+/** Colorado's state rectangle, with slack at each edge for cameras sited on an
+ * interstate a little past the line. */
+export function isLikelyColoradoCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 36.8 &&
+    lat <= 41.2 &&
+    lon >= -109.3 &&
+    lon <= -101.9
+  );
+}
+
 export function isLikelyFinlandCoordinate(lat, lon) {
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
   return lat >= 59.5 && lat <= 70.5 && lon >= 19 && lon <= 32;

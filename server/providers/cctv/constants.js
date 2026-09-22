@@ -236,6 +236,28 @@ export const CALGARY_DOWNTOWN = { lat: 51.0461, lon: -114.0626 };
  * body cannot be buffered without limit. */
 export const CALGARY_MAX_CATALOG_BYTES = 4 * 1024 * 1024;
 
+/** Colorado (CDOT / COtrip) cameras: one keyless GeoJSON endpoint for the whole
+ * state, the same feed COtrip's own public map reads. Frames are stills on a
+ * single CARS-operated host. */
+export const DEFAULT_COLORADO_ROWS_URL =
+  'https://api-511x-co.carsprogram.org/cameras/map-features';
+/** The only origin Colorado camera frames may come from. Both view shapes land
+ * here: a `WMP` view carries the still as `videoPreviewUrl` beside its HLS
+ * `url`, a `STILL_IMAGE` view carries it as `url`. Anything else is refused
+ * rather than proxied, the same pin Calgary and TfL apply. */
+export const COLORADO_IMAGE_ORIGIN = 'https://cocam.carsprogram.org/';
+export const DEFAULT_COLORADO_MAX_SOURCES = 300;
+/** Prioritization anchors: the Front Range corridor holds most of the state's
+ * cameras and all of its metro traffic. */
+export const COLORADO_ANCHORS = Object.freeze([
+  { lat: 39.7392, lon: -104.9903 },
+  { lat: 38.8339, lon: -104.8214 },
+]);
+/** Hard ceiling on the Colorado catalog body. The whole state is ~1,030
+ * features and under 100 KB; this only exists so an upstream that streams an
+ * unbounded body cannot be buffered without limit. */
+export const COLORADO_MAX_CATALOG_BYTES = 4 * 1024 * 1024;
+
 /** Camera CATALOGS change rarely; 15 min keeps multi-megabyte upstream list refetches (Austin rows.json + 4 Caltrans districts + TfL + Ontario 511) infrequent. Frames are fetched per-request and are unaffected. */
 export const CCTV_SOURCE_CACHE_MS = 15 * 60 * 1000;
 /** Per-provider catalog-fetch timeout. Bounds the worst-case refresh so one

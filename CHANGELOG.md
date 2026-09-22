@@ -1,5 +1,14 @@
 # Changelog
 
+- Add a Colorado (CDOT / COtrip) CCTV camera pack: 1,335 statewide traffic
+  cameras (Colorado DOT, CDOT Cellular, Douglas County, Colorado Springs),
+  read keyless from the same GeoJSON feed COtrip's own public map uses. Only
+  still frames are registered — the feed's live HLS streams are left for a
+  future pass. The nearest 300 to Denver/Colorado Springs load by default,
+  like every other regional pack; `CCTV_COLORADO_MAX_SOURCES` raises that and
+  `CCTV_COLORADO_ENABLED=0` turns the pack off. `DATA_SOURCES.md` records the
+  feed's terms and the frame-host pinning.
+
 - Remove the spurious scrollbars that appeared on both panel stacks at narrow
   widths (720px and below) as soon as a panel was expanded. The stacks scroll
   vertically there, and each panel's decorative glow, absolutely positioned
