@@ -101,6 +101,53 @@ test('most of the pack has no controller, and the loader says so', async () => {
   assert.equal(isControlled(uncontrolled), false);
 });
 
+test('field elevation is carried, and absent means absent rather than sea level', async () => {
+  // A phase classifier reads height above the FIELD. If a missing elevation
+  // decoded as 0 instead of null, every airport without one would look like it
+  // sat at sea level and an aircraft on the ramp at a 2,000 m plateau field
+  // would classify as cruise.
+  const { airports, meta } = await loadAtcFrequencies();
+  const austin = await airportByIdent('KAUS');
+  assert.ok(
+    Math.abs(austin.elevationM - 165.2) < 0.2,
+    'KAUS is 542 ft / 165 m',
+  );
+  const missing = airports.filter((a) => a.elevationM === null);
+  assert.equal(missing.length, meta.coverage.withoutElevation);
+  assert.ok(missing.length > 0, 'the null case must be exercised by real data');
+  for (const airport of airports) {
+    assert.ok(
+      airport.elevationM === null || Number.isFinite(airport.elevationM),
+      `${airport.ident}: elevation must be a number or null, never undefined`,
+    );
+  }
+});
+
+test('the loader decodes by the published column map, not by fixed indices', async () => {
+  // The pack rows are bare arrays. If the loader spelled the indices by hand,
+  // appending a column upstream would silently shift every field one across
+  // and the failure would surface as wrong data, not as an error.
+  const pack = JSON.parse(readFileSync(PACK, 'utf8'));
+  assert.deepEqual(Object.keys(pack.columns).sort(), [
+    'ELEVATION_M',
+    'FREQUENCIES',
+    'IDENT',
+    'LAT',
+    'LON',
+    'NAME',
+  ]);
+  const [row] = pack.airports;
+  const decoded = await airportByIdent(row[pack.columns.IDENT]);
+  assert.equal(decoded.name, row[pack.columns.NAME]);
+  assert.equal(decoded.lat, row[pack.columns.LAT]);
+  assert.equal(decoded.lon, row[pack.columns.LON]);
+  assert.equal(decoded.elevationM, row[pack.columns.ELEVATION_M]);
+  assert.equal(
+    decoded.frequencies.length,
+    row[pack.columns.FREQUENCIES].length,
+  );
+});
+
 test('a tower airport groups by class and reads as controlled', async () => {
   const austin = await airportByIdent('kaus');
   assert.ok(austin, 'KAUS must be in the pack');
