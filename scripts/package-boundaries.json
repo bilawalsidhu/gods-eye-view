@@ -189,6 +189,24 @@
     ],
     "external": []
   },
+  "web-receivers-provider": {
+    "runtime": "node",
+    "exports": ["./server/providers/web-receivers"],
+    "modules": [
+      "server/providers/web-receivers.js",
+      "server/providers/web-receivers/catalog.js",
+      "server/providers/web-receivers/constants.js",
+      "server/providers/web-receivers/directory.js",
+      "server/providers/common/http.js",
+      "server/providers/radio/stations.js",
+      "server/providers/radio/transport.js",
+      "src/data/radioCountry.js",
+      "src/sources/httpBody.js",
+      "src/sources/radioBrowser.js",
+      "src/sources/webReceivers.js"
+    ],
+    "external": []
+  },
   "overpass-provider": {
     "runtime": "node",
     "exports": ["./server/providers/overpass"],
@@ -419,6 +437,16 @@
     ],
     "external": []
   },
+  "web-receivers-controls": {
+    "exports": ["./ui/web-receivers"],
+    "modules": [
+      "src/ui/webReceivers.js",
+      "src/ui/webReceiversControls.js",
+      "src/ui/webReceiversPresentation.js",
+      "src/sources/webReceivers.js"
+    ],
+    "external": []
+  },
   "cctv-controls": {
     "exports": ["./ui/cctv"],
     "modules": [
@@ -589,6 +617,10 @@
       "src/ui/radioControls.js",
       "src/ui/radioPresentation.js",
       "src/ui/radioTunerModel.js",
+      "src/ui/webReceivers.js",
+      "src/ui/webReceiversControls.js",
+      "src/ui/webReceiversPresentation.js",
+      "src/sources/webReceivers.js",
       "src/ui/recordingControls.js",
       "src/ui/rightPanelRail.js",
       "src/ui/sceneControls.js",
@@ -1143,6 +1175,26 @@
     ],
     "external": ["cesium"]
   },
+  "web-receivers-layer": {
+    "exports": ["./layers/web-receivers"],
+    "modules": [
+      "src/data/inputOwnership.js",
+      "src/layers/webReceivers/controls.js",
+      "src/layers/webReceivers/index.js",
+      "src/layers/webReceivers/ingestion.js",
+      "src/layers/webReceivers/interaction.js",
+      "src/layers/webReceivers/lifecycle.js",
+      "src/layers/webReceivers/model.js",
+      "src/layers/webReceivers/policy.js",
+      "src/layers/webReceivers/presentation.js",
+      "src/layers/webReceivers/queries.js",
+      "src/layers/webReceivers/rendering.js",
+      "src/layers/webReceivers/source.js",
+      "src/layers/webReceivers/state.js",
+      "src/sources/webReceivers.js"
+    ],
+    "external": ["cesium"]
+  },
   "submarine-cables": {
     "exports": ["./layers/submarine-cables"],
     "modules": [
@@ -1300,6 +1352,20 @@
       "src/app/layers/militaryInstallations.js",
       "src/app/layers/overlayHost.js",
       "src/app/layers/radio.js",
+      "src/app/layers/webReceivers.js",
+      "src/layers/webReceivers/controls.js",
+      "src/layers/webReceivers/index.js",
+      "src/layers/webReceivers/ingestion.js",
+      "src/layers/webReceivers/interaction.js",
+      "src/layers/webReceivers/lifecycle.js",
+      "src/layers/webReceivers/model.js",
+      "src/layers/webReceivers/policy.js",
+      "src/layers/webReceivers/presentation.js",
+      "src/layers/webReceivers/queries.js",
+      "src/layers/webReceivers/rendering.js",
+      "src/layers/webReceivers/source.js",
+      "src/layers/webReceivers/state.js",
+      "src/sources/webReceivers.js",
       "src/app/layers/rocketLaunches.js",
       "src/app/layers/satellites.js",
       "src/app/layers/submarineCables.js",
@@ -1772,6 +1838,10 @@
       "src/ui/radioControls.js",
       "src/ui/radioPresentation.js",
       "src/ui/radioTunerModel.js",
+      "src/ui/webReceivers.js",
+      "src/ui/webReceiversControls.js",
+      "src/ui/webReceiversPresentation.js",
+      "src/sources/webReceivers.js",
       "src/ui/recordingControls.js",
       "src/ui/rightPanelRail.js",
       "src/ui/sceneControls.js",
@@ -2008,6 +2078,20 @@
       "src/app/layers/militaryInstallations.js",
       "src/app/layers/overlayHost.js",
       "src/app/layers/radio.js",
+      "src/app/layers/webReceivers.js",
+      "src/layers/webReceivers/controls.js",
+      "src/layers/webReceivers/index.js",
+      "src/layers/webReceivers/ingestion.js",
+      "src/layers/webReceivers/interaction.js",
+      "src/layers/webReceivers/lifecycle.js",
+      "src/layers/webReceivers/model.js",
+      "src/layers/webReceivers/policy.js",
+      "src/layers/webReceivers/presentation.js",
+      "src/layers/webReceivers/queries.js",
+      "src/layers/webReceivers/rendering.js",
+      "src/layers/webReceivers/source.js",
+      "src/layers/webReceivers/state.js",
+      "src/sources/webReceivers.js",
       "src/app/layers/rocketLaunches.js",
       "src/app/layers/satellites.js",
       "src/app/layers/submarineCables.js",
@@ -2615,6 +2699,11 @@
     "modules": ["src/sources/radioBrowser.js", "src/data/radioCountry.js"],
     "external": []
   },
+  "web-receivers-rules": {
+    "exports": ["./sources/web-receivers"],
+    "modules": ["src/sources/webReceivers.js"],
+    "external": []
+  },
   "cctv-types-source": {
     "exports": ["./sources/cctv-types"],
     "modules": ["src/sources/cctvTypes.js"],
@@ -2692,6 +2781,14 @@
   "radio-source": {
     "exports": ["./layers/radio/source"],
     "modules": ["src/layers/radio/policy.js", "src/layers/radio/source.js"],
+    "external": []
+  },
+  "web-receivers-source": {
+    "exports": ["./layers/web-receivers/source"],
+    "modules": [
+      "src/layers/webReceivers/policy.js",
+      "src/layers/webReceivers/source.js"
+    ],
     "external": []
   },
   "satellites-source": {

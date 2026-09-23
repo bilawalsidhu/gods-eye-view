@@ -568,6 +568,12 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     optionOwner: 'weather-satellite',
   }),
   Object.freeze({
+    id: 'web-receivers',
+    // '2' went to fire-perimeters in #737; the letters are gone (see #658).
+    token: '3',
+    disposition: 'enabled-only',
+  }),
+  Object.freeze({
     id: 'wind',
     token: 'k',
     disposition: 'enabled+options',

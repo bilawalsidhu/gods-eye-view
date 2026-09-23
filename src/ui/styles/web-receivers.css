@@ -1,0 +1,215 @@
+/* ── Web Receivers Panel (left stack, beside CCTV) ── */
+#web-receivers-panel {
+  --panel-expanded-width: 360px;
+  position: fixed;
+  top: var(--left-stack-top);
+  left: var(--left-stack-x);
+  right: auto;
+  bottom: auto;
+  z-index: 100;
+  width: var(--panel-expanded-width);
+  max-height: calc(100vh - 24px);
+}
+
+#web-receivers-panel .panel-glow {
+  position: absolute;
+  inset: -18px;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(0, 212, 255, 0.16) 0%,
+    transparent 65%
+  );
+  filter: blur(16px);
+  opacity: 0.25;
+  pointer-events: none;
+}
+
+.web-receivers-panel-inner {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--panel-radius);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 212, 255, 0.46) rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+}
+
+#web-receivers-panel.collapsed {
+  width: var(--left-collapsed-width);
+}
+
+#web-receivers-panel.collapsed
+  .web-receivers-panel-inner
+  > :not(.panel-header) {
+  display: none !important;
+}
+
+.web-receivers-filter-row {
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.web-receivers-filter-row select {
+  min-width: 0;
+}
+
+#web-receivers-enable-btn {
+  min-height: 36px;
+}
+
+/* The selects share the Radio filter look. */
+#web-receivers-type,
+#web-receivers-band,
+#web-receivers-mode {
+  min-width: 0;
+  padding: 7px 24px 7px 8px;
+  border: 1px solid rgba(65, 220, 231, 0.28);
+  border-radius: 5px;
+  color: #c5faff;
+  background: rgba(5, 24, 31, 0.88);
+  font: 9px/1.2 var(--font-mono);
+}
+
+.web-receivers-tune-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 0 2px;
+}
+
+.web-receivers-tune-row input {
+  flex: 1 1 96px;
+  min-width: 0;
+  background: rgba(4, 18, 26, 0.9);
+  color: #cbeaf5;
+  border: 1px solid rgba(101, 247, 255, 0.28);
+  border-radius: 4px;
+  padding: 5px 7px;
+  font: 12px var(--font-digital, monospace);
+  letter-spacing: 0.04em;
+}
+
+.web-receivers-tune-row select {
+  flex: 0 0 auto;
+}
+
+.web-receivers-tune-row button {
+  flex: 0 0 auto;
+  background: rgba(101, 247, 255, 0.12);
+  color: #65f7ff;
+  border: 1px solid rgba(101, 247, 255, 0.35);
+  border-radius: 4px;
+  padding: 5px 9px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.web-receivers-tune-row button:hover:not(:disabled) {
+  background: rgba(101, 247, 255, 0.24);
+}
+
+.web-receivers-tune-row button:disabled,
+.web-receivers-tune-row input:disabled,
+.web-receivers-tune-row select:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.web-receivers-spectrum-row {
+  padding-top: 2px;
+}
+
+.web-receivers-spectrum-row input {
+  flex: 1 1 64px;
+}
+
+.web-receivers-row-label {
+  flex: 0 0 auto;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: var(--text-dim, #6fa2ad);
+}
+
+#web-receivers-name,
+#web-receivers-meta,
+#web-receivers-bands {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* The dock embeds the tuned receiver page; minimized keeps it loaded. */
+.web-receivers-dock {
+  margin: 6px 0 4px;
+  border: 1px solid rgba(101, 247, 255, 0.28);
+  border-radius: 6px;
+  overflow: hidden;
+  background: #000;
+}
+
+.web-receivers-dock-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background: rgba(4, 18, 26, 0.95);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: #9fdfe9;
+}
+
+.web-receivers-dock-bar span {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.web-receivers-dock-bar a {
+  color: #65f7ff;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.web-receivers-dock-bar button {
+  flex: 0 0 auto;
+  background: none;
+  border: 0;
+  color: #9fdfe9;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+#web-receivers-frame {
+  display: block;
+  width: 100%;
+  height: 340px;
+  border: 0;
+  background: #000;
+}
+
+#web-receivers-frame[hidden] {
+  display: none;
+}
+
+.web-receivers-dock.minimized #web-receivers-frame,
+.web-receivers-dock.minimized #web-receivers-dock-note {
+  display: none;
+}

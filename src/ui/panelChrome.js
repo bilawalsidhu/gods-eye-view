@@ -15,6 +15,7 @@ const SHARE_PANEL_STATE_SPECS = Object.freeze([
   { id: 'weather-panel' },
   { id: 'recent-imagery-panel' },
   { id: 'radio-panel' },
+  { id: 'web-receivers-panel' },
   { id: 'scene-panel' },
   { id: 'global-context-panel' },
   { id: 'pp-toggles' },
@@ -30,6 +31,7 @@ const COCKPIT_ENTRY_COLLAPSE_PANEL_IDS = Object.freeze([
   'pp-toggles',
   'global-context-panel',
   'radio-panel',
+  'web-receivers-panel',
 ]);
 
 /** Own panel disclosure, docking, persistence and Cockpit rail restoration. */

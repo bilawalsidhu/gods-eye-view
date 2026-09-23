@@ -38,6 +38,14 @@ import { isPickedWorldPosition } from '../data/scenePick.js';
 import { unavailablePlaceSearch } from '../search/placeSearch.js';
 import * as defaultAnnotationResolver from '../annotations/annotationResolver.js';
 import { normalizeRadioCountryInput } from '../data/radioCountry.js';
+import {
+  defaultModeForHz,
+  describeReceiverBands,
+  formatFrequencyHz,
+  formatFrequencyRange,
+  normalizeReceiverMode,
+  parseFrequencyHz,
+} from '../sources/webReceivers.js';
 import { TR3B_CLASS } from '../data/tr3bRegistry.js';
 
 const ALLOWED_STYLES = new Set([
@@ -65,6 +73,14 @@ const PANEL_ALIASES = new Map([
   ['radio', 'radio-panel'],
   ['internet radio', 'radio-panel'],
   ['radio stations', 'radio-panel'],
+  ['receivers', 'web-receivers-panel'],
+  ['web receivers', 'web-receivers-panel'],
+  ['web receiver', 'web-receivers-panel'],
+  ['sdr', 'web-receivers-panel'],
+  ['sdrs', 'web-receivers-panel'],
+  ['kiwisdr', 'web-receivers-panel'],
+  ['websdr', 'web-receivers-panel'],
+  ['openwebrx', 'web-receivers-panel'],
   ['context', 'global-context-panel'],
   ['context panel', 'global-context-panel'],
   ['global context', 'global-context-panel'],
@@ -87,6 +103,7 @@ const PANEL_IDS = new Set([
   'control-panel',
   'cctv-panel',
   'radio-panel',
+  'web-receivers-panel',
   'global-context-panel',
   'scene-panel',
   'pp-toggles',
@@ -204,6 +221,18 @@ const LAYER_ALIASES = new Map([
   ['radio', 'radio'],
   ['internet radio', 'radio'],
   ['radio stations', 'radio'],
+  ['web receivers', 'web-receivers'],
+  ['web receiver', 'web-receivers'],
+  ['web-receivers', 'web-receivers'],
+  ['receivers', 'web-receivers'],
+  ['online receivers', 'web-receivers'],
+  ['sdr', 'web-receivers'],
+  ['sdrs', 'web-receivers'],
+  ['kiwisdr', 'web-receivers'],
+  ['kiwi sdr', 'web-receivers'],
+  ['websdr', 'web-receivers'],
+  ['web sdr', 'web-receivers'],
+  ['openwebrx', 'web-receivers'],
   ['bikeshare', 'bikeshare'],
   ['bikes', 'bikeshare'],
   ['ais', 'ais-live-vessels'],
@@ -1135,6 +1164,27 @@ export function createGevActionRunner({
 
     if (name === 'control_radio') {
       return controlRadio(viewer, dataManager, args, {
+        ...runOptions,
+        placeSearch,
+      });
+    }
+
+    if (name === 'find_web_receivers') {
+      return findWebReceivers(viewer, dataManager, args, {
+        ...runOptions,
+        placeSearch,
+      });
+    }
+
+    if (name === 'tune_web_receiver') {
+      return tuneWebReceiver(viewer, dataManager, args, {
+        ...runOptions,
+        placeSearch,
+      });
+    }
+
+    if (name === 'show_rf_spectrum') {
+      return showRfSpectrum(viewer, dataManager, args, {
         ...runOptions,
         placeSearch,
       });
@@ -4469,5 +4519,386 @@ async function runAnalystQuery(
         }
       : {}),
     ...(countsReconciliation ? { countsReconciliation } : {}),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Web receivers (KiwiSDR / WebSDR / OpenWebRX)
+// ---------------------------------------------------------------------------
+
+const WEB_RECEIVERS_LAYER = 'web-receivers';
+
+function webReceiversModule(dataManager) {
+  return dataManager?.layers?.get(WEB_RECEIVERS_LAYER)?.module || null;
+}
+
+async function ensureWebReceiversReady(dataManager, options = {}) {
+  if (!dataManager?.layers?.has(WEB_RECEIVERS_LAYER))
+    throw new Error('Web Receivers layer unavailable');
+  if (!dataManager.isEnabled(WEB_RECEIVERS_LAYER)) {
+    const changeOptions = { origin: 'voice' };
+    if (options.signal) changeOptions.signal = options.signal;
+    await dataManager.setEnabled(WEB_RECEIVERS_LAYER, true, changeOptions);
+  }
+  if (!radioActionIsCurrent(options)) throw radioAbortError();
+  const module = webReceiversModule(dataManager);
+  if (!module) throw new Error('Web Receivers layer unavailable');
+  await module.ensureLoaded();
+  if (!radioActionIsCurrent(options)) throw radioAbortError();
+  return module;
+}
+
+/** Ground point under the screen center, or the camera's own position. */
+function currentViewCenter(viewer) {
+  try {
+    const scene = viewer?.scene;
+    const camera = viewer?.camera;
+    const canvas = scene?.canvas;
+    if (canvas && camera?.pickEllipsoid) {
+      const center = camera.pickEllipsoid(
+        new Cesium.Cartesian2(canvas.clientWidth / 2, canvas.clientHeight / 2),
+        scene.globe?.ellipsoid,
+      );
+      if (center) {
+        const carto = Cesium.Cartographic.fromCartesian(center);
+        return {
+          lat: Cesium.Math.toDegrees(carto.latitude),
+          lon: Cesium.Math.toDegrees(carto.longitude),
+          label: 'the current view',
+          country: '',
+        };
+      }
+    }
+    const position = camera?.positionCartographic;
+    if (position) {
+      return {
+        lat: Cesium.Math.toDegrees(position.latitude),
+        lon: Cesium.Math.toDegrees(position.longitude),
+        label: 'the current view',
+        country: '',
+      };
+    }
+  } catch {
+    /* fall through */
+  }
+  return null;
+}
+
+async function resolveWebReceiverLocation(viewer, args, options) {
+  const coordinates = radioCoordinatePair(args);
+  if (coordinates.valid || args.locationQuery || args.locationId) {
+    const resolved = await resolveRadioLocation(args, coordinates, options);
+    if (resolved) return resolved;
+    if (args.locationQuery)
+      throw new Error(`Could not place "${args.locationQuery}"`);
+  }
+  return currentViewCenter(viewer);
+}
+
+function summarizeWebReceiverRow(row) {
+  const receiver = row.receiver;
+  return {
+    id: receiver.id,
+    name: receiver.name,
+    type: receiver.type,
+    typeLabel: receiver.typeLabel,
+    site: receiver.site,
+    url: receiver.url,
+    distanceKm: row.distanceKm === null ? null : Math.round(row.distanceKm),
+    coverage: describeReceiverBands(receiver),
+    coversFrequency: row.covers,
+    users: receiver.users,
+    usersMax: receiver.usersMax,
+    full: Boolean(row.full),
+    online: receiver.online,
+  };
+}
+
+function receiverSummary(receiver) {
+  return {
+    id: receiver.id,
+    name: receiver.name,
+    type: receiver.type,
+    typeLabel: receiver.typeLabel,
+    site: receiver.site,
+    url: receiver.url,
+  };
+}
+
+/** Open the receiver page: the panel dock listens for the event; a tab is opened here. */
+function announceWebReceiverTune(receiver, url, openIn, extra = {}) {
+  if (openIn === 'tab' && typeof window !== 'undefined') {
+    try {
+      window.open(url, '_blank', 'noopener');
+    } catch {
+      /* popup blocked: the dock link remains */
+    }
+  }
+  if (typeof document !== 'undefined') {
+    document.dispatchEvent(
+      new CustomEvent('gev:web-receiver-tune', {
+        detail: {
+          receiverId: receiver.id,
+          url,
+          openIn,
+          origin: 'voice',
+          ...extra,
+        },
+      }),
+    );
+  }
+}
+
+/** Voice: find web receivers near a place, optionally covering a frequency or band. */
+export async function findWebReceivers(
+  viewer,
+  dataManager,
+  args = {},
+  options = {},
+) {
+  const module = await ensureWebReceiversReady(dataManager, options);
+  const location = await resolveWebReceiverLocation(viewer, args, options);
+  const hz =
+    args.frequencyKhz !== undefined && args.frequencyKhz !== null
+      ? parseFrequencyHz(args.frequencyKhz, 'khz')
+      : null;
+  const band = ['all', 'lf-mw', 'hf', 'vhf', 'uhf'].includes(args.band)
+    ? args.band
+    : 'all';
+  const receiverType = ['all', 'kiwisdr', 'websdr', 'openwebrx'].includes(
+    args.receiverType,
+  )
+    ? args.receiverType
+    : 'all';
+  const rows = module.find({
+    lat: location?.lat ?? null,
+    lon: location?.lon ?? null,
+    hz,
+    band,
+    type: receiverType,
+    requireCoverage: hz !== null,
+    limit: Math.max(1, Math.min(20, Number(args.limit) || 8)),
+    label: location?.label || '',
+  });
+  const results = rows.map(summarizeWebReceiverRow);
+  if (results.length && args.frameResults !== false)
+    module.frame(results.map((row) => row.id));
+  return {
+    ok: results.length > 0,
+    action: 'find_web_receivers',
+    scopeLabel: location ? `around ${location.label}` : 'worldwide',
+    location: location
+      ? { lat: location.lat, lon: location.lon, label: location.label }
+      : null,
+    frequencyKhz: hz === null ? null : hz / 1000,
+    frequencyLabel: hz === null ? null : formatFrequencyHz(hz),
+    band,
+    receiverType,
+    count: results.length,
+    totalReceivers: module.getReceivers().length,
+    results,
+    error: results.length ? null : 'No matching web receivers',
+    ...readLayerLifecycleSummary(dataManager, WEB_RECEIVERS_LAYER),
+  };
+}
+
+/** Voice: tune a receiver and open it in the panel dock (or a tab). */
+export async function tuneWebReceiver(
+  viewer,
+  dataManager,
+  args = {},
+  options = {},
+) {
+  const module = await ensureWebReceiversReady(dataManager, options);
+  const hz = parseFrequencyHz(args.frequencyKhz, 'khz');
+  if (hz === null) {
+    return {
+      ok: false,
+      action: 'tune_web_receiver',
+      error: 'A frequency in kHz is required',
+    };
+  }
+  const mode = normalizeReceiverMode(args.mode) || defaultModeForHz(hz);
+  let receiver = null;
+  let resolvedBy = '';
+  if (args.receiverId) {
+    receiver = module.getReceiver(args.receiverId);
+    resolvedBy = 'id';
+  }
+  if (!receiver && args.receiverQuery) {
+    receiver = module.resolveReceiver(args.receiverQuery);
+    resolvedBy = 'query';
+    if (!receiver)
+      return {
+        ok: false,
+        action: 'tune_web_receiver',
+        error: `No web receiver matched "${args.receiverQuery}"`,
+      };
+  }
+  const target = String(args.target || '').toLowerCase();
+  if (!receiver && target !== 'nearest') {
+    receiver = module.getUIState().selected;
+    resolvedBy = 'selected';
+  }
+  if (!receiver) {
+    const location = await resolveWebReceiverLocation(viewer, args, options);
+    const rows = module.find({
+      lat: location?.lat ?? null,
+      lon: location?.lon ?? null,
+      hz,
+      requireCoverage: true,
+      limit: 1,
+      label: location?.label || '',
+    });
+    receiver = rows[0]?.receiver || null;
+    resolvedBy = 'nearest';
+    if (!receiver) {
+      return {
+        ok: false,
+        action: 'tune_web_receiver',
+        error: `No web receiver covering ${formatFrequencyHz(hz)} was found${location ? ` around ${location.label}` : ''}`,
+        ...readLayerLifecycleSummary(dataManager, WEB_RECEIVERS_LAYER),
+      };
+    }
+  }
+  const tuned = module.tune({ receiverId: receiver.id, hz, mode });
+  if (!tuned.ok)
+    return { ok: false, action: 'tune_web_receiver', error: tuned.error };
+  module.selectReceiver(receiver.id, { flyTo: true, origin: 'voice' });
+  const openIn = args.openIn === 'tab' ? 'tab' : 'dock';
+  announceWebReceiverTune(receiver, tuned.url, openIn);
+  return {
+    ok: true,
+    action: 'tune_web_receiver',
+    receiver: receiverSummary(receiver),
+    frequencyKhz: hz / 1000,
+    frequencyLabel: tuned.frequencyLabel,
+    mode,
+    covers: tuned.covers,
+    tuneUrl: tuned.url,
+    openedIn: openIn,
+    resolvedBy,
+    ...readLayerLifecycleSummary(dataManager, WEB_RECEIVERS_LAYER),
+  };
+}
+
+/** Resolve startKhz/stopKhz or centerKhz+spanKhz into a Hz range, or null. */
+export function spectrumRangeHz(args = {}) {
+  const start = parseFrequencyHz(args.startKhz, 'khz');
+  const stop = parseFrequencyHz(args.stopKhz, 'khz');
+  if (start !== null && stop !== null && stop > start) return [start, stop];
+  const center = parseFrequencyHz(args.centerKhz, 'khz');
+  const span =
+    args.spanKhz !== undefined && args.spanKhz !== null
+      ? Number(args.spanKhz) * 1000
+      : null;
+  if (center !== null && span !== null && Number.isFinite(span) && span > 0) {
+    return [
+      Math.max(0, Math.round(center - span / 2)),
+      Math.round(center + span / 2),
+    ];
+  }
+  return null;
+}
+
+/** Voice: silent spectrum view of a range on the best receiver. */
+export async function showRfSpectrum(
+  viewer,
+  dataManager,
+  args = {},
+  options = {},
+) {
+  const module = await ensureWebReceiversReady(dataManager, options);
+  const range = spectrumRangeHz(args);
+  if (!range) {
+    return {
+      ok: false,
+      action: 'show_rf_spectrum',
+      error:
+        'A frequency range is required: startKhz and stopKhz, or centerKhz and spanKhz',
+    };
+  }
+  const [lowHz, highHz] = range;
+  if (highHz - lowHz > 40_000_000) {
+    return {
+      ok: false,
+      action: 'show_rf_spectrum',
+      error:
+        'Spans wider than 40 MHz are not useful on a web receiver; ask for a narrower range',
+    };
+  }
+  let receiver = null;
+  let resolvedBy = '';
+  if (args.receiverId) {
+    receiver = module.getReceiver(args.receiverId);
+    resolvedBy = 'id';
+  }
+  if (!receiver && args.receiverQuery) {
+    receiver = module.resolveReceiver(args.receiverQuery);
+    resolvedBy = 'query';
+    if (!receiver)
+      return {
+        ok: false,
+        action: 'show_rf_spectrum',
+        error: `No web receiver matched "${args.receiverQuery}"`,
+      };
+  }
+  const target = String(args.target || '').toLowerCase();
+  if (
+    !receiver &&
+    target !== 'nearest' &&
+    !args.locationQuery &&
+    !args.locationId &&
+    !radioCoordinatePair(args).valid
+  ) {
+    receiver = module.getUIState().selected;
+    resolvedBy = 'selected';
+  }
+  let location = null;
+  if (!receiver) {
+    location = await resolveWebReceiverLocation(viewer, args, options);
+    const rows = module.find({
+      lat: location?.lat ?? null,
+      lon: location?.lon ?? null,
+      rangeHz: [lowHz, highHz],
+      requireCoverage: true,
+      preferTypes: ['kiwisdr'],
+      limit: 1,
+      label: location?.label || '',
+    });
+    receiver = rows[0]?.receiver || null;
+    resolvedBy = 'nearest';
+    if (!receiver) {
+      return {
+        ok: false,
+        action: 'show_rf_spectrum',
+        error: `No web receiver covering ${formatFrequencyRange(lowHz, highHz)} was found${location ? ` around ${location.label}` : ''}`,
+        ...readLayerLifecycleSummary(dataManager, WEB_RECEIVERS_LAYER),
+      };
+    }
+  }
+  const view = module.showSpectrum({ receiverId: receiver.id, lowHz, highHz });
+  if (!view.ok)
+    return { ok: false, action: 'show_rf_spectrum', error: view.error };
+  module.selectReceiver(receiver.id, { flyTo: true, origin: 'voice' });
+  const openIn = args.openIn === 'tab' ? 'tab' : 'dock';
+  announceWebReceiverTune(receiver, view.url, openIn, { kind: 'spectrum' });
+  return {
+    ok: true,
+    action: 'show_rf_spectrum',
+    receiver: receiverSummary(receiver),
+    rangeLabel: view.rangeLabel,
+    startKhz: lowHz / 1000,
+    stopKhz: highHz / 1000,
+    muted: view.muted,
+    zoom: view.zoom,
+    shownSpanKhz: view.shownSpanHz === null ? null : view.shownSpanHz / 1000,
+    covers: view.covers,
+    note: view.note,
+    spectrumUrl: view.url,
+    openedIn: openIn,
+    resolvedBy,
+    scopeLabel: location ? `around ${location.label}` : null,
+    ...readLayerLifecycleSummary(dataManager, WEB_RECEIVERS_LAYER),
   };
 }

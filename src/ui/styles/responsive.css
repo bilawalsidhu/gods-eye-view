@@ -235,10 +235,12 @@
   #left-panel-stack > #cctv-panel,
   #left-panel-stack > #global-context-panel,
   #left-panel-stack > #scene-panel,
+  #left-panel-stack > #web-receivers-panel,
   #left-panel-stack > #data-panel.collapsed,
   #left-panel-stack > #cctv-panel.collapsed,
   #left-panel-stack > #global-context-panel.collapsed,
-  #left-panel-stack > #scene-panel.collapsed {
+  #left-panel-stack > #scene-panel.collapsed,
+  #left-panel-stack > #web-receivers-panel.collapsed {
     position: relative;
     top: auto;
     right: auto;

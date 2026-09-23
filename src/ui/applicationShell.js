@@ -17,6 +17,7 @@ import { ContextControls } from './context.js';
 import { CctvControls } from './cctv.js';
 import { RadioControls } from './radio.js';
 import { LocalSdrControls } from './localSdrControls.js';
+import { WebReceiversControls } from './webReceivers.js';
 import { LocationNavigation } from './locationNavigation.js';
 import { bindClearLayersControl } from './layers.js';
 import { bindCameraOrientationControls } from './cameraOrientationControls.js';
@@ -263,6 +264,7 @@ export class StyleManager extends ShellFacade {
         _contextControls: this._contextControls,
         _cctvControls: this._cctvControls,
         _radioControls: this._radioControls,
+        _webReceiversControls: this._webReceiversControls,
       }),
       operations: {
         _updateTrafficSyncChip: (...args) =>
@@ -568,6 +570,7 @@ export class StyleManager extends ShellFacade {
     this._initLeftPanelAdaptiveLayout();
     this._initRightPanelAdaptiveLayout();
     this._initRadioPanel();
+    this._initWebReceiversPanel();
     this._initCctvPanel();
     this._initGlobalContextPanel();
     this._initLocationBar();
@@ -914,6 +917,52 @@ export class StyleManager extends ShellFacade {
         },
       });
     }
+  }
+
+  /** Wire the Web Receivers companion panel: enable toggle, filters, tune row and dock. */
+  _initWebReceiversPanel() {
+    const { webReceiversLayer } = this.services;
+    this._webReceiversControls?.destroy();
+    if (!this._webReceiversPanel || !webReceiversLayer) return;
+    this._webReceiversControls = new WebReceiversControls({
+      elements: {
+        _webReceiversPanel: this._webReceiversPanel,
+        _webReceiversLayerState: this._webReceiversLayerState,
+        _webReceiversEnableBtn: this._webReceiversEnableBtn,
+        _webReceiversType: this._webReceiversType,
+        _webReceiversBand: this._webReceiversBand,
+        _webReceiversName: this._webReceiversName,
+        _webReceiversMeta: this._webReceiversMeta,
+        _webReceiversBands: this._webReceiversBands,
+        _webReceiversFreq: this._webReceiversFreq,
+        _webReceiversMode: this._webReceiversMode,
+        _webReceiversTuneBtn: this._webReceiversTuneBtn,
+        _webReceiversOpenBtn: this._webReceiversOpenBtn,
+        _webReceiversSpecFrom: this._webReceiversSpecFrom,
+        _webReceiversSpecTo: this._webReceiversSpecTo,
+        _webReceiversSpecBtn: this._webReceiversSpecBtn,
+        _webReceiversDock: this._webReceiversDock,
+        _webReceiversDockLabel: this._webReceiversDockLabel,
+        _webReceiversDockLink: this._webReceiversDockLink,
+        _webReceiversDockMin: this._webReceiversDockMin,
+        _webReceiversDockClose: this._webReceiversDockClose,
+        _webReceiversFrame: this._webReceiversFrame,
+        _webReceiversDockNote: this._webReceiversDockNote,
+        _webReceiversStatus: this._webReceiversStatus,
+      },
+      layer: webReceiversLayer,
+      actions: {
+        isRegistered: () => this._dataManager?.layers?.has('web-receivers'),
+        isEnabled: () => this._dataManager?.isEnabled('web-receivers'),
+        setEnabled: (enabled, options) =>
+          this._dataManager.setEnabled('web-receivers', enabled, options),
+        getLifecycle: () =>
+          this._dataManager?.getLayerLifecycleState?.('web-receivers'),
+        runUserAction: (...args) => this._runUserFacingContextAction(...args),
+        setPanelCollapsed: (...args) => this.setPanelCollapsed(...args),
+        scheduleLayout: (options) => this._scheduleLeftPanelLayout(options),
+      },
+    });
   }
 
   /**
@@ -1535,6 +1584,7 @@ export class StyleManager extends ShellFacade {
     this._cctvControls?.destroy();
     this._radioControls?.destroy();
     this._localSdrControls?.destroy();
+    this._webReceiversControls?.destroy();
     this._cockpitCoordinator.stop();
     this._visualSettings.stop();
     this.shareLinkManager?.destroy();

@@ -82,7 +82,7 @@ export const ACTION_DESCRIPTIONS = {
       properties: {
         layerId: {
           description:
-            'Common-name mapping for the non-obvious ids: space mission(s) → rocket-launches; fires/wildfires/active fires → local-firms (NASA FIRMS); ships/vessels/boats → ais-live-vessels; undersea/submarine cables → telegeography-submarine-cables; datacenters → local-datacenters; dams → local-dams; bikes/bike share → bikeshare; street traffic/congestion → traffic; traffic cameras → cctv; internet radio/stations → radio; ALPR/license plate readers/Flock cameras → alpr-cameras; local ADS-B/my receiver/my antenna (aircraft heard by a local RTL-SDR receiver) → local-adsb.',
+            'Common-name mapping for the non-obvious ids: space mission(s) → rocket-launches; fires/wildfires/active fires → local-firms (NASA FIRMS); ships/vessels/boats → ais-live-vessels; undersea/submarine cables → telegeography-submarine-cables; datacenters → local-datacenters; dams → local-dams; bikes/bike share → bikeshare; street traffic/congestion → traffic; traffic cameras → cctv; internet radio/stations → radio; ALPR/license plate readers/Flock cameras → alpr-cameras; local ADS-B/my receiver/my antenna (aircraft heard by a local RTL-SDR receiver) → local-adsb; web receivers/SDRs/KiwiSDR/WebSDR/OpenWebRX/online receivers → web-receivers.',
           $position: 1,
         },
       },
@@ -598,5 +598,114 @@ export const ACTION_DESCRIPTIONS = {
     description:
       'Predict the next pass in 24 hours for one satellite in the loaded catalog, identified by exact NORAD ID or name. Ambiguous names return candidates: ask for a choice rather than selecting one. Defaults to geometric passes; visibleOnly requires estimated illumination and a dark observer sky, which does not guarantee naked-eye visibility. Uses camera location unless coordinates are supplied.',
     $position: 1,
+  },
+  find_web_receivers: {
+    description:
+      'Find internet-controllable radio receivers (KiwiSDR, WebSDR, OpenWebRX) near a place or the current view, optionally only those covering a frequency or band. Enables the Web Receivers layer if needed, highlights the results on the globe and frames them. Use for requests like "show me web receivers around Berlin", "which SDRs near me cover 20 meters", "find a shortwave receiver in Japan".',
+    $position: 1,
+    parameters: {
+      properties: {
+        locationQuery: {
+          description:
+            'Place to search around, e.g. "Berlin" or "Texas". Omit to use the current view center.',
+          $position: 1,
+        },
+        locationId: { description: 'Known city anchor.', $position: 2 },
+        frequencyKhz: {
+          description:
+            'Frequency the receiver must cover, in kHz (14233 for 14.233 MHz).',
+          $position: 1,
+        },
+        band: {
+          description:
+            'Band family filter: hf = shortwave 1.6–30 MHz, lf-mw = long/medium wave, vhf, uhf.',
+          $position: 1,
+        },
+        frameResults: {
+          description: 'Fly the camera to frame the results (default true).',
+          $position: 1,
+        },
+      },
+    },
+  },
+  tune_web_receiver: {
+    description:
+      'Tune a web receiver (KiwiSDR / WebSDR / OpenWebRX) to a frequency and mode and open it in the Web Receivers panel dock. Target the selected receiver, one by name/id from a previous find_web_receivers result, or the nearest one covering the frequency around a place. Examples: "tune to 14233 kHz USB on this receiver", "listen to 7055 LSB on the Twente WebSDR", "open the nearest KiwiSDR on 5 MHz AM".',
+    $position: 1,
+    parameters: {
+      properties: {
+        receiverId: {
+          description: 'Receiver id from find_web_receivers.',
+          $position: 1,
+        },
+        receiverQuery: {
+          description: 'Receiver name, site or host substring.',
+          $position: 1,
+        },
+        target: {
+          description:
+            'selected = the receiver currently selected on the globe/panel (default); nearest = nearest receiver covering the frequency around the place or view.',
+          $position: 1,
+        },
+        frequencyKhz: {
+          description: 'Frequency in kHz, e.g. 14233 or 7055.5.',
+          $position: 1,
+        },
+        mode: {
+          description:
+            'Demodulation. Omit to let GEV pick the usual mode for the band.',
+          $position: 1,
+        },
+        openIn: {
+          description:
+            'dock = embed the receiver page in the Web Receivers panel (default); tab = open a new browser tab.',
+          $position: 1,
+        },
+      },
+    },
+  },
+  show_rf_spectrum: {
+    description:
+      'Show the RF spectrum (waterfall) of a frequency range on a web receiver WITHOUT tuning in audibly — e.g. "show me the RF spectrum from 10 to 15 MHz around here", "let me see the 40 meter band on that receiver". Picks the selected receiver, a named one, or the nearest receiver covering the whole range (KiwiSDRs preferred because their page can be zoomed and muted from the URL) and opens it in the Web Receivers panel dock. Give the range as startKhz/stopKhz, or centerKhz plus spanKhz.',
+    $position: 1,
+    parameters: {
+      properties: {
+        startKhz: {
+          description: 'Lower edge in kHz (10 MHz = 10000).',
+          $position: 1,
+        },
+        stopKhz: {
+          description: 'Upper edge in kHz (15 MHz = 15000).',
+          $position: 1,
+        },
+        centerKhz: {
+          description: 'Alternative to start/stop: centre frequency in kHz.',
+          $position: 1,
+        },
+        spanKhz: {
+          description:
+            'Alternative to start/stop: total span in kHz around centerKhz.',
+          $position: 1,
+        },
+        receiverId: {
+          description: 'Receiver id from find_web_receivers.',
+          $position: 1,
+        },
+        receiverQuery: {
+          description: 'Receiver name, site or host substring.',
+          $position: 1,
+        },
+        target: {
+          description:
+            'selected = the receiver currently selected (default when one is); nearest = nearest receiver covering the range around the place or view.',
+          $position: 1,
+        },
+        openIn: {
+          description:
+            'dock = embed the receiver page in the Web Receivers panel (default); tab = open a new browser tab.',
+          $position: 1,
+        },
+      },
+    },
   },
 };

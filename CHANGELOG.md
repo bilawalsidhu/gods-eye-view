@@ -1,5 +1,21 @@
 # Changelog
 
+- Add a **Web Receivers** data layer: internet-controllable radio receivers —
+  KiwiSDR, WebSDR and OpenWebRX — as globe markers, sourced from Receiverbook
+  and the community KiwiSDR map feed through `/api/web-receivers/catalog`.
+  Markers are coloured by receiver family; the left-stack panel filters by
+  family and band, shows coverage, user slots and antenna for the selected
+  receiver, and tunes it by frequency and mode into an embedded dock (or a
+  new tab); its SPECTRUM row opens a silent waterfall of a range on a
+  KiwiSDR. Three voice tools: `find_web_receivers` ("show me the SDRs around
+  Berlin that cover 20 meters"), `tune_web_receiver` ("tune to 14233 kHz USB
+  on this receiver") and `show_rf_spectrum` ("show me the RF spectrum from
+  10 to 15 MHz around here"). WebSDR and OpenWebRX pages cannot be muted or
+  zoomed from a link, so a spectrum view on them is reported as audio-on.
+  Audio and control stay between the browser and the receiver operator; GEV
+  never proxies either. Layer factory under `src/layers/webReceivers/`,
+  provider under `server/providers/web-receivers/`, portable rules in
+  `src/sources/webReceivers.js`.
 - Region scopes in voice analyst queries ("in the Gulf of Mexico", "over
   the Alps") work again in the dev server: the bundled Natural Earth and
   neighborhood packs are fetched as JSON in the browser

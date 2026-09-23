@@ -661,18 +661,22 @@ test('the voice TOOL SCHEMA matches the pinned release — the mission mapping i
   // Canonical serialization pins every tool name, description, property and
   // ordering while allowing source formatting. Derived from the unchanged
   // release schema before formatting (the previous source-byte pin passed).
-  const legacyTools = structuredClone(GEV_REALTIME_TOOLS).filter((tool) => tool.name !== 'set_cyber_sonar');
-  const hudLayout = legacyTools.find((tool) => tool.name === 'set_hud').parameters.properties.layout;
+  const legacyTools = structuredClone(GEV_REALTIME_TOOLS).filter(
+    (tool) => tool.name !== 'set_cyber_sonar',
+  );
+  const hudLayout = legacyTools.find((tool) => tool.name === 'set_hud')
+    .parameters.properties.layout;
   assert.deepEqual(hudLayout.enum, ['tactical', 'operator', 'minimal', 'cyber']);
   // Cyber deliberately adds one layout; first-run missions still change no tools.
   hudLayout.enum = hudLayout.enum.filter((layout) => layout !== 'cyber');
   const block = JSON.stringify(legacyTools);
-  // Re-derived for the additive `local-adsb` set_layer_visibility value and
-  // its common-name mapping; the missions still ride existing tools.
-  assert.equal(block.length, 27432, 'serialized tool schema length drifted');
+  // Re-derived for Local ADS-B (one enum value), the Fire Perimeters layer and
+  // Web Receivers (three additive tools, three enum additions); the missions
+  // still ride existing tools.
+  assert.equal(block.length, 32700, 'serialized tool schema length drifted');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    'a2a4a787f4528f75b01f3f42caec636f29c37452c0d45b11f4f986171d6be57d',
+    'a853bbce864fbf695a105803330269d020daf3fd35877b8ee9554680e12a58e7',
     'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
   );
   const instructions = fs.readFileSync(new URL('../server/providers/openai/instructions.js', import.meta.url), 'utf8');
