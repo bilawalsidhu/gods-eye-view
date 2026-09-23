@@ -201,6 +201,37 @@ Note for the next run: assert the tile stream with a threshold, not strict
 equality — a CDN stream legitimately mixes 304 revalidations into an otherwise
 healthy frame.
 
+### 2026-09-23 verification run (v0.10.1 deploy, production alias)
+
+Deployed from `main` at `3e8eb82` (the release commit) with
+`npx wrangler pages deploy dist --project-name globe --branch main`; local
+gate battery green before the deploy (lint zero-warnings, unit suite
+3,988 + 14 allocation-gated tests, build, bundle budgets, dependency
+audit). This is the first release whose GitForge pipeline evidence is
+partial for an infra reason — see the trigger note below.
+
+| Check | Result |
+| --- | --- |
+| `/api/openzenith/elevation` | 200 — **99 m**, expected value; `x-gev-openzenith-cache: MISS` header present |
+| `/api/openzenith/reverse-geocode` | 200 (real Austin `place.display_name`) |
+| `/api/cctv/sources` | 200 (Austin camera inventory) |
+| `POST /api/realtime/debug-log` | 204 |
+| `POST /api/openai/hud-summary` | 200 (keyless honest degrade — no 405) |
+| `/api/celestrak/stations` | 502 — the documented CF-egress block, honest error body |
+| `scripts/verify-prod-render.mjs` | **PASS, 8/8** — boots, canvas fills 1600×900 (no 300×150 regression), camera 2500 m over target, tiles loaded, photoreal stream 146/148 → 200, CCTV 200, debug-log 204, regional-brief 200, no console errors |
+
+**GitForge trigger defect (2026-09-23, unfixed — owned by the GitForge
+session):** pushes to `mkinney/gods-eye-view` after 18:15 UTC write
+`ci.trigger.delivered` events (verified in the `events` table for
+`3e8eb82` and `7020b22`) but create NO pipeline row and NO run row; other
+repositories' triggers kept creating runs in the same window, so the
+drop is repo-specific, not a gateway/CI outage. The 18:15 push created
+pipeline `61a013cb` (active) + run `aa166a44` normally. Consequence: the
+lint + unit jobs DID succeed in-run on `d8b51755` before its build job
+hit the 1800 s timeout under fleet load, and the release commit's full
+battery ran green locally; re-verify on GitForge once the trigger path
+is repaired (any push re-tests it).
+
 ## Credentials & environment
 
 All keys are optional except `GOOGLE_MAPS_API_KEY`. See `.env.example` for the

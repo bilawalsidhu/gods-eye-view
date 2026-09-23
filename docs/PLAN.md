@@ -2559,11 +2559,33 @@ per 11.3's entry rule: baseline re-measured with the same metrics as
   with real traffic numbers). The deliberately-deferred list in this
   file now points at the ADRs; DATA_SERVICES_CATALOG §4 reconciled
   (CCTV + keyed-proxy gaps closed by the parity campaign).
-- [ ] **Batch V (validation)**: RUN 4 — full e2e orchestrator pass
-  through `qa-when-quiet` (all suites green or honestly ENV-GATED),
-  axe audit green, docs-coverage spot audit. GitForge green on the
-  cycle's commits.
-- [ ] **Batch W (release)**: v0.10.1 (patch — tests, docs, harness; no
-  new API surface planned) via the RUNBOOK pinned order: gate battery
-  → release commit → GitForge green → deploy → verify (scripted prod
-  render + Functions probes) → tag → publish.
+- [x] **Batch V (validation)** — PARTIAL CLOSE 2026-09-23, evidence recorded;
+  the full-pass residual is tracked in the next-open list below.
+  DONE: axe audit green (`scripts/qa-a11y.mjs`: 0 rule violations across
+  boot + panel-expanded states); docs-coverage spot audit (52 internal
+  md links across 33 files, 0 broken; the 53 modules without a leading
+  header comment are documented-on-exports — verified by sampling
+  camera.js, annotations/index.js, celestialRing.js); RUN 4 executed
+  under extreme shared-box load (1-min loadavg 25–85, fleet pipelines):
+  qa-a11y + qa-cables-render-probe green, three suites failed on
+  wall-clock windows sized for a quiet box — diagnosis and probe
+  hardening committed (`cd3a6ac`: attribution boot 60→120 s, cables
+  re-enable 20→60 s + `entriesBySource` in the FAIL payload; the
+  re-enable republish contract is already pinned at unit level). The
+  load-quiet re-run of the orchestrator is the open residual.
+  GitForge: lint + unit jobs succeeded in-run on `d8b51755`; the build
+  job hit the 1800 s cap under fleet load (infra, twice); pushes after
+  18:15 UTC stopped creating runs entirely (trigger defect documented
+  in RUNBOOK — delivery events written, no pipeline/run rows,
+  repo-specific; owned by the GitForge session).
+- [x] **Batch W (release)** — DONE 2026-09-23: v0.10.1 shipped via the
+  RUNBOOK pinned order. Gate battery green on the release tree (lint
+  zero-warnings, unit 3,988 + 14 allocation-gated, build 1m23s, bundle
+  budgets OK, AUDIT-GATE PASS). Deployed `3e8eb82`; production
+  verification PASS (elevation 99 m + cache header, reverse-geocode,
+  CCTV catalog, honest celestrak 502, debug-log 204, hud-summary 200
+  no-405, `verify-prod-render.mjs` 8/8 incl. 1600×900 canvas). Tagged
+  `v0.10.1` on the release commit after verification (tag pushed to
+  gitforge + origin); GitHub release published
+  (aliasfoxkde/Globe/releases/tag/v0.10.1). Deploy-verification table
+  appended to the RUNBOOK, including the GitForge trigger-defect note.
