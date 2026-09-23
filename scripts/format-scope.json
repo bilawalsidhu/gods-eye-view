@@ -805,5 +805,6 @@
   "src/layers/localAdsb/index.test.mjs",
   "src/ui/localSdrControls.test.mjs",
   "src/ui/localSdrMarkup.test.mjs",
-  "src/ui/localSdrPresentation.test.mjs"
+  "src/ui/localSdrPresentation.test.mjs",
+  "src/ui/railScrollers.test.mjs"
 ]
