@@ -24,7 +24,7 @@
  *   (defaults to the live location, injectable for tests).
  * @param {number} [options.devicePixelRatio] Reported DPR (defaults to the
  *   live value, injectable for tests).
- * @returns {number} Scale to apply to `viewer.sceneResolutionScale`.
+ * @returns {number} Scale to apply to `viewer.resolutionScale`.
  */
 export const DEFAULT_RENDER_SCALE_HIGH_DPR = 0.75; // DPR > 1.5 → scale 0.75 (~56% GPU bandwidth)
 export const DEFAULT_RENDER_SCALE_LOW_DPR = 1.0;
@@ -43,7 +43,7 @@ function clampRenderScale(value) {
 }
 
 /**
- * Resolve the render-resolution scale for `viewer.sceneResolutionScale`.
+ * Resolve the render-resolution scale for `viewer.resolutionScale`.
  * Honors `?renderScale=N`; otherwise picks the default for the live DPR.
  * @param {object} [options] - Injection seam.
  * @param {string} [options.search] Query string (defaults to live location).
@@ -70,12 +70,20 @@ export function resolveSceneRenderScale({
 /**
  * Apply the render-resolution scale to a live Cesium viewer.
  * Idempotent; safe to call multiple times.
+ *
+ * The knob is `viewer.resolutionScale` — Viewer proxies it to
+ * `cesiumWidget.resolutionScale` (Cesium 1.144, `CesiumWidget#resolutionScale`),
+ * and the widget applies it to the canvas backing store on its next resize.
+ * It is NOT a Scene property: `scene.sceneResolutionScale` (an earlier
+ * attempt here) never existed in Cesium, so the assignment created an inert
+ * expando and the whole HiDPI downscale policy silently no-op'd until the
+ * 2026-09-23 idle-GPU audit caught it by reading the property back live.
  * @param {object|null} viewer - Cesium viewer (duck-typed: needs `scene`).
  * @param {object} [resolved] - Pre-resolved policy (defaults to live).
  * @returns {object|null} The applied policy, or null when no viewer.
  */
 export function applySceneRenderScale(viewer, resolved = resolveSceneRenderScale()) {
   if (!viewer || !viewer.scene) return null;
-  viewer.scene.sceneResolutionScale = resolved.scale;
+  viewer.resolutionScale = resolved.scale;
   return resolved;
 }

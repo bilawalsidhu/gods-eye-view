@@ -60,12 +60,16 @@ test('resolveSceneRenderScale: non-numeric override falls through to DPR branch'
   assert.equal(result.source, 'high-dpr');
 });
 
-test('applySceneRenderScale: writes sceneResolutionScale and returns policy', () => {
-  const scene = { sceneResolutionScale: 1 };
-  const viewer = { scene };
+test('applySceneRenderScale: writes viewer.resolutionScale and returns policy', () => {
+  // The write target is the VIEWER (proxied by Cesium to cesiumWidget's
+  // resolutionScale, which drives the canvas backing store) — not the Scene.
+  // Pinned here because the 2026-09-23 audit found the property written
+  // previously (`scene.sceneResolutionScale`) does not exist in Cesium 1.144:
+  // the policy read green in tests while silently no-op'ing in the app.
+  const viewer = { scene: {}, resolutionScale: 1 };
   const result = applySceneRenderScale(viewer, { scale: 0.75, source: 'high-dpr' });
   assert.deepEqual(result, { scale: 0.75, source: 'high-dpr' });
-  assert.equal(scene.sceneResolutionScale, 0.75);
+  assert.equal(viewer.resolutionScale, 0.75);
 });
 
 test('applySceneRenderScale: null viewer is a safe no-op', () => {
