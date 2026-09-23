@@ -2512,10 +2512,25 @@ per 11.3's entry rule: baseline re-measured with the same metrics as
   +0.26pp branches beyond wave-5's +0.92pp, at the documented
   ceiling. Acceptance met: floors green, boundary documented per
   module with the mock-armor rationale (this entry).
-- [ ] **Batch S (R4)**: written module map (next three seams ranked
-  with evidence) + flightsTracking 24-factory-key config-schema
-  contract test. Acceptance: map committed to docs/, contract test in
-  CI.
+- [x] **Batch S (R4)** — DONE 2026-09-23. Module map committed to
+  docs/MODULE_MAP.md: method (size × churn, shared-closure cohesion,
+  extraction leverage), evidence table (7 largest modules), and the
+  next three seams ranked with split strategies — cctv.js (4,958 × 12,
+  per-provider fetch→normalize modules), ui.js (6,680 × 24, panel
+  subsystem out of the StyleManager orchestrator), gevRealtime.js
+  (3,021 × 10, pure-policy helpers + error-log store out of the WebRTC
+  session) — plus the deliberate don't-split on flightsTracking.js
+  (shared-pipeline chokepoint; residual flights.js bulk is the Tier-2
+  ingest where extraction has least leverage). Contract test landed:
+  src/data/flightsTracking.test.mjs (5 tests) pins the
+  createFlightTrackingPipeline config schema three ways — 24 JSDoc
+  keys with optionality exactly {trailFloorFix, requestTypeEnrichment};
+  24 runtime-consumed keys via a get-trap proxy (consumed =
+  documented, no dead config); both call sites (flights.js,
+  militaryFlights.js) provide every required key, no orphans, no
+  duplicates, and the per-layer divergence is exactly the optional
+  seams. Acceptance met: map committed to docs/, contract test runs
+  in CI (co-located *.test.mjs, full suite).
 - [ ] **Batch T (R6)**: three MEASURED WASM-candidate verdict lines in
   docs/PERFORMANCE.md (labelArbiter DENSE, detection sync-projection
   fallback, AIS bulk normalization) — each with the profiler scene
