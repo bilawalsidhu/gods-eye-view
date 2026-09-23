@@ -98,10 +98,35 @@ test('accepts country aggregate coordinates only with explicit provenance', () =
         rank: 1,
       },
     ],
+    flows: [
+      {
+        id: 'radar:flow:US:BE',
+        provider: 'cloudflare-radar',
+        origin: {
+          code: 'US',
+          name: 'United States',
+          latitude: 39.8,
+          longitude: -98.6,
+        },
+        target: { code: 'BE', name: 'Belgium', latitude: 50.5, longitude: 4.5 },
+        share: 3.6,
+        rank: 1,
+        observedAt: '2026-09-20T12:00:00Z',
+        windowStart: '2026-09-20T00:00:00Z',
+        windowEnd: '2026-09-20T12:00:00Z',
+        geographicPrecision: 'country',
+        geographicMethod: 'Cloudflare country reference coordinates',
+        geographicProvenance: 'Cloudflare Radar country-level pair',
+      },
+    ],
     ports: [],
   };
   const snapshot = normalizeCyberSnapshot(radar, 'cloudflare-radar');
   assert.equal(snapshot.observations[0].geographicPrecision, 'country');
+  assert.equal(snapshot.flows[0].origin.code, 'US');
+  assert.equal(snapshot.flows[0].target.code, 'BE');
+  assert.equal(snapshot.flows[0].share, 3.6);
+  assert.ok(Object.isFrozen(snapshot.flows));
   assert.throws(
     () =>
       normalizeCyberSnapshot(
@@ -109,6 +134,14 @@ test('accepts country aggregate coordinates only with explicit provenance', () =
           ...radar,
           observations: [{ ...radar.observations[0], longitude: 190 }],
         },
+        'cloudflare-radar',
+      ),
+    /Malformed Cyber/,
+  );
+  assert.throws(
+    () =>
+      normalizeCyberSnapshot(
+        { ...radar, flows: [{ ...radar.flows[0], target: null }] },
         'cloudflare-radar',
       ),
     /Malformed Cyber/,

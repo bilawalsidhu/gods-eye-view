@@ -386,6 +386,7 @@
 
 #control-panel.collapsed .button-grid,
 #data-panel.collapsed .data-toggle-list,
+#cyber-intel-panel.collapsed .cyber-intel-panel-inner > :not(.panel-header),
 #global-context-panel.collapsed #radio-panel,
 #global-context-panel.collapsed #military-awareness-panel,
 #global-context-panel.collapsed .global-context-actions,
@@ -415,6 +416,7 @@
 
 #data-panel.collapsed,
 #cctv-panel.collapsed,
+#cyber-intel-panel.collapsed,
 #scene-panel.collapsed {
   width: var(--left-collapsed-width);
 }
@@ -425,6 +427,7 @@
 
 #data-panel.collapsed .panel-title,
 #cctv-panel.collapsed .panel-title,
+#cyber-intel-panel.collapsed .panel-title,
 #radio-panel.collapsed .panel-title,
 #scene-panel.collapsed .panel-title {
   font-size: 8px;
@@ -434,6 +437,7 @@
 #control-panel.collapsed .panel-inner,
 #data-panel.collapsed .data-panel-inner,
 #cctv-panel.collapsed .cctv-panel-inner,
+#cyber-intel-panel.collapsed .cyber-intel-panel-inner,
 #radio-panel.collapsed .radio-panel-inner,
 #scene-panel.collapsed .scene-panel-inner,
 #param-slider-panel.collapsed,
@@ -444,6 +448,7 @@
 #control-panel.collapsed .panel-header,
 #data-panel.collapsed .panel-header,
 #cctv-panel.collapsed .panel-header,
+#cyber-intel-panel.collapsed .panel-header,
 #radio-panel.collapsed .panel-header,
 #global-context-panel.collapsed .panel-header,
 #scene-panel.collapsed .panel-header,

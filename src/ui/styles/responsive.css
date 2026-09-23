@@ -223,7 +223,9 @@
   #right-context-rail #radio-panel,
   #right-context-rail #radio-panel.collapsed,
   #right-context-rail #global-context-panel,
-  #right-context-rail #global-context-panel.collapsed {
+  #right-context-rail #global-context-panel.collapsed,
+  #right-context-rail #cyber-intel-panel,
+  #right-context-rail #cyber-intel-panel.collapsed {
     width: 100%;
   }
   .context-radio-mini {

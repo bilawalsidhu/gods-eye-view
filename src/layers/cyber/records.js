@@ -96,6 +96,73 @@ export function normalizeCyberSnapshot(value, provider) {
   );
   if (observations.some((record) => !record))
     throw new Error('Malformed Cyber provider response');
+  const flows =
+    provider === 'cloudflare-radar' && Array.isArray(value.flows)
+      ? value.flows.slice(0, 10).map((flow) => {
+          const id = boundedText(flow?.id, 120);
+          const share =
+            Number.isFinite(flow?.share) && flow.share >= 0 && flow.share <= 100
+              ? flow.share
+              : null;
+          const rank =
+            Number.isInteger(flow?.rank) && flow.rank > 0 ? flow.rank : null;
+          const point = (candidate) => {
+            const code = boundedText(candidate?.code, 2);
+            const name = boundedText(candidate?.name, 100);
+            if (
+              !/^[A-Z]{2}$/.test(code || '') ||
+              !name ||
+              !Number.isFinite(candidate?.latitude) ||
+              candidate.latitude < -90 ||
+              candidate.latitude > 90 ||
+              !Number.isFinite(candidate?.longitude) ||
+              candidate.longitude < -180 ||
+              candidate.longitude > 180
+            )
+              return null;
+            return Object.freeze({
+              code,
+              name,
+              latitude: candidate.latitude,
+              longitude: candidate.longitude,
+            });
+          };
+          const origin = point(flow?.origin);
+          const target = point(flow?.target);
+          const geographicMethod = boundedText(flow?.geographicMethod, 120);
+          const geographicProvenance = boundedText(
+            flow?.geographicProvenance,
+            240,
+          );
+          if (
+            !id ||
+            flow?.provider !== provider ||
+            share == null ||
+            rank == null ||
+            !origin ||
+            !target ||
+            !geographicMethod ||
+            !geographicProvenance
+          )
+            return null;
+          return Object.freeze({
+            id,
+            provider,
+            origin,
+            target,
+            share,
+            rank,
+            observedAt: iso(flow.observedAt),
+            windowStart: iso(flow.windowStart),
+            windowEnd: iso(flow.windowEnd),
+            geographicPrecision: 'country',
+            geographicMethod,
+            geographicProvenance,
+          });
+        })
+      : [];
+  if (flows.some((flow) => !flow))
+    throw new Error('Malformed Cyber provider response');
   const ports =
     provider === 'dshield' && Array.isArray(value.ports)
       ? value.ports.slice(0, 10).map((port) => ({
@@ -126,6 +193,7 @@ export function normalizeCyberSnapshot(value, provider) {
     windowEnd: iso(value.windowEnd),
     notice: boundedText(value.notice, 240),
     observations: Object.freeze(observations),
+    flows: Object.freeze(flows),
     ports: Object.freeze(ports),
   });
 }

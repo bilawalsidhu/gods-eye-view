@@ -810,6 +810,7 @@
   "src/layers/cyber/index.test.mjs",
   "src/layers/cyber/provider.test.mjs",
   "src/layers/cyber/records.test.mjs",
+  "src/ui/cyberIntelPanel.test.mjs",
   "src/data/aisStreamSentinels.test.mjs",
   "scripts/qa-weather-perf.mjs",
   "scripts/qa-weather-journey.mjs",

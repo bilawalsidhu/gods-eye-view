@@ -97,6 +97,9 @@
 
 - Add the provider-neutral Cyber Activity layer with optional Cloudflare Radar
   country aggregates and keyless DShield reported-IP/source-port observations.
+  Include Cloudflare-reported origin/target pair arcs, selected-marker/arc
+  details, and a collapsible Cyber Threat Intel panel outside Data Layers that
+  is visible only while Cyber Activity is enabled.
   Radar credentials use the existing local Provider Settings flow; DShield
   remains non-geographic, and Radar country points are explicitly aggregate
   reference anchors rather than individual attack locations.

@@ -21,6 +21,24 @@ function formatShare(value) {
   return Number.isFinite(value) ? `${value.toFixed(value < 1 ? 2 : 1)}%` : '—';
 }
 
+function arcPositions(origin, target, cesium) {
+  let deltaLongitude = target.longitude - origin.longitude;
+  if (deltaLongitude > 180) deltaLongitude -= 360;
+  if (deltaLongitude < -180) deltaLongitude += 360;
+  const samples = 32;
+  return Array.from({ length: samples + 1 }, (_, index) => {
+    const fraction = index / samples;
+    const longitude = origin.longitude + deltaLongitude * fraction;
+    const latitude =
+      origin.latitude + (target.latitude - origin.latitude) * fraction;
+    const height =
+      fraction === 0 || fraction === 1
+        ? 0
+        : Math.sin(Math.PI * fraction) * 1_250_000;
+    return cesium.Cartesian3.fromDegrees(longitude, latitude, height);
+  });
+}
+
 /** One provider-neutral Cyber layer with country aggregates and non-geographic DShield observations. */
 export function createCyberLayer({
   source,
@@ -45,6 +63,9 @@ export function createCyberLayer({
   let radarError = null;
   let dshieldError = null;
   let rowControlsListener = null;
+  let threatIntelListener = null;
+  let selectionHandler = null;
+  let selectedRadar = null;
 
   const notify = () => rowControlsListener?.();
   const records = () => [
@@ -55,7 +76,38 @@ export function createCyberLayer({
   function renderRadar() {
     if (!dataSource) return;
     const entities = radarEnabled ? radar?.observations || [] : [];
+    const flows = radarEnabled ? radar?.flows || [] : [];
     const current = new Set();
+    for (const flow of flows) {
+      const id = `cyber-flow:${flow.id}`;
+      current.add(id);
+      let entity = dataSource.entities.getById(id);
+      if (!entity) entity = dataSource.entities.add({ id });
+      entity.name = `Cloudflare Radar · ${flow.origin.name} to ${flow.target.name}`;
+      entity.polyline = {
+        positions: arcPositions(flow.origin, flow.target, cesium),
+        width: Math.max(2, Math.min(6, 2 + Math.sqrt(flow.share))),
+        material: new cesium.PolylineArrowMaterialProperty(
+          (cesium.Color.GOLD || cesium.Color.YELLOW).withAlpha(0.8),
+        ),
+        arcType: cesium.ArcType.NONE,
+        clampToGround: false,
+      };
+      entity.properties = {
+        provider: 'Cloudflare Radar',
+        category: 'layer7-origin-target-pair',
+        origin: flow.origin.name,
+        target: flow.target.name,
+        share: flow.share,
+        rank: flow.rank,
+        geographicPrecision: 'Country-level aggregate anchors',
+        geographicMethod: flow.geographicMethod,
+        geographicProvenance: flow.geographicProvenance,
+        windowStart: flow.windowStart,
+        windowEnd: flow.windowEnd,
+        attribution: 'Cloudflare Radar',
+      };
+    }
     for (const observation of entities) {
       if (
         !Number.isFinite(observation.latitude) ||
@@ -115,9 +167,32 @@ export function createCyberLayer({
       };
     }
     for (const entity of [...dataSource.entities.values])
-      if (String(entity.id).startsWith('cyber:') && !current.has(entity.id))
+      if (
+        (String(entity.id).startsWith('cyber:') ||
+          String(entity.id).startsWith('cyber-flow:')) &&
+        !current.has(entity.id)
+      )
         dataSource.entities.remove(entity);
     dataSource.show = enabled;
+  }
+
+  function findRadarSelection(entityId) {
+    if (!radarEnabled || typeof entityId !== 'string') return null;
+    if (entityId.startsWith('cyber-flow:')) {
+      const id = entityId.slice('cyber-flow:'.length);
+      const flow = radar?.flows?.find((item) => item.id === id);
+      return flow ? { type: 'flow', ...flow } : null;
+    }
+    if (entityId.startsWith('cyber:')) {
+      const id = entityId.slice('cyber:'.length);
+      const observation = radar?.observations?.find((item) => item.id === id);
+      return observation ? { type: 'location', ...observation } : null;
+    }
+    return null;
+  }
+
+  function notifyThreatIntel() {
+    threatIntelListener?.(layer.getThreatIntelState());
   }
 
   function setParams(params = {}) {
@@ -131,6 +206,7 @@ export function createCyberLayer({
       if (!radarEnabled) {
         radar = null;
         radarError = null;
+        selectedRadar = null;
       }
     }
     if (
@@ -150,6 +226,7 @@ export function createCyberLayer({
     loading = false;
     renderRadar();
     notify();
+    notifyThreatIntel();
     if (enabled) queueMicrotask(() => void layer.update(viewer));
   }
 
@@ -172,6 +249,22 @@ export function createCyberLayer({
       dataSource = new cesium.CustomDataSource('cyber-activity');
       dataSource.show = false;
       viewer.dataSources.add(dataSource);
+      selectionHandler = new cesium.ScreenSpaceEventHandler(
+        viewer.scene.canvas,
+      );
+      selectionHandler.setInputAction((event) => {
+        if (!enabled || !radarEnabled) return;
+        let picked = null;
+        try {
+          picked = viewer.scene.pick(event.position);
+        } catch {
+          picked = null;
+        }
+        const rawId = picked?.id;
+        const entityId = typeof rawId === 'string' ? rawId : rawId?.id || null;
+        selectedRadar = findRadarSelection(entityId);
+        notifyThreatIntel();
+      }, cesium.ScreenSpaceEventType.LEFT_CLICK);
     },
 
     enable() {
@@ -190,7 +283,9 @@ export function createCyberLayer({
       dshieldError = null;
       dataSource?.entities.removeAll();
       if (dataSource) dataSource.show = false;
+      selectedRadar = null;
       notify();
+      notifyThreatIntel();
     },
 
     async update() {
@@ -237,6 +332,14 @@ export function createCyberLayer({
           }
         }
         renderRadar();
+        if (selectedRadar) {
+          selectedRadar = findRadarSelection(
+            selectedRadar.type === 'flow'
+              ? `cyber-flow:${selectedRadar.id}`
+              : `cyber:${selectedRadar.id}`,
+          );
+        }
+        notifyThreatIntel();
         return succeeded;
       } finally {
         if (request === controller) {
@@ -321,11 +424,41 @@ export function createCyberLayer({
         },
         info: infos.join('\n'),
         infoTitle:
-          'Cloudflare Radar points are country-level aggregates, not individual hosts or attack paths. DShield IP observations have no defensible coordinates and remain in this list. DShield entries are reports, may include false positives, and are not a blocklist.',
+          'Orange-red points are origin-country aggregates; blue points are target-country aggregates. Gold arrows use Cloudflare-reported origin-target country pairs and are not physical network routes. DShield IP observations have no defensible coordinates and appear in Cyber Threat Intel. DShield entries may include false positives and are not a blocklist.',
       };
     },
     setRowControlsListener(listener) {
       rowControlsListener = typeof listener === 'function' ? listener : null;
+    },
+    setThreatIntelListener(listener) {
+      threatIntelListener = typeof listener === 'function' ? listener : null;
+      notifyThreatIntel();
+    },
+    getThreatIntelState() {
+      return {
+        enabled,
+        selectedRadar: selectedRadar ? { ...selectedRadar } : null,
+        nonGeographicProviders: dshieldEnabled
+          ? [
+              {
+                id: DSHIELD_SOURCE,
+                label: 'SANS ISC / DShield',
+                status: sourceStatus(DSHIELD_SOURCE, dshield, dshieldError),
+                fetchedAt: dshield?.fetchedAt || null,
+                stale: dshield?.stale === true,
+                attribution:
+                  dshield?.attribution ||
+                  'SANS Internet Storm Center / DShield',
+                notice:
+                  dshield?.notice ||
+                  'Reported source data; it may include false positives and is not a blocklist.',
+                observations: dshield?.observations || [],
+                ports: dshield?.ports || [],
+                error: dshieldError,
+              },
+            ]
+          : [],
+      };
     },
     getAnalystRecords(maxCount = 100) {
       const limit = Number.isInteger(maxCount)
@@ -358,7 +491,10 @@ export function createCyberLayer({
     },
     destroy(destroyViewer = viewer) {
       layer.disable();
+      selectionHandler?.destroy();
+      selectionHandler = null;
       rowControlsListener = null;
+      threatIntelListener = null;
       if (dataSource) destroyViewer?.dataSources?.remove(dataSource, true);
       dataSource = null;
       viewer = null;

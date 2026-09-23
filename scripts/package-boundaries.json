@@ -1719,6 +1719,7 @@
       "src/ui/cctvVideo.js",
       "src/ui/cctvPresentation.js",
       "src/ui/clearLayersControl.js",
+      "src/ui/cyberIntelPanel.js",
       "src/ui/cockpit.js",
       "src/ui/cockpitBriefing.js",
       "src/ui/cockpitCamera.js",

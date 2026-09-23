@@ -45,6 +45,23 @@ test('Radar uses a fixed same-purpose upstream request and returns country aggre
           ],
         },
       });
+    if (parsed.pathname.endsWith('/attacks'))
+      return jsonResponse({
+        success: true,
+        result: {
+          meta: windowMeta,
+          top_0: [
+            {
+              originCountryAlpha2: 'US',
+              originCountryName: 'United States',
+              targetCountryAlpha2: 'CA',
+              targetCountryName: 'Canada',
+              value: '2.4',
+              rank: 1,
+            },
+          ],
+        },
+      });
     if (parsed.pathname.endsWith('/locations'))
       return jsonResponse({
         success: true,
@@ -68,6 +85,10 @@ test('Radar uses a fixed same-purpose upstream request and returns country aggre
   });
   const entry = await proxy.requestRadarSnapshot({ token: 'unit-test-secret' });
   assert.equal(entry.value.observations.length, 2);
+  assert.equal(entry.value.flows.length, 1);
+  assert.equal(entry.value.flows[0].origin.name, 'United States');
+  assert.equal(entry.value.flows[0].target.name, 'Canada');
+  assert.equal(entry.value.flows[0].share, 2.4);
   assert.deepEqual(
     entry.value.observations.map((row) => row.geographicPrecision),
     ['country', 'country'],
@@ -77,7 +98,8 @@ test('Radar uses a fixed same-purpose upstream request and returns country aggre
       row.geographicProvenance.includes('country-level'),
     ),
   );
-  assert.equal(urls.length, 3);
+  assert.equal(urls.length, 4);
+  assert.ok(urls.some(({ url }) => url.pathname.endsWith('/top/attacks')));
   assert.ok(
     urls.every(
       ({ url, options }) =>

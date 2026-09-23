@@ -26,12 +26,36 @@ class CustomDataSource {
   }
 }
 const color = { withAlpha: () => color };
+let latestSelectionHandler;
 const cesium = {
   CustomDataSource,
-  Cartesian3: {
-    fromDegrees: (longitude, latitude) => ({ longitude, latitude }),
+  PolylineArrowMaterialProperty: class {
+    constructor(color) {
+      this.color = color;
+    }
   },
-  Color: { ORANGERED: color, DEEPSKYBLUE: color, WHITE: color },
+  ScreenSpaceEventHandler: class {
+    constructor() {
+      this.actions = new Map();
+      latestSelectionHandler = this;
+    }
+    setInputAction(callback, type) {
+      this.actions.set(type, callback);
+    }
+    destroy() {
+      this.destroyed = true;
+    }
+  },
+  ScreenSpaceEventType: { LEFT_CLICK: 'left-click' },
+  ArcType: { NONE: 'none' },
+  Cartesian3: {
+    fromDegrees: (longitude, latitude, height = 0) => ({
+      longitude,
+      latitude,
+      height,
+    }),
+  },
+  Color: { ORANGERED: color, DEEPSKYBLUE: color, WHITE: color, GOLD: color },
   HeightReference: { CLAMP_TO_GROUND: 0 },
 };
 
@@ -56,6 +80,25 @@ const radar = {
       windowStart: '2026-09-19T00:00:00Z',
       windowEnd: '2026-09-20T00:00:00Z',
       detail: 'Country aggregate only',
+    },
+  ],
+  flows: [
+    {
+      id: 'cloudflare-radar:flow:US:CA',
+      provider: 'cloudflare-radar',
+      origin: {
+        code: 'US',
+        name: 'United States',
+        latitude: 39.8,
+        longitude: -98.6,
+      },
+      target: { code: 'CA', name: 'Canada', latitude: 56.1, longitude: -106.3 },
+      share: 2.4,
+      rank: 1,
+      windowStart: '2026-09-19T00:00:00Z',
+      windowEnd: '2026-09-20T00:00:00Z',
+      geographicMethod: 'Country reference coordinates',
+      geographicProvenance: 'Cloudflare Radar country-level pair',
     },
   ],
 };
@@ -85,12 +128,22 @@ test('renders Radar aggregates only and keeps DShield in the non-geographic row 
     },
     cesium,
   });
-  const viewer = { dataSources: { add: () => {}, remove: () => {} } };
+  let dataSource;
+  const viewer = {
+    scene: { canvas: {}, pick: () => null },
+    dataSources: { add: (source) => (dataSource = source), remove: () => {} },
+  };
   layer.init(viewer);
   layer.enable();
   assert.equal(await layer.update(), true);
   const rows = layer.getRowControls();
-  assert.equal(layer.getStats().count, 1);
+  assert.equal(layer.getStats().count, 2);
+  const flowEntity = dataSource.entities.values.find((entity) =>
+    String(entity.id).startsWith('cyber-flow:'),
+  );
+  assert.equal(flowEntity.polyline.positions[0].height, 0);
+  assert.equal(flowEntity.polyline.positions.at(-1).height, 0);
+  assert.ok(flowEntity.polyline.positions[16].height > 1_000_000);
   assert.equal(rows.list.items.length, 3);
   assert.ok(
     rows.list.items.some((row) => row.text.includes('no geographic data')),
@@ -101,7 +154,42 @@ test('renders Radar aggregates only and keeps DShield in the non-geographic row 
     undefined,
   );
   const rendered = layer.getStats().count;
-  assert.equal(rendered, 1);
+  assert.equal(rendered, 2);
+  const flow = layer.getThreatIntelState().selectedRadar;
+  assert.equal(flow, null);
+  layer.destroy();
+});
+
+test('Radar map selection reports marker and paired-flow context and clears on disable', async () => {
+  let pickedId = null;
+  const states = [];
+  const layer = createCyberLayer({
+    source: {
+      getRadarSnapshot: async () => radar,
+      getDshieldSnapshot: async () => dshield,
+    },
+    cesium,
+  });
+  const viewer = {
+    scene: { canvas: {}, pick: () => ({ id: pickedId }) },
+    dataSources: { add: () => {}, remove: () => {} },
+  };
+  layer.init(viewer);
+  layer.setThreatIntelListener((state) => states.push(state));
+  layer.enable();
+  await layer.update();
+  const click = latestSelectionHandler.actions.get('left-click');
+  pickedId = 'cyber:cloudflare-radar:origin:US';
+  click({ position: { x: 10, y: 20 } });
+  assert.equal(states.at(-1).selectedRadar.type, 'location');
+  assert.equal(states.at(-1).selectedRadar.locationName, 'United States');
+  pickedId = 'cyber-flow:cloudflare-radar:flow:US:CA';
+  click({ position: { x: 10, y: 20 } });
+  assert.equal(states.at(-1).selectedRadar.type, 'flow');
+  assert.equal(states.at(-1).selectedRadar.target.name, 'Canada');
+  layer.disable();
+  assert.equal(states.at(-1).enabled, false);
+  assert.equal(states.at(-1).selectedRadar, null);
   layer.destroy();
 });
 
@@ -117,7 +205,10 @@ test('provider errors remain isolated and provider toggles remove their records'
     },
     cesium,
   });
-  layer.init({ dataSources: { add: () => {}, remove: () => {} } });
+  layer.init({
+    scene: { canvas: {}, pick: () => null },
+    dataSources: { add: () => {}, remove: () => {} },
+  });
   layer.enable();
   assert.equal(await layer.update(), true);
   assert.equal(layer.getStats().dshieldCount, 1);

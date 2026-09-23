@@ -1,6 +1,7 @@
 import { LayerPanel } from '../ui/layers.js';
 import { governorRequestRender } from '../renderGovernor.js';
 import { markDetectionSourcesChanged } from '../data/detection.js';
+import { CyberIntelPanel } from '../ui/cyberIntelPanel.js';
 
 /** Own the layer panel and application reactions to lifecycle activity. */
 export class LayerPresentation {
@@ -15,10 +16,13 @@ export class LayerPresentation {
     this.manager = manager;
     this.weatherClock = weatherClock;
     this._panel = null;
+    this._cyberIntelPanel = null;
     this.pendingVisible = false;
     this._unsubscribe = manager.subscribeActivity((change) => {
-      if (change.type === 'status') this.refresh();
-      else if (change.type === 'destroy-all') this.destroy();
+      if (change.type === 'status') {
+        this.refresh();
+        this._refreshCyberIntel();
+      } else if (change.type === 'destroy-all') this.destroy();
       else {
         const reason =
           change.type === 'data-updated'
@@ -29,6 +33,7 @@ export class LayerPresentation {
                 ? `layer-params:${change.layerId}`
                 : null;
         if (!reason) return;
+        this._refreshCyberIntel();
         requestRender(reason);
         if (change.type !== 'params-settled') invalidateDetection(reason);
       }
@@ -69,6 +74,12 @@ export class LayerPresentation {
   }
   mount(container) {
     this.panel.mount(container);
+    this._cyberIntelPanel = new CyberIntelPanel();
+    this._cyberIntelPanel.mount(this.manager.layers.get('cyber')?.module);
+  }
+  _refreshCyberIntel() {
+    const module = this.manager.layers.get('cyber')?.module;
+    if (module) this._cyberIntelPanel?.render(module.getThreatIntelState?.());
   }
   /** Hand the Recent Imagery readout factory to the panel (see LayerPanel). */
   attachRecentImagery(factory) {
@@ -87,6 +98,8 @@ export class LayerPresentation {
   destroy() {
     this._panel?.destroy();
     this._panel = null;
+    this._cyberIntelPanel?.destroy();
+    this._cyberIntelPanel = null;
     this.pendingVisible = false;
     this._unsubscribe?.();
     this._unsubscribe = null;

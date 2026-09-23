@@ -121,6 +121,59 @@ function radarObservations(topPayload, kind, locations, window) {
   });
 }
 
+function radarFlows(payload, locations, window) {
+  const rows = payload?.result?.top_0;
+  if (payload?.success !== true || !Array.isArray(rows) || rows.length > 10)
+    throw failure('invalid_radar_data');
+  return rows.map((row, index) => {
+    const originCode = String(row?.originCountryAlpha2 || '').toUpperCase();
+    const targetCode = String(row?.targetCountryAlpha2 || '').toUpperCase();
+    const originName = text(row?.originCountryName, 100);
+    const targetName = text(row?.targetCountryName, 100);
+    const share = percent(row?.value);
+    const rank = Number(row?.rank ?? index + 1);
+    const origin = locations.get(originCode);
+    const target = locations.get(targetCode);
+    if (
+      !/^[A-Z]{2}$/.test(originCode) ||
+      !/^[A-Z]{2}$/.test(targetCode) ||
+      !originName ||
+      !targetName ||
+      !origin ||
+      !target ||
+      share === null ||
+      !Number.isInteger(rank) ||
+      rank < 1
+    )
+      throw failure('invalid_radar_data');
+    return {
+      id: `cloudflare-radar:flow:${originCode}:${targetCode}`,
+      provider: 'cloudflare-radar',
+      origin: {
+        code: originCode,
+        name: originName,
+        latitude: origin.latitude,
+        longitude: origin.longitude,
+      },
+      target: {
+        code: targetCode,
+        name: targetName,
+        latitude: target.latitude,
+        longitude: target.longitude,
+      },
+      share,
+      rank,
+      observedAt: window.end,
+      windowStart: window.start,
+      windowEnd: window.end,
+      geographicPrecision: 'country',
+      geographicMethod: 'Cloudflare Radar country reference coordinates',
+      geographicProvenance:
+        'Cloudflare Radar country-level origin/target pair; origin by client IP country, target by attacked zone billing country when available.',
+    };
+  });
+}
+
 function getWindow(payload, now) {
   const range = payload?.result?.meta?.dateRange;
   const item = Array.isArray(range) ? range[0] : range;
@@ -282,7 +335,14 @@ export function cyberProxy({ fetchImpl = fetch, now = () => Date.now() } = {}) {
           `${RADAR_BASE}/attacks/layer7/top/locations/target`,
         );
         targetUrl.search = originUrl.search;
-        const [origin, target] = await Promise.all([
+        const pairsUrl = new URL(`${RADAR_BASE}/attacks/layer7/top/attacks`);
+        pairsUrl.search = new URLSearchParams({
+          dateRange: '1d',
+          limit: '10',
+          magnitude: 'MITIGATED_REQUESTS',
+          format: 'JSON',
+        });
+        const [origin, target, pairs] = await Promise.all([
           fetchBounded(originUrl.href, {
             fetchImpl,
             signal,
@@ -295,10 +355,29 @@ export function cyberProxy({ fetchImpl = fetch, now = () => Date.now() } = {}) {
             token: secret,
             cap: JSON_BODY_LIMIT,
           }),
+          fetchBounded(pairsUrl.href, {
+            fetchImpl,
+            signal,
+            token: secret,
+            cap: JSON_BODY_LIMIT,
+          }),
         ]);
         const originRows = locationCodes(origin?.result?.top_0, 'origin');
         const targetRows = locationCodes(target?.result?.top_0, 'target');
+        const pairRows = pairs?.result?.top_0;
+        if (
+          pairs?.success !== true ||
+          !Array.isArray(pairRows) ||
+          pairRows.length > 10
+        )
+          throw failure('invalid_radar_data');
         const allRows = [...originRows, ...targetRows];
+        for (const row of pairRows) {
+          allRows.push(
+            { code: String(row?.originCountryAlpha2 || '').toUpperCase() },
+            { code: String(row?.targetCountryAlpha2 || '').toUpperCase() },
+          );
+        }
         const locationMap = new Map();
         if (allRows.length) {
           const locationUrl = new URL(`${RADAR_BASE}/entities/locations`);
@@ -319,14 +398,17 @@ export function cyberProxy({ fetchImpl = fetch, now = () => Date.now() } = {}) {
           ))
             locationMap.set(code, location);
         }
-        const reference = origin?.result?.meta?.dateRange?.[0]
-          ? origin
-          : target;
+        const reference = pairs?.result?.meta?.dateRange?.[0]
+          ? pairs
+          : origin?.result?.meta?.dateRange?.[0]
+            ? origin
+            : target;
         const window = getWindow(reference, now());
         const observations = [
           ...radarObservations(origin, 'origin', locationMap, window),
           ...radarObservations(target, 'target', locationMap, window),
         ];
+        const flows = radarFlows(pairs, locationMap, window);
         const value = {
           schemaVersion: 1,
           provider: 'cloudflare-radar',
@@ -337,6 +419,7 @@ export function cyberProxy({ fetchImpl = fetch, now = () => Date.now() } = {}) {
           windowEnd: window.end,
           stale: false,
           observations,
+          flows,
         };
         const entry = { value, fetchedAt: now() };
         radarCache.entries.set(fingerprint, entry);
@@ -416,7 +499,7 @@ export function cyberProxy({ fetchImpl = fetch, now = () => Date.now() } = {}) {
       token || process.env.CLOUDFLARE_RADAR_API_TOKEN || '',
     ).trim();
     if (!secret) throw failure('missing_credentials', 401);
-    const url = new URL(`${RADAR_BASE}/attacks/layer7/top/locations/origin`);
+    const url = new URL(`${RADAR_BASE}/attacks/layer7/top/attacks`);
     url.search = new URLSearchParams({
       dateRange: '1d',
       limit: '1',
