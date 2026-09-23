@@ -36,6 +36,8 @@ export class CyberIntelPanel {
     this._wasEnabled = false;
     this._kevFilter = '';
     this._kevVisibleCount = 25;
+    this._kevResultsOpen = true;
+    this._shodanResultsOpen = true;
     this._lastState = null;
   }
 
@@ -76,6 +78,18 @@ export class CyberIntelPanel {
         return;
       }
     };
+    this._onPanelClick = (event) => {
+      const button = event.target?.closest?.('[data-cyber-intel-expand]');
+      if (!button) return;
+      const expanded = !this.panel.classList.contains('cyber-intel-expanded');
+      this.panel.classList.toggle('cyber-intel-expanded', expanded);
+      button.setAttribute('aria-pressed', String(expanded));
+      button.setAttribute(
+        'aria-label',
+        `${expanded ? 'Restore' : 'Expand'} Cyber Threat Intel panel size`,
+      );
+      button.title = `${expanded ? 'Restore' : 'Expand'} Cyber Threat Intel panel size`;
+    };
     this._onBodySubmit = (event) => {
       const kevForm = event.target?.closest?.('[data-kev-search]');
       if (kevForm) {
@@ -99,6 +113,7 @@ export class CyberIntelPanel {
     this.devicePopup?.addEventListener('click', this._onDevicePopupClick);
     this.body.addEventListener('click', this._onBodyClick);
     this.body.addEventListener('submit', this._onBodySubmit);
+    this.panel.addEventListener('click', this._onPanelClick);
     this.render(layer.getThreatIntelState());
   }
 
@@ -264,7 +279,7 @@ export class CyberIntelPanel {
         this.document,
         'p',
         'cyber-intel-provenance',
-        'Searches a circle centered on the current map view (up to 1,000 km radius), applies the optional query, and checks the first 100 Shodan results. Up to 100 unique devices are shown and mapped when coordinates are available. If Shodan has no coordinates, cached server-side IPwho.is approximate network geolocation is used when available. Unresolved devices are not mapped. Public IPs requiring fallback geolocation are sent to IPwho.is.',
+        'Searches the current map area (up to 1,000 km) and returns up to 100 devices. Missing coordinates may use approximate IP geolocation.',
       ),
     );
     if (areaSearch?.error)
@@ -273,6 +288,20 @@ export class CyberIntelPanel {
       );
     const areaMatches = areaSearch?.matches || [];
     if (areaMatches.length) {
+      const results = element(this.document, 'details', 'cyber-search-results');
+      results.dataset.shodanResults = 'true';
+      results.open = this._shodanResultsOpen;
+      results.addEventListener('toggle', () => {
+        this._shodanResultsOpen = results.open;
+      });
+      results.append(
+        element(
+          this.document,
+          'summary',
+          '',
+          `Shodan results · ${areaMatches.length} devices`,
+        ),
+      );
       const mappedCount = areaMatches.filter(
         (result) =>
           Number.isFinite(result.latitude) && Number.isFinite(result.longitude),
@@ -282,59 +311,60 @@ export class CyberIntelPanel {
           this.document,
           'p',
           'cyber-intel-provenance',
-          `${mappedCount} of ${areaMatches.length} returned devices have map positions. Devices sharing one approximate IP location are individually fanned around it, with connector lines. Those display offsets are not measured device locations. Unresolved IPs remain listed without a fabricated location.`,
+          `${mappedCount}/${areaMatches.length} mapped. Shared approximate locations use display offsets; unresolved IPs stay off-map.`,
         ),
       );
-    }
-    for (const result of areaMatches) {
-      const row = element(this.document, 'div', 'cyber-intel-search-result');
-      row.append(element(this.document, 'strong', '', result.ip));
-      row.append(
-        element(
-          this.document,
-          'span',
-          '',
-          [result.city, result.region, result.country, result.organization]
-            .filter(Boolean)
-            .join(' · ') || 'Location unavailable',
-        ),
-      );
-      for (const provider of ['shodan', 'greynoise']) {
-        const button = element(
-          this.document,
-          'button',
-          '',
-          provider === 'shodan' ? 'Host details' : 'GreyNoise',
-        );
-        button.type = 'button';
-        button.dataset.cyberEnrich = 'true';
-        button.dataset.provider = provider;
-        button.dataset.ip = result.ip;
-        row.append(button);
-      }
-      const kevMatches = kevMatchesForRecord(result, state.kevSnapshot);
-      if (kevMatches.length)
+      for (const result of areaMatches) {
+        const row = element(this.document, 'div', 'cyber-intel-search-result');
+        row.append(element(this.document, 'strong', '', result.ip));
         row.append(
           element(
             this.document,
             'span',
-            'cyber-kev-match-count',
-            `CISA KEV · ${kevMatches.length} explicit CVE match${kevMatches.length === 1 ? '' : 'es'}`,
+            '',
+            [result.city, result.region, result.country, result.organization]
+              .filter(Boolean)
+              .join(' · ') || 'Location unavailable',
           ),
         );
-      section.append(row);
-      const key = `shodan:${result.ip}`;
-      const enrichment = state.enrichmentResults?.[key];
-      const pending = state.enrichmentPending?.includes(key);
-      if (enrichment || pending)
-        section.append(
-          this._renderEnrichment(
-            enrichment,
-            'shodan',
-            pending,
-            state.kevSnapshot,
-          ),
-        );
+        for (const provider of ['shodan', 'greynoise']) {
+          const button = element(
+            this.document,
+            'button',
+            '',
+            provider === 'shodan' ? 'Host details' : 'GreyNoise',
+          );
+          button.type = 'button';
+          button.dataset.cyberEnrich = 'true';
+          button.dataset.provider = provider;
+          button.dataset.ip = result.ip;
+          row.append(button);
+        }
+        const kevMatches = kevMatchesForRecord(result, state.kevSnapshot);
+        if (kevMatches.length)
+          row.append(
+            element(
+              this.document,
+              'span',
+              'cyber-kev-match-count',
+              `CISA KEV · ${kevMatches.length} explicit CVE match${kevMatches.length === 1 ? '' : 'es'}`,
+            ),
+          );
+        results.append(row);
+        const key = `shodan:${result.ip}`;
+        const enrichment = state.enrichmentResults?.[key];
+        const pending = state.enrichmentPending?.includes(key);
+        if (enrichment || pending)
+          results.append(
+            this._renderEnrichment(
+              enrichment,
+              'shodan',
+              pending,
+              state.kevSnapshot,
+            ),
+          );
+      }
+      section.append(results);
     }
     return section;
   }
@@ -411,12 +441,26 @@ export class CyberIntelPanel {
           .includes(query),
       ),
     );
-    section.append(
+    const results = element(this.document, 'details', 'cyber-search-results');
+    results.dataset.kevResults = 'true';
+    results.open = this._kevResultsOpen;
+    results.addEventListener('toggle', () => {
+      this._kevResultsOpen = results.open;
+    });
+    results.append(
+      element(
+        this.document,
+        'summary',
+        '',
+        `KEV results · ${matches.length} vulnerabilities`,
+      ),
+    );
+    results.append(
       element(
         this.document,
         'p',
         'cyber-intel-provenance',
-        `${matches.length} matches · catalog version ${snapshot.catalogVersion} · released ${snapshot.dateReleased.slice(0, 10)}`,
+        `Catalog ${snapshot.catalogVersion} · released ${snapshot.dateReleased.slice(0, 10)}`,
       ),
     );
     for (const item of matches.slice(0, this._kevVisibleCount)) {
@@ -463,7 +507,7 @@ export class CyberIntelPanel {
       link.target = '_blank';
       link.rel = 'noopener noreferrer';
       card.append(link);
-      section.append(card);
+      results.append(card);
     }
     if (matches.length > this._kevVisibleCount) {
       const more = element(
@@ -474,8 +518,9 @@ export class CyberIntelPanel {
       );
       more.type = 'button';
       more.dataset.kevMore = 'true';
-      section.append(more);
+      results.append(more);
     }
+    section.append(results);
     section.append(
       element(
         this.document,
@@ -891,6 +936,10 @@ export class CyberIntelPanel {
 
   render(state) {
     if (!this.panel || !this.body) return;
+    const shodanResults = this.body.querySelector?.('[data-shodan-results]');
+    const kevResults = this.body.querySelector?.('[data-kev-results]');
+    if (shodanResults) this._shodanResultsOpen = shodanResults.open;
+    if (kevResults) this._kevResultsOpen = kevResults.open;
     this._lastState = state;
     const isEnabled = state?.enabled === true;
     const becameEnabled = isEnabled && !this._wasEnabled;
@@ -970,10 +1019,13 @@ export class CyberIntelPanel {
       this.body?.removeEventListener('click', this._onBodyClick);
     if (this._onBodySubmit)
       this.body?.removeEventListener('submit', this._onBodySubmit);
+    if (this._onPanelClick)
+      this.panel?.removeEventListener('click', this._onPanelClick);
     if (this._onDevicePopupClick)
       this.devicePopup?.removeEventListener('click', this._onDevicePopupClick);
     this._onBodyClick = null;
     this._onBodySubmit = null;
+    this._onPanelClick = null;
     this._onDevicePopupClick = null;
     this.layer?.setThreatIntelListener?.(null);
     this.layer = null;

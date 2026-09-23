@@ -235,6 +235,33 @@
   max-height: 100%;
   pointer-events: auto;
 }
+#right-context-rail > #cyber-intel-panel.cyber-intel-expanded {
+  width: min(600px, 78vw);
+  max-width: min(78vw, 760px);
+  max-height: 88vh;
+  z-index: 2;
+}
+#right-context-rail
+  > #cyber-intel-panel:not(.collapsed).cyber-intel-expanded
+  .cyber-intel-panel-inner {
+  max-height: 88vh;
+}
+#right-context-rail #cyber-intel-panel .cyber-intel-expand-btn {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--glass-border);
+  border-radius: 5px;
+  cursor: pointer;
+}
+#right-context-rail #cyber-intel-panel .cyber-intel-expand-btn:hover,
+#right-context-rail #cyber-intel-panel .cyber-intel-expand-btn:focus-visible {
+  color: var(--accent-cyan);
+  border-color: var(--accent-cyan);
+}
 #right-context-rail #cyber-intel-panel.collapsed {
   width: var(--right-context-collapsed-width);
   margin-left: auto;
@@ -248,6 +275,9 @@
 }
 #right-context-rail #cyber-intel-panel.collapsed .panel-header {
   margin: 0;
+}
+#right-context-rail #cyber-intel-panel.collapsed .cyber-intel-expand-btn {
+  display: none;
 }
 #right-context-rail.layout-focus > #cyber-intel-panel:not(.collapsed) {
   box-sizing: border-box;
@@ -291,6 +321,19 @@
   overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 212, 255, 0.5) rgba(255, 255, 255, 0.04);
+}
+.cyber-search-results {
+  min-width: 0;
+  margin-top: 8px;
+  border-top: 1px solid rgba(0, 212, 255, 0.16);
+}
+.cyber-search-results > summary {
+  padding: 8px 2px 4px;
+  color: var(--accent-cyan);
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  list-style-position: inside;
 }
 .cyber-intel-selection,
 .cyber-intel-provider,
