@@ -38,6 +38,8 @@ const MAX_FEEDS = 8;
 const LOG_PREFIX = '[local-receivers]';
 
 const BAND_LABELS = Object.freeze({ 1090: '1090 MHz', 978: '978 MHz UAT' });
+/** Statuses whose `Response` must be constructed without a body. */
+const NULL_BODY_STATUSES = new Set([101, 103, 204, 205, 304]);
 
 function defaultPort(protocol) {
   return protocol === 'https:' ? 443 : 80;
@@ -170,6 +172,33 @@ export async function resolveLocalReceiverAddresses(hostname, lookupImpl) {
   return addresses;
 }
 
+/**
+ * Settle with `promise`, or reject with an AbortError as soon as `signal`
+ * aborts; a later settlement of `promise` is ignored.
+ */
+function untilAborted(promise, signal) {
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      const error = new Error('aborted');
+      error.name = 'AbortError';
+      reject(error);
+    };
+    // Handlers are attached first so a late rejection is never unhandled.
+    promise.then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener('abort', onAbort);
+        reject(error);
+      },
+    );
+    if (signal.aborted) onAbort();
+    else signal.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
 /** A `net`-style lookup that only ever answers the validated addresses. */
 function pinnedLookup(addresses) {
   return (_hostname, options, callback) => {
@@ -207,19 +236,30 @@ function fetchLocalReceiverFeed(url, options) {
         agent: false,
       },
       (response) => {
-        const headers = new Headers();
-        for (const [name, value] of Object.entries(response.headers)) {
-          if (Array.isArray(value))
-            value.forEach((item) => headers.append(name, item));
-          else if (value !== undefined) headers.set(name, String(value));
-        }
-        const status = response.statusCode || 500;
-        resolve(
-          new Response(
-            status === 204 || status === 304 ? null : Readable.toWeb(response),
+        // Nothing thrown here may escape: this callback runs outside the
+        // promise, so an exception would be uncaught and crash the server.
+        try {
+          const status = response.statusCode;
+          // A `Response` only represents final statuses 200–599.
+          if (!Number.isInteger(status) || status < 200 || status > 599)
+            throw new FeedError('HTTP_STATUS');
+          const headers = new Headers();
+          for (const [name, value] of Object.entries(response.headers)) {
+            if (Array.isArray(value))
+              value.forEach((item) => headers.append(name, item));
+            else if (value !== undefined) headers.set(name, String(value));
+          }
+          const nullBody = NULL_BODY_STATUSES.has(status);
+          const upstream = new Response(
+            nullBody ? null : Readable.toWeb(response),
             { status, statusText: response.statusMessage || '', headers },
-          ),
-        );
+          );
+          if (nullBody) response.destroy();
+          resolve(upstream);
+        } catch (error) {
+          response.destroy();
+          reject(error);
+        }
       },
     );
     request.on('error', reject);
@@ -250,9 +290,16 @@ export async function fetchLocalReceiverDocument(
     const { hostname } = new URL(url);
     // IP literals were validated when the feed list was parsed; a name is
     // validated by what it resolves to now, and the socket is pinned there.
+    // Resolution runs against the same deadline as the read: a stalled
+    // lookup fails this feed instead of holding the whole snapshot.
     const lookup = isLocalIpv4(hostname)
       ? undefined
-      : pinnedLookup(await resolveLocalReceiverAddresses(hostname, lookupImpl));
+      : pinnedLookup(
+          await untilAborted(
+            resolveLocalReceiverAddresses(hostname, lookupImpl),
+            controller.signal,
+          ),
+        );
     upstream = await fetchImpl(url, {
       method: 'GET',
       headers: { Accept: 'application/json' },

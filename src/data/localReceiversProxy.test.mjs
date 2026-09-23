@@ -372,3 +372,88 @@ test('the default transport connects to the validated address, not a re-resoluti
   const { json } = await call(handler);
   assert.equal(json.feeds[0].status, 'live');
 });
+
+test('null-body statuses (204, 205, 304) from a named feed are a clean feed error, never an uncaught exception', async (t) => {
+  const { createServer } = await import('node:http');
+  const server = createServer((req, res) => {
+    const status = Number(req.url.split('/')[1]);
+    res.writeHead(status, { 'content-type': 'application/json' });
+    res.end();
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => server.close());
+  const { port } = server.address();
+  const uncaught = [];
+  const onUncaught = (error) => uncaught.push(error);
+  process.on('uncaughtException', onUncaught);
+  t.after(() => process.off('uncaughtException', onUncaught));
+  const handler = createLocalReceiversHandler({
+    feedsValue: [204, 205, 304]
+      .map(
+        (status) =>
+          `1090=http://receiver-null-body.local:${port}/${status}/aircraft.json`,
+      )
+      .join(','),
+    now: () => FIXTURE_NOW_MS,
+    logger: quietLogger(),
+    timeoutMs: 300,
+    lookupImpl: async () => [{ address: '127.0.0.1', family: 4 }],
+  });
+  const { status, json } = await call(handler);
+  // Let any exception thrown inside the response callback surface.
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.deepEqual(uncaught, [], 'no uncaught exception');
+  assert.equal(status, 200);
+  assert.deepEqual(
+    json.feeds.map((feed) => feed.status),
+    ['unreachable', 'unreachable', 'unreachable'],
+  );
+});
+
+test('a stalled DNS lookup fails its feed at the deadline without holding other feeds or later polls', async () => {
+  let clock = FIXTURE_NOW_MS;
+  const lookups = [
+    // Never answers.
+    () => new Promise(() => {}),
+    // Answers only after the deadline: the late answer is ignored.
+    () =>
+      new Promise((resolve) =>
+        setTimeout(() => resolve([{ address: '127.0.0.1', family: 4 }]), 80),
+      ),
+  ];
+  const fetched = [];
+  const handler = createLocalReceiversHandler({
+    feedsValue: `1090=http://stalled.local/data/aircraft.json,978=${FEED_978}`,
+    now: () => clock,
+    logger: quietLogger(),
+    timeoutMs: 20,
+    lookupImpl: () => lookups.shift()(),
+    fetchImpl: async (url) => {
+      fetched.push(url);
+      return respond();
+    },
+  });
+  const within = (promise) =>
+    Promise.race([
+      promise,
+      new Promise((resolve) => setTimeout(() => resolve('timed out'), 60)),
+    ]);
+  const first = await within(call(handler));
+  assert.notEqual(first, 'timed out', 'the snapshot is not held by DNS');
+  assert.deepEqual(
+    first.json.feeds.map((feed) => feed.status),
+    ['unreachable', 'live'],
+  );
+  clock += 2_000;
+  const second = await within(call(handler));
+  assert.notEqual(second, 'timed out', 'a later poll is not held either');
+  assert.deepEqual(
+    second.json.feeds.map((feed) => feed.status),
+    ['unreachable', 'live'],
+  );
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  assert.ok(
+    fetched.every((url) => !url.includes('stalled.local')),
+    'a late DNS answer is never fetched',
+  );
+});
