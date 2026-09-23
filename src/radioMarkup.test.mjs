@@ -192,8 +192,9 @@ test('no unchanged Realtime tool definition drifts silently', () => {
     .update(JSON.stringify(unchanged))
     .digest('hex')
     .slice(0, 16);
-  // Analyst additions and ISS wording correction are explicitly excluded above; all other tool definitions retain their pin.
-  assert.equal(digest, '7411ea585e534795', 'an unchanged Realtime tool definition drifted');
+  // Analyst additions and ISS wording correction are explicitly excluded above;
+  // re-pinned for Pattern Watch extending the two layer enums.
+  assert.equal(digest, '9b04e290fbb4c100', 'an unchanged Realtime tool definition drifted');
 });
 
 test('Radio volume and mission speed share the Sharpen slider visual language', () => {
