@@ -113,7 +113,7 @@ export function createQueries({
    * Build a public descriptor for one aircraft using its best current position
    * (dead-reckoned when history exists, billboard position otherwise).
    * @param {string} icao24 - ICAO 24-bit transponder address.
-   * @returns {{icao24: string, callsign: string|null, position: Cesium.Cartesian3, latitude: number, longitude: number, altitudeM: number, velocityMps: number|null, track: number|null}|null}
+   * @returns {{icao24: string, callsign: string|null, position: Cesium.Cartesian3, latitude: number, longitude: number, altitudeM: number, velocityMps: number|null, track: number|null, verticalRateMps: number|null}|null}
    *   Descriptor with a cloned position, or null if the aircraft is unknown.
    */
 
@@ -163,6 +163,15 @@ export function createQueries({
       onGround: info?.onGround === true,
       velocityMps: displayed.speedMps,
       track: displayed.trackDeg,
+      // Climb/descent rate, the one kinematic field `mapAnalystRecord` already
+      // published (as `verticalRateMps`) but this descriptor did not, so a
+      // consumer reading the tracked seam had to reach back into `_flightData`
+      // for it. Reported, never derived: `stickyNumber` in records.js keeps the
+      // last value across a blank poll, and an absent rate stays null rather
+      // than becoming a level-flight 0 the aircraft never transmitted.
+      verticalRateMps: Number.isFinite(info?.verticalRate)
+        ? info.verticalRate
+        : null,
       stale: Boolean(
         flightState.records.missingPolls.get(icao24) ||
         flightState.feed._backoff,
@@ -834,7 +843,7 @@ export function createQueries({
 
     /**
      * Describe the currently tracked aircraft at its dead-reckoned position.
-     * @returns {{icao24: string, callsign: string|null, latitude: number, longitude: number, altitudeM: number, velocityMps: number|null, track: number|null}|null}
+     * @returns {{icao24: string, callsign: string|null, latitude: number, longitude: number, altitudeM: number, velocityMps: number|null, track: number|null, verticalRateMps: number|null}|null}
      *   Tracked aircraft info, or null when nothing is tracked.
      */
     getTrackedInfo() {

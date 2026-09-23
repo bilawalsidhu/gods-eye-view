@@ -487,7 +487,15 @@ const LABEL_ICAO = 'ae1fa4';
 const LABEL_POSITION = Cesium.Cartesian3.fromDegrees(-97.71, 30.21, 10_668);
 
 /** Seed one civil contact through the production refresh seam. */
-function seedLabelContact({ callsign, registration, tracked = false }) {
+function seedLabelContact({
+  callsign,
+  registration,
+  tracked = false,
+  // Per-test metadata overrides, spread last so a test can set a field to
+  // `undefined` to model "the feed never sent it" — a default parameter
+  // could not express that, it would just re-supply the default.
+  meta: metaOverrides = {},
+}) {
   _setTrackedFlightRefreshStateForTest({
     icao24: LABEL_ICAO,
     entity: null,
@@ -509,6 +517,7 @@ function seedLabelContact({ callsign, registration, tracked = false }) {
       turnRateDps: 0,
       rawLat: 30.21,
       rawLon: -97.71,
+      ...metaOverrides,
     },
   });
 }
@@ -572,6 +581,44 @@ test('civil label chain: the cockpit descriptor exposes a trimmed registration',
   assert.equal(flightsLayer.getTrackedInfo()?.registration, 'N123AB');
   seedLabelContact({ callsign: '  ', registration: '   ', tracked: true });
   assert.equal(flightsLayer.getTrackedInfo()?.registration, null);
+});
+
+test('the tracked descriptor publishes the reported vertical rate', () => {
+  // `mapAnalystRecord` has always published `verticalRateMps`; the tracked
+  // seam did not, so a consumer that needs climb/descent (a flight-phase
+  // classifier, the cockpit) had to reach past getTrackedInfo() into the
+  // raw record. Both seams now answer with the same field name and unit.
+  seedLabelContact({
+    callsign: 'SWA696',
+    registration: 'N123AB',
+    tracked: true,
+    meta: { verticalRate: -6.4 },
+  });
+  assert.equal(flightsLayer.getTrackedInfo()?.verticalRateMps, -6.4);
+  assert.equal(
+    mapAnalystRecord(LABEL_ICAO, { verticalRate: -6.4 }).verticalRateMps,
+    -6.4,
+    'the analyst seam and the tracked seam must agree',
+  );
+});
+
+test('an unreported vertical rate stays null, never a level-flight zero', () => {
+  // Absent is not level. `stickyNumber` seeds this field with null, so a
+  // contact that has never transmitted a rate must not read as 0 m/s — a
+  // phase classifier would call that cruise while the aircraft climbs.
+  for (const missing of [undefined, null, Number.NaN]) {
+    seedLabelContact({
+      callsign: 'SWA696',
+      registration: 'N123AB',
+      tracked: true,
+      meta: { verticalRate: missing },
+    });
+    assert.equal(
+      flightsLayer.getTrackedInfo()?.verticalRateMps,
+      null,
+      `vertical rate ${String(missing)} must publish as null`,
+    );
+  }
 });
 
 test('civil label chain: identity stays icao24 while the label moves', () => {

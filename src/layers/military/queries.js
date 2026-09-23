@@ -86,7 +86,7 @@ export function createQueries({
    * Build a public descriptor for one aircraft using its best current position
    * (dead-reckoned when history exists, billboard position otherwise).
    * @param {string} icao24 - ICAO hex identifier of the aircraft.
-   * @returns {{icao24: string, callsign: string|null, position: Cesium.Cartesian3, latitude: number, longitude: number, altitudeM: number, velocityMps: number|null, track: number|null}|null}
+   * @returns {{icao24: string, callsign: string|null, position: Cesium.Cartesian3, latitude: number, longitude: number, altitudeM: number, velocityMps: number|null, track: number|null, verticalRateMps: number|null}|null}
    *   Descriptor with a cloned position, or null if the aircraft is unknown.
    */
 
@@ -129,6 +129,13 @@ export function createQueries({
       onGround: info?.onGround === true,
       velocityMps: displayed.speedMps,
       track: displayed.trackDeg,
+      // Same field, same name, same null-when-absent rule as the civil
+      // descriptor — the two layers store the record under different keys
+      // (`verticalRateMps` here, `verticalRate` there), so only the mapping
+      // makes `resolveTrackedAircraftInfo` hand back one shape for both.
+      verticalRateMps: Number.isFinite(info?.verticalRateMps)
+        ? info.verticalRateMps
+        : null,
       stale: Boolean(
         flightState.records.missingPolls.get(icao24) ||
         flightState.feed._backoff,
@@ -755,7 +762,7 @@ export function createQueries({
 
     /**
      * Describe the currently tracked aircraft at its dead-reckoned position.
-     * @returns {{icao24: string, callsign: string|null, latitude: number, longitude: number, altitudeM: number, velocityMps: number|null, track: number|null}|null}
+     * @returns {{icao24: string, callsign: string|null, latitude: number, longitude: number, altitudeM: number, velocityMps: number|null, track: number|null, verticalRateMps: number|null}|null}
      *   Tracked aircraft info, or null when nothing is tracked.
      */
     getTrackedInfo() {
