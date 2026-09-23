@@ -86,6 +86,29 @@ async function forceCloseUsb(usbDevice) {
   }
 }
 
+/**
+ * Wrap a WebUSB entry point so every `USBDevice` it hands out is reported to
+ * `onDevice`. The RTL-SDR provider opens and initializes the device inside
+ * `get()`, so this is the only way to reach a device whose initialization
+ * failed before `get()` returned it.
+ */
+function captureRequestedUsb(webUsb, onDevice) {
+  if (!webUsb || typeof webUsb.requestDevice !== 'function') return webUsb;
+  return new Proxy(webUsb, {
+    get(target, property) {
+      if (property === 'requestDevice') {
+        return async (...args) => {
+          const usbDevice = await target.requestDevice(...args);
+          if (usbDevice) onDevice(usbDevice);
+          return usbDevice;
+        };
+      }
+      const value = Reflect.get(target, property, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+}
+
 function closedUsbError() {
   return Promise.reject(new Error('RTL-SDR session was closed'));
 }
@@ -245,6 +268,12 @@ export class SdrController {
     // it joins it, and connect() waits for it before opening a device, so an
     // old session's close can never race a new session's open.
     this._teardown = null;
+    // Device acquisitions (`provider.get()` plus the cleanup of whatever it
+    // opened) that have not handed their device to a session yet. A connect
+    // waits for older ones, so an old acquisition can never close the WebUSB
+    // device a newer session opened.
+    this._acquisitions = new Set();
+    this._acquisitionSequence = 0;
     this._destroyed = false;
     this._fmFrequencyHz = FM_DEFAULT_HZ;
     this._spectrum = null;
@@ -254,20 +283,23 @@ export class SdrController {
     // Every provider opens its device through the selecting WebUSB wrapper.
     const createProvider =
       providerFactory || ((webusb) => new RTL2832U_Provider({ webusb }));
-    this._providerFactory = () =>
+    this._providerFactory = (onUsbDevice = () => {}) =>
       createProvider(
-        createRememberingWebUsb(this._webUsb, {
-          getMode: () => this.state.mode,
-          memory: this._deviceMemory,
-          consumeForcePicker: () => {
-            const force = this._forcePicker;
-            this._forcePicker = false;
-            return force;
-          },
-          onSelected: (device) => {
-            this._deviceIdentity = sdrDeviceIdentity(device);
-          },
-        }),
+        captureRequestedUsb(
+          createRememberingWebUsb(this._webUsb, {
+            getMode: () => this.state.mode,
+            memory: this._deviceMemory,
+            consumeForcePicker: () => {
+              const force = this._forcePicker;
+              this._forcePicker = false;
+              return force;
+            },
+            onSelected: (device) => {
+              this._deviceIdentity = sdrDeviceIdentity(device);
+            },
+          }),
+          onUsbDevice,
+        ),
       );
     this._sampleWindowStartedAt = 0;
     this._sampleWindowSamples = 0;
@@ -541,9 +573,7 @@ export class SdrController {
       status: 'connecting',
       message: 'Waiting for an RTL-SDR device…',
     });
-    let provider = null;
-    let device = null;
-    let installed = false;
+    let acquisition = null;
     try {
       const nextMode = normalizeMode(mode);
       this._setState({ mode: nextMode, gain: this._gainByMode[nextMode] });
@@ -556,21 +586,24 @@ export class SdrController {
         );
       }
       if (superseded()) return false;
-      // An old session's device may still be closing: opening the same
-      // WebUSB device now would let that close act on this session.
-      if (this._teardown) await this._teardown;
+      // An old session's device may still be closing, or an older connect may
+      // still be opening or cleaning up the same WebUSB device: opening it now
+      // would let that close act on this session.
+      await this._awaitUsbOwnership(superseded);
       if (superseded()) return false;
-      provider = this._providerFactory();
-      device = await provider.get();
+      acquisition = this._beginAcquisition();
+      const device = await acquisition.provider.get();
       // stop() or destroy() ran while the picker/open was pending: the late
       // device belongs to no session, so close it without publishing state.
       if (superseded()) {
-        await this._closeOrphan(device, provider);
+        await this._discardAcquisition(acquisition, device);
         return false;
       }
-      this._provider = provider;
+      this._provider = acquisition.provider;
       this._device = device;
-      installed = true;
+      // The session owns the device now; teardown takes over from here.
+      this._endAcquisition(acquisition);
+      acquisition = null;
       const configured = await this._configureDevice(
         this.state.mode,
         this._fmFrequencyHz,
@@ -596,9 +629,12 @@ export class SdrController {
       void this._readLoop(this._readGeneration);
       return true;
     } catch (error) {
+      // provider.get() failed after it may already have opened and claimed
+      // the raw device (a failed initialization transfer): close whatever it
+      // opened, whether or not this connect was superseded meanwhile.
+      if (acquisition) await this._discardAcquisition(acquisition, null);
       if (superseded()) {
         // An installed device was closed by the stop() that superseded us.
-        if (device && !installed) await this._closeOrphan(device, provider);
         return false;
       }
       console.warn('[SDR] Connection failed:', error);
@@ -619,9 +655,167 @@ export class SdrController {
     }
   }
 
-  /** Close a device a superseded connect() opened, bounded like stop(). */
-  async _closeOrphan(device, provider) {
-    await this._closeDevice(device, provider, { queued: false });
+  /**
+   * Start one device acquisition. Its provider reports every WebUSB device
+   * it is handed, so a device opened by a `get()` that later fails can still
+   * be closed.
+   */
+  _beginAcquisition() {
+    let settle = null;
+    const acquisition = {
+      sequence: ++this._acquisitionSequence,
+      usbDevices: new Set(),
+      provider: null,
+      ended: false,
+      settled: new Promise((resolve) => {
+        settle = resolve;
+      }),
+      settle,
+    };
+    acquisition.provider = this._providerFactory((usbDevice) => {
+      acquisition.usbDevices.add(usbDevice);
+    });
+    this._acquisitions.add(acquisition);
+    return acquisition;
+  }
+
+  _endAcquisition(acquisition) {
+    if (acquisition.ended) return;
+    acquisition.ended = true;
+    this._acquisitions.delete(acquisition);
+    acquisition.settle();
+  }
+
+  /** Every raw WebUSB device an acquisition opened or may have opened. */
+  _acquisitionUsbDevices(acquisition, device = null) {
+    const usbDevices = new Set(acquisition.usbDevices);
+    const provider = acquisition.provider;
+    for (const usbDevice of [
+      rawUsbDevice(device, provider),
+      provider?.device,
+    ]) {
+      if (usbDevice && typeof usbDevice === 'object') usbDevices.add(usbDevice);
+    }
+    return usbDevices;
+  }
+
+  /**
+   * Whether a raw WebUSB device belongs to someone other than `acquisition`:
+   * the installed session, or a newer acquisition that reopened it (WebUSB
+   * hands every opener the same `USBDevice`).
+   */
+  _usbClaimedElsewhere(usbDevice, acquisition) {
+    if (!usbDevice) return false;
+    const installed = this._device
+      ? [rawUsbDevice(this._device, this._provider), this._provider?.device]
+      : [];
+    if (installed.includes(usbDevice)) return true;
+    for (const other of this._acquisitions) {
+      if (
+        other !== acquisition &&
+        other.sequence > acquisition.sequence &&
+        other.usbDevices.has(usbDevice)
+      )
+        return true;
+    }
+    return false;
+  }
+
+  /** Close raw WebUSB devices, each bounded by the close deadline. */
+  async _forceCloseUsbDevices(usbDevices) {
+    await Promise.all(
+      [...usbDevices].map((usbDevice) =>
+        withDeadline(
+          forceCloseUsb(usbDevice),
+          this._closeTimeoutMs,
+          'RTL-SDR USB close timed out',
+        ).catch((error) => {
+          console.warn('[SDR] USB close did not settle:', error);
+        }),
+      ),
+    );
+  }
+
+  /**
+   * Close everything an acquisition that will not become a session opened:
+   * the RTL2832U it returned (a superseded connect), or only the raw WebUSB
+   * device a failed `get()` left open. A raw device that another session
+   * has reopened meanwhile is left alone. Bounded; never throws.
+   */
+  async _discardAcquisition(acquisition, device) {
+    if (acquisition.ended) return;
+    try {
+      const usbDevices = this._acquisitionUsbDevices(acquisition, device);
+      const ownRaw = rawUsbDevice(device, acquisition.provider);
+      if (device) {
+        if (this._usbClaimedElsewhere(ownRaw, acquisition)) fenceDevice(device);
+        else
+          await this._closeDevice(device, acquisition.provider, {
+            queued: false,
+          });
+      }
+      // Without an RTL2832U (a failed get()), every raw device is closed
+      // directly; with one, its own raw device was handled above.
+      const remaining = [...usbDevices].filter(
+        (usbDevice) =>
+          !(device && usbDevice === ownRaw) &&
+          !this._usbClaimedElsewhere(usbDevice, acquisition),
+      );
+      await this._forceCloseUsbDevices(remaining);
+    } catch (error) {
+      console.warn('[SDR] Acquisition cleanup failed:', error);
+    } finally {
+      this._endAcquisition(acquisition);
+    }
+  }
+
+  /**
+   * Abort a superseded acquisition that is still initializing: closing the
+   * raw device it opened fails its pending transfers, so its `get()` settles
+   * (and cleans up) promptly instead of holding up the next session.
+   */
+  _abandonAcquisitions() {
+    for (const acquisition of this._acquisitions) {
+      if (acquisition.abandoned) continue;
+      acquisition.abandoned = true;
+      const usbDevices = [...this._acquisitionUsbDevices(acquisition)].filter(
+        (usbDevice) => !this._usbClaimedElsewhere(usbDevice, acquisition),
+      );
+      if (usbDevices.length) void this._forceCloseUsbDevices(usbDevices);
+    }
+  }
+
+  /**
+   * Wait until no teardown is closing a device and no older acquisition can
+   * still open or close one. An older acquisition is abandoned first and
+   * waited for within the close deadlines; one that still has not settled
+   * (a `get()` that ignores the closed device) stays fenced by
+   * `_usbClaimedElsewhere`, so it cannot close this session's device later.
+   */
+  async _awaitUsbOwnership(superseded) {
+    const waitedOut = new Set();
+    for (;;) {
+      if (this._teardown) {
+        await this._teardown;
+        if (superseded()) return;
+        continue;
+      }
+      const older = [...this._acquisitions].filter(
+        (acquisition) => !waitedOut.has(acquisition),
+      );
+      if (!older.length) return;
+      this._abandonAcquisitions();
+      try {
+        await withDeadline(
+          Promise.all(older.map((acquisition) => acquisition.settled)),
+          this._closeTimeoutMs * 3,
+          'RTL-SDR acquisition did not settle',
+        );
+      } catch {
+        for (const acquisition of older) waitedOut.add(acquisition);
+      }
+      if (superseded()) return;
+    }
   }
 
   /**
@@ -1044,6 +1238,9 @@ export class SdrController {
     const provider = this._provider;
     this._device = null;
     this._provider = null;
+    // A connect still opening a device is superseded: abort its
+    // initialization so it settles and closes what it opened.
+    this._abandonAcquisitions();
     this._audioNode?.port.postMessage({ type: 'clear' });
     // Single-flight: a stop() while another teardown runs joins it.
     const teardown = device

@@ -719,3 +719,180 @@ test('a mode change queued behind a stalled read never reports streaming after t
   assert.equal(state.connected, false);
   assert.equal(controller._device, null);
 });
+
+/**
+ * A raw WebUSB RTL-SDR for the installed `RTL2832U_Provider`: open and claim
+ * succeed, and the first initialization transfer fails, either at once or
+ * (with `hold`) only when the device is closed, like a stuck control transfer.
+ */
+function failingInitUsb(events, { hold = false } = {}) {
+  const pending = new Set();
+  const usb = {
+    vendorId: 0x0bda,
+    productId: 0x2838,
+    productName: 'RTL2838UHIDIR',
+    serialNumber: 'init-fails',
+    opened: false,
+    async open() {
+      events.push('open');
+      usb.opened = true;
+    },
+    async claimInterface() {
+      events.push('claim');
+    },
+    async releaseInterface() {},
+    controlTransferOut() {
+      events.push('init-transfer');
+      if (!hold) return Promise.reject(new Error('transfer error'));
+      return new Promise((_, reject) => pending.add(reject));
+    },
+    controlTransferIn() {
+      return Promise.reject(new Error('transfer error'));
+    },
+    async close() {
+      events.push('close');
+      usb.opened = false;
+      for (const reject of pending) reject(new Error('AbortError'));
+      pending.clear();
+    },
+  };
+  return usb;
+}
+
+function failingInitController(usb) {
+  return new SdrController({
+    storage: memoryStorage(),
+    closeTimeoutMs: 30,
+    // No providerFactory: the installed RTL2832U_Provider opens the device.
+    webUsb: {
+      async getDevices() {
+        return [usb];
+      },
+      async requestDevice() {
+        return usb;
+      },
+    },
+  });
+}
+
+test('a receiver whose initialization fails is closed and destroy() settles', async (t) => {
+  const events = [];
+  t.after(replaceGlobal('Worker', FakeWorker));
+  const usb = failingInitUsb(events);
+  const controller = failingInitController(usb);
+  assert.equal(await within(controller.connect('adsb')), false);
+  assert.deepEqual(events, ['open', 'claim', 'init-transfer', 'close']);
+  assert.equal(usb.opened, false, 'the raw device is not left open');
+  assert.equal(controller.getState().status, 'error');
+  assert.equal(controller.getState().connected, false);
+  assert.notEqual(await within(controller.destroy()), 'timed out');
+  assert.equal(controller._acquisitions.size, 0);
+});
+
+test('a superseded receiver initialization that then fails still closes the device', async (t) => {
+  const events = [];
+  t.after(replaceGlobal('Worker', FakeWorker));
+  const usb = failingInitUsb(events, { hold: true });
+  const controller = failingInitController(usb);
+  const connecting = controller.connect('adsb');
+  await pause(5);
+  assert.ok(events.includes('init-transfer'), 'initialization is in flight');
+  assert.notEqual(await within(controller.destroy()), 'timed out');
+  assert.equal(await within(connecting), false);
+  assert.ok(events.includes('close'));
+  assert.equal(usb.opened, false, 'the raw device is not left open');
+  assert.notEqual(controller.getState().status, 'streaming');
+  assert.equal(controller._acquisitions.size, 0);
+});
+
+/**
+ * A provider shaped like the library's: it records the raw device before
+ * opening it, and its initialization can be held open by `initGate`.
+ */
+function heldProvider(usb, events, name, initGate) {
+  return {
+    device: undefined,
+    async get() {
+      this.device = usb;
+      await usb.open();
+      events.push(`${name}:init`);
+      if (initGate) await initGate;
+      return rtlOver(usb, events, name);
+    },
+  };
+}
+
+function acquisitionController(providers, closeTimeoutMs = 30) {
+  return new SdrController({
+    storage: memoryStorage(),
+    webUsb: {},
+    readStallMs: 60_000,
+    closeTimeoutMs,
+    providerFactory: () => providers.shift(),
+  });
+}
+
+test('a newer connect waits for an older acquisition to finish closing its device', async (t) => {
+  const events = [];
+  t.after(replaceGlobal('Worker', FakeWorker));
+  const usb = sharedUsb(events);
+  const heldA = gate();
+  const controller = acquisitionController(
+    [
+      heldProvider(usb, events, 'A', heldA.promise),
+      heldProvider(usb, events, 'B'),
+    ],
+    // Long enough that B does not give up on A while it is held.
+    1_000,
+  );
+  t.after(() => controller.destroy());
+  const connectA = controller.connect('adsb');
+  await pause(5);
+  const connectB = controller.connect('adsb');
+  await pause(5);
+  assert.ok(!events.includes('B:init'), 'B waits for A');
+  heldA.open();
+  assert.equal(await within(connectA), false, 'A was superseded');
+  assert.equal(await within(connectB), true);
+  assert.ok(
+    events.lastIndexOf('usb-close') < events.indexOf('B:init'),
+    'A closed its device before B opened it',
+  );
+  await pause(30);
+  assert.equal(usb.opened, true, "B's device stays open");
+  assert.equal(controller.getState().status, 'streaming');
+  assert.equal(controller.getState().connected, true);
+});
+
+test("a held older acquisition released after a newer session starts never closes that session's device", async (t) => {
+  const events = [];
+  t.after(replaceGlobal('Worker', FakeWorker));
+  const usb = sharedUsb(events);
+  const heldA = gate();
+  const controller = acquisitionController([
+    heldProvider(usb, events, 'A', heldA.promise),
+    heldProvider(usb, events, 'B'),
+  ]);
+  t.after(() => controller.destroy());
+  const connectA = controller.connect('adsb');
+  await pause(5);
+  // B gives up waiting on the stuck acquisition A and completes.
+  assert.equal(await within(controller.connect('adsb')), true);
+  assert.equal(controller.getState().status, 'streaming');
+  const closes = () => events.filter((event) => event === 'usb-close').length;
+  const closesBeforeRelease = closes();
+  heldA.open();
+  assert.equal(await within(connectA), false);
+  await pause(30);
+  assert.equal(
+    closes(),
+    closesBeforeRelease,
+    "A's cleanup does not close the device B reopened",
+  );
+  assert.ok(!events.includes('A:graceful-close'));
+  assert.equal(usb.opened, true);
+  const state = controller.getState();
+  assert.equal(state.status, 'streaming');
+  assert.equal(state.connected, true);
+  assert.equal(controller._acquisitions.size, 0);
+});
