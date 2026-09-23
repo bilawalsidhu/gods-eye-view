@@ -24,7 +24,7 @@ import {
   GeoDataPlotter,
   GeospatialThreatScanner,
 } from './tactical/index.js';
-import { JARVIS_API, NVIDIA_API, OPENAI_API } from './apiEndpoints.js';
+import { JARVIS_API, NVIDIA_API } from './apiEndpoints.js';
 
 /** Quick action prompts per mode */
 const MODE_PRESETS = {

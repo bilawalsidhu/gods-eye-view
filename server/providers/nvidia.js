@@ -13,8 +13,6 @@ import {
   findFreeLlmProvider,
   detectProviderFromKey,
   getFirstKeyForProvider,
-  getAllActiveProviderCandidates,
-  resolveActiveProviderId,
 } from '../../src/ai/freeLlmCatalog.js';
 
 const NVIDIA_DEFAULT_BASE_URL = 'https://integrate.api.nvidia.com/v1';
