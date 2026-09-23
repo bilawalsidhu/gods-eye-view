@@ -618,6 +618,7 @@ export function cyberProxy({ fetchImpl = fetch, now = () => Date.now() } = {}) {
             'invalid_ip',
             'invalid_query',
             'invalid_page',
+            'invalid_area',
             'not_found',
           ].includes(error?.code)
             ? error.code
@@ -631,6 +632,7 @@ export function cyberProxy({ fetchImpl = fetch, now = () => Date.now() } = {}) {
               invalid_ip: 400,
               invalid_query: 400,
               invalid_page: 400,
+              invalid_area: 400,
               not_found: 404,
             }[code] || 503;
           serveJson(res, status, { error: code });
@@ -664,6 +666,12 @@ export function cyberProxy({ fetchImpl = fetch, now = () => Date.now() } = {}) {
         ),
       );
       middlewares.use(
+        '/api/cyber/enrich/shodan/area',
+        enrichmentHandler(({ latitude, longitude, radiusKm }, options) =>
+          enrichment.searchShodanArea(latitude, longitude, radiusKm, options),
+        ),
+      );
+      middlewares.use(
         '/api/cyber/enrich/greynoise/ip',
         enrichmentHandler(({ ip }, options) =>
           enrichment.lookupGreyNoise(ip, options),
@@ -687,6 +695,12 @@ export function cyberProxy({ fetchImpl = fetch, now = () => Date.now() } = {}) {
         '/api/cyber/enrich/shodan/search',
         enrichmentHandler(({ query, page }, options) =>
           enrichment.searchShodan(query, page, options),
+        ),
+      );
+      middlewares.use(
+        '/api/cyber/enrich/shodan/area',
+        enrichmentHandler(({ latitude, longitude, radiusKm }, options) =>
+          enrichment.searchShodanArea(latitude, longitude, radiusKm, options),
         ),
       );
       middlewares.use(

@@ -63,6 +63,8 @@ const cesium = {
     GOLD: color,
   },
   HeightReference: { CLAMP_TO_GROUND: 0 },
+  Rectangle: { center: (rectangle) => rectangle.center },
+  Ellipsoid: { WGS84: {} },
 };
 
 const radar = {
@@ -217,6 +219,85 @@ test('Radar map selection reports marker and paired-flow context and clears on d
   assert.equal(states.at(-1).selectedRadar.target.name, 'Canada');
   layer.disable();
   assert.equal(states.at(-1).enabled, false);
+  assert.equal(states.at(-1).selectedRadar, null);
+  layer.destroy();
+});
+
+test('Shodan area search uses the visible map radius, renders devices, and exposes selected device details', async () => {
+  let pickedId = null;
+  let receivedArea;
+  const device = {
+    provider: 'shodan',
+    ip: '8.8.4.4',
+    latitude: 37.751,
+    longitude: -97.822,
+    organization: 'Example Org',
+    services: [{ port: 443, transport: 'tcp', product: 'HTTPS' }],
+    hostnames: ['example.net'],
+    domains: [],
+    geographicPrecision: 'network-approximate',
+    geographicMethod: 'IPwho.is IP geolocation',
+    geographicProvenance:
+      'Approximate IP network position; not a device location.',
+    attribution: 'Shodan',
+    fetchedAt: '2026-09-20T01:00:00Z',
+  };
+  const layer = createCyberLayer({
+    source: {
+      getRadarSnapshot: async () => radar,
+      getDshieldSnapshot: async () => dshield,
+      searchShodanArea: async (area) => {
+        receivedArea = area;
+        return {
+          provider: 'shodan',
+          query: 'geo:40.0000,-75.0000,20',
+          page: 1,
+          pageLimit: 3,
+          pageSize: 10,
+          total: 1,
+          fetchedAt: '2026-09-20T01:00:00Z',
+          attribution: 'Shodan',
+          matches: [device],
+        };
+      },
+    },
+    cesium,
+  });
+  const rectangle = {
+    south: (39.9 * Math.PI) / 180,
+    north: (40.1 * Math.PI) / 180,
+    west: (-75.1 * Math.PI) / 180,
+    east: (-74.9 * Math.PI) / 180,
+    center: {
+      latitude: (40 * Math.PI) / 180,
+      longitude: (-75 * Math.PI) / 180,
+    },
+  };
+  let dataSource;
+  const states = [];
+  layer.init({
+    camera: { computeViewRectangle: () => rectangle },
+    scene: {
+      canvas: {},
+      globe: { ellipsoid: {} },
+      pick: () => ({ id: pickedId }),
+    },
+    dataSources: { add: (value) => (dataSource = value), remove: () => {} },
+  });
+  layer.setThreatIntelListener((state) => states.push(state));
+  layer.enable();
+  await layer.getThreatIntelState().onShodanAreaSearch();
+  assert.ok(Math.abs(receivedArea.latitude - 40) < 1e-9);
+  assert.ok(Math.abs(receivedArea.longitude + 75) < 1e-9);
+  assert.ok(receivedArea.radiusKm > 10 && receivedArea.radiusKm < 20);
+  const entity = dataSource.entities.getById('cyber-shodan:8.8.4.4');
+  assert.equal(entity.position.latitude, 37.751);
+  assert.equal(entity.properties.geographicPrecision, 'network-approximate');
+  pickedId = entity.id;
+  latestSelectionHandler.actions.get('left-click')({
+    position: { x: 1, y: 1 },
+  });
+  assert.equal(states.at(-1).selectedShodan.ip, '8.8.4.4');
   assert.equal(states.at(-1).selectedRadar, null);
   layer.destroy();
 });

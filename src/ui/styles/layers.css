@@ -326,6 +326,10 @@
 .cyber-intel-legend-row > .cyber-legend-both {
   background: mediumpurple;
 }
+.cyber-intel-legend-row > .cyber-legend-shodan {
+  background: #ffd34e;
+  box-shadow: 0 0 8px rgba(255, 211, 78, 0.6);
+}
 .cyber-intel-legend-row > .cyber-legend-flow {
   width: 22px;
   height: 2px;
@@ -415,11 +419,30 @@
 }
 .cyber-intel-source-table th,
 .cyber-intel-source-table td {
-  width: 33.333%;
+  width: 36%;
   padding: 6px 5px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   text-align: left;
   overflow-wrap: anywhere;
+}
+.cyber-intel-source-table th:nth-child(2),
+.cyber-intel-source-table td:nth-child(2) {
+  width: 64%;
+}
+.cyber-intel-source-table .cyber-intel-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  width: 100%;
+}
+.cyber-intel-source-table .cyber-intel-actions button {
+  min-width: 0;
+  white-space: nowrap;
+  text-align: center;
+  font-size: 8px;
+}
+.cyber-intel-source-table td[colspan='2'] {
+  width: auto;
 }
 .cyber-intel-source-table th {
   color: #8feaff;
@@ -467,6 +490,12 @@
 .cyber-intel-search-form input {
   min-width: 0;
   flex: 1;
+}
+.cyber-shodan-area-button {
+  width: 100%;
+  min-height: 34px;
+  margin-top: 7px;
+  white-space: normal;
 }
 #right-context-rail
   #global-context-panel:not(.collapsed)

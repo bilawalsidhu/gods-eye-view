@@ -4,6 +4,7 @@ import { readResponseTextCapped } from '../common/http.js';
 
 const SHODAN_API = 'https://api.shodan.io';
 const GREYNOISE_API = 'https://api.greynoise.io/v3/community';
+const IP_GEO_API = 'https://ipwho.is';
 const REQUEST_TIMEOUT_MS = 10_000;
 const RESPONSE_LIMIT = 512 * 1024;
 const HOST_TTL_MS = 6 * 60 * 60_000;
@@ -12,6 +13,9 @@ const GREYNOISE_TTL_MS = 24 * 60 * 60_000;
 const MAX_CACHE_ENTRIES = 100;
 const MAX_SEARCH_PAGE = 3;
 const SHODAN_RESULT_LIMIT = 10;
+const GEOLOCATION_TTL_MS = 30 * 24 * 60 * 60_000;
+const MAX_GEO_REQUESTS_PER_DAY = 500;
+const MAX_AREA_RADIUS_KM = 1_000;
 
 function failure(code) {
   return Object.assign(new Error(code), { code });
@@ -71,6 +75,18 @@ function iso(value) {
   return new Date(value).toISOString();
 }
 
+function coordinate(value) {
+  if (
+    value === null ||
+    value === undefined ||
+    (typeof value !== 'number' && typeof value !== 'string') ||
+    (typeof value === 'string' && !value.trim())
+  )
+    return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
 function ipFromShodanRow(row) {
   if (typeof row?.ip_str === 'string' && isIP(row.ip_str) === 4)
     return row.ip_str;
@@ -117,8 +133,8 @@ function normalizeShodanHost(ip, payload, fetchedAt) {
           ]
         : [];
   const location = payload?.location || {};
-  const latitude = Number(location.latitude);
-  const longitude = Number(location.longitude);
+  const latitude = coordinate(location.latitude ?? payload?.latitude);
+  const longitude = coordinate(location.longitude ?? payload?.longitude);
   const hasCoordinates =
     Number.isFinite(latitude) &&
     latitude >= -90 &&
@@ -150,9 +166,12 @@ function normalizeShodanHost(ip, payload, fetchedAt) {
     latitude: hasCoordinates ? latitude : null,
     longitude: hasCoordinates ? longitude : null,
     geographicPrecision: hasCoordinates ? 'network-approximate' : null,
-    geographicMethod: hasCoordinates ? 'Shodan IP geolocation' : null,
+    geographicMethod: hasCoordinates
+      ? safeText(payload?.geographicMethod, 120) || 'Shodan IP geolocation'
+      : null,
     geographicProvenance: hasCoordinates
-      ? 'Shodan location associated with this public IP; approximate network location, not a device or person location.'
+      ? safeText(payload?.geographicProvenance, 200) ||
+        'Shodan location associated with this public IP; approximate network location, not a device or person location.'
       : null,
     attribution: 'Shodan InternetDB / host intelligence',
   });
@@ -276,7 +295,10 @@ export function createCyberEnrichmentProviders({
   const hostCache = makeCache();
   const searchCache = makeCache();
   const noiseCache = makeCache();
+  const geoCache = makeCache();
   let lastShodanSearchAt = null;
+  let geoRequestDay = '';
+  let geoRequestsToday = 0;
 
   async function shodanInfo({ signal } = {}) {
     const key = keyFromEnv('SHODAN_API_KEY');
@@ -327,13 +349,20 @@ export function createCyberEnrichmentProviders({
     );
   }
 
-  async function searchShodan(value, pageValue = 1, { signal } = {}) {
+  async function searchShodan(
+    value,
+    pageValue = 1,
+    { signal, geolocateMissing = false } = {},
+  ) {
     const query = validSearchQuery(value);
     const page = Number(pageValue);
     if (!Number.isInteger(page) || page < 1 || page > MAX_SEARCH_PAGE)
       throw failure('invalid_page');
     const key = keyFromEnv('SHODAN_API_KEY');
-    const identity = cacheKey(key, `search:${page}:${query.toLowerCase()}`);
+    const identity = cacheKey(
+      key,
+      `search:${geolocateMissing ? 'area' : 'manual'}:${page}:${query.toLowerCase()}`,
+    );
     return memoized(
       searchCache,
       identity,
@@ -368,6 +397,10 @@ export function createCyberEnrichmentProviders({
               rank: (page - 1) * 100 + index + 1,
             };
           });
+        // Only enrich the first ten displayed results, and only where Shodan
+        // has no usable coordinates. The IPs are public IPs returned by the
+        // operator-triggered Shodan query; requests stay on the local server.
+        if (geolocateMissing) await enrichMissingCoordinates(matches, signal);
         const total =
           Number.isSafeInteger(payload.total) && payload.total >= 0
             ? payload.total
@@ -384,6 +417,111 @@ export function createCyberEnrichmentProviders({
           attribution: 'Shodan',
         });
       },
+    );
+  }
+
+  async function geolocateIp(ip, signal) {
+    const identity = `ipwhois:${ip}`;
+    return memoized(
+      geoCache,
+      identity,
+      { now, ttl: GEOLOCATION_TTL_MS, maxEntries: MAX_CACHE_ENTRIES },
+      async () => {
+        const currentDay = new Date(now()).toISOString().slice(0, 10);
+        if (geoRequestDay !== currentDay) {
+          geoRequestDay = currentDay;
+          geoRequestsToday = 0;
+        }
+        if (geoRequestsToday >= MAX_GEO_REQUESTS_PER_DAY) return null;
+        geoRequestsToday++;
+        const { payload } = await requestJson(
+          fetchImpl,
+          `${IP_GEO_API}/${encodeURIComponent(ip)}`,
+          { signal },
+        );
+        const latitude = coordinate(payload?.latitude);
+        const longitude = coordinate(payload?.longitude);
+        if (
+          payload?.success !== true ||
+          !Number.isFinite(latitude) ||
+          latitude < -90 ||
+          latitude > 90 ||
+          !Number.isFinite(longitude) ||
+          longitude < -180 ||
+          longitude > 180
+        )
+          return null;
+        return {
+          latitude,
+          longitude,
+          city: safeText(payload?.city, 100),
+          region: safeText(payload?.region_code || payload?.region, 64),
+          country: safeText(payload?.country, 100),
+          countryCode: safeText(payload?.country_code, 2),
+        };
+      },
+    );
+  }
+
+  async function enrichMissingCoordinates(matches, signal) {
+    const pending = matches.filter(
+      (match) => match.latitude == null || match.longitude == null,
+    );
+    let cursor = 0;
+    const workers = Array.from(
+      { length: Math.min(3, pending.length) },
+      async () => {
+        while (cursor < pending.length) {
+          const match = pending[cursor++];
+          try {
+            const location = await geolocateIp(match.ip, signal);
+            if (!location) continue;
+            Object.assign(match, {
+              city: location.city || match.city,
+              region: location.region || match.region,
+              country: location.country || match.country,
+              countryCode: location.countryCode || match.countryCode,
+              latitude: location.latitude,
+              longitude: location.longitude,
+              geographicPrecision: 'network-approximate',
+              geographicMethod: 'IPwho.is IP geolocation',
+              geographicProvenance:
+                'Approximate network geolocation from IPwho.is using the public IP address; not a device or person location.',
+            });
+          } catch {
+            // Search results remain useful without fallback geography.
+          }
+        }
+      },
+    );
+    await Promise.all(workers);
+  }
+
+  async function searchShodanArea(
+    latitudeValue,
+    longitudeValue,
+    radiusValue,
+    { signal } = {},
+  ) {
+    const latitude = Number(latitudeValue);
+    const longitude = Number(longitudeValue);
+    const radiusKm = Math.ceil(Number(radiusValue));
+    if (
+      !Number.isFinite(latitude) ||
+      latitude < -90 ||
+      latitude > 90 ||
+      !Number.isFinite(longitude) ||
+      longitude < -180 ||
+      longitude > 180 ||
+      !Number.isInteger(radiusKm) ||
+      radiusKm < 1 ||
+      radiusKm > MAX_AREA_RADIUS_KM
+    )
+      throw failure('invalid_area');
+    return searchShodan(
+      `geo:${latitude.toFixed(4)},${longitude.toFixed(4)},${radiusKm}`,
+      1,
+      { signal, geolocateMissing: true },
     );
   }
 
@@ -428,6 +566,7 @@ export function createCyberEnrichmentProviders({
     testGreyNoiseConnection: testGreyNoise,
     lookupShodanHost,
     searchShodan,
+    searchShodanArea,
     lookupGreyNoise,
   });
 }

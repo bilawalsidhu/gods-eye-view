@@ -12,6 +12,7 @@ const URLS = Object.freeze({
 const ENRICHMENT_URLS = Object.freeze({
   shodanHost: '/api/cyber/enrich/shodan/host',
   shodanSearch: '/api/cyber/enrich/shodan/search',
+  shodanArea: '/api/cyber/enrich/shodan/area',
   greynoise: '/api/cyber/enrich/greynoise/ip',
 });
 
@@ -94,6 +95,8 @@ export function createCyberSource({
           invalid_ip: 'Enter a public IPv4 address.',
           invalid_query: 'Enter a supported Shodan search query.',
           invalid_page: 'That result page is unavailable.',
+          invalid_area:
+            'Zoom in to an area with a radius of 1,000 km or less, then try again.',
           not_found: 'The provider has no record for this IP.',
         };
         throw new Error(
@@ -119,6 +122,14 @@ export function createCyberSource({
     searchShodan: async (query, page = 1, options) =>
       normalizeShodanSearchResult(
         await post(ENRICHMENT_URLS.shodanSearch, { query, page }, options),
+      ),
+    searchShodanArea: async ({ latitude, longitude, radiusKm }, options) =>
+      normalizeShodanSearchResult(
+        await post(
+          ENRICHMENT_URLS.shodanArea,
+          { latitude, longitude, radiusKm },
+          options,
+        ),
       ),
     lookupGreyNoise: async (ip, options) =>
       normalizeCyberEnrichment(

@@ -122,6 +122,9 @@ function normalizeEnrichmentRecord(value, provider) {
     latitude: hasCoordinates ? value.latitude : null,
     longitude: hasCoordinates ? value.longitude : null,
     geographicPrecision: hasCoordinates ? 'network-approximate' : null,
+    geographicMethod: hasCoordinates
+      ? boundedText(value.geographicMethod, 120)
+      : null,
     geographicProvenance: hasCoordinates
       ? boundedText(value.geographicProvenance, 200)
       : null,

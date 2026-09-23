@@ -101,6 +101,19 @@ test('Cyber Threat Intel remains hidden unless Cyber Activity is enabled', () =>
         ports: [{ port: 23, protocol: 'tcp', label: 'Telnet' }],
         enrichmentResults: {},
         enrichmentPending: [],
+        shodanAreaSearch: {
+          matches: [
+            {
+              ip: '8.8.4.4',
+              city: 'Example City',
+              country: 'Example Country',
+              organization: 'Example Org',
+              latitude: 37.7,
+              longitude: -97.8,
+              geographicPrecision: 'network-approximate',
+            },
+          ],
+        },
       },
     ],
   };
@@ -115,7 +128,10 @@ test('Cyber Threat Intel remains hidden unless Cyber Activity is enabled', () =>
   assert.match(f.body.textContent, /Current Top 10 Targeted Ports/);
   assert.match(f.body.textContent, /23\/tcp/);
   assert.match(f.body.textContent, /Optional Shodan search/);
-  assert.match(f.body.textContent, /query credits/);
+  assert.match(f.body.textContent, /query credit/);
+  assert.match(f.body.textContent, /Search Shodan in current map area/);
+  assert.match(f.body.textContent, /IPwho\.is approximate network geolocation/);
+  assert.match(f.body.textContent, /8\.8\.4\.4/);
   layer.state = {
     enabled: false,
     selectedRadar: null,
@@ -124,6 +140,47 @@ test('Cyber Threat Intel remains hidden unless Cyber Activity is enabled', () =>
   layer.listener(layer.state);
   assert.equal(f.panel.hidden, true);
   assert.equal(f.panel.inert, true);
+  panel.destroy();
+});
+
+test('Shodan device selection shows the approximate network location and provenance', () => {
+  const f = fixture();
+  const layer = {
+    state: {
+      enabled: true,
+      selectedRadar: null,
+      selectedShodan: {
+        ip: '8.8.4.4',
+        organization: 'Example Org',
+        services: [{ port: 443, transport: 'tcp', product: 'HTTPS' }],
+        hostnames: ['example.net'],
+        domains: [],
+        city: 'Example City',
+        country: 'Example Country',
+        latitude: 1,
+        longitude: 2,
+        geographicMethod: 'IPwho.is IP geolocation',
+        geographicProvenance:
+          'Approximate network location; not a device or person location.',
+        attribution: 'Shodan',
+        fetchedAt: '2026-09-20T01:00:00Z',
+      },
+      nonGeographicProviders: [],
+    },
+    setThreatIntelListener(listener) {
+      this.listener = listener;
+    },
+    getThreatIntelState() {
+      return this.state;
+    },
+  };
+  const panel = new CyberIntelPanel({ documentRef: f.documentRef });
+  panel.mount(layer);
+  assert.match(f.body.textContent, /SELECTED SHODAN DEVICE/);
+  assert.match(f.body.textContent, /8\.8\.4\.4/);
+  assert.match(f.body.textContent, /443\/tcp/);
+  assert.match(f.body.textContent, /IPwho\.is IP geolocation/);
+  assert.match(f.body.textContent, /not a device or person location/);
   panel.destroy();
 });
 

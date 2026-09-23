@@ -60,17 +60,20 @@ the top ten source and targeted-port records.
 Each provider fails independently, and cached data may be shown during temporary
 upstream outages.
 
-Phase 2 adds optional Shodan host intelligence and manually submitted searches,
-plus on-demand GreyNoise Community lookups. Neither source polls or runs while
-the camera moves; lookups from the DShield IP table and search results require
-an explicit click. Responses are bounded and cached, and Shodan search results
-are capped at 10 per page with explicit confirmation before additional pages.
-The Cyber panel explains that filtered searches and later pages may consume
-Shodan query credits. GreyNoise connection testing confirms before spending
-one Community lookup. Both providers use the existing Provider Settings
-credential store. Shodan coordinates, when returned, are approximate network
-locations and are shown with that caveat; no enrichment locations are invented.
-See `DATA_SOURCES.md` for current provider terms and attribution.
+Phase 2 adds optional Shodan host intelligence, manually submitted searches,
+and a deliberate search for a circle around the current map view (up to a
+1,000 km radius), plus on-demand GreyNoise Community lookups. Neither source
+polls or runs while the camera moves; all lookups require an explicit click.
+Area searches use one Shodan query credit, fetch only the first result page,
+and display up to 10 devices.
+Shodan and IPwho.is coordinates are shown as approximate IP network locations,
+not precise device locations. When Shodan has no usable coordinates, the server
+may ask IPwho.is to geolocate the public IP; those fallback results are cached,
+their external disclosure is explained in the panel, and unresolved records are
+not mapped. Filtered searches and later pages may consume Shodan query credits.
+GreyNoise connection testing confirms before spending one Community lookup.
+All Cyber credentials use the existing Provider Settings credential store. See
+`DATA_SOURCES.md` for provider limits, terms and attribution.
 
 The Cyber layer uses the shared data-layer panel and state codec. Its local
 server proxy bounds upstream responses, keeps Radar tokens server-side, and

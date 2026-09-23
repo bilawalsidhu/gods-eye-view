@@ -162,7 +162,14 @@ test('Shodan host and manual search are normalized, bounded and cached without e
       if (parsed.pathname === '/shodan/host/search')
         return jsonResponse({
           total: 1,
-          matches: [{ ip_str: '8.8.4.4', port: 443, product: 'HTTPS' }],
+          matches: [
+            {
+              ip_str: '8.8.4.4',
+              port: 443,
+              product: 'HTTPS',
+              location: { latitude: null, longitude: null },
+            },
+          ],
         });
       if (parsed.pathname.startsWith('/shodan/host/'))
         return jsonResponse({
@@ -196,6 +203,72 @@ test('Shodan host and manual search are normalized, bounded and cached without e
       false,
     );
     assert.equal(calls, 3);
+  } finally {
+    if (oldKey === undefined) delete process.env.SHODAN_API_KEY;
+    else process.env.SHODAN_API_KEY = oldKey;
+  }
+});
+
+test('Shodan area search is bounded and fills missing locations with attributed approximate IP geolocation', async () => {
+  const oldKey = process.env.SHODAN_API_KEY;
+  process.env.SHODAN_API_KEY = 'fixture-secret-never-returned';
+  const requests = [];
+  const api = createCyberEnrichmentProviders({
+    now: () => Date.parse('2026-09-20T01:00:00Z'),
+    fetchImpl: async (url) => {
+      const parsed = new URL(url);
+      requests.push(parsed);
+      if (
+        parsed.hostname === 'api.shodan.io' &&
+        parsed.pathname === '/shodan/host/search'
+      )
+        return jsonResponse({
+          total: 1,
+          matches: [
+            {
+              ip_str: '8.8.4.4',
+              port: 443,
+              product: 'HTTPS',
+              location: { latitude: null, longitude: null },
+            },
+          ],
+        });
+      if (parsed.hostname === 'ipwho.is')
+        return jsonResponse({
+          success: true,
+          latitude: 37.751,
+          longitude: -97.822,
+          city: 'Example City',
+          region: 'Example Region',
+          country: 'United States',
+          country_code: 'US',
+        });
+      throw new Error('Unexpected provider endpoint');
+    },
+  });
+  try {
+    const result = await api.searchShodanArea(40, -74, 75);
+    assert.equal(result.query, 'geo:40.0000,-74.0000,75');
+    assert.equal(result.matches[0].latitude, 37.751);
+    assert.equal(result.matches[0].longitude, -97.822);
+    assert.equal(result.matches[0].geographicPrecision, 'network-approximate');
+    assert.equal(result.matches[0].geographicMethod, 'IPwho.is IP geolocation');
+    assert.match(
+      result.matches[0].geographicProvenance,
+      /Approximate network geolocation/,
+    );
+    assert.equal(
+      requests.filter((url) => url.hostname === 'ipwho.is').length,
+      1,
+    );
+    assert.equal(
+      requests[0].searchParams.get('query'),
+      'geo:40.0000,-74.0000,75',
+    );
+    await assert.rejects(api.searchShodanArea(40, -74, 1001), {
+      code: 'invalid_area',
+    });
+    assert.equal(JSON.stringify(result).includes('fixture-secret'), false);
   } finally {
     if (oldKey === undefined) delete process.env.SHODAN_API_KEY;
     else process.env.SHODAN_API_KEY = oldKey;

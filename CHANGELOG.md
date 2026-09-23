@@ -95,12 +95,18 @@
   `THIRD_PARTY_NOTICES.md`.
 ## Unreleased — Cyber Phase 2
 
-- Add optional Shodan host enrichment and manual, bounded search plus optional
-  GreyNoise Community IP context. Calls run only after an explicit operator
-  action; results are cached, attributed, normalized, and kept out of the
-  camera/update loop. Shodan later pages require confirmation because they may
-  spend query credits. GreyNoise connection testing confirms before using one
-  Community lookup. Credentials use the existing local Provider Settings flow.
+- Add optional Shodan host enrichment, manual bounded search, and explicit
+  current-map-area search plus optional GreyNoise Community IP context. Area
+  searches use one Shodan query credit, are limited to a 1,000 km radius and
+  the first result page, show at most 10 devices, and never run while the
+  camera moves. Devices without
+  Shodan coordinates use cached IPwho.is approximate network geolocation when
+  available; unresolved results are not mapped. Enrichment controls now use
+  readable full-width rows in the DShield table. Calls run only after an
+  explicit operator action; results are attributed, normalized, cached, and
+  kept out of the camera/update loop. Shodan later pages require confirmation
+  because they may spend query credits. GreyNoise connection testing confirms
+  before using one Community lookup. Credentials use existing Provider Settings.
 - Keep Shodan and GreyNoise optional: DShield and Cloudflare Radar retain their
   Phase 1 behavior when either enrichment provider is unconfigured or down.
   See `DATA_SOURCES.md` for terms, attribution and quota handling.
