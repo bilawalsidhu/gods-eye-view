@@ -52,6 +52,10 @@ export { localAdsbStatus } from './status.js';
 
 const FEET_TO_METERS = 0.3048;
 const RENDER_HOLD_ID = 'local-adsb';
+/** Picks looked through under a click for a local aircraft. */
+const CLICK_DRILL_LIMIT = 8;
+/** Trail lines pass through their aircraft; a click never stops on one. */
+const TRAIL_PICK_PREFIX = 'gev-trail:';
 /** The DISPLAY rail's first-run 3D preference, used when no reader is wired. */
 const DEFAULT_DISPLAY = Object.freeze({
   models3d: true,
@@ -92,6 +96,8 @@ const DEFAULT_DISPLAY = Object.freeze({
  * @param {(url: string) => string} [options.resolveAsset] Model URL resolver.
  * @param {(options: object) => Promise<object>} [options.loadModel] Model
  *   loader, injectable for tests.
+ * @param {(canvas: HTMLCanvasElement) => object} [options.createInputHandler]
+ *   Click-handler factory, injectable for tests.
  * @returns {object} Data-layer module.
  */
 export function createLocalAdsbLayer({
@@ -101,6 +107,7 @@ export function createLocalAdsbLayer({
   now = Date.now,
   resolveAsset = (url) => url,
   loadModel,
+  createInputHandler = (canvas) => new Cesium.ScreenSpaceEventHandler(canvas),
 }) {
   if (typeof receiver?.getState !== 'function')
     throw new TypeError('Local ADS-B requires a receiver session');
@@ -565,11 +572,12 @@ export function createLocalAdsbLayer({
   function selectMarker(id) {
     const marker = markers.get(id);
     if (!marker) return false;
+    const reselect = id === selectedId && selectedTrail?.id === id;
     selectedId = id;
     enrichment.request(marker.record, { selected: true });
     marker.entity.gevLabelModel = cardModel(marker, now());
     selectEntityContext(marker.entity);
-    startTrail(marker);
+    if (!reselect) startTrail(marker);
     governorRequestRender('local-adsb-selection');
     return true;
   }
@@ -578,23 +586,65 @@ export function createLocalAdsbLayer({
     const resolved = services.picking.resolvePickId?.(picked);
     if (resolved !== undefined) return resolved;
     if (typeof picked?.id === 'string') return picked.id;
-    return typeof picked?.id?.id === 'string' ? picked.id.id : null;
+    if (typeof picked?.id?.id === 'string') return picked.id.id;
+    return typeof picked?.primitive?.id === 'string' ? picked.primitive.id : null;
+  }
+
+  function ownedElsewhere(id) {
+    return Boolean(id) && services.picking.isOwnedByOtherLayer?.(LAYER_ID, id);
+  }
+
+  /**
+   * What a click at `position` means for this layer: a local aircraft id,
+   * `'other'` when a sibling layer's contact is under the pointer, `'trail'`
+   * for a trail line, or null for empty map.
+   *
+   * The frontmost pick decides, except that something no layer owns (a
+   * photoreal tile, a ring) or a trail line drawn over or through a local
+   * aircraft does not hide it: the click looks underneath for the aircraft.
+   */
+  function clickTarget(position) {
+    const scene = viewer.scene;
+    const top = pickedId(scene.pick(position));
+    if (top && markers.has(top)) return top;
+    const trail = Boolean(top) && String(top).startsWith(TRAIL_PICK_PREFIX);
+    if (ownedElsewhere(top) && !trail) return 'other';
+    let hits = [];
+    try {
+      hits = scene.drillPick?.(position, CLICK_DRILL_LIMIT) || [];
+    } catch {
+      hits = [];
+    }
+    for (const hit of hits) {
+      const id = pickedId(hit);
+      if (id && markers.has(id)) return id;
+      if (id && String(id).startsWith(TRAIL_PICK_PREFIX)) continue;
+      // A sibling layer's contact above ours takes the click.
+      if (ownedElsewhere(id)) return 'other';
+    }
+    return trail ? 'trail' : null;
   }
 
   function installInteraction() {
     if (clickHandler || !viewer?.scene?.canvas) return;
-    clickHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+    clickHandler = createInputHandler(viewer.scene.canvas);
     clickHandler.setInputAction((click) => {
       // A tool owns the pointer (src/data/inputOwnership.js): yield the click.
       if (!isPointerFree() || !enabled) return;
-      const id = pickedId(viewer.scene.pick(click.position));
-      if (id && markers.has(id) && id !== selectedId) selectMarker(id);
-      else if (selectedId) {
-        // Another contact, empty map or the same marker releases only this
-        // layer's selection, leaving a sibling layer's new selection intact.
-        clearSelection();
-        governorRequestRender('local-adsb-selection');
+      const target = clickTarget(click.position);
+      // Clicking a local aircraft always (re)selects it and republishes its
+      // card, including the one already selected: its card may have been
+      // displaced, and a click on a marker must never read as "deselect".
+      if (target && markers.has(target)) {
+        selectMarker(target);
+        return;
       }
+      // A click on a trail line is not empty map.
+      if (target === 'trail' || !selectedId) return;
+      // Another contact or empty map releases only this layer's selection,
+      // leaving a sibling layer's new selection intact.
+      clearSelection();
+      governorRequestRender('local-adsb-selection');
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
   }
 

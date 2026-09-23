@@ -198,6 +198,9 @@ async function enabledLayer(receiver, clock, feeds = null, options = {}) {
     services: { ...services, ...options.services },
     now: () => clock.now,
     loadModel: options.loadModel,
+    ...(options.createInputHandler
+      ? { createInputHandler: options.createInputHandler }
+      : {}),
   });
   layer.init(viewer);
   await layer.enable();
@@ -993,4 +996,120 @@ test('the last aircraft expiring removes its 3D model and cancels a pending load
   assert.equal(late.id, 'local-adsb:def456');
   assert.equal(primitives[0].contains(late), false);
   assert.equal(late.destroyed, true);
+});
+
+/** A viewer with a canvas and scripted picks, plus the layer's click action. */
+function clickHarness() {
+  const base = fakeViewer();
+  const scene = {
+    ...base.viewer.scene,
+    canvas: {},
+    pickResult: null,
+    drillResult: [],
+    pick() {
+      return scene.pickResult;
+    },
+    drillPick() {
+      return scene.drillResult;
+    },
+  };
+  const handler = { actions: new Map() };
+  return {
+    scene,
+    viewer: { ...base, viewer: { ...base.viewer, scene } },
+    createInputHandler: () => ({
+      setInputAction(action, type) {
+        handler.actions.set(type, action);
+      },
+      destroy() {},
+    }),
+    click() {
+      handler.actions.get(Cesium.ScreenSpaceEventType.LEFT_CLICK)({
+        position: new Cesium.Cartesian2(10, 10),
+      });
+    },
+  };
+}
+
+test('clicking the selected aircraft keeps it selected and republishes its card', async (t) => {
+  const receiver = fakeReceiver({ mode: 'adsb', connected: true });
+  const clock = { now: 100_000 };
+  const harness = clickHarness();
+  const { layer, calls } = await enabledLayer(receiver, clock, null, {
+    viewer: harness.viewer,
+    createInputHandler: harness.createInputHandler,
+  });
+  t.after(() => layer.destroy());
+  receiver.set({ aircraft: [record()] });
+  await layer.update();
+  const entity = harness.viewer.sources[0].entities.getById(
+    'local-adsb:abc123',
+  );
+  harness.scene.pickResult = { id: entity, primitive: {} };
+  harness.click();
+  assert.deepEqual(calls.selected, ['local-adsb:abc123']);
+  // Its card may have been displaced (another readout, a camera move): a
+  // second click on the same marker must show it again, never deselect it.
+  harness.click();
+  assert.deepEqual(calls.selected, ['local-adsb:abc123', 'local-adsb:abc123']);
+  assert.deepEqual(calls.cleared, []);
+});
+
+test('a click on a local aircraft under an unowned or trail pick still selects it', async (t) => {
+  const receiver = fakeReceiver({ mode: 'adsb', connected: true });
+  const clock = { now: 100_000 };
+  const harness = clickHarness();
+  const owners = new Map();
+  const { resolvePickId } = await import('../../data/pickRegistry.js');
+  const { layer, calls } = await enabledLayer(receiver, clock, null, {
+    viewer: harness.viewer,
+    createInputHandler: harness.createInputHandler,
+    services: {
+      picking: {
+        registerPickOwner: (id, predicate) => owners.set(id, predicate),
+        unregisterPickOwner: (id) => owners.delete(id),
+        resolvePickId,
+        isOwnedByOtherLayer: (layerId, pickedId) =>
+          [...owners].some(
+            ([owner, predicate]) => owner !== layerId && predicate(pickedId),
+          ),
+      },
+    },
+  });
+  owners.set('trails', (id) => String(id).startsWith('gev-trail:'));
+  owners.set('flights', (id) => id === 'abc123');
+  t.after(() => layer.destroy());
+  receiver.set({
+    aircraft: [record(), record({ icao: 'def456', lat: 0.01 })],
+  });
+  await layer.update();
+  const [first, second] = ['abc123', 'def456'].map((icao) =>
+    harness.viewer.sources[0].entities.getById(`local-adsb:${icao}`),
+  );
+  // A photoreal tile (no pick id) drawn over the 3D model at this pixel.
+  harness.scene.pickResult = { primitive: { tileset: true } };
+  harness.scene.drillResult = [
+    harness.scene.pickResult,
+    { primitive: { id: 'local-adsb:abc123' }, id: 'local-adsb:abc123' },
+  ];
+  harness.click();
+  assert.deepEqual(calls.selected, ['local-adsb:abc123']);
+
+  // The selected aircraft's trail crosses another local aircraft's marker.
+  harness.scene.pickResult = { id: { id: 'gev-trail:local-adsb-head-1' } };
+  harness.scene.drillResult = [
+    harness.scene.pickResult,
+    { id: second, primitive: {} },
+  ];
+  harness.click();
+  assert.deepEqual(calls.selected, ['local-adsb:abc123', 'local-adsb:def456']);
+
+  // Another layer's own contact on top is that layer's click.
+  harness.scene.pickResult = { id: 'abc123', primitive: {} };
+  harness.scene.drillResult = [
+    harness.scene.pickResult,
+    { id: first, primitive: {} },
+  ];
+  harness.click();
+  assert.equal(calls.selected.length, 2, 'the Flights contact is not taken');
 });
