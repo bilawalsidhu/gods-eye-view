@@ -203,8 +203,10 @@ Rebuild with `node scripts/build-atc-frequencies.mjs`.
 Curation (parameters in `meta.curation`): eight frequency classes kept verbatim —
 `TWR GND APP ATIS CNTR` (controlled) and `CTAF UNIC AFIS` (advisory) — 13,341 rows of other
 classes dropped; frequencies outside the 108–137 MHz VHF air band dropped (492 rows);
-coordinates rounded to 4 decimals and frequencies to 3; columnar layout (14.0 MB source →
-0.66 MB pack, budget ≤1 MB enforced by `src/data/ourAirportsAtc.test.mjs`).
+coordinates rounded to 4 decimals and frequencies to 3; field elevation carried in metres or
+`null` where the source has none (775 airports); columnar layout with the column positions
+published in the file (14.0 MB source → 0.71 MB pack, budget ≤1 MB enforced by
+`src/data/ourAirportsAtc.test.mjs`).
 
 The class is **not** remapped onto a flight phase, because the data does not support it: only
 443 of the 9,562 airports publish all four of TWR/GND/APP/ATIS, and 5,902 publish none of them

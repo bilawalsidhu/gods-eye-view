@@ -35,8 +35,12 @@
  *      order in `types`, then by frequency, for a stable diff.
  *   5. Round coordinates to 4 decimals (~11 m — an airport is not a point) and
  *      frequencies to 3 (the 25 kHz / 8.33 kHz channel grid).
- *   6. Sort airports by ident.
+ *   6. Carry field elevation in METRES (converted from elevation_ft, rounded to
+ *      0.1 m) or null when the source has none. A flight-phase classifier needs
+ *      height above the FIELD, not above sea level.
+ *   7. Sort airports by ident.
  *
+ * Row shape: [ident, name, lat, lon, elevationM, [[typeIndex, mhz], ...]].
  * Output shape is columnar on purpose: an array-of-objects form of the same
  * data is ~2.4x larger because every record repeats its keys.
  *
@@ -74,6 +78,21 @@ const BAND_MIN_MHZ = 108;
 const BAND_MAX_MHZ = 137;
 const COORD_DECIMALS = 4;
 const MHZ_DECIMALS = 3;
+const FEET_TO_M = 0.3048;
+
+/**
+ * Column positions in a packed airport row. Named because the row is a bare
+ * array for byte reasons, and a bare array is exactly the shape where an
+ * inserted column silently shifts every reader that spelled its index by hand.
+ */
+const COL = Object.freeze({
+  IDENT: 0,
+  NAME: 1,
+  LAT: 2,
+  LON: 3,
+  ELEVATION_M: 4,
+  FREQUENCIES: 5,
+});
 
 /**
  * Parse RFC-4180 CSV into an array of row objects keyed by the header line.
@@ -163,7 +182,20 @@ for (const row of airportRows) {
   const lat = Number.parseFloat(row.latitude_deg);
   const lon = Number.parseFloat(row.longitude_deg);
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-  airports.set(row.ident, { name: String(row.name || '').trim(), lat, lon });
+  // Field elevation, in metres. A flight-phase classifier needs height above
+  // the FIELD, not above sea level: 900 m MSL is short final at an airport on
+  // the coast and below the runway at one on a plateau. 14,951 of the source
+  // rows have no elevation; those airports keep a null and a caller must fall
+  // back rather than assume zero.
+  const elevationFt = Number.parseFloat(row.elevation_ft);
+  airports.set(row.ident, {
+    name: String(row.name || '').trim(),
+    lat,
+    lon,
+    elevationM: Number.isFinite(elevationFt)
+      ? round(elevationFt * FEET_TO_M, 1)
+      : null,
+  });
 }
 
 /** @type {Map<string, Set<string>>} ident → "typeIndex:mhz" (de-duplication). */
@@ -193,26 +225,30 @@ for (const row of frequencyRows) {
 const packed = [...kept.entries()]
   .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
   .map(([ident, entries]) => {
-    const { name, lat, lon } = airports.get(ident);
+    const { name, lat, lon, elevationM } = airports.get(ident);
     const frequencies = [...entries]
       .map((entry) => {
         const [typeIndex, mhz] = entry.split(':');
         return [Number(typeIndex), Number(mhz)];
       })
       .sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-    return [
-      ident,
-      name,
-      round(lat, COORD_DECIMALS),
-      round(lon, COORD_DECIMALS),
-      frequencies,
-    ];
+    const row = [];
+    row[COL.IDENT] = ident;
+    row[COL.NAME] = name;
+    row[COL.LAT] = round(lat, COORD_DECIMALS);
+    row[COL.LON] = round(lon, COORD_DECIMALS);
+    row[COL.ELEVATION_M] = elevationM;
+    row[COL.FREQUENCIES] = frequencies;
+    return row;
   });
+
+/** The frequency list of a packed row. */
+const freqs = (row) => row[COL.FREQUENCIES];
 
 /** Airports that carry at least one of the given classes. */
 const countWith = (classes) => {
   const wanted = new Set(classes.map((t) => TYPE_INDEX.get(t)));
-  return packed.filter((a) => a[4].some(([t]) => wanted.has(t))).length;
+  return packed.filter((a) => freqs(a).some(([t]) => wanted.has(t))).length;
 };
 const CONTROLLED = ['TWR', 'GND', 'APP', 'ATIS'];
 const ADVISORY = ['CTAF', 'UNIC', 'AFIS'];
@@ -239,15 +275,20 @@ const pack = {
       droppedOtherClass: droppedClass,
       droppedOutOfBand,
       airports: packed.length,
-      frequencies: packed.reduce((n, a) => n + a[4].length, 0),
+      withoutElevation: packed.filter((a) => a[COL.ELEVATION_M] === null)
+        .length,
+      frequencies: packed.reduce((n, a) => n + freqs(a).length, 0),
       // The numbers that decide what the UI may promise: a phase→frequency map
       // has all four controlled rails at only a small fraction of airports, and
       // most airports in the pack have no controller at all.
       withAnyOfTwrGndAppAtis: countWith(CONTROLLED),
       withAllOfTwrGndAppAtis: packed.filter(
         (a) =>
-          new Set(a[4].filter(([t]) => controlledSet.has(t)).map(([t]) => t))
-            .size === 4,
+          new Set(
+            freqs(a)
+              .filter(([t]) => controlledSet.has(t))
+              .map(([t]) => t),
+          ).size === 4,
       ).length,
       // "Advisory only" and "center only" are both measured against the four
       // TOWER classes, not against CONTROLLED_CLASSES in the loader (which
@@ -255,17 +296,20 @@ const pack = {
       // controller at this field", and an area centre is not one.
       advisoryOnly: packed.filter(
         (a) =>
-          a[4].some(([t]) => ADVISORY.includes(TYPES[t])) &&
-          !a[4].some(([t]) => controlledSet.has(t)),
+          freqs(a).some(([t]) => ADVISORY.includes(TYPES[t])) &&
+          !freqs(a).some(([t]) => controlledSet.has(t)),
       ).length,
       centerOnlyNoTower: packed.filter(
         (a) =>
-          !a[4].some(([t]) => controlledSet.has(t)) &&
-          !a[4].some(([t]) => ADVISORY.includes(TYPES[t])),
+          !freqs(a).some(([t]) => controlledSet.has(t)) &&
+          !freqs(a).some(([t]) => ADVISORY.includes(TYPES[t])),
       ).length,
     },
   },
   types: TYPES,
+  // Published so the loader decodes by name. A future column can then be
+  // appended without every reader having to be found and corrected.
+  columns: COL,
   airports: packed,
 };
 
