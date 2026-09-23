@@ -1,5 +1,5 @@
+import { attachCctvVideo } from './videoPlayback.js';
 import * as Cesium from 'cesium';
-import Hls from 'hls.js';
 import {
   CCTV_PROJECTION_OVERLAY_SOURCE_ID,
   CCTV_PROJECTION_OVERLAY_SOURCE_OPTIONS,
@@ -208,6 +208,7 @@ export function createProjection({
       // only re-uploads the plane texture when there is genuinely new content.
       canvasStamp: 1,
       lastSwappedCanvasStamp: 0,
+      disposed: false,
     };
 
     parts.frames.paintProjectionPlaceholder(ctx, record.camera);
@@ -215,44 +216,49 @@ export function createProjection({
     if (mode === 'video') {
       const video = document.createElement('video');
       video.muted = true;
-      video.loop = true;
-      video.autoplay = true;
       video.playsInline = true;
       video.crossOrigin = 'anonymous';
       video.preload = 'auto';
-      video.src = parts.frames.mediaUrlFor(record.camera);
-      video.addEventListener('canplay', () => {
-        video.play().catch(() => {});
-      });
-      video.addEventListener('error', () => {
-        if (runtime.mode !== 'video' || runtime.video !== video) return;
-        runtime.mode = 'image';
-        runtime.video = null;
-        const img = new Image();
-        img.decoding = 'async';
-        img.crossOrigin = 'anonymous';
-        img.onload = () => {
-          runtime.imageLoading = false;
-          runtime.imageReady = true;
-          runtime.imageStamp = Date.now();
-        };
-        img.onerror = () => {
-          runtime.imageLoading = false;
-          runtime.imageReady = false;
-        };
-        runtime.image = img;
-        runtime.lastImageRefreshAt = 0;
-        parts.frames.refreshProjectionImage(record, true);
-      });
-      if (feedType === 'hls' && Hls.isSupported()) {
-        const hls = new Hls({ enableWorker: true });
-        hls.loadSource(record.camera.streamUrl || parts.frames.mediaUrlFor(record.camera));
-        hls.attachMedia(video);
-        runtime.hls = hls;
-      } else {
-        video.src = record.camera.streamUrl || parts.frames.mediaUrlFor(record.camera);
-      }
+      // Cesium sizes the video texture from the element's width/height
+      // attributes at first upload. Set them from the real stream dimensions
+      // and rebind on any resolution change (camera switch, adaptive source).
+      const bindVideoTexture = () => {
+        if (runtime.video !== video || !runtime.planeMaterial) return;
+        if (!(video.videoWidth > 0 && video.videoHeight > 0)) return;
+        video.width = video.videoWidth;
+        video.height = video.videoHeight;
+        runtime.planeMaterial.image = runtime.canvas;
+        runtime.planeMaterial.image = video;
+      };
+      video.addEventListener('loadedmetadata', bindVideoTexture);
+      video.addEventListener('resize', bindVideoTexture);
       runtime.video = video;
+      runtime.playback = attachCctvVideo(
+        video,
+        parts.frames.mediaUrlFor(record.camera),
+        feedType,
+        {
+          onFailure: () => {
+            if (runtime.disposed) return;
+            runtime.video = null;
+            runtime.mode = 'image';
+            runtime.image = new Image();
+            runtime.image.decoding = 'async';
+            runtime.image.onload = () => {
+              runtime.imageLoading = false;
+              runtime.imageReady = true;
+              runtime.imageStamp = Date.now();
+            };
+            runtime.image.onerror = () => {
+              runtime.imageLoading = false;
+              runtime.imageReady = false;
+            };
+            runtime.planeMaterial.image = runtime.canvas;
+            parts.frames.refreshProjectionImage(record, true);
+            parts.presentation.notifyListeners();
+          },
+        },
+      );
     } else {
       const img = new Image();
       img.decoding = 'async';
@@ -283,7 +289,7 @@ export function createProjection({
     const positions =
       record.frustumPositions || parts.geometry.frustumCartesians(geometry);
     runtime.planeMaterial = new Cesium.ImageMaterialProperty({
-      image: mode === 'video' && runtime.video ? runtime.video : canvas,
+      image: canvas,
       transparent: true,
       color: Cesium.Color.WHITE.withAlpha(0.95),
     });
@@ -300,7 +306,8 @@ export function createProjection({
 
   function ensureProjectionRuntime(record) {
     if (!record) return null;
-    if (record.projection) return record.projection;
+    if (record.projection && !record.projection.disposed)
+      return record.projection;
     const runtime = createProjectionRuntime(record);
     record.projection = runtime;
     if (runtime) {
@@ -316,9 +323,15 @@ export function createProjection({
    */
 
   function destroyProjectionRuntime(runtime) {
-    if (!runtime) return;
-    runtime.hls?.destroy();
-    runtime.hls = null;
+    if (!runtime || runtime.disposed) return;
+    runtime.disposed = true;
+    runtime.playback?.dispose();
+    runtime.playback = null;
+    if (runtime.image) {
+      runtime.image.onload = null;
+      runtime.image.onerror = null;
+      runtime.image.src = '';
+    }
     if (runtime.video) {
       runtime.video.pause();
       runtime.video.removeAttribute('src');
@@ -355,10 +368,7 @@ export function createProjection({
       const active = parts.selection.getActiveRecord();
       if (layerState._enabled && layerState._showProjection && active) {
         ensureProjectionRuntime(active);
-        if (active.projection?.video) {
-          active.projection.video.play().catch(() => {});
-        }
-        if (active.projection) {
+        if (active.projection && !active.projection.video) {
           parts.frames.drawProjectionFrame(active);
           parts.frames.refreshProjectionTextures(active);
         }
@@ -386,22 +396,34 @@ export function createProjection({
    * @param {string|null} activeId - ID of the currently active camera.
    */
 
+  /**
+   * The active camera's decoded <video>, for a second surface (the panel card)
+   * to paint from. Null when the active feed is a still or not yet attached.
+   * @returns {HTMLVideoElement|null}
+   */
+  function getActiveVideoElement() {
+    if (!layerState._enabled) return null;
+    return parts.selection.getActiveRecord()?.projection?.video || null;
+  }
+
   function pauseInactiveProjectionFeeds(activeId) {
     for (const record of layerState._records) {
       if (!record.projection?.video) continue;
-      if (
-        record.camera.id === activeId &&
-        layerState._enabled &&
-        layerState._showProjection
-      ) {
+      if (record.camera.id === activeId && layerState._enabled) {
         record.projection.video.play().catch(() => {});
       } else {
-        record.projection.video.pause();
+        const runtime = record.projection;
+        destroyProjectionRuntime(runtime);
+        record.projection = null;
+        layerState._projectionEntities = layerState._projectionEntities.filter(
+          (entry) => entry !== runtime,
+        );
       }
     }
   }
   return {
     createCctvProjectionOverlayEntry,
+    getActiveVideoElement,
     updatePlanePlacement,
     clearProjectionOverlay,
     setPlaneVisible,

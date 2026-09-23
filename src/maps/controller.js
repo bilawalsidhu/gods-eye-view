@@ -66,6 +66,15 @@ export class MapSourceController {
       `${stack?.label || 'This map stack'} is unavailable`
     );
   }
+  /** Return the shown supplied or controller-owned tileset, if any. */
+  getImageryHostTileset() {
+    if (this._destroyed) return null;
+    for (const source of this._sources.values())
+      if (source.tileset?.show === true) return source.tileset;
+    for (const tileset of this._ownedTilesets)
+      if (tileset.show === true) return tileset;
+    return null;
+  }
   getActiveId() {
     return this._activeId;
   }

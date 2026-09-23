@@ -177,8 +177,8 @@ test('desktop panel lanes use per-panel allocations and presentation-only auto-c
   );
   assert.match(
     rightRail,
-    /panel !== displayPanel[\s\S]*?removeProperty\('--right-panel-allocated-height'\)[\s\S]*?const naturalHeight/,
-    'right intrinsic measurement must retain Display allocation while clearing other panel allocations',
+    /setAttribute\('data-rail-measuring', ''\)[\s\S]*?getBoundingClientRect\(\)\.height[\s\S]*?finally[\s\S]*?removeAttribute\('data-rail-measuring'\)/,
+    'right intrinsic measurement must neutralize allocations and always restore presentation',
   );
   assert.match(css, /var\(\s*--left-panel-allocated-height/);
   assert.match(css, /var\(\s*--right-panel-allocated-height/);

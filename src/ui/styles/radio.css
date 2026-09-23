@@ -890,3 +890,12 @@
   opacity: 0.75;
   font-style: italic;
 }
+
+.data-toggle-controls-info {
+  flex-basis: 100%;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-secondary);
+  padding-top: 3px;
+  overflow-wrap: anywhere;
+}

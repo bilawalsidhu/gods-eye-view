@@ -158,8 +158,8 @@ function encode(state) {
 
 test('production registry is exact, canonical, and rejects incomplete contracts', async () => {
   assert.equal(validateLayerStateRegistry(), true);
-  assert.equal(REGISTERED_LAYER_IDS.length, 21);
-  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 21);
+  assert.equal(REGISTERED_LAYER_IDS.length, 26);
+  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 26);
   assert.ok(REGISTERED_LAYER_IDS.includes('transit'));
   assert.deepEqual(REGISTERED_LAYER_IDS, [...REGISTERED_LAYER_IDS].sort());
   assert.throws(
@@ -331,6 +331,7 @@ test('compact URL omits absent-meaning option state and still resolves to it', (
   // below, and the divergence itself in the two codec tests above.
   state.options.flights = { models3d: false, models3dMode: 'proximity', selectedFlightsTrackingId: null, selectedMilitaryTrackingId: null };
   state.options.satellites = { catalog: 'core', showPoints: true, showOrbits: true, selectedSatTrackingId: null };
+  state.options.wind.overlay = 'speed'; // Frozen v2 omitted-token meaning; new boots use trails.
   const params = encodeLayerStateParams(new URLSearchParams('v=2'), state);
   assert.equal(params.has('lo'), false);
   const roundTrip = decodeLayerStateParams(params);
@@ -1602,5 +1603,62 @@ test('the owner layer going away revokes the pending watch at any origin', async
       `a disabled owner layer clears progress without a terminal failure (origin=${origin})`,
     );
     f.coordinator.destroy();
+  }
+});
+
+test('wind appearance shares round trip while old links retain weather defaults', () => {
+  const state = normalizeLayerState({
+    enabledLayerIds: ['wind'],
+    options: {
+      wind: { model: 'ifs', overlay: 'pressure', units: 'mph', paused: true },
+    },
+  });
+  assert.deepEqual(
+    decodeLayerStateParams(new URLSearchParams(encode(state))).options.wind,
+    { model: 'ifs', overlay: 'pressure', units: 'mph', paused: true },
+  );
+  const defaults = createDefaultLayerState().options.wind;
+  assert.deepEqual(defaults, {
+    model: 'gfs',
+    overlay: 'none',
+    units: 'km/h',
+    paused: false,
+  });
+  const legacy = decodeLayerStateParams(new URLSearchParams('v=2&l=k'));
+  assert.equal(legacy.options.wind.overlay, 'speed', 'old links retain their authored field');
+  assert.equal(decodeLayerStateParams(new URLSearchParams(encode(createDefaultLayerState()))).options.wind.overlay, 'none', 'new default is encoded explicitly');
+  const old = normalizeLayerState({ options: { wind: { model: 'ifs' } } });
+  assert.deepEqual(old.options.wind, { ...defaults, model: 'ifs' });
+  const invalid = normalizeLayerState({
+    options: {
+      wind: {
+        model: 'unknown',
+        overlay: 'clouds',
+        units: '<script>',
+        paused: 'yes',
+      },
+    },
+  });
+  assert.deepEqual(invalid.options.wind, defaults);
+});
+
+test('observed weather round trips product and opacity without persisting historical playback', () => {
+  const state = normalizeLayerState({ enabledLayerIds: ['weather-radar', 'weather-satellite'], options: { 'weather-radar': { opacity: 'light', play: true }, 'weather-satellite': { product: 'clouds', opacity: 'light', step: -1 } } });
+  const params = new URLSearchParams(encode(state));
+  const decoded = decodeLayerStateParams(params);
+  assert.deepEqual(decoded, state);
+  assert.equal(state.options['weather-satellite'].product, 'clouds');
+  assert.equal(Object.hasOwn(state.options['weather-radar'], 'play'), false);
+});
+
+test('satellite infrared display mode round trips and invalid or absent values use filtered', () => {
+  for (const infrared of ['full', 'filtered', undefined, 'invalid']) {
+    const state = normalizeLayerState({ enabledLayerIds: ['weather-satellite'], options: {
+      'weather-satellite': { infrared, product: 'clouds', step: -1, play: true },
+    } });
+    assert.deepEqual(decodeLayerStateParams(new URLSearchParams(encode(state))), state);
+    assert.equal(state.options['weather-satellite'].infrared, infrared === 'full' ? 'full' : 'filtered');
+    assert.equal(Object.hasOwn(state.options['weather-satellite'], 'step'), false);
+    assert.equal(Object.hasOwn(state.options['weather-satellite'], 'play'), false);
   }
 });

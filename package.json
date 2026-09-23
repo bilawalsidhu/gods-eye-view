@@ -48,6 +48,7 @@
   },
   "dependencies": {
     "@mapbox/vector-tile": "^3.0.0",
+    "@meri-imperiumi/eccodes-wasm": "^2.48.2",
     "cesium": "^1.124.0",
     "egm96-universal": "^1.1.1",
     "hls.js": "^1.7.3",

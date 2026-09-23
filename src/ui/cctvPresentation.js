@@ -1,3 +1,4 @@
+import { createCctvVideoSurface } from './cctvVideo.js';
 export function _calBadgeLabel(badge) {
   switch (badge) {
     case 'calibrated':
@@ -164,6 +165,26 @@ export function _renderCctvState(state) {
     }
   }
 
+  const liveIntent = enabled && !!activeCamera?.isVideo;
+  if (this._cctvVideo) {
+    this._cctvVideo.hidden = !liveIntent;
+    if (this._cctvFrame) this._cctvFrame.hidden = liveIntent;
+    const visible =
+      liveIntent &&
+      !document.hidden &&
+      !this._cctvPanel?.classList.contains('collapsed');
+    if (!visible || this._cctvVideoCameraId !== activeId) {
+      this._cctvVideoSurface?.stop();
+      this._cctvVideoSurface = null;
+    }
+    this._cctvVideoCameraId = activeId;
+    if (visible && !this._cctvVideoSurface) {
+      this._cctvVideoSurface = createCctvVideoSurface(this._cctvVideo, () =>
+        this.cctv.getActiveVideoElement?.(),
+      );
+    }
+  }
+
   if (this._cctvFrame) {
     const nextLiveSrc = enabled ? activeCamera?.mediaUrl : null;
     const nextSrc = enabled ? activeCamera?.frameUrl : null;
@@ -174,17 +195,25 @@ export function _renderCctvState(state) {
     // src every 10 seconds can cancel a slow but healthy decode forever and
     // leave SNAPSHOT · OK beside a blank/loading preview. Camera changes are
     // immediate so navigation never waits on the prior camera's request.
-    if (nextLiveSrc && (cameraChanged || this._cctvLive?.dataset.cameraId !== nextCameraId)) {
-      this._queueCctvLive(nextLiveSrc, nextCameraId);
-    } else if (
-      nextSrc &&
-      !this._cctvLive?.classList.contains('active') &&
-      (cameraChanged ||
-        (!frameLoading && this._cctvFrame.dataset.currentSrc !== nextSrc))
+    if (
+      nextLiveSrc &&
+      (cameraChanged || this._cctvLive?.dataset.cameraId !== nextCameraId)
     ) {
-      this._queueCctvFrame(nextSrc, nextCameraId, cameraChanged);
+      this._queueCctvLive(nextLiveSrc, nextCameraId);
     }
-    if (!nextSrc) {
+    if (!liveIntent) {
+      if (
+        nextSrc &&
+        !this._cctvLive?.classList.contains('active') &&
+        (cameraChanged ||
+          (!frameLoading && this._cctvFrame.dataset.currentSrc !== nextSrc))
+      ) {
+        this._queueCctvFrame(nextSrc, nextCameraId, cameraChanged);
+      }
+      if (!nextSrc) {
+        this._clearCctvFrame();
+      }
+    } else {
       this._clearCctvFrame();
     }
   }
