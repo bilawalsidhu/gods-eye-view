@@ -806,5 +806,7 @@
   "src/ui/localSdrControls.test.mjs",
   "src/ui/localSdrMarkup.test.mjs",
   "src/ui/localSdrPresentation.test.mjs",
+  "src/data/localReceiversProxy.test.mjs",
+  "src/layers/localAdsb/feeds.test.mjs",
   "src/ui/railScrollers.test.mjs"
 ]

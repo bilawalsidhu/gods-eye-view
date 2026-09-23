@@ -294,7 +294,6 @@ export function createLocalAdsbLayer({
     syncTimer = setTimeout(sync, LOCAL_ADSB_SYNC_MS);
   }
 
-
   function selectMarker(id) {
     const marker = markers.get(id);
     if (!marker) return false;

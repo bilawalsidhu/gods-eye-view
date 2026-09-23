@@ -124,9 +124,10 @@ test('construction mounts the route once and neither parses nor fetches', (t) =>
     1,
   );
   const routes = [];
-  localReceiversProxy({ feedsValue: '', logger: quietLogger() }).configureServer(
-    { middlewares: { use: (route) => routes.push(route) } },
-  );
+  localReceiversProxy({
+    feedsValue: '',
+    logger: quietLogger(),
+  }).configureServer({ middlewares: { use: (route) => routes.push(route) } });
   assert.deepEqual(routes, [LOCAL_RECEIVERS_ROUTE]);
 });
 
@@ -223,7 +224,11 @@ test('a feed whose own now is over 10 s old is stale; failures are unreachable',
   assert.equal(json.records.length, 4, 'stale feed records still flow');
   for (const secret of ['ECONNREFUSED', 'secret', 'internal detail', '169.254'])
     assert.equal(body.includes(secret), false, `${secret} leaked`);
-  assert.equal(body.includes('10.0.0'), false, 'feed addresses stay server-side');
+  assert.equal(
+    body.includes('10.0.0'),
+    false,
+    'feed addresses stay server-side',
+  );
   assert.ok(
     logger.lines.some((line) =>
       /LOCAL_RECEIVER_FEEDS feed-7 .* rejected: host must be/.test(line),

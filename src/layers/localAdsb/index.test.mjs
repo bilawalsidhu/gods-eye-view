@@ -414,8 +414,9 @@ test('feed records merge with browser SDR records by ICAO and UAT-only aircraft 
   const uat = sources[0].entities.getById('local-adsb:a1b2c3');
   assert.equal(sources[0].entities.values.length, 2);
   assert.equal(
-    Cesium.Cartographic.fromCartesian(shared.position.getValue())
-      .latitude.toFixed(4),
+    Cesium.Cartographic.fromCartesian(
+      shared.position.getValue(),
+    ).latitude.toFixed(4),
     Cesium.Math.toRadians(1).toFixed(4),
     'the newer feed position wins',
   );
@@ -427,10 +428,7 @@ test('feed records merge with browser SDR records by ICAO and UAT-only aircraft 
   assert.ok(uat.point, 'a UAT-only aircraft carries the ring');
   assert.equal(uat.point.outlineWidth.getValue(), 1.5);
   assert.ok(
-    Cesium.Color.equals(
-      uat.point.color.getValue(),
-      Cesium.Color.TRANSPARENT,
-    ),
+    Cesium.Color.equals(uat.point.color.getValue(), Cesium.Color.TRANSPARENT),
   );
   assert.ok(
     Cesium.Color.equals(

@@ -188,7 +188,10 @@ test('merge keeps the most recent position per ICAO, then the most recent messag
   // A positioned record beats one that has never decoded a position.
   const bare = heard({ lat: null, lon: null, lastPositionAt: null });
   [merged] = mergeLocalAdsbRecords(
-    [[{ ...bare, lastMessageAt: 11_900 }], [heard({ band: '978', source: 'feed' })]],
+    [
+      [{ ...bare, lastMessageAt: 11_900 }],
+      [heard({ band: '978', source: 'feed' })],
+    ],
     12_000,
   );
   assert.equal(merged.lat, 30);
@@ -199,7 +202,10 @@ test('merge keeps the most recent position per ICAO, then the most recent messag
 test('merge remembers the bands and sources that heard an aircraft for 60 s', () => {
   const memory = new Map();
   mergeLocalAdsbRecords(
-    [[heard()], [heard({ band: '978', source: 'feed', lastMessageAt: 20_000 })]],
+    [
+      [heard()],
+      [heard({ band: '978', source: 'feed', lastMessageAt: 20_000 })],
+    ],
     20_000,
     memory,
   );

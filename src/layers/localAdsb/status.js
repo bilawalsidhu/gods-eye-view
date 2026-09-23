@@ -52,7 +52,11 @@ function webUsbStatus(receiver, heard, feedState) {
     return { status: 'error', error: receiver.message };
   if (receiver.status === 'connecting' || receiver.status === 'tuning')
     return { loading: true, loadingLabel: 'opening receiver' };
-  if (feedState?.polling && feedState.configured === null && !receiver.connected)
+  if (
+    feedState?.polling &&
+    feedState.configured === null &&
+    !receiver.connected
+  )
     return { loading: true, loadingLabel: 'checking decoder feeds' };
   if (!receiver.webUsbSupported)
     return {
@@ -85,7 +89,10 @@ function webUsbStatus(receiver, heard, feedState) {
  */
 export function localAdsbStatus({ receiver, feedState, heard }) {
   if (!feedsConfigured(feedState))
-    return { source: LAYER_SOURCE, ...webUsbStatus(receiver, heard, feedState) };
+    return {
+      source: LAYER_SOURCE,
+      ...webUsbStatus(receiver, heard, feedState),
+    };
   const usbActive = Boolean(receiver.connected && receiver.mode === 'adsb');
   const source = usbActive ? COMBINED_SOURCE : FEED_SOURCE;
   const live = feedState.feeds.filter((feed) => feed.status === 'live');
