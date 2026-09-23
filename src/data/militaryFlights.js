@@ -3140,4 +3140,8 @@ export const _trackedBillboardColorForTest = () => p._trackedBillboardColorForTe
 export const _driveFleetModelHandoffForTest = ({ icao24, position, course = 0 }) => p._driveFleetModelHandoffForTest({ icao24, position, course });
 export const _ensureFleetModelForTest = async (icao24) => p._ensureFleetModelForTest(icao24);
 
+/** Dead-reckon contract seam: runs the real estimator against history seeded
+ * via _addMilitaryTrackingCandidateForTest, with no viewer. */
+export const _deadReckonForTest = (icao24, result) => _deadReckon(icao24, result);
+
 export default militaryFlightsLayer;

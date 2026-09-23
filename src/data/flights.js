@@ -4790,4 +4790,8 @@ export const _ambientBudgetForTest = () => _enrichAmbientBudget;
  */
 export const _requestModelTypeEnrichmentForTest = (icao24) => _requestModelTypeEnrichment(icao24);
 
+/** Dead-reckon contract seam: runs the real estimator against history seeded
+ * via _addFlightTrackingCandidateForTest, with no viewer. */
+export const _deadReckonForTest = (icao24, result) => _deadReckon(icao24, result);
+
 export default flightsLayer;
