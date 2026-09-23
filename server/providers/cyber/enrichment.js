@@ -13,12 +13,35 @@ const GREYNOISE_TTL_MS = 24 * 60 * 60_000;
 const MAX_CACHE_ENTRIES = 100;
 const MAX_SEARCH_PAGE = 3;
 const SHODAN_RESULT_LIMIT = 10;
+const SHODAN_SEARCH_FIELDS = [
+  'ip_str',
+  'ip',
+  'port',
+  'transport',
+  'product',
+  'version',
+  'timestamp',
+  'org',
+  'isp',
+  'asn',
+  'hostnames',
+  'location',
+  'os',
+].join(',');
 const GEOLOCATION_TTL_MS = 30 * 24 * 60 * 60_000;
 const MAX_GEO_REQUESTS_PER_DAY = 500;
 const MAX_AREA_RADIUS_KM = 1_000;
 
-function failure(code) {
-  return Object.assign(new Error(code), { code });
+function failure(code, details = {}) {
+  return Object.assign(new Error(code), { code, ...details });
+}
+
+function safeTransportCode(error) {
+  const candidate = error?.code ?? error?.cause?.code;
+  return typeof candidate === 'string' &&
+    /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(candidate)
+    ? candidate
+    : null;
 }
 
 function safeText(value, max = 160) {
@@ -227,7 +250,9 @@ async function requestJson(
       if (response.status === 402) throw failure('insufficient_credits');
       if (response.status === 429) throw failure('rate_limited');
       if (response.status === 404) throw failure('not_found');
-      throw failure('upstream_unavailable');
+      throw failure('upstream_unavailable', {
+        providerStatus: response.status,
+      });
     }
     const text = await readResponseTextCapped(
       response,
@@ -246,8 +271,26 @@ async function requestJson(
     return { status: response.status, payload };
   } catch (error) {
     if (signal?.aborted) throw signal.reason ?? new Error('cancelled');
-    if (error?.code) throw error;
-    throw failure('upstream_unavailable');
+    if (error?.code === 'RESPONSE_TOO_LARGE')
+      throw failure('provider_response_too_large');
+    if (
+      [
+        'missing_credentials',
+        'invalid_credentials',
+        'insufficient_credits',
+        'rate_limited',
+        'not_found',
+        'invalid_provider_data',
+        'upstream_unavailable',
+        'upstream_timeout',
+        'upstream_network_error',
+      ].includes(error?.code)
+    )
+      throw error;
+    if (controller.signal.aborted) throw failure('upstream_timeout');
+    throw failure('upstream_network_error', {
+      transportCode: safeTransportCode(error),
+    });
   } finally {
     clearTimeout(timer);
     signal?.removeEventListener('abort', abort);
@@ -375,7 +418,10 @@ export function createCyberEnrichmentProviders({
         url.searchParams.set('key', key);
         url.searchParams.set('query', query);
         url.searchParams.set('page', String(page));
-        url.searchParams.set('minify', 'true');
+        // Shodan's fields parameter is mutually exclusive with minify=true.
+        // Request only the compact device fields our normalized popup/map use.
+        url.searchParams.set('minify', 'false');
+        url.searchParams.set('fields', SHODAN_SEARCH_FIELDS);
         const { payload } = await requestJson(fetchImpl, url.href, { signal });
         if (!Array.isArray(payload?.matches) || payload.matches.length > 100)
           throw failure('invalid_provider_data');

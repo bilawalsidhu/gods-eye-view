@@ -99,6 +99,33 @@ export function createCyberSource({
             'Zoom in to an area with a radius of 1,000 km or less, then try again.',
           not_found: 'The provider has no record for this IP.',
         };
+        if (url.startsWith('/api/cyber/enrich/shodan/')) {
+          if (Number.isInteger(payload?.providerStatus))
+            throw new Error(
+              `Shodan returned HTTP ${payload.providerStatus} for this request.`,
+            );
+          if (payload?.failureKind === 'upstream_timeout')
+            throw new Error(
+              'The Shodan request timed out before a response arrived.',
+            );
+          if (payload?.failureKind === 'upstream_network_error')
+            throw new Error(
+              `The app could not reach Shodan${
+                typeof payload.transportCode === 'string' &&
+                /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(payload.transportCode)
+                  ? ` (${payload.transportCode})`
+                  : ''
+              }. Check the local network connection and try again.`,
+            );
+          if (payload?.failureKind === 'invalid_provider_data')
+            throw new Error(
+              'Shodan responded, but the app could not read its response.',
+            );
+          if (payload?.failureKind === 'provider_response_too_large')
+            throw new Error(
+              'Shodan returned more data than the app can safely process. The search has been narrowed; try again.',
+            );
+        }
         throw new Error(
           messages[payload?.error] ||
             `Provider request failed (${response.status}).`,

@@ -635,7 +635,27 @@ export function cyberProxy({ fetchImpl = fetch, now = () => Date.now() } = {}) {
               invalid_area: 400,
               not_found: 404,
             }[code] || 503;
-          serveJson(res, status, { error: code });
+          const diagnosticCodes = new Set([
+            'upstream_timeout',
+            'upstream_network_error',
+            'invalid_provider_data',
+            'provider_response_too_large',
+          ]);
+          serveJson(res, status, {
+            error: code,
+            ...(Number.isInteger(error?.providerStatus) &&
+            error.providerStatus >= 400 &&
+            error.providerStatus <= 599
+              ? { providerStatus: error.providerStatus }
+              : {}),
+            ...(diagnosticCodes.has(error?.code)
+              ? { failureKind: error.code }
+              : {}),
+            ...(typeof error?.transportCode === 'string' &&
+            /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(error.transportCode)
+              ? { transportCode: error.transportCode }
+              : {}),
+          });
         } finally {
           req.removeListener?.('aborted', abort);
           res.removeListener?.('close', abort);

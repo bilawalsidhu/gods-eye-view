@@ -265,6 +265,11 @@ test('Shodan area search is bounded and fills missing locations with attributed 
       requests[0].searchParams.get('query'),
       'geo:40.0000,-74.0000,75',
     );
+    assert.equal(requests[0].searchParams.get('minify'), 'false');
+    assert.equal(
+      requests[0].searchParams.get('fields'),
+      'ip_str,ip,port,transport,product,version,timestamp,org,isp,asn,hostnames,location,os',
+    );
     await assert.rejects(api.searchShodanArea(40, -74, 1001), {
       code: 'invalid_area',
     });
