@@ -242,8 +242,9 @@ export function createLocalAdsbLayer({
   }
 
   function billboardScale(marker) {
-    return (CLASS_SCALE_2D[marker.klass] || 1) *
-      (marker.onGround ? GROUND_SCALE : 1);
+    return (
+      (CLASS_SCALE_2D[marker.klass] || 1) * (marker.onGround ? GROUND_SCALE : 1)
+    );
   }
 
   /** Class silhouette and per-class scale (×0.8 on the ground), magenta. */

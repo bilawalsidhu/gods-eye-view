@@ -64,11 +64,18 @@ test('three refused fixes in a row restart the track from the new stream', () =>
   const motion = new LocalAdsbMotion();
   motion.observe(fix(0, 0), 0);
   for (let index = 1; index <= 2; index += 1)
-    assert.equal(motion.observe(fix(index * 1_000, 1 + index * STEP), index * 1_000), false);
+    assert.equal(
+      motion.observe(fix(index * 1_000, 1 + index * STEP), index * 1_000),
+      false,
+    );
   assert.equal(motion.rejectedFixes, 2);
   assert.equal(motion.observe(fix(3_000, 1 + 3 * STEP), 3_000), true);
   assert.equal(motion.rejectedFixes, 3);
-  assert.equal(motion.fixes.length, 1, 'the history restarts at the new stream');
+  assert.equal(
+    motion.fixes.length,
+    1,
+    'the history restarts at the new stream',
+  );
   assert.ok(Math.abs(motion.displayAt(3_000).lat - (1 + 3 * STEP)) < 1e-9);
 });
 

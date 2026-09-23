@@ -313,9 +313,13 @@ test('the position sanity check follows dump1090: speed × 1.5 + margin over ela
     'a reference older than 10 minutes proves nothing',
   );
   assert.equal(
-    localAdsbFixIsPlausible(from, { lat: 30.004, lon: -97, at: 0 }, {
-      groundSpeedKt: 0,
-    }),
+    localAdsbFixIsPlausible(
+      from,
+      { lat: 30.004, lon: -97, at: 0 },
+      {
+        groundSpeedKt: 0,
+      },
+    ),
     true,
     'the fixed 500 m margin absorbs CPR and reception error',
   );

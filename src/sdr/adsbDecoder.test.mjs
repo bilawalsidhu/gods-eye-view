@@ -378,8 +378,7 @@ test('a corrupt even/odd pair is refused and the track stays on dump1090', () =>
       'no accepted fix leaves the track',
     );
   assert.ok(
-    nauticalMiles(accepted.get('a27e81').at(-1), dump1090Final('a27e81')) <
-      0.3,
+    nauticalMiles(accepted.get('a27e81').at(-1), dump1090Final('a27e81')) < 0.3,
   );
 });
 

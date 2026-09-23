@@ -224,7 +224,9 @@ test('local aircraft use their class silhouette and scale in magenta', async (t)
   const clock = { now: 100_000 };
   const { layer, sources } = await enabledLayer(receiver, clock);
   t.after(() => layer.destroy());
-  receiver.set({ aircraft: [record(), record({ icao: 'a0b702', category: 'A7' })] });
+  receiver.set({
+    aircraft: [record(), record({ icao: 'a0b702', category: 'A7' })],
+  });
   await layer.update();
 
   const entity = sources[0].entities.getById('local-adsb:abc123');
@@ -264,7 +266,12 @@ test('local aircraft use their class silhouette and scale in magenta', async (t)
   // On the ground the silhouette shrinks like a grounded public flight.
   receiver.set({
     aircraft: [
-      record({ icao: 'a0b702', category: 'A7', onGround: true, lastPositionAt: 100_500 }),
+      record({
+        icao: 'a0b702',
+        category: 'A7',
+        onGround: true,
+        lastPositionAt: 100_500,
+      }),
     ],
   });
   await layer.update();
@@ -518,16 +525,32 @@ test('the DISPLAY 3D toggle gives local aircraft magenta class models', async (t
   await layer.update();
   assert.equal(loads.length, 1);
   const [model] = loads;
-  assert.equal(model.url, '/models/bell206.glb', 'the Flights helicopter model');
+  assert.equal(
+    model.url,
+    '/models/bell206.glb',
+    'the Flights helicopter model',
+  );
   assert.equal(model.scale, 1);
   assert.equal(model.id, 'local-adsb:a0b702');
-  assert.ok(Cesium.Color.equals(model.color, Cesium.Color.fromCssColorString('#ff4fd8')));
+  assert.ok(
+    Cesium.Color.equals(
+      model.color,
+      Cesium.Color.fromCssColorString('#ff4fd8'),
+    ),
+  );
   assert.equal(model.colorBlendMode, Cesium.ColorBlendMode.MIX);
   assert.equal(model.colorBlendAmount, 0.94);
   assert.equal(model.show, true);
   const heli = sources[0].entities.getById('local-adsb:a0b702');
-  assert.equal(heli.billboard.show.getValue(), false, 'the model is the visual');
-  const origin = Cesium.Matrix4.getTranslation(model.modelMatrix, new Cesium.Cartesian3());
+  assert.equal(
+    heli.billboard.show.getValue(),
+    false,
+    'the model is the visual',
+  );
+  const origin = Cesium.Matrix4.getTranslation(
+    model.modelMatrix,
+    new Cesium.Cartesian3(),
+  );
   assert.ok(Cesium.Cartesian3.distance(origin, heli.position.getValue()) < 1);
 
   display.models3d = false;

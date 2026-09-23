@@ -808,5 +808,7 @@
   "src/ui/localSdrPresentation.test.mjs",
   "src/data/localReceiversProxy.test.mjs",
   "src/layers/localAdsb/feeds.test.mjs",
-  "src/ui/railScrollers.test.mjs"
+  "src/ui/railScrollers.test.mjs",
+  "src/layers/localAdsb/motion.test.mjs",
+  "src/data/modelEligibility.test.mjs"
 ]

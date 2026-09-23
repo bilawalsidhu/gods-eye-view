@@ -41,7 +41,11 @@ export function localAdsbClass(record, meta = null) {
  * @param {() => number} [options.now]
  * @returns {object}
  */
-export function createLocalAdsbEnrichment({ source, onChange, now = Date.now }) {
+export function createLocalAdsbEnrichment({
+  source,
+  onChange,
+  now = Date.now,
+}) {
   const meta = new Map();
   const seen = new Set();
   const queue = [];

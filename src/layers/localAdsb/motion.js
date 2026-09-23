@@ -110,7 +110,9 @@ export class LocalAdsbMotion {
       lat,
       lon,
       altitudeFt: finite(record.altitudeFt),
-      trackDeg: Number.isFinite(record.trackDeg) ? norm360(record.trackDeg) : null,
+      trackDeg: Number.isFinite(record.trackDeg)
+        ? norm360(record.trackDeg)
+        : null,
       speedMps,
     };
     if (
@@ -263,10 +265,10 @@ export class LocalAdsbMotion {
       if (weight <= 0) this.correction = null;
       else {
         const w = Math.min(1, weight);
-        raw.lat += ((correction.north * w) / EARTH_RADIUS_M) / DEG;
+        raw.lat += (correction.north * w) / EARTH_RADIUS_M / DEG;
         raw.lon +=
-          ((correction.east * w) /
-            (EARTH_RADIUS_M * Math.max(1e-6, Math.cos(raw.lat * DEG)))) /
+          (correction.east * w) /
+          (EARTH_RADIUS_M * Math.max(1e-6, Math.cos(raw.lat * DEG))) /
           DEG;
         if (Number.isFinite(raw.altitudeFt))
           raw.altitudeFt += correction.upFt * w;
@@ -274,7 +276,8 @@ export class LocalAdsbMotion {
     }
     let courseDeg = this.courseDeg;
     // Hover and taxi noise: below the hold speed the course is not updated.
-    const target = raw.courseDeg ?? (courseDeg === null ? this.anchor.trackDeg : null);
+    const target =
+      raw.courseDeg ?? (courseDeg === null ? this.anchor.trackDeg : null);
     if (slew && target !== null) {
       const dtSec =
         this.lastCourseAt === null

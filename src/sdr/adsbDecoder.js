@@ -305,8 +305,7 @@ export function updateAircraftTrack(
       } else {
         next.rejectedPositions = (prior.rejectedPositions || 0) + 1;
         next.rejectStreak = (prior.rejectStreak || 0) + 1;
-        if (stats)
-          stats.positionsRejected = (stats.positionsRejected || 0) + 1;
+        if (stats) stats.positionsRejected = (stats.positionsRejected || 0) + 1;
       }
     }
   }
