@@ -1,5 +1,24 @@
 # Changelog
 
+- Add a **Repeaters** data layer (amateur-radio FM and D-STAR repeaters, via
+  HamRig's public repeater tables, keyless). Fly below 1,500 km and the layer
+  loads the repeaters around the view, or press LOAD HERE in its panel; markers
+  are coloured by mode, the panel lists them nearest-first with output and input
+  frequency, CTCSS tone or 1750 Hz tone-burst, D-STAR module and EchoLink /
+  AllStar / IRLP / WIRES node ids, and band (6m / 2m / 1.25m / 70cm / 23cm) and
+  mode chips filter the view. Every row names its own source, confidence and
+  record date: the FM table is a historic import and is marked unverified, the
+  scraped D-STAR listings are marked reported, and the panel says plainly that
+  this is directory data, not radio coverage — distance is ground distance from
+  the search centre, never a reachability claim. Voice: "show me the 70 cm
+  repeaters around Munich", "Relais / Umsetzer um München", "which 2 metre
+  repeaters are near me". The server proxy (`/api/ham-repeaters/nearby`)
+  validates every query parameter, caches each 0.1 degree cell for ten minutes
+  with a stale fallback, reports PARTIAL when only one feed answers, and drops
+  the D-STAR directory's contact fields. HamRig's login-only DL3EL route is
+  never called. `HAMRIG_ENABLED`, `HAMRIG_BASE_URL` and
+  `HAM_REPEATERS_HAMRIG_FM` configure it; credits and the full provenance are in
+  `DATA_SOURCES.md`.
 - Region scopes in voice analyst queries ("in the Gulf of Mexico", "over
   the Alps") work again in the dev server: the bundled Natural Earth and
   neighborhood packs are fetched as JSON in the browser

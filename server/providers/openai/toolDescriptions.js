@@ -82,7 +82,7 @@ export const ACTION_DESCRIPTIONS = {
       properties: {
         layerId: {
           description:
-            'Common-name mapping for the non-obvious ids: space mission(s) → rocket-launches; fires/wildfires/active fires → local-firms (NASA FIRMS); ships/vessels/boats → ais-live-vessels; undersea/submarine cables → telegeography-submarine-cables; datacenters → local-datacenters; dams → local-dams; bikes/bike share → bikeshare; street traffic/congestion → traffic; traffic cameras → cctv; internet radio/stations → radio; ALPR/license plate readers/Flock cameras → alpr-cameras; local ADS-B/my receiver/my antenna (aircraft heard by a local RTL-SDR receiver) → local-adsb.',
+            'Common-name mapping for the non-obvious ids: space mission(s) → rocket-launches; fires/wildfires/active fires → local-firms (NASA FIRMS); ships/vessels/boats → ais-live-vessels; undersea/submarine cables → telegeography-submarine-cables; datacenters → local-datacenters; dams → local-dams; bikes/bike share → bikeshare; street traffic/congestion → traffic; traffic cameras → cctv; internet radio/stations → radio; ALPR/license plate readers/Flock cameras → alpr-cameras; local ADS-B/my receiver/my antenna (aircraft heard by a local RTL-SDR receiver) → local-adsb; ham/amateur radio repeaters, Relais, Umsetzer → ham-repeaters.',
           $position: 1,
         },
       },
@@ -598,5 +598,39 @@ export const ACTION_DESCRIPTIONS = {
     description:
       'Predict the next pass in 24 hours for one satellite in the loaded catalog, identified by exact NORAD ID or name. Ambiguous names return candidates: ask for a choice rather than selecting one. Defaults to geometric passes; visibleOnly requires estimated illumination and a dark observer sky, which does not guarantee naked-eye visibility. Uses camera location unless coordinates are supplied.',
     $position: 1,
+  },
+  show_ham_repeaters: {
+    description:
+      'Show amateur-radio (ham) repeaters \u2014 FM and D-STAR relays, called Relais or Umsetzer in German \u2014 around a place or the current view, and switch the Repeaters layer on. This is not Internet Radio: use control_radio for listening to stations. Distances are ground distances from the search centre, not radio coverage. Results carry their source and a confidence flag; rows marked unverified come from a historic import and may be stale.',
+    $position: 1,
+    parameters: {
+      properties: {
+        radiusKm: {
+          description:
+            'Search radius in km around the centre. Default 100, maximum 500.',
+          $position: 1,
+        },
+        band: {
+          description:
+            'Amateur band filter. 2 metres is 2m, 70 centimetres is 70cm, 23 centimetres is 23cm. Omit or use all when the user names no band.',
+          $position: 1,
+        },
+        kind: {
+          description:
+            'Repeater mode: fm for analogue FM, dstar for D-STAR. Omit or use all when the user names no mode.',
+          $position: 1,
+        },
+        locationQuery: {
+          description:
+            'Free-text place to search around, e.g. "Munich" or "near Lake Tahoe". Omit to search around the current view.',
+          $position: 1,
+        },
+        limit: {
+          description:
+            'How many nearest repeaters to return for narration. Default 10.',
+          $position: 1,
+        },
+      },
+    },
   },
 };

@@ -37,3 +37,20 @@ test('adsbdb is credited and carries its published route-data restriction', () =
   assert.match(credit.html, /Guillaume Michel/);
   assert.match(credit.html, /href="https:\/\/www\.adsbdb\.com"/);
 });
+
+test('the repeater tables name both feeds and refuse to imply coverage', () => {
+  const credit = DATA_CREDITS.find((entry) => entry.key === 'hamrig-repeaters');
+  assert.ok(
+    credit,
+    'the Repeaters layer ships directory data and must credit it',
+  );
+  // Both upstream feeds are named because their provenance differs: the FM
+  // table is a historic import, the D-STAR rows are a scrape. Pin the wording
+  // so neither feed, nor the "not radio coverage" caveat, can quietly go away.
+  assert.match(credit.html, /href="https:\/\/hamrig\.com"/);
+  assert.match(credit.html, /historic import/);
+  assert.match(credit.html, /hearham\.com/);
+  assert.match(credit.html, /dstarinfo\.com/);
+  assert.match(credit.html, /ircddb\.net/);
+  assert.match(credit.html, /directory data, not radio coverage/);
+});

@@ -71,6 +71,38 @@
     </div>
   </div>
 
+  <!-- Repeaters Panel -->
+  <div id="ham-repeaters-panel" class="panel-collapsible collapsed" data-panel-id="ham-repeaters-panel" aria-label="Amateur radio repeaters companion">
+    <div class="panel-glow"></div>
+    <div class="ham-repeaters-panel-inner">
+      <div class="panel-header">
+        <span class="panel-title">REPEATERS</span>
+        <span id="ham-repeaters-layer-state" class="radio-layer-state">OFF</span>
+        <span class="panel-divider"></span>
+        <button class="panel-collapse-btn" data-collapse-target="ham-repeaters-panel" title="Collapse panel">+</button>
+      </div>
+      <div class="ham-repeaters-head">
+        <button id="ham-repeaters-enable-btn" class="panel-layer-toggle" type="button" aria-pressed="false">ENABLE</button>
+        <span id="ham-repeaters-summary" class="ham-repeaters-summary">Repeaters off</span>
+      </div>
+      <div class="ham-repeaters-filter-row">
+        <select id="ham-repeaters-radius" aria-label="Search radius">
+          <option value="25">25 km</option>
+          <option value="50">50 km</option>
+          <option value="100" selected>100 km</option>
+          <option value="200">200 km</option>
+          <option value="300">300 km</option>
+        </select>
+        <select id="ham-repeaters-band" aria-label="Filter repeaters by band"><option value="all">All bands</option></select>
+        <select id="ham-repeaters-kind" aria-label="Filter repeaters by kind"><option value="all">All repeaters</option></select>
+        <button id="ham-repeaters-load-btn" type="button" title="Load repeaters around the centre of the current view">LOAD HERE</button>
+      </div>
+      <div id="ham-repeaters-area" class="ham-repeaters-note"></div>
+      <div id="ham-repeaters-list" class="ham-repeaters-list" role="listbox" aria-label="Repeaters"></div>
+      <p class="radio-privacy">Directory data from HamRig (FM: historic import, cross-checked against hearham.com; D-STAR: dstarinfo.com / ircddb.net). Each row names its source, confidence and record date. Distance is ground distance from the search centre, not radio range.</p>
+    </div>
+  </div>
+
   <!-- Scene Director Panel -->
   <div id="scene-panel" class="panel-collapsible collapsed" data-panel-id="scene-panel">
     <div class="panel-glow"></div>

@@ -38,6 +38,10 @@ import { isPickedWorldPosition } from '../data/scenePick.js';
 import { unavailablePlaceSearch } from '../search/placeSearch.js';
 import * as defaultAnnotationResolver from '../annotations/annotationResolver.js';
 import { normalizeRadioCountryInput } from '../data/radioCountry.js';
+import {
+  REPEATER_BANDS,
+  formatHz as formatRepeaterHz,
+} from '../sources/hamRepeaters.js';
 import { TR3B_CLASS } from '../data/tr3bRegistry.js';
 
 const ALLOWED_STYLES = new Set([
@@ -65,6 +69,10 @@ const PANEL_ALIASES = new Map([
   ['radio', 'radio-panel'],
   ['internet radio', 'radio-panel'],
   ['radio stations', 'radio-panel'],
+  ['repeaters', 'ham-repeaters-panel'],
+  ['ham repeaters', 'ham-repeaters-panel'],
+  ['relais', 'ham-repeaters-panel'],
+  ['umsetzer', 'ham-repeaters-panel'],
   ['context', 'global-context-panel'],
   ['context panel', 'global-context-panel'],
   ['global context', 'global-context-panel'],
@@ -87,6 +95,7 @@ const PANEL_IDS = new Set([
   'control-panel',
   'cctv-panel',
   'radio-panel',
+  'ham-repeaters-panel',
   'global-context-panel',
   'scene-panel',
   'pp-toggles',
@@ -204,6 +213,13 @@ const LAYER_ALIASES = new Map([
   ['radio', 'radio'],
   ['internet radio', 'radio'],
   ['radio stations', 'radio'],
+  ['repeaters', 'ham-repeaters'],
+  ['repeater', 'ham-repeaters'],
+  ['ham repeaters', 'ham-repeaters'],
+  ['ham-repeaters', 'ham-repeaters'],
+  ['amateur radio repeaters', 'ham-repeaters'],
+  ['relais', 'ham-repeaters'],
+  ['umsetzer', 'ham-repeaters'],
   ['bikeshare', 'bikeshare'],
   ['bikes', 'bikeshare'],
   ['ais', 'ais-live-vessels'],
@@ -1135,6 +1151,13 @@ export function createGevActionRunner({
 
     if (name === 'control_radio') {
       return controlRadio(viewer, dataManager, args, {
+        ...runOptions,
+        placeSearch,
+      });
+    }
+
+    if (name === 'show_ham_repeaters') {
+      return showHamRepeaters(viewer, dataManager, args, {
         ...runOptions,
         placeSearch,
       });
@@ -4469,5 +4492,272 @@ async function runAnalystQuery(
         }
       : {}),
     ...(countsReconciliation ? { countsReconciliation } : {}),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Amateur-radio repeaters (FM / D-STAR around a place or the view)
+// ---------------------------------------------------------------------------
+
+const HAM_REPEATERS_LAYER = 'ham-repeaters';
+
+/** Switch a layer on for a voice action; a refused enable throws its reason. */
+async function enableLayerForVoice(dataManager, layerId, label, options = {}) {
+  if (dataManager.isEnabled(layerId)) return;
+  const changeOptions = { origin: 'voice' };
+  if (options.signal) changeOptions.signal = options.signal;
+  let blockReason = null;
+  const unsubscribe =
+    typeof dataManager.subscribe === 'function'
+      ? dataManager.subscribe((change) => {
+          if (
+            change?.type === 'visibility-blocked' &&
+            change.layerId === layerId
+          )
+            blockReason = change.reason || null;
+        })
+      : null;
+  let changed = false;
+  try {
+    changed = await dataManager.setEnabled(layerId, true, changeOptions);
+  } finally {
+    if (typeof unsubscribe === 'function') unsubscribe();
+  }
+  if (!radioActionIsCurrent(options)) throw radioAbortError();
+  if (!changed || !dataManager.isEnabled(layerId))
+    throw new Error(blockReason || `${label} layer could not be enabled`);
+}
+
+/** Ground point under the screen centre, or the camera's own position. */
+function currentViewCenter(viewer) {
+  try {
+    const scene = viewer?.scene;
+    const camera = viewer?.camera;
+    const canvas = scene?.canvas;
+    if (canvas && camera?.pickEllipsoid) {
+      const center = camera.pickEllipsoid(
+        new Cesium.Cartesian2(canvas.clientWidth / 2, canvas.clientHeight / 2),
+        scene.globe?.ellipsoid,
+      );
+      if (center) {
+        const carto = Cesium.Cartographic.fromCartesian(center);
+        return {
+          lat: Cesium.Math.toDegrees(carto.latitude),
+          lon: Cesium.Math.toDegrees(carto.longitude),
+          label: 'the current view',
+          country: '',
+        };
+      }
+    }
+    const position = camera?.positionCartographic;
+    if (position) {
+      return {
+        lat: Cesium.Math.toDegrees(position.latitude),
+        lon: Cesium.Math.toDegrees(position.longitude),
+        label: 'the current view',
+        country: '',
+      };
+    }
+  } catch {
+    /* fall through */
+  }
+  return null;
+}
+
+/** A place when the user named one, else the view (or null). */
+async function resolveHamLocation(
+  viewer,
+  args,
+  options,
+  { fallbackToView = false } = {},
+) {
+  const coordinates = radioCoordinatePair(args);
+  // Coordinates the caller offered but got wrong must not quietly become "the
+  // current view": the answer would name a place the caller never asked about.
+  if (coordinates.provided && !coordinates.valid)
+    throw new Error('A latitude and longitude in range are required');
+  if (coordinates.valid || args.locationQuery || args.locationId) {
+    const resolved = await resolveRadioLocation(args, coordinates, options);
+    if (resolved) return resolved;
+    if (args.locationQuery)
+      throw new Error(`Could not place "${args.locationQuery}"`);
+    if (args.locationId)
+      throw new Error(`Could not place "${args.locationId}"`);
+  }
+  return fallbackToView ? currentViewCenter(viewer) : null;
+}
+
+const HAM_DISTANCE_NOTE =
+  'ground distance from the search centre, not radio range';
+
+/** Internal load sentinels are not sentences; never hand one to the model. */
+function narratableLoadError(error) {
+  if (!error) return null;
+  // The layer's own generation counter can supersede our load when the
+  // manager's post-enable update races it, so this is reachable on a first
+  // invocation and must read as something a voice can say.
+  if (error === 'superseded' || error === 'cancelled')
+    return 'The repeater search was replaced by a newer one';
+  return error;
+}
+
+/** Map a spoken mode onto the layer's filter value and the reply's own vocabulary. */
+function hamKind(value) {
+  const text = String(value ?? 'all')
+    .trim()
+    .toLowerCase();
+  if (text === 'fm') return { filter: 'FM', query: 'fm' };
+  if (text === 'dstar' || text === 'd-star')
+    return { filter: 'D-STAR', query: 'dstar' };
+  return { filter: 'all', query: 'all' };
+}
+
+function hamBand(value, allowed = REPEATER_BANDS) {
+  const text = String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '');
+  if (!text || text === 'all') return 'all';
+  return allowed.includes(text) ? text : 'all';
+}
+
+function hamLimit(value, fallback = 10, max = 20) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed)
+    ? Math.max(1, Math.min(max, Math.floor(parsed)))
+    : fallback;
+}
+
+function roundKm(value) {
+  return Number.isFinite(value) ? Math.round(value) : null;
+}
+
+/** A frequency a voice can read, or null when the directory listed none. */
+function hamFrequencyLabel(hz) {
+  if (!Number.isFinite(hz) || hz <= 0) return null;
+  return formatRepeaterHz(hz) || null;
+}
+
+/** What the voice model narrates for one repeater: frequencies, tone, place, distance and provenance. */
+export function summarizeHamRepeater(row) {
+  const repeater = row?.repeater || row;
+  if (!repeater) return null;
+  return {
+    id: repeater.id,
+    kind: repeater.kind,
+    callsign: repeater.callsign,
+    module: repeater.module ?? null,
+    // A directory placeholder of 0 Hz passes a finite check but formats to an
+    // empty string, which reads as a frequency that is there but blank.
+    outputLabel: hamFrequencyLabel(repeater.outputHz),
+    inputLabel: hamFrequencyLabel(repeater.inputHz),
+    toneHz: repeater.toneHz ?? null,
+    toneBurstHz: repeater.toneBurstHz ?? null,
+    city: repeater.city ?? null,
+    region: repeater.region ?? null,
+    country: repeater.country ?? null,
+    status: repeater.status ?? null,
+    statusKnown: Boolean(repeater.statusKnown),
+    echolink: repeater.echolink ?? null,
+    allstar: repeater.allstar ?? null,
+    distanceKm: roundKm(row?.distanceKm ?? repeater.distanceKm),
+    source: repeater.sourceLabel ?? repeater.source ?? null,
+    confidence: repeater.confidence ?? null,
+    recordUpdatedAt: repeater.recordUpdatedAt ?? null,
+  };
+}
+
+/** Voice: FM / D-STAR repeaters around a place or the current view. */
+export async function showHamRepeaters(
+  viewer,
+  dataManager,
+  args = {},
+  options = {},
+) {
+  if (!dataManager?.layers?.has(HAM_REPEATERS_LAYER))
+    throw new Error('Repeaters layer unavailable');
+  await enableLayerForVoice(
+    dataManager,
+    HAM_REPEATERS_LAYER,
+    'Repeaters',
+    options,
+  );
+  const module = dataManager.layers.get(HAM_REPEATERS_LAYER)?.module;
+  if (!module) throw new Error('Repeaters layer unavailable');
+  const location = await resolveHamLocation(viewer, args, options, {
+    fallbackToView: true,
+  });
+  if (!location) {
+    // Every exit carries the same shape, so a consumer can read `results` and
+    // `sources` without checking which branch answered it.
+    return {
+      ok: false,
+      action: 'show_ham_repeaters',
+      scopeLabel: null,
+      location: null,
+      radiusKm: null,
+      band: hamBand(args.band),
+      kind: hamKind(args.kind).query,
+      count: 0,
+      filteredCount: 0,
+      partial: false,
+      sources: [],
+      distanceNote: HAM_DISTANCE_NOTE,
+      results: [],
+      error: 'Could not determine where to search for repeaters',
+      ...readLayerLifecycleSummary(dataManager, HAM_REPEATERS_LAYER),
+    };
+  }
+  const band = hamBand(args.band);
+  const { filter: kind, query: kindQuery } = hamKind(args.kind);
+  const radiusKm =
+    Number.isFinite(Number(args.radiusKm)) && Number(args.radiusKm) > 0
+      ? Number(args.radiusKm)
+      : 100;
+  const loaded = await module.loadAround(location.lat, location.lon, radiusKm, {
+    band,
+    kind,
+    origin: 'voice',
+    reason: 'voice',
+    signal: options.signal || null,
+  });
+  if (!radioActionIsCurrent(options)) throw radioAbortError();
+  const limit = hamLimit(args.limit, 10);
+  const results = loaded.ok
+    ? module
+        .nearest(location.lat, location.lon, limit)
+        .map(summarizeHamRepeater)
+    : [];
+  if (results.length) module.frame();
+  if (typeof document !== 'undefined') {
+    document.dispatchEvent(
+      new CustomEvent('gev:ham-repeaters-panel', {
+        detail: { origin: 'voice' },
+      }),
+    );
+  }
+  const state = module.getUIState();
+  const area = loaded.area || state.area || null;
+  const scope = `within ${area?.radiusKm ?? Math.round(radiusKm)} km of ${location.label}`;
+  return {
+    ok: results.length > 0,
+    action: 'show_ham_repeaters',
+    scopeLabel: scope,
+    location: { lat: location.lat, lon: location.lon, label: location.label },
+    radiusKm: area?.radiusKm ?? Math.round(radiusKm),
+    band,
+    kind: kindQuery,
+    count: loaded.count ?? state.count,
+    filteredCount: state.filteredCount,
+    partial: Boolean(state.partial),
+    sources: [...(state.sources || [])],
+    distanceNote: HAM_DISTANCE_NOTE,
+    results,
+    error: results.length
+      ? null
+      : narratableLoadError(loaded.error) ||
+        state.error ||
+        `No ${kind === 'all' ? '' : `${kind} `}repeaters ${scope}`,
+    ...readLayerLifecycleSummary(dataManager, HAM_REPEATERS_LAYER),
   };
 }

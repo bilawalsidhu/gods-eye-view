@@ -108,6 +108,9 @@
     "./server/providers/radio": {
       "node": "./server/providers/radio.js"
     },
+    "./server/providers/ham-repeaters": {
+      "node": "./server/providers/ham-repeaters.js"
+    },
     "./server/providers/overpass": {
       "node": "./server/providers/overpass.js"
     },
@@ -136,6 +139,7 @@
     "./ui/layers/feedback": "./src/loadingFeedback.js",
     "./ui/location": "./src/ui/location.js",
     "./ui/radio": "./src/ui/radio.js",
+    "./ui/ham-repeaters": "./src/ui/hamRepeaters.js",
     "./ui/cctv": "./src/ui/cctv.js",
     "./ui/context": "./src/ui/context.js",
     "./ui/context/policy": "./src/contextModePolicy.js",
@@ -168,6 +172,7 @@
     "./layers/cctv": "./src/layers/cctv/index.js",
     "./layers/alpr": "./src/layers/alpr/index.js",
     "./layers/radio": "./src/layers/radio/index.js",
+    "./layers/ham-repeaters": "./src/layers/hamRepeaters/index.js",
     "./layers/submarine-cables": "./src/layers/submarineCables/index.js",
     "./sources/bundled-cables": "./src/layers/submarineCables/bundledSource.js",
     "./geography/natural-earth": "./src/data/naturalEarthRegions.js",
@@ -217,6 +222,7 @@
     "./layers/vessels/records": "./src/layers/vessels/records.js",
     "./layers/vessels/ingestion": "./src/layers/vessels/ingestion.js",
     "./sources/radio-browser": "./src/sources/radioBrowser.js",
+    "./sources/ham-repeaters": "./src/sources/hamRepeaters.js",
     "./sources/cctv-types": "./src/sources/cctvTypes.js",
     "./sources/regional": "./src/data/regionalModel.js",
     "./voice/action-schemas": "./src/voice/actionSchemas.js",
@@ -232,6 +238,7 @@
     "./layers/installations/source": "./src/layers/installations/source.js",
     "./layers/launches/source": "./src/layers/launches/source.js",
     "./layers/radio/source": "./src/layers/radio/source.js",
+    "./layers/ham-repeaters/source": "./src/layers/hamRepeaters/source.js",
     "./layers/satellites/source": "./src/layers/satellites/source.js",
     "./layers/traffic/source": "./src/layers/traffic/source.js",
     "./sources/reference": "./src/sources/reference.js",

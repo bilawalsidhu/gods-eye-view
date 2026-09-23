@@ -227,6 +227,13 @@ export const DATA_CREDITS = [
       '(public domain; audio delivered directly by each broadcaster)',
   },
   {
+    key: 'hamrig-repeaters',
+    html:
+      'Repeaters: <a href="https://hamrig.com" target="_blank" rel="noopener">HamRig</a> repeater tables — ' +
+      'FM: HamRig FM table (historic import, cross-checked against hearham.com); ' +
+      'D-STAR: dstarinfo.com / ircddb.net via HamRig · directory data, not radio coverage',
+  },
+  {
     key: 'reearth-terrain',
     html:
       'Terrain (keyless globe stacks): ' +

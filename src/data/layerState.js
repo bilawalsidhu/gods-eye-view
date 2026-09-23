@@ -491,6 +491,13 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     disposition: 'enabled+options',
     optionOwner: 'flights',
   }),
+  Object.freeze({
+    id: 'ham-repeaters',
+    // '2' went to fire-perimeters in #737 and '3' to web-receivers in #279;
+    // the letters ran out first (see #658).
+    token: '4',
+    disposition: 'enabled-only',
+  }),
   Object.freeze({ id: 'local-dams', token: 'q', disposition: 'enabled-only' }),
   Object.freeze({
     id: 'local-datacenters',

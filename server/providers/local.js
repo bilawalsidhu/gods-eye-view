@@ -12,6 +12,7 @@ import { weatherEffectsProxy } from './regional/weather-effects.js';
 import { cctvProxy } from './cctv.js';
 import { defaultSourceRoot } from './common/source-root.js';
 import { radioBrowserProxy } from './radio.js';
+import { hamRepeatersProxy } from './ham-repeaters.js';
 import { gbfsProxy } from './gbfs.js';
 import { localReceiversProxy } from './local-receivers.js';
 import { transitProxy } from './transit.js';
@@ -43,6 +44,7 @@ function localProviderPlugins() {
     weatherEffectsProxy(),
     cctvProxy({ sourceRoot: defaultSourceRoot }),
     radioBrowserProxy(),
+    hamRepeatersProxy(),
     gbfsProxy(),
     localReceiversProxy(),
     transitProxy(),
@@ -72,6 +74,15 @@ export {
   publicRadioStation,
   publicRadioHttpsUrl,
 } from './radio.js';
+export {
+  createHamRepeatersMiddleware,
+  createHamrigRepeaterProvider,
+  fetchHamrigJson,
+  normalizeHamrigBaseUrl,
+  parseHamRepeatersEnv,
+  parseRepeaterSearch,
+  repeaterSearchKey,
+} from './ham-repeaters.js';
 export { LL2_CACHE_TTL_MS, launchLibraryRequestHeaders } from './space.js';
 export { googlePlacesContextProxy } from './places.js';
 export { googleServerApiKey } from './places.js';

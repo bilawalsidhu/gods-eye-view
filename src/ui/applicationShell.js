@@ -16,6 +16,7 @@ import { CockpitCoordinator } from './cockpitCoordinator.js';
 import { ContextControls } from './context.js';
 import { CctvControls } from './cctv.js';
 import { RadioControls } from './radio.js';
+import { HamRepeatersControls } from './hamRepeaters.js';
 import { LocalSdrControls } from './localSdrControls.js';
 import { LocationNavigation } from './locationNavigation.js';
 import { bindClearLayersControl } from './layers.js';
@@ -263,6 +264,7 @@ export class StyleManager extends ShellFacade {
         _contextControls: this._contextControls,
         _cctvControls: this._cctvControls,
         _radioControls: this._radioControls,
+        _hamRepeatersControls: this._hamRepeatersControls,
       }),
       operations: {
         _updateTrafficSyncChip: (...args) =>
@@ -568,6 +570,7 @@ export class StyleManager extends ShellFacade {
     this._initLeftPanelAdaptiveLayout();
     this._initRightPanelAdaptiveLayout();
     this._initRadioPanel();
+    this._initHamRepeatersPanel();
     this._initCctvPanel();
     this._initGlobalContextPanel();
     this._initLocationBar();
@@ -913,6 +916,70 @@ export class StyleManager extends ShellFacade {
           scheduleLayout: () => this._scheduleRightPanelLayout(),
         },
       });
+    }
+  }
+
+  /** Wire the Repeaters companion panel: enable, radius, filters, LOAD HERE and the list. */
+  _initHamRepeatersPanel() {
+    const { hamRepeatersLayer } = this.services;
+    this._hamRepeatersControls?.destroy();
+    if (!this._hamRepeatersPanel || !hamRepeatersLayer) return;
+    this._hamRepeatersControls = new HamRepeatersControls({
+      elements: {
+        _hamRepeatersPanel: this._hamRepeatersPanel,
+        _hamRepeatersLayerState: this._hamRepeatersLayerState,
+        _hamRepeatersEnableBtn: this._hamRepeatersEnableBtn,
+        _hamRepeatersSummary: this._hamRepeatersSummary,
+        _hamRepeatersRadius: this._hamRepeatersRadius,
+        _hamRepeatersBand: this._hamRepeatersBand,
+        _hamRepeatersKind: this._hamRepeatersKind,
+        _hamRepeatersLoadBtn: this._hamRepeatersLoadBtn,
+        _hamRepeatersArea: this._hamRepeatersArea,
+        _hamRepeatersList: this._hamRepeatersList,
+      },
+      layer: hamRepeatersLayer,
+      actions: {
+        isRegistered: () => this._dataManager?.layers?.has('ham-repeaters'),
+        isEnabled: () => this._dataManager?.isEnabled('ham-repeaters'),
+        setEnabled: (enabled, options) =>
+          this._dataManager.setEnabled('ham-repeaters', enabled, options),
+        getLifecycle: () =>
+          this._dataManager?.getLayerLifecycleState?.('ham-repeaters'),
+        runUserAction: (...args) => this._runUserFacingContextAction(...args),
+        setPanelCollapsed: (...args) => this.setPanelCollapsed(...args),
+        readViewCentre: () => this._readViewCentre(),
+      },
+    });
+  }
+
+  /** The ground point under the screen centre (terrain, then ellipsoid, then the camera itself). */
+  _readViewCentre() {
+    const viewer = this.viewer;
+    const scene = viewer?.scene;
+    const camera = viewer?.camera;
+    if (!scene || !camera) return null;
+    try {
+      const canvas = scene.canvas;
+      const centre = new Cesium.Cartesian2(
+        canvas.clientWidth / 2,
+        canvas.clientHeight / 2,
+      );
+      let cartesian = null;
+      if (typeof camera.getPickRay === 'function' && scene.globe)
+        cartesian = scene.globe.pick(camera.getPickRay(centre), scene) || null;
+      if (!cartesian && typeof camera.pickEllipsoid === 'function')
+        cartesian =
+          camera.pickEllipsoid(centre, scene.globe?.ellipsoid) || null;
+      const carto = cartesian
+        ? Cesium.Cartographic.fromCartesian(cartesian)
+        : camera.positionCartographic;
+      if (!carto) return null;
+      const lat = Cesium.Math.toDegrees(carto.latitude);
+      const lon = Cesium.Math.toDegrees(carto.longitude);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+      return { lat, lon, heightM: camera.positionCartographic?.height ?? null };
+    } catch {
+      return null;
     }
   }
 
@@ -1534,6 +1601,7 @@ export class StyleManager extends ShellFacade {
     this._clearLayersControl?.destroy();
     this._cctvControls?.destroy();
     this._radioControls?.destroy();
+    this._hamRepeatersControls?.destroy();
     this._localSdrControls?.destroy();
     this._cockpitCoordinator.stop();
     this._visualSettings.stop();

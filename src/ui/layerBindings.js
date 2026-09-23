@@ -55,6 +55,9 @@ export class LayerBindings {
   get _radioControls() {
     return this.readControls()._radioControls;
   }
+  get _hamRepeatersControls() {
+    return this.readControls()._hamRepeatersControls;
+  }
   observeCamera() {
     this._cctvRequestFocusHandler = (event) =>
       routeCctvFocusRequest(
@@ -234,6 +237,7 @@ export class LayerBindings {
     this._syncContextModeButtons();
     this._cctvControls.connect();
     this._radioControls.connect();
+    this._hamRepeatersControls?.connect();
     this._connectDirectionsCamera();
     this._connectWeatherCamera();
     if (!this._awarenessSelectedHandler) {

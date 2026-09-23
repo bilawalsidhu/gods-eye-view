@@ -20,3 +20,13 @@
   time is interpolated between the frames whose decoded position equals a
   dump1090 fix, timed as dump1090's `now − seen_pos`. Used by the decoder's
   category, speed-check and track-accuracy tests; never loaded at runtime.
+- `hamrig-fm-repeaters-nearby.json` and `hamrig-dstar-repeaters-nearby.json` —
+  one captured response each from HamRig's two public repeater routes
+  (`/api/fm/repeaters/nearby`, `/api/dstar/repeaters/nearby`), six rows apiece
+  around Cologne, Germany, captured 2026-09-23. They pin the normalisers in
+  `src/sources/hamRepeaters.js` and the proxy tests: the FM rows cover CTCSS
+  tone, the 1750 Hz tone-burst case and the historic record dates that make
+  those rows `unverified`; the D-STAR rows cover multi-module gateways and the
+  unknown gateway status that makes them `reported`. Contact fields the proxy
+  strips are kept in the fixture on purpose, so a regression that leaks them
+  fails a test. Never loaded at runtime.

@@ -170,6 +170,7 @@ const CREDIT_EXPECTATIONS = {
   traffic: /TomTom|OpenStreetMap/i,
   cctv: /Austin|Caltrans|Transport for London|TfL/i,
   radio: /Radio Browser/i,
+  'ham-repeaters': /repeater tables/i,
   bikeshare: /GBFS|bikeshare/i,
   'ais-live-vessels': /AISStream/i,
   'military-installations': /OpenStreetMap/i,

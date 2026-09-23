@@ -13,6 +13,7 @@
 
 #left-panel-stack > #data-panel,
 #left-panel-stack > #cctv-panel,
+#left-panel-stack > #ham-repeaters-panel,
 #left-panel-stack > #global-context-panel,
 #left-panel-stack > #scene-panel {
   position: relative;
@@ -35,6 +36,10 @@
   order: 2;
 }
 
+#left-panel-stack > #ham-repeaters-panel {
+  order: 3;
+}
+
 #left-panel-stack > #scene-panel {
   order: 4;
 }
@@ -50,6 +55,7 @@
 
 #left-panel-stack > #data-panel:not(.collapsed),
 #left-panel-stack > #cctv-panel:not(.collapsed),
+#left-panel-stack > #ham-repeaters-panel:not(.collapsed),
 #left-panel-stack > #scene-panel:not(.collapsed) {
   box-sizing: border-box;
   flex: 0 1 var(--left-panel-allocated-height, auto);
@@ -62,7 +68,9 @@
  * the canonical control order and center their combined stack at 50vh.
  */
 #left-panel-stack.layout-tail
-  > :is(#data-panel, #cctv-panel, #scene-panel):not(.collapsed) {
+  > :is(#data-panel, #cctv-panel, #ham-repeaters-panel, #scene-panel):not(
+    .collapsed
+  ) {
   box-sizing: border-box;
   flex: 0 0 var(--left-panel-allocated-height);
   height: var(--left-panel-allocated-height);
@@ -71,6 +79,9 @@
 
 #left-panel-stack > #data-panel:not(.collapsed) .data-panel-inner,
 #left-panel-stack > #cctv-panel:not(.collapsed) .cctv-panel-inner,
+#left-panel-stack
+  > #ham-repeaters-panel:not(.collapsed)
+  .ham-repeaters-panel-inner,
 #left-panel-stack > #scene-panel:not(.collapsed) .scene-panel-inner {
   height: 100%;
   max-height: 100%;
@@ -81,6 +92,9 @@
 }
 
 #left-panel-stack > #cctv-panel:not(.collapsed) .cctv-panel-inner,
+#left-panel-stack
+  > #ham-repeaters-panel:not(.collapsed)
+  .ham-repeaters-panel-inner,
 #left-panel-stack > #scene-panel:not(.collapsed) .scene-panel-inner {
   overflow-y: auto;
   scrollbar-gutter: stable;

@@ -25,11 +25,11 @@ const css = readStylesheet(new URL('../style.css', import.meta.url));
 
 function realtimeTools() { return GEV_REALTIME_TOOLS; }
 
-test('Realtime schema exposes the authoritative 30-tool inventory', () => {
+test('Realtime schema exposes the authoritative 31-tool inventory', () => {
   const tools = realtimeTools();
-  assert.equal(tools.length, 30);
+  assert.equal(tools.length, 31);
   const names = tools.map((tool) => tool.name);
-  assert.equal(new Set(names).size, 30, 'tool names are unique');
+  assert.equal(new Set(names).size, 31, 'tool names are unique');
   assert.ok(names.includes('set_context_mode'));
   assert.ok(names.includes('control_cockpit'));
   assert.ok(names.includes('select_nearest_aircraft'));
@@ -147,7 +147,7 @@ test('the edited existing tools changed exactly as intended', () => {
   const panel = byName.get('set_panel_open');
   assert.deepEqual(
     panel.parameters.properties.panelId.enum,
-    ['data-panel', 'location-bar', 'control-panel', 'cctv-panel', 'radio-panel', 'scene-panel', 'pp-toggles', 'global-context-panel'],
+    ['data-panel', 'location-bar', 'control-panel', 'cctv-panel', 'radio-panel', 'ham-repeaters-panel', 'scene-panel', 'pp-toggles', 'global-context-panel'],
   );
   assert.deepEqual(panel.parameters.required, ['panelId', 'open']);
 
@@ -187,13 +187,26 @@ test('no unchanged Realtime tool definition drifts silently', () => {
     // Local ADS-B adds one layer enum value and its common-name mapping.
     'set_layer_visibility',
   ]);
+  // Repeaters is a wholly new tool (nothing to compare), and it adds one
+  // additive enum value to the layer menu. Strip that value rather than
+  // excusing the whole tool, so the menu still has to be byte-identical.
   const unchanged = realtimeTools()
-    .filter((tool) => !TOUCHED.has(tool.name))
-    .sort((a, b) => a.name.localeCompare(b.name))
-    .map((tool) => structuredClone(tool))
-    .filter((tool) => tool.name !== 'set_cyber_sonar');
-  // Cyber adds one HUD choice and the sonar tool; retain the existing pin for every legacy field.
-  const hudLayout = unchanged.find((tool) => tool.name === 'set_hud').parameters.properties.layout;
+    .filter(
+      (tool) => !TOUCHED.has(tool.name) && tool.name !== 'show_ham_repeaters',
+    )
+    .map((tool) => {
+      // Repeaters adds one value to the layer menu. Strip that value rather
+      // than excusing the whole tool, so the menu must still be byte-identical.
+      if (tool.name !== 'show_data_layers_menu') return structuredClone(tool);
+      const clone = structuredClone(tool);
+      const layerId = clone.parameters.properties.layerId;
+      layerId.enum = layerId.enum.filter((key) => key !== 'ham-repeaters');
+      return clone;
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+  // Cyber adds one HUD choice; retain the existing pin for every legacy field.
+  const hudLayout = unchanged.find((tool) => tool.name === 'set_hud').parameters
+    .properties.layout;
   assert.deepEqual(hudLayout.enum, ['tactical', 'operator', 'minimal', 'cyber']);
   hudLayout.enum = hudLayout.enum.filter((layout) => layout !== 'cyber');
   assert.equal(unchanged.length, 18);

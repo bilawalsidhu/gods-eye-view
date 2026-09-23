@@ -1,0 +1,220 @@
+/* ── Repeaters Panel (left stack, after CCTV) ── */
+#ham-repeaters-panel {
+  --panel-expanded-width: 360px;
+  position: fixed;
+  top: var(--left-stack-top);
+  left: var(--left-stack-x);
+  right: auto;
+  bottom: auto;
+  z-index: 100;
+  width: var(--panel-expanded-width);
+  max-height: calc(100vh - 24px);
+}
+
+#ham-repeaters-panel .panel-glow {
+  position: absolute;
+  inset: -18px;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(0, 212, 255, 0.16) 0%,
+    transparent 65%
+  );
+  filter: blur(16px);
+  opacity: 0.25;
+  pointer-events: none;
+}
+
+.ham-repeaters-panel-inner {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--panel-radius);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 212, 255, 0.46) rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+}
+
+#ham-repeaters-panel.collapsed {
+  width: var(--left-collapsed-width);
+}
+
+#ham-repeaters-panel.collapsed
+  .ham-repeaters-panel-inner
+  > :not(.panel-header) {
+  display: none !important;
+}
+
+.ham-repeaters-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#ham-repeaters-enable-btn {
+  min-height: 36px;
+}
+
+.ham-repeaters-summary {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--text-dim);
+  font: 9px/1.3 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ham-repeaters-summary.error,
+.ham-repeaters-note.error {
+  color: #ff9d8f;
+}
+
+.ham-repeaters-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ham-repeaters-filter-row select {
+  flex: 1 1 88px;
+  min-width: 0;
+  padding: 7px 24px 7px 8px;
+  border: 1px solid rgba(65, 220, 231, 0.28);
+  border-radius: 5px;
+  color: #c5faff;
+  background: rgba(5, 24, 31, 0.88);
+  font: 9px/1.2 var(--font-mono);
+}
+
+.ham-repeaters-filter-row button {
+  flex: 0 0 auto;
+  background: rgba(101, 247, 255, 0.12);
+  color: #65f7ff;
+  border: 1px solid rgba(101, 247, 255, 0.35);
+  border-radius: 4px;
+  padding: 5px 9px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.ham-repeaters-filter-row button:hover:not(:disabled) {
+  background: rgba(101, 247, 255, 0.24);
+}
+
+.ham-repeaters-filter-row button:disabled,
+.ham-repeaters-filter-row select:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.ham-repeaters-note {
+  color: var(--text-dim);
+  font: 9px/1.4 var(--font-mono);
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+}
+
+.ham-repeaters-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ham-repeaters-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 2px 8px;
+  align-items: baseline;
+  padding: 5px 7px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: rgba(4, 18, 26, 0.55);
+  color: #cbeaf5;
+  font: 11px/1.3 var(--font-mono);
+  cursor: pointer;
+}
+
+.ham-repeaters-row:hover {
+  border-color: rgba(101, 247, 255, 0.3);
+}
+
+.ham-repeaters-row.selected {
+  border-color: rgba(0, 212, 255, 0.7);
+}
+
+.ham-repeaters-row.unverified {
+  opacity: 0.85;
+}
+
+.ham-repeaters-row-lead {
+  color: var(--text-dim);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.ham-repeaters-row-main {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ham-repeaters-row-main strong {
+  color: #e8fbff;
+}
+
+.ham-repeaters-row-tail {
+  color: var(--text-dim);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.ham-repeaters-row-sub {
+  grid-column: 2 / span 2;
+  color: var(--text-dim);
+  font-size: 9px;
+  letter-spacing: 0.02em;
+  overflow-wrap: anywhere;
+}
+
+.ham-repeaters-row-provenance {
+  grid-column: 2 / span 2;
+  color: rgba(159, 223, 233, 0.7);
+  font-size: 8px;
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+}
+
+.ham-repeaters-kind-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 5px;
+  border-radius: 50%;
+  vertical-align: middle;
+  background: currentcolor;
+}
+
+.ham-repeaters-list-empty {
+  padding: 8px 6px;
+  color: var(--text-dim);
+  font: 9px/1.4 var(--font-mono);
+  letter-spacing: 0.04em;
+}

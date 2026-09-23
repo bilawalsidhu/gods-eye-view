@@ -189,6 +189,20 @@
     ],
     "external": []
   },
+  "ham-repeaters-provider": {
+    "runtime": "node",
+    "exports": ["./server/providers/ham-repeaters"],
+    "modules": [
+      "server/providers/ham-repeaters.js",
+      "server/providers/ham-repeaters/catalog.js",
+      "server/providers/ham-repeaters/constants.js",
+      "server/providers/ham-repeaters/hamrig.js",
+      "server/providers/common/http.js",
+      "src/sources/httpBody.js",
+      "src/sources/hamRepeaters.js"
+    ],
+    "external": []
+  },
   "overpass-provider": {
     "runtime": "node",
     "exports": ["./server/providers/overpass"],
@@ -419,6 +433,16 @@
     ],
     "external": []
   },
+  "ham-repeaters-controls": {
+    "exports": ["./ui/ham-repeaters"],
+    "modules": [
+      "src/ui/hamRepeaters.js",
+      "src/ui/hamRepeatersControls.js",
+      "src/ui/hamRepeatersPresentation.js",
+      "src/sources/hamRepeaters.js"
+    ],
+    "external": []
+  },
   "cctv-controls": {
     "exports": ["./ui/cctv"],
     "modules": [
@@ -589,6 +613,10 @@
       "src/ui/radioControls.js",
       "src/ui/radioPresentation.js",
       "src/ui/radioTunerModel.js",
+      "src/ui/hamRepeaters.js",
+      "src/ui/hamRepeatersControls.js",
+      "src/ui/hamRepeatersPresentation.js",
+      "src/sources/hamRepeaters.js",
       "src/ui/recordingControls.js",
       "src/ui/rightPanelRail.js",
       "src/ui/sceneControls.js",
@@ -1143,6 +1171,26 @@
     ],
     "external": ["cesium"]
   },
+  "ham-repeaters-layer": {
+    "exports": ["./layers/ham-repeaters"],
+    "modules": [
+      "src/data/inputOwnership.js",
+      "src/layers/hamRepeaters/camera.js",
+      "src/layers/hamRepeaters/controls.js",
+      "src/layers/hamRepeaters/index.js",
+      "src/layers/hamRepeaters/ingestion.js",
+      "src/layers/hamRepeaters/interaction.js",
+      "src/layers/hamRepeaters/lifecycle.js",
+      "src/layers/hamRepeaters/policy.js",
+      "src/layers/hamRepeaters/presentation.js",
+      "src/layers/hamRepeaters/queries.js",
+      "src/layers/hamRepeaters/rendering.js",
+      "src/layers/hamRepeaters/source.js",
+      "src/layers/hamRepeaters/state.js",
+      "src/sources/hamRepeaters.js"
+    ],
+    "external": ["cesium"]
+  },
   "submarine-cables": {
     "exports": ["./layers/submarine-cables"],
     "modules": [
@@ -1300,6 +1348,20 @@
       "src/app/layers/militaryInstallations.js",
       "src/app/layers/overlayHost.js",
       "src/app/layers/radio.js",
+      "src/app/layers/hamRepeaters.js",
+      "src/layers/hamRepeaters/camera.js",
+      "src/layers/hamRepeaters/controls.js",
+      "src/layers/hamRepeaters/index.js",
+      "src/layers/hamRepeaters/ingestion.js",
+      "src/layers/hamRepeaters/interaction.js",
+      "src/layers/hamRepeaters/lifecycle.js",
+      "src/layers/hamRepeaters/policy.js",
+      "src/layers/hamRepeaters/presentation.js",
+      "src/layers/hamRepeaters/queries.js",
+      "src/layers/hamRepeaters/rendering.js",
+      "src/layers/hamRepeaters/source.js",
+      "src/layers/hamRepeaters/state.js",
+      "src/sources/hamRepeaters.js",
       "src/app/layers/rocketLaunches.js",
       "src/app/layers/satellites.js",
       "src/app/layers/submarineCables.js",
@@ -1772,6 +1834,10 @@
       "src/ui/radioControls.js",
       "src/ui/radioPresentation.js",
       "src/ui/radioTunerModel.js",
+      "src/ui/hamRepeaters.js",
+      "src/ui/hamRepeatersControls.js",
+      "src/ui/hamRepeatersPresentation.js",
+      "src/sources/hamRepeaters.js",
       "src/ui/recordingControls.js",
       "src/ui/rightPanelRail.js",
       "src/ui/sceneControls.js",
@@ -2008,6 +2074,20 @@
       "src/app/layers/militaryInstallations.js",
       "src/app/layers/overlayHost.js",
       "src/app/layers/radio.js",
+      "src/app/layers/hamRepeaters.js",
+      "src/layers/hamRepeaters/camera.js",
+      "src/layers/hamRepeaters/controls.js",
+      "src/layers/hamRepeaters/index.js",
+      "src/layers/hamRepeaters/ingestion.js",
+      "src/layers/hamRepeaters/interaction.js",
+      "src/layers/hamRepeaters/lifecycle.js",
+      "src/layers/hamRepeaters/policy.js",
+      "src/layers/hamRepeaters/presentation.js",
+      "src/layers/hamRepeaters/queries.js",
+      "src/layers/hamRepeaters/rendering.js",
+      "src/layers/hamRepeaters/source.js",
+      "src/layers/hamRepeaters/state.js",
+      "src/sources/hamRepeaters.js",
       "src/app/layers/rocketLaunches.js",
       "src/app/layers/satellites.js",
       "src/app/layers/submarineCables.js",
@@ -2615,6 +2695,11 @@
     "modules": ["src/sources/radioBrowser.js", "src/data/radioCountry.js"],
     "external": []
   },
+  "ham-repeaters-rules": {
+    "exports": ["./sources/ham-repeaters"],
+    "modules": ["src/sources/hamRepeaters.js"],
+    "external": []
+  },
   "cctv-types-source": {
     "exports": ["./sources/cctv-types"],
     "modules": ["src/sources/cctvTypes.js"],
@@ -2692,6 +2777,14 @@
   "radio-source": {
     "exports": ["./layers/radio/source"],
     "modules": ["src/layers/radio/policy.js", "src/layers/radio/source.js"],
+    "external": []
+  },
+  "ham-repeaters-source": {
+    "exports": ["./layers/ham-repeaters/source"],
+    "modules": [
+      "src/layers/hamRepeaters/source.js",
+      "src/sources/hamRepeaters.js"
+    ],
     "external": []
   },
   "satellites-source": {
