@@ -12,6 +12,8 @@ import {
   holdContinuousRender,
   releaseContinuousRender,
 } from '../renderGovernor.js';
+import { AtcRadioSystem } from '../data/atcRadio.js';
+import { AtcRadioCard } from '../data/atcRadioCard.js';
 
 /** Attach scene tools, rendering listeners and the application debug handle. */
 export function createApplicationTools({
@@ -175,6 +177,80 @@ export function createApplicationTools({
     if (window.__gevVoiceCommands === voiceCommands)
       delete window.__gevVoiceCommands;
   });
-  debug.voiceCommands = voiceCommands;
-  return { sceneDirector, annotations, voiceCommands };
+  const flightsLayer = dataManager.layers.get('flights')?.module;
+  const radioLayer = dataManager.layers.get('radio')?.module;
+  const atcRadio = new AtcRadioSystem({ viewer, radioLayer });
+  const atcRadioCard = new AtcRadioCard({ atcRadio });
+
+  const syncAtcTracking = () => {
+    try {
+      const info =
+        flightsLayer?.getTrackedInfo?.() ||
+        styleManager?.cockpitView?.readAircraftInfo?.();
+      if (
+        info &&
+        Number.isFinite(info.latitude) &&
+        Number.isFinite(info.longitude)
+      ) {
+        atcRadioCard.show();
+        atcRadio.updateAircraftTelemetry({
+          lat: info.latitude,
+          lon: info.longitude,
+          altitudeM: info.altitudeM,
+          verticalRateMps: info.verticalRateMps ?? 0,
+          velocityMps: info.velocityMps,
+          onGround: info.onGround,
+          callsign: info.callsign || info.icao24,
+        });
+      } else {
+        atcRadioCard.hide();
+        atcRadio.clearAircraftTelemetry();
+      }
+    } catch (err) {
+      console.warn('[ATC Radio] Tracking sync error:', err);
+    }
+  };
+
+  const removeAtcTrackingListener =
+    viewer.trackedEntityChanged.addEventListener(syncAtcTracking);
+
+  let lastAtcUpdateTime = 0;
+  const onPreRenderAtc = () => {
+    if (!viewer.trackedEntity) return;
+    const now = performance.now();
+    if (now - lastAtcUpdateTime < 500) return;
+    lastAtcUpdateTime = now;
+    syncAtcTracking();
+  };
+  viewer.scene.preRender.addEventListener(onPreRenderAtc);
+
+  const onGlobalKeydown = (e) => {
+    if (
+      e.key?.toLowerCase() === 'a' &&
+      !e.ctrlKey &&
+      !e.metaKey &&
+      !e.altKey &&
+      !e.repeat &&
+      !e.isComposing &&
+      !e.target?.closest?.(
+        'input, textarea, select, [contenteditable], [role="textbox"], #first-run-launcher',
+      )
+    ) {
+      atcRadioCard.toggle();
+    }
+  };
+  document.addEventListener('keydown', onGlobalKeydown);
+
+  defer(() => {
+    document.removeEventListener('keydown', onGlobalKeydown);
+    removeAtcTrackingListener?.();
+    viewer.scene.preRender.removeEventListener(onPreRenderAtc);
+    atcRadioCard.destroy?.();
+    atcRadio.destroy?.();
+  });
+
+  debug.atcRadio = atcRadio;
+  debug.atcRadioCard = atcRadioCard;
+
+  return { sceneDirector, annotations, voiceCommands, atcRadio, atcRadioCard };
 }

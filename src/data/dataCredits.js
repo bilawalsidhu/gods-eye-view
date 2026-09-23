@@ -317,6 +317,20 @@ export const DATA_CREDITS = [
       '<a href="https://www.submarinecablemap.com" target="_blank" rel="noopener">submarinecablemap.com</a> ' +
       '(CC BY-NC-SA 3.0 — NonCommercial)',
   },
+  {
+    key: 'ourairports',
+    html:
+      'Airports &amp; ATC VHF frequencies: ' +
+      '<a href="https://ourairports.com" target="_blank" rel="noopener">OurAirports</a> ' +
+      '(CC0 / Public Domain)',
+  },
+  {
+    key: 'liveatc',
+    html:
+      'ATC radio feeds &amp; airport directory: ' +
+      '<a href="https://www.liveatc.net" target="_blank" rel="noopener">LiveATC.net</a> ' +
+      '(courtesy attribution; personal non-commercial hobbyist use)',
+  },
 ];
 
 /**

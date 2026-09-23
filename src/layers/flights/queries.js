@@ -162,6 +162,9 @@ export function createQueries({
         : carto.height,
       onGround: info?.onGround === true,
       velocityMps: displayed.speedMps,
+      verticalRateMps: Number.isFinite(info?.verticalRate)
+        ? info.verticalRate
+        : null,
       track: displayed.trackDeg,
       stale: Boolean(
         flightState.records.missingPolls.get(icao24) ||

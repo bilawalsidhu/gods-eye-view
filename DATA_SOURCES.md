@@ -64,9 +64,11 @@ How to read this:
 | **Radio Browser**                                                     | Geolocated internet-radio station directory and station-level tags                                                                  | Public-domain directory data under PDDL 1.0; individual broadcaster stream terms apply                                                                                                                                                                                                                                                                | "Radio Browser" plus a link to the selected broadcaster                                                                                     |
 | **Re:Earth Terrain** (Mapterhorn)                                     | Terrain (keyless globe stacks — OSM etc. — + `/api/terrain/heights` ellipsoidal-height lookups)                                     | Terrain mesh: CC BY 4.0; geoid: EGM2008 (NGA, public domain)                                                                                                                                                                                                                                                                                          | "Terrain (keyless globe stacks): Re:Earth Terrain / Mapterhorn (CC BY 4.0) / EGM2008 (NGA)"                                                 |
 | **OSRM on the FOSSGIS routing servers** (`routing.openstreetmap.de`) | Street-following routes for the Directions layer and voice route annotations, via `/api/route` | [FOSSGIS routing usage policy](https://routing.openstreetmap.de/about.html): "Display the required attribution and display a link to 'fix the map'", "Use a valid user agent and, if applicable, a correct referrer", "One request per second max", "No scraping, no heavy usage". The full policy is the German [FOSSGIS Nutzungsbedingungen](https://www.fossgis.de/arbeitsgruppen/osm-server/nutzungsbedingungen/); FOSSGIS also states that the server may be embedded in your own pages but "eine gewerbliche Nutzung ist nur mit Einschränkungen erlaubt" (commercial use only with restrictions). Route data derives from OpenStreetMap (ODbL 1.0) | "Routing: OSRM on the FOSSGIS servers" + "© OpenStreetMap contributors" + a "fix the map" link — shown in the Data attribution popover |
+| **LiveATC.net** | Live air traffic control (ATC) streams and airport links (tower, approach, ground, ATIS) for tracked aircraft | Public audio streams and directory provided for personal, non-commercial hobbyist use | Courtesy attribution to LiveATC.net |
 
 ### Notes on the live sources
 
+- **LiveATC.net.** When tracking an aircraft near an airport, GEV provides an attributed link to the corresponding LiveATC airport page and enables auto-tuned frequency display. Users can optionally supply their own custom stream URL stored locally in the browser. GEV never proxies, records, caches, or redistributes audio streams. Audio playback adheres to personal, non-commercial listening terms.
 - **Google Maps Platform.** You supply your own API key and are bound by [Google's ToS](https://cloud.google.com/maps-platform/terms). Google Maps Content (tiles, geocodes, places) **may not be cached, stored, rehosted, or committed** — this app only ever uses it live, which is the compliant pattern. The "Google" attribution is displayed on the globe and must stay visible. Restrict your key (see [SECURITY.md](SECURITY.md)).
 - **OpenSky Network.** Its license is **non-commercial**, and operational use of the REST API in a live product can require a prior written agreement with OpenSky — even for non-profit/government use. If you deploy this commercially, contact OpenSky for your own terms. The flights layer is a toggle and runs anonymously by default.
 - **adsb.lol flight fallback.** When OpenSky is unavailable and no last-good OpenSky response exists, the server requests a cached, capped 250 nm adsb.lol point snapshot around the current camera subpoint. This is regional observed context, not worldwide completeness; provenance is exposed in the Flights stats/context row. Military ICAOs remain reconciled through the existing dedicated military registry rather than duplicated.
@@ -196,6 +198,20 @@ is legally required; we note the source here and in the folder's `SOURCE.md`, wh
 the retrieval date (2026-07-30), exact download URL, license evidence, and the
 deterministic transform (`scripts/build-sf-neighborhoods.mjs`: `nhood` → `name`, ~2 m
 Douglas-Peucker simplification, 6-decimal rounding).
+
+### OurAirports global airport frequencies (`ourairports/`)
+
+`ourairports/atc_airports.json` bundles a global database of 8,340 airports with published
+VHF voice communication frequencies (`tower`, `approach`, `atis`, `ground`) compiled from
+**OurAirports** (`airports.csv` and `airport-frequencies.csv`, https://ourairports.com). It backs
+the avionics COM1 auto-tuner (`src/data/atcAirports.js` and `src/data/atcTuner.js`) to resolve
+tactical ATC frequencies for tracked aircraft globally.
+
+The dataset is dedicated to the **Public Domain** under **Creative Commons CC0 1.0 Universal**.
+Attribution is provided in-app and in `DATA_CREDITS` as a courtesy: "OurAirports (ourairports.com) — Public Domain".
+No third-party stream URLs are bundled; listen actions open LiveATC's page for the tuned airport with
+attribution or stream user-provided custom URLs stored in safe browser localStorage.
+
 
 ---
 
