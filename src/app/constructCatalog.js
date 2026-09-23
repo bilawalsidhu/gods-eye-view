@@ -18,6 +18,7 @@ import { createApplicationInstallations } from './layers/militaryInstallations.j
 import { createApplicationSatellites } from './layers/satellites.js';
 import { createApplicationLaunches } from './layers/rocketLaunches.js';
 import { createApplicationAlpr } from './layers/alprCameras.js';
+import { createApplicationLocalAdsb } from './layers/localAdsb.js';
 import { createApplicationAwareness } from './layers/militaryAwareness.js';
 import { createApplicationFirms } from './layers/firms.js';
 import { createApplicationEarthquakes } from './layers/earthquakes.js';
@@ -53,6 +54,20 @@ const SOURCE_METHODS = Object.freeze({
   cables: ['fetch'],
 });
 
+/**
+ * Hardware-local layers are registered like any other but never enter share
+ * links or stored layer state: another browser cannot have this receiver.
+ */
+export const LOCAL_ONLY_LAYER_METADATA = Object.freeze([
+  Object.freeze({ id: 'local-adsb', disposition: 'local-only' }),
+]);
+
+/** Serialization metadata for every layer the application catalog constructs. */
+export const APPLICATION_LAYER_METADATA = Object.freeze([
+  ...LAYER_STATE_REGISTRY,
+  ...LOCAL_ONLY_LAYER_METADATA,
+]);
+
 /** Construct the current catalog without choosing any source provider.
  * Scene engines remain page-owned; layers and classification have this app's lifetime.
  * The manager owns layer destruction, while abort releases classification even if startup fails.
@@ -61,7 +76,7 @@ export function createApplicationCatalog({
   surface,
   sources,
   signal,
-  metadata = LAYER_STATE_REGISTRY,
+  metadata = APPLICATION_LAYER_METADATA,
   vesselOptions,
   resolveAsset,
   nepalBoundaryResolver,
@@ -119,6 +134,7 @@ export function createApplicationCatalog({
         }),
         flights,
         military,
+        createApplicationLocalAdsb(),
         createApplicationEarthquakes({ source: sources.earthquakes }),
         createApplicationAlpr({ surface, source: sources.alpr }),
         satellites,

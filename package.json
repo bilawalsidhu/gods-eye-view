@@ -47,6 +47,8 @@
     "qa:transit": "node scripts/qa-transit.mjs"
   },
   "dependencies": {
+    "@jtarrio/signals": "^0.10.0",
+    "@jtarrio/webrtlsdr": "^3.0.6",
     "@mapbox/vector-tile": "^3.0.0",
     "@meri-imperiumi/eccodes-wasm": "^2.48.2",
     "cesium": "^1.124.0",

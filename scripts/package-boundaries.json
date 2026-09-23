@@ -602,7 +602,9 @@
       "src/layers/weather/imageryHost.js",
       "src/ui/layerBindings.js",
       "src/ui/displayBindings.js",
-      "src/ui/shellFacade.js"
+      "src/ui/shellFacade.js",
+      "src/ui/localSdrControls.js",
+      "src/ui/localSdrPresentation.js"
     ],
     "external": ["cesium"]
   },
@@ -1872,7 +1874,18 @@
       "src/layers/cyclones/index.js",
       "src/layers/cyclones/rendering.js",
       "src/layers/cyclones/labels.js",
-      "src/layers/cyclones/source.js"
+      "src/layers/cyclones/source.js",
+      "src/app/layers/localAdsb.js",
+      "src/layers/localAdsb/index.js",
+      "src/layers/localAdsb/policy.js",
+      "src/layers/localAdsb/card.js",
+      "src/sources/adsbRecords.js",
+      "src/sdr/controller.js",
+      "src/sdr/spectrum.js",
+      "src/sdr/gain.js",
+      "src/sdr/usbDevices.js",
+      "src/ui/localSdrControls.js",
+      "src/ui/localSdrPresentation.js"
     ],
     "external": [
       "hls.js",
@@ -1881,7 +1894,8 @@
       "egm96-universal",
       "mgrs",
       "pbf",
-      "satellite.js"
+      "satellite.js",
+      "@jtarrio/webrtlsdr"
     ]
   },
   "application-catalog": {
@@ -2293,7 +2307,19 @@
       "src/layers/cyclones/index.js",
       "src/layers/cyclones/rendering.js",
       "src/layers/cyclones/labels.js",
-      "src/layers/cyclones/source.js"
+      "src/layers/cyclones/source.js",
+      "src/app/layers/localAdsb.js",
+      "src/layers/localAdsb/index.js",
+      "src/layers/localAdsb/policy.js",
+      "src/layers/localAdsb/card.js",
+      "src/sources/adsbRecords.js",
+      "src/sdr/controller.js",
+      "src/sdr/spectrum.js",
+      "src/sdr/gain.js",
+      "src/sdr/usbDevices.js",
+      "src/data/detection.js",
+      "src/data/detectionRenderDemand.js",
+      "src/data/detectionPresentation.js"
     ],
     "external": [
       "hls.js",
@@ -2302,7 +2328,8 @@
       "satellite.js",
       "@mapbox/vector-tile",
       "pbf",
-      "mgrs"
+      "mgrs",
+      "@jtarrio/webrtlsdr"
     ]
   },
   "application-operations": {

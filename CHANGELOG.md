@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased — local RTL-SDR and Local ADS-B
+
+- Add a Local RTL-SDR card to the Radio panel. It connects a USB RTL-SDR in
+  desktop Chrome or Edge through WebUSB and receives broadcast FM (tune, seek,
+  volume) or 1090 MHz ADS-B. Local FM and internet-radio playback never play
+  together: starting one stops the other.
+- Add a gain control: AUTO or a manual R820T step, remembered per mode. ADS-B
+  defaults to 20.7 dB, FM to AUTO; changes apply without reconnecting. In
+  ADS-B mode the card shows CRC-valid messages per second, aircraft heard,
+  aircraft positioned and the IQ level.
+- Prefer the ADS-B/1090 MHz channel of a dual-channel receiver, remember an
+  explicitly chosen device per mode, and add CHANGE DEVICE to reopen the
+  WebUSB picker.
+- Add the Local ADS-B layer (`local-adsb`, off by default, not part of share
+  links). Aircraft heard by the receiver draw in magenta beside public Flights;
+  a marker drops when its position is 60 s old and the aircraft is forgotten
+  after 60 s without a message. Clicking one opens a card; markers are not
+  camera-followed. Voice `set_layer_visibility` accepts `local-adsb`.
+- Normalize local ADS-B into one record shape, with a pure adapter for
+  dump1090/readsb `aircraft.json` documents.
+- Add `@jtarrio/webrtlsdr` and `@jtarrio/signals` (Apache-2.0); see
+  `THIRD_PARTY_NOTICES.md`.
+
 ## Unreleased — weather review
 
 - On 3D Tiles, draw a 4096×2048 detail window around the view on each

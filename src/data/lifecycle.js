@@ -16,6 +16,8 @@ const VALID_LAYER_SERIALIZATION_DISPOSITIONS = new Set([
   'enabled-only',
   'enabled+options',
   'enabled+mirrored-options',
+  // Registered but never serialized (for example hardware-local layers).
+  'local-only',
 ]);
 
 function isAbortError(error) {

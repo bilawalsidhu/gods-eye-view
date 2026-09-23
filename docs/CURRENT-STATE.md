@@ -4092,6 +4092,52 @@ Existing catalog validation, category filters, tuning and voice playback behavio
 remain unchanged. Audio connects directly to the broadcaster after an explicit
 play action; the source does not relay or record streams.
 
+## Local RTL-SDR and Local ADS-B
+
+The Radio panel holds a Local RTL-SDR card below internet radio. One browser
+WebUSB session (`src/sdr/controller.js`) drives a USB RTL-SDR in desktop Chrome
+or Edge on localhost or HTTPS; nothing opens until CONNECT. Demodulation and
+Mode S decoding run in a worker; FM audio plays through an audio worklet.
+Local FM and internet radio are one listening surface: starting local FM stops
+internet-radio playback, and starting internet radio stops local FM. ADS-B
+reception does not interrupt internet radio.
+
+- **Modes.** FM (87.5–108 MHz, tune, seek, volume) or ADS-B at 1090 MHz.
+  With a receiver open, selecting ADS-B enables the Local ADS-B layer;
+  selecting FM disables it.
+  Enabling the layer switches the receiver to ADS-B; disabling it leaves the
+  receiver mode unchanged.
+- **Gain.** AUTO (tuner AGC) or a manual R820T step from 0.0 to 49.6 dB,
+  stored per mode in `gev:sdr:gain:v1`. Defaults: ADS-B 20.7 dB, FM AUTO.
+  Changes apply to the open receiver without reconnecting.
+- **Receiver stats (ADS-B).** CRC-valid messages per second, aircraft heard,
+  aircraft with a fresh position and the IQ level.
+- **Devices.** An already-authorized receiver opens without the WebUSB
+  picker. ADS-B prefers a device whose product name matches ADS-B or 1090 (the
+  1090 MHz channel of a dual-channel board); FM avoids ADS-B/UAT channels.
+  A device chosen in the picker is remembered per mode by vendor, product,
+  product name and serial in `gev:sdr:device:v1`. CHANGE DEVICE reopens the
+  picker. LOCATE uses browser location for receiver-relative CPR decoding.
+
+The Local ADS-B layer (`local-adsb`, `src/layers/localAdsb/`) is off by default
+and registered as local-only: it never enters share links or stored layer
+state. Its aircraft draw as magenta heading-oriented markers alongside the
+public Flights layer, which renders about one poll interval behind, so local
+markers lead slightly. A marker drops once its newest position is 60 s old; an
+aircraft is forgotten after 60 s without a message. Clicking a marker opens a
+readout card (ICAO, callsign, altitude, ground speed, track, vertical rate,
+position age, message count, "Heard by your receiver"); markers are not
+camera-followed. Positioned aircraft join detection boxes, labelled only with a
+decoded callsign.
+
+Receivers publish one record shape from `src/sources/adsbRecords.js`
+(`icao`, `callsign`, `lat`, `lon`, `altitudeFt`, `groundSpeedKt`, `trackDeg`,
+`verticalRateFpm`, `lastPositionAt`, `lastMessageAt`, `messageCount`,
+`rssiDbfs`, `source`). `normalizeDump1090Aircraft(json, nowMs)` maps a
+dump1090/readsb `aircraft.json` document into the same records; no network
+receiver is wired up yet. Voice `set_layer_visibility` accepts `local-adsb`
+("local ADS-B", "my receiver", "my antenna").
+
 ## Bundled geography and submarine cable components
 
 Submarine cables use separate source, geometry, rendering, interaction and

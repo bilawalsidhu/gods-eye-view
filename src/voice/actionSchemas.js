@@ -138,6 +138,7 @@ const schemas = [
             'telegeography-submarine-cables',
             'local-firms',
             'alpr-cameras',
+            'local-adsb',
           ],
         },
         enabled: {

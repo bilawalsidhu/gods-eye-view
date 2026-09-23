@@ -115,7 +115,12 @@ export async function checkPackageBoundaries(root) {
         assetsInlineLimit: 0,
         rollupOptions: {
           input,
-          external: group.external,
+          // A declared dependency also owns its package subpath exports
+          // (for example `@jtarrio/webrtlsdr/rtlsdr.js`).
+          external: (id) =>
+            group.external.some(
+              (name) => id === name || id.startsWith(`${name}/`),
+            ),
           // Unused imports must still obey ownership; tree shaking is not a boundary.
           treeshake: false,
           preserveEntrySignatures: 'strict',

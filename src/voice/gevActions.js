@@ -226,6 +226,12 @@ const LAYER_ALIASES = new Map([
   ['license plate readers', 'alpr-cameras'],
   ['license plate cameras', 'alpr-cameras'],
   ['plate readers', 'alpr-cameras'],
+  ['local-adsb', 'local-adsb'],
+  ['local adsb', 'local-adsb'],
+  ['local ads-b', 'local-adsb'],
+  ['my receiver', 'local-adsb'],
+  ['my antenna', 'local-adsb'],
+  ['my sdr', 'local-adsb'],
 ]);
 
 const CITY_ALIASES = new Map([

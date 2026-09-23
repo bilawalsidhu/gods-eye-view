@@ -183,21 +183,23 @@ test('no unchanged Realtime tool definition drifts silently', () => {
     'analyst_query',
     'next_iss_pass',
     'next_satellite_pass',
+    // Local ADS-B adds one layer enum value and its common-name mapping.
+    'set_layer_visibility',
   ]);
   const unchanged = realtimeTools()
     .filter((tool) => !TOUCHED.has(tool.name))
     .sort((a, b) => a.name.localeCompare(b.name));
-  assert.equal(unchanged.length, 19);
+  assert.equal(unchanged.length, 18);
   const digest = createHash('sha256')
     .update(JSON.stringify(unchanged))
     .digest('hex')
     .slice(0, 16);
   // Analyst additions and ISS wording correction are explicitly excluded above; all other tool definitions retain their pin.
-  assert.equal(digest, '7411ea585e534795', 'an unchanged Realtime tool definition drifted');
+  assert.equal(digest, '8494f344fabb67f5', 'an unchanged Realtime tool definition drifted');
 });
 
 test('Radio volume and mission speed share the Sharpen slider visual language', () => {
-  for (const id of ['cockpit-radio-volume', 'context-radio-mini-volume', 'radio-volume']) {
+  for (const id of ['cockpit-radio-volume', 'context-radio-mini-volume', 'radio-volume', 'sdr-volume']) {
     assert.match(
       html,
       new RegExp(`id="${id}"[^>]*class="gev-quantitative-slider"[^>]*type="range"`),
