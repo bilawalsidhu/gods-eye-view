@@ -130,3 +130,32 @@ test('an unchanged position still delivers newer altitude and velocity', () => {
   );
   assert.ok(Math.abs(display.lat) < 1e-9, 'a stopped aircraft does not coast');
 });
+
+test('a velocity/altitude-only update with the same position time still refreshes telemetry', () => {
+  const motion = new LocalAdsbMotion();
+  motion.observe(fix(0, 0, { altitudeFt: 1_000, groundSpeedKt: 100 }), 0);
+  // No new position message: only velocity and altitude are newer.
+  const newer = fix(0, 0, {
+    altitudeFt: 1_500,
+    groundSpeedKt: 0,
+    trackDeg: 90,
+    lastMessageAt: 5_000,
+  });
+  assert.equal(motion.observe(newer, 5_000), false, 'no new trail point');
+  assert.equal(motion.fixes.length, 1);
+  assert.equal(motion.anchor.speedMps, 0);
+  assert.equal(motion.anchor.altitudeFt, 1_500);
+  assert.equal(motion.anchor.trackDeg, 90);
+  // Re-reading that record is not newer telemetry, and an older message
+  // never rolls it back.
+  motion.observe(newer, 5_500);
+  motion.observe(
+    fix(0, 0, { altitudeFt: 900, groundSpeedKt: 300, lastMessageAt: 4_000 }),
+    6_000,
+  );
+  assert.equal(motion.anchor.altitudeFt, 1_500);
+  assert.equal(motion.anchor.speedMps, 0);
+  const display = motion.displayAt(20_000);
+  assert.ok(Math.abs(display.altitudeFt - 1_500) < 1e-6, `${display.altitudeFt}`);
+  assert.ok(Math.abs(display.lat) < 1e-9, 'a stopped aircraft does not coast');
+});

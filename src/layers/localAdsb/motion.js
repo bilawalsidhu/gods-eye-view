@@ -45,6 +45,18 @@ function finite(value) {
   return Number.isFinite(value) ? value : null;
 }
 
+/**
+ * When a record's telemetry (altitude, speed, track, climb) was last heard:
+ * its newest message, which velocity-only and altitude-only messages advance
+ * without a new position.
+ */
+function telemetryTime(record) {
+  const messageAt = finite(record?.lastMessageAt);
+  const positionAt = finite(record?.lastPositionAt);
+  if (messageAt === null) return positionAt;
+  return positionAt === null ? messageAt : Math.max(messageAt, positionAt);
+}
+
 function chordCourse(from, to) {
   Cesium.Cartesian3.fromDegrees(from.lon, from.lat, 0, undefined, _chordFrom);
   Cesium.Cartesian3.fromDegrees(to.lon, to.lat, 0, undefined, _chordTo);
@@ -82,6 +94,9 @@ export class LocalAdsbMotion {
     // layer re-syncs the same record several times a second) is not a new
     // observation and must not count toward a re-anchor.
     this.lastCandidate = null;
+    // When the anchor's telemetry was heard. Telemetry has its own freshness:
+    // position freshness only decides trail points and re-anchoring.
+    this.telemetryAt = null;
   }
 
   /**
@@ -103,19 +118,25 @@ export class LocalAdsbMotion {
     if (at === null || lat === null || lon === null) return false;
     const newest = this.fixes.at(-1);
     const seen = this.lastCandidate;
-    if (newest && at <= newest.at) return false;
-    if (seen && at <= seen.at) return false;
-    // A decoder feed re-reads the same fix every poll and its rebased time
-    // jitters with `seen_pos` rounding: the same position is not a new fix.
-    if (seen && !seen.accepted && lat === seen.lat && lon === seen.lon)
+    // No new position, but velocity and altitude messages arrive between
+    // position messages: newer telemetry still reaches the anchor.
+    if (
+      (newest && at <= newest.at) ||
+      (seen && at <= seen.at) ||
+      // A decoder feed re-reads the same fix every poll and its rebased time
+      // jitters with `seen_pos` rounding: the same position is not a new fix.
+      (seen && !seen.accepted && lat === seen.lat && lon === seen.lon)
+    ) {
+      this._refreshTelemetry(record, nowMs);
       return false;
+    }
     if (newest && lat === newest.lat && lon === newest.lon) {
       // Same coordinates, but altitude and velocity may still be newer (a
       // hovering helicopter climbing, an aircraft coming to a stop): update
       // the motion telemetry without adding a trail point.
       this.lastCandidate = { at, lat, lon, accepted: true };
       this.rejectStreak = 0;
-      this._refreshTelemetry(record, at, nowMs);
+      this._refreshTelemetry(record, nowMs);
       return false;
     }
     const speedMps = Number.isFinite(record.groundSpeedKt)
@@ -142,7 +163,11 @@ export class LocalAdsbMotion {
       this.rejectedFixes += 1;
       this.rejectStreak += 1;
       this.lastCandidate = { at, lat, lon, accepted: false };
-      if (this.rejectStreak < LOCAL_ADSB_REANCHOR_AFTER) return false;
+      if (this.rejectStreak < LOCAL_ADSB_REANCHOR_AFTER) {
+        // The position is refused, not the record's telemetry.
+        this._refreshTelemetry(record, nowMs);
+        return false;
+      }
       // Three refusals in a row: the stream moved on and the old anchor was
       // the outlier. Restart the history from the new fix.
       this.fixes = [];
@@ -155,18 +180,24 @@ export class LocalAdsbMotion {
     this.fixes.push(fix);
     this._trimHistory(at);
     this.anchor = this._anchorFrom(fix, record);
+    this.telemetryAt = telemetryTime(record);
     this._absorb(before, nowMs);
     return true;
   }
 
   /**
-   * Apply a newer record's altitude, speed, track and vertical rate to the
-   * current anchor when its position has not changed.
+   * Apply a record's altitude, speed, track and vertical rate to the current
+   * anchor when they were heard after the anchor's telemetry, whether or not
+   * its position is new.
    */
-  _refreshTelemetry(record, at, nowMs) {
+  _refreshTelemetry(record, nowMs) {
     const anchor = this.anchor;
     const newest = this.fixes.at(-1);
     if (!anchor || !newest) return;
+    const at = telemetryTime(record);
+    if (at === null || (this.telemetryAt !== null && at <= this.telemetryAt))
+      return;
+    this.telemetryAt = at;
     const altitudeFt = finite(record.altitudeFt) ?? anchor.altitudeFt;
     const speedMps = Number.isFinite(record.groundSpeedKt)
       ? Math.max(0, record.groundSpeedKt) * KT_TO_MPS
