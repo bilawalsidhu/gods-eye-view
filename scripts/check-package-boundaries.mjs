@@ -89,6 +89,10 @@ export async function checkPackageBoundaries(root) {
     const seen = new Set();
     await build({
       root,
+      // Keep this gate out of a running dev server's dependency cache
+      // (node_modules/.vite): a build there re-optimizes dependencies and the
+      // dev server's workers then fail with 504 "Outdated Optimize Dep".
+      cacheDir: path.join(root, 'node_modules/.vite-boundaries'),
       configFile: false,
       envFile: false,
       publicDir: false,
