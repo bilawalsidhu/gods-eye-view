@@ -51,7 +51,9 @@
   volume) or 1090 MHz ADS-B. Local FM and internet-radio playback never play
   together: starting one stops the other.
 - Add a gain control: AUTO or a manual R820T step, remembered per mode. ADS-B
-  defaults to 20.7 dB, FM to AUTO; changes apply without reconnecting. In
+  defaults to 28.0 dB (the earlier 20.7 dB gave about 1 msg/s against about 9
+  at 28.0 dB on the same antenna; a stored choice still wins), FM to AUTO;
+  changes apply without reconnecting. In
   ADS-B mode the card shows CRC-valid messages per second, aircraft heard,
   aircraft positioned and the IQ level.
 - Prefer the ADS-B/1090 MHz channel of a dual-channel receiver, remember an

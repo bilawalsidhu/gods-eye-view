@@ -4120,7 +4120,7 @@ reception does not interrupt internet radio.
   Enabling the layer switches the receiver to ADS-B; disabling it leaves the
   receiver mode unchanged.
 - **Gain.** AUTO (tuner AGC) or a manual R820T step from 0.0 to 49.6 dB,
-  stored per mode in `gev:sdr:gain:v1`. Defaults: ADS-B 20.7 dB, FM AUTO.
+  stored per mode in `gev:sdr:gain:v1`. Defaults: ADS-B 28.0 dB, FM AUTO.
   Changes apply to the open receiver without reconnecting.
 - **Receiver stats (ADS-B).** CRC-valid messages per second, aircraft heard,
   aircraft with a fresh position and the IQ level.

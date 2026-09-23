@@ -4,7 +4,10 @@
  * `'auto'` hands gain to the tuner's AGC. Manual values are the R820T gain
  * steps librtlsdr and dump1090 expose, in dB. Receivers with an onboard LNA
  * (for example a Nooelec FlyCatcher with its LNA on) overload at AGC or high
- * gain, so the ADS-B default is a fixed mid step.
+ * gain, so the ADS-B default is a fixed step. It is 28.0 dB rather than the
+ * lower steps dump1090 users pick because the WebUSB library maps dB to tuner
+ * gain stages differently from librtlsdr: on a FlyCatcher, 20.7 dB here gave
+ * about 1 msg/s and 28.0 dB about 9 msg/s on the same antenna.
  */
 
 export const SDR_GAIN_AUTO = 'auto';
@@ -18,7 +21,7 @@ export const R820T_GAIN_STEPS_DB = Object.freeze([
 
 export const SDR_GAIN_DEFAULTS = Object.freeze({
   fm: SDR_GAIN_AUTO,
-  adsb: 20.7,
+  adsb: 28.0,
 });
 
 export const SDR_GAIN_STORAGE_KEY = 'gev:sdr:gain:v1';

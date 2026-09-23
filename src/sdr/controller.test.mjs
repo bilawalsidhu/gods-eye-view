@@ -139,7 +139,7 @@ test('receiver presets keep the known-working tuning settings', () => {
   });
 });
 
-test('ADS-B opens at manual 20.7 dB and gain changes apply live without reconnecting', async (t) => {
+test('ADS-B opens at manual 28.0 dB and gain changes apply live without reconnecting', async (t) => {
   const events = [];
   let opens = 0;
   const storage = memoryStorage();
@@ -157,8 +157,8 @@ test('ADS-B opens at manual 20.7 dB and gain changes apply live without reconnec
   t.after(() => controller.stop());
   assert.equal(controller.getState().gain, 'auto');
   assert.equal(await controller.connect('adsb'), true);
-  assert.ok(events.includes('device:gain:20.7'));
-  assert.equal(controller.getState().gain, 20.7);
+  assert.ok(events.includes('device:gain:28'));
+  assert.equal(controller.getState().gain, 28);
 
   assert.equal(await controller.setGain('36.4'), 36.4);
   assert.equal(events.at(-1), 'device:gain:36.4');

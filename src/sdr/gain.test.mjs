@@ -20,12 +20,13 @@ function memoryStorage(initial = {}) {
   };
 }
 
-test('gain steps are the R820T table and ADS-B defaults to manual 20.7 dB', () => {
+test('gain steps are the R820T table and ADS-B defaults to manual 28.0 dB', () => {
   assert.equal(R820T_GAIN_STEPS_DB.length, 29);
   assert.equal(R820T_GAIN_STEPS_DB[0], 0);
   assert.equal(R820T_GAIN_STEPS_DB.at(-1), 49.6);
   assert.ok(R820T_GAIN_STEPS_DB.includes(20.7));
-  assert.deepEqual(SDR_GAIN_DEFAULTS, { fm: 'auto', adsb: 20.7 });
+  assert.ok(R820T_GAIN_STEPS_DB.includes(28.0));
+  assert.deepEqual(SDR_GAIN_DEFAULTS, { fm: 'auto', adsb: 28.0 });
   assert.equal(tunerGainValue('auto'), null, 'AUTO hands gain to tuner AGC');
   assert.equal(tunerGainValue(20.7), 20.7);
 });
@@ -63,4 +64,15 @@ test('per-mode gain persists in storage and survives unavailable storage', () =>
   assert.deepEqual(readSdrGainSettings(throwing), SDR_GAIN_DEFAULTS);
   assert.equal(writeSdrGainSettings(throwing, SDR_GAIN_DEFAULTS), false);
   assert.deepEqual(readSdrGainSettings(null), SDR_GAIN_DEFAULTS);
+});
+
+test('a stored ADS-B gain wins over the 28.0 dB default', () => {
+  const storage = memoryStorage({
+    [SDR_GAIN_STORAGE_KEY]: JSON.stringify({ fm: 'auto', adsb: 20.7 }),
+  });
+  assert.deepEqual(readSdrGainSettings(storage), { fm: 'auto', adsb: 20.7 });
+  const onlyFm = memoryStorage({
+    [SDR_GAIN_STORAGE_KEY]: JSON.stringify({ fm: 36.4 }),
+  });
+  assert.deepEqual(readSdrGainSettings(onlyFm), { fm: 36.4, adsb: 28.0 });
 });
