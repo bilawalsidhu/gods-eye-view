@@ -165,3 +165,92 @@ test('probe asks once without polling so the Radio card can list feeds', async (
   await flush();
   assert.equal(calls.length, 1);
 });
+
+test('two feeds on one band keep the fresher record, whichever is listed last', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const fresh = aircraft({ lastPositionAt: 999_000, lastMessageAt: 999_500 });
+  // A second 1090 feed that heard the aircraft earlier and has no position.
+  const older = aircraft({
+    lat: null,
+    lon: null,
+    lastPositionAt: null,
+    lastMessageAt: 990_000,
+  });
+  const { fetchImpl } = route([
+    payload([fresh, older], 1_000_000),
+    payload([older], 1_000_000),
+  ]);
+  const feeds = createLocalReceiverFeeds({ fetchImpl, now: () => 1_000_000 });
+  feeds.start();
+  await flush();
+  let [kept] = feeds.getState().records;
+  assert.equal(feeds.getState().records.length, 1);
+  assert.equal(kept.lastPositionAt, 999_000, 'same response');
+  t.mock.timers.tick(1_000);
+  await flush();
+  [kept] = feeds.getState().records;
+  assert.equal(kept.lastPositionAt, 999_000, 'next poll');
+  assert.equal(kept.lat, 30.27);
+  feeds.stop();
+});
+
+/** A route whose requests never answer until their signal aborts. */
+function stalledRoute({ stallBody = false } = {}) {
+  const signals = [];
+  const hang = (signal) =>
+    new Promise((_, reject) => {
+      signal?.addEventListener('abort', () =>
+        reject(new DOMException('aborted', 'AbortError')),
+      );
+    });
+  const fetchImpl = async (url, options = {}) => {
+    signals.push(options.signal);
+    if (!stallBody) return hang(options.signal);
+    return { ok: true, json: () => hang(options.signal) };
+  };
+  return { signals, fetchImpl };
+}
+
+test('a stalled feed request is abandoned at its deadline and polling continues', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  for (const stallBody of [false, true]) {
+    const { signals, fetchImpl } = stalledRoute({ stallBody });
+    const feeds = createLocalReceiverFeeds({
+      fetchImpl,
+      now: () => 1_000_000,
+      requestTimeoutMs: 3_000,
+    });
+    feeds.start();
+    await flush();
+    assert.equal(signals.length, 1);
+    assert.ok(signals[0], 'every request carries an abort signal');
+    t.mock.timers.tick(3_000);
+    await flush();
+    assert.equal(signals[0].aborted, true, `aborted (stallBody ${stallBody})`);
+    assert.equal(feeds.getState().configured, false, 'never answered');
+    feeds.destroy();
+  }
+});
+
+test('stop() aborts the request in flight so start() is never blocked by it', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { signals, fetchImpl } = stalledRoute();
+  const feeds = createLocalReceiverFeeds({ fetchImpl, now: () => 1_000_000 });
+  feeds.start();
+  await flush();
+  feeds.stop();
+  assert.equal(signals[0].aborted, true);
+  feeds.start();
+  await flush();
+  feeds.stop();
+  feeds.start();
+  await flush();
+  assert.equal(signals.length, 3);
+  assert.deepEqual(
+    signals.map((signal) => signal.aborted),
+    [true, true, false],
+    'no disable/enable cycle leaves an old request outstanding',
+  );
+  feeds.destroy();
+  assert.equal(signals[2].aborted, true);
+});

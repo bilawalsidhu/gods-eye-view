@@ -353,3 +353,160 @@ test('WebUSB picker remains available when no authorized receiver matches', asyn
   assert.equal(result, selected);
   assert.equal(pickerCalls, 1);
 });
+
+/** Resolve with the promise's value, or 'timed out' after `ms`. */
+function within(promise, ms = 1_000) {
+  return Promise.race([
+    promise,
+    new Promise((resolve) => setTimeout(() => resolve('timed out'), ms)),
+  ]);
+}
+
+/**
+ * A device whose bulk reads hang until the raw WebUSB device is closed,
+ * the way a stalled `transferIn` behaves: `USBDevice.close()` aborts it.
+ */
+function stallingDevice(events, name = 'stalled') {
+  const pendingReads = new Set();
+  const usb = {
+    opened: true,
+    async close() {
+      events.push(`${name}:usb-close`);
+      usb.opened = false;
+      for (const reject of pendingReads) reject(new Error('AbortError'));
+      pendingReads.clear();
+    },
+  };
+  const base = fakeDevice(events, name);
+  return {
+    ...base,
+    com: { device: usb },
+    readSamples: () =>
+      new Promise((_, reject) => {
+        events.push(`${name}:read`);
+        pendingReads.add(reject);
+      }),
+    // The graceful close needs the bus, which the stalled transfer holds.
+    close: () => new Promise(() => events.push(`${name}:graceful-close`)),
+  };
+}
+
+test('a stalled USB read cannot wedge stop(): the raw device is closed and the queue replaced', async (t) => {
+  const events = [];
+  t.after(replaceGlobal('Worker', FakeWorker));
+  const devices = [stallingDevice(events), fakeDevice(events, 'fresh')];
+  const controller = new SdrController({
+    storage: memoryStorage(),
+    webUsb: {},
+    readStallMs: 60_000,
+    closeTimeoutMs: 50,
+    providerFactory: () => ({ get: async () => devices.shift() }),
+  });
+  t.after(() => controller.destroy());
+  assert.equal(await controller.connect('adsb'), true);
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.ok(events.includes('stalled:read'), 'a read is in flight');
+
+  assert.equal(await within(controller.stop()), true, 'stop() returns');
+  assert.ok(events.includes('stalled:usb-close'), 'raw USB device closed');
+  assert.equal(controller.getState().connected, false);
+
+  // The next session is not queued behind the abandoned transfer.
+  assert.equal(await within(controller.connect('adsb')), true);
+  assert.ok(events.includes('fresh:tune:1090000000'));
+});
+
+test('a stalled USB read times out and tears the session down on its own', async (t) => {
+  const events = [];
+  t.after(replaceGlobal('Worker', FakeWorker));
+  const controller = new SdrController({
+    storage: memoryStorage(),
+    webUsb: {},
+    readStallMs: 30,
+    closeTimeoutMs: 30,
+    providerFactory: () => ({ get: async () => stallingDevice(events) }),
+  });
+  t.after(() => controller.destroy());
+  assert.equal(await controller.connect('adsb'), true);
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  const state = controller.getState();
+  assert.equal(state.connected, false);
+  assert.equal(state.status, 'error');
+  assert.equal(state.message, 'RTL-SDR sample stream stopped');
+  assert.ok(events.includes('stalled:usb-close'));
+  // Mode changes work again instead of queuing behind the dead read.
+  assert.equal(await within(controller.setMode('fm')), true);
+});
+
+test('destroy() during a pending connect closes the late device instead of resuming the session', async (t) => {
+  const events = [];
+  const workers = [];
+  class CountingWorker extends FakeWorker {
+    constructor() {
+      super();
+      workers.push(this);
+    }
+  }
+  t.after(replaceGlobal('Worker', CountingWorker));
+  let deliver = null;
+  const controller = new SdrController({
+    storage: memoryStorage(),
+    webUsb: {},
+    providerFactory: () => ({
+      get: () =>
+        new Promise((resolve) => {
+          deliver = resolve;
+        }),
+    }),
+  });
+  const connecting = controller.connect('adsb');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(typeof deliver, 'function', 'device acquisition is pending');
+  await controller.destroy();
+  deliver(fakeDevice(events, 'late'));
+  assert.equal(await within(connecting), false);
+  assert.ok(events.includes('late:close'), 'late device is closed');
+  assert.ok(!events.includes('late:tune:1090000000'), 'never configured');
+  assert.equal(controller.getState().connected, false);
+  assert.notEqual(controller.getState().status, 'streaming');
+  assert.equal(workers.length, 0, 'no decoder worker is created');
+});
+
+test('a failed decoder worker is discarded and reconnect builds a fresh one', async (t) => {
+  const events = [];
+  const workers = [];
+  class RecordingWorker {
+    constructor() {
+      this.messages = [];
+      this.terminated = false;
+      workers.push(this);
+    }
+
+    postMessage(message) {
+      this.messages.push(message.type);
+    }
+
+    terminate() {
+      this.terminated = true;
+    }
+  }
+  t.after(replaceGlobal('Worker', RecordingWorker));
+  const controller = new SdrController({
+    storage: memoryStorage(),
+    webUsb: {},
+    providerFactory: () => ({ get: async () => fakeDevice(events) }),
+  });
+  t.after(() => controller.destroy());
+  assert.equal(await controller.connect('adsb'), true);
+  assert.equal(workers.length, 1);
+  workers[0].onerror?.({ message: 'module failed to load' });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(controller.getState().status, 'error');
+  assert.equal(workers[0].terminated, true, 'failed worker terminated');
+
+  await controller.stop();
+  assert.equal(await controller.connect('adsb'), true);
+  assert.equal(workers.length, 2, 'reconnect creates a fresh worker');
+  assert.ok(workers[1].messages.includes('configure'));
+  assert.equal(controller.getState().status, 'streaming');
+});

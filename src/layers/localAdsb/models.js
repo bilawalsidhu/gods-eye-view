@@ -245,6 +245,24 @@ export function createLocalAdsbModels({
       for (const id of [...models.keys()]) if (!markers.has(id)) release(id);
     },
 
+    /**
+     * Drop the model, and any load still in flight, of every aircraft that
+     * is no longer a marker. The layer calls this whenever markers expire:
+     * the per-frame pass does not run once the last marker is gone.
+     * @param {Map<string, object>|Set<string>} live Current marker ids.
+     */
+    retain(live) {
+      if (destroyed) return;
+      let dropped = false;
+      for (const id of [...models.keys(), ...pending.keys()]) {
+        if (live.has(id)) continue;
+        release(id);
+        eligible.delete(id);
+        dropped = true;
+      }
+      if (dropped) eligible = new Set(eligible);
+    },
+
     /** Drop every model (3D off, layer disabled). */
     clear: releaseAll,
 

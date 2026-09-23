@@ -524,6 +524,8 @@ export function createLocalAdsbLayer({
       markers.delete(id);
       removed = true;
     }
+    // Expired aircraft take their 3D models (and pending loads) with them.
+    if (removed) models?.retain(markers);
     if (selectedId && !live.has(selectedId))
       clearSelection({ evicted: enabled });
     removeEntityContextsForLayer(LAYER_ID, { retainIds: live });

@@ -90,3 +90,43 @@ test('the last known speed bounds a fix whose record carries none', () => {
   );
   assert.equal(motion.rejectedFixes, 1);
 });
+
+test('re-observing one refused fix never re-anchors on it', () => {
+  const motion = new LocalAdsbMotion();
+  motion.observe(fix(0, 0), 0);
+  const outlier = fix(1_000, 1);
+  // The layer re-syncs the same record several times a second.
+  for (let sync = 0; sync < 6; sync += 1)
+    assert.equal(motion.observe(outlier, 1_000 + sync * 250), false);
+  assert.equal(motion.rejectedFixes, 1, 'one fix is refused once');
+  assert.equal(motion.rejectStreak, 1);
+  assert.ok(motion.displayAt(2_000).lat < 0.01, 'still on the old track');
+  // A jittered re-read of the same refused position is the same fix too.
+  assert.equal(motion.observe(fix(1_080, 1), 2_500), false);
+  assert.equal(motion.rejectStreak, 1);
+});
+
+test('an unchanged position still delivers newer altitude and velocity', () => {
+  const motion = new LocalAdsbMotion();
+  motion.observe(fix(0, 0, { altitudeFt: 1_000, groundSpeedKt: 120 }), 0);
+  // A hovering helicopter: same coordinates, climbing, now stationary.
+  motion.observe(
+    fix(5_000, 0, {
+      altitudeFt: 1_500,
+      groundSpeedKt: 0,
+      verticalRateFpm: 0,
+      trackDeg: 90,
+    }),
+    5_000,
+  );
+  assert.equal(motion.fixes.length, 1, 'no duplicate trail point');
+  assert.equal(motion.anchor.speedMps, 0);
+  assert.equal(motion.anchor.trackDeg, 90);
+  // Past the correction window the display settles on the new telemetry.
+  const display = motion.displayAt(20_000);
+  assert.ok(
+    Math.abs(display.altitudeFt - 1_500) < 1e-6,
+    `${display.altitudeFt}`,
+  );
+  assert.ok(Math.abs(display.lat) < 1e-9, 'a stopped aircraft does not coast');
+});

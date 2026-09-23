@@ -853,3 +853,81 @@ test('row status reflects decoder feeds and the browser SDR together', () => {
     'feeds 1090, 978 stale · feed 1090 invalid · 14 heard · USB 3.5 msg/s',
   );
 });
+
+function fakeModel(options) {
+  return {
+    ...options,
+    ready: true,
+    show: true,
+    modelMatrix: new Cesium.Matrix4(),
+    destroyed: false,
+    destroy() {
+      this.destroyed = true;
+    },
+    isDestroyed() {
+      return this.destroyed;
+    },
+    update() {},
+  };
+}
+
+test('the last aircraft expiring removes its 3D model and cancels a pending load', async (t) => {
+  const receiver = fakeReceiver({ mode: 'adsb', connected: true });
+  const clock = { now: 100_000 };
+  const primitives = [];
+  const loads = [];
+  const deferred = [];
+  const { layer } = await enabledLayer(receiver, clock, null, {
+    services: {
+      display: {
+        getParams: () => ({ models3d: true, models3dMode: 'proximity' }),
+      },
+    },
+    viewer: modelViewer(primitives),
+    loadModel: (options) => {
+      const model = fakeModel(options);
+      loads.push(model);
+      if (options.id === 'local-adsb:abc123') return Promise.resolve(model);
+      return new Promise((resolve) => deferred.push(() => resolve(model)));
+    },
+  });
+  t.after(() => layer.destroy());
+  receiver.set({ aircraft: [record({ category: 'A7' })] });
+  await layer.update();
+  await new Promise((resolve) => setImmediate(resolve));
+  await layer.update();
+  const [model] = loads;
+  assert.equal(model.show, true, 'the model is the visual');
+  assert.ok(primitives[0].contains(model));
+
+  // Its position ages out: no markers remain, so no per-frame model pass.
+  clock.now = 160_000;
+  await layer.update();
+  assert.equal(
+    model.destroyed || !primitives[0].contains(model),
+    true,
+    'the expired aircraft leaves no model behind',
+  );
+
+  // A load still in flight when its aircraft expires is never admitted.
+  clock.now = 200_000;
+  receiver.set({
+    aircraft: [
+      record({
+        icao: 'def456',
+        lastPositionAt: 200_000,
+        lastMessageAt: 200_000,
+      }),
+    ],
+  });
+  await layer.update();
+  clock.now = 260_000;
+  await layer.update();
+  assert.equal(deferred.length, 1, 'a load was in flight');
+  deferred[0]();
+  await new Promise((resolve) => setImmediate(resolve));
+  const late = loads.at(-1);
+  assert.equal(late.id, 'local-adsb:def456');
+  assert.equal(primitives[0].contains(late), false);
+  assert.equal(late.destroyed, true);
+});

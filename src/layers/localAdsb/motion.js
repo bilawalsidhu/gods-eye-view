@@ -78,6 +78,10 @@ export class LocalAdsbMotion {
     this.lastContactAt = null;
     this.rejectStreak = 0;
     this.rejectedFixes = 0;
+    // The newest position evaluated, accepted or refused. Re-reading it (the
+    // layer re-syncs the same record several times a second) is not a new
+    // observation and must not count toward a re-anchor.
+    this.lastCandidate = null;
   }
 
   /**
@@ -98,10 +102,22 @@ export class LocalAdsbMotion {
     const lon = finite(record?.lon);
     if (at === null || lat === null || lon === null) return false;
     const newest = this.fixes.at(-1);
+    const seen = this.lastCandidate;
     if (newest && at <= newest.at) return false;
+    if (seen && at <= seen.at) return false;
     // A decoder feed re-reads the same fix every poll and its rebased time
     // jitters with `seen_pos` rounding: the same position is not a new fix.
-    if (newest && lat === newest.lat && lon === newest.lon) return false;
+    if (seen && !seen.accepted && lat === seen.lat && lon === seen.lon)
+      return false;
+    if (newest && lat === newest.lat && lon === newest.lon) {
+      // Same coordinates, but altitude and velocity may still be newer (a
+      // hovering helicopter climbing, an aircraft coming to a stop): update
+      // the motion telemetry without adding a trail point.
+      this.lastCandidate = { at, lat, lon, accepted: true };
+      this.rejectStreak = 0;
+      this._refreshTelemetry(record, at, nowMs);
+      return false;
+    }
     const speedMps = Number.isFinite(record.groundSpeedKt)
       ? Math.max(0, record.groundSpeedKt) * KT_TO_MPS
       : (newest?.speedMps ?? null);
@@ -125,6 +141,7 @@ export class LocalAdsbMotion {
     ) {
       this.rejectedFixes += 1;
       this.rejectStreak += 1;
+      this.lastCandidate = { at, lat, lon, accepted: false };
       if (this.rejectStreak < LOCAL_ADSB_REANCHOR_AFTER) return false;
       // Three refusals in a row: the stream moved on and the old anchor was
       // the outlier. Restart the history from the new fix.
@@ -132,11 +149,54 @@ export class LocalAdsbMotion {
       this.correction = null;
     }
     this.rejectStreak = 0;
+    this.lastCandidate = { at, lat, lon, accepted: true };
 
     const before = this.anchor ? this.displayAt(nowMs, { slew: false }) : null;
     this.fixes.push(fix);
     this._trimHistory(at);
     this.anchor = this._anchorFrom(fix, record);
+    this._absorb(before, nowMs);
+    return true;
+  }
+
+  /**
+   * Apply a newer record's altitude, speed, track and vertical rate to the
+   * current anchor when its position has not changed.
+   */
+  _refreshTelemetry(record, at, nowMs) {
+    const anchor = this.anchor;
+    const newest = this.fixes.at(-1);
+    if (!anchor || !newest) return;
+    const altitudeFt = finite(record.altitudeFt) ?? anchor.altitudeFt;
+    const speedMps = Number.isFinite(record.groundSpeedKt)
+      ? Math.max(0, record.groundSpeedKt) * KT_TO_MPS
+      : anchor.speedMps;
+    const trackDeg = Number.isFinite(record.trackDeg)
+      ? norm360(record.trackDeg)
+      : anchor.trackDeg;
+    const verticalRateFpm = finite(record.verticalRateFpm);
+    if (
+      altitudeFt === anchor.altitudeFt &&
+      speedMps === anchor.speedMps &&
+      trackDeg === anchor.trackDeg &&
+      verticalRateFpm === anchor.verticalRateFpm
+    )
+      return;
+    const before = this.displayAt(nowMs, { slew: false });
+    // The trail point keeps its heard position; the anchor takes the newer
+    // telemetry, with altitude extrapolated from when it was reported.
+    this.anchor = {
+      ...this._anchorFrom(
+        { ...newest, altitudeFt, speedMps, trackDeg },
+        { verticalRateFpm },
+      ),
+      altitudeAt: at,
+    };
+    this._absorb(before, nowMs);
+  }
+
+  /** Slide from where the marker was drawn to the new anchor, or snap. */
+  _absorb(before, nowMs) {
     if (before) {
       const after = this._raw(nowMs);
       const cosLat = Math.cos(after.lat * DEG);
@@ -151,7 +211,6 @@ export class LocalAdsbMotion {
           ? null
           : { east, north, upFt: up, startAt: nowMs };
     }
-    return true;
   }
 
   _trimHistory(newestAt) {
@@ -232,10 +291,13 @@ export class LocalAdsbMotion {
           dtSec,
         )
       : { lat: anchor.lat, lon: anchor.lon };
+    const altitudeDtSec = Number.isFinite(anchor.altitudeAt)
+      ? Math.min(dtSec, Math.max(0, (nowMs - anchor.altitudeAt) / 1000))
+      : dtSec;
     const altitudeFt =
       Number.isFinite(anchor.altitudeFt) &&
       Number.isFinite(anchor.verticalRateFpm)
-        ? anchor.altitudeFt + (anchor.verticalRateFpm * dtSec) / 60
+        ? anchor.altitudeFt + (anchor.verticalRateFpm * altitudeDtSec) / 60
         : anchor.altitudeFt;
     return {
       lat: projected.lat,

@@ -144,7 +144,7 @@ test('live feeds are read in parallel and labelled with their band', async () =>
   });
   const { status, json } = await call(handler);
   assert.equal(status, 200);
-  assert.deepEqual(calls, [
+  assert.deepEqual(calls.sort((a, b) => (a.url < b.url ? 1 : -1)), [
     { url: FEED_1090, redirect: 'manual' },
     { url: FEED_978, redirect: 'manual' },
   ]);
@@ -276,4 +276,93 @@ test('requests within a second share one read of every feed', async () => {
   assert.equal(fetches, 2);
   const res = await call(handler, 'POST');
   assert.equal(res.status, 405);
+});
+
+test('a feed name is resolved, every address checked, and the connection pinned to it', async () => {
+  const lookups = [];
+  const answers = {
+    'good.local': [{ address: '10.0.0.9', family: 4 }],
+    'public.local': [{ address: '93.184.216.34', family: 4 }],
+    'linklocal.local': [{ address: '169.254.169.254', family: 4 }],
+    'mixed.local': [
+      { address: '192.168.1.4', family: 4 },
+      { address: '8.8.8.8', family: 4 },
+    ],
+  };
+  const fetched = [];
+  const logger = quietLogger();
+  const handler = createLocalReceiversHandler({
+    feedsValue: [
+      '1090=http://good.local:8080/data/aircraft.json',
+      '1090=http://public.local:8080/data/aircraft.json',
+      '978=http://linklocal.local/data/aircraft.json',
+      '978=http://mixed.local/data/aircraft.json',
+      `1090=${FEED_978}`,
+    ].join(','),
+    now: () => FIXTURE_NOW_MS,
+    logger,
+    lookupImpl: async (hostname, options) => {
+      lookups.push({ hostname, all: options?.all });
+      return answers[hostname];
+    },
+    fetchImpl: async (url, options) => {
+      fetched.push({ url, lookup: options.lookup });
+      return respond();
+    },
+  });
+  const { json } = await call(handler);
+  assert.deepEqual(
+    json.feeds.map(({ status }) => status),
+    ['live', 'unreachable', 'unreachable', 'unreachable', 'live'],
+  );
+  assert.deepEqual(
+    lookups.map(({ hostname }) => hostname).sort(),
+    ['good.local', 'linklocal.local', 'mixed.local', 'public.local'],
+    'IP literals are not resolved',
+  );
+  assert.ok(lookups.every(({ all }) => all === true), 'every address');
+  assert.deepEqual(
+    fetched.map(({ url }) => url).sort(),
+    [FEED_978, 'http://good.local:8080/data/aircraft.json'],
+    'a name resolving outside loopback/RFC1918 is never contacted',
+  );
+  // The connection resolves only to the validated address, whatever the
+  // resolver would answer later.
+  answers['good.local'] = [{ address: '93.184.216.34', family: 4 }];
+  const pinned = fetched.find(({ url }) => url.includes('good.local')).lookup;
+  assert.equal(typeof pinned, 'function');
+  const one = await new Promise((resolve) =>
+    pinned('good.local', {}, (error, address, family) =>
+      resolve({ error, address, family }),
+    ),
+  );
+  assert.deepEqual(one, { error: null, address: '10.0.0.9', family: 4 });
+  const all = await new Promise((resolve) =>
+    pinned('good.local', { all: true }, (error, addresses) =>
+      resolve(addresses),
+    ),
+  );
+  assert.deepEqual(all, [{ address: '10.0.0.9', family: 4 }]);
+  assert.ok(logger.lines.some((line) => /FORBIDDEN_ADDRESS/.test(line)));
+});
+
+test('the default transport connects to the validated address, not a re-resolution', async (t) => {
+  const { createServer } = await import('node:http');
+  const server = createServer((req, res) => {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ now: FIXTURE_NOW_MS / 1000, aircraft: [] }));
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => server.close());
+  const { port } = server.address();
+  // `receiver-pin-test.local` has no real DNS entry: only the pinned lookup
+  // can reach the loopback server.
+  const handler = createLocalReceiversHandler({
+    feedsValue: `1090=http://receiver-pin-test.local:${port}/data/aircraft.json`,
+    now: () => FIXTURE_NOW_MS,
+    logger: quietLogger(),
+    lookupImpl: async () => [{ address: '127.0.0.1', family: 4 }],
+  });
+  const { json } = await call(handler);
+  assert.equal(json.feeds[0].status, 'live');
 });

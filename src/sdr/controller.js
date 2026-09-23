@@ -24,6 +24,12 @@ const FM_MIN_HZ = 87_500_000;
 const FM_MAX_HZ = 108_000_000;
 const READ_SAMPLE_COUNT = 32_768;
 const RATE_WINDOW_MS = 1_000;
+// A bulk read that has not completed in this long is treated as a stalled
+// USB transfer: the session is torn down instead of waiting forever.
+export const SDR_READ_STALL_MS = 5_000;
+// Upper bound on a graceful close queued behind other USB work; past it the
+// raw USB device is closed directly, which aborts any pending transfer.
+export const SDR_CLOSE_TIMEOUT_MS = 2_000;
 
 /** Tuning presets per receiver mode; gain is a separate per-mode setting. */
 export const SDR_RECEIVER_PRESETS = Object.freeze({
@@ -61,6 +67,34 @@ function defaultStorage() {
 async function setRtlAgc(device, enabled) {
   const method = device?._enableRtlAgc;
   if (typeof method === 'function') await method.call(device, enabled);
+}
+
+/** The WebUSB `USBDevice` under an opened RTL2832U, when reachable. */
+function rawUsbDevice(device, provider) {
+  return device?.com?.device || provider?.device || null;
+}
+
+/** Close a raw USB device, ignoring an already-closed or vanished one. */
+async function forceCloseUsb(usbDevice) {
+  if (!usbDevice || typeof usbDevice.close !== 'function') return;
+  try {
+    await usbDevice.close();
+  } catch {
+    /* already closed or unplugged */
+  }
+}
+
+/** Resolve with the operation's outcome, or reject once `ms` elapses. */
+function withDeadline(promise, ms, message) {
+  let timer = null;
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      const error = new Error(message);
+      error.name = 'TimeoutError';
+      reject(error);
+    }, ms);
+  });
+  return Promise.race([promise, deadline]).finally(() => clearTimeout(timer));
 }
 
 function publicAircraft(aircraft) {
@@ -108,9 +142,13 @@ export class SdrController {
    *   Builds the RTL-SDR provider around the selecting WebUSB wrapper.
    * @param {Storage|null} [options.storage] Gain and device preferences.
    * @param {USB|null} [options.webUsb] WebUSB entry point.
+   * @param {number} [options.readStallMs] Deadline for one bulk sample read.
+   * @param {number} [options.closeTimeoutMs] Deadline for a graceful close.
    */
   constructor({
     providerFactory = null,
+    readStallMs = SDR_READ_STALL_MS,
+    closeTimeoutMs = SDR_CLOSE_TIMEOUT_MS,
     storage = defaultStorage(),
     webUsb = typeof navigator !== 'undefined' ? navigator.usb : null,
   } = {}) {
@@ -157,8 +195,17 @@ export class SdrController {
     this._worker = null;
     this._audioContext = null;
     this._audioNode = null;
+    this._readStallMs = readStallMs;
+    this._closeTimeoutMs = closeTimeoutMs;
     this._usbTail = Promise.resolve();
+    // Bumped whenever a stalled queue is abandoned; work queued in an older
+    // epoch refuses to touch whatever device is current when it finally runs.
+    this._usbEpoch = 0;
     this._readGeneration = 0;
+    // Bumped by every connect() and stop(); a connect whose token is stale
+    // after an await has been superseded (stopped, destroyed or restarted).
+    this._sessionToken = 0;
+    this._destroyed = false;
     this._fmFrequencyHz = FM_DEFAULT_HZ;
     this._spectrum = null;
     this._spectrumSequence = 0;
@@ -212,23 +259,56 @@ export class SdrController {
   }
 
   _queueUsb(operation) {
-    const queued = this._usbTail.then(operation, operation);
+    const epoch = this._usbEpoch;
+    const run = () => {
+      if (epoch !== this._usbEpoch)
+        throw new Error('USB work abandoned after a stalled transfer');
+      return operation();
+    };
+    const queued = this._usbTail.then(run, run);
     this._usbTail = queued.catch(() => {});
     return queued;
   }
 
+  /** Abandon a queue that a stalled transfer is blocking. */
+  _resetUsbQueue() {
+    this._usbEpoch += 1;
+    this._usbTail = Promise.resolve();
+  }
+
   _ensureWorker() {
     if (this._worker) return this._worker;
-    this._worker = new Worker(new URL('./sdr.worker.js', import.meta.url), {
+    const worker = new Worker(new URL('./sdr.worker.js', import.meta.url), {
       type: 'module',
     });
-    this._worker.onmessage = (event) =>
+    this._worker = worker;
+    worker.onmessage = (event) => {
+      if (this._worker !== worker) return;
       this._handleWorkerMessage(event.data || {});
-    this._worker.onerror = (event) => {
-      console.warn('[SDR] Decoder worker error:', event.message || event);
-      this._setState({ status: 'error', message: 'SDR decoder worker failed' });
     };
-    return this._worker;
+    worker.onerror = (event) => {
+      if (this._worker !== worker) return;
+      console.warn('[SDR] Decoder worker error:', event?.message || event);
+      // A failed worker (e.g. its module did not load) never recovers: drop
+      // it so the next session builds and configures a fresh one.
+      this._discardWorker();
+      this._setState({ status: 'error', message: 'SDR decoder worker failed' });
+      if (this._device) void this.stop({ preserveMessage: true });
+    };
+    return worker;
+  }
+
+  _discardWorker() {
+    const worker = this._worker;
+    this._worker = null;
+    if (!worker) return;
+    worker.onmessage = null;
+    worker.onerror = null;
+    try {
+      worker.terminate();
+    } catch {
+      /* already gone */
+    }
   }
 
   _configureWorker() {
@@ -352,14 +432,15 @@ export class SdrController {
     const tunedFrequency =
       mode === 'adsb' ? preset.frequencyHz : clampFmFrequency(frequencyHz);
     const gain = this._gainByMode[mode];
+    const device = this._device;
     await this._queueUsb(async () => {
-      const actualRate = await this._device.setSampleRate(sampleRate);
-      await this._device.setFrequencyCorrection(preset.ppm);
-      const actualFrequency =
-        await this._device.setCenterFrequency(tunedFrequency);
-      await this._device.setGain(tunerGainValue(gain));
-      await setRtlAgc(this._device, preset.rtlAgc);
-      await this._device.resetBuffer();
+      const actualRate = await device.setSampleRate(sampleRate);
+      await device.setFrequencyCorrection(preset.ppm);
+      const actualFrequency = await device.setCenterFrequency(tunedFrequency);
+      await device.setGain(tunerGainValue(gain));
+      await setRtlAgc(device, preset.rtlAgc);
+      await device.resetBuffer();
+      if (device !== this._device) return;
       this._setState({
         sampleRate: Number.isFinite(actualRate) ? actualRate : sampleRate,
         frequencyHz: Number.isFinite(actualFrequency)
@@ -373,6 +454,7 @@ export class SdrController {
   }
 
   async connect(mode = this.state.mode) {
+    if (this._destroyed) return false;
     if (!this.state.webUsbSupported) {
       this._setState({
         status: 'unsupported',
@@ -381,10 +463,15 @@ export class SdrController {
       return false;
     }
     if (this._device) return this.setMode(mode);
+    const token = ++this._sessionToken;
+    const superseded = () => this._destroyed || token !== this._sessionToken;
     this._setState({
       status: 'connecting',
       message: 'Waiting for an RTL-SDR device…',
     });
+    let provider = null;
+    let device = null;
+    let installed = false;
     try {
       const nextMode = normalizeMode(mode);
       this._setState({ mode: nextMode, gain: this._gainByMode[nextMode] });
@@ -396,9 +483,21 @@ export class SdrController {
           'Browser audio is suspended; press Connect again to resume it',
         );
       }
-      this._provider = this._providerFactory();
-      this._device = await this._provider.get();
+      if (superseded()) return false;
+      provider = this._providerFactory();
+      device = await provider.get();
+      // stop() or destroy() ran while the picker/open was pending: the late
+      // device belongs to no session, so close it without publishing state.
+      if (superseded()) {
+        await this._closeOrphan(device, provider);
+        return false;
+      }
+      this._provider = provider;
+      this._device = device;
+      installed = true;
       await this._configureDevice(this.state.mode, this._fmFrequencyHz);
+      // A stop() during configuration already closed this device.
+      if (superseded()) return false;
       this._readGeneration += 1;
       this._sampleWindowStartedAt = Date.now();
       this._sampleWindowSamples = 0;
@@ -417,6 +516,12 @@ export class SdrController {
       void this._readLoop(this._readGeneration);
       return true;
     } catch (error) {
+      if (superseded()) {
+        // An installed device was closed by the stop() that superseded us.
+        if (device && !installed)
+          await this._closeOrphan(device, provider);
+        return false;
+      }
       console.warn('[SDR] Connection failed:', error);
       try {
         await this._device?.close();
@@ -431,6 +536,19 @@ export class SdrController {
         message: describeConnectionError(error),
       });
       return false;
+    }
+  }
+
+  /** Close a device a superseded connect() opened, bounded like stop(). */
+  async _closeOrphan(device, provider) {
+    try {
+      await withDeadline(
+        Promise.resolve().then(() => device?.close()),
+        this._closeTimeoutMs,
+        'RTL-SDR close timed out',
+      );
+    } catch {
+      await forceCloseUsb(rawUsbDevice(device, provider));
     }
   }
 
@@ -452,8 +570,16 @@ export class SdrController {
   async _readLoop(generation) {
     while (this._device && generation === this._readGeneration) {
       try {
+        const device = this._device;
+        // A transfer that never settles would hold the shared USB queue
+        // forever; past the deadline the session is torn down (stop() closes
+        // the raw USB device, which aborts the transfer).
         const block = await this._queueUsb(() =>
-          this._device.readSamples(READ_SAMPLE_COUNT),
+          withDeadline(
+            device.readSamples(READ_SAMPLE_COUNT),
+            this._readStallMs,
+            'RTL-SDR sample read stalled',
+          ),
         );
         if (!this._device || generation !== this._readGeneration) break;
         const buffer = block.data;
@@ -773,15 +899,28 @@ export class SdrController {
   async stop({ preserveMessage = false, message = null } = {}) {
     this.cancelSeek();
     this._readGeneration += 1;
+    this._sessionToken += 1;
     const device = this._device;
+    const provider = this._provider;
     this._device = null;
     this._provider = null;
     this._audioNode?.port.postMessage({ type: 'clear' });
     if (device) {
       try {
-        await this._queueUsb(() => device.close());
+        // Graceful close waits behind queued USB work, but only so long: a
+        // stalled bulk read would otherwise wedge stop, mode and device
+        // changes behind it.
+        await withDeadline(
+          this._queueUsb(() => device.close()),
+          this._closeTimeoutMs,
+          'RTL-SDR close timed out',
+        );
       } catch (error) {
         console.warn('[SDR] Device close failed:', error);
+        // Closing the raw USB device aborts any pending transfer; the old
+        // queue is abandoned so the next session starts unblocked.
+        await forceCloseUsb(rawUsbDevice(device, provider));
+        this._resetUsbQueue();
       }
     }
     const idleStatus = this.state.webUsbSupported ? 'idle' : 'unsupported';
@@ -802,9 +941,9 @@ export class SdrController {
   }
 
   async destroy() {
+    this._destroyed = true;
     await this.stop();
-    this._worker?.terminate();
-    this._worker = null;
+    this._discardWorker();
     await this._audioContext?.close();
     this._audioContext = null;
     this._audioNode = null;

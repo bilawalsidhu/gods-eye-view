@@ -1,5 +1,9 @@
+import { lookup as dnsLookup } from 'node:dns/promises';
+import http from 'node:http';
+import https from 'node:https';
+import { Readable } from 'node:stream';
 import { coalesceProxyRequest, readResponseTextCapped } from './common/http.js';
-import { parseTapAddress } from '../../src/data/tapAddress.js';
+import { isLocalIpv4, parseTapAddress } from '../../src/data/tapAddress.js';
 import { normalizeDump1090Aircraft } from '../../src/sources/adsbRecords.js';
 
 /**
@@ -15,6 +19,11 @@ import { normalizeDump1090Aircraft } from '../../src/sources/adsbRecords.js';
  * loopback, RFC1918, `localhost`, `*.local`), the scheme must be http(s) and
  * the path must end in `aircraft.json`. Invalid entries are logged at startup,
  * reported as `invalid` and never fetched.
+ *
+ * A name (`localhost`, `*.local`) is resolved before every read; each address
+ * it resolves to must itself be loopback or RFC1918, and the connection is
+ * pinned to exactly those validated addresses, so a later re-resolution
+ * cannot redirect it anywhere else.
  */
 
 export const LOCAL_RECEIVERS_ROUTE = '/api/local-receivers/aircraft';
@@ -123,6 +132,97 @@ class FeedError extends Error {
 }
 
 /**
+ * Whether a resolved address satisfies the receiver-tap rule: loopback or
+ * RFC1918 IPv4, the IPv6 loopback, or an IPv4-mapped form of the former.
+ * @param {string} address Resolved IP address.
+ * @returns {boolean}
+ */
+export function isLocalReceiverAddress(address) {
+  const value = String(address || '').toLowerCase();
+  if (value === '::1') return true;
+  const mapped = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/.exec(value);
+  return isLocalIpv4(mapped ? mapped[1] : value);
+}
+
+/**
+ * Resolve a feed host name and require every address to be local.
+ * @param {string} hostname `localhost` or a `*.local` name.
+ * @param {typeof dnsLookup} lookupImpl `dns.promises.lookup`-compatible.
+ * @returns {Promise<Array<{address:string, family:number}>>}
+ */
+export async function resolveLocalReceiverAddresses(hostname, lookupImpl) {
+  let resolved;
+  try {
+    resolved = await lookupImpl(hostname, { all: true, verbatim: true });
+  } catch {
+    throw new FeedError('UNRESOLVED');
+  }
+  const addresses = (Array.isArray(resolved) ? resolved : [resolved])
+    .map((row) => ({
+      address: String(row?.address || ''),
+      family: Number(row?.family) || (String(row?.address).includes(':') ? 6 : 4),
+    }))
+    .filter((row) => row.address);
+  if (!addresses.length) throw new FeedError('UNRESOLVED');
+  if (addresses.some((row) => !isLocalReceiverAddress(row.address)))
+    throw new FeedError('FORBIDDEN_ADDRESS');
+  return addresses;
+}
+
+/** A `net`-style lookup that only ever answers the validated addresses. */
+function pinnedLookup(addresses) {
+  return (_hostname, options, callback) => {
+    const done = typeof options === 'function' ? options : callback;
+    if (options?.all) done(null, addresses.map((row) => ({ ...row })));
+    else done(null, addresses[0].address, addresses[0].family);
+  };
+}
+
+/**
+ * Default transport. With `options.lookup` (a pinned feed name) the request
+ * is made with node:http(s) so the socket connects only to the validated
+ * addresses (TLS still verifies the name); otherwise it is a plain fetch of
+ * an IP-literal URL. Redirects are never followed either way.
+ * @param {string} url
+ * @param {object} options
+ * @returns {Promise<Response>}
+ */
+function fetchLocalReceiverFeed(url, options) {
+  if (typeof options?.lookup !== 'function') return fetch(url, options);
+  const client = new URL(url).protocol === 'https:' ? https : http;
+  return new Promise((resolve, reject) => {
+    const request = client.request(
+      url,
+      {
+        method: 'GET',
+        headers: options.headers,
+        signal: options.signal,
+        lookup: options.lookup,
+        // A fresh socket per read: a pooled one could outlive the pin.
+        agent: false,
+      },
+      (response) => {
+        const headers = new Headers();
+        for (const [name, value] of Object.entries(response.headers)) {
+          if (Array.isArray(value))
+            value.forEach((item) => headers.append(name, item));
+          else if (value !== undefined) headers.set(name, String(value));
+        }
+        const status = response.statusCode || 500;
+        resolve(
+          new Response(
+            status === 204 || status === 304 ? null : Readable.toWeb(response),
+            { status, statusText: response.statusMessage || '', headers },
+          ),
+        );
+      },
+    );
+    request.on('error', reject);
+    request.end();
+  });
+}
+
+/**
  * Fetch one validated feed document without following redirects and with the
  * body cap enforced while it streams.
  * @param {string} url Validated feed URL.
@@ -132,7 +232,8 @@ class FeedError extends Error {
 export async function fetchLocalReceiverDocument(
   url,
   {
-    fetchImpl = fetch,
+    fetchImpl = fetchLocalReceiverFeed,
+    lookupImpl = dnsLookup,
     timeoutMs = LOCAL_RECEIVER_TIMEOUT_MS,
     maxBytes = LOCAL_RECEIVER_MAX_BODY_BYTES,
   } = {},
@@ -141,11 +242,18 @@ export async function fetchLocalReceiverDocument(
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   let upstream;
   try {
+    const { hostname } = new URL(url);
+    // IP literals were validated when the feed list was parsed; a name is
+    // validated by what it resolves to now, and the socket is pinned there.
+    const lookup = isLocalIpv4(hostname)
+      ? undefined
+      : pinnedLookup(await resolveLocalReceiverAddresses(hostname, lookupImpl));
     upstream = await fetchImpl(url, {
       method: 'GET',
       headers: { Accept: 'application/json' },
       redirect: 'manual',
       signal: controller.signal,
+      ...(lookup ? { lookup } : {}),
     });
     if (upstream.status >= 300 && upstream.status < 400)
       throw new FeedError('REDIRECT_REFUSED');
@@ -186,7 +294,10 @@ export async function fetchLocalReceiverDocument(
  * Read one feed and describe it.
  * @returns {Promise<{status:object, records:object[]}>}
  */
-async function readFeed(feed, { fetchImpl, now, timeoutMs, maxBytes, log }) {
+async function readFeed(
+  feed,
+  { fetchImpl, lookupImpl, now, timeoutMs, maxBytes, log },
+) {
   const summary = { band: feed.band, label: feed.label };
   if (!feed.url)
     return {
@@ -197,6 +308,7 @@ async function readFeed(feed, { fetchImpl, now, timeoutMs, maxBytes, log }) {
   try {
     json = await fetchLocalReceiverDocument(feed.url, {
       fetchImpl,
+      lookupImpl,
       timeoutMs,
       maxBytes,
     });
@@ -231,14 +343,17 @@ async function readFeed(feed, { fetchImpl, now, timeoutMs, maxBytes, log }) {
  * Build the route handler. Exposed for tests; the plugin wraps it.
  * @param {object} [options]
  * @param {string} [options.feedsValue] `LOCAL_RECEIVER_FEEDS` value.
- * @param {typeof fetch} [options.fetchImpl]
+ * @param {typeof fetch} [options.fetchImpl] Receives `options.lookup` when
+ *   the feed host is a name; the connection must resolve only through it.
+ * @param {Function} [options.lookupImpl] `dns.promises.lookup`-compatible.
  * @param {() => number} [options.now]
  * @param {{warn:Function, info?:Function}} [options.logger]
  * @returns {{handle:Function, config:object}}
  */
 export function createLocalReceiversHandler({
   feedsValue = process.env[LOCAL_RECEIVER_FEEDS_ENV],
-  fetchImpl = (...args) => fetch(...args),
+  fetchImpl = fetchLocalReceiverFeed,
+  lookupImpl = dnsLookup,
   now = Date.now,
   logger = console,
   timeoutMs = LOCAL_RECEIVER_TIMEOUT_MS,
@@ -270,7 +385,14 @@ export function createLocalReceiversHandler({
   async function snapshot() {
     const results = await Promise.all(
       config.feeds.map((feed) =>
-        readFeed(feed, { fetchImpl, now, timeoutMs, maxBytes, log }),
+        readFeed(feed, {
+          fetchImpl,
+          lookupImpl,
+          now,
+          timeoutMs,
+          maxBytes,
+          log,
+        }),
       ),
     );
     return {
