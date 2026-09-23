@@ -128,12 +128,15 @@ async function main() {
   });
 
   console.log(`\n  qa-attribution-b12 → ${APP_URL}\n`);
-  await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
+  // Boot windows sized for a shared box: under CI-fleet load the Vite
+  // on-demand transform of the Cesium graph can exceed 60 s (RUN 4,
+  // 2026-09-23) — the assertion is unchanged, only the wait widens.
+  await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 120000 });
 
   // Wait for the app + viewer.creditDisplay to be live.
   await page.waitForFunction(
     () => window.__godsEyeView && window.__godsEyeView.viewer && window.__godsEyeView.viewer.creditDisplay,
-    { timeout: 60000 },
+    { timeout: 120000 },
   );
   // Give Cesium a few frames to render the on-screen credit line (logo + link).
   await new Promise((r) => setTimeout(r, 2500));

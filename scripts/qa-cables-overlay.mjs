@@ -205,6 +205,12 @@ try {
     check('parked idle stays near zero (≤6 / 5s)', idle.renders <= 6, idle);
 
     // OFF must clear the host source (no orphan labels), ON must restore.
+    // The re-enable window matches the first-enable wait (60 s): on a loaded
+    // box one preRender frame can take seconds (RUN 4: mean 1 s, p95 2.6 s),
+    // and 20 s could starve the sweep before its first publish even though
+    // the republish contract is pinned at unit level. entriesBySource rides
+    // in the payload so a failure distinguishes "publish never happened"
+    // from "published but never painted".
     const cycle = await page.evaluate(async (layerId) => {
       const gev = window.__godsEyeView;
       await gev.dataManager.setEnabled(layerId, false, { origin: 'user' });
@@ -216,14 +222,20 @@ try {
       await gev.dataManager.setEnabled(layerId, true, { origin: 'user' });
       const t0 = performance.now();
       let onPainted = 0;
-      while (performance.now() - t0 < 20_000) {
+      while (performance.now() - t0 < 60_000) {
         const diag = window.__gevWorldOverlay?.getDiagnostics?.() || {};
         onPainted = diag.paintedBySource?.[layerId] || 0;
         if (onPainted > 0) break;
         gev.viewer.scene.requestRender?.();
         await new Promise((r) => setTimeout(r, 100));
       }
-      return { offEntries, offPainted, onPainted };
+      const endDiag = window.__gevWorldOverlay?.getDiagnostics?.() || {};
+      return {
+        offEntries,
+        offPainted,
+        onPainted,
+        onEntries: endDiag.entriesBySource?.[layerId] || 0,
+      };
     }, LAYER_ID);
     check('disable clears host entries (no orphans)', cycle.offEntries === 0 && cycle.offPainted === 0, cycle);
     check('re-enable restores painted labels', cycle.onPainted > 0, cycle);
