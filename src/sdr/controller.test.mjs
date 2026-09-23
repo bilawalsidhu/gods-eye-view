@@ -6,6 +6,7 @@ import {
   SDR_RECEIVER_PRESETS,
   SdrController,
 } from './controller.js';
+import { RTL2832U_Provider } from '@jtarrio/webrtlsdr/rtlsdr.js';
 import { RTL_SDR_USB_FILTERS } from './usbDevices.js';
 import { SDR_GAIN_STORAGE_KEY } from './gain.js';
 
@@ -895,4 +896,126 @@ test("a held older acquisition released after a newer session starts never close
   assert.equal(state.status, 'streaming');
   assert.equal(state.connected, true);
   assert.equal(controller._acquisitions.size, 0);
+});
+
+test("an older acquisition's cleanup that outlives the wait never closes the newer session's device", async (t) => {
+  const events = [];
+  t.after(replaceGlobal('Worker', FakeWorker));
+  const usb = sharedUsb(events);
+  const heldA = gate();
+  // A's graceful close never finishes: only its fallback raw close ends it.
+  const providerA = {
+    device: undefined,
+    async get() {
+      this.device = usb;
+      await usb.open();
+      events.push('A:init');
+      await heldA.promise;
+      return rtlOver(usb, events, 'A', { closeGate: new Promise(() => {}) });
+    },
+  };
+  const controller = acquisitionController(
+    [providerA, heldProvider(usb, events, 'B')],
+    40,
+  );
+  t.after(() => controller.destroy());
+  const connectA = controller.connect('adsb');
+  await pause(5);
+  const connectB = controller.connect('adsb');
+  // A's cleanup starts shortly before B stops waiting for it (3 x 40 ms), so
+  // its fallback raw close comes due after B is already streaming.
+  await pause(100);
+  heldA.open();
+  assert.equal(await within(connectA), false, 'A was superseded');
+  assert.ok(events.includes('A:graceful-close'), "A's cleanup is running");
+  assert.equal(await within(connectB), true);
+  const closesAfterB = events.filter((event) => event === 'usb-close').length;
+  await pause(80);
+  assert.equal(
+    events.filter((event) => event === 'usb-close').length,
+    closesAfterB,
+    "A's fallback close does not close B's device",
+  );
+  assert.equal(usb.opened, true, "B's device stays open");
+  const state = controller.getState();
+  assert.equal(state.status, 'streaming');
+  assert.equal(state.connected, true);
+});
+
+test("a device selection that resolves after its acquisition was superseded cannot touch the newer session's device", async (t) => {
+  const events = [];
+  t.after(replaceGlobal('Worker', FakeWorker));
+  const usb = Object.assign(sharedUsb(events), {
+    vendorId: 0x0bda,
+    productId: 0x2838,
+    productName: 'RTL2838UHIDIR',
+    serialNumber: 'shared',
+    async claimInterface() {
+      events.push('usb-claim');
+    },
+    async releaseInterface() {
+      events.push('usb-release');
+    },
+    async controlTransferOut() {
+      events.push('usb-write');
+      throw new Error('transfer error');
+    },
+    async controlTransferIn() {
+      events.push('usb-read');
+      throw new Error('transfer error');
+    },
+  });
+  const heldSelection = gate();
+  let getDevicesCalls = 0;
+  const webUsb = {
+    async getDevices() {
+      getDevicesCalls += 1;
+      // A's selection is held; B's resolves at once.
+      if (getDevicesCalls === 1) await heldSelection.promise;
+      return [usb];
+    },
+    async requestDevice() {
+      return usb;
+    },
+  };
+  let providers = 0;
+  const controller = new SdrController({
+    storage: memoryStorage(),
+    webUsb,
+    readStallMs: 60_000,
+    closeTimeoutMs: 20,
+    providerFactory: (webusb) => {
+      providers += 1;
+      // A is the installed library provider; B opens the same device
+      // through the same selecting wrapper and streams.
+      if (providers === 1) return new RTL2832U_Provider({ webusb });
+      return {
+        device: undefined,
+        async get() {
+          this.device = await webusb.requestDevice({
+            filters: RTL_SDR_USB_FILTERS,
+          });
+          await this.device.open();
+          return rtlOver(this.device, events, 'B');
+        },
+      };
+    },
+  });
+  t.after(() => controller.destroy());
+  const connectA = controller.connect('adsb');
+  await pause(5);
+  assert.equal(await within(controller.connect('adsb')), true);
+  assert.equal(controller.getState().status, 'streaming');
+  const eventsBeforeRelease = events.length;
+  heldSelection.open();
+  assert.equal(await within(connectA), false, 'A was superseded');
+  await pause(30);
+  const late = events
+    .slice(eventsBeforeRelease)
+    .filter((event) => event.startsWith('usb-'));
+  assert.deepEqual(late, [], "A's late selection never reaches the device");
+  assert.equal(usb.opened, true, "B's device stays open");
+  const state = controller.getState();
+  assert.equal(state.status, 'streaming');
+  assert.equal(state.connected, true);
 });

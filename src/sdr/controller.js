@@ -71,9 +71,18 @@ async function setRtlAgc(device, enabled) {
   if (typeof method === 'function') await method.call(device, enabled);
 }
 
+// Guarded stand-in -> the WebUSB `USBDevice` it forwards to. Ownership checks
+// compare real devices, never the per-acquisition stand-ins.
+const GUARDED_USB_DEVICES = new WeakMap();
+
+/** The real WebUSB `USBDevice` behind a guarded stand-in (or itself). */
+function unwrapUsb(usbDevice) {
+  return (usbDevice && GUARDED_USB_DEVICES.get(usbDevice)) || usbDevice;
+}
+
 /** The WebUSB `USBDevice` under an opened RTL2832U, when reachable. */
 function rawUsbDevice(device, provider) {
-  return device?.com?.device || provider?.device || null;
+  return unwrapUsb(device?.com?.device || provider?.device || null);
 }
 
 /** Close a raw USB device, ignoring an already-closed or vanished one. */
@@ -86,31 +95,57 @@ async function forceCloseUsb(usbDevice) {
   }
 }
 
+function closedUsbError() {
+  return Promise.reject(new Error('RTL-SDR session was closed'));
+}
+
 /**
- * Wrap a WebUSB entry point so every `USBDevice` it hands out is reported to
- * `onDevice`. The RTL-SDR provider opens and initializes the device inside
- * `get()`, so this is the only way to reach a device whose initialization
- * failed before `get()` returned it.
+ * A stand-in for `usbDevice` whose methods reject once `isFenced()` holds,
+ * so an abandoned acquisition that is still running can never open, claim,
+ * write to or close the device a newer session has opened since (WebUSB
+ * hands every opener the same `USBDevice`).
  */
-function captureRequestedUsb(webUsb, onDevice) {
+function guardUsbDevice(usbDevice, isFenced) {
+  const guarded = new Proxy(usbDevice, {
+    get(target, property) {
+      const value = Reflect.get(target, property, target);
+      if (typeof value !== 'function') return value;
+      return (...args) =>
+        isFenced() ? closedUsbError() : value.apply(target, args);
+    },
+  });
+  GUARDED_USB_DEVICES.set(guarded, usbDevice);
+  return guarded;
+}
+
+/**
+ * Wrap a WebUSB entry point for one acquisition: every `USBDevice` it hands
+ * out is reported to `onDevice` and handed on guarded by `isFenced`. The
+ * RTL-SDR provider opens and initializes the device inside `get()`, so this
+ * is the only way to reach a device whose initialization failed before
+ * `get()` returned it, and the only way to stop a selection that resolves
+ * after the acquisition was abandoned from initializing that device.
+ */
+function captureRequestedUsb(webUsb, { onDevice, isFenced }) {
   if (!webUsb || typeof webUsb.requestDevice !== 'function') return webUsb;
   return new Proxy(webUsb, {
     get(target, property) {
       if (property === 'requestDevice') {
         return async (...args) => {
           const usbDevice = await target.requestDevice(...args);
-          if (usbDevice) onDevice(usbDevice);
-          return usbDevice;
+          if (!usbDevice) return usbDevice;
+          // A late selection belongs to no session: the device it names may
+          // already be open for a newer one.
+          if (isFenced())
+            throw new Error('RTL-SDR device selection was abandoned');
+          onDevice(usbDevice);
+          return guardUsbDevice(usbDevice, isFenced);
         };
       }
       const value = Reflect.get(target, property, target);
       return typeof value === 'function' ? value.bind(target) : value;
     },
   });
-}
-
-function closedUsbError() {
-  return Promise.reject(new Error('RTL-SDR session was closed'));
 }
 
 /**
@@ -283,7 +318,10 @@ export class SdrController {
     // Every provider opens its device through the selecting WebUSB wrapper.
     const createProvider =
       providerFactory || ((webusb) => new RTL2832U_Provider({ webusb }));
-    this._providerFactory = (onUsbDevice = () => {}) =>
+    this._providerFactory = ({
+      onUsbDevice = () => {},
+      isFenced = () => false,
+    } = {}) =>
       createProvider(
         captureRequestedUsb(
           createRememberingWebUsb(this._webUsb, {
@@ -295,10 +333,10 @@ export class SdrController {
               return force;
             },
             onSelected: (device) => {
-              this._deviceIdentity = sdrDeviceIdentity(device);
+              if (!isFenced()) this._deviceIdentity = sdrDeviceIdentity(device);
             },
           }),
-          onUsbDevice,
+          { onDevice: onUsbDevice, isFenced },
         ),
       );
     this._sampleWindowStartedAt = 0;
@@ -593,6 +631,7 @@ export class SdrController {
       if (superseded()) return false;
       acquisition = this._beginAcquisition();
       const device = await acquisition.provider.get();
+      acquisition.device = device || null;
       // stop() or destroy() ran while the picker/open was pending: the late
       // device belongs to no session, so close it without publishing state.
       if (superseded()) {
@@ -666,14 +705,23 @@ export class SdrController {
       sequence: ++this._acquisitionSequence,
       usbDevices: new Set(),
       provider: null,
+      // The RTL2832U its get() returned, once it has.
+      device: null,
       ended: false,
+      // Superseded: from here on its provider cannot reach the hardware.
+      abandoned: false,
+      // A newer connect stopped waiting for it to settle.
+      waitedOut: false,
       settled: new Promise((resolve) => {
         settle = resolve;
       }),
       settle,
     };
-    acquisition.provider = this._providerFactory((usbDevice) => {
-      acquisition.usbDevices.add(usbDevice);
+    acquisition.provider = this._providerFactory({
+      onUsbDevice: (usbDevice) => {
+        acquisition.usbDevices.add(usbDevice);
+      },
+      isFenced: () => acquisition.abandoned,
     });
     this._acquisitions.add(acquisition);
     return acquisition;
@@ -691,8 +739,8 @@ export class SdrController {
     const usbDevices = new Set(acquisition.usbDevices);
     const provider = acquisition.provider;
     for (const usbDevice of [
-      rawUsbDevice(device, provider),
-      provider?.device,
+      rawUsbDevice(device || acquisition.device, provider),
+      unwrapUsb(provider?.device),
     ]) {
       if (usbDevice && typeof usbDevice === 'object') usbDevices.add(usbDevice);
     }
@@ -707,14 +755,17 @@ export class SdrController {
   _usbClaimedElsewhere(usbDevice, acquisition) {
     if (!usbDevice) return false;
     const installed = this._device
-      ? [rawUsbDevice(this._device, this._provider), this._provider?.device]
+      ? [
+          rawUsbDevice(this._device, this._provider),
+          unwrapUsb(this._provider?.device),
+        ]
       : [];
     if (installed.includes(usbDevice)) return true;
     for (const other of this._acquisitions) {
       if (
         other !== acquisition &&
         other.sequence > acquisition.sequence &&
-        other.usbDevices.has(usbDevice)
+        this._acquisitionUsbDevices(other).has(usbDevice)
       )
         return true;
     }
@@ -747,11 +798,19 @@ export class SdrController {
     try {
       const usbDevices = this._acquisitionUsbDevices(acquisition, device);
       const ownRaw = rawUsbDevice(device, acquisition.provider);
+      const claimedElsewhere = (usbDevice) =>
+        this._usbClaimedElsewhere(usbDevice, acquisition);
       if (device) {
-        if (this._usbClaimedElsewhere(ownRaw, acquisition)) fenceDevice(device);
+        // A newer connect that stopped waiting may be opening this device
+        // right now: never let this old handle reach it gracefully.
+        if (acquisition.waitedOut) fenceDevice(device);
+        if (claimedElsewhere(ownRaw)) fenceDevice(device);
         else
           await this._closeDevice(device, acquisition.provider, {
             queued: false,
+            // Re-checked when the fallback comes due: a newer session may
+            // have opened the device while the graceful close stalled.
+            mayForceClose: (usbDevice) => !claimedElsewhere(usbDevice),
           });
       }
       // Without an RTL2832U (a failed get()), every raw device is closed
@@ -812,10 +871,26 @@ export class SdrController {
           'RTL-SDR acquisition did not settle',
         );
       } catch {
-        for (const acquisition of older) waitedOut.add(acquisition);
+        for (const acquisition of older) {
+          waitedOut.add(acquisition);
+          this._fenceWaitedOut(acquisition);
+        }
       }
       if (superseded()) return;
     }
+  }
+
+  /**
+   * Cut an acquisition that a newer connect stopped waiting for off the
+   * hardware: its provider's WebUSB calls already reject (it was abandoned),
+   * and an RTL2832U it returned is detached from the shared `USBDevice`, so
+   * a graceful close still running for it cannot close the newer session's
+   * device. Its cleanup still closes the device unless someone else owns it.
+   */
+  _fenceWaitedOut(acquisition) {
+    acquisition.abandoned = true;
+    acquisition.waitedOut = true;
+    if (acquisition.device) fenceDevice(acquisition.device);
   }
 
   /**
@@ -839,10 +914,12 @@ export class SdrController {
    * the raw WebUSB device. Before the raw close, queued USB work is abandoned
    * (so a graceful close still waiting in the queue never starts) and the old
    * device is fenced from the hardware (so a graceful close that is already
-   * running cannot reach a device a later session reopens). The raw close is
+   * running cannot reach a device a later session reopens). `mayForceClose`
+   * is asked immediately before the raw close, so a device that someone else
+   * opened while the graceful close stalled is left alone. The raw close is
    * bounded too; this never throws.
    */
-  async _closeDevice(device, provider, { queued }) {
+  async _closeDevice(device, provider, { queued, mayForceClose = () => true }) {
     const usbDevice = rawUsbDevice(device, provider);
     try {
       // Graceful close waits behind queued USB work, but only so long: a
@@ -862,6 +939,7 @@ export class SdrController {
     }
     if (queued) this._resetUsbQueue();
     fenceDevice(device);
+    if (!mayForceClose(usbDevice)) return;
     try {
       // Closing the raw USB device aborts any pending transfer.
       await withDeadline(
