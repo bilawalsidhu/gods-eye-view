@@ -54,6 +54,7 @@ export class PanelChrome {
     this._disposed = false;
     this._lifetime = new UiLifetime();
     this._cockpitPanelRestore = null;
+    this._cctvShortcutFocusOrigin = null;
     this._cockpitContextCollapsedForDataPanel = false;
     this._panelPosition = new PanelPositionControls({
       syncPanelCollapseButton: (panel) => this._syncPanelCollapseButton(panel),
@@ -142,14 +143,39 @@ export class PanelChrome {
     });
     this._initCommandDockPins();
     this._initCommandDockTrayMetrics();
+    this._initCctvShortcut();
     this._maybeNotifyLayoutReset();
   }
 
+  _initCctvShortcut() {
+    const button = this._cctvGlobeBtn;
+    this._removeCctvShortcut?.();
+    this._removeCctvShortcut = null;
+    if (!button) return;
+    this._removeCctvShortcut = this._lifetime.listen(button, 'click', () => {
+      this.setPanelCollapsed('cctv-panel', false, { explicit: true });
+      const panel = document.getElementById('cctv-panel');
+      if (panel) {
+        panel.removeAttribute('aria-hidden');
+        panel.scrollIntoView?.({ block: 'nearest' });
+        this._cctvShortcutFocusOrigin = button;
+        const disclosure = panel.querySelector?.(
+          '[data-collapse-target="cctv-panel"]',
+        );
+        disclosure?.focus?.();
+      }
+    });
+  }
+
   _collapsePanelOnEscape(event, panelId) {
-    return collapsePanelOnEscape(event, {
+    const focusOrigin =
+      panelId === 'cctv-panel'
+        ? this._cctvShortcutFocusOrigin || this._cctvGlobeBtn
+        : null;
+    const collapsed = collapsePanelOnEscape(event, {
       panel: document.getElementById(panelId),
-      onChange: (collapsed, options) =>
-        this.setPanelCollapsed(panelId, collapsed, options),
+      onChange: (nextCollapsed, options) =>
+        this.setPanelCollapsed(panelId, nextCollapsed, options),
       beforeCollapse: () => {
         if (panelId !== 'location-bar' || !this._locationSearch) return;
         this._locationSearch.classList.remove('expanded');
@@ -157,6 +183,8 @@ export class PanelChrome {
         this._locationSearch.blur();
       },
     });
+    if (collapsed) focusOrigin?.focus?.({ preventScroll: true });
+    return collapsed;
   }
 
   _initCommandDockPins() {
@@ -397,6 +425,14 @@ export class PanelChrome {
     if (explicit && !restore)
       this.shareLinkManager?.claimRestoreLane?.('panel', panelId);
     const nextCollapsed = Boolean(collapsed);
+    const focusOrigin =
+      panelId === 'cctv-panel' &&
+      nextCollapsed &&
+      panelEl.contains(document.activeElement)
+        ? this._cctvShortcutFocusOrigin || this._cctvGlobeBtn
+        : null;
+    if (panelId === 'cctv-panel' && nextCollapsed)
+      this._cctvShortcutFocusOrigin = null;
     const wasAutoCollapsed = panelEl.classList.contains(
       'layout-auto-collapsed',
     );
@@ -442,6 +478,7 @@ export class PanelChrome {
       if (priorRightOwner !== this._panelLayout._rightStackPreferredPanelId) {
         this._scheduleRightPanelLayout({ reconsiderAutoCollapse: true });
       }
+      focusOrigin?.focus?.({ preventScroll: true });
       return;
     }
     panelEl.classList.remove('layout-auto-collapsed');
@@ -496,6 +533,7 @@ export class PanelChrome {
       }
     }
     panelEl.classList.toggle('collapsed', nextCollapsed);
+    focusOrigin?.focus?.({ preventScroll: true });
     if (
       nextCollapsed &&
       this.cockpitView?.active &&

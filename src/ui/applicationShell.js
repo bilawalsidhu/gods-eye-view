@@ -86,6 +86,7 @@ export class StyleManager extends ShellFacade {
     Object.assign(this, readShellElements());
     this._panelChrome = new PanelChrome({
       elements: {
+        _cctvGlobeBtn: this._cctvGlobeBtn,
         _contextRadioDetailsBtn: this._contextRadioDetailsBtn,
         _contextRadioDock: this._contextRadioDock,
         _leftPanelStack: this._leftPanelStack,

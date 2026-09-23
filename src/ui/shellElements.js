@@ -150,6 +150,7 @@ export function readShellElements(document = globalThis.document) {
     _tiltMapBtn: document.getElementById('tilt-map-view'),
     _northUpBtn: document.getElementById('north-up-view'),
     _clearSelectedLayersBtn: document.getElementById('clear-selected-layers'),
+    _cctvGlobeBtn: document.getElementById('cctv-globe-btn'),
     _globalLoadingStatus: document.getElementById('global-loading-status'),
     _globalLoadingLabel: document.getElementById('global-loading-label'),
     _globalLoadingDetail: document.getElementById('global-loading-detail'),

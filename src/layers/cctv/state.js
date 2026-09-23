@@ -51,6 +51,7 @@ export function createState({ services }) {
   layerState._clickHandler = null;
 
   layerState._count = 0;
+  layerState._catalogFromSeeds = false;
 
   layerState._lastUpdate = null;
 

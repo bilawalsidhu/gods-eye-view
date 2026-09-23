@@ -33,6 +33,7 @@ export function createLifecycle({
     layerState._recordById = new Map();
     layerState._healthById = new Map();
     layerState._count = 0;
+    layerState._catalogFromSeeds = false;
     layerState._lastUpdate = null;
     layerState._lastHealthSyncAt = 0;
     layerState._lastError = null;
@@ -76,6 +77,7 @@ export function createLifecycle({
 
       const sources = await parts.catalog.loadCameraSources();
       const catalogFromSources = parts.catalog.buildCatalogFromSources(sources);
+      layerState._catalogFromSeeds = catalogFromSources.length === 0;
       const catalog = catalogFromSources.length
         ? catalogFromSources
         : parts.catalog.seedCatalog();

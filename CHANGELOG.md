@@ -1,5 +1,31 @@
 # Changelog
 
+- Return an uncached 502 when an aircraft-track upstream response exceeds the
+  proxy's 5 MiB limit, instead of caching an error body as a successful track.
+- Bound aircraft-track misses to 30 per client and 60 globally per minute,
+  250 OpenSky requests per rolling day, and four concurrent upstream calls
+  (at most three OpenSky, reserving one slot for adsb.lol). Coalesce
+  same-aircraft requests, cap cache memory at 24 MiB, cool down oversized
+  sources for five seconds, and report the remaining daily quota wait without
+  consuming the minute allowance. Honor OpenSky anonymous/Basic modes after
+  an OAuth token was cached, retry Basic in auto mode after bearer rejection,
+  and time out stalled OAuth token acquisition.
+- Coalesce concurrent OpenSky worldwide state-feed misses, cap each response
+  at 32 MiB and its fetch at 12 seconds, and keep oversized bodies out of
+  the successful snapshot cache. On 429, 5xx, or fetch failure, prefer
+  regional data to an obsolete worldwide frame and otherwise serve the
+  last-good snapshot. Missing budget headers use a conservative five-minute
+  cache TTL; missing retry headers use a two-minute cooldown. An oversized
+  429 body cannot bypass the provider's cooldown.
+- Add a globe-actions CCTV shortcut that opens the camera panel when a compact
+  right rail hides its collapsed header. It preserves panel preferences and
+  does not enable the camera feed.
+  Its disclosure is no longer focused while hidden from assistive technology,
+  and Escape or manual collapse returns focus to the globe shortcut.
+- Report CCTV's bundled seed catalog as FALLBACK when public camera catalogs
+  provide no usable entries; a healthy public catalog no longer inherits a
+  misleading "Street View fallback" source label.
+
 - Add a **Recent Imagery** data layer (NASA GIBS · HLS + VIIRS, keyless).
   Select a box (drag, the current view, or around a pin; up to 1,000 km a
   side) and the right-rail panel lists the last 30 days of Sentinel-2 /

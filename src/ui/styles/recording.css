@@ -30,6 +30,7 @@ body.recording-mode #scene-runtime.active {
 body.scene-playback-mode
   :is(
     #clear-selected-layers,
+    #cctv-globe-btn,
     #tilt-map-view,
     #north-up-view,
     #reset-globe-view

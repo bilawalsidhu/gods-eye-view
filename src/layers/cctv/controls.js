@@ -17,7 +17,7 @@ export function createControls({ state: layerState, services, parts, source }) {
 
     icon: '📹',
 
-    source: 'CCTV + Street View fallback',
+    source: 'Public CCTV catalogs',
 
     updateInterval: DEFAULT_UPDATE_INTERVAL_MS,
 
@@ -234,13 +234,17 @@ export function createControls({ state: layerState, services, parts, source }) {
     /**
      * Returns basic layer statistics, including initial-load progress while
      * the staggered geometry queue is draining.
-     * @returns {{ count: number, lastUpdate: number|null, error: string|null, loading: boolean, loadingLoaded: number, loadingTotal: number }}
+     * @returns {{ count: number, lastUpdate: number|null, error: string|null, source: string, fallback: boolean, loading: boolean, loadingLoaded: number, loadingTotal: number }}
      */
     getStats() {
       return {
         count: layerState._count,
         lastUpdate: layerState._lastUpdate,
         error: layerState._lastError,
+        source: layerState._catalogFromSeeds
+          ? 'Bundled camera positions'
+          : methods.source,
+        fallback: layerState._catalogFromSeeds,
         loading: layerState._geoLoading,
         loadingLoaded: Math.min(
           layerState._geoLoadDone,

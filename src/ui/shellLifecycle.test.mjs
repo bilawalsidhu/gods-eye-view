@@ -41,6 +41,7 @@ function fixture() {
       querySelector: () => null,
       querySelectorAll: () => [],
       closest: () => null,
+      contains: () => false,
       getBoundingClientRect: () => ({
         left: 20,
         top: 30,
@@ -362,6 +363,197 @@ test('weather rail orders between CCTV and Context, resets positions, observes a
     owner.destroy();
     assert.equal(observed.size, 0);
     assert.equal(f.frames.size, 0);
+  } finally {
+    f.restore();
+  }
+});
+
+test('CCTV access shortcut opens the panel under collapsed-sibling rail layout without toggling', () => {
+  const f = fixture();
+  try {
+    const stack = f.nodes.get('right-context-rail');
+    stack.children = [];
+    stack.contains = (child) => stack.children.includes(child);
+    stack.classList.add('layout-focus', 'layout-exclusive');
+
+    const displayPanel = f.nodes.get('pp-toggles');
+    displayPanel.id = 'pp-toggles';
+    displayPanel.parentElement = stack;
+    stack.children.push(displayPanel);
+
+    const cctvPanel = f.element();
+    cctvPanel.id = 'cctv-panel';
+    cctvPanel.parentElement = stack;
+    cctvPanel.classList.add('collapsed');
+    const attributes = new Map([['aria-hidden', 'true']]);
+    cctvPanel.getAttribute = (name) => attributes.get(name) ?? null;
+    cctvPanel.setAttribute = (name, value) => attributes.set(name, value);
+    cctvPanel.removeAttribute = (name) => attributes.delete(name);
+    let scrolled = 0;
+    cctvPanel.scrollIntoView = () => {
+      scrolled++;
+    };
+
+    let focused = 0;
+    const hiddenAtFocus = [];
+    const disclosureBtn = f.element();
+    disclosureBtn.dataset = { collapseTarget: 'cctv-panel' };
+    cctvPanel.contains = (target) =>
+      target === disclosureBtn || target === innerControl;
+    disclosureBtn.focus = () => {
+      focused++;
+      hiddenAtFocus.push(cctvPanel.getAttribute('aria-hidden'));
+      document.activeElement = disclosureBtn;
+    };
+    disclosureBtn.blur = () => {
+      if (document.activeElement === disclosureBtn)
+        document.activeElement = document.body;
+    };
+    const innerControl = f.element();
+    innerControl.focus = () => {
+      document.activeElement = innerControl;
+    };
+    cctvPanel.querySelector = (selector) => {
+      if (
+        typeof selector === 'string' &&
+        selector.includes('data-collapse-target="cctv-panel"')
+      ) {
+        return disclosureBtn;
+      }
+      return null;
+    };
+    stack.children.push(cctvPanel);
+
+    const cctvGlobeBtn = f.element();
+    cctvGlobeBtn.id = 'cctv-globe-btn';
+    cctvGlobeBtn.focus = () => {
+      document.activeElement = cctvGlobeBtn;
+    };
+
+    f.nodes.set('right-context-rail', stack);
+    f.nodes.set('pp-toggles', displayPanel);
+    f.nodes.set('cctv-panel', cctvPanel);
+    f.nodes.set('cctv-globe-btn', cctvGlobeBtn);
+    document.querySelectorAll = (selector) =>
+      selector === '.panel-collapse-btn[data-collapse-target]'
+        ? [disclosureBtn]
+        : [];
+
+    const claimed = [];
+    const chrome = new PanelChrome({
+      elements: {
+        _leftPanelStack: f.nodes.get('left-panel-stack'),
+        _rightPanelStack: stack,
+        _ppToggles: displayPanel,
+        _cctvGlobeBtn: cctvGlobeBtn,
+      },
+      operations: {
+        _syncPanelCollapseButton() {},
+        _layoutRightPanels() {},
+        _syncCctvPanelViewport() {},
+        _showToast() {},
+      },
+      readHud: () => ({ visible: true, getVariant: () => 'tactical' }),
+      readCockpit: () => ({ active: false }),
+      readShareLinks: () => ({
+        claimRestoreLane(lane, id) {
+          claimed.push([lane, id]);
+        },
+        onPanelStateChange() {},
+      }),
+      readInitialShare: () => null,
+      readScrollRestoreOwner: () => 'standard',
+      readDisplayScrollTop: () => 0,
+    });
+
+    chrome._initPanelChrome();
+    chrome._initPanelChrome();
+
+    // In the collapsed-sibling layout (layout-focus + layout-exclusive),
+    // cctv-panel starts collapsed.
+    assert.equal(cctvPanel.classList.contains('collapsed'), true);
+
+    // Activating the globe shortcut opens CCTV via setPanelCollapsed('cctv-panel', false, { explicit: true })
+    cctvGlobeBtn.dispatchEvent(new Event('click'));
+
+    assert.equal(cctvPanel.classList.contains('collapsed'), false);
+    assert.deepEqual(claimed, [['panel', 'cctv-panel']]);
+    assert.equal(chrome._panelLayout._rightStackPreferredPanelId, 'cctv-panel');
+    assert.equal(scrolled, 1);
+    assert.equal(focused, 1);
+    assert.deepEqual(
+      hiddenAtFocus,
+      [null],
+      'focus must reach an accessible panel',
+    );
+
+    // If the panel is ALREADY open, activation brings into view or focuses disclosure rather than collapsing it
+    cctvGlobeBtn.dispatchEvent(new Event('click'));
+    assert.equal(
+      cctvPanel.classList.contains('collapsed'),
+      false,
+      'must not toggle or collapse an open panel',
+    );
+    assert.equal(scrolled, 2);
+    assert.equal(focused, 2);
+    disclosureBtn.dispatchEvent(new Event('click'));
+    assert.equal(cctvPanel.classList.contains('collapsed'), true);
+    assert.equal(
+      document.activeElement,
+      cctvGlobeBtn,
+      'manual collapse returns focus to the visible shortcut',
+    );
+    cctvGlobeBtn.dispatchEvent(new Event('click'));
+    assert.equal(document.activeElement, disclosureBtn);
+    const escape = new Event('keydown');
+    Object.defineProperty(escape, 'key', { value: 'Escape' });
+    disclosureBtn.dispatchEvent(escape);
+    assert.equal(chrome._collapsePanelOnEscape(escape, 'cctv-panel'), true);
+    assert.equal(cctvPanel.classList.contains('collapsed'), true);
+    assert.equal(document.activeElement, cctvGlobeBtn);
+    cctvGlobeBtn.dispatchEvent(new Event('click'));
+    innerControl.focus();
+    const innerEscape = new Event('keydown');
+    Object.defineProperty(innerEscape, 'key', { value: 'Escape' });
+    innerControl.dispatchEvent(innerEscape);
+    assert.equal(
+      chrome._collapsePanelOnEscape(innerEscape, 'cctv-panel'),
+      true,
+    );
+    assert.equal(cctvPanel.classList.contains('collapsed'), true);
+    assert.equal(
+      document.activeElement,
+      cctvGlobeBtn,
+      'Escape from panel content must not refocus a hidden disclosure',
+    );
+    chrome.setPanelCollapsed('cctv-panel', false, { explicit: true });
+    innerControl.focus();
+    const restoredEscape = new Event('keydown');
+    Object.defineProperty(restoredEscape, 'key', { value: 'Escape' });
+    innerControl.dispatchEvent(restoredEscape);
+    assert.equal(
+      chrome._collapsePanelOnEscape(restoredEscape, 'cctv-panel'),
+      true,
+    );
+    assert.equal(
+      document.activeElement,
+      cctvGlobeBtn,
+      'restored CCTV must not leave focus in an exclusive hidden header',
+    );
+    chrome.setPanelCollapsed('cctv-panel', false, { explicit: true });
+    innerControl.focus();
+    chrome.setPanelCollapsed('cctv-panel', true, { explicit: true });
+    assert.equal(
+      document.activeElement,
+      cctvGlobeBtn,
+      'manual collapse from a restored panel also returns visible focus',
+    );
+
+    // Disposal removes the listener
+    chrome.destroy();
+    cctvGlobeBtn.dispatchEvent(new Event('click'));
+    assert.equal(scrolled, 4);
+    assert.equal(focused, 6);
   } finally {
     f.restore();
   }
