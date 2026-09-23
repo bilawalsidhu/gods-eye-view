@@ -137,10 +137,10 @@ function normalizeShodanSearchResult(value) {
     !value ||
     value.provider !== 'shodan' ||
     !Array.isArray(value.matches) ||
-    value.matches.length > 10
+    value.matches.length > 100
   )
     throw new Error('Malformed Cyber enrichment response');
-  const query = boundedText(value.query, 120);
+  const query = boundedText(value.query, 180);
   const fetchedAt = iso(value.fetchedAt);
   if (
     !query ||
@@ -158,7 +158,7 @@ function normalizeShodanSearchResult(value) {
     query,
     page: value.page,
     pageLimit: 3,
-    pageSize: 10,
+    pageSize: 100,
     total:
       Number.isSafeInteger(value.total) && value.total >= 0
         ? value.total

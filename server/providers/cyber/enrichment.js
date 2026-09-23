@@ -12,7 +12,7 @@ const SEARCH_TTL_MS = 15 * 60_000;
 const GREYNOISE_TTL_MS = 24 * 60 * 60_000;
 const MAX_CACHE_ENTRIES = 100;
 const MAX_SEARCH_PAGE = 3;
-const SHODAN_RESULT_LIMIT = 10;
+const SHODAN_RESULT_LIMIT = 100;
 const SHODAN_SEARCH_FIELDS = [
   'ip_str',
   'ip',
@@ -85,9 +85,13 @@ function requirePublicIPv4(value) {
   return ip;
 }
 
-function validSearchQuery(value) {
+function validSearchQuery(value, maxLength = 120) {
   const query = String(value || '').trim();
-  if (!query || query.length > 120 || /[\u0000-\u001f<>#?&=;]/.test(query))
+  if (
+    !query ||
+    query.length > maxLength ||
+    /[\u0000-\u001f<>#?&=;]/.test(query)
+  )
     throw failure('invalid_query');
   return query;
 }
@@ -397,7 +401,7 @@ export function createCyberEnrichmentProviders({
     pageValue = 1,
     { signal, geolocateMissing = false } = {},
   ) {
-    const query = validSearchQuery(value);
+    const query = validSearchQuery(value, 180);
     const page = Number(pageValue);
     if (!Number.isInteger(page) || page < 1 || page > MAX_SEARCH_PAGE)
       throw failure('invalid_page');
@@ -443,7 +447,7 @@ export function createCyberEnrichmentProviders({
               rank: (page - 1) * 100 + index + 1,
             };
           });
-        // Only enrich the first ten displayed results, and only where Shodan
+        // Only enrich displayed results, and only where Shodan
         // has no usable coordinates. The IPs are public IPs returned by the
         // operator-triggered Shodan query; requests stay on the local server.
         if (geolocateMissing) await enrichMissingCoordinates(matches, signal);
@@ -547,7 +551,7 @@ export function createCyberEnrichmentProviders({
     latitudeValue,
     longitudeValue,
     radiusValue,
-    { signal } = {},
+    { signal, query: queryValue = '' } = {},
   ) {
     const latitude = Number(latitudeValue);
     const longitude = Number(longitudeValue);
@@ -564,11 +568,24 @@ export function createCyberEnrichmentProviders({
       radiusKm > MAX_AREA_RADIUS_KM
     )
       throw failure('invalid_area');
-    return searchShodan(
+    const userQuery = String(queryValue || '').trim();
+    if (
+      userQuery.length > 120 ||
+      /(?:^|\s)geo\s*:/i.test(userQuery) ||
+      (userQuery && /[\u0000-\u001f<>#?&=;]/.test(userQuery))
+    )
+      throw failure('invalid_query');
+    const query = [
       `geo:${latitude.toFixed(4)},${longitude.toFixed(4)},${radiusKm}`,
-      1,
-      { signal, geolocateMissing: true },
-    );
+      userQuery,
+    ]
+      .filter(Boolean)
+      .join(' ');
+    const result = await searchShodan(query, 1, {
+      signal,
+      geolocateMissing: true,
+    });
+    return Object.freeze({ ...result, userQuery });
   }
 
   async function lookupGreyNoise(value, { signal, force = false } = {}) {

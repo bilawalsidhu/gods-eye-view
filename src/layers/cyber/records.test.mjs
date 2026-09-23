@@ -199,7 +199,7 @@ test('normalizes optional provider results and allows only explicit approximate 
   );
 });
 
-test('Shodan search normalization caps provider result rows and rejects provider spoofing', () => {
+test('Shodan search normalization accepts a full page and rejects provider spoofing', () => {
   const host = {
     provider: 'shodan',
     ip: '8.8.8.8',
@@ -214,9 +214,13 @@ test('Shodan search normalization caps provider result rows and rejects provider
     fetchedAt: host.fetchedAt,
     attribution: 'Shodan',
     total: 1,
-    matches: [host],
+    matches: Array.from({ length: 100 }, (_, index) => ({
+      ...host,
+      ip: `8.8.${Math.floor(index / 256)}.${index + 1}`,
+    })),
   });
-  assert.equal(result.matches.length, 1);
+  assert.equal(result.matches.length, 100);
+  assert.equal(result.pageSize, 100);
   assert.throws(() =>
     normalizeShodanSearchResult({
       provider: 'other',

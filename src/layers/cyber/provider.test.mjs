@@ -247,8 +247,11 @@ test('Shodan area search is bounded and fills missing locations with attributed 
     },
   });
   try {
-    const result = await api.searchShodanArea(40, -74, 75);
-    assert.equal(result.query, 'geo:40.0000,-74.0000,75');
+    const result = await api.searchShodanArea(40, -74, 75, {
+      query: 'port:443 country:US',
+    });
+    assert.equal(result.query, 'geo:40.0000,-74.0000,75 port:443 country:US');
+    assert.equal(result.userQuery, 'port:443 country:US');
     assert.equal(result.matches[0].latitude, 37.751);
     assert.equal(result.matches[0].longitude, -97.822);
     assert.equal(result.matches[0].geographicPrecision, 'network-approximate');
@@ -263,7 +266,7 @@ test('Shodan area search is bounded and fills missing locations with attributed 
     );
     assert.equal(
       requests[0].searchParams.get('query'),
-      'geo:40.0000,-74.0000,75',
+      'geo:40.0000,-74.0000,75 port:443 country:US',
     );
     assert.equal(requests[0].searchParams.get('minify'), 'false');
     assert.equal(
@@ -273,7 +276,42 @@ test('Shodan area search is bounded and fills missing locations with attributed 
     await assert.rejects(api.searchShodanArea(40, -74, 1001), {
       code: 'invalid_area',
     });
+    await assert.rejects(
+      api.searchShodanArea(40, -74, 75, { query: 'geo:1,2,3 port:443' }),
+      { code: 'invalid_query' },
+    );
     assert.equal(JSON.stringify(result).includes('fixture-secret'), false);
+  } finally {
+    if (oldKey === undefined) delete process.env.SHODAN_API_KEY;
+    else process.env.SHODAN_API_KEY = oldKey;
+  }
+});
+
+test('Shodan area search keeps and maps all 100 unique first-page results', async () => {
+  const oldKey = process.env.SHODAN_API_KEY;
+  process.env.SHODAN_API_KEY = 'fixture-secret-never-returned';
+  const api = createCyberEnrichmentProviders({
+    now: () => Date.parse('2026-09-20T02:00:00Z'),
+    fetchImpl: async (url) => {
+      const parsed = new URL(url);
+      if (parsed.hostname !== 'api.shodan.io')
+        throw new Error('Unexpected provider endpoint');
+      return jsonResponse({
+        total: 100,
+        matches: Array.from({ length: 100 }, (_, index) => ({
+          ip_str: `8.8.${Math.floor(index / 250)}.${index + 1}`,
+          port: 443,
+          location: { latitude: 40 + index / 1000, longitude: -74 },
+        })),
+      });
+    },
+  });
+  try {
+    const result = await api.searchShodanArea(40, -74, 75);
+    assert.equal(result.matches.length, 100);
+    assert.equal(result.pageSize, 100);
+    assert.equal(result.matches[99].rank, 100);
+    assert.equal(result.matches[99].latitude, 40.099);
   } finally {
     if (oldKey === undefined) delete process.env.SHODAN_API_KEY;
     else process.env.SHODAN_API_KEY = oldKey;

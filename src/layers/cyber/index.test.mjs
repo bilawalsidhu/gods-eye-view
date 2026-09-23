@@ -258,7 +258,7 @@ test('Shodan area search uses the visible map radius, renders devices, and expos
           query: 'geo:40.0000,-75.0000,20',
           page: 1,
           pageLimit: 3,
-          pageSize: 10,
+          pageSize: 100,
           total: 2,
           fetchedAt: '2026-09-20T01:00:00Z',
           attribution: 'Shodan',

@@ -509,7 +509,7 @@ export function createCyberLayer({
     if (enabled && generation === enrichmentGeneration) notifyThreatIntel();
   }
 
-  async function runShodanAreaSearch() {
+  async function runShodanAreaSearch(query = '') {
     if (!enabled || typeof source.searchShodanArea !== 'function') return;
     const area = viewportArea();
     if (!area || area.radiusKm < 1 || area.radiusKm > 1000) {
@@ -529,12 +529,13 @@ export function createCyberLayer({
     enrichmentMessage = '';
     selectedShodan = null;
     selectedRadar = null;
-    shodanAreaSearch = { ...area, loading: true };
+    shodanAreaSearch = { ...area, userQuery: query, loading: true };
     renderRadar();
     notifyThreatIntel();
     try {
       const result = await source.searchShodanArea(area, {
         signal: controller.signal,
+        query,
       });
       if (enabled && generation === enrichmentGeneration)
         shodanAreaSearch = { ...result, ...area };

@@ -98,7 +98,7 @@
 - Add optional Shodan host enrichment, manual bounded search, and explicit
   current-map-area search plus optional GreyNoise Community IP context. Area
   searches use one Shodan query credit, are limited to a 1,000 km radius and
-  the first result page, show at most 10 devices, and never run while the
+  the first result page, show up to 100 devices, and never run while the
   camera moves. Devices without
   Shodan coordinates use cached IPwho.is approximate network geolocation when
   available; unresolved results are not mapped. Enrichment controls now use

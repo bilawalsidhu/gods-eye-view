@@ -55,15 +55,13 @@ export class CyberIntelPanel {
         void layer.getThreatIntelState().onShodanSearch?.(query, page);
         return;
       }
-      if (event.target?.closest?.('[data-shodan-area-search]'))
-        void layer.getThreatIntelState().onShodanAreaSearch?.();
     };
     this._onBodySubmit = (event) => {
       const form = event.target?.closest?.('[data-shodan-search]');
       if (!form) return;
       event.preventDefault();
       const query = form.querySelector('input[name="query"]')?.value?.trim();
-      if (query) void layer.getThreatIntelState().onShodanSearch?.(query, 1);
+      void layer.getThreatIntelState().onShodanAreaSearch?.(query || '');
     };
     this._onDevicePopupClick = (event) => {
       if (!event.target?.closest?.('[data-close-shodan-popup]')) return;
@@ -176,13 +174,14 @@ export class CyberIntelPanel {
 
   _renderShodanSearch(state) {
     const section = element(this.document, 'section', 'cyber-intel-provider');
+    const areaSearch = state.shodanAreaSearch;
     section.append(element(this.document, 'h3', '', 'Optional Shodan search'));
     section.append(
       element(
         this.document,
         'p',
         'cyber-intel-provenance',
-        'Search only runs when submitted. A filtered search uses one Shodan query credit; each page after the first uses another. An unfiltered first page may be free. Results are capped at 10 per page. Check your account plan and remaining credits in Provider Settings before searching.',
+        'Search only runs when submitted. It searches the current map area and applies your optional Shodan query. A filtered search uses one query credit. Check your account plan and remaining credits in Provider Settings before searching.',
       ),
     );
     const form = element(this.document, 'form', 'cyber-intel-search-form');
@@ -193,30 +192,25 @@ export class CyberIntelPanel {
     input.maxLength = 120;
     input.placeholder = 'e.g. port:443 country:US';
     input.setAttribute('aria-label', 'Shodan search query');
-    input.value = state.shodanSearch?.query || '';
-    const submit = element(this.document, 'button', '', 'Search Shodan');
-    submit.type = 'submit';
-    form.append(input, submit);
-    section.append(form);
-    const areaSearch = state.shodanAreaSearch;
-    const areaButton = element(
+    input.value = areaSearch?.userQuery || '';
+    const submit = element(
       this.document,
       'button',
       'cyber-shodan-area-button',
-      areaSearch?.loading
+      state.shodanAreaSearch?.loading
         ? 'Searching this area…'
         : 'Search Shodan in current map area',
     );
-    areaButton.type = 'button';
-    areaButton.dataset.shodanAreaSearch = 'true';
-    areaButton.disabled = areaSearch?.loading === true;
-    section.append(areaButton);
+    submit.type = 'submit';
+    submit.disabled = state.shodanAreaSearch?.loading === true;
+    form.append(input, submit);
+    section.append(form);
     section.append(
       element(
         this.document,
         'p',
         'cyber-intel-provenance',
-        'Searches a circle centered on the current map view (up to 1,000 km radius) and uses one Shodan query credit. Only the first page is checked and at most 10 devices are shown; later pages are never fetched automatically. If Shodan has no coordinates, cached server-side IPwho.is approximate network geolocation is used when available. Unresolved devices are not mapped. Public IPs requiring fallback geolocation are sent to IPwho.is.',
+        'Searches a circle centered on the current map view (up to 1,000 km radius), applies the optional query, and checks the first 100 Shodan results. Up to 100 unique devices are shown and mapped when coordinates are available. If Shodan has no coordinates, cached server-side IPwho.is approximate network geolocation is used when available. Unresolved devices are not mapped. Public IPs requiring fallback geolocation are sent to IPwho.is.',
       ),
     );
     if (areaSearch?.error)
@@ -251,75 +245,20 @@ export class CyberIntelPanel {
             .join(' · ') || 'Location unavailable',
         ),
       );
-      section.append(row);
-    }
-    const search = state.shodanSearch;
-    if (!search) return section;
-    if (search.loading) {
-      section.append(
-        element(this.document, 'p', 'cyber-intel-empty', 'Searching Shodan…'),
-      );
-      return section;
-    }
-    if (search.error)
-      section.append(
-        element(this.document, 'p', 'cyber-intel-empty', search.error),
-      );
-    else {
-      section.append(
-        element(
-          this.document,
-          'p',
-          'cyber-intel-provenance',
-          `${search.total ?? 'Some'} matches · page ${search.page} · ${search.attribution}`,
-        ),
-      );
-      for (const result of search.matches || []) {
-        const row = element(this.document, 'div', 'cyber-intel-search-result');
-        row.append(element(this.document, 'strong', '', result.ip));
-        row.append(
-          element(
-            this.document,
-            'span',
-            '',
-            [
-              result.organization,
-              result.services?.[0]?.port
-                ? `port ${result.services[0].port}`
-                : null,
-            ]
-              .filter(Boolean)
-              .join(' · '),
-          ),
-        );
-        for (const provider of ['shodan', 'greynoise']) {
-          const button = element(
-            this.document,
-            'button',
-            '',
-            provider === 'shodan' ? 'Host details' : 'GreyNoise',
-          );
-          button.type = 'button';
-          button.dataset.cyberEnrich = 'true';
-          button.dataset.provider = provider;
-          button.dataset.ip = result.ip;
-          row.append(button);
-        }
-        section.append(row);
-      }
-      const nextPage = Number(search.page) + 1;
-      if (search.total > search.page * 100 && nextPage <= 3) {
-        const more = element(
+      for (const provider of ['shodan', 'greynoise']) {
+        const button = element(
           this.document,
           'button',
           '',
-          `More results · page ${nextPage} may cost query credits`,
+          provider === 'shodan' ? 'Host details' : 'GreyNoise',
         );
-        more.type = 'button';
-        more.dataset.shodanPage = String(nextPage);
-        more.dataset.query = search.query;
-        section.append(more);
+        button.type = 'button';
+        button.dataset.cyberEnrich = 'true';
+        button.dataset.provider = provider;
+        button.dataset.ip = result.ip;
+        row.append(button);
       }
+      section.append(row);
     }
     return section;
   }

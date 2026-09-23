@@ -65,7 +65,8 @@ and a deliberate search for a circle around the current map view (up to a
 1,000 km radius), plus on-demand GreyNoise Community lookups. Neither source
 polls or runs while the camera moves; all lookups require an explicit click.
 Area searches use one Shodan query credit, fetch only the first result page,
-and display up to 10 devices.
+and display up to 100 unique devices from the first result page. The optional
+Shodan query is combined with the current map-area filter in a single search.
 Shodan and IPwho.is coordinates are shown as approximate IP network locations,
 not precise device locations. When Shodan has no usable coordinates, the server
 may ask IPwho.is to geolocate the public IP; those fallback results are cached,

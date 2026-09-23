@@ -54,7 +54,7 @@ export function createCyberSource({
       }
       const payload = await readResponseJsonCapped(
         response,
-        128 * 1024,
+        512 * 1024,
         controller.signal,
       );
       signal?.throwIfAborted();
@@ -154,7 +154,7 @@ export function createCyberSource({
       normalizeShodanSearchResult(
         await post(
           ENRICHMENT_URLS.shodanArea,
-          { latitude, longitude, radiusKm },
+          { latitude, longitude, radiusKm, query: options?.query || '' },
           options,
         ),
       ),
