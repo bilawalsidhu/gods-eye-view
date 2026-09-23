@@ -166,6 +166,12 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
       // effect_detail / service_effect_text / timeframe_text additions.
       alertsUrl: 'https://cdn.mbta.com/realtime/Alerts_enhanced.json',
       alertsFormat: 'gtfs-rt-alerts-json',
+      // Positions for the stops that stop-level alerts (closed, moved,
+      // bypassed) name. The ids come from the operator's own alert feed, never
+      // from a browser request; the proxy appends `&filter[id]=` with the
+      // validated ids and caches the answer for a day.
+      stopsUrl:
+        'https://api-v3.mbta.com/stops?fields%5Bstop%5D=name,latitude,longitude',
     }),
   }),
   Object.freeze({

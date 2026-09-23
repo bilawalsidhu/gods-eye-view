@@ -4173,3 +4173,94 @@ test('network failures back off and never take the vehicles with them', async (t
   assert.equal(card.title, '🚇 Route Red', 'without a catalog the id is shown');
   assert.equal(app.layer.getStats().coverage, 'MBTA 1');
 });
+
+test('stop alerts get markers and cards, and the row toggles hide bus lines and stops', async (t) => {
+  const app = harness(t);
+  const network = mbtaNetwork(Date.now());
+  network.alerts.alerts.push({
+    id: 'a3',
+    kind: 'service',
+    effect: 'NO_SERVICE',
+    effectDetail: 'STATION_CLOSURE',
+    severity: 7,
+    header: 'Symphony is closed.',
+    serviceEffect: 'Symphony closed',
+    timeframe: 'through October 4',
+    activePeriods: [],
+    routeIds: ['Red'],
+    stopIds: ['70241', 'place-symcl'],
+  });
+  network.alerts.stops = [
+    { id: 'place-symcl', name: 'Symphony', lat: 42.3427, lon: -71.0851 },
+  ];
+  app.serve('mbta', (url) => {
+    if (url.includes('/routes/')) return { status: 200, body: network.routes };
+    if (url.includes('/alerts/')) return { status: 200, body: network.alerts };
+    return {
+      status: 200,
+      body: snapshot(
+        'mbta',
+        'MBTA',
+        [vehicle('red-1', 42.36, -71.06, reported(), { routeId: 'Red' })],
+        { fetchedAt: Date.now() },
+      ),
+    };
+  });
+  const repaints = [];
+  app.layer.setRowControlsListener(() => repaints.push(Date.now()));
+  app.layer.enable(app.viewer);
+  await app.layer.update();
+  await flush();
+  const parts = app.layer._transitPartsForTest();
+  const [net] = parts.network.snapshot();
+  assert.equal(net.stops, 1);
+  assert.ok(repaints.length > 0, 'the row repaints when network data lands');
+
+  const stopPick = 'transit-stop:mbta/place-symcl';
+  assert.equal(app.pickOwners.get('transit')(stopPick), true);
+  assert.equal(
+    app.pickOwners.get('transit')('transit-stop:mbta/70241'),
+    false,
+    'platforms fold into their station',
+  );
+  parts.selection.selectRoute(stopPick, null);
+  const [card] = app.overlaySources.get('transit-selected');
+  assert.equal(card.title, '🚏 Symphony');
+  assert.ok(card.details.includes('⚠ Symphony closed (through October 4)'));
+  assert.ok(card.details.includes('Affects Red Line'));
+  assert.ok(card.position, 'anchored at the stop itself');
+
+  let controls = app.layer.getRowControls();
+  assert.deepEqual(
+    controls.chips.map((chip) => [chip.id, chip.active]),
+    [
+      ['transit-bus-lines', true],
+      ['transit-stop-alerts', true],
+    ],
+  );
+  assert.deepEqual(
+    controls.legend.map((item) => [item.label, item.count]),
+    [
+      ['Disrupted route', 1],
+      ['Closed or moved stop', 1],
+    ],
+  );
+  assert.equal(
+    app.layer.setParams({ busLines: false, stopAlerts: false }),
+    true,
+  );
+  assert.deepEqual(app.layer.getParams(), {
+    busLines: false,
+    stopAlerts: false,
+  });
+  controls = app.layer.getRowControls();
+  assert.deepEqual(
+    controls.chips.map((chip) => chip.active),
+    [false, false],
+  );
+  assert.deepEqual(
+    controls.legend.map((item) => item.label),
+    ['Disrupted route'],
+  );
+  assert.equal(app.layer.setParams({ unrelated: 1 }), false);
+});

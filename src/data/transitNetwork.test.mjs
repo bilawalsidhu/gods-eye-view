@@ -517,3 +517,78 @@ test('only MBTA advertises routes and alerts in the public catalog', () => {
     /^https:\/\/cdn\.mbta\.com\/realtime\/Alerts_enhanced\.json$/,
   );
 });
+
+test('stop-level alerts carry their stops and are placed at parent stations', async () => {
+  const { isStopAlert, alertMarkerStopIds, normalizeMbtaStops } =
+    await import('./transitNetwork.js');
+  const [closure, moved, delay] = normalizeGtfsRtAlertsJson(
+    alertsFeed([
+      {
+        effect: 'NO_SERVICE',
+        effect_detail: 'STATION_CLOSURE',
+        header_text: text('Symphony closed'),
+        informed_entity: [
+          { route_id: 'Green-E', stop_id: '70241' },
+          { route_id: 'Green-E', stop_id: '70242' },
+          { route_id: 'Green-E', stop_id: 'place-symcl' },
+        ],
+      },
+      {
+        effect: 'STOP_MOVED',
+        effect_detail: 'STOP_MOVE',
+        header_text: text('Stop moved'),
+        informed_entity: [{ route_id: '60', stop_id: '1521' }],
+      },
+      {
+        effect: 'SIGNIFICANT_DELAYS',
+        effect_detail: 'DELAY',
+        header_text: text('Delays'),
+        informed_entity: [{ route_id: '60', stop_id: '1521' }],
+      },
+    ]),
+  ).alerts;
+  assert.deepEqual(closure.stopIds, ['70241', '70242', 'place-symcl']);
+  assert.equal(isStopAlert(closure), true);
+  assert.deepEqual(alertMarkerStopIds(closure), ['place-symcl']);
+  assert.equal(isStopAlert(moved), true);
+  assert.deepEqual(alertMarkerStopIds(moved), ['1521']);
+  assert.equal(isStopAlert(delay), false, 'a delay is about the route');
+
+  assert.deepEqual(
+    normalizeMbtaStops({
+      data: [
+        {
+          type: 'stop',
+          id: 'place-symcl',
+          attributes: {
+            name: 'Symphony',
+            latitude: 42.342687,
+            longitude: -71.085056,
+          },
+        },
+        {
+          type: 'stop',
+          id: 'nowhere',
+          attributes: { name: 'Null Island', latitude: 0, longitude: 0 },
+        },
+        {
+          type: 'stop',
+          id: 'nameless',
+          attributes: { latitude: 42.3, longitude: -71.1 },
+        },
+        {
+          type: 'stop',
+          id: '<bad>',
+          attributes: { name: 'x', latitude: 42.3, longitude: -71.1 },
+        },
+        {
+          type: 'route',
+          id: 'Red',
+          attributes: { name: 'Red', latitude: 42.3, longitude: -71.1 },
+        },
+      ],
+    }),
+    [{ id: 'place-symcl', name: 'Symphony', lat: 42.342687, lon: -71.085056 }],
+  );
+  assert.throws(() => normalizeMbtaStops({}), TypeError);
+});

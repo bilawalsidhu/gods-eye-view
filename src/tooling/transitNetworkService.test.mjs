@@ -261,3 +261,101 @@ test('source reads network resources and surfaces the server retry time', async 
     '/api/transit/alerts/mbta',
   ]);
 });
+
+test('stop-level alerts gain positions from one cached stop lookup', async (t) => {
+  const realNow = Date.now;
+  let now = realNow();
+  Date.now = () => now;
+  t.after(() => {
+    Date.now = realNow;
+  });
+  const seen = [];
+  const feed = {
+    header: { incrementality: 'FULL_DATASET', timestamp: 1_790_000_000 },
+    entity: [
+      {
+        id: '9',
+        alert: {
+          effect: 'NO_SERVICE',
+          effect_detail: 'STATION_CLOSURE',
+          header_text: { translation: [{ text: 'Symphony closed' }] },
+          informed_entity: [
+            { route_id: 'Green-E', stop_id: '70241' },
+            { route_id: 'Green-E', stop_id: 'place-symcl' },
+          ],
+        },
+      },
+    ],
+  };
+  const service = createTransitService({
+    fetchImpl: async (url) => {
+      seen.push(url);
+      if (url.startsWith('https://cdn.mbta.com/')) return json(feed);
+      if (url.startsWith('https://api-v3.mbta.com/stops?'))
+        return json({
+          data: [
+            {
+              type: 'stop',
+              id: 'place-symcl',
+              attributes: {
+                name: 'Symphony',
+                latitude: 42.3427,
+                longitude: -71.0851,
+              },
+            },
+          ],
+        });
+      throw new Error(`unexpected ${url}`);
+    },
+  });
+  t.after(service.close);
+  const body = await (
+    await service.handle(request('/api/transit/alerts/mbta'))
+  ).json();
+  assert.deepEqual(body.stops, [
+    { id: 'place-symcl', name: 'Symphony', lat: 42.3427, lon: -71.0851 },
+  ]);
+  const stopCalls = seen.filter((url) => url.includes('/stops?'));
+  assert.equal(stopCalls.length, 1);
+  assert.match(
+    stopCalls[0],
+    /filter%5Bid%5D=place-symcl$/,
+    'parent station only',
+  );
+
+  // The next alert refresh reuses the known position.
+  now += 61_000;
+  await service.handle(request('/api/transit/alerts/mbta'));
+  assert.equal(seen.filter((url) => url.includes('/stops?')).length, 1);
+});
+
+test('a failed stop lookup leaves the alerts intact and unplaced', async (t) => {
+  const warn = t.mock.method(console, 'warn', () => {});
+  const service = createTransitService({
+    fetchImpl: async (url) => {
+      if (url.startsWith('https://cdn.mbta.com/'))
+        return json({
+          header: { incrementality: 'FULL_DATASET' },
+          entity: [
+            {
+              id: '9',
+              alert: {
+                effect: 'STOP_MOVED',
+                effect_detail: 'STOP_MOVE',
+                header_text: { translation: [{ text: 'Stop moved' }] },
+                informed_entity: [{ route_id: '60', stop_id: '1521' }],
+              },
+            },
+          ],
+        });
+      return new Response('nope', { status: 500 });
+    },
+  });
+  t.after(service.close);
+  const response = await service.handle(request('/api/transit/alerts/mbta'));
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.count, 1);
+  assert.deepEqual(body.stops, []);
+  assert.equal(warn.mock.callCount(), 1);
+});

@@ -2,9 +2,13 @@ import * as Cesium from 'cesium';
 import {
   activeAlertsByRoute,
   alertCardLines,
+  alertMarkerStopIds,
+  compareAlerts,
   decodePolyline,
   hasDisruption,
+  isAlertActive,
   isDisruption,
+  isStopAlert,
 } from '../../data/transitNetwork.js';
 import { TRANSIT_MODE_ICON } from '../../data/transitFeeds.js';
 
@@ -26,6 +30,10 @@ const BUILD_HOLD_MAX_MS = 20_000;
 
 /** Pick-id prefix for route lines. Vehicle keys never start with it. */
 export const TRANSIT_ROUTE_PICK_PREFIX = 'transit-route:';
+/** Pick-id prefix for stop-alert markers. */
+export const TRANSIT_STOP_PICK_PREFIX = 'transit-stop:';
+/** Marker for a closed, moved or bypassed stop: the disruption colour, ringed. */
+export const STOP_ALERT_PIXEL_SIZE = 9;
 
 /**
  * Line weight per mode. Rapid transit is drawn heavy and opaque so it reads
@@ -71,12 +79,42 @@ export function transitRoutePickId(feedId, routeId) {
  * @returns {{feedId: string, routeId: string}|null}
  */
 export function parseTransitRoutePickId(id) {
-  if (typeof id !== 'string' || !id.startsWith(TRANSIT_ROUTE_PICK_PREFIX))
-    return null;
-  const rest = id.slice(TRANSIT_ROUTE_PICK_PREFIX.length);
+  const parsed = parseTransitNetworkPickId(id);
+  return parsed?.kind === 'route'
+    ? { feedId: parsed.feedId, routeId: parsed.id }
+    : null;
+}
+
+/**
+ * Pick id for one stop-alert marker.
+ * @param {string} feedId
+ * @param {string} stopId
+ * @returns {string}
+ */
+export function transitStopPickId(feedId, stopId) {
+  return `${TRANSIT_STOP_PICK_PREFIX}${feedId}/${stopId}`;
+}
+
+/**
+ * Parse any network pick id — a route line or a stop marker.
+ * @param {unknown} id
+ * @returns {{kind: 'route'|'stop', feedId: string, id: string}|null}
+ */
+export function parseTransitNetworkPickId(id) {
+  if (typeof id !== 'string') return null;
+  const kind = id.startsWith(TRANSIT_ROUTE_PICK_PREFIX)
+    ? 'route'
+    : id.startsWith(TRANSIT_STOP_PICK_PREFIX)
+      ? 'stop'
+      : null;
+  if (!kind) return null;
+  const rest = id.slice(
+    (kind === 'route' ? TRANSIT_ROUTE_PICK_PREFIX : TRANSIT_STOP_PICK_PREFIX)
+      .length,
+  );
   const slash = rest.indexOf('/');
   if (slash <= 0 || slash === rest.length - 1) return null;
-  return { feedId: rest.slice(0, slash), routeId: rest.slice(slash + 1) };
+  return { kind, feedId: rest.slice(0, slash), id: rest.slice(slash + 1) };
 }
 
 /**
@@ -141,6 +179,10 @@ export function createNetwork({ state, services, parts, source }) {
         alertsRetryAt: 0,
         alertsController: null,
         byRoute: new Map(),
+        byStop: new Map(),
+        stopIndex: new Map(),
+        stopSignature: '',
+        stopMarkers: null,
         disruptedSignature: '',
         busPrimitive: null,
         railPrimitive: null,
@@ -285,7 +327,10 @@ export function createNetwork({ state, services, parts, source }) {
     net.busPrimitive = colorPrimitive(
       instancesFor(net.feedId, buses, routeLineStyle),
     );
-    if (net.busPrimitive) s.groundPrimitives.add(net.busPrimitive);
+    if (net.busPrimitive) {
+      net.busPrimitive.show = state._showBusLines !== false;
+      s.groundPrimitives.add(net.busPrimitive);
+    }
     net.railPrimitive = colorPrimitive(
       instancesFor(net.feedId, rail, routeLineStyle),
     );
@@ -293,11 +338,13 @@ export function createNetwork({ state, services, parts, source }) {
     net.shown = true;
     net.disruptedSignature = '';
     refreshDisruptions(net);
+    refreshStopMarkers(net, Math.floor(Date.now() / 1000));
     watchBuilds();
     governorRequestRender('transit-network');
   }
 
   function hideLines(net) {
+    removeStopMarkers(net);
     removePrimitive(net.disruptionPrimitive);
     removePrimitive(net.railPrimitive);
     removePrimitive(net.busPrimitive);
@@ -318,7 +365,12 @@ export function createNetwork({ state, services, parts, source }) {
   function refreshDisruptions(net) {
     if (!net.shown || !net.routes) return;
     const disrupted = [];
+    const busesShown = state._showBusLines !== false;
     for (const route of net.routes.routes || []) {
+      // A hidden bus line takes its outline with it: dashes over nothing
+      // would read as a route that does not exist.
+      if (!busesShown && (route.mode === 'bus' || route.mode === 'unknown'))
+        continue;
       if (hasDisruption(net.byRoute.get(route.id))) disrupted.push(route);
     }
     const signature = disrupted.map((r) => r.id).join('\u0000');
@@ -353,11 +405,87 @@ export function createNetwork({ state, services, parts, source }) {
     governorRequestRender('transit-network-alerts');
   }
 
+  function removeStopMarkers(net) {
+    if (net.stopMarkers) {
+      const primitives = scene()?.primitives;
+      try {
+        if (primitives?.contains(net.stopMarkers))
+          primitives.remove(net.stopMarkers);
+        else if (!net.stopMarkers.isDestroyed?.()) net.stopMarkers.destroy();
+      } catch {
+        /* the scene may already be torn down */
+      }
+      governorRequestRender('transit-network-stops');
+    }
+    net.stopMarkers = null;
+    net.stopSignature = '';
+  }
+
+  /**
+   * Index the stop-level alerts in force (closed, moved, bypassed stops) by
+   * the stops they should be drawn at, and redraw the markers when — and
+   * only when — the set of marked stops changes.
+   */
+  function refreshStopMarkers(net, nowS) {
+    const byStop = new Map();
+    for (const alert of net.alerts?.alerts || []) {
+      if (!isStopAlert(alert) || !isAlertActive(alert, nowS)) continue;
+      for (const stopId of alertMarkerStopIds(alert)) {
+        if (!net.stopIndex.has(stopId)) continue;
+        let list = byStop.get(stopId);
+        if (!list) byStop.set(stopId, (list = []));
+        list.push(alert);
+      }
+    }
+    for (const list of byStop.values()) list.sort(compareAlerts);
+    net.byStop = byStop;
+    const wanted =
+      net.shown && state._showStopAlerts !== false ? [...byStop.keys()] : [];
+    const signature = wanted.join('\u0000');
+    if (signature === net.stopSignature && (net.stopMarkers || !wanted.length))
+      return;
+    removeStopMarkers(net);
+    const primitives = scene()?.primitives;
+    if (!wanted.length || !primitives) return;
+    const markers = new Cesium.PointPrimitiveCollection();
+    const fill = Cesium.Color.fromCssColorString(DISRUPTION_COLOR);
+    for (const stopId of wanted) {
+      const stop = net.stopIndex.get(stopId);
+      markers.add({
+        id: transitStopPickId(net.feedId, stopId),
+        position: Cesium.Cartesian3.fromDegrees(stop.lon, stop.lat, 0),
+        pixelSize: STOP_ALERT_PIXEL_SIZE,
+        color: fill,
+        outlineColor: Cesium.Color.WHITE,
+        outlineWidth: 2,
+        // Drawn over terrain and tiles: a stop marker is a label, not a model,
+        // and a closed stop hidden behind a building is no use to anyone.
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      });
+    }
+    primitives.add(markers);
+    net.stopMarkers = markers;
+    net.stopSignature = signature;
+    governorRequestRender('transit-network-stops');
+  }
+
   /** Re-derive which alerts are in force now; periods start and end silently. */
   function reindexAlerts(net, nowMs) {
     net.byRoute = net.alerts
       ? activeAlertsByRoute(net.alerts.alerts || [], Math.floor(nowMs / 1000))
       : new Map();
+    net.stopIndex = new Map(
+      (Array.isArray(net.alerts?.stops) ? net.alerts.stops : [])
+        .filter(
+          (stop) =>
+            stop &&
+            typeof stop.id === 'string' &&
+            Number.isFinite(stop.lat) &&
+            Number.isFinite(stop.lon),
+        )
+        .map((stop) => [stop.id, stop]),
+    );
+    refreshStopMarkers(net, Math.floor(nowMs / 1000));
     refreshDisruptions(net);
   }
 
@@ -379,6 +507,7 @@ export function createNetwork({ state, services, parts, source }) {
       if (state._enabled && state._activeFeeds.has(net.feedId)) showLines(net);
       parts.selection?.refreshSelectedCard(true);
       state._dataManager?.refreshLayerStats?.();
+      state._notifyRowControls?.();
     } catch (error) {
       if (controller.signal.aborted) return;
       net.routesFailures += 1;
@@ -409,6 +538,7 @@ export function createNetwork({ state, services, parts, source }) {
       reindexAlerts(net, Date.now());
       parts.selection?.refreshSelectedCard(true);
       state._dataManager?.refreshLayerStats?.();
+      state._notifyRowControls?.();
     } catch (error) {
       if (controller.signal.aborted) return;
       net.alertsFailures += 1;
@@ -478,6 +608,109 @@ export function createNetwork({ state, services, parts, source }) {
       parsed &&
       state._network.get(parsed.feedId)?.routeIndex.has(parsed.routeId),
     );
+  }
+
+  /** A route line or a stop marker this layer drew. */
+  function isNetworkPick(id) {
+    const parsed = parseTransitNetworkPickId(id);
+    if (!parsed) return false;
+    const net = state._network.get(parsed.feedId);
+    return parsed.kind === 'route'
+      ? Boolean(net?.routeIndex.has(parsed.id))
+      : Boolean(net?.byStop.has(parsed.id));
+  }
+
+  /** Where a stop marker stands, for anchoring its card. */
+  function stopPosition(feedId, stopId) {
+    const stop = state._network.get(feedId)?.stopIndex.get(stopId);
+    return stop ? Cesium.Cartesian3.fromDegrees(stop.lon, stop.lat, 0) : null;
+  }
+
+  /**
+   * Card copy for a stop-alert marker: the stop, what is wrong with it, and
+   * which routes it affects.
+   * @returns {{title: string, details: string[], accent: string}|null}
+   */
+  function stopCardCopy(feedId, stopId, nowMs = Date.now()) {
+    const net = state._network.get(feedId);
+    const stop = net?.stopIndex.get(stopId);
+    const alerts = net?.byStop.get(stopId);
+    if (!stop || !alerts?.length) return null;
+    const details = [];
+    for (const alert of alerts.slice(0, 4)) {
+      const lead = alert.serviceEffect || alert.header;
+      const when =
+        alert.timeframe && !/^ongoing$/i.test(alert.timeframe)
+          ? ` (${alert.timeframe})`
+          : '';
+      details.push(`⚠ ${lead}${when}`);
+    }
+    if (alerts.length > 4) details.push(`+ ${alerts.length - 4} more alerts`);
+    const routeNames = [];
+    for (const routeId of new Set(alerts.flatMap((a) => a.routeIds || []))) {
+      routeNames.push(net.routeIndex.get(routeId)?.name || routeId);
+    }
+    if (routeNames.length)
+      details.push(
+        `Affects ${routeNames.slice(0, 6).join(' · ')}${routeNames.length > 6 ? ` +${routeNames.length - 6}` : ''}`,
+      );
+    details.push(`Stop · ${net.feed.name} · ${net.feed.region}`);
+    const aged = alertsAgeLine(feedId, nowMs);
+    if (aged) details.push(aged);
+    return {
+      title: `🚏 ${stop.name}`,
+      details,
+      accent: DISRUPTION_COLOR,
+    };
+  }
+
+  /** Card copy for any network pick. */
+  function networkCardCopy(pick, nowMs = Date.now()) {
+    if (pick?.kind === 'stop') return stopCardCopy(pick.feedId, pick.id, nowMs);
+    if (pick?.kind === 'route')
+      return routeCardCopy(pick.feedId, pick.id, nowMs);
+    return null;
+  }
+
+  /**
+   * Apply the row toggles (bus lines, stop alerts) to what is drawn. Cheap:
+   * showing or hiding the bus primitive is a flag, and the outline and marker
+   * sets are only rebuilt if their membership actually changes.
+   */
+  function applyVisibility() {
+    const now = Date.now();
+    for (const net of state._network.values()) {
+      if (net.busPrimitive)
+        net.busPrimitive.show = state._showBusLines !== false;
+      refreshDisruptions(net);
+      refreshStopMarkers(net, Math.floor(now / 1000));
+    }
+    governorRequestRender('transit-network-visibility');
+  }
+
+  /** Whether any active feed has network data this layer can control. */
+  function hasControls() {
+    for (const feedId of state._activeFeeds.keys()) {
+      const net = state._network.get(feedId);
+      if (net?.routes || net?.alerts) return true;
+    }
+    return false;
+  }
+
+  /** Counts for the row legend across active feeds. */
+  function legendCounts() {
+    let disrupted = 0;
+    let stops = 0;
+    for (const feedId of state._activeFeeds.keys()) {
+      const net = state._network.get(feedId);
+      if (!net) continue;
+      for (const [routeId, alerts] of net.byRoute) {
+        if (net.routeIndex.size && !net.routeIndex.has(routeId)) continue;
+        if (alerts.some(isDisruption)) disrupted += 1;
+      }
+      stops += net.byStop.size;
+    }
+    return { disrupted, stops };
   }
 
   function routeFor(feedId, routeId) {
@@ -588,6 +821,9 @@ export function createNetwork({ state, services, parts, source }) {
         ? net.disruptedSignature.split('\u0000').length
         : 0,
       shown: net.shown,
+      stops: net.byStop.size,
+      stopMarkers: net.stopMarkers?.length ?? 0,
+      busLinesShown: net.busPrimitive ? net.busPrimitive.show : null,
       primitivesReady: [
         net.busPrimitive,
         net.railPrimitive,
@@ -605,6 +841,12 @@ export function createNetwork({ state, services, parts, source }) {
     clear,
     destroy,
     isRoutePick,
+    isNetworkPick,
+    stopPosition,
+    networkCardCopy,
+    applyVisibility,
+    hasControls,
+    legendCounts,
     routeFor,
     alertsFor,
     vehicleCardExtras,

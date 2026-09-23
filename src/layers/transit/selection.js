@@ -7,7 +7,7 @@ import {
   createTransitSelectedOverlayEntry,
 } from './policy.js';
 import { getRegisteredTransitFeed } from '../../data/transitFeeds.js';
-import { parseTransitRoutePickId } from './network.js';
+import { parseTransitNetworkPickId } from './network.js';
 import { isPointerFree } from '../../data/inputOwnership.js';
 
 /**
@@ -52,19 +52,18 @@ export function createSelection({ state, services, parts }) {
     if (!force && now - state._selectedCardAt < SELECTED_CARD_REFRESH_MS)
       return;
     state._selectedCardAt = now;
-    const copy = parts.network.routeCardCopy(
-      selected.feedId,
-      selected.routeId,
+    const copy = parts.network.networkCardCopy(
+      { kind: selected.kind, feedId: selected.feedId, id: selected.id },
       now,
     );
     if (!copy) {
       clearSelection();
       return;
     }
-    const text = `route\u0000${selected.feedId}\u0000${selected.routeId}\u0000${copy.title}\u0000${copy.details.join('\u0000')}`;
+    const text = `${selected.kind}\u0000${selected.feedId}\u0000${selected.id}\u0000${copy.title}\u0000${copy.details.join('\u0000')}`;
     if (!force && text === state._selectedCardText) return;
     const card = createTransitSelectedOverlayEntry(
-      `route:${selected.feedId}/${selected.routeId}`,
+      `${selected.kind}:${selected.feedId}/${selected.id}`,
       selected.position,
       copy,
       'unknown',
@@ -175,10 +174,22 @@ export function createSelection({ state, services, parts }) {
    * @param {object} position
    */
   function selectRoute(pickId, position) {
-    const parsed = parseTransitRoutePickId(pickId);
-    if (!parsed || !position) return;
+    const parsed = parseTransitNetworkPickId(pickId);
+    if (!parsed) return;
+    // A stop card stands on its stop; a route card where the click landed.
+    const anchor =
+      parsed.kind === 'stop'
+        ? parts.network.stopPosition(parsed.feedId, parsed.id)
+        : position;
+    if (!anchor) return;
     clearSelection();
-    state._selectedRoute = { ...parsed, position };
+    state._selectedRoute = {
+      ...parsed,
+      ...(parsed.kind === 'route'
+        ? { routeId: parsed.id }
+        : { stopId: parsed.id }),
+      position: anchor,
+    };
     state._detectRevision += 1;
     refreshSelectedCard(true);
     governorRequestRender('transit-select-route');
@@ -281,7 +292,7 @@ export function createSelection({ state, services, parts }) {
           selectVehicle(picked.id);
           return;
         }
-        if (parts.network.isRoutePick(picked.id)) {
+        if (parts.network.isNetworkPick(picked.id)) {
           selectRoute(picked.id, groundPositionAt(viewer, position));
           return;
         }

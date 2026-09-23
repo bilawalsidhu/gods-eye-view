@@ -103,6 +103,11 @@ export function createState({ services }) {
    * @type {{feedId: string, routeId: string, position: object}|null}
    */
   state._selectedRoute = null;
+  /** Row toggles for feeds with network data (see controls.js). */
+  state._showBusLines = true;
+  state._showStopAlerts = true;
+  /** Repaint hook the layer panel installs for this row's chips. */
+  state._notifyRowControls = null;
 
   /** @type {string|null} */
   state._selectedKey = null;

@@ -52,6 +52,10 @@ export const ALERTS_MAX_ROUTES = 64;
 export const ALERTS_MAX_HEADER_CHARS = 400;
 /** Longest short effect / timeframe line kept. */
 export const ALERTS_MAX_SHORT_CHARS = 160;
+/** Stops kept per alert. A station closure names its platforms and parent. */
+export const ALERTS_MAX_STOPS = 32;
+/** Stops looked up for one alert snapshot. MBTA needs a few dozen. */
+export const ALERT_STOPS_MAX_LOOKUP = 400;
 
 /** GTFS `route_type` → the Transit layer's mode vocabulary. */
 export const GTFS_ROUTE_TYPE_MODE = Object.freeze({
@@ -449,6 +453,7 @@ export function normalizeGtfsRtAlertsJson(payload) {
     const routeIds = new Set();
     const routeTypes = new Set();
     let stopCount = 0;
+    const stopIds = new Set();
     for (const informed of Array.isArray(raw.informed_entity)
       ? raw.informed_entity
       : []) {
@@ -456,7 +461,11 @@ export function normalizeGtfsRtAlertsJson(payload) {
       if (routeId && routeIds.size < ALERTS_MAX_ROUTES) routeIds.add(routeId);
       if (Number.isInteger(informed?.route_type))
         routeTypes.add(informed.route_type);
-      if (typeof informed?.stop_id === 'string') stopCount += 1;
+      if (typeof informed?.stop_id === 'string') {
+        stopCount += 1;
+        const stopId = validNetworkId(informed.stop_id);
+        if (stopId && stopIds.size < ALERTS_MAX_STOPS) stopIds.add(stopId);
+      }
     }
 
     const activePeriods = [];
@@ -498,6 +507,7 @@ export function normalizeGtfsRtAlertsJson(payload) {
       routeIds: [...routeIds],
       routeTypes: [...routeTypes].slice(0, 8),
       stopCount,
+      stopIds: [...stopIds],
       kind: 'other',
     };
     alert.kind = alertKind(alert);
@@ -648,4 +658,71 @@ export function isDisruption(alert) {
  */
 export function hasDisruption(alerts) {
   return Array.isArray(alerts) && alerts.some(isDisruption);
+}
+
+/**
+ * Whether an alert is about particular STOPS rather than a whole route — a
+ * closed, moved or bypassed stop — and so belongs as a marker at those stops.
+ * @param {object} alert Normalized alert.
+ * @returns {boolean}
+ */
+export function isStopAlert(alert) {
+  if (alert?.kind !== 'service' || !alert.stopIds?.length) return false;
+  if (alert.effectDetail) return STOP_LEVEL_DETAILS.has(alert.effectDetail);
+  return (
+    alert.effect === 'STOP_MOVED' ||
+    alert.effect === 'NO_EFFECT_ON_SERVICE_BUT_STOP_CLOSED'
+  );
+}
+
+const STOP_LEVEL_DETAILS = new Set([
+  'STOP_CLOSURE',
+  'STATION_CLOSURE',
+  'STOP_MOVE',
+  'STOP_MOVED',
+]);
+
+/**
+ * The stops a stop-level alert should be drawn at. A station closure lists
+ * its parent station (`place-…`) AND every platform under it; the parent
+ * alone is the one place a reader looks for, so when an alert names parents
+ * only those are kept. A bus stop has no parent and stands for itself.
+ * @param {object} alert Normalized alert.
+ * @returns {string[]}
+ */
+export function alertMarkerStopIds(alert) {
+  const ids = Array.isArray(alert?.stopIds) ? alert.stopIds : [];
+  const parents = ids.filter((id) => id.startsWith('place-'));
+  return parents.length ? parents : ids;
+}
+
+/**
+ * Normalize an MBTA V3 `/stops` JSON:API document into `{id, name, lat, lon}`
+ * records. Anything without a name and a plausible position is dropped.
+ * @param {object} payload
+ * @returns {Array<{id: string, name: string, lat: number, lon: number}>}
+ * @throws {TypeError} When the document has no data array.
+ */
+export function normalizeMbtaStops(payload) {
+  if (!payload || !Array.isArray(payload.data))
+    throw new TypeError('stop list has no data array');
+  const stops = [];
+  for (const item of payload.data) {
+    if (item?.type !== 'stop') continue;
+    const id = validNetworkId(item.id);
+    const name = boundedText(item.attributes?.name, NETWORK_MAX_NAME_CHARS);
+    const lat = Number(item.attributes?.latitude);
+    const lon = Number(item.attributes?.longitude);
+    if (!id || !name) continue;
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+    if (Math.abs(lat) > 90 || Math.abs(lon) > 180) continue;
+    if (Math.abs(lat) < 1e-6 && Math.abs(lon) < 1e-6) continue;
+    stops.push({
+      id,
+      name,
+      lat: Number(lat.toFixed(6)),
+      lon: Number(lon.toFixed(6)),
+    });
+  }
+  return stops;
 }

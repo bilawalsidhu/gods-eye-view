@@ -11,6 +11,21 @@ import { coalesceProxyRequest, readResponseBytesCapped } from './httpBody.js';
 import { makeRateLimiter } from './rateLimit.js';
 import { publicTransitCatalog } from '../data/transitFeeds.js';
 import {
+  ALERT_STOPS_MAX_LOOKUP,
+  alertMarkerStopIds,
+  isStopAlert,
+  normalizeMbtaStops,
+} from '../data/transitNetwork.js';
+
+/** A looked-up stop position (or a confirmed miss) is kept this long. */
+export const TRANSIT_STOP_CACHE_TTL_MS = 24 * 60 * 60_000;
+/** Stop positions remembered across all feeds. */
+export const TRANSIT_STOP_CACHE_MAX = 5_000;
+/** Stop ids per upstream lookup, which keeps the query string short. */
+export const TRANSIT_STOP_LOOKUP_CHUNK = 100;
+/** Byte cap for one stop lookup (100 stops are ~15 KB). */
+export const TRANSIT_STOP_LOOKUP_MAX_BYTES = 2 * 1024 * 1024;
+import {
   TRANSIT_ADMISSION_MAX_GLOBAL,
   TRANSIT_ADMISSION_MAX_PER_FEED,
   TRANSIT_ADMISSION_WINDOW_MS,
@@ -150,6 +165,87 @@ export function createTransitService({ fetchImpl = fetch } = {}) {
    * @type {Map<string, {at:number, body:string, host:string, etag?:string|null, lastModified?:string|null}>}
    */
   const networkCache = new Map();
+  /**
+   * Stop positions for stop-level alerts, keyed `<feedId>:<stopId>`. A value
+   * of `stop: null` records that the operator did not return that id, so a
+   * stale id in the alert feed is not asked about on every refresh.
+   * @type {Map<string, {at: number, stop: object|null}>}
+   */
+  const stopCache = new Map();
+
+  /**
+   * Attach positions for the stops that stop-level alerts name. The ids come
+   * from the operator's own alert feed, are validated by the normalizer, and
+   * are looked up only when not already known; a failed lookup leaves the
+   * alerts intact and simply unplaced.
+   * @param {object} feed
+   * @param {object} snapshot Alerts snapshot (mutated: gains `stops`).
+   * @param {AbortSignal} signal
+   */
+  async function attachAlertStops(feed, snapshot, signal) {
+    const base = feed.network?.stopsUrl;
+    snapshot.stops = [];
+    if (typeof base !== 'string') return;
+    const wanted = new Set();
+    for (const alert of snapshot.alerts) {
+      if (!isStopAlert(alert)) continue;
+      for (const id of alertMarkerStopIds(alert)) {
+        if (wanted.size >= ALERT_STOPS_MAX_LOOKUP) break;
+        wanted.add(id);
+      }
+    }
+    const now = Date.now();
+    const key = (id) => `${feed.id}:${id}`;
+    const missing = [...wanted].filter((id) => {
+      const cached = stopCache.get(key(id));
+      return !cached || now - cached.at > TRANSIT_STOP_CACHE_TTL_MS;
+    });
+    for (let i = 0; i < missing.length; i += TRANSIT_STOP_LOOKUP_CHUNK) {
+      const chunk = missing.slice(i, i + TRANSIT_STOP_LOOKUP_CHUNK);
+      const url = `${base}&filter%5Bid%5D=${chunk.map(encodeURIComponent).join(',')}`;
+      try {
+        const { response, finalUrl } = await fetchTransitFeed(
+          feed,
+          signal,
+          fetchImpl,
+          null,
+          { url, accept: TRANSIT_NETWORK_ACCEPT },
+        );
+        if (!isAcceptableTransitUpstreamUrl(finalUrl) || !response.ok) {
+          try {
+            await response.body?.cancel();
+          } catch {
+            /* no-op */
+          }
+          throw new Error(`stop lookup HTTP ${response.status}`);
+        }
+        const bytes = await readResponseBytesCapped(
+          response,
+          TRANSIT_STOP_LOOKUP_MAX_BYTES,
+        );
+        const found = new Map(
+          normalizeMbtaStops(
+            JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)),
+          ).map((stop) => [stop.id, stop]),
+        );
+        for (const id of chunk)
+          stopCache.set(key(id), { at: now, stop: found.get(id) || null });
+      } catch (error) {
+        if (signal.aborted) throw error;
+        console.warn(
+          `[transit-proxy] ${feed.id} stop lookup failed: ${error?.message || error}`,
+        );
+        break;
+      }
+    }
+    while (stopCache.size > TRANSIT_STOP_CACHE_MAX) {
+      stopCache.delete(stopCache.keys().next().value);
+    }
+    for (const id of wanted) {
+      const stop = stopCache.get(key(id))?.stop;
+      if (stop) snapshot.stops.push(stop);
+    }
+  }
 
   function reply(status, body, headers) {
     return new Response(body, { status, headers });
@@ -283,6 +379,8 @@ export function createTransitService({ fetchImpl = fetch } = {}) {
         kind === 'routes'
           ? buildTransitRoutesSnapshot(feed, bytes, now)
           : buildTransitAlertsSnapshot(feed, bytes, now);
+      if (kind === 'alerts')
+        await attachAlertStops(feed, snapshot, controller.signal);
       if (closed) throw new Error('Transit provider closed');
       const entry = {
         at: now,
@@ -600,6 +698,7 @@ export function createTransitService({ fetchImpl = fetch } = {}) {
     history.clear();
     cache.clear();
     networkCache.clear();
+    stopCache.clear();
     cooldown.clear();
   }
   return { handle, close };

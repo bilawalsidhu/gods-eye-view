@@ -186,7 +186,8 @@ export function createLifecycle({ state, services, parts }) {
       registerPickOwner(
         'transit',
         (pickedId) =>
-          state._vehicles.has(pickedId) || parts.network.isRoutePick(pickedId),
+          state._vehicles.has(pickedId) ||
+          parts.network.isNetworkPick(pickedId),
       );
       if (!state._cameraChangedAttached) {
         viewer.camera.changed.addEventListener(parts.viewport.onCameraChanged);
