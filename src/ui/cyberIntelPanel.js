@@ -190,7 +190,7 @@ export class CyberIntelPanel {
     input.name = 'query';
     input.type = 'search';
     input.maxLength = 120;
-    input.placeholder = 'e.g. port:443 country:US';
+    input.placeholder = 'Port/Service/CVE';
     input.setAttribute('aria-label', 'Shodan search query');
     input.value = areaSearch?.userQuery || '';
     const submit = element(
