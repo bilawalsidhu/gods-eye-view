@@ -1,8 +1,9 @@
 /* ── Responsive ───────────────────────────────── */
 @media (max-width: 720px) {
   #cyber-intel-legend-panel:not([hidden]) {
-    top: 16px;
+    top: auto;
     right: 16px;
+    bottom: calc(2vh + 92px);
     width: min(260px, calc(100vw - 32px));
     max-height: min(32vh, 280px);
   }

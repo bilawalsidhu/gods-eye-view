@@ -60,6 +60,8 @@ function fixture() {
   const body = new FakeNode('div');
   const legendPanel = new FakeNode('section');
   const legendContent = new FakeNode('div');
+  legendPanel.hidden = true;
+  legendPanel.inert = true;
   const documentBody = new FakeNode('body');
   const disclosure = new FakeNode('button');
   disclosure.click = () => panel.classList.remove('collapsed');
@@ -195,6 +197,11 @@ test('Cyber Threat Intel remains hidden unless Cyber Activity is enabled', () =>
     f.legendContent.textContent,
     /Gold dot · searched Shodan device/,
   );
+  const explainers = f.legendContent.children[0].children.filter(
+    (node) => node.tagName === 'details',
+  );
+  assert.equal(explainers.length, 2);
+  assert.ok(explainers.every((node) => !node.open));
   assert.ok(
     f.legendContent.textContent.indexOf('CloudFlare Radar') <
       f.legendContent.textContent.indexOf('Shodan'),

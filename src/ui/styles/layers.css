@@ -315,10 +315,10 @@
 .cyber-intel-map-legend-panel {
   position: fixed;
   z-index: 109;
-  top: var(--right-stack-safe-top, 26vh);
-  right: calc(var(--right-rail-x) + 370px);
-  width: min(300px, calc(100vw - 24px));
-  max-height: min(42vh, 360px);
+  right: 16px;
+  bottom: calc(2vh + 112px);
+  width: min(280px, calc(100vw - 32px));
+  max-height: min(38vh, 320px);
   overflow-y: auto;
   pointer-events: auto;
 }
@@ -331,10 +331,6 @@
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(24px) saturate(1.4);
   -webkit-backdrop-filter: blur(24px) saturate(1.4);
-}
-#cyber-intel-panel.cyber-intel-expanded
-  ~ #cyber-intel-legend-panel:not([hidden]) {
-  right: calc(var(--right-rail-x) + 610px);
 }
 #cyber-intel-legend-panel[hidden] {
   display: none !important;
@@ -511,6 +507,17 @@
   font-size: 10px;
   letter-spacing: 1.1px;
   text-transform: uppercase;
+}
+.cyber-legend-explainer {
+  margin-top: 5px;
+}
+.cyber-legend-explainer > summary {
+  color: var(--accent-cyan);
+  font-size: 9px;
+  cursor: pointer;
+}
+.cyber-legend-explainer > p {
+  margin: 5px 0 2px;
 }
 .cyber-intel-provider h4 {
   margin-top: 12px;

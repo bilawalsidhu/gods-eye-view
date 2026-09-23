@@ -927,10 +927,8 @@ export class CyberIntelPanel {
       legend.append(row);
     }
     legend.append(
-      element(
-        this.document,
-        'p',
-        'cyber-intel-provenance',
+      this._renderLegendExplainer(
+        'About CloudFlare Radar',
         'Radar positions are country reference anchors. Arrows show only the top 10 pairs Cloudflare reports; a dot without a line has no pair in that set. Arrows show aggregate associations, not network routes.',
       ),
     );
@@ -942,14 +940,21 @@ export class CyberIntelPanel {
     );
     legend.append(shodanRow);
     legend.append(
-      element(
-        this.document,
-        'p',
-        'cyber-intel-provenance',
+      this._renderLegendExplainer(
+        'About Shodan',
         'Shodan devices appear after an area search; IP-based positions are approximate network locations.',
       ),
     );
     return legend;
+  }
+
+  _renderLegendExplainer(summary, explanation) {
+    const details = element(this.document, 'details', 'cyber-legend-explainer');
+    details.append(element(this.document, 'summary', '', summary));
+    details.append(
+      element(this.document, 'p', 'cyber-intel-provenance', explanation),
+    );
+    return details;
   }
 
   render(state) {
