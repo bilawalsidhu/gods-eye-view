@@ -165,7 +165,7 @@ function normalizePosition(lat, lon) {
  * Map one track from the browser Mode S decoder into a local ADS-B record.
  * @param {object} track Decoder track (icao, callsign, latitude, longitude,
  *   altitudeFt, speedKt, headingDeg, verticalRateFpm, messages, lastSeen,
- *   lastPositionAt).
+ *   lastPositionAt, onGround from surface position messages).
  * @returns {object|null} Normalized record, or null without a valid address.
  */
 export function recordFromDecoderTrack(track) {
@@ -176,7 +176,7 @@ export function recordFromDecoderTrack(track) {
     icao,
     callsign: normalizeCallsign(track.callsign),
     category: normalizeAdsbCategory(track.category),
-    onGround: false,
+    onGround: track.onGround === true,
     lat,
     lon,
     altitudeFt: finiteOrNull(track.altitudeFt),

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import { classifyAircraft } from '../data/aircraftClass.js';
+import { recordFromDecoderTrack } from '../sources/adsbRecords.js';
 import {
   AdsbStreamDecoder,
   LOCAL_ADSB_STALE_MS,
@@ -446,4 +447,131 @@ test('three refused global fixes in a row re-anchor the track', () => {
   assert.equal(stats.positionsRejected, 2, 'the third global fix re-anchors');
   assert.ok(Math.abs(track.latitude - 30.2) < 0.2, 'moved to the new stream');
   assert.equal(track.rejectStreak, 0);
+});
+
+// Surface position examples from "The 1090MHz Riddle" (J. Sun), surface
+// position chapter: ICAO C8200A, even 8CC8200A3AC8F009BCDEF2..., odd
+// 8FC8200A3AB8F5F893096B..., receiver (-43.496, 172.558); published result
+// (-43.48564, 172.53942). The book prints the parity field as zeros, so the
+// 24-bit parity is recomputed here to make the frames CRC-valid.
+function withParity(hex) {
+  const bytes = fromHex(hex);
+  // The Mode S parity is the CRC remainder of the first 88 bits.
+  const parity = modeSChecksum(bytes.slice(0, 11));
+  bytes[11] = (parity >> 16) & 0xff;
+  bytes[12] = (parity >> 8) & 0xff;
+  bytes[13] = parity & 0xff;
+  assert.equal(modeSChecksum(bytes), 0);
+  return bytes;
+}
+const SURFACE_EVEN = withParity('8CC8200A3AC8F009BCDEF2000000');
+const SURFACE_ODD = withParity('8FC8200A3AB8F5F893096B000000');
+const SURFACE_RECEIVER = { latitude: -43.496, longitude: 172.558 };
+
+test('surface position messages decode movement, track and ground state', () => {
+  // Odd frame ME field, read by hand: TC 00111 (7), MOV 0101011 (43),
+  // S 1, TRK 0001111 (15), T 0, F 1. MOV 39–93 is 15 kt + 1 kt per step
+  // (43 → 19 kt); TRK is in 360/128° steps (15 → 42.1875°).
+  const odd = decodeAdsbMessage(SURFACE_ODD, { receivedAt: 2_000 });
+  assert.equal(odd.icao, 'C8200A');
+  assert.equal(odd.typeCode, 7);
+  assert.equal(odd.onGround, true);
+  assert.equal(odd.speedKt, 19);
+  assert.equal(odd.headingDeg, 42.1875);
+  assert.equal(odd.altitudeFt, null, 'no altitude on the surface');
+  assert.equal(odd.cpr.surface, true);
+  assert.equal(odd.cpr.odd, true);
+  // Even frame: MOV 0101100 (44 → 20 kt), same track.
+  const even = decodeAdsbMessage(SURFACE_EVEN);
+  assert.equal(even.speedKt, 20);
+  assert.equal(even.cpr.odd, false);
+
+  // A real Schiphol frame with a valid parity (Riddle ground-speed example):
+  // MOV 0101010 (42 → 18 kt), S 1, TRK 0110010 (50 → 140.625°).
+  const schiphol = decodeAdsbMessage(fromHex('8C4841753AAB238733C8CD4020B1'));
+  assert.equal(schiphol.icao, '484175');
+  assert.equal(schiphol.speedKt, 18);
+  assert.equal(schiphol.headingDeg, 140.625);
+
+  // MOV 1 is "stopped"; MOV 0 and a track status of 0 carry no value.
+  const stopped = withParity('8CC8200A3810F009BCDEF2000000');
+  const still = decodeAdsbMessage(stopped);
+  assert.equal(still.speedKt, 0);
+  assert.equal(still.headingDeg, undefined, 'track status 0: no track');
+});
+
+test('a surface even/odd pair decodes to the published position and marks the aircraft on the ground', () => {
+  const tracks = new Map();
+  // Airborne first: the landing must clear the old altitude.
+  const airborne = decodeAdsbMessage(fromHex('8D40621D58C382D690C8AC2863A7'));
+  updateAircraftTrack(
+    tracks,
+    // Its altitude only: the CPR belongs to another aircraft.
+    { ...airborne, icao: 'C8200A', receivedAt: 0, cpr: null },
+    SURFACE_RECEIVER,
+  );
+  updateAircraftTrack(
+    tracks,
+    decodeAdsbMessage(SURFACE_EVEN, { receivedAt: 1_000 }),
+    SURFACE_RECEIVER,
+  );
+  const track = updateAircraftTrack(
+    tracks,
+    decodeAdsbMessage(SURFACE_ODD, { receivedAt: 2_000 }),
+    SURFACE_RECEIVER,
+  );
+  assert.ok(
+    Math.abs(track.latitude - -43.48564) < 0.00001,
+    `${track.latitude}`,
+  );
+  assert.ok(
+    Math.abs(track.longitude - 172.53942) < 0.00001,
+    `${track.longitude}`,
+  );
+  assert.equal(track.lastPositionAt, 2_000);
+  assert.equal(track.onGround, true);
+  assert.equal(track.altitudeFt, null);
+  assert.equal(track.speedKt, 19);
+  const record = recordFromDecoderTrack(track);
+  assert.equal(record.onGround, true);
+  assert.equal(record.altitudeFt, null);
+  assert.ok(Math.abs(record.lat - -43.48564) < 0.00001);
+
+  // An airborne position afterwards clears the ground state.
+  const departed = updateAircraftTrack(
+    tracks,
+    { ...airborne, icao: 'C8200A', receivedAt: 3_000, cpr: null },
+    SURFACE_RECEIVER,
+  );
+  assert.equal(departed.onGround, false);
+  assert.equal(departed.altitudeFt, 38_000);
+});
+
+test('a single surface frame decodes against the receiver, then against its own fix', () => {
+  // Published local-decode example: odd frame with reference (-43.5, 172.5).
+  const tracks = new Map();
+  let track = updateAircraftTrack(
+    tracks,
+    decodeAdsbMessage(SURFACE_ODD, { receivedAt: 1_000 }),
+    { latitude: -43.5, longitude: 172.5 },
+  );
+  assert.ok(Math.abs(track.latitude - -43.48564) < 0.00001);
+  assert.ok(Math.abs(track.longitude - 172.53942) < 0.00001);
+  // With no receiver location, the aircraft's own recent fix is the reference.
+  track = updateAircraftTrack(
+    tracks,
+    decodeAdsbMessage(SURFACE_EVEN, { receivedAt: 40_000 }),
+    null,
+  );
+  assert.equal(track.lastPositionAt, 40_000);
+  assert.ok(Math.abs(track.latitude - -43.4856) < 0.001);
+  assert.ok(Math.abs(track.longitude - 172.5394) < 0.001);
+  // Without any reference a lone surface frame is ambiguous: no position.
+  const blind = updateAircraftTrack(
+    new Map(),
+    decodeAdsbMessage(SURFACE_ODD, { receivedAt: 1_000 }),
+    null,
+  );
+  assert.equal(blind.lastPositionAt, null);
+  assert.equal(blind.onGround, true);
 });
