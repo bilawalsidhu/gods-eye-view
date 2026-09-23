@@ -300,6 +300,43 @@
   border-radius: 8px;
   background: rgba(0, 14, 22, 0.56);
 }
+.cyber-device-popup {
+  position: fixed;
+  z-index: 2500;
+  width: min(328px, calc(100vw - 24px));
+  max-height: min(340px, calc(100vh - 24px));
+  overflow: auto;
+  padding: 9px;
+  border: 1px solid rgba(255, 211, 78, 0.72);
+  border-radius: 9px;
+  background: rgba(3, 13, 20, 0.96);
+  box-shadow:
+    0 10px 35px rgba(0, 0, 0, 0.68),
+    0 0 18px rgba(255, 211, 78, 0.15);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+.cyber-device-popup[hidden] {
+  display: none;
+}
+.cyber-device-popup .cyber-intel-selection {
+  position: relative;
+  padding-top: 28px;
+  border: 0;
+  background: transparent;
+}
+.cyber-device-popup-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 24px;
+  height: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 5px;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+}
 .cyber-intel-legend-row {
   display: flex;
   align-items: center;
@@ -385,6 +422,22 @@
   font-size: 11px;
   line-height: 1.45;
   overflow-wrap: anywhere;
+}
+.cyber-shodan-host-link {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 6px;
+  padding: 6px 9px;
+  border: 1px solid rgba(255, 211, 78, 0.48);
+  border-radius: 5px;
+  color: #ffe18a;
+  font-size: 10px;
+  text-decoration: none;
+}
+.cyber-shodan-host-link:hover,
+.cyber-shodan-host-link:focus-visible {
+  background: rgba(255, 211, 78, 0.12);
+  outline: 1px solid rgba(255, 211, 78, 0.7);
 }
 .cyber-intel-detail-row strong,
 .cyber-intel-record-list strong {

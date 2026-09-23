@@ -11,6 +11,16 @@ export class CyberIntelPanel {
     this.document = documentRef;
     this.panel = documentRef?.getElementById?.('cyber-intel-panel') || null;
     this.body = documentRef?.getElementById?.('cyber-intel-body') || null;
+    this.devicePopup =
+      typeof documentRef?.createElement === 'function'
+        ? element(documentRef, 'div', 'cyber-device-popup')
+        : null;
+    if (this.devicePopup) {
+      this.devicePopup.hidden = true;
+      this.devicePopup.setAttribute('role', 'dialog');
+      this.devicePopup.setAttribute('aria-label', 'Shodan device details');
+    }
+    if (this.devicePopup) documentRef?.body?.append?.(this.devicePopup);
     this._wasEnabled = false;
   }
 
@@ -55,6 +65,11 @@ export class CyberIntelPanel {
       const query = form.querySelector('input[name="query"]')?.value?.trim();
       if (query) void layer.getThreatIntelState().onShodanSearch?.(query, 1);
     };
+    this._onDevicePopupClick = (event) => {
+      if (!event.target?.closest?.('[data-close-shodan-popup]')) return;
+      layer.getThreatIntelState().onClearShodanSelection?.();
+    };
+    this.devicePopup?.addEventListener('click', this._onDevicePopupClick);
     this.body.addEventListener('click', this._onBodyClick);
     this.body.addEventListener('submit', this._onBodySubmit);
     this.render(layer.getThreatIntelState());
@@ -219,7 +234,7 @@ export class CyberIntelPanel {
           this.document,
           'p',
           'cyber-intel-provenance',
-          `${mappedCount} of ${areaMatches.length} returned devices have map positions. Nearby devices are grouped into numbered gold markers; select a group to see its devices. Unresolved IPs remain listed without a fabricated location.`,
+          `${mappedCount} of ${areaMatches.length} returned devices have map positions. Devices sharing one approximate IP location are individually fanned around it, with connector lines. Those display offsets are not measured device locations. Unresolved IPs remain listed without a fabricated location.`,
         ),
       );
     }
@@ -313,86 +328,116 @@ export class CyberIntelPanel {
     const section = element(this.document, 'section', 'cyber-intel-selection');
     section.setAttribute(
       'aria-label',
-      selection.type === 'shodan-cluster'
-        ? 'Selected Shodan device cluster'
-        : selection.type === 'shodan-asset'
-          ? 'Selected Shodan device'
-          : 'Selected Cloudflare Radar observation',
+      selection.type === 'shodan-asset'
+        ? 'Selected Shodan device'
+        : 'Selected Cloudflare Radar observation',
     );
     section.append(
       element(
         this.document,
         'h3',
         '',
-        selection.type === 'shodan-cluster'
-          ? `SHODAN DEVICES · ${selection.matches.length} AT THIS LOCATION`
-          : selection.type === 'shodan-asset'
-            ? 'SELECTED SHODAN DEVICE'
-            : selection.type === 'flow'
-              ? 'SELECTED RADAR FLOW'
-              : 'SELECTED RADAR LOCATION',
+        selection.type === 'shodan-asset'
+          ? 'SELECTED SHODAN DEVICE'
+          : selection.type === 'flow'
+            ? 'SELECTED RADAR FLOW'
+            : 'SELECTED RADAR LOCATION',
       ),
     );
+    if (selection.type === 'shodan-asset') {
+      const close = element(
+        this.document,
+        'button',
+        'cyber-device-popup-close',
+        '×',
+      );
+      close.type = 'button';
+      close.setAttribute('aria-label', 'Close Shodan device details');
+      close.dataset.closeShodanPopup = 'true';
+      section.append(close);
+    }
     const rows =
-      selection.type === 'shodan-cluster'
-        ? selection.matches.map((match) => [
-            match.ip,
+      selection.type === 'shodan-asset'
+        ? [
+            ['IP', selection.ip],
+            ['Organization', selection.organization],
             [
-              match.organization,
-              [match.city, match.region, match.country]
+              'Services',
+              (selection.services || [])
+                .map(
+                  (service) =>
+                    `${service.port ?? '?'}${service.transport ? `/${service.transport}` : ''}${service.product ? ` · ${service.product}` : ''}`,
+                )
+                .join('; ') || 'None reported',
+            ],
+            [
+              'Hostnames',
+              [
+                ...(selection.hostnames || []),
+                ...(selection.domains || []),
+              ].join(', ') || 'None reported',
+            ],
+            [
+              'Location',
+              [selection.city, selection.region, selection.country]
                 .filter(Boolean)
-                .join(', '),
-              (match.services || [])
-                .map((service) => service.port)
-                .filter(Boolean)
-                .map((port) => `port ${port}`)
-                .join(', '),
-            ]
-              .filter(Boolean)
-              .join(' · ') || 'No additional host details',
-          ])
-        : selection.type === 'shodan-asset'
+                .join(', ') || 'Unavailable',
+            ],
+            ['Geography', selection.geographicProvenance || 'Unavailable'],
+            ['Location method', selection.geographicMethod || 'Unavailable'],
+            [
+              'Source',
+              `${selection.attribution} · fetched ${selection.fetchedAt}`,
+            ],
+          ]
+        : selection.type === 'flow'
           ? [
-              ['IP', selection.ip],
-              ['Organization', selection.organization],
+              ['Origin', `${selection.origin.name} (${selection.origin.code})`],
+              ['Target', `${selection.target.name} (${selection.target.code})`],
               [
-                'Services',
-                (selection.services || [])
-                  .map(
-                    (service) =>
-                      `${service.port ?? '?'}${service.transport ? `/${service.transport}` : ''}${service.product ? ` · ${service.product}` : ''}`,
-                  )
-                  .join('; ') || 'None reported',
+                'Share',
+                `${Number.isFinite(selection.share) ? selection.share : 'Unavailable'}% of reported mitigated requests`,
               ],
+              ['Rank', selection.rank],
               [
-                'Hostnames',
-                [
-                  ...(selection.hostnames || []),
-                  ...(selection.domains || []),
-                ].join(', ') || 'None reported',
+                'Window',
+                `${selection.windowStart || '—'} to ${selection.windowEnd || '—'} UTC`,
               ],
               [
                 'Location',
-                [selection.city, selection.region, selection.country]
-                  .filter(Boolean)
-                  .join(', ') || 'Unavailable',
-              ],
-              ['Geography', selection.geographicProvenance || 'Unavailable'],
-              ['Location method', selection.geographicMethod || 'Unavailable'],
-              [
-                'Source',
-                `${selection.attribution} · fetched ${selection.fetchedAt}`,
+                'Country reference coordinates; not a device or network path',
               ],
             ]
-          : selection.type === 'flow'
+          : selection.roles?.length > 1
             ? [
+                ['Roles', selection.roles.map((row) => row.role).join(' and ')],
                 [
-                  'Origin',
-                  `${selection.origin.name} (${selection.origin.code})`,
+                  'Country',
+                  `${selection.locationName || 'Unknown'}${selection.locationCode ? ` (${selection.locationCode})` : ''}`,
+                ],
+                ...selection.roles.map((row) => [
+                  `${row.role === 'origin' ? 'Origin' : 'Target'} share / rank`,
+                  `${Number.isFinite(row.share) ? row.share : 'Unavailable'}% / ${row.rank ?? '—'}`,
+                ]),
+                [
+                  'Window',
+                  `${selection.windowStart || '—'} to ${selection.windowEnd || '—'} UTC`,
                 ],
                 [
-                  'Target',
-                  `${selection.target.name} (${selection.target.code})`,
+                  'Location',
+                  'Country reference coordinates; not a device location',
+                ],
+              ]
+            : [
+                [
+                  'Role',
+                  selection.category?.endsWith('-origin')
+                    ? 'Origin country aggregate'
+                    : 'Target country aggregate',
+                ],
+                [
+                  'Country',
+                  `${selection.locationName || 'Unknown'}${selection.locationCode ? ` (${selection.locationCode})` : ''}`,
                 ],
                 [
                   'Share',
@@ -405,62 +450,36 @@ export class CyberIntelPanel {
                 ],
                 [
                   'Location',
-                  'Country reference coordinates; not a device or network path',
+                  'Country reference coordinates; not a device location',
                 ],
-              ]
-            : selection.roles?.length > 1
-              ? [
-                  [
-                    'Roles',
-                    selection.roles.map((row) => row.role).join(' and '),
-                  ],
-                  [
-                    'Country',
-                    `${selection.locationName || 'Unknown'}${selection.locationCode ? ` (${selection.locationCode})` : ''}`,
-                  ],
-                  ...selection.roles.map((row) => [
-                    `${row.role === 'origin' ? 'Origin' : 'Target'} share / rank`,
-                    `${Number.isFinite(row.share) ? row.share : 'Unavailable'}% / ${row.rank ?? '—'}`,
-                  ]),
-                  [
-                    'Window',
-                    `${selection.windowStart || '—'} to ${selection.windowEnd || '—'} UTC`,
-                  ],
-                  [
-                    'Location',
-                    'Country reference coordinates; not a device location',
-                  ],
-                ]
-              : [
-                  [
-                    'Role',
-                    selection.category?.endsWith('-origin')
-                      ? 'Origin country aggregate'
-                      : 'Target country aggregate',
-                  ],
-                  [
-                    'Country',
-                    `${selection.locationName || 'Unknown'}${selection.locationCode ? ` (${selection.locationCode})` : ''}`,
-                  ],
-                  [
-                    'Share',
-                    `${Number.isFinite(selection.share) ? selection.share : 'Unavailable'}% of reported mitigated requests`,
-                  ],
-                  ['Rank', selection.rank],
-                  [
-                    'Window',
-                    `${selection.windowStart || '—'} to ${selection.windowEnd || '—'} UTC`,
-                  ],
-                  [
-                    'Location',
-                    'Country reference coordinates; not a device location',
-                  ],
-                ];
+              ];
     for (const [label, value] of rows) {
       const row = element(this.document, 'p', 'cyber-intel-detail-row');
       row.append(element(this.document, 'strong', '', `${label}: `));
       row.append(this.document.createTextNode(String(value ?? '—')));
       section.append(row);
+    }
+    if (selection.type === 'shodan-asset') {
+      if (selection.visualOffsetMeters > 0) {
+        section.append(
+          element(
+            this.document,
+            'p',
+            'cyber-intel-provenance',
+            `This dot is offset about ${Math.round(selection.visualOffsetMeters)} m from a shared IP-location point for visibility only; the offset is not a measured device location.`,
+          ),
+        );
+      }
+      const link = element(
+        this.document,
+        'a',
+        'cyber-shodan-host-link',
+        'Open this host on Shodan ↗',
+      );
+      link.href = `https://www.shodan.io/host/${encodeURIComponent(selection.ip)}`;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      section.append(link);
     }
     section.append(
       element(
@@ -664,22 +683,44 @@ export class CyberIntelPanel {
     this.panel.setAttribute('aria-hidden', String(!isEnabled));
     this.panel.inert = !isEnabled;
     this.body.replaceChildren();
-    if (!isEnabled) return;
+    if (!isEnabled) {
+      if (this.devicePopup) this.devicePopup.hidden = true;
+      return;
+    }
+
+    if (state.selectedShodan && this.devicePopup) {
+      this.devicePopup.hidden = false;
+      this.devicePopup.replaceChildren(
+        this._renderSelection({
+          ...state.selectedShodan,
+          type: 'shodan-asset',
+        }),
+      );
+      const point = state.selectedShodan.popupPosition;
+      const viewportWidth = globalThis.innerWidth || 1280;
+      const viewportHeight = globalThis.innerHeight || 800;
+      const left = Math.min(
+        Math.max(12, (point?.x ?? viewportWidth / 2) + 14),
+        Math.max(12, viewportWidth - 352),
+      );
+      const top = Math.min(
+        Math.max(12, (point?.y ?? viewportHeight / 2) + 14),
+        Math.max(12, viewportHeight - 300),
+      );
+      this.devicePopup.style.left = `${left}px`;
+      this.devicePopup.style.top = `${top}px`;
+    } else if (this.devicePopup) this.devicePopup.hidden = true;
 
     this.body.append(this._renderLegend());
 
-    const selected = state.selectedShodanCluster?.length
-      ? { type: 'shodan-cluster', matches: state.selectedShodanCluster }
-      : state.selectedShodan
-        ? { ...state.selectedShodan, type: 'shodan-asset' }
-        : state.selectedRadar;
+    const selected = state.selectedRadar;
     if (selected) {
       this.body.append(this._renderSelection(selected));
       const disclosure = this.panel.querySelector(
         '[data-collapse-target="cyber-intel-panel"]',
       );
       if (this.panel.classList.contains('collapsed')) disclosure?.click();
-    } else {
+    } else if (!state.selectedShodan || !this.devicePopup) {
       this.body.append(
         element(
           this.document,
@@ -711,8 +752,11 @@ export class CyberIntelPanel {
       this.body?.removeEventListener('click', this._onBodyClick);
     if (this._onBodySubmit)
       this.body?.removeEventListener('submit', this._onBodySubmit);
+    if (this._onDevicePopupClick)
+      this.devicePopup?.removeEventListener('click', this._onDevicePopupClick);
     this._onBodyClick = null;
     this._onBodySubmit = null;
+    this._onDevicePopupClick = null;
     this.layer?.setThreatIntelListener?.(null);
     this.layer = null;
     this.body?.replaceChildren();
@@ -720,6 +764,8 @@ export class CyberIntelPanel {
       this.panel.hidden = true;
       this.panel.inert = true;
     }
+    this.devicePopup?.remove?.();
+    this.devicePopup && (this.devicePopup.hidden = true);
     this._wasEnabled = false;
   }
 }

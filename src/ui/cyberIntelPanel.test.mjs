@@ -9,6 +9,7 @@ class FakeNode {
     this.children = [];
     this.attributes = new Map();
     this.dataset = {};
+    this.style = {};
     this.hidden = false;
     this.inert = false;
     this.classList = {
@@ -35,6 +36,9 @@ class FakeNode {
   setAttribute(name, value) {
     this.attributes.set(name, String(value));
   }
+  remove() {
+    this.removed = true;
+  }
   querySelector(selector) {
     return selector === '[data-collapse-target="cyber-intel-panel"]'
       ? this.disclosure
@@ -54,16 +58,23 @@ class FakeNode {
 function fixture() {
   const panel = new FakeNode('section', 'panel-collapsible collapsed');
   const body = new FakeNode('div');
+  const documentBody = new FakeNode('body');
   const disclosure = new FakeNode('button');
   disclosure.click = () => panel.classList.remove('collapsed');
   panel.disclosure = disclosure;
   const documentRef = {
+    body: documentBody,
     createElement: (tag) => new FakeNode(tag),
     createTextNode: (text) => ({ textContent: String(text) }),
     getElementById: (id) =>
       ({ 'cyber-intel-panel': panel, 'cyber-intel-body': body })[id] || null,
   };
-  return { panel, body, documentRef, disclosure };
+  return {
+    panel,
+    body,
+    documentRef,
+    disclosure,
+  };
 }
 
 test('Cyber Threat Intel remains hidden unless Cyber Activity is enabled', () => {
@@ -162,6 +173,8 @@ test('Shodan device selection shows the approximate network location and provena
         geographicMethod: 'IPwho.is IP geolocation',
         geographicProvenance:
           'Approximate network location; not a device or person location.',
+        visualOffsetMeters: 42,
+        popupPosition: { x: 100, y: 120 },
         attribution: 'Shodan',
         fetchedAt: '2026-09-20T01:00:00Z',
       },
@@ -176,11 +189,27 @@ test('Shodan device selection shows the approximate network location and provena
   };
   const panel = new CyberIntelPanel({ documentRef: f.documentRef });
   panel.mount(layer);
-  assert.match(f.body.textContent, /SELECTED SHODAN DEVICE/);
-  assert.match(f.body.textContent, /8\.8\.4\.4/);
-  assert.match(f.body.textContent, /443\/tcp/);
-  assert.match(f.body.textContent, /IPwho\.is IP geolocation/);
-  assert.match(f.body.textContent, /not a device or person location/);
+  assert.equal(panel.devicePopup.hidden, false);
+  assert.equal(panel.devicePopup.style.left, '114px');
+  assert.equal(panel.devicePopup.style.top, '134px');
+  assert.match(panel.devicePopup.textContent, /SELECTED SHODAN DEVICE/);
+  assert.match(panel.devicePopup.textContent, /8\.8\.4\.4/);
+  assert.match(panel.devicePopup.textContent, /443\/tcp/);
+  assert.match(panel.devicePopup.textContent, /IPwho\.is IP geolocation/);
+  assert.match(
+    panel.devicePopup.textContent,
+    /not a device or person location/,
+  );
+  assert.match(panel.devicePopup.textContent, /offset about 42 m/);
+  const detailCard = panel.devicePopup.children.find(
+    (node) => node.className === 'cyber-intel-selection',
+  );
+  const shodanLink = detailCard.children.find(
+    (node) => node.className === 'cyber-shodan-host-link',
+  );
+  assert.equal(shodanLink.href, 'https://www.shodan.io/host/8.8.4.4');
+  assert.equal(shodanLink.target, '_blank');
+  assert.equal(shodanLink.rel, 'noopener noreferrer');
   panel.destroy();
 });
 

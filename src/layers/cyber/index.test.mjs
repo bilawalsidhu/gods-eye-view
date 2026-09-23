@@ -259,10 +259,10 @@ test('Shodan area search uses the visible map radius, renders devices, and expos
           page: 1,
           pageLimit: 3,
           pageSize: 10,
-          total: 1,
+          total: 2,
           fetchedAt: '2026-09-20T01:00:00Z',
           attribution: 'Shodan',
-          matches: [device],
+          matches: [device, { ...device, ip: '8.8.8.8' }],
         };
       },
     },
@@ -301,13 +301,21 @@ test('Shodan area search uses the visible map radius, renders devices, and expos
   assert.ok(Math.abs(receivedArea.longitude + 75) < 1e-9);
   assert.ok(receivedArea.radiusKm > 10 && receivedArea.radiusKm < 20);
   const entity = shodanDataSource.entities.getById('cyber-shodan:8.8.4.4');
-  assert.equal(entity.position.latitude, 37.751);
+  const secondEntity = shodanDataSource.entities.getById(
+    'cyber-shodan:8.8.8.8',
+  );
+  assert.notEqual(entity.position.longitude, device.longitude);
+  assert.notEqual(entity.position.longitude, secondEntity.position.longitude);
+  assert.ok(
+    shodanDataSource.entities.getById('cyber-shodan-link:8.8.4.4').polyline,
+  );
   assert.equal(entity.properties.geographicPrecision, 'network-approximate');
   pickedId = entity.id;
   latestSelectionHandler.actions.get('left-click')({
     position: { x: 1, y: 1 },
   });
   assert.equal(states.at(-1).selectedShodan.ip, '8.8.4.4');
+  assert.ok(states.at(-1).selectedShodan.visualOffsetMeters > 0);
   assert.equal(states.at(-1).selectedRadar, null);
   layer.destroy();
 });
