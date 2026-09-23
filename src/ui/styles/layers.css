@@ -547,6 +547,10 @@
   min-width: 0;
   flex: 1;
   width: 100%;
+  font-size: 11px;
+}
+.cyber-shodan-credit-note {
+  margin-bottom: 9px;
 }
 .cyber-shodan-area-button {
   flex: 0 0 auto;

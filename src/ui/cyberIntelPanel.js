@@ -180,7 +180,7 @@ export class CyberIntelPanel {
       element(
         this.document,
         'p',
-        'cyber-intel-provenance',
+        'cyber-intel-provenance cyber-shodan-credit-note',
         'A search uses one query credit.',
       ),
     );
