@@ -799,7 +799,6 @@
   "scripts/qa-weather-swap.mjs",
   "scripts/qa-weather-teardown.mjs",
   "src/layers/weather/imageryHost.test.mjs",
-<<<<<<< HEAD
   "src/sdr/adsbDecoder.test.mjs",
   "src/sdr/controller.test.mjs",
   "src/sdr/gain.test.mjs",
@@ -814,8 +813,7 @@
   "src/layers/localAdsb/feeds.test.mjs",
   "src/ui/railScrollers.test.mjs",
   "src/layers/localAdsb/motion.test.mjs",
-  "src/data/modelEligibility.test.mjs"
-=======
+  "src/data/modelEligibility.test.mjs",
   "src/layers/recentImagery/model.test.mjs",
   "src/layers/recentImagery/catalog.test.mjs",
   "src/maps/imageryHost.test.mjs",
@@ -826,5 +824,4 @@
   "src/ui/recentImagery.test.mjs",
   "src/layers/recentImagery/testDoubles.mjs",
   "scripts/qa-recent-imagery.mjs"
->>>>>>> public/main
 ]
