@@ -67,12 +67,7 @@ How to read this:
 
 ### Local receiver input (not fetched from a service)
 
-The optional Local ADS-B layer and broadcast-FM receiver consume radio samples
-directly from a user-selected RTL-SDR through WebUSB. Samples, decoded audio,
-aircraft messages, and optional receiver location remain browser-local and are
-not proxied, stored, or redistributed by GEV. ADS-B values are unauthenticated
-public broadcasts and may be incomplete, delayed, spoofed, or decoded in error;
-they are not suitable for navigation or operational use.
+The optional Local ADS-B layer and the broadcast-FM receiver use radio you receive yourself: a USB RTL-SDR opened in the browser through WebUSB, or the `aircraft.json` of a decoder you run on your own machine or network (`LOCAL_RECEIVER_FEEDS`). Radio samples, audio and the optional receiver location stay in the browser; decoder feeds are read only by your local GEV server. Received data is not stored or redistributed. When a local aircraft qualifies for a 3D model its ICAO address, and when you select it also its callsign, is looked up through the same adsbdb proxy the public flight layers use, which caches the answers on your server. ADS-B is an unauthenticated public broadcast and may be incomplete, delayed, spoofed or decoded in error; it is not suitable for navigation or operational use.
 
 ### Notes on the live sources
 
