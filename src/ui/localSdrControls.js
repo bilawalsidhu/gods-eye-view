@@ -1,6 +1,7 @@
 import {
   internetRadioAudioActive,
   localSdrCardView,
+  localSdrFeedLine,
   localSdrFmAudioActive,
 } from './localSdrPresentation.js';
 
@@ -25,6 +26,7 @@ const ELEMENT_IDS = Object.freeze({
   volume: 'sdr-volume',
   volumeValue: 'sdr-volume-value',
   status: 'sdr-status',
+  feedStatus: 'sdr-feed-status',
 });
 
 function setText(element, text) {
@@ -43,12 +45,22 @@ export class LocalSdrControls {
    * @param {object} options
    * @param {Document} options.document Document containing the card.
    * @param {object} options.receiver Local RTL-SDR session.
+   * @param {object} [options.feeds] Decoder-feed session (getState,
+   *   subscribe, probe); the card shows one read-only line when the server
+   *   has feeds configured.
    * @param {object} [options.radio] Internet-radio port (subscribe, stopPlayback).
    * @param {object} [options.actions] Application actions:
    *   setLocalAdsbEnabled(enabled), isLocalAdsbEnabled(), scheduleLayout().
    */
-  constructor({ document: doc, receiver, radio = null, actions = {} }) {
+  constructor({
+    document: doc,
+    receiver,
+    feeds = null,
+    radio = null,
+    actions = {},
+  }) {
     this.receiver = receiver;
+    this.feeds = feeds;
     this.radio = radio;
     this.actions = actions;
     this.elements = Object.fromEntries(
@@ -71,6 +83,10 @@ export class LocalSdrControls {
     );
     this._radioUnsubscribe =
       radio?.subscribe?.((state) => this._onRadioState(state)) || null;
+    this._feedsUnsubscribe =
+      feeds?.subscribe?.(() => this._scheduleRender()) || null;
+    // One request, no polling: learn whether the server has decoder feeds.
+    void feeds?.probe?.()?.catch?.(() => {});
     this._render();
   }
 
@@ -245,11 +261,16 @@ export class LocalSdrControls {
       setText(el.status, view.statusText);
       el.status.classList.toggle('error', view.statusError);
     }
+    const feedLine = localSdrFeedLine(this.feeds?.getState?.() || null);
+    if (el.feedStatus) {
+      el.feedStatus.hidden = feedLine === null;
+      setText(el.feedStatus, feedLine || '');
+    }
     el.card
       ?.closest?.('#radio-panel')
       ?.classList.toggle('sdr-connected', view.connectionActive);
     // Only structural changes move the rail; per-block text updates do not.
-    const layoutKey = `${view.statsHidden}|${view.connectionActive}`;
+    const layoutKey = `${view.statsHidden}|${view.connectionActive}|${feedLine === null}`;
     if (layoutKey !== this._layoutKey) {
       this._layoutKey = layoutKey;
       this.actions.scheduleLayout?.();
@@ -262,6 +283,8 @@ export class LocalSdrControls {
     this._listeners.abort();
     this._receiverUnsubscribe?.();
     this._radioUnsubscribe?.();
+    this._feedsUnsubscribe?.();
+    this._feedsUnsubscribe = null;
     this._receiverUnsubscribe = null;
     this._radioUnsubscribe = null;
     if (this._renderFrame !== null) {

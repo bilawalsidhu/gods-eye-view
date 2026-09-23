@@ -877,6 +877,7 @@ export class StyleManager extends ShellFacade {
       this._localSdrControls = new LocalSdrControls({
         document,
         receiver,
+        feeds: this.services.localAdsbLayer?.feeds || null,
         radio: radioLayer,
         actions: {
           isLocalAdsbEnabled: () =>

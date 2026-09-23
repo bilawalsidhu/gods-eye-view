@@ -164,3 +164,44 @@ test('card controls drive gain, FM mode and the Local ADS-B layer', async (t) =>
   assert.deepEqual(layerCalls, [false, true]);
   assert.equal(controls.isActive(), true);
 });
+
+test('the card shows one read-only decoder-feed line after a single probe', async (t) => {
+  const doc = stubDocument();
+  const listeners = new Set();
+  let probes = 0;
+  let state = { configured: null, polling: false, feeds: [] };
+  const feeds = {
+    getState: () => state,
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    async probe() {
+      probes += 1;
+    },
+    set(patch) {
+      state = { ...state, ...patch };
+      for (const listener of listeners) listener(state);
+    },
+  };
+  const controls = new LocalSdrControls({
+    document: doc,
+    receiver: stubReceiver(),
+    feeds,
+  });
+  t.after(() => controls.destroy());
+  const line = doc.getElementById('sdr-feed-status');
+  assert.equal(probes, 1);
+  assert.equal(line.hidden, true);
+  feeds.set({
+    configured: true,
+    polling: true,
+    feeds: [
+      { band: '1090', status: 'live' },
+      { band: '978', status: 'live' },
+    ],
+  });
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(line.hidden, false);
+  assert.equal(line.textContent, 'Decoder feeds: 1090 live · 978 live');
+});

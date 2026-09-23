@@ -3,8 +3,8 @@
  *
  * Every local receiver path produces the same plain record, so the Local ADS-B
  * renderer does not care whether the frames were demodulated in this browser
- * from a WebUSB RTL-SDR or decoded by a dump1090/readsb process on the local
- * network:
+ * from a WebUSB RTL-SDR or decoded by a dump1090/readsb/dump978 process whose
+ * `aircraft.json` the server reads as a decoder feed:
  *
  * {
  *   icao: string,                 // lowercase 24-bit hex address
@@ -19,7 +19,8 @@
  *   lastMessageAt: number,        // epoch ms of the newest CRC-valid message
  *   messageCount: number,
  *   rssiDbfs: number|null,
- *   source: 'rtl-sdr'|'dump1090',
+ *   band: '1090'|'978',           // 1090 MHz Mode S/ES or 978 MHz UAT
+ *   source: 'webusb'|'feed',      // browser SDR or decoder feed
  * }
  *
  * This module is portable: no Cesium, DOM, network or storage access.
@@ -96,7 +97,8 @@ export function recordFromDecoderTrack(track) {
     lastMessageAt: finiteOrNull(track.lastSeen) ?? 0,
     messageCount: Math.max(0, Math.trunc(finiteOrNull(track.messages) ?? 0)),
     rssiDbfs: null,
-    source: 'rtl-sdr',
+    band: '1090',
+    source: 'webusb',
   };
 }
 
@@ -107,11 +109,16 @@ export function recordFromDecoderTrack(track) {
  * are anchored to the caller's receipt clock rather than trusting the
  * receiver host's wall clock. Entries without a valid 24-bit address (for
  * example non-ICAO TIS-B `~` addresses) are skipped.
+ * skyaware978 writes the same document shape for 978 MHz UAT, so one adapter
+ * serves both bands; the caller names the band.
  * @param {object} json Parsed aircraft.json document.
  * @param {number} nowMs Local epoch ms at which the document was received.
+ * @param {object} [options]
+ * @param {'1090'|'978'} [options.band='1090'] Band the feed decodes.
  * @returns {object[]} Normalized records.
  */
-export function normalizeDump1090Aircraft(json, nowMs) {
+export function normalizeDump1090Aircraft(json, nowMs, { band = '1090' } = {}) {
+  const recordBand = band === '978' ? '978' : '1090';
   const receivedAt = finiteOrNull(nowMs);
   if (receivedAt === null || !Array.isArray(json?.aircraft)) return [];
   const records = [];
@@ -139,7 +146,8 @@ export function normalizeDump1090Aircraft(json, nowMs) {
       lastMessageAt: receivedAt - seenS * 1000,
       messageCount: Math.max(0, Math.trunc(finiteOrNull(entry.messages) ?? 0)),
       rssiDbfs: finiteOrNull(entry.rssi),
-      source: 'dump1090',
+      band: recordBand,
+      source: 'feed',
     });
   }
   return records;
@@ -189,4 +197,91 @@ export function summarizeLocalAdsb(records, nowMs) {
     if (localAdsbPositionIsFresh(record, nowMs)) positioned += 1;
   }
   return { heard, positioned };
+}
+
+const BAND_ORDER = Object.freeze(['1090', '978']);
+const SOURCE_ORDER = Object.freeze(['webusb', 'feed']);
+
+function ordered(values, order) {
+  return order.filter((value) => values.has(value));
+}
+
+function positionTime(record) {
+  return Number.isFinite(record?.lastPositionAt)
+    ? record.lastPositionAt
+    : Number.NEGATIVE_INFINITY;
+}
+
+function messageTime(record) {
+  return Number.isFinite(record?.lastMessageAt)
+    ? record.lastMessageAt
+    : Number.NEGATIVE_INFINITY;
+}
+
+/**
+ * Whether `candidate` should replace `current` for the same ICAO: the most
+ * recent position wins, and on a tie the most recent message.
+ * @param {object} candidate
+ * @param {object} current
+ * @returns {boolean}
+ */
+export function localAdsbRecordIsNewer(candidate, current) {
+  const byPosition = positionTime(candidate) - positionTime(current);
+  if (byPosition !== 0 && !Number.isNaN(byPosition)) return byPosition > 0;
+  return messageTime(candidate) > messageTime(current);
+}
+
+/**
+ * Merge records from every local input (browser SDR, decoder feeds) into one
+ * record per ICAO.
+ *
+ * Keeps the record with the most recent position (tie: most recent message)
+ * and annotates it with every band and source that heard the aircraft within
+ * the last 60 s. `memory` (a Map owned by the caller) carries those
+ * receptions across calls, so an input that drops an aircraft does not erase
+ * that it was heard there moments ago.
+ * @param {object[][]} inputs Record lists; each record has `band`/`source`.
+ * @param {number} nowMs Current epoch ms.
+ * @param {Map<string, Map<string, number>>} [memory] Per-ICAO reception log
+ *   keyed `band|source`, mutated in place and pruned to 60 s.
+ * @returns {object[]} Merged records with `bands` and `sources` arrays.
+ */
+export function mergeLocalAdsbRecords(inputs, nowMs, memory = new Map()) {
+  const best = new Map();
+  for (const list of Array.isArray(inputs) ? inputs : []) {
+    for (const record of Array.isArray(list) ? list : []) {
+      if (!record?.icao || !localAdsbRecordIsLive(record, nowMs)) continue;
+      const current = best.get(record.icao);
+      if (!current || localAdsbRecordIsNewer(record, current))
+        best.set(record.icao, record);
+      let heard = memory.get(record.icao);
+      if (!heard) {
+        heard = new Map();
+        memory.set(record.icao, heard);
+      }
+      const key = `${record.band || '1090'}|${record.source || 'webusb'}`;
+      heard.set(key, Math.max(heard.get(key) ?? 0, record.lastMessageAt));
+    }
+  }
+  for (const [icao, heard] of memory) {
+    for (const [key, at] of heard)
+      if (nowMs - at >= LOCAL_ADSB_MESSAGE_STALE_MS) heard.delete(key);
+    if (!heard.size) memory.delete(icao);
+  }
+  const merged = [];
+  for (const [icao, record] of best) {
+    const bands = new Set();
+    const sources = new Set();
+    for (const key of memory.get(icao)?.keys() || []) {
+      const [band, source] = key.split('|');
+      bands.add(band);
+      sources.add(source);
+    }
+    merged.push({
+      ...record,
+      bands: ordered(bands, BAND_ORDER),
+      sources: ordered(sources, SOURCE_ORDER),
+    });
+  }
+  return merged;
 }

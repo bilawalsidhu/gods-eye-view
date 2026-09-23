@@ -38,6 +38,7 @@ test('the Local RTL-SDR card lives inside the Radio panel with every control', (
     'sdr-seek-forward-btn',
     'sdr-volume',
     'sdr-status',
+    'sdr-feed-status',
   ]) {
     assert.match(html, new RegExp(`id="${id}"`), `${id} is missing`);
   }

@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased — local receiver feeds
+
+- The Local ADS-B layer also reads local 1090 MHz and 978 MHz UAT decoder
+  feeds: the `aircraft.json` that dump1090-fa, readsb, tar1090 or skyaware978
+  serves. Configure them server-side with `LOCAL_RECEIVER_FEEDS`
+  (`band=url`, comma-separated); there is no feed editing in the browser.
+  Hosts must be loopback, RFC1918, `localhost` or `*.local`, the scheme http or
+  https and the path must end in `aircraft.json`; any other entry is logged at
+  startup, reported `invalid` and never fetched.
+- Add `GET /api/local-receivers/aircraft`. It reads every configured feed in
+  parallel (2 s timeout, redirects refused, 2 MB body cap, about 1 s of shared
+  cache) and reports each feed `live`, `stale` (its own `now` is over 10 s old),
+  `unreachable` or `invalid`. Unconfigured, it answers
+  `{ configured: false }` and fetches nothing. Upstream error text is never
+  returned.
+- The layer merges browser-SDR and feed aircraft by ICAO, keeping the newest
+  position, polls the route every second only while it is enabled, and remembers
+  which bands and sources heard each aircraft in the last 60 s. The click card
+  names them (for example "Heard by your receiver · 978 MHz UAT · decoder
+  feed"); aircraft heard only on 978 MHz carry a thin ring. The row status
+  covers both inputs ("2 feeds live · 14 heard", "feed 978 unreachable"), and
+  the Local RTL-SDR card shows a read-only decoder-feed line.
+- Records carry `band` (`1090`/`978`) and `source` (`webusb`/`feed`).
+- See `docs/LOCAL-RECEIVERS.md`.
+
 ## Unreleased — local RTL-SDR and Local ADS-B
 
 - Add a Local RTL-SDR card to the Radio panel. It connects a USB RTL-SDR in

@@ -7,6 +7,7 @@ import {
   LOCAL_ADSB_POSITION_STALE_MS,
   localAdsbPositionIsFresh,
   localAdsbRecordIsLive,
+  mergeLocalAdsbRecords,
   normalizeDump1090Aircraft,
   recordFromDecoderTrack,
   summarizeLocalAdsb,
@@ -41,7 +42,8 @@ test('dump1090 aircraft.json maps to the shared local ADS-B records', () => {
     lastMessageAt: now - 30_500,
     messageCount: 74,
     rssiDbfs: -30,
-    source: 'dump1090',
+    band: '1090',
+    source: 'feed',
   });
   const cruise = byIcao.get('a3c775');
   assert.equal(cruise.callsign, null);
@@ -110,7 +112,8 @@ test('decoder tracks map to the same record shape', () => {
     lastMessageAt: 5_000,
     messageCount: 48,
     rssiDbfs: null,
-    source: 'rtl-sdr',
+    band: '1090',
+    source: 'webusb',
   });
   assert.equal(recordFromDecoderTrack({ icao: 'nothex' }), null);
 });
@@ -136,4 +139,85 @@ test('markers need a position newer than 60 s; records need a message newer than
     localAdsbPositionIsFresh({ ...record, lat: null }, 1_000),
     false,
   );
+});
+
+test('a feed document names its band on every record', () => {
+  const now = 1_790_127_100_000;
+  const uat = normalizeDump1090Aircraft(dump1090, now, { band: '978' });
+  assert.equal(uat.length, 4);
+  assert.ok(uat.every((record) => record.band === '978'));
+  assert.ok(uat.every((record) => record.source === 'feed'));
+});
+
+function heard(overrides = {}) {
+  return {
+    icao: 'abc123',
+    lat: 30,
+    lon: -97,
+    lastPositionAt: 10_000,
+    lastMessageAt: 10_000,
+    band: '1090',
+    source: 'webusb',
+    ...overrides,
+  };
+}
+
+test('merge keeps the most recent position per ICAO, then the most recent message', () => {
+  const memory = new Map();
+  const webusb = heard({ lastPositionAt: 9_000, lastMessageAt: 11_000 });
+  const feed = heard({
+    lat: 31,
+    source: 'feed',
+    lastPositionAt: 10_000,
+    lastMessageAt: 10_000,
+  });
+  let [merged] = mergeLocalAdsbRecords([[webusb], [feed]], 12_000, memory);
+  assert.equal(merged.lat, 31, 'the newer position wins over a newer message');
+  assert.deepEqual(merged.bands, ['1090']);
+  assert.deepEqual(merged.sources, ['webusb', 'feed']);
+
+  // Equal positions: the newer message breaks the tie, in either input order.
+  const tieA = heard({ lat: 1, lastMessageAt: 10_500 });
+  const tieB = heard({ lat: 2, source: 'feed', lastMessageAt: 10_900 });
+  for (const inputs of [
+    [[tieA], [tieB]],
+    [[tieB], [tieA]],
+  ])
+    assert.equal(mergeLocalAdsbRecords(inputs, 12_000)[0].lat, 2);
+
+  // A positioned record beats one that has never decoded a position.
+  const bare = heard({ lat: null, lon: null, lastPositionAt: null });
+  [merged] = mergeLocalAdsbRecords(
+    [[{ ...bare, lastMessageAt: 11_900 }], [heard({ band: '978', source: 'feed' })]],
+    12_000,
+  );
+  assert.equal(merged.lat, 30);
+  assert.equal(merged.band, '978');
+  assert.deepEqual(merged.bands, ['1090', '978']);
+});
+
+test('merge remembers the bands and sources that heard an aircraft for 60 s', () => {
+  const memory = new Map();
+  mergeLocalAdsbRecords(
+    [[heard()], [heard({ band: '978', source: 'feed', lastMessageAt: 20_000 })]],
+    20_000,
+    memory,
+  );
+  // The 978 feed drops the aircraft; the 1090 browser SDR still hears it.
+  let [merged] = mergeLocalAdsbRecords(
+    [[heard({ lastMessageAt: 60_000, lastPositionAt: 60_000 })], []],
+    60_000,
+    memory,
+  );
+  assert.deepEqual(merged.bands, ['1090', '978']);
+  assert.deepEqual(merged.sources, ['webusb', 'feed']);
+  [merged] = mergeLocalAdsbRecords(
+    [[heard({ lastMessageAt: 80_000, lastPositionAt: 80_000 })], []],
+    80_000,
+    memory,
+  );
+  assert.deepEqual(merged.bands, ['1090'], '978 reception expired after 60 s');
+  assert.deepEqual(merged.sources, ['webusb']);
+  assert.deepEqual(mergeLocalAdsbRecords([[], []], 200_000, memory), []);
+  assert.equal(memory.size, 0, 'the reception log is pruned');
 });

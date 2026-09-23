@@ -8,9 +8,15 @@ import {
 import { isPointerFree } from '../../data/inputOwnership.js';
 import {
   localAdsbPositionIsFresh,
+  mergeLocalAdsbRecords,
   summarizeLocalAdsb,
 } from '../../sources/adsbRecords.js';
-import { localAdsbCardModel, localAdsbTitle } from './card.js';
+import {
+  localAdsbCardModel,
+  localAdsbIsUat,
+  localAdsbSourceText,
+  localAdsbTitle,
+} from './card.js';
 import {
   ENTITY_PREFIX,
   LAYER_ID,
@@ -19,13 +25,21 @@ import {
   LOCAL_ADSB_COLOR,
   LOCAL_ADSB_SYNC_MS,
   LOCAL_ADSB_TICK_MS,
+  LOCAL_ADSB_UAT_RING_COLOR,
 } from './policy.js';
+import { localAdsbStatus } from './status.js';
 
 export {
   LAYER_ID as LOCAL_ADSB_LAYER_ID,
   HEARD_BY_RECEIVER,
 } from './policy.js';
-export { localAdsbCardModel, localAdsbTitle } from './card.js';
+export {
+  localAdsbCardModel,
+  localAdsbIsUat,
+  localAdsbReceiverLine,
+  localAdsbTitle,
+} from './card.js';
+export { localAdsbStatus } from './status.js';
 
 const FEET_TO_METERS = 0.3048;
 
@@ -36,24 +50,34 @@ function heightMeters(record) {
 }
 
 /**
- * Local ADS-B layer: draws aircraft heard by the user's own receiver.
+ * Local ADS-B layer: draws aircraft heard by the user's own receivers.
  *
- * The receiver is any object with `getState()` returning
+ * Two inputs feed it. The receiver is any object with `getState()` returning
  * `{ connected, status, message, mode, webUsbSupported, aircraft, messagesPerSecond }`,
  * `subscribe(listener)` and `setMode(mode)`; `aircraft` holds records from
  * `src/sources/adsbRecords.js`. The browser WebUSB session is one such
- * receiver; a network receiver can supply the same records later.
+ * receiver. The optional `feeds` session (`./feeds.js`) supplies records read
+ * by the server from local 1090/978 MHz decoders; it polls only while this
+ * layer is enabled. Records are merged by ICAO (`mergeLocalAdsbRecords`).
+ * Aircraft heard only on 978 MHz UAT carry a thin ring around the marker.
  *
  * Markers are never followed by the camera. A marker disappears once its
  * position is older than 60 s; a record without any message for 60 s is gone.
  * @param {object} options
  * @param {object} options.receiver Local receiver session.
+ * @param {object} [options.feeds] Decoder-feed session (start, stop,
+ *   getState, subscribe).
  * @param {object} options.services Render, context, picking, detection and
  *   readout operations supplied by the application.
  * @param {() => number} [options.now] Clock, injectable for tests.
  * @returns {object} Data-layer module.
  */
-export function createLocalAdsbLayer({ receiver, services, now = Date.now }) {
+export function createLocalAdsbLayer({
+  receiver,
+  feeds = null,
+  services,
+  now = Date.now,
+}) {
   if (typeof receiver?.getState !== 'function')
     throw new TypeError('Local ADS-B requires a receiver session');
   const { governorRequestRender } = services.render;
@@ -66,24 +90,38 @@ export function createLocalAdsbLayer({ receiver, services, now = Date.now }) {
   } = services.context;
   const { registerPickOwner, unregisterPickOwner } = services.picking;
   const color = Cesium.Color.fromCssColorString(LOCAL_ADSB_COLOR);
+  const uatRingColor = Cesium.Color.fromCssColorString(
+    LOCAL_ADSB_UAT_RING_COLOR,
+  );
 
   let viewer = null;
   let dataSource = null;
   let enabled = false;
   let unsubscribe = null;
+  let unsubscribeFeeds = null;
   let tickTimer = null;
   let syncTimer = null;
   let clickHandler = null;
   let selectedId = null;
   let state = receiver.getState();
   const markers = new Map();
+  // Per-ICAO receptions (band|source -> last message) across merges.
+  const heardBy = new Map();
 
   function markSourcesChanged(reason) {
     services.detection?.markSourcesChanged?.(reason);
   }
 
+  function mergedRecords(at = now(), receiverState = state) {
+    return mergeLocalAdsbRecords(
+      [receiverState.aircraft || [], feeds?.getState?.()?.records || []],
+      at,
+      heardBy,
+    );
+  }
+
   function freshRecords(at = now()) {
-    return (state.aircraft || []).filter((record) =>
+    return mergedRecords(at).filter((record) =>
       localAdsbPositionIsFresh(record, at),
     );
   }
@@ -112,7 +150,7 @@ export function createLocalAdsbLayer({ receiver, services, now = Date.now }) {
       layerId: LAYER_ID,
       dataSource,
       layerName: LAYER_NAME,
-      source: 'Your RTL-SDR receiver',
+      source: localAdsbSourceText(record),
       label: localAdsbTitle(record),
       latitude: record.lat,
       longitude: record.lon,
@@ -126,8 +164,26 @@ export function createLocalAdsbLayer({ receiver, services, now = Date.now }) {
         lastPositionAt: record.lastPositionAt,
         messageCount: record.messageCount,
         receiverSource: record.source,
+        bands: record.bands,
+        sources: record.sources,
       },
     };
+  }
+
+  function uatRing(marker) {
+    return new Cesium.PointGraphics({
+      pixelSize: 24,
+      color: Cesium.Color.TRANSPARENT,
+      outlineColor: uatRingColor,
+      outlineWidth: 1.5,
+      scaleByDistance: new Cesium.NearFarScalar(1000, 3.0, 8_000_000, 0.5),
+      show: new Cesium.CallbackProperty(() => markerVisible(marker), false),
+      disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      distanceDisplayCondition: new Cesium.DistanceDisplayCondition(
+        0,
+        2_000_000,
+      ),
+    });
   }
 
   function upsertMarker(record, at) {
@@ -178,6 +234,9 @@ export function createLocalAdsbLayer({ receiver, services, now = Date.now }) {
       marker.entity.position = position;
     }
     marker.record = record;
+    const uat = localAdsbIsUat(record);
+    if (uat !== Boolean(marker.entity.point))
+      marker.entity.point = uat ? uatRing(marker) : undefined;
     if (Number.isFinite(record.trackDeg)) marker.trackDeg = record.trackDeg;
     marker.entity.gevLabelModel = localAdsbCardModel(record, at);
     registerEntityContext(marker.entity, contextMetadata(id, record));
@@ -227,9 +286,14 @@ export function createLocalAdsbLayer({ receiver, services, now = Date.now }) {
 
   function scheduleSync(nextState) {
     state = nextState;
+    requestSync();
+  }
+
+  function requestSync() {
     if (!enabled || syncTimer) return;
     syncTimer = setTimeout(sync, LOCAL_ADSB_SYNC_MS);
   }
+
 
   function selectMarker(id) {
     const marker = markers.get(id);
@@ -292,6 +356,8 @@ export function createLocalAdsbLayer({ receiver, services, now = Date.now }) {
     statsRefreshInterval: LOCAL_ADSB_TICK_MS,
     /** The shared receiver session, also driven by the Radio panel card. */
     receiver,
+    /** Decoder-feed session; the Radio card shows its one-line summary. */
+    feeds,
 
     init(nextViewer) {
       viewer = nextViewer;
@@ -299,6 +365,7 @@ export function createLocalAdsbLayer({ receiver, services, now = Date.now }) {
       dataSource.show = false;
       viewer.dataSources.add(dataSource);
       unsubscribe = receiver.subscribe?.(scheduleSync) || null;
+      unsubscribeFeeds = feeds?.subscribe?.(requestSync) || null;
       return true;
     },
 
@@ -309,6 +376,7 @@ export function createLocalAdsbLayer({ receiver, services, now = Date.now }) {
       installInteraction();
       clearInterval(tickTimer);
       tickTimer = setInterval(sync, LOCAL_ADSB_TICK_MS);
+      feeds?.start?.();
       // The layer asks the shared tuner for 1090 MHz. Disabling it leaves the
       // receiver in whatever mode the Radio card shows, so turning the layer
       // off never starts FM audio on its own.
@@ -320,6 +388,7 @@ export function createLocalAdsbLayer({ receiver, services, now = Date.now }) {
 
     async disable() {
       enabled = false;
+      feeds?.stop?.();
       clearInterval(tickTimer);
       tickTimer = null;
       releaseInteraction();
@@ -346,6 +415,9 @@ export function createLocalAdsbLayer({ receiver, services, now = Date.now }) {
       unregisterPickOwner(LAYER_ID);
       unsubscribe?.();
       unsubscribe = null;
+      unsubscribeFeeds?.();
+      unsubscribeFeeds = null;
+      feeds?.destroy?.();
       clearSelection();
       removeEntityContextsForLayer(LAYER_ID);
       markers.clear();
@@ -358,42 +430,22 @@ export function createLocalAdsbLayer({ receiver, services, now = Date.now }) {
     getStats() {
       const current = receiver.getState();
       const at = now();
-      const { heard, positioned } = summarizeLocalAdsb(current.aircraft, at);
+      const records = mergedRecords(at, current);
+      const { heard, positioned } = summarizeLocalAdsb(records, at);
       const lastUpdate =
-        (current.aircraft || []).reduce(
+        records.reduce(
           (latest, record) => Math.max(latest, record.lastMessageAt || 0),
           0,
         ) || null;
-      const base = { count: positioned, lastUpdate, source: LAYER_SOURCE };
-      if (current.status === 'error')
-        return { ...base, status: 'error', error: current.message };
-      if (current.status === 'connecting' || current.status === 'tuning')
-        return { ...base, loading: true, loadingLabel: 'opening receiver' };
-      if (!current.webUsbSupported)
-        return {
-          ...base,
-          status: 'idle',
-          statusMessage: 'WebUSB needs desktop Chrome or Edge',
-        };
-      if (!current.connected)
-        return {
-          ...base,
-          status: 'idle',
-          statusMessage: 'connect a receiver in Radio',
-        };
-      if (current.mode !== 'adsb')
-        return {
-          ...base,
-          status: 'idle',
-          statusMessage: 'receiver is in FM mode',
-        };
-      const rate = Number.isFinite(current.messagesPerSecond)
-        ? `${current.messagesPerSecond} msg/s`
-        : 'listening';
       return {
-        ...base,
-        status: 'streaming',
-        loadingLabel: `${heard} heard · ${rate}`,
+        count: positioned,
+        lastUpdate,
+        source: LAYER_SOURCE,
+        ...localAdsbStatus({
+          receiver: current,
+          feedState: feeds?.getState?.() || null,
+          heard,
+        }),
       };
     },
 

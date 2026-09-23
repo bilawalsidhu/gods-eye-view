@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   internetRadioAudioActive,
   localSdrCardView,
+  localSdrFeedLine,
   localSdrFmAudioActive,
 } from './localSdrPresentation.js';
 
@@ -107,4 +108,32 @@ test('local FM and internet radio audio states drive the one-listener rule', () 
     assert.equal(internetRadioAudioActive({ audioState }), true);
   assert.equal(internetRadioAudioActive({ audioState: 'paused' }), false);
   assert.equal(internetRadioAudioActive(null), false);
+});
+
+test('the decoder-feed line appears only when feeds are configured', () => {
+  assert.equal(localSdrFeedLine(null), null);
+  assert.equal(
+    localSdrFeedLine({ configured: false, feeds: [], polling: false }),
+    null,
+  );
+  const feeds = [
+    { band: '1090', label: '1090 MHz', status: 'live' },
+    { band: '978', label: '978 MHz UAT', status: 'unreachable' },
+  ];
+  assert.equal(
+    localSdrFeedLine({ configured: true, polling: true, feeds }),
+    'Decoder feeds: 1090 live · 978 unreachable',
+  );
+  assert.equal(
+    localSdrFeedLine({ configured: true, polling: false, feeds }),
+    'Decoder feeds: 1090 · 978 · read while Local ADS-B is on',
+  );
+  assert.equal(
+    localSdrFeedLine({
+      configured: true,
+      polling: false,
+      feeds: [{ band: null, label: 'entry 2', status: 'invalid' }],
+    }),
+    'Decoder feeds: entry 2 invalid · read while Local ADS-B is on',
+  );
 });

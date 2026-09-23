@@ -4133,10 +4133,41 @@ decoded callsign.
 Receivers publish one record shape from `src/sources/adsbRecords.js`
 (`icao`, `callsign`, `lat`, `lon`, `altitudeFt`, `groundSpeedKt`, `trackDeg`,
 `verticalRateFpm`, `lastPositionAt`, `lastMessageAt`, `messageCount`,
-`rssiDbfs`, `source`). `normalizeDump1090Aircraft(json, nowMs)` maps a
-dump1090/readsb `aircraft.json` document into the same records; no network
-receiver is wired up yet. Voice `set_layer_visibility` accepts `local-adsb`
-("local ADS-B", "my receiver", "my antenna").
+`rssiDbfs`, `band`, `source`). `band` is `1090` or `978`; `source` is
+`webusb` (browser SDR) or `feed` (decoder feed).
+`normalizeDump1090Aircraft(json, nowMs, { band })` maps a dump1090/readsb/
+skyaware978 `aircraft.json` document into the same records. Voice
+`set_layer_visibility` accepts `local-adsb` ("local ADS-B", "my receiver",
+"my antenna").
+
+**Decoder feeds.** The layer's second input is the server route
+`GET /api/local-receivers/aircraft`
+(`server/providers/local-receivers.js`), configured only by the
+`LOCAL_RECEIVER_FEEDS` environment value (`band=url`, comma-separated, e.g.
+`1090=http://localhost:8080/data/aircraft.json`). Every host must pass
+`parseTapAddress` (loopback, RFC1918, `localhost`, `*.local`), the scheme must
+be http(s) and the path must end in `aircraft.json`; an invalid entry is logged
+at startup, reported `invalid` and never fetched. The route reads all feeds in
+parallel (2 s timeout, redirects refused, 2 MB cap, single-flight with a 1 s
+cache) and returns `{ configured, generatedAt, feeds: [{ band, label, status,
+aircraft, ageMs }], records }`, where a feed is `live`, `stale` (its own `now`
+is over 10 s old), `unreachable` or `invalid`. Labels name the band only;
+addresses and upstream error text stay on the server. Unconfigured, it returns
+`{ configured: false, feeds: [], records: [] }` without fetching.
+
+The browser session (`src/layers/localAdsb/feeds.js`) polls the route every
+second only while the layer is enabled and only while the route reports
+`configured`; the Local RTL-SDR card makes one probe request at startup to show
+its read-only "Decoder feeds: 1090 live · 978 live" line. Feed records are
+rebased to the browser clock and kept up to 60 s after their last message.
+`mergeLocalAdsbRecords` merges both inputs by ICAO, keeping the newest position
+(tie: newest message) and the bands/sources heard in the last 60 s; the card's
+receiver line names them ("Heard by your receiver · 1090 MHz + 978 MHz UAT ·
+browser SDR + decoder feed"). Aircraft heard only on 978 MHz UAT draw with a
+thin light-magenta ring. With feeds configured the row status reads "2 feeds
+live · 14 heard", "feed 978 unreachable · 9 heard" (degraded) or an error when
+no input is producing; without feeds it keeps the WebUSB statuses. See
+`docs/LOCAL-RECEIVERS.md`.
 
 ## Bundled geography and submarine cable components
 

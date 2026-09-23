@@ -1019,3 +1019,12 @@
 .sdr-radio-card .radio-playback-state.error {
   color: #ff9d8f;
 }
+.sdr-feed-status {
+  color: #9e865f;
+  font: 8px/1.3 var(--font-mono);
+  letter-spacing: 0.08em;
+  overflow-wrap: anywhere;
+}
+.sdr-feed-status[hidden] {
+  display: none;
+}

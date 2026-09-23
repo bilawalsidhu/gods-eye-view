@@ -122,3 +122,23 @@ export function localSdrFmAudioActive(state) {
 export function internetRadioAudioActive(state) {
   return ['loading', 'buffering', 'playing'].includes(state?.audioState);
 }
+
+/**
+ * One-line decoder-feed summary for the card, or null when the server has no
+ * feed configured. Statuses show while Local ADS-B polls the feeds; otherwise
+ * the line names the configured bands.
+ * @param {object|null} feedState Local receiver feed session snapshot.
+ * @returns {string|null}
+ */
+export function localSdrFeedLine(feedState) {
+  const feeds = feedState?.configured === true ? feedState.feeds : null;
+  if (!Array.isArray(feeds) || !feeds.length) return null;
+  const names = feeds.map((feed) => {
+    const name = feed?.band || feed?.label || 'feed';
+    return feedState.polling || feed?.status === 'invalid'
+      ? `${name} ${feed?.status || 'unreachable'}`
+      : name;
+  });
+  const suffix = feedState.polling ? '' : ' · read while Local ADS-B is on';
+  return `Decoder feeds: ${names.join(' · ')}${suffix}`;
+}

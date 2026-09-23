@@ -6,6 +6,8 @@ import {
   createLocalAdsbLayer,
   HEARD_BY_RECEIVER,
   localAdsbCardModel,
+  localAdsbReceiverLine,
+  localAdsbStatus,
 } from './index.js';
 
 function fakeReceiver(initial = {}) {
@@ -109,16 +111,50 @@ function record(overrides = {}) {
     lastMessageAt: 100_000,
     messageCount: 12,
     rssiDbfs: null,
-    source: 'rtl-sdr',
+    band: '1090',
+    source: 'webusb',
     ...overrides,
   };
 }
 
-async function enabledLayer(receiver, clock) {
+function fakeFeeds(initial = {}) {
+  let state = {
+    configured: null,
+    polling: false,
+    feeds: [],
+    records: [],
+    ...initial,
+  };
+  const listeners = new Set();
+  const calls = [];
+  return {
+    calls,
+    getState: () => state,
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    set(patch) {
+      state = { ...state, ...patch };
+      for (const listener of listeners) listener(state);
+    },
+    start() {
+      calls.push('start');
+      state = { ...state, polling: true };
+    },
+    stop() {
+      calls.push('stop');
+      state = { ...state, polling: false };
+    },
+  };
+}
+
+async function enabledLayer(receiver, clock, feeds = null) {
   const { services, calls } = fakeServices();
   const { sources, viewer } = fakeViewer();
   const layer = createLocalAdsbLayer({
     receiver,
+    feeds,
     services,
     now: () => clock.now,
   });
@@ -269,7 +305,7 @@ test('the click card lists identity, kinematics, freshness and the receiver line
     'ALT 1,600 FT · GS 130 KT · TRK 331°',
     'V/S +64 FPM',
     'POSITION 4 S AGO · 48 MSGS',
-    HEARD_BY_RECEIVER,
+    'Heard by your receiver · 1090 MHz · browser SDR',
   ]);
   assert.equal(HEARD_BY_RECEIVER, 'Heard by your receiver');
   const bare = localAdsbCardModel(
@@ -318,5 +354,170 @@ test('layer stats guide the operator to the Radio card until ADS-B is streaming'
   assert.equal(
     layer.getStats().statusMessage,
     'WebUSB needs desktop Chrome or Edge',
+  );
+});
+
+test('the receiver line names every band and source that heard the aircraft', () => {
+  const line = (overrides) => localAdsbReceiverLine(record(overrides));
+  assert.equal(line({}), 'Heard by your receiver · 1090 MHz · browser SDR');
+  assert.equal(
+    line({ band: '1090', source: 'feed' }),
+    'Heard by your receiver · 1090 MHz · decoder feed',
+  );
+  assert.equal(
+    line({ band: '978', source: 'feed' }),
+    'Heard by your receiver · 978 MHz UAT · decoder feed',
+  );
+  assert.equal(
+    line({ bands: ['1090', '978'], sources: ['feed'] }),
+    'Heard by your receiver · 1090 MHz + 978 MHz UAT · decoder feed',
+  );
+  assert.equal(
+    line({ bands: ['1090'], sources: ['webusb', 'feed'] }),
+    'Heard by your receiver · 1090 MHz · browser SDR + decoder feed',
+  );
+  assert.equal(
+    line({ bands: ['1090', '978'], sources: ['webusb', 'feed'] }),
+    'Heard by your receiver · 1090 MHz + 978 MHz UAT · browser SDR + decoder feed',
+  );
+  assert.equal(
+    localAdsbReceiverLine({ icao: 'abc123' }),
+    HEARD_BY_RECEIVER,
+    'a record without band or source keeps the plain line',
+  );
+});
+
+test('feed records merge with browser SDR records by ICAO and UAT-only aircraft get a ring', async (t) => {
+  const receiver = fakeReceiver({ mode: 'adsb', connected: true });
+  const feeds = fakeFeeds();
+  const clock = { now: 100_000 };
+  const { layer, sources } = await enabledLayer(receiver, clock, feeds);
+  t.after(() => layer.destroy());
+  assert.deepEqual(feeds.calls, ['start'], 'the feeds poll while enabled');
+
+  receiver.set({ aircraft: [record({ lastPositionAt: 98_000 })] });
+  feeds.set({
+    configured: true,
+    feeds: [{ band: '978', label: '978 MHz UAT', status: 'live' }],
+    records: [
+      record({ lat: 1, band: '978', source: 'feed', lastPositionAt: 99_000 }),
+      record({
+        icao: 'a1b2c3',
+        callsign: 'N978UA',
+        band: '978',
+        source: 'feed',
+      }),
+    ],
+  });
+  await layer.update();
+  const shared = sources[0].entities.getById('local-adsb:abc123');
+  const uat = sources[0].entities.getById('local-adsb:a1b2c3');
+  assert.equal(sources[0].entities.values.length, 2);
+  assert.equal(
+    Cesium.Cartographic.fromCartesian(shared.position.getValue())
+      .latitude.toFixed(4),
+    Cesium.Math.toRadians(1).toFixed(4),
+    'the newer feed position wins',
+  );
+  assert.equal(shared.point, undefined, 'heard on 1090 too: no UAT ring');
+  assert.equal(
+    shared.gevLabelModel.details.at(-1),
+    'Heard by your receiver · 1090 MHz + 978 MHz UAT · browser SDR + decoder feed',
+  );
+  assert.ok(uat.point, 'a UAT-only aircraft carries the ring');
+  assert.equal(uat.point.outlineWidth.getValue(), 1.5);
+  assert.ok(
+    Cesium.Color.equals(
+      uat.point.color.getValue(),
+      Cesium.Color.TRANSPARENT,
+    ),
+  );
+  assert.ok(
+    Cesium.Color.equals(
+      uat.billboard.color.getValue(),
+      Cesium.Color.fromCssColorString('#ff4fd8'),
+    ),
+    'same magenta marker family',
+  );
+  assert.equal(
+    uat.gevLabelModel.details.at(-1),
+    'Heard by your receiver · 978 MHz UAT · decoder feed',
+  );
+  const stats = layer.getStats();
+  assert.equal(stats.source, 'WebUSB + decoder feeds');
+  assert.equal(stats.loadingLabel, '1 feed live · 2 heard');
+  assert.equal(stats.count, 2);
+
+  await layer.disable();
+  assert.deepEqual(feeds.calls, ['start', 'stop']);
+});
+
+test('row status reflects decoder feeds and the browser SDR together', () => {
+  const idle = {
+    webUsbSupported: true,
+    connected: false,
+    mode: 'fm',
+    status: 'idle',
+  };
+  const usb = {
+    ...idle,
+    connected: true,
+    mode: 'adsb',
+    status: 'streaming',
+    messagesPerSecond: 3.5,
+  };
+  const feedState = (...statuses) => ({
+    configured: true,
+    polling: true,
+    feeds: statuses.map(([band, status]) => ({
+      band,
+      label: band,
+      status,
+    })),
+  });
+  const status = (receiver, feeds, heard = 14) =>
+    localAdsbStatus({ receiver, feedState: feeds, heard });
+
+  // No feeds configured: the WebUSB statuses are unchanged.
+  assert.deepEqual(status(idle, null), {
+    source: 'RTL-SDR · WebUSB',
+    status: 'idle',
+    statusMessage: 'connect a receiver in Radio',
+  });
+  assert.deepEqual(
+    status(idle, { configured: false, feeds: [], polling: false }),
+    status(idle, null),
+  );
+  assert.equal(status(usb, null).loadingLabel, '14 heard · 3.5 msg/s');
+  assert.equal(
+    status(idle, { configured: null, polling: true, feeds: [] }).loadingLabel,
+    'checking decoder feeds',
+  );
+
+  let stats = status(idle, feedState(['1090', 'live'], ['978', 'live']));
+  assert.deepEqual(stats, {
+    source: 'Decoder feeds',
+    status: 'streaming',
+    loadingLabel: '2 feeds live · 14 heard',
+  });
+  stats = status(usb, feedState(['978', 'live']));
+  assert.equal(stats.source, 'WebUSB + decoder feeds');
+  assert.equal(stats.loadingLabel, '1 feed live · 14 heard · USB 3.5 msg/s');
+
+  stats = status(idle, feedState(['1090', 'live'], ['978', 'unreachable']), 9);
+  assert.equal(stats.degraded, true);
+  assert.equal(stats.loadingLabel, 'feed 978 unreachable · 9 heard');
+
+  stats = status(idle, feedState(['978', 'unreachable']), 0);
+  assert.equal(stats.status, 'error');
+  assert.equal(stats.error, 'feed 978 unreachable');
+  stats = status(
+    usb,
+    feedState(['1090', 'stale'], ['978', 'stale'], ['1090', 'invalid']),
+  );
+  assert.equal(stats.degraded, true);
+  assert.equal(
+    stats.loadingLabel,
+    'feeds 1090, 978 stale · feed 1090 invalid · 14 heard · USB 3.5 msg/s',
   );
 });
