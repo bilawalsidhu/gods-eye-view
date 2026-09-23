@@ -20,7 +20,9 @@ export function createApplicationData({
         `Data layers could not be destroyed: ${[...dataManager.layers.keys()].join(', ')}`,
       );
   });
-  const presentation = new LayerPresentation(dataManager);
+  const presentation = new LayerPresentation(dataManager, {
+    weatherClock: catalog?.weatherClock,
+  });
   defer(() => presentation.destroy());
   onData?.(dataManager);
   if (!catalog?.layers || !catalog?.metadata)

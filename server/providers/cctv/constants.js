@@ -277,6 +277,14 @@ export const CATALONIA_ANCHORS = [
   { lat: 41.5636, lon: 2.0111 }, // Terrassa
 ];
 
+/** DelDOT CCTV: one keyless statewide JSON catalog; live video via RTMP-over-HTTP (rtmpt:80). */
+export const DELDOT_CCTV_URL = 'https://tmc.deldot.gov/json/videocamera.json';
+export const DEFAULT_DELDOT_MAX_SOURCES = 300;
+export const DELDOT_ANCHORS = [
+  { lat: 39.7459, lon: -75.5466 }, // Wilmington (New Castle)
+  { lat: 39.1582, lon: -75.5244 }, // Dover (Kent)
+  { lat: 38.6906, lon: -75.3877 }, // Georgetown (Sussex)
+];
 /** Camera CATALOGS change rarely; 15 min keeps multi-megabyte upstream list refetches (Austin rows.json + 4 Caltrans districts + TfL + Ontario 511) infrequent. Frames are fetched per-request and are unaffected. */
 export const CCTV_SOURCE_CACHE_MS = 15 * 60 * 1000;
 /** Per-provider catalog-fetch timeout. Bounds the worst-case refresh so one

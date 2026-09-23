@@ -11,6 +11,8 @@ const SHARE_PANEL_STATE_SPECS = Object.freeze([
   { id: 'location-bar', pinnable: true },
   { id: 'data-panel' },
   { id: 'cctv-panel' },
+  { id: 'weather-panel' },
+  { id: 'recent-imagery-panel' },
   { id: 'radio-panel' },
   { id: 'scene-panel' },
   { id: 'global-context-panel' },
@@ -21,6 +23,8 @@ const SHARE_PANEL_STATE_SPECS = Object.freeze([
 const COCKPIT_ENTRY_COLLAPSE_PANEL_IDS = Object.freeze([
   'data-panel',
   'cctv-panel',
+  'weather-panel',
+  'recent-imagery-panel',
   'scene-panel',
   'pp-toggles',
   'global-context-panel',
@@ -281,6 +285,8 @@ export class PanelChrome {
     const isRightRail = [
       'pp-toggles',
       'cctv-panel',
+      'weather-panel',
+      'recent-imagery-panel',
       'global-context-panel',
     ].includes(panelEl?.id);
     const collapsed = panelEl.classList.contains('collapsed');
