@@ -117,6 +117,7 @@ The [Bhote Koshi event pack](public/events/bhote-koshi-2026/README.md), under `p
 | **Natural Earth physical regions** (1,046 land + 292 marine named polygons) | `natural_earth/`                  | **Public domain**                                                                                         | ✅ (no restrictions)                             | "Made with Natural Earth" (courtesy credit — not legally required)          |
 | **DataSF Analysis Neighborhoods** (41 SF neighborhood polygons)             | `neighborhoods/`                  | **PDDL 1.0** (public domain)                                                                              | ✅ (no restrictions)                             | "City & County of San Francisco — DataSF" (courtesy — not legally required) |
 | **CCTV ground heights** (3,445 cameras)                                     | `cctv_ground_heights/`            | Precomputed camera placement heights, aligned to work with Google Photorealistic 3D Tiles (folder README) | —                                                | —                                                                           |
+| **OurAirports ATC frequencies** (9,562 airports · 16,509 frequencies)       | `ourairports_atc/`                | **Public domain**                                                                                         | ✅ (no restrictions)                             | "OurAirports" (courtesy — not legally required)                             |
 
 ### ⚠️ TeleGeography is bundled but NonCommercial
 
@@ -185,6 +186,33 @@ Natural Earth is **public domain** (no permission needed, no attribution legally
 https://www.naturalearthdata.com/about/terms-of-use/). We credit anyway: "Made with Natural
 Earth". Registration in the in-app `dataCredits.js` attribution list ships with the resolver
 wiring (see below).
+
+### OurAirports ATC frequencies (`ourairports_atc/`)
+
+Curated from the **OurAirports** database (https://ourairports.com/data/ — `airports.csv` +
+`airport-frequencies.csv`, fetched via the canonical
+`davidmegginson.github.io/ourairports-data` mirror on 2026-09-23) into
+`ourairports_atc/frequencies.json`, which backs the offline airport-frequency lookup in
+`src/data/ourAirportsAtc.js`.
+
+**No upstream commit to pin.** OurAirports is a live, continuously community-edited database
+rather than a versioned repository, so the provenance recorded in the file's `meta` header is
+the fetch timestamp plus the source row counts, and a later rebuild is expected to differ.
+Rebuild with `node scripts/build-atc-frequencies.mjs`.
+
+Curation (parameters in `meta.curation`): eight frequency classes kept verbatim —
+`TWR GND APP ATIS CNTR` (controlled) and `CTAF UNIC AFIS` (advisory) — 13,341 rows of other
+classes dropped; frequencies outside the 108–137 MHz VHF air band dropped (492 rows);
+coordinates rounded to 4 decimals and frequencies to 3; columnar layout (14.0 MB source →
+0.66 MB pack, budget ≤1 MB enforced by `src/data/ourAirportsAtc.test.mjs`).
+
+The class is **not** remapped onto a flight phase, because the data does not support it: only
+443 of the 9,562 airports publish all four of TWR/GND/APP/ATIS, and 5,902 publish none of them
+at all. See the pack README for the full table.
+
+OurAirports is **public domain** — "released into the public domain ... no need to credit us,
+though we appreciate it". We credit anyway: "OurAirports". Registration in the in-app
+`dataCredits.js` attribution list (`OURAIRPORTS_CREDIT`) ships with the consumer wiring.
 
 ### DataSF Analysis Neighborhoods (`neighborhoods/`)
 
