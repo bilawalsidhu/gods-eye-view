@@ -19,6 +19,10 @@ import {
   decodeVehiclePositions,
 } from './gtfsRealtime.js';
 import { getTransitFeed } from './transitFeeds.js';
+import {
+  normalizeGtfsRtAlertsJson,
+  normalizeMbtaRoutePatterns,
+} from './transitNetwork.js';
 
 /** Fresh window: a snapshot younger than this is served without refetching. */
 export const TRANSIT_PROXY_TTL_MS = 15_000;
@@ -67,16 +71,66 @@ export const TRANSIT_BACKOFF_LADDER_MS = Object.freeze([
 ]);
 
 /**
+ * Route geometry and alerts are separate resources with their own clocks.
+ *
+ * Routes change a few times a year: twelve hours fresh, and a week of
+ * serve-stale so an operator outage never blanks the map. Alerts change by
+ * the minute: one minute fresh (the operator's own CDN refresh), and half an
+ * hour of serve-stale, after which an alert list is too old to present as
+ * current and the proxy says so instead.
+ */
+export const TRANSIT_NETWORK_POLICY = Object.freeze({
+  routes: Object.freeze({
+    ttlMs: 12 * 60 * 60_000,
+    staleMaxMs: 7 * 24 * 60 * 60_000,
+    // The full MBTA pattern catalog is ~2.4 MB decoded.
+    maxBytes: 12 * 1024 * 1024,
+    timeoutMs: 30_000,
+  }),
+  alerts: Object.freeze({
+    ttlMs: 60_000,
+    staleMaxMs: 30 * 60_000,
+    // MBTA's enhanced alerts are ~0.6 MB.
+    maxBytes: 8 * 1024 * 1024,
+    timeoutMs: 15_000,
+  }),
+});
+
+/** Accept header for the JSON network resources (JSON:API and plain JSON). */
+export const TRANSIT_NETWORK_ACCEPT =
+  'application/vnd.api+json, application/json;q=0.9, */*;q=0.1';
+
+/**
  * Resolve `/vehicles/<feedId>` (the path after the `/api/transit` mount) to a
  * registered feed. Anything else — a different route, an unknown id, path
  * tricks, a query string — resolves to null and the caller 404s.
  * @param {string} url Request URL relative to the mount point.
- * @returns {{ route: 'feeds' } | { route: 'vehicles', feed: object } | null}
+ * `/routes/<feedId>` and `/alerts/<feedId>` resolve only for a feed whose
+ * registry entry carries that network resource; every other feed 404s.
+ * @returns {{ route: 'feeds' } | { route: 'vehicles', feed: object } |
+ *   { route: 'routes'|'alerts', feed: object, upstreamUrl: string } | null}
  */
 export function resolveTransitRoute(url) {
   const pathname = String(url || '').split('?')[0];
   if (pathname === '/feeds' || pathname === '/feeds/')
     return { route: 'feeds' };
+  const network = /^\/(routes|alerts)\/([^/]+)\/?$/.exec(pathname);
+  if (network) {
+    let networkId;
+    try {
+      networkId = decodeURIComponent(network[2]);
+    } catch {
+      return null;
+    }
+    const networkFeed = getTransitFeed(networkId);
+    const upstreamUrl =
+      network[1] === 'routes'
+        ? networkFeed?.network?.routesUrl
+        : networkFeed?.network?.alertsUrl;
+    return networkFeed && typeof upstreamUrl === 'string'
+      ? { route: network[1], feed: networkFeed, upstreamUrl }
+      : null;
+  }
   const match = /^\/(vehicles|trail)\/([^/]+)(?:\/([^/]+))?\/?$/.exec(pathname);
   if (!match) return null;
   let id, vehicleId;
@@ -110,11 +164,13 @@ export function resolveTransitRoute(url) {
  * @param {{etag?: string|null, lastModified?: string|null}} [validators] From the cached snapshot.
  * @returns {Record<string, string>}
  */
-export function transitUpstreamHeaders(feed, validators = null) {
+export function transitUpstreamHeaders(feed, validators = null, accept = null) {
   return {
     'User-Agent':
       'gods-eye-view-transit-proxy/1.0 (+https://github.com/bilawalsidhu/gods-eye-view)',
-    Accept: 'application/x-protobuf, application/octet-stream;q=0.9, */*;q=0.1',
+    Accept:
+      accept ||
+      'application/x-protobuf, application/octet-stream;q=0.9, */*;q=0.1',
     'Accept-Encoding': 'gzip',
     ...(validators?.etag ? { 'If-None-Match': validators.etag } : {}),
     ...(validators?.lastModified
@@ -261,6 +317,125 @@ export function buildTransitSnapshot(feed, bytes, now = Date.now()) {
       decoded.timestamp,
       Math.floor(now / 1000),
     ),
+  };
+}
+
+/**
+ * Parse upstream JSON bytes, refusing anything that is not JSON.
+ * @param {Uint8Array|ArrayBuffer} bytes
+ * @returns {unknown}
+ * @throws {TransitFeedShapeError}
+ */
+function parseNetworkJson(bytes) {
+  const view = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  try {
+    return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(view));
+  } catch {
+    throw new TransitFeedShapeError('upstream is not JSON', 'not-json');
+  }
+}
+
+/**
+ * Decode a feed's route catalog into the JSON the layer draws.
+ * An empty catalog is a fault, not an answer: no operator runs zero routes,
+ * and caching "no routes" for twelve hours would blank the map for half a day.
+ * @param {object} feed Registry entry.
+ * @param {Uint8Array|ArrayBuffer} bytes Upstream body.
+ * @param {number} [now=Date.now()]
+ * @returns {object}
+ */
+export function buildTransitRoutesSnapshot(feed, bytes, now = Date.now()) {
+  if (feed?.network?.routesFormat !== 'mbta-v3-route-patterns') {
+    throw new TransitFeedShapeError('unsupported route format', 'format');
+  }
+  let normalized;
+  try {
+    normalized = normalizeMbtaRoutePatterns(parseNetworkJson(bytes), feed);
+  } catch (error) {
+    if (error instanceof TransitFeedShapeError) throw error;
+    throw new TransitFeedShapeError(error?.message || 'bad routes', 'shape');
+  }
+  if (normalized.routes.length === 0) {
+    throw new TransitFeedShapeError('route catalog is empty', 'empty');
+  }
+  return {
+    feedId: feed.id,
+    name: feed.name,
+    fetchedAt: now,
+    count: normalized.routes.length,
+    shapeCount: normalized.shapeCount,
+    pointCount: normalized.pointCount,
+    droppedShapes: normalized.droppedShapes,
+    routes: normalized.routes,
+  };
+}
+
+/**
+ * Decode a feed's alert list into the JSON the layer reads. Zero alerts is a
+ * legitimate answer (a quiet night) and is served as such.
+ * @param {object} feed Registry entry.
+ * @param {Uint8Array|ArrayBuffer} bytes Upstream body.
+ * @param {number} [now=Date.now()]
+ * @returns {object}
+ */
+export function buildTransitAlertsSnapshot(feed, bytes, now = Date.now()) {
+  if (feed?.network?.alertsFormat !== 'gtfs-rt-alerts-json') {
+    throw new TransitFeedShapeError('unsupported alerts format', 'format');
+  }
+  let normalized;
+  try {
+    normalized = normalizeGtfsRtAlertsJson(parseNetworkJson(bytes));
+  } catch (error) {
+    if (error instanceof TransitFeedShapeError) throw error;
+    throw new TransitFeedShapeError(error?.message || 'bad alerts', 'shape');
+  }
+  return {
+    feedId: feed.id,
+    name: feed.name,
+    fetchedAt: now,
+    feedTimestamp: normalized.feedTimestamp,
+    truncated: normalized.truncated,
+    count: normalized.alerts.length,
+    alerts: normalized.alerts,
+  };
+}
+
+/**
+ * Classify a network-resource cache entry against its own policy windows.
+ * @param {{ at: number }|null|undefined} entry
+ * @param {number} now
+ * @param {{ttlMs: number, staleMaxMs: number}} policy
+ * @returns {'none'|'fresh'|'stale'|'expired'}
+ */
+export function transitNetworkCacheState(entry, now, policy) {
+  if (!entry || !Number.isFinite(entry.at)) return 'none';
+  const age = now - entry.at;
+  if (age < policy.ttlMs) return 'fresh';
+  if (age < policy.staleMaxMs) return 'stale';
+  return 'expired';
+}
+
+/**
+ * Response headers for a network resource.
+ * @param {'HIT'|'MISS'|'INFLIGHT'|'STALE-ERROR'} cacheState
+ * @param {{ttlMs: number}} policy
+ * @param {string} [upstreamHost]
+ * @returns {Record<string, string>}
+ */
+export function transitNetworkResponseHeaders(
+  cacheState,
+  policy,
+  upstreamHost = '',
+) {
+  return {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control':
+      cacheState === 'STALE-ERROR'
+        ? 'no-store'
+        : `private, max-age=${Math.min(3600, Math.floor(policy.ttlMs / 1000))}`,
+    'X-GEV-Cache': cacheState,
+    'X-Content-Type-Options': 'nosniff',
+    ...(upstreamHost ? { 'X-Transit-Upstream': upstreamHost } : {}),
   };
 }
 

@@ -183,7 +183,12 @@ export function createLifecycle({ state, services, parts }) {
       );
       state._overlayHost.setVisible(TRANSIT_SELECTED_OVERLAY_SOURCE_ID, true);
       parts.selection.installClickHandler(viewer);
-      registerPickOwner('transit', (pickedId) => state._vehicles.has(pickedId));
+      registerPickOwner(
+        'transit',
+        (pickedId) =>
+          state._vehicles.has(pickedId) ||
+          parts.network.isNetworkPick(pickedId),
+      );
       if (!state._cameraChangedAttached) {
         viewer.camera.changed.addEventListener(parts.viewport.onCameraChanged);
         borrowCameraSensitivity(viewer);
@@ -233,6 +238,7 @@ export function createLifecycle({ state, services, parts }) {
         state._preRenderRemove = null;
       }
       parts.ingestion.abortAllInFlight();
+      parts.network.clear();
       state._activeFeeds.clear();
       state._feedStatus.clear();
       for (const entry of state._vehicles.values()) {
@@ -266,6 +272,7 @@ export function createLifecycle({ state, services, parts }) {
     async update() {
       if (!state._enabled) return;
       parts.ingestion.sweepAgedVehicles(Date.now());
+      parts.network.sync(Date.now());
       if (state._activeFeeds.size === 0) return;
       const generation = state._generation;
       await Promise.all(
@@ -293,6 +300,7 @@ export function createLifecycle({ state, services, parts }) {
       }
       state._overlayHost.clearSource(TRANSIT_SELECTED_OVERLAY_SOURCE_ID);
       parts.height.clear();
+      parts.network.destroy();
       unbindStyleEvents();
       state._dataManager = null;
       state._viewer = null;

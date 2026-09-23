@@ -3,6 +3,7 @@ import { createTrails } from './trails.js';
 import { createState } from './state.js';
 import { createHeight } from './height.js';
 import { createRendering } from './rendering.js';
+import { createNetwork } from './network.js';
 import { createSelection } from './selection.js';
 import { createIngestion } from './ingestion.js';
 import { createViewport } from './viewport.js';
@@ -48,6 +49,7 @@ export function createTransitLayer({
   parts.height = createHeight(context);
   parts.selection = createSelection(context);
   parts.rendering = createRendering(context);
+  parts.network = createNetwork(context);
   parts.ingestion = createIngestion(context);
   parts.viewport = createViewport(context);
   parts.queries = createQueries(context);

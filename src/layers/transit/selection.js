@@ -7,6 +7,7 @@ import {
   createTransitSelectedOverlayEntry,
 } from './policy.js';
 import { getRegisteredTransitFeed } from '../../data/transitFeeds.js';
+import { parseTransitNetworkPickId } from './network.js';
 import { isPointerFree } from '../../data/inputOwnership.js';
 
 /**
@@ -40,7 +41,49 @@ export function createSelection({ state, services, parts }) {
     };
   }
 
+  /**
+   * Card for a clicked route line, anchored where the click met the ground.
+   * @param {boolean} force
+   */
+  function refreshRouteCard(force) {
+    const selected = state._selectedRoute;
+    if (!selected) return;
+    const now = Date.now();
+    if (!force && now - state._selectedCardAt < SELECTED_CARD_REFRESH_MS)
+      return;
+    state._selectedCardAt = now;
+    const copy = parts.network.networkCardCopy(
+      { kind: selected.kind, feedId: selected.feedId, id: selected.id },
+      now,
+    );
+    if (!copy) {
+      clearSelection();
+      return;
+    }
+    const text = `${selected.kind}\u0000${selected.feedId}\u0000${selected.id}\u0000${copy.title}\u0000${copy.details.join('\u0000')}`;
+    if (!force && text === state._selectedCardText) return;
+    const card = createTransitSelectedOverlayEntry(
+      `${selected.kind}:${selected.feedId}/${selected.id}`,
+      selected.position,
+      copy,
+      'unknown',
+    );
+    if (!card) return;
+    card.accent = copy.accent;
+    state._selectedCardText = text;
+    state._overlayHost.setEntries(
+      TRANSIT_SELECTED_OVERLAY_SOURCE_ID,
+      [card],
+      TRANSIT_SELECTED_OVERLAY_SOURCE_OPTIONS,
+    );
+    state._cardPublications = (state._cardPublications || 0) + 1;
+  }
+
   function refreshSelectedCard(force) {
+    if (state._selectedRoute) {
+      refreshRouteCard(force);
+      return;
+    }
     const entry = state._selectedKey
       ? state._vehicles.get(state._selectedKey)
       : null;
@@ -61,6 +104,22 @@ export function createSelection({ state, services, parts }) {
       entry.fetchedAt,
       entry,
     );
+    // Route name and alerts, for feeds that publish them. "Route Red" becomes
+    // "Red Line"; a bus keeps its number and gains its destination line; and
+    // whatever is in force on the route is said where the reader is looking.
+    const extras = parts.network.vehicleCardExtras(
+      entry.feedId,
+      entry.record.routeId,
+      now,
+    );
+    if (extras.routeName && entry.record.routeId) {
+      copy.title = copy.title.replace(
+        `Route ${entry.record.routeId}`,
+        extras.routeName,
+      );
+    }
+    if (extras.description) copy.details.splice(1, 0, extras.description);
+    if (extras.lines.length) copy.details.push(...extras.lines);
     // The TEXT is what the throttle is for, and it is republished only when
     // it has changed: the anchor is live through its getter, so re-sending
     // an identical card would only make the host re-solve its layout.
@@ -89,6 +148,7 @@ export function createSelection({ state, services, parts }) {
       : null;
     parts.trails.clear();
     state._selectedKey = null;
+    state._selectedRoute = null;
     state._selectedCardText = null;
     state._detectRevision += 1;
     // Cleared first: the styling path reads the selection from state.
@@ -108,8 +168,56 @@ export function createSelection({ state, services, parts }) {
     governorRequestRender('transit-select');
   }
 
+  /**
+   * Select a route line clicked at `position` (a Cartesian3 on the ground).
+   * @param {string} pickId Route pick id.
+   * @param {object} position
+   */
+  function selectRoute(pickId, position) {
+    const parsed = parseTransitNetworkPickId(pickId);
+    if (!parsed) return;
+    // A stop card stands on its stop; a route card where the click landed.
+    const anchor =
+      parsed.kind === 'stop'
+        ? parts.network.stopPosition(parsed.feedId, parsed.id)
+        : position;
+    if (!anchor) return;
+    clearSelection();
+    state._selectedRoute = {
+      ...parsed,
+      ...(parsed.kind === 'route'
+        ? { routeId: parsed.id }
+        : { stopId: parsed.id }),
+      position: anchor,
+    };
+    state._detectRevision += 1;
+    refreshSelectedCard(true);
+    governorRequestRender('transit-select-route');
+  }
+
+  /**
+   * Where a click met the rendered surface: the depth buffer when the scene
+   * can read it (photoreal tiles, terrain), else the globe, else the ellipsoid.
+   */
+  function groundPositionAt(viewer, windowPosition) {
+    const scene = viewer.scene;
+    try {
+      if (scene.pickPositionSupported) {
+        const p = scene.pickPosition(windowPosition);
+        if (p && Number.isFinite(p.x)) return p;
+      }
+    } catch {
+      /* fall through */
+    }
+    const ray = viewer.camera.getPickRay(windowPosition);
+    const onGlobe = ray ? scene.globe?.pick(ray, scene) : null;
+    if (onGlobe) return onGlobe;
+    return viewer.camera.pickEllipsoid(windowPosition) || null;
+  }
+
   function onKeyDown(event) {
-    if (event.key === 'Escape' && state._selectedKey) clearSelection();
+    if (event.key === 'Escape' && (state._selectedKey || state._selectedRoute))
+      clearSelection();
   }
 
   function installClickHandler(viewer) {
@@ -184,8 +292,12 @@ export function createSelection({ state, services, parts }) {
           selectVehicle(picked.id);
           return;
         }
+        if (parts.network.isNetworkPick(picked.id)) {
+          selectRoute(picked.id, groundPositionAt(viewer, position));
+          return;
+        }
       }
-      if (state._selectedKey) clearSelection();
+      if (state._selectedKey || state._selectedRoute) clearSelection();
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
     document.addEventListener('keydown', onKeyDown);
   }
@@ -202,6 +314,7 @@ export function createSelection({ state, services, parts }) {
     refreshSelectedCard,
     clearSelection,
     selectVehicle,
+    selectRoute,
     onKeyDown,
     installClickHandler,
     removeClickHandler,
