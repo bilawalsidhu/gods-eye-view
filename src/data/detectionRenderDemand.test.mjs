@@ -277,7 +277,7 @@ test('detection holds nothing, and asks for its own frames instead', async () =>
 
   assert.match(source, /governorRequestRender\('detection-visibility'\)/,
     'mode/suspend transitions request their own repaint');
-  assert.match(source, /if \(detectionNeedsFollowUpFrame\(\{[\s\S]*?\}\)\) \{\s*\n\s*governorRequestRender\('detection-animation'\);/,
+  assert.match(source, /if \(\s*detectionNeedsFollowUpFrame\(\{[\s\S]*?\}\)\s*\) \{\s*\n\s*governorRequestRender\('detection-animation'\);/,
     'the follow-up frame is gated on the policy, never unconditional');
 
   // The demand call must read the FRAME's timestamp, not a fresh sample.
@@ -306,7 +306,7 @@ test('detection holds nothing, and asks for its own frames instead', async () =>
   // the emptiest possible scene. (Caught by the governor gate at 301 renders/5 s
   // with zero layers; the fix settles the solve there, because with nothing
   // detectable it is vacuously complete.)
-  const emptyExit = /\/\/ Drop the replay buffer with it[\s\S]*?return \{ didSolve: false[^\n]*\n/.exec(source)?.[0];
+  const emptyExit = /\/\/ Drop the replay buffer with it[\s\S]*?return \{\s*didSolve: false[\s\S]*?\};/.exec(source)?.[0];
   assert.ok(emptyExit, 'the zero-objects exit is still identifiable');
   assert.match(emptyExit, /_labelSolveDirty = false;/,
     'the zero-objects exit settles the solve instead of carrying it forward');
@@ -318,7 +318,7 @@ test('detection holds nothing, and asks for its own frames instead', async () =>
   assert.ok(drawOverlay, 'detection.js still has a draw pass');
   assert.doesNotMatch(drawOverlay, /Date\.now\(\)/,
     'the draw pass must run on the frame timestamp, not a wall clock');
-  assert.match(drawOverlay, /const now = Number\.isFinite\(frame\.timestamp\) \? frame\.timestamp : _nowMs\(\);/);
+  assert.match(drawOverlay, /const now =\s*Number\.isFinite\(frame\.timestamp\) \? frame\.timestamp : _nowMs\(\);/);
   assert.match(source, /_enableTime = _nowMs\(\);/,
     'the enable stamp shares the monotonic clock the fade is measured against');
 
@@ -331,7 +331,7 @@ test('detection holds nothing, and asks for its own frames instead', async () =>
     'the valve asks the shared policy instead of inlining its own threshold');
   assert.doesNotMatch(shouldPaint, /_lastPaintMs > 22/,
     'the old inline threshold must be gone, not shadowing the policy');
-  assert.match(shouldPaint, /if \(decision\.requestFollowUp\) governorRequestRender\('detection-paint-skipped'\)/,
+  assert.match(shouldPaint, /if \(decision\.requestFollowUp\)\s*governorRequestRender\('detection-paint-skipped'\)/,
     'skipping a paint must hand the request forward, not swallow it');
 
   // The scanline must not go back to the frame counter: that is what made a
@@ -359,14 +359,38 @@ test('a layer whose detectable set changed dirties the solve', async () => {
   assert.match(hook, /if \(_mode === MODE_OFF\) return;/,
     'and it stays inert while detection is off');
 
-  const manager = await readFile(new URL('./manager.js', import.meta.url), 'utf8');
-  assert.match(manager, /import \{ markDetectionSourcesChanged \} from '\.\/detection\.js';/);
-  // Both discrete events that can change the detectable set, next to the render
-  // request each already made.
-  assert.match(manager, /governorRequestRender\(`layer-tick:\$\{layerId\}`\);[\s\S]{0,700}?markDetectionSourcesChanged\(`layer-tick:\$\{layerId\}`\);/,
-    'a poll tick marks the solve dirty alongside its render request');
-  assert.match(manager, /governorRequestRender\('layer-visibility'\);[\s\S]{0,400}?markDetectionSourcesChanged\('layer-visibility'\);/,
-    'so does a layer appearing or disappearing');
+  const { LayerLifecycle } = await import('./lifecycle.js');
+  const { LayerPresentation } = await import('../app/layerPresentation.js');
+  const manager = new LayerLifecycle({});
+  const reactions = [];
+  const presentation = new LayerPresentation(manager, {
+    requestRender: (reason) => reactions.push(['render', reason]),
+    invalidateDetection: (reason) => reactions.push(['detection', reason]),
+  });
+  let result = true;
+  manager.register({ id: 'fixture', name: 'Fixture', updateInterval: 0,
+    init() {}, enable() {}, disable() {}, destroy() {},
+    update() { if (result instanceof Error) throw result; return result; },
+    getStats() { return { count: 1 }; },
+  });
+  await manager.setEnabled('fixture', true);
+  assert.deepEqual(reactions, [['render', 'layer-visibility'], ['detection', 'layer-visibility']]);
+  reactions.length = 0;
+  await manager.refreshLayer('fixture');
+  assert.deepEqual(reactions, [['render', 'layer-tick:fixture'], ['detection', 'layer-tick:fixture']]);
+  reactions.length = 0;
+  result = false;
+  await manager.refreshLayer('fixture');
+  assert.deepEqual(reactions, [['render', 'layer-tick:fixture'], ['detection', 'layer-tick:fixture']], 'partial/rejected updates still invalidate detection');
+  reactions.length = 0;
+  result = new Error('fixture update failure');
+  await manager.refreshLayer('fixture');
+  assert.deepEqual(reactions, [], 'throwing updates do not publish changed data');
+  result = true;
+  await manager.setEnabled('fixture', false);
+  assert.deepEqual(reactions, [['render', 'layer-visibility'], ['detection', 'layer-visibility']]);
+  presentation.destroy();
+  await manager.destroyAll();
 });
 
 test('the render-governor gate covers the parked case, with teeth on the painter', async () => {

@@ -122,6 +122,14 @@ export class PanelPositionControls {
     // choice still wins in both directions, so anyone who opens it keeps it.
     if (panelId === 'pp-toggles' && stored === null) collapsed = true;
     panelEl.classList.toggle('collapsed', collapsed);
+    // Bodies that expand themselves on first appearance must not override a
+    // choice the user (or a share link) already made.
+    if (panelEl.dataset)
+      panelEl.dataset.collapsedPreference = !allowStored
+        ? 'share'
+        : stored === null
+          ? 'default'
+          : 'stored';
     this._syncPanelCollapseButton(panelEl);
   }
 

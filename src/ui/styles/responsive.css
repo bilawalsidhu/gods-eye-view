@@ -28,6 +28,17 @@
     left: 20px;
   }
 
+  #top-center-actions {
+    top: max(12px, env(safe-area-inset-top));
+    right: 16px;
+    left: auto;
+    transform: none;
+  }
+
+  #style-indicator {
+    display: none;
+  }
+
   #title-bar h1 {
     font-size: 16px;
     letter-spacing: 4px;
@@ -186,6 +197,20 @@
     overflow-y: auto;
   }
 
+  /* Both stacks are scroll containers at this width (overflow-y above), which
+     also makes their overflow-x compute to auto. Each panel's decorative
+     .panel-glow is absolutely positioned with a negative inset (-18px/-20px),
+     so inside a scroll container it stops being harmless paint and becomes
+     18–20px of scrollable overflow on BOTH axes: a horizontal scrollbar band
+     under the expanded panel plus a vertical scrollbar that scrolls nothing
+     but glow. Pin the glow to the panel box here — its blur is ink overflow,
+     which never scrolls — instead of clipping the rail, which would also clip
+     legitimate content such as the Context radio popover. */
+  #left-panel-stack .panel-glow,
+  #right-context-rail .panel-glow {
+    inset: 0;
+  }
+
   #right-context-rail > #pp-toggles {
     width: 100%;
   }
@@ -193,6 +218,8 @@
   #right-context-rail #pp-toggles.collapsed .pp-header-row,
   #right-context-rail #cctv-panel,
   #right-context-rail #cctv-panel.collapsed,
+  #right-context-rail #recent-imagery-panel,
+  #right-context-rail #recent-imagery-panel.collapsed,
   #right-context-rail #radio-panel,
   #right-context-rail #radio-panel.collapsed,
   #right-context-rail #global-context-panel,
@@ -224,5 +251,17 @@
     top: 16px;
     max-width: calc(100vw - 24px);
     text-align: center;
+  }
+}
+
+@media (max-width: 520px) {
+  #title-bar {
+    top: 14px;
+    left: 16px;
+  }
+
+  #title-bar h1 > span:last-child,
+  #title-bar .subtitle {
+    display: none;
   }
 }

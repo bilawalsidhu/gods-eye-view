@@ -1,44 +1,13 @@
-import { createCivilFlightLayer } from '../layers/flights/index.js';
-import { createOpenSkySource } from '../sources/live/standalone.js';
-import * as picking from './pickRegistry.js';
-import * as sprites from './spriteOrder.js';
-import * as trails from './trailRenderer.js';
-import * as aircraftPresentation from './tr3bRegistry.js';
-import * as camera from './trackedCamera.js';
-import * as militaryRegistry from './militaryRegistry.js';
-import * as labels from './detectionDraw.js';
-import * as groundFloor from './groundFloor.js';
-import * as meshFloor from './meshFloorSampler.js';
-import * as geoid from './geoid.js';
-import * as focus from './focusDeemphasis.js';
-import * as readout from './trackedReadout.js';
-import * as context from './contextStore.js';
-import * as render from '../renderGovernor.js';
-import * as groundSnap from './groundSnap.js';
-import * as recession from './aircraftRecession.js';
+import { defaultSurface } from './surfaceServices.js';
+import { createApplicationFlights } from '../app/layers/flights.js';
 
-const flightsLayer = createCivilFlightLayer({
+import { createOpenSkySource } from '../sources/live/standalone.js';
+import * as militaryRegistry from './militaryRegistry.js';
+
+const flightsLayer = createApplicationFlights({
+  surface: defaultSurface,
   source: createOpenSkySource(),
-  resolveAsset: (url) =>
-    `${import.meta.env?.BASE_URL || '/'}${url.replace(/^\//, '')}`,
-  services: {
-    picking,
-    sprites,
-    trails,
-    aircraftPresentation,
-    camera,
-    militaryRegistry,
-    labels,
-    groundFloor,
-    meshFloor,
-    geoid,
-    focus,
-    readout,
-    context,
-    render,
-    groundSnap,
-    recession,
-  },
+  militaryRegistry,
 });
 export { TRACKED_MODEL_MAX_PX } from '../layers/flights/policy.js';
 export const _floorGroundedDisplayPositionForTest =

@@ -1,64 +1,104 @@
+import { syncChipGroup } from './chipGroup.js';
+import { syncRowList } from './rowList.js';
+import { layerFeedState } from '../data/feedState.js';
+export { layerFeedState } from '../data/feedState.js';
 import { GUIDANCE_STATUSES } from '../loadingFeedback.js';
+import { keySetupRequirement } from '../keySetupCore.mjs';
+import { createWeatherPanel } from './weatherPanel.js';
 const FEED_STATE_LABELS = Object.freeze({
   nominal: 'ON',
   loading: 'LOADING',
   degraded: 'DEGRADED',
   stale: 'STALE',
+  partial: 'PARTIAL',
   fallback: 'FALLBACK',
   unavailable: 'UNAVAILABLE',
 });
 
+// Presentation order is independent of catalog registration and startup order.
+const PANEL_GROUPS = [
+  {
+    label: 'Movement',
+    ids: [
+      'satellites',
+      'flights',
+      'military',
+      'ais-live-vessels',
+      'traffic',
+      'transit',
+      'bikeshare',
+    ],
+  },
+  {
+    label: 'Cameras',
+    ids: ['cctv', 'recent-imagery'],
+  },
+  {
+    label: 'Infrastructure',
+    ids: [
+      'alpr-cameras',
+      'military-installations',
+      'local-datacenters',
+      'telegeography-submarine-cables',
+      'local-dams',
+    ],
+  },
+  {
+    label: 'Events',
+    ids: ['rocket-launches', 'earthquakes', 'local-firms'],
+  },
+  {
+    label: 'Weather',
+    ids: [
+      'wind',
+      'weather-radar',
+      'weather-satellite',
+      'weather-lightning',
+      'weather-cyclones',
+    ],
+  },
+  {
+    label: 'Utilities',
+    ids: ['directions', 'radio'],
+  },
+];
+const PANEL_ORDER = PANEL_GROUPS.flatMap(({ label, ids }) =>
+  ids.map((id) => ({ id, label })),
+);
+const PANEL_POSITIONS = new Map(
+  PANEL_ORDER.map(({ id }, index) => [id, index]),
+);
+const PANEL_LABELS = {
+  'ais-live-vessels': 'Live Vessels',
+  bikeshare: 'Bike Share',
+  cctv: 'Cameras',
+  'alpr-cameras': 'Mapped ALPR Cameras',
+  'local-datacenters': 'Data Centers',
+  'local-firms': 'Active Fires',
+};
+
+function panelLabel(layer) {
+  return PANEL_LABELS[layer.id] || layer.name;
+}
+
 /**
- * Normalize heterogeneous layer stats into one honest control-chip state.
- * @param {object|null} stats Layer getStats() result.
- * @returns {'nominal'|'loading'|'degraded'|'stale'|'fallback'|'unavailable'} Feed state.
+ * Guidance for a control a missing provider key is holding back.
+ *
+ * The key registry already owns what each key is called and which environment
+ * variables enable it, so a layer only declares WHICH key it needs
+ * (`requiresKeyId`) and reports `stats.keyRequired` while that key is absent.
+ * Naming the variable turns an unexplained dead control into a next step.
+ *
+ * An unnamed or unknown key returns '' rather than guessing: guidance naming
+ * the wrong variable sends the operator to the wrong provider.
+ *
+ * @param {object} [layer] Row from the layer manager's getAll().
+ * @returns {string} Guidance text, or '' when no key guidance applies.
  */
-export function layerFeedState(stats = {}) {
-  const state = stats || {};
-  const status =
-    typeof state.status === 'string' ? state.status.toLowerCase() : '';
-  const source = `${state.source || ''} ${state.coverage || ''}`;
-  const hasExplicitFallback = typeof state.fallback === 'boolean';
-  const hasPriorData = Number(state.count) > 0 || Boolean(state.lastUpdate);
-  const presentedError =
-    state.error || state.lastError || state.managerRefreshError;
-  if (['unavailable', 'offline', 'down', 'error'].includes(status))
-    return 'unavailable';
-  if (
-    (presentedError ||
-      state.unavailable === true ||
-      state.available === false) &&
-    !hasPriorData &&
-    !GUIDANCE_STATUSES.includes(status)
-  ) {
-    return 'unavailable';
-  }
-  if (state.loading) return 'loading';
-  // Guidance states ask the user to act (zoom in, run a search) — normal
-  // operation, not feed faults. One honesty carve-out: layers keep their
-  // rendered records through the guidance state, so a genuinely stale cache
-  // still reads STALE; a guidance prompt alone never reads DEGRADED.
-  if (GUIDANCE_STATUSES.includes(status)) {
-    return state.stale ? 'stale' : 'nominal';
-  }
-  if (
-    state.fallback === true ||
-    status === 'fallback' ||
-    state.mode === 'sim' ||
-    /\bfallback\b/i.test(source) ||
-    (!hasExplicitFallback && /\badsb\.lol\b/i.test(source))
-  ) {
-    return 'fallback';
-  }
-  if (state.stale || status === 'stale') return 'stale';
-  if (
-    state.degraded ||
-    presentedError ||
-    state.unavailable === true ||
-    state.available === false
-  )
-    return 'degraded';
-  return 'nominal';
+export function layerKeyRequirementTooltip(layer = {}) {
+  if (layer?.stats?.keyRequired !== true) return '';
+  const requiresKeyId = String(layer.requiresKeyId || '').trim();
+  return requiresKeyId ? keySetupRequirement(requiresKeyId) : '';
 }
 
 /** Layer row presentation over supplied state and actions; no layer imports. */
@@ -72,7 +112,9 @@ export class LayerPanel {
     hasRowControls,
     subscribeRowControls,
     onHiddenRefresh = () => {},
+    weatherClock,
   }) {
+    this.weatherClock = weatherClock;
     this.getAll = getLayers;
     this.isEnabled = isEnabled;
     this.setEnabled = setEnabled;
@@ -84,12 +126,43 @@ export class LayerPanel {
     this._generation = 0;
     this._removers = [];
     this._destroyed = false;
+    this._cancelRowControlsRefresh = null;
+    this._recentImageryFactory = null;
+    this._recentImageryPanel = null;
   }
   mount(container) {
     if (this._destroyed) return;
     this._releaseBindings();
     this._toggleContainer = container;
+    this._weatherPanel?.destroy();
+    this._weatherPanel = createWeatherPanel({
+      clock: this.weatherClock,
+      container:
+        container?.ownerDocument?.getElementById?.('weather-panel-body'),
+      setLayerParams: this.setLayerParams,
+    });
+    this._mountRecentImagery();
     this._renderToggles();
+  }
+  /**
+   * Host the Recent Imagery readout in its rail body, like the weather
+   * readout. The application supplies the factory once the layer, viewer and
+   * box tool exist; a remount rebuilds the readout in place.
+   * @param {((container: HTMLElement) => { destroy: () => void } | null) | null} factory
+   */
+  attachRecentImagery(factory) {
+    if (this._destroyed) return;
+    this._recentImageryFactory = typeof factory === 'function' ? factory : null;
+    this._mountRecentImagery();
+  }
+  _mountRecentImagery() {
+    this._recentImageryPanel?.destroy();
+    this._recentImageryPanel = null;
+    const container = this._toggleContainer?.ownerDocument?.getElementById?.(
+      'recent-imagery-panel-body',
+    );
+    if (container && this._recentImageryFactory)
+      this._recentImageryPanel = this._recentImageryFactory(container) || null;
   }
   _bind(element, type, listener) {
     element.addEventListener(type, listener);
@@ -97,12 +170,19 @@ export class LayerPanel {
   }
   _releaseBindings() {
     this._generation++;
+    this._cancelRowControlsRefresh?.();
+    this._cancelRowControlsRefresh = null;
     for (const remove of this._removers.splice(0)) remove();
   }
   destroy() {
     if (this._destroyed) return;
     this._destroyed = true;
     this._releaseBindings();
+    this._weatherPanel?.destroy();
+    this._weatherPanel = null;
+    this._recentImageryPanel?.destroy();
+    this._recentImageryPanel = null;
+    this._recentImageryFactory = null;
     this._toggleContainer = null;
   }
   _renderToggles() {
@@ -111,8 +191,25 @@ export class LayerPanel {
     this._toggleContainer.innerHTML = '';
 
     const generation = this._generation;
-    for (const layer of this.getAll()) {
+    const layers = this.getAll()
+      .slice()
+      .sort(
+        (a, b) =>
+          (PANEL_POSITIONS.get(a.id) ?? PANEL_ORDER.length) -
+          (PANEL_POSITIONS.get(b.id) ?? PANEL_ORDER.length),
+      );
+    let previousGroup = '';
+    for (const layer of layers) {
       if (!layer.showInTogglePanel) continue;
+      const group =
+        PANEL_ORDER[PANEL_POSITIONS.get(layer.id)]?.label ?? 'Other layers';
+      if (group && group !== previousGroup) {
+        const heading = document.createElement('h3');
+        heading.className = 'data-layer-group-heading';
+        heading.textContent = group;
+        this._toggleContainer.appendChild(heading);
+      }
+      previousGroup = group;
       const row = document.createElement('div');
       row.className = 'data-toggle-row';
       row.dataset.layerId = layer.id;
@@ -127,7 +224,7 @@ export class LayerPanel {
       icon.textContent = layer.icon;
       const name = document.createElement('span');
       name.className = 'data-name';
-      name.textContent = layer.name;
+      name.textContent = panelLabel(layer);
       left.appendChild(icon);
       left.appendChild(name);
 
@@ -167,7 +264,8 @@ export class LayerPanel {
         }
       });
 
-      right.appendChild(count);
+      const readout = Boolean(this._rowControlsFor(layer.id)?.readout);
+      if (!readout) right.appendChild(count);
       right.appendChild(toggle);
       topRow.appendChild(left);
       topRow.appendChild(right);
@@ -187,30 +285,94 @@ export class LayerPanel {
         // that can also fail) pushes a re-render through this; nothing else
         // would repaint the row before its next scheduled refresh.
         const unsubscribe = this.subscribeRowControls(layer.id, () =>
-          this._refreshTogglePanel(),
+          this._scheduleRowControlsRefresh(),
         );
         if (unsubscribe) this._removers.push(unsubscribe);
-        const controls = document.createElement('div');
-        controls.className = 'data-toggle-controls';
-        this._bind(controls, 'click', (event) => {
-          const button = event.target?.closest?.('.data-toggle-chip');
-          if (!button || button.disabled) return;
-          // Re-read the live descriptor rather than trusting the rendered
-          // chip, so a stale row can never apply an inverted toggle.
-          const chip = this._rowControlsFor(layer.id)?.chips?.find(
-            (entry) => entry.id === button.dataset.chipId,
-          );
-          if (!chip || chip.disabled || !this.isEnabled(layer.id)) return;
-          if (typeof chip.onClick === 'function') chip.onClick();
-          else if (chip.params)
-            this.setLayerParams(layer.id, chip.params, { origin: 'user' });
-        });
-        row.appendChild(controls);
-        this._syncRowControls(controls, layer);
+        if (!readout) {
+          const controls = document.createElement('div');
+          controls.className = 'data-toggle-controls';
+          this._bind(controls, 'click', (event) => {
+            const button = event.target?.closest?.('.data-toggle-chip');
+            if (!button || button.disabled) return;
+            // Re-read the live descriptor rather than trusting the rendered
+            // chip, so a stale row can never apply an inverted toggle.
+            const chip = this._rowControlsFor(layer.id)?.chips?.find(
+              (entry) => entry.id === button.dataset.chipId,
+            );
+            if (!chip || chip.disabled || !this.isEnabled(layer.id)) return;
+            if (typeof chip.onClick === 'function') chip.onClick();
+            else if (chip.params)
+              this.setLayerParams(layer.id, chip.params, { origin: 'user' });
+          });
+          row.appendChild(controls);
+          // An ordered list below the chips, for a layer whose row carries a
+          // sequence (turn-by-turn directions). Its own delegated listener, its
+          // own container — the chip row stays a chip row.
+          const list = document.createElement('ol');
+          list.className = 'data-row-list';
+          list.hidden = true;
+          this._bind(list, 'click', (event) => {
+            const button = event.target?.closest?.('.data-row-list-item');
+            if (!button || button.disabled) return;
+            const item = this._rowControlsFor(layer.id)?.list?.items?.find(
+              (entry) => entry.id === button.dataset.listItemId,
+            );
+            if (item?.params)
+              this.setLayerParams(layer.id, item.params, { origin: 'user' });
+          });
+          row.appendChild(list);
+          this._syncRowControls(controls, layer, list);
+        }
       }
 
       this._toggleContainer.appendChild(row);
     }
+    this._refreshWeatherPanel();
+  }
+
+  _scheduleRowControlsRefresh() {
+    if (this._destroyed || this._cancelRowControlsRefresh) return;
+    const refresh = () => {
+      this._cancelRowControlsRefresh = null;
+      if (!this._destroyed) this._refreshTogglePanel();
+    };
+    if (typeof requestAnimationFrame === 'function') {
+      const frame = requestAnimationFrame(refresh);
+      this._cancelRowControlsRefresh = () => cancelAnimationFrame(frame);
+    } else {
+      const timer = setTimeout(refresh, 0);
+      this._cancelRowControlsRefresh = () => clearTimeout(timer);
+    }
+  }
+
+  /** Synchronously flush a pending row-controls refresh, including in tests. */
+  _flushRowControlsRefresh() {
+    if (this._destroyed || !this._cancelRowControlsRefresh) return;
+    this._cancelRowControlsRefresh();
+    this._cancelRowControlsRefresh = null;
+    this._refreshTogglePanel();
+  }
+
+  _refreshWeatherPanel() {
+    this._weatherPanel?.update(
+      this.getAll()
+        .filter(
+          (layer) =>
+            layer.enabled &&
+            [
+              'wind',
+              'weather-radar',
+              'weather-satellite',
+              'weather-lightning',
+              'weather-cyclones',
+            ].includes(layer.id),
+        )
+        .map((layer) => ({
+          id: layer.id,
+          icon: layer.icon,
+          ...this._rowControlsFor(layer.id),
+        })),
+    );
   }
 
   /** Qualify a loaded count when it does not mean items currently on screen. */
@@ -228,61 +390,91 @@ export class LayerPanel {
    * Chip BUTTONS are reconciled in place, keyed by chip id, rather than
    * rebuilt: this runs on every panel refresh — including the one the chip's
    * own click triggers — and replacing the node would drop keyboard focus
-   * mid-interaction. Legend entries hold no focus and no listeners, so they
-   * are replaced freely.
+   * mid-interaction. Legend entries are rebuilt only when their content changes;
+   * the info node is retained across refreshes.
    * @param {HTMLElement|null} container The row's `.data-toggle-controls` node.
    * @param {object} layer Registered layer entry.
+   * @param {HTMLElement|null} [listContainer] The row's `.data-row-list` node.
    */
-  _syncRowControls(container, layer) {
+  _syncRowControls(container, layer, listContainer = null) {
     if (!container) return;
     const controls = layer.enabled ? this._rowControlsFor(layer.id) : null;
+    if (controls?.readout) {
+      container.remove();
+      listContainer?.remove();
+      return;
+    }
     const chips = controls?.chips || [];
     const legend = controls?.legend || [];
-    container.hidden = chips.length === 0 && legend.length === 0;
+    const infoText = controls?.info;
+    this._syncRowList(listContainer, controls?.list || null);
+    container.hidden = chips.length === 0 && legend.length === 0 && !infoText;
 
-    for (const node of [...container.children]) {
-      if (
-        String(node.className).split(/\s+/).includes('data-toggle-legend-item')
-      )
-        node.remove();
-    }
+    const info = container._rowControlsInfo || null;
+    const firstLegend = container.querySelector('.data-toggle-legend-item');
 
-    const stale = new Map();
-    for (const node of [...container.children]) {
-      if (node.dataset?.chipId) stale.set(node.dataset.chipId, node);
-    }
+    syncChipGroup(container, chips, { before: firstLegend || info });
 
-    for (const chip of chips) {
-      let button = stale.get(chip.id);
-      stale.delete(chip.id);
-      if (!button) {
-        button = document.createElement('button');
-        button.type = 'button';
-        button.dataset.chipId = chip.id;
-        container.appendChild(button);
+    const legendSignature = JSON.stringify(
+      legend.map(({ label, color, count, blurb }) => [
+        label,
+        color,
+        count,
+        blurb,
+      ]),
+    );
+    if (container._legendSignature !== legendSignature) {
+      for (const node of [...container.children]) {
+        if (node.className === 'data-toggle-legend-item') node.remove();
       }
-      const state = chip.state || (chip.active ? 'active' : 'idle');
-      button.className = `data-toggle-chip chip-${state}${chip.active ? ' active' : ''}`;
-      if (button.textContent !== chip.label) button.textContent = chip.label;
-      button.title = chip.title || '';
-      button.disabled = Boolean(chip.disabled);
-      button.setAttribute('aria-pressed', chip.active ? 'true' : 'false');
-      button.setAttribute('aria-busy', chip.busy ? 'true' : 'false');
+      for (const item of legend) {
+        const entry = document.createElement('span');
+        entry.className = 'data-toggle-legend-item';
+        if (item.blurb) entry.title = item.blurb;
+        const swatch = document.createElement('span');
+        swatch.className = 'data-toggle-legend-swatch';
+        swatch.style.background = item.color;
+        const text = document.createElement('span');
+        text.textContent =
+          item.count == null
+            ? String(item.label)
+            : `${item.label} ${this._formatCount(item.count)}`;
+        entry.append(swatch, text);
+        container.insertBefore(entry, info);
+      }
+      container._legendSignature = legendSignature;
     }
-    for (const node of stale.values()) node.remove();
+    if (infoText || info) {
+      const node = info || document.createElement('div');
+      if (!info) {
+        container.appendChild(node);
+        container._rowControlsInfo = node;
+      }
+      const className = 'data-toggle-controls-info';
+      if (node.className !== className) node.className = className;
+      const text = infoText ? String(infoText) : '';
+      const title = controls?.infoTitle || '';
+      if (node.textContent !== text) node.textContent = text;
+      if (node.title !== title) node.title = title;
+      const hidden = !text;
+      if (node.hidden !== hidden) node.hidden = hidden;
+    }
+  }
 
-    for (const item of legend) {
-      const entry = document.createElement('span');
-      entry.className = 'data-toggle-legend-item';
-      if (item.blurb) entry.title = item.blurb;
-      const swatch = document.createElement('span');
-      swatch.className = 'data-toggle-legend-swatch';
-      swatch.style.background = item.color;
-      const text = document.createElement('span');
-      text.textContent = `${item.label} ${this._formatCount(item.count)}`;
-      entry.append(swatch, text);
-      container.appendChild(entry);
-    }
+  /**
+   * Render a row's ordered list (turn-by-turn directions).
+   *
+   * Each entry is a real `<button>` inside a real `<li>`, so Tab reaches it and
+   * Enter activates it with no key handling of our own, and the `<ol>` carries
+   * the ordering a screen reader announces. Items are reconciled in place,
+   * keyed by id, for the same reason chips are: this runs on every refresh —
+   * including the one a click on the list triggers — and replacing the node
+   * would drop keyboard focus mid-interaction.
+   * @param {HTMLElement|null} container The row's `.data-row-list` node.
+   * @param {{ariaLabel?: string, items?: Array<object>}|null} list Descriptor.
+   */
+  _syncRowList(container, list) {
+    syncRowList(container, list);
   }
 
   _refreshTogglePanel() {
@@ -314,8 +506,13 @@ export class LayerPanel {
         meta.textContent = this._buildMetaText(layer);
       }
 
-      this._syncRowControls(row.querySelector('.data-toggle-controls'), layer);
+      this._syncRowControls(
+        row.querySelector('.data-toggle-controls'),
+        layer,
+        row.querySelector('.data-row-list'),
+      );
     }
+    this._refreshWeatherPanel();
   }
 
   _buildMetaText(layer) {
@@ -362,6 +559,17 @@ export class LayerPanel {
           ? stats.loadingLabel.trim()
           : stats.coverage || ago;
       return `${stateLabel} · ${source} · ${detail}`;
+    }
+    if (feedState === 'partial') {
+      const { acceptedRowCount, rawRowCount } = stats;
+      const detail =
+        Number.isInteger(acceptedRowCount) &&
+        Number.isInteger(rawRowCount) &&
+        acceptedRowCount >= 0 &&
+        rawRowCount > acceptedRowCount
+          ? `${acceptedRowCount} of ${rawRowCount} records accepted`
+          : 'incomplete snapshot';
+      return `${stateLabel} · ${source} · ${detail} · ${ago}`;
     }
     if (feedState === 'stale') {
       const retry =
@@ -411,7 +619,17 @@ export class LayerPanel {
         : layer.enabled
           ? FEED_STATE_LABELS[feedState]
           : 'OFF';
-    button.setAttribute('aria-label', `${layer.name}: ${button.textContent}`);
+    const keyGuidance = layerKeyRequirementTooltip(layer);
+    // Name the missing key on the control itself: a row reading KEY REQUIRED
+    // without saying WHICH key leaves a dead control and no next step. Empty
+    // when the layer needs no key, or already has one.
+    button.title = keyGuidance;
+    button.setAttribute(
+      'aria-label',
+      keyGuidance
+        ? `${panelLabel(layer)}: ${button.textContent}. ${keyGuidance}`
+        : `${panelLabel(layer)}: ${button.textContent}`,
+    );
   }
 
   _formatCount(n) {

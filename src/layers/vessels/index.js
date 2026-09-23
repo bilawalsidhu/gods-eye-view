@@ -1,7 +1,7 @@
 import { createVesselState } from './state.js';
 import { createLifecycle } from './lifecycle.js';
 import { createIngestion } from './ingestion.js';
-import { createStore } from './store.js';
+import { createVesselSnapshotRenderer } from './snapshotRenderer.js';
 import { createRendering } from './rendering.js';
 import { createSelection } from './selection.js';
 import { createTracking } from './tracking.js';
@@ -16,8 +16,6 @@ export function createVesselLayer({ source, services, options = {} } = {}) {
   const layer = {};
   const context = { vesselState, services, parts, layer, options };
   parts.lifecycle = createLifecycle(context);
-  parts.ingestion = createIngestion(context);
-  parts.store = createStore(context);
   parts.rendering = createRendering(context);
   parts.selection = createSelection(context);
   parts.tracking = createTracking(context);
@@ -25,6 +23,32 @@ export function createVesselLayer({ source, services, options = {} } = {}) {
   parts.testing = createTesting(context);
   parts.evidence = createEvidence(context);
   parts.queries = createQueries(context);
+  parts.snapshots = createVesselSnapshotRenderer({
+    state: vesselState.state,
+    records: vesselState.state.records,
+    rendering: parts.rendering,
+    tracking: parts.tracking,
+    selection: parts.selection,
+    cards: parts.cards,
+  });
+
+  parts.ingestion = createIngestion({
+    feed: vesselState.state.feed,
+    readSource: () => vesselState._source,
+    readViewer: () => vesselState.state.viewer,
+    getRowLimit: parts.rendering.renderRowLimit,
+    readCount: () => vesselState.state.records.all.length,
+    applyRows: parts.snapshots.reconcileVessels,
+    classifySnapshot: parts.queries.classifyAisFeedSnapshot,
+    isDefinitiveTransportFailure: parts.lifecycle.isDefinitiveTransportFailure,
+    isGraceEligibleTransport: parts.lifecycle.isGraceEligibleTransport,
+    markUnavailable: parts.lifecycle.markAisUnavailable,
+    settleFirstConnect: parts.lifecycle.settleFirstConnectPhase,
+    now: () => vesselState._aisRuntime.now(),
+    setSourceLabel: (source) => {
+      layer.source = source;
+    },
+  });
   Object.assign(
     layer,
     parts.queries.methods,

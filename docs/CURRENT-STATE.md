@@ -1,5 +1,394 @@
 # God's Eye View Current State
 
+Wind appears in the Weather group before Utilities. The surface-weather prototype
+uses keyless NOAA GFS or ECMWF IFS forecasts on an approximately 1° display grid.
+It defaults to 10 m wind trails over the existing basemap. Speed shading is an explicit choice; earlier v2 links retain their original speed-shading meaning.
+Weather rows contain only the toggle and source/meta line. Configuration lives
+in each WEATHER card's Settings section: model, No color field, Speed, Pressure,
+Temperature, wind units, Pause/Resume and **Inspect center** for wind; coverage,
+image treatment and opacity controls for observed products. Cyclone cards carry
+a Storms section whose entries select and fly to the advisory, plus the official
+advisory link. Settings and Storms default closed; disclosure choices last for
+the page session.
+
+Inspect center adds an open Reading section to the wind card with captured
+coordinates, interpolated wind speed and meteorological direction, selected
+scalar, model, valid time and freshness. Clear reading removes the sample and
+map marker. Model/field changes or refresh also clear them. Unit chips reformat
+the captured sample without resampling or moving its marker. There is no separate
+floating reading surface. The card shows forecast issue and valid times; the
+observed-history timeline labels the oldest and newest available ticks. Animation
+moves through a fixed forecast; it does not advance forecast time.
+
+Temperature is air temperature at 2 m in °C; pressure is mean sea-level pressure
+in hPa. Optional companion fields come from the same model run/forecast as the
+wind. A missing or invalid companion leaves usable wind visible and identifies
+the selected field as unavailable. The color texture drapes the globe basemap; on
+photorealistic 3D Tiles the same 360×181 raster is a raised shell 5 km above the
+ellipsoid. With GPU rendering, the color field fades out below ~1,200 km camera
+height and is hidden at or below 200 km. Globe imagery keeps the smooth
+per-frame fade. On 3D Tiles, the shell alpha is quantized to 0.1 steps and
+updated only on camera move end, installation or rehome.
+GPU wind curves follow the sampled forecast field. Their 12 km display lift is a
+rendering aid; the source remains 10 m wind,
+not a forecast at the displayed height or a street-level observation.
+
+The renderer owns field installation, scalar imagery and the animation lifecycle.
+It bakes at most 7,200 curves (1,200 below 700 px) with at most 33 geographic points each on the CPU
+when installing a wind field, then advances a GPU phase along those curves
+without CPU projection of every point on every frame. Regional 30° batches are
+culled against the horizon and view frustum each frame, including when the globe
+is hidden; curves fade below 60 km and disappear at 15 km. Animation stops when
+no batch is visible and resumes on camera events. A canvas renderer remains
+available as a fallback. Pause and reduced-motion mode show a static flow view
+without an idle animation loop; hidden tabs suspend animation, and
+disable/destruction releases owned rendering
+resources and subscriptions. The globe relief helper is enabled with Wind and
+released when Wind is disabled. It uses terrain vertex normals
+for view-directed shading, falling back to global globe-curvature shading when
+normals are unavailable; the fallback does not show local hillshade. Neither mode
+adds elevation data or represents sunlight. Relief declines to replace an
+existing globe material, restores the prior empty material only while still
+owning it, and leaves later owners intact.
+Source acquisition retains deadlines, body budgets, disconnect cancellation,
+per-model/field singleflight caching and one-minute failure backoff. Application
+catalog construction owns each instance.
+
+Wind animates one forecast without advancing forecast time. Separate Weather
+observation layers provide radar and satellite history; none claims measured cloud volume.
+Weather imagery drapes onto the globe basemap. On photorealistic 3D Tiles each
+observed product is instead a raised, translucent shell: one rectangle over the
+product bounds at a fixed height (global infrared 5.5 km, regional infrared
+5.8 km, radar 6.2 km, lightning 6.6 km) showing one full-extent image per frame.
+Draping onto 3D Tiles was limited by Cesium's per-primitive texture budget and
+rebuilt every tile's coverage on each change; shells avoid both and show at any
+camera height. Shells draw first in the opaque pass, in height order,
+alpha-blended without depth writes: lightning draws over the other products,
+other map content draws over the shells, and shells are not pickable. A
+map-source change tears down one renderer and restages the shown observation on
+the other. A map without an imagery host pauses history while metadata refresh
+continues, then resumes when a host returns.
+Globe tiled products use 256 px tiles to maximum level 6. The tile proxy accepts
+size=256 (default), 512 or 1024 and keys cached bytes by size, retaining the
+24-hour immutable response and eight upstream slots. The image proxy serves every
+product as one whole-extent PNG at its advertised bounds, up to 4096×2048 for
+radar, regional infrared and lightning and 2048×1024 for global infrared
+(`size=W×H`, default the maximum), capped at 16 MiB and cached by product, time
+and size. NOAA returned each of these sizes from a single request in a live
+check; the WMS capabilities advertise no size maximum. Devices whose texture
+limit is below the product size request halved images.
+On 3D Tiles, each shell except global infrared also draws a detail window: the
+shell's own surface samples a second, 4096×2048 image of the area around the
+view inside that window, so the two images share one mesh and never blend. On
+camera move end and host switch the window is centred on the camera's ground
+footprint, max(2 × its longitude span, 6°) wide and half as tall, on a 0.5° grid
+inside the product bounds. It is used only while narrower than half the
+product's longitude extent and while the view overlaps the product; it moves
+only when the view centre leaves its inner half or the span changes by more
+than 50 %. A window applies once its image has drawn; until then the
+full-extent image covers it. A new frame swaps the full-extent image first and
+keeps the previous detail image until the new one decodes, over at most one
+newer frame; a moved window hides until its image arrives. Global
+infrared contrast depends on the requested extent, so it keeps one image. The
+image proxy accepts `bbox=west,south,east,north` for every product: inside the
+product bounds, 2:1 within 1 %, rounded to 0.25°, up to 4096×2048 (the
+default), cached by product, time, size and bbox. Diagnostics report
+`shell.detail` (`bbox`, `size`, `ready`, `enabled`).
+Clouds only applies a soft brightness ramp to decoded pixels once, using
+Cesium's sRGB-to-linear conversion (`channel ** 2.2`) and smoothstep from 0.40
+to 0.70. The old 0.55 threshold is the ramp midpoint. RGB and source alpha are
+preserved in Full image mode; both modes use the chosen layer opacity. This
+is a display filter, not a cloud mask. Satellite share links retain the display
+mode; observation history remains transient and links open latest.
+Global infrared fetches one capped 4 MiB, 2048×1024 mosaic per frame and decodes
+and processes it before staging. Globe hosts crop that canvas into 256 px tiles
+to maximum level 3 on a geographic 2×1 root grid bounded to the manifest extent,
+avoiding request-dependent contrast seams.
+On globe hosts, regional infrared retains network tiles and processes each
+decoded tile once; shells process each whole frame once.
+Exact-time tile and image responses are immutable for 24 hours; manifests and
+errors remain uncached. Each globe renderer retains up to 6 processed global
+mosaics in a least-recently-used cache keyed by observation time and infrared
+mode (up to 48 MiB of canvas pixels). Each shell keeps decoded full-extent and
+detail images in one least-recently-used cache bounded at 128 MiB, keyed by
+time, mode and window: the shown frame and the warmed next frame, each
+full-extent and detail; nothing older survives them. Disable clears the caches.
+Cache hits skip
+fetch/decode and report `mosaic.cached: true` with zero decode time.
+During playback, a successful frame warms the next advertised observation,
+wrapping at the end. Global imagery warms a decoded frame and shells warm the
+next frame and its detail window; globe tiled
+products fetch at most eight level-0/1 tiles intersecting the view and product
+bounds. Prefetch is best effort, has a deadline, and cancels on frame
+replacement, pause, suspension or clear. Diagnostics expose the renderer
+(`host`), mosaic count and active prefetch state.
+Browser cache reuse and scrub-back latency still require browser verification.
+On globe hosts a replacement becomes visible before the previous layer retires
+on the next rendered frame; a shell keeps its previous texture until the new
+image is uploaded. Failed acquisition or staging retains the previous
+observation. Imagery ordering skips already ordered layers. Diagnostics expose
+the infrared mode and mosaic fetch/decode state.
+Throttled weather requests (429/503) get at most three retries per tile within
+a frame, independent of other tiles; successful requests reset only their own
+counter, and closing a frame clears its retry state.
+Mapped.earth's public bundles informed the rendering study; no code or assets
+were reused, and the study found no application licence granting reuse. Native
+hardware GPU behavior remains unverified; software-rendered checks do not
+establish native GPU performance or compatibility.
+
+The right-rail WEATHER panel owns active-product readouts, coverage badges,
+legends and the single observed-history timeline. The timeline appears with an
+active observed layer and at least two union times; wind alone does not show it.
+Dragging previews UTC and age locally and coalesces clock commits at 150 ms;
+release commits immediately. Latest selects the newest frame per product, and
+history labels the actual displayed frame as synced or nearest. Missing-frame
+messages use each product's eligibility gap (30 minutes, or three hours for the
+global mosaic). Wind shows forecast valid and issue times and does not follow
+history. Satellite clouds uses Clouds only / Full image configuration labels.
+
+Left weather rows retain only the toggle and one status line with a source
+tooltip. Configuration and the cyclone Storms list live in the cards, as do the
+cyclone advisory, position time, wind, pressure, geometry status and the
+official advisory link. The panel hides when empty, auto-expands once per page
+session and then preserves the user's collapsed state. Status lines reserve their space and refreshes are coalesced
+per frame. Generic keyed rail cards and the native rail timeline preserve DOM
+nodes and avoid identical writes; the weather panel owns descriptor mapping.
+Inspection emphasizes the chosen scalar and marks the exact sampled location;
+the passive marker follows that snapshot, respects globe occlusion and disappears
+on dismissal, field/model changes, disable or teardown. Clean view and
+recording mode hide weather presentation with the other controls. Scalar changes
+reuse native wind geometry when the model, issue/valid time, grid and U/V values
+are identical; new or revised wind still rebuilds. Source and renderer clocks
+remain independent of the shared Cesium clock.
+
+Weather also offers default-off lightning density and cyclone advisories.
+Lightning uses NOAA/NWS nowCOAST's public derived 15-minute density product from
+Vaisala NLDN/GLD360, with ten-minute metadata refresh and exact source times.
+Coverage is the Americas/Pacific (110°E across the dateline to 0°, 25°S–80°N),
+not worldwide detections; units are strikes/km²/min ×10³. It is neither raw GLM
+flashes nor a live strike counter. Weather imagery orders scalar context below
+satellite, radar and lightning consistently across enable and history order.
+
+Cyclones combine fixed NHC/CPHC status and summary GIS endpoints through a bounded
+same-origin provider. The status endpoint lacks browser CORS; each installation
+fetches keyless public sources at runtime, with no centralized ingestion service.
+The five-minute snapshot covers Atlantic and eastern/central North Pacific only.
+Current positions, advisory issue time and position time stay distinct. Tracks,
+forecast lead-hour points and cones render only when all source parts match the
+status advisory; a newer status shows its position with geometry pending rather
+than relabeling older geometry. The cone represents forecast center uncertainty,
+not storm size or the full hazard area. Successful empty and unavailable states
+are distinct. One owned native Cesium data source preserves polygon holes and
+geographic seams and releases on disable; forecast animation is not implied.
+Cyclone markers, labels, tracks and cones are hidden beyond the horizon on every map source.
+Consult the linked official advisory for safety decisions.
+
+Voice and HUD snapshots reuse the existing feedState classifier. Analyst follow-ups retain their original data provenance; current-view results append provenance without replacing legacy fields. HUD context and deterministic telemetry include non-nominal feed state.
+
+Satellite and local infrastructure layers expose on-demand analyst records through their current factory owners. Analyst counts and ranks explicitly cover only bounded examined loaded records (default 2,000 per new layer, core satellite rows before dense extras); omitted records can change nearest/count and satellite distance is ground distance. Existing tools and result fields remain available.
+
+AIS encodes speed over ground in 0.1-knot units and course over ground in
+0.1-degree units, reserving the top code of each field for "not available", so
+those reports arrive as 102.3 knots and 360 degrees. Both are stored as unknown,
+and vessel cards, the HUD and analyst queries show a missing measurement rather
+than a reading. Heading keeps its existing separate check for its own sentinel.
+Genuine readings are unchanged, including a stopped vessel's zero and the
+highest speed and course the fields can encode.
+
+Native `<select>` controls declare a dark colour scheme and explicit option
+colours, so the browser-painted option list matches the panel it drops out of.
+The scheme is declared on the controls rather than on the document root, so
+hand-tuned scrollbar and text-input skins are unchanged. Applies to the HUD
+layout, Scenes, CCTV camera, Radio filter and Draw colour menus.
+
+Vessel snapshot completeness is separate from freshness. A current snapshot with
+rejected or duplicate records shows PARTIAL with accepted/received counts; stale
+or unknown freshness and transport failures retain their warnings. Partial
+snapshots still retain missing contacts within the existing age and row limits.
+A complete successful snapshot clears the partial indicator.
+
+Director imports now open a non-mutating preview before Apply. EDIT DETAILS
+authors validated anchor, camera, pack and interaction drafts; SHARE SCENE exports
+a selected scene or a bounded bundle of explicitly chosen pack files. Bundled
+bytes remain in memory until replacement/teardown and require reimport after a
+page reload. Stop releases rendering while retaining replay bytes. Cancellation
+and stale drafts cannot replace newer project state. See [authoring and sharing](DIRECTOR-SHARING.md).
+
+Director version-6 documents add bounded, scene-local feature actions. Settled
+LOAD/seek exposes keyboard-accessible text/source cards, anchor focus, explicit
+shot transitions and admitted layer state changes. Pointer claims take priority;
+Stop/replacement/teardown cancel pending actions and release handlers and UI.
+Same-shot seeks rebuild selected packs and restore declared layer baselines.
+See [scene actions](DIRECTOR-INTERACTIONS.md). Existing scenes/assets and credit remain.
+
+Director version-5 documents add scene-local data-pack manifests and per-shot
+selection. Registered sources acquire bounded, cancellable assets separately from
+GeoJSON, PNG and manually played media presentation. Storage paths, attribution
+and geographic placement remain distinct; Stop/replacement releases resources.
+Import acquires nothing. See [data packs](DIRECTOR-DATA-PACKS.md). Existing scene
+content, assets and credit remain unchanged.
+
+Director version-4 documents add named geographic anchors and optional explicit
+camera moves with easing, duration and holds. Playback and seek share one
+coordinate sampler; navigation/manual input revokes authored motion and pending
+holds. Anchor heights and explicit endpoints require the WGS84 ellipsoid
+reference. Legacy projects retain their ordinary flights, content and edits.
+See [camera directions](DIRECTOR-CAMERA.md).
+
+Realtime voice composes separate connection, response/tool, Radio handoff, input
+and audio-meter, cost, viewport-context and diagnostic owners. The existing
+controller exports and session/backend contracts remain available. Tool protocol,
+response wording, push-to-talk timing, model preferences and Radio confirmation
+order are preserved. Stopped connections, stale offers and delayed captures cannot affect a
+replacement session; audio meters release failed initialization and reject revoked
+frames. Delayed action results and post-capture continuations cannot resume a
+stopped conversation or send output into a replacement. See [voice ownership](VOICE-OWNERSHIP.md).
+
+The application shell composes focused state owners for navigation, destination
+lookup/orbit, Cockpit, visual settings, panel layout, aircraft display and layer
+bindings. Keyboard/display subscriptions have a separate lifetime; existing
+layer, scene and voice methods remain available through a delegation facade.
+Disposal settles pending globe resets and removes camera-entry listeners before
+asynchronous restoration; replacing a manager detaches its old Directions
+services. See [UI ownership](UI-OWNERSHIP.md).
+
+Director's ordered shot runner is exported independently of rendering, UI,
+storage and scene content. The existing scene controller supplies an adapter for
+visual/layer state, camera travel, media holds and release. Playback cancellation,
+preview cleanup, saved projects and all scene assets/attribution are preserved.
+Pure authored-time/seek calculations and a playback clock now own timing,
+hold deadlines and subscriptions. Stop immediately clears timers and settles
+holds; stale tick callbacks cannot publish into a replacement. Registered pack
+rules own presentation overrides and Nepal map fallback without changing saved
+shots or content. Scene-document validation and legacy migration now have separate
+owners. Invalid imports preserve the current project; unreadable saved projects
+are protected from fallback writes. Version 6 is the export format, with
+zero pitch, low camera heights, scope and detection edits preserved. See [the document contract](SCENE-DOCUMENT.md);
+see [Director](DIRECTOR.md) for camera, pack, action and sharing support.
+
+Search framing and annotations request semantic map features from an explicit source. The Overpass adapter owns bounded queries, member/tag decoding and request deadlines; callers retain candidate ranking, outline caching, deferred retries and scene placement. Empty, transient and throttled outcomes remain distinct. Traffic sources return road records and installation sources return mapped records with freshness/saturation metadata, so their layers no longer decode upstream elements. ALPR already normalizes its records in the source. Default providers, footprints, road directions, exact-viewport retries and source attribution are unchanged.
+
+Nepal media preloads survive repeated camera-flight updates, but Stop, event disable and replacement remove abandoned frames and revoke pending Facebook sessions. Fallback evidence-card clicks respect the shared drawing-tool pointer lease.
+
+In the Pinokio browser shell, Nepal provider embeds and hidden preloads are
+disabled before creating frames or loading provider SDKs, because the shell can
+redirect iframe navigation to an external browser. Existing source-linked cards
+remain available, and Open Original is an explicit action. Optional approved
+local clips still use the existing fallback; the public pack bundles no witness
+clips. Chrome and Safari retain embeds even when visiting a Pinokio-launched
+server. This compatibility fallback does not repair Pinokio's navigation handler.
+
+Nepal flood lines classify the active terrain or photoreal surface, and the surge marker follows that surface. Geographic route coordinates are unchanged; dynamic lines do not rely on unsupported depth-failure materials. Later media-only shots keep their completed source-path history throughout arrival and card reveal.
+
+Scene Stop, replacement, seek, and teardown revoke the Upper Valley locator's delayed camera approach and orbit while preserving its visible callout. A revoked timer or camera callback cannot start another flight or interfere with a newer shot.
+
+Nepal scene ownership follows the parameters prepared by the public layer manager before activation, without depending on enable-time origin metadata. Enabling a scene beat preserves its selected map and camera; passive restoration does not schedule standalone playback.
+
+Animated scene cards sample their optional scale, opacity and leader callbacks once per projected frame. A failed callback suppresses that frame and can recover on the next one; ordinary layers keep the shared projection path without animation evaluation.
+
+Nepal Flood Incident is accessed through Scenes. Its flood and locator components remain registered for scene playback but are hidden from the Data Layers menu. Closing the event stops the active scene, including pending loads and media. The default catalog does not install a separate reconstruction scene; existing saved scenes remain untouched.
+
+Double-click a shot name to edit it inline. Enter or moving focus saves a nonempty name, Escape cancels, and saved names persist with the scene project.
+
+The Nepal overview route and lake-shot trail share the river-centerline starting point nearest Debris-Dammed Lake. No earlier upstream section is included; evidence pins remain separate from the schematic river geometry.
+
+The event panel omits the WITNESS shortcut. Shot media, source attribution, Open Original links and corridor navigation remain available.
+
+The Mailung Bazzar, Dandaguan YouTube embed follows the provider's playback clock through 0:07, then the scene advances after its 0.65-second media exit. The controller reconciles provider state and source time when the API attaches and while waiting for playback, including missed PLAYING notifications and an already-ended clip. Startup is bounded to five seconds, and stalled playback has a bounded timeout; unavailable or blocked media cannot strand the scene. When the host deliberately suppresses provider playback and there is no approved local clip, the source card instead uses the authored 7.65-second dwell before the next shot. The authored estimate replaces older saved holds at runtime without rewriting them. Autoplay requires transient Director ownership from Play Scene or Play Shot; LOAD, restoration and seek remain passive. Stop, replacement and teardown revoke that ownership and pending playback callbacks.
+
+Persistent media-led Nepal shots preserve their completed upstream flood path during camera travel. The next reach still reveals after arrival; direct loads reconstruct the prefix and backward replay trims downstream history.
+
+Repeated map-stack requests retain the live imagery layer when its provider is unchanged. Scene handoffs keep loaded tiles while real source changes, switch cancellation, and tile-error fallbacks retain their existing behavior.
+
+Nepal Flood Incident is available in Scenes, with a 25-shot sequence, geographic labels, an event panel, scene scrubbing and shot playback. Comparison shots use Esri beneath Vantor imagery. Other Nepal shots use Google 3D when its tileset is available and fall back to Esri otherwise; without an ion token, the existing map stack uses Re:Earth terrain. Saved shots retain their authored camera and map preferences across keyed and keyless runtimes. The bundled pack contains historical 2021 and post-event 2026 imagery, not an isolated before/after measurement; the animated flood path is schematic, not a hazard model. Witness media opens or embeds original sources without bundled clips. See `public/events/bhote-koshi-2026/README.md` for provenance and non-commercial data terms.
+
+Transit snapshot and selected-history reads use an explicit source interface. The standalone source selects the existing routes; rendering, playback and selection retain their existing owners. A portable request service owns registered-feed admission, bounded decoding, cache/revalidation, backoff and history; development and preview use the same thin adapter. Compatibility exports and source attribution are preserved.
+
+Place search accepts an explicit Nominatim provider with independently configured search and reverse endpoints. The default offline/Google/Photon/local-fallback order is unchanged when no provider is selected. Provider adapters share normalized coordinates, viewport framing and reverse labels; roads and boundary geometry remain separate services. Portable capped-response and Overpass lexical helpers are exported independently of the Node server.
+
+Reference feed construction is exported through `sources/reference`; the cable source also has a dedicated `layers/submarine-cables/source` entry. Standalone catalog compatibility remains available. Source choices, data and attribution are unchanged.
+
+Source factories have dedicated `layers/<family>/source` exports. ALPR and earthquake record normalization and CCTV source policy no longer pull rendering into source consumers. Catalog construction and voice feed reads use their focused owners; compatibility entries remain available. Settings filesystem hardening lives under `server/standalone/`. Import-direction checks complement export ownership checks; source behavior, settings policy and rendering are unchanged.
+
+Voice controls bind to a protocol-independent session factory. The default WebRTC adapter preserves the existing Realtime connection, push-to-talk, cost controls and radio handoff. Session subscriptions expose state, transcript, action call/result, interruption and completion events; stopping or replacing a session cancels pending actions. Alternate adapters can use the same controls and action runner.
+
+Voice action argument schemas have one portable owner under `src/voice/actionSchemas.js`. The Realtime provider builds 29 tools, retaining the existing 28 names and argument contracts apart from the three additive analyst-layer enum values using separate description-only metadata. Description customization cannot replace argument types, enum values or required fields.
+
+Portable source exports provide Radio Browser station normalization, CCTV feed types and regional records independently of HTTP middleware. Radio normalization accepts an explicit URL policy; the standalone directory retains its existing HTTPS rules. Tile coordinate validation accepts explicit zoom bounds with unchanged traffic defaults. Cache, request and rendering owners remain unchanged.
+
+Vessels separate plain, stable MMSI records and source acquisition from scene
+resources. The renderer owns geometry and billboards; cards, picking and trails
+resolve those resources through it. Partial-feed retention, selected-vessel
+pinning, first-position grace, source time and sea-surface placement are unchanged.
+
+Military flights also separate portable records and source acquisition from
+Cesium snapshot application. The metadata owner retains aviation feet, source
+fix times, sticky fields and partial-feed retention. Rendering retains ground
+model ownership, motion history, military registration and tracking cleanup.
+
+Civil flights separate source acquisition, portable record reconciliation and
+scene application. The record owner keeps sticky metadata, geoid cache and
+bounded missing-poll state; ingestion owns cancellation, source freshness and
+backoff. The snapshot renderer owns Cartesian history, billboard/model changes
+and follow transitions. Aviation altitude remains separate from render height;
+partial retention, military suppression and ground-sampling policies are unchanged.
+
+The UI facade composes separate owners for navigation authority, share restoration,
+visual settings and panel chrome. Navigation owns request generations and follow
+handoff; restoration owns its coordinator, deferred notices, gestures and timer;
+visual settings own style/detection overrides and sensor cleanup; panel chrome
+owns disclosure, docking and Cockpit panel snapshots. Each takes explicit
+operations and reads instead of the complete shell. Existing controls, share
+formats and one-application-per-page behavior are preserved.
+
+Layer lifecycle transactions are owned by `data/lifecycle`, which has no panel,
+render-governor or detection imports. Application composition mounts a separate
+layer presentation owner that reacts to status, accepted visibility/parameter
+changes and non-throwing updates. Rejected partial updates still invalidate the
+rendered detection set. The legacy manager retains panel helper compatibility;
+registration sealing, restoration order and failed-transition rollback remain
+unchanged.
+
+Application scene setup owns request services, terrain/floor caches and annotation
+lookup state. Controls, layers and voice share those owners, and cancellation
+clears caches and removes map-stack listeners. Standalone setup supplies the
+existing service clients. HUD summaries, regional brief, cockpit weather, location
+framing and annotation boundaries receive their service instances explicitly.
+Compatibility entrypoints retain defaults for direct callers; normal startup does
+not change global service slots. Analyst follow-up memory belongs to its voice runner.
+
+Application startup constructs fresh layer instances from explicit source objects.
+Standalone composition selects the existing providers. Controls, launch orbit
+lookups, Contacts voice answers and ISS pass queries use the registered catalog.
+Aircraft classification is catalog-owned and cancelled with application teardown;
+scene engines still support one application per page. Compatibility data entrypoints
+remain for direct callers, but normal startup does not configure global sources.
+
+Application data setup receives an ordered layer catalog and serialization metadata.
+Controls use the same instances. The standalone composition selects the existing
+default catalog, and restoration starts only after all registrations are sealed.
+
+The `sources/firms-csv` package export exposes existing FIRMS CSV parsing and
+UTC acquisition-window helpers without Node middleware or rendering dependencies.
+The standalone FIRMS provider, source defaults and parsing behavior are unchanged.
+
+CLI tools and development launchers accept `GEV_PROJECT_ROOT` to select the project environment, dependencies and output directory. Their default remains this checkout; bundled tool resources and source checks stay relative to the script installation. The setup doctor also accepts an explicit `rootDir`.
+
+Application composition now uses shared scene/control/catalog/tool constructors and allowlisted HTML component templates. The standalone entry supplies settings and the default sources. Terrain, boundaries, weather, regional context and summaries use configurable services; renderer/action owners remain page-scoped. Annotation proximity guards remain on by default and allow distant targets only for explicit navigation.
+
+Voice controls compose a supplied action runner and connection controller.
+Realtime token and SDP requests live in a configurable backend, with independent
+transports and cancellation through response parsing. Stop and application
+teardown abort pending connections; reconnect requests a new client secret.
+Microphone, radio handoff, tool schemas and default model behavior are preserved.
+
+Geospatial lookups are composed through `src/search`: forward/reverse geocoding,
+text/nearby search and routing use configurable providers/endpoints. Annotation,
+HUD and voice consumers share the configured service. Existing Google/Photon
+selection, route/direct-line honesty and tool schemas are preserved. Node
+Google, OSRM and Nominatim adapters accept trusted construction-time configuration;
+request parameters cannot choose arbitrary upstream URLs. See APPLICATION.md.
+
 The optional **ALPR Cameras** layer shows community-mapped OpenStreetMap locations,
 not camera footage or plate records. City-scale queries use the existing Overpass
 provider, with capped results, retry, cached-data and incomplete-coverage notices.
@@ -10,8 +399,15 @@ registration supplies selection, picking, terrain and
 render services. Selected cards and Data attribution identify OpenStreetMap.
 Layer state and the existing voice layer tools include `alpr-cameras`.
 The row count explicitly says **nearby**: loaded records can be outside the
-screen. A purple-dot legend identifies the fixed 8-pixel markers (12 pixels when
-selected). **SHOW NEAREST** frames and selects the nearest loaded camera; it is
+screen. Cyan camera badges use Manjunath's camera artwork; selection switches to a
+larger coral badge with corner brackets and an animated tactical card. Numeric
+mapped bearings draw illustrative 90 m direction wedges (not measured coverage).
+The shared overlay paints gradients for at most 64 nearby cameras, promoting the
+selected camera; farther cameras retain native Cesium badges and ground-clamped
+wedges. Unknown bearings never acquire a wedge. Asset URLs resolve relative to
+the reusable layer, and the caller supplies overlay and map-stack services.
+The ALPR row uses the same header layout as other data layers. **SHOW NEAREST**
+frames and selects the nearest loaded camera; it is
 disabled with no loaded cameras or while following a tracked entity. This action
 chooses from the current source snapshot and uses rendered surface height from
 3D tiles or globe terrain when available.
@@ -96,7 +492,6 @@ Selection changes, disable and destruction cancel pending trail requests; late
 responses cannot refill a cleared or replacement trail. Heading and course,
 sea-surface placement, click ownership and card selection policy are unchanged.
 
-
 ## Military-flight components and aircraft mechanics
 
 `gods-eye-view/layers/military` exports `createMilitaryFlightLayer`. It uses the
@@ -153,7 +548,6 @@ messages; arbitrary HTTP response bodies are not surfaced as diagnostics.
 Sources receive cancellation signals and check them after body parsing. The
 layer's existing lifecycle and selection guards continue to reject late work.
 
-
 ## State and action outcomes
 
 Share preferences, place lookups and Scene playback expose immutable snapshots
@@ -202,7 +596,6 @@ retained Cockpit actions cannot restart a disposed controller. Input, subscripti
 and queued panel work stop before asynchronous layer restoration; final camera
 and portal cleanup follows that restoration.
 
-
 ## Context coordination
 
 Context controls own Contacts/Space Missions state, entry and exit transactions,
@@ -211,7 +604,6 @@ installations search and camera/panel actions. Tab listeners and pending
 presentation work stop during disposal; layer restoration retains its existing
 compensation and latest-intent rules. Clear Selected Layers shares this owner,
 so an older restore cannot replay over a newer Clear action.
-
 
 ## Camera panel ownership
 
@@ -222,7 +614,6 @@ Changing cameras invalidates old image callbacks and cancels an unfinished
 calibration edit. Failed refreshes preserve settled pixels for the same camera,
 while a newly selected camera never shows the prior camera's image. Disposal
 releases listeners, subscriptions, image handlers, summary timers and chip-hide timers.
-
 
 ## UI disposal
 
@@ -265,7 +656,6 @@ and result presentation. Existing search providers and camera handoff policy are
 preserved. Replacing or closing a POI row cancels its pending expansion frame;
 destruction releases listeners, pending searches and the orbit indicator.
 
-
 ## Layer panel ownership
 
 Layer rows, feed feedback, counts, focus-preserving chips and toggle listeners
@@ -273,7 +663,6 @@ are owned by a renderer-free panel component. The layer manager supplies current
 snapshots, lifecycle actions and row descriptors. Remount and teardown remove
 listeners and row subscriptions; obsolete completions do not repaint old rows.
 The clear control presents busy state while its existing action owns the transaction.
-
 
 ## Map Source control ownership
 
@@ -326,7 +715,6 @@ panel, and honors keyboard focus on the right. Mobile layout still releases
 desktop allocation styles. Stable Display allocation avoids unnecessary style
 writes. This extraction does not change panel positions or layout defaults.
 
-
 ## Surface keyboard lifecycle
 
 `ui/surfaces` owns the capture-phase keyboard listener, Tab cycling and return
@@ -338,7 +726,6 @@ preferences. Provider Settings retains its existing visibility and save policy.
 Initial focus, transitions and DOM content remain with each screen. This
 component does not add modal semantics or make the map inert.
 
-
 ## Panel disclosure lifecycle
 
 Panel collapse buttons, nested Escape handling and dock hover/focus timing now
@@ -347,7 +734,6 @@ state changes and content focus. Panel layout, saved state, share restoration,
 Location draft cleanup and Map Source selection remain with their existing
 callers. Listener and timer cleanup is synchronous when controls are replaced
 or disposed, preventing old hover or focus work from changing a later view.
-
 
 ## Military feed cooldown and loading guidance
 
@@ -361,7 +747,6 @@ positions or reporting a failed load. Fresh responses clear that stale state.
 Mapped-installation zoom guidance appears in the layer row without counting as
 a global loading failure. Guidance statuses do not suppress independent refresh
 errors.
-
 
 ## Places and CCTV request bounds
 
@@ -377,13 +762,12 @@ responses are cancelled. Buffered snapshots have a 16 MiB streaming cap; an
 oversized image remains an upstream miss and uses the normal fallback chain.
 The existing declared media size ceiling remains 64 MiB.
 
-
 ## GBFS upstream bounds
 
-GBFS refuses upstream redirects and enforces its 5 MiB response cap while
+The station reader addresses the proxy as `/api/gbfs/<encoded feed URL>`; the
+feed address is read from the path, and a query-string form is refused with a 400. GBFS refuses upstream redirects and enforces its 5 MiB response cap while
 streaming. The 12-second deadline includes reading the body, and rejected or
 stalled downloads are cancelled. Development and preview use the same handler.
-
 
 ## Remaining local service modules
 
@@ -416,7 +800,6 @@ Credential editing (`/api/setup/*` and Provider Settings) is development-only;
 preview returns JSON 404 for those endpoints. Server credentials come from the
 local environment; browser keys are captured at build time. Rebuild after changing
 a browser key. Preview is for local build verification, not a production server.
-
 
 ## CCTV and radio provider modules
 
@@ -510,7 +893,6 @@ missing-key count. Existing server keys and the single-key fallback remain
 supported. `.env.example` and `pinokio/_ENVIRONMENT` document both entries.
 The Street View headings tool uses the same server-first selection after
 resolving environment overrides per variable; its explicit `--key` wins.
-
 
 ## Infrastructure marker visibility
 
@@ -631,7 +1013,7 @@ Non-object or array-valued properties reject the response instead of being treat
 
 Launch payloads with missing records now say PAYLOAD DATA UNAVAILABLE. Missing names use Unnamed payload; absent or invalid mass stays unknown instead of appearing as 0 KG.
 
-Updated: August 24, 2026
+Updated: September 15, 2026
 
 ## Aircraft and vessel server modules
 
@@ -648,7 +1030,6 @@ plugins and shared request helpers. Importing it starts no sockets or timers.
 The existing aircraft normalizer is separately available through the portable
 `gods-eye-view/sources/adsb-lol` export. Provider URLs, local credentials, cache
 policy, fallback behavior, response shapes and rendering remain unchanged.
-
 
 ## Control names for assistive technology
 
@@ -699,7 +1080,13 @@ fetching, trailing-24-hour filtering and partial-success caching are unchanged.
 > is present — everyone gets the same tile.
 >
 > Keyless, the honest surface is the **layer row**, which reads
-> `UNAVAILABLE · NASA FIRMS · LIVE · KEY REQUIRED`, and the earthquakes half
+> `UNAVAILABLE · NASA FIRMS · LIVE · KEY REQUIRED`. Its control also names the
+> key: hovering it, and its accessible name, read
+> `Needs FIRMS_MAP_KEY — add it in Provider Settings`. A layer declares which
+> key it needs as a key-registry id and reports `stats.keyRequired` while that
+> key is absent; the panel builds the text from the pair, and produces none for
+> a layer that needs no key, already holds one, or names a key the registry does
+> not recognise. The earthquakes half
 > still delivers in full. The shared loading reducer now treats an explicitly
 > declared missing optional key as a configured terminal state rather than a
 > failed multi-layer mission, so the global chip completes without showing
@@ -738,7 +1125,7 @@ fetching, trailing-24-hour filtering and partial-success caching are unchanged.
 > durable in this app (`gev:layer-state:v2`, written by
 > `LayerStateCoordinator._commitExplicit` only for origin `user`/`voice`/`tool`).
 > A mission enables **its own** layers at `origin: 'user'` — durable, exactly as
-> clicking those rows is, because picking the mission *is* that choice. The two
+> clicking those rows is, because picking the mission _is_ that choice. The two
 > Context missions also expand the Context panel, as the visible tabs do; the
 > globe missions open no panel. Everything else is off limits: detection
 > mode/density, `gev:detection-allocation:v1`, 3D models, feather, and above all
@@ -762,7 +1149,7 @@ fetching, trailing-24-hour filtering and partial-success caching are unchanged.
 > rule by a unit pin), and session-dismisses rather than contesting the key; if
 > one is already up at init it **waits** instead of appearing over it. (2) A
 > surface can take the screen with **no class to watch** — the Cesium attribution
-> lightbox is full-screen at `z-index: 200` against the card's `175`, which left
+> lightbox is at `z-index: 200` against the card's `175`, which left
 > the launcher measurable (`getClientRects()` non-empty) and buried, so ESC
 > dismissed a card nobody could see and burned the session flag. `isTopmost()`
 > therefore also **hit-tests the card's own centre** with `elementFromPoint`; any
@@ -773,7 +1160,7 @@ fetching, trailing-24-hour filtering and partial-success caching are unchanged.
 > `stopImmediatePropagation()`, and the launcher skips `defaultPrevented` events.
 > `stopPropagation()` alone does **not** stop later listeners on the same
 > `document` — that is exactly how the compact Radio disclosure made one key
-> close the disclosure *and* dismiss the launcher.
+> close the disclosure _and_ dismiss the launcher.
 >
 > **Accepted:** a surface class that never clears means no launcher for that page
 > load, with no timeout. None of the four classes is restored at startup, so an
@@ -829,6 +1216,7 @@ This is the current runtime/source-of-truth snapshot for the project.
 > [!IMPORTANT]
 > **Delta since the July-2 body below** (the detailed sections are still accurate
 > for everything they describe; these landed after):
+>
 > - **"Never answered yet" is a THIRD state, distinct from empty (2026-08-23):**
 >   `sourceState` in `src/data/militaryAwareness.js` treats a dependency that is
 >   busy AND has never produced an answer (`loading === true && !lastUpdate`) as
@@ -851,7 +1239,6 @@ This is the current runtime/source-of-truth snapshot for the project.
 >     samples, `enabling` throughout, panel non-numeric) and across a failing
 >     one. Its `status: 'idle'` is not what saves it — the lifecycle is; the
 >     module has no `loading` status at all.
->
 >   Any new dependency that can be slow must report `loading` and `lastUpdate`
 >   honestly for the contract to hold, and must be pinned against the shape its
 >   own module really returns — a fixture that invents a status the module cannot
@@ -1056,7 +1443,7 @@ This is the current runtime/source-of-truth snapshot for the project.
 >   1,000,000,000 m, plus finite components — not a null check, because a depth
 >   read over empty sky can return a Cartesian that Cesium mishandles three
 >   different ways: non-finite throws `DeveloperError: normalized result is not
->   a number`, exactly `(0,0,0)` returns undefined, and a near-center value such
+a number`, exactly `(0,0,0)` returns undefined, and a near-center value such
 >   as `(500,0,0)` converts SILENTLY into a point 6,378 km underground that
 >   reverse-geocodes as 0°, 0°. The floor sits ~346 km below the smallest real
 >   surface magnitude (WGS84 polar radius 6,356,752 m); the ceiling is ~24×
@@ -1114,17 +1501,17 @@ This is the current runtime/source-of-truth snapshot for the project.
 >   supersession, and run teardown abort it — the data manager rolls an aborted
 >   enable back through the module's own `disable()`, so no layer is left on
 >   carrying stale params. Visuals: `styleManager.applyVisualState(state, {
->   isCurrent })` gates BOTH halves of the map-stack switch, which is its only
->   suspension point. The switch is a *mutation*, not just a wait, and
+isCurrent })` gates BOTH halves of the map-stack switch, which is its only
+>   suspension point. The switch is a _mutation_, not just a wait, and
 >   `mapStackController` invalidates a switch only when another `setStack()`
 >   arrives — a winning state that omits `mapStack` (every normalized shot does)
 >   never issues one, so a stale switch would otherwise stand on the globe.
 >   So: an already-superseded caller never starts the switch, and one superseded
->   *during* it puts the globe back to the stack the winner inherited — but only
+>   _during_ it puts the globe back to the stack the winner inherited — but only
 >   while `getSwitchGeneration()` shows no newer switch has claimed it, because
 >   a newer switch is a live intent that must not be stomped. The shader-uniform
 >   commit after the await keeps its own gate. Precisely: a stale LOAD's
->   *synchronous* prelude (style/bloom/HUD) can still have landed before it was
+>   _synchronous_ prelude (style/bloom/HUD) can still have landed before it was
 >   superseded, and is then overwritten by the newer state; what cannot survive
 >   is its map stack, its uniform commit, its layers, or its camera flight.
 >   Post-`await` flag checks remain as a backstop. Known remainder: run cleanup
@@ -1244,7 +1631,7 @@ This is the current runtime/source-of-truth snapshot for the project.
 > - **AIS feed watchdog (2026-08-18):** feed liveness is judged by DATA, not
 >   socket state — AISStream can complete the handshake and then deliver
 >   nothing forever. `/api/ais-live` reports `live | stale | reconnecting |
->   down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
+down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   `silentForMs`, `reconnectAttempt` and `nextAttemptAt`. Silence is REPORTED
 >   at 120s and ACTED ON at 300s; recovery walks a 5s/15s/60s/300s ladder and
 >   then stops at a terminal `down` with a slow 15-min retry running behind it
@@ -1362,7 +1749,15 @@ This is the current runtime/source-of-truth snapshot for the project.
 >   user intent.
 >   Display orders 3D immediately above Celestial and Clean UI immediately
 >   below it. The top-center action group places Clear Layers to the left of
->   Share and Reset Globe to the right. Clear Layers turns off the currently
+>   Share, then Tilt Map and North Up, and Reset Globe to the right. Tilt Map
+>   swings the camera between a straight-down map and a 35-degree oblique around
+>   the point under the centre of the view, keeping that point and the distance
+>   to it; North Up rotates around the same point until north is at the top,
+>   keeping the pitch. Its needle shows the current bearing. Both decline
+>   without moving the camera when nothing is under the centre of the view (a
+>   camera facing the sky), and both are explicit camera actions, so either one
+>   releases a followed aircraft the way the other camera controls do. They
+>   follow Reset Globe out of Clean UI, recording, Scene playback and Cockpit. Clear Layers turns off the currently
 >   selected manager-owned data layers, including an active Context choice,
 >   while retaining visual, HUD, map, and panel settings. A disabled layer may
 >   still release camera work that it owns through its normal teardown.
@@ -1408,8 +1803,9 @@ This is the current runtime/source-of-truth snapshot for the project.
 >   the Cockpit HUD at 145), scrolling internally when the layer list is longer than
 >   the corridor. Cesium's credit line is never passable and still bounds the
 >   corridor. Layer toggles stay live from there, and collapsing returns the
->   plain launcher. The map-only Clear, Share, and Reset Globe actions are hidden
->   for the duration of Cockpit, both as a group and as individual controls.
+>   plain launcher. The map-only Clear, Share, Tilt Map, North Up, and Reset
+>   Globe actions are hidden for the duration of Cockpit, both as a group and as
+>   individual controls.
 >   It uses the `radar` symbol; both tabs are reachable with Tab and Left/Right arrows switch between them. Its action row
 >   places the single Cockpit entry before Search Nearby Sites. Cockpit removes
 >   the duplicate floating map entry and topline exit; the bottom-center
@@ -1519,9 +1915,9 @@ This is the current runtime/source-of-truth snapshot for the project.
 >   tray inside the screen.
 >   Adaptive remeasurement preserves the user's
 >   scroll position across Tactical, Minimal, and HUD Off layouts.
->   During an active Scene run, Clear Selected Layers and Reset Globe remain
->   hidden until playback stops or completes because the Scene transport owns
->   layer and camera sequencing for that interval.
+>   During an active Scene run, Clear Selected Layers, Tilt Map, North Up and
+>   Reset Globe remain hidden until playback stops or completes because the
+>   Scene transport owns layer and camera sequencing for that interval.
 >   The Cockpit Contact summary exposes Previous and Next contact navigation
 >   plus its collapse control; it does not offer a Focus action because the
 >   first-person Cockpit camera remains owned by the tracked aircraft.
@@ -1565,7 +1961,7 @@ This is the current runtime/source-of-truth snapshot for the project.
 > - **Compact data-attribution panel:** the complete Cesium credit inventory
 >   remains available without taking over the viewport. Its expanded desktop
 >   panel is capped at 70dvh/36rem, the wrapped 12px credit list scrolls inside
->   it, and narrow screens retain Cesium's full-screen surface with an internal
+>   it, and narrow screens retain Cesium's surface with an internal
 >   scroller. The title, close control, links, and persistent Google/Cesium line
 >   remain unchanged and visible.
 > - **Distant-aircraft recession:** both civilian and military billboard fleets
@@ -1780,8 +2176,7 @@ This is the current runtime/source-of-truth snapshot for the project.
 >   at `z-index:5`**, not into `#world-overlay-root`: the root is a stacking
 >   context (`z-index:6`), i.e. an isolated blending group, and a surface inside
 >   it has its `mix-blend-mode: screen` silently discarded by the browser
->   instead of compositing against the WebGL scene. z-index (5 under the root's
->   6) keeps it beneath ambient-through-tracked host paint.
+>   instead of compositing against the WebGL scene. z-index (5 under the root's 6) keeps it beneath ambient-through-tracked host paint.
 >   The >22 ms odd-frame relief valve is restored: the host does not clear the
 >   detection surface on a held frame, while unrelated shared lanes repaint,
 >   and `throttleSkipCount` remains a live diagnostic. Detection `data-*` fields
@@ -1875,7 +2270,7 @@ This is the current runtime/source-of-truth snapshot for the project.
 >   Identity stays `icao24` on every keyed surface (`getNearby().icao24`, the
 >   detection `sourceId` declutter hashes, and the `id` that `trackById` and the
 >   Context cohorts resolve) — only the displayed string follows the chain.
->   Because adsbdb enrichment can answer *after* selection, the Context subject
+>   Because adsbdb enrichment can answer _after_ selection, the Context subject
 >   re-resolves its label each refresh (`resolveSubjectLabel()`) instead of
 >   freezing the selection-time snapshot.
 > - **Phase 5 tracked military aircraft label:** The military tracking entity
@@ -1993,7 +2388,7 @@ This is the current runtime/source-of-truth snapshot for the project.
 >   active camera is excluded from the 40-card ambient quota and has no host
 >   card by default: its monitor plane is the active representation. The
 >   product option `cctvLayer.setCardPresentationOptions({
->   activeCameraCardEnabled: true })` may publish it through the retained
+activeCameraCardEnabled: true })` may publish it through the retained
 >   protected path. CCTV leaders use the source cyan, remain vertical at the
 >   camera anchor except for the off-card edge clamp, and counter-scale to one
 >   CSS pixel through the altitude transform. Card hits come from
@@ -2175,7 +2570,7 @@ This is the current runtime/source-of-truth snapshot for the project.
 >   sprites/trails, OpenSky credit governor). The 2026-07-08 CHANGELOG entry
 >   records the subsystem's architecture, invariants, residuals, and verification.
 > - **Height-datum test surface:** `npm test` 184 unit · `npm run
->   test:track` 43 tracking invariants · headless QA harnesses under
+test:track` 43 tracking invariants · headless QA harnesses under
 >   `scripts/qa-*.mjs` incl. `qa-height-datum.mjs` (numeric heights) and
 >   `qa-floor-verify.mjs` (any-airport ground-truth oracle).
 > - **2026-08-19 — display-time ground floor (flights layer).** A grounded
@@ -2241,7 +2636,7 @@ This is the current runtime/source-of-truth snapshot for the project.
 > ISS pass prediction, and per-layer data attribution. Gate at close: unit 98/98, build clean,
 > track 19/19, + five QA harnesses (heading 16/16, sprites 9/9, cctv 5/5, failstate 5/5,
 > attribution 18/18). New modules: `src/data/{motionModel,aircraftMeta,aircraftClass,aircraftIcons,issPass,routePlausible,dataCredits}.js`.
-> The live runtime now declares 28 voice tools; the 17→20 count above is retained only as milestone history.
+> The live runtime now declares 29 voice tools; the 17→20 count above is retained only as milestone history.
 
 ## Canonical Docs Order
 
@@ -2278,23 +2673,321 @@ nearby place—always use station selection. Unqualified “turn on/start the ra
 requests use Play; a qualified Play-shaped tool call is normalized to Select so
 its criteria cannot be silently ignored.
 
-| Layer | Source | File | Proxy | Update Interval |
-|-------|--------|------|-------|-----------------|
-| Live Flights ✈️ | OpenSky Network; bounded adsb.lol regional fallback | `src/data/flights.js` | `/api/opensky` (OAuth + fallback) | 30s |
-| Military Flights 🎖️ | adsb.lol /v2/mil | `src/data/militaryFlights.js` | `/api/adsblol/mil` | 15s |
-| Live AIS Vessels 🚢 | AISStream websocket | `src/data/aisLiveVessels.js` | `/api/ais-live` | 60s (+800ms visibility pass) |
-| Mapped Installations ⌖ | OpenStreetMap mapped context; on-demand Google Maps Places supplement | `src/data/militaryInstallations.js` | `/api/military-installations`, `/api/google/text-search` | viewport-driven + user search; while unavailable, auto-retry 30 s → 240 s backoff |
-| Earthquakes | USGS | `src/data/earthquakes.js` | — | 60s |
-| Satellites | CelesTrak | `src/data/satellites.js` | `/api/celestrak` | 120s |
-| Space Missions (30d) | Launch Library 2 + CelesTrak | `src/data/rocketLaunches.js` | `/api/launches` + `/api/celestrak/active` | 5 min |
-| Traffic | OSM Overpass (+ optional TomTom live flow) | `src/data/traffic.js` | `/api/overpass` + `/api/tomtom` | viewport-driven |
-| CCTV | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW Open Data + Street View fallback | `src/data/cctv.js` | `/api/cctv` | 10s (active) |
-| Radio | Radio Browser (public-domain station directory) | `src/data/radio.js` | `/api/radio/stations`, `/api/radio/click/:uuid` | 45 min directory refresh |
-| Bikeshare 🚲 | GBFS (Lyft + BCycle) | `src/data/bikeshare.js` | `/api/gbfs` | 60s |
-| Datacenters ▣ | OSM extract (bundled) | `src/data/localLayers.js` | — | static |
-| Dams ▰ | OpenInfraMap/OSM extract (bundled) | `src/data/localLayers.js` | — | static |
-| Submarine Cables ◠ | TeleGeography public map (bundled) | `src/data/telegeographySubmarineCables.js` | — | static |
-| FIRMS Active Fires ▲ | NASA FIRMS live (VIIRS ×3 NRT, trailing 24h) | `src/data/firmsHeatmap.js` | `/api/firms` (`FIRMS_MAP_KEY`) | 10 min (proxy TTL 30 min) |
+| Layer                  | Source                                                                                                                                                                                          | File                                                  | Proxy                                                    | Update Interval                                                                   |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Live Flights ✈️        | OpenSky Network; bounded adsb.lol regional fallback                                                                                                                                             | `src/data/flights.js`                                 | `/api/opensky` (OAuth + fallback)                        | 30s                                                                               |
+| Military Flights 🎖️    | adsb.lol /v2/mil                                                                                                                                                                                | `src/data/militaryFlights.js`                         | `/api/adsblol/mil`                                       | 15s                                                                               |
+| Live AIS Vessels 🚢    | AISStream websocket                                                                                                                                                                             | `src/data/aisLiveVessels.js`                          | `/api/ais-live`                                          | 60s (+800ms visibility pass)                                                      |
+| Mapped Installations ⌖ | OpenStreetMap mapped context; on-demand Google Maps Places supplement                                                                                                                           | `src/data/militaryInstallations.js`                   | `/api/military-installations`, `/api/google/text-search` | viewport-driven + user search; while unavailable, auto-retry 30 s → 240 s backoff |
+| Earthquakes            | USGS                                                                                                                                                                                            | `src/data/earthquakes.js`                             | —                                                        | 60s                                                                               |
+| Satellites             | CelesTrak                                                                                                                                                                                       | `src/data/satellites.js`                              | `/api/celestrak`                                         | 120s                                                                              |
+| Space Missions (30d)   | Launch Library 2 + CelesTrak                                                                                                                                                                    | `src/data/rocketLaunches.js`                          | `/api/launches` + `/api/celestrak/active`                | 5 min                                                                             |
+| Traffic                | OSM Overpass (+ optional TomTom live flow)                                                                                                                                                      | `src/data/traffic.js`                                 | `/api/overpass` + `/api/tomtom`                          | viewport-driven                                                                   |
+| CCTV                   | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Street View fallback | `src/data/cctv.js`                                    | `/api/cctv`                                              | 10s (active)                                                                      |
+| Radio                  | Radio Browser (public-domain station directory)                                                                                                                                                 | `src/data/radio.js`                                   | `/api/radio/stations`, `/api/radio/click/:uuid`          | 45 min directory refresh                                                          |
+| Transit 🚌             | Operator GTFS-Realtime VehiclePositions (7 keyless regions, `src/data/transitFeeds.js`)                                                                                                         | `src/layers/transit/` via `src/app/layers/transit.js` | `/api/transit`                                           | 15s (poll + delayed playback)                                                     |
+| Bikeshare 🚲           | GBFS (Lyft + BCycle)                                                                                                                                                                            | `src/data/bikeshare.js`                               | `/api/gbfs`                                              | 60s                                                                               |
+| Directions 🧭          | OSRM on FOSSGIS servers (OpenStreetMap)                                                                                                                                                         | `src/data/directions.js`                              | `/api/route` (`steps=1`)                                 | on placement / mode change                                                        |
+| Datacenters ▣          | OSM extract (bundled)                                                                                                                                                                           | `src/data/localLayers.js`                             | —                                                        | static                                                                            |
+| Dams ▰                 | OpenInfraMap/OSM extract (bundled)                                                                                                                                                              | `src/data/localLayers.js`                             | —                                                        | static                                                                            |
+| Submarine Cables ◠     | TeleGeography public map (bundled)                                                                                                                                                              | `src/data/telegeographySubmarineCables.js`            | —                                                        | static                                                                            |
+| FIRMS Active Fires ▲   | NASA FIRMS live (VIIRS ×3 NRT, trailing 24h)                                                                                                                                                    | `src/data/firmsHeatmap.js`                            | `/api/firms` (`FIRMS_MAP_KEY`)                           | 10 min (proxy TTL 30 min)                                                         |
+| Wind 🌬                 | NOAA GFS 10 m wind (keyless, 0.25°→1° grid; animated particles)                                                                                                                                 | `src/data/wind.js`                                    | `/api/wind`                                              | 1 h (forecast cycle)                                                              |
+
+Directions is a keyless front end to the routing the voice agent already
+uses. Its row chips are the whole interface: DRIVE / WALK / BIKE pick the
+profile; SET A and SET B arm the next globe click (Escape or a second press
+cancels), placing clamped A/B markers; with both placed the layer requests
+`/api/route?…&steps=1`, drapes the geometry as a `ClassificationType.BOTH`
+ground polyline with the annotation renderer's flowing-dash material (so it
+reads on the keyless terrain globe and on 3D tiles alike), and drops one white
+point primitive per intermediate maneuver. Those dots are anchored on the
+shared ground floor (`cachedGroundFloor` — the rendered mesh cell on the
+photoreal stack, the Re:Earth DEM cell on the keyless terrain stacks) and stay
+hidden until their cell answers, so a route through Denver is not marked a
+kilometre and a half below the city. Clicking a dot opens a protected
+shared-host card with the instruction, the leg after it, and the next
+instruction; Escape or a click on empty globe clears it. Below the chips the
+row lists the turns in order — distance and instruction per step, each one a
+button a keyboard can reach; clicking one opens that maneuver's card once its
+ground cell has resolved, and the step the camera is on is highlighted and
+scrolled into view during FLY. SWAP
+reverses the endpoints and reroutes; changing the mode reroutes; CLEAR removes
+everything. The row meta reads `OSM routing · 21 km · 25 min · Drive`; while
+routing it shows `Routing…`, and a router miss reads
+`No route found between A and B` — the layer never substitutes a straight line.
+The layer holds continuous render only while a route is drawn (the dashes
+animate). Disable clears all state.
+
+**Keys needed: none.** Directions works on a keyless boot, and the layer is off
+until the operator turns it on.
+
+**Context behavior.** Directions is not a Context layer: neither Contacts nor
+Space Missions reads it, depends on it, or lists it as a companion. It is
+therefore one of the layers an exclusive Context mode switches off on entry
+(`_clearLayersOutsideContextMode`) and restores on exit, like every other
+non-participating layer — the route and both endpoints are cleared with it, and
+placing them again is the way back. Cockpit does not touch the layer either,
+but it does own the camera: pressing FLY inside Cockpit is refused with the
+shell's "Exit cockpit to fly to a route" toast, because FLY now goes through
+the same navigation authority as every other camera destination.
+
+**Clicks and the camera.** Arming SET A or SET B claims the shared pointer
+(`src/data/inputOwnership.js`) as owner `directions` and keeps the lease it is
+given; re-arming for the other endpoint reuses that lease rather than asking
+for a second claim, and every release names the lease, so a superseded instance
+can never free the claim its replacement holds. The claim is held until
+the click that uses it has finished being dispatched — every layer binds its
+own handler to the same canvas and they all run inside one browser event, so a
+claim dropped the instant the endpoint is placed would hand the rest of that
+same click to the ambient handlers bound after this one. It is returned on the
+next tick after placement, and immediately on cancel, Escape, CLEAR, disable
+and destroy; if another tool already holds it nothing is armed and the row says
+so. Maneuver-dot selection is an ordinary ambient handler and yields while any
+tool holds the pointer. FLY runs through the UI shell's immediate-navigation
+facade — the same camera authority validated voice destinations use — and is
+handed the shared ground-floor read and corridor warm, so the dolly does not
+fly a mountain corridor at sea level. A reroute (SWAP, or a profile change),
+CLEAR, disable and destroy stop the flight _this layer started_ and only that
+one: `flyRoute` returns a motion id and `interruptCameraMotionIfActive` refuses
+to stop a motion someone else began.
+
+`/api/route` (`server/providers/places/routes.js`) asks OSRM for maneuvers only
+when the request does (`steps=1`), so a caller that does not read them — the
+voice route annotation, `fly_route` — gets the same small response it always
+did; a cached response that carries steps still serves those callers their own
+shape. Identical requests that are in flight at the same time share one
+upstream call. Outbound calls pass a shared gate that spaces them at least one
+second apart across every client and profile, which is the rate the routing
+service's usage policy states; past a bounded queue the answer is a 429 with a
+`Retry-After` rather than a queue that grows until everything times out. The
+upstream host is pinned and a redirect is refused rather than followed, and a
+rate limit from the routing service is reported as one instead of as "no route
+found". `src/data/routeSteps.js` turns OSRM maneuver type / modifier / exit /
+road name into one plain-English sentence per decision, folding
+`exit roundabout` steps into the roundabout they leave, and caps one route at
+200 maneuvers — a route past that cap is reported as cut off, in the row
+summary and as the last line of the list, because the arrival step is among
+the ones dropped.
+
+A step's card opens from its dot on the globe or from its line in the list, and
+the list covers every step including departure and arrival, which have no dot.
+What a card needs is a resolved ground anchor: a step whose ground cell has not
+answered yet opens nothing rather than a card hanging at sea level. The cells
+are re-read for up to 90 seconds, which outlasts a cold terrain round trip;
+reroute, CLEAR and disable cancel that.
+Transit is off by default, and share links use token `j`. The movement panel order
+places Transit directly after Street Traffic and before Bike Share. Cameras and
+utilities retain their own groups. The layer polls
+registered feeds near the camera every 15 seconds, below a 3,000 km altitude
+gate. Seven keyless regions are available: Boston, Austin, Minneapolis–St Paul,
+Helsinki, the Netherlands, Norway and South East Queensland. Mode silhouettes
+identify buses, trams, subways, trains, ferries and unclassified vehicles.
+
+Retained transit history uses the same outlier quarantine as live observations and
+preserves the active live bracket. Rejected reports do not publish route or mode
+changes to sprites, cards or detection text.
+
+**Timestamp playback.** Vehicles play between reports at 1× or hold while
+waiting for the next report. The display delay adapts within 25–120 seconds;
+late updates do not make a vehicle accelerate. A short reported crawl still
+plays between fixes. Stationary segments schedule a wake at the next motion
+boundary. Motion wording and orientation come from the displayed segment;
+underflow says “Waiting for update,” and stale reports override confident
+motion wording. Reported speed and stop status remain explicitly labelled as
+reports. Duplicate timestamps and implausible observations cannot create a
+zero-duration journey or immediately relocate a visible vehicle.
+
+**Selected history.** Selecting one vehicle draws its available recent path,
+clipped to the displayed time. The browser retains up to 15 minutes and 128
+fixes per vehicle, under a global 32 MiB history budget. Capacity pressure may
+shorten that history. Only the selected vehicle has a trail: completed segments
+are batched primitives, and a small moving head ends at the marker. Trail
+geometry is bounded to 640 prepared vertices, prioritizing the active corridor
+and shortening the oldest geometry first. Active and future marker corridors
+retain their own 640-vertex budget; long report intervals use coarser subdivisions
+than 25 m instead of dropping an admitted vehicle. Supported scenes use ground polylines
+classified against both terrain and 3D tiles, including after map-stack changes,
+with per-segment age colours. History changes rebuild the body. The head is one
+short draped corridor, clipped to displayed time by a material uniform; only
+subdivision crossings rebuild it. Ordinary frames upload no head geometry.
+Without ground-polyline support, ordinary primitives retain a mode-coloured
+0.55-alpha depth-fail path, including the head, without dimming it to near-black.
+Instance attribute updates write back the same typed array returned by Cesium;
+its getters return copies, so reading a second time discards a visibility or colour edit.
+Normal instance colours follow the age ramp once per display second or style change. Subdivision crossings update only changed visibility
+attributes. Deselecting releases selection geometry; marker paths retain only
+active and future corridors.
+
+MBTA history is also retained in the running proxy: up to 15 minutes and 128
+observations per vehicle, with a 16 MiB feed limit and 64 MiB process limit.
+`GET /api/transit/trail/mbta/<encodedVehicle>` reads only observations already
+received by this process; it never contacts the operator. Selection reads it
+once and cancels the request on deselection or disable. Reload can recover
+available history while the same server stays running. Restart clears it, and
+there is no background collection or promise of complete coverage. Other feeds
+remain live-enabled with session-local trails; proxy history is opt-in per feed.
+The catalog and source tests pin that distinction and the MBTA / MassDOT credit.
+Epoch metadata grows as contexts arrive. Snapshot members are protected during
+ingestion, eviction uses receipt-ordered queues, and capacity loss is disclosed
+when history is recreated.
+
+**Surface and route limitations.** Heights are aligned to work with Google 3D
+tiles. Draped history is prepared on selection even while marker floors are unresolved;
+Cesium resolves its surface. Without ground-polyline support, unknown historical
+surfaces leave gaps. A selected body follows layer enablement and vehicle existence,
+so an off-screen head does not hide an on-screen tail. Sparse reports can
+cut across corners; these paths are not surveyed route geometry. Subway markers
+are projected to street level because the feed does not provide depth, and the
+selected card explains that choice. Actual street-level views still require
+visual inspection.
+
+**Appearance.** Normal fleet frames are 20 px, growing to 30 px on selection;
+CRT, NVG, thermal and noir frames are 26/39 px. Source rasters are 48/96 px before padding.
+External halos are 1/1.5 px in normal, 1.25/1.25 px in CRT and 2/2 px in sensors, calculated from the
+final unpadded display size. Six modes, two sizes and three profiles cap the
+raster cache at 36 variants. Normal mode colours are bus `#5EF08A`, tram
+`#FFC24A`, subway `#FF4538`, rail `#D9A6FF`, ferry `#5FD6FF`, and unknown
+`#D8DDE5`. Selection keeps the mode colour. Sensors reuse each normal silhouette's exact
+outer path, filled opaque white without interior panel lines, with an opaque
+`#05080C` halo. Only the external padding grows; the unpadded silhouette remains
+at CRT size. There is no envelope body. Black-hot reverses the contrast and
+Ironbow maps the white input to its hottest palette entry through the thermal
+effect; sprite code never applies a red tint. Creation, mode changes, selection, deselection, map presets and
+Cockpit vision use the same sprite styling function.
+
+Sensor signatures remain in-scene. The thresholds in `qaMetrics.js` require
+white-hot, Ironbow and noir centres ≥0.85 luma and halo minima ≤0.25;
+black-hot uses centre ≤0.15 and halo maximum ≥0.75. Surveillance uses ≥90%
+of its phosphor peak white (0.65992 from RGB 0.16/1/0.22), halo minimum ≤0.25
+with the centre minus sampled background reported without gating. Each preset needs at least
+six verified, unobscured sprites; insufficient coverage is UNEXERCISED.
+The sampler excludes overlapping footprints, including otherwise ineligible
+sprites, and chooses nine source-raster points in the widest solid white band, avoiding
+window/panel gaps. Equal-width tram bands prefer the upper solid body over the
+geometric centre; the nine-point spacing and all thresholds remain unchanged.
+The sampler then verifies pick ownership at all nine points.
+Noir samples also exclude its deliberately vignetted outer field, using shader
+settings and screen position rather than observed brightness. Selected-trail
+diagnostics report every condition even when selection fails.
+
+Transit brackets use the normal-composite overlay surface: a 1.25 px mode-colour
+stroke over 3.25 px dark backing. Other contact themes retain their existing
+behavior. The selected trail uses a 3 px core over 5 px backing, mode-coloured
+in normal and white input in sensors. Alpha falls linearly from 0.80 at the head
+to 0.45 at two minutes, 0.20 at ten minutes and 0.08 at fifteen minutes.
+
+**Cards and DETECT.** The card presents route, mode/operator, displayed motion,
+display delay and newest-report age, reported speed/stop, vehicle ID, and
+available trail duration. Its anchor follows the rendered marker; text is
+checked at 4 Hz and published when it changes. DETECT labels retain route,
+mode and motion, with the selected label suppressed beside its fuller card.
+Candidate membership changes on revisions, coalesced at 4 Hz; paints read
+cached contacts and strings. Marker migration explicitly updates cached
+position references. Freshness and delay use the shared sample’s anchored clock;
+newest bearings are explicitly labelled as reports. Rejected fixes cannot alter
+lag reservoirs or the target delay. Returning from a hidden tab explicitly
+synchronizes visible playback before its next frame.
+
+Playback reserves numeric scratch before the first sample, including unknown
+heights, and reuses caller-owned sample and segment storage.
+
+**Scene work.** Stationary and animated billboards use separate, adjacent
+collections above CCTV and Bikeshare. Traffic, Bikeshare and Transit share camera
+sensitivity claims; the original sensitivity returns after the last release.
+Visibility checks combine the camera frustum and ellipsoid occlusion at no more
+than 4 Hz; missing map bounds do not admit the globe's far side. Camera arrivals
+rebuild an unprepared or cold marker corridor during that visibility sweep,
+adopt a loaded surface, and update both heightPending and surfaceReady diagnostics.
+A resolved display sample clears its pending-height gate without waiting for a poll. Frame work
+visits moving visible vehicles, up to 64 pending height changes, and the selected
+head. Rotation visits visible membership at 5 Hz, with selected rotation per
+frame. The transit render hold exists only for visible positional or orientation
+animation. Polls, surface completions and trail fades request individual renders.
+Disable clears vehicles, detection references, requests, timers and holds;
+destruction also releases collections and registrations.
+
+**Acceptance harness.** Run against an already running development server:
+
+```sh
+QA_BASE_URL=http://localhost:4305 QA_TAG=keyless node scripts/qa-transit.mjs
+```
+
+`QA_BASE_URL=http://localhost:4305 node scripts/qa-transit-recovery.mjs` is the
+focused keyless camera-arrival regression. With destination tiles loaded, it
+injects nine disclosed moving-bus reports and delays their floor acquisition,
+selects the hidden vehicle, then releases the floor and calls camera.setView.
+Within two seconds it requires a visible marker, a prepared visible body and
+at least six of eight paired off/on trail pixel samples. It uses production
+selection, visibility and geometry owners and writes screenshots plus JSON;
+it does not establish Google 3D acceptance.
+
+The full run samples completed frames at 1920×1080 CSS pixels, records DPR, and
+measures moving fleets of 800 and 3,000 vehicles with 128 fixes each and DETECT
+on. Street/metro targets are respectively: transit frame CPU p95 ≤1/4 ms, frame
+interval p95 ≤20/25 ms, billboard uploads ≤256 KiB/1 MiB per frame, and retained
+heap growth ≤24/48 MiB. The 3,000-vehicle CPU budget is 4 ms (recorded browser
+measurement 3.4 ms); the 800-vehicle budget stays at 1 ms (measured 0.9 ms).
+Transit-authored frame allocation is ≤8 KiB/frame at both fleets, attributed
+by source stack to `src/layers/transit/**`, `src/data/contactPlayback.js`,
+`src/data/contactTrailRenderer.js` and `src/data/transit*.js`. Whole-frame
+allocation and its three largest allocators are reported without gating:
+Cesium billboard buffer uploads and the shared DETECT painter are outside
+this layer's allocation budget. **Follow-up: pool shared DETECT placement and
+paint scratch** in `_buildLabelPlacements`, `_materializeCandidate`,
+`_drawOverlay` and their cohort/arbiter helpers. Heap growth is measured
+conservatively as GC-bracketed page growth; allocation sampling includes objects
+collected during the interval. These are acceptance budgets, not measured claims
+for every machine.
+
+Artifacts in `qa-shots/transit/` include per-budget metrics and allocation
+profiles, the Boston Red/741/742/Green-E matrix on measured bright and dark
+backgrounds across normal, NVG, white-hot, black-hot and Ironbow, selected and
+restored screenshots, reload recovery, and disable checks. Matrix routes are
+scripted fixtures; the separate live-feed/reload checks use actual observations.
+The separate Boston live pass uses actual MBTA observations at 120–600 m and
+20–45 degree oblique views, with live selection and sensor readback.
+Live visual cities are otherwise chosen for local daytime operation. Motion checks use
+injected playback independently of live fleet activity. Thermal checks verify
+style activation before reading generated controls; DETECT checks set density
+and exercise the real OFF/restore button. Cesium render errors fail selection
+acceptance.
+The `trail-visible` section requires a visible Google 3D tileset. It selects a
+scripted straight bus with CapMetro metadata under the isolated `qa-trail-capmetro`
+feed ID, with nine retained fixes, runs for 20 seconds at each
+300/600/900 m view (55/45/45 degrees), then freezes playback and waits for sustained tile and primitive readiness.
+It captures off/on/off/on framebuffer patches at eight distinct projected surface
+points outside the padded sprite and selection bracket. `Google 3D selected trail visible at 6 of 8 projected samples`
+prints the selected key, fix count, elapsed display time, path length, hit count,
+per-point coordinates/hits and renderer strategy. At least six points need a
+repeatably changed green core or dark backing at the same pixels. Repeated off
+and on channels and their contrast deltas must agree within 8 RGB levels;
+background refinement, overlapping samples and unchanged dark roads fail. The dark
+backing must reduce summed RGB by at least 40%, and either match needs RGB
+distance of at least 40, so a faint depth-fail wash cannot satisfy visibility. Artifacts are
+`<tag>-<altitude>m-trail-visible.jpg` and matching JSON. Run the same harness
+against the base and patched keyed builds; partial runs remain diagnostic.
+Node checks run Cesium's final geometry pipeline, including batch IDs and
+position encoding: 1,576 bytes per head subdivision and 2,014,128 bytes for the
+1,278-instance body. The body plus a separate 81,792-byte instance reserve totals
+2,095,920 bytes, below the 2 MiB body limit; the head remains below its separate
+2 KiB/frame geometry limit. Ordinary frames upload no head geometry. These are
+pipeline buffer measurements, not measured GPU time or instance-texture uploads. The same 20-second browser interval scopes
+WebGL uploads to the trail body/head, forces one body rebuild, reports head CPU
+p95/max, and gates body uploads at 2 MiB and head uploads at 2 KiB/frame.
+
+Required empty or unexercised checks fail acceptance. The passing final line is
+`HARNESS: PASS (0 unexercised)`. A `QA_SECTIONS` subset is diagnostic only and
+cannot claim full acceptance.
+
+**Lifecycle and proxy.** Contacts temporarily disables Transit and restores its
+prior state on exit; Space Missions refuses enablement while isolating replay
+data. Cockpit enters through Contacts and does not independently enable Transit.
+The proxy fetches registered URLs only, validates redirect origins, bounds
+responses and decoding, caches successful snapshots, and backs off after failed
+refreshes. A 304 confirms contact without appending history. Missing vehicles
+are removed after two missed polls; reports older than ten minutes and feeds
+silent for five minutes are removed. Credits appear when the feed is used.
 
 `src/data/militaryAwareness.js` remains registered internally as the Contacts
 coordinator, but it is not a user-visible Data Layers entry. Its visible entry
@@ -2632,7 +3325,7 @@ silently demoting every later lookup for the session.
   COVERAGE ON enable creates the active/visible 14-camera cohort, and activation always creates the
   selected frustum even with COVERAGE OFF. **Field validation passed
   2026-07-04** (core look + downtown no-clip confirmed); that round fixed three findings: the
-  ground clamp now lifts the cap *center* only so the wireframe stays a true pyramid welded to
+  ground clamp now lifts the cap _center_ only so the wireframe stays a true pyramid welded to
   the plane (was a flattened fan / the ~47.5 m divergence — RESOLVED), re-selecting the active
   camera is a no-op (killed a click-flash), and texture swaps gate on canvas content (killed a
   periodic white flash). Coverage is now **metro-wide: 250 cameras** (`CCTV_AUSTIN_MAX_SOURCES`
@@ -2644,7 +3337,7 @@ silently demoting every later lookup for the session.
   poses, and the layer is stills-first.
   sources. Fintraffic Finland road weather cameras (2026-09-13; cap 300, `CCTV_FINTRAFFIC_MAX_SOURCES`,
   kill switch `CCTV_FINTRAFFIC_ENABLED=0`) are the fourth pack: one keyless GeoJSON station list
-  covering the whole country, where one *preset* (a station's fixed view) is one camera — 806
+  covering the whole country, where one _preset_ (a station's fixed view) is one camera — 806
   GATHERING stations carry 2,256 in-collection presets, prioritized to 300 against seven anchors
   on the main road spine. `CCTV_MAX_SOURCES` is a 4,000 catalog-wide ceiling shared round-robin
   across packs, so a lower global cap thins every region instead of starving the last pack.
@@ -2697,7 +3390,7 @@ silently demoting every later lookup for the session.
   `activeCameraCardEnabled` presentation option can publish the retained
   protected-card path. Disable tears the tier down completely.
   Coverage/viewshed semantics unchanged.
-- **Satellites**: orbit rings rotate about Earth's Z by ΔGMST every ~1s (exact inertial→ECEF compensation; no SGP4 re-runs); the tracked satellite propagates per frame with one shared epoch for dot/label/camera. Verified: ISS holds <1km perpendicular to its ring while tracked.
+- **Satellites**: orbit rings rotate about Earth's Z by ΔGMST every ~1s (exact inertial→ECEF compensation; no SGP4 re-runs); the tracked satellite propagates per frame with one shared epoch for dot/label/camera. Verified: ISS holds <1km perpendicular to its ring while tracked. Pass prediction (`src/data/satellitePass.js`; `getNextSatellitePass`, `getNextIssPass`) scans at 20s, bisects rise/set to ~0.2s, fits the peak with a parabola, and marks a pass visible when the satellite is outside a cylindrical Earth shadow while the observer's Sun is at or below −6°. `next_iss_pass` preserves its geometric-pass ordering and appends visibility metadata. General `next_satellite_pass` accepts a loaded NORAD ID or unambiguous name, searches 24 hours and optionally requires estimated visibility. These estimates do not account for weather or satellite brightness.
 - **Space Missions (30d)**: recent launches render as bounded shared-host, horizon-occluded mission markers using Launch Library 2 v2.3 detailed records. Enabling the layer selects the unified right-side Context panel's Space Missions mode and enables the required satellite layer. Before applying its temporary dense/hidden Satellite mode, Space Missions snapshots the complete standalone Satellite parameter set and exact enabled-layer set. Disabling Space Missions from either Context or the left Data Layers rail restores those parameters and the exact prior enabled state, so a Satellite layer that was already on stays on while a mode-owned dependency returns off; enabling Satellites by itself remains independent. Selecting a mission isolates its launch-to-orbit transfer and dashed satellite orbit, fills that same panel with navigation/details, and animates a small phase-colored marker along the exact displayed Cartesian samples. Marker hit testing drill-picks through photorealistic tiles so the depth-test-free tactical dot remains reliably selectable; its text is non-interactive shared-host presentation. The selected pad is the camera's zoom pivot: the overview remains centered on its launch site, wheel zoom approaches that site instead of drifting elsewhere, and camera pitch progressively changes from global nadir to an oblique close 3D view. Its protected shared-host callout remains visible and expands to include both mission and launch-site names. `FOCUS` flies directly to a 12 km oblique frame around the selected launch site and retains the same anchored zoom/orbit behavior. `REPLAY ASCENT` resets the selected marker at the pad, frames it from an oblique third-person angle, and follows it through the mission-specific compressed ascent directly into one orbital lap at the default `1×` rate. A live `0.25×`–`4×` slider changes ascent and orbit playback speed; adjusting it mid-replay preserves the current path position and historical mission timestamp. Re-entry/recovery cannot be inserted into replay. At orbit insertion the camera smoothly pulls back over the first fifth of the orbital replay and pitches to a globe-scale nadir view while continuing to target the moving replay point. Replay Cancel, mission navigation, deselection, layer disable, and data refresh all release camera ownership. Reconstructed paths are one continuous 128-sample geodetic curve: horizontal departure begins near zero while altitude rises quickly, then the climb progressively bends toward insertion without the former hard 120 km corner. Unmatched orbit fallbacks are smooth planar inclined rings rather than longitude/latitude ground-track curves. The panel lists disclosed payload names, types, operators/manufacturers, mass, multiplicity, and destination when supplied; an empty LL2 payload collection is shown as `CLASSIFIED / MULTI-PAYLOAD`. Launcher, spacecraft, and recoverable payload stages appear in a compact stage table with serial/flight/reuse details, recovery outcome/type, destination, and final coordinates when those records exist; an empty recovery collection omits the section. Stage recoveries with confirmed coordinates use those coordinates; return-to-launch-site records use the pad; downrange-only records receive an explicitly labeled estimated endpoint along the ascent azimuth. Available endpoints render as static 2 px dashed descent/recovery paths with a fixed final-position dot and an estimated atmospheric-interface segment when applicable. The ascent is geodetically densified above the ellipsoid toward the orbit's nearest insertion point, then rendered with `ArcType.NONE`, so it neither cuts through Earth nor separates from the marker. Because LL2 does not normally supply continuous ascent telemetry, pad-to-insertion paths without upstream trajectory samples are labeled `RECONSTRUCTED ESTIMATE` / `ASCENT ESTIMATE`; only supplied trajectory samples receive the replay wording. Selected-orbit framing fits the complete ring, rear-side linework uses normal scene depth occlusion, and current distance, speed, and callout data come only from a launch-year-validated satellite match. Speed is the magnitude of the SGP4 inertial velocity vector at the same propagation epoch as position, displayed in km/s with km/h available as hover detail. Unavailable operator, site, launch-time, orbit, current-altitude, and speed values omit their detail rows instead of reserving panel space with placeholders. Newly launched payloads absent from the core operational groups use CelesTrak's cached active TLE feed as a lookup-only fallback; weak constellation-name matches are rejected. The replay callout maps compressed animation progress onto Launch Library's mission-relative timeline, showing the historical UTC date/time at the marker's current path position; unavailable timelines remain explicit. Matched live satellite positions propagate at one-second cadence and use a distinct green dot/callout with the current UTC date/time.
   When no mission is selected, the Context panel presents a scrollable newest-first roster of every launch in the rolling window, including the smaller 5 px operator-colored marker, provider, and launch date. Hovering or keyboard-focusing a row shows four compact cyan corner brackets on both that roster row and its corresponding globe dot, rotates the globe at the current zoom to center it, and gives its label declutter priority without selecting it; the globe label remains unbracketed. Selecting a roster row invokes the same mission isolation and full-orbit framing as clicking its globe marker. The replay vehicle is one screen-space SVG/CSS HUD overlay rather than separate Cesium billboard, label, and reticle graphics. It is hidden during ordinary Focus and manual close views, where the standard selected launch-site label remains visible, and exists only while ascent replay is active. Its fixed pixel scale is shared by ascent and insertion, so camera range never resizes the rocket on screen before the phase boundary. Generic Launch Library pad names are reduced to their identifying suffix, and replay timestamps use a cyan state title over unprefixed white UTC date/time values. `REPLAY ASCENT` holds the unframed cyan/white rocket at the pad for a real-time `T−10` countdown, transitions through `LIFTOFF`, and attaches six tapered cyan/white ellipse waves directly below it from liftoff through insertion to convey thrust without adding scene geometry. While replay is active, the single start button is replaced by compact Play, Pause, and Cancel icon controls. Pause freezes countdown or mission time, vehicle/stage positions, camera target, labels, and thrust-wave animation; Play resumes from that exact frame, and Cancel releases replay camera ownership. The rocket and thrust group rotates from the path's live screen-space tangent, so its nose follows the visible ascent curve while the adjacent text remains upright. The camera begins as a close oblique launch chase, then smoothly widens between roughly 120 and 420 km vehicle altitude into a higher oblique context view that keeps the moving rocket targeted while exposing the ascent bend and orbit connection. At insertion the rocket/thrust glyph is replaced by the fixed-size cyan orbit dot, which the camera follows through the existing globe-scale orbit pullback. The chase camera limits per-frame yaw changes across heading wraps so it cannot abruptly cross in front of the vehicle and make ascent read in reverse; the replay-speed slider affects mission playback but not countdown duration.
   Mission world text has no native `LabelGraphics`: overview launch markers publish at most 48 ambient candidates for a 24-winner budget, while selecting a mission clears that overview source and publishes its launch-site callout, stage re-entry annotations, live/estimated payload-position readout, and orbit annotation as protected selected-lane entries. The source retains the exact former strings and colors. Static anchors reuse the Cartesian values used to build their mission geometry; the moving payload entry reads the layer's per-frame live-position cache; catalog-backed orbit annotation positions are cached in the same one-second matrix update that realigns the orbit primitive. Keyhole edge fade, horizon culling, final collision placement, and UI exclusion are owned by the shared host. Deselect restores the bounded overview, and refresh, disable, and destroy replace or clear both mission sources.
@@ -2712,6 +3405,7 @@ silently demoting every later lookup for the session.
 - `/api/overpass` fans out across four public mirrors. `overpassPayloadIsData()` governs cache reads, writes, and stale fallback: only a 2xx that is neither rate-limited nor a body-level runtime error qualifies. Previously stored refusals are ignored on both fresh and stale reads, so upgrading does not require manually clearing the disk cache.
 - HTTP refusals such as 406 now rotate alongside the existing network, rate-limit, and runtime-error cases. A refusal from one mirror no longer prevents reaching healthy alternatives or persists under the seven-day road/month-long boundary cache TTLs. Concurrent identical queries share one mirror sequence; if it fails, both the initiating and joined callers can use the same last-good data.
 - A refusal every mirror agrees on is still reported with the first mirror's status and body, so a genuinely malformed query says what upstream said — but only after every mirror has had the chance to answer it. `fetchOverpassPayload` takes injectable endpoints and fetch so the rotation is tested without a live mirror (`src/overpassProxy.test.mjs`).
+- Every mirror is asked with a User-Agent that names the application, its version and the project address (`OVERPASS_USER_AGENT` in `server/providers/overpass/constants.js`), which is what the OSM API usage policy asks for. Mirrors may refuse a client they cannot identify; such a refusal is never treated as data and costs the fan-out that mirror, so the header is what keeps the list at full strength.
 
 ### Share-link v2 layer state (August 2026)
 
@@ -2831,7 +3525,8 @@ silently demoting every later lookup for the session.
 
 - **Token flow**: browser fetches a short-lived client secret from `/api/realtime/token`; the Vite middleware holds `OPENAI_API_KEY` and posts the full session config (instructions, tool schemas, VAD, truncation) to `api.openai.com/v1/realtime/client_secrets`. SDP exchange goes directly to `api.openai.com/v1/realtime/calls` with the ephemeral token.
 - **Session defaults** (env-tunable): model `gpt-realtime-2` (or `gpt-realtime-2.1-mini` when the MINI tier is selected — see the model-tier entry below), voice `marin`, reasoning effort `low`, semantic VAD with low eagerness, no response interruption, context window truncated to ~3,000 post-instruction tokens with 0.5 retention ratio — the conversational window stays short because map state is fetched live per turn.
-- **Twenty-eight tools** (schemas defined server-side in `vite.config.js`, executed client-side in `src/voice/gevActions.js`): `fly_to_location`, `select_nearest_aircraft`, `adjust_camera_zoom`, `zoom_to_globe`, `set_layer_visibility`, `show_data_layers_menu`, `set_panel_open`, `set_visual_style`, `get_entity_context`, `get_current_view_state`, `set_hud`, `set_detection`, `set_map_stack`, `set_post_processing`, `control_scene`, `control_cctv`, `set_context_mode`, `control_cockpit`, `control_radio`, `track_entity`, `stop_tracking`, `frame_overhead`, `annotate_map`, `clear_annotations`, `move_camera`, `fly_route`, `analyst_query`, and `next_iss_pass`.
+- **Twenty-nine tools** (argument schemas in `src/voice/actionSchemas.js`, served with their descriptions by `server/providers/openai/tools.js`, executed client-side in `src/voice/gevActions.js`): `fly_to_location`, `select_nearest_aircraft`, `adjust_camera_zoom`, `zoom_to_globe`, `set_layer_visibility`, `show_data_layers_menu`, `set_panel_open`, `set_visual_style`, `get_entity_context`, `get_current_view_state`, `set_hud`, `set_detection`, `set_map_stack`, `set_post_processing`, `control_scene`, `control_cctv`, `set_context_mode`, `control_cockpit`, `control_radio`, `track_entity`, `stop_tracking`, `frame_overhead`, `annotate_map`, `clear_annotations`, `move_camera`, `fly_route`, `analyst_query`, `next_iss_pass`, and `next_satellite_pass`.
+
 > **Reading `npm test` totals:** the count depends on the Node major. The two
 > GC-bracketed allocation microbenchmarks (`src/data/focusAllocations.test.mjs`
 > = 1 test, `src/overlays/worldOverlayAllocation.test.mjs` = 13) only RUN on the
@@ -2861,15 +3556,15 @@ silently demoting every later lookup for the session.
   - **Tier selection.** `standard` = `gpt-realtime-2` (default), `mini` = `gpt-realtime-2.1-mini` (~3× cheaper per audio token). The client sends `?tier=` to `/api/realtime/token`; the endpoint resolves it through the shared registry, so an unknown, empty, or hostile value falls back to `standard` rather than reaching OpenAI as a model id. Responses echo `X-GEV-Voice-Tier` / `X-GEV-Voice-Model` (plus `X-GEV-Voice-Tier-Fallback: 1` when a bogus tier was downgraded). Persisted at `godsEyeView.voiceCost.tier`.
   - **Applies NEXT session.** The model is fixed when the ephemeral token is minted, so a live session always keeps the model it connected with; toggling mid-session only records the preference (the button title says so). The cost tracker's lifetime is the session's lifetime and its model binding is immutable from `start()` to `stop()` — rebuilding it on toggle would erase accrued spend and let repeated toggles bypass the cap. The tracker may only be replaced once the session is FULLY SETTLED (`isVoiceSessionSettled()`: not active **and** no data channel **and** no peer connection) — `!isActive()` alone is not enough, because the `error` status reports inactive while the transport can still deliver a late `response.done`. The toggle itself reads and writes only the persisted preference, never the live tracker.
   - **Env overrides.** `OPENAI_REALTIME_MODEL` / `OPENAI_REALTIME_MODEL_MINI` remain authoritative per tier, so a drifted upstream model id is a `.env` fix rather than a code change. Because an override can point a tier at any model, the client prices against the model id the server actually echoed, **not** the tier it requested. An unrecognised id is billed at the most expensive known rates plus one console warning — under-metering is what lets a cap be overrun.
-  - **Metering.** Token usage from each `response.done` is folded into a per-session estimate. Cached tokens are subtracted from their modality totals; any aggregate-minus-details residual (and any payload with no detail at all) is attributed to audio rates, so uncertainty always resolves *upward*.
+  - **Metering.** Token usage from each `response.done` is folded into a per-session estimate. Cached tokens are subtracted from their modality totals; any aggregate-minus-details residual (and any payload with no detail at all) is attributed to audio rates, so uncertainty always resolves _upward_.
   - **Thresholds** (one object, persisted at `godsEyeView.voiceCost.limits`): soft warning at **$2** — amber readout plus exactly one console line; hard cap at **$5** — the session ends through the ordinary stop path (data channel and peer connection closed, mic tracks stopped) and the readout reads `Session ended — cost cap`. `0`/negative disables a threshold and round-trips through storage as an `'off'` sentinel (raw `Infinity` would JSON-serialize to `null` and silently restore the default); a corrupt entry falls back to the defaults rather than disarming the cap.
-  - **Cap semantics — in-flight tools COMPLETE and are NOT rolled back.** A session-ending latch (`isSessionEnding()`) is checked at the tool-dispatch site, so no *new* tool is dispatched once the cap trips. `extractFunctionCalls` yields at most one call per event, so that single check covers the whole batch. A tool already executing may still finish its map mutation (a camera flight, a layer toggle, an annotation). This is deliberate: unwinding a partially applied map change has no safe general implementation, and a half-reverted camera/layer/annotation state is worse than a completed one.
+  - **Cap semantics — in-flight tools COMPLETE and are NOT rolled back.** A session-ending latch (`isSessionEnding()`) is checked at the tool-dispatch site, so no _new_ tool is dispatched once the cap trips. `extractFunctionCalls` yields at most one call per event, so that single check covers the whole batch. A tool already executing may still finish its map mutation (a camera flight, a layer toggle, an annotation). This is deliberate: unwinding a partially applied map change has no safe general implementation, and a half-reverted camera/layer/annotation state is worse than a completed one.
   - **In-flight response at teardown → the accounting is INCOMPLETE.** Usage only arrives with `response.done`, which never comes for a response cut off by teardown (`stop()` closes the peer connection, and the server cancels rather than completes it). Rather than invent a token count for it, the tracker is marked `incomplete`: the chip shows a trailing `*` (`~$1.00*`) as a see-note mark and the tooltip carries the reason. Deliberately **not** presented as a lower bound — the estimate can also run high (residuals and unrecognised models bill at worst-case rates, and sub-cent totals round up), so it is partial rather than directional. (A bounded teardown drain was tried and removed: `pc.close()` closes the data channels a drain would listen on, so it was structurally dead.)
   - **⚠️ Model ids and rates are external facts** read from OpenAI's model + pricing pages on 2026-08-18 and marked VERIFY-AT-RELEASE in `voiceCost.js`.
 - **Reliability**: tool-call dedupe (2.5s window across call/item/args keys); response-create queueing that respects active responses and defers follow-ups when the user starts speaking; per-tool follow-up instructions so the agent confirms only what actually happened (zoom confirms only on `ok=true`).
 - **Aircraft identity honesty:** “What is this aircraft?” reads callsign, operator, registration, type, and route only from the selected contact context. Missing operator, route, or type enrichment is named explicitly rather than silently omitted or inferred from the callsign.
 - **Diagnostics**: every client/server event is posted to `/api/realtime/debug-log` and appended to `.gev-logs/realtime-conversations.jsonl` (gitignored) with secret/image redaction; last 30 errors persist in `localStorage` (`gev-realtime-errors`); `window.__gevVoiceCommands.getDiagnostics()` in the console.
-- **Counting semantics ("near")** — a CONTRACT; new count-bearing tool work inherits it. Three honest numbers exist for one question: the Contacts cohort (250 km around the subject, what the panel shows), `analyst_query`'s count of *currently-loaded* records for the requested scope, and the layer-wide loaded total in `coverage.layersQueried[].records`. They diverge legitimately — the flights layer loads by viewport, so after a camera dive the loaded set can hold a fraction of the cohort (field case: panel 42, analyst 8). The contract:
+- **Counting semantics ("near")** — a CONTRACT; new count-bearing tool work inherits it. Three honest numbers exist for one question: the Contacts cohort (250 km around the subject, what the panel shows), `analyst_query`'s count of _currently-loaded_ records for the requested scope, and the layer-wide loaded total in `coverage.layersQueried[].records`. They diverge legitimately — the flights layer loads by viewport, so after a camera dive the loaded set can hold a fraction of the cohort (field case: panel 42, analyst 8). The contract:
   1. **Contacts ACTIVE** → "near / nearby / how many aircraft" means the **Contacts window** — the panel's numbers, spoken verbatim. Mechanism: `contactsWindow` (`{centeredOn, radiusKm, flights, military, vessels}`), carried by both `analyst_query` and `get_current_view_state`, derived by `contactsWindowFromSnapshot()` from the same snapshot the panel renders so the two cannot drift. A cohort whose feed cannot answer reports `'unknown'`, never a confident zero.
   2. **Contacts OFF** → "nearby" means **in view**; "near \<place\>" means a radius around that place. A radius query with Contacts active and no explicit centre is centred on the **active contact**, not the camera.
   3. **Every count names its scope in words** — "42 in your window", "8 in view", "about 30 within 250 km of Austin" — never a bare number. `analyst_query` returns `scopeLabel` so this is mechanical. Two different numbers with named scopes are not a contradiction.
@@ -2886,8 +3581,28 @@ silently demoting every later lookup for the session.
 
 Location search/fly-to, annotations and Radio location lookup receive one
 `placeSearch.geocode(query, { bias, signal })` service. `src/standalone` composes
-Google first when configured and Photon/OpenStreetMap as fallback, including
-Google transport failures or declined requests. The portable `./search` export
+two offline providers first — a strict decimal-degree coordinate reader and an
+exact-match reader over the bundled city and landmark names — then Google when
+configured and Photon/OpenStreetMap as fallback, including Google transport
+failures or declined requests. The offline pair answer with no request and no
+key, and decline everything they are not certain of: a coordinate must be a
+decimal-degree pair (either order when N/S/E/W fix the axes), and a bundled name
+must match exactly, so `12junk, 34oops` and `austin, tx` both reach the
+geocoders instead of being answered from the bundle. Degrees/minutes/seconds and
+grid references are not parsed. An answer either provider gives is exact, so
+nearby-landmark recovery stands aside for it — otherwise a typed coordinate
+could be replaced by whatever Places finds near the current view. The portable `./search` export
+Google first when configured, Photon/OpenStreetMap as fallback (including Google
+transport failures or declined requests), and the local `/api/geocode` route
+over Nominatim as a last resort when neither answers. That route keeps to the
+public instance's usage policy: an identifying `User-Agent` and `Referer`, at
+most one request per second shared with the cockpit's reverse lookups, answers
+cached for five minutes, one upstream call shared between identical searches
+already in flight, a queue bounded at four waiting searches (a burst past it is
+refused with 429 and `Retry-After`, never held), and a queued search dropped
+once its caller has given up rather than spending a slot on an answer nobody
+will read. A hit whose coordinates or bounding box are missing or out of range
+is discarded rather than coerced. The portable `./search` export
 provides the service and adapters; it reads no environment or application state.
 Existing browser/server key setup is unchanged.
 
@@ -2922,6 +3637,35 @@ are omitted rather than framing the wrong part of the globe.
 - Tooling: voice has `annotate_map` and `clear_annotations` tools. Annotations accumulate and persist by default; clearing is explicit only. Partial failures, approximate synthesized zones, and route fallbacks are returned as structured tool results so the voice layer can be honest.
 - Console/dev API: `window.__gevAnnotations.tour()`, `.demo()`, `.annotate()`, `.clear()`, `.count()`, and `.list()` are the deterministic no-mic test surface.
 - Current known resolver gap: mall/lifestyle districts such as "The Domain, Austin" can prefer a named building over the broader retail envelope. Product decision is that districts should become envelope + key buildings, but the scoring change still needs a careful multi-case validation pass.
+
+### Manual Whiteboard Drawing (September 2026)
+
+- DISPLAY ▸ **Draw** turns the globe into a whiteboard drawn by hand. Pick a shape (Area, Line, Pin), click the vertices on the real world, type an optional label and pick a colour, and finish. **Keyboard contract, live only while Draw is on and never while you are typing in another field:** Enter finishes the shape (as does a double-click, and the two cannot both submit it — the session is replaced before the annotate call is awaited); Backspace removes the last vertex; Esc cancels the shape in progress, and a second Esc — Esc on an empty session — leaves draw mode. Typing in the label field keeps Backspace; Enter there also finishes. **Clear** wipes the board (the shape in progress and every placed mark), so removing marks does not require the console or the microphone.
+- Runtime entry: `createApplicationTools` (`src/app/tools.js`, behind the `src/standalone/tools.js` shim) calls `initDrawTool({ viewer, annotations })` after `initAnnotations` and defers its `destroy()`, so disposing the shell returns every DOM listener, the Cesium handler, the preview data source, the borrowed click actions and the `window.__gevDrawTool` handle. Its markup is a DISPLAY-rail component template (`src/ui/templates/display-controls.html`), assembled into `index.html` at build time. That handle (`setActive`, `setShape`, `addVertex(lon, lat)`, `finish`, `cancel`, `clearAll`, `diagnostics`) is the no-mouse test seam.
+- Contract: a finished shape is submitted through the SAME `annotationEngine.annotate()` the voice agent uses, with geometry supplied and `manual: true` (`type: area` + `ring`, `type: route` + `path`, `type: pin` + coordinates). `resolveSpec` short-circuits manual specs (`resolveManualSpec`) so no geocoder, Places or Overpass call is made. A drawn area is a real (not synthesized) outline and drapes solid; a drawn line is a `route` with `mode: 'manual'`, labelled with its length and never a travel time; a pin is a point. Drawn marks therefore render with the whiteboard look, persist, de-dup, appear in `.list()`, and clear with `clear_annotations` / `.clear()`.
+- **A vertex is a lon/lat, and the mark is DRAPED.** Clicks are picked through `pickWorldFromScreen` — one of two scene helpers the annotation resolver factory (`src/annotations/resolver.js`) exposes alongside `sampleGroundHeight`, so the app has ONE depth-aware pick cascade rather than a second written beside it — which returns the height the pick landed on as well as the coordinate, so the live preview hangs on the roof or hillside under the pointer instead of sinking to sea level. The world renderer draws areas and routes with `clampToGround`, so the height is dropped at finish in one place (`finishSpec`) rather than being carried downstream and discarded silently: what you get is the outline you drew, lying on the surface beneath it.
+- **Draped marks classify onto `ClassificationType.BOTH`** — terrain AND 3D tiles — not onto 3D tiles alone. With only `CESIUM_3D_TILE`, every area fill, area outline, route and arrow rendered to nothing on a keyless boot, where Cesium's own globe carries Esri/OSM imagery and there are no tiles to classify against; the labels appeared and the geometry did not. That hit spoken annotations exactly as hard as hand-drawn ones. `scripts/qa-draw-tool.mjs` counts the mark's own colour in the rendered frame before and after a shape is finished, on a keyed AND a keyless server, so "the board says there is a mark" can no longer pass for "the mark is on screen".
+- **A finished area is a CLOSED ring.** The fill polygon closes itself but the outline beside it is a polyline, so an open ring drew every edge except the one back to the first vertex — a triangle with two sides. `finishSpec` repeats the first position at the end. A line is never closed: joining its ends would invent a segment nobody drew.
+- **Measurements and centres are computed on unwrapped longitudes** (`unwrapLongitudes` / `wrapLongitude` in `drawMode.js`, used by `ringAreaM2`, `ringCentroid` and the engine's manual-area anchor). A ~50,000 m² rectangle straddling the antimeridian reads its 0.002° width as 359.998° under raw arithmetic: it measured thousands of square kilometres and anchored on the Greenwich meridian, half a world from the shape. Path length was already safe — haversine is periodic in the longitude delta — and a test pins that so a "fix" cannot break it.
+- **Bounds.** One shape holds at most `MAX_VERTICES` = 512 points; two clicks within 0.5 m are one vertex (that is what makes a double-click finish without leaving a stray point); a vertex that is not a finite on-globe coordinate is refused. A shape that encloses nothing is refused rather than placed: three collinear points are not an area and a line under a metre long is not a line, and the hint says which.
+- Pointer ownership: while a session is open the tool holds the single pointer claim (`claimPointer('draw')`, `src/data/inputOwnership.js`) and **every** ambient scene selection handler — the shared tracking click gesture behind flights, military and CCTV, plus vessels, satellites, launches, fires, installations, bikeshare, radio, submarine cables, the bundled GeoJSON layers and the CCTV calibration gizmo — returns before picking. A vertex over an aircraft is a vertex, not a selection.
+- **The claim is a LEASE.** `claimPointer(owner)` returns an opaque token or `null`; `releasePointer(lease)` takes that token. A second claim fails even under the same owner name, because two live instances of one tool — an old one mid-teardown and its replacement — are two owners; releasing by name let the old instance free the claim its successor was holding, and every layer started selecting through the live session's vertices. A superseded lease now releases nothing.
+- **Cesium's own click actions are borrowed too.** The Viewer binds a selecting LEFT_CLICK and a tracking LEFT_DOUBLE_CLICK on its own handler, outside every layer and therefore outside the shared claim — guarding the layers alone still left a drawn vertex selecting the entity under it. Both are removed for the session and restored, as the same function objects, when it ends or the tool is destroyed.
+- **Enter belongs to whatever has the keyboard.** The finish key is taken only from the canvas, the page body and the tool's own label field. With a control focused — Clear, a shape button — Enter activates that control, as a keyboard user expects; it does not quietly finish the shape.
+- Pure half: `src/annotations/drawMode.js` (session, minimum vertices, double-click de-dup at 0.5 m, vertex ceiling, degenerate-geometry refusal, ring closing, dateline-safe length/area/centroid, hint text). Regression surface: `src/annotations/drawMode.test.mjs` and `src/data/inputOwnership.test.mjs` (pure), `src/annotations/drawToolBehaviour.test.mjs` (the tool driven against DOM and viewer doubles — leases, borrowed input actions, teardown, the Enter key, preview heights), `src/annotations/drawTool.test.mjs` (structural: where files live, which ids the markup carries, what the docs may claim), and the rendered harness `scripts/qa-draw-tool.mjs`.
+- The annotation tree is a declared ownership group: `./annotations` → `src/annotations/index.js` in `package.json`, with its module graph listed in `scripts/package-boundaries.json`, so an annotation module reaching outside that graph is a gate failure rather than a surprise in a layer's bundle. `drawMode.js`, `drawTool.js` and their tests are in `scripts/format-scope.json`.
+
+### Recent Imagery (September 2026)
+
+- The layer sits in the Data Layers panel's Cameras group beside Cameras (CCTV); Mapped ALPR Cameras moved to the Infrastructure group to make room.
+- DATA ▸ **Recent Imagery** (`recent-imagery`, `src/layers/recentImagery/`) lists the last 30 UTC days of imagery for a selected box and drapes the days you pick: HLS S30 (Sentinel-2) and L30 (Landsat 8/9) at 30 m, and the VIIRS NOAA-21 daily overview at 250 m. Keyless and browser-direct: NASA CMR for which days have HLS granules in the box (`catalog.js`, both collections concurrently, paged with `CMR-Search-After` up to 2,000 records each, `truncated` against CMR `hits`), GIBS WMTS for tiles, Worldview Snapshots for thumbnails and exports. Worldview's `Data-Present` header is the only availability signal: GIBS answers an empty tile with HTTP 200, and the JPEG overview would drape black, so a day confirmed empty never drapes.
+- **Box.** SELECT BOX (`src/ui/imageryBoxTool.js`) claims the pointer like Draw, borrows the stock click actions and freezes the camera only mid-drag; USE VIEW takes the camera rectangle; `boxFromPinAt` grows a 10 km box. Boxes must be ≤ 1,000 km a side, on one side of the dateline and inside the Web-Mercator limit (`validateBox`). A refusal (`boxError`, including the tool's own via `reportBoxRefusal`) stays at the top of the panel until a box succeeds; a view over the cap is refused with its size, never shrunk. An oversized box or view (`Box is … km wide · limit 1,000 km`, `View is … wide · …`) sets the hint to `Zoom in or draw a smaller box` and enables ZOOM IN: `zoomToFit()` flies top-down (1.2 s) to the refused box's centre, or the ground under the canvas centre for a view, at the height whose view is about 400 km wide for the canvas aspect and the camera's vertical FOV (`fitViewHeightM`, clamped 5–400 km), and returns that height.
+- **Modes, pins and the preview.** The mode is explicit: `image` (one pinned day, slot `a`), `basemap` (that day on the left of a swipe, the basemap on the right: slot `a` splits LEFT and there is no second layer) and `ab` (day `a` left, day `b` right). `setAssignment(slot, key | null)` / `toggleAssignment(slot, key)` pin and unpin; a day is in one slot at most (pinning it in the other slot moves it) and an empty day cannot be pinned. `setMode()` keeps both pins; `b` only drapes in `ab`. While the mode's first empty slot exists the focused day previews in it: a click at once, arrow keys after 250 ms of quiet (`FOCUS_DEBOUNCE_MS`, one timer, last day wins); an unprobed day is followed and previews when its probe says present, an empty or unknown day never drapes and the previous preview stays. A pin change drops the preview until focus moves again, and unpinning takes that layer off at once. `rankLatest` picks START HERE coverage first (a present HLS day whose footprints cover the box, or have none, beats a newer sliver), then newest with all granules ≤ 20% known cloud, then newest; slivers only as `partial`; else the newest non-empty VIIRS day; it is focused and previewed after each search when nothing is pinned. Escape clears the preview (`clearPreview()`), then cancels the box tool, then blurs — with SELECT BOX armed too, through the tool's `onEscape` interceptor wired in `createApplicationTools`. Pins, mode, box and split changes made in the panel are published with `adoptLayerParams`, never while a share link is being applied.
+- **Rendering.** `rendering.js` owns at most two GIBS layers on the host `src/maps/imageryHost.js` resolves: `viewer.imageryLayers` while the globe shows, the photoreal tileset's `imageryLayers` while it is hidden, or none (the panel says so). Layers are rebuilt on a new host, never re-parented. `MapSourceController.subscribe()` fires after every settled stack switch (silent switches and fallbacks included) and the layer rebinds on it. Tile requests pass a six-slot semaphore of our own (Cesium's global limits are untouched). Under `requestRenderMode` a deferred tile needs a later frame, but a deferral must never request one itself or a stalled tile keeps the scene rendering every frame: a request that finds the semaphore full asks for nothing (the settling request asks for one frame), and a tile Cesium itself deferred goes through one coalesced 250 ms retry. Thumbnails: three fetches at once, sixteen decoded images, least-recently-used where a `get` read is never a use; eviction keeps the probe result. The strip's visible window is probed around the focused card; the pinned and previewed days are probed wherever they sit, at the focused card's priority, so a pin restored or assigned off-screen still drapes.
+- **Esri surface and the swipe.** While any image is on the map (a preview included) the layer holds the map lease (`acquireImageryComparison`, owner `recent-imagery`, `esri-if-photoreal`): on Google 3D the map switches to Esri, because 30 m pixels over 3D buildings do not read, and Cesium's split only works on the globe. The lease is handed back, and Google 3D restored unless the operator changed maps meanwhile, when the last image leaves the map or the layer is disabled; the notice line says so while it holds. While a day is shown the imagery keeps Esri: a manual switch that lands on Google 3D is answered at once with a new lease under the same policy (`keepEsri`), the notice reads `Imagery stays on Esri · CLEAR to use Google 3D`, and the divider never suspends because of a map switch. It re-leases once per switch generation and only for a manual one (`MapSourceController#getSwitchOrigin()` is `manual` for an outside `setStack`, `automatic` for the controller's own fallback or recovery), never for the lease's own switch and never while releasing, so CLEAR and disable still return to Google 3D; a lease another owner holds stays refused. When Esri fails and the controller falls back to Google 3D on its own, the layer lets the lease go without restoring anything, both days drape on the tileset without a swipe and the guidance reads `Esri map unavailable · no swipe`; only the next manual switch to Google 3D takes Esri again, so a failing Esri map is never retried in a loop. Switching between globe stacks (Esri, OSM, Bing) only rebinds. On a tileset host both images drape without a swipe. The split control (`createImagerySplit`, labels A / B, or IMAGE / BASEMAP) exists only while a swipe is live, recentres on every new comparison (not while scrubbing the second day), except once for a split restored from a link. There is no keyboard shortcut (Space is the app's push-to-talk): SWAP (`#ri-swap`, in the controls row, its slot reserved and the button disabled while no swipe is live) trades the two sides, A to the right and B to the left, or the image to the right of the basemap, and a second click restores; the hint reads `Drag the divider · SWAP trades sides`. The swap is not in the share link, and every new comparison starts unswapped. One opacity applies to both drapes. Another owner holding the lease is reported and the images still drape.
+- **Panel.** `#recent-imagery-panel` is static rail markup in `src/ui/templates/context.html` beside `#weather-panel`, registered in `PanelLayoutController`, `PanelChrome` and the share panel state (`ui` token `i`), hidden while the layer is off and opened on first appearance unless a stored or shared collapse choice exists (`dataset.collapsedPreference`). `LayerPanel.attachRecentImagery(factory)` mounts the readout (`createRecentImageryPanel` in `src/ui/recentImagery.js`) into its `data-rail-scroller` body, as the weather readout is mounted. The body is a fixed stack in which no block changes height and no control moves in any state: `#ri-actions` (SELECT BOX · USE VIEW · CLEAR, rail-card actions), `#ri-notice` (one line: `#ri-notice-text` with the refusal, error, CLEAR notice or the Esri note, and `#ri-zoom-in` in a fixed slot at its right end, reserved unless an oversized box or view can be fitted), `#ri-strip` (day cards newest first: thumbnail, date, sensor, cloud, START HERE, PREVIEW, and a SHOW chip or A and B chips; ← → Home End move, S / A / B pin, Enter previews), `#ri-hint` (one line: the next step), `#ri-selection` (`#ri-mode` IMAGE · VS BASEMAP · A / B, then `#ri-slot-a` and `#ri-slot-b` with `#ri-unpin-a` / `#ri-unpin-b` kept in place when empty), `#ri-controls` (`#ri-opacity`, EXPORT / EXPORT A and EXPORT B) and `#ri-details`, a collapsed rail card holding the focused day's acquisition, coverage and granules, catalog notes, the empty-days toggle and the imagery credit. Absent controls are reserved (invisible), never removed. Every render preserves the body's `scrollTop`.
+- **Share links.** Layer options (token `1`): box edges as integers at degrees × 100000, pins `a` and `b` as compact days (`S20260918`), `m` mode (0 image, 1 basemap, 2 A / B), `p` split percent (share-link only: never stored locally) and `v` for the daily overview. Row chips: `MORE DETAIL · 30 m` (on) and `DAILY OVERVIEW · 250 m` (off).
+- Regression surface: the colocated `*.test.mjs` beside each module (shared doubles in `src/layers/recentImagery/testDoubles.mjs`; `src/ui/recentImagery.test.mjs` includes a DOM-structure guard: every control keeps its place in the tree, nothing is hidden, and every fixed-height block keeps the class the stylesheet fixes its height by; it has no layout, so it cannot see movement), `src/ui/layerPanel.test.mjs` (mount), `src/maps/controller.test.mjs` (`subscribe`), `src/data/layerState.test.mjs` (codec), `src/sharelink.celestial.test.mjs` (panel token), and the live gate `scripts/qa-recent-imagery.mjs`, which also measures every control's rect across the transitions within 1 px; that measurement is the real layout-shift check.
 
 ### 3D Aircraft + Tracking (June 2026)
 
@@ -2990,6 +3734,7 @@ are omitted rather than framing the wrong part of the globe.
 - Build gate: `npm run build`
 - Network access: local-only by default (`HOST=localhost` in dev-fresh.sh); LAN is an explicit opt-in via `HOST=0.0.0.0` (launcher prints a key-exposure warning + LAN URL; see SECURITY.md)
 - OpenSky default mode: OAuth (`OPENSKY_AUTH_MODE=oauth`; `anon` works without credentials)
+- Setup doctor resolves `OPENSKY_AUTH_MODE` from the environment and dotenv files. Explicit `anon` and OAuth mode without a client pair report keyless anonymous access (rate-limited); a complete OAuth pair retains the existing presence-only capability wording. Basic and auto modes report the selected mode without guessing which credentials runtime will accept. The proxy's auth behavior is unchanged.
 - Google key expected in Keychain service `google-maps-api` (or `GOOGLE_MAPS_API_KEY`, or `.env`)
 - OpenSky credentials expected in Keychain service `opensky-network` (or env, or `.env`); `OPENSKY_AUTH_MODE` and `OPENSKY_CREDENTIALS_FILE` read from `.env` too
 - Optional-key precedence in `dev-fresh.sh` is uniform — explicit shell env, then `.env`, then Keychain: `OPENAI_API_KEY` (Keychain `openai-api`/`api-key` — voice + HUD summary), `AISSTREAM_API_KEY` (`aisstream-api`/`api-key` — live vessels), `CESIUM_ION_TOKEN` (`cesium-ion`/`token` — Bing stacks), `TOMTOM_API_KEY` (`tomtom-api`/`api-key` — live traffic flow), `FIRMS_MAP_KEY` (`firms-map`/`map-key` — live fires), `LL2_API_TOKEN` (`.env` only)
@@ -3005,6 +3750,7 @@ are omitted rather than framing the wrong part of the globe.
 - A cold OpenSky failure uses the current camera subpoint only to request a cached adsb.lol point fallback capped at 250 nm. A fresh OpenSky response or last-good cache wins; a nominally successful worldwide snapshot more than two minutes old prefers viewport-scoped adsb.lol when available, otherwise the stale source is reported honestly. The fallback is visibly source-labeled and is never presented as a worldwide snapshot.
 - GBFS proxy refuses upstream redirects (`redirect: 'manual'`; any 3xx becomes a 502 and the redirect target is logged server-side only) and enforces its 5 MB response cap while the body streams, cancelling the upstream read past the cap; CCTV health map is bounded.
 - Proxy error payloads are sanitized (no internal error details returned to clients).
+- That holds for the OpenAI and CCTV media paths too: `/api/openai/hud-summary` never relays OpenAI's own `error.message`, `/api/realtime/token` passes successful ephemeral-token responses through but answers with a fixed error when minting fails or upstream rejects the request, and a failed CCTV media fetch stores a fixed camera health `message` — `GET /api/cctv/health` serializes that field and the CCTV panel renders it as a status label, so it is a client surface as much as the response body is.
 - `OPENAI_API_KEY` is server-side only; the browser receives ephemeral Realtime client secrets from `/api/realtime/token`.
 - `AISSTREAM_API_KEY` is server-side only; the browser reads the same-origin `/api/ais-live` cache.
 - `/api/google/nearby-places` keeps the Google key out of Places requests issued for voice scene context.
@@ -3014,9 +3760,14 @@ are omitted rather than framing the wrong part of the globe.
 - `/api/route` proxies bounded OSRM route requests for annotation routes, with profile allowlisting, distance caps, response caps, caching, and sanitized "no route found" errors.
 - Track endpoints: `/api/ais-live/track?mmsi=` (server-accumulated ring buffers; sub-route handled before the rows snapshot), `/api/opensky-track?icao24=` (OAuth, 60s cache, sanitized errors, independent OpenSky credit bucket), `/api/adsblol/trace?hex=` (60s cache, 5MB cap, ODbL attribution required in UI).
 - Realtime debug logs redact API keys, bearer tokens, client secrets, and image data URLs before writing to disk; request bodies are size-capped.
+- `/api/realtime/debug-log` enforces an always-on 120-per-client/400-global one-minute limiter (not the opt-in `GEV_RATELIMIT_OPENAI_PER_MIN` bucket the cost-bearing OpenAI routes share), appends asynchronously through a serialized queue, and rotates `realtime-conversations.jsonl` at 32 MB keeping one prior generation, so the sink is bounded at twice that regardless of session length. A malformed record answers 400 and a failed write 500, both with a fixed message.
 
 ## UI/UX Runtime Defaults
 
+- Trackpad pinch zoom is registered as Cesium's `Ctrl+wheel` camera input.
+  Pixel-mode pinch deltas receive bounded amplification before reaching the
+  canvas; ordinary wheel, line/page-mode and native touch-pinch paths are left
+  unchanged. The application scene owns and removes the relay listener.
 - Z ladder: panels promote within 100–139 (renormalized on wrap), voice pill 150, toast 200, clean-view exit 300.
 - Panel POSITION keys are versioned `v8` (`godsEyeView.v8.panelPos.<id>`); collapsed-state keys remain `v6`. The one-time position reset clears stale DISPLAY placements that could overlap the Context rail.
 - Map Source lives in the bottom Visual Presets tray. The left accordion contains no MAP STACK panel, and the `k` panel token that addressed it is gone from the share registry, so legacy `ui=k...` state takes the ordinary unknown-token skip.
@@ -3025,6 +3776,7 @@ are omitted rather than framing the wrong part of the globe.
 - The desktop right rail (`#right-context-rail`) owns `DISPLAY`, `CCTV`, its active parameter controls, and `GLOBAL CONTEXT` as one fixed responsive stack in that order. Its compact buttons use the same 176 px width as the left accordion and one consistent 50 px height, share the left stack's 52 px edge inset and measured top baseline across HUD variants, then constrain themselves against visible HUD/chrome rectangles and the remaining vertical corridor. `DISPLAY` is no longer draggable and legacy saved coordinates are ignored.
 - The right rail is labeled **DISPLAY** (formerly "MOVE") and groups, in order, HUD, DETECT, Bloom, Sharpen, 3D, Clean-UI (HUD + DETECT promoted to the top). Its expanded controls retain the same compact 176 px width as the right-side tabs instead of growing to the wider Context detail-card width. It starts expanded on first run and respects the user's later `v6` collapse choice. Collapses/expands with directional chevrons (`◀` collapsed, `▶` expanded).
 - Display and Context use matching 330 px expanded widths and matching compact tab dimensions. The parameter panel is part of Display's expanded content. DISPLAY may remain open beside one contextual panel; CCTV and Context are mutually exclusive. In Tactical HUD, expanding CCTV or Context hides the other contextual launcher while DISPLAY remains independently available. The most recently opened right-rail panel owns the constrained lane even when it appears later in DOM order; passive restoration and automatic disclosure do not replace that explicit owner. Minimal and other HUD layouts retain the collapsed launchers; when their active panel exceeds the measured corridor, the rail reserves sibling heights and gaps and scrolls the active panel internally.
+- At 720px and below both panel stacks (`#left-panel-stack`, `#right-context-rail`) go edge-to-edge and scroll vertically. Every hosted panel's decorative `.panel-glow` is pinned to its panel box there (`inset: 0` in `src/ui/styles/responsive.css`): on desktop the glow overhangs the panel by 18–20 px as harmless paint, but inside a scroll container that overhang is scrollable overflow on both axes and drew a horizontal scrollbar band plus a vertical scrollbar that scrolled nothing but glow whenever CCTV, Context, Data Layers or Scenes was expanded. The glow's blur is ink overflow and never scrolls, so the look is unchanged. Do not fix this by clipping the stacks: `overflow-x: clip` would also clip the Context radio popover and would not remove the vertical scrollbar. Pinned by `src/ui/panelRails.test.mjs` against every `(max-width: 720px)` block in the flattened stylesheet.
 - `STYLE PRESETS` and `LOCATIONS` start collapsed, expand on intentional hover/click, and auto-collapse after hover leave delay.
 - Collapsed mini-status indicators show active style and active location/landmark.
 - Detection mode is user-controlled and should persist when switching styles. Since 2026-08-22 it also STARTS on — Dense @ 75% for every style on a first run, Normal included — as a `GLOBAL_POST_DEFAULTS` baseline that does NOT set `_detectionUserOverridden`. Exception (unchanged): selecting a military style (CRT/NVG/FLIR) auto-enables the same Dense preset, but only until the user manually changes detection this session (`_detectionUserOverridden` gate), after which style switches never touch it.
@@ -3099,7 +3851,7 @@ are omitted rather than framing the wrong part of the globe.
 - **Aircraft course slew:** civilian and military 3D models retain the 60°/s course limiter, but each rendered frame can consume at most 250 ms of accumulated slew time. A long tile/render stall therefore catches up over multiple visible frames instead of turning one delayed frame into a heading snap.
 - **Manual-first cockpit briefing:** the right-side Live Signals / Regional News / Local Info carousel does not advance automatically on page load. Previous, Next, and direct page controls remain available; the visible `CYCLE OFF` / `CYCLE ON` toggle explicitly starts or stops the nine-second page cycle, which still pauses on hover/focus and while collapsed, hidden, or outside cockpit mode. Live signal data continues refreshing in either state.
 - **Photoreal horizon blend:** Cesium's sky atmosphere remains enabled behind the hidden base globe, but its light intensity, saturation, and brightness are reduced from the library defaults so the distant Google Photorealistic 3D Tiles boundary blends into the sky instead of producing a bright cyan horizon seam.
-   - **Cockpit direction and speed tapes:** plausible destination metadata now drives one translucent, isometric visor chevron labeled directly below with the estimated geographic bearing; the prior full geodesic dashed path is not rendered. A mirrored live ground-speed tape follows the inside-left keyhole rim using the same responsive curve, end fades, fixed pointer, and fractional tick motion as the altitude tape on the right. Speed values scroll upward as they increase while altitude values scroll downward. Its tick endpoints and current-speed pointer share the rail's inset-circle origin, so the markings stay attached to the visible curve rather than drifting inward with the text-label gutter.
+  - **Cockpit direction and speed tapes:** plausible destination metadata now drives one translucent, isometric visor chevron labeled directly below with the estimated geographic bearing; the prior full geodesic dashed path is not rendered. A mirrored live ground-speed tape follows the inside-left keyhole rim using the same responsive curve, end fades, fixed pointer, and fractional tick motion as the altitude tape on the right. Speed values scroll upward as they increase while altitude values scroll downward. Its tick endpoints and current-speed pointer share the rail's inset-circle origin, so the markings stay attached to the visible curve rather than drifting inward with the text-label gutter.
 - Voice control UI (`#gev-voice-control`) shows status states OFF / CONNECTING / LISTENING / EXECUTING / ERROR.
 
 ### Current Global Post Defaults
@@ -3226,7 +3978,7 @@ easier to meet (detection is now on more often), but does not create it.
   samples and constant elevation during E/N drag; one shared-floor resolution on
   release; late one-shot shared-cell work is permitted during viewshed idle. The
   A+B harness intentionally excludes citywide LOD assertions.
-- Draggable panel positions persist at `godsEyeView.v7.panelPos.<panel-id>` (collapsed states at `godsEyeView.v6.panelCollapsed.<panel-id>`).
+- Panel positions have a versioned storage name, `godsEyeView.v8.panelPos.<panel-id>`, but the current rails lay panels out adaptively and write none. Collapsed state does persist for every panel at `godsEyeView.v6.panelCollapsed.<panel-id>` (`'0'` open, `'1'` closed, absent means the panel's own default).
 - Legacy draggable-panel position keys may remain in local storage for backward compatibility, but the map-mode right rail ignores them; collapsed states still persist at `godsEyeView.v6.panelCollapsed.<panel-id>`.
 - Flight/military tracked entities cache dead-reckoned positions per frame to avoid callback desync flicker.
 - Aircraft 3D-model and tracking invariants are covered by `npm run test:track`; run this before touching `flights.js`, `militaryFlights.js`, `detection.js`, or `trackedReadout.js`.
@@ -3247,7 +3999,8 @@ easier to meet (detection is now on more often), but does not create it.
 - Traffic runs in `sim` mode (white dots, hardcoded speeds) unless `TOMTOM_API_KEY`
   is configured (env or Keychain `tomtom-api`/`api-key`), which enables `live` mode:
   TomTom flow vector tiles via the budget-governed `/api/tomtom` proxy
-  (`.gev-cache/tomtom/`, 120 s TTL, `TOMTOM_DAILY_TILE_BUDGET` default 40k/day),
+  (`.gev-cache/tomtom/`, 120 s TTL, `TOMTOM_DAILY_TILE_BUDGET` default 6k/day,
+  sized so a 31-day month stays inside TomTom's 200K/month free allowance),
   decoded client-side (`flowTiles.js`), matched onto Overpass roads
   (`flowMatch.js`), and rendered as green/amber/red dot color + speed/density
   scaling (`trafficFlowStyle.js`); closures spawn no dots; unmatched roads stay
@@ -3341,7 +4094,6 @@ frames. Typing fields, modified keys and key repeats do not toggle it. The
 readout starts hidden each session and releases its timer and frame listener
 when hidden or when the application is disposed.
 
-
 ## Radio components
 
 The radio entry composes one layer from directory ingestion, station queries,
@@ -3384,3 +4136,55 @@ releases imagery layers/listeners on replacement. Destroy invalidates pending
 work and releases owned resources, including late factory results. Supplied 3D
 tilesets remain owned by the caller; tilesets created through the controller's
 factory are added to its viewer and removed on destruction.
+
+## Live CCTV integration candidate (#489)
+
+Daniel Slay's shared-decoder panel/projection feature is adapted to bounded
+HTTP(S) HLS. DelDOT uses official HTTPS HLS URLs; RTMP/ffmpeg remux is excluded
+because subprocess transport does not inherit the Node redirect policy. Server
+sessions reserve synchronously, cap memory and response bytes, reject redirects,
+and abort on release/shutdown. No disk store or background sweep exists while
+inactive. The panel paints the same video at at most 640px/15 fps; collapse stops
+its paint loop. Camera deactivation destroys the decoder, and fatal playback
+errors revert to the labeled frame fallback. Camera changes clear the old panel
+frame. hls.js is imported only when an HLS camera starts. Two live sessions may
+coexist with at most eight independent consumer leases each; no-access lease
+expiry is 15 seconds. Closing one consumer leaves other consumers running. Encrypted/fMP4/byte-range playlists fail
+closed. Performance and live agency reliability require recorded validation.
+
+## Wind forecast models
+
+Wind supports selectable GFS/IFS models with persisted model choice. Each fetch chooses the available cycle and forecast step nearest the current time; rows show both issue and valid UTC timestamps. Grid identities include model, cycle, forecast step and any requested scalar field. The six model/field cache slots each retain the last two issued grids for manifest/grid rollover, coalesce concurrent requests, retain last-good data on failures and retry no faster than once per minute. Model changes clear the old field immediately, cancel old acquisition and ignore superseded results.
+
+### Local Weather review candidate
+
+Weather combines the GFS/ECMWF surface forecast with three observation layers:
+NOAA Rain radar (CONUS), Satellite clouds (regional GOES or slower global infrared),
+and 15-minute lightning density (Americas and Pacific). One transient observed
+clock drives all enabled observation rows. Earlier/Later use the sorted union of
+non-suspended products' advertised times; each product selects its nearest frame
+at or before the requested UTC time, never a future frame or an interpolation.
+The maximum gap is 30 minutes for radar, regional infrared and lightning, and
+3 hours for hourly global infrared. A missing eligible frame hides that product
+and reports the gap; rows show actual displayed UTC time with synced/nearest labels.
+Manifest rollover preserves the requested history time, even when frames expire.
+
+Latest follows each product's own newest frame, so its timestamps can differ.
+Playback advances two seconds after all products settle, wraps, and stops with
+fewer than two union times or when all products are suspended. Hidden documents,
+reduced motion and unavailable imagery hosts suspend products. Re-enabling or
+restoring a host joins the retained history target. The wind row explicitly says
+“Forecast · does not follow history” while the observed clock is in history mode.
+The catalog exposes `weatherClock` and destroys it with its lifetime signal.
+
+Source, opacity, coverage navigation and transport controls live in the WEATHER
+panel's cards and timeline, not in the rows. The viewer clock is untouched.
+Observation layers are off by default; share/persist includes appearance and product, while history
+is transient and shared links open latest. Rendering retains the previous frame
+when an incoming frame fails; no eligible historical frame instead hides imagery.
+
+Desktop wind now allows 7,200 baked native GPU paths (narrow viewports remain at
+1,200). This doubles the maximum desktop geometry budget, not forecast resolution.
+Temperature uses stronger fixed −40..50°C colors; the underlying 1° forecast and
+numeric inspection values are unchanged. No volumetric cloud height or local rain
+arrival prediction is claimed. NOAA source limits are documented in DATA_SOURCES.

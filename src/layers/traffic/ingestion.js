@@ -73,7 +73,7 @@ export function createIngestion({
     if (!state) {
       const data = await response.json();
       signal?.throwIfAborted();
-      if (!Array.isArray(data?.elements))
+      if (!Array.isArray(data?.roads))
         throw new Error('Malformed road snapshot');
       return data;
     }
@@ -100,8 +100,7 @@ export function createIngestion({
     }
     const data = await response.json();
     signal?.throwIfAborted();
-    if (!Array.isArray(data?.elements))
-      throw new Error('Malformed road snapshot');
+    if (!Array.isArray(data?.roads)) throw new Error('Malformed road snapshot');
     if (state) {
       const responseEnd = parts.timing.trafficTimingMark(
         state,

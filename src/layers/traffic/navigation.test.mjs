@@ -82,13 +82,13 @@ function roads(bounds) {
   return {
     ok: true,
     json: async () => ({
-      elements: [
+      roads: [
         {
-          type: 'way',
-          tags: { highway: 'primary' },
-          geometry: [
-            { lat: bounds.south, lon: bounds.west },
-            { lat: bounds.south + 0.005, lon: bounds.west + 0.005 },
+          type: 'primary',
+          oneway: 0,
+          coordinates: [
+            [bounds.west, bounds.south],
+            [bounds.west + 0.005, bounds.south + 0.005],
           ],
         },
       ],

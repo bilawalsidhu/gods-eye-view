@@ -43,6 +43,17 @@ export const DATA_CREDITS = [
       '(ODbL 1.0)',
   },
   {
+    key: 'adsbdb',
+    html:
+      'Aircraft type, registration &amp; flight routes: ' +
+      '<a href="https://www.adsbdb.com" target="_blank" rel="noopener">adsbdb</a> ' +
+      '· aircraft data from PlaneBase · ICAO-to-N-number conversion by ' +
+      'Guillaume Michel · route data is the work of ' +
+      'David Taylor, Edinburgh, and Jim Mason, Glasgow, and may not be ' +
+      'copied, published, or incorporated into other databases without the ' +
+      'explicit permission of David J Taylor, Edinburgh',
+  },
+  {
     key: 'aisstream',
     html:
       'Live vessels (AIS): ' +
@@ -65,6 +76,15 @@ export const DATA_CREDITS = [
   {
     key: 'usgs',
     html: 'Earthquakes: Data courtesy of the U.S. Geological Survey',
+  },
+  {
+    key: 'nasa-gibs',
+    html:
+      'Recent imagery: We acknowledge the use of imagery provided by services from ' +
+      "NASA's Global Imagery Browse Services (GIBS), part of NASA's Earth Science " +
+      'Data and Information System (ESDIS). ' +
+      '<a href="https://gibs.earthdata.nasa.gov" target="_blank" rel="noopener">gibs.earthdata.nasa.gov</a> · ' +
+      '<a href="https://lpdaac.usgs.gov/products/hlss30v002/" target="_blank" rel="noopener">HLS product page</a>',
   },
   {
     key: 'overpass',
@@ -99,7 +119,7 @@ export const DATA_CREDITS = [
   {
     key: 'cockpit-place-osm',
     html:
-      'Cockpit place context: ' +
+      'Cockpit place context and last-resort place search: ' +
       '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> ' +
       'via Nominatim (ODbL 1.0)',
   },
@@ -137,6 +157,10 @@ export const DATA_CREDITS = [
       '<a href="https://its.txdot.gov/" target="_blank" rel="noopener">Texas Department of Transportation</a> (courtesy)',
   },
   {
+    key: 'deldot-cctv',
+    html: 'CCTV live video (Delaware): <a href="https://deldot.gov/map/" target="_blank" rel="noopener">DelDOT — Delaware Department of Transportation</a>',
+  },
+  {
     key: 'caltrans-cctv',
     html:
       'CCTV cameras &amp; frames (California): Caltrans — ' +
@@ -164,8 +188,28 @@ export const DATA_CREDITS = [
       'license CC BY 4.0',
   },
   {
+    key: 'calgary-cctv',
+    html:
+      'Traffic cameras (Calgary): contains information licensed under the ' +
+      '<a href="https://data.calgary.ca/stories/s/Open-Calgary-Terms-of-Use/u45n-7awa" target="_blank" rel="noopener">Open Government Licence – City of Calgary</a>',
+  },
+  {
     key: 'gbfs',
     html: 'Bikeshare availability: GBFS operator feeds (e.g. Austin BCycle)',
+  },
+  {
+    key: 'osrm-routing',
+    // The service asks for its attribution to carry a "fix the map" link, so
+    // a reader who spots a wrong turn can go and correct the data it came from.
+    html:
+      'Routing (voice routes and Directions): OSRM on the FOSSGIS servers — ' +
+      '<a href="https://routing.openstreetmap.de/about.html" target="_blank" rel="noopener">routing.openstreetmap.de</a> · ' +
+      '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> (ODbL) · ' +
+      '<a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noopener">fix the map</a>',
+  },
+  {
+    key: 'gtfs-rt',
+    html: 'Transit vehicles: operator GTFS-Realtime feeds (each operator is credited below when its vehicles are shown)',
   },
   {
     key: 'radio-browser',
@@ -180,6 +224,34 @@ export const DATA_CREDITS = [
       'Terrain (keyless globe stacks): ' +
       '<a href="https://terrain.reearth.land" target="_blank" rel="noopener">Re:Earth Terrain</a> / ' +
       'Mapterhorn (CC BY 4.0) / EGM2008 (NGA)',
+  },
+  {
+    key: 'weather-noaa',
+    html: 'Observed weather: <a href="https://nowcoast.noaa.gov/" target="_blank" rel="noopener">NOAA nowCOAST</a> · NWS/OAR MRMS radar; NESDIS GOES and global satellite partners. <a href="https://oceanservice.noaa.gov/disclaimer.html" target="_blank" rel="noopener">Source disclaimer</a>.',
+  },
+  {
+    key: 'weather-cyclones',
+    html: 'Cyclone advisories: <a href="https://www.nhc.noaa.gov/" target="_blank" rel="noopener">NOAA/NWS NHC / CPHC</a> · Atlantic and eastern/central North Pacific. Forecast center uncertainty, not storm size.',
+  },
+  {
+    key: 'weather-lightning',
+    html: 'Lightning density: NOAA/NWS nowCOAST · derived from Vaisala NLDN/GLD360. <a href="https://ocean.weather.gov/lightning/lightning_pdd.php" target="_blank" rel="noopener">Public derived density product</a>, not raw detections.',
+  },
+  {
+    key: 'wind-gfs',
+    html:
+      'Wind: resampled NOAA Global Forecast System (GFS) 10 m wind via ' +
+      '<a href="https://registry.opendata.aws/noaa-gfs-bdp-pds/" target="_blank" rel="noopener">NOAA Open Data on AWS</a> ' +
+      '(U.S. public domain; forecast, not observations)',
+  },
+  {
+    key: 'ecmwf-ifs',
+    html:
+      'This service is based on data and products of the European Centre for Medium-Range Weather Forecasts (ECMWF). ' +
+      '<a href="https://www.ecmwf.int/en/forecasts/datasets/open-data" target="_blank" rel="noopener">ECMWF Open Data</a> · ' +
+      '<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>. ' +
+      'Modified: resampled 10 m IFS forecast vectors and animated display. ' +
+      'ECMWF does not accept any liability whatsoever for any error or omission in the data, their availability, or for any loss or damage arising from their use.',
   },
   // ── Bundled snapshots ───────────────────────────────────────────
   {
@@ -271,6 +343,49 @@ export const NATURAL_EARTH_CREDIT = {
     '<a href="https://www.naturalearthdata.com" target="_blank" rel="noopener">Natural Earth</a> (public domain)',
 };
 
+/**
+ * Per-feed transit credit, registered the first time that feed's vehicles
+ * render (see `src/data/transitFeeds.js` for the license of each).
+ * @param {{ id: string, attribution: string, license: string, licenseUrl: string }} feed
+ * @returns {{ key: string, html: string }}
+ */
+export function transitFeedCredit(feed) {
+  const escape = (text) =>
+    String(text)
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;');
+  return {
+    key: `transit-${feed.id}`,
+    html:
+      `Transit (${escape(feed.attribution)}): ` +
+      `<a href="${escape(feed.licenseUrl)}" target="_blank" rel="noopener">${escape(feed.license)}</a>`,
+  };
+}
+
+/** Registered when the Bhote Koshi event reconstruction activates. */
+export const BHOTE_KOSHI_CREDIT = {
+  key: 'bhote-koshi-2026',
+  html:
+    'Bhote Koshi 2026 event imagery and derived reconstruction: ' +
+    '<a href="https://vantor.com/company/open-data-program" target="_blank" rel="noopener">Vantor Open Data</a> ' +
+    'and <a href="https://github.com/geo-pera/bhotekoshi-2026-reconstruction" target="_blank" rel="noopener">GeoPera</a> ' +
+    '(CC BY-NC 4.0); terrain © Re:Earth / Mapterhorn (CC BY 4.0)',
+};
+
+/** Registered when the scene-friendly Nepal incident locator activates. */
+export const BHOTE_KOSHI_LOCATOR_CREDIT = {
+  key: 'bhote-koshi-locator',
+  html:
+    'Nepal administrative boundary and nearby-city locations: ' +
+    '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> ' +
+    '(ODbL 1.0); incident-place anchors use an owner-curated, source-verified geolocation union; ' +
+    'flood corridor derived from the ' +
+    '<a href="https://github.com/geo-pera/bhotekoshi-2026-reconstruction/blob/main/vectors/river_centerline.geojson" target="_blank" rel="noopener">GeoPera river centerline</a> ' +
+    '(CC BY-NC 4.0)',
+};
+
 /** @type {Set<string>} Keys of dynamic credits already registered this session. */
 const _dynamicCreditKeys = new Set();
 
@@ -300,12 +415,12 @@ export function registerDynamicCredit(viewer, credit) {
  * present in the "Data attribution" popover.
  * @param {Cesium.Viewer} viewer — the initialized Cesium viewer
  */
-export function registerDataCredits(viewer) {
+export function registerDataCredits(viewer, credits = DATA_CREDITS) {
   const creditDisplay = viewer?.creditDisplay;
   if (!creditDisplay || typeof creditDisplay.addStaticCredit !== 'function') {
     return;
   }
-  for (const { html } of DATA_CREDITS) {
+  for (const { html } of credits) {
     // showOnScreen=false → lives in the expandable "Data attribution" popover,
     // not the on-globe credit line.
     creditDisplay.addStaticCredit(new Cesium.Credit(html, false));

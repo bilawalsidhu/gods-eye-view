@@ -2838,7 +2838,7 @@ async function withAwareness(harness, run) {
       : originals.cartoFrom(value)
   );
   try {
-    return await run();
+    return await run(awareness);
   } finally {
     awareness.getContextSnapshot = originals.snapshot;
     flightsLayer.getNearby = originals.flightsNearby;
@@ -2847,7 +2847,7 @@ async function withAwareness(harness, run) {
   }
 }
 
-function analystRunner() {
+function analystRunner(awareness) {
   const flights = {
     id: 'flights',
     // Deliberately a DIFFERENT population from the proximity window: this is
@@ -2869,7 +2869,7 @@ function analystRunner() {
     viewer,
     styleManager: {},
     dataManager: {
-      layers: new Map([['flights', { module: flights }]]),
+      layers: new Map([['flights', { module: flights }], ['military-awareness', { module: awareness }]]),
       isEnabled: (id) => id === 'flights',
       getAll: () => [{ id: 'flights', name: 'Live Flights', enabled: true, stats: { count: 1 } }],
     },
@@ -2883,8 +2883,8 @@ test('front5: a nearby ask centres on the Contacts SUBJECT, not the selected dat
     flights: Array.from({ length: 111 }, (_, i) => ({ id: `F${i}`, icao24: `f${i}`, distance: 1000 * i })),
     military: Array.from({ length: 5 }, (_, i) => ({ id: `M${i}`, icao24: `m${i}`, distance: 500 * i })),
   });
-  await withAwareness(harness, async () => {
-    const runner = analystRunner();
+  await withAwareness(harness, async (awareness) => {
+    const runner = analystRunner(awareness);
     const result = await runner('analyst_query', {
       layers: ['flights', 'military'],
       // The centre the model reached for in the field: the selected datacenter.
@@ -2913,13 +2913,13 @@ test('front5: the spoken count and the panel window are ONE number by constructi
     flights: Array.from({ length: 111 }, (_, i) => ({ id: `F${i}`, icao24: `f${i}` })),
     military: Array.from({ length: 5 }, (_, i) => ({ id: `M${i}`, icao24: `m${i}` })),
   });
-  await withAwareness(harness, async () => {
+  await withAwareness(harness, async (awareness) => {
     // What the PANEL computes for this subject...
     const panel = collectAircraftProximityWindow(harness.snapshot.subject.position, {
       subject: harness.snapshot.subject,
     });
     // ...and what VOICE answers for the same subject.
-    const spoken = await analystRunner()('analyst_query', {
+    const spoken = await analystRunner(awareness)('analyst_query', {
       layers: ['flights', 'military'],
       scope: { kind: 'radius', km: 250 },
     });
@@ -2936,8 +2936,8 @@ test('front5: the spoken count and the panel window are ONE number by constructi
 test('front5: Contacts active with NO subject falls back to the view, not an empty panel', async () => {
   globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
   const harness = awarenessSubjectHarness({ subject: null });
-  await withAwareness(harness, async () => {
-    const result = await analystRunner()('analyst_query', {
+  await withAwareness(harness, async (awareness) => {
+    const result = await analystRunner(awareness)('analyst_query', {
       layers: ['flights'],
       scope: { kind: 'radius', km: 250 },
     });
@@ -2954,8 +2954,8 @@ test('front5: an explicit region still uses the region engine while Contacts is 
     subject: { id: 'a1b2c3', label: 'N546PC' },
     flights: Array.from({ length: 111 }, (_, i) => ({ id: `F${i}`, icao24: `f${i}` })),
   });
-  await withAwareness(harness, async () => {
-    const result = await analystRunner()('analyst_query', {
+  await withAwareness(harness, async (awareness) => {
+    const result = await analystRunner(awareness)('analyst_query', {
       layers: ['flights'],
       scope: { kind: 'region', name: 'Texas' },
     });
@@ -2988,8 +2988,8 @@ test('front5: the box DIAGONAL is not the subject — 1.32 km away is somewhere 
   // separation is 1.32 km. This is the case the coordinator flagged: a centre
   // far enough to be a different place, slipping through on the diagonal.
   globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
-  await withAwareness(subjectWindowHarness(), async () => {
-    const result = await analystRunner()('analyst_query', {
+  await withAwareness(subjectWindowHarness(), async (awareness) => {
+    const result = await analystRunner(awareness)('analyst_query', {
       layers: ['flights', 'military'],
       scope: { kind: 'radius', km: 250, center: { lat: 29.9 + 0.009, lon: -97.9 + 0.009 } },
     });
@@ -3009,8 +3009,8 @@ test('front5: 0.99 km due EAST is the subject, though a degree box rejects it', 
   // 0.99 km — inside 1 km — yet over the 0.01 box threshold. A box would send
   // the operator a different, smaller number for a centre that IS the contact.
   globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
-  await withAwareness(subjectWindowHarness(), async () => {
-    const result = await analystRunner()('analyst_query', {
+  await withAwareness(subjectWindowHarness(), async (awareness) => {
+    const result = await analystRunner(awareness)('analyst_query', {
       layers: ['flights', 'military'],
       scope: { kind: 'radius', km: 250, center: { lat: 29.9, lon: -97.9 + 0.0103 } },
     });
@@ -3163,4 +3163,110 @@ test('ALPR common names toggle only the registered camera layer through the norm
       assert.deepEqual(calls.at(-1), ['alpr-cameras', value]);
     }
   }
+});
+
+test('ISS voice lookup uses the registered satellite instance', async () => {
+  const calls = [];
+  const viewer = {
+    clock: { onTick: { addEventListener: () => () => {} } },
+    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+    camera: { moveEnd: { addEventListener() {} } },
+  };
+  const runner = createGevActionRunner({ viewer, styleManager: {}, dataManager: {
+    layers: new Map([['satellites', { module: { getNextIssPass(query) {
+      calls.push(query);
+      return { status: 'none' };
+    } } }]]),
+  } });
+  const result = await runner('next_iss_pass', { latitude: 30, longitude: -97, minElevationDeg: 15 });
+  assert.deepEqual(calls, [{ latDeg: 30, lonDeg: -97, minElevDeg: 15 }]);
+  assert.match(result.error, /No ISS pass above 15/);
+});
+
+test('analyst_query and get_current_view_state carry stale feed provenance', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const now = Date.now();
+  const flights = {
+    id: 'flights',
+    source: 'OpenSky Network',
+    getStats: () => ({
+      source: 'OpenSky Network',
+      stale: true,
+      count: 12,
+      lastUpdate: now - 240_000,
+    }),
+    getAnalystRecords: () => ([
+      { id: 'SWA1', icao24: 'aaa001', lat: 30.27, lon: -97.74, altitudeM: 11000, onGround: false },
+    ]),
+  };
+  const viewer = {
+    clock: { onTick: { addEventListener: () => () => {} } },
+    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+    camera: {
+      moveEnd: { addEventListener() {} },
+      positionWC: Cesium.Cartesian3.fromDegrees(-97.7, 30.2, 1000),
+      positionCartographic: { height: 300_000, latitude: 0.52, longitude: -1.71 },
+    },
+  };
+  const dataManager = {
+    layers: new Map([['flights', { module: flights }]]),
+    isEnabled: (id) => id === 'flights',
+    getAll: () => [{
+      id: 'flights',
+      name: 'Live Flights',
+      enabled: true,
+      source: 'OpenSky Network',
+      stats: flights.getStats(),
+    }],
+  };
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager: {
+      activeStyle: 'normal',
+      getContextModeState: () => ({ mode: null, active: false }),
+      getCockpitState: () => ({ active: false }),
+      getControlState: () => null,
+    },
+    dataManager,
+  });
+  const view = await runner('get_current_view_state');
+  assert.equal(view.layers[0].feedState, 'stale');
+  assert.equal(view.feedProvenance.overall, 'stale');
+  assert.match(view.feedProvenance.note, /STALE/);
+
+  const query = await runner('analyst_query', {
+    layers: ['flights'],
+    scope: { kind: 'view' },
+    limit: 5,
+  });
+  assert.equal(query.ok, true);
+  assert.equal(query.feedState, 'stale');
+  assert.equal(query.feedProvenance.overall, 'stale');
+  assert.equal(query.coverage.layersQueried[0].feedState, 'stale');
+  assert.match(query.feedProvenance.note, /do not describe this as live/i);
+});
+
+
+test('general satellite pass resolves once, refuses ambiguity, and preserves ISS call semantics', async () => {
+  const calls = [];
+  const pass = { riseMs: Date.now() + 60000, setMs: Date.now() + 360000, maxElevMs: Date.now() + 180000, maxElevDeg: 30, riseAzDeg: 90, visible: false };
+  const layer = {
+    resolveSatelliteForPass(target) { return target === 'starlink' ? { status: 'ambiguous', candidates: [{ noradId: 1 }, { noradId: 2 }] } : { status: 'ok', noradId: 25544, name: 'ISS' }; },
+    getNextSatellitePass(id, options) { calls.push({ id, ...options }); return { status: 'ok', pass }; },
+    getNextIssPass(options) { calls.push(options); return { status: 'ok', pass }; },
+  };
+  const viewer = { clock: { onTick: { addEventListener: () => () => {} } }, scene: { canvas: { addEventListener() {}, removeEventListener() {} } }, camera: { moveEnd: { addEventListener() {} } } };
+  const runner = createGevActionRunner({ viewer, styleManager: {}, dataManager: { layers: new Map([['satellites', { module: layer }]]) } });
+  const ambiguous = await runner('next_satellite_pass', { target: 'starlink' });
+  assert.equal(ambiguous.status, 'ambiguous');
+  assert.equal(calls.length, 0);
+  const args = { latitude: 30, longitude: -97, minElevationDeg: 15 };
+  const general = await runner('next_satellite_pass', { target: '25544', visibleOnly: true, ...args });
+  assert.equal(general.action, 'next_satellite_pass');
+  assert.deepEqual(calls[0], { id: 25544, latDeg: 30, lonDeg: -97, minElevDeg: 15, requireVisible: true });
+  const iss = await runner('next_iss_pass', args);
+  assert.deepEqual(calls[1], { latDeg: 30, lonDeg: -97, minElevDeg: 15 });
+  for (const key of ['observer', 'riseIso', 'minutesFromNow', 'durationMin', 'peakElevationDeg', 'riseDirection']) assert.deepEqual(iss[key], general[key]);
+  assert.equal(iss.visible, false);
+  assert.equal(iss.action, 'next_iss_pass');
 });

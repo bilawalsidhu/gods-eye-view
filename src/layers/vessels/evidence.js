@@ -17,28 +17,29 @@ export function createEvidence({
       return { ok: false, count: 0 };
     }
     components.selection.clearVesselInspection();
-    components.store.reconcileVessels(
+    components.snapshots.reconcileVessels(
       state.viewer,
       Array.isArray(rows) ? rows : [],
     );
-    state.count = state.vesselRecords.length;
-    state.loaded = true;
-    state.error = null;
-    state.stale = false;
-    state.lastUpdate = Date.now();
-    state.transportStatus = 'synthetic';
-    state.lastMessageAt = null;
-    state.rawRowCount = Array.isArray(rows) ? rows.length : 0;
-    state.acceptedRowCount = state.count;
-    return { ok: true, count: state.count };
+    state.feed.count = state.records.all.length;
+    state.feed.loaded = true;
+    state.feed.error = null;
+    state.feed.stale = false;
+    state.feed.partial = false;
+    state.feed.lastUpdate = Date.now();
+    state.feed.transportStatus = 'synthetic';
+    state.feed.lastMessageAt = null;
+    state.feed.rawRowCount = Array.isArray(rows) ? rows.length : 0;
+    state.feed.acceptedRowCount = state.feed.count;
+    return { ok: true, count: state.feed.count };
   }
 
   /** JSON-safe vessel alpha/position snapshot for the evidence report. */
 
   function _focusEvidenceVesselSnapshot() {
     if (!FOCUS_EVIDENCE_DEV || !state.viewer) return [];
-    return state.vesselRecords.map((record) => {
-      const bb = record.billboard;
+    return state.records.all.map((record) => {
+      const bb = components.rendering.getVisual(record).billboard;
       const screen = bb?.position
         ? Cesium.SceneTransforms.worldToWindowCoordinates(
             state.viewer.scene,

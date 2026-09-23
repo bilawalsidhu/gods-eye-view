@@ -45,6 +45,8 @@ export function validatePlacesCoordinates(searchParams) {
 /** Nearby place labels and view-biased text search, with request-time key resolution. */
 export function googlePlacesContextProxy({
   resolveApiKey = googleServerApiKey,
+  fetchImpl = (...args) => fetch(...args),
+  endpoints = {},
 } = {}) {
   function install(middlewares) {
     middlewares.use('/api/google/nearby-places', async (req, res) => {
@@ -96,10 +98,12 @@ export function googlePlacesContextProxy({
       );
 
       try {
-        const response = await fetch(
-          'https://places.googleapis.com/v1/places:searchNearby',
+        const response = await fetchImpl(
+          endpoints.nearby ||
+            'https://places.googleapis.com/v1/places:searchNearby',
           {
             method: 'POST',
+            redirect: 'error',
             headers: {
               'Content-Type': 'application/json',
               'X-Goog-Api-Key': apiKey,
@@ -214,10 +218,12 @@ export function googlePlacesContextProxy({
       );
 
       try {
-        const response = await fetch(
-          'https://places.googleapis.com/v1/places:searchText',
+        const response = await fetchImpl(
+          endpoints.textSearch ||
+            'https://places.googleapis.com/v1/places:searchText',
           {
             method: 'POST',
+            redirect: 'error',
             headers: {
               'Content-Type': 'application/json',
               'X-Goog-Api-Key': apiKey,

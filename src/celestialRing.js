@@ -90,16 +90,30 @@ export function getKeyholeGeometry(width, height) {
  * floor through a band derived from the live keyhole radius.
  */
 export function keyholeLabelAlpha(labelX, labelY, width, height) {
-  return keyholeLabelAlphaFromGeometry(labelX, labelY, getKeyholeGeometry(width, height));
+  return keyholeLabelAlphaFromGeometry(
+    labelX,
+    labelY,
+    getKeyholeGeometry(width, height),
+  );
 }
 
 /** Compute keyhole opacity from geometry already cached by a hot render loop. */
 export function keyholeLabelAlphaFromGeometry(labelX, labelY, geometry) {
-  if (!geometry || !(geometry.radius > 0) || !Number.isFinite(labelX) || !Number.isFinite(labelY)) return 0;
+  if (
+    !geometry ||
+    !(geometry.radius > 0) ||
+    !Number.isFinite(labelX) ||
+    !Number.isFinite(labelY)
+  )
+    return 0;
   const feather = geometry.featherPx;
-  const distance = Math.hypot(labelX - geometry.centerX, labelY - geometry.centerY);
+  const distance = Math.hypot(
+    labelX - geometry.centerX,
+    labelY - geometry.centerY,
+  );
   if (distance <= geometry.radius) return 1;
-  if (!(feather > 0) || distance >= geometry.radius + feather) return keyholeOutsideOpacity;
+  if (!(feather > 0) || distance >= geometry.radius + feather)
+    return keyholeOutsideOpacity;
   const progress = clamp((distance - geometry.radius) / feather, 0, 1);
   return 1 - (1 - keyholeOutsideOpacity) * progress;
 }
@@ -131,7 +145,11 @@ export function isCelestialRingStyleSupported(styleName) {
  * @param {number} lastAngle - Previous stable angle in radians.
  * @returns {{angle:number, opacity:number, stable:boolean}}
  */
-export function celestialScreenAngle(rightComponent, upComponent, lastAngle = 0) {
+export function celestialScreenAngle(
+  rightComponent,
+  upComponent,
+  lastAngle = 0,
+) {
   const planeLength = Math.hypot(rightComponent, upComponent);
   if (!Number.isFinite(planeLength) || planeLength < CELESTIAL_PLANE_EPSILON) {
     return {
@@ -170,26 +188,42 @@ export function isFullGlobeInsideKeyhole(geometry, wasVisible = false) {
     keyholeCenterY,
     keyholeRadius,
   } = geometry || {};
-  const values = [earthCenterX, earthCenterY, earthRadius, keyholeCenterX, keyholeCenterY, keyholeRadius];
-  if (!values.every(Number.isFinite) || earthRadius <= 0 || keyholeRadius <= 0) return false;
-  const offset = Math.hypot(earthCenterX - keyholeCenterX, earthCenterY - keyholeCenterY);
+  const values = [
+    earthCenterX,
+    earthCenterY,
+    earthRadius,
+    keyholeCenterX,
+    keyholeCenterY,
+    keyholeRadius,
+  ];
+  if (!values.every(Number.isFinite) || earthRadius <= 0 || keyholeRadius <= 0)
+    return false;
+  const offset = Math.hypot(
+    earthCenterX - keyholeCenterX,
+    earthCenterY - keyholeCenterY,
+  );
   const clearance = keyholeRadius - (offset + earthRadius);
-  return clearance >= (wasVisible ? GLOBE_EXIT_CLEARANCE_PX : GLOBE_ENTER_CLEARANCE_PX);
+  return (
+    clearance >=
+    (wasVisible ? GLOBE_EXIT_CLEARANCE_PX : GLOBE_ENTER_CLEARANCE_PX)
+  );
 }
 
 /** Return the Earth-disc radius in CSS pixels for a perspective camera. */
 export function earthDiscScreenRadius(cameraDistance, viewportHeight, fovy) {
   const earthRadiusM = Cesium.Ellipsoid.WGS84.maximumRadius;
   if (
-    !Number.isFinite(cameraDistance)
-    || cameraDistance <= earthRadiusM
-    || !(viewportHeight > 0)
-    || !Number.isFinite(fovy)
-    || fovy <= 0
-    || fovy >= Math.PI
-  ) return null;
+    !Number.isFinite(cameraDistance) ||
+    cameraDistance <= earthRadiusM ||
+    !(viewportHeight > 0) ||
+    !Number.isFinite(fovy) ||
+    fovy <= 0 ||
+    fovy >= Math.PI
+  )
+    return null;
   const angularRadius = Math.asin(clamp(earthRadiusM / cameraDistance, 0, 1));
-  const radius = (viewportHeight * 0.5) * Math.tan(angularRadius) / Math.tan(fovy * 0.5);
+  const radius =
+    (viewportHeight * 0.5 * Math.tan(angularRadius)) / Math.tan(fovy * 0.5);
   return Number.isFinite(radius) && radius > 0 ? radius : null;
 }
 
@@ -216,7 +250,11 @@ export function projectEarthDiscToViewport(
   if (!camera || !scene || !(width > 0) || !(height > 0)) return null;
 
   const distance = Cesium.Cartesian3.magnitude(camera.positionWC);
-  if (!Number.isFinite(distance) || distance <= Cesium.Ellipsoid.WGS84.maximumRadius) return null;
+  if (
+    !Number.isFinite(distance) ||
+    distance <= Cesium.Ellipsoid.WGS84.maximumRadius
+  )
+    return null;
 
   const toCenter = Cesium.Cartesian3.negate(
     camera.positionWC,
@@ -229,9 +267,14 @@ export function projectEarthDiscToViewport(
     Cesium.Cartesian3.ZERO,
     scratchCenter,
   );
-  if (!center || !Number.isFinite(center.x) || !Number.isFinite(center.y)) return null;
+  if (!center || !Number.isFinite(center.x) || !Number.isFinite(center.y))
+    return null;
 
-  const earthRadius = earthDiscScreenRadius(distance, height, camera.frustum?.fovy);
+  const earthRadius = earthDiscScreenRadius(
+    distance,
+    height,
+    camera.frustum?.fovy,
+  );
   if (!earthRadius) return null;
 
   const keyhole = getKeyholeGeometry(width, height);
@@ -286,7 +329,12 @@ function drawSunRays(ctx, cx, cy, radius, innerRadius, angle) {
   glow.addColorStop(0.58, 'rgba(255, 235, 188, 0.027)');
   glow.addColorStop(1, 'rgba(255, 242, 214, 0)');
   ctx.fillStyle = glow;
-  ctx.fillRect(cx - radius - 4, cy - radius - 4, (radius + 4) * 2, (radius + 4) * 2);
+  ctx.fillRect(
+    cx - radius - 4,
+    cy - radius - 4,
+    (radius + 4) * 2,
+    (radius + 4) * 2,
+  );
 
   ctx.lineCap = 'round';
   ctx.shadowColor = 'rgba(255, 232, 171, 0.11)';
@@ -299,7 +347,10 @@ function drawSunRays(ctx, cx, cy, radius, innerRadius, angle) {
     const ex = sx + Math.cos(rayAngle) * rayLength;
     const ey = sy + Math.sin(rayAngle) * rayLength;
     const lineGradient = ctx.createLinearGradient(sx, sy, ex, ey);
-    lineGradient.addColorStop(0, `rgba(255, 230, 166, ${0.075 - Math.abs(i) * 0.011})`);
+    lineGradient.addColorStop(
+      0,
+      `rgba(255, 230, 166, ${0.075 - Math.abs(i) * 0.011})`,
+    );
     lineGradient.addColorStop(1, 'rgba(255, 226, 156, 0)');
     ctx.strokeStyle = lineGradient;
     ctx.lineWidth = i === 0 ? 1.8 : 0.9;
@@ -340,7 +391,8 @@ export class CelestialRing {
     this.viewer = viewer;
     this.enabled = !!enabled;
     this.visible = false;
-    this._onAutoDisable = typeof onAutoDisable === 'function' ? onAutoDisable : null;
+    this._onAutoDisable =
+      typeof onAutoDisable === 'function' ? onAutoDisable : null;
     this._focusInProgress = false;
     this._ephemerisDirty = true;
     this._ephemerisUpdateCount = 0;
@@ -364,7 +416,9 @@ export class CelestialRing {
     this._fixedMatrix = new Cesium.Matrix3();
 
     this._buildDOM();
-    this._removePostRender = viewer.scene.postRender.addEventListener(() => this._draw());
+    this._removePostRender = viewer.scene.postRender.addEventListener(() =>
+      this._draw(),
+    );
     // Pre-existing staleness fix (perf wave 2 review): the ephemeris was
     // sampled once per visible-enable from the FROZEN app clock, so the
     // sun/moon markers aged with the app. Resample real wall time each
@@ -394,18 +448,26 @@ export class CelestialRing {
 
     this._sunCanvas = document.createElement('canvas');
     this._sunCanvas.className = 'celestial-ring-canvas celestial-sun-canvas';
-    this._sunCtx = this._sunCanvas.getContext('2d', { alpha: true, desynchronized: true });
+    this._sunCtx = this._sunCanvas.getContext('2d', {
+      alpha: true,
+      desynchronized: true,
+    });
 
     this._moonCanvas = document.createElement('canvas');
     this._moonCanvas.className = 'celestial-ring-canvas celestial-moon-canvas';
-    this._moonCtx = this._moonCanvas.getContext('2d', { alpha: true, desynchronized: true });
+    this._moonCtx = this._moonCanvas.getContext('2d', {
+      alpha: true,
+      desynchronized: true,
+    });
 
     this._sunMarker = document.createElement('span');
-    this._sunMarker.className = 'celestial-marker celestial-sun material-symbols-outlined';
+    this._sunMarker.className =
+      'celestial-marker celestial-sun material-symbols-outlined';
     this._sunMarker.textContent = 'light_mode';
 
     this._moonMarker = document.createElement('span');
-    this._moonMarker.className = 'celestial-marker celestial-moon material-symbols-outlined';
+    this._moonMarker.className =
+      'celestial-marker celestial-moon material-symbols-outlined';
     this._moonMarker.textContent = 'dark_mode';
 
     this._root.append(
@@ -413,7 +475,7 @@ export class CelestialRing {
       this._sunCanvas,
       this._moonCanvas,
       this._sunMarker,
-      this._moonMarker
+      this._moonMarker,
     );
     this.viewer.container.appendChild(this._root);
   }
@@ -458,15 +520,24 @@ export class CelestialRing {
     const height = canvas.clientHeight || canvas.height;
     const cartographic = this.viewer.camera.positionCartographic;
     const fovy = this.viewer.camera.frustum?.fovy;
-    if (!(height > 0) || !cartographic || !Number.isFinite(fovy) || fovy <= 0 || fovy >= Math.PI) {
+    if (
+      !(height > 0) ||
+      !cartographic ||
+      !Number.isFinite(fovy) ||
+      fovy <= 0 ||
+      fovy >= Math.PI
+    ) {
       return false;
     }
 
     const earthRadius = Cesium.Ellipsoid.WGS84.maximumRadius;
-    const keyholeRadius = getKeyholeGeometry(canvas.clientWidth || canvas.width, height).radius;
+    const keyholeRadius = getKeyholeGeometry(
+      canvas.clientWidth || canvas.width,
+      height,
+    ).radius;
     const targetScreenRadius = keyholeRadius * FULL_GLOBE_RADIUS_RATIO;
     const angularRadius = Math.atan(
-      (targetScreenRadius / (height * 0.5)) * Math.tan(fovy * 0.5)
+      (targetScreenRadius / (height * 0.5)) * Math.tan(fovy * 0.5),
     );
     const distance = earthRadius / Math.max(Math.sin(angularRadius), 1e-4);
     const altitude = Math.max(earthRadius * 1.55, distance - earthRadius);
@@ -480,7 +551,7 @@ export class CelestialRing {
       destination: Cesium.Cartesian3.fromRadians(
         cartographic.longitude,
         cartographic.latitude,
-        altitude
+        altitude,
       ),
       orientation: {
         heading: this.viewer.camera.heading,
@@ -500,7 +571,10 @@ export class CelestialRing {
 
   /** Clear the backing canvas. */
   _clear() {
-    for (const [canvas, ctx] of [[this._sunCanvas, this._sunCtx], [this._moonCanvas, this._moonCtx]]) {
+    for (const [canvas, ctx] of [
+      [this._sunCanvas, this._sunCtx],
+      [this._moonCanvas, this._moonCtx],
+    ]) {
       if (canvas && ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
     this._ringOutline?.style.setProperty('display', 'none');
@@ -512,12 +586,23 @@ export class CelestialRing {
   /** Resize the canvas backing store while drawing in CSS pixels. */
   _resize(width, height) {
     const nativeDpr = Math.max(1, window.devicePixelRatio || 1);
-    const pixelsScale = Math.sqrt(CELESTIAL_MAX_BACKING_PIXELS / (width * height));
-    const dimensionScale = CELESTIAL_MAX_BACKING_DIMENSION / Math.max(width, height);
-    const dpr = Math.min(nativeDpr, CELESTIAL_MAX_DEVICE_PIXEL_RATIO, pixelsScale, dimensionScale);
+    const pixelsScale = Math.sqrt(
+      CELESTIAL_MAX_BACKING_PIXELS / (width * height),
+    );
+    const dimensionScale =
+      CELESTIAL_MAX_BACKING_DIMENSION / Math.max(width, height);
+    const dpr = Math.min(
+      nativeDpr,
+      CELESTIAL_MAX_DEVICE_PIXEL_RATIO,
+      pixelsScale,
+      dimensionScale,
+    );
     const bw = Math.max(1, Math.round(width * dpr));
     const bh = Math.max(1, Math.round(height * dpr));
-    for (const [canvas, ctx] of [[this._sunCanvas, this._sunCtx], [this._moonCanvas, this._moonCtx]]) {
+    for (const [canvas, ctx] of [
+      [this._sunCanvas, this._sunCtx],
+      [this._moonCanvas, this._moonCtx],
+    ]) {
       if (canvas.width !== bw || canvas.height !== bh) {
         canvas.width = bw;
         canvas.height = bh;
@@ -536,14 +621,25 @@ export class CelestialRing {
   _updateEphemeris(time) {
     if (!this._ephemerisDirty) return true;
 
-    Cesium.Simon1994PlanetaryPositions.computeSunPositionInEarthInertialFrame(time, this._sunInertial);
-    Cesium.Simon1994PlanetaryPositions.computeMoonPositionInEarthInertialFrame(time, this._moonInertial);
-    const matrix = Cesium.Transforms.computeIcrfToFixedMatrix(time, this._fixedMatrix)
-      || Cesium.Transforms.computeTemeToPseudoFixedMatrix(time, this._fixedMatrix);
+    Cesium.Simon1994PlanetaryPositions.computeSunPositionInEarthInertialFrame(
+      time,
+      this._sunInertial,
+    );
+    Cesium.Simon1994PlanetaryPositions.computeMoonPositionInEarthInertialFrame(
+      time,
+      this._moonInertial,
+    );
+    const matrix =
+      Cesium.Transforms.computeIcrfToFixedMatrix(time, this._fixedMatrix) ||
+      Cesium.Transforms.computeTemeToPseudoFixedMatrix(time, this._fixedMatrix);
     if (!matrix) return false;
 
     Cesium.Matrix3.multiplyByVector(matrix, this._sunInertial, this._sunFixed);
-    Cesium.Matrix3.multiplyByVector(matrix, this._moonInertial, this._moonFixed);
+    Cesium.Matrix3.multiplyByVector(
+      matrix,
+      this._moonInertial,
+      this._moonFixed,
+    );
     Cesium.Cartesian3.normalize(this._sunFixed, this._sunFixed);
     Cesium.Cartesian3.normalize(this._moonFixed, this._moonFixed);
     this._ephemerisDirty = false;
@@ -574,8 +670,14 @@ export class CelestialRing {
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
     const margin = 14;
-    const maxRadiusX = Math.abs(cos) > 1e-4 ? (cx - margin) / Math.abs(cos) : Number.POSITIVE_INFINITY;
-    const maxRadiusY = Math.abs(sin) > 1e-4 ? (cy - margin) / Math.abs(sin) : Number.POSITIVE_INFINITY;
+    const maxRadiusX =
+      Math.abs(cos) > 1e-4
+        ? (cx - margin) / Math.abs(cos)
+        : Number.POSITIVE_INFINITY;
+    const maxRadiusY =
+      Math.abs(sin) > 1e-4
+        ? (cy - margin) / Math.abs(sin)
+        : Number.POSITIVE_INFINITY;
     const markerRadius = Math.min(radius, maxRadiusX, maxRadiusY);
     marker.style.left = `${cx + cos * markerRadius}px`;
     marker.style.top = `${cy + sin * markerRadius}px`;
@@ -596,14 +698,24 @@ export class CelestialRing {
 
     const sunKey = `${outlineKey}:${Math.round(rayInnerRadius)}`;
     if (sunKey !== this._sunRenderKey) {
-      this._sunCtx.clearRect(0, 0, this._sunCanvas.width, this._sunCanvas.height);
+      this._sunCtx.clearRect(
+        0,
+        0,
+        this._sunCanvas.width,
+        this._sunCanvas.height,
+      );
       drawSunRays(this._sunCtx, cx, cy, radius, rayInnerRadius, 0);
       drawTaperedArc(this._sunCtx, cx, cy, radius, 0, '222, 190, 89', 0.56);
       this._sunRenderKey = sunKey;
     }
 
     if (outlineKey !== this._moonRenderKey) {
-      this._moonCtx.clearRect(0, 0, this._moonCanvas.width, this._moonCanvas.height);
+      this._moonCtx.clearRect(
+        0,
+        0,
+        this._moonCanvas.width,
+        this._moonCanvas.height,
+      );
       drawMoonHaze(this._moonCtx, cx, cy, radius, 0);
       drawTaperedArc(this._moonCtx, cx, cy, radius, 0, '48, 201, 229', 0.42);
       this._moonRenderKey = outlineKey;
@@ -624,7 +736,9 @@ export class CelestialRing {
 
     const disc = this._projectedEarthDisc(width, height);
     const wasVisible = this.visible;
-    const nextVisible = disc ? isFullGlobeInsideKeyhole(disc, wasVisible) : false;
+    const nextVisible = disc
+      ? isFullGlobeInsideKeyhole(disc, wasVisible)
+      : false;
     this.visible = nextVisible;
     this._root.classList.toggle('visible', nextVisible);
     this._root.dataset.globeVisible = String(nextVisible);
@@ -645,12 +759,12 @@ export class CelestialRing {
     const sunProjection = celestialScreenAngle(
       Cesium.Cartesian3.dot(this._sunFixed, camera.rightWC),
       Cesium.Cartesian3.dot(this._sunFixed, camera.upWC),
-      this._sunAngle
+      this._sunAngle,
     );
     const moonProjection = celestialScreenAngle(
       Cesium.Cartesian3.dot(this._moonFixed, camera.rightWC),
       Cesium.Cartesian3.dot(this._moonFixed, camera.upWC),
-      this._moonAngle
+      this._moonAngle,
     );
     if (sunProjection.stable) this._sunAngle = sunProjection.angle;
     if (moonProjection.stable) this._moonAngle = moonProjection.angle;
@@ -660,7 +774,10 @@ export class CelestialRing {
     const cx = width * 0.5;
     const cy = height * 0.5;
     const radius = disc.keyholeRadius - RING_INSET_PX;
-    const rayInnerRadius = Math.min(radius - 12, disc.earthRadius + Math.max(38, radius * 0.065));
+    const rayInnerRadius = Math.min(
+      radius - 12,
+      disc.earthRadius + Math.max(38, radius * 0.065),
+    );
     this._renderEffectLayers(cx, cy, radius, rayInnerRadius);
     this._sunCanvas.style.transform = `rotate(${this._sunAngle}rad)`;
     this._sunCanvas.style.opacity = String(this._sunOpacity);
@@ -671,16 +788,24 @@ export class CelestialRing {
     // stroke. Near conjunction (such as a new moon), keep the true bearings but
     // move the moon into a second radial lane so both bodies remain legible.
     const markerRadius = radius - MARKER_INSET_PX;
-    const markersCollide = circularAngleDistance(this._sunAngle, this._moonAngle)
-      < MARKER_COLLISION_ANGLE;
-    this._positionMarker(this._sunMarker, cx, cy, markerRadius, this._sunAngle, this._sunOpacity);
+    const markersCollide =
+      circularAngleDistance(this._sunAngle, this._moonAngle) <
+      MARKER_COLLISION_ANGLE;
+    this._positionMarker(
+      this._sunMarker,
+      cx,
+      cy,
+      markerRadius,
+      this._sunAngle,
+      this._sunOpacity,
+    );
     this._positionMarker(
       this._moonMarker,
       cx,
       cy,
       markerRadius - (markersCollide ? COLLIDING_MARKER_EXTRA_INSET_PX : 0),
       this._moonAngle,
-      this._moonOpacity
+      this._moonOpacity,
     );
     this._debug = {
       enabled: true,
@@ -698,7 +823,12 @@ export class CelestialRing {
 
   /** Read-only geometry snapshot for browser QA. */
   getDebugState() {
-    return this._debug ? { ...this._debug, disc: this._debug.disc ? { ...this._debug.disc } : null } : null;
+    return this._debug
+      ? {
+          ...this._debug,
+          disc: this._debug.disc ? { ...this._debug.disc } : null,
+        }
+      : null;
   }
 
   /** Detach the render hook and remove all overlay DOM. */

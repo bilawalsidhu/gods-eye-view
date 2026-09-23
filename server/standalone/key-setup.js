@@ -12,7 +12,7 @@ import { readEnvironmentSource as readPinokioEnvironmentSource } from '../../scr
 import fs from 'node:fs';
 import { parseEnv as parseDotenvText } from 'node:util';
 import { randomUUID } from 'node:crypto';
-import { hardenCredentialFile } from '../../src/keySetupHardening.mjs';
+import { hardenCredentialFile } from './key-setup-hardening.mjs';
 
 /**
  * Which launcher started this process, captured at MODULE LOAD — before the

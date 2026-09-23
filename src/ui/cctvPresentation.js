@@ -1,3 +1,4 @@
+import { createCctvVideoSurface } from './cctvVideo.js';
 export function _calBadgeLabel(badge) {
   switch (badge) {
     case 'calibrated':
@@ -164,7 +165,27 @@ export function _renderCctvState(state) {
     }
   }
 
-  if (this._cctvFrame) {
+  const liveIntent = enabled && !!activeCamera?.isVideo;
+  if (this._cctvVideo) {
+    this._cctvVideo.hidden = !liveIntent;
+    if (this._cctvFrame) this._cctvFrame.hidden = liveIntent;
+    const visible =
+      liveIntent &&
+      !document.hidden &&
+      !this._cctvPanel?.classList.contains('collapsed');
+    if (!visible || this._cctvVideoCameraId !== activeId) {
+      this._cctvVideoSurface?.stop();
+      this._cctvVideoSurface = null;
+    }
+    this._cctvVideoCameraId = activeId;
+    if (visible && !this._cctvVideoSurface) {
+      this._cctvVideoSurface = createCctvVideoSurface(this._cctvVideo, () =>
+        this.cctv.getActiveVideoElement?.(),
+      );
+    }
+  }
+
+  if (this._cctvFrame && !liveIntent) {
     const nextSrc = enabled ? activeCamera?.frameUrl : null;
     const nextCameraId = enabled ? activeCamera?.id || '' : '';
     const cameraChanged = this._cctvFrame.dataset.cameraId !== nextCameraId;
@@ -183,6 +204,8 @@ export function _renderCctvState(state) {
     if (!nextSrc) {
       this._clearCctvFrame();
     }
+  } else if (liveIntent) {
+    this._clearCctvFrame();
   }
 
   this._syncCctvSourceBadge(activeCamera, enabled);

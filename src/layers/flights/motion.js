@@ -81,7 +81,7 @@ export function createMotion({
    */
 
   function _refloorStaleGroundedContacts(currentIcaos) {
-    for (const [icao24, info] of flightState._flightData) {
+    for (const [icao24, info] of flightState.records.data) {
       if (!info?.onGround || currentIcaos.has(icao24)) continue;
       if (!Number.isFinite(info.rawLat) || !Number.isFinite(info.rawLon))
         continue;
@@ -94,7 +94,7 @@ export function createMotion({
       )
         continue;
       info.renderAltitudeM = lifted;
-      info.cullPosition = null; // above the ellipsoid now (or floors say otherwise next poll)
+      flightState._cullPositions.delete(icao24); // above the ellipsoid now (or floors say otherwise next poll)
       const position = Cesium.Cartesian3.fromDegrees(
         info.rawLon,
         info.rawLat,
@@ -125,7 +125,7 @@ export function createMotion({
    */
 
   function _deadReckon(icao24, result) {
-    const info = flightState._flightData.get(icao24);
+    const info = flightState.records.data.get(icao24);
     if (FOCUS_EVIDENCE_DEV && flightState._focusEvidenceIds.has(icao24)) {
       const position = flightState._billboards.get(icao24)?.position;
       flightState._drCourseDeg = info?.true_track || 0;
@@ -323,7 +323,7 @@ export function createMotion({
     const rangeM = Cesium.Cartesian3.distance(camera.positionWC, position);
     if (parts.rendering._modelOwnsVisual(icao24)) {
       const spec = parts.rendering._modelSpec(
-        flightState._flightData.get(icao24)?.klass,
+        flightState.records.data.get(icao24)?.klass,
       );
       const scale = trackedModelScaleForPixelCap({
         baseScale: spec.scale,
@@ -349,7 +349,7 @@ export function createMotion({
     const height = billboard?.height?.getValue(time) ?? 28;
     const scale =
       billboard?.scale?.getValue(time) ??
-      (CLASS_SCALE_2D[flightState._flightData.get(icao24)?.klass] || 1);
+      (CLASS_SCALE_2D[flightState.records.data.get(icao24)?.klass] || 1);
     const scaleByDistance =
       billboard?.scaleByDistance?.getValue(time) ??
       TRACKED_BILLBOARD_SCALE_BY_DISTANCE;
@@ -392,7 +392,7 @@ export function createMotion({
     }
 
     const nowMs = Date.now();
-    const info = flightState._flightData.get(icao24);
+    const info = flightState.records.data.get(icao24);
     if (sameTrack) {
       const dtSec = Math.max(0.001, (nowMs - flightState._drPrevMs) / 1000);
       const speed = (info && info.velocity) || 0;
@@ -499,7 +499,7 @@ export function createMotion({
       parts.rendering._modelOwnsVisual(flightState._trackedIcao)
     ) {
       const spec = parts.rendering._modelSpec(
-        flightState._flightData.get(flightState._trackedIcao)?.klass,
+        flightState.records.data.get(flightState._trackedIcao)?.klass,
       );
       return modelVisualAnchor(
         flightState._trackedModel.modelMatrix,
@@ -544,7 +544,7 @@ export function createMotion({
     )
       return 0;
     const spec = parts.rendering._modelSpec(
-      flightState._flightData.get(flightState._trackedIcao)?.klass,
+      flightState.records.data.get(flightState._trackedIcao)?.klass,
     );
     const scale = Number.isFinite(flightState._trackedModel.computedScale)
       ? flightState._trackedModel.computedScale
@@ -558,7 +558,7 @@ export function createMotion({
       parts.rendering._modelOwnsVisual(flightState._trackedIcao)
     ) {
       const spec = parts.rendering._modelSpec(
-        flightState._flightData.get(flightState._trackedIcao)?.klass,
+        flightState.records.data.get(flightState._trackedIcao)?.klass,
       );
       // Through the model's OWN render chain (modelVisualAnchor's hand-rolled
       // half-correction put this offset on the lateral axis — see
@@ -584,7 +584,7 @@ export function createMotion({
    *  the same aircraft can never disagree across the handoff. */
 
   function _trackedDisplayCourse() {
-    const info = flightState._flightData.get(flightState._trackedIcao);
+    const info = flightState.records.data.get(flightState._trackedIcao);
     const fallback = (info && info.true_track) || 0;
     const cacheValid =
       flightState._drReconcileValid &&
@@ -1018,7 +1018,7 @@ export function createMotion({
     }
 
     const candidates = [];
-    for (const [icao24, info] of flightState._flightData) {
+    for (const [icao24, info] of flightState.records.data) {
       if (!info?.onGround) continue;
       // T7: a contact whose 3D model is the visual never reads a display floor.
       if (parts.rendering._modelOwnsVisual(icao24)) continue;

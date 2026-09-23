@@ -2,7 +2,7 @@ import {
   ACTIVE_FRAME_REFRESH_MS,
   FRAME_ENDPOINT,
   MEDIA_ENDPOINT,
-} from './policy.js';
+} from './sourcePolicy.js';
 function safeNumber(value, fallback = NaN) {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;

@@ -1,3 +1,7 @@
+import { DisplayBindings } from './ui/displayBindings.js';
+import { LocationNavigation } from './ui/locationNavigation.js';
+import { VisualSettings } from './ui/visualSettings.js';
+import { readShellSource, shellMethod } from './testSupport/readShellSource.mjs';
 import { StyleManager } from './ui/applicationShell.js';
 import { _claimContextVisualAuthority, setContextMode } from './ui/contextActions.js';
 import { _initGlobalContextPanel } from './ui/contextBindings.js';
@@ -7,11 +11,11 @@ import fs from 'node:fs';
 import { ShareLinkManager, decodeShareCreatedAtMs } from './sharelink.js';
 import { createDefaultLayerState } from './data/layerState.js';
 
-const uiSource = fs.readFileSync(new URL('./ui/applicationShell.js', import.meta.url), 'utf8');
+const uiSource = readShellSource();
 
 function sourceBlock(start, end) {
   const name = start.trim().match(/^(?:async )?(\w+)\(/)?.[1];
-  if (typeof StyleManager.prototype[name] === 'function') return StyleManager.prototype[name].toString();
+  if (typeof shellMethod(name) === 'function') return shellMethod(name).toString();
   const startIndex = uiSource.indexOf(start);
   const endIndex = uiSource.indexOf(end, startIndex + start.length);
   assert.ok(startIndex >= 0, `missing source block start: ${start}`);
@@ -64,7 +68,7 @@ test('share links parse explicit celestial on and off states', () => {
 });
 
 test('unknown-only v2 layer tokens are invalid, while historical l fields stay inert', () => {
-  const invalid = makeManager('#v=2&lat=10&lon=20&l=z').parseInitialHash();
+  const invalid = makeManager('#v=2&lat=10&lon=20&l=unknown').parseInitialHash();
   assert.equal(invalid.layerState, null);
   assert.equal(invalid.layerStateInvalid, true);
   for (const hash of ['#lat=10&lon=20&l=z', '#v=1&lat=10&lon=20&l=z']) {
@@ -72,6 +76,12 @@ test('unknown-only v2 layer tokens are invalid, while historical l fields stay i
     assert.equal(legacy.layerState, null);
     assert.equal(legacy.layerStateInvalid, false);
   }
+});
+
+test('Nepal locator token is valid in v2 share links', () => {
+  const parsed = makeManager('#v=2&lat=10&lon=20&l=z').parseInitialHash();
+  assert.deepEqual(parsed.layerState.enabledLayerIds, ['bhote-koshi-locator']);
+  assert.equal(parsed.layerStateInvalid, false);
 });
 
 test('share-link serialization emits the current celestial state', () => {
@@ -126,6 +136,35 @@ test('visual parameters, explicit empty layers, and panel state are v2-only', ()
   assert.equal(legacy.layerState, null);
   assert.equal(legacy.styleParams, null);
   assert.equal(legacy.panelState, null);
+});
+
+// The panel chrome shares every rail panel, so the link registry must know
+// each one: a collapsed Recent Imagery panel used to restore expanded because
+// the encoder had no token for it.
+test('a collapsed Recent Imagery panel survives the share-link round trip beside the older panels', () => {
+  const manager = makeManager();
+  manager.setPanelStateProvider(() => ({ specs: [
+    { id: 'cctv-panel', collapsed: false },
+    { id: 'recent-imagery-panel', collapsed: true },
+    { id: 'global-context-panel', collapsed: true },
+  ] }));
+  clearTimeout(manager._debounceTimer);
+  manager._updateHash();
+  const params = new URLSearchParams(window.location.hash.slice(1));
+  assert.equal(params.get('ui'), 'v.c.0_i.c.1_g.c.1');
+  const restored = makeManager(`#v=2&lat=10&lon=20&ui=${params.get('ui')}`)
+    .parseInitialHash();
+  assert.deepEqual(restored.panelState, { specs: [
+    { id: 'cctv-panel', collapsed: false, pinned: null },
+    { id: 'recent-imagery-panel', collapsed: true, pinned: null },
+    { id: 'global-context-panel', collapsed: true, pinned: null },
+  ] });
+  // A link written before the token existed decodes exactly as it did.
+  const older = makeManager('#v=2&lat=10&lon=20&ui=v.c.1_g.c.0').parseInitialHash();
+  assert.deepEqual(older.panelState, { specs: [
+    { id: 'cctv-panel', collapsed: true, pinned: null },
+    { id: 'global-context-panel', collapsed: false, pinned: null },
+  ] });
 });
 
 test('camera-only, partial, and malformed panel shares remain valid incoming state', () => {
@@ -189,7 +228,7 @@ test('incoming state suppresses premature hash replacement until restoration', (
 test('a shared view reserves its own camera without cancelling its saved Follow', () => {
   assert.match(
     uiSource,
-    /_beginDeferredNavigation\(\s*'shared view',\s*\{ cancelPendingSelection: false \},\s*\)/,
+    /_beginDeferredNavigation\(\s*'shared view',\s*\{\s*cancelPendingSelection: false,?\s*\},?\s*\)/,
   );
   const deferred = sourceBlock(
     "  _beginDeferredNavigation(noun = 'location', { cancelPendingSelection = true } = {}) {",
@@ -692,12 +731,15 @@ test('visual input listeners are revoked before asynchronous UI teardown', () =>
   const firstAwait = disposal.indexOf('await ');
   assert.ok(firstAwait > 0);
   const synchronous = disposal.slice(0, firstAwait);
-  assert.match(synchronous, /this\._applicationShortcuts\?\.destroy\(\)/);
-  assert.match(synchronous, /this\._visualEffects\.stop\(\)/);
+  assert.match(synchronous, /this\._displayBindings\.destroy\(\)/);
+  assert.match(synchronous, /this\._visualSettings\.stop\(\)/);
   assert.match(synchronous, /this\._mapSourceControls\?\.destroy\(\)/);
   assert.match(synchronous, /this\._clearLayersControl\?\.destroy\(\)/);
-  assert.match(synchronous, /this\._locationControls\?\.destroy\(\)/);
-  assert.match(synchronous, /this\._locationLookup\?\.destroy\(\)/);
-  assert.match(synchronous, /this\._displayControls\?\.destroy\(\)/);
-  assert.match(synchronous, /this\._styleParameters\?\.destroy\(\)/);
+  assert.match(synchronous, /this\._locationNavigation\.destroy\(\)/);
+  assert.match(LocationNavigation.prototype.destroy.toString(), /this\._locationControls\?\.destroy\(\)/);
+  assert.match(LocationNavigation.prototype.destroy.toString(), /this\._locationLookup\?\.destroy\(\)/);
+  assert.match(DisplayBindings.prototype.destroy.toString(), /this\._displayControls\?\.destroy\(\)/);
+  assert.match(DisplayBindings.prototype.destroy.toString(), /this\._applicationShortcuts\?\.destroy\(\)/);
+  assert.match(VisualSettings.prototype.stop.toString(), /this\._styleParameters\?\.destroy\(\)/);
+  assert.match(VisualSettings.prototype.stop.toString(), /this\._visualEffects\.stop\(\)/);
 });

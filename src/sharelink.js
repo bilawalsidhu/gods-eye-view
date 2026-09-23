@@ -5,7 +5,10 @@ import {
   normalizeAllocationStrategy,
 } from './data/detectionPolicy.js';
 import { clampScopeTerminusPct } from './scopeMask.js';
-import { decodeLayerStateParams, encodeLayerStateParams } from './data/layerState.js';
+import {
+  decodeLayerStateParams,
+  encodeLayerStateParams,
+} from './data/layerState.js';
 
 /**
  * Share Links — URL Hash State Management
@@ -37,6 +40,7 @@ const SHARE_PANEL_STATE_REGISTRY = Object.freeze([
   { id: 'location-bar', token: 'l', pinnable: true },
   { id: 'data-panel', token: 'd', pinnable: false },
   { id: 'cctv-panel', token: 'v', pinnable: false },
+  { id: 'recent-imagery-panel', token: 'i', pinnable: false },
   { id: 'radio-panel', token: 'r', pinnable: false },
   { id: 'scene-panel', token: 's', pinnable: false },
   { id: 'global-context-panel', token: 'g', pinnable: false },
@@ -44,12 +48,12 @@ const SHARE_PANEL_STATE_REGISTRY = Object.freeze([
   { id: 'param-slider-panel', token: 'm', pinnable: false },
 ]);
 
-const SHARE_PANEL_STATE_BY_TOKEN = Object.freeze(new Map(
-  SHARE_PANEL_STATE_REGISTRY.map((entry) => [entry.token, entry]),
-));
+const SHARE_PANEL_STATE_BY_TOKEN = Object.freeze(
+  new Map(SHARE_PANEL_STATE_REGISTRY.map((entry) => [entry.token, entry])),
+);
 
 const URL_TO_STYLE = Object.fromEntries(
-  Object.entries(STYLE_TO_URL).map(([k, v]) => [v, k])
+  Object.entries(STYLE_TO_URL).map(([k, v]) => [v, k]),
 );
 
 const SHARE_STYLE_PARAM_REGISTRY = Object.freeze({
@@ -87,11 +91,10 @@ const SHARE_STYLE_PARAM_REGISTRY = Object.freeze({
 });
 
 export class ShareLinkManager {
-  constructor(viewer, {
-    onRestore,
-    isNavigationCurrent,
-    cancelOwnedNavigation,
-  } = {}) {
+  constructor(
+    viewer,
+    { onRestore, isNavigationCurrent, cancelOwnedNavigation } = {},
+  ) {
     this.viewer = viewer;
     this._onRestore = onRestore; // callback: ({ style, bloom, sharpen }) => void
     this._debounceTimer = null;
@@ -135,17 +138,21 @@ export class ShareLinkManager {
     this._destroyed = false;
     this._restoreGeneration = 0;
     this._activeCameraFlight = null;
-    this._isNavigationCurrent = typeof isNavigationCurrent === 'function'
-      ? isNavigationCurrent
-      : () => true;
-    this._cancelOwnedNavigation = typeof cancelOwnedNavigation === 'function'
-      ? cancelOwnedNavigation
-      : null;
+    this._isNavigationCurrent =
+      typeof isNavigationCurrent === 'function'
+        ? isNavigationCurrent
+        : () => true;
+    this._cancelOwnedNavigation =
+      typeof cancelOwnedNavigation === 'function'
+        ? cancelOwnedNavigation
+        : null;
 
     // Listen for camera changes
-    this._removeCameraChanged = this.viewer.camera.changed.addEventListener(() => {
-      this._scheduleUpdate();
-    });
+    this._removeCameraChanged = this.viewer.camera.changed.addEventListener(
+      () => {
+        this._scheduleUpdate();
+      },
+    );
   }
 
   /**
@@ -192,10 +199,15 @@ export class ShareLinkManager {
       sharpenIntensity: parseOr(params.get('si'), 49),
       hudVariant: params.get('hud') || 'tactical',
       hudVisible: params.get('hv') === '1',
-      detectionMode: restoredDetection.enabled ? restoredDetection.profile : 'OFF',
+      detectionMode: restoredDetection.enabled
+        ? restoredDetection.profile
+        : 'OFF',
       detectionDensity: restoredDetection.densityPct,
       detectionAllocation: normalizeAllocationStrategy(params.get('da')),
-      detectionFadePct: Math.max(0, Math.min(40, Math.round(parseOr(params.get('kf'), 16)))),
+      detectionFadePct: Math.max(
+        0,
+        Math.min(40, Math.round(parseOr(params.get('kf'), 16))),
+      ),
       // Deliberately still 5 after the 2026-08-23 default moved to 3. Same rule
       // as `scf` below: this is the PARSE fallback for a link that predates
       // `ko`, and such a link was authored when 5 was what its author saw. Every
@@ -203,7 +215,10 @@ export class ShareLinkManager {
       // the field — so nothing from the 5 % era depends on this number either
       // way. The first-run default is a different question, answered in
       // celestialRing.js.
-      detectionOutsideOpacityPct: Math.max(0, Math.min(100, Math.round(parseOr(params.get('ko'), 5)))),
+      detectionOutsideOpacityPct: Math.max(
+        0,
+        Math.min(100, Math.round(parseOr(params.get('ko'), 5))),
+      ),
       celestialRing: params.has('cr') ? params.get('cr') === '1' : false,
       scopeEnabled: params.has('sc') ? params.get('sc') === '1' : true,
       // Deliberately still 35 through both later default moves (0 on
@@ -216,7 +231,10 @@ export class ShareLinkManager {
       // (`_scopeFeatherPct` in the constructor tracks the default: that one
       // mirrors live state for the link this session generates, so it must match
       // the mask, not the archive.)
-      scopeFeatherPct: Math.max(0, Math.min(100, Math.round(parseOr(params.get('scf'), 35)))),
+      scopeFeatherPct: Math.max(
+        0,
+        Math.min(100, Math.round(parseOr(params.get('scf'), 35))),
+      ),
       // Absent (or non-numeric) `sce` = adaptive (null), the default behavior;
       // a value pins the terminus opacity percent, clamped into the SUPPORTED
       // 94..100 band. `sce=0` used to survive as a sub-94 terminus — a hole in
@@ -226,9 +244,10 @@ export class ShareLinkManager {
         : null,
       mapStack: params.get('map') || 'photoreal',
       layerState: decodedLayerState,
-      layerStateInvalid: params.get('v') === '2'
-        && params.has('l')
-        && decodedLayerState === null,
+      layerStateInvalid:
+        params.get('v') === '2' &&
+        params.has('l') &&
+        decodedLayerState === null,
       panelState: decodePanelStateParams(params),
       sharedAtMs: decodeShareCreatedAtMs(params),
     };
@@ -247,27 +266,40 @@ export class ShareLinkManager {
    * Apply a parsed state to the viewer + style manager.
    */
   async applyState(state, { applyCamera = true, navigationToken = null } = {}) {
-    if (this._destroyed || !state) return { succeeded: false, reason: 'unavailable' };
+    if (this._destroyed || !state)
+      return { succeeded: false, reason: 'unavailable' };
     const view = {
-      destination: Cesium.Cartesian3.fromDegrees(state.lon, state.lat, state.alt),
+      destination: Cesium.Cartesian3.fromDegrees(
+        state.lon,
+        state.lat,
+        state.alt,
+      ),
       orientation: {
         heading: Cesium.Math.toRadians(state.heading),
         pitch: Cesium.Math.toRadians(state.pitch),
         roll: Cesium.Math.toRadians(state.roll),
       },
     };
-    let cameraPromise = Promise.resolve({ status: applyCamera ? 'superseded' : 'skipped' });
+    let cameraPromise = Promise.resolve({
+      status: applyCamera ? 'superseded' : 'skipped',
+    });
     if (applyCamera && this._isNavigationCurrent(navigationToken)) {
       const restoreGeneration = ++this._restoreGeneration;
       let settleCamera;
-      cameraPromise = new Promise((resolve) => { settleCamera = resolve; });
+      cameraPromise = new Promise((resolve) => {
+        settleCamera = resolve;
+      });
       const releaseOwnedFlight = (status = 'cancelled') => {
         if (this._activeCameraFlight?.restoreGeneration === restoreGeneration) {
           this._activeCameraFlight = null;
         }
         settleCamera({ status });
       };
-      this._activeCameraFlight = { restoreGeneration, navigationToken, settle: releaseOwnedFlight };
+      this._activeCameraFlight = {
+        restoreGeneration,
+        navigationToken,
+        settle: releaseOwnedFlight,
+      };
       // Re-apply the final pose only while this share restoration still owns
       // navigation. A later user or voice command wins over delayed restore.
       this.viewer.camera.flyTo({
@@ -276,9 +308,9 @@ export class ShareLinkManager {
         easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
         complete: () => {
           if (
-            this._destroyed
-            || restoreGeneration !== this._restoreGeneration
-            || !this._isNavigationCurrent(navigationToken)
+            this._destroyed ||
+            restoreGeneration !== this._restoreGeneration ||
+            !this._isNavigationCurrent(navigationToken)
           ) {
             releaseOwnedFlight('superseded');
             return;
@@ -293,14 +325,17 @@ export class ShareLinkManager {
 
     // Notify the style manager via callback
     const reserved = state.restoreAuthority || null;
-    const visualCurrent = !reserved || reserved.visual === this._restoreAuthority.visual;
+    const visualCurrent =
+      !reserved || reserved.visual === this._restoreAuthority.visual;
     const mapCurrent = !reserved || reserved.map === this._restoreAuthority.map;
     let panelState = state.panelState;
     if (reserved && panelState?.specs) {
       panelState = {
-        specs: panelState.specs.filter((spec) => (
-          (reserved.panels?.get(spec.id) || 0) === (this._restoreAuthority.panels.get(spec.id) || 0)
-        )),
+        specs: panelState.specs.filter(
+          (spec) =>
+            (reserved.panels?.get(spec.id) || 0) ===
+            (this._restoreAuthority.panels.get(spec.id) || 0),
+        ),
       };
       if (panelState.specs.length === 0) panelState = null;
     }
@@ -317,9 +352,13 @@ export class ShareLinkManager {
         hudVisible: visualCurrent ? state.hudVisible : undefined,
         detectionMode: visualCurrent ? state.detectionMode : undefined,
         detectionDensity: visualCurrent ? state.detectionDensity : undefined,
-        detectionAllocation: visualCurrent ? state.detectionAllocation : undefined,
+        detectionAllocation: visualCurrent
+          ? state.detectionAllocation
+          : undefined,
         detectionFadePct: visualCurrent ? state.detectionFadePct : undefined,
-        detectionOutsideOpacityPct: visualCurrent ? state.detectionOutsideOpacityPct : undefined,
+        detectionOutsideOpacityPct: visualCurrent
+          ? state.detectionOutsideOpacityPct
+          : undefined,
         celestialRing: visualCurrent ? state.celestialRing : undefined,
         scopeEnabled: visualCurrent ? state.scopeEnabled : undefined,
         scopeFeatherPct: visualCurrent ? state.scopeFeatherPct : undefined,
@@ -336,7 +375,11 @@ export class ShareLinkManager {
       camera: camera.status,
       visual: visualCurrent ? restoreStatus : 'superseded',
       map: mapCurrent ? restoreStatus : 'superseded',
-      panels: panelState ? restoreStatus : (state.panelState ? 'superseded' : 'skipped'),
+      panels: panelState
+        ? restoreStatus
+        : state.panelState
+          ? 'superseded'
+          : 'skipped',
     };
   }
 
@@ -351,7 +394,10 @@ export class ShareLinkManager {
   claimRestoreLane(lane, panelId = null) {
     if (!this._initialRestorePending) return;
     if (lane === 'panel' && panelId) {
-      this._restoreAuthority.panels.set(panelId, (this._restoreAuthority.panels.get(panelId) || 0) + 1);
+      this._restoreAuthority.panels.set(
+        panelId,
+        (this._restoreAuthority.panels.get(panelId) || 0) + 1,
+      );
     } else if (lane === 'visual' || lane === 'map') {
       this._restoreAuthority[lane] += 1;
     }
@@ -369,7 +415,8 @@ export class ShareLinkManager {
 
   /** Install the active visual preset parameter source used by URL generation. */
   setStyleParamStateProvider(provider) {
-    this._styleParamStateProvider = typeof provider === 'function' ? provider : null;
+    this._styleParamStateProvider =
+      typeof provider === 'function' ? provider : null;
   }
 
   /** Called only when the durable layer preference model changes. */
@@ -384,7 +431,11 @@ export class ShareLinkManager {
   }
 
   _encodePanelStateParam(params, panelState) {
-    if (!panelState || !Array.isArray(panelState.specs) || panelState.specs.length === 0) {
+    if (
+      !panelState ||
+      !Array.isArray(panelState.specs) ||
+      panelState.specs.length === 0
+    ) {
       params.delete(SHARE_UI_STATE_PARAM);
       return;
     }
@@ -397,7 +448,8 @@ export class ShareLinkManager {
         assignments.push(`${spec.token}.p.${state.pinned ? '1' : '0'}`);
       }
     }
-    if (assignments.length) params.set(SHARE_UI_STATE_PARAM, assignments.join('_'));
+    if (assignments.length)
+      params.set(SHARE_UI_STATE_PARAM, assignments.join('_'));
     else params.delete(SHARE_UI_STATE_PARAM);
   }
 
@@ -410,18 +462,30 @@ export class ShareLinkManager {
   onToggleChange(bloom, sharpen, extras = {}) {
     this._bloomEnabled = bloom;
     this._sharpenEnabled = sharpen;
-    if (typeof extras.bloomIntensity === 'number') this._bloomIntensity = extras.bloomIntensity;
-    if (typeof extras.bloomVersion === 'number') this._bloomVersion = extras.bloomVersion;
-    if (typeof extras.sharpenIntensity === 'number') this._sharpenIntensity = extras.sharpenIntensity;
-    if (typeof extras.hudVariant === 'string') this._hudVariant = extras.hudVariant;
-    if (typeof extras.hudVisible === 'boolean') this._hudVisible = extras.hudVisible;
-    if (typeof extras.detectionMode === 'string') this._detectionMode = extras.detectionMode.toUpperCase();
-    if (typeof extras.detectionDensity === 'number') this._detectionDensity = extras.detectionDensity;
+    if (typeof extras.bloomIntensity === 'number')
+      this._bloomIntensity = extras.bloomIntensity;
+    if (typeof extras.bloomVersion === 'number')
+      this._bloomVersion = extras.bloomVersion;
+    if (typeof extras.sharpenIntensity === 'number')
+      this._sharpenIntensity = extras.sharpenIntensity;
+    if (typeof extras.hudVariant === 'string')
+      this._hudVariant = extras.hudVariant;
+    if (typeof extras.hudVisible === 'boolean')
+      this._hudVisible = extras.hudVisible;
+    if (typeof extras.detectionMode === 'string')
+      this._detectionMode = extras.detectionMode.toUpperCase();
+    if (typeof extras.detectionDensity === 'number')
+      this._detectionDensity = extras.detectionDensity;
     if (typeof extras.detectionAllocation === 'string') {
-      this._detectionAllocation = normalizeAllocationStrategy(extras.detectionAllocation);
+      this._detectionAllocation = normalizeAllocationStrategy(
+        extras.detectionAllocation,
+      );
     }
     if (typeof extras.detectionFadePct === 'number') {
-      this._detectionFadePct = Math.max(0, Math.min(40, Math.round(extras.detectionFadePct)));
+      this._detectionFadePct = Math.max(
+        0,
+        Math.min(40, Math.round(extras.detectionFadePct)),
+      );
     }
     if (typeof extras.detectionOutsideOpacityPct === 'number') {
       this._detectionOutsideOpacityPct = Math.max(
@@ -429,10 +493,15 @@ export class ShareLinkManager {
         Math.min(100, Math.round(extras.detectionOutsideOpacityPct)),
       );
     }
-    if (typeof extras.celestialRingEnabled === 'boolean') this._celestialRingEnabled = extras.celestialRingEnabled;
-    if (typeof extras.scopeEnabled === 'boolean') this._scopeEnabled = extras.scopeEnabled;
+    if (typeof extras.celestialRingEnabled === 'boolean')
+      this._celestialRingEnabled = extras.celestialRingEnabled;
+    if (typeof extras.scopeEnabled === 'boolean')
+      this._scopeEnabled = extras.scopeEnabled;
     if (typeof extras.scopeFeatherPct === 'number') {
-      this._scopeFeatherPct = Math.max(0, Math.min(100, Math.round(extras.scopeFeatherPct)));
+      this._scopeFeatherPct = Math.max(
+        0,
+        Math.min(100, Math.round(extras.scopeFeatherPct)),
+      );
     }
     if (extras.scopeTerminusPct === null) this._scopeTerminusPct = null;
     else if (typeof extras.scopeTerminusPct === 'number') {
@@ -482,9 +551,18 @@ export class ShareLinkManager {
     params.set('lat', Cesium.Math.toDegrees(carto.latitude).toFixed(4));
     params.set('lon', Cesium.Math.toDegrees(carto.longitude).toFixed(4));
     params.set('alt', Math.round(carto.height).toString());
-    params.set('heading', Math.round(Cesium.Math.toDegrees(camera.heading)).toString());
-    params.set('pitch', Math.round(Cesium.Math.toDegrees(camera.pitch)).toString());
-    params.set('roll', Math.round(Cesium.Math.toDegrees(camera.roll)).toString());
+    params.set(
+      'heading',
+      Math.round(Cesium.Math.toDegrees(camera.heading)).toString(),
+    );
+    params.set(
+      'pitch',
+      Math.round(Cesium.Math.toDegrees(camera.pitch)).toString(),
+    );
+    params.set(
+      'roll',
+      Math.round(Cesium.Math.toDegrees(camera.roll)).toString(),
+    );
     params.set('style', STYLE_TO_URL[this._currentStyle] || 'normal');
     params.set('bloom', this._bloomEnabled ? '1' : '0');
     params.set('sharpen', this._sharpenEnabled ? '1' : '0');
@@ -527,7 +605,10 @@ export class ShareLinkManager {
   destroy() {
     if (this._destroyed) return;
     const activeFlight = this._activeCameraFlight;
-    if (activeFlight && this._isNavigationCurrent(activeFlight.navigationToken)) {
+    if (
+      activeFlight &&
+      this._isNavigationCurrent(activeFlight.navigationToken)
+    ) {
       this._cancelOwnedNavigation?.();
     }
     activeFlight?.settle?.('destroyed');
@@ -570,18 +651,22 @@ export function encodeStyleParamState(params, styleName, values) {
     const clamped = Math.max(spec.min, Math.min(spec.max, numeric));
     assignments.push(`${spec.token}.${Math.round(clamped * 100)}`);
   }
-  if (assignments.length) params.set(SHARE_STYLE_PARAMS_PARAM, assignments.join('_'));
+  if (assignments.length)
+    params.set(SHARE_STYLE_PARAMS_PARAM, assignments.join('_'));
   else params.delete(SHARE_STYLE_PARAMS_PARAM);
 }
 
 /** Decode allowlisted parameters for the selected visual preset. */
 export function decodeStyleParamState(params, styleName) {
-  if (params.get('v') !== '2' || !params.has(SHARE_STYLE_PARAMS_PARAM)) return null;
+  if (params.get('v') !== '2' || !params.has(SHARE_STYLE_PARAMS_PARAM))
+    return null;
   const registry = SHARE_STYLE_PARAM_REGISTRY[styleName];
   if (!registry) return null;
   const byToken = new Map(registry.map((spec) => [spec.token, spec]));
   const decoded = {};
-  for (const assignment of String(params.get(SHARE_STYLE_PARAMS_PARAM) || '').split('_')) {
+  for (const assignment of String(
+    params.get(SHARE_STYLE_PARAMS_PARAM) || '',
+  ).split('_')) {
     const [token, scaledRaw, ...extra] = assignment.split('.');
     if (extra.length || !/^-?\d+$/.test(scaledRaw || '')) continue;
     const spec = byToken.get(token);
@@ -606,12 +691,17 @@ export function decodePanelStateParams(params) {
     if (!spec || (field !== 'c' && field !== 'p')) continue;
     if (value !== '0' && value !== '1') continue;
     const bool = value === '1';
-    const current = stateById.get(spec.id) || { id: spec.id, collapsed: null, pinned: null };
+    const current = stateById.get(spec.id) || {
+      id: spec.id,
+      collapsed: null,
+      pinned: null,
+    };
     if (field === 'c') current.collapsed = bool;
     else if (field === 'p' && spec.pinnable) current.pinned = bool;
     stateById.set(spec.id, current);
   }
-  const specs = Array.from(stateById.values())
-    .filter((entry) => typeof entry.collapsed === 'boolean');
+  const specs = Array.from(stateById.values()).filter(
+    (entry) => typeof entry.collapsed === 'boolean',
+  );
   return specs.length ? { specs } : null;
 }

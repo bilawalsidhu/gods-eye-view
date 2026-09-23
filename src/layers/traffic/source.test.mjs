@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { createTrafficSource } from './source.js';
+import { clampBoundsAroundCenter } from '../../data/trafficBounds.js';
 const bounds = { south: 30.267, west: -97.744, north: 30.268, east: -97.743 };
 const fixture = readFileSync(
   new URL(
@@ -87,6 +88,28 @@ test('road requests have finite bounds and retain the two-pass query', async () 
     /residential/,
   );
 });
+test('antimeridian clamps produce road bounds accepted on either side', async () => {
+  const calls = [];
+  const source = createTrafficSource({
+    fetchImpl: async (...args) => {
+      calls.push(args);
+      return new Response('{"elements":[]}');
+    },
+  });
+  for (const centerLon of [179.99, -179.99]) {
+    const clamped = clampBoundsAroundCenter(
+      {
+        south: -0.02,
+        north: 0.02,
+        west: 179.98,
+        east: -179.98,
+      },
+      { lat: 0, lon: centerLon },
+    );
+    await source.requestRoads(clamped);
+  }
+  assert.equal(calls.length, 2);
+});
 test('malformed availability is an unavailable source rather than a keyless response', async () => {
   const source = createTrafficSource({
     fetchImpl: async () => new Response('{}'),
@@ -126,4 +149,42 @@ test('road body parsing retains the source request cancellation signal', async (
     signal: controller.signal,
   });
   await assert.rejects(response.json(), { name: 'AbortError' });
+});
+
+test('road sources decode direction and coordinates before scene construction', async () => {
+  const geometry = [
+    { lat: 30, lon: -97 },
+    { lat: 30.001, lon: -97.001 },
+  ];
+  const source = createTrafficSource({
+    fetchImpl: async () =>
+      Response.json({
+        elements: [
+          { type: 'node', id: 1 },
+          { type: 'way', geometry, tags: { highway: 'primary', oneway: '-1' } },
+          { type: 'way', geometry, tags: { junction: 'roundabout' } },
+          { type: 'way', geometry: [geometry[0]] },
+        ],
+      }),
+  });
+  assert.deepEqual(await (await source.requestRoads(bounds)).json(), {
+    roads: [
+      {
+        coordinates: [
+          [-97, 30],
+          [-97.001, 30.001],
+        ],
+        type: 'primary',
+        oneway: -1,
+      },
+      {
+        coordinates: [
+          [-97, 30],
+          [-97.001, 30.001],
+        ],
+        type: 'unclassified',
+        oneway: 1,
+      },
+    ],
+  });
 });

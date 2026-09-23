@@ -57,7 +57,7 @@ export function createEnrichment({
       Promise.resolve()
         .then(() => {
           lifetime.signal.throwIfAborted();
-          return flightState._source.getEnrichment?.(job.query, {
+          return flightState.feed._source.getEnrichment?.(job.query, {
             signal: lifetime.signal,
           });
         })
@@ -81,7 +81,7 @@ export function createEnrichment({
       `t:${icao24}`,
       { kind: 'type', id: icao24.toLowerCase() },
       (data) => {
-        const meta = flightState._flightData.get(icao24);
+        const meta = flightState.records.data.get(icao24);
         if (!meta) return; // evicted while the lookup was in flight
         meta.typeCode = data.typeCode || meta.typeCode;
         meta.typeName = data.typeName || meta.typeName;
@@ -109,7 +109,7 @@ export function createEnrichment({
   }
 
   function _requestRouteEnrichment(icao24) {
-    const cs = String(flightState._flightData.get(icao24)?.callsign || '')
+    const cs = String(flightState.records.data.get(icao24)?.callsign || '')
       .trim()
       .toUpperCase();
     if (!/^[A-Z]{3}\d/.test(cs)) return; // airline-style callsigns only (LLL + digit); GA tails won't resolve
@@ -117,7 +117,7 @@ export function createEnrichment({
       `r:${cs}`,
       { kind: 'route', id: cs },
       (data) => {
-        const meta = flightState._flightData.get(icao24);
+        const meta = flightState.records.data.get(icao24);
         if (!meta) return;
         meta.airline = data.airline || meta.airline;
         if (data.origin && data.destination)
@@ -198,7 +198,7 @@ export function createEnrichment({
       for (const [icao24, bb] of flightState._billboards) {
         if (flightState._enrichSeen.has(`t:${icao24}`)) continue; // answered / queued / negative this session
         if (!/^[0-9a-f]{6}$/i.test(icao24)) continue; // adsbdb keys are 6-char hex only
-        if (flightState._flightData.get(icao24)?.onGround) continue; // ground traffic never spends ambient budget (click-to-enrich still works)
+        if (flightState.records.data.get(icao24)?.onGround) continue; // ground traffic never spends ambient budget (click-to-enrich still works)
         if (!bb.position || !occluder.isPointVisible(bb.position)) continue; // beyond the limb
         Cesium.Cartesian3.clone(
           bb.position,

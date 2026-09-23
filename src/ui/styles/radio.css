@@ -666,6 +666,7 @@
 .data-toggle-btn.feed-loading,
 .data-toggle-btn.feed-degraded,
 .data-toggle-btn.feed-stale,
+.data-toggle-btn.feed-partial,
 .data-toggle-btn.feed-fallback,
 .data-toggle-btn.feed-unavailable {
   min-width: 82px;
@@ -685,6 +686,7 @@
 }
 
 .data-toggle-btn.active.feed-stale,
+.data-toggle-btn.active.feed-partial,
 .data-toggle-btn.active.feed-fallback {
   color: #ffd27a;
   border-color: rgba(255, 190, 82, 0.75);
@@ -799,4 +801,101 @@
      hairline ring so a near-black class still reads on the panel glass. */
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18);
   flex: none;
+}
+
+/* Optional per-layer ordered list: the turn-by-turn directions under the
+   Directions row. Kept short and scrollable so a 40-step drive cannot push the
+   rest of the rail off screen. */
+.data-row-list {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0 0 0 26px;
+  max-height: 150px;
+  overflow-y: auto;
+  counter-reset: gev-step;
+}
+
+.data-row-list[hidden] {
+  display: none;
+}
+
+.data-row-list-item {
+  counter-increment: gev-step;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  width: 100%;
+  padding: 2px 4px;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.4px;
+  text-align: left;
+  color: var(--text-dim);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast);
+  outline: none;
+}
+
+.data-row-list-item::before {
+  content: counter(gev-step);
+  min-width: 13px;
+  text-align: right;
+  color: var(--text-dim);
+  opacity: 0.65;
+  flex: none;
+}
+
+.data-row-list-item:hover,
+.data-row-list-item:focus-visible {
+  border-color: var(--glass-border-hover);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-secondary);
+}
+
+.data-row-list-item.active {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+/* The step the camera is on during FLY: the same accent, plus a rail on the
+   leading edge so it reads as "here", not "chosen". */
+.data-row-list-item.current {
+  border-left-color: var(--accent);
+  border-left-width: 2px;
+}
+
+.data-row-list-lead {
+  min-width: 34px;
+  flex: none;
+  opacity: 0.85;
+}
+
+.data-row-list-text {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A list line that states a limit rather than offering an action. */
+.data-row-list-item.note {
+  cursor: default;
+  opacity: 0.75;
+  font-style: italic;
+}
+
+.data-toggle-controls-info {
+  flex-basis: 100%;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-secondary);
+  padding-top: 3px;
+  overflow-wrap: anywhere;
 }
