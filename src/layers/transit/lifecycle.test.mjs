@@ -3983,3 +3983,193 @@ test('parked transit reprojects held and reported courses at the bounded camera 
     'selected unknown course also stays screen-up',
   );
 });
+
+/** The route catalog and alert list `/api/transit/{routes,alerts}/mbta` return. */
+function mbtaNetwork(fetchedAt) {
+  return {
+    routes: {
+      feedId: 'mbta',
+      fetchedAt,
+      count: 2,
+      routes: [
+        {
+          id: 'Red',
+          routeType: 1,
+          mode: 'subway',
+          shortName: null,
+          longName: 'Red Line',
+          name: 'Red Line',
+          color: '#DA291C',
+          shapes: ['_p~iF~ps|U_ulLnnqC_mqNvxq`@'],
+        },
+        {
+          id: '70',
+          routeType: 3,
+          mode: 'bus',
+          shortName: '70',
+          longName: 'Waltham Center - University Park',
+          name: 'Route 70',
+          color: '#FFC72C',
+          shapes: ['_p~iF~ps|U_ulLnnqC_mqNvxq`@'],
+        },
+      ],
+    },
+    alerts: {
+      feedId: 'mbta',
+      fetchedAt,
+      count: 2,
+      alerts: [
+        {
+          id: 'a1',
+          kind: 'service',
+          effect: 'NO_SERVICE',
+          effectDetail: 'SHUTTLE',
+          severity: 7,
+          header: 'Shuttle buses replace Red Line service.',
+          serviceEffect: 'Red Line shuttle',
+          timeframe: 'this weekend',
+          activePeriods: [],
+          routeIds: ['Red'],
+        },
+        {
+          id: 'a2',
+          kind: 'service',
+          effect: 'STOP_MOVED',
+          effectDetail: 'STOP_MOVE',
+          severity: 1,
+          header: 'Stop moved',
+          serviceEffect: 'Main St stop moved',
+          timeframe: 'ongoing',
+          activePeriods: [],
+          routeIds: ['70'],
+        },
+      ],
+    },
+  };
+}
+
+const flush = async (rounds = 6) => {
+  for (let i = 0; i < rounds; i += 1)
+    await new Promise((resolve) => setImmediate(resolve));
+};
+
+test('route names and alerts reach the vehicle card, the route card and the layer row', async (t) => {
+  const app = harness(t);
+  const network = mbtaNetwork(Date.now());
+  app.serve('mbta', (url) => {
+    if (url.includes('/routes/')) return { status: 200, body: network.routes };
+    if (url.includes('/alerts/')) return { status: 200, body: network.alerts };
+    return {
+      status: 200,
+      body: snapshot(
+        'mbta',
+        'MBTA',
+        [
+          vehicle('red-1', 42.36, -71.06, reported(), { routeId: 'Red' }),
+          vehicle('bus-70', 42.37, -71.05, reported(), { routeId: '70' }),
+        ],
+        { fetchedAt: Date.now() },
+      ),
+    };
+  });
+  app.layer.enable(app.viewer);
+  await app.layer.update();
+  await flush();
+  app.settle();
+
+  const parts = app.layer._transitPartsForTest();
+  const [net] = parts.network.snapshot();
+  assert.equal(net.routes, 2);
+  assert.equal(net.alerts, 2);
+  assert.equal(net.shown, false, 'no ground primitives in a stub scene');
+
+  // The row counts routes whose SERVICE is disrupted: a moved stop is not one.
+  assert.match(app.layer.getStats().coverage, /MBTA 2 · 1 route disrupted/);
+
+  const red = app.vehicles().find((entry) => entry.record.id === 'red-1');
+  parts.selection.selectVehicle(red.key);
+  let [card] = app.overlaySources.get('transit-selected');
+  assert.equal(
+    card.title,
+    '🚇 Red Line',
+    '"Route Red" is said the way riders say it',
+  );
+  assert.ok(card.details.includes('⚠ Red Line shuttle (this weekend)'));
+
+  const bus = app.vehicles().find((entry) => entry.record.id === 'bus-70');
+  parts.selection.selectVehicle(bus.key);
+  [card] = app.overlaySources.get('transit-selected');
+  assert.equal(card.title, '🚌 Route 70');
+  assert.equal(card.details[1], 'Waltham Center - University Park');
+  assert.ok(card.details.includes('⚠ Main St stop moved'));
+
+  // A route line is owned by this layer and opens its own card.
+  const pickId = 'transit-route:mbta/Red';
+  assert.equal(app.pickOwners.get('transit')(pickId), true);
+  assert.equal(app.pickOwners.get('transit')('transit-route:mbta/Nope'), false);
+  const where = Cesium.Cartesian3.fromDegrees(-71.06, 42.36);
+  parts.selection.selectRoute(pickId, where);
+  [card] = app.overlaySources.get('transit-selected');
+  assert.equal(card.title, '🚇 Red Line');
+  assert.equal(card.accent, '#DA291C');
+  assert.equal(card.position, where);
+  assert.ok(card.details.includes('Subway route · MBTA · Boston, MA'));
+  assert.ok(card.details.includes('⚠ Red Line shuttle (this weekend)'));
+  assert.equal(app.state()._selectedKey, null, 'one card at a time');
+  parts.selection.clearSelection();
+  assert.equal(app.overlaySources.has('transit-selected'), false);
+  assert.equal(app.state()._selectedRoute, null);
+
+  // Disable keeps the catalog; re-enabling redraws without asking again.
+  const routeReads = () =>
+    app.requested.filter((url) => url.includes('/routes/')).length;
+  const before = routeReads();
+  assert.equal(before, 1);
+  app.layer.disable(app.viewer);
+  app.layer.enable(app.viewer);
+  await app.layer.update();
+  await flush();
+  assert.equal(routeReads(), before);
+});
+
+test('network failures back off and never take the vehicles with them', async (t) => {
+  const app = harness(t);
+  app.serve('mbta', (url) => {
+    if (url.includes('/routes/') || url.includes('/alerts/'))
+      return { status: 503, body: { error: 'down', retryInSec: 120 } };
+    return {
+      status: 200,
+      body: snapshot(
+        'mbta',
+        'MBTA',
+        [vehicle('red-1', 42.36, -71.06, reported(), { routeId: 'Red' })],
+        { fetchedAt: Date.now() },
+      ),
+    };
+  });
+  const warn = t.mock.method(console, 'warn', () => {});
+  app.layer.enable(app.viewer);
+  await app.layer.update();
+  await flush();
+  app.settle();
+  assert.equal(app.vehicles().length, 1);
+  const networkReads = () =>
+    app.requested.filter((url) => /\/(routes|alerts)\//.test(url)).length;
+  assert.equal(networkReads(), 2);
+  // The server asked for two minutes; a poll inside that asks nothing.
+  app.advance(60_000);
+  await app.layer.update();
+  await flush();
+  assert.equal(networkReads(), 2);
+  app.advance(61_000);
+  await app.layer.update();
+  await flush();
+  assert.equal(networkReads(), 4);
+  assert.ok(warn.mock.callCount() >= 2);
+  const parts = app.layer._transitPartsForTest();
+  const red = app.vehicles()[0];
+  parts.selection.selectVehicle(red.key);
+  const [card] = app.overlaySources.get('transit-selected');
+  assert.equal(card.title, '🚇 Route Red', 'without a catalog the id is shown');
+  assert.equal(app.layer.getStats().coverage, 'MBTA 1');
+});

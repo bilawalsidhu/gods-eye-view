@@ -90,6 +90,20 @@ export function createState({ services }) {
   /** Where the next warm window starts among the cold cells: no cell waits for ever. */
   state._floorCursor = 0;
 
+  /**
+   * Route catalogs and alert lists for feeds that publish them, keyed by feed
+   * id (see network.js). Kept across disable so a re-enable redraws without
+   * asking the operator again.
+   * @type {Map<string, object>}
+   */
+  state._network = new Map();
+  /**
+   * A clicked route line: {feedId, routeId, position}. Mutually exclusive
+   * with `_selectedKey` — one card at a time.
+   * @type {{feedId: string, routeId: string, position: object}|null}
+   */
+  state._selectedRoute = null;
+
   /** @type {string|null} */
   state._selectedKey = null;
   state._selectedCardAt = 0;

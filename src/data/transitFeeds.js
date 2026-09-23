@@ -148,6 +148,25 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     }),
     defaultMode: 'bus',
     routeMode: mbtaRouteMode,
+    // Route geometry and service alerts, from the same operator under the
+    // same licence. Fetched server-side only, like `url`: the browser names
+    // `/api/transit/routes/mbta` and `/api/transit/alerts/mbta`, never a URL.
+    network: Object.freeze({
+      // Every route pattern with its representative trip's shape and its
+      // route, in ONE request. The keyless V3 allowance is 20 requests a
+      // minute; route geometry changes a few times a year and is cached for
+      // twelve hours, so this is one request per half day.
+      routesUrl:
+        'https://api-v3.mbta.com/route_patterns?include=representative_trip.shape,route' +
+        '&fields%5Broute_pattern%5D=direction_id,typicality,sort_order' +
+        '&fields%5Btrip%5D=headsign&fields%5Bshape%5D=polyline' +
+        '&fields%5Broute%5D=color,text_color,short_name,long_name,type,sort_order',
+      routesFormat: 'mbta-v3-route-patterns',
+      // The GTFS-Realtime Alerts feed rendered as JSON, with MBTA's
+      // effect_detail / service_effect_text / timeframe_text additions.
+      alertsUrl: 'https://cdn.mbta.com/realtime/Alerts_enhanced.json',
+      alertsFormat: 'gtfs-rt-alerts-json',
+    }),
   }),
   Object.freeze({
     id: 'capmetro-austin',
@@ -400,5 +419,7 @@ export function publicTransitCatalog() {
     licenseUrl: feed.licenseUrl,
     attribution: feed.attribution,
     historyRetention: feed.historyRetention === true,
+    routes: Boolean(feed.network?.routesUrl),
+    alerts: Boolean(feed.network?.alertsUrl),
   }));
 }

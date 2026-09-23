@@ -209,7 +209,8 @@ export function createQueries({ state, parts }) {
             quiet && Number.isFinite(status.upstreamAt)
               ? ` (${Math.round((now - status.upstreamAt) / 1000)}s old)`
               : '';
-          return `${feed.name} ${status.count}${aged}`;
+          const network = parts.network.statsLine(feed.id);
+          return `${feed.name} ${status.count}${aged}${network ? ` · ${network}` : ''}`;
         })
         .join(' · ');
       return {
