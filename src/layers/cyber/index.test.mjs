@@ -156,7 +156,12 @@ test('renders Radar aggregates only and keeps DShield in the non-geographic row 
   let dataSource;
   const viewer = {
     scene: { canvas: {}, pick: () => null },
-    dataSources: { add: (source) => (dataSource = source), remove: () => {} },
+    dataSources: {
+      add: (source) => {
+        if (source.name === 'cyber-activity') dataSource = source;
+      },
+      remove: () => {},
+    },
   };
   layer.init(viewer);
   layer.enable();
@@ -273,7 +278,7 @@ test('Shodan area search uses the visible map radius, renders devices, and expos
       longitude: (-75 * Math.PI) / 180,
     },
   };
-  let dataSource;
+  let shodanDataSource;
   const states = [];
   layer.init({
     camera: { computeViewRectangle: () => rectangle },
@@ -282,7 +287,12 @@ test('Shodan area search uses the visible map radius, renders devices, and expos
       globe: { ellipsoid: {} },
       pick: () => ({ id: pickedId }),
     },
-    dataSources: { add: (value) => (dataSource = value), remove: () => {} },
+    dataSources: {
+      add: (value) => {
+        if (value.name === 'shodan-devices') shodanDataSource = value;
+      },
+      remove: () => {},
+    },
   });
   layer.setThreatIntelListener((state) => states.push(state));
   layer.enable();
@@ -290,7 +300,7 @@ test('Shodan area search uses the visible map radius, renders devices, and expos
   assert.ok(Math.abs(receivedArea.latitude - 40) < 1e-9);
   assert.ok(Math.abs(receivedArea.longitude + 75) < 1e-9);
   assert.ok(receivedArea.radiusKm > 10 && receivedArea.radiusKm < 20);
-  const entity = dataSource.entities.getById('cyber-shodan:8.8.4.4');
+  const entity = shodanDataSource.entities.getById('cyber-shodan:8.8.4.4');
   assert.equal(entity.position.latitude, 37.751);
   assert.equal(entity.properties.geographicPrecision, 'network-approximate');
   pickedId = entity.id;

@@ -53,6 +53,7 @@ export function createCyberLayer({
 
   let viewer = null;
   let dataSource = null;
+  let shodanDataSource = null;
   let enabled = false;
   let radarEnabled = true;
   let dshieldEnabled = true;
@@ -67,6 +68,7 @@ export function createCyberLayer({
   let selectionHandler = null;
   let selectedRadar = null;
   let selectedShodan = null;
+  let selectedShodanCluster = null;
   const enrichmentResults = new Map();
   const enrichmentPending = new Set();
   const enrichmentRequests = new Set();
@@ -230,13 +232,16 @@ export function createCyberLayer({
         detail: observation.detail,
       };
     }
+    const shodanEntities = shodanDataSource?.entities;
+    const currentShodan = new Set();
     for (const match of shodanAreaSearch?.matches || []) {
       if (!Number.isFinite(match.latitude) || !Number.isFinite(match.longitude))
         continue;
       const id = `cyber-shodan:${match.ip}`;
-      current.add(id);
-      let entity = dataSource.entities.getById(id);
-      if (!entity) entity = dataSource.entities.add({ id });
+      currentShodan.add(id);
+      let entity = shodanEntities?.getById(id);
+      if (!entity) entity = shodanEntities?.add({ id });
+      if (!entity) continue;
       entity.name = `Shodan asset · ${match.ip}`;
       entity.position = cesium.Cartesian3.fromDegrees(
         match.longitude,
@@ -259,11 +264,16 @@ export function createCyberLayer({
         attribution: match.attribution,
       };
     }
+    for (const entity of [...(shodanEntities?.values || [])])
+      if (
+        String(entity.id).startsWith('cyber-shodan:') &&
+        !currentShodan.has(entity.id)
+      )
+        shodanEntities.remove(entity);
     for (const entity of [...dataSource.entities.values])
       if (
         (String(entity.id).startsWith('cyber:') ||
-          String(entity.id).startsWith('cyber-flow:') ||
-          String(entity.id).startsWith('cyber-shodan:')) &&
+          String(entity.id).startsWith('cyber-flow:')) &&
         !current.has(entity.id)
       )
         dataSource.entities.remove(entity);
@@ -415,6 +425,7 @@ export function createCyberLayer({
           'Zoom in to an area with a radius of 1,000 km or less to search Shodan.',
       };
       selectedShodan = null;
+      selectedShodanCluster = null;
       selectedRadar = null;
       renderRadar();
       notifyThreatIntel();
@@ -425,6 +436,7 @@ export function createCyberLayer({
     enrichmentRequests.add(controller);
     enrichmentMessage = '';
     selectedShodan = null;
+    selectedShodanCluster = null;
     selectedRadar = null;
     shodanAreaSearch = { ...area, loading: true };
     renderRadar();
@@ -504,6 +516,33 @@ export function createCyberLayer({
       dataSource = new cesium.CustomDataSource('cyber-activity');
       dataSource.show = false;
       viewer.dataSources.add(dataSource);
+      shodanDataSource = new cesium.CustomDataSource('shodan-devices');
+      shodanDataSource.show = false;
+      const clustering = shodanDataSource.clustering;
+      if (clustering) {
+        clustering.enabled = true;
+        clustering.pixelRange = 24;
+        clustering.minimumClusterSize = 2;
+        clustering.clusterLabels = true;
+        clustering.clusterPoints = false;
+        clustering.clusterBillboards = false;
+        clustering.clusterEvent?.addEventListener?.((members, cluster) => {
+          cluster.label.show = true;
+          cluster.label.text = String(members.length);
+          cluster.label.font = 'bold 14px sans-serif';
+          cluster.label.fillColor = cesium.Color.GOLD;
+          cluster.label.outlineColor = cesium.Color.BLACK;
+          cluster.label.outlineWidth = 3;
+          cluster.label.style = cesium.LabelStyle.FILL_AND_OUTLINE;
+          cluster.label.disableDepthTestDistance = Number.POSITIVE_INFINITY;
+          cluster.label.id = members;
+          cluster.point.id = members;
+          cluster.billboard.id = members;
+          cluster.point.show = false;
+          cluster.billboard.show = false;
+        });
+      }
+      viewer.dataSources.add(shodanDataSource);
       selectionHandler = new cesium.ScreenSpaceEventHandler(
         viewer.scene.canvas,
       );
@@ -516,9 +555,19 @@ export function createCyberLayer({
           picked = null;
         }
         const rawId = picked?.id;
+        if (Array.isArray(rawId)) {
+          selectedShodanCluster = rawId
+            .map((item) => item?.id || item)
+            .map((id) => findShodanSelection(id))
+            .filter(Boolean);
+        } else selectedShodanCluster = null;
         const entityId = typeof rawId === 'string' ? rawId : rawId?.id || null;
         selectedShodan = findShodanSelection(entityId);
         selectedRadar = selectedShodan ? null : findRadarSelection(entityId);
+        if (selectedShodanCluster?.length) {
+          selectedShodan = null;
+          selectedRadar = null;
+        }
         notifyThreatIntel();
       }, cesium.ScreenSpaceEventType.LEFT_CLICK);
     },
@@ -526,6 +575,7 @@ export function createCyberLayer({
     enable() {
       enabled = true;
       if (dataSource) dataSource.show = true;
+      if (shodanDataSource) shodanDataSource.show = true;
     },
 
     disable() {
@@ -543,10 +593,13 @@ export function createCyberLayer({
       shodanSearch = null;
       shodanAreaSearch = null;
       selectedShodan = null;
+      selectedShodanCluster = null;
       radarError = null;
       dshieldError = null;
       dataSource?.entities.removeAll();
       if (dataSource) dataSource.show = false;
+      shodanDataSource?.entities.removeAll();
+      if (shodanDataSource) shodanDataSource.show = false;
       selectedRadar = null;
       notify();
       notifyThreatIntel();
@@ -710,6 +763,7 @@ export function createCyberLayer({
         onShodanSearch: runShodanSearch,
         shodanAreaSearch,
         selectedShodan,
+        selectedShodanCluster,
         onShodanAreaSearch: runShodanAreaSearch,
         nonGeographicProviders: dshieldEnabled
           ? [
@@ -734,6 +788,7 @@ export function createCyberLayer({
                 onShodanSearch: runShodanSearch,
                 shodanAreaSearch,
                 selectedShodan,
+                selectedShodanCluster,
                 onShodanAreaSearch: runShodanAreaSearch,
                 error: dshieldError,
               },
@@ -791,7 +846,10 @@ export function createCyberLayer({
       rowControlsListener = null;
       threatIntelListener = null;
       if (dataSource) destroyViewer?.dataSources?.remove(dataSource, true);
+      if (shodanDataSource)
+        destroyViewer?.dataSources?.remove(shodanDataSource, true);
       dataSource = null;
+      shodanDataSource = null;
       viewer = null;
     },
   };

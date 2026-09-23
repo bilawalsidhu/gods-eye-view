@@ -208,7 +208,22 @@ export class CyberIntelPanel {
       section.append(
         element(this.document, 'p', 'cyber-intel-empty', areaSearch.error),
       );
-    for (const result of areaSearch?.matches || []) {
+    const areaMatches = areaSearch?.matches || [];
+    if (areaMatches.length) {
+      const mappedCount = areaMatches.filter(
+        (result) =>
+          Number.isFinite(result.latitude) && Number.isFinite(result.longitude),
+      ).length;
+      section.append(
+        element(
+          this.document,
+          'p',
+          'cyber-intel-provenance',
+          `${mappedCount} of ${areaMatches.length} returned devices have map positions. Nearby devices are grouped into numbered gold markers; select a group to see its devices. Unresolved IPs remain listed without a fabricated location.`,
+        ),
+      );
+    }
+    for (const result of areaMatches) {
       const row = element(this.document, 'div', 'cyber-intel-search-result');
       row.append(element(this.document, 'strong', '', result.ip));
       row.append(
@@ -298,104 +313,86 @@ export class CyberIntelPanel {
     const section = element(this.document, 'section', 'cyber-intel-selection');
     section.setAttribute(
       'aria-label',
-      selection.type === 'shodan-asset'
-        ? 'Selected Shodan device'
-        : 'Selected Cloudflare Radar observation',
+      selection.type === 'shodan-cluster'
+        ? 'Selected Shodan device cluster'
+        : selection.type === 'shodan-asset'
+          ? 'Selected Shodan device'
+          : 'Selected Cloudflare Radar observation',
     );
     section.append(
       element(
         this.document,
         'h3',
         '',
-        selection.type === 'shodan-asset'
-          ? 'SELECTED SHODAN DEVICE'
-          : selection.type === 'flow'
-            ? 'SELECTED RADAR FLOW'
-            : 'SELECTED RADAR LOCATION',
+        selection.type === 'shodan-cluster'
+          ? `SHODAN DEVICES · ${selection.matches.length} AT THIS LOCATION`
+          : selection.type === 'shodan-asset'
+            ? 'SELECTED SHODAN DEVICE'
+            : selection.type === 'flow'
+              ? 'SELECTED RADAR FLOW'
+              : 'SELECTED RADAR LOCATION',
       ),
     );
     const rows =
-      selection.type === 'shodan-asset'
-        ? [
-            ['IP', selection.ip],
-            ['Organization', selection.organization],
+      selection.type === 'shodan-cluster'
+        ? selection.matches.map((match) => [
+            match.ip,
             [
-              'Services',
-              (selection.services || [])
-                .map(
-                  (service) =>
-                    `${service.port ?? '?'}${service.transport ? `/${service.transport}` : ''}${service.product ? ` · ${service.product}` : ''}`,
-                )
-                .join('; ') || 'None reported',
-            ],
-            [
-              'Hostnames',
-              [
-                ...(selection.hostnames || []),
-                ...(selection.domains || []),
-              ].join(', ') || 'None reported',
-            ],
-            [
-              'Location',
-              [selection.city, selection.region, selection.country]
+              match.organization,
+              [match.city, match.region, match.country]
                 .filter(Boolean)
-                .join(', ') || 'Unavailable',
-            ],
-            ['Geography', selection.geographicProvenance || 'Unavailable'],
-            ['Location method', selection.geographicMethod || 'Unavailable'],
-            [
-              'Source',
-              `${selection.attribution} · fetched ${selection.fetchedAt}`,
-            ],
-          ]
-        : selection.type === 'flow'
+                .join(', '),
+              (match.services || [])
+                .map((service) => service.port)
+                .filter(Boolean)
+                .map((port) => `port ${port}`)
+                .join(', '),
+            ]
+              .filter(Boolean)
+              .join(' · ') || 'No additional host details',
+          ])
+        : selection.type === 'shodan-asset'
           ? [
-              ['Origin', `${selection.origin.name} (${selection.origin.code})`],
-              ['Target', `${selection.target.name} (${selection.target.code})`],
+              ['IP', selection.ip],
+              ['Organization', selection.organization],
               [
-                'Share',
-                `${Number.isFinite(selection.share) ? selection.share : 'Unavailable'}% of reported mitigated requests`,
+                'Services',
+                (selection.services || [])
+                  .map(
+                    (service) =>
+                      `${service.port ?? '?'}${service.transport ? `/${service.transport}` : ''}${service.product ? ` · ${service.product}` : ''}`,
+                  )
+                  .join('; ') || 'None reported',
               ],
-              ['Rank', selection.rank],
               [
-                'Window',
-                `${selection.windowStart || '—'} to ${selection.windowEnd || '—'} UTC`,
+                'Hostnames',
+                [
+                  ...(selection.hostnames || []),
+                  ...(selection.domains || []),
+                ].join(', ') || 'None reported',
               ],
               [
                 'Location',
-                'Country reference coordinates; not a device or network path',
+                [selection.city, selection.region, selection.country]
+                  .filter(Boolean)
+                  .join(', ') || 'Unavailable',
+              ],
+              ['Geography', selection.geographicProvenance || 'Unavailable'],
+              ['Location method', selection.geographicMethod || 'Unavailable'],
+              [
+                'Source',
+                `${selection.attribution} · fetched ${selection.fetchedAt}`,
               ],
             ]
-          : selection.roles?.length > 1
+          : selection.type === 'flow'
             ? [
-                ['Roles', selection.roles.map((row) => row.role).join(' and ')],
                 [
-                  'Country',
-                  `${selection.locationName || 'Unknown'}${selection.locationCode ? ` (${selection.locationCode})` : ''}`,
-                ],
-                ...selection.roles.map((row) => [
-                  `${row.role === 'origin' ? 'Origin' : 'Target'} share / rank`,
-                  `${Number.isFinite(row.share) ? row.share : 'Unavailable'}% / ${row.rank ?? '—'}`,
-                ]),
-                [
-                  'Window',
-                  `${selection.windowStart || '—'} to ${selection.windowEnd || '—'} UTC`,
+                  'Origin',
+                  `${selection.origin.name} (${selection.origin.code})`,
                 ],
                 [
-                  'Location',
-                  'Country reference coordinates; not a device location',
-                ],
-              ]
-            : [
-                [
-                  'Role',
-                  selection.category?.endsWith('-origin')
-                    ? 'Origin country aggregate'
-                    : 'Target country aggregate',
-                ],
-                [
-                  'Country',
-                  `${selection.locationName || 'Unknown'}${selection.locationCode ? ` (${selection.locationCode})` : ''}`,
+                  'Target',
+                  `${selection.target.name} (${selection.target.code})`,
                 ],
                 [
                   'Share',
@@ -408,9 +405,57 @@ export class CyberIntelPanel {
                 ],
                 [
                   'Location',
-                  'Country reference coordinates; not a device location',
+                  'Country reference coordinates; not a device or network path',
                 ],
-              ];
+              ]
+            : selection.roles?.length > 1
+              ? [
+                  [
+                    'Roles',
+                    selection.roles.map((row) => row.role).join(' and '),
+                  ],
+                  [
+                    'Country',
+                    `${selection.locationName || 'Unknown'}${selection.locationCode ? ` (${selection.locationCode})` : ''}`,
+                  ],
+                  ...selection.roles.map((row) => [
+                    `${row.role === 'origin' ? 'Origin' : 'Target'} share / rank`,
+                    `${Number.isFinite(row.share) ? row.share : 'Unavailable'}% / ${row.rank ?? '—'}`,
+                  ]),
+                  [
+                    'Window',
+                    `${selection.windowStart || '—'} to ${selection.windowEnd || '—'} UTC`,
+                  ],
+                  [
+                    'Location',
+                    'Country reference coordinates; not a device location',
+                  ],
+                ]
+              : [
+                  [
+                    'Role',
+                    selection.category?.endsWith('-origin')
+                      ? 'Origin country aggregate'
+                      : 'Target country aggregate',
+                  ],
+                  [
+                    'Country',
+                    `${selection.locationName || 'Unknown'}${selection.locationCode ? ` (${selection.locationCode})` : ''}`,
+                  ],
+                  [
+                    'Share',
+                    `${Number.isFinite(selection.share) ? selection.share : 'Unavailable'}% of reported mitigated requests`,
+                  ],
+                  ['Rank', selection.rank],
+                  [
+                    'Window',
+                    `${selection.windowStart || '—'} to ${selection.windowEnd || '—'} UTC`,
+                  ],
+                  [
+                    'Location',
+                    'Country reference coordinates; not a device location',
+                  ],
+                ];
     for (const [label, value] of rows) {
       const row = element(this.document, 'p', 'cyber-intel-detail-row');
       row.append(element(this.document, 'strong', '', `${label}: `));
@@ -623,9 +668,11 @@ export class CyberIntelPanel {
 
     this.body.append(this._renderLegend());
 
-    const selected = state.selectedShodan
-      ? { ...state.selectedShodan, type: 'shodan-asset' }
-      : state.selectedRadar;
+    const selected = state.selectedShodanCluster?.length
+      ? { type: 'shodan-cluster', matches: state.selectedShodanCluster }
+      : state.selectedShodan
+        ? { ...state.selectedShodan, type: 'shodan-asset' }
+        : state.selectedRadar;
     if (selected) {
       this.body.append(this._renderSelection(selected));
       const disclosure = this.panel.querySelector(
