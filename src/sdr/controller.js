@@ -518,8 +518,7 @@ export class SdrController {
     } catch (error) {
       if (superseded()) {
         // An installed device was closed by the stop() that superseded us.
-        if (device && !installed)
-          await this._closeOrphan(device, provider);
+        if (device && !installed) await this._closeOrphan(device, provider);
         return false;
       }
       console.warn('[SDR] Connection failed:', error);

@@ -144,10 +144,13 @@ test('live feeds are read in parallel and labelled with their band', async () =>
   });
   const { status, json } = await call(handler);
   assert.equal(status, 200);
-  assert.deepEqual(calls.sort((a, b) => (a.url < b.url ? 1 : -1)), [
-    { url: FEED_1090, redirect: 'manual' },
-    { url: FEED_978, redirect: 'manual' },
-  ]);
+  assert.deepEqual(
+    calls.sort((a, b) => (a.url < b.url ? 1 : -1)),
+    [
+      { url: FEED_1090, redirect: 'manual' },
+      { url: FEED_978, redirect: 'manual' },
+    ],
+  );
   assert.equal(json.configured, true);
   assert.deepEqual(json.feeds, [
     {
@@ -320,7 +323,10 @@ test('a feed name is resolved, every address checked, and the connection pinned 
     ['good.local', 'linklocal.local', 'mixed.local', 'public.local'],
     'IP literals are not resolved',
   );
-  assert.ok(lookups.every(({ all }) => all === true), 'every address');
+  assert.ok(
+    lookups.every(({ all }) => all === true),
+    'every address',
+  );
   assert.deepEqual(
     fetched.map(({ url }) => url).sort(),
     [FEED_978, 'http://good.local:8080/data/aircraft.json'],

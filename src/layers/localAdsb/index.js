@@ -587,7 +587,9 @@ export function createLocalAdsbLayer({
     if (resolved !== undefined) return resolved;
     if (typeof picked?.id === 'string') return picked.id;
     if (typeof picked?.id?.id === 'string') return picked.id.id;
-    return typeof picked?.primitive?.id === 'string' ? picked.primitive.id : null;
+    return typeof picked?.primitive?.id === 'string'
+      ? picked.primitive.id
+      : null;
   }
 
   function ownedElsewhere(id) {

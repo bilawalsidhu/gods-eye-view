@@ -1042,9 +1042,8 @@ test('clicking the selected aircraft keeps it selected and republishes its card'
   t.after(() => layer.destroy());
   receiver.set({ aircraft: [record()] });
   await layer.update();
-  const entity = harness.viewer.sources[0].entities.getById(
-    'local-adsb:abc123',
-  );
+  const entity =
+    harness.viewer.sources[0].entities.getById('local-adsb:abc123');
   harness.scene.pickResult = { id: entity, primitive: {} };
   harness.click();
   assert.deepEqual(calls.selected, ['local-adsb:abc123']);

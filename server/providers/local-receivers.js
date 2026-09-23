@@ -160,7 +160,8 @@ export async function resolveLocalReceiverAddresses(hostname, lookupImpl) {
   const addresses = (Array.isArray(resolved) ? resolved : [resolved])
     .map((row) => ({
       address: String(row?.address || ''),
-      family: Number(row?.family) || (String(row?.address).includes(':') ? 6 : 4),
+      family:
+        Number(row?.family) || (String(row?.address).includes(':') ? 6 : 4),
     }))
     .filter((row) => row.address);
   if (!addresses.length) throw new FeedError('UNRESOLVED');
@@ -173,7 +174,11 @@ export async function resolveLocalReceiverAddresses(hostname, lookupImpl) {
 function pinnedLookup(addresses) {
   return (_hostname, options, callback) => {
     const done = typeof options === 'function' ? options : callback;
-    if (options?.all) done(null, addresses.map((row) => ({ ...row })));
+    if (options?.all)
+      done(
+        null,
+        addresses.map((row) => ({ ...row })),
+      );
     else done(null, addresses[0].address, addresses[0].family);
   };
 }
