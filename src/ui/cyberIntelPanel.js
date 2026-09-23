@@ -175,7 +175,9 @@ export class CyberIntelPanel {
   _renderShodanSearch(state) {
     const section = element(this.document, 'section', 'cyber-intel-provider');
     const areaSearch = state.shodanAreaSearch;
-    section.append(element(this.document, 'h3', '', 'Optional Shodan search'));
+    section.append(
+      element(this.document, 'h3', '', 'Shodan Exposed Device Search'),
+    );
     section.append(
       element(
         this.document,
@@ -435,6 +437,10 @@ export class CyberIntelPanel {
 
   _renderProvider(provider) {
     const section = element(this.document, 'section', 'cyber-intel-provider');
+    if (provider.id === 'dshield')
+      section.append(
+        element(this.document, 'h3', '', 'Top Attackers & Target Ports'),
+      );
     const heading = element(
       this.document,
       'div',
@@ -578,14 +584,13 @@ export class CyberIntelPanel {
         `${provider.attribution}${provider.fetchedAt ? ` · fetched ${provider.fetchedAt}` : ''}`,
       ),
     );
-    if (provider.id === 'dshield')
-      section.append(this._renderShodanSearch(provider));
     return section;
   }
 
   _renderLegend() {
     const legend = element(this.document, 'section', 'cyber-intel-legend');
     legend.setAttribute('aria-label', 'Cyber map legend');
+    legend.append(element(this.document, 'h3', '', 'CloudFlare Radar'));
     const entries = [
       ['cyber-legend-origin', 'Origin aggregate · client IP country'],
       [
@@ -650,6 +655,7 @@ export class CyberIntelPanel {
       this.devicePopup.style.top = `${top}px`;
     } else if (this.devicePopup) this.devicePopup.hidden = true;
 
+    this.body.append(this._renderShodanSearch(state));
     this.body.append(this._renderLegend());
 
     const selected = state.selectedRadar;

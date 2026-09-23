@@ -94,6 +94,19 @@ test('Cyber Threat Intel remains hidden unless Cyber Activity is enabled', () =>
   layer.state = {
     enabled: true,
     selectedRadar: null,
+    shodanAreaSearch: {
+      matches: [
+        {
+          ip: '8.8.4.4',
+          city: 'Example City',
+          country: 'Example Country',
+          organization: 'Example Org',
+          latitude: 37.7,
+          longitude: -97.8,
+          geographicPrecision: 'network-approximate',
+        },
+      ],
+    },
     nonGeographicProviders: [
       {
         id: 'dshield',
@@ -138,7 +151,13 @@ test('Cyber Threat Intel remains hidden unless Cyber Activity is enabled', () =>
   assert.match(f.body.textContent, /Unavailable/);
   assert.match(f.body.textContent, /Current Top 10 Targeted Ports/);
   assert.match(f.body.textContent, /23\/tcp/);
-  assert.match(f.body.textContent, /Optional Shodan search/);
+  assert.match(f.body.textContent, /Shodan Exposed Device Search/);
+  assert.match(f.body.textContent, /CloudFlare Radar/);
+  assert.match(f.body.textContent, /Top Attackers & Target Ports/);
+  assert.ok(
+    f.body.textContent.indexOf('Shodan Exposed Device Search') <
+      f.body.textContent.indexOf('CloudFlare Radar'),
+  );
   assert.match(f.body.textContent, /query credit/);
   assert.match(f.body.textContent, /Shodan Search/);
   assert.match(f.body.textContent, /A search uses one query credit/);
