@@ -181,7 +181,7 @@ export class CyberIntelPanel {
         this.document,
         'p',
         'cyber-intel-provenance',
-        'Search only runs when submitted. It searches the current map area and applies your optional Shodan query. A filtered search uses one query credit. Check your account plan and remaining credits in Provider Settings before searching.',
+        'A search uses one query credit.',
       ),
     );
     const form = element(this.document, 'form', 'cyber-intel-search-form');
@@ -199,7 +199,7 @@ export class CyberIntelPanel {
       'cyber-shodan-area-button',
       state.shodanAreaSearch?.loading
         ? 'Searching this area…'
-        : 'Search Shodan in current map area',
+        : 'Shodan Search',
     );
     submit.type = 'submit';
     submit.disabled = state.shodanAreaSearch?.loading === true;

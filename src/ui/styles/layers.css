@@ -538,17 +538,22 @@
 }
 .cyber-intel-search-form {
   display: flex;
+  align-items: stretch;
   gap: 6px;
+  width: 100%;
 }
 .cyber-intel-search-form input {
+  box-sizing: border-box;
   min-width: 0;
   flex: 1;
+  width: 100%;
 }
 .cyber-shodan-area-button {
-  width: 100%;
+  flex: 0 0 auto;
+  width: auto;
   min-height: 34px;
-  margin-top: 7px;
-  white-space: normal;
+  margin-top: 0;
+  white-space: nowrap;
 }
 #right-context-rail
   #global-context-panel:not(.collapsed)

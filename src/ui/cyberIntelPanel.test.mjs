@@ -140,7 +140,8 @@ test('Cyber Threat Intel remains hidden unless Cyber Activity is enabled', () =>
   assert.match(f.body.textContent, /23\/tcp/);
   assert.match(f.body.textContent, /Optional Shodan search/);
   assert.match(f.body.textContent, /query credit/);
-  assert.match(f.body.textContent, /Search Shodan in current map area/);
+  assert.match(f.body.textContent, /Shodan Search/);
+  assert.match(f.body.textContent, /A search uses one query credit/);
   assert.match(f.body.textContent, /optional query/);
   assert.match(f.body.textContent, /IPwho\.is approximate network geolocation/);
   assert.match(f.body.textContent, /8\.8\.4\.4/);
