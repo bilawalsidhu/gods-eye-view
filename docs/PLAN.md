@@ -2531,10 +2531,18 @@ per 11.3's entry rule: baseline re-measured with the same metrics as
   duplicates, and the per-layer divergence is exactly the optional
   seams. Acceptance met: map committed to docs/, contract test runs
   in CI (co-located *.test.mjs, full suite).
-- [ ] **Batch T (R6)**: three MEASURED WASM-candidate verdict lines in
-  docs/PERFORMANCE.md (labelArbiter DENSE, detection sync-projection
-  fallback, AIS bulk normalization) — each with the profiler scene
-  that produced the number, or a disqualification with numbers.
+- [x] **Batch T (R6)** — DONE 2026-09-23. Three MEASURED verdicts in
+  docs/PERFORMANCE.md, all three DISQUALIFIED with numbers:
+  scripts/measure/bench-wasm-candidates.mjs (committed, reproducible)
+  drives the real production paths in node/V8 — LabelArbiter.solve at
+  DENSE 0.405 ms median against a 125 ms throttle (0.32%); the actual
+  detectionProjection.worker.js handler through a self shim, 0.054 ms
+  at n=250 / 0.414 ms at n=5000 against a 16.7 ms frame (0.32–2.48%);
+  normalizeVessel over a 12k-row payload 28.3 ms total, amortized by
+  processChunked to 1.18 ms per 500-row idle slice. Captured at box
+  load ~72 — idle hardware can only be faster, so the
+  disqualifications are conservative. With the earlier SGP4 verdict,
+  every standing WASM candidate is closed: no WASM candidate is open.
 - [ ] **Batch U (R7)**: three decision docs (ADR or explicit
   keep-as-is note in the deferred list) for AIS-in-production, the
   key-signup pass, per-isolate limiting.

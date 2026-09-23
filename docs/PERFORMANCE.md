@@ -365,3 +365,30 @@ not address it (the bottleneck was never single-threaded JS compute — see
 "Software-rendered CPU profile" above, where the top self-time entries are
 Cesium's own render/tile work). The open WASM candidates remain the
 measured ones in this document; the audit adds none.
+
+### WASM-candidate verdicts (2026-09-23, R6 measured — all three disqualified)
+
+Method: `scripts/measure/bench-wasm-candidates.mjs` — node (V8, the same JIT
+the browser runs) drives the REAL production code paths: the `LabelArbiter`
+class, the actual `detectionProjection.worker.js` message handler (through a
+`self` shim — one import per process; the handler is module-scoped), and the
+exported `normalizeVessel` seam with the bundled EGM96 grid warm. 20 warm-up
+iterations, 200 (30 for AIS) timed iterations; deterministic LCG inputs so
+runs are comparable. Box load ~72 during capture (5 concurrent sessions) —
+an idle machine can only be faster, so the disqualifications are
+conservative. Per-candidate:
+
+| Candidate | Measured (median) | Budget it runs against | Verdict |
+|---|---|---|---|
+| `LabelArbiter.solve` at DENSE | **0.405 ms**/solve (p95 0.605; 300 candidates, 6 layers, capacity 100) | 125 ms throttle (8 solves/s) → 0.32% | **disqualified** — 300× headroom |
+| Detection projection loop | n=250: **0.054 ms**; n=1000: **0.076 ms**; n=5000: **0.414 ms** (2.48% of frame) | 16.7 ms frame at 60 fps | **disqualified** — and it already runs off-main-thread in a worker |
+| AIS bulk row normalization | **28.3 ms** per 12k-row payload (2.36 µs/row; p95 59.8) | amortized by `processChunked` into 500-row idle slices → **1.18 ms/slice** | **disqualified** — the jank risk it would solve is already designed out |
+
+Notes: the earlier documented normalization figure (1.24 µs/row, of which
+0.34 was the duplicate `fromDegrees`) used a narrower row shape; this bench
+uses the full AISStream field set with EGM96 lookups warm, hence the higher
+per-row figure — the verdict is unchanged at either number. Together with
+the SGP4 verdict above, every standing WASM candidate is now closed with
+measurements: the app's JavaScript compute costs are microseconds against
+millisecond budgets, and the real cost centers are Cesium's own render/tile
+work and (pre-audit) frame submission volume. **No WASM candidate is open.**
