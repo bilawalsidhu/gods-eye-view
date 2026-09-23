@@ -839,5 +839,7 @@
   "scripts/qa-recent-imagery.mjs",
   "scripts/build-atc-frequencies.mjs",
   "src/data/ourAirportsAtc.js",
-  "src/data/ourAirportsAtc.test.mjs"
+  "src/data/ourAirportsAtc.test.mjs",
+  "src/data/audioOwnership.js",
+  "src/data/audioOwnership.test.mjs"
 ]
