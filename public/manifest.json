@@ -2,10 +2,14 @@
   "name": "God's Eye View",
   "short_name": "GEV",
   "description": "Real-time geospatial intelligence console — live aircraft, ships, satellites, fires, and more on a 3D globe",
+  "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "any",
+  "launch_handler": {
+    "client_mode": "focus-existing"
+  },
   "background_color": "#0a0a0a",
   "theme_color": "#0a0a0a",
   "categories": ["navigation", "utilities"],
@@ -23,13 +27,12 @@
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-512.png",
+      "src": "/icons/icon-maskable.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
     }
   ],
-  "screenshots": [],
   "shortcuts": [
     {
       "name": "Aircraft Tracking",

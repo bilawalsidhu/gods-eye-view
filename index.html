@@ -6,6 +6,14 @@
   <title>God's Eye View</title>
   <link rel="icon" type="image/svg+xml" href="/logo.svg" />
   <link rel="manifest" href="/manifest.json" />
+  <!-- iOS standalone home-screen support (Safari ignores parts of the web
+       app manifest): touch icon, standalone display, dark status bar, and
+       the short title under the icon. -->
+  <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="GEV" />
   <meta name="theme-color" content="#0a0a0a" />
   <meta name="description" content="Real-time geospatial intelligence console — live aircraft, ships, satellites, fires, and more on a 3D globe" />
   <link rel="stylesheet" href="/style.css" />
