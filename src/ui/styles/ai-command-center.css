@@ -1,22 +1,34 @@
-/* JARVIS AI Command Center — Premium Tactical Aesthetic */
+/* JARVIS AI Command Center — Refined Tactical Interface */
+/* Design tokens from foundation.css: --void, --abyss, --teal-void, --teal, --amber, --emerald */
+
+:root {
+  /* JARVIS-specific overrides for this panel */
+  --jarvis-panel: var(--abyss);
+  --jarvis-panel-hover: var(--teal-void);
+  --jarvis-border: var(--glass-border);
+  --jarvis-border-strong: var(--glass-border-hover);
+  --jarvis-scanline: var(--teal);
+  --jarvis-accent: var(--teal);
+  --jarvis-warm: var(--amber);
+  --jarvis-live: var(--emerald);
+  --jarvis-text: var(--text-primary);
+  --jarvis-text-dim: var(--text-dim);
+  --jarvis-radius-panel: 10px;
+  --jarvis-radius-btn: 8px;
+  --jarvis-radius-card: 6px;
+  --jarvis-shadow: 0 20px 60px rgba(0, 0, 0, 0.85), 0 0 30px rgba(0, 240, 255, 0.12);
+  --jarvis-shadow-inner: inset 0 1px 0 rgba(0, 240, 255, 0.25);
+}
 
 /* ═══════════ Panel Container ═══════════ */
 #ai-command-panel {
   position: relative;
   width: 100%;
   max-width: 520px;
-  background: linear-gradient(
-    180deg,
-    rgba(4, 16, 28, 0.97) 0%,
-    rgba(2, 10, 18, 0.99) 100%
-  );
-  border: 1px solid rgba(0, 240, 255, 0.35);
-  border-radius: 10px;
-  box-shadow:
-    0 20px 60px rgba(0, 0, 0, 0.85),
-    0 0 30px rgba(0, 240, 255, 0.14),
-    inset 0 1px 0 rgba(0, 240, 255, 0.3),
-    inset 0 0 20px rgba(0, 240, 255, 0.05);
+  background: var(--jarvis-panel);
+  border: 1px solid var(--jarvis-border);
+  border-radius: var(--jarvis-radius-panel);
+  box-shadow: var(--jarvis-shadow), var(--jarvis-shadow-inner);
   backdrop-filter: blur(28px) saturate(180%);
   overflow: hidden;
   transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
@@ -24,15 +36,16 @@
   pointer-events: auto;
 }
 
+/* Signature scanline — the ONE bold element */
 #ai-command-panel::before {
   content: '';
   position: absolute;
   top: 0;
-  left: 10%;
-  right: 10%;
+  left: 0;
+  right: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, #00f0ff, transparent);
-  opacity: 0.85;
+  background: linear-gradient(90deg, transparent 20%, var(--jarvis-scanline) 50%, transparent 80%);
+  opacity: 1;
   pointer-events: none;
   z-index: 3;
 }
@@ -214,11 +227,11 @@
   padding: 10px 14px;
   background: linear-gradient(
     90deg,
-    rgba(0, 240, 255, 0.18) 0%,
-    rgba(15, 42, 68, 0.55) 45%,
+    rgba(0, 240, 255, 0.12) 0%,
+    rgba(6, 26, 46, 0.35) 45%,
     transparent 100%
   );
-  border-bottom: 1px solid rgba(0, 240, 255, 0.28);
+  border-bottom: 1px solid var(--jarvis-border);
   user-select: none;
   cursor: pointer;
   position: relative;
@@ -235,11 +248,11 @@
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: #00f0ff;
+  background: var(--jarvis-scanline);
   box-shadow:
-    0 0 10px #00f0ff,
-    0 0 20px rgba(0, 240, 255, 0.6);
-  animation: pulse-glow 2s infinite ease-in-out;
+    0 0 10px var(--jarvis-scanline),
+    0 0 20px rgba(0, 240, 255, 0.5);
+  animation: pulse-glow 2.5s infinite ease-in-out;
 }
 
 .ai-status-pulse::after {
@@ -247,8 +260,8 @@
   position: absolute;
   inset: -4px;
   border-radius: 50%;
-  border: 1px solid rgba(0, 240, 255, 0.6);
-  animation: pulse-ring 2s infinite cubic-bezier(0.215, 0.61, 0.355, 1);
+  border: 1px solid rgba(0, 240, 255, 0.5);
+  animation: pulse-ring 2.5s infinite cubic-bezier(0.215, 0.61, 0.355, 1);
   pointer-events: none;
 }
 
@@ -266,39 +279,22 @@
 @keyframes pulse-glow {
   0%,
   100% {
-    opacity: 0.7;
+    opacity: 0.8;
     transform: scale(0.9);
   }
   50% {
     opacity: 1;
-    transform: scale(1.15);
+    transform: scale(1.1);
   }
 }
 
 .ai-panel-title {
   font-family: var(--font-mono, 'JetBrains Mono', monospace);
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 800;
-  letter-spacing: 0.18em;
-  background: linear-gradient(90deg, #00f0ff 0%, #38bdf8 45%, #a855f7 85%, #00ffaa 100%);
-  background-size: 200% auto;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  animation: jarvis-gradient 4s ease infinite;
-  text-shadow: 0 0 12px rgba(0, 240, 255, 0.35);
-}
-
-@keyframes jarvis-gradient {
-  0% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0% 50%;
-  }
+  letter-spacing: 0.15em;
+  color: var(--jarvis-scanline);
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.4);
 }
 
 .ai-active-model-badge {
@@ -686,8 +682,8 @@
 /* ═══════════ Primary View Navigation Bar ═══════════ */
 .ai-view-nav {
   display: flex;
-  background: rgba(2, 9, 16, 0.95);
-  border-bottom: 1px solid rgba(0, 240, 255, 0.2);
+  background: var(--jarvis-panel);
+  border-bottom: 1px solid var(--jarvis-border);
   padding: 4px 6px;
   gap: 4px;
   user-select: none;
@@ -700,50 +696,40 @@
   justify-content: center;
   gap: 5px;
   padding: 6px 4px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(0, 240, 255, 0.14);
-  border-radius: 5px;
+  background: transparent;
+  border: none;
+  border-radius: var(--jarvis-radius-btn);
   font-family: var(--font-mono, monospace);
   font-size: 0.62rem;
   font-weight: 600;
-  color: rgba(185, 215, 235, 0.75);
+  color: var(--jarvis-text-dim);
   cursor: pointer;
   transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
   white-space: nowrap;
+  position: relative;
 }
 
 .ai-view-tab:hover {
-  background: rgba(0, 240, 255, 0.12);
-  border-color: rgba(0, 240, 255, 0.4);
-  color: #00f0ff;
-  transform: translateY(-0.5px);
+  color: var(--jarvis-scanline);
+  background: var(--jarvis-panel-hover);
 }
 
 .ai-view-tab.active {
-  background: linear-gradient(
-    180deg,
-    rgba(0, 240, 255, 0.25) 0%,
-    rgba(6, 28, 48, 0.7) 100%
-  );
-  border-color: #00f0ff;
-  color: #ffffff;
-  box-shadow:
-    0 0 14px rgba(0, 240, 255, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.25);
-  position: relative;
+  color: var(--jarvis-text);
   font-weight: 700;
+  background: transparent;
 }
 
 .ai-view-tab.active::after {
   content: '';
   position: absolute;
-  bottom: -4px;
-  left: 12%;
-  right: 12%;
+  bottom: -1px;
+  left: 10%;
+  right: 10%;
   height: 2px;
-  background: #00f0ff;
+  background: var(--jarvis-warm);
   border-radius: 2px;
-  box-shadow: 0 0 8px #00f0ff;
+  box-shadow: 0 0 8px var(--jarvis-warm);
 }
 
 .ai-view-icon {
@@ -759,16 +745,16 @@
 .ai-mode-nav-wrap {
   display: flex;
   align-items: center;
-  background: rgba(2, 7, 13, 0.85);
-  border-bottom: 1px solid rgba(0, 240, 255, 0.14);
+  background: var(--jarvis-panel);
+  border-bottom: 1px solid var(--jarvis-border);
   position: relative;
 }
 
 .ai-mode-scroll-btn {
-  background: rgba(4, 14, 24, 0.85);
+  background: var(--jarvis-panel);
   border: none;
-  color: rgba(0, 240, 255, 0.7);
-  font-size: 0.85rem;
+  color: var(--jarvis-scanline);
+  font-size: 0.8rem;
   padding: 0 5px;
   height: 26px;
   cursor: pointer;
@@ -777,8 +763,8 @@
 }
 
 .ai-mode-scroll-btn:hover {
-  color: #ffffff;
-  background: rgba(0, 240, 255, 0.25);
+  color: var(--jarvis-text);
+  background: var(--jarvis-panel-hover);
 }
 
 .ai-mode-tabs {
@@ -801,52 +787,59 @@
   align-items: center;
   justify-content: center;
   gap: 4px;
-  padding: 5px 8px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid transparent;
-  border-radius: 4px;
+  padding: 6px 10px;
+  background: transparent;
+  border: none;
+  border-radius: var(--jarvis-radius-btn);
   font-family: var(--font-mono, monospace);
-  font-size: 0.58rem;
+  font-size: 0.6rem;
   font-weight: 600;
-  color: rgba(165, 195, 215, 0.7);
+  color: var(--jarvis-text-dim);
   cursor: pointer;
   transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
   white-space: nowrap;
+  position: relative;
 }
 
 .ai-mode-tab:hover {
-  background: rgba(0, 240, 255, 0.1);
-  border-color: rgba(0, 240, 255, 0.3);
-  color: #00f0ff;
+  color: var(--jarvis-scanline);
+  background: var(--jarvis-panel-hover);
 }
 
 .ai-mode-tab.active {
-  background: linear-gradient(
-    135deg,
-    rgba(0, 240, 255, 0.22),
-    rgba(14, 38, 62, 0.7)
-  );
-  border-color: rgba(0, 240, 255, 0.55);
-  color: #00f0ff;
-  box-shadow: 0 0 12px rgba(0, 240, 255, 0.2);
+  color: var(--jarvis-text);
   font-weight: 700;
-  text-shadow: 0 0 8px rgba(0, 240, 255, 0.4);
+  background: transparent;
+}
+
+.ai-mode-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 10%;
+  right: 10%;
+  height: 2px;
+  background: var(--jarvis-warm);
+  border-radius: 2px;
+  box-shadow: 0 0 8px var(--jarvis-warm);
 }
 
 .ai-quick-scroll-btn {
-  background: rgba(0, 212, 255, 0.08);
-  border: 1px solid rgba(0, 212, 255, 0.2);
-  border-radius: 4px;
-  color: #00d4ff;
-  font-size: 0.75rem;
-  padding: 1px 5px;
+  background: var(--jarvis-panel-hover);
+  border: 1px solid var(--jarvis-border);
+  border-radius: var(--jarvis-radius-btn);
+  color: var(--jarvis-scanline);
+  font-size: 0.7rem;
+  padding: 2px 6px;
   cursor: pointer;
   transition: all 0.15s ease;
   line-height: 1;
 }
 
 .ai-quick-scroll-btn:hover {
-  background: rgba(0, 212, 255, 0.25);
+  background: var(--jarvis-panel-hover);
+  border-color: var(--jarvis-border-strong);
+  color: var(--jarvis-text);
 }
 
 /* ═══════════ Conversation History Drawer ═══════════ */
@@ -1015,32 +1008,34 @@
 }
 
 .ai-msg-bubble {
-  padding: 12px 16px;
-  border-radius: 10px;
+  padding: 10px 14px;
+  border-radius: var(--jarvis-radius-card);
   position: relative;
   word-break: break-word;
-  backdrop-filter: blur(6px);
+  backdrop-filter: blur(8px);
+  font-size: 0.8rem;
+  line-height: 1.5;
 }
 
 .ai-msg.user .ai-msg-bubble {
   background: linear-gradient(
     135deg,
-    rgba(0, 140, 210, 0.32) 0%,
-    rgba(14, 34, 56, 0.92) 100%
+    rgba(0, 240, 255, 0.18) 0%,
+    var(--abyss) 100%
   );
-  border: 1px solid rgba(0, 240, 255, 0.35);
-  border-right: 2px solid #00f0ff;
-  color: #f0f9ff;
+  border: 1px solid var(--jarvis-border);
+  border-right: 2px solid var(--jarvis-scanline);
+  color: var(--jarvis-text);
   border-bottom-right-radius: 2px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35), 0 0 10px rgba(0, 240, 255, 0.08);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35), 0 0 8px rgba(0, 240, 255, 0.06);
 }
 
 .ai-msg.assistant .ai-msg-bubble {
-  background: rgba(5, 20, 36, 0.94);
-  border: 1px solid rgba(0, 240, 255, 0.2);
-  border-left: 2px solid #00f0ff;
-  color: rgba(235, 248, 255, 0.95);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  background: var(--jarvis-panel);
+  border: 1px solid var(--jarvis-border);
+  border-left: 2px solid var(--jarvis-scanline);
+  color: var(--jarvis-text);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.04);
   border-bottom-left-radius: 2px;
 }
 
