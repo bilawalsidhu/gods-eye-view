@@ -4222,8 +4222,12 @@ rebased to the browser clock and kept up to 60 s after their last message.
 receiver line names them ("Heard by your receiver · 1090 MHz + 978 MHz UAT ·
 browser SDR + decoder feed"). Aircraft heard only on 978 MHz UAT draw with a
 thin light-magenta ring. With feeds configured the row status reads "2 feeds
-live · 14 heard", "feed 978 unreachable · 9 heard" (degraded) or an error when
-no input is producing; without feeds it keeps the WebUSB statuses. See
+live · 14 heard" when every feed is live. While any input is producing (the
+browser receiver streaming, or a feed live) the row stays nominal and names the
+other feeds as a trailing note ("3 heard · USB 5.8 msg/s · feed 1090 stale"),
+since a decoder stopped so the browser can take the dongle is not a fault. With
+nothing producing, every readable feed stale reads STALE and anything else is
+an error. Without feeds it keeps the WebUSB statuses. See
 `docs/LOCAL-RECEIVERS.md`.
 
 ## Bundled geography and submarine cable components

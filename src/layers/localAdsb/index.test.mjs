@@ -840,9 +840,14 @@ test('row status reflects decoder feeds and the browser SDR together', () => {
   assert.equal(stats.source, 'WebUSB + decoder feeds');
   assert.equal(stats.loadingLabel, '1 feed live · 14 heard · USB 3.5 msg/s');
 
+  // A live feed keeps the row nominal; the unreachable one is a trailing note.
   stats = status(idle, feedState(['1090', 'live'], ['978', 'unreachable']), 9);
-  assert.equal(stats.degraded, true);
-  assert.equal(stats.loadingLabel, 'feed 978 unreachable · 9 heard');
+  assert.deepEqual(stats, {
+    source: 'Decoder feeds',
+    status: 'streaming',
+    loadingLabel: '9 heard · feed 978 unreachable',
+  });
+  assert.equal(layerFeedState(stats), 'nominal');
 
   stats = status(idle, feedState(['978', 'unreachable']), 0);
   assert.equal(stats.status, 'error');
@@ -851,11 +856,59 @@ test('row status reflects decoder feeds and the browser SDR together', () => {
     usb,
     feedState(['1090', 'stale'], ['978', 'stale'], ['1090', 'invalid']),
   );
-  assert.equal(stats.degraded, true);
+  assert.equal(stats.status, 'streaming');
+  assert.equal(stats.degraded, undefined);
+  assert.equal(layerFeedState(stats), 'nominal');
   assert.equal(
     stats.loadingLabel,
-    'feeds 1090 #1, 978 stale · feed 1090 #2 invalid · 14 heard · USB 3.5 msg/s',
+    '14 heard · USB 3.5 msg/s · feeds 1090 #1, 978 stale · feed 1090 #2 invalid',
   );
+});
+
+test('a stale decoder feed does not mark a streaming browser receiver degraded', () => {
+  // Owner field test: dump1090 stopped so the browser could take the dongle.
+  const stats = localAdsbStatus({
+    receiver: {
+      webUsbSupported: true,
+      connected: true,
+      mode: 'adsb',
+      status: 'streaming',
+      messagesPerSecond: 5.8,
+    },
+    feedState: {
+      configured: true,
+      polling: true,
+      feeds: [{ band: '1090', label: '1090 MHz', status: 'stale' }],
+    },
+    heard: 3,
+  });
+  assert.deepEqual(stats, {
+    source: 'WebUSB + decoder feeds',
+    status: 'streaming',
+    loadingLabel: '3 heard · USB 5.8 msg/s · feed 1090 stale',
+  });
+  assert.equal(layerFeedState(stats), 'nominal');
+});
+
+test('a browser receiver error beside a live feed is a note on a nominal row', () => {
+  const stats = localAdsbStatus({
+    receiver: {
+      webUsbSupported: true,
+      connected: true,
+      mode: 'adsb',
+      status: 'error',
+      message: 'RTL-SDR sample stream stopped',
+    },
+    feedState: {
+      configured: true,
+      polling: true,
+      feeds: [{ band: '978', label: '978 MHz UAT', status: 'live' }],
+    },
+    heard: 2,
+  });
+  assert.equal(stats.status, 'streaming');
+  assert.equal(layerFeedState(stats), 'nominal');
+  assert.equal(stats.loadingLabel, '2 heard · USB error');
 });
 
 test('every feed stale reads STALE, not an error; unreachable stays an error', () => {
@@ -916,7 +969,7 @@ test('row status names two same-band feeds by their ordinal labels', () => {
   });
   assert.equal(
     stats.loadingLabel,
-    'feeds 978 MHz UAT #2, 1090 unreachable · 4 heard',
+    '4 heard · feeds 978 MHz UAT #2, 1090 unreachable',
   );
 });
 

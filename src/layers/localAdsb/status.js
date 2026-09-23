@@ -74,15 +74,18 @@ function webUsbStatus(receiver, heard, feedState) {
  * Status fields of `getStats()` for the Local ADS-B row.
  *
  * Without configured feeds this is exactly the WebUSB status. With feeds:
- * "2 feeds live · 14 heard" when every feed is live, "feed 978 unreachable ·
- * 9 heard" (degraded) when some are not, and an error when no input is
- * producing aircraft at all.
+ * "2 feeds live · 14 heard" when every feed is live. While any input is
+ * producing (the browser receiver streaming, or a feed live) the row stays
+ * nominal and names the other feeds as a trailing note, e.g. "3 heard · USB
+ * 5.8 msg/s · feed 1090 stale": a decoder stopped so the browser can take the
+ * dongle is not a fault. With nothing producing, every readable feed stale is
+ * STALE and anything else is an error.
  * @param {object} options
  * @param {object} options.receiver WebUSB receiver snapshot.
  * @param {object|null} options.feedState Feed poller snapshot.
  * @param {number} options.heard Merged aircraft heard in the last 60 s.
  * @returns {object} status / statusMessage / loading / loadingLabel / error /
- *   degraded / source.
+ *   stale / source.
  */
 export function localAdsbStatus({ receiver, feedState, heard }) {
   if (!feedsConfigured(feedState))
@@ -133,7 +136,6 @@ export function localAdsbStatus({ receiver, feedState, heard }) {
   return {
     source,
     status: 'streaming',
-    degraded: true,
-    loadingLabel: `${problemText} · ${heardText}${rate}`,
+    loadingLabel: `${heardText}${rate} · ${problemText}`,
   };
 }

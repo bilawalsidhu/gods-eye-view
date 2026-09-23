@@ -37,6 +37,10 @@
   feed"); aircraft heard only on 978 MHz carry a thin ring. The row status
   covers both inputs ("2 feeds live · 14 heard", "feed 978 unreachable"), and
   the Local RTL-SDR card shows a read-only decoder-feed line.
+- While any input is producing aircraft (the browser receiver streaming, or a
+  feed live), the Local ADS-B row stays ON and lists feeds that are not live as
+  a trailing note ("3 heard · USB 5.8 msg/s · feed 1090 stale") instead of
+  showing DEGRADED.
 - Records carry `band` (`1090`/`978`) and `source` (`webusb`/`feed`).
 - See `docs/LOCAL-RECEIVERS.md`.
 
