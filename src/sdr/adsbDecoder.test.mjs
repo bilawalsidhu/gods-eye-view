@@ -13,21 +13,30 @@ import {
 } from './adsbDecoder.js';
 
 function fromHex(value) {
-  return Uint8Array.from(value.match(/../g), (pair) => Number.parseInt(pair, 16));
+  return Uint8Array.from(value.match(/../g), (pair) =>
+    Number.parseInt(pair, 16),
+  );
 }
 
-function synthesizeIq(bytes, { floor = 128, high = 255, preambleTail = null } = {}) {
-  const sampleCount = 16 + (112 * 2) + 8;
+function synthesizeIq(
+  bytes,
+  { floor = 128, high = 255, preambleTail = null } = {},
+) {
+  const sampleCount = 16 + 112 * 2 + 8;
   const iq = new Uint8Array(sampleCount * 2).fill(128);
-  for (let sample = 0; sample < sampleCount; sample += 1) iq[sample * 2] = floor;
-  const pulse = (sample) => { iq[sample * 2] = high; };
+  for (let sample = 0; sample < sampleCount; sample += 1)
+    iq[sample * 2] = floor;
+  const pulse = (sample) => {
+    iq[sample * 2] = high;
+  };
   for (const offset of [0, 2, 7, 9]) pulse(offset);
   if (Number.isFinite(preambleTail)) {
-    for (let sample = 10; sample < 16; sample += 1) iq[sample * 2] = preambleTail;
+    for (let sample = 10; sample < 16; sample += 1)
+      iq[sample * 2] = preambleTail;
   }
   for (let index = 0; index < 112; index += 1) {
     const value = (bytes[index >> 3] >> (7 - (index & 7))) & 1;
-    pulse(16 + (index * 2) + (value ? 0 : 1));
+    pulse(16 + index * 2 + (value ? 0 : 1));
   }
   return iq.buffer;
 }
@@ -49,16 +58,28 @@ test('decodes standard callsign, velocity, and altitude examples', () => {
 
 test('globally decodes a valid even/odd CPR pair and expires tracks at 60 seconds', () => {
   const tracks = new Map();
-  const even = decodeAdsbMessage(fromHex('8D40621D58C382D690C8AC2863A7'), { receivedAt: 1_000 });
-  const odd = decodeAdsbMessage(fromHex('8D40621D58C386435CC412692AD6'), { receivedAt: 1_500 });
+  const even = decodeAdsbMessage(fromHex('8D40621D58C382D690C8AC2863A7'), {
+    receivedAt: 1_000,
+  });
+  const odd = decodeAdsbMessage(fromHex('8D40621D58C386435CC412692AD6'), {
+    receivedAt: 1_500,
+  });
   updateAircraftTrack(tracks, even);
   const aircraft = updateAircraftTrack(tracks, odd);
   assert.ok(Math.abs(aircraft.latitude - 52.26578) < 0.0001);
   assert.ok(Math.abs(aircraft.longitude - 3.93891) < 0.0001);
   assert.equal(aircraft.lastPositionAt, 1_500);
   assert.equal(LOCAL_ADSB_STALE_MS, 60_000);
-  assert.equal(pruneAircraftTracks(tracks, 61_499), 0, 'contact survives below 60 seconds');
-  assert.equal(pruneAircraftTracks(tracks, 61_500), 1, 'contact expires at 60 seconds');
+  assert.equal(
+    pruneAircraftTracks(tracks, 61_499),
+    0,
+    'contact survives below 60 seconds',
+  );
+  assert.equal(
+    pruneAircraftTracks(tracks, 61_500),
+    1,
+    'contact expires at 60 seconds',
+  );
   assert.equal(tracks.size, 0);
 });
 
@@ -72,18 +93,24 @@ test('extracts a CRC-valid Mode S frame from synthetic 2 Msps IQ', () => {
 
 test('accepts a valid weak frame above an elevated local noise floor', () => {
   const bytes = fromHex('8D4840D6202CC371C32CE0576098');
-  const frames = extractAdsbMessages(synthesizeIq(bytes, { floor: 140, high: 150 }), 2_000_000);
+  const frames = extractAdsbMessages(
+    synthesizeIq(bytes, { floor: 140, high: 150 }),
+    2_000_000,
+  );
   assert.equal(frames.length, 1);
   assert.deepEqual(frames[0], bytes);
 });
 
 test('accepts a real-shaped preamble with energy trailing its final pulse', () => {
   const bytes = fromHex('8D4840D6202CC371C32CE0576098');
-  const frames = extractAdsbMessages(synthesizeIq(bytes, {
-    floor: 138,
-    high: 148,
-    preambleTail: 145,
-  }), 2_000_000);
+  const frames = extractAdsbMessages(
+    synthesizeIq(bytes, {
+      floor: 138,
+      high: 148,
+      preambleTail: 145,
+    }),
+    2_000_000,
+  );
   assert.equal(frames.length, 1);
   assert.deepEqual(frames[0], bytes);
 });
@@ -117,7 +144,10 @@ const fixtureFrames = readFileSync(
   .map((line) => fromHex(line.replace(/^\*|;$/g, '')));
 const dump1090 = JSON.parse(
   readFileSync(
-    new URL('../data/fixtures/adsb-austin-dump1090-aircraft.json', import.meta.url),
+    new URL(
+      '../data/fixtures/adsb-austin-dump1090-aircraft.json',
+      import.meta.url,
+    ),
     'utf8',
   ),
 );
@@ -140,14 +170,25 @@ test('real Austin frames decode to the same aircraft, callsigns and positions as
   assert.deepEqual(heard, dump1090.aircraft.map((entry) => entry.hex).sort());
   for (const oracle of dump1090.aircraft) {
     const track = tracks.get(oracle.hex.toUpperCase());
-    if (oracle.flight) assert.equal(track.callsign, oracle.flight.trim(), oracle.hex);
-    if (Number.isFinite(oracle.alt_baro)) assert.equal(track.altitudeFt, oracle.alt_baro, oracle.hex);
-    if (Number.isFinite(oracle.gs)) assert.ok(Math.abs(track.speedKt - oracle.gs) < 0.5, oracle.hex);
-    if (Number.isFinite(oracle.track)) assert.ok(Math.abs(track.headingDeg - oracle.track) < 0.5, oracle.hex);
-    if (Number.isFinite(oracle.baro_rate)) assert.equal(track.verticalRateFpm, oracle.baro_rate, oracle.hex);
+    if (oracle.flight)
+      assert.equal(track.callsign, oracle.flight.trim(), oracle.hex);
+    if (Number.isFinite(oracle.alt_baro))
+      assert.equal(track.altitudeFt, oracle.alt_baro, oracle.hex);
+    if (Number.isFinite(oracle.gs))
+      assert.ok(Math.abs(track.speedKt - oracle.gs) < 0.5, oracle.hex);
+    if (Number.isFinite(oracle.track))
+      assert.ok(Math.abs(track.headingDeg - oracle.track) < 0.5, oracle.hex);
+    if (Number.isFinite(oracle.baro_rate))
+      assert.equal(track.verticalRateFpm, oracle.baro_rate, oracle.hex);
     if (!Number.isFinite(oracle.lat)) continue;
-    assert.ok(Math.abs(track.latitude - oracle.lat) < 0.01, `${oracle.hex} latitude`);
-    assert.ok(Math.abs(track.longitude - oracle.lon) < 0.01, `${oracle.hex} longitude`);
+    assert.ok(
+      Math.abs(track.latitude - oracle.lat) < 0.01,
+      `${oracle.hex} latitude`,
+    );
+    assert.ok(
+      Math.abs(track.longitude - oracle.lon) < 0.01,
+      `${oracle.hex} longitude`,
+    );
   }
 });
 
@@ -156,10 +197,14 @@ test('receiver-relative CPR positions an even-only aircraft that dump1090 left u
   // global even/odd pair exists. dump1090 ran without a receiver location and
   // could not position it; with one, the local decode places it near AUS.
   const skywest = fixtureFrames.filter(
-    (bytes) => decodeAdsbMessage(bytes)?.icao === 'A15C54' && decodeAdsbMessage(bytes).cpr,
+    (bytes) =>
+      decodeAdsbMessage(bytes)?.icao === 'A15C54' &&
+      decodeAdsbMessage(bytes).cpr,
   );
   assert.equal(skywest.length, 3);
-  assert.ok(skywest.every((bytes) => decodeAdsbMessage(bytes).cpr.odd === false));
+  assert.ok(
+    skywest.every((bytes) => decodeAdsbMessage(bytes).cpr.odd === false),
+  );
 
   const located = decodeFixture(AUSTIN_RECEIVER).get('A15C54');
   assert.ok(Math.abs(located.latitude - 30.1599) < 0.01);
@@ -173,7 +218,10 @@ test('receiver-relative CPR positions an even-only aircraft that dump1090 left u
     .sort();
   assert.deepEqual(
     positioned,
-    dump1090.aircraft.filter((entry) => Number.isFinite(entry.lat)).map((entry) => entry.hex).sort(),
+    dump1090.aircraft
+      .filter((entry) => Number.isFinite(entry.lat))
+      .map((entry) => entry.hex)
+      .sort(),
     'without a receiver location the positioned set matches dump1090 exactly',
   );
 });

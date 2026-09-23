@@ -117,7 +117,11 @@ function record(overrides = {}) {
 async function enabledLayer(receiver, clock) {
   const { services, calls } = fakeServices();
   const { sources, viewer } = fakeViewer();
-  const layer = createLocalAdsbLayer({ receiver, services, now: () => clock.now });
+  const layer = createLocalAdsbLayer({
+    receiver,
+    services,
+    now: () => clock.now,
+  });
   layer.init(viewer);
   await layer.enable();
   return { layer, calls, sources };
@@ -151,7 +155,10 @@ test('local aircraft use the live-flight silhouette in magenta', async (t) => {
   assert.ok(entity);
   assert.equal(entity.point, undefined);
   assert.equal(entity.label, undefined);
-  assert.match(entity.billboard.image.getValue(), /^data:image\/svg\+xml;base64,/);
+  assert.match(
+    entity.billboard.image.getValue(),
+    /^data:image\/svg\+xml;base64,/,
+  );
   assert.equal(entity.billboard.width.getValue(), 20);
   assert.ok(
     Cesium.Color.equals(
@@ -190,12 +197,22 @@ test('markers drop when the position is 60 s old and records when silent 60 s', 
   receiver.set({
     aircraft: [
       record(),
-      record({ icao: 'def456', callsign: '   ', lat: null, lon: null, lastPositionAt: null }),
+      record({
+        icao: 'def456',
+        callsign: '   ',
+        lat: null,
+        lon: null,
+        lastPositionAt: null,
+      }),
     ],
   });
   await layer.update();
   const entities = () => sources[0].entities.values.map((entity) => entity.id);
-  assert.deepEqual(entities(), ['local-adsb:abc123'], 'only positioned aircraft draw');
+  assert.deepEqual(
+    entities(),
+    ['local-adsb:abc123'],
+    'only positioned aircraft draw',
+  );
   assert.equal(layer.getStats().count, 1);
 
   // Still transmitting (no position) but the last position is 60 s old.
@@ -226,9 +243,7 @@ test('selecting a marker publishes the readout card and eviction clears it', asy
 
   clock.now = 200_000;
   await layer.update();
-  assert.deepEqual(calls.cleared, [
-    { layerId: 'local-adsb', evicted: true },
-  ]);
+  assert.deepEqual(calls.cleared, [{ layerId: 'local-adsb', evicted: true }]);
   assert.equal(calls.removed.at(-1).layerId, 'local-adsb');
   assert.equal(calls.removed.at(-1).retainIds.size, 0);
 });
@@ -281,7 +296,11 @@ test('layer stats guide the operator to the Radio card until ADS-B is streaming'
   const clock = { now: 100_000 };
   const { services } = fakeServices();
   const receiver = fakeReceiver();
-  const layer = createLocalAdsbLayer({ receiver, services, now: () => clock.now });
+  const layer = createLocalAdsbLayer({
+    receiver,
+    services,
+    now: () => clock.now,
+  });
   assert.equal(layer.getStats().statusMessage, 'connect a receiver in Radio');
   receiver.set({ connected: true, status: 'streaming', mode: 'fm' });
   assert.equal(layer.getStats().statusMessage, 'receiver is in FM mode');

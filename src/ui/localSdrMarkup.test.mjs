@@ -9,7 +9,10 @@ import { R820T_GAIN_STEPS_DB } from '../sdr/gain.js';
 const html = expandApplicationHtml(
   readFileSync(new URL('../../index.html', import.meta.url), 'utf8'),
 );
-const css = readFileSync(new URL('./styles/radio.css', import.meta.url), 'utf8');
+const css = readFileSync(
+  new URL('./styles/radio.css', import.meta.url),
+  'utf8',
+);
 
 test('the Local RTL-SDR card lives inside the Radio panel with every control', () => {
   const radioStart = html.indexOf('id="radio-panel"');

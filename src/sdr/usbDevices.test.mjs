@@ -51,14 +51,20 @@ test('ADS-B mode prefers the 1090 MHz channel of a dual-channel board', () => {
     flyCatcherAdsb,
   );
   assert.equal(
-    selectAuthorizedSdrDevice([genericDongle, { ...flyCatcherAdsb, productName: 'Receiver 1090' }], {
-      filters: RTL_FILTERS,
-      mode: 'adsb',
-    }).productName,
+    selectAuthorizedSdrDevice(
+      [genericDongle, { ...flyCatcherAdsb, productName: 'Receiver 1090' }],
+      {
+        filters: RTL_FILTERS,
+        mode: 'adsb',
+      },
+    ).productName,
     'Receiver 1090',
   );
   assert.equal(
-    selectAuthorizedSdrDevice([genericDongle], { filters: RTL_FILTERS, mode: 'adsb' }),
+    selectAuthorizedSdrDevice([genericDongle], {
+      filters: RTL_FILTERS,
+      mode: 'adsb',
+    }),
     genericDongle,
     'a single generic dongle is still used for ADS-B',
   );
@@ -73,7 +79,10 @@ test('FM mode avoids ADS-B/UAT channels, and nothing matches unrelated devices',
     genericDongle,
   );
   assert.equal(
-    selectAuthorizedSdrDevice([unrelated], { filters: RTL_FILTERS, mode: 'fm' }),
+    selectAuthorizedSdrDevice([unrelated], {
+      filters: RTL_FILTERS,
+      mode: 'fm',
+    }),
     null,
   );
   assert.equal(selectAuthorizedSdrDevice([], { mode: 'adsb' }), null);
@@ -110,7 +119,9 @@ test('device memory is per mode and tolerates unavailable storage', () => {
   memory.set('fm', genericDongle);
   assert.deepEqual(memory.get('adsb'), flyCatcherAdsb);
   assert.deepEqual(memory.get('fm'), genericDongle);
-  assert.ok(storage.values.get(SDR_DEVICE_STORAGE_KEY).includes('FlyCatcher_ADS_B'));
+  assert.ok(
+    storage.values.get(SDR_DEVICE_STORAGE_KEY).includes('FlyCatcher_ADS_B'),
+  );
   const blocked = createSdrDeviceMemory({
     getItem() {
       throw new Error('blocked');
@@ -138,9 +149,16 @@ test('the WebUSB wrapper reuses the remembered channel without the picker', asyn
         return null;
       },
     },
-    { getMode: () => 'adsb', memory, onSelected: (device) => selected.push(device) },
+    {
+      getMode: () => 'adsb',
+      memory,
+      onSelected: (device) => selected.push(device),
+    },
   );
-  assert.equal(await webUsb.requestDevice({ filters: RTL_FILTERS }), flyCatcherAdsb);
+  assert.equal(
+    await webUsb.requestDevice({ filters: RTL_FILTERS }),
+    flyCatcherAdsb,
+  );
   assert.equal(pickerCalls, 0);
   assert.deepEqual(selected, [flyCatcherAdsb]);
 });
@@ -170,10 +188,16 @@ test('CHANGE DEVICE forces the picker once and remembers the choice for the mode
       },
     },
   );
-  assert.equal(await webUsb.requestDevice({ filters: RTL_FILTERS }), flyCatcherUat);
+  assert.equal(
+    await webUsb.requestDevice({ filters: RTL_FILTERS }),
+    flyCatcherUat,
+  );
   assert.equal(pickerCalls, 1);
   assert.deepEqual(memory.get('adsb'), flyCatcherUat);
-  assert.equal(await webUsb.requestDevice({ filters: RTL_FILTERS }), flyCatcherUat);
+  assert.equal(
+    await webUsb.requestDevice({ filters: RTL_FILTERS }),
+    flyCatcherUat,
+  );
   assert.equal(pickerCalls, 1, 'the next connection reuses the new choice');
 });
 
@@ -190,6 +214,9 @@ test('automatic selection is not remembered, so a fallback never becomes sticky'
     },
     { getMode: () => 'adsb', memory },
   );
-  assert.equal(await webUsb.requestDevice({ filters: RTL_FILTERS }), flyCatcherUat);
+  assert.equal(
+    await webUsb.requestDevice({ filters: RTL_FILTERS }),
+    flyCatcherUat,
+  );
   assert.equal(memory.get('adsb'), null);
 });

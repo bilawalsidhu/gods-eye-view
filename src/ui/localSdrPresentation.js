@@ -28,7 +28,9 @@ function statusText(state) {
     : state.seekMessage || state.message;
   if (state.connected && fmActive) {
     const workerStatus =
-      state.workerBlocks > 0 ? `DSP ${state.workerBlocks} blocks` : 'DSP waiting';
+      state.workerBlocks > 0
+        ? `DSP ${state.workerBlocks} blocks`
+        : 'DSP waiting';
     const rfStatus = `RF ${formatIq(state)}`;
     const audioSignal = Number.isFinite(state.audioLevelDbfs)
       ? `${state.audioLevelDbfs.toFixed(1)} dBFS audio`

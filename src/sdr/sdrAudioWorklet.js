@@ -5,9 +5,13 @@ class GevSdrAudioPlayer extends AudioWorkletProcessor {
     this.offset = 0;
     this.volume = 0.8;
     this.port.onmessage = (event) => {
-      if (event.data?.type === 'samples' && event.data.samples instanceof Float32Array) {
+      if (
+        event.data?.type === 'samples' &&
+        event.data.samples instanceof Float32Array
+      ) {
         this.queue.push(event.data.samples);
-        if (this.queue.length > 48) this.queue.splice(0, this.queue.length - 48);
+        if (this.queue.length > 48)
+          this.queue.splice(0, this.queue.length - 48);
       } else if (event.data?.type === 'volume') {
         this.volume = Math.max(0, Math.min(1, Number(event.data.value) || 0));
       } else if (event.data?.type === 'clear') {
@@ -27,7 +31,8 @@ class GevSdrAudioPlayer extends AudioWorkletProcessor {
       const available = samples.length - this.offset;
       const count = Math.min(output.length - outputOffset, available);
       for (let index = 0; index < count; index += 1) {
-        output[outputOffset + index] = samples[this.offset + index] * this.volume;
+        output[outputOffset + index] =
+          samples[this.offset + index] * this.volume;
       }
       outputOffset += count;
       this.offset += count;

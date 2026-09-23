@@ -78,7 +78,10 @@ function describeConnectionError(error) {
   const message = String(error?.message || error || '').trim();
   if (/No device was selected|NotFoundError/i.test(message))
     return 'No RTL-SDR device selected';
-  if (/does not support the WebUSB|usb/i.test(message) && /support/i.test(message)) {
+  if (
+    /does not support the WebUSB|usb/i.test(message) &&
+    /support/i.test(message)
+  ) {
     return 'WebUSB requires desktop Chrome or Edge on localhost/HTTPS';
   }
   if (/access|permission|claim|busy/i.test(message)) {
@@ -563,11 +566,16 @@ export class SdrController {
     this._setState({ gain: setting });
     if (!this._device) return setting;
     try {
-      await this._queueUsb(() => this._device?.setGain(tunerGainValue(setting)));
+      await this._queueUsb(() =>
+        this._device?.setGain(tunerGainValue(setting)),
+      );
       if (targetMode === 'adsb') this._setState(this._resetAdsbCounters());
     } catch (error) {
       console.warn('[SDR] Gain change failed:', error);
-      this._setState({ status: 'error', message: 'RTL-SDR gain change failed' });
+      this._setState({
+        status: 'error',
+        message: 'RTL-SDR gain change failed',
+      });
       return null;
     }
     return setting;
@@ -805,5 +813,8 @@ function positiveModulo(value, divisor) {
   return ((value % divisor) + divisor) % divisor;
 }
 
-export const SDR_FM_BAND = Object.freeze({ minHz: FM_MIN_HZ, maxHz: FM_MAX_HZ });
+export const SDR_FM_BAND = Object.freeze({
+  minHz: FM_MIN_HZ,
+  maxHz: FM_MAX_HZ,
+});
 export const SDR_ADSB_FREQUENCY_HZ = ADSB_FREQUENCY_HZ;

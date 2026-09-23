@@ -4,10 +4,11 @@ export const LOCAL_ADSB_STALE_MS = 60_000;
 const CPR_PAIR_MAX_AGE_MS = 10_000;
 const CPR_SCALE = 131_072;
 const CPR_NZ = 15;
-const CALLSIGN_CHARSET = '#ABCDEFGHIJKLMNOPQRSTUVWXYZ#####_###############0123456789######';
+const CALLSIGN_CHARSET =
+  '#ABCDEFGHIJKLMNOPQRSTUVWXYZ#####_###############0123456789######';
 const PREAMBLE_SAMPLES = 16;
 const FRAME_BITS = 112;
-const FRAME_SAMPLES = PREAMBLE_SAMPLES + (FRAME_BITS * 2);
+const FRAME_SAMPLES = PREAMBLE_SAMPLES + FRAME_BITS * 2;
 const STREAM_CARRY_BYTES = (FRAME_SAMPLES - 1) * 2;
 
 function bit(bytes, index) {
@@ -17,7 +18,7 @@ function bit(bytes, index) {
 function bits(bytes, start, length) {
   let value = 0;
   for (let index = 0; index < length; index += 1) {
-    value = (value * 2) + bit(bytes, start + index);
+    value = value * 2 + bit(bytes, start + index);
   }
   return value;
 }
@@ -31,7 +32,7 @@ function cprNl(latitude) {
   if (absolute >= 87) return absolute === 87 ? 2 : 1;
   const numerator = 1 - Math.cos(Math.PI / (2 * CPR_NZ));
   const denominator = Math.cos((Math.PI / 180) * absolute) ** 2;
-  return Math.floor((2 * Math.PI) / Math.acos(1 - (numerator / denominator)));
+  return Math.floor((2 * Math.PI) / Math.acos(1 - numerator / denominator));
 }
 
 function normalizeLongitude(longitude) {
@@ -42,38 +43,55 @@ function normalizeLongitude(longitude) {
 }
 
 function decodeLocalCpr(frame, reference) {
-  if (!reference || !Number.isFinite(reference.latitude) || !Number.isFinite(reference.longitude)) {
+  if (
+    !reference ||
+    !Number.isFinite(reference.latitude) ||
+    !Number.isFinite(reference.longitude)
+  ) {
     return null;
   }
   const parity = frame.odd ? 1 : 0;
-  const dLat = 360 / ((4 * CPR_NZ) - parity);
-  const latitudeIndex = Math.floor(reference.latitude / dLat)
-    + Math.floor(0.5 + (positiveModulo(reference.latitude, dLat) / dLat)
-      - (frame.latitude / CPR_SCALE));
-  let latitude = dLat * (latitudeIndex + (frame.latitude / CPR_SCALE));
+  const dLat = 360 / (4 * CPR_NZ - parity);
+  const latitudeIndex =
+    Math.floor(reference.latitude / dLat) +
+    Math.floor(
+      0.5 +
+        positiveModulo(reference.latitude, dLat) / dLat -
+        frame.latitude / CPR_SCALE,
+    );
+  let latitude = dLat * (latitudeIndex + frame.latitude / CPR_SCALE);
   if (latitude >= 270) latitude -= 360;
   if (latitude < -90 || latitude > 90) return null;
 
   const longitudeZones = Math.max(cprNl(latitude) - parity, 1);
   const dLon = 360 / longitudeZones;
-  const longitudeIndex = Math.floor(reference.longitude / dLon)
-    + Math.floor(0.5 + (positiveModulo(reference.longitude, dLon) / dLon)
-      - (frame.longitude / CPR_SCALE));
+  const longitudeIndex =
+    Math.floor(reference.longitude / dLon) +
+    Math.floor(
+      0.5 +
+        positiveModulo(reference.longitude, dLon) / dLon -
+        frame.longitude / CPR_SCALE,
+    );
   const longitude = normalizeLongitude(
-    dLon * (longitudeIndex + (frame.longitude / CPR_SCALE)),
+    dLon * (longitudeIndex + frame.longitude / CPR_SCALE),
   );
   return { latitude, longitude };
 }
 
 function decodeGlobalCpr(even, odd) {
-  if (!even || !odd || Math.abs(even.receivedAt - odd.receivedAt) > CPR_PAIR_MAX_AGE_MS) return null;
+  if (
+    !even ||
+    !odd ||
+    Math.abs(even.receivedAt - odd.receivedAt) > CPR_PAIR_MAX_AGE_MS
+  )
+    return null;
   const latitudeIndex = Math.floor(
-    (((59 * even.latitude) - (60 * odd.latitude)) / CPR_SCALE) + 0.5,
+    (59 * even.latitude - 60 * odd.latitude) / CPR_SCALE + 0.5,
   );
-  let evenLatitude = 6 * (positiveModulo(latitudeIndex, 60) + (even.latitude / CPR_SCALE));
-  let oddLatitude = (360 / 59) * (
-    positiveModulo(latitudeIndex, 59) + (odd.latitude / CPR_SCALE)
-  );
+  let evenLatitude =
+    6 * (positiveModulo(latitudeIndex, 60) + even.latitude / CPR_SCALE);
+  let oddLatitude =
+    (360 / 59) * (positiveModulo(latitudeIndex, 59) + odd.latitude / CPR_SCALE);
   if (evenLatitude >= 270) evenLatitude -= 360;
   if (oddLatitude >= 270) oddLatitude -= 360;
   if (cprNl(evenLatitude) !== cprNl(oddLatitude)) return null;
@@ -82,13 +100,15 @@ function decodeGlobalCpr(even, odd) {
   const latitude = useOdd ? oddLatitude : evenLatitude;
   const longitudeZones = Math.max(cprNl(latitude) - (useOdd ? 1 : 0), 1);
   const longitudeIndex = Math.floor(
-    (((even.longitude * (cprNl(latitude) - 1)) - (odd.longitude * cprNl(latitude)))
-      / CPR_SCALE) + 0.5,
+    (even.longitude * (cprNl(latitude) - 1) - odd.longitude * cprNl(latitude)) /
+      CPR_SCALE +
+      0.5,
   );
   const frame = useOdd ? odd : even;
   const longitude = normalizeLongitude(
-    (360 / longitudeZones)
-      * (positiveModulo(longitudeIndex, longitudeZones) + (frame.longitude / CPR_SCALE)),
+    (360 / longitudeZones) *
+      (positiveModulo(longitudeIndex, longitudeZones) +
+        frame.longitude / CPR_SCALE),
   );
   return { latitude, longitude };
 }
@@ -96,13 +116,13 @@ function decodeGlobalCpr(even, odd) {
 function decodeAltitude(bytes) {
   if (!bit(bytes, 47)) return null;
   const encoded = (bits(bytes, 40, 7) << 4) | bits(bytes, 48, 4);
-  return (encoded * 25) - 1_000;
+  return encoded * 25 - 1_000;
 }
 
 function decodeCallsign(bytes) {
   let callsign = '';
   for (let index = 0; index < 8; index += 1) {
-    callsign += CALLSIGN_CHARSET[bits(bytes, 40 + (index * 6), 6)] || ' ';
+    callsign += CALLSIGN_CHARSET[bits(bytes, 40 + index * 6, 6)] || ' ';
   }
   return callsign.replace(/[_#]/g, ' ').trim();
 }
@@ -115,9 +135,13 @@ function decodeVelocity(bytes) {
   const northSouthRaw = bits(bytes, 57, 10);
   if (!eastWestRaw || !northSouthRaw) return null;
   const eastWest = (eastWestRaw - 1) * multiplier * (bit(bytes, 45) ? -1 : 1);
-  const northSouth = (northSouthRaw - 1) * multiplier * (bit(bytes, 56) ? -1 : 1);
+  const northSouth =
+    (northSouthRaw - 1) * multiplier * (bit(bytes, 56) ? -1 : 1);
   const speedKt = Math.hypot(eastWest, northSouth);
-  const headingDeg = positiveModulo((Math.atan2(eastWest, northSouth) * 180) / Math.PI, 360);
+  const headingDeg = positiveModulo(
+    (Math.atan2(eastWest, northSouth) * 180) / Math.PI,
+    360,
+  );
   const verticalRaw = bits(bytes, 69, 9);
   const verticalRateFpm = verticalRaw
     ? (verticalRaw - 1) * 64 * (bit(bytes, 68) ? -1 : 1)
@@ -140,8 +164,15 @@ export function modeSChecksum(bytes) {
 export function decodeAdsbMessage(bytes, { receivedAt = Date.now() } = {}) {
   if (!(bytes instanceof Uint8Array) || bytes.length !== 14) return null;
   const downlinkFormat = bits(bytes, 0, 5);
-  if ((downlinkFormat !== 17 && downlinkFormat !== 18) || modeSChecksum(bytes) !== 0) return null;
-  const icao = [...bytes.slice(1, 4)].map((value) => value.toString(16).padStart(2, '0')).join('').toUpperCase();
+  if (
+    (downlinkFormat !== 17 && downlinkFormat !== 18) ||
+    modeSChecksum(bytes) !== 0
+  )
+    return null;
+  const icao = [...bytes.slice(1, 4)]
+    .map((value) => value.toString(16).padStart(2, '0'))
+    .join('')
+    .toUpperCase();
   const typeCode = bits(bytes, 32, 5);
   const message = { icao, typeCode, receivedAt };
   if (typeCode >= 1 && typeCode <= 4) {
@@ -180,15 +211,28 @@ export function updateAircraftTrack(tracks, message, receiverLocation = null) {
     cprEven: null,
     cprOdd: null,
   };
-  const next = { ...prior, messages: prior.messages + 1, lastSeen: message.receivedAt };
-  for (const key of ['callsign', 'category', 'altitudeFt', 'speedKt', 'headingDeg', 'verticalRateFpm']) {
-    if (message[key] !== undefined && message[key] !== null) next[key] = message[key];
+  const next = {
+    ...prior,
+    messages: prior.messages + 1,
+    lastSeen: message.receivedAt,
+  };
+  for (const key of [
+    'callsign',
+    'category',
+    'altitudeFt',
+    'speedKt',
+    'headingDeg',
+    'verticalRateFpm',
+  ]) {
+    if (message[key] !== undefined && message[key] !== null)
+      next[key] = message[key];
   }
   if (message.cpr) {
     if (message.cpr.odd) next.cprOdd = message.cpr;
     else next.cprEven = message.cpr;
-    const position = decodeGlobalCpr(next.cprEven, next.cprOdd)
-      || decodeLocalCpr(message.cpr, receiverLocation);
+    const position =
+      decodeGlobalCpr(next.cprEven, next.cprOdd) ||
+      decodeLocalCpr(message.cpr, receiverLocation);
     if (position) {
       Object.assign(next, position);
       next.lastPositionAt = message.receivedAt;
@@ -199,7 +243,11 @@ export function updateAircraftTrack(tracks, message, receiverLocation = null) {
 }
 
 /** Remove aircraft that have not transmitted recently. */
-export function pruneAircraftTracks(tracks, now = Date.now(), ttlMs = LOCAL_ADSB_STALE_MS) {
+export function pruneAircraftTracks(
+  tracks,
+  now = Date.now(),
+  ttlMs = LOCAL_ADSB_STALE_MS,
+) {
   if (!(tracks instanceof Map)) return 0;
   let removed = 0;
   for (const [icao, aircraft] of tracks) {
@@ -225,21 +273,26 @@ function preambleContrast(power, offset) {
   quietMean /= quietOffsets.length;
   const contrast = pulseMean - quietMean;
   if (contrast < 120 || pulseMean < quietMean * 1.8) return 0;
-  const decisionLevel = quietMean + (contrast * 0.35);
-  if (pulseOffsets.some((index) => power[offset + index] <= decisionLevel)) return 0;
+  const decisionLevel = quietMean + contrast * 0.35;
+  if (pulseOffsets.some((index) => power[offset + index] <= decisionLevel))
+    return 0;
   return contrast;
 }
 
 /** Extract CRC-valid 112-bit ADS-B messages from unsigned 8-bit interleaved IQ. */
 export function extractAdsbMessages(buffer, sampleRate = 2_000_000) {
-  if (!(buffer instanceof ArrayBuffer) || Math.abs(sampleRate - 2_000_000) > 30_000) return [];
+  if (
+    !(buffer instanceof ArrayBuffer) ||
+    Math.abs(sampleRate - 2_000_000) > 30_000
+  )
+    return [];
   const iq = new Uint8Array(buffer);
   const sampleCount = Math.floor(iq.length / 2);
   const power = new Float32Array(sampleCount);
   for (let index = 0; index < sampleCount; index += 1) {
     const i = iq[index * 2] - 127.5;
-    const q = iq[(index * 2) + 1] - 127.5;
-    power[index] = (i * i) + (q * q);
+    const q = iq[index * 2 + 1] - 127.5;
+    power[index] = i * i + q * q;
   }
 
   const messages = [];
@@ -249,13 +302,16 @@ export function extractAdsbMessages(buffer, sampleRate = 2_000_000) {
     const bytes = new Uint8Array(14);
     let uncertainBits = 0;
     for (let bitIndex = 0; bitIndex < FRAME_BITS; bitIndex += 1) {
-      const sampleOffset = offset + PREAMBLE_SAMPLES + (bitIndex * 2);
+      const sampleOffset = offset + PREAMBLE_SAMPLES + bitIndex * 2;
       const first = power[sampleOffset];
       const second = power[sampleOffset + 1];
       const total = first + second;
       const difference = Math.abs(first - second);
-      if (difference < Math.max(20, contrast * 0.02)
-          || difference / Math.max(total, 1) < 0.04) uncertainBits += 1;
+      if (
+        difference < Math.max(20, contrast * 0.02) ||
+        difference / Math.max(total, 1) < 0.04
+      )
+        uncertainBits += 1;
       if (first > second) bytes[bitIndex >> 3] |= 1 << (7 - (bitIndex & 7));
     }
     if (uncertainBits <= 10 && modeSChecksum(bytes) === 0) {
@@ -285,7 +341,9 @@ export class AdsbStreamDecoder {
       combined.set(this._carry);
       combined.set(incoming, this._carry.length);
     }
-    this._carry = combined.slice(Math.max(0, combined.length - STREAM_CARRY_BYTES));
+    this._carry = combined.slice(
+      Math.max(0, combined.length - STREAM_CARRY_BYTES),
+    );
     return extractAdsbMessages(combined.buffer, sampleRate);
   }
 }

@@ -99,7 +99,9 @@ export function selectAuthorizedSdrDevice(
   );
   if (!candidates.length) return null;
   if (remembered) {
-    const match = candidates.find((device) => sameSdrDevice(device, remembered));
+    const match = candidates.find((device) =>
+      sameSdrDevice(device, remembered),
+    );
     if (match) return match;
   }
   const preferred =

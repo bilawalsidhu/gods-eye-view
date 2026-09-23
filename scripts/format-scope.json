@@ -795,5 +795,15 @@
   "scripts/qa-weather-journey.mjs",
   "scripts/qa-weather-swap.mjs",
   "scripts/qa-weather-teardown.mjs",
-  "src/layers/weather/imageryHost.test.mjs"
+  "src/layers/weather/imageryHost.test.mjs",
+  "src/sdr/adsbDecoder.test.mjs",
+  "src/sdr/controller.test.mjs",
+  "src/sdr/gain.test.mjs",
+  "src/sdr/spectrum.test.mjs",
+  "src/sdr/usbDevices.test.mjs",
+  "src/sources/adsbRecords.test.mjs",
+  "src/layers/localAdsb/index.test.mjs",
+  "src/ui/localSdrControls.test.mjs",
+  "src/ui/localSdrMarkup.test.mjs",
+  "src/ui/localSdrPresentation.test.mjs"
 ]
