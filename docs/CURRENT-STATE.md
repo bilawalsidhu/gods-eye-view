@@ -4155,11 +4155,17 @@ local markers lead:
   blended over the reported track, rate-limited slew); a new fix is absorbed
   by a correction that decays over 900 ms. Coasting continues while messages
   arrive and stops 10 s after the last one (60 s at most).
-- **Sanity filter.** The browser decoder prefers a fresh even/odd pair, then a
-  frame decoded relative to the aircraft's own position (under 10 minutes
-  old), then the receiver location. Every fix must be reachable from the last
-  accepted one at 1.5 × reported ground speed + 50 kt (1,000 kt without a
-  speed, 350 kt for A1/A7/B1/B4) over the elapsed time + 1 s, plus 500 m.
+- **Sanity filter.** For airborne positions the browser decoder prefers a
+  fresh even/odd pair, then a frame decoded relative to the aircraft's own
+  position (under 10 minutes old), then the receiver location. Surface
+  positions are stricter: a single surface frame decodes only against the
+  aircraft's own recent fix, and only when that fix is provably within 45 NM
+  (it could not have gone farther since at its speed limit); the receiver
+  location never decodes a lone surface frame and only picks the quadrant of
+  a surface pair, so a surface track is always seeded by a pair. Every fix
+  must be reachable from the last accepted one at 1.5 × reported ground
+  speed + 50 kt (1,000 kt without a speed, 350 kt for A1/A7/B1/B4) over the
+  elapsed time + 1 s, plus 500 m.
   Refused fixes are counted (`positionsRejected` in the SDR state; the layer
   applies the same check to merged feed records and reports the total as
   `rejectedPositions` in its stats). Three refusals in a row re-anchor.
