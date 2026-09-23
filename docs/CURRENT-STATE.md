@@ -4134,8 +4134,10 @@ reception does not interrupt internet radio.
 The Local ADS-B layer (`local-adsb`, `src/layers/localAdsb/`) is off by default
 and registered as local-only: it never enters share links or stored layer
 state. Its aircraft get the public Flights treatment in magenta, alongside
-the public Flights layer, which renders about one poll interval behind, so
-local markers lead:
+the public Flights layer. Public Flights renders about one poll interval
+(~30 s) behind for smooth interpolation while local aircraft are shown as
+heard, so a local marker usually leads its public twin; both markers are drawn
+on purpose:
 
 - **Class.** Each aircraft is classified with `aircraftClass.js` from its
   ADS-B emitter category (dump1090 strings: `A1` light, `A3` large, `A7`

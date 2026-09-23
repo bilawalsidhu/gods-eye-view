@@ -12,6 +12,12 @@ Aircraft from both inputs are merged by ICAO address. The newest position
 wins, and the click card names every band and source that heard the aircraft
 in the last 60 s. Aircraft heard only on 978 MHz UAT draw with a thin ring.
 
+Local aircraft usually lead their public twins. The public Flights layer
+renders positions about one poll interval (~30 s) behind so it can interpolate
+smoothly between fixes, while local receiver aircraft are shown as heard. An
+aircraft in both layers therefore draws twice, the magenta local marker ahead
+of the public one; both markers are drawn on purpose.
+
 ## Which to use
 
 - **One plain RTL-SDR dongle, desktop Chrome or Edge:** use the browser SDR.
