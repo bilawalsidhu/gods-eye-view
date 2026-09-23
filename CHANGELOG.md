@@ -93,6 +93,16 @@
   dump1090/readsb `aircraft.json` documents.
 - Add `@jtarrio/webrtlsdr` and `@jtarrio/signals` (Apache-2.0); see
   `THIRD_PARTY_NOTICES.md`.
+## Unreleased — Cyber Phase 1
+
+- Add the provider-neutral Cyber Activity layer with optional Cloudflare Radar
+  country aggregates and keyless DShield reported-IP/source-port observations.
+  Radar credentials use the existing local Provider Settings flow; DShield
+  remains non-geographic, and Radar country points are explicitly aggregate
+  reference anchors rather than individual attack locations.
+- Add Cyber source attribution, hourly/15-minute caching, bounded upstream
+  requests, stale-data behavior, provider controls, and normalized analyst
+  records. See `DATA_SOURCES.md` for source semantics and terms.
 
 ## Unreleased — weather review
 

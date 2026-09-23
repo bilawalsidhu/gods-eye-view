@@ -37,3 +37,13 @@ test('adsbdb is credited and carries its published route-data restriction', () =
   assert.match(credit.html, /Guillaume Michel/);
   assert.match(credit.html, /href="https:\/\/www\.adsbdb\.com"/);
 });
+
+test('Cyber providers carry visible source credit and honest data semantics', () => {
+  const radar = DATA_CREDITS.find((entry) => entry.key === 'cloudflare-radar');
+  const dshield = DATA_CREDITS.find((entry) => entry.key === 'dshield');
+  assert.match(radar?.html || '', /Cloudflare Radar/);
+  assert.match(radar?.html || '', /country reference coordinates/);
+  assert.match(radar?.html || '', /CC BY-NC 4\.0/);
+  assert.match(dshield?.html || '', /SANS Internet Storm Center \/ DShield/);
+  assert.match(dshield?.html || '', /not a blocklist/);
+});

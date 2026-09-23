@@ -106,6 +106,15 @@ export const KEY_SETUP_KEYS = Object.freeze([
     envVars: Object.freeze(['LL2_API_TOKEN']),
     tier: 'free',
   }),
+  Object.freeze({
+    id: 'cloudflare-radar',
+    title: 'CLOUDFLARE RADAR',
+    unlocks: 'Country-level mitigated HTTP attack trends in Cyber Activity',
+    getUrl: 'https://dash.cloudflare.com/profile/api-tokens',
+    envVars: Object.freeze(['CLOUDFLARE_RADAR_API_TOKEN']),
+    tier: 'free',
+    testId: 'cloudflare-radar',
+  }),
 ]);
 
 /** Hostnames a Provider Settings request may arrive under or originate from. */
@@ -376,6 +385,7 @@ export function keySetupStatus(env = {}) {
       envVars: [...entry.envVars],
       tier: entry.tier,
       clientExposed: Boolean(entry.clientExposed),
+      testId: entry.testId || null,
       set,
     };
   });

@@ -70,7 +70,14 @@ const DEV_FRESH_EXTERNAL_KEYS_AT_BOOT = new Set(
  * keys exist. Prod builds never register this middleware (apply: 'serve'), so
  * the panel's status fetch fails and the client removes the whole surface.
  */
-function keySetupEndpoint({ sourceRoot = defaultSourceRoot } = {}) {
+function keySetupEndpoint({
+  sourceRoot = defaultSourceRoot,
+  testProvider = async () => {
+    throw Object.assign(new Error('test_unavailable'), {
+      code: 'test_unavailable',
+    });
+  },
+} = {}) {
   const respond = (res, statusCode, payload) => {
     res.statusCode = statusCode;
     res.setHeader('Content-Type', 'application/json');
@@ -252,6 +259,57 @@ function keySetupEndpoint({ sourceRoot = defaultSourceRoot } = {}) {
         if (!admission.ok)
           return respond(res, admission.status, { error: admission.error });
         respond(res, 200, providerStatus());
+      });
+      server.middlewares.use('/api/setup/test', (req, res) => {
+        if (req.method !== 'POST')
+          return respond(res, 405, { error: 'Method not allowed' });
+        const admission = admit(req);
+        if (!admission.ok)
+          return respond(res, admission.status, { error: admission.error });
+        let body = '';
+        let overflowed = false;
+        let receivedBytes = 0;
+        req.on('data', (chunk) => {
+          if (overflowed) return;
+          receivedBytes += chunk.length;
+          if (receivedBytes > 1024) {
+            overflowed = true;
+            body = '';
+          } else {
+            body += chunk;
+          }
+        });
+        req.on('end', async () => {
+          if (overflowed)
+            return respond(res, 413, { error: 'Request body too large' });
+          let parsed;
+          try {
+            parsed = JSON.parse(body || '{}');
+          } catch {
+            return respond(res, 400, { error: 'Invalid JSON' });
+          }
+          if (parsed?.provider !== 'cloudflare-radar')
+            return respond(res, 400, { error: 'Unknown provider test' });
+          try {
+            await testProvider(parsed.provider);
+            respond(res, 200, {
+              ok: true,
+              message: 'Cloudflare Radar connection succeeded.',
+            });
+          } catch (error) {
+            const message =
+              {
+                missing_credentials:
+                  'Add a Cloudflare Radar token in Provider Settings first.',
+                invalid_credentials:
+                  'Cloudflare rejected this token. Check its permissions and replace it in Provider Settings.',
+                rate_limited:
+                  'Cloudflare Radar is rate limited. Try again later.',
+              }[error?.code] ||
+              'Cloudflare Radar could not be reached. Try again later.';
+            respond(res, 200, { ok: false, message });
+          }
+        });
       });
       server.middlewares.use('/api/setup/keys', (req, res) => {
         if (req.method !== 'POST')

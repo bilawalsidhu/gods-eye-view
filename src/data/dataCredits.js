@@ -95,6 +95,20 @@ export const DATA_CREDITS = [
       '<a href="https://inciweb.wildfire.gov/" target="_blank" rel="noopener">InciWeb</a>',
   },
   {
+    key: 'cloudflare-radar',
+    html:
+      'Cyber activity (country-level mitigated HTTP request aggregates): ' +
+      '<a href="https://developers.cloudflare.com/radar/" target="_blank" rel="noopener">Cloudflare Radar</a> · ' +
+      'data under CC BY-NC 4.0 · country reference coordinates; no individual attack paths',
+  },
+  {
+    key: 'dshield',
+    html:
+      'Cyber activity (reported top IPs and source ports): ' +
+      '<a href="https://isc.sans.edu/feeds_doc.html" target="_blank" rel="noopener">SANS Internet Storm Center / DShield</a> · ' +
+      'may include false positives; not a blocklist',
+  },
+  {
     key: 'overpass',
     html:
       'Road geometry (traffic): ' +

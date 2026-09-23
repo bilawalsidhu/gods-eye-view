@@ -66,6 +66,9 @@ test('the status payload reports presence without any credential material', () =
   assert.equal(status.total, KEY_SETUP_KEYS.filter((key) => !key.hidden).length);
   const google = status.keys.find((key) => key.id === 'google-maps');
   assert.equal(google.set, true);
+  const radar = status.keys.find((key) => key.id === 'cloudflare-radar');
+  assert.equal(radar.set, false);
+  assert.equal(radar.testId, 'cloudflare-radar');
   const opensky = status.keys.find((key) => key.id === 'opensky');
   assert.equal(opensky.set, false, 'half a credential pair is not configured');
   const serialized = JSON.stringify(status);

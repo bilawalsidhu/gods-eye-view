@@ -144,6 +144,21 @@ function buildRow(documentRef, key) {
     }
     row.append(fields);
   }
+  if (key.testId) {
+    const actions = documentRef.createElement('div');
+    actions.className = 'key-setup-fields';
+    const test = documentRef.createElement('button');
+    test.type = 'button';
+    test.className = 'key-setup-test';
+    test.dataset.keySetupTest = key.testId;
+    test.textContent = 'TEST CONNECTION';
+    test.disabled = !key.set;
+    test.title = key.set
+      ? `Test ${key.title} connectivity without sending its token to the browser.`
+      : `Save a ${key.title} token before testing connectivity.`;
+    actions.append(test);
+    row.append(actions);
+  }
   return row;
 }
 
@@ -342,6 +357,39 @@ export async function initKeySetup({
     }
   };
 
+  const testProvider = async (provider, button) => {
+    if (disposed || busy || provider !== 'cloudflare-radar') return;
+    busy = true;
+    button.disabled = true;
+    applyButton?.setAttribute('aria-disabled', 'true');
+    say('Testing Cloudflare Radar…');
+    try {
+      const response = await doFetch('/api/setup/test', {
+        method: 'POST',
+        cache: 'no-store',
+        signal: lifetime.signal,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (disposed) return;
+      say(
+        payload?.ok === true
+          ? 'Cloudflare Radar connection succeeded.'
+          : payload?.message ||
+              'Cloudflare Radar could not be reached. Try again later.',
+      );
+    } catch {
+      if (!disposed)
+        say('Cloudflare Radar could not be reached. Try again later.');
+    } finally {
+      busy = false;
+      applyButton?.setAttribute('aria-disabled', 'false');
+      button.disabled = !status?.keys?.find((key) => key.testId === provider)
+        ?.set;
+    }
+  };
+
   const onApply = async () => {
     if (disposed || busy) return;
     const inputs = [...root.querySelectorAll('input[data-env-var]')];
@@ -363,6 +411,11 @@ export async function initKeySetup({
   applyButton?.addEventListener('click', onApply);
   // Remove buttons are rendered per row; delegate so re-renders stay wired.
   rowsHost?.addEventListener('click', (event) => {
+    const testButton = event.target?.closest?.('[data-key-setup-test]');
+    if (testButton) {
+      void testProvider(testButton.dataset.keySetupTest, testButton);
+      return;
+    }
     const button = event.target?.closest?.('[data-key-setup-remove]');
     if (disposed || !button || busy) return;
     let envVars = [];

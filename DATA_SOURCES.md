@@ -1,5 +1,10 @@
 # Data Sources & Attribution
 
+| Provider | Use and handling | Terms / attribution |
+|---|---|---|
+| **Cloudflare Radar API** (`/radar/attacks/layer7/top/locations/origin` and `target`) | Optional Cyber layer: 24-hour shares of mitigated HTTP requests by source-IP country and attacked-zone billing country when available. Requests are bounded to the top 10; country reference coordinates are display anchors only, never individual attack locations. Requires a user-configured Cloudflare API token through Provider Settings; token stays on the local server. | Radar API data is offered under [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/); [Cloudflare Radar API documentation](https://developers.cloudflare.com/radar/). Attribution: “Cloudflare Radar”. Non-commercial restriction applies to the Radar data. |
+| **SANS Internet Storm Center / DShield feeds** (`topips.txt`, `topports_source.txt`) | Keyless Cyber layer: hourly-cached top reported source IPs and source ports, bounded to 10 each. Records have no geographic coordinates. They may include false positives and are not a blocklist or a finding about an individual. | [DShield feed documentation](https://isc.sans.edu/feeds_doc.html): attribute SANS Technology Institute / Internet Storm Center; no resale. |
+
 God's Eye View's **code** is [MIT](LICENSE)-licensed. **The MIT grant covers the source code only — it does NOT extend to third-party data or visual assets.** Every third-party source keeps its own license and terms. This file documents the live and bundled data sources; bundled 3D-model provenance is recorded in [`public/models/README.md`](public/models/README.md).
 
 How to read this:

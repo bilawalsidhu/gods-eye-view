@@ -257,6 +257,49 @@ test('key setup writes only the supplied application root, retains request guard
   assert.equal(existsSync(path.join(untouched, '.env')), false);
 });
 
+test('Cloudflare test-connection endpoint is local-only, bounded and never relays provider errors', async (t) => {
+  const secret = 'fixture-radar-token-never-return-this';
+  let tested = 0;
+  const routes = install(
+    keySetupEndpoint({
+      sourceRoot: root(t),
+      testProvider: async (provider) => {
+        assert.equal(provider, 'cloudflare-radar');
+        tested++;
+        throw Object.assign(new Error(secret), { code: 'invalid_credentials' });
+      },
+    }),
+  );
+  const handler = routes.get('/api/setup/test');
+  assert.equal((await request(handler, { method: 'GET' })).status, 405);
+  assert.equal(
+    (
+      await request(handler, {
+        method: 'POST',
+        body: JSON.stringify({ provider: 'unknown' }),
+      })
+    ).status,
+    400,
+  );
+  const failed = await request(handler, {
+    method: 'POST',
+    body: JSON.stringify({ provider: 'cloudflare-radar' }),
+  });
+  assert.equal(failed.status, 200);
+  assert.deepEqual(failed.json(), {
+    ok: false,
+    message:
+      'Cloudflare rejected this token. Check its permissions and replace it in Provider Settings.',
+  });
+  assert.doesNotMatch(failed.body, /fixture-radar-token|authorization|stack/i);
+  assert.equal(tested, 1);
+  const oversized = await request(handler, {
+    method: 'POST',
+    body: 'x'.repeat(1025),
+  });
+  assert.equal(oversized.status, 413);
+});
+
 test('Realtime service configuration selects compatible endpoint/model without forwarding request model IDs or keys', async () => {
   const handler = install(
     openAiRealtimeProxy({

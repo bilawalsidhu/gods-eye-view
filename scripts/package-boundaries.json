@@ -1952,7 +1952,10 @@
       "src/layers/recentImagery/thumbnails.js",
       "src/maps/imageryHost.js",
       "src/ui/recentImagery.js",
-      "src/ui/imageryBoxTool.js"
+      "src/ui/imageryBoxTool.js",
+      "src/layers/cyber/index.js",
+      "src/layers/cyber/records.js",
+      "src/layers/cyber/source.js"
     ],
     "external": [
       "hls.js",
@@ -2411,7 +2414,8 @@
       "src/layers/recentImagery/catalog.js",
       "src/layers/recentImagery/rendering.js",
       "src/layers/recentImagery/thumbnails.js",
-      "src/maps/imageryHost.js"
+      "src/maps/imageryHost.js",
+      "src/layers/cyber/index.js"
     ],
     "external": [
       "hls.js",

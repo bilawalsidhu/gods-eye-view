@@ -36,6 +36,24 @@ themes or enabling omitted settings. State readback distinguishes configured
 settings from active map/contact effects. Sonar settings are session-only and
 return to their defaults on reload. Sliders accept integer values matching the
 action's ranges.
+## Cyber Activity (Phase 1)
+
+Cyber is one first-class, provider-neutral data layer. Cloudflare Radar supplies
+bounded 24-hour Layer 7 attack origin/target country aggregates when its
+optional token is configured in Provider Settings. Its map points use published
+country reference coordinates only; they are not device locations or source to
+target attack paths. Radar API data is licensed CC BY-NC 4.0, documented in
+`DATA_SOURCES.md`. SANS ISC / DShield supplies hourly-cached top reported source
+IPs and scanning source ports without credentials; those records have no
+geographic coordinates and may include false positives. Each provider fails
+independently, and cached data may be shown during temporary upstream outages.
+
+The Cyber layer uses the shared data-layer panel and state codec. Its local
+server proxy bounds upstream responses, keeps Radar tokens server-side, and
+normalizes provider records before rendering. Radar can be enabled/disabled in
+the layer controls; its credential can be tested, changed, or removed in the
+existing Provider Settings panel. Phase 1 deliberately has no individual host
+enrichment, vulnerability catalog, or threat-intelligence correlation.
 
 Wind appears in the Weather group before Utilities. The surface-weather prototype
 uses keyless NOAA GFS or ECMWF IFS forecasts on an approximately 1° display grid.
