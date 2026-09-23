@@ -90,6 +90,78 @@ export function localInfrastructureOverlayCopy(properties, layerId) {
 }
 
 /**
+ * Map one local infrastructure feature to a JSON-safe analyst record
+ * (analyst query engine seam). Pure — no Cesium types. Missing/unknown
+ * fields are null, never NaN/undefined. Layer-specific fields that do not
+ * apply (river/output on datacenters, capacity on dams) stay null so a
+ * shared compact payload can copy them without inventing values.
+ * Names are unclamped — overlay cards shorten for paint; queries need the
+ * full source string ("Usina Hidrelétrica de Itaipu").
+ * @param {Object|null|undefined} raw - {id, lat, lon, properties}.
+ * @param {string} [layerId] Local layer id (`local-datacenters` / `local-dams`).
+ * @returns {{id: string, name: string|null, lat: number|null, lon: number|null,
+ *   operator: string|null, capacity: string|null, river: string|null,
+ *   output: string|null}}
+ */
+export function mapAnalystRecord(raw, layerId = '') {
+  const num = (v) => (Number.isFinite(v) ? v : null);
+  const text = (v) => {
+    const t = String(v ?? '').trim();
+    return t && t !== 'undefined' && t !== 'null' ? t : null;
+  };
+  const props =
+    raw?.properties &&
+    typeof raw.properties === 'object' &&
+    !Array.isArray(raw.properties)
+      ? raw.properties
+      : {};
+  const tags =
+    props.tags && typeof props.tags === 'object' && !Array.isArray(props.tags)
+      ? props.tags
+      : {};
+  const name =
+    text(props.name) ||
+    text(tags.name) ||
+    text(tags['name:en']) ||
+    text(tags.official_name) ||
+    null;
+  const operator =
+    text(tags.operator) ||
+    text(props.operator) ||
+    text(tags['operator:short']) ||
+    null;
+  const capacity =
+    layerId === 'local-datacenters'
+      ? text(tags['capacity:it_load']) ||
+        text(tags.it_load) ||
+        text(tags.capacity) ||
+        text(props.capacity)
+      : null;
+  const river =
+    layerId === 'local-dams'
+      ? text(tags.associated_river) ||
+        text(props.associated_river) ||
+        text(tags.river) ||
+        text(props.river) ||
+        text(tags['river:name'])
+      : null;
+  const output =
+    layerId === 'local-dams'
+      ? text(props.output) || text(tags['plant:output:electricity'])
+      : null;
+  return {
+    id: name || text(raw?.id) || layerTitle(layerId),
+    name,
+    lat: num(raw?.lat),
+    lon: num(raw?.lon),
+    operator,
+    capacity,
+    river,
+    output,
+  };
+}
+
+/**
  * Produce one normalized-contract input owned by a local infrastructure layer.
  * The host revalidates the authoritative `source` value while normalizing it.
  * @param {object} options
@@ -310,7 +382,7 @@ export function localDatasetError(error) {
  * standard scene.pick natively clicks them.
  * @param {object} options Dataset URL, identity, appearance and optional Cesium adapters.
  * @param {object} services Caller-owned operations; see docs/INFRASTRUCTURE-LAYERS.md.
- * @returns {object} A fresh layer implementing init/enable/disable/update/destroy/getStats.
+ * @returns {object} A fresh layer implementing init/enable/disable/update/destroy/getStats/getAnalystRecords.
  * One live instance per layer id is allowed in a given viewer/context/overlay host.
  * Destroy the previous instance before replacing it. Importing creates no layers.
  */
@@ -529,6 +601,40 @@ export function createLocalGeoJsonLayer(
       budgetLimit: _lastLodBudgetLimit,
       computed: _lodComputed,
     }),
+
+    /**
+     * Snapshot in-memory infrastructure features as plain JSON-safe objects
+     * for the analyst query engine. On-demand only (called at most once per
+     * spoken query) — zero per-frame cost, no listeners, no caching. Returns
+     * [] while the layer is disabled or empty. Disable keeps the loaded
+     * stems for reuse; this method still returns [] until the next enable.
+     * @param {number} [maxCount=2000] Maximum records to return (truncation).
+     * @returns {Array<Object>} See mapAnalystRecord for the record shape.
+     */
+    getAnalystRecords(maxCount = 2000) {
+      if (!_enabled || !_stemRecords.length) return [];
+      const limit = Number.isFinite(maxCount)
+        ? Math.max(1, Math.floor(maxCount))
+        : 2000;
+      const result = [];
+      for (let i = 0; i < _stemRecords.length; i++) {
+        if (result.length >= limit) break;
+        const record = _stemRecords[i];
+        const carto = record.carto;
+        result.push(
+          mapAnalystRecord(
+            {
+              id: record.id,
+              lat: carto ? Cesium.Math.toDegrees(carto.latitude) : null,
+              lon: carto ? Cesium.Math.toDegrees(carto.longitude) : null,
+              properties: propertyObject(record.entity),
+            },
+            id,
+          ),
+        );
+      }
+      return result;
+    },
 
     enable: async (viewer) => {
       if (_destroyed) return;

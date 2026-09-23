@@ -78,6 +78,15 @@ export const DATA_CREDITS = [
     html: 'Earthquakes: Data courtesy of the U.S. Geological Survey',
   },
   {
+    key: 'nasa-gibs',
+    html:
+      'Recent imagery: We acknowledge the use of imagery provided by services from ' +
+      "NASA's Global Imagery Browse Services (GIBS), part of NASA's Earth Science " +
+      'Data and Information System (ESDIS). ' +
+      '<a href="https://gibs.earthdata.nasa.gov" target="_blank" rel="noopener">gibs.earthdata.nasa.gov</a> · ' +
+      '<a href="https://lpdaac.usgs.gov/products/hlss30v002/" target="_blank" rel="noopener">HLS product page</a>',
+  },
+  {
     key: 'overpass',
     html:
       'Road geometry (traffic): ' +
@@ -148,6 +157,10 @@ export const DATA_CREDITS = [
       '<a href="https://its.txdot.gov/" target="_blank" rel="noopener">Texas Department of Transportation</a> (courtesy)',
   },
   {
+    key: 'deldot-cctv',
+    html: 'CCTV live video (Delaware): <a href="https://deldot.gov/map/" target="_blank" rel="noopener">DelDOT — Delaware Department of Transportation</a>',
+  },
+  {
     key: 'caltrans-cctv',
     html:
       'CCTV cameras &amp; frames (California): Caltrans — ' +
@@ -211,6 +224,34 @@ export const DATA_CREDITS = [
       'Terrain (keyless globe stacks): ' +
       '<a href="https://terrain.reearth.land" target="_blank" rel="noopener">Re:Earth Terrain</a> / ' +
       'Mapterhorn (CC BY 4.0) / EGM2008 (NGA)',
+  },
+  {
+    key: 'weather-noaa',
+    html: 'Observed weather: <a href="https://nowcoast.noaa.gov/" target="_blank" rel="noopener">NOAA nowCOAST</a> · NWS/OAR MRMS radar; NESDIS GOES and global satellite partners. <a href="https://oceanservice.noaa.gov/disclaimer.html" target="_blank" rel="noopener">Source disclaimer</a>.',
+  },
+  {
+    key: 'weather-cyclones',
+    html: 'Cyclone advisories: <a href="https://www.nhc.noaa.gov/" target="_blank" rel="noopener">NOAA/NWS NHC / CPHC</a> · Atlantic and eastern/central North Pacific. Forecast center uncertainty, not storm size.',
+  },
+  {
+    key: 'weather-lightning',
+    html: 'Lightning density: NOAA/NWS nowCOAST · derived from Vaisala NLDN/GLD360. <a href="https://ocean.weather.gov/lightning/lightning_pdd.php" target="_blank" rel="noopener">Public derived density product</a>, not raw detections.',
+  },
+  {
+    key: 'wind-gfs',
+    html:
+      'Wind: resampled NOAA Global Forecast System (GFS) 10 m wind via ' +
+      '<a href="https://registry.opendata.aws/noaa-gfs-bdp-pds/" target="_blank" rel="noopener">NOAA Open Data on AWS</a> ' +
+      '(U.S. public domain; forecast, not observations)',
+  },
+  {
+    key: 'ecmwf-ifs',
+    html:
+      'This service is based on data and products of the European Centre for Medium-Range Weather Forecasts (ECMWF). ' +
+      '<a href="https://www.ecmwf.int/en/forecasts/datasets/open-data" target="_blank" rel="noopener">ECMWF Open Data</a> · ' +
+      '<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>. ' +
+      'Modified: resampled 10 m IFS forecast vectors and animated display. ' +
+      'ECMWF does not accept any liability whatsoever for any error or omission in the data, their availability, or for any loss or damage arising from their use.',
   },
   // ── Bundled snapshots ───────────────────────────────────────────
   {

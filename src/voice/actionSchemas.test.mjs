@@ -15,13 +15,13 @@ const stable = (value) =>
         )
       : value;
 
-test('the complete Realtime tool payload retains its pre-extraction contract and wording', () => {
+test('the complete Realtime tool payload pins the additive analyst and satellite release', () => {
   const digest = createHash('sha256')
     .update(JSON.stringify(stable(GEV_REALTIME_TOOLS)))
     .digest('hex');
   assert.equal(
     digest,
-    '956381c3456d3644ed7c9cda72910dc68a34d9191e0b3e414ee200c348245214',
+    '9e33ac0fa5a860a17bb6d79f2c43646b6c36d0c932590bf114814e891a1c96de',
   );
 });
 
@@ -75,4 +75,20 @@ test('metadata cannot add tools, fields, types or enum values', () => {
     { fly_to_location: { description: { nested: 'invalid' } } },
   ])
     assert.throws(() => createActionTools(descriptions), TypeError);
+});
+
+test('all legacy action arguments are byte-identical after removing the deliberate additions', () => {
+  const legacy = structuredClone(GEV_ACTION_SCHEMAS).filter(
+    (tool) => tool.name !== 'next_satellite_pass',
+  );
+  const layers = legacy.find((tool) => tool.name === 'analyst_query').parameters
+    .properties.layers.items;
+  layers.enum = layers.enum.filter(
+    (key) => !['satellites', 'local-datacenters', 'local-dams'].includes(key),
+  );
+  // Independently derived by executing trusted c9f9896 actionSchemas in the restricted container.
+  assert.equal(
+    createHash('sha256').update(JSON.stringify(legacy)).digest('hex'),
+    '820fff21658f6907e1010b2b79c5431a77f4e34afd2277d62d8de46c368b6f8c',
+  );
 });
