@@ -29,3 +29,6 @@ drift.
 - [0010 — GitForge is the primary CI platform](0010-gitforge-primary-ci.md)
 - [0011 — Prettier is declined; ESLint owns format](0011-prettier-declined.md)
 - [0012 — Screen-space annotation renders through the world-overlay lane host](0012-world-overlay-lane-architecture.md)
+- [0013 — AIS vessels stay dev-only until a DO relay is justified](0013-ais-production-relay.md)
+- [0014 — Key signup is operator configuration, not code](0014-key-signup-pass.md)
+- [0015 — Rate limits are per-isolate burst protection, not accounting](0015-per-isolate-rate-limiting.md)

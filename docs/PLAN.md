@@ -1888,17 +1888,19 @@ These are known gaps with reasons, not oversights:
   environment first.
 
 - **gbfs / tomtom / firms / google-\* / military-installations / regional-brief
-  / weather-effects Pages Functions**: keyed or self-hostable paths whose dev
-  middlewares carry credentials; porting them without a key story would either
-  leak keys or fake data. Revisit after the key-signup pass
-  (see [DATA_SERVICES_CATALOG.md](DATA_SERVICES_CATALOG.md)).
+  / weather-effects Pages Functions**: RESOLVED 2026-09-23 — the keyed paths
+  were all ported during the parity campaign; the key-signup pass turned out
+  to be operator configuration, not code
+  ([ADR 0014](adr/0014-key-signup-pass.md)).
 - **AISStream WebSocket in production**: requires Durable Objects (stateful
   WebSocket relay), a paid-plan dependency. Vessels remain dev-server-only
-  until that is justified.
+  until that is justified — decision recorded with explicit revisit triggers
+  ([ADR 0013](adr/0013-ais-production-relay.md)).
 - **Per-isolate rate limiting**: Cloudflare isolates are per-colo, so the
   limiter's "per minute" is per-isolate. A global limit needs
   Durable Objects or Workers KV — accepted for now because the limiter's job
-  is burst protection, not accounting.
+  is burst protection, not accounting
+  ([ADR 0015](adr/0015-per-isolate-rate-limiting.md)).
 - **One dev-only dependabot alert** (`extract-zip` via puppeteer): accepted
   with rationale rather than a semver-incompatible override; it never ships.
 
@@ -2543,9 +2545,20 @@ per 11.3's entry rule: baseline re-measured with the same metrics as
   load ~72 — idle hardware can only be faster, so the
   disqualifications are conservative. With the earlier SGP4 verdict,
   every standing WASM candidate is closed: no WASM candidate is open.
-- [ ] **Batch U (R7)**: three decision docs (ADR or explicit
-  keep-as-is note in the deferred list) for AIS-in-production, the
-  key-signup pass, per-isolate limiting.
+- [x] **Batch U (R7)** — DONE 2026-09-23. Three decision docs landed
+  as ADRs: 0013 (AIS vessels stay dev-only until a Durable Objects
+  relay is justified — keep-as-is with three explicit revisit
+  triggers: production demand, an unrelated paid-plan adoption, or an
+  HTTP-snapshot provider), 0014 (key-signup pass RESOLVED as operator
+  configuration, not code — the audit found every keyed path already
+  has an env-reading Pages Function with contract-tested keyless
+  degradation; the "keyed heavy proxies not yet ported" catalog gap
+  was stale and is corrected), 0015 (per-isolate rate limiting
+  accepted as burst protection, never accounting — global limiting
+  deferred until an accounting feature exists, then DO-vs-WAF decided
+  with real traffic numbers). The deliberately-deferred list in this
+  file now points at the ADRs; DATA_SERVICES_CATALOG §4 reconciled
+  (CCTV + keyed-proxy gaps closed by the parity campaign).
 - [ ] **Batch V (validation)**: RUN 4 — full e2e orchestrator pass
   through `qa-when-quiet` (all suites green or honestly ENV-GATED),
   axe audit green, docs-coverage spot audit. GitForge green on the

@@ -134,23 +134,26 @@ first after the current phase lands. Nothing here is integrated.
 
 ## 4. Known gaps in the current data plane (honest list)
 
-1. **CCTV in production** — the dev middleware lives in `vite.config.js`; a
-   static deploy has no such server. Port in progress (task #29): shared
-   source module + `functions/api/cctv/[[path]].js`.
-2. **AISStream WebSocket in production** — Pages Functions can't hold a
-   persistent upstream WebSocket without Durable Objects (paid Workers plan).
-   Until then the vessels layer needs an HTTP fallback or stays dev-only.
-   Honest status, not fixed by this phase.
-3. **Keyed heavy proxies not yet ported to Functions** — gbfs, tomtom, firms,
-   opensky, google/* (nearby-places, text-search), military-installations,
-   regional-brief, weather-effects. They work in dev; in production they 404
-   until ported. Porting order should follow actual usage.
-4. **Per-isolate rate limits** — Pages Functions limiters are per-isolate;
+Reconciled 2026-09-23: items 1 and 3 of the original list are CLOSED —
+CCTV (`functions/api/cctv/[[path]].js`) and every keyed heavy proxy
+(gbfs, tomtom, firms, opensky, google/*, military-installations,
+regional-brief, weather-effects) have Pages Functions, with parity
+enforced by `src/config/apiEndpoints.test.mjs`. What remains:
+
+1. **AISStream WebSocket in production** — Pages Functions can't hold a
+   persistent upstream WebSocket without Durable Objects (paid Workers
+   plan). Vessels stay dev-only; the production Function answers
+   `unavailable_in_pages` honestly. Decision + revisit triggers:
+   [ADR 0013](adr/0013-ais-production-relay.md).
+2. **Per-isolate rate limits** — Pages Functions limiters are per-isolate;
    they protect upstreams from a single runaway client, not from global
-   traffic. Documented here so nobody assumes global quotas exist.
-5. **Dependabot reports 11 vulnerabilities** (8 high, 3 moderate) on the
-   default branch as of 2026-08-29 — triage under the CI/security task, not
-   in this phase.
+   traffic. Documented so nobody assumes global quotas exist. Decision:
+   [ADR 0015](adr/0015-per-isolate-rate-limiting.md).
+3. **Keys are operator configuration** — the keyed Functions read
+   `env.*` per request and degrade honestly (keyless fallbacks per
+   contract); enabling the keyed layers in production is registering the
+   keys as Pages env vars, not code. See
+   [ADR 0014](adr/0014-key-signup-pass.md).
 
 ## 5. Signup checklist (operator actions)
 
