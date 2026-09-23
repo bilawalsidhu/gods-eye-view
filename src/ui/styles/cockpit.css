@@ -1950,6 +1950,7 @@ body.cockpit-mode
   :is(
     #clear-selected-layers,
     #share-btn,
+    #cctv-globe-btn,
     #tilt-map-view,
     #north-up-view,
     #reset-globe-view

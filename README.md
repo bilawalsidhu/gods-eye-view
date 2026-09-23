@@ -70,6 +70,7 @@ Start with the included data sources, then add your own. Each layer is a separat
 - **🏠 Reset Globe:** One control — or one sentence — back to the full Earth.
 - **🌦️ Weather:** Animate GFS or ECMWF forecast wind, replay observed radar, satellite clouds and lightning on one timeline, and follow NHC/CPHC cyclone tracks. No key needed.
 - **📷 Mapped ALPR cameras:** License-plate-reader camera locations tagged in OpenStreetMap, one city at a time. Locations and tags only; no key needed.
+- **Recent imagery:** Pick a box to browse the last 30 days of NASA HLS Sentinel-2/Landsat imagery and optional VIIRS overviews. Pin a day, compare it with the basemap or another day, and export a PNG. No key needed.
 - **🔭 Satellite passes:** Ask by voice when any loaded satellite next rises over you: rise, peak and set times, and whether you can see it.
 - **🔎 Analyst answers:** Count, filter and rank satellites, datacenters and dams by voice, alongside flights, ships, fires and quakes; answers say when a feed is stale or on a fallback.
 - **🧭 Tilt and North Up:** Switch between straight-down and a 35° oblique, or put north at the top, while a tracked target stays centered.
@@ -196,6 +197,10 @@ Choose a first-run mission, or try these in order. The GIFs show Google Photorea
 
 4. **Look through a public camera.** Turn on **Cameras** over Austin, London, California, Finland, or Delaware (live video). The feeds aren't webcam embeds — they project _into_ the 3D city. Cycle coverage to **VIEWSHED** and every camera draws its estimated coverage volume — where it reaches, and where it goes blind.
 
+On a compact layout, use the camera button in the top globe-actions bar if
+another right-rail panel has hidden CCTV. The button opens the panel; it does
+not enable the feed.
+
 ![Diving into an Austin intersection with a live public camera projected into the 3D scene](docs/media/03-austin-cctv.gif)
 
 5. **Track something in orbit.** Turn on **Satellites** and click the ISS — you ride along at orbital distance, orbit ring and all.
@@ -277,7 +282,7 @@ _Ask for radio near anywhere and the globe starts broadcasting — every station
 
 ## 🛰️ What's on the Globe
 
-Nineteen layers and map sources. **Seventeen have a keyless path.** Some offer additional capabilities with a provider key. (🟢 no key · 🟡 free key · 🔴 metered.)
+Twenty layers and map sources. **Eighteen have a keyless path.** Some offer additional capabilities with a provider key. (🟢 no key · 🟡 free key · 🔴 metered.)
 
 | Layer                       | What you get                                                                                                                                                                                                                                                                                                                                                                        | Source                                  | Auth                                                                                                |
 | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- | --------------------------------------------------------------------------------------------------- |
@@ -289,6 +294,7 @@ Nineteen layers and map sources. **Seventeen have a keyless path.** Some offer a
 | 🌍 **Earthquakes**          | Global seismic activity, last 24h                                                                                                                                                                                                                                                                                                                                                   | USGS                                    | 🟢                                                                                                  |
 | 🚗 **Traffic**              | Simulated vehicles on OSM roads. With TomTom, live flow speeds drive the simulation and congestion colors below ~8 km; individual vehicle positions are not live observations                                                                                                                                                                                                       | TomTom + OSM                            | 🟢 simulation · 🟡 live flow speeds                                                                 |
 | 📹 **CCTV Mesh**            | ~3,600 public cameras projected _into_ the 3D space — Austin · Texas (TxDOT) · California (Caltrans) · London (TfL) · Ontario (511) · Finland (Fintraffic) · British Columbia (DriveBC) · Estonia (Tallinn, Tarktee) · Delaware (DelDOT live video) · New South Wales (Live Traffic NSW) · Calgary. Positions are published; poses are estimated priors **you calibrate by dragging a gizmo on the camera itself** | City APIs                               | 🟢                                                                                                  |
+| **Recent Imagery**          | Choose a box to browse the last 30 days of HLS Sentinel-2/Landsat (30 m) and optional VIIRS daily imagery. Pin one day, swipe against the basemap or a second day, and export a PNG. Google 3D switches to Esri while imagery is shown and returns when cleared.                                                                                                    | NASA CMR / GIBS                         | No key                                                                                              |
 | 📷 **Mapped ALPR Cameras**  | License-plate-reader camera locations tagged by OpenStreetMap contributors, loaded one city-sized view at a time, with **SHOW NEAREST**. Locations and tags only: no plate data, no video                                                                                                                                                                                           | OpenStreetMap (incl. DeFlock mapping)   | 🟢                                                                                                  |
 | 📻 **Radio**                | Geolocated world radio with an **analog tuner** — drag the needle across up to 750 stations and the globe flies to each broadcaster                                                                                                                                                                                                                                                 | Radio Browser / broadcasters            | 🟢                                                                                                  |
 | 🚌 **Transit**              | Live buses, trams, metros, trains and ferries with delayed playback between reports, selected-vehicle trails, and mode-coloured DETECT labels — Boston, Austin, Minneapolis, Helsinki, the Netherlands, Norway, South East Queensland                                                                                                                                               | Operator GTFS-Realtime feeds            | 🟢                                                                                                  |
@@ -304,6 +310,16 @@ Nineteen layers and map sources. **Seventeen have a keyless path.** Some offer a
 **Weather, keyless.** **Wind** animates 10 m forecast flow from NOAA GFS or ECMWF IFS, with an optional color field and a reading at map center. **Rain radar**, **Satellite clouds** and **Lightning density** are observations on one history timeline in the **WEATHER** panel (step back, **Play**, **Latest**); **Cyclone advisories** draw NHC and CPHC positions, forecast tracks and cones. On Google 3D Tiles the observed layers float above the city as translucent shells, sharpened around your view.
 
 In the app, **Data Layers** groups them as Movement, Cameras, Infrastructure, Events, Weather and Utilities.
+
+A **FALLBACK** chip means the layer is using an alternative, not that it has
+no data. Without a TomTom key, Traffic simulates vehicles on OSM roads;
+TomTom adds live flow speeds, not live positions for individual cars. Flights
+can switch from a worldwide OpenSky snapshot to an adsb.lol region around
+the current view when OpenSky is stale or rate-limited. CCTV shows FALLBACK
+when the public camera catalog is unavailable and it uses bundled camera
+positions. Its layer badge does not verify that every selected camera has
+live video; an unavailable stream may show a still image, Street View or a
+synthetic view.
 
 **The basemap ladder — what each tier buys you:**
 
@@ -367,7 +383,7 @@ How the globe handles live data:
 - **Smooth motion from choppy data.** Live feeds arrive every 15–30s; the globe renders one interval behind real time and interpolates between known fixes. Dead reckoning fills the gaps.
 - **Honest satellites.** SGP4 propagation with orbit rings that stay locked to their satellites via GMST realignment — no drift, no per-second flicker.
 - **Sits on the real ground.** Entity heights are aligned to work with Google 3D tiles, so aircraft park on aprons and cameras stand on street corners instead of floating.
-- **Caching and request budgets.** An OpenSky credit governor, a TomTom daily tile budget, and disk-cached TLEs reduce repeated requests. These controls do not replace provider quotas or billing controls.
+- **Caching and request budgets.** OpenSky worldwide state and aircraft-track misses each share concurrent requests. Track fetches have per-client and global rate limits, a rolling OpenSky daily budget, and concurrency, response-size and cache-memory limits. Stale worldwide data gives way to regional adsb.lol data when a view anchor is available. TomTom has a daily tile budget; TLEs are disk-cached. These process-local controls do not replace provider quotas or billing controls; see [SECURITY.md](SECURITY.md).
 - **Server-side credentials.** Every API that touches a private key (OpenAI, AISStream, OpenSky OAuth, camera frames) is brokered through a hardened server-side proxy with SSRF protection, response caps, and sanitized errors. The only keys the browser sees are Google Maps and Cesium ion (restrict both at the provider).
 - **No framework.** Vanilla JavaScript, **CesiumJS**, and **Vite** — plus **Google Photorealistic 3D Tiles** for the planet and the **OpenAI Realtime API** for voice. Fast to read, fast to hack on.
 
@@ -430,6 +446,12 @@ _What the TomTom key buys you: rush-hour density painted on the city — then di
 
 Add these if you need higher polling allowances.
 
+OpenSky track requests follow `OPENSKY_AUTH_MODE` (`anon`, `basic`, `oauth`, or
+`auto`). In `auto`, a rejected OAuth bearer token falls back to Basic when
+username and password are configured. The server bounds uncached track requests
+and may return a rate-limit response before OpenSky's own allowance is reached.
+See [SECURITY.md](SECURITY.md) for the limits.
+
 `npm run doctor` reports Node/npm readiness, the primary provider routes, and
 where each configured provider was found without printing credential values.
 On macOS its Keychain-aware result previews `./scripts/dev-fresh.sh`; plain
@@ -457,7 +479,9 @@ security add-generic-password -U -s "firms-map"       -a "map-key" -w
 security add-generic-password -U -s "cesium-ion"      -a "token"   -w
 ```
 
-OpenSky can run fully anonymous (`OPENSKY_AUTH_MODE=anon`), or import OAuth credentials with `./scripts/opensky-import-client.sh /path/to/credentials.json`.
+OpenSky can run fully anonymous (`OPENSKY_AUTH_MODE=anon`), use Basic credentials
+(`OPENSKY_AUTH_MODE=basic` with `OPENSKY_USERNAME` and `OPENSKY_PASSWORD`), or
+import OAuth credentials with `./scripts/opensky-import-client.sh /path/to/credentials.json`.
 
 </details>
 
