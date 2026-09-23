@@ -3,6 +3,74 @@
 This changelog records public product changes. For the authoritative description
 of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md).
 
+## [0.10.1] — 2026-09-23
+
+The idle-GPU audit shipped: the HiDPI downscale policy that never engaged
+is fixed, and wall-clock animator holds drop to 30 fps when nothing else
+needs continuous rendering — together they address the reported GPU pegs
+on several machines. Patch cadence (fixes/perf/docs — no new data layer,
+no new production API surface).
+
+### Fixed
+
+- **HiDPI resolution scale actually applies.** `applySceneRenderScale`
+  wrote `viewer.scene.sceneResolutionScale` — no such property exists in
+  Cesium 1.144 (the knob is `viewer.resolutionScale`), so the assignment
+  created an inert expando and the DPR>1.5 downscale policy NEVER
+  engaged. Every HiDPI machine rendered at full native backing-store
+  size (~4× per-pixel fragment cost at DPR 2). The unit test had pinned
+  the same wrong property on a stub viewer; the contract now reads the
+  real property path.
+
+### Performance
+
+- **Low-demand 30 fps idle policy.** A default session never entered
+  idle mode: the CRT default style holds continuous render for its
+  lifetime and every live layer holds while enabled, so a parked camera
+  ran 60 fps forever. The governor now drops `targetFrameRate` to 30
+  when the camera is parked AND every hold owner is a wall-clock-timed
+  animator (flights, military, satellites, planets, traffic, ais-vessels,
+  style-anim) — world state is bit-identical since those animators sample
+  wall-clock trajectories. Camera-driven holders and camera motion stay
+  fail-safe at full rate. Audit findings + A/B numbers in
+  `docs/PERFORMANCE.md`.
+- **WASM candidates closed with measurements.** All three standing
+  candidates (label arbiter, detection projection worker, AIS row
+  normalization) were benchmarked against real production code paths and
+  disqualified — each is well under 2% of frame budget at realistic
+  scale. Verdicts + method in `docs/PERFORMANCE.md`; no WASM candidate
+  is open.
+
+### Added
+
+- **PWA install surface hardened.** Stable manifest `id` +
+  `launch_handler` (focus-existing), a dedicated maskable icon, a 180px
+  apple-touch-icon, and the iOS standalone meta Safari ignores from the
+  manifest. `src/pwaSurface.test.mjs` reads the real files (manifest,
+  icons on disk, `index.html` meta, vite wiring) so the surface cannot
+  silently regress.
+
+### Tests / coverage
+
+- Coverage waves 5 + 6: branch-contract tests for the render governor
+  tiers, both flight-layer forks' dead-reckoning, regional-brief
+  normalization, the tracking click-gesture clock, and ISS pass
+  prediction. Ratchet floors now 91/91/91/82
+  (lines/statements/functions/branches); the Cesium-coupled remainder is
+  documented per ADR 0008, not chased with mock choreography.
+- The `flightsTracking` pipeline config schema is enforced three ways —
+  documented JSDoc keys ↔ runtime consumption (Proxy get-trap) ↔
+  call-site object literals — by `src/data/flightsTracking.test.mjs`;
+  the extraction-seam map lives in `docs/MODULE_MAP.md`.
+
+### Docs
+
+- ADRs 0013 (AIS stays dev-only until a Durable Objects relay is
+  justified), 0014 (key signup is operator configuration — every keyed
+  path already reads `env.*` in production), and 0015 (per-isolate rate
+  limits are burst protection, not accounting).
+  `docs/DATA_SERVICES_CATALOG.md` §4 reconciled against them.
+
 ## [0.10.0] — 2026-09-22
 
 New live layers (transit + synthetic traffic), the production regional-brief
