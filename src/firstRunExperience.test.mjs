@@ -1,3 +1,5 @@
+import { expandApplicationHtml } from '../build/application-html.js';
+import { readStylesheet } from './testSupport/readStylesheet.mjs';
 import { GEV_REALTIME_TOOLS } from '../server/providers/openai/tools.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -183,7 +185,7 @@ test('no storage is touched from a default parameter position', () => {
 
 test('the JS and CSS lists of screen-claiming surfaces stay in step', () => {
   const module = fs.readFileSync(new URL('./firstRunExperience.js', import.meta.url), 'utf8');
-  const css = fs.readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const css = readStylesheet(new URL('../style.css', import.meta.url));
 
   assert.deepEqual(
     [...EXCLUSIVE_SURFACE_CLASSES].sort(),
@@ -217,21 +219,23 @@ test('exclusiveSurfaceActive reads the live body classes', () => {
 
 test('the key handler refuses to act for a card that is not really on screen', () => {
   const module = fs.readFileSync(new URL('./firstRunExperience.js', import.meta.url), 'utf8');
+  assert.match(module, /isActive: \(\) => !closing && isTopmost\(\)/);
   // Real visibility, not just the class: the class survives while CSS hides the
   // card, which is precisely how a Scene left an invisible ESC handler armed.
-  assert.match(module, /const isTopmost = \(\) => root\.isConnected/);
-  assert.match(module, /&& root\.getClientRects\(\)\.length > 0\s*\n\s*&& !coveredByOverlay\(\);/);
-  const handler = module.slice(module.indexOf('function onKeyDown(event) {'));
+  assert.match(module, /const isTopmost = \(\) =>\s*root\.isConnected/);
+  assert.match(module, /&&\s*root\.getClientRects\(\)\.length > 0 &&\s*!coveredByOverlay\(\);/);
+  const keyboard = fs.readFileSync(new URL('./ui/surfaceKeyboard.js', import.meta.url), 'utf8');
+  const handler = keyboard.slice(keyboard.indexOf('const onKeyDown = (event) => {'));
   assert.match(
     handler.slice(0, handler.indexOf("if (event.key === 'Escape')")),
-    /if \(closing \|\| !isTopmost\(\)\) return;/,
+    /!isActive\(\)/,
     'the handler must bail before consuming anything when it is not topmost',
   );
 });
 
 test('an overlay with NO class to watch still disarms the launcher', () => {
   const module = fs.readFileSync(new URL('./firstRunExperience.js', import.meta.url), 'utf8');
-  const css = fs.readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const css = readStylesheet(new URL('../style.css', import.meta.url));
 
   // The repro, pinned as the stacking it actually is: the attribution lightbox
   // is full-screen ABOVE the card and announces itself with nothing. The card
@@ -261,14 +265,14 @@ test('an overlay with NO class to watch still disarms the launcher', () => {
 });
 
 test('one ESC does one thing — the radio disclosure stops the launcher outright', () => {
-  const ui = fs.readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
+  const ui = fs.readFileSync(new URL('./ui/radioBindings.js', import.meta.url), 'utf8');
   const module = fs.readFileSync(new URL('./firstRunExperience.js', import.meta.url), 'utf8');
 
   // stopPropagation() does NOT stop later listeners on the SAME document, so the
   // disclosure's earlier capture handler closed the disclosure and the launcher
   // dismissed itself off the same key. The earlier listener is the only one that
   // can stop the later one — and only the immediate form does it.
-  const radioEsc = ui.slice(ui.indexOf("if (event.key !== 'Escape' || !this._contextRadioDock"));
+  const radioEsc = ui.slice(ui.indexOf("event.key !== 'Escape' ||"));
   const claim = radioEsc.slice(0, radioEsc.indexOf('setRadioDisclosure(false'));
   assert.match(claim, /event\.preventDefault\(\);/);
   assert.match(claim, /event\.stopImmediatePropagation\(\);/);
@@ -277,10 +281,11 @@ test('one ESC does one thing — the radio disclosure stops the launcher outrigh
 
   // Belt on the launcher side: a key another surface already marked is not ours,
   // whether or not that surface remembered to silence us.
-  const handler = module.slice(module.indexOf('function onKeyDown(event) {'));
+  const keyboard = fs.readFileSync(new URL('./ui/surfaceKeyboard.js', import.meta.url), 'utf8');
+  const handler = keyboard.slice(keyboard.indexOf('const onKeyDown = (event) => {'));
   assert.match(
     handler.slice(0, handler.indexOf("if (event.key === 'Escape')")),
-    /if \(event\.defaultPrevented\) return;/,
+    /event\.defaultPrevented\) return;/,
     'a marked key must be somebody else\'s key',
   );
 });
@@ -311,7 +316,7 @@ test('a refused write takes the tick back instead of promising "never again"', (
 
   const handler = module.slice(
     module.indexOf('const onSuppressChange = (event) => {'),
-    module.indexOf('function onKeyDown(event) {'),
+    module.indexOf('  const keyboard = createSurfaceKeyboard({'),
   );
   assert.match(handler, /if \(setFirstRunSuppressed\(wanted, storage\)\) return;/);
   assert.match(handler, /box\.checked = !wanted;/, 'a refused write must revert the tick');
@@ -342,7 +347,7 @@ test('a surface class that never clears is an ACCEPTED no-show, not a timer', ()
 
 test('the scroll fade only appears when the list really overflows', () => {
   const module = fs.readFileSync(new URL('./firstRunExperience.js', import.meta.url), 'utf8');
-  const css = fs.readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const css = readStylesheet(new URL('../style.css', import.meta.url));
   // A fade on a card where all five tiles fit promises a sixth mission that does
   // not exist, which is worse than no affordance at all.
   assert.match(module, /const overflows = choiceList\.scrollHeight > choiceList\.clientHeight \+ 1;/);
@@ -368,7 +373,7 @@ test('the launcher yields on engage and waits when a surface is already up', () 
   assert.match(module, /dismiss\(\{ restoreFocus: false \}\)/);
   // A cheap attribute watch, not a per-frame poll — the render governor must
   // not see a new hold because of onboarding chrome.
-  assert.match(module, /attributes: true, attributeFilter: \['class'\]/);
+  assert.match(module, /attributes: true,\s*attributeFilter: \['class'\]/);
   assert.match(module, /surfaceObserver\?\.disconnect\(\)/);
   assert.doesNotMatch(module, /setInterval|requestAnimationFrame\(function poll/);
 });
@@ -531,7 +536,7 @@ test('no mission writes a preference the visitor did not choose by picking it', 
   const panelWrites = code.match(/setPanelCollapsed/g) || [];
   assert.equal(panelWrites.length, 1, 'exactly one panel reveal, on the Context path');
   const contextPath = code.slice(code.indexOf('setContextMode: async (mode)'), code.indexOf('setLayerEnabled:'));
-  assert.match(contextPath, /result\?\.ok[\s\S]*?setPanelCollapsed\?\.\('global-context-panel', false, \{ explicit: true \}\)/);
+  assert.match(contextPath, /result\?\.ok[\s\S]*?setPanelCollapsed\?\.\('global-context-panel', false, \{\s*explicit: true,?\s*\}\)/);
 });
 
 test('the decision table is written down where the next editor will read it', () => {
@@ -546,9 +551,9 @@ test('the decision table is written down where the next editor will read it', ()
 // ── Markup, startup ordering, accessibility ─────────────────────────────────
 
 test('markup, startup ordering and accessibility remain pinned', () => {
-  const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  const startup = fs.readFileSync(new URL('./standalone/startupChrome.js', import.meta.url), 'utf8');
-  const css = fs.readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const html = expandApplicationHtml(fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
+  const startup = fs.readFileSync(new URL('./app/startupChrome.js', import.meta.url), 'utf8');
+  const css = readStylesheet(new URL('../style.css', import.meta.url));
 
   assert.match(html, /id="first-run-launcher" role="dialog"[^>]*aria-labelledby="first-run-title"[^>]*hidden/);
   assert.equal((html.match(/data-first-run-choice=/g) || []).length, 4);
@@ -580,7 +585,7 @@ test('markup, startup ordering and accessibility remain pinned', () => {
 
   assert.match(startup, /styleManager\.initialRestorePromise/);
   assert.ok(startup.indexOf("loadingScreen.classList.add('hidden')") < startup.indexOf("loadingScreen.addEventListener('transitionend', revealFirstRun"));
-  assert.match(startup, /initFirstRunExperience\(\{ styleManager, dataManager \}\)/);
+  assert.match(startup, /initializeWelcome\?\.\(\{ styleManager, dataManager \}\)/);
 
   assert.match(css, /body\.ui-clean-view #first-run-launcher/);
   assert.match(css, /body\.recording-mode #first-run-launcher/);
@@ -617,15 +622,18 @@ test('the launcher keeps focus, restores it, and never disables the focused butt
   assert.match(module, /button\.setAttribute\('aria-disabled', String\(next\)\)/);
   assert.doesNotMatch(module, /button\.disabled = /);
   // Tab is confined to the launcher, and ESC always releases it.
-  assert.match(module, /event\.key !== 'Tab'/);
-  assert.match(module, /event\.key === 'Escape'/);
-  assert.match(module, /previouslyFocused\?\.focus/);
+  const keyboard = fs.readFileSync(new URL('./ui/surfaceKeyboard.js', import.meta.url), 'utf8');
+  assert.match(module, /keyboard\.activate\(\)/);
+  assert.match(module, /keyboard\.deactivate\(\{ restoreFocus \}\)/);
+  assert.match(keyboard, /event\.key !== 'Tab'/);
+  assert.match(keyboard, /event\.key === 'Escape'/);
+  assert.match(keyboard, /target\?\.focus/);
   // Capture phase, so the app's global letter hotkeys cannot eat the launcher's keys.
-  assert.match(module, /addEventListener\('keydown', onKeyDown, true\)/);
+  assert.match(keyboard, /addEventListener\('keydown', onKeyDown, true\)/);
 });
 
 test('the DISPLAY rail starts collapsed on a first run, and a stored choice wins', () => {
-  const ui = fs.readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
+  const ui = fs.readFileSync(new URL('./ui/panelPositionControls.js', import.meta.url), 'utf8');
   // The rail opened by default to advertise HUD / DETECT / 3D. Those default ON
   // now, so it was opening to offer controls for things already happening —
   // while competing with the mission card for the one first impression there is.
@@ -649,14 +657,15 @@ test('the DISPLAY rail starts collapsed on a first run, and a stored choice wins
 // ── Voice: instruction-only, tool schema unchanged ─────────────────────
 
 test('the voice TOOL SCHEMA matches the pinned release — the mission mapping is instructions only', () => {
+  // Analyst layers and the separate satellite-pass tool deliberately extend the schema.
   // Canonical serialization pins every tool name, description, property and
   // ordering while allowing source formatting. Derived from the unchanged
   // release schema before formatting (the previous source-byte pin passed).
   const block = JSON.stringify(GEV_REALTIME_TOOLS);
-  assert.equal(block.length, 26121, 'serialized tool schema length drifted');
+  assert.equal(block.length, 27271, 'serialized tool schema length drifted');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    '11680affb4a7aebf142642c8185b28f2ee7d523407054c5b0c3962d933b045eb',
+    'da5f1bb334d1e882d63098cb35b29afde273947c0807ef6af2ef3d25a0df4918',
     'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
   );
   const instructions = fs.readFileSync(new URL('../server/providers/openai/instructions.js', import.meta.url), 'utf8');
@@ -682,11 +691,11 @@ test('the voice TOOL SCHEMA matches the pinned release — the mission mapping i
 });
 
 test('every layer a mission drives is already in the shipped set_layer_visibility enum', () => {
-  const src = fs.readFileSync(new URL('../server/providers/openai/tools.js', import.meta.url), 'utf8');
-  const tool = src.slice(src.indexOf("name: 'set_layer_visibility'"), src.indexOf("name: 'show_data_layers_menu'"));
+  const tool = GEV_REALTIME_TOOLS.find(tool => tool.name === 'set_layer_visibility');
+  const allowedLayers = tool.parameters.properties.layerId.enum;
   const missionLayerIds = Object.values(FIRST_RUN_MISSIONS).flatMap((mission) => mission.layerIds || []);
   assert.ok(missionLayerIds.length > 0);
   for (const layerId of missionLayerIds) {
-    assert.ok(tool.includes(`'${layerId}'`), `${layerId} must already be an allowed enum value`);
+    assert.ok(allowedLayers.includes(layerId), `${layerId} must already be an allowed enum value`);
   }
 });

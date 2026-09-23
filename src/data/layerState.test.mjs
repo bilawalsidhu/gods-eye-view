@@ -1,3 +1,6 @@
+import { readShellSource } from '../testSupport/readShellSource.mjs';
+import { expandApplicationHtml } from '../../build/application-html.js';
+import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -155,8 +158,9 @@ function encode(state) {
 
 test('production registry is exact, canonical, and rejects incomplete contracts', async () => {
   assert.equal(validateLayerStateRegistry(), true);
-  assert.equal(REGISTERED_LAYER_IDS.length, 16);
-  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 16);
+  assert.equal(REGISTERED_LAYER_IDS.length, 26);
+  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 26);
+  assert.ok(REGISTERED_LAYER_IDS.includes('transit'));
   assert.deepEqual(REGISTERED_LAYER_IDS, [...REGISTERED_LAYER_IDS].sort());
   assert.throws(
     () => validateLayerStateRegistry([...LAYER_STATE_REGISTRY, LAYER_STATE_REGISTRY[0]]),
@@ -223,8 +227,14 @@ test('v2 codec distinguishes absent from empty and keeps canonical deterministic
 });
 
 test('unknown enabled-layer tokens reject the payload instead of becoming an empty set', () => {
-  assert.equal(decodeLayerStateParams(new URLSearchParams('v=2&l=z')), null);
-  assert.equal(decodeLayerStateParams(new URLSearchParams('v=2&l=c.z')), null);
+  assert.equal(decodeLayerStateParams(new URLSearchParams('v=2&l=unknown')), null);
+  assert.equal(decodeLayerStateParams(new URLSearchParams('v=2&l=c.unknown')), null);
+});
+
+test('Nepal event and locator have distinct enabled-only share tokens', () => {
+  const decoded = decodeLayerStateParams(new URLSearchParams('v=2&l=h.z'));
+  assert.deepEqual(decoded.enabledLayerIds, ['bhote-koshi-2026', 'bhote-koshi-locator']);
+  assert.ok(encode(decoded).includes('l=h.z'));
 });
 
 test('unknown and forbidden option fields are ignored while missing options use codec defaults', () => {
@@ -321,6 +331,7 @@ test('compact URL omits absent-meaning option state and still resolves to it', (
   // below, and the divergence itself in the two codec tests above.
   state.options.flights = { models3d: false, models3dMode: 'proximity', selectedFlightsTrackingId: null, selectedMilitaryTrackingId: null };
   state.options.satellites = { catalog: 'core', showPoints: true, showOrbits: true, selectedSatTrackingId: null };
+  state.options.wind.overlay = 'speed'; // Frozen v2 omitted-token meaning; new boots use trails.
   const params = encodeLayerStateParams(new URLSearchParams('v=2'), state);
   assert.equal(params.has('lo'), false);
   const roundTrip = decodeLayerStateParams(params);
@@ -365,21 +376,21 @@ test('a fresh boot starts 3D aircraft ON in proximity — codec, both layers, an
   // first-run session actually boots from.
   const { readFile } = await import('node:fs/promises');
   for (const name of ['flights.js', 'militaryFlights.js']) {
-    const source = await readFile(new URL(`./${name}`, import.meta.url), 'utf8');
-    assert.match(source, /^let _models3dEnabled = true;$/m,
+    const source = readLayerSource(new URL(`./${name}`, import.meta.url));
+    assert.match(source, /^\s*(?:let |flightState\.)_models3dEnabled = true;$/m,
       `${name}: the fleet starts armed, matching the codec default`);
-    assert.match(source, /^let _models3dMode = 'proximity';/m,
+    assert.match(source, /^\s*(?:let |flightState\.)_models3dMode = 'proximity';/m,
       `${name}: and starts in proximity, matching the codec default`);
   }
-  const ui = await readFile(new URL('../ui.js', import.meta.url), 'utf8');
-  assert.match(ui, /^\s*this\._models3dEnabled = true;$/m,
+  const ui = await readShellSource();
+  assert.match(ui, /^\s*this\.(?:flightState\.)?_models3dEnabled = true;$/m,
     'ui.js: the DISPLAY rail believes 3D is on before any layer-state sync arrives');
-  assert.match(ui, /this\._models3dMode = 'proximity';/,
+  assert.match(ui, /this\.(?:flightState\.)?_models3dMode = 'proximity';/,
     'ui.js: and believes the mode is proximity');
-  const html = await readFile(new URL('../../index.html', import.meta.url), 'utf8');
+  const html = expandApplicationHtml(await readFile(new URL('../../index.html', import.meta.url), 'utf8'));
   assert.match(html, /class="pp-toggle-btn active" id="models3d-toggle" aria-pressed="true"/,
     'index.html: the 3D button paints lit on first paint, before ui.js runs — and says so');
-  assert.match(ui, /this\._models3dBtn\?\.setAttribute\('aria-pressed', String\(this\._models3dEnabled\)\)/,
+  assert.match(ui, /this\._models3dBtn\?\.setAttribute\(\s*'aria-pressed',\s*String\(this\.(?:flightState\.)?_models3dEnabled\),?\s*\)/,
     'ui.js: and keeps aria-pressed synchronized, so the lit state is not colour-only');
   assert.match(html, /class="pp-slider-row visible" id="models3d-mode-row"/,
     'index.html: and the Proximity/All row paints open with it');
@@ -1592,5 +1603,62 @@ test('the owner layer going away revokes the pending watch at any origin', async
       `a disabled owner layer clears progress without a terminal failure (origin=${origin})`,
     );
     f.coordinator.destroy();
+  }
+});
+
+test('wind appearance shares round trip while old links retain weather defaults', () => {
+  const state = normalizeLayerState({
+    enabledLayerIds: ['wind'],
+    options: {
+      wind: { model: 'ifs', overlay: 'pressure', units: 'mph', paused: true },
+    },
+  });
+  assert.deepEqual(
+    decodeLayerStateParams(new URLSearchParams(encode(state))).options.wind,
+    { model: 'ifs', overlay: 'pressure', units: 'mph', paused: true },
+  );
+  const defaults = createDefaultLayerState().options.wind;
+  assert.deepEqual(defaults, {
+    model: 'gfs',
+    overlay: 'none',
+    units: 'km/h',
+    paused: false,
+  });
+  const legacy = decodeLayerStateParams(new URLSearchParams('v=2&l=k'));
+  assert.equal(legacy.options.wind.overlay, 'speed', 'old links retain their authored field');
+  assert.equal(decodeLayerStateParams(new URLSearchParams(encode(createDefaultLayerState()))).options.wind.overlay, 'none', 'new default is encoded explicitly');
+  const old = normalizeLayerState({ options: { wind: { model: 'ifs' } } });
+  assert.deepEqual(old.options.wind, { ...defaults, model: 'ifs' });
+  const invalid = normalizeLayerState({
+    options: {
+      wind: {
+        model: 'unknown',
+        overlay: 'clouds',
+        units: '<script>',
+        paused: 'yes',
+      },
+    },
+  });
+  assert.deepEqual(invalid.options.wind, defaults);
+});
+
+test('observed weather round trips product and opacity without persisting historical playback', () => {
+  const state = normalizeLayerState({ enabledLayerIds: ['weather-radar', 'weather-satellite'], options: { 'weather-radar': { opacity: 'light', play: true }, 'weather-satellite': { product: 'clouds', opacity: 'light', step: -1 } } });
+  const params = new URLSearchParams(encode(state));
+  const decoded = decodeLayerStateParams(params);
+  assert.deepEqual(decoded, state);
+  assert.equal(state.options['weather-satellite'].product, 'clouds');
+  assert.equal(Object.hasOwn(state.options['weather-radar'], 'play'), false);
+});
+
+test('satellite infrared display mode round trips and invalid or absent values use filtered', () => {
+  for (const infrared of ['full', 'filtered', undefined, 'invalid']) {
+    const state = normalizeLayerState({ enabledLayerIds: ['weather-satellite'], options: {
+      'weather-satellite': { infrared, product: 'clouds', step: -1, play: true },
+    } });
+    assert.deepEqual(decodeLayerStateParams(new URLSearchParams(encode(state))), state);
+    assert.equal(state.options['weather-satellite'].infrared, infrared === 'full' ? 'full' : 'filtered');
+    assert.equal(Object.hasOwn(state.options['weather-satellite'], 'step'), false);
+    assert.equal(Object.hasOwn(state.options['weather-satellite'], 'play'), false);
   }
 });

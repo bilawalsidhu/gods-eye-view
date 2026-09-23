@@ -1,3 +1,5 @@
+import { readShellSource } from './testSupport/readShellSource.mjs';
+import { expandApplicationHtml } from '../build/application-html.js';
 // src/reasonableDefaults.test.mjs
 //
 // What the console looks like the FIRST time it opens — before any share link,
@@ -41,8 +43,10 @@ import {
 } from './scopeMask.js';
 import { ShareLinkManager } from './sharelink.js';
 
-const uiSource = fs.readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
-const indexHtml = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+// Follow the UI wiring and its extracted preset definitions.
+const uiSource = readShellSource()
+  + '\n' + fs.readFileSync(new URL('./ui/visualPresets.js', import.meta.url), 'utf8');
+const indexHtml = expandApplicationHtml(fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
 const shareSource = fs.readFileSync(new URL('./sharelink.js', import.meta.url), 'utf8');
 
 /** Slice ui.js between two literal anchors, so a pin reads one method, not the file. */
@@ -210,7 +214,7 @@ test('first run opens with detection on, in every style, using the one tactical 
   // Normal used to start OFF while only CRT/NVG/FLIR auto-applied the preset.
   // It is now the baseline for all of them, reusing the SAME frozen object, so
   // "the tactical look" cannot fork into two definitions.
-  assert.match(uiSource, /const MILITARY_DETECTION_PRESET = Object\.freeze\(\{ mode: 'dense', densityPct: 75 \}\);/,
+  assert.match(uiSource, /const MILITARY_DETECTION_PRESET = Object\.freeze\(\{\s*mode: 'dense',\s*densityPct: 75,?\s*\}\);/,
     'the tactical look is still Dense @ 75%');
   const baseline = uiBlock('const GLOBAL_POST_DEFAULTS = {', '\n};');
   assert.match(baseline, /detectionMode: MILITARY_DETECTION_PRESET\.mode\.toUpperCase\(\),/,
@@ -246,9 +250,12 @@ test('detection-on-by-default is a default, not an operator override', () => {
   // preset consults the flag, and the detection button sets it.
   assert.match(uiSource, /if \(preset\.detection && !this\._detectionUserOverridden\) \{/,
     'a style preset still yields to an operator who changed detection by hand');
-  const detectionButton = uiBlock("this._detectionBtn.addEventListener('click'", 'cycleDetectionMode()');
-  assert.match(detectionButton, /this\._detectionUserOverridden = true;/,
+  const displayActions = uiSource.slice(uiSource.indexOf('this._displayControls ='));
+  const detectionButton = displayActions.slice(displayActions.indexOf('cycleDetection:'), displayActions.indexOf('toggleModels:'));
+  assert.match(detectionButton, /cycleDetectionMode\(\)/, 'the button still invokes the detection action');
+  assert.match(detectionButton, /this\.claimDetection\(\);/,
     'and the detection control still claims the override when the operator uses it');
+  assert.match(uiSource, /claimDetection: \(\) => \{\s*this\._visualSettings\._detectionUserOverridden = true;/);
 
   // Style-switch semantics are unchanged: Normal is still not a preset owner,
   // so switching TO Normal does not re-apply or clear anything.

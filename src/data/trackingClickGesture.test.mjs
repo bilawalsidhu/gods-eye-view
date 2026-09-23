@@ -1,3 +1,4 @@
+import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -110,16 +111,16 @@ test('slow clean sprite clicks select, while long presses and orbit nudges canno
 
 test('civilian and military click handlers apply duration only at the deselect branch', () => {
   const sources = [
-    readFileSync(new URL('./flights.js', import.meta.url), 'utf8'),
-    readFileSync(new URL('./militaryFlights.js', import.meta.url), 'utf8'),
+    readLayerSource(new URL('./flights.js', import.meta.url)),
+    readLayerSource(new URL('./militaryFlights.js', import.meta.url)),
   ];
   for (const source of sources) {
     assert.match(source, /isTrackingSelectionGesture\(gesture\)[\s\S]+scene\.pick/);
-    assert.match(source, /isTrackingClickGesture\(gesture\)[\s\S]+_clearTracking\([^)]*\{ origin: 'user' \}\)/);
+    assert.match(source, /isTrackingClickGesture\(gesture\)[\s\S]+(?:parts\.\w+\.)?_clearTracking\([^)]*\{ origin: 'user' \}\)/);
   }
   assert.doesNotMatch(
     sources[0],
-    /_trackedEntity = _viewer\.entities\.add\(\{\s*id:/,
+    /(?:flightState\.)?_trackedEntity = (?:flightState\.)?_viewer\.entities\.add\(\{\s*id:/,
     'civilian tracked entities must retain Cesium-generated GUIDs',
   );
 });

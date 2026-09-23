@@ -1,0 +1,265 @@
+/* ── Responsive ───────────────────────────────── */
+@media (max-width: 720px) {
+  #pp-toggles {
+    --pp-expanded-width: 176px;
+    position: relative;
+    inset: auto;
+    gap: 6px;
+  }
+
+  .pp-toggle-group,
+  #clean-view-toggle {
+    width: 176px;
+  }
+
+  .button-grid {
+    flex-wrap: nowrap;
+  }
+
+  #control-panel {
+    left: 16px;
+    right: 16px;
+    transform: none;
+    max-width: none;
+  }
+
+  #title-bar {
+    top: 20px;
+    left: 20px;
+  }
+
+  #top-center-actions {
+    top: max(12px, env(safe-area-inset-top));
+    right: 16px;
+    left: auto;
+    transform: none;
+  }
+
+  #style-indicator {
+    display: none;
+  }
+
+  #title-bar h1 {
+    font-size: 16px;
+    letter-spacing: 4px;
+  }
+
+  #title-bar h1 {
+    gap: 8px;
+  }
+
+  #title-bar .title-logo {
+    width: 36px;
+  }
+
+  #title-bar .frame-rate-readout {
+    position: fixed;
+    top: 52px;
+    left: 20px;
+    margin: 0;
+    font-size: 10px;
+    line-height: 12px;
+  }
+
+  #title-bar:has(.frame-rate-readout:not([hidden])) .subtitle {
+    visibility: hidden;
+  }
+
+  #location-bar {
+    left: 16px;
+    right: 16px;
+    transform: none;
+    max-width: none;
+    bottom: 120px;
+  }
+
+  #gev-voice-control {
+    right: 16px;
+    bottom: 16px;
+    min-width: 196px;
+  }
+
+  #gev-voice-detail {
+    max-width: 112px;
+  }
+
+  .hud-top-left,
+  .hud-bottom-left {
+    left: 16px;
+  }
+
+  .hud-top-right,
+  .hud-bottom-right {
+    right: 16px;
+  }
+
+  .hud-left-edge,
+  .hud-right-edge {
+    display: none;
+  }
+
+  .hud-top-bar,
+  .hud-bottom-bar {
+    width: calc(100vw - 24px);
+    left: 12px;
+    transform: none;
+  }
+
+  .hud-top-bar {
+    top: 54px;
+    font-size: 9px;
+  }
+
+  #intel-hud[data-variant='operator'] .hud-top-bar {
+    left: 12px;
+    right: auto;
+    width: calc(100vw - 24px);
+    transform: none;
+  }
+
+  .hud-bottom-bar {
+    bottom: 90px;
+    font-size: 9px;
+  }
+
+  #data-panel {
+    top: auto;
+    left: 16px;
+    bottom: 200px;
+    width: 260px;
+  }
+
+  #data-panel.collapsed {
+    width: 260px;
+  }
+
+  #cctv-panel {
+    top: auto;
+    left: 16px;
+    right: 16px;
+    width: auto;
+    bottom: 308px;
+  }
+
+  #cctv-panel.collapsed {
+    width: auto;
+  }
+
+  /* Narrow viewports: cap the preview height to keep the panel compact. Cap
+     the IMAGE, not the wrap — the wrap is overflow:hidden, so capping it would
+     re-crop the very timestamp this is protecting. object-fit: contain then
+     letterboxes inside the shorter box. */
+  #cctv-frame {
+    aspect-ratio: auto;
+    height: 120px;
+  }
+
+  .cctv-frame-wrap {
+    min-height: 0;
+  }
+
+  #scene-panel {
+    top: auto;
+    right: 16px;
+    left: 16px;
+    width: auto;
+    bottom: 12px;
+  }
+
+  #scene-panel.collapsed {
+    width: auto;
+  }
+
+  #left-panel-stack {
+    top: 70px;
+    right: 16px;
+    bottom: calc(50vh + 8px);
+    left: 16px;
+    width: auto;
+    max-height: none;
+    overflow-y: auto;
+  }
+
+  #right-context-rail {
+    top: calc(50vh + 8px);
+    right: 16px;
+    /* The rail goes edge-to-edge at this width, so its floor is what decides
+       whether the required Google/Cesium credit line survives. The credit's
+       top edge sits at calc(2vh + 5rem) plus its own 28px, so a flat 100px
+       floor cut into it at EVERY viewport height — the DISPLAY toggles were
+       drawn straight over the notice. Track the credit's own anchor instead
+       and the 12px of clear air holds regardless of height; the rail already
+       scrolls (overflow-y below), so it loses reach, not content. */
+    bottom: calc(2vh + 7.5rem);
+    left: 16px;
+    width: auto;
+    max-height: none;
+    overflow-y: auto;
+  }
+
+  /* Both stacks are scroll containers at this width (overflow-y above), which
+     also makes their overflow-x compute to auto. Each panel's decorative
+     .panel-glow is absolutely positioned with a negative inset (-18px/-20px),
+     so inside a scroll container it stops being harmless paint and becomes
+     18–20px of scrollable overflow on BOTH axes: a horizontal scrollbar band
+     under the expanded panel plus a vertical scrollbar that scrolls nothing
+     but glow. Pin the glow to the panel box here — its blur is ink overflow,
+     which never scrolls — instead of clipping the rail, which would also clip
+     legitimate content such as the Context radio popover. */
+  #left-panel-stack .panel-glow,
+  #right-context-rail .panel-glow {
+    inset: 0;
+  }
+
+  #right-context-rail > #pp-toggles {
+    width: 100%;
+  }
+
+  #right-context-rail #pp-toggles.collapsed .pp-header-row,
+  #right-context-rail #cctv-panel,
+  #right-context-rail #cctv-panel.collapsed,
+  #right-context-rail #radio-panel,
+  #right-context-rail #radio-panel.collapsed,
+  #right-context-rail #global-context-panel,
+  #right-context-rail #global-context-panel.collapsed {
+    width: 100%;
+  }
+  .context-radio-mini {
+    right: -38px;
+    width: min(244px, calc(100vw - 32px));
+  }
+
+  #left-panel-stack > #data-panel,
+  #left-panel-stack > #cctv-panel,
+  #left-panel-stack > #global-context-panel,
+  #left-panel-stack > #scene-panel,
+  #left-panel-stack > #data-panel.collapsed,
+  #left-panel-stack > #cctv-panel.collapsed,
+  #left-panel-stack > #global-context-panel.collapsed,
+  #left-panel-stack > #scene-panel.collapsed {
+    position: relative;
+    top: auto;
+    right: auto;
+    bottom: auto;
+    left: auto;
+    width: 100%;
+  }
+
+  #scene-runtime {
+    top: 16px;
+    max-width: calc(100vw - 24px);
+    text-align: center;
+  }
+}
+
+@media (max-width: 520px) {
+  #title-bar {
+    top: 14px;
+    left: 16px;
+  }
+
+  #title-bar h1 > span:last-child,
+  #title-bar .subtitle {
+    display: none;
+  }
+}

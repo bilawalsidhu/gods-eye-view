@@ -62,7 +62,10 @@ export function resolveCockpitUtilityLayout({
   gap = 7,
   minimumExpandedHeight = 120,
 }) {
-  const available = Math.max(minimumExpandedHeight, Number(availableHeight) || 0);
+  const available = Math.max(
+    minimumExpandedHeight,
+    Number(availableHeight) || 0,
+  );
   const expanded = Math.max(0, Number(expandedHeight) || 0);
   const collapsed = Math.max(0, Number(collapsedHeight) || 0);
   const spacing = Math.max(0, Number(gap) || 0);
@@ -76,4 +79,3 @@ export function resolveCockpitUtilityLayout({
     ),
   };
 }
-

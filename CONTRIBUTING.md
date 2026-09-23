@@ -37,20 +37,54 @@ configuration through the development app or environment file. Unknown API
 paths return JSON 404 responses. Vite preview is for checking a local build;
 it is not a production server.
 
+## Feature regression gates
+
+Those three are the baseline, not the whole story. Most features also have a
+dedicated headless gate under `scripts/qa-*.mjs` that drives the real app and
+asserts that feature's contract. **Run the gate covering whatever you touched**,
+and say which one you ran in the PR.
+
+Feature gates and a few supporting modules live under the same filename pattern:
+
+```bash
+ls scripts/qa-*.mjs            # gates and their supporting modules
+head -40 scripts/qa-radio.mjs  # what this runnable gate proves and how to run it
+```
+
+Runnable gate entrypoints document what they assert and how to invoke them.
+Most need a dev server; some also need a specific provider key or port. Follow
+the entrypoint's header rather than assuming every matching file accepts the
+same arguments. Only a couple (`qa:map-source-tray`, `qa:transit`) have an
+`npm run` alias.
+
+If you aren't sure which gate covers your change, search `docs/CURRENT-STATE.md`
+for the feature: it names the gate for many of them, and it's the authoritative
+runtime reference either way. `scripts/qa-l9-matrix.mjs` aggregates the broader
+release-candidate checks and selected harnesses; it does not replace the focused
+gate for the feature you changed.
+
+> **CI does not cover this for you.** The workflow runs the setup policy
+> checks, the formatting and package-boundary checks, the unit suite and the
+> production build, plus a Windows onboarding job. It runs neither
+> `npm run test:track` nor any `qa-*.mjs` gate — both need a live dev server
+> and a browser. Include the applicable local run in your PR's validation
+> evidence.
+
 ## Good first contributions
 
 The highest-leverage places to jump in:
 
 - **🌆 Add a CCTV source pack.** Austin is the reference camera source. Adding another city means a clean public camera catalog with coordinates, attribution, and server-registered frame URLs (the proxy only fetches registered URLs — never client-supplied ones, see [SECURITY.md](SECURITY.md)). City packs are the best first lane.
-- **🛰️ Add or improve a data layer.** Each layer is one self-contained module in `src/data/<layer>.js` implementing the layer interface (`init/enable/disable/update/destroy/getStats`, optional `getDetectableObjects`/`getStats`). Use an existing layer as a template.
-- **🎙️ Extend voice control.** Voice tools are declared server-side (`GEV_REALTIME_TOOLS` in `server/providers/openai/tools.js`) and executed client-side (`src/voice/gevActions.js`). Keep the tool surface tight and the responses honest (confirm only what actually happened).
+- **🛰️ Add or improve a data layer.** Layer factories live in `src/layers/<family>/`, with source, record, controller and renderer owners implementing the layer interface (`init/enable/disable/update/destroy/getStats`, optional `getDetectableObjects`/`getStats`). Use an existing layer as a template.
+- **🎙️ Extend voice control.** Voice arguments are defined in `src/voice/actionSchemas.js`, with server-side descriptions in `server/providers/openai/tools.js` and client-side execution in `src/voice/gevActions.js`. Keep the tool surface tight and the responses honest (confirm only what actually happened).
 - **🎨 Add a visual style.** Styles are GLSL post-process shaders in `src/styles/`.
 - **🐛 Fix bugs / improve the first-run experience.** See [docs/KNOWN-ISSUES.md](docs/KNOWN-ISSUES.md).
 
 ## Architecture in one minute
 
 - **No framework.** Vanilla JS + [CesiumJS](https://cesium.com/platform/cesiumjs/) + [Vite](https://vitejs.dev/).
-- **UI lives in `src/ui.js`** (panels, HUD, styles, the control facade). **Layer logic lives in `src/data/<layer>.js`.** Keep them separate.
+- **Assembly lives in `src/app/`; standalone defaults live in `src/standalone/`.** UI controllers live in `src/ui/`, layer factories in `src/layers/`, portable sources in `src/sources/`, and application operations in `src/services/`. Existing `src/ui.js` and `src/data/<layer>.js` entries retain compatibility; new code belongs with its focused owner.
+- Sources acquire records; renderers own Cesium resources. Import `gods-eye-view/layers/<family>/source` when only a source factory is needed. Common voice controls consume the session interface; protocol adapters own connection details.
 - **Secrets stay server-side.** Anything needing a private key goes through a local proxy under `server/providers/`. The browser only ever sees the Google Maps key (which you restrict) and ephemeral tokens.
 - `docs/CURRENT-STATE.md` is the authoritative runtime reference — read it first.
 
@@ -63,12 +97,13 @@ The highest-leverage places to jump in:
 
 ## Formatting and reusable components
 
-Run `npm run format` before submitting changes to adopted modules, then
-`npm run format:check` and `npm run check:boundaries`. Formatting uses the
-explicit file list in `scripts/format-scope.json`; add newly extracted modules
-and tests there in a separate mechanical commit. Keep unadopted files consistent
-with their surrounding style. CI checks all adopted files and package boundaries
-on Linux and Windows.
+Run `npm run format` before submitting changes, then `npm run format:check`
+and `npm run check:boundaries`. Runtime JavaScript under the owned roots in
+`scripts/format-runtime.json` is discovered automatically, including new files.
+Tests and other adopted files remain listed in `scripts/format-scope.json`.
+Git-ignored files and `.prettierignore` exclusions are not automatically adopted.
+Keep mechanical formatting separate from behavioral edits. CI checks formatting
+and package boundaries on Linux and Windows.
 
 Reusable package exports own their state and receive application operations
 through explicit callbacks. They must not import the standalone bootstrap or
@@ -80,7 +115,7 @@ ownership and adoption process.
 ## Pull requests
 
 1. Branch off `main`.
-2. Keep `npm run build`, `npm test`, and `npm run test:track` green and avoid new console errors.
+2. Keep `npm run build`, `npm test`, and `npm run test:track` green and avoid new console errors, plus the [feature gate](#feature-regression-gates) for the area you touched.
 3. If you change runtime behavior, update `docs/CURRENT-STATE.md` and `CHANGELOG.md` in the same PR.
 4. If you add or change a data source, update [DATA_SOURCES.md](DATA_SOURCES.md) with its license and attribution. **Don't add data you don't have the right to redistribute** — fetch it at runtime instead.
 5. Describe what you changed and how you verified it (screenshots welcome for anything visual).

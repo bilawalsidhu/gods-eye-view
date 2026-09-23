@@ -1,0 +1,901 @@
+/* ── Radio companion section inside Context ── */
+#radio-panel {
+  position: relative;
+  width: 100%;
+  min-height: 0;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(65, 220, 231, 0.16);
+}
+.radio-panel-inner {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 9px;
+  padding: 10px;
+  border: 1px solid rgba(65, 220, 231, 0.18);
+  border-radius: 8px;
+  background: rgba(2, 15, 20, 0.42);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 212, 255, 0.46) rgba(255, 255, 255, 0.06);
+}
+#radio-panel .panel-header {
+  margin-bottom: 0;
+}
+.radio-layer-state {
+  color: var(--text-dim);
+  font: 8px/1 var(--font-mono);
+  letter-spacing: 0.12em;
+}
+.radio-layer-state.active {
+  color: #65f7ff;
+}
+.radio-directory-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px 8px;
+  align-items: end;
+}
+.radio-filter-label {
+  grid-column: 2;
+  color: var(--text-dim);
+  font: 7px/1 var(--font-mono);
+  letter-spacing: 0.12em;
+}
+#radio-enable-btn {
+  grid-row: 1 / span 2;
+  min-height: 36px;
+}
+#radio-filter {
+  min-width: 0;
+  padding: 7px 24px 7px 8px;
+  border: 1px solid rgba(65, 220, 231, 0.28);
+  border-radius: 5px;
+  color: #c5faff;
+  background: rgba(5, 24, 31, 0.88);
+  font: 9px/1.2 var(--font-mono);
+}
+.radio-station-card {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid rgba(65, 220, 231, 0.18);
+  border-radius: 7px;
+  background: rgba(2, 15, 20, 0.48);
+  overflow-wrap: anywhere;
+}
+.radio-station-card strong {
+  color: #e8feff;
+  font: 11px/1.25 var(--font-mono);
+  letter-spacing: 0.05em;
+}
+.radio-station-card span {
+  color: var(--text-dim);
+  font: 8px/1.35 var(--font-mono);
+}
+#radio-station-tags {
+  color: #72dce6;
+}
+.radio-tuner {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  gap: 5px;
+  padding: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(65, 220, 231, 0.22);
+  border-radius: 7px;
+  background: linear-gradient(
+    180deg,
+    rgba(1, 9, 13, 0.92),
+    rgba(4, 24, 30, 0.72)
+  );
+  box-shadow: inset 0 0 18px rgba(0, 212, 255, 0.045);
+}
+.radio-tuner[hidden] {
+  display: none;
+}
+.radio-tuner-header,
+.radio-tuner-readout {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: #6daeb5;
+  font: 7px/1.2 var(--font-mono);
+  letter-spacing: 0.1em;
+}
+#radio-tuner-value {
+  min-width: 0;
+  color: #a8f7ff;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.radio-tuner-dial {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  height: 51px;
+  overflow: hidden;
+  contain: paint;
+  border-block: 1px solid rgba(72, 225, 237, 0.3);
+  background:
+    linear-gradient(
+      180deg,
+      transparent 23px,
+      rgba(65, 220, 231, 0.8) 24px,
+      transparent 25px,
+      transparent 28px,
+      rgba(65, 220, 231, 0.6) 29px,
+      transparent 30px
+    ),
+    radial-gradient(
+      ellipse at center,
+      rgba(39, 177, 191, 0.12),
+      transparent 70%
+    );
+}
+.radio-tuner-scale {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  color: #58cbd6;
+  font: 9px/1 var(--font-mono);
+  text-shadow: 0 0 7px rgba(65, 220, 231, 0.5);
+  pointer-events: none;
+}
+.radio-tuner-tick {
+  position: absolute;
+  top: 6px;
+  bottom: 0;
+  min-width: 1px;
+  border-left: 1px solid rgba(85, 224, 235, 0.38);
+  color: #58cbd6;
+  padding-left: 3px;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  transition: left 80ms linear;
+}
+.radio-tuner-tick.is-current {
+  border-left-color: rgba(168, 247, 255, 0.9);
+  color: #a8f7ff;
+}
+.radio-tuner-needle {
+  position: absolute;
+  z-index: 1;
+  top: 2px;
+  bottom: 2px;
+  left: calc(7px + (100% - 14px) * var(--radio-tuner-ratio, 0));
+  width: 3px;
+  border-radius: 1px;
+  background: #ff6f4f;
+  box-shadow:
+    0 0 4px #ff6f4f,
+    0 0 10px rgba(255, 77, 50, 0.65);
+  pointer-events: none;
+  transform: translateX(-50%);
+  transition: left 0.18s ease-out;
+}
+.radio-tuner.is-dragging .radio-tuner-needle,
+.radio-tuner.is-dragging .radio-tuner-tick {
+  transition: none;
+}
+#radio-tuner-slider {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  height: 100%;
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: ew-resize;
+  touch-action: none;
+  background: transparent;
+}
+#radio-tuner-slider::-webkit-slider-runnable-track {
+  height: 100%;
+  background: transparent;
+}
+#radio-tuner-slider::-webkit-slider-thumb {
+  width: 14px;
+  height: 47px;
+  margin-top: 2px;
+  border: 0;
+  border-radius: 1px;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  box-shadow: none;
+}
+#radio-tuner-slider::-moz-range-track {
+  height: 100%;
+  background: transparent;
+}
+#radio-tuner-slider::-moz-range-thumb {
+  width: 14px;
+  height: 47px;
+  border: 0;
+  border-radius: 1px;
+  background: transparent;
+  box-shadow: none;
+}
+.radio-tuner.is-static .radio-tuner-dial {
+  box-shadow: inset 0 0 14px rgba(255, 111, 79, 0.1);
+}
+.radio-tuner.is-static #radio-tuner-station {
+  color: #ff9b7e;
+}
+.radio-tuner-readout span:first-child {
+  min-width: 0;
+  color: #7fe6ef;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.radio-tuner-readout span:last-child {
+  flex: 0 0 auto;
+  color: #517f84;
+}
+.radio-transport {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px;
+}
+.radio-transport button {
+  min-height: 30px;
+  padding: 6px 3px;
+  border: 1px solid rgba(65, 220, 231, 0.28);
+  border-radius: 5px;
+  color: #8feaf2;
+  background: rgba(14, 69, 78, 0.14);
+  font: 8px/1 var(--font-mono);
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+.radio-transport button:hover:not(:disabled),
+.radio-transport button:focus-visible:not(:disabled) {
+  border-color: #65f7ff;
+  color: #fff;
+  outline: none;
+}
+.radio-transport button:disabled,
+#radio-filter:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+#radio-play-btn.active {
+  color: #fff;
+  border-color: rgba(101, 247, 255, 0.8);
+  background: rgba(65, 220, 231, 0.18);
+  box-shadow: 0 0 12px rgba(65, 220, 231, 0.12);
+}
+.radio-volume-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 32px;
+  gap: 8px;
+  align-items: center;
+  color: var(--text-dim);
+  font: 7px/1 var(--font-mono);
+  letter-spacing: 0.1em;
+}
+.radio-volume-row input {
+  width: 100%;
+}
+.radio-playback-state {
+  min-height: 12px;
+  color: #79d7df;
+  font: 8px/1.35 var(--font-mono);
+}
+.radio-playback-state.error {
+  color: #ff9d8f;
+}
+.radio-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 5px 10px;
+}
+.radio-links a {
+  color: #64cbd5;
+  font: 7px/1.3 var(--font-mono);
+  letter-spacing: 0.06em;
+  text-decoration: none;
+}
+.radio-links a:hover,
+.radio-links a:focus-visible {
+  color: #fff;
+}
+.radio-privacy {
+  margin: 0;
+  color: rgba(190, 230, 230, 0.48);
+  font: 7px/1.4 var(--font-mono);
+}
+#military-awareness-panel {
+  width: 100%;
+  min-height: 0;
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 2px 1px 0;
+  color: #dceeff;
+  background: transparent;
+  border: 0;
+  font:
+    11px/1.35 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+
+#military-awareness-panel[hidden] {
+  display: none;
+}
+.military-awareness-subject {
+  margin: 0 0 7px;
+  color: #fff;
+}
+.military-awareness-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 5px;
+  margin: 0 0 8px;
+}
+.military-awareness-controls button {
+  border: 1px solid rgba(98, 181, 255, 0.34);
+  border-radius: 4px;
+  padding: 4px 3px;
+  color: #a9d9ff;
+  background: rgba(42, 113, 171, 0.12);
+  font:
+    9px/1.2 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  letter-spacing: 0.07em;
+  cursor: pointer;
+}
+.military-awareness-controls button:hover,
+.military-awareness-controls button:focus-visible {
+  color: #fff;
+  border-color: rgba(127, 200, 255, 0.85);
+  background: rgba(66, 148, 211, 0.24);
+  outline: none;
+}
+.military-awareness-controls button:disabled {
+  color: #627181;
+  border-color: rgba(98, 181, 255, 0.12);
+  background: transparent;
+  cursor: default;
+}
+.military-awareness-row {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 7px 0;
+}
+.military-awareness-row > div {
+  display: flex;
+  justify-content: space-between;
+}
+.military-awareness-row b {
+  color: #7fc8ff;
+}
+.military-awareness-row.unknown b {
+  color: #8fcfff;
+}
+.military-awareness-row small,
+.military-awareness-note {
+  color: #a9b7c7;
+}
+.military-awareness-row ul {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.military-awareness-row li {
+  display: block;
+}
+.military-awareness-target {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  border: 0;
+  padding: 1px 0;
+  color: #dceeff;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.military-awareness-target.unavailable {
+  color: var(--text-dim);
+  cursor: default;
+}
+.military-awareness-target:hover,
+.military-awareness-target:focus-visible {
+  color: #fff;
+  outline: none;
+  text-shadow: 0 0 8px rgba(114, 202, 255, 0.85);
+}
+.military-awareness-target:focus-visible {
+  box-shadow: inset 0 -1px 0 #7fc8ff;
+}
+.military-awareness-target span {
+  color: #7fc8ff;
+  white-space: nowrap;
+}
+.military-awareness-note {
+  margin: 8px 0 0;
+  font-size: 10px;
+}
+.military-awareness-standby {
+  display: grid;
+  gap: 7px;
+  padding: 12px 4px 4px;
+  border-top: 1px solid rgba(98, 181, 255, 0.16);
+}
+.military-awareness-standby strong {
+  color: #79c2ff;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+}
+.military-awareness-standby span {
+  color: #8192a6;
+  font-size: 9px;
+  letter-spacing: 0.05em;
+}
+.military-awareness-standby button {
+  justify-self: start;
+  padding: 4px 12px;
+  border: 1px solid rgba(98, 181, 255, 0.34);
+  border-radius: 4px;
+  color: #a9d9ff;
+  background: rgba(42, 113, 171, 0.12);
+  font:
+    9px/1.2 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+#military-awareness-direction-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  overflow: hidden;
+  pointer-events: none;
+}
+#military-awareness-direction-overlay[hidden] {
+  display: none;
+}
+.military-awareness-compass-ring {
+  --compass-rotation: 0deg;
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px solid rgba(111, 196, 255, 0.2);
+  outline: 1px dashed rgba(111, 196, 255, 0.28);
+  outline-offset: -5px;
+  border-radius: 50%;
+  box-shadow:
+    inset 0 0 0 5px rgba(34, 128, 196, 0.018),
+    inset 0 0 24px rgba(34, 128, 196, 0.035),
+    0 0 14px rgba(34, 128, 196, 0.05);
+}
+.military-awareness-compass-ring::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -7px;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 8px solid rgba(127, 200, 255, 0.88);
+  transform: translateX(-50%);
+  filter: drop-shadow(0 0 5px rgba(87, 184, 255, 0.7));
+}
+.military-awareness-compass-ring::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+  background: repeating-conic-gradient(
+    from 0deg,
+    rgba(125, 205, 255, 0.38) 0deg 0.7deg,
+    transparent 0.7deg 15deg
+  );
+  -webkit-mask: radial-gradient(
+    circle,
+    transparent calc(100% - 8px),
+    #000 calc(100% - 8px) calc(100% - 4px),
+    transparent calc(100% - 4px)
+  );
+  mask: radial-gradient(
+    circle,
+    transparent calc(100% - 8px),
+    #000 calc(100% - 8px) calc(100% - 4px),
+    transparent calc(100% - 4px)
+  );
+  transform: rotate(var(--compass-rotation));
+  transition: transform 80ms linear;
+}
+.military-awareness-compass-label,
+.military-awareness-compass-heading {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  color: rgba(156, 213, 255, 0.7);
+  font:
+    9px/1 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  letter-spacing: 0.08em;
+  text-shadow: 0 0 7px rgba(53, 161, 235, 0.55);
+}
+.military-awareness-compass-label.cardinal-n {
+  color: rgba(255, 188, 87, 0.92);
+}
+.military-awareness-compass-heading {
+  color: rgba(190, 225, 249, 0.76);
+  font-size: 8px;
+}
+.military-awareness-direction-marker {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  transform: translate(-50%, -50%);
+  transition: opacity 100ms linear;
+}
+.military-awareness-direction-marker[hidden] {
+  display: none;
+}
+.military-awareness-direction-arrow {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  color: #74dbff;
+  font: 23px/1 sans-serif;
+  transform-origin: 50% 50%;
+  text-shadow:
+    0 0 5px rgba(87, 223, 255, 0.9),
+    0 0 13px rgba(87, 223, 255, 0.35);
+}
+.military-awareness-direction-label {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  padding: 3px 6px;
+  border: 1px solid rgba(116, 219, 255, 0.24);
+  border-radius: 3px;
+  color: #bceeff;
+  background: rgba(5, 12, 20, 0.68);
+  font:
+    8px/1.3 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  text-align: center;
+  white-space: pre;
+  text-shadow: 0 0 5px rgba(116, 219, 255, 0.38);
+}
+
+.data-toggle-row.gev-voice-focus {
+  background: rgba(92, 255, 198, 0.1);
+  box-shadow:
+    inset 0 0 0 1px rgba(92, 255, 198, 0.72),
+    0 0 18px rgba(92, 255, 198, 0.18);
+}
+
+.data-toggle-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.data-toggle-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.data-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.data-name {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  letter-spacing: 0.3px;
+}
+
+.data-toggle-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.data-count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  min-width: 30px;
+  text-align: right;
+}
+
+.data-toggle-btn {
+  padding: 3px 10px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    color var(--transition-fast),
+    min-width var(--transition-fast),
+    letter-spacing var(--transition-fast);
+  outline: none;
+  min-width: 38px;
+  text-align: center;
+}
+
+/* An inset ring stays visible inside the scrolling layer list. */
+.data-toggle-btn:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: -3px;
+}
+
+.data-toggle-btn.feed-loading,
+.data-toggle-btn.feed-degraded,
+.data-toggle-btn.feed-stale,
+.data-toggle-btn.feed-partial,
+.data-toggle-btn.feed-fallback,
+.data-toggle-btn.feed-unavailable {
+  min-width: 82px;
+  letter-spacing: 0.8px;
+}
+
+.data-toggle-btn:hover {
+  border-color: var(--glass-border-hover);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.data-toggle-btn.active {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  box-shadow: 0 0 10px rgba(0, 212, 255, 0.15);
+}
+
+.data-toggle-btn.active.feed-stale,
+.data-toggle-btn.active.feed-partial,
+.data-toggle-btn.active.feed-fallback {
+  color: #ffd27a;
+  border-color: rgba(255, 190, 82, 0.75);
+  background: rgba(255, 174, 51, 0.1);
+  box-shadow: 0 0 10px rgba(255, 174, 51, 0.12);
+}
+
+.data-toggle-btn.active.feed-degraded {
+  color: #ffad72;
+  border-color: rgba(255, 137, 72, 0.78);
+  background: rgba(255, 112, 48, 0.1);
+  box-shadow: 0 0 10px rgba(255, 112, 48, 0.12);
+}
+
+.data-toggle-btn.active.feed-unavailable {
+  color: #ff8585;
+  border-color: rgba(255, 92, 92, 0.78);
+  background: rgba(255, 60, 60, 0.1);
+  box-shadow: 0 0 10px rgba(255, 60, 60, 0.12);
+}
+
+.data-toggle-meta {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  padding-left: 26px;
+  margin-top: 2px;
+}
+
+/* Optional per-layer sub-controls: mode chips plus a color legend. Aligned
+   under the layer name like .data-toggle-meta, and wrapping so a legend can
+   grow without widening the rail. */
+.data-toggle-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding-left: 26px;
+  margin-top: 5px;
+}
+
+.data-toggle-controls[hidden] {
+  display: none;
+}
+
+.data-toggle-chip {
+  padding: 2px 7px;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 1.2px;
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast),
+    opacity var(--transition-fast);
+  outline: none;
+}
+
+.data-toggle-chip:hover,
+.data-toggle-chip:focus-visible {
+  border-color: var(--glass-border-hover);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary);
+}
+
+.data-toggle-chip.active {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+/* Async sub-controls: a chip must never read ACTIVE before the data it turns
+   on actually exists, so loading and failure are their own visible states. */
+.data-toggle-chip:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.data-toggle-chip.chip-loading {
+  color: var(--text-secondary);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.data-toggle-chip.chip-error {
+  color: #ff8585;
+  border-color: rgba(255, 92, 92, 0.6);
+  background: rgba(255, 60, 60, 0.08);
+}
+
+.data-toggle-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  cursor: default;
+}
+
+.data-toggle-legend-swatch {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  /* The swatch IS the datum — keep it exactly the point color, with only a
+     hairline ring so a near-black class still reads on the panel glass. */
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18);
+  flex: none;
+}
+
+/* Optional per-layer ordered list: the turn-by-turn directions under the
+   Directions row. Kept short and scrollable so a 40-step drive cannot push the
+   rest of the rail off screen. */
+.data-row-list {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0 0 0 26px;
+  max-height: 150px;
+  overflow-y: auto;
+  counter-reset: gev-step;
+}
+
+.data-row-list[hidden] {
+  display: none;
+}
+
+.data-row-list-item {
+  counter-increment: gev-step;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  width: 100%;
+  padding: 2px 4px;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.4px;
+  text-align: left;
+  color: var(--text-dim);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast);
+  outline: none;
+}
+
+.data-row-list-item::before {
+  content: counter(gev-step);
+  min-width: 13px;
+  text-align: right;
+  color: var(--text-dim);
+  opacity: 0.65;
+  flex: none;
+}
+
+.data-row-list-item:hover,
+.data-row-list-item:focus-visible {
+  border-color: var(--glass-border-hover);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-secondary);
+}
+
+.data-row-list-item.active {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+/* The step the camera is on during FLY: the same accent, plus a rail on the
+   leading edge so it reads as "here", not "chosen". */
+.data-row-list-item.current {
+  border-left-color: var(--accent);
+  border-left-width: 2px;
+}
+
+.data-row-list-lead {
+  min-width: 34px;
+  flex: none;
+  opacity: 0.85;
+}
+
+.data-row-list-text {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A list line that states a limit rather than offering an action. */
+.data-row-list-item.note {
+  cursor: default;
+  opacity: 0.75;
+  font-style: italic;
+}
+
+.data-toggle-controls-info {
+  flex-basis: 100%;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-secondary);
+  padding-top: 3px;
+  overflow-wrap: anywhere;
+}

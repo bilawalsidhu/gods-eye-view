@@ -10,8 +10,7 @@ export const RADIO_CATALOG_HEALTHY_MIN_STATIONS = Math.ceil(
 );
 export const RADIO_USER_AGENT =
   'GodsEyeView/1.0 (Radio Browser directory client)';
-export const RADIO_UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export { RADIO_UUID_RE } from '../../../src/sources/radioBrowser.js';
 export const RADIO_FALLBACK_MIRRORS = Object.freeze([
   'https://de1.api.radio-browser.info',
   'https://de2.api.radio-browser.info',

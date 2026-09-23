@@ -14,8 +14,15 @@ import {
 import { realtimeInstructions } from './instructions.js';
 import { GEV_REALTIME_TOOLS } from './tools.js';
 
-function createRealtimeTokenHandler({ annotationGuidance } = {}) {
+function createRealtimeTokenHandler({
+  annotationGuidance,
+  endpoint = 'https://api.openai.com/v1/realtime/client_secrets',
+  fetchImpl = (...args) => fetch(...args),
+  resolveApiKey = () => process.env.OPENAI_API_KEY,
+  models = {},
+} = {}) {
   return async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
     if (req.method !== 'GET' && req.method !== 'POST') {
       res.statusCode = 405;
       res.setHeader('Content-Type', 'application/json');
@@ -26,7 +33,7 @@ function createRealtimeTokenHandler({ annotationGuidance } = {}) {
     // Opt-in per-IP throttle (GEV_RATELIMIT_OPENAI_PER_MIN). No-op when unset.
     if (!enforceOptInRateLimit(openAiRateLimiter(), req, res)) return;
 
-    const apiKey = process.env.OPENAI_API_KEY;
+    const apiKey = resolveApiKey();
     if (!apiKey) {
       res.statusCode = 503;
       res.setHeader('Content-Type', 'application/json');
@@ -52,9 +59,12 @@ function createRealtimeTokenHandler({ annotationGuidance } = {}) {
     const tier = resolveVoiceModel(requestedTier).tier;
     const model =
       tier === 'mini'
-        ? process.env.OPENAI_REALTIME_MODEL_MINI ||
+        ? models.mini ||
+          process.env.OPENAI_REALTIME_MODEL_MINI ||
           OPENAI_REALTIME_MODEL_MINI_DEFAULT
-        : process.env.OPENAI_REALTIME_MODEL || OPENAI_REALTIME_MODEL_DEFAULT;
+        : models.standard ||
+          process.env.OPENAI_REALTIME_MODEL ||
+          OPENAI_REALTIME_MODEL_DEFAULT;
     const voice =
       process.env.OPENAI_REALTIME_VOICE || OPENAI_REALTIME_VOICE_DEFAULT;
     const effort =
@@ -109,40 +119,48 @@ function createRealtimeTokenHandler({ annotationGuidance } = {}) {
     };
 
     try {
-      const response = await fetch(
-        'https://api.openai.com/v1/realtime/client_secrets',
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-            'OpenAI-Safety-Identifier': 'gev-local-dev',
-          },
-          body: JSON.stringify(sessionConfig),
+      const response = await fetchImpl(endpoint, {
+        method: 'POST',
+        redirect: 'error',
+        signal: AbortSignal.timeout(30_000),
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'OpenAI-Safety-Identifier': 'gev-local-dev',
         },
-      );
+        body: JSON.stringify(sessionConfig),
+      });
       const body = await response.text();
       res.statusCode = response.status;
-      res.setHeader(
-        'Content-Type',
-        response.headers.get('content-type') || 'application/json',
-      );
       // Which tier/model this secret was actually minted for. The upstream
-      // body is passed through untouched (the client parses it verbatim), so
-      // these headers are the authoritative echo — including the case where a
-      // bogus ?tier= was silently downgraded to standard.
+      // success body is passed through untouched (the client parses it
+      // verbatim), so these headers are the authoritative echo — including the
+      // case where a bogus ?tier= was silently downgraded to standard.
       res.setHeader('X-GEV-Voice-Tier', tier);
       res.setHeader('X-GEV-Voice-Model', model);
       if (requestedTier && !isKnownVoiceTier(requestedTier)) {
         res.setHeader('X-GEV-Voice-Tier-Fallback', '1');
       }
+      if (!response.ok) {
+        console.warn(`[realtime-token] upstream HTTP ${response.status}`);
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.end(JSON.stringify({ error: 'Failed to create Realtime token' }));
+        return;
+      }
+      res.setHeader(
+        'Content-Type',
+        response.headers.get('content-type') || 'application/json',
+      );
       res.end(body);
-    } catch (error) {
+    } catch {
+      // For a network fault this was a resolver message naming the upstream
+      // host; the client only needs to know the mint failed.
+      console.warn('[realtime-token] mint failed');
       res.statusCode = 502;
       res.setHeader('Content-Type', 'application/json');
       res.end(
         JSON.stringify({
-          error: error?.message || 'Failed to create Realtime token',
+          error: 'Failed to create Realtime token',
         }),
       );
     }

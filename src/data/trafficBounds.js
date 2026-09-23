@@ -33,8 +33,8 @@ export function greatCircleKm(lat1, lon1, lat2, lon2) {
   const p2 = toRad(lat2);
   const dp = toRad(lat2 - lat1);
   const dl = toRad(lon2 - lon1);
-  const a = Math.sin(dp / 2) ** 2
-    + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
+  const a =
+    Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
   return 2 * EARTH_RADIUS_KM * Math.asin(Math.min(1, Math.sqrt(a)));
 }
 
@@ -49,7 +49,8 @@ function initialBearingRad(lat1, lon1, lat2, lon2) {
   const p2 = toRad(lat2);
   const dl = toRad(lon2 - lon1);
   const y = Math.sin(dl) * Math.cos(p2);
-  const x = Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl);
+  const x =
+    Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl);
   return Math.atan2(y, x);
 }
 
@@ -68,12 +69,15 @@ function destinationPoint(lat, lon, bearingRad, distKm) {
   const p1 = toRad(lat);
   const l1 = toRad(lon);
   const p2 = Math.asin(
-    Math.sin(p1) * Math.cos(delta) + Math.cos(p1) * Math.sin(delta) * Math.cos(bearingRad)
+    Math.sin(p1) * Math.cos(delta) +
+      Math.cos(p1) * Math.sin(delta) * Math.cos(bearingRad),
   );
-  const l2 = l1 + Math.atan2(
-    Math.sin(bearingRad) * Math.sin(delta) * Math.cos(p1),
-    Math.cos(delta) - Math.sin(p1) * Math.sin(p2)
-  );
+  const l2 =
+    l1 +
+    Math.atan2(
+      Math.sin(bearingRad) * Math.sin(delta) * Math.cos(p1),
+      Math.cos(delta) - Math.sin(p1) * Math.sin(p2),
+    );
   // Normalize longitude to [-180, 180)
   const lonDeg = ((toDeg(l2) + 540) % 360) - 180;
   return { lat: toDeg(p2), lon: lonDeg };
@@ -100,7 +104,13 @@ function destinationPoint(lat, lon, bearingRad, distKm) {
  * @returns {{lat:number, lon:number, source:'hit'|'nadir'|'pulled'}}
  *   The fetch center and which rule produced it.
  */
-export function deriveFetchCenter({ nadirLat, nadirLon, hitLat, hitLon, maxPullKm = 12 }) {
+export function deriveFetchCenter({
+  nadirLat,
+  nadirLon,
+  hitLat,
+  hitLon,
+  maxPullKm = 12,
+}) {
   if (!Number.isFinite(hitLat) || !Number.isFinite(hitLon)) {
     return { lat: nadirLat, lon: nadirLon, source: 'nadir' };
   }
@@ -114,11 +124,50 @@ export function deriveFetchCenter({ nadirLat, nadirLon, hitLat, hitLon, maxPullK
 }
 
 /**
+ * Wrapped longitude span between two meridians, in degrees.
+ *
+ * Longitude is cyclic, so a box crossing the antimeridian (±180°) has
+ * `east < west` (e.g. `west = 179.98, east = -179.98`). A plain `east - west`
+ * goes negative in that case; wrap through 360° instead.
+ *
+ * @param {number} west - West edge longitude (degrees).
+ * @param {number} east - East edge longitude (degrees).
+ * @returns {number} Span in degrees, always >= 0.
+ */
+function longitudeSpanDeg(west, east) {
+  const raw = east - west;
+  return raw >= 0 ? raw : raw + 360;
+}
+
+/** Keep a monotonic longitude range inside the traffic source's legal domain. */
+function boundedLongitudeRange(center, span) {
+  let west = center - span / 2;
+  let east = center + span / 2;
+  if (east > 180) {
+    west -= east - 180;
+    east = 180;
+  }
+  if (west < -180) {
+    east += -180 - west;
+    west = -180;
+  }
+  return { west, east };
+}
+
+/**
  * Clamp a bounding box's spans to `maxSpanDeg` and recenter it on `center`.
  *
  * Preserves the pre-C4 span semantics (each axis capped at 0.05° ≈ 5.5 km)
  * but centers the box on the derived look-at point instead of the view
- * rectangle's midpoint. Idempotent when `center` is the box's own midpoint.
+ * rectangle's midpoint. At the antimeridian the whole box shifts just far
+ * enough to remain inside [-180, 180], because the road source accepts one
+ * monotonic Overpass bounding box. Idempotent when `center` is the box's own
+ * midpoint.
+ *
+ * Longitude is handled as a cyclic axis for the span calculation, so the
+ * input span wraps correctly across the antimeridian. Output remains
+ * monotonic because callers such as `getBoundsCenter` and `boundsOverlap`
+ * rely on `west <= east`.
  *
  * @param {{south:number, west:number, north:number, east:number}} bounds
  *   Source bounds (span donor).
@@ -128,11 +177,14 @@ export function deriveFetchCenter({ nadirLat, nadirLon, hitLat, hitLon, maxPullK
  */
 export function clampBoundsAroundCenter(bounds, center, maxSpanDeg = 0.05) {
   const latSpan = Math.min(bounds.north - bounds.south, maxSpanDeg);
-  const lonSpan = Math.min(bounds.east - bounds.west, maxSpanDeg);
+  const lonSpan = Math.min(
+    longitudeSpanDeg(bounds.west, bounds.east),
+    maxSpanDeg,
+  );
+  const longitude = boundedLongitudeRange(center.lon, lonSpan);
   return {
     south: center.lat - latSpan / 2,
     north: center.lat + latSpan / 2,
-    west: center.lon - lonSpan / 2,
-    east: center.lon + lonSpan / 2,
+    ...longitude,
   };
 }

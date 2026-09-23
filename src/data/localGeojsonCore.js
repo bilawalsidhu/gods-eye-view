@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { isPointerFree } from './inputOwnership.js';
 import {
   selectInfraLod,
   applyInfraEvictionGrace,
@@ -86,6 +87,78 @@ export function localInfrastructureOverlayCopy(properties, layerId) {
   }
 
   return { title, details };
+}
+
+/**
+ * Map one local infrastructure feature to a JSON-safe analyst record
+ * (analyst query engine seam). Pure — no Cesium types. Missing/unknown
+ * fields are null, never NaN/undefined. Layer-specific fields that do not
+ * apply (river/output on datacenters, capacity on dams) stay null so a
+ * shared compact payload can copy them without inventing values.
+ * Names are unclamped — overlay cards shorten for paint; queries need the
+ * full source string ("Usina Hidrelétrica de Itaipu").
+ * @param {Object|null|undefined} raw - {id, lat, lon, properties}.
+ * @param {string} [layerId] Local layer id (`local-datacenters` / `local-dams`).
+ * @returns {{id: string, name: string|null, lat: number|null, lon: number|null,
+ *   operator: string|null, capacity: string|null, river: string|null,
+ *   output: string|null}}
+ */
+export function mapAnalystRecord(raw, layerId = '') {
+  const num = (v) => (Number.isFinite(v) ? v : null);
+  const text = (v) => {
+    const t = String(v ?? '').trim();
+    return t && t !== 'undefined' && t !== 'null' ? t : null;
+  };
+  const props =
+    raw?.properties &&
+    typeof raw.properties === 'object' &&
+    !Array.isArray(raw.properties)
+      ? raw.properties
+      : {};
+  const tags =
+    props.tags && typeof props.tags === 'object' && !Array.isArray(props.tags)
+      ? props.tags
+      : {};
+  const name =
+    text(props.name) ||
+    text(tags.name) ||
+    text(tags['name:en']) ||
+    text(tags.official_name) ||
+    null;
+  const operator =
+    text(tags.operator) ||
+    text(props.operator) ||
+    text(tags['operator:short']) ||
+    null;
+  const capacity =
+    layerId === 'local-datacenters'
+      ? text(tags['capacity:it_load']) ||
+        text(tags.it_load) ||
+        text(tags.capacity) ||
+        text(props.capacity)
+      : null;
+  const river =
+    layerId === 'local-dams'
+      ? text(tags.associated_river) ||
+        text(props.associated_river) ||
+        text(tags.river) ||
+        text(props.river) ||
+        text(tags['river:name'])
+      : null;
+  const output =
+    layerId === 'local-dams'
+      ? text(props.output) || text(tags['plant:output:electricity'])
+      : null;
+  return {
+    id: name || text(raw?.id) || layerTitle(layerId),
+    name,
+    lat: num(raw?.lat),
+    lon: num(raw?.lon),
+    operator,
+    capacity,
+    river,
+    output,
+  };
 }
 
 /**
@@ -309,7 +382,7 @@ export function localDatasetError(error) {
  * standard scene.pick natively clicks them.
  * @param {object} options Dataset URL, identity, appearance and optional Cesium adapters.
  * @param {object} services Caller-owned operations; see docs/INFRASTRUCTURE-LAYERS.md.
- * @returns {object} A fresh layer implementing init/enable/disable/update/destroy/getStats.
+ * @returns {object} A fresh layer implementing init/enable/disable/update/destroy/getStats/getAnalystRecords.
  * One live instance per layer id is allowed in a given viewer/context/overlay host.
  * Destroy the previous instance before replacing it. Importing creates no layers.
  */
@@ -354,6 +427,17 @@ export function createLocalGeoJsonLayer(
   let _destroyed = false;
   let _loadPromise = null;
   let _loadController = null;
+  /**
+   * The parsed bundled dataset, kept across disable/enable so a re-enable
+   * rebuilds entities without refetching. The Cesium entities themselves are
+   * NOT kept: a hidden data source still costs every frame (DataSourceDisplay
+   * walks every visualizer over every entity regardless of `show`), and the
+   * ~11k entities of the three bundled layers hold hundreds of MB, so leaving
+   * them parked after a toggle-off made the whole scene render ~2× slower for
+   * the rest of the session (owner field test 2026-09-13).
+   * @type {Array<object>|null}
+   */
+  let _cachedFeatures = null;
   /**
    * Globe-LOD active set: the record ids allowed to carry a live stem right
    * now. This bounds geometry refreshes and ground-sample work to the
@@ -432,6 +516,27 @@ export function createLocalGeoJsonLayer(
     host: overlayHost,
   });
 
+  /**
+   * Take the built entities out of the scene entirely. The parsed features
+   * stay cached, so the next enable() rebuilds without a fetch; what must not
+   * survive a disable is the per-frame visualizer walk and the entity memory.
+   * @param {object} viewer
+   */
+  const releaseDataSource = (viewer) => {
+    if (!_dataSource) return;
+    const source = _dataSource;
+    _dataSource = null;
+    _stemRecords = [];
+    _stemGeometryDirty = true;
+    _lastVisibilityUpdate = Number.NEGATIVE_INFINITY;
+    removeEntityContextsForLayer(id);
+    try {
+      viewer?.dataSources?.remove(source, true);
+    } catch {
+      /* already gone */
+    }
+  };
+
   const disableLayer = (viewer) => {
     _enabled = false;
     clearGroundRetryRender();
@@ -440,7 +545,7 @@ export function createLocalGeoJsonLayer(
     _lastLodBudgetLimit = 0;
     _lodComputed = false;
     _lastLodProbeMs = Number.NEGATIVE_INFINITY;
-    if (_dataSource) _dataSource.show = false;
+    releaseDataSource(viewer);
     _overlayPublisher.hide();
     clearSelectedEntityContextForLayer(id);
     if (viewer?.selectedEntity?.__localLayerId === id) {
@@ -497,6 +602,40 @@ export function createLocalGeoJsonLayer(
       computed: _lodComputed,
     }),
 
+    /**
+     * Snapshot in-memory infrastructure features as plain JSON-safe objects
+     * for the analyst query engine. On-demand only (called at most once per
+     * spoken query) — zero per-frame cost, no listeners, no caching. Returns
+     * [] while the layer is disabled or empty. Disable keeps the loaded
+     * stems for reuse; this method still returns [] until the next enable.
+     * @param {number} [maxCount=2000] Maximum records to return (truncation).
+     * @returns {Array<Object>} See mapAnalystRecord for the record shape.
+     */
+    getAnalystRecords(maxCount = 2000) {
+      if (!_enabled || !_stemRecords.length) return [];
+      const limit = Number.isFinite(maxCount)
+        ? Math.max(1, Math.floor(maxCount))
+        : 2000;
+      const result = [];
+      for (let i = 0; i < _stemRecords.length; i++) {
+        if (result.length >= limit) break;
+        const record = _stemRecords[i];
+        const carto = record.carto;
+        result.push(
+          mapAnalystRecord(
+            {
+              id: record.id,
+              lat: carto ? Cesium.Math.toDegrees(carto.latitude) : null,
+              lon: carto ? Cesium.Math.toDegrees(carto.longitude) : null,
+              properties: propertyObject(record.entity),
+            },
+            id,
+          ),
+        );
+      }
+      return result;
+    },
+
     enable: async (viewer) => {
       if (_destroyed) return;
       _enabled = true;
@@ -529,20 +668,26 @@ export function createLocalGeoJsonLayer(
             // windows (before vs after the add settles) need different cleanup.
             let addedToScene = false;
             try {
-              const response = await fetch(url, {
-                signal: _loadController.signal,
-              });
-              if (_destroyed) return;
-              // A 404 returns an HTML body that would otherwise die in JSON.parse
-              // one line later, reported as a parse error for a missing file.
-              if (!response.ok) {
-                throw new Error(`HTTP ${response.status ?? '?'}`);
-              }
-              const text = await response.text();
-              if (_destroyed) return;
-              const lines = text.split('\n').filter((l) => l.trim().length > 0);
+              let features = _cachedFeatures;
+              if (!features) {
+                const response = await fetch(url, {
+                  signal: _loadController.signal,
+                });
+                if (_destroyed) return;
+                // A 404 returns an HTML body that would otherwise die in JSON.parse
+                // one line later, reported as a parse error for a missing file.
+                if (!response.ok) {
+                  throw new Error(`HTTP ${response.status ?? '?'}`);
+                }
+                const text = await response.text();
+                if (_destroyed) return;
+                const lines = text
+                  .split('\n')
+                  .filter((l) => l.trim().length > 0);
 
-              const features = lines.map((line) => JSON.parse(line));
+                features = lines.map((line) => JSON.parse(line));
+                _cachedFeatures = features;
+              }
 
               const geojson = {
                 type: 'FeatureCollection',
@@ -730,6 +875,8 @@ export function createLocalGeoJsonLayer(
                 viewer.scene.canvas,
               );
               _clickHandler.setInputAction((click) => {
+                // A tool owns the pointer (src/data/inputOwnership.js).
+                if (!isPointerFree()) return;
                 if (!_enabled) return;
                 const picked = viewer.scene.pick(click.position);
 
@@ -991,9 +1138,14 @@ export function createLocalGeoJsonLayer(
       }
 
       // Honor a disable() that landed while we were awaiting the fetch/parse:
-      // disable() runs before _dataSource exists, so its show=false is a no-op —
-      // reading _enabled here (rather than forcing true) respects the toggle-off.
-      if (_dataSource) _dataSource.show = _enabled;
+      // disable() runs before _dataSource exists, so its release is a no-op —
+      // release the finished build here instead of parking it hidden in the
+      // scene (the parsed features stay cached for the next enable).
+      if (!_enabled) {
+        releaseDataSource(viewer);
+        return;
+      }
+      if (_dataSource) _dataSource.show = true;
       viewer.scene.requestRender?.();
     },
 
@@ -1016,6 +1168,7 @@ export function createLocalGeoJsonLayer(
       }
       _overlayPublisher.destroy();
       _dataSource = null;
+      _cachedFeatures = null;
       _stemRecords = [];
       _count = 0;
       _lastUpdate = null;

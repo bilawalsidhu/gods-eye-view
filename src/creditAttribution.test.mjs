@@ -1,3 +1,5 @@
+import { readShellSource } from './testSupport/readShellSource.mjs';
+import { readStylesheet } from './testSupport/readStylesheet.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -5,8 +7,8 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const css = fs.readFileSync(path.join(ROOT, 'style.css'), 'utf8');
-const ui = fs.readFileSync(path.join(ROOT, 'src', 'ui.js'), 'utf8');
+const css = readStylesheet(path.join(ROOT, 'style.css'));
+const ui = readShellSource();
 
 /*
  * Required-attribution keep-out pin.
@@ -165,7 +167,7 @@ function flattenRules(source) {
       rules.push({
         order: rules.length,
         media: [...mediaStack],
-        parts: splitTopLevel(head, ',').map((part) => part.trim()).filter(Boolean),
+        parts: splitTopLevel(head, ',').map((part) => part.trim().replace(/\(\s+/g, '(').replace(/\s+\)/g, ')')).filter(Boolean),
         decls,
       });
       index = close + 1;
@@ -203,6 +205,7 @@ const RECOGNIZED = new Set([
   // rail
   '#right-context-rail',
   '#right-context-rail.layout-focus',
+  '#right-context-rail[data-rail-measuring]',
   // tray
   '#command-dock .dock-popover-content',
   '#command-dock #location-bar .dock-popover-content',
@@ -398,20 +401,26 @@ test('the model refuses every cascade construct it cannot resolve', () => {
       complaints.push(`nested media queries on "${part}": ${rule.media.join(' && ')}`);
     }
     for (const decl of guarded) {
-      if (decl.important) complaints.push(`!important on ${decl.prop} of "${part}"`);
+      // Measurement is synchronous and restored before returning or painting.
+      // Only these two exact declarations earn the exemption tested below.
+      const railMeasurement = part === '#right-context-rail[data-rail-measuring]'
+        && ((decl.prop === 'height' && decl.value === 'auto')
+          || (decl.prop === 'max-height' && decl.value === 'none'));
+      if (decl.important && !railMeasurement) complaints.push(`!important on ${decl.prop} of "${part}"`);
       if (decl.prop === 'inset' || decl.prop === 'margin' || decl.prop === 'all'
         || decl.prop.startsWith('inset-') || decl.prop.startsWith('margin-block')) {
         complaints.push(`shorthand ${decl.prop} on "${part}" — the model reads longhands only`);
       }
       if (decl.prop === 'height' || decl.prop === 'max-height') {
         // A capped height can override `bottom` and invalidate the measured
-        // dock/credit constants. Two exemptions, each earned by a test below:
+        // dock/credit constants. Exemptions are each earned by a test below:
         // the rail's own max-height (resolved to `none` across the whole
         // modelled band by the rail clearance test) and `.layout-focus`
-        // (proven inapplicable at <=720px by the mobile-mode test).
+        // (proven inapplicable at <=720px by the mobile-mode test), plus
+        // synchronous measurement, which is removed before any paint.
         const railOwn = part === '#right-context-rail' && decl.prop === 'max-height';
         const railFocus = part === '#right-context-rail.layout-focus';
-        if (!railOwn && !railFocus) complaints.push(`${decl.prop}: ${decl.value} on "${part}"`);
+        if (!railOwn && !railFocus && !railMeasurement) complaints.push(`${decl.prop}: ${decl.value} on "${part}"`);
       }
       if (decl.prop === 'transform' && /translateY|translate3d|matrix|scale\(/.test(decl.value)) {
         const identity = decl.value === 'translateY(0) scale(1)';
@@ -436,20 +445,21 @@ test('custom properties inside modelled offsets are provably non-negative', () =
     assert.doesNotMatch(decl.value, /-\s*\d/, `${decl.prop} has a negative CSS default: ${decl.value}`);
     assert.match(decl.value, /^(0|0px)$/, `${decl.prop} default is not a vetted shape: ${decl.value}`);
   }
-  const start = ui.indexOf('_updateCommandDockTrayStack() {');
+  const layout = fs.readFileSync(new URL('./ui/panelLayoutController.js', import.meta.url), 'utf8');
+  const start = layout.indexOf('_updateCommandDockTrayStack() {');
   assert.ok(start > 0, '_updateCommandDockTrayStack is missing');
-  const writer = ui.slice(start, start + 1800);
+  const writer = layout.slice(start, layout.indexOf('  _scheduleAdaptivePanelLayout(', start));
   // Every value traces back to a rect height, floored at 0 and rounded up.
-  assert.match(writer, /const locationHeight = [\s\S]{0,120}?getBoundingClientRect\(\)\.height \|\| 0;/);
-  assert.match(writer, /const presetsHeight = [\s\S]{0,120}?getBoundingClientRect\(\)\.height \|\| 0;/);
-  assert.match(writer, /const lowerPinnedHeight = [\s\S]{0,160}?getBoundingClientRect\(\)\.height \|\| 0;/);
+  assert.match(writer, /const locationHeight =\s*[\s\S]{0,180}?getBoundingClientRect\(\)\.height\s*\|\| 0;/);
+  assert.match(writer, /const presetsHeight =\s*[\s\S]{0,180}?getBoundingClientRect\(\)\.height\s*\|\| 0;/);
+  assert.match(writer, /const lowerPinnedHeight =\s*[\s\S]{0,220}?getBoundingClientRect\(\)\.height\s*\|\| 0;/);
   assert.match(writer, /const locationHeightPx = Math\.ceil\(locationHeight\);/);
   assert.match(writer, /const presetsHeightPx = Math\.ceil\(presetsHeight\);/);
-  assert.match(writer, /'--dock-location-pinned-height', `\$\{locationHeightPx\}px`/);
-  assert.match(writer, /'--dock-presets-pinned-height', `\$\{presetsHeightPx\}px`/);
-  assert.match(writer, /'--dock-lower-pinned-height', `\$\{Math\.ceil\(lowerPinnedHeight\)\}px`/);
+  assert.match(writer, /'--dock-location-pinned-height',\s*`\$\{locationHeightPx\}px`/);
+  assert.match(writer, /'--dock-presets-pinned-height',\s*`\$\{presetsHeightPx\}px`/);
+  assert.match(writer, /'--dock-lower-pinned-height',\s*`\$\{Math\.ceil\(lowerPinnedHeight\)\}px`/);
   assert.match(writer, /'--dock-pinned-stack-height', stackHeight/);
-  assert.match(writer, /const stackHeight = pinnedCount > 1[\s\S]{0,160}?`calc\(\$\{locationHeightPx\}px \+ \$\{presetsHeightPx\}px \+ 1\.2rem\)`/);
+  assert.match(writer, /const stackHeight =\s*pinnedCount > 1[\s\S]{0,160}?`calc\(\$\{locationHeightPx\}px \+ \$\{presetsHeightPx\}px \+ 1\.2rem\)`/);
 });
 
 test('the inputs behind the measured constants are unchanged', () => {
@@ -479,11 +489,23 @@ test('the full-width rail cannot inherit a height that overrides its floor', () 
   // over-constrained. It is safe only because the rail's layout pass switches
   // to a mobile mode at the SAME breakpoint and removes both the class and the
   // custom property. Pin that, or the exemption above is unearned.
-  const gate = ui.indexOf("window.matchMedia('(max-width: 720px)')");
+  const rail = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'rightPanelRail.js'), 'utf8');
+  const gate = rail.indexOf("windowRef.matchMedia('(max-width: 720px)')");
   assert.ok(gate > 0, 'the rail layout pass no longer keys off (max-width: 720px)');
-  const mobileBranch = ui.slice(gate, ui.indexOf("layoutMode = 'mobile'", gate) + 40);
+  const mobileBranch = rail.slice(gate, rail.indexOf("layoutMode = 'mobile'", gate) + 40);
   assert.match(mobileBranch, /stack\.classList\.remove\('layout-focus'\)/);
   assert.match(mobileBranch, /stack\.style\.removeProperty\('--right-stack-max-height'\)/);
+});
+
+test('right rail measurement cannot persist into a painted attribution layout', () => {
+  const rail = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'rightPanelRail.js'), 'utf8');
+  const start = rail.indexOf("stack.setAttribute('data-rail-measuring', '')");
+  const end = rail.indexOf("stack.removeAttribute('data-rail-measuring')", start);
+  assert.ok(start > rail.indexOf("layoutMode = 'mobile'"));
+  assert.ok(end > start);
+  const measurement = rail.slice(start, end);
+  assert.match(measurement, /try \{[\s\S]*\} finally \{/);
+  assert.doesNotMatch(measurement, /\b(?:await|return|yield)\b|requestAnimationFrame|setTimeout/);
 });
 
 // ── Clearance ───────────────────────────────────────────────────────────────

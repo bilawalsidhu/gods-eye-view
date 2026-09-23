@@ -97,6 +97,89 @@ test('a refusal moves to the next mirror instead of ending the fan-out', async (
   assert.deepEqual(tried, ENDPOINTS.slice(0, 2), 'the healthy mirror must be reached, and no further');
 });
 
+test('every mirror is asked with a User-Agent that identifies the application', async () => {
+  // The OSM API usage policy asks for a "Valid User-Agent identifying
+  // application and version". Every outbound request must carry it, not just
+  // the first: a mirror further down the list refusing an unidentified client
+  // is exactly the case the fan-out exists to survive.
+  const seen = [];
+  const fetchImpl = async (url, options) => {
+    seen.push({ url, agent: options?.headers?.['User-Agent'] });
+    // Refuse everywhere, so the loop is forced through the whole list.
+    return { status: 503, headers: { get: () => 'text/html' } };
+  };
+  await fetchOverpassPayload('data=x', 1e6, {
+    endpoints: ENDPOINTS,
+    fetchImpl,
+    readBody: async () => 'upstream down',
+    simplify: (body) => body,
+  });
+
+  assert.deepEqual(
+    seen.map((request) => request.url),
+    ENDPOINTS,
+    'the fan-out must reach every mirror',
+  );
+  for (const request of seen) {
+    const agent = String(request.agent || '');
+    assert.match(
+      agent,
+      /^gods-eye-view\/\d/,
+      `${request.url} must name the application and its version`,
+    );
+    assert.ok(
+      !/proxy\/1\.0$/.test(agent),
+      `${request.url} must not fall back to the unidentified label`,
+    );
+    assert.match(
+      agent,
+      /github\.com\/bilawalsidhu\/gods-eye-view/,
+      `${request.url} must carry a route back to the project`,
+    );
+  }
+});
+
+test('a mirror that refuses the old label serves the same query under the identifying one', async () => {
+  // Recorded from the canonical instance on 2026-09-14: the unidentified label
+  // is answered with a 406 Not Acceptable HTML page before the query is read,
+  // and the identifying one is served. This stub replays that shape so the
+  // behaviour the header change buys is pinned without a live mirror.
+  const REFUSED = 'gods-eye-view-overpass-proxy/1.0';
+  const answer = (agent) =>
+    String(agent || '').startsWith(REFUSED)
+      ? {
+          status: 406,
+          body: '<!DOCTYPE HTML><title>406 Not Acceptable</title>',
+          contentType: 'text/html',
+        }
+      : { status: 200, body: DATA.body, contentType: 'application/json' };
+
+  let last = null;
+  const run = (agentOverride) =>
+    fetchOverpassPayload('data=x', 1e6, {
+      endpoints: [ENDPOINTS[0]],
+      fetchImpl: async (url, options) => {
+        last = answer(agentOverride ?? options?.headers?.['User-Agent']);
+        return { status: last.status, headers: { get: () => last.contentType } };
+      },
+      readBody: async () => last.body,
+      simplify: (body) => body,
+    });
+
+  const refused = await run(REFUSED);
+  assert.equal(refused.status, 406, 'the old label is refused by the mirror');
+  assert.equal(
+    overpassPayloadIsData(refused),
+    false,
+    'a refusal is never treated as data',
+  );
+
+  const served = await run(undefined);
+  assert.equal(served.status, 200, 'the header the proxy now sends is served');
+  assert.equal(overpassPayloadIsData(served), true);
+  assert.equal(served.body, DATA.body);
+});
+
 test('the first mirror to answer wins, and the rest are left alone', async () => {
   const { payload, tried } = await run({
     [ENDPOINTS[0]]: DATA, [ENDPOINTS[1]]: DATA, [ENDPOINTS[2]]: DATA,

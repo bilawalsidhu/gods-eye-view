@@ -158,9 +158,10 @@ export function detectionPaintSkipDecision({
   frameCount,
   thresholdMs = DETECTION_PAINT_SKIP_THRESHOLD_MS,
 } = {}) {
-  const skip = !layoutChanged
-    && Number(lastPaintMs) > thresholdMs
-    && Number(frameCount) % 2 !== 0;
+  const skip =
+    !layoutChanged &&
+    Number(lastPaintMs) > thresholdMs &&
+    Number(frameCount) % 2 !== 0;
   return { skip, requestFollowUp: skip };
 }
 

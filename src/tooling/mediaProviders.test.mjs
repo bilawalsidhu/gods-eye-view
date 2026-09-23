@@ -7,9 +7,9 @@ import { cctvProxy } from '../../server/providers/cctv.js';
 import { radioBrowserProxy } from '../../server/providers/radio.js';
 import { localProviderPlugins } from '../../server/providers/local.js';
 
-function install(plugin) {
+function install(plugin, hook = 'configureServer') {
   let handler;
-  plugin.configureServer({
+  plugin[hook]({
     middlewares: {
       use(_route, fn) {
         handler = fn;
@@ -101,4 +101,93 @@ test('composition creates exactly one CCTV and radio provider without acquisitio
   for (const factory of [cctvProxy, radioBrowserProxy]) {
     assert.equal(plugins.filter((p) => p.name === factory().name).length, 1);
   }
+});
+
+for (const hook of ['configureServer', 'configurePreviewServer']) {
+  test(`CCTV ${hook} maps header timeouts and cancels upstream error bodies`, async (t) => {
+    isolate(t);
+    process.env.CCTV_SOURCES_JSON = JSON.stringify([
+      {
+        id: 'bounded',
+        name: 'Test',
+        lat: 30,
+        lon: -97,
+        feedType: 'video',
+        url: 'https://camera.example.org/live.mp4',
+      },
+    ]);
+    const request = install(
+      cctvProxy({ sourceRoot: fixture(t, 'unused') }),
+      hook,
+    );
+    // Resolve the catalog before substituting transport behavior.
+    await request('/sources');
+    t.mock.method(globalThis, 'fetch', async () => {
+      throw new DOMException('timeout', 'AbortError');
+    });
+    const timeout = await request('/media/bounded');
+    assert.equal(timeout.status, 504);
+    assert.deepEqual(JSON.parse(timeout.body), {
+      error: 'Upstream media timeout',
+    });
+    let cancelled = false;
+    t.mock.method(
+      globalThis,
+      'fetch',
+      async () =>
+        new Response(
+          new ReadableStream({
+            cancel() {
+              cancelled = true;
+            },
+          }),
+          { status: 503 },
+        ),
+    );
+    const error = await request('/media/bounded');
+    assert.equal(error.status, 503);
+    assert.equal(cancelled, true);
+  });
+}
+
+test('a failed CCTV media fetch reports a fixed health message, not the error text', async (t) => {
+  isolate(t);
+  const root = mkdtempSync(path.join(tmpdir(), 'gev-cctv-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  mkdirSync(path.join(root, 'config'));
+  writeFileSync(
+    path.join(root, 'config/cctv_sources.austin.json'),
+    JSON.stringify([
+      {
+        id: 'leaky',
+        name: 'Leaky camera',
+        lat: 30.27,
+        lon: -97.74,
+        feedType: 'video',
+        url: 'https://cams.fixture.invalid/leaky.m3u8',
+      },
+    ]),
+  );
+  const leak =
+    'connect ETIMEDOUT 203.0.113.9:443 C:\fixture\secret-path\cams.json';
+  t.mock.restoreAll();
+  t.mock.method(globalThis, 'fetch', () => {
+    throw Error(leak);
+  });
+
+  const call = install(cctvProxy({ sourceRoot: root }));
+  const media = await call('/media/leaky');
+  assert.equal(media.status, 502);
+  assert.equal(media.body.includes('203.0.113.9'), false);
+
+  // GET /health is the second door: src/layers/cctv/frames.js renders each
+  // entry's `message` as the camera's status label, so a raw errno stored here
+  // reaches the screen even though the response above is sanitized.
+  const camera = JSON.parse((await call('/health')).body).cameras.find(
+    (entry) => entry.id === 'leaky',
+  );
+  assert.equal(camera.status, 'degraded');
+  assert.equal(camera.message, 'Media fetch failed');
+  assert.equal(camera.message.includes('ETIMEDOUT'), false);
+  assert.equal(camera.message.includes('secret-path'), false);
 });
