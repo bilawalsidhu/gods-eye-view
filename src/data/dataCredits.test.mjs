@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DATA_CREDITS } from './dataCredits.js';
+import { DATA_CREDITS, OURAIRPORTS_CREDIT } from './dataCredits.js';
 
 test('every credit carries a unique key and some markup to render', () => {
   const keys = DATA_CREDITS.map((entry) => entry.key);
@@ -36,4 +36,21 @@ test('adsbdb is credited and carries its published route-data restriction', () =
   assert.match(credit.html, /PlaneBase/);
   assert.match(credit.html, /Guillaume Michel/);
   assert.match(credit.html, /href="https:\/\/www\.adsbdb\.com"/);
+});
+
+test('OurAirports is credited even though its license does not require it', () => {
+  // Public domain: "no need to credit us, though we appreciate it". The
+  // courtesy credit is also the only place a reader can see WHICH database a
+  // frequency came from, so it is not optional in practice.
+  assert.ok(OURAIRPORTS_CREDIT.key);
+  assert.match(OURAIRPORTS_CREDIT.html, /OurAirports/);
+  assert.match(OURAIRPORTS_CREDIT.html, /public domain/);
+  assert.match(
+    OURAIRPORTS_CREDIT.html,
+    /href="https:\/\/ourairports\.com\/data\/"/,
+  );
+  assert.ok(
+    !DATA_CREDITS.some((entry) => entry.key === OURAIRPORTS_CREDIT.key),
+    'a lazily registered credit must not also sit in the always-on list',
+  );
 });

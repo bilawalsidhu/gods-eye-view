@@ -17,6 +17,14 @@
   Native point, billboard and label highlighting uses GPU draw commands; there
   is no scene-dimming effect selector. Unsupported shaders retain native contact
   rendering, and leaving Cyber restores the standard shell and contact treatment.
+- Bundle a curated **OurAirports ATC frequency pack** (`src/data/local_data/ourairports_atc/`,
+  9,562 airports · 16,509 frequencies, 0.66 MB, public domain, no key) with an offline
+  lookup in `src/data/ourAirportsAtc.js` — nearest airports to a position, their published
+  frequency classes, and whether anyone is actually controlling them. The frequency class is
+  carried through verbatim rather than remapped onto a flight phase: only 443 airports publish
+  all four of TWR/GND/APP/ATIS and 5,902 publish none of them, so "uncontrolled field — CTAF"
+  is the majority answer and the data has to be able to say it. Rebuild with
+  `node scripts/build-atc-frequencies.mjs`.
 - The tracked-aircraft descriptor now publishes `verticalRateMps`, on both the
   civil and military layers, so a consumer reading `getTrackedInfo()` no longer
   has to reach past it into the raw poll record for climb/descent. Reported,
