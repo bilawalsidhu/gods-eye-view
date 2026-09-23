@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Cesium from 'cesium';
 
+import { CLASS_SCALE_2D } from '../../data/aircraftClass.js';
+import { aircraftIcon } from '../../data/aircraftIcons.js';
 import {
   createLocalAdsbLayer,
   HEARD_BY_RECEIVER,
@@ -87,6 +89,10 @@ function fakeViewer() {
     viewer: {
       camera,
       scene: { camera },
+      entities: {
+        add: (entity) => entity,
+        remove() {},
+      },
       dataSources: {
         add(source) {
           sources.push(source);
@@ -149,14 +155,48 @@ function fakeFeeds(initial = {}) {
   };
 }
 
-async function enabledLayer(receiver, clock, feeds = null) {
+/** A viewer whose camera looks down on (0°, 0°) from 50 km, with primitives. */
+function modelViewer(primitives) {
+  const base = fakeViewer();
+  const camera = {
+    ...base.viewer.camera,
+    positionWC: new Cesium.Cartesian3(6_378_137 + 50_000, 0, 0),
+    positionCartographic: new Cesium.Cartographic(0, 0, 50_000),
+    directionWC: new Cesium.Cartesian3(-1, 0, 0),
+    frustum: {
+      computeCullingVolume: () => ({
+        computeVisibility: () => Cesium.Intersect.INSIDE,
+      }),
+    },
+  };
+  return {
+    ...base,
+    viewer: {
+      ...base.viewer,
+      camera,
+      scene: {
+        camera,
+        primitives: {
+          add(collection) {
+            primitives.push(collection);
+            return collection;
+          },
+          remove() {},
+        },
+      },
+    },
+  };
+}
+
+async function enabledLayer(receiver, clock, feeds = null, options = {}) {
   const { services, calls } = fakeServices();
-  const { sources, viewer } = fakeViewer();
+  const { sources, viewer } = options.viewer || fakeViewer();
   const layer = createLocalAdsbLayer({
     receiver,
     feeds,
-    services,
+    services: { ...services, ...options.services },
     now: () => clock.now,
+    loadModel: options.loadModel,
   });
   layer.init(viewer);
   await layer.enable();
@@ -179,22 +219,19 @@ test('enabling Local ADS-B asks the shared tuner for 1090 MHz; disabling leaves 
   );
 });
 
-test('local aircraft use the live-flight silhouette in magenta', async (t) => {
+test('local aircraft use their class silhouette and scale in magenta', async (t) => {
   const receiver = fakeReceiver({ mode: 'adsb', connected: true });
   const clock = { now: 100_000 };
   const { layer, sources } = await enabledLayer(receiver, clock);
   t.after(() => layer.destroy());
-  receiver.set({ aircraft: [record()] });
+  receiver.set({ aircraft: [record(), record({ icao: 'a0b702', category: 'A7' })] });
   await layer.update();
 
   const entity = sources[0].entities.getById('local-adsb:abc123');
   assert.ok(entity);
   assert.equal(entity.point, undefined);
   assert.equal(entity.label, undefined);
-  assert.match(
-    entity.billboard.image.getValue(),
-    /^data:image\/svg\+xml;base64,/,
-  );
+  assert.equal(entity.billboard.image.getValue(), aircraftIcon('airliner'));
   assert.equal(entity.billboard.width.getValue(), 20);
   assert.ok(
     Cesium.Color.equals(
@@ -212,17 +249,291 @@ test('local aircraft use the live-flight silhouette in magenta', async (t) => {
   assert.equal(entity.gevLabelModel.title, 'LOCAL1');
   assert.equal(typeof entity.gevDisplayPosition, 'function');
 
-  const [detectable] = layer.getDetectableObjects();
-  assert.equal(detectable.sourceId, 'abc123');
-  assert.equal(detectable.id, 'LOCAL1');
-  assert.equal(detectable.type, 'AIR');
+  const heli = sources[0].entities.getById('local-adsb:a0b702');
+  assert.equal(heli.billboard.image.getValue(), aircraftIcon('helicopter'));
+  assert.equal(heli.billboard.scale.getValue(), CLASS_SCALE_2D.helicopter);
+  assert.ok(
+    Cesium.Color.equals(
+      heli.billboard.color.getValue(),
+      Cesium.Color.fromCssColorString('#ff4fd8'),
+    ),
+    'the helicopter keeps the local magenta',
+  );
+  assert.equal(heli.gevLabelModel.details[1], 'Helicopter · A7');
 
-  receiver.set({ aircraft: [record({ trackDeg: 90 })] });
+  // On the ground the silhouette shrinks like a grounded public flight.
+  receiver.set({
+    aircraft: [
+      record({ icao: 'a0b702', category: 'A7', onGround: true, lastPositionAt: 100_500 }),
+    ],
+  });
   await layer.update();
+  assert.equal(
+    heli.billboard.scale.getValue(),
+    CLASS_SCALE_2D.helicopter * 0.8,
+  );
+
+  const [detectable] = layer.getDetectableObjects();
+  assert.equal(detectable.sourceId, 'a0b702');
+  assert.equal(detectable.type, 'AIR');
+});
+
+test('the heading slews toward a new track instead of snapping', async (t) => {
+  const receiver = fakeReceiver({ mode: 'adsb', connected: true });
+  const clock = { now: 100_000 };
+  const { layer, sources } = await enabledLayer(receiver, clock);
+  t.after(() => layer.destroy());
+  receiver.set({ aircraft: [record()] });
+  await layer.update();
+  const entity = sources[0].entities.getById('local-adsb:abc123');
+  assert.equal(entity.billboard.rotation.getValue(), 0);
+
+  clock.now = 101_000;
+  receiver.set({
+    aircraft: [
+      record({
+        lat: 0.0008,
+        trackDeg: 90,
+        lastPositionAt: 101_000,
+        lastMessageAt: 101_000,
+      }),
+    ],
+  });
+  await layer.update();
+  const first = entity.billboard.rotation.getValue();
+  assert.ok(
+    first > -Cesium.Math.PI_OVER_TWO && first <= 0,
+    'one frame does not swing the nose 90°',
+  );
+  for (let frame = 0; frame < 12; frame += 1) {
+    clock.now += 250;
+    await layer.update();
+  }
   assert.ok(
     Math.abs(entity.billboard.rotation.getValue() + Cesium.Math.PI_OVER_TWO) <
-      1e-9,
+      1e-6,
+    'the nose settles on the new track',
   );
+});
+
+test('markers move in real time between fixes and never jump on a new fix', async (t) => {
+  const receiver = fakeReceiver({ mode: 'adsb', connected: true });
+  const clock = { now: 100_000 };
+  const { layer, sources } = await enabledLayer(receiver, clock);
+  t.after(() => layer.destroy());
+  const latitude = () =>
+    Cesium.Math.toDegrees(
+      Cesium.Cartographic.fromCartesian(
+        sources[0].entities.getById('local-adsb:abc123').position.getValue(),
+      ).latitude,
+    );
+  // 180 kt due north: 1 s covers 92.6 m, 0.000833° of latitude.
+  const degPerSecond = (180 * 1852) / 3600 / 111_195;
+  receiver.set({ aircraft: [record({ lastPositionAt: 99_000 })] });
+  await layer.update();
+  assert.ok(
+    Math.abs(latitude() - degPerSecond) < 1e-5,
+    'drawn where the aircraft is now, not at its last fix (no display delay)',
+  );
+  clock.now = 100_500;
+  await layer.update();
+  assert.ok(Math.abs(latitude() - 1.5 * degPerSecond) < 1e-5);
+
+  // The next fix is 150 m behind the extrapolation; the marker slides.
+  const before = latitude();
+  receiver.set({
+    aircraft: [
+      record({
+        lat: before - 150 / 111_195,
+        lastPositionAt: 100_500,
+        lastMessageAt: 100_500,
+      }),
+    ],
+  });
+  await layer.update();
+  assert.ok(Math.abs(latitude() - before) < 1e-7, 'no jump at the new fix');
+  clock.now = 101_500;
+  await layer.update();
+  assert.ok(
+    Math.abs(latitude() - (before - 150 / 111_195 + degPerSecond)) < 1e-5,
+    'the correction has decayed onto the new fix',
+  );
+});
+
+test('an implausible jump in a feed record is ignored by the display', async (t) => {
+  const receiver = fakeReceiver({ mode: 'adsb', connected: true });
+  const clock = { now: 100_000 };
+  const { layer, sources } = await enabledLayer(receiver, clock);
+  t.after(() => layer.destroy());
+  receiver.set({ aircraft: [record({ groundSpeedKt: 120, trackDeg: 0 })] });
+  await layer.update();
+  clock.now = 101_000;
+  receiver.set({
+    aircraft: [
+      record({
+        lat: 0.05,
+        groundSpeedKt: 120,
+        lastPositionAt: 101_000,
+        lastMessageAt: 101_000,
+      }),
+    ],
+  });
+  await layer.update();
+  const lat = Cesium.Math.toDegrees(
+    Cesium.Cartographic.fromCartesian(
+      sources[0].entities.getById('local-adsb:abc123').position.getValue(),
+    ).latitude,
+  );
+  assert.ok(lat < 0.001, `stayed on its track (${lat})`);
+  assert.equal(layer.getStats().rejectedPositions, 1);
+});
+
+test('selecting an aircraft draws a magenta trail of the fixes the receiver heard', async (t) => {
+  const receiver = fakeReceiver({ mode: 'adsb', connected: true });
+  const clock = { now: 100_000 };
+  const trails = [];
+  const { layer } = await enabledLayer(receiver, clock, null, {
+    services: {
+      trails: {
+        createTrail(viewer, options) {
+          const trail = { options, positions: [], destroyed: false };
+          trails.push(trail);
+          return {
+            setPositions: (positions) => (trail.positions = positions),
+            destroy: () => (trail.destroyed = true),
+          };
+        },
+      },
+    },
+  });
+  t.after(() => layer.destroy());
+  for (let second = 0; second < 4; second += 1) {
+    clock.now = 100_000 + second * 1_000;
+    receiver.set({
+      aircraft: [
+        record({
+          lat: second * 0.0008,
+          lastPositionAt: clock.now,
+          lastMessageAt: clock.now,
+        }),
+      ],
+    });
+    await layer.update();
+    if (second === 1) assert.equal(layer.selectAircraft('abc123'), true);
+  }
+  assert.equal(trails.length, 1);
+  assert.equal(trails[0].options.color, '#ff4fd8');
+  assert.equal(trails[0].options.width, 2.5);
+  assert.equal(trails[0].positions.length, 4, 'every heard fix, oldest first');
+  assert.ok(
+    Cesium.Cartographic.fromCartesian(trails[0].positions[0]).latitude <
+      Cesium.Cartographic.fromCartesian(trails[0].positions[3]).latitude,
+  );
+  clock.now = 200_000;
+  await layer.update();
+  assert.equal(trails[0].destroyed, true, 'the trail leaves with the aircraft');
+});
+
+test('adsbdb type, operator and route reach the card for the selected aircraft only', async (t) => {
+  const receiver = fakeReceiver({ mode: 'adsb', connected: true });
+  const clock = { now: 100_000 };
+  const queries = [];
+  const { layer, sources } = await enabledLayer(receiver, clock, null, {
+    services: {
+      enrichment: {
+        async getEnrichment(query) {
+          queries.push(`${query.kind}:${query.id}`);
+          if (query.kind === 'type')
+            return { found: true, typeCode: 'B407', typeName: 'Bell 407' };
+          return {
+            found: true,
+            airline: 'Air Evac',
+            origin: { code: 'AUS', lat: 0.1, lon: 0 },
+            destination: { code: 'SAT', lat: -0.1, lon: 0 },
+          };
+        },
+      },
+    },
+  });
+  t.after(() => layer.destroy());
+  receiver.set({
+    aircraft: [
+      record({ icao: 'a0b702', callsign: 'EVC145', category: 'A7' }),
+      record({ icao: 'def456', callsign: 'OTHER1' }),
+    ],
+  });
+  await layer.update();
+  assert.deepEqual(queries, [], 'no request per contact');
+  assert.equal(layer.selectAircraft('a0b702'), true);
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  assert.deepEqual([...queries].sort(), ['route:EVC145', 'type:a0b702']);
+  const entity = sources[0].entities.getById('local-adsb:a0b702');
+  assert.deepEqual(entity.gevLabelModel.details.slice(0, 4), [
+    'ICAO A0B702 · EVC145',
+    'Helicopter · A7',
+    'Air Evac · Bell 407',
+    'AUS → SAT',
+  ]);
+  assert.equal(
+    entity.gevLabelModel.details.at(-1),
+    'Heard by your receiver · 1090 MHz · browser SDR',
+  );
+  layer.selectAircraft('a0b702');
+  await layer.update();
+  assert.equal(queries.length, 2, 'each key is asked for once');
+});
+
+test('the DISPLAY 3D toggle gives local aircraft magenta class models', async (t) => {
+  const receiver = fakeReceiver({ mode: 'adsb', connected: true });
+  const clock = { now: 100_000 };
+  const loads = [];
+  const display = { models3d: true, models3dMode: 'proximity' };
+  const primitives = [];
+  const { layer, sources } = await enabledLayer(receiver, clock, null, {
+    services: { display: { getParams: () => display } },
+    viewer: modelViewer(primitives),
+    loadModel: async (options) => {
+      const model = {
+        ...options,
+        ready: true,
+        show: true,
+        modelMatrix: new Cesium.Matrix4(),
+        destroyed: false,
+        destroy() {
+          this.destroyed = true;
+        },
+        isDestroyed() {
+          return this.destroyed;
+        },
+        update() {},
+      };
+      loads.push(model);
+      return model;
+    },
+  });
+  t.after(() => layer.destroy());
+  receiver.set({ aircraft: [record({ icao: 'a0b702', category: 'A7' })] });
+  await layer.update();
+  await new Promise((resolve) => setImmediate(resolve));
+  await layer.update();
+  assert.equal(loads.length, 1);
+  const [model] = loads;
+  assert.equal(model.url, '/models/bell206.glb', 'the Flights helicopter model');
+  assert.equal(model.scale, 1);
+  assert.equal(model.id, 'local-adsb:a0b702');
+  assert.ok(Cesium.Color.equals(model.color, Cesium.Color.fromCssColorString('#ff4fd8')));
+  assert.equal(model.colorBlendMode, Cesium.ColorBlendMode.MIX);
+  assert.equal(model.colorBlendAmount, 0.94);
+  assert.equal(model.show, true);
+  const heli = sources[0].entities.getById('local-adsb:a0b702');
+  assert.equal(heli.billboard.show.getValue(), false, 'the model is the visual');
+  const origin = Cesium.Matrix4.getTranslation(model.modelMatrix, new Cesium.Cartesian3());
+  assert.ok(Cesium.Cartesian3.distance(origin, heli.position.getValue()) < 1);
+
+  display.models3d = false;
+  await layer.update();
+  assert.equal(model.destroyed || !primitives[0].contains(model), true);
+  assert.equal(heli.billboard.show.getValue(), true, 'the billboard is back');
 });
 
 test('markers drop when the position is 60 s old and records when silent 60 s', async (t) => {

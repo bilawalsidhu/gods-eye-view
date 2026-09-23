@@ -756,7 +756,9 @@
       "src/layers/flights/records.js",
       "src/layers/flights/recordPolicy.js",
       "src/layers/flights/snapshotRenderer.js",
-      "src/data/inputOwnership.js"
+      "src/layers/flights/modelSpec.js",
+      "src/data/inputOwnership.js",
+      "src/data/modelEligibility.js"
     ],
     "external": ["cesium"]
   },
@@ -791,7 +793,8 @@
       "src/layers/military/records.js",
       "src/layers/military/recordPolicy.js",
       "src/layers/military/snapshotRenderer.js",
-      "src/data/inputOwnership.js"
+      "src/data/inputOwnership.js",
+      "src/data/modelEligibility.js"
     ],
     "external": ["cesium"]
   },
@@ -1756,6 +1759,7 @@
       "src/layers/flights/records.js",
       "src/layers/flights/recordPolicy.js",
       "src/layers/flights/snapshotRenderer.js",
+      "src/layers/flights/modelSpec.js",
       "src/layers/military/records.js",
       "src/layers/military/recordPolicy.js",
       "src/layers/military/snapshotRenderer.js",
@@ -1809,6 +1813,7 @@
       "src/data/contactTrailRenderer.js",
       "src/data/transitProxy.js",
       "src/data/gtfsRealtime.js",
+      "src/data/modelEligibility.js",
       "src/layers/transit/trails.js",
       "src/layers/transit/movement.js",
       "src/layers/transit/qaMetrics.js",
@@ -1881,6 +1886,9 @@
       "src/layers/localAdsb/card.js",
       "src/layers/localAdsb/feeds.js",
       "src/layers/localAdsb/status.js",
+      "src/layers/localAdsb/motion.js",
+      "src/layers/localAdsb/models.js",
+      "src/layers/localAdsb/enrichment.js",
       "src/sources/adsbRecords.js",
       "src/sdr/controller.js",
       "src/sdr/spectrum.js",
@@ -2237,6 +2245,7 @@
       "src/layers/flights/records.js",
       "src/layers/flights/recordPolicy.js",
       "src/layers/flights/snapshotRenderer.js",
+      "src/layers/flights/modelSpec.js",
       "src/layers/military/records.js",
       "src/layers/military/recordPolicy.js",
       "src/layers/military/snapshotRenderer.js",
@@ -2316,6 +2325,9 @@
       "src/layers/localAdsb/card.js",
       "src/layers/localAdsb/feeds.js",
       "src/layers/localAdsb/status.js",
+      "src/layers/localAdsb/motion.js",
+      "src/layers/localAdsb/models.js",
+      "src/layers/localAdsb/enrichment.js",
       "src/sources/adsbRecords.js",
       "src/sdr/controller.js",
       "src/sdr/spectrum.js",
@@ -2323,7 +2335,8 @@
       "src/sdr/usbDevices.js",
       "src/data/detection.js",
       "src/data/detectionRenderDemand.js",
-      "src/data/detectionPresentation.js"
+      "src/data/detectionPresentation.js",
+      "src/data/modelEligibility.js"
     ],
     "external": [
       "hls.js",

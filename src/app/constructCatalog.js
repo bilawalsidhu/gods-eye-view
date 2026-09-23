@@ -134,7 +134,12 @@ export function createApplicationCatalog({
         }),
         flights,
         military,
-        createApplicationLocalAdsb(),
+        createApplicationLocalAdsb({
+          surface,
+          enrichment: sources.flights,
+          displayParams: () => flights.getParams(),
+          ...(resolveAsset ? { resolveAsset } : {}),
+        }),
         createApplicationEarthquakes({ source: sources.earthquakes }),
         createApplicationAlpr({ surface, source: sources.alpr }),
         satellites,

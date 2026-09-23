@@ -15,6 +15,8 @@ let receiverLocation = null;
 let demodulator = null;
 let blockCount = 0;
 const aircraft = new Map();
+// Positions refused by the decoder's speed check since the last clear.
+const decoderStats = { positionsRejected: 0 };
 const adsbStream = new AdsbStreamDecoder();
 
 function configure(nextMode, nextSampleRate, location) {
@@ -96,7 +98,10 @@ self.onmessage = (event) => {
   if (message.type === 'reset') {
     blockCount = 0;
     adsbStream.reset();
-    if (message.clearAircraft) aircraft.clear();
+    if (message.clearAircraft) {
+      aircraft.clear();
+      decoderStats.positionsRejected = 0;
+    }
     if (mode === 'fm') configure(mode, sampleRate, receiverLocation);
     return;
   }
@@ -139,7 +144,7 @@ self.onmessage = (event) => {
   for (const bytes of adsbStream.extract(message.buffer, sampleRate)) {
     const decoded = decodeAdsbMessage(bytes, { receivedAt: now });
     if (!decoded) continue;
-    updateAircraftTrack(aircraft, decoded, receiverLocation);
+    updateAircraftTrack(aircraft, decoded, receiverLocation, decoderStats);
     decodedCount += 1;
   }
   const removed = pruneAircraftTracks(aircraft, now);
@@ -148,6 +153,7 @@ self.onmessage = (event) => {
       type: 'adsb',
       aircraft: publicAircraft(),
       decodedCount,
+      positionsRejected: decoderStats.positionsRejected,
       diagnostics:
         blockCount % 30 === 0
           ? {

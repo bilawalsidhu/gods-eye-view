@@ -8,6 +8,7 @@ import {
   trailAnchorForModel,
 } from '../../data/modelVisualAnchor.js';
 import * as Cesium from 'cesium';
+import { selectModelEligible } from '../../data/modelEligibility.js';
 import { cockpitContactDotImage } from '../../data/cockpitContactDot.js';
 import { aircraftIcon, TRACKED_ICON_PX } from '../../data/aircraftIcons.js';
 import {
@@ -892,25 +893,11 @@ export function createRendering({
         );
         flightState._lastModelCapWarnMs = nowMs;
       }
-      modelEligible = new Set();
-      for (const [icao, , inF] of cand) {
-        if (modelEligible.size >= cap) break;
-        if (inF && flightState._models.has(icao)) modelEligible.add(icao);
-      } // 1. KEEP on-screen
-      for (const [icao, d2, inF] of cand) {
-        if (modelEligible.size >= cap) break;
-        if (inF && d2 <= addDistSq && !modelEligible.has(icao))
-          modelEligible.add(icao);
-      } // 2. ADD on-screen
-      for (const [icao, , inF] of cand) {
-        if (modelEligible.size >= cap) break;
-        if (!inF && flightState._models.has(icao)) modelEligible.add(icao);
-      } // 3. KEEP off-screen (can't starve visible)
-      for (const [icao, d2, inF] of cand) {
-        if (modelEligible.size >= cap) break;
-        if (!inF && d2 <= addDistSq && !modelEligible.has(icao))
-          modelEligible.add(icao);
-      } // 4. ADD off-screen leftover
+      modelEligible = selectModelEligible(cand, {
+        cap,
+        addDistSq,
+        isModeled: (icao) => flightState._models.has(icao),
+      });
       const toRelease = [];
       for (const icao of flightState._models.keys()) {
         if (icao !== flightState._trackedIcao && !modelEligible.has(icao))

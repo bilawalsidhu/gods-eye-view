@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { CLASS_SCALE_2D } from '../../data/aircraftClass.js';
 import { aircraftIcon } from '../../data/aircraftIcons.js';
 import {
   horizonOccluder,
@@ -6,17 +7,23 @@ import {
   stabilizeScreenRotation,
 } from '../../data/iconOrientation.js';
 import { isPointerFree } from '../../data/inputOwnership.js';
+import { pickRenderAltitudeM } from '../../data/renderAltitude.js';
+import { routePlausible } from '../../data/routePlausible.js';
 import {
   localAdsbPositionIsFresh,
   mergeLocalAdsbRecords,
   summarizeLocalAdsb,
 } from '../../sources/adsbRecords.js';
+import { GROUND_SCALE } from '../flights/policy.js';
 import {
   localAdsbCardModel,
   localAdsbIsUat,
   localAdsbSourceText,
   localAdsbTitle,
 } from './card.js';
+import { createLocalAdsbEnrichment, localAdsbClass } from './enrichment.js';
+import { createLocalAdsbModels } from './models.js';
+import { LocalAdsbMotion } from './motion.js';
 import {
   ENTITY_PREFIX,
   LAYER_ID,
@@ -35,19 +42,21 @@ export {
 } from './policy.js';
 export {
   localAdsbCardModel,
+  localAdsbClassLine,
   localAdsbIsUat,
   localAdsbReceiverLine,
   localAdsbTitle,
 } from './card.js';
+export { localAdsbClass } from './enrichment.js';
 export { localAdsbStatus } from './status.js';
 
 const FEET_TO_METERS = 0.3048;
-
-function heightMeters(record) {
-  return Number.isFinite(record.altitudeFt)
-    ? Math.max(0, record.altitudeFt * FEET_TO_METERS)
-    : 0;
-}
+const RENDER_HOLD_ID = 'local-adsb';
+/** The DISPLAY rail's first-run 3D preference, used when no reader is wired. */
+const DEFAULT_DISPLAY = Object.freeze({
+  models3d: true,
+  models3dMode: 'proximity',
+});
 
 /**
  * Local ADS-B layer: draws aircraft heard by the user's own receivers.
@@ -61,6 +70,12 @@ function heightMeters(record) {
  * layer is enabled. Records are merged by ICAO (`mergeLocalAdsbRecords`).
  * Aircraft heard only on 978 MHz UAT carry a thin ring around the marker.
  *
+ * Aircraft get the public Flights treatment in magenta: a class from the
+ * emitter category or adsbdb type (`aircraftClass.js`), the class silhouette
+ * and scale, the Flights 3D models under the DISPLAY rail's 3D toggle, smooth
+ * real-time motion (`./motion.js`, no display delay) and, while selected, a
+ * trail of the positions the receiver heard.
+ *
  * Markers are never followed by the camera. A marker disappears once its
  * position is older than 60 s; a record without any message for 60 s is gone.
  * @param {object} options
@@ -68,8 +83,15 @@ function heightMeters(record) {
  * @param {object} [options.feeds] Decoder-feed session (start, stop,
  *   getState, subscribe).
  * @param {object} options.services Render, context, picking, detection and
- *   readout operations supplied by the application.
+ *   readout operations supplied by the application; optionally `display`
+ *   (`getParams()` → `{ models3d, models3dMode }`), `enrichment` (a source
+ *   with `getEnrichment`), `trails` (`createTrail`), `geoid`
+ *   (`ensureGeoidReady`, `geoidHeight`) and `groundSnap`
+ *   (`createGroundSnap`).
  * @param {() => number} [options.now] Clock, injectable for tests.
+ * @param {(url: string) => string} [options.resolveAsset] Model URL resolver.
+ * @param {(options: object) => Promise<object>} [options.loadModel] Model
+ *   loader, injectable for tests.
  * @returns {object} Data-layer module.
  */
 export function createLocalAdsbLayer({
@@ -77,10 +99,16 @@ export function createLocalAdsbLayer({
   feeds = null,
   services,
   now = Date.now,
+  resolveAsset = (url) => url,
+  loadModel,
 }) {
   if (typeof receiver?.getState !== 'function')
     throw new TypeError('Local ADS-B requires a receiver session');
-  const { governorRequestRender } = services.render;
+  const {
+    governorRequestRender,
+    holdContinuousRender = () => {},
+    releaseContinuousRender = () => {},
+  } = services.render;
   const {
     registerEntityContext,
     selectEntityContext,
@@ -102,11 +130,30 @@ export function createLocalAdsbLayer({
   let tickTimer = null;
   let syncTimer = null;
   let clickHandler = null;
+  let removePreRender = null;
+  let renderHeld = false;
   let selectedId = null;
+  let selectedTrail = null;
+  let trailHeadSeq = 0;
+  let models = null;
+  let geoidReady = false;
+  let rejectedFixes = 0;
   let state = receiver.getState();
   const markers = new Map();
   // Per-ICAO receptions (band|source -> last message) across merges.
   const heardBy = new Map();
+  const enrichment = createLocalAdsbEnrichment({
+    source: services.enrichment || null,
+    onChange: () => {
+      for (const marker of markers.values()) refreshClass(marker);
+      refreshSelectedCard();
+      governorRequestRender('local-adsb-enrichment');
+    },
+  });
+
+  function displayPreferences() {
+    return services.display?.getParams?.() || DEFAULT_DISPLAY;
+  }
 
   function markSourcesChanged(reason) {
     services.detection?.markSourcesChanged?.(reason);
@@ -136,7 +183,7 @@ export function createLocalAdsbLayer({
     const projected = screenProjectedRotation(
       viewer.scene,
       marker.position,
-      marker.trackDeg,
+      marker.courseDeg ?? 0,
       marker.lastRotation,
     );
     const stable = stabilizeScreenRotation(marker.lastRotation, projected);
@@ -144,7 +191,113 @@ export function createLocalAdsbLayer({
     return marker.lastRotation;
   }
 
-  function contextMetadata(id, record) {
+  function geoidN(lat, lon) {
+    if (!geoidReady || typeof services.geoid?.geoidHeight !== 'function')
+      return null;
+    try {
+      const value = services.geoid.geoidHeight(lat, lon);
+      return Number.isFinite(value) ? value : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Barometric feet → ellipsoidal render metres, as the Flights layer does
+   *  for a contact without a geometric altitude: baro + geoid N. */
+  function renderHeightM(marker, altitudeFt, lat, lon) {
+    if (marker.geoidN === null) marker.geoidN = geoidN(lat, lon);
+    const height = pickRenderAltitudeM({
+      geoAltM: null,
+      baroAltM: Number.isFinite(altitudeFt)
+        ? altitudeFt * FEET_TO_METERS
+        : null,
+      onGround: false,
+      surfaceM: null,
+      geoidN: marker.geoidN,
+    });
+    return Number.isFinite(height) ? height : (marker.geoidN ?? 0);
+  }
+
+  function fixPosition(marker, fix) {
+    return Cesium.Cartesian3.fromDegrees(
+      fix.lon,
+      fix.lat,
+      renderHeightM(marker, fix.altitudeFt, fix.lat, fix.lon),
+    );
+  }
+
+  function updateDisplay(marker, at) {
+    const display = marker.motion.displayAt(at);
+    if (!display) return;
+    marker.lat = display.lat;
+    marker.lon = display.lon;
+    marker.position = Cesium.Cartesian3.fromDegrees(
+      display.lon,
+      display.lat,
+      renderHeightM(marker, display.altitudeFt, display.lat, display.lon),
+      Cesium.Ellipsoid.WGS84,
+      marker.position || new Cesium.Cartesian3(),
+    );
+    if (display.courseDeg !== null) marker.courseDeg = display.courseDeg;
+  }
+
+  function billboardScale(marker) {
+    return (CLASS_SCALE_2D[marker.klass] || 1) *
+      (marker.onGround ? GROUND_SCALE : 1);
+  }
+
+  /** Class silhouette and per-class scale (×0.8 on the ground), magenta. */
+  function refreshClass(marker) {
+    const { klass, evidence } = localAdsbClass(
+      marker.record,
+      enrichment.get(marker.record.icao),
+    );
+    marker.evidence = evidence;
+    marker.klass = klass;
+    const billboard = marker.entity?.billboard;
+    if (!billboard) return;
+    if (marker.iconKind !== klass) {
+      marker.iconKind = klass;
+      billboard.image = aircraftIcon(klass);
+    }
+    const scale = billboardScale(marker);
+    if (marker.iconScale !== scale) {
+      marker.iconScale = scale;
+      billboard.scale = scale;
+    }
+  }
+
+  function plausibleRoute(marker, meta) {
+    const route = meta?.route;
+    if (!route || route.callsign !== marker.record.callsign) return null;
+    const record = marker.record;
+    const ok = routePlausible({
+      latDeg: marker.lat ?? record.lat,
+      lonDeg: marker.lon ?? record.lon,
+      altitudeM: Number.isFinite(record.altitudeFt)
+        ? record.altitudeFt * FEET_TO_METERS
+        : null,
+      verticalRateMps: Number.isFinite(record.verticalRateFpm)
+        ? (record.verticalRateFpm * FEET_TO_METERS) / 60
+        : null,
+      origin: route.origin,
+      destination: route.destination,
+    });
+    return ok ? route : null;
+  }
+
+  function cardModel(marker, at) {
+    const meta = enrichment.get(marker.record.icao);
+    return localAdsbCardModel(marker.record, at, {
+      aircraftClass: { klass: marker.klass, evidence: marker.evidence },
+      meta,
+      route: plausibleRoute(marker, meta),
+    });
+  }
+
+  function contextMetadata(id, marker) {
+    const record = marker.record;
+    const meta = enrichment.get(record.icao);
     return {
       id,
       layerId: LAYER_ID,
@@ -152,11 +305,14 @@ export function createLocalAdsbLayer({
       layerName: LAYER_NAME,
       source: localAdsbSourceText(record),
       label: localAdsbTitle(record),
-      latitude: record.lat,
-      longitude: record.lon,
+      latitude: marker.lat ?? record.lat,
+      longitude: marker.lon ?? record.lon,
       properties: {
         icao: record.icao,
         callsign: record.callsign,
+        category: record.category ?? null,
+        aircraftClass: marker.evidence ? marker.klass : null,
+        typeCode: meta?.typeCode ?? null,
         altitudeFt: record.altitudeFt,
         groundSpeedKt: record.groundSpeedKt,
         trackDeg: record.trackDeg,
@@ -186,25 +342,98 @@ export function createLocalAdsbLayer({
     });
   }
 
+  // ── Trail of the selected aircraft ──────────────────────────────────────
+
+  function releaseTrail() {
+    if (!selectedTrail) return;
+    selectedTrail.trail?.destroy();
+    if (selectedTrail.head && viewer && !viewer.isDestroyed?.()) {
+      try {
+        viewer.entities.remove(selectedTrail.head);
+      } catch {
+        /* torn down */
+      }
+    }
+    selectedTrail = null;
+  }
+
+  function refreshTrail() {
+    const marker = selectedId ? markers.get(selectedId) : null;
+    if (!marker || !selectedTrail?.trail) return;
+    const positions = marker.motion.fixes.map((fix) =>
+      fixPosition(marker, fix),
+    );
+    selectedTrail.lastFix = positions.at(-1) || null;
+    selectedTrail.trail.setPositions(positions);
+  }
+
+  function startTrail(marker) {
+    releaseTrail();
+    const createTrail = services.trails?.createTrail;
+    if (typeof createTrail !== 'function' || !viewer?.entities) return;
+    selectedTrail = {
+      id: marker.id,
+      trail: createTrail(viewer, { color: LOCAL_ADSB_COLOR, width: 2.5 }),
+      head: null,
+      lastFix: null,
+    };
+    // Live head: last heard fix → the extrapolated marker, every frame.
+    selectedTrail.head = viewer.entities.add({
+      // 'gev-trail' namespace: claimed by the trail pick owner so a click on
+      // the head segment never reads as empty space.
+      id: `gev-trail:local-adsb-head-${++trailHeadSeq}`,
+      polyline: {
+        positions: new Cesium.CallbackProperty(() => {
+          const current = markers.get(selectedTrail?.id);
+          const from = selectedTrail?.lastFix;
+          if (!current?.position || !from) return [];
+          return [from, Cesium.Cartesian3.clone(current.position)];
+        }, false),
+        width: 2.5,
+        material: color.withAlpha(0.9),
+        depthFailMaterial: color.withAlpha(0.45),
+        arcType: Cesium.ArcType.GEODESIC,
+      },
+    });
+    refreshTrail();
+  }
+
+  // ── Markers ─────────────────────────────────────────────────────────────
+
   function upsertMarker(record, at) {
     const id = `${ENTITY_PREFIX}${record.icao}`;
-    const position = Cesium.Cartesian3.fromDegrees(
-      record.lon,
-      record.lat,
-      heightMeters(record),
-    );
     let marker = markers.get(id);
     if (!marker) {
       marker = {
+        id,
         entity: null,
         record,
-        position,
-        trackDeg: Number.isFinite(record.trackDeg) ? record.trackDeg : 0,
+        motion: new LocalAdsbMotion(),
+        position: null,
+        lat: null,
+        lon: null,
+        courseDeg: Number.isFinite(record.trackDeg) ? record.trackDeg : null,
         lastRotation: 0,
+        klass: null,
+        evidence: false,
+        iconKind: null,
+        iconScale: null,
+        onGround: Boolean(record.onGround),
+        geoidN: null,
+        modelOwnsVisual: false,
       };
+      markers.set(id, marker);
+    }
+    marker.record = record;
+    marker.onGround = Boolean(record.onGround);
+    const rejectedBefore = marker.motion.rejectedFixes;
+    const newFix = marker.motion.observe(record, at);
+    rejectedFixes += marker.motion.rejectedFixes - rejectedBefore;
+    updateDisplay(marker, at);
+    if (!marker.entity) {
       marker.entity = dataSource.entities.add({
         id,
-        position,
+        position: new Cesium.CallbackProperty(() => marker.position, false),
         billboard: {
           image: aircraftIcon('airliner'),
           width: 20,
@@ -218,7 +447,10 @@ export function createLocalAdsbLayer({
             () => markerRotation(marker),
             false,
           ),
-          show: new Cesium.CallbackProperty(() => markerVisible(marker), false),
+          show: new Cesium.CallbackProperty(
+            () => !marker.modelOwnsVisual && markerVisible(marker),
+            false,
+          ),
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
           distanceDisplayCondition: new Cesium.DistanceDisplayCondition(
             0,
@@ -228,25 +460,46 @@ export function createLocalAdsbLayer({
       });
       marker.entity.gevTrackedId = id;
       marker.entity.gevDisplayPosition = () => marker.position;
-      markers.set(id, marker);
-    } else {
-      marker.position = position;
-      marker.entity.position = position;
     }
-    marker.record = record;
+    refreshClass(marker);
     const uat = localAdsbIsUat(record);
     if (uat !== Boolean(marker.entity.point))
       marker.entity.point = uat ? uatRing(marker) : undefined;
-    if (Number.isFinite(record.trackDeg)) marker.trackDeg = record.trackDeg;
-    marker.entity.gevLabelModel = localAdsbCardModel(record, at);
-    registerEntityContext(marker.entity, contextMetadata(id, record));
+    marker.entity.gevLabelModel = cardModel(marker, at);
+    registerEntityContext(marker.entity, contextMetadata(id, marker));
+    if (newFix && id === selectedId) refreshTrail();
     return id;
   }
 
   function clearSelection({ evicted = false } = {}) {
     if (!selectedId) return;
     selectedId = null;
+    releaseTrail();
     clearSelectedEntityContextForLayer(LAYER_ID, { evicted });
+  }
+
+  function refreshSelectedCard() {
+    const marker = selectedId ? markers.get(selectedId) : null;
+    if (!marker) return;
+    marker.entity.gevLabelModel = cardModel(marker, now());
+    services.overlays?.refreshReadout?.(marker.entity);
+  }
+
+  function updateRenderHold() {
+    const want = enabled && markers.size > 0;
+    if (want === renderHeld) return;
+    renderHeld = want;
+    if (want) holdContinuousRender(RENDER_HOLD_ID);
+    else releaseContinuousRender(RENDER_HOLD_ID);
+  }
+
+  function requestEnrichment() {
+    const selected = selectedId ? markers.get(selectedId) : null;
+    if (selected) enrichment.request(selected.record, { selected: true });
+    for (const id of models?.eligible || []) {
+      const marker = markers.get(id);
+      if (marker) enrichment.request(marker.record);
+    }
   }
 
   function sync() {
@@ -266,7 +519,7 @@ export function createLocalAdsbLayer({
     let removed = false;
     for (const [id, marker] of markers) {
       if (live.has(id)) continue;
-      dataSource.entities.remove(marker.entity);
+      if (marker.entity) dataSource.entities.remove(marker.entity);
       markers.delete(id);
       removed = true;
     }
@@ -275,13 +528,25 @@ export function createLocalAdsbLayer({
     removeEntityContextsForLayer(LAYER_ID, { retainIds: live });
     if (selectedId) {
       const selected = markers.get(selectedId);
-      if (getSelectedEntityContext()?.id !== selectedId) selectedId = null;
-      else services.overlays?.refreshReadout?.(selected.entity);
+      if (getSelectedEntityContext()?.id !== selectedId) {
+        selectedId = null;
+        releaseTrail();
+      } else services.overlays?.refreshReadout?.(selected.entity);
     }
+    requestEnrichment();
+    updateRenderHold();
     if (live.size || removed) governorRequestRender('local-adsb-update');
     // Detection re-solves labels only when the set of contacts changes, not
     // on every position report.
     if (added || removed) markSourcesChanged('local-adsb-update');
+  }
+
+  /** Per-frame pass: smooth positions and courses, then 3D models. */
+  function frame() {
+    if (!enabled || !markers.size) return;
+    const at = now();
+    for (const marker of markers.values()) updateDisplay(marker, at);
+    models?.frame(markers, displayPreferences(), at);
   }
 
   function scheduleSync(nextState) {
@@ -298,10 +563,19 @@ export function createLocalAdsbLayer({
     const marker = markers.get(id);
     if (!marker) return false;
     selectedId = id;
-    marker.entity.gevLabelModel = localAdsbCardModel(marker.record, now());
+    enrichment.request(marker.record, { selected: true });
+    marker.entity.gevLabelModel = cardModel(marker, now());
     selectEntityContext(marker.entity);
+    startTrail(marker);
     governorRequestRender('local-adsb-selection');
     return true;
+  }
+
+  function pickedId(picked) {
+    const resolved = services.picking.resolvePickId?.(picked);
+    if (resolved !== undefined) return resolved;
+    if (typeof picked?.id === 'string') return picked.id;
+    return typeof picked?.id?.id === 'string' ? picked.id.id : null;
   }
 
   function installInteraction() {
@@ -310,8 +584,7 @@ export function createLocalAdsbLayer({
     clickHandler.setInputAction((click) => {
       // A tool owns the pointer (src/data/inputOwnership.js): yield the click.
       if (!isPointerFree() || !enabled) return;
-      const picked = viewer.scene.pick(click.position);
-      const id = typeof picked?.id?.id === 'string' ? picked.id.id : null;
+      const id = pickedId(viewer.scene.pick(click.position));
       if (id && markers.has(id) && id !== selectedId) selectMarker(id);
       else if (selectedId) {
         // Another contact, empty map or the same marker releases only this
@@ -327,23 +600,34 @@ export function createLocalAdsbLayer({
     clickHandler = null;
   }
 
+  function installFrame() {
+    if (removePreRender || !viewer?.scene?.preRender?.addEventListener) return;
+    removePreRender = viewer.scene.preRender.addEventListener(frame);
+  }
+
+  function releaseFrame() {
+    removePreRender?.();
+    removePreRender = null;
+  }
+
   function positionRows(maxCount = 500) {
     if (!enabled) return [];
-    return freshRecords()
-      .slice(0, maxCount)
-      .map((record) => ({
-        id: record.icao,
-        label: localAdsbTitle(record),
-        callsign: record.callsign,
-        position: Cesium.Cartesian3.fromDegrees(
-          record.lon,
-          record.lat,
-          heightMeters(record),
-        ),
-        latitude: record.lat,
-        longitude: record.lon,
-        altitudeM: heightMeters(record),
-      }));
+    const rows = [];
+    for (const marker of markers.values()) {
+      if (rows.length >= maxCount) break;
+      if (!marker.position) continue;
+      const carto = Cesium.Cartographic.fromCartesian(marker.position);
+      rows.push({
+        id: marker.record.icao,
+        label: localAdsbTitle(marker.record),
+        callsign: marker.record.callsign,
+        position: Cesium.Cartesian3.clone(marker.position),
+        latitude: marker.lat,
+        longitude: marker.lon,
+        altitudeM: carto?.height ?? 0,
+      });
+    }
+    return rows;
   }
 
   return {
@@ -363,6 +647,24 @@ export function createLocalAdsbLayer({
       dataSource = new Cesium.CustomDataSource(LAYER_ID);
       dataSource.show = false;
       viewer.dataSources.add(dataSource);
+      if (viewer.scene?.primitives) {
+        models = createLocalAdsbModels({
+          viewer,
+          color,
+          resolveAsset,
+          groundSnap: services.groundSnap?.createGroundSnap?.() || null,
+          ...(loadModel ? { loadModel } : {}),
+        });
+      }
+      services.geoid
+        ?.ensureGeoidReady?.()
+        ?.then(() => {
+          geoidReady = true;
+          for (const marker of markers.values()) marker.geoidN = null;
+        })
+        ?.catch(() => {
+          /* the baro path stays un-geoid-corrected */
+        });
       unsubscribe = receiver.subscribe?.(scheduleSync) || null;
       unsubscribeFeeds = feeds?.subscribe?.(requestSync) || null;
       return true;
@@ -371,8 +673,9 @@ export function createLocalAdsbLayer({
     async enable() {
       enabled = true;
       if (dataSource) dataSource.show = true;
-      registerPickOwner(LAYER_ID, (pickedId) => markers.has(pickedId));
+      registerPickOwner(LAYER_ID, (pickedValue) => markers.has(pickedValue));
       installInteraction();
+      installFrame();
       clearInterval(tickTimer);
       tickTimer = setInterval(sync, LOCAL_ADSB_TICK_MS);
       feeds?.start?.();
@@ -391,8 +694,10 @@ export function createLocalAdsbLayer({
       clearInterval(tickTimer);
       tickTimer = null;
       releaseInteraction();
+      releaseFrame();
       unregisterPickOwner(LAYER_ID);
       sync();
+      models?.clear();
       if (dataSource) dataSource.show = false;
       markSourcesChanged('local-adsb-disabled');
       return true;
@@ -401,6 +706,7 @@ export function createLocalAdsbLayer({
     async update() {
       state = receiver.getState();
       sync();
+      frame();
       return true;
     },
 
@@ -411,15 +717,20 @@ export function createLocalAdsbLayer({
       tickTimer = null;
       syncTimer = null;
       releaseInteraction();
+      releaseFrame();
       unregisterPickOwner(LAYER_ID);
       unsubscribe?.();
       unsubscribe = null;
       unsubscribeFeeds?.();
       unsubscribeFeeds = null;
       feeds?.destroy?.();
+      enrichment.destroy();
       clearSelection();
       removeEntityContextsForLayer(LAYER_ID);
       markers.clear();
+      updateRenderHold();
+      models?.destroy();
+      models = null;
       if (viewer && dataSource) viewer.dataSources.remove(dataSource, true);
       dataSource = null;
       viewer = null;
@@ -440,6 +751,10 @@ export function createLocalAdsbLayer({
         count: positioned,
         lastUpdate,
         source: LAYER_SOURCE,
+        // Fixes refused by the speed check: the browser decoder's own count
+        // plus the layer's check on every merged record.
+        rejectedPositions:
+          Math.max(0, Number(current.positionsRejected) || 0) + rejectedFixes,
         ...localAdsbStatus({
           receiver: current,
           feedState: feeds?.getState?.() || null,

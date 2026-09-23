@@ -1,3 +1,4 @@
+import { AIRCRAFT_CLASS_LABELS } from '../../data/aircraftClass.js';
 import {
   BAND_LABELS,
   HEARD_BY_RECEIVER,
@@ -79,12 +80,35 @@ export function localAdsbSourceText(record) {
 }
 
 /**
+ * Class line of the click card, e.g. "Helicopter · A7". Empty when neither an
+ * ICAO type nor an emitter category backs the class.
+ * @param {object} record Local ADS-B record.
+ * @param {{klass?:string, evidence?:boolean}} [aircraftClass]
+ * @returns {string}
+ */
+export function localAdsbClassLine(record, aircraftClass = {}) {
+  if (!aircraftClass.evidence) return '';
+  const label = AIRCRAFT_CLASS_LABELS[aircraftClass.klass];
+  return [label, record?.category].filter(Boolean).join(' · ');
+}
+
+/**
  * Click-card presentation for one locally heard aircraft.
  * @param {object} record Local ADS-B record.
  * @param {number} nowMs Current epoch ms, for the position age.
+ * @param {object} [extras]
+ * @param {{klass:string, evidence:boolean}} [extras.aircraftClass] Class and
+ *   whether a type or category backs it.
+ * @param {object|null} [extras.meta] adsbdb metadata (typeCode, typeName,
+ *   airline).
+ * @param {object|null} [extras.route] A route already judged plausible.
  * @returns {{title:string, details:string[], accent:string}}
  */
-export function localAdsbCardModel(record, nowMs) {
+export function localAdsbCardModel(
+  record,
+  nowMs,
+  { aircraftClass = null, meta = null, route = null } = {},
+) {
   const icao = String(record?.icao || '').toUpperCase();
   const altitude = rounded(record?.altitudeFt);
   const speed = rounded(record?.groundSpeedKt);
@@ -94,15 +118,26 @@ export function localAdsbCardModel(record, nowMs) {
     ? Math.max(0, Math.round((nowMs - record.lastPositionAt) / 1000))
     : null;
   const messages = Math.max(0, Math.trunc(Number(record?.messageCount) || 0));
+  // Same identity and route lines the public flight card shows.
+  const identity = [meta?.airline, meta?.typeName || meta?.typeCode]
+    .filter(Boolean)
+    .join(' · ');
+  const routeLine =
+    route?.origin?.code && route?.destination?.code
+      ? `${route.origin.code} → ${route.destination.code}`
+      : '';
   return {
     title: localAdsbTitle(record),
     details: [
       `ICAO ${icao} · ${record?.callsign || 'NO CALLSIGN'}`,
+      localAdsbClassLine(record, aircraftClass || {}),
+      identity,
+      routeLine,
       `ALT ${grouped(altitude)} FT · GS ${speed === null ? DASH : speed} KT · TRK ${track === null ? DASH : `${track}°`}`,
       `V/S ${vertical === null ? DASH : `${vertical > 0 ? '+' : ''}${grouped(vertical)} FPM`}`,
       `POSITION ${ageS === null ? DASH : `${ageS} S AGO`} · ${messages} ${messages === 1 ? 'MSG' : 'MSGS'}`,
       localAdsbReceiverLine(record),
-    ],
+    ].filter(Boolean),
     accent: LOCAL_ADSB_COLOR,
   };
 }

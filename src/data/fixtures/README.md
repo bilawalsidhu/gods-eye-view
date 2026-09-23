@@ -12,3 +12,11 @@
   `adsb-austin-dump1090-aircraft.json` — dump1090-fa's `aircraft.json` decode
   of the same frames, trimmed to the fields the tests assert on. Used by the
   Local ADS-B decoder and record-adapter tests; never loaded at runtime.
+- `adsb-austin-capture-timed.json` — a second ~90 s receive over Austin, TX:
+  846 extended squitters from six aircraft (`frames`: `[ms, hex]`), with
+  dump1090-fa's decoded positions and emitter categories for the same
+  interval (`dump1090`: per ICAO `flight`, `category` and `fixes` as
+  `[ms, lat, lon]`). The capture has no per-frame timestamps; each frame's
+  time is interpolated between the frames whose decoded position equals a
+  dump1090 fix, timed as dump1090's `now − seen_pos`. Used by the decoder's
+  category, speed-check and track-accuracy tests; never loaded at runtime.

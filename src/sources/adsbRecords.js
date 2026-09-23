@@ -15,6 +15,10 @@
  *   groundSpeedKt: number|null,
  *   trackDeg: number|null,        // true track over ground, [0, 360)
  *   verticalRateFpm: number|null,
+ *   category: string|null,        // ADS-B emitter category, dump1090 style
+ *                                 // ('A1' light, 'A3' large, 'A7' rotorcraft…)
+ *   onGround: boolean,            // the receiver reported the aircraft on the
+ *                                 // surface (dump1090 `alt_baro: "ground"`)
  *   lastPositionAt: number|null,  // epoch ms of the newest decoded position
  *   lastMessageAt: number,        // epoch ms of the newest CRC-valid message
  *   messageCount: number,
@@ -32,6 +36,27 @@ export const LOCAL_ADSB_POSITION_STALE_MS = 60_000;
 export const LOCAL_ADSB_MESSAGE_STALE_MS = 60_000;
 
 const ICAO_PATTERN = /^[0-9a-f]{6}$/;
+const CATEGORY_PATTERN = /^[A-D][0-7]$/;
+
+/** A previous accepted fix older than this is no reference for a new one. */
+export const LOCAL_ADSB_REFERENCE_MAX_AGE_MS = 10 * 60_000;
+/** Speed limit (kt) for an aircraft that has not reported a ground speed. */
+export const LOCAL_ADSB_UNKNOWN_SPEED_LIMIT_KT = 1_000;
+/** Tighter limit (kt) for light aircraft and rotorcraft without a speed. */
+export const LOCAL_ADSB_SLOW_CATEGORY_LIMIT_KT = 350;
+/** Reported ground speed is multiplied by this, plus the margin below. */
+export const LOCAL_ADSB_SPEED_FACTOR = 1.5;
+export const LOCAL_ADSB_SPEED_MARGIN_KT = 50;
+/** Distance always allowed between two fixes (CPR and reception error). */
+export const LOCAL_ADSB_POSITION_MARGIN_M = 500;
+/**
+ * After this many consecutive rejected fixes the newest one becomes the new
+ * reference: the previously accepted fix was the outlier, not the stream.
+ */
+export const LOCAL_ADSB_REANCHOR_AFTER = 3;
+const SLOW_CATEGORIES = new Set(['A1', 'A7', 'B1', 'B4']);
+const KT_TO_MPS = 1852 / 3600;
+const EARTH_RADIUS_M = 6_371_008.8;
 
 function finiteOrNull(value) {
   const number = typeof value === 'string' ? Number.NaN : Number(value);
@@ -58,6 +83,69 @@ function normalizeCallsign(value) {
 function normalizeTrack(value) {
   const track = finiteOrNull(value);
   return track === null ? null : ((track % 360) + 360) % 360;
+}
+
+/**
+ * Normalize an ADS-B emitter category to the dump1090 string ('A7').
+ * @param {unknown} value
+ * @returns {string|null}
+ */
+export function normalizeAdsbCategory(value) {
+  const category = String(value ?? '')
+    .trim()
+    .toUpperCase();
+  return CATEGORY_PATTERN.test(category) ? category : null;
+}
+
+function surfaceDistanceM(lat1, lon1, lat2, lon2) {
+  const toRad = Math.PI / 180;
+  const dLat = (lat2 - lat1) * toRad;
+  const dLon = (lon2 - lon1) * toRad;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * toRad) * Math.cos(lat2 * toRad) * Math.sin(dLon / 2) ** 2;
+  return 2 * EARTH_RADIUS_M * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+
+/**
+ * dump1090-style position sanity check: whether `next` is reachable from the
+ * previous accepted fix at a plausible speed. The allowance is a fixed
+ * reception margin plus the distance covered in the elapsed time + 1 s at
+ * 1.5 × the reported ground speed + 50 kt, or at 1,000 kt (350 kt for light
+ * aircraft, gliders and rotorcraft) when no speed is known. Without a
+ * reference younger than 10 minutes every fix is plausible.
+ * @param {{lat:number, lon:number, at:number}|null} previous Last accepted fix.
+ * @param {{lat:number, lon:number, at:number}} next Candidate fix.
+ * @param {{groundSpeedKt?:number|null, category?:string|null}} [options]
+ * @returns {boolean}
+ */
+export function localAdsbFixIsPlausible(
+  previous,
+  next,
+  { groundSpeedKt = null, category = null } = {},
+) {
+  if (
+    !previous ||
+    !Number.isFinite(previous.lat) ||
+    !Number.isFinite(previous.lon) ||
+    !Number.isFinite(previous.at) ||
+    !Number.isFinite(next?.at)
+  )
+    return true;
+  const elapsedMs = next.at - previous.at;
+  if (elapsedMs < 0 || elapsedMs > LOCAL_ADSB_REFERENCE_MAX_AGE_MS) return true;
+  const limitKt = Number.isFinite(groundSpeedKt)
+    ? Math.max(0, groundSpeedKt) * LOCAL_ADSB_SPEED_FACTOR +
+      LOCAL_ADSB_SPEED_MARGIN_KT
+    : SLOW_CATEGORIES.has(normalizeAdsbCategory(category))
+      ? LOCAL_ADSB_SLOW_CATEGORY_LIMIT_KT
+      : LOCAL_ADSB_UNKNOWN_SPEED_LIMIT_KT;
+  const allowedM =
+    LOCAL_ADSB_POSITION_MARGIN_M +
+    ((elapsedMs + 1_000) / 1_000) * limitKt * KT_TO_MPS;
+  return (
+    surfaceDistanceM(previous.lat, previous.lon, next.lat, next.lon) <= allowedM
+  );
 }
 
 function normalizePosition(lat, lon) {
@@ -87,6 +175,8 @@ export function recordFromDecoderTrack(track) {
   return {
     icao,
     callsign: normalizeCallsign(track.callsign),
+    category: normalizeAdsbCategory(track.category),
+    onGround: false,
     lat,
     lon,
     altitudeFt: finiteOrNull(track.altitudeFt),
@@ -134,6 +224,8 @@ export function normalizeDump1090Aircraft(json, nowMs, { band = '1090' } = {}) {
     records.push({
       icao,
       callsign: normalizeCallsign(entry.flight),
+      category: normalizeAdsbCategory(entry.category),
+      onGround: entry.alt_baro === 'ground',
       lat: hasPosition ? position.lat : null,
       lon: hasPosition ? position.lon : null,
       altitudeFt: altitude,
@@ -237,7 +329,8 @@ export function localAdsbRecordIsNewer(candidate, current) {
  *
  * Keeps the record with the most recent position (tie: most recent message)
  * and annotates it with every band and source that heard the aircraft within
- * the last 60 s. `memory` (a Map owned by the caller) carries those
+ * the last 60 s. A category missing from the winning record is taken from
+ * another input that decoded it. `memory` (a Map owned by the caller) carries those
  * receptions across calls, so an input that drops an aircraft does not erase
  * that it was heard there moments ago.
  * @param {object[][]} inputs Record lists; each record has `band`/`source`.
@@ -248,9 +341,12 @@ export function localAdsbRecordIsNewer(candidate, current) {
  */
 export function mergeLocalAdsbRecords(inputs, nowMs, memory = new Map()) {
   const best = new Map();
+  const categories = new Map();
   for (const list of Array.isArray(inputs) ? inputs : []) {
     for (const record of Array.isArray(list) ? list : []) {
       if (!record?.icao || !localAdsbRecordIsLive(record, nowMs)) continue;
+      if (record.category && !categories.has(record.icao))
+        categories.set(record.icao, record.category);
       const current = best.get(record.icao);
       if (!current || localAdsbRecordIsNewer(record, current))
         best.set(record.icao, record);
@@ -279,6 +375,7 @@ export function mergeLocalAdsbRecords(inputs, nowMs, memory = new Map()) {
     }
     merged.push({
       ...record,
+      category: record.category || categories.get(icao) || null,
       bands: ordered(bands, BAND_ORDER),
       sources: ordered(sources, SOURCE_ORDER),
     });

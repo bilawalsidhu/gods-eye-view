@@ -1,3 +1,9 @@
+import {
+  LOCAL_ADSB_REANCHOR_AFTER,
+  LOCAL_ADSB_REFERENCE_MAX_AGE_MS,
+  localAdsbFixIsPlausible,
+} from '../sources/adsbRecords.js';
+
 const MODE_S_POLYNOMIAL = 0xfff409;
 /** An aircraft with no CRC-valid message for this long is removed. */
 export const LOCAL_ADSB_STALE_MS = 60_000;
@@ -177,7 +183,9 @@ export function decodeAdsbMessage(bytes, { receivedAt = Date.now() } = {}) {
   const message = { icao, typeCode, receivedAt };
   if (typeCode >= 1 && typeCode <= 4) {
     message.callsign = decodeCallsign(bytes);
-    message.category = bits(bytes, 37, 3);
+    // dump1090 convention: category set A = TC 4, B = TC 3, C = TC 2, D = TC 1,
+    // followed by the 3-bit emitter category ('A7' rotorcraft, 'A1' light).
+    message.category = `${String.fromCharCode(69 - typeCode)}${bits(bytes, 37, 3)}`;
   } else if (typeCode >= 9 && typeCode <= 18) {
     message.altitudeFt = decodeAltitude(bytes);
     message.cpr = {
@@ -192,8 +200,40 @@ export function decodeAdsbMessage(bytes, { receivedAt = Date.now() } = {}) {
   return message;
 }
 
-/** Merge one decoded message into a stable aircraft record. */
-export function updateAircraftTrack(tracks, message, receiverLocation = null) {
+function recentReference(track, receivedAt) {
+  if (
+    !Number.isFinite(track.latitude) ||
+    !Number.isFinite(track.longitude) ||
+    !Number.isFinite(track.lastPositionAt) ||
+    receivedAt - track.lastPositionAt > LOCAL_ADSB_REFERENCE_MAX_AGE_MS
+  )
+    return null;
+  return { latitude: track.latitude, longitude: track.longitude };
+}
+
+/**
+ * Merge one decoded message into a stable aircraft record.
+ *
+ * A position comes from a fresh even/odd pair (global CPR), else from one
+ * frame decoded relative to the aircraft's own last accepted position when it
+ * is under 10 minutes old, else relative to the receiver location. Every
+ * candidate then passes the dump1090-style speed check against the last
+ * accepted fix; a failing fix is counted (`rejectedPositions` on the track and
+ * `positionsRejected` on the optional `stats`) and not applied. From the
+ * third consecutive rejection on, a globally decoded fix is accepted as the
+ * new reference, so one bad accepted fix cannot freeze a track.
+ * @param {Map<string, object>} tracks Tracks keyed by uppercase ICAO.
+ * @param {object} message Output of `decodeAdsbMessage`.
+ * @param {{latitude:number, longitude:number}|null} [receiverLocation]
+ * @param {{positionsRejected?:number}} [stats] Mutable decoder counters.
+ * @returns {object|null} The updated track.
+ */
+export function updateAircraftTrack(
+  tracks,
+  message,
+  receiverLocation = null,
+  stats = null,
+) {
   if (!(tracks instanceof Map) || !message?.icao) return null;
   const prior = tracks.get(message.icao) || {
     icao: message.icao,
@@ -210,6 +250,8 @@ export function updateAircraftTrack(tracks, message, receiverLocation = null) {
     lastPositionAt: null,
     cprEven: null,
     cprOdd: null,
+    rejectedPositions: 0,
+    rejectStreak: 0,
   };
   const next = {
     ...prior,
@@ -230,12 +272,42 @@ export function updateAircraftTrack(tracks, message, receiverLocation = null) {
   if (message.cpr) {
     if (message.cpr.odd) next.cprOdd = message.cpr;
     else next.cprEven = message.cpr;
+    const reference = recentReference(prior, message.receivedAt);
+    const global = decodeGlobalCpr(next.cprEven, next.cprOdd);
     const position =
-      decodeGlobalCpr(next.cprEven, next.cprOdd) ||
+      global ||
+      decodeLocalCpr(message.cpr, reference) ||
       decodeLocalCpr(message.cpr, receiverLocation);
     if (position) {
-      Object.assign(next, position);
-      next.lastPositionAt = message.receivedAt;
+      const plausible =
+        !reference ||
+        localAdsbFixIsPlausible(
+          {
+            lat: prior.latitude,
+            lon: prior.longitude,
+            at: prior.lastPositionAt,
+          },
+          {
+            lat: position.latitude,
+            lon: position.longitude,
+            at: message.receivedAt,
+          },
+          { groundSpeedKt: next.speedKt, category: next.category },
+        );
+      const reanchor =
+        !plausible &&
+        Boolean(global) &&
+        (prior.rejectStreak || 0) + 1 >= LOCAL_ADSB_REANCHOR_AFTER;
+      if (plausible || reanchor) {
+        Object.assign(next, position);
+        next.lastPositionAt = message.receivedAt;
+        next.rejectStreak = 0;
+      } else {
+        next.rejectedPositions = (prior.rejectedPositions || 0) + 1;
+        next.rejectStreak = (prior.rejectStreak || 0) + 1;
+        if (stats)
+          stats.positionsRejected = (stats.positionsRejected || 0) + 1;
+      }
     }
   }
   tracks.set(message.icao, next);

@@ -139,6 +139,7 @@ export class SdrController {
       messagesPerSecond: null,
       aircraftHeard: 0,
       aircraftPositioned: 0,
+      positionsRejected: 0,
       deviceLabel: null,
       receiverLocation: null,
       locationStatus: 'unknown',
@@ -323,6 +324,9 @@ export class SdrController {
       aircraft: publicAircraft(message.aircraft),
       decodedMessages: this.state.decodedMessages + decodedCount,
     };
+    // Cumulative count of fixes the decoder's speed check refused.
+    if (Number.isFinite(message.positionsRejected))
+      patch.positionsRejected = Math.max(0, message.positionsRejected);
     if (elapsed >= RATE_WINDOW_MS) {
       patch.messagesPerSecond =
         Math.round(((this._messageWindowCount * 1_000) / elapsed) * 10) / 10;

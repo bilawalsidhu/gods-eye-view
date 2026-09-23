@@ -5,8 +5,11 @@ import { readFileSync } from 'node:fs';
 import {
   LOCAL_ADSB_MESSAGE_STALE_MS,
   LOCAL_ADSB_POSITION_STALE_MS,
+  LOCAL_ADSB_REFERENCE_MAX_AGE_MS,
+  localAdsbFixIsPlausible,
   localAdsbPositionIsFresh,
   localAdsbRecordIsLive,
+  normalizeAdsbCategory,
   mergeLocalAdsbRecords,
   normalizeDump1090Aircraft,
   recordFromDecoderTrack,
@@ -32,6 +35,8 @@ test('dump1090 aircraft.json maps to the shared local ADS-B records', () => {
   assert.deepEqual(byIcao.get('ae5d8a'), {
     icao: 'ae5d8a',
     callsign: 'SHINR42',
+    category: null,
+    onGround: false,
     lat: 30.269662,
     lon: -97.793262,
     altitudeFt: 1600,
@@ -70,14 +75,26 @@ test('dump1090 adapter skips invalid addresses and tolerates missing fields', ()
       aircraft: [
         { hex: '~12ab34', seen: 1 },
         { hex: 'zzzzzz' },
-        { hex: 'ABC123', alt_baro: 'ground', lat: 95, lon: 10, seen_pos: 1 },
+        {
+          hex: 'ABC123',
+          alt_baro: 'ground',
+          lat: 95,
+          lon: 10,
+          seen_pos: 1,
+          category: 'a7',
+        },
+        { hex: 'def456', category: 'E9', seen: 1 },
       ],
     },
     10_000,
   );
-  assert.equal(records.length, 1);
+  assert.equal(records.length, 2);
   assert.equal(records[0].icao, 'abc123');
   assert.equal(records[0].altitudeFt, 0);
+  assert.equal(records[0].onGround, true, 'dump1090 "ground" is kept');
+  assert.equal(records[0].category, 'A7');
+  assert.equal(records[1].category, null, 'an invalid category is dropped');
+  assert.equal(records[1].onGround, false);
   assert.equal(records[0].lat, null, 'out-of-range latitude is rejected');
   assert.equal(records[0].lastMessageAt, 10_000);
   assert.deepEqual(normalizeDump1090Aircraft(null, 1), []);
@@ -88,6 +105,7 @@ test('decoder tracks map to the same record shape', () => {
   const record = recordFromDecoderTrack({
     icao: 'AE5D8A',
     callsign: 'SHINR42',
+    category: 'A1',
     latitude: 30.27,
     longitude: -97.79,
     altitudeFt: 1600,
@@ -102,6 +120,8 @@ test('decoder tracks map to the same record shape', () => {
   assert.deepEqual(record, {
     icao: 'ae5d8a',
     callsign: 'SHINR42',
+    category: 'A1',
+    onGround: false,
     lat: 30.27,
     lon: -97.79,
     altitudeFt: 1600,
@@ -226,4 +246,77 @@ test('merge remembers the bands and sources that heard an aircraft for 60 s', ()
   assert.deepEqual(merged.sources, ['webusb']);
   assert.deepEqual(mergeLocalAdsbRecords([[], []], 200_000, memory), []);
   assert.equal(memory.size, 0, 'the reception log is pruned');
+});
+
+test('emitter categories normalize to the dump1090 strings', () => {
+  assert.equal(normalizeAdsbCategory('a7'), 'A7');
+  assert.equal(normalizeAdsbCategory(' B1 '), 'B1');
+  assert.equal(normalizeAdsbCategory('A8'), null);
+  assert.equal(normalizeAdsbCategory(7), null);
+  assert.equal(normalizeAdsbCategory(null), null);
+});
+
+test('merging keeps a category decoded by any input', () => {
+  const base = {
+    icao: 'a0b702',
+    lat: 30.2,
+    lon: -97.8,
+    lastMessageAt: 10_000,
+    band: '1090',
+  };
+  const [merged] = mergeLocalAdsbRecords(
+    [
+      [{ ...base, category: null, lastPositionAt: 9_900, source: 'webusb' }],
+      [{ ...base, category: 'A7', lastPositionAt: 9_000, source: 'feed' }],
+    ],
+    10_000,
+  );
+  assert.equal(merged.source, 'webusb', 'the newest position still wins');
+  assert.equal(merged.category, 'A7');
+});
+
+test('the position sanity check follows dump1090: speed × 1.5 + margin over elapsed + 1 s', () => {
+  const from = { lat: 30, lon: -97, at: 0 };
+  // 1 nm north in 10 s: 360 kt.
+  const next = { lat: 30 + 1 / 60, lon: -97, at: 10_000 };
+  assert.equal(localAdsbFixIsPlausible(null, next), true, 'no reference');
+  assert.equal(
+    localAdsbFixIsPlausible(from, next, { groundSpeedKt: 300 }),
+    true,
+    '300 kt reported allows 500 kt',
+  );
+  assert.equal(
+    localAdsbFixIsPlausible(from, next, { groundSpeedKt: 120 }),
+    false,
+    '120 kt reported allows 230 kt',
+  );
+  assert.equal(
+    localAdsbFixIsPlausible(from, next),
+    true,
+    'unknown speed allows 1,000 kt',
+  );
+  // 2 nm in 10 s: 720 kt.
+  const fast = { lat: 30 + 2 / 60, lon: -97, at: 10_000 };
+  assert.equal(localAdsbFixIsPlausible(from, fast), true);
+  assert.equal(
+    localAdsbFixIsPlausible(from, fast, { category: 'A7' }),
+    false,
+    'rotorcraft without a speed are capped at 350 kt',
+  );
+  assert.equal(
+    localAdsbFixIsPlausible(
+      from,
+      { ...next, lat: 31, at: LOCAL_ADSB_REFERENCE_MAX_AGE_MS + 1 },
+      { groundSpeedKt: 100 },
+    ),
+    true,
+    'a reference older than 10 minutes proves nothing',
+  );
+  assert.equal(
+    localAdsbFixIsPlausible(from, { lat: 30.004, lon: -97, at: 0 }, {
+      groundSpeedKt: 0,
+    }),
+    true,
+    'the fixed 500 m margin absorbs CPR and reception error',
+  );
 });

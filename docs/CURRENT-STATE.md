@@ -4121,19 +4121,56 @@ reception does not interrupt internet radio.
 
 The Local ADS-B layer (`local-adsb`, `src/layers/localAdsb/`) is off by default
 and registered as local-only: it never enters share links or stored layer
-state. Its aircraft draw as magenta heading-oriented markers alongside the
-public Flights layer, which renders about one poll interval behind, so local
-markers lead slightly. A marker drops once its newest position is 60 s old; an
-aircraft is forgotten after 60 s without a message. Clicking a marker opens a
-readout card (ICAO, callsign, altitude, ground speed, track, vertical rate,
-position age, message count, "Heard by your receiver"); markers are not
-camera-followed. Positioned aircraft join detection boxes, labelled only with a
-decoded callsign.
+state. Its aircraft get the public Flights treatment in magenta, alongside
+the public Flights layer, which renders about one poll interval behind, so
+local markers lead:
+
+- **Class.** Each aircraft is classified with `aircraftClass.js` from its
+  ADS-B emitter category (dump1090 strings: `A1` light, `A3` large, `A7`
+  rotorcraft; set A/B/C/D = type code 4/3/2/1) and, once known, its adsbdb
+  ICAO type. Silhouette and per-class scale come from `aircraftIcons.js`
+  (×0.8 on the ground), tinted magenta.
+- **3D.** The DISPLAY rail's 3D toggle and its proximity/all mode apply: the
+  layer reads the Flights layer's `models3d` params and uses the same ceiling,
+  caps, add/keep radii, visible-first eligibility
+  (`src/data/modelEligibility.js`) and per-class GLB
+  (`src/layers/flights/modelSpec.js`), tinted magenta through the same MIX
+  colour blend Flights uses for military amber. Heights are barometric +
+  geoid N, as Flights renders a contact without a geometric altitude; a
+  grounded model rides the one-shot ground snap and belly offset.
+- **Motion.** No display delay. The marker is extrapolated forward from the
+  newest fix with `motionModel.js` (arc extrapolation, path-derived course
+  blended over the reported track, rate-limited slew); a new fix is absorbed
+  by a correction that decays over 900 ms. Coasting continues while messages
+  arrive and stops 10 s after the last one (60 s at most).
+- **Sanity filter.** The browser decoder prefers a fresh even/odd pair, then a
+  frame decoded relative to the aircraft's own position (under 10 minutes
+  old), then the receiver location. Every fix must be reachable from the last
+  accepted one at 1.5 × reported ground speed + 50 kt (1,000 kt without a
+  speed, 350 kt for A1/A7/B1/B4) over the elapsed time + 1 s, plus 500 m.
+  Refused fixes are counted (`positionsRejected` in the SDR state; the layer
+  applies the same check to merged feed records and reports the total as
+  `rejectedPositions` in its stats). Three refusals in a row re-anchor.
+- **Trail.** A selected aircraft draws a magenta trail of the positions the
+  receiver heard (up to 10 minutes / 600 fixes, dropped with the aircraft),
+  with the tracked-flight trail look and a live head segment. No network
+  backfill.
+- **Enrichment.** Only the selected aircraft (type + route) and aircraft
+  about to render as models (type) are looked up, through the Flights
+  source's cached adsbdb proxy with the same once-per-session, four-in-flight,
+  200 ms drip rules.
+
+A marker drops once its newest position is 60 s old; an aircraft is forgotten
+after 60 s without a message. Clicking a marker opens a readout card (ICAO,
+callsign, class and category, adsbdb operator/type and a plausible route when
+known, altitude, ground speed, track, vertical rate, position age, message
+count, "Heard by your receiver"); markers are not camera-followed. Positioned
+aircraft join detection boxes, labelled only with a decoded callsign.
 
 Receivers publish one record shape from `src/sources/adsbRecords.js`
-(`icao`, `callsign`, `lat`, `lon`, `altitudeFt`, `groundSpeedKt`, `trackDeg`,
-`verticalRateFpm`, `lastPositionAt`, `lastMessageAt`, `messageCount`,
-`rssiDbfs`, `band`, `source`). `band` is `1090` or `978`; `source` is
+(`icao`, `callsign`, `category`, `onGround`, `lat`, `lon`, `altitudeFt`,
+`groundSpeedKt`, `trackDeg`, `verticalRateFpm`, `lastPositionAt`,
+`lastMessageAt`, `messageCount`, `rssiDbfs`, `band`, `source`). `band` is `1090` or `978`; `source` is
 `webusb` (browser SDR) or `feed` (decoder feed).
 `normalizeDump1090Aircraft(json, nowMs, { band })` maps a dump1090/readsb/
 skyaware978 `aircraft.json` document into the same records. Voice
