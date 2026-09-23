@@ -131,6 +131,51 @@ test('an unchanged position still delivers newer altitude and velocity', () => {
   assert.ok(Math.abs(display.lat) < 1e-9, 'a stopped aircraft does not coast');
 });
 
+test('a delayed position never rolls back newer telemetry', () => {
+  const motion = new LocalAdsbMotion();
+  const step100 = (100 * 1852) / 3600 / 111_195;
+  assert.equal(
+    motion.observe(
+      fix(10_000, 0, { altitudeFt: 1_000, groundSpeedKt: 100 }),
+      10_000,
+    ),
+    true,
+  );
+  // Velocity and altitude heard at 20 s, no new position.
+  motion.observe(
+    fix(10_000, 0, {
+      altitudeFt: 1_500,
+      groundSpeedKt: 0,
+      lastMessageAt: 20_000,
+    }),
+    20_000,
+  );
+  assert.equal(motion.anchor.speedMps, 0);
+  assert.equal(motion.telemetryAt, 20_000);
+  // Another receiver's record: a newer position (15 s) whose telemetry is
+  // older than what the anchor already holds.
+  const delayed = fix(15_000, 5 * step100, {
+    altitudeFt: 1_000,
+    groundSpeedKt: 100,
+  });
+  assert.equal(motion.observe(delayed, 21_000), true, 'the position is new');
+  assert.equal(motion.fixes.length, 2);
+  assert.equal(motion.anchor.lat, 5 * step100, 'the anchor moves');
+  assert.equal(motion.anchor.speedMps, 0, 'telemetry stays 0 kt');
+  assert.equal(motion.anchor.altitudeFt, 1_500, 'telemetry stays 1,500 ft');
+  assert.equal(motion.telemetryAt, 20_000, 'telemetryAt never moves back');
+  assert.equal(motion.fixes.at(-1).altitudeFt, 1_000, 'trail point as heard');
+  const display = motion.displayAt(40_000);
+  assert.ok(
+    Math.abs(display.altitudeFt - 1_500) < 1e-6,
+    `${display.altitudeFt}`,
+  );
+  assert.ok(
+    Math.abs(display.lat - 5 * step100) < 1e-9,
+    'a stopped aircraft does not coast',
+  );
+});
+
 test('a velocity/altitude-only update with the same position time still refreshes telemetry', () => {
   const motion = new LocalAdsbMotion();
   motion.observe(fix(0, 0, { altitudeFt: 1_000, groundSpeedKt: 100 }), 0);

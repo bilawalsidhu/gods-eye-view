@@ -176,11 +176,38 @@ export class LocalAdsbMotion {
     this.rejectStreak = 0;
     this.lastCandidate = { at, lat, lon, accepted: true };
 
-    const before = this.anchor ? this.displayAt(nowMs, { slew: false }) : null;
+    const prior = this.anchor;
+    const before = prior ? this.displayAt(nowMs, { slew: false }) : null;
     this.fixes.push(fix);
     this._trimHistory(at);
-    this.anchor = this._anchorFrom(fix, record);
-    this.telemetryAt = telemetryTime(record);
+    // Position and telemetry are accepted independently: merged receivers
+    // can deliver a newer position in a record whose last message is OLDER
+    // than the telemetry the anchor already holds. The trail point keeps the
+    // record's values as heard; the anchor keeps the newer telemetry.
+    const recordTelemetryAt = telemetryTime(record);
+    const keepTelemetry =
+      prior &&
+      this.telemetryAt !== null &&
+      (recordTelemetryAt === null || recordTelemetryAt < this.telemetryAt);
+    if (keepTelemetry) {
+      this.anchor = {
+        ...this._anchorFrom(
+          {
+            ...fix,
+            altitudeFt: prior.altitudeFt,
+            speedMps: prior.speedMps,
+            trackDeg: prior.trackDeg,
+          },
+          { verticalRateFpm: prior.verticalRateFpm },
+        ),
+        altitudeAt: Number.isFinite(prior.altitudeAt)
+          ? prior.altitudeAt
+          : prior.at,
+      };
+    } else {
+      this.anchor = this._anchorFrom(fix, record);
+      this.telemetryAt = recordTelemetryAt;
+    }
     this._absorb(before, nowMs);
     return true;
   }
