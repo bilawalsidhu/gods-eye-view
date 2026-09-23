@@ -182,6 +182,29 @@ export const ACTION_DESCRIPTIONS = {
       },
     },
   },
+  set_cyber_sonar: {
+    description:
+      'Adjust Cyber-only sonar controls. Requires the Cyber HUD layout; never switches layout or HUD visibility. Omitted fields stay unchanged. Returns actual settings and separate map/contact sweep activity. A saved setting does not mean the effect is active.',
+    $position: 1,
+    parameters: {
+      properties: {
+        enabled: { description: 'Explicitly turn sonar on or off.' },
+        rings: { description: 'Number of decorative sonar rings, 3–12.' },
+        rangePct: {
+          description:
+            'Visual ring range, 60–120 percent; not geographic distance.',
+        },
+        intensityPct: {
+          description: 'Sonar Power slider, 0–100 percent. Zero is valid.',
+        },
+        opacityPct: {
+          description:
+            'Contact opacity floor between passes, 35–100 percent; labels have a derived floor. Not whole-scene dimming.',
+        },
+        sectorDeg: { description: 'Sonar sweep sector width, 8–60 degrees.' },
+      },
+    },
+  },
   set_detection: {
     description:
       'Control the detection overlay: on/off, density-derived Sparse/Balanced/Dense profile, and Elastic/Weighted layer allocation.',

@@ -5,6 +5,7 @@
       <span class="panel-divider" aria-hidden="true"></span>
       <button class="panel-collapse-btn pp-collapse-btn" data-collapse-target="pp-toggles" title="Collapse panel">&#x25C0;</button>
     </div>
+    <div class="pp-panel-body" data-rail-scroller>
     <div class="pp-toggle-group">
       <button class="pp-toggle-btn" id="hud-toggle" title="Intelligence HUD (H)">
         <span class="pp-icon">&#x25CE;</span>
@@ -31,12 +32,12 @@
       </div>
       <div class="pp-slider-row cyber-sonar-control cyber-sonar-setting" id="cyber-sonar-range-row">
         <label class="pp-slider-mini-label" for="cyber-sonar-range">Range</label>
-        <input type="range" class="pp-slider" id="cyber-sonar-range" min="60" max="120" step="5" value="100" aria-label="Sonar ring range" />
+        <input type="range" class="pp-slider" id="cyber-sonar-range" min="60" max="120" step="1" value="100" aria-label="Sonar ring range" />
         <span class="pp-slider-value" id="cyber-sonar-range-value">100%</span>
       </div>
       <div class="pp-slider-row cyber-sonar-control cyber-sonar-setting" id="cyber-sonar-intensity-row">
         <label class="pp-slider-mini-label" for="cyber-sonar-intensity">Power</label>
-        <input type="range" class="pp-slider" id="cyber-sonar-intensity" min="0" max="100" step="5" value="70" aria-label="Sonar intensity" />
+        <input type="range" class="pp-slider" id="cyber-sonar-intensity" min="0" max="100" step="1" value="70" aria-label="Sonar intensity" />
         <span class="pp-slider-value" id="cyber-sonar-intensity-value">70%</span>
       </div>
       <div class="pp-slider-row cyber-sonar-control cyber-sonar-setting" id="cyber-sonar-opacity-row">
@@ -46,7 +47,7 @@
       </div>
       <div class="pp-slider-row cyber-sonar-control cyber-sonar-setting" id="cyber-sonar-sector-row">
         <label class="pp-slider-mini-label" for="cyber-sonar-sector">Sector</label>
-        <input type="range" class="pp-slider" id="cyber-sonar-sector" min="8" max="60" step="2" value="24" aria-label="Sonar sector width" />
+        <input type="range" class="pp-slider" id="cyber-sonar-sector" min="8" max="60" step="1" value="24" aria-label="Sonar sector width" />
         <span class="pp-slider-value" id="cyber-sonar-sector-value">24°</span>
       </div>
     </div>
@@ -176,5 +177,6 @@
         <span class="pp-slider-value" id="sharpen-intensity-value">49%</span>
       </div>
     </div>
+  </div>
   </div>
   <button id="clean-view-exit" title="Return UI controls">EXIT CLEAN VIEW</button>

@@ -22,6 +22,10 @@ import { bindCameraOrientationControls } from './cameraOrientationControls.js';
 import { createMapSourceControls } from './mapSource.js';
 import { STYLES } from './effects.js';
 import { isHudLayout } from '../hudLayouts.js';
+import {
+  getCyberSonarControlState,
+  setCyberSonarControls,
+} from './cyberSonarControls.js';
 
 import * as Cesium from 'cesium';
 
@@ -1191,6 +1195,11 @@ export class StyleManager extends ShellFacade {
     };
   }
 
+  /** Apply Cyber-only sonar settings through the shared visual controls. */
+  setCyberSonar(settings) {
+    return setCyberSonarControls(this, settings);
+  }
+
   /**
    * Full control-state snapshot — single source for voice read-back so the
    * agent confirms from the same state it acted on.
@@ -1203,6 +1212,7 @@ export class StyleManager extends ShellFacade {
       hud: {
         visible: !!this.hud?.visible,
         layout: this.hud?.getVariant?.() || null,
+        sonar: getCyberSonarControlState(),
       },
       detection: this.getDetectionState(),
       bloom: {

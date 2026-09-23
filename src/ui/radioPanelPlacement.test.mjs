@@ -29,7 +29,7 @@ function node() {
   };
 }
 
-test('Cyber reuses Radio controls and restores the original non-Cyber hierarchy', () => {
+test('all themes keep the same Radio controls nested in Context', () => {
   const panel = node(),
     context = node(),
     rail = node(),
@@ -41,6 +41,8 @@ test('Cyber reuses Radio controls and restores the original non-Cyber hierarchy'
   const contextCollapse = node(),
     radioCollapse = node();
   context.selectors['.global-context-panel-inner'] = inner;
+  const body = node();
+  context.selectors['.cyber-panel-body'] = body;
   context.selectors['.panel-header'] = contextHeader;
   panel.selectors['.panel-header'] = radioHeader;
   contextHeader.selectors['.panel-collapse-btn'] = contextCollapse;
@@ -64,9 +66,9 @@ test('Cyber reuses Radio controls and restores the original non-Cyber hierarchy'
   for (let cycle = 0; cycle < 3; cycle++) {
     doc.documentElement.dataset.uiTheme = 'cyber';
     syncRadioPanelPlacement(doc);
-    assert.equal(panel.parentElement, rail);
-    assert.deepEqual(radioHeader.children, [dock, radioCollapse]);
-    assert.equal(mini.parentElement, panel);
+    assert.equal(panel.parentElement, body);
+    assert.deepEqual(contextHeader.children, [dock, contextCollapse]);
+    assert.equal(mini.parentElement, dock);
     const moves = [panel.moves, dock.moves, mini.moves];
     syncRadioPanelPlacement(doc);
     assert.deepEqual(
@@ -76,10 +78,20 @@ test('Cyber reuses Radio controls and restores the original non-Cyber hierarchy'
     );
     delete doc.documentElement.dataset.uiTheme;
     syncRadioPanelPlacement(doc);
-    assert.equal(panel.parentElement, inner);
+    assert.equal(panel.parentElement, body);
     assert.deepEqual(contextHeader.children, [dock, contextCollapse]);
     assert.equal(mini.parentElement, dock);
   }
+  // Recover a hierarchy left by the previous Cyber implementation without
+  // recreating the player, changing playback, or mutating collapse state.
+  rail.append(panel);
+  radioHeader.insertBefore(dock, radioCollapse);
+  panel.append(mini);
+  doc.documentElement.dataset.uiTheme = 'cyber';
+  syncRadioPanelPlacement(doc);
+  assert.equal(panel.parentElement, body);
+  assert.deepEqual(contextHeader.children, [dock, contextCollapse]);
+  assert.equal(mini.parentElement, dock);
 });
 
 test('placement is inert before the complete shell exists', () => {

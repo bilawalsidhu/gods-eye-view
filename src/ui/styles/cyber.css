@@ -1,21 +1,7 @@
 /* Cyber is selected from DISPLAY > HUD > Layout. It skins the application
    shell while map imagery and source media retain their original colours. */
 
-/* Radio is a peer rail panel only in Cyber. Other layouts retain Context's
-   original nested player and disclosure geometry. */
-:root[data-ui-theme='cyber'] #right-context-rail > #radio-panel {
-  position: relative;
-  inset: auto;
-  flex: 0 0 auto;
-  max-height: 100%;
-  margin-top: 0;
-  padding-top: 0;
-  border-top: 0;
-  pointer-events: auto;
-}
-:root[data-ui-theme='cyber'] #right-context-rail > #radio-panel.collapsed {
-  margin-left: auto;
-}
+/* Radio retains Context's nested player and disclosure geometry in Cyber. */
 :root[data-ui-theme='cyber'] #radio-panel.collapsed .radio-panel-inner {
   height: 50px;
   min-height: 50px;
@@ -26,25 +12,72 @@
   overflow-y: auto;
   scrollbar-gutter: stable;
 }
+
+:root[data-ui-theme='cyber'] #right-context-rail > #pp-toggles:not(.collapsed) {
+  overflow: hidden;
+}
+
+:root[data-ui-theme='cyber'] #pp-toggles > .pp-header-row {
+  flex: 0 0 auto;
+}
+
 :root[data-ui-theme='cyber']
-  #right-context-rail.layout-focus
-  > #radio-panel:not(.collapsed) {
-  flex: 0 1 var(--right-panel-allocated-height);
-  height: var(--right-panel-allocated-height);
+  #right-context-rail
+  :is(#cctv-panel, #global-context-panel):not(.collapsed)
+  > :is(.cctv-panel-inner, .global-context-panel-inner) {
+  overflow: visible;
+  scrollbar-gutter: auto;
+}
+
+:root[data-ui-theme='cyber']
+  :is(.cctv-panel-inner, .global-context-panel-inner)
+  > .panel-header {
+  flex: 0 0 auto;
+}
+
+:root[data-ui-theme='cyber'] .cyber-panel-body {
+  display: flex;
+  flex-direction: column;
   min-height: 0;
-  max-height: var(--right-panel-allocated-height);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(165, 188, 199, 0.35) transparent;
 }
-:root[data-ui-theme='cyber'] #radio-panel > .context-radio-mini {
-  top: auto;
-  right: calc(100% + 6px);
-  bottom: 0;
+
+:root[data-ui-theme='cyber'] .cctv-panel-inner > .cyber-panel-body {
+  gap: 8px;
 }
-:root[data-ui-theme='cyber'] #radio-panel > .context-radio-mini:not([hidden]) {
-  display: grid;
+
+:root[data-ui-theme='cyber'] .cyber-panel-body > * {
+  flex-shrink: 0;
 }
+
 :root[data-ui-theme='cyber']
-  #radio-panel:has(> .context-radio-mini:not([hidden])) {
-  z-index: 30;
+  .panel-collapsible.collapsed
+  > :is(.cctv-panel-inner, .global-context-panel-inner)
+  > .cyber-panel-body {
+  display: none;
+}
+
+:root[data-ui-theme='cyber'] #pp-toggles > .pp-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  width: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(165, 188, 199, 0.35) transparent;
+}
+
+:root[data-ui-theme='cyber'] #pp-toggles > .pp-panel-body > * {
+  flex-shrink: 0;
+}
+
+:root[data-ui-theme='cyber'] #pp-toggles.collapsed > .pp-panel-body {
+  display: none;
 }
 
 :root[data-ui-theme='cyber'] {
@@ -321,6 +354,9 @@
   body:not(.cockpit-mode)
   #pp-toggles:not(.collapsed),
 :root[data-ui-theme='cyber']
+  #global-context-panel.panel-collapsible
+  .global-context-panel-inner,
+:root[data-ui-theme='cyber']
   body.cockpit-mode
   .cockpit-utility-control.is-expanded:has([data-cockpit-launcher='display']) {
   isolation: isolate;
@@ -335,6 +371,9 @@
 :root[data-ui-theme='cyber']
   body:not(.cockpit-mode)
   #pp-toggles:not(.collapsed)::before,
+:root[data-ui-theme='cyber']
+  #global-context-panel.panel-collapsible
+  .global-context-panel-inner::before,
 :root[data-ui-theme='cyber']
   body.cockpit-mode
   .cockpit-utility-control.is-expanded:has(
@@ -681,6 +720,28 @@
   box-shadow:
     0 0 0 2px #090d0f,
     0 0 0 4px var(--cyber-red-bright);
+}
+
+/* These controls are clipped to a chamfered tag. Keep focus inside that shape;
+   an outside outline/shadow is clipped away, including in cockpit launchers. */
+:root[data-ui-theme='cyber']
+  :is(.panel-collapse-btn, body.cockpit-mode .cockpit-utility-glyph):is(
+    :hover,
+    :focus-visible
+  ) {
+  border-color: var(--cyber-red-bright);
+  color: var(--text-primary);
+  background-color: rgba(64, 45, 46, 0.94);
+}
+
+:root[data-ui-theme='cyber']
+  :is(
+    .panel-collapse-btn,
+    body.cockpit-mode .cockpit-utility-glyph
+  ):focus-visible {
+  outline: 2px solid var(--cyber-red-bright) !important;
+  outline-offset: -3px;
+  box-shadow: none;
 }
 
 :root[data-ui-theme='cyber'] #title-bar h1,
@@ -1539,8 +1600,7 @@
       #cctv-panel,
       #weather-panel,
       #recent-imagery-panel,
-      #global-context-panel,
-      #radio-panel
+      #global-context-panel
     ):not(.collapsed) {
     width: var(--cyber-right-panel-width);
   }
@@ -1549,8 +1609,8 @@
     --pp-expanded-width: var(--cyber-right-panel-width);
   }
 
-  :root[data-ui-theme='cyber'] #right-context-rail #radio-panel.collapsed {
-    width: var(--cyber-panel-collapsed-width);
+  :root[data-ui-theme='cyber'] #global-context-panel #radio-panel.collapsed {
+    width: 100%;
   }
 
   /* The shared rail owns intrinsic sizing and constrained allocations. A
@@ -2627,6 +2687,14 @@
 
   :root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-compass {
     width: 94vw;
+  }
+
+  :root[data-ui-theme='cyber'] #pp-toggles > .pp-panel-body {
+    max-height: min(48vh, 440px);
+  }
+
+  :root[data-ui-theme='cyber'] .cyber-panel-body {
+    max-height: min(48vh, 440px);
   }
 
   :root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-utility-controls {

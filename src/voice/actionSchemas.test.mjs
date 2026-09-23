@@ -15,9 +15,15 @@ const stable = (value) =>
         )
       : value;
 
-test('the complete Realtime tool payload pins the additive analyst and satellite release', () => {
+test('the existing Realtime payload remains pinned alongside the new sonar tool', () => {
   const digest = createHash('sha256')
-    .update(JSON.stringify(stable(GEV_REALTIME_TOOLS)))
+    .update(
+      JSON.stringify(
+        stable(
+          GEV_REALTIME_TOOLS.filter((tool) => tool.name !== 'set_cyber_sonar'),
+        ),
+      ),
+    )
     .digest('hex');
   assert.equal(
     digest,
@@ -79,7 +85,7 @@ test('metadata cannot add tools, fields, types or enum values', () => {
 
 test('all legacy action arguments are byte-identical after removing the deliberate additions', () => {
   const legacy = structuredClone(GEV_ACTION_SCHEMAS).filter(
-    (tool) => tool.name !== 'next_satellite_pass',
+    (tool) => !['next_satellite_pass', 'set_cyber_sonar'].includes(tool.name),
   );
   const layers = legacy.find((tool) => tool.name === 'analyst_query').parameters
     .properties.layers.items;

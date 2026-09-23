@@ -59,7 +59,10 @@ export class RadioControls {
    */
   async _revealRadioControlsAfterExplicitEnable(trigger) {
     const contextPanel = document.getElementById('global-context-panel');
-    const scroller = contextPanel?.querySelector('.global-context-panel-inner');
+    const scroller =
+      (document.documentElement?.dataset.uiTheme === 'cyber' &&
+        contextPanel?.querySelector('.cyber-panel-body')) ||
+      contextPanel?.querySelector('.global-context-panel-inner');
     const directory = this._radioPanel?.querySelector('.radio-directory-row');
     const transport = this._radioPanel?.querySelector('.radio-transport');
     if (
@@ -113,7 +116,10 @@ export class RadioControls {
    */
   async _revealRadioPanelInsideContext({ focusTarget = null } = {}) {
     const contextPanel = document.getElementById('global-context-panel');
-    const scroller = contextPanel?.querySelector('.global-context-panel-inner');
+    const scroller =
+      (document.documentElement?.dataset.uiTheme === 'cyber' &&
+        contextPanel?.querySelector('.cyber-panel-body')) ||
+      contextPanel?.querySelector('.global-context-panel-inner');
     if (
       !contextPanel ||
       contextPanel.classList.contains('collapsed') ||
@@ -161,9 +167,7 @@ export class RadioControls {
       'global-context-panel',
     );
     const contextExpanded = Boolean(
-      globalThis.document?.documentElement?.dataset.uiTheme !== 'cyber' &&
-      contextPanel &&
-      !contextPanel.classList.contains('collapsed'),
+      contextPanel && !contextPanel.classList.contains('collapsed'),
     );
     if (contextExpanded) {
       const radioExpanded = Boolean(

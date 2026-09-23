@@ -12,6 +12,33 @@ import { GEV_ACTION_SCHEMAS } from '../voice/actionSchemas.js';
 import { VisualSettings } from './visualSettings.js';
 import { STYLES } from './visualPresets.js';
 
+test('CCTV and Context keep their headers outside Cyber-only scroll bodies', () => {
+  for (const file of ['layer-panels.html', 'context.html']) {
+    const markup = readFileSync(
+      new URL(`./templates/${file}`, import.meta.url),
+      'utf8',
+    );
+    assert.match(markup, /class="cyber-panel-body" data-rail-scroller/);
+    assert.ok(
+      markup.indexOf('class="panel-header"') <
+        markup.indexOf('class="cyber-panel-body"'),
+    );
+  }
+  const shared = readFileSync(
+    new URL('./styles/controls.css', import.meta.url),
+    'utf8',
+  );
+  const cyber = readFileSync(
+    new URL('./styles/cyber.css', import.meta.url),
+    'utf8',
+  );
+  assert.match(shared, /\.cyber-panel-body\s*\{\s*display: contents;/);
+  assert.match(
+    cyber,
+    /:root\[data-ui-theme='cyber'\] \.cyber-panel-body\s*\{[^}]*overflow-y: auto;[^}]*overscroll-behavior: contain;/,
+  );
+});
+
 function styleOwner(t, initialVariant = 'cyber') {
   const previous = { document: globalThis.document, window: globalThis.window };
   const root = { dataset: {} };
@@ -152,11 +179,19 @@ test('Cyber setup uses a compact toolbar icon and highlights the north-up letter
 });
 const cyberStyles = read('./styles/cyber.css');
 
-test('Cyber peer Radio drops its nested Context spacing without affecting other themes', () => {
+test('Cyber clipped expand controls retain an inset keyboard-focus outline in map and cockpit', () => {
   assert.match(
     cyberStyles,
-    /:root\[data-ui-theme='cyber'\] #right-context-rail > #radio-panel \{[^}]*margin-top: 0;[^}]*padding-top: 0;[^}]*border-top: 0;/,
+    /:root\[data-ui-theme='cyber'\]\s+:is\(\s*\.panel-collapse-btn,\s*body\.cockpit-mode \.cockpit-utility-glyph\s*\):focus-visible\s*\{[^}]*outline: 2px solid var\(--cyber-red-bright\) !important;[^}]*outline-offset: -3px;[^}]*box-shadow: none;/,
   );
+  assert.match(
+    cyberStyles,
+    /:root\[data-ui-theme='cyber'\]\s+:is\(\.panel-collapse-btn, body\.cockpit-mode \.cockpit-utility-glyph\):is\(\s*:hover,\s*:focus-visible\s*\)\s*\{[^}]*border-color: var\(--cyber-red-bright\);/,
+  );
+});
+
+test('Cyber Radio retains upstream nested Context ownership', () => {
+  assert.doesNotMatch(cyberStyles, /#right-context-rail\s*>\s*#radio-panel/);
 });
 
 test('Cyber cockpit launchers share Data Layers frame and expand-control treatment', () => {
@@ -201,7 +236,7 @@ test('Cyber side panels share one width and one framed surface material', () => 
   );
   assert.match(
     cyberStyles,
-    /#right-context-rail #radio-panel\.collapsed \{\s*width: var\(--cyber-panel-collapsed-width\);/,
+    /#global-context-panel #radio-panel\.collapsed \{\s*width: 100%;/,
   );
   assert.match(
     cyberStyles,

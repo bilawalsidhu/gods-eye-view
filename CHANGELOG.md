@@ -1,5 +1,11 @@
 # Changelog
 
+- Keep Cyber right-rail panels mutually exclusive and Display, CCTV and Context
+  headers and frames fixed during content scrolling. Restore Radio's nested Context placement and compact
+  player. Add Cyber Sonar voice controls with settings and effect-state readback.
+  Keep keyboard-focus outlines visible inside Cyber's clipped map and cockpit
+  expand/collapse buttons, with a matching red hover border.
+
 - Add the opt-in Cyber HUD layout with coordinated map and cockpit panel
   styling. Display exposes Sonar on/off, rings, range, power, opacity and sector.
   Native point, billboard and label highlighting uses GPU draw commands; there

@@ -8,6 +8,14 @@ FLIR with Ironbow 0.42; restored links and subsequent visual tuning remain
 authoritative. The skin uses shared red/slate panel treatments in map and cockpit,
 with compact 200px collapsed controls and wider expanded panels. Other HUD
 layouts retain their existing presentation.
+Chamfered panel expand/collapse controls use an inset keyboard-focus outline and
+red hover border in both map and cockpit, so clipping does not hide the highlight.
+
+Cyber's map-side right rail opens one panel at a time while keeping collapsed
+launchers available. Display, CCTV and Context scroll their contents inside fixed
+headers and decorative frames. The narrow-screen rail remains scrollable to reach
+each panel. Radio retains the shared nested Context player and compact
+header disclosure, without relocating playback controls on theme changes.
 
 Sonar has one contact-highlighting method. Native Cesium points, billboards and
 labels are treated in GPU draw commands without replacing their positions,
@@ -22,6 +30,12 @@ The Sonar controls adjust rings, range, power, opacity and sector. Sweep opacity
 affects detection painting rather than label cohort admission. Theme exit and
 renderer teardown release the derived GPU resources and restore owned model
 colors without replacing newer layer-owned color changes.
+
+The `set_cyber_sonar` voice action adjusts the same controls without switching
+themes or enabling omitted settings. State readback distinguishes configured
+settings from active map/contact effects. Sonar settings are session-only and
+return to their defaults on reload. Sliders accept integer values matching the
+action's ranges.
 
 Wind appears in the Weather group before Utilities. The surface-weather prototype
 uses keyless NOAA GFS or ECMWF IFS forecasts on an approximately 1° display grid.
