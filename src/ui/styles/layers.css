@@ -315,8 +315,9 @@
 .cyber-intel-map-legend-panel {
   position: fixed;
   z-index: 109;
-  right: 16px;
-  bottom: calc(2vh + 112px);
+  left: calc(50% + clamp(220px, 18vw, 340px));
+  right: auto;
+  bottom: 2vh;
   width: min(280px, calc(100vw - 32px));
   max-height: min(38vh, 320px);
   overflow-y: auto;
