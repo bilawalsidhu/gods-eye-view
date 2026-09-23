@@ -212,6 +212,84 @@ function integerOption(key, token, defaultValue) {
   });
 }
 
+/**
+ * A share-link-only option: the whole-state codec carries it, but the stored
+ * local blob always holds its default.
+ */
+function shareOnlyOption(spec) {
+  return Object.freeze({ ...spec, shareOnly: true });
+}
+
+/**
+ * A signed integer in `[min, max]`, rejected (never clamped) outside it: a
+ * clamped box edge would be a different box, not a shorter spelling.
+ */
+function boundedIntegerOption(key, token, defaultValue, { min, max }) {
+  const parse = (value) => {
+    const number =
+      typeof value === 'number'
+        ? value
+        : /^-?\d{1,9}$/.test(String(value).trim())
+          ? Number(String(value).trim())
+          : NaN;
+    return Number.isInteger(number) && number >= min && number <= max
+      ? number
+      : null;
+  };
+  return Object.freeze({
+    key,
+    token,
+    defaultValue,
+    normalize: parse,
+    encode: (value) => String(value),
+    decode: parse,
+  });
+}
+
+/**
+ * Recent Imagery day: runtime key `S30:2026-09-18`, URL form `S20260918`.
+ * The calendar is checked both ways, and "today" is never consulted, so a
+ * link decodes the same whenever it is opened.
+ */
+const IMAGERY_LETTERS = Object.freeze({ S30: 'S', L30: 'L', VIIRS: 'V' });
+const IMAGERY_PRODUCTS = Object.freeze({ S: 'S30', L: 'L30', V: 'VIIRS' });
+
+function imageryKey(product, year, month, day) {
+  const time = Date.UTC(Number(year), Number(month) - 1, Number(day));
+  const iso = Number.isFinite(time)
+    ? new Date(time).toISOString().slice(0, 10)
+    : '';
+  return product && iso === `${year}-${month}-${day}`
+    ? `${product}:${iso}`
+    : null;
+}
+
+function imageryPinOption(key, token) {
+  return Object.freeze({
+    key,
+    token,
+    defaultValue: null,
+    normalize: (value) => {
+      const match = /^(S30|L30|VIIRS):(\d{4})-(\d{2})-(\d{2})$/.exec(
+        typeof value === 'string' ? value.trim() : '',
+      );
+      return match ? imageryKey(match[1], match[2], match[3], match[4]) : null;
+    },
+    encode: (value) => {
+      const [product, day] = value.split(':');
+      return `${IMAGERY_LETTERS[product]}${day.replaceAll('-', '')}`;
+    },
+    decode: (value) => {
+      const match = /^([SLV])(\d{4})(\d{2})(\d{2})$/.exec(
+        typeof value === 'string' ? value : '',
+      );
+      return match
+        ? imageryKey(IMAGERY_PRODUCTS[match[1]], match[2], match[3], match[4])
+        : null;
+    },
+  });
+}
+
 const OPTION_GROUPS = Object.freeze({
   'weather-lightning': Object.freeze([
     enumOption('opacity', 'o', 'strong', ['light', 'strong'], {
@@ -302,6 +380,23 @@ const OPTION_GROUPS = Object.freeze({
     }),
     booleanOption('showProjection', 'p', true),
     booleanOption('autoHop', 'a', false),
+  ]),
+  'recent-imagery': Object.freeze([
+    // Box edges in degrees × 100000; latitudes stop at the Web-Mercator limit.
+    boundedIntegerOption('west', 'w', null, { min: -18000000, max: 18000000 }),
+    boundedIntegerOption('south', 's', null, { min: -8505110, max: 8505110 }),
+    boundedIntegerOption('east', 'e', null, { min: -18000000, max: 18000000 }),
+    boundedIntegerOption('north', 'n', null, { min: -8505110, max: 8505110 }),
+    imageryPinOption('a', 'a'),
+    imageryPinOption('b', 'b'),
+    // 0 one image, 1 image against the basemap, 2 two images A / B.
+    boundedIntegerOption('mode', 'm', 0, { min: 0, max: 2 }),
+    // The swipe position is one comparison's framing, not a preference: a
+    // stored split resurfaced in the next session's first comparison.
+    shareOnlyOption(
+      boundedIntegerOption('split', 'p', 50, { min: 0, max: 100 }),
+    ),
+    booleanOption('viirs', 'v', false),
   ]),
   radio: Object.freeze([
     Object.freeze({
@@ -419,6 +514,12 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     token: 'r',
     disposition: 'enabled+options',
     optionOwner: 'radio',
+  }),
+  Object.freeze({
+    id: 'recent-imagery',
+    token: '1',
+    disposition: 'enabled+options',
+    optionOwner: 'recent-imagery',
   }),
   Object.freeze({
     id: 'rocket-launches',
@@ -699,13 +800,28 @@ export function decodeLayerStateParams(params) {
   return normalizeLayerState({ enabledLayerIds, options: rawOptions });
 }
 
-/** Stable local-storage representation (full IDs for debuggability). */
+/** Options with share-link-only values reset to their defaults. */
+function withoutShareOnlyOptions(options) {
+  const out = {};
+  for (const ownerId of OPTION_OWNER_IDS) {
+    out[ownerId] = { ...(options?.[ownerId] || {}) };
+    for (const spec of optionSpecs(ownerId)) {
+      if (spec.shareOnly) out[ownerId][spec.key] = spec.defaultValue;
+    }
+  }
+  return out;
+}
+
+/**
+ * Stable local-storage representation (full IDs for debuggability), with
+ * share-link-only options at their defaults.
+ */
 export function serializeStoredLayerState(state) {
   const normalized = normalizeLayerState(state);
   return JSON.stringify({
     v: LAYER_STATE_VERSION,
     l: normalized.enabledLayerIds,
-    o: normalized.options,
+    o: withoutShareOnlyOptions(normalized.options),
   });
 }
 
@@ -717,7 +833,7 @@ export function parseStoredLayerState(raw) {
       return null;
     return normalizeLayerState({
       enabledLayerIds: parsed.l,
-      options: parsed.o,
+      options: withoutShareOnlyOptions(parsed.o),
     });
   } catch {
     return null;

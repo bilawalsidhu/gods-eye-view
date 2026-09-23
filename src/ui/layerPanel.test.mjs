@@ -175,3 +175,56 @@ test('readout rows contain only toggles and metadata; ordinary rows retain contr
     globalThis.document = previousDocument;
   }
 });
+
+test('the Recent Imagery readout mounts in its rail body like the weather readout and is rebuilt or released with the panel', async () => {
+  const { LayerPanel } = await import('./layerPanel.js');
+  const { railFixture } = await import('./railTestFixture.mjs');
+  const f = railFixture();
+  const body = f.document.createElement('div');
+  f.document.getElementById = (id) =>
+    id === 'recent-imagery-panel-body' ? body : null;
+  const previousDocument = globalThis.document;
+  globalThis.document = f.document;
+  const mounted = [];
+  const factory = (container) => {
+    const readout = {
+      container,
+      destroyed: false,
+      destroy() {
+        this.destroyed = true;
+      },
+    };
+    mounted.push(readout);
+    return readout;
+  };
+  const panel = new LayerPanel({
+    getLayers: () => [],
+    isEnabled: () => false,
+    setEnabled() {},
+    setLayerParams() {},
+    hasRowControls: () => false,
+    subscribeRowControls() {},
+    getRowControls: () => null,
+  });
+  try {
+    panel.attachRecentImagery(factory);
+    assert.equal(mounted.length, 0, 'no body before the panel mounts');
+    panel.mount(f.container);
+    assert.equal(mounted.length, 1);
+    assert.equal(mounted[0].container, body);
+    panel.mount(f.container);
+    assert.equal(mounted[0].destroyed, true, 'a remount rebuilds it');
+    assert.equal(mounted.length, 2);
+    panel.attachRecentImagery(null);
+    assert.equal(mounted[1].destroyed, true);
+    panel.attachRecentImagery(factory);
+    assert.equal(mounted.length, 3);
+    panel.destroy();
+    assert.equal(mounted[2].destroyed, true);
+    panel.attachRecentImagery(factory);
+    assert.equal(mounted.length, 3, 'a destroyed panel mounts nothing');
+  } finally {
+    panel.destroy();
+    globalThis.document = previousDocument;
+  }
+});

@@ -78,6 +78,15 @@ export const DATA_CREDITS = [
     html: 'Earthquakes: Data courtesy of the U.S. Geological Survey',
   },
   {
+    key: 'nasa-gibs',
+    html:
+      'Recent imagery: We acknowledge the use of imagery provided by services from ' +
+      "NASA's Global Imagery Browse Services (GIBS), part of NASA's Earth Science " +
+      'Data and Information System (ESDIS). ' +
+      '<a href="https://gibs.earthdata.nasa.gov" target="_blank" rel="noopener">gibs.earthdata.nasa.gov</a> · ' +
+      '<a href="https://lpdaac.usgs.gov/products/hlss30v002/" target="_blank" rel="noopener">HLS product page</a>',
+  },
+  {
     key: 'overpass',
     html:
       'Road geometry (traffic): ' +
