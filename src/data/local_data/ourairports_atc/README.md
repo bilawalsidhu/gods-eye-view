@@ -36,10 +36,16 @@ in `meta.curation`):
   dropped. Exact (airport, class, MHz) duplicates collapsed.
 - Coordinates rounded to 4 decimals (~11 m — an airport is not a point),
   frequencies to 3 (the 25 kHz / 8.33 kHz channel grid).
-- Columnar layout (`[ident, name, lat, lon, [[typeIndex, mhz], …]]`): the same
-  data as an array of objects is ~2.4× larger, because every record would
-  repeat its keys.
-- Result: 14.0 MB source → 0.66 MB pack (budget ≤1 MB, enforced by
+- Field elevation carried in metres (from `elevation_ft`, rounded to 0.1 m), or
+  `null` where the source has none — 775 of the packed airports. A flight-phase
+  classifier needs height above the **field**, not above sea level, and `null`
+  means "cannot say", never "sea level".
+- Columnar layout (`[ident, name, lat, lon, elevationM, [[typeIndex, mhz], …]]`):
+  the same data as an array of objects is ~2.4× larger, because every record
+  would repeat its keys. The column positions are published in the file as
+  `columns`, so a reader decodes by name and an appended column cannot silently
+  shift every field one across.
+- Result: 14.0 MB source → 0.71 MB pack (budget ≤1 MB, enforced by
   `src/data/ourAirportsAtc.test.mjs`).
 
 ## The numbers that decide what the UI may promise

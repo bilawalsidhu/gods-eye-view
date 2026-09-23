@@ -53,14 +53,24 @@ const loadPack = createRetryableLoader(async () => {
   });
   const pack = mod.default || mod;
   const types = pack.types || [];
+  // Decode by the column map the pack publishes, not by hand-spelled indices:
+  // the rows are bare arrays for byte reasons, and a bare array is exactly the
+  // shape where an appended column silently shifts every reader.
+  const col = pack.columns;
   return {
     meta: pack.meta || null,
-    airports: (pack.airports || []).map(
-      ([ident, name, lat, lon, frequencies]) => ({
-        ident,
-        name,
-        lat,
-        lon,
+    airports: (pack.airports || []).map((row) => {
+      const frequencies = row[col.FREQUENCIES];
+      return {
+        ident: row[col.IDENT],
+        name: row[col.NAME],
+        lat: row[col.LAT],
+        lon: row[col.LON],
+        // Field elevation in metres, or null where the source has none (775 of
+        // the packed airports). A phase classifier needs height above the
+        // FIELD: 900 m MSL is short final on the coast and underground on a
+        // plateau. Null means "cannot say", never "sea level".
+        elevationM: row[col.ELEVATION_M],
         // Decoded once at load, not per query: the pack stores the class as an
         // index into `types` to keep the bytes down, and every consumer wants
         // the name.
@@ -69,8 +79,8 @@ const loadPack = createRetryableLoader(async () => {
           label: CLASS_LABELS[types[typeIndex]] || types[typeIndex],
           mhz,
         })),
-      }),
-    ),
+      };
+    }),
   };
 });
 
