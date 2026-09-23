@@ -21,7 +21,7 @@ test('the complete Realtime tool payload pins the additive analyst and satellite
     .digest('hex');
   assert.equal(
     digest,
-    '9e33ac0fa5a860a17bb6d79f2c43646b6c36d0c932590bf114814e891a1c96de',
+    '04a6a13611f70ca41096ffbfaf43259a1eca5837c27fff96aeec5f6db8cb6e08',
   );
 });
 
@@ -87,6 +87,9 @@ test('all legacy action arguments are byte-identical after removing the delibera
     (key) => !['satellites', 'local-datacenters', 'local-dams'].includes(key),
   );
   // Independently derived by executing trusted c9f9896 actionSchemas in the restricted container.
+  const hud = legacy.find((tool) => tool.name === 'set_hud').parameters
+    .properties.layout;
+  hud.enum = hud.enum.filter((layout) => layout !== 'cyber');
   assert.equal(
     createHash('sha256').update(JSON.stringify(legacy)).digest('hex'),
     '820fff21658f6907e1010b2b79c5431a77f4e34afd2277d62d8de46c368b6f8c',

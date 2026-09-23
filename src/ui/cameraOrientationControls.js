@@ -293,6 +293,7 @@ export function bindCameraOrientationControls({
       );
     }
     if (!applied || applied.heading !== next.heading) {
+      northButton?.setAttribute('data-north-up', String(next.heading === 0));
       northButton?.style?.setProperty('--camera-heading', `${next.heading}deg`);
       northButton?.setAttribute(
         'aria-label',

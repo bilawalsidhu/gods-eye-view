@@ -30,6 +30,11 @@ import {
   hudTelemetryProvenanceTag,
   isHudSummaryUnconfigured,
 } from './hudSummaryResponse.js';
+import {
+  applyHudUiTheme,
+  DEFAULT_HUD_LAYOUT,
+  normalizeHudLayout,
+} from './hudLayouts.js';
 
 /** Color palettes keyed by shader mode; applied as CSS custom properties. */
 const HUD_COLORS = {
@@ -58,8 +63,6 @@ const HUD_COLORS = {
 /** Shader modes that automatically show the HUD overlay. */
 const MILITARY_STYLES = new Set(['retro', 'surveillance', 'thermal']);
 
-/** Allowed HUD layout variants. */
-const HUD_VARIANTS = new Set(['tactical', 'operator', 'minimal']);
 const HUD_SUMMARY_INTERVAL_MS = 15000;
 
 /**
@@ -110,7 +113,7 @@ export class IntelHUD {
     this._autoMode = true; // auto show/hide based on style
     this._currentStyle = 'normal';
     this._el = null;
-    this._variant = 'tactical';
+    this._variant = DEFAULT_HUD_LAYOUT;
     this._recBlinkState = true;
     this._updateInterval = null;
     this._recBlinkInterval = null;
@@ -183,6 +186,8 @@ export class IntelHUD {
     if (!this._el) return;
 
     this._el.innerHTML = `
+      <div class="hud-sonar" aria-hidden="true"></div>
+
       <div class="hud-top-bar">
         <span class="hud-top-bar-left">TOP SECRET // SI-TK // NOFORN</span>
         <span class="hud-top-bar-center">${this._missionId}</span>
@@ -879,15 +884,16 @@ export class IntelHUD {
 
   /**
    * Switch the HUD layout variant. Falls back to `'tactical'` if the
-   * name is unrecognized.
-   * @param {string} variantName - One of `'tactical'`, `'operator'`, `'minimal'`.
+   * name is unrecognized. Cyber also applies a coordinated skin to the full
+   * application shell; leaving Cyber restores the standard shell tokens.
+   * @param {string} variantName - One of `'tactical'`, `'operator'`, `'minimal'`, `'cyber'`.
    */
   setVariant(variantName) {
-    const normalized = String(variantName || '').toLowerCase();
-    this._variant = HUD_VARIANTS.has(normalized) ? normalized : 'tactical';
+    this._variant = normalizeHudLayout(variantName);
     if (this._el) {
       this._el.dataset.variant = this._variant;
     }
+    applyHudUiTheme(document.documentElement, this._variant);
   }
 
   /**

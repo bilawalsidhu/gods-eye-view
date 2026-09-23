@@ -382,7 +382,11 @@ export function bindRadioControls() {
   );
   this.listen(this._contextRadioToggleBtn, 'click', () => {
     const contextPanel = document.getElementById('global-context-panel');
-    if (contextPanel && !contextPanel.classList.contains('collapsed')) {
+    if (
+      document.documentElement?.dataset.uiTheme !== 'cyber' &&
+      contextPanel &&
+      !contextPanel.classList.contains('collapsed')
+    ) {
       setRadioDisclosure(false);
       this.actions.setPanelCollapsed('radio-panel', false, { explicit: true });
       void this._revealRadioPanelInsideContext({
@@ -400,7 +404,10 @@ export function bindRadioControls() {
     setRadioDisclosure(false, { returnFocus: true });
   });
   this.listen(this._contextRadioDetailsBtn, 'click', () => {
-    if (!this.actions.isCockpitActive())
+    if (
+      !this.actions.isCockpitActive() &&
+      document.documentElement?.dataset.uiTheme !== 'cyber'
+    )
       this.actions.setPanelCollapsed('global-context-panel', false, {
         explicit: true,
       });
@@ -420,6 +427,11 @@ export function bindRadioControls() {
       if (!this._contextRadioDock?.classList.contains('disclosure-open'))
         return;
       if (event.target?.closest?.('#context-radio-dock')) return;
+      if (
+        document.documentElement?.dataset.uiTheme === 'cyber' &&
+        event.target?.closest?.('#context-radio-mini')
+      )
+        return;
       setRadioDisclosure(false);
     },
     tunerListenerOptions,

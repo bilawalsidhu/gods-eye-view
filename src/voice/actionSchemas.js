@@ -1,3 +1,5 @@
+import { HUD_LAYOUTS } from '../hudLayoutPolicy.js';
+
 // Canonical action arguments. Descriptive wording is supplied separately.
 const schemas = [
   {
@@ -310,7 +312,7 @@ const schemas = [
         },
         layout: {
           type: 'string',
-          enum: ['tactical', 'operator', 'minimal'],
+          enum: [...HUD_LAYOUTS],
         },
       },
     },

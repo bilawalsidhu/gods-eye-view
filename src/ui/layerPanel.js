@@ -221,6 +221,7 @@ export class LayerPanel {
       left.className = 'data-toggle-left';
       const icon = document.createElement('span');
       icon.className = 'data-icon';
+      icon.setAttribute('aria-hidden', 'true');
       icon.textContent = layer.icon;
       const name = document.createElement('span');
       name.className = 'data-name';

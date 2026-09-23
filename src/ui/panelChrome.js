@@ -282,13 +282,16 @@ export class PanelChrome {
   }
 
   _syncPanelCollapseButton(panelEl) {
-    const isRightRail = [
-      'pp-toggles',
-      'cctv-panel',
-      'weather-panel',
-      'recent-imagery-panel',
-      'global-context-panel',
-    ].includes(panelEl?.id);
+    const isRightRail =
+      (document.documentElement?.dataset.uiTheme === 'cyber' &&
+        panelEl?.id === 'radio-panel') ||
+      [
+        'pp-toggles',
+        'cctv-panel',
+        'weather-panel',
+        'recent-imagery-panel',
+        'global-context-panel',
+      ].includes(panelEl?.id);
     const collapsed = panelEl.classList.contains('collapsed');
     panelEl
       .querySelectorAll('.panel-collapse-btn[data-collapse-target]')
@@ -404,7 +407,8 @@ export class PanelChrome {
       ? panelEl
       : null;
     const rightOwnerPanel =
-      panelId === 'radio-panel'
+      panelId === 'radio-panel' &&
+      document.documentElement?.dataset.uiTheme !== 'cyber'
         ? document.getElementById('global-context-panel')
         : this._rightPanelStack?.contains(panelEl)
           ? panelEl
@@ -466,6 +470,7 @@ export class PanelChrome {
     if (
       !nextCollapsed &&
       panelId === 'radio-panel' &&
+      document.documentElement?.dataset.uiTheme !== 'cyber' &&
       document
         .getElementById('global-context-panel')
         ?.classList.contains('collapsed')

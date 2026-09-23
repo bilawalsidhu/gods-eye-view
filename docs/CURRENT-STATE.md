@@ -1,5 +1,28 @@
 # God's Eye View Current State
 
+## Cyber HUD — September 23, 2026
+
+Display > HUD > Layout includes Cyber, also available through the HUD voice
+action and shared visual state. An explicit first transition into Cyber selects
+FLIR with Ironbow 0.42; restored links and subsequent visual tuning remain
+authoritative. The skin uses shared red/slate panel treatments in map and cockpit,
+with compact 200px collapsed controls and wider expanded panels. Other HUD
+layouts retain their existing presentation.
+
+Sonar has one contact-highlighting method. Native Cesium points, billboards and
+labels are treated in GPU draw commands without replacing their positions,
+identities or pick commands. Model and canvas/DOM overlays retain their own
+rendering paths. Sonar OFF stops the sweep while retaining Cyber's neutral
+contact treatment. Reduced motion disables the animated sweep; cockpit and
+hidden HUD states do not apply the map treatment. If the native shader is not
+supported, native contacts remain available and Display reports the limitation.
+No CSS scene-dimming fallback or effect selector is exposed.
+
+The Sonar controls adjust rings, range, power, opacity and sector. Sweep opacity
+affects detection painting rather than label cohort admission. Theme exit and
+renderer teardown release the derived GPU resources and restore owned model
+colors without replacing newer layer-owned color changes.
+
 Wind appears in the Weather group before Utilities. The surface-weather prototype
 uses keyless NOAA GFS or ECMWF IFS forecasts on an approximately 1° display grid.
 It defaults to 10 m wind trails over the existing basemap. Speed shading is an explicit choice; earlier v2 links retain their original speed-shading meaning.
@@ -1013,7 +1036,7 @@ Non-object or array-valued properties reject the response instead of being treat
 
 Launch payloads with missing records now say PAYLOAD DATA UNAVAILABLE. Missing names use Unnamed payload; absent or invalid mass stays unknown instead of appearing as 0 KG.
 
-Updated: September 15, 2026
+Updated: September 23, 2026
 
 ## Aircraft and vessel server modules
 

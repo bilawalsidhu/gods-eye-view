@@ -374,7 +374,8 @@ async function main() {
         enabled: true,
         uncertain: true,
       });
-      gev.dataManager._refreshTogglePanel();
+      // The app owns presentation separately from the lifecycle manager.
+      gev.dataManager._publishActivity({ type: 'status' });
       const staticResult = module.setTuningStatic(true);
       const filterBefore = module.getUIState().filter;
       const filterControl = document.getElementById('radio-filter');
@@ -447,7 +448,7 @@ async function main() {
         enabled: true,
         uncertain: false,
       });
-      gev.dataManager._refreshTogglePanel();
+      gev.dataManager._publishActivity({ type: 'status' });
       module.cancelTuning();
       camera.flyTo = originalFlyTo;
       return result;

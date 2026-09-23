@@ -1,5 +1,11 @@
 # Changelog
 
+- Add the opt-in Cyber HUD layout with coordinated map and cockpit panel
+  styling. Display exposes Sonar on/off, rings, range, power, opacity and sector.
+  Native point, billboard and label highlighting uses GPU draw commands; there
+  is no scene-dimming effect selector. Unsupported shaders retain native contact
+  rendering, and leaving Cyber restores the standard shell and contact treatment.
+
 - Add a **Recent Imagery** data layer (NASA GIBS · HLS + VIIRS, keyless).
   Select a box (drag, the current view, or around a pin; up to 1,000 km a
   side) and the right-rail panel lists the last 30 days of Sentinel-2 /

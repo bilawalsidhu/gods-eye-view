@@ -8,6 +8,7 @@ import {
   trailAnchorForModel,
 } from '../../data/modelVisualAnchor.js';
 import * as Cesium from 'cesium';
+import { cyberSonarBaseAlpha } from '../../cyberSonar.js';
 import { cockpitContactDotImage } from '../../data/cockpitContactDot.js';
 import { aircraftIcon, TRACKED_ICON_PX } from '../../data/aircraftIcons.js';
 import {
@@ -151,7 +152,7 @@ export function createRendering({
     const isCockpitNear =
       isCockpitContact && flightState._cockpitNearContacts.has(icao24);
     if (isCockpitContact && !isCockpitNear) {
-      const freshnessAlpha = bb.color?.alpha ?? 1;
+      const freshnessAlpha = cyberSonarBaseAlpha(bb);
       bb.image = cockpitContactDotImage();
       bb.width = COCKPIT_CONTACT_SIZE_PX;
       bb.height = COCKPIT_CONTACT_SIZE_PX;
@@ -171,7 +172,7 @@ export function createRendering({
     bb.height = icao24 === flightState._trackedIcao ? 24 : 20;
     bb.scale = _militaryBillboardScale(icao24) * limbScale;
     bb.scaleByDistance = _normalBillboardScaleByDistance();
-    bb.color = MIL_ICON_COLOR.withAlpha(bb.color?.alpha ?? 1);
+    bb.color = MIL_ICON_COLOR.withAlpha(cyberSonarBaseAlpha(bb));
   }
 
   /** Sprite kind for one contact's billboard. Identity for every aircraft except
@@ -977,6 +978,7 @@ export function createRendering({
       const isCockpitNear =
         flightState._cockpitContactMode &&
         flightState._cockpitNearContacts.has(icao24);
+      const baseColor = MIL_ICON_COLOR;
       const treatment = applyAircraftBillboardTreatment({
         billboard: bb,
         baseScale:
@@ -984,7 +986,7 @@ export function createRendering({
             ? 1
             : _militaryBillboardScale(icao24),
         baseAlpha: flightState.records.missingPolls.get(icao24) ? 0.45 : 1,
-        baseColor: MIL_ICON_COLOR,
+        baseColor,
         focusFactor: focus.factor,
         cameraDistanceM,
         cameraHeightM: camera.positionCartographic?.height,

@@ -257,6 +257,7 @@
     "runtime": "node",
     "exports": ["./server/providers/openai"],
     "modules": [
+      "src/hudLayoutPolicy.js",
       "server/providers/common/rate-limit.js",
       "server/providers/common/request.js",
       "server/providers/common/source-root.js",
@@ -487,6 +488,10 @@
   "ui-shell": {
     "exports": ["./ui/shell"],
     "modules": [
+      "src/hudLayouts.js",
+      "src/hudLayoutPolicy.js",
+      "src/cyberSonar.js",
+      "src/ui/radioPanelPlacement.js",
       "src/app/stateChannel.js",
       "src/bloom.js",
       "src/cctvFocusPolicy.js",
@@ -724,6 +729,7 @@
   "civil-flights": {
     "exports": ["./layers/flights"],
     "modules": [
+      "src/cyberSonar.js",
       "src/data/aircraftClass.js",
       "src/data/aircraftIcons.js",
       "src/data/aircraftMeta.js",
@@ -762,6 +768,7 @@
   "military-flights": {
     "exports": ["./layers/military"],
     "modules": [
+      "src/cyberSonar.js",
       "src/data/aircraftClass.js",
       "src/data/aircraftIcons.js",
       "src/data/aircraftMeta.js",
@@ -915,6 +922,7 @@
   "launches-layer": {
     "exports": ["./layers/launches"],
     "modules": [
+      "src/cyberSonar.js",
       "src/layers/launches/camera.js",
       "src/layers/launches/controls.js",
       "src/layers/launches/index.js",
@@ -961,6 +969,7 @@
   "awareness-layer": {
     "exports": ["./layers/awareness"],
     "modules": [
+      "src/cyberSonar.js",
       "src/cockpitMath.js",
       "src/data/iconOrientation.js",
       "src/data/militaryAwarenessEngine.js",
@@ -1241,6 +1250,12 @@
       "./standalone/catalog"
     ],
     "modules": [
+      "src/cyberSonarScene.js",
+      "src/cyberSonar.js",
+      "src/hudLayouts.js",
+      "src/hudLayoutPolicy.js",
+      "src/ui/radioPanelPlacement.js",
+      "src/cyberSonarGpu.js",
       "src/scenes/nepalEvidencePack.js",
       "src/data/bhoteKoshiEvent.js",
       "src/ui/imagerySplit.js",
@@ -1918,6 +1933,7 @@
   "application-layer-construction": {
     "exports": ["./application/layers"],
     "modules": [
+      "src/cyberSonar.js",
       "src/data/bhoteKoshiEvent.js",
       "src/ui/imagerySplit.js",
       "src/maps/imageryComparison.js",
@@ -2422,6 +2438,10 @@
   "ui-visual-settings": {
     "exports": ["./ui/visual-settings"],
     "modules": [
+      "src/cyberSonar.js",
+      "src/hudLayouts.js",
+      "src/hudLayoutPolicy.js",
+      "src/ui/radioPanelPlacement.js",
       "src/bloom.js",
       "src/cockpitVisionPolicy.js",
       "src/contactsDetectionPolicy.js",
@@ -2446,6 +2466,7 @@
   "ui-panel-chrome": {
     "exports": ["./ui/panel-chrome"],
     "modules": [
+      "src/ui/radioPanelPlacement.js",
       "src/panelStackLayout.js",
       "src/ui/leftPanelRail.js",
       "src/ui/panelChrome.js",
@@ -2536,7 +2557,7 @@
   },
   "voice-action-schemas": {
     "exports": ["./voice/action-schemas"],
-    "modules": ["src/voice/actionSchemas.js"],
+    "modules": ["src/voice/actionSchemas.js", "src/hudLayoutPolicy.js"],
     "external": []
   },
   "voice-session": {
@@ -2695,6 +2716,7 @@
   "transit-standalone": {
     "exports": ["./layers/transit/standalone"],
     "modules": [
+      "src/cyberSonar.js",
       "src/app/sourceSlot.js",
       "src/celestialRing.js",
       "src/data/cameraSensitivity.js",

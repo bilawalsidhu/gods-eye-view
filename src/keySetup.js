@@ -147,10 +147,29 @@ function buildRow(documentRef, key) {
   return row;
 }
 
-/**
- * Wire the chip + dialog. Fire-and-forget from main.js; resolves to null when
- * the surface has no business existing (prod build, LAN visitor, no markup).
- */
+/** Move the existing setup action with the theme, retaining its listeners. */
+export function bindKeySetupPlacement(documentRef, chip, root) {
+  const theme = documentRef?.documentElement;
+  const toolbar = documentRef?.getElementById?.('top-center-actions');
+  const Observer = documentRef?.defaultView?.MutationObserver;
+  if (!theme || !toolbar || !Observer) return () => {};
+  const sync = () => {
+    if (theme.dataset.uiTheme === 'cyber') {
+      if (chip.parentNode !== toolbar) toolbar.append(chip);
+    } else if (chip.parentNode !== root.parentNode) {
+      root.before(chip);
+    }
+  };
+  const observer = new Observer(sync);
+  observer.observe(theme, {
+    attributes: true,
+    attributeFilter: ['data-ui-theme'],
+  });
+  sync();
+  return () => observer.disconnect();
+}
+
+/** Wire the dev-only setup surface; unavailable endpoints remove it entirely. */
 export async function initKeySetup({
   documentRef = globalThis.document,
   fetchImpl,
@@ -163,12 +182,14 @@ export async function initKeySetup({
   const lifetime = new AbortController();
   let disposed = false;
   let disposeControls = () => {};
+  let disposePlacement = () => {};
   const destroy = () => {
     if (disposed) return;
     disposed = true;
     lifetime.abort();
     signal?.removeEventListener('abort', destroy);
     disposeControls();
+    disposePlacement();
     chip.remove();
     root.remove();
   };
@@ -196,6 +217,7 @@ export async function initKeySetup({
   }
 
   const rowsHost = root.querySelector('[data-key-setup-rows]');
+  disposePlacement = bindKeySetupPlacement(documentRef, chip, root);
   const applyButton = root.querySelector('[data-key-setup-apply]');
   const closeButton = root.querySelector('[data-key-setup-close]');
   const chipLabel = chip.querySelector('[data-key-setup-chip-label]') || chip;
@@ -208,6 +230,8 @@ export async function initKeySetup({
     if (disposed) return;
     status = nextStatus;
     chipLabel.textContent = keySetupChipLabel(status);
+    chip.title = `Project keys: ${keySetupChipLabel(status)}`;
+    chip.setAttribute('aria-label', chip.title);
     // Fully powered is the owner's clean screen: the chip retires. The dialog
     // stays reachable this session (and via ?setup=1) to swap or verify keys.
     chip.hidden = status.setCount >= status.total;

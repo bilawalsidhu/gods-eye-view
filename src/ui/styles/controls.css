@@ -683,6 +683,28 @@
   min-width: 200px;
 }
 
+.cyber-sonar-control {
+  display: none;
+}
+
+:root[data-ui-theme='cyber'] .cyber-sonar-control {
+  display: flex;
+}
+
+.cyber-sonar-toggle-row,
+.cyber-sonar-setting {
+  min-width: 200px;
+}
+
+.cyber-sonar-toggle-row .pp-mode-btn {
+  margin-left: auto;
+  min-width: 48px;
+}
+
+:root[data-cyber-sonar='off'] .cyber-sonar-setting {
+  display: none;
+}
+
 /* Map Source tiles live with Visual Presets in the bottom command tray. */
 .map-source-section {
   display: grid;

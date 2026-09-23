@@ -21,6 +21,7 @@ import { bindClearLayersControl } from './layers.js';
 import { bindCameraOrientationControls } from './cameraOrientationControls.js';
 import { createMapSourceControls } from './mapSource.js';
 import { STYLES } from './effects.js';
+import { isHudLayout } from '../hudLayouts.js';
 
 import * as Cesium from 'cesium';
 
@@ -189,6 +190,17 @@ export class StyleManager extends ShellFacade {
         _detectionOpacityValue: this._detectionOpacityValue,
         _detectionSliderRow: this._detectionSliderRow,
         _hudBtn: this._hudBtn,
+        _cyberSonarBtn: this._cyberSonarBtn,
+        _cyberSonarRings: this._cyberSonarRings,
+        _cyberSonarRingsValue: this._cyberSonarRingsValue,
+        _cyberSonarRange: this._cyberSonarRange,
+        _cyberSonarRangeValue: this._cyberSonarRangeValue,
+        _cyberSonarIntensity: this._cyberSonarIntensity,
+        _cyberSonarIntensityValue: this._cyberSonarIntensityValue,
+        _cyberSonarOpacity: this._cyberSonarOpacity,
+        _cyberSonarOpacityValue: this._cyberSonarOpacityValue,
+        _cyberSonarSector: this._cyberSonarSector,
+        _cyberSonarSectorValue: this._cyberSonarSectorValue,
         _hudLayoutRow: this._hudLayoutRow,
         _hudLayoutSelect: this._hudLayoutSelect,
         _ppToggles: this._ppToggles,
@@ -483,6 +495,12 @@ export class StyleManager extends ShellFacade {
         _scopeFeatherSlider: this._scopeFeatherSlider,
         _hudLayoutSelect: this._hudLayoutSelect,
         _hudBtn: this._hudBtn,
+        _cyberSonarBtn: this._cyberSonarBtn,
+        _cyberSonarRings: this._cyberSonarRings,
+        _cyberSonarRange: this._cyberSonarRange,
+        _cyberSonarIntensity: this._cyberSonarIntensity,
+        _cyberSonarOpacity: this._cyberSonarOpacity,
+        _cyberSonarSector: this._cyberSonarSector,
         _cleanViewBtn: this._cleanViewBtn,
         _cleanViewExitBtn: this._cleanViewExitBtn,
         _detectionDensitySlider: this._detectionDensitySlider,
@@ -508,6 +526,8 @@ export class StyleManager extends ShellFacade {
         _applySharpenIntensity: (...args) =>
           this._applySharpenIntensity(...args),
         _setHudVariant: (...args) => this._setHudVariant(...args),
+        _setCyberSonarEnabled: (...args) => this._setCyberSonarEnabled(...args),
+        _setCyberSonarSetting: (...args) => this._setCyberSonarSetting(...args),
         _applyDetectionDensityFromUi: (...args) =>
           this._applyDetectionDensityFromUi(...args),
         _setDetectionAllocation: (...args) =>
@@ -1046,16 +1066,16 @@ export class StyleManager extends ShellFacade {
 
   /**
    * Switches the HUD layout variant.
-   * @param {'tactical'|'operator'|'minimal'} variantName - Layout variant.
+   * @param {'tactical'|'operator'|'minimal'|'cyber'} variantName - Layout variant.
    * @returns {{ok: boolean, layout?: string, visible?: boolean, error?: string}}
    */
   setHudLayout(variantName) {
     const variant = String(variantName ?? '').toLowerCase();
-    if (!['tactical', 'operator', 'minimal'].includes(variant)) {
+    if (!isHudLayout(variant)) {
       return { ok: false, error: `Unknown HUD layout: ${variantName}` };
     }
     this.shareLinkManager?.claimRestoreLane?.('visual');
-    this._setHudVariant(variant);
+    this._setHudVariant(variant, { applyVisualDefaults: true });
     return {
       ok: true,
       layout: this.hud.getVariant(),

@@ -154,12 +154,16 @@ export class RadioControls {
     return moved;
   }
 
-  /** Keep the Context header Radio shortcut truthful for its current route. */
+  /** Keep the launcher truthful for the active theme and Context route. */
   _syncContextRadioLauncherState() {
     if (this.destroyed || !this._contextRadioToggleBtn) return;
-    const contextPanel = document.getElementById('global-context-panel');
+    const contextPanel = globalThis.document?.getElementById(
+      'global-context-panel',
+    );
     const contextExpanded = Boolean(
-      contextPanel && !contextPanel.classList.contains('collapsed'),
+      globalThis.document?.documentElement?.dataset.uiTheme !== 'cyber' &&
+      contextPanel &&
+      !contextPanel.classList.contains('collapsed'),
     );
     if (contextExpanded) {
       const radioExpanded = Boolean(
@@ -177,6 +181,8 @@ export class RadioControls {
       this._contextRadioToggleBtn.title = label;
       return;
     }
+    // This launcher toggles the compact player even when the detailed panel
+    // is open elsewhere. Its ARIA state must describe that same disclosure.
     const compactOpen = Boolean(
       this._contextRadioDock?.classList.contains('disclosure-open'),
     );
