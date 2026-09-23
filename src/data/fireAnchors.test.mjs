@@ -159,3 +159,28 @@ test('warmFireAnchorFloors: proxy failure reports false (re-render chain termina
   });
   assert.equal(fireAnchorHeight(22.501, 32.501), 0, 'anchor stays at 0 until a real floor lands');
 });
+
+test('wave-6b: collectCold guards — non-array input and non-finite coordinates', async () => {
+  // A non-array (null from a destroyed layer, say) is zero cold points —
+  // no chain entry, no fetch.
+  _resetFireAnchorsForTest();
+  const degenerateLog = [];
+  await withFakeFetch(echoFetch(degenerateLog), async () => {
+    assert.equal(await warmFireAnchorFloors(null), false);
+    assert.equal(await warmFireAnchorFloors('nonsense'), false);
+    assert.equal(degenerateLog.length, 0, 'no proxy call for degenerate inputs');
+  });
+  // Points with non-finite coordinates are skipped inside the loop — the
+  // finite siblings still go out as one batch.
+  _resetFireAnchorsForTest();
+  const skipLog = [];
+  await withFakeFetch(echoFetch(skipLog), async () => {
+    const warmed = await warmFireAnchorFloors([
+      { lat: 23.001, lon: 33.001 },
+      { lat: Number.NaN, lon: 33.002 },
+      { lat: 23.003, lon: Infinity },
+    ]);
+    assert.equal(warmed, true, 'the one finite point still warms');
+    assert.equal(skipLog.flat().length, 1, 'only the finite point is requested');
+  });
+});

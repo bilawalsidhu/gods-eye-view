@@ -2,6 +2,8 @@ import { readSource } from '../testSupport/readSource.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
+import * as Cesium from 'cesium';
+
 import {
   bindTrackingClickGesture,
   domEventPressClock,
@@ -449,4 +451,92 @@ test('production gesture bindings measure press duration from DOM event stamps',
     assert.match(source, /now: _clickPressClock\.now/, `${name} must feed the clock to its click gesture`);
     assert.match(source, /_clickPressClock\?\.dispose\(\)/, `${name} must dispose the clock with its click handler`);
   }
+});
+
+// ── wave-6b: degenerate inputs take the clock's degraded arms without throwing ──
+
+test('non-numeric stamps, mid-press reads, and stale up-stamps degrade safely', () => {
+  const element = makeDomElement();
+  const clock = domEventPressClock(element);
+
+  // A non-numeric timeStamp reads as no stamp: the press is unmeasurable and
+  // `now()` falls through to wall-clock time (downStamp stays null).
+  element.fireDom('mousedown', { timeStamp: 'not-a-stamp' });
+  assert.equal(Number.isFinite(clock.now()), true, 'null stamp falls back to wall clock');
+
+  // A fresh down-stamp read BEFORE its mouseup reports the press's start
+  // stamp — mid-press callers (camera verbs) get a monotonic time, not NaN.
+  const base = Math.round(performance.now());
+  element.fireDom('mousedown', { timeStamp: base + 100 });
+  assert.equal(clock.now(), base + 100, 'mid-press reads report the press start stamp');
+
+  // An out-of-order mouseup (stamped BEFORE the current down-stamp — a queued
+  // release from the previous press) must not produce a negative duration:
+  // the stale stamp sorts below the fresh one and the press reads from start.
+  const handler = makeHandler();
+  let lastGesture = null;
+  bindTrackingClickGesture(handler, (_click, gesture) => { lastGesture = gesture; }, {
+    now: clock.now,
+    eventTypes: TYPES,
+  });
+  handler.fire(TYPES.LEFT_DOWN, { position: { x: 0, y: 0 } });
+  element.fireDom('mouseup', { timeStamp: base - 1000 });
+  handler.fire(TYPES.LEFT_UP, { position: { x: 0, y: 0 } });
+  handler.fire(TYPES.LEFT_CLICK, { position: { x: 0, y: 0 } });
+  assert.equal(lastGesture.durationMs, 0, 'a stale up-stamp reads as an instant press');
+
+  clock.dispose();
+});
+
+test('a stampless element binds nothing and still answers now/dispose', () => {
+  // Element without add/removeEventListener (the `?.` guard arms): the clock
+  // degrades to wall clock and dispose must not throw.
+  const clock = domEventPressClock({});
+  assert.equal(Number.isFinite(clock.now()), true);
+  clock.dispose();
+});
+
+test('gesture tracker ignores malformed movement and mid-air events', () => {
+  const timeMs = 0;
+  const gestures = [];
+  const mouseMoves = [];
+  const handler = makeHandler();
+  bindTrackingClickGesture(handler, (_click, gesture) => gestures.push(gesture), {
+    now: () => timeMs,
+    eventTypes: TYPES,
+    onMouseMove: (event) => mouseMoves.push(event),
+  });
+
+  // Moves and ups outside any press are inert — but onMouseMove still fires.
+  handler.fire(TYPES.MOUSE_MOVE, { endPosition: { x: 1, y: 1 } });
+  handler.fire(TYPES.LEFT_UP, { position: { x: 2, y: 2 } });
+  assert.deepEqual(gestures, [], 'no press, no gesture');
+
+  // Non-finite and missing positions are skipped by the travel accumulator.
+  handler.fire(TYPES.LEFT_DOWN, { position: { x: Number.NaN, y: 5 } });
+  handler.fire(TYPES.LEFT_DOWN, { position: { x: 0, y: 0 } }); // resets state
+  handler.fire(TYPES.MOUSE_MOVE, {}); // neither endPosition nor position
+  handler.fire(TYPES.MOUSE_MOVE, { position: { x: 3, y: 4 } }); // position fallback
+  handler.fire(TYPES.MOUSE_MOVE, { endPosition: { x: 6, y: 8 } }); // +5 px (3,4)→(6,8)
+  handler.fire(TYPES.LEFT_UP, {});
+  handler.fire(TYPES.LEFT_CLICK, {});
+  assert.equal(gestures.length, 1);
+  assert.equal(Math.round(gestures[0].travelPx), 10, '0→(3,4)→(6,8) accumulates both segments; skips add nothing');
+  assert.deepEqual(mouseMoves.map((e) => e?.endPosition ?? e?.position), [
+    { x: 1, y: 1 }, undefined, { x: 3, y: 4 }, { x: 6, y: 8 },
+  ], 'every move — even positionless ones — is forwarded to the onMouseMove seam');
+});
+
+test('binding without options defaults to Cesium event types and wall clock', () => {
+  const handler = makeHandler();
+  const gestures = [];
+  // No options object at all: event types come from Cesium and time from
+  // performance.now() — the production binding shape minus the DOM clock.
+  bindTrackingClickGesture(handler, (_click, gesture) => gestures.push(gesture));
+  const types = Cesium.ScreenSpaceEventType;
+  handler.fire(types.LEFT_DOWN, { position: { x: 0, y: 0 } });
+  handler.fire(types.LEFT_UP, { position: { x: 0, y: 0 } });
+  handler.fire(types.LEFT_CLICK, { position: { x: 0, y: 0 } });
+  assert.equal(gestures.length, 1, 'default event types wire the full press pipeline');
+  assert.equal(gestures[0].durationMs >= 0, true);
 });

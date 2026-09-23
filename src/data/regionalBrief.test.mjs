@@ -115,3 +115,73 @@ test('fetchRegionalBrief builds the same-origin proxy URL and rejects bad input'
     globalThis.fetch = original;
   }
 });
+
+// ── wave-6b: the WMO ladder arms, dedupe fallbacks, and distance guards ─────
+
+test('weatherCodeLabel: the full WMO ladder, band by band', () => {
+  assert.equal(weatherCodeLabel(0), 'CLEAR');
+  assert.equal(weatherCodeLabel(1), 'PARTLY CLOUDY');
+  assert.equal(weatherCodeLabel(2), 'PARTLY CLOUDY');
+  assert.equal(weatherCodeLabel(51), 'DRIZZLE');
+  assert.equal(weatherCodeLabel(57), 'DRIZZLE');
+  assert.equal(weatherCodeLabel(61), 'RAIN');
+  assert.equal(weatherCodeLabel(67), 'RAIN');
+  assert.equal(weatherCodeLabel(71), 'SNOW');
+  assert.equal(weatherCodeLabel(77), 'SNOW');
+  assert.equal(weatherCodeLabel(80), 'RAIN SHOWERS');
+  assert.equal(weatherCodeLabel(82), 'RAIN SHOWERS');
+  assert.equal(weatherCodeLabel(85), 'SNOW SHOWERS');
+  assert.equal(weatherCodeLabel(86), 'SNOW SHOWERS');
+  assert.equal(weatherCodeLabel(150), 'THUNDERSTORM', '>=95 ladder tail');
+  assert.equal(weatherCodeLabel(4), 'MIXED CONDITIONS', 'below drizzle band');
+  assert.equal(weatherCodeLabel(90), 'MIXED CONDITIONS', 'between snow and showers');
+});
+
+test('normalizeRegionalPlace: dedupe in label, county fallbacks, and code casing', () => {
+  // locality === region collapses in the LABEL (indexOf dedupe); region keeps
+  // its raw value — state wins the region ladder over county.
+  assert.deepEqual(normalizeRegionalPlace({ address: {
+    city: 'Springfield', county: 'Sangamon', state: 'Springfield', country: 'USA', country_code: 'USA',
+  } }), {
+    label: 'Springfield', locality: 'Springfield', region: 'Springfield',
+    country: 'USA', countryCode: 'USA',
+  });
+  // No locality at all: label falls back to region then country.
+  const countyOnly = normalizeRegionalPlace({ address: { county: 'Sangamon' } });
+  assert.equal(countyOnly.label, 'Sangamon');
+  assert.equal(countyOnly.region, 'Sangamon');
+  // Nothing names a place except the display_name blob.
+  const displayOnly = normalizeRegionalPlace({ display_name: 'Nowhere, Tennessee, USA' });
+  assert.equal(displayOnly.label, 'Nowhere, Tennessee, USA');
+});
+
+test('normalizeRegionalArticles: url_mobile fallback, hostname derivation, limit clamp', () => {
+  const articles = normalizeRegionalArticles({ articles: [
+    { title: 'Mobile only', url_mobile: 'https://mobile.example/story' }, // url missing → url_mobile
+    { title: 'www strip', url: 'https://www2.news.example/none' }, // no domain → hostname minus www.
+    { title: 'No url at all' },
+    { url: 'https://silent.example/x' }, // no title → dropped
+  ] }, 10);
+  assert.equal(articles.length, 2);
+  assert.equal(articles[0].domain, 'mobile.example');
+  assert.equal(articles[1].domain, 'www2.news.example', 'only the leading www. is stripped');
+  // Limit clamps to MAX_ARTICLES and never returns fewer than 1.
+  const one = normalizeRegionalArticles({ articles: [
+    { title: 'a', url: 'https://a.example/1' }, { title: 'b', url: 'https://b.example/2' },
+  ] }, 1);
+  assert.equal(one.length, 1);
+  assert.deepEqual(normalizeRegionalArticles({ articles: 'nope' }), []);
+});
+
+test('regionalDistanceM: non-finite coordinates answer Infinity', () => {
+  assert.equal(regionalDistanceM(
+    { latitude: Number.NaN, longitude: -97.7 },
+    { latitude: 30.2, longitude: -97.7 },
+  ), Infinity);
+  assert.equal(regionalDistanceM(null, { latitude: 30.2, longitude: -97.7 }), Infinity);
+  // Same point → 0; Austin→Davis-ish sanity bound.
+  assert.equal(regionalDistanceM(
+    { latitude: 30.2, longitude: -97.7 },
+    { latitude: 30.2, longitude: -97.7 },
+  ), 0);
+});

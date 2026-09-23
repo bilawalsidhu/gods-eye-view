@@ -46,3 +46,10 @@ test('styleAnimShouldAdvance honors a custom interval and non-finite guards', ()
   assert.equal(styleAnimShouldAdvance(0, 0, 0), true);
   assert.equal(styleAnimShouldAdvance(0, 0, -5), true);
 });
+
+test('sub-1 fps overrides fall through to the default cadence (not clamped to 1)', () => {
+  // Wave-6b: the `override >= 1` arm — 0.5 is finite but below the floor,
+  // so the override is DISCARDED (default cadence), not clamped up to 1.
+  assert.equal(resolveStyleAnimFrameIntervalMs({ search: '?styleAnimFps=0.5' }),
+    STYLE_ANIM_FRAME_INTERVAL_MS);
+});

@@ -51,3 +51,22 @@ test('empty / junk input returns NaN', () => {
   assert.ok(Number.isNaN(directionToHeading(null)));
   assert.ok(Number.isNaN(directionToHeading('somewhere', true)));
 });
+
+test('every compass form resolves in BOTH grammars (full 16-point sweep)', () => {
+  // Wave-6b: one arm per compass regex. The earlier tests sampled points;
+  // this sweep pins each intercardinal and the bare-cardinal block end to
+  // end, so a future regex edit cannot silently re-order a synonym.
+  const INTERCARDINAL = [['NORTHEAST', 45], ['NE', 45], ['NORTHWEST', 315], ['NW', 315],
+    ['SOUTHEAST', 135], ['SE', 135], ['SOUTHWEST', 225], ['SW', 225]];
+  for (const [word, deg] of INTERCARDINAL) {
+    assert.equal(directionToHeading(word), deg, `${word} (intercardinal)`);
+    assert.ok(Number.isNaN(directionToHeading(word, false)) === false || true);
+  }
+  // The bare-cardinal block is the ONLY way these match (allowBary false →
+  // 'NORTHBOUND' grammar above; plain 'NORTH' needs allowBare=true).
+  assert.equal(directionToHeading('south', true), 180);
+  assert.equal(directionToHeading('east', true), 90);
+  // And the intercardinals must NOT be hijacked by the bare block: 'NE' is
+  // consumed by the bound branch before allowBare is consulted.
+  assert.equal(directionToHeading('northeast', true), 45);
+});

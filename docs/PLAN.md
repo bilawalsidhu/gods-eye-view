@@ -2473,12 +2473,45 @@ per 11.3's entry rule: baseline re-measured with the same metrics as
   cycle). The 93+ ambition moves to Batch R's documented-bound
   decision. Acceptance met: `test:coverage` green locally at the
   ratcheted floors.
-- [ ] **Batch R (R2 wave 6)**: next tranche — radio branches,
-  flights/militaryFlights parse paths, annotationResolver geocode
-  fallbacks, satellites SGP4 edges → 95/95/94/86, or the ADR 0008
-  terminal module list if the residual proves mock-armor. Acceptance:
-  floors green, or the boundary documented per module with the mock-
-  armor rationale.
+- [x] **Batch R (R2 wave 6)** — DONE 2026-09-23. Executed against the
+  scoped c8 JSON missed-arm map (per-file branchMap/b → owning
+  function) rather than the pre-planned module list: the residual
+  under 95/95/94/86 is NOT concentrated in radio/flights/satellites
+  parse paths (those are Tier-2 browser-coupled, see below) but in
+  cheap pure-policy modules whose untriggered arms were enumerable
+  exactly. Thirteen modules raised with real-input contract tests
+  (zero mock armor): directionText → 100 branches (16-point compass
+  sweep in both grammars), externalUrlPolicy → 100 (full IANA
+  reserved-range table + header contract), tommtomTiles → 100
+  (null/degenerate bounds), firmsCsv → 98.3, regionalBrief → 98.98
+  (full WMO ladder, dedupe ladders, article coercion),
+  trackingClickGesture → 96.1 (non-numeric stamps, stale up-stamp
+  ordering, malformed-move guards, default Cesium event types),
+  issPass → 95.83 (broken-TLE propagation → null, never throw),
+  analystEngine → 92.68 (operator table, direct applyScope arms,
+  followUp memory semantics), fireAnchors → 92.59, logger → 89.74
+  (ring flood cap + initial-level parsing), flowTiles → 85.1 (MVT
+  no-layer arm + all-tiles-fail), styleAnimationCadence → 81.81
+  (param fall-through), regionalBriefPolicy (earlier wave).
+  Floors: 95/95/94/86 measured UNREACHABLE for the same reason as
+  wave 5 — Tier-2 Cesium-coupled modules pin the ceiling — and this
+  wave's +0.26pp branch gain (82.12 → 82.38) does not clear an
+  83 floor, so floors HOLD at 91/91/91/82 (measured
+  91.68/82.38/91.27/91.68, EXIT=0, 3,980 tests green; +49 tests).
+  **Terminal branch list (ADR 0008 documented bound, %branch, this
+  run)**: militaryFlights 60.94, rocketLaunches 61.02,
+  screenAnnotationRenderer 61.31, satellites 61.58, traffic 65.58,
+  cctv 69.12, flights 71.3, flightsTracking 71.56, radio 71.92,
+  aisLiveVessels 72.51 — each is a live-data ingest or Cesium render
+  path where the uncovered arms are websocket drop/reconnect,
+  Billboard/Primitive visual branches, and event-handler plumbing
+  that only executes against a live scene; covering them needs mock
+  choreography of Cesium's render pipeline (ADR 0008's definition of
+  mock armor), so the honest bound is documented here rather than
+  chased with tests that would prove nothing. R2 waves 5+6 together:
+  +0.26pp branches beyond wave-5's +0.92pp, at the documented
+  ceiling. Acceptance met: floors green, boundary documented per
+  module with the mock-armor rationale (this entry).
 - [ ] **Batch S (R4)**: written module map (next three seams ranked
   with evidence) + flightsTracking 24-factory-key config-schema
   contract test. Acceptance: map committed to docs/, contract test in

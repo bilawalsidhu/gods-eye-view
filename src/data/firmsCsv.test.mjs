@@ -129,3 +129,45 @@ test('filterTrailing24h on the fixture keeps everything for a same-night now', (
   const kept = filterTrailing24h(records, Date.UTC(2026, 6, 17, 2, 0));
   assert.equal(kept.length, records.length);
 });
+
+// ── wave-6b: guard arms and column-dialect fallbacks ────────────────────────
+
+test('isLikelyCsv rejects non-strings, empties, and HTML error pages', () => {
+  assert.equal(isLikelyCsv(42), false);
+  assert.equal(isLikelyCsv(null), false);
+  assert.equal(isLikelyCsv('   '), false, 'whitespace-only body');
+  assert.equal(isLikelyCsv('<html><body>Invalid MAP_KEY</body></html>'), false, 'HTML error page');
+});
+
+test('parseFirmsCsv survives a leading blank line and MODIS column names', () => {
+  // The header scan skips blank lines; the ?? fallbacks accept the MODIS
+  // brightness/bright_t31 spellings VIIRS products do not use.
+  const modis = [
+    '', // leading blank line exercises the header-index advance
+    'latitude,longitude,bright_t31,brightness,frp,confidence,acq_date,acq_time',
+    '30.1,-97.2,302.5,318.1,4.2,7,2026-09-23,2015',
+    '30.2,-97.3,303.0,,9.9,c,2026-09-23,2030', // blank frp cell → 0
+  ].join('\n');
+  assert.equal(isLikelyCsv(modis), true);
+  const records = parseFirmsCsv(modis);
+  assert.equal(records.length, 2);
+  assert.equal(records[0].brightness, 318.1, 'MODIS brightness column read via fallback');
+  assert.equal(records[1].brightness, 0, 'blank numeric cell coerces to 0, never NaN');
+});
+
+test('acquisitionMsUtc rejects malformed dates, times, and out-of-range fields', () => {
+  assert.ok(Number.isNaN(acquisitionMsUtc(20260923, 2015)), 'non-string date');
+  assert.ok(Number.isNaN(acquisitionMsUtc('2026/09/23', 2015)), 'wrong date shape');
+  assert.ok(Number.isNaN(acquisitionMsUtc('2026-09-23', '20:15')), 'wrong time shape');
+  assert.ok(Number.isNaN(acquisitionMsUtc('2026-09-23', null)), 'null time');
+  assert.ok(Number.isNaN(acquisitionMsUtc('2026-13-01', 0)), 'month 13');
+  assert.ok(Number.isNaN(acquisitionMsUtc('2026-09-32', 0)), 'day 32 rejected (guard is a 1..31 range check)');
+  assert.ok(Number.isNaN(acquisitionMsUtc('2026-09-23', 2400)), 'hour 24');
+  assert.ok(Number.isNaN(acquisitionMsUtc('2026-09-23', 2060)), 'minute 60');
+  assert.equal(acquisitionMsUtc('2026-09-23', '15'), Date.UTC(2026, 8, 23, 0, 15), '1–3 digit time pads to HHMM');
+});
+
+test('filterTrailing24h guard: non-array records or non-finite nowMs', () => {
+  assert.deepEqual(filterTrailing24h(null, Date.now()), []);
+  assert.deepEqual(filterTrailing24h([{ acqDate: '2026-09-23', acqTime: 0 }], Number.NaN), []);
+});

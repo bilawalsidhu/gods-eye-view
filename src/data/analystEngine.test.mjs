@@ -220,3 +220,113 @@ test('applyScope: an unrecognized scope kind passes the records through', () => 
   );
   assert.deepEqual(passthrough.map((f) => f.id), FLIGHTS.map((f) => f.id));
 });
+
+// ── wave-6b: filter operator table, scope fallbacks, follow-up memory ───────
+
+test('applyFilter (via query): every operator arm and the degenerate guards', async () => {
+  const e = makeEngine();
+  const world = { layers: ['flights'], scope: { kind: 'anywhere' }, limit: 50 };
+
+  // Guard: a filter missing field/op is returned unchanged.
+  const noFilter = await e.query({ ...world, filters: [{ value: 5 }] });
+  assert.equal(noFilter.count, 4, 'incomplete filter is ignored');
+
+  const gt = await e.query({ ...world, filters: [{ field: 'altitudeM', op: 'gt', value: 5000 }] });
+  assert.deepEqual(gt.items.map((i) => i.id).sort(), ['RCH01', 'SWA1']);
+  const gte = await e.query({ ...world, filters: [{ field: 'altitudeM', op: 'gte', value: 11000 }] });
+  assert.deepEqual(gte.items.map((i) => i.id).sort(), ['RCH01', 'SWA1']);
+  const lt = await e.query({ ...world, filters: [{ field: 'speedMps', op: 'lt', value: 100 }] });
+  assert.deepEqual(lt.items.map((i) => i.id).sort(), ['GND1', 'N123']);
+  const lte = await e.query({ ...world, filters: [{ field: 'speedMps', op: 'lte', value: 5 }] });
+  assert.deepEqual(lte.items.map((i) => i.id), ['GND1']);
+
+  // Boolean coercion: eq with a boolean compares booleans, not strings.
+  const boolEq = await e.query({ ...world, filters: [{ field: 'onGround', op: 'eq', value: true }] });
+  assert.deepEqual(boolEq.items.map((i) => i.id), ['GND1']);
+  const strEq = await e.query({ ...world, layers: ['ais-live-vessels'], scope: { kind: 'anywhere' }, limit: 50,
+    filters: [{ field: 'destination', op: 'eq', value: 'oakland' }] });
+  assert.equal(strEq.count, 1, 'string eq is case-insensitive');
+  const neq = await e.query({ ...world, filters: [{ field: 'military', op: 'neq', value: false }] });
+  assert.deepEqual(neq.items.map((i) => i.id), ['RCH01'], 'neq keeps the non-matching case-insensitively');
+  const contains = await e.query({ ...world, layers: ['ais-live-vessels'], scope: { kind: 'anywhere' }, limit: 50,
+    filters: [{ field: 'destination', op: 'contains', value: 'hou' }] });
+  assert.equal(contains.count, 1, 'contains is case-insensitive');
+  const unknownOp = await e.query({ ...world, filters: [{ field: 'speedMps', op: 'wat', value: 5 }] });
+  assert.equal(unknownOp.count, 4, 'unknown op passes everything through');
+});
+
+test('applyFilter: null/undefined record fields never pass a comparison', async () => {
+  const e = makeEngine();
+  // RCH01 has routeOrigin: null — a filter on it must drop, not throw.
+  const r = await e.query({
+    layers: ['flights'], scope: { kind: 'anywhere' }, limit: 50,
+    filters: [{ field: 'routeOrigin', op: 'eq', value: 'aus' }],
+  });
+  assert.deepEqual(r.items.map((i) => i.id), ['SWA1'], 'null routeOrigin drops out');
+});
+
+test('applyScope: region without a resolved ring and radius without a center pass through', () => {
+  const records = [{ lat: 30.2, lon: -97.7 }, { lat: Number.NaN, lon: Number.NaN }];
+  // Engine-level: a named-but-unresolvable region is an ok:false answer
+  // BEFORE scope runs, so the ring-missing pass-through arm is only
+  // reachable at the unit seam — an unnamed region scope with no resolved
+  // ring must return the records unchanged, not empty.
+  const passthrough = applyScope(records, { kind: 'region' }, { ring: null });
+  assert.equal(passthrough.length, 2, 'missing ring passes records through');
+  // Non-finite coordinates drop even when the ring would contain them.
+  const finiteOnly = applyScope(records, { kind: 'region' }, { ring: TEXLAND.ring });
+  assert.equal(finiteOnly.length, 1, 'non-finite coordinates never pass a ring test');
+  // radius/view whose resolved scope lacks center/km passes through.
+  const noCenter = applyScope(records, { kind: 'radius' }, { center: null });
+  assert.equal(noCenter.length, 2, 'centerless radius scope is a no-op');
+  // Unknown scope kind falls to the terminal passthrough.
+  const other = applyScope(records, { kind: 'galaxy' }, null);
+  assert.equal(other.length, 2, 'unknown scope kind is a no-op');
+});
+
+test('query: a resolved region filters to inside the ring', async () => {
+  const e = makeEngine();
+  const resolved = await e.query({ layers: ['flights'], scope: { kind: 'region', name: 'Texland' }, limit: 50 });
+  assert.equal(resolved.count, 3, 'resolved ring filters to inside Texland');
+
+  // radius with no resolvable center (no subject, engine without contacts):
+  // scopeNote should note the fallback — records still answer from the camera.
+  const e2 = makeEngine();
+  const r2 = await e2.query({ layers: ['flights'], scope: { kind: 'radius', km: 100 }, limit: 50 });
+  assert.ok(r2.ok && typeof r2.count === 'number', 'radius without a subject still answers');
+});
+
+test('query: unknown layers answer with the supported-list error', async () => {
+  const e = makeEngine();
+  const r = await e.query({ layers: ['flights', 'ufo-tracks'] });
+  assert.equal(r.ok, false);
+  assert.match(r.error, /ufo-tracks/);
+  assert.match(r.error, /supported layers/);
+});
+
+test('query: followUp re-filters the remembered set without re-snapshotting', async () => {
+  let reads = 0;
+  const e = createAnalystEngine({
+    getRecords: () => { reads += 1; return FLIGHTS; },
+    resolveRegionRing: async () => null,
+    getViewContext: () => ({ lat: 30.27, lon: -97.74, viewRadiusKm: 150 }),
+  });
+  const first = await e.query({ layers: ['flights'], scope: { kind: 'anywhere' }, limit: 50 });
+  assert.equal(first.ok, true);
+  assert.equal(reads, 1);
+  assert.equal(e.hasMemory(), true, 'first query leaves a memory');
+
+  const follow = await e.query({ followUp: true, scope: { kind: 'anywhere' }, limit: 2 });
+  assert.equal(reads, 1, 'follow-up did NOT re-read the layer');
+  // count reflects the FULL remembered filtered set; items is the limited top.
+  assert.equal(follow.count, 4, 'follow-up re-filtered the remembered set');
+  assert.equal(follow.items.length, 2, 'limit applies to the displayed top');
+  assert.equal(follow.truncated, true);
+  assert.equal(follow.coverage.layersQueried.length, 1, 'coverage carried over from the first query');
+
+  e.reset();
+  assert.equal(e.hasMemory(), false, 'reset clears the memory');
+  const afterReset = await e.query({ followUp: true, scope: { kind: 'anywhere' } });
+  assert.equal(reads, 2, 'a followUp with no memory falls back to a fresh snapshot');
+  assert.ok(afterReset.ok);
+});

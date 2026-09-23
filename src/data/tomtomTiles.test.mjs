@@ -150,3 +150,17 @@ test('isOverBudget: non-positive or invalid limit never blocks', () => {
   assert.equal(isOverBudget({ date: 'x', count: 1e9 }, 0), false);
   assert.equal(isOverBudget({ date: 'x', count: 1e9 }, Number.NaN), false);
 });
+
+test('wave-6b: tilesForBounds guard arms (null / non-finite / maxTiles cap)', () => {
+  assert.deepEqual(tilesForBounds(null, 12), [], 'null bounds is an empty tile list');
+  assert.deepEqual(
+    tilesForBounds({ south: Number.NaN, west: 0, north: 1, east: 1 }, 12),
+    [],
+    'non-finite bounds are an empty tile list',
+  );
+  // maxTiles early-return: a continent-wide bounds at high zoom would be
+  // tens of thousands of tiles; the cap ends the loop mid-scan.
+  const world = { south: -85, west: -180, north: 85, east: 180 };
+  assert.equal(tilesForBounds(world, 10, { maxTiles: 5 }).length, 5, 'cap ends the scan');
+  assert.ok(tilesForBounds(world, 10, { maxTiles: 5 }).every((t) => t.z === 10));
+});

@@ -32,3 +32,27 @@ test('returns null when no pass clears an absurd threshold', () => {
   const pass = findNextIssPass({ satrec, ...AUSTIN, fromMs: FROM_MS, minElevDeg: 89.9, horizonHours: 2 });
   assert.equal(pass, null);
 });
+
+test('wave-6b: failed propagation degrades to a null pass, never a throw', () => {
+  // satellite.js 6.x sgp4 returns null (bad mean motion/epoch) — propagate
+  // forwards that null and lookAnglesAt must answer null, not throw. The
+  // zero-mean-motion TLE forces the sgp4 error path deterministically.
+  const broken = twoline2satrec(
+    L1,
+    '2 25544  51.6416 247.4627 0006703 130.5360 325.0288 000.0000000 563537',
+  );
+  assert.equal(lookAnglesAt(broken, Date.UTC(2008, 8, 20, 13, 0, 0), AUSTIN.latDeg, AUSTIN.lonDeg), null,
+    'failed propagation is a null look-angle');
+
+  // The pass-search elevator treats a null look-angle as -90 deg elevation:
+  // a horizon window over failed propagation terminates as null, never throws.
+  assert.equal(findNextIssPass({
+    satrec: broken, ...AUSTIN, fromMs: Date.UTC(2008, 8, 20, 12, 30, 0),
+    minElevDeg: 10, horizonHours: 1,
+  }), null, 'search over failed propagation answers null');
+
+  // NOTE: the `typeof pos === 'boolean'` guard is defense for satellite.js
+  // versions whose propagate returns {position: false}; 6.x only returns
+  // null, so that arm is unreachable through the public surface (ADR 0008
+  // forbids faking it).
+});

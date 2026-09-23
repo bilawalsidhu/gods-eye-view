@@ -85,3 +85,58 @@ test('both CCTV media proxies validate Range before forwarding (parity anchor)',
     assert.doesNotMatch(source, /await fetch\(mediaUrl, \{/, `${name} must not use an unbounded raw fetch for media`);
   }
 });
+
+test('isNonGlobalIpv4: every IANA-special range the gate blocks (table)', () => {
+  // Wave-6b: one arm per reserved range in the disjunction. Each entry is a
+  // real RFC/IANA block; a public address in the same octet-neighborhood
+  // guards against an over-broad prefix.
+  const blocked = [
+    '0.1.2.3', // this-network
+    '10.0.0.1', // private
+    '127.0.0.1', // loopback
+    '100.64.0.1', // CGNAT
+    '100.127.255.254', // CGNAT top
+    '169.254.1.1', // link-local
+    '172.16.0.1', // private
+    '172.31.255.254', // private top
+    '192.0.0.1', // IETF protocol assignments
+    '192.88.99.1', // 6to4 relay
+    '192.168.1.1', // private
+    '198.18.0.1', // benchmarking
+    '198.19.255.254', // benchmarking top
+    '198.51.100.7', // documentation
+    '203.0.113.9', // documentation
+    '224.0.0.1', // multicast
+    '255.255.255.255', // broadcast
+  ];
+  for (const host of blocked) {
+    assert.equal(isNonGlobalIpv4(host), true, `${host} must be non-global`);
+  }
+  const public_ = ['8.8.8.8', '100.63.0.1', '100.128.0.1', '172.32.0.1', '198.20.0.1', '203.0.114.1'];
+  for (const host of public_) {
+    assert.equal(isNonGlobalIpv4(host), false, `${host} must read as public`);
+  }
+});
+
+test('isSafeExternalHttpUrl: IPv6 literals, credentials, and truncation dots', () => {
+  // Wave-6b: the host-shape arms around the IPv4 table.
+  assert.equal(isSafeExternalHttpUrl('http://[2001:db8::1]/stream'), false, 'IPv6 literal');
+  assert.equal(isSafeExternalHttpUrl('http://user:pass@example.com/x'), false, 'credentials');
+  assert.equal(isSafeExternalHttpUrl('http://camera.example./shot.jpg'), true, 'trailing dot is stripped, host reads public');
+  assert.equal(isSafeExternalHttpUrl('http://HOST.LOCAL/x'), false, 'case-insensitive .local');
+  assert.equal(isSafeExternalHttpUrl('https://cams.example.com/c/1', { httpsOnly: true }), true);
+  assert.equal(isSafeExternalHttpUrl('http://cams.example.com/c/1', { httpsOnly: true }), false, 'httpsOnly rejects http');
+});
+
+test('safeRangeHeader: the contract both CCTV media proxies rely on', () => {
+  // Wave-6b: pure function, pinned here because the Pages Function twin
+  // imports THIS module — a regression here is a production regression.
+  assert.equal(safeRangeHeader('bytes=0-'), 'bytes=0-', 'open-ended passes through');
+  assert.equal(safeRangeHeader('bytes=100-199'), 'bytes=100-199', 'bounded passes through');
+  assert.equal(safeRangeHeader('  bytes=5-9  '), 'bytes=5-9', 'trimmed');
+  assert.equal(safeRangeHeader('bytes=199-100'), null, 'reversed range rejected');
+  assert.equal(safeRangeHeader('bytes=abc-'), null, 'malformed rejected');
+  assert.equal(safeRangeHeader('bytes=0-99999999999999999999999'), null, 'over-long last byte rejected');
+  assert.equal(safeRangeHeader('item=0-5'), null, 'non-bytes unit rejected');
+  assert.equal(safeRangeHeader(42), null, 'non-string rejected');
+});

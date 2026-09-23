@@ -275,3 +275,47 @@ test('fetchFlowForBounds: decoding past the cache ceiling evicts the oldest tile
     resetFlowTileCache();
   }
 });
+
+// ── wave-6b: per-feature guard arms + fetch error path ─────────────────────
+
+test('decodeFlowTile: a malformed feature is skipped, the rest of the tile survives', () => {
+  // Craft an MVT buffer whose layer contains one good feature followed by a
+  // garbage one is impractical without a Pbf writer; instead pin the
+  // no-layer arm: a VALID MVT without the TomTom flow layer decodes to [].
+  // Build a minimal valid protobuf: Field 3 (layers) with an empty layer
+  // message named "other" — enough structure for Pbf to parse, no flow layer.
+  const nameTag = Uint8Array.of(0x0a, 0x05, 0x6f, 0x74, 0x68, 0x65, 0x72); // name="other"
+  const versionField = Uint8Array.of(0x08, 0x02); // version: 2
+  const layersBody = new Uint8Array([...versionField, ...nameTag]);
+  const layerField = Uint8Array.of(0x1a, layersBody.length, ...layersBody); // field 3, length-delim
+  const segments = decodeFlowTile(layerField.buffer, 12, 935, 1686);
+  assert.deepEqual(segments, [], 'missing flow layer decodes to [] (no-layer arm)');
+});
+
+test('fetchFlowForBounds: all tiles failing rethrows, partial failure keeps the rest', async () => {
+  const restore = stubFetch(async () => ({ ok: false, status: 503, arrayBuffer: async () => new ArrayBuffer(0) }));
+  try {
+    resetFlowTileCache();
+    const bounds = {
+      south: 30.2672 - 0.001, north: 30.2672 + 0.001,
+      west: -97.7431 - 0.001, east: -97.7431 + 0.001,
+    };
+    await assert.rejects(() => fetchFlowForBounds(bounds), /HTTP 503/,
+      'zero fulfilled tiles rethrows the first reason');
+  } finally {
+    restore();
+  }
+});
+
+test('fetchFlowForBounds: empty tile list short-circuits without any fetch', async () => {
+  resetFlowTileCache();
+  let fetches = 0;
+  const restore = stubFetch(async () => { fetches += 1; return { ok: true, arrayBuffer: async () => new ArrayBuffer(0) }; });
+  try {
+    const segments = await fetchFlowForBounds(null);
+    assert.deepEqual(segments, [], 'null bounds → [] with zero network calls');
+    assert.equal(fetches, 0);
+  } finally {
+    restore();
+  }
+});

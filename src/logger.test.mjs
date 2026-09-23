@@ -166,3 +166,31 @@ test('level ordering is monotonic and silent sits above everything', () => {
   assert.ok(LOG_LEVELS.warn < LOG_LEVELS.error);
   assert.ok(LOG_LEVELS.error < LOG_LEVELS.silent);
 });
+
+test('wave-6b: initialLogLevel without a requested level falls to debug', () => {
+  // The `requested` falsy arm: no ?log= param → default, not 'undefined'.
+  assert.equal(initialLogLevel(''), 'debug');
+  assert.equal(initialLogLevel('?layer=x'), 'debug');
+  assert.equal(initialLogLevel('?log=not-a-level'), 'debug', 'unknown names parse as null');
+});
+
+test('wave-6b: the debug ring trims to capacity from the front', () => {
+  resetLoggerForTest();
+  // The `splice` arm only runs past LOG_RING_CAPACITY — flood it.
+  for (let i = 0; i < LOG_RING_CAPACITY + 10; i++) {
+    recordDebugEvent('wave6b.flood', { timestamp: `2026-01-01T00:00:${String(i % 60).padStart(2, '0')}`, seq: i });
+  }
+  const ring = peekLogBuffer();
+  assert.equal(ring.length, LOG_RING_CAPACITY, 'ring never exceeds capacity');
+  assert.equal(ring[0].detail.seq, 10, 'oldest entries were evicted from the front');
+  assert.equal(ring.at(-1).detail.seq, 509, 'newest entry retained');
+  drainLogBuffer();
+});
+
+test('wave-6b: recordDebugEvent falls back to now when the record lacks a timestamp', () => {
+  resetLoggerForTest();
+  recordDebugEvent('wave6b.noTs', { seq: 1 }); // no timestamp field
+  const [entry] = peekLogBuffer();
+  assert.ok(!Number.isNaN(Date.parse(entry.timestamp)), 'timestamp falls back to an ISO now');
+  drainLogBuffer();
+});
