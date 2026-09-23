@@ -95,6 +95,13 @@
   `THIRD_PARTY_NOTICES.md`.
 ## Unreleased — Cyber Phase 1
 
+- Clarify Radar overlap and pair coverage: countries in both role aggregates
+  render as a single purple marker with separate origin/target details; only
+  Cloudflare-reported country pairs receive red, wider directional arrows.
+  Explain that unconnected country aggregates have no pair in the displayed
+  top-pair results. Rename DShield top-ten sections and show IP/domain values in
+  labeled columns.
+
 - Add the provider-neutral Cyber Activity layer with optional Cloudflare Radar
   country aggregates and keyless DShield reported-IP/source-port observations.
   Include Cloudflare-reported origin/target pair arcs, selected-marker/arc

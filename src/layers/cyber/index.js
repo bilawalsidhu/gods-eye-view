@@ -86,9 +86,11 @@ export function createCyberLayer({
       entity.name = `Cloudflare Radar · ${flow.origin.name} to ${flow.target.name}`;
       entity.polyline = {
         positions: arcPositions(flow.origin, flow.target, cesium),
-        width: Math.max(2, Math.min(6, 2 + Math.sqrt(flow.share))),
+        // Wider strokes improve visibility and line picking; the arrowhead
+        // from PolylineArrow scales with the stroke width.
+        width: Math.max(7, Math.min(10, 7 + Math.sqrt(flow.share) * 0.4)),
         material: new cesium.PolylineArrowMaterialProperty(
-          (cesium.Color.GOLD || cesium.Color.YELLOW).withAlpha(0.8),
+          cesium.Color.ORANGERED.withAlpha(0.95),
         ),
         arcType: cesium.ArcType.NONE,
         clampToGround: false,
@@ -108,6 +110,7 @@ export function createCyberLayer({
         attribution: 'Cloudflare Radar',
       };
     }
+    const observationsByCountry = new Map();
     for (const observation of entities) {
       if (
         !Number.isFinite(observation.latitude) ||
@@ -115,19 +118,43 @@ export function createCyberLayer({
         observation.geographicPrecision !== 'country'
       )
         continue;
-      const id = `cyber:${observation.id}`;
+      const country = observationsByCountry.get(observation.locationCode) || [];
+      country.push(observation);
+      observationsByCountry.set(observation.locationCode, country);
+    }
+    for (const [countryCode, roles] of observationsByCountry) {
+      const observation =
+        roles.find((row) => row.category.endsWith('-origin')) || roles[0];
+      const originObservation = roles.find((row) =>
+        row.category.endsWith('-origin'),
+      );
+      const targetObservation = roles.find((row) =>
+        row.category.endsWith('-target'),
+      );
+      const origin = Boolean(originObservation);
+      const target = Boolean(targetObservation);
+      const dualRole = origin && target;
+      const roleLabel = dualRole
+        ? 'origin and target'
+        : origin
+          ? 'origin'
+          : 'target';
+      const id = `cyber:location:${countryCode}`;
       current.add(id);
       let entity = dataSource.entities.getById(id);
       if (!entity) entity = dataSource.entities.add({ id });
-      const origin = observation.category.endsWith('-origin');
-      const color = origin ? cesium.Color.ORANGERED : cesium.Color.DEEPSKYBLUE;
-      const detail = escapeText(observation.detail);
+      const color = dualRole
+        ? cesium.Color.MEDIUMPURPLE
+        : origin
+          ? cesium.Color.ORANGERED
+          : cesium.Color.DEEPSKYBLUE;
+      const detail = roles.map((row) => escapeText(row.detail)).join(' ');
       const title = escapeText(observation.locationName);
       const windowText =
         observation.windowStart && observation.windowEnd
           ? `${escapeText(observation.windowStart)} – ${escapeText(observation.windowEnd)} UTC`
           : '24-hour aggregate window';
-      entity.name = `Cloudflare Radar · ${origin ? 'origin' : 'target'} · ${observation.locationName}`;
+      entity.name = `Cloudflare Radar · ${roleLabel} · ${observation.locationName}`;
       entity.position = cesium.Cartesian3.fromDegrees(
         observation.longitude,
         observation.latitude,
@@ -135,7 +162,17 @@ export function createCyberLayer({
       entity.point = {
         pixelSize: Math.max(
           7,
-          Math.min(18, 7 + Math.sqrt(observation.share || 0) * 2),
+          Math.min(
+            20,
+            10 +
+              Math.sqrt(
+                Math.max(
+                  originObservation?.share || 0,
+                  targetObservation?.share || 0,
+                ),
+              ) *
+                2,
+          ),
         ),
         color: color.withAlpha(0.86),
         outlineColor: cesium.Color.WHITE.withAlpha(0.9),
@@ -144,15 +181,28 @@ export function createCyberLayer({
         disableDepthTestDistance: 0,
       };
       entity.description =
-        `<h3>${title} · ${origin ? 'Origin aggregate' : 'Target aggregate'}</h3>` +
-        `<p>${formatShare(observation.share)} of Cloudflare's mitigated HTTP requests, ranked ${observation.rank ?? '—'}.</p>` +
+        `<h3>${title} · ${roleLabel} aggregate${dualRole ? 's' : ''}</h3>` +
+        (originObservation
+          ? `<p>Origin: ${formatShare(originObservation.share)}, rank ${originObservation.rank ?? '—'}.</p>`
+          : '') +
+        (targetObservation
+          ? `<p>Target: ${formatShare(targetObservation.share)}, rank ${targetObservation.rank ?? '—'}.</p>`
+          : '') +
         `<p>${detail}</p>` +
         `<p>Country-level location anchor: ${observation.latitude.toFixed(1)}, ${observation.longitude.toFixed(1)}. Not a device location.</p>` +
         `<p>Window: ${windowText}</p>` +
         `<p>Source: Cloudflare Radar</p>`;
       entity.properties = {
         provider: 'Cloudflare Radar',
-        category: observation.category,
+        category: dualRole
+          ? 'layer7-attack-origin-target'
+          : observation.category,
+        roles: roles.map((row) => ({
+          role: row.category.endsWith('-origin') ? 'origin' : 'target',
+          share: row.share,
+          rank: row.rank,
+          detail: row.detail,
+        })),
         location: observation.locationName,
         locationCode: observation.locationCode,
         share: observation.share,
@@ -184,9 +234,20 @@ export function createCyberLayer({
       return flow ? { type: 'flow', ...flow } : null;
     }
     if (entityId.startsWith('cyber:')) {
-      const id = entityId.slice('cyber:'.length);
-      const observation = radar?.observations?.find((item) => item.id === id);
-      return observation ? { type: 'location', ...observation } : null;
+      const code = entityId.slice('cyber:location:'.length);
+      const observations =
+        radar?.observations?.filter((item) => item.locationCode === code) || [];
+      if (!observations.length) return null;
+      return {
+        type: 'location',
+        entityId: `cyber:location:${code}`,
+        roles: observations.map((item) => ({
+          role: item.category.endsWith('-origin') ? 'origin' : 'target',
+          share: item.share,
+          rank: item.rank,
+        })),
+        ...observations[0],
+      };
     }
     return null;
   }
@@ -336,7 +397,7 @@ export function createCyberLayer({
           selectedRadar = findRadarSelection(
             selectedRadar.type === 'flow'
               ? `cyber-flow:${selectedRadar.id}`
-              : `cyber:${selectedRadar.id}`,
+              : selectedRadar.entityId,
           );
         }
         notifyThreatIntel();
@@ -424,7 +485,7 @@ export function createCyberLayer({
         },
         info: infos.join('\n'),
         infoTitle:
-          'Orange-red points are origin-country aggregates; blue points are target-country aggregates. Gold arrows use Cloudflare-reported origin-target country pairs and are not physical network routes. DShield IP observations have no defensible coordinates and appear in Cyber Threat Intel. DShield entries may include false positives and are not a blocklist.',
+          'Orange-red points are origin countries; blue points are target countries; purple points represent countries in both lists. Red arrows show only Cloudflare-reported top origin-target country pairs (up to 10); an unconnected dot has no pair in that displayed set. Arrows are aggregate associations, not physical routes. DShield observations appear in Cyber Threat Intel and may include false positives.',
       };
     },
     setRowControlsListener(listener) {

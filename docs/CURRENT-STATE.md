@@ -43,13 +43,20 @@ bounded 24-hour Layer 7 attack origin/target country aggregates when its
 optional token is configured in Provider Settings. Its map points use published
 country reference coordinates only; they are not device locations. Country pair
 arcs use Cloudflare's reported top origin-target pairs and do not represent
-physical network routes. Selecting a Radar marker or arc shows its role, country
-pair, share, rank, reporting window, and geographic provenance. Radar API data is licensed CC BY-NC 4.0, documented in
+physical network routes. Countries present in both aggregate lists use one
+purple marker with both roles and their separate shares/ranks in the detail
+panel; origin-only and target-only markers remain red and blue. A country marker
+may have no connecting arc when it is absent from Cloudflare's bounded top-pair
+results. Arcs are red, wider, and use a larger arrow cue. Selecting a Radar
+marker or arc shows its role, country pair, share, rank, reporting window, and
+geographic provenance. Radar API data is licensed CC BY-NC 4.0, documented in
 `DATA_SOURCES.md`. SANS ISC / DShield supplies hourly-cached top reported source
 IPs and scanning source ports without credentials; those records have no
 geographic coordinates and may include false positives. They appear in a
 separate Cyber Threat Intel panel outside Data Layers while Cyber Activity is
 enabled. The panel also reserves space for future non-geographic Cyber sources.
+Its DShield source list labels IP Address and Domain Name separately and shows
+the top ten source and targeted-port records.
 Each provider fails independently, and cached data may be shown during temporary
 upstream outages.
 

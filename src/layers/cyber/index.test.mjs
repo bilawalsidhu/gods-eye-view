@@ -55,7 +55,13 @@ const cesium = {
       height,
     }),
   },
-  Color: { ORANGERED: color, DEEPSKYBLUE: color, WHITE: color, GOLD: color },
+  Color: {
+    ORANGERED: color,
+    DEEPSKYBLUE: color,
+    MEDIUMPURPLE: color,
+    WHITE: color,
+    GOLD: color,
+  },
   HeightReference: { CLAMP_TO_GROUND: 0 },
 };
 
@@ -77,6 +83,23 @@ const radar = {
       geographicProvenance: 'United States; aggregate',
       share: 5,
       rank: 1,
+      windowStart: '2026-09-19T00:00:00Z',
+      windowEnd: '2026-09-20T00:00:00Z',
+      detail: 'Country aggregate only',
+    },
+    {
+      id: 'cloudflare-radar:target:US',
+      category: 'layer7-attack-target',
+      provider: 'cloudflare-radar',
+      locationName: 'United States',
+      locationCode: 'US',
+      latitude: 39.8,
+      longitude: -98.6,
+      geographicPrecision: 'country',
+      geographicMethod: 'Country reference',
+      geographicProvenance: 'United States; aggregate',
+      share: 7,
+      rank: 2,
       windowStart: '2026-09-19T00:00:00Z',
       windowEnd: '2026-09-20T00:00:00Z',
       detail: 'Country aggregate only',
@@ -142,9 +165,10 @@ test('renders Radar aggregates only and keeps DShield in the non-geographic row 
     String(entity.id).startsWith('cyber-flow:'),
   );
   assert.equal(flowEntity.polyline.positions[0].height, 0);
+  assert.ok(flowEntity.polyline.width >= 7);
   assert.equal(flowEntity.polyline.positions.at(-1).height, 0);
   assert.ok(flowEntity.polyline.positions[16].height > 1_000_000);
-  assert.equal(rows.list.items.length, 3);
+  assert.equal(rows.list.items.length, 4);
   assert.ok(
     rows.list.items.some((row) => row.text.includes('no geographic data')),
   );
@@ -179,10 +203,14 @@ test('Radar map selection reports marker and paired-flow context and clears on d
   layer.enable();
   await layer.update();
   const click = latestSelectionHandler.actions.get('left-click');
-  pickedId = 'cyber:cloudflare-radar:origin:US';
+  pickedId = 'cyber:location:US';
   click({ position: { x: 10, y: 20 } });
   assert.equal(states.at(-1).selectedRadar.type, 'location');
   assert.equal(states.at(-1).selectedRadar.locationName, 'United States');
+  assert.deepEqual(
+    states.at(-1).selectedRadar.roles.map((role) => role.role),
+    ['origin', 'target'],
+  );
   pickedId = 'cyber-flow:cloudflare-radar:flow:US:CA';
   click({ position: { x: 10, y: 20 } });
   assert.equal(states.at(-1).selectedRadar.type, 'flow');

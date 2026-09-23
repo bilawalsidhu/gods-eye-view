@@ -98,6 +98,11 @@ test('Cyber Threat Intel remains hidden unless Cyber Activity is enabled', () =>
   assert.equal(f.panel.hidden, false);
   assert.equal(f.panel.classList.contains('collapsed'), false);
   assert.match(f.body.textContent, /192\.0\.2\.1/);
+  assert.match(f.body.textContent, /Current Top 10 malicious sources/);
+  assert.match(f.body.textContent, /IP Address/);
+  assert.match(f.body.textContent, /Domain Name/);
+  assert.match(f.body.textContent, /Unavailable/);
+  assert.match(f.body.textContent, /Current Top 10 Targeted Ports/);
   assert.match(f.body.textContent, /23\/tcp/);
   layer.state = {
     enabled: false,

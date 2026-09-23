@@ -58,31 +58,51 @@ export class CyberIntelPanel {
               'Country reference coordinates; not a device or network path',
             ],
           ]
-        : [
-            [
-              'Role',
-              selection.category?.endsWith('-origin')
-                ? 'Origin country aggregate'
-                : 'Target country aggregate',
-            ],
-            [
-              'Country',
-              `${selection.locationName || 'Unknown'}${selection.locationCode ? ` (${selection.locationCode})` : ''}`,
-            ],
-            [
-              'Share',
-              `${Number.isFinite(selection.share) ? selection.share : 'Unavailable'}% of reported mitigated requests`,
-            ],
-            ['Rank', selection.rank],
-            [
-              'Window',
-              `${selection.windowStart || '—'} to ${selection.windowEnd || '—'} UTC`,
-            ],
-            [
-              'Location',
-              'Country reference coordinates; not a device location',
-            ],
-          ];
+        : selection.roles?.length > 1
+          ? [
+              ['Roles', selection.roles.map((row) => row.role).join(' and ')],
+              [
+                'Country',
+                `${selection.locationName || 'Unknown'}${selection.locationCode ? ` (${selection.locationCode})` : ''}`,
+              ],
+              ...selection.roles.map((row) => [
+                `${row.role === 'origin' ? 'Origin' : 'Target'} share / rank`,
+                `${Number.isFinite(row.share) ? row.share : 'Unavailable'}% / ${row.rank ?? '—'}`,
+              ]),
+              [
+                'Window',
+                `${selection.windowStart || '—'} to ${selection.windowEnd || '—'} UTC`,
+              ],
+              [
+                'Location',
+                'Country reference coordinates; not a device location',
+              ],
+            ]
+          : [
+              [
+                'Role',
+                selection.category?.endsWith('-origin')
+                  ? 'Origin country aggregate'
+                  : 'Target country aggregate',
+              ],
+              [
+                'Country',
+                `${selection.locationName || 'Unknown'}${selection.locationCode ? ` (${selection.locationCode})` : ''}`,
+              ],
+              [
+                'Share',
+                `${Number.isFinite(selection.share) ? selection.share : 'Unavailable'}% of reported mitigated requests`,
+              ],
+              ['Rank', selection.rank],
+              [
+                'Window',
+                `${selection.windowStart || '—'} to ${selection.windowEnd || '—'} UTC`,
+              ],
+              [
+                'Location',
+                'Country reference coordinates; not a device location',
+              ],
+            ];
     for (const [label, value] of rows) {
       const row = element(this.document, 'p', 'cyber-intel-detail-row');
       row.append(element(this.document, 'strong', '', `${label}: `));
@@ -134,33 +154,38 @@ export class CyberIntelPanel {
       );
 
     if (provider.observations?.length) {
-      section.append(element(this.document, 'h4', '', 'REPORTED SOURCE IPs'));
-      const list = element(this.document, 'ul', 'cyber-intel-record-list');
+      section.append(
+        element(this.document, 'h4', '', 'Current Top 10 malicious sources'),
+      );
+      const table = element(this.document, 'table', 'cyber-intel-source-table');
+      const head = element(this.document, 'thead');
+      const headerRow = element(this.document, 'tr');
+      for (const label of ['IP Address', 'Domain Name'])
+        headerRow.append(element(this.document, 'th', '', label));
+      head.append(headerRow);
+      table.append(head);
+      const body = element(this.document, 'tbody');
       for (const record of provider.observations.slice(0, 10)) {
-        const item = element(this.document, 'li', '');
-        item.append(
+        const row = element(this.document, 'tr');
+        row.append(
           element(
             this.document,
-            'strong',
+            'td',
             '',
-            `${record.indicator?.value || 'Unknown IP'}${record.hostname ? ` · ${record.hostname}` : ''}`,
+            record.indicator?.value || 'Unknown IP',
           ),
         );
-        item.append(
-          element(
-            this.document,
-            'span',
-            '',
-            `Rank ${record.rank || '—'} · no geographic data`,
-          ),
+        row.append(
+          element(this.document, 'td', '', record.hostname || 'Unavailable'),
         );
-        list.append(item);
+        body.append(row);
       }
-      section.append(list);
+      table.append(body);
+      section.append(table);
     }
     if (provider.ports?.length) {
       section.append(
-        element(this.document, 'h4', '', 'COMMONLY TARGETED PORTS'),
+        element(this.document, 'h4', '', 'Current Top 10 Targeted Ports'),
       );
       const list = element(
         this.document,
@@ -207,7 +232,8 @@ export class CyberIntelPanel {
         'cyber-legend-target',
         'Target aggregate · zone billing country when available',
       ],
-      ['cyber-legend-flow', 'Arrow · Cloudflare-reported origin → target pair'],
+      ['cyber-legend-both', 'Origin and target country'],
+      ['cyber-legend-flow', 'Red arrow · reported origin → target pair'],
     ];
     for (const [swatchClass, label] of entries) {
       const row = element(this.document, 'p', 'cyber-intel-legend-row');
@@ -220,7 +246,7 @@ export class CyberIntelPanel {
         this.document,
         'p',
         'cyber-intel-provenance',
-        'Map positions are country reference anchors. Arrows show an aggregate association, not a device location or network route.',
+        'Map positions are country reference anchors. Arrows show only the top 10 pairs Cloudflare reports; a dot without a line has no pair in that set. Arrows show aggregate associations, not device locations or network routes.',
       ),
     );
     return legend;

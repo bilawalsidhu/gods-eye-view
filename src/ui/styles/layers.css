@@ -323,13 +323,27 @@
 .cyber-intel-legend-row > .cyber-legend-target {
   background: deepskyblue;
 }
+.cyber-intel-legend-row > .cyber-legend-both {
+  background: mediumpurple;
+}
 .cyber-intel-legend-row > .cyber-legend-flow {
   width: 22px;
   height: 2px;
   flex-basis: 22px;
   border: 0;
   border-radius: 0;
-  background: gold;
+  background: orangered;
+  box-shadow: 8px 0 0 -0.5px orangered;
+  position: relative;
+}
+.cyber-intel-legend-row > .cyber-legend-flow::after {
+  content: '';
+  position: absolute;
+  right: -2px;
+  top: -3px;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 7px solid orangered;
 }
 .cyber-intel-selection h3,
 .cyber-intel-provider h3,
@@ -392,6 +406,25 @@
 .cyber-intel-record-list li span {
   color: var(--text-secondary);
   font-size: 10px;
+}
+.cyber-intel-source-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 10px;
+}
+.cyber-intel-source-table th,
+.cyber-intel-source-table td {
+  width: 50%;
+  padding: 6px 5px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.cyber-intel-source-table th {
+  color: #8feaff;
+  font-size: 9px;
+  text-transform: uppercase;
 }
 .cyber-intel-provenance,
 .cyber-intel-attribution {
