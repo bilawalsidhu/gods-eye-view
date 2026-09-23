@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { cyberProxy } from '../../../server/providers/cyber.js';
 import { createCyberEnrichmentProviders } from '../../../server/providers/cyber/enrichment.js';
+import { createCyberSource } from './source.js';
 
 const jsonResponse = (value, status = 200) =>
   new Response(JSON.stringify(value), { status });
@@ -137,6 +138,99 @@ test('DShield is cached, normalized and non-geographic', async () => {
   assert.match(first.value.notice, /not a blocklist/);
 });
 
+test('CISA KEV catalog is validated, cached, stale-safe, and never geographic', async () => {
+  let currentTime = Date.parse('2026-09-23T13:00:00Z');
+  let requests = 0;
+  let fail = false;
+  const proxy = cyberProxy({
+    now: () => currentTime,
+    fetchImpl: async (url) => {
+      requests++;
+      assert.equal(
+        String(url),
+        'https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json',
+      );
+      if (fail) throw new Error('fixture upstream outage');
+      return jsonResponse({
+        catalogVersion: '2026.09.23',
+        dateReleased: '2026-09-23T12:51:35.821Z',
+        count: 1,
+        vulnerabilities: [
+          {
+            cveID: 'CVE-2024-12345',
+            vendorProject: 'Example Vendor',
+            product: 'Example Product',
+            vulnerabilityName: 'Example vulnerability',
+            dateAdded: '2026-09-22',
+            shortDescription: 'A test vulnerability.',
+            requiredAction: 'Apply the vendor update.',
+            dueDate: '2026-10-01',
+            knownRansomwareCampaignUse: 'Unknown',
+            forensicTriage: 'Yes',
+            notes: 'https://example.test/advisory',
+            cwes: ['CWE-20'],
+          },
+        ],
+      });
+    },
+  });
+  const first = await proxy.requestKevSnapshot();
+  const cached = await proxy.requestKevSnapshot();
+  assert.equal(requests, 1);
+  assert.equal(cached, first);
+  assert.equal(first.value.provider, 'cisa-kev');
+  assert.equal(first.value.vulnerabilities[0].cveId, 'CVE-2024-12345');
+  assert.equal(first.value.vulnerabilities[0].ransomware, 'Unknown');
+  assert.equal(first.value.vulnerabilities[0].forensicTriage, true);
+  assert.equal('latitude' in first.value.vulnerabilities[0], false);
+  assert.equal('longitude' in first.value.vulnerabilities[0], false);
+  currentTime += 60 * 60_000 + 1;
+  fail = true;
+  const stale = await proxy.requestKevSnapshot();
+  assert.equal(stale.value.stale, true);
+  assert.equal(stale.value.count, 1);
+  assert.doesNotMatch(JSON.stringify(stale.value), /API[_ -]?key|secret/i);
+});
+
+test('Cyber source fetches and normalizes the public CISA KEV snapshot', async () => {
+  const requested = [];
+  const source = createCyberSource({
+    fetchImpl: async (url, options) => {
+      requested.push({ url, options });
+      return jsonResponse({
+        provider: 'cisa-kev',
+        attribution: 'CISA Known Exploited Vulnerabilities Catalog',
+        catalogVersion: '2026.09.23',
+        dateReleased: '2026-09-23T12:51:35.821Z',
+        fetchedAt: '2026-09-23T13:00:00.000Z',
+        stale: false,
+        count: 1,
+        vulnerabilities: [
+          {
+            cveId: 'CVE-2024-12345',
+            vendor: 'Example Vendor',
+            product: 'Example Product',
+            name: 'Example vulnerability',
+            dateAdded: '2026-09-22',
+            shortDescription: 'A test vulnerability.',
+            requiredAction: 'Apply the vendor update.',
+            dueDate: '2026-10-01',
+            ransomware: 'Known',
+            forensicTriage: true,
+            notes: null,
+            cwes: ['CWE-20'],
+          },
+        ],
+      });
+    },
+  });
+  const snapshot = await source.getKevSnapshot();
+  assert.equal(requested[0].url, '/api/cyber/kev');
+  assert.equal(requested[0].options.method || 'GET', 'GET');
+  assert.equal(snapshot.vulnerabilities[0].cveId, 'CVE-2024-12345');
+  assert.equal(snapshot.vulnerabilities[0].forensicTriage, true);
+});
+
 test('Radar missing/invalid credentials produce safe machine errors and test never echoes key', async () => {
   const proxy = cyberProxy({ fetchImpl: async () => jsonResponse({}, 401) });
   await assert.rejects(proxy.requestRadarSnapshot({ token: '' }), {
@@ -152,6 +246,7 @@ test('Shodan host and manual search are normalized, bounded and cached without e
   const oldKey = process.env.SHODAN_API_KEY;
   process.env.SHODAN_API_KEY = 'fixture-secret-never-returned';
   let calls = 0;
+  let searchUrl;
   const api = createCyberEnrichmentProviders({
     now: () => Date.parse('2026-09-20T01:00:00Z'),
     fetchImpl: async (url) => {
@@ -159,7 +254,8 @@ test('Shodan host and manual search are normalized, bounded and cached without e
       const parsed = new URL(url);
       if (parsed.pathname === '/api-info')
         return jsonResponse({ plan: 'membership', query_credits: 100 });
-      if (parsed.pathname === '/shodan/host/search')
+      if (parsed.pathname === '/shodan/host/search') {
+        searchUrl = parsed;
         return jsonResponse({
           total: 1,
           matches: [
@@ -167,10 +263,12 @@ test('Shodan host and manual search are normalized, bounded and cached without e
               ip_str: '8.8.4.4',
               port: 443,
               product: 'HTTPS',
+              vulns: { 'CVE-2024-12345': { cvss: 9.8 } },
               location: { latitude: null, longitude: null },
             },
           ],
         });
+      }
       if (parsed.pathname.startsWith('/shodan/host/'))
         return jsonResponse({
           ip_str: '8.8.8.8',
@@ -195,6 +293,10 @@ test('Shodan host and manual search are normalized, bounded and cached without e
     assert.equal(await api.searchShodan('port:443', 1), search);
     assert.equal(search.matches.length, 1);
     assert.equal(search.matches[0].ip, '8.8.4.4');
+    assert.deepEqual(search.matches[0].services[0].vulnerabilities, [
+      'CVE-2024-12345',
+    ]);
+    assert.match(searchUrl.searchParams.get('fields'), /vulns/);
     await assert.rejects(api.searchShodan('port:22', 1), {
       code: 'rate_limited',
     });
@@ -271,7 +373,7 @@ test('Shodan area search is bounded and fills missing locations with attributed 
     assert.equal(requests[0].searchParams.get('minify'), 'false');
     assert.equal(
       requests[0].searchParams.get('fields'),
-      'ip_str,ip,port,transport,product,version,timestamp,org,isp,asn,hostnames,location,os',
+      'ip_str,ip,port,transport,product,version,timestamp,org,isp,asn,hostnames,vulns,location,os',
     );
     await assert.rejects(api.searchShodanArea(40, -74, 1001), {
       code: 'invalid_area',

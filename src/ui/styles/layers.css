@@ -300,6 +300,52 @@
   border-radius: 8px;
   background: rgba(0, 14, 22, 0.56);
 }
+.cyber-kev-entry {
+  margin: 8px 0;
+  padding: 8px;
+  border: 1px solid rgba(0, 212, 255, 0.16);
+  border-radius: 6px;
+  background: rgba(0, 8, 14, 0.45);
+}
+.cyber-kev-entry-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  font-size: 10px;
+}
+.cyber-kev-entry-heading strong,
+.cyber-kev-match-count {
+  color: #ffd34e;
+}
+.cyber-kev-entry-heading span,
+.cyber-kev-meta,
+.cyber-kev-description,
+.cyber-kev-action p {
+  color: var(--text-secondary);
+  font-size: 10px;
+  line-height: 1.45;
+}
+.cyber-kev-entry h4 {
+  margin: 6px 0 4px;
+  color: #8feaff;
+  font-size: 10px;
+}
+.cyber-kev-entry p {
+  margin: 5px 0;
+}
+.cyber-kev-action summary {
+  color: #d9f6ff;
+  cursor: pointer;
+  font-size: 10px;
+}
+.cyber-kev-source-link {
+  color: #8feaff;
+  font-size: 10px;
+}
+.cyber-kev-more {
+  width: 100%;
+}
 .cyber-device-popup {
   position: fixed;
   z-index: 2500;

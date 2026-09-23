@@ -5,6 +5,18 @@ const element = (documentRef, tag, className, text) => {
   return node;
 };
 
+function kevMatchesForRecord(record, snapshot) {
+  const byCve = new Map(
+    (snapshot?.vulnerabilities || []).map((item) => [item.cveId, item]),
+  );
+  const ids = new Set(
+    (record?.services || [])
+      .flatMap((service) => service.vulnerabilities || [])
+      .filter((cve) => /^CVE-\d{4}-\d{4,}$/i.test(cve)),
+  );
+  return [...ids].map((cve) => byCve.get(cve.toUpperCase())).filter(Boolean);
+}
+
 /** Dedicated, provenance-first view for Cyber records without map geometry. */
 export class CyberIntelPanel {
   constructor({ documentRef = globalThis.document } = {}) {
@@ -22,6 +34,9 @@ export class CyberIntelPanel {
     }
     if (this.devicePopup) documentRef?.body?.append?.(this.devicePopup);
     this._wasEnabled = false;
+    this._kevFilter = '';
+    this._kevVisibleCount = 25;
+    this._lastState = null;
   }
 
   mount(layer) {
@@ -34,6 +49,11 @@ export class CyberIntelPanel {
       return;
     layer.setThreatIntelListener((state) => this.render(state));
     this._onBodyClick = (event) => {
+      if (event.target?.closest?.('[data-kev-more]')) {
+        this._kevVisibleCount += 25;
+        this.render(this._lastState);
+        return;
+      }
       const button = event.target?.closest?.('[data-cyber-enrich]');
       if (button) {
         void layer
@@ -57,6 +77,15 @@ export class CyberIntelPanel {
       }
     };
     this._onBodySubmit = (event) => {
+      const kevForm = event.target?.closest?.('[data-kev-search]');
+      if (kevForm) {
+        event.preventDefault();
+        this._kevFilter =
+          kevForm.querySelector('input[name="kev-query"]')?.value?.trim() || '';
+        this._kevVisibleCount = 25;
+        this.render(this._lastState);
+        return;
+      }
       const form = event.target?.closest?.('[data-shodan-search]');
       if (!form) return;
       event.preventDefault();
@@ -73,7 +102,7 @@ export class CyberIntelPanel {
     this.render(layer.getThreatIntelState());
   }
 
-  _renderEnrichment(result, provider, pending = false) {
+  _renderEnrichment(result, provider, pending = false, kevSnapshot = null) {
     const section = element(
       this.document,
       'section',
@@ -160,6 +189,29 @@ export class CyberIntelPanel {
       row.append(element(this.document, 'strong', '', `${label}: `));
       row.append(this.document.createTextNode(String(value || 'Unavailable')));
       section.append(row);
+    }
+    if (provider === 'shodan' && !pending && result?.services?.length) {
+      const matches = kevMatchesForRecord(result, kevSnapshot);
+      section.append(
+        element(
+          this.document,
+          'h4',
+          '',
+          `CISA KEV matches · ${matches.length}`,
+        ),
+      );
+      section.append(
+        element(
+          this.document,
+          'p',
+          'cyber-intel-provenance',
+          matches.length
+            ? matches.map((item) => item.cveId).join(', ')
+            : kevSnapshot
+              ? 'No explicit Shodan-reported CVE matched the CISA KEV catalog. Product similarity alone is not treated as a match.'
+              : 'CISA KEV is unavailable, so matches could not be checked.',
+        ),
+      );
     }
     section.append(
       element(
@@ -260,8 +312,178 @@ export class CyberIntelPanel {
         button.dataset.ip = result.ip;
         row.append(button);
       }
+      const kevMatches = kevMatchesForRecord(result, state.kevSnapshot);
+      if (kevMatches.length)
+        row.append(
+          element(
+            this.document,
+            'span',
+            'cyber-kev-match-count',
+            `CISA KEV · ${kevMatches.length} explicit CVE match${kevMatches.length === 1 ? '' : 'es'}`,
+          ),
+        );
       section.append(row);
+      const key = `shodan:${result.ip}`;
+      const enrichment = state.enrichmentResults?.[key];
+      const pending = state.enrichmentPending?.includes(key);
+      if (enrichment || pending)
+        section.append(
+          this._renderEnrichment(
+            enrichment,
+            'shodan',
+            pending,
+            state.kevSnapshot,
+          ),
+        );
     }
+    return section;
+  }
+
+  _renderKevCatalog(state) {
+    const section = element(this.document, 'section', 'cyber-intel-provider');
+    const heading = element(
+      this.document,
+      'div',
+      'cyber-intel-provider-heading',
+    );
+    heading.append(
+      element(this.document, 'h3', '', 'CISA Known Exploited Vulnerabilities'),
+    );
+    const snapshot = state.kevSnapshot;
+    heading.append(
+      element(
+        this.document,
+        'span',
+        snapshot?.stale ? 'is-stale' : 'is-current',
+        snapshot
+          ? snapshot.stale
+            ? 'STALE CACHE'
+            : `UPDATED ${snapshot.fetchedAt}`
+          : state.kevLoading
+            ? 'LOADING'
+            : 'UNAVAILABLE',
+      ),
+    );
+    section.append(heading);
+    section.append(
+      element(
+        this.document,
+        'p',
+        'cyber-intel-provenance',
+        'CISA KEV entries are vulnerability intelligence, not geographic objects. Asset matches require an explicit CVE reported by Shodan; product similarity alone is not a match. The listed CISA due date is catalog guidance, not an asset-specific remediation SLA.',
+      ),
+    );
+    if (!snapshot) {
+      section.append(
+        element(
+          this.document,
+          'p',
+          'cyber-intel-empty',
+          state.kevError || 'Loading the CISA KEV catalog…',
+        ),
+      );
+      return section;
+    }
+    const form = element(this.document, 'form', 'cyber-intel-search-form');
+    form.dataset.kevSearch = 'true';
+    const input = element(this.document, 'input');
+    input.type = 'search';
+    input.name = 'kev-query';
+    input.maxLength = 120;
+    input.placeholder = 'CVE, vendor, or product';
+    input.setAttribute('aria-label', 'Search the CISA KEV catalog');
+    input.value = this._kevFilter;
+    const submit = element(this.document, 'button', '', 'Search KEV');
+    submit.type = 'submit';
+    form.append(input, submit);
+    section.append(form);
+    const query = this._kevFilter.toLocaleLowerCase();
+    const matches = snapshot.vulnerabilities.filter((item) =>
+      [
+        item.cveId,
+        item.vendor,
+        item.product,
+        item.name,
+        item.shortDescription,
+      ].some((field) =>
+        String(field || '')
+          .toLocaleLowerCase()
+          .includes(query),
+      ),
+    );
+    section.append(
+      element(
+        this.document,
+        'p',
+        'cyber-intel-provenance',
+        `${matches.length} matches · catalog version ${snapshot.catalogVersion} · released ${snapshot.dateReleased.slice(0, 10)}`,
+      ),
+    );
+    for (const item of matches.slice(0, this._kevVisibleCount)) {
+      const card = element(this.document, 'article', 'cyber-kev-entry');
+      const title = element(this.document, 'div', 'cyber-kev-entry-heading');
+      title.append(element(this.document, 'strong', '', item.cveId));
+      title.append(
+        element(this.document, 'span', '', `${item.vendor} · ${item.product}`),
+      );
+      card.append(title);
+      card.append(element(this.document, 'h4', '', item.name));
+      card.append(
+        element(
+          this.document,
+          'p',
+          'cyber-kev-description',
+          item.shortDescription,
+        ),
+      );
+      const dates = element(this.document, 'p', 'cyber-kev-meta');
+      dates.textContent = `Added ${item.dateAdded} · CISA due date ${item.dueDate} · Ransomware use: ${item.ransomware}`;
+      card.append(dates);
+      if (item.forensicTriage)
+        card.append(
+          element(
+            this.document,
+            'p',
+            'cyber-kev-meta',
+            'CISA forensic triage requirements apply.',
+          ),
+        );
+      const action = element(this.document, 'details', 'cyber-kev-action');
+      action.append(element(this.document, 'summary', '', 'Required action'));
+      action.append(element(this.document, 'p', '', item.requiredAction));
+      card.append(action);
+      const link = element(
+        this.document,
+        'a',
+        'cyber-kev-source-link',
+        'CISA KEV catalog ↗',
+      );
+      link.href =
+        'https://www.cisa.gov/known-exploited-vulnerabilities-catalog';
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      card.append(link);
+      section.append(card);
+    }
+    if (matches.length > this._kevVisibleCount) {
+      const more = element(
+        this.document,
+        'button',
+        'cyber-kev-more',
+        `Show next ${Math.min(25, matches.length - this._kevVisibleCount)} vulnerabilities`,
+      );
+      more.type = 'button';
+      more.dataset.kevMore = 'true';
+      section.append(more);
+    }
+    section.append(
+      element(
+        this.document,
+        'p',
+        'cyber-intel-attribution',
+        `${snapshot.attribution} · fetched ${snapshot.fetchedAt}`,
+      ),
+    );
     return section;
   }
 
@@ -401,6 +623,50 @@ export class CyberIntelPanel {
       section.append(row);
     }
     if (selection.type === 'shodan-asset') {
+      const kevMatches = selection.kevMatches || [];
+      section.append(
+        element(
+          this.document,
+          'h4',
+          '',
+          `CISA KEV matches · ${kevMatches.length}`,
+        ),
+      );
+      if (kevMatches.length) {
+        for (const item of kevMatches) {
+          const match = element(this.document, 'p', 'cyber-intel-detail-row');
+          match.append(
+            element(this.document, 'strong', '', `${item.cveId} · `),
+          );
+          match.append(
+            this.document.createTextNode(
+              `${item.vendor} ${item.product} · CISA due ${item.dueDate}`,
+            ),
+          );
+          section.append(match);
+        }
+      } else {
+        section.append(
+          element(
+            this.document,
+            'p',
+            'cyber-intel-provenance',
+            !selection.kevCatalogAvailable
+              ? 'CISA KEV is unavailable, so matches could not be checked.'
+              : selection.reportedCves?.length
+                ? 'Shodan reported CVE identifiers, but none match the current CISA KEV catalog.'
+                : 'Shodan did not report CVE identifiers for this device.',
+          ),
+        );
+      }
+      section.append(
+        element(
+          this.document,
+          'p',
+          'cyber-intel-provenance',
+          'Matches use explicit CVE identifiers reported by Shodan banners. They do not confirm the device remains vulnerable.',
+        ),
+      );
       if (selection.visualOffsetMeters > 0) {
         section.append(
           element(
@@ -534,7 +800,12 @@ export class CyberIntelPanel {
           const value = provider.enrichmentResults?.[key];
           const pending = provider.enrichmentPending?.includes(key);
           if (value || pending) {
-            const result = this._renderEnrichment(value, source, pending);
+            const result = this._renderEnrichment(
+              value,
+              source,
+              pending,
+              provider.kevSnapshot,
+            );
             const resultRow = element(this.document, 'tr');
             const cell = element(this.document, 'td');
             cell.setAttribute('colspan', '2');
@@ -620,6 +891,7 @@ export class CyberIntelPanel {
 
   render(state) {
     if (!this.panel || !this.body) return;
+    this._lastState = state;
     const isEnabled = state?.enabled === true;
     const becameEnabled = isEnabled && !this._wasEnabled;
     this._wasEnabled = isEnabled;
@@ -656,6 +928,7 @@ export class CyberIntelPanel {
     } else if (this.devicePopup) this.devicePopup.hidden = true;
 
     this.body.append(this._renderShodanSearch(state));
+    this.body.append(this._renderKevCatalog(state));
     this.body.append(this._renderLegend());
 
     const selected = state.selectedRadar;

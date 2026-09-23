@@ -2,6 +2,7 @@ import * as Cesium from 'cesium';
 
 const RADAR_SOURCE = 'cloudflare-radar';
 const DSHIELD_SOURCE = 'dshield';
+const KEV_SOURCE = 'cisa-kev';
 
 function escapeText(value) {
   return String(value ?? '').replace(
@@ -109,9 +110,10 @@ export function createCyberLayer({
 } = {}) {
   if (
     typeof source?.getRadarSnapshot !== 'function' ||
-    typeof source?.getDshieldSnapshot !== 'function'
+    typeof source?.getDshieldSnapshot !== 'function' ||
+    typeof source?.getKevSnapshot !== 'function'
   )
-    throw new TypeError('Cyber requires Radar and DShield provider sources');
+    throw new TypeError('Cyber requires Radar, DShield, and CISA KEV sources');
 
   let viewer = null;
   let dataSource = null;
@@ -123,8 +125,11 @@ export function createCyberLayer({
   let request = null;
   let radar = null;
   let dshield = null;
+  let kev = null;
   let radarError = null;
   let dshieldError = null;
+  let kevError = null;
+  const kevByCve = new Map();
   let rowControlsListener = null;
   let threatIntelListener = null;
   let selectionHandler = null;
@@ -330,6 +335,9 @@ export function createCyberLayer({
         geographicProvenance: match.geographicProvenance,
         visualOffsetMeters: display?.visualOffsetMeters || 0,
         attribution: match.attribution,
+        kevMatches: (match.services || [])
+          .flatMap((service) => service.vulnerabilities || [])
+          .filter((cve) => kevByCve.has(cve.toUpperCase())).length,
       };
       if (display?.visualOffsetMeters && display.anchorLatitude != null) {
         const linkId = `cyber-shodan-link:${match.ip}`;
@@ -402,7 +410,22 @@ export function createCyberLayer({
   function findShodanSelection(entityId) {
     if (!entityId?.startsWith?.('cyber-shodan:')) return null;
     const ip = entityId.slice('cyber-shodan:'.length);
-    return shodanAreaSearch?.matches?.find((match) => match.ip === ip) || null;
+    const match =
+      shodanAreaSearch?.matches?.find((item) => item.ip === ip) || null;
+    if (!match) return null;
+    const reportedCves = new Set(
+      (match.services || [])
+        .flatMap((service) => service.vulnerabilities || [])
+        .filter((cve) => /^CVE-\d{4}-\d{4,}$/i.test(cve)),
+    );
+    return {
+      ...match,
+      kevCatalogAvailable: Boolean(kev),
+      reportedCves: [...reportedCves],
+      kevMatches: [...reportedCves]
+        .map((cve) => kevByCve.get(cve.toUpperCase()))
+        .filter(Boolean),
+    };
   }
 
   function viewportArea() {
@@ -661,6 +684,8 @@ export function createCyberLayer({
       loading = false;
       radar = null;
       dshield = null;
+      kev = null;
+      kevByCve.clear();
       enrichmentResults.clear();
       enrichmentPending.clear();
       shodanSearch = null;
@@ -668,6 +693,7 @@ export function createCyberLayer({
       selectedShodan = null;
       radarError = null;
       dshieldError = null;
+      kevError = null;
       dataSource?.entities.removeAll();
       if (dataSource) dataSource.show = false;
       shodanDataSource?.entities.removeAll();
@@ -699,6 +725,12 @@ export function createCyberLayer({
             (error) => ({ provider: DSHIELD_SOURCE, error }),
           ),
         );
+      tasks.push(
+        source.getKevSnapshot({ signal: controller.signal }).then(
+          (value) => ({ provider: KEV_SOURCE, value }),
+          (error) => ({ provider: KEV_SOURCE, error }),
+        ),
+      );
       try {
         const outcomes = await Promise.all(tasks);
         if (controller.signal.aborted || request !== controller || !enabled)
@@ -708,16 +740,24 @@ export function createCyberLayer({
           if (outcome.error) {
             if (outcome.provider === RADAR_SOURCE)
               radarError = outcome.error.message;
-            else dshieldError = outcome.error.message;
+            else if (outcome.provider === DSHIELD_SOURCE)
+              dshieldError = outcome.error.message;
+            else kevError = outcome.error.message;
             continue;
           }
           succeeded = true;
           if (outcome.provider === RADAR_SOURCE) {
             radar = outcome.value;
             radarError = null;
-          } else {
+          } else if (outcome.provider === DSHIELD_SOURCE) {
             dshield = outcome.value;
             dshieldError = null;
+          } else {
+            kev = outcome.value;
+            kevError = null;
+            kevByCve.clear();
+            for (const vulnerability of kev.vulnerabilities || [])
+              kevByCve.set(vulnerability.cveId, vulnerability);
           }
         }
         renderRadar();
@@ -831,6 +871,9 @@ export function createCyberLayer({
       return {
         enabled,
         selectedRadar: selectedRadar ? { ...selectedRadar } : null,
+        kevSnapshot: kev,
+        kevError,
+        kevLoading: loading,
         enrichmentResults: Object.fromEntries(enrichmentResults),
         enrichmentPending: [...enrichmentPending],
         shodanSearch,
@@ -866,6 +909,7 @@ export function createCyberLayer({
                 selectedShodan,
                 onShodanAreaSearch: runShodanAreaSearch,
                 error: dshieldError,
+                kevSnapshot: kev,
               },
             ]
           : [],
@@ -880,7 +924,7 @@ export function createCyberLayer({
         .map((record) => ({ ...record }));
     },
     getStats() {
-      const issues = [radarError, dshieldError].filter(Boolean);
+      const issues = [radarError, dshieldError, kevError].filter(Boolean);
       const mapEntities = dataSource?.entities.values || [];
       const countryCount = mapEntities.filter((entity) =>
         String(entity.id).startsWith('cyber:location:'),
@@ -903,7 +947,7 @@ export function createCyberLayer({
           : 'Provider observations',
         loading,
         keyRequired: radarNeedsKey && !hasProviderData,
-        stale: Boolean(radar?.stale || dshield?.stale),
+        stale: Boolean(radar?.stale || dshield?.stale || kev?.stale),
         error: issues.length && !hasProviderData ? issues.join(' · ') : null,
         radarCount: radarEnabled ? radar?.observations.length || 0 : 0,
         dshieldCount: dshieldEnabled ? dshield?.observations.length || 0 : 0,

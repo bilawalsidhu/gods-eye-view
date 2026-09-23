@@ -1,6 +1,7 @@
 import { readResponseJsonCapped } from '../../sources/httpBody.js';
 import {
   normalizeCyberEnrichment,
+  normalizeCyberKevSnapshot,
   normalizeCyberSnapshot,
   normalizeShodanSearchResult,
 } from './records.js';
@@ -8,6 +9,7 @@ import {
 const URLS = Object.freeze({
   'cloudflare-radar': '/api/cyber/radar',
   dshield: '/api/cyber/dshield',
+  'cisa-kev': '/api/cyber/kev',
 });
 const ENRICHMENT_URLS = Object.freeze({
   shodanHost: '/api/cyber/enrich/shodan/host',
@@ -50,15 +52,19 @@ export function createCyberSource({
           throw new Error(
             `${provider} is rate limited; cached data may be shown.`,
           );
+        if (provider === 'cisa-kev')
+          throw new Error(`CISA KEV catalog unavailable (${response.status}).`);
         throw new Error(`${provider} data unavailable (${response.status}).`);
       }
       const payload = await readResponseJsonCapped(
         response,
-        512 * 1024,
+        provider === 'cisa-kev' ? 4 * 1024 * 1024 : 512 * 1024,
         controller.signal,
       );
       signal?.throwIfAborted();
-      return normalizeCyberSnapshot(payload, provider);
+      return provider === 'cisa-kev'
+        ? normalizeCyberKevSnapshot(payload)
+        : normalizeCyberSnapshot(payload, provider);
     } finally {
       clearTimeout(timer);
       signal?.removeEventListener('abort', abort);
@@ -141,6 +147,7 @@ export function createCyberSource({
   return Object.freeze({
     getRadarSnapshot: (options) => get('cloudflare-radar', options),
     getDshieldSnapshot: (options) => get('dshield', options),
+    getKevSnapshot: (options) => get('cisa-kev', options),
     lookupShodanHost: async (ip, options) =>
       normalizeCyberEnrichment(
         await post(ENRICHMENT_URLS.shodanHost, { ip }, options),

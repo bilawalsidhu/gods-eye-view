@@ -36,7 +36,7 @@ themes or enabling omitted settings. State readback distinguishes configured
 settings from active map/contact effects. Sonar settings are session-only and
 return to their defaults on reload. Sliders accept integer values matching the
 action's ranges.
-## Cyber Activity (Phase 1)
+## Cyber Activity (Phases 1–3)
 
 Cyber is one first-class, provider-neutral data layer. Cloudflare Radar supplies
 bounded 24-hour Layer 7 attack origin/target country aggregates when its
@@ -60,10 +60,10 @@ the top ten source and targeted-port records.
 Each provider fails independently, and cached data may be shown during temporary
 upstream outages.
 
-Phase 2 adds optional Shodan host intelligence, manually submitted searches,
-and a deliberate search for a circle around the current map view (up to a
-1,000 km radius), plus on-demand GreyNoise Community lookups. Neither source
-polls or runs while the camera moves; all lookups require an explicit click.
+Phase 2 adds optional Shodan host intelligence and deliberate searches for a
+circle around the current map view (up to a 1,000 km radius), plus on-demand
+  GreyNoise Community lookups. Neither source polls or runs while the camera
+moves; all lookups require an explicit click.
 Area searches use one Shodan query credit, fetch only the first result page,
 and display up to 100 unique devices from the first result page. The optional
 Shodan query is combined with the current map-area filter in a single search.
@@ -76,13 +76,22 @@ GreyNoise connection testing confirms before spending one Community lookup.
 All Cyber credentials use the existing Provider Settings credential store. See
 `DATA_SOURCES.md` for provider limits, terms and attribution.
 
+Phase 3 adds the public CISA Known Exploited Vulnerabilities (KEV) catalog to
+Cyber Threat Intel. The catalog is cached server-side for one hour, with a
+seven-day stale fallback. Users can search its full catalog by CVE, vendor,
+product, name, or description and expand remediation guidance. KEV entries are
+not geographic objects. Shodan asset correlation is limited to explicit CVE
+identifiers returned in Shodan banners; product/CPE similarity alone is not
+treated as a confirmed match, and a reported match does not prove the asset
+remains vulnerable.
+
 The Cyber layer uses the shared data-layer panel and state codec. Its local
 server proxy bounds upstream responses, keeps Radar tokens server-side, and
 normalizes provider records before rendering. Radar and DShield can be
 enabled/disabled in
 the layer controls; its credential can be tested, changed, or removed in the
-existing Provider Settings panel. Vulnerability catalog and threat-intelligence
-correlation remain future phases.
+existing Provider Settings panel. AlienVault OTX threat-intelligence and broader
+cross-provider correlation remain future phases.
 
 Wind appears in the Weather group before Utilities. The surface-weather prototype
 uses keyless NOAA GFS or ECMWF IFS forecasts on an approximately 1° display grid.

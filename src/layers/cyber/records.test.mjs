@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   normalizeCyberEnrichment,
+  normalizeCyberKevSnapshot,
   normalizeCyberSnapshot,
   normalizeShodanSearchResult,
 } from './records.js';
@@ -233,3 +234,52 @@ test('Shodan search normalization accepts a full page and rejects provider spoof
     }),
   );
 });
+
+test('CISA KEV normalization retains bounded catalog records without geography', () => {
+  const result = normalizeCyberKevSnapshot(kevSnapshot());
+  assert.equal(result.count, 1);
+  assert.equal(result.vulnerabilities[0].cveId, 'CVE-2024-12345');
+  assert.equal(result.vulnerabilities[0].ransomware, 'Known');
+  assert.equal('latitude' in result.vulnerabilities[0], false);
+  assert.equal('longitude' in result.vulnerabilities[0], false);
+  assert.throws(() =>
+    normalizeCyberKevSnapshot({
+      ...kevSnapshot(),
+      vulnerabilities: [
+        {
+          ...kevSnapshot().vulnerabilities[0],
+          cveId: 'not-a-cve',
+        },
+      ],
+    }),
+  );
+});
+
+function kevSnapshot() {
+  return {
+    schemaVersion: 1,
+    provider: 'cisa-kev',
+    attribution: 'CISA Known Exploited Vulnerabilities Catalog',
+    catalogVersion: '2026.09.23',
+    dateReleased: '2026-09-23T12:51:35.821Z',
+    fetchedAt: '2026-09-23T13:00:00.000Z',
+    stale: false,
+    count: 1,
+    vulnerabilities: [
+      {
+        cveId: 'CVE-2024-12345',
+        vendor: 'Example Vendor',
+        product: 'Example Product',
+        name: 'Example vulnerability',
+        dateAdded: '2026-09-22',
+        shortDescription: 'A test vulnerability.',
+        requiredAction: 'Apply the vendor update.',
+        dueDate: '2026-10-01',
+        ransomware: 'Known',
+        forensicTriage: true,
+        notes: null,
+        cwes: ['CWE-20'],
+      },
+    ],
+  };
+}

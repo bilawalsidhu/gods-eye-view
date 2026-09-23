@@ -94,6 +94,31 @@ test('Cyber Threat Intel remains hidden unless Cyber Activity is enabled', () =>
   layer.state = {
     enabled: true,
     selectedRadar: null,
+    kevSnapshot: {
+      provider: 'cisa-kev',
+      attribution: 'CISA Known Exploited Vulnerabilities Catalog',
+      catalogVersion: '2026.09.23',
+      dateReleased: '2026-09-23T12:51:35.821Z',
+      fetchedAt: '2026-09-23T13:00:00.000Z',
+      stale: false,
+      count: 1,
+      vulnerabilities: [
+        {
+          cveId: 'CVE-2024-12345',
+          vendor: 'Example Vendor',
+          product: 'Example Product',
+          name: 'Example vulnerability',
+          dateAdded: '2026-09-22',
+          shortDescription: 'A test vulnerability.',
+          requiredAction: 'Apply the vendor update.',
+          dueDate: '2026-10-01',
+          ransomware: 'Known',
+          forensicTriage: true,
+          notes: null,
+          cwes: ['CWE-20'],
+        },
+      ],
+    },
     shodanAreaSearch: {
       matches: [
         {
@@ -152,6 +177,8 @@ test('Cyber Threat Intel remains hidden unless Cyber Activity is enabled', () =>
   assert.match(f.body.textContent, /Current Top 10 Targeted Ports/);
   assert.match(f.body.textContent, /23\/tcp/);
   assert.match(f.body.textContent, /Shodan Exposed Device Search/);
+  assert.match(f.body.textContent, /CISA Known Exploited Vulnerabilities/);
+  assert.match(f.body.textContent, /CVE-2024-12345/);
   assert.match(f.body.textContent, /CloudFlare Radar/);
   assert.match(f.body.textContent, /Top Attackers & Target Ports/);
   assert.ok(
@@ -184,7 +211,23 @@ test('Shodan device selection shows the approximate network location and provena
       selectedShodan: {
         ip: '8.8.4.4',
         organization: 'Example Org',
-        services: [{ port: 443, transport: 'tcp', product: 'HTTPS' }],
+        services: [
+          {
+            port: 443,
+            transport: 'tcp',
+            product: 'HTTPS',
+            vulnerabilities: ['CVE-2024-12345'],
+          },
+        ],
+        reportedCves: ['CVE-2024-12345'],
+        kevMatches: [
+          {
+            cveId: 'CVE-2024-12345',
+            vendor: 'Example Vendor',
+            product: 'Example Product',
+            dueDate: '2026-10-01',
+          },
+        ],
         hostnames: ['example.net'],
         domains: [],
         city: 'Example City',
@@ -216,6 +259,8 @@ test('Shodan device selection shows the approximate network location and provena
   assert.match(panel.devicePopup.textContent, /SELECTED SHODAN DEVICE/);
   assert.match(panel.devicePopup.textContent, /8\.8\.4\.4/);
   assert.match(panel.devicePopup.textContent, /443\/tcp/);
+  assert.match(panel.devicePopup.textContent, /CISA KEV matches · 1/);
+  assert.match(panel.devicePopup.textContent, /CVE-2024-12345/);
   assert.match(panel.devicePopup.textContent, /IPwho\.is IP geolocation/);
   assert.match(
     panel.devicePopup.textContent,

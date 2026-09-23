@@ -9,12 +9,17 @@ const DSHIELD_URLS = Object.freeze({
   ips: 'https://feeds.dshield.org/feeds/topips.txt',
   ports: 'https://feeds.dshield.org/feeds/topports_source.txt',
 });
+const CISA_KEV_URL =
+  'https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json';
 const RADAR_TTL_MS = 15 * 60_000;
 const DSHIELD_TTL_MS = 60 * 60_000;
+const CISA_KEV_TTL_MS = 60 * 60_000;
+const CISA_KEV_MAX_STALE_MS = 7 * 24 * 60 * 60_000;
 const MAX_STALE_MS = 6 * 60 * 60_000;
 const HTTP_TIMEOUT_MS = 12_000;
 const JSON_BODY_LIMIT = 256 * 1024;
 const TEXT_BODY_LIMIT = 128 * 1024;
+const CISA_KEV_BODY_LIMIT = 4 * 1024 * 1024;
 
 function failure(code, status = 503) {
   return Object.assign(new Error(code), { code, status });
@@ -35,6 +40,103 @@ function percent(value) {
   return Number.isFinite(number) && number >= 0 && number <= 100
     ? number
     : null;
+}
+
+function catalogText(value, max = 2_000) {
+  if (typeof value !== 'string') return null;
+  const candidate = value.trim();
+  return candidate &&
+    candidate.length <= max &&
+    !/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(candidate)
+    ? candidate
+    : null;
+}
+
+function dateOnly(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value))
+    return null;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  if (
+    !Number.isFinite(parsed.getTime()) ||
+    parsed.toISOString().slice(0, 10) !== value
+  )
+    return null;
+  return value;
+}
+
+function parseKevCatalog(payload, fetchedAt) {
+  const rows = payload?.vulnerabilities;
+  if (
+    !Array.isArray(rows) ||
+    rows.length === 0 ||
+    rows.length > 5_000 ||
+    !Number.isSafeInteger(payload?.count) ||
+    payload.count !== rows.length
+  )
+    throw failure('invalid_kev_data');
+  const seen = new Set();
+  const vulnerabilities = rows.map((row) => {
+    const cveId = String(row?.cveID || '').toUpperCase();
+    const vendor = catalogText(row?.vendorProject, 120);
+    const product = catalogText(row?.product, 200);
+    const name = catalogText(row?.vulnerabilityName, 300);
+    const dateAdded = dateOnly(row?.dateAdded);
+    const shortDescription = catalogText(row?.shortDescription, 2_000);
+    const requiredAction = catalogText(row?.requiredAction, 2_000);
+    const dueDate = dateOnly(row?.dueDate);
+    if (
+      !/^CVE-\d{4}-\d{4,}$/.test(cveId) ||
+      seen.has(cveId) ||
+      !vendor ||
+      !product ||
+      !name ||
+      !dateAdded ||
+      !shortDescription ||
+      !requiredAction ||
+      !dueDate
+    )
+      throw failure('invalid_kev_data');
+    seen.add(cveId);
+    const ransomware = ['Known', 'Unknown'].includes(
+      row?.knownRansomwareCampaignUse,
+    )
+      ? row.knownRansomwareCampaignUse
+      : 'Unknown';
+    return {
+      cveId,
+      vendor,
+      product,
+      name,
+      dateAdded,
+      shortDescription,
+      requiredAction,
+      dueDate,
+      ransomware,
+      forensicTriage: row?.forensicTriage === 'Yes',
+      notes: catalogText(row?.notes, 2_000),
+      cwes: Array.isArray(row?.cwes)
+        ? row.cwes
+            .slice(0, 20)
+            .map((cwe) => catalogText(cwe, 32))
+            .filter(Boolean)
+        : [],
+    };
+  });
+  const catalogVersion = catalogText(payload?.catalogVersion, 32);
+  const dateReleased = Date.parse(payload?.dateReleased);
+  if (!catalogVersion || !Number.isFinite(dateReleased))
+    throw failure('invalid_kev_data');
+  return {
+    schemaVersion: 1,
+    provider: 'cisa-kev',
+    attribution: 'CISA Known Exploited Vulnerabilities Catalog',
+    catalogVersion,
+    dateReleased: new Date(dateReleased).toISOString(),
+    fetchedAt,
+    stale: false,
+    count: payload.count,
+    vulnerabilities,
+  };
 }
 
 function locationCodes(rows, kind) {
@@ -196,7 +298,14 @@ function getWindow(payload, now) {
 
 async function fetchBounded(
   url,
-  { fetchImpl, signal, token = null, cap, json = true },
+  {
+    fetchImpl,
+    signal,
+    token = null,
+    cap,
+    json = true,
+    invalidDataCode = 'invalid_radar_data',
+  },
 ) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), HTTP_TIMEOUT_MS);
@@ -215,7 +324,7 @@ async function fetchBounded(
     });
     if (!response.ok) {
       await response.body?.cancel();
-      if (response.status === 401 || response.status === 403)
+      if (token && (response.status === 401 || response.status === 403))
         throw failure('invalid_credentials', 401);
       if (response.status === 429) throw failure('rate_limited', 429);
       throw failure('upstream_unavailable');
@@ -226,7 +335,7 @@ async function fetchBounded(
     try {
       return JSON.parse(body);
     } catch {
-      throw failure('invalid_radar_data');
+      throw failure(invalidDataCode);
     }
   } catch (error) {
     if (signal?.aborted) throw signal.reason ?? new Error('cancelled');
@@ -311,6 +420,7 @@ function serveJson(res, status, payload, cacheControl = 'no-store') {
 export function cyberProxy({ fetchImpl = fetch, now = () => Date.now() } = {}) {
   const radarCache = makeProxyCache();
   const dshieldCache = makeProxyCache();
+  const kevCache = makeProxyCache();
   const enrichment = createCyberEnrichmentProviders({ fetchImpl, now });
 
   async function requestRadarSnapshot({ token, signal, force = false }) {
@@ -497,6 +607,38 @@ export function cyberProxy({ fetchImpl = fetch, now = () => Date.now() } = {}) {
     return operation;
   }
 
+  async function requestKevSnapshot({ signal, force = false } = {}) {
+    const key = 'cisa-kev';
+    const cached = kevCache.entries.get(key);
+    if (!force && cached && now() - cached.fetchedAt < CISA_KEV_TTL_MS)
+      return cached;
+    if (kevCache.pending.has(key)) return kevCache.pending.get(key);
+    const operation = (async () => {
+      try {
+        const payload = await fetchBounded(CISA_KEV_URL, {
+          fetchImpl,
+          signal,
+          cap: CISA_KEV_BODY_LIMIT,
+          invalidDataCode: 'invalid_kev_data',
+        });
+        const value = parseKevCatalog(payload, new Date(now()).toISOString());
+        const entry = { value, fetchedAt: now() };
+        kevCache.entries.set(key, entry);
+        return entry;
+      } catch (error) {
+        if (signal?.aborted) throw error;
+        const current = kevCache.entries.get(key);
+        if (current && now() - current.fetchedAt <= CISA_KEV_MAX_STALE_MS)
+          return { ...current, value: { ...current.value, stale: true } };
+        throw error?.code ? error : failure('upstream_unavailable');
+      } finally {
+        kevCache.pending.delete(key);
+      }
+    })();
+    kevCache.pending.set(key, operation);
+    return operation;
+  }
+
   async function testRadarConnection({ token, signal } = {}) {
     const secret = String(
       token || process.env.CLOUDFLARE_RADAR_API_TOKEN || '',
@@ -531,7 +673,9 @@ export function cyberProxy({ fetchImpl = fetch, now = () => Date.now() } = {}) {
       const entry =
         provider === 'cloudflare-radar'
           ? await requestRadarSnapshot({ signal: controller.signal })
-          : await requestDshieldSnapshot({ signal: controller.signal });
+          : provider === 'dshield'
+            ? await requestDshieldSnapshot({ signal: controller.signal })
+            : await requestKevSnapshot({ signal: controller.signal });
       serveJson(res, 200, entry.value);
     } catch (error) {
       if (controller.signal.aborted) return;
@@ -541,6 +685,7 @@ export function cyberProxy({ fetchImpl = fetch, now = () => Date.now() } = {}) {
         'rate_limited',
         'invalid_radar_data',
         'invalid_dshield_data',
+        'invalid_kev_data',
       ].includes(error?.code)
         ? error.code
         : 'upstream_unavailable';
@@ -673,6 +818,9 @@ export function cyberProxy({ fetchImpl = fetch, now = () => Date.now() } = {}) {
       middlewares.use('/api/cyber/dshield', (req, res) =>
         handler('dshield', req, res),
       );
+      middlewares.use('/api/cyber/kev', (req, res) =>
+        handler('cisa-kev', req, res),
+      );
       middlewares.use(
         '/api/cyber/enrich/shodan/host',
         enrichmentHandler(({ ip }, options) =>
@@ -708,6 +856,9 @@ export function cyberProxy({ fetchImpl = fetch, now = () => Date.now() } = {}) {
       middlewares.use('/api/cyber/dshield', (req, res) =>
         handler('dshield', req, res),
       );
+      middlewares.use('/api/cyber/kev', (req, res) =>
+        handler('cisa-kev', req, res),
+      );
       middlewares.use(
         '/api/cyber/enrich/shodan/host',
         enrichmentHandler(({ ip }, options) =>
@@ -738,6 +889,7 @@ export function cyberProxy({ fetchImpl = fetch, now = () => Date.now() } = {}) {
     },
     requestRadarSnapshot,
     requestDshieldSnapshot,
+    requestKevSnapshot,
     testRadarConnection,
     testShodanConnection: enrichment.testShodanConnection,
     testGreyNoiseConnection: enrichment.testGreyNoiseConnection,

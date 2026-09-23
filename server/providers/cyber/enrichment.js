@@ -25,6 +25,7 @@ const SHODAN_SEARCH_FIELDS = [
   'isp',
   'asn',
   'hostnames',
+  'vulns',
   'location',
   'os',
 ].join(',');

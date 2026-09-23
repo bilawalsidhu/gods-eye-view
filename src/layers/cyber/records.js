@@ -13,6 +13,16 @@ function boundedText(value, max = 160) {
     : null;
 }
 
+function boundedCatalogText(value, max = 2_000) {
+  if (typeof value !== 'string') return null;
+  const text = value.trim();
+  return text &&
+    text.length <= max &&
+    !/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(text)
+    ? text
+    : null;
+}
+
 function publicIPv4Text(value) {
   if (typeof value !== 'string') return false;
   const parts = value.split('.');
@@ -166,6 +176,80 @@ function normalizeShodanSearchResult(value) {
     fetchedAt,
     attribution: boundedText(value.attribution, 120),
     matches: Object.freeze(matches),
+  });
+}
+
+function normalizeCyberKevSnapshot(value) {
+  const fetchedAt = iso(value?.fetchedAt);
+  const dateReleased = iso(value?.dateReleased);
+  if (
+    !value ||
+    value.provider !== 'cisa-kev' ||
+    !fetchedAt ||
+    !dateReleased ||
+    !boundedText(value.catalogVersion, 32) ||
+    !boundedText(value.attribution, 120) ||
+    !Array.isArray(value.vulnerabilities) ||
+    value.vulnerabilities.length === 0 ||
+    value.vulnerabilities.length > 5_000 ||
+    value.count !== value.vulnerabilities.length
+  )
+    throw new Error('Malformed CISA KEV response');
+  const seen = new Set();
+  const vulnerabilities = value.vulnerabilities.map((item) => {
+    const cveId = boundedText(item?.cveId, 24)?.toUpperCase();
+    const vendor = boundedCatalogText(item?.vendor, 120);
+    const product = boundedCatalogText(item?.product, 200);
+    const name = boundedCatalogText(item?.name, 300);
+    const dateAdded = boundedText(item?.dateAdded, 10);
+    const dueDate = boundedText(item?.dueDate, 10);
+    const shortDescription = boundedCatalogText(item?.shortDescription, 2_000);
+    const requiredAction = boundedCatalogText(item?.requiredAction, 2_000);
+    if (
+      !/^CVE-\d{4}-\d{4,}$/.test(cveId || '') ||
+      seen.has(cveId) ||
+      !vendor ||
+      !product ||
+      !name ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(dateAdded || '') ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(dueDate || '') ||
+      !shortDescription ||
+      !requiredAction
+    )
+      throw new Error('Malformed CISA KEV response');
+    seen.add(cveId);
+    return Object.freeze({
+      cveId,
+      vendor,
+      product,
+      name,
+      dateAdded,
+      shortDescription,
+      requiredAction,
+      dueDate,
+      ransomware: ['Known', 'Unknown'].includes(item?.ransomware)
+        ? item.ransomware
+        : 'Unknown',
+      forensicTriage: item?.forensicTriage === true,
+      notes: boundedCatalogText(item?.notes, 2_000),
+      cwes: Object.freeze(
+        (Array.isArray(item?.cwes) ? item.cwes : [])
+          .slice(0, 20)
+          .map((cwe) => boundedText(cwe, 32))
+          .filter(Boolean),
+      ),
+    });
+  });
+  return Object.freeze({
+    schemaVersion: 1,
+    provider: 'cisa-kev',
+    attribution: boundedText(value.attribution, 120),
+    catalogVersion: boundedText(value.catalogVersion, 32),
+    dateReleased,
+    fetchedAt,
+    stale: value.stale === true,
+    count: vulnerabilities.length,
+    vulnerabilities: Object.freeze(vulnerabilities),
   });
 }
 
@@ -358,4 +442,5 @@ export {
   normalizeObservation as normalizeCyberObservation,
   normalizeEnrichmentRecord as normalizeCyberEnrichment,
   normalizeShodanSearchResult,
+  normalizeCyberKevSnapshot,
 };

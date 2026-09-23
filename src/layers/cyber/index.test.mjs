@@ -144,12 +144,38 @@ const dshield = {
   ports: [{ rank: 1, port: 443, protocol: 'tcp', label: 'https' }],
   notice: 'not a blocklist',
 };
+const kev = {
+  provider: 'cisa-kev',
+  attribution: 'CISA Known Exploited Vulnerabilities Catalog',
+  catalogVersion: '2026.09.23',
+  dateReleased: '2026-09-23T12:51:35.821Z',
+  fetchedAt: '2026-09-23T13:00:00.000Z',
+  stale: false,
+  count: 1,
+  vulnerabilities: [
+    {
+      cveId: 'CVE-2024-12345',
+      vendor: 'Example Vendor',
+      product: 'Example Product',
+      name: 'Example vulnerability',
+      dateAdded: '2026-09-22',
+      shortDescription: 'Example description.',
+      requiredAction: 'Apply the vendor update.',
+      dueDate: '2026-10-01',
+      ransomware: 'Unknown',
+      forensicTriage: false,
+      notes: null,
+      cwes: [],
+    },
+  ],
+};
 
 test('renders Radar aggregates only and keeps DShield in the non-geographic row list', async () => {
   const layer = createCyberLayer({
     source: {
       getRadarSnapshot: async () => radar,
       getDshieldSnapshot: async () => dshield,
+      getKevSnapshot: async () => kev,
     },
     cesium,
   });
@@ -198,6 +224,7 @@ test('Radar map selection reports marker and paired-flow context and clears on d
     source: {
       getRadarSnapshot: async () => radar,
       getDshieldSnapshot: async () => dshield,
+      getKevSnapshot: async () => kev,
     },
     cesium,
   });
@@ -237,7 +264,14 @@ test('Shodan area search uses the visible map radius, renders devices, and expos
     latitude: 37.751,
     longitude: -97.822,
     organization: 'Example Org',
-    services: [{ port: 443, transport: 'tcp', product: 'HTTPS' }],
+    services: [
+      {
+        port: 443,
+        transport: 'tcp',
+        product: 'HTTPS',
+        vulnerabilities: ['CVE-2024-12345'],
+      },
+    ],
     hostnames: ['example.net'],
     domains: [],
     geographicPrecision: 'network-approximate',
@@ -251,6 +285,7 @@ test('Shodan area search uses the visible map radius, renders devices, and expos
     source: {
       getRadarSnapshot: async () => radar,
       getDshieldSnapshot: async () => dshield,
+      getKevSnapshot: async () => kev,
       searchShodanArea: async (area) => {
         receivedArea = area;
         return {
@@ -296,6 +331,7 @@ test('Shodan area search uses the visible map radius, renders devices, and expos
   });
   layer.setThreatIntelListener((state) => states.push(state));
   layer.enable();
+  await layer.update();
   await layer.getThreatIntelState().onShodanAreaSearch();
   assert.ok(Math.abs(receivedArea.latitude - 40) < 1e-9);
   assert.ok(Math.abs(receivedArea.longitude + 75) < 1e-9);
@@ -319,6 +355,10 @@ test('Shodan area search uses the visible map radius, renders devices, and expos
   });
   assert.equal(states.at(-1).selectedShodan.ip, '8.8.4.4');
   assert.ok(states.at(-1).selectedShodan.visualOffsetMeters > 0);
+  assert.equal(
+    states.at(-1).selectedShodan.kevMatches[0].cveId,
+    'CVE-2024-12345',
+  );
   assert.equal(states.at(-1).selectedRadar, null);
   layer.destroy();
 });
@@ -332,6 +372,7 @@ test('provider errors remain isolated and provider toggles remove their records'
         throw new Error('Radar offline');
       },
       getDshieldSnapshot: async () => dshield,
+      getKevSnapshot: async () => kev,
     },
     cesium,
   });
