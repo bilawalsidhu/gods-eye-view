@@ -312,6 +312,33 @@
   backdrop-filter: blur(24px) saturate(1.4);
   -webkit-backdrop-filter: blur(24px) saturate(1.4);
 }
+.cyber-intel-map-legend-panel {
+  position: fixed;
+  z-index: 109;
+  top: var(--right-stack-safe-top, 26vh);
+  right: calc(var(--right-rail-x) + 370px);
+  width: min(300px, calc(100vw - 24px));
+  max-height: min(42vh, 360px);
+  overflow-y: auto;
+  pointer-events: auto;
+}
+.cyber-intel-map-legend-inner {
+  padding: 12px;
+  color: var(--text-primary);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--panel-radius);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+}
+#cyber-intel-panel.cyber-intel-expanded
+  ~ #cyber-intel-legend-panel:not([hidden]) {
+  right: calc(var(--right-rail-x) + 610px);
+}
+#cyber-intel-legend-panel[hidden] {
+  display: none !important;
+}
 .cyber-intel-body {
   display: flex;
   flex-direction: column;

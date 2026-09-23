@@ -1,5 +1,12 @@
 /* ── Responsive ───────────────────────────────── */
 @media (max-width: 720px) {
+  #cyber-intel-legend-panel:not([hidden]) {
+    top: 16px;
+    right: 16px;
+    width: min(260px, calc(100vw - 32px));
+    max-height: min(32vh, 280px);
+  }
+
   #pp-toggles {
     --pp-expanded-width: 176px;
     position: relative;

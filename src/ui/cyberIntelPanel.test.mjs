@@ -58,6 +58,8 @@ class FakeNode {
 function fixture() {
   const panel = new FakeNode('section', 'panel-collapsible collapsed');
   const body = new FakeNode('div');
+  const legendPanel = new FakeNode('section');
+  const legendContent = new FakeNode('div');
   const documentBody = new FakeNode('body');
   const disclosure = new FakeNode('button');
   disclosure.click = () => panel.classList.remove('collapsed');
@@ -67,11 +69,18 @@ function fixture() {
     createElement: (tag) => new FakeNode(tag),
     createTextNode: (text) => ({ textContent: String(text) }),
     getElementById: (id) =>
-      ({ 'cyber-intel-panel': panel, 'cyber-intel-body': body })[id] || null,
+      ({
+        'cyber-intel-panel': panel,
+        'cyber-intel-body': body,
+        'cyber-intel-legend-panel': legendPanel,
+        'cyber-intel-map-legend-content': legendContent,
+      })[id] || null,
   };
   return {
     panel,
     body,
+    legendPanel,
+    legendContent,
     documentRef,
     disclosure,
   };
@@ -168,6 +177,7 @@ test('Cyber Threat Intel remains hidden unless Cyber Activity is enabled', () =>
   };
   layer.listener(layer.state);
   assert.equal(f.panel.hidden, false);
+  assert.equal(f.legendPanel.hidden, false);
   assert.equal(f.panel.classList.contains('collapsed'), false);
   assert.match(f.body.textContent, /192\.0\.2\.1/);
   assert.match(f.body.textContent, /Current Top 10 malicious sources/);
@@ -179,17 +189,28 @@ test('Cyber Threat Intel remains hidden unless Cyber Activity is enabled', () =>
   assert.match(f.body.textContent, /Shodan Exposed Device Search/);
   assert.match(f.body.textContent, /CISA Known Exploited Vulnerabilities/);
   assert.match(f.body.textContent, /CVE-2024-12345/);
-  assert.match(f.body.textContent, /CloudFlare Radar/);
+  assert.match(f.legendContent.textContent, /CloudFlare Radar/);
+  assert.match(f.legendContent.textContent, /Shodan/);
+  assert.match(
+    f.legendContent.textContent,
+    /Gold dot · searched Shodan device/,
+  );
+  assert.ok(
+    f.legendContent.textContent.indexOf('CloudFlare Radar') <
+      f.legendContent.textContent.indexOf('Shodan'),
+  );
   assert.match(f.body.textContent, /Top Attackers & Target Ports/);
   assert.ok(
     f.body.textContent.indexOf('Shodan Exposed Device Search') <
-      f.body.textContent.indexOf('CloudFlare Radar'),
+      f.body.textContent.indexOf('CISA Known Exploited Vulnerabilities'),
   );
   assert.match(f.body.textContent, /query credit/);
   assert.match(f.body.textContent, /Shodan Search/);
   assert.match(f.body.textContent, /A search uses one query credit/);
-  assert.match(f.body.textContent, /optional query/);
-  assert.match(f.body.textContent, /IPwho\.is approximate network geolocation/);
+  assert.match(
+    f.body.textContent,
+    /Missing coordinates may use approximate IP geolocation/,
+  );
   assert.match(f.body.textContent, /8\.8\.4\.4/);
   layer.state = {
     enabled: false,
@@ -199,6 +220,8 @@ test('Cyber Threat Intel remains hidden unless Cyber Activity is enabled', () =>
   layer.listener(layer.state);
   assert.equal(f.panel.hidden, true);
   assert.equal(f.panel.inert, true);
+  assert.equal(f.legendPanel.hidden, true);
+  assert.equal(f.legendPanel.inert, true);
   panel.destroy();
 });
 

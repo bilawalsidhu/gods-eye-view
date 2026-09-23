@@ -23,6 +23,10 @@ export class CyberIntelPanel {
     this.document = documentRef;
     this.panel = documentRef?.getElementById?.('cyber-intel-panel') || null;
     this.body = documentRef?.getElementById?.('cyber-intel-body') || null;
+    this.legendPanel =
+      documentRef?.getElementById?.('cyber-intel-legend-panel') || null;
+    this.legendContent =
+      documentRef?.getElementById?.('cyber-intel-map-legend-content') || null;
     this.devicePopup =
       typeof documentRef?.createElement === 'function'
         ? element(documentRef, 'div', 'cyber-device-popup')
@@ -915,7 +919,6 @@ export class CyberIntelPanel {
       ],
       ['cyber-legend-both', 'Origin and target country'],
       ['cyber-legend-flow', 'Red arrow · reported origin → target pair'],
-      ['cyber-legend-shodan', 'Gold dot · searched Shodan device'],
     ];
     for (const [swatchClass, label] of entries) {
       const row = element(this.document, 'p', 'cyber-intel-legend-row');
@@ -928,7 +931,22 @@ export class CyberIntelPanel {
         this.document,
         'p',
         'cyber-intel-provenance',
-        'Radar positions are country reference anchors. Arrows show only the top 10 pairs Cloudflare reports; a dot without a line has no pair in that set. Arrows show aggregate associations, not network routes. Shodan devices appear only after an area search; their IP-based positions are approximate network locations.',
+        'Radar positions are country reference anchors. Arrows show only the top 10 pairs Cloudflare reports; a dot without a line has no pair in that set. Arrows show aggregate associations, not network routes.',
+      ),
+    );
+    legend.append(element(this.document, 'h3', '', 'Shodan'));
+    const shodanRow = element(this.document, 'p', 'cyber-intel-legend-row');
+    shodanRow.append(element(this.document, 'span', 'cyber-legend-shodan'));
+    shodanRow.append(
+      this.document.createTextNode('Gold dot · searched Shodan device'),
+    );
+    legend.append(shodanRow);
+    legend.append(
+      element(
+        this.document,
+        'p',
+        'cyber-intel-provenance',
+        'Shodan devices appear after an area search; IP-based positions are approximate network locations.',
       ),
     );
     return legend;
@@ -947,6 +965,11 @@ export class CyberIntelPanel {
     this.panel.hidden = !isEnabled;
     this.panel.setAttribute('aria-hidden', String(!isEnabled));
     this.panel.inert = !isEnabled;
+    if (this.legendPanel) {
+      this.legendPanel.hidden = !isEnabled;
+      this.legendPanel.inert = !isEnabled;
+    }
+    this.legendContent?.replaceChildren();
     this.body.replaceChildren();
     if (!isEnabled) {
       if (this.devicePopup) this.devicePopup.hidden = true;
@@ -978,7 +1001,7 @@ export class CyberIntelPanel {
 
     this.body.append(this._renderShodanSearch(state));
     this.body.append(this._renderKevCatalog(state));
-    this.body.append(this._renderLegend());
+    this.legendContent?.append(this._renderLegend());
 
     const selected = state.selectedRadar;
     if (selected) {
