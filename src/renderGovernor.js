@@ -41,14 +41,40 @@ const CONTINUOUS_COOLDOWN_MS = 100;
 export const BASE_TARGET_FRAME_RATE = 60;
 
 /**
- * Scene frame rate while the ONLY continuous-render holder is the style
- * animation loop and the camera is still (Phase 9 Batch P). The style
- * shaders are wall-clock-timed, so 30 fps is visually identical for them
- * and halves the idle GPU cost of a retro/CRT-styled boot (the default
- * style keeps such a hold alive forever). Any second hold, any camera
- * motion, or full idle restores the baseline immediately.
+ * Scene frame rate when the camera is parked and EVERY continuous-render
+ * holder is a wall-clock-timed animator (see LOW_DEMAND_HOLD_OWNERS). Cesium's
+ * default render loop gates actual `render()` submissions on `targetFrameRate`
+ * (Viewer.js `startRenderLoop`: render only when `frameTime - lastFrameTime >
+ * 1000/targetFrameRate`), so a 30 fps policy halves GPU submissions while the
+ * world state stays bit-identical — wall-clock animators sample the same
+ * trajectory, just at half the samples. Proven on the style loop (Phase 9
+ * Batch P); extended 2026-09-23 after the idle-GPU audit found the app NEVER
+ * re-enters idle in a default session (the default style animates forever and
+ * every live layer holds continuous while enabled), which pegs real GPUs at
+ * ~99% with a parked camera.
  */
-export const STYLE_ANIM_LOW_DEMAND_FPS = 30;
+export const LOW_DEMAND_FPS = 30;
+
+/** Back-compat alias: the policy began life scoped to the style loop. */
+export const STYLE_ANIM_LOW_DEMAND_FPS = LOW_DEMAND_FPS;
+
+/**
+ * Continuous-render holders that are wall-clock-timed animators: their output
+ * is a function of wall time, NOT of per-frame accumulation, so rendering
+ * them at LOW_DEMAND_FPS produces the identical world state at half the GPU
+ * cost. Any holder NOT in this set (camera follows, replay cameras, cockpit,
+ * CCTV projection loops, annotation drawing) forces the baseline rate — an
+ * unknown owner id is always fail-safe baseline.
+ */
+export const LOW_DEMAND_HOLD_OWNERS = Object.freeze(new Set([
+  'flights', // dead-reckoned fleet interpolation (JulianDate.now-based)
+  'military', // same pipeline, military fork
+  'satellites', // SGP4 propagation, wall-clock-positioned
+  'planets', // computed ephemeris
+  'traffic', // elapsed-time route animation
+  'ais-vessels', // dead-reckoned vessel interpolation
+  'style-anim', // wall-clock-timed style shaders (the original member)
+]));
 
 /** Owner id of the style loop's continuous-render hold (src/ui.js). */
 export const STYLE_ANIM_OWNER_ID = 'style-anim';
@@ -81,18 +107,21 @@ const RECENT_REQUEST_CAP = 16;
  * @param {string[]} [options.holds] Active hold owner ids.
  * @param {boolean} [options.cameraActive] Whether camera motion is underway.
  * @param {number} [options.baseFps] Baseline loop rate.
- * @param {number} [options.lowDemandFps] Rate when style-anim is the only
- *   holder and the camera is still.
+ * @param {number} [options.lowDemandFps] Rate when every holder is a
+ *   wall-clock-timed animator and the camera is still.
  * @returns {number} targetFrameRate the viewer should run at.
  */
 export function resolveGovernorTargetFrameRate({
   holds = [],
   cameraActive = false,
   baseFps = BASE_TARGET_FRAME_RATE,
-  lowDemandFps = STYLE_ANIM_LOW_DEMAND_FPS,
+  lowDemandFps = LOW_DEMAND_FPS,
 } = {}) {
   if (cameraActive) return baseFps;
-  return holds.length === 1 && holds[0] === STYLE_ANIM_OWNER_ID ? lowDemandFps : baseFps;
+  // A parked camera plus ONLY wall-clock-timed animators is the low-demand
+  // regime (empty holds = idle mode, where the rate is moot — report base).
+  const lowDemand = holds.length > 0 && holds.every((owner) => LOW_DEMAND_HOLD_OWNERS.has(owner));
+  return lowDemand ? lowDemandFps : baseFps;
 }
 
 /**
@@ -252,18 +281,27 @@ export function governorRequestRender(reason = 'unspecified') {
 
 /**
  * @returns {{installed: boolean, mode: 'continuous'|'idle', holds: string[],
+ *   policy: 'idle'|'camera'|'low-demand',
  *   recentRequests: Array<{reason: string, at: number}>, targetFrameRate: number|null,
  *   cameraActive: boolean}}
  *   Read-only snapshot of the governor for QA harnesses and the HUD: whether it
- *   is installed, the derived mode, sorted hold owners, the last idle-mode
- *   render requests, the live frame rate (null pre-install), and the
- *   camera-motion flag behind the low-demand policy.
+ *   is installed, the derived mode, sorted hold owners, which frame-rate policy
+ *   resolved ('idle' = no holds, 'camera' = baseline while moving or any
+ *   non-animator holder, 'low-demand' = parked camera + wall-clock animators
+ *   only), the last idle-mode render requests, the live frame rate (null
+ *   pre-install), and the camera-motion flag behind the low-demand policy.
  */
 export function getRenderGovernorDiagnostics() {
+  const holds = [..._holds].sort();
   return {
     installed: _installed,
-    mode: _holds.size > 0 ? 'continuous' : 'idle',
-    holds: [..._holds].sort(),
+    mode: holds.length > 0 ? 'continuous' : 'idle',
+    holds,
+    policy: holds.length === 0
+      ? 'idle'
+      : resolveGovernorTargetFrameRate({ holds, cameraActive: _cameraActive }) === BASE_TARGET_FRAME_RATE
+        ? 'camera'
+        : 'low-demand',
     recentRequests: [..._recentRequests],
     targetFrameRate: _installed ? _viewer?.targetFrameRate ?? null : null,
     cameraActive: _cameraActive,

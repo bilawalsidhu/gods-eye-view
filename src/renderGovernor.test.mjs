@@ -138,16 +138,18 @@ test('low-demand policy: style-anim alone with a still camera runs the scene at 
   assert.equal(viewer.targetFrameRate, BASE_TARGET_FRAME_RATE);
 });
 
-test('any second hold — or camera motion — restores the baseline immediately', () => {
+test('camera motion — or any non-animator holder — restores the baseline immediately', () => {
   const { viewer, moveStart, moveEnd } = makeViewer();
   installRenderGovernor(viewer);
   moveEnd.fire();
   holdContinuousRender(STYLE_ANIM_OWNER_ID);
   assert.equal(viewer.targetFrameRate, STYLE_ANIM_LOW_DEMAND_FPS);
 
-  holdContinuousRender('flights');
-  assert.equal(viewer.targetFrameRate, BASE_TARGET_FRAME_RATE, 'second holder → baseline');
-  releaseContinuousRender('flights', true);
+  // A camera/UI-driven holder (tracked follow) forces baseline even with a
+  // parked camera — it is NOT a wall-clock animator.
+  holdContinuousRender('tracked-entity');
+  assert.equal(viewer.targetFrameRate, BASE_TARGET_FRAME_RATE, 'tracked follow → baseline');
+  releaseContinuousRender('tracked-entity', true);
   assert.equal(viewer.targetFrameRate, STYLE_ANIM_LOW_DEMAND_FPS, 'back to low demand');
 
   moveStart.fire();
@@ -155,6 +157,29 @@ test('any second hold — or camera motion — restores the baseline immediately
   assert.equal(getRenderGovernorDiagnostics().cameraActive, true);
   moveEnd.fire();
   assert.equal(viewer.targetFrameRate, STYLE_ANIM_LOW_DEMAND_FPS, 'camera settled → low demand');
+});
+
+test('multiple wall-clock animators share the low-demand rate (idle-GPU audit fix)', () => {
+  // 2026-09-23 audit: the app NEVER re-enters idle in a default session — the
+  // default style animates forever and every live layer holds continuous — so
+  // a parked camera still rendered at baseline and pegged real GPUs. The
+  // wall-clock animators are collectively low-demand: a parked session with
+  // several live layers runs at LOW_DEMAND_FPS, halving GPU submissions.
+  const { viewer, moveEnd } = makeViewer();
+  installRenderGovernor(viewer);
+  moveEnd.fire();
+  for (const owner of ['flights', 'satellites', 'ais-vessels', 'style-anim']) {
+    holdContinuousRender(owner);
+  }
+  assert.equal(viewer.targetFrameRate, STYLE_ANIM_LOW_DEMAND_FPS, 'all-animator holds → low demand');
+  const diag = getRenderGovernorDiagnostics();
+  assert.equal(diag.policy, 'low-demand');
+  // Any camera-driven or unknown holder spoils the set: fail safe to baseline.
+  holdContinuousRender('cctv-projection');
+  assert.equal(viewer.targetFrameRate, BASE_TARGET_FRAME_RATE, 'projection loop → baseline');
+  releaseContinuousRender('cctv-projection', true);
+  holdContinuousRender('some-future-layer');
+  assert.equal(viewer.targetFrameRate, BASE_TARGET_FRAME_RATE, 'unknown holder → baseline');
 });
 
 test('a viewer without camera events still gets mode + baseline-rate behavior', () => {
@@ -180,8 +205,14 @@ test('resolveGovernorTargetFrameRate is pure and pins the decision table', () =>
   assert.equal(resolveGovernorTargetFrameRate({ ...base, holds: [], cameraActive: false }), 60);
   assert.equal(resolveGovernorTargetFrameRate({ ...base, holds: ['style-anim'], cameraActive: false }), 30);
   assert.equal(resolveGovernorTargetFrameRate({ ...base, holds: ['style-anim'], cameraActive: true }), 60);
-  assert.equal(resolveGovernorTargetFrameRate({ ...base, holds: ['style-anim', 'flights'], cameraActive: false }), 60);
-  assert.equal(resolveGovernorTargetFrameRate({ ...base, holds: ['flights'], cameraActive: false }), 60);
+  // 2026-09-23 idle-GPU audit: wall-clock animators are collectively
+  // low-demand; camera-driven holders and unknown ids are baseline.
+  assert.equal(resolveGovernorTargetFrameRate({ ...base, holds: ['style-anim', 'flights'], cameraActive: false }), 30);
+  assert.equal(resolveGovernorTargetFrameRate({ ...base, holds: ['flights'], cameraActive: false }), 30);
+  assert.equal(resolveGovernorTargetFrameRate({ ...base, holds: ['flights', 'military', 'satellites', 'traffic', 'planets', 'ais-vessels'], cameraActive: false }), 30);
+  assert.equal(resolveGovernorTargetFrameRate({ ...base, holds: ['flights', 'tracked-entity'], cameraActive: false }), 60);
+  assert.equal(resolveGovernorTargetFrameRate({ ...base, holds: ['cctv-projection'], cameraActive: false }), 60);
+  assert.equal(resolveGovernorTargetFrameRate({ ...base, holds: ['not-a-known-owner'], cameraActive: false }), 60);
   // Non-default rates flow through (keeps future cadence retunes one-line).
   assert.equal(resolveGovernorTargetFrameRate({ baseFps: 120, lowDemandFps: 45, holds: ['style-anim'], cameraActive: false }), 45);
 });

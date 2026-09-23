@@ -10,12 +10,14 @@
  * share while it holds continuous scene render.
  *
  * It pairs with the render governor's low-demand frame-rate policy
- * (`STYLE_ANIM_LOW_DEMAND_FPS` in renderGovernor.js): when the style loop is
- * the only continuous-render holder and the camera is still, the governor
- * drops the scene loop to the same 30 fps, so the GPU cost of an idle
- * retro-styled boot drops with it. One constant (`STYLE_ANIM_LOW_DEMAND_FPS`,
- * owned by the dependency-free governor) feeds both, so the uniform cadence
- * and the scene cadence can never drift apart.
+ * (`LOW_DEMAND_FPS` in renderGovernor.js): when the camera is parked and
+ * EVERY continuous-render holder is a wall-clock-timed animator — the style
+ * loop among them — the governor drops the scene loop to the same 30 fps, so
+ * a parked-camera session of live layers costs half the GPU submissions
+ * (2026-09-23 idle-GPU audit fix; the policy began life scoped to this loop).
+ * One constant (`STYLE_ANIM_LOW_DEMAND_FPS`, a back-compat alias owned by the
+ * dependency-free governor) feeds both, so the uniform cadence and the scene
+ * cadence can never drift apart.
  *
  * `?styleAnimFps=N` forces a specific uniform-advance rate (1..120) for A/B
  * capture — same escape-hatch pattern as `?msaa=` and `?overlayDpr=`.

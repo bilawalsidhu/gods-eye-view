@@ -175,10 +175,12 @@ async function init() {
     // designed against wall-clock time, not frame count. Measured on the
     // 2026-08-05 perf investigation as a strict halving of idle burn on
     // 120 Hz hardware; a no-op on 60 Hz displays. (perf item 2)
-    // From installRenderGovernor() onward the GOVERNOR owns this knob: it
-    // drops to 30 fps while the style loop is the only continuous-render
-    // holder and the camera is still (Phase 9 Batch P), restoring 60 on any
-    // other hold or camera motion.
+    // From installRenderGovernor() onward the GOVERNOR owns this knob: with
+    // the camera parked and every continuous-render holder a wall-clock-timed
+    // animator (style loop, fleet dead-reckoning, satellites, …) it drops to
+    // 30 fps — the world state is unchanged, only the sampling rate (Phase 9
+    // Batch P, widened by the 2026-09-23 idle-GPU audit) — and restores 60 on
+    // any camera-driven holder or camera motion.
     viewer.targetFrameRate = 60;
 
     // Render-resolution scale policy (Phase 9 Batch R — docs/PLAN.md, sceneRenderScale.js).
