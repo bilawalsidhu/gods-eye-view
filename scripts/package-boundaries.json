@@ -276,7 +276,8 @@
       "server/providers/nvidia-assistant.js",
       "server/providers/jarvis-tools.js",
       "server/providers/nvidia-genai.js",
-      "server/providers/nvidia-vision.js"
+      "server/providers/nvidia-vision.js",
+      "src/ai/freeLlmCatalog.js"
     ],
     "external": ["qrcode"]
   },

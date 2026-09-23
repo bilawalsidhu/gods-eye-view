@@ -8,6 +8,14 @@ import {
 import { handleNvidiaGenAiImage } from './nvidia-genai.js';
 import { handleNvidiaVisionAnalyze } from './nvidia-vision.js';
 import { jarvisToolsProxy } from './jarvis-tools.js';
+import {
+  FREE_LLM_PROVIDERS,
+  findFreeLlmProvider,
+  detectProviderFromKey,
+  getFirstKeyForProvider,
+  getAllActiveProviderCandidates,
+  resolveActiveProviderId,
+} from '../../src/ai/freeLlmCatalog.js';
 
 const NVIDIA_DEFAULT_BASE_URL = 'https://integrate.api.nvidia.com/v1';
 const NVIDIA_DEFAULT_MODEL = 'nvidia/nemotron-3.5-lightning-30b-a3b';
@@ -76,58 +84,41 @@ export function formatNvidiaTools(tools = GEV_REALTIME_TOOLS) {
 }
 
 /**
- * Resolve the appropriate API key based on the active base URL and configured provider keys.
- * Supports dedicated keys (REQUESTY_API_KEY, GROQ_API_KEY, GEMINI_API_KEY, etc.)
- * while falling back to NVIDIA_API_KEY.
+ * Resolve the appropriate API key based on the active base URL and configured
+ * provider keys. Uses the FreeLLM catalog as the single source of truth for
+ * provider definitions and env-var names. Supports dedicated keys
+ * (REQUESTY_API_KEY, GROQ_API_KEY, GEMINI_API_KEY, etc.) while falling back
+ * to NVIDIA_API_KEY.
  */
 export function resolveEffectiveAiKey(bodyKey = null) {
   if (bodyKey) return String(bodyKey).split(',')[0].trim();
-  const baseUrl = (process.env.NVIDIA_BASE_URL || '').toLowerCase();
+  const env = process.env;
+  const baseUrl = (env.NVIDIA_BASE_URL || '').toLowerCase();
 
-  if (baseUrl.includes('manifest.build') && process.env.MANIFEST_API_KEY) {
-    return process.env.MANIFEST_API_KEY.split(',')[0].trim();
-  }
-  if (baseUrl.includes('requesty.ai') && process.env.REQUESTY_API_KEY) {
-    return process.env.REQUESTY_API_KEY.split(',')[0].trim();
-  }
-  if (baseUrl.includes('groq.com') && process.env.GROQ_API_KEY) {
-    return process.env.GROQ_API_KEY.split(',')[0].trim();
-  }
-  if (baseUrl.includes('cerebras.ai') && process.env.CEREBRAS_API_KEY) {
-    return process.env.CEREBRAS_API_KEY.split(',')[0].trim();
-  }
-  if (baseUrl.includes('generativelanguage') && process.env.GEMINI_API_KEY) {
-    return process.env.GEMINI_API_KEY.split(',')[0].trim();
-  }
-  if (baseUrl.includes('mistral.ai') && process.env.MISTRAL_API_KEY) {
-    return process.env.MISTRAL_API_KEY.split(',')[0].trim();
-  }
-  if (baseUrl.includes('cohere.com') && process.env.COHERE_API_KEY) {
-    return process.env.COHERE_API_KEY.split(',')[0].trim();
-  }
-  if (baseUrl.includes('aionlabs.ai') && process.env.AION_API_KEY) {
-    return process.env.AION_API_KEY.split(',')[0].trim();
-  }
-  if (baseUrl.includes('bigmodel.cn') && process.env.ZHIPU_API_KEY) {
-    return process.env.ZHIPU_API_KEY.split(',')[0].trim();
-  }
-  if (baseUrl.includes('sambanova.ai') && process.env.SAMBANOVA_API_KEY) {
-    return process.env.SAMBANOVA_API_KEY.split(',')[0].trim();
-  }
-  if (
-    (baseUrl.includes('together.xyz') || baseUrl.includes('together.ai')) &&
-    process.env.TOGETHER_API_KEY
-  ) {
-    return process.env.TOGETHER_API_KEY.split(',')[0].trim();
-  }
-  if (baseUrl.includes('cloudflare.com') && process.env.CLOUDFLARE_API_KEY) {
-    return process.env.CLOUDFLARE_API_KEY.split(',')[0].trim();
-  }
-  if (baseUrl.includes('openrouter.ai') && process.env.OPENROUTER_API_KEY) {
-    return process.env.OPENROUTER_API_KEY.split(',')[0].trim();
+  // Check NVIDIA_API_KEY for third-party keys by prefix FIRST — a key
+  // prefix (gsk_, rqsty-, etc.) takes precedence over the base URL.
+  const nvidiaKey = env.NVIDIA_API_KEY || '';
+  if (nvidiaKey) {
+    const keyPrefix = nvidiaKey.trim().split(',')[0];
+    const provider = detectProviderFromKey(keyPrefix);
+    if (provider && provider.id !== 'nvidia') {
+      return keyPrefix;
+    }
   }
 
-  const defaultKey = process.env.NVIDIA_API_KEY;
+  // Walk the catalog providers in declaration order and return the first
+  // key whose base URL matches the configured NVIDIA_BASE_URL.
+  for (const provider of FREE_LLM_PROVIDERS) {
+    if (provider.baseUrl && baseUrl.includes(provider.baseUrl.toLowerCase())) {
+      // Keyless providers (e.g. local FreeLLM) don't need a key.
+      if (provider.keyless) return '';
+      const key = getFirstKeyForProvider(provider.id, env);
+      if (key) return key;
+    }
+  }
+
+  // Fall back to the native NVIDIA key.
+  const defaultKey = env.NVIDIA_API_KEY;
   return defaultKey ? defaultKey.split(',')[0].trim() : null;
 }
 

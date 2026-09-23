@@ -9,12 +9,20 @@ import {
   getModelCapabilities,
   getModelsForCategory,
   NVIDIA_MODEL_REGISTRY,
+  getEnvVarForProvider,
+  getKeysForProvider,
+  getFirstKeyForProvider,
+  buildProviderCandidate,
+  getAllActiveProviderCandidates,
+  resolveActiveProviderId,
+  getProviderKeyStatuses,
 } from './freeLlmCatalog.js';
 
 test('FREE_LLM_PROVIDERS exports all providers from awesome-free-llm-apis', () => {
   const ids = FREE_LLM_PROVIDERS.map((p) => p.id);
-  assert.equal(ids.length, 14);
+  assert.equal(ids.length, 15);
   assert.ok(ids.includes('nvidia'));
+  assert.ok(ids.includes('local'));
   assert.ok(ids.includes('gemini'));
   assert.ok(ids.includes('groq'));
   assert.ok(ids.includes('mistral'));
@@ -79,5 +87,129 @@ test('findProviderForModel accurately identifies provider for various models', (
   assert.equal(findProviderForModel('nvidia/nemotron-3.5-lightning-30b-a3b')?.id, 'nvidia');
   assert.equal(findProviderForModel('meta-llama/llama-3.3-70b-instruct:free')?.id, 'openrouter');
   assert.equal(findProviderForModel('Meta-Llama-3.3-70B-Instruct')?.id, 'sambanova');
+});
+
+test('getEnvVarForProvider returns correct env var for each provider', () => {
+  assert.equal(getEnvVarForProvider('nvidia'), 'NVIDIA_API_KEY');
+  assert.equal(getEnvVarForProvider('groq'), 'GROQ_API_KEY');
+  assert.equal(getEnvVarForProvider('gemini'), 'GEMINI_API_KEY');
+  assert.equal(getEnvVarForProvider('cerebras'), 'CEREBRAS_API_KEY');
+  assert.equal(getEnvVarForProvider('mistral'), 'MISTRAL_API_KEY');
+  assert.equal(getEnvVarForProvider('cohere'), 'COHERE_API_KEY');
+  assert.equal(getEnvVarForProvider('aion'), 'AION_API_KEY');
+  assert.equal(getEnvVarForProvider('zhipu'), 'ZHIPU_API_KEY');
+  assert.equal(getEnvVarForProvider('sambanova'), 'SAMBANOVA_API_KEY');
+  assert.equal(getEnvVarForProvider('together'), 'TOGETHER_API_KEY');
+  assert.equal(getEnvVarForProvider('requesty'), 'REQUESTY_API_KEY');
+  assert.equal(getEnvVarForProvider('cloudflare'), 'CLOUDFLARE_API_KEY');
+  assert.equal(getEnvVarForProvider('openrouter'), 'OPENROUTER_API_KEY');
+  assert.equal(getEnvVarForProvider('manifest'), 'MANIFEST_API_KEY');
+  assert.equal(getEnvVarForProvider('unknown'), null);
+});
+
+test('getKeysForProvider parses comma-separated keys from env', () => {
+  const env = {
+    NVIDIA_API_KEY: 'nvapi-key1, nvapi-key2 , nvapi-key3',
+    GROQ_API_KEY: 'gsk_only',
+    EMPTY_API_KEY: '',
+    UNSET_API_KEY: undefined,
+  };
+  const nvidiaKeys = getKeysForProvider('nvidia', env);
+  assert.equal(nvidiaKeys.length, 3);
+  assert.equal(nvidiaKeys[0], 'nvapi-key1');
+  assert.equal(nvidiaKeys[1], 'nvapi-key2');
+  assert.equal(nvidiaKeys[2], 'nvapi-key3');
+  assert.equal(getKeysForProvider('groq', env).length, 1);
+  assert.equal(getKeysForProvider('empty', env).length, 0);
+  assert.equal(getKeysForProvider('unset', env).length, 0);
+  assert.equal(getKeysForProvider('unknown', env).length, 0);
+});
+
+test('getFirstKeyForProvider returns first key or null', () => {
+  const env = { NVIDIA_API_KEY: 'nvapi-first, nvapi-second' };
+  assert.equal(getFirstKeyForProvider('nvidia', env), 'nvapi-first');
+  assert.equal(getFirstKeyForProvider('groq', env), null);
+  assert.equal(getFirstKeyForProvider('unknown', env), null);
+});
+
+test('buildProviderCandidate builds candidate from catalog', () => {
+  const env = { GROQ_API_KEY: 'gsk_test' };
+  const candidate = buildProviderCandidate('groq', 'custom-model', env);
+  assert.ok(candidate);
+  assert.equal(candidate[0].name, 'Groq Cloud');
+  assert.equal(candidate[0].baseUrl, 'https://api.groq.com/openai/v1');
+  assert.equal(candidate[0].key, 'gsk_test');
+  assert.equal(candidate[0].model, 'custom-model');
+  assert.equal(candidate[0].isNvidia, false);
+  assert.equal(candidate[0].emblem, '🚀');
+  // No key = no candidate
+  assert.equal(buildProviderCandidate('groq', 'model', {}), null);
+});
+
+test('getAllActiveProviderCandidates returns all providers with keys', () => {
+  const env = {
+    NVIDIA_API_KEY: 'nvapi-1',
+    GROQ_API_KEY: 'gsk_1,gsk_2',
+    GEMINI_API_KEY: 'AIzaSy1',
+  };
+  const candidates = getAllActiveProviderCandidates(env);
+  const names = candidates.map((c) => c.provider);
+  assert.ok(names.includes('NVIDIA NIM'));
+  assert.ok(names.includes('Groq Cloud'));
+  assert.ok(names.includes('Google Gemini'));
+  assert.ok(!names.includes('Mistral AI'));
+  assert.ok(!names.includes('Cerebras'));
+  // Multiple keys for Groq = multiple candidates
+  const groqCount = candidates.filter((c) => c.provider === 'Groq Cloud').length;
+  assert.equal(groqCount, 2);
+});
+
+test('resolveActiveProviderId picks correct provider from base URL and key', () => {
+  // Groq base URL + Groq key
+  assert.equal(resolveActiveProviderId({
+    NVIDIA_BASE_URL: 'https://api.groq.com/openai/v1',
+    GROQ_API_KEY: 'gsk_test',
+  }), 'groq');
+
+  // Requesty base URL + Requesty key
+  assert.equal(resolveActiveProviderId({
+    NVIDIA_BASE_URL: 'https://router.requesty.ai/v1',
+    REQUESTY_API_KEY: 'rqsty_test',
+  }), 'requesty');
+
+  // Third-party key in NVIDIA_API_KEY (prefix detection)
+  assert.equal(resolveActiveProviderId({
+    NVIDIA_API_KEY: 'gsk_groqKeyInNvidiaSlot',
+    NVIDIA_BASE_URL: 'https://integrate.api.nvidia.com/v1',
+  }), 'groq');
+
+  assert.equal(resolveActiveProviderId({
+    NVIDIA_API_KEY: 'rqsty-requestyKeyInNvidiaSlot',
+    NVIDIA_BASE_URL: 'https://integrate.api.nvidia.com/v1',
+  }), 'requesty');
+
+  // Default to nvidia
+  assert.equal(resolveActiveProviderId({}), 'nvidia');
+  assert.equal(resolveActiveProviderId({
+    NVIDIA_API_KEY: 'nvapi_native',
+    NVIDIA_BASE_URL: 'https://integrate.api.nvidia.com/v1',
+  }), 'nvidia');
+});
+
+test('getProviderKeyStatuses returns status for POWER UP panel', () => {
+  const env = {
+    NVIDIA_API_KEY: 'nvapi_1',
+    GROQ_API_KEY: 'gsk_1',
+  };
+  const status = getProviderKeyStatuses(env);
+  assert.equal(status.activeId, 'nvidia');
+  assert.equal(status.providers.nvidia.set, true);
+  assert.equal(status.providers.nvidia.envVar, 'NVIDIA_API_KEY');
+  assert.equal(status.providers.groq.set, true);
+  assert.equal(status.providers.groq.envVar, 'GROQ_API_KEY');
+  assert.equal(status.providers.gemini.set, false);
+  assert.equal(status.providers.gemini.envVar, 'GEMINI_API_KEY');
+  // All 15 providers present (14 remote + 1 keyless local)
+  assert.equal(Object.keys(status.providers).length, 15);
 });
 

@@ -2,6 +2,10 @@
  * Free LLM API Catalog from awesome-free-llm-apis.
  * Curated list of OpenAI-compatible permanent free-tier LLM inference providers.
  * Includes all 13 providers (1st-party + 3rd-party inference engines).
+ *
+ * NOTE: index 0 is the default fallback for detectProviderFromKey / findFreeLlmProvider
+ * and must remain 'nvidia'. The keyless 'local' provider is appended last so it
+ * never shadows the native NVIDIA slot.
  */
 
 export const FREE_LLM_PROVIDERS = Object.freeze([
@@ -398,6 +402,22 @@ export const FREE_LLM_PROVIDERS = Object.freeze([
     ]),
     description:
       'Unified LLM gateway & router dynamically dispatching queries with smart fallbacks.',
+  }),
+  Object.freeze({
+    id: 'local',
+    name: 'Local FreeLLM',
+    icon: '🖥️',
+    badge: 'KEYLESS',
+    baseUrl: 'http://localhost:11434/v1',
+    defaultModel: 'auto',
+    keyUrl: '',
+    keyPlaceholder: 'No key needed — local server is keyless',
+    keyPrefix: '',
+    envVar: '',
+    keyless: true,
+    models: Object.freeze([{ id: 'auto', label: 'Auto-Detect Local Model' }]),
+    description:
+      'Your own locally-hosted FreeLLM (Ollama, vLLM, text-generation-inference). Runs keyless on localhost — no API key, no rate limits, no data leaves your machine.',
   }),
 ]);
 
@@ -827,4 +847,154 @@ export function findProviderForModel(modelId, preferredProvider = null) {
   )
     return findFreeLlmProvider('nvidia');
   return null;
+}
+
+/**
+ * Get the environment variable name for a provider by its ID.
+ * @param {string} providerId
+ * @returns {string|null}
+ */
+export function getEnvVarForProvider(providerId) {
+  const provider = findFreeLlmProvider(providerId);
+  return provider?.envVar || null;
+}
+
+/**
+ * Get the API key(s) from process.env for a provider by its ID.
+ * Returns an array of trimmed keys (supports comma-separated multi-key env vars).
+ * @param {string} providerId
+ * @param {Record<string, string|undefined>} env e.g. process.env
+ * @returns {string[]}
+ */
+export function getKeysForProvider(providerId, env = process.env) {
+  const envVar = getEnvVarForProvider(providerId);
+  if (!envVar) return [];
+  const val = env[envVar];
+  if (!val) return [];
+  return String(val)
+    .split(',')
+    .map((k) => k.trim())
+    .filter(Boolean);
+}
+
+/**
+ * Get the first available API key for a provider (for load balancing).
+ * @param {string} providerId
+ * @param {Record<string, string|undefined>} env e.g. process.env
+ * @returns {string|null}
+ */
+export function getFirstKeyForProvider(providerId, env = process.env) {
+  const keys = getKeysForProvider(providerId, env);
+  return keys[0] || null;
+}
+
+/**
+ * Build the full provider candidate object for a given provider ID using
+ * the catalog as the source of truth.
+ * @param {string} providerId
+ * @param {string} requestedModel
+ * @param {Record<string, string|undefined>} env e.g. process.env
+ * @returns {object|null}
+ */
+export function buildProviderCandidate(
+  providerId,
+  requestedModel,
+  env = process.env,
+) {
+  const provider = findFreeLlmProvider(providerId);
+  if (!provider) return null;
+  const keys = getKeysForProvider(providerId, env);
+  if (keys.length === 0) return null;
+  // For load balancing, we return multiple candidates if multiple keys exist
+  return keys.map((key, idx) => ({
+    name: provider.name,
+    baseUrl: provider.baseUrl,
+    key,
+    model: requestedModel || provider.defaultModel,
+    isNvidia: providerId === 'nvidia',
+    emblem: provider.icon,
+    provider: provider.name,
+  }));
+}
+
+/**
+ * Get all active provider candidates from environment using the catalog.
+ * This is the single source of truth for swarm/ensemble multi-provider calls.
+ * @param {Record<string, string|undefined>} env e.g. process.env
+ * @returns {object[]}
+ */
+export function getAllActiveProviderCandidates(env = process.env) {
+  const candidates = [];
+  for (const provider of FREE_LLM_PROVIDERS) {
+    const keys = getKeysForProvider(provider.id, env);
+    if (keys.length === 0) continue;
+    // Use the default model for swarm candidates, or first model in catalog
+    const defaultModel =
+      provider.defaultModel || provider.models[0]?.id || 'auto';
+    for (const key of keys) {
+      candidates.push({
+        name: provider.name,
+        baseUrl: provider.baseUrl,
+        key,
+        model: defaultModel,
+        isNvidia: provider.id === 'nvidia',
+        emblem: provider.icon,
+        provider: provider.name,
+      });
+    }
+  }
+  return candidates;
+}
+
+/**
+ * Resolve the active provider ID from the current environment and base URL.
+ * This replaces the hardcoded chain in keySetupCore.mjs.
+ * @param {Record<string, string|undefined>} env e.g. process.env
+ * @returns {string}
+ */
+export function resolveActiveProviderId(env = process.env) {
+  const baseUrl = (env.NVIDIA_BASE_URL || '').toLowerCase();
+
+  // Check NVIDIA_API_KEY for third-party keys by prefix FIRST — a key
+  // prefix (gsk_, rqsty-, etc.) takes precedence over the base URL.
+  const nvidiaKey = env.NVIDIA_API_KEY || '';
+  if (nvidiaKey) {
+    const keyPrefix = nvidiaKey.trim().split(',')[0];
+    const provider = detectProviderFromKey(keyPrefix);
+    if (provider && provider.id !== 'nvidia') {
+      return provider.id;
+    }
+  }
+
+  // Check explicit base URL against catalog providers
+  for (const provider of FREE_LLM_PROVIDERS) {
+    if (provider.baseUrl && baseUrl.includes(provider.baseUrl.toLowerCase())) {
+      // Verify the corresponding key is actually set
+      if (getFirstKeyForProvider(provider.id, env)) {
+        return provider.id;
+      }
+    }
+  }
+
+  // Default to nvidia if no other match
+  return 'nvidia';
+}
+
+/**
+ * Get provider status object for the POWER UP panel.
+ * Returns { activeId, providers: { [providerId]: { set: boolean, envVar: string } } }
+ * @param {Record<string, string|undefined>} env e.g. process.env
+ * @returns {object}
+ */
+export function getProviderKeyStatuses(env = process.env) {
+  const activeId = resolveActiveProviderId(env);
+  const providers = {};
+  for (const provider of FREE_LLM_PROVIDERS) {
+    const keys = getKeysForProvider(provider.id, env);
+    providers[provider.id] = {
+      set: keys.length > 0,
+      envVar: provider.envVar,
+    };
+  }
+  return { activeId, providers };
 }
