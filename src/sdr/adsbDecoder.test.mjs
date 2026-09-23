@@ -547,17 +547,27 @@ test('a surface even/odd pair decodes to the published position and marks the ai
   assert.equal(departed.altitudeFt, 38_000);
 });
 
-test('a single surface frame decodes against the receiver, then against its own fix', () => {
-  // Published local-decode example: odd frame with reference (-43.5, 172.5).
+test('a surface track is seeded by a pair; a single frame then decodes against its own fix', () => {
+  // The receiver is not established to be within 45 NM of the aircraft, so a
+  // lone surface frame does not decode against it (even though this one is).
+  const receiver = { latitude: -43.5, longitude: 172.5 };
   const tracks = new Map();
   let track = updateAircraftTrack(
     tracks,
-    decodeAdsbMessage(SURFACE_ODD, { receivedAt: 1_000 }),
-    { latitude: -43.5, longitude: 172.5 },
+    decodeAdsbMessage(SURFACE_EVEN, { receivedAt: 1_000 }),
+    receiver,
+  );
+  assert.equal(track.lastPositionAt, null, 'no single-frame receiver fix');
+  // The even/odd pair seeds the track at the published position.
+  track = updateAircraftTrack(
+    tracks,
+    decodeAdsbMessage(SURFACE_ODD, { receivedAt: 2_000 }),
+    receiver,
   );
   assert.ok(Math.abs(track.latitude - -43.48564) < 0.00001);
   assert.ok(Math.abs(track.longitude - 172.53942) < 0.00001);
-  // With no receiver location, the aircraft's own recent fix is the reference.
+  // With no receiver location, the aircraft's own recent fix is the reference
+  // (the other frame of the pair is too old to pair with).
   track = updateAircraftTrack(
     tracks,
     decodeAdsbMessage(SURFACE_EVEN, { receivedAt: 40_000 }),
@@ -566,6 +576,15 @@ test('a single surface frame decodes against the receiver, then against its own 
   assert.equal(track.lastPositionAt, 40_000);
   assert.ok(Math.abs(track.latitude - -43.4856) < 0.001);
   assert.ok(Math.abs(track.longitude - 172.5394) < 0.001);
+  // An own fix the aircraft may have left by 45 NM or more (unknown speed,
+  // four minutes old) is no single-frame reference either.
+  tracks.set('C8200A', { ...track, speedKt: null, category: null });
+  track = updateAircraftTrack(
+    tracks,
+    decodeAdsbMessage(SURFACE_ODD, { receivedAt: 280_000 }),
+    null,
+  );
+  assert.equal(track.lastPositionAt, 40_000, 'reference too old to trust');
   // Without any reference a lone surface frame is ambiguous: no position.
   const blind = updateAircraftTrack(
     new Map(),
@@ -574,4 +593,32 @@ test('a single surface frame decodes against the receiver, then against its own 
   );
   assert.equal(blind.lastPositionAt, null);
   assert.equal(blind.onGround, true);
+});
+
+// "The 1090MHz Riddle", surface position chapter: Schiphol pair of ICAO
+// 484175, published position about (52.3206, 4.7347).
+const SCHIPHOL_EVEN = fromHex('8C4841753AAB238733C8CD4020B1');
+const SCHIPHOL_ODD = fromHex('8C4841753A9A153237AEF0F275BE');
+
+test('a far receiver never places a lone surface frame; the next valid pair seeds the track', () => {
+  // About 80 NM from the airport: beyond half a surface zone (45 NM).
+  const receiver = { latitude: 51, longitude: 4.375 };
+  const tracks = new Map();
+  let track = updateAircraftTrack(
+    tracks,
+    decodeAdsbMessage(SCHIPHOL_EVEN, { receivedAt: 1_000 }),
+    receiver,
+  );
+  assert.equal(track.lastPositionAt, null, 'no position from one frame');
+  assert.equal(track.latitude, null, 'never (50.823040, 4.602622)');
+  track = updateAircraftTrack(
+    tracks,
+    decodeAdsbMessage(SCHIPHOL_ODD, { receivedAt: 2_000 }),
+    receiver,
+  );
+  assert.equal(track.lastPositionAt, 2_000);
+  assert.equal(track.rejectedPositions, 0, 'the valid pair is accepted');
+  assert.ok(Math.abs(track.latitude - 52.3206) < 0.002, `${track.latitude}`);
+  assert.ok(Math.abs(track.longitude - 4.7347) < 0.002, `${track.longitude}`);
+  assert.equal(track.onGround, true);
 });

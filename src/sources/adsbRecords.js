@@ -108,6 +108,27 @@ function surfaceDistanceM(lat1, lon1, lat2, lon2) {
 }
 
 /**
+ * The fastest an aircraft is assumed to move, in knots: 1.5 × its reported
+ * ground speed + 50 kt, or 1,000 kt (350 kt for light aircraft, gliders and
+ * rotorcraft) when no speed is known.
+ * @param {{groundSpeedKt?:number|null, category?:string|null}} [options]
+ * @returns {number}
+ */
+export function localAdsbSpeedLimitKt({
+  groundSpeedKt = null,
+  category = null,
+} = {}) {
+  if (Number.isFinite(groundSpeedKt))
+    return (
+      Math.max(0, groundSpeedKt) * LOCAL_ADSB_SPEED_FACTOR +
+      LOCAL_ADSB_SPEED_MARGIN_KT
+    );
+  return SLOW_CATEGORIES.has(normalizeAdsbCategory(category))
+    ? LOCAL_ADSB_SLOW_CATEGORY_LIMIT_KT
+    : LOCAL_ADSB_UNKNOWN_SPEED_LIMIT_KT;
+}
+
+/**
  * dump1090-style position sanity check: whether `next` is reachable from the
  * previous accepted fix at a plausible speed. The allowance is a fixed
  * reception margin plus the distance covered in the elapsed time + 1 s at
@@ -134,12 +155,7 @@ export function localAdsbFixIsPlausible(
     return true;
   const elapsedMs = next.at - previous.at;
   if (elapsedMs < 0 || elapsedMs > LOCAL_ADSB_REFERENCE_MAX_AGE_MS) return true;
-  const limitKt = Number.isFinite(groundSpeedKt)
-    ? Math.max(0, groundSpeedKt) * LOCAL_ADSB_SPEED_FACTOR +
-      LOCAL_ADSB_SPEED_MARGIN_KT
-    : SLOW_CATEGORIES.has(normalizeAdsbCategory(category))
-      ? LOCAL_ADSB_SLOW_CATEGORY_LIMIT_KT
-      : LOCAL_ADSB_UNKNOWN_SPEED_LIMIT_KT;
+  const limitKt = localAdsbSpeedLimitKt({ groundSpeedKt, category });
   const allowedM =
     LOCAL_ADSB_POSITION_MARGIN_M +
     ((elapsedMs + 1_000) / 1_000) * limitKt * KT_TO_MPS;

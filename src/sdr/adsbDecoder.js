@@ -1,7 +1,9 @@
 import {
+  LOCAL_ADSB_POSITION_MARGIN_M,
   LOCAL_ADSB_REANCHOR_AFTER,
   LOCAL_ADSB_REFERENCE_MAX_AGE_MS,
   localAdsbFixIsPlausible,
+  localAdsbSpeedLimitKt,
 } from '../sources/adsbRecords.js';
 
 const MODE_S_POLYNOMIAL = 0xfff409;
@@ -10,6 +12,13 @@ export const LOCAL_ADSB_STALE_MS = 60_000;
 const CPR_PAIR_MAX_AGE_MS = 10_000;
 /** Surface aircraft move slowly; an even/odd surface pair may be further apart. */
 const CPR_SURFACE_PAIR_MAX_AGE_MS = 25_000;
+/**
+ * Half a surface CPR latitude zone (90° / 60 zones / 2 = 0.75°, 45 NM): a
+ * single surface frame decodes unambiguously only against a reference known
+ * to be closer than this to the aircraft.
+ */
+const SURFACE_REFERENCE_RANGE_M = 45 * 1_852;
+const KT_TO_MPS = 1_852 / 3_600;
 const CPR_SCALE = 131_072;
 const CPR_NZ = 15;
 const CALLSIGN_CHARSET =
@@ -66,8 +75,8 @@ function nearestAlias(value, period, target) {
 /**
  * Locally decode one CPR frame against a reference within half a zone.
  * Surface frames use quarter-size zones (90° instead of 360°), so their
- * reference must be within about 45 km, the receiver or the aircraft's own
- * last position.
+ * reference must be within 45 NM of the aircraft: only the aircraft's own
+ * recent position qualifies (see `surfaceReference`).
  */
 function decodeLocalCpr(frame, reference) {
   if (!validReference(reference)) return null;
@@ -317,6 +326,34 @@ function recentReference(track, receivedAt) {
 }
 
 /**
+ * The aircraft's own last position as a single-frame SURFACE reference, when
+ * it is established to be within 45 NM: recent, and the aircraft cannot have
+ * covered 45 NM since at its speed limit (the speed check's limit). The
+ * receiver location never qualifies, since how far away a heard aircraft is
+ * cannot be known from one frame.
+ */
+function surfaceReference(track, message) {
+  const reference = recentReference(track, message.receivedAt);
+  if (!reference) return null;
+  const groundSpeedKt = Number.isFinite(track.speedKt)
+    ? Math.max(
+        track.speedKt,
+        Number.isFinite(message.speedKt) ? message.speedKt : 0,
+      )
+    : null;
+  const limitKt = localAdsbSpeedLimitKt({
+    groundSpeedKt,
+    category: track.category,
+  });
+  const reachM =
+    LOCAL_ADSB_POSITION_MARGIN_M +
+    ((message.receivedAt - track.lastPositionAt + 1_000) / 1_000) *
+      limitKt *
+      KT_TO_MPS;
+  return reachM < SURFACE_REFERENCE_RANGE_M ? reference : null;
+}
+
+/**
  * Merge one decoded message into a stable aircraft record.
  *
  * Airborne (TC 9–18) and surface (TC 5–8) positions are paired separately.
@@ -326,7 +363,9 @@ function recentReference(track, receivedAt) {
  *
  * A position comes from a fresh even/odd pair (global CPR), else from one
  * frame decoded relative to the aircraft's own last accepted position when it
- * is under 10 minutes old, else relative to the receiver location. Every
+ * is under 10 minutes old, else (airborne only) relative to the receiver
+ * location. A single surface frame needs the aircraft's own position within
+ * 45 NM, so a surface track is always seeded by a pair. Every
  * candidate then passes the dump1090-style speed check against the last
  * accepted fix; a failing fix is counted (`rejectedPositions` on the track and
  * `positionsRejected` on the optional `stats`) and not applied. From the
@@ -409,8 +448,10 @@ export function updateAircraftTrack(
       : decodeGlobalCpr(next.cprEven, next.cprOdd);
     const position =
       global ||
-      decodeLocalCpr(message.cpr, reference) ||
-      decodeLocalCpr(message.cpr, receiverLocation);
+      (surface
+        ? decodeLocalCpr(message.cpr, surfaceReference(prior, message))
+        : decodeLocalCpr(message.cpr, reference) ||
+          decodeLocalCpr(message.cpr, receiverLocation));
     if (position) {
       const plausible =
         !reference ||
