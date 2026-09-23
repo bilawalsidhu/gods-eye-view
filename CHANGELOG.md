@@ -83,6 +83,15 @@
   never derived: an aircraft that has not transmitted a rate reads as `null`
   rather than a level-flight `0`.
 
+- Bundle a curated **OurAirports ATC frequency pack** (`src/data/local_data/ourairports_atc/`,
+  9,562 airports · 16,509 frequencies, 0.66 MB, public domain, no key) with an offline
+  lookup in `src/data/ourAirportsAtc.js` — nearest airports to a position, their published
+  frequency classes, and whether anyone is actually controlling them. The frequency class is
+  carried through verbatim rather than remapped onto a flight phase: only 443 airports publish
+  all four of TWR/GND/APP/ATIS and 5,902 publish none of them, so "uncontrolled field — CTAF"
+  is the majority answer and the data has to be able to say it. Rebuild with
+  `node scripts/build-atc-frequencies.mjs`.
+
 - Add a **Recent Imagery** data layer (NASA GIBS · HLS + VIIRS, keyless).
   Select a box (drag, the current view, or around a pin; up to 1,000 km a
   side) and the right-rail panel lists the last 30 days of Sentinel-2 /
