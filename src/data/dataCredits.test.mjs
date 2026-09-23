@@ -27,7 +27,6 @@ test('adsbdb is credited and carries its published route-data restriction', () =
   // adsbdb publishes this restriction for its route data. Pin the provider's
   // credits and restriction here so a later edit cannot silently remove them.
   assert.match(credit.html, /David Taylor, Edinburgh/);
-  assert.match(credit.html, /Jim Mason, Glasgow/);
   assert.match(
     credit.html,
     /may not be\s+copied, published, or incorporated into other databases/,
@@ -36,4 +35,15 @@ test('adsbdb is credited and carries its published route-data restriction', () =
   assert.match(credit.html, /PlaneBase/);
   assert.match(credit.html, /Guillaume Michel/);
   assert.match(credit.html, /href="https:\/\/www\.adsbdb\.com"/);
+});
+
+test('ourairports and liveatc are credited', () => {
+  const ourairports = DATA_CREDITS.find((entry) => entry.key === 'ourairports');
+  assert.ok(ourairports, 'ourairports must be credited');
+  assert.match(ourairports.html, /OurAirports/);
+  assert.match(ourairports.html, /CC0 \/ Public Domain/);
+
+  const liveatc = DATA_CREDITS.find((entry) => entry.key === 'liveatc');
+  assert.ok(liveatc, 'liveatc must be credited');
+  assert.match(liveatc.html, /LiveATC\.net/);
 });

@@ -2663,6 +2663,7 @@ Historical planning documents may not match runtime behavior.
 - Voice control in `src/voice/` (OpenAI Realtime over WebRTC)
 - Voice map whiteboard annotations in `src/annotations/`
 - 3D aircraft/model tracking surfaces in `src/data/flights.js` and `src/data/militaryFlights.js`
+- ATC COM1 Avionics auto-tuning radio in `src/data/atcRadio.js`, `src/data/atcAudio.js`, `src/data/atcTuner.js`, and `src/data/atcRadioCard.js`
 - Detection overlay and tracked-target readout in `src/data/detection.js`, `src/data/detectionDraw.js`, and `src/data/trackedReadout.js`
 - Proxy middleware and API wiring in `vite.config.js`
 

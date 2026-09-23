@@ -393,6 +393,9 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   spoken ones, so they render with the whiteboard look, persist, de-dup and clear
   together. While you are drawing, the draw tool owns the pointer and no layer
   selects what you click through (#235 — thanks @cora-fresh-labs).
+- Live Air Traffic Control (ATC) auto-tuning avionics radio (COM1) that tracks
+  aircraft telemetry, classifies flight phases, and auto-tunes to nearest airport
+  tower and approach frequencies with VHF procedural squelch audio and HUD avionics card (#255).
 
 ### Fixed
 
