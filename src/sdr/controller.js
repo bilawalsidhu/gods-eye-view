@@ -607,7 +607,8 @@ export class SdrController {
       this._device = null;
       this._provider = null;
       // Best-effort failed-open cleanup, bounded and fenced like stop().
-      if (failedDevice) await this._teardownDevice(failedDevice, failedProvider);
+      if (failedDevice)
+        await this._teardownDevice(failedDevice, failedProvider);
       if (superseded()) return false;
       this._setState({
         connected: false,

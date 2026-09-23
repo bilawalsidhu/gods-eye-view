@@ -156,6 +156,9 @@ test('a velocity/altitude-only update with the same position time still refreshe
   assert.equal(motion.anchor.altitudeFt, 1_500);
   assert.equal(motion.anchor.speedMps, 0);
   const display = motion.displayAt(20_000);
-  assert.ok(Math.abs(display.altitudeFt - 1_500) < 1e-6, `${display.altitudeFt}`);
+  assert.ok(
+    Math.abs(display.altitudeFt - 1_500) < 1e-6,
+    `${display.altitudeFt}`,
+  );
   assert.ok(Math.abs(display.lat) < 1e-9, 'a stopped aircraft does not coast');
 });
