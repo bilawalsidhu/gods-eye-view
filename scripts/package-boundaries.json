@@ -604,6 +604,7 @@
       "src/ui/displayBindings.js",
       "src/ui/shellFacade.js",
       "src/ui/localSdrControls.js",
+      "src/layers/localAdsb/feedNames.js",
       "src/ui/localSdrPresentation.js"
     ],
     "external": ["cesium"]
@@ -1886,6 +1887,7 @@
       "src/layers/localAdsb/card.js",
       "src/layers/localAdsb/feeds.js",
       "src/layers/localAdsb/status.js",
+      "src/layers/localAdsb/feedNames.js",
       "src/layers/localAdsb/motion.js",
       "src/layers/localAdsb/models.js",
       "src/layers/localAdsb/enrichment.js",
@@ -2325,6 +2327,7 @@
       "src/layers/localAdsb/card.js",
       "src/layers/localAdsb/feeds.js",
       "src/layers/localAdsb/status.js",
+      "src/layers/localAdsb/feedNames.js",
       "src/layers/localAdsb/motion.js",
       "src/layers/localAdsb/models.js",
       "src/layers/localAdsb/enrichment.js",

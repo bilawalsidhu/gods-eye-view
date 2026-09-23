@@ -1,4 +1,4 @@
-import { localReceiverFeedName } from '../layers/localAdsb/feeds.js';
+import { localReceiverFeedName } from '../layers/localAdsb/feedNames.js';
 
 /**
  * Pure presentation of the Local RTL-SDR card in the Radio panel. Receives the

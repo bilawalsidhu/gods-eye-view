@@ -1,4 +1,4 @@
-import { localReceiverFeedName } from './feeds.js';
+import { localReceiverFeedName } from './feedNames.js';
 import { LAYER_SOURCE } from './policy.js';
 
 /**
