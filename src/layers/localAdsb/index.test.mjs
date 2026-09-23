@@ -3,6 +3,7 @@ import test from 'node:test';
 import * as Cesium from 'cesium';
 
 import { CLASS_SCALE_2D } from '../../data/aircraftClass.js';
+import { layerFeedState } from '../../data/feedState.js';
 import { aircraftIcon } from '../../data/aircraftIcons.js';
 import {
   createLocalAdsbLayer,
@@ -850,7 +851,69 @@ test('row status reflects decoder feeds and the browser SDR together', () => {
   assert.equal(stats.degraded, true);
   assert.equal(
     stats.loadingLabel,
-    'feeds 1090, 978 stale · feed 1090 invalid · 14 heard · USB 3.5 msg/s',
+    'feeds 1090 #1, 978 stale · feed 1090 #2 invalid · 14 heard · USB 3.5 msg/s',
+  );
+});
+
+test('every feed stale reads STALE, not an error; unreachable stays an error', () => {
+  const idle = {
+    webUsbSupported: true,
+    connected: false,
+    mode: 'fm',
+    status: 'idle',
+  };
+  const feedState = (...feeds) => ({
+    configured: true,
+    polling: true,
+    feeds: feeds.map(([band, status, label = band]) => ({
+      band,
+      label,
+      status,
+    })),
+  });
+  const status = (feeds, heard = 3) =>
+    localAdsbStatus({ receiver: idle, feedState: feeds, heard });
+
+  // A decoder that stopped but still serves its last aircraft.json.
+  let stats = status(feedState(['1090', 'stale'], ['978', 'stale']));
+  assert.equal(stats.status, 'stale');
+  assert.equal(stats.error, undefined);
+  assert.equal(layerFeedState(stats), 'stale');
+  assert.equal(stats.statusMessage, 'feeds 1090, 978 stale · 3 heard');
+
+  // An invalid entry is a configuration note, not a reason to fail the row.
+  stats = status(feedState(['1090', 'stale'], ['978', 'invalid']), 0);
+  assert.equal(layerFeedState(stats), 'stale');
+
+  stats = status(feedState(['1090', 'stale'], ['978', 'unreachable']), 0);
+  assert.equal(stats.status, 'error');
+  assert.equal(layerFeedState(stats), 'unavailable');
+  stats = status(feedState(['978', 'invalid']), 0);
+  assert.equal(stats.status, 'error');
+});
+
+test('row status names two same-band feeds by their ordinal labels', () => {
+  const stats = localAdsbStatus({
+    receiver: {
+      webUsbSupported: true,
+      connected: false,
+      mode: 'fm',
+      status: 'idle',
+    },
+    feedState: {
+      configured: true,
+      polling: true,
+      feeds: [
+        { band: '978', label: '978 MHz UAT #1', status: 'live' },
+        { band: '978', label: '978 MHz UAT #2', status: 'unreachable' },
+        { band: '1090', label: '1090 MHz', status: 'unreachable' },
+      ],
+    },
+    heard: 4,
+  });
+  assert.equal(
+    stats.loadingLabel,
+    'feeds 978 MHz UAT #2, 1090 unreachable · 4 heard',
   );
 });
 

@@ -1,3 +1,4 @@
+import { localReceiverFeedName } from './feeds.js';
 import { LAYER_SOURCE } from './policy.js';
 
 /**
@@ -7,10 +8,6 @@ import { LAYER_SOURCE } from './policy.js';
 
 export const FEED_SOURCE = 'Decoder feeds';
 export const COMBINED_SOURCE = 'WebUSB + decoder feeds';
-
-function feedName(feed) {
-  return feed?.band || feed?.label || 'feed';
-}
 
 function plural(count, one, many) {
   return count === 1 ? one : many;
@@ -28,7 +25,7 @@ export function describeFeedProblems(feeds) {
     if (feed?.status === 'live') continue;
     const status = feed?.status || 'unreachable';
     if (!byStatus.has(status)) byStatus.set(status, new Set());
-    byStatus.get(status).add(feedName(feed));
+    byStatus.get(status).add(localReceiverFeedName(feed, feeds));
   }
   return [...byStatus]
     .map(([status, names]) => {
@@ -115,6 +112,18 @@ export function localAdsbStatus({ receiver, feedState, heard }) {
   const problemText = problems.join(' · ');
   const usbProducing = usbActive && receiver.status !== 'error';
   if (!live.length && !usbProducing) {
+    // Decoders that stopped but still serve their last aircraft.json are
+    // stale, not down: only an unreachable or unusable feed is an error.
+    const readable = feedState.feeds.filter(
+      (feed) => feed.status !== 'invalid',
+    );
+    if (readable.length && readable.every((feed) => feed.status === 'stale'))
+      return {
+        source,
+        status: 'stale',
+        stale: true,
+        statusMessage: `${problemText} · ${heardText}`,
+      };
     return {
       source,
       status: 'error',

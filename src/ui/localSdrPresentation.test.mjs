@@ -137,3 +137,19 @@ test('the decoder-feed line appears only when feeds are configured', () => {
     'Decoder feeds: entry 2 invalid · read while Local ADS-B is on',
   );
 });
+
+test('two feeds on one band are told apart by their ordinal labels', () => {
+  const feeds = [
+    { band: '1090', label: '1090 MHz', status: 'live' },
+    { band: '978', label: '978 MHz UAT #1', status: 'live' },
+    { band: '978', label: '978 MHz UAT #2', status: 'stale' },
+  ];
+  assert.equal(
+    localSdrFeedLine({ configured: true, polling: true, feeds }),
+    'Decoder feeds: 1090 live · 978 MHz UAT #1 live · 978 MHz UAT #2 stale',
+  );
+  assert.equal(
+    localSdrFeedLine({ configured: true, polling: false, feeds }),
+    'Decoder feeds: 1090 · 978 MHz UAT #1 · 978 MHz UAT #2 · read while Local ADS-B is on',
+  );
+});

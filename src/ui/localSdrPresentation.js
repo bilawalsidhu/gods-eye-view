@@ -1,3 +1,5 @@
+import { localReceiverFeedName } from '../layers/localAdsb/feeds.js';
+
 /**
  * Pure presentation of the Local RTL-SDR card in the Radio panel. Receives the
  * receiver session snapshot and returns what each control should show.
@@ -134,7 +136,7 @@ export function localSdrFeedLine(feedState) {
   const feeds = feedState?.configured === true ? feedState.feeds : null;
   if (!Array.isArray(feeds) || !feeds.length) return null;
   const names = feeds.map((feed) => {
-    const name = feed?.band || feed?.label || 'feed';
+    const name = localReceiverFeedName(feed, feeds);
     return feedState.polling || feed?.status === 'invalid'
       ? `${name} ${feed?.status || 'unreachable'}`
       : name;
