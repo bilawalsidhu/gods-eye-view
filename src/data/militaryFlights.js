@@ -3141,7 +3141,11 @@ export const _driveFleetModelHandoffForTest = ({ icao24, position, course = 0 })
 export const _ensureFleetModelForTest = async (icao24) => p._ensureFleetModelForTest(icao24);
 
 /** Dead-reckon contract seam: runs the real estimator against history seeded
- * via _addMilitaryTrackingCandidateForTest, with no viewer. */
+ * via _addMilitaryTrackingCandidateForTest, with no viewer.
+ * @param {string} icao24 hex of the seeded contact.
+ * @param {import('cesium').Cartesian3} result - Scratch position to fill.
+ * @returns {import('cesium').Cartesian3|undefined} The dead-reckoned position.
+ */
 export const _deadReckonForTest = (icao24, result) => _deadReckon(icao24, result);
 
 export default militaryFlightsLayer;

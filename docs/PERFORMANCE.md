@@ -270,3 +270,98 @@ Use the same controls before attributing a difference to the application:
 
 Use this page as a regression baseline for one known hardware and browser
 configuration, not as a compatibility guarantee.
+
+## Idle-GPU audit (2026-09-23, code-verified + instrumented)
+
+User report: "the website pegs the GPU at 99% on several machines." The audit
+answer is structural and does not need clean fps hardware to be conclusive,
+because Cesium only burns GPU while it submits frames, and every frame
+submission in this app is governed by two knobs the render governor owns:
+`scene.requestRenderMode` (frames at all?) and `viewer.targetFrameRate`
+(how many per second — Cesium's `startRenderLoop` gates each `render()` on
+`frameTime - lastFrameTime > 1000/targetFrameRate`).
+
+### Finding 1: a default session never idles
+
+The governor's idle mode (`requestRenderMode = true`) is unreachable in a
+default session, for two independent reasons:
+
+- The first-run default style is CRT (operator ruling 2026-08-29), an
+  animated post-processing stage whose `style-anim` hold is held for the
+  lifetime of the style — it never releases while a boot-to-CRT session runs.
+- Every live layer holds continuous render unconditionally while enabled
+  (flights `src/data/flights.js`, military, satellites, planets, traffic,
+  ais-vessels), because their per-frame interpolators assume continuous mode.
+
+So a parked camera with default layers on runs 60 fps continuous, forever.
+At photoreal-tile scene complexity that is the reported ~99% GPU. This is a
+policy gap, not a leak: each hold is individually correct; their composition
+was never priced.
+
+### Finding 2: the fix that ships — low-demand 30 fps policy
+
+Wall-clock animators are frame-rate-independent by construction: fleet
+dead-reckoning samples a trajectory at `now - RENDER_DELAY_SEC`, satellites
+propagate from JulianDate.now, the CRT uniforms advance on a `Date.now()`
+delta. Rendering them at 30 Hz produces a bit-identical world at half the
+frame submissions. The governor therefore resolves
+`viewer.targetFrameRate = 30` (`LOW_DEMAND_FPS` in `src/renderGovernor.js`)
+when the camera is parked AND every active hold is in
+`LOW_DEMAND_HOLD_OWNERS` (`flights`, `military`, `satellites`, `planets`,
+`traffic`, `ais-vessels`, `style-anim`); any camera-driven holder
+(tracked-entity, camera-verb, cockpit, cctv-projection, replay, annotations)
+or camera motion restores 60. Unknown owner ids are fail-safe baseline.
+Phase 9 Batch P proved the mechanism on the style loop; the audit widened it
+to the whole wall-clock class. Expected effect on the reported machines:
+~50% GPU reduction in the everyday parked-camera case, no visual change.
+
+### Finding 3: the HiDPI downscale policy was a silent NO-OP (fixed)
+
+`applySceneRenderScale` (Phase 9 Batch R) wrote
+`viewer.scene.sceneResolutionScale` — a property that does not exist in
+Cesium 1.144. The real knob is `viewer.resolutionScale` (Viewer proxies to
+`cesiumWidget.resolutionScale`, which drives the canvas backing store). The
+assignment created an inert expando, so the DPR > 1.5 downscale (0.75,
+claimed ~56% GPU bandwidth) NEVER ENGAGED — every HiDPI machine rendered at
+full native backing-store size (~4x the per-pixel fragment cost at DPR 2).
+This is a direct contributor to the reported 99% GPU pegs, and it compiles
+with Finding 2's halved frame rate once fixed: HiDPI machines now get both
+0.75x linear resolution and 30 fps parked. The unit test had pinned the same
+wrong property on a stub viewer, which is exactly the mock-armor failure
+mode ADR 0008 warns about. The fix is code-verified (Cesium 1.144 bundle:
+the `resolutionScale` setter sets `_forceResize` and `pixelRatio *=
+widget._resolutionScale` in the resize path; `Viewer.resolutionScale`
+proxies to the widget) and unit-pinned on the real write target. The live
+canvas readback (`?renderScale=0.75` → `scene.canvas.width` 1080) could not
+be captured: the audit box sat at load ~80 with 71 Chromium processes and
+CDP `Runtime.callFunctionOn` itself timed out. The probe now samples
+`resolutionScale` plus the live canvas dimensions, so a quiet-box
+`node scripts/profile-gpu-holds.mjs --json out.json` run closes that inch.
+
+The remaining knobs were already sane: FXAA off by default, MSAA 2,
+`targetFrameRate` 60 cap (120 Hz ProMotion fix, 2026-08-05). The HUD
+readPixels stall found in the 2026-09-10 profile was already fixed
+(`surfaceOnly: true` in `getBasemapLabelContext`, cached per camera
+signature).
+
+### Instrument and honest limits
+
+`scripts/profile-gpu-holds.mjs` drives a scripted session (boot-idle →
+flights-idle → orbit → rest) and samples `frameState.frameNumber` deltas
+bracketed by screenshot pumps, plus `requestRenderMode`, governor
+diagnostics (`policy` field), and the cost knobs. Absolute renders/s from
+this box are NOT hardware numbers: headless Chrome runs SwiftShader, and the
+audit machine ran at load average 76-92 (concurrent sessions, ~70 Chromium
+processes), which twice starved `page.goto`. The portable signals are WHICH
+holds are alive, the resolved policy, and renders/s vs. the policy — those
+are load-independent and are what the probe asserts. A hardware fps A/B on a
+quiet machine remains open work; the code path it would measure is pinned by
+`src/renderGovernor.test.mjs` (12 tests) instead.
+
+### WASM implications (task follow-up)
+
+A 99%-GPU peg is a frame-submission problem; moving JavaScript to WASM does
+not address it (the bottleneck was never single-threaded JS compute — see
+"Software-rendered CPU profile" above, where the top self-time entries are
+Cesium's own render/tile work). The open WASM candidates remain the
+measured ones in this document; the audit adds none.
