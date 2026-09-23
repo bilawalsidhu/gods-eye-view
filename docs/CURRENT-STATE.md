@@ -4162,7 +4162,9 @@ local markers lead:
   aircraft's own recent fix, and only when that fix is provably within 45 NM
   (it could not have gone farther since at its speed limit); the receiver
   location never decodes a lone surface frame and only picks the quadrant of
-  a surface pair, so a surface track is always seeded by a pair. Every fix
+  a surface pair. Without an existing suitable fix for that aircraft
+  (airborne or surface, provably within 45 NM), surface acquisition
+  requires an even/odd pair. Every fix
   must be reachable from the last accepted one at 1.5 × reported ground
   speed + 50 kt (1,000 kt without a speed, 350 kt for A1/A7/B1/B4) over the
   elapsed time + 1 s, plus 500 m.
