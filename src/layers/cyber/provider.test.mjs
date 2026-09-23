@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { cyberProxy } from '../../../server/providers/cyber.js';
+import { createCyberEnrichmentProviders } from '../../../server/providers/cyber/enrichment.js';
 
 const jsonResponse = (value, status = 200) =>
   new Response(JSON.stringify(value), { status });
@@ -145,4 +146,93 @@ test('Radar missing/invalid credentials produce safe machine errors and test nev
     proxy.testRadarConnection({ token: 'sensitive-token' }),
     { code: 'invalid_credentials' },
   );
+});
+
+test('Shodan host and manual search are normalized, bounded and cached without exposing credentials', async () => {
+  const oldKey = process.env.SHODAN_API_KEY;
+  process.env.SHODAN_API_KEY = 'fixture-secret-never-returned';
+  let calls = 0;
+  const api = createCyberEnrichmentProviders({
+    now: () => Date.parse('2026-09-20T01:00:00Z'),
+    fetchImpl: async (url) => {
+      calls++;
+      const parsed = new URL(url);
+      if (parsed.pathname === '/api-info')
+        return jsonResponse({ plan: 'membership', query_credits: 100 });
+      if (parsed.pathname === '/shodan/host/search')
+        return jsonResponse({
+          total: 1,
+          matches: [{ ip_str: '8.8.4.4', port: 443, product: 'HTTPS' }],
+        });
+      if (parsed.pathname.startsWith('/shodan/host/'))
+        return jsonResponse({
+          ip_str: '8.8.8.8',
+          org: 'Example Org',
+          ports: [53],
+          data: [
+            { port: 53, transport: 'udp', product: 'DNS', data: 'safe banner' },
+          ],
+          hostnames: ['dns.example'],
+        });
+      throw new Error('Unexpected provider endpoint');
+    },
+  });
+  try {
+    const test = await api.testShodanConnection();
+    assert.match(test.message, /100 query credits/);
+    const host = await api.lookupShodanHost('8.8.8.8');
+    await api.lookupShodanHost('8.8.8.8');
+    assert.equal(host.services[0].product, 'DNS');
+    assert.equal(host.geographicPrecision, null);
+    const search = await api.searchShodan('port:443', 1);
+    assert.equal(await api.searchShodan('port:443', 1), search);
+    assert.equal(search.matches.length, 1);
+    assert.equal(search.matches[0].ip, '8.8.4.4');
+    await assert.rejects(api.searchShodan('port:22', 1), {
+      code: 'rate_limited',
+    });
+    assert.equal(
+      JSON.stringify({ test, host, search }).includes('fixture-secret'),
+      false,
+    );
+    assert.equal(calls, 3);
+  } finally {
+    if (oldKey === undefined) delete process.env.SHODAN_API_KEY;
+    else process.env.SHODAN_API_KEY = oldKey;
+  }
+});
+
+test('GreyNoise test discloses its one cached Community lookup and bad IPs never call upstream', async () => {
+  const oldKey = process.env.GREYNOISE_API_KEY;
+  process.env.GREYNOISE_API_KEY = 'fixture-grey-secret-never-returned';
+  let calls = 0;
+  const api = createCyberEnrichmentProviders({
+    now: () => Date.parse('2026-09-20T01:00:00Z'),
+    fetchImpl: async () => {
+      calls++;
+      return jsonResponse({
+        ip: '1.1.1.1',
+        noise: false,
+        riot: true,
+        classification: 'benign',
+        name: 'Example',
+        last_seen: '2026-09-19T12:00:00Z',
+      });
+    },
+  });
+  try {
+    const tested = await api.testGreyNoiseConnection();
+    assert.match(tested.message, /one Community lookup/);
+    assert.match(tested.message, /counts toward/);
+    assert.equal((await api.lookupGreyNoise('1.1.1.1')).riot, true);
+    assert.equal(calls, 1);
+    await assert.rejects(api.lookupGreyNoise('192.168.1.1'), {
+      code: 'invalid_ip',
+    });
+    assert.equal(calls, 1);
+    assert.equal(JSON.stringify(tested).includes('fixture-grey-secret'), false);
+  } finally {
+    if (oldKey === undefined) delete process.env.GREYNOISE_API_KEY;
+    else process.env.GREYNOISE_API_KEY = oldKey;
+  }
 });

@@ -288,25 +288,34 @@ function keySetupEndpoint({
           } catch {
             return respond(res, 400, { error: 'Invalid JSON' });
           }
-          if (parsed?.provider !== 'cloudflare-radar')
+          const providerTitle = {
+            'cloudflare-radar': 'Cloudflare Radar',
+            shodan: 'Shodan',
+            greynoise: 'GreyNoise',
+          }[parsed?.provider];
+          if (!providerTitle)
             return respond(res, 400, { error: 'Unknown provider test' });
           try {
-            await testProvider(parsed.provider);
+            const result = await testProvider(parsed.provider);
             respond(res, 200, {
               ok: true,
-              message: 'Cloudflare Radar connection succeeded.',
+              message:
+                result?.message || `${providerTitle} connection succeeded.`,
             });
           } catch (error) {
+            const messageByCode = {
+              missing_credentials: `Add a ${providerTitle} API key in Provider Settings first.`,
+              invalid_credentials:
+                parsed.provider === 'cloudflare-radar'
+                  ? 'Cloudflare rejected this token. Check its permissions and replace it in Provider Settings.'
+                  : `${providerTitle} rejected this key. Check the account permissions and replace it in Provider Settings.`,
+              rate_limited: `${providerTitle} is rate limited. Try again later.`,
+              insufficient_credits:
+                'Shodan reports that this account has no query credits available.',
+            };
             const message =
-              {
-                missing_credentials:
-                  'Add a Cloudflare Radar token in Provider Settings first.',
-                invalid_credentials:
-                  'Cloudflare rejected this token. Check its permissions and replace it in Provider Settings.',
-                rate_limited:
-                  'Cloudflare Radar is rate limited. Try again later.',
-              }[error?.code] ||
-              'Cloudflare Radar could not be reached. Try again later.';
+              messageByCode[error?.code] ||
+              `${providerTitle} could not be reached. Try again later.`;
             respond(res, 200, { ok: false, message });
           }
         });

@@ -93,6 +93,18 @@
   dump1090/readsb `aircraft.json` documents.
 - Add `@jtarrio/webrtlsdr` and `@jtarrio/signals` (Apache-2.0); see
   `THIRD_PARTY_NOTICES.md`.
+## Unreleased — Cyber Phase 2
+
+- Add optional Shodan host enrichment and manual, bounded search plus optional
+  GreyNoise Community IP context. Calls run only after an explicit operator
+  action; results are cached, attributed, normalized, and kept out of the
+  camera/update loop. Shodan later pages require confirmation because they may
+  spend query credits. GreyNoise connection testing confirms before using one
+  Community lookup. Credentials use the existing local Provider Settings flow.
+- Keep Shodan and GreyNoise optional: DShield and Cloudflare Radar retain their
+  Phase 1 behavior when either enrichment provider is unconfigured or down.
+  See `DATA_SOURCES.md` for terms, attribution and quota handling.
+
 ## Unreleased — Cyber Phase 1
 
 - Clarify Radar overlap and pair coverage: countries in both role aggregates

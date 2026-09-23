@@ -66,8 +66,20 @@ export function createCyberLayer({
   let threatIntelListener = null;
   let selectionHandler = null;
   let selectedRadar = null;
+  const enrichmentResults = new Map();
+  const enrichmentPending = new Set();
+  const enrichmentRequests = new Set();
+  let enrichmentGeneration = 0;
+  let shodanSearch = null;
+  let enrichmentMessage = '';
 
   const notify = () => rowControlsListener?.();
+  function cacheEnrichmentResult(key, value) {
+    enrichmentResults.delete(key);
+    enrichmentResults.set(key, value);
+    while (enrichmentResults.size > 50)
+      enrichmentResults.delete(enrichmentResults.keys().next().value);
+  }
   const records = () => [
     ...(radarEnabled ? radar?.observations || [] : []),
     ...(dshieldEnabled ? dshield?.observations || [] : []),
@@ -256,6 +268,68 @@ export function createCyberLayer({
     threatIntelListener?.(layer.getThreatIntelState());
   }
 
+  async function enrichIp(provider, ip) {
+    if (!enabled || !['shodan', 'greynoise'].includes(provider)) return;
+    const key = `${provider}:${ip}`;
+    if (enrichmentPending.has(key)) return;
+    const operation =
+      provider === 'shodan' ? source.lookupShodanHost : source.lookupGreyNoise;
+    if (typeof operation !== 'function') {
+      enrichmentMessage =
+        'This provider is unavailable in the current session.';
+      notifyThreatIntel();
+      return;
+    }
+    enrichmentPending.add(key);
+    const generation = enrichmentGeneration;
+    const controller = new AbortController();
+    enrichmentRequests.add(controller);
+    enrichmentMessage = '';
+    notifyThreatIntel();
+    try {
+      const result = await operation(ip, { signal: controller.signal });
+      if (enabled && generation === enrichmentGeneration)
+        cacheEnrichmentResult(key, result);
+    } catch (error) {
+      if (enabled && generation === enrichmentGeneration)
+        cacheEnrichmentResult(key, {
+          error: error?.message || 'Provider request failed.',
+        });
+    } finally {
+      enrichmentRequests.delete(controller);
+      if (generation === enrichmentGeneration) {
+        enrichmentPending.delete(key);
+        notifyThreatIntel();
+      }
+    }
+  }
+
+  async function runShodanSearch(query, page = 1) {
+    if (!enabled || typeof source.searchShodan !== 'function') return;
+    const generation = enrichmentGeneration;
+    const controller = new AbortController();
+    enrichmentRequests.add(controller);
+    enrichmentMessage = '';
+    shodanSearch = { query, page, loading: true };
+    notifyThreatIntel();
+    try {
+      const result = await source.searchShodan(query, page, {
+        signal: controller.signal,
+      });
+      if (enabled && generation === enrichmentGeneration) shodanSearch = result;
+    } catch (error) {
+      if (enabled && generation === enrichmentGeneration)
+        shodanSearch = {
+          query,
+          page,
+          error: error?.message || 'Shodan search failed.',
+        };
+    } finally {
+      enrichmentRequests.delete(controller);
+    }
+    if (enabled && generation === enrichmentGeneration) notifyThreatIntel();
+  }
+
   function setParams(params = {}) {
     let changed = false;
     if (
@@ -334,12 +408,18 @@ export function createCyberLayer({
     },
 
     disable() {
+      enrichmentGeneration++;
+      for (const controller of enrichmentRequests) controller.abort();
+      enrichmentRequests.clear();
       request?.abort();
       request = null;
       enabled = false;
       loading = false;
       radar = null;
       dshield = null;
+      enrichmentResults.clear();
+      enrichmentPending.clear();
+      shodanSearch = null;
       radarError = null;
       dshieldError = null;
       dataSource?.entities.removeAll();
@@ -499,6 +579,12 @@ export function createCyberLayer({
       return {
         enabled,
         selectedRadar: selectedRadar ? { ...selectedRadar } : null,
+        enrichmentResults: Object.fromEntries(enrichmentResults),
+        enrichmentPending: [...enrichmentPending],
+        shodanSearch,
+        enrichmentMessage,
+        onEnrichIp: enrichIp,
+        onShodanSearch: runShodanSearch,
         nonGeographicProviders: dshieldEnabled
           ? [
               {
@@ -515,6 +601,11 @@ export function createCyberLayer({
                   'Reported source data; it may include false positives and is not a blocklist.',
                 observations: dshield?.observations || [],
                 ports: dshield?.ports || [],
+                enrichmentResults: Object.fromEntries(enrichmentResults),
+                enrichmentPending: [...enrichmentPending],
+                shodanSearch,
+                onEnrichIp: enrichIp,
+                onShodanSearch: runShodanSearch,
                 error: dshieldError,
               },
             ]
@@ -552,6 +643,9 @@ export function createCyberLayer({
     },
     destroy(destroyViewer = viewer) {
       layer.disable();
+      enrichmentResults.clear();
+      enrichmentPending.clear();
+      shodanSearch = null;
       selectionHandler?.destroy();
       selectionHandler = null;
       rowControlsListener = null;

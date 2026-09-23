@@ -293,6 +293,18 @@
     ],
     "external": []
   },
+  "cyber-provider": {
+    "runtime": "node",
+    "exports": ["./server/providers/cyber"],
+    "modules": [
+      "server/providers/cyber.js",
+      "server/providers/cyber/enrichment.js",
+      "server/providers/common/http.js",
+      "src/sources/httpBody.js",
+      "src/keySetupCore.mjs"
+    ],
+    "external": []
+  },
   "place-search": {
     "exports": ["./search"],
     "modules": [

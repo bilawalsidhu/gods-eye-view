@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeCyberSnapshot } from './records.js';
+import {
+  normalizeCyberEnrichment,
+  normalizeCyberSnapshot,
+  normalizeShodanSearchResult,
+} from './records.js';
 
 const base = {
   schemaVersion: 1,
@@ -145,5 +149,83 @@ test('accepts country aggregate coordinates only with explicit provenance', () =
         'cloudflare-radar',
       ),
     /Malformed Cyber/,
+  );
+});
+
+test('normalizes optional provider results and allows only explicit approximate host geography', () => {
+  const shodan = normalizeCyberEnrichment(
+    {
+      provider: 'shodan',
+      ip: '8.8.8.8',
+      fetchedAt: '2026-09-20T01:00:00Z',
+      attribution: 'Shodan',
+      organization: 'Example',
+      latitude: 37.4,
+      longitude: -122.1,
+      geographicPrecision: 'network-approximate',
+      geographicProvenance: 'Approximate IP location',
+      services: [{ port: 443, product: 'HTTPS', banner: 'banner' }],
+    },
+    'shodan',
+  );
+  assert.equal(shodan.geographicPrecision, 'network-approximate');
+  assert.equal(shodan.services[0].port, 443);
+  const grey = normalizeCyberEnrichment(
+    {
+      provider: 'greynoise',
+      ip: '8.8.8.8',
+      fetchedAt: '2026-09-20T01:00:00Z',
+      attribution: 'GreyNoise Community API',
+      noise: true,
+      riot: false,
+    },
+    'greynoise',
+  );
+  assert.equal(grey.noise, true);
+  assert.equal('latitude' in grey, false);
+  assert.throws(() =>
+    normalizeCyberEnrichment(
+      {
+        provider: 'shodan',
+        ip: '8.8.8.8',
+        fetchedAt: '2026-09-20T01:00:00Z',
+        attribution: 'Shodan',
+        latitude: 999,
+        longitude: 0,
+        geographicPrecision: 'network-approximate',
+      },
+      'shodan',
+    ),
+  );
+});
+
+test('Shodan search normalization caps provider result rows and rejects provider spoofing', () => {
+  const host = {
+    provider: 'shodan',
+    ip: '8.8.8.8',
+    fetchedAt: '2026-09-20T01:00:00Z',
+    attribution: 'Shodan',
+    services: [],
+  };
+  const result = normalizeShodanSearchResult({
+    provider: 'shodan',
+    query: 'port:443',
+    page: 1,
+    fetchedAt: host.fetchedAt,
+    attribution: 'Shodan',
+    total: 1,
+    matches: [host],
+  });
+  assert.equal(result.matches.length, 1);
+  assert.throws(() =>
+    normalizeShodanSearchResult({
+      provider: 'other',
+      query: 'x',
+      page: 1,
+      fetchedAt: host.fetchedAt,
+      attribution: 'Other',
+      total: 1,
+      matches: [host],
+    }),
   );
 });

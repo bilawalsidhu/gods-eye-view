@@ -60,13 +60,25 @@ the top ten source and targeted-port records.
 Each provider fails independently, and cached data may be shown during temporary
 upstream outages.
 
+Phase 2 adds optional Shodan host intelligence and manually submitted searches,
+plus on-demand GreyNoise Community lookups. Neither source polls or runs while
+the camera moves; lookups from the DShield IP table and search results require
+an explicit click. Responses are bounded and cached, and Shodan search results
+are capped at 10 per page with explicit confirmation before additional pages.
+The Cyber panel explains that filtered searches and later pages may consume
+Shodan query credits. GreyNoise connection testing confirms before spending
+one Community lookup. Both providers use the existing Provider Settings
+credential store. Shodan coordinates, when returned, are approximate network
+locations and are shown with that caveat; no enrichment locations are invented.
+See `DATA_SOURCES.md` for current provider terms and attribution.
+
 The Cyber layer uses the shared data-layer panel and state codec. Its local
 server proxy bounds upstream responses, keeps Radar tokens server-side, and
 normalizes provider records before rendering. Radar and DShield can be
 enabled/disabled in
 the layer controls; its credential can be tested, changed, or removed in the
-existing Provider Settings panel. Phase 1 deliberately has no individual host
-enrichment, vulnerability catalog, or threat-intelligence correlation.
+existing Provider Settings panel. Vulnerability catalog and threat-intelligence
+correlation remain future phases.
 
 Wind appears in the Weather group before Utilities. The surface-weather prototype
 uses keyless NOAA GFS or ECMWF IFS forecasts on an approximately 1° display grid.

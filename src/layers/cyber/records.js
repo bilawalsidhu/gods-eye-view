@@ -13,6 +13,159 @@ function boundedText(value, max = 160) {
     : null;
 }
 
+function publicIPv4Text(value) {
+  if (typeof value !== 'string') return false;
+  const parts = value.split('.');
+  return (
+    parts.length === 4 &&
+    parts.every((part) => {
+      const number = Number(part);
+      return /^\d{1,3}$/.test(part) && number >= 0 && number <= 255;
+    })
+  );
+}
+
+function normalizeEnrichmentRecord(value, provider) {
+  if (!value || value.provider !== provider || !publicIPv4Text(value.ip))
+    throw new Error('Malformed Cyber enrichment response');
+  const fetchedAt = iso(value.fetchedAt);
+  const attribution = boundedText(value.attribution, 120);
+  if (!fetchedAt || !attribution)
+    throw new Error('Malformed Cyber enrichment response');
+  if (provider === 'greynoise')
+    return Object.freeze({
+      provider,
+      ip: value.ip,
+      fetchedAt,
+      noise: typeof value.noise === 'boolean' ? value.noise : null,
+      riot: typeof value.riot === 'boolean' ? value.riot : null,
+      classification: boundedText(value.classification, 40),
+      organization: boundedText(value.organization, 120),
+      lastSeen: iso(value.lastSeen),
+      message: boundedText(value.message, 160),
+      attribution,
+    });
+  const coordinatesPresent = value.latitude != null || value.longitude != null;
+  const hasCoordinates =
+    coordinatesPresent &&
+    Number.isFinite(value.latitude) &&
+    value.latitude >= -90 &&
+    value.latitude <= 90 &&
+    Number.isFinite(value.longitude) &&
+    value.longitude >= -180 &&
+    value.longitude <= 180 &&
+    value.geographicPrecision === 'network-approximate';
+  if (coordinatesPresent && !hasCoordinates)
+    throw new Error('Malformed Cyber enrichment response');
+  const serviceRows = Array.isArray(value.services)
+    ? value.services.slice(0, 12)
+    : [];
+  return Object.freeze({
+    provider,
+    ip: value.ip,
+    fetchedAt,
+    ports: Object.freeze(
+      (Array.isArray(value.ports) ? value.ports : [])
+        .slice(0, 64)
+        .filter((port) => Number.isInteger(port) && port >= 0 && port <= 65535),
+    ),
+    services: Object.freeze(
+      serviceRows.map((service) =>
+        Object.freeze({
+          port:
+            Number.isInteger(service?.port) &&
+            service.port >= 0 &&
+            service.port <= 65535
+              ? service.port
+              : null,
+          transport: boundedText(service?.transport, 12),
+          product: boundedText(service?.product, 100),
+          version: boundedText(service?.version, 80),
+          cpe: Object.freeze(
+            (Array.isArray(service?.cpe) ? service.cpe : [])
+              .slice(0, 12)
+              .map((item) => boundedText(item, 160))
+              .filter(Boolean),
+          ),
+          vulnerabilities: Object.freeze(
+            (Array.isArray(service?.vulnerabilities)
+              ? service.vulnerabilities
+              : []
+            )
+              .slice(0, 20)
+              .map((item) => boundedText(item, 32))
+              .filter(Boolean),
+          ),
+          banner: boundedText(service?.banner, 320),
+        }),
+      ),
+    ),
+    hostnames: Object.freeze(
+      (Array.isArray(value.hostnames) ? value.hostnames : [])
+        .slice(0, 10)
+        .map((item) => boundedText(item, 253))
+        .filter(Boolean),
+    ),
+    domains: Object.freeze(
+      (Array.isArray(value.domains) ? value.domains : [])
+        .slice(0, 10)
+        .map((item) => boundedText(item, 253))
+        .filter(Boolean),
+    ),
+    organization: boundedText(value.organization, 120),
+    isp: boundedText(value.isp, 120),
+    asn: boundedText(value.asn, 24),
+    operatingSystem: boundedText(value.operatingSystem, 100),
+    city: boundedText(value.city, 100),
+    region: boundedText(value.region, 64),
+    country: boundedText(value.country, 100),
+    latitude: hasCoordinates ? value.latitude : null,
+    longitude: hasCoordinates ? value.longitude : null,
+    geographicPrecision: hasCoordinates ? 'network-approximate' : null,
+    geographicProvenance: hasCoordinates
+      ? boundedText(value.geographicProvenance, 200)
+      : null,
+    attribution,
+  });
+}
+
+function normalizeShodanSearchResult(value) {
+  if (
+    !value ||
+    value.provider !== 'shodan' ||
+    !Array.isArray(value.matches) ||
+    value.matches.length > 10
+  )
+    throw new Error('Malformed Cyber enrichment response');
+  const query = boundedText(value.query, 120);
+  const fetchedAt = iso(value.fetchedAt);
+  if (
+    !query ||
+    !fetchedAt ||
+    !Number.isInteger(value.page) ||
+    value.page < 1 ||
+    value.page > 3
+  )
+    throw new Error('Malformed Cyber enrichment response');
+  const matches = value.matches.map((row) =>
+    normalizeEnrichmentRecord(row, 'shodan'),
+  );
+  return Object.freeze({
+    provider: 'shodan',
+    query,
+    page: value.page,
+    pageLimit: 3,
+    pageSize: 10,
+    total:
+      Number.isSafeInteger(value.total) && value.total >= 0
+        ? value.total
+        : null,
+    fetchedAt,
+    attribution: boundedText(value.attribution, 120),
+    matches: Object.freeze(matches),
+  });
+}
+
 /** Validate one normalized, provider-attributed Cyber observation. */
 function normalizeObservation(value, provider) {
   if (!value || typeof value !== 'object') return null;
@@ -198,4 +351,8 @@ export function normalizeCyberSnapshot(value, provider) {
   });
 }
 
-export { normalizeObservation as normalizeCyberObservation };
+export {
+  normalizeObservation as normalizeCyberObservation,
+  normalizeEnrichmentRecord as normalizeCyberEnrichment,
+  normalizeShodanSearchResult,
+};

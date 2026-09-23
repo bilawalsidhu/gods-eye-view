@@ -63,7 +63,11 @@ function localProviderPlugins() {
       testProvider: (id) =>
         id === 'cloudflare-radar'
           ? cyber.testRadarConnection()
-          : Promise.reject(new Error('unknown_test_provider')),
+          : id === 'shodan'
+            ? cyber.testShodanConnection()
+            : id === 'greynoise'
+              ? cyber.testGreyNoiseConnection()
+              : Promise.reject(new Error('unknown_test_provider')),
     }),
   ];
 }

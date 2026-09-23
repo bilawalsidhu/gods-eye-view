@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
 import { isIP } from 'node:net';
 import { readResponseTextCapped } from './common/http.js';
+import { admitKeySetupRequest } from '../../src/keySetupCore.mjs';
+import { createCyberEnrichmentProviders } from './cyber/enrichment.js';
 
 const RADAR_BASE = 'https://api.cloudflare.com/client/v4/radar';
 const DSHIELD_URLS = Object.freeze({
@@ -309,6 +311,7 @@ function serveJson(res, status, payload, cacheControl = 'no-store') {
 export function cyberProxy({ fetchImpl = fetch, now = () => Date.now() } = {}) {
   const radarCache = makeProxyCache();
   const dshieldCache = makeProxyCache();
+  const enrichment = createCyberEnrichmentProviders({ fetchImpl, now });
 
   async function requestRadarSnapshot({ token, signal, force = false }) {
     const secret = String(
@@ -555,6 +558,90 @@ export function cyberProxy({ fetchImpl = fetch, now = () => Date.now() } = {}) {
     }
   }
 
+  function admitEnrichment(req) {
+    return admitKeySetupRequest({
+      method: req.method,
+      remoteAddress: req.socket?.remoteAddress,
+      hostHeader: req.headers?.host,
+      protocol: req.socket?.encrypted ? 'https:' : 'http:',
+      origin: req.headers?.origin,
+      contentType: req.headers?.['content-type'],
+      proxyHeaders: req.headers || {},
+      env: process.env,
+    });
+  }
+
+  function enrichmentHandler(operation) {
+    return (req, res) => {
+      const admission = admitEnrichment(req);
+      if (!admission.ok)
+        return serveJson(res, admission.status, {
+          error: 'local_request_required',
+        });
+      if (req.method !== 'POST')
+        return serveJson(res, 405, { error: 'method_not_allowed' });
+      let body = '';
+      let overflow = false;
+      req.on('data', (chunk) => {
+        if (overflow) return;
+        body += chunk.toString('utf8');
+        if (Buffer.byteLength(body) > 2048) {
+          overflow = true;
+          body = '';
+        }
+      });
+      req.on('end', async () => {
+        if (overflow)
+          return serveJson(res, 413, { error: 'request_too_large' });
+        let input;
+        try {
+          input = JSON.parse(body || '{}');
+        } catch {
+          return serveJson(res, 400, { error: 'invalid_request' });
+        }
+        const controller = new AbortController();
+        const abort = () => {
+          if (!res.writableEnded) controller.abort();
+        };
+        req.once?.('aborted', abort);
+        res.once?.('close', abort);
+        try {
+          const result = await operation(input, { signal: controller.signal });
+          if (!controller.signal.aborted) serveJson(res, 200, result);
+        } catch (error) {
+          if (controller.signal.aborted) return;
+          const code = [
+            'missing_credentials',
+            'invalid_credentials',
+            'insufficient_credits',
+            'rate_limited',
+            'invalid_ip',
+            'invalid_query',
+            'invalid_page',
+            'not_found',
+          ].includes(error?.code)
+            ? error.code
+            : 'upstream_unavailable';
+          const status =
+            {
+              missing_credentials: 401,
+              invalid_credentials: 401,
+              insufficient_credits: 402,
+              rate_limited: 429,
+              invalid_ip: 400,
+              invalid_query: 400,
+              invalid_page: 400,
+              not_found: 404,
+            }[code] || 503;
+          serveJson(res, status, { error: code });
+        } finally {
+          req.removeListener?.('aborted', abort);
+          res.removeListener?.('close', abort);
+        }
+      });
+    };
+  }
+
   return {
     name: 'cyber-providers',
     configureServer({ middlewares }) {
@@ -564,6 +651,24 @@ export function cyberProxy({ fetchImpl = fetch, now = () => Date.now() } = {}) {
       middlewares.use('/api/cyber/dshield', (req, res) =>
         handler('dshield', req, res),
       );
+      middlewares.use(
+        '/api/cyber/enrich/shodan/host',
+        enrichmentHandler(({ ip }, options) =>
+          enrichment.lookupShodanHost(ip, options),
+        ),
+      );
+      middlewares.use(
+        '/api/cyber/enrich/shodan/search',
+        enrichmentHandler(({ query, page }, options) =>
+          enrichment.searchShodan(query, page, options),
+        ),
+      );
+      middlewares.use(
+        '/api/cyber/enrich/greynoise/ip',
+        enrichmentHandler(({ ip }, options) =>
+          enrichment.lookupGreyNoise(ip, options),
+        ),
+      );
     },
     configurePreviewServer({ middlewares }) {
       middlewares.use('/api/cyber/radar', (req, res) =>
@@ -572,9 +677,29 @@ export function cyberProxy({ fetchImpl = fetch, now = () => Date.now() } = {}) {
       middlewares.use('/api/cyber/dshield', (req, res) =>
         handler('dshield', req, res),
       );
+      middlewares.use(
+        '/api/cyber/enrich/shodan/host',
+        enrichmentHandler(({ ip }, options) =>
+          enrichment.lookupShodanHost(ip, options),
+        ),
+      );
+      middlewares.use(
+        '/api/cyber/enrich/shodan/search',
+        enrichmentHandler(({ query, page }, options) =>
+          enrichment.searchShodan(query, page, options),
+        ),
+      );
+      middlewares.use(
+        '/api/cyber/enrich/greynoise/ip',
+        enrichmentHandler(({ ip }, options) =>
+          enrichment.lookupGreyNoise(ip, options),
+        ),
+      );
     },
     requestRadarSnapshot,
     requestDshieldSnapshot,
     testRadarConnection,
+    testShodanConnection: enrichment.testShodanConnection,
+    testGreyNoiseConnection: enrichment.testGreyNoiseConnection,
   };
 }

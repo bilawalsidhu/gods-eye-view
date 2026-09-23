@@ -358,11 +358,21 @@ export async function initKeySetup({
   };
 
   const testProvider = async (provider, button) => {
-    if (disposed || busy || provider !== 'cloudflare-radar') return;
+    if (disposed || busy) return;
+    if (
+      provider === 'greynoise' &&
+      typeof globalThis.confirm === 'function' &&
+      !globalThis.confirm(
+        'Testing GreyNoise performs one Community API lookup of 1.1.1.1 and uses one lookup from your account limit. Continue?',
+      )
+    )
+      return;
+    const providerTitle =
+      status?.keys?.find((key) => key.testId === provider)?.title || 'Provider';
     busy = true;
     button.disabled = true;
     applyButton?.setAttribute('aria-disabled', 'true');
-    say('Testing Cloudflare Radar…');
+    say(`Testing ${providerTitle}…`);
     try {
       const response = await doFetch('/api/setup/test', {
         method: 'POST',
@@ -375,13 +385,13 @@ export async function initKeySetup({
       if (disposed) return;
       say(
         payload?.ok === true
-          ? 'Cloudflare Radar connection succeeded.'
+          ? payload?.message || `${providerTitle} connection succeeded.`
           : payload?.message ||
-              'Cloudflare Radar could not be reached. Try again later.',
+              `${providerTitle} could not be reached. Try again later.`,
       );
     } catch {
       if (!disposed)
-        say('Cloudflare Radar could not be reached. Try again later.');
+        say(`${providerTitle} could not be reached. Try again later.`);
     } finally {
       busy = false;
       applyButton?.setAttribute('aria-disabled', 'false');

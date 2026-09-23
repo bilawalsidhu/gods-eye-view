@@ -8,6 +8,7 @@ class FakeNode {
     this.className = className;
     this.children = [];
     this.attributes = new Map();
+    this.dataset = {};
     this.hidden = false;
     this.inert = false;
     this.classList = {
@@ -26,6 +27,8 @@ class FakeNode {
   append(...nodes) {
     this.children.push(...nodes);
   }
+  addEventListener() {}
+  removeEventListener() {}
   replaceChildren(...nodes) {
     this.children = nodes;
   }
@@ -82,15 +85,22 @@ test('Cyber Threat Intel remains hidden unless Cyber Activity is enabled', () =>
     selectedRadar: null,
     nonGeographicProviders: [
       {
+        id: 'dshield',
         label: 'SANS ISC / DShield',
         status: 'updated 2026-09-20T01:00:00Z',
         fetchedAt: '2026-09-20T01:00:00Z',
         attribution: 'SANS ISC / DShield',
         notice: 'Reports may include false positives.',
         observations: [
-          { rank: 1, indicator: { value: '192.0.2.1' }, hostname: null },
+          {
+            rank: 1,
+            indicator: { type: 'ipv4', value: '192.0.2.1' },
+            hostname: null,
+          },
         ],
         ports: [{ port: 23, protocol: 'tcp', label: 'Telnet' }],
+        enrichmentResults: {},
+        enrichmentPending: [],
       },
     ],
   };
@@ -104,6 +114,8 @@ test('Cyber Threat Intel remains hidden unless Cyber Activity is enabled', () =>
   assert.match(f.body.textContent, /Unavailable/);
   assert.match(f.body.textContent, /Current Top 10 Targeted Ports/);
   assert.match(f.body.textContent, /23\/tcp/);
+  assert.match(f.body.textContent, /Optional Shodan search/);
+  assert.match(f.body.textContent, /query credits/);
   layer.state = {
     enabled: false,
     selectedRadar: null,

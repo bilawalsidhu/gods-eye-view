@@ -415,7 +415,7 @@
 }
 .cyber-intel-source-table th,
 .cyber-intel-source-table td {
-  width: 50%;
+  width: 33.333%;
   padding: 6px 5px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   text-align: left;
@@ -432,6 +432,41 @@
 }
 .cyber-intel-map-hint {
   margin: 0;
+}
+.cyber-intel-actions,
+.cyber-intel-search-result {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: center;
+}
+.cyber-intel-search-result {
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 10px;
+}
+.cyber-intel-provider button {
+  border: 1px solid rgba(120, 220, 255, 0.35);
+  border-radius: 4px;
+  padding: 4px 7px;
+  color: #d9f6ff;
+  background: rgba(20, 52, 70, 0.75);
+  cursor: pointer;
+  font: inherit;
+}
+.cyber-intel-provider button:hover,
+.cyber-intel-provider button:focus-visible {
+  border-color: #8feaff;
+  background: rgba(26, 78, 104, 0.9);
+}
+.cyber-intel-search-form {
+  display: flex;
+  gap: 6px;
+}
+.cyber-intel-search-form input {
+  min-width: 0;
+  flex: 1;
 }
 #right-context-rail
   #global-context-panel:not(.collapsed)
