@@ -47,7 +47,7 @@ const cesium = {
     }
   },
   ScreenSpaceEventType: { LEFT_CLICK: 'left-click' },
-  ArcType: { NONE: 'none' },
+  ArcType: { NONE: 'none', GEODESIC: 'geodesic' },
   Cartesian3: {
     fromDegrees: (longitude, latitude, height = 0) => ({
       longitude,
@@ -306,9 +306,12 @@ test('Shodan area search uses the visible map radius, renders devices, and expos
   );
   assert.notEqual(entity.position.longitude, device.longitude);
   assert.notEqual(entity.position.longitude, secondEntity.position.longitude);
-  assert.ok(
-    shodanDataSource.entities.getById('cyber-shodan-link:8.8.4.4').polyline,
-  );
+  const connector = shodanDataSource.entities.getById(
+    'cyber-shodan-link:8.8.4.4',
+  ).polyline;
+  assert.ok(connector);
+  assert.equal(connector.clampToGround, true);
+  assert.equal(connector.arcType, cesium.ArcType.GEODESIC);
   assert.equal(entity.properties.geographicPrecision, 'network-approximate');
   pickedId = entity.id;
   latestSelectionHandler.actions.get('left-click')({

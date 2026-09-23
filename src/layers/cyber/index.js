@@ -350,7 +350,8 @@ export function createCyberLayer({
             ],
             width: 1.5,
             material: cesium.Color.GOLD.withAlpha(0.65),
-            arcType: cesium.ArcType.NONE,
+            // GroundPolylineGeometry accepts only GEODESIC or RHUMB arcs.
+            arcType: cesium.ArcType.GEODESIC,
             clampToGround: true,
           };
       }
