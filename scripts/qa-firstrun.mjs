@@ -92,10 +92,13 @@ async function open(page, { hash = '', query = '', clearAll = true, clearSession
     await page.goto(`${APP_URL}/${query}${hash}`, { waitUntil: 'domcontentloaded' });
   }
   // The launcher is revealed after the loading cover yields (~T+1.9 s).
+  // 120 s: the reveal is gated on full app init, which at 1-min load 42-77
+  // (run6c, 2026-09-24) exceeded the old 45 s wait — every open() then
+  // graded a not-yet-revealed launcher. Assertion unchanged, wait widened.
   await page.waitForFunction(
     (sel) => Boolean(window.__godsEyeView?.styleManager)
       && (document.querySelector(sel)?.classList.contains('visible') || !document.querySelector(sel)),
-    { timeout: 45000 },
+    { timeout: 120000 },
     LAUNCHER,
   ).catch(() => {});
   await sleep(400);
