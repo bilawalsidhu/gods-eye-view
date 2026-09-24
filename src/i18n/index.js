@@ -1,9 +1,10 @@
 // God's Eye View i18n core (phase 1): catalog registry, translation, and
 // Intl-based formatting. English is the source/fallback catalog; a missing key
 // in another locale falls back to English with a development-only warning.
-// English is also the ONLY shipped catalog in this foundation change — each
-// additional locale lands as a stacked follow-up PR following the recipe in
-// docs/TRANSLATORS.md (catalog files + registration + CATALOG_LOCALES entry).
+// The shipped set is catalog-driven (CATALOG_LOCALES in locale.js): the
+// foundation shipped English only, and each additional locale lands as a
+// stacked follow-up PR following the recipe in docs/TRANSLATORS.md (catalog
+// files + registration + CATALOG_LOCALES entry). Spanish is the first.
 // Every shipped catalog is built UNCONDITIONALLY — the build cost is trivial
 // and the registry stays declarative — but only locales in the configured pair
 // are offered/accepted (see locale.js resolveLocalePair).
@@ -26,9 +27,14 @@ import * as enShell from './locales/en/shell.js';
 import * as enCockpit from './locales/en/cockpit.js';
 import * as enLayers from './locales/en/layers.js';
 import * as enSetup from './locales/en/setup.js';
+import * as esShell from './locales/es/shell.js';
+import * as esCockpit from './locales/es/cockpit.js';
+import * as esLayers from './locales/es/layers.js';
+import * as esSetup from './locales/es/setup.js';
 
 // Append new namespace modules here (one import + one entry per locale).
 const EN_NAMESPACES = [enShell, enCockpit, enLayers, enSetup];
+const ES_NAMESPACES = [esShell, esCockpit, esLayers, esSetup];
 
 /**
  * Prefix one namespace module's flat, namespace-relative keys with its
@@ -72,6 +78,7 @@ function buildCatalog(namespaceModules) {
 
 const CATALOGS = Object.freeze({
   [DEFAULT_LOCALE]: buildCatalog(EN_NAMESPACES),
+  es: buildCatalog(ES_NAMESPACES),
 });
 
 /**

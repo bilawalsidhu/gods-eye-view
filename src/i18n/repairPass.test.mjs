@@ -1,12 +1,13 @@
-// Repair-pass anchors (extraction correctness).
+// Repair-pass anchors (extraction correctness + Spanish review).
 //
 // en behavior must stay byte-identical: the values added for the director
 // status corpus, the keySetup dev surface, and the map-source wiring are
 // pinned here to the exact literals the code rendered before extraction.
-// Cross-module anchors (keySetupCore registry) catch catalog/registry drift
-// in either direction. The locale-scoped CCTV wrap rules and per-locale value
-// pins live in their locale PRs (es first); this file pins the English
-// contract plus the pixel-identical English layout.
+// The eleven es one-string fixes are pinned so a future edit cannot silently
+// reintroduce a reviewed defect. Cross-module anchors (keySetupCore registry)
+// catch catalog/registry drift in either direction. Further locales pin
+// their anchors in their own PRs; the es-scoped CCTV wrap rule is pinned
+// here (base rule unwrapped, English pixels identical).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -15,6 +16,7 @@ import { getCatalog } from './index.js';
 import { KEY_SETUP_KEYS, keySetupRequirement } from '../keySetupCore.mjs';
 
 const en = getCatalog('en');
+const es = getCatalog('es');
 
 test('director status corpus keeps the pre-extraction English literals byte-identical', () => {
   const expected = {
@@ -41,6 +43,7 @@ test('setup.keySetup.unlocks.* en values equal the keySetupCore registry copy', 
   for (const entry of KEY_SETUP_KEYS) {
     const key = `setup.keySetup.unlocks.${entry.id}`;
     assert.equal(en[key], entry.unlocks, `${key} drifted from KEY_SETUP_KEYS unlocks`);
+    assert.notEqual(es[key], undefined, `${key} missing in es`);
   }
   assert.equal(en['setup.keySetup.requirement'], 'Needs {envVars} — add it in Provider Settings');
   assert.equal(
@@ -67,17 +70,31 @@ test('the seven redundant layers.radio transport seeds stay deleted', () => {
   ];
   for (const key of deleted) {
     assert.equal(en[key], undefined, `${key} was removed by the repair pass`);
+    assert.equal(es[key], undefined, `${key} was removed by the repair pass`);
   }
 });
 
-test('the English CCTV control rows stay unwrapped: no locale-scoped wrap rule ships ahead of its locale', () => {
-  // Locale wrap rules (html[lang='…'] .cctv-controls { flex-wrap: wrap }) are
-  // added one per locale PR, each with a measured-width justification — never
-  // speculatively. Until then the base rule must stay unwrapped so English
-  // pixels are unchanged, and no html[lang] override may exist.
+test('the eleven reviewed es one-string fixes stay fixed', () => {
+  assert.equal(es['cockpit.cctv.coverageViewshedOn'], 'ÁREA VISIBLE ACTIVADA');
+  assert.equal(es['cockpit.context.bearingNone'], 'BRG —');
+  assert.ok(es['layers.awareness.standbySelect'].includes('BUQUE U INSTALACIÓN'));
+  assert.equal(es['cockpit.status.sharedSubjectDetail'], '{subject} COMPARTIDA');
+  assert.equal(es['cockpit.hud.metaFeedSurfaceFallback'], 'RESPALDO DE SUPERFICIE');
+  assert.equal(es['cockpit.display.sharpenLabel'], 'Nitidez');
+  assert.ok(es['cockpit.brief.autoTitleOn'].includes('SIG/NEWS/LOCAL'));
+  assert.ok(es['layers.meta.uncertainLifecycle'].includes('reconciliación'));
+  assert.equal(es['cockpit.context.actionStop'], 'detenerse');
+  assert.equal(es['setup.voice.detail.holdSpaceTalk'], 'Mantén Espacio para hablar');
+  assert.equal(es['setup.scenes.recipe.omnisciencePullback'], 'Alejamiento omnisciente');
+});
+
+test('the es CCTV clip fix is scoped to html[lang="es"] and leaves the base rule unwrapped', () => {
   const css = readFileSync(new URL('../../src/ui/styles/cctv.css', import.meta.url), 'utf8');
   const baseStart = css.indexOf('.cctv-controls {');
   const baseBody = css.slice(baseStart, css.indexOf('}', baseStart));
   assert.ok(!baseBody.includes('flex-wrap'), 'base .cctv-controls must stay unwrapped (EN pixel-identical)');
-  assert.ok(!/html\[lang=/i.test(css), 'no locale-scoped CCTV rule may ship before its locale does');
+  const scoped = css.indexOf("html[lang='es'] .cctv-controls {");
+  assert.ok(scoped > baseStart, 'es-scoped wrap rule present');
+  const scopedBody = css.slice(scoped, css.indexOf('}', scoped));
+  assert.ok(scopedBody.includes('flex-wrap: wrap'));
 });
