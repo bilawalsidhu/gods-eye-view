@@ -294,12 +294,16 @@ async function main() {
     // Context-expansion checks below (L9 matrix D8): the harness is not
     // testing onboarding — qa-firstrun.mjs owns that surface.
     await installCompositorFramePump(page);
-    await page.goto(`${APP_URL}${APP_URL.includes('?') ? '&' : '?'}welcome=0`, { waitUntil: 'domcontentloaded', timeout: 60_000 });
-    await page.waitForFunction(() => window.__godsEyeView?.dataManager, { timeout: 60_000 });
-    await page.waitForFunction(() => window.__godsEyeView?.styleManager?._dataManager?.layers?.has('radio'), { timeout: 60_000 });
+    // 240 s boot tier: fresh-boot navigations across the suite set needed
+    // more than 240 s under a sustained 1-min load 90-154 (re-run logs,
+    // 2026-09-24); 60 s expired at far milder load in the run4b sweep.
+    // The assertions are unchanged, only the waits widen.
+    await page.goto(`${APP_URL}${APP_URL.includes('?') ? '&' : '?'}welcome=0`, { waitUntil: 'domcontentloaded', timeout: 240_000 });
+    await page.waitForFunction(() => window.__godsEyeView?.dataManager, { timeout: 240_000 });
+    await page.waitForFunction(() => window.__godsEyeView?.styleManager?._dataManager?.layers?.has('radio'), { timeout: 240_000 });
     await page.waitForFunction(
       () => document.getElementById('loading-screen')?.classList.contains('hidden'),
-      { timeout: 60_000 },
+      { timeout: 240_000 },
     );
     await page.waitForFunction(() => (
       typeof window.__gevQaRegisterLayer === 'function'

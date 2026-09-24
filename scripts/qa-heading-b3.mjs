@@ -671,10 +671,14 @@ async function main() {
     }, TURN);
 
     console.log('Loading app...');
-    await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    // 240 s: fresh-boot navigations across the suite set needed more than
+    // 240 s under a sustained 1-min load 90-154 (re-run logs, 2026-09-24);
+    // 60 s expired at far milder load in the run4b sweep. The assertions
+    // are unchanged, only the wait widens.
+    await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 240000 });
     await page.waitForFunction(
       () => window.__godsEyeView && window.__godsEyeView.viewer && window.__godsEyeView.dataManager,
-      { timeout: 60000, polling: 200 }
+      { timeout: 240000, polling: 200 }
     );
     console.log('  App globals ready.');
 
