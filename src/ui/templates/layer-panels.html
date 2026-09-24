@@ -208,6 +208,15 @@
         <button
           type="button"
           class="ai-view-tab"
+          data-view="genai"
+          title="AI Image Generation Studio (Alt+7)"
+        >
+          <span class="ai-view-icon">🎨</span>
+          <span class="ai-view-label">GenAI</span>
+        </button>
+        <button
+          type="button"
+          class="ai-view-tab"
           data-view="system"
           title="Host Computer Control & Diagnostics (Alt+6)"
         >
@@ -390,6 +399,23 @@
           <button type="button" class="ai-model-opt" data-model="glm-4-flash">
             <span class="model-opt-name">🇨🇳 GLM-4 Flash (Zhipu 200K)</span>
             <span class="model-opt-tag">PERMANENT FREE · 200K HIGH SPEED BILINGUAL</span>
+          </button>
+        <div class="ai-model-group-title">🎨 IMAGE GENERATION (STABLE DIFFUSION 3 / FLUX)</div>
+          <button type="button" class="ai-model-opt" data-model="stabilityai/stable-diffusion-3-medium">
+            <span class="model-opt-name">🎨 Stable Diffusion 3 Medium</span>
+            <span class="model-opt-tag">PHOTOREALISTIC · 2B PARAMS · HIGH FIDELITY</span>
+          </button>
+          <button type="button" class="ai-model-opt" data-model="black-forest-labs/flux-1-schnell">
+            <span class="model-opt-name">⚡ Flux.1 Schnell</span>
+            <span class="model-opt-tag">ULTRA-FAST · 12B PARAMS · STEP DISTILLATION</span>
+          </button>
+          <button type="button" class="ai-model-opt" data-model="stabilityai/stable-diffusion-3.5-large">
+            <span class="model-opt-name">🎨 Stable Diffusion 3.5 Large</span>
+            <span class="model-opt-tag">LARGE · 5B PARAMS · HAND & TEXT ACCURACY</span>
+          </button>
+          <button type="button" class="ai-model-opt" data-model="black-forest-labs/flux-1-pro">
+            <span class="model-opt-name">🌟 Flux.1 Pro</span>
+            <span class="model-opt-tag">PRO · BEST QUALITY · COMPOSITIONAL CONTROL</span>
           </button>
         </div>
       </div>
@@ -576,6 +602,22 @@
             title="Nemotron 3.5 Lightning (Default · Fast tactical globe control)"
           >
             ⚡ Nemotron
+          </button>
+          <button
+            type="button"
+            class="ai-quick-model-btn"
+            data-model="stabilityai/stable-diffusion-3-medium"
+            title="Stable Diffusion 3 Medium — generate AI imagery from a prompt"
+          >
+            🎨 SD3
+          </button>
+          <button
+            type="button"
+            class="ai-quick-model-btn"
+            data-model="black-forest-labs/flux-1-schnell"
+            title="Flux.1 Schnell — ultra-fast AI image generation"
+          >
+            ⚡ Flux
           </button>
         </div>
         <button
@@ -1032,6 +1074,72 @@
         </div>
       </div>
 
+      <!-- AI Image Generation Studio Drawer -->
+      <div class="ai-genai-drawer" hidden>
+        <div class="ai-genai-drawer-inner">
+          <div class="ai-genai-drawer-header">
+            <button
+              type="button"
+              class="ai-drawer-back-btn ai-genai-back-btn"
+              title="Back to Chat"
+            >
+              ← Chat
+            </button>
+            <span class="ai-genai-title">🎨 AI Image Generation Studio</span>
+            <button type="button" class="ai-genai-close-btn" title="Close">
+              ✕
+            </button>
+          </div>
+          <div class="ai-genai-drawer-body">
+            <div class="ai-genai-toolbar">
+              <div class="ai-genai-model-picker">
+                <label for="ai-genai-model-select">Model:</label>
+                <select id="ai-genai-model-select" class="ai-genai-model-select">
+                  <option value="stabilityai/stable-diffusion-3-medium">🎨 Stable Diffusion 3 Medium</option>
+                  <option value="black-forest-labs/flux-1-schnell">⚡ Flux.1 Schnell</option>
+                  <option value="stabilityai/stable-diffusion-3.5-large">🎨 Stable Diffusion 3.5 Large</option>
+                  <option value="black-forest-labs/flux-1-pro">🌟 Flux.1 Pro</option>
+                </select>
+              </div>
+              <div class="ai-genai-aspect-picker">
+                <label for="ai-genai-aspect-select">Aspect:</label>
+                <select id="ai-genai-aspect-select" class="ai-genai-aspect-select">
+                  <option value="1:1">1:1 Square</option>
+                  <option value="16:9">16:9 Landscape</option>
+                  <option value="9:16">9:16 Portrait</option>
+                  <option value="4:3">4:3 Standard</option>
+                  <option value="3:2">3:2 Photo</option>
+                </select>
+              </div>
+              <button type="button" class="ai-genai-generate-btn" id="ai-genai-generate-btn" title="Generate">
+                🎨 Generate
+              </button>
+            </div>
+            <div class="ai-genai-prompt-bar">
+              <textarea
+                id="ai-genai-prompt"
+                class="ai-genai-prompt-input"
+                placeholder="Describe the image you want to generate... (e.g. 'A futuristic orbital station above Earth, photorealistic, 8K, dramatic lighting')"
+                rows="3"
+              ></textarea>
+              <textarea
+                id="ai-genai-negative-prompt"
+                class="ai-genai-negative-prompt-input"
+                placeholder="Negative prompt (optional) — what to exclude from the image"
+                rows="2"
+              ></textarea>
+            </div>
+            <div class="ai-genai-gallery" id="ai-genai-gallery" role="list" aria-label="Generated images">
+              <div class="ai-genai-empty">
+                <span class="ai-genai-empty-icon">🎨</span>
+                <p>Your generated images will appear here</p>
+                <small>Prompt → Generate → Download</small>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Conversation History Sidebar (hidden by default) -->
       <div class="ai-history-drawer" hidden>
         <div class="ai-history-header">
@@ -1163,6 +1271,14 @@
           capture="environment"
           hidden
         />
+        <button
+          type="button"
+          class="ai-chat-btn ai-genai-btn"
+          title="Generate AI Image (Stable Diffusion 3 / Flux)"
+          id="ai-genai-btn"
+        >
+          🎨
+        </button>
         <input
           type="text"
           class="ai-chat-input"

@@ -52,6 +52,9 @@ export function classifyHandPose(landmarks, gestures = []) {
 
   // Check finger extension relative to wrist
   const indexExtended = pointDist(indexTip, wrist) > 0.28;
+  const middleExtended = pointDist(middleTip, wrist) > 0.28;
+  const ringExtended = pointDist(ringTip, wrist) > 0.28;
+  const pinkyExtended = pointDist(pinkyTip, wrist) > 0.28;
   const middleCurled = pointDist(middleTip, wrist) < 0.22;
   const ringCurled = pointDist(ringTip, wrist) < 0.22;
   const pinkyCurled = pointDist(pinkyTip, wrist) < 0.22;
@@ -77,8 +80,36 @@ export function classifyHandPose(landmarks, gestures = []) {
     };
   }
 
+  // OK / Circle: Thumb and index form a circle, others extended
+  const okDist = pointDist(thumbTip, indexTip);
+  if (
+    okDist > 0.04 &&
+    okDist < 0.15 &&
+    middleExtended &&
+    ringExtended &&
+    pinkyExtended
+  ) {
+    return {
+      name: 'ok',
+      label: 'CONFIRM',
+      icon: '👌',
+      confidence: 0.85,
+    };
+  }
+
+  // Open palm / Stop: All fingers extended and splayed
+  const allExtended =
+    indexExtended && middleExtended && ringExtended && pinkyExtended;
+  if (allExtended) {
+    return {
+      name: 'open_palm',
+      label: 'BROADCAST',
+      icon: '✋',
+      confidence: 0.8,
+    };
+  }
+
   // Peace / V sign: Index and middle extended, ring and pinky curled
-  const middleExtended = pointDist(middleTip, wrist) > 0.28;
   if (indexExtended && middleExtended && ringCurled && pinkyCurled) {
     return {
       name: 'peace',
@@ -147,12 +178,22 @@ export class VisionGestureController {
     this.ctx = null;
     this.animId = null;
 
+    // Dual-hand support
+    this.hands = []; // Array of {landmarks, pose, screenPos}
     this.lastHandPos = null;
     this.lastPinchDist = null;
     this.currentGesture = { name: 'none', label: 'STANDBY', icon: '👁️' };
     this.fps = 0;
     this._lastFrameTime = 0;
     this._lastProcessTime = 0;
+    this._lastGestureTime = 0;
+    this._gestureCooldown = 800; // ms between gesture triggers
+
+    // State machine for gesture sequencing
+    this._state = 'IDLE'; // IDLE → GESTURING → COOLDOWN
+    this._lastPoseName = null;
+    this._stablePoseCount = 0;
+    this._requiredStableFrames = 3;
 
     this._boundLoop = this._processFrame.bind(this);
   }
@@ -308,15 +349,48 @@ export class VisionGestureController {
         this._drawCyberOverlay(res);
       }
 
-      // Process Hand
+      // Process Hand — dual-hand support
       if (res.hand && res.hand.length > 0) {
-        const hand = res.hand[0];
-        const pose = classifyHandPose(hand.landmarks, res.gesture || []);
-        this.currentGesture = pose;
-        this._handleHandActions(hand, pose);
+        this.hands = res.hand.map((hand) => {
+          const pose = classifyHandPose(hand.landmarks, res.gesture || []);
+          const screenPos = mapHandToScreenCoords(
+            hand.landmarks[0],
+            typeof window !== 'undefined' ? window.innerWidth : 1920,
+            typeof window !== 'undefined' ? window.innerHeight : 1080,
+          );
+          return { hand, pose, screenPos };
+        });
+
+        // Primary gesture from first hand
+        this.currentGesture = this.hands[0].pose;
+
+        // State machine: require stable pose before triggering
+        const poseName = this.hands[0].pose.name;
+        if (poseName === this._lastPoseName) {
+          this._stablePoseCount++;
+        } else {
+          this._stablePoseCount = 0;
+          this._lastPoseName = poseName;
+        }
+
+        if (
+          this._stablePoseCount >= this._requiredStableFrames &&
+          this._state !== 'COOLDOWN'
+        ) {
+          this._state = 'GESTURING';
+          this.hands.forEach((h, i) => this._handleHandActions(h, pose, i));
+          this._state = 'COOLDOWN';
+          this._lastGestureTime = now;
+        }
+
+        // Process each hand for continuous actions (pan/zoom)
+        this.hands.forEach((h, i) => this._handleContinuousActions(h, i));
       } else {
+        this.hands = [];
         this.lastHandPos = null;
         this.lastPinchDist = null;
+        this._stablePoseCount = 0;
+        this._lastPoseName = null;
         if (!res.face || res.face.length === 0) {
           this.currentGesture = {
             name: 'none',
@@ -324,6 +398,14 @@ export class VisionGestureController {
             icon: '🔍',
           };
         }
+      }
+
+      // Cooldown expiry
+      if (
+        this._state === 'COOLDOWN' &&
+        now - this._lastGestureTime > this._gestureCooldown
+      ) {
+        this._state = 'IDLE';
       }
 
       // Process Face Parallax
@@ -344,7 +426,7 @@ export class VisionGestureController {
     }
   }
 
-  _handleHandActions(hand, pose) {
+  _handleHandActions(hand, pose, handIndex = 0) {
     const palm = hand.landmarks[0]; // Wrist/base of palm
     const screenPos = mapHandToScreenCoords(
       palm,
@@ -352,7 +434,7 @@ export class VisionGestureController {
       typeof window !== 'undefined' ? window.innerHeight : 1080,
     );
 
-    this.onGesture?.(pose);
+    this.onGesture?.(pose, handIndex);
 
     // 1. Fist / Grab: Orbit & Pan globe
     if (pose.name === 'fist') {
@@ -425,6 +507,93 @@ export class VisionGestureController {
         }
       }
     }
+
+    // 5. OK gesture: Confirm selection
+    if (pose.name === 'ok') {
+      if (!this._lastOk || Date.now() - this._lastOk > 2000) {
+        this._lastOk = Date.now();
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('gev:gesture-confirm', {
+              detail: {
+                gesture: 'ok',
+                hand: handIndex,
+                message: 'Gesture: Selection confirmed via OK signal 👌',
+              },
+            }),
+          );
+        }
+      }
+    }
+
+    // 6. Open palm: Broadcast / toggle panel
+    if (pose.name === 'open_palm') {
+      if (!this._lastOpenPalm || Date.now() - this._lastOpenPalm > 3000) {
+        this._lastOpenPalm = Date.now();
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('gev:gesture-broadcast', {
+              detail: {
+                gesture: 'open_palm',
+                message: 'Gesture: Broadcast mode activated ✋',
+              },
+            }),
+          );
+        }
+      }
+    }
+
+    // 7. Peace sign: Cockpit view toggle
+    if (pose.name === 'peace') {
+      if (!this._lastPeace || Date.now() - this._lastPeace > 2000) {
+        this._lastPeace = Date.now();
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('gev:gesture-cockpit', {
+              detail: {
+                gesture: 'peace',
+                message: 'Gesture: Cockpit view activated ✌️',
+              },
+            }),
+          );
+        }
+      }
+    }
+  }
+
+  _handleContinuousActions(hand, handIndex) {
+    // Continuous pinch zoom (runs every frame, not gated by state machine)
+    const pose = hand.pose;
+    if (
+      pose.name === 'pinch' &&
+      pose.distance !== undefined &&
+      this.viewer?.camera
+    ) {
+      if (this.lastPinchDist !== null) {
+        const dDist = pose.distance - this.lastPinchDist;
+        if (Math.abs(dDist) > 0.002) {
+          const height =
+            this.viewer.camera.positionCartographic?.height || 5000000;
+          const zoomAmount = dDist * height * 1.5;
+          if (zoomAmount > 0) {
+            this.viewer.camera.zoomOut?.(zoomAmount);
+          } else {
+            this.viewer.camera.zoomIn?.(-zoomAmount);
+          }
+        }
+      }
+      this.lastPinchDist = pose.distance;
+    }
+
+    // Continuous fist orbit
+    if (pose.name === 'fist' && this.lastHandPos && this.viewer?.camera) {
+      const dx = hand.screenPos.x - this.lastHandPos.x;
+      const dy = hand.screenPos.y - this.lastHandPos.y;
+      const rotFactor = 0.0035;
+      this.viewer.camera.rotateRight?.(-dx * rotFactor);
+      this.viewer.camera.rotateUp?.(-dy * rotFactor);
+    }
+    this.lastHandPos = hand.screenPos;
   }
 
   _handleFaceParallax(rotation) {

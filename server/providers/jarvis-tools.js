@@ -1301,8 +1301,47 @@ export async function pingHost(host = '8.8.8.8') {
 
 // ── 3. Web Scraper ──
 
+// ── SSRF Protection ──
+const BLOCKED_HOSTS = new Set([
+  'localhost',
+  '127.0.0.1',
+  '0.0.0.0',
+  '::1',
+  '169.254.169.254', // AWS / cloud metadata endpoint
+]);
+const PRIVATE_IPV4_RE =
+  /^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.|127\.|169\.254\.|0\.0\.0\.0)/;
+
+/**
+ * Reject URLs that target local/private network resources (SSRF prevention).
+ * Blocks loopback, link-local, RFC 1918, and cloud metadata addresses.
+ */
+export function isBlockedUrl(urlString) {
+  if (typeof urlString !== 'string' || !urlString) return true;
+  let u;
+  try {
+    u = new URL(urlString);
+  } catch {
+    return true; // malformed URLs are rejected
+  }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return true;
+  const host = u.hostname.toLowerCase();
+  if (BLOCKED_HOSTS.has(host)) return true;
+  if (
+    host.startsWith('fe80:') ||
+    host.startsWith('fc') ||
+    host.startsWith('fd')
+  )
+    return true;
+  if (PRIVATE_IPV4_RE.test(host)) return true;
+  return false;
+}
+
 /** Fetch content from a URL and return text/html content. */
 export async function scrapeUrl(url, { maxBytes = 100_000 } = {}) {
+  if (isBlockedUrl(url)) {
+    return { error: 'URL blocked by security policy (SSRF protection)', url };
+  }
   try {
     const res = await fetch(url, {
       headers: { 'User-Agent': 'JARVIS-GodsEyeView/1.0' },
@@ -1334,22 +1373,69 @@ export async function scrapeUrl(url, { maxBytes = 100_000 } = {}) {
 
 /** Evaluate a math expression safely. */
 export function calculate(expression) {
-  // Whitelist only safe math characters and functions
-  const sanitized = expression.replace(/[^0-9+\-*/().%,\s^eE]/g, '');
-  if (
-    sanitized !==
-    expression
-      .replace(/\s/g, '')
-      .replace(/Math\.\w+/g, '')
-      .replace(/[a-z]+/gi, '')
-  ) {
-    // Allow Math.* functions
+  if (typeof expression !== 'string') {
+    return { expression, result: null, error: 'Expression must be a string' };
+  }
+  // Strict whitelist: digits, arithmetic operators, decimals, whitespace,
+  // and the Math.* functions we expose. Anything else is rejected.
+  const ALLOWED = /^[\s0-9+\-*/().,%^eE<>!=&|?:a-zA-Z_]+$/;
+  const stripped = expression.replace(/\s/g, '');
+  if (!ALLOWED.test(stripped)) {
+    return {
+      expression,
+      result: null,
+      error: 'Expression contains disallowed characters',
+    };
+  }
+  // Only permit calls to the safe Math helper set.
+  const SAFE_MATH = new Set([
+    'abs',
+    'ceil',
+    'floor',
+    'round',
+    'trunc',
+    'sqrt',
+    'cbrt',
+    'pow',
+    'exp',
+    'log',
+    'log2',
+    'log10',
+    'sin',
+    'cos',
+    'tan',
+    'asin',
+    'acos',
+    'atan',
+    'atan2',
+    'sinh',
+    'cosh',
+    'tanh',
+    'PI',
+    'E',
+    'min',
+    'max',
+    'random',
+    'sign',
+    'clz32',
+    'imul',
+    'fround',
+    'hypot',
+  ]);
+  const identifiers = stripped.match(/[A-Za-z_][A-Za-z0-9_]*/g) || [];
+  for (const id of identifiers) {
+    if (!SAFE_MATH.has(id)) {
+      return {
+        expression,
+        result: null,
+        error: `Function or identifier '${id}' is not permitted`,
+      };
+    }
   }
   try {
-    // Build a safe evaluator using Function constructor with Math in scope
     const mathFns =
-      'const {abs,ceil,floor,round,sqrt,pow,log,log2,log10,sin,cos,tan,PI,E,min,max,random}=Math;';
-    const fn = new Function(mathFns + `return (${expression});`);
+      'const {abs,ceil,floor,round,trunc,sqrt,cbrt,pow,exp,log,log2,log10,sin,cos,tan,asin,acos,atan,atan2,sinh,cosh,tanh,PI,E,min,max,random,sign,clz32,imul,fround,hypot}=Math;';
+    const fn = new Function(mathFns + `return (${stripped});`);
     const result = fn();
     if (typeof result !== 'number' || !isFinite(result)) {
       return { expression, result: String(result), error: null };

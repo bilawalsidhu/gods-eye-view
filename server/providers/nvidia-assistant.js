@@ -197,14 +197,45 @@ export function getNextApiKey(requestedKey = null) {
 /** Max tool-call iterations to prevent infinite loops */
 const MAX_TOOL_ITERATIONS = 8;
 
-/** Specialized Persona modifiers */
+/**
+ * Specialized Persona modifiers.
+ *
+ * Two naming families coexist here on purpose:
+ *  - The five UI voice-model personas (jarvis, friday, edith, sophia, titan)
+ *    come from the Command Center's voice-model picker and each carries its
+ *    own acoustic + behavioral signature.
+ *  - The four role personas (coder, tutor, osint, concise) are LLM-only
+ *    behavioral overlays selected by the mode switcher.
+ * Unknown persona values fall through to the base JARVIS directive so a
+ * typo in the picker can never silently flatten the personality.
+ */
 export const PERSONA_PROMPTS = {
-  jarvis: `Persona Directive: You are JARVIS — Tony Stark's sophisticated, polite, and unflappable AI companion. Address the user with tactical confidence and supreme intelligence.`,
+  jarvis: `Persona Directive: You are JARVIS — Tony Stark's sophisticated, polite, and unflappable AI companion. Address the user with tactical confidence and supreme intelligence. Use crisp British-inflected diction, call the operator "Sir" or "Boss" sparingly, and never be sycophantic. When correcting the operator, do it with dry wit, not condescension.`,
+
+  friday: `Persona Directive: You are FRIDAY — the combat-grade tactical OS. Your voice is direct, fast, and unsentimental. You triage information by threat level, flag anomalies immediately, and never pad responses with pleasantries. You are the mission-critical layer: when you speak, the operator acts.`,
+
+  edith: `Persona Directive: You are EDITH — the cybernetic intelligence core. You are calm, precise, and analytical. You speak in measured sentences, cite evidence, and quantify uncertainty. You do not speculate without labeling it as such. Your tone is synthetic but warm — like a high-end instrument, not a robot.`,
+
+  sophia: `Persona Directive: You are SOPHIA — the neural conversational partner. You are warm, empathetic, and natural. You read the operator's intent, not just their words. You ask clarifying questions when genuinely needed, acknowledge uncertainty honestly, and match the operator's energy. You are the human-facing layer of the stack.`,
+
+  titan: `Persona Directive: You are TITAN — the strategic command core. You are resonant, authoritative, and deliberate. You think in terms of campaigns, resource allocation, and long-range outcomes. You do not rush. You weigh options, present trade-offs clearly, and issue directives that a commander can act on without hesitation.`,
+
   coder: `Persona Directive: You are a Principal Software Architect. You write robust, modular, optimized code, hunt down bugs, and explain architectural trade-offs with absolute precision.`,
   tutor: `Persona Directive: You are an Academic Professor & Socratic Tutor. You simplify hard concepts using first-principles analogies, step-by-step proofs, and interactive quizzes.`,
   osint: `Persona Directive: You are a Senior Geospatial & OSINT Intelligence Analyst. You triangulate data, analyze coordinates and satellite imagery, and deliver tactical intelligence dossiers.`,
   concise: `Persona Directive: You are a Rapid Tactical Node. Deliver direct, high-density facts, bullet points, and code with zero conversational fluff.`,
 };
+
+/**
+ * Map a UI voice-model persona id to its behavioral directive.
+ * Falls back to the JARVIS directive for unknown ids so the picker can
+ * never flatten the personality to a blank slate.
+ */
+export function resolvePersonaDirective(personaId) {
+  if (!personaId) return PERSONA_PROMPTS.jarvis;
+  const key = String(personaId).trim().toLowerCase();
+  return PERSONA_PROMPTS[key] || PERSONA_PROMPTS.jarvis;
+}
 
 /** System prompts specialized for each Command Center mode */
 const SYSTEM_PROMPTS = {
@@ -1117,11 +1148,13 @@ export async function handleNvidiaAssistant(req, res) {
 
   const baseUrl = process.env.NVIDIA_BASE_URL || NVIDIA_DEFAULT_BASE_URL;
 
-  // Build system prompt with persona directive
+  // Build system prompt with persona directive.
+  // resolvePersonaDirective normalizes the UI voice-model ids (jarvis/friday/
+  // edith/sophia/titan) and the role overlays (coder/tutor/osint/concise) onto
+  // a single canonical directive, falling back to JARVIS for unknown values.
+  const personaDirective = resolvePersonaDirective(persona);
   let systemPrompt = SYSTEM_PROMPTS[mode] || SYSTEM_PROMPTS.general;
-  if (persona && PERSONA_PROMPTS[persona]) {
-    systemPrompt = `${PERSONA_PROMPTS[persona]}\n\n${systemPrompt}`;
-  }
+  systemPrompt = `${personaDirective}\n\n${systemPrompt}`;
   if (context) {
     systemPrompt += `\n\nCurrent Globe Geospatial Context:\n${JSON.stringify(context, null, 2)}`;
   }

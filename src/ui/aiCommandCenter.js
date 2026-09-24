@@ -808,6 +808,20 @@ export function initAiCommandCenter({
   const systemDrawer = panel.querySelector('.ai-system-drawer');
   const systemCloseBtn = panel.querySelector('.ai-system-close-btn');
 
+  // GenAI Image Generation Drawer
+  const genaiDrawer = panel.querySelector('.ai-genai-drawer');
+  const genaiBackBtn = panel.querySelector('.ai-genai-back-btn');
+  const genaiCloseBtn = panel.querySelector('.ai-genai-close-btn');
+  const genaiGenerateBtn = panel.querySelector('#ai-genai-generate-btn');
+  const genaiModelSelect = panel.querySelector('#ai-genai-model-select');
+  const genaiAspectSelect = panel.querySelector('#ai-genai-aspect-select');
+  const genaiPromptInput = panel.querySelector('#ai-genai-prompt');
+  const genaiNegativePromptInput = panel.querySelector(
+    '#ai-genai-negative-prompt',
+  );
+  const genaiGallery = panel.querySelector('#ai-genai-gallery');
+  const genaiBtn = panel.querySelector('#ai-genai-btn');
+
   // Navigation & In-Chat Search DOM Elements
   const breadcrumb = panel.querySelector('.ai-nav-breadcrumb');
   const viewTabs = panel.querySelectorAll('.ai-view-tab');
@@ -1220,6 +1234,7 @@ export function initAiCommandCenter({
 
   voiceSettingsBtn?.addEventListener('click', () => switchView('voice'));
   voiceModalCloseBtn?.addEventListener('click', () => switchView('chat'));
+  genaiBtn?.addEventListener('click', () => switchView('genai'));
 
   voiceModelSelect?.addEventListener('change', () => {
     voiceSettings.voiceModel = voiceModelSelect.value;
@@ -1404,6 +1419,7 @@ export function initAiCommandCenter({
     if (voiceModal) voiceModal.hidden = viewName !== 'voice';
     if (deviceModal) deviceModal.hidden = viewName !== 'device';
     if (systemDrawer) systemDrawer.hidden = viewName !== 'system';
+    if (genaiDrawer) genaiDrawer.hidden = viewName !== 'genai';
 
     if (viewName === 'history') {
       void loadHistory();
@@ -1413,6 +1429,8 @@ export function initAiCommandCenter({
       void showDeviceModal();
     } else if (viewName === 'system') {
       void refreshSystemView();
+    } else if (viewName === 'genai') {
+      // ensure gallery is visible
     } else if (viewName === 'chat') {
       if (inputEl) setTimeout(() => inputEl.focus(), 60);
     }
@@ -2705,6 +2723,156 @@ export function initAiCommandCenter({
     cameraInput.value = '';
   });
 
+  // AI Image Generation button
+  genaiGenerateBtn?.addEventListener('click', async () => {
+    const prompt = genaiPromptInput?.value?.trim() || '';
+    const negativePrompt = genaiNegativePromptInput?.value?.trim() || '';
+    const model =
+      genaiModelSelect?.value || 'stabilityai/stable-diffusion-3-medium';
+    const aspectRatio = genaiAspectSelect?.value || '1:1';
+
+    if (!prompt) {
+      appendMessage('assistant', 'Please enter a prompt to generate an image.');
+      return;
+    }
+
+    showToolStatus('Generating image...');
+    genaiGenerateBtn.disabled = true;
+    genaiGenerateBtn.textContent = '⏳ Generating...';
+
+    try {
+      const res = await fetch(NVIDIA_API.assistant, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [
+            ...messages.slice(0, -1),
+            { role: 'user', content: prompt },
+          ],
+          mode: currentMode,
+          model: model,
+          stream: false,
+          persona: currentPersona,
+          temperature: currentTemperature,
+          tools: [
+            {
+              type: 'function',
+              function: {
+                name: 'generate_image',
+                description:
+                  'Generate an AI image or artwork using NVIDIA GenAI models (Stable Diffusion 3 / Flux). Saves image to public assets and returns the web URL.',
+                parameters: {
+                  type: 'object',
+                  properties: {
+                    prompt: {
+                      type: 'string',
+                      description:
+                        'Detailed visual prompt describing the image to generate',
+                    },
+                    aspect_ratio: {
+                      type: 'string',
+                      enum: ['1:1', '16:9', '9:16', '4:3', '3:2'],
+                      description: 'Aspect ratio (default 1:1)',
+                    },
+                    negative_prompt: {
+                      type: 'string',
+                      description: 'What to exclude from the image',
+                    },
+                  },
+                  required: ['prompt'],
+                },
+              },
+            },
+          ],
+          tool_choice: {
+            type: 'function',
+            function: { name: 'generate_image' },
+          },
+        }),
+      });
+
+      const data = await res.json();
+      hideToolStatus();
+      genaiGenerateBtn.disabled = false;
+      genaiGenerateBtn.textContent = '🎨 Generate';
+
+      if (!res.ok || !data.ok) {
+        appendMessage(
+          'assistant',
+          `⚠️ Image generation failed: ${data.error || 'Unknown error'}`,
+        );
+        return;
+      }
+
+      const toolExecs = data.toolExecutions || [];
+      const imageResult = toolExecs.find(
+        (exec) => exec.name === 'generate_image',
+      );
+
+      if (imageResult && imageResult.result?.imageUrl) {
+        // Add to gallery
+        const galleryItem = documentRef.createElement('div');
+        galleryItem.className = 'ai-genai-gallery-item';
+        galleryItem.innerHTML = `
+          <div class="ai-genai-preview-wrap">
+            <img src="${imageResult.result.imageUrl}" alt="${prompt}" class="ai-genai-preview-img" loading="lazy" />
+          </div>
+          <div class="ai-genai-meta-bar">
+            <span class="ai-genai-model-tag">🎨 ${imageResult.result.model || 'Generated'}</span>
+            <a href="${imageResult.result.imageUrl}" download="${imageResult.result.filename || 'jarvis-generated.png'}" target="_blank" class="ai-genai-download-btn">⬇️ Download Image</a>
+          </div>
+        `;
+
+        // Add download handler
+        const downloadBtn = galleryItem.querySelector('.ai-genai-download-btn');
+        if (downloadBtn) {
+          downloadBtn.addEventListener('click', (e) => {
+            e.target.textContent = '✓ Downloading...';
+            setTimeout(() => {
+              e.target.textContent = '⬇️ Download Image';
+            }, 1500);
+          });
+        }
+
+        genaiGallery.insertBefore(galleryItem, genaiGallery.firstChild);
+        genaiGallery.querySelector('.ai-genai-empty')?.classList.add('hidden');
+
+        appendMessage('assistant', `🎨 Generated image: "${prompt}"`, {
+          toolExecutions: [
+            {
+              name: 'generate_image',
+              args: {
+                prompt,
+                negative_prompt: negativePrompt,
+                aspect_ratio: aspectRatio,
+                model,
+              },
+              result: imageResult.result,
+              iteration: 1,
+            },
+          ],
+        });
+
+        // Clear prompt for next generation
+        genaiPromptInput.value = '';
+        genaiNegativePromptInput.value = '';
+      } else {
+        appendMessage(
+          'assistant',
+          '⚠️ Image generation completed but no image was returned.',
+        );
+      }
+    } catch (err) {
+      hideToolStatus();
+      genaiGenerateBtn.disabled = false;
+      genaiGenerateBtn.textContent = '🎨 Generate';
+      appendMessage(
+        'assistant',
+        `⚠️ Image generation error: ${err.message || err}`,
+      );
+    }
+  });
+
   // Code block Run & Auto-Debug event delegation
   panel.addEventListener('click', async (e) => {
     const runBtn = e.target.closest('.ai-run-btn');
@@ -3597,6 +3765,8 @@ export function initAiCommandCenter({
 
   systemCloseBtn?.addEventListener('click', () => switchView('chat'));
   telemetryChip?.addEventListener('click', () => switchView('system'));
+  genaiCloseBtn?.addEventListener('click', () => switchView('chat'));
+  genaiBackBtn?.addEventListener('click', () => switchView('chat'));
 
   // System Drawer quick actions
   panel
