@@ -336,6 +336,32 @@
 #cyber-intel-legend-panel[hidden] {
   display: none !important;
 }
+#cyber-intel-legend-panel.cyber-legend-collapsed {
+  max-height: none;
+  overflow: visible;
+}
+#cyber-intel-legend-panel.cyber-legend-collapsed
+  #cyber-intel-map-legend-content {
+  display: none;
+}
+.cyber-legend-collapse-btn {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: var(--text-secondary);
+  font-size: 15px;
+  line-height: 1;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--glass-border);
+  border-radius: 5px;
+  cursor: pointer;
+}
+.cyber-legend-collapse-btn:hover,
+.cyber-legend-collapse-btn:focus-visible {
+  color: var(--accent-cyan);
+  border-color: var(--accent-cyan);
+}
 .cyber-intel-body {
   display: flex;
   flex-direction: column;

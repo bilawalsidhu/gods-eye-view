@@ -94,6 +94,21 @@ export class CyberIntelPanel {
       );
       button.title = `${expanded ? 'Restore' : 'Expand'} Cyber Threat Intel panel size`;
     };
+    this._onLegendClick = (event) => {
+      const button = event.target?.closest?.('[data-cyber-legend-collapse]');
+      if (!button) return;
+      const collapsed = !this.legendPanel.classList.contains(
+        'cyber-legend-collapsed',
+      );
+      this.legendPanel.classList.toggle('cyber-legend-collapsed', collapsed);
+      button.setAttribute('aria-expanded', String(!collapsed));
+      button.setAttribute(
+        'aria-label',
+        `${collapsed ? 'Expand' : 'Collapse'} Cyber Intel Map Legend`,
+      );
+      button.title = `${collapsed ? 'Expand' : 'Collapse'} Cyber Intel Map Legend`;
+      button.textContent = collapsed ? '⌃' : '⌄';
+    };
     this._onBodySubmit = (event) => {
       const kevForm = event.target?.closest?.('[data-kev-search]');
       if (kevForm) {
@@ -118,6 +133,7 @@ export class CyberIntelPanel {
     this.body.addEventListener('click', this._onBodyClick);
     this.body.addEventListener('submit', this._onBodySubmit);
     this.panel.addEventListener('click', this._onPanelClick);
+    this.legendPanel?.addEventListener('click', this._onLegendClick);
     this.render(layer.getThreatIntelState());
   }
 
@@ -1049,11 +1065,14 @@ export class CyberIntelPanel {
       this.body?.removeEventListener('submit', this._onBodySubmit);
     if (this._onPanelClick)
       this.panel?.removeEventListener('click', this._onPanelClick);
+    if (this._onLegendClick)
+      this.legendPanel?.removeEventListener('click', this._onLegendClick);
     if (this._onDevicePopupClick)
       this.devicePopup?.removeEventListener('click', this._onDevicePopupClick);
     this._onBodyClick = null;
     this._onBodySubmit = null;
     this._onPanelClick = null;
+    this._onLegendClick = null;
     this._onDevicePopupClick = null;
     this.layer?.setThreatIntelListener?.(null);
     this.layer = null;

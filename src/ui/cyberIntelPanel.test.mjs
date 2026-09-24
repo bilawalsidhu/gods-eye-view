@@ -12,6 +12,7 @@ class FakeNode {
     this.style = {};
     this.hidden = false;
     this.inert = false;
+    this.listeners = new Map();
     this.classList = {
       contains: (value) => this.className.split(/\s+/).includes(value),
       add: (value) => {
@@ -23,13 +24,23 @@ class FakeNode {
           .filter((item) => item !== value)
           .join(' ');
       },
+      toggle: (value, force) => {
+        const next = force ?? !this.classList.contains(value);
+        if (next) this.classList.add(value);
+        else this.classList.remove(value);
+        return next;
+      },
     };
   }
   append(...nodes) {
     this.children.push(...nodes);
   }
-  addEventListener() {}
-  removeEventListener() {}
+  addEventListener(type, listener) {
+    this.listeners.set(type, listener);
+  }
+  removeEventListener(type) {
+    this.listeners.delete(type);
+  }
   replaceChildren(...nodes) {
     this.children = nodes;
   }
@@ -60,6 +71,7 @@ function fixture() {
   const body = new FakeNode('div');
   const legendPanel = new FakeNode('section');
   const legendContent = new FakeNode('div');
+  const legendToggle = new FakeNode('button');
   legendPanel.hidden = true;
   legendPanel.inert = true;
   const documentBody = new FakeNode('body');
@@ -83,6 +95,7 @@ function fixture() {
     body,
     legendPanel,
     legendContent,
+    legendToggle,
     documentRef,
     disclosure,
   };
@@ -205,6 +218,25 @@ test('Cyber Threat Intel remains hidden unless Cyber Activity is enabled', () =>
   assert.ok(
     f.legendContent.textContent.indexOf('CloudFlare Radar') <
       f.legendContent.textContent.indexOf('Shodan'),
+  );
+  const clickLegendToggle = () =>
+    f.legendPanel.listeners.get('click')({
+      target: {
+        closest: (selector) =>
+          selector === '[data-cyber-legend-collapse]' ? f.legendToggle : null,
+      },
+    });
+  clickLegendToggle();
+  assert.equal(
+    f.legendPanel.classList.contains('cyber-legend-collapsed'),
+    true,
+  );
+  assert.equal(f.legendToggle.attributes.get('aria-expanded'), 'false');
+  assert.equal(f.legendToggle.textContent, '⌃');
+  clickLegendToggle();
+  assert.equal(
+    f.legendPanel.classList.contains('cyber-legend-collapsed'),
+    false,
   );
   assert.match(f.body.textContent, /Top Attackers & Target Ports/);
   assert.ok(
