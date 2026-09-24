@@ -142,9 +142,13 @@ async function main() {
   await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 120000 });
 
   // Wait for the app + viewer.creditDisplay to be live.
+  // 240 s: full viewer construction is CPU-bound in the starved renderer —
+  // at 1-min load 42-55 even 120 s expired (run6c, 2026-09-24) while the
+  // Vite transform itself answered in 26 ms. The assertion is unchanged:
+  // the app must boot and expose creditDisplay, however long the box takes.
   await page.waitForFunction(
     () => window.__godsEyeView && window.__godsEyeView.viewer && window.__godsEyeView.viewer.creditDisplay,
-    { timeout: 120000 },
+    { timeout: 240000 },
   );
   // Give Cesium a few frames to render the on-screen credit line (logo + link).
   await new Promise((r) => setTimeout(r, 2500));
