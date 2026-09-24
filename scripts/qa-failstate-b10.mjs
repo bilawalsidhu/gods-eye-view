@@ -223,13 +223,17 @@ async function main() {
     });
 
     console.log('Loading app...');
-    await page.goto(withDetectDebug(APP_URL), { waitUntil: 'domcontentloaded', timeout: 60000 });
+    // Boot windows sized for a shared box: under CI-fleet load (run5,
+    // 2026-09-24 — 1-min load spiked to 56 mid-sweep) the Vite on-demand
+    // transform of the Cesium graph can exceed 60 s. The assertion is
+    // unchanged, only the wait widens.
+    await page.goto(withDetectDebug(APP_URL), { waitUntil: 'domcontentloaded', timeout: 120000 });
     await page.waitForFunction(
       () => window.__godsEyeView
         && window.__godsEyeView.viewer
         && window.__godsEyeView.dataManager
         && window.__godsEyeView.styleManager,
-      { timeout: 60000 },
+      { timeout: 120000 },
     );
     await sleep(1500);
 
