@@ -492,9 +492,11 @@ async function main() {
     await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
     // Every section re-navigates; Puppeteer's default 30 s navigation
     // timeout expired repeatedly under CI-fleet load (run5, 2026-09-24 —
-    // load 32-48) before the section could even boot. The assertions are
-    // unchanged, only the wait widens.
-    page.setDefaultNavigationTimeout(120_000);
+    // load 32-48), then 120 s expired for the three late sections' fresh
+    // boots under a sustained 110-130 (re-run, 2026-09-24 — 47/51, all
+    // four misses this signature). The assertions are unchanged, only the
+    // wait widens.
+    page.setDefaultNavigationTimeout(240_000);
     page.on('console', (message) => {
       if (message.type() !== 'error') return;
       const text = message.text();
