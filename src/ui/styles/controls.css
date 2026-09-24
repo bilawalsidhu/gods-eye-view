@@ -368,9 +368,18 @@
 }
 
 #pp-toggles:not(.collapsed) > .pp-header-row,
-#pp-toggles:not(.collapsed) > .pp-toggle-group,
-#pp-toggles:not(.collapsed) > #clean-view-toggle {
+#pp-toggles:not(.collapsed) > .pp-panel-body > .pp-toggle-group,
+#pp-toggles:not(.collapsed) > .pp-panel-body > #clean-view-toggle {
   width: 100%;
+}
+
+.pp-panel-body,
+.cyber-panel-body {
+  display: contents;
+}
+
+.panel-collapsible.collapsed > .global-context-panel-inner > .cyber-panel-body {
+  display: none;
 }
 
 .pp-toggle-btn {
@@ -687,6 +696,28 @@
 
 #hud-layout-row {
   min-width: 200px;
+}
+
+.cyber-sonar-control {
+  display: none;
+}
+
+:root[data-ui-theme='cyber'] .cyber-sonar-control {
+  display: flex;
+}
+
+.cyber-sonar-toggle-row,
+.cyber-sonar-setting {
+  min-width: 200px;
+}
+
+.cyber-sonar-toggle-row .pp-mode-btn {
+  margin-left: auto;
+  min-width: 48px;
+}
+
+:root[data-cyber-sonar='off'] .cyber-sonar-setting {
+  display: none;
 }
 
 /* Map Source tiles live with Visual Presets in the bottom command tray. */
@@ -1061,7 +1092,7 @@ body.ui-clean-view #scene-runtime.active {
 /* Display owns the constrained desktop scroll surface. Keeping Parameters as
  * a second scroll container traps wheel/touch input at its boundary and lets
  * the flex column compress newly added preset rows below the visible panel. */
-#pp-toggles:not(.collapsed) > #param-slider-panel.active {
+#pp-toggles:not(.collapsed) > .pp-panel-body > #param-slider-panel.active {
   flex: 0 0 auto;
   max-height: none;
   overflow-y: visible;

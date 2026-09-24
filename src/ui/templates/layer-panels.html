@@ -1193,7 +1193,7 @@
   <!-- CCTV Coverage Panel -->
   <div id="cctv-panel" class="panel-collapsible collapsed" data-panel-id="cctv-panel">
     <div class="panel-glow"></div>
-    <div class="cctv-panel-inner">
+    <div class="cctv-panel-inner" data-rail-scroller>
       <div class="panel-header">
         <span class="panel-title">CCTV</span>
         <span class="panel-divider"></span>
@@ -1205,8 +1205,10 @@
           +
         </button>
       </div>
+      <div class="cyber-panel-body" data-rail-scroller>
       <div id="cctv-frame-wrap" class="cctv-frame-wrap">
         <img id="cctv-frame" alt="CCTV feed frame" />
+        <canvas id="cctv-video" class="cctv-frame" hidden></canvas>
       </div>
       <div id="cctv-source-badge" role="status" aria-live="polite">
         SOURCE · UNKNOWN
@@ -1306,6 +1308,7 @@
       <div class="cctv-summary-label">SCENE SUMMARY</div>
       <div id="cctv-summary">
         Enable CCTV to start camera-linked intelligence summaries.
+      <div id="cctv-summary">Enable CCTV to start camera-linked intelligence summaries.</div>
       </div>
     </div>
   </div>

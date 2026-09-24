@@ -307,8 +307,24 @@
   transition: opacity 180ms ease;
 }
 
+#cctv-video {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+}
+
 #cctv-frame.active {
   opacity: 1;
+}
+
+#cctv-video:not([hidden]) {
+  opacity: 1;
+}
+
+#cctv-frame[hidden],
+#cctv-video[hidden] {
+  display: none;
 }
 
 #cctv-meta {
