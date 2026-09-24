@@ -29,6 +29,21 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
     (`net::ERR_NETWORK_CHANGED`, the shared-box connection-reset artifact
     on re-requested Google tile assets); every other console error still
     fails.
+- **Boot-cost envelope measured and every tier widened to it.** Across
+  four sweeps the fresh-boot cost of the app scaled with the shared
+  box's 1-minute load — roughly 3 s of viewer construction per load
+  unit: >120 s at load 42-55, >240 s at 89-94, >360 s at 114-154, and
+  a Chrome process launch alone exceeded puppeteer's default 30 s at a
+  rising 43-50. Boot navigations and viewer waits across
+  attribution-b12, firstrun, flyroute-cinema, overlay-baseline,
+  heading-b3, labels and radio now gate at 240 s; attribution-b12's
+  boot wait is 360 s with a 300 s `protocolTimeout` (one starved CDP
+  call outlived the 180 s default after every displayed check had
+  passed) and a 120 s browser-launch timeout. The two-flight
+  flyroute-cinema run has a 60 min ceiling (25 and 40 min both ended
+  in SIGKILLs mid-run). Under these windows the 51-check qa-firstrun
+  and the firstrun-mutations suite pass on a loaded box; no assertion
+  was weakened anywhere.
 
 ## [0.10.1] — 2026-09-23
 
