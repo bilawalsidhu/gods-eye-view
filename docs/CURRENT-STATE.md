@@ -806,6 +806,26 @@ feed address is read from the path, and a query-string form is refused with a 40
 streaming. The 12-second deadline includes reading the body, and rejected or
 stalled downloads are cancelled. Development and preview use the same handler.
 
+## Upstream body bounds
+
+Every proxied fetch outside CCTV media now reads its body through the shared
+streaming readers in `src/sources/httpBody.js`, so a declared or observed body
+over the cap is refused with `RESPONSE_TOO_LARGE` and cancelled rather than
+buffered. `readResponseBytesCapped` accepts the same optional abort signal as
+the text reader and cancels a body still streaming when it fires; TomTom flow
+tiles use it alongside GTFS-Realtime. Caps are bounds, not budgets, sized well
+above measured payloads: FIRMS 64 MiB per satellite source, CelesTrak 16 MiB
+per group, OpenSky `states/all` 8 MiB, adsb.lol `/v2/mil` 8 MiB, TomTom tiles
+8 MiB and adsbdb lookups 1 MiB. Where a route already had a deadline (FIRMS
+60 s, CelesTrak 20 s, TomTom 15 s, adsbdb 8 s) that deadline now covers the
+body read as well as the headers. Two polls that had no deadline gain one: the
+adsb.lol military poll waits at most 12 seconds, and the OpenSky `states/all`
+exchange, including its Basic-auth retry, at most 20. A rejected or timed-out
+body is an upstream miss and follows each route's existing error and
+cached-data paths. FIRMS map-key status, the OpenSky token exchange and CCTV
+media keep their current handling.
+
+
 ## Remaining local service modules
 
 Overpass query validation, geometry simplification, disk caching and upstream

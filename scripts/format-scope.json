@@ -697,6 +697,7 @@
   "src/search/nominatim.js",
   "src/search/nominatim.test.mjs",
   "src/sources/httpBody.js",
+  "src/sources/httpBody.test.mjs",
   "src/sources/overpass.js",
   "src/sources/nominatim.js",
   "server/providers/transit.js",

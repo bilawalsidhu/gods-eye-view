@@ -1,5 +1,7 @@
 # Changelog
 
+- Bound the remaining upstream body reads (FIRMS, CelesTrak, adsb.lol, TomTom, OpenSky, adsbdb) with streaming size caps and shared deadlines; the adsb.lol military and OpenSky `states/all` polls gain deadlines of their own.
+
 - Region scopes in voice analyst queries ("in the Gulf of Mexico", "over
   the Alps") work again in the dev server: the bundled Natural Earth and
   neighborhood packs are fetched as JSON in the browser
