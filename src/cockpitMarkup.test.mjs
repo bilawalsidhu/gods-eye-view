@@ -33,6 +33,8 @@ const ui = readShellSource();
 const css = readStylesheet(path.join(ROOT, 'style.css'));
 const sceneDirector = fs.readFileSync(path.join(ROOT, 'src', 'scenes', 'director.js'), 'utf8');
 const manager = fs.readFileSync(path.join(ROOT, 'src', 'data', 'lifecycle.js'), 'utf8');
+const appShellSource = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'applicationShell.js'), 'utf8');
+const shellElementsSource = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'shellElements.js'), 'utf8');
 const contextLayer = readLayerSource(path.join(ROOT, 'src', 'data', 'militaryAwareness.js'), 'utf8');
 const voiceActions = fs.readFileSync(path.join(ROOT, 'src', 'voice', 'gevActions.js'), 'utf8');
 
@@ -304,6 +306,12 @@ test('Cockpit owns a focused shared Display portal and compact Radio controls', 
   assert.match(css, /@media \(max-width:\s*760px\)[\s\S]*?\.cockpit-utility-controls:has\(\.cockpit-utility-control\.is-expanded\)[\s\S]*?display:\s*none/);
   assert.match(syncSignalLayout.toString(), /resolveCockpitUtilityLayout\(\{\s*availableHeight,\s*expandedHeight,\s*collapsedHeight,?\s*\}\)/);
   assert.match(syncSignalLayout.toString(), /setAttribute\('aria-hidden', String\(hiddenSibling\)\)/);
+});
+
+test('Display Roam button is passed into DisplayBindings, not only rendered', () => {
+  assert.match(html, /id="roam-toggle"/);
+  assert.match(shellElementsSource, /_roamBtn:\s*document\.getElementById\('roam-toggle'\)/);
+  assert.match(appShellSource, /_roamBtn:\s*this\._roamBtn/);
 });
 
 test('Display orders 3D above Celestial, Clean UI below it, and Parameters below Detection', () => {

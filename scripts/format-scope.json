@@ -162,6 +162,8 @@
   "scripts/qa-visual-input.mjs",
   "src/ui/displayControls.js",
   "src/ui/displayControls.test.mjs",
+  "src/randomRoam.js",
+  "src/randomRoam.test.mjs",
   "src/ui/cameraOrientationControls.js",
   "src/ui/cameraOrientationControls.test.mjs",
   "src/ui/effects.js",

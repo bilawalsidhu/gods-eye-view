@@ -595,6 +595,7 @@
       "src/ui/visualInput.js",
       "src/ui/visualPresets.js",
       "src/ui/visualSettings.js",
+      "src/randomRoam.js",
       "src/worldFocus.js",
       "src/data/feedState.js",
       "src/data/layerSnapshot.js",

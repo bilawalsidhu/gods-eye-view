@@ -82,6 +82,22 @@ test('style, allocation and model choices retain their current data attributes',
   control.destroy();
 });
 
+test('roam toggle dispatches to the random roam action', () => {
+  const roamButton = element();
+  let calls = 0;
+  const control = bindDisplayControls({
+    elements: { roamButton },
+    actions: { toggleRoam: () => calls++ },
+  });
+
+  roamButton.dispatchEvent(new Event('click'));
+  assert.equal(calls, 1);
+
+  control.destroy();
+  roamButton.dispatchEvent(new Event('click'));
+  assert.equal(calls, 1);
+});
+
 test('optional controls are absent safely and subscriptions stay instance-owned', () => {
   const calls = [];
   const a = element();

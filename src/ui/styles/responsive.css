@@ -8,7 +8,8 @@
   }
 
   .pp-toggle-group,
-  #clean-view-toggle {
+  #clean-view-toggle,
+  #roam-toggle {
     width: 176px;
   }
 
