@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createWfigsPerimeterSource } from './source.js';
+import { normalizeFirePerimeterSnapshot } from './records.js';
+import { firePerimetersProxy } from '../../../server/providers/firePerimeters.js';
 
 const ring = [
   [-108.1, 35.2],
@@ -23,13 +25,15 @@ test('a successful response yields normalized perimeter rows', async () => {
   const source = createWfigsPerimeterSource({
     fetchImpl: async (url) => {
       requested = String(url);
-      return { ok: true, json: async () => validPayload };
+      return Response.json({
+        rows: normalizeFirePerimeterSnapshot(validPayload),
+      });
     },
   });
   const rows = await source.getSnapshot();
   assert.equal(rows.length, 1);
   assert.equal(rows[0].stableId, '2026-NMGNF-000123');
-  assert.match(requested, /f=geojson/);
+  assert.equal(requested, '/api/fire-perimeters');
 });
 
 test('a truncated response pages until the feed is complete', async () => {
@@ -39,23 +43,37 @@ test('a truncated response pages until the feed is complete', async () => {
     properties: { attr_UniqueFireIdentifier: `fire-${id}` },
   });
   const requests = [];
-  const source = createWfigsPerimeterSource({
+  let handler;
+  const plugin = firePerimetersProxy({
     fetchImpl: async (url) => {
       requests.push(new URL(String(url)).searchParams.get('resultOffset'));
       const page = requests.length;
-      return {
-        ok: true,
-        json: async () =>
-          page < 3
-            ? {
-                features: [pageRing(page)],
-                properties: { exceededTransferLimit: true },
-              }
-            : { features: [pageRing(page)] },
-      };
+      return Response.json({
+        features: [pageRing(page)],
+        properties: { exceededTransferLimit: page < 3 },
+      });
     },
   });
-  const rows = await source.getSnapshot();
+  plugin.configureServer({
+    middlewares: {
+      use: (_path, callback) => {
+        handler = callback;
+      },
+    },
+  });
+  let payload;
+  await handler(
+    { url: '/', method: 'GET' },
+    {
+      writeHead(status) {
+        assert.equal(status, 200);
+      },
+      end(body) {
+        payload = JSON.parse(body);
+      },
+    },
+  );
+  const rows = payload.rows;
   assert.deepEqual(
     rows.map((row) => row.stableId),
     ['fire-1', 'fire-2', 'fire-3'],
@@ -71,9 +89,9 @@ test('an upstream failure surfaces its HTTP status', async () => {
 });
 
 test('a malformed successful response is never accepted as an empty snapshot', async () => {
-  for (const payload of [{}, { features: null }, { features: {} }]) {
+  for (const payload of [{}, { rows: null }, { rows: {} }]) {
     const source = createWfigsPerimeterSource({
-      fetchImpl: async () => ({ ok: true, json: async () => payload }),
+      fetchImpl: async () => Response.json(payload),
     });
     await assert.rejects(source.getSnapshot(), /Malformed perimeter snapshot/);
   }
@@ -84,9 +102,12 @@ test('response-body completion honors cancellation without replacing records', a
   const source = createWfigsPerimeterSource({
     fetchImpl: async () => ({
       ok: true,
-      json: async () => {
+      headers: new Headers(),
+      text: async () => {
         abort.abort();
-        return validPayload;
+        return JSON.stringify({
+          rows: normalizeFirePerimeterSnapshot(validPayload),
+        });
       },
     }),
   });

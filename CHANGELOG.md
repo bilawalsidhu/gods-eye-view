@@ -172,7 +172,10 @@ Analyst records for loaded satellites, datacenters and dams, with explicit bound
   cost, complex membership) and, when the incident has a state- and
   recency-verified InciWeb page, a click-through link to it. The layer is
   reachable from the panel, voice control, share links (token `2`), and the
-  analyst query engine.
+  analyst query engine. WFIGS and InciWeb requests use a capped, cached
+  same-origin proxy with timeouts and a per-client limit. Unchanged refreshes
+  retain geometry; incident-link checks abort on disable or selection change,
+  and the row includes a containment legend.
 
 - Remove the spurious scrollbars that appeared on both panel stacks at narrow
   widths (720px and below) as soon as a panel was expanded. The stacks scroll

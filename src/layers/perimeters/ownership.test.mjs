@@ -437,3 +437,118 @@ test('analyst records expose incident facts without geometry payloads', async ()
   assert.ok(Math.abs(records[0].lon - -108.0333) < 0.01);
   assert.equal('polygons' in records[0], false);
 });
+
+test('unchanged snapshots retain entity identity even if source ordering changes', async () => {
+  let rows = [row, { ...row, stableId: 'other' }];
+  const h = harness({ getSnapshot: async () => rows });
+  await h.layer.update();
+  const original = [...h.sources[0].entities.values];
+  let removals = 0;
+  const entities = h.sources[0].entities;
+  const removeAll = entities.removeAll.bind(entities);
+  entities.removeAll = () => {
+    removals++;
+    removeAll();
+  };
+  rows = [...rows].reverse();
+  await h.layer.update();
+  assert.equal(removals, 0);
+  assert.equal(entities.values[0], original[0]);
+  rows = rows.map((value) => ({
+    ...value,
+    updatedTime: value.updatedTime + 1,
+  }));
+  await h.layer.update();
+  assert.equal(removals, 1);
+  assert.notEqual(entities.values[0], original[0]);
+  rows = rows.map((value) => ({ ...value, containedPct: 100 }));
+  await h.layer.update();
+  assert.equal(
+    removals,
+    2,
+    'incident facts can change without a new polygon timestamp',
+  );
+  assert.equal(h.layer.getRowControls().legend[3].count, 2);
+  rows = [];
+  await h.layer.update();
+  assert.equal(entities.values.length, 0);
+  h.layer.destroy();
+});
+
+test('containment legend uses the existing thresholds, colours and incident counts', async () => {
+  const values = [null, -1, 0, 0.5, 49.9, 50, 99.9, 100, 101];
+  const h = harness({
+    getSnapshot: async () =>
+      values.map((containedPct, index) => ({
+        ...row,
+        stableId: String(index),
+        containedPct,
+      })),
+  });
+  await h.layer.update();
+  const controls = h.layer.getRowControls();
+  assert.deepEqual(controls.chips, []);
+  assert.deepEqual(
+    controls.legend.map(({ color, count }) => [color, count]),
+    [
+      ['#ff3b30', 3],
+      ['#ff7a00', 2],
+      ['#ffb300', 2],
+      ['#8bc34a', 2],
+    ],
+  );
+  assert.ok(
+    controls.legend.every(
+      ({ label }) => typeof label === 'string' && label.length,
+    ),
+  );
+  assert.equal(
+    controls.legend[0].blurb,
+    'Colour shows reported containment. Perimeters are simplified to about 100 m.',
+  );
+  h.layer.destroy();
+  assert.deepEqual(
+    h.layer.getRowControls().legend.map(({ count }) => count),
+    [0, 0, 0, 0],
+  );
+});
+
+for (const action of ['disable', 'destroy', 'selection']) {
+  test(`incident-link verification aborts on ${action} and ignores late completion`, async () => {
+    let finish, signal;
+    let pick = { id: `fire-perimeter:${row.stableId}:0` };
+    const h = harness(
+      {
+        getSnapshot: async () => [
+          row,
+          { ...row, stableId: 'other', name: 'Other Fire' },
+        ],
+      },
+      {
+        pick: () => pick,
+        inciwebIndex: [
+          { incident_id: '123', incident_title: row.name, tau: 'nm' },
+        ],
+        publication: (_id, options) => {
+          signal = options.signal;
+          return new Promise((resolve) => {
+            finish = resolve;
+          });
+        },
+      },
+    );
+    await h.layer.update();
+    h.clicks.handler({ position: { x: 1, y: 1 } });
+    assert.equal(signal.aborted, false);
+    if (action === 'selection') {
+      pick = { id: 'fire-perimeter:other:0' };
+      h.clicks.handler({ position: { x: 1, y: 1 } });
+    } else h.layer[action]();
+    assert.equal(signal.aborted, true);
+    const entries = h.overlay.entries.get('fire-perimeters');
+    finish({ createdMs: row.discoveredTime, changedMs: row.updatedTime });
+    await new Promise(setImmediate);
+    assert.equal(h.overlay.entries.get('fire-perimeters'), entries);
+    if (action !== 'destroy') h.layer.destroy();
+  });
+}

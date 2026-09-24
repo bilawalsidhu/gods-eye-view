@@ -1,10 +1,6 @@
 /** InciWeb incident catalog: full-index fetch and WFIGS-name matching. */
 
-// InciWeb's publication search; an empty title returns the full incident
-// catalog (~2k rows, ~200 KB). Permissive CORS, so the browser fetches it
-// directly. This supersedes the site's RSS feed, which only carries the
-// ~50 most recently updated incidents.
-const SEARCH_URL = 'https://inciweb.wildfire.gov/api/single-publication/';
+import { readResponseJsonCapped } from '../../sources/httpBody.js';
 
 /**
  * Normalize an incident title for matching: lowercase, collapsed whitespace,
@@ -106,11 +102,6 @@ export function isCurrentPublication(
   return false;
 }
 
-const epochMsOrNull = (value) => {
-  const seconds = Number(value);
-  return Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : null;
-};
-
 /** Fetch one publication's created/changed timestamps for currency checks. */
 export function createInciwebPublicationSource({
   fetchImpl = (...args) => globalThis.fetch(...args),
@@ -119,15 +110,23 @@ export function createInciwebPublicationSource({
     async getPublication(id, { signal } = {}) {
       signal?.throwIfAborted();
       const response = await fetchImpl(
-        `https://inciweb.wildfire.gov/api/publication/${id}`,
+        `/api/fire-perimeters/inciweb/publication/${encodeURIComponent(id)}`,
         { signal },
       );
       if (!response.ok) throw new Error(`InciWeb HTTP ${response.status}`);
-      const payload = await response.json();
+      const payload = await readResponseJsonCapped(
+        response,
+        512 * 1024,
+        signal,
+      );
       signal?.throwIfAborted();
       return {
-        createdMs: epochMsOrNull(payload?.created?.[0]?.value),
-        changedMs: epochMsOrNull(payload?.changed?.[0]?.value),
+        createdMs: Number.isFinite(payload?.createdMs)
+          ? payload.createdMs
+          : null,
+        changedMs: Number.isFinite(payload?.changedMs)
+          ? payload.changedMs
+          : null,
       };
     },
   };
@@ -158,14 +157,15 @@ export function createInciwebIndexSource({
   return {
     async getIndex({ signal } = {}) {
       signal?.throwIfAborted();
-      const response = await fetchImpl(SEARCH_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: '' }),
+      const response = await fetchImpl('/api/fire-perimeters/inciweb/index', {
         signal,
       });
       if (!response.ok) throw new Error(`InciWeb HTTP ${response.status}`);
-      const rows = await response.json();
+      const rows = await readResponseJsonCapped(
+        response,
+        4 * 1024 * 1024,
+        signal,
+      );
       signal?.throwIfAborted();
       return Array.isArray(rows) ? rows : [];
     },

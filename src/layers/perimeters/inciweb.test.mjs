@@ -231,25 +231,28 @@ test('the publication source fetches timestamps and honors cancellation', async 
       requested = String(url);
       return {
         ok: true,
-        json: async () => ({
-          created: [{ value: '1785025540' }],
-          changed: [{ value: '1787589503' }],
-        }),
+        headers: new Headers(),
+        text: async () =>
+          JSON.stringify({
+            createdMs: 1785025540000,
+            changedMs: 1787589503000,
+          }),
       };
     },
   });
   const publication = await source.getPublication('329195');
-  assert.equal(
-    requested,
-    'https://inciweb.wildfire.gov/api/publication/329195',
-  );
+  assert.equal(requested, '/api/fire-perimeters/inciweb/publication/329195');
   assert.deepEqual(publication, {
     createdMs: 1785025540000,
     changedMs: 1787589503000,
   });
 
   const malformed = createInciwebPublicationSource({
-    fetchImpl: async () => ({ ok: true, json: async () => ({ nope: 1 }) }),
+    fetchImpl: async () => ({
+      ok: true,
+      headers: new Headers(),
+      text: async () => JSON.stringify({ nope: 1 }),
+    }),
   });
   assert.deepEqual(await malformed.getPublication('1'), {
     createdMs: null,
@@ -265,9 +268,10 @@ test('the publication source fetches timestamps and honors cancellation', async 
   const cancelled = createInciwebPublicationSource({
     fetchImpl: async () => ({
       ok: true,
-      json: async () => {
+      headers: new Headers(),
+      text: async () => {
         abort.abort();
-        return {};
+        return JSON.stringify({});
       },
     }),
   });
@@ -279,19 +283,23 @@ test('the publication source fetches timestamps and honors cancellation', async 
   );
 });
 
-test('the index source posts an empty title for the full catalog', async () => {
+test('the index source requests the same-origin full catalog', async () => {
   let request;
   const source = createInciwebIndexSource({
     fetchImpl: async (url, options) => {
       request = { url: String(url), options };
-      return { ok: true, json: async () => catalog };
+      return {
+        ok: true,
+        headers: new Headers(),
+        text: async () => JSON.stringify(catalog),
+      };
     },
   });
   const rows = await source.getIndex();
   assert.equal(rows.length, catalog.length);
-  assert.match(request.url, /single-publication/);
-  assert.equal(request.options.method, 'POST');
-  assert.deepEqual(JSON.parse(request.options.body), { title: '' });
+  assert.equal(request.url, '/api/fire-perimeters/inciweb/index');
+  assert.equal(request.options.method, undefined);
+  assert.equal(request.options.body, undefined);
 });
 
 test('the index source rejects failures and honors cancellation', async () => {
@@ -301,7 +309,11 @@ test('the index source rejects failures and honors cancellation', async () => {
   await assert.rejects(failing.getIndex(), /InciWeb HTTP 503/);
 
   const malformed = createInciwebIndexSource({
-    fetchImpl: async () => ({ ok: true, json: async () => ({ nope: 1 }) }),
+    fetchImpl: async () => ({
+      ok: true,
+      headers: new Headers(),
+      text: async () => JSON.stringify({ nope: 1 }),
+    }),
   });
   assert.deepEqual(await malformed.getIndex(), []);
 
@@ -309,9 +321,10 @@ test('the index source rejects failures and honors cancellation', async () => {
   const cancelled = createInciwebIndexSource({
     fetchImpl: async () => ({
       ok: true,
-      json: async () => {
+      headers: new Headers(),
+      text: async () => {
         abort.abort();
-        return catalog;
+        return JSON.stringify(catalog);
       },
     }),
   });

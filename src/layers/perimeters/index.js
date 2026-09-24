@@ -49,6 +49,8 @@ export function createFirePerimetersLayer({
     throw new TypeError('Fire perimeters require a snapshot source');
   let _viewer = null;
   let _request = null;
+  let _linkRequest = null;
+  let _snapshotSignature = null;
   let _dataSource = null;
   let _count = 0;
   let _lastUpdate = null;
@@ -66,7 +68,10 @@ export function createFirePerimetersLayer({
   // Link → currency verdict from the publication check; unknown links are
   // absent. Failed checks are not cached so a transient outage retries.
   const _linkVerdicts = new Map();
-  const _verdictsInFlight = new Set();
+  function abortLinkVerification() {
+    _linkRequest?.controller.abort();
+    _linkRequest = null;
+  }
 
   const canSelect = () =>
     overlayHost && screenSpaceEventHandlerFactory && picking;
@@ -83,7 +88,7 @@ export function createFirePerimetersLayer({
     inciwebSource
       .getIndex({ signal })
       .then((rows) => {
-        if (!Array.isArray(rows)) return;
+        if (signal.aborted || !_enabled || !Array.isArray(rows)) return;
         _inciwebIndex = rows;
         _indexFetchedAt = Date.now();
         if (_selectedId) publishSelectedCard();
@@ -103,11 +108,15 @@ export function createFirePerimetersLayer({
    */
   function verifyLink(link, row) {
     const id = inciwebNodeId(link);
-    if (!id || !inciwebPublications || _verdictsInFlight.has(link)) return;
-    _verdictsInFlight.add(link);
+    if (!id || !inciwebPublications || _linkRequest?.link === link) return;
+    abortLinkVerification();
+    const request = { link, controller: new AbortController() };
+    _linkRequest = request;
+    const { signal } = request.controller;
     inciwebPublications
-      .getPublication(id)
+      .getPublication(id, { signal })
       .then((publication) => {
+        if (signal.aborted || _linkRequest !== request || !_enabled) return;
         _linkVerdicts.set(
           link,
           isCurrentPublication(publication, {
@@ -120,7 +129,7 @@ export function createFirePerimetersLayer({
         // Fail closed without caching: no link now, retry on reselection.
       })
       .finally(() => {
-        _verdictsInFlight.delete(link);
+        if (_linkRequest === request) _linkRequest = null;
       });
   }
 
@@ -196,6 +205,7 @@ export function createFirePerimetersLayer({
       const picked = _viewer.scene.pick(click.position);
       const incidentId = picked ? pickedIncidentId(picked) : null;
       if (incidentId) {
+        abortLinkVerification();
         _selectedId = incidentId;
         publishSelectedCard();
         return;
@@ -207,6 +217,7 @@ export function createFirePerimetersLayer({
         if (pickId && picking.isOwnedByOtherLayer(layer.id, pickId)) return;
       }
       if (_selectedId) {
+        abortLinkVerification();
         _selectedId = null;
         publishSelectedCard();
       }
@@ -221,6 +232,7 @@ export function createFirePerimetersLayer({
   }
 
   function clearSelection() {
+    abortLinkVerification();
     _selectedId = null;
     _selectedLink = null;
     _selectedCardId = null;
@@ -278,6 +290,19 @@ export function createFirePerimetersLayer({
         if (request.signal.aborted || _request !== request || !_enabled)
           return false;
 
+        // Incident facts may change independently of the polygon's source clock.
+        const signature = JSON.stringify(
+          rows
+            .map(({ polygons, ...facts }) => facts)
+            .sort((a, b) => a.stableId.localeCompare(b.stableId)),
+        );
+        if (signature === _snapshotSignature) {
+          if (_selectedId) publishSelectedCard();
+          _lastUpdate = Date.now();
+          _lastError = null;
+          return true;
+        }
+        abortLinkVerification();
         const nextEntities = [];
         _rowById.clear();
         for (const row of rows) {
@@ -325,6 +350,7 @@ export function createFirePerimetersLayer({
 
         _dataSource.entities.removeAll();
         for (const entity of nextEntities) _dataSource.entities.add(entity);
+        _snapshotSignature = signature;
         // Refresh (or drop) the selected incident's card against the new feed.
         if (_selectedId) publishSelectedCard();
         _count = rows.length;
@@ -351,6 +377,7 @@ export function createFirePerimetersLayer({
       removeClickHandler();
       clearSelection();
       _rowById.clear();
+      _snapshotSignature = null;
       _inciwebIndex = [];
       _indexFetchedAt = 0;
       _linkVerdicts.clear();
@@ -383,6 +410,30 @@ export function createFirePerimetersLayer({
         });
       }
       return result;
+    },
+
+    getRowControls() {
+      const bands = [
+        { label: '0% or unknown', color: containmentAccent(0) },
+        { label: '>0–<50% contained', color: containmentAccent(1) },
+        { label: '50–<100% contained', color: containmentAccent(50) },
+        { label: '100% contained', color: containmentAccent(100) },
+      ];
+      return {
+        chips: [],
+        legend: bands.map((band, index) => ({
+          ...band,
+          count: [..._rowById.values()].filter(
+            (row) => containmentAccent(row.containedPct) === band.color,
+          ).length,
+          ...(index === 0
+            ? {
+                blurb:
+                  'Colour shows reported containment. Perimeters are simplified to about 100 m.',
+              }
+            : {}),
+        })),
+      };
     },
 
     getStats() {
