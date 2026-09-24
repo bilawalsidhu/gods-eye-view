@@ -1,5 +1,12 @@
 # Changelog
 
+- Region scopes in voice analyst queries ("in the Gulf of Mexico", "over
+  the Alps") work again in the dev server: the bundled Natural Earth and
+  neighborhood packs are fetched as JSON in the browser
+  (`src/data/bundledJson.js`). When a region is not in the bundled packs, the
+  geocode and admin-boundary fallback answers `region-timeout` after 3 s
+  instead of holding the reply.
+
 - Transit and Directions rows repaint as soon as their data lands again:
   `refreshLayerStats()` now lives on the layer lifecycle, not only on the
   compatibility facade. `scripts/qa-radio.mjs` uses it instead of a private

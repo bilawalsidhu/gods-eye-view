@@ -562,6 +562,7 @@
   "src/data/telegeographySubmarineCables.test.mjs",
   "src/data/naturalEarthRegions.js",
   "src/data/neighborhoodPolygons.js",
+  "src/data/bundledJson.js",
   "src/layers/submarineCables/bundledSource.test.mjs",
   "src/maps/availability.js",
   "src/maps/catalog.js",
