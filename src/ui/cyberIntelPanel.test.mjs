@@ -101,6 +101,15 @@ function fixture() {
   };
 }
 
+function findNode(root, predicate) {
+  if (predicate(root)) return root;
+  for (const child of root.children || []) {
+    const match = findNode(child, predicate);
+    if (match) return match;
+  }
+  return null;
+}
+
 test('Cyber Threat Intel remains hidden unless Cyber Activity is enabled', () => {
   const f = fixture();
   const layer = {
@@ -204,6 +213,9 @@ test('Cyber Threat Intel remains hidden unless Cyber Activity is enabled', () =>
   assert.match(f.body.textContent, /Shodan Exposed Device Search/);
   assert.match(f.body.textContent, /CISA Known Exploited Vulnerabilities/);
   assert.match(f.body.textContent, /CVE-2024-12345/);
+  const kevResults = findNode(f.body, (node) => node.dataset?.kevResults);
+  assert.ok(kevResults);
+  assert.equal(kevResults.open, false);
   assert.match(f.legendContent.textContent, /CloudFlare Radar/);
   assert.match(f.legendContent.textContent, /Shodan/);
   assert.match(

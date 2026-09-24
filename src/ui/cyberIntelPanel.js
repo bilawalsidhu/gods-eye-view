@@ -40,7 +40,7 @@ export class CyberIntelPanel {
     this._wasEnabled = false;
     this._kevFilter = '';
     this._kevVisibleCount = 25;
-    this._kevResultsOpen = true;
+    this._kevResultsOpen = false;
     this._shodanResultsOpen = true;
     this._lastState = null;
   }
