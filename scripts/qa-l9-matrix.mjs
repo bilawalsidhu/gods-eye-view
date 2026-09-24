@@ -1227,10 +1227,17 @@ async function runBrowserGroup(record) {
   const emit = (id, res, ms) => { if (ids.includes(id)) record(CHECKS.find((c) => c.id === id), res, ms); };
   const only = (id) => ids.includes(id);
 
-  const exe = (() => { try { return puppeteer.executablePath(); } catch { return null; } })();
+  // Resolve Chrome the same way every other qa-*.mjs does: explicit env
+  // first, then puppeteer's own resolution — and only pass a path that
+  // actually exists on disk. `puppeteer.executablePath()` can return a
+  // Promise-shaped value here; stringifying it into launch config made the
+  // whole C group harness-crash with "[object Promise]" (RUN 4d).
+  const exe = process.env.PUPPETEER_EXECUTABLE_PATH
+    || (() => { try { return puppeteer.executablePath(); } catch { return null; } })();
+  const exeOk = typeof exe === 'string' && exe.length > 0 && existsSync(exe);
   const browser = await puppeteer.launch({
     headless: HEADFUL ? false : 'new',
-    ...(exe ? { executablePath: exe } : {}),
+    ...(exeOk ? { executablePath: exe } : {}),
     // Heavy layers (CCTV fleet admission, traffic road graphs) can block the
     // page's main thread past puppeteer's 180 s default and turn a healthy
     // layer into a bogus "probe threw" FAIL.

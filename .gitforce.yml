@@ -54,8 +54,10 @@
 #   2026-09-15: doc-example keys, test localhost mocks, vendored cesium)
 #   pass; anything NEW fails the job. Canary-verified 2026-09-20: the
 #   baselined tree exits 0 and a planted random-shaped AWS key exits 1
-#   (the canonical AKIAIOSFODNN7EXAMPLE doc key is allowlisted by the
-#   scanner and is NOT a valid canary). Regenerate the baseline only when
+#   (the canonical AWS docs example key id is allowlisted by the
+#   scanner and is NOT a valid canary — spell it out nowhere, the L9
+#   A5 credential scan greps prefixes without the allowlist).
+#   Regenerate the baseline only when
 #   an accepted finding legitimately changes position:
 #
 #     aegis -f json scan --categories secrets --severity-threshold high . \

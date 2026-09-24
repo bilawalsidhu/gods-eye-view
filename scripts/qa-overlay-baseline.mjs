@@ -355,10 +355,15 @@ async function installPageInstrumentation(page) {
 }
 
 async function waitForApp(page) {
-  await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+  // Boot windows sized for a shared box: under CI-fleet load the Vite
+  // on-demand transform of the Cesium graph can exceed 60 s (RUN 4 sweep,
+  // 2026-09-23 — vessels + detection-25 scenes timed out here while the
+  // same scenes passed in quieter windows). The assertion is unchanged,
+  // only the wait widens.
+  await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 120_000 });
   await page.waitForFunction(
     () => Boolean(window.__godsEyeView?.viewer && window.__godsEyeView?.dataManager),
-    { timeout: 60_000 },
+    { timeout: 120_000 },
   );
   await page.evaluate(() => {
     const viewer = window.__godsEyeView.viewer;
