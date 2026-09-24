@@ -1,5 +1,17 @@
 # Changelog
 
+- A deployment can serve the app under a sub-path (`GEV_BASE_PATH`, e.g.
+  `/gods-eye/`): Vite's `base` is configurable, every client `/api/...` request is
+  prefixed at runtime (`src/services/apiBase.js` `withBase()`), provider
+  middlewares receive their routes with the base stripped
+  (`server/standalone/base-api-strip.js`), and runtime-built asset references
+  resolve against the document. A contract test
+  (`src/services/apiBaseSweep.test.mjs`) fails the unit suite when a new client
+  file calls a root-absolute path without `withBase()` or adds a root-absolute
+  asset reference that Vite does not rewrite. Frame headers stay same-origin-only
+  (`SAMEORIGIN` / `frame-ancestors 'self'`), so the app may be embedded by a page
+  on its own origin and by nobody else.
+
 - Region scopes in voice analyst queries ("in the Gulf of Mexico", "over
   the Alps") work again in the dev server: the bundled Natural Earth and
   neighborhood packs are fetched as JSON in the browser

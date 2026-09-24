@@ -1,5 +1,28 @@
 # God's Eye View Current State
 
+## Configurable base path — September 24, 2026
+
+`GEV_BASE_PATH` (default `/`) sets Vite's `base` for the standalone app
+(`build/vite.js` `createBrowserViteConfig({ base })`, wired in
+`server/standalone/vite.config.js`), so a deployment can serve the app under a
+sub-path. Three things follow from it:
+
+- **Client requests.** Every root-absolute `/api/...` path goes through
+  `withBase()` (`src/services/apiBase.js`; `__GEV_BASE__` is injected at build
+  time and plain-Node tests fall back to `/`). `src/services/apiBaseSweep.test.mjs`
+  is the contract: it fails when a client file carries an unwrapped root-absolute
+  `/api/` literal, or a root-absolute public-asset reference in runtime-built
+  markup or a `data-*` attribute (Vite rewrites only the attributes it knows and
+  CSS `url()`). Two explicitly allowed exceptions cover the server-side transit
+  path checks.
+- **Provider routes.** Middlewares mount at `/api/...`; a browser under a base
+  requests `<base>api/...`. `server/standalone/base-api-strip.js` strips the base
+  for those routes only — documents and assets keep it — so the dev and preview
+  servers answer JSON instead of the SPA fallback.
+- **Framing.** The dev server sends `X-Frame-Options: SAMEORIGIN` and
+  `Content-Security-Policy: frame-ancestors 'self'`: same-origin embedding works,
+  third-party framing stays impossible.
+
 ## Cyber HUD — September 23, 2026
 
 Display > HUD > Layout includes Cyber, also available through the HUD voice
