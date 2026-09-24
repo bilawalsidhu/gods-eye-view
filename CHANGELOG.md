@@ -1,5 +1,18 @@
 # Changelog
 
+- Make share-link layer tokens durable allocations instead of ad hoc picks.
+  Existing one-character mappings are pinned permanently, while new layers use
+  the next free single-character digit, then two-character base-36 tokens.
+  Authors record each token in the permanent JSON ledger after running
+  `npm run layer-token:next -- <layer-id>` on a rebased branch.
+  `npm run layer-token:check -- --base-ref origin/main` guards published
+  assignments and allocation order in
+  pull-request CI. Existing v2 links keep their exact meaning.
+  Malformed enabled-layer lists now reject the whole layer payload instead of
+  restoring a partial list. A QA-only browser fixture exercises the future
+  two-character path after a fixture-only exhausted-digit scenario, without
+  reserving `00` in production.
+
 - Region scopes in voice analyst queries ("in the Gulf of Mexico", "over
   the Alps") work again in the dev server: the bundled Natural Earth and
   neighborhood packs are fetched as JSON in the browser

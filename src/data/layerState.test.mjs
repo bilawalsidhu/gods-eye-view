@@ -6,17 +6,22 @@ import assert from 'node:assert/strict';
 
 import { DataLayerManager } from './manager.js';
 import {
+  LEGACY_LAYER_STATE_TOKENS,
   LAYER_STATE_REGISTRY,
   LAYER_STATE_STORAGE_KEY,
+  LAYER_STATE_TOKEN_ALPHABET,
+  LAYER_STATE_TOKEN_RESERVATIONS,
   LayerStateCoordinator,
   REGISTERED_LAYER_IDS,
   SHARE_TRACKING_RESTORE_POLICIES,
   createDefaultLayerState,
   decodeLayerStateParams,
   encodeLayerStateParams,
+  nextLayerStateToken,
   normalizeLayerState,
   parseStoredLayerState,
   serializeStoredLayerState,
+  validateLayerStateAllocations,
   validateLayerStateRegistry,
 } from './layerState.js';
 import radioLayer from './radio.js';
@@ -198,6 +203,144 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   assert.equal(new Set(REGISTERED_LAYER_IDS).size, 28);
   assert.ok(REGISTERED_LAYER_IDS.includes('transit'));
   assert.deepEqual(REGISTERED_LAYER_IDS, [...REGISTERED_LAYER_IDS].sort());
+  assert.deepEqual(LEGACY_LAYER_STATE_TOKENS, {
+    'ais-live-vessels': 'a',
+    'alpr-cameras': 'p',
+    'bhote-koshi-2026': 'h',
+    'bhote-koshi-locator': 'z',
+    bikeshare: 'b',
+    cctv: 'c',
+    directions: 'n',
+    earthquakes: 'e',
+    'fire-perimeters': '2',
+    flights: 'f',
+    'local-dams': 'q',
+    'local-datacenters': 'd',
+    'local-firms': 'w',
+    military: 'm',
+    'military-awareness': 'g',
+    'military-installations': 'i',
+    radio: 'r',
+    'recent-imagery': '1',
+    'rocket-launches': 'x',
+    satellites: 's',
+    'telegeography-submarine-cables': 'u',
+    traffic: 't',
+    transit: 'j',
+    'weather-cyclones': 'y',
+    'weather-lightning': 'l',
+    'weather-radar': 'v',
+    'weather-satellite': 'o',
+    wind: 'k',
+  });
+  for (const { id, token } of LAYER_STATE_REGISTRY) {
+    assert.equal(LAYER_STATE_TOKEN_RESERVATIONS[id], token);
+  }
+  for (const [id, token] of Object.entries(LEGACY_LAYER_STATE_TOKENS)) {
+    assert.equal(LAYER_STATE_TOKEN_RESERVATIONS[id], token);
+  }
+  assert.equal(nextLayerStateToken(), '0');
+  assert.equal(
+    nextLayerStateToken({ ...LAYER_STATE_TOKEN_RESERVATIONS, alpha: '0', bravo: '3' }),
+    '4',
+  );
+  const digitsExhausted = {
+    ...LAYER_STATE_TOKEN_RESERVATIONS,
+    ...Object.fromEntries(
+      [...'03456789'].map((digit) => [`prior-${digit}`, digit]),
+    ),
+  };
+  assert.equal(nextLayerStateToken(digitsExhausted), '00');
+  assert.equal(
+    nextLayerStateToken({ ...digitsExhausted, retired: '00', used: '01' }),
+    '02',
+  );
+  assert.equal(
+    nextLayerStateToken({
+      ...digitsExhausted,
+      ...Object.fromEntries(
+        [...LAYER_STATE_TOKEN_ALPHABET].map((second) => [
+          `pair-0${second}`,
+          `0${second}`,
+        ]),
+      ),
+    }),
+    '10',
+  );
+  assert.throws(
+    () =>
+      nextLayerStateToken(
+        Object.fromEntries(
+          [
+            ...'0123456789',
+            ...[...LAYER_STATE_TOKEN_ALPHABET].flatMap((first) =>
+              [...LAYER_STATE_TOKEN_ALPHABET].map((second) => `${first}${second}`),
+            ),
+          ].map((token, index) => [`occupied-${index}`, token]),
+        ),
+      ),
+    /namespace exhausted/,
+  );
+  assert.equal(
+    validateLayerStateRegistry(
+      [{ id: 'future-layer', token: '0', disposition: 'enabled-only' }],
+      { 'future-layer': '0' },
+    ),
+    true,
+  );
+  assert.equal(
+    validateLayerStateRegistry(
+      [{ id: 'future-layer', token: '01', disposition: 'enabled-only' }],
+      { retired: '00', 'future-layer': '01' },
+    ),
+    true,
+  );
+  assert.equal(
+    validateLayerStateAllocations(
+      LAYER_STATE_TOKEN_RESERVATIONS,
+      { ...LAYER_STATE_TOKEN_RESERVATIONS, future: '0', next: '3' },
+    ),
+    true,
+  );
+  assert.throws(
+    () => validateLayerStateAllocations(LAYER_STATE_TOKEN_RESERVATIONS, {
+      ...LAYER_STATE_TOKEN_RESERVATIONS,
+      future: '00',
+    }),
+    /next free token 0/,
+  );
+  const beforeLastDigit = { ...digitsExhausted };
+  delete beforeLastDigit['prior-9'];
+  assert.equal(
+    validateLayerStateAllocations(
+      beforeLastDigit,
+      { ...beforeLastDigit, futurePair: '00', futureDigit: '9' },
+    ),
+    true,
+  );
+  assert.equal(
+    validateLayerStateAllocations(
+      digitsExhausted,
+      { ...digitsExhausted, pairB: '01', pairA: '00' },
+    ),
+    true,
+  );
+  assert.throws(
+    () =>
+      validateLayerStateAllocations(
+        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '0' },
+        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '0', competing: '0' },
+      ),
+    /next free token 3/,
+  );
+  assert.throws(
+    () => validateLayerStateAllocations({ future: '00' }, { future: '01' }),
+    /changed or removed/,
+  );
+  assert.throws(
+    () => validateLayerStateAllocations({ retired: '00' }, { newcomer: '00' }),
+    /changed or removed/,
+  );
   assert.throws(
     () =>
       validateLayerStateRegistry([
@@ -205,6 +348,30 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
         LAYER_STATE_REGISTRY[0],
       ]),
     /Duplicate layer-state id/,
+  );
+  assert.throws(
+    () =>
+      validateLayerStateRegistry(
+        [{ id: 'future-layer', token: '000', disposition: 'enabled-only' }],
+        { 'future-layer': '000' },
+      ),
+    /Invalid layer-state token reservation/,
+  );
+  assert.throws(
+    () =>
+      validateLayerStateRegistry(
+        [{ id: 'future-layer', token: 'a', disposition: 'enabled-only' }],
+        { 'future-layer': 'a' },
+      ),
+    /Legacy layer-state token is immutable/,
+  );
+  assert.throws(
+    () =>
+      validateLayerStateRegistry(
+        [{ id: 'flights', token: '0', disposition: 'enabled-only' }],
+        { flights: '0' },
+      ),
+    /Legacy layer-state token is immutable/,
   );
 
   const manager = new DataLayerManager({});
@@ -298,6 +465,27 @@ test('unknown enabled-layer tokens reject the payload instead of becoming an emp
     decodeLayerStateParams(new URLSearchParams('v=2&l=c.unknown')),
     null,
   );
+});
+
+test('malformed enabled-layer lists reject the entire payload', () => {
+  for (const value of ['.c', 'c.', 'c..e', 'c.c', '00', 'c.00']) {
+    assert.equal(
+      decodeLayerStateParams(new URLSearchParams(`v=2&l=${value}`)),
+      null,
+      `l=${value}`,
+    );
+  }
+  assert.deepEqual(
+    decodeLayerStateParams(new URLSearchParams('v=2&l=c.e')).enabledLayerIds,
+    ['cctv', 'earthquakes'],
+  );
+  for (const fields of ['l=f&l=f', 'l=f&l=unknown', 'l=&l=f']) {
+    assert.equal(
+      decodeLayerStateParams(new URLSearchParams(`v=2&${fields}`)),
+      null,
+      fields,
+    );
+  }
 });
 
 test('Nepal event and locator have distinct enabled-only share tokens', () => {
@@ -2421,7 +2609,17 @@ test('the recent-imagery split is share-link only: never stored locally, and a s
 
 test('fire perimeters uses digit 2 without colliding with wind or recent imagery', () => {
   const decoded = decodeLayerStateParams(new URLSearchParams('v=2&l=2.k.1'));
-  assert.deepEqual(decoded.enabledLayerIds, ['fire-perimeters', 'recent-imagery', 'wind']);
-  assert.equal(LAYER_STATE_REGISTRY.find(({ id }) => id === 'fire-perimeters').token, '2');
-  assert.deepEqual(decodeLayerStateParams(new URLSearchParams(encode(decoded))), decoded);
+  assert.deepEqual(decoded.enabledLayerIds, [
+    'fire-perimeters',
+    'recent-imagery',
+    'wind',
+  ]);
+  assert.equal(
+    LAYER_STATE_REGISTRY.find(({ id }) => id === 'fire-perimeters').token,
+    '2',
+  );
+  assert.deepEqual(
+    decodeLayerStateParams(new URLSearchParams(encode(decoded))),
+    decoded,
+  );
 });

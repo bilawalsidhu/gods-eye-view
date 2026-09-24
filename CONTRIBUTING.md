@@ -70,6 +70,27 @@ gate for the feature you changed.
 > and a browser. Include the applicable local run in your PR's validation
 > evidence.
 
+## Share-link layer tokens
+
+Every shareable layer owns an immutable token in `LAYER_STATE_REGISTRY` and
+`src/data/layerStateTokenReservations.json`. Never change or reuse an existing
+token: published v2 links are authored state, and the reservation remains even
+if its layer is later removed.
+
+New layers first use the remaining unreserved single-character digits (`0`
+through `9`), then the two-character base-36 namespace (`00` through `zz`). On the
+current published ledger, `1` and `2` are already owned, so the next choices
+are `0`, `3` through `9`, then `00`. After rebasing onto the latest `main`, run
+`npm run layer-token:next -- <layer-id>`, add that result to both the permanent
+JSON reservation ledger and registry entry, and keep the exact registered-layer
+count assertion up to date. The token is assigned against the merge-time base, not
+claimed when a PR opens, so another merged layer may require rerunning the
+command after a rebase. Never repurpose a published or retired token.
+Run `npm run layer-token:check -- --base-ref origin/main` after the rebase;
+this checks that every published assignment remains reserved and that new
+assignments consume free digits before the two-character tokens, in order.
+Pull-request CI runs the same check against `main`.
+
 ## Good first contributions
 
 The highest-leverage places to jump in:
