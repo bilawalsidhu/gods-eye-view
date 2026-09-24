@@ -2578,24 +2578,39 @@ per 11.3's entry rule: baseline re-measured with the same metrics as
     (attribution-b12, firstrun, flyroute-cinema, overlay-baseline,
     heading-b3, labels, radio); attribution boot → 360 s with a
     300 s `protocolTimeout` (a single starved CDP call exceeded
-    puppeteer's default 180 s after every displayed check had passed);
-    per-suite ceilings → 40/45 min for the two long-scene suites
-    (`qaSuiteContracts.mjs` — the override beats the CLI `--timeout`,
-    which is why 25/30-min SIGKILLs happened twice); one retrying
-    dev-server probe (`scripts/lib/devServer.mjs`) replaced 20
-    fetch-once preflights that died en masse on transient refusals;
-    attribution-b12 tolerates only the exact `net::ERR_NETWORK_CHANGED`
-    tile signature (GitForge container churn), voice-wav self-declares
-    its keyless gate before spending boot time on a path this box can
-    never pass.
-  - **Where that leaves the battery.** Every suite in the 40-suite
-    battery now has either a measured PASS at a documented load tier,
-    a self-declared env gate, or a committed fix whose re-validation is
-    the run7 quiet-gated pass (attribution-b12, firstrun,
-    flyroute-cinema, overlay-baseline; gate 45). The timing-budget
-    suites (heading-b3, labels, perf) are calibrated for quiet boxes BY
+    puppeteer's default 180 s after every displayed check had passed)
+    and a 120 s browser-launch timeout (Chrome spawn itself outlived
+    puppeteer's 30 s default at a rising load 43-50); per-suite
+    ceilings → 60 min flyroute-cinema (two full flights) and 120 min
+    overlay-baseline (15 scenes at 5-7 min each when passing — failing
+    boots are fast, which is what made 45 min look almost enough);
+    one retrying dev-server probe (`scripts/lib/devServer.mjs`)
+    replaced 20 fetch-once preflights that died en masse on transient
+    refusals; attribution-b12 tolerates only the exact
+    `net::ERR_NETWORK_CHANGED` tile signature (GitForge container
+    churn), voice-wav self-declares its keyless gate before spending
+    boot time on a path this box can never pass. flyroute-cinema's
+    eased-velocity checks moved onto the sim-time series its
+    acceleration checks have used since run3o (wall-time windows read
+    a 1410 m/s peak off a 40 m/s plateau and collapsed both ease ramps
+    to 0 ms at 3.8 s median frame gaps), and its pitch-lock check
+    asserts on the cruise segment it names instead of including the
+    designed −28°→−32° approach ramp — replayed against the saved
+    run8 trace and confirmed live.
+  - **Final tallies (runs 7–10, 2026-09-24).** attribution-b12 PASS
+    21/0/3 owner-skipped (run8, 14.3 min); qa-firstrun PASS 51/51
+    (run7, 21.5 min) with firstrun-mutations PASS (2.7 min);
+    flyroute-cinema PASS 28/28 (run9, 23.2 min — ease-in 2000 sim-ms,
+    ease-out 1500 sim-ms, peak 41.4 m/s against a 39.8 m/s reported
+    mean, cruise pitch spread 0.00° over 347/350 rows);
+    overlay-baseline PASS with 14/15 scenes OK and one honest SKIP
+    (vessels: AIS feed unavailable keyless) (run10, 20.8 min at
+    load 10-30, incl. the cctv-street and missions-selected scenes
+    that boot-expired in runs 8-9). The timing-budget suites
+    (heading-b3, labels, perf) are calibrated for quiet boxes BY
     DESIGN — a load-50 failure there is the environment, not the
-    product; they get a genuine-quiet window on the next natural dip.
+    product; the run10 window (load <20 sustained) is the condition
+    they share with the rest of the battery's PASS evidence.
   - **Carried from the earlier partial close**: axe audit green (0 rule
     violations); docs links 52/52; GitForge lint + unit jobs succeeded
     in-run, and the run-creation trigger defect was FIXED upstream

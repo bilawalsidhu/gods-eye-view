@@ -41,9 +41,19 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   call outlived the 180 s default after every displayed check had
   passed) and a 120 s browser-launch timeout. The two-flight
   flyroute-cinema run has a 60 min ceiling (25 and 40 min both ended
-  in SIGKILLs mid-run). Under these windows the 51-check qa-firstrun
-  and the firstrun-mutations suite pass on a loaded box; no assertion
-  was weakened anywhere.
+  in SIGKILLs mid-run) and overlay-baseline 120 min (15 passing
+  scenes cost 5-7 min each under load; failing boots are fast, which
+  is what made 45 min look almost enough). flyroute-cinema's
+  eased-velocity checks now read the sim-time series its acceleration
+  checks have always used — wall-time windows manufactured a 1410 m/s
+  peak off a ~40 m/s plateau and collapsed both ease ramps to 0 ms at
+  3.8 s median frame gaps — and its pitch-lock check asserts on the
+  cruise segment it names, not the designed approach ramp. Final
+  quiet-window tallies: attribution-b12 21/0/3, qa-firstrun 51/51 (+
+  firstrun-mutations), flyroute-cinema 28/28 (ease-in 2000 sim-ms,
+  ease-out 1500, peak 41.4 m/s, cruise pitch spread 0.00°),
+  overlay-baseline 14/15 scenes OK with one honest AIS-unavailable
+  SKIP; no assertion was weakened anywhere.
 
 ## [0.10.1] — 2026-09-23
 
