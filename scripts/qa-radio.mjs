@@ -85,13 +85,17 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // the reveal actually moved, then let the caller measure the settled state.
 async function waitForRevealScroll(page) {
   await page.evaluate(() => { delete window.__qaRevealSample; });
+  // 15s: the reveal scroll is smooth/rAF-driven, so under CI-fleet load
+  // (frames measured at 1-2 s) the 6 s wait expired before the scroller
+  // moved and the caller graded an unmoved scroller (run4b, 2026-09-23).
+  // The assertion is unchanged, only the wait widens.
   await page.waitForFunction(() => {
     const scroller = document.querySelector('#global-context-panel .global-context-panel-inner');
     const top = scroller ? scroller.scrollTop : -1;
     if (top > 0 && top === window.__qaRevealSample) return true;
     window.__qaRevealSample = top;
     return false;
-  }, { polling: 150, timeout: 6000 }).catch(() => null);
+  }, { polling: 150, timeout: 15_000 }).catch(() => null);
   await sleep(150);
 }
 
@@ -1519,10 +1523,16 @@ async function main() {
       const { getOverlayPaintRect, getWorldOverlayDiagnostics } = await import('/src/overlays/worldOverlay.js');
       const paintedClusters = () => new Promise((resolve) => {
         let removePostRender = null;
+        // 5s: under CI-fleet load a single SwiftShader frame measured 1-2 s
+        // (run4b, 2026-09-23), so the old 500 ms cap expired before the
+        // requested render happened and 17/28 samples resolved via the
+        // timeout sentinel (fadingCount:-1) with zero clusters — the badge
+        // contract itself never failed. Same rationale as
+        // awaitRenderedFrame below.
         const timeout = setTimeout(() => {
           removePostRender?.();
           resolve({ clusters: [], fadingCount: -1, host: null, source: null });
-        }, 500);
+        }, 5000);
         removePostRender = viewer.scene.postRender.addEventListener(() => {
           clearTimeout(timeout);
           removePostRender();
