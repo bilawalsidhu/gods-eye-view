@@ -128,7 +128,10 @@ try {
       return realFetch(input, init);
     };
   }, appOrigin);
-  await page.goto(url, { waitUntil: 'domcontentloaded' });
+  // Navigation timeout widened from Puppeteer's 30 s default: under CI-fleet
+  // load (run5, 2026-09-24) the navigation itself exceeded 30 s. The
+  // assertions are unchanged, only the wait widens.
+  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 120_000 });
   await page.waitForFunction(() => Boolean(window.__godsEyeView?.viewer), { timeout: 90_000 });
   // Boot flyTo + tile warm + all deferred init.
   await new Promise((r) => setTimeout(r, 15_000));
