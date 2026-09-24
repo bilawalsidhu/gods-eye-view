@@ -1708,6 +1708,14 @@ export async function loadDelDOTSourcesFromOpenData() {
   }
 }
 
+/** FL511 DIRECTION codes as headings; "NOT DIRECTIONAL" has none. */
+const FLORIDA_DIRECTION_HEADINGS = Object.freeze({
+  N: 0,
+  E: 90,
+  S: 180,
+  W: 270,
+});
+
 /**
  * Stable camera id from a frame URL. FL511's ID column repeats across regions
  * (ID 1220 is both an I-75 and an I-95 camera), so the image channel is the
@@ -1733,11 +1741,8 @@ export function floridaCameraId(imageUrl) {
 }
 
 /**
- * One FL511 ArcGIS feature -> one catalog source, or null. DIRECTION is a real
-
-/**
- * One FL511 ArcGIS feature -> one catalog source, or null. DIRECTION is a real
- * bearing (N/S/E/W); "NOT DIRECTIONAL" falls back to the id hash.
+ * One FL511 ArcGIS feature -> one catalog source, or null. DIRECTION is a
+ * one-letter code the free-text parser won't read, so a table maps it.
  *
  * @param {object} feature - ArcGIS feature from the FL511 camera layer.
  * @returns {?object}
@@ -1768,12 +1773,12 @@ export function floridaCameraToSource(feature) {
   const cameraId = floridaCameraId(imageUrl);
   if (!cameraId) return null;
 
-  const heading = directionToHeading(
-    String(a.DIRECTION || '')
-      .trim()
-      .toUpperCase(),
-    true,
-  );
+  const heading =
+    FLORIDA_DIRECTION_HEADINGS[
+      String(a.DIRECTION || '')
+        .trim()
+        .toUpperCase()
+    ];
   const hasHeading = Number.isFinite(heading);
 
   return {
