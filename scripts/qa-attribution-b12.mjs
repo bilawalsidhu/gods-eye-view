@@ -81,6 +81,11 @@ async function main() {
   const chromeExecutable = findChromeExecutable();
   const browser = await puppeteer.launch({
     headless: 'new',
+    // 120 s: puppeteer's default launch timeout (30 s) bounds waiting for
+    // Chrome's WS endpoint — under a rising 1-min load 43-50 the browser
+    // process itself couldn't finish starting in 30 s (run7 log,
+    // 2026-09-24). Same environmental class as the boot waits below.
+    timeout: 120_000,
     // 300 s: puppeteer's default protocolTimeout (180 s) bounds ONE CDP call,
     // and on a starved renderer a single evaluate can exceed it — at 1-min
     // load 95-102 every displayed check had passed, then the next
