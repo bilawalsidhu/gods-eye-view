@@ -14,6 +14,7 @@ import {
   fallbackHeadingFromId,
   isLikelyFloridaCoordinate,
 } from '../../server/providers/cctv/normalize.js';
+import { createCctvCatalog } from '../../server/providers/cctv/catalog.js';
 
 const IMAGE_HOST = 'https://images-dis.divas.cloud/DGI/';
 
@@ -255,4 +256,78 @@ test('an oversized catalog page is refused', async (t) => {
     );
   });
   assert.deepEqual(await loadFloridaSourcesFromOpenData(), []);
+});
+
+/**
+ * Serve a two-camera FL511 page to the Florida endpoint and an empty payload
+ * to every other pack, so one catalog refresh exercises the registration
+ * without reaching the network. Returns the URLs that were requested.
+ */
+const runCatalogWithMockedUpstreams = async (t) => {
+  const requested = [];
+  t.mock.method(console, 'log', () => {});
+  t.mock.method(console, 'warn', () => {});
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    const href = String(url);
+    requested.push(href);
+    if (href.startsWith(FLORIDA_CCTV_URL)) return Response.json(page(0, 2));
+    return Response.json([]);
+  });
+  // No curated catalogs or ground-height sidecar, so only live lanes are in play.
+  const sources = await createCctvCatalog({ sourceRoot: '/nonexistent' })();
+  return { requested, sources };
+};
+
+/** Put process.env back exactly as it was. */
+const restoreEnv = (saved) => {
+  for (const key of Object.keys(process.env)) {
+    if (key in saved) continue;
+    delete process.env[key];
+  }
+  Object.assign(process.env, saved);
+};
+
+test('the Florida lane is wired into the catalog and its loader runs', async (t) => {
+  const saved = { ...process.env };
+  try {
+    delete process.env.CCTV_SOURCES_FILE;
+    delete process.env.CCTV_SOURCES_JSON;
+    delete process.env.CCTV_FLORIDA_ENABLED;
+    const { requested, sources } = await runCatalogWithMockedUpstreams(t);
+    assert.ok(
+      requested.some((href) => href.startsWith(FLORIDA_CCTV_URL)),
+      'the catalog refresh invokes the Florida loader',
+    );
+    assert.deepEqual(
+      sources
+        .filter((s) => s.cityId === 'florida')
+        .map((s) => s.id)
+        .sort(),
+      ['fl-0', 'fl-1'],
+      'Florida cameras reach the served catalog through the registered lane',
+    );
+  } finally {
+    restoreEnv(saved);
+  }
+});
+
+test('CCTV_FLORIDA_ENABLED=0 keeps the lane from being loaded at all', async (t) => {
+  const saved = { ...process.env };
+  try {
+    delete process.env.CCTV_SOURCES_FILE;
+    delete process.env.CCTV_SOURCES_JSON;
+    process.env.CCTV_FLORIDA_ENABLED = '0';
+    const { requested, sources } = await runCatalogWithMockedUpstreams(t);
+    assert.equal(
+      requested.some((href) => href.startsWith(FLORIDA_CCTV_URL)),
+      false,
+      'the disabled lane never reaches its upstream',
+    );
+    assert.deepEqual(
+      sources.filter((s) => s.cityId === 'florida'),
+      [],
+    );
+  } finally {
+    restoreEnv(saved);
+  }
 });
