@@ -81,6 +81,12 @@ async function main() {
   const chromeExecutable = findChromeExecutable();
   const browser = await puppeteer.launch({
     headless: 'new',
+    // 300 s: puppeteer's default protocolTimeout (180 s) bounds ONE CDP call,
+    // and on a starved renderer a single evaluate can exceed it — at 1-min
+    // load 95-102 every displayed check had passed, then the next
+    // Runtime.callFunctionOn expired and crashed the suite before RESULT
+    // (re-run log, 2026-09-24).
+    protocolTimeout: 300_000,
     ...(chromeExecutable ? { executablePath: chromeExecutable } : {}),
     args: ['--no-sandbox', '--disable-setuid-sandbox'],
   });
