@@ -79,6 +79,8 @@
   "src/data/terrainHeightsProxy.test.mjs",
   "src/data/tomtomTiles.js",
   "src/data/tomtomTiles.test.mjs",
+  "src/data/tileBudget.js",
+  "src/data/tileBudget.test.mjs",
   "src/data/firmsCsv.js",
   "src/data/firmsCsv.test.mjs",
   "src/tooling/environmentProviders.test.mjs",
