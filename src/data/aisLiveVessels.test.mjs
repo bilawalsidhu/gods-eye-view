@@ -1878,6 +1878,31 @@ test('vessel interaction wire: a sibling-owned pick wins without selection mutat
   }
 });
 
+for (const card of ['live', 'stale', 'absent', 'covered']) {
+  test(`vessel interaction wire: ${card} foreground card over registered cyclone`, () => {
+    const id = 'cyclone:fixture:cone:0';
+    registerPickOwner('weather-cyclones', (pickedId) => pickedId === id);
+    const harness = installWireHarness({ id });
+    const requests = [];
+    harness.windowTarget.addEventListener(WORLD_FOCUS_REQUEST_EVENT, (event) => requests.push(event.detail));
+    const host = hostWithCardHit(card === 'live' ? `vessel:${harness.record.mmsi}` : card === 'stale' ? 'vessel:999999999' : null);
+    if (card === 'covered') host.hitTest = (_x, _y, options) => {
+      assert.equal(options?.sourceId, undefined, 'test topmost host hit, not a covered AIS card');
+      return { sourceId: 'cctv', entryId: 'vessel:999999999' };
+    };
+    _setVesselOverlayHostForTest(host);
+    try {
+      harness.handler.click({ position: { x: 10, y: 20 } });
+      assert.equal(aisLiveVesselsLayer.getSelectedInfo()?.mmsi, harness.record.mmsi);
+      assert.equal(requests.length, card === 'live' ? 1 : 0);
+    } finally {
+      _setVesselOverlayHostForTest(null);
+      harness.cleanup();
+      unregisterPickOwner('weather-cyclones');
+    }
+  });
+}
+
 test('vessel card policy: only MMSI-keyed cards publish a hit rect', () => {
   const keyed = applyVesselOverlayPolicy(buildVesselCard(makeRecord()));
   assert.equal(keyed.interactive, true);

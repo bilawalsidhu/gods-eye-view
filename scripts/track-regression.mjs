@@ -88,6 +88,7 @@
  *   --source-base <path>  Browser module prefix (default /src)
  *   --url <url>        App URL (default http://localhost:4173)
  *   --headful          Show the browser (debugging)
+ *   --offline-imagery  Use bundled texture for known Esri/OSM tile images only
  *   --keep-open        Leave the browser open after the run (debugging)
  */
 
@@ -114,6 +115,7 @@ const SOURCE_BASE = getOpt('--source-base', '/src').replace(/\/$/, '');
 const APP_URL = getOpt('--url', 'http://localhost:4173');
 const APP_ORIGIN = new URL(APP_URL).origin;
 const HEADFUL = getFlag('--headful');
+const OFFLINE_IMAGERY = getFlag('--offline-imagery');
 const KEEP_OPEN = getFlag('--keep-open');
 
 const CHROME_EXECUTABLE_CANDIDATES = [
@@ -249,6 +251,15 @@ async function main() {
   console.log(`  App URL : ${APP_URL}`);
   console.log(`  Mode    : ${HEADFUL ? 'headful' : 'headless'}\n`);
 
+  // Tracking does not assert imagery geography. This optional fixture leaves
+  // provider metadata, terrain, models and every tracking assertion untouched.
+  // Read before launching so a missing bundled asset fails explicitly.
+  const offlineImageryTile = OFFLINE_IMAGERY
+    ? fs.readFileSync(new URL('../node_modules/cesium/Build/Cesium/Assets/Textures/NaturalEarthII/0/0/0.jpg', import.meta.url))
+    : null;
+  let offlineImageryRequests = 0;
+  if (OFFLINE_IMAGERY) console.log('  Imagery : bundled NaturalEarthII fixture (tile images only)');
+
   // Verify the dev server is up before launching a browser.
   try {
     const res = await fetch(APP_URL, { method: 'GET' });
@@ -310,10 +321,33 @@ async function main() {
     await page.setRequestInterception(true);
     page.on('request', (request) => {
       const url = new URL(request.url());
+<<<<<<< HEAD
       if (
         url.origin === APP_ORIGIN &&
         url.pathname === '/api/openai/hud-summary'
       ) {
+=======
+      // Reuse the one existing interceptor; do not install competing handlers.
+      // Exact HTTPS origins and image paths only: metadata, feature queries,
+      // other providers, terrain and local/model resources continue normally.
+      const knownImageryTile = request.method() === 'GET' && (
+        (url.origin === 'https://services.arcgisonline.com'
+          && /^\/ArcGIS\/rest\/services\/World_Imagery\/MapServer\/tile\/\d+\/\d+\/\d+$/.test(url.pathname))
+        || (url.origin === 'https://tile.openstreetmap.org'
+          && /^\/\d+\/\d+\/\d+\.png$/.test(url.pathname))
+      );
+      if (OFFLINE_IMAGERY && knownImageryTile) {
+        offlineImageryRequests++;
+        request.respond({
+          status: 200,
+          contentType: 'image/jpeg',
+          headers: { 'Access-Control-Allow-Origin': '*' },
+          body: offlineImageryTile,
+        });
+        return;
+      }
+      if (url.origin === APP_ORIGIN && url.pathname === '/api/openai/hud-summary') {
+>>>>>>> 4c1dbe653b2589e5068a1c10e052d5d24249be77
         request.respond({
           status: 200,
           contentType: 'application/json',
@@ -368,6 +402,7 @@ async function main() {
             headers: { 'Content-Type': 'application/json' },
           });
 
+<<<<<<< HEAD
         window.fetch = (input, init) => {
           const requestUrl =
             typeof input === 'string' || input instanceof URL
@@ -411,6 +446,92 @@ async function main() {
             return Promise.resolve(
               jsonResponse({ time: Math.floor(Date.now() / 1000), states }),
             );
+=======
+      window.fetch = (input, init) => {
+        const requestUrl = typeof input === 'string' || input instanceof URL
+          ? String(input)
+          : input?.url;
+        const url = new URL(requestUrl, window.location.href);
+        const isAppRequest = url.origin === appOrigin;
+        // OpenSky (commercial flights): { states: [ state-vector[] ] }
+        if (isAppRequest && url.pathname === '/api/opensky') {
+          window.__SYNTH_HITS.opensky++;
+          // A withheld contact models the ordinary case where the recipient's
+          // first authoritative refresh does not yet carry the shared aircraft.
+          const withheld = (() => {
+            try { return window.sessionStorage.getItem('__gevWithhold') || ''; } catch { return ''; }
+          })();
+          const states = window.__SYNTH.flights
+            .filter((f) => f.icao !== withheld)
+            .map((f) => ([
+            f.icao,            // 0 icao24
+            f.callsign,        // 1 callsign
+            'Synthetica',      // 2 origin_country
+            Math.floor(Date.now() / 1000), // 3 time_position
+            Math.floor(Date.now() / 1000), // 4 last_contact
+            f.lon,             // 5 longitude
+            f.lat,             // 6 latitude
+            f.alt,             // 7 baro_altitude (m)
+            f.onGround === true, // 8 on_ground (ground-traffic phase flips this live)
+            f.vel,             // 9 velocity (m/s)
+            f.track,           // 10 true_track (deg)
+            0, null, null, null, false, 0, // padding to match state-vector length
+          ]));
+          return Promise.resolve(jsonResponse({ time: Math.floor(Date.now() / 1000), states }));
+        }
+        // Trail backfill (fires on trackById). Stub with valid-but-empty
+        // payloads so the deterministic run never 404s against the dev proxy.
+        // flights: { path: [ [time, lat, lon, baroAlt, true_track, on_ground] ] }
+        if (isAppRequest && url.pathname === '/api/opensky-track') {
+          return Promise.resolve(jsonResponse({ path: [] }));
+        }
+        // military: { timestamp: <epochSec>, trace: [ [secAfter, lat, lon, ...] ] }
+        if (isAppRequest && url.pathname === '/api/adsblol/trace') {
+          return Promise.resolve(jsonResponse({ timestamp: Math.floor(Date.now() / 1000), trace: [] }));
+        }
+        // adsbdb enrichment (fires for tracked/model-eligible planes): empty
+        // object → typeCode stays null → the synthetic planes' class (and so
+        // their 3D scale + ground-snap belly offset) is DETERMINISTIC, never a
+        // live-proxy lookup of a fake hex.
+        if (isAppRequest && /^\/api\/adsbdb\/(?:type|route)\/[^/]+$/.test(url.pathname)) {
+          return Promise.resolve(jsonResponse({}));
+        }
+        // Contacts enables the optional AIS source alongside aircraft. Keep
+        // this tracking harness independent of local AIS credentials while
+        // preserving the truthful "awaiting first message" lifecycle.
+        if (isAppRequest && url.pathname === '/api/ais-live') {
+          return Promise.resolve(jsonResponse({
+            status: 'connected',
+            rows: [],
+            lastMessageAt: null,
+          }));
+        }
+        // Contacts also enables mapped installations. This tracking harness
+        // does not test installation acquisition; a valid empty viewport keeps
+        // public Overpass outages out of aircraft/satellite tracking results.
+        // Preserve the real response shape and all console-error assertions.
+        if (isAppRequest && url.pathname === '/api/military-installations') {
+          return Promise.resolve(jsonResponse({
+            elements: [],
+            saturated: false,
+            elementCap: 700,
+            retrievedAt: new Date().toISOString(),
+            status: 'ready',
+          }));
+        }
+        // CelesTrak TLE groups. Served from a fixed two-satellite catalog so
+        // the satellite assertions are deterministic and the run never depends
+        // on an upstream that rate-limits (it was answering 403 the night this
+        // was written).
+        if (isAppRequest && url.pathname.startsWith('/api/celestrak/')) {
+          const group = url.pathname.slice('/api/celestrak/'.length);
+          // One named group fails on demand. Failing a group the subject is
+          // NOT in is the reclassification case: CelesTrak moves satellites
+          // between groups, so a subject missing from its old group may have
+          // moved into the one that just failed.
+          if (window.__SYNTH.failGroup && group === window.__SYNTH.failGroup) {
+            return Promise.resolve(new Response('upstream unavailable', { status: 503 }));
+>>>>>>> 4c1dbe653b2589e5068a1c10e052d5d24249be77
           }
           // Trail backfill (fires on trackById). Stub with valid-but-empty
           // payloads so the deterministic run never 404s against the dev proxy.
@@ -5461,6 +5582,7 @@ async function main() {
 
     finishAndExit();
   } finally {
+    if (OFFLINE_IMAGERY) console.log(`  Bundled imagery tiles served: ${offlineImageryRequests}`);
     if (!KEEP_OPEN) {
       await browser.close();
     } else {

@@ -10,6 +10,7 @@
 @import './src/ui/styles/cctv.css';
 @import './src/ui/styles/scenes.css';
 @import './src/ui/styles/bhote-koshi.css';
+@import './src/ui/styles/recent-imagery.css';
 @import './src/ui/styles/recording.css';
 @import './src/ui/styles/responsive.css';
 @import './src/ui/styles/command-dock.css';
@@ -22,3 +23,6 @@
 @import './src/ui/styles/ai-command-center.css';
 @import './src/ui/styles/radial-menu.css';
 @import './src/ui/styles/timeline.css';
+
+@import './src/ui/styles/weather.css';
+@import './src/ui/styles/cyber.css';

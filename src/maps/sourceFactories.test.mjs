@@ -126,3 +126,32 @@ test('credentialed source factories reject an omitted token instead of consuming
   );
   await assert.rejects(createWorldTerrain(' '), /explicit ion token/);
 });
+
+test('both Google 3D routes keep tiles drawing while draped imagery loads', async () => {
+  const { createGoogleDirectTileset, createGoogleIonTileset } =
+    await import('./google3d.js');
+  const calls = [];
+  const sdk = {
+    createGooglePhotorealistic3DTileset: async (...args) => {
+      calls.push(args);
+      return 'direct';
+    },
+    IonResource: { fromAssetId: async (id, options) => ({ id, ...options }) },
+    Cesium3DTileset: {
+      fromUrl: async (...args) => {
+        calls.push(args);
+        return 'ion';
+      },
+    },
+  };
+  assert.equal(await createGoogleDirectTileset(sdk, 'key'), 'direct');
+  assert.equal(await createGoogleIonTileset(sdk, 'token'), 'ion');
+  assert.deepEqual(calls[0], [
+    { key: 'key', onlyUsingWithGoogleGeocoder: true },
+    { asynchronouslyLoadImagery: true },
+  ]);
+  assert.equal(calls[1][0].id, 2275207);
+  assert.equal(calls[1][0].accessToken, 'token');
+  assert.equal(calls[1][1].asynchronouslyLoadImagery, true);
+  assert.equal(calls[1][1].enableCollision, true);
+});

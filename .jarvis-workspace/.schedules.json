@@ -793,5 +793,50 @@
     "runCount": 0,
     "lastRunAt": null,
     "lastResult": null
+  },
+  {
+    "id": "task_1790251471353_d0xz",
+    "name": "Unit Test Task",
+    "tool": null,
+    "command": "echo \"scheduled ok\"",
+    "args": {},
+    "message": null,
+    "delaySeconds": 10,
+    "intervalSeconds": 0,
+    "createdAt": "2026-09-24T12:04:31.353Z",
+    "status": "cancelled",
+    "runCount": 0,
+    "lastRunAt": null,
+    "lastResult": null
+  },
+  {
+    "id": "task_1790252014861_4oio",
+    "name": "Unit Test Task",
+    "tool": null,
+    "command": "echo \"scheduled ok\"",
+    "args": {},
+    "message": null,
+    "delaySeconds": 10,
+    "intervalSeconds": 0,
+    "createdAt": "2026-09-24T12:13:34.861Z",
+    "status": "cancelled",
+    "runCount": 0,
+    "lastRunAt": null,
+    "lastResult": null
+  },
+  {
+    "id": "task_1790252221863_9y55",
+    "name": "Unit Test Task",
+    "tool": null,
+    "command": "echo \"scheduled ok\"",
+    "args": {},
+    "message": null,
+    "delaySeconds": 10,
+    "intervalSeconds": 0,
+    "createdAt": "2026-09-24T12:17:01.863Z",
+    "status": "cancelled",
+    "runCount": 0,
+    "lastRunAt": null,
+    "lastResult": null
   }
 ]

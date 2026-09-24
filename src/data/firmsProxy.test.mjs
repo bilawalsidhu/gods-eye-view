@@ -12,7 +12,7 @@ assert.notEqual(start, -1, 'FIRMS refresh function exists');
 const end = config.indexOf('\n  }', start);
 assert.notEqual(end, -1, 'FIRMS refresh function closes');
 const refreshSource = config.slice(start, end + 4);
-const SOURCES = ['VIIRS_NOAA20_NRT', 'VIIRS_NOAA21_NRT', 'VIIRS_SNPP_NRT'];
+const SOURCES = ['VIIRS_NOAA20_NRT', 'VIIRS_NOAA21_NRT', 'VIIRS_SNPP_NRT', 'MODIS_NRT'];
 const NOW = Date.UTC(2026, 8, 11, 12);
 const recent = { acqDate: '2026-09-11', acqTime: '1100' };
 
@@ -56,6 +56,7 @@ test('FIRMS retains large sources in order and filters expired rows', async () =
   assert.equal(result.fires[0], large[0]);
   assert.equal(result.fires[199_999], large.at(-1));
   assert.equal(result.fires.at(-1), last);
+<<<<<<< HEAD
   assert.deepEqual(
     result.sources,
     SOURCES.map((source, index) => ({
@@ -64,6 +65,11 @@ test('FIRMS retains large sources in order and filters expired rows', async () =
       ok: true,
     })),
   );
+=======
+  assert.deepEqual(result.sources, SOURCES.map((source, index) => ({
+    source, count: [200_000, 1, 0, 0][index], ok: true,
+  })));
+>>>>>>> 4c1dbe653b2589e5068a1c10e052d5d24249be77
 });
 
 test('FIRMS keeps successful sources when another upstream fails', async () => {
@@ -71,6 +77,7 @@ test('FIRMS keeps successful sources when another upstream fails', async () => {
     if (source === SOURCES[1]) throw new Error('upstream unavailable');
     return [recent];
   })('fixture');
+<<<<<<< HEAD
   assert.equal(result.fires.length, 2);
   assert.deepEqual(
     result.sources,
@@ -80,6 +87,12 @@ test('FIRMS keeps successful sources when another upstream fails', async () => {
       ok: index !== 1,
     })),
   );
+=======
+  assert.equal(result.fires.length, 3);
+  assert.deepEqual(result.sources, SOURCES.map((source, index) => ({
+    source, count: index === 1 ? 0 : 1, ok: index !== 1,
+  })));
+>>>>>>> 4c1dbe653b2589e5068a1c10e052d5d24249be77
 });
 
 test('FIRMS reports one failure if consuming a source throws before append', async () => {
@@ -89,6 +102,7 @@ test('FIRMS reports one failure if consuming a source throws before append', asy
     (records, now) => {
       if (records !== failing) return filterTrailing24h(records, now);
       // Fault injection for aggregation; ordinary parsed CSV returns an array.
+<<<<<<< HEAD
       return {
         length: 1,
         [Symbol.iterator]() {
@@ -106,6 +120,14 @@ test('FIRMS reports one failure if consuming a source throws before append', asy
       ok: index !== 0,
     })),
   );
+=======
+      return { length: 1, [Symbol.iterator]() { throw new Error('aggregation failed'); } };
+    })('fixture');
+  assert.equal(result.fires.length, 3);
+  assert.deepEqual(result.sources, SOURCES.map((source, index) => ({
+    source, count: index === 0 ? 0 : 1, ok: index !== 0,
+  })));
+>>>>>>> 4c1dbe653b2589e5068a1c10e052d5d24249be77
 });
 
 test('FIRMS distinguishes all-source failure from successful empty sources', async () => {

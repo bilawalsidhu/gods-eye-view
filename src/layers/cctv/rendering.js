@@ -215,7 +215,12 @@ export function createRendering({
         // (set at creation) — see the field-test far-zoom submerge fix there.
       }
 
-      if (layerState._enabled && layerState._showProjection && isActive) {
+      if (
+        layerState._enabled &&
+        isActive &&
+        (layerState._showProjection ||
+          parts.model.isVideoFeedType(record.camera.feedType))
+      ) {
         parts.projection.ensureProjectionRuntime(record);
       }
       // One live plane in the world at a time (§2c): only the active camera's

@@ -923,6 +923,7 @@ async function runBehaviorLayer() {
 
     // (4b) analyst engine end-to-end: count flights over Texas (region ring
     // via NE-pack/admin machinery), then a follow-up over the same set.
+<<<<<<< HEAD
     r = await run('analyst_query', {
       layers: ['flights'],
       scope: { kind: 'region', name: 'Texas' },
@@ -947,6 +948,29 @@ async function runBehaviorLayer() {
       'behavior: analyst follow-up re-filters the remembered set',
       `count=${r?.count} followUp=${r?.coverage?.followUp}`,
     );
+=======
+    // A cold boundary lookup can exceed the resolver's budget; it answers
+    // region-timeout and keeps loading, so asking again must succeed.
+    let texasTimeouts = 0;
+    r = await run('analyst_query', { layers: ['flights'], scope: { kind: 'region', name: 'Texas' }, limit: 5 });
+    while (r?.code === 'region-timeout' && texasTimeouts < 8) {
+      texasTimeouts += 1;
+      await settle(5000);
+      r = await run('analyst_query', { layers: ['flights'], scope: { kind: 'region', name: 'Texas' }, limit: 5 });
+    }
+    report(r?.ok === true && Number.isFinite(r?.count) && r.count > 0 && String(r?.coverage?.scope || '').includes('Texas'),
+      'behavior: analyst counts flights over Texas', `count=${r?.count} scope=${r?.coverage?.scope} timeouts=${texasTimeouts} err=${r?.error || ''}`);
+    r = await run('analyst_query', { followUp: true, filters: [{ field: 'onGround', op: 'eq', value: false }], sortBy: 'altitudeM', limit: 3 });
+    report(r?.ok === true && r?.coverage?.followUp === true,
+      'behavior: analyst follow-up re-filters the remembered set', `count=${r?.count} followUp=${r?.coverage?.followUp}`);
+    // A marine region resolves from the bundled Natural Earth pack in the page,
+    // without the slower geocode fallback.
+    const gulfStarted = Date.now();
+    r = await run('analyst_query', { layers: ['flights'], scope: { kind: 'region', name: 'Gulf of Mexico' }, limit: 5 });
+    const gulfMs = Date.now() - gulfStarted;
+    report(r?.ok === true && String(r?.coverage?.scope || '').includes('Gulf of Mexico') && gulfMs < 3000,
+      'behavior: analyst resolves the Gulf of Mexico from the bundled pack', `scope=${r?.coverage?.scope} ms=${gulfMs} err=${r?.error || ''}`);
+>>>>>>> 4c1dbe653b2589e5068a1c10e052d5d24249be77
 
     // (5) zoom_to_globe is ABSOLUTE full-earth (>12,000 km band)
     r = await run('zoom_to_globe', {});

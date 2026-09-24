@@ -1,0 +1,53 @@
+{
+  "now": 1790127097.5,
+  "messages": 112,
+  "aircraft": [
+    {
+      "hex": "a15c54",
+      "flight": "SKW3301 ",
+      "alt_baro": 5050,
+      "gs": 287.5,
+      "track": 291.2,
+      "baro_rate": 3072,
+      "seen": 31.5,
+      "messages": 14,
+      "rssi": -28.2
+    },
+    {
+      "hex": "ae5d8a",
+      "flight": "SHINR42 ",
+      "lat": 30.269662,
+      "lon": -97.793262,
+      "alt_baro": 1600,
+      "gs": 129.9,
+      "track": 330.5,
+      "baro_rate": 64,
+      "seen": 30.5,
+      "seen_pos": 34.6,
+      "messages": 74,
+      "rssi": -30.0
+    },
+    {
+      "hex": "a3c775",
+      "lat": 30.360625,
+      "lon": -97.919659,
+      "alt_baro": 34000,
+      "gs": 434.4,
+      "track": 283.7,
+      "baro_rate": 0,
+      "seen": 38.2,
+      "seen_pos": 43.4,
+      "messages": 20,
+      "rssi": -30.5
+    },
+    {
+      "hex": "a46e6a",
+      "gs": 319.8,
+      "track": 351.2,
+      "baro_rate": 2688,
+      "seen": 32.0,
+      "messages": 4,
+      "rssi": -37.1
+    }
+  ]
+}

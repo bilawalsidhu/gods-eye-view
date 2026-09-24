@@ -576,6 +576,7 @@ test('a converted contact never consumes a 3D model CAP SLOT', async () => {
         source,
       )?.[0];
     assert.ok(loop, `${name}: the model-eligibility candidate loop is present`);
+<<<<<<< HEAD
     assert.match(
       loop,
       /keepDistSq/,
@@ -592,6 +593,16 @@ test('a converted contact never consumes a 3D model CAP SLOT', async () => {
       /modelEligible\.size >= cap/,
       `${name}: the cap bounds the candidate-derived eligible set`,
     );
+=======
+    assert.match(loop, /keepDistSq/, `${name}: matched the model-eligibility loop`);
+    assert.match(loop, /if \(isTr3b\(icao\)\) continue;/,
+      `${name}: converted contacts are dropped BEFORE entering the capped candidate list`);
+    // ...and the cap really is applied to that list, so a dropped candidate is a
+    // freed slot. The four-pass selection itself is the shared
+    // selectModelEligible (behavior-tested in modelEligibility.test.mjs).
+    assert.match(source, /modelEligible\s*=\s*selectModelEligible\(\s*cand,\s*\{\s*cap,/,
+      `${name}: the cap bounds the candidate-derived eligible set`);
+>>>>>>> 4c1dbe653b2589e5068a1c10e052d5d24249be77
   }
 });
 

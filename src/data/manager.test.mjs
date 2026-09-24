@@ -3505,6 +3505,7 @@ function makeControlElement() {
     title: '',
     type: '',
     classList: { toggle() {} },
+<<<<<<< HEAD
     appendChild(child) {
       child.parent = this;
       this.children.push(child);
@@ -3517,6 +3518,17 @@ function makeControlElement() {
     replaceChildren(...nodes) {
       this.children = [...nodes];
     },
+=======
+    appendChild(child) { child.parent = this; this.children.push(child); return child; },
+    append(...nodes) { for (const n of nodes) n.parent = this; this.children.push(...nodes); },
+    insertBefore(child, anchor) {
+      child.parent = this;
+      const index = anchor ? this.children.indexOf(anchor) : this.children.length;
+      this.children.splice(index, 0, child);
+      return child;
+    },
+    replaceChildren(...nodes) { this.children = [...nodes]; },
+>>>>>>> 4c1dbe653b2589e5068a1c10e052d5d24249be77
     remove() {
       const siblings = this.parent?.children;
       if (siblings) this.parent.children = siblings.filter((n) => n !== this);
@@ -4113,6 +4125,7 @@ test('an async layer pushes its own row refresh, and a busy chip refuses clicks'
     // The layer settles and pushes its own refresh — no panel poll involved.
     settled = true;
     module._listener();
+    mgr._layerPanel._flushRowControlsRefresh();
     assert.equal(chip.textContent, 'DENSE');
     assert.equal(chip.disabled, false);
     assert.equal(chip.attributes['aria-pressed'], 'true');
@@ -4277,4 +4290,147 @@ test('row action chips use live disabled state and descriptive counts without wr
     if (originalDocument === undefined) delete globalThis.document;
     else globalThis.document = originalDocument;
   }
+});
+
+for (const scheduler of ['animation frame', 'timeout']) {
+  test(`row notifications coalesce with ${scheduler} and stop after destroy`, async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const frames = new Map();
+    let nextFrame = 0;
+    const originalRaf = globalThis.requestAnimationFrame;
+    const originalCancel = globalThis.cancelAnimationFrame;
+    globalThis.requestAnimationFrame = scheduler === 'animation frame'
+      ? (callback) => { frames.set(++nextFrame, callback); return nextFrame; }
+      : undefined;
+    globalThis.cancelAnimationFrame = (id) => frames.delete(id);
+    const originalDocument = globalThis.document;
+    globalThis.document = { createElement: makeControlElement };
+    const manager = new DataLayerManager({});
+    const layer = makeSlowLayer('wind', { updateInterval: -1 });
+    let notify;
+    layer.module.getRowControls = () => ({ chips: [] });
+    layer.module.setRowControlsListener = (listener) => { if (listener) notify = listener; };
+    manager.register(layer.module);
+    try {
+      manager.buildTogglePanel(makeControlElement());
+      const panel = manager._layerPanel;
+      let refreshes = 0;
+      const refresh = panel._refreshTogglePanel.bind(panel);
+      panel._refreshTogglePanel = () => { refreshes++; refresh(); };
+      for (let i = 0; i < 10; i++) notify();
+      assert.equal(refreshes, 0, 'notifications defer refresh');
+      if (scheduler === 'animation frame') assert.equal(frames.size, 1);
+      panel._flushRowControlsRefresh();
+      assert.equal(refreshes, 1);
+      panel._flushRowControlsRefresh();
+      t.mock.timers.tick(0);
+      assert.equal(frames.size, 0, 'flush cancels the pending frame');
+      assert.equal(refreshes, 1, 'flush does not leave duplicate work');
+      notify();
+      notify();
+      if (scheduler === 'animation frame') {
+        const [id, callback] = frames.entries().next().value;
+        frames.delete(id);
+        callback();
+      } else t.mock.timers.tick(0);
+      assert.equal(refreshes, 2, 'scheduled callback refreshes once');
+      notify();
+      panel.destroy();
+      assert.equal(frames.size, 0, 'destroy cancels pending work');
+      notify();
+      panel._flushRowControlsRefresh();
+      t.mock.timers.tick(0);
+      assert.equal(refreshes, 2, 'retained notifications after destroy are inert');
+    } finally {
+      await manager.destroyAll();
+      if (originalDocument === undefined) delete globalThis.document;
+      else globalThis.document = originalDocument;
+      if (originalRaf === undefined) delete globalThis.requestAnimationFrame;
+      else globalThis.requestAnimationFrame = originalRaf;
+      if (originalCancel === undefined) delete globalThis.cancelAnimationFrame;
+      else globalThis.cancelAnimationFrame = originalCancel;
+    }
+  });
+}
+
+test('row info and legends reconcile in place while chips retain focus and order', async () => {
+  const originalDocument = globalThis.document;
+  globalThis.document = { createElement: makeControlElement, activeElement: null };
+  const manager = new DataLayerManager({});
+  const layer = makeSlowLayer('wind', { updateInterval: -1 });
+  let controls = {
+    chips: [{ id: 'one', label: 'One' }],
+    legend: [{ label: 'Low', color: '#0000ff', count: 1, blurb: 'Low values' }],
+    info: 'Forecast',
+    infoTitle: 'Source time',
+  };
+  layer.module.getRowControls = () => controls;
+  manager.register(layer.module);
+  try {
+    const container = makeControlElement();
+    manager.buildTogglePanel(container);
+    await manager.setEnabled('wind', true);
+    const row = container.querySelector('.data-toggle-controls');
+    const chip = row.children[0];
+    let legend = row.children[1];
+    const info = row.children[2];
+    chip.focus();
+    let writes = 0;
+    for (const key of ['textContent', 'title']) {
+      let value = info[key];
+      Object.defineProperty(info, key, {
+        get: () => value,
+        set: (next) => { writes++; value = next; },
+      });
+    }
+    controls = structuredClone(controls);
+    manager._refreshTogglePanel();
+    assert.equal(row.children[1], legend);
+    assert.equal(row.children[2], info);
+    assert.equal(writes, 0);
+    for (const change of [{ label: 'High' }, { color: '#ff0000' }, { count: 2 }, { blurb: 'High values' }]) {
+      Object.assign(controls.legend[0], change);
+      manager._refreshTogglePanel();
+      assert.notEqual(row.children[1], legend);
+      legend = row.children[1];
+      assert.equal(row.children[2], info);
+      assert.equal(globalThis.document.activeElement, chip);
+    }
+    controls.info = '<img onerror=alert(1)>';
+    controls.infoTitle = '';
+    controls.chips.push({ id: 'two', label: 'Two' });
+    manager._refreshTogglePanel();
+    assert.deepEqual(row.children.map(node => node.className), [
+      'data-toggle-chip chip-idle', 'data-toggle-chip chip-idle',
+      'data-toggle-legend-item', 'data-toggle-controls-info',
+    ]);
+    assert.equal(row.children[2], legend);
+    assert.equal(row.children[3], info);
+    assert.equal(info.textContent, controls.info);
+    assert.equal(info.title, '');
+    assert.equal(info.children.length, 0, 'info remains plain text');
+    controls = { chips: [], legend: [] };
+    manager._refreshTogglePanel();
+    assert.equal(row.hidden, true);
+    assert.equal(info.hidden, true);
+    assert.deepEqual(row.children, [info]);
+    controls = { info: 'Restored', legend: [{ label: 'New', color: '#ffffff' }] };
+    manager._refreshTogglePanel();
+    assert.equal(row.children.at(-1), info);
+    assert.equal(info.hidden, false);
+    assert.equal(info.textContent, 'Restored');
+  } finally {
+    await manager.destroyAll();
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+  }
+});
+
+test('refreshLayerStats reaches presentation through the bare lifecycle', async () => {
+  const { LayerLifecycle } = await import('./lifecycle.js');
+  const lifecycle = new LayerLifecycle({});
+  const changes = [];
+  lifecycle.subscribeActivity((change) => changes.push(change.type));
+  lifecycle.refreshLayerStats();
+  assert.deepEqual(changes, ['status']);
 });

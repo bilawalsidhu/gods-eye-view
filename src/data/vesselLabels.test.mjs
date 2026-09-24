@@ -87,6 +87,7 @@ test('vessel host policy uses always-on shared fade and protected selected lane'
     selected: true,
   });
   assert.equal(selected.variant, 'selected');
+  assert.equal(selected.verticalOnly, false, 'selected detail can clear panels on either side');
   assert.equal(selected.protected, true);
   assert.equal(selected.collisionGroup, 'ambient-card');
   assert.equal(selected.maxDistance, Number.POSITIVE_INFINITY);

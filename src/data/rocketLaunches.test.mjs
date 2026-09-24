@@ -1355,12 +1355,21 @@ test('real mission build, select, refresh, deselect, disable, and destroy paths 
       this.parentElement = null;
     }
     setAttribute() {}
+<<<<<<< HEAD
     getBoundingClientRect() {
       return { left: 0, top: 0, width: 1600, height: 900 };
     }
     getContext() {
       return this.tagName === 'CANVAS' ? context : null;
     }
+=======
+    // This fixture has no parsed DOM children; it exercises native label
+    // ownership, not the replay overlay's separately rendered icon children.
+    querySelectorAll() { return []; }
+    querySelector() { return null; }
+    getBoundingClientRect() { return { left: 0, top: 0, width: 1600, height: 900 }; }
+    getContext() { return this.tagName === 'CANVAS' ? context : null; }
+>>>>>>> 4c1dbe653b2589e5068a1c10e052d5d24249be77
   }
   const body = new FakeElement('body');
   const document = {

@@ -82,7 +82,7 @@ export const ACTION_DESCRIPTIONS = {
       properties: {
         layerId: {
           description:
-            'Common-name mapping for the non-obvious ids: space mission(s) → rocket-launches; fires/wildfires/active fires → local-firms (NASA FIRMS); ships/vessels/boats → ais-live-vessels; undersea/submarine cables → telegeography-submarine-cables; datacenters → local-datacenters; dams → local-dams; bikes/bike share → bikeshare; street traffic/congestion → traffic; traffic cameras → cctv; internet radio/stations → radio; ALPR/license plate readers/Flock cameras → alpr-cameras.',
+            'Common-name mapping for the non-obvious ids: space mission(s) → rocket-launches; fires/wildfires/active fires → local-firms (NASA FIRMS); ships/vessels/boats → ais-live-vessels; undersea/submarine cables → telegeography-submarine-cables; datacenters → local-datacenters; dams → local-dams; bikes/bike share → bikeshare; street traffic/congestion → traffic; traffic cameras → cctv; internet radio/stations → radio; ALPR/license plate readers/Flock cameras → alpr-cameras; local ADS-B/my receiver/my antenna (aircraft heard by a local RTL-SDR receiver) → local-adsb.',
           $position: 1,
         },
       },
@@ -179,6 +179,29 @@ export const ACTION_DESCRIPTIONS = {
           description: 'auto restores style-driven show/hide.',
           $position: 2,
         },
+      },
+    },
+  },
+  set_cyber_sonar: {
+    description:
+      'Adjust Cyber-only sonar controls. Requires the Cyber HUD layout; never switches layout or HUD visibility. Omitted fields stay unchanged. Returns actual settings and separate map/contact sweep activity. A saved setting does not mean the effect is active.',
+    $position: 1,
+    parameters: {
+      properties: {
+        enabled: { description: 'Explicitly turn sonar on or off.' },
+        rings: { description: 'Number of decorative sonar rings, 3–12.' },
+        rangePct: {
+          description:
+            'Visual ring range, 60–120 percent; not geographic distance.',
+        },
+        intensityPct: {
+          description: 'Sonar Power slider, 0–100 percent. Zero is valid.',
+        },
+        opacityPct: {
+          description:
+            'Contact opacity floor between passes, 35–100 percent; labels have a derived floor. Not whole-scene dimming.',
+        },
+        sectorDeg: { description: 'Sonar sweep sector width, 8–60 degrees.' },
       },
     },
   },
@@ -505,7 +528,7 @@ export const ACTION_DESCRIPTIONS = {
   },
   analyst_query: {
     description:
-      'Answer questions ABOUT the data currently loaded on the map — counts, lists, superlatives, and attribute filters over live layers (flights, military, ships, fires, earthquakes). Examples: "how many flights over Texas", "biggest fire near LA", "which ships are headed to Oakland", "anything above 40,000 feet", "fastest thing in view". Queries ONLY client-side data from ENABLED layers — if the needed layer is off, say so and offer to enable it. For a follow-up about the previous answer\'s set ("which of those is closest?"), set followUp=true and send only the new filters/sort.',
+      'Answer questions ABOUT the data currently loaded on the map — counts, lists, superlatives, and attribute filters over live layers (flights, military, ships, fires, earthquakes, satellites, datacenters, dams). Examples: "how many flights over Texas", "biggest fire near LA", "which ships are headed to Oakland", "anything above 40,000 feet", "fastest thing in view". For satellites and infrastructure, counts and ranks cover only bounded examined loaded records; omitted records can change nearest/count. Queries ONLY client-side data from ENABLED layers — if the needed layer is off, say so and offer to enable it. For a follow-up about the previous answer\'s set ("which of those is closest?"), set followUp=true and send only the new filters/sort.',
     $position: 1,
     parameters: {
       properties: {
@@ -549,7 +572,7 @@ export const ACTION_DESCRIPTIONS = {
   },
   next_iss_pass: {
     description:
-      "When the user asks when the ISS / the space station will next fly over: returns the next visible ISS pass for the current camera location (or an explicit lat/lon) — rise time (ISO + minutes from now), rise compass direction, peak elevation, and duration. Requires the satellites layer to have loaded its catalog at least once this session; if it hasn't, tell the user to enable the satellites layer and try again.",
+      "When the user asks when the ISS / the space station will next fly over: returns the next geometric ISS pass with estimated visibility for the current camera location (or an explicit lat/lon) — rise time (ISO + minutes from now), rise compass direction, peak elevation, and duration. Requires the satellites layer to have loaded its catalog at least once this session; if it hasn't, tell the user to enable the satellites layer and try again.",
     $position: 1,
     parameters: {
       properties: {
@@ -570,5 +593,10 @@ export const ACTION_DESCRIPTIONS = {
         },
       },
     },
+  },
+  next_satellite_pass: {
+    description:
+      'Predict the next pass in 24 hours for one satellite in the loaded catalog, identified by exact NORAD ID or name. Ambiguous names return candidates: ask for a choice rather than selecting one. Defaults to geometric passes; visibleOnly requires estimated illumination and a dark observer sky, which does not guarantee naked-eye visibility. Uses camera location unless coordinates are supplied.',
+    $position: 1,
   },
 };
