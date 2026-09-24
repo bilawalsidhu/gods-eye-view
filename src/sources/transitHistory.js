@@ -1,3 +1,4 @@
+import { withBase } from '../services/apiBase.js';
 /** Validate the entire decoded identifier, including UTF-8 length. */
 export function validTransitIdentifier(value) {
   return (
@@ -21,7 +22,7 @@ export async function fetchTransitHistory(
   if (!validTransitIdentifier(vehicleId))
     throw new TypeError('Invalid transit vehicle identifier');
   const response = await fetchImpl(
-    `/api/transit/trail/${encodeURIComponent(feedId)}/${encodeURIComponent(vehicleId)}`,
+    `${withBase('/api/transit/trail/')}${encodeURIComponent(feedId)}/${encodeURIComponent(vehicleId)}`,
     { signal, headers: { Accept: 'application/json' } },
   );
   if (!response.ok) throw new Error(`Transit history HTTP ${response.status}`);

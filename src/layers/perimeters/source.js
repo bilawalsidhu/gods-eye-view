@@ -1,3 +1,4 @@
+import { withBase } from '../../services/apiBase.js';
 import { readResponseJsonCapped } from '../../sources/httpBody.js';
 
 /** Request a normalized snapshot through the bounded, same-origin WFIGS proxy. */
@@ -7,7 +8,9 @@ export function createWfigsPerimeterSource({
   return {
     async getSnapshot({ signal } = {}) {
       signal?.throwIfAborted();
-      const response = await fetchImpl('/api/fire-perimeters', { signal });
+      const response = await fetchImpl(withBase('/api/fire-perimeters'), {
+        signal,
+      });
       if (!response.ok) throw new Error(`WFIGS HTTP ${response.status}`);
       const payload = await readResponseJsonCapped(
         response,

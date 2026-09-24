@@ -1,3 +1,4 @@
+import { withBase } from './services/apiBase.js';
 import { createSurfaceKeyboard } from './ui/surfaceKeyboard.js';
 
 /**
@@ -202,7 +203,7 @@ export async function initKeySetup({
 
   let status = null;
   try {
-    const response = await doFetch('/api/setup/status', {
+    const response = await doFetch(withBase('/api/setup/status'), {
       cache: 'no-store',
       signal: lifetime.signal,
     });
@@ -296,7 +297,7 @@ export async function initKeySetup({
     applyButton?.setAttribute('aria-disabled', 'true');
     say('Saving…');
     try {
-      const response = await doFetch('/api/setup/keys', {
+      const response = await doFetch(withBase('/api/setup/keys'), {
         method: 'POST',
         signal: lifetime.signal,
         headers: { 'Content-Type': 'application/json' },

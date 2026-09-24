@@ -1,8 +1,9 @@
+import { withBase } from '../services/apiBase.js';
 export const ERROR_LOG_LIMIT = 30;
 
 export const ERROR_STORAGE_KEY = 'gev-realtime-errors';
 
-export const DEBUG_LOG_URL = '/api/realtime/debug-log';
+export const DEBUG_LOG_URL = withBase('/api/realtime/debug-log');
 
 export function createDebugSessionId() {
   const randomPart = Math.random().toString(36).slice(2, 10);

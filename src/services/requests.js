@@ -1,3 +1,4 @@
+import { withBase } from './apiBase.js';
 import { createOverpassFeatureSource } from '../sources/overpassFeatures.js';
 /** Parse bounded retry information from a service response. */
 function retryAfterMs(value) {
@@ -17,11 +18,11 @@ export function createApplicationRequestServices({
   features,
 } = {}) {
   const urls = {
-    boundaries: '/api/overpass',
-    terrain: '/api/terrain/heights',
-    regional: '/api/regional-brief',
-    weather: '/api/weather-effects',
-    summary: '/api/openai/hud-summary',
+    boundaries: withBase('/api/overpass'),
+    terrain: withBase('/api/terrain/heights'),
+    regional: withBase('/api/regional-brief'),
+    weather: withBase('/api/weather-effects'),
+    summary: withBase('/api/openai/hud-summary'),
     ...endpoints,
   };
   async function request(endpoint, { signal, ...init } = {}) {

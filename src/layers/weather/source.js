@@ -1,3 +1,4 @@
+import { withBase } from '../../services/apiBase.js';
 import { readResponseJsonCapped } from '../../sources/httpBody.js';
 
 export const WEATHER_PRODUCTS = Object.freeze([
@@ -88,7 +89,7 @@ export function weatherImageUrl(
     // The largest size is the proxy default: one frame has one URL.
     if (width !== largest.width) size = `&size=${width}x${height}`;
   }
-  return `/api/weather/image?product=${product}&time=${encodeURIComponent(time)}${box}${size}`;
+  return `${withBase('/api/weather/image')}?product=${product}&time=${encodeURIComponent(time)}${box}${size}`;
 }
 
 export function weatherTileUrl(product, time, { size } = {}) {
@@ -97,7 +98,7 @@ export function weatherTileUrl(product, time, { size } = {}) {
   if (size !== undefined && ![256, 512, 1024].includes(size))
     throw new Error('Invalid weather tile size');
   // Construct locally; never accept a manifest-provided host or template.
-  return `/api/weather/tile?product=${product}&time=${encodeURIComponent(time)}&z={z}&x={x}&y={y}${size === undefined ? '' : `&size=${size}`}`;
+  return `${withBase('/api/weather/tile')}?product=${product}&time=${encodeURIComponent(time)}&z={z}&x={x}&y={y}${size === undefined ? '' : `&size=${size}`}`;
 }
 
 /** Acquisition is lazy and shares the application's existing source contract. */
@@ -119,7 +120,7 @@ export function createWeatherSource({
       try {
         signal?.throwIfAborted();
         const response = await fetchImpl(
-          `/api/weather/manifest?product=${product}`,
+          `${withBase('/api/weather/manifest')}?product=${product}`,
           { signal: controller.signal, cache: 'no-store', redirect: 'error' },
         );
         if (!response.ok) throw new Error(`Weather HTTP ${response.status}`);

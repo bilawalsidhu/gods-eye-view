@@ -1,3 +1,4 @@
+import { withBase } from '../../services/apiBase.js';
 import { normalizeMilitaryInstallations } from '../../data/militaryInstallationData.js';
 
 /** Preserve legacy cache admission even when the explicit saturation flag is absent. */
@@ -35,9 +36,12 @@ export function createInstallationSource({
         ]),
       );
       if (exact) query.set('exact', '1');
-      const response = await fetchImpl(`/api/military-installations?${query}`, {
-        signal,
-      });
+      const response = await fetchImpl(
+        `${withBase('/api/military-installations')}?${query}`,
+        {
+          signal,
+        },
+      );
       const body = await response.json();
       signal?.throwIfAborted();
       if (!response.ok)
@@ -73,7 +77,7 @@ export function createInstallationSource({
         throw new TypeError('Invalid nearby installation search');
       signal?.throwIfAborted();
       const response = await fetchImpl(
-        `/api/google/text-search?${new URLSearchParams({
+        `${withBase('/api/google/text-search')}?${new URLSearchParams({
           q: 'military installation',
           lat: latitude.toFixed(5),
           lon: longitude.toFixed(5),

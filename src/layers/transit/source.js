@@ -1,3 +1,4 @@
+import { withBase } from '../../services/apiBase.js';
 import { fetchTransitHistory } from '../../sources/transitHistory.js';
 
 /** Request transit snapshots through caller-owned transport. */
@@ -14,10 +15,13 @@ export function createTransitSource({
       if (typeof feedId !== 'string' || !feedId || feedId.length > 160)
         throw new TypeError('A transit feed identifier is required');
       return Promise.resolve(
-        fetchImpl(`/api/transit/vehicles/${encodeURIComponent(feedId)}`, {
-          signal,
-          headers: { Accept: 'application/json' },
-        }),
+        fetchImpl(
+          `${withBase('/api/transit/vehicles/')}${encodeURIComponent(feedId)}`,
+          {
+            signal,
+            headers: { Accept: 'application/json' },
+          },
+        ),
       ).then((response) => {
         signal?.throwIfAborted();
         return {

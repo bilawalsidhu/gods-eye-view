@@ -1,3 +1,4 @@
+import { withBase } from '../../services/apiBase.js';
 import { normalizeOverpassRoads } from '../../sources/overpassRoads.js';
 export { normalizeOverpassRoads } from '../../sources/overpassRoads.js';
 import { createFlowTileSource } from './flowSource.js';
@@ -46,7 +47,7 @@ export function createTrafficSource({
         majorOnly,
         timeoutSec,
       });
-      const response = await fetchImpl('/api/overpass', {
+      const response = await fetchImpl(withBase('/api/overpass'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: 'data=' + encodeURIComponent(query),
@@ -68,7 +69,9 @@ export function createTrafficSource({
     },
     async getStatus({ signal } = {}) {
       signal?.throwIfAborted();
-      const response = await fetchImpl('/api/tomtom/status', { signal });
+      const response = await fetchImpl(withBase('/api/tomtom/status'), {
+        signal,
+      });
       if (!response.ok) throw new Error('HTTP ' + response.status);
       const status = await response.json();
       signal?.throwIfAborted();

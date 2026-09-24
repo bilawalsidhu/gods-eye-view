@@ -1,10 +1,11 @@
+import { withBase } from '../../services/apiBase.js';
 import {
   localAdsbRecordIsLive,
   localAdsbRecordIsNewer,
 } from '../../sources/adsbRecords.js';
 
 /** Same-origin route served by `server/providers/local-receivers.js`. */
-export const LOCAL_RECEIVERS_URL = '/api/local-receivers/aircraft';
+export const LOCAL_RECEIVERS_URL = withBase('/api/local-receivers/aircraft');
 export const LOCAL_RECEIVER_POLL_MS = 1_000;
 /**
  * Browser-side deadline for one route request, body included. The server

@@ -4,6 +4,7 @@
  * The `typeof` guard keeps plain-Node unit tests (no Vite) on '/'.
  */
 export function withBase(path, base) {
-  const effective = base ?? (typeof __GEV_BASE__ === 'undefined' ? '/' : __GEV_BASE__);
+  const effective =
+    base ?? (typeof __GEV_BASE__ === 'undefined' ? '/' : __GEV_BASE__);
   return `${effective}${path.replace(/^\//, '')}`;
 }

@@ -1,3 +1,4 @@
+import { withBase } from '../../services/apiBase.js';
 /** InciWeb incident catalog: full-index fetch and WFIGS-name matching. */
 
 import { readResponseJsonCapped } from '../../sources/httpBody.js';
@@ -110,7 +111,7 @@ export function createInciwebPublicationSource({
     async getPublication(id, { signal } = {}) {
       signal?.throwIfAborted();
       const response = await fetchImpl(
-        `/api/fire-perimeters/inciweb/publication/${encodeURIComponent(id)}`,
+        `${withBase('/api/fire-perimeters/inciweb/publication/')}${encodeURIComponent(id)}`,
         { signal },
       );
       if (!response.ok) throw new Error(`InciWeb HTTP ${response.status}`);
@@ -157,9 +158,12 @@ export function createInciwebIndexSource({
   return {
     async getIndex({ signal } = {}) {
       signal?.throwIfAborted();
-      const response = await fetchImpl('/api/fire-perimeters/inciweb/index', {
-        signal,
-      });
+      const response = await fetchImpl(
+        withBase('/api/fire-perimeters/inciweb/index'),
+        {
+          signal,
+        },
+      );
       if (!response.ok) throw new Error(`InciWeb HTTP ${response.status}`);
       const rows = await readResponseJsonCapped(
         response,

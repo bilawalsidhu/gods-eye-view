@@ -1,3 +1,4 @@
+import { withBase } from '../../services/apiBase.js';
 import { readWindBody } from '../../sources/windBody.js';
 
 /** Create a bounded, cancellable source for the same-origin wind provider. */
@@ -22,11 +23,14 @@ export function createWindSource({
       const active = controller.signal;
       try {
         signal?.throwIfAborted();
-        const response = await fetchImpl(`/api/wind/manifest?${query}`, {
-          signal: active,
-          cache: 'no-store',
-          redirect: 'error',
-        });
+        const response = await fetchImpl(
+          `${withBase('/api/wind/manifest')}?${query}`,
+          {
+            signal: active,
+            cache: 'no-store',
+            redirect: 'error',
+          },
+        );
         if (!response.ok) throw new Error(`Wind HTTP ${response.status}`);
         const manifest = JSON.parse(
           new TextDecoder().decode(

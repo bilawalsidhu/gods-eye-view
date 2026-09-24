@@ -12,7 +12,21 @@ import { fileURLToPath } from 'node:url';
 const ROOT = fileURLToPath(new URL('../../src/', import.meta.url));
 
 /** Explicit exceptions: [relative-path suffix, unique substring, reason]. Keep empty unless justified. */
-const ALLOW = [];
+const ALLOW = [
+  // Server-side request routing lives behind Vite's mount paths; Vite's preview
+  // server strips the deployment base before middlewares run (verified live:
+  // /gods-eye/api/transit/* routes correctly with no base awareness server-side).
+  [
+    'sources/transitService.js',
+    "startsWith('/api/transit/')",
+    'server-side pathname check',
+  ],
+  [
+    'sources/transitService.js',
+    "slice('/api/transit'.length)",
+    'server-side pathname slice',
+  ],
+];
 
 function* walk(dir) {
   for (const entry of readdirSync(dir)) {
@@ -29,14 +43,30 @@ test('no root-absolute /api literal escapes withBase()', () => {
     const lines = readFileSync(file, 'utf8').split('\n');
     lines.forEach((line, index) => {
       const trimmed = line.trimStart();
-      if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*')) return;
+      if (
+        trimmed.startsWith('//') ||
+        trimmed.startsWith('*') ||
+        trimmed.startsWith('/*')
+      )
+        return;
       // Mask comments before matching: block comments and trailing line comments
       // (a `//` directly after `:` is a URL scheme, not a comment).
-      const code = line.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/, '$1');
+      const code = line
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/(^|[^:])\/\/.*$/, '$1');
       if (!/(?<!withBase\()(['"`])\/api\//.test(code)) return;
-      if (ALLOW.some(([suffix, needle]) => rel.endsWith(suffix) && line.includes(needle))) return;
+      if (
+        ALLOW.some(
+          ([suffix, needle]) => rel.endsWith(suffix) && line.includes(needle),
+        )
+      )
+        return;
       offenders.push(`${rel}:${index + 1}: ${line.trim()}`);
     });
   }
-  assert.deepEqual(offenders, [], `Unwrapped root-absolute /api paths:\n${offenders.join('\n')}`);
+  assert.deepEqual(
+    offenders,
+    [],
+    `Unwrapped root-absolute /api paths:\n${offenders.join('\n')}`,
+  );
 });

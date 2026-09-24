@@ -1,3 +1,4 @@
+import { withBase } from '../../services/apiBase.js';
 import { readResponseJsonCapped } from '../../sources/httpBody.js';
 
 export const CYCLONE_RESPONSE_LIMIT = 4 * 1024 * 1024;
@@ -220,7 +221,7 @@ export function createCycloneSource({
       );
       try {
         signal?.throwIfAborted();
-        const response = await fetchImpl('/api/cyclones', {
+        const response = await fetchImpl(withBase('/api/cyclones'), {
           signal: controller.signal,
           cache: 'no-store',
           redirect: 'error',

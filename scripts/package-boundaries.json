@@ -310,7 +310,8 @@
       "src/nominatimGeocode.js",
       "src/data/regionalModel.js",
       "src/sources/httpBody.js",
-      "src/sources/nominatim.js"
+      "src/sources/nominatim.js",
+      "src/services/apiBase.js"
     ],
     "external": []
   },
@@ -729,7 +730,8 @@
       "src/sources/live/contract.js",
       "src/sources/live/index.js",
       "src/sources/live/standalone.js",
-      "src/sources/live/vessels.js"
+      "src/sources/live/vessels.js",
+      "src/services/apiBase.js"
     ],
     "external": []
   },
@@ -900,7 +902,8 @@
       "src/layers/firms/source.js",
       "src/layers/firms/state.js",
       "src/layers/firms/viewport.js",
-      "src/data/inputOwnership.js"
+      "src/data/inputOwnership.js",
+      "src/services/apiBase.js"
     ],
     "external": ["cesium"]
   },
@@ -925,7 +928,8 @@
       "src/layers/satellites/state.js",
       "src/layers/satellites/testing.js",
       "src/layers/satellites/tracking.js",
-      "src/data/inputOwnership.js"
+      "src/data/inputOwnership.js",
+      "src/services/apiBase.js"
     ],
     "external": ["cesium", "satellite.js"]
   },
@@ -952,7 +956,8 @@
       "src/layers/launches/source.js",
       "src/layers/launches/state.js",
       "src/layers/launches/testing.js",
-      "src/data/inputOwnership.js"
+      "src/data/inputOwnership.js",
+      "src/services/apiBase.js"
     ],
     "external": ["cesium"]
   },
@@ -972,7 +977,8 @@
       "src/layers/installations/source.js",
       "src/layers/installations/state.js",
       "src/layers/installations/viewport.js",
-      "src/data/inputOwnership.js"
+      "src/data/inputOwnership.js",
+      "src/services/apiBase.js"
     ],
     "external": ["cesium"]
   },
@@ -1029,7 +1035,8 @@
       "src/layers/traffic/style.js",
       "src/layers/traffic/timing.js",
       "src/layers/traffic/viewport.js",
-      "src/sources/overpassRoads.js"
+      "src/sources/overpassRoads.js",
+      "src/services/apiBase.js"
     ],
     "external": ["cesium", "pbf", "@mapbox/vector-tile"]
   },
@@ -1051,7 +1058,8 @@
       "src/layers/bikeshare/testing.js",
       "src/layers/bikeshare/viewport.js",
       "src/data/inputOwnership.js",
-      "src/data/cameraSensitivity.js"
+      "src/data/cameraSensitivity.js",
+      "src/services/apiBase.js"
     ],
     "external": ["cesium"]
   },
@@ -1091,7 +1099,8 @@
       "src/overlays/worldOverlayTokens.js",
       "src/data/cctvFootprint.js",
       "src/data/inputOwnership.js",
-      "src/layers/cctv/sourcePolicy.js"
+      "src/layers/cctv/sourcePolicy.js",
+      "src/services/apiBase.js"
     ],
     "external": ["hls.js", "cesium"]
   },
@@ -1106,7 +1115,8 @@
       "src/layers/alpr/overlay.js",
       "src/layers/alpr/source.js",
       "src/data/inputOwnership.js",
-      "src/layers/alpr/records.js"
+      "src/layers/alpr/records.js",
+      "src/services/apiBase.js"
     ],
     "external": ["cesium"]
   },
@@ -1139,7 +1149,8 @@
       "src/layers/radio/tuningNoise.js",
       "src/layers/radio/volume.js",
       "src/ui/radioTunerModel.js",
-      "src/data/inputOwnership.js"
+      "src/data/inputOwnership.js",
+      "src/services/apiBase.js"
     ],
     "external": ["cesium"]
   },
@@ -1237,7 +1248,8 @@
       "src/voice/realtimeFacade.js",
       "src/voice/realtimeRadio.js",
       "src/voice/realtimeTurns.js",
-      "src/voice/realtimeConnection.js"
+      "src/voice/realtimeConnection.js",
+      "src/services/apiBase.js"
     ],
     "external": []
   },
@@ -1952,7 +1964,8 @@
       "src/layers/recentImagery/thumbnails.js",
       "src/maps/imageryHost.js",
       "src/ui/recentImagery.js",
-      "src/ui/imageryBoxTool.js"
+      "src/ui/imageryBoxTool.js",
+      "src/services/apiBase.js"
     ],
     "external": [
       "hls.js",
@@ -2411,7 +2424,8 @@
       "src/layers/recentImagery/catalog.js",
       "src/layers/recentImagery/rendering.js",
       "src/layers/recentImagery/thumbnails.js",
-      "src/maps/imageryHost.js"
+      "src/maps/imageryHost.js",
+      "src/services/apiBase.js"
     ],
     "external": [
       "hls.js",
@@ -2467,7 +2481,8 @@
       "src/sources/featureGeometry.js",
       "src/sources/overpassFeaturesRecords.js",
       "src/sources/overpassFeatures.js",
-      "src/sources/featureSource.js"
+      "src/sources/featureSource.js",
+      "src/services/apiBase.js"
     ],
     "external": [
       "cesium",
@@ -2607,7 +2622,11 @@
   },
   "directions-layer": {
     "exports": ["./layers/directions"],
-    "modules": ["src/layers/directions/index.js", "src/data/routeSteps.js"],
+    "modules": [
+      "src/layers/directions/index.js",
+      "src/data/routeSteps.js",
+      "src/services/apiBase.js"
+    ],
     "external": ["cesium"]
   },
   "radio-browser-source": {
@@ -2649,18 +2668,23 @@
     "modules": [
       "src/layers/alpr/policy.js",
       "src/layers/alpr/records.js",
-      "src/layers/alpr/source.js"
+      "src/layers/alpr/source.js",
+      "src/services/apiBase.js"
     ],
     "external": []
   },
   "bikeshare-source": {
     "exports": ["./layers/bikeshare/source"],
-    "modules": ["src/layers/bikeshare/source.js"],
+    "modules": ["src/layers/bikeshare/source.js", "src/services/apiBase.js"],
     "external": []
   },
   "cctv-source": {
     "exports": ["./layers/cctv/source"],
-    "modules": ["src/layers/cctv/source.js", "src/layers/cctv/sourcePolicy.js"],
+    "modules": [
+      "src/layers/cctv/source.js",
+      "src/layers/cctv/sourcePolicy.js",
+      "src/services/apiBase.js"
+    ],
     "external": []
   },
   "earthquakes-source": {
@@ -2673,30 +2697,35 @@
   },
   "firms-source": {
     "exports": ["./layers/firms/source"],
-    "modules": ["src/layers/firms/source.js"],
+    "modules": ["src/layers/firms/source.js", "src/services/apiBase.js"],
     "external": []
   },
   "installations-source": {
     "exports": ["./layers/installations/source"],
     "modules": [
       "src/layers/installations/source.js",
-      "src/data/militaryInstallationData.js"
+      "src/data/militaryInstallationData.js",
+      "src/services/apiBase.js"
     ],
     "external": []
   },
   "launches-source": {
     "exports": ["./layers/launches/source"],
-    "modules": ["src/layers/launches/source.js"],
+    "modules": ["src/layers/launches/source.js", "src/services/apiBase.js"],
     "external": []
   },
   "radio-source": {
     "exports": ["./layers/radio/source"],
-    "modules": ["src/layers/radio/policy.js", "src/layers/radio/source.js"],
+    "modules": [
+      "src/layers/radio/policy.js",
+      "src/layers/radio/source.js",
+      "src/services/apiBase.js"
+    ],
     "external": []
   },
   "satellites-source": {
     "exports": ["./layers/satellites/source"],
-    "modules": ["src/layers/satellites/source.js"],
+    "modules": ["src/layers/satellites/source.js", "src/services/apiBase.js"],
     "external": []
   },
   "traffic-source-factory": {
@@ -2706,7 +2735,8 @@
       "src/layers/traffic/flowDecode.js",
       "src/layers/traffic/flowSource.js",
       "src/layers/traffic/source.js",
-      "src/sources/overpassRoads.js"
+      "src/sources/overpassRoads.js",
+      "src/services/apiBase.js"
     ],
     "external": ["@mapbox/vector-tile", "pbf"]
   },
@@ -2719,7 +2749,8 @@
       "src/sources/httpBody.js",
       "src/layers/perimeters/source.js",
       "src/layers/perimeters/records.js",
-      "src/layers/submarineCables/bundledSource.js"
+      "src/layers/submarineCables/bundledSource.js",
+      "src/services/apiBase.js"
     ],
     "external": []
   },
@@ -2772,7 +2803,8 @@
       "src/sources/transitHistory.js",
       "src/sources/transitService.js",
       "src/sources/transitHistoryStore.js",
-      "src/sources/rateLimit.js"
+      "src/sources/rateLimit.js",
+      "src/services/apiBase.js"
     ],
     "external": ["pbf"]
   },
@@ -2782,7 +2814,8 @@
       "src/data/gtfsRealtime.js",
       "src/data/transitFeeds.js",
       "src/data/transitProxy.js",
-      "src/sources/transitHistory.js"
+      "src/sources/transitHistory.js",
+      "src/services/apiBase.js"
     ],
     "external": ["pbf"]
   },
@@ -2843,7 +2876,8 @@
       "src/sources/featureGeometry.js",
       "src/sources/overpassFeaturesRecords.js",
       "src/sources/overpassFeatures.js",
-      "src/sources/featureSource.js"
+      "src/sources/featureSource.js",
+      "src/services/apiBase.js"
     ],
     "external": ["cesium", "egm96-universal", "pbf"]
   },
@@ -2880,7 +2914,8 @@
       "scripts/qa-transit-controls.mjs",
       "scripts/qa-transit-browser.mjs",
       "src/layers/transit/source.js",
-      "src/sources/transitHistory.js"
+      "src/sources/transitHistory.js",
+      "src/services/apiBase.js"
     ],
     "external": ["cesium", "pbf"]
   },
@@ -2888,7 +2923,8 @@
     "exports": ["./layers/transit/source"],
     "modules": [
       "src/layers/transit/source.js",
-      "src/sources/transitHistory.js"
+      "src/sources/transitHistory.js",
+      "src/services/apiBase.js"
     ],
     "external": []
   },
@@ -2902,7 +2938,8 @@
       "src/sources/transitHistory.js",
       "src/sources/transitService.js",
       "src/sources/transitHistoryStore.js",
-      "src/sources/rateLimit.js"
+      "src/sources/rateLimit.js",
+      "src/services/apiBase.js"
     ],
     "external": ["pbf"]
   },
@@ -2924,7 +2961,8 @@
       "src/layers/perimeters/source.js",
       "src/layers/perimeters/records.js",
       "src/layers/perimeters/cards.js",
-      "src/layers/perimeters/inciweb.js"
+      "src/layers/perimeters/inciweb.js",
+      "src/services/apiBase.js"
     ],
     "external": ["cesium"]
   },
@@ -2933,7 +2971,8 @@
     "modules": [
       "src/layers/perimeters/records.js",
       "src/sources/httpBody.js",
-      "src/layers/perimeters/source.js"
+      "src/layers/perimeters/source.js",
+      "src/services/apiBase.js"
     ],
     "external": []
   }
