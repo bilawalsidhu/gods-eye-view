@@ -63,11 +63,28 @@ test('root config retains existing named exports and standalone provider order',
     assert.equal(compatibility[name], value, name);
   const config = standaloneConfig({ mode: 'test' });
   assert.deepEqual(
-    config.plugins.slice(2, -1).map((plugin) => plugin.name),
+    config.plugins.slice(2, -2).map((plugin) => plugin.name),
     providers.localProviderPlugins().map((plugin) => plugin.name),
   );
-  assert.equal(config.plugins.at(-2).name, 'gev-key-setup');
-  assert.equal(config.plugins.at(-1).name, 'api-not-found');
+  assert.equal(config.plugins.at(-3).name, 'gev-key-setup');
+  assert.equal(config.plugins.at(-2).name, 'api-not-found');
+  // Config-only, so it sits after the provider slice rather than in it.
+  assert.equal(config.plugins.at(-1).name, 'gev-unwatched-runtime-dirs');
+});
+
+test('directories the server writes while it runs are kept out of the dev watcher', () => {
+  // A provider writing a file per tile into a watched directory costs each
+  // cold tile 3-9 s instead of ~150 ms: the watcher's stat calls hold the
+  // libuv threads getaddrinfo needs.
+  const config = standaloneConfig({ mode: 'test' });
+  const plugin = config.plugins.at(-1);
+  assert.equal(plugin.name, 'gev-unwatched-runtime-dirs');
+  // Dev only: preview and build have no watcher.
+  assert.equal(plugin.apply, 'serve');
+  assert.deepEqual(plugin.config().server.watch.ignored, [
+    '**/.gev-cache/**',
+    '**/.gev-logs/**',
+  ]);
 });
 
 test('build export resolves in Node and has no browser fallback', async () => {
