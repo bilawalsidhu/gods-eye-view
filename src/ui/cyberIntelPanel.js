@@ -415,14 +415,6 @@ export class CyberIntelPanel {
       ),
     );
     section.append(heading);
-    section.append(
-      element(
-        this.document,
-        'p',
-        'cyber-intel-provenance',
-        'CISA KEV entries are vulnerability intelligence, not geographic objects. Asset matches require an explicit CVE reported by Shodan; product similarity alone is not a match. The listed CISA due date is catalog guidance, not an asset-specific remediation SLA.',
-      ),
-    );
     if (!snapshot) {
       section.append(
         element(
