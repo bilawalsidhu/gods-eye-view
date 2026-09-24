@@ -47,6 +47,8 @@
     "qa:transit": "node scripts/qa-transit.mjs"
   },
   "dependencies": {
+    "@jtarrio/signals": "^0.10.0",
+    "@jtarrio/webrtlsdr": "^3.0.6",
     "@mapbox/vector-tile": "^3.0.0",
     "@meri-imperiumi/eccodes-wasm": "^2.48.2",
     "cesium": "^1.124.0",
@@ -153,6 +155,7 @@
     "./layers/vessels": "./src/layers/vessels/index.js",
     "./layers/earthquakes": "./src/layers/earthquakes/index.js",
     "./layers/recent-imagery": "./src/layers/recentImagery/index.js",
+    "./layers/perimeters": "./src/layers/perimeters/index.js",
     "./sources/firms-csv": "./src/data/firmsCsv.js",
     "./layers/firms": "./src/layers/firms/index.js",
     "./layers/satellites": "./src/layers/satellites/index.js",
@@ -224,6 +227,7 @@
     "./layers/bikeshare/source": "./src/layers/bikeshare/source.js",
     "./layers/cctv/source": "./src/layers/cctv/source.js",
     "./layers/earthquakes/source": "./src/layers/earthquakes/source.js",
+    "./layers/perimeters/source": "./src/layers/perimeters/source.js",
     "./layers/firms/source": "./src/layers/firms/source.js",
     "./layers/installations/source": "./src/layers/installations/source.js",
     "./layers/launches/source": "./src/layers/launches/source.js",

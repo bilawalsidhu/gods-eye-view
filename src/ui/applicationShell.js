@@ -16,6 +16,7 @@ import { CockpitCoordinator } from './cockpitCoordinator.js';
 import { ContextControls } from './context.js';
 import { CctvControls } from './cctv.js';
 import { RadioControls } from './radio.js';
+import { LocalSdrControls } from './localSdrControls.js';
 import { LocationNavigation } from './locationNavigation.js';
 import { bindClearLayersControl } from './layers.js';
 import { bindCameraOrientationControls } from './cameraOrientationControls.js';
@@ -82,6 +83,7 @@ export class StyleManager extends ShellFacade {
       transitLayer,
       aisLiveVesselsLayer,
       militaryAwarenessLayer,
+      localAdsbLayer,
     } = services;
     this.services = services;
     this._lifetime = new UiLifetime();
@@ -465,12 +467,13 @@ export class StyleManager extends ShellFacade {
         trafficLayer,
         flightsLayer,
         militaryFlightsLayer,
+        localAdsbLayer,
         satellitesLayer,
         cctvLayer,
         bikeshareLayer,
         transitLayer,
         aisLiveVesselsLayer,
-      ],
+      ].filter(Boolean),
       (modeLabel) => {
         this._updateDetectionButton(modeLabel);
       },
@@ -884,11 +887,33 @@ export class StyleManager extends ShellFacade {
         isCockpitActive: () => this.cockpitView?.active,
         signalUserCollapsed: () => this.cockpitView?.signalUserCollapsed,
         layoutCockpit: () => this.cockpitView?.scheduleContextLayout(),
+        // An open local receiver keeps the shared Radio panel expanded.
         preservePanelStateDuringClear: () =>
-          this._preservePanelStateDuringLayerClear,
+          this._preservePanelStateDuringLayerClear ||
+          Boolean(this._localSdrControls?.isActive()),
         scheduleLayout: () => this._scheduleRightPanelLayout(),
       },
     });
+    this._localSdrControls?.destroy();
+    this._localSdrControls = null;
+    const receiver = this.services.localAdsbLayer?.receiver;
+    if (receiver) {
+      this._localSdrControls = new LocalSdrControls({
+        document,
+        receiver,
+        feeds: this.services.localAdsbLayer?.feeds || null,
+        radio: radioLayer,
+        actions: {
+          isLocalAdsbEnabled: () =>
+            Boolean(this._dataManager?.isEnabled('local-adsb')),
+          setLocalAdsbEnabled: (enabled) =>
+            this._dataManager?.setEnabled('local-adsb', enabled, {
+              origin: 'user',
+            }),
+          scheduleLayout: () => this._scheduleRightPanelLayout(),
+        },
+      });
+    }
   }
 
   /**
@@ -1509,6 +1534,7 @@ export class StyleManager extends ShellFacade {
     this._clearLayersControl?.destroy();
     this._cctvControls?.destroy();
     this._radioControls?.destroy();
+    this._localSdrControls?.destroy();
     this._cockpitCoordinator.stop();
     this._visualSettings.stop();
     this.shareLinkManager?.destroy();

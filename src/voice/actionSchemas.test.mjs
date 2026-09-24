@@ -15,7 +15,7 @@ const stable = (value) =>
         )
       : value;
 
-test('the existing Realtime payload remains pinned alongside the new sonar tool', () => {
+test('the complete Realtime tool payload pins the additive analyst, satellite, Local ADS-B and Cyber release', () => {
   const digest = createHash('sha256')
     .update(
       JSON.stringify(
@@ -27,7 +27,9 @@ test('the existing Realtime payload remains pinned alongside the new sonar tool'
     .digest('hex');
   assert.equal(
     digest,
-    '04a6a13611f70ca41096ffbfaf43259a1eca5837c27fff96aeec5f6db8cb6e08',
+    // Re-derived for the additive `local-adsb` set_layer_visibility value and
+    // the Cyber HUD layout; the separate sonar tool is excluded above.
+    '590d537d93e132ac64ac5e211ad5bb9d7d1b1f22e2dd963dda5465fab4510a3b',
   );
 });
 
@@ -90,8 +92,26 @@ test('all legacy action arguments are byte-identical after removing the delibera
   const layers = legacy.find((tool) => tool.name === 'analyst_query').parameters
     .properties.layers.items;
   layers.enum = layers.enum.filter(
-    (key) => !['satellites', 'local-datacenters', 'local-dams'].includes(key),
+    (key) =>
+      ![
+        'satellites',
+        'local-datacenters',
+        'local-dams',
+        'fire-perimeters',
+      ].includes(key),
   );
+  // Local ADS-B is an additive set_layer_visibility enum value.
+  const visibility = legacy.find((tool) => tool.name === 'set_layer_visibility')
+    .parameters.properties.layerId;
+  visibility.enum = visibility.enum.filter(
+    (key) => !['local-adsb', 'fire-perimeters'].includes(key),
+  );
+  for (const tool of legacy) {
+    for (const value of Object.values(tool.parameters.properties)) {
+      if (value.enum)
+        value.enum = value.enum.filter((key) => key !== 'fire-perimeters');
+    }
+  }
   // Independently derived by executing trusted c9f9896 actionSchemas in the restricted container.
   const hud = legacy.find((tool) => tool.name === 'set_hud').parameters
     .properties.layout;

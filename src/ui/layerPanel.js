@@ -23,6 +23,7 @@ const PANEL_GROUPS = [
       'satellites',
       'flights',
       'military',
+      'local-adsb',
       'ais-live-vessels',
       'traffic',
       'transit',
@@ -45,7 +46,7 @@ const PANEL_GROUPS = [
   },
   {
     label: 'Events',
-    ids: ['rocket-launches', 'earthquakes', 'local-firms'],
+    ids: ['rocket-launches', 'earthquakes', 'local-firms', 'fire-perimeters'],
   },
   {
     label: 'Weather',

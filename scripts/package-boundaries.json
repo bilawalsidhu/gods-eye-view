@@ -611,7 +611,10 @@
       "src/layers/weather/imageryHost.js",
       "src/ui/layerBindings.js",
       "src/ui/displayBindings.js",
-      "src/ui/shellFacade.js"
+      "src/ui/shellFacade.js",
+      "src/ui/localSdrControls.js",
+      "src/layers/localAdsb/feedNames.js",
+      "src/ui/localSdrPresentation.js"
     ],
     "external": ["cesium"]
   },
@@ -765,7 +768,9 @@
       "src/layers/flights/records.js",
       "src/layers/flights/recordPolicy.js",
       "src/layers/flights/snapshotRenderer.js",
-      "src/data/inputOwnership.js"
+      "src/layers/flights/modelSpec.js",
+      "src/data/inputOwnership.js",
+      "src/data/modelEligibility.js"
     ],
     "external": ["cesium"]
   },
@@ -801,7 +806,8 @@
       "src/layers/military/records.js",
       "src/layers/military/recordPolicy.js",
       "src/layers/military/snapshotRenderer.js",
-      "src/data/inputOwnership.js"
+      "src/data/inputOwnership.js",
+      "src/data/modelEligibility.js"
     ],
     "external": ["cesium"]
   },
@@ -1792,6 +1798,7 @@
       "src/layers/flights/records.js",
       "src/layers/flights/recordPolicy.js",
       "src/layers/flights/snapshotRenderer.js",
+      "src/layers/flights/modelSpec.js",
       "src/layers/military/records.js",
       "src/layers/military/recordPolicy.js",
       "src/layers/military/snapshotRenderer.js",
@@ -1817,6 +1824,12 @@
       "src/data/layerSnapshot.js",
       "src/layers/alpr/records.js",
       "src/layers/earthquakes/records.js",
+      "src/app/layers/perimeters.js",
+      "src/layers/perimeters/index.js",
+      "src/layers/perimeters/source.js",
+      "src/layers/perimeters/records.js",
+      "src/layers/perimeters/cards.js",
+      "src/layers/perimeters/inciweb.js",
       "src/layers/cctv/sourcePolicy.js",
       "src/sources/reference.js",
       "src/search/nominatim.js",
@@ -1845,6 +1858,7 @@
       "src/data/contactTrailRenderer.js",
       "src/data/transitProxy.js",
       "src/data/gtfsRealtime.js",
+      "src/data/modelEligibility.js",
       "src/layers/transit/trails.js",
       "src/layers/transit/movement.js",
       "src/layers/transit/qaMetrics.js",
@@ -1911,6 +1925,23 @@
       "src/layers/cyclones/rendering.js",
       "src/layers/cyclones/labels.js",
       "src/layers/cyclones/source.js",
+      "src/app/layers/localAdsb.js",
+      "src/layers/localAdsb/index.js",
+      "src/layers/localAdsb/policy.js",
+      "src/layers/localAdsb/card.js",
+      "src/layers/localAdsb/feeds.js",
+      "src/layers/localAdsb/status.js",
+      "src/layers/localAdsb/feedNames.js",
+      "src/layers/localAdsb/motion.js",
+      "src/layers/localAdsb/models.js",
+      "src/layers/localAdsb/enrichment.js",
+      "src/sources/adsbRecords.js",
+      "src/sdr/controller.js",
+      "src/sdr/spectrum.js",
+      "src/sdr/gain.js",
+      "src/sdr/usbDevices.js",
+      "src/ui/localSdrControls.js",
+      "src/ui/localSdrPresentation.js",
       "src/app/layers/recentImagery.js",
       "src/layers/recentImagery/index.js",
       "src/layers/recentImagery/model.js",
@@ -1928,7 +1959,8 @@
       "egm96-universal",
       "mgrs",
       "pbf",
-      "satellite.js"
+      "satellite.js",
+      "@jtarrio/webrtlsdr"
     ]
   },
   "application-catalog": {
@@ -2271,6 +2303,7 @@
       "src/layers/flights/records.js",
       "src/layers/flights/recordPolicy.js",
       "src/layers/flights/snapshotRenderer.js",
+      "src/layers/flights/modelSpec.js",
       "src/layers/military/records.js",
       "src/layers/military/recordPolicy.js",
       "src/layers/military/snapshotRenderer.js",
@@ -2294,6 +2327,12 @@
       "src/app/localGeojsonServices.js",
       "src/layers/alpr/records.js",
       "src/layers/earthquakes/records.js",
+      "src/app/layers/perimeters.js",
+      "src/layers/perimeters/index.js",
+      "src/layers/perimeters/source.js",
+      "src/layers/perimeters/records.js",
+      "src/layers/perimeters/cards.js",
+      "src/layers/perimeters/inciweb.js",
       "src/layers/cctv/sourcePolicy.js",
       "src/search/nominatim.js",
       "src/nominatimGeocode.js",
@@ -2344,6 +2383,25 @@
       "src/layers/cyclones/rendering.js",
       "src/layers/cyclones/labels.js",
       "src/layers/cyclones/source.js",
+      "src/app/layers/localAdsb.js",
+      "src/layers/localAdsb/index.js",
+      "src/layers/localAdsb/policy.js",
+      "src/layers/localAdsb/card.js",
+      "src/layers/localAdsb/feeds.js",
+      "src/layers/localAdsb/status.js",
+      "src/layers/localAdsb/feedNames.js",
+      "src/layers/localAdsb/motion.js",
+      "src/layers/localAdsb/models.js",
+      "src/layers/localAdsb/enrichment.js",
+      "src/sources/adsbRecords.js",
+      "src/sdr/controller.js",
+      "src/sdr/spectrum.js",
+      "src/sdr/gain.js",
+      "src/sdr/usbDevices.js",
+      "src/data/detection.js",
+      "src/data/detectionRenderDemand.js",
+      "src/data/detectionPresentation.js",
+      "src/data/modelEligibility.js",
       "src/app/layers/recentImagery.js",
       "src/layers/recentImagery/index.js",
       "src/layers/recentImagery/model.js",
@@ -2359,7 +2417,8 @@
       "satellite.js",
       "@mapbox/vector-tile",
       "pbf",
-      "mgrs"
+      "mgrs",
+      "@jtarrio/webrtlsdr"
     ]
   },
   "application-operations": {
@@ -2653,6 +2712,9 @@
       "src/sources/reference.js",
       "src/layers/earthquakes/source.js",
       "src/layers/earthquakes/records.js",
+      "src/sources/httpBody.js",
+      "src/layers/perimeters/source.js",
+      "src/layers/perimeters/records.js",
       "src/layers/submarineCables/bundledSource.js"
     ],
     "external": []
@@ -2847,6 +2909,27 @@
       "src/sources/overpassFeaturesRecords.js",
       "src/sources/overpassFeatures.js",
       "src/sources/featureSource.js"
+    ],
+    "external": []
+  },
+  "perimeters": {
+    "exports": ["./layers/perimeters"],
+    "modules": [
+      "src/layers/perimeters/index.js",
+      "src/sources/httpBody.js",
+      "src/layers/perimeters/source.js",
+      "src/layers/perimeters/records.js",
+      "src/layers/perimeters/cards.js",
+      "src/layers/perimeters/inciweb.js"
+    ],
+    "external": ["cesium"]
+  },
+  "perimeters-source": {
+    "exports": ["./layers/perimeters/source"],
+    "modules": [
+      "src/layers/perimeters/records.js",
+      "src/sources/httpBody.js",
+      "src/layers/perimeters/source.js"
     ],
     "external": []
   }

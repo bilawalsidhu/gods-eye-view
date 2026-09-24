@@ -374,8 +374,7 @@ async function main() {
         enabled: true,
         uncertain: true,
       });
-      // The app owns presentation separately from the lifecycle manager.
-      gev.dataManager._publishActivity({ type: 'status' });
+      gev.dataManager.refreshLayerStats();
       const staticResult = module.setTuningStatic(true);
       const filterBefore = module.getUIState().filter;
       const filterControl = document.getElementById('radio-filter');
@@ -448,7 +447,7 @@ async function main() {
         enabled: true,
         uncertain: false,
       });
-      gev.dataManager._publishActivity({ type: 'status' });
+      gev.dataManager.refreshLayerStats();
       module.cancelTuning();
       camera.flyTo = originalFlyTo;
       return result;
@@ -4049,7 +4048,13 @@ async function main() {
       const { getOverlayPaintRect, getWorldOverlayDiagnostics } = await import('/src/overlays/worldOverlay.js');
       const expectedEntryId = `selected:${selected.id}`;
       let painted = null;
-      for (let attempt = 0; attempt < 20 && !painted?.rect; attempt += 1) {
+      // Radio's horizon pass reveals the selected entity on its own timer
+      // after the camera jump, so a stationary view waits for both to settle.
+      for (
+        let attempt = 0;
+        attempt < 20 && !(painted?.rect && selectedEntity?.show === true);
+        attempt += 1
+      ) {
         painted = await new Promise((resolve) => {
           let removePostRender = null;
           const timeout = setTimeout(() => {
