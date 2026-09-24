@@ -42,7 +42,11 @@ export const SUITE_TIMEOUT_OVERRIDES = {
   // cannot cover it (run3l cut the flight at ~17%). The suite now exits on
   // the dolly's own completion signal; this ceiling just bounds the whole
   // run (boot + setup + flight + interrupt case + analysis).
-  'qa-flyroute-cinema.mjs': 1_500_000,
+  // 40 min: under CI-fleet load the boot alone can take 2-4 min and the
+  // capture rides its internal 15-min budget before the interrupt case —
+  // 25 min SIGKILLed the suite mid-analysis in run5/run6c (2026-09-24)
+  // with no RESULT line.
+  'qa-flyroute-cinema.mjs': 2_400_000,
 };
 
 // Suites that exit nonzero with a self-declared key gate cannot run on this
