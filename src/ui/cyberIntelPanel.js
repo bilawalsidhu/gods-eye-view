@@ -143,6 +143,13 @@ export class CyberIntelPanel {
         void layer.getThreatIntelState().onOtxLookup?.(indicator, 'auto');
     };
     this._onDevicePopupClick = (event) => {
+      const otxButton = event.target?.closest?.('[data-otx-lookup]');
+      if (otxButton) {
+        void layer
+          .getThreatIntelState()
+          .onOtxLookup?.(otxButton.dataset.indicator, 'auto');
+        return;
+      }
       if (!event.target?.closest?.('[data-close-shodan-popup]')) return;
       layer.getThreatIntelState().onClearShodanSelection?.();
     };
@@ -592,6 +599,55 @@ export class CyberIntelPanel {
       otxButton.dataset.otxLookup = 'true';
       otxButton.dataset.indicator = selection.ip;
       section.append(otxButton);
+      const otxKey = `auto:${String(selection.ip || '').toLowerCase()}`;
+      const otxResult = selection.otxResults?.[otxKey];
+      if (selection.otxPending?.includes(otxKey))
+        section.append(
+          element(
+            this.document,
+            'p',
+            'cyber-intel-provenance',
+            'Looking up this device in AlienVault OTX…',
+          ),
+        );
+      else if (otxResult?.error)
+        section.append(
+          element(this.document, 'p', 'cyber-intel-empty', otxResult.error),
+        );
+      else if (otxResult) {
+        section.append(
+          element(
+            this.document,
+            'h4',
+            '',
+            `OTX context · ${otxResult.pulseCount} associated pulse${otxResult.pulseCount === 1 ? '' : 's'}`,
+          ),
+        );
+        for (const pulse of otxResult.pulses || []) {
+          const item = element(this.document, 'p', 'cyber-intel-detail-row');
+          item.append(this.document.createTextNode(pulse.name));
+          const link = element(
+            this.document,
+            'a',
+            'cyber-kev-source-link',
+            'Open pulse ↗',
+          );
+          link.href = `https://otx.alienvault.com/pulse/${encodeURIComponent(pulse.id)}`;
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          item.append(link);
+          section.append(item);
+        }
+        if (!otxResult.pulses?.length)
+          section.append(
+            element(
+              this.document,
+              'p',
+              'cyber-intel-provenance',
+              'No subscribed OTX pulse associations were returned.',
+            ),
+          );
+      }
       const close = element(
         this.document,
         'button',
@@ -1165,6 +1221,8 @@ export class CyberIntelPanel {
         this._renderSelection({
           ...state.selectedShodan,
           type: 'shodan-asset',
+          otxResults: state.otxResults,
+          otxPending: state.otxPending,
         }),
       );
       const point = state.selectedShodan.popupPosition;

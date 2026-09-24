@@ -134,7 +134,7 @@ function normalizeOtxResponse(identity, payload, fetchedAt) {
     schemaVersion: 1,
     provider: 'alienvault-otx',
     indicator: identity.indicator,
-    indicatorType: identity.type,
+    indicatorType: identity.label,
     indicatorTypeLabel: identity.label,
     fetchedAt,
     attribution: 'AlienVault Open Threat Exchange (OTX)',

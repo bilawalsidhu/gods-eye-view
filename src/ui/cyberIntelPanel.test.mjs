@@ -278,10 +278,19 @@ test('Cyber Threat Intel remains hidden unless Cyber Activity is enabled', () =>
 
 test('Shodan device selection shows the approximate network location and provenance', () => {
   const f = fixture();
+  let lookedUp = null;
   const layer = {
     state: {
       enabled: true,
       selectedRadar: null,
+      selectedOtxKey: 'auto:8.8.4.4',
+      otxPending: [],
+      otxResults: {
+        'auto:8.8.4.4': {
+          pulseCount: 1,
+          pulses: [{ id: 'a'.repeat(24), name: 'Example OTX pulse' }],
+        },
+      },
       selectedShodan: {
         ip: '8.8.4.4',
         organization: 'Example Org',
@@ -324,7 +333,12 @@ test('Shodan device selection shows the approximate network location and provena
     getThreatIntelState() {
       return this.state;
     },
+    recordOtxLookup(indicator, type) {
+      lookedUp = { indicator, type };
+    },
   };
+  layer.state.onOtxLookup = (indicator, type) =>
+    layer.recordOtxLookup(indicator, type);
   const panel = new CyberIntelPanel({ documentRef: f.documentRef });
   panel.mount(layer);
   assert.equal(panel.devicePopup.hidden, false);
@@ -341,6 +355,11 @@ test('Shodan device selection shows the approximate network location and provena
     /not a device or person location/,
   );
   assert.match(panel.devicePopup.textContent, /offset about 42 m/);
+  assert.match(
+    panel.devicePopup.textContent,
+    /OTX context · 1 associated pulse/,
+  );
+  assert.match(panel.devicePopup.textContent, /Example OTX pulse/);
   const detailCard = panel.devicePopup.children.find(
     (node) => node.className === 'cyber-intel-selection',
   );
@@ -350,6 +369,17 @@ test('Shodan device selection shows the approximate network location and provena
   assert.equal(shodanLink.href, 'https://www.shodan.io/host/8.8.4.4');
   assert.equal(shodanLink.target, '_blank');
   assert.equal(shodanLink.rel, 'noopener noreferrer');
+  const otxButton = findNode(
+    detailCard,
+    (node) => node.dataset?.otxLookup === 'true',
+  );
+  panel._onDevicePopupClick({
+    target: {
+      closest: (selector) =>
+        selector === '[data-otx-lookup]' ? otxButton : null,
+    },
+  });
+  assert.deepEqual(lookedUp, { indicator: '8.8.4.4', type: 'auto' });
   panel.destroy();
 });
 

@@ -491,6 +491,7 @@ test('OTX explicitly looks up supported indicators, bounds pulse context, and ke
     assert.equal(JSON.stringify(tested).includes('fixture-otx-secret'), false);
     const result = await api.lookupIndicator('8.8.8.8');
     assert.equal(result.provider, 'alienvault-otx');
+    assert.equal(result.indicatorType, 'IPv4');
     assert.equal(result.pulseCount, 8);
     assert.equal(result.pulses.length, 5);
     assert.equal('latitude' in result, false);
