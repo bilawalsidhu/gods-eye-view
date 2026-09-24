@@ -1,5 +1,12 @@
 # Changelog
 
+- Transit and Directions rows repaint as soon as their data lands again:
+  `refreshLayerStats()` now lives on the layer lifecycle, not only on the
+  compatibility facade. `scripts/qa-radio.mjs` uses it instead of a private
+  panel method.
+- On phones the title bar sits 16 px from the top so both Radio broadcast
+  waves stay on-screen.
+
 - Add a **Recent Imagery** data layer (NASA GIBS · HLS + VIIRS, keyless).
   Select a box (drag, the current view, or around a pin; up to 1,000 km a
   side) and the right-rail panel lists the last 30 days of Sentinel-2 /

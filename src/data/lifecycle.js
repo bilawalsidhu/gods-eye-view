@@ -2304,6 +2304,14 @@ export class LayerLifecycle {
     return () => this._activityListeners.delete(callback);
   }
 
+  /**
+   * Ask presentation to repaint layer rows now, for data that lands outside
+   * the manager tick (Transit's proximity polls, Directions' route steps).
+   */
+  refreshLayerStats() {
+    this._publishActivity({ type: 'status' });
+  }
+
   _publishActivity(change) {
     for (const callback of this._activityListeners) {
       try {
