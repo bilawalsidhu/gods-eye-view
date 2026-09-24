@@ -170,8 +170,9 @@ Analyst records for loaded satellites, datacenters and dams, with explicit bound
   keyless feature service with truncation paging. Clicking a perimeter shows
   an incident card (acreage, containment, cause, behavior, personnel, county,
   cost, complex membership) and, when the incident has a state- and
-  recency-verified InciWeb page, a click-through link to it. The layer is
-  reachable from the panel, voice control, share links (token `2`), and the
+  recency-verified InciWeb page, a click-through link to it. Recency uses
+  incident page origin and update times because the publication API was retired.
+  The layer is reachable from the panel, voice control, share links (token `2`), and the
   analyst query engine. WFIGS and InciWeb requests use a capped, cached
   same-origin proxy with timeouts and a per-client limit. Unchanged refreshes
   retain geometry; incident-link checks abort on disable or selection change,

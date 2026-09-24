@@ -1,5 +1,9 @@
 import { normalizeFirePerimeterSnapshot } from '../../src/layers/perimeters/records.js';
-import { readResponseJsonCapped, coalesceProxyRequest } from './common/http.js';
+import {
+  readResponseJsonCapped,
+  readResponseTextCapped,
+  coalesceProxyRequest,
+} from './common/http.js';
 import { makeRateLimiter, clientKey } from './common/rate-limit.js';
 
 // NIFC WFIGS current interagency fire perimeters (public, keyless).
@@ -41,10 +45,6 @@ const exceededTransferLimit = (payload) =>
   payload?.properties?.exceededTransferLimit === true;
 
 const MIB = 1024 * 1024;
-const epochMsOrNull = (value) => {
-  const seconds = Number(value);
-  return Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : null;
-};
 
 /** Fixed-origin, bounded WFIGS and InciWeb routes for dev and preview. */
 export function firePerimetersProxy({
@@ -100,16 +100,51 @@ export function firePerimetersProxy({
     return rows;
   }
 
+  // InciWeb's publication API was retired; incident pages carry origin and update times.
   async function fetchPublication(id) {
-    const payload = await upstream(
-      `https://inciweb.wildfire.gov/api/publication/${id}`,
-      512 * 1024,
-      15_000,
+    const signal = AbortSignal.timeout(15_000);
+    let response = await fetchImpl(`https://inciweb.wildfire.gov/node/${id}`, {
+      signal,
+      redirect: 'manual',
+    });
+    if ([301, 302, 303, 307, 308].includes(response.status)) {
+      await response.body?.cancel();
+      const location = response.headers.get('location');
+      if (!location || /\.\.|[?%\\]/.test(location))
+        throw new Error('invalid_redirect');
+      const url = new URL(location, 'https://inciweb.wildfire.gov/');
+      if (
+        url.hostname !== 'inciweb.wildfire.gov' ||
+        !/^\/[a-z0-9-]+(?:\/[a-z0-9-]+)?$/.test(url.pathname) ||
+        !['http:', 'https:'].includes(url.protocol) ||
+        url.port ||
+        url.username ||
+        url.password
+      )
+        throw new Error('invalid_redirect');
+      url.protocol = 'https:';
+      url.search = '';
+      url.hash = '';
+      response = await fetchImpl(url.href, { signal, redirect: 'error' });
+    }
+    if (response.status !== 200) {
+      await response.body?.cancel();
+      throw new Error('upstream_unavailable');
+    }
+    const html = await readResponseTextCapped(response, 2 * MIB, signal);
+    const changed = Date.parse(
+      html.match(/<meta\s+property="og:updated_time"\s+content="([^"]+)"/)?.[1],
     );
-    return {
-      createdMs: epochMsOrNull(payload?.created?.[0]?.value),
-      changedMs: epochMsOrNull(payload?.changed?.[0]?.value),
-    };
+    const created = Date.parse(
+      html.match(
+        /Date of Origin<\/th>\s*<td[^>]*>\s*<time\s+datetime="([^"]+)"/,
+      )?.[1],
+    );
+    const createdMs = Number.isFinite(created) ? created : null;
+    const changedMs = Number.isFinite(changed) ? changed : null;
+    if (createdMs === null && changedMs === null)
+      throw new Error('invalid_incident_page');
+    return { createdMs, changedMs };
   }
 
   async function acquire(key, ttl, load, store) {

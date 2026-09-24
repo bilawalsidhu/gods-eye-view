@@ -2,6 +2,19 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { firePerimetersProxy } from '../../server/providers/firePerimeters.js';
 
+const incidentHtml = `<meta property="og:updated_time" content="2026-09-23T11:32:31-04:00" />
+<th>Date of Origin</th>
+<td class="text-tabular text-left"><time datetime="2026-07-15T20:20:00Z">Origin</time></td>`;
+const incidentTimes = {
+  createdMs: Date.parse('2026-07-15T20:20:00Z'),
+  changedMs: Date.parse('2026-09-23T11:32:31-04:00'),
+};
+const incidentRedirect = () =>
+  new Response('redirect', {
+    status: 301,
+    headers: { location: 'http://inciweb.wildfire.gov/test-fire' },
+  });
+
 const feature = (id = 'fire') => ({
   properties: { attr_UniqueFireIdentifier: id, poly_DateCurrent: 123 },
   geometry: {
@@ -166,6 +179,8 @@ test('concurrent requests share one upstream operation for every route', async (
       fetchImpl: async () => {
         calls++;
         await pending;
+        if (path.includes('/publication/'))
+          return calls === 1 ? incidentRedirect() : new Response(incidentHtml);
         return Response.json(payload);
       },
     });
@@ -175,6 +190,7 @@ test('concurrent requests share one upstream operation for every route', async (
     release();
     for (const res of await Promise.all(responses))
       assert.equal(res.status, 200);
+    assert.equal(calls, path.includes('/publication/') ? 2 : 1);
   }
 });
 
@@ -228,36 +244,32 @@ test('publication timestamps, thirty-minute TTL and oldest-entry eviction', asyn
     now: () => clock,
     fetchImpl: async (url) => {
       calls.push(url);
-      return Response.json({
-        created: [{ value: '100' }],
-        changed: [{ value: '200' }],
-      });
+      return url.includes('/node/')
+        ? incidentRedirect()
+        : new Response(incidentHtml);
     },
   });
   const get = (id) =>
     request(`/inciweb/publication/${id}`, 'GET', `peer-${id}`);
-  assert.deepEqual((await get(1)).body, {
-    createdMs: 100000,
-    changedMs: 200000,
-  });
+  assert.deepEqual((await get(1)).body, incidentTimes);
   clock = 1_799_999;
   await get(1);
-  assert.equal(calls.length, 1);
+  assert.equal(calls.length, 2);
   clock++;
   await get(1);
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 4);
   for (let id = 2; id <= 257; id++) assert.equal((await get(id)).status, 200);
   await get(2);
-  assert.equal(calls.length, 258);
+  assert.equal(calls.length, 516);
   await get(1);
-  assert.equal(calls.length, 259);
-  assert.equal(calls.at(-1), 'https://inciweb.wildfire.gov/api/publication/1');
+  assert.equal(calls.length, 518);
+  assert.equal(calls.at(-2), 'https://inciweb.wildfire.gov/node/1');
 });
 
 test('InciWeb index and publication reads enforce their smaller caps', async () => {
   for (const [path, cap] of [
     ['/inciweb/index', 4 * 1024 * 1024],
-    ['/inciweb/publication/1', 512 * 1024],
+    ['/inciweb/publication/1', 2 * 1024 * 1024],
   ]) {
     const request = install({
       fetchImpl: async () =>
@@ -279,4 +291,120 @@ test('the per-client limit stops a loop while another client can read the cache'
   assert.equal((await request()).status, 429);
   assert.equal((await request('/', 'GET', 'another-client')).status, 200);
   assert.equal(calls, 1);
+});
+
+test('publication redirects share a signal, cancel the redirect body and force HTTPS', async () => {
+  for (const status of [301, 302, 303, 307, 308]) {
+    const calls = [];
+    const redirect = new Response('redirect', {
+      status,
+      headers: {
+        location: 'http://inciweb.wildfire.gov/incident/test-fire#details',
+      },
+    });
+    const request = install({
+      fetchImpl: async (url, options) => {
+        calls.push({ url, options });
+        return calls.length === 1 ? redirect : new Response(incidentHtml);
+      },
+    });
+    assert.deepEqual(
+      (await request('/inciweb/publication/42')).body,
+      incidentTimes,
+    );
+    assert.equal(calls.length, 2);
+    assert.equal(redirect.bodyUsed, true);
+    assert.equal(calls[0].url, 'https://inciweb.wildfire.gov/node/42');
+    assert.equal(calls[0].options.redirect, 'manual');
+    assert.equal(
+      calls[1].url,
+      'https://inciweb.wildfire.gov/incident/test-fire',
+    );
+    assert.equal(calls[1].options.redirect, 'error');
+    assert.ok(calls[0].options.signal instanceof AbortSignal);
+    assert.equal(calls[0].options.signal, calls[1].options.signal);
+  }
+});
+
+test('unsafe publication redirect locations fail before a second fetch', async () => {
+  for (const location of [
+    'https://evil.example/x',
+    '/a/../x',
+    '/x?q=1',
+    '/x?',
+    '/%2e%2e/x',
+    '/a/b/c',
+    '',
+  ]) {
+    let calls = 0;
+    const request = install({
+      fetchImpl: async () => {
+        calls++;
+        return new Response('redirect', { status: 301, headers: { location } });
+      },
+    });
+    assert.equal((await request('/inciweb/publication/42')).status, 502);
+    assert.equal(calls, 1);
+  }
+});
+
+test('incident pages without valid timestamps fail closed and are not cached', async () => {
+  for (const html of [
+    '<html>No markers</html>',
+    incidentHtml.replaceAll(/2026-[^"]+/g, 'invalid'),
+  ]) {
+    let calls = 0;
+    const request = install({
+      fetchImpl: async () => {
+        calls++;
+        return calls % 2 ? incidentRedirect() : new Response(html);
+      },
+    });
+    assert.equal((await request('/inciweb/publication/42')).status, 502);
+    assert.equal((await request('/inciweb/publication/42')).status, 502);
+    assert.equal(calls, 4);
+  }
+});
+
+test('direct 200 incident pages work, including one missing timestamp', async () => {
+  for (const [html, expected] of [
+    [incidentHtml, incidentTimes],
+    [
+      incidentHtml.replace('og:updated_time', 'unrelated'),
+      { ...incidentTimes, changedMs: null },
+    ],
+    [
+      incidentHtml.replace('Date of Origin', 'Unrelated'),
+      { ...incidentTimes, createdMs: null },
+    ],
+  ]) {
+    let calls = 0;
+    const request = install({
+      fetchImpl: async () => {
+        calls++;
+        return new Response(html);
+      },
+    });
+    assert.deepEqual((await request('/inciweb/publication/42')).body, expected);
+    assert.equal(calls, 1);
+  }
+});
+
+test('publication HTML streams are capped at 2 MiB', async () => {
+  let cancelled = false;
+  const request = install({
+    fetchImpl: async () =>
+      new Response(
+        new ReadableStream({
+          pull(controller) {
+            controller.enqueue(new Uint8Array(1024 * 1024));
+          },
+          cancel() {
+            cancelled = true;
+          },
+        }),
+      ),
+  });
+  assert.equal((await request('/inciweb/publication/42')).status, 502);
+  assert.equal(cancelled, true);
 });
