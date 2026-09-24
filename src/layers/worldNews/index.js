@@ -17,6 +17,7 @@ import {
 } from '../../data/worldNewsArticles.js';
 import {
   aggregatePlaces,
+  collapseSyndicated,
   formatAge,
   formatAgoMinutes,
   mapAnalystRecord,
@@ -233,7 +234,11 @@ export function createWorldNewsLayer({
       now,
       state.retentionMs,
     );
-    return mergeBatchArticles(state.batches);
+    // After the merge, not per batch: a syndicated copy often arrives in a
+    // different fetch (the worldwide feed, then a view) from the one it
+    // duplicates. The batches keep every copy, so if the representative ages
+    // out the next admission promotes a surviving one.
+    return collapseSyndicated(mergeBatchArticles(state.batches));
   }
 
   /**

@@ -76,3 +76,11 @@ export const REGION_LOOKAT_PULL_KM = 100;
  * server is allowed to.
  */
 export const DEFAULT_RETENTION_MS = 60 * 60_000;
+
+/**
+ * Shortest headline, in words, that may be collapsed as a syndicated copy.
+ * Syndicated wire and network stories carry long, distinctive headlines; a
+ * short generic one ("Live updates", "Weather forecast") repeated at a place is
+ * more likely two different stories that happen to share a title.
+ */
+export const MIN_SYNDICATED_HEADLINE_WORDS = 4;

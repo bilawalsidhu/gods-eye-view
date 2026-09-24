@@ -98,12 +98,18 @@ export function buildLabelModel(group, storyIndex = 0, nowMs = Date.now()) {
     ? formatAge(nowMs - article.publishedMs)
     : '';
   const domain = article?.domain || 'unknown source';
+  // A collapsed syndicated story names how widely it ran rather than hiding
+  // the other outlets (see collapseSyndicated).
+  const outlets = Array.isArray(article?.alsoIn) ? article.alsoIn.length : 0;
+  const source = outlets
+    ? `${domain} (+${outlets} ${outlets === 1 ? 'outlet' : 'outlets'})`
+    : domain;
   const place = String(group?.place || 'Unnamed place');
   const url = typeof article?.url === 'string' ? article.url : null;
   return {
     title: String(article?.title || place),
     details: [
-      age ? `${domain} · ${age} ago` : domain,
+      age ? `${source} · ${age} ago` : source,
       // The counter invites paging, so it has to say where the control is:
       // clicking the pin again is the nearest one, and the only one visible
       // without the layer panel open.

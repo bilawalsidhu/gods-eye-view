@@ -1458,3 +1458,36 @@ test('the card opens the story; only the pin under it pages', async () => {
   assert.deepEqual(h.opened, [ROW_A.url], 'and nothing else was opened');
   h.layer.destroy(h.viewer);
 });
+
+test('a syndicated copy arriving in a later fetch joins the story already pinned', async () => {
+  let reply = snapshot([ROW_A]);
+  const h = harness({ getSnapshot: async () => reply });
+  await h.layer.update(h.viewer);
+  // The same story from another outlet, with its own provider id, one fetch later.
+  reply = snapshot([
+    {
+      ...ROW_A,
+      id: 'wn-a-syndicated',
+      url: 'https://z.example/1',
+      domain: 'z.example',
+    },
+  ]);
+  await h.layer.update(h.viewer);
+  assert.deepEqual(
+    h.layer.getAnalystRecords().map((record) => record.id),
+    ['wn-a'],
+    'one story, not two — and the earlier-alphabetised outlet represents it',
+  );
+  assert.equal(h.entities().length, 1);
+  h.layer.selectPlace(ROTTERDAM);
+  const card = h
+    .entities()
+    .find((entity) => entity.id === ROTTERDAM).gevLabelModel;
+  assert.match(card.details[0], /^a\.example \(\+1 outlet\) · /);
+  assert.equal(
+    card.details[1],
+    'Rotterdam',
+    'a single story has nothing to page, so no counter',
+  );
+  h.layer.destroy(h.viewer);
+});

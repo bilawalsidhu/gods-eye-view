@@ -491,6 +491,15 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   (kill switch), `WORLD_NEWS_REGION_FETCHES_PER_HOUR` (default 6),
   `WORLD_NEWS_REGION_PAGE_SIZE` and `WORLD_NEWS_REGION_CACHE_MAX`.
 
+- World News collapses syndicated copies. The provider gives every outlet's
+  copy of a story its own id, so id de-duplication left them all on the map —
+  one Australian feature sat on the London pin three times, and the worldwide
+  feed's "Kyiv · 3" was one restaurant review, three times. The same headline at
+  the same place now counts once, and the card names the other outlets ("+2
+  outlets"). Matching ignores case, punctuation, typographic quotes and HTML
+  entities; headlines under four words and identical headlines in different
+  places are left alone.
+
 - Clicking a World News pin that is already selected steps to the next story
   at that place, wrapping at the end. The readout card counts "1/8 stories
   here" directly under the cursor and previously offered no way to reach the

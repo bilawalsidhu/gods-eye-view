@@ -1,6 +1,7 @@
 import {
   HEADLINE_LABEL_CHARS,
   MAX_PLACE_PIXEL_SIZE,
+  MIN_SYNDICATED_HEADLINE_WORDS,
   PLACE_KEY_DECIMALS,
   POINT_PIXEL_SIZE,
   TONE_NEGATIVE_MAX,
@@ -157,6 +158,113 @@ function compareNewest(a, b) {
  *   count: number, meanSentiment: number|null, band: string,
  *   newestMs: number|null, articles: Array<object>}>} Newest place first.
  */
+/** Named entities the provider has been seen to leave in headlines. */
+const NAMED_ENTITIES = Object.freeze({
+  amp: '&',
+  quot: '"',
+  apos: "'",
+  lt: '<',
+  gt: '>',
+  nbsp: ' ',
+});
+
+function codePoint(value, radix) {
+  const code = parseInt(value, radix);
+  return Number.isInteger(code) && code >= 0 && code <= 0x10ffff
+    ? String.fromCodePoint(code)
+    : null;
+}
+
+/**
+ * A headline reduced to what syndication keeps identical. Outlets carrying the
+ * same wire or network story differ in case, typographic quotes, punctuation,
+ * spacing and HTML-entity encoding — the provider returns some titles with
+ * entities left in (`Trump&#039;s`) and others decoded — so all of that goes.
+ * @param {string} title Headline text.
+ * @returns {string} Lower-case words separated by single spaces.
+ */
+export function normalizeHeadline(title) {
+  return String(title ?? '')
+    .replace(/&#x([0-9a-f]+);/gi, (match, hex) => codePoint(hex, 16) ?? match)
+    .replace(/&#(\d+);/g, (match, dec) => codePoint(dec, 10) ?? match)
+    .replace(/&([a-z]+);/gi, (match, name) =>
+      Object.hasOwn(NAMED_ENTITIES, name.toLowerCase())
+        ? NAMED_ENTITIES[name.toLowerCase()]
+        : match,
+    )
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
+}
+
+/** Earliest copy first; the outlet name then the id break ties deterministically. */
+function compareEarliestCopy(a, b) {
+  const aMs = Number.isFinite(a.publishedMs) ? a.publishedMs : Infinity;
+  const bMs = Number.isFinite(b.publishedMs) ? b.publishedMs : Infinity;
+  if (aMs !== bMs) return aMs - bMs;
+  return (
+    String(a.domain ?? '').localeCompare(String(b.domain ?? ''), 'en') ||
+    String(a.id).localeCompare(String(b.id), 'en')
+  );
+}
+
+/**
+ * Collapse syndicated copies — the same story carried by several outlets —
+ * into one row per story.
+ *
+ * The provider gives every outlet's copy its own id, so id de-duplication
+ * leaves them all on the map: a London view on 2026-09-24 put one Australian
+ * feature on the pin three times (theage.com.au, smh.com.au,
+ * brisbanetimes.com.au), and the worldwide feed's "Kyiv · 3" was one restaurant
+ * review, three times. Copies are matched on the normalized headline AT THE
+ * SAME PLACE: syndicated text resolves to the same location entity, and keying
+ * on the place too means two different local stories that share a headline in
+ * two cities are never merged. Headlines shorter than
+ * MIN_SYNDICATED_HEADLINE_WORDS are left alone for the same reason.
+ *
+ * The earliest copy represents the story and names the other outlets in
+ * `alsoIn`, so the card can say how widely it ran. Inputs are not mutated, and
+ * the order of the rows is kept.
+ *
+ * @param {Array<object>} rows Normalized rows, newest first.
+ * @returns {Array<object>} One row per story.
+ */
+export function collapseSyndicated(rows) {
+  if (!Array.isArray(rows)) return [];
+  const groups = new Map();
+  const slots = [];
+  for (const row of rows) {
+    const headline = normalizeHeadline(row?.title);
+    const words = headline ? headline.split(' ').length : 0;
+    if (words < MIN_SYNDICATED_HEADLINE_WORDS) {
+      slots.push({ row });
+      continue;
+    }
+    const key = `${placeKey(row.lat, row.lon)}|${headline}`;
+    let copies = groups.get(key);
+    if (!copies) {
+      copies = [];
+      groups.set(key, copies);
+      slots.push({ copies });
+    }
+    copies.push(row);
+  }
+  return slots.map(({ row, copies }) => {
+    if (row) return row;
+    if (copies.length === 1) return copies[0];
+    const [first, ...rest] = copies.slice().sort(compareEarliestCopy);
+    const alsoIn = [
+      ...new Set(
+        rest
+          .map((copy) => copy.domain)
+          .filter((domain) => domain && domain !== first.domain),
+      ),
+    ].sort((a, b) => a.localeCompare(b, 'en'));
+    return { ...first, alsoIn };
+  });
+}
+
 export function aggregatePlaces(rows) {
   const groups = new Map();
   for (const row of Array.isArray(rows) ? rows : []) {

@@ -1141,7 +1141,14 @@ the map: NEWS IN VIEW appends the circle the camera frames (centre snapped to a
 circle), GLOBAL FEED appends the worldwide feed, and neither removes what the
 other put there. Batches carry the proxy's own retention window, dated by
 receipt so a skewed browser clock cannot blank the map, and de-duplicate by
-article id. The ten-minute refresh re-asks for the last feed fetched — a pinned
+article id. Syndicated copies — the same headline at the same pin from different
+outlets, each with its own provider id — then collapse into one story after the
+merge, since a copy often arrives in a different fetch from the one it
+duplicates. Headlines are compared after normalizing case, punctuation,
+typographic quotes and HTML entities; the earliest copy represents the story and
+its card names the rest ("+2 outlets"). Headlines under four words are never
+collapsed, and neither are identical headlines at different places. The
+ten-minute refresh re-asks for the last feed fetched — a pinned
 circle stays pinned and does not follow the camera, so a drifting view spends
 nothing. Row chips: OPEN ARTICLE, LOAD MORE, NEWS IN VIEW, GLOBAL FEED, CLEAR
 PINS, PREV/NEXT STORY (the paging chips appear only while a place with several

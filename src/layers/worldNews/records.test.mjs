@@ -2,9 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   aggregatePlaces,
+  collapseSyndicated,
   formatAge,
   formatAgoMinutes,
   mapAnalystRecord,
+  normalizeHeadline,
   normalizeWorldNewsSnapshot,
   placeKey,
   placePixelSize,
@@ -273,4 +275,165 @@ test('headline truncation and age formatting follow the shared shapes', () => {
   assert.equal(formatAgoMinutes(30_000), '<1m ago');
   assert.equal(formatAgoMinutes(7 * 60_000), '7m ago');
   assert.equal(formatAgoMinutes(3 * 3_600_000), '3h ago');
+});
+
+/** A normalized row, as collapseSyndicated receives it. */
+function story(overrides = {}) {
+  const publishedAt = overrides.publishedAt ?? '2026-09-24T19:00:00.000Z';
+  return {
+    id: 'wn-1',
+    title:
+      'After two days with Evonne Goolagong Cawley, I couldn’t help but text her one final question',
+    url: 'https://www.theage.com.au/story',
+    domain: 'theage.com.au',
+    publishedAt,
+    publishedMs: Date.parse(publishedAt),
+    sentiment: -0.514,
+    lat: 51.5085,
+    lon: -0.1257,
+    place: 'London',
+    placeFoundIn: 'content',
+    placeMentions: 0,
+    ...overrides,
+  };
+}
+
+test('headlines normalize away case, quotes, punctuation, spacing and HTML entities', () => {
+  assert.equal(
+    normalizeHeadline('US Senate rejects bid to halt Trump&#039;s Iran war'),
+    normalizeHeadline('US Senate rejects bid to halt Trump’s Iran war'),
+  );
+  assert.equal(
+    normalizeHeadline(
+      'Stocks &amp; bonds  struggle — amid &#x27;volatility&#x27;',
+    ),
+    'stocks bonds struggle amid volatility',
+  );
+  assert.equal(normalizeHeadline('A&nbsp;B'), 'a b');
+  assert.equal(normalizeHeadline('&notanentity; stays'), 'notanentity stays');
+  assert.equal(
+    normalizeHeadline('&#99999999; out of range'),
+    '99999999 out of range',
+  );
+  assert.equal(normalizeHeadline(null), '');
+});
+
+test('one story carried by three outlets at one place becomes one row naming the others', () => {
+  const rows = [
+    story({ id: 'wn-a', domain: 'theage.com.au' }),
+    story({ id: 'wn-b', domain: 'brisbanetimes.com.au' }),
+    story({ id: 'wn-c', domain: 'smh.com.au' }),
+  ];
+  const collapsed = collapseSyndicated(rows);
+  assert.equal(collapsed.length, 1);
+  // Identical timestamps: the outlet name breaks the tie, deterministically.
+  assert.equal(collapsed[0].domain, 'brisbanetimes.com.au');
+  assert.deepEqual(collapsed[0].alsoIn, ['smh.com.au', 'theage.com.au']);
+  assert.equal(rows[0].alsoIn, undefined, 'inputs are not mutated');
+});
+
+test('the earliest copy represents the story', () => {
+  const [row] = collapseSyndicated([
+    story({
+      id: 'wn-late',
+      domain: 'aaa.example',
+      publishedAt: '2026-09-24T20:00:00Z',
+    }),
+    story({
+      id: 'wn-early',
+      domain: 'zzz.example',
+      publishedAt: '2026-09-24T18:00:00Z',
+    }),
+  ]);
+  assert.equal(row.id, 'wn-early');
+  assert.deepEqual(row.alsoIn, ['aaa.example']);
+});
+
+test('copies differing only in encoding and typography still collapse', () => {
+  const collapsed = collapseSyndicated([
+    story({
+      id: 'wn-a',
+      title: 'US Senate rejects bid to halt Trump&#039;s Iran war',
+      domain: 'a.example',
+    }),
+    story({
+      id: 'wn-b',
+      title: 'US SENATE rejects bid to halt Trump’s Iran war!',
+      domain: 'b.example',
+    }),
+  ]);
+  assert.equal(collapsed.length, 1);
+});
+
+test('the same headline in two different places is two stories', () => {
+  const collapsed = collapseSyndicated([
+    story({ id: 'wn-london' }),
+    story({ id: 'wn-paris', lat: 48.8566, lon: 2.3522, place: 'Paris' }),
+  ]);
+  assert.deepEqual(
+    collapsed.map((row) => row.id),
+    ['wn-london', 'wn-paris'],
+  );
+  assert.ok(collapsed.every((row) => row.alsoIn === undefined));
+});
+
+test('short generic headlines are never collapsed, even at the same place', () => {
+  const collapsed = collapseSyndicated([
+    story({ id: 'wn-a', title: 'Live updates', domain: 'a.example' }),
+    story({ id: 'wn-b', title: 'Live updates', domain: 'b.example' }),
+    story({ id: 'wn-c', title: 'Weather: more rain', domain: 'c.example' }),
+    story({ id: 'wn-d', title: 'Weather: more rain', domain: 'd.example' }),
+  ]);
+  assert.equal(collapsed.length, 4);
+});
+
+test('distinct stories keep their identity and their order', () => {
+  const a = story({
+    id: 'wn-a',
+    title: 'Londoners underpaying council tax by billions',
+  });
+  const dupA = story({
+    id: 'wn-b',
+    title: 'Stocks struggle amid oil, bond price volatility',
+    domain: 'x.example',
+  });
+  const dupB = story({
+    id: 'wn-c',
+    title: 'Stocks struggle amid oil, bond price volatility',
+    domain: 'y.example',
+  });
+  const c = story({
+    id: 'wn-d',
+    title: 'Thames barrier closes ahead of surge tide',
+  });
+  const collapsed = collapseSyndicated([a, dupA, c, dupB]);
+  assert.deepEqual(
+    collapsed.map((row) => row.id),
+    ['wn-a', 'wn-b', 'wn-d'],
+    'a story sits where its first copy did',
+  );
+  assert.equal(collapsed[0], a, 'an unduplicated row is passed through as-is');
+  assert.equal(collapsed[2], c);
+});
+
+test('the same outlet twice is not reported as a second outlet', () => {
+  const [row] = collapseSyndicated([
+    story({
+      id: 'wn-a',
+      domain: 'smh.com.au',
+      publishedAt: '2026-09-24T18:00:00Z',
+    }),
+    story({
+      id: 'wn-b',
+      domain: 'smh.com.au',
+      publishedAt: '2026-09-24T19:00:00Z',
+    }),
+  ]);
+  assert.deepEqual(row.alsoIn, []);
+});
+
+test('non-array input collapses to nothing', () => {
+  assert.deepEqual(collapseSyndicated(null), []);
+  assert.deepEqual(collapseSyndicated(undefined), []);
+  assert.deepEqual(collapseSyndicated([]), []);
 });
