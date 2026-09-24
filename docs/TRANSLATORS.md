@@ -1,38 +1,38 @@
-# Translator's guide (i18n foundation — English shipped)
+# Translator's guide (English / Spanish)
 
 This is the working guide for translating God's Eye View. The i18n
-foundation ships **English only**: the locale core, the English
-catalogs, and the parity gates are in, and every additional locale lands
-as its own stacked PR, one locale at a time, following the
-[locale-addition recipe](#the-locale-addition-recipe) below. That recipe
-is the deliberate design artifact of this phase — a locale is not
-"translated into the app", it is *shipped* through the same gate every
+foundation shipped English only; **es** is the first follow-up locale, and
+every additional locale lands as its own stacked PR, one locale at a time,
+following the [locale-addition recipe](#the-locale-addition-recipe) below.
+That recipe is the deliberate design artifact of this phase — a locale is
+not "translated into the app", it is *shipped* through the same gate every
 time.
 
 ## Which locale ships, and which pair is offered
 
-One catalog ships: **en** (source of truth and unconditional fallback).
-Shipping is catalog-driven (`CATALOG_LOCALES` in `src/i18n/locale.js`):
-while only English ships, the built-in locale pair is en-only and the
-dock language switch renders a single EN button. Which pair the app
-*offers* is configuration, not code: `GEV_DEFAULT_LOCALE` and
+Two catalogs ship: **en** (source of truth and unconditional fallback) and
+**es** (fully translated, key-for-key with en — 913 keys each). Shipping is
+catalog-driven (`CATALOG_LOCALES` in `src/i18n/locale.js`): the built-in
+locale pair is en+es and the dock language switch renders EN + ES. Which
+pair the app *offers* is configuration, not code: `GEV_DEFAULT_LOCALE` and
 `GEV_SECONDARY_LOCALE` in `.env`, injected into the browser via vite
 defines. Both values are validated against the shipped catalogs — an
-invalid, unshipped, or degenerate pair (e.g. the same locale twice)
-degenerates to the built-in en-only shape with a dev-server-only
-`console.warn`. English is always resolvable — it is the fallback
-catalog — even when not part of the configured pair.
+invalid, unshipped, or degenerate pair (e.g. the same locale twice) falls
+back to the built-in en+es shape with a dev-server-only `console.warn`.
+English is always resolvable — it is the fallback catalog — even when not
+part of the configured pair.
 
 ## How the catalog system works
 
-All application-owned UI text lives in four flat message catalogs (en
-today; one directory per locale once shipped):
+All application-owned UI text lives in four flat message catalogs, one set
+per shipped locale (en and es today):
 
 ```text
 src/i18n/
   locale.js                  pair config + resolution + storage + <html lang>/<html dir>
   index.js                   catalog registry, t(), Intl formatters, DOM apply
   locales/en/{shell,cockpit,layers,setup}.js
+  locales/es/{shell,cockpit,layers,setup}.js
 ```
 
 | Namespace | Surface |
@@ -46,8 +46,8 @@ Each catalog file exports `NAMESPACE` and a default map of
 namespace-relative keys; `mergeNamespace()` prefixes them (`cockpit.…`)
 and `buildCatalog()` rejects duplicates. English is the default and the
 fallback locale: a key missing in another locale renders its English
-value (dev-server-only `console.warn`). The en catalogs hold 912 keys
-(shell 34, cockpit 369, layers 388, setup 121).
+value (dev-server-only `console.warn`). The catalogs hold 913 keys each
+(shell 35, cockpit 369, layers 388, setup 121).
 
 ## Key naming
 
@@ -144,6 +144,19 @@ optional — the gates below fail the build if a step is skipped.
   compound that on multi-word tactical labels — plan string budgets and
   check fixed-width panels before review (see step 6 above).
 
+## Spanish (es) review conventions
+
+Conventions that produced reviewed fixes in the es catalog — reuse them:
+
+- `o → u` before i- words ("BUQUE U INSTALACIÓN").
+- Adjective agreement with the fallback noun ("entidad … COMPARTIDA").
+- Consistent word order ("RESPALDO DE SUPERFICIE").
+- No copy that ellipsis-truncates in its container ("Mantén Espacio para
+  hablar").
+- Compact instrument codes stay compact: the review reverted a spelled-out
+  `MARC —` (MARCACIÓN) to `BRG —` — readout codes a pilot reads identically
+  in every language stay identical.
+
 ## Keep-English boundary (summary)
 
 Never catalog these — they are contracts, not copy:
@@ -168,30 +181,45 @@ Adjudicated exceptions live in "Internationalization" in
 
 ## Glossary
 
-Approved recurring terms per locale. Each locale PR appends its
- glossary here (English term · translation · catalog evidence) so later
- translators reuse approved copy verbatim. None yet — the first entry
- arrives with the first translated locale.
+Approved recurring terms (from the Spanish catalog — reuse these verbatim;
+each further locale PR appends its own glossary):
+
+| English | Spanish | Catalog evidence |
+| --- | --- | --- |
+| Contacts | Contactos / CONTACTOS | `cockpit.context.standbyContactsDesc` |
+| Context | Contexto | `layers.name.globalContext` ("Contexto global") |
+| Tracked / Tracking | Rastreado / Rastreo | `cockpit.context.tr3bAriaLabel` ("contacto rastreado"), `cockpit.hud.metaFeedLive` ("RASTREO EN VIVO") |
+| Coverage | Cobertura | `layers.cctv.coverageOn` ("COBERTURA ACTIVADA") |
+| Layer | Capa | `shell.panels.dataLayers` ("CAPAS DE DATOS") |
+| Feed | Fuente | `cockpit.hud.metaFeedStale` ("FUENTE DESACTUALIZADA") |
+| View | Vista | `shell.actions.resetView.title` ("vista del globo completo") |
+| Cockpit | Cabina | `cockpit.exit.label` ("SALIR DE CABINA") |
+| POWER UP (key setup) | ENCENDER | `setup.keySetup.chip`, `setup.keySetup.chipWaiting` ("ENCENDER · {count} CLAVE(S) EN ESPERA") |
+
+Aviation terms: ground speed → **VEL. SUELO**, altitude → **ALTITUD**,
+heading/course → **RUMBO** (`cockpit.readout.*`). Bearing keeps the compact
+instrument codes **BRG** / **DEST** (see the review conventions above).
 
 ## Running the i18n test gates
 
 ```sh
-node --test src/i18n/            # 40 tests: core + pair config, catalog parity, markup coverage, repair-pass anchors
+node --test src/i18n/            # 41 tests: core + pair config, catalog parity, markup coverage, repair-pass anchors
 npm test                         # full suite (see below for the known environmental caveat)
 ```
 
 - `src/i18n/i18n.test.mjs` — resolution precedence, guarded storage,
-  fallback, interpolation, plural selection (contract + synthetic
-  missing-category degradation; real-catalog plural pins arrive with
-  each locale PR), DOM application.
+  fallback, interpolation, plural selection (es one/other agreement through
+  the real catalog; ru/uk one/few/many/other pins arrive with those
+  locales; the synthetic missing-category degradation is locale-agnostic),
+  DOM application.
 - `src/i18n/catalog.test.mjs` — key + placeholder + plural-shape parity for
-  every shipped locale against en, strict `REQUIRE_FULL_PARITY` gate
-  (vacuous while only en ships; each locale PR meets it from day one).
+  every shipped locale against en, strict `REQUIRE_FULL_PARITY` gate.
 - `src/i18n/markupCoverage.test.mjs` — every `data-i18n*` attribute in
   `index.html` must resolve in every shipped catalog; unknown attribute
   spellings fail loudly.
 - `src/i18n/repairPass.test.mjs` — byte-identity anchors for English
-  literals; per-locale value anchors arrive with each locale PR.
+  literals, the eleven reviewed es strings, and the es-scoped CCTV wrap
+  rule; further locales pin their anchors in their own PRs.
 
 Full-suite caveat: `src/devFreshDotenv.test.mjs`'s external-keys provenance
 test fails when a provider key (e.g. `OPENAI_API_KEY`) is exported in the
