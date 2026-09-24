@@ -36,6 +36,9 @@ import { ShellFeedback } from './shellFeedback.js';
 
 import { runCctvLayerEnableTransition } from '../cctvFocusPolicy.js';
 
+import { getLocale, persistLocaleAndReload, t } from '../i18n/index.js';
+import { availableLocales } from '../i18n/locale.js';
+
 /**
  * Central UI orchestrator for the God's Eye View application.
  *
@@ -565,6 +568,8 @@ export class StyleManager extends ShellFacade {
     this._initUI();
     this._initMapStackControl();
     this._initPanelChrome();
+    this._initLocaleSelector();
+    this._applyRuntimeStaticHeaderText();
     this._initLeftPanelAdaptiveLayout();
     this._initRightPanelAdaptiveLayout();
     this._initRadioPanel();
@@ -698,6 +703,109 @@ export class StyleManager extends ShellFacade {
   }
 
   /**
+   * Renders the command-dock locale switch (runtime-built since the
+   * configurable-pair stage): one button per locale availableLocales()
+   * yields — the configured GEV_DEFAULT_LOCALE / GEV_SECONDARY_LOCALE pair,
+   * already deduped against the always-shipped English fallback. Labels are
+   * uppercase locale codes (EN/ES/FR); aria-labels come from
+   * shell.locale.<code>.ariaLabel in the active catalog. Pressed state is
+   * synced from the resolved locale at boot; a click persists the choice and
+   * reloads the page, so no live re-apply of document translations is needed
+   * here (persistLocaleAndReload strips ?lang and keeps the hash).
+   * @returns {void}
+   */
+  _initLocaleSelector() {
+    const container = document.querySelector(
+      '#control-panel .dock-locale-switch',
+    );
+    if (!container) return;
+    const active = getLocale();
+    for (const locale of availableLocales()) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'dock-locale-btn';
+      button.dataset.locale = locale;
+      button.textContent = locale.toUpperCase();
+      button.setAttribute('aria-label', t(`shell.locale.${locale}.ariaLabel`));
+      const isActive = locale === active;
+      button.classList.toggle('active', isActive);
+      button.setAttribute('aria-pressed', String(isActive));
+      button.addEventListener('click', () => {
+        persistLocaleAndReload(button.dataset.locale);
+      });
+      container.appendChild(button);
+    }
+  }
+
+  /**
+   * Rewrites a header's trailing text node in place, preserving the leading
+   * dock-label-icon span that a textContent write would destroy (the phase-2
+   * "key-only" headers: .panel-title / .pp-header-label share their element
+   * with the icon, so no data-i18n attribute could target them — see
+   * docs/TRANSLATORS.md, runtime-only static sites).
+   * @param {Element|null} element
+   * @param {string} text
+   * @returns {void}
+   */
+  _setHeaderText(element, text) {
+    if (!element) return;
+    const textNode = Array.from(element.childNodes)
+      .reverse()
+      .find(
+        (node) => node.nodeType === Node.TEXT_NODE && node.nodeValue?.trim(),
+      );
+    if (textNode) textNode.nodeValue = text;
+    else element.textContent = text;
+  }
+
+  /**
+   * Localizes the key-only dock/panel headers at boot: VISUAL PRESETS,
+   * LOCATION, and the DISPLAY rail label. English output is byte-identical to
+   * the static markup these replace.
+   * @returns {void}
+   */
+  _applyRuntimeStaticHeaderText() {
+    this._setHeaderText(
+      document.querySelector('#control-panel .panel-title'),
+      t('cockpit.presets.title'),
+    );
+    this._setHeaderText(
+      document.querySelector('#location-bar .location-toolbar-label'),
+      t('cockpit.location.toolbarLabel'),
+    );
+    this._setHeaderText(
+      document.querySelector('#pp-toggles .pp-header-label'),
+      t('cockpit.display.title'),
+    );
+    // The cockpit context kicker ('CONTACT') is visible on the map itself, and
+    // the briefing kicker shares its element with the live-dot <i>; both are
+    // phase-2 key-only sites (see docs/TRANSLATORS.md). The briefing
+    // text node keeps renderBriefPage's leading-space convention.
+    this._setHeaderText(
+      document.querySelector('.cockpit-context-kicker'),
+      t('cockpit.context.kicker'),
+    );
+    // The phase-2 key-only standby description: one span holds BOTH mode
+    // descriptions split by a literal <br>, so no attribute write was possible
+    // without destroying the markup (docs/TRANSLATORS.md). Split into
+    // two keys and write them at boot, preserving the <br>.
+    const standbyDescription = document.querySelector(
+      '#context-mode-standby span',
+    );
+    if (standbyDescription) {
+      standbyDescription.replaceChildren(
+        document.createTextNode(t('cockpit.context.standbyContactsDesc')),
+        document.createElement('br'),
+        document.createTextNode(t('cockpit.context.standbyMissionsDesc')),
+      );
+    }
+    const briefKicker = document.querySelector('#cockpit-brief-kicker');
+    if (briefKicker) {
+      this._setHeaderText(briefKicker, ` ${t('cockpit.brief.kicker')}`);
+    }
+  }
+
+  /**
    * Renders the owner-approved map stack chip row from the matching controller
    * entries. Cesium ion/Bing chips remain keyboard-focusable but unavailable,
    * with an accessible explanation, until a CESIUM_ION_TOKEN is configured.
@@ -705,6 +813,18 @@ export class StyleManager extends ShellFacade {
    */
   _initMapStackControl() {
     if (!this.mapStackController) return;
+
+    // Key-only i18n sites (mapStackChips.test.mjs pins the static markup
+    // verbatim, so no data-i18n* attribute can be added): localize at this
+    // runtime write instead. The locale resolves before UI init and never
+    // changes without a reload, so an init-time write is sufficient.
+    if (this._mapSourceLabel)
+      this._mapSourceLabel.textContent = t('cockpit.presets.mapSourceLabel');
+    this._mapStackChips.setAttribute(
+      'aria-label',
+      t('cockpit.presets.mapSourceChipsAriaLabel'),
+    );
+
     this._mapSourceControls?.destroy();
     this._mapSourceControls = createMapSourceControls({
       container: this._mapStackChips,
@@ -986,7 +1106,7 @@ export class StyleManager extends ShellFacade {
     const { cctvLayer } = this.services;
     if (this._disposed) return false;
     if (!this._dataManager || !this._dataManager.layers?.has('cctv')) {
-      this._showToast('CCTV layer unavailable');
+      this._showToast(t('cockpit.cctv.toastLayerUnavailable'));
       return false;
     }
     const enabled = this._dataManager.isEnabled('cctv');
@@ -1433,7 +1553,11 @@ export class StyleManager extends ShellFacade {
     this._lifetime.listen(this._shareBtn, 'click', async () => {
       const success = await this.shareLinkManager.copyLink();
       if (!this._disposed)
-        this._showToast(success ? 'Link copied!' : 'Copy failed');
+        this._showToast(
+          success
+            ? t('cockpit.share.toastCopied')
+            : t('cockpit.share.toastCopyFailed'),
+        );
     });
   }
 

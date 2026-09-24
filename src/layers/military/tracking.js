@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { t } from '../../i18n/index.js';
 import { nextCockpitNearContacts } from '../../data/cockpitAirLod.js';
 import { aircraftIcon, TRACKED_ICON_PX } from '../../data/aircraftIcons.js';
 import { trackedModelZoomActive } from '../../data/trackedModelRegime.js';
@@ -219,7 +220,7 @@ export function createTracking({
   function _buildTrackedLabel(info, icao24) {
     const stale =
       flightState.records.missingPolls.get(icao24) || flightState.feed._backoff
-        ? ' · STALE'
+        ? ` · ${t('layers.status.stale')}`
         : '';
     const callsign =
       (parts.queries._toCleanText(info?.callsign) ||
@@ -229,12 +230,14 @@ export function createTracking({
     // what the Easter egg replaces the real type with.
     const type = tr3bTypeLabel(
       icao24,
-      parts.queries._toCleanText(info?.type) || 'Type unknown',
+      parts.queries._toCleanText(info?.type) || t('layers.readout.typeUnknown'),
     );
     const registration =
-      parts.queries._toCleanText(info?.registration) || 'Reg unknown';
+      parts.queries._toCleanText(info?.registration) ||
+      t('layers.readout.regUnknown');
     const operator =
-      parts.queries._toCleanText(info?.operator) || 'Operator unknown';
+      parts.queries._toCleanText(info?.operator) ||
+      t('layers.readout.operatorUnknown');
     const altitude = parts.queries._formatAltitude(info?.altitudeFt);
     const speedKt = info?.speedMps ? Math.round(info.speedMps * 1.944) : null;
     const tail = speedKt ? `${altitude} · ${speedKt} kt` : altitude;

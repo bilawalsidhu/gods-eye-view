@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js';
 import {
   featureLabel,
   featureReference,
@@ -11,7 +12,7 @@ export function createIngestion({ state, parts, source }) {
 
     state._loading = true;
     state._error = null;
-    state._loadingLabel = 'loading...';
+    state._loadingLabel = t('layers.meta.loading');
     // Ownership token (the militaryAwareness activationId pattern): a
     // disable/abort followed by a fresh enable starts a NEWER load while this
     // one is still settling. The stale load must bail after every await and

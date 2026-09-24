@@ -210,6 +210,7 @@ export default {
   'cctv.summary.empty': 'No cameras available in catalog.',
   'cctv.summary.city': '{city} CCTV',
   'cctv.summary.hdg': 'HDG {value}°',
+  'cctv.summary.hdgEstimated': 'HDG {value}° (ESTIMATED)',
   'cctv.summary.fov': 'FOV {value}°',
   'cctv.summary.coverage': 'COVERAGE {value}km²',
   'cctv.summary.overlap': 'OVERLAP {count} cams',

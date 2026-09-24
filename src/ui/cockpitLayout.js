@@ -1,4 +1,5 @@
 /** Measure Cockpit panels against visible HUD and viewport obstacles. */
+import { t } from '../i18n/index.js';
 import {
   resolveCockpitUtilityAnchor,
   resolveCockpitUtilityLayout,
@@ -35,11 +36,26 @@ export function setContextCollapsed(collapsed) {
   if (this.contextToggle) {
     const expanded = !this.contextCollapsed;
     this.contextToggle.setAttribute('aria-expanded', String(expanded));
+    // The English aria-label literal is pinned verbatim by
+    // cockpitMarkup.test.mjs; the t() re-write below is a same-value
+    // override that localizes it (byte-identical under 'en').
     this.contextToggle.setAttribute(
       'aria-label',
       `${expanded ? 'Collapse' : 'Expand'} Contact panel`,
     );
-    this.contextToggle.title = `${expanded ? 'Collapse' : 'Expand'} contact panel`;
+    this.contextToggle.setAttribute(
+      'aria-label',
+      t(
+        expanded
+          ? 'cockpit.context.toggleExpandAriaLabel'
+          : 'cockpit.context.toggleAriaLabel',
+      ),
+    );
+    this.contextToggle.title = t(
+      expanded
+        ? 'cockpit.context.toggleExpandTitle'
+        : 'cockpit.context.toggleTitle',
+    );
     const icon = this.contextToggle.querySelector('.material-symbols-outlined');
     if (icon) icon.textContent = expanded ? 'chevron_left' : 'chevron_right';
   }
@@ -60,9 +76,15 @@ export function setSignalCollapsed(collapsed, { user = false } = {}) {
     this.signalToggle.setAttribute('aria-expanded', String(expanded));
     this.signalToggle.setAttribute(
       'aria-label',
-      `${expanded ? 'Collapse' : 'Expand'} cockpit briefing panel`,
+      t(
+        expanded
+          ? 'cockpit.brief.collapseAriaLabel'
+          : 'cockpit.brief.expandAriaLabel',
+      ),
     );
-    this.signalToggle.title = `${expanded ? 'Collapse' : 'Expand'} briefing panel`;
+    this.signalToggle.title = t(
+      expanded ? 'cockpit.brief.collapseTitle' : 'cockpit.brief.expandTitle',
+    );
     const icon = this.signalToggle.querySelector('.material-symbols-outlined');
     if (icon)
       icon.textContent = expanded ? 'right_panel_close' : 'right_panel_open';

@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { t } from '../../i18n/index.js';
 import {
   createCyberSonarSampler,
   isCyberContactSonarActive as isCyberSonarActive,
@@ -137,7 +138,9 @@ export function createRendering({
       '--compass-rotation',
       `${-headingDeg}deg`,
     );
-    layerState.compassHeading.textContent = `HDG ${String(headingDeg).padStart(3, '0')}°`;
+    layerState.compassHeading.textContent = t('layers.awareness.hdg', {
+      value: String(headingDeg).padStart(3, '0'),
+    });
     layerState.compassHeading.style.left = `${geometry.centerX}px`;
     layerState.compassHeading.style.top = `${geometry.centerY - compassRadius + 39}px`;
     for (const label of layerState.compassLabels) {
@@ -221,10 +224,14 @@ export function createRendering({
             )
           : null;
       const bearingText = Number.isFinite(bearing)
-        ? `BRG ${String(Math.round(bearing)).padStart(3, '0')}°`
-        : 'BRG —';
+        ? t('layers.awareness.brg', {
+            value: String(Math.round(bearing)).padStart(3, '0'),
+          })
+        : t('layers.awareness.brgUnknown');
       const courseText = Number.isFinite(item.track)
-        ? ` · CRS ${String(Math.round(item.track)).padStart(3, '0')}°`
+        ? ` · ${t('layers.awareness.crs', {
+            value: String(Math.round(item.track)).padStart(3, '0'),
+          })}`
         : '';
       marker._label.textContent = `${label} · ${formatAwarenessDistance(item.distanceM)}\n${bearingText}${courseText}`;
       marker.hidden = false;

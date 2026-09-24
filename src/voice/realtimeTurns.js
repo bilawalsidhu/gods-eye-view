@@ -1,4 +1,5 @@
 import { realtimeSessionEvent } from './realtimeEvents.js';
+import { t } from '../i18n/index.js';
 import { readLayerLifecycleSummary } from './layerSummary.js';
 import {
   CALL_DEDUPE_MS,
@@ -207,7 +208,7 @@ export class RealtimeTurns {
           eventId: payload.event_id,
           activeResponseMessage: payload.error?.message || null,
         });
-        this.setStatus('listening', 'Ask or command');
+        this.setStatus('listening', t('setup.voice.detail.askOrCommand'));
         return;
       }
       // A conversation.item.delete for a stale viewport screenshot can land
@@ -327,7 +328,7 @@ export class RealtimeTurns {
       return;
     }
 
-    this.setStatus('executing', 'Running command');
+    this.setStatus('executing', t('setup.voice.detail.runningCommand'));
     this.pruneProcessedCalls();
     let sentOutput = false;
     let lastResult = null;
@@ -577,7 +578,7 @@ export class RealtimeTurns {
         ),
       );
     }
-    this.setStatus('listening', 'Ask or command');
+    this.setStatus('listening', t('setup.voice.detail.askOrCommand'));
   }
 
   sendToolOutput(callId, result) {
@@ -642,7 +643,7 @@ export class RealtimeTurns {
         // connection is still live. Recover to listening so the user can retry
         // (mirrors the transient-blip philosophy, H8).
         if (this.dc?.readyState === 'open') {
-          this.setStatus('listening', 'Ask or command');
+          this.setStatus('listening', t('setup.voice.detail.askOrCommand'));
         }
       }
       if (!this.radio.pendingRadioPlaybackResult) {

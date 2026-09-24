@@ -301,7 +301,7 @@ test('Contacts continuation target is the visible explanatory note', () => {
   const source = readLayerSource(new URL('./militaryAwareness.js', import.meta.url));
   assert.match(
     source,
-    /<p class="military-awareness-note" tabindex="-1" data-awareness-focus-continuation>Open-source mapped\/observed context\./,
+    /<p class="military-awareness-note" tabindex="-1" data-awareness-focus-continuation>\$\{t\('layers\.awareness\.note'\)\}<\/p>/,
   );
   assert.doesNotMatch(source, /<span[^>]*data-awareness-focus-continuation/);
 });
