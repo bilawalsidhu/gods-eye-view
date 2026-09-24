@@ -414,10 +414,10 @@ export function createFirePerimetersLayer({
 
     getRowControls() {
       const bands = [
-        { label: '0% or unknown', color: containmentAccent(0) },
-        { label: '>0–<50% contained', color: containmentAccent(1) },
-        { label: '50–<100% contained', color: containmentAccent(50) },
-        { label: '100% contained', color: containmentAccent(100) },
+        { label: 'Not contained or unknown', color: containmentAccent(0) },
+        { label: 'Under 50% contained', color: containmentAccent(1) },
+        { label: '50–99% contained', color: containmentAccent(50) },
+        { label: 'Fully contained', color: containmentAccent(100) },
       ];
       return {
         chips: [],
