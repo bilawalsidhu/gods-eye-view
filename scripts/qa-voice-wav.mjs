@@ -78,11 +78,13 @@ try {
   });
   page.on('pageerror', (error) => consoleErrors.push(error.message));
 
-  await page.goto(appUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+  // Boot windows sized for a shared box (run5, 2026-09-24): the 30 s waits
+  // expired under fleet load before the app could boot. Assertion unchanged.
+  await page.goto(appUrl, { waitUntil: 'domcontentloaded', timeout: 120_000 });
   await page.waitForFunction(() => (
     window.__godsEyeView?.voiceCommands
     && document.getElementById('gev-voice-button')
-  ), { timeout: 30_000 });
+  ), { timeout: 120_000 });
 
   const readState = () => page.evaluate(() => {
     const voice = window.__godsEyeView?.voiceCommands;
