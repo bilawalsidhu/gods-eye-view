@@ -120,6 +120,8 @@ export const FLORIDA_IMAGE_HOSTS = [
   'snapshots.divas.cloud',
 ];
 export const DEFAULT_FLORIDA_MAX_SOURCES = 500;
+/** Byte cap per catalog page (2,000 rows, about 650 KiB measured). */
+export const FLORIDA_MAX_CATALOG_BYTES = 2 * 1024 * 1024;
 export const FLORIDA_ANCHORS = [
   { lat: 25.7617, lon: -80.1918 }, // Miami
   { lat: 28.5384, lon: -81.3789 }, // Orlando
