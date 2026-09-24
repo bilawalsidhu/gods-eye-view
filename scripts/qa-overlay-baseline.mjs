@@ -882,7 +882,11 @@ async function main() {
     const contextPage = await browser.newPage();
     await contextPage.setViewport({ ...VIEWPORT, deviceScaleFactor: DPR });
     await installStaticDist(contextPage, DIST_DIR);
-    await contextPage.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+    // 240 s: this bootstrap navigation expired at 60 s under a sustained
+    // 1-min load 90-154 before the first scene could start (re-run log,
+    // 2026-09-24) — same fresh-boot tier the other suites measured. The
+    // assertion is unchanged, only the wait widens.
+    await contextPage.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 240_000 });
     const browserContext = await contextPage.evaluate(() => {
       const canvas = document.createElement('canvas');
       const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');

@@ -150,7 +150,10 @@ function sampleDistanceM(a, b) {
 
 try {
   console.log(`\nfly_route cinematic evidence — ${APP_URL}`);
-  await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 90000 });
+  // 240 s: the fresh-boot navigation expired at 90 s under a sustained
+  // 1-min load 110-154 before the suite could boot at all (re-run log,
+  // 2026-09-24). The assertion is unchanged, only the wait widens.
+  await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 240000 });
   await page.waitForFunction(
     () => window.__godsEyeView?.viewer && window.__gevVoiceCommands?.runner && window.__gevAnnotations,
     { timeout: 150000, polling: 250 },
