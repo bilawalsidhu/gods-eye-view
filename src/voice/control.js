@@ -20,7 +20,7 @@ export function createVoiceControl({ reset = false } = {}) {
         </div>
       </div>
       <button id="gev-voice-button" type="button" aria-label="Voice control — activate to toggle voice; hold Space to speak" aria-describedby="gev-voice-help">
-        <span class="gev-mic-orbit"><img src="/mic.svg" alt="" /></span>
+        <span class="gev-mic-orbit"><img src="mic.svg" alt="" /></span>
         <span class="gev-mic-label">ON/OFF</span>
       </button>
       <div class="gev-voice-visualizer" aria-hidden="true">
