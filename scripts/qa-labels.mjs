@@ -15,6 +15,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
 import { installCompositorFramePump } from './lib/headlessFrames.mjs';
+import { assertDevServerReachable } from './lib/devServer.mjs';
 import { DETECTION_PAINT_SKIP_THRESHOLD_MS } from '../src/data/detectionRenderDemand.js';
 
 const argv = process.argv.slice(2);
@@ -209,13 +210,7 @@ async function main() {
   console.log(`  Observations : ${OBSERVATION_COUNT}`);
   console.log(`  Sample window: >=${SYNTHETIC_SAMPLE_MS / 1000}s synthetic + >=${NORMAL_SAMPLE_MS / 1000}s normal\n`);
 
-  try {
-    const response = await fetch(APP_URL);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  } catch (error) {
-    console.error(`Dev server not reachable at ${APP_URL}: ${error.message}`);
-    process.exit(2);
-  }
+  await assertDevServerReachable(APP_URL);
 
   fs.mkdirSync(SHOT_DIR, { recursive: true });
   const executablePath = findChromeExecutable();

@@ -34,6 +34,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import WebSocket from 'ws';
 import puppeteer from 'puppeteer';
+import { devServerReachable } from './lib/devServer.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -364,11 +365,7 @@ async function runRoutingLayer() {
 
 async function runBehaviorLayer() {
   console.log('\nLAYER 2 — behavior drives (runner(), no model)');
-  try {
-    const res = await fetch(APP_URL);
-    if (!res.ok) throw new Error(String(res.status));
-  } catch (e) {
-    console.error(`\x1b[31mDev server not reachable at ${APP_URL} (${e.message}).\x1b[0m`);
+  if (!(await devServerReachable(APP_URL))) {
     process.exitCode = 1;
     return;
   }

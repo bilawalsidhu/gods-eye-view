@@ -30,6 +30,7 @@
  */
 
 import fs from 'node:fs';
+import { assertDevServerReachable } from './lib/devServer.mjs';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
 import { classifyAircraft, CLASS_SCALE_2D, CLASS_SCALE_3D, CLASS_MODEL_REAL } from '../src/data/aircraftClass.js';
@@ -155,13 +156,7 @@ async function main() {
   console.log(`  Expected classes — flights: ${[...expectedFlights.entries()].map(([k, v]) => `${k}:${v}`).join(' ')}`);
   console.log(`  Expected classes — military: ${[...expectedMilitary.entries()].map(([k, v]) => `${k}:${v}`).join(' ')}\n`);
 
-  try {
-    const res = await fetch(APP_URL, { method: 'GET' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  } catch (e) {
-    console.error(`\x1b[31mDev server not reachable at ${APP_URL} (${e.message}).\x1b[0m`);
-    process.exit(2);
-  }
+  await assertDevServerReachable(APP_URL);
 
   fs.mkdirSync(SHOT_DIR, { recursive: true });
 

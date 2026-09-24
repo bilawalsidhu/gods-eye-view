@@ -21,6 +21,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
+import { assertDevServerReachable } from './lib/devServer.mjs';
 
 const argv = process.argv.slice(2);
 const getOpt = (name, fallback = null) => {
@@ -630,10 +631,7 @@ async function browserContext(page, browser) {
 
 async function main() {
   const requestedParams = parseParams();
-  const response = await fetch(APP_URL).catch((error) => ({ ok: false, statusText: error.message }));
-  if (!response.ok) {
-    throw new Error(`Live dev server unavailable at ${APP_URL}: ${response.status || response.statusText}`);
-  }
+  await assertDevServerReachable(APP_URL);
   fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
   fs.mkdirSync(path.dirname(JSON_PATH), { recursive: true });
 

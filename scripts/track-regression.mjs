@@ -93,6 +93,7 @@
 
 import fs from 'node:fs';
 import puppeteer from 'puppeteer';
+import { assertDevServerReachable } from './lib/devServer.mjs';
 import { classifyAircraft, CLASS_SCALE_3D, CLASS_MODEL_REAL } from '../src/data/aircraftClass.js';
 import { ensureGeoidReady, geoidHeight } from '../src/data/geoid.js';
 
@@ -201,14 +202,7 @@ async function main() {
   console.log(`  Mode    : ${HEADFUL ? 'headful' : 'headless'}\n`);
 
   // Verify the dev server is up before launching a browser.
-  try {
-    const res = await fetch(APP_URL, { method: 'GET' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  } catch (e) {
-    console.error(`\x1b[31mDev server not reachable at ${APP_URL} (${e.message}).\x1b[0m`);
-    console.error(`Start it first:  ./scripts/dev-fresh.sh   (or:  npm run dev)`);
-    process.exit(2);
-  }
+  await assertDevServerReachable(APP_URL);
 
   const chromeExecutable = findChromeExecutable();
   if (chromeExecutable) {

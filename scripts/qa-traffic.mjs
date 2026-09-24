@@ -29,6 +29,7 @@
  */
 
 import puppeteer from 'puppeteer';
+import { assertDevServerReachable } from './lib/devServer.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -104,13 +105,7 @@ async function main() {
   console.log('\nTomTom Live-Flow Traffic Proof (qa-traffic)');
   console.log(`  App URL : ${APP_URL}\n`);
 
-  try {
-    const res = await fetch(APP_URL);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  } catch (e) {
-    console.error(`\x1b[31mDev server not reachable at ${APP_URL} (${e.message}).\x1b[0m`);
-    process.exit(2);
-  }
+  await assertDevServerReachable(APP_URL);
 
   const statusBefore = await fetch(`${APP_URL}/api/tomtom/status`).then((r) => r.json()).catch(() => null);
   if (!statusBefore?.hasKey) {

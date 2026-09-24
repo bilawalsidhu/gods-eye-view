@@ -36,6 +36,7 @@
  */
 
 import puppeteer from 'puppeteer';
+import { assertDevServerReachable } from './lib/devServer.mjs';
 import fs from 'node:fs';
 
 const argv = process.argv.slice(2);
@@ -288,13 +289,7 @@ async function main() {
   console.log(`  Browser mode     : ${HEADFUL ? 'headful (real GPU expected)' : 'headless SwiftShader (relative-only)'}`);
   console.log(`  Degraded delay   : ${DEGRADED_DELAY_MS ? `${DEGRADED_DELAY_MS} ms/request` : 'skipped'}`);
 
-  try {
-    const response = await fetch(APP_URL);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  } catch (error) {
-    console.error(`\nDev server not reachable at ${APP_URL} (${error.message}).`);
-    process.exit(2);
-  }
+  await assertDevServerReachable(APP_URL);
 
   // The subject of this capture is the LIVE road→dot causal chain, so unlike
   // the TomTom leg (intercepted keyless above) the Overpass leg must be real:

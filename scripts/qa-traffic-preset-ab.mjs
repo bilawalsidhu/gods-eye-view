@@ -24,6 +24,7 @@
  */
 
 import puppeteer from 'puppeteer';
+import { assertDevServerReachable } from './lib/devServer.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -143,13 +144,7 @@ async function main() {
   console.log(`  App URL : ${APP_URL}`);
   console.log(`  Out dir : ${OUT_DIR}\n`);
 
-  try {
-    const res = await fetch(APP_URL);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  } catch (e) {
-    console.error(`Dev server not reachable at ${APP_URL} (${e.message}).`);
-    process.exit(2);
-  }
+  await assertDevServerReachable(APP_URL);
   const status = await fetch(`${APP_URL}/api/tomtom/status`).then((r) => r.json()).catch(() => null);
   if (!status?.hasKey) {
     console.error('Server has no TomTom key — the A/B needs live flow.');

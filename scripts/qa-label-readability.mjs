@@ -27,6 +27,7 @@
  */
 
 import fs from 'node:fs';
+import { assertDevServerReachable } from './lib/devServer.mjs';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
 
@@ -224,13 +225,7 @@ async function main() {
   console.log(`  Tag     : ${TAG}`);
   console.log(`  Output  : ${SHOT_DIR}\n`);
 
-  try {
-    const response = await fetch(APP_URL);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  } catch (error) {
-    console.error(`Dev server not reachable at ${APP_URL}: ${error.message}`);
-    process.exit(2);
-  }
+  await assertDevServerReachable(APP_URL);
 
   fs.mkdirSync(SHOT_DIR, { recursive: true });
   const executablePath = findChrome();

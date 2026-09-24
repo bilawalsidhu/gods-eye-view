@@ -30,6 +30,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import puppeteer from 'puppeteer';
+import { assertDevServerReachable } from './lib/devServer.mjs';
 
 const argv = process.argv.slice(2);
 const getOpt = (name, dflt) => {
@@ -209,14 +210,7 @@ async function main() {
   for (const line of vesselCardProvenanceLines(DATA_MODE)) console.log(`  ${line}`);
   console.log('');
 
-  try {
-    const res = await fetch(APP_URL, { method: 'GET' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  } catch (e) {
-    console.error(`\x1b[31mDev server not reachable at ${APP_URL} (${e.message}).\x1b[0m`);
-    console.error(`Start it first:  ./scripts/dev-fresh.sh`);
-    process.exit(2);
-  }
+  await assertDevServerReachable(APP_URL);
 
   // In live mode the feed must actually be able to connect. On a server
   // without AISSTREAM_API_KEY the proxy reports `missing-key` up front; the

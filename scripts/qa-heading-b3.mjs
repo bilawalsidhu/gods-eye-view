@@ -105,6 +105,7 @@
  */
 
 import fs from 'node:fs';
+import { assertDevServerReachable } from './lib/devServer.mjs';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
 
@@ -476,13 +477,7 @@ async function main() {
   console.log(`\nTurning-plane heading QA (Batch 3 / skylight Task 4)`);
   console.log(`  App URL : ${APP_URL}\n`);
 
-  try {
-    const res = await fetch(APP_URL, { method: 'GET' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  } catch (e) {
-    console.error(`\x1b[31mDev server not reachable at ${APP_URL} (${e.message}).\x1b[0m`);
-    process.exit(2);
-  }
+  await assertDevServerReachable(APP_URL);
 
   fs.mkdirSync(SHOT_DIR, { recursive: true });
   fs.mkdirSync(SHOT_DIR_V2, { recursive: true });

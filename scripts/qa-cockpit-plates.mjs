@@ -54,6 +54,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
 import { webglLaunchArgs } from './lib/webglLaunchArgs.mjs';
+import { assertDevServerReachable } from './lib/devServer.mjs';
 
 const argv = process.argv.slice(2);
 const getOpt = (name, fallback) => {
@@ -205,13 +206,7 @@ async function main() {
   console.log(`  Tag     : ${TAG}${TEETH ? '  (TEETH: painter stubbed, expect RED)' : ''}`);
   console.log(`  Backend : ${backend}\n`);
 
-  try {
-    const response = await fetch(APP_URL);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  } catch (error) {
-    console.error(`Dev server not reachable at ${APP_URL}: ${error.message}`);
-    process.exit(2);
-  }
+  await assertDevServerReachable(APP_URL);
 
   fs.mkdirSync(SHOT_DIR, { recursive: true });
   const executablePath = CHROME_CANDIDATES.find((candidate) => {

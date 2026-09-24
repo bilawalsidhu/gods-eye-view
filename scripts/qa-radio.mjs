@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer';
 import { installCompositorFramePump, waitForLaidOutRect } from './lib/headlessFrames.mjs';
 import { webglLaunchArgs } from './lib/webglLaunchArgs.mjs';
+import { assertDevServerReachable } from './lib/devServer.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
@@ -136,11 +137,7 @@ async function awaitRenderedFrame(page) {
 // (imported above), which documents the failure class in full.
 
 async function main() {
-  const response = await fetch(APP_URL).catch(() => null);
-  if (!response?.ok) {
-    console.error(`Dev server not reachable at ${APP_URL}`);
-    process.exit(2);
-  }
+  await assertDevServerReachable(APP_URL);
   // Keyless probe (same allowance the L9 matrix's C3 makes): a server with
   // no real GOOGLE_MAPS_API_KEY answers its OWN endpoints with the honest
   // unavailability contract — google places as 200 {"unavailable":true},

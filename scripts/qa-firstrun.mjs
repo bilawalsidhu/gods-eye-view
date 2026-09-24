@@ -23,6 +23,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer';
 import { webglLaunchArgs } from './lib/webglLaunchArgs.mjs';
+import { assertDevServerReachable } from './lib/devServer.mjs';
 
 const args = process.argv.slice(2);
 const getOpt = (flag, fallback) => {
@@ -464,13 +465,7 @@ async function main() {
   console.log(`  App URL : ${APP_URL}`);
   console.log(`  Mode    : ${TEETH ? 'TEETH (launcher suppressed — expect RED)' : 'normal'}\n`);
 
-  try {
-    const response = await fetch(`${APP_URL}/`);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  } catch (error) {
-    console.error(`Dev server not reachable at ${APP_URL}: ${error.message}`);
-    process.exit(2);
-  }
+  await assertDevServerReachable(APP_URL);
 
   fs.mkdirSync(SHOT_DIR, { recursive: true });
   const executablePath = CHROME_CANDIDATES.find((candidate) => {

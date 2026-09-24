@@ -21,6 +21,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
+import { assertDevServerReachable } from './lib/devServer.mjs';
 
 const argv = process.argv.slice(2);
 const getOpt = (name, dflt) => {
@@ -137,14 +138,7 @@ async function main() {
   console.log(`  App URL : ${APP_URL}`);
   console.log(`  Ports   : ${PORT_KEYS.join(', ')}\n`);
 
-  try {
-    const res = await fetch(APP_URL, { method: 'GET' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  } catch (e) {
-    console.error(`\x1b[31mDev server not reachable at ${APP_URL} (${e.message}).\x1b[0m`);
-    console.error(`Start it first:  ./scripts/dev-fresh.sh`);
-    process.exit(2);
-  }
+  await assertDevServerReachable(APP_URL);
 
   // The datum assertions are made against LIVE rows; a server without
   // AISSTREAM_API_KEY reports `missing-key` up front, and without this gate

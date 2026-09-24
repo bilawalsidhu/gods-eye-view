@@ -21,6 +21,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
+import { assertDevServerReachable } from './lib/devServer.mjs';
 
 // Resolve Chrome the way the other regression harnesses do: explicit env
 // override first, then puppeteer's own version-pinned download, then the
@@ -856,8 +857,7 @@ async function main() {
     throw new Error(`--dist-dir is not a directory: ${DIST_DIR}`);
   }
   if (!DIST_DIR) {
-    const response = await fetch(APP_URL).catch((error) => ({ ok: false, statusText: error.message }));
-    if (!response.ok) throw new Error(`Dev server unavailable at ${APP_URL}: ${response.status || response.statusText}`);
+    await assertDevServerReachable(APP_URL);
   }
 
   const browser = await puppeteer.launch({
