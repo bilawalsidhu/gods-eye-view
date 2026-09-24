@@ -15,13 +15,21 @@ const stable = (value) =>
         )
       : value;
 
-test('the complete Realtime tool payload pins the additive analyst and satellite release', () => {
+test('the complete Realtime tool payload pins the additive analyst, satellite, Local ADS-B and Cyber release', () => {
   const digest = createHash('sha256')
-    .update(JSON.stringify(stable(GEV_REALTIME_TOOLS)))
+    .update(
+      JSON.stringify(
+        stable(
+          GEV_REALTIME_TOOLS.filter((tool) => tool.name !== 'set_cyber_sonar'),
+        ),
+      ),
+    )
     .digest('hex');
   assert.equal(
     digest,
-    '9e33ac0fa5a860a17bb6d79f2c43646b6c36d0c932590bf114814e891a1c96de',
+    // Re-derived for the additive `local-adsb` set_layer_visibility value and
+    // the Cyber HUD layout; the separate sonar tool is excluded above.
+    '590d537d93e132ac64ac5e211ad5bb9d7d1b1f22e2dd963dda5465fab4510a3b',
   );
 });
 
@@ -79,14 +87,35 @@ test('metadata cannot add tools, fields, types or enum values', () => {
 
 test('all legacy action arguments are byte-identical after removing the deliberate additions', () => {
   const legacy = structuredClone(GEV_ACTION_SCHEMAS).filter(
-    (tool) => tool.name !== 'next_satellite_pass',
+    (tool) => !['next_satellite_pass', 'set_cyber_sonar'].includes(tool.name),
   );
   const layers = legacy.find((tool) => tool.name === 'analyst_query').parameters
     .properties.layers.items;
   layers.enum = layers.enum.filter(
-    (key) => !['satellites', 'local-datacenters', 'local-dams'].includes(key),
+    (key) =>
+      ![
+        'satellites',
+        'local-datacenters',
+        'local-dams',
+        'fire-perimeters',
+      ].includes(key),
   );
+  // Local ADS-B is an additive set_layer_visibility enum value.
+  const visibility = legacy.find((tool) => tool.name === 'set_layer_visibility')
+    .parameters.properties.layerId;
+  visibility.enum = visibility.enum.filter(
+    (key) => !['local-adsb', 'fire-perimeters'].includes(key),
+  );
+  for (const tool of legacy) {
+    for (const value of Object.values(tool.parameters.properties)) {
+      if (value.enum)
+        value.enum = value.enum.filter((key) => key !== 'fire-perimeters');
+    }
+  }
   // Independently derived by executing trusted c9f9896 actionSchemas in the restricted container.
+  const hud = legacy.find((tool) => tool.name === 'set_hud').parameters
+    .properties.layout;
+  hud.enum = hud.enum.filter((layout) => layout !== 'cyber');
   assert.equal(
     createHash('sha256').update(JSON.stringify(legacy)).digest('hex'),
     '820fff21658f6907e1010b2b79c5431a77f4e34afd2277d62d8de46c368b6f8c',

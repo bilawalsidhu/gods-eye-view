@@ -1,5 +1,30 @@
 # Changelog
 
+- Region scopes in voice analyst queries ("in the Gulf of Mexico", "over
+  the Alps") work again in the dev server: the bundled Natural Earth and
+  neighborhood packs are fetched as JSON in the browser
+  (`src/data/bundledJson.js`). When a region is not in the bundled packs, the
+  geocode and admin-boundary fallback answers `region-timeout` after 3 s
+  instead of holding the reply.
+
+- Transit and Directions rows repaint as soon as their data lands again:
+  `refreshLayerStats()` now lives on the layer lifecycle, not only on the
+  compatibility facade. `scripts/qa-radio.mjs` uses it instead of a private
+  panel method.
+- On phones the title bar sits 16 px from the top so both Radio broadcast
+  waves stay on-screen.
+- Keep Cyber right-rail panels mutually exclusive and Display, CCTV and Context
+  headers and frames fixed during content scrolling. Restore Radio's nested Context placement and compact
+  player. Add Cyber Sonar voice controls with settings and effect-state readback.
+  Keep keyboard-focus outlines visible inside Cyber's clipped map and cockpit
+  expand/collapse buttons, with a matching red hover border.
+
+- Add the opt-in Cyber HUD layout with coordinated map and cockpit panel
+  styling. Display exposes Sonar on/off, rings, range, power, opacity and sector.
+  Native point, billboard and label highlighting uses GPU draw commands; there
+  is no scene-dimming effect selector. Unsupported shaders retain native contact
+  rendering, and leaving Cyber restores the standard shell and contact treatment.
+
 - Add a **Recent Imagery** data layer (NASA GIBS · HLS + VIIRS, keyless).
   Select a box (drag, the current view, or around a pin; up to 1,000 km a
   side) and the right-rail panel lists the last 30 days of Sentinel-2 /
@@ -14,6 +39,60 @@
   `DATA_SOURCES.md`. The swipe is now shared with the Nepal scene
   (`src/ui/imagerySplit.js`, `src/maps/imageryComparison.js`), and
   `MapSourceController.subscribe()` reports every settled map switch.
+
+## Unreleased — local receiver feeds
+
+- The Local ADS-B layer also reads local 1090 MHz and 978 MHz UAT decoder
+  feeds: the `aircraft.json` that dump1090-fa, readsb, tar1090 or skyaware978
+  serves. Configure them server-side with `LOCAL_RECEIVER_FEEDS`
+  (`band=url`, comma-separated); there is no feed editing in the browser.
+  Hosts must be loopback, RFC1918, `localhost` or `*.local`, the scheme http or
+  https and the path must end in `aircraft.json`; any other entry is logged at
+  startup, reported `invalid` and never fetched.
+- Add `GET /api/local-receivers/aircraft`. It reads every configured feed in
+  parallel (2 s timeout, redirects refused, 2 MB body cap, about 1 s of shared
+  cache) and reports each feed `live`, `stale` (its own `now` is over 10 s old),
+  `unreachable` or `invalid`. Unconfigured, it answers
+  `{ configured: false }` and fetches nothing. Upstream error text is never
+  returned.
+- The layer merges browser-SDR and feed aircraft by ICAO, keeping the newest
+  position, polls the route every second only while it is enabled, and remembers
+  which bands and sources heard each aircraft in the last 60 s. The click card
+  names them (for example "Heard by your receiver · 978 MHz UAT · decoder
+  feed"); aircraft heard only on 978 MHz carry a thin ring. The row status
+  covers both inputs ("2 feeds live · 14 heard", "feed 978 unreachable"), and
+  the Local RTL-SDR card shows a read-only decoder-feed line.
+- While any input is producing aircraft (the browser receiver streaming, or a
+  feed live), the Local ADS-B row stays ON and lists feeds that are not live as
+  a trailing note ("3 heard · USB 5.8 msg/s · feed 1090 stale") instead of
+  showing DEGRADED.
+- Records carry `band` (`1090`/`978`) and `source` (`webusb`/`feed`).
+- See `docs/LOCAL-RECEIVERS.md`.
+
+## Unreleased — local RTL-SDR and Local ADS-B
+
+- Add a Local RTL-SDR card to the Radio panel. It connects a USB RTL-SDR in
+  desktop Chrome or Edge through WebUSB and receives broadcast FM (tune, seek,
+  volume) or 1090 MHz ADS-B. Local FM and internet-radio playback never play
+  together: starting one stops the other.
+- Add a gain control: AUTO or a manual R820T step, remembered per mode. ADS-B
+  defaults to 28.0 dB (the earlier 20.7 dB gave about 1 msg/s against about 9
+  at 28.0 dB on the same antenna; a stored choice still wins), FM to AUTO;
+  changes apply without reconnecting. In
+  ADS-B mode the card shows CRC-valid messages per second, aircraft heard,
+  aircraft positioned and the IQ level.
+- Prefer the ADS-B/1090 MHz channel of a dual-channel receiver, remember an
+  explicitly chosen device per mode, and add CHANGE DEVICE to reopen the
+  WebUSB picker.
+- Add the Local ADS-B layer (`local-adsb`, off by default, not part of share
+  links). Aircraft heard by the receiver draw in magenta beside public Flights;
+  a marker drops when its position is 60 s old and the aircraft is forgotten
+  after 60 s without a message. Clicking one opens a card; markers are not
+  camera-followed. Voice `set_layer_visibility` accepts `local-adsb`.
+- Normalize local ADS-B into one record shape, with a pure adapter for
+  dump1090/readsb `aircraft.json` documents.
+- Add `@jtarrio/webrtlsdr` and `@jtarrio/signals` (Apache-2.0); see
+  `THIRD_PARTY_NOTICES.md`.
 
 ## Unreleased — weather review
 
@@ -103,6 +182,19 @@
 Add feed provenance to analyst/view answers and HUD context while retaining existing response fields and runner ownership (Matt Van Horn, #347).
 
 Analyst records for loaded satellites, datacenters and dams, with explicit bounded count/rank coverage (Matt Van Horn, #351).
+- New Fire Perimeters layer (Events group): live NIFC WFIGS interagency
+  wildfire incident perimeters as ground-clamped polygons with a
+  containment-colored fire line, refreshed every 5 minutes from the public
+  keyless feature service with truncation paging. Clicking a perimeter shows
+  an incident card (acreage, containment, cause, behavior, personnel, county,
+  cost, complex membership) and, when the incident has a state- and
+  recency-verified InciWeb page, a click-through link to it. Recency uses
+  incident page origin and update times because the publication API was retired.
+  The layer is reachable from the panel, voice control, share links (token `2`), and the
+  analyst query engine. WFIGS and InciWeb requests use a capped, cached
+  same-origin proxy with timeouts and a per-client limit. Unchanged refreshes
+  retain geometry; incident-link checks abort on disable or selection change,
+  and the row includes a containment legend.
 
 - Remove the spurious scrollbars that appeared on both panel stacks at narrow
   widths (720px and below) as soon as a panel was expanded. The stacks scroll
@@ -470,6 +562,8 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ### Added
 
+- Add MODIS NRT (Terra+Aqua, ~1 km) active fires to the FIRMS layer, sharing the
+  existing `FIRMS_MAP_KEY` and 30-minute cache.
 - Two map-orientation controls sit beside Share in the top-center globe
   actions. Tilt Map swings between a straight-down map and a 35-degree oblique
   around the point under the centre of the view, keeping that point and the

@@ -1,3 +1,5 @@
+import { HUD_LAYOUTS } from '../hudLayoutPolicy.js';
+
 // Canonical action arguments. Descriptive wording is supplied separately.
 const schemas = [
   {
@@ -137,7 +139,9 @@ const schemas = [
             'local-dams',
             'telegeography-submarine-cables',
             'local-firms',
+            'fire-perimeters',
             'alpr-cameras',
+            'local-adsb',
           ],
         },
         enabled: {
@@ -169,6 +173,7 @@ const schemas = [
             'local-dams',
             'telegeography-submarine-cables',
             'local-firms',
+            'fire-perimeters',
             'alpr-cameras',
           ],
         },
@@ -310,8 +315,23 @@ const schemas = [
         },
         layout: {
           type: 'string',
-          enum: ['tactical', 'operator', 'minimal'],
+          enum: [...HUD_LAYOUTS],
         },
+      },
+    },
+  },
+  {
+    name: 'set_cyber_sonar',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        enabled: { type: 'boolean' },
+        rings: { type: 'integer', minimum: 3, maximum: 12 },
+        rangePct: { type: 'integer', minimum: 60, maximum: 120 },
+        intensityPct: { type: 'integer', minimum: 0, maximum: 100 },
+        opacityPct: { type: 'integer', minimum: 35, maximum: 100 },
+        sectorDeg: { type: 'integer', minimum: 8, maximum: 60 },
       },
     },
   },
@@ -774,6 +794,7 @@ const schemas = [
               'satellites',
               'local-datacenters',
               'local-dams',
+              'fire-perimeters',
             ],
           },
         },

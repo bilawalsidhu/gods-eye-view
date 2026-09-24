@@ -1,5 +1,6 @@
 import { LayerLifecycle } from '../data/lifecycle.js';
 import { LayerPresentation } from './layerPresentation.js';
+import { createCyberSonarScene } from '../cyberSonarScene.js';
 /** Register the application layer catalog before allowing state restoration. */
 export function createApplicationData({
   scene: { viewer, mapStackController },
@@ -55,6 +56,7 @@ export function createApplicationData({
   }
   presentation.mount(document.getElementById('data-toggles'));
   styleManager.attachDataManager(dataManager);
+  defer(createCyberSonarScene(viewer, dataManager));
 
   return { dataManager, catalog, presentation };
 }

@@ -25,6 +25,12 @@ const NO_WINDOW = Object.freeze({ west: 0, south: 0, east: -1, north: -1 });
 const DETAIL_MIN_WIDTH = 6;
 const DETAIL_GRID = 0.5;
 const shellHeights = new WeakMap();
+// From far away Google's coarse 3D tiles rise tens of kilometres above the
+// ground and hide the shells, so the shells rise with the camera: 4 m per
+// kilometre of camera height, at most 60 km, in 500 m steps.
+const LIFT_PER_METRE = 0.004;
+const MAX_LIFT = 60_000;
+const LIFT_STEP = 500;
 // Cesium binds a 1×1 white texture to an image uniform until its first upload:
 // draw nothing until the full-extent image has arrived, and sample the detail
 // image only once it has arrived. The window is west, south, east, north in the
@@ -70,6 +76,13 @@ const sameEdges = (a, b) =>
   a.south === b.south &&
   a.east === b.east &&
   a.north === b.north;
+
+/** Metres every shell rises for a camera this high above the ellipsoid. */
+export function shellLift(cameraHeight) {
+  if (!(cameraHeight > 0)) return 0;
+  const lift = Math.min(MAX_LIFT, cameraHeight * LIFT_PER_METRE);
+  return Math.round(lift / LIFT_STEP) * LIFT_STEP;
+}
 
 /** Keep weather shells first in the primitive collection, in ascending height:
  * higher shells draw over lower ones and other opaque content draws over both. */
@@ -135,6 +148,17 @@ export function createShellSurface({
   });
   primitives.add(primitive);
   orderWeatherShells(primitives, primitive, height);
+  // A uniform scale about the Earth's centre lifts every shell alike and keeps
+  // their order.
+  let lift = 0;
+  const offLift = scene.preRender?.addEventListener(() => {
+    const next = shellLift(scene.camera?.positionCartographic?.height);
+    if (next === lift) return;
+    lift = next;
+    primitive.modelMatrix = cesium.Matrix4.fromUniformScale(
+      1 + lift / cesium.Ellipsoid.WGS84.maximumRadius,
+    );
+  });
   let image = null;
   let frames = 0;
   // The detail image, its own upload count and a window waiting for it to draw.
@@ -265,6 +289,7 @@ export function createShellSurface({
       destroyed = true;
       offRender?.();
       offRender = null;
+      offLift?.();
       if (!primitives.isDestroyed?.() && primitives.contains(primitive))
         primitives.remove(primitive);
       if (!primitive.isDestroyed()) primitive.destroy();

@@ -82,7 +82,7 @@ export const ACTION_DESCRIPTIONS = {
       properties: {
         layerId: {
           description:
-            'Common-name mapping for the non-obvious ids: space mission(s) → rocket-launches; fires/wildfires/active fires → local-firms (NASA FIRMS); ships/vessels/boats → ais-live-vessels; undersea/submarine cables → telegeography-submarine-cables; datacenters → local-datacenters; dams → local-dams; bikes/bike share → bikeshare; street traffic/congestion → traffic; traffic cameras → cctv; internet radio/stations → radio; ALPR/license plate readers/Flock cameras → alpr-cameras.',
+            'Common-name mapping for the non-obvious ids: space mission(s) → rocket-launches; fires/wildfires/active fires → local-firms (NASA FIRMS); ships/vessels/boats → ais-live-vessels; undersea/submarine cables → telegeography-submarine-cables; datacenters → local-datacenters; dams → local-dams; bikes/bike share → bikeshare; street traffic/congestion → traffic; traffic cameras → cctv; internet radio/stations → radio; ALPR/license plate readers/Flock cameras → alpr-cameras; local ADS-B/my receiver/my antenna (aircraft heard by a local RTL-SDR receiver) → local-adsb.',
           $position: 1,
         },
       },
@@ -179,6 +179,29 @@ export const ACTION_DESCRIPTIONS = {
           description: 'auto restores style-driven show/hide.',
           $position: 2,
         },
+      },
+    },
+  },
+  set_cyber_sonar: {
+    description:
+      'Adjust Cyber-only sonar controls. Requires the Cyber HUD layout; never switches layout or HUD visibility. Omitted fields stay unchanged. Returns actual settings and separate map/contact sweep activity. A saved setting does not mean the effect is active.',
+    $position: 1,
+    parameters: {
+      properties: {
+        enabled: { description: 'Explicitly turn sonar on or off.' },
+        rings: { description: 'Number of decorative sonar rings, 3–12.' },
+        rangePct: {
+          description:
+            'Visual ring range, 60–120 percent; not geographic distance.',
+        },
+        intensityPct: {
+          description: 'Sonar Power slider, 0–100 percent. Zero is valid.',
+        },
+        opacityPct: {
+          description:
+            'Contact opacity floor between passes, 35–100 percent; labels have a derived floor. Not whole-scene dimming.',
+        },
+        sectorDeg: { description: 'Sonar sweep sector width, 8–60 degrees.' },
       },
     },
   },
