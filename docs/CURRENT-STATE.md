@@ -36,7 +36,7 @@ themes or enabling omitted settings. State readback distinguishes configured
 settings from active map/contact effects. Sonar settings are session-only and
 return to their defaults on reload. Sliders accept integer values matching the
 action's ranges.
-## Cyber Activity (Phases 1–3)
+## Cyber Activity (Phases 1–4)
 
 Cyber is one first-class, provider-neutral data layer. Cloudflare Radar supplies
 bounded 24-hour Layer 7 attack origin/target country aggregates when its
@@ -85,13 +85,24 @@ identifiers returned in Shodan banners; product/CPE similarity alone is not
 treated as a confirmed match, and a reported match does not prove the asset
 remains vulnerable.
 
+Phase 4 adds optional AlienVault OTX indicator lookups for IP addresses,
+domains, HTTP(S) URLs, file hashes and CVEs. Operators may enter an indicator
+in Cyber Threat Intel or start a lookup from a DShield source IP or selected
+Shodan device. Each lookup is explicit and sends the submitted indicator to
+OTX. Results show up to five related pulse summaries, tags and source links;
+they are cached server-side for 30 minutes and remain non-geographic. A match
+provides threat-intelligence context and does not establish compromise. The
+OTX API key is configured, tested, updated and removed through Provider
+Settings; it stays in the existing local server credential store. OTX lookups
+are optional and do not block the other Cyber providers. See `DATA_SOURCES.md`.
+
 The Cyber layer uses the shared data-layer panel and state codec. Its local
 server proxy bounds upstream responses, keeps Radar tokens server-side, and
 normalizes provider records before rendering. Radar and DShield can be
 enabled/disabled in
 the layer controls; its credential can be tested, changed, or removed in the
-existing Provider Settings panel. AlienVault OTX threat-intelligence and broader
-cross-provider correlation remain future phases.
+existing Provider Settings panel. Broader cross-provider correlation remains
+for Phase 5.
 
 Wind appears in the Weather group before Utilities. The surface-weather prototype
 uses keyless NOAA GFS or ECMWF IFS forecasts on an approximately 1° display grid.

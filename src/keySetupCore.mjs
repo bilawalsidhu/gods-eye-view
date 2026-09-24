@@ -135,6 +135,15 @@ export const KEY_SETUP_KEYS = Object.freeze([
     tier: 'free',
     testId: 'greynoise',
   }),
+  Object.freeze({
+    id: 'alienvault-otx',
+    title: 'ALIENVAULT OTX',
+    unlocks: 'On-demand IOC and threat-pulse context in Cyber Activity',
+    getUrl: 'https://otx.alienvault.com/api/',
+    envVars: Object.freeze(['ALIENVAULT_OTX_API_KEY']),
+    tier: 'free',
+    testId: 'alienvault-otx',
+  }),
 ]);
 
 /** Hostnames a Provider Settings request may arrive under or originate from. */

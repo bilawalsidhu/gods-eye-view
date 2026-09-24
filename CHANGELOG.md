@@ -93,6 +93,18 @@
   dump1090/readsb `aircraft.json` documents.
 - Add `@jtarrio/webrtlsdr` and `@jtarrio/signals` (Apache-2.0); see
   `THIRD_PARTY_NOTICES.md`.
+# Unreleased — Cyber Phase 4
+
+- Add optional AlienVault OTX indicator lookups for IP addresses, domains,
+  HTTP(S) URLs, file hashes and CVEs. Operators can submit indicators directly
+  or look up DShield source IPs and Shodan devices; each request is deliberate,
+  bounded, cached server-side and attributed to OTX. Pulse context is limited
+  to five entries per result and does not create geographic map objects.
+- Add AlienVault OTX API-key setup and connection testing through the existing
+  Provider Settings flow. Keep the key server-side and explain that indicators
+  submitted for lookup are sent to OTX. A pulse match is context, not proof of
+  compromise. See `DATA_SOURCES.md` for source handling and terms.
+
 ## Unreleased — Cyber Phase 3
 
 - Add the CISA Known Exploited Vulnerabilities catalog as a public, keyless

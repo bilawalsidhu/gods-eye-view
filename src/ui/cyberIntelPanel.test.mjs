@@ -387,3 +387,49 @@ test('Radar selection details expand the panel and identify the country pair', (
   assert.match(f.body.textContent, /country-level pair/);
   panel.destroy();
 });
+
+test('OTX lookup UI displays attributed pulse context without map geography', () => {
+  const f = fixture();
+  const layer = {
+    state: {
+      enabled: true,
+      selectedRadar: null,
+      selectedOtxKey: 'auto:8.8.8.8',
+      otxPending: [],
+      otxResults: {
+        'auto:8.8.8.8': {
+          indicator: '8.8.8.8',
+          indicatorTypeLabel: 'IPv4',
+          pulseCount: 1,
+          fetchedAt: '2026-09-20T12:00:00Z',
+          attribution: 'AlienVault Open Threat Exchange (OTX)',
+          link: 'https://otx.alienvault.com/indicator/ip/8.8.8.8',
+          pulses: [
+            {
+              id: 'a'.repeat(24),
+              name: 'Example threat pulse',
+              tags: ['phishing'],
+            },
+          ],
+        },
+      },
+      nonGeographicProviders: [],
+    },
+    setThreatIntelListener(listener) {
+      this.listener = listener;
+    },
+    getThreatIntelState() {
+      return this.state;
+    },
+  };
+  const panel = new CyberIntelPanel({ documentRef: f.documentRef });
+  panel.mount(layer);
+  assert.match(f.body.textContent, /AlienVault OTX/);
+  assert.match(f.body.textContent, /Example threat pulse/);
+  assert.match(f.body.textContent, /not proof of compromise/);
+  assert.equal(
+    findNode(f.body, (node) => node.tagName === 'a')?.href,
+    'https://otx.alienvault.com/pulse/aaaaaaaaaaaaaaaaaaaaaaaa',
+  );
+  panel.destroy();
+});

@@ -292,6 +292,7 @@ function keySetupEndpoint({
             'cloudflare-radar': 'Cloudflare Radar',
             shodan: 'Shodan',
             greynoise: 'GreyNoise',
+            'alienvault-otx': 'AlienVault OTX',
           }[parsed?.provider];
           if (!providerTitle)
             return respond(res, 400, { error: 'Unknown provider test' });

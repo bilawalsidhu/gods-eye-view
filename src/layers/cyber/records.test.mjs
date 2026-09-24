@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   normalizeCyberEnrichment,
   normalizeCyberKevSnapshot,
+  normalizeCyberOtxResult,
   normalizeCyberSnapshot,
   normalizeShodanSearchResult,
 } from './records.js';
@@ -283,3 +284,38 @@ function kevSnapshot() {
     ],
   };
 }
+
+test('normalizes OTX pulse context without accepting geographic fields', () => {
+  const result = normalizeCyberOtxResult({
+    schemaVersion: 1,
+    provider: 'alienvault-otx',
+    indicator: '8.8.8.8',
+    indicatorType: 'IPv4',
+    indicatorTypeLabel: 'IPv4',
+    fetchedAt: '2026-09-20T12:00:00Z',
+    attribution: 'AlienVault Open Threat Exchange (OTX)',
+    pulseCount: 1,
+    pulses: [{ id: 'a'.repeat(24), name: 'Example pulse', tags: ['phishing'] }],
+    latitude: 40,
+    longitude: -74,
+  });
+  assert.equal(result.pulses.length, 1);
+  assert.equal(result.link, 'https://otx.alienvault.com/indicator/ip/8.8.8.8');
+  assert.equal('latitude' in result, false);
+  assert.equal('longitude' in result, false);
+  assert.throws(() =>
+    normalizeCyberOtxResult({
+      ...{
+        schemaVersion: 1,
+        provider: 'alienvault-otx',
+        indicator: '8.8.8.8',
+        indicatorType: 'IPv4',
+        fetchedAt: '2026-09-20T12:00:00Z',
+        attribution: 'AlienVault Open Threat Exchange (OTX)',
+        pulseCount: 0,
+        pulses: [],
+      },
+      attribution: 'untrusted',
+    }),
+  );
+});

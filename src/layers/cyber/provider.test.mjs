@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { cyberProxy } from '../../../server/providers/cyber.js';
 import { createCyberEnrichmentProviders } from '../../../server/providers/cyber/enrichment.js';
+import { createOtxProvider } from '../../../server/providers/cyber/otx.js';
 import { createCyberSource } from './source.js';
 
 const jsonResponse = (value, status = 200) =>
@@ -453,4 +454,95 @@ test('GreyNoise test discloses its one cached Community lookup and bad IPs never
     if (oldKey === undefined) delete process.env.GREYNOISE_API_KEY;
     else process.env.GREYNOISE_API_KEY = oldKey;
   }
+});
+
+test('OTX explicitly looks up supported indicators, bounds pulse context, and keeps its key server-side', async () => {
+  const oldKey = process.env.ALIENVAULT_OTX_API_KEY;
+  process.env.ALIENVAULT_OTX_API_KEY = 'fixture-otx-secret-never-returned';
+  const requests = [];
+  const api = createOtxProvider({
+    now: () => Date.parse('2026-09-20T02:00:00Z'),
+    fetchImpl: async (url, options) => {
+      requests.push({ url: new URL(url), options });
+      if (new URL(url).pathname.endsWith('/pulses/subscribed'))
+        return jsonResponse({ results: [] });
+      return jsonResponse({
+        pulse_info: {
+          count: 8,
+          pulses: Array.from({ length: 8 }, (_, index) => ({
+            id: `${index.toString(16).padStart(24, '0')}`,
+            name: `Pulse ${index}`,
+            description: 'Community intelligence context',
+            author_name: 'Analyst',
+            tags: ['phishing'],
+            indicator_count: 12,
+            TLP: 'white',
+          })),
+        },
+        country: 'US',
+        latitude: 40,
+        longitude: -74,
+      });
+    },
+  });
+  try {
+    const tested = await api.testConnection();
+    assert.match(tested.message, /connection succeeded/);
+    assert.equal(JSON.stringify(tested).includes('fixture-otx-secret'), false);
+    const result = await api.lookupIndicator('8.8.8.8');
+    assert.equal(result.provider, 'alienvault-otx');
+    assert.equal(result.pulseCount, 8);
+    assert.equal(result.pulses.length, 5);
+    assert.equal('latitude' in result, false);
+    assert.equal('longitude' in result, false);
+    assert.equal(requests.length, 2);
+    assert.equal(requests[0].url.hostname, 'otx.alienvault.com');
+    assert.equal(
+      requests[0].options.headers['X-OTX-API-KEY'],
+      'fixture-otx-secret-never-returned',
+    );
+    assert.equal(JSON.stringify(result).includes('fixture-otx-secret'), false);
+    await api.lookupIndicator('8.8.8.8');
+    assert.equal(requests.length, 2, 'repeat lookup uses server cache');
+    await assert.rejects(api.lookupIndicator('not an indicator'), {
+      code: 'invalid_indicator',
+    });
+    assert.equal(
+      requests.length,
+      2,
+      'invalid indicators never leave the server',
+    );
+  } finally {
+    if (oldKey === undefined) delete process.env.ALIENVAULT_OTX_API_KEY;
+    else process.env.ALIENVAULT_OTX_API_KEY = oldKey;
+  }
+});
+
+test('Cyber source posts normalized OTX indicators to its same-origin server endpoint', async () => {
+  let call;
+  const source = createCyberSource({
+    fetchImpl: async (url, options) => {
+      call = { url, options };
+      return jsonResponse({
+        schemaVersion: 1,
+        provider: 'alienvault-otx',
+        indicator: 'example.com',
+        indicatorType: 'Domain',
+        indicatorTypeLabel: 'Domain',
+        fetchedAt: '2026-09-20T12:00:00Z',
+        attribution: 'AlienVault Open Threat Exchange (OTX)',
+        pulseCount: 0,
+        pulses: [],
+      });
+    },
+  });
+  const result = await source.lookupOtxIndicator('example.com');
+  assert.equal(call.url, '/api/cyber/otx/lookup');
+  assert.deepEqual(JSON.parse(call.options.body), {
+    indicator: 'example.com',
+    type: 'auto',
+  });
+  assert.equal(result.indicatorType, 'Domain');
+  assert.equal(result.pulses.length, 0);
+  assert.equal('latitude' in result, false);
 });

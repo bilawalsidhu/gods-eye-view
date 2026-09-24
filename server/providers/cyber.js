@@ -3,6 +3,7 @@ import { isIP } from 'node:net';
 import { readResponseTextCapped } from './common/http.js';
 import { admitKeySetupRequest } from '../../src/keySetupCore.mjs';
 import { createCyberEnrichmentProviders } from './cyber/enrichment.js';
+import { createOtxProvider } from './cyber/otx.js';
 
 const RADAR_BASE = 'https://api.cloudflare.com/client/v4/radar';
 const DSHIELD_URLS = Object.freeze({
@@ -422,6 +423,7 @@ export function cyberProxy({ fetchImpl = fetch, now = () => Date.now() } = {}) {
   const dshieldCache = makeProxyCache();
   const kevCache = makeProxyCache();
   const enrichment = createCyberEnrichmentProviders({ fetchImpl, now });
+  const otx = createOtxProvider({ fetchImpl, now });
 
   async function requestRadarSnapshot({ token, signal, force = false }) {
     const secret = String(
@@ -765,6 +767,8 @@ export function cyberProxy({ fetchImpl = fetch, now = () => Date.now() } = {}) {
             'invalid_page',
             'invalid_area',
             'not_found',
+            'invalid_indicator',
+            'invalid_provider_data',
           ].includes(error?.code)
             ? error.code
             : 'upstream_unavailable';
@@ -848,6 +852,12 @@ export function cyberProxy({ fetchImpl = fetch, now = () => Date.now() } = {}) {
           enrichment.lookupGreyNoise(ip, options),
         ),
       );
+      middlewares.use(
+        '/api/cyber/otx/lookup',
+        enrichmentHandler(({ indicator, type }, options) =>
+          otx.lookupIndicator(indicator, type, options),
+        ),
+      );
     },
     configurePreviewServer({ middlewares }) {
       middlewares.use('/api/cyber/radar', (req, res) =>
@@ -886,6 +896,12 @@ export function cyberProxy({ fetchImpl = fetch, now = () => Date.now() } = {}) {
           enrichment.lookupGreyNoise(ip, options),
         ),
       );
+      middlewares.use(
+        '/api/cyber/otx/lookup',
+        enrichmentHandler(({ indicator, type }, options) =>
+          otx.lookupIndicator(indicator, type, options),
+        ),
+      );
     },
     requestRadarSnapshot,
     requestDshieldSnapshot,
@@ -893,5 +909,7 @@ export function cyberProxy({ fetchImpl = fetch, now = () => Date.now() } = {}) {
     testRadarConnection,
     testShodanConnection: enrichment.testShodanConnection,
     testGreyNoiseConnection: enrichment.testGreyNoiseConnection,
+    testOtxConnection: otx.testConnection,
+    lookupOtxIndicator: otx.lookupIndicator,
   };
 }

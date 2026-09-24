@@ -299,6 +299,7 @@
     "modules": [
       "server/providers/cyber.js",
       "server/providers/cyber/enrichment.js",
+      "server/providers/cyber/otx.js",
       "server/providers/common/http.js",
       "src/sources/httpBody.js",
       "src/keySetupCore.mjs"

@@ -67,7 +67,9 @@ function localProviderPlugins() {
             ? cyber.testShodanConnection()
             : id === 'greynoise'
               ? cyber.testGreyNoiseConnection()
-              : Promise.reject(new Error('unknown_test_provider')),
+              : id === 'alienvault-otx'
+                ? cyber.testOtxConnection()
+                : Promise.reject(new Error('unknown_test_provider')),
     }),
   ];
 }

@@ -67,6 +67,13 @@ export class CyberIntelPanel {
           .onEnrichIp?.(button.dataset.provider, button.dataset.ip);
         return;
       }
+      const otxButton = event.target?.closest?.('[data-otx-lookup]');
+      if (otxButton) {
+        void layer
+          .getThreatIntelState()
+          .onOtxLookup?.(otxButton.dataset.indicator, 'auto');
+        return;
+      }
       const more = event.target?.closest?.('[data-shodan-page]');
       if (more) {
         const page = Number(more.dataset.shodanPage);
@@ -120,10 +127,20 @@ export class CyberIntelPanel {
         return;
       }
       const form = event.target?.closest?.('[data-shodan-search]');
-      if (!form) return;
+      if (form) {
+        event.preventDefault();
+        const query = form.querySelector('input[name="query"]')?.value?.trim();
+        void layer.getThreatIntelState().onShodanAreaSearch?.(query || '');
+        return;
+      }
+      const otxForm = event.target?.closest?.('[data-otx-search]');
+      if (!otxForm) return;
       event.preventDefault();
-      const query = form.querySelector('input[name="query"]')?.value?.trim();
-      void layer.getThreatIntelState().onShodanAreaSearch?.(query || '');
+      const indicator = otxForm
+        .querySelector('input[name="otx-indicator"]')
+        ?.value?.trim();
+      if (indicator)
+        void layer.getThreatIntelState().onOtxLookup?.(indicator, 'auto');
     };
     this._onDevicePopupClick = (event) => {
       if (!event.target?.closest?.('[data-close-shodan-popup]')) return;
@@ -483,6 +500,11 @@ export class CyberIntelPanel {
         element(this.document, 'span', '', `${item.vendor} · ${item.product}`),
       );
       card.append(title);
+      const otxButton = element(this.document, 'button', '', 'OTX context');
+      otxButton.type = 'button';
+      otxButton.dataset.otxLookup = 'true';
+      otxButton.dataset.indicator = item.cveId;
+      card.append(otxButton);
       card.append(element(this.document, 'h4', '', item.name));
       card.append(
         element(
@@ -565,6 +587,11 @@ export class CyberIntelPanel {
       ),
     );
     if (selection.type === 'shodan-asset') {
+      const otxButton = element(this.document, 'button', '', 'OTX context');
+      otxButton.type = 'button';
+      otxButton.dataset.otxLookup = 'true';
+      otxButton.dataset.indicator = selection.ip;
+      section.append(otxButton);
       const close = element(
         this.document,
         'button',
@@ -843,6 +870,15 @@ export class CyberIntelPanel {
           button.dataset.ip = ip;
           actions.append(button);
         }
+        const otxButton = element(this.document, 'button', '', 'OTX context');
+        otxButton.type = 'button';
+        otxButton.dataset.otxLookup = 'true';
+        otxButton.dataset.indicator = record.indicator?.value || '';
+        if (
+          record.indicator?.type === 'ipv4' ||
+          record.indicator?.type === 'ipv6'
+        )
+          actions.append(otxButton);
         body.append(row);
         if (actions.children.length) {
           const actionRow = element(this.document, 'tr');
@@ -912,6 +948,140 @@ export class CyberIntelPanel {
         `${provider.attribution}${provider.fetchedAt ? ` · fetched ${provider.fetchedAt}` : ''}`,
       ),
     );
+    return section;
+  }
+
+  _renderOtxLookup(state) {
+    const section = element(this.document, 'section', 'cyber-intel-provider');
+    section.append(element(this.document, 'h3', '', 'AlienVault OTX'));
+    section.append(
+      element(
+        this.document,
+        'p',
+        'cyber-intel-provenance',
+        'Look up an IP, domain, URL, file hash, or CVE. Each lookup sends that indicator to OTX. A match is threat-intelligence context, not proof of compromise; OTX indicators do not create map locations.',
+      ),
+    );
+    const form = element(this.document, 'form', 'cyber-intel-search-form');
+    form.dataset.otxSearch = 'true';
+    const input = element(this.document, 'input');
+    input.type = 'search';
+    input.name = 'otx-indicator';
+    input.maxLength = 2048;
+    input.placeholder = 'IP, domain, URL, hash, or CVE';
+    input.setAttribute('aria-label', 'AlienVault OTX indicator');
+    const submit = element(
+      this.document,
+      'button',
+      '',
+      state.selectedOtxKey && state.otxPending?.includes(state.selectedOtxKey)
+        ? 'Looking up…'
+        : 'OTX Lookup',
+    );
+    submit.type = 'submit';
+    submit.disabled =
+      !!state.selectedOtxKey &&
+      state.otxPending?.includes(state.selectedOtxKey);
+    form.append(input, submit);
+    section.append(form);
+    const result = state.selectedOtxKey
+      ? state.otxResults?.[state.selectedOtxKey]
+      : null;
+    const pending =
+      state.selectedOtxKey && state.otxPending?.includes(state.selectedOtxKey);
+    if (pending)
+      section.append(
+        element(
+          this.document,
+          'p',
+          'cyber-intel-empty',
+          'Querying AlienVault OTX…',
+        ),
+      );
+    else if (result?.error)
+      section.append(
+        element(this.document, 'p', 'cyber-intel-empty', result.error),
+      );
+    else if (result) {
+      section.append(
+        element(
+          this.document,
+          'p',
+          'cyber-intel-provenance',
+          `${result.indicatorTypeLabel} · ${result.indicator} · ${result.pulseCount} associated pulse${result.pulseCount === 1 ? '' : 's'}${result.fetchedAt ? ` · ${result.fetchedAt}` : ''}`,
+        ),
+      );
+      if (!result.pulses?.length)
+        section.append(
+          element(
+            this.document,
+            'p',
+            'cyber-intel-empty',
+            'No subscribed OTX pulse associations were returned.',
+          ),
+        );
+      for (const pulse of result.pulses || []) {
+        const card = element(this.document, 'article', 'cyber-kev-entry');
+        card.append(element(this.document, 'h4', '', pulse.name));
+        const metadata = [
+          pulse.author,
+          pulse.modified,
+          pulse.indicatorCount ? `${pulse.indicatorCount} indicators` : null,
+          pulse.tlp,
+        ]
+          .filter(Boolean)
+          .join(' · ');
+        if (metadata)
+          card.append(element(this.document, 'p', 'cyber-kev-meta', metadata));
+        if (pulse.description)
+          card.append(
+            element(
+              this.document,
+              'p',
+              'cyber-kev-description',
+              pulse.description,
+            ),
+          );
+        if (pulse.tags?.length)
+          card.append(
+            element(
+              this.document,
+              'p',
+              'cyber-kev-meta',
+              `Tags: ${pulse.tags.join(', ')}`,
+            ),
+          );
+        const link = element(
+          this.document,
+          'a',
+          'cyber-kev-source-link',
+          'Open OTX pulse ↗',
+        );
+        link.href = `https://otx.alienvault.com/pulse/${encodeURIComponent(pulse.id)}`;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        card.append(link);
+        section.append(card);
+      }
+      const sourceLink = element(
+        this.document,
+        'a',
+        'cyber-kev-source-link',
+        'Open OTX indicator ↗',
+      );
+      sourceLink.href = result.link;
+      sourceLink.target = '_blank';
+      sourceLink.rel = 'noopener noreferrer';
+      section.append(sourceLink);
+      section.append(
+        element(
+          this.document,
+          'p',
+          'cyber-intel-attribution',
+          result.attribution,
+        ),
+      );
+    }
     return section;
   }
 
@@ -1035,6 +1205,7 @@ export class CyberIntelPanel {
     }
     for (const provider of state.nonGeographicProviders || [])
       this.body.append(this._renderProvider(provider));
+    this.body.append(this._renderOtxLookup(state));
     if (state.enrichmentMessage)
       this.body.append(
         element(

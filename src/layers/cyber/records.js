@@ -253,6 +253,72 @@ function normalizeCyberKevSnapshot(value) {
   });
 }
 
+function normalizeCyberOtxResult(value) {
+  const fetchedAt = iso(value?.fetchedAt);
+  const indicator = boundedText(value?.indicator, 2_000);
+  const indicatorType = boundedText(value?.indicatorType, 16);
+  const allowedTypes = ['IPv4', 'IPv6', 'Domain', 'URL', 'File hash', 'CVE'];
+  if (
+    !value ||
+    value.schemaVersion !== 1 ||
+    value.provider !== 'alienvault-otx' ||
+    !indicator ||
+    !allowedTypes.includes(indicatorType) ||
+    !fetchedAt ||
+    !Array.isArray(value.pulses) ||
+    value.pulses.length > 5 ||
+    !Number.isSafeInteger(value.pulseCount) ||
+    value.pulseCount < 0 ||
+    value.pulseCount > 1_000_000 ||
+    value.attribution !== 'AlienVault Open Threat Exchange (OTX)'
+  )
+    throw new Error('Malformed AlienVault OTX response');
+  const pulses = value.pulses.map((pulse) => {
+    const id = boundedText(pulse?.id, 40);
+    const name = boundedText(pulse?.name, 180);
+    if (!id || !/^[a-f\d]{24}$/i.test(id) || !name)
+      throw new Error('Malformed AlienVault OTX response');
+    return Object.freeze({
+      id,
+      name,
+      description: boundedText(pulse.description, 1_000),
+      author: boundedText(pulse.author, 100),
+      created: iso(pulse.created),
+      modified: iso(pulse.modified),
+      tags: Object.freeze(
+        (Array.isArray(pulse.tags) ? pulse.tags : [])
+          .slice(0, 8)
+          .map((tag) => boundedText(tag, 80))
+          .filter(Boolean),
+      ),
+      indicatorCount:
+        Number.isSafeInteger(pulse.indicatorCount) && pulse.indicatorCount >= 0
+          ? pulse.indicatorCount
+          : null,
+      tlp: boundedText(pulse.tlp, 16),
+    });
+  });
+  const pathType = {
+    IPv4: 'ip',
+    IPv6: 'ip',
+    Domain: 'domain',
+    URL: 'url',
+    'File hash': 'file',
+    CVE: 'cve',
+  }[indicatorType];
+  return Object.freeze({
+    provider: 'alienvault-otx',
+    indicator,
+    indicatorType,
+    indicatorTypeLabel: boundedText(value.indicatorTypeLabel, 24),
+    fetchedAt,
+    attribution: value.attribution,
+    pulseCount: value.pulseCount,
+    pulses: Object.freeze(pulses),
+    link: `https://otx.alienvault.com/indicator/${pathType}/${encodeURIComponent(indicator)}`,
+  });
+}
+
 /** Validate one normalized, provider-attributed Cyber observation. */
 function normalizeObservation(value, provider) {
   if (!value || typeof value !== 'object') return null;
@@ -443,4 +509,5 @@ export {
   normalizeEnrichmentRecord as normalizeCyberEnrichment,
   normalizeShodanSearchResult,
   normalizeCyberKevSnapshot,
+  normalizeCyberOtxResult,
 };

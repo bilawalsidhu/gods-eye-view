@@ -2,6 +2,7 @@ import { readResponseJsonCapped } from '../../sources/httpBody.js';
 import {
   normalizeCyberEnrichment,
   normalizeCyberKevSnapshot,
+  normalizeCyberOtxResult,
   normalizeCyberSnapshot,
   normalizeShodanSearchResult,
 } from './records.js';
@@ -16,6 +17,7 @@ const ENRICHMENT_URLS = Object.freeze({
   shodanSearch: '/api/cyber/enrich/shodan/search',
   shodanArea: '/api/cyber/enrich/shodan/area',
   greynoise: '/api/cyber/enrich/greynoise/ip',
+  otxLookup: '/api/cyber/otx/lookup',
 });
 
 /** Client for the same-origin, normalized Cyber provider endpoints. */
@@ -103,8 +105,33 @@ export function createCyberSource({
           invalid_page: 'That result page is unavailable.',
           invalid_area:
             'Zoom in to an area with a radius of 1,000 km or less, then try again.',
-          not_found: 'The provider has no record for this IP.',
+          invalid_indicator:
+            'Enter a supported IOC: IP, domain, HTTP(S) URL, file hash, or CVE.',
         };
+        if (url === ENRICHMENT_URLS.otxLookup) {
+          const otxMessages = {
+            missing_credentials:
+              'Add your AlienVault OTX API key in Provider Settings.',
+            invalid_credentials:
+              'AlienVault OTX rejected the saved API key. Check it in Provider Settings.',
+            rate_limited:
+              'AlienVault OTX rate limit reached. Try the lookup again later.',
+            upstream_timeout:
+              'AlienVault OTX did not respond before the request timed out.',
+            upstream_unavailable:
+              'AlienVault OTX is temporarily unavailable. Try again later.',
+            provider_response_too_large:
+              'AlienVault OTX returned more data than the app can safely process.',
+          };
+          if (otxMessages[payload?.error])
+            throw new Error(otxMessages[payload.error]);
+          if (payload?.error === 'not_found')
+            throw new Error('AlienVault OTX has no record for this indicator.');
+          if (payload?.error === 'invalid_provider_data')
+            throw new Error(
+              'AlienVault OTX returned data the app could not read.',
+            );
+        }
         if (url.startsWith('/api/cyber/enrich/shodan/')) {
           if (Number.isInteger(payload?.providerStatus))
             throw new Error(
@@ -169,6 +196,10 @@ export function createCyberSource({
       normalizeCyberEnrichment(
         await post(ENRICHMENT_URLS.greynoise, { ip }, options),
         'greynoise',
+      ),
+    lookupOtxIndicator: async (indicator, type = 'auto', options) =>
+      normalizeCyberOtxResult(
+        await post(ENRICHMENT_URLS.otxLookup, { indicator, type }, options),
       ),
   });
 }

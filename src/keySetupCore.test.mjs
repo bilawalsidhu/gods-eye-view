@@ -62,6 +62,7 @@ test('the status payload reports presence without any credential material', () =
     OPENSKY_CLIENT_ID: 'client-id-abcdef',
     SHODAN_API_KEY: 'shodan-fixture-secret',
     GREYNOISE_API_KEY: 'greynoise-fixture-secret',
+    ALIENVAULT_OTX_API_KEY: 'otx-fixture-secret',
     // Secret missing: the OpenSky pair must read as NOT set.
   };
   const status = keySetupStatus(env);
@@ -74,6 +75,7 @@ test('the status payload reports presence without any credential material', () =
   for (const [id, testId, envVar] of [
     ['shodan', 'shodan', 'SHODAN_API_KEY'],
     ['greynoise', 'greynoise', 'GREYNOISE_API_KEY'],
+    ['alienvault-otx', 'alienvault-otx', 'ALIENVAULT_OTX_API_KEY'],
   ]) {
     const key = status.keys.find((row) => row.id === id);
     assert.equal(key.set, true);
@@ -90,7 +92,8 @@ test('the status payload reports presence without any credential material', () =
   assert.ok(!serialized.includes('tails'), 'status must not expose a credential-tail field');
   assert.ok(!serialized.includes('shodan-fixture-secret'));
   assert.ok(!serialized.includes('greynoise-fixture-secret'));
-  assert.equal(status.setCount, 3);
+  assert.ok(!serialized.includes('otx-fixture-secret'));
+  assert.equal(status.setCount, 4);
 });
 
 test('whitespace-only env values do not count as configured', () => {

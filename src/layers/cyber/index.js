@@ -138,11 +138,21 @@ export function createCyberLayer({
   const shodanVisualOffsets = new Map();
   const enrichmentResults = new Map();
   const enrichmentPending = new Set();
+  const otxResults = new Map();
+  const otxPending = new Set();
   const enrichmentRequests = new Set();
   let enrichmentGeneration = 0;
   let shodanSearch = null;
   let shodanAreaSearch = null;
+  let selectedOtxKey = null;
   let enrichmentMessage = '';
+
+  function cacheOtxResult(key, result) {
+    otxResults.delete(key);
+    otxResults.set(key, result);
+    while (otxResults.size > 20)
+      otxResults.delete(otxResults.keys().next().value);
+  }
 
   const notify = () => rowControlsListener?.();
   function cacheEnrichmentResult(key, value) {
@@ -506,6 +516,47 @@ export function createCyberLayer({
     }
   }
 
+  async function lookupOtxIndicator(indicator, type = 'auto') {
+    const value = String(indicator || '').trim();
+    if (!enabled || !value || typeof source.lookupOtxIndicator !== 'function')
+      return;
+    const key = `${type}:${value.toLowerCase()}`;
+    selectedOtxKey = key;
+    if (
+      (otxResults.has(key) && !otxResults.get(key)?.error) ||
+      otxPending.has(key)
+    ) {
+      notifyThreatIntel();
+      return;
+    }
+    otxResults.delete(key);
+    otxPending.add(key);
+    const generation = enrichmentGeneration;
+    const controller = new AbortController();
+    enrichmentRequests.add(controller);
+    notifyThreatIntel();
+    try {
+      const result = await source.lookupOtxIndicator(value, type, {
+        signal: controller.signal,
+      });
+      if (enabled && generation === enrichmentGeneration)
+        cacheOtxResult(key, result);
+    } catch (error) {
+      if (enabled && generation === enrichmentGeneration)
+        cacheOtxResult(key, {
+          indicator: value,
+          type,
+          error: error?.message || 'AlienVault OTX lookup failed.',
+        });
+    } finally {
+      enrichmentRequests.delete(controller);
+      if (generation === enrichmentGeneration) {
+        otxPending.delete(key);
+        notifyThreatIntel();
+      }
+    }
+  }
+
   async function runShodanSearch(query, page = 1) {
     if (!enabled || typeof source.searchShodan !== 'function') return;
     const generation = enrichmentGeneration;
@@ -688,6 +739,9 @@ export function createCyberLayer({
       kevByCve.clear();
       enrichmentResults.clear();
       enrichmentPending.clear();
+      otxResults.clear();
+      otxPending.clear();
+      selectedOtxKey = null;
       shodanSearch = null;
       shodanAreaSearch = null;
       selectedShodan = null;
@@ -878,6 +932,10 @@ export function createCyberLayer({
         enrichmentPending: [...enrichmentPending],
         shodanSearch,
         enrichmentMessage,
+        otxResults: Object.fromEntries(otxResults),
+        otxPending: [...otxPending],
+        selectedOtxKey,
+        onOtxLookup: lookupOtxIndicator,
         onEnrichIp: enrichIp,
         onShodanSearch: runShodanSearch,
         shodanAreaSearch,
@@ -902,6 +960,10 @@ export function createCyberLayer({
                 ports: dshield?.ports || [],
                 enrichmentResults: Object.fromEntries(enrichmentResults),
                 enrichmentPending: [...enrichmentPending],
+                otxResults: Object.fromEntries(otxResults),
+                otxPending: [...otxPending],
+                selectedOtxKey,
+                onOtxLookup: lookupOtxIndicator,
                 shodanSearch,
                 onEnrichIp: enrichIp,
                 onShodanSearch: runShodanSearch,
