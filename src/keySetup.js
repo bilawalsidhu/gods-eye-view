@@ -324,18 +324,37 @@ function buildRow(documentRef, key, status = null) {
         titleGroup.className = 'provider-card-title-group';
 
         const radioLabel = documentRef.createElement('label');
-        radioLabel.className = 'provider-card-radio-label';
+        radioLabel.className = 'provider-card-checkbox-label';
 
         const radio = documentRef.createElement('input');
-        radio.type = 'radio';
+        radio.type = 'checkbox';
         radio.name = 'key_setup_active_provider';
         radio.value = provider.id;
         radio.checked = pActive;
-        radio.title = `Select ${provider.name} as default engine`;
+        radio.title = `${pActive ? 'Disable' : 'Enable'} ${provider.name}`;
         radio.addEventListener('change', () => {
           if (radio.checked) {
-            baseUrlInput.value = provider.baseUrl;
-            modelInput.value = provider.defaultModel;
+            // When enabling a provider, add it to active providers
+            // We'll handle the actual activation in the submit handler
+          } else {
+            // When disabling a provider, remove it from active providers
+            // We'll handle the actual deactivation in the submit handler
+          }
+          // Update the baseUrl and model inputs to reflect the first active provider
+          // or keep current values if no change needed
+          const checkboxes = fields.querySelectorAll(
+            'input[name="key_setup_active_provider"]:checked',
+          );
+          if (checkboxes.length > 0) {
+            const firstChecked = checkboxes[0];
+            const providerId = firstChecked.value;
+            const provider = FREE_LLM_PROVIDERS.find(
+              (p) => p.id === providerId,
+            );
+            if (provider) {
+              baseUrlInput.value = provider.baseUrl;
+              modelInput.value = provider.defaultModel;
+            }
           }
         });
 
