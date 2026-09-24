@@ -393,57 +393,15 @@ try {
   derivativeReport(peakRollRate < 20, 'the roll enters and exits smoothly, never snaps',
     `peak roll rate ${peakRollRate.toFixed(1)} °/s over ${RATE_WINDOW_MS} ms`);
 
-  // Speed: eased at both ends, no step in between. Measured over 400 ms
-  // windows — the per-frame delta is dominated by the pairing jitter between
-  // the motion tick's own clock and postRender, not by the dolly.
-  const cumulative = [0];
-  for (let i = 1; i < rows.length; i += 1) {
-    cumulative.push(cumulative[i - 1] + sampleDistanceM(rows[i - 1], rows[i]));
-  }
-  const speeds = [];
-  for (let i = 0, j = 0; i < rows.length; i += 1) {
-    while (j < rows.length - 1 && rows[j].t - rows[i].t < 400) j += 1;
-    const dt = (rows[j].t - rows[i].t) / 1000;
-    if (dt >= 0.3) speeds.push({ t: rows[i].t - rows[0].t, v: (cumulative[j] - cumulative[i]) / dt });
-  }
-  const window1s = (from, to) => {
-    const inWindow = speeds.filter((s) => s.t >= from && s.t <= to);
-    return inWindow.length ? inWindow.reduce((sum, s) => sum + s.v, 0) / inWindow.length : Number.NaN;
-  };
-  const peakV = Math.max(...speeds.map((s) => s.v));
-  const firstSecond = window1s(0, 1200);
-  report(firstSecond < peakV * 0.5, 'the dolly eases IN (no velocity step at the start)',
-    `first 1.2 s ${firstSecond.toFixed(1)} m/s vs peak ${peakV.toFixed(1)} m/s`);
-
-  // Ease-out is measured as the SHAPE of the decay, not as a terminal window.
-  // The sampler keeps running after the dolly stops, so a trailing average
-  // includes stationary frames — under which a hard stop also reports ~0 m/s
-  // and passes. How long the speed takes to fall from 90% to 10% of peak is
-  // immune to that tail: a ramp spreads it over a second or more, a hard stop
-  // collapses it into a single frame.
-  const lastAbove = (fraction) => {
-    for (let i = speeds.length - 1; i >= 0; i -= 1) if (speeds[i].v >= peakV * fraction) return speeds[i].t;
-    return Number.NaN;
-  };
-  const decayMs = lastAbove(0.1) - lastAbove(0.9);
-  report(decayMs > 800, 'the dolly eases OUT over a real ramp, not a hard stop',
-    `speed fell 90% → 10% of peak over ${decayMs.toFixed(0)} ms (a hard stop collapses to one frame)`);
-  const riseMs = (() => {
-    const first = (fraction) => speeds.find((s) => s.v >= peakV * fraction)?.t ?? Number.NaN;
-    return first(0.9) - first(0.1);
-  })();
-  report(riseMs > 800, 'and eases IN over one too',
-    `speed rose 10% → 90% of peak over ${riseMs.toFixed(0)} ms`);
-  report(peakV < 40 * 1.35, 'the easing keeps the shipped pace — the plateau IS the speed word',
-    `peak ${peakV.toFixed(1)} m/s over a 40 m/s mean (${(flight.distanceM / flight.durationS).toFixed(1)} m/s reported)`);
-  // Acceleration in the DOLLY'S OWN TIME BASE. The renderer's frame cadence
-  // on software GL is irregular — 0.3-4 s gaps with occasional double frames
-  // — and wall-time window differencing manufactures spikes out of that
-  // cadence alone (run3o: 74 m/s² at a 3.9 s gap + 0.04 s double frame while
-  // the camera moved a metronomic 10.3 m on EVERY frame). advanceRouteFlight
-  // advances exactly min(0.25 s, wall gap) of simulation time per rendered
-  // frame, so velocity and acceleration measured in SIMULATION time read the
-  // designed easing and are immune to when the renderer delivers frames.
+  // ── Velocity, easing and acceleration in the DOLLY'S OWN TIME BASE ──────
+  // advanceRouteFlight advances exactly min(0.25 s, wall gap) of simulation
+  // time per rendered frame, so velocity measured in SIMULATION time reads
+  // the designed easing no matter when the renderer delivers frames. Wall
+  // windows manufacture artifacts out of the cadence alone: run3o read
+  // 74 m/s² of "acceleration" at a 3.9 s gap + 0.04 s double frame while the
+  // camera moved a metronomic 10.3 m on EVERY frame, and run8 (2026-09-24, a
+  // frame every 3.8 s median under fleet load) read a 1410 m/s "peak" off a
+  // ~40 m/s plateau, collapsing both ease ramps to "0 ms".
   const SIM_STEP_S = 0.25;
   const simT = [0];
   const simV = [0];
@@ -463,6 +421,45 @@ try {
     const sample = simV.slice(from, to).sort((a, b) => a - b);
     return sample[sample.length >> 1];
   };
+  // speeds[] rides SIM- milliseconds so the windows and thresholds below
+  // keep their ms semantics; the acceleration check further down consumes
+  // simT in seconds directly (m/s per sim-s = m/s²).
+  const speeds = simT.map((t, i) => ({ t: t * 1000, v: windowMedian(Math.max(0, i - K + 1), i + 1) }));
+
+  // Speed: eased at both ends, no step in between. Windows are in
+  // SIMULATION ms (the series above); on quiet hardware sim time tracks
+  // wall time, so the designed curve reads identically — under starvation
+  // it is the only time base that reads the curve at all.
+  const window1s = (from, to) => {
+    const inWindow = speeds.filter((s) => s.t >= from && s.t <= to);
+    return inWindow.length ? inWindow.reduce((sum, s) => sum + s.v, 0) / inWindow.length : Number.NaN;
+  };
+  const peakV = Math.max(...speeds.map((s) => s.v));
+  const firstSecond = window1s(0, 1200);
+  report(firstSecond < peakV * 0.5, 'the dolly eases IN (no velocity step at the start)',
+    `first 1.2 sim-s ${firstSecond.toFixed(1)} m/s vs peak ${peakV.toFixed(1)} m/s`);
+
+  // Ease-out is measured as the SHAPE of the decay, not as a terminal window.
+  // The sampler keeps running after the dolly stops, so a trailing average
+  // includes stationary frames — under which a hard stop also reports ~0 m/s
+  // and passes. How long the speed takes to fall from 90% to 10% of peak is
+  // immune to that tail: a ramp spreads it over a sim second or more, a hard
+  // stop collapses it into a single frame.
+  const lastAbove = (fraction) => {
+    for (let i = speeds.length - 1; i >= 0; i -= 1) if (speeds[i].v >= peakV * fraction) return speeds[i].t;
+    return Number.NaN;
+  };
+  const decayMs = lastAbove(0.1) - lastAbove(0.9);
+  report(decayMs > 800, 'the dolly eases OUT over a real ramp, not a hard stop',
+    `speed fell 90% → 10% of peak over ${decayMs.toFixed(0)} sim-ms (a hard stop collapses to one frame)`);
+  const riseMs = (() => {
+    const first = (fraction) => speeds.find((s) => s.v >= peakV * fraction)?.t ?? Number.NaN;
+    return first(0.9) - first(0.1);
+  })();
+  report(riseMs > 800, 'and eases IN over one too',
+    `speed rose 10% → 90% of peak over ${riseMs.toFixed(0)} sim-ms`);
+  report(peakV < 40 * 1.35, 'the easing keeps the shipped pace — the plateau IS the speed word',
+    `peak ${peakV.toFixed(1)} m/s over a 40 m/s mean (${(flight.distanceM / flight.durationS).toFixed(1)} m/s reported)`);
   let peakAccel = 0;
   for (let i = 2 * K; i < rows.length; i += 1) {
     const dt = simT[i] - simT[i - K];
@@ -569,10 +566,25 @@ try {
   derivativeReport(peakClimbMps < 20, 'and climbs stay a swell rather than a lurch',
     `peak climb ${peakClimbMps.toFixed(1)} m/s against ~40 m/s of ground speed`);
 
+  // The look-down LOCK is a cruise property. The flight deliberately eases
+  // the pitch from wherever the camera was looking down to the look-down
+  // angle during the approach, and at software-GL cadence that approach
+  // spans only a few frames (run8: -28° → -32° inside the first sim second,
+  // then 0.00° of spread through the middle 80% and final 10% of the
+  // flight). Including the approach in the spread measures the designed
+  // ramp, not wobble — so lock is asserted from the first row already
+  // within 0.5° of the flight's own terminal pitch, and the assertion on
+  // that cruise segment stays hard. The full-series range is still
+  // recorded so the approach itself remains visible evidence.
   const pitches = rows.map((r) => r.pitchDeg);
-  const pitchSpread = Math.max(...pitches) - Math.min(...pitches);
-  report(pitchSpread < 2, 'the look-down angle stays locked (no pitch wobble)',
-    `pitch ${Math.min(...pitches).toFixed(1)}°..${Math.max(...pitches).toFixed(1)}°`);
+  const sortedTail = [...pitches.slice(-Math.max(5, Math.floor(pitches.length / 10)))].sort((a, b) => a - b);
+  const terminalPitch = sortedTail[sortedTail.length >> 1];
+  const pitchLockFrom = pitches.findIndex((p) => Math.abs(p - terminalPitch) < 0.5);
+  const lockedPitches = pitchLockFrom >= 0 ? pitches.slice(pitchLockFrom) : pitches;
+  const lockedSpread = Math.max(...lockedPitches) - Math.min(...lockedPitches);
+  report(lockedSpread < 2, 'the look-down angle stays locked (no pitch wobble)',
+    `locked-segment spread ${lockedSpread.toFixed(2)}° (${lockedPitches.length}/${pitches.length} rows;` +
+    ` full series ${Math.min(...pitches).toFixed(1)}°..${Math.max(...pitches).toFixed(1)}° incl. the designed approach)`);
 
   // ── Run 2: interrupt the dolly MID-BANK ───────────────────────────────
   // Cutting a level camera proves nothing about levelling, so this waits for
