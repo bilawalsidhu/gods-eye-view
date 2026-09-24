@@ -30,11 +30,12 @@ export const SUITE_TIMEOUT_OVERRIDES = {
   // (D8 log 12:49:36 → overlay-baseline json 12:52:41) — ≈86 min total.
   // 95 min keeps ≈9 min of headroom for load swings.
   'qa-l9-matrix.mjs': 5_700_000,
-  // 45 min: 15 scenes × (boot + layer data + 10 s of sampled motion/rest)
-  // measured 22 min quiet, but at 1-min load 40+ each scene's boot can take
-  // 2-4 min — 30 min SIGKILLed the run mid-scenes in run4b/run6c
-  // (2026-09-24) with no RESULT line.
-  'qa-overlay-baseline.mjs': 2_700_000,
+  // 75 min: 15 scenes × (boot + layer data + 10 s of sampled motion/rest)
+  // measured 22 min quiet, but each scene's boot can take up to its 240 s
+  // window under fleet load — 30 min cut run4b/run6c mid-scenes, and 45 min
+  // cut run7 AND run8 (2026-09-24) with 10/13 scenes OK and 2-3 scenes to
+  // go; 15 × 240 s of worst-case boot alone is 60 min.
+  'qa-overlay-baseline.mjs': 4_500_000,
   // Heaviest suite on the box (52 checks: cockpit + tracking + CCTV +
   // overlays). Its armored probe survives a mid-run burst (renderer
   // unresponsive ~5 min, then recovery — RUN 3i), but the cumulative
