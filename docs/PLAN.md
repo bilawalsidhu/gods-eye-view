@@ -2612,9 +2612,18 @@ per 11.3's entry rule: baseline re-measured with the same metrics as
     product; the run10 window (load <20 sustained) is the condition
     they share with the rest of the battery's PASS evidence.
   - **Carried from the earlier partial close**: axe audit green (0 rule
-    violations); docs links 52/52; GitForge lint + unit jobs succeeded
-    in-run, and the run-creation trigger defect was FIXED upstream
-    (2026-09-23: four `succeeded` runs on the v0.10.1 tree).
+    violations); docs links 52/52; the run-creation trigger defect was
+    FIXED upstream (2026-09-23: four `succeeded` runs on the v0.10.1
+    tree).
+  - **GitForge green on the closed tree (verified 2026-09-24)**: run
+    `08299058` @ `bfabc3c` (this close's head) — `succeeded`, 12.2 min,
+    6/6 jobs exit 0: lint+audit-gate, Aegis secrets scan (0 findings),
+    allocation-gated unit suite on default Node, allocation-gated unit
+    suite on Node 26, coverage, wasm+build+budgets. The Node-26 job is
+    the clean allocation-gate green the local calm-box re-run was held
+    for — the local ETIMEDOUT probes (2/13 at load 163-253) were
+    fork-starvation, and the same gate passes in CI on the same
+    commit.
 - [x] **Batch W (release)** — DONE 2026-09-23: v0.10.1 shipped via the
   RUNBOOK pinned order. Gate battery green on the release tree (lint
   zero-warnings, unit 3,988 + 14 allocation-gated, build 1m23s, bundle

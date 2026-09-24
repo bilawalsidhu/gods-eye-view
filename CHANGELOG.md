@@ -53,7 +53,10 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   firstrun-mutations), flyroute-cinema 28/28 (ease-in 2000 sim-ms,
   ease-out 1500, peak 41.4 m/s, cruise pitch spread 0.00°),
   overlay-baseline 14/15 scenes OK with one honest AIS-unavailable
-  SKIP; no assertion was weakened anywhere.
+  SKIP; no assertion was weakened anywhere. GitForge CI confirmed green
+  on the closed tree (run `08299058` @ the close head, 6/6 jobs exit 0:
+  lint+audit, Aegis, allocation-gated units on default Node and on
+  Node 26, coverage, wasm+build+budgets).
 
 ## [0.10.1] — 2026-09-23
 
