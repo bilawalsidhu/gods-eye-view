@@ -29,20 +29,39 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const SOURCE_URL = 'https://data.sfgov.org/resource/j2bu-swwd.geojson?$limit=100';
-const OUT = path.join(path.dirname(fileURLToPath(import.meta.url)),
-  '..', 'src', 'data', 'local_data', 'neighborhoods', 'san-francisco.json');
+const SOURCE_URL =
+  'https://data.sfgov.org/resource/j2bu-swwd.geojson?$limit=100';
+const OUT = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..',
+  'src',
+  'data',
+  'local_data',
+  'neighborhoods',
+  'san-francisco.json',
+);
 const TOLERANCE = 2e-5; // degrees, ~2 m
 const DECIMALS = 6;
 
 /** Perpendicular distance from point p to segment a-b (in degrees, planar — fine at this scale). */
 function segDist(p, a, b) {
-  let [x, y] = p; const [x1, y1] = a; const [x2, y2] = b;
-  let dx = x2 - x1; let dy = y2 - y1;
+  let [x, y] = p;
+  const [x1, y1] = a;
+  const [x2, y2] = b;
+  let dx = x2 - x1;
+  let dy = y2 - y1;
   if (dx !== 0 || dy !== 0) {
     const t = ((x - x1) * dx + (y - y1) * dy) / (dx * dx + dy * dy);
-    if (t > 1) { x -= x2; y -= y2; return Math.hypot(x, y); }
-    if (t > 0) { x -= x1 + dx * t; y -= y1 + dy * t; return Math.hypot(x, y); }
+    if (t > 1) {
+      x -= x2;
+      y -= y2;
+      return Math.hypot(x, y);
+    }
+    if (t > 0) {
+      x -= x1 + dx * t;
+      y -= y1 + dy * t;
+      return Math.hypot(x, y);
+    }
   }
   return Math.hypot(x - x1, y - y1);
 }
@@ -55,10 +74,14 @@ function douglasPeucker(points, tolerance) {
   const stack = [[0, points.length - 1]];
   while (stack.length) {
     const [first, last] = stack.pop();
-    let maxDist = 0; let index = -1;
+    let maxDist = 0;
+    let index = -1;
     for (let i = first + 1; i < last; i++) {
       const d = segDist(points[i], points[first], points[last]);
-      if (d > maxDist) { maxDist = d; index = i; }
+      if (d > maxDist) {
+        maxDist = d;
+        index = i;
+      }
     }
     if (maxDist > tolerance && index !== -1) {
       keep[index] = 1;
@@ -73,10 +96,16 @@ const round = (v) => Number(v.toFixed(DECIMALS));
 /** Simplify + round one ring; returns null if it degenerates. */
 function processRing(ring) {
   // GeoJSON rings are closed (first == last); simplify the open part.
-  const open = ring.length > 1
-    && ring[0][0] === ring[ring.length - 1][0] && ring[0][1] === ring[ring.length - 1][1]
-    ? ring.slice(0, -1) : ring.slice();
-  const simplified = douglasPeucker(open, TOLERANCE).map(([lon, lat]) => [round(lon), round(lat)]);
+  const open =
+    ring.length > 1 &&
+    ring[0][0] === ring[ring.length - 1][0] &&
+    ring[0][1] === ring[ring.length - 1][1]
+      ? ring.slice(0, -1)
+      : ring.slice();
+  const simplified = douglasPeucker(open, TOLERANCE).map(([lon, lat]) => [
+    round(lon),
+    round(lat),
+  ]);
   const out = [];
   for (const pt of simplified) {
     const prev = out[out.length - 1];
@@ -104,29 +133,43 @@ async function main() {
     throw new Error('unexpected payload: not a FeatureCollection');
   }
 
-  let inVerts = 0; let outVerts = 0;
+  let inVerts = 0;
+  let outVerts = 0;
   const features = [];
   for (const f of raw.features) {
     const name = f.properties && f.properties.nhood;
-    if (!name || !f.geometry) throw new Error(`feature missing nhood/geometry: ${JSON.stringify(f.properties)}`);
-    const polysIn = f.geometry.type === 'MultiPolygon' ? f.geometry.coordinates
-      : f.geometry.type === 'Polygon' ? [f.geometry.coordinates]
-        : null;
-    if (!polysIn) throw new Error(`unexpected geometry type ${f.geometry.type} for ${name}`);
+    if (!name || !f.geometry)
+      throw new Error(
+        `feature missing nhood/geometry: ${JSON.stringify(f.properties)}`,
+      );
+    const polysIn =
+      f.geometry.type === 'MultiPolygon'
+        ? f.geometry.coordinates
+        : f.geometry.type === 'Polygon'
+          ? [f.geometry.coordinates]
+          : null;
+    if (!polysIn)
+      throw new Error(
+        `unexpected geometry type ${f.geometry.type} for ${name}`,
+      );
     const polys = [];
     for (const poly of polysIn) {
       const rings = [];
       for (const ring of poly) {
         inVerts += ring.length;
         const r = processRing(ring);
-        if (r) { rings.push(r); outVerts += r.length; }
+        if (r) {
+          rings.push(r);
+          outVerts += r.length;
+        }
       }
       if (rings.length && poly[0] && rings[0]) polys.push(rings);
     }
     if (!polys.length) throw new Error(`geometry collapsed for ${name}`);
-    const geometry = polys.length === 1
-      ? { type: 'Polygon', coordinates: polys[0] }
-      : { type: 'MultiPolygon', coordinates: polys };
+    const geometry =
+      polys.length === 1
+        ? { type: 'Polygon', coordinates: polys[0] }
+        : { type: 'MultiPolygon', coordinates: polys };
     features.push({ type: 'Feature', properties: { name }, geometry });
   }
   features.sort((a, b) => a.properties.name.localeCompare(b.properties.name));
@@ -134,12 +177,18 @@ async function main() {
   const out = {
     type: 'FeatureCollection',
     city: 'San Francisco',
-    source: 'DataSF "Analysis Neighborhoods" (dataset j2bu-swwd, map view p5b7-5n3h) — PDDL 1.0 (public domain); see SOURCE.md',
+    source:
+      'DataSF "Analysis Neighborhoods" (dataset j2bu-swwd, map view p5b7-5n3h) — PDDL 1.0 (public domain); see SOURCE.md',
     features,
   };
   fs.writeFileSync(OUT, `${JSON.stringify(out)}\n`);
   const kb = (fs.statSync(OUT).size / 1024).toFixed(0);
-  console.log(`wrote ${OUT}: ${features.length} features, ${inVerts} → ${outVerts} vertices, ${kb} KB`);
+  console.log(
+    `wrote ${OUT}: ${features.length} features, ${inVerts} → ${outVerts} vertices, ${kb} KB`,
+  );
 }
 
-main().catch((err) => { console.error(err); process.exit(1); });
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

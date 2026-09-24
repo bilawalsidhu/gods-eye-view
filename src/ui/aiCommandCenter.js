@@ -669,11 +669,6 @@ export function isGlobePrompt(text) {
     return true;
   }
 
-  // Touchless gesture control
-  if (/\b(?:gesture|gestures|touchless|webcam control)\b/i.test(p)) {
-    return true;
-  }
-
   // Notable cities and world landmarks frequently queried on the 3D globe
   if (
     /\b(?:tokyo|paris|london|austin|nyc|new york|san francisco|dubai|dc|washington|hawaii|fuji|eiffel|tower|kremlin|pentagon|taj mahal|colosseum|sydney|beijing|cairo|rome|berlin)\b/i.test(
@@ -3988,33 +3983,6 @@ export function initAiCommandCenter({
     toggleWakeWord,
     isWakeWordActive: () => wakeWordActive,
     playAudioCue,
-    setGestureStatus: ({ enabled, lastGesture } = {}) => {
-      const pill = panel.querySelector('.ai-gesture-status-pill');
-      if (pill) {
-        if (!enabled) {
-          pill.textContent = '🖐️ GESTURE: STANDBY';
-          pill.classList.remove('active', 'triggered');
-        } else {
-          pill.textContent = lastGesture
-            ? `🖐️ ${lastGesture}`
-            : '🖐️ GESTURE: ACTIVE';
-          pill.classList.add('active');
-          if (lastGesture) {
-            pill.classList.add('triggered');
-            setTimeout(() => pill.classList.remove('triggered'), 1200);
-          }
-        }
-      }
-    },
-    handleGestureTargetLock: (entity) => {
-      const name = entity?.name || entity?.id || 'contact';
-      const prompt = `Provide immediate tactical reconnaissance and SITREP on locked target: "${name}".`;
-      if (inputEl) {
-        inputEl.value = prompt;
-        void handleSend();
-      }
-      playAudioCue('alert');
-    },
     requestTacticalSitrep: () => {
       const prompt =
         'Tactical SITREP: Summarize current airspace, maritime traffic, and active threats in view.';

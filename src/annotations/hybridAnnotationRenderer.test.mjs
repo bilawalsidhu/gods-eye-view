@@ -10,7 +10,11 @@ class FakeClassList {
   }
 
   reset(value) {
-    this.names = new Set(String(value || '').split(/\s+/).filter(Boolean));
+    this.names = new Set(
+      String(value || '')
+        .split(/\s+/)
+        .filter(Boolean),
+    );
   }
 
   add(...names) {
@@ -90,7 +94,8 @@ class FakeElement {
     const matches = [];
     const visit = (node) => {
       for (const child of node.children) {
-        if (className && child.classList.contains(className)) matches.push(child);
+        if (className && child.classList.contains(className))
+          matches.push(child);
         visit(child);
       }
     };
@@ -131,8 +136,12 @@ function fakeDocument() {
 }
 
 function findAnnotationGroup(document) {
-  const layer = document.body.children.find((child) => child.classList.contains('gev-screen-whiteboard'));
-  const svg = layer.children.find((child) => child.classList.contains('gev-screen-whiteboard-svg'));
+  const layer = document.body.children.find((child) =>
+    child.classList.contains('gev-screen-whiteboard'),
+  );
+  const svg = layer.children.find((child) =>
+    child.classList.contains('gev-screen-whiteboard-svg'),
+  );
   return {
     svg,
     group: svg.children.find((child) => child.classList.contains('gev-anno')),
@@ -152,7 +161,11 @@ function cameraLookingAt(lon, lat) {
     new Cesium.Cartesian3(),
   );
   const right = Cesium.Cartesian3.normalize(
-    Cesium.Cartesian3.cross(direction, Cesium.Cartesian3.UNIT_Z, new Cesium.Cartesian3()),
+    Cesium.Cartesian3.cross(
+      direction,
+      Cesium.Cartesian3.UNIT_Z,
+      new Cesium.Cartesian3(),
+    ),
     new Cesium.Cartesian3(),
   );
   const up = Cesium.Cartesian3.normalize(
@@ -194,13 +207,23 @@ function installBrowserGlobals(t) {
     ['OffscreenCanvas', globalThis.OffscreenCanvas],
   ]);
   globalThis.document = fakeDocument();
-  globalThis.requestAnimationFrame = (callback) => { callback(); return 1; };
-  globalThis.window = { setTimeout: (fn) => { fn(); return 1; } };
-  for (const name of originalBrowserConstructors.keys()) globalThis[name] = class {};
+  globalThis.requestAnimationFrame = (callback) => {
+    callback();
+    return 1;
+  };
+  globalThis.window = {
+    setTimeout: (fn) => {
+      fn();
+      return 1;
+    },
+  };
+  for (const name of originalBrowserConstructors.keys())
+    globalThis[name] = class {};
   t.after(() => {
     if (originalDocument === undefined) delete globalThis.document;
     else globalThis.document = originalDocument;
-    if (originalRequestAnimationFrame === undefined) delete globalThis.requestAnimationFrame;
+    if (originalRequestAnimationFrame === undefined)
+      delete globalThis.requestAnimationFrame;
     else globalThis.requestAnimationFrame = originalRequestAnimationFrame;
     if (originalWindow === undefined) delete globalThis.window;
     else globalThis.window = originalWindow;
@@ -253,7 +276,11 @@ function naiveRingCentroid(ring) {
     (sum, [lon, lat]) => ({ lon: sum.lon + lon, lat: sum.lat + lat }),
     { lon: 0, lat: 0 },
   );
-  return { lon: totals.lon / ring.length, lat: totals.lat / ring.length, height: 0 };
+  return {
+    lon: totals.lon / ring.length,
+    lat: totals.lat / ring.length,
+    height: 0,
+  };
 }
 
 test('hybrid outline upgrade preserves the screen group and adds world geometry', (t) => {
@@ -266,12 +293,17 @@ test('hybrid outline upgrade preserves the screen group and adds world geometry'
     ['OffscreenCanvas', globalThis.OffscreenCanvas],
   ]);
   globalThis.document = fakeDocument();
-  globalThis.requestAnimationFrame = (callback) => { callback(); return 1; };
-  for (const name of originalBrowserConstructors.keys()) globalThis[name] = class {};
+  globalThis.requestAnimationFrame = (callback) => {
+    callback();
+    return 1;
+  };
+  for (const name of originalBrowserConstructors.keys())
+    globalThis[name] = class {};
   t.after(() => {
     if (originalDocument === undefined) delete globalThis.document;
     else globalThis.document = originalDocument;
-    if (originalRequestAnimationFrame === undefined) delete globalThis.requestAnimationFrame;
+    if (originalRequestAnimationFrame === undefined)
+      delete globalThis.requestAnimationFrame;
     else globalThis.requestAnimationFrame = originalRequestAnimationFrame;
     for (const [name, original] of originalBrowserConstructors) {
       if (original === undefined) delete globalThis[name];
@@ -344,18 +376,56 @@ test('hybrid outline upgrade preserves the screen group and adds world geometry'
     scene,
     Cesium.Cartesian3.fromDegrees(centroid.lon, centroid.lat, centroid.height),
   );
-  assert.equal(after.group, before.group, 'the real hybrid keeps the existing SVG group');
-  assert.equal(after.svg.children.filter((child) => child.classList.contains('gev-anno')).length, 1);
-  assert.equal(after.group.querySelectorAll('.gev-anno-ring').length, 0, 'screen reticle rings are removed');
-  assert.equal(after.group.querySelector('.gev-anno-callout'), originalCallout, 'the callout node is retained');
-  assert.equal(after.group.querySelector('.gev-anno-dot'), originalDot, 'the anchor dot is retained');
+  assert.equal(
+    after.group,
+    before.group,
+    'the real hybrid keeps the existing SVG group',
+  );
+  assert.equal(
+    after.svg.children.filter((child) => child.classList.contains('gev-anno'))
+      .length,
+    1,
+  );
+  assert.equal(
+    after.group.querySelectorAll('.gev-anno-ring').length,
+    0,
+    'screen reticle rings are removed',
+  );
+  assert.equal(
+    after.group.querySelector('.gev-anno-callout'),
+    originalCallout,
+    'the callout node is retained',
+  );
+  assert.equal(
+    after.group.querySelector('.gev-anno-dot'),
+    originalDot,
+    'the anchor dot is retained',
+  );
   assert.equal(originalDot.getAttribute('cx'), expectedWindow.x.toFixed(1));
   assert.equal(originalDot.getAttribute('cy'), expectedWindow.y.toFixed(1));
-  assert.deepEqual(centroid, { lon: -100.8, lat: 29.4, height: 0 }, 'closed-ring vertex mean stays pinned');
-  assert.equal(dataSources[0].entities.values.length, 2, 'world area adds one fill and one outline');
-  assert.equal(dataSources[0].entities.values.filter((entity) => entity.polygon).length, 1);
-  assert.equal(dataSources[0].entities.values.filter((entity) => entity.polyline).length, 1);
-  assert.equal(Object.hasOwn(anno, '_entities'), false, 'world entity state stays on the inherited proxy');
+  assert.deepEqual(
+    centroid,
+    { lon: -100.8, lat: 29.4, height: 0 },
+    'closed-ring vertex mean stays pinned',
+  );
+  assert.equal(
+    dataSources[0].entities.values.length,
+    2,
+    'world area adds one fill and one outline',
+  );
+  assert.equal(
+    dataSources[0].entities.values.filter((entity) => entity.polygon).length,
+    1,
+  );
+  assert.equal(
+    dataSources[0].entities.values.filter((entity) => entity.polyline).length,
+    1,
+  );
+  assert.equal(
+    Object.hasOwn(anno, '_entities'),
+    false,
+    'world entity state stays on the inherited proxy',
+  );
   renderer.destroy();
 });
 
@@ -371,7 +441,13 @@ test('a sub-renderer throw mid-add leaves state the rollback can still remove', 
   installBrowserGlobals(t);
   const { viewer, dataSources } = fakeViewer(-99, 31);
   const renderer = createHybridAnnotationRenderer(viewer);
-  const ring = [[-106, 25], [-93, 25], [-93, 36], [-106, 36], [-106, 25]];
+  const ring = [
+    [-106, 25],
+    [-93, 25],
+    [-93, 36],
+    [-106, 36],
+    [-106, 25],
+  ];
   const anno = {
     id: 'anno-partial-add',
     type: 'area',
@@ -398,18 +474,38 @@ test('a sub-renderer throw mid-add leaves state the rollback can still remove', 
   };
 
   assert.throws(() => renderer.add(anno), /screen insert failed/);
-  assert.equal(dataSources[0].entities.values.length, 2, 'the world drape is already live');
-  assert.equal(annotationGroups(svg).length, 0, 'the half-built screen group detached itself');
+  assert.equal(
+    dataSources[0].entities.values.length,
+    2,
+    'the world drape is already live',
+  );
+  assert.equal(
+    annotationGroups(svg).length,
+    0,
+    'the half-built screen group detached itself',
+  );
 
   // The engine's rollback path — it must reach the partial state by id.
   renderer.remove(anno);
-  assert.equal(dataSources[0].entities.values.length, 0, 'partial world state must be released');
+  assert.equal(
+    dataSources[0].entities.values.length,
+    0,
+    'partial world state must be released',
+  );
 
   // …and the id is free again: a retry draws ONE mark, not a second one over
   // an orphan nothing owns.
   renderer.add(anno);
-  assert.equal(dataSources[0].entities.values.length, 2, 'the retry draws exactly one world drape');
-  assert.equal(annotationGroups(svg).length, 1, 'and exactly one screen caption');
+  assert.equal(
+    dataSources[0].entities.values.length,
+    2,
+    'the retry draws exactly one world drape',
+  );
+  assert.equal(
+    annotationGroups(svg).length,
+    1,
+    'and exactly one screen caption',
+  );
   renderer.remove(anno);
   assert.equal(dataSources[0].entities.values.length, 0);
   renderer.destroy();
@@ -419,7 +515,13 @@ test('a release that throws keeps the mark addressable for a retry cleanup', (t)
   installBrowserGlobals(t);
   const { viewer, dataSources } = fakeViewer(-99, 31);
   const renderer = createHybridAnnotationRenderer(viewer);
-  const ring = [[-106, 25], [-93, 25], [-93, 36], [-106, 36], [-106, 25]];
+  const ring = [
+    [-106, 25],
+    [-93, 25],
+    [-93, 36],
+    [-106, 36],
+    [-106, 25],
+  ];
   const anno = {
     id: 'anno-release-throw',
     type: 'area',
@@ -440,17 +542,35 @@ test('a release that throws keeps the mark addressable for a retry cleanup', (t)
   // The world route releases fine, then the screen release fails part-way
   // (its fade-out timer throws) — so its SVG group is still in the document.
   const workingSetTimeout = globalThis.window.setTimeout;
-  globalThis.window.setTimeout = () => { throw new Error('teardown scheduling failed'); };
+  globalThis.window.setTimeout = () => {
+    throw new Error('teardown scheduling failed');
+  };
   assert.throws(() => renderer.remove(anno), /teardown scheduling failed/);
-  assert.equal(dataSources[0].entities.values.length, 0, 'the world route did release');
-  assert.equal(annotationGroups(svg).length, 1, 'the screen route did NOT — that is the orphan');
+  assert.equal(
+    dataSources[0].entities.values.length,
+    0,
+    'the world route did release',
+  );
+  assert.equal(
+    annotationGroups(svg).length,
+    1,
+    'the screen route did NOT — that is the orphan',
+  );
 
   // Dropping the routing entry here would make that orphan permanently
   // unreachable. It must still be addressable, so a retry finishes the job.
   globalThis.window.setTimeout = workingSetTimeout;
   renderer.remove(anno);
-  assert.equal(annotationGroups(svg).length, 0, 'the retry cleanup must reach the orphan');
-  assert.equal(dataSources[0].entities.values.length, 0, 'without double-releasing the world route');
+  assert.equal(
+    annotationGroups(svg).length,
+    0,
+    'the retry cleanup must reach the orphan',
+  );
+  assert.equal(
+    dataSources[0].entities.values.length,
+    0,
+    'without double-releasing the world route',
+  );
 
   // Fully released now — a third call is inert.
   renderer.remove(anno);
@@ -462,7 +582,13 @@ test('a world add that fails mid-way leaves its landed entities removable', (t) 
   installBrowserGlobals(t);
   const { viewer, dataSources } = fakeViewer(-99, 31);
   const renderer = createHybridAnnotationRenderer(viewer);
-  const ring = [[-106, 25], [-93, 25], [-93, 36], [-106, 36], [-106, 25]];
+  const ring = [
+    [-106, 25],
+    [-93, 25],
+    [-93, 36],
+    [-106, 36],
+    [-106, 25],
+  ];
   const anno = {
     id: 'anno-partial-world-add',
     type: 'area',
@@ -486,12 +612,19 @@ test('a world add that fails mid-way leaves its landed entities removable', (t) 
   };
 
   assert.throws(() => renderer.add(anno), /entity add failed/);
-  assert.equal(entities.values.length, 1, 'one entity landed before the failure');
+  assert.equal(
+    entities.values.length,
+    1,
+    'one entity landed before the failure',
+  );
 
   entities.add = realAdd;
   renderer.remove(anno);
-  assert.equal(entities.values.length, 0,
-    'the rollback must see the entities that landed before the throw');
+  assert.equal(
+    entities.values.length,
+    0,
+    'the rollback must see the entities that landed before the throw',
+  );
 
   const { svg } = findAnnotationGroup(globalThis.document);
   renderer.add(anno);

@@ -25,7 +25,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const TESTS = ['src/firstRunExperience.test.mjs', 'src/standalone/startupChrome.test.mjs'];
+const TESTS = [
+  'src/firstRunExperience.test.mjs',
+  'src/standalone/startupChrome.test.mjs',
+];
 
 const FILES = {
   keyboard: path.join(ROOT, 'src', 'ui', 'surfaceKeyboard.js'),
@@ -49,7 +52,8 @@ const MUTATIONS = [
     to: "writeStored('local', sessionStorageRef, FIRST_RUN_STORAGE_KEY, 'suppressed');",
   },
   {
-    defect: 'the checkbox is ignored, so nothing can ever suppress the launcher',
+    defect:
+      'the checkbox is ignored, so nothing can ever suppress the launcher',
     file: 'module',
     from: "    ? writeStored('local', storage, FIRST_RUN_STORAGE_KEY, 'suppressed')",
     to: '    ? false',
@@ -73,7 +77,8 @@ const MUTATIONS = [
     to: '// durable check removed',
   },
   {
-    defect: '?welcome=1 no longer outranks suppression, so demos cannot replay it',
+    defect:
+      '?welcome=1 no longer outranks suppression, so demos cannot replay it',
     file: 'module',
     from: "if (params.get('welcome') === '1') return true;",
     to: '// replay hatch removed',
@@ -135,7 +140,8 @@ const MUTATIONS = [
     to: '/* observer never attached */',
   },
   {
-    defect: 'cockpit drops off the exclusive list and can stack with the launcher',
+    defect:
+      'cockpit drops off the exclusive list and can stack with the launcher',
     file: 'module',
     from: "export const EXCLUSIVE_SURFACE_CLASSES = Object.freeze([\n  'cockpit-mode',",
     to: 'export const EXCLUSIVE_SURFACE_CLASSES = Object.freeze([',
@@ -153,19 +159,22 @@ const MUTATIONS = [
     to: 'dismiss();',
   },
   {
-    defect: 'isTopmost stops hit-testing, so an unclassed overlay buries the card again',
+    defect:
+      'isTopmost stops hit-testing, so an unclassed overlay buries the card again',
     file: 'module',
     from: '    && root.getClientRects().length > 0\n    && !coveredByOverlay();',
     to: '    && root.getClientRects().length > 0;',
   },
   {
-    defect: 'an inconclusive hit test reads as COVERED, so ESC quietly stops working',
+    defect:
+      'an inconclusive hit test reads as COVERED, so ESC quietly stops working',
     file: 'module',
     from: '      return Boolean(hit) && !root.contains(hit);',
     to: '      return !root.contains(hit);',
   },
   {
-    defect: 'the launcher stops honouring a key another surface already claimed',
+    defect:
+      'the launcher stops honouring a key another surface already claimed',
     file: 'keyboard',
     from: ' || event.defaultPrevented',
     to: '    /* belt removed */',
@@ -173,25 +182,29 @@ const MUTATIONS = [
   {
     // Anchored past the call so it cannot land on the cockpit disclosure's own
     // stopImmediatePropagation() a few lines below and prove nothing about this.
-    defect: 'the radio disclosure returns to stopPropagation, so one ESC does two things',
+    defect:
+      'the radio disclosure returns to stopPropagation, so one ESC does two things',
     file: 'ui',
     from: '      event.stopImmediatePropagation();\n      const escapedFromDisclosure = event.target === this._contextRadioToggleBtn',
     to: '      event.stopPropagation();\n      const escapedFromDisclosure = event.target === this._contextRadioToggleBtn',
   },
   {
-    defect: 'the "no timer" decision is deleted, so the next editor re-litigates it blind',
+    defect:
+      'the "no timer" decision is deleted, so the next editor re-litigates it blind',
     file: 'module',
     from: '   * ACCEPTED, DELIBERATELY NOT TIMED OUT: a surface class that never clears',
     to: '   * (note removed)',
   },
   {
-    defect: 'a bounded reveal timer punches the card through a recording in progress',
+    defect:
+      'a bounded reveal timer punches the card through a recording in progress',
     file: 'module',
     from: '  const syncToExclusiveSurfaces = () => {\n    if (closing) return;',
     to: '  const syncToExclusiveSurfaces = () => {\n    if (closing) return;\n    globalThis.setTimeout?.(reveal, 45000);',
   },
   {
-    defect: 'the accepted no-show vanishes from CURRENT-STATE and reads as a bug',
+    defect:
+      'the accepted no-show vanishes from CURRENT-STATE and reads as a bug',
     file: 'docs',
     from: 'a surface class that never clears means no launcher for that page',
     to: 'the launcher always turns up eventually for that page',
@@ -199,7 +212,8 @@ const MUTATIONS = [
 
   // ── The checkbox may not promise what storage refused ─────────────────────
   {
-    defect: 'a refused write leaves the box ticked, promising a suppression nobody stored',
+    defect:
+      'a refused write leaves the box ticked, promising a suppression nobody stored',
     file: 'module',
     from: '    if (setFirstRunSuppressed(wanted, storage)) return;',
     to: '    setFirstRunSuppressed(wanted, storage);\n    return;',
@@ -211,14 +225,16 @@ const MUTATIONS = [
     to: '    store?.setItem?.(key, value);\n    return true;',
   },
   {
-    defect: 'the scroll fade promises more list on a card where everything fits',
+    defect:
+      'the scroll fade promises more list on a card where everything fits',
     file: 'module',
     from: 'choiceList.dataset.scrollable = String(overflows);',
     to: "choiceList.dataset.scrollable = 'true'; void overflows;",
   },
 
   {
-    defect: 'the DISPLAY rail opens on first run again, stealing the impression',
+    defect:
+      'the DISPLAY rail opens on first run again, stealing the impression',
     file: 'ui',
     from: "if (panelId === 'pp-toggles' && stored === null) collapsed = true;",
     to: "if (panelId === 'pp-toggles' && stored === null) collapsed = false;",
@@ -232,13 +248,15 @@ const MUTATIONS = [
 
   // ── Mission definitions ────────────────────────────────────────────────────
   {
-    defect: 'the removed INFRASTRUCTURE tile comes back as a one-click globe dump',
+    defect:
+      'the removed INFRASTRUCTURE tile comes back as a one-click globe dump',
     file: 'module',
-    from: "  environmental: Object.freeze({",
+    from: '  environmental: Object.freeze({',
     to: "  infrastructure: Object.freeze({\n    kind: 'globe',\n    layerIds: Object.freeze(['local-datacenters', 'local-dams', 'telegeography-submarine-cables']),\n    busyText: 'Mapping global infrastructure…',\n  }),\n  environmental: Object.freeze({",
   },
   {
-    defect: 'ENVIRONMENTAL drops the keyless earthquakes that carry it without a key',
+    defect:
+      'ENVIRONMENTAL drops the keyless earthquakes that carry it without a key',
     file: 'module',
     from: "layerIds: Object.freeze(['earthquakes', 'local-firms']),",
     to: "layerIds: Object.freeze(['local-firms']),",
@@ -256,7 +274,7 @@ const MUTATIONS = [
     to: '<small>Live earthquakes worldwide, straight from USGS</small>',
   },
   {
-    defect: "the owner-authored first-run line is quietly rewritten",
+    defect: 'the owner-authored first-run line is quietly rewritten',
     file: 'html',
     from: 'It feels like a forbidden cockpit—then you realize the sources are public and the data is real.',
     to: "It feels like a forbidden cockpit. It isn't — every feed is public, and every contact is live.",
@@ -298,7 +316,8 @@ const MUTATIONS = [
     to: 'if (!mission) return { ok: true, choice };',
   },
   {
-    defect: 'the fires/quakes tile name stops being switchable from one constant',
+    defect:
+      'the fires/quakes tile name stops being switchable from one constant',
     file: 'module',
     from: 'return ENVIRONMENTAL_LABELS[choice] || ENVIRONMENTAL_LABELS.ENVIRONMENTAL;',
     to: 'return ENVIRONMENTAL_LABELS.ENVIRONMENTAL;',
@@ -306,13 +325,15 @@ const MUTATIONS = [
 
   // ── Defaults interplay (the ruling this whole integration turns on) ────────
   {
-    defect: "mission layer enables stop persisting, unlike the clicks they stand for",
+    defect:
+      'mission layer enables stop persisting, unlike the clicks they stand for',
     file: 'module',
     from: "dataManager.setEnabled(layerId, true, { origin: 'user' })",
     to: 'dataManager.setEnabled(layerId, true)',
   },
   {
-    defect: 'a mission hand-edits detection and kills the style auto-preset contract',
+    defect:
+      'a mission hand-edits detection and kills the style auto-preset contract',
     file: 'module',
     from: '        flyToGlobe: () => styleManager.resetToGlobeView(),',
     to: '        flyToGlobe: () => { styleManager._detectionUserOverridden = true; return styleManager.resetToGlobeView(); },',
@@ -324,13 +345,15 @@ const MUTATIONS = [
     to: '      styleManager._setModels3dEnabled?.(true);\n          const result = await styleManager.setContextMode(mode);',
   },
   {
-    defect: 'the Context panel is left collapsed, hiding the mode that just started',
+    defect:
+      'the Context panel is left collapsed, hiding the mode that just started',
     file: 'module',
     from: "styleManager.setPanelCollapsed?.('global-context-panel', false, { explicit: true });",
     to: '// panel reveal removed',
   },
   {
-    defect: 'the decision table is deleted, so the next editor re-litigates it blind',
+    defect:
+      'the decision table is deleted, so the next editor re-litigates it blind',
     file: 'module',
     from: ' * MISSION → APP STATE, AND WHAT IT IS ALLOWED TO PERSIST',
     to: ' * (notes removed)',
@@ -338,7 +361,8 @@ const MUTATIONS = [
 
   // ── Accessibility and the transplant defects ──────────────────────────────
   {
-    defect: 'disabling the focused tile drops the keyboard to <body> mid-flight',
+    defect:
+      'disabling the focused tile drops the keyboard to <body> mid-flight',
     file: 'module',
     from: "for (const button of buttons) button.setAttribute('aria-disabled', String(next));",
     to: 'for (const button of buttons) button.disabled = next;',
@@ -380,19 +404,22 @@ const MUTATIONS = [
     to: 'body.never-matches-anything #first-run-launcher,',
   },
   {
-    defect: 'the flex card defeats [hidden] and sits in the a11y tree pre-reveal',
+    defect:
+      'the flex card defeats [hidden] and sits in the a11y tree pre-reveal',
     file: 'css',
     from: '#first-run-launcher[hidden] {\n  display: none;\n}',
     to: '/* [hidden] rule removed */',
   },
   {
-    defect: 'the card loses its viewport cap and clips on a short landscape phone',
+    defect:
+      'the card loses its viewport cap and clips on a short landscape phone',
     file: 'css',
     from: '  max-height: calc(100dvh - 1.5rem);',
     to: '  /* cap removed */',
   },
   {
-    defect: 'the mission list stops scrolling, so tiles overflow the capped card',
+    defect:
+      'the mission list stops scrolling, so tiles overflow the capped card',
     file: 'css',
     from: '  min-height: 0;\n  overflow-y: auto;',
     to: '  /* scroll removed */',
@@ -415,7 +442,7 @@ const MUTATIONS = [
     to: '      <button type="button" data-first-run-choice-disabled="space-missions">',
   },
   {
-    defect: 'the menu order stops matching the owner\'s',
+    defect: "the menu order stops matching the owner's",
     file: 'html',
     from: '<button type="button" data-first-run-choice="environmental">',
     to: '<button type="button" data-first-run-choice="zzz-environmental">',
@@ -442,10 +469,11 @@ const MUTATIONS = [
     defect: 'the launcher is revealed before the loading cover yields',
     file: 'main',
     from: "      loadingScreen.classList.add('hidden');",
-    to: '      initFirstRunExperience({ styleManager, dataManager });\n      loadingScreen.classList.add(\'hidden\');',
+    to: "      initFirstRunExperience({ styleManager, dataManager });\n      loadingScreen.classList.add('hidden');",
   },
   {
-    defect: 'the globe missions lose their DataManager and cannot enable layers',
+    defect:
+      'the globe missions lose their DataManager and cannot enable layers',
     file: 'main',
     from: 'initFirstRunExperience({ styleManager, dataManager });',
     to: 'initFirstRunExperience({ styleManager });',
@@ -459,7 +487,8 @@ const MUTATIONS = [
     to: "            'earthquakes',\n            'infrastructure-mode',\n            'satellites',",
   },
   {
-    defect: 'the instruction mapping is dropped, so voice cannot reach the modes',
+    defect:
+      'the instruction mapping is dropped, so voice cannot reach the modes',
     file: 'voiceInstructions',
     from: "    'NAMED VIEWS are shorthand",
     to: "    // 'NAMED VIEWS are shorthand",
@@ -467,21 +496,25 @@ const MUTATIONS = [
 ];
 
 const originals = new Map();
-for (const [key, file] of Object.entries(FILES)) originals.set(key, fs.readFileSync(file, 'utf8'));
+for (const [key, file] of Object.entries(FILES))
+  originals.set(key, fs.readFileSync(file, 'utf8'));
 
 /** Write only on a real change: a no-op write still wakes every file watcher. */
 const write = (file, next) => {
   if (fs.readFileSync(file, 'utf8') !== next) fs.writeFileSync(file, next);
 };
 const restoreAll = () => {
-  for (const [key, file] of Object.entries(FILES)) write(file, originals.get(key));
+  for (const [key, file] of Object.entries(FILES))
+    write(file, originals.get(key));
 };
 process.on('exit', restoreAll);
 
 let caught = 0;
 const missed = [];
 
-console.log(`\nFirst-run launcher pin strength — ${MUTATIONS.length} individual reverts\n`);
+console.log(
+  `\nFirst-run launcher pin strength — ${MUTATIONS.length} individual reverts\n`,
+);
 for (const { defect, file, from, to } of MUTATIONS) {
   const original = originals.get(file);
   if (!original.includes(from)) {
@@ -493,10 +526,15 @@ for (const { defect, file, from, to } of MUTATIONS) {
   let red = false;
   let by = '';
   try {
-    execFileSync('node', ['--test', ...TESTS], { cwd: ROOT, encoding: 'utf8', stdio: 'pipe' });
+    execFileSync('node', ['--test', ...TESTS], {
+      cwd: ROOT,
+      encoding: 'utf8',
+      stdio: 'pipe',
+    });
   } catch (error) {
     red = true;
-    const failed = String(error.stdout || '').split('\n')
+    const failed = String(error.stdout || '')
+      .split('\n')
       .filter((line) => line.trim().startsWith('✖') && line.includes('('))
       .map((line) => line.trim().slice(2).split(' (')[0]);
     by = [...new Set(failed)].slice(0, 2).join('; ');

@@ -1,6 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { formatMarkdown, extractThinking, initAiCommandCenter, detectTextLanguage, selectBestVoice, playAudioCue, isGlobePrompt } from './aiCommandCenter.js';
+import {
+  formatMarkdown,
+  extractThinking,
+  initAiCommandCenter,
+  detectTextLanguage,
+  selectBestVoice,
+  playAudioCue,
+  isGlobePrompt,
+} from './aiCommandCenter.js';
 
 test('isGlobePrompt accurately identifies 3D globe, flight, camera and landmark queries', () => {
   assert.equal(isGlobePrompt('Fly to Tokyo Tower'), true);
@@ -9,7 +17,10 @@ test('isGlobePrompt accurately identifies 3D globe, flight, camera and landmark 
   assert.equal(isGlobePrompt('Show satellites in orbit'), true);
   assert.equal(isGlobePrompt('Tilt camera 45 degrees'), true);
   assert.equal(isGlobePrompt('What is the capital of France?'), false);
-  assert.equal(isGlobePrompt('Write a javascript function to sort an array'), false);
+  assert.equal(
+    isGlobePrompt('Write a javascript function to sort an array'),
+    false,
+  );
 });
 
 test('extractThinking cleanly separates <think> tags from output', () => {
@@ -114,10 +125,14 @@ test('initAiCommandCenter initializes panel and exposes toggle and setMode', () 
     querySelector: (sel) => {
       if (sel === '.panel-collapse-btn') return mockCollapseBtn;
       if (sel === '.ai-panel-header') return { addEventListener: () => {} };
-      if (sel === '.ai-active-model-badge') return { textContent: '', title: '' };
-      if (sel === '.ai-chat-messages') return { appendChild: () => {}, children: [] };
-      if (sel === '.ai-quick-prompts') return { innerHTML: '', appendChild: () => {} };
-      if (sel === '.ai-chat-input') return { value: '', focus: () => {}, addEventListener: () => {} };
+      if (sel === '.ai-active-model-badge')
+        return { textContent: '', title: '' };
+      if (sel === '.ai-chat-messages')
+        return { appendChild: () => {}, children: [] };
+      if (sel === '.ai-quick-prompts')
+        return { innerHTML: '', appendChild: () => {} };
+      if (sel === '.ai-chat-input')
+        return { value: '', focus: () => {}, addEventListener: () => {} };
       if (sel === '.ai-send-btn') return { addEventListener: () => {} };
       return null;
     },
@@ -176,28 +191,45 @@ test('detectTextLanguage accurately identifies multiple languages and scripts', 
   assert.equal(detectTextLanguage('Guten Tag, wie geht es Ihnen?'), 'de-DE');
 
   // English fallback / default
-  assert.equal(detectTextLanguage('Hello JARVIS, run tactical analysis on flight ADSB-204'), 'en-US');
+  assert.equal(
+    detectTextLanguage(
+      'Hello JARVIS, run tactical analysis on flight ADSB-204',
+    ),
+    'en-US',
+  );
   assert.equal(detectTextLanguage(''), 'en-US');
   assert.equal(detectTextLanguage(null), 'en-US');
 });
 
 test('selectBestVoice prioritizes neural and natural voices matching language', () => {
   const mockVoices = [
-    { name: 'Microsoft David Desktop - English (United States)', lang: 'en-US' },
+    {
+      name: 'Microsoft David Desktop - English (United States)',
+      lang: 'en-US',
+    },
     { name: 'Microsoft Swara Online (Natural) - Hindi (India)', lang: 'hi-IN' },
-    { name: 'Microsoft Guy Online (Natural) - English (United States)', lang: 'en-US' },
+    {
+      name: 'Microsoft Guy Online (Natural) - English (United States)',
+      lang: 'en-US',
+    },
     { name: 'Google español', lang: 'es-ES' },
   ];
 
   // For Hindi, should pick Microsoft Swara Online (Natural)
   const hindiVoice = selectBestVoice(mockVoices, 'hi-IN');
   assert.ok(hindiVoice);
-  assert.equal(hindiVoice.name, 'Microsoft Swara Online (Natural) - Hindi (India)');
+  assert.equal(
+    hindiVoice.name,
+    'Microsoft Swara Online (Natural) - Hindi (India)',
+  );
 
   // For English, should pick Guy (Natural) over David (Desktop)
   const enVoice = selectBestVoice(mockVoices, 'en-US');
   assert.ok(enVoice);
-  assert.equal(enVoice.name, 'Microsoft Guy Online (Natural) - English (United States)');
+  assert.equal(
+    enVoice.name,
+    'Microsoft Guy Online (Natural) - English (United States)',
+  );
 
   // For Spanish, should pick Google español
   const esVoice = selectBestVoice(mockVoices, 'es-ES');
@@ -205,9 +237,16 @@ test('selectBestVoice prioritizes neural and natural voices matching language', 
   assert.equal(esVoice.name, 'Google español');
 
   // Direct preferred voice override
-  const directVoice = selectBestVoice(mockVoices, 'en-US', 'Microsoft David Desktop - English (United States)');
+  const directVoice = selectBestVoice(
+    mockVoices,
+    'en-US',
+    'Microsoft David Desktop - English (United States)',
+  );
   assert.ok(directVoice);
-  assert.equal(directVoice.name, 'Microsoft David Desktop - English (United States)');
+  assert.equal(
+    directVoice.name,
+    'Microsoft David Desktop - English (United States)',
+  );
 });
 
 test('initAiCommandCenter provides unlock, speak, and voiceSettings controls', () => {
@@ -217,7 +256,14 @@ test('initAiCommandCenter provides unlock, speak, and voiceSettings controls', (
       return {
         id: 'ai-command-panel',
         classList: { contains: () => false, toggle: () => {} },
-        querySelector: () => ({ addEventListener: () => {}, textContent: '', value: '', focus: () => {}, appendChild: () => {}, innerHTML: '' }),
+        querySelector: () => ({
+          addEventListener: () => {},
+          textContent: '',
+          value: '',
+          focus: () => {},
+          appendChild: () => {},
+          innerHTML: '',
+        }),
         querySelectorAll: () => [],
         addEventListener: () => {},
       };
@@ -260,14 +306,23 @@ test('initAiCommandCenter exposes navigation controls and view switching', () =>
     id: 'ai-command-panel',
     classList: { contains: () => false, toggle: () => {} },
     querySelector: (sel) => {
-      if (sel === '.ai-nav-breadcrumb') return { textContent: '', title: '', addEventListener: () => {} };
+      if (sel === '.ai-nav-breadcrumb')
+        return { textContent: '', title: '', addEventListener: () => {} };
       if (sel === '.ai-history-drawer') return { hidden: viewsHidden.history };
       if (sel === '.ai-model-drawer') return { hidden: viewsHidden.models };
       if (sel === '.ai-voice-modal') return { hidden: viewsHidden.voice };
       if (sel === '.ai-device-modal') return { hidden: viewsHidden.device };
       if (sel === '.ai-search-bar') return { hidden: true };
       if (sel === '.ai-scroll-navigator') return { hidden: true };
-      return { addEventListener: () => {}, textContent: '', value: '', focus: () => {}, appendChild: () => {}, innerHTML: '', hidden: true };
+      return {
+        addEventListener: () => {},
+        textContent: '',
+        value: '',
+        focus: () => {},
+        appendChild: () => {},
+        innerHTML: '',
+        hidden: true,
+      };
     },
     querySelectorAll: () => [],
     addEventListener: () => {},
@@ -328,9 +383,15 @@ test('initAiCommandCenter supports Auto-MoE and Council Swarm modes', () => {
     querySelector: (sel) => {
       if (sel === '.ai-active-model-badge') return modelBadge;
       if (sel === '.ai-panel-header') return { addEventListener: () => {} };
-      if (sel === '.ai-chat-messages') return { appendChild: (node) => appendedNodes.push(node), children: [] };
-      if (sel === '.ai-quick-prompts') return { innerHTML: '', appendChild: () => {} };
-      if (sel === '.ai-chat-input') return { value: '', focus: () => {}, addEventListener: () => {} };
+      if (sel === '.ai-chat-messages')
+        return {
+          appendChild: (node) => appendedNodes.push(node),
+          children: [],
+        };
+      if (sel === '.ai-quick-prompts')
+        return { innerHTML: '', appendChild: () => {} };
+      if (sel === '.ai-chat-input')
+        return { value: '', focus: () => {}, addEventListener: () => {} };
       if (sel === '.ai-send-btn') return { addEventListener: () => {} };
       return null;
     },
@@ -379,16 +440,35 @@ test('initAiCommandCenter supports Auto-MoE and Council Swarm modes', () => {
 
   // Test appendMessage with council and routedModel
   const councilData = [
-    { name: 'DeepSeek R1', role: 'Logic & Reasoning', model: 'deepseek-ai/deepseek-r1', content: 'Step 1: Analyzed constraints.' },
-    { name: 'Qwen Coder', role: 'Code Synthesis', model: 'qwen/qwen2.5-coder-32b-instruct', content: 'const res = 42;' },
-    { name: 'Nemotron 3.5', role: 'Tactical Execution', model: 'nvidia/nemotron-3.5-lightning-30b-a3b', content: 'Execution plan verified.' },
+    {
+      name: 'DeepSeek R1',
+      role: 'Logic & Reasoning',
+      model: 'deepseek-ai/deepseek-r1',
+      content: 'Step 1: Analyzed constraints.',
+    },
+    {
+      name: 'Qwen Coder',
+      role: 'Code Synthesis',
+      model: 'qwen/qwen2.5-coder-32b-instruct',
+      content: 'const res = 42;',
+    },
+    {
+      name: 'Nemotron 3.5',
+      role: 'Tactical Execution',
+      model: 'nvidia/nemotron-3.5-lightning-30b-a3b',
+      content: 'Execution plan verified.',
+    },
   ];
 
-  const handle = controller.appendMessage('assistant', 'Deliberation consensus reached.', {
-    council: councilData,
-    routedModel: 'deepseek-ai/deepseek-r1',
-    routedReason: 'Reasoning problem detected',
-  });
+  const handle = controller.appendMessage(
+    'assistant',
+    'Deliberation consensus reached.',
+    {
+      council: councilData,
+      routedModel: 'deepseek-ai/deepseek-r1',
+      routedReason: 'Reasoning problem detected',
+    },
+  );
 
   assert.ok(handle);
   assert.ok(handle.msgEl);
@@ -396,7 +476,10 @@ test('initAiCommandCenter supports Auto-MoE and Council Swarm modes', () => {
 
   // Test appendVoiceExchange
   assert.equal(typeof controller.appendVoiceExchange, 'function');
-  controller.appendVoiceExchange('Show flights over Tokyo', 'Tracking flights now.');
+  controller.appendVoiceExchange(
+    'Show flights over Tokyo',
+    'Tracking flights now.',
+  );
   assert.ok(appendedNodes.length > 0);
 });
 
@@ -422,7 +505,9 @@ test('initAiCommandCenter handles open/close toggles, FAB, top toggle, and drawe
     return {
       classList: {
         _classes: new Set(),
-        contains(cls) { return this._classes.has(cls); },
+        contains(cls) {
+          return this._classes.has(cls);
+        },
         toggle(cls, force) {
           if (force === undefined) {
             if (this._classes.has(cls)) this._classes.delete(cls);
@@ -440,7 +525,8 @@ test('initAiCommandCenter handles open/close toggles, FAB, top toggle, and drawe
         elementListeners.get(evt).push(fn);
       },
       click() {
-        for (const fn of elementListeners.get('click') || []) fn({ target: this, stopPropagation: () => {} });
+        for (const fn of elementListeners.get('click') || [])
+          fn({ target: this, stopPropagation: () => {} });
       },
     };
   };
@@ -472,10 +558,14 @@ test('initAiCommandCenter handles open/close toggles, FAB, top toggle, and drawe
       if (sel === '.ai-panel-header') return header;
       if (sel === '.ai-close-btn') return closeBtn;
       if (sel === '.ai-collapsed-hint') return collapsedHint;
-      if (sel === '.ai-active-model-badge') return { textContent: '', title: '' };
-      if (sel === '.ai-chat-messages') return { appendChild: () => {}, children: [] };
-      if (sel === '.ai-quick-prompts') return { innerHTML: '', appendChild: () => {} };
-      if (sel === '.ai-chat-input') return { value: '', focus: () => {}, addEventListener: () => {} };
+      if (sel === '.ai-active-model-badge')
+        return { textContent: '', title: '' };
+      if (sel === '.ai-chat-messages')
+        return { appendChild: () => {}, children: [] };
+      if (sel === '.ai-quick-prompts')
+        return { innerHTML: '', appendChild: () => {} };
+      if (sel === '.ai-chat-input')
+        return { value: '', focus: () => {}, addEventListener: () => {} };
       if (sel === '.ai-send-btn') return { addEventListener: () => {} };
       return null;
     },
@@ -557,8 +647,10 @@ test('playAudioCue procedurally generates cues without errors', () => {
         const osc = {
           type: 'sine',
           frequency: {
-            setValueAtTime: (val, t) => oscCalls.push({ action: 'freq', val, t }),
-            exponentialRampToValueAtTime: (val, t) => oscCalls.push({ action: 'ramp', val, t }),
+            setValueAtTime: (val, t) =>
+              oscCalls.push({ action: 'freq', val, t }),
+            exponentialRampToValueAtTime: (val, t) =>
+              oscCalls.push({ action: 'ramp', val, t }),
           },
           connect: () => {},
           start: () => {},
@@ -608,7 +700,8 @@ test('initAiCommandCenter exposes tactical superpowers: wake-word, drone recon, 
       listeners.get(evt).push(fn);
     },
     click: () => {
-      for (const fn of listeners.get('click') || []) fn({ stopPropagation: () => {} });
+      for (const fn of listeners.get('click') || [])
+        fn({ stopPropagation: () => {} });
     },
   });
 
@@ -618,10 +711,14 @@ test('initAiCommandCenter exposes tactical superpowers: wake-word, drone recon, 
     querySelector: (sel) => {
       if (sel === '.ai-wakeword-toggle-btn') return makeMockEl();
       if (sel === '#ai-wakeword-modal-toggle') return makeMockEl();
-      if (sel === '#ai-wakeword-status') return { textContent: '', classList: { toggle: () => {} } };
-      if (sel === '.ai-chat-messages') return { appendChild: () => {}, children: [] };
-      if (sel === '.ai-quick-prompts') return { innerHTML: '', appendChild: () => {} };
-      if (sel === '.ai-chat-input') return { value: '', focus: () => {}, addEventListener: () => {} };
+      if (sel === '#ai-wakeword-status')
+        return { textContent: '', classList: { toggle: () => {} } };
+      if (sel === '.ai-chat-messages')
+        return { appendChild: () => {}, children: [] };
+      if (sel === '.ai-quick-prompts')
+        return { innerHTML: '', appendChild: () => {} };
+      if (sel === '.ai-chat-input')
+        return { value: '', focus: () => {}, addEventListener: () => {} };
       return null;
     },
     querySelectorAll: () => [],
@@ -653,6 +750,3 @@ test('initAiCommandCenter exposes tactical superpowers: wake-word, drone recon, 
   assert.equal(typeof controller.isWakeWordActive, 'function');
   assert.equal(typeof controller.playAudioCue, 'function');
 });
-
-
-

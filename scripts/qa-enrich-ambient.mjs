@@ -71,10 +71,10 @@ const HEADFUL = getFlag('--headful');
 const SHOT_DIR = path.resolve('qa-shots/enrich-ambient');
 
 // Client-side bounds under test (flights.js constants):
-const MAX_INFLIGHT = 4;        // ENRICH_MAX_INFLIGHT
-const DISPATCH_GAP_MS = 200;   // ENRICH_DISPATCH_GAP_MS (≤5 req/s)
-const GAP_TOLERANCE_MS = 15;   // clock-quantization allowance on the gap check
-const SESSION_CAP = 300;       // ENRICH_AMBIENT_BUDGET_CEIL (rolling-bucket ceiling)
+const MAX_INFLIGHT = 4; // ENRICH_MAX_INFLIGHT
+const DISPATCH_GAP_MS = 200; // ENRICH_DISPATCH_GAP_MS (≤5 req/s)
+const GAP_TOLERANCE_MS = 15; // clock-quantization allowance on the gap check
+const SESSION_CAP = 300; // ENRICH_AMBIENT_BUDGET_CEIL (rolling-bucket ceiling)
 
 // Rolling-budget QA seam (window.__GEV_ENRICH_AMBIENT_QA in flights.js):
 // shrunk so the exhaust→refill cycle is observable headlessly. windowMs starts
@@ -101,7 +101,11 @@ const CHROME_EXECUTABLE_CANDIDATES = [
 
 function findChromeExecutable() {
   for (const candidate of CHROME_EXECUTABLE_CANDIDATES) {
-    try { if (fs.existsSync(candidate)) return candidate; } catch { /* skip */ }
+    try {
+      if (fs.existsSync(candidate)) return candidate;
+    } catch {
+      /* skip */
+    }
   }
   return null;
 }
@@ -112,14 +116,16 @@ function record(name, ok, detail) {
   const tag = ok ? '\x1b[32mPASS\x1b[0m' : '\x1b[31mFAIL\x1b[0m';
   console.log(`  [${tag}] ${name}${detail ? `  — ${detail}` : ''}`);
 }
-function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
 
 // ---------------------------------------------------------------------------
 // Synthetic fleet: one east-west row near Austin, ALL category 0 ("no info" —
 // the 94% real-world case). adsbdb type answers cover 8 distinct classes;
 // aa000c answers found:false (negative-cache case → stays airliner).
 // ---------------------------------------------------------------------------
-const ROW_LAT = 30.30;
+const ROW_LAT = 30.3;
 const ROW_LON0 = -97.82;
 const ROW_STEP_DEG = 0.012; // ~1.15 km — 12 planes span ~12.7 km, fits a 20 km-up frame
 
@@ -128,15 +134,15 @@ const TYPES = {
   aa0001: 'C172', // light
   aa0002: 'B744', // quadjet
   aa0003: 'DH8D', // turboprop
-  aa0004: 'H60',  // helicopter
-  aa0005: 'F16',  // fastjet
+  aa0004: 'H60', // helicopter
+  aa0005: 'F16', // fastjet
   aa0006: 'GLID', // glider
   aa0007: 'B77W', // widebody
   aa0008: 'A320', // airliner
   aa0009: 'B738', // airliner (known code outside the special sets)
   aa000a: 'PC12', // turboprop
-  aa000b: 'R44',  // helicopter
-  aa000c: null,   // adsbdb 404 → found:false → stays airliner, never re-asked
+  aa000b: 'R44', // helicopter
+  aa000c: null, // adsbdb 404 → found:false → stays airliner, never re-asked
 };
 
 const SPEC = {
@@ -156,22 +162,29 @@ const SPEC = {
 };
 
 // Node-side expectations (same classifier inputs the layer sees).
-const expected = new Map(Object.entries(TYPES).map(([hex, tc]) => [
-  hex, classifyAircraft(tc ? { typeCode: tc } : { category: 0 }),
-]));
+const expected = new Map(
+  Object.entries(TYPES).map(([hex, tc]) => [
+    hex,
+    classifyAircraft(tc ? { typeCode: tc } : { category: 0 }),
+  ]),
+);
 const AIRLINER_ICON = aircraftIcon(classifyAircraft({ category: 0 })); // pre-enrichment default
 
 // ---------------------------------------------------------------------------
 async function main() {
   console.log(`\nAmbient fleet type-enrichment QA (fleet-enrichment widening)`);
   console.log(`  App URL : ${APP_URL}\n`);
-  console.log(`  Expected classes: ${[...expected.entries()].map(([k, v]) => `${k}:${v}`).join(' ')}\n`);
+  console.log(
+    `  Expected classes: ${[...expected.entries()].map(([k, v]) => `${k}:${v}`).join(' ')}\n`,
+  );
 
   try {
     const res = await fetch(APP_URL, { method: 'GET' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
   } catch (e) {
-    console.error(`\x1b[31mDev server not reachable at ${APP_URL} (${e.message}).\x1b[0m`);
+    console.error(
+      `\x1b[31mDev server not reachable at ${APP_URL} (${e.message}).\x1b[0m`,
+    );
     process.exit(2);
   }
 
@@ -201,10 +214,13 @@ async function main() {
     page.on('console', (msg) => {
       if (msg.type() === 'error') {
         const text = msg.text();
-        if (!/Failed to load resource.*404/i.test(text)) consoleErrors.push(text);
+        if (!/Failed to load resource.*404/i.test(text))
+          consoleErrors.push(text);
       }
     });
-    page.on('pageerror', (err) => consoleErrors.push(`pageerror: ${err.message}`));
+    page.on('pageerror', (err) =>
+      consoleErrors.push(`pageerror: ${err.message}`),
+    );
 
     // ---- Fetch shim: synthetic fleet + instrumented, holdable adsbdb -------
     await page.evaluateOnNewDocument((spec) => {
@@ -216,7 +232,13 @@ async function main() {
       // Request log: starts (hex + performance.now), live/max concurrency,
       // hold gate (responses park until the harness releases them so the
       // pre-enrichment baseline is deterministic).
-      window.__ENRICH_LOG = { starts: [], inflight: 0, maxInflight: 0, held: true, holds: [] };
+      window.__ENRICH_LOG = {
+        starts: [],
+        inflight: 0,
+        maxInflight: 0,
+        held: true,
+        holds: [],
+      };
       window.__ENRICH_RELEASE = () => {
         window.__ENRICH_LOG.held = false;
         window.__ENRICH_LOG.holds.splice(0).forEach((fn) => fn());
@@ -229,17 +251,21 @@ async function main() {
         const east = dist * Math.sin(cRad);
         const north = dist * Math.cos(cRad);
         const lat = p.lat0 + north / 111320;
-        const lon = p.lon0 + east / (111320 * Math.cos((p.lat0 * Math.PI) / 180));
+        const lon =
+          p.lon0 + east / (111320 * Math.cos((p.lat0 * Math.PI) / 180));
         return { lon, lat, course: p.courseDeg, speedMps: p.speedMps };
       };
 
       const realFetch = window.fetch.bind(window);
-      const jsonResponse = (obj) => new Response(JSON.stringify(obj), {
-        status: 200, headers: { 'Content-Type': 'application/json' },
-      });
+      const jsonResponse = (obj) =>
+        new Response(JSON.stringify(obj), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
 
       window.fetch = (input, init) => {
-        const url = typeof input === 'string' ? input : (input && input.url) || '';
+        const url =
+          typeof input === 'string' ? input : (input && input.url) || '';
         const S = window.__ENR;
         const nowSec = Date.now() / 1000 + (S.timeOffsetSec || 0);
         const tRel = nowSec - S.epochMs / 1000;
@@ -252,35 +278,64 @@ async function main() {
           L.maxInflight = Math.max(L.maxInflight, L.inflight);
           const tc = S.types[hex];
           const body = tc
-            ? { found: true, typeCode: tc, typeName: `Synthetic ${tc}`, registration: `N${hex.slice(-3).toUpperCase()}` }
+            ? {
+                found: true,
+                typeCode: tc,
+                typeName: `Synthetic ${tc}`,
+                registration: `N${hex.slice(-3).toUpperCase()}`,
+              }
             : { found: false };
           return new Promise((resolve) => {
-            const finish = () => setTimeout(() => { L.inflight -= 1; resolve(jsonResponse(body)); }, S.responseDelayMs);
-            if (L.held) L.holds.push(finish); else finish();
+            const finish = () =>
+              setTimeout(() => {
+                L.inflight -= 1;
+                resolve(jsonResponse(body));
+              }, S.responseDelayMs);
+            if (L.held) L.holds.push(finish);
+            else finish();
           });
         }
-        if (url.includes('/api/adsbdb/')) return Promise.resolve(jsonResponse({ found: false }));
-        if (url.includes('/api/opensky-track')) return Promise.resolve(jsonResponse({ path: [] }));
+        if (url.includes('/api/adsbdb/'))
+          return Promise.resolve(jsonResponse({ found: false }));
+        if (url.includes('/api/opensky-track'))
+          return Promise.resolve(jsonResponse({ path: [] }));
         if (url.includes('/api/adsblol/trace')) {
-          return Promise.resolve(jsonResponse({ timestamp: Math.floor(nowSec), trace: [] }));
+          return Promise.resolve(
+            jsonResponse({ timestamp: Math.floor(nowSec), trace: [] }),
+          );
         }
         if (url.includes('/api/adsblol/mil')) {
-          return Promise.resolve(jsonResponse({ msg: 'No error', now: Date.now(), ac: [] }));
+          return Promise.resolve(
+            jsonResponse({ msg: 'No error', now: Date.now(), ac: [] }),
+          );
         }
         if (url.includes('/api/opensky')) {
           const states = S.planes.map((f) => {
             const s = S.stateAt(f, tRel);
             return [
-              f.icao, f.callsign, 'Synthetica',
-              Math.floor(nowSec), Math.floor(nowSec),
-              s.lon, s.lat, f.altM,
-              false,                    // on_ground
-              s.speedMps, s.course,
-              0, null, null, null, false, 0,
-              0,                        // state[17] — category 0 = "no info" (the 94% case)
+              f.icao,
+              f.callsign,
+              'Synthetica',
+              Math.floor(nowSec),
+              Math.floor(nowSec),
+              s.lon,
+              s.lat,
+              f.altM,
+              false, // on_ground
+              s.speedMps,
+              s.course,
+              0,
+              null,
+              null,
+              null,
+              false,
+              0,
+              0, // state[17] — category 0 = "no info" (the 94% case)
             ];
           });
-          return Promise.resolve(jsonResponse({ time: Math.floor(nowSec), states }));
+          return Promise.resolve(
+            jsonResponse({ time: Math.floor(nowSec), states }),
+          );
         }
         return realFetch(input, init);
       };
@@ -289,8 +344,11 @@ async function main() {
     console.log('Loading app...');
     await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForFunction(
-      () => window.__godsEyeView && window.__godsEyeView.viewer && window.__godsEyeView.dataManager,
-      { timeout: 60000, polling: 200 }
+      () =>
+        window.__godsEyeView &&
+        window.__godsEyeView.viewer &&
+        window.__godsEyeView.dataManager,
+      { timeout: 60000, polling: 200 },
     );
     console.log('  App globals ready.');
 
@@ -303,11 +361,23 @@ async function main() {
           const n = coll.length;
           for (let i = 0; i < n; i++) {
             let p;
-            try { p = coll.get(i); } catch { continue; }
+            try {
+              p = coll.get(i);
+            } catch {
+              continue;
+            }
             if (!p) continue;
-            if (typeof p.length === 'number' && typeof p.get === 'function') { walk(p); continue; }
+            if (typeof p.length === 'number' && typeof p.get === 'function') {
+              walk(p);
+              continue;
+            }
             if (p.image !== undefined && p.alignedAxis !== undefined) {
-              out.push({ id: p.id, image: p.image, scale: p.scale, show: p.show });
+              out.push({
+                id: p.id,
+                image: p.image,
+                scale: p.scale,
+                show: p.show,
+              });
             }
           }
         };
@@ -321,17 +391,22 @@ async function main() {
     // framing the fleet when the layer polls — otherwise the frustum test
     // (correctly) skips off-screen planes.
     const centerLon = ROW_LON0 + ((SPEC.planes.length - 1) / 2) * ROW_STEP_DEG;
-    await page.evaluate(({ lat, lon, height }) => {
-      const v = window.__godsEyeView.viewer;
-      v.camera.cancelFlight(); // the boot fly-to-Austin otherwise stomps setView
-      const C3 = v.camera.position.constructor;
-      v.camera.setView({
-        destination: C3.fromDegrees(lon, lat, height),
-        orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
-      });
-    }, { lat: ROW_LAT, lon: centerLon, height: 20000 });
+    await page.evaluate(
+      ({ lat, lon, height }) => {
+        const v = window.__godsEyeView.viewer;
+        v.camera.cancelFlight(); // the boot fly-to-Austin otherwise stomps setView
+        const C3 = v.camera.position.constructor;
+        v.camera.setView({
+          destination: C3.fromDegrees(lon, lat, height),
+          orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+        });
+      },
+      { lat: ROW_LAT, lon: centerLon, height: 20000 },
+    );
 
-    console.log('Priming straight-flight history through the render delay (30 s)...');
+    console.log(
+      'Priming straight-flight history through the render delay (30 s)...',
+    );
     const primed = await page.evaluate(async () => {
       const dm = window.__godsEyeView.dataManager;
       const v = window.__godsEyeView.viewer;
@@ -343,13 +418,26 @@ async function main() {
         await fl.update(v);
       }
       window.__ENR.timeOffsetSec = 0;
-      window.__ENR_DRIVER = setInterval(() => { fl.update(v); }, 15000);
-      return { count: fl.getStats().count, starts: window.__ENRICH_LOG.starts.length };
+      window.__ENR_DRIVER = setInterval(() => {
+        fl.update(v);
+      }, 15000);
+      return {
+        count: fl.getStats().count,
+        starts: window.__ENRICH_LOG.starts.length,
+      };
     });
-    console.log(`  flights count=${primed.count} | adsbdb requests started (held): ${primed.starts}`);
-    record('E1 ingest: all synthetic category-0 planes in the flights layer',
-      primed.count === SPEC.planes.length, `count=${primed.count}/${SPEC.planes.length}`);
-    if (primed.count === 0) { finish(); return; }
+    console.log(
+      `  flights count=${primed.count} | adsbdb requests started (held): ${primed.starts}`,
+    );
+    record(
+      'E1 ingest: all synthetic category-0 planes in the flights layer',
+      primed.count === SPEC.planes.length,
+      `count=${primed.count}/${SPEC.planes.length}`,
+    );
+    if (primed.count === 0) {
+      finish();
+      return;
+    }
 
     // ========================================================================
     // E2 — deterministic pre-enrichment baseline (responses still held)
@@ -361,31 +449,59 @@ async function main() {
     for (const hex of Object.keys(TYPES)) {
       const bb = beforeById.get(hex);
       if (!bb) baselineBad.push(`${hex}:missing`);
-      else if (bb.image !== AIRLINER_ICON) baselineBad.push(`${hex}:not-default-glyph`);
-      else if (Math.abs(bb.scale - (CLASS_SCALE_2D.airliner || 1)) > 1e-9) baselineBad.push(`${hex}:scale=${bb.scale}`);
+      else if (bb.image !== AIRLINER_ICON)
+        baselineBad.push(`${hex}:not-default-glyph`);
+      else if (Math.abs(bb.scale - (CLASS_SCALE_2D.airliner || 1)) > 1e-9)
+        baselineBad.push(`${hex}:scale=${bb.scale}`);
     }
-    record('E2 baseline: all 12 category-0 planes default to the airliner glyph',
+    record(
+      'E2 baseline: all 12 category-0 planes default to the airliner glyph',
       baselineBad.length === 0,
-      baselineBad.length ? baselineBad.join(' ') : 'all 12 identical airliner silhouettes (the field-data problem)');
+      baselineBad.length
+        ? baselineBad.join(' ')
+        : 'all 12 identical airliner silhouettes (the field-data problem)',
+    );
     await sleep(1200); // let a fleet tick land rotations before the "before" shot
-    await page.screenshot({ path: path.join(SHOT_DIR, 'enrich-before-monoculture.png') });
-    console.log('  saved enrich-before-monoculture.png (12 identical airliner glyphs)');
+    await page.screenshot({
+      path: path.join(SHOT_DIR, 'enrich-before-monoculture.png'),
+    });
+    console.log(
+      '  saved enrich-before-monoculture.png (12 identical airliner glyphs)',
+    );
 
     // ========================================================================
     // Release adsbdb + wait for the drip to finish, then for glyph swaps
     // ========================================================================
-    console.log('\nReleasing adsbdb responses; waiting for the bounded drip to drain...');
+    console.log(
+      '\nReleasing adsbdb responses; waiting for the bounded drip to drain...',
+    );
     await page.evaluate(() => window.__ENRICH_RELEASE());
-    const drained = await page.waitForFunction(
-      (want) => window.__ENRICH_LOG.starts.length >= want && window.__ENRICH_LOG.inflight === 0,
-      { timeout: 30000, polling: 100 }, SPEC.planes.length
-    ).then(() => true).catch(() => false);
-    if (!drained) console.log('  \x1b[33mdrip did not fully drain within 30 s\x1b[0m');
+    const drained = await page
+      .waitForFunction(
+        (want) =>
+          window.__ENRICH_LOG.starts.length >= want &&
+          window.__ENRICH_LOG.inflight === 0,
+        { timeout: 30000, polling: 100 },
+        SPEC.planes.length,
+      )
+      .then(() => true)
+      .catch(() => false);
+    if (!drained)
+      console.log('  \x1b[33mdrip did not fully drain within 30 s\x1b[0m');
     // Give the enrichment callbacks a beat to apply billboard swaps.
-    await page.waitForFunction(() => {
-      const images = new Set(window.__collectBillboards().map((b) => b.image));
-      return images.size >= 5;
-    }, { timeout: 10000, polling: 200 }).catch(() => { /* asserted below */ });
+    await page
+      .waitForFunction(
+        () => {
+          const images = new Set(
+            window.__collectBillboards().map((b) => b.image),
+          );
+          return images.size >= 5;
+        },
+        { timeout: 10000, polling: 200 },
+      )
+      .catch(() => {
+        /* asserted below */
+      });
 
     // ========================================================================
     // E3–E6 — requests + ambient glyph/scale swaps (nothing tracked, 3D off)
@@ -398,17 +514,24 @@ async function main() {
     const startHexes = log1.starts.map((s) => s.hex);
     const uniqueHexes = new Set(startHexes);
     const allRequested = Object.keys(TYPES).every((h) => uniqueHexes.has(h));
-    record('E3 requests: sweep requested all 12 hexes, each exactly once',
+    record(
+      'E3 requests: sweep requested all 12 hexes, each exactly once',
       allRequested && startHexes.length === Object.keys(TYPES).length,
-      `${startHexes.length} requests, ${uniqueHexes.size} unique`);
+      `${startHexes.length} requests, ${uniqueHexes.size} unique`,
+    );
 
     const after = await page.evaluate(() => window.__collectBillboards());
     const afterById = new Map(after.map((b) => [b.id, b]));
     const syntheticImages = new Set(
-      Object.keys(TYPES).map((hex) => afterById.get(hex)?.image).filter(Boolean)
+      Object.keys(TYPES)
+        .map((hex) => afterById.get(hex)?.image)
+        .filter(Boolean),
     );
-    record('E4 diversity: ≥5 distinct glyph data-URIs displayed ambiently',
-      syntheticImages.size >= 5, `${syntheticImages.size} distinct glyphs (expected 8)`);
+    record(
+      'E4 diversity: ≥5 distinct glyph data-URIs displayed ambiently',
+      syntheticImages.size >= 5,
+      `${syntheticImages.size} distinct glyphs (expected 8)`,
+    );
 
     const glyphBad = [];
     const scaleBad = [];
@@ -416,38 +539,63 @@ async function main() {
       const bb = afterById.get(hex);
       const wantImg = aircraftIcon(klass);
       const wantScale = CLASS_SCALE_2D[klass] || 1;
-      if (!bb || bb.image !== wantImg) glyphBad.push(`${hex}(${klass})${bb ? ':wrong-image' : ':missing'}`);
-      if (bb && Math.abs(bb.scale - wantScale) > 1e-9) scaleBad.push(`${hex}: ${bb.scale} != ${wantScale}`);
+      if (!bb || bb.image !== wantImg)
+        glyphBad.push(`${hex}(${klass})${bb ? ':wrong-image' : ':missing'}`);
+      if (bb && Math.abs(bb.scale - wantScale) > 1e-9)
+        scaleBad.push(`${hex}: ${bb.scale} != ${wantScale}`);
     }
-    record('E5 glyphs: every billboard matches aircraftIcon(classify(typeCode))',
-      glyphBad.length === 0, glyphBad.length ? glyphBad.join(' ') : `${expected.size} matched (incl. the found:false miss staying airliner)`);
-    record('E6 scales: every billboard has its per-class CLASS_SCALE_2D',
-      scaleBad.length === 0, scaleBad.length ? scaleBad.join(' ') : 'all scales exact (composes with scaleByDistance)');
+    record(
+      'E5 glyphs: every billboard matches aircraftIcon(classify(typeCode))',
+      glyphBad.length === 0,
+      glyphBad.length
+        ? glyphBad.join(' ')
+        : `${expected.size} matched (incl. the found:false miss staying airliner)`,
+    );
+    record(
+      'E6 scales: every billboard has its per-class CLASS_SCALE_2D',
+      scaleBad.length === 0,
+      scaleBad.length
+        ? scaleBad.join(' ')
+        : 'all scales exact (composes with scaleByDistance)',
+    );
 
-    await page.screenshot({ path: path.join(SHOT_DIR, 'enrich-after-diverse.png') });
-    console.log('  saved enrich-after-diverse.png (type-diverse row, still untracked)');
+    await page.screenshot({
+      path: path.join(SHOT_DIR, 'enrich-after-diverse.png'),
+    });
+    console.log(
+      '  saved enrich-after-diverse.png (type-diverse row, still untracked)',
+    );
 
     // ========================================================================
     // E7 — politeness bounds (concurrency, drip rate, session cap)
     // ========================================================================
     console.log('\nE7 — client-side bounds');
     const gaps = [];
-    for (let i = 1; i < log1.starts.length; i++) gaps.push(log1.starts[i].t - log1.starts[i - 1].t);
+    for (let i = 1; i < log1.starts.length; i++)
+      gaps.push(log1.starts[i].t - log1.starts[i - 1].t);
     const minGap = gaps.length ? Math.min(...gaps) : Infinity;
     // Max dispatches in any sliding 1 s window (reported for context).
     let maxPerSec = 0;
     for (let i = 0; i < log1.starts.length; i++) {
       let n = 0;
-      for (let j = i; j < log1.starts.length && log1.starts[j].t - log1.starts[i].t < 1000; j++) n++;
+      for (
+        let j = i;
+        j < log1.starts.length && log1.starts[j].t - log1.starts[i].t < 1000;
+        j++
+      )
+        n++;
       maxPerSec = Math.max(maxPerSec, n);
     }
-    const boundsOk = log1.maxInflight <= MAX_INFLIGHT
-      && minGap >= (DISPATCH_GAP_MS - GAP_TOLERANCE_MS)
-      && log1.starts.length <= SESSION_CAP;
-    record(`E7 bounds: ≤${MAX_INFLIGHT} concurrent, ≥${DISPATCH_GAP_MS}ms drip gap, ≤${SESSION_CAP}/session`,
+    const boundsOk =
+      log1.maxInflight <= MAX_INFLIGHT &&
+      minGap >= DISPATCH_GAP_MS - GAP_TOLERANCE_MS &&
+      log1.starts.length <= SESSION_CAP;
+    record(
+      `E7 bounds: ≤${MAX_INFLIGHT} concurrent, ≥${DISPATCH_GAP_MS}ms drip gap, ≤${SESSION_CAP}/session`,
       boundsOk,
-      `maxConcurrent=${log1.maxInflight} minGap=${Number.isFinite(minGap) ? minGap.toFixed(1) : 'n/a'}ms `
-      + `maxIn1s=${maxPerSec} total=${log1.starts.length}`);
+      `maxConcurrent=${log1.maxInflight} minGap=${Number.isFinite(minGap) ? minGap.toFixed(1) : 'n/a'}ms ` +
+        `maxIn1s=${maxPerSec} total=${log1.starts.length}`,
+    );
 
     // ========================================================================
     // E8 — next poll: klass persists (poll re-derive keeps enriched types) and
@@ -468,13 +616,19 @@ async function main() {
     const pollBad = [];
     for (const [hex, klass] of expected) {
       const bb = afterPollById.get(hex);
-      if (!bb || bb.image !== aircraftIcon(klass)) pollBad.push(`${hex}(${klass})${bb ? ':reverted' : ':missing'}`);
-      else if (Math.abs(bb.scale - (CLASS_SCALE_2D[klass] || 1)) > 1e-9) pollBad.push(`${hex}:scale-reverted`);
+      if (!bb || bb.image !== aircraftIcon(klass))
+        pollBad.push(`${hex}(${klass})${bb ? ':reverted' : ':missing'}`);
+      else if (Math.abs(bb.scale - (CLASS_SCALE_2D[klass] || 1)) > 1e-9)
+        pollBad.push(`${hex}:scale-reverted`);
     }
     const noReRequests = afterPoll.starts === Object.keys(TYPES).length;
-    record('E8 next poll: enriched glyphs persist and no hex is re-requested',
+    record(
+      'E8 next poll: enriched glyphs persist and no hex is re-requested',
       pollBad.length === 0 && noReRequests,
-      pollBad.length ? pollBad.join(' ') : `glyphs stable, requests still ${afterPoll.starts}`);
+      pollBad.length
+        ? pollBad.join(' ')
+        : `glyphs stable, requests still ${afterPoll.starts}`,
+    );
 
     // ========================================================================
     // E10 — rolling-budget exhaustion (2026-07-03 field bug, red/green): the
@@ -487,37 +641,59 @@ async function main() {
     // no rolling bucket to exhaust (the seam is unread and the 300 cap simply
     // admits the whole batch).
     // ========================================================================
-    console.log('\nE10 — rolling budget exhausts (batch of 26 new planes, 8 tokens left)');
+    console.log(
+      '\nE10 — rolling budget exhausts (batch of 26 new planes, 8 tokens left)',
+    );
     const BATCH_COUNT = 26;
-    const batchHexes = Array.from({ length: BATCH_COUNT }, (_, i) => `ab00${(i + 1).toString(16).padStart(2, '0')}`);
-    const startsBeforeBatch = await page.evaluate(() => window.__ENRICH_LOG.starts.length);
-    await page.evaluate(async ({ hexes, rowLat, rowLon0, stepDeg }) => {
-      const dm = window.__godsEyeView.dataManager;
-      const v = window.__godsEyeView.viewer;
-      // Two fresh rows just north of the original one — still inside the
-      // top-down 20 km frame, so the sweep's frustum test keeps them.
-      // STATIONARY (speed 0): moving planes drift north out of the frustum at
-      // run-time-dependent rates, which made this phase timing-sensitive.
-      hexes.forEach((hex, i) => {
-        window.__ENR.planes.push({
-          icao: hex,
-          callsign: `BGT${String(i + 1).padStart(3, '0')}`,
-          lon0: rowLon0 + (i % 13) * stepDeg,
-          lat0: rowLat + (i < 13 ? 0.02 : 0.04),
-          courseDeg: 0,
-          speedMps: 0,
-          altM: 2600 + i * 15,
+    const batchHexes = Array.from(
+      { length: BATCH_COUNT },
+      (_, i) => `ab00${(i + 1).toString(16).padStart(2, '0')}`,
+    );
+    const startsBeforeBatch = await page.evaluate(
+      () => window.__ENRICH_LOG.starts.length,
+    );
+    await page.evaluate(
+      async ({ hexes, rowLat, rowLon0, stepDeg }) => {
+        const dm = window.__godsEyeView.dataManager;
+        const v = window.__godsEyeView.viewer;
+        // Two fresh rows just north of the original one — still inside the
+        // top-down 20 km frame, so the sweep's frustum test keeps them.
+        // STATIONARY (speed 0): moving planes drift north out of the frustum at
+        // run-time-dependent rates, which made this phase timing-sensitive.
+        hexes.forEach((hex, i) => {
+          window.__ENR.planes.push({
+            icao: hex,
+            callsign: `BGT${String(i + 1).padStart(3, '0')}`,
+            lon0: rowLon0 + (i % 13) * stepDeg,
+            lat0: rowLat + (i < 13 ? 0.02 : 0.04),
+            courseDeg: 0,
+            speedMps: 0,
+            altM: 2600 + i * 15,
+          });
         });
-      });
-      const fl = dm.layers.get('flights').module;
-      await fl.update(v); // sweep enqueues the last 8 tokens
-      await fl.update(v); // bucket empty — must enqueue nothing more
-    }, { hexes: batchHexes, rowLat: ROW_LAT, rowLon0: ROW_LON0, stepDeg: ROW_STEP_DEG });
+        const fl = dm.layers.get('flights').module;
+        await fl.update(v); // sweep enqueues the last 8 tokens
+        await fl.update(v); // bucket empty — must enqueue nothing more
+      },
+      {
+        hexes: batchHexes,
+        rowLat: ROW_LAT,
+        rowLon0: ROW_LON0,
+        stepDeg: ROW_STEP_DEG,
+      },
+    );
     // Wait for the drip to drain whatever was enqueued, then settle.
-    await page.waitForFunction(
-      (min) => window.__ENRICH_LOG.starts.length >= min && window.__ENRICH_LOG.inflight === 0,
-      { timeout: 20000, polling: 100 }, startsBeforeBatch + (BUDGET_QA.ceil - startsBeforeBatch)
-    ).catch(() => { /* asserted below */ });
+    await page
+      .waitForFunction(
+        (min) =>
+          window.__ENRICH_LOG.starts.length >= min &&
+          window.__ENRICH_LOG.inflight === 0,
+        { timeout: 20000, polling: 100 },
+        startsBeforeBatch + (BUDGET_QA.ceil - startsBeforeBatch),
+      )
+      .catch(() => {
+        /* asserted below */
+      });
     await sleep(1500); // any illegal post-exhaustion enqueue would dispatch within ~200 ms
     // One more poll while exhausted — still nothing new.
     await page.evaluate(async () => {
@@ -529,10 +705,12 @@ async function main() {
       starts: window.__ENRICH_LOG.starts.length,
       inflight: window.__ENRICH_LOG.inflight,
     }));
-    record(`E10 exhaust: requests stall at the budget ceiling (${BUDGET_QA.ceil}) with unrequested planes on-screen`,
+    record(
+      `E10 exhaust: requests stall at the budget ceiling (${BUDGET_QA.ceil}) with unrequested planes on-screen`,
       exhausted.starts === BUDGET_QA.ceil && exhausted.inflight === 0,
-      `starts=${exhausted.starts} (want ${BUDGET_QA.ceil}: ${startsBeforeBatch} baseline + ${BUDGET_QA.ceil - startsBeforeBatch} tokens; `
-      + `${BATCH_COUNT - (BUDGET_QA.ceil - startsBeforeBatch)} planes left waiting) inflight=${exhausted.inflight}`);
+      `starts=${exhausted.starts} (want ${BUDGET_QA.ceil}: ${startsBeforeBatch} baseline + ${BUDGET_QA.ceil - startsBeforeBatch} tokens; ` +
+        `${BATCH_COUNT - (BUDGET_QA.ceil - startsBeforeBatch)} planes left waiting) inflight=${exhausted.inflight}`,
+    );
 
     // ========================================================================
     // E11 — refill window passes → enrichment RESUMES. Shorten windowMs so the
@@ -540,26 +718,48 @@ async function main() {
     // sweep refills (clamped at ceil) and the waiting planes get requested.
     // ========================================================================
     console.log('\nE11 — refill window passes; ambient enrichment resumes');
-    await page.evaluate((winMs) => { window.__GEV_ENRICH_AMBIENT_QA.windowMs = winMs; }, RESUME_WINDOW_MS);
+    await page.evaluate((winMs) => {
+      window.__GEV_ENRICH_AMBIENT_QA.windowMs = winMs;
+    }, RESUME_WINDOW_MS);
     await sleep(RESUME_WINDOW_MS + 200); // a full (shortened) refill window elapses
     await page.evaluate(async () => {
       const dm = window.__godsEyeView.dataManager;
       await dm.layers.get('flights').module.update(window.__godsEyeView.viewer);
     });
     const expectedTotal = startsBeforeBatch + BATCH_COUNT; // every batch plane eventually requested
-    const resumed = await page.waitForFunction(
-      (want) => window.__ENRICH_LOG.starts.length >= want && window.__ENRICH_LOG.inflight === 0,
-      { timeout: 25000, polling: 100 }, expectedTotal
-    ).then(() => true).catch(() => false);
-    const resumeLog = await page.evaluate(() => window.__ENRICH_LOG.starts.map((s) => s.hex));
-    const batchRequested = batchHexes.filter((h) => resumeLog.includes(h)).length;
+    const resumed = await page
+      .waitForFunction(
+        (want) =>
+          window.__ENRICH_LOG.starts.length >= want &&
+          window.__ENRICH_LOG.inflight === 0,
+        { timeout: 25000, polling: 100 },
+        expectedTotal,
+      )
+      .then(() => true)
+      .catch(() => false);
+    const resumeLog = await page.evaluate(() =>
+      window.__ENRICH_LOG.starts.map((s) => s.hex),
+    );
+    const batchRequested = batchHexes.filter((h) =>
+      resumeLog.includes(h),
+    ).length;
     const dupes = resumeLog.length !== new Set(resumeLog).size;
-    record('E11 resume: enrichment resumes after a refill window (all waiting planes requested, once each)',
-      resumed && batchRequested === BATCH_COUNT && resumeLog.length === expectedTotal && !dupes,
-      `starts=${resumeLog.length} (want ${expectedTotal}) batchRequested=${batchRequested}/${BATCH_COUNT} dupes=${dupes}`);
+    record(
+      'E11 resume: enrichment resumes after a refill window (all waiting planes requested, once each)',
+      resumed &&
+        batchRequested === BATCH_COUNT &&
+        resumeLog.length === expectedTotal &&
+        !dupes,
+      `starts=${resumeLog.length} (want ${expectedTotal}) batchRequested=${batchRequested}/${BATCH_COUNT} dupes=${dupes}`,
+    );
 
-    record('E12: no console errors during QA run', consoleErrors.length === 0,
-      consoleErrors.length ? `${consoleErrors.length}: ${consoleErrors.slice(0, 3).join(' | ')}` : 'clean');
+    record(
+      'E12: no console errors during QA run',
+      consoleErrors.length === 0,
+      consoleErrors.length
+        ? `${consoleErrors.length}: ${consoleErrors.slice(0, 3).join(' | ')}`
+        : 'clean',
+    );
 
     finish();
   } finally {
@@ -577,6 +777,9 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error('\n\x1b[31mQA harness error:\x1b[0m', err && err.stack ? err.stack : err);
+  console.error(
+    '\n\x1b[31mQA harness error:\x1b[0m',
+    err && err.stack ? err.stack : err,
+  );
   process.exit(2);
 });

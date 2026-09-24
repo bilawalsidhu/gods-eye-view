@@ -17,7 +17,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  geoidSurfaceLastResortM, pickRenderAltitudeM, reuseGroundedSurfaceM,
+  geoidSurfaceLastResortM,
+  pickRenderAltitudeM,
+  reuseGroundedSurfaceM,
 } from './renderAltitude.js';
 
 test('onGround with a finite surfaceM wins over everything else', () => {
@@ -93,7 +95,11 @@ test('null-geo fallback: neither geoAltM nor baroAltM finite -> sentinel null', 
     surfaceM: null,
     geoidN: -17.3,
   });
-  assert.equal(got, null, 'caller applies its own existing sticky/default fallback on null');
+  assert.equal(
+    got,
+    null,
+    'caller applies its own existing sticky/default fallback on null',
+  );
 });
 
 test('grounded with no surfaceM and no geo/baro altitude -> still sentinel null (caller default)', () => {
@@ -109,12 +115,24 @@ test('grounded with no surfaceM and no geo/baro altitude -> still sentinel null 
 
 test('non-finite (NaN/Infinity) inputs are treated as missing, not thrown', () => {
   assert.equal(
-    pickRenderAltitudeM({ geoAltM: NaN, baroAltM: 1200, onGround: false, surfaceM: null, geoidN: 5 }),
-    1205
+    pickRenderAltitudeM({
+      geoAltM: NaN,
+      baroAltM: 1200,
+      onGround: false,
+      surfaceM: null,
+      geoidN: 5,
+    }),
+    1205,
   );
   assert.equal(
-    pickRenderAltitudeM({ geoAltM: Infinity, baroAltM: 1200, onGround: false, surfaceM: null, geoidN: 5 }),
-    1205
+    pickRenderAltitudeM({
+      geoAltM: Infinity,
+      baroAltM: 1200,
+      onGround: false,
+      surfaceM: null,
+      geoidN: 5,
+    }),
+    1205,
   );
 });
 
@@ -157,17 +175,24 @@ test('taxiing aircraft over nonzero terrain resolves every poll after the first 
   // NEXT poll, so `cachedCurrent` misses every poll but `cachedPrev` (last
   // poll's now-warmed fix) hits from poll 2 onward.
   const GROUND = 1620;
-  const warm = new Map();                 // stands in for terrainHeights cache
+  const warm = new Map(); // stands in for terrainHeights cache
   const key = (lat) => lat.toFixed(5);
   let prevFixLat = null;
   const rendered = [];
   for (let poll = 0; poll < 4; poll++) {
-    const lat = 39.85000 + poll * 0.001;  // ~111 m/poll — a fresh key every poll
+    const lat = 39.85 + poll * 0.001; // ~111 m/poll — a fresh key every poll
     const cachedCurrent = warm.has(key(lat)) ? warm.get(key(lat)) : null;
-    const cachedPrev = prevFixLat != null && warm.has(key(prevFixLat)) ? warm.get(key(prevFixLat)) : null;
+    const cachedPrev =
+      prevFixLat != null && warm.has(key(prevFixLat))
+        ? warm.get(key(prevFixLat))
+        : null;
     const surfaceM = reuseGroundedSurfaceM(cachedCurrent, cachedPrev);
     const renderAltM = pickRenderAltitudeM({
-      geoAltM: null, baroAltM: null, onGround: true, surfaceM, geoidN: -17.3,
+      geoAltM: null,
+      baroAltM: null,
+      onGround: true,
+      surfaceM,
+      geoidN: -17.3,
     });
     rendered.push(renderAltM);
     // end-of-poll warm batch resolves this poll's fix for later polls
@@ -177,8 +202,16 @@ test('taxiing aircraft over nonzero terrain resolves every poll after the first 
   // Poll 0 has no prior fix (brand-new contact) -> sentinel null (caller uses
   // its 0 m grounded default for one poll). Polls 1..3 reuse the previous
   // fix's ground and never stick underground.
-  assert.equal(rendered[0], null, 'first poll: no prior warm fix yet -> caller default');
-  assert.deepEqual(rendered.slice(1), [GROUND, GROUND, GROUND], 'subsequent polls resolve via previous fix');
+  assert.equal(
+    rendered[0],
+    null,
+    'first poll: no prior warm fix yet -> caller default',
+  );
+  assert.deepEqual(
+    rendered.slice(1),
+    [GROUND, GROUND, GROUND],
+    'subsequent polls resolve via previous fix',
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -188,28 +221,59 @@ test('taxiing aircraft over nonzero terrain resolves every poll after the first 
 // ---------------------------------------------------------------------------
 
 test('geoid last resort: a first sighting with no altitude at all gets the guess', () => {
-  assert.equal(geoidSurfaceLastResortM({
-    geoAltM: null, baroAltM: null, priorRenderM: null, geoidN: -27.4,
-  }), -27.4);
+  assert.equal(
+    geoidSurfaceLastResortM({
+      geoAltM: null,
+      baroAltM: null,
+      priorRenderM: null,
+      geoidN: -27.4,
+    }),
+    -27.4,
+  );
 });
 
 test('geoid last resort: a contact that already has a render height HOLDS it', () => {
-  assert.equal(geoidSurfaceLastResortM({
-    geoAltM: null, baroAltM: null, priorRenderM: 168.2, geoidN: -27.4,
-  }), null, 'null leaves surfaceM cold, so the caller falls through to its own hold');
+  assert.equal(
+    geoidSurfaceLastResortM({
+      geoAltM: null,
+      baroAltM: null,
+      priorRenderM: 168.2,
+      geoidN: -27.4,
+    }),
+    null,
+    'null leaves surfaceM cold, so the caller falls through to its own hold',
+  );
 });
 
 test('geoid last resort: any reported altitude outranks the guess', () => {
-  assert.equal(geoidSurfaceLastResortM({
-    geoAltM: 190, baroAltM: null, priorRenderM: null, geoidN: -27.4,
-  }), null);
-  assert.equal(geoidSurfaceLastResortM({
-    geoAltM: null, baroAltM: 165, priorRenderM: null, geoidN: -27.4,
-  }), null);
+  assert.equal(
+    geoidSurfaceLastResortM({
+      geoAltM: 190,
+      baroAltM: null,
+      priorRenderM: null,
+      geoidN: -27.4,
+    }),
+    null,
+  );
+  assert.equal(
+    geoidSurfaceLastResortM({
+      geoAltM: null,
+      baroAltM: 165,
+      priorRenderM: null,
+      geoidN: -27.4,
+    }),
+    null,
+  );
 });
 
 test('geoid last resort: no geoid grid yet means no guess to make', () => {
-  assert.equal(geoidSurfaceLastResortM({
-    geoAltM: null, baroAltM: null, priorRenderM: null, geoidN: undefined,
-  }), null);
+  assert.equal(
+    geoidSurfaceLastResortM({
+      geoAltM: null,
+      baroAltM: null,
+      priorRenderM: null,
+      geoidN: undefined,
+    }),
+    null,
+  );
 });

@@ -18,11 +18,14 @@
  *   node scripts/qa-floorhold-probe-cost.mjs
  */
 import {
-  neighborFloorM, reportMeshFloorCell, setMeshFloorPreferred, _clearMeshFloorCellsForTest,
+  neighborFloorM,
+  reportMeshFloorCell,
+  setMeshFloorPreferred,
+  _clearMeshFloorCellsForTest,
 } from '../src/data/groundFloor.js';
 
-const CONTACTS = 200;   // a dense airport view, every contact probing at once
-const TICK_MS = 80;     // the fleet dead-reckoning cadence
+const CONTACTS = 200; // a dense airport view, every contact probing at once
+const TICK_MS = 80; // the fleet dead-reckoning cadence
 const THROTTLE_MS = 500; // NEIGHBOR_FLOOR_PROBE_MS
 
 setMeshFloorPreferred(true);
@@ -39,7 +42,11 @@ for (const [label, warm] of [
       for (let dLat = -1; dLat <= 1; dLat += 1) {
         for (let dLon = -1; dLon <= 1; dLon += 1) {
           if (dLat === 0 && dLon === 0) continue; // the contact's OWN cell stays cold
-          reportMeshFloorCell(cell.lat + dLat * 0.001, cell.lon + dLon * 0.001, 100 + i);
+          reportMeshFloorCell(
+            cell.lat + dLat * 0.001,
+            cell.lon + dLon * 0.001,
+            100 + i,
+          );
         }
       }
     }
@@ -55,8 +62,16 @@ for (const [label, warm] of [
   const median = runs[Math.floor(runs.length / 2)];
   const worst = runs[runs.length - 1];
   console.log(`\n${label}`);
-  console.log(`  ${CONTACTS} contacts x 8 cells on ONE tick : median ${median.toFixed(3)} ms, worst ${worst.toFixed(3)} ms`);
-  console.log(`  share of one ${TICK_MS} ms fleet tick        : ${(worst / TICK_MS * 100).toFixed(2)}%`);
-  console.log(`  sustained under the ${THROTTLE_MS} ms throttle   : ${(median * 1000 / THROTTLE_MS).toFixed(2)} ms per second`);
+  console.log(
+    `  ${CONTACTS} contacts x 8 cells on ONE tick : median ${median.toFixed(3)} ms, worst ${worst.toFixed(3)} ms`,
+  );
+  console.log(
+    `  share of one ${TICK_MS} ms fleet tick        : ${((worst / TICK_MS) * 100).toFixed(2)}%`,
+  );
+  console.log(
+    `  sustained under the ${THROTTLE_MS} ms throttle   : ${((median * 1000) / THROTTLE_MS).toFixed(2)} ms per second`,
+  );
 }
-console.log('\nA global scheduler over this protects single-digit milliseconds.\n');
+console.log(
+  '\nA global scheduler over this protects single-digit milliseconds.\n',
+);

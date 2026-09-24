@@ -11,14 +11,18 @@
   background: rgba(6, 16, 26, 0.94);
   border: 1px solid rgba(0, 240, 255, 0.35);
   border-radius: 8px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.75), 0 0 15px rgba(0, 240, 255, 0.15);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.75),
+    0 0 15px rgba(0, 240, 255, 0.15);
   backdrop-filter: blur(14px);
   z-index: 1050;
   display: flex;
   flex-direction: column;
   padding: 6px 14px;
   user-select: none;
-  transition: opacity 0.25s ease, transform 0.25s ease;
+  transition:
+    opacity 0.25s ease,
+    transform 0.25s ease;
 }
 
 .gev-timeline-bar.hidden {

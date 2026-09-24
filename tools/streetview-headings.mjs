@@ -33,21 +33,47 @@ const PROJECT_ROOT = projectRoot(import.meta.url);
 
 function parseArgs() {
   const args = process.argv.slice(2);
-  const opts = { fov: 90, pitch: 0, size: '640x640', outdir: 'output', neighbors: false };
+  const opts = {
+    fov: 90,
+    pitch: 0,
+    size: '640x640',
+    outdir: 'output',
+    neighbors: false,
+  };
 
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
-      case '--lat':        opts.lat = parseFloat(args[++i]); break;
-      case '--lon':        opts.lon = parseFloat(args[++i]); break;
-      case '--fov':        opts.fov = parseInt(args[++i], 10); break;
-      case '--pitch':      opts.pitch = parseInt(args[++i], 10); break;
-      case '--size':       opts.size = args[++i]; break;
-      case '--outdir':     opts.outdir = args[++i]; break;
-      case '--key':        opts.key = args[++i]; break;
-      case '--step':       opts.step = parseInt(args[++i], 10); break;
-      case '--neighbors':  opts.neighbors = true; break;
+      case '--lat':
+        opts.lat = parseFloat(args[++i]);
+        break;
+      case '--lon':
+        opts.lon = parseFloat(args[++i]);
+        break;
+      case '--fov':
+        opts.fov = parseInt(args[++i], 10);
+        break;
+      case '--pitch':
+        opts.pitch = parseInt(args[++i], 10);
+        break;
+      case '--size':
+        opts.size = args[++i];
+        break;
+      case '--outdir':
+        opts.outdir = args[++i];
+        break;
+      case '--key':
+        opts.key = args[++i];
+        break;
+      case '--step':
+        opts.step = parseInt(args[++i], 10);
+        break;
+      case '--neighbors':
+        opts.neighbors = true;
+        break;
       case '--help':
-        console.log('Usage: node tools/streetview-headings.mjs --lat <lat> --lon <lon> [--fov 90] [--pitch 0] [--size 640x640] [--neighbors]');
+        console.log(
+          'Usage: node tools/streetview-headings.mjs --lat <lat> --lon <lon> [--fov 90] [--pitch 0] [--size 640x640] [--neighbors]',
+        );
         process.exit(0);
     }
   }
@@ -61,10 +87,10 @@ function parseArgs() {
 }
 
 /** The explicit CLI key wins; otherwise prefer the server key across both stores. */
-export function loadApiKey(overrideKey, {
-  environment = process.env,
-  envPath = join(PROJECT_ROOT, '.env'),
-} = {}) {
+export function loadApiKey(
+  overrideKey,
+  { environment = process.env, envPath = join(PROJECT_ROOT, '.env') } = {},
+) {
   if (overrideKey) return overrideKey;
   const serverKey = resolveGoogleServerKey({
     GOOGLE_MAPS_SERVER_API_KEY: environment.GOOGLE_MAPS_SERVER_API_KEY,
@@ -74,11 +100,14 @@ export function loadApiKey(overrideKey, {
   try {
     fromDotenv = parseEnv(readFileSync(envPath, 'utf8'));
   } catch (error) {
-    if (error.code !== 'ENOENT') throw new Error('Could not read the Street View tool environment file');
+    if (error.code !== 'ENOENT')
+      throw new Error('Could not read the Street View tool environment file');
   }
   const key = resolveGoogleServerKey(environment, fromDotenv);
   if (key) return key;
-  throw new Error('No API key found. Set GOOGLE_MAPS_SERVER_API_KEY (or GOOGLE_MAPS_API_KEY) in .env or pass --key.');
+  throw new Error(
+    'No API key found. Set GOOGLE_MAPS_SERVER_API_KEY (or GOOGLE_MAPS_API_KEY) in .env or pass --key.',
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -121,17 +150,23 @@ async function getNeighborLocations(lat, lon) {
       if (nlat === undefined || nlon === undefined) continue;
 
       // Haversine distance — only keep first-order neighbors (within ~15m)
-      const dlat = (nlat - originLat) * Math.PI / 180;
-      const dlon = (nlon - originLon) * Math.PI / 180;
-      const a = Math.sin(dlat / 2) ** 2
-        + Math.cos(originLat * Math.PI / 180) * Math.cos(nlat * Math.PI / 180)
-        * Math.sin(dlon / 2) ** 2;
+      const dlat = ((nlat - originLat) * Math.PI) / 180;
+      const dlon = ((nlon - originLon) * Math.PI) / 180;
+      const a =
+        Math.sin(dlat / 2) ** 2 +
+        Math.cos((originLat * Math.PI) / 180) *
+          Math.cos((nlat * Math.PI) / 180) *
+          Math.sin(dlon / 2) ** 2;
       const dist = 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       if (dist > 15) continue;
 
       // Extract street name if available
       let street = null;
-      try { street = link[3][2][0][0]; } catch { /* no street name */ }
+      try {
+        street = link[3][2][0][0];
+      } catch {
+        /* no street name */
+      }
       neighbors.push({ lat: nlat, lon: nlon, street, dist });
     }
   } catch {
@@ -145,12 +180,22 @@ async function getNeighborLocations(lat, lon) {
 // Fetch 8 heading images for a single location
 // ---------------------------------------------------------------------------
 
-async function fetchHeadingsForLocation(lat, lon, label, directions, opts, apiKey, outdir) {
+async function fetchHeadingsForLocation(
+  lat,
+  lon,
+  label,
+  directions,
+  opts,
+  apiKey,
+  outdir,
+) {
   console.log(`\n  [${label}] ${lat.toFixed(6)}, ${lon.toFixed(6)}`);
 
   for (const dir of directions) {
     const url = `https://maps.googleapis.com/maps/api/streetview?location=${lat},${lon}&heading=${dir.heading}&pitch=${opts.pitch}&fov=${opts.fov}&size=${opts.size}&source=outdoor&key=${apiKey}`;
-    const res = await fetch(url, { headers: { 'Referer': 'http://localhost:4173/' } });
+    const res = await fetch(url, {
+      headers: { Referer: 'http://localhost:4173/' },
+    });
 
     if (!res.ok) {
       console.log(`    ${dir.name} (${dir.heading}): FAILED ${res.status}`);
@@ -158,9 +203,14 @@ async function fetchHeadingsForLocation(lat, lon, label, directions, opts, apiKe
     }
 
     const buf = Buffer.from(await res.arrayBuffer());
-    const outPath = join(outdir, `sv_${lat.toFixed(6)}_${lon.toFixed(6)}_${dir.heading.toString().padStart(3, '0')}_${dir.name}.jpg`);
+    const outPath = join(
+      outdir,
+      `sv_${lat.toFixed(6)}_${lon.toFixed(6)}_${dir.heading.toString().padStart(3, '0')}_${dir.name}.jpg`,
+    );
     writeFileSync(outPath, buf);
-    console.log(`    ${dir.name} (${dir.heading}): ${(buf.length / 1024).toFixed(1)} KB`);
+    console.log(
+      `    ${dir.name} (${dir.heading}): ${(buf.length / 1024).toFixed(1)} KB`,
+    );
   }
 }
 
@@ -179,10 +229,30 @@ async function main() {
   const step = opts.step || 45;
   const directions = [];
   const compassNames = {
-    0: 'N', 15: 'NNE', 30: 'NNE2', 45: 'NE', 60: 'ENE', 75: 'ENE2',
-    90: 'E', 105: 'ESE', 120: 'ESE2', 135: 'SE', 150: 'SSE', 165: 'SSE2',
-    180: 'S', 195: 'SSW', 210: 'SSW2', 225: 'SW', 240: 'WSW', 255: 'WSW2',
-    270: 'W', 285: 'WNW', 300: 'WNW2', 315: 'NW', 330: 'NNW', 345: 'NNW2',
+    0: 'N',
+    15: 'NNE',
+    30: 'NNE2',
+    45: 'NE',
+    60: 'ENE',
+    75: 'ENE2',
+    90: 'E',
+    105: 'ESE',
+    120: 'ESE2',
+    135: 'SE',
+    150: 'SSE',
+    165: 'SSE2',
+    180: 'S',
+    195: 'SSW',
+    210: 'SSW2',
+    225: 'SW',
+    240: 'WSW',
+    255: 'WSW2',
+    270: 'W',
+    285: 'WNW',
+    300: 'WNW2',
+    315: 'NW',
+    330: 'NNW',
+    345: 'NNW2',
   };
   for (let h = 0; h < 360; h += step) {
     directions.push({ name: compassNames[h] || `H${h}`, heading: h });
@@ -194,7 +264,15 @@ async function main() {
   console.log(`  Neighbors: ${opts.neighbors ? 'yes' : 'no'}`);
 
   // Fetch origin point
-  await fetchHeadingsForLocation(opts.lat, opts.lon, 'origin', directions, opts, apiKey, outdir);
+  await fetchHeadingsForLocation(
+    opts.lat,
+    opts.lon,
+    'origin',
+    directions,
+    opts,
+    apiKey,
+    outdir,
+  );
 
   // Fetch first-order neighbors
   if (opts.neighbors) {
@@ -207,13 +285,15 @@ async function main() {
       // Deduplicate: the static API snaps to nearest panorama, so nearby coords
       // resolve to the same imagery. Use the metadata API to get the actual pano_id
       // each coord resolves to, and skip duplicates.
-      console.log(`  Raw neighbors: ${neighbors.length} (deduplicating via metadata...)`);
+      console.log(
+        `  Raw neighbors: ${neighbors.length} (deduplicating via metadata...)`,
+      );
       const seenPanos = new Set();
 
       // Mark origin pano as seen
       const originMeta = await fetch(
         `https://maps.googleapis.com/maps/api/streetview/metadata?location=${opts.lat},${opts.lon}&source=outdoor&key=${apiKey}`,
-        { headers: { 'Referer': 'http://localhost:4173/' } }
+        { headers: { Referer: 'http://localhost:4173/' } },
       );
       if (originMeta.ok) {
         const oj = await originMeta.json();
@@ -224,7 +304,7 @@ async function main() {
       for (const n of neighbors) {
         const metaRes = await fetch(
           `https://maps.googleapis.com/maps/api/streetview/metadata?location=${n.lat},${n.lon}&source=outdoor&key=${apiKey}`,
-          { headers: { 'Referer': 'http://localhost:4173/' } }
+          { headers: { Referer: 'http://localhost:4173/' } },
         );
         if (!metaRes.ok) continue;
         const meta = await metaRes.json();
@@ -242,13 +322,23 @@ async function main() {
       console.log(`  Unique neighbors: ${uniqueNeighbors.length}`);
       for (const n of uniqueNeighbors) {
         const streetLabel = n.street ? ` (${n.street})` : '';
-        console.log(`    ${n.lat.toFixed(6)}, ${n.lon.toFixed(6)}  ${n.dist.toFixed(1)}m${streetLabel}`);
+        console.log(
+          `    ${n.lat.toFixed(6)}, ${n.lon.toFixed(6)}  ${n.dist.toFixed(1)}m${streetLabel}`,
+        );
       }
 
       for (let i = 0; i < uniqueNeighbors.length; i++) {
         const n = uniqueNeighbors[i];
         const label = n.street || `neighbor-${i + 1}`;
-        await fetchHeadingsForLocation(n.lat, n.lon, label, directions, opts, apiKey, outdir);
+        await fetchHeadingsForLocation(
+          n.lat,
+          n.lon,
+          label,
+          directions,
+          opts,
+          apiKey,
+          outdir,
+        );
       }
     }
   }
@@ -256,7 +346,10 @@ async function main() {
   console.log('\nDone.');
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (
+  process.argv[1] &&
+  resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
   main().catch((err) => {
     console.error('\nError:', err.message);
     process.exitCode = 1;

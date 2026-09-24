@@ -26,7 +26,10 @@ function installOpenAiRoutes() {
   return routes;
 }
 
-function invokeRoute(handler, { method = 'GET', url = '/', remoteAddress = '127.0.0.1' } = {}) {
+function invokeRoute(
+  handler,
+  { method = 'GET', url = '/', remoteAddress = '127.0.0.1' } = {},
+) {
   return new Promise((resolve, reject) => {
     const headers = new Map();
     const req = {
@@ -67,33 +70,54 @@ test('builds an HTTP-success capability response only for a blank key', () => {
 test('recognizes only the exact deliberate no-key fallback response', () => {
   assert.equal(isHudSummaryUnconfigured(200, UNCONFIGURED_PAYLOAD), true);
   assert.equal(isHudSummaryUnconfigured(503, UNCONFIGURED_PAYLOAD), false);
-  assert.equal(isHudSummaryUnconfigured(200, {
-    ...UNCONFIGURED_PAYLOAD,
-    error: 'provider failed',
-  }), false);
-  assert.equal(isHudSummaryUnconfigured(200, {
-    ...UNCONFIGURED_PAYLOAD,
-    summary: 'Unexpected provider output',
-  }), false);
-  assert.equal(isHudSummaryUnconfigured(200, {
-    ...UNCONFIGURED_PAYLOAD,
-    configured: true,
-  }), false);
-  assert.equal(isHudSummaryUnconfigured(200, {
-    ...UNCONFIGURED_PAYLOAD,
-    unexpected: true,
-  }), false);
-  assert.equal(isHudSummaryUnconfigured(200, {
-    code: HUD_SUMMARY_UNCONFIGURED_CODE,
-  }), false);
+  assert.equal(
+    isHudSummaryUnconfigured(200, {
+      ...UNCONFIGURED_PAYLOAD,
+      error: 'provider failed',
+    }),
+    false,
+  );
+  assert.equal(
+    isHudSummaryUnconfigured(200, {
+      ...UNCONFIGURED_PAYLOAD,
+      summary: 'Unexpected provider output',
+    }),
+    false,
+  );
+  assert.equal(
+    isHudSummaryUnconfigured(200, {
+      ...UNCONFIGURED_PAYLOAD,
+      configured: true,
+    }),
+    false,
+  );
+  assert.equal(
+    isHudSummaryUnconfigured(200, {
+      ...UNCONFIGURED_PAYLOAD,
+      unexpected: true,
+    }),
+    false,
+  );
+  assert.equal(
+    isHudSummaryUnconfigured(200, {
+      code: HUD_SUMMARY_UNCONFIGURED_CODE,
+    }),
+    false,
+  );
 });
 
 test('does not hide real provider and HTTP failures', () => {
-  assert.equal(isHudSummaryUnconfigured(502, {
-    code: HUD_SUMMARY_UNCONFIGURED_CODE,
-  }), false);
+  assert.equal(
+    isHudSummaryUnconfigured(502, {
+      code: HUD_SUMMARY_UNCONFIGURED_CODE,
+    }),
+    false,
+  );
   assert.equal(isHudSummaryUnconfigured(503, UNCONFIGURED_PAYLOAD), false);
-  assert.equal(isHudSummaryUnconfigured(200, { error: 'provider failed' }), false);
+  assert.equal(
+    isHudSummaryUnconfigured(200, { error: 'provider failed' }),
+    false,
+  );
 });
 
 test('the installed keyless HUD route stays successful after the voice quota is exhausted', async () => {
@@ -119,7 +143,10 @@ test('the installed keyless HUD route stays successful after the voice quota is 
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const response = await invokeRoute(hud, { method: 'POST' });
       assert.equal(response.statusCode, 200);
-      assert.equal(response.headers['content-type'], 'application/json; charset=utf-8');
+      assert.equal(
+        response.headers['content-type'],
+        'application/json; charset=utf-8',
+      );
       assert.equal(response.headers['cache-control'], 'no-store');
       assert.deepEqual(response.body, UNCONFIGURED_PAYLOAD);
     }
@@ -128,7 +155,8 @@ test('the installed keyless HUD route stays successful after the voice quota is 
     else process.env.OPENAI_API_KEY = previousKey;
     if (previousNvidiaKey === undefined) delete process.env.NVIDIA_API_KEY;
     else process.env.NVIDIA_API_KEY = previousNvidiaKey;
-    if (previousLimit === undefined) delete process.env.GEV_RATELIMIT_OPENAI_PER_MIN;
+    if (previousLimit === undefined)
+      delete process.env.GEV_RATELIMIT_OPENAI_PER_MIN;
     else process.env.GEV_RATELIMIT_OPENAI_PER_MIN = previousLimit;
   }
 });

@@ -41,8 +41,12 @@ test('active-change listener fires on transitions only, with committed state', (
 
 test('unsubscribe stops delivery; throwing listeners never break the toggle', () => {
   let calls = 0;
-  const unsubBroken = onMilitaryLayerActiveChange(() => { throw new Error('boom'); });
-  const unsubCounter = onMilitaryLayerActiveChange(() => { calls++; });
+  const unsubBroken = onMilitaryLayerActiveChange(() => {
+    throw new Error('boom');
+  });
+  const unsubCounter = onMilitaryLayerActiveChange(() => {
+    calls++;
+  });
   try {
     setMilitaryLayerActive(true); // broken listener swallowed, counter still runs
     assert.equal(calls, 1);

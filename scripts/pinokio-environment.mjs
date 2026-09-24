@@ -45,8 +45,10 @@ function appendEnvironmentLine(source, line) {
 }
 
 function detectEnvironmentEncoding(buffer) {
-  if (buffer.length >= 2 && buffer[0] === 0xff && buffer[1] === 0xfe) return 'utf-16le';
-  if (buffer.length >= 2 && buffer[0] === 0xfe && buffer[1] === 0xff) return 'utf-16be';
+  if (buffer.length >= 2 && buffer[0] === 0xff && buffer[1] === 0xfe)
+    return 'utf-16le';
+  if (buffer.length >= 2 && buffer[0] === 0xfe && buffer[1] === 0xff)
+    return 'utf-16be';
 
   let evenNulls = 0;
   let oddNulls = 0;
@@ -66,14 +68,20 @@ export function readEnvironmentSource(filepath) {
   if (!existsSync(filepath)) return '';
   const buffer = readFileSync(filepath);
   try {
-    return new TextDecoder(detectEnvironmentEncoding(buffer), { fatal: true }).decode(buffer);
+    return new TextDecoder(detectEnvironmentEncoding(buffer), {
+      fatal: true,
+    }).decode(buffer);
   } catch {
-    throw new Error('Pinokio ENVIRONMENT could not be decoded as UTF-8 or UTF-16.');
+    throw new Error(
+      'Pinokio ENVIRONMENT could not be decoded as UTF-8 or UTF-16.',
+    );
   }
 }
 
 /** Persist only the non-secret controls Pinokio itself re-reads at local.set. */
-export function ensurePinokioSharingBoundary(filepath = DEFAULT_ENVIRONMENT_FILE) {
+export function ensurePinokioSharingBoundary(
+  filepath = DEFAULT_ENVIRONMENT_FILE,
+) {
   const original = existsSync(filepath) ? readFileSync(filepath) : null;
   let source = readEnvironmentSource(filepath);
   try {
@@ -90,11 +98,14 @@ export function ensurePinokioSharingBoundary(filepath = DEFAULT_ENVIRONMENT_FILE
     'gm',
   );
   source = source.replace(sharingLine, '');
-  source = appendEnvironmentLine(source, [
-    'PINOKIO_SHARE_CLOUDFLARE=false',
-    'PINOKIO_SHARE_LOCAL=false',
-    `PINOKIO_SHARE_VAR=${PINOKIO_SHARE_SENTINEL}`,
-  ].join('\n'));
+  source = appendEnvironmentLine(
+    source,
+    [
+      'PINOKIO_SHARE_CLOUDFLARE=false',
+      'PINOKIO_SHARE_LOCAL=false',
+      `PINOKIO_SHARE_VAR=${PINOKIO_SHARE_SENTINEL}`,
+    ].join('\n'),
+  );
 
   let configured;
   try {
@@ -131,7 +142,9 @@ export function applyPinokioEnvironment({
 } = {}) {
   const configured = ensurePinokioSharingBoundary(filepath);
   for (const field of PINOKIO_CONFIG_FIELDS) {
-    environment[field] = String(configured[field] ?? PINOKIO_DEFAULTS[field] ?? '');
+    environment[field] = String(
+      configured[field] ?? PINOKIO_DEFAULTS[field] ?? '',
+    );
   }
 
   // Sharing is unsupported on Pinokio 8.0.40. Never let a global passcode

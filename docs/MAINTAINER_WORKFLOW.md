@@ -106,15 +106,15 @@ inspection, but it does not make subsequent builds or tests safe to run on the h
 
 For runtime changes, record these local results on the candidate to be integrated:
 
-| Check | Command or evidence |
-| --- | --- |
-| Setup policy | `npm run doctor -- --json` |
-| Adopted formatting | `npm run format:check` |
-| Package boundaries | `npm run check:boundaries` |
-| Unit tests | `npm test` |
-| Production build | `npm run build` |
+| Check               | Command or evidence                                                                                                |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Setup policy        | `npm run doctor -- --json`                                                                                         |
+| Adopted formatting  | `npm run format:check`                                                                                             |
+| Package boundaries  | `npm run check:boundaries`                                                                                         |
+| Unit tests          | `npm test`                                                                                                         |
+| Production build    | `npm run build`                                                                                                    |
 | Tracking regression | Start `npm run dev` at `http://localhost:4173`, then run `npm run test:track` with a compatible Chromium available |
-| Built app | Stop the dev server if needed, then run `npm run preview` and inspect the built app |
+| Built app           | Stop the dev server if needed, then run `npm run preview` and inspect the built app                                |
 
 Confirm the browser and tracking harness target the candidate server, not an
 already-running checkout. Provision browser tooling within the restricted

@@ -64,7 +64,7 @@ x1y2z3a Add task feature, fix sidebar, update deps, refactor utils
 
 ### 3. Descriptive Messages
 
-Commit messages explain the *why*, not just the *what*:
+Commit messages explain the _why_, not just the _what_:
 
 ```
 # Good: Explains intent
@@ -79,6 +79,7 @@ update auth.ts
 ```
 
 **Format:**
+
 ```
 <type>: <short description>
 
@@ -86,6 +87,7 @@ update auth.ts
 ```
 
 **Types:**
+
 - `feat` — New feature
 - `fix` — Bug fix
 - `refactor` — Code change that neither fixes a bug nor adds a feature
@@ -165,6 +167,7 @@ git worktree remove ../project-feature-a
 ```
 
 Benefits:
+
 - Multiple agents can work on different features simultaneously
 - No branch switching needed (each directory has its own branch)
 - If one experiment fails, delete the worktree — nothing is lost
@@ -269,7 +272,7 @@ git log --grep="validation" --oneline
 
 ## Release & Versioning
 
-Commits are how *you* track change; a **version** is how your *consumers* track it. The moment anything else depends on your code — another team, a published package, a deployed client — "latest on main" stops being a sufficient answer to "what am I running, and is it safe to upgrade?" A version number and a changelog are the contract that answers it.
+Commits are how _you_ track change; a **version** is how your _consumers_ track it. The moment anything else depends on your code — another team, a published package, a deployed client — "latest on main" stops being a sufficient answer to "what am I running, and is it safe to upgrade?" A version number and a changelog are the contract that answers it.
 
 ### Semantic Versioning
 
@@ -300,11 +303,17 @@ A changelog is not `git log`. It's the curated, consumer-facing answer to "what 
 
 ```markdown
 ## [1.4.0] - 2025-06-12
+
 ### Added
+
 - Bulk task import via CSV
+
 ### Fixed
+
 - Timezone drift in recurring task due dates
+
 ### Deprecated
+
 - `GET /v1/tasks/all` — use the paginated `GET /v1/tasks` (removal in 2.0)
 ```
 
@@ -312,17 +321,17 @@ Write the entry in the same change that makes the change, while the impact is fr
 
 ## Common Rationalizations
 
-| Rationalization | Reality |
-|---|---|
-| "I'll commit when the feature is done" | One giant commit is impossible to review, debug, or revert. Commit each slice. |
-| "The message doesn't matter" | Messages are documentation. Future you (and future agents) will need to understand what changed and why. |
-| "I'll squash it all later" | Squashing destroys the development narrative. Prefer clean incremental commits from the start. |
-| "Branches add overhead" | Short-lived branches are free and prevent conflicting work from colliding. Long-lived branches are the problem — merge within 1-3 days. |
-| "I'll split this change later" | Large changes are harder to review, riskier to deploy, and harder to revert. Split before submitting, not after. |
-| "I don't need a .gitignore" | Until `.env` with production secrets gets committed. Set it up immediately. |
-| "It's just a small fix, bump the patch" | Check what consumers can observe. A behavior change they relied on is a major, whatever the diff size. |
-| "The changelog is just the commit log" | Commits are for you; the changelog is for consumers, curated by impact. Generating one from raw commits buries what matters. |
-| "We'll write the changelog at release time" | By then the impact is reconstructed from memory and half of it is missing. Write the entry with the change. |
+| Rationalization                             | Reality                                                                                                                                 |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| "I'll commit when the feature is done"      | One giant commit is impossible to review, debug, or revert. Commit each slice.                                                          |
+| "The message doesn't matter"                | Messages are documentation. Future you (and future agents) will need to understand what changed and why.                                |
+| "I'll squash it all later"                  | Squashing destroys the development narrative. Prefer clean incremental commits from the start.                                          |
+| "Branches add overhead"                     | Short-lived branches are free and prevent conflicting work from colliding. Long-lived branches are the problem — merge within 1-3 days. |
+| "I'll split this change later"              | Large changes are harder to review, riskier to deploy, and harder to revert. Split before submitting, not after.                        |
+| "I don't need a .gitignore"                 | Until `.env` with production secrets gets committed. Set it up immediately.                                                             |
+| "It's just a small fix, bump the patch"     | Check what consumers can observe. A behavior change they relied on is a major, whatever the diff size.                                  |
+| "The changelog is just the commit log"      | Commits are for you; the changelog is for consumers, curated by impact. Generating one from raw commits buries what matters.            |
+| "We'll write the changelog at release time" | By then the impact is reconstructed from memory and half of it is missing. Write the entry with the change.                             |
 
 ## Red Flags
 

@@ -100,38 +100,38 @@ jobs:
 ### With Database Integration Tests
 
 ```yaml
-  integration:
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_DB: testdb
-          POSTGRES_USER: ci_user
-          POSTGRES_PASSWORD: ${{ secrets.CI_DB_PASSWORD }}
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+integration:
+  runs-on: ubuntu-latest
+  services:
+    postgres:
+      image: postgres:16
+      env:
+        POSTGRES_DB: testdb
+        POSTGRES_USER: ci_user
+        POSTGRES_PASSWORD: ${{ secrets.CI_DB_PASSWORD }}
+      ports:
+        - 5432:5432
+      options: >-
+        --health-cmd pg_isready
+        --health-interval 10s
+        --health-timeout 5s
+        --health-retries 5
 
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-      - run: npm ci
-      - name: Run migrations
-        run: npx prisma migrate deploy
-        env:
-          DATABASE_URL: postgresql://ci_user:${{ secrets.CI_DB_PASSWORD }}@localhost:5432/testdb
-      - name: Integration tests
-        run: npm run test:integration
-        env:
-          DATABASE_URL: postgresql://ci_user:${{ secrets.CI_DB_PASSWORD }}@localhost:5432/testdb
+  steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+        cache: 'npm'
+    - run: npm ci
+    - name: Run migrations
+      run: npx prisma migrate deploy
+      env:
+        DATABASE_URL: postgresql://ci_user:${{ secrets.CI_DB_PASSWORD }}@localhost:5432/testdb
+    - name: Integration tests
+      run: npm run test:integration
+      env:
+        DATABASE_URL: postgresql://ci_user:${{ secrets.CI_DB_PASSWORD }}@localhost:5432/testdb
 ```
 
 > **Note:** Even for CI-only test databases, use GitHub Secrets for credentials rather than hardcoding values. This builds good habits and prevents accidental reuse of test credentials in other contexts.
@@ -139,26 +139,26 @@ jobs:
 ### E2E Tests
 
 ```yaml
-  e2e:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-      - run: npm ci
-      - name: Install Playwright
-        run: npx playwright install --with-deps chromium
-      - name: Build
-        run: npm run build
-      - name: Run E2E tests
-        run: npx playwright test
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: playwright-report
-          path: playwright-report/
+e2e:
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+        cache: 'npm'
+    - run: npm ci
+    - name: Install Playwright
+      run: npx playwright install --with-deps chromium
+    - name: Build
+      run: npm run build
+    - name: Run E2E tests
+      run: npx playwright test
+    - uses: actions/upload-artifact@v4
+      if: failure()
+      with:
+        name: playwright-report
+        path: playwright-report/
 ```
 
 ## Feeding CI Failures Back to Agents
@@ -327,6 +327,7 @@ Slow CI pipeline?
 ```
 
 **Example: caching and parallelism**
+
 ```yaml
 jobs:
   lint:
@@ -359,13 +360,13 @@ jobs:
 
 ## Common Rationalizations
 
-| Rationalization | Reality |
-|---|---|
-| "CI is too slow" | Optimize the pipeline (see CI Optimization below), don't skip it. A 5-minute pipeline prevents hours of debugging. |
-| "This change is trivial, skip CI" | Trivial changes break builds. CI is fast for trivial changes anyway. |
-| "The test is flaky, just re-run" | Flaky tests mask real bugs and waste everyone's time. Fix the flakiness. |
-| "We'll add CI later" | Projects without CI accumulate broken states. Set it up on day one. |
-| "Manual testing is enough" | Manual testing doesn't scale and isn't repeatable. Automate what you can. |
+| Rationalization                   | Reality                                                                                                            |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| "CI is too slow"                  | Optimize the pipeline (see CI Optimization below), don't skip it. A 5-minute pipeline prevents hours of debugging. |
+| "This change is trivial, skip CI" | Trivial changes break builds. CI is fast for trivial changes anyway.                                               |
+| "The test is flaky, just re-run"  | Flaky tests mask real bugs and waste everyone's time. Fix the flakiness.                                           |
+| "We'll add CI later"              | Projects without CI accumulate broken states. Set it up on day one.                                                |
+| "Manual testing is enough"        | Manual testing doesn't scale and isn't repeatable. Automate what you can.                                          |
 
 ## Red Flags
 

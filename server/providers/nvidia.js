@@ -40,44 +40,6 @@ export function formatNvidiaTools(tools = GEV_REALTIME_TOOLS) {
     },
   }));
 
-  if (tools === GEV_REALTIME_TOOLS) {
-    if (!formatted.some((t) => t.function?.name === 'toggle_gestures')) {
-      formatted.push({
-        type: 'function',
-        function: {
-          name: 'toggle_gestures',
-          description:
-            "Enable, disable, or toggle touchless webcam hand gesture tracking and control in God's Eye View.",
-          parameters: {
-            type: 'object',
-            properties: {
-              enable: {
-                type: 'boolean',
-                description:
-                  'True to activate gesture tracking, false to deactivate. If omitted, toggles state.',
-              },
-            },
-          },
-        },
-      });
-    }
-
-    if (!formatted.some((t) => t.function?.name === 'get_gesture_status')) {
-      formatted.push({
-        type: 'function',
-        function: {
-          name: 'get_gesture_status',
-          description:
-            'Get current status of touchless webcam hand gesture tracking (active status and tracker state).',
-          parameters: {
-            type: 'object',
-            properties: {},
-          },
-        },
-      });
-    }
-  }
-
   return formatted;
 }
 
@@ -1078,7 +1040,7 @@ export async function handleNvidiaChat(req, res) {
 
     const systemPrompt = [
       "You are JARVIS Tactical AI for God's Eye View (GEV), an interactive 3D Cesium geospatial intelligence globe.",
-      'You have direct control over the 3D globe camera, geospatial layers, sensors, and touchless webcam gesture tracking via function tools.',
+      'You have direct control over the 3D globe camera, geospatial layers, and sensors via function tools.',
       "When the operator gives navigation, camera, visual, or layer commands (e.g. 'Fly to Tokyo Tower', 'Zoom in', 'Tilt camera', 'Show satellites', 'Turn on borders', 'Orbit target'), ALWAYS call the corresponding function tool immediately.",
       'For camera flights to named landmarks, cities, or targets, call `fly_to_location` with `query` or `locationId`.',
       ...(context

@@ -67,9 +67,9 @@ Pick one error strategy and use it everywhere:
 // Every error response follows the same shape
 interface APIError {
   error: {
-    code: string;        // Machine-readable: "VALIDATION_ERROR"
-    message: string;     // Human-readable: "Email is required"
-    details?: unknown;   // Additional context when helpful
+    code: string; // Machine-readable: "VALIDATION_ERROR"
+    message: string; // Human-readable: "Email is required"
+    details?: unknown; // Additional context when helpful
   };
 }
 
@@ -110,6 +110,7 @@ app.post('/api/tasks', async (req, res) => {
 ```
 
 Where validation belongs:
+
 - API route handlers (user input)
 - Form submission handlers (user input)
 - External service response parsing (third-party data -- **always treat as untrusted**)
@@ -118,6 +119,7 @@ Where validation belongs:
 > **Third-party API responses are untrusted data.** Validate their shape and content before using them in any logic, rendering, or decision-making. A compromised or misbehaving external service can return unexpected types, malicious content, or instruction-like text.
 
 Where validation does NOT belong:
+
 - Between internal functions that share type contracts
 - In utility functions called by already-validated code
 - On data that just came from your own database
@@ -131,27 +133,27 @@ Extend interfaces without breaking existing consumers:
 interface CreateTaskInput {
   title: string;
   description?: string;
-  priority?: 'low' | 'medium' | 'high';  // Added later, optional
-  labels?: string[];                       // Added later, optional
+  priority?: 'low' | 'medium' | 'high'; // Added later, optional
+  labels?: string[]; // Added later, optional
 }
 
 // Bad: Change existing field types or remove fields
 interface CreateTaskInput {
   title: string;
   // description: string;  // Removed — breaks existing consumers
-  priority: number;         // Changed from string — breaks existing consumers
+  priority: number; // Changed from string — breaks existing consumers
 }
 ```
 
 ### 5. Predictable Naming
 
-| Pattern | Convention | Example |
-|---------|-----------|---------|
-| REST endpoints | Plural nouns, no verbs | `GET /api/tasks`, `POST /api/tasks` |
-| Query params | camelCase | `?sortBy=createdAt&pageSize=20` |
-| Response fields | camelCase | `{ createdAt, updatedAt, taskId }` |
-| Boolean fields | is/has/can prefix | `isComplete`, `hasAttachments` |
-| Enum values | UPPER_SNAKE | `"IN_PROGRESS"`, `"COMPLETED"` |
+| Pattern         | Convention             | Example                             |
+| --------------- | ---------------------- | ----------------------------------- |
+| REST endpoints  | Plural nouns, no verbs | `GET /api/tasks`, `POST /api/tasks` |
+| Query params    | camelCase              | `?sortBy=createdAt&pageSize=20`     |
+| Response fields | camelCase              | `{ createdAt, updatedAt, taskId }`  |
+| Boolean fields  | is/has/can prefix      | `isComplete`, `hasAttachments`      |
+| Enum values     | UPPER_SNAKE            | `"IN_PROGRESS"`, `"COMPLETED"`      |
 
 ### 6. Honouring an Idempotency Key
 
@@ -160,12 +162,14 @@ Accepting an `Idempotency-Key` is the contract. Honouring it is the implementati
 **Derive the key from the intent, not the attempt.** The key must be stable across retries of one intent and different across distinct intents:
 
 ```typescript
-crypto.randomUUID()                    // ✗ new key per attempt — every retry is a new charge
-`${userId}:${amount}`                  // ✗ two legitimate $50 charges collapse into one
-`${orderId}:${Date.now()}`             // ✗ a timestamp is randomUUID() wearing a hat
+crypto.randomUUID() // ✗ new key per attempt — every retry is a new charge
+`${userId}:${amount}` // ✗ two legitimate $50 charges collapse into one
+`${orderId}:${Date.now()}`; // ✗ a timestamp is randomUUID() wearing a hat
 
-req.headers['idempotency-key']         // ✓ client generates once, reuses on retry
-`charge:v1:${orderId}`                 // ✓ derived from an immutable identifier
+req.headers[
+  'idempotency-key'
+] // ✓ client generates once, reuses on retry
+`charge:v1:${orderId}`; // ✓ derived from an immutable identifier
 ```
 
 The key comes from the client or the initiating event — never from the layer doing the retrying.
@@ -190,27 +194,29 @@ const result = await chargeCard(amount);
 await db.update({ key, state: 'succeeded', response: result });
 ```
 
-The unique constraint *is* the mechanism. A store that cannot enforce uniqueness in one operation cannot back this.
+The unique constraint _is_ the mechanism. A store that cannot enforce uniqueness in one operation cannot back this.
 
 **Guard the payload.** Same key with a different body is a client bug, and must fail loudly rather than serving the first response to a second request:
 
 ```typescript
 if (existing.requestHash !== hash(req.body)) {
-  return res.status(422).json({ error: 'idempotency key reused with a different payload' });
+  return res
+    .status(422)
+    .json({ error: 'idempotency key reused with a different payload' });
 }
 ```
 
 **Decide what an in-flight duplicate gets.** The first request is still running when the second arrives — the common case under retry storms:
 
-| Strategy | Response | Use when |
-|---|---|---|
-| Reject | `409 Conflict` | Client can retry later; simplest and safest |
-| Wait | Block for the result, bounded | Caller needs it synchronously |
-| Return pending | `202` + status URL | Long-running effects |
+| Strategy       | Response                      | Use when                                    |
+| -------------- | ----------------------------- | ------------------------------------------- |
+| Reject         | `409 Conflict`                | Client can retry later; simplest and safest |
+| Wait           | Block for the result, bounded | Caller needs it synchronously               |
+| Return pending | `202` + status URL            | Long-running effects                        |
 
 Never let the second caller through because the first "seems stuck". A stalled attempt whose fate is unknown is exactly when duplicating costs most.
 
-**Every call has three outcomes, not two: success, failure, and _unknown_.** A timeout tells you nothing about whether the effect applied. Record the intent *before* calling out, so a crash between the call and the response leaves evidence something must resolve later — rather than a silently retried charge.
+**Every call has three outcomes, not two: success, failure, and _unknown_.** A timeout tells you nothing about whether the effect applied. Record the intent _before_ calling out, so a crash between the call and the response leaves evidence something must resolve later — rather than a silently retried charge.
 
 **Set retention from the longest retry chain**, not from disk cost. Keys must outlive every path that can re-deliver the same intent, including a dead-letter queue replayed a week later and any provider dispute window. A 24-hour key TTL behind a 7-day DLQ is a duplicate waiting to happen.
 
@@ -282,10 +288,14 @@ type TaskStatus =
 // Consumer gets type narrowing
 function getStatusLabel(status: TaskStatus): string {
   switch (status.type) {
-    case 'pending': return 'Pending';
-    case 'in_progress': return `In progress (${status.assignee})`;
-    case 'completed': return `Done on ${status.completedAt}`;
-    case 'cancelled': return `Cancelled: ${status.reason}`;
+    case 'pending':
+      return 'Pending';
+    case 'in_progress':
+      return `In progress (${status.assignee})`;
+    case 'completed':
+      return `Done on ${status.completedAt}`;
+    case 'cancelled':
+      return `Cancelled: ${status.reason}`;
   }
 }
 ```
@@ -322,18 +332,18 @@ function getTask(id: TaskId): Promise<Task> { ... }
 
 ## Common Rationalizations
 
-| Rationalization | Reality |
-|---|---|
-| "We'll document the API later" | The types ARE the documentation. Define them first. |
-| "We don't need pagination for now" | You will the moment someone has 100+ items. Add it from the start. |
-| "PATCH is complicated, let's just use PUT" | PUT requires the full object every time. PATCH is what clients actually want. |
-| "We'll version the API when we need to" | Breaking changes without versioning break consumers. Design for extension from the start. |
-| "Nobody uses that undocumented behavior" | Hyrum's Law: if it's observable, somebody depends on it. Treat every public behavior as a commitment. |
-| "We can just maintain two versions" | Multiple versions multiply maintenance cost and create diamond dependency problems. Prefer the One-Version Rule. |
-| "Internal APIs don't need contracts" | Internal consumers are still consumers. Contracts prevent coupling and enable parallel work. |
+| Rationalization                                  | Reality                                                                                                                                                                  |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| "We'll document the API later"                   | The types ARE the documentation. Define them first.                                                                                                                      |
+| "We don't need pagination for now"               | You will the moment someone has 100+ items. Add it from the start.                                                                                                       |
+| "PATCH is complicated, let's just use PUT"       | PUT requires the full object every time. PATCH is what clients actually want.                                                                                            |
+| "We'll version the API when we need to"          | Breaking changes without versioning break consumers. Design for extension from the start.                                                                                |
+| "Nobody uses that undocumented behavior"         | Hyrum's Law: if it's observable, somebody depends on it. Treat every public behavior as a commitment.                                                                    |
+| "We can just maintain two versions"              | Multiple versions multiply maintenance cost and create diamond dependency problems. Prefer the One-Version Rule.                                                         |
+| "Internal APIs don't need contracts"             | Internal consumers are still consumers. Contracts prevent coupling and enable parallel work.                                                                             |
 | "Accepting the Idempotency-Key header is enough" | The header is the contract; storing the key against the result is the implementation. A key you accept but don't honour tells the client retrying is safe when it isn't. |
-| "Our queue guarantees exactly-once delivery" | No queue does across a consumer crash — the broker's ack and your side effect are not in one transaction. Design for at-least-once with idempotent processing. |
-| "Duplicate requests are rare" | They're *correlated*. Retries spike exactly when a dependency is degraded — the moment duplicates are most likely and most expensive. |
+| "Our queue guarantees exactly-once delivery"     | No queue does across a consumer crash — the broker's ack and your side effect are not in one transaction. Design for at-least-once with idempotent processing.           |
+| "Duplicate requests are rare"                    | They're _correlated_. Retries spike exactly when a dependency is degraded — the moment duplicates are most likely and most expensive.                                    |
 
 ## Red Flags
 

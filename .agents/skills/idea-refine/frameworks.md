@@ -25,11 +25,13 @@ Reframe problems as opportunities using the "How Might We..." format:
 - Generate multiple HMW framings of the same problem — different framings unlock different solutions
 
 **Good HMW qualities:**
+
 - Narrow enough to be actionable ("...help new users find relevant content in their first 5 minutes")
 - Broad enough to allow creative solutions (not "...add a recommendation sidebar")
 - Contains a tension or constraint that forces creativity
 
 **Bad HMW qualities:**
+
 - Too broad: "How might we make users happy?"
 - Too narrow: "How might we add a button to the settings page?"
 - Solution-embedded: "How might we build a chatbot for support?"
@@ -94,6 +96,6 @@ Look at how other domains solved similar problems:
 - What natural system works this way?
 - What historical precedent exists?
 
-The key is finding *structural* similarities, not surface-level ones. "Uber for X" is surface-level. "A two-sided marketplace that solves a trust problem between strangers" is structural.
+The key is finding _structural_ similarities, not surface-level ones. "Uber for X" is surface-level. "A two-sided marketplace that solves a trust problem between strangers" is structural.
 
 **Best for:** Phase 1 expansion. Generating variations that feel genuinely different from the obvious approach.

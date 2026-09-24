@@ -11,29 +11,56 @@ function createMockAudioContext() {
       type,
       gain: {
         value: 1,
-        setValueAtTime: (v) => { node.gain.value = v; },
-        linearRampToValueAtTime: (v) => { node.gain.value = v; },
-        exponentialRampToValueAtTime: (v) => { node.gain.value = v; },
-        setTargetAtTime: (v) => { node.gain.value = v; },
+        setValueAtTime: (v) => {
+          node.gain.value = v;
+        },
+        linearRampToValueAtTime: (v) => {
+          node.gain.value = v;
+        },
+        exponentialRampToValueAtTime: (v) => {
+          node.gain.value = v;
+        },
+        setTargetAtTime: (v) => {
+          node.gain.value = v;
+        },
       },
       frequency: {
         value: 440,
-        setValueAtTime: (v) => { node.frequency.value = v; },
-        exponentialRampToValueAtTime: (v) => { node.frequency.value = v; },
-        setTargetAtTime: (v) => { node.frequency.value = v; },
+        setValueAtTime: (v) => {
+          node.frequency.value = v;
+        },
+        exponentialRampToValueAtTime: (v) => {
+          node.frequency.value = v;
+        },
+        setTargetAtTime: (v) => {
+          node.frequency.value = v;
+        },
       },
       Q: {
         value: 1,
-        setValueAtTime: (v) => { node.Q.value = v; },
+        setValueAtTime: (v) => {
+          node.Q.value = v;
+        },
       },
       pan: {
         value: 0,
-        setTargetAtTime: (v) => { node.pan.value = v; },
+        setTargetAtTime: (v) => {
+          node.pan.value = v;
+        },
       },
-      connect: (target) => { node._target = target; return target; },
-      disconnect: () => { node._target = null; },
-      start: () => { node._started = true; },
-      stop: () => { node._stopped = true; },
+      connect: (target) => {
+        node._target = target;
+        return target;
+      },
+      disconnect: () => {
+        node._target = null;
+      },
+      start: () => {
+        node._started = true;
+      },
+      stop: () => {
+        node._stopped = true;
+      },
     };
     nodes.push(node);
     return node;
@@ -105,7 +132,11 @@ test('CockpitAmbiance starts, updates telemetry, and stops safely', () => {
   assert.equal(ambiance.isActive(), true);
 
   assert.doesNotThrow(() => {
-    ambiance.updateTelemetry({ speedKts: 450, rollDeg: 15, verticalRateFpm: 1200 });
+    ambiance.updateTelemetry({
+      speedKts: 450,
+      rollDeg: 15,
+      verticalRateFpm: 1200,
+    });
   });
 
   ambiance.stop();

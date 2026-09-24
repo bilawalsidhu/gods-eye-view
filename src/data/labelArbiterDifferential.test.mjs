@@ -10,8 +10,10 @@ import {
 // key@corner@x@y@w@h (fade rows append @alpha@selected).
 const GOLDEN = {
   elasticTie12: {
-    selected: 'firms:000,firms:008,firms:010,vessels:003,vessels:007,vessels:009',
-    placements: 'firms:000@NE@-229@-190@38@16|firms:008@NE@451@-65@38@16|firms:010@NE@153@-304@38@16|vessels:003@NE@94@-74@38@16|vessels:007@NE@-418@-73@38@16|vessels:009@NE@-210@180@38@16',
+    selected:
+      'firms:000,firms:008,firms:010,vessels:003,vessels:007,vessels:009',
+    placements:
+      'firms:000@NE@-229@-190@38@16|firms:008@NE@451@-65@38@16|firms:010@NE@153@-304@38@16|vessels:003@NE@94@-74@38@16|vessels:007@NE@-418@-73@38@16|vessels:009@NE@-210@180@38@16',
     fades: [],
     selectedCount: 6,
     quotas: 'firms:3,vessels:3',
@@ -20,8 +22,10 @@ const GOLDEN = {
     spatialCellCount: 27,
   },
   weightedFew24: {
-    selected: 'cctv:003,cctv:009,cctv:015,cctv:018,firms:010,firms:016,vessels:008,vessels:011,vessels:020',
-    placements: 'cctv:003@NE@-163@-259@38@16|cctv:009@NE@188@-51@38@16|cctv:015@NE@-230@100@38@16|cctv:018@NE@-431@-109@38@16|firms:010@NE@-199@-290@38@16|firms:016@NE@232@232@38@16|vessels:008@NE@52@-209@38@16|vessels:011@NE@-68@-54@38@16|vessels:020@NE@-31@199@38@16',
+    selected:
+      'cctv:003,cctv:009,cctv:015,cctv:018,firms:010,firms:016,vessels:008,vessels:011,vessels:020',
+    placements:
+      'cctv:003@NE@-163@-259@38@16|cctv:009@NE@188@-51@38@16|cctv:015@NE@-230@100@38@16|cctv:018@NE@-431@-109@38@16|firms:010@NE@-199@-290@38@16|firms:016@NE@232@232@38@16|vessels:008@NE@52@-209@38@16|vessels:011@NE@-68@-54@38@16|vessels:020@NE@-31@199@38@16',
     fades: [],
     selectedCount: 9,
     quotas: 'cctv:4,firms:2,vessels:3',
@@ -31,7 +35,8 @@ const GOLDEN = {
   },
   duplicateKeys48: {
     selected: 'a-blocker:fixed,z-duplicates:shared',
-    placements: 'a-blocker:fixed@only@0@0@20@20|z-duplicates:shared@free@300@300@20@20',
+    placements:
+      'a-blocker:fixed@only@0@0@20@20|z-duplicates:shared@free@300@300@20@20',
     fades: [],
     selectedCount: 2,
     quotas: 'a-blocker:1,z-duplicates:1',
@@ -41,8 +46,10 @@ const GOLDEN = {
   },
   stable96: [
     {
-      selected: 'flights:003,flights:009,flights:033,flights:057,flights:087,satellites:055,satellites:067,satellites:073,satellites:079,satellites:085,vessels:017,vessels:029,vessels:035,vessels:083,vessels:095',
-      placements: 'flights:003@NE@-214@22@38@16|flights:009@NE@190@-267@38@16|flights:033@NE@-437@237@38@16|flights:057@NE@43@241@38@16|flights:087@NE@384@3@38@16|satellites:055@NE@-343@-236@38@16|satellites:067@NE@420@187@38@16|satellites:073@NE@-380@40@38@16|satellites:079@NE@256@32@38@16|satellites:085@NE@-80@207@38@16|vessels:017@NE@-212@-132@38@16|vessels:029@NE@12@-14@38@16|vessels:035@NE@130@-106@38@16|vessels:083@NE@-43@-289@38@16|vessels:095@NE@439@-262@38@16',
+      selected:
+        'flights:003,flights:009,flights:033,flights:057,flights:087,satellites:055,satellites:067,satellites:073,satellites:079,satellites:085,vessels:017,vessels:029,vessels:035,vessels:083,vessels:095',
+      placements:
+        'flights:003@NE@-214@22@38@16|flights:009@NE@190@-267@38@16|flights:033@NE@-437@237@38@16|flights:057@NE@43@241@38@16|flights:087@NE@384@3@38@16|satellites:055@NE@-343@-236@38@16|satellites:067@NE@420@187@38@16|satellites:073@NE@-380@40@38@16|satellites:079@NE@256@32@38@16|satellites:085@NE@-80@207@38@16|vessels:017@NE@-212@-132@38@16|vessels:029@NE@12@-14@38@16|vessels:035@NE@130@-106@38@16|vessels:083@NE@-43@-289@38@16|vessels:095@NE@439@-262@38@16',
       fades: [],
       selectedCount: 15,
       quotas: 'flights:5,satellites:5,vessels:5',
@@ -51,8 +58,10 @@ const GOLDEN = {
       spatialCellCount: 52,
     },
     {
-      selected: 'flights:003,flights:009,flights:033,flights:057,flights:087,satellites:055,satellites:067,satellites:073,satellites:079,satellites:085,vessels:017,vessels:029,vessels:035,vessels:083,vessels:095',
-      placements: 'flights:003@NE@-214@22@38@16|flights:009@NE@190@-267@38@16|flights:033@NE@-437@237@38@16|flights:057@NE@43@241@38@16|flights:087@NE@384@3@38@16|satellites:055@NE@-343@-236@38@16|satellites:067@NE@420@187@38@16|satellites:073@NE@-380@40@38@16|satellites:079@NE@256@32@38@16|satellites:085@NE@-80@207@38@16|vessels:017@NE@-212@-132@38@16|vessels:029@NE@12@-14@38@16|vessels:035@NE@130@-106@38@16|vessels:083@NE@-43@-289@38@16|vessels:095@NE@439@-262@38@16',
+      selected:
+        'flights:003,flights:009,flights:033,flights:057,flights:087,satellites:055,satellites:067,satellites:073,satellites:079,satellites:085,vessels:017,vessels:029,vessels:035,vessels:083,vessels:095',
+      placements:
+        'flights:003@NE@-214@22@38@16|flights:009@NE@190@-267@38@16|flights:033@NE@-437@237@38@16|flights:057@NE@43@241@38@16|flights:087@NE@384@3@38@16|satellites:055@NE@-343@-236@38@16|satellites:067@NE@420@187@38@16|satellites:073@NE@-380@40@38@16|satellites:079@NE@256@32@38@16|satellites:085@NE@-80@207@38@16|vessels:017@NE@-212@-132@38@16|vessels:029@NE@12@-14@38@16|vessels:035@NE@130@-106@38@16|vessels:083@NE@-43@-289@38@16|vessels:095@NE@439@-262@38@16',
       fades: [],
       selectedCount: 15,
       quotas: 'flights:5,satellites:5,vessels:5',
@@ -72,8 +81,10 @@ const GOLDEN = {
     spatialCellCount: 9,
   },
   packedCells400: {
-    selected: 'air:000,air:003,air:051,air:066,air:171,air:210,air:330,air:351,ground:013,ground:124,ground:157,ground:379,sea:146,sea:230,sea:281,sea:347,sea:383,sea:386',
-    placements: 'air:000@packed@-639@-127@10@10|air:003@packed@-607@-639@10@10|air:051@NE@-4288@546@38@16|air:066@NE@-245@-2390@38@16|air:171@NE@5493@2134@38@16|air:210@NE@2943@2389@38@16|air:330@NE@3289@-1454@38@16|air:351@NE@5423@-3072@38@16|ground:013@NE@2371@-2822@38@16|ground:124@NE@-20@3579@38@16|ground:157@NE@-1642@-3390@38@16|ground:379@NE@5196@-1036@38@16|sea:146@NE@-3559@-3258@38@16|sea:230@NE@-1938@-1868@38@16|sea:281@NE@5212@-1783@38@16|sea:347@NE@-2185@2564@38@16|sea:383@NE@2177@-1527@38@16|sea:386@NE@4250@1117@38@16',
+    selected:
+      'air:000,air:003,air:051,air:066,air:171,air:210,air:330,air:351,ground:013,ground:124,ground:157,ground:379,sea:146,sea:230,sea:281,sea:347,sea:383,sea:386',
+    placements:
+      'air:000@packed@-639@-127@10@10|air:003@packed@-607@-639@10@10|air:051@NE@-4288@546@38@16|air:066@NE@-245@-2390@38@16|air:171@NE@5493@2134@38@16|air:210@NE@2943@2389@38@16|air:330@NE@3289@-1454@38@16|air:351@NE@5423@-3072@38@16|ground:013@NE@2371@-2822@38@16|ground:124@NE@-20@3579@38@16|ground:157@NE@-1642@-3390@38@16|ground:379@NE@5196@-1036@38@16|sea:146@NE@-3559@-3258@38@16|sea:230@NE@-1938@-1868@38@16|sea:281@NE@5212@-1783@38@16|sea:347@NE@-2185@2564@38@16|sea:383@NE@2177@-1527@38@16|sea:386@NE@4250@1117@38@16',
     fades: [],
     selectedCount: 18,
     quotas: 'air:8,ground:4,sea:6',
@@ -84,7 +95,8 @@ const GOLDEN = {
   fadeSequence12: [
     {
       selected: 'tracks:000,tracks:005,tracks:007,tracks:009',
-      placements: 'tracks:000@NE@-51@-134@38@16|tracks:005@NE@-179@-256@38@16|tracks:007@NE@347@200@38@16|tracks:009@NE@446@22@38@16',
+      placements:
+        'tracks:000@NE@-51@-134@38@16|tracks:005@NE@-179@-256@38@16|tracks:007@NE@347@200@38@16|tracks:009@NE@446@22@38@16',
       fades: [
         '7000:',
         '7075:tracks:000@NE@-51@-134@38@16@0.5@true|tracks:005@NE@-179@-256@38@16@0.5@true|tracks:007@NE@347@200@38@16@0.5@true|tracks:009@NE@446@22@38@16@0.5@true',
@@ -147,14 +159,17 @@ function placementsFor(x, y, shape = 'full') {
   ];
 }
 
-function makeCohort(count, {
-  seed,
-  layers,
-  shape = 'full',
-  tieHeavy = false,
-  spreadX = 900,
-  spreadY = 560,
-} = {}) {
+function makeCohort(
+  count,
+  {
+    seed,
+    layers,
+    shape = 'full',
+    tieHeavy = false,
+    spreadX = 900,
+    spreadY = 560,
+  } = {},
+) {
   const random = seededRandom(seed);
   return Array.from({ length: count }, (_, index) => {
     const x = Math.floor(random() * spreadX) - Math.floor(spreadX / 2);
@@ -186,10 +201,13 @@ function snapshotSolve(arbiter, candidates, options, fadeTimes = []) {
     const { x, y, w, h } = state.lastPlacement.rect;
     return [key, state.corner, x, y, w, h];
   });
-  const current = new Map(candidates.map((candidate) => [candidate.key, candidate]));
+  const current = new Map(
+    candidates.map((candidate) => [candidate.key, candidate]),
+  );
   const fades = fadeTimes.map((now) => [
     now,
-    ...arbiter.renderEntries(current, now)
+    ...arbiter
+      .renderEntries(current, now)
       .map((entry) => {
         const { x, y, w, h } = entry.placement.rect;
         return [
@@ -208,11 +226,21 @@ function snapshotSolve(arbiter, candidates, options, fadeTimes = []) {
   return {
     selected: selected.join(','),
     placements: placements.map((row) => row.join('@')).join('|'),
-    fades: fades.map(([now, ...entries]) => `${now}:${entries.map((row) => row.join('@')).join('|')}`),
+    fades: fades.map(
+      ([now, ...entries]) =>
+        `${now}:${entries.map((row) => row.join('@')).join('|')}`,
+    ),
     selectedCount: diagnostics.selectedCount,
-    quotas: Object.entries(diagnostics.quotas).map((row) => row.join(':')).join(','),
-    labelsByLayer: Object.entries(diagnostics.labelsByLayer).map((row) => row.join(':')).join(','),
-    queue: [diagnostics.spatialQueueBuildCount, diagnostics.spatialQueueNextCount],
+    quotas: Object.entries(diagnostics.quotas)
+      .map((row) => row.join(':'))
+      .join(','),
+    labelsByLayer: Object.entries(diagnostics.labelsByLayer)
+      .map((row) => row.join(':'))
+      .join(','),
+    queue: [
+      diagnostics.spatialQueueBuildCount,
+      diagnostics.spatialQueueNextCount,
+    ],
     spatialCellCount: arbiter._spatial.cells.size,
   };
 }
@@ -315,10 +343,12 @@ function buildGoldenBattery() {
     centerDistance: 0,
     screenX: cellX * 32 + 1,
     screenY: cellY * 32 + 1,
-    placements: [{
-      corner: 'packed',
-      rect: rect(cellX * 32 + 1, cellY * 32 + 1, 10, 10),
-    }],
+    placements: [
+      {
+        corner: 'packed',
+        rect: rect(cellX * 32 + 1, cellY * 32 + 1, 10, 10),
+      },
+    ],
   });
   packed400[0] = packedCell(packed400[0], -20, -4, 1000);
   packed400[3] = packedCell(packed400[3], -19, -20, 999);
@@ -380,18 +410,28 @@ function buildGoldenBattery() {
       preserveIncumbents: false,
     }),
     fadeSequence12: [
-      snapshotSolve(fadeArbiter, fade12, {
-        capacity: 4,
-        strategy: ALLOCATION_ELASTIC,
-        now: 7000,
-        preserveIncumbents: false,
-      }, [7000, 7075, 7150]),
-      snapshotSolve(fadeArbiter, fade12.slice(4), {
-        capacity: 2,
-        strategy: ALLOCATION_ELASTIC,
-        now: 7200,
-        preserveIncumbents: false,
-      }, [7200, 7275, 7350, 7501]),
+      snapshotSolve(
+        fadeArbiter,
+        fade12,
+        {
+          capacity: 4,
+          strategy: ALLOCATION_ELASTIC,
+          now: 7000,
+          preserveIncumbents: false,
+        },
+        [7000, 7075, 7150],
+      ),
+      snapshotSolve(
+        fadeArbiter,
+        fade12.slice(4),
+        {
+          capacity: 2,
+          strategy: ALLOCATION_ELASTIC,
+          now: 7200,
+          preserveIncumbents: false,
+        },
+        [7200, 7275, 7350, 7501],
+      ),
     ],
   };
 }

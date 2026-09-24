@@ -57,9 +57,9 @@ Before deprecating anything, answer these questions:
 
 ## Compulsory vs Advisory Deprecation
 
-| Type | When to Use | Mechanism |
-|------|-------------|-----------|
-| **Advisory** | Migration is optional, old system is stable | Warnings, documentation, nudges. Users migrate on their own timeline. |
+| Type           | When to Use                                                                           | Mechanism                                                                       |
+| -------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| **Advisory**   | Migration is optional, old system is stable                                           | Warnings, documentation, nudges. Users migrate on their own timeline.           |
 | **Compulsory** | Old system has security issues, blocks progress, or maintenance cost is unsustainable | Hard deadline. Old system will be removed by date X. Provide migration tooling. |
 
 **Default to advisory.** Use compulsory only when the maintenance cost or risk justifies forcing migration. Compulsory deprecation requires providing migration tooling, documentation, and support — you can't just announce a deadline.
@@ -83,9 +83,10 @@ Don't deprecate without a working alternative. The replacement must:
 **Replacement:** NewService (see migration guide below)
 **Removal date:** Advisory — no hard deadline yet
 **Reason:** OldService requires manual scaling and lacks observability.
-            NewService handles both automatically.
+NewService handles both automatically.
 
 ### Migration Guide
+
 1. Replace `import { client } from 'old-service'` with `import { client } from 'new-service'`
 2. Update configuration (see examples below)
 3. Run the migration verification script: `npx migrate-check`
@@ -178,12 +179,13 @@ the old one            the app                  a later, separate deploy
 2. **Dual-write.** App writes both `name` and `full_name` on every insert/update. Deploy.
 3. **Backfill.** Copy `name → full_name` for existing rows, in batches, so you don't lock the table.
 4. **Switch reads.** Point the app at `full_name`, keep writing both. Deploy and bake.
-5. **Contract.** Stop writing `name`, then — in a *separate, later* deploy — drop the column.
+5. **Contract.** Stop writing `name`, then — in a _separate, later_ deploy — drop the column.
 
 Each step is independently deployable and reversible: if step 4 misbehaves, roll the code back and `full_name` is still being populated. Treat each phase as a thin vertical slice — see the `incremental-implementation` skill.
 
 **Rules:**
-- **Additive first, destructive last and alone.** Adds (new nullable column, new table, new index) are safe in any deploy; drops and renames get their own deploy *after* no code references the old shape.
+
+- **Additive first, destructive last and alone.** Adds (new nullable column, new table, new index) are safe in any deploy; drops and renames get their own deploy _after_ no code references the old shape.
 - **Every migration has a tested down path.** A migration you can't reverse is a deploy you can't roll back. Write and run the `down` before merging.
 - **Backfill in batches, off the hot path.** A single `UPDATE` over millions of rows locks the table; chunk it and throttle.
 - **Build large indexes without blocking writes** (e.g. Postgres `CREATE INDEX CONCURRENTLY`).
@@ -203,17 +205,17 @@ Zombie code is code that nobody owns but everybody depends on. It's not actively
 
 ## Common Rationalizations
 
-| Rationalization | Reality |
-|---|---|
-| "It still works, why remove it?" | Working code that nobody maintains accumulates security debt and complexity. Maintenance cost grows silently. |
-| "Someone might need it later" | If it's needed later, it can be rebuilt. Keeping unused code "just in case" costs more than rebuilding. |
-| "The migration is too expensive" | Compare migration cost to ongoing maintenance cost over 2-3 years. Migration is usually cheaper long-term. |
-| "We'll deprecate it after we finish the new system" | Deprecation planning starts at design time. By the time the new system is done, you'll have new priorities. Plan now. |
-| "Users will migrate on their own" | They won't. Provide tooling, documentation, and incentives — or do the migration yourself (the Churn Rule). |
-| "We can maintain both systems indefinitely" | Two systems doing the same thing is double the maintenance, testing, documentation, and onboarding cost. |
-| "Just rename the column, it's one line" | During the rollout, old and new code run together — one will query a column that no longer exists. Expand/contract, never rename in place. |
-| "I'll add the column and drop the old one in the same migration" | That couples a safe add to a destructive drop. Drops get their own deploy, after no code references the old shape. |
-| "We'll write the rollback if we need it" | A migration with no down path is a deploy you can't reverse. Write and run the `down` before merging. |
+| Rationalization                                                  | Reality                                                                                                                                    |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| "It still works, why remove it?"                                 | Working code that nobody maintains accumulates security debt and complexity. Maintenance cost grows silently.                              |
+| "Someone might need it later"                                    | If it's needed later, it can be rebuilt. Keeping unused code "just in case" costs more than rebuilding.                                    |
+| "The migration is too expensive"                                 | Compare migration cost to ongoing maintenance cost over 2-3 years. Migration is usually cheaper long-term.                                 |
+| "We'll deprecate it after we finish the new system"              | Deprecation planning starts at design time. By the time the new system is done, you'll have new priorities. Plan now.                      |
+| "Users will migrate on their own"                                | They won't. Provide tooling, documentation, and incentives — or do the migration yourself (the Churn Rule).                                |
+| "We can maintain both systems indefinitely"                      | Two systems doing the same thing is double the maintenance, testing, documentation, and onboarding cost.                                   |
+| "Just rename the column, it's one line"                          | During the rollout, old and new code run together — one will query a column that no longer exists. Expand/contract, never rename in place. |
+| "I'll add the column and drop the old one in the same migration" | That couples a safe add to a destructive drop. Drops get their own deploy, after no code references the old shape.                         |
+| "We'll write the rollback if we need it"                         | A migration with no down path is a deploy you can't reverse. Write and run the `down` before merging.                                      |
 
 ## Red Flags
 

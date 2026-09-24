@@ -70,8 +70,14 @@ test('CctvSurveillanceGrid manages feeds, limits, and dom presentation', () => {
   });
 
   assert.equal(grid.feeds.length, 4);
-  assert.equal(grid.feeds.some((f) => f.id === 'cam_1'), false);
-  assert.equal(grid.feeds.some((f) => f.id === 'cam_5'), true);
+  assert.equal(
+    grid.feeds.some((f) => f.id === 'cam_1'),
+    false,
+  );
+  assert.equal(
+    grid.feeds.some((f) => f.id === 'cam_5'),
+    true,
+  );
 
   // Remove cam_2
   assert.equal(grid.removeFeed('cam_2'), true);

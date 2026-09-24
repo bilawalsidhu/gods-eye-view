@@ -1,55 +1,69 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content, viewport-fit=cover" />
-  <title>JARVIS — God's Eye View</title>
-  <meta name="description" content="JARVIS: Universal AI Assistant with 3D Globe, Code Execution, Workflow Automation, Research, and Study. Powered by NVIDIA NIM." />
-  <meta name="theme-color" content="#040e16" />
-  <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="JARVIS" />
-  <link rel="icon" type="image/svg+xml" href="/logo.svg" />
-  <link rel="apple-touch-icon" href="/jarvis-icon-192.png" />
-  <link rel="manifest" href="/manifest.json" />
-  <link rel="stylesheet" href="/style.css" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
-  <!-- Icon font subset to the glyphs this app renders. Keep `icon_names` in sync
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content, viewport-fit=cover"
+    />
+    <title>JARVIS — God's Eye View</title>
+    <meta
+      name="description"
+      content="JARVIS: Universal AI Assistant with 3D Globe, Code Execution, Workflow Automation, Research, and Study. Powered by NVIDIA NIM."
+    />
+    <meta name="theme-color" content="#040e16" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+    <meta name="apple-mobile-web-app-title" content="JARVIS" />
+    <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+    <link rel="apple-touch-icon" href="/jarvis-icon-192.png" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="stylesheet" href="/style.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <!-- Icon font subset to the glyphs this app renders. Keep `icon_names` in sync
        with the sources: src/materialSymbolsSubset.test.mjs fails when a source
        names a glyph this list is missing, because a missing glyph does not draw
        a box — the ligature never forms and the element renders the literal word. -->
-  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,400,0,0&icon_names=adjust,arrow_drop_down,arrow_forward,arrow_left,arrow_right,bolt,chevron_left,chevron_right,close,close_fullscreen,dark_mode,draw,east,flare,flight,layers_clear,light_mode,local_fire_department,my_location,navigation,normal,on,open_in_full,public,radar,radio,right_panel_close,right_panel_open,rocket_launch,skip_next,skip_previous,view_in_ar" rel="stylesheet" />
-</head>
-<body class="crt-grid">
-  <!-- gev:template scene-chrome -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,400,0,0&icon_names=adjust,arrow_drop_down,arrow_forward,arrow_left,arrow_right,bolt,chevron_left,chevron_right,close,close_fullscreen,dark_mode,draw,east,flare,flight,layers_clear,light_mode,local_fire_department,my_location,navigation,normal,on,open_in_full,public,radar,radio,right_panel_close,right_panel_open,rocket_launch,skip_next,skip_previous,view_in_ar"
+      rel="stylesheet"
+    />
+  </head>
+  <body class="crt-grid">
+    <!-- gev:template scene-chrome -->
 
-  <!-- gev:template cockpit -->
+    <!-- gev:template cockpit -->
 
-  <!-- gev:template display-controls -->
+    <!-- gev:template display-controls -->
 
-  <!-- gev:template command-dock -->
+    <!-- gev:template command-dock -->
 
-  <!-- gev:template layer-panels -->
+    <!-- gev:template layer-panels -->
 
-  <!-- gev:template context -->
+    <!-- gev:template context -->
 
-  <!-- gev:template welcome -->
+    <!-- gev:template welcome -->
 
-  <!-- gev:template provider-settings -->
+    <!-- gev:template provider-settings -->
 
-  <!-- gev:template hud-loading -->
+    <!-- gev:template hud-loading -->
 
-  <script type="module" src="/src/main.js"></script>
+    <script type="module" src="/src/main.js"></script>
 
-  <!-- PWA Service Worker Registration -->
-  <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(() => {});
-    }
-  </script>
-</body>
+    <!-- PWA Service Worker Registration -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      }
+    </script>
+  </body>
 </html>
-

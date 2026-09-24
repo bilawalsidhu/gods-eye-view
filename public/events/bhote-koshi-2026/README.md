@@ -5,12 +5,12 @@ This is not an official hazard model.
 
 ## Provenance and licenses
 
-| File | Source and modifications | License |
-| --- | --- | --- |
-| `pre.webp` | Vantor WorldView-2 scene `10300100C86CED00`, observed 2021-10-16; natural-color crop of 85.295–85.379 E, 28.135–28.292 N, resampled to 2048×4352 and WebP-compressed | CC BY-NC 4.0 |
-| `post.webp` | Vantor WorldView-3 scene `B040001100881410`, observed 2026-08-27; same bounds and output geometry, with source clouds retained | CC BY-NC 4.0 |
-| `event.json` | GeoPera reconstruction, commit `59ee5bd`; every fourth published centerline point inside the image bounds, plus sixteen curated evidence records linking public witness posts and the GeoGeorgeShadrach geolocation map | CC BY-NC 4.0 for the derived centerline; linked posts and map records retain their owners' terms |
-| `src/data/bhoteKoshiFloodPath.js` (outside this directory) | Simplified GeoPera centerline from the Debris-Dammed Lake observation to Trishuli Bazaar, compiled into the scene and locator | CC BY-NC 4.0 for the coordinate dataset, separately from the executable code |
+| File                                                       | Source and modifications                                                                                                                                                                                                | License                                                                                          |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `pre.webp`                                                 | Vantor WorldView-2 scene `10300100C86CED00`, observed 2021-10-16; natural-color crop of 85.295–85.379 E, 28.135–28.292 N, resampled to 2048×4352 and WebP-compressed                                                    | CC BY-NC 4.0                                                                                     |
+| `post.webp`                                                | Vantor WorldView-3 scene `B040001100881410`, observed 2026-08-27; same bounds and output geometry, with source clouds retained                                                                                          | CC BY-NC 4.0                                                                                     |
+| `event.json`                                               | GeoPera reconstruction, commit `59ee5bd`; every fourth published centerline point inside the image bounds, plus sixteen curated evidence records linking public witness posts and the GeoGeorgeShadrach geolocation map | CC BY-NC 4.0 for the derived centerline; linked posts and map records retain their owners' terms |
+| `src/data/bhoteKoshiFloodPath.js` (outside this directory) | Simplified GeoPera centerline from the Debris-Dammed Lake observation to Trishuli Bazaar, compiled into the scene and locator                                                                                           | CC BY-NC 4.0 for the coordinate dataset, separately from the executable code                     |
 
 These third-party assets are **not covered by the application's MIT license**.
 Keep attribution and the [CC BY-NC 4.0 license](https://creativecommons.org/licenses/by-nc/4.0/).

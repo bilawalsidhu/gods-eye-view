@@ -21,7 +21,10 @@ test('formatNvidiaTools formats tools to OpenAI/NVIDIA function schema', () => {
   assert.equal(formatted.length, 1);
   assert.equal(formatted[0].type, 'function');
   assert.equal(formatted[0].function.name, 'fly_to_location');
-  assert.equal(formatted[0].function.description, 'Fly the camera to a named city');
+  assert.equal(
+    formatted[0].function.description,
+    'Fly the camera to a named city',
+  );
   assert.deepEqual(formatted[0].function.parameters, dummyTools[0].parameters);
 });
 

@@ -10,7 +10,11 @@ import {
 const desktop = { viewportHeight: 790, stripHeight: 107, collapsedHeight: 50 };
 
 test('the strip hangs 12px under the REC readout when the briefing card leaves room', () => {
-  const { top } = resolveCockpitUtilityAnchor({ ...desktop, recBottom: 148.1, signalTop: 420 });
+  const { top } = resolveCockpitUtilityAnchor({
+    ...desktop,
+    recBottom: 148.1,
+    signalTop: 420,
+  });
   assert.equal(Number(top.toFixed(1)), 160.1);
 });
 
@@ -50,48 +54,63 @@ test('the corridor is measured from the resolved top and floors on a launcher, n
 });
 
 test('a missing REC readout leaves the strip on the viewport ceiling', () => {
-  const { top } = resolveCockpitUtilityAnchor({ ...desktop, recBottom: 0, signalTop: 600 });
+  const { top } = resolveCockpitUtilityAnchor({
+    ...desktop,
+    recBottom: 0,
+    signalTop: 600,
+  });
   assert.equal(top, 96);
 });
 
 test('keeps the collapsed sibling visible when both Cockpit utilities fit', () => {
-  assert.deepEqual(resolveCockpitUtilityLayout({
-    availableHeight: 320,
-    expandedHeight: 220,
-    collapsedHeight: 50,
-  }), {
-    primaryOnly: false,
-    expandedMaxHeight: 263,
-  });
+  assert.deepEqual(
+    resolveCockpitUtilityLayout({
+      availableHeight: 320,
+      expandedHeight: 220,
+      collapsedHeight: 50,
+    }),
+    {
+      primaryOnly: false,
+      expandedMaxHeight: 263,
+    },
+  );
 });
 
 test('keeps the collapsed sibling at the exact corridor boundary', () => {
-  assert.equal(resolveCockpitUtilityLayout({
-    availableHeight: 277,
-    expandedHeight: 220,
-    collapsedHeight: 50,
-  }).primaryOnly, false);
+  assert.equal(
+    resolveCockpitUtilityLayout({
+      availableHeight: 277,
+      expandedHeight: 220,
+      collapsedHeight: 50,
+    }).primaryOnly,
+    false,
+  );
 });
 
 test('gives the expanded panel the full corridor when both controls do not fit', () => {
-  assert.deepEqual(resolveCockpitUtilityLayout({
-    availableHeight: 276,
-    expandedHeight: 220,
-    collapsedHeight: 50,
-  }), {
-    primaryOnly: true,
-    expandedMaxHeight: 276,
-  });
+  assert.deepEqual(
+    resolveCockpitUtilityLayout({
+      availableHeight: 276,
+      expandedHeight: 220,
+      collapsedHeight: 50,
+    }),
+    {
+      primaryOnly: true,
+      expandedMaxHeight: 276,
+    },
+  );
 });
 
 test('clamps malformed or short corridors to the minimum expanded height', () => {
-  assert.deepEqual(resolveCockpitUtilityLayout({
-    availableHeight: Number.NaN,
-    expandedHeight: 180,
-    collapsedHeight: 50,
-  }), {
-    primaryOnly: true,
-    expandedMaxHeight: 120,
-  });
+  assert.deepEqual(
+    resolveCockpitUtilityLayout({
+      availableHeight: Number.NaN,
+      expandedHeight: 180,
+      collapsedHeight: 50,
+    }),
+    {
+      primaryOnly: true,
+      expandedMaxHeight: 120,
+    },
+  );
 });
-

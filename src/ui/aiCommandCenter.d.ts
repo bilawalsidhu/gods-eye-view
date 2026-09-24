@@ -49,9 +49,7 @@ export interface VoiceModelProfile {
  * AI Voice Personas / Voice Models with customized acoustic properties.
  * Frozen map of persona id -> acoustic profile.
  */
-export declare const VOICE_MODELS: Readonly<
-  Record<string, VoiceModelProfile>
->;
+export declare const VOICE_MODELS: Readonly<Record<string, VoiceModelProfile>>;
 
 /**
  * Detect written language from text script and lexical tokens.
@@ -231,10 +229,7 @@ export interface AiCommandController {
   /** Play a procedural Web Audio cue. */
   playAudioCue(type?: AudioCueType, options?: PlayAudioCueOptions): void;
   /** Update the gesture status pill shown in the HUD. */
-  setGestureStatus(options?: {
-    enabled?: boolean;
-    lastGesture?: string;
-  }): void;
+  setGestureStatus(options?: { enabled?: boolean; lastGesture?: string }): void;
   /** Handle a gesture-driven target lock on a tracked entity. */
   handleGestureTargetLock(entity: unknown): void;
   /** Request a tactical SITREP summarizing current airspace, maritime traffic, and threats. */

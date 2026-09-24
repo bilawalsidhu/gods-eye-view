@@ -27,21 +27,31 @@ test('doctor distinguishes supported, usable EOL, and unsupported Node versions'
   // A FUTURE Node is a warning, never an install-bricking refusal: the
   // no-terminal user it would stop cannot act on "install Node 24".
   assert.equal(classifyNodeVersion('27.0.0').level, 'warn');
-  assert.match(classifyNodeVersion('27.0.0').summary, /newer than this release has verified/);
+  assert.match(
+    classifyNodeVersion('27.0.0').summary,
+    /newer than this release has verified/,
+  );
 });
 
 test('doctor rejects an empty node_modules and requires every direct package', () => {
   const root = mkdtempSync(path.join(tmpdir(), 'gev-doctor-deps-'));
   try {
-    writeFileSync(path.join(root, 'package.json'), JSON.stringify({
-      dependencies: { vite: '1.0.0' },
-      devDependencies: { '@scope/tool': '1.0.0' },
-    }));
+    writeFileSync(
+      path.join(root, 'package.json'),
+      JSON.stringify({
+        dependencies: { vite: '1.0.0' },
+        devDependencies: { '@scope/tool': '1.0.0' },
+      }),
+    );
     mkdirSync(path.join(root, 'node_modules'));
     assert.equal(hasRequiredDependencies(root), false);
 
     for (const packagePath of ['vite', '@scope/tool']) {
-      const directory = path.join(root, 'node_modules', ...packagePath.split('/'));
+      const directory = path.join(
+        root,
+        'node_modules',
+        ...packagePath.split('/'),
+      );
       mkdirSync(directory, { recursive: true });
       writeFileSync(path.join(directory, 'package.json'), '{}');
     }
@@ -59,36 +69,33 @@ test('placeholder values are never counted as configured credentials', () => {
 });
 
 test('doctor selects a Windows-safe npm process without changing Unix behavior', () => {
-  assert.deepEqual(npmProcessSpec('win32'), { command: 'npm.cmd', shell: true });
+  assert.deepEqual(npmProcessSpec('win32'), {
+    command: 'npm.cmd',
+    shell: true,
+  });
   assert.deepEqual(npmProcessSpec('darwin'), { command: 'npm', shell: false });
   assert.deepEqual(npmProcessSpec('linux'), { command: 'npm', shell: false });
 });
 
 test('doctor recognizes every OpenSky OAuth keychain alias used by dev-fresh', () => {
-  assert.deepEqual(
-    credential('OPENSKY_CLIENT_ID').keychain,
-    [
-      ['opensky-network', 'client_id'],
-      ['opensky-network', 'client-id'],
-      ['opensky-network', 'client'],
-      ['opensky-network', 'api-key'],
-      ['opensky', 'client_id'],
-      ['opensky', 'client-id'],
-      ['opensky', 'client'],
-      ['opensky', 'api-key'],
-    ],
-  );
-  assert.deepEqual(
-    credential('OPENSKY_CLIENT_SECRET').keychain,
-    [
-      ['opensky-network', 'client_secret'],
-      ['opensky-network', 'client-secret'],
-      ['opensky-network', 'secret'],
-      ['opensky', 'client_secret'],
-      ['opensky', 'client-secret'],
-      ['opensky', 'secret'],
-    ],
-  );
+  assert.deepEqual(credential('OPENSKY_CLIENT_ID').keychain, [
+    ['opensky-network', 'client_id'],
+    ['opensky-network', 'client-id'],
+    ['opensky-network', 'client'],
+    ['opensky-network', 'api-key'],
+    ['opensky', 'client_id'],
+    ['opensky', 'client-id'],
+    ['opensky', 'client'],
+    ['opensky', 'api-key'],
+  ]);
+  assert.deepEqual(credential('OPENSKY_CLIENT_SECRET').keychain, [
+    ['opensky-network', 'client_secret'],
+    ['opensky-network', 'client-secret'],
+    ['opensky-network', 'secret'],
+    ['opensky', 'client_secret'],
+    ['opensky', 'client-secret'],
+    ['opensky', 'secret'],
+  ]);
 });
 
 test('Pinokio-scoped diagnosis ignores Keychain items its start path does not import', () => {
@@ -96,17 +103,23 @@ test('Pinokio-scoped diagnosis ignores Keychain items its start path does not im
   try {
     const spec = credential('OPENAI_API_KEY');
     const keychainLookup = () => true;
-    assert.deepEqual(resolveCredential(spec, {
-      environment: {},
-      rootDir: root,
-      keychainLookup,
-    }), { configured: true, source: 'macOS Keychain' });
-    assert.deepEqual(resolveCredential(spec, {
-      includeKeychain: false,
-      environment: {},
-      rootDir: root,
-      keychainLookup,
-    }), { configured: false, source: null });
+    assert.deepEqual(
+      resolveCredential(spec, {
+        environment: {},
+        rootDir: root,
+        keychainLookup,
+      }),
+      { configured: true, source: 'macOS Keychain' },
+    );
+    assert.deepEqual(
+      resolveCredential(spec, {
+        includeKeychain: false,
+        environment: {},
+        rootDir: root,
+        keychainLookup,
+      }),
+      { configured: false, source: null },
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -116,18 +129,27 @@ test('Pinokio-scoped diagnosis does not count dotenv values shadowed by blank ap
   const root = mkdtempSync(path.join(tmpdir(), 'gev-pinokio-doctor-env-'));
   try {
     const spec = credential('GOOGLE_MAPS_API_KEY');
-    writeFileSync(path.join(root, '.env.local'), 'GOOGLE_MAPS_API_KEY=dotenv-only\n');
-    assert.deepEqual(resolveCredential(spec, {
-      environment: { GOOGLE_MAPS_API_KEY: '' },
-      rootDir: root,
-      keychainLookup: () => false,
-    }), { configured: true, source: 'dotenv files' });
-    assert.deepEqual(resolveCredential(spec, {
-      authoritativeEnvironment: true,
-      environment: { GOOGLE_MAPS_API_KEY: '' },
-      rootDir: root,
-      keychainLookup: () => false,
-    }), { configured: false, source: null });
+    writeFileSync(
+      path.join(root, '.env.local'),
+      'GOOGLE_MAPS_API_KEY=dotenv-only\n',
+    );
+    assert.deepEqual(
+      resolveCredential(spec, {
+        environment: { GOOGLE_MAPS_API_KEY: '' },
+        rootDir: root,
+        keychainLookup: () => false,
+      }),
+      { configured: true, source: 'dotenv files' },
+    );
+    assert.deepEqual(
+      resolveCredential(spec, {
+        authoritativeEnvironment: true,
+        environment: { GOOGLE_MAPS_API_KEY: '' },
+        rootDir: root,
+        keychainLookup: () => false,
+      }),
+      { configured: false, source: null },
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -138,7 +160,10 @@ test('doctor reads the dotenv ladder without requiring Vite to be installed', ()
   try {
     writeFileSync(path.join(root, '.env'), 'GEV_TEST_KEY=base\n');
     writeFileSync(path.join(root, '.env.local'), 'GEV_TEST_KEY=local\n');
-    writeFileSync(path.join(root, '.env.development.local'), 'GEV_TEST_KEY=mode-local\n');
+    writeFileSync(
+      path.join(root, '.env.development.local'),
+      'GEV_TEST_KEY=mode-local\n',
+    );
     assert.equal(readDoctorDotenvValue('GEV_TEST_KEY', root), 'mode-local');
     assert.equal(readDoctorDotenvValue('not valid', root), '');
   } finally {
@@ -150,10 +175,31 @@ test('doctor resolves OpenSky auth mode with launcher-compatible precedence', ()
   const root = mkdtempSync(path.join(tmpdir(), 'gev-doctor-opensky-mode-'));
   try {
     writeFileSync(path.join(root, '.env'), 'OPENSKY_AUTH_MODE=anon\n');
-    assert.equal(resolveOpenSkyAuthMode({ environment: {}, rootDir: root }), 'anon');
-    assert.equal(resolveOpenSkyAuthMode({ environment: { OPENSKY_AUTH_MODE: 'oauth' }, rootDir: root }), 'oauth');
-    assert.equal(resolveOpenSkyAuthMode({ environment: { OPENSKY_AUTH_MODE: '' }, rootDir: root }), 'anon');
-    assert.equal(resolveOpenSkyAuthMode({ environment: { OPENSKY_AUTH_MODE: 'invalid' }, rootDir: root }), 'oauth');
+    assert.equal(
+      resolveOpenSkyAuthMode({ environment: {}, rootDir: root }),
+      'anon',
+    );
+    assert.equal(
+      resolveOpenSkyAuthMode({
+        environment: { OPENSKY_AUTH_MODE: 'oauth' },
+        rootDir: root,
+      }),
+      'oauth',
+    );
+    assert.equal(
+      resolveOpenSkyAuthMode({
+        environment: { OPENSKY_AUTH_MODE: '' },
+        rootDir: root,
+      }),
+      'anon',
+    );
+    assert.equal(
+      resolveOpenSkyAuthMode({
+        environment: { OPENSKY_AUTH_MODE: 'invalid' },
+        rootDir: root,
+      }),
+      'oauth',
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -221,11 +267,17 @@ test('doctor describes the credential ladder without exposing values', () => {
     LL2_API_TOKEN: { configured: true, source: 'environment' },
   };
   const capabilities = buildCapabilitySummary(credentials);
-  assert.match(capabilities.map, /Google Photorealistic 3D Tiles through Cesium ion/);
+  assert.match(
+    capabilities.map,
+    /Google Photorealistic 3D Tiles through Cesium ion/,
+  );
   assert.match(capabilities.map, /Bing and world-terrain stacks/);
   assert.equal(capabilities.voice, 'available');
   assert.match(capabilities.missions, /token allowance/);
-  assert.equal(capabilities.flights, 'OpenSky keyless anonymous access (rate-limited)');
+  assert.equal(
+    capabilities.flights,
+    'OpenSky keyless anonymous access (rate-limited)',
+  );
 
   const report = formatSetupReport({
     ready: true,
@@ -239,34 +291,45 @@ test('doctor describes the credential ladder without exposing values', () => {
   assert.match(report, /Cesium ion \(environment\)/);
   assert.match(report, /Launch Library 2 \(environment\)/);
 
-  const pinokioReport = formatSetupReport({
-    ready: true,
-    node: { version: '24.14.0', level: 'ok', summary: 'supported' },
-    npm: { available: true, version: '11.0.0' },
-    dependenciesInstalled: true,
-    credentials,
-    capabilities,
-  }, { readyMessage: 'Ready. Return to Pinokio and choose Start.' });
+  const pinokioReport = formatSetupReport(
+    {
+      ready: true,
+      node: { version: '24.14.0', level: 'ok', summary: 'supported' },
+      npm: { available: true, version: '11.0.0' },
+      dependenciesInstalled: true,
+      credentials,
+      capabilities,
+    },
+    { readyMessage: 'Ready. Return to Pinokio and choose Start.' },
+  );
   assert.match(pinokioReport, /Return to Pinokio and choose Start/);
   assert.doesNotMatch(pinokioReport, /npm run dev/);
 });
 
 test('doctor sends Keychain-backed reports to dev-fresh and describes OpenSky as presence only', () => {
-  const credentials = Object.fromEntries([
-    'GOOGLE_MAPS_API_KEY',
-    'GOOGLE_MAPS_SERVER_API_KEY',
-    'CESIUM_ION_TOKEN',
-    'OPENAI_API_KEY',
-    'AISSTREAM_API_KEY',
-    'FIRMS_MAP_KEY',
-    'TOMTOM_API_KEY',
-    'OPENSKY_CLIENT_ID',
-    'OPENSKY_CLIENT_SECRET',
-    'LL2_API_TOKEN',
-  ].map((name) => [name, { configured: false }]));
-  credentials.GOOGLE_MAPS_API_KEY = { configured: true, source: 'macOS Keychain' };
+  const credentials = Object.fromEntries(
+    [
+      'GOOGLE_MAPS_API_KEY',
+      'GOOGLE_MAPS_SERVER_API_KEY',
+      'CESIUM_ION_TOKEN',
+      'OPENAI_API_KEY',
+      'AISSTREAM_API_KEY',
+      'FIRMS_MAP_KEY',
+      'TOMTOM_API_KEY',
+      'OPENSKY_CLIENT_ID',
+      'OPENSKY_CLIENT_SECRET',
+      'LL2_API_TOKEN',
+    ].map((name) => [name, { configured: false }]),
+  );
+  credentials.GOOGLE_MAPS_API_KEY = {
+    configured: true,
+    source: 'macOS Keychain',
+  };
   credentials.OPENSKY_CLIENT_ID = { configured: true, source: 'environment' };
-  credentials.OPENSKY_CLIENT_SECRET = { configured: true, source: 'environment' };
+  credentials.OPENSKY_CLIENT_SECRET = {
+    configured: true,
+    source: 'environment',
+  };
   const capabilities = buildCapabilitySummary(credentials);
   const output = formatSetupReport({
     ready: true,
@@ -284,18 +347,20 @@ test('doctor sends Keychain-backed reports to dev-fresh and describes OpenSky as
 });
 
 test('doctor never calls a dependency-missing setup ready', () => {
-  const credentials = Object.fromEntries([
-    'GOOGLE_MAPS_API_KEY',
-    'GOOGLE_MAPS_SERVER_API_KEY',
-    'CESIUM_ION_TOKEN',
-    'OPENAI_API_KEY',
-    'AISSTREAM_API_KEY',
-    'FIRMS_MAP_KEY',
-    'TOMTOM_API_KEY',
-    'OPENSKY_CLIENT_ID',
-    'OPENSKY_CLIENT_SECRET',
-    'LL2_API_TOKEN',
-  ].map((name) => [name, { configured: false }]));
+  const credentials = Object.fromEntries(
+    [
+      'GOOGLE_MAPS_API_KEY',
+      'GOOGLE_MAPS_SERVER_API_KEY',
+      'CESIUM_ION_TOKEN',
+      'OPENAI_API_KEY',
+      'AISSTREAM_API_KEY',
+      'FIRMS_MAP_KEY',
+      'TOMTOM_API_KEY',
+      'OPENSKY_CLIENT_ID',
+      'OPENSKY_CLIENT_SECRET',
+      'LL2_API_TOKEN',
+    ].map((name) => [name, { configured: false }]),
+  );
   const output = formatSetupReport({
     ready: false,
     node: { level: 'ok', version: '24.14.0', summary: 'supported' },

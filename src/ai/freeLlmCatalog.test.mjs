@@ -84,9 +84,18 @@ test('findProviderForModel accurately identifies provider for various models', (
   assert.equal(findProviderForModel('cerebras/gpt-oss-120b')?.id, 'cerebras');
   assert.equal(findProviderForModel('groq/openai/gpt-oss-20b')?.id, 'groq');
   assert.equal(findProviderForModel('qwen/qwen3.8-27b')?.id, 'groq');
-  assert.equal(findProviderForModel('nvidia/nemotron-3.5-lightning-30b-a3b')?.id, 'nvidia');
-  assert.equal(findProviderForModel('meta-llama/llama-3.3-70b-instruct:free')?.id, 'openrouter');
-  assert.equal(findProviderForModel('Meta-Llama-3.3-70B-Instruct')?.id, 'sambanova');
+  assert.equal(
+    findProviderForModel('nvidia/nemotron-3.5-lightning-30b-a3b')?.id,
+    'nvidia',
+  );
+  assert.equal(
+    findProviderForModel('meta-llama/llama-3.3-70b-instruct:free')?.id,
+    'openrouter',
+  );
+  assert.equal(
+    findProviderForModel('Meta-Llama-3.3-70B-Instruct')?.id,
+    'sambanova',
+  );
 });
 
 test('getEnvVarForProvider returns correct env var for each provider', () => {
@@ -160,40 +169,57 @@ test('getAllActiveProviderCandidates returns all providers with keys', () => {
   assert.ok(!names.includes('Mistral AI'));
   assert.ok(!names.includes('Cerebras'));
   // Multiple keys for Groq = multiple candidates
-  const groqCount = candidates.filter((c) => c.provider === 'Groq Cloud').length;
+  const groqCount = candidates.filter(
+    (c) => c.provider === 'Groq Cloud',
+  ).length;
   assert.equal(groqCount, 2);
 });
 
 test('resolveActiveProviderId picks correct provider from base URL and key', () => {
   // Groq base URL + Groq key
-  assert.equal(resolveActiveProviderId({
-    NVIDIA_BASE_URL: 'https://api.groq.com/openai/v1',
-    GROQ_API_KEY: 'gsk_test',
-  }), 'groq');
+  assert.equal(
+    resolveActiveProviderId({
+      NVIDIA_BASE_URL: 'https://api.groq.com/openai/v1',
+      GROQ_API_KEY: 'gsk_test',
+    }),
+    'groq',
+  );
 
   // Requesty base URL + Requesty key
-  assert.equal(resolveActiveProviderId({
-    NVIDIA_BASE_URL: 'https://router.requesty.ai/v1',
-    REQUESTY_API_KEY: 'rqsty_test',
-  }), 'requesty');
+  assert.equal(
+    resolveActiveProviderId({
+      NVIDIA_BASE_URL: 'https://router.requesty.ai/v1',
+      REQUESTY_API_KEY: 'rqsty_test',
+    }),
+    'requesty',
+  );
 
   // Third-party key in NVIDIA_API_KEY (prefix detection)
-  assert.equal(resolveActiveProviderId({
-    NVIDIA_API_KEY: 'gsk_groqKeyInNvidiaSlot',
-    NVIDIA_BASE_URL: 'https://integrate.api.nvidia.com/v1',
-  }), 'groq');
+  assert.equal(
+    resolveActiveProviderId({
+      NVIDIA_API_KEY: 'gsk_groqKeyInNvidiaSlot',
+      NVIDIA_BASE_URL: 'https://integrate.api.nvidia.com/v1',
+    }),
+    'groq',
+  );
 
-  assert.equal(resolveActiveProviderId({
-    NVIDIA_API_KEY: 'rqsty-requestyKeyInNvidiaSlot',
-    NVIDIA_BASE_URL: 'https://integrate.api.nvidia.com/v1',
-  }), 'requesty');
+  assert.equal(
+    resolveActiveProviderId({
+      NVIDIA_API_KEY: 'rqsty-requestyKeyInNvidiaSlot',
+      NVIDIA_BASE_URL: 'https://integrate.api.nvidia.com/v1',
+    }),
+    'requesty',
+  );
 
   // Default to nvidia
   assert.equal(resolveActiveProviderId({}), 'nvidia');
-  assert.equal(resolveActiveProviderId({
-    NVIDIA_API_KEY: 'nvapi_native',
-    NVIDIA_BASE_URL: 'https://integrate.api.nvidia.com/v1',
-  }), 'nvidia');
+  assert.equal(
+    resolveActiveProviderId({
+      NVIDIA_API_KEY: 'nvapi_native',
+      NVIDIA_BASE_URL: 'https://integrate.api.nvidia.com/v1',
+    }),
+    'nvidia',
+  );
 });
 
 test('getProviderKeyStatuses returns status for POWER UP panel', () => {
@@ -212,4 +238,3 @@ test('getProviderKeyStatuses returns status for POWER UP panel', () => {
   // All 15 providers present (14 remote + 1 keyless local)
   assert.equal(Object.keys(status.providers).length, 15);
 });
-

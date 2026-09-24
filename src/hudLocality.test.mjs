@@ -17,7 +17,7 @@ test('the NEAR bound is metro scale, not continental', () => {
 
 test('a landmark under the camera reads NEAR', () => {
   assert.equal(
-    composeLocalityTag({ ...ALCATRAZ, distKm: 2.4 }, 37.8267, -122.4230),
+    composeLocalityTag({ ...ALCATRAZ, distKm: 2.4 }, 37.8267, -122.423),
     'NEAR ALCATRAZ ISLAND (SAN FRANCISCO) 2KM',
   );
   assert.equal(
@@ -40,20 +40,42 @@ test('the field failures now fall through to the SECTOR readout', () => {
 });
 
 test('the boundary is pinned on both sides, inclusive at the bound', () => {
-  const at = composeLocalityTag({ ...LINCOLN, distKm: NEAR_POI_MAX_KM }, 40, -78);
-  assert.match(at, /^NEAR LINCOLN MEMORIAL/, 'exactly at the bound still reads NEAR');
+  const at = composeLocalityTag(
+    { ...LINCOLN, distKm: NEAR_POI_MAX_KM },
+    40,
+    -78,
+  );
+  assert.match(
+    at,
+    /^NEAR LINCOLN MEMORIAL/,
+    'exactly at the bound still reads NEAR',
+  );
 
-  const just_under = composeLocalityTag({ ...LINCOLN, distKm: NEAR_POI_MAX_KM - 0.1 }, 40, -78);
+  const just_under = composeLocalityTag(
+    { ...LINCOLN, distKm: NEAR_POI_MAX_KM - 0.1 },
+    40,
+    -78,
+  );
   assert.match(just_under, /^NEAR LINCOLN MEMORIAL/);
 
-  const just_over = composeLocalityTag({ ...LINCOLN, distKm: NEAR_POI_MAX_KM + 0.1 }, 40, -78);
+  const just_over = composeLocalityTag(
+    { ...LINCOLN, distKm: NEAR_POI_MAX_KM + 0.1 },
+    40,
+    -78,
+  );
   assert.match(just_over, /^SECTOR /, 'one step past the bound falls through');
 });
 
 test('southern and western hemispheres carry the right suffixes', () => {
   // Rio and Honolulu — the two the fallback already handled correctly in the field.
-  assert.equal(composeLocalityTag(null, -22.9068, -43.1729), 'SECTOR 22.91S 43.17W');
-  assert.equal(composeLocalityTag(null, 21.3069, -157.8583), 'SECTOR 21.31N 157.86W');
+  assert.equal(
+    composeLocalityTag(null, -22.9068, -43.1729),
+    'SECTOR 22.91S 43.17W',
+  );
+  assert.equal(
+    composeLocalityTag(null, 21.3069, -157.8583),
+    'SECTOR 21.31N 157.86W',
+  );
 });
 
 // The tests above all pass against a hud.js that still computes the tag inline —
@@ -72,7 +94,9 @@ test('hud.js actually composes its summary through this helper', () => {
     'hud.js must import composeLocalityTag from ./hudLocality.js',
   );
   assert.equal(
-    has(/const localityTag = composeLocalityTag\(nearest, m\.latDeg, m\.lonDeg\);/),
+    has(
+      /const localityTag = composeLocalityTag\(nearest, m\.latDeg, m\.lonDeg\);/,
+    ),
     true,
     '_composeSummary must build its locality tag through composeLocalityTag()',
   );
@@ -91,6 +115,9 @@ test('hud.js actually composes its summary through this helper', () => {
 test('a missing or malformed nearest POI never crashes the summary', () => {
   assert.match(composeLocalityTag(null, 0, 0), /^SECTOR /);
   assert.match(composeLocalityTag(undefined, 0, 0), /^SECTOR /);
-  assert.match(composeLocalityTag({ ...LINCOLN, distKm: NaN }, 10, 10), /^SECTOR /);
+  assert.match(
+    composeLocalityTag({ ...LINCOLN, distKm: NaN }, 10, 10),
+    /^SECTOR /,
+  );
   assert.match(composeLocalityTag({ ...LINCOLN }, 10, 10), /^SECTOR /);
 });

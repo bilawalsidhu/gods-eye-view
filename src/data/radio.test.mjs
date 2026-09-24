@@ -62,12 +62,27 @@ const stations = [
 test('station-level tags produce canonical and detected-genre categories', () => {
   const categories = buildRadioCategories(stations);
   assert.equal(categories.find((category) => category.id === 'all').count, 4);
-  assert.equal(categories.find((category) => category.id === 'weather').count, 2);
-  assert.equal(categories.find((category) => category.id === 'public-safety').count, 1);
-  assert.equal(categories.find((category) => category.id === 'genre:jazz').count, 1);
+  assert.equal(
+    categories.find((category) => category.id === 'weather').count,
+    2,
+  );
+  assert.equal(
+    categories.find((category) => category.id === 'public-safety').count,
+    1,
+  );
+  assert.equal(
+    categories.find((category) => category.id === 'genre:jazz').count,
+    1,
+  );
   assert.equal(categories.find((category) => category.id === 'other').count, 1);
-  assert.equal(categories.find((category) => category.id === 'music').color, '#54d17a');
-  assert.equal(categories.find((category) => category.id === 'genre:jazz').color, '#54d17a');
+  assert.equal(
+    categories.find((category) => category.id === 'music').color,
+    '#54d17a',
+  );
+  assert.equal(
+    categories.find((category) => category.id === 'genre:jazz').color,
+    '#54d17a',
+  );
 });
 
 test('every generated Radio category is accepted by durable preferences', () => {
@@ -100,26 +115,46 @@ test('cluster badges lead with a readable count and concise dominant category', 
 
 test('Radio globe labels are compact and frequency-first without misreading names', () => {
   assert.equal(
-    radioGlobeLabel({ name: 'La Zeta (Hermosillo) - 93.9 FM - XHHY - Uniradio' }),
+    radioGlobeLabel({
+      name: 'La Zeta (Hermosillo) - 93.9 FM - XHHY - Uniradio',
+    }),
     '93.9 FM — La Zeta',
   );
   assert.equal(
-    radioGlobeLabel({ name: '100.3 The River - WQRV - Meridianville/Huntsville, AL' }),
+    radioGlobeLabel({
+      name: '100.3 The River - WQRV - Meridianville/Huntsville, AL',
+    }),
     '100.3 FM — The River',
   );
-  assert.equal(radioGlobeLabel({ name: "80's New Wave Radio" }), "80's New Wave Radio");
-  assert.equal(radioGlobeLabel({ name: "100 GREATEST OF THE 80'S" }), "100 GREATEST OF THE 80'S");
-  assert.doesNotMatch(radioGlobeLabel({ name: 'Movie Soundtracks Hits Radio @ 1.fm' }), /^1 FM/);
+  assert.equal(
+    radioGlobeLabel({ name: "80's New Wave Radio" }),
+    "80's New Wave Radio",
+  );
+  assert.equal(
+    radioGlobeLabel({ name: "100 GREATEST OF THE 80'S" }),
+    "100 GREATEST OF THE 80'S",
+  );
+  assert.doesNotMatch(
+    radioGlobeLabel({ name: 'Movie Soundtracks Hits Radio @ 1.fm' }),
+    /^1 FM/,
+  );
   assert.equal(
     radioGlobeLabel({ name: '  La   Zeta - 93.9 fm - XHHY  ' }),
     '93.9 FM — La Zeta',
   );
   assert.equal(radioGlobeLabel({ name: '93.9 FM ---' }), '93.9 FM');
-  assert.equal(radioGlobeLabel({ name: 'Radio One 93.9 FM / 94.1 FM' }), '93.9 FM — Radio One');
-  const truncated = radioGlobeLabel({ name: 'Christian Power Praise Dot Net Worldwide Service' });
+  assert.equal(
+    radioGlobeLabel({ name: 'Radio One 93.9 FM / 94.1 FM' }),
+    '93.9 FM — Radio One',
+  );
+  const truncated = radioGlobeLabel({
+    name: 'Christian Power Praise Dot Net Worldwide Service',
+  });
   assert.equal(truncated.length, 30);
   assert.ok(truncated.endsWith('…'));
-  const unicodeTruncated = radioGlobeLabel({ name: `${'a'.repeat(28)}📻 more` });
+  const unicodeTruncated = radioGlobeLabel({
+    name: `${'a'.repeat(28)}📻 more`,
+  });
   assert.equal(unicodeTruncated, `${'a'.repeat(28)}📻…`);
   assert.doesNotMatch(unicodeTruncated, /�/);
 });
@@ -135,27 +170,45 @@ test('Radio ranks and caps cluster candidates before shared-host entry construct
   for (let index = 1; index < selected.length; index += 1) {
     assert.ok(selected[index - 1].stationCount >= selected[index].stationCount);
   }
-  assert.deepEqual(selectRadioClusterCandidates([
-    { id: 'z', stationCount: 5 },
-    { id: 'a', stationCount: 5 },
-  ], 1).map(({ id }) => id), ['a']);
+  assert.deepEqual(
+    selectRadioClusterCandidates(
+      [
+        { id: 'z', stationCount: 5 },
+        { id: 'a', stationCount: 5 },
+      ],
+      1,
+    ).map(({ id }) => id),
+    ['a'],
+  );
 });
 
 test('Radio preserves one-to-one cluster identity across substantial membership churn', () => {
   const previous = [
-    { id: 'stable:north', identityId: 'stable:north', stationIds: ['a', 'b', 'c', 'd'] },
-    { id: 'stable:south', identityId: 'stable:south', stationIds: ['w', 'x', 'y', 'z'] },
+    {
+      id: 'stable:north',
+      identityId: 'stable:north',
+      stationIds: ['a', 'b', 'c', 'd'],
+    },
+    {
+      id: 'stable:south',
+      identityId: 'stable:south',
+      stationIds: ['w', 'x', 'y', 'z'],
+    },
   ];
   const generated = [];
-  const reconciled = reconcileRadioClusterCandidates([
-    { id: 'b:e:4', stationIds: ['a', 'b', 'c', 'e'], text: '4 NEWS' },
-    { id: 'new:weak:3', stationIds: ['d', 'm', 'n'], text: '3 OTHER' },
-    { id: 'x:q:4', stationIds: ['w', 'x', 'y', 'q'], text: '4 MUSIC' },
-  ], previous, (candidate) => {
-    const id = `new:${candidate.id}`;
-    generated.push(id);
-    return id;
-  });
+  const reconciled = reconcileRadioClusterCandidates(
+    [
+      { id: 'b:e:4', stationIds: ['a', 'b', 'c', 'e'], text: '4 NEWS' },
+      { id: 'new:weak:3', stationIds: ['d', 'm', 'n'], text: '3 OTHER' },
+      { id: 'x:q:4', stationIds: ['w', 'x', 'y', 'q'], text: '4 MUSIC' },
+    ],
+    previous,
+    (candidate) => {
+      const id = `new:${candidate.id}`;
+      generated.push(id);
+      return id;
+    },
+  );
   assert.equal(reconciled[0].id, 'stable:north');
   assert.equal(reconciled[0].text, '4 NEWS');
   assert.equal(reconciled[2].id, 'stable:south');
@@ -171,31 +224,48 @@ test('directory refresh retains only identities whose represented stations still
     { id: 'stable:invalid', stationIds: ['x', 'y', 'z'] },
   ];
   const unchangedRefresh = retainRadioClusterIdentitiesForStations(previous, [
-    { id: 'c' }, { id: 'a' }, { id: 'b' }, { id: 'x' }, { id: 'y' }, { id: 'z' },
+    { id: 'c' },
+    { id: 'a' },
+    { id: 'b' },
+    { id: 'x' },
+    { id: 'y' },
+    { id: 'z' },
   ]);
   assert.deepEqual(unchangedRefresh, previous);
   const changedRefresh = retainRadioClusterIdentitiesForStations(previous, [
-    { id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'x' }, { id: 'z' },
+    { id: 'a' },
+    { id: 'b' },
+    { id: 'c' },
+    { id: 'x' },
+    { id: 'z' },
   ]);
-  assert.deepEqual(changedRefresh.map(({ id }) => id), ['stable:unchanged']);
+  assert.deepEqual(
+    changedRefresh.map(({ id }) => id),
+    ['stable:unchanged'],
+  );
 });
 
 test('Radio cluster identity inheritance is deterministic for splits and disjoint replacements', () => {
-  const previous = [{
-    id: 'stable:whole',
-    identityId: 'stable:whole',
-    stationIds: ['a', 'b', 'c', 'd', 'e', 'f'],
-  }];
-  const reconciled = reconcileRadioClusterCandidates([
-    { id: 'a:c:3', stationIds: ['a', 'b', 'c'] },
-    { id: 'd:f:3', stationIds: ['d', 'e', 'f'] },
-    { id: 'x:z:3', stationIds: ['x', 'y', 'z'] },
-  ], previous, (candidate) => `new:${candidate.id}`);
-  assert.deepEqual(reconciled.map(({ id }) => id), [
-    'stable:whole',
-    'new:d:f:3',
-    'new:x:z:3',
-  ]);
+  const previous = [
+    {
+      id: 'stable:whole',
+      identityId: 'stable:whole',
+      stationIds: ['a', 'b', 'c', 'd', 'e', 'f'],
+    },
+  ];
+  const reconciled = reconcileRadioClusterCandidates(
+    [
+      { id: 'a:c:3', stationIds: ['a', 'b', 'c'] },
+      { id: 'd:f:3', stationIds: ['d', 'e', 'f'] },
+      { id: 'x:z:3', stationIds: ['x', 'y', 'z'] },
+    ],
+    previous,
+    (candidate) => `new:${candidate.id}`,
+  );
+  assert.deepEqual(
+    reconciled.map(({ id }) => id),
+    ['stable:whole', 'new:d:f:3', 'new:x:z:3'],
+  );
   assert.equal(new Set(reconciled.map(({ id }) => id)).size, reconciled.length);
 });
 
@@ -206,38 +276,51 @@ test('Radio allocates fresh disjoint cluster identities in canonical membership 
   ];
   const reconcile = (input) => {
     let sequence = 0;
-    return reconcileRadioClusterCandidates(input, [], () => `stable:${++sequence}`);
+    return reconcileRadioClusterCandidates(
+      input,
+      [],
+      () => `stable:${++sequence}`,
+    );
   };
-  const identities = (result) => Object.fromEntries(
-    result.map(({ membershipId, identityId }) => [membershipId, identityId]),
-  );
+  const identities = (result) =>
+    Object.fromEntries(
+      result.map(({ membershipId, identityId }) => [membershipId, identityId]),
+    );
 
   assert.deepEqual(identities(reconcile(current)), {
     'z-membership': 'stable:2',
     'a-membership': 'stable:1',
   });
-  assert.deepEqual(identities(reconcile([...current].reverse())), identities(reconcile(current)));
+  assert.deepEqual(
+    identities(reconcile([...current].reverse())),
+    identities(reconcile(current)),
+  );
 });
 
 test('Radio split competition never falls through from a consumed majority to a historical minority', () => {
   const previous = [
-    { id: 'stable:majority', stationIds: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'] },
+    {
+      id: 'stable:majority',
+      stationIds: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'],
+    },
     { id: 'stable:minority', stationIds: ['x'] },
   ];
   const current = [
     { id: 'strong-child', stationIds: ['a', 'b', 'c', 'd', 'e'] },
     { id: 'later-child', stationIds: ['f', 'g', 'h', 'i', 'x'] },
   ];
-  const reconcile = (currentInput, previousInput) => reconcileRadioClusterCandidates(
-    currentInput,
-    previousInput,
-    (candidate) => `new:${candidate.id}`,
-  );
+  const reconcile = (currentInput, previousInput) =>
+    reconcileRadioClusterCandidates(
+      currentInput,
+      previousInput,
+      (candidate) => `new:${candidate.id}`,
+    );
   const forward = reconcile(current, previous);
   const permuted = reconcile([...current].reverse(), [...previous].reverse());
-  const identities = (result) => Object.fromEntries(
-    result.map(({ membershipId, identityId }) => [membershipId, identityId]),
-  );
+  const identities = (result) =>
+    Object.fromEntries(
+      result.map(({ membershipId, identityId }) => [membershipId, identityId]),
+    );
 
   assert.deepEqual(identities(forward), {
     'strong-child': 'stable:majority',
@@ -248,21 +331,39 @@ test('Radio split competition never falls through from a consumed majority to a 
 
 test('Radio split identities cannot migrate to weaker children to increase inherited count', () => {
   const previous = [
-    { id: 'stable:alpha', stationIds: ['a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'a8', 'a9'] },
+    {
+      id: 'stable:alpha',
+      stationIds: ['a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'a8', 'a9'],
+    },
     { id: 'stable:beta', stationIds: ['b1', 'b2', 'b3', 'b4', 'b5'] },
   ];
-  const reconciled = reconcileRadioClusterCandidates([
-    {
-      id: 'strong-tie',
-      stationIds: ['a1', 'a2', 'a3', 'a4', 'a5', 'b1', 'b2', 'b3', 'b4', 'b5'],
-    },
-    { id: 'weaker-alpha-child', stationIds: ['a6', 'a7', 'a8', 'a9'] },
-  ], previous, (candidate) => `new:${candidate.id}`);
+  const reconciled = reconcileRadioClusterCandidates(
+    [
+      {
+        id: 'strong-tie',
+        stationIds: [
+          'a1',
+          'a2',
+          'a3',
+          'a4',
+          'a5',
+          'b1',
+          'b2',
+          'b3',
+          'b4',
+          'b5',
+        ],
+      },
+      { id: 'weaker-alpha-child', stationIds: ['a6', 'a7', 'a8', 'a9'] },
+    ],
+    previous,
+    (candidate) => `new:${candidate.id}`,
+  );
 
-  assert.deepEqual(reconciled.map(({ id }) => id), [
-    'stable:beta',
-    'new:weaker-alpha-child',
-  ]);
+  assert.deepEqual(
+    reconciled.map(({ id }) => id),
+    ['stable:beta', 'new:weaker-alpha-child'],
+  );
 });
 
 test('Radio duplicate prior records cannot assign one stable identity twice', () => {
@@ -274,23 +375,29 @@ test('Radio duplicate prior records cannot assign one stable identity twice', ()
     { id: 'a-child', stationIds: ['a', 'b'] },
     { id: 'z-child', stationIds: ['c', 'd'] },
   ];
-  const reconcile = (currentInput, previousInput) => reconcileRadioClusterCandidates(
-    currentInput,
-    previousInput,
-    (candidate) => `new:${candidate.id}`,
-  );
+  const reconcile = (currentInput, previousInput) =>
+    reconcileRadioClusterCandidates(
+      currentInput,
+      previousInput,
+      (candidate) => `new:${candidate.id}`,
+    );
   const forward = reconcile(current, previous);
   const permuted = reconcile([...current].reverse(), [...previous].reverse());
-  const identities = (result) => Object.fromEntries(
-    result.map(({ membershipId, identityId }) => [membershipId, identityId]),
-  );
+  const identities = (result) =>
+    Object.fromEntries(
+      result.map(({ membershipId, identityId }) => [membershipId, identityId]),
+    );
 
   assert.deepEqual(identities(forward), {
     'a-child': 'stable:duplicate',
     'z-child': 'new:z-child',
   });
   assert.deepEqual(identities(permuted), identities(forward));
-  assert.equal(forward.filter(({ identityId }) => identityId === 'stable:duplicate').length, 1);
+  assert.equal(
+    forward.filter(({ identityId }) => identityId === 'stable:duplicate')
+      .length,
+    1,
+  );
 });
 
 test('Radio cluster merges preserve the larger contributor over a fully retained minority', () => {
@@ -298,32 +405,43 @@ test('Radio cluster merges preserve the larger contributor over a fully retained
     { id: 'stable:minority', stationIds: ['a', 'b'] },
     { id: 'stable:majority', stationIds: ['c', 'd', 'e', 'f', 'g', 'h'] },
   ];
-  const [merged] = reconcileRadioClusterCandidates([
-    { id: 'merged', stationIds: ['a', 'b', 'c', 'd', 'e'] },
-  ], previous, () => 'new:merged');
+  const [merged] = reconcileRadioClusterCandidates(
+    [{ id: 'merged', stationIds: ['a', 'b', 'c', 'd', 'e'] }],
+    previous,
+    () => 'new:merged',
+  );
 
   assert.equal(merged.id, 'stable:majority');
 });
 
 test('Radio cluster inheritance never discards the greatest low-ratio contributor', () => {
   const previous = [
-    { id: 'stable:four', stationIds: ['a', 'b', 'c', 'd', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w'] },
+    {
+      id: 'stable:four',
+      stationIds: ['a', 'b', 'c', 'd', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w'],
+    },
     { id: 'stable:two', stationIds: ['e', 'f'] },
   ];
-  const [merged] = reconcileRadioClusterCandidates([{
-    id: 'merged',
-    stationIds: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'],
-  }], previous, () => 'new:merged');
+  const [merged] = reconcileRadioClusterCandidates(
+    [
+      {
+        id: 'merged',
+        stationIds: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'],
+      },
+    ],
+    previous,
+    () => 'new:merged',
+  );
 
   assert.equal(merged.id, 'stable:four');
 });
 
 test('Radio cluster inheritance permits a unique one-member overlap', () => {
-  const [reconciled] = reconcileRadioClusterCandidates([
-    { id: 'current', stationIds: ['a', 'x', 'y'] },
-  ], [
-    { id: 'stable:single-overlap', stationIds: ['a', 'b', 'c'] },
-  ], () => 'new:current');
+  const [reconciled] = reconcileRadioClusterCandidates(
+    [{ id: 'current', stationIds: ['a', 'x', 'y'] }],
+    [{ id: 'stable:single-overlap', stationIds: ['a', 'b', 'c'] }],
+    () => 'new:current',
+  );
 
   assert.equal(reconciled.id, 'stable:single-overlap');
 });
@@ -334,8 +452,16 @@ test('Radio cluster majority ties are deterministic across input permutations', 
     { id: 'stable:alpha', stationIds: ['c', 'd', 'y'] },
   ];
   const current = [{ id: 'merged', stationIds: ['a', 'b', 'c', 'd'] }];
-  const forward = reconcileRadioClusterCandidates(current, previous, () => 'new:merged');
-  const reversed = reconcileRadioClusterCandidates(current, [...previous].reverse(), () => 'new:merged');
+  const forward = reconcileRadioClusterCandidates(
+    current,
+    previous,
+    () => 'new:merged',
+  );
+  const reversed = reconcileRadioClusterCandidates(
+    current,
+    [...previous].reverse(),
+    () => 'new:merged',
+  );
 
   assert.equal(forward[0].id, 'stable:alpha');
   assert.equal(reversed[0].id, 'stable:alpha');
@@ -356,8 +482,14 @@ test('active station tags own cluster labels even when overlapping tags have hig
 
 test('filters do not rewrite inputs and overlapping operational tags remain discoverable', () => {
   const before = structuredClone(stations);
-  assert.deepEqual(filterRadioStations(stations, 'public-safety').map((station) => station.id), ['safety']);
-  assert.equal(stationMatchesRadioCategory(stations[0], 'aviation-marine'), true);
+  assert.deepEqual(
+    filterRadioStations(stations, 'public-safety').map((station) => station.id),
+    ['safety'],
+  );
+  assert.equal(
+    stationMatchesRadioCategory(stations[0], 'aviation-marine'),
+    true,
+  );
   assert.deepEqual(stations, before);
 });
 
@@ -383,17 +515,35 @@ test('destroy and re-init reset Radio audio ownership, volume, filter, and telem
       audioInstances.push(this);
     }
 
-    addEventListener(type, listener) { this.listeners.set(type, listener); }
+    addEventListener(type, listener) {
+      this.listeners.set(type, listener);
+    }
     pause() {}
-    play() { return Promise.resolve(); }
-    removeAttribute(name) { if (name === 'src') this.srcRemoved = true; }
+    play() {
+      return Promise.resolve();
+    }
+    removeAttribute(name) {
+      if (name === 'src') this.srcRemoved = true;
+    }
     load() {}
   };
   const viewer = {
     camera: { positionWC: { x: 7_000_000, y: 0, z: 0 } },
-    scene: { canvas: { disableRootEvents: true, onwheel: null, addEventListener() {}, removeEventListener() {} } },
+    scene: {
+      canvas: {
+        disableRootEvents: true,
+        onwheel: null,
+        addEventListener() {},
+        removeEventListener() {},
+      },
+    },
     dataSources: { add() {}, remove() {} },
-    entities: { add(entity) { return entity; }, remove() {} },
+    entities: {
+      add(entity) {
+        return entity;
+      },
+      remove() {},
+    },
   };
 
   radioLayer.destroy();
@@ -401,7 +551,9 @@ test('destroy and re-init reset Radio audio ownership, volume, filter, and telem
     radioLayer.init(viewer);
     radioLayer.enable();
     radioLayer.setLifecyclePresentation({
-      lifecycleState: 'enabled', enabled: true, uncertain: false,
+      lifecycleState: 'enabled',
+      enabled: true,
+      uncertain: false,
     });
     assert.equal(audioInstances.length, 1);
     assert.equal(setRadioVolume(0.25), true);
@@ -424,11 +576,19 @@ test('destroy and re-init reset Radio audio ownership, volume, filter, and telem
     assert.equal(getRadioUIState().effectiveVolume, 0.8);
 
     radioLayer.init(viewer);
-    assert.equal(audioInstances.length, 2, 're-init creates a clean Audio session');
+    assert.equal(
+      audioInstances.length,
+      2,
+      're-init creates a clean Audio session',
+    );
     const nextState = getRadioUIState();
     for (const eventName of ['playing', 'pause', 'waiting', 'error']) {
       oldAudio.listeners.get(eventName)?.();
-      assert.deepEqual(getRadioUIState(), nextState, `discarded ${eventName} callback is inert`);
+      assert.deepEqual(
+        getRadioUIState(),
+        nextState,
+        `discarded ${eventName} callback is inert`,
+      );
     }
   } finally {
     radioLayer.destroy();
@@ -451,14 +611,18 @@ test('late media errors after replacement or Pause cannot mutate the active stat
       audioInstances.push(this);
     }
 
-    addEventListener(type, listener) { this.listeners.set(type, listener); }
+    addEventListener(type, listener) {
+      this.listeners.set(type, listener);
+    }
     pause() {}
     play() {
       this.playCalls += 1;
       this.currentSrc = this.src;
       return new Promise(() => {});
     }
-    removeAttribute(name) { if (name === 'src') this.src = ''; }
+    removeAttribute(name) {
+      if (name === 'src') this.src = '';
+    }
     load() {}
   };
   const stationRows = [
@@ -495,24 +659,37 @@ test('late media errors after replacement or Pause cannot mutate the active stat
       bitrate: 128,
     },
   ];
-  globalThis.fetch = async (url) => String(url).startsWith('/api/radio/click/')
-    ? { ok: true }
-    : {
-      ok: true,
-      json: async () => ({
-        stations: stationRows,
-        updatedAt: new Date().toISOString(),
-        stale: false,
-        degraded: false,
-        acceptedGeneration: 1,
-        catalogInstance: 'qa-instance-a',
-      }),
-    };
+  globalThis.fetch = async (url) =>
+    String(url).startsWith('/api/radio/click/')
+      ? { ok: true }
+      : {
+          ok: true,
+          json: async () => ({
+            stations: stationRows,
+            updatedAt: new Date().toISOString(),
+            stale: false,
+            degraded: false,
+            acceptedGeneration: 1,
+            catalogInstance: 'qa-instance-a',
+          }),
+        };
   const viewer = {
     camera: { positionWC: { x: 7_000_000, y: 0, z: 0 } },
-    scene: { canvas: { disableRootEvents: true, onwheel: null, addEventListener() {}, removeEventListener() {} } },
+    scene: {
+      canvas: {
+        disableRootEvents: true,
+        onwheel: null,
+        addEventListener() {},
+        removeEventListener() {},
+      },
+    },
     dataSources: { add() {}, remove() {} },
-    entities: { add(entity) { return entity; }, remove() {} },
+    entities: {
+      add(entity) {
+        return entity;
+      },
+      remove() {},
+    },
   };
 
   radioLayer.destroy();
@@ -526,18 +703,29 @@ test('late media errors after replacement or Pause cannot mutate the active stat
       uncertain: true,
     });
     assert.equal(radioLayer.getUIState().presentationActive, false);
-    assert.equal(radioLayer.selectStation(stationRows[0].id, {
-      autoplay: true,
-      origin: 'voice',
-    }), false, 'uncertain lifecycle blocks direct station selection');
-    assert.equal(radioLayer.cycleStation(1, {
-      stationIds: stationRows.map(({ id }) => id),
-      autoplay: false,
-      rotate: true,
-    }), false, 'uncertain lifecycle blocks cycling before camera or fallback mutation');
+    assert.equal(
+      radioLayer.selectStation(stationRows[0].id, {
+        autoplay: true,
+        origin: 'voice',
+      }),
+      false,
+      'uncertain lifecycle blocks direct station selection',
+    );
+    assert.equal(
+      radioLayer.cycleStation(1, {
+        stationIds: stationRows.map(({ id }) => id),
+        autoplay: false,
+        rotate: true,
+      }),
+      false,
+      'uncertain lifecycle blocks cycling before camera or fallback mutation',
+    );
     assert.equal(await radioLayer.togglePlayback({ origin: 'user' }), false);
     assert.equal(radioLayer.getUIState().selected, null);
-    assert.equal(audioInstances.reduce((sum, audio) => sum + audio.playCalls, 0), 0);
+    assert.equal(
+      audioInstances.reduce((sum, audio) => sum + audio.playCalls, 0),
+      0,
+    );
     radioLayer.setLifecyclePresentation({
       lifecycleState: 'enabled',
       enabled: true,
@@ -559,28 +747,36 @@ test('late media errors after replacement or Pause cannot mutate the active stat
     const replacementAudio = audioInstances.at(-1);
     assert.notEqual(replacementAudio, primaryAudio);
     assert.equal(radioLayer.getUIState().selected?.id, stationRows[1].id);
-    assert.equal(audioInstances.reduce((sum, audio) => sum + audio.playCalls, 0), 2);
+    assert.equal(
+      audioInstances.reduce((sum, audio) => sum + audio.playCalls, 0),
+      2,
+    );
 
     primaryAudio.currentSrc = '';
     primaryAudio.listeners.get('error')?.();
     assert.equal(radioLayer.getUIState().audioState, 'loading');
     assert.equal(radioLayer.getUIState().selected?.id, stationRows[1].id);
-    assert.equal(audioInstances.reduce((sum, audio) => sum + audio.playCalls, 0), 2);
+    assert.equal(
+      audioInstances.reduce((sum, audio) => sum + audio.playCalls, 0),
+      2,
+    );
 
     const controlEvents = [];
-    const unsubscribeControls = radioLayer.subscribePlaybackControls((event) => {
-      const observed = radioLayer.getUIState();
-      const cleanupResult = radioLayer.stopPlayback({
-        origin: 'voice-cleanup',
-        attemptId: event.attemptId,
-      });
-      controlEvents.push({
-        action: event.action,
-        observedAudioState: observed.audioState,
-        observedStationId: observed.playingStationId,
-        cleanupResult,
-      });
-    });
+    const unsubscribeControls = radioLayer.subscribePlaybackControls(
+      (event) => {
+        const observed = radioLayer.getUIState();
+        const cleanupResult = radioLayer.stopPlayback({
+          origin: 'voice-cleanup',
+          attemptId: event.attemptId,
+        });
+        controlEvents.push({
+          action: event.action,
+          observedAudioState: observed.audioState,
+          observedStationId: observed.playingStationId,
+          cleanupResult,
+        });
+      },
+    );
     assert.equal(radioLayer.pause({ origin: 'user' }), true);
     replacementAudio.listeners.get('error')?.();
     await Promise.resolve();
@@ -590,12 +786,14 @@ test('late media errors after replacement or Pause cannot mutate the active stat
     assert.equal(state.selected?.id, stationRows[1].id);
     assert.equal(state.playingStationId, stationRows[1].id);
     assert.equal(replacementAudio.src, stationRows[1].streamUrl);
-    assert.deepEqual(controlEvents, [{
-      action: 'pause',
-      observedAudioState: 'paused',
-      observedStationId: stationRows[1].id,
-      cleanupResult: false,
-    }]);
+    assert.deepEqual(controlEvents, [
+      {
+        action: 'pause',
+        observedAudioState: 'paused',
+        observedStationId: stationRows[1].id,
+        cleanupResult: false,
+      },
+    ]);
 
     void radioLayer.togglePlayback({ origin: 'user' });
     await Promise.resolve();
@@ -611,7 +809,10 @@ test('late media errors after replacement or Pause cannot mutate the active stat
     assert.equal(radioLayer.getUIState().audioState, 'stopped');
     assert.equal(resumedAudio.src, '');
     unsubscribeControls();
-    assert.equal(audioInstances.reduce((sum, audio) => sum + audio.playCalls, 0), 3);
+    assert.equal(
+      audioInstances.reduce((sum, audio) => sum + audio.playCalls, 0),
+      3,
+    );
   } finally {
     radioLayer.destroy();
     globalThis.fetch = originalFetch;
@@ -641,21 +842,37 @@ test('unusable directory responses preserve warm client state atomically', async
   };
   const viewer = {
     camera: { positionWC: { x: 7_000_000, y: 0, z: 0 } },
-    scene: { canvas: { disableRootEvents: true, onwheel: null, addEventListener() {}, removeEventListener() {} } },
+    scene: {
+      canvas: {
+        disableRootEvents: true,
+        onwheel: null,
+        addEventListener() {},
+        removeEventListener() {},
+      },
+    },
     dataSources: { add() {}, remove() {} },
-    entities: { add(entity) { return entity; }, remove() {} },
+    entities: {
+      add(entity) {
+        return entity;
+      },
+      remove() {},
+    },
   };
   radioLayer.destroy();
   try {
     radioLayer.init(viewer);
-    globalThis.fetch = async () => new Response(JSON.stringify({
-      stations: [station],
-      stale: false,
-      degraded: false,
-      acceptedGeneration: 1,
-      catalogInstance: 'qa-instance-a',
-      updatedAt: now,
-    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          stations: [station],
+          stale: false,
+          degraded: false,
+          acceptedGeneration: 1,
+          catalogInstance: 'qa-instance-a',
+          updatedAt: now,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
     radioLayer.enable();
     await radioLayer.update();
     assert.equal(getRadioUIState().stationCount, 1);
@@ -663,13 +880,18 @@ test('unusable directory responses preserve warm client state atomically', async
     const acceptedSnapshot = getRadioAcceptedCatalogSnapshot();
     assert.equal(acceptedSnapshot.generation, 1);
     assert.equal(acceptedSnapshot.stations[0].id, station.id);
-    assert.equal(acceptedSnapshot.stations[0].metadataTrust, 'untrusted-community');
+    assert.equal(
+      acceptedSnapshot.stations[0].metadataTrust,
+      'untrusted-community',
+    );
     assert.equal(Object.isFrozen(acceptedSnapshot), true);
     assert.equal(Object.isFrozen(acceptedSnapshot.stations), true);
     assert.equal(Object.isFrozen(acceptedSnapshot.stations[0]), true);
     assert.equal(Object.isFrozen(acceptedSnapshot.stations[0].tags), true);
     assert.equal(Object.isFrozen(acceptedSnapshot.stations[0].languages), true);
-    assert.throws(() => { acceptedSnapshot.stations[0].name = 'mutated'; }, TypeError);
+    assert.throws(() => {
+      acceptedSnapshot.stations[0].name = 'mutated';
+    }, TypeError);
     radioLayer.selectStation(station.id, { autoplay: false, focus: false });
 
     const replacement = {
@@ -678,13 +900,26 @@ test('unusable directory responses preserve warm client state atomically', async
       name: 'Partial Replacement',
     };
     for (const body of [
-      { stations: [replacement], stale: false, degraded: true, acceptedGeneration: 1, updatedAt: now },
-      { stations: [replacement], stale: true, degraded: true, acceptedGeneration: 1, updatedAt: now },
+      {
+        stations: [replacement],
+        stale: false,
+        degraded: true,
+        acceptedGeneration: 1,
+        updatedAt: now,
+      },
+      {
+        stations: [replacement],
+        stale: true,
+        degraded: true,
+        acceptedGeneration: 1,
+        updatedAt: now,
+      },
     ]) {
-      globalThis.fetch = async () => new Response(JSON.stringify(body), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      globalThis.fetch = async () =>
+        new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
       await radioLayer.update();
       const preserved = getRadioUIState();
       assert.equal(preserved.stationCount, 1);
@@ -698,14 +933,25 @@ test('unusable directory responses preserve warm client state atomically', async
 
     for (const body of [
       { stations: {} },
-      { stations: [station, { id: 'malformed' }], stale: false, degraded: false, updatedAt: now },
-      { stations: [station], stale: false, degraded: false, updatedAt: 'not-a-date' },
+      {
+        stations: [station, { id: 'malformed' }],
+        stale: false,
+        degraded: false,
+        updatedAt: now,
+      },
+      {
+        stations: [station],
+        stale: false,
+        degraded: false,
+        updatedAt: 'not-a-date',
+      },
       { stations: [station], stale: 'false', degraded: false, updatedAt: now },
     ]) {
-      globalThis.fetch = async () => new Response(JSON.stringify(body), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      globalThis.fetch = async () =>
+        new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
       await radioLayer.update();
       assert.equal(getRadioUIState().stationCount, 1);
       assert.equal(getRadioUIState().updatedAt, now);
@@ -722,9 +968,21 @@ test('tuner drag keeps one immutable catalog resolution through refresh and rele
   const originalFetch = globalThis.fetch;
   const viewer = {
     camera: { positionWC: { x: 7_000_000, y: 0, z: 0 } },
-    scene: { canvas: { disableRootEvents: true, onwheel: null, addEventListener() {}, removeEventListener() {} } },
+    scene: {
+      canvas: {
+        disableRootEvents: true,
+        onwheel: null,
+        addEventListener() {},
+        removeEventListener() {},
+      },
+    },
     dataSources: { add() {}, remove() {} },
-    entities: { add(entity) { return entity; }, remove() {} },
+    entities: {
+      add(entity) {
+        return entity;
+      },
+      remove() {},
+    },
   };
   const stationA = {
     id: '00000000-0000-4000-8000-000000000041',
@@ -753,15 +1011,21 @@ test('tuner drag keeps one immutable catalog resolution through refresh and rele
     name: 'Generation C',
   };
   const publish = async (stationOrStations, acceptedGeneration) => {
-    const stations = Array.isArray(stationOrStations) ? stationOrStations : [stationOrStations];
-    globalThis.fetch = async () => new Response(JSON.stringify({
-      stations,
-      stale: false,
-      degraded: false,
-      acceptedGeneration,
-      catalogInstance: 'qa-instance-a',
-      updatedAt: new Date().toISOString(),
-    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    const stations = Array.isArray(stationOrStations)
+      ? stationOrStations
+      : [stationOrStations];
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          stations,
+          stale: false,
+          degraded: false,
+          acceptedGeneration,
+          catalogInstance: 'qa-instance-a',
+          updatedAt: new Date().toISOString(),
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
     await radioLayer.update();
   };
 
@@ -771,12 +1035,17 @@ test('tuner drag keeps one immutable catalog resolution through refresh and rele
     radioLayer.enable();
     await publish(stationA, 1);
     assert.equal(radioLayer.beginTuning(), true);
-    assert.equal(radioLayer.previewTuningStation(stationA.id, { rotate: false }), true);
+    assert.equal(
+      radioLayer.previewTuningStation(stationA.id, { rotate: false }),
+      true,
+    );
     assert.equal(getRadioUIState().tuningCatalogGeneration, 1);
 
     await publish(stationB, 2);
     assert.equal(getRadioUIState().tuningPreviewStationId, stationA.id);
-    const changed = radioLayer.commitTuningStation(stationA.id, { origin: 'user' });
+    const changed = radioLayer.commitTuningStation(stationA.id, {
+      origin: 'user',
+    });
     assert.deepEqual(changed, {
       ok: false,
       reason: 'station-unavailable',
@@ -787,39 +1056,65 @@ test('tuner drag keeps one immutable catalog resolution through refresh and rele
     assert.equal(getRadioUIState().tuningUnavailableStationId, stationA.id);
 
     assert.equal(radioLayer.beginTuning(), true);
-    assert.equal(radioLayer.previewTuningStation(stationB.id, { rotate: false }), true);
+    assert.equal(
+      radioLayer.previewTuningStation(stationB.id, { rotate: false }),
+      true,
+    );
     await publish(stationB, 3);
-    const unchanged = radioLayer.commitTuningStation(stationB.id, { origin: 'user' });
+    const unchanged = radioLayer.commitTuningStation(stationB.id, {
+      origin: 'user',
+    });
     assert.equal(unchanged.ok, true);
     assert.equal(unchanged.generation, 2);
     assert.equal(getRadioUIState().selected?.name, 'Generation B');
 
     assert.equal(radioLayer.beginTuning(), true);
-    assert.equal(radioLayer.previewTuningStation(stationB.id, { rotate: false }), true);
+    assert.equal(
+      radioLayer.previewTuningStation(stationB.id, { rotate: false }),
+      true,
+    );
     await publish(stationC, 4);
-    const removed = radioLayer.commitTuningStation(stationB.id, { origin: 'user' });
+    const removed = radioLayer.commitTuningStation(stationB.id, {
+      origin: 'user',
+    });
     assert.equal(removed.ok, false);
     assert.equal(removed.reason, 'station-unavailable');
     assert.equal(removed.stationId, stationB.id);
     assert.notEqual(getRadioUIState().selected?.id, stationC.id);
 
     await publish([stationA, stationC], 5);
-    assert.equal(radioLayer.selectStation(stationA.id, { autoplay: false, focus: false }), true);
+    assert.equal(
+      radioLayer.selectStation(stationA.id, { autoplay: false, focus: false }),
+      true,
+    );
     assert.equal(radioLayer.beginTuning(), true);
-    assert.equal(radioLayer.previewTuningStation(stationC.id, { rotate: false }), true);
+    assert.equal(
+      radioLayer.previewTuningStation(stationC.id, { rotate: false }),
+      true,
+    );
     await publish([stationA, { ...stationC, name: 'Changed target' }], 6);
-    const priorSelectionMismatch = radioLayer.commitTuningStation(stationC.id, { origin: 'user' });
+    const priorSelectionMismatch = radioLayer.commitTuningStation(stationC.id, {
+      origin: 'user',
+    });
     assert.equal(priorSelectionMismatch.ok, false);
     assert.equal(priorSelectionMismatch.reason, 'station-unavailable');
     assert.equal(getRadioUIState().selected, null);
     assert.equal(getRadioUIState().tuningUnavailableStationId, stationC.id);
 
     await publish([stationB, stationC], 7);
-    assert.equal(radioLayer.selectStation(stationB.id, { autoplay: false, focus: false }), true);
+    assert.equal(
+      radioLayer.selectStation(stationB.id, { autoplay: false, focus: false }),
+      true,
+    );
     assert.equal(radioLayer.beginTuning(), true);
-    assert.equal(radioLayer.previewTuningStation(stationB.id, { rotate: false }), true);
+    assert.equal(
+      radioLayer.previewTuningStation(stationB.id, { rotate: false }),
+      true,
+    );
     await publish([{ ...stationB, name: 'Same ID replacement' }, stationC], 8);
-    const sameIdMismatch = radioLayer.commitTuningStation(stationB.id, { origin: 'user' });
+    const sameIdMismatch = radioLayer.commitTuningStation(stationB.id, {
+      origin: 'user',
+    });
     assert.equal(sameIdMismatch.ok, false);
     assert.equal(sameIdMismatch.reason, 'station-unavailable');
     assert.equal(getRadioUIState().selected, null);
@@ -879,28 +1174,48 @@ test('failed exact tuner release cannot consume a stale playback fallback', asyn
     play() {
       playUrls.push(this.src);
       if (this.src === stationRows[0].streamUrl) {
-        return Promise.reject(new DOMException('Exact target unavailable', 'NotSupportedError'));
+        return Promise.reject(
+          new DOMException('Exact target unavailable', 'NotSupportedError'),
+        );
       }
       return Promise.resolve();
     }
-    removeAttribute() { this.src = ''; }
+    removeAttribute() {
+      this.src = '';
+    }
     load() {}
   };
-  globalThis.fetch = async (url) => String(url).startsWith('/api/radio/click/')
-    ? { ok: true }
-    : new Response(JSON.stringify({
-      stations: stationRows,
-      stale: false,
-      degraded: false,
-      acceptedGeneration: 1,
-      catalogInstance: 'qa-instance-a',
-      updatedAt: new Date().toISOString(),
-    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  globalThis.fetch = async (url) =>
+    String(url).startsWith('/api/radio/click/')
+      ? { ok: true }
+      : new Response(
+          JSON.stringify({
+            stations: stationRows,
+            stale: false,
+            degraded: false,
+            acceptedGeneration: 1,
+            catalogInstance: 'qa-instance-a',
+            updatedAt: new Date().toISOString(),
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
   const viewer = {
     camera: { positionWC: { x: 7_000_000, y: 0, z: 0 } },
-    scene: { canvas: { disableRootEvents: true, onwheel: null, addEventListener() {}, removeEventListener() {} } },
+    scene: {
+      canvas: {
+        disableRootEvents: true,
+        onwheel: null,
+        addEventListener() {},
+        removeEventListener() {},
+      },
+    },
     dataSources: { add() {}, remove() {} },
-    entities: { add(entity) { return entity; }, remove() {} },
+    entities: {
+      add(entity) {
+        return entity;
+      },
+      remove() {},
+    },
   };
 
   radioLayer.destroy();
@@ -908,14 +1223,27 @@ test('failed exact tuner release cannot consume a stale playback fallback', asyn
     radioLayer.init(viewer);
     radioLayer.enable();
     await radioLayer.update();
-    assert.equal(radioLayer.selectStation(stationRows[0].id, { autoplay: false }), true);
-    assert.equal(radioLayer.cycleStation(1, {
-      stationIds: stationRows.map(({ id }) => id),
-      autoplay: false,
-    }), true, 'non-playing cycle creates the stale-fallback precondition');
+    assert.equal(
+      radioLayer.selectStation(stationRows[0].id, { autoplay: false }),
+      true,
+    );
+    assert.equal(
+      radioLayer.cycleStation(1, {
+        stationIds: stationRows.map(({ id }) => id),
+        autoplay: false,
+      }),
+      true,
+      'non-playing cycle creates the stale-fallback precondition',
+    );
     assert.equal(radioLayer.beginTuning(), true);
-    assert.equal(radioLayer.previewTuningStation(stationRows[0].id, { rotate: false }), true);
-    assert.equal(radioLayer.commitTuningStation(stationRows[0].id, { origin: 'user' }).ok, true);
+    assert.equal(
+      radioLayer.previewTuningStation(stationRows[0].id, { rotate: false }),
+      true,
+    );
+    assert.equal(
+      radioLayer.commitTuningStation(stationRows[0].id, { origin: 'user' }).ok,
+      true,
+    );
     await new Promise((resolve) => setTimeout(resolve));
     const state = radioLayer.getUIState();
     assert.deepEqual(playUrls, [stationRows[0].streamUrl]);
@@ -944,23 +1272,38 @@ test('tuner cancellation restores the frozen start marker after catalog removal'
 
     addEventListener() {}
     pause() {}
-    play() { playCalls += 1; return Promise.resolve(); }
+    play() {
+      playCalls += 1;
+      return Promise.resolve();
+    }
     removeAttribute() {}
     load() {}
   };
   const viewer = {
     camera: {
       positionWC: { x: 7_000_000, y: 0, z: 0 },
-      flyTo() { flyToCalls += 1; },
+      flyTo() {
+        flyToCalls += 1;
+      },
     },
     scene: {
-      canvas: { disableRootEvents: true, onwheel: null, addEventListener() {}, removeEventListener() {} },
+      canvas: {
+        disableRootEvents: true,
+        onwheel: null,
+        addEventListener() {},
+        removeEventListener() {},
+      },
       requestRender() {},
     },
     dataSources: { add() {}, remove() {} },
     entities: {
-      add(entity) { selectedEntities.set(entity.id, entity); return entity; },
-      remove(entity) { return selectedEntities.delete(entity?.id); },
+      add(entity) {
+        selectedEntities.set(entity.id, entity);
+        return entity;
+      },
+      remove(entity) {
+        return selectedEntities.delete(entity?.id);
+      },
     },
   };
   const stationA = {
@@ -988,14 +1331,18 @@ test('tuner cancellation restores the frozen start marker after catalog removal'
     streamUrl: 'https://radio.example.com/preview.mp3',
   };
   const publish = async (rows, acceptedGeneration) => {
-    globalThis.fetch = async () => new Response(JSON.stringify({
-      stations: rows,
-      stale: false,
-      degraded: false,
-      acceptedGeneration,
-      catalogInstance: 'qa-instance-a',
-      updatedAt: new Date().toISOString(),
-    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          stations: rows,
+          stale: false,
+          degraded: false,
+          acceptedGeneration,
+          catalogInstance: 'qa-instance-a',
+          updatedAt: new Date().toISOString(),
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
     await radioLayer.update();
   };
 
@@ -1004,27 +1351,47 @@ test('tuner cancellation restores the frozen start marker after catalog removal'
     radioLayer.init(viewer);
     radioLayer.enable();
     radioLayer.setLifecyclePresentation({
-      lifecycleState: 'enabled', enabled: true, uncertain: false,
+      lifecycleState: 'enabled',
+      enabled: true,
+      uncertain: false,
     });
     let nextGeneration = 1;
     const restoreRemovedStartMarker = async () => {
       await publish([stationA, stationB], nextGeneration);
       nextGeneration += 1;
-      assert.equal(radioLayer.selectStation(stationA.id, { autoplay: false, focus: false }), true);
+      assert.equal(
+        radioLayer.selectStation(stationA.id, {
+          autoplay: false,
+          focus: false,
+        }),
+        true,
+      );
       const startMarker = selectedEntities.get(`radio:selected:${stationA.id}`);
       assert.ok(startMarker);
       assert.equal(radioLayer.beginTuning(), true);
-      assert.equal(radioLayer.previewTuningStation(stationB.id, { rotate: false }), true);
+      assert.equal(
+        radioLayer.previewTuningStation(stationB.id, { rotate: false }),
+        true,
+      );
       await publish([stationB], nextGeneration);
       nextGeneration += 1;
       assert.equal(getRadioUIState().selected, null);
       assert.equal(radioLayer.cancelTuning(), true);
-      const restoredMarker = selectedEntities.get(`radio:selected:${stationA.id}`);
-      assert.ok(restoredMarker, 'the frozen start marker remains visible after cancellation');
+      const restoredMarker = selectedEntities.get(
+        `radio:selected:${stationA.id}`,
+      );
+      assert.ok(
+        restoredMarker,
+        'the frozen start marker remains visible after cancellation',
+      );
       assert.deepEqual(restoredMarker.position, startMarker.position);
       assert.equal(getRadioUIState().tuningRestoredStationId, stationA.id);
       assert.equal(getRadioUIState().tuningActive, false);
-      assert.equal(getRadioUIState().selected, null, 'stale marker never becomes playback authority');
+      assert.equal(
+        getRadioUIState().selected,
+        null,
+        'stale marker never becomes playback authority',
+      );
       assert.equal(playCalls, 0);
       assert.equal(flyToCalls, 0);
       return radioLayer.getAcceptedCatalogSnapshot();
@@ -1046,7 +1413,10 @@ test('tuner cancellation restores the frozen start marker after catalog removal'
     assert.equal(getRadioUIState().filter, 'news');
     assert.equal(getRadioUIState().tuningRestoredStationId, null);
     assert.equal(selectedEntities.has(`radio:selected:${stationA.id}`), false);
-    assert.equal(radioLayer.getAcceptedCatalogSnapshot(), changedFilterSnapshot);
+    assert.equal(
+      radioLayer.getAcceptedCatalogSnapshot(),
+      changedFilterSnapshot,
+    );
     assert.equal(getRadioUIState().selected, null);
     assert.equal(playCalls, 0);
     assert.equal(flyToCalls, 0);
@@ -1059,11 +1429,17 @@ test('tuner cancellation restores the frozen start marker after catalog removal'
       'the next accepted equal-generation refresh clears the presentation-only marker',
     );
     assert.equal(selectedEntities.has(`radio:selected:${stationA.id}`), false);
-    assert.equal(radioLayer.getAcceptedCatalogSnapshot(), equalGenerationSnapshot);
+    assert.equal(
+      radioLayer.getAcceptedCatalogSnapshot(),
+      equalGenerationSnapshot,
+    );
     assert.equal(playCalls, 0);
     assert.equal(flyToCalls, 0);
 
-    assert.equal(radioLayer.selectStation(stationB.id, { autoplay: false, focus: false }), true);
+    assert.equal(
+      radioLayer.selectStation(stationB.id, { autoplay: false, focus: false }),
+      true,
+    );
     assert.equal(getRadioUIState().tuningRestoredStationId, null);
     assert.equal(selectedEntities.has(`radio:selected:${stationA.id}`), false);
   } finally {
@@ -1076,35 +1452,53 @@ test('tuner cancellation restores the frozen start marker after catalog removal'
 
 test('Radio public tuner, filter, and resume mutations require certain enabled lifecycle authority', async () => {
   const originalFetch = globalThis.fetch;
-  const stationRows = [{
-    id: '00000000-0000-4000-8000-000000000061',
-    name: 'Lifecycle station',
-    lat: 30,
-    lon: -97,
-    streamUrl: 'https://radio.example.com/lifecycle.mp3',
-    homepage: null,
-    tags: ['news'],
-    languages: ['English'],
-    state: 'Texas',
-    country: 'United States',
-    countryCode: 'US',
-    metadataTrust: 'untrusted-community',
-    codec: 'MP3',
-    bitrate: 128,
-  }];
-  globalThis.fetch = async () => new Response(JSON.stringify({
-    stations: stationRows,
-    stale: false,
-    degraded: false,
-    acceptedGeneration: 1,
-    catalogInstance: 'qa-instance-a',
-    updatedAt: new Date().toISOString(),
-  }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  const stationRows = [
+    {
+      id: '00000000-0000-4000-8000-000000000061',
+      name: 'Lifecycle station',
+      lat: 30,
+      lon: -97,
+      streamUrl: 'https://radio.example.com/lifecycle.mp3',
+      homepage: null,
+      tags: ['news'],
+      languages: ['English'],
+      state: 'Texas',
+      country: 'United States',
+      countryCode: 'US',
+      metadataTrust: 'untrusted-community',
+      codec: 'MP3',
+      bitrate: 128,
+    },
+  ];
+  globalThis.fetch = async () =>
+    new Response(
+      JSON.stringify({
+        stations: stationRows,
+        stale: false,
+        degraded: false,
+        acceptedGeneration: 1,
+        catalogInstance: 'qa-instance-a',
+        updatedAt: new Date().toISOString(),
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    );
   const viewer = {
     camera: { positionWC: { x: 7_000_000, y: 0, z: 0 } },
-    scene: { canvas: { disableRootEvents: true, onwheel: null, addEventListener() {}, removeEventListener() {} } },
+    scene: {
+      canvas: {
+        disableRootEvents: true,
+        onwheel: null,
+        addEventListener() {},
+        removeEventListener() {},
+      },
+    },
     dataSources: { add() {}, remove() {} },
-    entities: { add(entity) { return entity; }, remove() {} },
+    entities: {
+      add(entity) {
+        return entity;
+      },
+      remove() {},
+    },
   };
   viewer.scene.requestRender = () => {};
 
@@ -1114,7 +1508,9 @@ test('Radio public tuner, filter, and resume mutations require certain enabled l
     radioLayer.enable();
     await radioLayer.update();
     radioLayer.setLifecyclePresentation({
-      lifecycleState: 'enabled', enabled: true, uncertain: false,
+      lifecycleState: 'enabled',
+      enabled: true,
+      uncertain: false,
     });
     assert.equal(radioLayer.beginTuning(), true);
     assert.equal(radioLayer.setTuningStatic(false), true);
@@ -1127,18 +1523,36 @@ test('Radio public tuner, filter, and resume mutations require certain enabled l
     ]) {
       radioLayer.setLifecyclePresentation(presentation);
       const before = getRadioUIState();
-      assert.equal(radioLayer.setTuningStatic(true), false, presentation.lifecycleState);
-      assert.equal(radioLayer.setFilter('news'), false, presentation.lifecycleState);
-      assert.equal(await radioLayer.togglePlayback({ origin: 'user' }), false, presentation.lifecycleState);
+      assert.equal(
+        radioLayer.setTuningStatic(true),
+        false,
+        presentation.lifecycleState,
+      );
+      assert.equal(
+        radioLayer.setFilter('news'),
+        false,
+        presentation.lifecycleState,
+      );
+      assert.equal(
+        await radioLayer.togglePlayback({ origin: 'user' }),
+        false,
+        presentation.lifecycleState,
+      );
       const after = getRadioUIState();
-      assert.equal(after.tuningStatic, before.tuningStatic, presentation.lifecycleState);
+      assert.equal(
+        after.tuningStatic,
+        before.tuningStatic,
+        presentation.lifecycleState,
+      );
       assert.equal(after.filter, before.filter, presentation.lifecycleState);
       assert.equal(after.selected, null, presentation.lifecycleState);
       assert.equal(after.audioState, 'stopped', presentation.lifecycleState);
     }
 
     radioLayer.setLifecyclePresentation({
-      lifecycleState: 'enabled', enabled: true, uncertain: false,
+      lifecycleState: 'enabled',
+      enabled: true,
+      uncertain: false,
     });
     assert.equal(radioLayer.setTuningStatic(true), true);
     assert.equal(getRadioUIState().tuningStatic, true);
@@ -1155,9 +1569,21 @@ test('tuner refuses a degraded fallback that has no accepted catalog generation'
   const originalFetch = globalThis.fetch;
   const viewer = {
     camera: { positionWC: { x: 7_000_000, y: 0, z: 0 } },
-    scene: { canvas: { disableRootEvents: true, onwheel: null, addEventListener() {}, removeEventListener() {} } },
+    scene: {
+      canvas: {
+        disableRootEvents: true,
+        onwheel: null,
+        addEventListener() {},
+        removeEventListener() {},
+      },
+    },
     dataSources: { add() {}, remove() {} },
-    entities: { add(entity) { return entity; }, remove() {} },
+    entities: {
+      add(entity) {
+        return entity;
+      },
+      remove() {},
+    },
   };
   const station = {
     id: '00000000-0000-4000-8000-000000000043',
@@ -1178,18 +1604,26 @@ test('tuner refuses a degraded fallback that has no accepted catalog generation'
 
   radioLayer.destroy();
   try {
-    globalThis.fetch = async () => new Response(JSON.stringify({
-      stations: [station],
-      stale: false,
-      degraded: true,
-      acceptedGeneration: null,
-      updatedAt: new Date().toISOString(),
-    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          stations: [station],
+          stale: false,
+          degraded: true,
+          acceptedGeneration: null,
+          updatedAt: new Date().toISOString(),
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
     radioLayer.init(viewer);
     radioLayer.enable();
     await radioLayer.update();
 
-    assert.equal(getRadioUIState().stationCount, 1, 'fallback remains visible outside the tuner');
+    assert.equal(
+      getRadioUIState().stationCount,
+      1,
+      'fallback remains visible outside the tuner',
+    );
     assert.equal(getRadioUIState().acceptedCatalogGeneration, null);
     assert.deepEqual(radioLayer.getTunerStations(), []);
     assert.equal(radioLayer.beginTuning(), false);
@@ -1223,19 +1657,39 @@ test('accepted snapshots allowlist station fields and never regress generation i
   };
   const viewer = {
     camera: { positionWC: { x: 7_000_000, y: 0, z: 0 } },
-    scene: { canvas: { disableRootEvents: true, onwheel: null, addEventListener() {}, removeEventListener() {} } },
+    scene: {
+      canvas: {
+        disableRootEvents: true,
+        onwheel: null,
+        addEventListener() {},
+        removeEventListener() {},
+      },
+    },
     dataSources: { add() {}, remove() {} },
-    entities: { add(entity) { return entity; }, remove() {} },
+    entities: {
+      add(entity) {
+        return entity;
+      },
+      remove() {},
+    },
   };
-  const serve = (stations, acceptedGeneration, catalogInstance = 'qa-instance-a') => {
-    globalThis.fetch = async () => new Response(JSON.stringify({
-      stations,
-      stale: false,
-      degraded: false,
-      acceptedGeneration,
-      catalogInstance,
-      updatedAt: now,
-    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  const serve = (
+    stations,
+    acceptedGeneration,
+    catalogInstance = 'qa-instance-a',
+  ) => {
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          stations,
+          stale: false,
+          degraded: false,
+          acceptedGeneration,
+          catalogInstance,
+          updatedAt: now,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
   };
 
   radioLayer.destroy();
@@ -1324,9 +1778,21 @@ test('update abort, destroy, and re-init invalidate the prior session and reset 
   let requestSignal = null;
   const viewer = {
     camera: { positionWC: { x: 7_000_000, y: 0, z: 0 } },
-    scene: { canvas: { disableRootEvents: true, onwheel: null, addEventListener() {}, removeEventListener() {} } },
+    scene: {
+      canvas: {
+        disableRootEvents: true,
+        onwheel: null,
+        addEventListener() {},
+        removeEventListener() {},
+      },
+    },
     dataSources: { add() {}, remove() {} },
-    entities: { add(entity) { return entity; }, remove() {} },
+    entities: {
+      add(entity) {
+        return entity;
+      },
+      remove() {},
+    },
   };
   const lateStation = {
     id: '00000000-0000-4000-8000-000000000099',
@@ -1349,7 +1815,9 @@ test('update abort, destroy, and re-init invalidate the prior session and reset 
   try {
     globalThis.fetch = (_url, options) => {
       requestSignal = options.signal;
-      return new Promise((resolve) => { resolveFetch = resolve; });
+      return new Promise((resolve) => {
+        resolveFetch = resolve;
+      });
     };
     radioLayer.init(viewer);
     radioLayer.enable();
@@ -1362,45 +1830,57 @@ test('update abort, destroy, and re-init invalidate the prior session and reset 
     radioLayer.destroy();
     radioLayer.init(viewer);
     const cleanState = getRadioUIState();
-    assert.deepEqual({
-      enabled: cleanState.enabled,
-      loading: cleanState.loading,
-      stale: cleanState.stale,
-      degraded: cleanState.degraded,
-      error: cleanState.error,
-      updatedAt: cleanState.updatedAt,
-      stationCount: cleanState.stationCount,
-      selected: cleanState.selected,
-      audioState: cleanState.audioState,
-      voiceDucked: cleanState.voiceDucked,
-      voiceRestoring: cleanState.voiceRestoring,
-      acceptedCatalogGeneration: cleanState.acceptedCatalogGeneration,
-    }, {
-      enabled: false,
-      loading: false,
-      stale: false,
-      degraded: false,
-      error: null,
-      updatedAt: null,
-      stationCount: 0,
-      selected: null,
-      audioState: 'stopped',
-      voiceDucked: false,
-      voiceRestoring: false,
-      acceptedCatalogGeneration: null,
-    });
+    assert.deepEqual(
+      {
+        enabled: cleanState.enabled,
+        loading: cleanState.loading,
+        stale: cleanState.stale,
+        degraded: cleanState.degraded,
+        error: cleanState.error,
+        updatedAt: cleanState.updatedAt,
+        stationCount: cleanState.stationCount,
+        selected: cleanState.selected,
+        audioState: cleanState.audioState,
+        voiceDucked: cleanState.voiceDucked,
+        voiceRestoring: cleanState.voiceRestoring,
+        acceptedCatalogGeneration: cleanState.acceptedCatalogGeneration,
+      },
+      {
+        enabled: false,
+        loading: false,
+        stale: false,
+        degraded: false,
+        error: null,
+        updatedAt: null,
+        stationCount: 0,
+        selected: null,
+        audioState: 'stopped',
+        voiceDucked: false,
+        voiceRestoring: false,
+        acceptedCatalogGeneration: null,
+      },
+    );
     assert.equal(getRadioAcceptedCatalogSnapshot().generation, null);
 
-    resolveFetch(new Response(JSON.stringify({
-      stations: [lateStation],
-      stale: false,
-      degraded: false,
-      acceptedGeneration: 99,
-      catalogInstance: 'qa-instance-a',
-      updatedAt: new Date().toISOString(),
-    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    resolveFetch(
+      new Response(
+        JSON.stringify({
+          stations: [lateStation],
+          stale: false,
+          degraded: false,
+          acceptedGeneration: 99,
+          catalogInstance: 'qa-instance-a',
+          updatedAt: new Date().toISOString(),
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
     await pending;
-    assert.deepEqual(getRadioUIState(), cleanState, 'retired update completion is inert after re-init');
+    assert.deepEqual(
+      getRadioUIState(),
+      cleanState,
+      'retired update completion is inert after re-init',
+    );
   } finally {
     globalThis.fetch = originalFetch;
     radioLayer.destroy();
@@ -1413,48 +1893,107 @@ test('All is the initial Radio filter', () => {
 });
 
 test('local viewport ranking chooses geographic distance without a language override', () => {
-  const ranked = rankRadioStationsForViewport([
-    { id: 'english-far', lat: 30.5, lon: -97.7, languages: ['English'] },
-    { id: 'spanish-near', lat: 30.2673, lon: -97.7430, languages: ['Spanish'] },
-    { id: 'english-near', lat: 30.28, lon: -97.74, languages: ['en'] },
-  ], { lat: 30.2672, lon: -97.7431 });
-  assert.deepEqual(ranked.map((station) => station.id), ['spanish-near', 'english-near', 'english-far']);
+  const ranked = rankRadioStationsForViewport(
+    [
+      { id: 'english-far', lat: 30.5, lon: -97.7, languages: ['English'] },
+      {
+        id: 'spanish-near',
+        lat: 30.2673,
+        lon: -97.743,
+        languages: ['Spanish'],
+      },
+      { id: 'english-near', lat: 30.28, lon: -97.74, languages: ['en'] },
+    ],
+    { lat: 30.2672, lon: -97.7431 },
+  );
+  assert.deepEqual(
+    ranked.map((station) => station.id),
+    ['spanish-near', 'english-near', 'english-far'],
+  );
 });
 
 test('global viewport ranking prefers English stations, then distance', () => {
-  const ranked = rankRadioStationsForViewport([
-    { id: 'spanish-nearest', lat: 0, lon: 0, languages: ['Spanish'] },
-    { id: 'english-far', lat: 15, lon: 0, languages: ['English'] },
-    { id: 'english-near', lat: 5, lon: 0, languages: ['eng'] },
-  ], { lat: 0, lon: 0 }, { preferEnglish: true });
-  assert.deepEqual(ranked.map((station) => station.id), ['english-near', 'english-far', 'spanish-nearest']);
+  const ranked = rankRadioStationsForViewport(
+    [
+      { id: 'spanish-nearest', lat: 0, lon: 0, languages: ['Spanish'] },
+      { id: 'english-far', lat: 15, lon: 0, languages: ['English'] },
+      { id: 'english-near', lat: 5, lon: 0, languages: ['eng'] },
+    ],
+    { lat: 0, lon: 0 },
+    { preferEnglish: true },
+  );
+  assert.deepEqual(
+    ranked.map((station) => station.id),
+    ['english-near', 'english-far', 'spanish-nearest'],
+  );
   assert.equal(isEnglishRadioStation(ranked[0]), true);
 });
 
 test('explicit Radio requests combine category, country, station name, and distance', () => {
   const rows = [
-    { id: 'music-austin', name: 'Austin Music', tags: ['music'], countryCode: 'US', country: 'United States', lat: 30.26, lon: -97.74 },
-    { id: 'news-dallas', name: 'Texas News', tags: ['news'], countryCode: 'US', country: 'United States', lat: 32.77, lon: -96.79 },
-    { id: 'news-austin', name: 'Austin Public News', tags: ['news'], countryCode: 'US', country: 'United States', lat: 30.27, lon: -97.75 },
-    { id: 'news-mexico', name: 'Noticias', tags: ['news'], countryCode: 'MX', country: 'Mexico', lat: 25.68, lon: -100.31 },
+    {
+      id: 'music-austin',
+      name: 'Austin Music',
+      tags: ['music'],
+      countryCode: 'US',
+      country: 'United States',
+      lat: 30.26,
+      lon: -97.74,
+    },
+    {
+      id: 'news-dallas',
+      name: 'Texas News',
+      tags: ['news'],
+      countryCode: 'US',
+      country: 'United States',
+      lat: 32.77,
+      lon: -96.79,
+    },
+    {
+      id: 'news-austin',
+      name: 'Austin Public News',
+      tags: ['news'],
+      countryCode: 'US',
+      country: 'United States',
+      lat: 30.27,
+      lon: -97.75,
+    },
+    {
+      id: 'news-mexico',
+      name: 'Noticias',
+      tags: ['news'],
+      countryCode: 'MX',
+      country: 'Mexico',
+      lat: 25.68,
+      lon: -100.31,
+    },
   ];
   const ranked = rankRadioStationsForRequest(rows, {
     categoryId: 'news',
     country: 'US',
     anchor: { lat: 30.2672, lon: -97.7431 },
   });
-  assert.deepEqual(ranked.map((station) => station.id), ['news-austin', 'news-dallas']);
-  assert.equal(rankRadioStationsForRequest(rows, {
-    categoryId: 'news',
-    stationQuery: 'public',
-  })[0].id, 'news-austin');
+  assert.deepEqual(
+    ranked.map((station) => station.id),
+    ['news-austin', 'news-dallas'],
+  );
+  assert.equal(
+    rankRadioStationsForRequest(rows, {
+      categoryId: 'news',
+      stationQuery: 'public',
+    })[0].id,
+    'news-austin',
+  );
 });
 
 test('viewport ranking treats the antimeridian as adjacent', () => {
-  const ranked = rankRadioStationsForViewport([
-    { id: 'far', lat: 0, lon: 150, languages: ['English'] },
-    { id: 'across-dateline', lat: 0, lon: -179.9, languages: ['English'] },
-  ], { lat: 0, lon: 179.9 });
+  const ranked = rankRadioStationsForViewport(
+    [
+      { id: 'far', lat: 0, lon: 150, languages: ['English'] },
+      { id: 'across-dateline', lat: 0, lon: -179.9, languages: ['English'] },
+    ],
+    { lat: 0, lon: 179.9 },
+  );
   assert.equal(ranked[0].id, 'across-dateline');
 });
 
@@ -1465,10 +2004,26 @@ test('global-view threshold tolerates Cesium altitude round-off without widening
 
 test('Radio picks resolve ordinary, selected, primitive, and clustered entity ids', () => {
   assert.equal(radioStationIdFromPick({ id: 'radio:alpha' }), 'alpha');
-  assert.equal(radioStationIdFromPick({ primitive: { id: 'radio:beta' } }), 'beta');
-  assert.equal(radioStationIdFromPick({ id: { id: 'radio:selected:gamma' } }), 'gamma');
-  assert.equal(radioStationIdFromPick({ id: [{ id: 'other' }, { id: 'radio:delta' }] }), 'delta');
-  assert.equal(radioStationIdFromPick({ primitive: { id: [{ id: 'radio:cluster-first' }, { id: 'radio:cluster-second' }] } }), 'cluster-first');
+  assert.equal(
+    radioStationIdFromPick({ primitive: { id: 'radio:beta' } }),
+    'beta',
+  );
+  assert.equal(
+    radioStationIdFromPick({ id: { id: 'radio:selected:gamma' } }),
+    'gamma',
+  );
+  assert.equal(
+    radioStationIdFromPick({ id: [{ id: 'other' }, { id: 'radio:delta' }] }),
+    'delta',
+  );
+  assert.equal(
+    radioStationIdFromPick({
+      primitive: {
+        id: [{ id: 'radio:cluster-first' }, { id: 'radio:cluster-second' }],
+      },
+    }),
+    'cluster-first',
+  );
   assert.equal(radioStationIdFromPick({ id: 'flights:abc' }), null);
 });
 
@@ -1482,11 +2037,14 @@ test('selected Radio station bracket is a transparent four-corner category-color
 
 test('Radio text uses protected selected and bounded ambient WorldOverlay entries', () => {
   const position = { x: 1, y: 2, z: 3 };
-  const selected = createRadioSelectedOverlayEntry({
-    id: 'station-a',
-    name: 'Austin News 93.9 FM - KQA',
-    tags: ['news'],
-  }, position);
+  const selected = createRadioSelectedOverlayEntry(
+    {
+      id: 'station-a',
+      name: 'Austin News 93.9 FM - KQA',
+      tags: ['news'],
+    },
+    position,
+  );
   assert.equal(selected.variant, 'selected');
   assert.equal(selected.selected, true);
   assert.equal(selected.protected, true);
@@ -1507,16 +2065,26 @@ test('Radio text uses protected selected and bounded ambient WorldOverlay entrie
   assert.equal(cluster.collisionGroup, 'ambient-label');
   assert.equal(cluster.horizonCull, true);
   assert.equal(cluster.maxDistance, RADIO_GLOBE_INTERACTION_MAX_DISTANCE_M);
-  assert.equal(cluster.distanceScale.far, RADIO_GLOBE_INTERACTION_MAX_DISTANCE_M);
+  assert.equal(
+    cluster.distanceScale.far,
+    RADIO_GLOBE_INTERACTION_MAX_DISTANCE_M,
+  );
   assert.equal(cluster.title, '12 NEWS');
   assert.equal(cluster.priority, 12);
   assert.equal(cluster.stateless, true);
   assert.equal(cluster.edgeFade, 'none');
-  assert.equal(RADIO_OVERLAY_SOURCE_OPTIONS.cohortLimit, RADIO_OVERLAY_COHORT_LIMIT);
+  assert.equal(
+    RADIO_OVERLAY_SOURCE_OPTIONS.cohortLimit,
+    RADIO_OVERLAY_COHORT_LIMIT,
+  );
   assert.ok(RADIO_OVERLAY_COHORT_LIMIT < 750);
 
   const singleton = createRadioSingletonOverlayEntry({
-    station: { id: 'station-b', name: '100.3 The River - WQRV', tags: ['public safety'] },
+    station: {
+      id: 'station-b',
+      name: '100.3 The River - WQRV',
+      tags: ['public safety'],
+    },
     position,
     priority: 1.5,
   });
@@ -1527,63 +2095,106 @@ test('Radio text uses protected selected and bounded ambient WorldOverlay entrie
   assert.equal(singleton.interactive, false);
   assert.equal(singleton.horizonCull, true);
   assert.equal(singleton.maxDistance, RADIO_GLOBE_INTERACTION_MAX_DISTANCE_M);
-  assert.equal(singleton.distanceScale.far, RADIO_GLOBE_INTERACTION_MAX_DISTANCE_M);
+  assert.equal(
+    singleton.distanceScale.far,
+    RADIO_GLOBE_INTERACTION_MAX_DISTANCE_M,
+  );
   assert.equal(singleton.priority, 1.5);
   assert.equal(singleton.stateless, true);
 });
 
 test('Radio singleton labels are zoom-aware, nearest-first, stable, and bounded', () => {
-  assert.equal(radioSingletonLabelLimit(25_000_000), RADIO_SINGLETON_GLOBAL_LIMIT);
-  assert.equal(radioSingletonLabelLimit(2_000_000), RADIO_SINGLETON_GLOBAL_LIMIT);
+  assert.equal(
+    radioSingletonLabelLimit(25_000_000),
+    RADIO_SINGLETON_GLOBAL_LIMIT,
+  );
+  assert.equal(
+    radioSingletonLabelLimit(2_000_000),
+    RADIO_SINGLETON_GLOBAL_LIMIT,
+  );
   assert.equal(radioSingletonLabelLimit(1_999_999), RADIO_SINGLETON_MID_LIMIT);
   assert.equal(radioSingletonLabelLimit(250_000), RADIO_SINGLETON_MID_LIMIT);
   assert.equal(radioSingletonLabelLimit(249_999), RADIO_SINGLETON_NEAR_LIMIT);
-  const ranked = selectRadioSingletonCandidates([
-    { station: { id: 'far' }, distanceM: 30 },
-    { station: { id: 'near-z' }, distanceM: 10 },
-    { station: { id: 'near-a' }, distanceM: 10 },
-  ], 2);
-  assert.deepEqual(ranked.map(({ station }) => station.id), ['near-a', 'near-z']);
+  const ranked = selectRadioSingletonCandidates(
+    [
+      { station: { id: 'far' }, distanceM: 30 },
+      { station: { id: 'near-z' }, distanceM: 10 },
+      { station: { id: 'near-a' }, distanceM: 10 },
+    ],
+    2,
+  );
+  assert.deepEqual(
+    ranked.map(({ station }) => station.id),
+    ['near-a', 'near-z'],
+  );
 });
 
 test('directory tuner maps every absolute slot to an available station', () => {
   assert.deepEqual(radioTunerSlot(0, 4), {
-    slot: 0, max: 3, locked: true, stationIndex: 0, leftIndex: 0, rightIndex: 0,
+    slot: 0,
+    max: 3,
+    locked: true,
+    stationIndex: 0,
+    leftIndex: 0,
+    rightIndex: 0,
   });
   assert.deepEqual(radioTunerSlot(1, 4), {
-    slot: 1, max: 3, locked: true, stationIndex: 1, leftIndex: 1, rightIndex: 1,
+    slot: 1,
+    max: 3,
+    locked: true,
+    stationIndex: 1,
+    leftIndex: 1,
+    rightIndex: 1,
   });
   assert.deepEqual(radioTunerSlot(99, 4), {
-    slot: 3, max: 3, locked: true, stationIndex: 3, leftIndex: 3, rightIndex: 3,
+    slot: 3,
+    max: 3,
+    locked: true,
+    stationIndex: 3,
+    leftIndex: 3,
+    rightIndex: 3,
   });
   assert.equal(radioTunerSlot(0, 0).locked, false);
 });
 
 test('directory tuner pointer progress maps left, center, right, and midpoint ties exactly', () => {
   assert.deepEqual(radioTunerPointerPosition(7, 0, 114, 750), {
-    ratio: 0, coordinate: 0, stationIndex: 0,
+    ratio: 0,
+    coordinate: 0,
+    stationIndex: 0,
   });
   assert.deepEqual(radioTunerPointerPosition(57, 0, 114, 750), {
-    ratio: 0.5, coordinate: 374.5, stationIndex: 375,
+    ratio: 0.5,
+    coordinate: 374.5,
+    stationIndex: 375,
   });
   assert.deepEqual(radioTunerPointerPosition(107, 0, 114, 750), {
-    ratio: 1, coordinate: 749, stationIndex: 749,
+    ratio: 1,
+    coordinate: 749,
+    stationIndex: 749,
   });
   assert.deepEqual(radioTunerPointerPosition(50, 10, 80, 1), {
-    ratio: 0.5, coordinate: 0, stationIndex: 0,
+    ratio: 0.5,
+    coordinate: 0,
+    stationIndex: 0,
   });
   assert.equal(radioTunerPointerPosition(50, 10, 80, 0).stationIndex, -1);
   assert.deepEqual(radioTunerCommitSlot(2.5, 5), radioTunerSlot(3, 5));
 });
 
 test('directory tuner bands preserve stable filtered order without injecting outside selections', () => {
-  const ranked = Array.from({ length: 800 }, (_, index) => ({ id: `station-${index}` }));
+  const ranked = Array.from({ length: 800 }, (_, index) => ({
+    id: `station-${index}`,
+  }));
   const selected = { id: 'selected-outside-band' };
   const band = buildRadioTunerBand(ranked, selected, 750);
   assert.equal(band.length, 750);
   assert.deepEqual(band, ranked.slice(0, 750));
   assert.ok(!band.includes(selected));
-  assert.deepEqual(buildRadioTunerBand(ranked, ranked[5], 24), ranked.slice(0, 24));
+  assert.deepEqual(
+    buildRadioTunerBand(ranked, ranked[5], 24),
+    ranked.slice(0, 24),
+  );
 });
 
 test('directory tuner virtual tape is bounded and moves opposite the needle', () => {
@@ -1591,12 +2202,21 @@ test('directory tuner virtual tape is bounded and moves opposite the needle', ()
   const at101 = buildRadioTunerTicks(101, 750, 300);
   assert.ok(at100.ticks.length <= Math.ceil(286 / at100.pitchPx) + 6);
   assert.ok(at101.needleX > at100.needleX);
-  const sharedIndex = at100.ticks.find((tick) => at101.ticks.some((next) => next.stationIndex === tick.stationIndex));
+  const sharedIndex = at100.ticks.find((tick) =>
+    at101.ticks.some((next) => next.stationIndex === tick.stationIndex),
+  );
   assert.ok(sharedIndex);
-  const before = at100.ticks.find((tick) => tick.stationIndex === sharedIndex.stationIndex);
-  const after = at101.ticks.find((tick) => tick.stationIndex === sharedIndex.stationIndex);
+  const before = at100.ticks.find(
+    (tick) => tick.stationIndex === sharedIndex.stationIndex,
+  );
+  const after = at101.ticks.find(
+    (tick) => tick.stationIndex === sharedIndex.stationIndex,
+  );
   assert.ok(after.xPx < before.xPx);
-  assert.ok(Math.abs(after.xPx - before.xPx) >= 4 * (at101.needleX - at100.needleX) - 1e-9);
+  assert.ok(
+    Math.abs(after.xPx - before.xPx) >=
+      4 * (at101.needleX - at100.needleX) - 1e-9,
+  );
   const singleton = buildRadioTunerTicks(0, 1, 300);
   assert.equal(singleton.ratio, 0.5);
   assert.equal(singleton.ticks.length, 1);
@@ -1604,24 +2224,30 @@ test('directory tuner virtual tape is bounded and moves opposite the needle', ()
 });
 
 test('station camera plans preserve altitude and viewing orientation without zooming', () => {
-  const nadir = radioStationCameraPlan({ lat: 30, lon: -97 }, {
-    height: 600,
-    heading: 0,
-    pitch: -Math.PI / 2,
-    roll: 0,
-  });
+  const nadir = radioStationCameraPlan(
+    { lat: 30, lon: -97 },
+    {
+      height: 600,
+      heading: 0,
+      pitch: -Math.PI / 2,
+      roll: 0,
+    },
+  );
   assert.ok(Math.abs(nadir.lat - 30) < 1e-9);
   assert.ok(Math.abs(nadir.lon + 97) < 1e-9);
   assert.equal(nadir.height, 600);
   assert.equal(nadir.heading, 0);
   assert.equal(nadir.pitch, -Math.PI / 2);
   assert.equal(nadir.roll, 0);
-  const oblique = radioStationCameraPlan({ lat: 30, lon: -97 }, {
-    height: 600,
-    heading: 0,
-    pitch: -Math.PI / 6,
-    roll: 0.2,
-  });
+  const oblique = radioStationCameraPlan(
+    { lat: 30, lon: -97 },
+    {
+      height: 600,
+      heading: 0,
+      pitch: -Math.PI / 6,
+      roll: 0.2,
+    },
+  );
   assert.equal(oblique.height, 600);
   assert.equal(oblique.heading, 0);
   assert.equal(oblique.pitch, -Math.PI / 6);
@@ -1640,12 +2266,27 @@ test('Radio recenters clipped global and below-center closer Earth discs', () =>
     keyholeRadius: 420,
   };
   assert.equal(radioGlobeNeedsRecentering(centered), false);
-  assert.equal(radioGlobeNeedsRecentering({ ...centered, earthCenterY: 560 }), true);
-  assert.equal(radioGlobeNeedsRecentering({ ...centered, earthCenterX: 755 }), true);
-  assert.equal(radioGlobeNeedsRecentering({ ...centered, earthRadius: 405 }), false);
+  assert.equal(
+    radioGlobeNeedsRecentering({ ...centered, earthCenterY: 560 }),
+    true,
+  );
+  assert.equal(
+    radioGlobeNeedsRecentering({ ...centered, earthCenterX: 755 }),
+    true,
+  );
+  assert.equal(
+    radioGlobeNeedsRecentering({ ...centered, earthRadius: 405 }),
+    false,
+  );
   const closer = { ...centered, earthRadius: 900 };
-  assert.equal(radioGlobeNeedsRecentering({ ...closer, earthCenterY: 800 }), false);
-  assert.equal(radioGlobeNeedsRecentering({ ...closer, earthCenterY: 1_300 }), true);
+  assert.equal(
+    radioGlobeNeedsRecentering({ ...closer, earthCenterY: 800 }),
+    false,
+  );
+  assert.equal(
+    radioGlobeNeedsRecentering({ ...closer, earthCenterY: 1_300 }),
+    true,
+  );
   assert.equal(radioGlobeNeedsRecentering(null), false);
 });
 
@@ -1672,21 +2313,48 @@ test('Radio camera navigation yields to every live tracked-entity owner', () => 
 });
 
 test('tuner static spans drag and broadcaster handoff but voice ducking silences it', () => {
-  assert.equal(radioTuningStaticShouldPlay({ tuningActive: true, tuningStatic: true }), true);
-  assert.equal(radioTuningStaticShouldPlay({ tuningStatic: true, awaitingStationId: 'news' }), true);
-  assert.equal(radioTuningStaticShouldPlay({
-    tuningStatic: true,
-    awaitingStationId: 'news',
-    voiceDucked: true,
-  }), false);
-  assert.equal(radioTuningStaticShouldPlay({ tuningStatic: false, awaitingStationId: 'news' }), false);
+  assert.equal(
+    radioTuningStaticShouldPlay({ tuningActive: true, tuningStatic: true }),
+    true,
+  );
+  assert.equal(
+    radioTuningStaticShouldPlay({
+      tuningStatic: true,
+      awaitingStationId: 'news',
+    }),
+    true,
+  );
+  assert.equal(
+    radioTuningStaticShouldPlay({
+      tuningStatic: true,
+      awaitingStationId: 'news',
+      voiceDucked: true,
+    }),
+    false,
+  );
+  assert.equal(
+    radioTuningStaticShouldPlay({
+      tuningStatic: false,
+      awaitingStationId: 'news',
+    }),
+    false,
+  );
 });
 
 test('station horizon scans ignore stationary camera noise but detect movement', () => {
   const prior = { x: 1_000, y: -2_000, z: 3_000 };
-  assert.equal(radioCameraPositionChanged(prior, { x: 1_000, y: -2_000, z: 3_000 }), false);
-  assert.equal(radioCameraPositionChanged(prior, { x: 1_000.5, y: -2_000, z: 3_000 }), false);
-  assert.equal(radioCameraPositionChanged(prior, { x: 1_002, y: -2_000, z: 3_000 }), true);
+  assert.equal(
+    radioCameraPositionChanged(prior, { x: 1_000, y: -2_000, z: 3_000 }),
+    false,
+  );
+  assert.equal(
+    radioCameraPositionChanged(prior, { x: 1_000.5, y: -2_000, z: 3_000 }),
+    false,
+  );
+  assert.equal(
+    radioCameraPositionChanged(prior, { x: 1_002, y: -2_000, z: 3_000 }),
+    true,
+  );
   assert.equal(radioCameraPositionChanged(null, prior), true);
 });
 
@@ -1694,7 +2362,9 @@ test('voice ducking preserves the user-owned Radio volume', async () => {
   radioLayer.destroy();
   radioLayer.enable();
   radioLayer.setLifecyclePresentation({
-    lifecycleState: 'enabled', enabled: true, uncertain: false,
+    lifecycleState: 'enabled',
+    enabled: true,
+    uncertain: false,
   });
   try {
     setRadioVoiceDucking(true);
@@ -1736,7 +2406,9 @@ test('Radio volume requires certain enabled lifecycle authority', () => {
   }
 
   radioLayer.setLifecyclePresentation({
-    lifecycleState: 'enabled', enabled: true, uncertain: false,
+    lifecycleState: 'enabled',
+    enabled: true,
+    uncertain: false,
   });
   assert.equal(setRadioVolume(0.2), true);
   assert.equal(getRadioUIState().volume, 0.2);
@@ -1759,7 +2431,9 @@ test('voice playback confirmation waits for playing and requires a hard duck', a
     subscribe: (next) => {
       listener = next;
       next({ ...state, audioState: 'stopped' });
-      return () => { listener = () => {}; };
+      return () => {
+        listener = () => {};
+      };
     },
     getState: () => state,
     timeoutMs: 50,
@@ -1767,15 +2441,18 @@ test('voice playback confirmation waits for playing and requires a hard duck', a
   assert.equal(await confirmed, true);
 
   state = { ...state, voiceDucked: false };
-  assert.equal(await confirmRadioPlayback({
-    startPlayback: async () => true,
-    subscribe: (next) => {
-      next(state);
-      return () => {};
-    },
-    getState: () => state,
-    timeoutMs: 5,
-  }), false);
+  assert.equal(
+    await confirmRadioPlayback({
+      startPlayback: async () => true,
+      subscribe: (next) => {
+        next(state);
+        return () => {};
+      },
+      getState: () => state,
+      timeoutMs: 5,
+    }),
+    false,
+  );
 });
 
 test('voice playback confirmation accepts fallback buffering but times out safely', async () => {
@@ -1791,7 +2468,9 @@ test('voice playback confirmation accepts fallback buffering but times out safel
     subscribe: (next) => {
       listener = next;
       next(state);
-      return () => { listener = () => {}; };
+      return () => {
+        listener = () => {};
+      };
     },
     getState: () => state,
     timeoutMs: 10,

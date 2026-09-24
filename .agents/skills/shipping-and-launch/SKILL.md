@@ -102,6 +102,7 @@ return null;
 ```
 
 **Rules:**
+
 - Every feature flag has an owner and an expiration date
 - Clean up flags within 2 weeks of full rollout
 - Don't nest feature flags (creates exponential combinations)
@@ -143,16 +144,17 @@ return null;
 
 Use these thresholds to decide whether to advance, hold, or roll back at each stage:
 
-| Metric | Advance (green) | Hold and investigate (yellow) | Roll back (red) |
-|--------|-----------------|-------------------------------|-----------------|
-| Error rate | Within 10% of baseline | 10-100% above baseline | >2x baseline |
-| P95 latency | Within 20% of baseline | 20-50% above baseline | >50% above baseline |
-| Client JS errors | No new error types | New errors at <0.1% of sessions | New errors at >0.1% of sessions |
-| Business metrics | Neutral or positive | Decline <5% (may be noise) | Decline >5% |
+| Metric           | Advance (green)        | Hold and investigate (yellow)   | Roll back (red)                 |
+| ---------------- | ---------------------- | ------------------------------- | ------------------------------- |
+| Error rate       | Within 10% of baseline | 10-100% above baseline          | >2x baseline                    |
+| P95 latency      | Within 20% of baseline | 20-50% above baseline           | >50% above baseline             |
+| Client JS errors | No new error types     | New errors at <0.1% of sessions | New errors at >0.1% of sessions |
+| Business metrics | Neutral or positive    | Decline <5% (may be noise)      | Decline >5%                     |
 
 ### When to Roll Back
 
 Roll back immediately if:
+
 - Error rate increases by more than 2x baseline
 - P95 latency increases by more than 50%
 - User-reported issues spike
@@ -256,26 +258,31 @@ Every deployment needs a rollback plan before it happens:
 ## Rollback Plan for [Feature/Release]
 
 ### Trigger Conditions
+
 - Error rate > 2x baseline
 - P95 latency > [X]ms
 - User reports of [specific issue]
 
 ### Rollback Steps
+
 1. Disable feature flag (if applicable)
    OR
 1. Deploy previous version: `git revert <commit> && git push`
-2. Verify rollback: health check, error monitoring
-3. Communicate: notify team of rollback
+1. Verify rollback: health check, error monitoring
+1. Communicate: notify team of rollback
 
 ### Database Considerations
+
 - Migration [X] has a rollback: `npx prisma migrate rollback`
 - Data inserted by new feature: [preserved / cleaned up]
 
 ### Time to Rollback
+
 - Feature flag: < 1 minute
 - Redeploy previous version: < 5 minutes
 - Database rollback: < 15 minutes
 ```
+
 ## See Also
 
 - For the project-wide Definition of Done that every change must clear before this checklist, see `../../references/definition-of-done.md`
@@ -286,13 +293,13 @@ Every deployment needs a rollback plan before it happens:
 
 ## Common Rationalizations
 
-| Rationalization | Reality |
-|---|---|
-| "It works in staging, it'll work in production" | Production has different data, traffic patterns, and edge cases. Monitor after deploy. |
-| "We don't need feature flags for this" | Every feature benefits from a kill switch. Even "simple" changes can break things. |
-| "Monitoring is overhead" | Not having monitoring means you discover problems from user complaints instead of dashboards. |
-| "We'll add monitoring later" | Add it before launch. You can't debug what you can't see. |
-| "Rolling back is admitting failure" | Rolling back is responsible engineering. Shipping a broken feature is the failure. |
+| Rationalization                                  | Reality                                                                                                                                                 |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "It works in staging, it'll work in production"  | Production has different data, traffic patterns, and edge cases. Monitor after deploy.                                                                  |
+| "We don't need feature flags for this"           | Every feature benefits from a kill switch. Even "simple" changes can break things.                                                                      |
+| "Monitoring is overhead"                         | Not having monitoring means you discover problems from user complaints instead of dashboards.                                                           |
+| "We'll add monitoring later"                     | Add it before launch. You can't debug what you can't see.                                                                                               |
+| "Rolling back is admitting failure"              | Rolling back is responsible engineering. Shipping a broken feature is the failure.                                                                      |
 | "The error rate looks fine, let's keep shipping" | Check the burn rate, not just the current error rate. Consuming budget faster than baseline is a hold signal even when individual thresholds are green. |
 
 ## Red Flags

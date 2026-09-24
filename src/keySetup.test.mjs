@@ -7,10 +7,20 @@ import {
 } from './keySetup.js';
 
 test('the chip counts what is missing, and retires the count at zero', () => {
-  assert.equal(keySetupChipLabel({ setCount: 0, total: 8 }), 'POWER UP · 8 KEYS WAITING');
-  assert.equal(keySetupChipLabel({ setCount: 7, total: 8 }), 'POWER UP · 1 KEY WAITING');
+  assert.equal(
+    keySetupChipLabel({ setCount: 0, total: 8 }),
+    'POWER UP · 8 KEYS WAITING',
+  );
+  assert.equal(
+    keySetupChipLabel({ setCount: 7, total: 8 }),
+    'POWER UP · 1 KEY WAITING',
+  );
   assert.equal(keySetupChipLabel({ setCount: 8, total: 8 }), 'POWERED UP');
-  assert.equal(keySetupChipLabel(null), 'POWERED UP', 'no status is not a broken label');
+  assert.equal(
+    keySetupChipLabel(null),
+    'POWERED UP',
+    'no status is not a broken label',
+  );
 });
 
 test('collectKeyUpdates keeps only non-empty trimmed values', () => {
@@ -27,7 +37,9 @@ test('collectKeyUpdates keeps only non-empty trimmed values', () => {
 });
 
 test('the first Google key strips ONLY the keyless OSM basemap from the share hash', () => {
-  const stripped = stripKeylessBasemapFromHash('lat=30.2&lon=-97.7&map=osm&style=normal');
+  const stripped = stripKeylessBasemapFromHash(
+    'lat=30.2&lon=-97.7&map=osm&style=normal',
+  );
   assert.ok(stripped !== null);
   const params = new URLSearchParams(stripped);
   assert.equal(params.get('map'), null, 'osm basemap removed');
@@ -35,7 +47,11 @@ test('the first Google key strips ONLY the keyless OSM basemap from the share ha
   assert.equal(params.get('style'), 'normal', 'style survives');
   // A stack under any other name was chosen or shared on purpose.
   assert.equal(stripKeylessBasemapFromHash('map=bing-aerial&lat=1'), null);
-  assert.equal(stripKeylessBasemapFromHash('lat=1&lon=2'), null, 'no stack, nothing to do');
+  assert.equal(
+    stripKeylessBasemapFromHash('lat=1&lon=2'),
+    null,
+    'no stack, nothing to do',
+  );
   assert.equal(stripKeylessBasemapFromHash(''), null);
   assert.equal(stripKeylessBasemapFromHash(undefined), null);
 });
@@ -49,11 +65,15 @@ test('aborting pending setup removes its surface and ignores a late response', a
   let requestSignal;
   const controller = new AbortController();
   const pending = initKeySetup({
-    documentRef: { getElementById: (id) => id === 'key-setup-chip' ? chip : root },
+    documentRef: {
+      getElementById: (id) => (id === 'key-setup-chip' ? chip : root),
+    },
     signal: controller.signal,
     fetchImpl: (_url, { signal }) => {
       requestSignal = signal;
-      return new Promise((resolve) => { resolveResponse = resolve; });
+      return new Promise((resolve) => {
+        resolveResponse = resolve;
+      });
     },
   });
   controller.abort();
@@ -100,15 +120,22 @@ test('render displays active provider pill and differentiates chips with NO KEY 
       textContent: '',
       innerHTML: '',
       append: (...children) => el.children.push(...children),
-      setAttribute: (k, v) => { el[k] = v; },
+      setAttribute: (k, v) => {
+        el[k] = v;
+      },
       addEventListener: () => {},
       removeEventListener: () => {},
       querySelector: () => null,
       querySelectorAll: () => [],
       classList: {
-        add: (cls) => { el.className = `${el.className} ${cls}`.trim(); },
+        add: (cls) => {
+          el.className = `${el.className} ${cls}`.trim();
+        },
         remove: (cls) => {
-          el.className = el.className.split(' ').filter((c) => c !== cls).join(' ');
+          el.className = el.className
+            .split(' ')
+            .filter((c) => c !== cls)
+            .join(' ');
         },
         contains: (cls) => el.className.includes(cls),
       },
@@ -155,28 +182,39 @@ test('render displays active provider pill and differentiates chips with NO KEY 
   assert.equal(row.dataset.set, 'true');
 
   // Verify that an element inside the row contains '🟢 ACTIVE: Requesty'
-  const hasActivePill = elements.some((el) =>
-    typeof el.innerHTML === 'string' && el.innerHTML.includes('🟢 ACTIVE: Requesty')
+  const hasActivePill = elements.some(
+    (el) =>
+      typeof el.innerHTML === 'string' &&
+      el.innerHTML.includes('🟢 ACTIVE: Requesty'),
   );
   assert.equal(hasActivePill, true, 'Active pill must name Requesty');
 
   // Verify that Requesty chip shows ⚡ ACTIVE
-  const hasActiveTag = elements.some((el) =>
-    typeof el.innerHTML === 'string' && el.innerHTML.includes('⚡ ACTIVE') && el.innerHTML.includes('Requesty')
+  const hasActiveTag = elements.some(
+    (el) =>
+      typeof el.innerHTML === 'string' &&
+      el.innerHTML.includes('⚡ ACTIVE') &&
+      el.innerHTML.includes('Requesty'),
   );
   assert.equal(hasActiveTag, true, 'Requesty chip must display ⚡ ACTIVE');
 
   // Verify that other chips show ⚪ NO KEY
-  const hasNoKeyTag = elements.some((el) =>
-    typeof el.innerHTML === 'string' && el.innerHTML.includes('⚪ NO KEY')
+  const hasNoKeyTag = elements.some(
+    (el) =>
+      typeof el.innerHTML === 'string' && el.innerHTML.includes('⚪ NO KEY'),
   );
   assert.equal(hasNoKeyTag, true, 'Unconfigured chips must display ⚪ NO KEY');
 
   // Verify that all providers have dedicated input fields with their respective envVars
   const providerInputs = elements.filter(
-    (el) => el.tagName === 'INPUT' && el.dataset?.envVar && el.type === 'password'
+    (el) =>
+      el.tagName === 'INPUT' && el.dataset?.envVar && el.type === 'password',
   );
-  assert.equal(providerInputs.length, 14, 'Must render exactly 14 segregated password inputs');
+  assert.equal(
+    providerInputs.length,
+    14,
+    'Must render exactly 14 segregated password inputs',
+  );
 
   const expectedVars = [
     'NVIDIA_API_KEY',
@@ -198,9 +236,7 @@ test('render displays active provider pill and differentiates chips with NO KEY 
   for (const expectedVar of expectedVars) {
     assert.ok(
       renderedVars.includes(expectedVar),
-      `Input field for ${expectedVar} must be present and segregated`
+      `Input field for ${expectedVar} must be present and segregated`,
     );
   }
 });
-
-

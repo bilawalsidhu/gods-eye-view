@@ -11,7 +11,11 @@ test('DroneReconController initializes and manages recon state', async () => {
       toRadians: (deg) => (deg * Math.PI) / 180,
       toDegrees: (rad) => (rad * 180) / Math.PI,
     },
-    HeadingPitchRange: function (h, p, r) { this.h = h; this.p = p; this.r = r; },
+    HeadingPitchRange: function (h, p, r) {
+      this.h = h;
+      this.p = p;
+      this.r = r;
+    },
     Matrix4: { IDENTITY: [] },
   };
 

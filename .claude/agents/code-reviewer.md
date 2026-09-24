@@ -33,6 +33,7 @@ For every file passed to you:
 ## Output format
 
 Report findings as a list with severity:
+
 - **[BLOCKER]** — boundary violation, security issue, will crash
 - **[WARNING]** — missing test, missing error handling, dead code
 - **[INFO]** — style nit, simplification suggestion

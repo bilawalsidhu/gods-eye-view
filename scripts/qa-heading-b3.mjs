@@ -131,7 +131,11 @@ const CHROME_EXECUTABLE_CANDIDATES = [
 
 function findChromeExecutable() {
   for (const candidate of CHROME_EXECUTABLE_CANDIDATES) {
-    try { if (fs.existsSync(candidate)) return candidate; } catch { /* skip */ }
+    try {
+      if (fs.existsSync(candidate)) return candidate;
+    } catch {
+      /* skip */
+    }
   }
   return null;
 }
@@ -147,56 +151,64 @@ function record(name, ok, detail) {
 }
 
 async function observeTrackedHostPaint(page, timeoutMs = 5000) {
-  return page.evaluate((boundedTimeoutMs) => new Promise((resolve) => {
-    const viewer = window.__godsEyeView?.viewer;
-    const scene = viewer?.scene;
-    const history = [];
-    const startedAt = performance.now();
-    let removePostRender = null;
-    let requestTimer = null;
-    let timeoutTimer = null;
-    let finished = false;
-    const finish = (observed) => {
-      if (finished) return;
-      finished = true;
-      removePostRender?.();
-      clearInterval(requestTimer);
-      clearTimeout(timeoutTimer);
-      resolve({ observed, history, sample: history.at(-1) || null });
-    };
-    const sample = () => {
-      const diagnostics = window.__gevWorldOverlay?.getDiagnostics?.() || {};
-      const tracked = viewer?.trackedEntity;
-      const current = {
-        elapsedMs: Math.round(performance.now() - startedAt),
-        entryId: tracked?.gevTrackedId || null,
-        hasPresentationModel: Boolean(tracked?.gevLabelModel?.title),
-        candidateCount: diagnostics.candidateCount || 0,
-        projectedCount: diagnostics.projectedCount || 0,
-        selectedCount: diagnostics.selectedCount || 0,
-        entryCount: diagnostics.entriesBySource?.tracked || 0,
-        painted: diagnostics.paintedBySource?.tracked || 0,
-        paintedCount: diagnostics.paintedCount || 0,
-      };
-      history.push(current);
-      if (history.length > 80) history.shift();
-      if (current.entryCount === 1 && current.painted >= 1) finish(true);
-    };
-    if (!scene?.postRender?.addEventListener) {
-      finish(false);
-      return;
-    }
-    // The overlay registered first during bootstrap, so this later listener
-    // sees projection and paint from the same frame before diagnostics reset.
-    removePostRender = scene.postRender.addEventListener(sample);
-    requestTimer = setInterval(() => scene.requestRender(), 100);
-    timeoutTimer = setTimeout(() => finish(false), boundedTimeoutMs);
-    scene.requestRender();
-  }), timeoutMs);
+  return page.evaluate(
+    (boundedTimeoutMs) =>
+      new Promise((resolve) => {
+        const viewer = window.__godsEyeView?.viewer;
+        const scene = viewer?.scene;
+        const history = [];
+        const startedAt = performance.now();
+        let removePostRender = null;
+        let requestTimer = null;
+        let timeoutTimer = null;
+        let finished = false;
+        const finish = (observed) => {
+          if (finished) return;
+          finished = true;
+          removePostRender?.();
+          clearInterval(requestTimer);
+          clearTimeout(timeoutTimer);
+          resolve({ observed, history, sample: history.at(-1) || null });
+        };
+        const sample = () => {
+          const diagnostics =
+            window.__gevWorldOverlay?.getDiagnostics?.() || {};
+          const tracked = viewer?.trackedEntity;
+          const current = {
+            elapsedMs: Math.round(performance.now() - startedAt),
+            entryId: tracked?.gevTrackedId || null,
+            hasPresentationModel: Boolean(tracked?.gevLabelModel?.title),
+            candidateCount: diagnostics.candidateCount || 0,
+            projectedCount: diagnostics.projectedCount || 0,
+            selectedCount: diagnostics.selectedCount || 0,
+            entryCount: diagnostics.entriesBySource?.tracked || 0,
+            painted: diagnostics.paintedBySource?.tracked || 0,
+            paintedCount: diagnostics.paintedCount || 0,
+          };
+          history.push(current);
+          if (history.length > 80) history.shift();
+          if (current.entryCount === 1 && current.painted >= 1) finish(true);
+        };
+        if (!scene?.postRender?.addEventListener) {
+          finish(false);
+          return;
+        }
+        // The overlay registered first during bootstrap, so this later listener
+        // sees projection and paint from the same frame before diagnostics reset.
+        removePostRender = scene.postRender.addEventListener(sample);
+        requestTimer = setInterval(() => scene.requestRender(), 100);
+        timeoutTimer = setTimeout(() => finish(false), boundedTimeoutMs);
+        scene.requestRender();
+      }),
+    timeoutMs,
+  );
 }
 
 const norm360 = (d) => ((d % 360) + 360) % 360;
-const norm180 = (d) => { const n = norm360(d); return n > 180 ? n - 360 : n; };
+const norm180 = (d) => {
+  const n = norm360(d);
+  return n > 180 ? n - 360 : n;
+};
 
 // ---------------------------------------------------------------------------
 // Synthetic TURNING aircraft — constant-rate-turn circles near Austin.
@@ -208,13 +220,62 @@ const norm180 = (d) => { const n = norm360(d); return n > 180 ? n - 360 : n; };
 const TURN = {
   timeOffsetSec: 0, // shim knob: serve fixes as of (now + offset) — used to back-date priming fixes
   flights: [
-    { icao: 'aaa001', callsign: 'TRN001', cLon: -97.7431, cLat: 30.2672, radiusM: 2673, alphaDeg0: 0, turnDps: 3, altM: 3000 },
-    { icao: 'aaa002', callsign: 'TRN002', cLon: -97.7800, cLat: 30.2900, radiusM: 2673, alphaDeg0: 120, turnDps: 3, altM: 3400 },
-    { icao: 'aaa003', callsign: 'TRN003', cLon: -97.7100, cLat: 30.2400, radiusM: 2673, alphaDeg0: 240, turnDps: 3, altM: 2800 },
+    {
+      icao: 'aaa001',
+      callsign: 'TRN001',
+      cLon: -97.7431,
+      cLat: 30.2672,
+      radiusM: 2673,
+      alphaDeg0: 0,
+      turnDps: 3,
+      altM: 3000,
+    },
+    {
+      icao: 'aaa002',
+      callsign: 'TRN002',
+      cLon: -97.78,
+      cLat: 30.29,
+      radiusM: 2673,
+      alphaDeg0: 120,
+      turnDps: 3,
+      altM: 3400,
+    },
+    {
+      icao: 'aaa003',
+      callsign: 'TRN003',
+      cLon: -97.71,
+      cLat: 30.24,
+      radiusM: 2673,
+      alphaDeg0: 240,
+      turnDps: 3,
+      altM: 2800,
+    },
   ],
   military: [
-    { hex: 'bbb201', flight: 'TRNMIL1', cLon: -97.7550, cLat: 30.2750, radiusM: 2947, alphaDeg0: 45, turnDps: 3, altFt: 12000, t: 'F16', r: 'AF-201' },
-    { hex: 'bbb202', flight: 'TRNMIL2', cLon: -97.7250, cLat: 30.2500, radiusM: 2947, alphaDeg0: 200, turnDps: 3, altFt: 14000, t: 'F18', r: 'AF-202' },
+    {
+      hex: 'bbb201',
+      flight: 'TRNMIL1',
+      cLon: -97.755,
+      cLat: 30.275,
+      radiusM: 2947,
+      alphaDeg0: 45,
+      turnDps: 3,
+      altFt: 12000,
+      t: 'F16',
+      r: 'AF-201',
+    },
+    {
+      hex: 'bbb202',
+      flight: 'TRNMIL2',
+      cLon: -97.725,
+      cLat: 30.25,
+      radiusM: 2947,
+      alphaDeg0: 200,
+      turnDps: 3,
+      altFt: 14000,
+      t: 'F18',
+      r: 'AF-202',
+    },
   ],
   // Low-speed scenarios (heading-v2). The heli HOVERS: position = smooth
   // pseudo-random GPS drift (driftAmpM metres per sinusoid pair → fix-to-fix
@@ -223,15 +284,46 @@ const TURN = {
   // classifies it klass=helicopter at ingest. The slow plane reuses the circle
   // math: R=184.2 m at 4°/s ⇒ ground speed R·ω = 12.86 m/s ≈ 25 kt; category 2
   // (light). Both served by the flights (OpenSky) shim branch.
-  hover: { icao: 'aaa010', callsign: 'HOVER1', cLon: -97.7431, cLat: 30.2672, altM: 450, driftAmpM: 4, baseTrack: 90, trackFlipSec: 29, category: 8 },
-  slow: { icao: 'aaa011', callsign: 'SLOW25', cLon: -97.7000, cLat: 30.2300, radiusM: 184.2, alphaDeg0: 0, turnDps: 4, altM: 900, category: 2 },
+  hover: {
+    icao: 'aaa010',
+    callsign: 'HOVER1',
+    cLon: -97.7431,
+    cLat: 30.2672,
+    altM: 450,
+    driftAmpM: 4,
+    baseTrack: 90,
+    trackFlipSec: 29,
+    category: 8,
+  },
+  slow: {
+    icao: 'aaa011',
+    callsign: 'SLOW25',
+    cLon: -97.7,
+    cLat: 30.23,
+    radiusM: 184.2,
+    alphaDeg0: 0,
+    turnDps: 4,
+    altM: 900,
+    category: 2,
+  },
   // Phase 5 (course-handoff consistency): 65 kt helicopter in a wide orbit —
   // R=958 m at 2°/s ⇒ ground speed R·ω = 33.4 m/s ≈ 65 kt (the owner's Bell
   // 429 case). Category 8 classifies it klass=helicopter, so its display
   // course is the reported per-fix track (chords are ignored for rotorcraft).
   // `active` gates it INTO the feed only when phase 5 starts, so phases 1–4
   // run against exactly the fleet they were calibrated on.
-  heli65: { icao: 'aaa012', callsign: 'HELI65', cLon: -97.7750, cLat: 30.2150, radiusM: 958, alphaDeg0: 0, turnDps: 2, altM: 600, category: 8, active: false },
+  heli65: {
+    icao: 'aaa012',
+    callsign: 'HELI65',
+    cLon: -97.775,
+    cLat: 30.215,
+    radiusM: 958,
+    alphaDeg0: 0,
+    turnDps: 2,
+    altM: 600,
+    category: 8,
+    active: false,
+  },
 };
 
 /** Analytic ground truth (Node side too, for A5): plane state at epoch-relative tSec. */
@@ -251,15 +343,33 @@ function arcState(p, tSec) {
 // Node-side analysis of a sampled {tMs, course} series
 // ---------------------------------------------------------------------------
 function analyze(label, samples, plan) {
-  const { capDps = 60, tolFactor = 1.15, snapCeilDeg = 33.75, snapDtCeilMs = 500, minTotalDeg = 40 } = plan;
+  const {
+    capDps = 60,
+    tolFactor = 1.15,
+    snapCeilDeg = 33.75,
+    snapDtCeilMs = 500,
+    minTotalDeg = 40,
+  } = plan;
   const valid = samples.filter((s) => s && Number.isFinite(s.course));
-  const windowSec = valid.length ? (valid[valid.length - 1].tMs - valid[0].tMs) / 1000 : 0;
-  console.log(`\n  ${label}: ${valid.length}/${samples.length} valid frames over ${windowSec.toFixed(1)} s`);
+  const windowSec = valid.length
+    ? (valid[valid.length - 1].tMs - valid[0].tMs) / 1000
+    : 0;
+  console.log(
+    `\n  ${label}: ${valid.length}/${samples.length} valid frames over ${windowSec.toFixed(1)} s`,
+  );
   if (valid.length < 12 || windowSec < 30) {
-    record(`${label}: >=12 sampled frames spanning >=30 s`, false, `${valid.length} frames over ${windowSec.toFixed(1)} s`);
+    record(
+      `${label}: >=12 sampled frames spanning >=30 s`,
+      false,
+      `${valid.length} frames over ${windowSec.toFixed(1)} s`,
+    );
     return;
   }
-  record(`${label}: >=12 sampled frames spanning >=30 s`, true, `${valid.length} frames over ${windowSec.toFixed(1)} s`);
+  record(
+    `${label}: >=12 sampled frames spanning >=30 s`,
+    true,
+    `${valid.length} frames over ${windowSec.toFixed(1)} s`,
+  );
 
   const deltas = []; // {d, dtMs, rate, tMs}
   let total = 0;
@@ -268,7 +378,12 @@ function analyze(label, samples, plan) {
     if (dtMs < 4 || dtMs > 10000) continue; // keep slow SwiftShader frames; skip only genuine stalls
     const d = norm180(valid[i].course - valid[i - 1].course);
     total += d;
-    deltas.push({ d, dtMs, rate: Math.abs(d) / (dtMs / 1000), tMs: valid[i].tMs });
+    deltas.push({
+      d,
+      dtMs,
+      rate: Math.abs(d) / (dtMs / 1000),
+      tMs: valid[i].tMs,
+    });
   }
   const dts = deltas.map((x) => x.dtMs).sort((a, b) => a - b);
   const dtMed = dts[Math.floor(dts.length / 2)] || 0;
@@ -277,28 +392,52 @@ function analyze(label, samples, plan) {
   const moving = deltas.filter((x) => Math.abs(x.d) > 1.5);
   const maxRate = moving.length ? Math.max(...moving.map((x) => x.rate)) : 0;
   const maxAbsD = Math.max(...deltas.map((x) => Math.abs(x.d)));
-  const snapFrames = deltas.filter((x) => Math.abs(x.d) >= snapCeilDeg && x.dtMs <= snapDtCeilMs);
+  const snapFrames = deltas.filter(
+    (x) => Math.abs(x.d) >= snapCeilDeg && x.dtMs <= snapDtCeilMs,
+  );
   const active = deltas.filter((x) => Math.abs(x.d) > 0.5);
-  let maxRun = 0, run = 0;
-  for (const x of deltas) { run = Math.abs(x.d) > 0.5 ? run + 1 : 0; if (run > maxRun) maxRun = run; }
-  const top = [...deltas].sort((a, b) => Math.abs(b.d) - Math.abs(a.d)).slice(0, 5);
+  let maxRun = 0,
+    run = 0;
+  for (const x of deltas) {
+    run = Math.abs(x.d) > 0.5 ? run + 1 : 0;
+    if (run > maxRun) maxRun = run;
+  }
+  const top = [...deltas]
+    .sort((a, b) => Math.abs(b.d) - Math.abs(a.d))
+    .slice(0, 5);
   const t0 = valid[0].tMs;
-  console.log(`    frame dt median=${dtMed.toFixed(0)} ms | max rate (|Δ|>1.5°)=${maxRate.toFixed(1)} °/s | max |Δ|=${maxAbsD.toFixed(2)}°`);
-  console.log(`    active frames (|Δ|>0.5°): ${active.length} (longest consecutive run ${maxRun}) | total signed change=${total.toFixed(1)}°`);
-  console.log(`    top deltas: ${top.map((x) => `${x.d.toFixed(1)}°/${x.dtMs.toFixed(0)}ms@t+${((x.tMs - t0) / 1000).toFixed(1)}s`).join('  ')}`);
+  console.log(
+    `    frame dt median=${dtMed.toFixed(0)} ms | max rate (|Δ|>1.5°)=${maxRate.toFixed(1)} °/s | max |Δ|=${maxAbsD.toFixed(2)}°`,
+  );
+  console.log(
+    `    active frames (|Δ|>0.5°): ${active.length} (longest consecutive run ${maxRun}) | total signed change=${total.toFixed(1)}°`,
+  );
+  console.log(
+    `    top deltas: ${top.map((x) => `${x.d.toFixed(1)}°/${x.dtMs.toFixed(0)}ms@t+${((x.tMs - t0) / 1000).toFixed(1)}s`).join('  ')}`,
+  );
 
-  record(`${label} A1: per-frame course rate <= ${capDps}°/s cap (+${Math.round((tolFactor - 1) * 100)}%)`,
+  record(
+    `${label} A1: per-frame course rate <= ${capDps}°/s cap (+${Math.round((tolFactor - 1) * 100)}%)`,
     maxRate <= capDps * tolFactor,
-    `max ${maxRate.toFixed(1)} °/s vs ${(capDps * tolFactor).toFixed(0)} °/s (over ${moving.length} moving pairs)`);
-  record(`${label} A2: no once-per-poll snap (no |Δ| >= ${snapCeilDeg}° in a <= ${snapDtCeilMs} ms frame; full step ~45°)`,
+    `max ${maxRate.toFixed(1)} °/s vs ${(capDps * tolFactor).toFixed(0)} °/s (over ${moving.length} moving pairs)`,
+  );
+  record(
+    `${label} A2: no once-per-poll snap (no |Δ| >= ${snapCeilDeg}° in a <= ${snapDtCeilMs} ms frame; full step ~45°)`,
     snapFrames.length === 0,
-    snapFrames.length ? `snap frames: ${snapFrames.map((x) => `${x.d.toFixed(1)}°/${x.dtMs.toFixed(0)}ms`).join(' ')}` : `max |Δ| ${maxAbsD.toFixed(2)}°`);
-  record(`${label} A3: slew spread over frames (>=4 active, >=2 consecutive)`,
+    snapFrames.length
+      ? `snap frames: ${snapFrames.map((x) => `${x.d.toFixed(1)}°/${x.dtMs.toFixed(0)}ms`).join(' ')}`
+      : `max |Δ| ${maxAbsD.toFixed(2)}°`,
+  );
+  record(
+    `${label} A3: slew spread over frames (>=4 active, >=2 consecutive)`,
     active.length >= 4 && maxRun >= 2,
-    `${active.length} active, run ${maxRun}`);
-  record(`${label} A4: really turning (total change >= +${minTotalDeg}°)`,
+    `${active.length} active, run ${maxRun}`,
+  );
+  record(
+    `${label} A4: really turning (total change >= +${minTotalDeg}°)`,
     total >= minTotalDeg,
-    `total ${total.toFixed(1)}° over ${((valid[valid.length - 1].tMs - t0) / 1000).toFixed(1)} s`);
+    `total ${total.toFixed(1)}° over ${((valid[valid.length - 1].tMs - t0) / 1000).toFixed(1)} s`,
+  );
 }
 
 /** Per-frame deltas of a sampled {tMs, course} series (shared by the
@@ -316,65 +455,120 @@ function courseDeltas(samples) {
 
 /** Phase 3 (hovering helicopter): the displayed course must HOLD — chord and
  *  reported track are both noise at hover, so any movement is chasing noise. */
-function analyzeHover(label, samples, { maxTotalAbsDeg = 25, maxExcursionDeg = 60 } = {}) {
+function analyzeHover(
+  label,
+  samples,
+  { maxTotalAbsDeg = 25, maxExcursionDeg = 60 } = {},
+) {
   const { valid, deltas } = courseDeltas(samples);
-  const windowSec = valid.length ? (valid[valid.length - 1].tMs - valid[0].tMs) / 1000 : 0;
-  console.log(`\n  ${label}: ${valid.length}/${samples.length} valid frames over ${windowSec.toFixed(1)} s`);
+  const windowSec = valid.length
+    ? (valid[valid.length - 1].tMs - valid[0].tMs) / 1000
+    : 0;
+  console.log(
+    `\n  ${label}: ${valid.length}/${samples.length} valid frames over ${windowSec.toFixed(1)} s`,
+  );
   const covered = valid.length >= 12 && windowSec >= 30;
-  record(`${label} H1: >=12 sampled frames spanning >=30 s`, covered, `${valid.length} frames over ${windowSec.toFixed(1)} s`);
+  record(
+    `${label} H1: >=12 sampled frames spanning >=30 s`,
+    covered,
+    `${valid.length} frames over ${windowSec.toFixed(1)} s`,
+  );
   if (!covered) return;
-  let totalAbs = 0, cum = 0, maxExcursion = 0;
+  let totalAbs = 0,
+    cum = 0,
+    maxExcursion = 0;
   for (const x of deltas) {
     totalAbs += Math.abs(x.d);
     cum += x.d;
     maxExcursion = Math.max(maxExcursion, Math.abs(cum));
   }
-  console.log(`    total |Δcourse|=${totalAbs.toFixed(1)}° | max excursion from start=${maxExcursion.toFixed(1)}° | start=${valid[0].course.toFixed(0)}° end=${valid[valid.length - 1].course.toFixed(0)}°`);
-  record(`${label} H2: displayed course stays put (total |Δ| <= ${maxTotalAbsDeg}° over ${windowSec.toFixed(0)} s)`,
-    totalAbs <= maxTotalAbsDeg, `total |Δ| ${totalAbs.toFixed(1)}°`);
-  record(`${label} H3: no spins (max excursion from initial course <= ${maxExcursionDeg}°)`,
-    maxExcursion <= maxExcursionDeg, `max excursion ${maxExcursion.toFixed(1)}°`);
+  console.log(
+    `    total |Δcourse|=${totalAbs.toFixed(1)}° | max excursion from start=${maxExcursion.toFixed(1)}° | start=${valid[0].course.toFixed(0)}° end=${valid[valid.length - 1].course.toFixed(0)}°`,
+  );
+  record(
+    `${label} H2: displayed course stays put (total |Δ| <= ${maxTotalAbsDeg}° over ${windowSec.toFixed(0)} s)`,
+    totalAbs <= maxTotalAbsDeg,
+    `total |Δ| ${totalAbs.toFixed(1)}°`,
+  );
+  record(
+    `${label} H3: no spins (max excursion from initial course <= ${maxExcursionDeg}°)`,
+    maxExcursion <= maxExcursionDeg,
+    `max excursion ${maxExcursion.toFixed(1)}°`,
+  );
 }
 
 /** Phase 4 (25 kt tight turn): the course must ADVANCE like the real 4°/s turn —
  *  smooth (no 60°/s boundary whips), monotonic (no counter-turn reversals). */
-function analyzeSlowTurn(label, samples, {
-  maxRateDps = 20,
-  maxReversalDeg = 8,
-  expectDps = 4,
-  minSamples = 12,
-  minWindowSec = 30,
-  minProgressFraction = 0.4,
-  scoreProgress = true,
-} = {}) {
+function analyzeSlowTurn(
+  label,
+  samples,
+  {
+    maxRateDps = 20,
+    maxReversalDeg = 8,
+    expectDps = 4,
+    minSamples = 12,
+    minWindowSec = 30,
+    minProgressFraction = 0.4,
+    scoreProgress = true,
+  } = {},
+) {
   const { valid, deltas } = courseDeltas(samples);
-  const windowSec = valid.length ? (valid[valid.length - 1].tMs - valid[0].tMs) / 1000 : 0;
-  console.log(`\n  ${label}: ${valid.length}/${samples.length} valid frames over ${windowSec.toFixed(1)} s`);
+  const windowSec = valid.length
+    ? (valid[valid.length - 1].tMs - valid[0].tMs) / 1000
+    : 0;
+  console.log(
+    `\n  ${label}: ${valid.length}/${samples.length} valid frames over ${windowSec.toFixed(1)} s`,
+  );
   const covered = valid.length >= minSamples && windowSec >= minWindowSec;
-  record(`${label} S0: >=${minSamples} frames spanning >=${minWindowSec} s`, covered, `${valid.length} frames over ${windowSec.toFixed(1)} s`);
+  record(
+    `${label} S0: >=${minSamples} frames spanning >=${minWindowSec} s`,
+    covered,
+    `${valid.length} frames over ${windowSec.toFixed(1)} s`,
+  );
   if (!covered) return;
   const moving = deltas.filter((x) => Math.abs(x.d) > 1.5);
-  const maxRate = moving.length ? Math.max(...moving.map((x) => Math.abs(x.d) / (x.dtMs / 1000))) : 0;
-  let total = 0, reversal = 0;
-  for (const x of deltas) { total += x.d; if (x.d < 0) reversal += x.d; }
-  const top = [...deltas].sort((a, b) => Math.abs(b.d) - Math.abs(a.d)).slice(0, 4);
-  console.log(`    max rate (|Δ|>1.5°)=${maxRate.toFixed(1)} °/s | total=${total.toFixed(1)}° | counter-turn sum=${reversal.toFixed(1)}°`);
-  console.log(`    top deltas: ${top.map((x) => `${x.d.toFixed(1)}°/${x.dtMs.toFixed(0)}ms`).join('  ')}`);
-  record(`${label} S1: smooth slow turn (max per-frame rate <= ${maxRateDps}°/s; real turn ${expectDps}°/s)`,
-    maxRate <= maxRateDps, `max ${maxRate.toFixed(1)} °/s (over ${moving.length} moving pairs)`);
+  const maxRate = moving.length
+    ? Math.max(...moving.map((x) => Math.abs(x.d) / (x.dtMs / 1000)))
+    : 0;
+  let total = 0,
+    reversal = 0;
+  for (const x of deltas) {
+    total += x.d;
+    if (x.d < 0) reversal += x.d;
+  }
+  const top = [...deltas]
+    .sort((a, b) => Math.abs(b.d) - Math.abs(a.d))
+    .slice(0, 4);
+  console.log(
+    `    max rate (|Δ|>1.5°)=${maxRate.toFixed(1)} °/s | total=${total.toFixed(1)}° | counter-turn sum=${reversal.toFixed(1)}°`,
+  );
+  console.log(
+    `    top deltas: ${top.map((x) => `${x.d.toFixed(1)}°/${x.dtMs.toFixed(0)}ms`).join('  ')}`,
+  );
+  record(
+    `${label} S1: smooth slow turn (max per-frame rate <= ${maxRateDps}°/s; real turn ${expectDps}°/s)`,
+    maxRate <= maxRateDps,
+    `max ${maxRate.toFixed(1)} °/s (over ${moving.length} moving pairs)`,
+  );
   // The default 100 ms request cadence can still produce multi-second render
   // gaps under SwiftShader. Use it for load/coverage/rate, but score direction
   // and progress only in the dedicated 600 ms cadence pass below, which
   // demonstrated stable consecutive samples on this backend.
   if (!scoreProgress) return;
-  record(`${label} S2: monotonic in the turn direction (counter-turn sum >= -${maxReversalDeg}°)`,
-    reversal >= -maxReversalDeg, `counter-turn ${reversal.toFixed(1)}°`);
+  record(
+    `${label} S2: monotonic in the turn direction (counter-turn sum >= -${maxReversalDeg}°)`,
+    reversal >= -maxReversalDeg,
+    `counter-turn ${reversal.toFixed(1)}°`,
+  );
   // The window can begin halfway through the 15 s fix interval, before the
   // next segment-boundary slew starts. Require substantial forward progress
   // without assuming a favorable phase alignment.
   const minTotal = minProgressFraction * expectDps * windowSec;
-  record(`${label} S3: really turning (total >= ${minTotal.toFixed(0)}°)`,
-    total >= minTotal, `total ${total.toFixed(1)}° over ${windowSec.toFixed(1)} s`);
+  record(
+    `${label} S3: really turning (total >= ${minTotal.toFixed(0)}°)`,
+    total >= minTotal,
+    `total ${total.toFixed(1)}° over ${windowSec.toFixed(1)} s`,
+  );
 }
 
 /** Phase 5 (tracked↔fleet handoff): the sampled RENDERED course must stay
@@ -386,16 +580,30 @@ function analyzeSlowTurn(label, samples, {
  *   - course rate: the pre-fix snap-back replayed the divergence at the
  *     60°/s slew cap, so ANY two near-boundary samples catch it even when the
  *     fleet model appears a few frames late. */
-function analyzeHandoff(label, { samples, actionTMs }, {
-  truthDps = 2, stepExcessTolDeg = 12, rateTolDps = 12, postWindowMs = 4000,
-  minSamples = 30, pairDtCeilMs = 3000, rateDtFloorMs = 0,
-} = {}) {
+function analyzeHandoff(
+  label,
+  { samples, actionTMs },
+  {
+    truthDps = 2,
+    stepExcessTolDeg = 12,
+    rateTolDps = 12,
+    postWindowMs = 4000,
+    minSamples = 30,
+    pairDtCeilMs = 3000,
+    rateDtFloorMs = 0,
+  } = {},
+) {
   const valid = samples.filter((s) => s && Number.isFinite(s.course));
   const t0 = valid.length ? valid[0].tMs : 0;
-  console.log(`\n  ${label}: ${valid.length}/${samples.length} valid frames; action at t+${Number.isFinite(actionTMs) ? ((actionTMs - t0) / 1000).toFixed(1) : '?'} s`);
+  console.log(
+    `\n  ${label}: ${valid.length}/${samples.length} valid frames; action at t+${Number.isFinite(actionTMs) ? ((actionTMs - t0) / 1000).toFixed(1) : '?'} s`,
+  );
   if (valid.length < minSamples || !Number.isFinite(actionTMs)) {
-    record(`${label}: enough samples around the transition`, false,
-      `valid=${valid.length} (need ${minSamples}) actionTMs=${actionTMs}`);
+    record(
+      `${label}: enough samples around the transition`,
+      false,
+      `valid=${valid.length} (need ${minSamples}) actionTMs=${actionTMs}`,
+    );
     return;
   }
   let maxExcess = 0;
@@ -407,26 +615,38 @@ function analyzeHandoff(label, { samples, actionTMs }, {
     if (dtMs < 4 || dtMs > pairDtCeilMs) continue; // stalled / model-swap-gap outliers
     // (Step excess is truth-compensated, so long low-fps pairs stay valid —
     // SwiftShader near ground-level 3D tiles can drop under 1 fps.)
-    const nearAction = valid[i].tMs >= actionTMs - 1000 && valid[i - 1].tMs <= actionTMs + postWindowMs;
+    const nearAction =
+      valid[i].tMs >= actionTMs - 1000 &&
+      valid[i - 1].tMs <= actionTMs + postWindowMs;
     if (!nearAction) continue;
     boundaryPairs += 1;
     const d = Math.abs(norm180(valid[i].course - valid[i - 1].course));
     const excess = d - truthDps * (dtMs / 1000);
-    if (excess > maxExcess) { maxExcess = excess; maxExcessAtMs = valid[i].tMs - actionTMs; }
+    if (excess > maxExcess) {
+      maxExcess = excess;
+      maxExcessAtMs = valid[i].tMs - actionTMs;
+    }
     // Rate metric: dt floored at the display's own refresh quantum — the fleet
     // billboard's rotation advances in ROTATION_REFRESH_MS batches, so a
     // short-dt sample pair spanning one refresh reads a full second of course
     // advance over a fraction of a second. The pre-fix snap (~120° in one
     // refresh) still reads >100°/s through the floor.
-    if (d > 1.5) maxRate = Math.max(maxRate, d / (Math.max(dtMs, rateDtFloorMs) / 1000)); // sub-1.5° deltas are noise
+    if (d > 1.5)
+      maxRate = Math.max(maxRate, d / (Math.max(dtMs, rateDtFloorMs) / 1000)); // sub-1.5° deltas are noise
   }
-  console.log(`    boundary pairs=${boundaryPairs} | max step excess=${maxExcess.toFixed(1)}° @ action+${(maxExcessAtMs / 1000).toFixed(2)} s | max rate=${maxRate.toFixed(1)} °/s`);
-  record(`${label}: no course flip across the handoff (step excess <= ${stepExcessTolDeg}°, rate <= ${rateTolDps}°/s near the boundary)`,
+  console.log(
+    `    boundary pairs=${boundaryPairs} | max step excess=${maxExcess.toFixed(1)}° @ action+${(maxExcessAtMs / 1000).toFixed(2)} s | max rate=${maxRate.toFixed(1)} °/s`,
+  );
+  record(
+    `${label}: no course flip across the handoff (step excess <= ${stepExcessTolDeg}°, rate <= ${rateTolDps}°/s near the boundary)`,
     boundaryPairs > 0 && maxExcess <= stepExcessTolDeg && maxRate <= rateTolDps,
-    `maxExcess=${maxExcess.toFixed(1)}° maxRate=${maxRate.toFixed(1)}°/s over ${boundaryPairs} pairs (truth ${truthDps}°/s)`);
+    `maxExcess=${maxExcess.toFixed(1)}° maxRate=${maxRate.toFixed(1)}°/s over ${boundaryPairs} pairs (truth ${truthDps}°/s)`,
+  );
 }
 
-function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
 
 // ---------------------------------------------------------------------------
 // Main
@@ -439,7 +659,9 @@ async function main() {
     const res = await fetch(APP_URL, { method: 'GET' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
   } catch (e) {
-    console.error(`\x1b[31mDev server not reachable at ${APP_URL} (${e.message}).\x1b[0m`);
+    console.error(
+      `\x1b[31mDev server not reachable at ${APP_URL} (${e.message}).\x1b[0m`,
+    );
     process.exit(2);
   }
 
@@ -470,12 +692,16 @@ async function main() {
     page.on('console', (msg) => {
       if (msg.type() === 'error') {
         const text = msg.text();
-        if (!/Failed to load resource.*404/i.test(text)) consoleErrors.push(text);
+        if (!/Failed to load resource.*404/i.test(text))
+          consoleErrors.push(text);
       }
     });
-    page.on('pageerror', (err) => consoleErrors.push(`pageerror: ${err.message}`));
+    page.on('pageerror', (err) =>
+      consoleErrors.push(`pageerror: ${err.message}`),
+    );
     page.on('response', (response) => {
-      if (response.status() >= 500) failedResponses.push(`${response.status()} ${response.url()}`);
+      if (response.status() >= 500)
+        failedResponses.push(`${response.status()} ${response.url()}`);
     });
 
     // ---- Turning-plane fetch shim (installed before any app code runs) ------
@@ -492,9 +718,11 @@ async function main() {
         const east = p.radiusM * Math.sin(aRad);
         const north = p.radiusM * Math.cos(aRad);
         const lat = p.cLat + north / 111320;
-        const lon = p.cLon + east / (111320 * Math.cos((p.cLat * Math.PI) / 180));
+        const lon =
+          p.cLon + east / (111320 * Math.cos((p.cLat * Math.PI) / 180));
         return {
-          lon, lat,
+          lon,
+          lat,
           course: norm360(alpha + 90),
           speedMps: p.radiusM * ((p.turnDps * Math.PI) / 180),
         };
@@ -502,71 +730,139 @@ async function main() {
       // Hovering-heli truth (keep in sync with hoverState() on the Node side):
       // smooth bounded GPS drift + square-wave reported-track flips.
       window.__TURN.hoverAt = (p, tSec) => {
-        const east = p.driftAmpM * (Math.sin(2 * Math.PI * tSec / 41) + 0.6 * Math.sin(2 * Math.PI * tSec / 13.7));
-        const north = p.driftAmpM * (Math.sin(2 * Math.PI * tSec / 53 + 1.3) + 0.6 * Math.sin(2 * Math.PI * tSec / 17.3 + 0.7));
+        const east =
+          p.driftAmpM *
+          (Math.sin((2 * Math.PI * tSec) / 41) +
+            0.6 * Math.sin((2 * Math.PI * tSec) / 13.7));
+        const north =
+          p.driftAmpM *
+          (Math.sin((2 * Math.PI * tSec) / 53 + 1.3) +
+            0.6 * Math.sin((2 * Math.PI * tSec) / 17.3 + 0.7));
         const lat = p.cLat + north / 111320;
-        const lon = p.cLon + east / (111320 * Math.cos((p.cLat * Math.PI) / 180));
-        const flip = Math.sin(2 * Math.PI * tSec / p.trackFlipSec) >= 0 ? 1 : -1;
-        return { lon, lat, course: norm360(p.baseTrack + flip * 45), speedMps: 1.0 };
+        const lon =
+          p.cLon + east / (111320 * Math.cos((p.cLat * Math.PI) / 180));
+        const flip =
+          Math.sin((2 * Math.PI * tSec) / p.trackFlipSec) >= 0 ? 1 : -1;
+        return {
+          lon,
+          lat,
+          course: norm360(p.baseTrack + flip * 45),
+          speedMps: 1.0,
+        };
       };
 
       const realFetch = window.fetch.bind(window);
-      const jsonResponse = (obj) => new Response(JSON.stringify(obj), {
-        status: 200, headers: { 'Content-Type': 'application/json' },
-      });
+      const jsonResponse = (obj) =>
+        new Response(JSON.stringify(obj), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
 
       window.fetch = (input, init) => {
-        const url = typeof input === 'string' ? input : (input && input.url) || '';
+        const url =
+          typeof input === 'string' ? input : (input && input.url) || '';
         const T = window.__TURN;
         if (url.includes('/api/openai/hud-summary')) {
-          return Promise.resolve(jsonResponse({ summary: 'Turning-flight QA' }));
+          return Promise.resolve(
+            jsonResponse({ summary: 'Turning-flight QA' }),
+          );
         }
         // Serve-time truth: position/track/timestamp all as of (now + offset).
         const nowSec = Date.now() / 1000 + (T.timeOffsetSec || 0);
         const tRel = nowSec - T.epochMs / 1000;
 
-        if (url.includes('/api/opensky-track')) return Promise.resolve(jsonResponse({ path: [] }));
+        if (url.includes('/api/opensky-track'))
+          return Promise.resolve(jsonResponse({ path: [] }));
         if (url.includes('/api/adsblol/trace')) {
-          return Promise.resolve(jsonResponse({ timestamp: Math.floor(nowSec), trace: [] }));
+          return Promise.resolve(
+            jsonResponse({ timestamp: Math.floor(nowSec), trace: [] }),
+          );
         }
         if (url.includes('/api/opensky')) {
           T.__hitsGuard = ++window.__TURN_HITS.opensky;
           const row = (id, callsign, s, altM, category) => [
-            id, callsign, 'Synthetica',
-            Math.floor(nowSec),        // 3 time_position — the fix epoch the layer stamps history with
-            Math.floor(nowSec),        // 4 last_contact
-            s.lon, s.lat, altM,        // 5,6,7
-            false,                     // 8 on_ground
-            s.speedMps,                // 9 velocity (m/s)
-            s.course,                  // 10 true_track (deg) — honest arc tangent (hover: flipping GPS-vector noise)
-            0, null, null, null, false, 0,
-            category ?? null,          // 17 extended=1 emitter category (8 = rotorcraft → klass helicopter)
+            id,
+            callsign,
+            'Synthetica',
+            Math.floor(nowSec), // 3 time_position — the fix epoch the layer stamps history with
+            Math.floor(nowSec), // 4 last_contact
+            s.lon,
+            s.lat,
+            altM, // 5,6,7
+            false, // 8 on_ground
+            s.speedMps, // 9 velocity (m/s)
+            s.course, // 10 true_track (deg) — honest arc tangent (hover: flipping GPS-vector noise)
+            0,
+            null,
+            null,
+            null,
+            false,
+            0,
+            category ?? null, // 17 extended=1 emitter category (8 = rotorcraft → klass helicopter)
           ];
-          const states = T.flights.map((f) => row(f.icao, f.callsign, T.stateAt(f, tRel), f.altM, null));
-          states.push(row(T.hover.icao, T.hover.callsign, T.hoverAt(T.hover, tRel), T.hover.altM, T.hover.category));
-          states.push(row(T.slow.icao, T.slow.callsign, T.stateAt(T.slow, tRel), T.slow.altM, T.slow.category));
-          if (T.heli65.active) states.push(row(T.heli65.icao, T.heli65.callsign, T.stateAt(T.heli65, tRel), T.heli65.altM, T.heli65.category));
-          return Promise.resolve(jsonResponse({ time: Math.floor(nowSec), states }));
+          const states = T.flights.map((f) =>
+            row(f.icao, f.callsign, T.stateAt(f, tRel), f.altM, null),
+          );
+          states.push(
+            row(
+              T.hover.icao,
+              T.hover.callsign,
+              T.hoverAt(T.hover, tRel),
+              T.hover.altM,
+              T.hover.category,
+            ),
+          );
+          states.push(
+            row(
+              T.slow.icao,
+              T.slow.callsign,
+              T.stateAt(T.slow, tRel),
+              T.slow.altM,
+              T.slow.category,
+            ),
+          );
+          if (T.heli65.active)
+            states.push(
+              row(
+                T.heli65.icao,
+                T.heli65.callsign,
+                T.stateAt(T.heli65, tRel),
+                T.heli65.altM,
+                T.heli65.category,
+              ),
+            );
+          return Promise.resolve(
+            jsonResponse({ time: Math.floor(nowSec), states }),
+          );
         }
         if (url.includes('/api/adsblol/mil')) {
           window.__TURN_HITS.mil++;
           const ac = T.military.map((m) => {
             const s = T.stateAt(m, tRel);
             return {
-              hex: m.hex, flight: m.flight,
-              lon: s.lon, lat: s.lat, alt_baro: m.altFt,
-              track: s.course, gs: s.speedMps * 1.9438,
-              t: m.t, r: m.r, ownOp: 'SYNTH AF',
+              hex: m.hex,
+              flight: m.flight,
+              lon: s.lon,
+              lat: s.lat,
+              alt_baro: m.altFt,
+              track: s.course,
+              gs: s.speedMps * 1.9438,
+              t: m.t,
+              r: m.r,
+              ownOp: 'SYNTH AF',
               seen_pos: Math.max(0, -(T.timeOffsetSec || 0)), // age → fixTime = now + offset
             };
           });
-          return Promise.resolve(jsonResponse({ msg: 'No error', now: Date.now(), ac }));
+          return Promise.resolve(
+            jsonResponse({ msg: 'No error', now: Date.now(), ac }),
+          );
         }
         // Classification is supplied by the synthetic OpenSky category, so the
         // best-effort ADSBDB enrichment has no bearing on this scenario. Stub
         // it rather than letting one unrelated public-provider 502 turn a
         // renderer/heading result into a console-cleanliness false negative.
-        if (url.includes('/api/adsbdb/')) return Promise.resolve(jsonResponse({ found: false }));
+        if (url.includes('/api/adsbdb/'))
+          return Promise.resolve(jsonResponse({ found: false }));
         return realFetch(input, init);
       };
     }, TURN);
@@ -574,8 +870,11 @@ async function main() {
     console.log('Loading app...');
     await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForFunction(
-      () => window.__godsEyeView && window.__godsEyeView.viewer && window.__godsEyeView.dataManager,
-      { timeout: 60000, polling: 200 }
+      () =>
+        window.__godsEyeView &&
+        window.__godsEyeView.viewer &&
+        window.__godsEyeView.dataManager,
+      { timeout: 60000, polling: 200 },
     );
     console.log('  App globals ready.');
 
@@ -596,7 +895,10 @@ async function main() {
           for (let i = 0; i < n; i++) {
             const p = coll.get(i);
             if (!p) continue;
-            if (typeof p.length === 'number' && typeof p.get === 'function') { walk(p); continue; }
+            if (typeof p.length === 'number' && typeof p.get === 'function') {
+              walk(p);
+              continue;
+            }
             if (p.modelMatrix && typeof p.ready !== 'undefined') {
               if (icao && p.id !== icao) continue;
               out.push(p);
@@ -610,14 +912,21 @@ async function main() {
         if (!pool.length) return null;
         const ent = v.trackedEntity;
         let tracked = null;
-        if (ent && typeof ent.gevDisplayPosition === 'function') tracked = ent.gevDisplayPosition();
+        if (ent && typeof ent.gevDisplayPosition === 'function')
+          tracked = ent.gevDisplayPosition();
         if (!tracked) return pool[0];
-        let best = null, bestD = Infinity;
+        let best = null,
+          bestD = Infinity;
         for (const m of pool) {
           const mm = m.modelMatrix;
-          const dx = mm[12] - tracked.x, dy = mm[13] - tracked.y, dz = mm[14] - tracked.z;
+          const dx = mm[12] - tracked.x,
+            dy = mm[13] - tracked.y,
+            dz = mm[14] - tracked.z;
           const d = dx * dx + dy * dy + dz * dz;
-          if (d < bestD) { bestD = d; best = m; }
+          if (d < bestD) {
+            bestD = d;
+            best = m;
+          }
         }
         return best;
       };
@@ -630,10 +939,16 @@ async function main() {
         const Carto = v.camera.positionCartographic.constructor;
         const carto = Carto.fromCartesian(new C3(mm[12], mm[13], mm[14]));
         if (!carto) return null;
-        const sLat = Math.sin(carto.latitude), cLat = Math.cos(carto.latitude);
-        const sLon = Math.sin(carto.longitude), cLon = Math.cos(carto.longitude);
-        const ex = -sLon, ey = cLon, ez = 0;
-        const nx = -sLat * cLon, ny = -sLat * sLon, nz = cLat;
+        const sLat = Math.sin(carto.latitude),
+          cLat = Math.cos(carto.latitude);
+        const sLon = Math.sin(carto.longitude),
+          cLon = Math.cos(carto.longitude);
+        const ex = -sLon,
+          ey = cLon,
+          ez = 0;
+        const nx = -sLat * cLon,
+          ny = -sLat * sLon,
+          nz = cLat;
         const xe = mm[0] * ex + mm[1] * ey + mm[2] * ez;
         const xn = mm[0] * nx + mm[1] * ny + mm[2] * nz;
         const hDeg = (Math.atan2(-xn, xe) * 180) / Math.PI;
@@ -645,7 +960,12 @@ async function main() {
       // render loop while sampling instead: it still invokes the production
       // preUpdate/preRender listeners and reads the rendered model matrix, but
       // does not depend on ambient render-loop scheduling for sample count.
-      window.__sampleModelCourse = async function (icao, headingOffsetDeg, windowMs, stepMs = 100) {
+      window.__sampleModelCourse = async function (
+        icao,
+        headingOffsetDeg,
+        windowMs,
+        stepMs = 100,
+      ) {
         const v = window.__godsEyeView.viewer;
         const tileset = window.__godsEyeView.tileset;
         const out = [];
@@ -662,8 +982,17 @@ async function main() {
           await new Promise((resolve) => {
             const remove = v.scene.preRender.addEventListener(() => {
               const m = window.__findTrackedModel(icao);
-              const c = m ? window.__courseFromModelMatrix(m.modelMatrix, headingOffsetDeg) : null;
-              out.push({ tMs: performance.now(), course: c, epochMs: Date.now() });
+              const c = m
+                ? window.__courseFromModelMatrix(
+                    m.modelMatrix,
+                    headingOffsetDeg,
+                  )
+                : null;
+              out.push({
+                tMs: performance.now(),
+                course: c,
+                epochMs: Date.now(),
+              });
             });
             const step = () => {
               if (performance.now() - start >= windowMs) {
@@ -688,7 +1017,9 @@ async function main() {
     // ---- Enable layers with fixes back-dated 32 s, then prime forward ------
     // First update() fires inside setEnabled, so the FIRST fix must already be
     // the oldest (history appends only monotonically-newer fix times).
-    console.log('Priming turning history through the render delay (30 s / 15 s)...');
+    console.log(
+      'Priming turning history through the render delay (30 s / 15 s)...',
+    );
     const primed = await page.evaluate(async () => {
       const dm = window.__godsEyeView.dataManager;
       const v = window.__godsEyeView.viewer;
@@ -708,28 +1039,61 @@ async function main() {
       // Live driver: a fresh fix every 15 s from here on (the layers' own 30 s /
       // 15 s pollers add consistent extras — the shim serves arc truth at serve
       // time). 15 s × 3°/s = 45° course step per segment boundary.
-      window.__TURN_DRIVER = setInterval(() => { fl.update(v); mil.update(v); }, 15000);
-      return { fl: fl.getStats().count, mil: mil.getStats().count, hits: window.__TURN_HITS };
+      window.__TURN_DRIVER = setInterval(() => {
+        fl.update(v);
+        mil.update(v);
+      }, 15000);
+      return {
+        fl: fl.getStats().count,
+        mil: mil.getStats().count,
+        hits: window.__TURN_HITS,
+      };
     });
-    console.log(`  flights count=${primed.fl} military count=${primed.mil} | shim hits opensky=${primed.hits.opensky} mil=${primed.hits.mil}`);
-    record('inject: turning synthetic planes ingested (both layers)', primed.fl > 0 && primed.mil > 0,
-      `flights=${primed.fl} military=${primed.mil}`);
-    if (!(primed.fl > 0 && primed.mil > 0)) { finish(); return; }
+    console.log(
+      `  flights count=${primed.fl} military count=${primed.mil} | shim hits opensky=${primed.hits.opensky} mil=${primed.hits.mil}`,
+    );
+    record(
+      'inject: turning synthetic planes ingested (both layers)',
+      primed.fl > 0 && primed.mil > 0,
+      `flights=${primed.fl} military=${primed.mil}`,
+    );
+    if (!(primed.fl > 0 && primed.mil > 0)) {
+      finish();
+      return;
+    }
 
     // ========================================================================
     // Phase 1 — FLIGHTS layer: track TRN001, sample displayed course 30 s
     // ========================================================================
-    console.log('\nPhase 1 — flights layer (airplane.glb, heading offset 180°)');
+    console.log(
+      '\nPhase 1 — flights layer (airplane.glb, heading offset 180°)',
+    );
     await page.evaluate((icao) => {
-      window.__godsEyeView.dataManager.layers.get('flights').module.trackById(icao);
+      window.__godsEyeView.dataManager.layers
+        .get('flights')
+        .module.trackById(icao);
     }, TURN.flights[0].icao);
 
-    const flModelUp = await page.waitForFunction((icao) => {
-      const m = window.__findTrackedModel(icao);
-      return !!(m && m.ready && m.show);
-    }, { timeout: 40000, polling: 250 }, TURN.flights[0].icao).then(() => true).catch(() => false);
-    record('flights: tracked 3D model rendered (ready+shown)', flModelUp, flModelUp ? 'model up' : 'model never became ready');
-    if (!flModelUp) { finish(); return; }
+    const flModelUp = await page
+      .waitForFunction(
+        (icao) => {
+          const m = window.__findTrackedModel(icao);
+          return !!(m && m.ready && m.show);
+        },
+        { timeout: 40000, polling: 250 },
+        TURN.flights[0].icao,
+      )
+      .then(() => true)
+      .catch(() => false);
+    record(
+      'flights: tracked 3D model rendered (ready+shown)',
+      flModelUp,
+      flModelUp ? 'model up' : 'model never became ready',
+    );
+    if (!flModelUp) {
+      finish();
+      return;
+    }
     await sleep(1500); // let the follow camera + reconciliation settle
 
     const readoutObservation = await observeTrackedHostPaint(page);
@@ -740,11 +1104,12 @@ async function main() {
     const readoutSample = readoutObservation.sample || {};
     record(
       'tracked readout: host-painted model with no dedicated canvas',
-      !readoutHost.dedicatedCanvas && readoutHost.hostCanvas
-        && readoutObservation.observed
-        && readoutSample.hasPresentationModel
-        && readoutSample.entryCount === 1
-        && readoutSample.painted >= 1,
+      !readoutHost.dedicatedCanvas &&
+        readoutHost.hostCanvas &&
+        readoutObservation.observed &&
+        readoutSample.hasPresentationModel &&
+        readoutSample.entryCount === 1 &&
+        readoutSample.painted >= 1,
       readoutObservation.observed
         ? `id=${readoutSample.entryId} entries=${readoutSample.entryCount} hostPainted=${readoutSample.painted} legacy=${readoutHost.dedicatedCanvas}`
         : `timeout history=${JSON.stringify(readoutObservation.history)} legacy=${readoutHost.dedicatedCanvas}`,
@@ -762,16 +1127,25 @@ async function main() {
     // A5 — absolute alignment vs the analytic arc tangent at the DISPLAYED time
     // (render delay 30 s; the chord course lags the tangent by ≤ half a segment).
     {
-      const last = [...flSamples].reverse().find((s) => Number.isFinite(s.course));
+      const last = [...flSamples]
+        .reverse()
+        .find((s) => Number.isFinite(s.course));
       const epochMs = await page.evaluate(() => window.__TURN.epochMs);
       if (last) {
         const tDispRel = (last.epochMs - epochMs) / 1000 - 30;
         const expected = arcState(TURN.flights[0], tDispRel).course;
         const err = Math.abs(norm180(last.course - expected));
-        record('flights A5: displayed course aligned with arc tangent at displayed time (±35°)',
-          err <= 35, `sampled ${last.course.toFixed(1)}° vs tangent ${expected.toFixed(1)}° (|err| ${err.toFixed(1)}°)`);
+        record(
+          'flights A5: displayed course aligned with arc tangent at displayed time (±35°)',
+          err <= 35,
+          `sampled ${last.course.toFixed(1)}° vs tangent ${expected.toFixed(1)}° (|err| ${err.toFixed(1)}°)`,
+        );
       } else {
-        record('flights A5: displayed course aligned with arc tangent', false, 'no valid sample');
+        record(
+          'flights A5: displayed course aligned with arc tangent',
+          false,
+          'no valid sample',
+        );
       }
     }
 
@@ -782,18 +1156,44 @@ async function main() {
     });
     await sleep(800);
     const shots = [
-      ['flights-far-orbitA.png', async () => { /* default follow framing */ }],
-      ['flights-far-orbitB.png', () => page.evaluate(() => { window.__godsEyeView.viewer.camera.rotateRight(1.9); })],
-      ['flights-near-orbitA.png', () => page.evaluate(() => {
-        const cam = window.__godsEyeView.viewer.camera;
-        // Synthetic cruise frame settles ~5.6 km out; leave ~430 m so model,
-        // readout anchor, tracking line, and trail can be judged close-up.
-        cam.rotateRight(-1.9); cam.zoomIn(5200);
-      })],
-      ['flights-near-orbitB.png', () => page.evaluate(() => { window.__godsEyeView.viewer.camera.rotateLeft(1.2); })],
+      [
+        'flights-far-orbitA.png',
+        async () => {
+          /* default follow framing */
+        },
+      ],
+      [
+        'flights-far-orbitB.png',
+        () =>
+          page.evaluate(() => {
+            window.__godsEyeView.viewer.camera.rotateRight(1.9);
+          }),
+      ],
+      [
+        'flights-near-orbitA.png',
+        () =>
+          page.evaluate(() => {
+            const cam = window.__godsEyeView.viewer.camera;
+            // Synthetic cruise frame settles ~5.6 km out; leave ~430 m so model,
+            // readout anchor, tracking line, and trail can be judged close-up.
+            cam.rotateRight(-1.9);
+            cam.zoomIn(5200);
+          }),
+      ],
+      [
+        'flights-near-orbitB.png',
+        () =>
+          page.evaluate(() => {
+            window.__godsEyeView.viewer.camera.rotateLeft(1.2);
+          }),
+      ],
     ];
     for (const [name, move] of shots) {
-      try { await move(); } catch (e) { console.log(`    (camera move for ${name} failed: ${e.message})`); }
+      try {
+        await move();
+      } catch (e) {
+        console.log(`    (camera move for ${name} failed: ${e.message})`);
+      }
       await sleep(1200); // let a few frames render at the new pose
       await page.screenshot({ path: path.join(SHOT_DIR, name) });
       console.log(`    saved ${name}`);
@@ -807,14 +1207,27 @@ async function main() {
     // ========================================================================
     console.log('\nPhase 2 — military layer (jet.glb, heading offset 180°)');
     await page.evaluate((hex) => {
-      window.__godsEyeView.dataManager.layers.get('military').module.trackById(hex);
+      window.__godsEyeView.dataManager.layers
+        .get('military')
+        .module.trackById(hex);
     }, TURN.military[0].hex);
 
-    const milModelUp = await page.waitForFunction((hex) => {
-      const m = window.__findTrackedModel(hex);
-      return !!(m && m.ready && m.show);
-    }, { timeout: 40000, polling: 250 }, TURN.military[0].hex).then(() => true).catch(() => false);
-    record('military: tracked 3D model rendered (ready+shown)', milModelUp, milModelUp ? 'model up' : 'model never became ready');
+    const milModelUp = await page
+      .waitForFunction(
+        (hex) => {
+          const m = window.__findTrackedModel(hex);
+          return !!(m && m.ready && m.show);
+        },
+        { timeout: 40000, polling: 250 },
+        TURN.military[0].hex,
+      )
+      .then(() => true)
+      .catch(() => false);
+    record(
+      'military: tracked 3D model rendered (ready+shown)',
+      milModelUp,
+      milModelUp ? 'model up' : 'model never became ready',
+    );
     if (milModelUp) {
       await sleep(1500);
       const milSamples = await page.evaluate(
@@ -823,16 +1236,25 @@ async function main() {
       );
       analyze('military', milSamples, {});
       {
-        const last = [...milSamples].reverse().find((s) => Number.isFinite(s.course));
+        const last = [...milSamples]
+          .reverse()
+          .find((s) => Number.isFinite(s.course));
         const epochMs = await page.evaluate(() => window.__TURN.epochMs);
         if (last) {
           const tDispRel = (last.epochMs - epochMs) / 1000 - 15; // military render delay 15 s
           const expected = arcState(TURN.military[0], tDispRel).course;
           const err = Math.abs(norm180(last.course - expected));
-          record('military A5: displayed course aligned with arc tangent at displayed time (±35°)',
-            err <= 35, `sampled ${last.course.toFixed(1)}° vs tangent ${expected.toFixed(1)}° (|err| ${err.toFixed(1)}°)`);
+          record(
+            'military A5: displayed course aligned with arc tangent at displayed time (±35°)',
+            err <= 35,
+            `sampled ${last.course.toFixed(1)}° vs tangent ${expected.toFixed(1)}° (|err| ${err.toFixed(1)}°)`,
+          );
         } else {
-          record('military A5: displayed course aligned with arc tangent', false, 'no valid sample');
+          record(
+            'military A5: displayed course aligned with arc tangent',
+            false,
+            'no valid sample',
+          );
         }
       }
       await page.evaluate(() => {
@@ -840,18 +1262,37 @@ async function main() {
       });
       await sleep(800);
       for (const [name, move] of [
-        ['military-orbitA.png', async () => { }],
-        ['military-orbitB.png', () => page.evaluate(() => { window.__godsEyeView.viewer.camera.rotateRight(1.6); })],
-        ['military-near-orbitA.png', () => page.evaluate(() => {
-          const cam = window.__godsEyeView.viewer.camera;
-          // 12,000 ft synthetic frame settles ~6.3 km out; leave ~630 m.
-          cam.rotateLeft(1.6); cam.zoomIn(5700);
-        })],
-        ['military-near-orbitB.png', () => page.evaluate(() => {
-          window.__godsEyeView.viewer.camera.rotateRight(1.2);
-        })],
+        ['military-orbitA.png', async () => {}],
+        [
+          'military-orbitB.png',
+          () =>
+            page.evaluate(() => {
+              window.__godsEyeView.viewer.camera.rotateRight(1.6);
+            }),
+        ],
+        [
+          'military-near-orbitA.png',
+          () =>
+            page.evaluate(() => {
+              const cam = window.__godsEyeView.viewer.camera;
+              // 12,000 ft synthetic frame settles ~6.3 km out; leave ~630 m.
+              cam.rotateLeft(1.6);
+              cam.zoomIn(5700);
+            }),
+        ],
+        [
+          'military-near-orbitB.png',
+          () =>
+            page.evaluate(() => {
+              window.__godsEyeView.viewer.camera.rotateRight(1.2);
+            }),
+        ],
       ]) {
-        try { await move(); } catch (e) { console.log(`    (camera move for ${name} failed: ${e.message})`); }
+        try {
+          await move();
+        } catch (e) {
+          console.log(`    (camera move for ${name} failed: ${e.message})`);
+        }
         await sleep(1200);
         await page.screenshot({ path: path.join(SHOT_DIR, name) });
         console.log(`    saved ${name}`);
@@ -866,30 +1307,50 @@ async function main() {
     // as phases 1–2 (reads the tracked model matrix at the instant the rate
     // limiter advanced). Both scenarios live on the flights layer (offset 180°).
     // ========================================================================
-    const sampleCourse = (offsetDeg, windowMs, icao, stepMs = 100) => page.evaluate(
-      ({ id, offset, duration, step }) => window.__sampleModelCourse(id, offset, duration, step),
-      { id: icao, offset: offsetDeg, duration: windowMs, step: stepMs },
-    );
+    const sampleCourse = (offsetDeg, windowMs, icao, stepMs = 100) =>
+      page.evaluate(
+        ({ id, offset, duration, step }) =>
+          window.__sampleModelCourse(id, offset, duration, step),
+        { id: icao, offset: offsetDeg, duration: windowMs, step: stepMs },
+      );
 
     const trackFlightsAndWaitModel = async (icao, label) => {
       await page.evaluate((id) => {
-        window.__godsEyeView.dataManager.layers.get('flights').module.trackById(id);
+        window.__godsEyeView.dataManager.layers
+          .get('flights')
+          .module.trackById(id);
       }, icao);
-      const up = await page.waitForFunction((id) => {
-        const m = window.__findTrackedModel(id);
-        return !!(m && m.ready && m.show);
-      }, { timeout: 40000, polling: 250 }, icao).then(() => true).catch(() => false);
-      record(`${label}: tracked 3D model rendered (ready+shown)`, up, up ? 'model up' : 'model never became ready');
+      const up = await page
+        .waitForFunction(
+          (id) => {
+            const m = window.__findTrackedModel(id);
+            return !!(m && m.ready && m.show);
+          },
+          { timeout: 40000, polling: 250 },
+          icao,
+        )
+        .then(() => true)
+        .catch(() => false);
+      record(
+        `${label}: tracked 3D model rendered (ready+shown)`,
+        up,
+        up ? 'model up' : 'model never became ready',
+      );
       return up;
     };
 
     // ---- Phase 3 — hovering helicopter --------------------------------------
-    console.log('\nPhase 3 — hovering helicopter (klass=helicopter, drift ~4 m, track flips ±45°)');
+    console.log(
+      '\nPhase 3 — hovering helicopter (klass=helicopter, drift ~4 m, track flips ±45°)',
+    );
     if (await trackFlightsAndWaitModel(TURN.hover.icao, 'hover-heli')) {
       await sleep(1500);
       const heliSamples = await sampleCourse(180, 35000, TURN.hover.icao);
       analyzeHover('hover-heli', heliSamples, {});
-      for (const [name, waitMs] of [['hover-heli-T0.png', 0], ['hover-heli-T8s.png', 8000]]) {
+      for (const [name, waitMs] of [
+        ['hover-heli-T0.png', 0],
+        ['hover-heli-T8s.png', 8000],
+      ]) {
         if (waitMs) await sleep(waitMs);
         await page.screenshot({ path: path.join(SHOT_DIR_V2, name) });
         console.log(`    saved ${name}`);
@@ -897,7 +1358,9 @@ async function main() {
     }
 
     // ---- Phase 4 — 25 kt plane in a continuous 4°/s right turn --------------
-    console.log('\nPhase 4 — slow plane in a tight turn (25 kt, 4°/s, R=184 m)');
+    console.log(
+      '\nPhase 4 — slow plane in a tight turn (25 kt, 4°/s, R=184 m)',
+    );
     if (await trackFlightsAndWaitModel(TURN.slow.icao, 'slow-turn')) {
       await sleep(1500);
       const slowSamples = await sampleCourse(180, 40000, TURN.slow.icao);
@@ -905,7 +1368,12 @@ async function main() {
       // Exercise the production dt clamp with render gaps above
       // COURSE_SLEW_DT_MAX_SEC. The regular 10 Hz sampling path cannot enter
       // this regime, so it would miss a slow ambient-loop recovery spike.
-      const slowCadenceSamples = await sampleCourse(180, 18000, TURN.slow.icao, 600);
+      const slowCadenceSamples = await sampleCourse(
+        180,
+        18000,
+        TURN.slow.icao,
+        600,
+      );
       analyzeSlowTurn('slow-turn / 600 ms cadence', slowCadenceSamples, {
         minSamples: 6,
         minWindowSec: 12,
@@ -913,10 +1381,25 @@ async function main() {
         maxReversalDeg: 8,
       });
       for (const [name, move] of [
-        ['slowturn-far.png', async () => { /* default follow framing */ }],
-        ['slowturn-near.png', () => page.evaluate(() => { window.__godsEyeView.viewer.camera.zoomIn(2500); })],
+        [
+          'slowturn-far.png',
+          async () => {
+            /* default follow framing */
+          },
+        ],
+        [
+          'slowturn-near.png',
+          () =>
+            page.evaluate(() => {
+              window.__godsEyeView.viewer.camera.zoomIn(2500);
+            }),
+        ],
       ]) {
-        try { await move(); } catch (e) { console.log(`    (camera move for ${name} failed: ${e.message})`); }
+        try {
+          await move();
+        } catch (e) {
+          console.log(`    (camera move for ${name} failed: ${e.message})`);
+        }
         await sleep(1200);
         await page.screenshot({ path: path.join(SHOT_DIR_V2, name) });
         console.log(`    saved ${name}`);
@@ -928,7 +1411,9 @@ async function main() {
     // The tracked standalone model AND the fleet model both carry id=icao, so
     // one finder reads the RENDERED course through the whole transition.
     // ========================================================================
-    console.log('\nPhase 5 — 65 kt helicopter: tracked↔fleet course handoff (click / click-away)');
+    console.log(
+      '\nPhase 5 — 65 kt helicopter: tracked↔fleet course handoff (click / click-away)',
+    );
     await page.evaluate(() => {
       window.__findModelByIcao = function (icao) {
         const v = window.__godsEyeView.viewer;
@@ -937,10 +1422,24 @@ async function main() {
           const n = coll.length;
           for (let i = 0; i < n; i++) {
             let p;
-            try { p = coll.get(i); } catch { continue; }
+            try {
+              p = coll.get(i);
+            } catch {
+              continue;
+            }
             if (!p) continue;
-            if (typeof p.length === 'number' && typeof p.get === 'function') { walk(p); continue; }
-            if (p.modelMatrix && typeof p.ready !== 'undefined' && p.id === icao && p.show && p.ready) out.push(p);
+            if (typeof p.length === 'number' && typeof p.get === 'function') {
+              walk(p);
+              continue;
+            }
+            if (
+              p.modelMatrix &&
+              typeof p.ready !== 'undefined' &&
+              p.id === icao &&
+              p.show &&
+              p.ready
+            )
+              out.push(p);
           }
         };
         walk(v.scene.primitives);
@@ -961,72 +1460,129 @@ async function main() {
     });
     await sleep(4000); // several fleet ticks establish the heli's fleet course
     await page.evaluate((icao) => {
-      window.__godsEyeView.dataManager.layers.get('flights').module.trackById(icao);
+      window.__godsEyeView.dataManager.layers
+        .get('flights')
+        .module.trackById(icao);
     }, TURN.heli65.icao);
-    const heliTracked = await page.waitForFunction((icao) => {
-      const fl = window.__godsEyeView.dataManager.layers.get('flights').module;
-      const ti = fl.getTrackedInfo();
-      return !!(ti && ti.icao24 === icao && window.__godsEyeView.viewer.trackedEntity);
-    }, { timeout: 15000, polling: 250 }, TURN.heli65.icao).then(() => true).catch(() => false);
-    record('heli65: tracking engaged (2D billboard mode)', heliTracked,
-      heliTracked ? 'tracked' : 'tracking never engaged');
+    const heliTracked = await page
+      .waitForFunction(
+        (icao) => {
+          const fl =
+            window.__godsEyeView.dataManager.layers.get('flights').module;
+          const ti = fl.getTrackedInfo();
+          return !!(
+            ti &&
+            ti.icao24 === icao &&
+            window.__godsEyeView.viewer.trackedEntity
+          );
+        },
+        { timeout: 15000, polling: 250 },
+        TURN.heli65.icao,
+      )
+      .then(() => true)
+      .catch(() => false);
+    record(
+      'heli65: tracking engaged (2D billboard mode)',
+      heliTracked,
+      heliTracked ? 'tracked' : 'tracking never engaged',
+    );
 
     if (heliTracked) {
       // Stay tracked for 60 s: pre-fix, the fleet's per-icao course entry
       // FROZE at click time, so a snapped handoff replays ~2°/s × 60 s ≈ 120°
       // of divergence; the post-fix shared state must hand off seamlessly.
-      console.log('  accumulating tracked time (60 s) so a frozen fleet entry would diverge ~120°...');
+      console.log(
+        '  accumulating tracked time (60 s) so a frozen fleet entry would diverge ~120°...',
+      );
       await sleep(60000);
 
       // C1 — click-away. Sample the rendered SCREEN rotation per preRender:
       // tracked entity rotation callback while tracked, fleet billboard
       // rotation after. The release-in-place keeps the camera static, so
       // rotation deltas across the boundary are course deltas.
-      const c1 = await page.evaluate(async ({ icao, actionAtMs, windowMs }) => {
-        const v = window.__godsEyeView.viewer;
-        const fl = window.__godsEyeView.dataManager.layers.get('flights').module;
-        const findFleetBillboard = (id) => {
-          const out = [];
-          const walk = (coll) => {
-            const n = coll.length;
-            for (let i = 0; i < n; i++) {
-              let p;
-              try { p = coll.get(i); } catch { continue; }
-              if (!p) continue;
-              if (typeof p.length === 'number' && typeof p.get === 'function') { walk(p); continue; }
-              if (p.image !== undefined && p.alignedAxis !== undefined && p.id === id && p.show) out.push(p);
-            }
+      const c1 = await page.evaluate(
+        async ({ icao, actionAtMs, windowMs }) => {
+          const v = window.__godsEyeView.viewer;
+          const fl =
+            window.__godsEyeView.dataManager.layers.get('flights').module;
+          const findFleetBillboard = (id) => {
+            const out = [];
+            const walk = (coll) => {
+              const n = coll.length;
+              for (let i = 0; i < n; i++) {
+                let p;
+                try {
+                  p = coll.get(i);
+                } catch {
+                  continue;
+                }
+                if (!p) continue;
+                if (
+                  typeof p.length === 'number' &&
+                  typeof p.get === 'function'
+                ) {
+                  walk(p);
+                  continue;
+                }
+                if (
+                  p.image !== undefined &&
+                  p.alignedAxis !== undefined &&
+                  p.id === id &&
+                  p.show
+                )
+                  out.push(p);
+              }
+            };
+            walk(v.scene.primitives);
+            return out[0] || null;
           };
-          walk(v.scene.primitives);
-          return out[0] || null;
-        };
-        const out = [];
-        const start = performance.now();
-        let actionTMs = null;
-        setTimeout(() => { actionTMs = performance.now(); fl.stopTracking(); }, actionAtMs);
-        await new Promise((resolve) => {
-          const remove = v.scene.preRender.addEventListener(() => {
-            let rotRad = null;
-            const ent = v.trackedEntity;
-            if (ent && ent.billboard && ent.billboard.rotation) {
-              try { rotRad = ent.billboard.rotation.getValue(v.clock.currentTime); } catch { rotRad = null; }
-            } else {
-              const bb = findFleetBillboard(icao);
-              if (bb) rotRad = bb.rotation;
-            }
-            out.push({ tMs: performance.now(), course: rotRad == null ? null : (rotRad * 180) / Math.PI });
-            if (performance.now() - start >= windowMs) { remove(); resolve(); }
+          const out = [];
+          const start = performance.now();
+          let actionTMs = null;
+          setTimeout(() => {
+            actionTMs = performance.now();
+            fl.stopTracking();
+          }, actionAtMs);
+          await new Promise((resolve) => {
+            const remove = v.scene.preRender.addEventListener(() => {
+              let rotRad = null;
+              const ent = v.trackedEntity;
+              if (ent && ent.billboard && ent.billboard.rotation) {
+                try {
+                  rotRad = ent.billboard.rotation.getValue(v.clock.currentTime);
+                } catch {
+                  rotRad = null;
+                }
+              } else {
+                const bb = findFleetBillboard(icao);
+                if (bb) rotRad = bb.rotation;
+              }
+              out.push({
+                tMs: performance.now(),
+                course: rotRad == null ? null : (rotRad * 180) / Math.PI,
+              });
+              if (performance.now() - start >= windowMs) {
+                remove();
+                resolve();
+              }
+            });
+            v.scene.requestRender();
           });
-          v.scene.requestRender();
-        });
-        return { samples: out, actionTMs };
-      }, { icao: TURN.heli65.icao, actionAtMs: 14000, windowMs: 40000 });
+          return { samples: out, actionTMs };
+        },
+        { icao: TURN.heli65.icao, actionAtMs: 14000, windowMs: 40000 },
+      );
       analyzeHandoff('heli65 C1 (click-away, screen rotation)', c1, {
-        truthDps: TURN.heli65.turnDps, stepExcessTolDeg: 15, rateTolDps: 15,
+        truthDps: TURN.heli65.turnDps,
+        stepExcessTolDeg: 15,
+        rateTolDps: 15,
         // Low-fps tolerant: SwiftShader can drop under 1 fps near ground-level
         // 3D tiles. Step excess is truth-compensated so long pairs stay exact;
         // the boundary pair (which always spans the click) carries the snap.
-        postWindowMs: 10000, minSamples: 12, pairDtCeilMs: 8000, rateDtFloorMs: 1000,
+        postWindowMs: 10000,
+        minSamples: 12,
+        pairDtCeilMs: 8000,
+        rateDtFloorMs: 1000,
       });
 
       // C2 — click. 3D back ON: the fleet model (camera is already parked a
@@ -1034,7 +1590,9 @@ async function main() {
       // both carry id=icao, and the model matrix gives the WORLD course, so
       // the re-track camera flight cannot contaminate the series.
       await page.evaluate(() => {
-        window.__godsEyeView.dataManager.layers.get('flights').module.setParams({ models3d: true });
+        window.__godsEyeView.dataManager.layers
+          .get('flights')
+          .module.setParams({ models3d: true });
       });
       const fleetModelUp = await page.evaluate(async (icao) => {
         const v = window.__godsEyeView.viewer;
@@ -1058,41 +1616,71 @@ async function main() {
         }
       }, TURN.heli65.icao);
       if (!fleetModelUp) {
-        record('heli65 C2 (click): fleet model rendered before re-track', false, 'fleet model never became ready');
+        record(
+          'heli65 C2 (click): fleet model rendered before re-track',
+          false,
+          'fleet model never became ready',
+        );
       } else {
-        const c2 = await page.evaluate(async ({ icao, offsetDeg, actionAtMs, windowMs }) => {
-          const v = window.__godsEyeView.viewer;
-          const fl = window.__godsEyeView.dataManager.layers.get('flights').module;
-          const out = [];
-          const start = performance.now();
-          let actionTMs = null;
-          setTimeout(() => { actionTMs = performance.now(); fl.trackById(icao); }, actionAtMs);
-          await new Promise((resolve) => {
-            const remove = v.scene.preRender.addEventListener(() => {
-              const m = window.__findModelByIcao(icao);
-              const c = m ? window.__courseFromModelMatrix(m.modelMatrix, offsetDeg) : null;
-              out.push({ tMs: performance.now(), course: c });
-              if (performance.now() - start >= windowMs) { remove(); resolve(); }
+        const c2 = await page.evaluate(
+          async ({ icao, offsetDeg, actionAtMs, windowMs }) => {
+            const v = window.__godsEyeView.viewer;
+            const fl =
+              window.__godsEyeView.dataManager.layers.get('flights').module;
+            const out = [];
+            const start = performance.now();
+            let actionTMs = null;
+            setTimeout(() => {
+              actionTMs = performance.now();
+              fl.trackById(icao);
+            }, actionAtMs);
+            await new Promise((resolve) => {
+              const remove = v.scene.preRender.addEventListener(() => {
+                const m = window.__findModelByIcao(icao);
+                const c = m
+                  ? window.__courseFromModelMatrix(m.modelMatrix, offsetDeg)
+                  : null;
+                out.push({ tMs: performance.now(), course: c });
+                if (performance.now() - start >= windowMs) {
+                  remove();
+                  resolve();
+                }
+              });
+              v.scene.requestRender();
             });
-            v.scene.requestRender();
-          });
-          return { samples: out, actionTMs };
-        }, { icao: TURN.heli65.icao, offsetDeg: 180, actionAtMs: 12000, windowMs: 35000 });
+            return { samples: out, actionTMs };
+          },
+          {
+            icao: TURN.heli65.icao,
+            offsetDeg: 180,
+            actionAtMs: 12000,
+            windowMs: 35000,
+          },
+        );
         analyzeHandoff('heli65 C2 (click, model course)', c2, {
-          truthDps: TURN.heli65.turnDps, stepExcessTolDeg: 15, rateTolDps: 15,
-          postWindowMs: 10000, minSamples: 12, pairDtCeilMs: 8000,
+          truthDps: TURN.heli65.turnDps,
+          stepExcessTolDeg: 15,
+          rateTolDps: 15,
+          postWindowMs: 10000,
+          minSamples: 12,
+          pairDtCeilMs: 8000,
         });
       }
 
       await page.evaluate(() => {
-        window.__godsEyeView.dataManager.layers.get('flights').module.stopTracking();
+        window.__godsEyeView.dataManager.layers
+          .get('flights')
+          .module.stopTracking();
       });
     }
 
-    record('no console errors during QA run', consoleErrors.length === 0,
+    record(
+      'no console errors during QA run',
+      consoleErrors.length === 0,
       consoleErrors.length
         ? `${consoleErrors.length}: ${consoleErrors.slice(0, 3).join(' | ')}; responses=${failedResponses.slice(0, 3).join(' | ') || 'unidentified'}`
-        : 'clean');
+        : 'clean',
+    );
 
     finish();
   } finally {
@@ -1110,6 +1698,9 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error('\n\x1b[31mQA harness error:\x1b[0m', err && err.stack ? err.stack : err);
+  console.error(
+    '\n\x1b[31mQA harness error:\x1b[0m',
+    err && err.stack ? err.stack : err,
+  );
   process.exit(2);
 });

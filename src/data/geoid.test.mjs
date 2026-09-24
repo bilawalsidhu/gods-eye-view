@@ -48,7 +48,7 @@ test('geoidHeight matches known EGM96 undulation values within ±2.5 m', async (
     const n = geoidHeight(lat, lon);
     assert.ok(
       Math.abs(n - nExpected) <= TOLERANCE_M,
-      `geoidHeight(${lat}, ${lon}) = ${n}, expected ≈ ${nExpected} (±${TOLERANCE_M})`
+      `geoidHeight(${lat}, ${lon}) = ${n}, expected ≈ ${nExpected} (±${TOLERANCE_M})`,
     );
   }
 });
@@ -60,7 +60,7 @@ test('orthometricToEllipsoidal adds the geoid undulation to the MSL height', asy
   // London geoid ≈ +46.1 -> 15 + 46.1 = 61.1, expect ≈ 61 within tolerance.
   assert.ok(
     Math.abs(hEllipsoidal - 61) <= TOLERANCE_M,
-    `orthometricToEllipsoidal(15, london) = ${hEllipsoidal}, expected ≈ 61 (±${TOLERANCE_M})`
+    `orthometricToEllipsoidal(15, london) = ${hEllipsoidal}, expected ≈ 61 (±${TOLERANCE_M})`,
   );
   // Must equal hMslM + geoidHeight exactly (same lookup, no extra fudge).
   const n = geoidHeight(LONDON.lat, LONDON.lon);
@@ -78,7 +78,7 @@ test('geoidHeight wraps longitude consistently (359.87 === -0.13)', async () => 
   // bit pattern," invariant the brief calls for.
   assert.ok(
     Math.abs(wrapped - normal) < 1e-9,
-    `geoidHeight(51.5, 359.87) = ${wrapped}, geoidHeight(51.5, -0.13) = ${normal}`
+    `geoidHeight(51.5, 359.87) = ${wrapped}, geoidHeight(51.5, -0.13) = ${normal}`,
   );
 });
 
@@ -99,12 +99,15 @@ test('the SFO deck case: an ellipsoidal height equal to N reads as 0 m MSL', asy
 test('the reported SFO cockpit OSD height turns into a small positive MSL number', async () => {
   await ensureGeoidReady();
   const n = geoidHeight(SFO.lat, SFO.lon);
-  assert.ok(n < -25 && n > -40, `SFO undulation should be strongly negative, got ${n}`);
+  assert.ok(
+    n < -25 && n > -40,
+    `SFO undulation should be strongly negative, got ${n}`,
+  );
   // The owner's screenshot: ALT: -15m ellipsoidal over the SFO deck.
   const displayed = ellipsoidalToMslDisplayM(-15, n);
   assert.ok(
     displayed > 10 && displayed < 25,
-    `-15 m ellipsoidal at SFO should read ≈ +17 m MSL, got ${displayed}`
+    `-15 m ellipsoidal at SFO should read ≈ +17 m MSL, got ${displayed}`,
   );
 });
 
@@ -117,7 +120,7 @@ test('a positive undulation lowers the readout — the correction subtracts N', 
   assert.equal(cruise, 10000 - n);
   assert.ok(
     cruise > 9950 && cruise < 9960,
-    `10 000 m ellipsoidal over London should read ≈ 9954 m MSL, got ${cruise}`
+    `10 000 m ellipsoidal over London should read ≈ 9954 m MSL, got ${cruise}`,
   );
 });
 

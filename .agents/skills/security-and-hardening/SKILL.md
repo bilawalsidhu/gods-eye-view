@@ -22,18 +22,18 @@ Security-first development practices for web applications. Treat every external 
 
 Controls bolted on without a threat model are guesses. Before hardening, spend five minutes thinking like an attacker:
 
-1. **Map the trust boundaries.** Where does untrusted data cross into your system? HTTP requests, form fields, file uploads, webhooks, third-party APIs, message queues, and **LLM output** — plus the local values that look internal because the OS handed them to you: another process's command line or environment, filenames on a shared volume, a path in a job payload. Trust follows who *wrote* a value, not which channel delivered it. Every boundary is attack surface.
+1. **Map the trust boundaries.** Where does untrusted data cross into your system? HTTP requests, form fields, file uploads, webhooks, third-party APIs, message queues, and **LLM output** — plus the local values that look internal because the OS handed them to you: another process's command line or environment, filenames on a shared volume, a path in a job payload. Trust follows who _wrote_ a value, not which channel delivered it. Every boundary is attack surface.
 2. **Name the assets.** What's worth stealing or breaking? Credentials, PII, payment data, admin actions, money movement.
 3. **Run STRIDE over each boundary** — a quick lens, not a ceremony:
 
-| Threat | Ask | Typical mitigation |
-|---|---|---|
-| **S**poofing | Can someone impersonate a user/service? | Authentication, signature verification |
-| **T**ampering | Can data be altered in transit or at rest? | Integrity checks, parameterized queries, HTTPS |
-| **R**epudiation | Can an action be denied later? | Audit logging of security events |
-| **I**nformation disclosure | Can data leak? | Encryption, field allowlists, generic errors |
-| **D**enial of service | Can it be overwhelmed? | Rate limiting, input size caps, timeouts |
-| **E**levation of privilege | Can a user gain rights they shouldn't? | Authorization checks, least privilege |
+| Threat                     | Ask                                        | Typical mitigation                             |
+| -------------------------- | ------------------------------------------ | ---------------------------------------------- |
+| **S**poofing               | Can someone impersonate a user/service?    | Authentication, signature verification         |
+| **T**ampering              | Can data be altered in transit or at rest? | Integrity checks, parameterized queries, HTTPS |
+| **R**epudiation            | Can an action be denied later?             | Audit logging of security events               |
+| **I**nformation disclosure | Can data leak?                             | Encryption, field allowlists, generic errors   |
+| **D**enial of service      | Can it be overwhelmed?                     | Rate limiting, input size caps, timeouts       |
+| **E**levation of privilege | Can a user gain rights they shouldn't?     | Authorization checks, least privilege          |
 
 4. **Write abuse cases next to use cases.** For each feature, ask "how would I misuse this?" — then make that your first test.
 
@@ -114,7 +114,7 @@ Pattern: [SSRF](references/hardening-patterns.md#server-side-request-forgery-ssr
 
 ### Destructive operations on derived paths
 
-A delete, move, or overwrite is only as safe as the value naming its target, and trust follows who *wrote* that value, not which channel delivered it: another process's command line is as attacker-controlled as a form field. A shape check proves well-formedness, not authorization. Before the call, require all three: the resolved target (symlinks resolved) sits under an **allowlisted root**; it is at least one level **below** that root; and it carries **ownership evidence read before the operation**. On refusal, log the rejected target and stop; never fall back to a broader default path.
+A delete, move, or overwrite is only as safe as the value naming its target, and trust follows who _wrote_ that value, not which channel delivered it: another process's command line is as attacker-controlled as a form field. A shape check proves well-formedness, not authorization. Before the call, require all three: the resolved target (symlinks resolved) sits under an **allowlisted root**; it is at least one level **below** that root; and it carries **ownership evidence read before the operation**. On refusal, log the rejected target and stop; never fall back to a broader default path.
 
 Why the check is weaker than it reads (marker self-attestation, check/use races): [Destructive paths](references/hardening-patterns.md#destructive-operations-on-derived-paths). Worked code: `../../references/security-checklist.md`.
 
@@ -141,7 +141,7 @@ Triage decision tree: [Dependency audit triage](references/hardening-patterns.md
 
 ### Personal data and privacy
 
-Hardening asks "can an attacker read it?" Privacy asks "should *we* hold it at all, and for how long?" The cheapest data to protect, breach, and comply over is the data you never collected; treat personal data as a liability to minimize.
+Hardening asks "can an attacker read it?" Privacy asks "should _we_ hold it at all, and for how long?" The cheapest data to protect, breach, and comply over is the data you never collected; treat personal data as a liability to minimize.
 
 - **Classify fields as you add them** (non-personal, PII, sensitive) and handle each class accordingly. You cannot protect, or honor a deletion request for, data you cannot find.
 - **Collect only against a stated purpose.** "Might be useful later" is latent breach scope, not a purpose. Keep PII out of telemetry (the `observability-and-instrumentation` skill makes the same point from the ops side).
@@ -167,19 +167,19 @@ Before sign-off, walk `../../references/security-checklist.md`: it covers authen
 
 ## Common Rationalizations
 
-| Rationalization | Reality |
-|---|---|
-| "This is an internal tool, security doesn't matter" | Internal tools get compromised. Attackers target the weakest link. |
-| "We'll add security later" | Security retrofitting is 10x harder than building it in. Add it now. |
-| "No one would try to exploit this" | Automated scanners will find it. Security by obscurity is not security. |
-| "The framework handles security" | Frameworks provide tools, not guarantees. You still need to use them correctly. |
-| "It's just a prototype" | Prototypes become production. Security habits from day one. |
-| "Threat modeling is overkill here" | Five minutes of "how would I attack this?" prevents the design flaws no control can patch later. |
-| "It's just LLM output, it's only text" | That "text" can be a SQL statement, a script tag, or a shell command. Treat it like any untrusted input. |
-| "The audit passed, so the dependency is safe" | Audits match known advisories. They do not detect a newly malicious package or make unreviewed install scripts safe to execute. |
-| "Collect it now, we might need it later" | Data you don't hold can't be breached, subpoenaed, or mis-deleted. "Might need it" is breach scope, not a purpose. |
-| "We'll handle deletion requests manually" | Manual erasure misses backups, caches, and analytics copies. If the schema can't find a user's data, you can't honor the request — design for it. |
-| "Compliance is legal's problem, not ours" | Export, deletion, retention, and consent are schema and code. Legal can't bolt them on after you've smeared PII across ten systems. |
+| Rationalization                                     | Reality                                                                                                                                           |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "This is an internal tool, security doesn't matter" | Internal tools get compromised. Attackers target the weakest link.                                                                                |
+| "We'll add security later"                          | Security retrofitting is 10x harder than building it in. Add it now.                                                                              |
+| "No one would try to exploit this"                  | Automated scanners will find it. Security by obscurity is not security.                                                                           |
+| "The framework handles security"                    | Frameworks provide tools, not guarantees. You still need to use them correctly.                                                                   |
+| "It's just a prototype"                             | Prototypes become production. Security habits from day one.                                                                                       |
+| "Threat modeling is overkill here"                  | Five minutes of "how would I attack this?" prevents the design flaws no control can patch later.                                                  |
+| "It's just LLM output, it's only text"              | That "text" can be a SQL statement, a script tag, or a shell command. Treat it like any untrusted input.                                          |
+| "The audit passed, so the dependency is safe"       | Audits match known advisories. They do not detect a newly malicious package or make unreviewed install scripts safe to execute.                   |
+| "Collect it now, we might need it later"            | Data you don't hold can't be breached, subpoenaed, or mis-deleted. "Might need it" is breach scope, not a purpose.                                |
+| "We'll handle deletion requests manually"           | Manual erasure misses backups, caches, and analytics copies. If the schema can't find a user's data, you can't honor the request — design for it. |
+| "Compliance is legal's problem, not ours"           | Export, deletion, retention, and consent are schema and code. Legal can't bolt them on after you've smeared PII across ten systems.               |
 
 ## Red Flags
 

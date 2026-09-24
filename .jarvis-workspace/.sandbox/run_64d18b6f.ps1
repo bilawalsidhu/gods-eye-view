@@ -1,0 +1,1 @@
+pip install Pillow 2>&1 | tail -5

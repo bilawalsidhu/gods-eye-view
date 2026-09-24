@@ -30,11 +30,21 @@ const getOpt = (name, fallback = null) => {
 const hasFlag = (name) => argv.includes(name);
 
 const APP_URL = getOpt('--url', 'http://localhost:4173');
-const JSON_PATH = path.resolve(getOpt('--json', 'qa-shots/focus-evidence/report.json'));
-const SCREENSHOTS_DIR = path.resolve(getOpt('--screenshots-dir', 'qa-shots/focus-evidence'));
+const JSON_PATH = path.resolve(
+  getOpt('--json', 'qa-shots/focus-evidence/report.json'),
+);
+const SCREENSHOTS_DIR = path.resolve(
+  getOpt('--screenshots-dir', 'qa-shots/focus-evidence'),
+);
 const HEADFUL = hasFlag('--headful');
 const SMOKE = hasFlag('--smoke');
-const MAP_STACK_IDS = Object.freeze(['photoreal', 'bing-aerial', 'bing-labels', 'esri-imagery', 'osm']);
+const MAP_STACK_IDS = Object.freeze([
+  'photoreal',
+  'bing-aerial',
+  'bing-labels',
+  'esri-imagery',
+  'osm',
+]);
 const BASEMAP = getOpt('--basemap', 'photoreal');
 const VIEWPORT = Object.freeze({ width: 1440, height: 900 });
 const FRAME_COUNT = SMOKE ? 6 : 30;
@@ -43,7 +53,9 @@ const TILE_SETTLE_TIMEOUT_MS = 45_000;
 const TARGET_ID = 'f0c001';
 const _firstCaptureScenarios = new Set();
 if (!MAP_STACK_IDS.includes(BASEMAP)) {
-  throw new Error(`Invalid --basemap ${BASEMAP}; expected one of ${MAP_STACK_IDS.join(', ')}`);
+  throw new Error(
+    `Invalid --basemap ${BASEMAP}; expected one of ${MAP_STACK_IDS.join(', ')}`,
+  );
 }
 const TARGET = Object.freeze({
   id: TARGET_ID,
@@ -55,9 +67,7 @@ const TARGET = Object.freeze({
 });
 // Owner's 13:58 horizon composition: a low, east-facing regional view whose
 // distant field sits close to the geometric limb instead of a whole-globe view.
-const HORIZON_CAMERA = Object.freeze([
-  -100, 30, 1_000_000, Math.PI / 2, -0.52,
-]);
+const HORIZON_CAMERA = Object.freeze([-100, 30, 1_000_000, Math.PI / 2, -0.52]);
 
 function parseParams() {
   const raw = getOpt('--params');
@@ -72,20 +82,36 @@ function parseParams() {
     throw new Error('--params must be a JSON object');
   }
   if (parsed.focus || parsed.horizon) {
-    if ((parsed.focus && (typeof parsed.focus !== 'object' || Array.isArray(parsed.focus)))
-      || (parsed.horizon && (typeof parsed.horizon !== 'object' || Array.isArray(parsed.horizon)))) {
+    if (
+      (parsed.focus &&
+        (typeof parsed.focus !== 'object' || Array.isArray(parsed.focus))) ||
+      (parsed.horizon &&
+        (typeof parsed.horizon !== 'object' || Array.isArray(parsed.horizon)))
+    ) {
       throw new Error('--params focus and horizon values must be JSON objects');
     }
     return { focus: parsed.focus || {}, horizon: parsed.horizon || {} };
   }
   const focusKeys = new Set([
-    'paddingPx', 'dimFloor', 'nearerBehavior', 'hysteresisPx',
-    'distanceHysteresisRatio', 'attackMs', 'releaseMs', 'writeEpsilon',
+    'paddingPx',
+    'dimFloor',
+    'nearerBehavior',
+    'hysteresisPx',
+    'distanceHysteresisRatio',
+    'attackMs',
+    'releaseMs',
+    'writeEpsilon',
   ]);
   const horizonKeys = new Set([
-    'startLimbRatio', 'scaleFloor', 'alphaFloor', 'combinedAlphaFloor',
-    'globeViewBlendStartM', 'globeViewBlendEndM', 'globeViewHeightM',
-    'earthRadiusM', 'writeEpsilon',
+    'startLimbRatio',
+    'scaleFloor',
+    'alphaFloor',
+    'combinedAlphaFloor',
+    'globeViewBlendStartM',
+    'globeViewBlendEndM',
+    'globeViewHeightM',
+    'earthRadiusM',
+    'writeEpsilon',
   ]);
   const focus = {};
   const horizon = {};
@@ -187,7 +213,9 @@ async function awaitTilesSettled(page, scenario) {
       if (typeof removeListener === 'function') removeListener();
     }
   }, TILE_SETTLE_TIMEOUT_MS);
-  const status = result.tilesSettled ? 'settled' : `NOT settled after ${TILE_SETTLE_TIMEOUT_MS / 1000}s`;
+  const status = result.tilesSettled
+    ? 'settled'
+    : `NOT settled after ${TILE_SETTLE_TIMEOUT_MS / 1000}s`;
   console.log(`    tiles (${scenario}): ${status}`);
   return result;
 }
@@ -202,10 +230,13 @@ async function capture(page, scenario, frame) {
   // Chromium's Page.captureScreenshot can wedge while a manually driven
   // WebGL surface is paused. Reading the explicitly rendered canvas captures
   // that same frame without handing frame ownership back to the browser.
-  const dataUrl = await page.evaluate(() => (
-    window.__godsEyeView.viewer.scene.canvas.toDataURL('image/png')
-  ));
-  fs.writeFileSync(out, Buffer.from(dataUrl.slice(dataUrl.indexOf(',') + 1), 'base64'));
+  const dataUrl = await page.evaluate(() =>
+    window.__godsEyeView.viewer.scene.canvas.toDataURL('image/png'),
+  );
+  fs.writeFileSync(
+    out,
+    Buffer.from(dataUrl.slice(dataUrl.indexOf(',') + 1), 'base64'),
+  );
   return { file: out, ...tileReadiness };
 }
 
@@ -214,16 +245,24 @@ async function captureSequenceFrame(page, scenario, frameIndex, update) {
   await update();
   if (SMOKE) console.log(`    frame ${frameIndex + 1}/${FRAME_COUNT}: render`);
   await advanceEvidenceFrame(page, FRAME_MS);
-  if (SMOKE) console.log(`    frame ${frameIndex + 1}/${FRAME_COUNT}: screenshot`);
-  return capture(page, scenario, `frame-${String(frameIndex).padStart(2, '0')}`);
+  if (SMOKE)
+    console.log(`    frame ${frameIndex + 1}/${FRAME_COUNT}: screenshot`);
+  return capture(
+    page,
+    scenario,
+    `frame-${String(frameIndex).padStart(2, '0')}`,
+  );
 }
 
 async function takeFrameClock(page) {
   const result = await page.evaluate(() => {
-    const seam = window.__godsEyeView.dataManager.layers.get('flights').module.__focusEvidence;
+    const seam =
+      window.__godsEyeView.dataManager.layers.get('flights').module
+        .__focusEvidence;
     return seam.takeFrameClock();
   });
-  if (!result?.ok) throw new Error('Unable to take ownership of the evidence frame clock');
+  if (!result?.ok)
+    throw new Error('Unable to take ownership of the evidence frame clock');
 }
 
 async function advanceEvidenceFrame(page, deltaMs = FRAME_MS) {
@@ -233,7 +272,11 @@ async function advanceEvidenceFrame(page, deltaMs = FRAME_MS) {
     const seam = gev.dataManager.layers.get('flights').module.__focusEvidence;
     const nowMs = seam.advanceFrameClock(stepMs);
     const JulianDate = viewer.clock.currentTime.constructor;
-    JulianDate.addSeconds(viewer.clock.currentTime, stepMs / 1000, viewer.clock.currentTime);
+    JulianDate.addSeconds(
+      viewer.clock.currentTime,
+      stepMs / 1000,
+      viewer.clock.currentTime,
+    );
     viewer.dataSourceDisplay?.update(viewer.clock.currentTime);
     viewer.scene.render(viewer.clock.currentTime);
     // Cross a task boundary so Chrome can commit the explicitly rendered
@@ -249,30 +292,38 @@ async function advanceEvidenceDuration(page, durationMs) {
   const totalMs = Math.max(0, durationMs);
   const publishMs = Math.min(80, totalMs);
   await advanceEvidenceFrame(page, publishMs);
-  if (totalMs > publishMs) await advanceEvidenceFrame(page, totalMs - publishMs);
+  if (totalMs > publishMs)
+    await advanceEvidenceFrame(page, totalMs - publishMs);
 }
 
 async function releaseFrameClock(page) {
   await page.evaluate(() => {
     window.__godsEyeView.dataManager.layers
-      .get('flights').module.__focusEvidence.releaseFrameClock();
+      .get('flights')
+      .module.__focusEvidence.releaseFrameClock();
   });
 }
 
 async function installSyntheticFetches(page) {
   await page.evaluateOnNewDocument(() => {
     const realFetch = window.fetch.bind(window);
-    const json = (body) => Promise.resolve(new Response(JSON.stringify(body), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    }));
+    const json = (body) =>
+      Promise.resolve(
+        new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
     window.fetch = (input, init) => {
       const url = typeof input === 'string' ? input : input?.url || '';
       if (url.includes('/api/opensky-track')) return json({ path: [] });
-      if (url.includes('/api/adsblol/trace')) return json({ timestamp: Date.now() / 1000, trace: [] });
-      if (url.includes('/api/opensky')) return json({ time: Math.floor(Date.now() / 1000), states: [] });
+      if (url.includes('/api/adsblol/trace'))
+        return json({ timestamp: Date.now() / 1000, trace: [] });
+      if (url.includes('/api/opensky'))
+        return json({ time: Math.floor(Date.now() / 1000), states: [] });
       if (url.includes('/api/adsbdb/')) return json({ found: false });
-      if (url.includes('/api/ais-live')) return json({ status: 'open', rows: [] });
+      if (url.includes('/api/ais-live'))
+        return json({ status: 'open', rows: [] });
       return realFetch(input, init);
     };
   });
@@ -281,17 +332,23 @@ async function installSyntheticFetches(page) {
 async function waitForApp(page) {
   await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 });
   await page.waitForFunction(
-    () => Boolean(window.__godsEyeView?.viewer && window.__godsEyeView?.dataManager),
+    () =>
+      Boolean(
+        window.__godsEyeView?.viewer && window.__godsEyeView?.dataManager,
+      ),
     { timeout: 60_000, polling: 200 },
   );
 }
 
 async function setBasemap(page, stackId) {
-  const result = await page.evaluate(async (id) => (
-    window.__godsEyeView.styleManager.setMapStack(id)
-  ), stackId);
+  const result = await page.evaluate(
+    async (id) => window.__godsEyeView.styleManager.setMapStack(id),
+    stackId,
+  );
   if (!result?.ok) {
-    throw new Error(`Unable to activate --basemap ${stackId}: ${result?.error || 'unknown error'}`);
+    throw new Error(
+      `Unable to activate --basemap ${stackId}: ${result?.error || 'unknown error'}`,
+    );
   }
   return result.activeStack;
 }
@@ -307,11 +364,15 @@ async function requireEvidenceSeams(page) {
     const manager = window.__godsEyeView.dataManager;
     return {
       flights: Boolean(manager.layers.get('flights')?.module?.__focusEvidence),
-      vessels: Boolean(manager.layers.get('ais-live-vessels')?.module?.__focusEvidence),
+      vessels: Boolean(
+        manager.layers.get('ais-live-vessels')?.module?.__focusEvidence,
+      ),
     };
   });
   if (!result.flights || !result.vessels) {
-    throw new Error('Focus evidence seams are unavailable. Use the Vite dev server (not a production preview/build).');
+    throw new Error(
+      'Focus evidence seams are unavailable. Use the Vite dev server (not a production preview/build).',
+    );
   }
 }
 
@@ -324,8 +385,8 @@ async function setCamera(page, values) {
     viewer.scene.tweens?.removeAll?.();
     viewer.camera.setView({
       destination: ellipsoid.cartographicToCartesian({
-        longitude: lon * Math.PI / 180,
-        latitude: lat * Math.PI / 180,
+        longitude: (lon * Math.PI) / 180,
+        latitude: (lat * Math.PI) / 180,
         height,
       }),
       orientation: { heading, pitch, roll: 0 },
@@ -335,12 +396,19 @@ async function setCamera(page, values) {
 }
 
 async function injectAndTrackTarget(page, extraAircraft = [], target = TARGET) {
-  const result = await page.evaluate(({ targetRecord, extras }) => {
-    const layer = window.__godsEyeView.dataManager.layers.get('flights').module;
-    const injected = layer.__focusEvidence.setAircraft([targetRecord, ...extras]);
-    const tracked = layer.trackById(targetRecord.id);
-    return { injected, tracked };
-  }, { targetRecord: target, extras: extraAircraft });
+  const result = await page.evaluate(
+    ({ targetRecord, extras }) => {
+      const layer =
+        window.__godsEyeView.dataManager.layers.get('flights').module;
+      const injected = layer.__focusEvidence.setAircraft([
+        targetRecord,
+        ...extras,
+      ]);
+      const tracked = layer.trackById(targetRecord.id);
+      return { injected, tracked };
+    },
+    { targetRecord: target, extras: extraAircraft },
+  );
   if (!result.injected?.ok || !result.tracked) {
     throw new Error(`Synthetic target setup failed: ${JSON.stringify(result)}`);
   }
@@ -355,7 +423,9 @@ async function readTrackedBasis(page) {
   return page.evaluate((targetId) => {
     const gev = window.__godsEyeView;
     const layer = gev.dataManager.layers.get('flights').module;
-    const target = layer.getAllPositions(100).find((entry) => entry.id === targetId)?.position;
+    const target = layer
+      .getAllPositions(100)
+      .find((entry) => entry.id === targetId)?.position;
     const camera = gev.viewer.camera;
     if (!target) throw new Error('Tracked target position unavailable');
     const toTarget = {
@@ -365,12 +435,17 @@ async function readTrackedBasis(page) {
     };
     const distance = Math.hypot(toTarget.x, toTarget.y, toTarget.z);
     const canvasHeight = gev.viewer.scene.canvas.clientHeight;
-    const metresPerPixel = (2 * distance * Math.tan(camera.frustum.fovy / 2)) / canvasHeight;
+    const metresPerPixel =
+      (2 * distance * Math.tan(camera.frustum.fovy / 2)) / canvasHeight;
     return {
       target: [target.x, target.y, target.z],
       right: [camera.rightWC.x, camera.rightWC.y, camera.rightWC.z],
       up: [camera.upWC.x, camera.upWC.y, camera.upWC.z],
-      away: [toTarget.x / distance, toTarget.y / distance, toTarget.z / distance],
+      away: [
+        toTarget.x / distance,
+        toTarget.y / distance,
+        toTarget.z / distance,
+      ],
       metresPerPixel,
       targetDistanceM: distance,
     };
@@ -378,21 +453,29 @@ async function readTrackedBasis(page) {
 }
 
 async function flightSnapshot(page) {
-  return page.evaluate(() => (
-    window.__godsEyeView.dataManager.layers.get('flights').module.__focusEvidence.snapshot()
-  ));
+  return page.evaluate(() =>
+    window.__godsEyeView.dataManager.layers
+      .get('flights')
+      .module.__focusEvidence.snapshot(),
+  );
 }
 
 async function setTuning(page, params) {
-  return page.evaluate((next) => (
-    window.__godsEyeView.dataManager.layers.get('flights').module.__focusEvidence.setTuning(next)
-  ), params);
+  return page.evaluate(
+    (next) =>
+      window.__godsEyeView.dataManager.layers
+        .get('flights')
+        .module.__focusEvidence.setTuning(next),
+    params,
+  );
 }
 
 async function runControlledCrossing(page, effectiveParams) {
   const scenario = 's1-controlled-crossing';
   if (SMOKE) console.log('    setup: inject + track');
-  await injectAndTrackTarget(page, [{ ...TARGET, id: 'f0c002', callsign: 'CROSS2' }]);
+  await injectAndTrackTarget(page, [
+    { ...TARGET, id: 'f0c002', callsign: 'CROSS2' },
+  ]);
   if (SMOKE) console.log('    setup: read tracked basis');
   const basis = await readTrackedBasis(page);
   // Stay beyond the default 8% range-side hysteresis band so S1 exercises
@@ -400,7 +483,9 @@ async function runControlledCrossing(page, effectiveParams) {
   const crossingDepthM = Math.max(600, basis.targetDistanceM * 0.12);
   const start = screenPlanePosition(basis, -180, 0, crossingDepthM);
   await page.evaluate((position) => {
-    const seam = window.__godsEyeView.dataManager.layers.get('flights').module.__focusEvidence;
+    const seam =
+      window.__godsEyeView.dataManager.layers.get('flights').module
+        .__focusEvidence;
     seam.moveAircraft([{ id: 'f0c002', cartesian: position, trackDeg: 90 }]);
   }, start);
   // The placeholder begins at the target so tracking can establish its camera
@@ -412,21 +497,35 @@ async function runControlledCrossing(page, effectiveParams) {
   for (let i = 0; i < FRAME_COUNT; i += 1) {
     const xPx = -180 + (360 * i) / (FRAME_COUNT - 1);
     const cartesian = screenPlanePosition(basis, xPx, 0, crossingDepthM);
-    const captured = await captureSequenceFrame(page, scenario, i, () => page.evaluate((position) => {
-      const seam = window.__godsEyeView.dataManager.layers.get('flights').module.__focusEvidence;
-      seam.moveAircraft([{ id: 'f0c002', cartesian: position, trackDeg: 90 }]);
-    }, cartesian));
+    const captured = await captureSequenceFrame(page, scenario, i, () =>
+      page.evaluate((position) => {
+        const seam =
+          window.__godsEyeView.dataManager.layers.get('flights').module
+            .__focusEvidence;
+        seam.moveAircraft([
+          { id: 'f0c002', cartesian: position, trackDeg: 90 },
+        ]);
+      }, cartesian),
+    );
     const snapshot = await flightSnapshot(page);
     frames.push({ index: i, xPx, ...captured, contacts: snapshot });
   }
-  return { id: scenario, frameCount: frames.length, basis, crossingDepthM, frames };
+  return {
+    id: scenario,
+    frameCount: frames.length,
+    basis,
+    crossingDepthM,
+    frames,
+  };
 }
 
 async function vesselRowsAroundTarget(page) {
   return page.evaluate(() => {
     const gev = window.__godsEyeView;
     const layer = gev.dataManager.layers.get('flights').module;
-    const target = layer.getAllPositions(100).find((entry) => entry.id === 'f0c001')?.position;
+    const target = layer
+      .getAllPositions(100)
+      .find((entry) => entry.id === 'f0c001')?.position;
     const Cartographic = gev.viewer.camera.positionCartographic.constructor;
     const ellipsoid = gev.viewer.scene.globe.ellipsoid;
     const rows = [];
@@ -437,9 +536,10 @@ async function vesselRowsAroundTarget(page) {
       // Cesium.Transforms is not global; a small local lat/lon offset is
       // sufficient at harbor scale and keeps the injected vessel at sea level.
       const carto = Cartographic.fromCartesian(target, ellipsoid);
-      const lat = carto.latitude * 180 / Math.PI + northM / 111_320;
-      const lon = carto.longitude * 180 / Math.PI
-        + eastM / (111_320 * Math.cos(carto.latitude));
+      const lat = (carto.latitude * 180) / Math.PI + northM / 111_320;
+      const lon =
+        (carto.longitude * 180) / Math.PI +
+        eastM / (111_320 * Math.cos(carto.latitude));
       rows.push({
         mmsi: String(990000000 + i),
         name: `HARBOR ${String(i + 1).padStart(2, '0')}`,
@@ -464,26 +564,32 @@ async function runHarborClutter(page, effectiveParams) {
   await injectAndTrackTarget(page, [], lowTarget);
   const rows = await vesselRowsAroundTarget(page);
   await page.evaluate((vessels) => {
-    const seam = window.__godsEyeView.dataManager.layers
-      .get('ais-live-vessels').module.__focusEvidence;
+    const seam =
+      window.__godsEyeView.dataManager.layers.get('ais-live-vessels').module
+        .__focusEvidence;
     seam.setVessels(vessels);
   }, rows);
 
   await setTuning(page, { focus: { ...clutterFocus, dimFloor: 1 } });
   await advanceEvidenceDuration(page, 450);
   const beforeCapture = await capture(page, scenario, 'before');
-  const before = await page.evaluate(() => (
+  const before = await page.evaluate(() =>
     window.__godsEyeView.dataManager.layers
-      .get('ais-live-vessels').module.__focusEvidence.snapshot()
-  ));
+      .get('ais-live-vessels')
+      .module.__focusEvidence.snapshot(),
+  );
 
   await setTuning(page, { ...effectiveParams, focus: clutterFocus });
-  await advanceEvidenceDuration(page, Math.max(500, effectiveParams.focus.attackMs + 200));
+  await advanceEvidenceDuration(
+    page,
+    Math.max(500, effectiveParams.focus.attackMs + 200),
+  );
   const afterCapture = await capture(page, scenario, 'after');
-  const after = await page.evaluate(() => (
+  const after = await page.evaluate(() =>
     window.__godsEyeView.dataManager.layers
-      .get('ais-live-vessels').module.__focusEvidence.snapshot()
-  ));
+      .get('ais-live-vessels')
+      .module.__focusEvidence.snapshot(),
+  );
   await setTuning(page, effectiveParams);
   return {
     id: scenario,
@@ -501,7 +607,8 @@ async function runAirportTraffic(page, effectiveParams) {
     ...TARGET,
     id: `f3${String(index).padStart(4, '0')}`,
     callsign: `APT${String(index).padStart(2, '0')}`,
-    klass: index % 7 === 0 ? 'widebody' : index % 5 === 0 ? 'fastjet' : 'airliner',
+    klass:
+      index % 7 === 0 ? 'widebody' : index % 5 === 0 ? 'fastjet' : 'airliner',
   }));
   await injectAndTrackTarget(page, placeholders);
   const basis = await readTrackedBasis(page);
@@ -516,11 +623,13 @@ async function runAirportTraffic(page, effectiveParams) {
         Math.sin(angle) * 220 * 0.55,
         trafficDepthM + index * 3,
       ),
-      trackDeg: (angle * 180 / Math.PI + 180) % 360,
+      trackDeg: ((angle * 180) / Math.PI + 180) % 360,
     };
   });
   await page.evaluate((positions) => {
-    const seam = window.__godsEyeView.dataManager.layers.get('flights').module.__focusEvidence;
+    const seam =
+      window.__godsEyeView.dataManager.layers.get('flights').module
+        .__focusEvidence;
     seam.moveAircraft(positions);
   }, startingMoves);
   await advanceEvidenceDuration(page, effectiveParams.focus.releaseMs + 150);
@@ -529,7 +638,8 @@ async function runAirportTraffic(page, effectiveParams) {
     const progress = frame / (FRAME_COUNT - 1);
     const radiusPx = 220 - 205 * progress;
     const moves = placeholders.map((record, index) => {
-      const angle = (index / placeholders.length) * Math.PI * 2 + progress * 0.35;
+      const angle =
+        (index / placeholders.length) * Math.PI * 2 + progress * 0.35;
       return {
         id: record.id,
         cartesian: screenPlanePosition(
@@ -538,14 +648,23 @@ async function runAirportTraffic(page, effectiveParams) {
           Math.sin(angle) * radiusPx * 0.55,
           trafficDepthM + index * 3,
         ),
-        trackDeg: (angle * 180 / Math.PI + 180) % 360,
+        trackDeg: ((angle * 180) / Math.PI + 180) % 360,
       };
     });
-    const captured = await captureSequenceFrame(page, scenario, frame, () => page.evaluate((positions) => {
-      const seam = window.__godsEyeView.dataManager.layers.get('flights').module.__focusEvidence;
-      seam.moveAircraft(positions);
-    }, moves));
-    frames.push({ index: frame, radiusPx, ...captured, contacts: await flightSnapshot(page) });
+    const captured = await captureSequenceFrame(page, scenario, frame, () =>
+      page.evaluate((positions) => {
+        const seam =
+          window.__godsEyeView.dataManager.layers.get('flights').module
+            .__focusEvidence;
+        seam.moveAircraft(positions);
+      }, moves),
+    );
+    frames.push({
+      index: frame,
+      radiusPx,
+      ...captured,
+      contacts: await flightSnapshot(page),
+    });
   }
   return { id: scenario, frameCount: frames.length, basis, frames };
 }
@@ -553,7 +672,9 @@ async function runAirportTraffic(page, effectiveParams) {
 async function runHorizonBand(page, effectiveParams) {
   const scenario = 's4-horizon-band';
   await page.evaluate(() => {
-    window.__godsEyeView.dataManager.layers.get('flights').module.stopTracking();
+    window.__godsEyeView.dataManager.layers
+      .get('flights')
+      .module.stopTracking();
   });
   const contacts = [];
   for (let row = 0; row < 6; row += 1) {
@@ -569,7 +690,8 @@ async function runHorizonBand(page, effectiveParams) {
     }
   }
   await page.evaluate((records) => {
-    window.__godsEyeView.dataManager.layers.get('flights')
+    window.__godsEyeView.dataManager.layers
+      .get('flights')
       .module.__focusEvidence.setAircraft(records);
   }, contacts);
   await setCamera(page, HORIZON_CAMERA);
@@ -598,7 +720,8 @@ async function runHorizonBand(page, effectiveParams) {
 async function browserContext(page, browser) {
   const gl = await page.evaluate(() => {
     const canvas = document.createElement('canvas');
-    const context = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+    const context =
+      canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
     const debug = context?.getExtension('WEBGL_debug_renderer_info');
     return {
       userAgent: navigator.userAgent,
@@ -630,9 +753,14 @@ async function browserContext(page, browser) {
 
 async function main() {
   const requestedParams = parseParams();
-  const response = await fetch(APP_URL).catch((error) => ({ ok: false, statusText: error.message }));
+  const response = await fetch(APP_URL).catch((error) => ({
+    ok: false,
+    statusText: error.message,
+  }));
   if (!response.ok) {
-    throw new Error(`Live dev server unavailable at ${APP_URL}: ${response.status || response.statusText}`);
+    throw new Error(
+      `Live dev server unavailable at ${APP_URL}: ${response.status || response.statusText}`,
+    );
   }
   fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
   fs.mkdirSync(path.dirname(JSON_PATH), { recursive: true });
@@ -641,7 +769,9 @@ async function main() {
     headless: HEADFUL ? false : 'new',
     protocolTimeout: 300000,
     args: [
-      ...(HEADFUL ? [] : ['--enable-unsafe-swiftshader', '--use-gl=swiftshader']),
+      ...(HEADFUL
+        ? []
+        : ['--enable-unsafe-swiftshader', '--use-gl=swiftshader']),
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
@@ -658,7 +788,9 @@ async function main() {
       consoleMessages.push({ type: message.type(), text: message.text() });
     }
   });
-  page.on('pageerror', (error) => consoleMessages.push({ type: 'pageerror', text: error.message }));
+  page.on('pageerror', (error) =>
+    consoleMessages.push({ type: 'pageerror', text: error.message }),
+  );
 
   const report = {
     generatedAt: new Date().toISOString(),
@@ -689,16 +821,27 @@ async function main() {
     console.log(`  renderer   : ${report.context.webglRenderer}`);
     console.log(`  basemap    : ${report.activeBasemap}`);
     console.log(`  params     : ${JSON.stringify(report.effectiveParams)}`);
-    console.log(`  mode       : ${SMOKE ? 'smoke (S1, 6 frames)' : 'full (S1-S4)'}`);
+    console.log(
+      `  mode       : ${SMOKE ? 'smoke (S1, 6 frames)' : 'full (S1-S4)'}`,
+    );
     console.log(`  caveat     : ${report.context.caveat}`);
 
     const scenarios = [
-      ['S1 controlled crossing', () => runControlledCrossing(page, report.effectiveParams)],
-      ['S2 harbor clutter', () => runHarborClutter(page, report.effectiveParams)],
-      ['S3 airport traffic', () => runAirportTraffic(page, report.effectiveParams)],
+      [
+        'S1 controlled crossing',
+        () => runControlledCrossing(page, report.effectiveParams),
+      ],
+      [
+        'S2 harbor clutter',
+        () => runHarborClutter(page, report.effectiveParams),
+      ],
+      [
+        'S3 airport traffic',
+        () => runAirportTraffic(page, report.effectiveParams),
+      ],
       ['S4 horizon band', () => runHorizonBand(page, report.effectiveParams)],
     ];
-    for (const [label, run] of (SMOKE ? scenarios.slice(0, 1) : scenarios)) {
+    for (const [label, run] of SMOKE ? scenarios.slice(0, 1) : scenarios) {
       console.log(`  capture    : ${label}`);
       await page.bringToFront();
       report.scenarios.push(await run());
@@ -710,7 +853,11 @@ async function main() {
 
   fs.writeFileSync(JSON_PATH, `${JSON.stringify(report, null, 2)}\n`);
   console.log(`  report     : ${JSON_PATH}`);
-  if (consoleMessages.some((message) => message.type === 'error' || message.type === 'pageerror')) {
+  if (
+    consoleMessages.some(
+      (message) => message.type === 'error' || message.type === 'pageerror',
+    )
+  ) {
     process.exitCode = 1;
   }
 }

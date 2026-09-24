@@ -9,29 +9,55 @@ path editor remains a later extension.
 ```json
 {
   "version": 4,
-  "scenes": [{
-    "id": "austin",
-    "title": "Across Austin",
-    "anchors": [
-      { "id": "west", "title": "West viewpoint", "lat": 30.2672,
-        "lon": -97.76, "alt": 6000, "altitudeReference": "ellipsoid" },
-      { "id": "east", "title": "East viewpoint", "lat": 30.2672,
-        "lon": -97.73, "alt": 7000, "altitudeReference": "ellipsoid" }
-    ],
-    "shots": [{
-      "id": "crossing",
-      "title": "Cross the city",
-      "durationSec": 4,
-      "holdSec": 2,
-      "camera": { "anchorId": "east", "heading": 10, "pitch": -45, "roll": 0 },
-      "move": {
-        "from": { "anchorId": "west", "heading": 350, "pitch": -45, "roll": 0 },
-        "easing": "cubic-in-out"
-      },
-      "visual": { "style": "normal" },
-      "layers": {}
-    }]
-  }]
+  "scenes": [
+    {
+      "id": "austin",
+      "title": "Across Austin",
+      "anchors": [
+        {
+          "id": "west",
+          "title": "West viewpoint",
+          "lat": 30.2672,
+          "lon": -97.76,
+          "alt": 6000,
+          "altitudeReference": "ellipsoid"
+        },
+        {
+          "id": "east",
+          "title": "East viewpoint",
+          "lat": 30.2672,
+          "lon": -97.73,
+          "alt": 7000,
+          "altitudeReference": "ellipsoid"
+        }
+      ],
+      "shots": [
+        {
+          "id": "crossing",
+          "title": "Cross the city",
+          "durationSec": 4,
+          "holdSec": 2,
+          "camera": {
+            "anchorId": "east",
+            "heading": 10,
+            "pitch": -45,
+            "roll": 0
+          },
+          "move": {
+            "from": {
+              "anchorId": "west",
+              "heading": 350,
+              "pitch": -45,
+              "roll": 0
+            },
+            "easing": "cubic-in-out"
+          },
+          "visual": { "style": "normal" },
+          "layers": {}
+        }
+      ]
+    }
+  ]
 }
 ```
 

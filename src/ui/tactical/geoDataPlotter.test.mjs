@@ -24,7 +24,9 @@ test('GeoDataPlotter parses GeoJSON and CSV, styles with holographics and notifi
       add: (ds) => addedDataSources.push(ds),
       remove: (ds) => removedDataSources.push(ds),
     },
-    zoomTo: (ds) => { zoomTarget = ds; },
+    zoomTo: (ds) => {
+      zoomTarget = ds;
+    },
   };
 
   const messages = [];
@@ -57,7 +59,10 @@ test('GeoDataPlotter parses GeoJSON and CSV, styles with holographics and notifi
     ],
   });
 
-  const resGeo = await plotter.plotText(geoJsonSample, { name: 'Tokyo Targets', ext: 'geojson' });
+  const resGeo = await plotter.plotText(geoJsonSample, {
+    name: 'Tokyo Targets',
+    ext: 'geojson',
+  });
   assert.equal(resGeo.ok, true);
   assert.equal(resGeo.featureCount, 2);
   assert.equal(addedDataSources.length, 1);
@@ -69,7 +74,10 @@ test('GeoDataPlotter parses GeoJSON and CSV, styles with holographics and notifi
 Yokohama Port,35.44,139.64,maritime
 Haneda Airport,35.54,139.77,aviation`;
 
-  const resCsv = await plotter.plotText(csvSample, { name: 'Kanto Hubs.csv', ext: 'csv' });
+  const resCsv = await plotter.plotText(csvSample, {
+    name: 'Kanto Hubs.csv',
+    ext: 'csv',
+  });
   assert.equal(resCsv.ok, true);
   assert.equal(addedDataSources.length, 2);
   assert.equal(resCsv.featureCount, 2);
@@ -78,5 +86,7 @@ Haneda Airport,35.54,139.77,aviation`;
   // 3. Clear all plotted datasets
   plotter.clearAll();
   assert.equal(removedDataSources.length, 2);
-  assert.ok(messages.some((m) => m.msg.includes('Cleared all custom plotted datasets')));
+  assert.ok(
+    messages.some((m) => m.msg.includes('Cleared all custom plotted datasets')),
+  );
 });

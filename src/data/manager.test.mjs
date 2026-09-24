@@ -29,12 +29,26 @@ function makeSlowLayer(id, { updateInterval = 1000 } = {}) {
       icon: '',
       source: 'test',
       updateInterval,
-      async init() { calls.init++; await Promise.resolve(); },
-      enable() { calls.enable++; },
-      disable() { calls.disable++; },
-      async update() { calls.update++; await Promise.resolve(); },
-      setLifecyclePresentation(state) { calls.presentation.push({ ...state }); },
-      getStats() { return { count: 0, lastUpdate: null }; },
+      async init() {
+        calls.init++;
+        await Promise.resolve();
+      },
+      enable() {
+        calls.enable++;
+      },
+      disable() {
+        calls.disable++;
+      },
+      async update() {
+        calls.update++;
+        await Promise.resolve();
+      },
+      setLifecyclePresentation(state) {
+        calls.presentation.push({ ...state });
+      },
+      getStats() {
+        return { count: 0, lastUpdate: null };
+      },
     },
   };
 }
@@ -44,9 +58,12 @@ test('keeps panel-hidden coordinator layers registered and addressable', () => {
   const layer = makeSlowLayer('military-awareness', { updateInterval: -1 });
   layer.module.showInTogglePanel = false;
   mgr.register(layer.module);
-  assert.deepEqual(mgr.getAll().map(({ id, showInTogglePanel }) => ({ id, showInTogglePanel })), [
-    { id: 'military-awareness', showInTogglePanel: false },
-  ]);
+  assert.deepEqual(
+    mgr
+      .getAll()
+      .map(({ id, showInTogglePanel }) => ({ id, showInTogglePanel })),
+    [{ id: 'military-awareness', showInTogglePanel: false }],
+  );
   assert.equal(mgr.isEnabled('military-awareness'), false);
 });
 
@@ -55,22 +72,45 @@ test('adopts direct layer params without re-entering the layer setter', () => {
   let setterCalls = 0;
   const manager = new DataLayerManager({});
   manager.register({
-    id: 'flights', name: 'Flights', icon: '', source: 'test',
-    setParams() { setterCalls += 1; return true; },
-    getParams() { return { ...params }; },
+    id: 'flights',
+    name: 'Flights',
+    icon: '',
+    source: 'test',
+    setParams() {
+      setterCalls += 1;
+      return true;
+    },
+    getParams() {
+      return { ...params };
+    },
   });
   const events = [];
   manager.subscribe((event) => events.push(event));
-  assert.equal(manager.adoptLayerParams('flights', {
-    selectedFlightsTrackingId: 'flight-a',
-  }, { origin: 'user' }), true);
+  assert.equal(
+    manager.adoptLayerParams(
+      'flights',
+      {
+        selectedFlightsTrackingId: 'flight-a',
+      },
+      { origin: 'user' },
+    ),
+    true,
+  );
   assert.equal(setterCalls, 0);
   assert.equal(events.at(-1)?.type, 'params');
   assert.equal(events.at(-1)?.params.selectedFlightsTrackingId, 'flight-a');
   params = { selectedFlightsTrackingId: 'flight-b' };
-  assert.equal(manager.adoptLayerParams('flights', {
-    selectedFlightsTrackingId: 'flight-a',
-  }, { origin: 'user' }), false, 'changed live params reject stale adoption');
+  assert.equal(
+    manager.adoptLayerParams(
+      'flights',
+      {
+        selectedFlightsTrackingId: 'flight-a',
+      },
+      { origin: 'user' },
+    ),
+    false,
+    'changed live params reject stale adoption',
+  );
 });
 
 test('adopts settled visibility without re-running lifecycle work', async () => {
@@ -80,14 +120,20 @@ test('adopts settled visibility without re-running lifecycle work', async () => 
   await manager.setEnabled('flights', true, { origin: 'programmatic' });
   const events = [];
   manager.subscribe((event) => events.push(event));
-  assert.equal(manager.adoptLayerVisibility('flights', true, {
-    origin: 'user',
-    adoptedFromSelection: true,
-  }), true);
+  assert.equal(
+    manager.adoptLayerVisibility('flights', true, {
+      origin: 'user',
+      adoptedFromSelection: true,
+    }),
+    true,
+  );
   assert.equal(layer.calls.enable, 1);
   assert.equal(events.at(-1)?.type, 'visibility');
   assert.equal(events.at(-1)?.adoptedFromSelection, true);
-  assert.equal(manager.adoptLayerVisibility('flights', false, { origin: 'user' }), false);
+  assert.equal(
+    manager.adoptLayerVisibility('flights', false, { origin: 'user' }),
+    false,
+  );
 });
 
 test('renders ordinary layer rows without recreating a panel-hidden coordinator', async () => {
@@ -103,18 +149,26 @@ test('renders ordinary layer rows without recreating a panel-hidden coordinator'
       classList: {
         toggle() {},
       },
-      appendChild(child) { this.children.push(child); return child; },
+      appendChild(child) {
+        this.children.push(child);
+        return child;
+      },
       addEventListener() {},
       removeEventListener() {},
-      setAttribute(name, value) { this.attributes[name] = String(value); },
+      setAttribute(name, value) {
+        this.attributes[name] = String(value);
+      },
       querySelector(selector) {
         if (selector.startsWith('[data-layer-id="')) {
           const id = selector.slice(16, -2);
-          return this.children.find((child) => child.dataset.layerId === id) || null;
+          return (
+            this.children.find((child) => child.dataset.layerId === id) || null
+          );
         }
         const className = selector.startsWith('.') ? selector.slice(1) : '';
         const visit = (node) => {
-          if (String(node.className).split(/\s+/).includes(className)) return node;
+          if (String(node.className).split(/\s+/).includes(className))
+            return node;
           for (const child of node.children || []) {
             const found = visit(child);
             if (found) return found;
@@ -123,15 +177,21 @@ test('renders ordinary layer rows without recreating a panel-hidden coordinator'
         };
         return visit(this);
       },
-      set innerHTML(value) { if (value === '') this.children = []; },
-      get innerHTML() { return ''; },
+      set innerHTML(value) {
+        if (value === '') this.children = [];
+      },
+      get innerHTML() {
+        return '';
+      },
     };
     return element;
   };
   globalThis.document = { createElement: makeElement };
   const mgr = new DataLayerManager({});
   const ordinary = makeSlowLayer('flights', { updateInterval: -1 });
-  const coordinator = makeSlowLayer('military-awareness', { updateInterval: -1 });
+  const coordinator = makeSlowLayer('military-awareness', {
+    updateInterval: -1,
+  });
   coordinator.module.showInTogglePanel = false;
   mgr.register(ordinary.module);
   mgr.register(coordinator.module);
@@ -140,11 +200,20 @@ test('renders ordinary layer rows without recreating a panel-hidden coordinator'
   try {
     mgr.buildTogglePanel(container);
     assert.ok(container.querySelector('[data-layer-id="flights"]'));
-    assert.equal(container.querySelector('[data-layer-id="military-awareness"]'), null);
+    assert.equal(
+      container.querySelector('[data-layer-id="military-awareness"]'),
+      null,
+    );
     assert.equal(await mgr.setEnabled('military-awareness', true), true);
     mgr._refreshTogglePanel();
-    assert.equal(container.querySelector('[data-layer-id="military-awareness"]'), null);
-    assert.equal(mgr.getAll().find(({ id }) => id === 'military-awareness').enabled, true);
+    assert.equal(
+      container.querySelector('[data-layer-id="military-awareness"]'),
+      null,
+    );
+    assert.equal(
+      mgr.getAll().find(({ id }) => id === 'military-awareness').enabled,
+      true,
+    );
   } finally {
     await mgr.destroyAll();
     if (originalDocument === undefined) delete globalThis.document;
@@ -159,13 +228,18 @@ test('clearSelectedLayers includes hidden coordinators and preserves newer depen
   const missions = makeSlowLayer('rocket-launches', { updateInterval: -1 });
   const context = makeSlowLayer('military-awareness', { updateInterval: -1 });
   context.module.showInTogglePanel = false;
-  satellites.module.disable = () => { order.push('satellites'); };
+  satellites.module.disable = () => {
+    order.push('satellites');
+  };
   missions.module.disable = async () => {
     order.push('rocket-launches');
     await mgr.setEnabled('satellites', true, { origin: 'dependency-restore' });
   };
-  context.module.disable = () => { order.push('military-awareness'); };
-  for (const layer of [satellites, missions, context]) mgr.register(layer.module);
+  context.module.disable = () => {
+    order.push('military-awareness');
+  };
+  for (const layer of [satellites, missions, context])
+    mgr.register(layer.module);
   await mgr.setEnabled('satellites', true);
   await mgr.setEnabled('rocket-launches', true);
   await mgr.setEnabled('military-awareness', true);
@@ -178,9 +252,15 @@ test('clearSelectedLayers includes hidden coordinators and preserves newer depen
     'satellites',
   ]);
   assert.deepEqual(order, ['military-awareness', 'rocket-launches']);
-  assert.deepEqual(result.clearedIds, ['military-awareness', 'rocket-launches']);
+  assert.deepEqual(result.clearedIds, [
+    'military-awareness',
+    'rocket-launches',
+  ]);
   assert.deepEqual(result.notClearedIds, ['satellites']);
-  assert.equal(result.items.find(({ id }) => id === 'satellites')?.superseded, true);
+  assert.equal(
+    result.items.find(({ id }) => id === 'satellites')?.superseded,
+    true,
+  );
   assert.deepEqual([...mgr.getEnabledLayerIds()], ['satellites']);
   await mgr.destroyAll();
 });
@@ -191,9 +271,12 @@ test('clearSelectedLayers absorbs a hidden coordinator fire-and-forget dependenc
   const context = makeSlowLayer('military-awareness', { updateInterval: -1 });
   context.module.showInTogglePanel = false;
   let releaseFinished;
-  const finished = new Promise((resolve) => { releaseFinished = resolve; });
+  const finished = new Promise((resolve) => {
+    releaseFinished = resolve;
+  });
   context.module.disable = () => {
-    void mgr.setEnabled('flights', false, { origin: 'dependency-release' })
+    void mgr
+      .setEnabled('flights', false, { origin: 'dependency-release' })
       .finally(releaseFinished);
   };
   mgr.register(flights.module);
@@ -235,10 +318,14 @@ test('newer direct layer intent supersedes clearSelectedLayers without a blind r
   const layer = makeSlowLayer('flights', { updateInterval: -1 });
   let releaseDisable;
   let announceDisable;
-  const disableStarted = new Promise((resolve) => { announceDisable = resolve; });
+  const disableStarted = new Promise((resolve) => {
+    announceDisable = resolve;
+  });
   layer.module.disable = async () => {
     announceDisable();
-    await new Promise((resolve) => { releaseDisable = resolve; });
+    await new Promise((resolve) => {
+      releaseDisable = resolve;
+    });
   };
   mgr.register(layer.module);
   await mgr.setEnabled('flights', true);
@@ -265,10 +352,14 @@ test('clearSelectedLayers does not issue a delayed OFF after a newer explicit ON
   const blocker = makeSlowLayer('traffic', { updateInterval: -1 });
   let releaseBlocker;
   let announceBlocker;
-  const blockerStarted = new Promise((resolve) => { announceBlocker = resolve; });
+  const blockerStarted = new Promise((resolve) => {
+    announceBlocker = resolve;
+  });
   blocker.module.disable = async () => {
     announceBlocker();
-    await new Promise((resolve) => { releaseBlocker = resolve; });
+    await new Promise((resolve) => {
+      releaseBlocker = resolve;
+    });
   };
   mgr.register(flights.module);
   mgr.register(blocker.module);
@@ -288,17 +379,27 @@ test('clearSelectedLayers does not issue a delayed OFF after a newer explicit ON
 });
 
 test('clearSelectedLayers skips delayed OFF for every newer absolute-intent origin', async (t) => {
-  for (const origin of ['user', 'voice', 'programmatic', 'dependency-restore', 'context-restore']) {
+  for (const origin of [
+    'user',
+    'voice',
+    'programmatic',
+    'dependency-restore',
+    'context-restore',
+  ]) {
     await t.test(origin, async () => {
       const mgr = new DataLayerManager({});
       const flights = makeSlowLayer('flights', { updateInterval: -1 });
       const blocker = makeSlowLayer('traffic', { updateInterval: -1 });
       let releaseBlocker;
       let announceBlocker;
-      const blockerStarted = new Promise((resolve) => { announceBlocker = resolve; });
+      const blockerStarted = new Promise((resolve) => {
+        announceBlocker = resolve;
+      });
       blocker.module.disable = async () => {
         announceBlocker();
-        await new Promise((resolve) => { releaseBlocker = resolve; });
+        await new Promise((resolve) => {
+          releaseBlocker = resolve;
+        });
       };
       mgr.register(flights.module);
       mgr.register(blocker.module);
@@ -326,10 +427,14 @@ test('Clear All reserves its complete OFF baseline before sequential teardown', 
   const blocker = makeSlowLayer('traffic', { updateInterval: -1 });
   let releaseBlocker;
   let markBlockerStarted;
-  const blockerStarted = new Promise((resolve) => { markBlockerStarted = resolve; });
+  const blockerStarted = new Promise((resolve) => {
+    markBlockerStarted = resolve;
+  });
   blocker.module.disable = async () => {
     markBlockerStarted();
-    await new Promise((resolve) => { releaseBlocker = resolve; });
+    await new Promise((resolve) => {
+      releaseBlocker = resolve;
+    });
   };
   mgr.register(first.module);
   mgr.register(blocker.module);
@@ -352,7 +457,10 @@ test('Clear All reserves its complete OFF baseline before sequential teardown', 
   );
   releaseBlocker();
   const result = await clearing;
-  assert.equal(result.items.find(({ id }) => id === 'flights')?.superseded, true);
+  assert.equal(
+    result.items.find(({ id }) => id === 'flights')?.superseded,
+    true,
+  );
   assert.equal(mgr.isEnabled('flights'), true);
   await mgr.destroyAll();
 });
@@ -362,16 +470,22 @@ test('a current queued request aborted before its turn publishes one exact cance
   const layer = makeSlowLayer('rocket-launches', { updateInterval: -1 });
   let releaseToggle;
   let markToggleStarted;
-  const toggleStarted = new Promise((resolve) => { markToggleStarted = resolve; });
+  const toggleStarted = new Promise((resolve) => {
+    markToggleStarted = resolve;
+  });
   layer.module.enable = async () => {
     markToggleStarted();
-    await new Promise((resolve) => { releaseToggle = resolve; });
+    await new Promise((resolve) => {
+      releaseToggle = resolve;
+    });
   };
   mgr.register(layer.module);
   const changes = [];
   mgr.subscribe((change) => changes.push(change));
 
-  const occupyingTurn = mgr.toggle('rocket-launches', { origin: 'programmatic' });
+  const occupyingTurn = mgr.toggle('rocket-launches', {
+    origin: 'programmatic',
+  });
   await toggleStarted;
   const controller = new AbortController();
   const queued = mgr._setEnabledWithIntent('rocket-launches', false, {
@@ -382,12 +496,20 @@ test('a current queued request aborted before its turn publishes one exact cance
   releaseToggle();
   await occupyingTurn;
   assert.equal(await queued.promise, false);
-  const outcome = await mgr._waitForVisibilityIntent('rocket-launches', queued.intentEpoch);
+  const outcome = await mgr._waitForVisibilityIntent(
+    'rocket-launches',
+    queued.intentEpoch,
+  );
   assert.equal(outcome.succeeded, false);
   assert.equal(outcome.cancellationReason, 'caller-abort');
   assert.equal(outcome.phase, 'queued');
-  const terminal = changes.filter(({ intentEpoch }) => intentEpoch === queued.intentEpoch);
-  assert.deepEqual(terminal.map(({ type }) => type), ['visibility-cancelled']);
+  const terminal = changes.filter(
+    ({ intentEpoch }) => intentEpoch === queued.intentEpoch,
+  );
+  assert.deepEqual(
+    terminal.map(({ type }) => type),
+    ['visibility-cancelled'],
+  );
   await mgr.destroyAll();
 });
 
@@ -398,13 +520,19 @@ test('visibility lifecycle events retain the exact absolute-intent epoch', async
   mgr.register(layer.module);
   mgr.subscribe((change) => changes.push(change));
 
-  const request = mgr._setEnabledWithIntent('rocket-launches', true, { origin: 'voice' });
+  const request = mgr._setEnabledWithIntent('rocket-launches', true, {
+    origin: 'voice',
+  });
   assert.equal(await request.promise, true);
 
-  const ownedChanges = changes.filter(({ layerId }) => layerId === 'rocket-launches');
+  const ownedChanges = changes.filter(
+    ({ layerId }) => layerId === 'rocket-launches',
+  );
   assert.ok(ownedChanges.length >= 3);
   assert.ok(
-    ownedChanges.every(({ intentEpoch }) => intentEpoch === request.intentEpoch),
+    ownedChanges.every(
+      ({ intentEpoch }) => intentEpoch === request.intentEpoch,
+    ),
     'pre-transition, lifecycle, and settled events remain correlated to one accepted intent',
   );
   await mgr.destroyAll();
@@ -415,17 +543,23 @@ test('programmatic ON during Clear All active OFF owns final visibility and repo
   const layer = makeSlowLayer('flights', { updateInterval: -1 });
   let releaseDisable;
   let announceDisable;
-  const disableStarted = new Promise((resolve) => { announceDisable = resolve; });
+  const disableStarted = new Promise((resolve) => {
+    announceDisable = resolve;
+  });
   layer.module.disable = async () => {
     announceDisable();
-    await new Promise((resolve) => { releaseDisable = resolve; });
+    await new Promise((resolve) => {
+      releaseDisable = resolve;
+    });
   };
   mgr.register(layer.module);
   await mgr.setEnabled('flights', true);
 
   const clearing = mgr.clearSelectedLayers({ origin: 'user' });
   await disableStarted;
-  const newerEnable = mgr.setEnabled('flights', true, { origin: 'programmatic' });
+  const newerEnable = mgr.setEnabled('flights', true, {
+    origin: 'programmatic',
+  });
   releaseDisable();
   const result = await clearing;
   await newerEnable;
@@ -451,15 +585,23 @@ test('manager exposes enabling and disabling without changing settled visibility
   let announceInit;
   let releaseDisable;
   let announceDisable;
-  const initStarted = new Promise((resolve) => { announceInit = resolve; });
-  const disableStarted = new Promise((resolve) => { announceDisable = resolve; });
+  const initStarted = new Promise((resolve) => {
+    announceInit = resolve;
+  });
+  const disableStarted = new Promise((resolve) => {
+    announceDisable = resolve;
+  });
   layer.module.init = async () => {
     announceInit();
-    await new Promise((resolve) => { releaseInit = resolve; });
+    await new Promise((resolve) => {
+      releaseInit = resolve;
+    });
   };
   layer.module.disable = async () => {
     announceDisable();
-    await new Promise((resolve) => { releaseDisable = resolve; });
+    await new Promise((resolve) => {
+      releaseDisable = resolve;
+    });
   };
   mgr.register(layer.module);
   const changes = [];
@@ -476,7 +618,9 @@ test('manager exposes enabling and disabling without changing settled visibility
   assert.equal(changes.at(-1)?.type, 'visibility-transition');
   assert.equal(changes.at(-1)?.settledEnabled, false);
   assert.deepEqual(layer.calls.presentation.at(-1), {
-    lifecycleState: 'enabling', enabled: false, uncertain: false,
+    lifecycleState: 'enabling',
+    enabled: false,
+    uncertain: false,
   });
   releaseInit();
   assert.equal(await enabling, true);
@@ -486,7 +630,9 @@ test('manager exposes enabling and disabling without changing settled visibility
     uncertain: false,
   });
   assert.deepEqual(layer.calls.presentation.at(-1), {
-    lifecycleState: 'enabled', enabled: true, uncertain: false,
+    lifecycleState: 'enabled',
+    enabled: true,
+    uncertain: false,
   });
 
   const disabling = mgr.setEnabled('radio', false, { origin: 'user' });
@@ -499,7 +645,9 @@ test('manager exposes enabling and disabling without changing settled visibility
   assert.equal(changes.at(-1)?.type, 'visibility-transition');
   assert.equal(changes.at(-1)?.settledEnabled, true);
   assert.deepEqual(layer.calls.presentation.at(-1), {
-    lifecycleState: 'disabling', enabled: true, uncertain: false,
+    lifecycleState: 'disabling',
+    enabled: true,
+    uncertain: false,
   });
   releaseDisable();
   assert.equal(await disabling, true);
@@ -509,10 +657,14 @@ test('manager exposes enabling and disabling without changing settled visibility
     uncertain: false,
   });
   assert.deepEqual(layer.calls.presentation.at(-1), {
-    lifecycleState: 'disabled', enabled: false, uncertain: false,
+    lifecycleState: 'disabled',
+    enabled: false,
+    uncertain: false,
   });
   assert.deepEqual(
-    changes.filter(({ type }) => type === 'visibility').map(({ enabled }) => enabled),
+    changes
+      .filter(({ type }) => type === 'visibility')
+      .map(({ enabled }) => enabled),
     [true, false],
   );
 });
@@ -541,12 +693,24 @@ test('serialized toggles never arm two intervals (2× poll → 429 guard)', asyn
   mgr.register(layer.module);
 
   // enable, disable, enable — rapid-fire, unawaited.
-  const ps = [mgr.toggle('military'), mgr.toggle('military'), mgr.toggle('military')];
+  const ps = [
+    mgr.toggle('military'),
+    mgr.toggle('military'),
+    mgr.toggle('military'),
+  ];
   await Promise.all(ps);
 
-  assert.equal(mgr.isEnabled('military'), true, 'odd number of toggles ends enabled');
+  assert.equal(
+    mgr.isEnabled('military'),
+    true,
+    'odd number of toggles ends enabled',
+  );
   const entry = mgr.layers.get('military');
-  assert.notEqual(entry.intervalId, null, 'exactly one interval should be armed');
+  assert.notEqual(
+    entry.intervalId,
+    null,
+    'exactly one interval should be armed',
+  );
   // enable ran twice, disable once — and only one interval survives.
   assert.ok(layer.calls.enable >= 1, 'enable was called');
   clearInterval(entry.intervalId); // don't leak the timer out of the test
@@ -577,15 +741,20 @@ test('idempotent absolute intent publishes its newer origin without rerunning li
   await mgr.setEnabled('rocket-launches', true, { origin: 'programmatic' });
   changes.length = 0;
 
-  assert.equal(await mgr.setEnabled('rocket-launches', true, { origin: 'voice' }), true);
+  assert.equal(
+    await mgr.setEnabled('rocket-launches', true, { origin: 'voice' }),
+    true,
+  );
   assert.equal(layer.calls.enable, 1, 'the module is not redundantly enabled');
-  assert.deepEqual(changes, [{
-    type: 'visibility',
-    layerId: 'rocket-launches',
-    enabled: true,
-    origin: 'voice',
-    intentEpoch: 2,
-  }]);
+  assert.deepEqual(changes, [
+    {
+      type: 'visibility',
+      layerId: 'rocket-launches',
+      enabled: true,
+      origin: 'voice',
+      intentEpoch: 2,
+    },
+  ]);
   await mgr.destroyAll();
 });
 
@@ -597,7 +766,9 @@ test('an aborted enable is transactionally cancelled without a settled visibilit
   let updateShouldWait = true;
   let cleanupFails = true;
   let moduleActive = false;
-  const updateStarted = new Promise((resolve) => { announceUpdate = resolve; });
+  const updateStarted = new Promise((resolve) => {
+    announceUpdate = resolve;
+  });
   const layer = makeSlowLayer('radio', { updateInterval: 0 });
   layer.module.enable = () => {
     layer.calls.enable++;
@@ -608,7 +779,9 @@ test('an aborted enable is transactionally cancelled without a settled visibilit
     if (!updateShouldWait) return;
     updateShouldWait = false;
     announceUpdate();
-    await new Promise((resolve) => { releaseUpdate = resolve; });
+    await new Promise((resolve) => {
+      releaseUpdate = resolve;
+    });
   };
   // Cleanup failure means the partially enabled module cannot be proven OFF;
   // retain the conservative ON state without emitting settled visibility.
@@ -632,17 +805,30 @@ test('an aborted enable is transactionally cancelled without a settled visibilit
 
   assert.equal(changed, false);
   assert.equal(mgr.isEnabled('radio'), true);
-  assert.equal(moduleActive, false, 'module cleanup completed before reporting failure');
+  assert.equal(
+    moduleActive,
+    false,
+    'module cleanup completed before reporting failure',
+  );
   assert.equal(mgr.layers.get('radio').lifecycleUncertain, true);
   assert.equal(mgr.layers.get('radio').intervalId, null);
-  assert.equal(changes.some(({ type }) => type === 'visibility'), false);
+  assert.equal(
+    changes.some(({ type }) => type === 'visibility'),
+    false,
+  );
   assert.equal(changes.at(-1)?.type, 'visibility-failed');
   assert.equal(changes.at(-1)?.phase, 'cancel-enable-cleanup');
 
   cleanupFails = false;
-  const visibilityBeforeRetry = changes.filter(({ type }) => type === 'visibility').length;
+  const visibilityBeforeRetry = changes.filter(
+    ({ type }) => type === 'visibility',
+  ).length;
   assert.equal(await mgr.setEnabled('radio', true), true);
-  assert.equal(moduleActive, true, 'same-state retry performs real enable work');
+  assert.equal(
+    moduleActive,
+    true,
+    'same-state retry performs real enable work',
+  );
   assert.equal(mgr.isEnabled('radio'), true);
   assert.equal(mgr.layers.get('radio').lifecycleUncertain, false);
   assert.notEqual(mgr.layers.get('radio').intervalId, null);
@@ -663,7 +849,9 @@ test('failed enable cleanup leaves reconciliation debt instead of skipping a sam
         let failPhase = true;
         let failCleanup = true;
         let moduleActive = false;
-        const layer = makeSlowLayer(`reconcile-${phase}-${cleanupFailure}`, { updateInterval: 1000 });
+        const layer = makeSlowLayer(`reconcile-${phase}-${cleanupFailure}`, {
+          updateInterval: 1000,
+        });
         layer.module.init = async () => {
           layer.calls.init++;
           if (failPhase && phase === 'init') throw new Error('init fixture');
@@ -671,11 +859,13 @@ test('failed enable cleanup leaves reconciliation debt instead of skipping a sam
         layer.module.enable = async () => {
           layer.calls.enable++;
           moduleActive = true;
-          if (failPhase && phase === 'enable') throw new Error('enable fixture');
+          if (failPhase && phase === 'enable')
+            throw new Error('enable fixture');
         };
         layer.module.update = async () => {
           layer.calls.update++;
-          if (failPhase && phase === 'update') throw new Error('update fixture');
+          if (failPhase && phase === 'update')
+            throw new Error('update fixture');
         };
         layer.module.disable = async () => {
           layer.calls.disable++;
@@ -689,10 +879,17 @@ test('failed enable cleanup leaves reconciliation debt instead of skipping a sam
 
         assert.equal(await mgr.setEnabled(layer.module.id, true), false);
         assert.equal(moduleActive, false, 'cleanup made the module inactive');
-        assert.equal(mgr.isEnabled(layer.module.id), true, 'manager remains conservatively ON');
+        assert.equal(
+          mgr.isEnabled(layer.module.id),
+          true,
+          'manager remains conservatively ON',
+        );
         assert.equal(mgr.layers.get(layer.module.id).lifecycleUncertain, true);
         assert.equal(mgr.layers.get(layer.module.id).intervalId, null);
-        assert.equal(changes.some(({ type }) => type === 'visibility'), false);
+        assert.equal(
+          changes.some(({ type }) => type === 'visibility'),
+          false,
+        );
         assert.equal(changes.at(-1)?.type, 'visibility-failed');
         assert.equal(changes.at(-1)?.phase, phase);
 
@@ -700,12 +897,19 @@ test('failed enable cleanup leaves reconciliation debt instead of skipping a sam
         failCleanup = false;
         const enablesBeforeRetry = layer.calls.enable;
         assert.equal(await mgr.setEnabled(layer.module.id, true), true);
-        assert.equal(layer.calls.enable, enablesBeforeRetry + 1, 'retry does not take the same-state no-op');
+        assert.equal(
+          layer.calls.enable,
+          enablesBeforeRetry + 1,
+          'retry does not take the same-state no-op',
+        );
         assert.equal(moduleActive, true);
         assert.equal(mgr.isEnabled(layer.module.id), true);
         assert.equal(mgr.layers.get(layer.module.id).lifecycleUncertain, false);
         assert.notEqual(mgr.layers.get(layer.module.id).intervalId, null);
-        assert.equal(changes.filter(({ type }) => type === 'visibility').length, 1);
+        assert.equal(
+          changes.filter(({ type }) => type === 'visibility').length,
+          1,
+        );
         clearInterval(mgr.layers.get(layer.module.id).intervalId);
       });
     }
@@ -736,7 +940,10 @@ test('failed disable is uncertain and same-state enable reconciles module author
   assert.equal(moduleActive, false);
   assert.equal(mgr.isEnabled(layer.module.id), true);
   assert.equal(mgr.layers.get(layer.module.id).lifecycleUncertain, true);
-  assert.equal(changes.some(({ type }) => type === 'visibility'), false);
+  assert.equal(
+    changes.some(({ type }) => type === 'visibility'),
+    false,
+  );
 
   rejectDisable = false;
   const enablesBeforeRetry = layer.calls.enable;
@@ -754,16 +961,23 @@ test('abort rejections from init and enable are cancellations, not lifecycle fai
       const mgr = new DataLayerManager({});
       const changes = [];
       let announcePhase;
-      const phaseStarted = new Promise((resolve) => { announcePhase = resolve; });
-      const layer = makeSlowLayer(`radio-${phase}`, { updateInterval: -1 });
-      const rejectOnAbort = (_viewer, { signal } = {}) => new Promise((_resolve, reject) => {
-        announcePhase();
-        signal.addEventListener('abort', () => {
-          const error = new Error(`${phase} aborted`);
-          error.name = 'AbortError';
-          reject(error);
-        }, { once: true });
+      const phaseStarted = new Promise((resolve) => {
+        announcePhase = resolve;
       });
+      const layer = makeSlowLayer(`radio-${phase}`, { updateInterval: -1 });
+      const rejectOnAbort = (_viewer, { signal } = {}) =>
+        new Promise((_resolve, reject) => {
+          announcePhase();
+          signal.addEventListener(
+            'abort',
+            () => {
+              const error = new Error(`${phase} aborted`);
+              error.name = 'AbortError';
+              reject(error);
+            },
+            { once: true },
+          );
+        });
       if (phase === 'init') layer.module.init = rejectOnAbort;
       else layer.module.enable = rejectOnAbort;
       mgr.register(layer.module);
@@ -780,8 +994,14 @@ test('abort rejections from init and enable are cancellations, not lifecycle fai
 
       assert.equal(changed, false);
       assert.equal(mgr.isEnabled(layer.module.id), false);
-      assert.equal(changes.some(({ type }) => type === 'visibility-failed'), false);
-      assert.equal(changes.some(({ type }) => type === 'visibility'), false);
+      assert.equal(
+        changes.some(({ type }) => type === 'visibility-failed'),
+        false,
+      );
+      assert.equal(
+        changes.some(({ type }) => type === 'visibility'),
+        false,
+      );
       assert.equal(changes.at(-1)?.type, 'visibility-cancelled');
       assert.equal(changes.at(-1)?.intentEpoch, 1);
       assert.equal(changes.at(-1)?.cancellationReason, 'caller-abort');
@@ -796,7 +1016,9 @@ test('failed cancelled-disable compensation preserves manager/module coherence a
   let announceDisable;
   let failEnable = false;
   let disableAttempts = 0;
-  const disableStarted = new Promise((resolve) => { announceDisable = resolve; });
+  const disableStarted = new Promise((resolve) => {
+    announceDisable = resolve;
+  });
   const layer = makeSlowLayer('radio', { updateInterval: -1 });
   layer.module.enable = () => {
     layer.calls.enable++;
@@ -807,7 +1029,9 @@ test('failed cancelled-disable compensation preserves manager/module coherence a
     disableAttempts++;
     if (disableAttempts > 1) return;
     announceDisable();
-    await new Promise((resolve) => { releaseDisable = resolve; });
+    await new Promise((resolve) => {
+      releaseDisable = resolve;
+    });
   };
   mgr.register(layer.module);
   await mgr.setEnabled('radio', true);
@@ -826,13 +1050,20 @@ test('failed cancelled-disable compensation preserves manager/module coherence a
 
   assert.equal(changed, false);
   assert.equal(mgr.isEnabled('radio'), false);
-  assert.equal(changes.some(({ type }) => type === 'visibility'), false);
+  assert.equal(
+    changes.some(({ type }) => type === 'visibility'),
+    false,
+  );
   assert.equal(changes.at(-1)?.type, 'visibility-failed');
   assert.equal(changes.at(-1)?.phase, 'cancel-disable-compensation');
 
   failEnable = false;
   assert.equal(await mgr.setEnabled('radio', true), true);
-  assert.equal(mgr.isEnabled('radio'), true, 'same-state retry performs real lifecycle work');
+  assert.equal(
+    mgr.isEnabled('radio'),
+    true,
+    'same-state retry performs real lifecycle work',
+  );
 });
 
 test('cancelled Space Missions entry exposes the owning manager intent epoch', async () => {
@@ -840,11 +1071,15 @@ test('cancelled Space Missions entry exposes the owning manager intent epoch', a
   const changes = [];
   let releaseEnable;
   let announceEnable;
-  const enableStarted = new Promise((resolve) => { announceEnable = resolve; });
+  const enableStarted = new Promise((resolve) => {
+    announceEnable = resolve;
+  });
   const missions = makeSlowLayer('rocket-launches', { updateInterval: -1 });
   missions.module.enable = async () => {
     announceEnable();
-    await new Promise((resolve) => { releaseEnable = resolve; });
+    await new Promise((resolve) => {
+      releaseEnable = resolve;
+    });
   };
   mgr.register(missions.module);
   mgr.subscribe((change) => changes.push(change));
@@ -880,11 +1115,17 @@ test('lifecycle methods returning false reject their transaction without settled
       }
       mgr.subscribe((change) => changes.push(change));
 
-      const changed = await mgr.setEnabled(layer.module.id, phase !== 'disable');
+      const changed = await mgr.setEnabled(
+        layer.module.id,
+        phase !== 'disable',
+      );
 
       assert.equal(changed, false);
       assert.equal(mgr.isEnabled(layer.module.id), phase === 'disable');
-      assert.equal(changes.some(({ type }) => type === 'visibility'), false);
+      assert.equal(
+        changes.some(({ type }) => type === 'visibility'),
+        false,
+      );
       assert.equal(changes.at(-1)?.type, 'visibility-failed');
       assert.equal(changes.at(-1)?.phase, phase);
       assert.equal(
@@ -900,7 +1141,9 @@ test('module-local AbortError is a cancellation while the caller signal remains 
     await t.test(phase, async () => {
       const mgr = new DataLayerManager({});
       const changes = [];
-      const layer = makeSlowLayer(`resource-abort-${phase}`, { updateInterval: -1 });
+      const layer = makeSlowLayer(`resource-abort-${phase}`, {
+        updateInterval: -1,
+      });
       const abortLocally = async () => {
         const error = new Error(`${phase} resource cancelled`);
         error.name = 'AbortError';
@@ -916,12 +1159,21 @@ test('module-local AbortError is a cancellation while the caller signal remains 
       }
       mgr.subscribe((change) => changes.push(change));
 
-      const changed = await mgr.setEnabled(layer.module.id, phase !== 'disable');
+      const changed = await mgr.setEnabled(
+        layer.module.id,
+        phase !== 'disable',
+      );
 
       assert.equal(changed, false);
       assert.equal(mgr.isEnabled(layer.module.id), phase === 'disable');
-      assert.equal(changes.some(({ type }) => type === 'visibility-failed'), false);
-      assert.equal(changes.some(({ type }) => type === 'visibility'), false);
+      assert.equal(
+        changes.some(({ type }) => type === 'visibility-failed'),
+        false,
+      );
+      assert.equal(
+        changes.some(({ type }) => type === 'visibility'),
+        false,
+      );
       assert.equal(changes.at(-1)?.type, 'visibility-cancelled');
       assert.equal(changes.at(-1)?.cancellationReason, 'resource-abort');
       assert.equal(changes.at(-1)?.phase, phase);
@@ -944,7 +1196,10 @@ test('a settled resource cancellation cannot disable a later successful retry', 
   };
   mgr.register(layer.module);
 
-  assert.equal(await mgr.setEnabled(layer.module.id, true, { signal: caller.signal }), false);
+  assert.equal(
+    await mgr.setEnabled(layer.module.id, true, { signal: caller.signal }),
+    false,
+  );
   assert.equal(caller.signal.aborted, false);
   assert.equal(mgr.isEnabled(layer.module.id), false);
 
@@ -971,21 +1226,43 @@ test('simultaneous absolute enable requests stay idempotent inside the toggle qu
     mgr.setEnabled('vessels', true),
   ]);
 
-  assert.equal(mgr.isEnabled('vessels'), true, 'repeated absolute enables end enabled');
-  assert.equal(layer.calls.enable, 1, 'the queued desired-state check prevents a second enable');
-  assert.equal(layer.calls.disable, 0, 'an absolute enable never turns the layer off');
+  assert.equal(
+    mgr.isEnabled('vessels'),
+    true,
+    'repeated absolute enables end enabled',
+  );
+  assert.equal(
+    layer.calls.enable,
+    1,
+    'the queued desired-state check prevents a second enable',
+  );
+  assert.equal(
+    layer.calls.disable,
+    0,
+    'an absolute enable never turns the layer off',
+  );
 
   await Promise.all([
     mgr.setEnabled('vessels', false),
     mgr.setEnabled('vessels', false),
   ]);
-  assert.equal(mgr.isEnabled('vessels'), false, 'repeated absolute disables end disabled');
-  assert.equal(layer.calls.disable, 1, 'the queued desired-state check prevents a second disable');
+  assert.equal(
+    mgr.isEnabled('vessels'),
+    false,
+    'repeated absolute disables end disabled',
+  );
+  assert.equal(
+    layer.calls.disable,
+    1,
+    'the queued desired-state check prevents a second disable',
+  );
 });
 
 test('enabled-layer snapshots restore the exact set through normal visibility events', async () => {
   const mgr = new DataLayerManager({});
-  const layers = ['flights', 'satellites', 'earthquakes'].map((id) => makeSlowLayer(id, { updateInterval: 0 }));
+  const layers = ['flights', 'satellites', 'earthquakes'].map((id) =>
+    makeSlowLayer(id, { updateInterval: 0 }),
+  );
   const changes = [];
   for (const layer of layers) mgr.register(layer.module);
   mgr.subscribe((change) => changes.push(change));
@@ -1007,7 +1284,8 @@ test('enabled-layer snapshots restore the exact set through normal visibility ev
 
   assert.deepEqual([...mgr.getEnabledLayerIds()], ['flights', 'earthquakes']);
   assert.deepEqual(
-    changes.slice(restoreStart)
+    changes
+      .slice(restoreStart)
       .filter(({ type }) => type === 'visibility')
       .map(({ layerId, enabled, origin }) => ({ layerId, enabled, origin }))
       .sort((a, b) => a.layerId.localeCompare(b.layerId)),
@@ -1027,7 +1305,9 @@ test('restore waits for every queued layer transition before rethrowing a failur
   const failing = makeSlowLayer('failing', { updateInterval: 0 });
   const radio = makeSlowLayer('radio', { updateInterval: 0 });
   let releaseRadioDisable;
-  const radioDisableGate = new Promise((resolve) => { releaseRadioDisable = resolve; });
+  const radioDisableGate = new Promise((resolve) => {
+    releaseRadioDisable = resolve;
+  });
   radio.module.disable = async () => radioDisableGate;
   failing.module.enable = async () => {
     throw new Error('real lifecycle enable failure');
@@ -1037,11 +1317,18 @@ test('restore waits for every queued layer transition before rethrowing a failur
   await mgr.setEnabled('radio', true);
 
   let settled = false;
-  const restoring = mgr.restoreEnabledLayerIds(new Set(['failing']), { origin: 'context-restore' })
-    .finally(() => { settled = true; });
+  const restoring = mgr
+    .restoreEnabledLayerIds(new Set(['failing']), { origin: 'context-restore' })
+    .finally(() => {
+      settled = true;
+    });
   await Promise.resolve();
   await Promise.resolve();
-  assert.equal(settled, false, 'a sibling semantic failure must not release the restore barrier early');
+  assert.equal(
+    settled,
+    false,
+    'a sibling semantic failure must not release the restore barrier early',
+  );
 
   releaseRadioDisable();
   await assert.rejects(restoring, (error) => {
@@ -1050,7 +1337,11 @@ test('restore waits for every queued layer transition before rethrowing a failur
     return true;
   });
   assert.equal(settled, true);
-  assert.equal(mgr.isEnabled('failing'), false, 'fulfilled false remains an honest failed state');
+  assert.equal(
+    mgr.isEnabled('failing'),
+    false,
+    'fulfilled false remains an honest failed state',
+  );
   assert.equal(mgr.isEnabled('radio'), false);
   await mgr.destroyAll();
 });
@@ -1106,7 +1397,9 @@ test('a partial caller-aborted restore can be compensated to its exact target', 
     /Failed to restore layer/,
   );
 
-  await mgr.restoreEnabledLayerIds(new Set(['radio']), { origin: 'context-restore' });
+  await mgr.restoreEnabledLayerIds(new Set(['radio']), {
+    origin: 'context-restore',
+  });
   assert.deepEqual(new Set(mgr.getEnabledLayerIds()), new Set(['radio']));
   await mgr.destroyAll();
 });
@@ -1128,7 +1421,9 @@ test('restore follows superseding intents and requires their authoritative settl
     return handle;
   };
   await assert.rejects(
-    mgr.restoreEnabledLayerIds(new Set(['satellites']), { origin: 'context-restore' }),
+    mgr.restoreEnabledLayerIds(new Set(['satellites']), {
+      origin: 'context-restore',
+    }),
     /Failed to restore layer "satellites" visibility/,
   );
   assert.equal(mgr.isEnabled('satellites'), false);
@@ -1142,7 +1437,9 @@ test('restore follows superseding intents and requires their authoritative settl
     }
     return handle;
   };
-  await mgr.restoreEnabledLayerIds(new Set(['satellites']), { origin: 'context-restore' });
+  await mgr.restoreEnabledLayerIds(new Set(['satellites']), {
+    origin: 'context-restore',
+  });
   assert.equal(mgr.isEnabled('satellites'), true);
   await mgr.destroyAll();
 });
@@ -1167,8 +1464,12 @@ test('newer absolute OFF supersedes a slow ON before settled publication', async
   let releaseUpdate;
   let markUpdateStarted;
   let moduleActive = false;
-  const updateGate = new Promise((resolve) => { releaseUpdate = resolve; });
-  const updateStarted = new Promise((resolve) => { markUpdateStarted = resolve; });
+  const updateGate = new Promise((resolve) => {
+    releaseUpdate = resolve;
+  });
+  const updateStarted = new Promise((resolve) => {
+    markUpdateStarted = resolve;
+  });
   const radio = makeSlowLayer('radio', { updateInterval: 0 });
   radio.module.enable = () => {
     radio.calls.enable++;
@@ -1196,10 +1497,13 @@ test('newer absolute OFF supersedes a slow ON before settled publication', async
     origin: 'user',
     notificationToken: latestToken,
   });
-  assert.deepEqual(requests.map(({ enabled, origin }) => ({ enabled, origin })), [
-    { enabled: true, origin: 'voice' },
-    { enabled: false, origin: 'user' },
-  ]);
+  assert.deepEqual(
+    requests.map(({ enabled, origin }) => ({ enabled, origin })),
+    [
+      { enabled: true, origin: 'voice' },
+      { enabled: false, origin: 'user' },
+    ],
+  );
 
   releaseUpdate();
   assert.deepEqual(await Promise.all([enabling, disabling]), [false, true]);
@@ -1207,15 +1511,21 @@ test('newer absolute OFF supersedes a slow ON before settled publication', async
   assert.equal(moduleActive, false);
   assert.equal(mgr.layers.get('radio').intervalId, null);
   assert.deepEqual(
-    changes.filter(({ type }) => type === 'visibility')
-      .map(({ enabled, origin, notificationToken }) => ({ enabled, origin, notificationToken })),
+    changes
+      .filter(({ type }) => type === 'visibility')
+      .map(({ enabled, origin, notificationToken }) => ({
+        enabled,
+        origin,
+        notificationToken,
+      })),
     [{ enabled: false, origin: 'user', notificationToken: latestToken }],
     'only the latest absolute request may publish settled visibility',
   );
   assert.equal(
-    radio.calls.presentation.some(({ lifecycleState, enabled, uncertain }) => (
-      lifecycleState === 'enabled' && enabled && !uncertain
-    )),
+    radio.calls.presentation.some(
+      ({ lifecycleState, enabled, uncertain }) =>
+        lifecycleState === 'enabled' && enabled && !uncertain,
+    ),
     false,
     'the superseded ON never exposes certain settled presentation',
   );
@@ -1228,8 +1538,12 @@ test('newer OFF cancels init and enable phases without obsolete settlement', asy
       const mgr = new DataLayerManager({});
       let releasePhase;
       let markPhaseStarted;
-      const phaseGate = new Promise((resolve) => { releasePhase = resolve; });
-      const phaseStarted = new Promise((resolve) => { markPhaseStarted = resolve; });
+      const phaseGate = new Promise((resolve) => {
+        releasePhase = resolve;
+      });
+      const phaseStarted = new Promise((resolve) => {
+        markPhaseStarted = resolve;
+      });
       const radio = makeSlowLayer(`radio-${phase}`, { updateInterval: -1 });
       radio.module[phase] = async () => {
         radio.calls[phase]++;
@@ -1240,22 +1554,28 @@ test('newer OFF cancels init and enable phases without obsolete settlement', asy
       const changes = [];
       mgr.subscribe((change) => changes.push(change));
 
-      const enabling = mgr.setEnabled(radio.module.id, true, { origin: 'voice' });
+      const enabling = mgr.setEnabled(radio.module.id, true, {
+        origin: 'voice',
+      });
       await phaseStarted;
-      const disabling = mgr.setEnabled(radio.module.id, false, { origin: 'user' });
+      const disabling = mgr.setEnabled(radio.module.id, false, {
+        origin: 'user',
+      });
       releasePhase();
 
       assert.deepEqual(await Promise.all([enabling, disabling]), [false, true]);
       assert.deepEqual(
-        changes.filter(({ type }) => type === 'visibility')
+        changes
+          .filter(({ type }) => type === 'visibility')
           .map(({ enabled, origin }) => ({ enabled, origin })),
         [{ enabled: false, origin: 'user' }],
       );
       assert.equal(mgr.isEnabled(radio.module.id), false);
       assert.equal(
-        radio.calls.presentation.some(({ lifecycleState, enabled, uncertain }) => (
-          lifecycleState === 'enabled' && enabled && !uncertain
-        )),
+        radio.calls.presentation.some(
+          ({ lifecycleState, enabled, uncertain }) =>
+            lifecycleState === 'enabled' && enabled && !uncertain,
+        ),
         false,
       );
       await mgr.destroyAll();
@@ -1267,8 +1587,12 @@ test('supersession during a visibility guard cancels the stale request before bl
   const mgr = new DataLayerManager({});
   let releaseGuard;
   let markGuardStarted;
-  const guardGate = new Promise((resolve) => { releaseGuard = resolve; });
-  const guardStarted = new Promise((resolve) => { markGuardStarted = resolve; });
+  const guardGate = new Promise((resolve) => {
+    releaseGuard = resolve;
+  });
+  const guardStarted = new Promise((resolve) => {
+    markGuardStarted = resolve;
+  });
   const radio = makeSlowLayer('radio', { updateInterval: -1 });
   mgr.register(radio.module);
   mgr.addVisibilityGuard(async (change) => {
@@ -1286,9 +1610,15 @@ test('supersession during a visibility guard cancels the stale request before bl
   releaseGuard();
 
   assert.deepEqual(await Promise.all([enabling, disabling]), [false, true]);
-  assert.equal(changes.some(({ type }) => type === 'visibility-blocked'), false);
+  assert.equal(
+    changes.some(({ type }) => type === 'visibility-blocked'),
+    false,
+  );
   assert.deepEqual(
-    changes.filter(({ type }) => ['visibility-cancelled', 'visibility'].includes(type))
+    changes
+      .filter(({ type }) =>
+        ['visibility-cancelled', 'visibility'].includes(type),
+      )
       .map(({ type, enabled, origin }) => ({ type, enabled, origin })),
     [
       { type: 'visibility-cancelled', enabled: true, origin: 'voice' },
@@ -1304,8 +1634,12 @@ test('newer same-target absolute intent owns the only settled publication', asyn
   let releaseUpdate;
   let markUpdateStarted;
   let firstUpdate = true;
-  const updateGate = new Promise((resolve) => { releaseUpdate = resolve; });
-  const updateStarted = new Promise((resolve) => { markUpdateStarted = resolve; });
+  const updateGate = new Promise((resolve) => {
+    releaseUpdate = resolve;
+  });
+  const updateStarted = new Promise((resolve) => {
+    markUpdateStarted = resolve;
+  });
   const radio = makeSlowLayer('radio', { updateInterval: -1 });
   radio.module.update = async () => {
     radio.calls.update++;
@@ -1325,7 +1659,8 @@ test('newer same-target absolute intent owns the only settled publication', asyn
 
   assert.deepEqual(await Promise.all([voiceEnable, userEnable]), [false, true]);
   assert.deepEqual(
-    changes.filter(({ type }) => type === 'visibility')
+    changes
+      .filter(({ type }) => type === 'visibility')
       .map(({ enabled, origin }) => ({ enabled, origin })),
     [{ enabled: true, origin: 'user' }],
   );
@@ -1338,8 +1673,12 @@ test('cancelled visibility publishes an atomic successor handoff and exact inten
   let releaseUpdate;
   let markUpdateStarted;
   let firstUpdate = true;
-  const updateGate = new Promise((resolve) => { releaseUpdate = resolve; });
-  const updateStarted = new Promise((resolve) => { markUpdateStarted = resolve; });
+  const updateGate = new Promise((resolve) => {
+    releaseUpdate = resolve;
+  });
+  const updateStarted = new Promise((resolve) => {
+    markUpdateStarted = resolve;
+  });
   const missions = makeSlowLayer('rocket-launches', { updateInterval: -1 });
   missions.module.update = async () => {
     missions.calls.update++;
@@ -1352,32 +1691,50 @@ test('cancelled visibility publishes an atomic successor handoff and exact inten
   const changes = [];
   mgr.subscribe((change) => changes.push(change));
 
-  const first = mgr._setEnabledWithIntent('rocket-launches', true, { origin: 'user' });
+  const first = mgr._setEnabledWithIntent('rocket-launches', true, {
+    origin: 'user',
+  });
   await updateStarted;
-  const successor = mgr._setEnabledWithIntent('rocket-launches', true, { origin: 'programmatic' });
+  const successor = mgr._setEnabledWithIntent('rocket-launches', true, {
+    origin: 'programmatic',
+  });
   releaseUpdate();
 
   assert.equal(await first.promise, false);
   assert.equal(await successor.promise, true);
-  const cancelled = changes.find(({ type, intentEpoch }) => (
-    type === 'visibility-cancelled' && intentEpoch === first.intentEpoch
-  ));
-  assert.deepEqual({
-    reason: cancelled?.cancellationReason,
-    phase: cancelled?.phase,
-    successorIntentEpoch: cancelled?.successorIntentEpoch,
-    successorEnabled: cancelled?.successorEnabled,
-    successorOrigin: cancelled?.successorOrigin,
-  }, {
-    reason: 'superseded',
-    phase: 'update',
-    successorIntentEpoch: successor.intentEpoch,
-    successorEnabled: true,
-    successorOrigin: 'programmatic',
-  });
-  assert.equal((await mgr._waitForVisibilityIntent('rocket-launches', successor.intentEpoch))?.succeeded, true);
+  const cancelled = changes.find(
+    ({ type, intentEpoch }) =>
+      type === 'visibility-cancelled' && intentEpoch === first.intentEpoch,
+  );
   assert.deepEqual(
-    changes.filter(({ type }) => type === 'visibility').map(({ enabled, origin }) => ({ enabled, origin })),
+    {
+      reason: cancelled?.cancellationReason,
+      phase: cancelled?.phase,
+      successorIntentEpoch: cancelled?.successorIntentEpoch,
+      successorEnabled: cancelled?.successorEnabled,
+      successorOrigin: cancelled?.successorOrigin,
+    },
+    {
+      reason: 'superseded',
+      phase: 'update',
+      successorIntentEpoch: successor.intentEpoch,
+      successorEnabled: true,
+      successorOrigin: 'programmatic',
+    },
+  );
+  assert.equal(
+    (
+      await mgr._waitForVisibilityIntent(
+        'rocket-launches',
+        successor.intentEpoch,
+      )
+    )?.succeeded,
+    true,
+  );
+  assert.deepEqual(
+    changes
+      .filter(({ type }) => type === 'visibility')
+      .map(({ enabled, origin }) => ({ enabled, origin })),
     [{ enabled: true, origin: 'programmatic' }],
   );
   await mgr.destroyAll();
@@ -1389,19 +1746,27 @@ test('same-target uncertain retry retains authoritative visibility until abort c
   let enableAttempt = 0;
   let markRetryStarted;
   let releaseCleanup;
-  const retryStarted = new Promise((resolve) => { markRetryStarted = resolve; });
-  const cleanupGate = new Promise((resolve) => { releaseCleanup = resolve; });
+  const retryStarted = new Promise((resolve) => {
+    markRetryStarted = resolve;
+  });
+  const cleanupGate = new Promise((resolve) => {
+    releaseCleanup = resolve;
+  });
   radio.module.enable = (_viewer, { signal } = {}) => {
     radio.calls.enable++;
     enableAttempt += 1;
     if (enableAttempt !== 2) return Promise.resolve();
     markRetryStarted();
     return new Promise((_resolve, reject) => {
-      signal.addEventListener('abort', () => {
-        const error = new Error('superseded retry');
-        error.name = 'AbortError';
-        reject(error);
-      }, { once: true });
+      signal.addEventListener(
+        'abort',
+        () => {
+          const error = new Error('superseded retry');
+          error.name = 'AbortError';
+          reject(error);
+        },
+        { once: true },
+      );
     });
   };
   radio.module.disable = async () => {
@@ -1445,7 +1810,12 @@ test('re-entrant absolute request during lifecycle presentation owns settlement 
   };
   radio.module.setLifecyclePresentation = (state) => {
     radio.calls.presentation.push({ ...state });
-    if (!triggered && state.lifecycleState === 'enabled' && state.enabled && !state.uncertain) {
+    if (
+      !triggered &&
+      state.lifecycleState === 'enabled' &&
+      state.enabled &&
+      !state.uncertain
+    ) {
       triggered = true;
       reentrantDisable = mgr.setEnabled('radio', false, { origin: 'user' });
     }
@@ -1462,7 +1832,8 @@ test('re-entrant absolute request during lifecycle presentation owns settlement 
   assert.equal(mgr.isEnabled('radio'), false);
   assert.equal(mgr.layers.get('radio').intervalId, null);
   assert.deepEqual(
-    changes.filter(({ type }) => type === 'visibility')
+    changes
+      .filter(({ type }) => type === 'visibility')
       .map(({ enabled, origin }) => ({ enabled, origin })),
     [{ enabled: false, origin: 'user' }],
   );
@@ -1474,8 +1845,12 @@ test('newer absolute ON supersedes a slow OFF without publishing stale OFF', asy
   let releaseDisable;
   let markDisableStarted;
   let firstDisable = true;
-  const disableGate = new Promise((resolve) => { releaseDisable = resolve; });
-  const disableStarted = new Promise((resolve) => { markDisableStarted = resolve; });
+  const disableGate = new Promise((resolve) => {
+    releaseDisable = resolve;
+  });
+  const disableStarted = new Promise((resolve) => {
+    markDisableStarted = resolve;
+  });
   const radio = makeSlowLayer('radio', { updateInterval: -1 });
   radio.module.disable = async () => {
     radio.calls.disable++;
@@ -1494,9 +1869,13 @@ test('newer absolute ON supersedes a slow OFF without publishing stale OFF', asy
   const userEnable = mgr.setEnabled('radio', true, { origin: 'user' });
   releaseDisable();
 
-  assert.deepEqual(await Promise.all([voiceDisable, userEnable]), [false, true]);
+  assert.deepEqual(await Promise.all([voiceDisable, userEnable]), [
+    false,
+    true,
+  ]);
   assert.deepEqual(
-    changes.filter(({ type }) => type === 'visibility')
+    changes
+      .filter(({ type }) => type === 'visibility')
       .map(({ enabled, origin }) => ({ enabled, origin })),
     [{ enabled: true, origin: 'user' }],
   );
@@ -1509,8 +1888,12 @@ test('rapid ON then OFF then ON publishes only the final absolute intent', async
   let releaseUpdate;
   let markUpdateStarted;
   let firstUpdate = true;
-  const updateGate = new Promise((resolve) => { releaseUpdate = resolve; });
-  const updateStarted = new Promise((resolve) => { markUpdateStarted = resolve; });
+  const updateGate = new Promise((resolve) => {
+    releaseUpdate = resolve;
+  });
+  const updateStarted = new Promise((resolve) => {
+    markUpdateStarted = resolve;
+  });
   const radio = makeSlowLayer('radio', { updateInterval: -1 });
   radio.module.update = async () => {
     radio.calls.update++;
@@ -1529,9 +1912,14 @@ test('rapid ON then OFF then ON publishes only the final absolute intent', async
   const finalOn = mgr.setEnabled('radio', true, { origin: 'user' });
   releaseUpdate();
 
-  assert.deepEqual(await Promise.all([firstOn, middleOff, finalOn]), [false, false, true]);
+  assert.deepEqual(await Promise.all([firstOn, middleOff, finalOn]), [
+    false,
+    false,
+    true,
+  ]);
   assert.deepEqual(
-    changes.filter(({ type }) => type === 'visibility')
+    changes
+      .filter(({ type }) => type === 'visibility')
       .map(({ enabled, origin }) => ({ enabled, origin })),
     [{ enabled: true, origin: 'user' }],
   );
@@ -1543,8 +1931,12 @@ test('waitForLayerSettled defers reconciliation until the captured queue complet
   const mgr = new DataLayerManager({});
   let releaseEnable;
   let markEnableStarted;
-  const enableGate = new Promise((resolve) => { releaseEnable = resolve; });
-  const enableStarted = new Promise((resolve) => { markEnableStarted = resolve; });
+  const enableGate = new Promise((resolve) => {
+    releaseEnable = resolve;
+  });
+  const enableStarted = new Promise((resolve) => {
+    markEnableStarted = resolve;
+  });
   const missions = makeSlowLayer('rocket-launches', { updateInterval: 0 });
   missions.module.enable = async () => {
     markEnableStarted();
@@ -1555,7 +1947,9 @@ test('waitForLayerSettled defers reconciliation until the captured queue complet
   const enabling = mgr.setEnabled('rocket-launches', true);
   await enableStarted;
   let settled = false;
-  const waiting = mgr.waitForLayerSettled('rocket-launches').then(() => { settled = true; });
+  const waiting = mgr.waitForLayerSettled('rocket-launches').then(() => {
+    settled = true;
+  });
   await Promise.resolve();
   assert.equal(settled, false);
   releaseEnable();
@@ -1583,12 +1977,20 @@ test('programmatic Context enables neither create nor replace a restoration snap
   });
 
   await mgr.setEnabled('rocket-launches', true, { origin: 'programmatic' });
-  assert.equal(snapshot, existingSnapshot, 'programmatic enable preserves an existing session snapshot');
+  assert.equal(
+    snapshot,
+    existingSnapshot,
+    'programmatic enable preserves an existing session snapshot',
+  );
 
   await mgr.setEnabled('rocket-launches', false, { origin: 'programmatic' });
   snapshot = null;
   await mgr.setEnabled('rocket-launches', true, { origin: 'programmatic' });
-  assert.equal(snapshot, null, 'programmatic enable does not create a new session snapshot');
+  assert.equal(
+    snapshot,
+    null,
+    'programmatic enable does not create a new session snapshot',
+  );
 
   await mgr.destroyAll();
 });
@@ -1599,17 +2001,21 @@ test('visibility guards refuse incompatible enables before lifecycle work', asyn
   const changes = [];
   mgr.register(layer.module);
   mgr.subscribe((change) => changes.push(change));
-  const removeGuard = mgr.addVisibilityGuard((change) => (
+  const removeGuard = mgr.addVisibilityGuard((change) =>
     change.layerId === 'flights' && change.enabled
       ? 'Replay isolation keeps Live Flights off'
-      : null
-  ));
+      : null,
+  );
 
   const changed = await mgr.setEnabled('flights', true, { origin: 'user' });
   assert.equal(changed, false);
   assert.equal(mgr.isEnabled('flights'), false);
   assert.deepEqual(layer.calls, {
-    enable: 0, disable: 0, update: 0, init: 0, presentation: [],
+    enable: 0,
+    disable: 0,
+    update: 0,
+    init: 0,
+    presentation: [],
   });
   assert.deepEqual(changes, [
     {
@@ -1640,7 +2046,9 @@ test('failed asynchronous disable stays enabled and reports an explicit lifecycl
   const layer = makeSlowLayer('flights', { updateInterval: 0 });
   const failure = new Error('poller refused to stop');
   const changes = [];
-  layer.module.disable = async () => { throw failure; };
+  layer.module.disable = async () => {
+    throw failure;
+  };
   mgr.register(layer.module);
   mgr.subscribe((change) => changes.push(change));
 
@@ -1648,20 +2056,31 @@ test('failed asynchronous disable stays enabled and reports an explicit lifecycl
   const changed = await mgr.setEnabled('flights', false);
 
   assert.equal(changed, false);
-  assert.equal(mgr.isEnabled('flights'), true, 'manager must not publish a false disabled state');
-  assert.notEqual(mgr.layers.get('flights').intervalId, null, 'the live refresh interval remains owned');
+  assert.equal(
+    mgr.isEnabled('flights'),
+    true,
+    'manager must not publish a false disabled state',
+  );
+  assert.notEqual(
+    mgr.layers.get('flights').intervalId,
+    null,
+    'the live refresh interval remains owned',
+  );
   const failed = changes.find(({ type }) => type === 'visibility-failed');
-  assert.deepEqual({
-    layerId: failed?.layerId,
-    enabled: failed?.enabled,
-    phase: failed?.phase,
-    error: failed?.error,
-  }, {
-    layerId: 'flights',
-    enabled: false,
-    phase: 'disable',
-    error: failure,
-  });
+  assert.deepEqual(
+    {
+      layerId: failed?.layerId,
+      enabled: failed?.enabled,
+      phase: failed?.phase,
+      error: failed?.error,
+    },
+    {
+      layerId: 'flights',
+      enabled: false,
+      phase: 'disable',
+      error: failure,
+    },
+  );
 
   clearInterval(mgr.layers.get('flights').intervalId);
 });
@@ -1671,7 +2090,9 @@ test('captured enabled set repairs siblings stopped before an isolation failure'
   const flights = makeSlowLayer('flights', { updateInterval: 0 });
   const traffic = makeSlowLayer('traffic', { updateInterval: 0 });
   const missions = makeSlowLayer('rocket-launches', { updateInterval: 0 });
-  traffic.module.disable = async () => { throw new Error('traffic teardown failed'); };
+  traffic.module.disable = async () => {
+    throw new Error('traffic teardown failed');
+  };
   mgr.register(flights.module);
   mgr.register(traffic.module);
   mgr.register(missions.module);
@@ -1686,7 +2107,11 @@ test('captured enabled set repairs siblings stopped before an isolation failure'
     mgr.setEnabled('traffic', false),
   ]);
   assert.deepEqual(results, [true, false]);
-  assert.deepEqual([...mgr.getEnabledLayerIds()], ['traffic'], 'one sibling stopped before failure surfaced');
+  assert.deepEqual(
+    [...mgr.getEnabledLayerIds()],
+    ['traffic'],
+    'one sibling stopped before failure surfaced',
+  );
 
   // Model rollback running from inside Rocket Launches' own visibility guard:
   // that entry's queue cannot settle until the guard returns. Excluding the
@@ -1707,7 +2132,9 @@ test('deferred full restore reconciles an uncertain failed Context shell', async
   const flights = makeSlowLayer('flights', { updateInterval: 0 });
   const missions = makeSlowLayer('rocket-launches', { updateInterval: 0 });
   let cleanupCanConfirm = false;
-  missions.module.enable = async () => { throw new Error('mission activation fixture'); };
+  missions.module.enable = async () => {
+    throw new Error('mission activation fixture');
+  };
   missions.module.disable = async () => cleanupCanConfirm;
   mgr.register(flights.module);
   mgr.register(missions.module);
@@ -1715,8 +2142,15 @@ test('deferred full restore reconciles an uncertain failed Context shell', async
   const snapshot = mgr.getEnabledLayerIds();
   await mgr.setEnabled('flights', false);
 
-  assert.equal(await mgr.setEnabled('rocket-launches', true, { origin: 'user' }), false);
-  assert.equal(mgr.isEnabled('rocket-launches'), true, 'uncertain cleanup stays conservatively ON');
+  assert.equal(
+    await mgr.setEnabled('rocket-launches', true, { origin: 'user' }),
+    false,
+  );
+  assert.equal(
+    mgr.isEnabled('rocket-launches'),
+    true,
+    'uncertain cleanup stays conservatively ON',
+  );
   assert.equal(mgr.layers.get('rocket-launches').lifecycleUncertain, true);
 
   await mgr.waitForLayerSettled('rocket-launches');
@@ -1733,8 +2167,12 @@ test('mission entry guard remains active until the slow Rocket Launches enable s
   const flights = makeSlowLayer('flights', { updateInterval: 0 });
   let releaseMissionEnable;
   let markMissionEnableStarted;
-  const missionEnableGate = new Promise((resolve) => { releaseMissionEnable = resolve; });
-  const missionEnableStarted = new Promise((resolve) => { markMissionEnableStarted = resolve; });
+  const missionEnableGate = new Promise((resolve) => {
+    releaseMissionEnable = resolve;
+  });
+  const missionEnableStarted = new Promise((resolve) => {
+    markMissionEnableStarted = resolve;
+  });
   const missions = makeSlowLayer('rocket-launches', { updateInterval: 0 });
   missions.module.enable = async () => {
     markMissionEnableStarted();
@@ -1745,7 +2183,11 @@ test('mission entry guard remains active until the slow Rocket Launches enable s
 
   let enteringMode = null;
   mgr.addVisibilityGuard(async (change) => {
-    if (enteringMode === 'space-missions' && change.enabled && change.layerId !== 'rocket-launches') {
+    if (
+      enteringMode === 'space-missions' &&
+      change.enabled &&
+      change.layerId !== 'rocket-launches'
+    ) {
       return 'Replay isolation keeps other layers off';
     }
     if (change.enabled && change.layerId === 'rocket-launches') {
@@ -1755,24 +2197,42 @@ test('mission entry guard remains active until the slow Rocket Launches enable s
   });
   mgr.subscribe((change) => {
     if (
-      change.layerId === 'rocket-launches'
-      && ['visibility', 'visibility-blocked', 'visibility-failed'].includes(change.type)
+      change.layerId === 'rocket-launches' &&
+      ['visibility', 'visibility-blocked', 'visibility-failed'].includes(
+        change.type,
+      )
     ) {
       enteringMode = null;
     }
   });
 
-  const enablingMissions = mgr.setEnabled('rocket-launches', true, { origin: 'user' });
+  const enablingMissions = mgr.setEnabled('rocket-launches', true, {
+    origin: 'user',
+  });
   await missionEnableStarted;
-  const flightsChanged = await mgr.setEnabled('flights', true, { origin: 'user' });
+  const flightsChanged = await mgr.setEnabled('flights', true, {
+    origin: 'user',
+  });
   assert.equal(flightsChanged, false);
-  assert.equal(mgr.isEnabled('flights'), false, 'incompatible layer stays off throughout mission startup');
-  assert.equal(enteringMode, 'space-missions', 'entry gate remains owned while enable is pending');
+  assert.equal(
+    mgr.isEnabled('flights'),
+    false,
+    'incompatible layer stays off throughout mission startup',
+  );
+  assert.equal(
+    enteringMode,
+    'space-missions',
+    'entry gate remains owned while enable is pending',
+  );
 
   releaseMissionEnable();
   await enablingMissions;
   assert.equal(mgr.isEnabled('rocket-launches'), true);
-  assert.equal(enteringMode, null, 'settled visibility releases the entry gate');
+  assert.equal(
+    enteringMode,
+    null,
+    'settled visibility releases the entry gate',
+  );
   await mgr.destroyAll();
 });
 
@@ -1781,8 +2241,12 @@ test('manager awaits asynchronous dependency teardown before a rapid re-enable',
   const order = [];
   let releaseDisable;
   let markDisableStarted;
-  const disableGate = new Promise((resolve) => { releaseDisable = resolve; });
-  const disableStarted = new Promise((resolve) => { markDisableStarted = resolve; });
+  const disableGate = new Promise((resolve) => {
+    releaseDisable = resolve;
+  });
+  const disableStarted = new Promise((resolve) => {
+    markDisableStarted = resolve;
+  });
   mgr.register({
     id: 'rocket-launches',
     name: 'missions',
@@ -1790,7 +2254,9 @@ test('manager awaits asynchronous dependency teardown before a rapid re-enable',
     source: 'test',
     updateInterval: 0,
     async init() {},
-    async enable() { order.push('enable'); },
+    async enable() {
+      order.push('enable');
+    },
     async disable() {
       order.push('disable-start');
       markDisableStarted();
@@ -1798,7 +2264,9 @@ test('manager awaits asynchronous dependency teardown before a rapid re-enable',
       order.push('disable-finish');
     },
     async update() {},
-    getStats() { return { count: 0, lastUpdate: null }; },
+    getStats() {
+      return { count: 0, lastUpdate: null };
+    },
   });
   await mgr.setEnabled('rocket-launches', true);
   const disabling = mgr.setEnabled('rocket-launches', false);
@@ -1807,56 +2275,105 @@ test('manager awaits asynchronous dependency teardown before a rapid re-enable',
   assert.deepEqual(order, ['enable', 'disable-start']);
   releaseDisable();
   assert.deepEqual(await Promise.all([disabling, reenabling]), [false, true]);
-  assert.deepEqual(order, ['enable', 'disable-start', 'disable-finish', 'enable']);
+  assert.deepEqual(order, [
+    'enable',
+    'disable-start',
+    'disable-finish',
+    'enable',
+  ]);
   assert.equal(mgr.isEnabled('rocket-launches'), true);
   await mgr.destroyAll();
 });
 
 test('layer feed states distinguish unavailable, fallback, stale, and degraded controls', () => {
-  assert.equal(layerFeedState({ error: 'feed down', count: 0, lastUpdate: null }), 'unavailable');
-  assert.equal(layerFeedState({
-    status: 'unavailable',
-    error: 'feed down',
-    count: 50,
-    lastUpdate: 1,
-  }), 'unavailable', 'an explicit total outage stays unavailable while last-good data is preserved');
-  assert.equal(layerFeedState({ mode: 'sim', count: 100, lastUpdate: 1 }), 'fallback');
-  assert.equal(layerFeedState({ source: 'adsb.lol', count: 10, lastUpdate: 1 }), 'fallback');
-  assert.equal(layerFeedState({
-    source: 'adsb.lol',
-    fallback: false,
-    count: 10,
-    lastUpdate: 1,
-  }), 'nominal', 'an explicitly primary adsb.lol feed is not a fallback');
-  assert.equal(layerFeedState({ stale: true, count: 0, lastUpdate: 1 }), 'stale');
-  assert.equal(layerFeedState({ error: 'partial group failure', count: 50, lastUpdate: 1 }), 'degraded');
+  assert.equal(
+    layerFeedState({ error: 'feed down', count: 0, lastUpdate: null }),
+    'unavailable',
+  );
+  assert.equal(
+    layerFeedState({
+      status: 'unavailable',
+      error: 'feed down',
+      count: 50,
+      lastUpdate: 1,
+    }),
+    'unavailable',
+    'an explicit total outage stays unavailable while last-good data is preserved',
+  );
+  assert.equal(
+    layerFeedState({ mode: 'sim', count: 100, lastUpdate: 1 }),
+    'fallback',
+  );
+  assert.equal(
+    layerFeedState({ source: 'adsb.lol', count: 10, lastUpdate: 1 }),
+    'fallback',
+  );
+  assert.equal(
+    layerFeedState({
+      source: 'adsb.lol',
+      fallback: false,
+      count: 10,
+      lastUpdate: 1,
+    }),
+    'nominal',
+    'an explicitly primary adsb.lol feed is not a fallback',
+  );
+  assert.equal(
+    layerFeedState({ stale: true, count: 0, lastUpdate: 1 }),
+    'stale',
+  );
+  assert.equal(
+    layerFeedState({
+      error: 'partial group failure',
+      count: 50,
+      lastUpdate: 1,
+    }),
+    'degraded',
+  );
   assert.equal(layerFeedState({ loading: true }), 'loading');
   assert.equal(layerFeedState({ count: 5, lastUpdate: 1 }), 'nominal');
 });
 
 test('layer metadata names degraded state instead of presenting an ordinary age', () => {
   const mgr = new DataLayerManager({});
-  assert.match(mgr._buildMetaText({
-    source: 'AISStream',
-    stats: { stale: true, count: 20, lastUpdate: Date.now() - 10_000 },
-  }), /^STALE · AISStream · /);
-  assert.equal(mgr._buildMetaText({
-    source: 'TomTom',
-    stats: { mode: 'sim', count: 120, lastUpdate: 1, loadingLabel: 'simulated traffic' },
-  }), 'FALLBACK · TomTom · simulated traffic');
-  assert.equal(mgr._buildMetaText({
-    source: 'CelesTrak',
-    stats: { error: 'CelesTrak unreachable', count: 0, lastUpdate: null },
-  }), 'UNAVAILABLE · CelesTrak · CelesTrak unreachable');
-  assert.equal(mgr._buildMetaText({
-    source: 'CelesTrak',
-    stats: {
-      status: 'unavailable',
-      error: 'CelesTrak unreachable',
-      count: 50,
-      lastUpdate: 1,
-    },
-  }), 'UNAVAILABLE · CelesTrak · CelesTrak unreachable');
+  assert.match(
+    mgr._buildMetaText({
+      source: 'AISStream',
+      stats: { stale: true, count: 20, lastUpdate: Date.now() - 10_000 },
+    }),
+    /^STALE · AISStream · /,
+  );
+  assert.equal(
+    mgr._buildMetaText({
+      source: 'TomTom',
+      stats: {
+        mode: 'sim',
+        count: 120,
+        lastUpdate: 1,
+        loadingLabel: 'simulated traffic',
+      },
+    }),
+    'FALLBACK · TomTom · simulated traffic',
+  );
+  assert.equal(
+    mgr._buildMetaText({
+      source: 'CelesTrak',
+      stats: { error: 'CelesTrak unreachable', count: 0, lastUpdate: null },
+    }),
+    'UNAVAILABLE · CelesTrak · CelesTrak unreachable',
+  );
+  assert.equal(
+    mgr._buildMetaText({
+      source: 'CelesTrak',
+      stats: {
+        status: 'unavailable',
+        error: 'CelesTrak unreachable',
+        count: 50,
+        lastUpdate: 1,
+      },
+    }),
+    'UNAVAILABLE · CelesTrak · CelesTrak unreachable',
+  );
 });
 
 test('uncertain lifecycle state overrides ordinary feed status without disabling reconciliation', () => {
@@ -1865,12 +2382,16 @@ test('uncertain lifecycle state overrides ordinary feed status without disabling
   const attributes = new Map();
   const button = {
     classList: {
-      toggle(name, active) { classes.set(name, Boolean(active)); },
+      toggle(name, active) {
+        classes.set(name, Boolean(active));
+      },
     },
     dataset: {},
     disabled: false,
     textContent: '',
-    setAttribute(name, value) { attributes.set(name, String(value)); },
+    setAttribute(name, value) {
+      attributes.set(name, String(value));
+    },
   };
   const layer = {
     name: 'Radio',
@@ -1885,7 +2406,11 @@ test('uncertain lifecycle state overrides ordinary feed status without disabling
 
   assert.equal(button.textContent, 'UNCERTAIN');
   assert.equal(button.dataset.feedState, 'uncertain');
-  assert.equal(button.disabled, false, 'the lifecycle toggle remains available to reconcile authority');
+  assert.equal(
+    button.disabled,
+    false,
+    'the lifecycle toggle remains available to reconcile authority',
+  );
   assert.equal(attributes.get('aria-label'), 'Radio: UNCERTAIN');
   assert.equal(classes.get('lifecycle-uncertain'), true);
   assert.equal(classes.get('feed-nominal'), false);
@@ -1906,11 +2431,14 @@ test('pre-transition subscribers capture the exact enabled set before user chang
 
   mgr.subscribe((change) => {
     if (
-      change.type === 'visibility-will-change'
-      && change.layerId === 'military-awareness'
-      && change.origin === 'user'
+      change.type === 'visibility-will-change' &&
+      change.layerId === 'military-awareness' &&
+      change.origin === 'user'
     ) {
-      snapshots.push({ enabled: change.enabled, ids: [...mgr.getEnabledLayerIds()] });
+      snapshots.push({
+        enabled: change.enabled,
+        ids: [...mgr.getEnabledLayerIds()],
+      });
     }
   });
 
@@ -1933,11 +2461,9 @@ test('absolute Context entry intent is excluded from its own pre-entry restore s
   let snapshot = null;
   mgr.subscribe((change) => {
     if (shouldCaptureContextSession(change)) {
-      snapshot = contextSnapshotLayerIds(
-        mgr.getEnabledLayerIds(),
-        null,
-        [change.layerId],
-      );
+      snapshot = contextSnapshotLayerIds(mgr.getEnabledLayerIds(), null, [
+        change.layerId,
+      ]);
     }
   });
 
@@ -1966,7 +2492,11 @@ test('destroy waits for pre-destroy restoration before removing a layer', async 
   });
 
   await mgr.destroyLayer('satellites');
-  assert.deepEqual(order, ['restore-start:satellites', 'restore-finish', 'destroy']);
+  assert.deepEqual(order, [
+    'restore-start:satellites',
+    'restore-finish',
+    'destroy',
+  ]);
   assert.equal(mgr.layers.has('satellites'), false);
 });
 
@@ -1975,16 +2505,22 @@ test('destroy revokes an in-flight enable before it can publish settled visibili
   const layer = makeSlowLayer('rocket-launches', { updateInterval: -1 });
   let releaseUpdate;
   let announceUpdate;
-  const updateStarted = new Promise((resolve) => { announceUpdate = resolve; });
+  const updateStarted = new Promise((resolve) => {
+    announceUpdate = resolve;
+  });
   layer.module.update = async () => {
     announceUpdate();
-    await new Promise((resolve) => { releaseUpdate = resolve; });
+    await new Promise((resolve) => {
+      releaseUpdate = resolve;
+    });
   };
   mgr.register(layer.module);
   const changes = [];
   mgr.subscribe((change) => changes.push({ ...change }));
 
-  const enable = mgr._setEnabledWithIntent('rocket-launches', true, { origin: 'user' });
+  const enable = mgr._setEnabledWithIntent('rocket-launches', true, {
+    origin: 'user',
+  });
   await updateStarted;
   const destroying = mgr.destroyLayer('rocket-launches');
   assert.equal(mgr.isEffectivelyEnabled('rocket-launches'), false);
@@ -1994,13 +2530,17 @@ test('destroy revokes an in-flight enable before it can publish settled visibili
   assert.equal(await destroying, true);
   assert.equal(mgr.layers.has('rocket-launches'), false);
   assert.equal(
-    changes.some((change) => change.type === 'visibility' && change.enabled === true),
+    changes.some(
+      (change) => change.type === 'visibility' && change.enabled === true,
+    ),
     false,
     'revoked enable never publishes settled ON',
   );
-  const cancelled = changes.find((change) => (
-    change.type === 'visibility-cancelled' && change.intentEpoch === enable.intentEpoch
-  ));
+  const cancelled = changes.find(
+    (change) =>
+      change.type === 'visibility-cancelled' &&
+      change.intentEpoch === enable.intentEpoch,
+  );
   assert.equal(cancelled?.cancellationReason, 'superseded');
   assert.equal(cancelled?.successorOrigin, 'teardown');
   assert.equal(cancelled?.successorEnabled, false);
@@ -2011,10 +2551,14 @@ test('destroy revokes an in-flight public toggle before it can publish settled v
   const layer = makeSlowLayer('rocket-launches', { updateInterval: -1 });
   let releaseUpdate;
   let announceUpdate;
-  const updateStarted = new Promise((resolve) => { announceUpdate = resolve; });
+  const updateStarted = new Promise((resolve) => {
+    announceUpdate = resolve;
+  });
   layer.module.update = async () => {
     announceUpdate();
-    await new Promise((resolve) => { releaseUpdate = resolve; });
+    await new Promise((resolve) => {
+      releaseUpdate = resolve;
+    });
   };
   mgr.register(layer.module);
   const changes = [];
@@ -2029,11 +2573,15 @@ test('destroy revokes an in-flight public toggle before it can publish settled v
   assert.equal(await destroying, true);
   assert.equal(mgr.layers.has('rocket-launches'), false);
   assert.equal(
-    changes.some((change) => change.type === 'visibility' && change.enabled === true),
+    changes.some(
+      (change) => change.type === 'visibility' && change.enabled === true,
+    ),
     false,
     'revoked public toggle never publishes settled ON',
   );
-  const cancelled = changes.find((change) => change.type === 'visibility-cancelled');
+  const cancelled = changes.find(
+    (change) => change.type === 'visibility-cancelled',
+  );
   assert.equal(cancelled?.phase, 'update');
   assert.equal(cancelled?.cancellationReason, 'superseded');
   assert.equal(cancelled?.successorOrigin, 'teardown');
@@ -2045,13 +2593,17 @@ test('destroyLayer retains an enabled entry when semantic disable fails and perm
   let moduleActive = false;
   let rejectDisable = true;
   let destroyCalls = 0;
-  layer.module.enable = () => { moduleActive = true; };
+  layer.module.enable = () => {
+    moduleActive = true;
+  };
   layer.module.disable = () => {
     if (rejectDisable) return false;
     moduleActive = false;
     return true;
   };
-  layer.module.destroy = () => { destroyCalls += 1; };
+  layer.module.destroy = () => {
+    destroyCalls += 1;
+  };
   mgr.register(layer.module);
   await mgr.setEnabled('radio', true);
 
@@ -2076,7 +2628,8 @@ test('pre-destroy hook can restore the exact focused-session state and params', 
   const missions = makeSlowLayer('rocket-launches', { updateInterval: 0 });
   const satelliteParams = { catalog: 'default', showDots: true };
   satellites.module.getParams = () => satelliteParams;
-  satellites.module.setParams = (params) => Object.assign(satelliteParams, params);
+  satellites.module.setParams = (params) =>
+    Object.assign(satelliteParams, params);
   for (const layer of [local, satellites, missions]) mgr.register(layer.module);
   await Promise.all([
     mgr.setEnabled('cctv', true),
@@ -2095,7 +2648,9 @@ test('pre-destroy hook can restore the exact focused-session state and params', 
   let stateAtDestroy = null;
   mgr.subscribeBeforeDestroy(async () => {
     mgr.setLayerParams('satellites', snapshot.params);
-    await mgr.restoreEnabledLayerIds(snapshot.enabled, { origin: 'context-restore' });
+    await mgr.restoreEnabledLayerIds(snapshot.enabled, {
+      origin: 'context-restore',
+    });
     stateAtDestroy = {
       enabled: [...mgr.getEnabledLayerIds()],
       params: mgr.getLayerParams('satellites'),
@@ -2119,28 +2674,49 @@ test('layer parameter snapshots are detached from module-owned nested state', ()
     name: 'satellites',
     icon: '',
     source: 'test',
-    getParams() { return params; },
+    getParams() {
+      return params;
+    },
   });
 
   const snapshot = mgr.getLayerParams('satellites');
   params.catalog = 'default';
   params.filters.altitude[0] = 999;
 
-  assert.deepEqual(snapshot, { catalog: 'dense', filters: { altitude: [100, 200] } });
+  assert.deepEqual(snapshot, {
+    catalog: 'dense',
+    filters: { altitude: [100, 200] },
+  });
 });
 
 test('feed state: guidance statuses are normal operation, not faults', () => {
   // The Military Installations wide-view prompt: zoom/search guidance must
   // never read DEGRADED — waiting for user action is instruction, not fault.
-  assert.equal(layerFeedState({ status: 'zoom-in', error: 'zoom in to search', count: 12 }), 'nominal');
+  assert.equal(
+    layerFeedState({
+      status: 'zoom-in',
+      error: 'zoom in to search',
+      count: 12,
+    }),
+    'nominal',
+  );
   assert.equal(layerFeedState({ status: 'idle' }), 'nominal');
-  assert.equal(layerFeedState({ status: 'empty', error: 'no records in view' }), 'nominal');
+  assert.equal(
+    layerFeedState({ status: 'empty', error: 'no records in view' }),
+    'nominal',
+  );
   // Honesty carve-out: rendered records from a genuinely stale cache still
   // read STALE through the guidance state.
-  assert.equal(layerFeedState({ status: 'zoom-in', stale: true, count: 12 }), 'stale');
+  assert.equal(
+    layerFeedState({ status: 'zoom-in', stale: true, count: 12 }),
+    'stale',
+  );
   // Loading still wins over guidance, and a real declared outage still wins over everything.
   assert.equal(layerFeedState({ status: 'zoom-in', loading: true }), 'loading');
-  assert.equal(layerFeedState({ status: 'unavailable', error: 'down' }), 'unavailable');
+  assert.equal(
+    layerFeedState({ status: 'unavailable', error: 'down' }),
+    'unavailable',
+  );
   // A bare error with no prior data and no guidance status remains unavailable.
   assert.equal(layerFeedState({ error: 'boom' }), 'unavailable');
 });
@@ -2150,35 +2726,66 @@ test('effective visibility counts in-flight transitions as their target state', 
   const layer = makeSlowLayer('flights', { updateInterval: -1 });
   let releaseInit;
   let announceInit;
-  const initStarted = new Promise((resolve) => { announceInit = resolve; });
+  const initStarted = new Promise((resolve) => {
+    announceInit = resolve;
+  });
   layer.module.init = async () => {
     announceInit();
-    await new Promise((resolve) => { releaseInit = resolve; });
+    await new Promise((resolve) => {
+      releaseInit = resolve;
+    });
   };
   mgr.register(layer.module);
 
   // Mid-ENABLING: settled false, effectively true, snapshot includes it.
   const pendingEnable = mgr.setEnabled('flights', true, { origin: 'user' });
   await initStarted;
-  assert.equal(mgr.isEnabled('flights'), false, 'settled state stays false during activation');
-  assert.equal(mgr.isEffectivelyEnabled('flights'), true, 'in-flight enable is effectively ON');
-  assert.ok(mgr.getEnabledLayerIds().has('flights'), 'snapshot captures the in-flight enable');
+  assert.equal(
+    mgr.isEnabled('flights'),
+    false,
+    'settled state stays false during activation',
+  );
+  assert.equal(
+    mgr.isEffectivelyEnabled('flights'),
+    true,
+    'in-flight enable is effectively ON',
+  );
+  assert.ok(
+    mgr.getEnabledLayerIds().has('flights'),
+    'snapshot captures the in-flight enable',
+  );
   releaseInit();
   assert.equal(await pendingEnable, true);
 
   // Mid-DISABLING: settled true, effectively false, snapshot excludes it.
   let releaseDisable;
   let announceDisable;
-  const disableStarted = new Promise((resolve) => { announceDisable = resolve; });
+  const disableStarted = new Promise((resolve) => {
+    announceDisable = resolve;
+  });
   layer.module.disable = async () => {
     announceDisable();
-    await new Promise((resolve) => { releaseDisable = resolve; });
+    await new Promise((resolve) => {
+      releaseDisable = resolve;
+    });
   };
   const pendingDisable = mgr.setEnabled('flights', false, { origin: 'user' });
   await disableStarted;
-  assert.equal(mgr.isEnabled('flights'), true, 'settled state stays true during teardown');
-  assert.equal(mgr.isEffectivelyEnabled('flights'), false, 'in-flight disable is effectively OFF');
-  assert.equal(mgr.getEnabledLayerIds().has('flights'), false, 'snapshot honors the in-flight disable');
+  assert.equal(
+    mgr.isEnabled('flights'),
+    true,
+    'settled state stays true during teardown',
+  );
+  assert.equal(
+    mgr.isEffectivelyEnabled('flights'),
+    false,
+    'in-flight disable is effectively OFF',
+  );
+  assert.equal(
+    mgr.getEnabledLayerIds().has('flights'),
+    false,
+    'snapshot honors the in-flight disable',
+  );
   releaseDisable();
   await pendingDisable;
   assert.equal(mgr.isEnabled('flights'), false);
@@ -2189,7 +2796,9 @@ test('superseded-intent adoption re-runs visibility guards before publishing suc
   const layer = makeSlowLayer('flights', { updateInterval: -1 });
   let releaseDisable;
   let announceDisable;
-  const disableStarted = new Promise((resolve) => { announceDisable = resolve; });
+  const disableStarted = new Promise((resolve) => {
+    announceDisable = resolve;
+  });
   mgr.register(layer.module);
   assert.equal(await mgr.setEnabled('flights', true, { origin: 'user' }), true);
 
@@ -2201,7 +2810,9 @@ test('superseded-intent adoption re-runs visibility guards before publishing suc
     disableCalls += 1;
     if (disableCalls > 1) return;
     announceDisable();
-    await new Promise((resolve) => { releaseDisable = resolve; });
+    await new Promise((resolve) => {
+      releaseDisable = resolve;
+    });
   };
   const pendingOff = mgr.setEnabled('flights', false, { origin: 'user' });
   await disableStarted;
@@ -2226,21 +2837,39 @@ test('superseded-intent adoption re-runs visibility guards before publishing suc
   await pendingOff;
   await mgr.waitForLayerSettled('flights');
 
-  assert.equal(onResult, false, 'guarded adoption reports the blocked request as unfulfilled');
+  assert.equal(
+    onResult,
+    false,
+    'guarded adoption reports the blocked request as unfulfilled',
+  );
   assert.ok(
-    guardChanges.some((change) => change.layerId === 'flights' && change.enabled),
+    guardChanges.some(
+      (change) => change.layerId === 'flights' && change.enabled,
+    ),
     'the guard was actually consulted for the adopted ON',
   );
   assert.ok(
-    changes.some((change) => change.type === 'visibility-blocked' && change.layerId === 'flights'),
+    changes.some(
+      (change) =>
+        change.type === 'visibility-blocked' && change.layerId === 'flights',
+    ),
     'the blocked adoption is published as blocked',
   );
   assert.equal(
-    changes.some((change) => change.type === 'visibility' && change.layerId === 'flights' && change.enabled === true),
+    changes.some(
+      (change) =>
+        change.type === 'visibility' &&
+        change.layerId === 'flights' &&
+        change.enabled === true,
+    ),
     false,
     'no successful ON visibility event is published past the guard',
   );
-  assert.equal(mgr.isEnabled('flights'), false, 'the guard-forbidden adopted state is reconciled OFF');
+  assert.equal(
+    mgr.isEnabled('flights'),
+    false,
+    'the guard-forbidden adopted state is reconciled OFF',
+  );
   assert.equal(mgr.isEffectivelyEnabled('flights'), false);
 });
 
@@ -2248,49 +2877,77 @@ test('superseding an intent inside the adoption guard publishes the exact succes
   const mgr = new DataLayerManager({});
   const layer = makeSlowLayer('rocket-launches', { updateInterval: -1 });
   mgr.register(layer.module);
-  assert.equal(await mgr.setEnabled('rocket-launches', true, { origin: 'user' }), true);
+  assert.equal(
+    await mgr.setEnabled('rocket-launches', true, { origin: 'user' }),
+    true,
+  );
 
   let releaseDisable;
   let announceDisable;
-  const disableStarted = new Promise((resolve) => { announceDisable = resolve; });
+  const disableStarted = new Promise((resolve) => {
+    announceDisable = resolve;
+  });
   layer.module.disable = async () => {
     announceDisable();
-    await new Promise((resolve) => { releaseDisable = resolve; });
+    await new Promise((resolve) => {
+      releaseDisable = resolve;
+    });
   };
 
   let releaseAdoptionGuard;
   let announceAdoptionGuard;
-  const adoptionGuardStarted = new Promise((resolve) => { announceAdoptionGuard = resolve; });
+  const adoptionGuardStarted = new Promise((resolve) => {
+    announceAdoptionGuard = resolve;
+  });
   mgr.addVisibilityGuard(async (change) => {
-    if (change.layerId !== 'rocket-launches' || !change.enabled || change.origin !== 'replacement-b') return null;
+    if (
+      change.layerId !== 'rocket-launches' ||
+      !change.enabled ||
+      change.origin !== 'replacement-b'
+    )
+      return null;
     announceAdoptionGuard();
-    await new Promise((resolve) => { releaseAdoptionGuard = resolve; });
+    await new Promise((resolve) => {
+      releaseAdoptionGuard = resolve;
+    });
     return null;
   });
 
   const changes = [];
   mgr.subscribe((change) => changes.push({ ...change }));
-  const off = mgr._setEnabledWithIntent('rocket-launches', false, { origin: 'user' });
+  const off = mgr._setEnabledWithIntent('rocket-launches', false, {
+    origin: 'user',
+  });
   await disableStarted;
-  const replacementB = mgr._setEnabledWithIntent('rocket-launches', true, { origin: 'replacement-b' });
+  const replacementB = mgr._setEnabledWithIntent('rocket-launches', true, {
+    origin: 'replacement-b',
+  });
   releaseDisable();
   await adoptionGuardStarted;
-  const replacementC = mgr._setEnabledWithIntent('rocket-launches', true, { origin: 'replacement-c' });
+  const replacementC = mgr._setEnabledWithIntent('rocket-launches', true, {
+    origin: 'replacement-c',
+  });
   releaseAdoptionGuard();
 
   assert.equal(await off.promise, false);
   assert.equal(await replacementB.promise, false);
   assert.equal(await replacementC.promise, true);
-  const outcomeB = await mgr._waitForVisibilityIntent('rocket-launches', replacementB.intentEpoch);
+  const outcomeB = await mgr._waitForVisibilityIntent(
+    'rocket-launches',
+    replacementB.intentEpoch,
+  );
   assert.equal(outcomeB.cancellationReason, 'superseded');
   assert.equal(outcomeB.successorIntentEpoch, replacementC.intentEpoch);
   assert.equal(outcomeB.successorEnabled, true);
   assert.equal(outcomeB.successorOrigin, 'replacement-c');
-  assert.ok(changes.some((change) => (
-    change.type === 'visibility-cancelled'
-    && change.intentEpoch === replacementB.intentEpoch
-    && change.successorIntentEpoch === replacementC.intentEpoch
-  )));
+  assert.ok(
+    changes.some(
+      (change) =>
+        change.type === 'visibility-cancelled' &&
+        change.intentEpoch === replacementB.intentEpoch &&
+        change.successorIntentEpoch === replacementC.intentEpoch,
+    ),
+  );
   assert.equal(mgr.isEnabled('rocket-launches'), true);
 });
 
@@ -2299,10 +2956,14 @@ test('effective visibility follows the newest absolute intent in both supersede 
   const layer = makeSlowLayer('flights', { updateInterval: -1 });
   let releaseInit;
   let announceInit;
-  const initStarted = new Promise((resolve) => { announceInit = resolve; });
+  const initStarted = new Promise((resolve) => {
+    announceInit = resolve;
+  });
   layer.module.init = async () => {
     announceInit();
-    await new Promise((resolve) => { releaseInit = resolve; });
+    await new Promise((resolve) => {
+      releaseInit = resolve;
+    });
   };
   mgr.register(layer.module);
 
@@ -2329,13 +2990,17 @@ test('effective visibility follows the newest absolute intent in both supersede 
   assert.equal(await mgr.setEnabled('flights', true, { origin: 'user' }), true);
   let releaseDisable;
   let announceDisable;
-  const disableStarted = new Promise((resolve) => { announceDisable = resolve; });
+  const disableStarted = new Promise((resolve) => {
+    announceDisable = resolve;
+  });
   let disableCalls = 0;
   layer.module.disable = async () => {
     disableCalls += 1;
     if (disableCalls > 1) return;
     announceDisable();
-    await new Promise((resolve) => { releaseDisable = resolve; });
+    await new Promise((resolve) => {
+      releaseDisable = resolve;
+    });
   };
   const pendingOff2 = mgr.setEnabled('flights', false, { origin: 'user' });
   await disableStarted;
@@ -2352,7 +3017,11 @@ test('effective visibility follows the newest absolute intent in both supersede 
   await pendingOn2;
   await mgr.waitForLayerSettled('flights');
   assert.equal(mgr.isEnabled('flights'), true);
-  assert.equal(mgr.isEffectivelyEnabled('flights'), true, 'settled fallback after all intents release');
+  assert.equal(
+    mgr.isEffectivelyEnabled('flights'),
+    true,
+    'settled fallback after all intents release',
+  );
 });
 
 test('a newer absolute intent aborts a hung guard-compensation instead of starving', async () => {
@@ -2360,7 +3029,9 @@ test('a newer absolute intent aborts a hung guard-compensation instead of starvi
   const layer = makeSlowLayer('flights', { updateInterval: -1 });
   let releaseFirstDisable;
   let announceFirstDisable;
-  const firstDisableStarted = new Promise((resolve) => { announceFirstDisable = resolve; });
+  const firstDisableStarted = new Promise((resolve) => {
+    announceFirstDisable = resolve;
+  });
   let hangCompensation = false;
   let compensationAborted = false;
   mgr.register(layer.module);
@@ -2371,15 +3042,28 @@ test('a newer absolute intent aborts a hung guard-compensation instead of starvi
     disableCalls += 1;
     if (disableCalls === 1) {
       announceFirstDisable();
-      await new Promise((resolve) => { releaseFirstDisable = resolve; });
+      await new Promise((resolve) => {
+        releaseFirstDisable = resolve;
+      });
       return;
     }
     if (hangCompensation) {
       // Hang until the manager aborts this transition; resolve on abort so the
       // lifecycle can run its cancellation path.
       await new Promise((resolve) => {
-        if (signal?.aborted) { compensationAborted = true; resolve(); return; }
-        signal?.addEventListener('abort', () => { compensationAborted = true; resolve(); }, { once: true });
+        if (signal?.aborted) {
+          compensationAborted = true;
+          resolve();
+          return;
+        }
+        signal?.addEventListener(
+          'abort',
+          () => {
+            compensationAborted = true;
+            resolve();
+          },
+          { once: true },
+        );
       });
       return false;
     }
@@ -2387,9 +3071,9 @@ test('a newer absolute intent aborts a hung guard-compensation instead of starvi
 
   const pendingOff = mgr.setEnabled('flights', false, { origin: 'user' });
   await firstDisableStarted;
-  const removeGuard = mgr.addVisibilityGuard((change) => (
-    change.layerId === 'flights' && change.enabled ? 'blocked by mode' : null
-  ));
+  const removeGuard = mgr.addVisibilityGuard((change) =>
+    change.layerId === 'flights' && change.enabled ? 'blocked by mode' : null,
+  );
   hangCompensation = true;
   const pendingBlockedOn = mgr.setEnabled('flights', true, { origin: 'user' });
   releaseFirstDisable();
@@ -2402,9 +3086,17 @@ test('a newer absolute intent aborts a hung guard-compensation instead of starvi
     pendingFinalOn,
     new Promise((resolve) => setTimeout(() => resolve('starved'), 2000)),
   ]);
-  assert.notEqual(finalOn, 'starved', 'newest intent must not starve behind the compensation');
+  assert.notEqual(
+    finalOn,
+    'starved',
+    'newest intent must not starve behind the compensation',
+  );
   assert.equal(compensationAborted, true, 'the hung compensation was aborted');
-  assert.equal(await pendingBlockedOn, false, 'the guard-blocked request stays unfulfilled');
+  assert.equal(
+    await pendingBlockedOn,
+    false,
+    'the guard-blocked request stays unfulfilled',
+  );
   assert.equal(finalOn, true, 'the newest ON wins once the guard is gone');
   await pendingOff;
   await mgr.waitForLayerSettled('flights');
@@ -2416,7 +3108,9 @@ test('re-entrant setEnabled from a blocked-adoption listener supersedes the comp
   const layer = makeSlowLayer('flights', { updateInterval: -1 });
   let releaseFirstDisable;
   let announceFirstDisable;
-  const firstDisableStarted = new Promise((resolve) => { announceFirstDisable = resolve; });
+  const firstDisableStarted = new Promise((resolve) => {
+    announceFirstDisable = resolve;
+  });
   mgr.register(layer.module);
   assert.equal(await mgr.setEnabled('flights', true, { origin: 'user' }), true);
 
@@ -2425,15 +3119,17 @@ test('re-entrant setEnabled from a blocked-adoption listener supersedes the comp
     disableCalls += 1;
     if (disableCalls === 1) {
       announceFirstDisable();
-      await new Promise((resolve) => { releaseFirstDisable = resolve; });
+      await new Promise((resolve) => {
+        releaseFirstDisable = resolve;
+      });
     }
   };
 
   const pendingOff = mgr.setEnabled('flights', false, { origin: 'user' });
   await firstDisableStarted;
-  let removeGuard = mgr.addVisibilityGuard((change) => (
-    change.layerId === 'flights' && change.enabled ? 'blocked by mode' : null
-  ));
+  let removeGuard = mgr.addVisibilityGuard((change) =>
+    change.layerId === 'flights' && change.enabled ? 'blocked by mode' : null,
+  );
 
   // The moment the blocked event is announced, a listener re-enters with a
   // newer absolute intent — this used to land in the unregistered-compensation
@@ -2441,7 +3137,8 @@ test('re-entrant setEnabled from a blocked-adoption listener supersedes the comp
   let reentrantResult = null;
   const effectiveDuringBlocked = [];
   const unsubscribe = mgr.subscribe((change) => {
-    if (change.type !== 'visibility-blocked' || change.layerId !== 'flights') return;
+    if (change.type !== 'visibility-blocked' || change.layerId !== 'flights')
+      return;
     effectiveDuringBlocked.push(mgr.isEffectivelyEnabled('flights'));
     removeGuard();
     reentrantResult = mgr.setEnabled('flights', true, { origin: 'user' });
@@ -2452,7 +3149,8 @@ test('re-entrant setEnabled from a blocked-adoption listener supersedes the comp
 
   const blockedOn = await pendingBlockedOn;
   const reentrant = await Promise.race([
-    (async () => reentrantResult === null ? 'never-fired' : await reentrantResult)(),
+    (async () =>
+      reentrantResult === null ? 'never-fired' : await reentrantResult)(),
     new Promise((resolve) => setTimeout(() => resolve('starved'), 2000)),
   ]);
   await pendingOff;
@@ -2460,16 +3158,32 @@ test('re-entrant setEnabled from a blocked-adoption listener supersedes the comp
   unsubscribe();
 
   assert.equal(blockedOn, false, 'the guard-blocked request stays unfulfilled');
-  assert.notEqual(reentrant, 'starved', 'the re-entrant newest intent must not starve');
-  assert.notEqual(reentrant, 'never-fired', 'the blocked event fired and re-entered');
+  assert.notEqual(
+    reentrant,
+    'starved',
+    'the re-entrant newest intent must not starve',
+  );
+  assert.notEqual(
+    reentrant,
+    'never-fired',
+    'the blocked event fired and re-entered',
+  );
   assert.deepEqual(
     effectiveDuringBlocked,
     [false],
     'during the blocked callback, effective visibility reads the reconciliation target (OFF)',
   );
-  assert.equal(mgr.isEnabled('flights'), true, 'the re-entrant ON wins after the guard is removed');
+  assert.equal(
+    mgr.isEnabled('flights'),
+    true,
+    'the re-entrant ON wins after the guard is removed',
+  );
   const lifecycle = mgr.getLayerLifecycleState('flights');
-  assert.equal(lifecycle.lifecycleState, 'enabled', 'no orphaned transitional presentation');
+  assert.equal(
+    lifecycle.lifecycleState,
+    'enabled',
+    'no orphaned transitional presentation',
+  );
   assert.equal(lifecycle.uncertain, false);
 });
 
@@ -2509,8 +3223,16 @@ test('every manager registration exposes the normalized loading and refresh cont
   mgr.layers.get('specific').initialized = true;
 
   for (const layer of mgr.getAll()) {
-    assert.equal(typeof layer.stats.loading, 'boolean', `${layer.id} loading must be normalized`);
-    assert.equal(typeof layer.stats.refreshing, 'boolean', `${layer.id} refreshing must be normalized`);
+    assert.equal(
+      typeof layer.stats.loading,
+      'boolean',
+      `${layer.id} loading must be normalized`,
+    );
+    assert.equal(
+      typeof layer.stats.refreshing,
+      'boolean',
+      `${layer.id} refreshing must be normalized`,
+    );
     assert.ok(Object.hasOwn(layer.stats, 'managerRefreshError'));
   }
   const specific = mgr.getAll().find(({ id }) => id === 'specific').stats;
@@ -2525,7 +3247,9 @@ test('periodic refresh publishes work, failure, and later manager-owned recovery
   let moduleError = null;
   let releaseUpdate;
   let updateStarted;
-  const started = new Promise((resolve) => { updateStarted = resolve; });
+  const started = new Promise((resolve) => {
+    updateStarted = resolve;
+  });
   const events = [];
   mgr.register({
     id: 'flights',
@@ -2538,7 +3262,9 @@ test('periodic refresh publishes work, failure, and later manager-owned recovery
     disable() {},
     async update() {
       updateStarted();
-      await new Promise((resolve) => { releaseUpdate = resolve; });
+      await new Promise((resolve) => {
+        releaseUpdate = resolve;
+      });
       return updateResult;
     },
     getStats() {
@@ -2559,20 +3285,25 @@ test('periodic refresh publishes work, failure, and later manager-owned recovery
   releaseUpdate();
   assert.equal(await failedRefresh, false);
   assert.match(mgr.getAll()[0].stats.managerRefreshError, /refresh rejected/);
-  assert.deepEqual(events.map(({ type }) => type), ['refresh-transition', 'refresh-failed']);
+  assert.deepEqual(
+    events.map(({ type }) => type),
+    ['refresh-transition', 'refresh-failed'],
+  );
 
   updateStarted = () => {};
   updateResult = true;
   entry.module.update = async () => true;
   assert.equal(await mgr._runPeriodicUpdate('flights', entry), true);
   assert.equal(mgr.getAll()[0].stats.managerRefreshError, null);
-  assert.deepEqual(events.map(({ type }) => type), [
-    'refresh-transition',
-    'refresh-failed',
-    'refresh-transition',
-    'refresh',
-  ]);
-  assert.equal(mgr.isEnabled('flights'), true, 'refresh state never owns visibility');
+  assert.deepEqual(
+    events.map(({ type }) => type),
+    ['refresh-transition', 'refresh-failed', 'refresh-transition', 'refresh'],
+  );
+  assert.equal(
+    mgr.isEnabled('flights'),
+    true,
+    'refresh state never owns visibility',
+  );
 
   let explicitRefreshCalls = 0;
   entry.module.update = async (_viewer, { signal } = {}) => {
@@ -2581,7 +3312,11 @@ test('periodic refresh publishes work, failure, and later manager-owned recovery
     return true;
   };
   assert.equal(await mgr.refreshLayer('flights'), true);
-  assert.equal(explicitRefreshCalls, 1, 'an enabled layer can be refreshed on demand');
+  assert.equal(
+    explicitRefreshCalls,
+    1,
+    'an enabled layer can be refreshed on demand',
+  );
 });
 
 test('periodic rejection preserves a module-specific error and recovers independently', async () => {
@@ -2603,7 +3338,12 @@ test('periodic rejection preserves a module-specific error and recovers independ
       return true;
     },
     getStats() {
-      return { count: 12, lastUpdate: 456, error: moduleError, available: false };
+      return {
+        count: 12,
+        lastUpdate: 456,
+        error: moduleError,
+        available: false,
+      };
     },
   });
   const entry = mgr.layers.get('satellites');
@@ -2619,7 +3359,12 @@ test('periodic rejection preserves a module-specific error and recovers independ
 
   shouldReject = false;
   moduleError = null;
-  entry.module.getStats = () => ({ count: 13, lastUpdate: 789, error: null, available: true });
+  entry.module.getStats = () => ({
+    count: 13,
+    lastUpdate: 789,
+    error: null,
+    available: true,
+  });
   assert.equal(await mgr._runPeriodicUpdate('satellites', entry), true);
   stats = mgr.getAll()[0].stats;
   assert.equal(stats.error, null);
@@ -2631,7 +3376,9 @@ test('disable invalidates an active periodic refresh without publishing stale se
   const mgr = new DataLayerManager({});
   let releaseRefresh;
   let announceRefresh;
-  const refreshStarted = new Promise((resolve) => { announceRefresh = resolve; });
+  const refreshStarted = new Promise((resolve) => {
+    announceRefresh = resolve;
+  });
   const events = [];
   mgr.register({
     id: 'flights',
@@ -2644,7 +3391,9 @@ test('disable invalidates an active periodic refresh without publishing stale se
     disable() {},
     async update() {
       announceRefresh();
-      await new Promise((resolve) => { releaseRefresh = resolve; });
+      await new Promise((resolve) => {
+        releaseRefresh = resolve;
+      });
       throw new Error('late refresh failure');
     },
     getStats() {
@@ -2672,17 +3421,24 @@ test('disable invalidates an active periodic refresh without publishing stale se
   assert.equal(entry.refreshing, false);
   assert.equal(entry.managerRefreshError, null);
   assert.ok(events.some(({ type }) => type === 'refresh-transition'));
-  assert.ok(events.some(({ type, reason }) => (
-    type === 'refresh-cancelled' && reason === 'layer-disabled'
-  )));
-  assert.ok(!events.some(({ type }) => type === 'refresh-failed' || type === 'refresh'));
+  assert.ok(
+    events.some(
+      ({ type, reason }) =>
+        type === 'refresh-cancelled' && reason === 'layer-disabled',
+    ),
+  );
+  assert.ok(
+    !events.some(({ type }) => type === 'refresh-failed' || type === 'refresh'),
+  );
 });
 
 test('destroy settles an explicit refresh waiting behind invalidated periodic work', async () => {
   const mgr = new DataLayerManager({});
   let releaseRefresh;
   let announceRefresh;
-  const refreshStarted = new Promise((resolve) => { announceRefresh = resolve; });
+  const refreshStarted = new Promise((resolve) => {
+    announceRefresh = resolve;
+  });
   const events = [];
   mgr.register({
     id: 'flights',
@@ -2695,7 +3451,9 @@ test('destroy settles an explicit refresh waiting behind invalidated periodic wo
     disable() {},
     async update() {
       announceRefresh();
-      await new Promise((resolve) => { releaseRefresh = resolve; });
+      await new Promise((resolve) => {
+        releaseRefresh = resolve;
+      });
       return true;
     },
     getStats() {
@@ -2715,9 +3473,12 @@ test('destroy settles an explicit refresh waiting behind invalidated periodic wo
   const destroy = mgr.destroyLayer('flights');
 
   assert.equal(await requestedRefresh, false);
-  assert.ok(events.some(({ type, reason }) => (
-    type === 'refresh-cancelled' && reason === 'layer-destroyed'
-  )));
+  assert.ok(
+    events.some(
+      ({ type, reason }) =>
+        type === 'refresh-cancelled' && reason === 'layer-destroyed',
+    ),
+  );
   releaseRefresh();
   assert.equal(await periodicRefresh, false);
   assert.equal(await destroy, true);
@@ -2744,34 +3505,59 @@ function makeControlElement() {
     title: '',
     type: '',
     classList: { toggle() {} },
-    appendChild(child) { child.parent = this; this.children.push(child); return child; },
-    append(...nodes) { for (const n of nodes) n.parent = this; this.children.push(...nodes); },
-    replaceChildren(...nodes) { this.children = [...nodes]; },
+    appendChild(child) {
+      child.parent = this;
+      this.children.push(child);
+      return child;
+    },
+    append(...nodes) {
+      for (const n of nodes) n.parent = this;
+      this.children.push(...nodes);
+    },
+    replaceChildren(...nodes) {
+      this.children = [...nodes];
+    },
     remove() {
       const siblings = this.parent?.children;
       if (siblings) this.parent.children = siblings.filter((n) => n !== this);
       // Browsers blur a node the moment it leaves the document. Modelling that
       // is the whole point: it is exactly what in-place chip reconciliation
       // exists to avoid, so a regression to rebuild-everything must fail here.
-      if (globalThis.document?.activeElement === this) globalThis.document.activeElement = null;
+      if (globalThis.document?.activeElement === this)
+        globalThis.document.activeElement = null;
     },
-    focus() { if (globalThis.document) globalThis.document.activeElement = this; },
-    addEventListener(name, handler) { this.listeners[name] = handler; },
-    removeEventListener(name, handler) { if (this.listeners[name] === handler) delete this.listeners[name]; },
-    setAttribute(name, value) { this.attributes[name] = String(value); },
-    getAttribute(name) { return this.attributes[name] ?? null; },
+    focus() {
+      if (globalThis.document) globalThis.document.activeElement = this;
+    },
+    addEventListener(name, handler) {
+      this.listeners[name] = handler;
+    },
+    removeEventListener(name, handler) {
+      if (this.listeners[name] === handler) delete this.listeners[name];
+    },
+    setAttribute(name, value) {
+      this.attributes[name] = String(value);
+    },
+    getAttribute(name) {
+      return this.attributes[name] ?? null;
+    },
     closest(selector) {
       const className = selector.slice(1);
-      return String(this.className).split(/\s+/).includes(className) ? this : null;
+      return String(this.className).split(/\s+/).includes(className)
+        ? this
+        : null;
     },
     querySelector(selector) {
       if (selector.startsWith('[data-layer-id="')) {
         const id = selector.slice(16, -2);
-        return this.children.find((child) => child.dataset.layerId === id) || null;
+        return (
+          this.children.find((child) => child.dataset.layerId === id) || null
+        );
       }
       const className = selector.startsWith('.') ? selector.slice(1) : '';
       const visit = (node) => {
-        if (String(node.className).split(/\s+/).includes(className)) return node;
+        if (String(node.className).split(/\s+/).includes(className))
+          return node;
         for (const child of node.children || []) {
           const found = visit(child);
           if (found) return found;
@@ -2780,15 +3566,22 @@ function makeControlElement() {
       };
       return visit(this);
     },
-    set innerHTML(value) { if (value === '') this.children = []; },
-    get innerHTML() { return ''; },
+    set innerHTML(value) {
+      if (value === '') this.children = [];
+    },
+    get innerHTML() {
+      return '';
+    },
   };
   return element;
 }
 
 test('keyboard focus survives Data Layer enabling and disabling transitions', async () => {
   const originalDocument = globalThis.document;
-  globalThis.document = { createElement: makeControlElement, activeElement: null };
+  globalThis.document = {
+    createElement: makeControlElement,
+    activeElement: null,
+  };
   const mgr = new DataLayerManager({});
   let releaseEnable;
   let releaseDisable;
@@ -2802,15 +3595,21 @@ test('keyboard focus survives Data Layer enabling and disabling transitions', as
     init() {},
     enable() {
       calls.enable += 1;
-      return new Promise((resolve) => { releaseEnable = resolve; });
+      return new Promise((resolve) => {
+        releaseEnable = resolve;
+      });
     },
     disable() {
       calls.disable += 1;
-      return new Promise((resolve) => { releaseDisable = resolve; });
+      return new Promise((resolve) => {
+        releaseDisable = resolve;
+      });
     },
     update() {},
     destroy() {},
-    getStats() { return { count: 1, lastUpdate: Date.now() }; },
+    getStats() {
+      return { count: 1, lastUpdate: Date.now() };
+    },
   });
   const container = makeControlElement();
 
@@ -2829,7 +3628,10 @@ test('keyboard focus survives Data Layer enabling and disabling transitions', as
     button.focus();
 
     const enablingClick = button.listeners.click();
-    await waitFor(() => typeof releaseEnable === 'function', 'enable transition');
+    await waitFor(
+      () => typeof releaseEnable === 'function',
+      'enable transition',
+    );
     assert.equal(globalThis.document.activeElement, button);
     assert.equal(button.disabled, false, 'ENABLING never uses native disabled');
     assert.equal(button.getAttribute('aria-disabled'), 'true');
@@ -2848,14 +3650,25 @@ test('keyboard focus survives Data Layer enabling and disabling transitions', as
     assert.equal(mgr.isEnabled('focus-layer'), true);
 
     const disablingClick = button.listeners.click();
-    await waitFor(() => typeof releaseDisable === 'function', 'disable transition');
+    await waitFor(
+      () => typeof releaseDisable === 'function',
+      'disable transition',
+    );
     assert.equal(globalThis.document.activeElement, button);
-    assert.equal(button.disabled, false, 'DISABLING never uses native disabled');
+    assert.equal(
+      button.disabled,
+      false,
+      'DISABLING never uses native disabled',
+    );
     assert.equal(button.getAttribute('aria-disabled'), 'true');
     assert.equal(button.getAttribute('aria-busy'), 'true');
     assert.equal(button.textContent, 'DISABLING');
     await button.listeners.click();
-    assert.equal(calls.disable, 1, 'repeat activation is inert while disabling');
+    assert.equal(
+      calls.disable,
+      1,
+      'repeat activation is inert while disabling',
+    );
     assert.equal(mgr.layers.get('focus-layer').visibilityIntentEpoch, 2);
 
     releaseDisable();
@@ -2877,7 +3690,10 @@ test('keyboard focus survives Data Layer enabling and disabling transitions', as
 test('a failed Data Layer transition clears busy state without losing keyboard focus', async () => {
   const originalDocument = globalThis.document;
   const originalWarn = console.warn;
-  globalThis.document = { createElement: makeControlElement, activeElement: null };
+  globalThis.document = {
+    createElement: makeControlElement,
+    activeElement: null,
+  };
   console.warn = () => {};
   const mgr = new DataLayerManager({});
   let rejectEnable;
@@ -2892,12 +3708,18 @@ test('a failed Data Layer transition clears busy state without losing keyboard f
     enable() {
       enableCalls += 1;
       if (enableCalls > 1) return true;
-      return new Promise((resolve, reject) => { rejectEnable = reject; });
+      return new Promise((resolve, reject) => {
+        rejectEnable = reject;
+      });
     },
-    disable() { return true; },
+    disable() {
+      return true;
+    },
     update() {},
     destroy() {},
-    getStats() { return { count: 0, lastUpdate: null }; },
+    getStats() {
+      return { count: 0, lastUpdate: null };
+    },
   });
   const container = makeControlElement();
 
@@ -2909,7 +3731,11 @@ test('a failed Data Layer transition clears busy state without losing keyboard f
     button.focus();
 
     const failedClick = button.listeners.click();
-    for (let attempt = 0; attempt < 20 && typeof rejectEnable !== 'function'; attempt += 1) {
+    for (
+      let attempt = 0;
+      attempt < 20 && typeof rejectEnable !== 'function';
+      attempt += 1
+    ) {
       await Promise.resolve();
     }
     assert.equal(typeof rejectEnable, 'function');
@@ -2919,7 +3745,11 @@ test('a failed Data Layer transition clears busy state without losing keyboard f
 
     rejectEnable(new Error('QA enable rejected'));
     await failedClick;
-    assert.equal(globalThis.document.activeElement, button, 'failure settlement preserves focus');
+    assert.equal(
+      globalThis.document.activeElement,
+      button,
+      'failure settlement preserves focus',
+    );
     assert.equal(button.disabled, false);
     assert.equal(button.getAttribute('aria-disabled'), 'false');
     assert.equal(button.getAttribute('aria-busy'), 'false');
@@ -2947,7 +3777,8 @@ test('a failed Data Layer transition clears busy state without losing keyboard f
 function collectByClass(node, className) {
   const found = [];
   const visit = (current) => {
-    if (String(current.className).split(/\s+/).includes(className)) found.push(current);
+    if (String(current.className).split(/\s+/).includes(className))
+      found.push(current);
     for (const child of current.children || []) visit(child);
   };
   visit(node);
@@ -2958,7 +3789,9 @@ function collectByClass(node, className) {
 function makeRowControlLayer() {
   let mode = 'core';
   return {
-    get mode() { return mode; },
+    get mode() {
+      return mode;
+    },
     module: {
       id: 'satellites',
       name: 'Satellites',
@@ -2969,22 +3802,42 @@ function makeRowControlLayer() {
       enable() {},
       disable() {},
       async update() {},
-      getStats() { return { count: 3, lastUpdate: Date.now() }; },
-      setParams(params) { if (params.catalog) mode = params.catalog; },
-      getParams() { return { catalog: mode }; },
+      getStats() {
+        return { count: 3, lastUpdate: Date.now() };
+      },
+      setParams(params) {
+        if (params.catalog) mode = params.catalog;
+      },
+      getParams() {
+        return { catalog: mode };
+      },
       getRowControls() {
         const dense = mode === 'dense';
         return {
-          chips: [{
-            id: 'catalog',
-            label: 'DENSE',
-            active: dense,
-            title: 'toggle the dense catalog',
-            params: { catalog: dense ? 'core' : 'dense' },
-          }],
+          chips: [
+            {
+              id: 'catalog',
+              label: 'DENSE',
+              active: dense,
+              title: 'toggle the dense catalog',
+              params: { catalog: dense ? 'core' : 'dense' },
+            },
+          ],
           legend: [
-            { klass: 'nav', label: 'NAV', color: '#4fd8ff', blurb: 'GNSS', count: 2 },
-            { klass: 'geo', label: 'GEO', color: '#c89bff', blurb: 'belt', count: 5 },
+            {
+              klass: 'nav',
+              label: 'NAV',
+              color: '#4fd8ff',
+              blurb: 'GNSS',
+              count: 2,
+            },
+            {
+              klass: 'geo',
+              label: 'GEO',
+              color: '#c89bff',
+              blurb: 'belt',
+              count: 5,
+            },
           ],
         };
       },
@@ -3020,10 +3873,16 @@ test('a layer that declares row controls renders its chips and color legend', as
     assert.equal(chips[0].title, 'toggle the dense catalog');
 
     const swatches = collectByClass(controls, 'data-toggle-legend-swatch');
-    assert.deepEqual(swatches.map((s) => s.style.background), ['#4fd8ff', '#c89bff'],
-      'each legend swatch is painted the exact class color');
+    assert.deepEqual(
+      swatches.map((s) => s.style.background),
+      ['#4fd8ff', '#c89bff'],
+      'each legend swatch is painted the exact class color',
+    );
     const items = collectByClass(controls, 'data-toggle-legend-item');
-    assert.deepEqual(items.map((i) => i.title), ['GNSS', 'belt']);
+    assert.deepEqual(
+      items.map((i) => i.title),
+      ['GNSS', 'belt'],
+    );
     assert.equal(items.length, 2);
   } finally {
     await mgr.destroyAll();
@@ -3055,8 +3914,17 @@ test('clicking a row chip applies the params it declared and re-renders', async 
     assert.equal(afterOn.className.includes('active'), true);
 
     controls.listeners.click({ target: afterOn });
-    assert.equal(layer.mode, 'core', 'the chip toggles back rather than latching');
-    assert.equal(collectByClass(controls, 'data-toggle-chip')[0].attributes['aria-pressed'], 'false');
+    assert.equal(
+      layer.mode,
+      'core',
+      'the chip toggles back rather than latching',
+    );
+    assert.equal(
+      collectByClass(controls, 'data-toggle-chip')[0].attributes[
+        'aria-pressed'
+      ],
+      'false',
+    );
   } finally {
     await mgr.destroyAll();
     if (originalDocument === undefined) delete globalThis.document;
@@ -3086,10 +3954,19 @@ test('a click outside a chip is inert, and a throwing layer cannot blank the pan
     controls.listeners.click({ target: { closest: () => null } });
     assert.equal(layer.mode, 'core');
 
-    layer.module.getRowControls = () => { throw new Error('boom'); };
+    layer.module.getRowControls = () => {
+      throw new Error('boom');
+    };
     mgr._refreshTogglePanel();
-    assert.equal(controls.hidden, true, 'a throwing layer collapses to an empty block');
-    assert.ok(container.querySelector('[data-layer-id="satellites"]'), 'the row itself survives');
+    assert.equal(
+      controls.hidden,
+      true,
+      'a throwing layer collapses to an empty block',
+    );
+    assert.ok(
+      container.querySelector('[data-layer-id="satellites"]'),
+      'the row itself survives',
+    );
   } finally {
     console.warn = warn;
     await mgr.destroyAll();
@@ -3103,7 +3980,10 @@ test('keyboard focus on a chip survives the refresh its own click triggers', asy
   // own click triggers. Rebuilding the button would blur it every time, so a
   // keyboard user loses their place on activation.
   const originalDocument = globalThis.document;
-  globalThis.document = { createElement: makeControlElement, activeElement: null };
+  globalThis.document = {
+    createElement: makeControlElement,
+    activeElement: null,
+  };
   const mgr = new DataLayerManager({});
   const layer = makeRowControlLayer();
   mgr.register(layer.module);
@@ -3118,18 +3998,31 @@ test('keyboard focus on a chip survives the refresh its own click triggers', asy
     const chip = collectByClass(controls, 'data-toggle-chip')[0];
 
     chip.focus();
-    assert.equal(globalThis.document.activeElement, chip, 'the chip starts focused');
+    assert.equal(
+      globalThis.document.activeElement,
+      chip,
+      'the chip starts focused',
+    );
 
     controls.listeners.click({ target: chip });
-    assert.equal(globalThis.document.activeElement, chip,
-      'activating the chip does not blur it');
-    assert.equal(collectByClass(controls, 'data-toggle-chip')[0], chip,
-      'the SAME button node is reused across the click-driven refresh');
+    assert.equal(
+      globalThis.document.activeElement,
+      chip,
+      'activating the chip does not blur it',
+    );
+    assert.equal(
+      collectByClass(controls, 'data-toggle-chip')[0],
+      chip,
+      'the SAME button node is reused across the click-driven refresh',
+    );
 
     mgr._refreshTogglePanel();
     mgr._refreshTogglePanel();
-    assert.equal(globalThis.document.activeElement, chip,
-      'repeated refreshes never steal focus');
+    assert.equal(
+      globalThis.document.activeElement,
+      chip,
+      'repeated refreshes never steal focus',
+    );
     // Legend entries hold no focus, so they may be replaced — never duplicated.
     assert.equal(collectByClass(controls, 'data-toggle-legend-item').length, 2);
 
@@ -3161,24 +4054,32 @@ test('an async layer pushes its own row refresh, and a busy chip refuses clicks'
     enable() {},
     disable() {},
     async update() {},
-    getStats() { return { count: 1, lastUpdate: Date.now() }; },
-    setParams() { writes += 1; },
+    getStats() {
+      return { count: 1, lastUpdate: Date.now() };
+    },
+    setParams() {
+      writes += 1;
+    },
     getRowControls() {
       return {
-        chips: [{
-          id: 'catalog',
-          label: settled ? 'DENSE' : 'DENSE ···',
-          active: settled,
-          busy: !settled,
-          disabled: !settled,
-          state: settled ? 'active' : 'loading',
-          title: 'x',
-          params: { catalog: 'core' },
-        }],
+        chips: [
+          {
+            id: 'catalog',
+            label: settled ? 'DENSE' : 'DENSE ···',
+            active: settled,
+            busy: !settled,
+            disabled: !settled,
+            state: settled ? 'active' : 'loading',
+            title: 'x',
+            params: { catalog: 'core' },
+          },
+        ],
         legend: [],
       };
     },
-    setRowControlsListener(fn) { module._listener = fn; },
+    setRowControlsListener(fn) {
+      module._listener = fn;
+    },
   };
   mgr.register(module);
   const container = makeControlElement();
@@ -3186,7 +4087,11 @@ test('an async layer pushes its own row refresh, and a busy chip refuses clicks'
   try {
     mgr.buildTogglePanel(container);
     assert.equal(await mgr.setEnabled('satellites', true), true);
-    assert.equal(typeof module._listener, 'function', 'the manager installed its listener');
+    assert.equal(
+      typeof module._listener,
+      'function',
+      'the manager installed its listener',
+    );
 
     const controls = container
       .querySelector('[data-layer-id="satellites"]')
@@ -3195,7 +4100,11 @@ test('an async layer pushes its own row refresh, and a busy chip refuses clicks'
     assert.equal(chip.textContent, 'DENSE ···');
     assert.equal(chip.disabled, true);
     assert.equal(chip.attributes['aria-busy'], 'true');
-    assert.equal(chip.attributes['aria-pressed'], 'false', 'busy is never reported as active');
+    assert.equal(
+      chip.attributes['aria-pressed'],
+      'false',
+      'busy is never reported as active',
+    );
     assert.equal(chip.className.includes('chip-loading'), true);
 
     controls.listeners.click({ target: chip });
@@ -3228,7 +4137,8 @@ test('a layer that surrenders its row controls hides the block entirely', async 
   let surrendered = false;
   const layer = makeRowControlLayer();
   const inner = layer.module.getRowControls;
-  layer.module.getRowControls = () => (surrendered ? { chips: [], legend: [] } : inner());
+  layer.module.getRowControls = () =>
+    surrendered ? { chips: [], legend: [] } : inner();
   mgr.register(layer.module);
   const container = makeControlElement();
 
@@ -3244,13 +4154,20 @@ test('a layer that surrenders its row controls hides the block entirely', async 
     surrendered = true;
     mgr._refreshTogglePanel();
     assert.equal(controls.hidden, true);
-    assert.equal(collectByClass(controls, 'data-toggle-chip').length, 0,
-      'the chip is removed, not merely hidden behind a style');
+    assert.equal(
+      collectByClass(controls, 'data-toggle-chip').length,
+      0,
+      'the chip is removed, not merely hidden behind a style',
+    );
     assert.equal(collectByClass(controls, 'data-toggle-legend-item').length, 0);
 
     surrendered = false;
     mgr._refreshTogglePanel();
-    assert.equal(controls.hidden, false, 'the row returns when the owner releases it');
+    assert.equal(
+      controls.hidden,
+      false,
+      'the row returns when the owner releases it',
+    );
     assert.equal(collectByClass(controls, 'data-toggle-chip').length, 1);
   } finally {
     await mgr.destroyAll();
@@ -3264,21 +4181,30 @@ test('layer metadata shows a guidance prompt without reporting it as a fault', (
   const text = mgr._buildMetaText({
     enabled: true,
     source: 'OpenStreetMap',
-    stats: { status: 'zoom-in', error: null, count: 0, statusMessage: 'Zoom in to search mapped installations' },
+    stats: {
+      status: 'zoom-in',
+      error: null,
+      count: 0,
+      statusMessage: 'Zoom in to search mapped installations',
+    },
   });
   assert.match(text, /Zoom in to search mapped installations$/);
   assert.doesNotMatch(text, /UNAVAILABLE|DEGRADED/);
 });
 
-
 test('panel remount releases old listeners and destruction revokes retained controls', async () => {
   const originalDocument = globalThis.document;
-  globalThis.document = { createElement: makeControlElement, activeElement: null };
+  globalThis.document = {
+    createElement: makeControlElement,
+    activeElement: null,
+  };
   const manager = new DataLayerManager({});
   const layer = makeSlowLayer('lifecycle-panel', { updateInterval: -1 });
   let rowListener;
   layer.module.getRowControls = () => ({ chips: [] });
-  layer.module.setRowControlsListener = (listener) => { rowListener = listener; };
+  layer.module.setRowControlsListener = (listener) => {
+    rowListener = listener;
+  };
   manager.register(layer.module);
   try {
     const first = makeControlElement();
@@ -3289,7 +4215,11 @@ test('panel remount releases old listeners and destruction revokes retained cont
     manager.buildTogglePanel(second);
     assert.equal(oldButton.listeners.click, undefined);
     await retainedClick();
-    assert.equal(layer.calls.enable, 0, 'a revoked generation cannot issue actions');
+    assert.equal(
+      layer.calls.enable,
+      0,
+      'a revoked generation cannot issue actions',
+    );
     const currentButton = second.querySelector('.data-toggle-btn');
     assert.equal(typeof currentButton.listeners.click, 'function');
     assert.equal(typeof rowListener, 'function');
@@ -3308,10 +4238,22 @@ test('row action chips use live disabled state and descriptive counts without wr
   globalThis.document = { createElement: makeControlElement };
   const mgr = new DataLayerManager({});
   const layer = makeRowControlLayer();
-  let calls = 0, blocked = false;
+  let calls = 0,
+    blocked = false;
   layer.module.getStats = () => ({ count: 3, countLabel: '3 nearby' });
-  layer.module.getRowControls = () => ({ chips: [{ id: 'find', label: 'SHOW NEAREST', disabled: blocked, onClick: () => calls++ }] });
-  layer.module.setParams = () => { throw new Error('navigation must not write persistent params'); };
+  layer.module.getRowControls = () => ({
+    chips: [
+      {
+        id: 'find',
+        label: 'SHOW NEAREST',
+        disabled: blocked,
+        onClick: () => calls++,
+      },
+    ],
+  });
+  layer.module.setParams = () => {
+    throw new Error('navigation must not write persistent params');
+  };
   mgr.register(layer.module);
   const container = makeControlElement();
   try {

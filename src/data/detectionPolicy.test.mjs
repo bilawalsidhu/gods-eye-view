@@ -19,11 +19,16 @@ import {
 } from './detectionPolicy.js';
 import { KEYHOLE_OUTSIDE_OPACITY_DEFAULT } from '../celestialRing.js';
 
-const indexHtml = expandApplicationHtml(fs.readFileSync(new URL('../../index.html', import.meta.url), 'utf8'));
+const indexHtml = expandApplicationHtml(
+  fs.readFileSync(new URL('../../index.html', import.meta.url), 'utf8'),
+);
 
 test('side aircraft brackets stay readable without changing zero-opacity intent', () => {
   assert.equal(detectionBracketAlpha('AIR', 0), 0);
-  assert.equal(detectionBracketAlpha('AIR', 0.05), AIRCRAFT_BRACKET_ALPHA_FLOOR);
+  assert.equal(
+    detectionBracketAlpha('AIR', 0.05),
+    AIRCRAFT_BRACKET_ALPHA_FLOOR,
+  );
   assert.equal(detectionBracketAlpha('AIR', 1), 1);
   assert.equal(detectionBracketAlpha('SAT', 0.05), 0.05);
 });
@@ -39,7 +44,10 @@ test('the default OUTSIDE setting reproduces the approved 0.35 floor exactly', (
   // Byte-identical at the default, at every keyhole alpha, with the setting
   // passed explicitly and with it omitted. The owner approved this look; only
   // the off-default range is allowed to change.
-  assert.equal(aircraftBracketAlphaFloor(KEYHOLE_OUTSIDE_OPACITY_DEFAULT), AIRCRAFT_BRACKET_ALPHA_FLOOR);
+  assert.equal(
+    aircraftBracketAlphaFloor(KEYHOLE_OUTSIDE_OPACITY_DEFAULT),
+    AIRCRAFT_BRACKET_ALPHA_FLOOR,
+  );
   for (const alpha of [0.01, 0.05, 0.2, 0.34, 0.35, 0.36, 0.7, 1]) {
     assert.equal(
       detectionBracketAlpha('AIR', alpha, KEYHOLE_OUTSIDE_OPACITY_DEFAULT),
@@ -63,7 +71,9 @@ test('the OUTSIDE slider genuinely dims aircraft brackets below the default', ()
   // constants rather than hardcoded, so moving the default moves this with it.
   const third = AIRCRAFT_BRACKET_FLOOR_ANCHOR / 3;
   assert.ok(
-    Math.abs(aircraftBracketAlphaFloor(third) - AIRCRAFT_BRACKET_ALPHA_FLOOR / 3) < 1e-9,
+    Math.abs(
+      aircraftBracketAlphaFloor(third) - AIRCRAFT_BRACKET_ALPHA_FLOOR / 3,
+    ) < 1e-9,
     'a third of the default setting must paint a third of the floor, not all of it',
   );
   assert.ok(
@@ -75,7 +85,10 @@ test('the OUTSIDE slider genuinely dims aircraft brackets below the default', ()
     'every step below the default must visibly move',
   );
   // The old behaviour, stated as the thing that must NOT come back.
-  assert.notEqual(aircraftBracketAlphaFloor(0.005), AIRCRAFT_BRACKET_ALPHA_FLOOR);
+  assert.notEqual(
+    aircraftBracketAlphaFloor(0.005),
+    AIRCRAFT_BRACKET_ALPHA_FLOOR,
+  );
   assert.notEqual(aircraftBracketAlphaFloor(0.2), AIRCRAFT_BRACKET_ALPHA_FLOOR);
 });
 
@@ -94,7 +107,9 @@ test('the range around the default is REACHABLE from the handle', () => {
   // Each newly reachable stop is a distinct, ordered picture — otherwise
   // widening the control would just add handle positions that paint the same
   // thing.
-  const reachable = [1, 2, 3, 4, 5].map((pct) => aircraftBracketAlphaFloor(pct / 100));
+  const reachable = [1, 2, 3, 4, 5].map((pct) =>
+    aircraftBracketAlphaFloor(pct / 100),
+  );
   for (let i = 1; i < reachable.length; i += 1) {
     assert.ok(
       reachable[i] > reachable[i - 1],
@@ -107,7 +122,11 @@ test('the range around the default is REACHABLE from the handle', () => {
     AIRCRAFT_BRACKET_ALPHA_FLOOR,
     'the first-run setting still paints the approved bracket floor',
   );
-  assert.equal(AIRCRAFT_BRACKET_FLOOR_ANCHOR, 0.01, 'and that setting is 1% (owner, 2026-08-24)');
+  assert.equal(
+    AIRCRAFT_BRACKET_FLOOR_ANCHOR,
+    0.01,
+    'and that setting is 1% (owner, 2026-08-24)',
+  );
 });
 
 test('the bracket floor is strictly increasing and stops overriding at full opacity', () => {
@@ -115,8 +134,14 @@ test('the bracket floor is strictly increasing and stops overriding at full opac
   let previous = -1;
   for (const outside of steps) {
     const floor = aircraftBracketAlphaFloor(outside);
-    assert.ok(floor >= 0 && floor <= 1, `floor ${floor} out of range at ${outside}`);
-    assert.ok(floor > previous, `floor must strictly increase; ${outside} gave ${floor} after ${previous}`);
+    assert.ok(
+      floor >= 0 && floor <= 1,
+      `floor ${floor} out of range at ${outside}`,
+    );
+    assert.ok(
+      floor > previous,
+      `floor must strictly increase; ${outside} gave ${floor} after ${previous}`,
+    );
     previous = floor;
   }
   // At full opacity the floor equals the label alpha, so the boost is gone —
@@ -152,8 +177,9 @@ test('aircraft coverage diagnostics use stable left/front/right thirds', () => {
 
 test('density canonicalization respects profile thresholds and five stops', () => {
   assert.deepEqual(
-    [-10, 0, 12.49, 12.5, 25, 26, 49, 74, 75, 87.49, 87.5, 100, 120]
-      .map(canonicalizeDensity),
+    [-10, 0, 12.49, 12.5, 25, 26, 49, 74, 75, 87.49, 87.5, 100, 120].map(
+      canonicalizeDensity,
+    ),
     [0, 0, 0, 25, 25, 50, 50, 50, 75, 75, 100, 100, 100],
   );
 });
@@ -190,16 +216,24 @@ test('collective budgets follow view scale and canonical stop', () => {
 
 test('legacy state migration removes contradictory mode/density pairs', () => {
   assert.deepEqual(migrateDetectionState('PANOPTIC', 0), {
-    enabled: true, profile: 'DENSE', densityPct: 75,
+    enabled: true,
+    profile: 'DENSE',
+    densityPct: 75,
   });
   assert.deepEqual(migrateDetectionState('SPARSE', 100), {
-    enabled: true, profile: 'SPARSE', densityPct: 25,
+    enabled: true,
+    profile: 'SPARSE',
+    densityPct: 25,
   });
   assert.deepEqual(migrateDetectionState('BALANCED', 100), {
-    enabled: true, profile: 'BALANCED', densityPct: 50,
+    enabled: true,
+    profile: 'BALANCED',
+    densityPct: 50,
   });
   assert.equal(migrateDetectionState('OFF', 25).enabled, false);
   assert.deepEqual(migrateDetectionState('OFF', 25, 50), {
-    enabled: false, profile: 'SPARSE', densityPct: 25,
+    enabled: false,
+    profile: 'SPARSE',
+    densityPct: 25,
   });
 });

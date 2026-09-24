@@ -25,7 +25,13 @@ test('generateMarkdownDossier compiles structured intel document with all sectio
       lonDeg: 139.7,
     },
     geofences: [
-      { id: 'z1', name: 'Tokyo Airspace', type: 'circle', radiusM: 50000, alertLevel: 'critical' },
+      {
+        id: 'z1',
+        name: 'Tokyo Airspace',
+        type: 'circle',
+        radiusM: 50000,
+        alertLevel: 'critical',
+      },
     ],
     weather: {
       available: true,

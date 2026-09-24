@@ -62,83 +62,131 @@ const PROJECT_ROOT = projectRoot(import.meta.url);
 function parseArgs() {
   const args = process.argv.slice(2);
   const opts = {
-    heading: 0, pitch: -10, height: 8, fov: 60,
-    width: 1280, heightPx: 720, sse: 2, timeout: 30, outdir: 'output',
+    heading: 0,
+    pitch: -10,
+    height: 8,
+    fov: 60,
+    width: 1280,
+    heightPx: 720,
+    sse: 2,
+    timeout: 30,
+    outdir: 'output',
   };
 
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
-      case '--lat':        opts.lat = parseFloat(args[++i]); break;
-      case '--lon':        opts.lon = parseFloat(args[++i]); break;
-      case '--lookat-lat': opts.lookatLat = parseFloat(args[++i]); break;
-      case '--lookat-lon': opts.lookatLon = parseFloat(args[++i]); break;
-      case '--heading':    opts.heading = parseFloat(args[++i]); break;
-      case '--pitch':      opts.pitch = parseFloat(args[++i]); break;
-      case '--height':     opts.height = parseFloat(args[++i]); break;
-      case '--fov':        opts.fov = parseFloat(args[++i]); break;
-      case '--width':      opts.width = parseInt(args[++i], 10); break;
-      case '--height-px':  opts.heightPx = parseInt(args[++i], 10); break;
-      case '--sse':        opts.sse = parseFloat(args[++i]); break;
-      case '--timeout':    opts.timeout = parseInt(args[++i], 10); break;
-      case '--outdir':     opts.outdir = args[++i]; break;
-      case '--key':        opts.key = args[++i]; break;
+      case '--lat':
+        opts.lat = parseFloat(args[++i]);
+        break;
+      case '--lon':
+        opts.lon = parseFloat(args[++i]);
+        break;
+      case '--lookat-lat':
+        opts.lookatLat = parseFloat(args[++i]);
+        break;
+      case '--lookat-lon':
+        opts.lookatLon = parseFloat(args[++i]);
+        break;
+      case '--heading':
+        opts.heading = parseFloat(args[++i]);
+        break;
+      case '--pitch':
+        opts.pitch = parseFloat(args[++i]);
+        break;
+      case '--height':
+        opts.height = parseFloat(args[++i]);
+        break;
+      case '--fov':
+        opts.fov = parseFloat(args[++i]);
+        break;
+      case '--width':
+        opts.width = parseInt(args[++i], 10);
+        break;
+      case '--height-px':
+        opts.heightPx = parseInt(args[++i], 10);
+        break;
+      case '--sse':
+        opts.sse = parseFloat(args[++i]);
+        break;
+      case '--timeout':
+        opts.timeout = parseInt(args[++i], 10);
+        break;
+      case '--outdir':
+        opts.outdir = args[++i];
+        break;
+      case '--key':
+        opts.key = args[++i];
+        break;
       case '--help':
-        console.log([
-          'Usage:',
-          '  Direct:  node tools/cesium-render.mjs --lat <lat> --lon <lon> [options]',
-          '  LookAt:  node tools/cesium-render.mjs --lookat-lat <lat> --lookat-lon <lon> [options]',
-          '',
-          'Position (pick one pair):',
-          '  --lat        Camera latitude (direct mode)',
-          '  --lon        Camera longitude (direct mode)',
-          '  --lookat-lat Target latitude to look at (computes camera position)',
-          '  --lookat-lon Target longitude to look at (computes camera position)',
-          '',
-          'Camera:',
-          '  --heading    Compass heading (default: 0)',
-          '  --pitch      Camera pitch (default: -10, must be <0 for lookat mode)',
-          '  --height     Meters above ground (default: 8)',
-          '  --fov        Vertical FOV degrees (default: 60)',
-          '',
-          'Output:',
-          '  --width      Image width (default: 1280)',
-          '  --height-px  Image height (default: 720)',
-          '  --sse        Screen space error, lower=sharper (default: 2)',
-          '  --timeout    Timeout seconds (default: 30)',
-          '  --outdir     Output dir (default: output/)',
-          '  --key        Google Maps API key',
-        ].join('\n'));
+        console.log(
+          [
+            'Usage:',
+            '  Direct:  node tools/cesium-render.mjs --lat <lat> --lon <lon> [options]',
+            '  LookAt:  node tools/cesium-render.mjs --lookat-lat <lat> --lookat-lon <lon> [options]',
+            '',
+            'Position (pick one pair):',
+            '  --lat        Camera latitude (direct mode)',
+            '  --lon        Camera longitude (direct mode)',
+            '  --lookat-lat Target latitude to look at (computes camera position)',
+            '  --lookat-lon Target longitude to look at (computes camera position)',
+            '',
+            'Camera:',
+            '  --heading    Compass heading (default: 0)',
+            '  --pitch      Camera pitch (default: -10, must be <0 for lookat mode)',
+            '  --height     Meters above ground (default: 8)',
+            '  --fov        Vertical FOV degrees (default: 60)',
+            '',
+            'Output:',
+            '  --width      Image width (default: 1280)',
+            '  --height-px  Image height (default: 720)',
+            '  --sse        Screen space error, lower=sharper (default: 2)',
+            '  --timeout    Timeout seconds (default: 30)',
+            '  --outdir     Output dir (default: output/)',
+            '  --key        Google Maps API key',
+          ].join('\n'),
+        );
         process.exit(0);
     }
   }
 
   // Validate: need either --lat/--lon or --lookat-lat/--lookat-lon, not both
   const hasDirect = opts.lat !== undefined && opts.lon !== undefined;
-  const hasLookat = opts.lookatLat !== undefined && opts.lookatLon !== undefined;
-  const hasPartialDirect = (opts.lat !== undefined) !== (opts.lon !== undefined);
-  const hasPartialLookat = (opts.lookatLat !== undefined) !== (opts.lookatLon !== undefined);
+  const hasLookat =
+    opts.lookatLat !== undefined && opts.lookatLon !== undefined;
+  const hasPartialDirect =
+    (opts.lat !== undefined) !== (opts.lon !== undefined);
+  const hasPartialLookat =
+    (opts.lookatLat !== undefined) !== (opts.lookatLon !== undefined);
 
   if (hasPartialDirect) {
     console.error('Error: --lat and --lon must both be provided.');
     process.exit(1);
   }
   if (hasPartialLookat) {
-    console.error('Error: --lookat-lat and --lookat-lon must both be provided.');
+    console.error(
+      'Error: --lookat-lat and --lookat-lon must both be provided.',
+    );
     process.exit(1);
   }
   if (hasDirect && hasLookat) {
-    console.error('Error: Use --lat/--lon OR --lookat-lat/--lookat-lon, not both.');
+    console.error(
+      'Error: Use --lat/--lon OR --lookat-lat/--lookat-lon, not both.',
+    );
     process.exit(1);
   }
   if (!hasDirect && !hasLookat) {
-    console.error('Error: Provide --lat/--lon (direct) or --lookat-lat/--lookat-lon (look-at).');
+    console.error(
+      'Error: Provide --lat/--lon (direct) or --lookat-lat/--lookat-lon (look-at).',
+    );
     process.exit(1);
   }
 
   if (hasLookat) {
     opts.mode = 'lookat';
     if (opts.pitch >= 0) {
-      console.error('Error: --pitch must be negative in lookat mode (camera looks down at target).');
+      console.error(
+        'Error: --pitch must be negative in lookat mode (camera looks down at target).',
+      );
       process.exit(1);
     }
   } else {
@@ -167,9 +215,13 @@ function loadApiKey(overrideKey) {
       const val = trimmed.slice(eqIdx + 1).trim();
       if (key === 'GOOGLE_MAPS_API_KEY' && val) return val;
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
-  console.error('Error: No API key found. Set GOOGLE_MAPS_API_KEY in .env or pass --key.');
+  console.error(
+    'Error: No API key found. Set GOOGLE_MAPS_API_KEY in .env or pass --key.',
+  );
   process.exit(1);
 }
 
@@ -248,8 +300,12 @@ async function main() {
     console.log(`  Mode     : direct`);
     console.log(`  Camera   : ${opts.lat}, ${opts.lon}`);
   }
-  console.log(`  Heading  : ${opts.heading}°  Pitch: ${opts.pitch}°  Height: ${opts.height}m`);
-  console.log(`  FOV      : ${opts.fov}°  Size: ${opts.width}x${opts.heightPx}  SSE: ${opts.sse}`);
+  console.log(
+    `  Heading  : ${opts.heading}°  Pitch: ${opts.pitch}°  Height: ${opts.height}m`,
+  );
+  console.log(
+    `  FOV      : ${opts.fov}°  Size: ${opts.width}x${opts.heightPx}  SSE: ${opts.sse}`,
+  );
   console.log(`  Timeout  : ${opts.timeout}s\n`);
 
   // Step 1: Start temp HTTP server
@@ -280,11 +336,12 @@ async function main() {
     // Load tiles directly at target resolution.
     // The HTML page does progressive SSE refinement (16→12→8→6→4→target)
     // to avoid overwhelming SwiftShader with tile requests all at once.
-    const LOAD_W = opts.width, LOAD_H = opts.heightPx;
+    const LOAD_W = opts.width,
+      LOAD_H = opts.heightPx;
     await page.setViewport({ width: LOAD_W, height: LOAD_H });
 
     // Log browser console
-    page.on('console', msg => {
+    page.on('console', (msg) => {
       const type = msg.type();
       if (type === 'error' || type === 'warning' || type === 'log') {
         console.log(`  [${type}] ${msg.text()}`);
@@ -320,10 +377,12 @@ async function main() {
     try {
       await page.waitForFunction(
         'window.__tilesReady === true || window.__error !== null',
-        { timeout: timeoutMs, polling: 500 }
+        { timeout: timeoutMs, polling: 500 },
       );
     } catch {
-      console.log(`  Timed out after ${opts.timeout}s — capturing what we have.`);
+      console.log(
+        `  Timed out after ${opts.timeout}s — capturing what we have.`,
+      );
     }
 
     // Check for errors
@@ -340,8 +399,10 @@ async function main() {
     const fileLat = opts.mode === 'lookat' ? opts.lookatLat : opts.lat;
     const fileLon = opts.mode === 'lookat' ? opts.lookatLon : opts.lon;
     const prefix = opts.mode === 'lookat' ? 'cesium_lookat' : 'cesium';
-    const outPath = join(outdir,
-      `${prefix}_${fileLat}_${fileLon}_h${opts.heading}_p${opts.pitch}_${opts.height}m_${opts.width}x${opts.heightPx}.jpg`);
+    const outPath = join(
+      outdir,
+      `${prefix}_${fileLat}_${fileLon}_h${opts.heading}_p${opts.pitch}_${opts.height}m_${opts.width}x${opts.heightPx}.jpg`,
+    );
 
     await page.screenshot({
       path: outPath,
@@ -359,13 +420,14 @@ async function main() {
     }
     const cam = await page.evaluate('window.__cameraInfo');
     if (cam) {
-      console.log(`  Camera pos   : ${cam.lat.toFixed(6)}, ${cam.lon.toFixed(6)}`);
+      console.log(
+        `  Camera pos   : ${cam.lat.toFixed(6)}, ${cam.lon.toFixed(6)}`,
+      );
       console.log(`  Camera alt   : ${cam.height.toFixed(1)}m (WGS84)`);
       console.log(`  True heading : ${cam.heading.toFixed(1)}°`);
       console.log(`  True pitch   : ${cam.pitch.toFixed(1)}°`);
       console.log(`  Distance     : ${cam.dist.toFixed(1)}m to target`);
     }
-
   } finally {
     if (browser) await browser.close();
     server.close();

@@ -80,8 +80,12 @@ test('GeospatialThreatScanner detects squawk 7700 emergencies and earthquake haz
   assert.equal(cues.includes('alert'), true);
 
   // Verify JARVIS received notifications for both threats
-  assert.ok(messages.some((m) => m.msg.includes('UAL920') && m.msg.includes('7700')));
-  assert.ok(messages.some((m) => m.msg.includes('M6.2') && m.msg.includes('Honshu')));
+  assert.ok(
+    messages.some((m) => m.msg.includes('UAL920') && m.msg.includes('7700')),
+  );
+  assert.ok(
+    messages.some((m) => m.msg.includes('M6.2') && m.msg.includes('Honshu')),
+  );
 
   // Test intercepting threat
   scanner.interceptThreat({ entity: mockFlightEntity });

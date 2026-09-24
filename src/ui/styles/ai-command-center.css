@@ -16,7 +16,8 @@
   --jarvis-radius-panel: 10px;
   --jarvis-radius-btn: 8px;
   --jarvis-radius-card: 6px;
-  --jarvis-shadow: 0 20px 60px rgba(0, 0, 0, 0.85), 0 0 30px rgba(0, 240, 255, 0.12);
+  --jarvis-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.85), 0 0 30px rgba(0, 240, 255, 0.12);
   --jarvis-shadow-inner: inset 0 1px 0 rgba(0, 240, 255, 0.25);
 }
 
@@ -44,7 +45,12 @@
   left: 0;
   right: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent 20%, var(--jarvis-scanline) 50%, transparent 80%);
+  background: linear-gradient(
+    90deg,
+    transparent 20%,
+    var(--jarvis-scanline) 50%,
+    transparent 80%
+  );
   opacity: 1;
   pointer-events: none;
   z-index: 3;
@@ -178,7 +184,11 @@
 
 #ai-command-panel.ai-fullscreen .ai-panel-header {
   padding: 12px 20px;
-  background: linear-gradient(90deg, rgba(0, 240, 255, 0.16), rgba(6, 26, 46, 0.7));
+  background: linear-gradient(
+    90deg,
+    rgba(0, 240, 255, 0.16),
+    rgba(6, 26, 46, 0.7)
+  );
   border-bottom: 1px solid rgba(0, 240, 255, 0.3);
 }
 
@@ -202,7 +212,9 @@
   padding: 6px 12px;
   background: rgba(4, 16, 28, 0.92);
   border: 1px solid rgba(0, 240, 255, 0.35);
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6), 0 0 20px rgba(0, 240, 255, 0.15);
+  box-shadow:
+    0 8px 30px rgba(0, 0, 0, 0.6),
+    0 0 20px rgba(0, 240, 255, 0.15);
 }
 
 #ai-command-panel.ai-fullscreen .ai-quick-prompts {
@@ -302,7 +314,11 @@
   font-size: 0.58rem;
   font-weight: 600;
   padding: 2px 8px;
-  background: linear-gradient(135deg, rgba(0, 240, 255, 0.12), rgba(6, 26, 44, 0.7));
+  background: linear-gradient(
+    135deg,
+    rgba(0, 240, 255, 0.12),
+    rgba(6, 26, 44, 0.7)
+  );
   border: 1px solid rgba(0, 240, 255, 0.32);
   border-radius: 12px;
   color: #c8f3ff;
@@ -967,7 +983,10 @@
   gap: 12px;
   min-height: 0;
   scroll-behavior: smooth;
-  background-image: radial-gradient(rgba(0, 240, 255, 0.04) 1px, transparent 1px);
+  background-image: radial-gradient(
+    rgba(0, 240, 255, 0.04) 1px,
+    transparent 1px
+  );
   background-size: 22px 22px;
 }
 
@@ -1027,7 +1046,9 @@
   border-right: 2px solid var(--jarvis-scanline);
   color: var(--jarvis-text);
   border-bottom-right-radius: 2px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35), 0 0 8px rgba(0, 240, 255, 0.06);
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.35),
+    0 0 8px rgba(0, 240, 255, 0.06);
 }
 
 .ai-msg.assistant .ai-msg-bubble {
@@ -1035,7 +1056,9 @@
   border: 1px solid var(--jarvis-border);
   border-left: 2px solid var(--jarvis-scanline);
   color: var(--jarvis-text);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
   border-bottom-left-radius: 2px;
 }
 
@@ -1081,7 +1104,9 @@
   border-radius: 6px;
   padding: 8px 10px;
   margin: 6px 0;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4), 0 0 10px rgba(0, 255, 170, 0.1);
+  box-shadow:
+    0 4px 14px rgba(0, 0, 0, 0.4),
+    0 0 10px rgba(0, 255, 170, 0.1);
   animation: fade-in-up 0.25s ease-out;
 }
 
@@ -1105,7 +1130,11 @@
 
 /* Pulsing Mic Recording Effect */
 .ai-mic-btn.recording {
-  background: linear-gradient(135deg, rgba(255, 40, 80, 0.35), rgba(255, 80, 40, 0.25)) !important;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 40, 80, 0.35),
+    rgba(255, 80, 40, 0.25)
+  ) !important;
   border-color: #ff3366 !important;
   color: #ff3366 !important;
   box-shadow: 0 0 16px rgba(255, 51, 102, 0.6) !important;
@@ -1113,7 +1142,8 @@
 }
 
 @keyframes mic-pulse {
-  0%, 100% {
+  0%,
+  100% {
     transform: scale(1);
     box-shadow: 0 0 10px rgba(255, 51, 102, 0.4);
   }
@@ -1163,27 +1193,6 @@
   overflow-y: auto;
   line-height: 1.45;
   background: rgba(8, 14, 24, 0.55);
-}
-
-/* ═══════════ Gesture Status Pill ═══════════ */
-.ai-status-pill.ai-gesture-status-pill {
-  transition: all 0.25s ease;
-  font-weight: 600;
-}
-
-.ai-status-pill.ai-gesture-status-pill.active {
-  border-color: rgba(0, 255, 170, 0.55);
-  color: #00ffaa;
-  background: rgba(0, 255, 170, 0.1);
-  box-shadow: 0 0 10px rgba(0, 255, 170, 0.25);
-}
-
-.ai-status-pill.ai-gesture-status-pill.triggered {
-  border-color: rgba(255, 170, 0, 0.85);
-  color: #ffaa00;
-  background: rgba(255, 170, 0, 0.18);
-  box-shadow: 0 0 14px rgba(255, 170, 0, 0.45);
-  transform: scale(1.04);
 }
 
 /* ═══════════ Tactical Markdown Tables ═══════════ */

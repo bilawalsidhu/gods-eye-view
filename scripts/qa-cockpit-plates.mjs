@@ -64,7 +64,8 @@ const APP_ORIGIN = new URL(APP_URL).origin;
 const TAG = getOpt('--tag', 'after');
 const HEADFUL = argv.includes('--headful');
 const TEETH = argv.includes('--teeth');
-const SWIFTSHADER = argv.includes('--swiftshader') || process.platform !== 'darwin';
+const SWIFTSHADER =
+  argv.includes('--swiftshader') || process.platform !== 'darwin';
 const SHOT_DIR = path.resolve('qa-shots/cockpitplates');
 
 /** Mirrors `SKY_PLATE_SCALE` in src/overlays/worldOverlayTokens.js. */
@@ -95,12 +96,28 @@ const CONTACTS = [
   // --- against the apron: below the cockpit floor ---
   { id: 'N6172G', metric: '12KT', range: 150, height: RAMP_H, want: 'ground' },
   { id: 'SWA2255', metric: '8KT', range: 260, height: RAMP_H, want: 'ground' },
-  { id: 'DAL2190', metric: '15KT', range: 400, height: RAMP_H - 4, want: 'ground' },
-  { id: 'AAL77', metric: '6KT', range: 620, height: RAMP_H - 6, want: 'ground' },
+  {
+    id: 'DAL2190',
+    metric: '15KT',
+    range: 400,
+    height: RAMP_H - 4,
+    want: 'ground',
+  },
+  {
+    id: 'AAL77',
+    metric: '6KT',
+    range: 620,
+    height: RAMP_H - 6,
+    want: 'ground',
+  },
 ];
 
-const SKY_IDS = CONTACTS.filter((contact) => contact.want === 'sky').map((contact) => contact.id);
-const GROUND_IDS = CONTACTS.filter((contact) => contact.want === 'ground').map((contact) => contact.id);
+const SKY_IDS = CONTACTS.filter((contact) => contact.want === 'sky').map(
+  (contact) => contact.id,
+);
+const GROUND_IDS = CONTACTS.filter((contact) => contact.want === 'ground').map(
+  (contact) => contact.id,
+);
 
 const POSES = [
   {
@@ -146,7 +163,9 @@ const CHROME_CANDIDATES = [
 const results = [];
 function record(name, ok, detail) {
   results.push({ name, ok, detail });
-  console.log(`  [${ok ? '\x1b[32mPASS\x1b[0m' : '\x1b[31mFAIL\x1b[0m'}] ${name}${detail ? ` — ${detail}` : ''}`);
+  console.log(
+    `  [${ok ? '\x1b[32mPASS\x1b[0m' : '\x1b[31mFAIL\x1b[0m'}] ${name}${detail ? ` — ${detail}` : ''}`,
+  );
 }
 
 const stubJson = (body) => ({
@@ -191,17 +210,25 @@ function installPaintTap(teeth) {
   };
   proto.fillText = function (text, x, y, ...rest) {
     if (window.__PLATE_TAP.on) {
-      window.__PLATE_TAP.events.push({ kind: 'text', alpha: this.globalAlpha, text: String(text) });
+      window.__PLATE_TAP.events.push({
+        kind: 'text',
+        alpha: this.globalAlpha,
+        text: String(text),
+      });
     }
     return origFillText.call(this, text, x, y, ...rest);
   };
 }
 
 async function main() {
-  const backend = SWIFTSHADER ? 'software GL (SwiftShader)' : 'real GPU (ANGLE/Metal)';
+  const backend = SWIFTSHADER
+    ? 'software GL (SwiftShader)'
+    : 'real GPU (ANGLE/Metal)';
   console.log('\nCockpit Plate Backdrop QA — rendered path');
   console.log(`  App URL : ${APP_URL}`);
-  console.log(`  Tag     : ${TAG}${TEETH ? '  (TEETH: painter stubbed, expect RED)' : ''}`);
+  console.log(
+    `  Tag     : ${TAG}${TEETH ? '  (TEETH: painter stubbed, expect RED)' : ''}`,
+  );
   console.log(`  Backend : ${backend}\n`);
 
   try {
@@ -214,7 +241,11 @@ async function main() {
 
   fs.mkdirSync(SHOT_DIR, { recursive: true });
   const executablePath = CHROME_CANDIDATES.find((candidate) => {
-    try { return fs.existsSync(candidate); } catch { return false; }
+    try {
+      return fs.existsSync(candidate);
+    } catch {
+      return false;
+    }
   });
   const browser = await puppeteer.launch({
     headless: HEADFUL ? false : 'new',
@@ -245,7 +276,9 @@ async function main() {
       const text = message.text();
       if (!/Failed to load resource.*404/i.test(text)) consoleErrors.push(text);
     });
-    page.on('pageerror', (error) => consoleErrors.push(`pageerror: ${error.message}`));
+    page.on('pageerror', (error) =>
+      consoleErrors.push(`pageerror: ${error.message}`),
+    );
     await page.evaluateOnNewDocument(installPaintTap, TEETH);
 
     await page.setRequestInterception(true);
@@ -254,16 +287,27 @@ async function main() {
       if (url.origin !== APP_ORIGIN) return void request.continue();
       // Silence the live feeds: the injected field is the only population.
       if (url.pathname === '/api/ais-live') {
-        return void request.respond(stubJson({
-          rows: [], source: 'QA', status: 'open', error: null, refreshing: false,
-          newestPositionAt: null, lastMessageAt: null,
-        }));
+        return void request.respond(
+          stubJson({
+            rows: [],
+            source: 'QA',
+            status: 'open',
+            error: null,
+            refreshing: false,
+            newestPositionAt: null,
+            lastMessageAt: null,
+          }),
+        );
       }
       if (url.pathname === '/api/adsblol/mil') {
-        return void request.respond(stubJson({ msg: 'No error', now: Date.now(), ac: [] }));
+        return void request.respond(
+          stubJson({ msg: 'No error', now: Date.now(), ac: [] }),
+        );
       }
       if (url.pathname === '/api/opensky') {
-        return void request.respond(stubJson({ time: Math.floor(Date.now() / 1000), states: [] }));
+        return void request.respond(
+          stubJson({ time: Math.floor(Date.now() / 1000), states: [] }),
+        );
       }
       if (url.pathname === '/api/opensky-track') {
         return void request.respond(stubJson({ path: [] }));
@@ -274,16 +318,23 @@ async function main() {
       return void request.continue();
     });
 
-    await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 90_000 });
-    await page.waitForFunction(() => window.__godsEyeView?.styleManager, { timeout: 90_000 });
+    await page.goto(APP_URL, {
+      waitUntil: 'domcontentloaded',
+      timeout: 90_000,
+    });
+    await page.waitForFunction(() => window.__godsEyeView?.styleManager, {
+      timeout: 90_000,
+    });
     await page.waitForFunction(
-      () => document.getElementById('loading-screen')?.classList.contains('hidden'),
+      () =>
+        document.getElementById('loading-screen')?.classList.contains('hidden'),
       { timeout: 90_000 },
     );
 
     renderer = await page.evaluate(() => {
-      const gl = document.createElement('canvas').getContext('webgl2')
-        || document.createElement('canvas').getContext('webgl');
+      const gl =
+        document.createElement('canvas').getContext('webgl2') ||
+        document.createElement('canvas').getContext('webgl');
       if (!gl) return 'no webgl';
       const ext = gl.getExtension('WEBGL_debug_renderer_info');
       return ext
@@ -302,42 +353,69 @@ async function main() {
 
     // Inject the field. The layers keep their real pipelines; only the source
     // of observations is replaced, exactly as scripts/qa-labels.mjs does.
-    await page.evaluate((payload) => {
-      const { viewer, dataManager, styleManager } = window.__godsEyeView;
-      viewer.camera.cancelFlight();
-      const Cartesian3 = viewer.camera.position.constructor;
-      window.__PLATE_QA_FIELD = payload.contacts.map((contact) => ({
-        sourceId: contact.id.toLowerCase(),
-        id: contact.id,
-        metric: contact.metric,
-        position: Cartesian3.fromDegrees(
-          payload.lon,
-          payload.lat + contact.range / payload.mPerDegLat,
-          contact.height,
-        ),
-        type: 'AIR',
-        tier: 'civil',
-      }));
-      for (const layerId of ['flights', 'military', 'satellites']) {
-        const entry = dataManager.layers.get(layerId);
-        if (!entry?.module) continue;
-        entry.module.getDetectableObjects = () => (
-          layerId === 'flights' ? window.__PLATE_QA_FIELD : []
-        );
-      }
-      styleManager.setDetection({ enabled: true, densityPct: 100, allocationStrategy: 'elastic' });
-    }, { lon: JFK_LON, lat: JFK_LAT, mPerDegLat: M_PER_DEG_LAT, contacts: CONTACTS });
+    await page.evaluate(
+      (payload) => {
+        const { viewer, dataManager, styleManager } = window.__godsEyeView;
+        viewer.camera.cancelFlight();
+        const Cartesian3 = viewer.camera.position.constructor;
+        window.__PLATE_QA_FIELD = payload.contacts.map((contact) => ({
+          sourceId: contact.id.toLowerCase(),
+          id: contact.id,
+          metric: contact.metric,
+          position: Cartesian3.fromDegrees(
+            payload.lon,
+            payload.lat + contact.range / payload.mPerDegLat,
+            contact.height,
+          ),
+          type: 'AIR',
+          tier: 'civil',
+        }));
+        for (const layerId of ['flights', 'military', 'satellites']) {
+          const entry = dataManager.layers.get(layerId);
+          if (!entry?.module) continue;
+          entry.module.getDetectableObjects = () =>
+            layerId === 'flights' ? window.__PLATE_QA_FIELD : [];
+        }
+        styleManager.setDetection({
+          enabled: true,
+          densityPct: 100,
+          allocationStrategy: 'elastic',
+        });
+      },
+      {
+        lon: JFK_LON,
+        lat: JFK_LAT,
+        mPerDegLat: M_PER_DEG_LAT,
+        contacts: CONTACTS,
+      },
+    );
 
     for (const pose of POSES) {
       console.log(`\n  — pose "${pose.name}" (${pose.note})`);
-      await page.evaluate((payload) => {
-        const { viewer } = window.__godsEyeView;
-        const Cartesian3 = viewer.camera.position.constructor;
-        viewer.camera.setView({
-          destination: Cartesian3.fromDegrees(payload.lon, payload.lat, payload.height),
-          orientation: { heading: 0, pitch: payload.pitchDeg * Math.PI / 180, roll: 0 },
-        });
-      }, { lon: JFK_LON, lat: JFK_LAT, height: pose.height, pitchDeg: pose.pitchDeg });
+      await page.evaluate(
+        (payload) => {
+          const { viewer } = window.__godsEyeView;
+          const Cartesian3 = viewer.camera.position.constructor;
+          viewer.camera.setView({
+            destination: Cartesian3.fromDegrees(
+              payload.lon,
+              payload.lat,
+              payload.height,
+            ),
+            orientation: {
+              heading: 0,
+              pitch: (payload.pitchDeg * Math.PI) / 180,
+              roll: 0,
+            },
+          });
+        },
+        {
+          lon: JFK_LON,
+          lat: JFK_LAT,
+          height: pose.height,
+          pitchDeg: pose.pitchDeg,
+        },
+      );
 
       // Let the tiles settle and the label solve run before the tap window.
       await new Promise((resolve) => setTimeout(resolve, 6_000));
@@ -365,77 +443,96 @@ async function main() {
         pump();
       });
       await new Promise((resolve) => setTimeout(resolve, 1_200));
-      const observed = await page.evaluate((wantedIds) => {
-        window.__PLATE_TAP.on = false;
-        const events = window.__PLATE_TAP.events;
-        const wanted = new Set(wantedIds);
-        // paintDetectionCallout paints, in order: the plate (alpha*plateScale),
-        // the accent bar (alpha), the leader, then the callsign. So the two
-        // fills before a callsign are that callout's plate and accent, and
-        // their ratio is the plate scale that was actually painted.
-        const byId = new Map();
-        for (let i = 0; i < events.length; i++) {
-          const event = events[i];
-          if (event.kind !== 'text') continue;
-          const id = event.text.trim();
-          if (!wanted.has(id)) continue;
-          const fills = [];
-          for (let j = i - 1; j >= 0 && fills.length < 2; j--) {
-            if (events[j].kind === 'fill') fills.unshift(events[j]);
+      const observed = await page.evaluate(
+        (wantedIds) => {
+          window.__PLATE_TAP.on = false;
+          const events = window.__PLATE_TAP.events;
+          const wanted = new Set(wantedIds);
+          // paintDetectionCallout paints, in order: the plate (alpha*plateScale),
+          // the accent bar (alpha), the leader, then the callsign. So the two
+          // fills before a callsign are that callout's plate and accent, and
+          // their ratio is the plate scale that was actually painted.
+          const byId = new Map();
+          for (let i = 0; i < events.length; i++) {
+            const event = events[i];
+            if (event.kind !== 'text') continue;
+            const id = event.text.trim();
+            if (!wanted.has(id)) continue;
+            const fills = [];
+            for (let j = i - 1; j >= 0 && fills.length < 2; j--) {
+              if (events[j].kind === 'fill') fills.unshift(events[j]);
+            }
+            if (fills.length < 2) continue;
+            const [plate, accent] = fills;
+            if (!(accent.alpha > 0)) continue;
+            byId.set(id, {
+              id,
+              plateAlpha: plate.alpha,
+              accentAlpha: accent.alpha,
+              plateScale: plate.alpha / accent.alpha,
+              rect: plate.rect,
+            });
           }
-          if (fills.length < 2) continue;
-          const [plate, accent] = fills;
-          if (!(accent.alpha > 0)) continue;
-          byId.set(id, {
-            id,
-            plateAlpha: plate.alpha,
-            accentAlpha: accent.alpha,
-            plateScale: plate.alpha / accent.alpha,
-            rect: plate.rect,
-          });
-        }
 
-        // Pixel readback from the real compositing surface, over the plate rect
-        // the painter itself just used.
-        const canvas = document.getElementById('world-overlay-canvas');
-        const ctx = canvas?.getContext('2d', { willReadFrequently: true });
-        const dpr = canvas && canvas.clientWidth ? canvas.width / canvas.clientWidth : 1;
-        for (const entry of byId.values()) {
-          entry.meanPixelAlpha = null;
-          if (!ctx || !entry.rect || !(entry.rect.w > 0) || !(entry.rect.h > 0)) continue;
-          const x = Math.max(0, Math.round(entry.rect.x * dpr));
-          const y = Math.max(0, Math.round(entry.rect.y * dpr));
-          const w = Math.min(canvas.width - x, Math.round(entry.rect.w * dpr));
-          const h = Math.min(canvas.height - y, Math.round(entry.rect.h * dpr));
-          if (!(w > 0) || !(h > 0)) continue;
-          const data = ctx.getImageData(x, y, w, h).data;
-          let total = 0;
-          for (let p = 3; p < data.length; p += 4) total += data[p];
-          entry.meanPixelAlpha = total / (data.length / 4) / 255;
-        }
+          // Pixel readback from the real compositing surface, over the plate rect
+          // the painter itself just used.
+          const canvas = document.getElementById('world-overlay-canvas');
+          const ctx = canvas?.getContext('2d', { willReadFrequently: true });
+          const dpr =
+            canvas && canvas.clientWidth
+              ? canvas.width / canvas.clientWidth
+              : 1;
+          for (const entry of byId.values()) {
+            entry.meanPixelAlpha = null;
+            if (
+              !ctx ||
+              !entry.rect ||
+              !(entry.rect.w > 0) ||
+              !(entry.rect.h > 0)
+            )
+              continue;
+            const x = Math.max(0, Math.round(entry.rect.x * dpr));
+            const y = Math.max(0, Math.round(entry.rect.y * dpr));
+            const w = Math.min(
+              canvas.width - x,
+              Math.round(entry.rect.w * dpr),
+            );
+            const h = Math.min(
+              canvas.height - y,
+              Math.round(entry.rect.h * dpr),
+            );
+            if (!(w > 0) || !(h > 0)) continue;
+            const data = ctx.getImageData(x, y, w, h).data;
+            let total = 0;
+            for (let p = 3; p < data.length; p += 4) total += data[p];
+            entry.meanPixelAlpha = total / (data.length / 4) / 255;
+          }
 
-        const diagnostics = window.__godsEyeView.styleManager.getDetectionDiagnostics();
-        return {
-          plated: [...byId.values()],
-          visibleCount: diagnostics?.visibleCount ?? null,
-          labeledKeys: diagnostics?.labeledKeys ?? null,
-          profile: diagnostics?.profile ?? null,
-          fillEvents: events.filter((event) => event.kind === 'fill').length,
-        };
-      }, [...pose.expectPlated, ...pose.expectAbsent]);
+          const diagnostics =
+            window.__godsEyeView.styleManager.getDetectionDiagnostics();
+          return {
+            plated: [...byId.values()],
+            visibleCount: diagnostics?.visibleCount ?? null,
+            labeledKeys: diagnostics?.labeledKeys ?? null,
+            profile: diagnostics?.profile ?? null,
+            fillEvents: events.filter((event) => event.kind === 'fill').length,
+          };
+        },
+        [...pose.expectPlated, ...pose.expectAbsent],
+      );
 
       const labelledIds = (observed.labeledKeys || [])
         .filter((key) => key.startsWith('flights:'))
         .map((key) => key.slice('flights:'.length).toUpperCase());
       console.log(
-        `    diagnostics: profile=${observed.profile} visibleCount=${observed.visibleCount}`
-        + ` labelled=[${labelledIds.join(' ')}] fills=${observed.fillEvents}`,
+        `    diagnostics: profile=${observed.profile} visibleCount=${observed.visibleCount}` +
+          ` labelled=[${labelledIds.join(' ')}] fills=${observed.fillEvents}`,
       );
       for (const entry of observed.plated) {
         console.log(
-          `      ${entry.id.padEnd(8)} plateScale=${entry.plateScale.toFixed(4)}`
-          + ` (plate ${entry.plateAlpha.toFixed(4)} / accent ${entry.accentAlpha.toFixed(4)})`
-          + ` meanPixelAlpha=${entry.meanPixelAlpha === null ? 'n/a' : entry.meanPixelAlpha.toFixed(4)}`,
+          `      ${entry.id.padEnd(8)} plateScale=${entry.plateScale.toFixed(4)}` +
+            ` (plate ${entry.plateAlpha.toFixed(4)} / accent ${entry.accentAlpha.toFixed(4)})` +
+            ` meanPixelAlpha=${entry.meanPixelAlpha === null ? 'n/a' : entry.meanPixelAlpha.toFixed(4)}`,
         );
       }
 
@@ -446,7 +543,9 @@ async function main() {
         `visibleCount=${observed.visibleCount}`,
       );
       // 2. The contacts we expect to be labelled are labelled, by id.
-      const missingLabels = pose.expectPlated.filter((id) => !labelledIds.includes(id));
+      const missingLabels = pose.expectPlated.filter(
+        (id) => !labelledIds.includes(id),
+      );
       record(
         `${pose.name}: every expected contact reaches the label solve`,
         missingLabels.length === 0,
@@ -455,7 +554,9 @@ async function main() {
           : `${pose.expectPlated.length} labelled`,
       );
       // 3. The contacts that must NOT be labelled are absent.
-      const unexpected = pose.expectAbsent.filter((id) => labelledIds.includes(id));
+      const unexpected = pose.expectAbsent.filter((id) =>
+        labelledIds.includes(id),
+      );
       record(
         `${pose.name}: below-eye-level contacts stay out of the solve`,
         unexpected.length === 0,
@@ -466,7 +567,9 @@ async function main() {
       // 4/5/6. Painted plate scale and pixels, per named contact.
       if (pose.expectPlated.length > 0) {
         const platedIds = observed.plated.map((entry) => entry.id);
-        const missingPaint = pose.expectPlated.filter((id) => !platedIds.includes(id));
+        const missingPaint = pose.expectPlated.filter(
+          (id) => !platedIds.includes(id),
+        );
         record(
           `${pose.name}: the callout painter ran for every expected contact`,
           missingPaint.length === 0,
@@ -475,21 +578,32 @@ async function main() {
             : `${platedIds.length} painted`,
         );
         const offScale = observed.plated.filter(
-          (entry) => Math.abs(entry.plateScale - pose.expectScale) > PLATE_SCALE_TOLERANCE,
+          (entry) =>
+            Math.abs(entry.plateScale - pose.expectScale) >
+            PLATE_SCALE_TOLERANCE,
         );
         record(
           `${pose.name}: painted plate scale is ${pose.expectScale}`,
           observed.plated.length > 0 && offScale.length === 0,
           offScale.length
-            ? offScale.map((entry) => `${entry.id}=${entry.plateScale.toFixed(3)}`).join(' ')
-            : observed.plated.map((entry) => entry.plateScale.toFixed(3)).join(' '),
+            ? offScale
+                .map((entry) => `${entry.id}=${entry.plateScale.toFixed(3)}`)
+                .join(' ')
+            : observed.plated
+                .map((entry) => entry.plateScale.toFixed(3))
+                .join(' '),
         );
-        const inked = observed.plated.filter((entry) => (entry.meanPixelAlpha ?? 0) > 0.01);
+        const inked = observed.plated.filter(
+          (entry) => (entry.meanPixelAlpha ?? 0) > 0.01,
+        );
         record(
           `${pose.name}: the plate rect carries real pixels on the overlay canvas`,
           observed.plated.length > 0 && inked.length === observed.plated.length,
           observed.plated
-            .map((entry) => `${entry.id}=${entry.meanPixelAlpha === null ? 'n/a' : entry.meanPixelAlpha.toFixed(3)}`)
+            .map(
+              (entry) =>
+                `${entry.id}=${entry.meanPixelAlpha === null ? 'n/a' : entry.meanPixelAlpha.toFixed(3)}`,
+            )
             .join(' '),
         );
       }
@@ -502,18 +616,24 @@ async function main() {
 
     // Cross-pose pixel comparison: the same theme, the same canvas, the same
     // painter — only the backdrop differs, so sky plates must be lighter.
-    const skyInk = perPose.find((entry) => entry.pose === 'level')?.plated || [];
-    const groundInk = perPose.find((entry) => entry.pose === 'lifted')?.plated || [];
-    const meanOf = (rows) => (rows.length
-      ? rows.reduce((sum, entry) => sum + (entry.meanPixelAlpha ?? 0), 0) / rows.length
-      : null);
+    const skyInk =
+      perPose.find((entry) => entry.pose === 'level')?.plated || [];
+    const groundInk =
+      perPose.find((entry) => entry.pose === 'lifted')?.plated || [];
+    const meanOf = (rows) =>
+      rows.length
+        ? rows.reduce((sum, entry) => sum + (entry.meanPixelAlpha ?? 0), 0) /
+          rows.length
+        : null;
     const skyMean = meanOf(skyInk);
     const groundMean = meanOf(groundInk);
     record(
       'sky-backed plates are measurably lighter on the canvas than ground-backed ones',
-      Number.isFinite(skyMean) && Number.isFinite(groundMean) && skyMean < groundMean,
-      `sky mean alpha ${skyMean === null ? 'n/a' : skyMean.toFixed(4)}`
-      + ` vs ground ${groundMean === null ? 'n/a' : groundMean.toFixed(4)}`,
+      Number.isFinite(skyMean) &&
+        Number.isFinite(groundMean) &&
+        skyMean < groundMean,
+      `sky mean alpha ${skyMean === null ? 'n/a' : skyMean.toFixed(4)}` +
+        ` vs ground ${groundMean === null ? 'n/a' : groundMean.toFixed(4)}`,
     );
 
     record(
@@ -527,25 +647,33 @@ async function main() {
 
   fs.writeFileSync(
     path.join(SHOT_DIR, `${TAG}-rendered.json`),
-    `${JSON.stringify({
-      tag: TAG,
-      teeth: TEETH,
-      backend,
-      renderer,
-      cockpitHeight: COCKPIT_H,
-      poses: perPose,
-    }, null, 2)}\n`,
+    `${JSON.stringify(
+      {
+        tag: TAG,
+        teeth: TEETH,
+        backend,
+        renderer,
+        cockpitHeight: COCKPIT_H,
+        poses: perPose,
+      },
+      null,
+      2,
+    )}\n`,
   );
 
   const failed = results.filter((entry) => !entry.ok);
-  console.log(`\n  ${results.length - failed.length}/${results.length} checks passed\n`);
+  console.log(
+    `\n  ${results.length - failed.length}/${results.length} checks passed\n`,
+  );
   if (TEETH) {
     // Under --teeth the run is EXPECTED to fail; a green run would mean the
     // assertions do not depend on the painter and the harness is decorative.
     const ok = failed.length > 0;
-    console.log(ok
-      ? `  \x1b[32mTEETH OK\x1b[0m — ${failed.length} check(s) went red with the painter stubbed:\n    ${failed.map((entry) => entry.name).join('\n    ')}\n`
-      : '  \x1b[31mTEETH FAILED\x1b[0m — every check passed with the painter stubbed; the harness proves nothing.\n');
+    console.log(
+      ok
+        ? `  \x1b[32mTEETH OK\x1b[0m — ${failed.length} check(s) went red with the painter stubbed:\n    ${failed.map((entry) => entry.name).join('\n    ')}\n`
+        : '  \x1b[31mTEETH FAILED\x1b[0m — every check passed with the painter stubbed; the harness proves nothing.\n',
+    );
     process.exit(ok ? 0 : 1);
   }
   process.exit(failed.length === 0 ? 0 : 1);

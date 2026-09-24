@@ -50,44 +50,75 @@ const PROJECT_ROOT = projectRoot(import.meta.url);
 function parseArgs() {
   const args = process.argv.slice(2);
   const opts = {
-    heading: 0, pitch: 0, roll: 0, hfov: 90,
-    width: 1920, height: 1080, step: 45, all: false, outdir: 'output',
+    heading: 0,
+    pitch: 0,
+    roll: 0,
+    hfov: 90,
+    width: 1920,
+    height: 1080,
+    step: 45,
+    all: false,
+    outdir: 'output',
   };
 
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
-      case '--input':   opts.input = args[++i]; break;
-      case '--heading':  opts.heading = parseFloat(args[++i]); break;
-      case '--pitch':    opts.pitch = parseFloat(args[++i]); break;
-      case '--roll':     opts.roll = parseFloat(args[++i]); break;
-      case '--hfov':     opts.hfov = parseFloat(args[++i]); break;
-      case '--focal':    opts.focal = parseFloat(args[++i]); break;
-      case '--width':    opts.width = parseInt(args[++i], 10); break;
-      case '--height':   opts.height = parseInt(args[++i], 10); break;
-      case '--step':     opts.step = parseInt(args[++i], 10); break;
-      case '--all':      opts.all = true; break;
-      case '--outdir':   opts.outdir = args[++i]; break;
+      case '--input':
+        opts.input = args[++i];
+        break;
+      case '--heading':
+        opts.heading = parseFloat(args[++i]);
+        break;
+      case '--pitch':
+        opts.pitch = parseFloat(args[++i]);
+        break;
+      case '--roll':
+        opts.roll = parseFloat(args[++i]);
+        break;
+      case '--hfov':
+        opts.hfov = parseFloat(args[++i]);
+        break;
+      case '--focal':
+        opts.focal = parseFloat(args[++i]);
+        break;
+      case '--width':
+        opts.width = parseInt(args[++i], 10);
+        break;
+      case '--height':
+        opts.height = parseInt(args[++i], 10);
+        break;
+      case '--step':
+        opts.step = parseInt(args[++i], 10);
+        break;
+      case '--all':
+        opts.all = true;
+        break;
+      case '--outdir':
+        opts.outdir = args[++i];
+        break;
       case '--help':
-        console.log([
-          'Usage: node tools/pano-pinhole.mjs --input <panorama.jpg> [options]',
-          '',
-          'Required:',
-          '  --input    Equirectangular panorama image path',
-          '',
-          'Camera:',
-          '  --heading  Compass heading degrees, 0=N 90=E (default: 0)',
-          '  --pitch    Pitch degrees, 0=horizon +up (default: 0)',
-          '  --roll     Roll degrees, +CW (default: 0)',
-          '  --hfov     Horizontal FOV degrees (default: 90)',
-          '  --focal    Focal length in pixels (overrides --hfov)',
-          '',
-          'Output:',
-          '  --width    Output width pixels (default: 1920)',
-          '  --height   Output height pixels (default: 1080)',
-          '  --all      Render all compass headings (ignores --heading)',
-          '  --step     Heading step degrees for --all mode (default: 45)',
-          '  --outdir   Output directory (default: output/)',
-        ].join('\n'));
+        console.log(
+          [
+            'Usage: node tools/pano-pinhole.mjs --input <panorama.jpg> [options]',
+            '',
+            'Required:',
+            '  --input    Equirectangular panorama image path',
+            '',
+            'Camera:',
+            '  --heading  Compass heading degrees, 0=N 90=E (default: 0)',
+            '  --pitch    Pitch degrees, 0=horizon +up (default: 0)',
+            '  --roll     Roll degrees, +CW (default: 0)',
+            '  --hfov     Horizontal FOV degrees (default: 90)',
+            '  --focal    Focal length in pixels (overrides --hfov)',
+            '',
+            'Output:',
+            '  --width    Output width pixels (default: 1920)',
+            '  --height   Output height pixels (default: 1080)',
+            '  --all      Render all compass headings (ignores --heading)',
+            '  --step     Heading step degrees for --all mode (default: 45)',
+            '  --outdir   Output directory (default: output/)',
+          ].join('\n'),
+        );
         process.exit(0);
     }
   }
@@ -124,7 +155,7 @@ function sampleBilinear(buf, pW, pH, u, v) {
 
   const x0 = Math.floor(u);
   const y0 = Math.floor(v);
-  const x1 = (x0 + 1) % pW;  // wrap horizontally
+  const x1 = (x0 + 1) % pW; // wrap horizontally
   const y1 = Math.min(y0 + 1, pH - 1);
 
   const fx = u - x0;
@@ -142,8 +173,16 @@ function sampleBilinear(buf, pW, pH, u, v) {
   const w11 = fx * fy;
 
   const r = buf[i00] * w00 + buf[i10] * w10 + buf[i01] * w01 + buf[i11] * w11;
-  const g = buf[i00 + 1] * w00 + buf[i10 + 1] * w10 + buf[i01 + 1] * w01 + buf[i11 + 1] * w11;
-  const b = buf[i00 + 2] * w00 + buf[i10 + 2] * w10 + buf[i01 + 2] * w01 + buf[i11 + 2] * w11;
+  const g =
+    buf[i00 + 1] * w00 +
+    buf[i10 + 1] * w10 +
+    buf[i01 + 1] * w01 +
+    buf[i11 + 1] * w11;
+  const b =
+    buf[i00 + 2] * w00 +
+    buf[i10 + 2] * w10 +
+    buf[i01 + 2] * w01 +
+    buf[i11 + 2] * w11;
 
   return [Math.round(r), Math.round(g), Math.round(b)];
 }
@@ -213,10 +252,30 @@ function buildRotationMatrix(headingRad, pitchRad, rollRad) {
 // ---------------------------------------------------------------------------
 
 const COMPASS_NAMES = {
-  0: 'N', 15: 'NNE', 30: 'NNE2', 45: 'NE', 60: 'ENE', 75: 'ENE2',
-  90: 'E', 105: 'ESE', 120: 'ESE2', 135: 'SE', 150: 'SSE', 165: 'SSE2',
-  180: 'S', 195: 'SSW', 210: 'SSW2', 225: 'SW', 240: 'WSW', 255: 'WSW2',
-  270: 'W', 285: 'WNW', 300: 'WNW2', 315: 'NW', 330: 'NNW', 345: 'NNW2',
+  0: 'N',
+  15: 'NNE',
+  30: 'NNE2',
+  45: 'NE',
+  60: 'ENE',
+  75: 'ENE2',
+  90: 'E',
+  105: 'ESE',
+  120: 'ESE2',
+  135: 'SE',
+  150: 'SSE',
+  165: 'SSE2',
+  180: 'S',
+  195: 'SSW',
+  210: 'SSW2',
+  225: 'SW',
+  240: 'WSW',
+  255: 'WSW2',
+  270: 'W',
+  285: 'WNW',
+  300: 'WNW2',
+  315: 'NW',
+  330: 'NNW',
+  345: 'NNW2',
 };
 
 // ---------------------------------------------------------------------------
@@ -235,10 +294,20 @@ const COMPASS_NAMES = {
  * @param {number} outH     Output height
  * @returns {Buffer}        Raw RGB output buffer
  */
-function renderView(panoBuf, pW, pH, heading, pitch, roll, focalPx, outW, outH) {
-  const headingRad = heading * Math.PI / 180;
-  const pitchRad = pitch * Math.PI / 180;
-  const rollRad = roll * Math.PI / 180;
+function renderView(
+  panoBuf,
+  pW,
+  pH,
+  heading,
+  pitch,
+  roll,
+  focalPx,
+  outW,
+  outH,
+) {
+  const headingRad = (heading * Math.PI) / 180;
+  const pitchRad = (pitch * Math.PI) / 180;
+  const rollRad = (roll * Math.PI) / 180;
   const rotate = buildRotationMatrix(headingRad, pitchRad, rollRad);
 
   const outBuf = Buffer.alloc(outW * outH * 3);
@@ -247,7 +316,7 @@ function renderView(panoBuf, pW, pH, heading, pitch, roll, focalPx, outW, outH) 
 
   for (let py = 0; py < outH; py++) {
     for (let px = 0; px < outW; px++) {
-      const camX = (px - halfW + 0.5);
+      const camX = px - halfW + 0.5;
       const camY = -(py - halfH + 0.5);
       const camZ = focalPx;
 
@@ -288,8 +357,8 @@ async function main() {
   if (opts.focal !== undefined) {
     focalPx = opts.focal;
   } else {
-    const hfovRad = opts.hfov * Math.PI / 180;
-    focalPx = (opts.width / 2) / Math.tan(hfovRad / 2);
+    const hfovRad = (opts.hfov * Math.PI) / 180;
+    focalPx = opts.width / 2 / Math.tan(hfovRad / 2);
   }
 
   // Build list of headings to render
@@ -302,17 +371,22 @@ async function main() {
     headings.push(opts.heading);
   }
 
-  const fovLabel = opts.focal !== undefined
-    ? `f${Math.round(opts.focal)}`
-    : `fov${Math.round(opts.hfov)}`;
-  const hfovDeg = 2 * Math.atan((opts.width / 2) / focalPx) * 180 / Math.PI;
+  const fovLabel =
+    opts.focal !== undefined
+      ? `f${Math.round(opts.focal)}`
+      : `fov${Math.round(opts.hfov)}`;
+  const hfovDeg = (2 * Math.atan(opts.width / 2 / focalPx) * 180) / Math.PI;
 
   console.log('\nPano → Pinhole Renderer');
   console.log(`  Input    : ${opts.input}`);
-  console.log(`  Mode     : ${opts.all ? `all headings (${headings.length} views, step ${opts.step}°)` : `heading ${opts.heading}°`}`);
+  console.log(
+    `  Mode     : ${opts.all ? `all headings (${headings.length} views, step ${opts.step}°)` : `heading ${opts.heading}°`}`,
+  );
   console.log(`  Pitch    : ${opts.pitch}°`);
   if (opts.roll !== 0) console.log(`  Roll     : ${opts.roll}°`);
-  console.log(`  HFOV     : ${hfovDeg.toFixed(1)}° (focal ≈ ${focalPx.toFixed(1)} px)`);
+  console.log(
+    `  HFOV     : ${hfovDeg.toFixed(1)}° (focal ≈ ${focalPx.toFixed(1)} px)`,
+  );
   console.log(`  Output   : ${opts.width}x${opts.height}`);
 
   // Load panorama once
@@ -324,10 +398,7 @@ async function main() {
   const pH = meta.height;
   console.log(`  Panorama : ${pW}x${pH}`);
 
-  const panoBuf = await panoImage
-    .removeAlpha()
-    .raw()
-    .toBuffer();
+  const panoBuf = await panoImage.removeAlpha().raw().toBuffer();
 
   const outdir = resolve(PROJECT_ROOT, opts.outdir);
   mkdirSync(outdir, { recursive: true });
@@ -341,7 +412,17 @@ async function main() {
 
   for (const heading of headings) {
     const t1 = performance.now();
-    const outBuf = renderView(panoBuf, pW, pH, heading, opts.pitch, opts.roll, focalPx, outW, outH);
+    const outBuf = renderView(
+      panoBuf,
+      pW,
+      pH,
+      heading,
+      opts.pitch,
+      opts.roll,
+      focalPx,
+      outW,
+      outH,
+    );
     const renderMs = (performance.now() - t1).toFixed(0);
 
     const compassLabel = COMPASS_NAMES[heading] || `H${heading}`;
@@ -352,16 +433,18 @@ async function main() {
       .jpeg({ quality: 92 })
       .toFile(outPath);
 
-    console.log(`  ${compassLabel.padEnd(4)} (${String(heading).padStart(3)}°): ${outName}  (${renderMs}ms)`);
+    console.log(
+      `  ${compassLabel.padEnd(4)} (${String(heading).padStart(3)}°): ${outName}  (${renderMs}ms)`,
+    );
   }
 
   const totalElapsed = ((performance.now() - t0) / 1000).toFixed(2);
   console.log(`\n  Total: ${headings.length} images in ${totalElapsed}s`);
 
   // Report camera parameters
-  const vfov = 2 * Math.atan((outH / 2) / focalPx) * 180 / Math.PI;
+  const vfov = (2 * Math.atan(outH / 2 / focalPx) * 180) / Math.PI;
   const diagPx = Math.sqrt(outW * outW + outH * outH);
-  const dfov = 2 * Math.atan((diagPx / 2) / focalPx) * 180 / Math.PI;
+  const dfov = (2 * Math.atan(diagPx / 2 / focalPx) * 180) / Math.PI;
   console.log(`  Horizontal FOV : ${hfovDeg.toFixed(1)}°`);
   console.log(`  Vertical FOV   : ${vfov.toFixed(1)}°`);
   console.log(`  Diagonal FOV   : ${dfov.toFixed(1)}°`);

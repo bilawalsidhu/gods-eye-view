@@ -13,12 +13,21 @@ const luma = ([r, g, b]) => (0.299 * r + 0.587 * g + 0.114 * b) / 255;
 
 const BUCKETS = ['free', 'slow', 'jam'];
 const MONO_STYLES = ['surveillance', 'thermal', 'noir'];
-const NORMAL_STYLES = ['normal', 'anime', 'snow', 'does-not-exist', '', undefined, null];
+const NORMAL_STYLES = [
+  'normal',
+  'anime',
+  'snow',
+  'does-not-exist',
+  '',
+  undefined,
+  null,
+];
 
 test('profile mapping: NVG/FLIR/noir are mono, retro is crt, everything else normal', () => {
   for (const s of MONO_STYLES) assert.equal(trafficStyleProfile(s), 'mono', s);
   assert.equal(trafficStyleProfile('retro'), 'crt');
-  for (const s of NORMAL_STYLES) assert.equal(trafficStyleProfile(s), 'normal', String(s));
+  for (const s of NORMAL_STYLES)
+    assert.equal(trafficStyleProfile(s), 'normal', String(s));
 });
 
 test('normal-profile styles never restyle: null rgba, zero size delta', () => {
@@ -44,8 +53,14 @@ test('mono: EVERY colored dot is a bright white core (owner round 2: "just brigh
     for (const b of BUCKETS) {
       const rgba = presetDotRgba(s, b);
       assert.ok(rgba, `${s}/${b} returns a tuple`);
-      assert.ok(luma(rgba) >= 0.95, `${s}/${b} is near-white (luma ${luma(rgba).toFixed(2)})`);
-      assert.ok(rgba[3] >= 0.8, `${s}/${b} stays opaque enough to read (alpha ${rgba[3]})`);
+      assert.ok(
+        luma(rgba) >= 0.95,
+        `${s}/${b} is near-white (luma ${luma(rgba).toFixed(2)})`,
+      );
+      assert.ok(
+        rgba[3] >= 0.8,
+        `${s}/${b} stays opaque enough to read (alpha ${rgba[3]})`,
+      );
     }
   }
 });
@@ -65,9 +80,15 @@ test('crt palette: saturated hues that survive posterization, all buckets upsize
     const [r, g, bl] = rgba;
     const sat = (Math.max(r, g, bl) - Math.min(r, g, bl)) / 255;
     assert.ok(sat >= 0.5, `retro/${b} saturation ${sat.toFixed(2)} ≥ 0.5`);
-    assert.ok(presetSizeDelta('retro', b) >= 1, `retro/${b} at least +1px vs pixel grid`);
+    assert.ok(
+      presetSizeDelta('retro', b) >= 1,
+      `retro/${b} at least +1px vs pixel grid`,
+    );
   }
-  assert.ok(presetSizeDelta('retro', 'jam') > presetSizeDelta('retro', 'free'), 'jam still dominant');
+  assert.ok(
+    presetSizeDelta('retro', 'jam') > presetSizeDelta('retro', 'free'),
+    'jam still dominant',
+  );
 });
 
 test('outlines: mono buckets ALL get a dark halo (bright core + dark ring is the readable unit)', () => {
@@ -75,10 +96,15 @@ test('outlines: mono buckets ALL get a dark halo (bright core + dark ring is the
     for (const b of BUCKETS) {
       const o = presetDotOutline(s, b);
       assert.ok(o && o.width >= 1, `${s}/${b} has an outline`);
-      assert.ok(luma(o.rgba) <= 0.2, `${s}/${b} outline is dark (luma ${luma(o.rgba).toFixed(2)})`);
+      assert.ok(
+        luma(o.rgba) <= 0.2,
+        `${s}/${b} outline is dark (luma ${luma(o.rgba).toFixed(2)})`,
+      );
     }
-    assert.ok(presetDotOutline(s, 'jam').width >= presetDotOutline(s, 'slow').width,
-      `${s} jam outline at least as wide as slow`);
+    assert.ok(
+      presetDotOutline(s, 'jam').width >= presetDotOutline(s, 'slow').width,
+      `${s} jam outline at least as wide as slow`,
+    );
   }
   for (const b of ['jam', 'slow']) {
     assert.ok(presetDotOutline('retro', b)?.width >= 1, `retro/${b} outlined`);
@@ -112,7 +138,10 @@ test('all styled tuples are valid rgba: channels 0–255 ints, alpha in (0, 1]',
     for (const b of BUCKETS) {
       const [r, g, bl, a] = presetDotRgba(s, b);
       for (const c of [r, g, bl]) {
-        assert.ok(Number.isInteger(c) && c >= 0 && c <= 255, `${s}/${b} channel ${c}`);
+        assert.ok(
+          Number.isInteger(c) && c >= 0 && c <= 255,
+          `${s}/${b} channel ${c}`,
+        );
       }
       assert.ok(a > 0 && a <= 1, `${s}/${b} alpha ${a}`);
     }

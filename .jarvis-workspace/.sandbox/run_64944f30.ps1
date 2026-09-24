@@ -1,0 +1,1 @@
+python -m pip install Pillow 2>&1 | Select-Object -Last 3

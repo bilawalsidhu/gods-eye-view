@@ -1,7 +1,11 @@
 // src/data/trafficQueue.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { queueDistances, queuePlatoons, locateAlongRoad } from './trafficQueue.js';
+import {
+  queueDistances,
+  queuePlatoons,
+  locateAlongRoad,
+} from './trafficQueue.js';
 
 // ── queuePlatoons ───────────────────────────────────────────
 

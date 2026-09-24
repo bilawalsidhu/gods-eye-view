@@ -46,12 +46,12 @@ Most requests describe one capability. If this one does, skip this phase and go 
 ```markdown
 # Capability Map: [Initiative Name]
 
-| Module id | Responsibility | Depends on |
-|---|---|---|
-| identity | Accounts, sessions, SSO | — |
-| billing | Plans, invoices, payments | identity |
-| notifications | Email and webhook fan-out | identity |
-| reporting | Usage dashboards | billing, notifications |
+| Module id     | Responsibility            | Depends on             |
+| ------------- | ------------------------- | ---------------------- |
+| identity      | Accounts, sessions, SSO   | —                      |
+| billing       | Plans, invoices, payments | identity               |
+| notifications | Email and webhook fan-out | identity               |
+| reporting     | Usage dashboards          | billing, notifications |
 
 Build order: identity → billing, notifications → reporting
 ```
@@ -79,13 +79,14 @@ ASSUMPTIONS I'M MAKING:
 → Correct me now or I'll proceed with these.
 ```
 
-Don't silently fill in ambiguous requirements. The spec's entire purpose is to surface misunderstandings *before* code gets written — assumptions are the most dangerous form of misunderstanding.
+Don't silently fill in ambiguous requirements. The spec's entire purpose is to surface misunderstandings _before_ code gets written — assumptions are the most dangerous form of misunderstanding.
 
 **Write a spec document covering these six core areas:**
 
 1. **Objective** — What are we building and why? Who is the user? What does success look like?
 
 2. **Commands** — Full executable commands with flags, not just tool names.
+
    ```
    Build: npm run build
    Test: npm test -- --coverage
@@ -94,6 +95,7 @@ Don't silently fill in ambiguous requirements. The spec's entire purpose is to s
    ```
 
 3. **Project Structure** — Where source code lives, where tests go, where docs belong.
+
    ```
    src/           → Application source code
    src/components → React components
@@ -118,32 +120,41 @@ Don't silently fill in ambiguous requirements. The spec's entire purpose is to s
 # Spec: [Project/Feature Name]
 
 ## Objective
+
 [What we're building and why. User stories or acceptance criteria.]
 
 ## Tech Stack
+
 [Framework, language, key dependencies with versions]
 
 ## Commands
+
 [Build, test, lint, dev — full commands]
 
 ## Project Structure
+
 [Directory layout with descriptions]
 
 ## Code Style
+
 [Example snippet + key conventions]
 
 ## Testing Strategy
+
 [Framework, test locations, coverage requirements, test levels]
 
 ## Boundaries
+
 - Always: [...]
 - Ask first: [...]
 - Never: [...]
 
 ## Success Criteria
+
 [How we'll know this is done — specific, testable conditions]
 
 ## Open Questions
+
 [Anything unresolved that needs human input]
 ```
 
@@ -196,6 +207,7 @@ Break the plan into discrete, implementable tasks:
 > Follow `planning-and-task-breakdown` for the full task-sizing and dependency-ordering mechanics; it is the canonical source. The template below is a lightweight inline form; if they ever diverge, `planning-and-task-breakdown` takes precedence.
 
 **Task template:**
+
 ```markdown
 - [ ] Task: [Description]
   - Acceptance: [What must be true when done]
@@ -218,15 +230,15 @@ The spec is a living document, not a one-time artifact:
 
 ## Common Rationalizations
 
-| Rationalization | Reality |
-|---|---|
-| "This is simple, I don't need a spec" | Simple tasks don't need *long* specs, but they still need acceptance criteria. A two-line spec is fine. |
-| "I'll write the spec after I code it" | That's documentation, not specification. The spec's value is in forcing clarity *before* code. |
-| "The spec will slow us down" | A 15-minute spec prevents hours of rework. Waterfall in 15 minutes beats debugging in 15 hours. |
-| "Requirements will change anyway" | That's why the spec is a living document. An outdated spec is still better than no spec. |
-| "The user knows what they want" | Even clear requests have implicit assumptions. The spec surfaces those assumptions. |
+| Rationalization                                  | Reality                                                                                                                                                                                                  |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "This is simple, I don't need a spec"            | Simple tasks don't need _long_ specs, but they still need acceptance criteria. A two-line spec is fine.                                                                                                  |
+| "I'll write the spec after I code it"            | That's documentation, not specification. The spec's value is in forcing clarity _before_ code.                                                                                                           |
+| "The spec will slow us down"                     | A 15-minute spec prevents hours of rework. Waterfall in 15 minutes beats debugging in 15 hours.                                                                                                          |
+| "Requirements will change anyway"                | That's why the spec is a living document. An outdated spec is still better than no spec.                                                                                                                 |
+| "The user knows what they want"                  | Even clear requests have implicit assumptions. The spec surfaces those assumptions.                                                                                                                      |
 | "It's one big feature; splitting it is overhead" | If acceptance criteria cluster into independently testable groups, a monolithic spec forces every downstream task to reason over the whole contract. A ten-line capability map is the cheap alternative. |
-| "I'll decompose during planning" | Planning slices tasks within a spec. By then the oversized artifact already exists — module boundaries and dependency direction must be decided before the spec is written, not after. |
+| "I'll decompose during planning"                 | Planning slices tasks within a spec. By then the oversized artifact already exists — module boundaries and dependency direction must be decided before the spec is written, not after.                   |
 
 ## Red Flags
 

@@ -12,7 +12,9 @@
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
   border-radius: 6px;
-  box-shadow: 0 18px 52px rgba(0, 0, 0, 0.48), inset 0 0 28px rgba(14, 78, 92, 0.12);
+  box-shadow:
+    0 18px 52px rgba(0, 0, 0, 0.48),
+    inset 0 0 28px rgba(14, 78, 92, 0.12);
   backdrop-filter: blur(24px) saturate(1.4);
   font-family: var(--font-mono);
   letter-spacing: 0;
@@ -153,33 +155,69 @@
 }
 
 @keyframes bhote-embedded-anchor-enter {
-  from { opacity: 0; transform: scale(0.2); }
-  to { opacity: 1; transform: scale(1); }
+  from {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 @keyframes bhote-embedded-leader-enter {
-  from { opacity: 0; stroke-dashoffset: 1; }
-  to { opacity: 1; stroke-dashoffset: 0; }
+  from {
+    opacity: 0;
+    stroke-dashoffset: 1;
+  }
+  to {
+    opacity: 1;
+    stroke-dashoffset: 0;
+  }
 }
 
 @keyframes bhote-embedded-body-enter {
-  from { opacity: 0; transform: translateY(8px) scale(0.98); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 @keyframes bhote-embedded-body-exit {
-  from { opacity: 1; transform: translateY(0) scale(1); }
-  to { opacity: 0; transform: translateY(6px) scale(0.985); }
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
 }
 
 @keyframes bhote-embedded-leader-exit {
-  from { opacity: 1; stroke-dashoffset: 0; }
-  to { opacity: 0; stroke-dashoffset: 1; }
+  from {
+    opacity: 1;
+    stroke-dashoffset: 0;
+  }
+  to {
+    opacity: 0;
+    stroke-dashoffset: 1;
+  }
 }
 
 @keyframes bhote-embedded-anchor-exit {
-  from { opacity: 1; transform: scale(1); }
-  to { opacity: 0; transform: scale(0.2); }
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.2);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -388,7 +426,11 @@
   border-radius: 4px;
   color: var(--accent);
   background: rgba(7, 25, 35, 0.9);
-  font: 22px/1 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+  font:
+    22px/1 'JetBrains Mono',
+    'SFMono-Regular',
+    Consolas,
+    monospace;
   cursor: pointer;
 }
 
@@ -469,7 +511,7 @@
   border-color: rgba(88, 196, 218, 0.36);
 }
 
-.bhote-event-actions button[data-action="cinematic"][aria-pressed="true"] {
+.bhote-event-actions button[data-action='cinematic'][aria-pressed='true'] {
   color: #071017;
   border-color: var(--accent);
   background: var(--accent);
@@ -593,7 +635,6 @@
     max-height: 48vh;
     overflow-y: auto;
   }
-
 }
 
 * {
@@ -602,7 +643,8 @@
   box-sizing: border-box;
 }
 
-html, body {
+html,
+body {
   width: 100%;
   height: 100%;
   overflow: hidden;

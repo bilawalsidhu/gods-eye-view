@@ -72,13 +72,13 @@ Wait for the user to react before asking the next question.
 
 - The user reacts faster to a wrong guess than they generate an answer from scratch
 - It commits you to a hypothesis you can be visibly wrong about, which keeps you honest
-- It surfaces *your* assumptions, which is what the interview is meant to expose
+- It surfaces _your_ assumptions, which is what the interview is meant to expose
 
 The risk here is a polite user agreeing with your guess to be agreeable. Mitigate by being visibly willing to be wrong, and occasionally guess in a direction you expect the user to push back on.
 
 ### Step 3: Listen for "want vs. should want"
 
-The most dangerous answers are the ones where the user says what a thoughtful answer *sounds like* rather than what they actually want. Watch for:
+The most dangerous answers are the ones where the user says what a thoughtful answer _sounds like_ rather than what they actually want. Watch for:
 
 - Answers that pattern-match best-practice talk ("I want it to be scalable", "clean architecture") without specifics
 - Answers that defer to convention ("the way most apps do it", "the standard approach")
@@ -87,7 +87,7 @@ The most dangerous answers are the ones where the user says what a thoughtful an
 
 When you hear these, the question to ask is:
 
-> *"If you didn't have to justify this to anyone, what would you actually want?"*
+> _"If you didn't have to justify this to anyone, what would you actually want?"_
 
 That single question often does more work than the previous five.
 
@@ -108,7 +108,7 @@ Here's what I now think you want:
 Yes / no / refine?
 ```
 
-Including "Out of scope" is non-negotiable. Half of misalignment is silent disagreement about what is *not* being built.
+Including "Out of scope" is non-negotiable. Half of misalignment is silent disagreement about what is _not_ being built.
 
 ### Step 5: Confirm — explicit yes, not "whatever you think"
 
@@ -133,7 +133,7 @@ When the user confirms the statement of intent with an explicit "yes":
 
 You're done when you can answer yes to this:
 
-> *Can I predict the user's reaction to the next three questions I would ask?*
+> _Can I predict the user's reaction to the next three questions I would ask?_
 
 If yes, you have shared understanding. Stop interviewing and produce the restate. If no, you're not done; ask the next question.
 
@@ -195,16 +195,16 @@ Two questions in, the agent has discovered the actual ask isn't "a dashboard." I
 
 ## Common Rationalizations
 
-| Rationalization | Reality |
-|---|---|
-| "The ask is clear enough" | If you can't write the user's desired outcome in one sentence right now, the ask isn't clear. Run Step 1 before deciding. |
-| "Asking too many questions wastes their time" | Time wasted by 4–6 targeted questions is small. Time wasted by building the wrong thing is enormous, and the user is the one bearing that cost. |
-| "I'll figure it out as I build" | Switching costs after code exists are 10x what they are now. Discovery during implementation is rework. |
-| "They said 'whatever you think,' so I should just decide" | "Whatever you think" is delegation, not decision. Re-ask with two concrete options as a choice. |
-| "I should give them several options to pick from" | Options work when the user knows what they want and is choosing between trade-offs. They don't know what they want yet. Listing options widens the search; asking narrows it. |
-| "If I attach my guess, I'm leading them" | Leading is the point. Reacting is faster than generating from scratch. The risk is sycophancy, not leading; mitigate by being visibly willing to be wrong. |
-| "We've talked enough, I get it" | Test it: can you predict their reaction to the next three questions? If not, you don't get it yet. |
-| "The user said yes, we're done" | If the yes followed a vague restate or an open-ended "sounds good," the yes is hollow. Restate concretely and re-confirm. |
+| Rationalization                                           | Reality                                                                                                                                                                       |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "The ask is clear enough"                                 | If you can't write the user's desired outcome in one sentence right now, the ask isn't clear. Run Step 1 before deciding.                                                     |
+| "Asking too many questions wastes their time"             | Time wasted by 4–6 targeted questions is small. Time wasted by building the wrong thing is enormous, and the user is the one bearing that cost.                               |
+| "I'll figure it out as I build"                           | Switching costs after code exists are 10x what they are now. Discovery during implementation is rework.                                                                       |
+| "They said 'whatever you think,' so I should just decide" | "Whatever you think" is delegation, not decision. Re-ask with two concrete options as a choice.                                                                               |
+| "I should give them several options to pick from"         | Options work when the user knows what they want and is choosing between trade-offs. They don't know what they want yet. Listing options widens the search; asking narrows it. |
+| "If I attach my guess, I'm leading them"                  | Leading is the point. Reacting is faster than generating from scratch. The risk is sycophancy, not leading; mitigate by being visibly willing to be wrong.                    |
+| "We've talked enough, I get it"                           | Test it: can you predict their reaction to the next three questions? If not, you don't get it yet.                                                                            |
+| "The user said yes, we're done"                           | If the yes followed a vague restate or an open-ended "sounds good," the yes is hollow. Restate concretely and re-confirm.                                                     |
 
 ## Red Flags
 

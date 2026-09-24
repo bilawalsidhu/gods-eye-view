@@ -1,7 +1,7 @@
 name: Feature request
 description: Propose a new layer, data source, tool, or UI capability.
-title: "feat: "
-labels: ["enhancement"]
+title: 'feat: '
+labels: ['enhancement']
 body:
   - type: markdown
     attributes:

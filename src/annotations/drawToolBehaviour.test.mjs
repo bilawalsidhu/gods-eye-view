@@ -68,7 +68,8 @@ class FakeElement {
     if (selector === '.pp-mode-btn[data-shape]')
       return this.children.filter((child) => child.dataset.shape);
     const shape = /\.pp-mode-btn\[data-shape="([a-z]+)"\]/.exec(selector)?.[1];
-    if (shape) return this.children.filter((child) => child.dataset.shape === shape);
+    if (shape)
+      return this.children.filter((child) => child.dataset.shape === shape);
     return [];
   }
   querySelector(selector) {
@@ -79,9 +80,17 @@ class FakeElement {
   }
   closest(selector) {
     // Only what the tool asks: "am I inside an activatable control?"
-    const activatable = ['button', 'a', 'select', '[role="button"]', '[role="radio"]'];
+    const activatable = [
+      'button',
+      'a',
+      'select',
+      '[role="button"]',
+      '[role="radio"]',
+    ];
     if (!activatable.some((part) => selector.includes(part))) return null;
-    return this.tagName === 'BUTTON' || this.tagName === 'A' || this.tagName === 'SELECT'
+    return this.tagName === 'BUTTON' ||
+      this.tagName === 'A' ||
+      this.tagName === 'SELECT'
       ? this
       : null;
   }
@@ -264,7 +273,11 @@ test('Draw refuses to start when something else holds the pointer', async () => 
     assert.equal(h.tool.active, false, 'it must not half-start');
     assert.equal(pointerOwner(), 'directions', 'and must not steal the claim');
     assert.match(h.element('draw-hint').textContent, /directions/);
-    assert.equal(h.tool.diagnostics().sceneHandler, false, 'no handler was bound');
+    assert.equal(
+      h.tool.diagnostics().sceneHandler,
+      false,
+      'no handler was bound',
+    );
 
     releasePointer(other);
     h.element('draw-toggle').emit('click');
@@ -306,7 +319,10 @@ test('both stock viewer click actions are borrowed for the session and given bac
     const stockClick = () => 'viewer picks and selects';
     const stockDouble = () => 'viewer tracks';
     h.viewer.screenSpaceEventHandler.setInputAction(stockClick, LEFT_CLICK);
-    h.viewer.screenSpaceEventHandler.setInputAction(stockDouble, LEFT_DOUBLE_CLICK);
+    h.viewer.screenSpaceEventHandler.setInputAction(
+      stockDouble,
+      LEFT_DOUBLE_CLICK,
+    );
 
     h.element('draw-toggle').emit('click');
     assert.equal(
@@ -344,20 +360,34 @@ test('Enter finishes from the canvas and the label field, never from a focused b
     h.tool.addVertex(-97.74, 30.27);
 
     // Enter while the Clear button has keyboard focus means "press Clear".
-    h.documentDouble.emit('keydown', { key: 'Enter', target: h.element('draw-clear') });
+    h.documentDouble.emit('keydown', {
+      key: 'Enter',
+      target: h.element('draw-clear'),
+    });
     await Promise.resolve();
     assert.equal(
       h.annotations.calls.annotate.length,
       0,
       'a focused button keeps its own Enter',
     );
-    assert.equal(h.tool.session.vertices.length, 3, 'and the shape is untouched');
+    assert.equal(
+      h.tool.session.vertices.length,
+      3,
+      'and the shape is untouched',
+    );
 
     // Enter from the page body (the canvas has focus in practice) finishes it.
-    h.documentDouble.emit('keydown', { key: 'Enter', target: h.documentDouble.body });
+    h.documentDouble.emit('keydown', {
+      key: 'Enter',
+      target: h.documentDouble.body,
+    });
     await Promise.resolve();
     await Promise.resolve();
-    assert.equal(h.annotations.calls.annotate.length, 1, 'Enter on the map finishes');
+    assert.equal(
+      h.annotations.calls.annotate.length,
+      1,
+      'Enter on the map finishes',
+    );
     assert.equal(h.annotations.calls.annotate[0].specs[0].type, 'area');
   } finally {
     h.restore();
@@ -386,7 +416,10 @@ test('the live preview hangs at the height the click landed on', async () => {
 
     // …and the finished shape is still flattened, deliberately: the renderer
     // drapes, so a height carried further would be discarded out of sight.
-    h.documentDouble.emit('keydown', { key: 'Enter', target: h.documentDouble.body });
+    h.documentDouble.emit('keydown', {
+      key: 'Enter',
+      target: h.documentDouble.body,
+    });
     await Promise.resolve();
     await Promise.resolve();
     const spec = h.annotations.calls.annotate[0].specs[0];
@@ -441,7 +474,11 @@ test('destroy releases the pointer, the handler, the listeners and the stock act
       stockClick,
       'the viewer got its selecting click back',
     );
-    assert.equal(h.viewer._attached.length, 0, 'the preview data source is detached');
+    assert.equal(
+      h.viewer._attached.length,
+      0,
+      'the preview data source is detached',
+    );
 
     // Idempotent: a second destroy is harmless.
     await h.tool.destroy();
@@ -460,7 +497,11 @@ test('Clear wipes the board and the shape in progress', async () => {
 
     h.element('draw-clear').emit('click');
     assert.equal(h.annotations.calls.clear, 1, 'placed marks are removed');
-    assert.equal(h.tool.session.vertices.length, 0, 'and so is the shape in progress');
+    assert.equal(
+      h.tool.session.vertices.length,
+      0,
+      'and so is the shape in progress',
+    );
   } finally {
     h.restore();
   }

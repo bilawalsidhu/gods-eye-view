@@ -119,7 +119,7 @@ A single-model reviewer shares blind spots with the original author — a colder
 
 After the single-model review in Step 3 above, but before RECONCILE, pause and ask:
 
-> *"Single-model review complete. Want a cross-model second opinion? Options: Gemini CLI, Codex CLI, manual external review (you paste it elsewhere), or skip."*
+> _"Single-model review complete. Want a cross-model second opinion? Options: Gemini CLI, Codex CLI, manual external review (you paste it elsewhere), or skip."_
 
 This question is mandatory in every interactive doubt cycle — even on artifacts that feel low-stakes. The user — not the agent — decides whether the cost is worth it. The agent's job is to surface the choice.
 
@@ -156,11 +156,11 @@ Surface the failure explicitly. Offer: run it manually, try a different tool, or
 
 **Step 4: If the user skips**
 
-Acknowledge the skip in the output (*"Proceeding with single-model findings only"*) and continue to RECONCILE. Skipping is fine; silent skipping is not.
+Acknowledge the skip in the output (_"Proceeding with single-model findings only"_) and continue to RECONCILE. Skipping is fine; silent skipping is not.
 
 **Non-interactive contexts** (CI, `/loop`, autonomous-loop, scheduled runs):
 
-- Cross-model is **skipped**, and the skip must be **announced** in the output: *"Cross-model skipped: non-interactive context."*
+- Cross-model is **skipped**, and the skip must be **announced** in the output: _"Cross-model skipped: non-interactive context."_
 - **Never invoke an external CLI without explicit user authorization** — this is a load-bearing safety property.
 
 Cross-model adds cost, latency, and tool fragility. The agent surfaces the choice every cycle; the user decides whether this artifact warrants it.
@@ -192,17 +192,17 @@ If 3 cycles is "obviously insufficient" because the artifact is large: the artif
 
 ## Common Rationalizations
 
-| Rationalization | Reality |
-|---|---|
-| "I'm confident, skip the doubt step" | Confidence correlates poorly with correctness on novel problems. Moments of certainty are exactly when blind spots hide. |
-| "Spawning a reviewer is expensive" | Debugging a wrong commit in production is more expensive. The check is bounded; the bug isn't. |
-| "The reviewer will just nitpick" | Only if unscoped. Constrain the prompt to "issues that would make this fail under the contract." |
-| "I'll do doubt at the end with `/review`" | `/review` is a final gate. Doubt-driven catches wrong directions early when course-correction is cheap. By PR time it's too late. |
-| "If I doubt every step I'll never ship" | The skill applies to non-trivial decisions, not every keystroke. Re-read "When NOT to Use." |
-| "Two opinions are always better than one" | Not when the second has less context and produces noise. Reconcile, don't defer. |
-| "The reviewer disagreed so I was wrong" | The reviewer lacks your context — disagreement is information, not verdict. Re-read the artifact, classify, then decide. |
-| "Cross-model is always better" | Cross-model catches blind spots a single model shares with itself, but it adds cost and tool fragility. Offer it every interactive doubt cycle — the user decides whether the artifact warrants it. The agent's job is to surface the choice, not to gate it. |
-| "User said yes once, so I can keep invoking the CLI" | Each invocation is its own authorization. The artifact, the prompt, and the flags change between calls — re-confirm the exact command with the user before every run. |
+| Rationalization                                      | Reality                                                                                                                                                                                                                                                       |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "I'm confident, skip the doubt step"                 | Confidence correlates poorly with correctness on novel problems. Moments of certainty are exactly when blind spots hide.                                                                                                                                      |
+| "Spawning a reviewer is expensive"                   | Debugging a wrong commit in production is more expensive. The check is bounded; the bug isn't.                                                                                                                                                                |
+| "The reviewer will just nitpick"                     | Only if unscoped. Constrain the prompt to "issues that would make this fail under the contract."                                                                                                                                                              |
+| "I'll do doubt at the end with `/review`"            | `/review` is a final gate. Doubt-driven catches wrong directions early when course-correction is cheap. By PR time it's too late.                                                                                                                             |
+| "If I doubt every step I'll never ship"              | The skill applies to non-trivial decisions, not every keystroke. Re-read "When NOT to Use."                                                                                                                                                                   |
+| "Two opinions are always better than one"            | Not when the second has less context and produces noise. Reconcile, don't defer.                                                                                                                                                                              |
+| "The reviewer disagreed so I was wrong"              | The reviewer lacks your context — disagreement is information, not verdict. Re-read the artifact, classify, then decide.                                                                                                                                      |
+| "Cross-model is always better"                       | Cross-model catches blind spots a single model shares with itself, but it adds cost and tool fragility. Offer it every interactive doubt cycle — the user decides whether the artifact warrants it. The agent's job is to surface the choice, not to gate it. |
+| "User said yes once, so I can keep invoking the CLI" | Each invocation is its own authorization. The artifact, the prompt, and the flags change between calls — re-confirm the exact command with the user before every run.                                                                                         |
 
 ## Red Flags
 
@@ -223,8 +223,8 @@ If 3 cycles is "obviously insufficient" because the artifact is large: the artif
 ## Interaction with Other Skills
 
 - **`code-review-and-quality` / `/review`**: complementary. `/review` is post-hoc PR verdict; doubt-driven is in-flight per-decision. Use both.
-- **`source-driven-development`**: SDD verifies *facts about frameworks* against official docs. Doubt-driven verifies *your reasoning about the artifact*. SDD checks the API exists; doubt-driven checks you used it correctly under the contract.
-- **`test-driven-development`**: TDD's RED step is doubt made concrete — a failing test is a disproof attempt. When TDD applies, that failing test *is* the doubt step for behavioral claims.
+- **`source-driven-development`**: SDD verifies _facts about frameworks_ against official docs. Doubt-driven verifies _your reasoning about the artifact_. SDD checks the API exists; doubt-driven checks you used it correctly under the contract.
+- **`test-driven-development`**: TDD's RED step is doubt made concrete — a failing test is a disproof attempt. When TDD applies, that failing test _is_ the doubt step for behavioral claims.
 - **`debugging-and-error-recovery`**: when the reviewer surfaces a real failure mode, drop into the debugging skill to localize and fix.
 - **Repo orchestration rules** (`../../references/orchestration-patterns.md`): this skill orchestrates from the main session. A persona calling another persona is anti-pattern B — see Loading Constraints above.
 

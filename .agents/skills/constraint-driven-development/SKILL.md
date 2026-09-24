@@ -43,14 +43,14 @@ The interview needs a live user. **Don't run it in non-interactive contexts** (C
 
 Never ask what you can read. Before the first question, gather:
 
-| What | Where to look |
-|------|---------------|
+| What               | Where to look                                            |
+| ------------------ | -------------------------------------------------------- |
 | Language and stack | `package.json`, `pyproject.toml`, `go.mod`, `Cargo.toml` |
-| Test runner | dev dependencies, `test` script, existing test files |
-| Existing linters | `eslint.config.*`, `biome.json`, `.ruff.toml` |
-| Coverage today | `coverage/` output, or run the suite once |
-| CI | `.github/workflows/`, `.gitlab-ci.yml` |
-| Agent harness | `.claude/`, `.codex/`, `AGENTS.md` |
+| Test runner        | dev dependencies, `test` script, existing test files     |
+| Existing linters   | `eslint.config.*`, `biome.json`, `.ruff.toml`            |
+| Coverage today     | `coverage/` output, or run the suite once                |
+| CI                 | `.github/workflows/`, `.gitlab-ci.yml`                   |
+| Agent harness      | `.claude/`, `.codex/`, `AGENTS.md`                       |
 
 Report what you found in two lines, then ask only what's left.
 
@@ -109,32 +109,32 @@ Last reviewed: 2026-08-08 by @addy
 
 ## Enforced with numbers
 
-| Dimension | Rule | Checked by | Runs at |
-|-----------|------|-----------|---------|
-| Types | Zero type errors | `tsc --noEmit` | every edit |
-| Lint | Zero errors from our config | `biome check` | every edit |
-| Secrets | No secrets in source | `gitleaks detect --redact` | every edit |
-| Coverage | Changed lines ≥ 80% covered | `vitest run --coverage` + git diff | task end, CI |
-| Security: code | No high findings | `semgrep scan --config p/default` | CI |
-| Security: deps | Nothing at high or above | `osv-scanner scan source -r .` | CI |
-| Accessibility | Zero critical or serious | `axe $PREVIEW_URL --tags wcag2a,wcag2aa,wcag21aa` | preview deploy |
-| Performance | LCP ≤ 2500ms, CLS ≤ 0.1 | `lighthouse $PREVIEW_URL --output=json` | preview deploy |
+| Dimension      | Rule                        | Checked by                                        | Runs at        |
+| -------------- | --------------------------- | ------------------------------------------------- | -------------- |
+| Types          | Zero type errors            | `tsc --noEmit`                                    | every edit     |
+| Lint           | Zero errors from our config | `biome check`                                     | every edit     |
+| Secrets        | No secrets in source        | `gitleaks detect --redact`                        | every edit     |
+| Coverage       | Changed lines ≥ 80% covered | `vitest run --coverage` + git diff                | task end, CI   |
+| Security: code | No high findings            | `semgrep scan --config p/default`                 | CI             |
+| Security: deps | Nothing at high or above    | `osv-scanner scan source -r .`                    | CI             |
+| Accessibility  | Zero critical or serious    | `axe $PREVIEW_URL --tags wcag2a,wcag2aa,wcag21aa` | preview deploy |
+| Performance    | LCP ≤ 2500ms, CLS ≤ 0.1     | `lighthouse $PREVIEW_URL --output=json`           | preview deploy |
 
 Every row names the command that produces the verdict. A dimension with a
 number and no command in this column is an aspiration, not a constraint.
 
 ## Measured, not yet enforced
 
-| Metric | Today | Direction |
-|--------|-------|-----------|
-| Project coverage | 62.4% | must not fall |
+| Metric             | Today  | Direction     |
+| ------------------ | ------ | ------------- |
+| Project coverage   | 62.4%  | must not fall |
 | Bundle size (main) | 184 kB | must not grow |
 
 ## Exceptions
 
-| ID | Rule | Path | Reason | Owner | Expires |
-|----|------|------|--------|-------|---------|
-| W1 | `no-explicit-any` | `src/legacy/**` | Rewrite tracked in ENG-441 | @addy | 2026-11-01 |
+| ID  | Rule              | Path            | Reason                     | Owner | Expires    |
+| --- | ----------------- | --------------- | -------------------------- | ----- | ---------- |
+| W1  | `no-explicit-any` | `src/legacy/**` | Rewrite tracked in ENG-441 | @addy | 2026-11-01 |
 ```
 
 Then add one line to `AGENTS.md` and `CLAUDE.md`: `Read CONSTRAINTS.md before writing code. Do not weaken it to make a change pass.`
@@ -143,21 +143,21 @@ Then add one line to `AGENTS.md` and `CLAUDE.md`: `Read CONSTRAINTS.md before wr
 
 Picking a dimension means installing something. Don't leave the user with a number and no mechanism, and don't invent your own checker when a de facto one exists — these tools are listed because their rule formats and thresholds are what everything else in the ecosystem targets, so the team's existing config keeps working.
 
-| Dimension | Tool | Install | Run | Gate on |
-|-----------|------|---------|-----|---------|
-| Types (TS) | tsc | already there | `tsc --noEmit` | any error |
-| Types (Python) | mypy | `pip install mypy` | `mypy .` | any error |
-| Lint | your existing config | already there | `eslint .` / `biome check` / `ruff check` | any error |
-| Coverage (JS) | your test runner | already there | `vitest run --coverage` (or `jest --coverage`) | coverage of changed lines |
-| Coverage (Python) | pytest-cov | `pip install pytest-cov` | `pytest --cov --cov-report=lcov` | same |
-| Security: code | Semgrep | `pipx install semgrep` | `semgrep scan --config p/default --config p/owasp-top-ten` | any high finding |
-| Security: secrets | gitleaks | `brew install gitleaks` | `gitleaks detect --redact --no-banner` | any finding |
-| Security: dependencies | osv-scanner | `brew install osv-scanner` | `osv-scanner scan source -r .` | high or above |
-| Performance: page | Lighthouse | `npm i -D lighthouse` | `lighthouse $URL --output=json --quiet` | LCP, CLS, performance score |
-| Performance: bundle | size-limit | `npm i -D size-limit` | `size-limit --json` | per-entry byte budget |
-| Accessibility | axe-core | `npm i -D @axe-core/cli` | `axe $URL --tags wcag2a,wcag2aa,wcag21aa` | zero critical or serious |
-| Architecture | dependency-cruiser | `npm i -D dependency-cruiser` | `depcruise --validate src` | any violation |
-| Assertion quality | Stryker | `npm i -D @stryker-mutator/core` | `stryker run --mutate <changed files>` | mutation score |
+| Dimension              | Tool                 | Install                          | Run                                                        | Gate on                     |
+| ---------------------- | -------------------- | -------------------------------- | ---------------------------------------------------------- | --------------------------- |
+| Types (TS)             | tsc                  | already there                    | `tsc --noEmit`                                             | any error                   |
+| Types (Python)         | mypy                 | `pip install mypy`               | `mypy .`                                                   | any error                   |
+| Lint                   | your existing config | already there                    | `eslint .` / `biome check` / `ruff check`                  | any error                   |
+| Coverage (JS)          | your test runner     | already there                    | `vitest run --coverage` (or `jest --coverage`)             | coverage of changed lines   |
+| Coverage (Python)      | pytest-cov           | `pip install pytest-cov`         | `pytest --cov --cov-report=lcov`                           | same                        |
+| Security: code         | Semgrep              | `pipx install semgrep`           | `semgrep scan --config p/default --config p/owasp-top-ten` | any high finding            |
+| Security: secrets      | gitleaks             | `brew install gitleaks`          | `gitleaks detect --redact --no-banner`                     | any finding                 |
+| Security: dependencies | osv-scanner          | `brew install osv-scanner`       | `osv-scanner scan source -r .`                             | high or above               |
+| Performance: page      | Lighthouse           | `npm i -D lighthouse`            | `lighthouse $URL --output=json --quiet`                    | LCP, CLS, performance score |
+| Performance: bundle    | size-limit           | `npm i -D size-limit`            | `size-limit --json`                                        | per-entry byte budget       |
+| Accessibility          | axe-core             | `npm i -D @axe-core/cli`         | `axe $URL --tags wcag2a,wcag2aa,wcag21aa`                  | zero critical or serious    |
+| Architecture           | dependency-cruiser   | `npm i -D dependency-cruiser`    | `depcruise --validate src`                                 | any violation               |
+| Assertion quality      | Stryker              | `npm i -D @stryker-mutator/core` | `stryker run --mutate <changed files>`                     | mutation score              |
 
 Five things that will bite you if you skip them:
 
@@ -187,12 +187,12 @@ The commands now live in two places — the `Checked by` column in `CONSTRAINTS.
 
 The single biggest mistake is running everything everywhere. A check that stalls the agent gets switched off, and a gate people switched off is worse than no gate, because the bar still looks like it exists.
 
-| Phase | Command | What runs | Budget |
-|-------|---------|-----------|--------|
-| BUILD | `/build` | Types, lint, secrets, the floor | under 5s, changed file only |
-| VERIFY | `/test` | Related tests, coverage on changed lines | under 90s |
-| REVIEW | `/review` | Everything, plus the guards below | minutes |
-| SHIP | `/ship` | Direction checks, no regressions | CI |
+| Phase  | Command   | What runs                                | Budget                      |
+| ------ | --------- | ---------------------------------------- | --------------------------- |
+| BUILD  | `/build`  | Types, lint, secrets, the floor          | under 5s, changed file only |
+| VERIFY | `/test`   | Related tests, coverage on changed lines | under 90s                   |
+| REVIEW | `/review` | Everything, plus the guards below        | minutes                     |
+| SHIP   | `/ship`   | Direction checks, no regressions         | CI                          |
 
 Two rules that keep this tolerable:
 
@@ -235,17 +235,17 @@ This also answers a fair objection to training. Models are rewarded for passing 
 
 When the user has no opinion, use these. They're chosen to be met by most codebases on day one.
 
-| Constraint | Default | Why this number |
-|------------|---------|-----------------|
-| Coverage of changed lines | ≥ 80% | High enough to force a test, low enough to allow a config line |
-| Project coverage | today's value, must not fall | No argument needed to adopt |
-| Mutation score (if used) | ≥ 60% to start | Typical for a suite never mutated before; 80% is mature |
-| Dependency vulnerabilities | nothing at high or above | Below that is mostly noise |
-| LCP | ≤ 2500 ms | Core Web Vitals "good" threshold |
-| CLS | ≤ 0.1 | Same |
-| Accessibility | zero critical or serious axe violations | Moderate and minor are often debatable |
-| Exception lifetime | 90 days | Long enough to plan the fix, short enough to remember |
-| Ratchet tolerance | 0.5% | Absorbs drift when an unrelated file moves the number |
+| Constraint                 | Default                                 | Why this number                                                |
+| -------------------------- | --------------------------------------- | -------------------------------------------------------------- |
+| Coverage of changed lines  | ≥ 80%                                   | High enough to force a test, low enough to allow a config line |
+| Project coverage           | today's value, must not fall            | No argument needed to adopt                                    |
+| Mutation score (if used)   | ≥ 60% to start                          | Typical for a suite never mutated before; 80% is mature        |
+| Dependency vulnerabilities | nothing at high or above                | Below that is mostly noise                                     |
+| LCP                        | ≤ 2500 ms                               | Core Web Vitals "good" threshold                               |
+| CLS                        | ≤ 0.1                                   | Same                                                           |
+| Accessibility              | zero critical or serious axe violations | Moderate and minor are often debatable                         |
+| Exception lifetime         | 90 days                                 | Long enough to plan the fix, short enough to remember          |
+| Ratchet tolerance          | 0.5%                                    | Absorbs drift when an unrelated file moves the number          |
 
 State the number and the reason together. A threshold without a rationale gets deleted by the next person who hits it.
 
@@ -263,14 +263,14 @@ Most projects should stop at 2. Move to 3 when you're maintaining more than abou
 
 ## Common Rationalizations
 
-| Excuse | Reality |
-|--------|---------|
-| "We'll add constraints once the code settles" | Code settles around whatever was allowed while it was moving |
-| "The tests are the constraints" | Tests you wrote prove you agree with yourself; they say nothing about coverage of new code, dependency risk, or bundle growth |
-| "We can't hit 80% coverage" | Then don't set 80%. Set today's number and hold it |
-| "This will slow the agent down" | Only if you put slow checks in the fast loop. That's a placement error, not an argument against constraints |
-| "I'll remember what our standards are" | The agent won't, and it's writing most of the code |
-| "Constraints will block us shipping" | An exception with an owner and a date unblocks you. Deleting the constraint unblocks everyone forever |
+| Excuse                                        | Reality                                                                                                                       |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| "We'll add constraints once the code settles" | Code settles around whatever was allowed while it was moving                                                                  |
+| "The tests are the constraints"               | Tests you wrote prove you agree with yourself; they say nothing about coverage of new code, dependency risk, or bundle growth |
+| "We can't hit 80% coverage"                   | Then don't set 80%. Set today's number and hold it                                                                            |
+| "This will slow the agent down"               | Only if you put slow checks in the fast loop. That's a placement error, not an argument against constraints                   |
+| "I'll remember what our standards are"        | The agent won't, and it's writing most of the code                                                                            |
+| "Constraints will block us shipping"          | An exception with an owner and a date unblocks you. Deleting the constraint unblocks everyone forever                         |
 
 ## Red Flags
 

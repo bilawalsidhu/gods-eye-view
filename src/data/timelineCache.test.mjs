@@ -10,17 +10,38 @@ test('TimelineCache stores snapshots and retrieves closest historical record', (
   const t1 = 1030000;
   const t2 = 1060000;
 
-  cache.recordSnapshot([
-    { id: 'FLIGHT-A', lat: 10, lon: 20, alt: 3000, heading: 90, speed: 250 },
-  ], t0);
+  cache.recordSnapshot(
+    [{ id: 'FLIGHT-A', lat: 10, lon: 20, alt: 3000, heading: 90, speed: 250 }],
+    t0,
+  );
 
-  cache.recordSnapshot([
-    { id: 'FLIGHT-A', lat: 10.1, lon: 20.2, alt: 3100, heading: 90, speed: 250 },
-  ], t1);
+  cache.recordSnapshot(
+    [
+      {
+        id: 'FLIGHT-A',
+        lat: 10.1,
+        lon: 20.2,
+        alt: 3100,
+        heading: 90,
+        speed: 250,
+      },
+    ],
+    t1,
+  );
 
-  cache.recordSnapshot([
-    { id: 'FLIGHT-A', lat: 10.2, lon: 20.4, alt: 3200, heading: 90, speed: 250 },
-  ], t2);
+  cache.recordSnapshot(
+    [
+      {
+        id: 'FLIGHT-A',
+        lat: 10.2,
+        lon: 20.4,
+        alt: 3200,
+        heading: 90,
+        speed: 250,
+      },
+    ],
+    t2,
+  );
 
   // Exact query
   const res1 = cache.getEntitiesAtTime(t1);

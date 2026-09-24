@@ -32,8 +32,6 @@ import { GeofenceRenderer } from '../layers/geofenceRenderer.js';
 import { GeofenceControls } from './geofenceControls.js';
 import { TimelineCache } from '../data/timelineCache.js';
 import { TimelineScrubber } from './timelineScrubber.js';
-import { GestureControls } from './gestureControls.js';
-import { TouchGestureController } from '../gestures/touchGestures.js';
 import { WeatherParticles } from '../effects/weatherParticles.js';
 import { ExportControls } from './exportControls.js';
 
@@ -637,29 +635,6 @@ export class StyleManager extends ShellFacade {
         onScrub: (entities, timestamp, isLive) => {
           this._historicalEntities = isLive ? null : entities;
         },
-      });
-      this.gestureControls = new GestureControls({
-        container: null,
-        audioEngine: this.audioEngine,
-        onAction: (action, payload) =>
-          this._handleGestureAction(action, payload),
-        onError: (err) => {
-          this._showToast(
-            `Hand tracking notice: ${err?.message || 'Webcam unavailable'}`,
-          );
-        },
-        onStatusChange: (enabled) => {
-          const gestureBtn = document.getElementById('tactical-gesture-btn');
-          gestureBtn?.classList.toggle('active', enabled);
-          const fab = document.getElementById('gesture-quick-toggle-fab');
-          fab?.classList.toggle('active', enabled);
-        },
-      });
-      this.touchGestures = new TouchGestureController({
-        targetEl:
-          this.viewer?.scene?.canvas ||
-          (typeof document !== 'undefined' ? document.body : null),
-        viewer: this.viewer,
       });
       this.exportControls = new ExportControls({
         container: null,
@@ -1795,11 +1770,9 @@ export class StyleManager extends ShellFacade {
     const toggle = document.getElementById('tactical-suite-toggle');
     const row = document.getElementById('tactical-suite-row');
     const sfxBtn = document.getElementById('tactical-sfx-btn');
-    const gestureBtn = document.getElementById('tactical-gesture-btn');
     const fenceBtn = document.getElementById('tactical-geofence-btn');
     const timelineBtn = document.getElementById('tactical-timeline-btn');
     const exportBtn = document.getElementById('tactical-export-btn');
-    const gestureFab = document.getElementById('gesture-quick-toggle-fab');
 
     toggle?.addEventListener('click', () => {
       const isVisible = row?.style.display === 'flex';
@@ -1816,29 +1789,6 @@ export class StyleManager extends ShellFacade {
       this._showToast(
         isMuted ? 'Tactical Audio Muted' : 'Tactical Audio Enabled',
       );
-    });
-
-    gestureBtn?.addEventListener('click', () => {
-      this.gestureControls?.toggle();
-    });
-
-    gestureFab?.addEventListener('click', () => {
-      this.gestureControls?.toggle();
-    });
-
-    window.addEventListener('keydown', (e) => {
-      if (
-        (e.key === 'g' || e.key === 'G') &&
-        !e.ctrlKey &&
-        !e.altKey &&
-        !e.metaKey &&
-        !['INPUT', 'TEXTAREA', 'SELECT'].includes(
-          document.activeElement?.tagName,
-        )
-      ) {
-        e.preventDefault();
-        this.gestureControls?.toggle();
-      }
     });
 
     fenceBtn?.addEventListener('click', () => {
@@ -1871,166 +1821,6 @@ export class StyleManager extends ShellFacade {
       this.exportControls?.exportDossier();
       this._showToast('Exported Tactical Mission Dossier');
     });
-  }
-
-  _handleGestureAction(action, payload) {
-    switch (action) {
-      case 'pan':
-        if (this.viewer?.camera && payload?.pointTip) {
-          const dx = payload.pointTip.x - 0.5;
-          if (Math.abs(dx) > 0.08) {
-            this.viewer.camera.rotate(Cesium.Cartesian3.UNIT_Z, -dx * 0.02);
-          }
-        }
-        break;
-      case 'pinch_zoom': {
-        const delta = (payload?.pinchDist || 0.05) - 0.05;
-        if (this.viewer?.camera && Math.abs(delta) > 0.008) {
-          const amount = delta * 50000;
-          if (amount > 0) {
-            this.viewer.camera.zoomOut(amount);
-          } else {
-            this.viewer.camera.zoomIn(-amount);
-          }
-        }
-        break;
-      }
-      case 'toggle_lock':
-        if (this.viewer?.trackedEntity) {
-          this.viewer.trackedEntity = undefined;
-          this.audioEngine?.playRelease();
-          this._showToast('Tracking lock disengaged');
-        } else if (this.viewer?.selectedEntity) {
-          this.viewer.trackedEntity = this.viewer.selectedEntity;
-          this.audioEngine?.playLock();
-          this._showToast(
-            `Tracking locked: ${this.viewer.selectedEntity.name || this.viewer.selectedEntity.id || 'Target'}`,
-          );
-        } else if (this._currentTarget) {
-          this._toggleOrbit();
-          this._showToast('Target orbit lock engaged');
-        } else {
-          const flightsLayer = this.services?.flightsLayer;
-          const entity = flightsLayer?.dataSource?.entities?.values?.[0];
-          if (entity && this.viewer) {
-            this.viewer.trackedEntity = entity;
-            this.audioEngine?.playLock();
-            this._showToast(
-              `Tracking locked: ${entity.name || entity.id || 'Flight Contact'}`,
-            );
-          } else {
-            this._showToast('Select an entity on globe to lock tracking');
-          }
-        }
-        if (
-          this.viewer?.trackedEntity &&
-          typeof window !== 'undefined' &&
-          window.__gevAiCommandCenter
-        ) {
-          window.__gevAiCommandCenter.handleGestureTargetLock?.(
-            this.viewer.trackedEntity,
-          );
-        }
-        break;
-      case 'ai_sitrep':
-        if (typeof window !== 'undefined' && window.__gevAiCommandCenter) {
-          window.__gevAiCommandCenter.requestTacticalSitrep?.();
-          this._showToast('AI Tactical SITREP requested');
-        }
-        break;
-      case 'reset_globe':
-        if (typeof this.resetToGlobeView === 'function') {
-          this.resetToGlobeView();
-        } else if (this._navigation?.resetView) {
-          this._navigation.resetView();
-        }
-        this._showToast('Globe reset to home view');
-        break;
-      case 'toggle_cockpit':
-        if (this.cockpitView?.active) {
-          const res = this.controlCockpit('exit');
-          this._showToast(
-            res.ok ? 'Exited Cockpit View' : 'Cockpit already inactive',
-          );
-        } else {
-          if (!this.cockpitView.isEntryAllowed?.()) {
-            if (!this.getContextModeState()?.active) {
-              this.setContextMode('contacts');
-            }
-            const flightsLayer = this.services?.flightsLayer;
-            const entity =
-              this.viewer?.trackedEntity ||
-              flightsLayer?.dataSource?.entities?.values?.[0];
-            if (entity && this.viewer) {
-              this.viewer.trackedEntity = entity;
-            }
-          }
-          const res = this.controlCockpit('enter');
-          if (res.ok) {
-            this._showToast('Engaged Cockpit View');
-          } else {
-            this._showToast(res.error || 'Select a flight to enter Cockpit');
-          }
-        }
-        break;
-      case 'export_dossier':
-        this.exportControls?.exportDossier();
-        this._showToast('Exported Tactical Mission Dossier');
-        break;
-      case 'cycle_style': {
-        const styles = [
-          'normal',
-          'retro',
-          'surveillance',
-          'thermal',
-          'anime',
-          'noir',
-          'snow',
-        ];
-        const currIdx = styles.indexOf(this.activeStyle);
-        const next = styles[(currIdx + 1) % styles.length];
-        this.setStyle(next);
-        this._showToast(`Visual Preset: ${next.toUpperCase()}`);
-        break;
-      }
-      case 'toggle_voice': {
-        if (
-          typeof window !== 'undefined' &&
-          window.__gevAiCommandCenter?.toggleVoice
-        ) {
-          window.__gevAiCommandCenter.toggleVoice();
-        } else {
-          const voiceBtn =
-            document.getElementById('voice-control-btn') ||
-            document.querySelector('.gev-voice-btn');
-          voiceBtn?.click();
-        }
-        break;
-      }
-      case 'confirm':
-        if (
-          typeof window !== 'undefined' &&
-          window.__gevAiCommandCenter?.confirmPendingAction
-        ) {
-          window.__gevAiCommandCenter.confirmPendingAction();
-        }
-        this._showToast('Gesture confirmed');
-        break;
-      case 'dismiss':
-        this.radialMenu?.close();
-        if (
-          typeof window !== 'undefined' &&
-          window.__gevAiCommandCenter?.dismissCurrentAction
-        ) {
-          window.__gevAiCommandCenter.dismissCurrentAction();
-        }
-        this._showToast('Dismissed');
-        break;
-      case 'next_contact':
-      case 'prev_contact':
-        this.services?.flightsLayer?.focusNext?.();
-        break;
-    }
   }
 
   /**
@@ -2072,8 +1862,6 @@ export class StyleManager extends ShellFacade {
     this.audioControls?.destroy();
     this.geofenceControls?.destroy();
     this.timelineScrubber?.destroy();
-    this.gestureControls?.destroy();
-    this.touchGestures?.detach();
     this.exportControls?.destroy();
     this.weatherParticles?.destroy();
 

@@ -17,6 +17,7 @@ Apply frontend-design methodology to elevate the AI Command Center panel from "f
 ## Token System (refined from foundation.css)
 
 ### Color (6 named hex values)
+
 ```
 --void:       #020810       // deepest space — panel background base
 --abyss:      #06141e       // elevated surfaces — cards, drawers
@@ -27,17 +28,20 @@ Apply frontend-design methodology to elevate the AI Command Center panel from "f
 ```
 
 ### Typography
+
 - **Display/Headlines**: 'JetBrains Mono' — monospace for tactical precision
 - **Body/UI**: 'Inter' — clean, legible, -apple-system fallback
 - **Scale**: clamp(12px, 0.75rem, 14px) base, modular scale 1.25
 
 ### Layout
+
 - **Panel width**: 520px max (current) — good for dense tactical data
 - **Alignment**: Left-aligned content, centered headlines
 - **Spacing**: 8px base unit, 4/8/16/24/32px rhythm
 - **Corner radius**: 10px panel, 8px buttons, 6px cards — hierarchy not uniform
 
 ### Principles
+
 1. **One bold element** — the cyan scanline top border is the signature; keep it, amplify it
 2. **Motion as feedback** — only on user action (expand, send, switch mode)
 3. **Hierarchy via weight/opacity** — not color overload

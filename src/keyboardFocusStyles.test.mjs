@@ -41,7 +41,8 @@ test('the global keyboard ring survives local active and outline-reset rules', (
     "[role='tab']",
     '[tabindex]',
     'a[href]',
-  ]) assert.ok(rule.includes(selector), `${selector} receives the global ring`);
+  ])
+    assert.ok(rule.includes(selector), `${selector} receives the global ring`);
 });
 
 test('Location city, POI, search toggle and search field use an inset ring', () => {
@@ -51,7 +52,11 @@ test('Location city, POI, search toggle and search field use an inset ring', () 
   assert.match(rule, /#location-search:focus-visible/);
   assert.match(rule, /outline:\s*2px solid var\(--text-primary\)/);
   assert.match(rule, /outline-offset:\s*-3px/);
-  for (const selector of ['.location-pill {', '.poi-pill {', '.search-toggle-btn {']) {
+  for (const selector of [
+    '.location-pill {',
+    '.poi-pill {',
+    '.search-toggle-btn {',
+  ]) {
     assert.doesNotMatch(ruleBody(selector), /transition:\s*all\b/);
   }
 });
@@ -80,8 +85,13 @@ test('focusable controls do not animate the global outline', () => {
 });
 
 test('opening a dock popover makes its controls keyboard-reachable immediately', () => {
-  const base = ruleBodyContaining('#command-dock .dock-popover-content {', 'visibility: hidden');
+  const base = ruleBodyContaining(
+    '#command-dock .dock-popover-content {',
+    'visibility: hidden',
+  );
   assert.match(base, /visibility\s+0s\s+linear\s+180ms/);
-  const open = ruleText('#command-dock #location-bar:not(.collapsed) .dock-popover-content,');
+  const open = ruleText(
+    '#command-dock #location-bar:not(.collapsed) .dock-popover-content,',
+  );
   assert.match(open, /transition-delay:\s*0s/);
 });

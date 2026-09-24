@@ -22,7 +22,7 @@ test('extrapolateGreatCircle advances latitude and longitude correctly', () => {
 test('predictVehicleTrajectory yields horizon-partitioned waypoints with climbing profile', () => {
   const segments = predictVehicleTrajectory({
     latDeg: 40.7128,
-    lonDeg: -74.0060,
+    lonDeg: -74.006,
     altitudeM: 10000,
     headingDeg: 90,
     speedKts: 450,
@@ -43,10 +43,18 @@ test('predictVehicleTrajectory yields horizon-partitioned waypoints with climbin
 
 test('predictSatelliteOrbit propagates TLE lines into valid groundtrack points', () => {
   // ISS (ZARYA) sample TLE
-  const tle1 = '1 25544U 98067A   24080.52857639  .00016717  00000+0  30123-3 0  9998';
-  const tle2 = '2 25544  51.6416 182.1643 0005215  44.8211  82.5298 15.49885854444585';
+  const tle1 =
+    '1 25544U 98067A   24080.52857639  .00016717  00000+0  30123-3 0  9998';
+  const tle2 =
+    '2 25544  51.6416 182.1643 0005215  44.8211  82.5298 15.49885854444585';
 
-  const orbit = predictSatelliteOrbit(tle1, tle2, new Date('2024-03-20T12:00:00Z'), 1800, 300);
+  const orbit = predictSatelliteOrbit(
+    tle1,
+    tle2,
+    new Date('2024-03-20T12:00:00Z'),
+    1800,
+    300,
+  );
 
   assert.ok(orbit.groundtrack.length > 5);
   assert.ok(orbit.footprintRadiusM > 1000000); // ISS footprint is ~2200km radius

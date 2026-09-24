@@ -23,7 +23,9 @@ import * as Cesium from 'cesium';
 import { sampleMeshFloorCells } from './meshFloorSampler.js';
 import { resolveEllipsoidalGround } from './terrainHeights.js';
 import {
-  cachedGroundFloor, cachedMeshFloor, setMeshFloorPreferred,
+  cachedGroundFloor,
+  cachedMeshFloor,
+  setMeshFloorPreferred,
   _clearMeshFloorCellsForTest,
 } from './groundFloor.js';
 
@@ -35,10 +37,11 @@ const nextSite = () => ({ lat: +(siteLat += 0.05).toFixed(3), lon: -97.66 });
 /** Seeds a REAL ('reearth') DEM prior for a cell through the real resolver. */
 async function seedDem(cell, ellipsoid) {
   const original = globalThis.fetch;
-  globalThis.fetch = async () => new Response(
-    JSON.stringify({ results: [{ ellipsoid }] }),
-    { status: 200, headers: { 'Content-Type': 'application/json' } },
-  );
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ results: [{ ellipsoid }] }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
   try {
     await resolveEllipsoidalGround([{ lat: cell.lat, lon: cell.lon }]);
   } finally {
@@ -48,11 +51,17 @@ async function seedDem(cell, ellipsoid) {
 
 /** A scene the sampler accepts: low camera, one visible tileset reporting
  *  tilesLoaded, and a `sampleHeight` under the test's control. */
-function fakeScene(sampleHeight, { cameraHeightM = 900, tilesLoaded = true, show = true } = {}) {
+function fakeScene(
+  sampleHeight,
+  { cameraHeightM = 900, tilesLoaded = true, show = true } = {},
+) {
   // instanceof-compatible without running Cesium's constructor; `tilesLoaded` is
   // a prototype getter, so it has to be shadowed with an own data property.
   const tileset = Object.create(Cesium.Cesium3DTileset.prototype);
-  Object.defineProperty(tileset, 'tilesLoaded', { value: tilesLoaded, configurable: true });
+  Object.defineProperty(tileset, 'tilesLoaded', {
+    value: tilesLoaded,
+    configurable: true,
+  });
   Object.defineProperty(tileset, 'show', { value: show, configurable: true });
   return {
     sampleHeight,
@@ -69,9 +78,21 @@ function reset() {
 test('sampler: a finite sample with NO DEM prior is stored NOWHERE', () => {
   reset();
   const cell = nextSite();
-  sampleMeshFloorCells(fakeScene(() => 138.0), [cell], { viewerLat: cell.lat, viewerLon: cell.lon });
-  assert.equal(cachedMeshFloor(cell.lat, cell.lon), null, 'nothing may latch without a prior');
-  assert.equal(cachedGroundFloor(cell.lat, cell.lon), null, 'the shared choke point stays clean');
+  sampleMeshFloorCells(
+    fakeScene(() => 138.0),
+    [cell],
+    { viewerLat: cell.lat, viewerLon: cell.lon },
+  );
+  assert.equal(
+    cachedMeshFloor(cell.lat, cell.lon),
+    null,
+    'nothing may latch without a prior',
+  );
+  assert.equal(
+    cachedGroundFloor(cell.lat, cell.lon),
+    null,
+    'the shared choke point stays clean',
+  );
 });
 
 test('sampler: a finite sample WITH a fitting DEM prior latches and becomes the shared floor', async () => {
@@ -79,9 +100,16 @@ test('sampler: a finite sample WITH a fitting DEM prior latches and becomes the 
   const cell = nextSite();
   await seedDem(cell, 120.0);
   const scene = fakeScene(() => 137.0); // +17 m of mesh over bare earth — in window
-  sampleMeshFloorCells(scene, [cell], { viewerLat: cell.lat, viewerLon: cell.lon });
+  sampleMeshFloorCells(scene, [cell], {
+    viewerLat: cell.lat,
+    viewerLon: cell.lon,
+  });
   assert.equal(cachedMeshFloor(cell.lat, cell.lon), 137.0);
-  assert.equal(cachedGroundFloor(cell.lat, cell.lon), 137.0, 'and it is what every consumer reads');
+  assert.equal(
+    cachedGroundFloor(cell.lat, cell.lon),
+    137.0,
+    'and it is what every consumer reads',
+  );
 });
 
 test('sampler: a sample REJECTED against a real prior is stored nowhere', async () => {
@@ -89,21 +117,49 @@ test('sampler: a sample REJECTED against a real prior is stored nowhere', async 
   const cell = nextSite();
   await seedDem(cell, 120.0);
   const scene = fakeScene(() => 400.0); // a tower hit — far outside the +80 m window
-  sampleMeshFloorCells(scene, [cell], { viewerLat: cell.lat, viewerLon: cell.lon });
+  sampleMeshFloorCells(scene, [cell], {
+    viewerLat: cell.lat,
+    viewerLon: cell.lon,
+  });
   assert.equal(cachedMeshFloor(cell.lat, cell.lon), null);
-  assert.equal(cachedGroundFloor(cell.lat, cell.lon), 120.0, 'the DEM prior still answers');
+  assert.equal(
+    cachedGroundFloor(cell.lat, cell.lon),
+    120.0,
+    'the DEM prior still answers',
+  );
 });
 
 test('sampler: undefined, NaN and a throwing probe latch nothing and crash nothing', async () => {
   reset();
   const cell = nextSite();
   await seedDem(cell, 120.0);
-  for (const bad of [() => undefined, () => Number.NaN, () => { throw new Error('mid-teardown'); }]) {
-    sampleMeshFloorCells(fakeScene(bad), [cell], { viewerLat: cell.lat, viewerLon: cell.lon });
-    assert.equal(cachedMeshFloor(cell.lat, cell.lon), null, 'no negative latch, no throw');
+  for (const bad of [
+    () => undefined,
+    () => Number.NaN,
+    () => {
+      throw new Error('mid-teardown');
+    },
+  ]) {
+    sampleMeshFloorCells(fakeScene(bad), [cell], {
+      viewerLat: cell.lat,
+      viewerLon: cell.lon,
+    });
+    assert.equal(
+      cachedMeshFloor(cell.lat, cell.lon),
+      null,
+      'no negative latch, no throw',
+    );
   }
-  sampleMeshFloorCells(fakeScene(() => 133.0), [cell], { viewerLat: cell.lat, viewerLon: cell.lon });
-  assert.equal(cachedMeshFloor(cell.lat, cell.lon), 133.0, 'and a later good sample still lands');
+  sampleMeshFloorCells(
+    fakeScene(() => 133.0),
+    [cell],
+    { viewerLat: cell.lat, viewerLon: cell.lon },
+  );
+  assert.equal(
+    cachedMeshFloor(cell.lat, cell.lon),
+    133.0,
+    'and a later good sample still lands',
+  );
 });
 
 test('sampler: a high camera or unloaded tiles produce no records at all', async () => {
@@ -111,10 +167,26 @@ test('sampler: a high camera or unloaded tiles produce no records at all', async
   const cell = nextSite();
   await seedDem(cell, 120.0);
   const opts = { viewerLat: cell.lat, viewerLon: cell.lon };
-  sampleMeshFloorCells(fakeScene(() => 138.0, { cameraHeightM: 90_000 }), [cell], opts);
-  assert.equal(cachedMeshFloor(cell.lat, cell.lon), null, 'coarse LOD under a high camera');
-  sampleMeshFloorCells(fakeScene(() => 138.0, { tilesLoaded: false }), [cell], opts);
-  assert.equal(cachedMeshFloor(cell.lat, cell.lon), null, 'mid-stream tiles read coarse');
+  sampleMeshFloorCells(
+    fakeScene(() => 138.0, { cameraHeightM: 90_000 }),
+    [cell],
+    opts,
+  );
+  assert.equal(
+    cachedMeshFloor(cell.lat, cell.lon),
+    null,
+    'coarse LOD under a high camera',
+  );
+  sampleMeshFloorCells(
+    fakeScene(() => 138.0, { tilesLoaded: false }),
+    [cell],
+    opts,
+  );
+  assert.equal(
+    cachedMeshFloor(cell.lat, cell.lon),
+    null,
+    'mid-stream tiles read coarse',
+  );
 });
 
 test('sampler: outside the google-3d regime nothing is sampled at all', () => {
@@ -122,8 +194,14 @@ test('sampler: outside the google-3d regime nothing is sampled at all', () => {
   const cell = nextSite();
   setMeshFloorPreferred(false);
   let calls = 0;
-  sampleMeshFloorCells(fakeScene(() => { calls += 1; return 138.0; }), [cell],
-    { viewerLat: cell.lat, viewerLon: cell.lon });
+  sampleMeshFloorCells(
+    fakeScene(() => {
+      calls += 1;
+      return 138.0;
+    }),
+    [cell],
+    { viewerLat: cell.lat, viewerLon: cell.lon },
+  );
   assert.equal(calls, 0, 'on a globe stack the DEM IS the rendered surface');
   setMeshFloorPreferred(true);
   assert.equal(cachedMeshFloor(cell.lat, cell.lon), null);

@@ -11,9 +11,11 @@ Diagnose the God's Eye View environment and report what is misconfigured.
 ## Steps
 
 1. **Node version**
+
    ```bash
    node --version
    ```
+
    Must be Node 24 (allocation budgets are calibrated to it).
 
 2. **Required env vars**
@@ -27,14 +29,17 @@ Diagnose the God's Eye View environment and report what is misconfigured.
    - `GOOGLE_MAPS_API_KEY` — places/geocoding
 
 3. **Provider status**
+
    ```bash
    curl -s http://localhost:4173/api/nvidia/status
    curl -s http://localhost:4173/api/setup/status
    ```
+
    Report which AI providers are configured.
 
 4. **Data layer probe**
    Check each layer's API:
+
    ```bash
    curl -s -o /dev/null -w "%{http_code}" http://localhost:4173/api/ais-live
    curl -s -o /dev/null -w "%{http_code}" http://localhost:4173/api/firms
@@ -49,21 +54,21 @@ Diagnose the God's Eye View environment and report what is misconfigured.
 
 Report a table:
 
-| Check | Status | Detail |
-|-------|--------|--------|
-| Node | OK/WRONG | version |
-| NVIDIA key | SET/MISSING | — |
-| OpenAI key | SET/MISSING | — |
-| AISStream key | SET/MISSING | — |
-| FIRMS key | SET/MISSING | — |
-| TomTom key | SET/MISSING | — |
-| Cesium token | SET/MISSING | — |
-| Google key | SET/MISSING | — |
-| AI providers | N configured | list |
-| AIS live | 200/503 | — |
-| FIRMS | 200/503 | — |
-| Transit | 200/503 | — |
-| Launches | 200/503 | — |
-| Dev server | RUNNING/STOPPED | — |
+| Check         | Status          | Detail  |
+| ------------- | --------------- | ------- |
+| Node          | OK/WRONG        | version |
+| NVIDIA key    | SET/MISSING     | —       |
+| OpenAI key    | SET/MISSING     | —       |
+| AISStream key | SET/MISSING     | —       |
+| FIRMS key     | SET/MISSING     | —       |
+| TomTom key    | SET/MISSING     | —       |
+| Cesium token  | SET/MISSING     | —       |
+| Google key    | SET/MISSING     | —       |
+| AI providers  | N configured    | list    |
+| AIS live      | 200/503         | —       |
+| FIRMS         | 200/503         | —       |
+| Transit       | 200/503         | —       |
+| Launches      | 200/503         | —       |
+| Dev server    | RUNNING/STOPPED | —       |
 
 Then list recommended actions: which keys to add, which services to start.

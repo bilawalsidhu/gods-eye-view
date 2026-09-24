@@ -5,15 +5,15 @@ overall lifetime. It coordinates startup and shutdown. `realtimeFacade.js`
 preserves existing methods and properties by delegation, without copying state.
 The session adapter, action runner and backend interfaces remain unchanged.
 
-| Owner | State and responsibility |
-| --- | --- |
-| `realtimeConnection.js` | Start generation, request cancellation, peer/data channel, acquired microphone stream and playback element |
-| `realtimeTurns.js` | Active and superseded responses, pending confirmations, deduplicated calls and action cancellation |
-| `realtimeRadio.js` | Speaker ducking, prepared playback, stronger-action reservations and playback observers |
-| `realtimeInput.js` | Physical Space gesture, microphone mute, input/output meters and their frame/listener lifetime |
-| `realtimeCost.js` | Next-session preferences and the current session's model-bound meter |
-| `realtimeViewport.js` | One retained image, bounded deletion identities and capture generation |
-| `realtimeDiagnostics.js` | Bounded error history and sanitized optional diagnostics |
+| Owner                    | State and responsibility                                                                                   |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| `realtimeConnection.js`  | Start generation, request cancellation, peer/data channel, acquired microphone stream and playback element |
+| `realtimeTurns.js`       | Active and superseded responses, pending confirmations, deduplicated calls and action cancellation         |
+| `realtimeRadio.js`       | Speaker ducking, prepared playback, stronger-action reservations and playback observers                    |
+| `realtimeInput.js`       | Physical Space gesture, microphone mute, input/output meters and their frame/listener lifetime             |
+| `realtimeCost.js`        | Next-session preferences and the current session's model-bound meter                                       |
+| `realtimeViewport.js`    | One retained image, bounded deletion identities and capture generation                                     |
+| `realtimeDiagnostics.js` | Bounded error history and sanitized optional diagnostics                                                   |
 
 Pure input policy, preferences and protocol-response policy have separate modules.
 Owners receive named readers, operations or focused collaborators. Cross-owner

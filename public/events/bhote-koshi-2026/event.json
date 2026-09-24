@@ -912,10 +912,7 @@
     {
       "id": "rasuwagadhi-geoconfirmed",
       "title": "RASUWAGADHI · SOURCE GEOCONFIRMED",
-      "details": [
-        "28.279942 N · 85.377725 E",
-        "WITNESS VIDEO · OPEN ORIGINAL"
-      ],
+      "details": ["28.279942 N · 85.377725 E", "WITNESS VIDEO · OPEN ORIGINAL"],
       "lat": 28.279942,
       "lon": 85.377725,
       "sourceUrl": "https://x.com/Indowatchosint/status/2092640554568007958",

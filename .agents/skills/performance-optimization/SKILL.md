@@ -21,11 +21,11 @@ Measure before optimizing. Performance work without measurement is guessing — 
 
 ## Core Web Vitals Targets
 
-| Metric | Good | Needs Improvement | Poor |
-|--------|------|-------------------|------|
-| **LCP** (Largest Contentful Paint) | ≤ 2.5s | ≤ 4.0s | > 4.0s |
-| **INP** (Interaction to Next Paint) | ≤ 200ms | ≤ 500ms | > 500ms |
-| **CLS** (Cumulative Layout Shift) | ≤ 0.1 | ≤ 0.25 | > 0.25 |
+| Metric                              | Good    | Needs Improvement | Poor    |
+| ----------------------------------- | ------- | ----------------- | ------- |
+| **LCP** (Largest Contentful Paint)  | ≤ 2.5s  | ≤ 4.0s            | > 4.0s  |
+| **INP** (Interaction to Next Paint) | ≤ 200ms | ≤ 500ms           | > 500ms |
+| **CLS** (Cumulative Layout Shift)   | ≤ 0.1   | ≤ 0.25            | > 0.25  |
 
 ## The Optimization Workflow
 
@@ -45,6 +45,7 @@ Two complementary approaches — use both:
 - **RUM (web-vitals library, CrUX):** Real user data in real conditions. Required to validate that a fix actually improved user experience.
 
 **Frontend:**
+
 ```bash
 # Synthetic: Lighthouse in Chrome DevTools (or CI)
 # Chrome DevTools → Performance tab → Record
@@ -59,6 +60,7 @@ onCLS(console.log);
 ```
 
 **Backend:**
+
 ```bash
 # Response time logging
 # Application Performance Monitoring (APM)
@@ -102,21 +104,21 @@ Common bottlenecks by category:
 
 **Frontend:**
 
-| Symptom | Likely Cause | Investigation |
-|---------|-------------|---------------|
-| Slow LCP | Large images, render-blocking resources, slow server | Check network waterfall, image sizes |
-| High CLS | Images without dimensions, late-loading content, font shifts | Check layout shift attribution |
-| Poor INP | Heavy JavaScript on main thread, large DOM updates | Check long tasks in Performance trace |
-| Slow initial load | Large bundle, many network requests | Check bundle size, code splitting |
+| Symptom           | Likely Cause                                                 | Investigation                         |
+| ----------------- | ------------------------------------------------------------ | ------------------------------------- |
+| Slow LCP          | Large images, render-blocking resources, slow server         | Check network waterfall, image sizes  |
+| High CLS          | Images without dimensions, late-loading content, font shifts | Check layout shift attribution        |
+| Poor INP          | Heavy JavaScript on main thread, large DOM updates           | Check long tasks in Performance trace |
+| Slow initial load | Large bundle, many network requests                          | Check bundle size, code splitting     |
 
 **Backend:**
 
-| Symptom | Likely Cause | Investigation |
-|---------|-------------|---------------|
-| Slow API responses | N+1 queries, missing indexes, unoptimized queries | Check database query log |
-| Memory growth | Leaked references, unbounded caches, large payloads | Heap snapshot analysis |
-| CPU spikes | Synchronous heavy computation, regex backtracking | CPU profiling |
-| High latency | Missing caching, redundant computation, network hops | Trace requests through the stack |
+| Symptom            | Likely Cause                                         | Investigation                    |
+| ------------------ | ---------------------------------------------------- | -------------------------------- |
+| Slow API responses | N+1 queries, missing indexes, unoptimized queries    | Check database query log         |
+| Memory growth      | Leaked references, unbounded caches, large payloads  | Heap snapshot analysis           |
+| CPU spikes         | Synchronous heavy computation, regex backtracking    | CPU profiling                    |
+| High latency       | Missing caching, redundant computation, network hops | Trace requests through the stack |
 
 ### Step 3: Fix Common Anti-Patterns
 
@@ -161,11 +163,11 @@ WHERE owner_id = 42 ORDER BY created_at DESC LIMIT 20;
 
 Three things in the output decide the fix:
 
-| What you see | What it means |
-|---|---|
-| `Seq Scan` on a large table where you expected an index | No usable index for this predicate |
+| What you see                                               | What it means                                                |
+| ---------------------------------------------------------- | ------------------------------------------------------------ |
+| `Seq Scan` on a large table where you expected an index    | No usable index for this predicate                           |
 | Estimated `rows=` off from actual by an order of magnitude | Stale statistics; the planner is choosing on bad information |
-| A `Sort` node above the scan | The index covers the filter but not the `ORDER BY` |
+| A `Sort` node above the scan                               | The index covers the filter but not the `ORDER BY`           |
 
 Index for the **shape of the query**, not the column in isolation. In a composite index, equality columns come first, then the range or sort column:
 
@@ -175,12 +177,12 @@ CREATE INDEX idx_tasks_owner_created ON tasks (owner_id, created_at DESC);
 
 **When an index will not help:**
 
-| Situation | Why |
-|---|---|
+| Situation                                                                                                   | Why                                                                                                                                                             |
+| ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Low selectivity, querying the dominant value (a `status` column that is 95% `active`, filtered on `active`) | A sequential scan is genuinely cheaper; the planner will ignore the index. Filtering on the rare value is the opposite case, and a partial index serves it well |
-| Leading wildcard (`LIKE '%term'`) | A B-tree cannot seek without a prefix; needs trigram or full-text |
-| Function on the column (`WHERE lower(email) = ?`) | The plain column index is unusable; index the expression instead |
-| Write-heavy table | Every index is a tax on every `INSERT`/`UPDATE`; measure the write cost, not just the read gain |
+| Leading wildcard (`LIKE '%term'`)                                                                           | A B-tree cannot seek without a prefix; needs trigram or full-text                                                                                               |
+| Function on the column (`WHERE lower(email) = ?`)                                                           | The plain column index is unusable; index the expression instead                                                                                                |
+| Write-heavy table                                                                                           | Every index is a tax on every `INSERT`/`UPDATE`; measure the write cost, not just the read gain                                                                 |
 
 Re-run `EXPLAIN ANALYZE` after. An index that did not change the plan is a revert (Step 4), and it is not free: it still costs on every write.
 
@@ -193,7 +195,7 @@ The signature is distinctive: **every** endpoint slows at once, the slow time is
 // by instance count and exhausts the database's connection limit
 // GOOD: one pool per process, sized against the database's ceiling
 const pool = new Pool({
-  max: 10,                        // instances × max must stay under max_connections
+  max: 10, // instances × max must stay under max_connections
   idleTimeoutMillis: 30_000,
   connectionTimeoutMillis: 5_000, // fail fast instead of queueing forever
 });
@@ -288,7 +290,11 @@ const TaskItem = React.memo(function TaskItem({ task }: Props) {
 // Use useMemo for expensive computations
 function TaskStats({ tasks }: Props) {
   const stats = useMemo(() => calculateStats(tasks), [tasks]);
-  return <div>{stats.completed} / {stats.total}</div>;
+  return (
+    <div>
+      {stats.completed} / {stats.total}
+    </div>
+  );
 }
 ```
 
@@ -320,11 +326,11 @@ Cache what is expensive to produce and read far more often than it changes. Cach
 
 **Pick the layer deliberately:**
 
-| Layer | Visible to | Use when | Cost |
-|---|---|---|---|
-| In-process (`Map`, LRU) | One instance | Small, hot, per-instance staleness is acceptable | Each instance drifts independently; invalidation reaches only one |
-| Shared (Redis, Memcached) | All instances | Instances must agree, or the value is expensive to recompute | A network hop, and another service to run and monitor |
-| CDN / edge | Everyone, per URL | Responses are public and identical for a given key | Invalidation is the hard part; assume you cannot recall a bad response quickly |
+| Layer                     | Visible to        | Use when                                                     | Cost                                                                           |
+| ------------------------- | ----------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| In-process (`Map`, LRU)   | One instance      | Small, hot, per-instance staleness is acceptable             | Each instance drifts independently; invalidation reaches only one              |
+| Shared (Redis, Memcached) | All instances     | Instances must agree, or the value is expensive to recompute | A network hop, and another service to run and monitor                          |
+| CDN / edge                | Everyone, per URL | Responses are public and identical for a given key           | Invalidation is the hard part; assume you cannot recall a bad response quickly |
 
 ```typescript
 // Cache frequently-read, rarely-changed data
@@ -342,10 +348,13 @@ async function getAppConfig(): Promise<AppConfig> {
 }
 
 // HTTP caching headers for static assets
-app.use('/static', express.static('public', {
-  maxAge: '1y',           // Cache for 1 year
-  immutable: true,        // Never revalidate (use content hashing in filenames)
-}));
+app.use(
+  '/static',
+  express.static('public', {
+    maxAge: '1y', // Cache for 1 year
+    immutable: true, // Never revalidate (use content hashing in filenames)
+  }),
+);
 
 // Cache-Control for API responses
 res.set('Cache-Control', 'public, max-age=300'); // 5 minutes
@@ -355,11 +364,11 @@ res.set('Cache-Control', 'public, max-age=300'); // 5 minutes
 
 **Choose one invalidation strategy, not three:**
 
-| Strategy | Trade-off |
-|---|---|
-| TTL | Simplest. You accept staleness up to the TTL, so state the acceptable window explicitly |
-| Event or tag based | Fresh on write, but writers now have to know the cache topology |
-| Versioned keys (`user:42:profile:v7`) | Never invalidate, just stop reading old keys. Costs memory until eviction |
+| Strategy                              | Trade-off                                                                               |
+| ------------------------------------- | --------------------------------------------------------------------------------------- |
+| TTL                                   | Simplest. You accept staleness up to the TTL, so state the acceptable window explicitly |
+| Event or tag based                    | Fresh on write, but writers now have to know the cache topology                         |
+| Versioned keys (`user:42:profile:v7`) | Never invalidate, just stop reading old keys. Costs memory until eviction               |
 
 **Guard against the stampede.** A hot key expires, every concurrent request misses together, and the origin takes the full load at once, which is how a cache turns into an outage instead of preventing one. Serve stale while a single request recomputes (`stale-while-revalidate`), or coalesce concurrent misses behind one in-flight promise so N waiters cause one recompute.
 
@@ -377,26 +386,26 @@ A fix is a hypothesis until you re-measure. This step decides whether it survive
 
 Then decide, strictly:
 
-| Result vs. baseline | Action |
-|---|---|
-| Past the threshold, tests green | **Keep.** Commit with the before/after numbers in the message. |
-| Within noise (no measurable change) | **Revert.** |
-| Worse | **Revert.** |
-| Improved, but a test went red | **Revert.** A regression wearing a win's clothing. |
+| Result vs. baseline                 | Action                                                         |
+| ----------------------------------- | -------------------------------------------------------------- |
+| Past the threshold, tests green     | **Keep.** Commit with the before/after numbers in the message. |
+| Within noise (no measurable change) | **Revert.**                                                    |
+| Worse                               | **Revert.**                                                    |
+| Improved, but a test went red       | **Revert.** A regression wearing a win's clothing.             |
 
 **"Neutral" is a revert, not a keep.** This is the step teams skip: the change is already written, throwing it away feels wasteful, so it lands unmeasured, and the codebase accretes complexity that never bought anything. Code you keep, you maintain forever. Make it pay for itself.
 
-**Correctness gates the metric.** The suite stays green *and* the number moves. An "optimization" that wins by dropping work the product needed (skipping a validation, caching something that must be fresh, removing an `await` that was load-bearing) is a regression, not a win.
+**Correctness gates the metric.** The suite stays green _and_ the number moves. An "optimization" that wins by dropping work the product needed (skipping a validation, caching something that must be fresh, removing an `await` that was load-bearing) is a regression, not a win.
 
 #### Log every attempt, including the reverted ones
 
 Reverted work leaves no trace in git history, which is exactly why the same dead idea gets tried again next quarter. Keep a short ledger so a discarded idea stays discarded:
 
-| Idea | Baseline → Result | Verdict | Why |
-|---|---|---|---|
-| Memoize the row component | INP 240ms → 235ms | reverted | Inside noise (±15ms). Rows weren't the bottleneck. |
-| Virtualize the list | INP 240ms → 90ms | kept | Long tasks gone from the trace. |
-| Preconnect to the API origin | LCP 2.8s → 2.8s | reverted | Already same-origin. |
+| Idea                         | Baseline → Result | Verdict  | Why                                                |
+| ---------------------------- | ----------------- | -------- | -------------------------------------------------- |
+| Memoize the row component    | INP 240ms → 235ms | reverted | Inside noise (±15ms). Rows weren't the bottleneck. |
+| Virtualize the list          | INP 240ms → 90ms  | kept     | Long tasks gone from the trace.                    |
+| Preconnect to the API origin | LCP 2.8s → 2.8s   | reverted | Already same-origin.                               |
 
 A section in the PR description or a `PERF.md` in the repo both work. What matters is that the next person (or the next agent) reads it before proposing an experiment, and doesn't re-run one that already failed.
 
@@ -430,6 +439,7 @@ Lighthouse Performance score: ≥ 90
 ```
 
 **Enforce in CI:**
+
 ```bash
 # Bundle size check
 npx bundlesize --config bundlesize.config.json
@@ -442,22 +452,21 @@ npx lhci autorun
 
 For detailed performance checklists, optimization commands, and anti-pattern reference, see `../../references/performance-checklist.md`.
 
-
 ## Common Rationalizations
 
-| Rationalization | Reality |
-|---|---|
-| "We'll optimize later" | Performance debt compounds. Fix obvious anti-patterns now, defer micro-optimizations. |
-| "It's fast on my machine" | Your machine isn't the user's. Profile on representative hardware and networks. |
-| "This optimization is obvious" | If you didn't measure, you don't know. Profile first. |
-| "Users won't notice 100ms" | Research shows 100ms delays impact conversion rates. Users notice more than you think. |
-| "The framework handles performance" | Frameworks prevent some issues but can't fix N+1 queries or oversized bundles. |
-| "The query is slow, add an index" | Read the plan first. The index may already exist and be unusable, and every index taxes writes forever. |
-| "Just cache it" | Caching an already-cheap call buys nothing and adds a staleness bug. Cache what is expensive *and* re-read far more than written. |
-| "Raise the pool size, we're running out of connections" | A pool bigger than the database can serve moves the queue somewhere less visible. Find what holds connections. |
-| "It didn't help much, but it doesn't hurt" | Neutral changes are a revert. You pay maintenance on them forever and got nothing back. |
-| "We already wrote it, may as well keep it" | Sunk cost. The measurement doesn't care how long the change took to write. |
-| "The improvement is obvious, no need to re-measure" | Then re-measuring is cheap and proves it. Unmeasured wins are how neutral complexity lands. |
+| Rationalization                                         | Reality                                                                                                                           |
+| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| "We'll optimize later"                                  | Performance debt compounds. Fix obvious anti-patterns now, defer micro-optimizations.                                             |
+| "It's fast on my machine"                               | Your machine isn't the user's. Profile on representative hardware and networks.                                                   |
+| "This optimization is obvious"                          | If you didn't measure, you don't know. Profile first.                                                                             |
+| "Users won't notice 100ms"                              | Research shows 100ms delays impact conversion rates. Users notice more than you think.                                            |
+| "The framework handles performance"                     | Frameworks prevent some issues but can't fix N+1 queries or oversized bundles.                                                    |
+| "The query is slow, add an index"                       | Read the plan first. The index may already exist and be unusable, and every index taxes writes forever.                           |
+| "Just cache it"                                         | Caching an already-cheap call buys nothing and adds a staleness bug. Cache what is expensive _and_ re-read far more than written. |
+| "Raise the pool size, we're running out of connections" | A pool bigger than the database can serve moves the queue somewhere less visible. Find what holds connections.                    |
+| "It didn't help much, but it doesn't hurt"              | Neutral changes are a revert. You pay maintenance on them forever and got nothing back.                                           |
+| "We already wrote it, may as well keep it"              | Sunk cost. The measurement doesn't care how long the change took to write.                                                        |
+| "The improvement is obvious, no need to re-measure"     | Then re-measuring is cheap and proves it. Unmeasured wins are how neutral complexity lands.                                       |
 
 ## Red Flags
 

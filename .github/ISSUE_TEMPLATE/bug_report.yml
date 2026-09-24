@@ -1,7 +1,7 @@
 name: Bug report
 description: Something is broken, fails to install, or renders wrong.
-title: "bug: "
-labels: ["bug"]
+title: 'bug: '
+labels: ['bug']
 body:
   - type: markdown
     attributes:
@@ -40,7 +40,7 @@ body:
     attributes:
       label: OS, Node version, browser
       description: Include the versions you can find. Write "unknown" for anything unavailable.
-      placeholder: "Windows 11, Node 24.14.0, Chrome 151"
+      placeholder: 'Windows 11, Node 24.14.0, Chrome 151'
     validations:
       required: true
   - type: input
@@ -48,7 +48,7 @@ body:
     attributes:
       label: Version or commit
       description: Output of `git rev-parse --short HEAD`, or the release tag. If unavailable, say when you installed or last updated.
-      placeholder: "aacfa06"
+      placeholder: 'aacfa06'
     validations:
       required: true
   - type: textarea

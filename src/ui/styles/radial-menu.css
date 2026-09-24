@@ -12,8 +12,12 @@
 }
 
 @keyframes gev-radial-fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .gev-radial-menu {
@@ -36,7 +40,9 @@
   border-radius: 50%;
   background: rgba(6, 16, 26, 0.88);
   border: 1px solid rgba(0, 240, 255, 0.5);
-  box-shadow: 0 0 20px rgba(0, 240, 255, 0.25), inset 0 0 15px rgba(0, 240, 255, 0.15);
+  box-shadow:
+    0 0 20px rgba(0, 240, 255, 0.25),
+    inset 0 0 15px rgba(0, 240, 255, 0.15);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -80,17 +86,20 @@
   border-radius: 50%;
   background: rgba(10, 25, 40, 0.85);
   border: 1px solid rgba(0, 240, 255, 0.35);
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5), 0 0 10px rgba(0, 240, 255, 0.15);
+  box-shadow:
+    0 4px 15px rgba(0, 0, 0, 0.5),
+    0 0 10px rgba(0, 240, 255, 0.15);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   pointer-events: auto;
-  transition: transform 0.2s cubic-bezier(0.18, 0.89, 0.32, 1.28),
-              background 0.15s ease,
-              border-color 0.15s ease,
-              box-shadow 0.15s ease;
+  transition:
+    transform 0.2s cubic-bezier(0.18, 0.89, 0.32, 1.28),
+    background 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
   backdrop-filter: blur(8px);
   z-index: 2;
 }
@@ -99,7 +108,9 @@
 .gev-radial-item:focus-visible {
   background: rgba(0, 240, 255, 0.22);
   border-color: #00f0ff;
-  box-shadow: 0 0 25px rgba(0, 240, 255, 0.6), inset 0 0 10px rgba(0, 240, 255, 0.3);
+  box-shadow:
+    0 0 25px rgba(0, 240, 255, 0.6),
+    inset 0 0 10px rgba(0, 240, 255, 0.3);
   transform: scale(1.18);
   outline: none;
 }
@@ -175,7 +186,9 @@
   background: rgba(8, 20, 32, 0.95);
   border: 1px solid rgba(0, 240, 255, 0.4);
   border-radius: 6px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8), 0 0 15px rgba(0, 240, 255, 0.2);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.8),
+    0 0 15px rgba(0, 240, 255, 0.2);
   backdrop-filter: blur(16px);
   padding: 12px;
   z-index: 1000;
@@ -226,7 +239,7 @@
   color: #8fa3b5;
 }
 
-.gev-audio-row input[type="range"] {
+.gev-audio-row input[type='range'] {
   accent-color: #00f0ff;
   height: 4px;
   cursor: pointer;

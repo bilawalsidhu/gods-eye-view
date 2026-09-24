@@ -4,11 +4,7 @@
  */
 
 const CACHE_NAME = 'jarvis-gev-v1';
-const APP_SHELL = [
-  '/',
-  '/index.html',
-  '/style.css',
-];
+const APP_SHELL = ['/', '/index.html', '/style.css'];
 
 // Install — cache app shell
 self.addEventListener('install', (event) => {
@@ -25,9 +21,13 @@ self.addEventListener('install', (event) => {
 // Activate — clean old caches
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))),
-    ),
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(
+          keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)),
+        ),
+      ),
   );
   self.clients.claim();
 });

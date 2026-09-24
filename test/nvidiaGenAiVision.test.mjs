@@ -10,8 +10,12 @@ test('handleNvidiaGenAiImage rejects GET requests with 405', async () => {
   const req = { method: 'GET' };
   const res = {
     setHeader: () => {},
-    set statusCode(code) { statusCode = code; },
-    end: (data) => { responseData = data; },
+    set statusCode(code) {
+      statusCode = code;
+    },
+    end: (data) => {
+      responseData = data;
+    },
   };
 
   await handleNvidiaGenAiImage(req, res);
@@ -25,8 +29,12 @@ test('handleNvidiaVisionAnalyze rejects GET requests with 405', async () => {
   const req = { method: 'GET' };
   const res = {
     setHeader: () => {},
-    set statusCode(code) { statusCode = code; },
-    end: (data) => { responseData = data; },
+    set statusCode(code) {
+      statusCode = code;
+    },
+    end: (data) => {
+      responseData = data;
+    },
   };
 
   await handleNvidiaVisionAnalyze(req, res);
@@ -40,8 +48,12 @@ test('handleNvidiaModels returns list of models and categories', () => {
   const req = { method: 'GET' };
   const res = {
     setHeader: () => {},
-    set statusCode(code) { statusCode = code; },
-    end: (data) => { responseData = data; },
+    set statusCode(code) {
+      statusCode = code;
+    },
+    end: (data) => {
+      responseData = data;
+    },
   };
 
   handleNvidiaModels(req, res);

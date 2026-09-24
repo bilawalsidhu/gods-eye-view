@@ -13,32 +13,75 @@ test('greatCircleKm sanity: SFO→LAX ≈ 543 km', () => {
 });
 
 test('plane mid-route SFO→LAX: plausible', () => {
-  assert.equal(routePlausible({
-    latDeg: 35.8, lonDeg: -120.4, altitudeM: 10000, verticalRateMps: 0,
-    origin: SFO, destination: LAX,
-  }), true);
+  assert.equal(
+    routePlausible({
+      latDeg: 35.8,
+      lonDeg: -120.4,
+      altitudeM: 10000,
+      verticalRateMps: 0,
+      origin: SFO,
+      destination: LAX,
+    }),
+    true,
+  );
 });
 
 test('plane in London with an SFO→LAX route: implausible', () => {
-  assert.equal(routePlausible({
-    latDeg: 51.5, lonDeg: -0.12, altitudeM: 10000, verticalRateMps: 0,
-    origin: SFO, destination: LAX,
-  }), false);
+  assert.equal(
+    routePlausible({
+      latDeg: 51.5,
+      lonDeg: -0.12,
+      altitudeM: 10000,
+      verticalRateMps: 0,
+      origin: SFO,
+      destination: LAX,
+    }),
+    false,
+  );
 });
 
 test('vertical trend: low climbing plane near SFO — origin must be local', () => {
   const nearSfo = { latDeg: 37.7, lonDeg: -122.4, altitudeM: 2500 };
   // JFK→SFO passes geometry (near destination), but a CLIMBING plane here just
   // departed — origin JFK (far) contradicts it.
-  assert.equal(routePlausible({ ...nearSfo, verticalRateMps: 8, origin: JFK, destination: SFO }), false);
+  assert.equal(
+    routePlausible({
+      ...nearSfo,
+      verticalRateMps: 8,
+      origin: JFK,
+      destination: SFO,
+    }),
+    false,
+  );
   // The same plane DESCENDING is arriving at SFO — plausible.
-  assert.equal(routePlausible({ ...nearSfo, verticalRateMps: -8, origin: JFK, destination: SFO }), true);
+  assert.equal(
+    routePlausible({
+      ...nearSfo,
+      verticalRateMps: -8,
+      origin: JFK,
+      destination: SFO,
+    }),
+    true,
+  );
 });
 
 test('missing data never hides a route (cannot judge → allow)', () => {
-  assert.equal(routePlausible({ latDeg: 35.8, lonDeg: -120.4, origin: null, destination: null }), true);
-  assert.equal(routePlausible({
-    latDeg: 51.5, lonDeg: -0.12,
-    origin: { lat: null, lon: null }, destination: null,
-  }), true);
+  assert.equal(
+    routePlausible({
+      latDeg: 35.8,
+      lonDeg: -120.4,
+      origin: null,
+      destination: null,
+    }),
+    true,
+  );
+  assert.equal(
+    routePlausible({
+      latDeg: 51.5,
+      lonDeg: -0.12,
+      origin: { lat: null, lon: null },
+      destination: null,
+    }),
+    true,
+  );
 });

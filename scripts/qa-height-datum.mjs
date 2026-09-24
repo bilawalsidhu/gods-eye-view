@@ -135,7 +135,12 @@ function findChromeExecutable() {
 const results = [];
 function record(name, ok, detail) {
   results.push({ name, ok, detail });
-  const tag = ok === null ? '\x1b[33mINCONCLUSIVE\x1b[0m' : ok ? '\x1b[32mPASS\x1b[0m' : '\x1b[31mFAIL\x1b[0m';
+  const tag =
+    ok === null
+      ? '\x1b[33mINCONCLUSIVE\x1b[0m'
+      : ok
+        ? '\x1b[32mPASS\x1b[0m'
+        : '\x1b[31mFAIL\x1b[0m';
   console.log(`  [${tag}] ${name}${detail ? `  — ${detail}` : ''}`);
 }
 
@@ -151,20 +156,23 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * @returns {Promise<boolean>}
  */
 function waitForTilesLoaded(page, timeoutMs = 15000) {
-  return page.waitForFunction(
-    () => {
-      const scene = window.__godsEyeView.viewer.scene;
-      const prims = scene.primitives;
-      for (let i = 0; i < prims.length; i++) {
-        const p = prims.get(i);
-        if (p && p.constructor && p.constructor.name === 'Cesium3DTileset') {
-          return p.tilesLoaded === true;
+  return page
+    .waitForFunction(
+      () => {
+        const scene = window.__godsEyeView.viewer.scene;
+        const prims = scene.primitives;
+        for (let i = 0; i < prims.length; i++) {
+          const p = prims.get(i);
+          if (p && p.constructor && p.constructor.name === 'Cesium3DTileset') {
+            return p.tilesLoaded === true;
+          }
         }
-      }
-      return true;
-    },
-    { timeout: timeoutMs }
-  ).then(() => true).catch(() => false);
+        return true;
+      },
+      { timeout: timeoutMs },
+    )
+    .then(() => true)
+    .catch(() => false);
 }
 
 /**
@@ -234,7 +242,9 @@ async function main() {
     const res = await fetch(APP_URL, { method: 'GET' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
   } catch (e) {
-    console.error(`\x1b[31mDev server not reachable at ${APP_URL} (${e.message}).\x1b[0m`);
+    console.error(
+      `\x1b[31mDev server not reachable at ${APP_URL} (${e.message}).\x1b[0m`,
+    );
     process.exit(2);
   }
 
@@ -271,7 +281,11 @@ async function main() {
     page.on('console', (msg) => {
       if (msg.type() === 'error') {
         const t = msg.text();
-        if (!/Failed to load resource|net::ERR|status of 4\d\d|status of 5\d\d/.test(t)) {
+        if (
+          !/Failed to load resource|net::ERR|status of 4\d\d|status of 5\d\d/.test(
+            t,
+          )
+        ) {
           consoleErrors.push(t);
         }
       }
@@ -279,8 +293,11 @@ async function main() {
     console.log('Loading app...');
     await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForFunction(
-      () => window.__godsEyeView && window.__godsEyeView.viewer && window.__godsEyeView.dataManager,
-      { timeout: 60000 }
+      () =>
+        window.__godsEyeView &&
+        window.__godsEyeView.viewer &&
+        window.__godsEyeView.dataManager,
+      { timeout: 60000 },
     );
     await sleep(4000);
 
@@ -294,8 +311,14 @@ async function main() {
       if (!entry.enabled) await dm.toggle('cctv');
     });
 
-    const camCount = await page.evaluate(() => window.__godsEyeView.dataManager.layers.get('cctv').module.getUIState().count);
-    console.log(`CCTV catalog loaded: ${camCount} cameras. Waiting for the geometry-load queue to drain...`);
+    const camCount = await page.evaluate(
+      () =>
+        window.__godsEyeView.dataManager.layers.get('cctv').module.getUIState()
+          .count,
+    );
+    console.log(
+      `CCTV catalog loaded: ${camCount} cameras. Waiting for the geometry-load queue to drain...`,
+    );
     // The full-catalog drain is NOT a precondition for group 1's assertions
     // below: every record renders correctly from `record.groundPrior` the
     // instant the Re:Earth prior batch lands (Task 5 contract #1/#4 — "the
@@ -315,20 +338,26 @@ async function main() {
     // dependent (inconclusive, not a hard fail) rather than failing the
     // whole run — mirroring qa-cctv-v2's own tiles-timeout handling.
     const DRAIN_WAIT_CEILING_MS = 120000;
-    const drained = await page.waitForFunction(
-      () => {
-        const mod = window.__godsEyeView.dataManager.layers.get('cctv').module;
-        const ui = mod.getUIState();
-        return ui.loading && ui.loading.active === false;
-      },
-      { timeout: DRAIN_WAIT_CEILING_MS }
-    ).then(() => true).catch(() => false);
-    record(`CCTV geometry-load queue drains within ${Math.round(DRAIN_WAIT_CEILING_MS / 1000)}s (N=${camCount})`,
+    const drained = await page
+      .waitForFunction(
+        () => {
+          const mod =
+            window.__godsEyeView.dataManager.layers.get('cctv').module;
+          const ui = mod.getUIState();
+          return ui.loading && ui.loading.active === false;
+        },
+        { timeout: DRAIN_WAIT_CEILING_MS },
+      )
+      .then(() => true)
+      .catch(() => false);
+    record(
+      `CCTV geometry-load queue drains within ${Math.round(DRAIN_WAIT_CEILING_MS / 1000)}s (N=${camCount})`,
       drained ? true : null,
       drained
         ? 'loading.active === false'
         : `did not fully drain within the ceiling at N=${camCount} — environmental/scale-dependent under headless SwiftShader ` +
-          '(each un-drained camera still renders correctly from its Re:Earth prior; group 1 assertions below read that prior directly, so this does not block them)');
+            '(each un-drained camera still renders correctly from its Re:Earth prior; group 1 assertions below read that prior directly, so this does not block them)',
+    );
 
     // Pull the full camera list, then bucket by city so we can pick 5
     // London + 5 Austin + 3 SF regardless of catalog ordering. TfL tags
@@ -337,30 +366,57 @@ async function main() {
     // `nearbyPlace` string (NOT a stable "San Francisco" literal), so SF-area
     // Caltrans cameras are identified by proximity to the SF anchor instead
     // (same anchor vite.config.js's CALTRANS_ANCHORS uses for prioritization).
-    const allCameras = await page.evaluate(() => window.__godsEyeView.dataManager.layers.get('cctv').module.getUIState().cameras);
+    const allCameras = await page.evaluate(
+      () =>
+        window.__godsEyeView.dataManager.layers.get('cctv').module.getUIState()
+          .cameras,
+    );
     console.log(`Camera catalog: ${allCameras.length} total.`);
 
     const SF_ANCHOR = { lat: 37.7793, lon: -122.4193 };
     const haversineKm = (lat1, lon1, lat2, lon2) => {
       const R = 6371;
-      const dLat = (lat2 - lat1) * Math.PI / 180;
-      const dLon = (lon2 - lon1) * Math.PI / 180;
-      const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+      const dLat = ((lat2 - lat1) * Math.PI) / 180;
+      const dLon = ((lon2 - lon1) * Math.PI) / 180;
+      const a =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos((lat1 * Math.PI) / 180) *
+          Math.cos((lat2 * Math.PI) / 180) *
+          Math.sin(dLon / 2) ** 2;
       return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     };
 
-    const londonCams = allCameras.filter((c) => c.city === 'London').slice(0, 5);
-    const austinCams = allCameras.filter((c) => c.city === 'Austin').slice(0, 5);
+    const londonCams = allCameras
+      .filter((c) => c.city === 'London')
+      .slice(0, 5);
+    const austinCams = allCameras
+      .filter((c) => c.city === 'Austin')
+      .slice(0, 5);
     const sfCams = allCameras
-      .filter((c) => c.provider === 'Caltrans' && haversineKm(c.lat, c.lon, SF_ANCHOR.lat, SF_ANCHOR.lon) < 60)
+      .filter(
+        (c) =>
+          c.provider === 'Caltrans' &&
+          haversineKm(c.lat, c.lon, SF_ANCHOR.lat, SF_ANCHOR.lon) < 60,
+      )
       .slice(0, 3);
 
-    record('found >=5 London (TfL) test cameras', londonCams.length >= 5, `found ${londonCams.length}`);
-    record('found >=5 Austin test cameras', austinCams.length >= 5, `found ${austinCams.length}`);
-    record('found >=3 SF-area (Caltrans) test cameras', sfCams.length >= 3 ? true : null,
+    record(
+      'found >=5 London (TfL) test cameras',
+      londonCams.length >= 5,
+      `found ${londonCams.length}`,
+    );
+    record(
+      'found >=5 Austin test cameras',
+      austinCams.length >= 5,
+      `found ${austinCams.length}`,
+    );
+    record(
+      'found >=3 SF-area (Caltrans) test cameras',
+      sfCams.length >= 3 ? true : null,
       sfCams.length >= 3
         ? `found ${sfCams.length}`
-        : `found ${sfCams.length} — live Caltrans catalog unavailable/partial this run (upstream INCONCLUSIVE, not an app datum failure)`);
+        : `found ${sfCams.length} — live Caltrans catalog unavailable/partial this run (upstream INCONCLUSIVE, not an app datum failure)`,
+    );
 
     const cityBuckets = [
       { label: 'London', cams: londonCams },
@@ -373,42 +429,87 @@ async function main() {
     for (const { label, cams } of cityBuckets) {
       for (const cam of cams) {
         const state = await page.evaluate((id) => {
-          const mod = window.__godsEyeView.dataManager.layers.get('cctv').module;
-          return mod.getUIState().cameras.find((camera) => camera.id === id) || null;
+          const mod =
+            window.__godsEyeView.dataManager.layers.get('cctv').module;
+          return (
+            mod.getUIState().cameras.find((camera) => camera.id === id) || null
+          );
         }, cam.id);
         const geom = await readCameraGround(page, cam.id);
         if (!geom || !Number.isFinite(geom.groundM)) {
-          record(`${label} ${cam.id}: record ground reads finitely`, false, 'ray-tl entity missing or non-finite height');
+          record(
+            `${label} ${cam.id}: record ground reads finitely`,
+            false,
+            'ray-tl entity missing or non-finite height',
+          );
           continue;
         }
-        record(`${label} ${cam.id}: rendered ground reads finitely`, true,
-          `renderedGround=${geom.groundM.toFixed(1)}m`);
+        record(
+          `${label} ${cam.id}: rendered ground reads finitely`,
+          true,
+          `renderedGround=${geom.groundM.toFixed(1)}m`,
+        );
         const priorM = state?.groundPriorM;
         if (!Number.isFinite(priorM)) {
-          record(`${label} ${cam.id}: Re:Earth ground prior resolved`, null,
-            `renderedGround=${geom.groundM.toFixed(1)}m; prior unavailable this run`);
-          groundRows.push({ label, id: cam.id, groundM: geom.groundM, priorM: null, reearthM: null });
+          record(
+            `${label} ${cam.id}: Re:Earth ground prior resolved`,
+            null,
+            `renderedGround=${geom.groundM.toFixed(1)}m; prior unavailable this run`,
+          );
+          groundRows.push({
+            label,
+            id: cam.id,
+            groundM: geom.groundM,
+            priorM: null,
+            reearthM: null,
+          });
           continue;
         }
         const reearth = await fetchReearthEllipsoid(cam.lat, cam.lon);
         if (reearth === null) {
-          record(`${label} ${cam.id}: |ground prior - Re:Earth ellipsoid| < 6m`, null,
-            `Re:Earth proxy unreachable this run — prior=${priorM.toFixed(1)}m rendered=${geom.groundM.toFixed(1)}m (upstream INCONCLUSIVE, not a harness/app failure)`);
-          groundRows.push({ label, id: cam.id, groundM: geom.groundM, priorM, reearthM: null });
+          record(
+            `${label} ${cam.id}: |ground prior - Re:Earth ellipsoid| < 6m`,
+            null,
+            `Re:Earth proxy unreachable this run — prior=${priorM.toFixed(1)}m rendered=${geom.groundM.toFixed(1)}m (upstream INCONCLUSIVE, not a harness/app failure)`,
+          );
+          groundRows.push({
+            label,
+            id: cam.id,
+            groundM: geom.groundM,
+            priorM,
+            reearthM: null,
+          });
           continue;
         }
         const delta = Math.abs(priorM - reearth);
-        record(`${label} ${cam.id}: |ground prior - Re:Earth ellipsoid| < 6m`, delta < 6,
-          `prior=${priorM.toFixed(1)}m rendered=${geom.groundM.toFixed(1)}m reearth=${reearth.toFixed(1)}m Δ=${delta.toFixed(1)}m`);
-        groundRows.push({ label, id: cam.id, groundM: geom.groundM, priorM, reearthM: reearth });
+        record(
+          `${label} ${cam.id}: |ground prior - Re:Earth ellipsoid| < 6m`,
+          delta < 6,
+          `prior=${priorM.toFixed(1)}m rendered=${geom.groundM.toFixed(1)}m reearth=${reearth.toFixed(1)}m Δ=${delta.toFixed(1)}m`,
+        );
+        groundRows.push({
+          label,
+          id: cam.id,
+          groundM: geom.groundM,
+          priorM,
+          reearthM: reearth,
+        });
       }
     }
 
-    console.log('\n  Ground-height table (city, camera, rendered ground, stored prior, Re:Earth ellipsoid):');
+    console.log(
+      '\n  Ground-height table (city, camera, rendered ground, stored prior, Re:Earth ellipsoid):',
+    );
     for (const row of groundRows) {
-      console.log(`    ${row.label.padEnd(8)} ${row.id.padEnd(24)} rendered=${row.groundM.toFixed(1)}m` +
-        (row.priorM !== null ? ` prior=${row.priorM.toFixed(1)}m` : ' prior=N/A') +
-        (row.reearthM !== null ? ` reearth=${row.reearthM.toFixed(1)}m` : ' reearth=N/A'));
+      console.log(
+        `    ${row.label.padEnd(8)} ${row.id.padEnd(24)} rendered=${row.groundM.toFixed(1)}m` +
+          (row.priorM !== null
+            ? ` prior=${row.priorM.toFixed(1)}m`
+            : ' prior=N/A') +
+          (row.reearthM !== null
+            ? ` reearth=${row.reearthM.toFixed(1)}m`
+            : ' reearth=N/A'),
+      );
     }
     console.log('');
 
@@ -423,7 +524,9 @@ async function main() {
     console.log('Checking Google-3D active-camera ground BANDS (post-snap)...');
     async function checkActiveCameraBand(cityLabel, targetCamId, band) {
       await page.evaluate((id) => {
-        window.__godsEyeView.dataManager.layers.get('cctv').module.selectCamera(id, { focus: true, durationSec: 0.1 });
+        window.__godsEyeView.dataManager.layers
+          .get('cctv')
+          .module.selectCamera(id, { focus: true, durationSec: 0.1 });
       }, targetCamId);
       await sleep(600);
       const tilesReady = await waitForTilesLoaded(page, 30000);
@@ -432,34 +535,54 @@ async function main() {
       await sleep(1500);
       const geom = await readCameraGround(page, targetCamId);
       if (!tilesReady) {
-        record(`${cityLabel} active camera (${targetCamId}) google-3d ground ∈ [${band[0]},${band[1]}]m`, null,
-          `tiles never reported loaded within 30s under headless GL — environmental, inconclusive (recordGround=${geom?.groundM?.toFixed?.(1) ?? 'n/a'}m)`);
+        record(
+          `${cityLabel} active camera (${targetCamId}) google-3d ground ∈ [${band[0]},${band[1]}]m`,
+          null,
+          `tiles never reported loaded within 30s under headless GL — environmental, inconclusive (recordGround=${geom?.groundM?.toFixed?.(1) ?? 'n/a'}m)`,
+        );
         return;
       }
       if (!geom || !Number.isFinite(geom.groundM)) {
-        record(`${cityLabel} active camera (${targetCamId}) google-3d ground ∈ [${band[0]},${band[1]}]m`, false, 'ground unreadable');
+        record(
+          `${cityLabel} active camera (${targetCamId}) google-3d ground ∈ [${band[0]},${band[1]}]m`,
+          false,
+          'ground unreadable',
+        );
         return;
       }
       const inBand = geom.groundM >= band[0] && geom.groundM <= band[1];
-      record(`${cityLabel} active camera (${targetCamId}) google-3d ground ∈ [${band[0]},${band[1]}]m`, inBand,
-        `recordGround=${geom.groundM.toFixed(1)}m`);
+      record(
+        `${cityLabel} active camera (${targetCamId}) google-3d ground ∈ [${band[0]},${band[1]}]m`,
+        inBand,
+        `recordGround=${geom.groundM.toFixed(1)}m`,
+      );
     }
 
     if (londonCams.length) {
       await checkActiveCameraBand('London', londonCams[0].id, [45, 75]);
     } else {
-      record('London active camera google-3d ground ∈ [45,75]m', null, 'no London camera available to test');
+      record(
+        'London active camera google-3d ground ∈ [45,75]m',
+        null,
+        'no London camera available to test',
+      );
     }
     if (austinCams.length) {
       await checkActiveCameraBand('Austin', austinCams[0].id, [110, 135]);
     } else {
-      record('Austin active camera google-3d ground ∈ [110,135]m', null, 'no Austin camera available to test');
+      record(
+        'Austin active camera google-3d ground ∈ [110,135]m',
+        null,
+        'no Austin camera available to test',
+      );
     }
 
     // =========================================================================
     // Group 2: Aircraft render altitude
     // =========================================================================
-    console.log('Enabling flights layer, waiting for a live aircraft sample...');
+    console.log(
+      'Enabling flights layer, waiting for a live aircraft sample...',
+    );
     await page.evaluate(async () => {
       const dm = window.__godsEyeView.dataManager;
       const entry = dm.layers.get('flights');
@@ -468,17 +591,24 @@ async function main() {
 
     // OpenSky polls on its own interval; give it real time to land a batch
     // (the layer polls every ~30s per the documented polling invariant).
-    const gotAircraft = await page.waitForFunction(
-      () => {
-        const mod = window.__godsEyeView.dataManager.layers.get('flights').module;
-        return mod.getAllPositions(1).length > 0;
-      },
-      { timeout: 45000 }
-    ).then(() => true).catch(() => false);
+    const gotAircraft = await page
+      .waitForFunction(
+        () => {
+          const mod =
+            window.__godsEyeView.dataManager.layers.get('flights').module;
+          return mod.getAllPositions(1).length > 0;
+        },
+        { timeout: 45000 },
+      )
+      .then(() => true)
+      .catch(() => false);
 
     if (!gotAircraft) {
-      record('>=10 live aircraft sampled from OpenSky', null,
-        'no aircraft appeared within 45s — OpenSky upstream INCONCLUSIVE this run (not an app failure)');
+      record(
+        '>=10 live aircraft sampled from OpenSky',
+        null,
+        'no aircraft appeared within 45s — OpenSky upstream INCONCLUSIVE this run (not an app failure)',
+      );
     } else {
       // Let a full second poll cycle land (updateInterval: 30000 — see
       // flights.js) before sampling. A just-appeared ON-GROUND aircraft can
@@ -491,7 +621,9 @@ async function main() {
       // appears would catch exactly that transient and misreport it as an
       // under-terrain violation. Waiting past a second poll interval lets the
       // cache warm before the under-terrain detector runs.
-      console.log('Waiting through a second poll cycle so on-ground aircraft ground-cache warm-up completes...');
+      console.log(
+        'Waiting through a second poll cycle so on-ground aircraft ground-cache warm-up completes...',
+      );
       await sleep(32000);
 
       // getAllPositions gives render-height (carto.height off the actual
@@ -501,7 +633,8 @@ async function main() {
       // the two public APIs by icao24/id to reconstruct both sides without
       // reaching into the layer's private _flightData closure.
       const allPositions = await page.evaluate(() => {
-        const mod = window.__godsEyeView.dataManager.layers.get('flights').module;
+        const mod =
+          window.__godsEyeView.dataManager.layers.get('flights').module;
         return mod.getAllPositions(60);
       });
       // getNearby needs an ECEF center + range; use the live camera position
@@ -510,17 +643,22 @@ async function main() {
       // qa-cctv-v2's pattern) with an effectively unbounded range so it
       // returns everything currently shown regardless of viewer position.
       const nearbyList = await page.evaluate(() => {
-        const mod = window.__godsEyeView.dataManager.layers.get('flights').module;
+        const mod =
+          window.__godsEyeView.dataManager.layers.get('flights').module;
         const center = window.__godsEyeView.viewer.camera.position;
-        return mod.getNearby(center, Number.MAX_VALUE, 200).map((a) => ({ icao24: a.icao24, altitudeM: a.altitudeM }));
+        return mod
+          .getNearby(center, Number.MAX_VALUE, 200)
+          .map((a) => ({ icao24: a.icao24, altitudeM: a.altitudeM }));
       });
       const baroById = new Map(nearbyList.map((a) => [a.icao24, a.altitudeM]));
 
       const sampleSize = Math.min(allPositions.length, 25);
       const sample = allPositions.slice(0, sampleSize);
-      record(`>=10 live aircraft sampled from OpenSky (public getAllPositions/getNearby)`,
-        sample.length >= 10 ? true : (sample.length > 0 ? null : false),
-        `sampled ${sample.length} (getAllPositions total=${allPositions.length})`);
+      record(
+        `>=10 live aircraft sampled from OpenSky (public getAllPositions/getNearby)`,
+        sample.length >= 10 ? true : sample.length > 0 ? null : false,
+        `sampled ${sample.length} (getAllPositions total=${allPositions.length})`,
+      );
 
       let plausibleCount = 0;
       let checkedCount = 0;
@@ -533,7 +671,10 @@ async function main() {
         // Finite + plausible sanity: render altitude must be a real number in
         // a physically sane band (-500m .. 20000m covers everything from
         // Death-Valley-adjacent ground traffic to high-altitude cruise).
-        const finitePlausible = Number.isFinite(renderAltM) && renderAltM > -500 && renderAltM < 20000;
+        const finitePlausible =
+          Number.isFinite(renderAltM) &&
+          renderAltM > -500 &&
+          renderAltM < 20000;
         if (finitePlausible) plausibleCount += 1;
 
         // Cross-check vs baro+geoidHeight when we have the baro side (weaker
@@ -552,19 +693,30 @@ async function main() {
           // Not asserted individually (geo_altitude legitimately diverges from
           // baro+N) — logged into the report table so the cross-check is
           // actually visible, not silently discarded.
-          baroPlusNDeltas.push({ id: ac.id, renderAltM, expectedBaroPlusN, deltaVsBaroPlusN });
+          baroPlusNDeltas.push({
+            id: ac.id,
+            renderAltM,
+            expectedBaroPlusN,
+            deltaVsBaroPlusN,
+          });
         }
         checkedCount += 1;
       }
-      record(`aircraft render altitudes are finite + physically plausible (-500..20000m)`,
+      record(
+        `aircraft render altitudes are finite + physically plausible (-500..20000m)`,
         checkedCount > 0 ? plausibleCount === checkedCount : null,
-        `${plausibleCount}/${checkedCount} plausible`);
+        `${plausibleCount}/${checkedCount} plausible`,
+      );
 
       if (baroPlusNDeltas.length) {
-        console.log('\n  baro+geoidN cross-check table (id, renderAlt, expected baro+N, |Δ|):');
+        console.log(
+          '\n  baro+geoidN cross-check table (id, renderAlt, expected baro+N, |Δ|):',
+        );
         for (const d of baroPlusNDeltas) {
-          console.log(`    ${String(d.id).padEnd(10)} renderAlt=${d.renderAltM.toFixed(1)}m` +
-            ` expected=${d.expectedBaroPlusN.toFixed(1)}m Δ=${d.deltaVsBaroPlusN.toFixed(1)}m`);
+          console.log(
+            `    ${String(d.id).padEnd(10)} renderAlt=${d.renderAltM.toFixed(1)}m` +
+              ` expected=${d.expectedBaroPlusN.toFixed(1)}m Δ=${d.deltaVsBaroPlusN.toFixed(1)}m`,
+          );
         }
         console.log('');
       }
@@ -602,24 +754,34 @@ async function main() {
         if (ground === null) continue; // upstream unreachable for this point — skip, don't fail
         underTerrainChecked += 1;
         if (gc.altitudeM >= ground - 50) continue; // not under terrain at all
-        const isSentinelMiss = Math.abs(gc.altitudeM) < SENTINEL_EPS_M && Math.abs(ground) > SENTINEL_GROUND_FLOOR_M;
+        const isSentinelMiss =
+          Math.abs(gc.altitudeM) < SENTINEL_EPS_M &&
+          Math.abs(ground) > SENTINEL_GROUND_FLOOR_M;
         if (isSentinelMiss) {
           sentinelViolations += 1;
-          underTerrainDetails.push(`${gc.id}: renderAlt=${gc.altitudeM.toFixed(1)}m ground=${ground.toFixed(1)}m (0m SENTINEL fingerprint)`);
+          underTerrainDetails.push(
+            `${gc.id}: renderAlt=${gc.altitudeM.toFixed(1)}m ground=${ground.toFixed(1)}m (0m SENTINEL fingerprint)`,
+          );
         } else {
           ambiguousUnderTerrain += 1;
-          ambiguousDetails.push(`${gc.id}: renderAlt=${gc.altitudeM.toFixed(1)}m ground=${ground.toFixed(1)}m`);
+          ambiguousDetails.push(
+            `${gc.id}: renderAlt=${gc.altitudeM.toFixed(1)}m ground=${ground.toFixed(1)}m`,
+          );
         }
       }
-      record('no aircraft renders at the 0m sentinel while terrain ground is far from 0m (datum-miss fingerprint)',
+      record(
+        'no aircraft renders at the 0m sentinel while terrain ground is far from 0m (datum-miss fingerprint)',
         underTerrainChecked > 0 ? sentinelViolations === 0 : null,
         underTerrainChecked > 0
           ? `${sentinelViolations} violation(s) out of ${underTerrainChecked} checked${underTerrainDetails.length ? ': ' + underTerrainDetails.slice(0, 3).join(' | ') : ''}`
-          : 'Re:Earth proxy unreachable for every sampled point this run — INCONCLUSIVE');
+          : 'Re:Earth proxy unreachable for every sampled point this run — INCONCLUSIVE',
+      );
       if (ambiguousUnderTerrain > 0) {
-        record('other under-terrain readings (non-zero, ambiguous — may be legit climb/descent near an airport)',
+        record(
+          'other under-terrain readings (non-zero, ambiguous — may be legit climb/descent near an airport)',
           null,
-          `${ambiguousUnderTerrain} case(s): ${ambiguousDetails.slice(0, 5).join(' | ')}`);
+          `${ambiguousUnderTerrain} case(s): ${ambiguousDetails.slice(0, 5).join(' | ')}`,
+        );
       }
     }
 
@@ -629,8 +791,11 @@ async function main() {
     console.log('Switching map stack to keyless OSM (regime C)...');
     // Grab a London camera's ground BEFORE the switch (still whatever regime
     // we were in — Google-3D, given the app's default).
-    const regimeCTargetId = londonCams[0]?.id || austinCams[0]?.id || allCameras[0]?.id;
-    const groundBeforeSwitch = regimeCTargetId ? await readCameraGround(page, regimeCTargetId) : null;
+    const regimeCTargetId =
+      londonCams[0]?.id || austinCams[0]?.id || allCameras[0]?.id;
+    const groundBeforeSwitch = regimeCTargetId
+      ? await readCameraGround(page, regimeCTargetId)
+      : null;
 
     await page.evaluate(async () => {
       await window.__godsEyeView.mapStackController.setStack('osm');
@@ -650,25 +815,40 @@ async function main() {
     // load — the old failure mode). Report whatever it settled on.
     let terrainCtor = null;
     try {
-      await page.waitForFunction(() => {
-        const p = window.__godsEyeView?.viewer?.terrainProvider;
-        const name = p && p.constructor && p.constructor.name;
-        return !!name && name !== 'EllipsoidTerrainProvider';
-      }, { timeout: 12000, polling: 250 });
-    } catch { /* timed out — fall through and report the settled ctor below */ }
+      await page.waitForFunction(
+        () => {
+          const p = window.__godsEyeView?.viewer?.terrainProvider;
+          const name = p && p.constructor && p.constructor.name;
+          return !!name && name !== 'EllipsoidTerrainProvider';
+        },
+        { timeout: 12000, polling: 250 },
+      );
+    } catch {
+      /* timed out — fall through and report the settled ctor below */
+    }
     terrainCtor = await page.evaluate(() => {
       const provider = window.__godsEyeView.viewer.terrainProvider;
       return provider?.constructor?.name || null;
     });
-    record('globe-stack terrain is a real CesiumTerrainProvider, not the flat EllipsoidTerrainProvider (regime B/C)',
+    record(
+      'globe-stack terrain is a real CesiumTerrainProvider, not the flat EllipsoidTerrainProvider (regime B/C)',
       terrainCtor !== null && terrainCtor !== 'EllipsoidTerrainProvider',
-      `constructor=${terrainCtor}`);
+      `constructor=${terrainCtor}`,
+    );
 
     if (regimeCTargetId) {
       const groundAfterSwitch = await readCameraGround(page, regimeCTargetId);
-      if (!groundBeforeSwitch || !groundAfterSwitch ||
-          !Number.isFinite(groundBeforeSwitch.groundM) || !Number.isFinite(groundAfterSwitch.groundM)) {
-        record(`CCTV grounds re-resolved for regime C (${regimeCTargetId})`, false, 'ground unreadable before or after switch');
+      if (
+        !groundBeforeSwitch ||
+        !groundAfterSwitch ||
+        !Number.isFinite(groundBeforeSwitch.groundM) ||
+        !Number.isFinite(groundAfterSwitch.groundM)
+      ) {
+        record(
+          `CCTV grounds re-resolved for regime C (${regimeCTargetId})`,
+          false,
+          'ground unreadable before or after switch',
+        );
       } else {
         // The prior-everywhere invariant (Task 5) means BOTH readings should
         // already be close to the Re:Earth ellipsoid value in every regime —
@@ -681,17 +861,27 @@ async function main() {
         // record instead of a re-arm).
         const isLondonId = londonCams.some((c) => c.id === regimeCTargetId);
         const staleValue = isLondonId ? 15 : 150;
-        const notStuckAtFabricated = Math.abs(groundAfterSwitch.groundM - staleValue) > 5;
-        const stableAcrossSwitch = Math.abs(groundAfterSwitch.groundM - groundBeforeSwitch.groundM) < 20;
-        record(`CCTV ground NOT stuck at the old fabricated prior (${staleValue}m) after regime C switch (${regimeCTargetId})`,
+        const notStuckAtFabricated =
+          Math.abs(groundAfterSwitch.groundM - staleValue) > 5;
+        const stableAcrossSwitch =
+          Math.abs(groundAfterSwitch.groundM - groundBeforeSwitch.groundM) < 20;
+        record(
+          `CCTV ground NOT stuck at the old fabricated prior (${staleValue}m) after regime C switch (${regimeCTargetId})`,
           notStuckAtFabricated,
-          `before=${groundBeforeSwitch.groundM.toFixed(1)}m after=${groundAfterSwitch.groundM.toFixed(1)}m`);
-        record(`CCTV ground re-resolved within one event cycle, consistent with the prior-everywhere invariant (${regimeCTargetId})`,
+          `before=${groundBeforeSwitch.groundM.toFixed(1)}m after=${groundAfterSwitch.groundM.toFixed(1)}m`,
+        );
+        record(
+          `CCTV ground re-resolved within one event cycle, consistent with the prior-everywhere invariant (${regimeCTargetId})`,
           stableAcrossSwitch,
-          `Δ=${Math.abs(groundAfterSwitch.groundM - groundBeforeSwitch.groundM).toFixed(1)}m`);
+          `Δ=${Math.abs(groundAfterSwitch.groundM - groundBeforeSwitch.groundM).toFixed(1)}m`,
+        );
       }
     } else {
-      record('CCTV grounds re-resolved for regime C', null, 'no test camera available');
+      record(
+        'CCTV grounds re-resolved for regime C',
+        null,
+        'no test camera available',
+      );
     }
 
     // -----------------------------------------------------------------------
@@ -700,10 +890,15 @@ async function main() {
     await sleep(500);
     const shot = path.join(SHOTS_DIR, 'height-datum-regimeC.png');
     await page.screenshot({ path: shot });
-    console.log(`  screenshot (visual review only, not a gate) → ${path.relative(REPO_ROOT, shot)}`);
+    console.log(
+      `  screenshot (visual review only, not a gate) → ${path.relative(REPO_ROOT, shot)}`,
+    );
 
-    record('no console errors during height-datum exercise', consoleErrors.length === 0,
-      consoleErrors.length ? consoleErrors.slice(0, 3).join(' | ') : 'clean');
+    record(
+      'no console errors during height-datum exercise',
+      consoleErrors.length === 0,
+      consoleErrors.length ? consoleErrors.slice(0, 3).join(' | ') : 'clean',
+    );
 
     for (const r of results) {
       if (r.ok === false) exitCode = 1;
@@ -716,7 +911,9 @@ async function main() {
   const pass = results.filter((r) => r.ok === true).length;
   const fail = results.filter((r) => r.ok === false).length;
   const inconclusive = results.filter((r) => r.ok === null).length;
-  console.log(`  RESULT: ${pass} passed, ${fail} failed, ${inconclusive} inconclusive`);
+  console.log(
+    `  RESULT: ${pass} passed, ${fail} failed, ${inconclusive} inconclusive`,
+  );
   console.log('─'.repeat(60) + '\n');
   process.exit(exitCode);
 }

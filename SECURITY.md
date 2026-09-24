@@ -15,12 +15,12 @@ Include repro steps and impact. We'll acknowledge, investigate, and credit you (
 
 The golden rule: **secret-bearing API keys stay on the server side.** The dev/preview server (middleware under `server/providers/`) brokers every request that needs a private credential, so the browser never receives one.
 
-| Key | Where it lives | How the browser uses it |
-|-----|----------------|--------------------------|
-| `OPENAI_API_KEY` | Server only | Browser fetches a short-lived **ephemeral** Realtime session token from `/api/realtime/token`; the real key never ships |
-| `AISSTREAM_API_KEY` | Server only | Server holds the AISStream websocket; browser polls the same-origin `/api/ais-live` cache |
-| OpenSky OAuth (`OPENSKY_CLIENT_ID/SECRET`) | Server only | Server mints + refreshes the token behind `/api/opensky` |
-| `GOOGLE_MAPS_SERVER_API_KEY` (optional, #33) | Server only | Server calls Places (`/api/google/nearby-places`, `/api/google/text-search`) and the Street View fallback with this key; falls back to `GOOGLE_MAPS_API_KEY` when unset |
+| Key                                          | Where it lives | How the browser uses it                                                                                                                                                 |
+| -------------------------------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `OPENAI_API_KEY`                             | Server only    | Browser fetches a short-lived **ephemeral** Realtime session token from `/api/realtime/token`; the real key never ships                                                 |
+| `AISSTREAM_API_KEY`                          | Server only    | Server holds the AISStream websocket; browser polls the same-origin `/api/ais-live` cache                                                                               |
+| OpenSky OAuth (`OPENSKY_CLIENT_ID/SECRET`)   | Server only    | Server mints + refreshes the token behind `/api/opensky`                                                                                                                |
+| `GOOGLE_MAPS_SERVER_API_KEY` (optional, #33) | Server only    | Server calls Places (`/api/google/nearby-places`, `/api/google/text-search`) and the Street View fallback with this key; falls back to `GOOGLE_MAPS_API_KEY` when unset |
 
 ### Two deliberately client-side keys — restrict them
 

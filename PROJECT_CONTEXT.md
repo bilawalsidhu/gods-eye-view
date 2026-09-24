@@ -7,9 +7,11 @@ This document provides a complete, authoritative reference of the **God's Eye Vi
 ## 1. Project Overview & Design Philosophy
 
 ### 1.1 What is God's Eye View?
+
 God's Eye View (GEV) is an open-source, browser-based, real-time spatial intelligence (GEOINT/OSINT) console for planet Earth. It renders a photorealistic 3D globe with live tracking of commercial & military aircraft, maritime vessels, orbital satellites, seismic events, public traffic cameras, public transit, active wildfires, rocket launches, and static infrastructure. It includes hands-free voice control powered by real-time conversational AI models.
 
 ### 1.2 Core Architectural Principles
+
 - **No Heavy Frontend Framework**: Built with Vanilla ES Modules, [CesiumJS](https://cesium.com/), and [Vite](https://vitejs.dev/). No React, Vue, Angular, or Tailwind.
 - **Strict Separation of Concerns**: Clean boundaries between data acquisition, portable normalization, Cesium rendering, UI facades, and server middleware.
 - **Local-First & Keyless Baseline**: The app runs locally without mandatory accounts or keys (using Esri Satellite imagery, keyless terrain, open-source ADS-B, USGS, CelesTrak, GBFS, etc.). Paid/metered keys (Cesium ion, Google Photorealistic 3D, OpenAI Realtime) are optional drop-in upgrades.
@@ -20,25 +22,26 @@ God's Eye View (GEV) is an open-source, browser-based, real-time spatial intelli
 
 ## 2. Directory Structure & Subsystem Ownership
 
-| Directory | Subsystem Responsibility | Platform / Environment |
-| :--- | :--- | :--- |
-| `src/app/` | Application lifecycle controller (`createApplication`), viewer factory, core service wiring. | Browser (Framework-agnostic) |
-| `src/standalone/` | Standalone composition: default layer catalog, local sources, setup controls, DOM binding. | Browser (Page-scoped) |
-| `src/ui/` | Navigation authority, visual styles, HUD, display panels, modal dialogs, share link restoration. | Browser (DOM / Canvas) |
-| `src/data/` | Global context store, lifecycle transitions, feed states, motion models, detection arbiters. | Portable / Browser |
-| `src/layers/` | Dedicated domain layers (aircraft, vessels, satellites, cctv, transit, traffic, etc.). | Browser (CesiumJS) |
-| `src/sources/` | Portable protocol adapters, endpoint definitions, data normalization (zero DOM/Cesium dependencies). | Portable (Node / Browser) |
-| `src/services/` | Shared domain services: terrain sampling, ground floor clamping, geocoding, routing. | Browser / Portable |
-| `src/voice/` | OpenAI Realtime WebRTC session, tool schema registry, execution engine, cost tracker. | Browser (WebRTC / Web Audio) |
-| `src/styles/` | GLSL fragment shaders for screen-space post-processing presets (CRT, NVG, FLIR, Anime, Noir). | WebGL / GLSL |
-| `server/providers/` | Node.js proxy endpoints (AISStream WS bridge, OpenSky, TomTom, Overpass, JARVIS tools). | Node.js / Vite middleware |
-| `server/standalone/`| Root `.env` configuration, credential hardening, Pinokio environment integration. | Node.js |
+| Directory            | Subsystem Responsibility                                                                             | Platform / Environment       |
+| :------------------- | :--------------------------------------------------------------------------------------------------- | :--------------------------- |
+| `src/app/`           | Application lifecycle controller (`createApplication`), viewer factory, core service wiring.         | Browser (Framework-agnostic) |
+| `src/standalone/`    | Standalone composition: default layer catalog, local sources, setup controls, DOM binding.           | Browser (Page-scoped)        |
+| `src/ui/`            | Navigation authority, visual styles, HUD, display panels, modal dialogs, share link restoration.     | Browser (DOM / Canvas)       |
+| `src/data/`          | Global context store, lifecycle transitions, feed states, motion models, detection arbiters.         | Portable / Browser           |
+| `src/layers/`        | Dedicated domain layers (aircraft, vessels, satellites, cctv, transit, traffic, etc.).               | Browser (CesiumJS)           |
+| `src/sources/`       | Portable protocol adapters, endpoint definitions, data normalization (zero DOM/Cesium dependencies). | Portable (Node / Browser)    |
+| `src/services/`      | Shared domain services: terrain sampling, ground floor clamping, geocoding, routing.                 | Browser / Portable           |
+| `src/voice/`         | OpenAI Realtime WebRTC session, tool schema registry, execution engine, cost tracker.                | Browser (WebRTC / Web Audio) |
+| `src/styles/`        | GLSL fragment shaders for screen-space post-processing presets (CRT, NVG, FLIR, Anime, Noir).        | WebGL / GLSL                 |
+| `server/providers/`  | Node.js proxy endpoints (AISStream WS bridge, OpenSky, TomTom, Overpass, JARVIS tools).              | Node.js / Vite middleware    |
+| `server/standalone/` | Root `.env` configuration, credential hardening, Pinokio environment integration.                    | Node.js                      |
 
 ---
 
 ## 3. Application Lifecycle & Architecture
 
 ### 3.1 Four-Phase IoC Startup Lifecycle (`src/app/application.js`)
+
 Application construction is inactive upon import. Construction is triggered via `app.start()` and executes across four strictly ordered phases:
 
 ```
@@ -51,12 +54,14 @@ Application construction is inactive upon import. Construction is triggered via 
 4. **`createTools({ scene, controls, data, signal, defer })`**: Registers scene director, whiteboard annotations, voice sessions, and DOM event listeners.
 
 ### 3.2 LIFO Teardown Contract
+
 - `defer(cleanupFn)` is called immediately upon resource acquisition within each constructor.
 - Teardown executes in reverse phase order: **Tools $\rightarrow$ Controls $\rightarrow$ Data $\rightarrow$ Scene**.
 - Teardown callbacks within each phase execute in reverse registration order (LIFO).
 - `app.destroy()` aborts the shared `AbortSignal`, waits for pending constructors to settle, and executes all registered cleanups.
 
 ### 3.3 Strict Import Direction Gates (`npm run check:boundaries`)
+
 - Portable source graphs (`src/sources/*`, `src/layers/*/source*`, action schemas) **cannot** import Cesium, DOM globals (`window`, `document`), or Node modules.
 - Browser modules cannot import server or Node runtime files.
 - Provider modules cannot import application/rendering modules.
@@ -66,6 +71,7 @@ Application construction is inactive upon import. Construction is triggered via 
 ## 4. Mathematical & Geospatial Algorithms
 
 ### 4.1 Coordinate Reference Systems & Geodesics
+
 - **Earth Ellipsoid**: WGS84 standard ($a = 6378137.0\text{ m}$, $f = 1 / 298.257223563$, mean radius $R = 6371008.8\text{ m}$).
 - **Great-Circle Distance (Haversine Formula)**:
   $$\Delta\sigma = 2 \arcsin\left(\sqrt{\sin^2\left(\frac{\Delta\phi}{2}\right) + \cos\phi_1 \cos\phi_2 \sin^2\left(\frac{\Delta\lambda}{2}\right)}\right), \quad d = R \cdot \Delta\sigma$$
@@ -82,6 +88,7 @@ Application construction is inactive upon import. Construction is triggered via 
 ---
 
 ### 4.2 World-Stable Screen-Projected Heading (`src/data/iconOrientation.js`)
+
 Billboards in CesiumJS are screen-aligned 2D quads. To make aircraft and ships point along their true physical heading across all pitch angles, nadir views, and orbiting tracked cameras:
 
 1. A forward probe vector is constructed in local East-North-Up (ENU) space:
@@ -104,7 +111,9 @@ Billboards in CesiumJS are screen-aligned 2D quads. To make aircraft and ships p
 GEV operates on a **delayed playback model**: it renders positions one poll interval behind real time, interpolating between historical fixes and extrapolating ahead via constant-rate turn integration.
 
 #### A. Low-Speed Course Blender
+
 To prevent GPS jitter at low speeds (e.g. taxiing or hovering helicopters) from whipping vehicle headings:
+
 - Above $v_{\text{high}} = 25.7\text{ m/s}$ (~50 kt): Heading is derived 100% from the movement chord.
 - Below $v_{\text{low}} = 15.4\text{ m/s}$ (~30 kt): Heading uses the reported sensor track only.
 - Below $v_{\text{hold}} = 1.5\text{ m/s}$ (~3 kt): Heading updates are frozen to suppress random walk noise.
@@ -112,7 +121,9 @@ To prevent GPS jitter at low speeds (e.g. taxiing or hovering helicopters) from 
   $$\text{SlewCap}(v) = \text{MinDPS} + (\text{MaxDPS} - \text{MinDPS}) \cdot \operatorname{Ramp}(v)$$
 
 #### B. Analytical Constant-Rate Turn Arc Integrator (`arcOffsetEnu`)
+
 When dead-reckoning during an active turn with angular velocity $\omega = \frac{d\theta}{dt}$ (rad/s) and speed $v$:
+
 - For straight motion ($|\omega| < 10^{-4}\text{ rad/s}$):
   $$\Delta E = v \sin(\theta) \Delta t, \quad \Delta N = v \cos(\theta) \Delta t$$
 - For curved motion ($|\omega| \ge 10^{-4}\text{ rad/s}$):
@@ -123,7 +134,9 @@ When dead-reckoning during an active turn with angular velocity $\omega = \frac{
 ---
 
 ### 4.4 Terrain Clamping & Predictive Ground Corridor (`src/services/groundFloor.js`)
+
 To prevent entities from clipping into 3D photorealistic buildings or mountainous terrain:
+
 - **Spatial Grid Quantization**: Coordinates are snapped to a 3-decimal (~111 m) grid (`coarseFloorCoord`), collapsing moving entities and trail waypoints onto a small set of cached elevation keys.
 - **Synchronous Cache Queries**: Rendering paths read elevation synchronously from cache; cache misses fire asynchronous background sampling.
 - **Predictive Corridor Walk**: For ground contacts, GEV samples ahead along the projected turn arc (`projectGroundArcLatLon`) at 55 m intervals up to 1300 m, pre-warming elevation tiles before the entity reaches them.
@@ -132,6 +145,7 @@ To prevent entities from clipping into 3D photorealistic buildings or mountainou
 ---
 
 ### 4.5 Orbital Mechanics & Space Missions (`src/layers/satellites/`, `src/layers/trajectoryPredictor.js`)
+
 - **SGP4 Propagation**: Parses standard Two-Line Element sets (TLE) and evaluates Simplified General Perturbations-4 models (`satellite.js`).
 - **GMST Realignment**: Rotates satellite positions from Earth-Centered Inertial (ECI) coordinates to Earth-Centered, Earth-Fixed (ECEF) using Greenwich Mean Sidereal Time (GMST) to keep orbits locked to the rotating globe without drift.
 - **Orbital Swath / Sensor Footprint Cone**:
@@ -142,6 +156,7 @@ To prevent entities from clipping into 3D photorealistic buildings or mountainou
 ---
 
 ### 4.6 Cockpit Camera & Follow Dynamics (`src/cockpitMath.js`, `src/cockpitTracking.js`)
+
 - **Inertial Anchor Correction**: Smooths the transition between dead-reckoned forward motion and newly received server fixes:
   $$\Delta_{\text{correction}} = \min\left(d_{\text{error}}, \; d_{\text{error}} \cdot \left(1 - e^{-1.25 \Delta t}\right), \; \max(0.75, 0.22 \cdot v) \cdot \Delta t\right)$$
 - **Circular Keyhole Altitude/Speed Tapes**: Altitude and speed tapes render in curved HUD margins. The horizontal inset $x_{\text{inset}}$ for tick slot $y$ is computed via circle geometry:
@@ -152,7 +167,9 @@ To prevent entities from clipping into 3D photorealistic buildings or mountainou
 ---
 
 ### 4.7 Camera Verbs & Cinematic Routing (`src/cameraVerbs.js`)
+
 Cinematic camera paths along routes implement multi-layered smoothing:
+
 1. **Trapezoid Velocity Profile**: Eased acceleration and deceleration ramps (`ROUTE_RAMP_S = 2.4\text{s}`).
 2. **Path Curvature & Banked Turn Roll**: Measures angular turn rate over a 4-second triangular window centered on the camera:
    $$\text{Roll}_{\text{target}} = \text{clamp}\left(\dot{\theta}_{\text{path}} \cdot 0.44^\circ/(\text{deg/s}), \; -10^\circ, \; +10^\circ\right)$$
@@ -164,16 +181,19 @@ Cinematic camera paths along routes implement multi-layered smoothing:
 ---
 
 ### 4.8 Tactical Detection Mesh & Label Arbiter (`src/data/detection.js`, `src/data/labelArbiter.js`)
+
 Renders screen-space 2D bounding brackets and telemetry callouts over 3D entities:
+
 - **Spatial Partitioning Grid**: Screen space is subdivided into $32 \times 32\text{ px}$ hash buckets. Candidate bounding boxes are pruned via Axis-Aligned Bounding Box (AABB) intersection tests.
 - **Layer Quota Allocation**:
-  - *Elastic Mode*: Equal distribution across all active layers with greedy water-filling redistribution for underutilized quotas.
-  - *Weighted Mode*: Semantic priority weights (Military: 1.4, Traffic: 1.15, CCTV: 1.1, Flights: 1.0, Satellites: 1.0, Bikeshare: 0.9) allocated using the Largest Remainder Method (Hamilton's method).
+  - _Elastic Mode_: Equal distribution across all active layers with greedy water-filling redistribution for underutilized quotas.
+  - _Weighted Mode_: Semantic priority weights (Military: 1.4, Traffic: 1.15, CCTV: 1.1, Flights: 1.0, Satellites: 1.0, Bikeshare: 0.9) allocated using the Largest Remainder Method (Hamilton's method).
 - **Temporal Hysteresis**: Minimum label lifetime of 2500 ms and cooldown of 1200 ms prevents rapid label flickering or thrashing. Fade-in takes 150 ms; fade-out takes 300 ms.
 
 ---
 
 ### 4.9 Spatial Awareness & Proximity Engine (`src/data/militaryAwarenessEngine.js`, `src/layers/geofenceEngine.js`)
+
 - **Doubling-Radius Nearest Neighbor Search**: Searches concentric spheres expanding from 250 km ($r_{\text{initial}}$) up to 16,000 km ($r_{\text{max}}$), doubling the radius on each miss:
   $$r_{k+1} = \min(2 \cdot r_k, \; 16000\text{ km})$$
 - **Point-in-Polygon (Jordan Curve Ray-Casting)**:
@@ -183,6 +203,7 @@ Renders screen-space 2D bounding brackets and telemetry callouts over 3D entitie
 ---
 
 ### 4.10 CCTV Frustum & Footprint Geometry (`src/data/cctvViewshed.js`, `src/data/cctvFootprint.js`)
+
 - **3D Frustum Mesh**: Constructed from 5 vertices (mount apex, top-left, top-right, bottom-right, bottom-left) forming 6 triangles (4 side rays + 2 far-plane triangles).
 - **3x3 Monitor Plane Ground Support**:
   For a camera pose (heading $\theta$, pitch $\alpha$, horizontal FOV $\text{hFov}$, range $R$):
@@ -195,7 +216,9 @@ Renders screen-space 2D bounding brackets and telemetry callouts over 3D entitie
 ---
 
 ### 4.11 GLSL Post-Processing Pipeline (`src/styles/`, `src/ui/visualEffects.js`)
+
 Screen-space post-processing shaders integrated with Cesium's `PostProcessStageComposite`:
+
 - **CRT / Retro (`retro.js`)**: Radial barrel distortion, CRT phosphor triad mask, horizontal scanlines with vertical roll instability, chromatic aberration (RGB barrel offsets), phosphor decay bloom.
 - **Night Vision / Surveillance (`surveillance.js`)**: Green monochrome phosphorescence LUT, high-frequency animated film grain / scintillation, vignetting, scanlines, bloom overload.
 - **FLIR / Thermal (`thermal.js`)**: Luminance extraction remapped through Ironbow, White-Hot, or Black-Hot palettes, Sobel/Laplacian edge enhancement, heat gradient pseudo-shading.
@@ -205,33 +228,36 @@ Screen-space post-processing shaders integrated with Cesium's `PostProcessStageC
 
 ## 5. Data Feeds, Layer Catalogs & Schemas
 
-| Layer Identifier | Data Source / Provider | Ingestion Protocol | Update Cadence | Keyless Path? |
-| :--- | :--- | :--- | :--- | :--- |
-| `flights` | OpenSky Network & adsb.lol | REST (JSON) | 15–30s | Yes (Anon) / Optional OAuth |
-| `military` | adsb.lol | REST (JSON) | 10–15s | Yes |
-| `ais-live-vessels` | AISStream | WebSocket | Real-time | Free API Key Required |
-| `satellites` | CelesTrak | TLE text files | Daily cache | Yes |
-| `earthquakes` | USGS | GeoJSON | 60s | Yes |
-| `cctv` | Municipal & DOT feeds (Austin, London, Caltrans, etc.) | Static catalog + image proxy | On-demand | Yes |
-| `traffic` | OpenStreetMap + TomTom Flow | Vector tiles / REST | Simulated + live flow | Yes (Sim) / TomTom key |
-| `transit` | GTFS-Realtime | Protocol Buffers (`pbf`) | 15–30s | Yes |
-| `firms` | NASA FIRMS (VIIRS/MODIS) | CSV | 10–15 min | Free API Key Required |
-| `radio` | Radio Browser | REST / HTTP Audio | On-demand stream | Yes |
-| `launches` | Launch Library 2 | REST (JSON) | 60s | Yes |
-| `bikeshare` | GBFS | REST (JSON) | 60s | Yes |
-| `infrastructure` | Bundled Datasets (Dams, Cables, Datacenters) | GeoJSON | Static | Yes |
+| Layer Identifier   | Data Source / Provider                                 | Ingestion Protocol           | Update Cadence        | Keyless Path?               |
+| :----------------- | :----------------------------------------------------- | :--------------------------- | :-------------------- | :-------------------------- |
+| `flights`          | OpenSky Network & adsb.lol                             | REST (JSON)                  | 15–30s                | Yes (Anon) / Optional OAuth |
+| `military`         | adsb.lol                                               | REST (JSON)                  | 10–15s                | Yes                         |
+| `ais-live-vessels` | AISStream                                              | WebSocket                    | Real-time             | Free API Key Required       |
+| `satellites`       | CelesTrak                                              | TLE text files               | Daily cache           | Yes                         |
+| `earthquakes`      | USGS                                                   | GeoJSON                      | 60s                   | Yes                         |
+| `cctv`             | Municipal & DOT feeds (Austin, London, Caltrans, etc.) | Static catalog + image proxy | On-demand             | Yes                         |
+| `traffic`          | OpenStreetMap + TomTom Flow                            | Vector tiles / REST          | Simulated + live flow | Yes (Sim) / TomTom key      |
+| `transit`          | GTFS-Realtime                                          | Protocol Buffers (`pbf`)     | 15–30s                | Yes                         |
+| `firms`            | NASA FIRMS (VIIRS/MODIS)                               | CSV                          | 10–15 min             | Free API Key Required       |
+| `radio`            | Radio Browser                                          | REST / HTTP Audio            | On-demand stream      | Yes                         |
+| `launches`         | Launch Library 2                                       | REST (JSON)                  | 60s                   | Yes                         |
+| `bikeshare`        | GBFS                                                   | REST (JSON)                  | 60s                   | Yes                         |
+| `infrastructure`   | Bundled Datasets (Dams, Cables, Datacenters)           | GeoJSON                      | Static                | Yes                         |
 
 ---
 
 ## 6. Voice Agent & JARVIS Tool Execution Engine
 
 ### 6.1 Voice System Architecture (`src/voice/`)
+
 - **Protocol**: OpenAI Realtime API over WebRTC data channels.
 - **Audio Pipeline**: Web Audio API with microphone echo cancellation and noise suppression. Push-to-talk and voice-activity detection (VAD).
 - **Cost Governor (`voiceCost.js`)**: Live session spending monitor based on token counters and audio duration, featuring a $2 alert and a $5 hard disconnect limit.
 
 ### 6.2 Voice Action Schemas & Dispatcher (`src/voice/actionSchemas.js`, `gevActions.js`)
+
 Voice tools are declared with strict JSON schemas and dispatched by `gevActions.js`. Key categories:
+
 1. **Camera Operators**: `move_camera`, `fly_to_location`, `orbit_target`, `set_view_scale`, `fly_route`.
 2. **Layer Toggles**: `toggle_layer`, `set_layer_opacity`, `set_visual_style`.
 3. **Analyst Interrogators**: `count_entities_in_area`, `find_nearest_entity`, `get_entity_telemetry`, `query_iss_pass`.
@@ -239,7 +265,9 @@ Voice tools are declared with strict JSON schemas and dispatched by `gevActions.
 5. **Tactical Operations**: `track_entity`, `enter_cockpit`, `cycle_contacts`, `tune_radio_station`.
 
 ### 6.3 JARVIS Server Execution Engine (`server/providers/jarvis-tools.js`)
+
 Server-side agent capabilities for autonomous analysis and local system integration:
+
 - **Sandboxed Code Execution**: Executes JavaScript, TypeScript, Python, PowerShell, or Bash in isolated child processes with a 30s timeout and 64KB output caps.
 - **Hardware Telemetry**: Reads host CPU, RAM, disk, battery, and visible desktop windows.
 - **Computer Vision**: Screenshot capture and multimodal inspection via Vision APIs.

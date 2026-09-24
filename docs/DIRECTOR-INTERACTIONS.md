@@ -24,12 +24,12 @@ lines and polygons retain stable pack/feature identities. Assets load before
 feature existence is checked; a missing feature refuses the entire action set.
 Images and native media are not interaction targets in this version.
 
-| Action | Fields | Behavior |
-| --- | --- | --- |
-| `card` | `text`, optional `url` | Show plain text and an optional HTTPS source link; never HTML |
-| `focus` | `anchorId` | Set a top-down camera pose at a scene anchor through camera ownership arbitration |
-| `shot` | `shotId` | Load another shot in the same scene at its authored start |
-| `layer` | `layerId`, boolean `enabled` | Request an explicit state through the ordinary layer admission path |
+| Action  | Fields                       | Behavior                                                                          |
+| ------- | ---------------------------- | --------------------------------------------------------------------------------- |
+| `card`  | `text`, optional `url`       | Show plain text and an optional HTTPS source link; never HTML                     |
+| `focus` | `anchorId`                   | Set a top-down camera pose at a scene anchor through camera ownership arbitration |
+| `shot`  | `shotId`                     | Load another shot in the same scene at its authored start                         |
+| `layer` | `layerId`, boolean `enabled` | Request an explicit state through the ordinary layer admission path               |
 
 There are at most 64 interactions per shot. Card text is limited to 4,096
 characters; source links cannot contain credentials, query strings or fragments.

@@ -10,30 +10,66 @@ module.exports = {
     const resetting = info.running('reset.js');
 
     if (installing || updating || resetting) {
-      const href = installing ? 'install.js' : updating ? 'update.js' : 'reset.js';
-      const text = installing ? 'Installing' : updating ? 'Updating' : 'Resetting';
+      const href = installing
+        ? 'install.js'
+        : updating
+          ? 'update.js'
+          : 'reset.js';
+      const text = installing
+        ? 'Installing'
+        : updating
+          ? 'Updating'
+          : 'Resetting';
       return [{ default: true, icon: 'fa-solid fa-terminal', text, href }];
     }
 
     if (!installed) {
-      return [{ default: true, icon: 'fa-solid fa-download', text: 'Install', href: 'install.js' }];
+      return [
+        {
+          default: true,
+          icon: 'fa-solid fa-download',
+          text: 'Install',
+          href: 'install.js',
+        },
+      ];
     }
 
     if (starting) {
       const local = info.local('start.js');
       if (local?.url) {
         return [
-          { default: true, icon: 'fa-solid fa-earth-americas', text: 'Open God\'s Eye View', href: local.url },
+          {
+            default: true,
+            icon: 'fa-solid fa-earth-americas',
+            text: "Open God's Eye View",
+            href: local.url,
+          },
           { icon: 'fa-solid fa-terminal', text: 'Server', href: 'start.js' },
         ];
       }
-      return [{ default: true, icon: 'fa-solid fa-terminal', text: 'Starting', href: 'start.js' }];
+      return [
+        {
+          default: true,
+          icon: 'fa-solid fa-terminal',
+          text: 'Starting',
+          href: 'start.js',
+        },
+      ];
     }
 
     return [
-      { default: true, icon: 'fa-solid fa-power-off', text: 'Start', href: 'start.js' },
+      {
+        default: true,
+        icon: 'fa-solid fa-power-off',
+        text: 'Start',
+        href: 'start.js',
+      },
       { icon: 'fa-solid fa-arrows-rotate', text: 'Update', href: 'update.js' },
-      { icon: 'fa-solid fa-broom', text: 'Repair installation', href: 'reset.js' },
+      {
+        icon: 'fa-solid fa-broom',
+        text: 'Repair installation',
+        href: 'reset.js',
+      },
     ];
   },
 };

@@ -1160,27 +1160,6 @@ export function createGevActionRunner({
       return { ok: true, action: 'export_dossier' };
     }
 
-    if (name === 'toggle_gestures') {
-      const targetState =
-        args.enable !== undefined
-          ? Boolean(args.enable)
-          : !styleManager?.gestureControls?.isEnabled;
-      styleManager?.gestureControls?.toggle(targetState);
-      return { ok: true, action: 'toggle_gestures', enabled: targetState };
-    }
-
-    if (name === 'get_gesture_status') {
-      const isEnabled = Boolean(styleManager?.gestureControls?.isEnabled);
-      return {
-        ok: true,
-        action: 'get_gesture_status',
-        enabled: isEnabled,
-        trackerRunning: Boolean(
-          styleManager?.gestureControls?.tracker?.isRunning,
-        ),
-      };
-    }
-
     throw new Error(`Unknown GEV tool: ${name}`);
   };
 }

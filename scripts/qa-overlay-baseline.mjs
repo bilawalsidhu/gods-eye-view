@@ -22,7 +22,8 @@ import os from 'node:os';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
 
-const CHROME_EXECUTABLE = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const CHROME_EXECUTABLE =
+  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const DEFAULT_URL = 'http://localhost:4176';
 const VIEWPORT = Object.freeze({ width: 1440, height: 900 });
 const SAMPLE_MS = 5_000;
@@ -38,21 +39,76 @@ const KNOWN_OVERLAY_CANVASES = new Set([
 ]);
 
 const SCENES = Object.freeze([
-  { id: 'datacenters', layers: ['local-datacenters'], camera: [-98, 38, 6_000_000, 0, -Math.PI / 2] },
-  { id: 'dams', layers: ['local-dams'], camera: [-98, 38, 6_000_000, 0, -Math.PI / 2] },
-  { id: 'datacenters+dams', layers: ['local-datacenters', 'local-dams'], camera: [-98, 38, 6_000_000, 0, -Math.PI / 2] },
-  { id: 'submarine-cables', layers: ['telegeography-submarine-cables'], camera: [-20, 12, 11_000_000, 0, -Math.PI / 2] },
+  {
+    id: 'datacenters',
+    layers: ['local-datacenters'],
+    camera: [-98, 38, 6_000_000, 0, -Math.PI / 2],
+  },
+  {
+    id: 'dams',
+    layers: ['local-dams'],
+    camera: [-98, 38, 6_000_000, 0, -Math.PI / 2],
+  },
+  {
+    id: 'datacenters+dams',
+    layers: ['local-datacenters', 'local-dams'],
+    camera: [-98, 38, 6_000_000, 0, -Math.PI / 2],
+  },
+  {
+    id: 'submarine-cables',
+    layers: ['telegeography-submarine-cables'],
+    camera: [-20, 12, 11_000_000, 0, -Math.PI / 2],
+  },
   { id: 'cctv-street', layers: ['cctv'], cctvHeightM: 1_500 },
   { id: 'cctv-city', layers: ['cctv'], cctvHeightM: 6_000 },
   { id: 'cctv-high', layers: ['cctv'], cctvHeightM: 12_000 },
-  { id: 'firms', layers: ['local-firms'], camera: [-110, 45, 5_000_000, 0, -Math.PI / 2] },
-  { id: 'vessels', layers: ['ais-live-vessels'], camera: [4.05, 51.93, 18_000, 0.3, -1.25] },
-  { id: 'detection-25', layers: ['flights', 'satellites'], detectionDensity: 25, camera: [-98, 38, 2_500_000, 0, -Math.PI / 2] },
-  { id: 'detection-50', layers: ['flights', 'satellites'], detectionDensity: 50, camera: [-98, 38, 2_500_000, 0, -Math.PI / 2] },
-  { id: 'detection-100', layers: ['flights', 'satellites'], detectionDensity: 100, camera: [-98, 38, 2_500_000, 0, -Math.PI / 2] },
-  { id: 'tracked-civil-aircraft', layers: ['flights'], trackedFlight: true, camera: [-98, 38, 2_500_000, 0, -Math.PI / 2] },
-  { id: 'missions-selected', layers: ['rocket-launches'], missionSelected: true, camera: [0, 15, 18_000_000, 0, -Math.PI / 2] },
-  { id: 'cockpit-mode', layers: ['flights'], trackedFlight: true, cockpit: true, camera: [-98, 38, 2_500_000, 0, -Math.PI / 2] },
+  {
+    id: 'firms',
+    layers: ['local-firms'],
+    camera: [-110, 45, 5_000_000, 0, -Math.PI / 2],
+  },
+  {
+    id: 'vessels',
+    layers: ['ais-live-vessels'],
+    camera: [4.05, 51.93, 18_000, 0.3, -1.25],
+  },
+  {
+    id: 'detection-25',
+    layers: ['flights', 'satellites'],
+    detectionDensity: 25,
+    camera: [-98, 38, 2_500_000, 0, -Math.PI / 2],
+  },
+  {
+    id: 'detection-50',
+    layers: ['flights', 'satellites'],
+    detectionDensity: 50,
+    camera: [-98, 38, 2_500_000, 0, -Math.PI / 2],
+  },
+  {
+    id: 'detection-100',
+    layers: ['flights', 'satellites'],
+    detectionDensity: 100,
+    camera: [-98, 38, 2_500_000, 0, -Math.PI / 2],
+  },
+  {
+    id: 'tracked-civil-aircraft',
+    layers: ['flights'],
+    trackedFlight: true,
+    camera: [-98, 38, 2_500_000, 0, -Math.PI / 2],
+  },
+  {
+    id: 'missions-selected',
+    layers: ['rocket-launches'],
+    missionSelected: true,
+    camera: [0, 15, 18_000_000, 0, -Math.PI / 2],
+  },
+  {
+    id: 'cockpit-mode',
+    layers: ['flights'],
+    trackedFlight: true,
+    cockpit: true,
+    camera: [-98, 38, 2_500_000, 0, -Math.PI / 2],
+  },
 ]);
 
 const SCENE_ALIASES = Object.freeze({
@@ -77,13 +133,18 @@ function hasFlag(name) {
 function selectedScenes() {
   const raw = getOpt('--scene');
   if (!raw) return [...SCENES];
-  const requested = raw.split(',').map((value) => value.trim()).filter(Boolean);
+  const requested = raw
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
   const selected = [];
   for (const requestedId of requested) {
     const id = SCENE_ALIASES[requestedId] || requestedId;
     const scene = SCENES.find((candidate) => candidate.id === id);
     if (!scene) {
-      throw new Error(`Unknown scene '${requestedId}'. Available: ${SCENES.map((candidate) => candidate.id).join(', ')}`);
+      throw new Error(
+        `Unknown scene '${requestedId}'. Available: ${SCENES.map((candidate) => candidate.id).join(', ')}`,
+      );
     }
     selected.push(scene);
   }
@@ -96,23 +157,25 @@ function sleep(ms) {
 
 function contentType(filePath) {
   const extension = path.extname(filePath).toLowerCase();
-  return ({
-    '.css': 'text/css',
-    '.gif': 'image/gif',
-    '.html': 'text/html',
-    '.ico': 'image/x-icon',
-    '.jpeg': 'image/jpeg',
-    '.jpg': 'image/jpeg',
-    '.js': 'text/javascript',
-    '.json': 'application/json',
-    '.ktx2': 'image/ktx2',
-    '.png': 'image/png',
-    '.svg': 'image/svg+xml',
-    '.wasm': 'application/wasm',
-    '.webp': 'image/webp',
-    '.woff': 'font/woff',
-    '.woff2': 'font/woff2',
-  })[extension] || 'application/octet-stream';
+  return (
+    {
+      '.css': 'text/css',
+      '.gif': 'image/gif',
+      '.html': 'text/html',
+      '.ico': 'image/x-icon',
+      '.jpeg': 'image/jpeg',
+      '.jpg': 'image/jpeg',
+      '.js': 'text/javascript',
+      '.json': 'application/json',
+      '.ktx2': 'image/ktx2',
+      '.png': 'image/png',
+      '.svg': 'image/svg+xml',
+      '.wasm': 'application/wasm',
+      '.webp': 'image/webp',
+      '.woff': 'font/woff',
+      '.woff2': 'font/woff2',
+    }[extension] || 'application/octet-stream'
+  );
 }
 
 async function installStaticDist(page, distDir) {
@@ -127,11 +190,16 @@ async function installStaticDist(page, distDir) {
           await request.respond({
             status: 503,
             contentType: 'application/json',
-            body: JSON.stringify({ error: 'offline_dist_capture', message: 'Dev-server proxies unavailable' }),
+            body: JSON.stringify({
+              error: 'offline_dist_capture',
+              message: 'Dev-server proxies unavailable',
+            }),
           });
           return;
         }
-        const relativePath = decodeURIComponent(url.pathname === '/' ? '/index.html' : url.pathname).replace(/^\/+/, '');
+        const relativePath = decodeURIComponent(
+          url.pathname === '/' ? '/index.html' : url.pathname,
+        ).replace(/^\/+/, '');
         const filePath = path.resolve(root, relativePath);
         if (filePath !== root && !filePath.startsWith(`${root}${path.sep}`)) {
           await request.respond({ status: 403, body: 'Forbidden' });
@@ -148,17 +216,28 @@ async function installStaticDist(page, distDir) {
         });
         return;
       }
-      if (url.hostname === 'tile.googleapis.com' && url.pathname.includes('/3dtiles/')) {
+      if (
+        url.hostname === 'tile.googleapis.com' &&
+        url.pathname.includes('/3dtiles/')
+      ) {
         await request.respond({
           status: 403,
           contentType: 'application/json',
-          body: JSON.stringify({ error: { message: 'Offline dist capture: Google tiles unavailable' } }),
+          body: JSON.stringify({
+            error: {
+              message: 'Offline dist capture: Google tiles unavailable',
+            },
+          }),
         });
         return;
       }
       await request.continue();
     } catch {
-      try { await request.abort(); } catch { /* request already resolved */ }
+      try {
+        await request.abort();
+      } catch {
+        /* request already resolved */
+      }
     }
   });
 }
@@ -184,7 +263,11 @@ async function installDeterministicDevEndpoints(page) {
       await request.respond({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ status: 'connected', rows: [], lastMessageAt: null }),
+        body: JSON.stringify({
+          status: 'connected',
+          rows: [],
+          lastMessageAt: null,
+        }),
       });
       return;
     }
@@ -201,20 +284,32 @@ function round(value, digits = 3) {
 function percentile(values, fraction) {
   const sorted = values.filter(Number.isFinite).sort((a, b) => a - b);
   if (!sorted.length) return null;
-  const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * fraction) - 1));
+  const index = Math.min(
+    sorted.length - 1,
+    Math.max(0, Math.ceil(sorted.length * fraction) - 1),
+  );
   return sorted[index];
 }
 
 function summarizeFrameIntervals(intervals) {
-  const usable = intervals.filter((value) => Number.isFinite(value) && value > 0);
+  const usable = intervals.filter(
+    (value) => Number.isFinite(value) && value > 0,
+  );
   if (!usable.length) {
-    return { samples: 0, meanMs: null, p50Ms: null, p95Ms: null, p99Ms: null, maxMs: null };
+    return {
+      samples: 0,
+      meanMs: null,
+      p50Ms: null,
+      p95Ms: null,
+      p99Ms: null,
+      maxMs: null,
+    };
   }
   const mean = usable.reduce((sum, value) => sum + value, 0) / usable.length;
   return {
     samples: usable.length,
     meanMs: round(mean),
-    p50Ms: round(percentile(usable, 0.50)),
+    p50Ms: round(percentile(usable, 0.5)),
     p95Ms: round(percentile(usable, 0.95)),
     p99Ms: round(percentile(usable, 0.99)),
     maxMs: round(Math.max(...usable)),
@@ -241,46 +336,73 @@ function inventoryDelta(before, after) {
 function printContext(context) {
   console.log('\nWorld Overlay Phase 0 Baseline');
   console.log(`  URL        : ${context.url}`);
-  console.log(`  Machine    : ${context.machine.hostname} · ${context.machine.platform} ${context.machine.release} · ${context.machine.arch}`);
-  console.log(`  CPU / RAM  : ${context.machine.cpuModel} · ${context.machine.logicalCpuCount} logical · ${context.machine.totalMemoryGiB} GiB`);
+  console.log(
+    `  Machine    : ${context.machine.hostname} · ${context.machine.platform} ${context.machine.release} · ${context.machine.arch}`,
+  );
+  console.log(
+    `  CPU / RAM  : ${context.machine.cpuModel} · ${context.machine.logicalCpuCount} logical · ${context.machine.totalMemoryGiB} GiB`,
+  );
   console.log(`  Browser    : ${context.browser.version}`);
   console.log(`  User agent : ${context.browser.userAgent}`);
-  console.log(`  Viewport   : ${context.viewport.width}×${context.viewport.height} CSS px · DPR ${context.viewport.dpr}`);
-  console.log(`  WebGL      : ${context.browser.webglVendor} · ${context.browser.webglRenderer}`);
+  console.log(
+    `  Viewport   : ${context.viewport.width}×${context.viewport.height} CSS px · DPR ${context.viewport.dpr}`,
+  );
+  console.log(
+    `  WebGL      : ${context.browser.webglVendor} · ${context.browser.webglRenderer}`,
+  );
   console.log(`  Capture    : ${context.captureMode}`);
-  console.log(context.gpuMode === 'hardware'
-    ? '  Timing note: hardware-GPU run; retain the renderer string with every comparison.\n'
-    : '  Timing note: SwiftShader absolute FPS is non-representative; compare motion/rest and before/after only.\n');
+  console.log(
+    context.gpuMode === 'hardware'
+      ? '  Timing note: hardware-GPU run; retain the renderer string with every comparison.\n'
+      : '  Timing note: SwiftShader absolute FPS is non-representative; compare motion/rest and before/after only.\n',
+  );
 }
 
 function printScene(result) {
-  const tag = result.status === 'ok' ? 'OK' : result.status === 'skipped' ? 'SKIP' : 'ERROR';
+  const tag =
+    result.status === 'ok'
+      ? 'OK'
+      : result.status === 'skipped'
+        ? 'SKIP'
+        : 'ERROR';
   console.log(`[${tag}] ${result.scene}`);
   if (result.reason) console.log(`  reason      : ${result.reason}`);
   for (const activation of result.layerActivations || []) {
     const delta = activation.delta;
-    console.log(`  toggle ${activation.layerId.padEnd(31)} entities ${String(delta.entities).padStart(6)} · LabelGraphics ${String(delta.labelGraphics).padStart(6)} · primitive labels ${String(delta.primitiveLabels).padStart(6)}`);
+    console.log(
+      `  toggle ${activation.layerId.padEnd(31)} entities ${String(delta.entities).padStart(6)} · LabelGraphics ${String(delta.labelGraphics).padStart(6)} · primitive labels ${String(delta.primitiveLabels).padStart(6)}`,
+    );
   }
   if (result.entityInventory) {
     const totals = result.entityInventory.totals;
-    console.log(`  scene total : entities ${totals.entities} · LabelGraphics ${totals.labelGraphics} (${totals.shownLabelGraphics} show=true) · primitive labels ${totals.primitiveLabels}`);
+    console.log(
+      `  scene total : entities ${totals.entities} · LabelGraphics ${totals.labelGraphics} (${totals.shownLabelGraphics} show=true) · primitive labels ${totals.primitiveLabels}`,
+    );
   }
   for (const phaseName of ['motion', 'rest']) {
     const phase = result.samples?.[phaseName];
     if (!phase) continue;
     const frame = phase.frameTime;
-    console.log(`  ${phaseName.padEnd(6)} frame: n=${frame.samples} mean=${frame.meanMs} ms p50=${frame.p50Ms} ms p95=${frame.p95Ms} ms p99=${frame.p99Ms} ms`);
+    console.log(
+      `  ${phaseName.padEnd(6)} frame: n=${frame.samples} mean=${frame.meanMs} ms p50=${frame.p50Ms} ms p95=${frame.p95Ms} ms p99=${frame.p99Ms} ms`,
+    );
     for (const canvas of phase.canvases || []) {
-      console.log(`    ${canvas.id.padEnd(18)} frames≈${String(canvas.clearRectCalls).padStart(4)} fillText=${String(canvas.fillTextCalls).padStart(5)} drawImage=${String(canvas.drawImageCalls).padStart(5)} 2D-sync=${String(canvas.totalSyncMs).padStart(8)} ms`);
+      console.log(
+        `    ${canvas.id.padEnd(18)} frames≈${String(canvas.clearRectCalls).padStart(4)} fillText=${String(canvas.fillTextCalls).padStart(5)} drawImage=${String(canvas.drawImageCalls).padStart(5)} 2D-sync=${String(canvas.totalSyncMs).padStart(8)} ms`,
+      );
     }
   }
   const detection = result.samples?.rest?.detectionDiagnostics;
   if (detection) {
-    console.log(`  detection   : observations=${detection.observationCount ?? 'n/a'} candidates=${detection.candidateCount ?? 'n/a'} visible=${detection.visibleCount ?? 'n/a'} selected=${detection.selectedCount ?? 'n/a'} solve=${round(detection.solveMs)} ms paint=${round(detection.paintMs)} ms`);
+    console.log(
+      `  detection   : observations=${detection.observationCount ?? 'n/a'} candidates=${detection.candidateCount ?? 'n/a'} visible=${detection.visibleCount ?? 'n/a'} selected=${detection.selectedCount ?? 'n/a'} solve=${round(detection.solveMs)} ms paint=${round(detection.paintMs)} ms`,
+    );
   }
   const exposed = result.samples?.rest?.exposedCounts;
   if (exposed && Object.values(exposed).some((value) => value != null)) {
-    console.log(`  exposed     : CCTV cards=${exposed.cctvOwnedEntries ?? 'n/a'}/${exposed.cctvEntryLimit ?? 'n/a'} · FIRMS objects=${exposed.firmsSourceObjects ?? 'n/a'} · vessel objects=${exposed.vesselSourceObjects ?? 'n/a'}`);
+    console.log(
+      `  exposed     : CCTV cards=${exposed.cctvOwnedEntries ?? 'n/a'}/${exposed.cctvEntryLimit ?? 'n/a'} · FIRMS objects=${exposed.firmsSourceObjects ?? 'n/a'} · vessel objects=${exposed.vesselSourceObjects ?? 'n/a'}`,
+    );
   }
   console.log('');
 }
@@ -288,10 +410,31 @@ function printScene(result) {
 async function installPageInstrumentation(page) {
   await page.evaluateOnNewDocument(() => {
     const trackedMethods = [
-      'arc', 'arcTo', 'beginPath', 'clearRect', 'closePath', 'drawImage', 'fill',
-      'fillRect', 'fillText', 'lineTo', 'measureText', 'moveTo', 'quadraticCurveTo',
-      'rect', 'resetTransform', 'restore', 'rotate', 'roundRect', 'save', 'scale',
-      'setTransform', 'stroke', 'strokeRect', 'strokeText', 'translate',
+      'arc',
+      'arcTo',
+      'beginPath',
+      'clearRect',
+      'closePath',
+      'drawImage',
+      'fill',
+      'fillRect',
+      'fillText',
+      'lineTo',
+      'measureText',
+      'moveTo',
+      'quadraticCurveTo',
+      'rect',
+      'resetTransform',
+      'restore',
+      'rotate',
+      'roundRect',
+      'save',
+      'scale',
+      'setTransform',
+      'stroke',
+      'strokeRect',
+      'strokeText',
+      'translate',
     ];
     const metrics = new Map();
     const metricFor = (canvas) => {
@@ -307,8 +450,9 @@ async function installPageInstrumentation(page) {
     if (proto) {
       for (const method of trackedMethods) {
         const original = proto[method];
-        if (typeof original !== 'function' || original.__gevBaselineWrapped) continue;
-        const wrapped = function(...args) {
+        if (typeof original !== 'function' || original.__gevBaselineWrapped)
+          continue;
+        const wrapped = function (...args) {
           const startedAt = performance.now();
           try {
             return Reflect.apply(original, this, args);
@@ -318,17 +462,25 @@ async function installPageInstrumentation(page) {
             metric.calls++;
             metric.totalSyncMs += elapsed;
             metric.maxSyncMs = Math.max(metric.maxSyncMs, elapsed);
-            const methodMetric = metric.methods[method] || (metric.methods[method] = { calls: 0, totalSyncMs: 0 });
+            const methodMetric =
+              metric.methods[method] ||
+              (metric.methods[method] = { calls: 0, totalSyncMs: 0 });
             methodMetric.calls++;
             methodMetric.totalSyncMs += elapsed;
           }
         };
         Object.defineProperty(wrapped, '__gevBaselineWrapped', { value: true });
-        try { proto[method] = wrapped; } catch { /* A non-writable method stays uninstrumented. */ }
+        try {
+          proto[method] = wrapped;
+        } catch {
+          /* A non-writable method stays uninstrumented. */
+        }
       }
     }
     globalThis.__overlayBaselineInstrumentation = {
-      reset() { metrics.clear(); },
+      reset() {
+        metrics.clear();
+      },
       snapshot() {
         return Array.from(metrics.values()).map((metric) => ({
           id: metric.id,
@@ -345,13 +497,24 @@ async function installPageInstrumentation(page) {
 async function waitForApp(page) {
   await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 });
   await page.waitForFunction(
-    () => Boolean(window.__godsEyeView?.viewer && window.__godsEyeView?.dataManager),
+    () =>
+      Boolean(
+        window.__godsEyeView?.viewer && window.__godsEyeView?.dataManager,
+      ),
     { timeout: 60_000 },
   );
   await page.evaluate(() => {
     const viewer = window.__godsEyeView.viewer;
-    try { viewer.camera.cancelFlight(); } catch { /* no flight */ }
-    try { viewer.scene.tweens?.removeAll?.(); } catch { /* no tween collection */ }
+    try {
+      viewer.camera.cancelFlight();
+    } catch {
+      /* no flight */
+    }
+    try {
+      viewer.scene.tweens?.removeAll?.();
+    } catch {
+      /* no tween collection */
+    }
   });
   await sleep(1_250);
 }
@@ -365,8 +528,8 @@ async function setCamera(page, camera) {
     viewer.scene.tweens?.removeAll?.();
     viewer.camera.setView({
       destination: ellipsoid.cartographicToCartesian({
-        longitude: lon * Math.PI / 180,
-        latitude: lat * Math.PI / 180,
+        longitude: (lon * Math.PI) / 180,
+        latitude: (lat * Math.PI) / 180,
         height,
       }),
       orientation: { heading, pitch, roll: 0 },
@@ -381,27 +544,46 @@ async function readLayerState(page, layerId) {
     const entry = manager.layers.get(id);
     if (!entry) return null;
     let stats = {};
-    try { stats = entry.initialized ? entry.module.getStats?.() || {} : {}; } catch (error) { stats = { error: error.message }; }
+    try {
+      stats = entry.initialized ? entry.module.getStats?.() || {} : {};
+    } catch (error) {
+      stats = { error: error.message };
+    }
     return { enabled: entry.enabled, initialized: entry.initialized, stats };
   }, layerId);
 }
 
 async function waitForLayer(page, layerId) {
   const dataBearing = new Set([
-    'local-datacenters', 'local-dams', 'telegeography-submarine-cables', 'cctv',
-    'local-firms', 'ais-live-vessels', 'flights', 'satellites', 'rocket-launches',
+    'local-datacenters',
+    'local-dams',
+    'telegeography-submarine-cables',
+    'cctv',
+    'local-firms',
+    'ais-live-vessels',
+    'flights',
+    'satellites',
+    'rocket-launches',
   ]);
   if (!dataBearing.has(layerId)) return readLayerState(page, layerId);
   try {
-    await page.waitForFunction((id) => {
-      const entry = window.__godsEyeView?.dataManager?.layers?.get(id);
-      if (!entry?.enabled || !entry.initialized) return false;
-      let stats;
-      try { stats = entry.module.getStats?.() || {}; } catch { return false; }
-      if (stats.loading === true) return false;
-      if (stats.error) return true;
-      return Number(stats.count || 0) > 0;
-    }, { timeout: LAYER_WAIT_MS, polling: 250 }, layerId);
+    await page.waitForFunction(
+      (id) => {
+        const entry = window.__godsEyeView?.dataManager?.layers?.get(id);
+        if (!entry?.enabled || !entry.initialized) return false;
+        let stats;
+        try {
+          stats = entry.module.getStats?.() || {};
+        } catch {
+          return false;
+        }
+        if (stats.loading === true) return false;
+        if (stats.error) return true;
+        return Number(stats.count || 0) > 0;
+      },
+      { timeout: LAYER_WAIT_MS, polling: 250 },
+      layerId,
+    );
   } catch {
     // The caller records the final state and decides whether live-data absence
     // makes the specialized scene skippable.
@@ -429,7 +611,9 @@ async function readEntityInventory(page) {
     const propertyValue = (property, fallback) => {
       if (property == null) return fallback;
       try {
-        return typeof property.getValue === 'function' ? property.getValue(time) : property;
+        return typeof property.getValue === 'function'
+          ? property.getValue(time)
+          : property;
       } catch {
         return fallback;
       }
@@ -437,13 +621,19 @@ async function readEntityInventory(page) {
     const labelGroup = (entityId) => {
       const id = String(entityId || '');
       if (id.startsWith('rocket-launch:')) return 'mission-anchor';
-      if (id.startsWith('rocket-satellite:')) return 'mission-live-or-estimated';
+      if (id.startsWith('rocket-satellite:'))
+        return 'mission-live-or-estimated';
       if (id.startsWith('rocket-orbit-label:')) return 'mission-orbit';
       if (id.startsWith('rocket-reentry-label:')) return 'mission-reentry';
       if (id.startsWith('cctv-')) return 'cctv';
       return id.includes(':') ? id.split(':', 1)[0] : '(other)';
     };
-    const addCollection = (scope, name, entityCollection, collectionShown = true) => {
+    const addCollection = (
+      scope,
+      name,
+      entityCollection,
+      collectionShown = true,
+    ) => {
       const entities = Array.from(entityCollection?.values || []);
       let labelGraphics = 0;
       let shownLabelGraphics = 0;
@@ -483,7 +673,12 @@ async function readEntityInventory(page) {
     addCollection('viewer', 'viewer.entities', viewer.entities, true);
     for (let index = 0; index < viewer.dataSources.length; index++) {
       const dataSource = viewer.dataSources.get(index);
-      addCollection('dataSource', dataSource.name || `dataSource:${index}`, dataSource.entities, dataSource.show !== false);
+      addCollection(
+        'dataSource',
+        dataSource.name || `dataSource:${index}`,
+        dataSource.entities,
+        dataSource.show !== false,
+      );
     }
 
     const primitiveTypes = {};
@@ -494,15 +689,25 @@ async function readEntityInventory(page) {
       const length = Number(collection.length || 0);
       for (let index = 0; index < length; index++) {
         let primitive;
-        try { primitive = collection.get(index); } catch { primitive = null; }
+        try {
+          primitive = collection.get(index);
+        } catch {
+          primitive = null;
+        }
         if (!primitive || seen.has(primitive)) continue;
         const type = primitive.constructor?.name || '(anonymous)';
         primitiveTypes[type] = (primitiveTypes[type] || 0) + 1;
         totals.scenePrimitives++;
-        if (Array.isArray(primitive._labels)) totals.primitiveLabels += primitive._labels.length;
-        if (Array.isArray(primitive._billboards)) totals.primitiveBillboards += primitive._billboards.length;
-        if (Array.isArray(primitive._pointPrimitives)) totals.primitivePoints += primitive._pointPrimitives.length;
-        if (typeof primitive.length === 'number' && typeof primitive.get === 'function') {
+        if (Array.isArray(primitive._labels))
+          totals.primitiveLabels += primitive._labels.length;
+        if (Array.isArray(primitive._billboards))
+          totals.primitiveBillboards += primitive._billboards.length;
+        if (Array.isArray(primitive._pointPrimitives))
+          totals.primitivePoints += primitive._pointPrimitives.length;
+        if (
+          typeof primitive.length === 'number' &&
+          typeof primitive.get === 'function'
+        ) {
           visitPrimitiveCollection(primitive, depth + 1);
         }
       }
@@ -519,7 +724,8 @@ async function activateLayers(page, layerIds) {
     const before = await readEntityInventory(page);
     const toggleResult = await page.evaluate(async (id) => {
       const manager = window.__godsEyeView.dataManager;
-      if (!manager.layers.has(id)) return { error: `unregistered layer: ${id}` };
+      if (!manager.layers.has(id))
+        return { error: `unregistered layer: ${id}` };
       if (!manager.isEnabled(id)) await manager.toggle(id);
       return { enabled: manager.isEnabled(id) };
     }, layerId);
@@ -530,7 +736,12 @@ async function activateLayers(page, layerIds) {
       toggleResult,
       state,
       delta: inventoryDelta(before, after),
-      collectionsAdded: after.collections.filter((row) => !before.collections.some((prior) => prior.scope === row.scope && prior.name === row.name)),
+      collectionsAdded: after.collections.filter(
+        (row) =>
+          !before.collections.some(
+            (prior) => prior.scope === row.scope && prior.name === row.name,
+          ),
+      ),
     });
   }
   return activations;
@@ -540,7 +751,10 @@ async function prepareCctv(page, heightM) {
   const camera = await page.evaluate((height) => {
     const layer = window.__godsEyeView.dataManager.layers.get('cctv')?.module;
     const state = layer?.getUIState?.();
-    const record = state?.cameras?.find((candidate) => Number.isFinite(candidate.lon) && Number.isFinite(candidate.lat));
+    const record = state?.cameras?.find(
+      (candidate) =>
+        Number.isFinite(candidate.lon) && Number.isFinite(candidate.lat),
+    );
     if (!record) return null;
     return [record.lon, record.lat, height, 0, -1.35];
   }, heightM);
@@ -552,44 +766,61 @@ async function prepareCctv(page, heightM) {
 
 async function prepareFirms(page) {
   const result = await page.evaluate(() => {
-    const layer = window.__godsEyeView.dataManager.layers.get('local-firms')?.module;
+    const layer =
+      window.__godsEyeView.dataManager.layers.get('local-firms')?.module;
     const stats = layer?.getStats?.() || {};
     const fire = layer?.getStrongestFire?.();
     return { stats, fire };
   });
-  if (!result.fire) return `FIRMS unavailable (${result.stats.error || 'no detections'})`;
-  await setCamera(page, [result.fire.longitude, result.fire.latitude, 60_000, 0, -1.45]);
+  if (!result.fire)
+    return `FIRMS unavailable (${result.stats.error || 'no detections'})`;
+  await setCamera(page, [
+    result.fire.longitude,
+    result.fire.latitude,
+    60_000,
+    0,
+    -1.45,
+  ]);
   await sleep(4_000);
   return null;
 }
 
 async function prepareVessels(page) {
   const state = await readLayerState(page, 'ais-live-vessels');
-  if (!(state?.stats?.count > 0)) return `AIS unavailable (${state?.stats?.error || 'no live vessels'})`;
+  if (!(state?.stats?.count > 0))
+    return `AIS unavailable (${state?.stats?.error || 'no live vessels'})`;
   await sleep(2_500);
   return null;
 }
 
 async function prepareDetection(page, densityPct) {
-  const sourceStates = await Promise.all(['flights', 'satellites'].map((id) => readLayerState(page, id)));
+  const sourceStates = await Promise.all(
+    ['flights', 'satellites'].map((id) => readLayerState(page, id)),
+  );
   if (!sourceStates.some((state) => (state?.stats?.count || 0) > 0)) {
     return 'Detection sources exposed no observations';
   }
-  const control = await page.evaluate((density) => window.__godsEyeView.styleManager.setDetection({
-    enabled: true,
-    densityPct: density,
-  }), densityPct);
-  if (!control?.ok) return `Detection control failed (${control?.error || 'unknown error'})`;
+  const control = await page.evaluate(
+    (density) =>
+      window.__godsEyeView.styleManager.setDetection({
+        enabled: true,
+        densityPct: density,
+      }),
+    densityPct,
+  );
+  if (!control?.ok)
+    return `Detection control failed (${control?.error || 'unknown error'})`;
   await sleep(2_000);
   return null;
 }
 
 async function prepareTrackedFlight(page, cockpit) {
   if (cockpit) {
-    const contacts = await page.evaluate(() => window.__godsEyeView.styleManager.setContextMode(
-      'contacts',
-      { origin: 'user' },
-    ));
+    const contacts = await page.evaluate(() =>
+      window.__godsEyeView.styleManager.setContextMode('contacts', {
+        origin: 'user',
+      }),
+    );
     if (!contacts?.ok) {
       return `Contacts activation failed (${contacts?.error || 'unknown error'})`;
     }
@@ -598,14 +829,24 @@ async function prepareTrackedFlight(page, cockpit) {
     const entry = window.__godsEyeView.dataManager.layers.get('flights');
     const layer = entry?.module;
     const candidates = layer?.getAllPositions?.(500) || [];
-    const airborne = candidates.find((candidate) => Number(candidate.altitudeM) > 1_000) || candidates[0];
+    const airborne =
+      candidates.find((candidate) => Number(candidate.altitudeM) > 1_000) ||
+      candidates[0];
     if (!airborne) return { ok: false, reason: 'no rendered civil aircraft' };
     const ok = layer.trackById?.(airborne.id);
-    return { ok: Boolean(ok), id: airborne.id, label: airborne.label, reason: ok ? null : 'trackById rejected candidate' };
+    return {
+      ok: Boolean(ok),
+      id: airborne.id,
+      label: airborne.label,
+      reason: ok ? null : 'trackById rejected candidate',
+    };
   });
   if (!tracked.ok) return `Civil tracking unavailable (${tracked.reason})`;
   try {
-    await page.waitForFunction(() => Boolean(window.__godsEyeView.viewer.trackedEntity?.position), { timeout: 10_000 });
+    await page.waitForFunction(
+      () => Boolean(window.__godsEyeView.viewer.trackedEntity?.position),
+      { timeout: 10_000 },
+    );
   } catch {
     return 'Civil tracking did not create a tracked entity';
   }
@@ -617,9 +858,13 @@ async function prepareTrackedFlight(page, cockpit) {
     button.click();
     return true;
   });
-  if (!entryAvailable) return 'Cockpit entry control was unavailable for the tracked aircraft';
+  if (!entryAvailable)
+    return 'Cockpit entry control was unavailable for the tracked aircraft';
   try {
-    await page.waitForFunction(() => document.body.classList.contains('cockpit-mode'), { timeout: 5_000 });
+    await page.waitForFunction(
+      () => document.body.classList.contains('cockpit-mode'),
+      { timeout: 5_000 },
+    );
   } catch {
     return 'Cockpit entry control did not enter cockpit mode';
   }
@@ -629,7 +874,8 @@ async function prepareTrackedFlight(page, cockpit) {
 
 async function prepareMission(page) {
   const state = await readLayerState(page, 'rocket-launches');
-  if (!(state?.stats?.count > 0)) return `Mission feed unavailable (${state?.stats?.error || 'no missions'})`;
+  if (!(state?.stats?.count > 0))
+    return `Mission feed unavailable (${state?.stats?.error || 'no missions'})`;
   const selected = await page.evaluate(() => {
     const button = document.querySelector('[data-mission-roster-index="0"]');
     if (!button) return false;
@@ -638,7 +884,13 @@ async function prepareMission(page) {
   });
   if (!selected) return 'Mission roster did not expose a selectable mission';
   try {
-    await page.waitForFunction(() => String(window.__godsEyeView.viewer.selectedEntity?.id || '').startsWith('rocket-launch:'), { timeout: 10_000 });
+    await page.waitForFunction(
+      () =>
+        String(window.__godsEyeView.viewer.selectedEntity?.id || '').startsWith(
+          'rocket-launch:',
+        ),
+      { timeout: 10_000 },
+    );
   } catch {
     return 'Mission selection did not reach the Cesium selected entity';
   }
@@ -650,75 +902,93 @@ async function prepareScene(page, scene) {
   if (scene.camera) await setCamera(page, scene.camera);
   const layerActivations = await activateLayers(page, scene.layers);
   let skipReason = null;
-  if (scene.cctvHeightM) skipReason = await prepareCctv(page, scene.cctvHeightM);
-  if (!skipReason && scene.id === 'firms') skipReason = await prepareFirms(page);
-  if (!skipReason && scene.id === 'vessels') skipReason = await prepareVessels(page);
-  if (!skipReason && scene.detectionDensity) skipReason = await prepareDetection(page, scene.detectionDensity);
-  if (!skipReason && scene.trackedFlight) skipReason = await prepareTrackedFlight(page, scene.cockpit);
-  if (!skipReason && scene.missionSelected) skipReason = await prepareMission(page);
+  if (scene.cctvHeightM)
+    skipReason = await prepareCctv(page, scene.cctvHeightM);
+  if (!skipReason && scene.id === 'firms')
+    skipReason = await prepareFirms(page);
+  if (!skipReason && scene.id === 'vessels')
+    skipReason = await prepareVessels(page);
+  if (!skipReason && scene.detectionDensity)
+    skipReason = await prepareDetection(page, scene.detectionDensity);
+  if (!skipReason && scene.trackedFlight)
+    skipReason = await prepareTrackedFlight(page, scene.cockpit);
+  if (!skipReason && scene.missionSelected)
+    skipReason = await prepareMission(page);
   await sleep(DEFAULT_SETTLE_MS);
   return { layerActivations, skipReason };
 }
 
 async function readCanvasSummary(page) {
-  return page.evaluate(() => Array.from(document.querySelectorAll('canvas')).map((canvas) => {
-    const style = getComputedStyle(canvas);
-    return {
-      id: canvas.id || '(anonymous-canvas)',
-      width: canvas.width,
-      height: canvas.height,
-      cssWidth: canvas.clientWidth,
-      cssHeight: canvas.clientHeight,
-      display: style.display,
-      opacity: style.opacity,
-      zIndex: style.zIndex,
-    };
-  }));
+  return page.evaluate(() =>
+    Array.from(document.querySelectorAll('canvas')).map((canvas) => {
+      const style = getComputedStyle(canvas);
+      return {
+        id: canvas.id || '(anonymous-canvas)',
+        width: canvas.width,
+        height: canvas.height,
+        cssWidth: canvas.clientWidth,
+        cssHeight: canvas.clientHeight,
+        display: style.display,
+        opacity: style.opacity,
+        zIndex: style.zIndex,
+      };
+    }),
+  );
 }
 
 async function samplePhase(page, moving) {
-  const raw = await page.evaluate(async ({ durationMs, movingCamera }) => {
-    const viewer = window.__godsEyeView.viewer;
-    const instrumentation = window.__overlayBaselineInstrumentation;
-    instrumentation?.reset?.();
-    const intervals = [];
-    const startedAt = performance.now();
-    let lastFrameAt = null;
-    await new Promise((resolve) => {
-      const step = (now) => {
-        if (lastFrameAt != null) intervals.push(now - lastFrameAt);
-        lastFrameAt = now;
-        const elapsed = now - startedAt;
-        if (movingCamera) {
-          viewer.camera.rotateRight(0.00035);
-          viewer.camera.rotateUp(0.00008 * Math.sin(elapsed / 600));
-        }
-        viewer.scene.requestRender?.();
-        if (elapsed >= durationMs) resolve();
-        else requestAnimationFrame(step);
+  const raw = await page.evaluate(
+    async ({ durationMs, movingCamera }) => {
+      const viewer = window.__godsEyeView.viewer;
+      const instrumentation = window.__overlayBaselineInstrumentation;
+      instrumentation?.reset?.();
+      const intervals = [];
+      const startedAt = performance.now();
+      let lastFrameAt = null;
+      await new Promise((resolve) => {
+        const step = (now) => {
+          if (lastFrameAt != null) intervals.push(now - lastFrameAt);
+          lastFrameAt = now;
+          const elapsed = now - startedAt;
+          if (movingCamera) {
+            viewer.camera.rotateRight(0.00035);
+            viewer.camera.rotateUp(0.00008 * Math.sin(elapsed / 600));
+          }
+          viewer.scene.requestRender?.();
+          if (elapsed >= durationMs) resolve();
+          else requestAnimationFrame(step);
+        };
+        requestAnimationFrame(step);
+      });
+      const canvasMetrics = instrumentation?.snapshot?.() || [];
+      const detectionDiagnostics =
+        window.__godsEyeView.styleManager?.getDetectionDiagnostics?.() || null;
+      const manager = window.__godsEyeView.dataManager;
+      const cctvEntry = manager.layers.get('cctv');
+      const cctvState = cctvEntry?.initialized
+        ? cctvEntry.module.getUIState?.()
+        : null;
+      const firmsEntry = manager.layers.get('local-firms');
+      const vesselsEntry = manager.layers.get('ais-live-vessels');
+      return {
+        intervals,
+        canvasMetrics,
+        detectionDiagnostics,
+        exposedCounts: {
+          cctvOwnedEntries: cctvState?.ambientCards?.count ?? null,
+          cctvEntryLimit: cctvState?.ambientCards?.limit ?? null,
+          firmsSourceObjects: firmsEntry?.initialized
+            ? (firmsEntry.module.getStats?.()?.count ?? null)
+            : null,
+          vesselSourceObjects: vesselsEntry?.initialized
+            ? (vesselsEntry.module.getStats?.()?.count ?? null)
+            : null,
+        },
+        elapsedMs: performance.now() - startedAt,
       };
-      requestAnimationFrame(step);
-    });
-    const canvasMetrics = instrumentation?.snapshot?.() || [];
-    const detectionDiagnostics = window.__godsEyeView.styleManager?.getDetectionDiagnostics?.() || null;
-    const manager = window.__godsEyeView.dataManager;
-    const cctvEntry = manager.layers.get('cctv');
-    const cctvState = cctvEntry?.initialized ? cctvEntry.module.getUIState?.() : null;
-    const firmsEntry = manager.layers.get('local-firms');
-    const vesselsEntry = manager.layers.get('ais-live-vessels');
-    return {
-      intervals,
-      canvasMetrics,
-      detectionDiagnostics,
-      exposedCounts: {
-        cctvOwnedEntries: cctvState?.ambientCards?.count ?? null,
-        cctvEntryLimit: cctvState?.ambientCards?.limit ?? null,
-        firmsSourceObjects: firmsEntry?.initialized ? firmsEntry.module.getStats?.()?.count ?? null : null,
-        vesselSourceObjects: vesselsEntry?.initialized ? vesselsEntry.module.getStats?.()?.count ?? null : null,
-      },
-      elapsedMs: performance.now() - startedAt,
-    };
-  }, { durationMs: SAMPLE_MS, movingCamera: moving });
+    },
+    { durationMs: SAMPLE_MS, movingCamera: moving },
+  );
 
   const canvases = raw.canvasMetrics
     .filter((metric) => KNOWN_OVERLAY_CANVASES.has(metric.id))
@@ -733,10 +1003,15 @@ async function samplePhase(page, moving) {
       measureTextCalls: metric.methods.measureText?.calls || 0,
       strokeCalls: metric.methods.stroke?.calls || 0,
       fillCalls: metric.methods.fill?.calls || 0,
-      methods: Object.fromEntries(Object.entries(metric.methods).map(([name, value]) => [name, {
-        calls: value.calls,
-        totalSyncMs: round(value.totalSyncMs),
-      }])),
+      methods: Object.fromEntries(
+        Object.entries(metric.methods).map(([name, value]) => [
+          name,
+          {
+            calls: value.calls,
+            totalSyncMs: round(value.totalSyncMs),
+          },
+        ]),
+      ),
     }))
     .sort((a, b) => a.id.localeCompare(b.id));
   return {
@@ -769,7 +1044,9 @@ async function runScene(browser, scene, shotsDir) {
       consoleMessages.push({ type: message.type(), text: message.text() });
     }
   });
-  page.on('pageerror', (error) => consoleMessages.push({ type: 'pageerror', text: error.message }));
+  page.on('pageerror', (error) =>
+    consoleMessages.push({ type: 'pageerror', text: error.message }),
+  );
   await installPageInstrumentation(page);
 
   const result = {
@@ -794,10 +1071,20 @@ async function runScene(browser, scene, shotsDir) {
       result.reason = prepared.skipReason;
       return result;
     }
-    const beforeShot = await captureShot(page, shotsDir, scene.id, 'before-motion');
+    const beforeShot = await captureShot(
+      page,
+      shotsDir,
+      scene.id,
+      'before-motion',
+    );
     if (beforeShot) result.screenshots.push(beforeShot);
     const motion = await samplePhase(page, true);
-    const afterMotionShot = await captureShot(page, shotsDir, scene.id, 'after-motion');
+    const afterMotionShot = await captureShot(
+      page,
+      shotsDir,
+      scene.id,
+      'after-motion',
+    );
     if (afterMotionShot) result.screenshots.push(afterMotionShot);
     await sleep(BETWEEN_PHASE_SETTLE_MS);
     const rest = await samplePhase(page, false);
@@ -826,28 +1113,45 @@ function softwareRenderer(renderer) {
 }
 
 function unavailableRenderer(renderer) {
-  return !String(renderer || '').trim() || String(renderer).toLowerCase() === 'unavailable';
+  return (
+    !String(renderer || '').trim() ||
+    String(renderer).toLowerCase() === 'unavailable'
+  );
 }
 
 async function main() {
   if (!fs.existsSync(CHROME_EXECUTABLE)) {
-    throw new Error(`Required Chrome executable not found: ${CHROME_EXECUTABLE}`);
+    throw new Error(
+      `Required Chrome executable not found: ${CHROME_EXECUTABLE}`,
+    );
   }
-  if (!Number.isFinite(DPR) || DPR <= 0) throw new Error(`Invalid --dpr value: ${DPR}`);
+  if (!Number.isFinite(DPR) || DPR <= 0)
+    throw new Error(`Invalid --dpr value: ${DPR}`);
   const scenes = selectedScenes();
-  if (DIST_DIR && (!fs.existsSync(DIST_DIR) || !fs.statSync(DIST_DIR).isDirectory())) {
+  if (
+    DIST_DIR &&
+    (!fs.existsSync(DIST_DIR) || !fs.statSync(DIST_DIR).isDirectory())
+  ) {
     throw new Error(`--dist-dir is not a directory: ${DIST_DIR}`);
   }
   if (!DIST_DIR) {
-    const response = await fetch(APP_URL).catch((error) => ({ ok: false, statusText: error.message }));
-    if (!response.ok) throw new Error(`Dev server unavailable at ${APP_URL}: ${response.status || response.statusText}`);
+    const response = await fetch(APP_URL).catch((error) => ({
+      ok: false,
+      statusText: error.message,
+    }));
+    if (!response.ok)
+      throw new Error(
+        `Dev server unavailable at ${APP_URL}: ${response.status || response.statusText}`,
+      );
   }
 
   const browser = await puppeteer.launch({
     executablePath: CHROME_EXECUTABLE,
     headless: HEADFUL ? false : 'new',
     args: [
-      ...(HARDWARE_GPU ? [] : ['--enable-unsafe-swiftshader', '--use-gl=swiftshader']),
+      ...(HARDWARE_GPU
+        ? []
+        : ['--enable-unsafe-swiftshader', '--use-gl=swiftshader']),
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
@@ -857,30 +1161,45 @@ async function main() {
     ],
   });
 
-  const run = { generatedAt: new Date().toISOString(), context: null, scenes: [] };
+  const run = {
+    generatedAt: new Date().toISOString(),
+    context: null,
+    scenes: [],
+  };
   try {
     const contextPage = await browser.newPage();
     await contextPage.setViewport({ ...VIEWPORT, deviceScaleFactor: DPR });
     await installStaticDist(contextPage, DIST_DIR);
-    await contextPage.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+    await contextPage.goto(APP_URL, {
+      waitUntil: 'domcontentloaded',
+      timeout: 60_000,
+    });
     const browserContext = await contextPage.evaluate(() => {
       const canvas = document.createElement('canvas');
-      const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+      const gl =
+        canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
       const debug = gl?.getExtension('WEBGL_debug_renderer_info');
       return {
         userAgent: navigator.userAgent,
         dpr: window.devicePixelRatio,
-        webglVendor: debug ? gl.getParameter(debug.UNMASKED_VENDOR_WEBGL) : gl?.getParameter(gl.VENDOR) || 'unavailable',
-        webglRenderer: debug ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL) : gl?.getParameter(gl.RENDERER) || 'unavailable',
+        webglVendor: debug
+          ? gl.getParameter(debug.UNMASKED_VENDOR_WEBGL)
+          : gl?.getParameter(gl.VENDOR) || 'unavailable',
+        webglRenderer: debug
+          ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL)
+          : gl?.getParameter(gl.RENDERER) || 'unavailable',
       };
     });
     await contextPage.close();
     const cpus = os.cpus();
-    if (HARDWARE_GPU && (
-      unavailableRenderer(browserContext.webglRenderer)
-      || softwareRenderer(browserContext.webglRenderer)
-    )) {
-      throw new Error(`Hardware GPU requested but Chrome reported ${browserContext.webglRenderer}`);
+    if (
+      HARDWARE_GPU &&
+      (unavailableRenderer(browserContext.webglRenderer) ||
+        softwareRenderer(browserContext.webglRenderer))
+    ) {
+      throw new Error(
+        `Hardware GPU requested but Chrome reported ${browserContext.webglRenderer}`,
+      );
     }
     run.context = {
       url: APP_URL,
@@ -891,7 +1210,7 @@ async function main() {
         arch: os.arch(),
         cpuModel: cpus[0]?.model || 'unknown',
         logicalCpuCount: cpus.length,
-        totalMemoryGiB: round(os.totalmem() / (1024 ** 3), 1),
+        totalMemoryGiB: round(os.totalmem() / 1024 ** 3, 1),
       },
       browser: {
         version: await browser.version(),
@@ -904,9 +1223,15 @@ async function main() {
       chromeExecutable: CHROME_EXECUTABLE,
       chromeArgs: HARDWARE_GPU
         ? ['--no-sandbox']
-        : ['--enable-unsafe-swiftshader', '--use-gl=swiftshader', '--no-sandbox'],
+        : [
+            '--enable-unsafe-swiftshader',
+            '--use-gl=swiftshader',
+            '--no-sandbox',
+          ],
       sampleMs: SAMPLE_MS,
-      captureMode: DIST_DIR ? `static-dist:${path.resolve(DIST_DIR)}` : 'dev-server',
+      captureMode: DIST_DIR
+        ? `static-dist:${path.resolve(DIST_DIR)}`
+        : 'dev-server',
     };
     printContext(run.context);
 
@@ -924,7 +1249,9 @@ async function main() {
     skipped: run.scenes.filter((scene) => scene.status === 'skipped').length,
     errors: run.scenes.filter((scene) => scene.status === 'error').length,
   };
-  console.log(`Summary: ${run.summary.ok} measured · ${run.summary.skipped} skipped · ${run.summary.errors} errors`);
+  console.log(
+    `Summary: ${run.summary.ok} measured · ${run.summary.skipped} skipped · ${run.summary.errors} errors`,
+  );
   if (JSON_PATH) {
     fs.mkdirSync(path.dirname(path.resolve(JSON_PATH)), { recursive: true });
     fs.writeFileSync(JSON_PATH, `${JSON.stringify(run, null, 2)}\n`);

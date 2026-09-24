@@ -3,9 +3,8 @@ import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { isPickedWorldPosition } from './scenePick.js';
 
-const describe = (position) => (position
-  ? `(${position.x}, ${position.y}, ${position.z})`
-  : String(position));
+const describe = (position) =>
+  position ? `(${position.x}, ${position.y}, ${position.z})` : String(position);
 
 test('a degenerate depth pick is rejected before it reaches Cesium', () => {
   // These are the shapes `scene.pickPosition()` can produce when the depth read
@@ -21,7 +20,11 @@ test('a degenerate depth pick is rejected before it reaches Cesium', () => {
     new Cesium.Cartesian3(0.2, -0.3, 0.1),
   ];
   for (const position of degenerate) {
-    assert.equal(isPickedWorldPosition(position), false, `must reject ${describe(position)}`);
+    assert.equal(
+      isPickedWorldPosition(position),
+      false,
+      `must reject ${describe(position)}`,
+    );
   }
 });
 
@@ -38,11 +41,18 @@ test('the guard is an Earth-sized band, not just a non-zero check', () => {
     new Cesium.Cartesian3(0, 0, 5_999_999),
   ];
   for (const position of belowTheFloor) {
-    assert.equal(isPickedWorldPosition(position), false, `must reject ${describe(position)}`);
+    assert.equal(
+      isPickedWorldPosition(position),
+      false,
+      `must reject ${describe(position)}`,
+    );
     // Each one converts WITHOUT throwing — that is exactly what makes it dangerous.
     const carto = Cesium.Cartographic.fromCartesian(position);
     assert.ok(carto, `Cesium converts ${describe(position)} without complaint`);
-    assert.ok(carto.height < -300_000, 'and puts the "target" hundreds of km underground');
+    assert.ok(
+      carto.height < -300_000,
+      'and puts the "target" hundreds of km underground',
+    );
   }
 
   const aboveTheCeiling = [
@@ -52,7 +62,11 @@ test('the guard is an Earth-sized band, not just a non-zero check', () => {
     new Cesium.Cartesian3(1e155, 0, 0),
   ];
   for (const position of aboveTheCeiling) {
-    assert.equal(isPickedWorldPosition(position), false, `must reject ${describe(position)}`);
+    assert.equal(
+      isPickedWorldPosition(position),
+      false,
+      `must reject ${describe(position)}`,
+    );
   }
   assert.throws(
     () => Cesium.Cartographic.fromCartesian(new Cesium.Cartesian3(1e155, 0, 0)),
@@ -61,8 +75,14 @@ test('the guard is an Earth-sized band, not just a non-zero check', () => {
   );
 
   // Both edges of the band are inclusive, and both are real magnitudes.
-  assert.equal(isPickedWorldPosition(new Cesium.Cartesian3(6_000_000, 0, 0)), true);
-  assert.equal(isPickedWorldPosition(new Cesium.Cartesian3(1_000_000_000, 0, 0)), true);
+  assert.equal(
+    isPickedWorldPosition(new Cesium.Cartesian3(6_000_000, 0, 0)),
+    true,
+  );
+  assert.equal(
+    isPickedWorldPosition(new Cesium.Cartesian3(1_000_000_000, 0, 0)),
+    true,
+  );
 });
 
 test('a real picked position is accepted', () => {
@@ -81,13 +101,22 @@ test('a real picked position is accepted', () => {
     Cesium.Cartesian3.fromDegrees(0, 0, 35_786_000),
   ];
   for (const position of real) {
-    assert.equal(isPickedWorldPosition(position), true, `must accept ${describe(position)}`);
+    assert.equal(
+      isPickedWorldPosition(position),
+      true,
+      `must accept ${describe(position)}`,
+    );
   }
 
   // The floor has real margin under the smallest legitimate magnitude, so no
   // plausible pick sits anywhere near the boundary.
-  const polarSurface = Cesium.Cartesian3.magnitude(Cesium.Cartesian3.fromDegrees(0, 90, -10_935));
-  assert.ok(polarSurface > 6_300_000, `smallest real magnitude was ${polarSurface}`);
+  const polarSurface = Cesium.Cartesian3.magnitude(
+    Cesium.Cartesian3.fromDegrees(0, 90, -10_935),
+  );
+  assert.ok(
+    polarSurface > 6_300_000,
+    `smallest real magnitude was ${polarSurface}`,
+  );
 });
 
 test('the guard rejects each way Cesium mishandles a degenerate pick', () => {
@@ -118,7 +147,10 @@ test('the guard rejects each way Cesium mishandles a degenerate pick', () => {
   //    Earth's core. That is the quietest failure of the three and the reason
   //    the guard needs a magnitude band, not just a finiteness check.
   const nearCenter = new Cesium.Cartesian3(0.2, -0.3, 0.1);
-  assert.ok(Cesium.Cartographic.fromCartesian(nearCenter), 'Cesium converts it without complaint');
+  assert.ok(
+    Cesium.Cartographic.fromCartesian(nearCenter),
+    'Cesium converts it without complaint',
+  );
   assert.equal(isPickedWorldPosition(nearCenter), false);
 
   // …and every position the guard accepts must convert to the right place.

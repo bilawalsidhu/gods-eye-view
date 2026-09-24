@@ -51,26 +51,40 @@ function parseArgs() {
 
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
-      case '--lat':    opts.lat = parseFloat(args[++i]); break;
-      case '--lon':    opts.lon = parseFloat(args[++i]); break;
-      case '--zoom':   opts.zoom = parseInt(args[++i], 10); break;
-      case '--size':   opts.size = parseInt(args[++i], 10); break;
-      case '--outdir': opts.outdir = args[++i]; break;
-      case '--key':    opts.key = args[++i]; break;
+      case '--lat':
+        opts.lat = parseFloat(args[++i]);
+        break;
+      case '--lon':
+        opts.lon = parseFloat(args[++i]);
+        break;
+      case '--zoom':
+        opts.zoom = parseInt(args[++i], 10);
+        break;
+      case '--size':
+        opts.size = parseInt(args[++i], 10);
+        break;
+      case '--outdir':
+        opts.outdir = args[++i];
+        break;
+      case '--key':
+        opts.key = args[++i];
+        break;
       case '--help':
-        console.log([
-          'Usage: node tools/sat-ortho.mjs --lat <lat> --lon <lon> [options]',
-          '',
-          'Required:',
-          '  --lat      Center latitude',
-          '  --lon      Center longitude',
-          '',
-          'Options:',
-          '  --zoom     Tile zoom level (default: 21)',
-          '  --size     Output square size in pixels (default: 2048)',
-          '  --outdir   Output directory (default: output/)',
-          '  --key      Google Maps API key',
-        ].join('\n'));
+        console.log(
+          [
+            'Usage: node tools/sat-ortho.mjs --lat <lat> --lon <lon> [options]',
+            '',
+            'Required:',
+            '  --lat      Center latitude',
+            '  --lon      Center longitude',
+            '',
+            'Options:',
+            '  --zoom     Tile zoom level (default: 21)',
+            '  --size     Output square size in pixels (default: 2048)',
+            '  --outdir   Output directory (default: output/)',
+            '  --key      Google Maps API key',
+          ].join('\n'),
+        );
         process.exit(0);
     }
   }
@@ -102,9 +116,13 @@ function loadApiKey(overrideKey) {
       const val = trimmed.slice(eqIdx + 1).trim();
       if (key === 'GOOGLE_MAPS_API_KEY' && val) return val;
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
-  console.error('Error: No API key found. Set GOOGLE_MAPS_API_KEY in .env or pass --key.');
+  console.error(
+    'Error: No API key found. Set GOOGLE_MAPS_API_KEY in .env or pass --key.',
+  );
   process.exit(1);
 }
 
@@ -116,8 +134,9 @@ function loadApiKey(overrideKey) {
 function latLonToTile(lat, lon, zoom) {
   const n = 2 ** zoom;
   const x = ((lon + 180) / 360) * n;
-  const latRad = lat * Math.PI / 180;
-  const y = (1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * n;
+  const latRad = (lat * Math.PI) / 180;
+  const y =
+    ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n;
   return { x, y };
 }
 
@@ -125,14 +144,16 @@ function latLonToTile(lat, lon, zoom) {
 function tilePxToLatLon(tileX, tileY, pxX, pxY, zoom) {
   const n = 2 ** zoom;
   const lon = ((tileX + pxX / TILE_SIZE) / n) * 360 - 180;
-  const latRad = Math.atan(Math.sinh(Math.PI * (1 - 2 * (tileY + pxY / TILE_SIZE) / n)));
-  const lat = latRad * 180 / Math.PI;
+  const latRad = Math.atan(
+    Math.sinh(Math.PI * (1 - (2 * (tileY + pxY / TILE_SIZE)) / n)),
+  );
+  const lat = (latRad * 180) / Math.PI;
   return { lat, lon };
 }
 
 /** Compute meters per pixel at a given latitude and zoom. */
 function metersPerPixel(lat, zoom) {
-  return (156543.03392 * Math.cos(lat * Math.PI / 180)) / (2 ** zoom);
+  return (156543.03392 * Math.cos((lat * Math.PI) / 180)) / 2 ** zoom;
 }
 
 // ---------------------------------------------------------------------------
@@ -140,18 +161,21 @@ function metersPerPixel(lat, zoom) {
 // ---------------------------------------------------------------------------
 
 async function createSession(apiKey) {
-  const res = await fetch(`https://tile.googleapis.com/v1/createSession?key=${apiKey}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Referer': 'http://localhost:4173/',
+  const res = await fetch(
+    `https://tile.googleapis.com/v1/createSession?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Referer: 'http://localhost:4173/',
+      },
+      body: JSON.stringify({
+        mapType: 'satellite',
+        language: 'en-US',
+        region: 'US',
+      }),
     },
-    body: JSON.stringify({
-      mapType: 'satellite',
-      language: 'en-US',
-      region: 'US',
-    }),
-  });
+  );
 
   if (!res.ok) {
     const text = await res.text();
@@ -165,7 +189,7 @@ async function createSession(apiKey) {
 async function fetchTile(zoom, x, y, session, apiKey) {
   const url = `https://tile.googleapis.com/v1/2dtiles/${zoom}/${x}/${y}?session=${session}&key=${apiKey}`;
   const res = await fetch(url, {
-    headers: { 'Referer': 'http://localhost:4173/' },
+    headers: { Referer: 'http://localhost:4173/' },
   });
 
   if (!res.ok) {
@@ -196,7 +220,9 @@ async function fetchTiles(tileCoords, session, apiKey) {
         const buf = await fetchTile(zoom, x, y, session, apiKey);
         results.set(`${x},${y}`, buf);
       } catch (err) {
-        console.log(`    Warning: tile ${zoom}/${x}/${y} failed: ${err.message}`);
+        console.log(
+          `    Warning: tile ${zoom}/${x}/${y} failed: ${err.message}`,
+        );
       }
       completed++;
       if (completed % 10 === 0 || completed === total) {
@@ -231,21 +257,25 @@ async function main() {
   console.log(`  Zoom     : ${opts.zoom}`);
   console.log(`  Output   : ${opts.size}x${opts.size} px`);
   console.log(`  GSD      : ~${(mpp * 100).toFixed(1)} cm/pixel`);
-  console.log(`  Coverage : ~${coverageM.toFixed(0)}m x ${coverageM.toFixed(0)}m`);
+  console.log(
+    `  Coverage : ~${coverageM.toFixed(0)}m x ${coverageM.toFixed(0)}m`,
+  );
 
   // Compute center tile position (fractional)
   const center = latLonToTile(opts.lat, opts.lon, opts.zoom);
   const centerTileX = Math.floor(center.x);
   const centerTileY = Math.floor(center.y);
-  const centerPxX = (center.x - centerTileX) * TILE_SIZE;  // pixel offset within center tile
+  const centerPxX = (center.x - centerTileX) * TILE_SIZE; // pixel offset within center tile
   const centerPxY = (center.y - centerTileY) * TILE_SIZE;
 
   // How many tiles we need on each side to cover --size/2 pixels from center
   const halfSize = opts.size / 2;
   const tilesLeft = Math.ceil((halfSize - centerPxX) / TILE_SIZE) + 1;
-  const tilesRight = Math.ceil((halfSize - (TILE_SIZE - centerPxX)) / TILE_SIZE) + 1;
+  const tilesRight =
+    Math.ceil((halfSize - (TILE_SIZE - centerPxX)) / TILE_SIZE) + 1;
   const tilesUp = Math.ceil((halfSize - centerPxY) / TILE_SIZE) + 1;
-  const tilesDown = Math.ceil((halfSize - (TILE_SIZE - centerPxY)) / TILE_SIZE) + 1;
+  const tilesDown =
+    Math.ceil((halfSize - (TILE_SIZE - centerPxY)) / TILE_SIZE) + 1;
 
   const minTileX = centerTileX - tilesLeft;
   const maxTileX = centerTileX + tilesRight;
@@ -257,7 +287,9 @@ async function main() {
   const totalTiles = gridW * gridH;
 
   console.log(`  Grid     : ${gridW}x${gridH} = ${totalTiles} tiles`);
-  console.log(`  Tile range: x=[${minTileX}, ${maxTileX}] y=[${minTileY}, ${maxTileY}]`);
+  console.log(
+    `  Tile range: x=[${minTileX}, ${maxTileX}] y=[${minTileY}, ${maxTileY}]`,
+  );
 
   // Create session
   console.log('\nCreating tile session...');
@@ -272,11 +304,15 @@ async function main() {
   }
 
   // Fetch all tiles
-  console.log(`  Fetching ${totalTiles} tiles (concurrency: ${MAX_CONCURRENT})...`);
+  console.log(
+    `  Fetching ${totalTiles} tiles (concurrency: ${MAX_CONCURRENT})...`,
+  );
   const t0 = performance.now();
   const tiles = await fetchTiles(tileCoords, session, apiKey);
   const fetchElapsed = ((performance.now() - t0) / 1000).toFixed(2);
-  console.log(`    Fetched ${tiles.size}/${totalTiles} tiles in ${fetchElapsed}s`);
+  console.log(
+    `    Fetched ${tiles.size}/${totalTiles} tiles in ${fetchElapsed}s`,
+  );
 
   if (tiles.size === 0) {
     console.error('Error: No tiles fetched.');
@@ -314,8 +350,12 @@ async function main() {
   stitched = sharp(await stitched.composite(compositeInputs).toBuffer());
 
   // Crop to --size x --size centered on the target lat/lon
-  const cropLeft = Math.round((centerTileX - minTileX) * TILE_SIZE + centerPxX - halfSize);
-  const cropTop = Math.round((centerTileY - minTileY) * TILE_SIZE + centerPxY - halfSize);
+  const cropLeft = Math.round(
+    (centerTileX - minTileX) * TILE_SIZE + centerPxX - halfSize,
+  );
+  const cropTop = Math.round(
+    (centerTileY - minTileY) * TILE_SIZE + centerPxY - halfSize,
+  );
 
   const cropped = await stitched
     .extract({
@@ -339,15 +379,33 @@ async function main() {
   console.log(`\nSaved: ${outPath}`);
   console.log(`  Size     : ${opts.size}x${opts.size}`);
   console.log(`  GSD      : ~${(mpp * 100).toFixed(1)} cm/pixel`);
-  console.log(`  Coverage : ~${coverageM.toFixed(0)}m x ${coverageM.toFixed(0)}m`);
+  console.log(
+    `  Coverage : ~${coverageM.toFixed(0)}m x ${coverageM.toFixed(0)}m`,
+  );
   console.log(`  Tiles    : ${tiles.size}`);
   console.log(`  Time     : ${totalElapsed}s`);
 
   // Report corner coordinates
-  const topLeft = tilePxToLatLon(minTileX, minTileY, cropLeft - 0, cropTop - 0, opts.zoom);
-  const botRight = tilePxToLatLon(minTileX, minTileY, cropLeft + opts.size, cropTop + opts.size, opts.zoom);
-  console.log(`  NW corner: ${topLeft.lat.toFixed(6)}, ${topLeft.lon.toFixed(6)}`);
-  console.log(`  SE corner: ${botRight.lat.toFixed(6)}, ${botRight.lon.toFixed(6)}`);
+  const topLeft = tilePxToLatLon(
+    minTileX,
+    minTileY,
+    cropLeft - 0,
+    cropTop - 0,
+    opts.zoom,
+  );
+  const botRight = tilePxToLatLon(
+    minTileX,
+    minTileY,
+    cropLeft + opts.size,
+    cropTop + opts.size,
+    opts.zoom,
+  );
+  console.log(
+    `  NW corner: ${topLeft.lat.toFixed(6)}, ${topLeft.lon.toFixed(6)}`,
+  );
+  console.log(
+    `  SE corner: ${botRight.lat.toFixed(6)}, ${botRight.lon.toFixed(6)}`,
+  );
 }
 
 main().catch((err) => {
