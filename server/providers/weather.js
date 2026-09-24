@@ -1,7 +1,11 @@
+import { createRainViewerGovernor } from './rainViewerGovernor.js';
 import { readResponseTextCapped } from './common/http.js';
 import { readWindBody as readBytesCapped } from '../../src/sources/windBody.js';
 
 const BASE = 'https://nowcoast.noaa.gov/geoserver/observations/';
+const RAINVIEWER_MANIFEST =
+  'https://api.rainviewer.com/public/weather-maps.json';
+const RAINVIEWER_TILES = 'https://tilecache.rainviewer.com';
 const HOUR = 3600_000;
 const PRODUCTS = Object.freeze({
   lightning: Object.freeze({
@@ -27,6 +31,25 @@ const PRODUCTS = Object.freeze({
     description:
       'Observed MRMS radar base reflectivity (dBZ), approximately 1 km and 4-minute updates; not a rainfall forecast.',
     image: Object.freeze({ width: 4096, height: 2048 }),
+  }),
+  'radar-global': Object.freeze({
+    service: 'rainviewer',
+    title: 'Global radar reflectivity',
+    coverage: 'Global · where radars exist',
+    description:
+      'RainViewer global radar composite (dBZ). Coverage follows national radar networks; a gap does not mean no rain.',
+    source: 'RainViewer',
+    attribution: 'RainViewer',
+    metadataTtlMs: 300_000,
+    tilingScheme: 'web-mercator',
+    maxLevel: 7,
+    bounds: Object.freeze({
+      west: -180,
+      south: -85.0511,
+      east: 180,
+      north: 85.0511,
+    }),
+    image: Object.freeze({ width: 2048, height: 1024 }),
   }),
   clouds: Object.freeze({
     service: 'satellite',
@@ -169,6 +192,52 @@ export function parseWeatherCapabilities(xml, product, nowMs = Date.now()) {
   return { bounds, times: recent.slice(-13), allowedTimes: recent };
 }
 
+/** Accept only observed frames with bounded paths; never trust the manifest host. */
+export function parseRainViewerManifest(text) {
+  const manifest = JSON.parse(text);
+  if (manifest?.version !== '2.0' || !Array.isArray(manifest.radar?.past))
+    throw failure('invalid_weather_metadata');
+  const frames = new Map();
+  for (const frame of manifest.radar.past) {
+    if (
+      !Number.isSafeInteger(frame?.time) ||
+      frame.time <= 0 ||
+      typeof frame.path !== 'string' ||
+      !/^\/v2\/radar\/[A-Za-z0-9]{1,64}$/.test(frame.path)
+    )
+      continue;
+    const date = new Date(frame.time * 1000);
+    if (!Number.isFinite(date.getTime()) || date.getUTCFullYear() > 9999)
+      continue;
+    frames.set(date.toISOString(), frame.path);
+  }
+  const times = [...frames.keys()].sort().slice(-13);
+  if (!times.length) throw failure('invalid_weather_metadata');
+  return {
+    bounds: PRODUCTS['radar-global'].bounds,
+    times,
+    allowedTimes: times,
+    framePaths: Object.fromEntries(
+      times.map((time) => [time, frames.get(time)]),
+    ),
+  };
+}
+
+/** Web Mercator XYZ has one square root, unlike NOAA's geographic grid. */
+export function rainViewerTileCoordinates(z, x, y) {
+  if (
+    ![z, x, y].every(Number.isInteger) ||
+    z < 0 ||
+    z > 7 ||
+    x < 0 ||
+    y < 0 ||
+    x >= 2 ** z ||
+    y >= 2 ** z
+  )
+    throw failure('invalid_weather_tile', 400);
+  return [z, x, y];
+}
+
 /** A detail window `west,south,east,north` in degrees, rounded to 0.25° so cache
  * keys repeat, with a 2:1 aspect within 1 %; null when absent. Containment in
  * the product bounds is checked once the metadata is known. */
@@ -234,12 +303,14 @@ function validatePng(bytes, width, height) {
   return buffer;
 }
 
-/** Fixed NOAA observed-weather metadata and WMS tiles; no client-supplied destinations. */
+/** Fixed observed-weather metadata and tiles; no client-supplied destinations. */
 export function weatherProxy({
   fetchImpl = fetch,
   now = () => Date.now(),
   timeoutMs = 12_000,
+  rainViewerSleep,
 } = {}) {
+  const admitRainViewerTile = createRainViewerGovernor();
   const metadata = new Map();
   const attempts = new Map();
   const operations = new Map();
@@ -264,7 +335,7 @@ export function weatherProxy({
         });
     }
   }
-  async function shared(key, work, clientSignal) {
+  async function shared(key, work, clientSignal, extraWaitMs = 0) {
     clientSignal.throwIfAborted();
     let operation = operations.get(key);
     if (operation?.controller.signal.aborted) {
@@ -286,7 +357,10 @@ export function weatherProxy({
         operation.reject(failure('weather_request_cancelled'));
       };
       controller.signal.addEventListener('abort', cancel, { once: true });
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      const timer = setTimeout(
+        () => controller.abort(),
+        timeoutMs + extraWaitMs,
+      );
       operation.promise = operation.promise.finally(() => {
         clearTimeout(timer);
         controller.signal.removeEventListener('abort', cancel);
@@ -310,12 +384,18 @@ export function weatherProxy({
       if (!clientSignal.aborted) operation.waiters--;
     }
   }
-  async function upstream(url, signal, image = null) {
+  async function upstream(url, signal, image = null, json = false) {
     signal.throwIfAborted();
     const response = await fetchImpl(url, {
       signal,
       redirect: 'error',
-      headers: { Accept: image ? 'image/png' : 'application/xml,text/xml' },
+      headers: {
+        Accept: image
+          ? 'image/png'
+          : json
+            ? 'application/json'
+            : 'application/xml,text/xml',
+      },
     });
     if (
       !response.ok ||
@@ -331,7 +411,11 @@ export function weatherProxy({
           image.width,
           image.height,
         )
-      : await readResponseTextCapped(response, 512 * 1024, signal);
+      : await readResponseTextCapped(
+          response,
+          (json ? 256 : 512) * 1024,
+          signal,
+        );
     signal.throwIfAborted();
     return value;
   }
@@ -348,14 +432,19 @@ export function weatherProxy({
       )
         throw failure('weather_upstream_unavailable');
       attempts.set(product, now());
-      const url = `${BASE}${spec.service}/ows?service=WMS&version=1.3.0&request=GetCapabilities`;
-      const xml = await shared(
+      const globalRadar = product === 'radar-global';
+      const url = globalRadar
+        ? RAINVIEWER_MANIFEST
+        : `${BASE}${spec.service}/ows?service=WMS&version=1.3.0&request=GetCapabilities`;
+      const text = await shared(
         `metadata:${spec.service}`,
-        (activeSignal) => upstream(url, activeSignal),
+        (activeSignal) => upstream(url, activeSignal, null, globalRadar),
         signal,
       );
       const value = {
-        ...parseWeatherCapabilities(xml, product, now()),
+        ...(globalRadar
+          ? parseRainViewerManifest(text)
+          : parseWeatherCapabilities(text, product, now())),
         fetchedAt: now(),
       };
       metadata.set(product, value);
@@ -388,7 +477,7 @@ export function weatherProxy({
       title: spec.title,
       coverage: spec.coverage,
       description: spec.description,
-      source: 'NOAA nowCOAST',
+      source: spec.source ?? 'NOAA nowCOAST',
       attribution: spec.attribution ?? 'NOAA/NWS/NESDIS nowCOAST',
       bounds: value?.bounds ?? null,
       times: value?.times ?? [],
@@ -404,22 +493,23 @@ export function weatherProxy({
           ? 'Cached weather metadata; upstream unavailable'
           : null,
       tileSize: 256,
-      maxLevel: 6,
-      tilingScheme: 'geographic',
+      maxLevel: spec.maxLevel ?? 6,
+      tilingScheme: spec.tilingScheme ?? 'geographic',
       tileTemplate: time
         ? `/api/weather/tile?product=${product}&time=${encodeURIComponent(time)}&z={z}&x={x}&y={y}`
         : null,
-      imageUrl: time
-        ? `/api/weather/image?product=${product}&time=${encodeURIComponent(time)}`
-        : null,
+      imageUrl:
+        time && product !== 'radar-global'
+          ? `/api/weather/image?product=${product}&time=${encodeURIComponent(time)}`
+          : null,
       imageSize: { ...spec.image },
     };
   }
-  function json(res, status, body) {
+  function json(res, status, body, retryAfter = 2) {
     res.writeHead(status, {
       'Content-Type': 'application/json',
       'Cache-Control': 'no-store',
-      ...(status === 429 ? { 'Retry-After': '2' } : {}),
+      ...(status === 429 ? { 'Retry-After': String(retryAfter) } : {}),
     });
     res.end(JSON.stringify(body));
   }
@@ -451,6 +541,9 @@ export function weatherProxy({
       if (!Object.hasOwn(PRODUCTS, product))
         return json(res, 400, { error: 'unknown_weather_product' });
       const wholeImage = url.pathname === '/image';
+      const globalRadar = product === 'radar-global';
+      if (wholeImage && globalRadar)
+        throw failure('whole_image_unsupported', 400);
       const detailBox = wholeImage
         ? weatherImageBbox(url.searchParams.get('bbox'))
         : null;
@@ -462,7 +555,7 @@ export function weatherProxy({
         wholeImage
           ? !IMAGE_SIZES.includes(size) ||
             Number.parseInt(size, 10) > largest.width
-          : !['256', '512', '1024'].includes(size)
+          : !(globalRadar ? ['256'] : ['256', '512', '1024']).includes(size)
       )
         throw failure(
           wholeImage
@@ -487,7 +580,9 @@ export function weatherProxy({
       if (coords?.some((value) => !/^(?:0|[1-9]\d{0,2})$/.test(value ?? '')))
         throw failure('invalid_weather_tile', 400);
       const tileBounds = coords
-        ? weatherTileBounds(...coords.map(Number))
+        ? globalRadar
+          ? rainViewerTileCoordinates(...coords.map(Number))
+          : weatherTileBounds(...coords.map(Number))
         : null;
       const time = url.searchParams.get('time');
       if (!time || observationTime(time) !== time)
@@ -495,7 +590,9 @@ export function weatherProxy({
       const value = await getMetadata(product, controller.signal);
       controller.signal.throwIfAborted();
       if (
-        !value.allowedTimes.includes(time) ||
+        (globalRadar
+          ? !Object.hasOwn(value.framePaths, time)
+          : !value.allowedTimes.includes(time)) ||
         now() - Date.parse(time) > 24 * HOUR
       )
         throw failure('unknown_weather_time', 400);
@@ -543,26 +640,45 @@ export function weatherProxy({
         if (now() - (tileFailures.get(key) ?? -Infinity) < 30_000)
           throw failure('weather_upstream_unavailable');
         const spec = PRODUCTS[product];
-        const upstreamUrl = new URL(`${BASE}${spec.service}/ows`);
-        upstreamUrl.search = new URLSearchParams({
-          service: 'WMS',
-          version: '1.1.1',
-          request: 'GetMap',
-          layers: spec.layer,
-          styles: spec.style,
-          srs: 'EPSG:4326',
-          bbox: bbox.join(','),
-          width: String(imageShape.width),
-          height: String(imageShape.height),
-          format: 'image/png',
-          transparent: 'true',
-          time,
-        }).toString();
+        const upstreamUrl = new URL(
+          globalRadar
+            ? `${RAINVIEWER_TILES}${value.framePaths[time]}/256/${coords.join('/')}/2/1_1.png`
+            : `${BASE}${spec.service}/ows`,
+        );
+        if (!globalRadar)
+          upstreamUrl.search = new URLSearchParams({
+            service: 'WMS',
+            version: '1.1.1',
+            request: 'GetMap',
+            layers: spec.layer,
+            styles: spec.style,
+            srs: 'EPSG:4326',
+            bbox: bbox.join(','),
+            width: String(imageShape.width),
+            height: String(imageShape.height),
+            format: 'image/png',
+            transparent: 'true',
+            time,
+          }).toString();
         try {
           const bytes = await shared(
             `image:${key}`,
-            (signal) => upstream(upstreamUrl.href, signal, imageShape),
+            async (signal) => {
+              if (globalRadar) {
+                const retryAfter = await admitRainViewerTile.admit(now, {
+                  signal,
+                  sleep: rainViewerSleep,
+                });
+                if (retryAfter)
+                  throw Object.assign(failure('weather_busy', 429), {
+                    retryAfter,
+                  });
+              }
+              signal.throwIfAborted();
+              return upstream(upstreamUrl.href, signal, imageShape);
+            },
             controller.signal,
+            globalRadar ? 20_000 : 0,
           );
           rememberTile(key, bytes);
           cached = { bytes };
@@ -593,6 +709,7 @@ export function weatherProxy({
                 ? error.code
                 : 'weather_upstream_unavailable',
           },
+          error.retryAfter,
         );
     } finally {
       res.removeListener?.('close', close);

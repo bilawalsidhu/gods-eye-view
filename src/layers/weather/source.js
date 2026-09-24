@@ -2,6 +2,7 @@ import { readResponseJsonCapped } from '../../sources/httpBody.js';
 
 export const WEATHER_PRODUCTS = Object.freeze([
   'radar',
+  'radar-global',
   'clouds',
   'clouds-regional',
   'lightning',
@@ -20,8 +21,8 @@ export function validateWeatherSnapshot(value, product) {
     ) ||
     bounds.west < -180 ||
     bounds.east > 180 ||
-    bounds.south < -90 ||
-    bounds.north > 90 ||
+    bounds.south < (product === 'radar-global' ? -85.0511 : -90) ||
+    bounds.north > (product === 'radar-global' ? 85.0511 : 90) ||
     bounds.west >= bounds.east ||
     bounds.south >= bounds.north ||
     !Array.isArray(times) ||
@@ -37,8 +38,9 @@ export function validateWeatherSnapshot(value, product) {
     ) ||
     value.latest !== times.at(-1) ||
     value.tileSize !== 256 ||
-    value.maxLevel !== 6 ||
-    value.tilingScheme !== 'geographic'
+    value.maxLevel !== (product === 'radar-global' ? 7 : 6) ||
+    value.tilingScheme !==
+      (product === 'radar-global' ? 'web-mercator' : 'geographic')
   )
     throw new Error('Malformed weather manifest');
   return value;
@@ -46,6 +48,7 @@ export function validateWeatherSnapshot(value, product) {
 
 /** Largest whole-extent image per product; also the proxy default size. */
 export const WEATHER_IMAGE_SIZES = Object.freeze({
+  'radar-global': Object.freeze({ width: 2048, height: 1024 }),
   radar: Object.freeze({ width: 4096, height: 2048 }),
   'clouds-regional': Object.freeze({ width: 4096, height: 2048 }),
   clouds: Object.freeze({ width: 2048, height: 1024 }),
@@ -94,7 +97,10 @@ export function weatherImageUrl(
 export function weatherTileUrl(product, time, { size } = {}) {
   if (!WEATHER_PRODUCTS.includes(product) || !Number.isFinite(Date.parse(time)))
     throw new Error('Invalid weather frame');
-  if (size !== undefined && ![256, 512, 1024].includes(size))
+  if (
+    size !== undefined &&
+    !(product === 'radar-global' ? [256] : [256, 512, 1024]).includes(size)
+  )
     throw new Error('Invalid weather tile size');
   // Construct locally; never accept a manifest-provided host or template.
   return `/api/weather/tile?product=${product}&time=${encodeURIComponent(time)}&z={z}&x={x}&y={y}${size === undefined ? '' : `&size=${size}`}`;

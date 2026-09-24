@@ -126,6 +126,7 @@ test('shell heights stack every product with lightning highest', () => {
     clouds: 5_500,
     'clouds-regional': 5_800,
     radar: 6_200,
+    'radar-global': 6_200,
     lightning: 6_600,
   });
   assert.equal(WEATHER_SHELL_CACHE_BYTES, 128 * 1024 * 1024);
@@ -1501,4 +1502,38 @@ test('global infrared keeps one full-extent image; detail images halve for small
     enabled: true,
   });
   small.shell.clear();
+});
+
+test('RainViewer shell composes full and detail textures on one raised surface', async () => {
+  const view = camera(10, 40, 12, 41);
+  const h = harness({
+    product: 'radar-global',
+    camera: view,
+    decodeImage: async () => ({ width: 256, height: 256, close() {} }),
+  });
+  const global = snapshot('radar-global', {
+    bounds: { west: -180, south: -85.0511, east: 180, north: 85.0511 },
+  });
+  const pending = h.shell.setFrame(global, times[0]);
+  for (let i = 0; i < 10; i++) {
+    await flush();
+    h.render();
+  }
+  assert.equal(await pending, true);
+  for (let i = 0; i < 10; i++) {
+    await flush();
+    h.render();
+  }
+  assert.equal(h.primitives().length, 1);
+  assert.equal(h.material().uniforms.image.width, 2048);
+  assert.equal(h.material().uniforms.detail.width, 4096);
+  assert.ok(h.fetches.length > 16 && h.fetches.length <= 40);
+  assert.ok(
+    h.fetches.every(({ url }) =>
+      url.startsWith('/api/weather/tile?product=radar-global&'),
+    ),
+  );
+  assert.equal(h.shell.getDiagnostics().shell.height, 6200);
+  h.shell.clear();
+  assert.equal(h.primitives().length, 0);
 });

@@ -2421,7 +2421,46 @@ test('the recent-imagery split is share-link only: never stored locally, and a s
 
 test('fire perimeters uses digit 2 without colliding with wind or recent imagery', () => {
   const decoded = decodeLayerStateParams(new URLSearchParams('v=2&l=2.k.1'));
-  assert.deepEqual(decoded.enabledLayerIds, ['fire-perimeters', 'recent-imagery', 'wind']);
-  assert.equal(LAYER_STATE_REGISTRY.find(({ id }) => id === 'fire-perimeters').token, '2');
-  assert.deepEqual(decodeLayerStateParams(new URLSearchParams(encode(decoded))), decoded);
+  assert.deepEqual(decoded.enabledLayerIds, [
+    'fire-perimeters',
+    'recent-imagery',
+    'wind',
+  ]);
+  assert.equal(
+    LAYER_STATE_REGISTRY.find(({ id }) => id === 'fire-perimeters').token,
+    '2',
+  );
+  assert.deepEqual(
+    decodeLayerStateParams(new URLSearchParams(encode(decoded))),
+    decoded,
+  );
+});
+
+test('RainViewer radar choice round trips on the existing v token and old links default to NOAA', () => {
+  const entry = LAYER_STATE_REGISTRY.find(({ id }) => id === 'weather-radar');
+  assert.equal(entry.token, 'v');
+  assert.equal(entry.optionOwner, 'weather-radar');
+  for (const product of ['radar', 'radar-global']) {
+    const state = normalizeLayerState({
+      enabledLayerIds: ['weather-radar'],
+      options: { 'weather-radar': { product, opacity: 'light', play: true } },
+    });
+    const decoded = decodeLayerStateParams(new URLSearchParams(encode(state)));
+    assert.deepEqual(decoded, state);
+    assert.equal(decoded.options['weather-radar'].product, product);
+    assert.equal(
+      Object.hasOwn(decoded.options['weather-radar'], 'play'),
+      false,
+    );
+  }
+  const old = normalizeLayerState({
+    enabledLayerIds: ['weather-radar'],
+    options: { 'weather-radar': { opacity: 'light' } },
+  });
+  assert.equal(old.options['weather-radar'].product, 'radar');
+  assert.equal(
+    normalizeLayerState({ options: { 'weather-radar': { product: 'clouds' } } })
+      .options['weather-radar'].product,
+    'radar',
+  );
 });

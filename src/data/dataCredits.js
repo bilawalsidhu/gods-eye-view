@@ -234,6 +234,10 @@ export const DATA_CREDITS = [
       'Mapterhorn (CC BY 4.0) / EGM2008 (NGA)',
   },
   {
+    key: 'rainviewer',
+    html: 'Global rain radar: <a href="https://www.rainviewer.com" target="_blank" rel="noopener">RainViewer</a>',
+  },
+  {
     key: 'weather-noaa',
     html: 'Observed weather: <a href="https://nowcoast.noaa.gov/" target="_blank" rel="noopener">NOAA nowCOAST</a> · NWS/OAR MRMS radar; NESDIS GOES and global satellite partners. <a href="https://oceanservice.noaa.gov/disclaimer.html" target="_blank" rel="noopener">Source disclaimer</a>.',
   },

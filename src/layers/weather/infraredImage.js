@@ -1,5 +1,6 @@
 import { readResponseBytesCapped } from '../../sources/httpBody.js';
 import { weatherImageUrl } from './source.js';
+import { composeMercatorImage } from './mercatorMosaic.js';
 import { infraredAlpha } from './infraredAlpha.js';
 
 export const MAX_MOSAIC_BYTES = 4 * 1024 * 1024;
@@ -76,6 +77,20 @@ export async function acquireWeatherImage(
     onFetched = () => {},
   },
 ) {
+  if (product === 'radar-global') {
+    const result = await composeMercatorImage({
+      product,
+      time,
+      bbox,
+      size,
+      fetchImpl,
+      createCanvas,
+      decodeImage,
+      signal,
+    });
+    onFetched();
+    return result;
+  }
   const response = await fetchImpl(weatherImageUrl(product, time, size, bbox), {
     signal,
   });

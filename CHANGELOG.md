@@ -1,5 +1,10 @@
 # Changelog
 
+- Add Global (RainViewer) beside US (NOAA) in Rain radar, with shared observed
+  history and share-link region selection. Validated, rate-limited Web Mercator
+  tiles draw on globe basemaps and compose into reprojected images on 3D Tiles
+  shells; coverage follows national radar networks, with 2 hours of history.
+
 - Transit and Directions rows repaint as soon as their data lands again:
   `refreshLayerStats()` now lives on the layer lifecycle, not only on the
   compatibility facade. `scripts/qa-radio.mjs` uses it instead of a private
