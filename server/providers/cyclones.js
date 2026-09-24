@@ -41,6 +41,9 @@ function number(value, min, max) {
   const n = Number(value);
   return Number.isFinite(n) && n >= min && n <= max ? n : null;
 }
+// NHC stamps an advisory with its nominal time (e.g. 03:00Z) and publishes it
+// up to about half an hour before; allow that, but not a clock far ahead.
+const EARLY_ADVISORY_MS = 90 * 60_000;
 function iso(value, now) {
   if (
     typeof value !== 'string' ||
@@ -50,7 +53,7 @@ function iso(value, now) {
   const n = Date.parse(value);
   if (
     !Number.isFinite(n) ||
-    n > now + 5 * 60_000 ||
+    n > now + EARLY_ADVISORY_MS ||
     now - n > 12 * HOUR ||
     new Date(n).toISOString().replace('.000Z', 'Z') !==
       value.replace('.000Z', 'Z')

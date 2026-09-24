@@ -162,6 +162,15 @@ test('malformed, duplicate, oversized, future and expired status is rejected rat
   assert.deepEqual(parseCycloneStatus({ activeStorms: [] }, NOW), []);
 });
 
+test('advisories published before their nominal time are accepted, far-future ones are not', () => {
+  // NHC wrote the 03:00Z advisory at 02:34Z.
+  const early = Date.UTC(2026, 8, 16, 2, 34);
+  assert.equal(parseCycloneStatus(status(), early)[0].issuedAt, TIME);
+  assert.throws(() =>
+    parseCycloneStatus(status(), Date.UTC(2026, 8, 16, 1, 25)),
+  );
+});
+
 test('coherent geometry is retained with holes/dateline while older advisory geometry is omitted', () => {
   const storms = parseCycloneStatus(status(), NOW);
   const parts = collections();
