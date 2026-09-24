@@ -2027,7 +2027,11 @@
       "src/sources/requestDeadline.js",
       "src/data/local_data/osm_military_names/names.json",
       "src/layers/installations/namedMarkers.js",
-      "src/data/infrastructureOverlayEntry.js"
+      "src/data/infrastructureOverlayEntry.js",
+      "src/app/layers/airQuality.js",
+      "src/layers/airQuality/index.js",
+      "src/layers/airQuality/model.js",
+      "src/layers/airQuality/source.js"
     ],
     "external": [
       "hls.js",
@@ -2511,7 +2515,11 @@
       "src/sources/requestDeadline.js",
       "src/data/local_data/osm_military_names/names.json",
       "src/layers/installations/namedMarkers.js",
-      "src/data/infrastructureOverlayEntry.js"
+      "src/data/infrastructureOverlayEntry.js",
+      "src/app/layers/airQuality.js",
+      "src/layers/airQuality/index.js",
+      "src/layers/airQuality/model.js",
+      "src/layers/airQuality/source.js"
     ],
     "external": [
       "hls.js",
@@ -2853,7 +2861,9 @@
       "src/sources/httpBody.js",
       "src/layers/perimeters/source.js",
       "src/layers/perimeters/records.js",
-      "src/layers/submarineCables/bundledSource.js"
+      "src/layers/submarineCables/bundledSource.js",
+      "src/layers/airQuality/model.js",
+      "src/layers/airQuality/source.js"
     ],
     "external": []
   },
@@ -3070,6 +3080,23 @@
       "src/layers/perimeters/records.js",
       "src/sources/httpBody.js",
       "src/layers/perimeters/source.js"
+    ],
+    "external": []
+  },
+  "air-quality": {
+    "exports": ["./layers/air-quality"],
+    "modules": [
+      "src/layers/airQuality/index.js",
+      "src/layers/airQuality/model.js",
+      "src/layers/airQuality/source.js"
+    ],
+    "external": ["cesium"]
+  },
+  "air-quality-source": {
+    "exports": ["./layers/air-quality/source"],
+    "modules": [
+      "src/layers/airQuality/model.js",
+      "src/layers/airQuality/source.js"
     ],
     "external": []
   }
