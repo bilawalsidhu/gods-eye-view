@@ -115,11 +115,15 @@ try {
       detail: document.getElementById('global-loading-detail').textContent.trim(),
     });
   });
-  await page.goto(appUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 });
-  await page.waitForFunction(() => window.__godsEyeView?.styleManager, { timeout: 60_000 });
+  // Boot windows sized for a shared box: under CI-fleet load the Vite
+  // on-demand transform of the Cesium graph can exceed 60 s (run4b sweep,
+  // 2026-09-23 — this suite died at the styleManager wait). The assertion is
+  // unchanged, only the wait widens.
+  await page.goto(appUrl, { waitUntil: 'domcontentloaded', timeout: 120_000 });
+  await page.waitForFunction(() => window.__godsEyeView?.styleManager, { timeout: 120_000 });
   await page.waitForFunction(
     () => document.getElementById('loading-screen')?.classList.contains('hidden'),
-    { timeout: 60_000 },
+    { timeout: 120_000 },
   );
 
   // Google-dependent assertions are only provable where Google 3D actually

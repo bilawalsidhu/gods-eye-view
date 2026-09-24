@@ -28,6 +28,15 @@ if (fixtureSha256 !== expectedFixtureSha256) {
 }
 
 const appOrigin = new URL(appUrl).origin;
+// Keyless-server gate: the realtime token endpoint answers 200 with
+// { unavailable: true, error: 'OPENAI_API_KEY is not set' } when the server
+// has no key (the dev middleware's honest unavailability contract). The
+// credentialed acceptance path cannot run there — self-declare the env gate
+// (marker matched by ENV_GATE_MARKERS in scripts/lib/qaSuiteContracts.mjs)
+// instead of reporting a product failure, and never fake a session.
+const tokenProbe = await fetch(new URL('/api/realtime/token', appOrigin)).catch(() => null);
+const tokenBody = tokenProbe?.ok ? await tokenProbe.json().catch(() => null) : null;
+const keylessServer = tokenBody?.unavailable === true;
 // Resolve Chrome like the other harnesses: env override first, then
 // puppeteer's pinned download, then platform paths. puppeteer 25.x's
 // executablePath() is ASYNC — passed through raw it reaches launch() as a
@@ -139,6 +148,9 @@ try {
     consoleErrors,
   };
   console.log(JSON.stringify(result, null, 2));
+  if (!result.ok && keylessServer) {
+    console.log('ENV-GATED: OPENAI_API_KEY is not set — the realtime token endpoint reports unavailable, so the credentialed voice path cannot run against this server. Re-run against a keyed dev server.');
+  }
   process.exitCode = result.ok ? 0 : 1;
 } finally {
   await browser.close();
