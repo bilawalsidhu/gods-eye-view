@@ -3,6 +3,33 @@
 This changelog records public product changes. For the authoritative description
 of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md).
 
+## [Unreleased]
+
+### Tests / infrastructure
+
+- **QA harnesses sized for shared boxes.** The full-suite sweep on a
+  CI-fleet-loaded box surfaced one systemic gap and four starved-window
+  classes, all fixed without weakening a single assertion:
+  - All 22 suites shared a fetch-once dev-server preflight; one transient
+    refusal during a load peak failed 8 consecutive suites in under 0.1 min
+    while the server stayed up. `scripts/lib/devServer.mjs` now owns the
+    check with bounded retries (4×/2.5 s), degrading layers instead of
+    exiting where the suite's semantics require it.
+  - Boot windows (60 s) and navigation timeouts (30 s) that predate the
+    fleet-loaded reality widened to 120 s across attribution-b12,
+    overlay-baseline, map-source-tray, failstate-b10, firstrun, perf and
+    voice-wav.
+  - qa-radio's reveal-scroll (6→15 s) and badge postRender cap (500 ms→5 s)
+    now survive 1-2 s frames; the `fadingCount:-1` timeout sentinel had
+    been resolving 17/28 samples with zero clusters.
+  - qa-voice-wav self-declares the documented keyless env gate
+    (`OPENAI_API_KEY is not set`) instead of exiting unexplained on a
+    server without a realtime key — no session is faked.
+  - qa-attribution-b12 tolerates exactly one transport-noise signature
+    (`net::ERR_NETWORK_CHANGED`, the shared-box connection-reset artifact
+    on re-requested Google tile assets); every other console error still
+    fails.
+
 ## [0.10.1] — 2026-09-23
 
 The idle-GPU audit shipped: the HiDPI downscale policy that never engaged
