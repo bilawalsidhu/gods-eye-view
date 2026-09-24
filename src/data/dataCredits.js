@@ -95,6 +95,13 @@ export const DATA_CREDITS = [
       '<a href="https://inciweb.wildfire.gov/" target="_blank" rel="noopener">InciWeb</a>',
   },
   {
+    key: 'eccc-aqhi',
+    html:
+      'Air quality (AQHI): Environment and Climate Change Canada — MSC GeoMet ' +
+      '(<a href="https://eccc-msc.github.io/open-data/" target="_blank" rel="noopener">eccc-msc.github.io/open-data</a>) ' +
+      '· ECCC Data Servers End-use Licence',
+  },
+  {
     key: 'overpass',
     html:
       'Road geometry (traffic): ' +
