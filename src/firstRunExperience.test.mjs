@@ -668,11 +668,14 @@ test('the voice TOOL SCHEMA matches the pinned release — the mission mapping i
   hudLayout.enum = hudLayout.enum.filter((layout) => layout !== 'cyber');
   const block = JSON.stringify(legacyTools);
   // Re-derived for the additive `local-adsb` set_layer_visibility value and
-  // its common-name mapping; the missions still ride existing tools.
-  assert.equal(block.length, 27432, 'serialized tool schema length drifted');
+  // its common-name mapping, and for World News, which adds `world-news` to the
+  // two layer menus and the analyst_query layers enum (+95 bytes, the same
+  // growth it measured before upstream's additions); the missions still ride
+  // existing tools.
+  assert.equal(block.length, 27527, 'serialized tool schema length drifted');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    'a2a4a787f4528f75b01f3f42caec636f29c37452c0d45b11f4f986171d6be57d',
+    '44442c9c48912155b341af81e5d5efe8da152b3e01d0d2014efa42f888e3983a',
     'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
   );
   const instructions = fs.readFileSync(new URL('../server/providers/openai/instructions.js', import.meta.url), 'utf8');

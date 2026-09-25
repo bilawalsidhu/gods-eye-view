@@ -202,7 +202,8 @@ test('no unchanged Realtime tool definition drifts silently', () => {
     .digest('hex')
     .slice(0, 16);
   // Analyst additions and ISS wording correction are explicitly excluded above; all other tool definitions retain their pin.
-  assert.equal(digest, '91935845ef2598b1', 'an unchanged Realtime tool definition drifted');
+  // Re-derived for World News, which adds `world-news` to the two layer menus.
+  assert.equal(digest, 'cff6ccc13da95253', 'an unchanged Realtime tool definition drifted');
 });
 
 test('Radio volume and mission speed share the Sharpen slider visual language', () => {

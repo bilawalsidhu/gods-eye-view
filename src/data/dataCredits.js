@@ -342,6 +342,17 @@ export const TOMTOM_CREDIT = {
     '<a href="https://www.tomtom.com" target="_blank" rel="noopener">TomTom</a>',
 };
 
+/** Registered when the World News layer first receives data (BYOK; the
+ * provider's free plan requires this backlink — keep the href and anchor
+ * text intact). Keyless installs never show it. */
+export const WORLD_NEWS_CREDIT = {
+  key: 'world-news-api',
+  html:
+    'News headlines &amp; place tags: ' +
+    '<a href="https://worldnewsapi.com/" target="_blank" rel="noopener">World News API</a> ' +
+    '(your own key; headline links retain publisher terms)',
+};
+
 /** Registered when the first Natural Earth region outline resolves (public
  * domain — no attribution required; credited as a courtesy). */
 export const NATURAL_EARTH_CREDIT = {
