@@ -59,6 +59,10 @@ import {
   DELDOT_CCTV_URL,
   DEFAULT_DELDOT_MAX_SOURCES,
   DELDOT_ANCHORS,
+  WSDOT_CAMERAS_URL,
+  WSDOT_IMAGE_ORIGIN,
+  DEFAULT_WSDOT_MAX_SOURCES,
+  WSDOT_ANCHORS,
 } from './constants.js';
 import {
   toFiniteNumber,
@@ -1696,6 +1700,136 @@ export async function loadDelDOTSourcesFromOpenData() {
   } catch (error) {
     console.warn(
       '[CCTV] DelDOT source download error:',
+      error?.message || error,
+    );
+    return [];
+  }
+}
+
+/** WSDOT compass letters as headings in degrees. `B` (both directions), `O`
+ * (other) and null carry no single facing and fall through to the id hash. */
+const WSDOT_COMPASS_HEADINGS = Object.freeze({
+  N: 0,
+  E: 90,
+  S: 180,
+  W: 270,
+});
+
+/**
+ * Converts an EPSG:3857 (Web Mercator) coordinate pair to WGS84 degrees.
+ * The WSDOT camera layer publishes point geometry in wkid 102100.
+ * @param {number} x - Web Mercator metres east.
+ * @param {number} y - Web Mercator metres north.
+ * @returns {{lat: number, lon: number}} WGS84 degrees.
+ */
+export function webMercatorToWgs84(x, y) {
+  const R = 6378137;
+  const lon = (x / R) * (180 / Math.PI);
+  const lat = (2 * Math.atan(Math.exp(y / R)) - Math.PI / 2) * (180 / Math.PI);
+  return { lat, lon };
+}
+
+/** Rough Washington State bounding box (with the Columbia River border cams). */
+function isLikelyWashingtonCoordinate(lat, lon) {
+  return (
+    Number.isFinite(lat) &&
+    Number.isFinite(lon) &&
+    lat >= 45.3 &&
+    lat <= 49.3 &&
+    lon >= -125 &&
+    lon <= -116.5
+  );
+}
+
+/**
+ * Fetch WSDOT highway cameras (Washington State). Keyless: one Esri JSON
+ * layer on WSDOT's official open-data host (the same layer the WSDOT Travel
+ * Center map consumes; a keyed Traveler Information API serves the identical
+ * population for higher-volume use). Only cameras with a positive integer id,
+ * finite in-state coordinates, and a frame on WSDOT's own image host are
+ * kept — the catalog's ~70 partner cameras (Oregon DOT, City of Seattle,
+ * lodges, airports) are skipped rather than proxied under someone else's
+ * terms. `CompassDirection` letters give a high-confidence heading; `B`
+ * (both directions, the majority) and `O`/null fall back to the id hash.
+ * The feed carries Windows-1252 bytes (en-dashes in titles) with no charset
+ * declaration, so the body is decoded explicitly before parsing.
+ *
+ * @returns {Promise<Array<object>>} Normalized camera source objects.
+ */
+export async function loadWsdotSourcesFromOpenData() {
+  try {
+    const resp = await fetch(WSDOT_CAMERAS_URL, {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+    });
+    if (!resp.ok) {
+      console.warn('[CCTV] WSDOT camera download failed:', resp.status);
+      return [];
+    }
+    const payload = JSON.parse(
+      new TextDecoder('windows-1252').decode(await resp.arrayBuffer()),
+    );
+    const rows = Array.isArray(payload?.features) ? payload.features : [];
+
+    const cameras = [];
+    for (const row of rows) {
+      const attrs = row?.attributes;
+      const rawId = attrs?.CameraID;
+      if (!Number.isSafeInteger(rawId) || rawId <= 0) continue;
+      const imageUrl = String(attrs.ImageURL || '').trim();
+      if (!imageUrl.startsWith(WSDOT_IMAGE_ORIGIN)) continue;
+      const x = row?.geometry?.x;
+      const y = row?.geometry?.y;
+      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+      const { lat, lon } = webMercatorToWgs84(x, y);
+      if (!isLikelyWashingtonCoordinate(lat, lon)) continue;
+
+      const cameraId = `wsdot-${rawId}`;
+      const heading =
+        WSDOT_COMPASS_HEADINGS[
+          String(attrs.CompassDirection || '')
+            .trim()
+            .toUpperCase()
+        ];
+      const hasHeading = Number.isFinite(heading);
+      cameras.push({
+        id: cameraId,
+        name: String(attrs.CameraTitle || '').trim() || `WSDOT camera ${rawId}`,
+        city: 'Washington',
+        cityId: 'washington-state',
+        provider: 'WSDOT',
+        lat,
+        lon,
+        headingDeg: hasHeading ? heading : fallbackHeadingFromId(cameraId),
+        headingConfidence: hasHeading ? 'high' : 'low',
+        // Same two pose personalities as the other packs: raw priors that the
+        // client's ground snap and manual calibration refine.
+        pitchDeg: hasHeading ? -24 : -18,
+        fovDeg: hasHeading ? 56 : 44,
+        rangeM: hasHeading ? 210 : 145,
+        mountHeightM: hasHeading ? 10 : 8,
+        feedType: 'image',
+        url: imageUrl,
+        snapshotUrl: imageUrl,
+        sourceKind: 'wsdot-open-data',
+        license: 'WSDOT Travel Center camera data (public low-volume feed)',
+      });
+    }
+
+    const maxRaw = Number(
+      process.env.CCTV_WSDOT_MAX_SOURCES || DEFAULT_WSDOT_MAX_SOURCES,
+    );
+    const maxCount = Number.isFinite(maxRaw)
+      ? Math.max(8, Math.min(1200, Math.floor(maxRaw)))
+      : DEFAULT_WSDOT_MAX_SOURCES;
+    const prioritized = prioritizeSources(cameras, maxCount, WSDOT_ANCHORS);
+    console.log(
+      `[CCTV] Loaded WSDOT camera sources: ${cameras.length} published (using nearest ${prioritized.length})`,
+    );
+    return prioritized;
+  } catch (error) {
+    console.warn(
+      '[CCTV] WSDOT camera download error:',
       error?.message || error,
     );
     return [];
