@@ -1,3 +1,4 @@
+import { phaseTiming } from './phaseTiming.js';
 import { tilesForBounds } from '../data/tomtomTiles.js';
 import { readResponseBytesCapped, readResponseJsonCapped } from './httpBody.js';
 
@@ -33,6 +34,7 @@ export function createVectorTileSource({
 }) {
   const cache = new Map();
   const active = new Set();
+  const flights = new Map();
   let cacheBytes = 0;
   let metadata = null;
   let metadataError = null;
@@ -102,6 +104,7 @@ export function createVectorTileSource({
         users: 0,
         promise: null,
       };
+      const metadataStart = performance.now();
       metadataFlight = flight;
       flight.promise = (
         template
@@ -141,6 +144,10 @@ export function createVectorTileSource({
           )
             throw Object.assign(new Error('Invalid vector tile origin'), {
               retryable: false,
+            });
+          if (!template)
+            phaseTiming('tilejson-fetch', metadataStart, {
+              source: allowedOrigin,
             });
           metadata = { ...value, template: url };
           return metadata;
@@ -218,53 +225,88 @@ export function createVectorTileSource({
     else activeWorkers -= 1;
   }
 
+  function subscribe(flight, signal, key) {
+    signal?.throwIfAborted();
+    flight.users++;
+    return new Promise((resolve, reject) => {
+      const abort = () => reject(signal.reason);
+      signal?.addEventListener('abort', abort, { once: true });
+      flight.promise
+        .then(resolve, reject)
+        .finally(() => signal?.removeEventListener('abort', abort));
+    }).finally(() => {
+      if (--flight.users === 0 && flights.get(key) === flight) {
+        flights.delete(key);
+        flight.controller.abort();
+      }
+    });
+  }
+
   async function getTile(tile, meta, signal, epoch) {
-    await acquire(signal);
-    try {
-      signal?.throwIfAborted();
-      if (epoch !== generation)
-        throw new DOMException('Source cleared', 'AbortError');
-      const key = `${tile.z}/${tile.x}/${tile.y}`;
-      const hit = cache.get(key);
-      if (hit && Date.now() - hit.at < ttlMs) {
-        cache.delete(key);
-        cache.set(key, hit);
-        return hit.value;
-      }
-      fetched += 1;
-      const url = meta.template
-        .replace('{z}', tile.z)
-        .replace('{x}', tile.x)
-        .replace('{y}', tile.y);
-      const bytes = await request(url, signal, (res, requestSignal) =>
-        readResponseBytesCapped(res, maxResponseBytes, requestSignal),
-      );
-      const value = decode(bytes, tile.z, tile.x, tile.y);
-      signal?.throwIfAborted();
-      // Account for decoded coordinate/property storage, not just compressed input.
-      const size = new TextEncoder().encode(JSON.stringify(value)).byteLength;
-      if (epoch === generation && size <= maxCacheBytes) {
-        if (cache.has(key)) {
-          cacheBytes -= cache.get(key).size;
-          cache.delete(key);
-        }
-        cache.set(key, { at: Date.now(), value, size });
-        cacheBytes += size;
-        while (cache.size > maxEntries || cacheBytes > maxCacheBytes) {
-          const oldest = cache.keys().next().value;
-          cacheBytes -= cache.get(oldest).size;
-          cache.delete(oldest);
-        }
-      }
-      return value;
-    } finally {
-      release();
+    signal?.throwIfAborted();
+    const key = `${meta.template}:${tile.z}/${tile.x}/${tile.y}`;
+    const hit = cache.get(key);
+    if (hit && now() - hit.at < ttlMs) {
+      cache.delete(key);
+      cache.set(key, hit);
+      return hit.value;
     }
+    let flight = flights.get(key);
+    if (!flight) {
+      flight = { controller: new AbortController(), users: 0 };
+      const ownedSignal = flight.controller.signal;
+      flights.set(key, flight);
+      flight.promise = (async () => {
+        await acquire(ownedSignal);
+        try {
+          ownedSignal.throwIfAborted();
+          if (epoch !== generation)
+            throw new DOMException('Source cleared', 'AbortError');
+          fetched++;
+          const url = meta.template
+            .replace('{z}', tile.z)
+            .replace('{x}', tile.x)
+            .replace('{y}', tile.y);
+          const fetchStart = performance.now();
+          const bytes = await request(url, ownedSignal, (res, requestSignal) =>
+            readResponseBytesCapped(res, maxResponseBytes, requestSignal),
+          );
+          phaseTiming('tile-fetch', fetchStart, {
+            source: allowedOrigin,
+            key,
+            bytes: bytes.byteLength,
+          });
+          const decodeStart = performance.now();
+          const value = decode(bytes, tile.z, tile.x, tile.y);
+          phaseTiming('decode', decodeStart, { source: allowedOrigin, key });
+          ownedSignal.throwIfAborted();
+          // Conservative decoded-storage estimate; never stringify geometry on the load path.
+          const size = bytes.byteLength * 4;
+          if (epoch === generation && size <= maxCacheBytes) {
+            if (cache.has(key)) cacheBytes -= cache.get(key).size;
+            cache.delete(key);
+            cache.set(key, { at: now(), value, size });
+            cacheBytes += size;
+            while (cache.size > maxEntries || cacheBytes > maxCacheBytes) {
+              const oldest = cache.keys().next().value;
+              cacheBytes -= cache.get(oldest).size;
+              cache.delete(oldest);
+            }
+          }
+          return value;
+        } finally {
+          release();
+        }
+      })().finally(() => {
+        if (flights.get(key) === flight) flights.delete(key);
+      });
+    }
+    return subscribe(flight, signal, key);
   }
 
   return {
     getMetadata,
-    async fetchBounds(box, { zoom, signal } = {}) {
+    async fetchBounds(box, { zoom, signal, onTile } = {}) {
       if (
         !validTileBounds(box) ||
         !Number.isInteger(zoom) ||
@@ -274,8 +316,16 @@ export function createVectorTileSource({
         throw new TypeError('Invalid tile viewport');
       signal?.throwIfAborted();
       const epoch = generation;
+      const metaStart = performance.now();
       const meta = await getMetadata(signal);
+      phaseTiming('tilejson', metaStart, { source: allowedOrigin });
       const candidates = tilesForBounds(box, zoom, { maxTiles: maxTiles + 1 });
+      const cx = candidates.reduce((n, t) => n + t.x, 0) / candidates.length;
+      const cy = candidates.reduce((n, t) => n + t.y, 0) / candidates.length;
+      candidates.sort(
+        (a, b) =>
+          Math.hypot(a.x - cx, a.y - cy) - Math.hypot(b.x - cx, b.y - cy),
+      );
       const limited = candidates.length > maxTiles;
       // Refuse over-wide views instead of silently sampling a northwest strip.
       if (limited)
@@ -295,6 +345,8 @@ export function createVectorTileSource({
                 results[i] = {
                   value: await getTile(candidates[i], meta, signal, epoch),
                 };
+                signal?.throwIfAborted();
+                onTile?.(results[i].value, candidates[i]);
               } catch (error) {
                 results[i] = { error };
               }
@@ -325,6 +377,8 @@ export function createVectorTileSource({
       metadata = null;
       metadataError = null;
       metadataRetryAt = 0;
+      for (const flight of flights.values()) flight.controller.abort();
+      flights.clear();
       for (const controller of active) controller.abort();
       cache.clear();
       cacheBytes = 0;

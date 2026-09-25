@@ -983,7 +983,8 @@
       "src/sources/httpBody.js",
       "src/sources/openFreeMap.js",
       "src/sources/militaryTileGeometry.js",
-      "src/sources/vectorTiles.js"
+      "src/sources/vectorTiles.js",
+      "src/sources/phaseTiming.js"
     ],
     "external": ["cesium", "@mapbox/vector-tile", "pbf"]
   },
@@ -1046,7 +1047,8 @@
       "src/sources/httpBody.js",
       "src/sources/openFreeMap.js",
       "src/sources/militaryTileGeometry.js",
-      "src/sources/vectorTiles.js"
+      "src/sources/vectorTiles.js",
+      "src/sources/phaseTiming.js"
     ],
     "external": ["cesium", "pbf", "@mapbox/vector-tile"]
   },
@@ -1129,7 +1131,8 @@
       "src/layers/alpr/tileRecords.js",
       "src/sources/capability.js",
       "src/sources/httpBody.js",
-      "src/sources/vectorTiles.js"
+      "src/sources/vectorTiles.js",
+      "src/sources/phaseTiming.js"
     ],
     "external": ["cesium", "@mapbox/vector-tile", "pbf"]
   },
@@ -1983,7 +1986,8 @@
       "src/sources/capability.js",
       "src/sources/openFreeMap.js",
       "src/sources/militaryTileGeometry.js",
-      "src/sources/vectorTiles.js"
+      "src/sources/vectorTiles.js",
+      "src/sources/phaseTiming.js"
     ],
     "external": [
       "hls.js",
@@ -2449,7 +2453,8 @@
       "src/sources/capability.js",
       "src/sources/openFreeMap.js",
       "src/sources/militaryTileGeometry.js",
-      "src/sources/vectorTiles.js"
+      "src/sources/vectorTiles.js",
+      "src/sources/phaseTiming.js"
     ],
     "external": [
       "hls.js",
@@ -2692,7 +2697,8 @@
       "src/data/tomtomTiles.js",
       "src/layers/alpr/tileRecords.js",
       "src/sources/httpBody.js",
-      "src/sources/vectorTiles.js"
+      "src/sources/vectorTiles.js",
+      "src/sources/phaseTiming.js"
     ],
     "external": ["@mapbox/vector-tile", "pbf"]
   },
@@ -2729,7 +2735,8 @@
       "src/sources/httpBody.js",
       "src/sources/openFreeMap.js",
       "src/sources/militaryTileGeometry.js",
-      "src/sources/vectorTiles.js"
+      "src/sources/vectorTiles.js",
+      "src/sources/phaseTiming.js"
     ],
     "external": ["@mapbox/vector-tile", "pbf"]
   },
@@ -2759,7 +2766,8 @@
       "src/sources/httpBody.js",
       "src/sources/openFreeMap.js",
       "src/sources/militaryTileGeometry.js",
-      "src/sources/vectorTiles.js"
+      "src/sources/vectorTiles.js",
+      "src/sources/phaseTiming.js"
     ],
     "external": ["@mapbox/vector-tile", "pbf"]
   },

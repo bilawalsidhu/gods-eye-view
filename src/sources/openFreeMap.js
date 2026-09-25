@@ -165,6 +165,8 @@ export function decodeOpenFreeMapTile(bytes, z, x, y) {
                 ? `tile:${z}/${x}/${y}:${i}`
                 : String(feature.id),
             tileEpsilon: (box.east - box.west) / feature.extent,
+            tileBounds: box,
+            tileZoom: z,
             outlineLines: rings.flatMap((r) => militaryOutlineLines(r, box)),
             validation: 'unreviewed',
             sources: [{ name: 'OpenStreetMap', id: `tile:${z}/${x}/${y}` }],
@@ -182,6 +184,8 @@ export function createOpenFreeMapSource(options = {}) {
     tileJsonUrl: 'https://tiles.openfreemap.org/planet',
     allowedOrigin: 'https://tiles.openfreemap.org',
     decode: decodeOpenFreeMapTile,
+    maxEntries: 192,
+    maxCacheBytes: 64 * 1024 * 1024,
     ...options,
   });
 }

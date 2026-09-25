@@ -86,3 +86,82 @@ for (const declared of [true, false])
     assert.equal(signal.aborted, true);
     assert.equal(source.getStats().cacheEntries, 0);
   });
+
+test('overlapping callers share XYZ; cancelling one keeps the other alive', async () => {
+  let releaseBody,
+    reads = 0,
+    underlying;
+  const source = createVectorTileSource({
+    ...options,
+    template: meta.tiles[0],
+    fetchImpl: async (_, { signal }) => {
+      reads++;
+      underlying = signal;
+      await new Promise((resolve) => {
+        releaseBody = resolve;
+      });
+      return new Response(new Uint8Array([1]));
+    },
+  });
+  const a = new AbortController(),
+    b = new AbortController();
+  const first = source.fetchBounds(box, { zoom: 12, signal: a.signal });
+  const rejection = assert.rejects(first, { name: 'AbortError' });
+  const second = source.fetchBounds(box, { zoom: 12, signal: b.signal });
+  while (!releaseBody) await new Promise((resolve) => setTimeout(resolve, 0));
+  a.abort();
+  await rejection;
+  assert.equal(underlying.aborted, false);
+  releaseBody();
+  assert.equal((await second).tiles.length, 1);
+  assert.equal(reads, 1);
+  await source.fetchBounds(box, { zoom: 12 });
+  assert.equal(reads, 1);
+});
+
+test('final subscriber cancellation aborts the owned request; completed tiles publish before a straggler', async () => {
+  let owned;
+  const source = createVectorTileSource({
+    ...options,
+    template: meta.tiles[0],
+    fetchImpl: (_, { signal }) =>
+      new Promise((resolve, reject) => {
+        owned = signal;
+        signal.addEventListener('abort', () => reject(signal.reason));
+      }),
+  });
+  const controller = new AbortController();
+  const pending = source.fetchBounds(box, {
+    zoom: 12,
+    signal: controller.signal,
+  });
+  const rejection = assert.rejects(pending, { name: 'AbortError' });
+  while (!owned) await new Promise((resolve) => setTimeout(resolve, 0));
+  controller.abort();
+  await rejection;
+  assert.equal(owned.aborted, true);
+  let release,
+    published = 0,
+    requests = 0;
+  const incremental = createVectorTileSource({
+    ...options,
+    template: meta.tiles[0],
+    fetchImpl: async () => {
+      if (++requests === 2)
+        await new Promise((resolve) => {
+          release = resolve;
+        });
+      return new Response(new Uint8Array([1]));
+    },
+  });
+  const complete = incremental.fetchBounds(
+    { ...box, east: -97.7 },
+    { zoom: 12, onTile: () => published++ },
+  );
+  while (!published) await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(published, 1);
+  assert.equal(typeof release, 'function');
+  release();
+  await complete;
+  assert.equal(published, 2);
+});
