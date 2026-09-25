@@ -25,7 +25,7 @@
  * Pure data + pure helpers: imported by the browser layer, the Vite proxy, and
  * node:test. No Cesium, no Node built-ins.
  */
-
+import { greatCircleMeters, queryRadius } from '../spatialQuery.js';
 /** Transit modes the layer colors. `routeMode` hints refine a feed's default. */
 export const TRANSIT_MODES = Object.freeze([
   'bus',
@@ -324,13 +324,12 @@ export function getRegisteredTransitFeed(id) {
  * @returns {number}
  */
 export function haversineKm(aLat, aLon, bLat, bLon) {
-  const toRad = (deg) => (deg * Math.PI) / 180;
-  const dLat = toRad(bLat - aLat);
-  const dLon = toRad(bLon - aLon);
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLon / 2) ** 2;
-  return 2 * 6371 * Math.asin(Math.min(1, Math.sqrt(h)));
+  return (
+    greatCircleMeters(
+      { lat: aLat, lon: aLon },
+      { lat: bLat, lon: bLon },
+    ) / 1000
+  );
 }
 
 /**
@@ -342,14 +341,35 @@ export function haversineKm(aLat, aLon, bLat, bLon) {
  * @returns {object[]}
  */
 export function transitFeedsInRange(lat, lon, slackKm = 0) {
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return [];
-  return TRANSIT_ENABLED_FEEDS.map((feed) => ({
-    feed,
-    km: haversineKm(lat, lon, feed.center.lat, feed.center.lon),
-  }))
-    .filter(({ feed, km }) => km <= feed.loadRadiusKm + Math.max(0, slackKm))
-    .sort((a, b) => a.km - b.km)
-    .map(({ feed }) => feed);
+  if (
+    !Number.isFinite(lat) ||
+    !Number.isFinite(lon) ||
+    lat < -90 ||
+    lat > 90 ||
+    lon < -180 ||
+    lon > 180
+  ) {
+    return [];
+  }
+
+  const slack = Math.max(0, slackKm);
+  const maxRadiusKm = TRANSIT_ENABLED_FEEDS.reduce(
+    (max, feed) => Math.max(max, feed.loadRadiusKm),
+    0,
+  );
+  const candidates = queryRadius(
+    TRANSIT_ENABLED_FEEDS,
+    { lat, lon },
+    (maxRadiusKm + slack) * 1000,
+    (feed) => feed.center,
+  );
+
+  return candidates
+    .filter(
+      ({ entity: feed, distanceM }) =>
+        distanceM <= (feed.loadRadiusKm + slack) * 1000,
+    )
+    .map(({ entity: feed }) => feed);
 }
 
 /**

@@ -109,6 +109,28 @@ test('feeds in range are nearest-first and honor slack as hysteresis', () => {
   );
 });
 
+test('transitFeedsInRange rejects out-of-range coordinates without querying', () => {
+  assert.deepEqual(
+    transitFeedsInRange(91, 0),
+    [],
+  );
+
+  assert.deepEqual(
+    transitFeedsInRange(0, 181),
+    [],
+  );
+
+  assert.deepEqual(
+    transitFeedsInRange(-91, 0),
+    [],
+  );
+
+  assert.deepEqual(
+    transitFeedsInRange(0, -181),
+    [],
+  );
+});
+
 test('route hints refine a feed default and never escape the known modes', () => {
   const mbta = getTransitFeed('mbta');
   assert.equal(transitModeFor(mbta, 'Red'), 'subway');
